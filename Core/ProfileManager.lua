@@ -435,29 +435,12 @@ function KitnEssentialsAPI:ImportProfile(profileString, profileKey)
     if not profileString or profileString == "" then return end
     if not KE.db then return end
 
-    -- Strip prefix if present
-    if profileString:sub(1, #EXPORT_PREFIX) == EXPORT_PREFIX then
-        profileString = profileString:sub(#EXPORT_PREFIX + 1)
-    end
+    -- Use ProfileManager:ImportProfile which handles both LibDeflate and C_EncodingUtil formats
+    local success, finalName = ProfileManager:ImportProfile(profileString, profileKey)
+    if not success then return end
 
-    local decoded = C_EncodingUtil.DecodeBase64(profileString)
-    if not decoded then return end
-
-    local decompressed = C_EncodingUtil.DecompressString(decoded, Enum.CompressionMethod.Deflate)
-    if not decompressed then return end
-
-    local profileData = C_EncodingUtil.DeserializeCBOR(decompressed)
-    if not profileData or type(profileData) ~= "table" then return end
-
-    -- Handle envelope format if present (from internal export)
-    if profileData.d and type(profileData.d) == "table" then
-        profileData = profileData.d
-    end
-
-    -- Store profile
-    KE.db.profiles[profileKey] = profileData
-    KE.db:SetProfile(profileKey)
-    KE.db:SetProfile(profileKey)
+    -- Activate the imported profile
+    KE.db:SetProfile(finalName)
 
     -- Refresh without ReloadUI
     ProfileManager:RefreshAllModules()
@@ -469,24 +452,42 @@ end
 function KitnEssentialsAPI:DecodeProfileString(profileString)
     if not profileString or profileString == "" then return {} end
 
-    -- Strip prefix if present
-    if profileString:sub(1, #EXPORT_PREFIX) == EXPORT_PREFIX then
-        profileString = profileString:sub(#EXPORT_PREFIX + 1)
+    -- Validate prefix
+    if profileString:sub(1, #EXPORT_PREFIX) ~= EXPORT_PREFIX then return {} end
+
+    local encoded = profileString:sub(#EXPORT_PREFIX + 1)
+    local profileData
+
+    -- Try internal format first (LibDeflate + AceSerializer)
+    local compressed = LibDeflate:DecodeForPrint(encoded)
+    if compressed then
+        local serialized = LibDeflate:DecompressDeflate(compressed)
+        if serialized then
+            local success, exportData = AceSerializer:Deserialize(serialized)
+            if success and type(exportData) == "table" then
+                if exportData.d and type(exportData.d) == "table" then
+                    return exportData.d
+                end
+                return exportData
+            end
+        end
     end
 
-    local decoded = C_EncodingUtil.DecodeBase64(profileString)
-    if not decoded then return {} end
-
-    local decompressed = C_EncodingUtil.DecompressString(decoded, Enum.CompressionMethod.Deflate)
-    if not decompressed then return {} end
-
-    local profileData = C_EncodingUtil.DeserializeCBOR(decompressed)
-    if profileData and type(profileData) == "table" then
-        -- Handle envelope format {d = ..., _n = ...}
-        if profileData.d and type(profileData.d) == "table" then
-            return profileData.d
+    -- Fallback: try C_EncodingUtil format (Base64 + Deflate + CBOR)
+    if C_EncodingUtil then
+        local decoded = C_EncodingUtil.DecodeBase64(encoded)
+        if decoded then
+            local ok, decompressed = pcall(C_EncodingUtil.DecompressString, decoded, Enum.CompressionMethod.Deflate)
+            if ok and decompressed then
+                local data = C_EncodingUtil.DeserializeCBOR(decompressed)
+                if data and type(data) == "table" then
+                    if data.d and type(data.d) == "table" then
+                        return data.d
+                    end
+                    return data
+                end
+            end
         end
-        return profileData
     end
 
     return {}
