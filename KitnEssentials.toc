@@ -1,0 +1,23 @@
+## Title: |cffFF008CKitn|r|cffffffffEssentials|r
+## Notes: Standalone combat, QoL, and skinning modules for KitnUI.
+## Author: Bitebtw
+## Version: @project-version@
+## SavedVariables: KitnEssentialsDB, KitnEssentialsOptimizeDB
+## Interface: 120000, 120001
+## OptionalDeps: Ace3, LibSharedMedia-3.0, ElvUI
+## IconTexture: Interface\Icons\INV_Misc_Gift_05
+## Category-enUS: |cffFF008CKitn|rUI
+## X-Curse-Project-ID: 1485435
+## X-Wago-ID: n6VLEEGd
+
+Libs\Init.xml
+
+Core\Core.xml
+Utils\Utils.xml
+
+Combat\Combat.xml
+CustomBuffs\CustomBuffs.xml
+QoL\QoL.xml
+Skinning\Skinning.xml
+
+GUI\GUI.xml

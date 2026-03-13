@@ -1,0 +1,15 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/ ..\FrameXML\UI.xsd">
+
+    <Script file="CombatTimer.lua" />
+    <Script file="CombatCross.lua" />
+    <Script file="CombatRes.lua" />
+    <Script file="CombatTexts.lua" />
+    <Script file="CursorCircle.lua" />
+    <Script file="PetStatusText.lua" />
+    <Script file="GatewayAlert.lua" />
+    <Script file="TargetCastbar.lua" />
+    <Script file="FocusCastbar.lua" />
+    <Script file="RangeChecker.lua" />
+    <Script file="TimeSpiral.lua" />
+</Ui>

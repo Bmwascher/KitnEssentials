@@ -1,0 +1,76 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/ ..\FrameXML\UI.xsd">
+
+    <!-- Core must load first (creates GUIFrame namespace) -->
+    <Script file="GUIMain\GUI-Core.lua" />
+
+    <!-- Utilities -->
+    <Script file="GUIUtil\GUI-FrameChooser.lua" />
+
+    <!-- Widgets attach to GUIFrame -->
+    <Script file="GUIWidgets\GUI-KEToggle.lua" />
+    <Script file="GUIWidgets\GUI-KESlider.lua" />
+    <Script file="GUIWidgets\GUI-KEDropdown.lua" />
+    <Script file="GUIWidgets\GUI-KEButton.lua" />
+    <Script file="GUIWidgets\GUI-KEColorPicker.lua" />
+    <Script file="GUIWidgets\GUI-KEEditBox.lua" />
+    <Script file="GUIWidgets\GUI-KEText.lua" />
+    <Script file="GUIWidgets\GUI-PositionCard.lua" />
+    <Script file="GUIWidgets\GUI-Sidebar.lua" />
+
+    <!-- Main frame and pages -->
+    <Script file="GUIMain\GUI-MainFrame.lua" />
+    <Script file="GUIMain\GUI-HomePage.lua" />
+
+    <!-- Combat tabs -->
+    <Script file="GUITabs\GUICombat\GUI-CombatTimer.lua" />
+    <Script file="GUITabs\GUICombat\GUI-CombatCross.lua" />
+    <Script file="GUITabs\GUICombat\GUI-CombatRes.lua" />
+    <Script file="GUITabs\GUICombat\GUI-CombatTexts.lua" />
+    <Script file="GUITabs\GUICombat\GUI-CursorCircle.lua" />
+    <Script file="GUITabs\GUICombat\GUI-PetStatusText.lua" />
+    <Script file="GUITabs\GUICombat\GUI-GatewayAlert.lua" />
+    <Script file="GUITabs\GUICombat\GUI-TargetCastbar.lua" />
+    <Script file="GUITabs\GUICombat\GUI-FocusCastbar.lua" />
+    <Script file="GUITabs\GUICombat\GUI-RangeChecker.lua" />
+    <Script file="GUITabs\GUICombat\GUI-TimeSpiral.lua" />
+
+    <!-- QoL tabs -->
+    <Script file="GUITabs\GUIQoL\GUI-Automation.lua" />
+    <Script file="GUITabs\GUIQoL\GUI-CVars.lua" />
+    <Script file="GUITabs\GUIQoL\GUI-SlashCommands.lua" />
+    <Script file="GUITabs\GUIQoL\GUI-CopyAnything.lua" />
+    <Script file="GUITabs\GUIQoL\GUI-DragonRiding.lua" />
+    <Script file="GUITabs\GUIQoL\GUI-MissingBuffs.lua" />
+    <Script file="GUITabs\GUIQoL\GUI-HuntersMark.lua" />
+    <Script file="GUITabs\GUIQoL\GUI-HideBars.lua" />
+    <Script file="GUITabs\GUIQoL\GUI-Recuperate.lua" />
+
+    <!-- Skinning tabs -->
+    <Script file="GUITabs\GUISkinning\GUI-Tooltips.lua" />
+    <Script file="GUITabs\GUISkinning\GUI-Chat.lua" />
+    <Script file="GUITabs\GUISkinning\GUI-BlizzardMessages.lua" />
+    <Script file="GUITabs\GUISkinning\GUI-BlizzardMouseover.lua" />
+    <Script file="GUITabs\GUISkinning\GUI-BlizzardMicroMenu.lua" />
+    <Script file="GUITabs\GUISkinning\GUI-Minimap.lua" />
+    <Script file="GUITabs\GUISkinning\GUI-DetailsBackdrop.lua" />
+    <Script file="GUITabs\GUISkinning\GUI-ActionBars.lua" />
+    <Script file="GUITabs\GUISkinning\GUI-Auras.lua" />
+    <Script file="GUITabs\GUISkinning\GUI-CDMOverlay.lua" />
+    <Script file="GUITabs\GUISkinning\GUI-CDMGlow.lua" />
+    <Script file="GUITabs\GUISkinning\GUI-UICleanup.lua" />
+    <Script file="GUITabs\GUISkinning\GUI-Battlenet.lua" />
+    <Script file="GUITabs\GUISkinning\GUI-BlizzardRaidmanager.lua" />
+
+    <!-- CustomBuffs tabs -->
+    <Script file="GUITabs\GUICustomBuffs\GUI-BuffIcons.lua" />
+    <Script file="GUITabs\GUICustomBuffs\GUI-BuffBars.lua" />
+    <Script file="GUITabs\GUICustomBuffs\GUI-ExternalsDefensives.lua" />
+    <Script file="GUITabs\GUICustomBuffs\GUI-MovementBuffs.lua" />
+
+    <!-- Optimize tab -->
+    <Script file="GUITabs\GUIQoL\GUI-Optimize.lua" />
+
+    <!-- Profiles tab -->
+    <Script file="GUIMain\GUI-ProfilesTab.lua" />
+</Ui>

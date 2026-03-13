@@ -1,0 +1,398 @@
+-- KitnEssentials namespace
+---@class KE
+local KE = select(2, ...)
+if not KitnEssentials then return end
+
+-- Credit to unhalted for the idea of this module
+
+-- Create module
+---@class SkinDetailsBackdrop: AceModule, AceEvent-3.0
+local SK = KitnEssentials:NewModule("SkinDetailsBackdrop", "AceEvent-3.0")
+
+-- Localization
+local CreateFrame = CreateFrame
+local unpack = unpack
+local pairs = pairs
+local _G = _G
+local C_AddOns = C_AddOns
+
+-- Module locals
+local backdropOneInitialized = false
+local backdropTwoInitialized = false
+local DetailsBase1 = _G["DetailsBaseFrame1"]
+local DetailsWindow1 = _G["Details_WindowFrame1"]
+local DetailsBase2 = _G["DetailsBaseFrame2"]
+local DetailsWindow2 = _G["Details_WindowFrame2"]
+
+-- Update db
+function SK:UpdateDB()
+    self.db = KE.db.profile.Skinning.Details
+end
+
+-- Module init
+function SK:OnInitialize()
+    self:UpdateDB()
+    self.backdropOne = nil
+    self.bordersOne = {}
+    self.backdropTwo = nil
+    self.bordersTwo = {}
+    self:SetEnabledState(false)
+end
+
+-- Helper to create 4 pixel borders on a frame
+local function CreateBorders(parent, color)
+    local borderFrame = CreateFrame("Frame", nil, parent)
+    borderFrame:SetAllPoints(parent)
+    borderFrame:SetFrameLevel(parent:GetFrameLevel() + 1)
+
+    local borderTop = borderFrame:CreateTexture(nil, "OVERLAY", nil, 7)
+    borderTop:SetHeight(1)
+    borderTop:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
+    borderTop:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, 0)
+    borderTop:SetColorTexture(unpack(color))
+    borderTop:SetTexelSnappingBias(0)
+    borderTop:SetSnapToPixelGrid(false)
+
+    local borderBottom = borderFrame:CreateTexture(nil, "OVERLAY", nil, 7)
+    borderBottom:SetHeight(1)
+    borderBottom:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", 0, 0)
+    borderBottom:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, 0)
+    borderBottom:SetColorTexture(unpack(color))
+    borderBottom:SetTexelSnappingBias(0)
+    borderBottom:SetSnapToPixelGrid(false)
+
+    local borderLeft = borderFrame:CreateTexture(nil, "OVERLAY", nil, 7)
+    borderLeft:SetWidth(1)
+    borderLeft:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
+    borderLeft:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", 0, 0)
+    borderLeft:SetColorTexture(unpack(color))
+    borderLeft:SetTexelSnappingBias(0)
+    borderLeft:SetSnapToPixelGrid(false)
+
+    local borderRight = borderFrame:CreateTexture(nil, "OVERLAY", nil, 7)
+    borderRight:SetWidth(1)
+    borderRight:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, 0)
+    borderRight:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, 0)
+    borderRight:SetColorTexture(unpack(color))
+    borderRight:SetTexelSnappingBias(0)
+    borderRight:SetSnapToPixelGrid(false)
+
+    return {
+        top = borderTop,
+        bottom = borderBottom,
+        left = borderLeft,
+        right = borderRight,
+    }
+end
+
+-- Module OnEnable
+function SK:OnEnable()
+    if KE:ShouldNotLoadModule() then return end
+    if not C_AddOns.IsAddOnLoaded("Details") then return end
+    if not self.db.Enabled then return end
+
+    if not backdropOneInitialized then
+        SK:CreateBackdropOne()
+    else
+        self.backdropOne:Show()
+    end
+
+    -- Register edit mode for backdrop one
+    if self.backdropOne and KE.EditMode then
+        local config = {
+            key = "DetailsBackdropOne",
+            displayName = "Details Backdrop: 1",
+            frame = self.backdropOne,
+            getPosition = function()
+                local bgOneDB = self.db.backDropOne
+                if bgOneDB.autoSize then
+                    return {
+                        AnchorFrom = "BOTTOMRIGHT",
+                        AnchorTo = "BOTTOMRIGHT",
+                        XOffset = bgOneDB.Position.XOffset,
+                        YOffset = bgOneDB.Position.YOffset,
+                    }
+                end
+                return bgOneDB.Position
+            end,
+            setPosition = function(pos)
+                local bgOneDB = self.db.backDropOne
+                bgOneDB.Position.XOffset = pos.XOffset
+                bgOneDB.Position.YOffset = pos.YOffset
+                if not bgOneDB.autoSize then
+                    bgOneDB.Position.AnchorFrom = pos.AnchorFrom
+                    bgOneDB.Position.AnchorTo = pos.AnchorTo
+                end
+                SK:UpdateDetailsBackdropOne()
+            end,
+            getParentFrame = function()
+                return UIParent
+            end,
+            guiPath = "SkinDetails",
+        }
+        KE.EditMode:RegisterElement(config)
+    end
+
+    if not backdropTwoInitialized then
+        SK:CreateBackdropTwo()
+    else
+        self.backdropTwo:Show()
+    end
+
+    -- Register edit mode for backdrop two
+    if self.backdropTwo and KE.EditMode then
+        local config = {
+            key = "DetailsBackdropTwo",
+            displayName = "Details Backdrop: 2",
+            frame = self.backdropTwo,
+            getPosition = function()
+                local bgTwoDB = self.db.backDropTwo
+                if bgTwoDB.autoSize then
+                    return {
+                        AnchorFrom = "BOTTOMRIGHT",
+                        AnchorTo = "BOTTOMRIGHT",
+                        XOffset = bgTwoDB.Position.XOffset,
+                        YOffset = bgTwoDB.Position.YOffset,
+                    }
+                end
+                return bgTwoDB.Position
+            end,
+            setPosition = function(pos)
+                local bgTwoDB = self.db.backDropTwo
+                bgTwoDB.Position.XOffset = pos.XOffset
+                bgTwoDB.Position.YOffset = pos.YOffset
+                if not bgTwoDB.autoSize then
+                    bgTwoDB.Position.AnchorFrom = pos.AnchorFrom
+                    bgTwoDB.Position.AnchorTo = pos.AnchorTo
+                end
+                SK:UpdateDetailsBackdropTwo()
+            end,
+            getParentFrame = function()
+                return UIParent
+            end,
+            guiPath = "SkinDetails",
+        }
+        KE.EditMode:RegisterElement(config)
+    end
+end
+
+-- Create backdrop One
+function SK:CreateBackdropOne()
+    if not self.db.Enabled then return end
+    if not self.db.backDropOne.Enabled then return end
+    if backdropOneInitialized then return end
+    local bgOneDB = self.db.backDropOne
+
+    -- Refresh Details frame references
+    DetailsBase1 = _G["DetailsBaseFrame1"]
+    DetailsWindow1 = _G["Details_WindowFrame1"]
+
+    local backdrop = CreateFrame("Frame", "KE_DetailsBgOne", UIParent, "BackdropTemplate")
+    backdrop:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+    })
+    backdrop:SetBackdropColor(unpack(bgOneDB.BackgroundColor))
+
+    -- Create borders
+    self.bordersOne = CreateBorders(backdrop, bgOneDB.BorderColor)
+
+    -- Apply sizing
+    local detailsBars = bgOneDB.detailsBars or self.db.detailsBars or 7
+    if bgOneDB.autoSize and DetailsBase1 and DetailsWindow1 then
+        backdrop:SetFrameStrata("LOW")
+        DetailsBase1:ClearAllPoints()
+        DetailsWindow1:ClearAllPoints()
+
+        local detailHeight = self.db.detailsTitelH + (self.db.detailsBarH * detailsBars) +
+            (self.db.detailsSpacing * detailsBars) + 2
+        backdrop:SetWidth(self.db.detailsWidth)
+        backdrop:SetHeight(detailHeight)
+
+        backdrop:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT",
+            bgOneDB.Position.XOffset, bgOneDB.Position.YOffset)
+
+        DetailsBase1:SetSize(backdrop:GetWidth() - 2, backdrop:GetHeight() - self.db.detailsTitelH)
+        DetailsWindow1:SetSize(backdrop:GetWidth() - 2, backdrop:GetHeight() - self.db.detailsTitelH)
+        DetailsBase1:SetPoint("BOTTOMRIGHT", backdrop, "BOTTOMRIGHT", -1, -1)
+        DetailsWindow1:SetPoint("BOTTOMRIGHT", backdrop, "BOTTOMRIGHT", -1, -1)
+    else
+        backdrop:SetWidth(bgOneDB.width)
+        backdrop:SetHeight(bgOneDB.height)
+        backdrop:SetFrameStrata(bgOneDB.Strata)
+        backdrop:SetPoint(bgOneDB.Position.AnchorFrom, UIParent, bgOneDB.Position.AnchorTo,
+            bgOneDB.Position.XOffset, bgOneDB.Position.YOffset)
+    end
+
+    self.backdropOne = backdrop
+    backdropOneInitialized = true
+end
+
+function SK:UpdateDetailsBackdropOne()
+    if not self.backdropOne then return end
+    local bgOneDB = self.db.backDropOne
+
+    -- Refresh Details frame references
+    DetailsBase1 = _G["DetailsBaseFrame1"]
+    DetailsWindow1 = _G["Details_WindowFrame1"]
+
+    local detailsBars = bgOneDB.detailsBars or self.db.detailsBars or 7
+    if bgOneDB.autoSize and DetailsBase1 and DetailsWindow1 then
+        DetailsBase1:ClearAllPoints()
+        DetailsWindow1:ClearAllPoints()
+        self.backdropOne:ClearAllPoints()
+
+        local detailHeight = self.db.detailsTitelH + (self.db.detailsBarH * detailsBars) +
+            (self.db.detailsSpacing * detailsBars) + 2
+        self.backdropOne:SetWidth(self.db.detailsWidth)
+        self.backdropOne:SetHeight(detailHeight)
+
+        self.backdropOne:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT",
+            bgOneDB.Position.XOffset, bgOneDB.Position.YOffset)
+        self.backdropOne:SetFrameStrata("LOW")
+
+        DetailsBase1:SetSize(self.backdropOne:GetWidth() - 2, self.backdropOne:GetHeight() - self.db.detailsTitelH)
+        DetailsWindow1:SetSize(self.backdropOne:GetWidth() - 2, self.backdropOne:GetHeight() - self.db.detailsTitelH)
+        DetailsBase1:SetPoint("BOTTOMRIGHT", self.backdropOne, "BOTTOMRIGHT", -1, -1)
+        DetailsWindow1:SetPoint("BOTTOMRIGHT", self.backdropOne, "BOTTOMRIGHT", -1, -1)
+    elseif not bgOneDB.autoSize then
+        self.backdropOne:ClearAllPoints()
+        self.backdropOne:SetWidth(bgOneDB.width)
+        self.backdropOne:SetHeight(bgOneDB.height)
+        self.backdropOne:SetFrameStrata(bgOneDB.Strata)
+        self.backdropOne:SetPoint(bgOneDB.Position.AnchorFrom, UIParent, bgOneDB.Position.AnchorTo,
+            bgOneDB.Position.XOffset, bgOneDB.Position.YOffset)
+    end
+
+    -- Update colors
+    self.backdropOne:SetBackdropColor(unpack(bgOneDB.BackgroundColor))
+    for _, border in pairs(self.bordersOne) do
+        border:SetColorTexture(unpack(bgOneDB.BorderColor))
+    end
+end
+
+-- Create backdrop Two
+function SK:CreateBackdropTwo()
+    if not self.db.Enabled then return end
+    if not self.db.backDropTwo.Enabled then return end
+    if backdropTwoInitialized then return end
+    local bgTwoDB = self.db.backDropTwo
+
+    -- Refresh Details frame references
+    DetailsBase2 = _G["DetailsBaseFrame2"]
+    DetailsWindow2 = _G["Details_WindowFrame2"]
+
+    local backdrop = CreateFrame("Frame", "KE_DetailsBgTwo", UIParent, "BackdropTemplate")
+    backdrop:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+    })
+    backdrop:SetBackdropColor(unpack(bgTwoDB.BackgroundColor))
+
+    -- Create borders
+    self.bordersTwo = CreateBorders(backdrop, bgTwoDB.BorderColor)
+
+    -- Apply sizing
+    local detailsBars = bgTwoDB.detailsBars or self.db.detailsBars or 7
+    if bgTwoDB.autoSize and DetailsBase2 and DetailsWindow2 then
+        backdrop:SetFrameStrata("LOW")
+        DetailsBase2:ClearAllPoints()
+        DetailsWindow2:ClearAllPoints()
+
+        local detailHeight = self.db.detailsTitelH + (self.db.detailsBarH * detailsBars) +
+            (self.db.detailsSpacing * detailsBars) + 2
+        backdrop:SetWidth(self.db.detailsWidth)
+        backdrop:SetHeight(detailHeight)
+
+        backdrop:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT",
+            bgTwoDB.Position.XOffset, bgTwoDB.Position.YOffset)
+
+        DetailsBase2:SetSize(backdrop:GetWidth() - 2, backdrop:GetHeight() - self.db.detailsTitelH)
+        DetailsWindow2:SetSize(backdrop:GetWidth() - 2, backdrop:GetHeight() - self.db.detailsTitelH)
+        DetailsBase2:SetPoint("BOTTOMRIGHT", backdrop, "BOTTOMRIGHT", -1, -1)
+        DetailsWindow2:SetPoint("BOTTOMRIGHT", backdrop, "BOTTOMRIGHT", -1, -1)
+    else
+        backdrop:ClearAllPoints()
+        backdrop:SetWidth(bgTwoDB.width)
+        backdrop:SetHeight(bgTwoDB.height)
+        backdrop:SetFrameStrata(bgTwoDB.Strata)
+        backdrop:SetPoint(bgTwoDB.Position.AnchorFrom, UIParent, bgTwoDB.Position.AnchorTo,
+            bgTwoDB.Position.XOffset, bgTwoDB.Position.YOffset)
+    end
+
+    self.backdropTwo = backdrop
+    backdropTwoInitialized = true
+end
+
+function SK:UpdateDetailsBackdropTwo()
+    if not self.backdropTwo then return end
+    local bgTwoDB = self.db.backDropTwo
+
+    -- Refresh Details frame references
+    DetailsBase2 = _G["DetailsBaseFrame2"]
+    DetailsWindow2 = _G["Details_WindowFrame2"]
+
+    local detailsBars = bgTwoDB.detailsBars or self.db.detailsBars or 7
+    if bgTwoDB.autoSize and DetailsBase2 and DetailsWindow2 then
+        self.backdropTwo:SetFrameStrata("LOW")
+        self.backdropTwo:ClearAllPoints()
+        DetailsBase2:ClearAllPoints()
+        DetailsWindow2:ClearAllPoints()
+
+        local detailHeight = self.db.detailsTitelH + (self.db.detailsBarH * detailsBars) +
+            (self.db.detailsSpacing * detailsBars) + 2
+        self.backdropTwo:SetWidth(self.db.detailsWidth)
+        self.backdropTwo:SetHeight(detailHeight)
+        self.backdropTwo:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT",
+            bgTwoDB.Position.XOffset, bgTwoDB.Position.YOffset)
+
+        DetailsBase2:SetSize(self.backdropTwo:GetWidth() - 2, self.backdropTwo:GetHeight() - self.db.detailsTitelH)
+        DetailsWindow2:SetSize(self.backdropTwo:GetWidth() - 2, self.backdropTwo:GetHeight() - self.db.detailsTitelH)
+        DetailsBase2:SetPoint("BOTTOMRIGHT", self.backdropTwo, "BOTTOMRIGHT", -1, -1)
+        DetailsWindow2:SetPoint("BOTTOMRIGHT", self.backdropTwo, "BOTTOMRIGHT", -1, -1)
+    elseif not bgTwoDB.autoSize then
+        self.backdropTwo:ClearAllPoints()
+        self.backdropTwo:SetWidth(bgTwoDB.width)
+        self.backdropTwo:SetHeight(bgTwoDB.height)
+        self.backdropTwo:SetFrameStrata(bgTwoDB.Strata)
+        self.backdropTwo:SetPoint(bgTwoDB.Position.AnchorFrom, UIParent, bgTwoDB.Position.AnchorTo,
+            bgTwoDB.Position.XOffset, bgTwoDB.Position.YOffset)
+    end
+
+    -- Update colors
+    self.backdropTwo:SetBackdropColor(unpack(bgTwoDB.BackgroundColor))
+    for _, border in pairs(self.bordersTwo) do
+        border:SetColorTexture(unpack(bgTwoDB.BorderColor))
+    end
+end
+
+function SK:ApplySettings()
+    if KE:ShouldNotLoadModule() then return end
+    if not self.db.Enabled then
+        if self.backdropOne then
+            self.backdropOne:Hide()
+        end
+        if self.backdropTwo then
+            self.backdropTwo:Hide()
+        end
+    else
+        if self.backdropOne then
+            self:UpdateDetailsBackdropOne()
+        else
+            self:CreateBackdropOne()
+        end
+        if self.backdropTwo then
+            self:UpdateDetailsBackdropTwo()
+        else
+            self:CreateBackdropTwo()
+        end
+    end
+end
+
+-- Module OnDisable
+function SK:OnDisable()
+    if self.backdropOne then
+        self.backdropOne:Hide()
+    end
+    if self.backdropTwo then
+        self.backdropTwo:Hide()
+    end
+end
