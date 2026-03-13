@@ -1,0 +1,18 @@
+package-as: KitnEssentials
+
+changelog-title: KitnEssentials
+
+ignore:
+  - "*.png"
+  - .pkgmeta
+  - .claude
+  - CLAUDE.md
+  - CHANGELOG.md
+
+externals:
+  Libs/Ace3:
+    url: https://repos.curseforge.com/wow/ace3/trunk
+    tag: latest
+  Libs/LibSharedMedia-3.0:
+    url: https://repos.curseforge.com/wow/libsharedmedia-3-0/trunk/LibSharedMedia-3.0
+    tag: latest
