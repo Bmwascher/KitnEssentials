@@ -3,7 +3,6 @@ package-as: KitnEssentials
 changelog-title: KitnEssentials
 
 ignore:
-  - "*.png"
   - .pkgmeta
   - .claude
   - CLAUDE.md
