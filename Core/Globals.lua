@@ -51,7 +51,11 @@ end
 local function GetAddonMetadata()
     if not C_AddOns then return end
     KE.AddOnName = C_AddOns.GetAddOnMetadata(addonName, "Title")
-    KE.Version = C_AddOns.GetAddOnMetadata(addonName, "Version")
+    local ver = C_AddOns.GetAddOnMetadata(addonName, "Version")
+    if not ver or ver:find("@") then
+        ver = C_AddOns.GetAddOnMetadata(addonName, "X-Manual-Version") or "dev"
+    end
+    KE.Version = ver:gsub("^v", "")
     KE.Author = C_AddOns.GetAddOnMetadata(addonName, "Author")
 end
 GetAddonMetadata()
