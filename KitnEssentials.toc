@@ -2,6 +2,7 @@
 ## Notes: Standalone combat, QoL, and skinning modules for KitnUI.
 ## Author: Bitebtw
 ## Version: @project-version@
+## X-Manual-Version: 1.0.1
 ## SavedVariables: KitnEssentialsDB, KitnEssentialsOptimizeDB
 ## Interface: 120000, 120001
 ## OptionalDeps: Ace3, LibSharedMedia-3.0, ElvUI

@@ -265,10 +265,9 @@ end
 local function RegisterKitnCommands()
     if kitnHooked then return end
 
-    -- Ensure the global tables exist (KitnUI/KitnUI Lite creates KitnCommands,
+    -- Ensure the global table exists (KitnUI/KitnUI Lite creates KitnCommands,
     -- but KE may load first)
     KitnCommands = KitnCommands or {}
-    KitnHelpLines = KitnHelpLines or {}
 
     -- /kitn essentials — open KE settings
     KitnCommands["essentials"] = function()
@@ -337,18 +336,19 @@ local function RegisterKitnCommands()
         print(PREFIX .. "Lua errors " .. (enabled and "shown" or "hidden") .. ".")
     end
 
-    -- Help lines (printed by KitnUI/KitnUI Lite after their own help)
-    table_insert(KitnHelpLines, "  |cff888888— KitnEssentials —|r")
-    table_insert(KitnHelpLines, "  /kitn essentials   - Open KitnEssentials settings")
-    table_insert(KitnHelpLines, "  /kitn cd           - Toggle Cooldown Manager panel")
-    table_insert(KitnHelpLines, "  /kitn edit         - Toggle Edit Mode (drag UI elements)")
-    table_insert(KitnHelpLines, "  /kitn pi           - Set PI macro target (mouseover or target)")
-    table_insert(KitnHelpLines, "  /kitn clearchat    - Clear all chat frames")
-    table_insert(KitnHelpLines, "  /kitn chatbubbles  - Toggle chat bubbles")
-    table_insert(KitnHelpLines, "  /kitn nameplates   - Toggle enemy nameplates")
-    table_insert(KitnHelpLines, "  /kitn friendplates - Toggle friendly nameplates")
-    table_insert(KitnHelpLines, "  /kitn actioncam    - Toggle action camera")
-    table_insert(KitnHelpLines, "  /kitn errors       - Toggle Lua error display")
+    -- Slash lines (printed by /kitn slash)
+    KitnSlashLines = KitnSlashLines or {}
+    table_insert(KitnSlashLines, "  |cff888888— KitnEssentials —|r")
+    table_insert(KitnSlashLines, "  /kitn essentials   - Open KitnEssentials settings")
+    table_insert(KitnSlashLines, "  /kitn cd           - Toggle Cooldown Manager panel")
+    table_insert(KitnSlashLines, "  /kitn edit         - Toggle Edit Mode (drag UI elements)")
+    table_insert(KitnSlashLines, "  /kitn pi           - Set PI macro target (mouseover or target)")
+    table_insert(KitnSlashLines, "  /kitn clearchat    - Clear all chat frames")
+    table_insert(KitnSlashLines, "  /kitn chatbubbles  - Toggle chat bubbles")
+    table_insert(KitnSlashLines, "  /kitn nameplates   - Toggle enemy nameplates")
+    table_insert(KitnSlashLines, "  /kitn friendplates - Toggle friendly nameplates")
+    table_insert(KitnSlashLines, "  /kitn actioncam    - Toggle action camera")
+    table_insert(KitnSlashLines, "  /kitn errors       - Toggle Lua error display")
 
     kitnHooked = true
 end
