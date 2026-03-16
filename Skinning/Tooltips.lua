@@ -463,6 +463,9 @@ function SK:HookTooltip(tooltip)
     tooltip:HookScript("OnShow", function(self)
         SK:HideNineSlice(self)
         SK:HideHealthBars(self)
+        -- Guard against tainted (secret) width/height values that cause
+        -- SetBackdrop arithmetic errors in Blizzard's Backdrop.lua
+        if issecretvalue and issecretvalue(self:GetWidth()) then return end
         local backdrop = SK:GetOrCreateBackdrop(self)
         SK:UpdateBackdrop(backdrop)
         backdrop:Show()
@@ -489,12 +492,17 @@ function SK:Refresh()
     end
 
     for tooltip in pairs(hookedTooltips) do
-        if tooltip:IsShown() then
-            SK:StyleTooltip(tooltip)
-        end
-        local backdrop = tooltipBackdrops[tooltip]
-        if backdrop then
-            SK:UpdateBackdrop(backdrop)
+        -- Skip tooltips with tainted dimensions
+        if issecretvalue and issecretvalue(tooltip:GetWidth()) then
+            -- no-op: can't safely touch backdrop math
+        else
+            if tooltip:IsShown() then
+                SK:StyleTooltip(tooltip)
+            end
+            local backdrop = tooltipBackdrops[tooltip]
+            if backdrop then
+                SK:UpdateBackdrop(backdrop)
+            end
         end
     end
 end
