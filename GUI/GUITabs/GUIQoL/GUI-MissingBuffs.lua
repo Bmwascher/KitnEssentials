@@ -208,6 +208,9 @@ local SPEC_ICONS = {
     EVOKER = {
         Augmentation = { textureId = 5198700 },
     },
+    ROGUE = {
+        Stealth = { textureId = 132320 },
+    },
 }
 
 local LOAD_CONDITIONS = {
@@ -669,10 +672,18 @@ local function RenderStancesTab(scrollChild, yOffset, activeCards)
         function(checked)
             db.Stances.HideInRestedArea = checked
             Refresh()
-        end,
-        true, "Rested Area", "On", "Off")
-    restedRow:AddWidget(restedCheck, 1)
+        end)
+    restedRow:AddWidget(restedCheck, 0.5)
     table_insert(allWidgets, restedCheck)
+
+    local mountedCheck = GUIFrame:CreateCheckbox(restedRow, "Hide When Mounted",
+        db.Stances.HideWhenMounted == true,
+        function(checked)
+            db.Stances.HideWhenMounted = checked
+            Refresh()
+        end)
+    restedRow:AddWidget(mountedCheck, 0.5)
+    table_insert(allWidgets, mountedCheck)
     infoCard:AddRow(restedRow, 36)
 
     yOffset = yOffset + infoCard:GetContentHeight() + Theme.paddingSmall
@@ -690,6 +701,18 @@ local function RenderStancesTab(scrollChild, yOffset, activeCards)
     local druidCard = GUIFrame:CreateCard(scrollChild, "Druid Forms", yOffset)
     table_insert(activeCards, druidCard)
     table_insert(allWidgets, druidCard)
+
+    -- Combat Only toggle
+    local combatOnlyRow = GUIFrame:CreateRow(druidCard.content, 36)
+    local combatOnlyToggle = GUIFrame:CreateCheckbox(combatOnlyRow, "Only Show in Combat",
+        db.Stances.DRUID.CombatOnly == true,
+        function(checked)
+            db.Stances.DRUID.CombatOnly = checked
+            Refresh()
+        end)
+    combatOnlyRow:AddWidget(combatOnlyToggle, 1)
+    table_insert(allWidgets, combatOnlyToggle)
+    druidCard:AddRow(combatOnlyRow, 36)
 
     local balanceRow = GUIFrame:CreateRow(druidCard.content, 40)
     local balanceIcon = CreateIconWidget(balanceRow, SPEC_ICONS.DRUID.Balance, 40)
@@ -780,6 +803,28 @@ local function RenderStancesTab(scrollChild, yOffset, activeCards)
     priestCard:AddRow(priestRow, 40)
 
     yOffset = yOffset + priestCard:GetContentHeight() + Theme.paddingSmall
+
+    -- Rogue Stealth
+    db.Stances.ROGUE = db.Stances.ROGUE or {}
+    local rogueCard = GUIFrame:CreateCard(scrollChild, "Rogue Stealth", yOffset)
+    table_insert(activeCards, rogueCard)
+    table_insert(allWidgets, rogueCard)
+
+    local rogueRow = GUIFrame:CreateRow(rogueCard.content, 40)
+    local rogueIcon = CreateIconWidget(rogueRow, SPEC_ICONS.ROGUE.Stealth, 40)
+    rogueRow:AddWidget(rogueIcon, 0.1)
+
+    local rogueToggle = GUIFrame:CreateCheckbox(rogueRow, "Warn When Not Stealthed",
+        db.Stances.ROGUE.StealthEnabled == true,
+        function(checked)
+            db.Stances.ROGUE.StealthEnabled = checked
+            Refresh()
+        end)
+    rogueRow:AddWidget(rogueToggle, 0.9)
+    table_insert(allWidgets, rogueToggle)
+    rogueCard:AddRow(rogueRow, 40)
+
+    yOffset = yOffset + rogueCard:GetContentHeight() + Theme.paddingSmall
 
     -- Display Settings
     local card3 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)

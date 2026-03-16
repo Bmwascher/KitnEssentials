@@ -187,8 +187,11 @@ local CUSTOM_BUFFS = {
     -- Food
     { category = "FOOD",       spellId = 457284,    enabled = true },
     { category = "FOOD",       spellId = 1232585,   enabled = true },
+    { category = "FOOD",       spellId = 1232500,   enabled = true }, -- Well Fed (Vers)
     { category = "FOOD",       spellId = 461959,    enabled = true },
     { category = "FOOD",       spellId = 461960,    enabled = true },
+    { category = "FOOD",       spellId = 1233724,   enabled = true }, -- Well Fed (Midnight)
+    { category = "FOOD",       spellId = 1285644,   enabled = true }, -- Well Fed (Midnight)
     { category = "FOOD",       spellId = 462210,    enabled = true },
     { category = "FOOD",       spellId = 462181,    enabled = true },
     { category = "FOOD",       spellId = 462183,    enabled = true },
@@ -910,6 +913,7 @@ local function CheckStances()
     if stancesDb.Enabled == false then return end
 
     if stancesDb.HideInRestedArea and IsResting() then return end
+    if stancesDb.HideWhenMounted and IsMounted() then return end
 
     local spec = GetSpecialization()
     if not spec then return end
@@ -935,6 +939,9 @@ local function CheckStances()
 
     -- Druid: Form check
     if playerClass == "DRUID" then
+        -- Combat only check
+        if classSettings.CombatOnly and not UnitAffectingCombat("player") then return end
+
         local druidSpecs = {
             [102] = { toggleKey = "BalanceEnabled", spellId = 24858 },
             [103] = { toggleKey = "FeralEnabled", spellId = 768 },
@@ -969,6 +976,19 @@ local function CheckStances()
         local hasAttunement = PlayerHasBuff(requiredSpellId)
         if not hasAttunement and IsSpellKnown(requiredSpellId) then
             ShowStanceIcon(requiredSpellId)
+        end
+        return
+    end
+
+    -- Rogue: Stealth check (out of combat only)
+    if playerClass == "ROGUE" then
+        if not classSettings.StealthEnabled then return end
+        if UnitAffectingCombat("player") then return end
+
+        local stealthSpellId = 1784
+        local hasStealthBuff = PlayerHasBuff(stealthSpellId, { 115192, 185422, 11327 })
+        if not hasStealthBuff and IsSpellKnown(stealthSpellId) then
+            ShowStanceIcon(stealthSpellId)
         end
         return
     end

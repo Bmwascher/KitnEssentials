@@ -397,6 +397,7 @@ local Defaults = {
             Stances = {
                 Enabled = true,
                 HideInRestedArea = false,
+                HideWhenMounted = false,
                 WARRIOR = {
                     Enabled = true,
                     ArmsEnabled = true, Arms = "386164", ArmsReverseIcon = true,
@@ -411,6 +412,7 @@ local Defaults = {
                 },
                 DRUID = {
                     Enabled = true,
+                    CombatOnly = false,
                     BalanceEnabled = true, Balance = "24858", BalanceReverseIcon = false,
                     FeralEnabled = true, Feral = "768", FeralReverseIcon = false,
                     GuardianEnabled = true, Guardian = "5487", GuardianReverseIcon = false,
@@ -421,6 +423,10 @@ local Defaults = {
                 EVOKER = {
                     Enabled = true,
                     AugmentationEnabled = false, Augmentation = "403264", AugmentationReverseIcon = false,
+                },
+                ROGUE = {
+                    Enabled = true,
+                    StealthEnabled = true,
                 },
             },
             StanceDisplay = {
