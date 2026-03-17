@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.0.5
+### Fixes
+- Replaced BackdropTemplate with manual textures for tooltip skinning to avoid Blizzard Backdrop.lua taint errors on protected tooltips (world map POIs, quest tooltips, etc.).
+
+### Additions
+- MissingBuffs: Added food buff tracking (Well Fed, Sated, etc.).
+- MissingBuffs: Added Rogue Stealth tracking with icon display.
+- MissingBuffs: Added "Hide When Mounted" option for stance & spec buffs.
+- MissingBuffs: Added Druid Forms "Only Show in Combat" option.
+
 ## v1.0.4
 ### Fixes
 - Fixed secretvalue error with skinning the tooltip.

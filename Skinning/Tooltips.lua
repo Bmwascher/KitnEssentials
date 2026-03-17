@@ -128,34 +128,87 @@ function SK:OnInitialize()
 end
 
 -- Get or create custom backdrop for a tooltip
+-- Uses manual textures instead of BackdropTemplate to completely avoid
+-- Blizzard's Backdrop.lua taint errors with protected tooltip frames.
 function SK:GetOrCreateBackdrop(tooltip)
     if tooltipBackdrops[tooltip] then
         return tooltipBackdrops[tooltip]
     end
-    local backdrop = CreateFrame("Frame", nil, tooltip, "BackdropTemplate")
+    local backdrop = CreateFrame("Frame", nil, tooltip)
     local level = tooltip:GetFrameLevel()
     backdrop:SetFrameLevel(level > 0 and level - 1 or 0)
     backdrop:SetAllPoints(tooltip)
+
+    -- Background fill
+    local bg = backdrop:CreateTexture(nil, "BACKGROUND")
+    bg:SetTexture("Interface\\Buttons\\WHITE8X8")
+    bg:SetAllPoints(backdrop)
+    backdrop.bg = bg
+
+    -- Border edges (top, bottom, left, right)
+    local borderSize = self.db and self.db.BorderSize or 1
+
+    local top = backdrop:CreateTexture(nil, "BORDER")
+    top:SetTexture("Interface\\Buttons\\WHITE8X8")
+    top:SetPoint("TOPLEFT", backdrop, "TOPLEFT", 0, 0)
+    top:SetPoint("TOPRIGHT", backdrop, "TOPRIGHT", 0, 0)
+    top:SetHeight(borderSize)
+    backdrop.borderTop = top
+
+    local bottom = backdrop:CreateTexture(nil, "BORDER")
+    bottom:SetTexture("Interface\\Buttons\\WHITE8X8")
+    bottom:SetPoint("BOTTOMLEFT", backdrop, "BOTTOMLEFT", 0, 0)
+    bottom:SetPoint("BOTTOMRIGHT", backdrop, "BOTTOMRIGHT", 0, 0)
+    bottom:SetHeight(borderSize)
+    backdrop.borderBottom = bottom
+
+    local left = backdrop:CreateTexture(nil, "BORDER")
+    left:SetTexture("Interface\\Buttons\\WHITE8X8")
+    left:SetPoint("TOPLEFT", backdrop, "TOPLEFT", 0, 0)
+    left:SetPoint("BOTTOMLEFT", backdrop, "BOTTOMLEFT", 0, 0)
+    left:SetWidth(borderSize)
+    backdrop.borderLeft = left
+
+    local right = backdrop:CreateTexture(nil, "BORDER")
+    right:SetTexture("Interface\\Buttons\\WHITE8X8")
+    right:SetPoint("TOPRIGHT", backdrop, "TOPRIGHT", 0, 0)
+    right:SetPoint("BOTTOMRIGHT", backdrop, "BOTTOMRIGHT", 0, 0)
+    right:SetWidth(borderSize)
+    backdrop.borderRight = right
+
     tooltipBackdrops[tooltip] = backdrop
     return backdrop
 end
 
--- Update backdrop settings
+-- Update backdrop colors
 function SK:UpdateBackdrop(backdrop)
     if not self.db then return end
-
-    backdrop:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",
-        edgeSize = self.db.BorderSize or 1,
-        insets = { left = 0, right = 0, top = 0, bottom = 0 },
-    })
 
     local bgColor = self.db.BackgroundColor or { 0, 0, 0, 0.8 }
     local borderColor = self.db.BorderColor or { 0, 0, 0, 1 }
 
-    backdrop:SetBackdropColor(bgColor[1], bgColor[2], bgColor[3], bgColor[4] or 0.8)
-    backdrop:SetBackdropBorderColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4] or 1)
+    if backdrop.bg then
+        backdrop.bg:SetVertexColor(bgColor[1], bgColor[2], bgColor[3], bgColor[4] or 0.8)
+    end
+
+    local br, bg, bb, ba = borderColor[1], borderColor[2], borderColor[3], borderColor[4] or 1
+    if backdrop.borderTop then backdrop.borderTop:SetVertexColor(br, bg, bb, ba) end
+    if backdrop.borderBottom then backdrop.borderBottom:SetVertexColor(br, bg, bb, ba) end
+    if backdrop.borderLeft then backdrop.borderLeft:SetVertexColor(br, bg, bb, ba) end
+    if backdrop.borderRight then backdrop.borderRight:SetVertexColor(br, bg, bb, ba) end
+end
+
+-- Re-apply full backdrop settings (called from Refresh when user changes settings like BorderSize)
+function SK:ApplyBackdropSettings(backdrop)
+    if not self.db then return end
+
+    local borderSize = self.db.BorderSize or 1
+    if backdrop.borderTop then backdrop.borderTop:SetHeight(borderSize) end
+    if backdrop.borderBottom then backdrop.borderBottom:SetHeight(borderSize) end
+    if backdrop.borderLeft then backdrop.borderLeft:SetWidth(borderSize) end
+    if backdrop.borderRight then backdrop.borderRight:SetWidth(borderSize) end
+
+    self:UpdateBackdrop(backdrop)
 end
 
 -- Fetch color info from unit if unit is a player
@@ -463,9 +516,6 @@ function SK:HookTooltip(tooltip)
     tooltip:HookScript("OnShow", function(self)
         SK:HideNineSlice(self)
         SK:HideHealthBars(self)
-        -- Guard against tainted (secret) width/height values that cause
-        -- SetBackdrop arithmetic errors in Blizzard's Backdrop.lua
-        if issecretvalue and issecretvalue(self:GetWidth()) then return end
         local backdrop = SK:GetOrCreateBackdrop(self)
         SK:UpdateBackdrop(backdrop)
         backdrop:Show()
@@ -501,7 +551,7 @@ function SK:Refresh()
             end
             local backdrop = tooltipBackdrops[tooltip]
             if backdrop then
-                SK:UpdateBackdrop(backdrop)
+                SK:ApplyBackdropSettings(backdrop)
             end
         end
     end
