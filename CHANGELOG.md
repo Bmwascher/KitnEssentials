@@ -1,9 +1,10 @@
 # Changelog
 
-## v1.0.5
+## v1.0.6
 ### Fixes
 - Replaced BackdropTemplate with manual textures for tooltip skinning to avoid Blizzard Backdrop.lua taint errors on protected tooltips (world map POIs, quest tooltips, etc.).
 
+## v1.0.5
 ### Additions
 - MissingBuffs: Added food buff tracking (Well Fed, Sated, etc.).
 - MissingBuffs: Added Rogue Stealth tracking with icon display.
