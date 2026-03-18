@@ -39,7 +39,7 @@ GUIFrame:RegisterContent("Recuperate", function(scrollChild, yOffset)
     end
 
     ----------------------------------------------------------------
-    -- Card 1: Enable
+    -- Card 1: Enable + Load Conditions
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Recuperate Button", yOffset)
 
@@ -50,11 +50,32 @@ GUIFrame:RegisterContent("Recuperate", function(scrollChild, yOffset)
     row1:AddWidget(enableCheck, 1)
     card1:AddRow(row1, 40)
 
+    -- Load conditions
+    local row1b = GUIFrame:CreateRow(card1.content, 36)
+    local loadInRaidCheck = GUIFrame:CreateCheckbox(row1b, "Load in Raid", db.LoadInRaid ~= false,
+        function(checked)
+            db.LoadInRaid = checked
+            if REC then REC:UpdateStateDriver() end
+        end,
+        true, "Load in Raid", "On", "Off")
+    row1b:AddWidget(loadInRaidCheck, 0.5)
+    table_insert(allWidgets, loadInRaidCheck)
+
+    local loadInPartyCheck = GUIFrame:CreateCheckbox(row1b, "Load in Party", db.LoadInParty == true,
+        function(checked)
+            db.LoadInParty = checked
+            if REC then REC:UpdateStateDriver() end
+        end,
+        true, "Load in Party", "On", "Off")
+    row1b:AddWidget(loadInPartyCheck, 0.5)
+    table_insert(allWidgets, loadInPartyCheck)
+    card1:AddRow(row1b, 36)
+
     local noteHeight = 40
     local noteRow = GUIFrame:CreateRow(card1.content, noteHeight)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
-        "Visible while in a raid group and out of combat. Fades based on missing health.",
+        "Visible out of combat in selected group types. Fades based on missing health.",
         noteHeight, "hide")
     noteRow:AddWidget(noteText, 1)
     card1:AddRow(noteRow, noteHeight)

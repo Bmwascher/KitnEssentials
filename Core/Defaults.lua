@@ -96,6 +96,9 @@ local Defaults = {
             Color = { 0, 1, 0.169, 1 },
             Thickness = 22,
             Outline = true,
+            RangeColorMeleeEnabled = false,
+            RangeColorRangedEnabled = false,
+            OutOfRangeColor = { 1, 0, 0, 1 },
         },
 
         CombatRes = {
@@ -502,11 +505,13 @@ local Defaults = {
 
         Recuperate = {
             Enabled = false,
+            LoadInRaid = true,
+            LoadInParty = false,
             Size = 40,
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
             Strata = "MEDIUM",
-            Position = DefaultPosition(0, -250),
+            Position = DefaultPosition(0, -90),
         },
 
         ----------------------------------------------------------------

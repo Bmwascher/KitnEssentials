@@ -13,21 +13,19 @@ GUIFrame:RegisterContent("CombatCross", function(scrollChild, yOffset)
         return yOffset + errorCard:GetContentHeight() + Theme.paddingMedium
     end
 
+    local CC = KitnEssentials and KitnEssentials:GetModule("CombatCross", true)
+
     local allWidgets = {}
     local colorModeWidgets = {}
+    local rangeColorWidgets = {}
 
     local function ApplySettings()
-        if KitnEssentials then
-            local mod = KitnEssentials:GetModule("CombatCross", true)
-            if mod and mod.ApplySettings then mod:ApplySettings() end
-        end
+        if CC then CC:ApplySettings() end
     end
 
     local function ApplyModuleState(enabled)
-        if not KitnEssentials then return end
-        local mod = KitnEssentials:GetModule("CombatCross", true)
-        if not mod then return end
-        mod.db.Enabled = enabled
+        if not CC then return end
+        CC.db.Enabled = enabled
         if enabled then
             KitnEssentials:EnableModule("CombatCross")
         else
@@ -38,6 +36,7 @@ GUIFrame:RegisterContent("CombatCross", function(scrollChild, yOffset)
     local function UpdateAllWidgetStates()
         local mainEnabled = db.Enabled ~= false
         local isCustomColor = (db.ColorMode or "custom") == "custom"
+        local isRangeEnabled = db.RangeColorMeleeEnabled == true or db.RangeColorRangedEnabled == true
 
         for _, widget in ipairs(allWidgets) do
             if widget.SetEnabled then
@@ -49,6 +48,11 @@ GUIFrame:RegisterContent("CombatCross", function(scrollChild, yOffset)
             for _, widget in ipairs(colorModeWidgets) do
                 if widget.SetEnabled then
                     widget:SetEnabled(isCustomColor)
+                end
+            end
+            for _, widget in ipairs(rangeColorWidgets) do
+                if widget.SetEnabled then
+                    widget:SetEnabled(isRangeEnabled)
                 end
             end
         end
@@ -164,6 +168,44 @@ GUIFrame:RegisterContent("CombatCross", function(scrollChild, yOffset)
     card3:AddRow(row3, 36)
 
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
+
+    ----------------------------------------------------------------
+    -- Card 4: Range Warning
+    ----------------------------------------------------------------
+    local card4 = GUIFrame:CreateCard(scrollChild, "Range Warning", yOffset)
+
+    local row4a = GUIFrame:CreateRow(card4.content, 40)
+    local meleeRangeCheck = GUIFrame:CreateCheckbox(row4a, "Enable for melee specs", db.RangeColorMeleeEnabled == true,
+        function(checked)
+            db.RangeColorMeleeEnabled = checked
+            ApplySettings()
+            UpdateAllWidgetStates()
+        end)
+    row4a:AddWidget(meleeRangeCheck, 1)
+    card4:AddRow(row4a, 40)
+
+    local row4b = GUIFrame:CreateRow(card4.content, 40)
+    local rangedRangeCheck = GUIFrame:CreateCheckbox(row4b, "Enable for ranged specs", db.RangeColorRangedEnabled == true,
+        function(checked)
+            db.RangeColorRangedEnabled = checked
+            ApplySettings()
+            UpdateAllWidgetStates()
+        end)
+    row4b:AddWidget(rangedRangeCheck, 1)
+    card4:AddRow(row4b, 40)
+
+    local row4c = GUIFrame:CreateRow(card4.content, 36)
+    local outOfRangeColorPicker = GUIFrame:CreateColorPicker(row4c, "Out of Range Color",
+        db.OutOfRangeColor or { 1, 0, 0, 1 },
+        function(r, g, b, a)
+            db.OutOfRangeColor = { r, g, b, a }
+            if CC then CC.lastInRange = nil end
+        end)
+    row4c:AddWidget(outOfRangeColorPicker, 1)
+    table_insert(rangeColorWidgets, outOfRangeColorPicker)
+    card4:AddRow(row4c, 36)
+
+    yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
 
     -- Apply initial widget states
     UpdateAllWidgetStates()

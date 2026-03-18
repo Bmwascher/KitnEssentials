@@ -26,6 +26,7 @@ local GetShapeshiftForm, GetShapeshiftFormInfo = GetShapeshiftForm, GetShapeshif
 local tostring, tonumber = tostring, tonumber
 local C_Spell, C_SpellBook, C_SpellActivationOverlay = C_Spell, C_SpellBook, C_SpellActivationOverlay
 local C_PetBattles, C_ChallengeMode = C_PetBattles, C_ChallengeMode
+local C_UnitAuras = C_UnitAuras
 local AuraUtil = AuraUtil
 local UIParent = UIParent
 local C_Timer = C_Timer
@@ -286,68 +287,55 @@ local function IsValidTarget(unit)
     return true
 end
 
+-- Direct spell ID lookup — fast and combat-safe, avoids iterating tainted aura data
 local function PlayerHasBuff(spellId, extraSpellIds)
     if not spellId then return false, nil end
     if issecretvalue(spellId) or issecretvalue(extraSpellIds) then return end
 
-    local hasBuff = false
-    local expirationTime = nil
+    local auraData = C_UnitAuras.GetPlayerAuraBySpellID(spellId)
+    if auraData then
+        return true, auraData.expirationTime
+    end
 
-    AuraUtil.ForEachAura("player", "HELPFUL", nil, function(auraInfo)
-        if not auraInfo or not auraInfo.spellId then return false end
-        local auraSpellId = auraInfo.spellId
-        if issecretvalue(auraSpellId) then return false end
-
-        if auraSpellId == spellId then
-            hasBuff = true
-            expirationTime = auraInfo.expirationTime
-            return true
-        end
-
-        if extraSpellIds then
-            for _, extraId in ipairs(extraSpellIds) do
-                if auraSpellId == extraId then
-                    hasBuff = true
-                    expirationTime = auraInfo.expirationTime
-                    return true
-                end
+    if extraSpellIds then
+        for _, extraId in ipairs(extraSpellIds) do
+            auraData = C_UnitAuras.GetPlayerAuraBySpellID(extraId)
+            if auraData then
+                return true, auraData.expirationTime
             end
         end
-        return false
-    end, true)
+    end
 
-    return hasBuff, expirationTime
+    return false, nil
 end
 
+-- Spell name lookup for group members — GetPlayerAuraBySpellID only works for player
 local function UnitHasBuff(unit, spellId, extraSpellIds)
     if issecretvalue(unit) then return end
     if not unit or not IsValidTarget(unit) then return true end
     if issecretvalue(spellId) or issecretvalue(extraSpellIds) then return end
 
-    local hasBuff = false
-
-    AuraUtil.ForEachAura(unit, "HELPFUL", nil, function(auraInfo)
-        if not auraInfo or not auraInfo.spellId then return false end
-        local auraSpellId = auraInfo.spellId
-        if issecretvalue(auraSpellId) then return false end
-
-        if auraSpellId == spellId then
-            hasBuff = true
+    local spellName = spellId and C_Spell.GetSpellName(spellId)
+    if spellName then
+        local auraData = C_UnitAuras.GetAuraDataBySpellName(unit, spellName, "HELPFUL")
+        if auraData then
             return true
         end
+    end
 
-        if extraSpellIds then
-            for _, extraId in ipairs(extraSpellIds) do
-                if auraSpellId == extraId then
-                    hasBuff = true
+    if extraSpellIds then
+        for _, extraId in ipairs(extraSpellIds) do
+            local extraName = C_Spell.GetSpellName(extraId)
+            if extraName then
+                local auraData = C_UnitAuras.GetAuraDataBySpellName(unit, extraName, "HELPFUL")
+                if auraData then
                     return true
                 end
             end
         end
-        return false
-    end, true)
+    end
 
-    return hasBuff
+    return false
 end
 
 local function GetGroupBuffClasses()

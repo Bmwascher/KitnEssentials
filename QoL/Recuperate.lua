@@ -10,7 +10,9 @@ local CreateFrame = CreateFrame
 local RegisterStateDriver = RegisterStateDriver
 local UnregisterStateDriver = UnregisterStateDriver
 local UnitHealthPercent = UnitHealthPercent
+local UnitIsDeadOrGhost = UnitIsDeadOrGhost
 local C_Spell = C_Spell
+local InCombatLockdown = InCombatLockdown
 
 local RECUPERATE_SPELL_ID = 1231411
 local spellInfo = C_Spell.GetSpellInfo(RECUPERATE_SPELL_ID)
@@ -18,7 +20,7 @@ local spellInfo = C_Spell.GetSpellInfo(RECUPERATE_SPELL_ID)
 REC.isPreview = false
 
 --------------------------------------------------------------------------------
--- Inline helpers (KE has no core ApplyZoom/AddBorders)
+-- Inline helpers
 --------------------------------------------------------------------------------
 local function ApplyZoom(texture, zoom)
     local texMin = 0.25 * zoom
@@ -75,18 +77,61 @@ function REC:OnInitialize()
 end
 
 --------------------------------------------------------------------------------
--- Health alpha (linear: 1 when missing health, 0 when full)
+-- Health alpha (step curve: visible when missing health, hidden at full)
 --------------------------------------------------------------------------------
 function REC:UpdateAlpha()
     if self.isPreview then return end
     if not self.button then return end
-    local alpha = UnitHealthPercent("player", true)
+
+    if UnitIsDeadOrGhost("player") then
+        self.button:SetAlpha(0)
+        return
+    end
+
+    -- UnitHealthPercent with curve handles secret values safely
+    -- Returns 1 when missing health, 0 when full
+    local alpha = UnitHealthPercent("player", true, KE.curves.HealthMissingAlpha)
     self.button:SetAlpha(alpha)
 end
 
 function REC:OnHealthChange(_, unit)
     if unit ~= "player" then return end
     if self.isPreview then return end
+    self:UpdateAlpha()
+end
+
+--------------------------------------------------------------------------------
+-- Visibility state driver (configurable raid/party load conditions)
+--------------------------------------------------------------------------------
+function REC:GetVisibilityString()
+    local loadInRaid = self.db.LoadInRaid
+    local loadInParty = self.db.LoadInParty
+
+    -- Neither enabled - always hide
+    if not loadInRaid and not loadInParty then
+        return "hide"
+    end
+
+    -- Both enabled - show in any group
+    if loadInRaid and loadInParty then
+        return "[combat] hide; [nogroup] hide; [dead] hide; show"
+    end
+
+    -- Only raid - hide if not in raid
+    if loadInRaid then
+        return "[combat] hide; [nogroup:raid] hide; [dead] hide; show"
+    end
+
+    -- Only party - hide in raid, hide if no group
+    return "[combat] hide; [group:raid] hide; [nogroup] hide; [dead] hide; show"
+end
+
+function REC:UpdateStateDriver()
+    if not self.button then return end
+    if self.isPreview then return end
+
+    UnregisterStateDriver(self.button, "visibility")
+    RegisterStateDriver(self.button, "visibility", self:GetVisibilityString())
     self:UpdateAlpha()
 end
 
@@ -101,7 +146,8 @@ function REC:CreateButton()
     button:SetSize(self.db.Size, self.db.Size)
     button:Hide()
 
-    RegisterStateDriver(button, "visibility", "[combat] hide; [nogroup:raid] hide; [dead] hide; show")
+    -- Register state driver for visibility
+    RegisterStateDriver(button, "visibility", self:GetVisibilityString())
 
     button:RegisterForClicks("AnyUp", "AnyDown")
     button:SetAttribute("type", "spell")
@@ -147,7 +193,10 @@ function REC:OnEnable()
     end)
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "UpdateAlpha")
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "UpdateAlpha")
+    self:RegisterEvent("GROUP_ROSTER_UPDATE", "UpdateAlpha")
     self:RegisterEvent("UNIT_HEALTH", "OnHealthChange")
+    self:RegisterEvent("PLAYER_DEAD", "UpdateAlpha")
+    self:RegisterEvent("PLAYER_UNGHOST", "UpdateAlpha")
     self:UpdateAlpha()
 end
 
@@ -193,8 +242,7 @@ function REC:HidePreview()
     self.isPreview = false
     if not self.button then return end
     if self.db.Enabled then
-        RegisterStateDriver(self.button, "visibility",
-            "[combat] hide; [nogroup:raid] hide; [dead] hide; show")
+        RegisterStateDriver(self.button, "visibility", self:GetVisibilityString())
         self:UpdateAlpha()
     else
         self.button:Hide()

@@ -557,6 +557,16 @@ function SK:CreateButtonBackdrop(button, barName, index, buttonSize)
     if button.icon then button.icon:SetAllPoints(button) end
     if button.cooldown then button.cooldown:SetAllPoints(button) end
     if button.SpellHighlightTexture then button.SpellHighlightTexture:SetAllPoints(button) end
+
+    -- Reposition proc glow (SpellActivationAlert) to match button size
+    if button.SpellActivationAlert then
+        local alert = button.SpellActivationAlert
+        local glowOverflow = buttonSize * 0.2
+        alert:ClearAllPoints()
+        alert:SetPoint("TOPLEFT", button, "TOPLEFT", -glowOverflow, glowOverflow)
+        alert:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", glowOverflow, -glowOverflow)
+    end
+
     if button.AutoCastable then button.AutoCastable:SetDrawLayer("OVERLAY", 7) end
 
     if button.AutoCastOverlay then
@@ -911,6 +921,7 @@ function SK:OnEnable()
 
         self:SetupDragDetection()
         self:SetupRangeIndicatorHook()
+        self:SetupProcGlowHook()
     end)
 end
 
@@ -931,6 +942,33 @@ function SK:SetupRangeIndicatorHook()
             end
         end
     end)
+end
+
+-- Proc glow hook — resize SpellActivationAlert when a proc fires
+function SK:SetupProcGlowHook()
+    if self._procGlowHookSetup then return end
+    self._procGlowHookSetup = true
+
+    if ActionButtonSpellAlertManager and ActionButtonSpellAlertManager.ShowAlert then
+        hooksecurefunc(ActionButtonSpellAlertManager, "ShowAlert", function(_, button)
+            if not button or not button.SpellActivationAlert then return end
+            if not button.ke_backdrop then return end -- Only for our skinned buttons
+
+            local alert = button.SpellActivationAlert
+
+            -- Hide the proc start animation (makes intro invisible, cleaner look)
+            if alert.ProcStartFlipbook then
+                alert.ProcStartFlipbook:SetAlpha(0)
+            end
+
+            -- Resize glow to match button size
+            local buttonSize = button:GetWidth()
+            local glowOverflow = buttonSize * 0.2
+            alert:ClearAllPoints()
+            alert:SetPoint("TOPLEFT", button, "TOPLEFT", -glowOverflow, glowOverflow)
+            alert:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", glowOverflow, -glowOverflow)
+        end)
+    end
 end
 
 -- Iterate all backdrops
@@ -1126,6 +1164,14 @@ function SK:UpdateBarLayout(barKey)
                 if button.icon then button.icon:SetAllPoints(button) end
                 if button.cooldown then button.cooldown:SetAllPoints(button) end
                 if button.SpellHighlightTexture then button.SpellHighlightTexture:SetAllPoints(button) end
+
+                -- Update proc glow to match new size
+                if button.SpellActivationAlert then
+                    local glowOverflow = buttonSize * 0.2
+                    button.SpellActivationAlert:ClearAllPoints()
+                    button.SpellActivationAlert:SetPoint("TOPLEFT", button, "TOPLEFT", -glowOverflow, glowOverflow)
+                    button.SpellActivationAlert:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", glowOverflow, -glowOverflow)
+                end
 
                 self:StyleButtonText(button, barKey)
             end
