@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.1
+### Fixes
+- Sidebar: Hover and selection gradient overlays now update dynamically with theme changes.
+- GUI-Theme: Fixed CreateButton callback format for Copy/Reset buttons.
+
 ## v1.1.0
 ### Additions
 - Addon Theme system: 8 WoW-themed color presets (KitnUI, Nighthold, Firelands, Icecrown, Dreamsurge, Twilight, Sunwell, Torghast), class color mode, and full custom color mode.

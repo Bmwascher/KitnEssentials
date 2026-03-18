@@ -495,7 +495,14 @@ function GUIFrame:RefreshSidebar()
                     item.label:SetText(itemConfig.text or "")
                     item.selectedBar:SetColorTexture(T.accent[1], T.accent[2], T.accent[3], 1)
                     item.selectedBar:Show()
-                    item.selectedOverlay:SetColorTexture(T.accent[1], T.accent[2], T.accent[3], 0.10)
+                    item.selectedOverlay:SetColorTexture(1, 1, 1, 1)
+                    item.selectedOverlay:SetGradient("HORIZONTAL",
+                        CreateColor(T.accent[1], T.accent[2], T.accent[3], 0.25),
+                        CreateColor(T.accent[1], T.accent[2], T.accent[3], 0))
+                    item.background:SetColorTexture(1, 1, 1, 1)
+                    item.background:SetGradient("HORIZONTAL",
+                        CreateColor(T.accent[1], T.accent[2], T.accent[3], 0.25),
+                        CreateColor(T.accent[1], T.accent[2], T.accent[3], 0))
 
                     if sectionDisabled then
                         item.label:SetTextColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 0.35)
