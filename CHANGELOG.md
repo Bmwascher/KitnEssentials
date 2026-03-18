@@ -1,12 +1,16 @@
 # Changelog
 
+## v1.0.8
+### Fixes
+- CustomOutline: Added secret/tainted value guards to all text and alpha comparisons to prevent errors on focus castbar and other secure frames.
+- Tooltip skinning: Reverted to manual textures (bypass Backdrop.lua entirely) — NorskenUI's BackdropTemplate approach still triggered taint errors.
+
 ## v1.0.7
 ### Additions
 - CombatCross: Added range warning — cross changes color when target is out of range (melee/ranged/healer spec support).
 - Recuperate: Added configurable Load in Raid/Party toggles.
 
 ### Fixes
-- Tooltip skinning: Adopted NorskenUI's taint-safe approach (SetBackdrop before SetAllPoints, issecretvalue guard, no explicit Show/Hide).
 - MissingBuffs: Replaced AuraUtil.ForEachAura with direct C_UnitAuras API calls for better secret value handling.
 - ActionBars: Added proc glow (SpellActivationAlert) size handling to match button size dynamically.
 - Recuperate: Added health alpha curve (step: visible when missing health, hidden at full) and dead/ghost handling.

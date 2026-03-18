@@ -12,6 +12,7 @@ SoftOutline.__index = SoftOutline
 local ipairs = ipairs
 local hooksecurefunc = hooksecurefunc
 local setmetatable = setmetatable
+local issecretvalue = issecretvalue
 local UIFrameFade = UIFrameFade
 local UIFrameFadeIn = UIFrameFadeIn
 local UIFrameFadeOut = UIFrameFadeOut
@@ -36,9 +37,15 @@ local ALPHA_STRENGTH = {
     1.0, 0.7,
 }
 
+-- Check if a value is secret/tainted (safe to call even if issecretvalue doesn't exist)
+local function isSecret(val)
+    return issecretvalue and issecretvalue(val)
+end
+
 -- Strip WoW escape codes from text for solid outline
 local function StripEscapeCodes(text)
     if not text then return "" end
+    if isSecret(text) then return "" end
     text = text:gsub("|c%x%x%x%x%x%x%x%x", "")
     text = text:gsub("|r", "")
     text = text:gsub("|T.-|t", "")
@@ -127,7 +134,8 @@ function SoftOutline:SetShown(shown)
     if shown and self.main then
         local _, _, _, textAlpha = self.main:GetTextColor()
         local frameAlpha = self.main:GetAlpha()
-        if textAlpha == 0 or frameAlpha == 0 then
+        if isSecret(textAlpha) or isSecret(frameAlpha)
+            or textAlpha == 0 or frameAlpha == 0 then
             for _, shadow in ipairs(self.shadows) do
                 shadow:SetShown(false)
             end
@@ -213,7 +221,7 @@ function SoftOutline:_HookMain()
                 local outline = frame._keSoftOutline
                 if outline and outline.shadows and outline.isShown then
                     local _, _, _, textAlpha = frame:GetTextColor()
-                    if textAlpha ~= 0 then
+                    if not isSecret(textAlpha) and textAlpha ~= 0 then
                         for _, shadow in ipairs(outline.shadows) do
                             shadow:SetAlpha(startAlpha or 0)
                             shadow:Show()
@@ -231,7 +239,7 @@ function SoftOutline:_HookMain()
                 local outline = frame._keSoftOutline
                 if outline and outline.shadows and outline.isShown then
                     local _, _, _, textAlpha = frame:GetTextColor()
-                    if textAlpha ~= 0 then
+                    if not isSecret(textAlpha) and textAlpha ~= 0 then
                         for _, shadow in ipairs(outline.shadows) do
                             shadow:SetAlpha(startAlpha or 1)
                             shadow:Show()
@@ -286,7 +294,7 @@ function SoftOutline:_HookMain()
     hooksecurefunc(main, "SetAlpha", function(_, a)
         local outline = main._keSoftOutline
         if outline and outline.shadows then
-            if a == 0 then
+            if isSecret(a) or a == 0 then
                 for _, shadow in ipairs(outline.shadows) do
                     shadow:Hide()
                 end
@@ -301,7 +309,7 @@ function SoftOutline:_HookMain()
     hooksecurefunc(main, "SetTextColor", function(_, r, g, b, a)
         local outline = main._keSoftOutline
         if outline and outline.shadows then
-            if a == 0 then
+            if isSecret(a) or a == 0 then
                 for _, shadow in ipairs(outline.shadows) do
                     shadow:Hide()
                 end
@@ -331,7 +339,8 @@ function SoftOutline:_HookMain()
             if outline and outline.shadows and outline.isShown then
                 local _, _, _, textAlpha = main:GetTextColor()
                 local frameAlpha = main:GetAlpha()
-                if textAlpha ~= 0 and frameAlpha ~= 0 then
+                if not isSecret(textAlpha) and not isSecret(frameAlpha)
+                    and textAlpha ~= 0 and frameAlpha ~= 0 then
                     for _, shadow in ipairs(outline.shadows) do
                         shadow:Show()
                     end
@@ -403,7 +412,8 @@ function KE:CreateSoftOutline(mainText, options)
     -- Hide shadows if text is currently invisible
     local _, _, _, textAlpha = mainText:GetTextColor()
     local frameAlpha = mainText:GetAlpha()
-    if textAlpha == 0 or frameAlpha == 0 then
+    if isSecret(textAlpha) or isSecret(frameAlpha)
+        or textAlpha == 0 or frameAlpha == 0 then
         for _, shadow in ipairs(outline.shadows) do
             shadow:Hide()
         end
