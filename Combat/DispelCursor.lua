@@ -112,8 +112,13 @@ function DC:CreateFrame()
         end
     end
 
-    -- Follow cursor
-    frame:SetScript("OnUpdate", function()
+    -- Follow cursor (throttled to ~60fps)
+    local cursorElapsed = 0
+    frame:SetScript("OnUpdate", function(_, elapsed)
+        cursorElapsed = cursorElapsed + elapsed
+        if cursorElapsed < 0.016 then return end
+        cursorElapsed = 0
+
         local sdb = DC.db
         if not sdb or not sdb.Enabled then
             frame:Hide()
@@ -158,7 +163,12 @@ function DC:OnEnable()
 end
 
 function DC:OnDisable()
-    if self.frame then self.frame:Hide() end
+    if self.frame then
+        self.frame:UnregisterAllEvents()
+        self.frame:SetScript("OnUpdate", nil)
+        self.frame:SetScript("OnEvent", nil)
+        self.frame:Hide()
+    end
 end
 
 function DC:ShowPreview()

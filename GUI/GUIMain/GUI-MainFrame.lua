@@ -11,12 +11,13 @@ local math = math
 -- Sidebar configuration
 GUIFrame.sidebarConfig = {
     {
-        id = "profiles_section",
+        id = "settings_section",
         type = "header",
-        text = "\226\128\162 Profiles",
+        text = "\226\128\162 Settings",
         defaultExpanded = true,
         items = {
             { id = "Profiles", text = "Profile Manager" },
+            { id = "Theme",    text = "Addon Theme" },
         },
     },
     {
@@ -38,6 +39,7 @@ GUIFrame.sidebarConfig = {
             { id = "CombatCross",   text = "Combat Cross" },
             { id = "CombatRes",     text = "Combat Res" },
             { id = "CombatTexts",   text = "Combat Texts" },
+            { id = "CursorCircle",  text = "Cursor Circle" },
             { id = "RangeChecker",  text = "Range Checker Text" },
             { id = "PetStatusText", text = "Pet Status Texts" },
             { id = "GatewayAlert",  text = "Gateway Alert" },
@@ -56,7 +58,6 @@ GUIFrame.sidebarConfig = {
             { id = "Automation",    text = "Automation" },
             { id = "CVars",         text = "CVars" },
             { id = "SlashCommands", text = "Slash Commands" },
-            { id = "CursorCircle",  text = "Cursor Circle" },
             { id = "MissingBuffs",  text = "Missing Buffs" },
             { id = "HuntersMark",   text = "Hunter's Mark Missing" },
             { id = "DragonRiding",  text = "Dragon Riding UI" },
@@ -230,6 +231,7 @@ function GUIFrame:CreateMainFrame()
     title:SetPoint("LEFT", header, "LEFT", T.paddingMedium, 0)
     KE:ApplyThemeFont(title, "normal")
     title:SetText(KE:ColorTextByTheme("Kitn") .. "Essentials")
+    GUIFrame.titleText = title
 
     -- Close button (custom cross texture)
     local closeBtn = CreateFrame("Button", nil, header)
@@ -248,10 +250,164 @@ function GUIFrame:CreateMainFrame()
         closeIcon:SetVertexColor(T.textPrimary[1], T.textPrimary[2], T.textPrimary[3], T.textPrimary[4])
     end)
 
+    -- Hamburger menu button
+    local menuBtn = CreateFrame("Button", nil, header)
+    menuBtn:SetSize(18, 18)
+    menuBtn:SetPoint("RIGHT", closeBtn, "LEFT", -8, 0)
+    local menuIcon = menuBtn:CreateTexture(nil, "ARTWORK")
+    menuIcon:SetAllPoints()
+    menuIcon:SetTexture("Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\KitnCustomBurger.png")
+    menuIcon:SetVertexColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
+    menuBtn:SetNormalTexture(menuIcon)
+    menuIcon:SetTexelSnappingBias(0)
+    menuIcon:SetSnapToPixelGrid(true)
+
+    -- Dropdown panel
+    local ITEM_HEIGHT = 26
+    local menuDropdown = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+    menuDropdown:SetWidth(160)
+    menuDropdown:SetFrameStrata("TOOLTIP")
+    menuDropdown:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = 1,
+    })
+    menuDropdown:SetBackdropColor(T.bgMedium[1], T.bgMedium[2], T.bgMedium[3], 1)
+    menuDropdown:SetBackdropBorderColor(T.border[1], T.border[2], T.border[3], 1)
+    menuDropdown:SetPoint("TOPLEFT", frame, "TOPRIGHT", 2, 0)
+    menuDropdown:Hide()
+    GUIFrame.menuDropdown = menuDropdown
+
+    local menuShortcuts = {
+        { text = "Reload UI", onClick = function() ReloadUI() end },
+        { text = "Blizzard Edit Mode", onClick = function()
+            if EditModeManagerFrame and not EditModeManagerFrame:IsShown() then
+                ShowUIPanel(EditModeManagerFrame)
+            end
+        end },
+        { text = "Kitn Edit Mode", onClick = function()
+            if KE.EditMode then
+                KE.EditMode:Toggle()
+            end
+        end },
+        { text = "Cooldown Manager", onClick = function()
+            local cdFrame = _G["CooldownViewerSettings"]
+            if cdFrame then
+                cdFrame:Show()
+                cdFrame:Raise()
+            else
+                KE:Print("CooldownViewerSettings not found. Enable Cooldown Manager in Edit Mode.")
+            end
+        end },
+    }
+
+    menuDropdown:SetHeight(#menuShortcuts * ITEM_HEIGHT)
+
+    local menuItemTexts = {}
+
+    for i, item in ipairs(menuShortcuts) do
+        local btn = CreateFrame("Button", nil, menuDropdown, "BackdropTemplate")
+        btn:SetHeight(ITEM_HEIGHT)
+        btn:SetPoint("TOPLEFT", menuDropdown, "TOPLEFT", 0, -(i - 1) * ITEM_HEIGHT)
+        btn:SetPoint("RIGHT", menuDropdown, "RIGHT", 0, 0)
+
+        local btnText = btn:CreateFontString(nil, "OVERLAY")
+        btnText:SetPoint("LEFT", btn, "LEFT", 8, 0)
+        btnText:SetPoint("RIGHT", btn, "RIGHT", -8, 0)
+        btnText:SetJustifyH("LEFT")
+        KE:ApplyThemeFont(btnText, "normal")
+        btnText:SetText(item.text)
+        local Th = KE.Theme
+        btnText:SetTextColor(Th.accent[1], Th.accent[2], Th.accent[3])
+
+        btn:SetScript("OnClick", function()
+            item.onClick()
+            menuDropdown:Hide()
+        end)
+        btn:SetScript("OnEnter", function()
+            local L = KE.Theme
+            btn:SetBackdrop({
+                bgFile = "Interface\\Buttons\\WHITE8X8",
+                edgeFile = "Interface\\Buttons\\WHITE8X8",
+                edgeSize = 1,
+            })
+            btn:SetBackdropBorderColor(L.border[1], L.border[2], L.border[3], 1)
+            btn:SetBackdropColor(L.accentHover[1], L.accentHover[2], L.accentHover[3], L.accentHover[4] or 0.25)
+            btnText:SetTextColor(L.textPrimary[1], L.textPrimary[2], L.textPrimary[3], 1)
+        end)
+        btn:SetScript("OnLeave", function()
+            local L = KE.Theme
+            btn:SetBackdrop(nil)
+            btnText:SetTextColor(L.accent[1], L.accent[2], L.accent[3])
+            C_Timer.After(0.15, function()
+                if menuDropdown:IsShown() and not menuDropdown:IsMouseOver() and not menuBtn:IsMouseOver() then
+                    menuDropdown:Hide()
+                end
+            end)
+        end)
+        menuItemTexts[#menuItemTexts + 1] = btnText
+    end
+
+    -- Refresh item text colors on show (picks up current theme)
+    menuDropdown:SetScript("OnShow", function()
+        local L = KE.Theme
+        menuDropdown:SetBackdropColor(L.bgMedium[1], L.bgMedium[2], L.bgMedium[3], 1)
+        menuDropdown:SetBackdropBorderColor(L.border[1], L.border[2], L.border[3], 1)
+        for _, txt in ipairs(menuItemTexts) do
+            txt:SetTextColor(L.accent[1], L.accent[2], L.accent[3])
+        end
+    end)
+
+    -- Open dropdown on hover
+    menuBtn:SetScript("OnEnter", function()
+        local L = KE.Theme
+        menuIcon:SetVertexColor(L.accent[1], L.accent[2], L.accent[3], 1)
+        menuDropdown:Show()
+    end)
+    menuBtn:SetScript("OnLeave", function()
+        local L = KE.Theme
+        menuIcon:SetVertexColor(L.textSecondary[1], L.textSecondary[2], L.textSecondary[3], 1)
+        C_Timer.After(0.1, function()
+            if not menuDropdown:IsMouseOver() and not menuBtn:IsMouseOver() then
+                menuDropdown:Hide()
+            end
+        end)
+    end)
+
+    -- Close dropdown when mouse leaves
+    menuDropdown:SetScript("OnLeave", function()
+        C_Timer.After(0.1, function()
+            if not menuDropdown:IsMouseOver() and not menuBtn:IsMouseOver() then
+                menuDropdown:Hide()
+            end
+        end)
+    end)
+
+    -- Theme button (paint icon)
+    local themeBtn = CreateFrame("Button", nil, header)
+    themeBtn:SetSize(18, 18)
+    themeBtn:SetPoint("RIGHT", menuBtn, "LEFT", -8, 0)
+    local themeIcon = themeBtn:CreateTexture(nil, "ARTWORK")
+    themeIcon:SetAllPoints()
+    themeIcon:SetTexture("Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\fill.png")
+    themeIcon:SetVertexColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
+    themeBtn:SetNormalTexture(themeIcon)
+    themeIcon:SetTexelSnappingBias(0)
+    themeIcon:SetSnapToPixelGrid(true)
+    themeBtn:SetScript("OnEnter", function()
+        themeIcon:SetVertexColor(T.accent[1], T.accent[2], T.accent[3], 1)
+    end)
+    themeBtn:SetScript("OnLeave", function()
+        themeIcon:SetVertexColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
+    end)
+    themeBtn:SetScript("OnClick", function()
+        GUIFrame:SelectSidebarItem("Theme")
+    end)
+
     -- Home button (custom texture)
     local homeBtn = CreateFrame("Button", nil, header)
     homeBtn:SetSize(18, 18)
-    homeBtn:SetPoint("RIGHT", closeBtn, "LEFT", -8, 0)
+    homeBtn:SetPoint("RIGHT", themeBtn, "LEFT", -8, 0)
     local homeIcon = homeBtn:CreateTexture(nil, "ARTWORK")
     homeIcon:SetAllPoints()
     homeIcon:SetTexture("Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\HomeButtonv2.png")
@@ -330,6 +486,7 @@ function GUIFrame:CreateMainFrame()
     versionText:SetPoint("LEFT", bottomBar, "LEFT", T.paddingSmall, 0)
     KE:ApplyThemeFont(versionText, "small")
     versionText:SetText(KE:ColorTextByTheme("Kitn") .. "Essentials |cff888888v" .. (KE.Version or "?") .. "|r")
+    GUIFrame.versionText = versionText
 
     -- Resize grip (right side, custom texture)
     local resizeGrip = CreateFrame("Button", nil, bottomBar)

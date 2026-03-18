@@ -393,6 +393,16 @@ function CC:OnEnable()
     self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnSpecChanged")
 end
 
+-- Theme change handler (called by KE:NotifyThemeChange)
+function CC:OnThemeChanged()
+    if not self.db or not self.db.Enabled then return end
+    if (self.db.ColorMode or "custom") == "theme" and self.text then
+        local r, g, b, a = self:GetColor()
+        self.text:SetTextColor(r, g, b, a)
+        self.lastInRange = nil -- force re-evaluation
+    end
+end
+
 -- Module OnDisable
 function CC:OnDisable()
     self:UnregisterAllEvents()

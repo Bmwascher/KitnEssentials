@@ -48,6 +48,9 @@ function KitnEssentials:OnInitialize()
             KE.ProfileManager:RefreshAllModules()
         end
     end)
+
+    -- Activate saved theme settings now that DB is ready
+    if KE.RefreshTheme then KE:RefreshTheme() end
 end
 
 local function OnEncounterEnd()

@@ -1,12 +1,29 @@
 # Changelog
 
+## v1.1.0
+### Additions
+- Addon Theme system: 8 WoW-themed color presets (KitnUI, Nighthold, Firelands, Icecrown, Dreamsurge, Twilight, Sunwell, Torghast), class color mode, and full custom color mode.
+- Paint icon button in header bar for quick theme access.
+- Hamburger menu in header bar with Reload UI, Blizzard Edit Mode, Kitn Edit Mode, and Cooldown Manager shortcuts.
+
+### Fixes
+- GUI-Theme: Added nil guards for db.Custom color picker access.
+- ActionBars: Added minimum size guard in proc glow hook to prevent errors on unsized buttons.
+- DispelCursor: Added 60fps throttle to OnUpdate, proper event cleanup in OnDisable.
+- AddonTheme: Added recursion guard to RefreshTheme to prevent infinite loops.
+- CustomOutline: Secret value guards now cover all text/alpha comparisons.
+- Sidebar: Accent bar and selection highlight colors now update dynamically with theme changes.
+- CursorCircle/CombatCross: Added OnThemeChanged handlers for live theme color updates.
+
+### Changes
+- Merged Profiles and Theme into unified "Settings" sidebar section.
+- Moved Cursor Circle from Quality of Life to Combat section.
+- Removed Personal Defensives and Personal Movement Buffs from GUI sidebar (handled by ACDM).
+
 ## v1.0.9
 ### Additions
 - New module: Dispel on Cursor — shows your dispel cooldown timer following your cursor, auto-detects class dispel spell.
 - Cursor Circle: Added new crosshair and heart texture options, texture selector now supports multi-row grid layout.
-
-### Changes
-- Removed Personal Defensives and Personal Movement Buffs from GUI sidebar (handled by ACDM).
 
 ## v1.0.8
 ### Fixes
