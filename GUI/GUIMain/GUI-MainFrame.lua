@@ -43,6 +43,7 @@ GUIFrame.sidebarConfig = {
             { id = "GatewayAlert",  text = "Gateway Alert" },
             { id = "TargetCastbar", text = "Target Castbar" },
             { id = "FocusCastbar",  text = "Focus Castbar" },
+            { id = "DispelCursor",  text = "Dispel on Cursor" },
             { id = "TimeSpiral",    text = "Time Spiral" },
         },
     },
@@ -88,8 +89,6 @@ GUIFrame.sidebarConfig = {
         text = "\226\128\162 Custom Buffs",
         defaultExpanded = true,
         items = {
-            { id = "ExternalsDefensives", text = "Personal Defensives" },
-            { id = "MovementBuffs",       text = "Personal Movement Buffs" },
             { id = "BuffIcons",           text = "Buff Icons" },
             { id = "BuffBars",            text = "Buff Bars" },
         },

@@ -271,6 +271,14 @@ local Defaults = {
             },
         },
 
+        DispelCursor = {
+            Enabled = false,
+            FontSize = 18,
+            TextColor = { 1, 1, 1, 1 },
+            XOffset = 10,
+            YOffset = 10,
+        },
+
         RangeChecker = {
             Enabled = false,
             CombatOnly = false,

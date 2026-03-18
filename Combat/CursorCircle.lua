@@ -25,11 +25,15 @@ CC.Textures = {
     ["Circle 3"] = "Interface\\AddOns\\KitnEssentials\\Media\\CursorCircles\\Aura103.tga",
     ["Circle 4"] = "Interface\\AddOns\\KitnEssentials\\Media\\CursorCircles\\nauraThin.png",
     ["Circle 5"] = "Interface\\AddOns\\KitnEssentials\\Media\\CursorCircles\\nauraMedium.png",
-    ["Circle 6"] = "Interface\\AddOns\\KitnEssentials\\Media\\CursorCircles\\nauraThick.png",
+    ["Circle 6"]    = "Interface\\AddOns\\KitnEssentials\\Media\\CursorCircles\\nauraThick.png",
+    ["Crosshair 1"] = "Interface\\AddOns\\KitnEssentials\\Media\\CursorCircles\\cursor basic crosshair 1.tga",
+    ["Crosshair 2"] = "Interface\\AddOns\\KitnEssentials\\Media\\CursorCircles\\cursor basic crosshair 2.tga",
+    ["Heart"]        = "Interface\\AddOns\\KitnEssentials\\Media\\CursorCircles\\cursor heart corsshair 1.tga",
 }
 
 -- Texture display order for GUI
 CC.TextureOrder = { "Circle 1", "Circle 2", "Circle 3", "Circle 4", "Circle 5", "Circle 6" }
+-- CC.TextureOrder = { "Circle 1", "Circle 2", "Circle 3", "Circle 4", "Circle 5", "Circle 6", "Crosshair 1", "Crosshair 2", "Heart" }
 
 -- GCD Ring textures (same set)
 CC.GCDRingTextures = CC.Textures

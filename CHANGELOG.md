@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.0.9
+### Additions
+- New module: Dispel on Cursor — shows your dispel cooldown timer following your cursor, auto-detects class dispel spell.
+- Cursor Circle: Added new crosshair and heart texture options, texture selector now supports multi-row grid layout.
+
+### Changes
+- Removed Personal Defensives and Personal Movement Buffs from GUI sidebar (handled by ACDM).
+
 ## v1.0.8
 ### Fixes
 - CustomOutline: Added secret/tainted value guards to all text and alpha comparisons to prevent errors on focus castbar and other secure frames.
