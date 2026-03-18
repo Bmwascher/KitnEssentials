@@ -33,6 +33,7 @@
     <Script file="GUITabs\GUICombat\GUI-TargetCastbar.lua" />
     <Script file="GUITabs\GUICombat\GUI-FocusCastbar.lua" />
     <Script file="GUITabs\GUICombat\GUI-RangeChecker.lua" />
+    <Script file="GUITabs\GUICombat\GUI-DispelCursor.lua" />
     <Script file="GUITabs\GUICombat\GUI-TimeSpiral.lua" />
 
     <!-- QoL tabs -->

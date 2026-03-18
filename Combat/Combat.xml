@@ -11,5 +11,6 @@
     <Script file="TargetCastbar.lua" />
     <Script file="FocusCastbar.lua" />
     <Script file="RangeChecker.lua" />
+    <Script file="DispelCursor.lua" />
     <Script file="TimeSpiral.lua" />
 </Ui>

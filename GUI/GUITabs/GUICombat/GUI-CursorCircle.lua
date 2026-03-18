@@ -10,11 +10,12 @@ local ipairs = ipairs
 -- Helper: Create Texture Selector (auto-width based on container)
 local function CreateTextureSelector(parent, textures, textureOrder, currentTexture, getColorFunc, onSelect)
     local container = CreateFrame("Frame", nil, parent)
-    container:SetHeight(80)
 
     local buttons = {}
-    local buttonSize = 70
-    local minSpacing = 8
+    local buttonSize = 58
+    local minSpacing = 6
+    local maxColumns = 6
+    local rowSpacing = 6
 
     for i, textureName in ipairs(textureOrder) do
         local texturePath = textures[textureName]
@@ -92,6 +93,11 @@ local function CreateTextureSelector(parent, textures, textureOrder, currentText
         table_insert(buttons, btn)
     end
 
+    -- Calculate grid dimensions
+    local numButtons = #buttons
+    local numRows = math.ceil(numButtons / maxColumns)
+    container:SetHeight(numRows * buttonSize + (numRows - 1) * rowSpacing)
+
     container.lastWidth = 0
 
     container:SetScript("OnSizeChanged", function(self, width)
@@ -101,24 +107,21 @@ local function CreateTextureSelector(parent, textures, textureOrder, currentText
         if math.abs(flooredWidth - (self.lastWidth or 0)) < 2 then return end
         self.lastWidth = flooredWidth
 
-        local numButtons = #buttons
         if numButtons == 0 then return end
 
-        local totalButtonWidth = numButtons * buttonSize
+        -- Calculate columns per row and spacing
+        local cols = math.min(maxColumns, numButtons)
+        local totalButtonWidth = cols * buttonSize
         local availableSpacing = flooredWidth - totalButtonWidth - Theme.paddingSmall
-        local spacing = math.max(minSpacing, math.floor(availableSpacing / (numButtons - 1)))
-
-        if spacing < minSpacing then
-            spacing = minSpacing
-        end
+        local spacing = math.max(minSpacing, math.floor(availableSpacing / math.max(cols - 1, 1)))
 
         for i, btn in ipairs(buttons) do
             btn:ClearAllPoints()
-            if i == 1 then
-                btn:SetPoint("LEFT", self, "LEFT", 0, 0)
-            else
-                btn:SetPoint("LEFT", buttons[i - 1], "RIGHT", spacing, 0)
-            end
+            local col = (i - 1) % maxColumns
+            local row = math.floor((i - 1) / maxColumns)
+            local x = col * (buttonSize + spacing)
+            local y = -(row * (buttonSize + rowSpacing))
+            btn:SetPoint("TOPLEFT", self, "TOPLEFT", x, y)
         end
     end)
 
@@ -393,10 +396,8 @@ GUIFrame:RegisterContent("CursorCircle", function(scrollChild, yOffset)
     local card3 = GUIFrame:CreateCard(scrollChild, "Main Ring Texture", yOffset)
     table_insert(allWidgets, card3)
 
-    local row3 = GUIFrame:CreateRow(card3.content, 71)
-
     textureSelector = CreateTextureSelector(
-        row3,
+        card3.content,
         CC and CC.Textures or {},
         CC and CC.TextureOrder or {},
         db.Texture or "Circle 3",
@@ -406,10 +407,13 @@ GUIFrame:RegisterContent("CursorCircle", function(scrollChild, yOffset)
             ApplySettings()
         end
     )
-    textureSelector:SetPoint("TOPLEFT", row3, "TOPLEFT", 0, 3)
+    local texHeight = textureSelector:GetHeight() + 4
+    local row3 = GUIFrame:CreateRow(card3.content, texHeight)
+    textureSelector:SetParent(row3)
+    textureSelector:SetPoint("TOPLEFT", row3, "TOPLEFT", 0, 0)
     textureSelector:SetPoint("TOPRIGHT", row3, "TOPRIGHT", 0, 0)
     textureSelector:SetEnabled(db.Enabled == true)
-    card3:AddRow(row3, 71)
+    card3:AddRow(row3, texHeight)
 
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 
@@ -476,14 +480,12 @@ GUIFrame:RegisterContent("CursorCircle", function(scrollChild, yOffset)
     table_insert(gcdWidgets, card5)
     table_insert(gcdSeparateWidgets, card5)
 
-    local row5 = GUIFrame:CreateRow(card5.content, 71)
-
     local function GetGCDEffectiveColor()
         return KE:GetAccentColor(gcd.RingColorMode or "theme", gcd.RingColor)
     end
 
     gcdTextureSelector = CreateTextureSelector(
-        row5,
+        card5.content,
         CC and CC.GCDRingTextures or {},
         CC and CC.GCDRingTextureOrder or {},
         gcd.Texture or "Circle 5",
@@ -493,9 +495,12 @@ GUIFrame:RegisterContent("CursorCircle", function(scrollChild, yOffset)
             ApplySettings()
         end
     )
-    gcdTextureSelector:SetPoint("TOPLEFT", row5, "TOPLEFT", 0, 3)
+    local gcdTexHeight = gcdTextureSelector:GetHeight() + 4
+    local row5 = GUIFrame:CreateRow(card5.content, gcdTexHeight)
+    gcdTextureSelector:SetParent(row5)
+    gcdTextureSelector:SetPoint("TOPLEFT", row5, "TOPLEFT", 0, 0)
     gcdTextureSelector:SetPoint("TOPRIGHT", row5, "TOPRIGHT", 0, 0)
-    card5:AddRow(row5, 71)
+    card5:AddRow(row5, gcdTexHeight)
 
     yOffset = yOffset + card5:GetContentHeight() + Theme.paddingSmall
 
