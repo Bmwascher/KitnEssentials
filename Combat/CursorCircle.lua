@@ -432,6 +432,18 @@ function CC:UNIT_SPELLCAST_SUCCEEDED(_, unit)
     self:UpdateGCDCooldown()
 end
 
+-- Theme change handler (called by KE:NotifyThemeChange)
+function CC:OnThemeChanged()
+    if not self.db or not self.db.Enabled then return end
+    if self.db.ColorMode == "theme" then
+        self:ApplyColor()
+    end
+    local gcd = self.db.GCD or {}
+    if gcd.RingColorMode == "theme" or gcd.SwipeColorMode == "theme" then
+        self:ApplyGCDColor()
+    end
+end
+
 -- Module OnDisable
 function CC:OnDisable()
     if self.frame then

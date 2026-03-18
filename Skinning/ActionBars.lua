@@ -963,6 +963,7 @@ function SK:SetupProcGlowHook()
 
             -- Resize glow to match button size
             local buttonSize = button:GetWidth()
+            if buttonSize < 1 then return end
             local glowOverflow = buttonSize * 0.2
             alert:ClearAllPoints()
             alert:SetPoint("TOPLEFT", button, "TOPLEFT", -glowOverflow, glowOverflow)

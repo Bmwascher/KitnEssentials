@@ -138,6 +138,19 @@ function GUIFrame:ApplyThemeColors()
 
     -- Refresh sidebar visuals
     self:RefreshSidebar()
+
+    -- Update title and version text with new accent color
+    if self.titleText then
+        self.titleText:SetText(KE:ColorTextByTheme("Kitn") .. "Essentials")
+    end
+    if self.versionText then
+        self.versionText:SetText(KE:ColorTextByTheme("Kitn") .. "Essentials |cff888888v" .. (KE.Version or "?") .. "|r")
+    end
+
+    -- Rebuild current content to pick up new accent colors
+    if self.selectedSidebarItem then
+        self:RefreshContent()
+    end
 end
 
 --------------------------------------------------------------------------------

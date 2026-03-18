@@ -184,6 +184,7 @@ function GUIFrame:ConfigureSectionHeader(header, config, yOffset, isExpanded)
     else
         header.label:SetTextColor(T.accent[1], T.accent[2], T.accent[3], 1)
         header.arrow:SetVertexColor(T.accent[1], T.accent[2], T.accent[3], 1)
+        header.selectedBar:SetColorTexture(T.accent[1], T.accent[2], T.accent[3], 1)
         header.disabled = false
     end
 
@@ -344,6 +345,11 @@ function GUIFrame:SelectSidebarItem(itemId)
     local T = Theme
     self.selectedSidebarItem = itemId
 
+    -- Close hamburger menu if open
+    if self.menuDropdown and self.menuDropdown:IsShown() then
+        self.menuDropdown:Hide()
+    end
+
     for _, item in ipairs(self.staticSidebarItemPool) do
         if item.inUse then
             if item.disabled then
@@ -487,7 +493,9 @@ function GUIFrame:RefreshSidebar()
                     item:SetPoint("TOPRIGHT", scrollChild, "TOPRIGHT", -T.paddingSmall, -yOffset)
                     item.id = itemConfig.id
                     item.label:SetText(itemConfig.text or "")
+                    item.selectedBar:SetColorTexture(T.accent[1], T.accent[2], T.accent[3], 1)
                     item.selectedBar:Show()
+                    item.selectedOverlay:SetColorTexture(T.accent[1], T.accent[2], T.accent[3], 0.10)
 
                     if sectionDisabled then
                         item.label:SetTextColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 0.35)

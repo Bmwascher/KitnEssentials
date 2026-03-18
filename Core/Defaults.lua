@@ -52,6 +52,12 @@ local Defaults = {
             selectedTab = nil,
             minimized = false,
         },
+
+        Theme = {
+            Mode = "preset",
+            Preset = "KitnUI",
+            Custom = {},
+        },
     },
     profile = {
         -- Minimap Icon
