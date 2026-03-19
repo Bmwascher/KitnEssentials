@@ -238,12 +238,9 @@ end
 function CR:Update()
     if not self.frame then return end
 
-    local chargeTable
-    local ok = pcall(function()
-        chargeTable = C_Spell.GetSpellCharges(SPELL_ID)
-    end)
+    local chargeTable = C_Spell.GetSpellCharges(SPELL_ID)
 
-    if not ok or not chargeTable or not chargeTable.currentCharges then
+    if not chargeTable or not chargeTable.currentCharges then
         if self.isPreview then
             -- Show preview with fake data
             self.frame:Show()
@@ -392,12 +389,9 @@ function CR:OnCombatEvent()
     if not self.frame then return end
 
     -- Try to get charge data
-    local chargeTable
-    local ok = pcall(function()
-        chargeTable = C_Spell.GetSpellCharges(SPELL_ID)
-    end)
+    local chargeTable = C_Spell.GetSpellCharges(SPELL_ID)
 
-    if ok and chargeTable and chargeTable.currentCharges then
+    if chargeTable and chargeTable.currentCharges then
         -- Charges available — show frame and ensure OnUpdate is running
         if not self.frame:IsShown() then
             self.frame:Show()
