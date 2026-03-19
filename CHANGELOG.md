@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.1.4
+### Fixes
+- Combat Res: Removed pcall wrappers around C_Spell.GetSpellCharges to prevent taint spreading to Blizzard's ZoneAbility system (caused CastSpellByID forbidden errors).
+
 ## v1.1.3
 ### Fixes
 - Combat Res: Added event-driven updates (SPELL_UPDATE_CHARGES, PLAYER_REGEN_DISABLED) so the tracker shows during encounters on all classes, not just Druids.
