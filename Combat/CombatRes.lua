@@ -386,6 +386,31 @@ function CR:Refresh()
     self:ApplySettings()
 end
 
+-- Event handler — show frame and start OnUpdate when charges become available
+function CR:OnCombatEvent()
+    if not self.db.Enabled then return end
+    if not self.frame then return end
+
+    -- Try to get charge data
+    local chargeTable
+    local ok = pcall(function()
+        chargeTable = C_Spell.GetSpellCharges(SPELL_ID)
+    end)
+
+    if ok and chargeTable and chargeTable.currentCharges then
+        -- Charges available — show frame and ensure OnUpdate is running
+        if not self.frame:IsShown() then
+            self.frame:Show()
+        end
+        if not self.frame:GetScript("OnUpdate") then
+            self.frame:SetScript("OnUpdate", function(_, elapsed)
+                self:OnUpdate(elapsed)
+            end)
+        end
+        self:Update()
+    end
+end
+
 -- Module OnEnable
 function CR:OnEnable()
     self:CreateFrame()
@@ -402,6 +427,12 @@ function CR:OnEnable()
     self.frame:SetScript("OnUpdate", function(_, elapsed)
         self:OnUpdate(elapsed)
     end)
+
+    -- Register events to detect when battle res charges become available
+    self:RegisterEvent("SPELL_UPDATE_CHARGES", "OnCombatEvent")
+    self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnCombatEvent")
+    self:RegisterEvent("CHALLENGE_MODE_START", "OnCombatEvent")
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnCombatEvent")
 end
 
 -- Module OnDisable

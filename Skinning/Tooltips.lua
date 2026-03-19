@@ -49,7 +49,6 @@ local TOOLTIPS_TO_SKIN = {
     "ItemRefShoppingTooltip2",
     "ShoppingTooltip1",
     "ShoppingTooltip2",
-    "EmbeddedItemTooltip",
     "FriendsTooltip",
     "GameSmallHeaderTooltip",
     "QuickKeybindTooltip",
