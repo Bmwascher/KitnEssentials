@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.1.5
+### Fixes
+- ActionBars: Removed pcall wrappers from cooldown text styling and SetUserPlaced calls to reduce taint spreading to Blizzard's ZoneAbility system. Note: modifying cooldown regions inherently taints them (known Blizzard-side issue shared with NorskenUI).
+
 ## v1.1.4
 ### Fixes
 - Combat Res: Removed pcall wrappers around C_Spell.GetSpellCharges to prevent taint spreading to Blizzard's ZoneAbility system (caused CastSpellByID forbidden errors).
