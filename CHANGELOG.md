@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.3
+### Fixes
+- Combat Res: Added event-driven updates (SPELL_UPDATE_CHARGES, PLAYER_REGEN_DISABLED) so the tracker shows during encounters on all classes, not just Druids.
+- Tooltips: Removed EmbeddedItemTooltip from skin list to fix IsShown/SetAlpha errors on embedded widget tooltips.
+
 ## v1.1.1
 ### Fixes
 - Sidebar: Hover and selection gradient overlays now update dynamically with theme changes.
