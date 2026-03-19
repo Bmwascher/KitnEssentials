@@ -63,9 +63,11 @@ local function HideElement(object, ...)
             object:UnregisterAllEvents()
             object:SetAttribute("statehidden", true)
         end
-        if object.SetUserPlaced then
-            pcall(object.SetUserPlaced, object, true)
-            pcall(object.SetDontSavePosition, object, true)
+        if object.SetUserPlaced and not InCombatLockdown() then
+            object:SetUserPlaced(true)
+            if object.SetDontSavePosition then
+                object:SetDontSavePosition(true)
+            end
         end
         object:SetParent(hiddenFrame)
     end
@@ -307,22 +309,20 @@ function SK:StyleButtonText(button, barKey)
     local fontSizes = self:GetFontSizes(barKey)
     local textPos = self:GetTextPositions(barKey)
 
-    -- Style cooldown text
-    if cooldown then
+    -- Style cooldown text (no pcall — avoids tainting spell cache/ZoneAbility)
+    if cooldown and not InCombatLockdown() then
         local fontSize = math.max(8, fontSizes.cooldown)
         for _, region in ipairs({ cooldown:GetRegions() }) do
             if region:GetObjectType() == "FontString" then
-                pcall(function()
-                    region:ClearAllPoints()
-                    region:SetPoint(textPos.cooldownAnchor, button, textPos.cooldownAnchor,
-                        textPos.cooldownXOffset, textPos.cooldownYOffset)
-                    region:SetFont(fontpath, fontSize, self.db.FontOutline)
-                    region:SetTextColor(1, 1, 1, 1)
-                    region:SetShadowOffset(0, 0)
-                    region:SetShadowColor(0, 0, 0, 0)
-                    region:SetAlpha(1)
-                    region:SetJustifyH("CENTER")
-                end)
+                region:ClearAllPoints()
+                region:SetPoint(textPos.cooldownAnchor, button, textPos.cooldownAnchor,
+                    textPos.cooldownXOffset, textPos.cooldownYOffset)
+                region:SetFont(fontpath, fontSize, self.db.FontOutline)
+                region:SetTextColor(1, 1, 1, 1)
+                region:SetShadowOffset(0, 0)
+                region:SetShadowColor(0, 0, 0, 0)
+                region:SetAlpha(1)
+                region:SetJustifyH("CENTER")
             end
         end
     end
