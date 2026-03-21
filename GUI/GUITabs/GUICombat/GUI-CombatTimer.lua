@@ -201,20 +201,18 @@ GUIFrame:RegisterContent("CombatTimer", function(scrollChild, yOffset)
             db.ColorInCombat = { r, g, b, a }
             ApplySettings()
         end)
-    row4a:AddWidget(inCombatColor, 1)
+    row4a:AddWidget(inCombatColor, 0.5)
     table_insert(allWidgets, inCombatColor)
-    card4:AddRow(row4a, 40)
 
-    local row4b = GUIFrame:CreateRow(card4.content, 37)
-    local outCombatColor = GUIFrame:CreateColorPicker(row4b, "Out of Combat Color",
+    local outCombatColor = GUIFrame:CreateColorPicker(row4a, "Out of Combat Color",
         db.ColorOutOfCombat or { 1, 1, 1, 0.7 },
         function(r, g, b, a)
             db.ColorOutOfCombat = { r, g, b, a }
             ApplySettings()
         end)
-    row4b:AddWidget(outCombatColor, 1)
+    row4a:AddWidget(outCombatColor, 0.5)
     table_insert(allWidgets, outCombatColor)
-    card4:AddRow(row4b, 37)
+    card4:AddRow(row4a, 40)
 
     yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
 

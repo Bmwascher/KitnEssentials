@@ -1,5 +1,28 @@
 # Changelog
 
+## v1.3.1
+### Changes
+- Sidebar reorganization: new **Utilities** section between Combat and Quality of Life. Moved Gateway Alert, Pet Status Texts, Time Spiral Tracker, Recuperate Button, Dispel CD on Cursor, Disintegrate Castbar Ticks, World Marker Cycler, and Focus Marker Macro Builder into Utilities.
+- Skinning section now auto-collapses when ElvUI is detected.
+- Skinning sidebar reordered: General UI Clean Up and Buffs/Debuffs pinned at top, rest alphabetized.
+- Range Checker Text renamed to **Range Display**.
+- UX improvements across multiple GUI pages:
+  - Color pickers paired side-by-side where previously stacked (Combat Timer, Range Display).
+  - Automation page: all toggle pairs now side-by-side (Cinematics, Merchant, Quest, Social, Convenience).
+  - Combat Cross: Range Warning checkboxes paired side-by-side.
+  - Recuperate: Load conditions and Button Size merged into "General Settings" card, added full anchor frame controls.
+  - Disintegrate Ticks: Note text split into two clear lines.
+- Target Castbar: Added **Target Names** card with enable toggle, anchor, font size, and offset controls.
+- Focus Castbar: Added **Target Names** enable toggle.
+
+## v1.3.0
+### Additions
+- New module: **Focus Marker Macro Builder** — Auto-creates and manages a focus target + raid marker macro. Features marker icon grid selector, mark-only mode, no-raid marking, no-toggle, ready check announce, custom macro name/icon/conditionals.
+
+### Fixes
+- Target Castbar: Fixed target names using hardcoded positioning with no GUI controls.
+- Focus Marker: Fixed NoToggle setting inversion causing marker spam on repeated clicks.
+
 ## v1.2.0
 ### Additions
 - New module: **Disintegrate Castbar Ticks** — Evoker-only (Devastation/Preservation). Displays tick marks on your cast bar during Disintegrate channels with configurable "DON'T CLIP" warning for Mass Disintegrate. Supports UUF, BCDM, Ayije CDM, and Blizzard cast bars.

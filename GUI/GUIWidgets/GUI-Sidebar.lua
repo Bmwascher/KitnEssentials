@@ -211,7 +211,11 @@ function GUIFrame:InitializeSidebarExpansion()
 
     for _, section in ipairs(self.sidebarConfig) do
         if section.type == "header" and section.defaultExpanded then
-            self.sidebarExpanded[section.id] = true
+            if section.elvUIDisabled and KE.ShouldNotLoadModule and KE:ShouldNotLoadModule() then
+                self.sidebarExpanded[section.id] = nil
+            else
+                self.sidebarExpanded[section.id] = true
+            end
         end
     end
     sidebarInitialized = true

@@ -50,27 +50,6 @@ GUIFrame:RegisterContent("Recuperate", function(scrollChild, yOffset)
     row1:AddWidget(enableCheck, 1)
     card1:AddRow(row1, 40)
 
-    -- Load conditions
-    local row1b = GUIFrame:CreateRow(card1.content, 36)
-    local loadInRaidCheck = GUIFrame:CreateCheckbox(row1b, "Load in Raid", db.LoadInRaid ~= false,
-        function(checked)
-            db.LoadInRaid = checked
-            if REC then REC:UpdateStateDriver() end
-        end,
-        true, "Load in Raid", "On", "Off")
-    row1b:AddWidget(loadInRaidCheck, 0.5)
-    table_insert(allWidgets, loadInRaidCheck)
-
-    local loadInPartyCheck = GUIFrame:CreateCheckbox(row1b, "Load in Party", db.LoadInParty == true,
-        function(checked)
-            db.LoadInParty = checked
-            if REC then REC:UpdateStateDriver() end
-        end,
-        true, "Load in Party", "On", "Off")
-    row1b:AddWidget(loadInPartyCheck, 0.5)
-    table_insert(allWidgets, loadInPartyCheck)
-    card1:AddRow(row1b, 36)
-
     local noteHeight = 40
     local noteRow = GUIFrame:CreateRow(card1.content, noteHeight)
     local noteText = GUIFrame:CreateText(noteRow,
@@ -83,20 +62,40 @@ GUIFrame:RegisterContent("Recuperate", function(scrollChild, yOffset)
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
     ----------------------------------------------------------------
-    -- Card 2: Size Settings
+    -- Card 2: General Settings
     ----------------------------------------------------------------
-    local card2 = GUIFrame:CreateCard(scrollChild, "Size Settings", yOffset)
+    local card2 = GUIFrame:CreateCard(scrollChild, "General Settings", yOffset)
     table_insert(allWidgets, card2)
 
-    local row2 = GUIFrame:CreateRow(card2.content, 40)
+    local row2a = GUIFrame:CreateRow(card2.content, 36)
+    local loadInRaid2 = GUIFrame:CreateCheckbox(row2a, "Load in Raid", db.LoadInRaid ~= false,
+        function(checked)
+            db.LoadInRaid = checked
+            if REC then REC:UpdateStateDriver() end
+        end,
+        true, "Load in Raid", "On", "Off")
+    row2a:AddWidget(loadInRaid2, 0.5)
+    table_insert(allWidgets, loadInRaid2)
+
+    local loadInParty2 = GUIFrame:CreateCheckbox(row2a, "Load in Party", db.LoadInParty == true,
+        function(checked)
+            db.LoadInParty = checked
+            if REC then REC:UpdateStateDriver() end
+        end,
+        true, "Load in Party", "On", "Off")
+    row2a:AddWidget(loadInParty2, 0.5)
+    table_insert(allWidgets, loadInParty2)
+    card2:AddRow(row2a, 36)
+
+    local row2b = GUIFrame:CreateRow(card2.content, 40)
     local sizeSlider = GUIFrame:CreateSlider(card2.content, "Button Size", 1, 1000, 1, db.Size or 40, 60,
         function(val)
             db.Size = val
             ApplySettings()
         end)
-    row2:AddWidget(sizeSlider, 1)
+    row2b:AddWidget(sizeSlider, 1)
     table_insert(allWidgets, sizeSlider)
-    card2:AddRow(row2, 40)
+    card2:AddRow(row2b, 40)
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
@@ -114,7 +113,7 @@ GUIFrame:RegisterContent("Recuperate", function(scrollChild, yOffset)
             yOffset = "YOffset",
             strata = "Strata",
         },
-        showAnchorFrameType = false,
+        showAnchorFrameType = true,
         showStrata = true,
         onChangeCallback = ApplySettings,
     })
