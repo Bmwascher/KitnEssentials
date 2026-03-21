@@ -68,7 +68,7 @@ GUIFrame:RegisterContent("DispelCursor", function(scrollChild, yOffset)
     local noteRow = GUIFrame:CreateRow(card1.content, noteHeight)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
-        "Shows your dispel cooldown timer following your cursor.\nAuto-detects your class dispel spell.",
+        KE:ColorTextByTheme("-") .. " Shows your dispel cooldown timer following your cursor.\n" .. KE:ColorTextByTheme("-") .. " Auto-detects your class dispel spell.",
         noteHeight, "hide")
     noteRow:AddWidget(noteText, 1)
     card1:AddRow(noteRow, noteHeight)

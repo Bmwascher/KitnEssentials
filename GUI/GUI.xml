@@ -38,6 +38,7 @@
     <Script file="GUITabs\GUICombat\GUI-RangeChecker.lua" />
     <Script file="GUITabs\GUICombat\GUI-DispelCursor.lua" />
     <Script file="GUITabs\GUICombat\GUI-TimeSpiral.lua" />
+    <Script file="GUITabs\GUICombat\GUI-DisintegrateTicks.lua" />
 
     <!-- QoL tabs -->
     <Script file="GUITabs\GUIQoL\GUI-Automation.lua" />
@@ -49,6 +50,7 @@
     <Script file="GUITabs\GUIQoL\GUI-HuntersMark.lua" />
     <Script file="GUITabs\GUIQoL\GUI-HideBars.lua" />
     <Script file="GUITabs\GUIQoL\GUI-Recuperate.lua" />
+    <Script file="GUITabs\GUIQoL\GUI-WorldMarkerCycler.lua" />
 
     <!-- Skinning tabs -->
     <Script file="GUITabs\GUISkinning\GUI-Tooltips.lua" />

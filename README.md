@@ -17,7 +17,8 @@ KitnEssentials adds HUD elements, buff trackers, and Blizzard UI skinning throug
 - **Gateway Alert** — Warlock gateway usability notification
 - **Target & Focus Castbars** — Customizable castbars with kick indicators and hold timers
 - **Range Checker** — Color-coded range text using LibRangeCheck
-- **TimeSpiral** — Movement spell proc tracker with glow effects and cooldown spiral
+- **Time Spiral Tracker** — Movement spell proc tracker with glow effects and cooldown spiral (all classes)
+- **Disintegrate Castbar Ticks** — Evoker channel tick marks with Mass Disintegrate clip warning
 
 ### Quality of Life
 - **Missing Buffs** — Alerts for missing raid buffs, food, flasks, runes, weapon enchants, rogue poisons, stance/form tracking (Druid, Warrior, Paladin, Priest, Evoker, Rogue stealth)
@@ -27,6 +28,7 @@ KitnEssentials adds HUD elements, buff trackers, and Blizzard UI skinning throug
 - **Dragon Riding UI** — Customizable dragon riding speed display
 - **Hunter's Mark Missing** — Alert when Hunter's Mark is not applied
 - **Hide ActionBars** — Hide action bars in/out of combat
+- **World Marker Cycler** — Cycle through world markers at cursor with drag-to-reorder and interactive keybind capture
 
 ### Skinning
 - **Action Bars** — Full action bar reskinning with proc glow sizing

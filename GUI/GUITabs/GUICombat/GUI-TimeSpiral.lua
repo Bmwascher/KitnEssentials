@@ -101,6 +101,16 @@ GUIFrame:RegisterContent("TimeSpiral", function(scrollChild, yOffset)
     row1:AddWidget(enableCheck, 0.5)
     card1:AddRow(row1, 36)
 
+    -- Note
+    local noteHeight = 50
+    local noteRow = GUIFrame:CreateRow(card1.content, noteHeight)
+    local noteText = GUIFrame:CreateText(noteRow,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " Works for all classes. Tracks when your movement ability is\n  available for free use from the Time Spiral buff.",
+        noteHeight, "hide")
+    noteRow:AddWidget(noteText, 1)
+    card1:AddRow(noteRow, noteHeight)
+
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
     ----------------------------------------------------------------

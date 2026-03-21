@@ -75,7 +75,7 @@ GUIFrame:RegisterContent("Recuperate", function(scrollChild, yOffset)
     local noteRow = GUIFrame:CreateRow(card1.content, noteHeight)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
-        "Visible out of combat in selected group types. Fades based on missing health.",
+        KE:ColorTextByTheme("-") .. " Visible out of combat in selected group types. Fades based on missing health.",
         noteHeight, "hide")
     noteRow:AddWidget(noteText, 1)
     card1:AddRow(noteRow, noteHeight)

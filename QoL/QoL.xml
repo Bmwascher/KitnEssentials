@@ -10,4 +10,5 @@
     <Script file="Recuperate.lua" />
     <Script file="Optimize.lua" />
     <Script file="SlashCommands.lua" />
+    <Script file="WorldMarkerCycler.lua" />
 </Ui>

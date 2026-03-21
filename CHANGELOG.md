@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.2.0
+### Additions
+- New module: **Disintegrate Castbar Ticks** — Evoker-only (Devastation/Preservation). Displays tick marks on your cast bar during Disintegrate channels with configurable "DON'T CLIP" warning for Mass Disintegrate. Supports UUF, BCDM, Ayije CDM, and Blizzard cast bars.
+- New module: **World Marker Cycler** — Cycles through world markers at cursor position with customizable keybinds and drag-to-reorder marker priority. Interactive keybind capture with modifier support.
+
+### Changes
+- Sidebar renames: "Dispel on Cursor" → "Dispel CD on Cursor", "Time Spiral" → "Time Spiral Tracker".
+- Time Spiral Tracker: Added note clarifying it works for all classes.
+- GUI Notes: Standardized all note prefixes with accent-colored dash across all pages.
+- CVars: Changed "enabled" text color from accent to green for better visibility.
+
 ## v1.1.5
 ### Fixes
 - ActionBars: Removed pcall wrappers from cooldown text styling and SetUserPlaced calls to reduce taint spreading to Blizzard's ZoneAbility system. Note: modifying cooldown regions inherently taints them (known Blizzard-side issue shared with NorskenUI).

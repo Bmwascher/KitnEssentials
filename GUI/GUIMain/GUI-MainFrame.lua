@@ -45,8 +45,9 @@ GUIFrame.sidebarConfig = {
             { id = "GatewayAlert",  text = "Gateway Alert" },
             { id = "TargetCastbar", text = "Target Castbar" },
             { id = "FocusCastbar",  text = "Focus Castbar" },
-            { id = "DispelCursor",  text = "Dispel on Cursor" },
-            { id = "TimeSpiral",    text = "Time Spiral" },
+            { id = "DispelCursor",  text = "Dispel CD on Cursor" },
+            { id = "TimeSpiral",    text = "Time Spiral Tracker" },
+            { id = "DisintegrateTicks", text = "Disintegrate Castbar Ticks" },
         },
     },
     {
@@ -64,6 +65,7 @@ GUIFrame.sidebarConfig = {
             { id = "CopyAnything",  text = "Copy Anything" },
             { id = "HideBars",      text = "Hide ActionBars" },
             { id = "Recuperate",    text = "Recuperate Button" },
+            { id = "WorldMarkerCycler", text = "World Marker Cycler" },
         },
     },
     {
