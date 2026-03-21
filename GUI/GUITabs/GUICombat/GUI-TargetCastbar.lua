@@ -207,7 +207,85 @@ GUIFrame:RegisterContent("TargetCastbar", function(scrollChild, yOffset)
     yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
 
     ----------------------------------------------------------------
-    -- Card 5: Colors
+    -- Card 5: Target Names
+    ----------------------------------------------------------------
+    local card5tn = GUIFrame:CreateCard(scrollChild, "Target Names", yOffset)
+    table_insert(allWidgets, card5tn)
+
+    if not db.TargetNames then
+        db.TargetNames = {
+            Enabled = true,
+            Anchor = "RIGHT",
+            XOffset = 0,
+            YOffset = 14,
+            FontSize = 12,
+        }
+    end
+
+    -- Enable toggle
+    local rowTnEnable = GUIFrame:CreateRow(card5tn.content, 36)
+    local tnEnableCheck = GUIFrame:CreateCheckbox(rowTnEnable, "Show Target Names", db.TargetNames.Enabled ~= false,
+        function(checked)
+            db.TargetNames.Enabled = checked
+            ApplySettings()
+        end,
+        true, "Target Names", "On", "Off")
+    rowTnEnable:AddWidget(tnEnableCheck, 1)
+    table_insert(allWidgets, tnEnableCheck)
+    card5tn:AddRow(rowTnEnable, 36)
+
+    local anchorList = {
+        { key = "LEFT", text = "Left" },
+        { key = "CENTER", text = "Center" },
+        { key = "RIGHT", text = "Right" },
+    }
+
+    -- Anchor + Font Size
+    local rowTnA = GUIFrame:CreateRow(card5tn.content, 40)
+    local tnAnchorDropdown = GUIFrame:CreateDropdown(rowTnA, "Anchor", anchorList,
+        db.TargetNames.Anchor or "RIGHT", 50,
+        function(key)
+            db.TargetNames.Anchor = key
+            ApplySettings()
+        end)
+    rowTnA:AddWidget(tnAnchorDropdown, 0.5)
+    table_insert(allWidgets, tnAnchorDropdown)
+
+    local tnFontSlider = GUIFrame:CreateSlider(rowTnA, "Font Size", 6, 18, 1,
+        db.TargetNames.FontSize or 12, nil,
+        function(val)
+            db.TargetNames.FontSize = val
+            ApplySettings()
+        end)
+    rowTnA:AddWidget(tnFontSlider, 0.5)
+    table_insert(allWidgets, tnFontSlider)
+    card5tn:AddRow(rowTnA, 40)
+
+    -- X + Y Offset
+    local rowTnB = GUIFrame:CreateRow(card5tn.content, 40)
+    local tnXSlider = GUIFrame:CreateSlider(rowTnB, "X Offset", -100, 100, 1,
+        db.TargetNames.XOffset or 0, nil,
+        function(val)
+            db.TargetNames.XOffset = val
+            ApplySettings()
+        end)
+    rowTnB:AddWidget(tnXSlider, 0.5)
+    table_insert(allWidgets, tnXSlider)
+
+    local tnYSlider = GUIFrame:CreateSlider(rowTnB, "Y Offset", -50, 100, 1,
+        db.TargetNames.YOffset or 14, nil,
+        function(val)
+            db.TargetNames.YOffset = val
+            ApplySettings()
+        end)
+    rowTnB:AddWidget(tnYSlider, 0.5)
+    table_insert(allWidgets, tnYSlider)
+    card5tn:AddRow(rowTnB, 40)
+
+    yOffset = yOffset + card5tn:GetContentHeight() + Theme.paddingSmall
+
+    ----------------------------------------------------------------
+    -- Card 6: Colors
     ----------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
     table_insert(allWidgets, card5)

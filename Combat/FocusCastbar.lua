@@ -362,6 +362,13 @@ end
 -- Update target name display
 function FC:UpdateTargetNames()
     if not self.targetNames then return end
+    local targetSettings = self.db.TargetNames or {}
+    if not targetSettings.Enabled then
+        for i = 1, MAX_TARGET_NAMES do
+            self.targetNames[i]:SetAlpha(0)
+        end
+        return
+    end
     if self.isPreview then return end
 
     for i = 1, MAX_TARGET_NAMES do

@@ -235,6 +235,13 @@ local Defaults = {
                 NotReadyColor = { 0.5, 0.5, 0.5, 1 },
                 TickColor = { 1, 1, 1, 1 },
             },
+            TargetNames = {
+                Enabled = true,
+                Anchor = "RIGHT",
+                XOffset = 0,
+                YOffset = 14,
+                FontSize = 12,
+            },
         },
 
         FocusCastbar = {
@@ -270,10 +277,11 @@ local Defaults = {
                 TickColor = { 1, 1, 1, 1 },
             },
             TargetNames = {
+                Enabled = true,
                 Anchor = "RIGHT",
-                XOffset = 0,
-                YOffset = 14,
-                FontSize = 12,
+                XOffset = 3,
+                YOffset = -21,
+                FontSize = 13,
             },
         },
 
@@ -525,6 +533,18 @@ local Defaults = {
             ClearKey = "",
             ClearModifier = "",
             OrderList = { 1, 2, 3, 4, 5, 6, 7, 8 },
+        },
+
+        FocusMarker = {
+            Enabled = true,
+            SelectedMarker = "Star",
+            MacroName = "FocusMarker",
+            MacroIcon = 1033497,
+            MacroConditionals = "",
+            MarkOnly = false,
+            NoRaid = false,
+            NoToggle = true,
+            AnnounceReadyCheck = true,
         },
 
         SlashCommands = {
