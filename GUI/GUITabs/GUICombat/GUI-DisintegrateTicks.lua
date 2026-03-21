@@ -82,7 +82,7 @@ GUIFrame:RegisterContent("DisintegrateTicks", function(scrollChild, yOffset)
     local noteRow = GUIFrame:CreateRow(card1.content, noteHeight)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Evoker only (Devastation / Preservation). Displays tick marks on\n  your cast bar during Disintegrate channels.",
+        KE:ColorTextByTheme("-") .. " Evoker only (Devastation / Preservation).\n" .. KE:ColorTextByTheme("-") .. " Displays tick marks on your cast bar during Disintegrate channels.",
         noteHeight, "hide")
     noteRow:AddWidget(noteText, 1)
     card1:AddRow(noteRow, noteHeight)

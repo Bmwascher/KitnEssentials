@@ -201,53 +201,47 @@ GUIFrame:RegisterContent("RangeChecker", function(scrollChild, yOffset)
     local card5 = GUIFrame:CreateCard(scrollChild, "Color Settings", yOffset)
     table_insert(allWidgets, card5)
 
-    -- 40+ Yards
-    local row5a = GUIFrame:CreateRow(card5.content, 38)
-    local colorOnePicker = GUIFrame:CreateColorPicker(row5a, "40+ Yards",
-        db.ColorOne or { 1, 0, 0, 1 },
-        function(r, g, b, a)
-            db.ColorOne = { r, g, b, a }
-            ApplySettings()
-        end)
-    row5a:AddWidget(colorOnePicker, 0.5)
-    table_insert(allWidgets, colorOnePicker)
-    card5:AddRow(row5a, 38)
-
-    -- 20-40 Yards
-    local row5b = GUIFrame:CreateRow(card5.content, 38)
-    local colorTwoPicker = GUIFrame:CreateColorPicker(row5b, "20-40 Yards",
-        db.ColorTwo or { 1, 0.42, 0, 1 },
-        function(r, g, b, a)
-            db.ColorTwo = { r, g, b, a }
-            ApplySettings()
-        end)
-    row5b:AddWidget(colorTwoPicker, 0.5)
-    table_insert(allWidgets, colorTwoPicker)
-    card5:AddRow(row5b, 38)
-
-    -- 10-20 Yards
-    local row5c = GUIFrame:CreateRow(card5.content, 38)
-    local colorThreePicker = GUIFrame:CreateColorPicker(row5c, "10-20 Yards",
-        db.ColorThree or { 1, 0.82, 0, 1 },
-        function(r, g, b, a)
-            db.ColorThree = { r, g, b, a }
-            ApplySettings()
-        end)
-    row5c:AddWidget(colorThreePicker, 0.5)
-    table_insert(allWidgets, colorThreePicker)
-    card5:AddRow(row5c, 38)
-
-    -- 0-10 Yards
-    local row5d = GUIFrame:CreateRow(card5.content, 38)
-    local colorFourPicker = GUIFrame:CreateColorPicker(row5d, "0-10 Yards",
+    -- 0-10 Yards / 20-40 Yards
+    local row5a = GUIFrame:CreateRow(card5.content, 40)
+    local colorFourPicker = GUIFrame:CreateColorPicker(row5a, "0-10 Yards",
         db.ColorFour or { 0, 1, 0, 1 },
         function(r, g, b, a)
             db.ColorFour = { r, g, b, a }
             ApplySettings()
         end)
-    row5d:AddWidget(colorFourPicker, 0.5)
+    row5a:AddWidget(colorFourPicker, 0.5)
     table_insert(allWidgets, colorFourPicker)
-    card5:AddRow(row5d, 38)
+
+    local colorTwoPicker = GUIFrame:CreateColorPicker(row5a, "20-40 Yards",
+        db.ColorTwo or { 1, 0.42, 0, 1 },
+        function(r, g, b, a)
+            db.ColorTwo = { r, g, b, a }
+            ApplySettings()
+        end)
+    row5a:AddWidget(colorTwoPicker, 0.5)
+    table_insert(allWidgets, colorTwoPicker)
+    card5:AddRow(row5a, 40)
+
+    -- 10-20 Yards / 40+ Yards
+    local row5b = GUIFrame:CreateRow(card5.content, 40)
+    local colorThreePicker = GUIFrame:CreateColorPicker(row5b, "10-20 Yards",
+        db.ColorThree or { 1, 0.82, 0, 1 },
+        function(r, g, b, a)
+            db.ColorThree = { r, g, b, a }
+            ApplySettings()
+        end)
+    row5b:AddWidget(colorThreePicker, 0.5)
+    table_insert(allWidgets, colorThreePicker)
+
+    local colorOnePicker = GUIFrame:CreateColorPicker(row5b, "40+ Yards",
+        db.ColorOne or { 1, 0, 0, 1 },
+        function(r, g, b, a)
+            db.ColorOne = { r, g, b, a }
+            ApplySettings()
+        end)
+    row5b:AddWidget(colorOnePicker, 0.5)
+    table_insert(allWidgets, colorOnePicker)
+    card5:AddRow(row5b, 40)
 
     yOffset = yOffset + card5:GetContentHeight() + Theme.paddingSmall
 

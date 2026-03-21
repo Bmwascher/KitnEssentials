@@ -181,18 +181,16 @@ GUIFrame:RegisterContent("CombatCross", function(scrollChild, yOffset)
             ApplySettings()
             UpdateAllWidgetStates()
         end)
-    row4a:AddWidget(meleeRangeCheck, 1)
-    card4:AddRow(row4a, 40)
+    row4a:AddWidget(meleeRangeCheck, 0.5)
 
-    local row4b = GUIFrame:CreateRow(card4.content, 40)
-    local rangedRangeCheck = GUIFrame:CreateCheckbox(row4b, "Enable for ranged specs", db.RangeColorRangedEnabled == true,
+    local rangedRangeCheck = GUIFrame:CreateCheckbox(row4a, "Enable for ranged specs", db.RangeColorRangedEnabled == true,
         function(checked)
             db.RangeColorRangedEnabled = checked
             ApplySettings()
             UpdateAllWidgetStates()
         end)
-    row4b:AddWidget(rangedRangeCheck, 1)
-    card4:AddRow(row4b, 40)
+    row4a:AddWidget(rangedRangeCheck, 0.5)
+    card4:AddRow(row4a, 40)
 
     local row4c = GUIFrame:CreateRow(card4.content, 36)
     local outOfRangeColorPicker = GUIFrame:CreateColorPicker(row4c, "Out of Range Color",
