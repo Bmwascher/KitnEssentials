@@ -66,6 +66,7 @@ GUIFrame.sidebarConfig = {
             { id = "HideBars",      text = "Hide ActionBars" },
             { id = "Recuperate",    text = "Recuperate Button" },
             { id = "WorldMarkerCycler", text = "World Marker Cycler" },
+            { id = "FocusMarker", text = "Focus Marker Macro Builder" },
         },
     },
     {

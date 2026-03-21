@@ -210,12 +210,25 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
 
     if not db.TargetNames then
         db.TargetNames = {
+            Enabled = true,
             Anchor = "RIGHT",
             XOffset = 0,
             YOffset = 14,
             FontSize = 12,
         }
     end
+
+    -- Enable toggle
+    local rowTnEnable = GUIFrame:CreateRow(card5.content, 36)
+    local tnEnableCheck = GUIFrame:CreateCheckbox(rowTnEnable, "Show Target Names", db.TargetNames.Enabled ~= false,
+        function(checked)
+            db.TargetNames.Enabled = checked
+            ApplySettings()
+        end,
+        true, "Target Names", "On", "Off")
+    rowTnEnable:AddWidget(tnEnableCheck, 1)
+    table_insert(allWidgets, tnEnableCheck)
+    card5:AddRow(rowTnEnable, 36)
 
     local anchorList = {
         { key = "LEFT", text = "Left" },

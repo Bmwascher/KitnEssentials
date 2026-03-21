@@ -25,6 +25,14 @@ local GetPlayerInfoByGUID = GetPlayerInfoByGUID
 local ipairs = ipairs
 local type = type
 
+-- Map anchor string to frame point
+local function GetPointFromAnchor(anchor)
+    if anchor == "LEFT" then return "LEFT"
+    elseif anchor == "RIGHT" then return "RIGHT"
+    end
+    return "CENTER"
+end
+
 -- Module locals
 local FALLBACK_ICON = 136243
 local PREVIEW_DURATION = 20
@@ -187,8 +195,7 @@ function TC:CreateFrame()
     local targetNames = {}
     for i = 1, MAX_TARGET_NAMES do
         local nameText = frame:CreateFontString(nil, "OVERLAY")
-        nameText:SetPoint("LEFT", frame, "RIGHT", 4, 14 - ((i - 1) * 14))
-        KE:ApplyFontToText(nameText, db.FontFace, db.FontSize, db.FontOutline)
+        nameText:SetParent(castBar)
         nameText:SetAlpha(0)
         targetNames[i] = nameText
     end
@@ -239,10 +246,16 @@ function TC:ApplySettings()
     self.text:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4] or 1)
     self.time:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4] or 1)
 
-    -- Update target name fonts
+    -- Target name positioning
     if self.targetNames then
+        local targetSettings = db.TargetNames or {}
+        local anchorPoint = GetPointFromAnchor(targetSettings.Anchor)
         for i = 1, MAX_TARGET_NAMES do
-            KE:ApplyFontToText(self.targetNames[i], db.FontFace, db.FontSize, db.FontOutline)
+            local targetText = self.targetNames[i]
+            targetText:ClearAllPoints()
+            targetText:SetPoint(anchorPoint, self.frame, anchorPoint, targetSettings.XOffset or 0, targetSettings.YOffset or 14)
+            targetText:SetJustifyH(anchorPoint)
+            KE:ApplyFontToText(targetText, db.FontFace, targetSettings.FontSize or 12, db.FontOutline)
         end
     end
 
@@ -353,6 +366,13 @@ end
 -- Update target name display
 function TC:UpdateTargetNames()
     if not self.targetNames then return end
+    local targetSettings = self.db.TargetNames or {}
+    if not targetSettings.Enabled then
+        for i = 1, MAX_TARGET_NAMES do
+            self.targetNames[i]:SetAlpha(0)
+        end
+        return
+    end
     if self.isPreview then return end
 
     for i = 1, MAX_TARGET_NAMES do

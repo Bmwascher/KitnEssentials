@@ -11,4 +11,5 @@
     <Script file="Optimize.lua" />
     <Script file="SlashCommands.lua" />
     <Script file="WorldMarkerCycler.lua" />
+    <Script file="FocusMarker.lua" />
 </Ui>
