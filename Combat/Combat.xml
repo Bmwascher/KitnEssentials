@@ -13,4 +13,5 @@
     <Script file="RangeChecker.lua" />
     <Script file="DispelCursor.lua" />
     <Script file="TimeSpiral.lua" />
+    <Script file="DisintegrateTicks.lua" />
 </Ui>

@@ -202,7 +202,7 @@ GUIFrame:RegisterContent("ExternalsDefensives", function(scrollChild, yOffset)
     local noteRow = GUIFrame:CreateRow(card1.content, noteHeight)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
-        "Tracks self-cast defensive spell duration from cast time. If a spell is\ncancelled early (e.g. Dispersion), the remaining duration will not update.",
+        KE:ColorTextByTheme("-") .. " Tracks self-cast defensive spell duration from cast time. If a spell is\n  cancelled early (e.g. Dispersion), the remaining duration will not update.",
         noteHeight, "hide")
     noteRow:AddWidget(noteText, 1)
     card1:AddRow(noteRow, noteHeight)

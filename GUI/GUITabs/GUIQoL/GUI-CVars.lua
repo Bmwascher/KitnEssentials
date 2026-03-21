@@ -104,7 +104,7 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
     local card4 = GUIFrame:CreateCard(scrollChild, "Nameplates", yOffset)
     table_insert(allWidgets, card4)
 
-    card4:AddLabel("|cffCC8800Friendly Player Nameplates must be " .. KE:ColorTextByTheme("enabled") .. " for these to work.|r")
+    card4:AddLabel("|cffCC8800Friendly Player Nameplates must be |cff33ff33enabled|r|cffCC8800 for these to work.|r")
 
     if AU then
         for _, def in ipairs(AU.CVAR_DEFS) do

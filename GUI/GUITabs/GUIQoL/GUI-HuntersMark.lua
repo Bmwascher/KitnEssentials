@@ -55,7 +55,7 @@ GUIFrame:RegisterContent("HuntersMark", function(scrollChild, yOffset)
     local noteRow = GUIFrame:CreateRow(card1.content, noteHeight)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
-        "This module only works inside raid instances and while out of combat.",
+        KE:ColorTextByTheme("-") .. " This module only works inside raid instances and while out of combat.",
         noteHeight, "hide")
     noteRow:AddWidget(noteText, 1)
     card1:AddRow(noteRow, noteHeight)

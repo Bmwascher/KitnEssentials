@@ -321,6 +321,24 @@ local Defaults = {
             Position = DefaultPosition(0, -160),
         },
 
+        DisintegrateTicks = {
+            Enabled = false,
+            TickColor = { 1, 1, 1, 0.8 },
+            TickWidth = 2,
+            ClipWarning = {
+                Enabled = true,
+                Text = "DON'T CLIP",
+                FontSize = 16,
+                FontFace = "Expressway",
+                FontOutline = "SOFTOUTLINE",
+                Color = { 1, 0, 0, 1 },
+            },
+            Strata = "HIGH",
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            Position = DefaultPosition(0, -50),
+        },
+
         ----------------------------------------------------------------
         -- QOL MODULES
         ----------------------------------------------------------------
@@ -498,6 +516,15 @@ local Defaults = {
                 [1] = true, [2] = false, [3] = false,
                 [4] = true, [5] = true, [6] = true,
             },
+        },
+
+        WorldMarkerCycler = {
+            Enabled = false,
+            PlaceKey = "",
+            PlaceModifier = "",
+            ClearKey = "",
+            ClearModifier = "",
+            OrderList = { 1, 2, 3, 4, 5, 6, 7, 8 },
         },
 
         SlashCommands = {

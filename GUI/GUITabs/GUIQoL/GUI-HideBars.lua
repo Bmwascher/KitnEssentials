@@ -166,7 +166,7 @@ GUIFrame:RegisterContent("HideBars", function(scrollChild, yOffset)
 
     local noteWidget = GUIFrame:CreateText(card4.content,
         KE:ColorTextByTheme("Out of Combat Only"),
-        "The keybind will only work out of combat. Action bars cannot be toggled during combat due to Blizzard's secure frame restrictions. Select which ElvUI bars to toggle above.",
+        KE:ColorTextByTheme("-") .. " The keybind will only work out of combat. Action bars cannot be toggled\n  during combat due to Blizzard's secure frame restrictions.",
         60, "hide", true)
     card4:AddRow(noteWidget, 60)
     yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall

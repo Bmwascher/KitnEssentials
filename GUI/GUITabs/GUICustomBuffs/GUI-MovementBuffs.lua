@@ -202,7 +202,7 @@ GUIFrame:RegisterContent("MovementBuffs", function(scrollChild, yOffset)
     local noteRow = GUIFrame:CreateRow(card1.content, noteHeight)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
-        "Tracks self-cast movement buff duration from cast time. If a buff is\ncancelled early, the remaining duration will not update.",
+        KE:ColorTextByTheme("-") .. " Tracks self-cast movement buff duration from cast time. If a buff is\n  cancelled early, the remaining duration will not update.",
         noteHeight, "hide")
     noteRow:AddWidget(noteText, 1)
     card1:AddRow(noteRow, noteHeight)
