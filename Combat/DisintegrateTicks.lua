@@ -14,6 +14,9 @@ local C_AddOns = C_AddOns
 local PlayerUtil = PlayerUtil
 local hooksecurefunc = hooksecurefunc
 local math_ceil = math.ceil
+local math_max = math.max
+local UnitChannelInfo = UnitChannelInfo
+local UnitSpellHaste = UnitSpellHaste
 
 -- Spell constants
 local DISINTEGRATE = 356995
@@ -23,6 +26,7 @@ local FIRE_BREATH = 357208
 local FIRE_BREATH_FONT = 382266
 local ETERNITY_SURGE = 359073
 local ETERNITY_SURGE_FONT = 382411
+local NATURAL_CONVERGENCE = 369913
 local STACK_EXPIRY = 15
 
 -- Spec IDs (Devastation / Preservation)
@@ -36,6 +40,10 @@ DT.channeling = false
 DT.massDisintegrateStacks = 0
 DT.lastGainedStack = 0
 DT.hasTipTheScalesActive = false
+DT.chaining = false
+DT.lastStart = 0
+DT.firstTick = 0
+DT.prevEndTime = nil
 DT.castBarInfo = { width = 0, height = 0, anchor = nil }
 DT.hooksInstalled = false
 
@@ -123,6 +131,26 @@ function DT:AdjustDimensions(width, height)
 end
 
 --------------------------------------------------------------------------------
+-- Haste / tick interval helpers
+--------------------------------------------------------------------------------
+function DT:GetHaste()
+    return 1 + UnitSpellHaste("player") / 100
+end
+
+function DT:GetTickInterval()
+    local base = 1
+    -- Azure Celerity reduces tick interval by 25%
+    if C_SpellBook.IsSpellKnown(DISINTEGRATE_TALENT) then
+        base = base * 0.75
+    end
+    -- Natural Convergence reduces total cast time by 20%
+    if C_SpellBook.IsSpellKnown(NATURAL_CONVERGENCE) then
+        base = base * 0.8
+    end
+    return base
+end
+
+--------------------------------------------------------------------------------
 -- Tick management
 --------------------------------------------------------------------------------
 function DT:CreateTick(index)
@@ -143,15 +171,16 @@ function DT:HideTicks()
     end
 end
 
-function DT:UpdateTicks(castBarFrame, amountOfTicks)
+function DT:UpdateTicks(castBarFrame, duration)
     self:HideTicks()
     if not castBarFrame then return end
 
     local db = self.db
     local tickWidth = db.TickWidth or 2
-    local spacing = self.castBarInfo.width / amountOfTicks
+    local hastedTickInterval = self:GetTickInterval() / self:GetHaste()
+    local pixelsPerSecond = self.castBarInfo.width / duration
 
-    for i = 1, amountOfTicks - 1 do
+    for i = 1, self.maxTicks do
         local tick = self.ticks[i]
 
         if tick == nil or tick:GetParent() ~= castBarFrame then
@@ -162,8 +191,21 @@ function DT:UpdateTicks(castBarFrame, amountOfTicks)
         if tick then
             tick:SetSize(tickWidth, self.castBarInfo.height * 0.95)
             tick:ClearAllPoints()
-            tick:SetPoint("CENTER", castBarFrame, "LEFT", spacing * i, 0)
-            tick:Show()
+
+            local tickTime = i * hastedTickInterval
+
+            if self.chaining then
+                local interval = (duration - self.firstTick) / (self.maxTicks - 1)
+                tickTime = self.firstTick + (i - 1) * interval
+            end
+
+            tick:SetPoint("CENTER", castBarFrame, "LEFT", (duration - tickTime) * pixelsPerSecond, 0)
+
+            if tickTime < duration * 0.99 then
+                tick:Show()
+            else
+                tick:Hide()
+            end
         end
     end
 end
@@ -312,6 +354,7 @@ end
 function DT:OnEvent(event, unit, ...)
     -- Filter unit-specific events to player only
     if event == "UNIT_SPELLCAST_CHANNEL_START" or event == "UNIT_SPELLCAST_CHANNEL_STOP"
+        or event == "UNIT_SPELLCAST_CHANNEL_UPDATE"
         or event == "UNIT_SPELLCAST_EMPOWER_STOP" or event == "UNIT_SPELLCAST_SUCCEEDED" then
         if unit ~= "player" then return end
     end
@@ -353,15 +396,33 @@ function DT:OnEvent(event, unit, ...)
         self.massDisintegrateStacks = self.massDisintegrateStacks + 1
         self.lastGainedStack = GetTime()
 
-    elseif event == "UNIT_SPELLCAST_CHANNEL_START" then
-        local _, spellId = ...  -- castGUID, spellID
+    elseif event == "UNIT_SPELLCAST_CHANNEL_UPDATE" then
+        local _, spellId = ...
         if spellId ~= DISINTEGRATE then return end
 
-        local now = GetTime()
+        local endTimeMS = select(5, UnitChannelInfo("player"))
+        if endTimeMS ~= nil then
+            self.prevEndTime = endTimeMS / 1000
+        end
+
+    elseif event == "UNIT_SPELLCAST_CHANNEL_START" then
+        local _, spellId = ...
+        if spellId ~= DISINTEGRATE then return end
+
+        local _, _, _, startTimeMS, endTimeMS = UnitChannelInfo("player")
+        local startTime = startTimeMS / 1000
+
+        -- Hover mid-Disintegrate triggers another CHANNEL_START — deduplicate
+        if startTime - self.lastStart < 0.5 then
+            return
+        end
+
+        self.lastStart = startTime
+
         local cw = self.db.ClipWarning or {}
 
         if cw.Enabled and self.massDisintegrateStacks > 0 then
-            local expired = now - self.lastGainedStack > STACK_EXPIRY
+            local expired = GetTime() - self.lastGainedStack > STACK_EXPIRY
             if expired then
                 self.massDisintegrateStacks = 0
             else
@@ -383,8 +444,19 @@ function DT:OnEvent(event, unit, ...)
             self:DiscoverCastBar()
         end
 
-        self:UpdateTicks(self.castBarInfo.anchor, self.channeling and self.maxTicks or (self.maxTicks - 1))
+        local nextEndTime = endTimeMS / 1000
+
+        self.firstTick = 0
+
+        if self.channeling and self.prevEndTime then
+            self.firstTick = math_max(0, self.prevEndTime - startTime)
+        end
+
+        self.prevEndTime = nextEndTime
+        self.chaining = self.channeling
         self.channeling = true
+
+        self:UpdateTicks(self.castBarInfo.anchor, nextEndTime - startTime)
 
     elseif event == "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW" then
         -- unit param captures spellId for non-unit events
@@ -398,14 +470,19 @@ function DT:OnEvent(event, unit, ...)
         end
 
     elseif event == "UNIT_SPELLCAST_CHANNEL_STOP" then
+        local _, spellId = ...
+        if spellId ~= DISINTEGRATE then return end
+
         self:HideWarning()
         self:HideTicks()
         self.channeling = false
+        self.chaining = false
     end
 end
 
 function DT:RegisterSpecEvents()
     self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START", "OnEvent")
+    self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_UPDATE", "OnEvent")
     self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP", "OnEvent")
     self:RegisterEvent("UNIT_SPELLCAST_EMPOWER_STOP", "OnEvent")
     self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", "OnEvent")
@@ -417,6 +494,7 @@ end
 
 function DT:UnregisterSpecEvents()
     self:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_START")
+    self:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_UPDATE")
     self:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
     self:UnregisterEvent("UNIT_SPELLCAST_EMPOWER_STOP")
     self:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED")
@@ -479,7 +557,8 @@ function DT:ShowPreview()
         local w, h = self.castBarInfo.anchor:GetSize()
         self.castBarInfo.width = math_ceil(w)
         self.castBarInfo.height = math_ceil(h)
-        self:UpdateTicks(self.castBarInfo.anchor, self.maxTicks - 1)
+        local previewDuration = self.maxTicks * (self:GetTickInterval() / self:GetHaste())
+        self:UpdateTicks(self.castBarInfo.anchor, previewDuration)
     end
 end
 
@@ -531,6 +610,8 @@ function DT:OnDisable()
     end
     self.isPreview = false
     self.channeling = false
+    self.chaining = false
+    self.prevEndTime = nil
     self.massDisintegrateStacks = 0
     self:UnregisterAllEvents()
 end

@@ -11,5 +11,8 @@
     <Script file="Optimize.lua" />
     <Script file="SlashCommands.lua" />
     <Script file="WorldMarkerCycler.lua" />
+    <Script file="CombatLogger.lua" />
+    <Script file="AuctionHouseFilter.lua" />
+    <Script file="PIMacroBuilder.lua" />
     <Script file="FocusMarker.lua" />
 </Ui>

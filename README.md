@@ -24,11 +24,14 @@ KitnEssentials adds HUD elements, buff trackers, and Blizzard UI skinning throug
 - **Disintegrate Castbar Ticks** — Evoker channel tick marks with Mass Disintegrate clip warning
 - **World Marker Cycler** — Cycle through world markers at cursor with drag-to-reorder and interactive keybind capture
 - **Focus Marker Macro Builder** — Auto-creates and manages a focus target + raid marker macro with marker selection, mark-only mode, no-raid/no-toggle options, ready check announce, and custom conditionals
+- **Power Infusion Macro Builder** — Auto-creates and manages a PI macro with trinkets, Vampiric Embrace, racial, potions, and custom /use line
 
 ### Quality of Life
 - **Automation** — Auto-accept invites, release, repair, sell junk, and more
+- **Combat Logger** — Automatic combat logging with per-content-type toggles (raids, dungeons, M+, PvP, arenas), 30s delayed stop for Warcraft Recorder
 - **CVars** — Combat text, character effects, and visual toggles
 - **Slash Commands** — Custom slash command registration
+- **Auction House Filter** — Auto-applies Current Expansion filter and focuses search bar for Blizzard AH and Craft Orders
 - **Missing Buffs** — Alerts for missing raid buffs, food, flasks, runes, weapon enchants, rogue poisons, stance/form tracking (Druid, Warrior, Paladin, Priest, Evoker, Rogue stealth)
 - **Hunter's Mark Missing** — Alert when Hunter's Mark is not applied
 - **Dragon Riding UI** — Customizable dragon riding speed display

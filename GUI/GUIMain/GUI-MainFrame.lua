@@ -59,6 +59,7 @@ GUIFrame.sidebarConfig = {
             { id = "DisintegrateTicks", text = "Disintegrate Castbar Ticks" },
             { id = "WorldMarkerCycler", text = "World Marker Cycler" },
             { id = "FocusMarker",   text = "Focus Marker Macro Builder" },
+            { id = "PIMacroBuilder", text = "Power Infusion Macro Builder" },
         },
     },
     {
@@ -68,8 +69,10 @@ GUIFrame.sidebarConfig = {
         defaultExpanded = true,
         items = {
             { id = "Automation",    text = "Automation" },
+            { id = "CombatLogger",  text = "Combat Logger" },
             { id = "CVars",         text = "CVars" },
             { id = "SlashCommands", text = "Slash Commands" },
+            { id = "AuctionHouseFilter", text = "Auction House Filter" },
             { id = "MissingBuffs",  text = "Missing Buffs" },
             { id = "HuntersMark",   text = "Hunter's Mark Missing" },
             { id = "DragonRiding",  text = "Dragon Riding UI" },
@@ -240,7 +243,7 @@ function GUIFrame:CreateMainFrame()
 
     local title = header:CreateFontString(nil, "OVERLAY")
     title:SetPoint("LEFT", header, "LEFT", T.paddingMedium, 0)
-    KE:ApplyThemeFont(title, "normal")
+    KE:ApplyThemeFont(title, "large")
     title:SetText(KE:ColorTextByTheme("Kitn") .. "Essentials")
     GUIFrame.titleText = title
 
@@ -508,16 +511,20 @@ function GUIFrame:CreateMainFrame()
     resizeTex:SetTexture("Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\KitnCustomResizeHandle23px.png")
     resizeTex:SetVertexColor(T.textMuted[1], T.textMuted[2], T.textMuted[3], 0.6)
     resizeGrip:RegisterForDrag("LeftButton")
-    resizeGrip:SetScript("OnDragStart", function()
-        frame:StartSizing("BOTTOMRIGHT")
+    resizeGrip:SetScript("OnMouseDown", function(self, button)
+        if button == "LeftButton" then
+            frame:StartSizing("BOTTOMRIGHT")
+        end
     end)
-    resizeGrip:SetScript("OnDragStop", function()
+    resizeGrip:SetScript("OnMouseUp", function()
         frame:StopMovingOrSizing()
         if KE.db and KE.db.global then
             KE.db.global.GUIState.frame.width = frame:GetWidth()
             KE.db.global.GUIState.frame.height = frame:GetHeight()
         end
     end)
+    resizeGrip:SetScript("OnDragStart", function() end)
+    resizeGrip:SetScript("OnDragStop", function() end)
     resizeGrip:SetScript("OnEnter", function()
         resizeTex:SetVertexColor(T.accent[1], T.accent[2], T.accent[3], 0.8)
     end)

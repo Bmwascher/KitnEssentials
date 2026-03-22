@@ -1,5 +1,24 @@
 # Changelog
 
+## v1.4.0
+### Additions
+- New module: **Auction House Filter** — Auto-applies Current Expansion filter and focuses search bar for Blizzard AH and Craft Orders. Replaces the old single toggle from Automation.
+- New module: **Combat Logger** — Automatic combat logging for raids, dungeons, M+, PvP, arenas, and scenarios. Per-content-type toggles, 30-second delayed stop for Warcraft Recorder compatibility, ACL prompt on login.
+- New module: **Power Infusion Macro Builder** — Auto-creates and manages a PI macro with trinkets, Vampiric Embrace, racial, potion/fleeting potion, and custom /use line. Extracted from Slash Commands into its own module with full GUI.
+
+### Changes
+- **DisintegrateTicks** updated to match upstream v2.0.0: haste-aware tick placement, channel chaining support, Hover mid-Disintegrate deduplication, spellId filter on channel stop.
+- GUI title bar font increased to large (16px).
+- GUI resize grip fix: resolved intermittent drag conflict with frame movement.
+- PI Macro Builder: now auto-creates the macro (no longer requires pre-existing "PI" macro).
+- Removed AH filter toggle from Automation page (replaced by new module).
+- Removed PI Macro Builder card from Slash Commands page (replaced by new module).
+
+### Fixes
+- FocusMarker: replaced hardcoded print() with KE:Print(), clear lastMacroName on disable, removed dead MARKER_NAMES table.
+- WorldMarkerCycler: fixed initial icon texture using wrong mapping, removed dead dragState.ghostTex.
+- Code cleanup: replaced hardcoded PREFIX constants with KE:Print() across new modules, removed redundant hooksInstalled guard in AuctionHouseFilter, removed _G.SetPITarget global pollution from PIMacroBuilder.
+
 ## v1.3.1
 ### Changes
 - Sidebar reorganization: new **Utilities** section between Combat and Quality of Life. Moved Gateway Alert, Pet Status Texts, Time Spiral Tracker, Recuperate Button, Dispel CD on Cursor, Disintegrate Castbar Ticks, World Marker Cycler, and Focus Marker Macro Builder into Utilities.

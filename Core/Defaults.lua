@@ -366,7 +366,6 @@ local Defaults = {
             QuestModifier = "SHIFT",
             AutoDeclineDuels = false,
             AutoDeclinePetBattles = false,
-            AHCurrentExpansion = false,
             -- CVars (merged) - boolean
             CVarsEnabled = true,
             enableFloatingCombatText = nil,
@@ -385,6 +384,45 @@ local Defaults = {
             RAIDWaterDetail = nil,
             RAIDweatherDensity = nil,
             autoLootRate = nil,
+        },
+
+        AuctionHouseFilter = {
+            Enabled = true,
+            AuctionHouse = {
+                CurrentExpansion = true,
+                FocusSearchBar = true,
+            },
+            CraftOrders = {
+                CurrentExpansion = true,
+                FocusSearchBar = false,
+            },
+        },
+
+        CombatLogger = {
+            Enabled = true,
+            DelayStop = true,
+            DisableACLPrompt = false,
+            -- Dungeons
+            DungeonNormal = false,
+            DungeonHeroic = false,
+            DungeonMythic = false,
+            DungeonMythicPlus = true,
+            DungeonTimewalking = false,
+            -- Raids
+            RaidLFR = false,
+            RaidNormal = true,
+            RaidHeroic = true,
+            RaidMythic = true,
+            RaidTimewalking = false,
+            -- PvP
+            PvPRegularBG = false,
+            PvPRatedBG = false,
+            PvPArenaSkirmish = false,
+            PvPRatedArena = false,
+            PvPSoloShuffle = false,
+            PvPWarGame = false,
+            -- Scenarios
+            ScenarioTorghast = false,
         },
 
         CopyAnything = {
@@ -547,21 +585,27 @@ local Defaults = {
             AnnounceReadyCheck = true,
         },
 
+        PIMacroBuilder = {
+            Enabled = true,
+            MacroName = "PI",
+            MacroIcon = 135939,
+            Trinket1 = true,
+            Trinket2 = false,
+            VampiricEmbrace = true,
+            Racial = "Ancestral Call",
+            Potion = "item:241309",
+            FleetingPotion = "",
+            Custom = "",
+        },
+
         SlashCommands = {
             CDMEnabled = true,
-            SetPITargetEnabled = true,
             RLEnabled = true,
             FSEnabled = true,
             LeavePartyEnabled = true,
             ResetInstancesEnabled = true,
             MuteEnabled = true,
             MusicEnabled = true,
-            PITrinket1 = true,
-            PITrinket2 = false,
-            PIVampiricEmbrace = true,
-            PIRacial = "Ancestral Call",
-            PIConsumable = "item:241309",
-            PICustom = "",
         },
 
         Recuperate = {
