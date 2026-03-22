@@ -105,7 +105,7 @@ function FM:ApplyMacro()
     end)
 
     if not ok then
-        print("|cffff6600KitnEssentials|r: FocusMarker macro error: " .. tostring(err))
+        KE:Print("FocusMarker macro error: " .. tostring(err))
     end
 
     self.lastMacroName = name
@@ -138,4 +138,5 @@ end
 
 function FM:OnDisable()
     self:UnregisterAllEvents()
+    self.lastMacroName = nil
 end

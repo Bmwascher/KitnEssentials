@@ -94,10 +94,6 @@ GUIFrame:RegisterContent("Automation", function(scrollChild, yOffset)
     row3b:AddWidget(useGuildCheck, 0.5)
     table_insert(allWidgets, useGuildCheck)
 
-    local ahExpansionCheck = GUIFrame:CreateCheckbox(row3b, "Auto Filter AH to Expansion", db.AHCurrentExpansion == true,
-        function(checked) db.AHCurrentExpansion = checked; ApplySettings() end)
-    row3b:AddWidget(ahExpansionCheck, 0.5)
-    table_insert(allWidgets, ahExpansionCheck)
     card3:AddRow(row3b, 40)
 
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall

@@ -91,8 +91,6 @@ GUIFrame:RegisterContent("FocusMarker", function(scrollChild, yOffset)
     local MARKER_TEX = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_"
     local MARKER_ORDER = { "Star", "Circle", "Diamond", "Triangle", "Moon", "Square", "Cross", "Skull", "None" }
     local MARKER_INDEX = { Star=1, Circle=2, Diamond=3, Triangle=4, Moon=5, Square=6, Cross=7, Skull=8 }
-    local MARKER_NAMES = { "Star", "Circle", "Diamond", "Triangle", "Moon", "Square", "Cross", "Skull", "None" }
-
     local totalWidth = (#MARKER_ORDER * ICON_SIZE) + ((#MARKER_ORDER - 1) * ICON_SPACING)
     local gridRowHeight = ICON_SIZE + 8
     local gridRow = GUIFrame:CreateRow(card2.content, gridRowHeight)

@@ -61,49 +61,6 @@ local function UnregisterCDM()
 end
 
 ------------------------------------------------------------------------
--- SetPITarget global function
-------------------------------------------------------------------------
-local piRegistered = false
-
-local function BuildPIMacro(targetName)
-    local lines = { "#showtooltip" }
-    table_insert(lines, "/cast [@mouseover,help,nodead][@" .. targetName .. ",exists,nodead][] Power Infusion")
-    if db.PITrinket1 then table_insert(lines, "/use 13") end
-    if db.PITrinket2 then table_insert(lines, "/use 14") end
-    if db.PIVampiricEmbrace then table_insert(lines, "/use Vampiric Embrace") end
-    for _, key in ipairs({ "PIRacial", "PIConsumable", "PICustom" }) do
-        local val = db[key]
-        if val and val ~= "" then
-            table_insert(lines, "/use " .. val)
-        end
-    end
-    return table.concat(lines, "\n")
-end
-
-local function RegisterSetPITarget()
-    if piRegistered then return end
-    _G.SetPITarget = function()
-        local macroIndex = GetMacroIndexByName("PI")
-        if not macroIndex or macroIndex == 0 then
-            print(PREFIX .. "|cffFF4444No macro named \"PI\" found. Create one first.|r")
-            return
-        end
-        local n = UnitName("mouseover") or UnitName("target") or "target"
-        if not InCombatLockdown() then
-            EditMacro(macroIndex, nil, nil, BuildPIMacro(n))
-            print(PREFIX .. "PI macro updated to " .. n)
-        end
-    end
-    piRegistered = true
-end
-
-local function UnregisterSetPITarget()
-    if not piRegistered then return end
-    _G.SetPITarget = nil
-    piRegistered = false
-end
-
-------------------------------------------------------------------------
 -- /rl Slash Command (Reload UI)
 ------------------------------------------------------------------------
 local rlRegistered = false
@@ -285,12 +242,13 @@ local function RegisterKitnCommands()
         if KE.EditMode then KE.EditMode:Toggle() end
     end
 
-    -- /kitn pi — set PI target (calls SetPITarget)
+    -- /kitn pi — set PI target (calls into PIMacroBuilder module)
     KitnCommands["pi"] = function()
-        if _G.SetPITarget then
-            _G.SetPITarget()
+        local PImod = KitnEssentials:GetModule("PIMacroBuilder", true)
+        if PImod and PImod:IsEnabled() then
+            PImod:SetPITarget()
         else
-            print(PREFIX .. "SetPITarget is not enabled.")
+            print(PREFIX .. "PI Macro Builder is not enabled.")
         end
     end
 
@@ -364,12 +322,6 @@ function KE:ApplySlashCommands()
         RegisterCDM()
     else
         UnregisterCDM()
-    end
-
-    if db.SetPITargetEnabled then
-        RegisterSetPITarget()
-    else
-        UnregisterSetPITarget()
     end
 
     if db.RLEnabled then

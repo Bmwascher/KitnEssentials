@@ -340,7 +340,6 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
     ghost:SetSize(ICON_SIZE, ICON_SIZE)
     ghost:SetAlpha(0.7)
     ghost:Hide()
-    dragState.ghostTex = ghost
 
     -- Drop position indicator (vertical line showing where icon will land)
     local dropIndicator = dragContainer:CreateTexture(nil, "OVERLAY", nil, 6)
@@ -381,7 +380,7 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
 
         local icon = slot:CreateTexture(nil, "ARTWORK")
         icon:SetAllPoints()
-        icon:SetTexture(MARKER_TEX .. slot.markerId)
+        icon:SetTexture(MarkerTexture(slot.markerId))
         slot.icon = icon
 
         -- Border on hover

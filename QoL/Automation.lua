@@ -424,28 +424,6 @@ local function SetupAutoDeclinePetBattles()
 end
 
 --------------------------------------------------------------------------------
--- Auto Filter AH to Current Expansion
---------------------------------------------------------------------------------
-local ahFrame
-local function SetupAHCurrentExpansion()
-    if ahFrame then return end
-    ahFrame = CreateFrame("Frame")
-    ahFrame:RegisterEvent("AUCTION_HOUSE_SHOW")
-    ahFrame:SetScript("OnEvent", function()
-        if not AU.db or not AU.db.AHCurrentExpansion then return end
-        C_Timer.After(0, function()
-            if AuctionHouseFrame and AuctionHouseFrame.SearchBar then
-                local filterBtn = AuctionHouseFrame.SearchBar.FilterButton
-                if filterBtn and filterBtn.filters then
-                    filterBtn.filters[Enum.AuctionHouseFilter.CurrentExpansionOnly] = true
-                    AuctionHouseFrame.SearchBar:UpdateClearFiltersButton()
-                end
-            end
-        end)
-    end)
-end
-
---------------------------------------------------------------------------------
 -- CVAR_UPDATE event handler
 --------------------------------------------------------------------------------
 function AU:CVAR_UPDATE(_, cvarName)
@@ -480,7 +458,6 @@ function AU:ApplySettings()
     SetupAutoQuests()
     SetupAutoDeclineDuels()
     SetupAutoDeclinePetBattles()
-    SetupAHCurrentExpansion()
     self:ApplyCVars()
 end
 
