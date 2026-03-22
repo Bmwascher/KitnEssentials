@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.4.2
+### Changes
+- Minimap button tooltip: gold-colored click keywords, grey "Essentials" text for better visual hierarchy.
+
 ## v1.4.1
 ### Additions
 - **Minimap Button** — KitnUI cat icon on minimap. Left-click opens settings, right-click toggles edit mode, middle-click reloads UI.
