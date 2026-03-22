@@ -27,7 +27,7 @@ KitnEssentials adds HUD elements, buff trackers, and Blizzard UI skinning throug
 - **Power Infusion Macro Builder** — Auto-creates and manages a PI macro with trinkets, Vampiric Embrace, racial, potions, and custom /use line
 
 ### Quality of Life
-- **Automation** — Auto-accept invites, release, repair, sell junk, and more
+- **Automation** — Auto-accept invites, release, repair, sell junk, auto-confirm queue, auto-slot keystone, hide event toasts/zone text, and more
 - **Combat Logger** — Automatic combat logging with per-content-type toggles (raids, dungeons, M+, PvP, arenas), 30s delayed stop for Warcraft Recorder
 - **CVars** — Combat text, character effects, and visual toggles
 - **Slash Commands** — Custom slash command registration
@@ -48,6 +48,7 @@ KitnEssentials adds HUD elements, buff trackers, and Blizzard UI skinning throug
 - **Addon Theme** — 8 WoW-themed color presets (KitnUI, Nighthold, Firelands, Icecrown, Dreamsurge, Twilight, Sunwell, Torghast), class color mode, and fully custom colors
 - **Profile System** — Import, export, and manage profiles with per-character and global profile support
 - **Edit Mode** — Drag to reposition any element, nudge tool for pixel-perfect placement
+- **Minimap Button** — Left-click opens settings, right-click toggles edit mode
 
 ## Slash Commands
 

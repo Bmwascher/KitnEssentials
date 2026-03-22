@@ -53,6 +53,38 @@ function KitnEssentials:OnInitialize()
     if KE.RefreshTheme then KE:RefreshTheme() end
 end
 
+-- Setup minimap icon using LibDataBroker and LibDBIcon
+function KE:SetupMinimapIcon()
+    local LDB = LibStub("LibDataBroker-1.1", true)
+    local LDBIcon = LibStub("LibDBIcon-1.0", true)
+    if not LDB or not LDBIcon then return end
+
+    local Theme = KE.Theme
+    local MyLDB = LDB:NewDataObject("KitnEssentials", {
+        type = "launcher",
+        text = "KitnEssentials",
+        icon = "Interface\\AddOns\\KitnEssentials\\Media\\Icon\\KitnUI",
+        OnClick = function(_, button)
+            if button == "LeftButton" then
+                if KE.GUIFrame then KE.GUIFrame:Toggle() end
+            elseif button == "RightButton" then
+                if KE.EditMode then KE.EditMode:Toggle() end
+            elseif button == "MiddleButton" then
+                ReloadUI()
+            end
+        end,
+        OnTooltipShow = function(tt)
+            tt:AddLine(KE:ColorTextByTheme("Kitn") .. "|cffb3b3b3Essentials|r")
+            tt:AddLine("Left-Click to open options", 0.70, 0.70, 0.70)
+            tt:AddLine("Right-Click to toggle edit mode", 0.70, 0.70, 0.70)
+            tt:AddLine("Middle-Click to reload UI", 0.70, 0.70, 0.70)
+        end,
+    })
+
+    LDBIcon:Register("KitnEssentials", MyLDB, KE.db.profile.Minimap)
+    KE.minimapIcon = LDBIcon
+end
+
 local function OnEncounterEnd()
     local _, instanceType = IsInInstance()
     if instanceType == "raid" and KE.encounterActive then
@@ -88,6 +120,11 @@ function KitnEssentials:OnEnable()
 
     -- Slash commands (/cd, /wa, SetPITarget)
     if KE.ApplySlashCommands then KE:ApplySlashCommands() end
+
+    -- Minimap icon (delayed for theme readiness)
+    C_Timer.After(1, function()
+        KE:SetupMinimapIcon()
+    end)
 
     -- Event registration
     self:RegisterEvent("ENCOUNTER_END", OnEncounterEnd)

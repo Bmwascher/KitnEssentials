@@ -114,6 +114,11 @@ function PI:OnEnable()
 
     self:ApplyMacro()
 
+    -- Backward compat: existing macros may contain /run SetPITarget()
+    _G.SetPITarget = function()
+        PI:SetPITarget()
+    end
+
     self:RegisterEvent("PLAYER_REGEN_ENABLED", function()
         if self.pendingMacro then
             self:ApplyMacro()
