@@ -2,7 +2,7 @@
 
 ## v1.4.1
 ### Additions
-- **Minimap Button** — KitnUI cat icon on minimap. Left-click opens settings, right-click toggles edit mode.
+- **Minimap Button** — KitnUI cat icon on minimap. Left-click opens settings, right-click toggles edit mode, middle-click reloads UI.
 - Automation: **Auto Confirm Queue** toggle — auto-clicks Sign Up on LFG application dialogs (hold Ctrl to bypass).
 - Automation: **Auto Slot Keystone** toggle — auto-slots your keystone when opening the M+ UI.
 - Automation: **Hide Event Toasts** and **Hide Zone Text** toggles in Cinematics & Dialogs card.
