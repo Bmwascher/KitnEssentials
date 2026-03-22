@@ -353,7 +353,7 @@ function GUIFrame:CreateMainFrame()
             local L = KE.Theme
             btn:SetBackdrop(nil)
             btnText:SetTextColor(L.accent[1], L.accent[2], L.accent[3])
-            C_Timer.After(0.15, function()
+            C_Timer.After(0.3, function()
                 if menuDropdown:IsShown() and not menuDropdown:IsMouseOver() and not menuBtn:IsMouseOver() then
                     menuDropdown:Hide()
                 end
@@ -381,7 +381,7 @@ function GUIFrame:CreateMainFrame()
     menuBtn:SetScript("OnLeave", function()
         local L = KE.Theme
         menuIcon:SetVertexColor(L.textSecondary[1], L.textSecondary[2], L.textSecondary[3], 1)
-        C_Timer.After(0.1, function()
+        C_Timer.After(0.3, function()
             if not menuDropdown:IsMouseOver() and not menuBtn:IsMouseOver() then
                 menuDropdown:Hide()
             end
@@ -390,7 +390,7 @@ function GUIFrame:CreateMainFrame()
 
     -- Close dropdown when mouse leaves
     menuDropdown:SetScript("OnLeave", function()
-        C_Timer.After(0.1, function()
+        C_Timer.After(0.3, function()
             if not menuDropdown:IsMouseOver() and not menuBtn:IsMouseOver() then
                 menuDropdown:Hide()
             end

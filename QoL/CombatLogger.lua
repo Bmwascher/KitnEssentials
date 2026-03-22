@@ -69,7 +69,9 @@ function CL:StartLogging()
     if not self.isLogging then
         LoggingCombat(true)
         self.isLogging = true
-        KE:Print("Combat logging |cff00ff00started|r.")
+        if not self.db.QuietMode then
+            KE:Print("Combat logging |cff00ff00started|r.")
+        end
     end
 end
 
@@ -78,7 +80,9 @@ function CL:StopLogging()
 
     if self.db.DelayStop then
         if not self.delayStopTimer then
-            KE:Print("Combat logging will stop in 30 seconds...")
+            if not self.db.QuietMode then
+                KE:Print("Combat logging will stop in 30 seconds...")
+            end
             self.delayStopTimer = self:ScheduleTimer("StopLoggingNow", 30)
         end
     else
@@ -95,7 +99,9 @@ function CL:StopLoggingNow()
     if self.isLogging then
         LoggingCombat(false)
         self.isLogging = false
-        KE:Print("Combat logging |cffff4444stopped|r.")
+        if not self.db.QuietMode then
+            KE:Print("Combat logging |cffff4444stopped|r.")
+        end
     end
 end
 

@@ -239,6 +239,43 @@ function AU:SetupTalkingHeadHider()
 end
 
 --------------------------------------------------------------------------------
+-- Hide Event Toasts
+--------------------------------------------------------------------------------
+local function SetupHideEventToasts()
+    if AU._eventToastsHooked then return end
+    AU._eventToastsHooked = true
+    if not EventToastManagerFrame then return end
+    if EventToastManagerFrame.DisplayToast then
+        hooksecurefunc(EventToastManagerFrame, "DisplayToast", function(self)
+            if not AU.db or not AU.db.HideEventToasts then return end
+            C_Timer.After(0.05, function()
+                if self:IsShown() then
+                    self:CloseActiveToasts()
+                end
+            end)
+        end)
+    end
+end
+
+--------------------------------------------------------------------------------
+-- Hide Zone Text
+--------------------------------------------------------------------------------
+local function SetupHideZoneText()
+    if AU._zoneTextHooked then return end
+    AU._zoneTextHooked = true
+    local frames = { ZoneTextFrame, SubZoneTextFrame }
+    for _, frame in ipairs(frames) do
+        if frame then
+            hooksecurefunc(frame, "Show", function(self)
+                if AU.db and AU.db.HideZoneText then
+                    self:Hide()
+                end
+            end)
+        end
+    end
+end
+
+--------------------------------------------------------------------------------
 -- Auto Sell Junk + Auto Repair
 --------------------------------------------------------------------------------
 local function SellJunkItems()
@@ -296,6 +333,67 @@ local function SetupAutoRoleCheck()
             end
         end)
     end
+end
+
+--------------------------------------------------------------------------------
+-- Auto Queue Confirm (skip LFG application dialog)
+--------------------------------------------------------------------------------
+local function SetupAutoQueueConfirm()
+    if AU._lfgHooked then return end
+    AU._lfgHooked = true
+    local dialog = LFGListApplicationDialog
+    if not dialog then return end
+    dialog:HookScript("OnShow", function(dlg)
+        if not AU.db or not AU.db.AutoQueueConfirm then return end
+        if IsControlKeyDown() then return end
+        local confirmBtn = dlg.SignUpButton
+        if confirmBtn and confirmBtn:IsEnabled() then
+            confirmBtn:Click()
+        end
+    end)
+end
+
+--------------------------------------------------------------------------------
+-- Auto Slot Keystone
+--------------------------------------------------------------------------------
+local function SetupAutoSlotKeystone()
+    if AU._keystoneHooked then return end
+    AU._keystoneHooked = true
+
+    local watcher = CreateFrame("Frame")
+    watcher:RegisterEvent("ADDON_LOADED")
+    watcher:SetScript("OnEvent", function(self, event, loaded)
+        if loaded ~= "Blizzard_ChallengesUI" then return end
+        self:UnregisterEvent("ADDON_LOADED")
+
+        local keystoneUI = ChallengesKeystoneFrame
+        if not keystoneUI then return end
+
+        keystoneUI:HookScript("OnShow", function()
+            if not AU.db or not AU.db.AutoSlotKeystone then return end
+            if C_ChallengeMode.HasSlottedKeystone() then return end
+
+            local reagentType = Enum.ItemClass.Reagent
+            local keystoneType = Enum.ItemReagentSubclass.Keystone
+
+            for bag = 0, (NUM_BAG_FRAMES or 4) do
+                local slots = C_Container.GetContainerNumSlots(bag)
+                for slot = 1, slots do
+                    local itemID = C_Container.GetContainerItemID(bag, slot)
+                    if itemID then
+                        local _, _, _, _, _, _, _, _, _, _, _, itemClass, itemSub = C_Item.GetItemInfo(itemID)
+                        if itemClass == reagentType and itemSub == keystoneType then
+                            C_Container.PickupContainerItem(bag, slot)
+                            if C_Cursor.GetCursorItem() then
+                                C_ChallengeMode.SlotKeystone()
+                                return
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+    end)
 end
 
 --------------------------------------------------------------------------------
@@ -451,8 +549,12 @@ function AU:ApplySettings()
     if not self.db.Enabled then return end
     SetupSkipCinematics()
     self:SetupTalkingHeadHider()
+    SetupHideEventToasts()
+    SetupHideZoneText()
     SetupAutoSellRepair()
     SetupAutoRoleCheck()
+    SetupAutoQueueConfirm()
+    SetupAutoSlotKeystone()
     SetupAutoFillDelete()
     ApplyAutoLoot()
     SetupAutoQuests()

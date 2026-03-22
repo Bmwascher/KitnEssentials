@@ -68,6 +68,18 @@ GUIFrame:RegisterContent("Automation", function(scrollChild, yOffset)
     table_insert(allWidgets, hideTalkingHeadCheck)
     card2:AddRow(row2a, 40)
 
+    local row2b = GUIFrame:CreateRow(card2.content, 40)
+    local hideEventToastsCheck = GUIFrame:CreateCheckbox(row2b, "Hide Event Toasts", db.HideEventToasts == true,
+        function(checked) db.HideEventToasts = checked; ApplySettings() end)
+    row2b:AddWidget(hideEventToastsCheck, 0.5)
+    table_insert(allWidgets, hideEventToastsCheck)
+
+    local hideZoneTextCheck = GUIFrame:CreateCheckbox(row2b, "Hide Zone Text", db.HideZoneText == true,
+        function(checked) db.HideZoneText = checked; ApplySettings() end)
+    row2b:AddWidget(hideZoneTextCheck, 0.5)
+    table_insert(allWidgets, hideZoneTextCheck)
+    card2:AddRow(row2b, 40)
+
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
     ----------------------------------------------------------------
@@ -107,9 +119,21 @@ GUIFrame:RegisterContent("Automation", function(scrollChild, yOffset)
     local row4 = GUIFrame:CreateRow(card4.content, 40)
     local autoRoleCheck = GUIFrame:CreateCheckbox(row4, "Auto Accept Role Check", db.AutoRoleCheck ~= false,
         function(checked) db.AutoRoleCheck = checked; ApplySettings() end)
-    row4:AddWidget(autoRoleCheck, 1)
+    row4:AddWidget(autoRoleCheck, 0.5)
     table_insert(allWidgets, autoRoleCheck)
+
+    local autoQueueCheck = GUIFrame:CreateCheckbox(row4, "Auto Confirm Queue", db.AutoQueueConfirm ~= false,
+        function(checked) db.AutoQueueConfirm = checked; ApplySettings() end)
+    row4:AddWidget(autoQueueCheck, 0.5)
+    table_insert(allWidgets, autoQueueCheck)
     card4:AddRow(row4, 40)
+
+    local row4b = GUIFrame:CreateRow(card4.content, 40)
+    local autoKeystoneCheck = GUIFrame:CreateCheckbox(row4b, "Auto Slot Keystone", db.AutoSlotKeystone ~= false,
+        function(checked) db.AutoSlotKeystone = checked; ApplySettings() end)
+    row4b:AddWidget(autoKeystoneCheck, 0.5)
+    table_insert(allWidgets, autoKeystoneCheck)
+    card4:AddRow(row4b, 40)
 
     yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
 

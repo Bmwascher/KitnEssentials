@@ -77,6 +77,7 @@ GUIFrame:RegisterContent("CombatLogger", function(scrollChild, yOffset)
     local settingsDefs = {
         { key = "DelayStop", label = "Delay Stop", desc = "Wait 30s before stopping log after leaving instance. (Warcraft Recorder)", default = true },
         { key = "DisableACLPrompt", label = "Disable ACL Prompt", desc = "Hide the login popup to enable Advanced Combat Logging.", default = false },
+        { key = "QuietMode", label = "Quiet Mode", desc = "Suppress chat messages when logging starts/stops.", default = false },
     }
 
     for _, def in ipairs(settingsDefs) do
