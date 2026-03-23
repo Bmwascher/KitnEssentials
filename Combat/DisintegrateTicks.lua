@@ -44,6 +44,7 @@ DT.chaining = false
 DT.lastStart = 0
 DT.firstTick = 0
 DT.prevEndTime = nil
+DT.prevHastedTickInterval = nil
 DT.castBarInfo = { width = 0, height = 0, anchor = nil }
 DT.hooksInstalled = false
 
@@ -445,14 +446,18 @@ function DT:OnEvent(event, unit, ...)
         end
 
         local nextEndTime = endTimeMS / 1000
+        local hastedTickInterval = self:GetTickInterval() / self:GetHaste()
 
         self.firstTick = 0
 
-        if self.channeling and self.prevEndTime then
-            self.firstTick = math_max(0, self.prevEndTime - startTime)
+        if self.channeling and self.prevEndTime and self.prevHastedTickInterval then
+            local remaining = self.prevEndTime - startTime
+            -- modulo gives time to the next tick that would've fired, not just the last
+            self.firstTick = math_max(0, math.fmod(remaining, self.prevHastedTickInterval))
         end
 
         self.prevEndTime = nextEndTime
+        self.prevHastedTickInterval = hastedTickInterval
         self.chaining = self.channeling
         self.channeling = true
 
@@ -612,6 +617,7 @@ function DT:OnDisable()
     self.channeling = false
     self.chaining = false
     self.prevEndTime = nil
+    self.prevHastedTickInterval = nil
     self.massDisintegrateStacks = 0
     self:UnregisterAllEvents()
 end
