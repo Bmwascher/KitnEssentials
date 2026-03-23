@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.5.0
+### Additions
+- New module: **Class Stance Texts** — Displays customizable text labels for your current Warrior stance, Paladin aura, or Evoker attunement with per-stance colors. Located in Utilities sidebar.
+
+### Removals
+- **Missing Buffs** module removed. Buff/food/flask/enchant/poison tracking replaced by the BuffReminders addon. Stance text feature extracted into the new Class Stance Texts module.
+
 ## v1.4.3
 ### Fixes
 - DisintegrateTicks: fix chain-cast tick placement firing too early. First tick now uses modulo of remaining time by previous hasted tick interval, matching upstream v2.0.1.

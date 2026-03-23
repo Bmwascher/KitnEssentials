@@ -53,6 +53,7 @@ GUIFrame.sidebarConfig = {
         items = {
             { id = "GatewayAlert",  text = "Gateway Alert" },
             { id = "PetStatusText", text = "Pet Status Texts" },
+            { id = "StanceText",    text = "Class Stance Texts" },
             { id = "TimeSpiral",    text = "Time Spiral Tracker" },
             { id = "Recuperate",    text = "Recuperate Button" },
             { id = "DispelCursor",  text = "Dispel CD on Cursor" },
@@ -73,7 +74,6 @@ GUIFrame.sidebarConfig = {
             { id = "CVars",         text = "CVars" },
             { id = "SlashCommands", text = "Slash Commands" },
             { id = "AuctionHouseFilter", text = "Auction House Filter" },
-            { id = "MissingBuffs",  text = "Missing Buffs" },
             { id = "HuntersMark",   text = "Hunter's Mark Missing" },
             { id = "DragonRiding",  text = "Dragon Riding UI" },
             { id = "CopyAnything",  text = "Copy Anything" },

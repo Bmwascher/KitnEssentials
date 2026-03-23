@@ -2,59 +2,96 @@
 
 Standalone combat, quality of life, and skinning modules for **KitnUI**.
 
-KitnEssentials adds HUD elements, buff trackers, and Blizzard UI skinning through a fully themed settings panel. Every module is independently toggleable and repositionable via a built-in edit mode.
+KitnEssentials adds HUD elements, buff trackers, automation features, and Blizzard UI skinning through a fully themed settings panel. Every module is independently toggleable and repositionable via a built-in edit mode.
 
 ## Features
 
-### Combat
-- **Combat Timer** — Configurable in-combat duration display
-- **Combat Res** — Battle res charge tracker with timer
-- **Combat Cross** — Static crosshair overlay with range warning (supports melee/ranged/healer specs)
-- **Combat Texts** — Floating combat text customization
-- **Cursor Circle** — Cursor-following ring with GCD overlay (integrated or separate), multiple texture options
-- **Range Display** — Color-coded range text using LibRangeCheck
-- **Target & Focus Castbars** — Customizable castbars with kick indicators, hold timers, and target name display
+- **40+ modules** — combat HUD, buff tracking, automation, and UI skinning
+- **Dark themed GUI** — custom settings panel with sidebar navigation and 8 color themes
+- **Edit mode** — drag any element to reposition, with anchor and strata controls
+- **Profile system** — save, copy, and reset per-character or shared profiles
+- **Minimap button** — quick access to settings, edit mode, and reload
+- **Zero dependencies** — works standalone, no ElvUI required
 
-### Utilities
-- **Gateway Alert** — Warlock gateway usability notification
-- **Pet Status Texts** — Pet health/status display
-- **Time Spiral Tracker** — Movement spell proc tracker with glow effects and cooldown spiral (all classes)
-- **Recuperate Button** — One-click recuperate with configurable raid/party visibility and health-based alpha
-- **Dispel CD on Cursor** — Dispel cooldown timer that follows your cursor, auto-detects your class dispel spell
-- **Disintegrate Castbar Ticks** — Evoker channel tick marks with Mass Disintegrate clip warning
-- **World Marker Cycler** — Cycle through world markers at cursor with drag-to-reorder and interactive keybind capture
-- **Focus Marker Macro Builder** — Auto-creates and manages a focus target + raid marker macro with marker selection, mark-only mode, no-raid/no-toggle options, ready check announce, and custom conditionals
-- **Power Infusion Macro Builder** — Auto-creates and manages a PI macro with trinkets, Vampiric Embrace, racial, potions, and custom /use line
+## Combat
 
-### Quality of Life
-- **Automation** — Auto-accept invites, release, repair, sell junk, auto-confirm queue, auto-slot keystone, hide event toasts/zone text, and more
-- **Combat Logger** — Automatic combat logging with per-content-type toggles (raids, dungeons, M+, PvP, arenas), 30s delayed stop for Warcraft Recorder
-- **CVars** — Combat text, character effects, and visual toggles
-- **Slash Commands** — Custom slash command registration
-- **Auction House Filter** — Auto-applies Current Expansion filter and focuses search bar for Blizzard AH and Craft Orders
-- **Missing Buffs** — Alerts for missing raid buffs, food, flasks, runes, weapon enchants, rogue poisons, stance/form tracking (Druid, Warrior, Paladin, Priest, Evoker, Rogue stealth)
-- **Hunter's Mark Missing** — Alert when Hunter's Mark is not applied
-- **Dragon Riding UI** — Customizable dragon riding speed display
-- **Copy Anything** — Copy any text from chat or tooltips
-- **Hide ActionBars** — Hide action bars in/out of combat
+| Module | Description |
+|---|---|
+| Combat Timer | Configurable in-combat duration display |
+| Combat Res | Battle res charge tracker with timer |
+| Combat Cross | Static crosshair overlay with range warning (melee/ranged/healer) |
+| Combat Texts | Floating combat text customization |
+| Cursor Circle | Cursor-following ring with GCD overlay, multiple texture options |
+| Range Display | Target range text with out-of-range color warning |
+| Target Castbar | Repositionable target cast bar with kick indicators and target names |
+| Focus Castbar | Repositionable focus cast bar with kick indicators and target names |
 
-### Skinning
-- **Action Bars** — Full action bar reskinning with proc glow sizing
-- **Auras** — Buff/debuff frame customization
-- **Tooltips** — Tooltip reskinning with class colors, spec icons, and taint-safe backdrop (manual textures, no BackdropTemplate)
-- **Micro Menu, Blizzard Messages, Blizzard Mouseover, Raid Manager, Details Backdrop, UI Cleanup**
+## Utilities
 
-### Settings
-- **Addon Theme** — 8 WoW-themed color presets (KitnUI, Nighthold, Firelands, Icecrown, Dreamsurge, Twilight, Sunwell, Torghast), class color mode, and fully custom colors
-- **Profile System** — Import, export, and manage profiles with per-character and global profile support
-- **Edit Mode** — Drag to reposition any element, nudge tool for pixel-perfect placement
-- **Minimap Button** — Left-click opens settings, right-click toggles edit mode
+| Module | Description |
+|---|---|
+| Gateway Alert | Demonic Gateway usability notification |
+| Pet Status Texts | Pet health and happiness display |
+| Class Stance Texts | Customizable text labels for Warrior stances, Paladin auras, and Evoker attunements |
+| Time Spiral Tracker | Movement spell proc tracker with glow effects and cooldown spiral (all classes) |
+| Recuperate Button | One-click self-heal with configurable raid/party visibility and health-based alpha |
+| Dispel CD on Cursor | Dispel cooldown timer following your cursor, auto-detects class dispel spell |
+| Disintegrate Castbar Ticks | Evoker channel tick marks on cast bar with Mass Disintegrate clip warning |
+| World Marker Cycler | Cycle through world markers at cursor with drag-to-reorder priority |
+| Focus Marker Macro Builder | Auto-creates focus target + raid marker macro with marker selection and custom conditionals |
+| Power Infusion Macro Builder | Auto-creates PI macro with trinkets, racials, potions, and custom /use line |
+
+## Quality of Life
+
+| Module | Description |
+|---|---|
+| Automation | Auto-repair, auto-sell, auto-confirm queue, auto-slot keystone, skip cinematics, hide event toasts/zone text, and more |
+| Combat Logger | Automatic combat logging for raids, dungeons, M+, PvP, and arenas with per-content toggles |
+| CVars | One-click CVar optimization panel |
+| Slash Commands | Custom slash command utilities |
+| Auction House Filter | Auto-filter AH to current expansion, auto-focus search bar, craft orders filter |
+| Hunter's Mark Missing | Alert when Hunter's Mark is not applied |
+| Dragon Riding UI | Reskinned dragonriding vigor bar |
+| Copy Anything | Copy any chat message or tooltip text |
+| Hide ActionBars | Hide specific action bar rows in/out of combat |
+
+## Skinning
+
+| Module | Description |
+|---|---|
+| General UI Clean Up | Hide unnecessary Blizzard UI elements |
+| Buffs, Debuffs & Externals | Restyle aura icons and bars |
+| Action Bars | Cooldown text styling and proc glow sizing |
+| Blizzard Mouseover | Highlight and tooltip behavior tweaks |
+| Blizzard Texts | Font and outline changes for Blizzard text |
+| Blizzard Tooltips | Tooltip backdrop and font restyling |
+| Micro Menu | Micro menu bar appearance |
+| Details Backdrop | Details! Damage Meter backdrop styling |
+| Raid Manager Panel | Raid manager panel appearance |
+
+## Custom Buffs
+
+| Module | Description |
+|---|---|
+| Buff Icons | Custom buff icon tracking with positioning |
+| Buff Bars | Custom buff bar tracking with positioning |
+
+## Settings
+
+| Feature | Description |
+|---|---|
+| Addon Theme | 8 WoW-themed color presets, class color mode, and fully custom colors |
+| Profile System | Import, export, and manage profiles with per-character and global support |
+| Edit Mode | Drag to reposition any element, nudge tool for pixel-perfect placement |
+| Minimap Button | Left-click opens settings, right-click toggles edit mode, middle-click reloads UI |
 
 ## Slash Commands
 
-- `/kes` — Open the settings panel
-- `/kes edit` — Toggle edit mode
-- `/kes gui` — Toggle the GUI
+| Command | Description |
+|---|---|
+| `/kes` or `/kitnessentials` | Toggle settings GUI |
+| `/kes edit` | Toggle edit mode |
+| `/kes resetgui` | Reset GUI position and size |
 
 ## Related Addons
 
