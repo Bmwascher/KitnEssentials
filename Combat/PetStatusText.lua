@@ -214,6 +214,9 @@ function PS:ShowPreview(state)
     self.isPreview = true
     self.previewState = state or "missing"
 
+    KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
+    KE:ApplyFontToText(self.text, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
+
     local previewText, previewColor
     if self.previewState == "dead" then
         previewText = self.db.PetDead or "PET DEAD"
