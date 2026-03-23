@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.5.1
+### Fixes
+- Pet Status Texts: fixed preview not showing on non-pet classes until a GUI change was made. Frame now applies position and font on first preview open.
+
 ## v1.5.0
 ### Additions
 - New module: **Class Stance Texts** — Displays customizable text labels for your current Warrior stance, Paladin aura, or Evoker attunement with per-stance colors. Located in Utilities sidebar.
