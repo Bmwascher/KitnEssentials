@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.4.3
+### Fixes
+- DisintegrateTicks: fix chain-cast tick placement firing too early. First tick now uses modulo of remaining time by previous hasted tick interval, matching upstream v2.0.1.
+
 ## v1.4.2
 ### Changes
 - Minimap button tooltip: gold-colored click keywords, grey "Essentials" text for better visual hierarchy.
