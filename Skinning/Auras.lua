@@ -22,7 +22,7 @@ function SK:OnInitialize()
     self:SetEnabledState(false)
 end
 
--- Icon zoom (same as MissingBuffs, BuffIcons, etc.)
+-- Icon zoom (same as BuffIcons, etc.)
 local function ApplyZoom(tex, zoom)
     local texMin = 0.25 * zoom
     local texMax = 1 - 0.25 * zoom

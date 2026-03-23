@@ -353,7 +353,7 @@ end
 function GUIFrame:RefreshContent()
     if not self.contentArea then return end
 
-    -- Clean up custom panel if exists (e.g. MissingBuffs sub-tab panel)
+    -- Clean up custom panel if exists (e.g. sub-tab panel)
     if self.contentArea._customPanel then
         self.contentArea._customPanel:Hide()
         self.contentArea._customPanel:SetParent(nil)

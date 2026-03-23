@@ -4,7 +4,7 @@
     <Script file="Automation.lua" />
     <Script file="CopyAnything.lua" />
     <Script file="DragonRiding.lua" />
-    <Script file="MissingBuffs.lua" />
+    <Script file="StanceText.lua" />
     <Script file="HuntersMark.lua" />
     <Script file="HideBars.lua" />
     <Script file="Recuperate.lua" />

@@ -46,7 +46,7 @@
     <Script file="GUITabs\GUIQoL\GUI-SlashCommands.lua" />
     <Script file="GUITabs\GUIQoL\GUI-CopyAnything.lua" />
     <Script file="GUITabs\GUIQoL\GUI-DragonRiding.lua" />
-    <Script file="GUITabs\GUIQoL\GUI-MissingBuffs.lua" />
+    <Script file="GUITabs\GUIQoL\GUI-StanceText.lua" />
     <Script file="GUITabs\GUIQoL\GUI-HuntersMark.lua" />
     <Script file="GUITabs\GUIQoL\GUI-HideBars.lua" />
     <Script file="GUITabs\GUIQoL\GUI-Recuperate.lua" />
