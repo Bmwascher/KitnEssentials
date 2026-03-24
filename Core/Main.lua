@@ -112,9 +112,15 @@ function KitnEssentials:OnEnable()
     if KE.Init then KE:Init() end
 
     -- Enable modules based on saved settings
+    local skipSkinning = KE:ShouldNotLoadModule()
     for name, module in self:IterateModules() do
         if module.db and module.db.Enabled then
-            self:EnableModule(name)
+            -- Skip skinning modules when ElvUI handles skinning
+            if skipSkinning and name:find("^Skin") then
+                -- Do not enable
+            else
+                self:EnableModule(name)
+            end
         end
     end
 
