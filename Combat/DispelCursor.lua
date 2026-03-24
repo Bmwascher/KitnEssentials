@@ -105,8 +105,13 @@ function DC:CreateFrame()
             return
         end
         local cdInfo = C_Spell.GetSpellCooldown(DC.trackedSpellId)
-        if cdInfo and cdInfo.startTime and cdInfo.duration then
-            cooldownFrame:SetCooldown(cdInfo.startTime, cdInfo.duration)
+        if cdInfo and cdInfo.isActive then
+            local duration = C_Spell.GetSpellCooldownDuration(DC.trackedSpellId)
+            if duration then
+                cooldownFrame:SetCooldownFromDurationObject(duration)
+            else
+                cooldownFrame:Clear()
+            end
         else
             cooldownFrame:Clear()
         end
