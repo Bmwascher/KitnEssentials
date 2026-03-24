@@ -241,7 +241,8 @@ function SK:FetchUnitGuild(unit)
     if success then
         local guildName, guildRank = GetGuildInfo(unit)
         local playerGuildName = GetGuildInfo("player")
-        if not guildName then return end
+        if not guildName or issecretvalue(guildName) then return end
+        if guildRank and issecretvalue(guildRank) then return end
         if guildName == playerGuildName then
             guildName = "|cffe51039" .. guildName .. "|r"
             guildRank = "|cffe51039" .. guildRank .. "|r"
@@ -258,11 +259,13 @@ function SK:FetchUnitLevelRace(unit)
     if not unit then return end
     local race = UnitRace(unit)
     local level = UnitLevel(unit)
-    if race then
+    if race and not issecretvalue(race) then
         race = "|cffFFFFFF" .. race .. "|r"
+    else
+        race = nil
     end
     local levelOut
-    if level then
+    if level and not issecretvalue(level) then
         levelOut = "|cffffad00" .. level .. "|r"
     end
     return race, levelOut
@@ -281,7 +284,7 @@ end
 
 -- Check Class and Spec string, match it to correct icon, return it
 function SK:FetchUnitSpecInfo(text)
-    if not text then return text, nil end
+    if not text or issecretvalue(text) then return nil, nil end
     local matchedSpec
     local matchedIcon
 
@@ -491,6 +494,7 @@ function SK:InitializeTooltipProcessor()
                 local line = _G["GameTooltipTextLeft" .. i]
                 if line then
                     local text = line:GetText()
+                    if not text or issecretvalue(text) then break end
                     if text == FACTION_HORDE then
                         line:SetTextColor(1, 0, 0)
                         line:SetFont(fontPath, FactionFontSize, outline)
