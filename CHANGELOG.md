@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.6.0
+### Additions
+- New module: **Interrupt Tracker** — Tracks party interrupt cooldowns in real-time using status bars. Event-correlation detection (no protected API calls), class/dark color modes with drain/fill animations, channel kick detection, icon desaturation on CD, warlock pet kick support, role-based sorting. Located in Combat sidebar.
+- New module: **Bloodlust Tracker** — Animated sprite overlay + sound on Bloodlust/Heroism/Time Warp. Presets: Pedro, Chipi Chipi, 9MM Bang (sound only), Sarah Gamer Word (sound only). Basic icon + countdown mode, sated debuff detection with optional haste approximation fallback, instance-only toggle. Located in Utilities sidebar.
+- **Focus Castbar**: Added sound alert on focus target cast start with LSM sound picker and channel selection.
+- **Gateway Alert**: Added gateway shard icons flanking the alert text (toggleable). Added color mode selector (Class/Custom/Theme).
+
+### Changes
+- **Focus Marker**: Ready check announce now silently skips for specs without an interrupt ability.
+
 ## v1.5.1
 ### Fixes
 - Pet Status Texts: fixed preview not showing on non-pet classes until a GUI change was made. Frame now applies position and font on first preview open.

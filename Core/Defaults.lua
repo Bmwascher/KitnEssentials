@@ -200,7 +200,9 @@ local Defaults = {
             FontSize = 16,
             FontFace = "Expressway",
             FontOutline = "SOFTOUTLINE",
-            Color = { 1, 0.82, 0, 1 },
+            ColorMode = "custom",
+            Color = { 0.969, 0.027, 0.945, 1 },  -- #F707F1
+            ShowIcons = true,
         },
 
         TargetCastbar = {
@@ -261,6 +263,9 @@ local Defaults = {
             EmpoweringColor = { 0.8, 0.4, 1, 1 },
             NotInterruptibleColor = { 0.7, 0.7, 0.7, 1 },
             HideNotInterruptible = false,
+            SoundEnabled = false,
+            SoundFile = "None",
+            SoundChannel = "SFX",
             TextColor = { 1, 1, 1, 1 },
             BackdropColor = { 0, 0, 0, 0.8 },
             BorderColor = { 0, 0, 0, 1 },
@@ -456,6 +461,63 @@ local Defaults = {
                 SecondWind = { 0.3, 0.7, 1, 1 },
                 SecondWindCD = { 0.3, 0.3, 0.3, 1 },
             },
+        },
+
+        BloodlustTracker = {
+            Enabled = false,
+            DisplayMode = "animated",
+            Preset = "pedro",
+            Scale = 0.5,
+            BasicIconSize = 48,
+            FontSize = 22,
+            FontFace = "Expressway",
+            FontOutline = "SOFTOUTLINE",
+            CountdownColor = { 1, 1, 1, 1 },
+            SoundEnabled = true,
+            SoundChannel = "Master",
+            HasteApproxEnabled = false,
+            InstanceOnly = false,
+            Strata = "MEDIUM",
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            Position = DefaultPosition(0, 500),
+        },
+
+        KickTracker = {
+            Enabled = true,
+            Strata = "MEDIUM",
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            Position = DefaultPosition(-650, 65),
+            -- Bar appearance
+            BarWidth = 209,
+            BarHeight = 27,
+            BarSpacing = 1,
+            StatusBarTexture = "KitnUI",
+            GrowthDirection = "UP",
+            MaxBars = 5,
+            IconSide = "LEFT",
+            IconSize = 20,
+            ShowIcon = true,
+            -- Bar colors
+            ColorMode = "dark",             -- "class" = class-colored bars + white names, "dark" = dark bars + class-colored names
+            CoolingColor = { 0.8, 0.2, 0.2, 1 },
+            ReadyColor = { 0.2, 0.8, 0.2, 1 },
+            BackgroundColor = { 0.031, 0.031, 0.031, 0.80 },  -- #080808 A:80
+            ClassColorCooling = true,       -- true = keep class color while on CD (ExWind style)
+            -- Text
+            ShowName = true,
+            ShowTimer = true,
+            FontFace = "Expressway",
+            FontSize = 14,
+            FontOutline = "OUTLINE",
+            -- Ready state
+            ShowReadyText = true,
+            ReadyText = "Ready",
+            -- Sort priorities (1=first, 3=last)
+            SortTankPriority = 1,
+            SortHealerPriority = 2,
+            SortDPSPriority = 3,
         },
 
         StanceText = {

@@ -8,6 +8,7 @@ if not KitnEssentials then return end
 local FC = KitnEssentials:NewModule("FocusCastbar", "AceEvent-3.0")
 
 -- Localization
+local PlaySoundFile = PlaySoundFile
 local CreateFrame = CreateFrame
 local UnitCastingInfo, UnitChannelInfo = UnitCastingInfo, UnitChannelInfo
 local UnitCastingDuration, UnitChannelDuration = UnitCastingDuration, UnitChannelDuration
@@ -482,6 +483,21 @@ function FC:OnCastEvent(event, unit, ...)
     end
 end
 
+-- Play sound alert when focus starts casting
+function FC:PlayCastSound()
+    if not self.db.SoundEnabled then return end
+    if self.isPreview then return end
+    local soundFile = self.db.SoundFile
+    if not soundFile or soundFile == "None" then return end
+    local LSM = LibStub("LibSharedMedia-3.0", true)
+    if LSM then
+        local path = LSM:Fetch("sound", soundFile)
+        if path then
+            PlaySoundFile(path, self.db.SoundChannel or "SFX")
+        end
+    end
+end
+
 -- Start displaying a cast
 function FC:StartCast()
     if not self.frame or not UnitExists("focus") then return end
@@ -547,6 +563,7 @@ function FC:StartCast()
 
     self:UpdateBarColor()
     self:SetupKickCooldownBar()
+    self:PlayCastSound()
     self:EnsureOnUpdate()
     self.frame:Show()
 end

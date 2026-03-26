@@ -382,6 +382,63 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     yOffset = yOffset + card7:GetContentHeight() + Theme.paddingSmall
 
     ----------------------------------------------------------------
+    -- Card 7b: Sound Settings
+    ----------------------------------------------------------------
+    local cardSound = GUIFrame:CreateCard(scrollChild, "Sound Settings", yOffset)
+    table_insert(allWidgets, cardSound)
+
+    -- Build LSM sound list
+    local soundList = { ["None"] = "None" }
+    local LSM_sounds = LSM and LSM:HashTable("sound")
+    if LSM_sounds then
+        for name in pairs(LSM_sounds) do soundList[name] = name end
+    end
+
+    local rowSndA = GUIFrame:CreateRow(cardSound.content, 40)
+    local soundEnable = GUIFrame:CreateCheckbox(rowSndA, "Play Sound on Cast", db.SoundEnabled == true,
+        function(checked)
+            db.SoundEnabled = checked
+            ApplySettings()
+        end)
+    rowSndA:AddWidget(soundEnable, 0.5)
+    table_insert(allWidgets, soundEnable)
+
+    local channelList = {
+        { key = "Master", text = "Master" },
+        { key = "SFX", text = "SFX" },
+        { key = "Music", text = "Music" },
+        { key = "Ambience", text = "Ambience" },
+        { key = "Dialog", text = "Dialog" },
+    }
+    local channelDropdown = GUIFrame:CreateDropdown(rowSndA, "Channel", channelList, db.SoundChannel or "SFX", 30,
+        function(key)
+            db.SoundChannel = key
+            ApplySettings()
+        end)
+    rowSndA:AddWidget(channelDropdown, 0.5)
+    table_insert(allWidgets, channelDropdown)
+    cardSound:AddRow(rowSndA, 40)
+
+    local rowSndB = GUIFrame:CreateRow(cardSound.content, 40)
+    local soundDropdown = GUIFrame:CreateDropdown(rowSndB, "Sound", soundList, db.SoundFile or "None", 70,
+        function(key)
+            db.SoundFile = key
+            -- Play preview
+            if key ~= "None" and LSM then
+                local path = LSM:Fetch("sound", key)
+                if path then PlaySoundFile(path, db.SoundChannel or "SFX") end
+            end
+            ApplySettings()
+        end)
+    rowSndB:AddWidget(soundDropdown, 1)
+    table_insert(allWidgets, soundDropdown)
+    cardSound:AddRow(rowSndB, 40)
+
+    cardSound:AddLabel("|cff888888" .. KE:ColorTextByTheme("-") .. " Plays when your focus target starts casting.\n" .. KE:ColorTextByTheme("-") .. " Cannot filter by interruptible or kick CD due to WoW API secret value restrictions.|r")
+
+    yOffset = yOffset + cardSound:GetContentHeight() + Theme.paddingSmall
+
+    ----------------------------------------------------------------
     -- Card 8: Hold Timer
     ----------------------------------------------------------------
     local card8 = GUIFrame:CreateCard(scrollChild, "Hold Timer", yOffset)

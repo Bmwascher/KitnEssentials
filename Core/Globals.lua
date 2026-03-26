@@ -174,7 +174,7 @@ local PREVIEW_MODULES = {
     "StanceText", "CombatCross", "CombatTexts", "CombatRes",
     "CombatTimer", "PetStatusText", "DragonRiding",
     "FocusCastbar", "GatewayAlert", "HuntersMark", "RangeChecker",
-    "TimeSpiral", "DisintegrateTicks", "Recuperate",
+    "TimeSpiral", "DisintegrateTicks", "Recuperate", "BloodlustTracker", "KickTracker",
 }
 
 PreviewManager.guiOpen = false
