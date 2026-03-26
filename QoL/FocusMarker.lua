@@ -12,7 +12,20 @@ local CreateMacro = CreateMacro
 local IsInGroup = IsInGroup
 local IsInRaid = IsInRaid
 local C_ChatInfo = C_ChatInfo
+local GetSpecialization = GetSpecialization
+local GetSpecializationInfo = GetSpecializationInfo
 local table_concat = table.concat
+
+-- Specs without an interrupt ability (skip ready check announce for these)
+local NO_KICK_SPECS = {
+    [102]  = true, -- Balance Druid
+    [105]  = true, -- Resto Druid
+    [65]   = true, -- Holy Paladin
+    [256]  = true, -- Disc Priest
+    [257]  = true, -- Holy Priest
+    [270]  = true, -- Mistweaver Monk
+    [1468] = true, -- Preservation Evoker
+}
 local table_insert = table.insert
 local tostring = tostring
 
@@ -122,6 +135,12 @@ function FM:OnEnable()
     self:RegisterEvent("READY_CHECK", function()
         local db = self.db
         if not db.AnnounceReadyCheck then return end
+        -- Skip announce if current spec has no interrupt
+        local specIndex = GetSpecialization()
+        if specIndex then
+            local specID = GetSpecializationInfo(specIndex)
+            if specID and NO_KICK_SPECS[specID] then return end
+        end
         if IsInGroup() and not IsInRaid() and not InCombatLockdown() then
             local marker = db.SelectedMarker or "Star"
             local msg = "My Focus Marker is {" .. marker .. "}"
