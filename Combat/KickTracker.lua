@@ -101,6 +101,11 @@ for _, data in pairs(INTERRUPT_DATA) do
         INTERRUPT_SPELL_IDS[data.id] = true
     end
 end
+-- Warlock pet interrupt variants (Command Demon / pet actual spell IDs)
+INTERRUPT_SPELL_IDS[119910] = true  -- Command Demon: Spell Lock
+INTERRUPT_SPELL_IDS[132409] = true  -- Command Demon: Fel Ravager kick
+INTERRUPT_SPELL_IDS[89766]  = true  -- Axe Toss (Felguard pet actual)
+INTERRUPT_SPELL_IDS[119914] = true  -- Command Demon: Axe Toss
 
 -- =============================================================
 -- Constants
@@ -471,6 +476,17 @@ function KT:OnSpellcastSucceeded(_, unit, _, spellID)
         local guid = UnitGUID("player")
         if guid then
             self:ConfirmKick(guid)
+        end
+        return
+    end
+
+    -- Player's own pet kick (Warlock Spell Lock / Axe Toss)
+    -- Pet commands fire on "pet", map to player's GUID
+    if unit == "pet" then
+        if not INTERRUPT_SPELL_IDS[spellID] then return end
+        local ownerGuid = UnitGUID("player")
+        if ownerGuid then
+            self:ConfirmKick(ownerGuid)
         end
         return
     end
