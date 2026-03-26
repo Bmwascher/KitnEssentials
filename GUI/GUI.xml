@@ -32,7 +32,7 @@
     <Script file="GUITabs\GUICombat\GUI-CombatTexts.lua" />
     <Script file="GUITabs\GUICombat\GUI-CursorCircle.lua" />
     <Script file="GUITabs\GUICombat\GUI-PetStatusText.lua" />
-    <Script file="GUITabs\GUICombat\GUI-GatewayAlert.lua" />
+    <Script file="GUITabs\GUICombat\GUI-RaidNotifications.lua" />
     <Script file="GUITabs\GUICombat\GUI-TargetCastbar.lua" />
     <Script file="GUITabs\GUICombat\GUI-FocusCastbar.lua" />
     <Script file="GUITabs\GUICombat\GUI-RangeChecker.lua" />

@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.6.1
+### Changes
+- **Gateway Alert** replaced by new **Raid Notifications** module. Gateway usability alert is now joined by **Reset Boss** (lust debuff reminder between pulls) and **Loot Boss** (reminder to loot after a boss kill). Per-alert toggles, shared font/color/position settings, configurable alert duration. Existing Gateway Alert settings are migrated automatically. Located in Utilities sidebar.
+
 ## v1.6.0
 ### Additions
 - New module: **Interrupt Tracker** — Tracks party interrupt cooldowns in real-time using status bars. Event-correlation detection (no protected API calls), class/dark color modes with drain/fill animations, channel kick detection, icon desaturation on CD, warlock pet kick support, role-based sorting. Located in Combat sidebar.

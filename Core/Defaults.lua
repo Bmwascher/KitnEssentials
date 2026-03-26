@@ -191,6 +191,7 @@ local Defaults = {
             PassiveColor = { 0.3, 0.7, 1, 1 },
         },
 
+        -- Old GatewayAlert kept for migration (absorbed into RaidNotifications)
         GatewayAlert = {
             Enabled = false,
             Strata = "HIGH",
@@ -203,6 +204,25 @@ local Defaults = {
             ColorMode = "custom",
             Color = { 0.969, 0.027, 0.945, 1 },  -- #F707F1
             ShowIcons = true,
+        },
+
+        RaidNotifications = {
+            Enabled = false,
+            Strata = "MEDIUM",
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            Position = DefaultPosition(0, 150),
+            FontSize = 16,
+            FontFace = "Expressway",
+            FontOutline = "SOFTOUTLINE",
+            ColorMode = "custom",
+            Color = { 0.969, 0.027, 0.945, 1 },  -- #F707F1
+            ShowIcons = true,
+            RowSpacing = 4,
+            AlertDuration = 40,
+            GatewayEnabled = true,
+            ResetBossEnabled = true,
+            LootBossEnabled = true,
         },
 
         TargetCastbar = {

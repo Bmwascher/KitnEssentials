@@ -31,7 +31,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 
 | Module | Description |
 |---|---|
-| Gateway Alert | Demonic Gateway usability notification with icons and color mode |
+| Raid Notifications | Gateway usability, reset boss reminder, loot boss reminder with per-alert toggles |
 | Pet Status Texts | Pet status texts display (missing/dead/passive) |
 | Class Stance Texts | Customizable text labels for Warrior stances, Paladin auras, and Evoker attunements |
 | Bloodlust Tracker | Animated sprite overlay + sound on Bloodlust/Heroism with 4 presets, basic icon+countdown mode, and haste detection fallback |

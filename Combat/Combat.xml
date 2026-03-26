@@ -7,7 +7,7 @@
     <Script file="CombatTexts.lua" />
     <Script file="CursorCircle.lua" />
     <Script file="PetStatusText.lua" />
-    <Script file="GatewayAlert.lua" />
+    <Script file="RaidNotifications.lua" />
     <Script file="TargetCastbar.lua" />
     <Script file="FocusCastbar.lua" />
     <Script file="RangeChecker.lua" />
