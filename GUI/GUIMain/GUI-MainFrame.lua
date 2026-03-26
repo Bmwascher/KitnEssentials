@@ -43,6 +43,7 @@ GUIFrame.sidebarConfig = {
             { id = "RangeChecker",  text = "Range Display" },
             { id = "TargetCastbar", text = "Target Castbar" },
             { id = "FocusCastbar",  text = "Focus Castbar" },
+            { id = "KickTracker",   text = "Interrupt Tracker" },
         },
     },
     {
@@ -54,6 +55,7 @@ GUIFrame.sidebarConfig = {
             { id = "GatewayAlert",  text = "Gateway Alert" },
             { id = "PetStatusText", text = "Pet Status Texts" },
             { id = "StanceText",    text = "Class Stance Texts" },
+            { id = "BloodlustTracker", text = "Bloodlust Tracker" },
             { id = "TimeSpiral",    text = "Time Spiral Tracker" },
             { id = "Recuperate",    text = "Recuperate Button" },
             { id = "DispelCursor",  text = "Dispel CD on Cursor" },

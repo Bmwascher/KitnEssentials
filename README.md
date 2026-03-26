@@ -23,16 +23,18 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Combat Texts | Floating combat text customization |
 | Cursor Circle | Cursor-following ring with GCD overlay, multiple texture options |
 | Range Display | Target range text with out-of-range color warning |
-| Target Castbar | Repositionable target cast bar with kick indicators and target names |
-| Focus Castbar | Repositionable focus cast bar with kick indicators and target names |
+| Target Castbar | Repositionable target cast bar with kick indicators and color settings for casts |
+| Focus Castbar | Repositionable focus cast bar with kick indicators, target names, and cast sound alert |
+| Interrupt Tracker | Party interrupt cooldown bars with class colors, dark mode, and channel kick detection |
 
 ## Utilities
 
 | Module | Description |
 |---|---|
-| Gateway Alert | Demonic Gateway usability notification |
-| Pet Status Texts | Pet health and happiness display |
+| Gateway Alert | Demonic Gateway usability notification with icons and color mode |
+| Pet Status Texts | Pet status texts display (missing/dead/passive) |
 | Class Stance Texts | Customizable text labels for Warrior stances, Paladin auras, and Evoker attunements |
+| Bloodlust Tracker | Animated sprite overlay + sound on Bloodlust/Heroism with 4 presets, basic icon+countdown mode, and haste detection fallback |
 | Time Spiral Tracker | Movement spell proc tracker with glow effects and cooldown spiral (all classes) |
 | Recuperate Button | One-click self-heal with configurable raid/party visibility and health-based alpha |
 | Dispel CD on Cursor | Dispel cooldown timer following your cursor, auto-detects class dispel spell |

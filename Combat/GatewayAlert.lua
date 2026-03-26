@@ -50,11 +50,39 @@ function GA:CreateFrame()
     text:ClearAllPoints()
     text:SetPoint("CENTER", frame, "CENTER", 0, 0)
 
-    local color = self.db.Color or { 1, 0.82, 0, 1 }
-    text:SetTextColor(color[1], color[2], color[3], color[4] or 1)
+    local r, g, b, a = KE:GetAccentColor(self.db.ColorMode, self.db.Color)
+    text:SetTextColor(r, g, b, a)
+
+    -- Gateway icons flanking the text (standard icon zoom + backdrop)
+    local iconSize = self.db.FontSize
+    local function CreateIcon(parent, anchor, point, relPoint, xOff)
+        local holder = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+        holder:SetSize(iconSize, iconSize)
+        holder:SetPoint(point, anchor, relPoint, xOff, 0)
+        holder:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Buttons\\WHITE8X8",
+            edgeSize = 1,
+        })
+        holder:SetBackdropColor(0, 0, 0, 0.8)
+        holder:SetBackdropBorderColor(0, 0, 0, 1)
+
+        local tex = holder:CreateTexture(nil, "ARTWORK")
+        tex:SetPoint("TOPLEFT", 1, -1)
+        tex:SetPoint("BOTTOMRIGHT", -1, 1)
+        tex:SetTexture(607513)
+        tex:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        holder.tex = tex
+        return holder
+    end
+
+    local leftIcon = CreateIcon(frame, text, "RIGHT", "LEFT", -4)
+    local rightIcon = CreateIcon(frame, text, "LEFT", "RIGHT", 4)
 
     self.frame = frame
     self.text = text
+    self.leftIcon = leftIcon
+    self.rightIcon = rightIcon
     frame:Hide()
 end
 
@@ -81,6 +109,19 @@ function GA:CheckUsable()
     self:UpdateState(IsUsableItem(GATEWAY_ITEM_ID) and true or false)
 end
 
+-- Update icon visibility and size
+function GA:UpdateIcons()
+    if not self.leftIcon or not self.rightIcon then return end
+    local show = self.db.ShowIcons ~= false
+    self.leftIcon:SetShown(show)
+    self.rightIcon:SetShown(show)
+    if show then
+        local iconSize = self.db.FontSize
+        self.leftIcon:SetSize(iconSize, iconSize)
+        self.rightIcon:SetSize(iconSize, iconSize)
+    end
+end
+
 -- Handle state changes
 function GA:UpdateState(isUsable)
     if self.isPreview then return end
@@ -105,12 +146,14 @@ function GA:ApplySettings()
     KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
     KE:ApplyFontToText(self.text, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
 
-    local color = self.db.Color or { 1, 0.82, 0, 1 }
-    self.text:SetTextColor(color[1], color[2], color[3], color[4] or 1)
+    local r, g, b, a = KE:GetAccentColor(self.db.ColorMode, self.db.Color)
+    self.text:SetTextColor(r, g, b, a)
 
     if self.db.Strata then
         self.frame:SetFrameStrata(self.db.Strata)
     end
+
+    self:UpdateIcons()
 end
 
 function GA:RegWithEditMode()

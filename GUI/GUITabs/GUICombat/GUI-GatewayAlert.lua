@@ -57,7 +57,15 @@ GUIFrame:RegisterContent("GatewayAlert", function(scrollChild, yOffset)
         end,
         true, "Gateway Alert", "On", "Off"
     )
-    row1:AddWidget(enableCheck, 1)
+    row1:AddWidget(enableCheck, 0.5)
+
+    local iconToggle = GUIFrame:CreateCheckbox(row1, "Show Icons", db.ShowIcons ~= false,
+        function(checked)
+            db.ShowIcons = checked
+            ApplySettings()
+        end)
+    row1:AddWidget(iconToggle, 0.5)
+    table_insert(allWidgets, iconToggle)
     card1:AddRow(row1, 36)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
@@ -146,15 +154,38 @@ GUIFrame:RegisterContent("GatewayAlert", function(scrollChild, yOffset)
     local card4 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
     table_insert(allWidgets, card4)
 
-    local row4 = GUIFrame:CreateRow(card4.content, 40)
-    local colorPicker = GUIFrame:CreateColorPicker(row4, "Alert Color", db.Color or { 1, 0.82, 0, 1 },
+    local customColorWidgets = {}
+
+    local row4a = GUIFrame:CreateRow(card4.content, 40)
+    local colorModeDropdown = GUIFrame:CreateDropdown(row4a, "Color Mode", KE.ColorModeOptions,
+        db.ColorMode or "custom", 70,
+        function(key)
+            db.ColorMode = key
+            ApplySettings()
+            local isCustom = key == "custom"
+            for _, w in ipairs(customColorWidgets) do
+                if w.SetEnabled then w:SetEnabled(isCustom) end
+            end
+        end)
+    row4a:AddWidget(colorModeDropdown, 0.5)
+    table_insert(allWidgets, colorModeDropdown)
+
+    local colorPicker = GUIFrame:CreateColorPicker(row4a, "Custom Color", db.Color or { 0, 1, 0.169, 1 },
         function(r, g, b, a)
             db.Color = { r, g, b, a }
             ApplySettings()
         end)
-    row4:AddWidget(colorPicker, 1)
+    row4a:AddWidget(colorPicker, 0.5)
     table_insert(allWidgets, colorPicker)
-    card4:AddRow(row4, 40)
+    table_insert(customColorWidgets, colorPicker)
+    card4:AddRow(row4a, 40)
+
+    -- Set initial custom color widget state
+    if (db.ColorMode or "custom") ~= "custom" then
+        for _, w in ipairs(customColorWidgets) do
+            if w.SetEnabled then w:SetEnabled(false) end
+        end
+    end
 
     yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
 
