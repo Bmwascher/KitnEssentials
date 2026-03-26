@@ -971,8 +971,10 @@ function KT:LayoutBars()
         end
     end
 
-    -- Keep container at a fixed size for consistent anchor behavior
-    self.containerFrame:SetSize(db.BarWidth, 1)
+    -- Resize container to encompass all visible bars (for EditMode dragging)
+    local visibleCount = math.min(#self.sortedBars, maxBars)
+    local totalHeight = visibleCount > 0 and (visibleCount * (barHeight + spacing) - spacing) or barHeight
+    self.containerFrame:SetSize(db.BarWidth, math.max(totalHeight, barHeight))
 end
 
 -- =============================================================
@@ -1162,7 +1164,8 @@ function KT:ShowPreview()
         self.activeBars["preview_" .. i] = bar
     end
 
-    self.containerFrame:SetSize(db.BarWidth, 1)
+    local previewHeight = 5 * ((db.BarHeight or 27) + (db.BarSpacing or 1)) - (db.BarSpacing or 1)
+    self.containerFrame:SetSize(db.BarWidth, math.max(previewHeight, db.BarHeight or 27))
     self.containerFrame:Show()
 end
 

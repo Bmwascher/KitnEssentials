@@ -173,7 +173,7 @@ KE.PreviewManager = PreviewManager
 local PREVIEW_MODULES = {
     "StanceText", "CombatCross", "CombatTexts", "CombatRes",
     "CombatTimer", "PetStatusText", "DragonRiding",
-    "FocusCastbar", "GatewayAlert", "HuntersMark", "RangeChecker",
+    "FocusCastbar", "RaidNotifications", "HuntersMark", "RangeChecker",
     "TimeSpiral", "DisintegrateTicks", "Recuperate", "BloodlustTracker", "KickTracker",
 }
 

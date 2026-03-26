@@ -52,7 +52,7 @@ GUIFrame.sidebarConfig = {
         text = "\226\128\162 Utilities",
         defaultExpanded = true,
         items = {
-            { id = "GatewayAlert",  text = "Gateway Alert" },
+            { id = "RaidNotifications", text = "Raid Notifications" },
             { id = "PetStatusText", text = "Pet Status Texts" },
             { id = "StanceText",    text = "Class Stance Texts" },
             { id = "BloodlustTracker", text = "Bloodlust Tracker" },
