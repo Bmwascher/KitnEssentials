@@ -536,6 +536,10 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     row9a:AddWidget(kickEnableCheck, 1)
     card9:AddRow(row9a, 40)
 
+    local kickA = Theme.accent
+    local kickDash = string.format("|cff%02x%02x%02x—|r", kickA[1]*255, kickA[2]*255, kickA[3]*255)
+    card9:AddLabel(kickDash .. " |cff888888When enabled, bar color reflects kick readiness instead of cast type (Casting/Channeling colors).|r")
+
     -- Separator
     local rowSepKick = GUIFrame:CreateRow(card9.content, 8)
     local sepKick = GUIFrame:CreateSeparator(rowSepKick)

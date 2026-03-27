@@ -23,8 +23,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Combat Texts | Floating combat text customization |
 | Cursor Circle | Cursor-following ring with GCD overlay, multiple texture options |
 | Range Display | Target range text with out-of-range color warning |
-| Target Castbar | Repositionable target cast bar with kick indicators and color settings for casts |
-| Focus Castbar | Repositionable focus cast bar with kick indicators, target names, and cast sound alert |
+| Focus & Target Castbar | Repositionable cast bars with kick indicators, target names, color settings, and cast sound alert (tabbed GUI) |
 | Interrupt Tracker | Party interrupt cooldown bars with class colors, dark mode, and channel kick detection |
 
 ## Utilities
@@ -32,17 +31,13 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Module | Description |
 |---|---|
 | Raid Notifications | Gateway usability, reset boss reminder, loot boss reminder with per-alert toggles |
-| Pet Status Texts | Pet status texts display (missing/dead/passive) |
-| Class Stance Texts | Customizable text labels for Warrior stances, Paladin auras, and Evoker attunements |
+| Class Status Texts | Pet status, class stance, movement alert, and dispel CD — 4 class-specific text alerts in one tabbed GUI |
 | Bloodlust Tracker | Animated sprite overlay + sound on Bloodlust/Heroism with 4 presets, basic icon+countdown mode, and haste detection fallback |
 | Time Spiral Tracker | Movement spell proc tracker with glow effects and cooldown spiral (all classes) |
 | Recuperate Button | One-click self-heal with configurable raid/party visibility and health-based alpha |
-| Dispel CD on Cursor | Dispel cooldown timer following your cursor, auto-detects class dispel spell |
 | Disintegrate Castbar Ticks | Evoker channel tick marks on cast bar with Mass Disintegrate clip warning |
 | World Marker Cycler | Cycle through world markers at cursor with drag-to-reorder priority |
-| Focus Marker Macro Builder | Auto-creates focus target + raid marker macro with marker selection and custom conditionals |
-| Power Infusion Macro Builder | Auto-creates PI macro with trinkets, racials, potions, and custom /use line |
-| No Movement Alert | Shows movement ability cooldown with configurable threshold, auto-detects class spell |
+| Macro Builders | Focus Marker and Power Infusion macro builders in one tabbed GUI |
 
 ## Quality of Life
 

@@ -175,20 +175,20 @@ local Defaults = {
         },
 
         PetStatusText = {
-            Enabled = false,
-            Strata = "HIGH",
+            Enabled = true,
+            Strata = "MEDIUM",
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
-            Position = DefaultPosition(0, -120),
-            FontSize = 14,
+            Position = DefaultPosition(0, 100),
+            FontSize = 26,
             FontFace = "Expressway",
             FontOutline = "SOFTOUTLINE",
             PetMissing = "PET MISSING",
             PetDead = "PET DEAD",
             PetPassive = "PET PASSIVE",
-            MissingColor = { 1, 0.82, 0, 1 },
-            DeadColor = { 1, 0.2, 0.2, 1 },
-            PassiveColor = { 0.3, 0.7, 1, 1 },
+            MissingColor = { 1, 0.82, 0, 1 },       -- #FFD100
+            DeadColor = { 1, 0.2, 0.2, 1 },          -- #FF3333
+            PassiveColor = { 1, 0, 0.549, 1 },        -- #FF008C
         },
 
         -- Old GatewayAlert kept for migration (absorbed into RaidNotifications)
@@ -226,17 +226,17 @@ local Defaults = {
         },
 
         NoMovementAlert = {
-            Enabled = false,
+            Enabled = true,
             Strata = "MEDIUM",
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
-            Position = DefaultPosition(0, -50),
-            FontSize = 24,
+            Position = DefaultPosition(0, -61),
+            FontSize = 16,
             FontFace = "Expressway",
             FontOutline = "OUTLINE",
-            ColorMode = "custom",
+            ColorMode = "theme",
             Color = { 1, 0.2, 0.2, 1 },
-            DisplayFormat = "NO %n (%t)",
+            DisplayFormat = "NO %n - %t",
             MaxCooldown = 30,
         },
 
@@ -326,11 +326,11 @@ local Defaults = {
         },
 
         DispelCursor = {
-            Enabled = false,
+            Enabled = true,
             FontSize = 18,
-            TextColor = { 1, 1, 1, 1 },
-            XOffset = 10,
-            YOffset = 10,
+            TextColor = { 0.235, 0.929, 1, 1 },  -- #3BECFF
+            XOffset = 3,
+            YOffset = 3,
         },
 
         RangeChecker = {
