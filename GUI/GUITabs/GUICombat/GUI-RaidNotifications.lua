@@ -121,7 +121,7 @@ GUIFrame:RegisterContent("RaidNotifications", function(scrollChild, yOffset)
     table_insert(allWidgets, durationSlider)
     card2:AddRow(row2b, 40)
 
-    card2:AddLabel(accentDash .. " Duration applies to Reset Boss and Loot Boss alerts.")
+    card2:AddLabel(accentDash .. " |cff888888Duration applies to Reset Boss and Loot Boss alerts.|r")
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 

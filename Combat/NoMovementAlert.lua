@@ -14,6 +14,7 @@ local C_Timer = C_Timer
 local CreateFrame = CreateFrame
 local UnitClass = UnitClass
 local IsPlayerSpell = IsPlayerSpell
+local GetTime = GetTime
 local string_format = string.format
 local string_gsub = string.gsub
 
@@ -172,6 +173,23 @@ function NMA:UpdateMovementAlert()
     end
 
     local cdInfo = C_Spell.GetSpellCooldown(self.activeSpellID)
+
+    -- Skip if remaining cooldown exceeds threshold (hides long CDs until they're almost ready)
+    -- startTime and duration are secret in 12.0.5 — launder through string.format + tonumber
+    if cdInfo and cdInfo.startTime and cdInfo.duration then
+        local durationNum = tonumber(string_format("%.1f", cdInfo.duration))
+        if durationNum and durationNum > 0 then
+            local startNum = tonumber(string_format("%.1f", cdInfo.startTime))
+            if startNum then
+                local remaining = (startNum + durationNum) - GetTime()
+                local maxCD = self.db.MaxCooldown or 30
+                if remaining > maxCD then
+                    if self.frame:IsShown() then self.frame:Hide() end
+                    return
+                end
+            end
+        end
+    end
 
     if cdInfo and cdInfo.timeUntilEndOfStartRecovery and not cdInfo.isOnGCD and cdInfo.isOnGCD ~= nil then
         -- timeUntilEndOfStartRecovery is a secret number — only string.format + concatenation work
