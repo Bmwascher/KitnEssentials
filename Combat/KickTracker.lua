@@ -138,6 +138,8 @@ KT.processScheduled = false
 KT.barPool = {}           -- array of reusable bar frames
 KT.activeBars = {}        -- [guid] = barFrame
 KT.sortedBars = {}        -- ordered array for layout
+KT._coolingList = {}      -- reusable temp table for LayoutBars
+KT._readyList = {}        -- reusable temp table for LayoutBars
 
 -- Environment
 KT.isActive = false
@@ -470,23 +472,13 @@ function KT:OnSpellcastSucceeded(_, unit, _, spellID)
     if not self.db.Enabled or self.isPreview or not self.isActive then return end
     if not unit then return end
 
-    -- Player self-kick: spellID is NOT secret for own casts, so direct check works
-    if unit == "player" then
+    -- Player self-kick or pet kick (Warlock Spell Lock / Axe Toss)
+    -- spellID is NOT secret for own casts; pet commands map to player's GUID
+    if unit == "player" or unit == "pet" then
         if not INTERRUPT_SPELL_IDS[spellID] then return end
         local guid = UnitGUID("player")
         if guid then
             self:ConfirmKick(guid)
-        end
-        return
-    end
-
-    -- Player's own pet kick (Warlock Spell Lock / Axe Toss)
-    -- Pet commands fire on "pet", map to player's GUID
-    if unit == "pet" then
-        if not INTERRUPT_SPELL_IDS[spellID] then return end
-        local ownerGuid = UnitGUID("player")
-        if ownerGuid then
-            self:ConfirmKick(ownerGuid)
         end
         return
     end
@@ -668,12 +660,7 @@ function KT:GetOrCreateBar(guid)
     end
 
     -- Try pool first
-    local bar
-    for i = #self.barPool, 1, -1 do
-        bar = table.remove(self.barPool, i)
-        break
-    end
-
+    local bar = table.remove(self.barPool)
     if not bar then
         bar = self:CreateBar()
     end
@@ -702,7 +689,6 @@ function KT:HideAllBars()
     for _, guid in ipairs(guids) do
         self:ReleaseBar(guid)
     end
-    wipe(self.activeBars)
     wipe(self.sortedBars)
 end
 
@@ -769,15 +755,14 @@ function KT:UpdateBarVisuals(bar, member)
         end
     end
 
+    -- Ready state: no active kick cooldown
+    local isReady = not member or not member.kickStart
+
     -- Name text
     KE:ApplyFont(bar.nameText, db.FontFace, db.FontSize, db.FontOutline)
     bar.nameText:SetShown(db.ShowName)
     if member then
         bar.nameText:SetText(member.name or "")
-        -- Color mode determines name color:
-        -- "class" = class-colored bars, WHITE names (always)
-        -- "dark"  = class-colored names when ready, WHITE names when cooling
-        local isReady = not member.kickStart
         if isDarkMode and isReady and member.classToken then
             local color = GetClassColor(member.classToken)
             if color then
@@ -796,7 +781,6 @@ function KT:UpdateBarVisuals(bar, member)
     bar.timerText:SetTextColor(1, 1, 1, 1)
 
     -- Icon desaturation (greyed out when on CD)
-    local isReady = not member or not member.kickStart
     bar.iconTex:SetDesaturated(not isReady)
 
     -- Bar color (ready state)
@@ -903,8 +887,8 @@ function KT:LayoutBars()
 
     -- Build sorted list
     wipe(self.sortedBars)
-    local coolingList = {}
-    local readyList = {}
+    local coolingList = wipe(self._coolingList)
+    local readyList = wipe(self._readyList)
     local now = GetTime()
 
     for guid, bar in pairs(self.activeBars) do
@@ -1025,7 +1009,6 @@ function KT:OnUpdateBars(elapsed)
                 else
                     bar.statusBar:SetValue(elapsedTime / member.kickDuration)
                 end
-                self:ApplyBarColor(bar, member, true)
 
                 if db.ShowTimer and bar.timerText then
                     if remaining > 6 then
@@ -1232,7 +1215,7 @@ end
 
 function KT:OnDisable()
     self:UnregisterAllEvents()
-    self:UnregisterCombatEvents()
+    self.combatEventsRegistered = false
     self:CancelAllTimers()
     self:StopOnUpdate()
 

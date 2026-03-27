@@ -41,6 +41,7 @@
     <Script file="GUITabs\GUICombat\GUI-DisintegrateTicks.lua" />
     <Script file="GUITabs\GUICombat\GUI-BloodlustTracker.lua" />
     <Script file="GUITabs\GUICombat\GUI-KickTracker.lua" />
+    <Script file="GUITabs\GUICombat\GUI-NoMovementAlert.lua" />
 
     <!-- QoL tabs -->
     <Script file="GUITabs\GUIQoL\GUI-Automation.lua" />

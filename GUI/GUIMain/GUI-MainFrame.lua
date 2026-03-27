@@ -63,6 +63,7 @@ GUIFrame.sidebarConfig = {
             { id = "WorldMarkerCycler", text = "World Marker Cycler" },
             { id = "FocusMarker",   text = "Focus Marker Macro Builder" },
             { id = "PIMacroBuilder", text = "Power Infusion Macro Builder" },
+            { id = "NoMovementAlert", text = "No Movement Alert" },
         },
     },
     {
