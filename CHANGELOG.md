@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.6.6
+### Fixes
+- **Raid Notifications**: Reset Boss and Loot Boss alerts now restricted to Normal/Heroic/Mythic raids only (difficulty 14-16). Previously triggered in dungeons and M+. Uses `GetInstanceInfo()` difficulty check matching NorthernSkyRaidTools reference.
+
 ## v1.6.5
 ### Changes
 - **GUI sidebar tab mergers** — Reduced sidebar clutter with tabbed GUI pages:

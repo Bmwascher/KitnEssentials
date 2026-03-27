@@ -17,7 +17,14 @@ local GetItemInfo = C_Item.GetItemInfo
 local CreateFrame = CreateFrame
 local GetTime = GetTime
 local InCombatLockdown = InCombatLockdown
+local GetInstanceInfo = GetInstanceInfo
 local issecretvalue = issecretvalue
+
+-- Check if player is in a Normal/Heroic/Mythic raid (difficultyID 14-16)
+local function IsInRaidInstance()
+    local difficultyID = select(3, GetInstanceInfo()) or 0
+    return difficultyID >= 14 and difficultyID <= 16
+end
 
 ---------------------------------------------------------------------------------
 -- Constants
@@ -297,6 +304,12 @@ function RN:CheckResetBoss()
         return
     end
 
+    -- Only show in raid groups
+    if not IsInRaidInstance() then
+        self:HideAlert("ResetBoss")
+        return
+    end
+
     if InCombatLockdown() or UnitIsDeadOrGhost("player") then
         self:HideAlert("ResetBoss")
         return
@@ -345,6 +358,7 @@ function RN:OnEncounterEnd(_, encounterID, encounterName, difficultyID, groupSiz
     if not self.db.Enabled or self.isPreview then return end
     if self.db.LootBossEnabled == false then return end
     if success ~= 1 then return end
+    if not IsInRaidInstance() then return end
 
     self:ShowAlert("LootBoss")
 
