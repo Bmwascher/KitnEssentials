@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.6.5
+### Changes
+- **GUI sidebar tab mergers** — Reduced sidebar clutter with tabbed GUI pages:
+  - **Focus & Target Castbar** — Target and Focus castbar settings combined with tab switcher (Combat section).
+  - **Class Status Texts** — Pet Status, Class Stance, No Movement Alert, and Dispel CD on Cursor combined into one 4-tab page (Utilities section).
+  - **Macro Builders** — Focus Marker and Power Infusion macro builders combined with tab switcher (Utilities section).
+- Sidebar item count: Combat 10→8, Utilities 12→8. All module backends unchanged.
+- Added kick indicator note on both castbar GUI pages explaining bar color override behavior.
+- Updated defaults: PetStatusText (enabled, medium strata, size 26, accent passive color), NoMovementAlert (enabled, theme color, size 16, "NO %n - %t" format), DispelCursor (enabled, cyan text #3BECFF, offset 3).
+- Removed DH Shift from No Movement Alert spell list (3-charge spells incompatible with 12.0.5 secret value cooldown checks).
+
 ## v1.6.4
 ### Additions
 - New module: **No Movement Alert** — Shows remaining cooldown when your movement ability is unavailable. Auto-detects class spell (highest priority known spell). Configurable display format with spell name and timer placeholders. Located in Utilities sidebar.

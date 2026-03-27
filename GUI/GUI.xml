@@ -35,6 +35,7 @@
     <Script file="GUITabs\GUICombat\GUI-RaidNotifications.lua" />
     <Script file="GUITabs\GUICombat\GUI-TargetCastbar.lua" />
     <Script file="GUITabs\GUICombat\GUI-FocusCastbar.lua" />
+    <Script file="GUITabs\GUICombat\GUI-Castbars.lua" />
     <Script file="GUITabs\GUICombat\GUI-RangeChecker.lua" />
     <Script file="GUITabs\GUICombat\GUI-DispelCursor.lua" />
     <Script file="GUITabs\GUICombat\GUI-TimeSpiral.lua" />
@@ -50,6 +51,7 @@
     <Script file="GUITabs\GUIQoL\GUI-CopyAnything.lua" />
     <Script file="GUITabs\GUIQoL\GUI-DragonRiding.lua" />
     <Script file="GUITabs\GUIQoL\GUI-StanceText.lua" />
+    <Script file="GUITabs\GUICombat\GUI-ClassStatusTexts.lua" />
     <Script file="GUITabs\GUIQoL\GUI-HuntersMark.lua" />
     <Script file="GUITabs\GUIQoL\GUI-HideBars.lua" />
     <Script file="GUITabs\GUIQoL\GUI-Recuperate.lua" />
@@ -58,6 +60,7 @@
     <Script file="GUITabs\GUIQoL\GUI-AuctionHouseFilter.lua" />
     <Script file="GUITabs\GUIQoL\GUI-PIMacroBuilder.lua" />
     <Script file="GUITabs\GUIQoL\GUI-FocusMarker.lua" />
+    <Script file="GUITabs\GUIQoL\GUI-MacroBuilders.lua" />
 
     <!-- Skinning tabs -->
     <Script file="GUITabs\GUISkinning\GUI-Tooltips.lua" />

@@ -32,7 +32,6 @@ local CLASS_SPELLS = {
     ["DEMONHUNTER"] = {
         { 195072, "RUSH" },       -- Fel Rush
         { 189110, "LEAP" },       -- Infernal Strike
-        { 1234796, "SHIFT" },     -- Shift
     },
     ["DRUID"] = {
         { 252216, "DASH" },       -- Tiger Dash

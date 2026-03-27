@@ -488,6 +488,10 @@ GUIFrame:RegisterContent("TargetCastbar", function(scrollChild, yOffset)
     row7a:AddWidget(kickEnableCheck, 1)
     card7:AddRow(row7a, 40)
 
+    local a = Theme.accent
+    local accentDash = string.format("|cff%02x%02x%02x—|r", a[1]*255, a[2]*255, a[3]*255)
+    card7:AddLabel(accentDash .. " |cff888888When enabled, bar color reflects kick readiness instead of cast type (Casting/Channeling colors).|r")
+
     -- Separator
     local rowSepKick = GUIFrame:CreateRow(card7.content, 8)
     local sepKick = GUIFrame:CreateSeparator(rowSepKick)
