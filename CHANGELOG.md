@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.6.4
+### Additions
+- New module: **No Movement Alert** — Shows remaining cooldown when your movement ability is unavailable. Auto-detects class spell (highest priority known spell). Configurable display format with spell name and timer placeholders. Located in Utilities sidebar.
+- **No Movement Alert**: Max Cooldown threshold (default 30s) — only shows alert when remaining cooldown drops below threshold, hiding long-CD spells like Dash until they're nearly ready.
+
+### Changes
+- **KickTracker**: Merged player/pet kick handlers, pool pop simplification, reusable temp tables for layout, removed redundant ApplyBarColor from OnUpdate tick.
+- **FocusCastbar**: Single cooldown fetch per frame shared between kick indicator and tick position.
+- **RaidNotifications**: Cached aura API at load time, skip alerts when player is dead, updated defaults (enabled by default, accent color, larger font).
+- GUI text cleanup: gray `|cff888888` helper labels on settings hints, standard Note block on module descriptions.
+
+## v1.6.2
+### Changes
+- **Gateway Alert** replaced by new **Raid Notifications** module. Gateway usability alert is now joined by **Reset Boss** (lust debuff reminder between pulls) and **Loot Boss** (reminder to loot after a boss kill). Per-alert toggles, shared font/color/position settings, configurable alert duration. Existing Gateway Alert settings are migrated automatically. Located in Utilities sidebar.
+
 ## v1.6.1
 ### Changes
 - **Gateway Alert** replaced by new **Raid Notifications** module. Gateway usability alert is now joined by **Reset Boss** (lust debuff reminder between pulls) and **Loot Boss** (reminder to loot after a boss kill). Per-alert toggles, shared font/color/position settings, configurable alert duration. Existing Gateway Alert settings are migrated automatically. Located in Utilities sidebar.

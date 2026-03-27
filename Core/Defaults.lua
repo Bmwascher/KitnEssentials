@@ -237,6 +237,7 @@ local Defaults = {
             ColorMode = "custom",
             Color = { 1, 0.2, 0.2, 1 },
             DisplayFormat = "NO %n (%t)",
+            MaxCooldown = 30,
         },
 
         TargetCastbar = {

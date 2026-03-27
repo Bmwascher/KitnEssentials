@@ -61,7 +61,14 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
 
     local a = Theme.accent
     local accentDash = string.format("|cff%02x%02x%02x—|r", a[1]*255, a[2]*255, a[3]*255)
-    card1:AddLabel(accentDash .. " Shows remaining cooldown when your movement ability is unavailable. Supports all classes.")
+    local noteHeight = 50
+    local noteRow = GUIFrame:CreateRow(card1.content, noteHeight)
+    local noteText = GUIFrame:CreateText(noteRow,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " Shows remaining cooldown when your movement ability is unavailable.\n" .. KE:ColorTextByTheme("-") .. " Supports all classes. Auto-detects your highest priority movement spell.",
+        noteHeight, "hide")
+    noteRow:AddWidget(noteText, 1)
+    card1:AddRow(noteRow, noteHeight)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
@@ -82,7 +89,19 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
     table_insert(allWidgets, formatBox)
     card2:AddRow(row2a, 40)
 
-    card2:AddLabel(accentDash .. " %n = spell name, %t = remaining time.")
+    card2:AddLabel(accentDash .. " |cff888888%n = spell name, %t = remaining time.|r")
+
+    -- Max Cooldown threshold
+    local row2b = GUIFrame:CreateRow(card2.content, 40)
+    local maxCDSlider = GUIFrame:CreateSlider(row2b, "Max Cooldown", 5, 120, 1, db.MaxCooldown or 30, 60,
+        function(val)
+            db.MaxCooldown = val
+        end)
+    row2b:AddWidget(maxCDSlider, 1)
+    table_insert(allWidgets, maxCDSlider)
+    card2:AddRow(row2b, 40)
+
+    card2:AddLabel(accentDash .. " |cff888888Only show alert when the spell's total cooldown is under this threshold (seconds).|r")
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 

@@ -42,6 +42,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | World Marker Cycler | Cycle through world markers at cursor with drag-to-reorder priority |
 | Focus Marker Macro Builder | Auto-creates focus target + raid marker macro with marker selection and custom conditionals |
 | Power Infusion Macro Builder | Auto-creates PI macro with trinkets, racials, potions, and custom /use line |
+| No Movement Alert | Shows movement ability cooldown with configurable threshold, auto-detects class spell |
 
 ## Quality of Life
 
