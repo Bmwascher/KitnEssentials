@@ -207,22 +207,36 @@ local Defaults = {
         },
 
         RaidNotifications = {
-            Enabled = false,
+            Enabled = true,
             Strata = "MEDIUM",
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
-            Position = DefaultPosition(0, 150),
-            FontSize = 16,
+            Position = DefaultPosition(0, 350),
+            FontSize = 37,
             FontFace = "Expressway",
             FontOutline = "SOFTOUTLINE",
             ColorMode = "custom",
-            Color = { 0.969, 0.027, 0.945, 1 },  -- #F707F1
+            Color = { 1, 0, 0.549, 1 },  -- #FF008C
             ShowIcons = true,
             RowSpacing = 4,
             AlertDuration = 40,
             GatewayEnabled = true,
             ResetBossEnabled = true,
             LootBossEnabled = true,
+        },
+
+        NoMovementAlert = {
+            Enabled = false,
+            Strata = "MEDIUM",
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            Position = DefaultPosition(0, -50),
+            FontSize = 24,
+            FontFace = "Expressway",
+            FontOutline = "OUTLINE",
+            ColorMode = "custom",
+            Color = { 1, 0.2, 0.2, 1 },
+            DisplayFormat = "NO %n (%t)",
         },
 
         TargetCastbar = {

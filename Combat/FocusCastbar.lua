@@ -326,7 +326,7 @@ function FC:CacheInterruptId()
 end
 
 -- Update kick indicator tick visibility and bar color
-function FC:UpdateKickIndicator()
+function FC:UpdateKickIndicator(cooldown)
     local kick = self.db.KickIndicator
     if not kick or not kick.Enabled or not self.interruptId then
         self.kickTick:SetAlpha(0)
@@ -338,7 +338,6 @@ function FC:UpdateKickIndicator()
         return
     end
 
-    local cooldown = C_Spell.GetSpellCooldownDuration(self.interruptId)
     if not cooldown then return end
 
     self.kickTick:SetAlphaFromBoolean(cooldown:IsZero(), 0,
@@ -348,13 +347,12 @@ function FC:UpdateKickIndicator()
 end
 
 -- Update tick position based on interrupt cooldown
-function FC:UpdateTickPosition(duration)
+function FC:UpdateTickPosition(duration, cooldown)
     local kick = self.db.KickIndicator
     if not kick or not kick.Enabled or not self.interruptId then return end
 
     self.positioner:SetValue(duration:GetElapsedDuration())
 
-    local cooldown = C_Spell.GetSpellCooldownDuration(self.interruptId)
     if not cooldown then return end
 
     self.kickCooldownBar:SetValue(cooldown:GetRemainingDuration())
@@ -671,11 +669,12 @@ function FC:OnUpdate(elapsed)
     local hasActiveCast = self.casting or self.channeling or self.empowering
 
     if hasActiveCast then
+        local cooldown = self.interruptId and C_Spell.GetSpellCooldownDuration(self.interruptId) or nil
         local duration = self.castBar:GetTimerDuration()
         if duration and self.cachedDuration then
-            self:UpdateTickPosition(duration)
+            self:UpdateTickPosition(duration, cooldown)
         end
-        self:UpdateKickIndicator()
+        self:UpdateKickIndicator(cooldown)
     else
         self.kickTick:SetAlpha(0)
     end

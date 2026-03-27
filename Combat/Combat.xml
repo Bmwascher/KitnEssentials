@@ -16,4 +16,5 @@
     <Script file="DisintegrateTicks.lua" />
     <Script file="BloodlustTracker.lua" />
     <Script file="KickTracker.lua" />
+    <Script file="NoMovementAlert.lua" />
 </Ui>

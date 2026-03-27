@@ -277,20 +277,13 @@ end
 ---------------------------------------------------------------------------------
 -- Reset Boss Logic
 ---------------------------------------------------------------------------------
-function RN:GetPlayerAuraBySpellID(spellID)
-    if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
-        return C_UnitAuras.GetPlayerAuraBySpellID(spellID)
-    end
-end
+-- Cache aura API at load time
+local GetPlayerAuraBySpellID = C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID
 
 function RN:HasLustDebuff()
+    if not GetPlayerAuraBySpellID then return false end
     for _, spellID in ipairs(SATED_DEBUFFS) do
-        local aura = self:GetPlayerAuraBySpellID(spellID)
-        if aura then
-            -- Guard against secret values
-            if issecretvalue and issecretvalue(aura.spellId) then
-                return true  -- aura exists but spellId is secret, still treat as found
-            end
+        if GetPlayerAuraBySpellID(spellID) then
             return true
         end
     end
@@ -304,7 +297,7 @@ function RN:CheckResetBoss()
         return
     end
 
-    if InCombatLockdown() then
+    if InCombatLockdown() or UnitIsDeadOrGhost("player") then
         self:HideAlert("ResetBoss")
         return
     end
