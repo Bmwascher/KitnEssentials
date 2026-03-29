@@ -331,6 +331,11 @@ function KT:OnPlayerSpecChanged()
     if not guid then return end
 
     self:ApplySpecData(guid, "player", specID)
+
+    -- Re-apply position in case healer override is active
+    if self.db and self.db.UseHealerPosition then
+        self:ApplySettings()
+    end
 end
 
 -- =============================================================
@@ -554,7 +559,7 @@ function KT:CheckActivation()
         self.isActive = true
         self:RegisterCombatEvents()
         if self.containerFrame then
-            KE:ApplyFramePosition(self.containerFrame, self.db.Position, self.db)
+            KE:ApplyActivePosition(self.containerFrame, self.db)
             self.containerFrame:Show()
         end
         self:RefreshPartyRoster()
@@ -1063,7 +1068,7 @@ function KT:ShowPreview()
     self.isPreview = true
     self:HideAllBars()
 
-    KE:ApplyFramePosition(self.containerFrame, self.db.Position, self.db)
+    KE:ApplyActivePosition(self.containerFrame, self.db)
 
     -- Create 5 mock bars: 3 ready + 2 cooling
     local previewData = {
@@ -1171,12 +1176,22 @@ function KT:RegWithEditMode()
             key = "KickTracker",
             displayName = "Interrupt Tracker",
             frame = self.containerFrame,
-            getPosition = function() return self.db.Position end,
-            setPosition = function(pos)
-                self.db.Position = pos
-                KE:ApplyFramePosition(self.containerFrame, self.db.Position, self.db)
+            getPosition = function()
+                local pos = KE:GetActivePositionConfig(self.db)
+                return pos
             end,
-            getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
+            setPosition = function(pos)
+                if self.db.UseHealerPosition and KE:IsPlayerHealerSpec() then
+                    self.db.HealerPosition = pos
+                else
+                    self.db.Position = pos
+                end
+                KE:ApplyActivePosition(self.containerFrame, self.db)
+            end,
+            getParentFrame = function()
+                local _, aft, pf = KE:GetActivePositionConfig(self.db)
+                return KE:ResolveAnchorFrame(aft, pf)
+            end,
             guiPath = "KickTracker",
         })
         self.editModeRegistered = true
@@ -1239,8 +1254,7 @@ function KT:ApplySettings()
     self:UpdateDB()
     if not self.containerFrame then return end
 
-    KE:ApplyFramePosition(self.containerFrame, self.db.Position, self.db)
-    self.containerFrame:SetFrameStrata(self.db.Strata or "HIGH")
+    KE:ApplyActivePosition(self.containerFrame, self.db)
 
     -- Re-apply visuals to all active bars
     for guid, bar in pairs(self.activeBars) do

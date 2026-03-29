@@ -16,6 +16,7 @@ local GetTime = GetTime
 local string_format = string.format
 local math_floor = math.floor
 
+
 -- Module constants
 local SPELL_ID = 20484 -- Rebirth
 local UPDATE_INTERVAL = 0.1
@@ -265,6 +266,7 @@ function CR:Update()
         end
         return
     end
+
 
     local cdStart = chargeTable.cooldownStartTime
     local curCharges = chargeTable.currentCharges

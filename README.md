@@ -24,7 +24,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Cursor Circle | Cursor-following ring with GCD overlay, multiple texture options |
 | Range Display | Target range text with out-of-range color warning |
 | Focus & Target Castbar | Repositionable cast bars with kick indicators, target names, color settings, and cast sound alert (tabbed GUI) |
-| Interrupt Tracker | Party interrupt cooldown bars with class colors, dark mode, and channel kick detection |
+| Interrupt Tracker | Party interrupt cooldown bars with class colors, dark mode, channel kick detection, and healer position override |
 
 ## Utilities
 

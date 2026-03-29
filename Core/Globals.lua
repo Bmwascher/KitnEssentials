@@ -229,6 +229,33 @@ function PreviewManager:IsPreviewActive()
     return self.previewsActive
 end
 
+-- Check if the player's current spec is a healer role
+function KE:IsPlayerHealerSpec()
+    local specIndex = _G.GetSpecialization()
+    if not specIndex then return false end
+    local role = _G.GetSpecializationRole(specIndex)
+    return role == "HEALER"
+end
+
+-- Returns the active position config based on healer override state
+-- Returns: posConfig, anchorFrameType, parentFrame, strata
+function KE:GetActivePositionConfig(db)
+    if db.UseHealerPosition and self:IsPlayerHealerSpec() and db.HealerPosition then
+        return db.HealerPosition,
+               db.HealerAnchorFrameType or db.anchorFrameType,
+               db.HealerParentFrame or db.ParentFrame,
+               db.HealerStrata or db.Strata
+    end
+    return db.Position, db.anchorFrameType, db.ParentFrame, db.Strata
+end
+
+-- Convenience wrapper: resolve active position and apply it
+function KE:ApplyActivePosition(frame, db, setParent)
+    local posConfig, aft, pf, strata = self:GetActivePositionConfig(db)
+    local config = { anchorFrameType = aft, ParentFrame = pf, Strata = strata }
+    self:ApplyFramePosition(frame, posConfig, config, setParent)
+end
+
 -- Apply frame position from config
 function KE:ApplyFramePosition(frame, posConfig, Config, SetParent)
     if not frame or not posConfig then return end

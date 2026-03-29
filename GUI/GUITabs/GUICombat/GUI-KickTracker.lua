@@ -104,7 +104,60 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
         showStrata = true,
         onChangeCallback = ApplySettings,
     })
+    -- Disable standard position card when healer override is active for a healer spec
+    local isHealerActive = db.UseHealerPosition and KE.IsPlayerHealerSpec and KE:IsPlayerHealerSpec()
+    if isHealerActive then posCard:SetEnabled(false) end
     yOffset = posOffset + Theme.paddingSmall
+
+    ----------------------------------------------------------------
+    -- Card 2b: Healer Position Override
+    ----------------------------------------------------------------
+    local healerCard = GUIFrame:CreateCard(scrollChild, "Healer Position Override", yOffset)
+
+    local healerRow1 = GUIFrame:CreateRow(healerCard.content, 36)
+    local healerEnableCheck = GUIFrame:CreateCheckbox(healerRow1, "Use Healer Position",
+        db.UseHealerPosition == true,
+        function(checked)
+            db.UseHealerPosition = checked
+            ApplySettings()
+            C_Timer.After(0.05, function() GUIFrame:RefreshContent() end)
+        end)
+    healerRow1:AddWidget(healerEnableCheck, 1)
+    healerCard:AddRow(healerRow1, 36)
+
+    healerCard:AddLabel("|cff888888" .. KE:ColorTextByTheme("-") .. " Auto-swap to a separate position when playing a healer spec.|r")
+
+    yOffset = yOffset + healerCard:GetContentHeight() + Theme.paddingSmall
+
+    if db.UseHealerPosition then
+        -- Metatable wrapper so CreatePositionCard reads/writes healer keys
+        local healerDb = setmetatable({
+            Position = db.HealerPosition,
+        }, {
+            __index = function(_, k)
+                if k == "anchorFrameType" then return db.HealerAnchorFrameType
+                elseif k == "ParentFrame" then return db.HealerParentFrame
+                elseif k == "Strata" then return db.HealerStrata
+                else return db[k] end
+            end,
+            __newindex = function(t, k, v)
+                if k == "anchorFrameType" then db.HealerAnchorFrameType = v
+                elseif k == "ParentFrame" then db.HealerParentFrame = v
+                elseif k == "Strata" then db.HealerStrata = v
+                else rawset(t, k, v) end
+            end,
+        })
+
+        local _, healerPosOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+            title = "Healer Position",
+            db = healerDb,
+            dbKeys = { selfPoint = "AnchorFrom", anchorPoint = "AnchorTo", xOffset = "XOffset", yOffset = "YOffset" },
+            showAnchorFrameType = true,
+            showStrata = true,
+            onChangeCallback = ApplySettings,
+        })
+        yOffset = healerPosOffset + Theme.paddingSmall
+    end
 
     ----------------------------------------------------------------
     -- Card 3: Bar Appearance

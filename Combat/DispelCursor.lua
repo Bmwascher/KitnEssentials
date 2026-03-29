@@ -13,6 +13,7 @@ local C_SpellBook = C_SpellBook
 local ipairs = ipairs
 local UIParent = UIParent
 
+
 -- Dispel spell IDs per class
 local DISPEL_SPELL_IDS = {
     -- Healer dispels

@@ -18,6 +18,7 @@ local math_max = math.max
 local UnitChannelInfo = UnitChannelInfo
 local UnitSpellHaste = UnitSpellHaste
 
+
 -- Spell constants
 local DISINTEGRATE = 356995
 local MASS_DISINTEGRATE = 436335
