@@ -174,7 +174,7 @@ local PREVIEW_MODULES = {
     "StanceText", "CombatCross", "CombatTexts", "CombatRes",
     "CombatTimer", "PetStatusText", "DragonRiding",
     "FocusCastbar", "RaidNotifications", "HuntersMark", "RangeChecker",
-    "TimeSpiral", "DisintegrateTicks", "Recuperate", "BloodlustTracker", "KickTracker",
+    "TimeSpiral", "DisintegrateTicks", "StasisTracker", "Recuperate", "BloodlustTracker", "KickTracker",
     "NoMovementAlert",
 }
 

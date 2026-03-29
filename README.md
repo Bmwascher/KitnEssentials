@@ -35,7 +35,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Bloodlust Tracker | Animated sprite overlay + sound on Bloodlust/Heroism with 4 presets, basic icon+countdown mode, and haste detection fallback |
 | Time Spiral Tracker | Movement spell proc tracker with glow effects and cooldown spiral (all classes) |
 | Recuperate Button | One-click self-heal with configurable raid/party visibility and health-based alpha |
-| Disintegrate Castbar Ticks | Evoker channel tick marks on cast bar with Mass Disintegrate clip warning |
+| Evoker Suite | Disintegrate tick marks, Preservation Stasis spell/countdown tracker, and Augmentation Ebon Might extension warning — tabbed GUI |
 | World Marker Cycler | Cycle through world markers at cursor with drag-to-reorder priority |
 | Macro Builders | Focus Marker and Power Infusion macro builders in one tabbed GUI |
 

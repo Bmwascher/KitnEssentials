@@ -56,7 +56,7 @@ GUIFrame.sidebarConfig = {
             { id = "BloodlustTracker", text = "Bloodlust Tracker" },
             { id = "TimeSpiral",    text = "Time Spiral Tracker" },
             { id = "Recuperate",    text = "Recuperate Button" },
-            { id = "DisintegrateTicks", text = "Disintegrate Castbar Ticks" },
+            { id = "EvokerSuite",   text = "Evoker Suite" },
             { id = "WorldMarkerCycler", text = "World Marker Cycler" },
             { id = "MacroBuilders", text = "Macro Builders" },
         },
