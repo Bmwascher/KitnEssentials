@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.6.7
+### Additions
+- **Interrupt Tracker**: Healer position override — auto-swaps to a separate position/anchor when playing a healer spec. Core-level system (`KE:ApplyActivePosition`) available for future module opt-in. Enabled by default.
+
+### Fixes
+- **FocusCastbar / TargetCastbar**: Fixed `notInterruptible` secret boolean handling — separated casting/channeling checks to avoid `or` operator on secret values, added nil guard for `HideNotInterruptible` alpha toggle.
+- **NoMovementAlert**: Removed `GetSpellCooldown` secret value debug print spam.
+- Removed secret value debug prints from BloodlustTracker, CombatRes, CursorCircle, DisintegrateTicks, and DispelCursor.
+
 ## v1.6.6
 ### Fixes
 - **Raid Notifications**: Reset Boss and Loot Boss alerts now restricted to Normal/Heroic/Mythic raids only (difficulty 14-16). Previously triggered in dungeons and M+. Uses `GetInstanceInfo()` difficulty check matching NorthernSkyRaidTools reference.

@@ -15,6 +15,7 @@ local IsMouseButtonDown = IsMouseButtonDown
 local C_Spell = C_Spell
 local UIParent = UIParent
 
+
 -- GCD spell ID (standard global cooldown reference)
 local GCD_SPELL_ID = 61304
 

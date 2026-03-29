@@ -619,10 +619,16 @@ end
 -- Update interruptible state mid-cast
 function TC:UpdateInterruptible()
     if not self.frame or not self.frame:IsShown() then return end
-    local notInterruptible = select(8, UnitCastingInfo("target")) or select(7, UnitChannelInfo("target"))
+    -- notInterruptible is a secret boolean in 12.0.5 — cannot use `or` operator
+    local notInterruptible
+    if self.casting then
+        notInterruptible = select(8, UnitCastingInfo("target"))
+    else
+        notInterruptible = select(7, UnitChannelInfo("target"))
+    end
     self.notInterruptible = notInterruptible
 
-    if self.db.HideNotInterruptible then
+    if self.db.HideNotInterruptible and notInterruptible ~= nil then
         self.frame:SetAlphaFromBoolean(notInterruptible, 0, 1)
     end
 

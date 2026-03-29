@@ -523,7 +523,13 @@ local Defaults = {
             Strata = "MEDIUM",
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
-            Position = DefaultPosition(-650, 65),
+            Position = DefaultPosition(-650, 105),
+            -- Healer position override
+            UseHealerPosition = true,
+            HealerPosition = DefaultPosition(-650, 65),
+            HealerAnchorFrameType = "UIPARENT",
+            HealerParentFrame = "UIParent",
+            HealerStrata = "MEDIUM",
             -- Bar appearance
             BarWidth = 209,
             BarHeight = 27,
