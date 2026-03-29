@@ -14,6 +14,8 @@
     <Script file="DispelCursor.lua" />
     <Script file="TimeSpiral.lua" />
     <Script file="DisintegrateTicks.lua" />
+    <Script file="StasisTracker.lua" />
+    <Script file="EbonMightHelper.lua" />
     <Script file="BloodlustTracker.lua" />
     <Script file="KickTracker.lua" />
     <Script file="NoMovementAlert.lua" />

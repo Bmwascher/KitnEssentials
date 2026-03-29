@@ -387,6 +387,32 @@ local Defaults = {
             Position = DefaultPosition(0, -50),
         },
 
+        StasisTracker = {
+            Enabled = false,
+            Strata = "HIGH",
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            Position = DefaultPosition(0, -60),
+            GrowthDirection = "Horizontal",
+            BarSide = "start",
+            IconSize = 40,
+            IconSpacing = 2,
+            BarHeight = 15,
+            BarTexture = "KitnUI",
+            ColorMode = "custom",
+            Color = { 0.2, 0.5, 0.4, 1 },
+            BarBackgroundColor = { 0, 0, 0, 0.8 },
+            FontSize = 14,
+            FontFace = "Expressway",
+            FontOutline = "OUTLINE",
+        },
+
+        EbonMightHelper = {
+            Enabled = false,
+            SoundFile = "None",
+            SoundChannel = "Master",
+        },
+
         ----------------------------------------------------------------
         -- QOL MODULES
         ----------------------------------------------------------------

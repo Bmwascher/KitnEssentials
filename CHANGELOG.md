@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.6.8
+### Additions
+- **Stasis Tracker**: Preservation Evoker module — displays stored spell icons and a 30-second countdown bar during Stasis. Configurable icon size, spacing, growth direction (horizontal/vertical), bar side, bar color mode, and font settings.
+- **Ebon Might Helper**: Augmentation Evoker module — plays a warning sound when casting an extender spell (Eruption, Fire Breath, Upheaval) that won't refresh Ebon Might. Smart polling handles mid-cast haste changes. Configurable sound and channel.
+- **Evoker Suite**: Combined Disintegrate Ticks, Stasis Tracker, and Ebon Might Helper into a single tabbed GUI page under Utilities.
+
 ## v1.6.7
 ### Additions
 - **Interrupt Tracker**: Healer position override — auto-swaps to a separate position/anchor when playing a healer spec. Core-level system (`KE:ApplyActivePosition`) available for future module opt-in. Enabled by default.
