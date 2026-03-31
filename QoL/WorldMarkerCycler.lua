@@ -14,6 +14,12 @@ local CreateFrame = CreateFrame
 local string_format = string.format
 
 --------------------------------------------------------------------------------
+-- NOTE: Blizzard limits world marker placement/clearing to 3 per second.
+-- Markers beyond that rate are silently dropped. This is a server-side
+-- restriction and cannot be bypassed.
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
 -- Secure buttons (created at file scope — must exist before combat)
 --------------------------------------------------------------------------------
 local cycleBtn = CreateFrame("Button", "KE_WorldMarkerCycleBtn", nil, "SecureActionButtonTemplate")

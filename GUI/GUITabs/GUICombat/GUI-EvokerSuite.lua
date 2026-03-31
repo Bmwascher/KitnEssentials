@@ -22,12 +22,13 @@ local function BuildTabBar(scrollChild, yOffset)
     tabRow:SetPoint("TOPRIGHT", scrollChild, "TOPRIGHT", -T.paddingSmall, -yOffset)
 
     local tabs = {
-        { id = "DisintegrateTicks", label = "Disintegrate Ticks" },
-        { id = "StasisTracker",     label = "Stasis Tracker" },
-        { id = "EbonMightHelper",   label = "Ebon Might Helper" },
+        { id = "DisintegrateTicks", label = "Disintegrate" },
+        { id = "StasisTracker",     label = "Stasis" },
+        { id = "EbonMightHelper",   label = "Ebon Might" },
+        { id = "AugBuffsTracker",   label = "Aug Buffs" },
     }
 
-    local tabWidth = 170
+    local tabWidth = 128
     local spacing = 4
 
     for i, def in ipairs(tabs) do

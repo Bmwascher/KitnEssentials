@@ -100,19 +100,15 @@ function DC:CreateFrame()
     frame.cooldownText = cooldownText
 
     -- Update cooldown when it changes
+    -- v1.4 upstream pattern: GetSpellCooldownDuration replaces GetSpellCooldown
     local function UpdateCooldown()
         if not DC.trackedSpellId then
             cooldownFrame:Clear()
             return
         end
-        local cdInfo = C_Spell.GetSpellCooldown(DC.trackedSpellId)
-        if cdInfo and cdInfo.isActive then
-            local duration = C_Spell.GetSpellCooldownDuration(DC.trackedSpellId)
-            if duration then
-                cooldownFrame:SetCooldownFromDurationObject(duration)
-            else
-                cooldownFrame:Clear()
-            end
+        local duration = C_Spell.GetSpellCooldownDuration(DC.trackedSpellId)
+        if duration then
+            cooldownFrame:SetCooldownFromDurationObject(duration, false)
         else
             cooldownFrame:Clear()
         end
