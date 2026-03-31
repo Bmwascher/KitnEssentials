@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.6.9
+### Additions
+- New module: **Aug Buffs Tracker** — Tracks Prescience and Shifting Sands on party/raid members for Augmentation Evoker. Shows buff icon, countdown timer, role badge, and player name per tracked target. Configurable horizontal/vertical stacking, icon size, separate name/timer font settings, class-colored names, crit color for Prescience. Added as 4th tab in Evoker Suite.
+- **Raid Notifications**: Loot Boss save detection — uses `C_EncounterJournal.IsEncounterComplete` to suppress "LOOT BOSS" alert when player is already saved to the boss (pre-cached on zone-in, compared on encounter end).
+
+### Fixes
+- **Aug Buffs Tracker**: Combat-safe aura handling — processes `addedAuras` event payload directly (non-secret), guards `isFullUpdate` and `updatedAuraInstanceIDs` paths against tainted API returns in combat, `issecretvalue` guards on `expirationTime` and `points` table.
+
 ## v1.6.8
 ### Additions
 - **Stasis Tracker**: Preservation Evoker module — displays stored spell icons and a 30-second countdown bar during Stasis. Configurable icon size, spacing, growth direction (horizontal/vertical), bar side, bar color mode, and font settings.

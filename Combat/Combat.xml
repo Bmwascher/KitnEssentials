@@ -19,4 +19,5 @@
     <Script file="BloodlustTracker.lua" />
     <Script file="KickTracker.lua" />
     <Script file="NoMovementAlert.lua" />
+    <Script file="AugBuffsTracker.lua" />
 </Ui>
