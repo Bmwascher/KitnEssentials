@@ -137,10 +137,23 @@ function ABT:ScanAllUnits()
 
     if not self.isAugSpec and not self.isPreview then return end
 
-    -- Scan player
-    self:ScanUnit("player")
+    self:ScanRoster()
+    self:SyncEntries()
+    self:LayoutEntries()
+end
 
-    -- Scan party/raid
+-- Additive re-scan: check all roster units without wiping existing data.
+-- Matching reference FullRaidCheck: just scans and adds, safe to call in combat.
+function ABT:RescanRoster()
+    if not self.isAugSpec then return end
+    self:ScanRoster()
+    self:SyncEntries()
+    self:LayoutEntries()
+end
+
+-- Shared roster iteration for both full and additive scans
+function ABT:ScanRoster()
+    self:ScanUnit("player")
     local size = GetNumGroupMembers()
     if size > 0 then
         local token = IsInRaid() and "raid" or "party"
@@ -151,27 +164,22 @@ function ABT:ScanAllUnits()
             end
         end
     end
-
-    self:SyncEntries()
-    self:LayoutEntries()
 end
 
 function ABT:AddTrackedBuff(unit, aura, spellID)
     if not aura.auraInstanceID then return end
-    -- Guard against secret applications
-    if issecretvalue and aura.applications and issecretvalue(aura.applications) then return end
+
+    -- Guard: if expirationTime is secret (API call in combat), skip — can't track timer
+    if aura.expirationTime and issecretvalue(aura.expirationTime) then return end
 
     local name = UnitName(unit) or "?"
     local role = UnitGroupRolesAssigned(unit) or "NONE"
     local _, classToken = UnitClass(unit)
 
-    -- Skip if expirationTime is secret (can't track timer)
-    if aura.expirationTime and issecretvalue and issecretvalue(aura.expirationTime) then return end
-
     -- Prescience crit detection (matching reference: aura.points[1] == 6)
     local isCrit = false
-    if spellID == PRESCIENCE_ID and aura.points and not (issecretvalue and issecretvalue(aura.points)) then
-        isCrit = aura.points[1] == 6
+    if aura.points and not issecretvalue(aura.points) then
+        isCrit = aura.points[1] == 6 and spellID == PRESCIENCE_ID
     end
 
     self.trackedBuffs[aura.auraInstanceID] = {
@@ -208,24 +216,20 @@ function ABT:OnUnitAura(_, unit, info)
     local changed = false
 
     if info.isFullUpdate then
-        -- Full update: remove + re-scan this unit
-        -- Skip in combat: ScanUnit uses GetAuraDataBySpellName which returns nil when tainted
         if not InCombatLockdown() then
             for id, data in pairs(self.trackedBuffs) do
                 if data.unit == unit then
                     self.trackedBuffs[id] = nil
-                    changed = true
                 end
             end
             self:ScanUnit(unit)
             changed = true
         end
     else
-        -- Incremental update: process event payload directly (no API calls needed)
+        -- Incremental update: process event payload directly
         if info.addedAuras then
             for _, aura in ipairs(info.addedAuras) do
-                -- Guard only applications (matching reference: issecretvalue(aura.applications))
-                if not (issecretvalue and issecretvalue(aura.applications)) then
+                if not issecretvalue(aura.applications) then
                     local def = BUFF_DEFS[aura.spellId]
                     if def and self.db[def.key] ~= false and aura.sourceUnit == "player" then
                         self:AddTrackedBuff(unit, aura, aura.spellId)
@@ -238,12 +242,16 @@ function ABT:OnUnitAura(_, unit, info)
 
         if info.updatedAuraInstanceIDs then
             for _, instanceID in ipairs(info.updatedAuraInstanceIDs) do
-                if self.trackedBuffs[instanceID] then
+                local tracked = self.trackedBuffs[instanceID]
+                if tracked and tracked.unit == unit then
                     local aura = C_UnitAuras.GetAuraDataByAuraInstanceID(unit, instanceID)
-                    if aura and aura.expirationTime and not (issecretvalue and issecretvalue(aura.expirationTime)) then
-                        self.trackedBuffs[instanceID].expirationTime = aura.expirationTime
-                        self.trackedBuffs[instanceID].duration = aura.duration or 0
-                        changed = true
+                    if aura then
+                        if not issecretvalue(aura.expirationTime) then
+                            tracked.expirationTime = aura.expirationTime
+                            tracked.duration = aura.duration or 0
+                            tracked.isCrit = aura.points and aura.points[1] == 6 and aura.spellId == PRESCIENCE_ID
+                            changed = true
+                        end
                     end
                 end
             end
@@ -251,7 +259,10 @@ function ABT:OnUnitAura(_, unit, info)
 
         if info.removedAuraInstanceIDs then
             for _, instanceID in ipairs(info.removedAuraInstanceIDs) do
-                if self.trackedBuffs[instanceID] then
+                -- Match reference: check BOTH instanceID AND unit before removing.
+                -- Aura instance IDs are per-unit, not global — different units can share the same ID.
+                local data = self.trackedBuffs[instanceID]
+                if data and data.unit == unit then
                     self:RemoveTrackedBuff(instanceID)
                     changed = true
                 end
@@ -422,12 +433,8 @@ function ABT:LayoutEntries()
     if not self.containerFrame then return end
 
     local db = self.db
-    local isVertical = db.StackDirection == "VERTICAL"
     local spacing = db.Spacing or 4
-    local iconSize = db.IconSize or 32
     local maxEntries = db.MaxEntries or 6
-    local nameHeight = (db.ShowNames ~= false) and (db.NameFontSize + 4) or 0
-    local entrySize = iconSize + nameHeight
 
     -- Build sorted list: Prescience first, then Shifting Sands
     wipe(self.sortedEntries)
@@ -456,34 +463,42 @@ function ABT:LayoutEntries()
     for _, e in ipairs(presEntries) do table_insert(self.sortedEntries, e) end
     for _, e in ipairs(sandEntries) do table_insert(self.sortedEntries, e) end
 
+    -- Growth direction — chain entries to each other so container resize doesn't shift them.
+    -- Container stays 1x1 as a stable anchor point (KE position system anchors from CENTER).
+    local growth = db.GrowthDirection or "DOWN"
+
+    -- Anchor maps: [growth] = { firstPoint, firstRelPoint, chainPoint, chainRelPoint, xMul, yMul }
+    local anchors = {
+        DOWN  = { "TOP",    "TOP",    "TOP",    "BOTTOM", 0, -spacing },
+        UP    = { "BOTTOM", "BOTTOM", "BOTTOM", "TOP",    0,  spacing },
+        RIGHT = { "LEFT",   "LEFT",   "LEFT",   "RIGHT",  spacing, 0 },
+        LEFT  = { "RIGHT",  "RIGHT",  "RIGHT",  "LEFT",  -spacing, 0 },
+    }
+    local a = anchors[growth] or anchors.DOWN
+
     -- Position entries
     local count = 0
+    local prevEntry = nil
     for i, sorted in ipairs(self.sortedEntries) do
         if i > maxEntries then
             sorted.entry:Hide()
         else
             sorted.entry:ClearAllPoints()
-            local offset = count * (isVertical and (entrySize + spacing) or (iconSize + spacing))
-            if isVertical then
-                sorted.entry:SetPoint("TOPLEFT", self.containerFrame, "TOPLEFT", 0, -offset)
+            if not prevEntry then
+                -- First entry anchors to container
+                sorted.entry:SetPoint(a[1], self.containerFrame, a[2], 0, 0)
             else
-                sorted.entry:SetPoint("TOPLEFT", self.containerFrame, "TOPLEFT", offset, 0)
+                -- Subsequent entries chain to previous
+                sorted.entry:SetPoint(a[3], prevEntry, a[4], a[5], a[6])
             end
             sorted.entry:Show()
+            prevEntry = sorted.entry
             count = count + 1
         end
     end
 
-    -- Resize container for EditMode
-    if count > 0 then
-        if isVertical then
-            self.containerFrame:SetSize(iconSize, count * (entrySize + spacing) - spacing)
-        else
-            self.containerFrame:SetSize(count * (iconSize + spacing) - spacing, entrySize)
-        end
-    else
-        self.containerFrame:SetSize(iconSize, entrySize)
-    end
+    -- Keep container at 1x1 — it's just a drag anchor for EditMode
+    self.containerFrame:SetSize(1, 1)
 end
 
 ---------------------------------------------------------------------------------
@@ -536,14 +551,12 @@ function ABT:UpdateTimers()
         self:LayoutEntries()
     end
 
-    -- If no tracked buffs, do a full scan (detect newly cast buffs)
-    -- Skip in combat — API returns nil due to taint
-    if not InCombatLockdown() then
-        local hasAny = false
-        for _ in pairs(self.trackedBuffs) do hasAny = true; break end
-        if not hasAny then
-            self:ScanAllUnits()
-        end
+    -- If no tracked buffs, try to re-detect via additive scan (doesn't wipe first).
+    -- Matching reference: FullRaidCheck runs regardless of combat state.
+    local hasAny = false
+    for _ in pairs(self.trackedBuffs) do hasAny = true; break end
+    if not hasAny then
+        self:RescanRoster()
     end
 end
 

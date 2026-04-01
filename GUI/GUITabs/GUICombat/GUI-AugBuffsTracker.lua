@@ -138,52 +138,69 @@ GUIFrame:RegisterContent("AugBuffsTracker", function(scrollChild, yOffset)
     row3a:AddWidget(dirDropdown, 0.5)
     table_insert(allWidgets, dirDropdown)
 
-    local maxSlider = GUIFrame:CreateSlider(row3a, "Max Entries", 1, 20, 1, db.MaxEntries or 6, 50,
+    local growthOptions = {
+        { key = "DOWN", text = "Down" },
+        { key = "UP", text = "Up" },
+        { key = "RIGHT", text = "Right" },
+        { key = "LEFT", text = "Left" },
+    }
+    local growthDropdown = GUIFrame:CreateDropdown(row3a, "Growth Direction", growthOptions, db.GrowthDirection or "DOWN", 45,
+        function(key)
+            db.GrowthDirection = key
+            ApplySettings()
+        end)
+    row3a:AddWidget(growthDropdown, 0.5)
+    table_insert(allWidgets, growthDropdown)
+    card3:AddRow(row3a, 40)
+
+    -- Max Entries
+    local row3b = GUIFrame:CreateRow(card3.content, 40)
+    local maxSlider = GUIFrame:CreateSlider(row3b, "Max Entries", 1, 20, 1, db.MaxEntries or 6, 50,
         function(val)
             db.MaxEntries = val
             ApplySettings()
         end)
-    row3a:AddWidget(maxSlider, 0.5)
+    row3b:AddWidget(maxSlider, 0.5)
     table_insert(allWidgets, maxSlider)
-    card3:AddRow(row3a, 40)
+    card3:AddRow(row3b, 40)
 
     -- Icon Size + Spacing
-    local row3b = GUIFrame:CreateRow(card3.content, 40)
-    local iconSlider = GUIFrame:CreateSlider(row3b, "Icon Size", 16, 64, 2, db.IconSize or 32, 50,
+    local row3c = GUIFrame:CreateRow(card3.content, 40)
+    local iconSlider = GUIFrame:CreateSlider(row3c, "Icon Size", 16, 64, 2, db.IconSize or 32, 50,
         function(val)
             db.IconSize = val
             ApplySettings()
         end)
-    row3b:AddWidget(iconSlider, 0.5)
+    row3c:AddWidget(iconSlider, 0.5)
     table_insert(allWidgets, iconSlider)
 
-    local spacingSlider = GUIFrame:CreateSlider(row3b, "Spacing", 0, 20, 1, db.Spacing or 4, 50,
+    local spacingSlider = GUIFrame:CreateSlider(row3c, "Spacing", 0, 20, 1, db.Spacing or 4, 50,
         function(val)
             db.Spacing = val
             ApplySettings()
         end)
-    row3b:AddWidget(spacingSlider, 0.5)
+    row3c:AddWidget(spacingSlider, 0.5)
     table_insert(allWidgets, spacingSlider)
-    card3:AddRow(row3b, 40)
+    card3:AddRow(row3c, 40)
 
     -- Show Role Icons + Role Icon Scale
-    local row3c = GUIFrame:CreateRow(card3.content, 40)
-    local roleCheck = GUIFrame:CreateCheckbox(row3c, "Show Role Icons", db.ShowRoleIcon ~= false,
+    local row3d = GUIFrame:CreateRow(card3.content, 40)
+    local roleCheck = GUIFrame:CreateCheckbox(row3d, "Show Role Icons", db.ShowRoleIcon ~= false,
         function(checked)
             db.ShowRoleIcon = checked
             ApplySettings()
         end)
-    row3c:AddWidget(roleCheck, 0.4)
+    row3d:AddWidget(roleCheck, 0.4)
     table_insert(allWidgets, roleCheck)
 
-    local roleScaleSlider = GUIFrame:CreateSlider(row3c, "Role Icon Scale", 0.5, 3.0, 0.1, db.RoleIconScale or 1.0, 50,
+    local roleScaleSlider = GUIFrame:CreateSlider(row3d, "Role Icon Scale", 0.5, 3.0, 0.1, db.RoleIconScale or 1.0, 50,
         function(val)
             db.RoleIconScale = val
             ApplySettings()
         end)
-    row3c:AddWidget(roleScaleSlider, 0.6)
+    row3d:AddWidget(roleScaleSlider, 0.6)
     table_insert(allWidgets, roleScaleSlider)
-    card3:AddRow(row3c, 40)
+    card3:AddRow(row3d, 40)
 
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 

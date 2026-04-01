@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.7.1
+### Additions
+- **Aug Buffs Tracker**: Growth Direction setting — entries can grow Down, Up, Left, or Right from the anchor point. Chain-anchor layout prevents frame resize from shifting entries.
+
+### Fixes
+- **Aug Buffs Tracker**: Fixed entries randomly disappearing in combat — `removedAuraInstanceIDs` now checks both instance ID and unit token before removing (aura instance IDs are per-unit, not global; cross-unit ID collisions caused false removals in raids). Additive re-scan in ticker (no wipe) for combat recovery. Secret value guards restored on `expirationTime` and `aura.points` in `AddTrackedBuff`.
+- **Raid Notifications**: Removed Loot Boss save detection (unreliable encounter ID mapping).
+
 ## v1.7.0
 ### Additions
 - **GUI Sidebar Search** — Real-time search bar at the top of the sidebar. Filters modules by name as you type, hides non-matching sections, force-expands matching sections, shows "No results found" for empty queries. Clear button (X) and ESC to reset. Search clears automatically on GUI close. Theme-aware colors.
