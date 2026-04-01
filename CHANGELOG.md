@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.7.3
+### Fixes
+- **GUI**: Smooth mousewheel scrolling — content area (40px/tick) and sidebar (30px/tick) now scroll incrementally instead of jumping top-to-bottom. Added `EnableMouseWheel` and `OnMouseWheel` handlers matching the dropdown widget pattern.
+- **Aug Buffs Tracker**: Edit mode overlay now correctly matches entry bounds using KickTracker's edge-anchor resize pattern.
+
 ## v1.7.2
 ### Additions
 - **Aug Buffs Tracker**: Name truncation — "Max Characters" slider (0 = full name) to shorten long player names.
