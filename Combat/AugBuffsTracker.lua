@@ -468,42 +468,47 @@ function ABT:LayoutEntries()
     for _, e in ipairs(presEntries) do table_insert(self.sortedEntries, e) end
     for _, e in ipairs(sandEntries) do table_insert(self.sortedEntries, e) end
 
-    -- Growth direction — chain entries to each other so container resize doesn't shift them.
-    -- Container stays 1x1 as a stable anchor point (KE position system anchors from CENTER).
+    -- Growth direction — same pattern as KickTracker: entries anchor to the
+    -- container's edge, container resizes to fit. Position system anchors from
+    -- CENTER so the block shifts slightly when entry count changes — this is
+    -- normal and matches KickTracker behavior.
     local growth = db.GrowthDirection or "DOWN"
+    local iconSize = db.IconSize or 32
+    local nameHeight = (db.ShowNames ~= false) and ((db.NameFontSize or 12) + 4) or 0
+    local entryH = iconSize + nameHeight
 
-    -- Anchor maps: [growth] = { firstPoint, firstRelPoint, chainPoint, chainRelPoint, xMul, yMul }
-    local anchors = {
-        DOWN  = { "TOP",    "TOP",    "TOP",    "BOTTOM", 0, -spacing },
-        UP    = { "BOTTOM", "BOTTOM", "BOTTOM", "TOP",    0,  spacing },
-        RIGHT = { "LEFT",   "LEFT",   "LEFT",   "RIGHT",  spacing, 0 },
-        LEFT  = { "RIGHT",  "RIGHT",  "RIGHT",  "LEFT",  -spacing, 0 },
-    }
-    local a = anchors[growth] or anchors.DOWN
-
-    -- Position entries
+    -- Position entries with offset from container edge
     local count = 0
-    local prevEntry = nil
     for i, sorted in ipairs(self.sortedEntries) do
         if i > maxEntries then
             sorted.entry:Hide()
         else
             sorted.entry:ClearAllPoints()
-            if not prevEntry then
-                -- First entry anchors to container
-                sorted.entry:SetPoint(a[1], self.containerFrame, a[2], 0, 0)
-            else
-                -- Subsequent entries chain to previous
-                sorted.entry:SetPoint(a[3], prevEntry, a[4], a[5], a[6])
+            local step = (i - 1) * (entryH + spacing)
+            local stepH = (i - 1) * (iconSize + spacing)
+
+            if growth == "DOWN" then
+                sorted.entry:SetPoint("TOPLEFT", self.containerFrame, "TOPLEFT", 0, -step)
+            elseif growth == "UP" then
+                sorted.entry:SetPoint("BOTTOMLEFT", self.containerFrame, "BOTTOMLEFT", 0, step)
+            elseif growth == "RIGHT" then
+                sorted.entry:SetPoint("TOPLEFT", self.containerFrame, "TOPLEFT", stepH, 0)
+            elseif growth == "LEFT" then
+                sorted.entry:SetPoint("TOPRIGHT", self.containerFrame, "TOPRIGHT", -stepH, 0)
             end
+
             sorted.entry:Show()
-            prevEntry = sorted.entry
             count = count + 1
         end
     end
 
-    -- Keep container at 1x1 — it's just a drag anchor for EditMode
-    self.containerFrame:SetSize(1, 1)
+    -- Resize container to fit content (EditMode overlay uses SetAllPoints)
+    local visibleCount = math.max(count, 1)
+    if growth == "DOWN" or growth == "UP" then
+        self.containerFrame:SetSize(iconSize, visibleCount * (entryH + spacing) - spacing)
+    else
+        self.containerFrame:SetSize(visibleCount * (iconSize + spacing) - spacing, entryH)
+    end
 end
 
 ---------------------------------------------------------------------------------

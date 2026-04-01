@@ -145,6 +145,21 @@ function GUIFrame:CreateContentArea(parent)
         sb:SetAlpha(0)
     end
 
+    -- Smooth mousewheel scrolling
+    local SCROLL_STEP = 40
+    scrollFrame:EnableMouseWheel(true)
+    scrollFrame:SetScript("OnMouseWheel", function(_, delta)
+        if scrollFrame.ScrollBar then
+            local sb = scrollFrame.ScrollBar
+            local current = sb:GetValue()
+            local minVal, maxVal = sb:GetMinMaxValues()
+            local newValue = current - (delta * SCROLL_STEP)
+            if newValue < minVal then newValue = minVal end
+            if newValue > maxVal then newValue = maxVal end
+            sb:SetValue(newValue)
+        end
+    end)
+
     -- Scroll child
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
     scrollChild:SetHeight(1)
