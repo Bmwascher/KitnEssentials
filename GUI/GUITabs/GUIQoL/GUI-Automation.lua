@@ -213,6 +213,47 @@ GUIFrame:RegisterContent("Automation", function(scrollChild, yOffset)
     yOffset = yOffset + card7:GetContentHeight() + Theme.paddingSmall
 
     ----------------------------------------------------------------
+    -- Card 8: Vantus Rune Withdrawer
+    ----------------------------------------------------------------
+    local vrDB = KE.db and KE.db.profile.VantusRune
+    if vrDB then
+        local VR = KitnEssentials and KitnEssentials:GetModule("VantusRune", true)
+
+        local function ApplyVRState(enabled)
+            if not VR then return end
+            vrDB.Enabled = enabled
+            if enabled then KitnEssentials:EnableModule("VantusRune")
+            else KitnEssentials:DisableModule("VantusRune") end
+        end
+
+        local card8 = GUIFrame:CreateCard(scrollChild, "Vantus Rune Withdrawer", yOffset)
+        table_insert(allWidgets, card8)
+
+        local row8a = GUIFrame:CreateRow(card8.content, 40)
+        local vrEnableCheck = GUIFrame:CreateCheckbox(row8a, "Enable Vantus Rune", vrDB.Enabled ~= false,
+            function(checked) ApplyVRState(checked) end)
+        row8a:AddWidget(vrEnableCheck, 0.5)
+        table_insert(allWidgets, vrEnableCheck)
+
+        local vrChatCheck = GUIFrame:CreateCheckbox(row8a, "Show Chat Messages", vrDB.ShowChatMessages ~= false,
+            function(checked) vrDB.ShowChatMessages = checked end)
+        row8a:AddWidget(vrChatCheck, 0.5)
+        table_insert(allWidgets, vrChatCheck)
+        card8:AddRow(row8a, 40)
+
+        local row8b = GUIFrame:CreateRow(card8.content, 40)
+        local vrTimeoutSlider = GUIFrame:CreateSlider(row8b, "Confirm Timeout", 5, 30, 1, vrDB.ConfirmationTimeout or 15, 50,
+            function(val) vrDB.ConfirmationTimeout = val end)
+        row8b:AddWidget(vrTimeoutSlider, 0.5)
+        table_insert(allWidgets, vrTimeoutSlider)
+        card8:AddRow(row8b, 40)
+
+        card8:AddLabel("|cff888888Adds a button to the Guild Bank to withdraw one Vantus Rune.\nPriority: Radiant Gold (245880) > Radiant Silver (245879).|r")
+
+        yOffset = yOffset + card8:GetContentHeight() + Theme.paddingSmall
+    end
+
+    ----------------------------------------------------------------
     UpdateAllWidgetStates()
     yOffset = yOffset - (Theme.paddingSmall * 2)
     return yOffset

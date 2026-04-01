@@ -65,6 +65,7 @@
     <Script file="GUITabs\GUIQoL\GUI-PIMacroBuilder.lua" />
     <Script file="GUITabs\GUIQoL\GUI-FocusMarker.lua" />
     <Script file="GUITabs\GUIQoL\GUI-MacroBuilders.lua" />
+    <Script file="GUITabs\GUIQoL\GUI-GreatVaultAlert.lua" />
 
     <!-- Skinning tabs -->
     <Script file="GUITabs\GUISkinning\GUI-Tooltips.lua" />

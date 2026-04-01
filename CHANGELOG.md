@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.8.0
+### Additions
+- New module: **Great Vault Spec Alert** — Shows your loot specialization with class color and spec icon when opening the Great Vault. Configurable sound, chat message, alert duration, font, and position. Located in Quality of Life sidebar.
+- New module: **Vantus Rune Withdrawer** — Adds a button to the Guild Bank to withdraw one Vantus Rune by priority (Radiant Gold > Radiant Silver). Pre-flight checks for existing rune, bag space, and withdrawal limits. Confirmation popup with countdown timer. Verified withdrawal with cross-realm failure detection. Located as a card in the Automation page.
+
 ## v1.7.3
 ### Fixes
 - **GUI**: Smooth mousewheel scrolling — content area (40px/tick) and sidebar (30px/tick) now scroll incrementally instead of jumping top-to-bottom. Added `EnableMouseWheel` and `OnMouseWheel` handlers matching the dropdown widget pattern.

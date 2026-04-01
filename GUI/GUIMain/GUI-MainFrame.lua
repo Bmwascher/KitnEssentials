@@ -76,6 +76,7 @@ GUIFrame.sidebarConfig = {
             { id = "DragonRiding",  text = "Dragon Riding UI" },
             { id = "CopyAnything",  text = "Copy Anything" },
             { id = "HideBars",      text = "Hide ActionBars" },
+            { id = "GreatVaultAlert", text = "Great Vault Alert" },
         },
     },
     {

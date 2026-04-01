@@ -52,6 +52,8 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Dragon Riding UI | Reskinned dragonriding vigor bar |
 | Copy Anything | Copy any chat message or tooltip text |
 | Hide ActionBars | Hide specific action bar rows in/out of combat |
+| Great Vault Alert | Shows your loot spec when opening the Great Vault with class color and sound |
+| Vantus Rune | One-click Vantus Rune withdrawal from Guild Bank with priority and confirmation |
 
 ## Skinning
 
