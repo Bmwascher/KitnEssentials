@@ -553,6 +553,7 @@ local Defaults = {
             ShowPrescience = true,
             ShowShiftingSands = false,
             StackDirection = "VERTICAL",
+            GrowthDirection = "DOWN",
             MaxEntries = 6,
             IconSize = 32,
             Spacing = 4,

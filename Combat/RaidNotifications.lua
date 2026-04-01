@@ -15,10 +15,8 @@ local IsUsableItem = C_Item.IsUsableItem
 local GetItemCount = C_Item.GetItemCount
 local GetItemInfo = C_Item.GetItemInfo
 local CreateFrame = CreateFrame
-local GetTime = GetTime
 local InCombatLockdown = InCombatLockdown
 local GetInstanceInfo = GetInstanceInfo
-local issecretvalue = issecretvalue
 
 -- Check if player is in a Normal/Heroic/Mythic raid (difficultyID 14-16)
 local function IsInRaidInstance()
@@ -68,8 +66,6 @@ RN.wasUsable = nil
 RN.resetBossGen = 0
 RN.lootBossGen = 0
 
--- Loot Boss save detection cache
-RN.savedEncounterCount = 0
 
 ---------------------------------------------------------------------------------
 -- UpdateDB / Migration
@@ -249,11 +245,6 @@ end
 ---------------------------------------------------------------------------------
 function RN:OnZoneChange()
     self:GatewayFullUpdate()
-    -- Cache saved encounters for loot boss detection (0.5s delay for instance info to settle)
-    C_Timer.After(0.5, function()
-        if not self.db or not self.db.Enabled then return end
-        self:CacheSavedEncounters()
-    end)
 end
 
 ---------------------------------------------------------------------------------
@@ -369,61 +360,11 @@ end
 ---------------------------------------------------------------------------------
 -- Loot Boss Logic
 ---------------------------------------------------------------------------------
--- Cache how many encounters are completed on the current map
--- Uses C_EncounterJournal APIs (work in combat, confirmed non-secret)
-function RN:CacheSavedEncounters()
-    local uiMapID = C_Map and C_Map.GetBestMapForUnit and C_Map.GetBestMapForUnit("player")
-    if not uiMapID then
-        self.savedEncounterCount = 0
-        return
-    end
-
-    local encounters = C_EncounterJournal and C_EncounterJournal.GetEncountersOnMap
-        and C_EncounterJournal.GetEncountersOnMap(uiMapID)
-    if not encounters then
-        self.savedEncounterCount = 0
-        return
-    end
-
-    local count = 0
-    for _, enc in ipairs(encounters) do
-        if C_EncounterJournal.IsEncounterComplete(enc.encounterID) then
-            count = count + 1
-        end
-    end
-    self.savedEncounterCount = count
-end
-
--- Check if a new boss was saved since last cache (player got new loot)
-function RN:IsNewBossKill()
-    local uiMapID = C_Map and C_Map.GetBestMapForUnit and C_Map.GetBestMapForUnit("player")
-    if not uiMapID then return true end  -- can't determine, show alert to be safe
-
-    local encounters = C_EncounterJournal and C_EncounterJournal.GetEncountersOnMap
-        and C_EncounterJournal.GetEncountersOnMap(uiMapID)
-    if not encounters then return true end
-
-    local count = 0
-    for _, enc in ipairs(encounters) do
-        if C_EncounterJournal.IsEncounterComplete(enc.encounterID) then
-            count = count + 1
-        end
-    end
-
-    local isNew = count > self.savedEncounterCount
-    KE:Print("Loot Boss check: cached=" .. self.savedEncounterCount .. " now=" .. count .. " new=" .. tostring(isNew))
-    self.savedEncounterCount = count  -- update cache
-    return isNew
-end
-
 function RN:OnEncounterEnd(_, encounterID, encounterName, difficultyID, groupSize, success)
     if not self.db.Enabled or self.isPreview then return end
     if self.db.LootBossEnabled == false then return end
     if success ~= 1 then return end
     if not IsInRaidInstance() then return end
-
-    -- Check if this is a new kill (not already saved) before showing alert
-    if not self:IsNewBossKill() then return end
 
     self:ShowAlert("LootBoss")
 
