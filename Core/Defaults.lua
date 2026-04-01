@@ -717,6 +717,28 @@ local Defaults = {
             Position = DefaultPosition(0, -90),
         },
 
+        GreatVaultAlert = {
+            Enabled = true,
+            PlaySound = true,
+            SoundFile = "None",
+            SoundChannel = "Master",
+            ShowChatMessage = true,
+            FontSize = 32,
+            FontFace = "Expressway",
+            FontOutline = "OUTLINE",
+            AlertDuration = 4,
+            Strata = "HIGH",
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            Position = DefaultPosition(0, 200),
+        },
+
+        VantusRune = {
+            Enabled = true,
+            ShowChatMessages = true,
+            ConfirmationTimeout = 15,
+        },
+
         ----------------------------------------------------------------
         -- SKINNING MODULES (disabled when ElvUI active)
         ----------------------------------------------------------------

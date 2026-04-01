@@ -15,4 +15,6 @@
     <Script file="AuctionHouseFilter.lua" />
     <Script file="PIMacroBuilder.lua" />
     <Script file="FocusMarker.lua" />
+    <Script file="GreatVaultAlert.lua" />
+    <Script file="VantusRune.lua" />
 </Ui>
