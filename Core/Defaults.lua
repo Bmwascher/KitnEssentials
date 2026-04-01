@@ -561,6 +561,7 @@ local Defaults = {
             RoleIconScale = 1.0,
             ShowNames = true,
             ClassColorNames = false,
+            NameMaxLength = 0,
             NameFontFace = "Expressway",
             NameFontSize = 12,
             NameFontOutline = "OUTLINE",

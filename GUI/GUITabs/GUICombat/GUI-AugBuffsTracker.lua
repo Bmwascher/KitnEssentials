@@ -124,20 +124,8 @@ GUIFrame:RegisterContent("AugBuffsTracker", function(scrollChild, yOffset)
     local card3 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
     table_insert(allWidgets, card3)
 
-    -- Stack Direction + Max Entries
+    -- Growth Direction + Max Entries
     local row3a = GUIFrame:CreateRow(card3.content, 40)
-    local dirOptions = {
-        { key = "VERTICAL", text = "Vertical" },
-        { key = "HORIZONTAL", text = "Horizontal" },
-    }
-    local dirDropdown = GUIFrame:CreateDropdown(row3a, "Stack Direction", dirOptions, db.StackDirection or "VERTICAL", 45,
-        function(key)
-            db.StackDirection = key
-            ApplySettings()
-        end)
-    row3a:AddWidget(dirDropdown, 0.5)
-    table_insert(allWidgets, dirDropdown)
-
     local growthOptions = {
         { key = "DOWN", text = "Down" },
         { key = "UP", text = "Up" },
@@ -151,18 +139,15 @@ GUIFrame:RegisterContent("AugBuffsTracker", function(scrollChild, yOffset)
         end)
     row3a:AddWidget(growthDropdown, 0.5)
     table_insert(allWidgets, growthDropdown)
-    card3:AddRow(row3a, 40)
 
-    -- Max Entries
-    local row3b = GUIFrame:CreateRow(card3.content, 40)
-    local maxSlider = GUIFrame:CreateSlider(row3b, "Max Entries", 1, 20, 1, db.MaxEntries or 6, 50,
+    local maxSlider = GUIFrame:CreateSlider(row3a, "Max Entries", 1, 20, 1, db.MaxEntries or 6, 50,
         function(val)
             db.MaxEntries = val
             ApplySettings()
         end)
-    row3b:AddWidget(maxSlider, 0.5)
+    row3a:AddWidget(maxSlider, 0.5)
     table_insert(allWidgets, maxSlider)
-    card3:AddRow(row3b, 40)
+    card3:AddRow(row3a, 40)
 
     -- Icon Size + Spacing
     local row3c = GUIFrame:CreateRow(card3.content, 40)
@@ -224,16 +209,24 @@ GUIFrame:RegisterContent("AugBuffsTracker", function(scrollChild, yOffset)
         { key = "SOFTOUTLINE", text = "Soft" },
     }
 
-    -- Show Names toggle
-    local row4a = GUIFrame:CreateRow(card4.content, 36)
+    -- Show Names toggle + Max Length
+    local row4a = GUIFrame:CreateRow(card4.content, 40)
     local nameCheck = GUIFrame:CreateCheckbox(row4a, "Show Names", db.ShowNames ~= false,
         function(checked)
             db.ShowNames = checked
             ApplySettings()
         end)
-    row4a:AddWidget(nameCheck, 1)
+    row4a:AddWidget(nameCheck, 0.4)
     table_insert(allWidgets, nameCheck)
-    card4:AddRow(row4a, 36)
+
+    local maxLenSlider = GUIFrame:CreateSlider(row4a, "Max Characters", 0, 12, 1, db.NameMaxLength or 0, 50,
+        function(val)
+            db.NameMaxLength = val
+            ApplySettings()
+        end)
+    row4a:AddWidget(maxLenSlider, 0.6)
+    table_insert(allWidgets, maxLenSlider)
+    card4:AddRow(row4a, 40)
 
     local row4b = GUIFrame:CreateRow(card4.content, 40)
     local nameFontDropdown = GUIFrame:CreateDropdown(row4b, "Font", fontList, db.NameFontFace or "Expressway", 30,

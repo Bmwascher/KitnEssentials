@@ -78,8 +78,8 @@ local function UpdateStanceTextDisplay()
 
     local currentSpellId = nil
 
-    -- Warrior: detect via shapeshift form
-    if playerClass == "WARRIOR" then
+    -- Warrior / Evoker: detect via shapeshift form (persists in combat)
+    if playerClass == "WARRIOR" or playerClass == "EVOKER" then
         local currentForm = GetShapeshiftForm()
         if currentForm > 0 then
             local _, _, _, formSpellId = GetShapeshiftFormInfo(currentForm)
@@ -91,17 +91,6 @@ local function UpdateStanceTextDisplay()
     if playerClass == "PALADIN" then
         local paladinAuras = { 465, 317920, 32223 }
         for _, auraId in ipairs(paladinAuras) do
-            if PlayerHasBuff(auraId) then
-                currentSpellId = auraId
-                break
-            end
-        end
-    end
-
-    -- Evoker: detect attunement via buff
-    if playerClass == "EVOKER" then
-        local evokerAttunements = { 403264, 403265 }
-        for _, auraId in ipairs(evokerAttunements) do
             if PlayerHasBuff(auraId) then
                 currentSpellId = auraId
                 break
@@ -177,8 +166,8 @@ function ST:OnEnable()
     self:RegisterEvent("UPDATE_SHAPESHIFT_FORMS", function() UpdateStanceTextDisplay() end)
     self:RegisterEvent("PLAYER_ENTERING_WORLD", function() C_Timer.After(1, UpdateStanceTextDisplay) end)
 
-    -- Paladin auras and Evoker attunements are buffs, so track aura changes
-    if playerClass == "PALADIN" or playerClass == "EVOKER" then
+    -- Paladin auras are buffs, so track aura changes
+    if playerClass == "PALADIN" then
         self:RegisterEvent("UNIT_AURA", function(_, unit)
             if unit == "player" then UpdateStanceTextDisplay() end
         end)

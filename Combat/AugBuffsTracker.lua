@@ -397,7 +397,12 @@ function ABT:UpdateEntryVisuals(entry, data)
     -- Name
     KE:ApplyFont(entry.nameText, db.NameFontFace, db.NameFontSize, db.NameFontOutline)
     if db.ShowNames ~= false then
-        entry.nameText:SetText(data.name or "")
+        local displayName = data.name or ""
+        local maxLen = db.NameMaxLength or 0
+        if maxLen > 0 and #displayName > maxLen then
+            displayName = displayName:sub(1, maxLen)
+        end
+        entry.nameText:SetText(displayName)
         if data.isCrit then
             local cc = db.CritColor
             entry.nameText:SetTextColor(cc[1], cc[2], cc[3], cc[4] or 1)
@@ -692,7 +697,7 @@ function ABT:OnEnable()
     self.isAugSpec = IsAugSpec()
 
     self:RegisterEvent("UNIT_AURA", "OnUnitAura")
-    self:RegisterEvent("GROUP_ROSTER_UPDATE", "ScanAllUnits")
+    self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnRosterUpdate")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnZoneChange")
     self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnSpecChanged")
 
@@ -706,6 +711,15 @@ function ABT:OnEnable()
             self.containerFrame:Show()
         end
     end)
+end
+
+function ABT:OnRosterUpdate()
+    -- Roster changes don't invalidate existing buff data.
+    -- Out of combat: additive re-scan to pick up new members.
+    -- In combat: skip — UNIT_AURA handles everything, API unreliable.
+    if not InCombatLockdown() then
+        self:RescanRoster()
+    end
 end
 
 function ABT:OnZoneChange()
