@@ -82,6 +82,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Profile System | Import, export, and manage profiles with per-character and global support |
 | Edit Mode | Drag to reposition any element, nudge tool for pixel-perfect placement |
 | Minimap Button | Left-click opens settings, right-click toggles edit mode, middle-click reloads UI |
+| Sidebar Search | Real-time search bar at top of sidebar to quickly filter modules by name |
 
 ## Slash Commands
 

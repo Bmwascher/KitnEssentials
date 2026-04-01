@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.7.0
+### Additions
+- **GUI Sidebar Search** — Real-time search bar at the top of the sidebar. Filters modules by name as you type, hides non-matching sections, force-expands matching sections, shows "No results found" for empty queries. Clear button (X) and ESC to reset. Search clears automatically on GUI close. Theme-aware colors.
+
 ## v1.6.9
 ### Additions
 - New module: **Aug Buffs Tracker** — Tracks Prescience and Shifting Sands on party/raid members for Augmentation Evoker. Shows buff icon, countdown timer, role badge, and player name per tracked target. Configurable horizontal/vertical stacking, icon size, separate name/timer font settings, class-colored names, crit color for Prescience. Added as 4th tab in Evoker Suite.

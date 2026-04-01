@@ -105,6 +105,12 @@ function GUIFrame:Hide()
     if self.mainFrame then
         self.mainFrame:Hide()
     end
+    -- Clear search on close
+    if self.searchEditBox then
+        self.searchEditBox:SetText("")
+        self.searchEditBox:ClearFocus()
+    end
+    self.searchFilter = ""
     -- Fire cleanup
     for _, callback in pairs(self.contentCleanupCallbacks) do
         pcall(callback)
@@ -138,6 +144,15 @@ function GUIFrame:ApplyThemeColors()
 
     -- Refresh sidebar visuals
     self:RefreshSidebar()
+
+    -- Search bar
+    if self.searchContainer then
+        self.searchContainer:SetBackdropColor(T.bgDark[1], T.bgDark[2], T.bgDark[3], 1)
+        self.searchContainer:SetBackdropBorderColor(T.border[1], T.border[2], T.border[3], 1)
+    end
+    if self.searchEditBox then
+        self.searchEditBox:SetTextColor(T.accent[1], T.accent[2], T.accent[3], 1)
+    end
 
     -- Update title and version text with new accent color
     if self.titleText then
