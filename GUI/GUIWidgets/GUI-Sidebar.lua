@@ -394,10 +394,102 @@ function GUIFrame:CreateSidebar(parent)
     rightBorder:SetPoint("BOTTOMRIGHT", sidebar, "BOTTOMRIGHT", 0, 0)
     rightBorder:SetColorTexture(T.border[1], T.border[2], T.border[3], T.border[4])
 
+    -- Search bar (fixed above scroll area)
+    local SEARCH_HEIGHT = 24
+    local searchContainer = CreateFrame("Frame", nil, sidebar, "BackdropTemplate")
+    searchContainer:SetHeight(SEARCH_HEIGHT)
+    searchContainer:SetPoint("TOPLEFT", sidebar, "TOPLEFT", T.paddingSmall, -T.paddingSmall)
+    searchContainer:SetPoint("TOPRIGHT", sidebar, "TOPRIGHT", -(T.paddingSmall + T.borderSize), -T.paddingSmall)
+    searchContainer:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = 1,
+    })
+    searchContainer:SetBackdropColor(T.bgDark[1], T.bgDark[2], T.bgDark[3], 1)
+    searchContainer:SetBackdropBorderColor(T.border[1], T.border[2], T.border[3], 1)
+
+    -- Search EditBox
+    local searchEditBox = CreateFrame("EditBox", nil, searchContainer)
+    searchEditBox:SetPoint("LEFT", searchContainer, "LEFT", 6, 0)
+    searchEditBox:SetPoint("RIGHT", searchContainer, "RIGHT", -22, 0)
+    searchEditBox:SetPoint("TOP", searchContainer, "TOP", 0, -3)
+    searchEditBox:SetPoint("BOTTOM", searchContainer, "BOTTOM", 0, 3)
+    searchEditBox:SetFont(KE:GetFontPath("Expressway"), T.fontSizeSmall, T.fontOutline or "OUTLINE")
+    searchEditBox:SetAutoFocus(false)
+    searchEditBox:SetTextColor(T.accent[1], T.accent[2], T.accent[3], 1)
+    searchEditBox:SetMaxLetters(50)
+
+    -- Placeholder text
+    local placeholder = searchContainer:CreateFontString(nil, "OVERLAY")
+    placeholder:SetPoint("LEFT", searchContainer, "LEFT", 6, 0)
+    KE:ApplyThemeFont(placeholder, "small")
+    placeholder:SetText("Search...")
+    placeholder:SetTextColor(T.textMuted[1], T.textMuted[2], T.textMuted[3], 0.4)
+
+    -- Clear button (X)
+    local clearBtn = CreateFrame("Button", nil, searchContainer)
+    clearBtn:SetSize(14, 14)
+    clearBtn:SetPoint("RIGHT", searchContainer, "RIGHT", -4, 0)
+    local clearIcon = clearBtn:CreateTexture(nil, "ARTWORK")
+    clearIcon:SetAllPoints()
+    clearIcon:SetTexture("Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\KitnCustomCrossv3.png")
+    clearIcon:SetRotation(math.rad(45))
+    clearIcon:SetVertexColor(1, 1, 1, 1)
+    clearBtn:Hide()
+
+    -- Placeholder/clear button visibility
+    local function UpdateSearchVisuals()
+        if searchEditBox:GetText() == "" then
+            placeholder:Show()
+            clearBtn:Hide()
+        else
+            placeholder:Hide()
+            clearBtn:Show()
+        end
+    end
+
+    -- Real-time filtering
+    searchEditBox:SetScript("OnTextChanged", function(self, userInput)
+        UpdateSearchVisuals()
+        GUIFrame.searchFilter = self:GetText():lower()
+        GUIFrame:RefreshSidebar()
+    end)
+
+    searchEditBox:SetScript("OnEditFocusGained", function()
+        searchContainer:SetBackdropBorderColor(T.accent[1], T.accent[2], T.accent[3], 1)
+    end)
+
+    searchEditBox:SetScript("OnEditFocusLost", function()
+        local L = KE.Theme
+        searchContainer:SetBackdropBorderColor(L.border[1], L.border[2], L.border[3], 1)
+    end)
+
+    searchEditBox:SetScript("OnEscapePressed", function(self)
+        self:SetText("")
+        self:ClearFocus()
+    end)
+
+    clearBtn:SetScript("OnClick", function()
+        searchEditBox:SetText("")
+        searchEditBox:ClearFocus()
+    end)
+
+    clearBtn:SetScript("OnEnter", function()
+        local L = KE.Theme
+        clearIcon:SetVertexColor(L.accent[1], L.accent[2], L.accent[3], 1)
+    end)
+
+    clearBtn:SetScript("OnLeave", function()
+        clearIcon:SetVertexColor(1, 1, 1, 1)
+    end)
+
+    GUIFrame.searchEditBox = searchEditBox
+    GUIFrame.searchContainer = searchContainer
+
     -- Scroll frame
     local scrollFrame = CreateFrame("ScrollFrame", nil, sidebar, "UIPanelScrollFrameTemplate")
     scrollFrame:SetFrameLevel(sidebar:GetFrameLevel() + 5)
-    scrollFrame:SetPoint("TOPLEFT", sidebar, "TOPLEFT", 0, -T.paddingSmall)
+    scrollFrame:SetPoint("TOPLEFT", searchContainer, "BOTTOMLEFT", -T.paddingSmall, -T.paddingSmall)
     scrollFrame:SetPoint("BOTTOMRIGHT", sidebar, "BOTTOMRIGHT", -T.borderSize, T.paddingSmall)
     scrollFrame:SetClipsChildren(true)
 
@@ -480,57 +572,104 @@ function GUIFrame:RefreshSidebar()
     local sectionSpacing = 2
     local itemIndent = 8
 
+    local filter = self.searchFilter or ""
+    local isFiltering = filter ~= ""
+
     for _, sectionConfig in ipairs(config) do
         if sectionConfig.type == "header" then
-            local isExpanded = self.sidebarExpanded[sectionConfig.id]
-            local header = self:GetSectionHeader()
-            self:ConfigureSectionHeader(header, sectionConfig, yOffset, isExpanded)
-            yOffset = yOffset + headerHeight
+            -- Filter items when searching
+            local visibleItems = sectionConfig.items
+            local skipSection = false
 
-            if isExpanded and sectionConfig.items then
-                local sectionDisabled = sectionConfig.elvUIDisabled and KE.ShouldNotLoadModule and KE:ShouldNotLoadModule()
-
+            if isFiltering and sectionConfig.items then
+                visibleItems = {}
                 for _, itemConfig in ipairs(sectionConfig.items) do
-                    local item = self:GetStaticSidebarItem()
-                    item:SetParent(scrollChild)
-                    item:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", T.paddingSmall + itemIndent, -yOffset)
-                    item:SetPoint("TOPRIGHT", scrollChild, "TOPRIGHT", -T.paddingSmall, -yOffset)
-                    item.id = itemConfig.id
-                    item.label:SetText(itemConfig.text or "")
-                    item.selectedBar:SetColorTexture(T.accent[1], T.accent[2], T.accent[3], 1)
-                    item.selectedBar:Show()
-                    item.selectedOverlay:SetColorTexture(1, 1, 1, 1)
-                    item.selectedOverlay:SetGradient("HORIZONTAL",
-                        CreateColor(T.accent[1], T.accent[2], T.accent[3], 0.25),
-                        CreateColor(T.accent[1], T.accent[2], T.accent[3], 0))
-                    item.background:SetColorTexture(1, 1, 1, 1)
-                    item.background:SetGradient("HORIZONTAL",
-                        CreateColor(T.accent[1], T.accent[2], T.accent[3], 0.25),
-                        CreateColor(T.accent[1], T.accent[2], T.accent[3], 0))
-
-                    if sectionDisabled then
-                        item.label:SetTextColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 0.35)
-                        item.selectedOverlay:Hide()
-                        item.selectedBar:Hide()
-                        item:EnableMouse(false)
-                        item.disabled = true
-                    else
-                        item.disabled = false
-                        item:EnableMouse(true)
-                        if itemConfig.id == self.selectedSidebarItem then
-                            item.selectedOverlay:Show()
-                            item.background:Hide()
-                            item.label:SetTextColor(T.accent[1], T.accent[2], T.accent[3], T.accent[4] or 1)
-                        else
-                            item.selectedOverlay:Hide()
-                            item.background:Hide()
-                            item.label:SetTextColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
-                        end
+                    if itemConfig.text and itemConfig.text:lower():find(filter, 1, true) then
+                        visibleItems[#visibleItems + 1] = itemConfig
                     end
-                    yOffset = yOffset + itemHeight + itemSpacing
+                end
+                if #visibleItems == 0 then
+                    skipSection = true
                 end
             end
-            yOffset = yOffset + sectionSpacing
+
+            if not skipSection then
+                -- Force expand when filtering, normal toggle otherwise
+                local isExpanded = isFiltering or self.sidebarExpanded[sectionConfig.id]
+                local header = self:GetSectionHeader()
+                self:ConfigureSectionHeader(header, sectionConfig, yOffset, isExpanded)
+
+                -- Disable collapse toggle while filtering
+                if isFiltering then
+                    header:EnableMouse(false)
+                end
+
+                yOffset = yOffset + headerHeight
+
+                if isExpanded and visibleItems then
+                    local sectionDisabled = sectionConfig.elvUIDisabled and KE.ShouldNotLoadModule and KE:ShouldNotLoadModule()
+
+                    for _, itemConfig in ipairs(visibleItems) do
+                        local item = self:GetStaticSidebarItem()
+                        item:SetParent(scrollChild)
+                        item:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", T.paddingSmall + itemIndent, -yOffset)
+                        item:SetPoint("TOPRIGHT", scrollChild, "TOPRIGHT", -T.paddingSmall, -yOffset)
+                        item.id = itemConfig.id
+                        item.label:SetText(itemConfig.text or "")
+                        item.selectedBar:SetColorTexture(T.accent[1], T.accent[2], T.accent[3], 1)
+                        item.selectedBar:Show()
+                        item.selectedOverlay:SetColorTexture(1, 1, 1, 1)
+                        item.selectedOverlay:SetGradient("HORIZONTAL",
+                            CreateColor(T.accent[1], T.accent[2], T.accent[3], 0.25),
+                            CreateColor(T.accent[1], T.accent[2], T.accent[3], 0))
+                        item.background:SetColorTexture(1, 1, 1, 1)
+                        item.background:SetGradient("HORIZONTAL",
+                            CreateColor(T.accent[1], T.accent[2], T.accent[3], 0.25),
+                            CreateColor(T.accent[1], T.accent[2], T.accent[3], 0))
+
+                        if sectionDisabled then
+                            item.label:SetTextColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 0.35)
+                            item.selectedOverlay:Hide()
+                            item.selectedBar:Hide()
+                            item:EnableMouse(false)
+                            item.disabled = true
+                        else
+                            item.disabled = false
+                            item:EnableMouse(true)
+                            if itemConfig.id == self.selectedSidebarItem then
+                                item.selectedOverlay:Show()
+                                item.background:Hide()
+                                item.label:SetTextColor(T.accent[1], T.accent[2], T.accent[3], T.accent[4] or 1)
+                            else
+                                item.selectedOverlay:Hide()
+                                item.background:Hide()
+                                item.label:SetTextColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
+                            end
+                        end
+                        yOffset = yOffset + itemHeight + itemSpacing
+                    end
+                end
+                yOffset = yOffset + sectionSpacing
+            end
+        end
+    end
+
+    -- "No results" message when filtering produces nothing
+    if isFiltering and yOffset <= T.paddingSmall + sectionSpacing then
+        if not scrollChild._noResultsText then
+            local noResults = scrollChild:CreateFontString(nil, "OVERLAY")
+            KE:ApplyThemeFont(noResults, "normal")
+            noResults:SetTextColor(T.textMuted[1], T.textMuted[2], T.textMuted[3], 0.5)
+            noResults:SetText("No results found")
+            scrollChild._noResultsText = noResults
+        end
+        scrollChild._noResultsText:ClearAllPoints()
+        scrollChild._noResultsText:SetPoint("TOP", scrollChild, "TOP", 0, -(yOffset + 20))
+        scrollChild._noResultsText:Show()
+        yOffset = yOffset + 50
+    else
+        if scrollChild._noResultsText then
+            scrollChild._noResultsText:Hide()
         end
     end
 

@@ -441,11 +441,16 @@ function GUIFrame:CreateMainFrame()
     headerBorder:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", 0, 0)
     headerBorder:SetColorTexture(T.border[1], T.border[2], T.border[3], T.border[4])
 
-    -- Close on ESC
+    -- Close on ESC (clear search first if focused)
     frame:SetScript("OnKeyDown", function(self, key)
         if key == "ESCAPE" then
             self:SetPropagateKeyboardInput(false)
-            GUIFrame:Hide()
+            if GUIFrame.searchEditBox and GUIFrame.searchEditBox:HasFocus() then
+                GUIFrame.searchEditBox:SetText("")
+                GUIFrame.searchEditBox:ClearFocus()
+            else
+                GUIFrame:Hide()
+            end
         else
             self:SetPropagateKeyboardInput(true)
         end
