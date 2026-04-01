@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.7.2
+### Additions
+- **Aug Buffs Tracker**: Name truncation — "Max Characters" slider (0 = full name) to shorten long player names.
+
+### Changes
+- **Aug Buffs Tracker**: Replaced Stack Direction + Growth Direction with a single Growth Direction dropdown (Down/Up/Right/Left). Stack Direction was redundant.
+
+### Fixes
+- **Aug Buffs Tracker**: Fixed all entries disappearing simultaneously in combat — `GROUP_ROSTER_UPDATE` was calling `ScanAllUnits` (destructive wipe + API re-scan that fails in combat). Now uses additive re-scan out of combat, skips in combat.
+- **Stance Texts**: Evoker attunements now detected via shapeshift form (like Warrior) instead of buff scan, avoiding combat aura restrictions.
+
 ## v1.7.1
 ### Additions
 - **Aug Buffs Tracker**: Growth Direction setting — entries can grow Down, Up, Left, or Right from the anchor point. Chain-anchor layout prevents frame resize from shifting entries.
