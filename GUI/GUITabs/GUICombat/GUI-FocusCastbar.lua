@@ -434,7 +434,17 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     table_insert(allWidgets, soundDropdown)
     cardSound:AddRow(rowSndB, 40)
 
-    cardSound:AddLabel("|cff888888" .. KE:ColorTextByTheme("-") .. " Plays when your focus target starts casting.\n" .. KE:ColorTextByTheme("-") .. " Cannot filter by interruptible or kick CD due to WoW API secret value restrictions.|r")
+    local rowSndC = GUIFrame:CreateRow(cardSound.content, 40)
+    local muteCB = GUIFrame:CreateCheckbox(rowSndC, "Mute When Kick on CD", db.MuteSoundOnKickCD ~= false,
+        function(checked)
+            db.MuteSoundOnKickCD = checked
+            ApplySettings()
+        end)
+    rowSndC:AddWidget(muteCB, 1)
+    table_insert(allWidgets, muteCB)
+    cardSound:AddRow(rowSndC, 40)
+
+    cardSound:AddLabel("|cff888888" .. KE:ColorTextByTheme("-") .. " Plays when your focus target starts casting.\n" .. KE:ColorTextByTheme("-") .. " Cannot filter by interruptible casts (WoW secret value), but can filter by your kick cooldown.|r")
 
     yOffset = yOffset + cardSound:GetContentHeight() + Theme.paddingSmall
 

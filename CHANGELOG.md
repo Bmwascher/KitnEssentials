@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.8.1
+### Additions
+- **Focus Castbar**: Mute sound when kick on CD — suppresses the cast alert sound while your interrupt is on cooldown. Uses spec-aware cooldown tracking (event-based, no secret value APIs). New "Mute When Kick on CD" checkbox in Sound Settings, enabled by default.
+- **CVars**: Always Compare Items toggle — disable to only show item comparison tooltips when holding Shift. New "Tooltips" card in CVars page.
+
+### Fixes
+- **Interrupt Tracker**: Replaced UNIT_AURA-based CC detection with `interruptedBy` GUID validation (ExWind v26.4.2 port). Eliminates the ~1-in-5-8 CC false positive edge case. Removed UNIT_AURA event handler entirely.
+- **Focus Castbar**: Fixed interrupt spell ID not caching at login — added `SPELLS_CHANGED` event to `CacheInterruptId`. Previously the kick indicator tick mark and mute feature required a zone change before working.
+- **Focus Castbar**: Rewrote interrupt data from class-keyed spell IDs to spec-keyed table matching KickTracker. Fixes stale cooldown values (DK 15→12s, Mage 24→20s, Priest 45→30s) and per-spec CD differences (Evoker 20/18s, Shaman 12/30s, Warlock 24/30s).
+
+### Changes
+- **Focus Castbar**: Updated defaults — enabled by default, 350x30, blue casting/channeling colors, red not-interruptible, green hold/tick indicators, hide non-interruptible casts, sound enabled (Interrupt, Master channel).
+- **.luacheckrc**: Comprehensive WoW API globals whitelist — zero "undefined variable" warnings across entire codebase. Added References/ exclusion.
+
 ## v1.8.0
 ### Additions
 - New module: **Great Vault Spec Alert** — Shows your loot specialization with class color and spec icon when opening the Great Vault. Configurable sound, chat message, alert duration, font, and position. Located in Quality of Life sidebar.

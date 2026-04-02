@@ -24,6 +24,7 @@ local GetInspectSpecialization = GetInspectSpecialization
 local C_Timer = C_Timer
 local C_ClassColor = C_ClassColor
 local C_Spell = C_Spell
+local UnitNameFromGUID = UnitNameFromGUID
 local string_find = string.find
 local string_format = string.format
 local math_floor = math.floor
@@ -129,9 +130,8 @@ KT.inspectQueue = {}      -- array of { guid, unit }
 KT.inspectPending = nil   -- guid currently being inspected
 
 -- Event correlation
-KT.pendingInterrupts = {} -- [nameplateUnit] = { time }
-KT.pendingAuras = {}      -- [nameplateUnit] = { time }
-KT.pendingCasts = {}      -- [partyUnit] = { time, spellID }
+KT.pendingInterrupts = {} -- [nameplateUnit] = { time, interruptedBy }
+KT.pendingCasts = {}      -- [partyUnit] = { time }
 KT.processScheduled = false
 
 -- Bar display
@@ -339,7 +339,7 @@ function KT:OnPlayerSpecChanged()
 end
 
 -- =============================================================
--- Three-Event Correlator
+-- Event Correlator
 -- =============================================================
 function KT:ScheduleProcessing()
     if self.processScheduled then return end
@@ -349,16 +349,39 @@ function KT:ScheduleProcessing()
     end)
 end
 
-function KT:ProcessPendingEvents()
-    self.processScheduled = false
+-- Validate that interruptedBy resolves to a real player, then find the
+-- closest matching party cast within the time window.
+function KT:ResolveCasterByInterruptSource(targetUnit)
+    local interruptData = self.pendingInterrupts[targetUnit]
+    if not interruptData or not interruptData.interruptedBy then
+        return nil
+    end
 
-    -- Clean stale aura records (>40ms old = persistent debuff, not CC)
-    local currentTime = GetTime()
-    for unit, data in pairs(self.pendingAuras) do
-        if currentTime - data.time > 0.04 then
-            self.pendingAuras[unit] = nil
+    -- interruptedBy is a GUID. Confirm it resolves to a real name.
+    -- In 12.0, pcall guards against potential secret-value errors.
+    local ok, name = pcall(UnitNameFromGUID, interruptData.interruptedBy)
+    if not ok or not name then
+        return nil
+    end
+
+    -- Valid interrupter confirmed — find the closest cast in the time window
+    local bestMatch = nil
+    local bestTimeDiff = math.huge
+    local interruptTime = interruptData.time
+
+    for unit, data in pairs(self.pendingCasts) do
+        local timeDiff = math_abs(interruptTime - data.time)
+        if timeDiff <= TIME_WINDOW and timeDiff < bestTimeDiff then
+            bestMatch = unit
+            bestTimeDiff = timeDiff
         end
     end
+
+    return bestMatch
+end
+
+function KT:ProcessPendingEvents()
+    self.processScheduled = false
 
     -- Count interrupts
     local interruptCount = 0
@@ -371,7 +394,6 @@ function KT:ProcessPendingEvents()
     if interruptCount == 0 then
         wipe(self.pendingInterrupts)
         wipe(self.pendingCasts)
-        wipe(self.pendingAuras)
         return
     end
 
@@ -379,36 +401,14 @@ function KT:ProcessPendingEvents()
     if interruptCount > 1 then
         wipe(self.pendingInterrupts)
         wipe(self.pendingCasts)
-        wipe(self.pendingAuras)
         return
     end
 
-    local interruptTime = self.pendingInterrupts[targetUnit].time
+    -- Validate via interruptedBy GUID, then time-window match to caster
+    local caster = self:ResolveCasterByInterruptSource(targetUnit)
 
-    -- Check if UNIT_AURA fired within ±30ms = CC, not a kick
-    if self.pendingAuras[targetUnit] then
-        local auraTime = self.pendingAuras[targetUnit].time
-        if math_abs(interruptTime - auraTime) <= 0.030 then
-            wipe(self.pendingInterrupts)
-            wipe(self.pendingCasts)
-            wipe(self.pendingAuras)
-            return
-        end
-    end
-
-    -- Find matching UNIT_SPELLCAST_SUCCEEDED within ±50ms
-    local bestMatch = nil
-    local bestTimeDiff = math.huge
-    for unit, data in pairs(self.pendingCasts) do
-        local timeDiff = math_abs(interruptTime - data.time)
-        if timeDiff <= TIME_WINDOW and timeDiff < bestTimeDiff then
-            bestMatch = unit
-            bestTimeDiff = timeDiff
-        end
-    end
-
-    if bestMatch then
-        local guid = UnitGUID(bestMatch)
+    if caster then
+        local guid = UnitGUID(caster)
         if guid then
             self:ConfirmKick(guid)
         end
@@ -416,7 +416,6 @@ function KT:ProcessPendingEvents()
 
     wipe(self.pendingInterrupts)
     wipe(self.pendingCasts)
-    wipe(self.pendingAuras)
 end
 
 function KT:ConfirmKick(guid)
@@ -450,10 +449,10 @@ end
 -- =============================================================
 -- Event Handlers (Combat)
 -- =============================================================
-function KT:OnSpellcastInterrupted(_, unit)
+function KT:OnSpellcastInterrupted(_, unit, _, _, interruptedBy)
     if not self.db.Enabled or self.isPreview or not self.isActive then return end
     if not unit or not string_find(unit, "nameplate") then return end
-    self.pendingInterrupts[unit] = { time = GetTime() }
+    self.pendingInterrupts[unit] = { time = GetTime(), interruptedBy = interruptedBy }
     self:ScheduleProcessing()
 end
 
@@ -461,16 +460,8 @@ function KT:OnChannelStop(_, unit, _, interruptedBy)
     if not self.db.Enabled or self.isPreview or not self.isActive then return end
     if not unit or not string_find(unit, "nameplate") then return end
     if interruptedBy == nil then return end  -- channel ended naturally, not kicked
-    self.pendingInterrupts[unit] = { time = GetTime() }
+    self.pendingInterrupts[unit] = { time = GetTime(), interruptedBy = interruptedBy }
     self:ScheduleProcessing()
-end
-
-function KT:OnUnitAura(_, unit)
-    if not self.db.Enabled or self.isPreview or not self.isActive then return end
-    if not unit or not string_find(unit, "nameplate") then return end
-    -- Record aura timestamp only — no ScheduleProcessing (matches ExWind)
-    -- Processing is triggered by INTERRUPTED or SUCCEEDED events
-    self.pendingAuras[unit] = { time = GetTime() }
 end
 
 function KT:OnSpellcastSucceeded(_, unit, _, spellID)
@@ -522,7 +513,6 @@ function KT:RegisterCombatEvents()
     if self.combatEventsRegistered then return end
     self:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED", "OnSpellcastInterrupted")
     self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP", "OnChannelStop")
-    self:RegisterEvent("UNIT_AURA", "OnUnitAura")
     self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", "OnSpellcastSucceeded")
     self.combatEventsRegistered = true
 end
@@ -531,13 +521,11 @@ function KT:UnregisterCombatEvents()
     if not self.combatEventsRegistered then return end
     self:UnregisterEvent("UNIT_SPELLCAST_INTERRUPTED")
     self:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
-    self:UnregisterEvent("UNIT_AURA")
     self:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED")
     self.combatEventsRegistered = false
 
     wipe(self.pendingInterrupts)
     wipe(self.pendingCasts)
-    wipe(self.pendingAuras)
     self.processScheduled = false
 end
 
@@ -1240,7 +1228,6 @@ function KT:OnDisable()
     wipe(self.inspectQueue)
     wipe(self.pendingInterrupts)
     wipe(self.pendingCasts)
-    wipe(self.pendingAuras)
 
     self.inspectPending = nil
     self.isActive = false

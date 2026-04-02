@@ -31,21 +31,55 @@ local FALLBACK_ICON = 136243
 local PREVIEW_DURATION = 20
 local MAX_TARGET_NAMES = 5
 
--- Class interrupt spell IDs
-local CLASS_INTERRUPTS = {
-    [1] = { 6552 },                         -- Warrior
-    [2] = { 31935, 96231 },                 -- Paladin
-    [3] = { 147362, 187707 },               -- Hunter
-    [4] = { 1766 },                         -- Rogue
-    [5] = { 15487 },                        -- Priest
-    [6] = { 47528 },                        -- Death Knight
-    [7] = { 57994 },                        -- Shaman
-    [8] = { 2139 },                         -- Mage
-    [9] = { 19647, 89766, 119910, 132409 }, -- Warlock
-    [10] = { 116705 },                      -- Monk
-    [11] = { 78675, 106839 },               -- Druid
-    [12] = { 183752 },                      -- Demon Hunter
-    [13] = { 351338 },                      -- Evoker
+-- Interrupt data keyed by spec ID (matches KickTracker's INTERRUPT_DATA)
+-- Specs with id=0 have no interrupt (Holy Priest, Resto Druid, etc.)
+local INTERRUPT_BY_SPEC = {
+    -- Death Knight: Mind Freeze 12s
+    [250] = { id = 47528,  cd = 12 },
+    [251] = { id = 47528,  cd = 12 },
+    [252] = { id = 47528,  cd = 12 },
+    -- Demon Hunter: Disrupt 15s
+    [577] = { id = 183752, cd = 15 },
+    [581] = { id = 183752, cd = 15 },
+    [1480] = { id = 183752, cd = 15 },
+    -- Druid: Skull Bash 15s (Feral/Guardian only)
+    [103] = { id = 106839, cd = 15 },
+    [104] = { id = 106839, cd = 15 },
+    -- Evoker: Quell 20s (Dev) / 18s (Aug)
+    [1467] = { id = 351338, cd = 20 },
+    [1473] = { id = 351338, cd = 18 },
+    -- Hunter: Counter Shot 24s / Muzzle 15s
+    [253] = { id = 147362, cd = 24 },
+    [254] = { id = 147362, cd = 24 },
+    [255] = { id = 187707, cd = 15 },
+    -- Mage: Counterspell 20s
+    [62]  = { id = 2139,   cd = 20 },
+    [63]  = { id = 2139,   cd = 20 },
+    [64]  = { id = 2139,   cd = 20 },
+    -- Monk: Spear Hand Strike 15s (Brew/WW only)
+    [268] = { id = 116705, cd = 15 },
+    [269] = { id = 116705, cd = 15 },
+    -- Paladin: Rebuke 15s (Prot/Ret only)
+    [66]  = { id = 96231,  cd = 15 },
+    [70]  = { id = 96231,  cd = 15 },
+    -- Priest: Silence 30s (Shadow only)
+    [258] = { id = 15487,  cd = 30 },
+    -- Rogue: Kick 15s
+    [259] = { id = 1766,   cd = 15 },
+    [260] = { id = 1766,   cd = 15 },
+    [261] = { id = 1766,   cd = 15 },
+    -- Shaman: Wind Shear 12s (Ele/Enh), 30s (Resto)
+    [262] = { id = 57994,  cd = 12 },
+    [263] = { id = 57994,  cd = 12 },
+    [264] = { id = 57994,  cd = 30 },
+    -- Warlock: Spell Lock 24s (Aff/Destro), 30s (Demo)
+    [265] = { id = 19647,  cd = 24 },
+    [266] = { id = 19647,  cd = 30 },
+    [267] = { id = 19647,  cd = 24 },
+    -- Warrior: Pummel 15s
+    [71]  = { id = 6552,   cd = 15 },
+    [72]  = { id = 6552,   cd = 15 },
+    [73]  = { id = 6552,   cd = 15 },
 }
 
 -- Map anchor string to frame point
@@ -306,23 +340,21 @@ function FC:UpdateBarColor(interruptDuration)
     texture:SetVertexColor(color[1], color[2], color[3], color[4] or 1)
 end
 
--- Detect and cache interrupt spell ID
+-- Detect and cache interrupt spell ID + cooldown from spec
 function FC:CacheInterruptId()
-    local playerClass = select(3, UnitClass("player"))
-    local interrupts = CLASS_INTERRUPTS[playerClass]
-    if not interrupts then
-        self.interruptId = nil
-        return
-    end
-    for i = 1, #interrupts do
-        local id = interrupts[i]
-        if C_SpellBook.IsSpellKnownOrInSpellBook(id)
-            or C_SpellBook.IsSpellKnownOrInSpellBook(id, Enum.SpellBookSpellBank.Pet) then
-            self.interruptId = id
-            return
-        end
-    end
     self.interruptId = nil
+    self.interruptCD = nil
+    local specIndex = GetSpecialization()
+    if not specIndex then return end
+    local specID = GetSpecializationInfo(specIndex)
+    if not specID then return end
+    local data = INTERRUPT_BY_SPEC[specID]
+    if not data or data.id == 0 then return end
+    if C_SpellBook.IsSpellKnownOrInSpellBook(data.id)
+        or C_SpellBook.IsSpellKnownOrInSpellBook(data.id, Enum.SpellBookSpellBank.Pet) then
+        self.interruptId = data.id
+        self.interruptCD = data.cd
+    end
 end
 
 -- Update kick indicator tick visibility and bar color
@@ -481,10 +513,23 @@ function FC:OnCastEvent(event, unit, ...)
     end
 end
 
+-- Track player kick usage via events (Duration APIs return secret values)
+function FC:OnPlayerCastSucceeded(_, unit, _, spellID)
+    if unit ~= "player" and unit ~= "pet" then return end
+    if not self.interruptId or spellID ~= self.interruptId then return end
+    self.kickOnCD = true
+    if self.kickCDTimer then self.kickCDTimer:Cancel() end
+    self.kickCDTimer = C_Timer.NewTimer(self.interruptCD or 15, function()
+        self.kickOnCD = false
+        self.kickCDTimer = nil
+    end)
+end
+
 -- Play sound alert when focus starts casting
 function FC:PlayCastSound()
     if not self.db.SoundEnabled then return end
     if self.isPreview then return end
+    if self.db.MuteSoundOnKickCD and self.kickOnCD then return end
     local soundFile = self.db.SoundFile
     if not soundFile or soundFile == "None" then return end
     local LSM = LibStub("LibSharedMedia-3.0", true)
@@ -809,6 +854,8 @@ function FC:OnEnable()
     self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "CacheInterruptId")
     self:RegisterEvent("LOADING_SCREEN_DISABLED", "CacheInterruptId")
     self:RegisterEvent("ZONE_CHANGED_NEW_AREA", "CacheInterruptId")
+    self:RegisterEvent("SPELLS_CHANGED", "CacheInterruptId")
+    self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", "OnPlayerCastSucceeded")
     self:EnsureOnUpdate()
     self:CacheInterruptId()
 end
@@ -823,6 +870,11 @@ function FC:OnDisable()
         self.holdTimer:Cancel()
         self.holdTimer = nil
     end
+    if self.kickCDTimer then
+        self.kickCDTimer:Cancel()
+        self.kickCDTimer = nil
+    end
+    self.kickOnCD = false
     self:HideTargetNames()
     self:ResetCastState()
     self.isPreview = false
