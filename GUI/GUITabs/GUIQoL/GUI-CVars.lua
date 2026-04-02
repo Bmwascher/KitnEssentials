@@ -99,7 +99,23 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 
     ----------------------------------------------------------------
-    -- Card 4: Nameplates
+    -- Card 4: Tooltips
+    ----------------------------------------------------------------
+    local card4t = GUIFrame:CreateCard(scrollChild, "Tooltips", yOffset)
+    table_insert(allWidgets, card4t)
+
+    if AU then
+        for _, def in ipairs(AU.CVAR_DEFS) do
+            if def.key == "alwaysCompareItems" then
+                AddCVarCheckbox(card4t, def)
+            end
+        end
+    end
+
+    yOffset = yOffset + card4t:GetContentHeight() + Theme.paddingSmall
+
+    ----------------------------------------------------------------
+    -- Card 5a: Nameplates
     ----------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Nameplates", yOffset)
     table_insert(allWidgets, card4)

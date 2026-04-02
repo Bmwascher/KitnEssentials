@@ -248,7 +248,7 @@ GUIFrame:RegisterContent("Automation", function(scrollChild, yOffset)
         table_insert(allWidgets, vrTimeoutSlider)
         card8:AddRow(row8b, 40)
 
-        card8:AddLabel("|cff888888Adds a button to the Guild Bank to withdraw one Vantus Rune.\nPriority: Radiant Gold (245880) > Radiant Silver (245879).|r")
+        card8:AddLabel("|cff888888Adds a button to the Guild Bank to withdraw one Vantus Rune.\nPriority: Radiant Gold (245880) > Radiant Silver (245879).\nYou must be on the same realm as your guild to withdraw.|r")
 
         yOffset = yOffset + card8:GetContentHeight() + Theme.paddingSmall
     end

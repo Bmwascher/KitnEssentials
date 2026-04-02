@@ -87,6 +87,13 @@ AU.CVAR_DEFS = {
         desc = "Sharpens Up Textures.",
         type = "boolean",
     },
+    -- Tooltips
+    {
+        key = "alwaysCompareItems",
+        label = "Always Compare Items",
+        desc = "Always show item comparison tooltips. Disable to require Shift.",
+        type = "boolean",
+    },
     -- Nameplates
     {
         key = "nameplateShowOnlyNameForFriendlyPlayerUnits",
