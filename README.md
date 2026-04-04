@@ -20,7 +20,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Combat Timer | Configurable in-combat duration display |
 | Combat Res | Battle res charge tracker with timer |
 | Combat Cross | Static crosshair overlay with range warning (melee/ranged/healer) |
-| Combat Texts | Floating combat text customization |
+| Combat Texts | Combat enter/exit, interrupt announce with spell icon, and low durability warnings |
 | Cursor Circle | Cursor-following ring with GCD overlay, multiple texture options |
 | Range Display | Target range text with out-of-range color warning |
 | Focus & Target Castbar | Repositionable cast bars with kick indicators, target names, color settings, and cast sound alert (tabbed GUI) |
