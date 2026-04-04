@@ -66,6 +66,8 @@
     <Script file="GUITabs\GUIQoL\GUI-FocusMarker.lua" />
     <Script file="GUITabs\GUIQoL\GUI-MacroBuilders.lua" />
     <Script file="GUITabs\GUIQoL\GUI-GreatVaultAlert.lua" />
+    <Script file="GUITabs\GUIQoL\GUI-MissingEnchants.lua" />
+    <Script file="GUITabs\GUIQoL\GUI-WorldMap.lua" />
 
     <!-- Skinning tabs -->
     <Script file="GUITabs\GUISkinning\GUI-Tooltips.lua" />

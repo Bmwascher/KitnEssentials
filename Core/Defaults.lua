@@ -60,6 +60,8 @@ local Defaults = {
         },
     },
     profile = {
+        -- Global
+        ShowChatMessage = true,
         -- Minimap Icon
         Minimap = {
             hide = false,
@@ -427,6 +429,7 @@ local Defaults = {
             SkipCinematics = true,
             HideTalkingHead = true,
             HideEventToasts = false,
+            HideZoneNote = false,
             HideZoneText = false,
             AutoSellJunk = true,
             AutoRepair = true,
@@ -743,6 +746,22 @@ local Defaults = {
             Enabled = true,
             ShowChatMessages = true,
             ConfirmationTimeout = 15,
+        },
+
+        MissingEnchants = {
+            Enabled = true,
+            GemEnabled = true,
+            FontFace = "Expressway",
+            FontSize = 13,
+            FontOutline = "SOFTOUTLINE",
+            HideCharacterBackground = false,
+        },
+
+        WorldMap = {
+            Enabled = true,
+            ScaleEnabled = true,
+            Scale = 1.2,
+            WaypointBarEnabled = true,
         },
 
         ----------------------------------------------------------------

@@ -17,4 +17,6 @@
     <Script file="FocusMarker.lua" />
     <Script file="GreatVaultAlert.lua" />
     <Script file="VantusRune.lua" />
+    <Script file="MissingEnchants.lua" />
+    <Script file="WorldMap.lua" />
 </Ui>

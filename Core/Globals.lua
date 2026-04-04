@@ -106,7 +106,7 @@ function KE:Init()
         if KE.db and KE.db.global and KE.db.global._guiReset then
             KE.db.global._guiReset = nil
             KE:Print("GUI Reset")
-        else
+        elseif KE.db and KE.db.profile.ShowChatMessage then
             KE:Print(KE:ColorTextByTheme("/kes") .. " to open the configuration window.")
         end
     end)
