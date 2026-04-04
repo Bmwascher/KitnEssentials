@@ -81,6 +81,41 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
     yOffset = yOffset + card2:GetContentHeight() + T.paddingSmall
 
     ----------------------------------------------------------------
+    -- Card 3: General Settings
+    ----------------------------------------------------------------
+    local db = KE.db and KE.db.profile
+    local cardSettings = GUIFrame:CreateCard(scrollChild, "General Settings", yOffset)
+
+    local row3a = GUIFrame:CreateRow(cardSettings.content, 36)
+    local minimapCheck = GUIFrame:CreateCheckbox(row3a, "Show Minimap Button",
+        not (db and db.Minimap and db.Minimap.hide),
+        function(checked)
+            if not db then return end
+            db.Minimap = db.Minimap or {}
+            db.Minimap.hide = not checked
+            local icon = LibStub and LibStub("LibDBIcon-1.0", true)
+            if icon then
+                if checked then
+                    icon:Show("KitnEssentials")
+                else
+                    icon:Hide("KitnEssentials")
+                end
+            end
+        end)
+    row3a:AddWidget(minimapCheck, 0.5)
+
+    local chatCheck = GUIFrame:CreateCheckbox(row3a, "Show Command in Chat on Login",
+        db and db.ShowChatMessage ~= false,
+        function(checked)
+            if not db then return end
+            db.ShowChatMessage = checked
+        end)
+    row3a:AddWidget(chatCheck, 0.5)
+    cardSettings:AddRow(row3a, 36)
+
+    yOffset = yOffset + cardSettings:GetContentHeight() + T.paddingSmall
+
+    ----------------------------------------------------------------
     -- Card 3: Getting Started
     ----------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Getting Started", yOffset)

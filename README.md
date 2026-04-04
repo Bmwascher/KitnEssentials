@@ -1,6 +1,6 @@
 # KitnEssentials
 
-Standalone combat, quality of life, and skinning modules for **KitnUI**.
+Standalone combat, utilites, quality of life, and skinning modules for **KitnUI**.
 
 KitnEssentials adds HUD elements, buff trackers, automation features, and Blizzard UI skinning through a fully themed settings panel. Every module is independently toggleable and repositionable via a built-in edit mode.
 
@@ -53,6 +53,8 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Copy Anything | Copy any chat message or tooltip text |
 | Hide ActionBars | Hide specific action bar rows in/out of combat |
 | Great Vault Alert | Shows your loot spec when opening the Great Vault with class color and sound |
+| Missing Enchants/Gems | Red warnings on character panel for missing enchants and empty gem sockets |
+| World Map Scaler | Adjustable minimized map scale and coordinate waypoint search bar |
 | Vantus Rune | One-click Vantus Rune withdrawal from Guild Bank with priority and confirmation |
 
 ## Skinning
@@ -61,7 +63,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 |---|---|
 | General UI Clean Up | Hide unnecessary Blizzard UI elements |
 | Buffs, Debuffs & Externals | Restyle aura icons and bars |
-| Action Bars | Cooldown text styling and proc glow sizing |
+| Action Bars | Dark themed backdrops, cooldown text styling and proc glow sizing |
 | Blizzard Mouseover | Highlight and tooltip behavior tweaks |
 | Blizzard Texts | Font and outline changes for Blizzard text |
 | Blizzard Tooltips | Tooltip backdrop and font restyling |

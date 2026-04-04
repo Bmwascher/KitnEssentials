@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.8.3
+### Additions
+- New module: **Missing Enchants/Gems** — displays red warnings on the character panel for missing enchants and empty gem sockets. Expansion-aware enchant slots, tooltip-based gem socket detection ("Prismatic Socket"), combined text display ("No Enchant / No Gem"). Configurable font, size, and outline. Hide Character Panel Background toggle.
+- New module: **World Map Scaler** — adjustable minimized world map scale (1.0–2.0x) and coordinate waypoint search bar with live preview. Accepts multiple input formats (/way, comma-separated, spaces). Super-tracks waypoints automatically.
+- **ElvUI Tags** — 3 custom tags for ElvUI unit frames: `[kes:name-classcolor]` (unit name with class/reaction color), `[kes:target:separator]` (white » only when target exists), `[kes:target:name-classcolor]` (target name with class/reaction color). Only loads when ElvUI is present.
+- **Home Page**: General Settings card with "Show Minimap Button" and "Show Command in Chat on Login" toggles.
+
 ## v1.8.2
 ### Additions
 - **Combat Texts**: Interrupt Text — displays interrupted spell name and icon on successful kick. Spec-aware detection using zzal reference pattern (UNIT_SPELLCAST_SUCCEEDED flag + UNIT_SPELLCAST_INTERRUPTED). Works in dungeons via C_Spell.GetSpellInfo AllowedWhenTainted. Configurable text, color, and fade duration.

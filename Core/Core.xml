@@ -12,4 +12,5 @@
     <Script file="ProfileManager.lua" />
     <Script file="Colors.lua" />
     <Script file="Curves.lua" />
+    <Script file="Tags.lua" />
 </Ui>
