@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.8.2
+### Additions
+- **Combat Texts**: Interrupt Text — displays interrupted spell name and icon on successful kick. Spec-aware detection using zzal reference pattern (UNIT_SPELLCAST_SUCCEEDED flag + UNIT_SPELLCAST_INTERRUPTED). Works in dungeons via C_Spell.GetSpellInfo AllowedWhenTainted. Configurable text, color, and fade duration.
+
+### Changes
+- **Combat Texts**: Combined Enter/Exit Combat into single "Combat Messages" card with one enable toggle.
+- **Combat Texts**: Per-type fade durations — Combat Messages and Interrupt Text each have their own slider. Removed shared Fade Duration.
+- **Combat Texts**: Renamed "Interrupt Announce" to "Interrupt Text".
+- **Combat Texts**: Updated defaults — enabled by default, MEDIUM strata, Y offset 125, spacing 0, gray enter/exit colors, blue interrupt color.
+- **Combat Texts**: Tighter message stacking — frame height matches font size instead of hardcoded 30px.
+
 ## v1.8.1
 ### Additions
 - **Focus Castbar**: Mute sound when kick on CD — suppresses the cast alert sound while your interrupt is on cooldown. Uses spec-aware cooldown tracking (event-based, no secret value APIs). New "Mute When Kick on CD" checkbox in Sound Settings, enabled by default.

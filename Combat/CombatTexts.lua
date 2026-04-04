@@ -11,17 +11,76 @@ local UIFrameFadeRemoveFrame = UIFrameFadeRemoveFrame
 local UIFrameFadeOut = UIFrameFadeOut
 local InCombatLockdown = InCombatLockdown
 local GetInventoryItemDurability = GetInventoryItemDurability
+local C_Spell_GetSpellInfo = C_Spell.GetSpellInfo
+local GetSpecialization = C_SpecializationInfo.GetSpecialization or GetSpecialization
+local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
+local issecretvalue = issecretvalue
 local ipairs, pairs = ipairs, pairs
 local math_max = math.max
+local string_format = string.format
 
 -- Equipment slots to check for durability
 local EQUIP_SLOTS = { 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 }
+
+------------------------------------------------------------------------
+-- Interrupt spell IDs by spec (for detecting player's own kicks)
+------------------------------------------------------------------------
+local SPEC_INTERRUPTS = {
+    -- Warrior
+    [71]   = { [6552] = true },                                         -- Arms: Pummel
+    [72]   = { [6552] = true },                                         -- Fury: Pummel
+    [73]   = { [6552] = true, [386071] = true },                        -- Prot: Pummel + Disrupting Shout
+    -- Rogue
+    [259]  = { [1766] = true },                                         -- Assassination: Kick
+    [260]  = { [1766] = true },                                         -- Outlaw: Kick
+    [261]  = { [1766] = true },                                         -- Subtlety: Kick
+    -- Mage
+    [62]   = { [2139] = true },                                         -- Arcane: Counterspell
+    [63]   = { [2139] = true },                                         -- Fire: Counterspell
+    [64]   = { [2139] = true },                                         -- Frost: Counterspell
+    -- Shaman
+    [262]  = { [57994] = true },                                        -- Elemental: Wind Shear
+    [263]  = { [57994] = true },                                        -- Enhancement: Wind Shear
+    [264]  = { [57994] = true },                                        -- Restoration: Wind Shear
+    -- Druid
+    [102]  = { [78675] = true },                                        -- Balance: Solar Beam
+    [103]  = { [106839] = true },                                       -- Feral: Skull Bash
+    [104]  = { [106839] = true },                                       -- Guardian: Skull Bash
+    -- Death Knight
+    [250]  = { [47528] = true },                                        -- Blood: Mind Freeze
+    [251]  = { [47528] = true },                                        -- Frost: Mind Freeze
+    [252]  = { [47528] = true },                                        -- Unholy: Mind Freeze
+    -- Paladin
+    [66]   = { [96231] = true, [375576] = true, [31935] = true },       -- Prot: Rebuke + Divine Toll + Avenger's Shield
+    [70]   = { [96231] = true },                                        -- Retribution: Rebuke
+    -- Demon Hunter
+    [577]  = { [183752] = true },                                       -- Havoc: Disrupt
+    [581]  = { [183752] = true },                                       -- Vengeance: Disrupt
+    [1480] = { [183752] = true },                                       -- Devourer: Disrupt
+    -- Monk
+    [268]  = { [116705] = true },                                       -- Brewmaster: Spear Hand Strike
+    [269]  = { [116705] = true },                                       -- Windwalker: Spear Hand Strike
+    -- Priest
+    [258]  = { [15487] = true },                                        -- Shadow: Silence
+    -- Hunter
+    [253]  = { [147362] = true },                                       -- Beast Mastery: Counter Shot
+    [254]  = { [147362] = true },                                       -- Marksmanship: Counter Shot
+    [255]  = { [187707] = true },                                       -- Survival: Muzzle
+    -- Warlock (pet interrupts)
+    [265]  = { [19647] = true, [119910] = true, [132409] = true },      -- Affliction: Spell Lock variants
+    [266]  = { [19647] = true, [119910] = true, [119914] = true },      -- Demonology: Spell Lock + Felstorm
+    [267]  = { [19647] = true, [119910] = true, [132409] = true },      -- Destruction: Spell Lock variants
+    -- Evoker
+    [1467] = { [351338] = true },                                       -- Devastation: Quell
+    [1473] = { [351338] = true },                                       -- Augmentation: Quell
+}
 
 -- Message types (order determines vertical stacking)
 local MESSAGE_TYPES = {
     "enterCombat",
     "exitCombat",
     "lowDurability",
+    "interrupt",
 }
 
 -- Module state
@@ -30,6 +89,9 @@ CM.messageFrames = {}
 CM.activeMessages = {}
 CM.isPreview = false
 CM.inCombat = false
+CM.interruptFlag = false
+CM.interruptTimer = nil
+CM.currentInterrupts = nil
 
 function CM:UpdateDB()
     self.db = KE.db.profile.CombatTexts
@@ -54,6 +116,10 @@ local function GetMessageConfig(db, msgType)
         return db.DurabilityEnabled ~= false,
             db.DurabilityText or "LOW DURABILITY",
             db.DurabilityColor or { 1, 0.3, 0.3, 1 }
+    elseif msgType == "interrupt" then
+        return db.InterruptEnabled ~= false,
+            (db.InterruptText or "Interrupted") .. " [Spell Name]",
+            db.InterruptColor or { 1, 1, 1, 1 }
     end
     return false, "", { 1, 1, 1, 1 }
 end
@@ -77,20 +143,15 @@ function CM:GetMessageFrame(msgType)
     end
 
     local frame = CreateFrame("Frame", nil, self.container)
-    frame:SetSize(200, 30)
+    local fontSize = self.db.FontSize or 16
+    frame:SetSize(200, fontSize + 2)
     frame:Hide()
 
     local text = frame:CreateFontString(nil, "OVERLAY")
-    text:SetAllPoints(frame)
+    text:SetPoint("CENTER", frame, "CENTER", 0, 0)
     text:SetJustifyH("CENTER")
     text:SetJustifyV("MIDDLE")
-
-    local fontPath = KE:GetFontPath(self.db.FontFace) or KE.FONT
-    text:SetFont(fontPath, self.db.FontSize or 16, "")
-
-    local width = math_max(text:GetWidth(), 150)
-    local height = math_max(text:GetHeight(), 14)
-    frame:SetSize(width + 5, height)
+    text:SetWordWrap(false)
 
     frame.text = text
     frame.msgType = msgType
@@ -98,8 +159,14 @@ function CM:GetMessageFrame(msgType)
 
     self.messageFrames[msgType] = frame
 
-    -- Apply font with SOFTOUTLINE support
-    KE:ApplyFontToText(text, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
+    -- Apply font — interrupt uses native OUTLINE (SOFTOUTLINE shadows too visible on white text)
+    if msgType == "interrupt" then
+        local outline = self.db.FontOutline
+        if outline == "SOFTOUTLINE" then outline = "OUTLINE" end
+        KE:ApplyFont(text, self.db.FontFace, self.db.FontSize, KE:GetFontOutline(outline))
+    else
+        KE:ApplyFontToText(text, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
+    end
 
     return frame
 end
@@ -124,17 +191,26 @@ function CM:ArrangeMessages()
 end
 
 -- Show a flash message (fades out after duration)
-function CM:ShowFlashMessage(msgType)
+-- textOverride: optional dynamic text (used by interrupt announce)
+function CM:ShowFlashMessage(msgType, textOverride)
     if not self.db or self.db.Enabled == false then return end
     if self.isPreview then return end
 
     local enabled, msgText, color = GetMessageConfig(self.db, msgType)
     if not enabled then return end
+    if textOverride then msgText = textOverride end
 
     local frame = self:GetMessageFrame(msgType)
     if not frame then return end
 
-    local duration = self.db.Duration or 1.5
+    local duration
+    if msgType == "enterCombat" or msgType == "exitCombat" then
+        duration = self.db.CombatDuration or 1.5
+    elseif msgType == "interrupt" then
+        duration = self.db.InterruptDuration or 3.0
+    else
+        duration = 1.5
+    end
     frame.generation = frame.generation + 1
     local myGeneration = frame.generation
 
@@ -232,7 +308,6 @@ function CM:CheckDurability()
 
     local threshold = (self.db.DurabilityThreshold or 25) / 100
 
-    -- Don't show while in combat
     if self.inCombat then
         self:HidePersistentMessage("lowDurability")
         return
@@ -261,10 +336,21 @@ function CM:ApplySettings()
     if not self.container then return end
     KE:ApplyFramePosition(self.container, self.db.Position, self.db)
 
-    -- Update font settings for all message frames
+    -- Update font settings and frame height for all message frames
+    local fontSize = self.db.FontSize or 16
     for _, frame in pairs(self.messageFrames) do
+        frame:SetHeight(fontSize + 2)
         if frame.text then
-            KE:ApplyFontToText(frame.text, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
+            if frame.msgType == "interrupt" then
+                if frame.text._keSoftOutline then
+                    frame.text._keSoftOutline:Release()
+                end
+                local outline = self.db.FontOutline
+                if outline == "SOFTOUTLINE" then outline = "OUTLINE" end
+                KE:ApplyFont(frame.text, self.db.FontFace, self.db.FontSize, KE:GetFontOutline(outline))
+            else
+                KE:ApplyFontToText(frame.text, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
+            end
         end
     end
 
@@ -342,6 +428,62 @@ function CM:HidePreview()
     end
 end
 
+------------------------------------------------------------------------
+-- Interrupt announce
+------------------------------------------------------------------------
+function CM:CacheInterruptSpells()
+    local specIndex = GetSpecialization()
+    if not specIndex then
+        self.currentInterrupts = nil
+        return
+    end
+    local specID = GetSpecializationInfo(specIndex)
+    if not specID then
+        self.currentInterrupts = nil
+        return
+    end
+    self.currentInterrupts = SPEC_INTERRUPTS[specID]
+end
+
+function CM:OnSpellcastSucceeded(_, unit, _, spellID)
+    if not self.db or self.db.InterruptEnabled == false then return end
+    if not self.currentInterrupts then return end
+    if issecretvalue(unit) then return end
+    if unit ~= "player" and unit ~= "pet" then return end
+    if issecretvalue(spellID) or not self.currentInterrupts[spellID] then return end
+
+    self.interruptFlag = true
+    if self.interruptTimer then
+        self.interruptTimer:Cancel()
+    end
+    self.interruptTimer = C_Timer.NewTimer(0.1, function()
+        self.interruptFlag = false
+    end)
+end
+
+function CM:OnSpellcastInterrupted(_, _, _, spellID, interruptedBy)
+    if not self.interruptFlag then return end
+    if not interruptedBy then return end
+
+    self.interruptFlag = false
+    if self.interruptTimer then
+        self.interruptTimer:Cancel()
+        self.interruptTimer = nil
+    end
+
+    -- Build display: "Interrupted |Ticon|t [Spell Name]"
+    -- C_Spell.GetSpellInfo accepts secret spellIDs (AllowedWhenTainted) and returns clean data
+    local prefix = self.db.InterruptText or "Interrupted"
+    local spellInfo = C_Spell_GetSpellInfo(spellID)
+    if spellInfo and spellInfo.iconID and spellInfo.name then
+        local iconSize = self.db.FontSize or 16
+        local text = string_format("%s |T%d:%d|t [%s]", prefix, spellInfo.iconID, iconSize, spellInfo.name)
+        self:ShowFlashMessage("interrupt", text)
+    else
+        self:ShowFlashMessage("interrupt")
+    end
+end
+
 -- Module OnEnable
 function CM:OnEnable()
     if not self.db.Enabled then return end
@@ -363,6 +505,14 @@ function CM:OnEnable()
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnExitCombat")
     self:RegisterEvent("UPDATE_INVENTORY_DURABILITY", "CheckDurability")
 
+    -- Interrupt announce events
+    self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", "OnSpellcastSucceeded")
+    self:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED", "OnSpellcastInterrupted")
+    self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP", "OnSpellcastInterrupted")
+    self:RegisterEvent("ACTIVE_PLAYER_SPECIALIZATION_CHANGED", "CacheInterruptSpells")
+    self:RegisterEvent("SPELLS_CHANGED", "CacheInterruptSpells")
+    self:CacheInterruptSpells()
+
     -- Track initial combat state
     self.inCombat = InCombatLockdown()
 
@@ -380,5 +530,11 @@ function CM:OnDisable()
     self.activeMessages = {}
     self.isPreview = false
     self.inCombat = false
+    self.interruptFlag = false
+    if self.interruptTimer then
+        self.interruptTimer:Cancel()
+        self.interruptTimer = nil
+    end
+    self.currentInterrupts = nil
     self:UnregisterAllEvents()
 end
