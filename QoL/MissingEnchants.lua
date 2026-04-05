@@ -1,7 +1,8 @@
 -- KitnEssentials Missing Enchants & Gems
 -- Shows "No Enchant" / "No Gem" warnings on the character panel.
--- Only displays at max level. Based on BetterCharacterPanel by Jibbie.
--- Author: Kitn
+-- Only displays at max level. Based on BetterCharacterPanel by Grimonja.
+-- Author: Bitebtw
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
@@ -237,10 +238,10 @@ local function HookCharacterPanel()
         end)
     end
 
-    local eventFrame = CreateFrame("Frame")
-    eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
-    eventFrame:RegisterEvent("UNIT_INVENTORY_CHANGED")
-    eventFrame:SetScript("OnEvent", function(_, event, unit)
+    ME.eventFrame = CreateFrame("Frame")
+    ME.eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+    ME.eventFrame:RegisterEvent("UNIT_INVENTORY_CHANGED")
+    ME.eventFrame:SetScript("OnEvent", function(_, event, unit)
         if event == "UNIT_INVENTORY_CHANGED" and unit ~= "player" then return end
         if CharacterFrame and CharacterFrame:IsShown() then
             C_Timer.After(0.1, UpdateDisplay)
@@ -254,6 +255,7 @@ end
 -- Module API
 ----------------------------------------------------------------
 function ME:Refresh()
+    if C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("BetterCharacterPanel") then return end
     HookCharacterPanel()
     ApplyFontToAll()
     if CharacterFrame and CharacterFrame:IsShown() then
@@ -274,6 +276,8 @@ function ME:OnInitialize()
 end
 
 function ME:OnEnable()
+    -- Skip if BetterCharacterPanel is loaded (provides same functionality)
+    if C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("BetterCharacterPanel") then return end
     if not self.db.Enabled and not self.db.GemEnabled and not self.db.HideCharacterBackground then return end
     HookCharacterPanel()
     if CharacterFrame and CharacterFrame:IsShown() then
@@ -283,4 +287,7 @@ end
 
 function ME:OnDisable()
     self:ClearAll()
+    if self.eventFrame then
+        self.eventFrame:UnregisterAllEvents()
+    end
 end
