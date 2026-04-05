@@ -5,13 +5,37 @@ changelog-title: KitnEssentials
 ignore:
   - .pkgmeta
   - .claude
+  - .github
+  - .gitattributes
+  - .gitignore
+  - .luacheckrc
+  - .wow-api-reference
   - CLAUDE.md
   - CHANGELOG.md
+  - README.md
+  - References
+  - diff_output.txt
 
 externals:
-  Libs/Ace3:
-    url: https://repos.curseforge.com/wow/ace3/trunk
-    tag: latest
+  Libs/AceAddon-3.0:
+    url: https://repos.curseforge.com/wow/ace3/trunk/AceAddon-3.0
+  Libs/AceDB-3.0:
+    url: https://repos.curseforge.com/wow/ace3/trunk/AceDB-3.0
+  Libs/AceEvent-3.0:
+    url: https://repos.curseforge.com/wow/ace3/trunk/AceEvent-3.0
+  Libs/AceHook-3.0:
+    url: https://repos.curseforge.com/wow/ace3/trunk/AceHook-3.0
+  Libs/AceSerializer-3.0:
+    url: https://repos.curseforge.com/wow/ace3/trunk/AceSerializer-3.0
+  Libs/CallbackHandler-1.0:
+    url: https://repos.curseforge.com/wow/ace3/trunk/CallbackHandler-1.0
+  Libs/LibCustomGlow-1.0:
+    url: https://github.com/Stanzilla/LibCustomGlow
+  Libs/LibDBIcon-1.0:
+    url: https://repos.curseforge.com/wow/libdbicon-1-0/trunk/LibDBIcon-1.0
+  Libs/LibDataBroker-1.1:
+    url: https://github.com/tekkub/libdatabroker-1-1
+  Libs/LibRangeCheck-3.0:
+    url: https://github.com/WeakAuras/LibRangeCheck-3.0
   Libs/LibSharedMedia-3.0:
     url: https://repos.curseforge.com/wow/libsharedmedia-3-0/trunk/LibSharedMedia-3.0
-    tag: latest
