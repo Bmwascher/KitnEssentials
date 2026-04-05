@@ -409,6 +409,7 @@ end
 
 -- Module OnEnable
 function CR:OnEnable()
+    if not self.db.Enabled then return end
     self:CreateFrame()
     self:RegWithEditMode()
 

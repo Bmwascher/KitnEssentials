@@ -5,7 +5,7 @@ if not KitnEssentials then return end
 
 -- WorldMap module
 -- Purpose: Adds configurable world map scaling and a coordinate waypoint search bar.
--- Author: Kitn (ported from atrocityEssentials by Bmwascher)
+-- Author: Bitebtw (ported from atrocityEssentials by Bitebtw)
 
 ---@class WorldMap: AceModule, AceEvent-3.0
 local WM = KitnEssentials:NewModule("WorldMap", "AceEvent-3.0")
