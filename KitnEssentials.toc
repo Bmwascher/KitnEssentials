@@ -14,7 +14,7 @@
 Libs\Init.xml
 
 Core\Core.xml
-Utils\Utils.xml
+Utilities\Utilities.xml
 
 Combat\Combat.xml
 CustomBuffs\CustomBuffs.xml

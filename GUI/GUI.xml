@@ -5,7 +5,7 @@
     <Script file="GUIMain\GUI-Core.lua" />
 
     <!-- Utilities -->
-    <Script file="GUIUtil\GUI-FrameChooser.lua" />
+    <Script file="GUIHelpers\GUI-FrameChooser.lua" />
 
     <!-- Widgets attach to GUIFrame -->
     <Script file="GUIWidgets\GUI-KEToggle.lua" />
@@ -31,22 +31,31 @@
     <Script file="GUITabs\GUICombat\GUI-CombatRes.lua" />
     <Script file="GUITabs\GUICombat\GUI-CombatTexts.lua" />
     <Script file="GUITabs\GUICombat\GUI-CursorCircle.lua" />
-    <Script file="GUITabs\GUICombat\GUI-PetStatusText.lua" />
-    <Script file="GUITabs\GUICombat\GUI-RaidNotifications.lua" />
     <Script file="GUITabs\GUICombat\GUI-TargetCastbar.lua" />
     <Script file="GUITabs\GUICombat\GUI-FocusCastbar.lua" />
     <Script file="GUITabs\GUICombat\GUI-Castbars.lua" />
     <Script file="GUITabs\GUICombat\GUI-RangeChecker.lua" />
-    <Script file="GUITabs\GUICombat\GUI-DispelCursor.lua" />
-    <Script file="GUITabs\GUICombat\GUI-TimeSpiral.lua" />
-    <Script file="GUITabs\GUICombat\GUI-DisintegrateTicks.lua" />
-    <Script file="GUITabs\GUICombat\GUI-StasisTracker.lua" />
-    <Script file="GUITabs\GUICombat\GUI-EbonMightHelper.lua" />
-    <Script file="GUITabs\GUICombat\GUI-AugBuffsTracker.lua" />
-    <Script file="GUITabs\GUICombat\GUI-EvokerSuite.lua" />
-    <Script file="GUITabs\GUICombat\GUI-BloodlustTracker.lua" />
     <Script file="GUITabs\GUICombat\GUI-KickTracker.lua" />
-    <Script file="GUITabs\GUICombat\GUI-NoMovementAlert.lua" />
+
+    <!-- Utilities tabs -->
+    <Script file="GUITabs\GUIUtilities\GUI-RaidNotifications.lua" />
+    <Script file="GUITabs\GUIUtilities\GUI-PetStatusText.lua" />
+    <Script file="GUITabs\GUIUtilities\GUI-StanceText.lua" />
+    <Script file="GUITabs\GUIUtilities\GUI-DispelCursor.lua" />
+    <Script file="GUITabs\GUIUtilities\GUI-NoMovementAlert.lua" />
+    <Script file="GUITabs\GUIUtilities\GUI-ClassStatusTexts.lua" />
+    <Script file="GUITabs\GUIUtilities\GUI-BloodlustTracker.lua" />
+    <Script file="GUITabs\GUIUtilities\GUI-TimeSpiral.lua" />
+    <Script file="GUITabs\GUIUtilities\GUI-Recuperate.lua" />
+    <Script file="GUITabs\GUIUtilities\GUI-DisintegrateTicks.lua" />
+    <Script file="GUITabs\GUIUtilities\GUI-StasisTracker.lua" />
+    <Script file="GUITabs\GUIUtilities\GUI-EbonMightHelper.lua" />
+    <Script file="GUITabs\GUIUtilities\GUI-AugBuffsTracker.lua" />
+    <Script file="GUITabs\GUIUtilities\GUI-EvokerSuite.lua" />
+    <Script file="GUITabs\GUIUtilities\GUI-WorldMarkerCycler.lua" />
+    <Script file="GUITabs\GUIUtilities\GUI-FocusMarker.lua" />
+    <Script file="GUITabs\GUIUtilities\GUI-PIMacroBuilder.lua" />
+    <Script file="GUITabs\GUIUtilities\GUI-MacroBuilders.lua" />
 
     <!-- QoL tabs -->
     <Script file="GUITabs\GUIQoL\GUI-Automation.lua" />
@@ -54,17 +63,10 @@
     <Script file="GUITabs\GUIQoL\GUI-SlashCommands.lua" />
     <Script file="GUITabs\GUIQoL\GUI-CopyAnything.lua" />
     <Script file="GUITabs\GUIQoL\GUI-DragonRiding.lua" />
-    <Script file="GUITabs\GUIQoL\GUI-StanceText.lua" />
-    <Script file="GUITabs\GUICombat\GUI-ClassStatusTexts.lua" />
     <Script file="GUITabs\GUIQoL\GUI-HuntersMark.lua" />
     <Script file="GUITabs\GUIQoL\GUI-HideBars.lua" />
-    <Script file="GUITabs\GUIQoL\GUI-Recuperate.lua" />
-    <Script file="GUITabs\GUIQoL\GUI-WorldMarkerCycler.lua" />
     <Script file="GUITabs\GUIQoL\GUI-CombatLogger.lua" />
     <Script file="GUITabs\GUIQoL\GUI-AuctionHouseFilter.lua" />
-    <Script file="GUITabs\GUIQoL\GUI-PIMacroBuilder.lua" />
-    <Script file="GUITabs\GUIQoL\GUI-FocusMarker.lua" />
-    <Script file="GUITabs\GUIQoL\GUI-MacroBuilders.lua" />
     <Script file="GUITabs\GUIQoL\GUI-GreatVaultAlert.lua" />
     <Script file="GUITabs\GUIQoL\GUI-MissingEnchants.lua" />
     <Script file="GUITabs\GUIQoL\GUI-WorldMap.lua" />
