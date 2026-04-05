@@ -6,18 +6,8 @@
     <Script file="CombatRes.lua" />
     <Script file="CombatTexts.lua" />
     <Script file="CursorCircle.lua" />
-    <Script file="PetStatusText.lua" />
-    <Script file="RaidNotifications.lua" />
     <Script file="TargetCastbar.lua" />
     <Script file="FocusCastbar.lua" />
     <Script file="RangeChecker.lua" />
-    <Script file="DispelCursor.lua" />
-    <Script file="TimeSpiral.lua" />
-    <Script file="DisintegrateTicks.lua" />
-    <Script file="StasisTracker.lua" />
-    <Script file="EbonMightHelper.lua" />
-    <Script file="BloodlustTracker.lua" />
     <Script file="KickTracker.lua" />
-    <Script file="NoMovementAlert.lua" />
-    <Script file="AugBuffsTracker.lua" />
 </Ui>

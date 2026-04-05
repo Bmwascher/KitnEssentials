@@ -4,17 +4,12 @@
     <Script file="Automation.lua" />
     <Script file="CopyAnything.lua" />
     <Script file="DragonRiding.lua" />
-    <Script file="StanceText.lua" />
     <Script file="HuntersMark.lua" />
     <Script file="HideBars.lua" />
-    <Script file="Recuperate.lua" />
     <Script file="Optimize.lua" />
     <Script file="SlashCommands.lua" />
-    <Script file="WorldMarkerCycler.lua" />
     <Script file="CombatLogger.lua" />
     <Script file="AuctionHouseFilter.lua" />
-    <Script file="PIMacroBuilder.lua" />
-    <Script file="FocusMarker.lua" />
     <Script file="GreatVaultAlert.lua" />
     <Script file="VantusRune.lua" />
     <Script file="MissingEnchants.lua" />
