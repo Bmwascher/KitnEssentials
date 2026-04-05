@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.8.4
+### Fixes
+- **Combat Res**: Added missing `db.Enabled` gate in OnEnable — module now properly respects disabled state on login/profile switch.
+- **Missing Enchants/Gems**: Added BetterCharacterPanel conflict guard — silently skips if BCP addon is loaded to prevent double text overlays.
+- **Missing Enchants/Gems**: Event frame now properly unregisters events on module disable.
+- **Libs/Init.xml**: Fixed `<Include>` tags on `.lua` files to correct `<Script>` tags. Standardized all paths to forward slashes.
+- **Packaging**: Expanded `.pkgmeta` ignore list, split Ace3 bulk external into individual library externals, added LibCustomGlow, LibDBIcon, LibDataBroker, LibRangeCheck as externals. Added `.gitattributes` for line ending normalization.
+
 ## v1.8.3
 ### Additions
 - New module: **Missing Enchants/Gems** — displays red warnings on the character panel for missing enchants and empty gem sockets. Expansion-aware enchant slots, tooltip-based gem socket detection ("Prismatic Socket"), combined text display ("No Enchant / No Gem"). Configurable font, size, and outline. Hide Character Panel Background toggle.
