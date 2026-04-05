@@ -38,6 +38,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Evoker Suite | Disintegrate tick marks, Preservation Stasis tracker, Ebon Might extension warning, and Aug Buffs Tracker (Prescience/Shifting Sands) with growth direction — tabbed GUI |
 | World Marker Cycler | Cycle through world markers at cursor with drag-to-reorder priority |
 | Macro Builders | Focus Marker and Power Infusion macro builders in one tabbed GUI |
+| Combat Potion Ready | "Potion Ready" text when a combat potion is in bags and off cooldown, with instance/combat/healer visibility toggles |
 
 ## Quality of Life
 

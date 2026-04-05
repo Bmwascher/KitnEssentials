@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.8.5
+### Additions
+- New module: **Combat Potion Ready** — displays "Potion Ready" text when a combat potion is in bags and off cooldown. 22 potions tracked (regular + fleeting). Visibility toggles: Instance Only, Combat Only, Hide for Healer Specs. Standard color mode (class/custom/theme), SOFTOUTLINE default, anchored to UtilityCooldownViewer.
+
 ## v1.8.4
 ### Fixes
 - **Combat Res**: Added missing `db.Enabled` gate in OnEnable — module now properly respects disabled state on login/profile switch.

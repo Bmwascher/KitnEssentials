@@ -59,6 +59,7 @@ GUIFrame.sidebarConfig = {
             { id = "EvokerSuite",   text = "Evoker Suite" },
             { id = "WorldMarkerCycler", text = "World Marker Cycler" },
             { id = "MacroBuilders", text = "Macro Builders" },
+            { id = "PotionReady",   text = "Combat Potion Ready" },
         },
     },
     {
