@@ -56,6 +56,7 @@
     <Script file="GUITabs\GUIUtilities\GUI-FocusMarker.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-PIMacroBuilder.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-MacroBuilders.lua" />
+    <Script file="GUITabs\GUIUtilities\GUI-PotionReady.lua" />
 
     <!-- QoL tabs -->
     <Script file="GUITabs\GUIQoL\GUI-Automation.lua" />

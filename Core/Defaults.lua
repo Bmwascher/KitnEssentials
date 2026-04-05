@@ -662,6 +662,24 @@ local Defaults = {
             Color = { 1, 0.82, 0, 1 },
         },
 
+        PotionReady = {
+            Enabled = true,
+            InstanceOnly = true,
+            CombatOnly = false,
+            DisableOnHealer = false,
+            Text = "Potion Ready",
+            FontSize = 20,
+            FontFace = "Expressway",
+            FontOutline = "SOFTOUTLINE",
+            ColorMode = "theme",
+            Color = { 0, 1, 0, 1 },
+            Strata = "MEDIUM",
+            anchorFrameType = "SELECTFRAME",
+            ParentFrame = "UtilityCooldownViewer",
+            Position = { AnchorFrom = "TOP", AnchorTo = "BOTTOMRIGHT", XOffset = 0, YOffset = 5 },
+        },
+
+
         HideBars = {
             Enabled = false,
             Keybind = "",

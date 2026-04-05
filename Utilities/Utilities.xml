@@ -16,4 +16,5 @@
     <Script file="WorldMarkerCycler.lua" />
     <Script file="FocusMarker.lua" />
     <Script file="PIMacroBuilder.lua" />
+    <Script file="PotionReady.lua" />
 </Ui>
