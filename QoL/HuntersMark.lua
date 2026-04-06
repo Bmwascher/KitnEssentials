@@ -5,6 +5,7 @@ if not KitnEssentials then return end
 
 ---@class HuntersMark: AceModule
 local HM = KitnEssentials:NewModule("HuntersMark")
+HM.classRestriction = "HUNTER"
 
 local CreateFrame = CreateFrame
 local UnitExists = UnitExists

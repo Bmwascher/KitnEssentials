@@ -206,10 +206,13 @@ end
 function PreviewManager:StartAllPreviews()
     local Addon = KitnEssentials
     if not Addon then return end
+    local classMatch = { [select(2, UnitClass("player"))] = true }
     for _, moduleName in ipairs(PREVIEW_MODULES) do
         local module = Addon:GetModule(moduleName, true)
         if module and module.ShowPreview and module.db and module.db.Enabled then
-            module:ShowPreview()
+            if not module.classRestriction or classMatch[module.classRestriction] then
+                module:ShowPreview()
+            end
         end
     end
 end

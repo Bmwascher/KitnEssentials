@@ -4,6 +4,7 @@ local KE = select(2, ...)
 if not KitnEssentials then return end
 
 local ST = KitnEssentials:NewModule("StasisTracker", "AceEvent-3.0")
+ST.classRestriction = "EVOKER"
 
 -- Localization
 local CreateFrame = CreateFrame
