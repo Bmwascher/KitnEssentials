@@ -4,6 +4,7 @@ local KE = select(2, ...)
 if not KitnEssentials then return end
 
 local DT = KitnEssentials:NewModule("DisintegrateTicks", "AceEvent-3.0")
+DT.classRestriction = "EVOKER"
 
 -- Localization
 local CreateFrame = CreateFrame

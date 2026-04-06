@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.8.6
+### Changes
+- **Preview/Edit Mode**: Class-restricted modules (Evoker Suite, Hunter's Mark) no longer show previews on non-matching classes. Extensible system — any module can declare `classRestriction`.
+
 ## v1.8.5
 ### Additions
 - New module: **Combat Potion Ready** — displays "Potion Ready" text when a combat potion is in bags and off cooldown. 22 potions tracked (regular + fleeting). Visibility toggles: Instance Only, Combat Only, Hide for Healer Specs. Standard color mode (class/custom/theme), SOFTOUTLINE default, anchored to UtilityCooldownViewer.

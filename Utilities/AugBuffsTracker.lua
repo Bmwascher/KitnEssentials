@@ -6,6 +6,7 @@ if not KitnEssentials then return end
 -- Create module
 ---@class AugBuffsTracker: AceModule, AceEvent-3.0
 local ABT = KitnEssentials:NewModule("AugBuffsTracker", "AceEvent-3.0")
+ABT.classRestriction = "EVOKER"
 
 -- Localization
 local C_UnitAuras = C_UnitAuras
