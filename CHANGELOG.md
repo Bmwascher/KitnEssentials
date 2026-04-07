@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.9.1
+### Fixes
+- **GetStringWidth taint**: CombatRes, CombatTimer, and NoMovementAlert now guard against secret values from `GetStringWidth()` after combat — prevents crash when opening GUI post-encounter.
+
 ## v1.9.0
 ### Additions
 - New module: **Boss Debuffs** (Encounter Tools) — shows icons for external debuffs applied to you during boss encounters. 1-5 icons with growth direction, cooldown spiral, duration text, mouseover tooltip, encounter blacklist with hover reference. Visibility modes: Boss Encounters, Instance Combat, Always in Combat.

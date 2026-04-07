@@ -212,15 +212,23 @@ function CR:ApplyBackdropSettings()
 
     local backdrop = self.db.Backdrop or {}
 
-    -- Size frame from content
+    -- Size frame from content (GetStringWidth can return secret after combat)
     local totalWidth = 8 -- padding
+    local tainted = false
     for _, fs in ipairs({ self.frame.bracketOpen, self.frame.CRText, self.frame.charge, self.frame.separator, self.frame.timerText, self.frame.bracketClose }) do
         if fs and fs:GetText() and fs:GetText() ~= "" then
-            totalWidth = totalWidth + fs:GetStringWidth() + (self.db.TextSpacing or 4)
+            local sw = fs:GetStringWidth()
+            if sw and not issecretvalue(sw) then
+                totalWidth = totalWidth + sw + (self.db.TextSpacing or 4)
+            else
+                tainted = true
+            end
         end
     end
-    local h = (self.db.FontSize or 16) + 10
-    self.frame:SetSize(math.max(totalWidth, 80), h)
+    if not tainted then
+        local h = (self.db.FontSize or 16) + 10
+        self.frame:SetSize(math.max(totalWidth, 80), h)
+    end
 
     if backdrop.Enabled then
         local bgColor = backdrop.Color or { 0, 0, 0, 0.6 }
