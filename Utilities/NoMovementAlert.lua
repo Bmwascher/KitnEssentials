@@ -252,10 +252,11 @@ function NMA:ApplySettings()
     -- Re-parse format in case DisplayFormat changed
     self:ParseDisplayFormat()
 
-    -- Size frame from content
-    local w = (self.text and self.text:GetStringWidth() or 150) + 16
-    local h = (self.db.FontSize or 20) + 10
-    self.frame:SetSize(w, h)
+    -- Size frame from content (GetStringWidth can return secret after combat)
+    local textWidth = self.text and self.text:GetStringWidth()
+    if textWidth and not issecretvalue(textWidth) then
+        self.frame:SetSize(textWidth + 16, (self.db.FontSize or 20) + 10)
+    end
 end
 
 ---------------------------------------------------------------------------------

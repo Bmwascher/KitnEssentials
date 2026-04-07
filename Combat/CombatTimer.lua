@@ -76,9 +76,10 @@ end
 
 function CT:UpdateFrameSize()
     if not self.frame then return end
-    local w = (self.text and self.text:GetStringWidth() or 80) + 16
-    local h = (self.db.FontSize or 28) + 8
-    self.frame:SetSize(w, h)
+    local textWidth = self.text and self.text:GetStringWidth()
+    if textWidth and not issecretvalue(textWidth) then
+        self.frame:SetSize(textWidth + 16, (self.db.FontSize or 28) + 8)
+    end
 end
 
 function CT:UpdateText()
