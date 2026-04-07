@@ -90,12 +90,19 @@ function ST:CreateFrames()
     container:Hide()
     self.containerFrame = container
 
-    -- Icons
+    -- Icons (wrapped in frames for borders)
     for i = 1, 3 do
-        local icon = container:CreateTexture(nil, "ARTWORK")
-        icon:SetTexture(PLACEHOLDER_ICON)
-        icon:Hide()
-        self.icons[i] = icon
+        local iconFrame = CreateFrame("Frame", nil, container)
+        iconFrame:Hide()
+
+        local tex = iconFrame:CreateTexture(nil, "ARTWORK")
+        tex:SetAllPoints(iconFrame)
+        tex:SetTexture(PLACEHOLDER_ICON)
+        KE:ApplyIconZoom(tex)
+        KE:AddIconBorders(iconFrame)
+
+        iconFrame.texture = tex
+        self.icons[i] = iconFrame
     end
 
     -- Status bar
@@ -108,6 +115,7 @@ function ST:CreateFrames()
     local barBG = bar:CreateTexture(nil, "BACKGROUND")
     barBG:SetAllPoints(bar)
     self.barBackground = barBG
+    KE:AddIconBorders(bar)
 
     -- Countdown text
     local text = bar:CreateFontString(nil, "OVERLAY")
@@ -244,7 +252,7 @@ function ST:StartStasis()
     self.state.tts = false
 
     for i = 1, 3 do
-        self.icons[i]:SetTexture(PLACEHOLDER_ICON)
+        self.icons[i].texture:SetTexture(PLACEHOLDER_ICON)
         self.icons[i]:Show()
     end
 
@@ -286,7 +294,7 @@ function ST:AddSpell(spellId)
     if self.icons[index] then
         local texture = C_Spell.GetSpellTexture(spellId)
         if texture then
-            self.icons[index]:SetTexture(texture)
+            self.icons[index].texture:SetTexture(texture)
         end
     end
     if self.state.storedSpells >= 3 then
@@ -395,7 +403,7 @@ function ST:ShowPreview()
     self:ApplySettings()
 
     for i = 1, 3 do
-        self.icons[i]:SetTexture(PLACEHOLDER_ICON)
+        self.icons[i].texture:SetTexture(PLACEHOLDER_ICON)
         self.icons[i]:Show()
     end
     self.bar:SetValue(15)

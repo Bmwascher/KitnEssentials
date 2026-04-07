@@ -22,47 +22,7 @@ REC.isPreview = false
 --------------------------------------------------------------------------------
 -- Inline helpers
 --------------------------------------------------------------------------------
-local function ApplyZoom(texture, zoom)
-    local texMin = 0.25 * zoom
-    local texMax = 1 - 0.25 * zoom
-    texture:SetTexCoord(texMin, texMax, texMin, texMax)
-end
-
-local function AddBorders(frame, color)
-    local r, g, b, a = color[1], color[2], color[3], color[4] or 1
-
-    local top = frame:CreateTexture(nil, "OVERLAY", nil, 7)
-    top:SetHeight(1)
-    top:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
-    top:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
-    top:SetColorTexture(r, g, b, a)
-    top:SetTexelSnappingBias(0)
-    top:SetSnapToPixelGrid(false)
-
-    local bottom = frame:CreateTexture(nil, "OVERLAY", nil, 7)
-    bottom:SetHeight(1)
-    bottom:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
-    bottom:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
-    bottom:SetColorTexture(r, g, b, a)
-    bottom:SetTexelSnappingBias(0)
-    bottom:SetSnapToPixelGrid(false)
-
-    local left = frame:CreateTexture(nil, "OVERLAY", nil, 7)
-    left:SetWidth(1)
-    left:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
-    left:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
-    left:SetColorTexture(r, g, b, a)
-    left:SetTexelSnappingBias(0)
-    left:SetSnapToPixelGrid(false)
-
-    local right = frame:CreateTexture(nil, "OVERLAY", nil, 7)
-    right:SetWidth(1)
-    right:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
-    right:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
-    right:SetColorTexture(r, g, b, a)
-    right:SetTexelSnappingBias(0)
-    right:SetSnapToPixelGrid(false)
-end
+-- Icon helpers: KE:ApplyIconZoom() and KE:AddIconBorders() in Core/Widgets.lua
 
 --------------------------------------------------------------------------------
 -- DB
@@ -156,12 +116,12 @@ function REC:CreateButton()
     -- Icon
     button.icon = button:CreateTexture(nil, "ARTWORK")
     button.icon:SetAllPoints(button)
-    ApplyZoom(button.icon, 0.3)
+    KE:ApplyIconZoom(button.icon)
     if spellInfo and spellInfo.iconID then
         button.icon:SetTexture(spellInfo.iconID)
     end
 
-    AddBorders(button, { 0, 0, 0, 1 })
+    KE:AddIconBorders(button)
 
     -- Highlight
     button.highlight = button:CreateTexture(nil, "HIGHLIGHT")

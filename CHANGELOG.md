@@ -1,5 +1,24 @@
 # Changelog
 
+## v1.9.0
+### Additions
+- New module: **Boss Debuffs** (Encounter Tools) — shows icons for external debuffs applied to you during boss encounters. 1-5 icons with growth direction, cooldown spiral, duration text, mouseover tooltip, encounter blacklist with hover reference. Visibility modes: Boss Encounters, Instance Combat, Always in Combat.
+- New module: **Racials Anchor** (QoL) — repositions Ayije CDM racials bar with custom X/Y offsets and automatic pet bar offset for pet classes. Supports ElvUI and UUF pet frames.
+- New section: **Encounter Tools** — dedicated sidebar section for encounter-specific modules.
+- **Icon Standard** — centralized `KE:ApplyIconZoom()` and `KE:AddIconBorders()` in Core/Widgets.lua. All icon modules now use consistent 0.3 zoom + 1px pixel-perfect borders.
+
+### Changes
+- **Sidebar**: Alphabetical ordering for Combat, Utilities, and QoL sections.
+- **Sidebar renames**: Combat Res → Battle Res, Combat Cross → Player Crosshair, Dragon Riding UI → Skyriding UI.
+- **Custom Buffs**: Removed section and all 4 modules (Buff Icons, Buff Bars, Externals/Defensives, Movement Buffs) — deprecated.
+
+### Fixes
+- **Edit Mode**: CombatRes, CombatTimer, and NoMovementAlert frames now size dynamically from content instead of backdrop/hardcoded values — fixes 1px or oversized edit mode borders.
+- **WeakAuras detection**: `/wa` slash command now checks `WeakAuras` global instead of `IsAddOnLoaded` — works correctly with addon forks and disabled addons.
+- **RaidNotifications**: Fixed "Font not set" error during profile switch by applying settings before showing preview alerts.
+- **AugBuffsTracker**: Added class check in OnEnable — no longer creates frames or registers events on non-Evoker characters.
+- **Icon modules**: Migrated BloodlustTracker, StasisTracker, AugBuffsTracker, RaidNotifications, TimeSpiral, Recuperate, HuntersMark to centralized icon helpers — consistent zoom and borders, text overlays at correct sublevel.
+
 ## v1.8.6
 ### Changes
 - **Preview/Edit Mode**: Class-restricted modules (Evoker Suite, Hunter's Mark) no longer show previews on non-matching classes. Extensible system — any module can declare `classRestriction`.

@@ -8,9 +8,7 @@ if not KitnEssentials then return end
 -- SetPITarget macro helper, and /kitn subcommand integration
 
 local InCombatLockdown = InCombatLockdown
-local UnitName = UnitName
 local ReloadUI = ReloadUI
-local IsAddOnLoaded = C_AddOns.IsAddOnLoaded
 local GetCVar = C_CVar.GetCVar
 local SetCVar = C_CVar.SetCVar
 local IsInGroup = IsInGroup
@@ -41,7 +39,7 @@ end
 
 local function RegisterCDM()
     if cdmRegistered then return end
-    local waLoaded = IsAddOnLoaded("WeakAuras")
+    local waLoaded = WeakAuras ~= nil
     SLASH_KE_CDM1 = "/cd"
     if not waLoaded then
         SLASH_KE_CDM2 = "/wa"

@@ -17,9 +17,9 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 
 | Module | Description |
 |---|---|
+| Battle Res | Battle res charge tracker with timer |
 | Combat Timer | Configurable in-combat duration display |
-| Combat Res | Battle res charge tracker with timer |
-| Combat Cross | Static crosshair overlay with range warning (melee/ranged/healer) |
+| Player Crosshair | Static crosshair overlay with range warning (melee/ranged/healer) |
 | Combat Texts | Combat enter/exit, interrupt announce with spell icon, and low durability warnings |
 | Cursor Circle | Cursor-following ring with GCD overlay, multiple texture options |
 | Range Display | Target range text with out-of-range color warning |
@@ -50,7 +50,8 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Slash Commands | Custom slash command utilities |
 | Auction House Filter | Auto-filter AH to current expansion, auto-focus search bar, craft orders filter |
 | Hunter's Mark Missing | Alert when Hunter's Mark is not applied |
-| Dragon Riding UI | Reskinned dragonriding vigor bar |
+| Skyriding UI | Reskinned skyriding vigor bar |
+| Racials Anchor | Repositions CDM racials bar with custom offsets and pet bar adjustment |
 | Copy Anything | Copy any chat message or tooltip text |
 | Hide ActionBars | Hide specific action bar rows in/out of combat |
 | Great Vault Alert | Shows your loot spec when opening the Great Vault with class color and sound |
@@ -72,12 +73,11 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Details Backdrop | Details! Damage Meter backdrop styling |
 | Raid Manager Panel | Raid manager panel appearance |
 
-## Custom Buffs
+## Encounter Tools
 
 | Module | Description |
 |---|---|
-| Buff Icons | Custom buff icon tracking with positioning |
-| Buff Bars | Custom buff bar tracking with positioning |
+| Boss Debuffs | External debuff icon display with cooldown spiral, duration text, encounter blacklist, and visibility gating |
 
 ## Settings
 

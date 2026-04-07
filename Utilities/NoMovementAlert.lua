@@ -149,7 +149,7 @@ function NMA:CreateFrame()
     if self.frame then return end
 
     local frame = CreateFrame("Frame", "KE_NoMovementAlertFrame", UIParent)
-    frame:SetSize(300, 50)
+    frame:SetSize(200, 30)
 
     local text = frame:CreateFontString(nil, "OVERLAY")
     text:SetPoint("CENTER", frame, "CENTER", 0, 0)
@@ -251,6 +251,11 @@ function NMA:ApplySettings()
 
     -- Re-parse format in case DisplayFormat changed
     self:ParseDisplayFormat()
+
+    -- Size frame from content
+    local w = (self.text and self.text:GetStringWidth() or 150) + 16
+    local h = (self.db.FontSize or 20) + 10
+    self.frame:SetSize(w, h)
 end
 
 ---------------------------------------------------------------------------------

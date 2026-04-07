@@ -18,7 +18,6 @@ local GetTime = GetTime
 local pairs = pairs
 local next = next
 local UnitClass = UnitClass
-local unpack = unpack
 
 -- Module state
 TSP.activeProcs = {}
@@ -103,34 +102,7 @@ function TSP:OnInitialize()
 end
 
 -- Helper: apply zoom to a texture via TexCoord
-local function ApplyZoom(tex, zoom)
-    local texMin = 0.25 * zoom
-    local texMax = 1 - 0.25 * zoom
-    tex:SetTexCoord(texMin, texMax, texMin, texMax)
-end
-
--- Helper: add pixel-perfect borders to a frame
-local function AddBorders(frame, color)
-    color = color or { 0, 0, 0, 1 }
-    frame.borders = {}
-
-    local function MakeBorder(point1A, rel1A, point1B, rel1B, point2A, rel2A, point2B, rel2B, w, h)
-        local tex = frame:CreateTexture(nil, "OVERLAY", nil, 7)
-        tex:SetColorTexture(unpack(color))
-        tex:SetTexelSnappingBias(0)
-        tex:SetSnapToPixelGrid(false)
-        tex:SetPoint(point1A, frame, rel1A, 0, 0)
-        tex:SetPoint(point2A, frame, rel2A, 0, 0)
-        if w then tex:SetWidth(w) end
-        if h then tex:SetHeight(h) end
-        return tex
-    end
-
-    frame.borders.top    = MakeBorder("TOPLEFT", "TOPLEFT", nil, nil, "TOPRIGHT", "TOPRIGHT", nil, nil, nil, 1)
-    frame.borders.bottom = MakeBorder("BOTTOMLEFT", "BOTTOMLEFT", nil, nil, "BOTTOMRIGHT", "BOTTOMRIGHT", nil, nil, nil, 1)
-    frame.borders.left   = MakeBorder("TOPLEFT", "TOPLEFT", nil, nil, "BOTTOMLEFT", "BOTTOMLEFT", nil, nil, 1, nil)
-    frame.borders.right  = MakeBorder("TOPRIGHT", "TOPRIGHT", nil, nil, "BOTTOMRIGHT", "BOTTOMRIGHT", nil, nil, 1, nil)
-end
+-- Icon helpers: KE:ApplyIconZoom() and KE:AddIconBorders() in Core/Widgets.lua
 
 -- Create the display frame
 function TSP:CreateFrame()
@@ -146,12 +118,12 @@ function TSP:CreateFrame()
     f:Hide()
 
     -- Pixel borders
-    AddBorders(f, { 0, 0, 0, 1 })
+    KE:AddIconBorders(f)
 
     -- Icon texture with zoom
     f.icon = f:CreateTexture(nil, "ARTWORK")
     f.icon:SetAllPoints(f)
-    ApplyZoom(f.icon, 0.3)
+    KE:ApplyIconZoom(f.icon)
     f.icon:SetTexture(self:GetDisplayIcon())
 
     -- Text below the icon

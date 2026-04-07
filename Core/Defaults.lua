@@ -782,6 +782,32 @@ local Defaults = {
             WaypointBarEnabled = true,
         },
 
+        RacialsAnchor = {
+            Enabled = false,
+            AnchorFrom = "",
+            AnchorTo = "",
+            XOffset = 0,
+            YOffset = -2,
+            PetBarOffset = -13,
+        },
+
+        BossDebuffs = {
+            Enabled = false,
+            VisibilityMode = "boss",
+            EncounterBlacklist = "",
+            MaxDebuffs = 2,
+            IconSize = 96,
+            Spacing = 1,
+            GrowthDirection = "LEFT",
+            ShowDuration = true,
+            ShowDurationText = true,
+            ShowTooltip = true,
+            Strata = "MEDIUM",
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            Position = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = -360, YOffset = -55 },
+        },
+
         ----------------------------------------------------------------
         -- SKINNING MODULES (disabled when ElvUI active)
         ----------------------------------------------------------------
@@ -1090,84 +1116,6 @@ local Defaults = {
             },
         },
 
-        ----------------------------------------------------------------
-        -- CUSTOM BUFFS
-        ----------------------------------------------------------------
-
-        BuffIcons = {
-            Enabled = false,
-            GrowthDirection = "RIGHT",
-            Spacing = 2,
-            anchorFrameType = "UIPARENT",
-            ParentFrame = "UIParent",
-            Position = DefaultPosition(0, 250),
-            Trackers = {},
-            Defaults = {
-                IconSize = 40,
-                ShowCooldownText = true,
-                CountdownSize = 18,
-                BorderColor = { 0, 0, 0, 1 },
-                BorderSize = 1,
-            },
-        },
-
-        BuffBars = {
-            Enabled = false,
-            GrowthDirection = "DOWN",
-            Spacing = 2,
-            anchorFrameType = "UIPARENT",
-            ParentFrame = "UIParent",
-            Position = DefaultPosition(0, 280),
-            Trackers = {},
-            Defaults = {
-                BarWidth = 200,
-                BarHeight = 20,
-                IconSize = 20,
-                ShowIcon = true,
-                ShowTimeText = true,
-                ShowSpellText = true,
-                FontSize = 12,
-                BarColor = { 0.65, 0.65, 0.65, 1 },
-                BackgroundColor = { 0, 0, 0, 0.8 },
-                BorderColor = { 0, 0, 0, 1 },
-                Reverse = false,
-                StatusBarTexture = "Blizzard",
-            },
-        },
-
-        ExternalsDefensives = {
-            Enabled = false,
-            GrowthDirection = "RIGHT",
-            Spacing = 2,
-            anchorFrameType = "UIPARENT",
-            ParentFrame = "UIParent",
-            Position = DefaultPosition(0, 300),
-            Trackers = {},
-            Defaults = {
-                IconSize = 40,
-                ShowCooldownText = true,
-                CountdownSize = 18,
-                BorderColor = { 0, 0, 0, 1 },
-                BorderSize = 1,
-            },
-        },
-
-        MovementBuffs = {
-            Enabled = false,
-            GrowthDirection = "RIGHT",
-            Spacing = 2,
-            anchorFrameType = "UIPARENT",
-            ParentFrame = "UIParent",
-            Position = DefaultPosition(0, 250),
-            Trackers = {},
-            Defaults = {
-                IconSize = 40,
-                ShowCooldownText = true,
-                CountdownSize = 18,
-                BorderColor = { 0, 0, 0, 1 },
-                BorderSize = 1,
-            },
-        },
     },
 }
 

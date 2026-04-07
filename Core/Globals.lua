@@ -175,7 +175,7 @@ local PREVIEW_MODULES = {
     "CombatTimer", "PetStatusText", "DragonRiding",
     "FocusCastbar", "RaidNotifications", "HuntersMark", "RangeChecker",
     "TimeSpiral", "DisintegrateTicks", "StasisTracker", "Recuperate", "BloodlustTracker", "KickTracker",
-    "NoMovementAlert", "AugBuffsTracker", "GreatVaultAlert", "PotionReady",
+    "NoMovementAlert", "AugBuffsTracker", "GreatVaultAlert", "PotionReady", "BossDebuffs",
 }
 
 PreviewManager.guiOpen = false

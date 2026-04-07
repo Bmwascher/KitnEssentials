@@ -76,8 +76,9 @@ end
 
 function CT:UpdateFrameSize()
     if not self.frame then return end
-    local backdrop = self.db.Backdrop or {}
-    self.frame:SetSize(backdrop.bgWidth or 100, backdrop.bgHeight or 26)
+    local w = (self.text and self.text:GetStringWidth() or 80) + 16
+    local h = (self.db.FontSize or 28) + 8
+    self.frame:SetSize(w, h)
 end
 
 function CT:UpdateText()

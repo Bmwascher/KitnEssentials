@@ -17,7 +17,6 @@ Core\Core.xml
 Utilities\Utilities.xml
 
 Combat\Combat.xml
-CustomBuffs\CustomBuffs.xml
 QoL\QoL.xml
 Skinning\Skinning.xml
 

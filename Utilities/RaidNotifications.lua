@@ -109,8 +109,9 @@ local function CreateIcon(parent, anchor, point, relPoint, xOff, iconSize)
     local tex = holder:CreateTexture(nil, "ARTWORK")
     tex:SetPoint("TOPLEFT", 1, -1)
     tex:SetPoint("BOTTOMRIGHT", -1, 1)
-    tex:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    KE:ApplyIconZoom(tex)
     holder.tex = tex
+    KE:AddIconBorders(holder)
     return holder
 end
 
@@ -444,6 +445,7 @@ function RN:ShowPreview()
     self:RegWithEditMode()
 
     self.isPreview = true
+    self:ApplySettings()
     -- Show only enabled alerts as preview
     for _, def in ipairs(ALERT_DEFS) do
         if self.db[def.enableKey] ~= false then
@@ -452,7 +454,6 @@ function RN:ShowPreview()
             self:HideAlert(def.key)
         end
     end
-    self:ApplySettings()
 end
 
 function RN:HidePreview()
