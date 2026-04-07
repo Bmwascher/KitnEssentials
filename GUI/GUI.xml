@@ -57,6 +57,7 @@
     <Script file="GUITabs\GUIUtilities\GUI-PIMacroBuilder.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-MacroBuilders.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-PotionReady.lua" />
+    <Script file="GUITabs\GUIUtilities\GUI-BossDebuffs.lua" />
 
     <!-- QoL tabs -->
     <Script file="GUITabs\GUIQoL\GUI-Automation.lua" />
@@ -71,6 +72,7 @@
     <Script file="GUITabs\GUIQoL\GUI-GreatVaultAlert.lua" />
     <Script file="GUITabs\GUIQoL\GUI-MissingEnchants.lua" />
     <Script file="GUITabs\GUIQoL\GUI-WorldMap.lua" />
+    <Script file="GUITabs\GUIQoL\GUI-RacialsAnchor.lua" />
 
     <!-- Skinning tabs -->
     <Script file="GUITabs\GUISkinning\GUI-Tooltips.lua" />
@@ -87,12 +89,6 @@
     <Script file="GUITabs\GUISkinning\GUI-UICleanup.lua" />
     <Script file="GUITabs\GUISkinning\GUI-Battlenet.lua" />
     <Script file="GUITabs\GUISkinning\GUI-BlizzardRaidmanager.lua" />
-
-    <!-- CustomBuffs tabs -->
-    <Script file="GUITabs\GUICustomBuffs\GUI-BuffIcons.lua" />
-    <Script file="GUITabs\GUICustomBuffs\GUI-BuffBars.lua" />
-    <Script file="GUITabs\GUICustomBuffs\GUI-ExternalsDefensives.lua" />
-    <Script file="GUITabs\GUICustomBuffs\GUI-MovementBuffs.lua" />
 
     <!-- Optimize tab -->
     <Script file="GUITabs\GUIQoL\GUI-Optimize.lua" />

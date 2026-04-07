@@ -301,12 +301,17 @@ function ABT:CreateEntry()
     local entry = CreateFrame("Frame", nil, self.containerFrame)
     entry:SetSize(db.IconSize or 32, (db.IconSize or 32) + 20)
 
-    -- Buff icon
-    local icon = entry:CreateTexture(nil, "ARTWORK")
-    icon:SetSize(db.IconSize or 32, db.IconSize or 32)
-    icon:SetPoint("TOP", entry, "TOP", 0, 0)
-    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    -- Buff icon (wrapped in frame for borders)
+    local iconFrame = CreateFrame("Frame", nil, entry)
+    iconFrame:SetSize(db.IconSize or 32, db.IconSize or 32)
+    iconFrame:SetPoint("TOP", entry, "TOP", 0, 0)
+    entry.iconFrame = iconFrame
+
+    local icon = iconFrame:CreateTexture(nil, "ARTWORK")
+    icon:SetAllPoints(iconFrame)
+    KE:ApplyIconZoom(icon)
     entry.icon = icon
+    KE:AddIconBorders(iconFrame)
 
     -- Role badge (small overlay on icon)
     local roleBadge = entry:CreateTexture(nil, "OVERLAY")
@@ -314,9 +319,9 @@ function ABT:CreateEntry()
     roleBadge:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", 2, -2)
     entry.roleBadge = roleBadge
 
-    -- Timer text (on icon)
-    local timer = entry:CreateFontString(nil, "OVERLAY")
-    timer:SetPoint("CENTER", icon, "CENTER", 0, 0)
+    -- Timer text (on icon frame, above borders)
+    local timer = iconFrame:CreateFontString(nil, "OVERLAY", nil, 8)
+    timer:SetPoint("CENTER", iconFrame, "CENTER", 0, 0)
     entry.timer = timer
 
     -- Name text (below icon)
@@ -381,7 +386,7 @@ function ABT:UpdateEntryVisuals(entry, data)
 
     -- Icon
     entry.icon:SetTexture(data.icon)
-    entry.icon:SetSize(db.IconSize or 32, db.IconSize or 32)
+    entry.iconFrame:SetSize(db.IconSize or 32, db.IconSize or 32)
 
     -- Role badge
     local showRole = db.ShowRoleIcon ~= false
@@ -696,6 +701,7 @@ end
 
 function ABT:OnEnable()
     if not self.db.Enabled then return end
+    if select(2, UnitClass("player")) ~= "EVOKER" then return end
 
     ResolveSpellNames()
     self:CreateFrames()

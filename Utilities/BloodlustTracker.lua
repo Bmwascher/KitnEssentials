@@ -185,22 +185,28 @@ function BLT:CreateFrames()
     sprite:SetAllPoints()
     sprite:Hide()
 
-    -- Icon texture for basic mode
-    local icon = frame:CreateTexture(nil, "ARTWORK")
-    icon:SetTexture(BLOODLUST_ICON)
-    icon:SetSize(self.db.BasicIconSize, self.db.BasicIconSize)
-    icon:SetPoint("CENTER", frame, "CENTER", 0, 0)
-    icon:Hide()
+    -- Icon container for basic mode (separate frame for borders)
+    local iconFrame = CreateFrame("Frame", nil, frame)
+    iconFrame:SetSize(self.db.BasicIconSize, self.db.BasicIconSize)
+    iconFrame:SetPoint("CENTER", frame, "CENTER", 0, 0)
+    iconFrame:Hide()
 
-    -- Countdown text for basic mode
-    local text = frame:CreateFontString(nil, "OVERLAY")
+    local icon = iconFrame:CreateTexture(nil, "ARTWORK")
+    icon:SetAllPoints(iconFrame)
+    icon:SetTexture(BLOODLUST_ICON)
+    KE:ApplyIconZoom(icon)
+    KE:AddIconBorders(iconFrame)
+
+    -- Countdown text for basic mode (on iconFrame, above borders)
+    local text = iconFrame:CreateFontString(nil, "OVERLAY", nil, 8)
     local fontPath = KE:GetFontPath(self.db.FontFace)
     text:SetFont(fontPath, self.db.FontSize, KE:GetFontOutline(self.db.FontOutline) or "")
-    text:SetPoint("CENTER", icon, "CENTER", 0, 0)
+    text:SetPoint("CENTER", iconFrame, "CENTER", 0, 0)
     text:Hide()
 
     self.frame = frame
     self.spriteTexture = sprite
+    self.iconFrame = iconFrame
     self.iconTexture = icon
     self.countdownText = text
 end
@@ -284,7 +290,7 @@ function BLT:StartAnimation()
         self.spriteTexture:SetTexture(path)
         self:SetSpriteFrame(0)
         self.spriteTexture:Show()
-        self.iconTexture:Hide()
+        self.iconFrame:Hide()
         self.countdownText:Hide()
         HideSoftOutline(self.countdownText)
 
@@ -294,7 +300,7 @@ function BLT:StartAnimation()
     else
         -- Basic mode OR sound-only preset: icon + countdown
         self.spriteTexture:Hide()
-        self.iconTexture:Show()
+        self.iconFrame:Show()
         self.countdownText:Show()
         ShowSoftOutline(self.countdownText)
 
@@ -708,7 +714,7 @@ function BLT:ApplySettings()
         KE:ApplyFontToText(self.countdownText, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
         local color = self.db.CountdownColor or { 1, 1, 1, 1 }
         self.countdownText:SetTextColor(color[1], color[2], color[3], color[4] or 1)
-        self.iconTexture:SetSize(self.db.BasicIconSize, self.db.BasicIconSize)
+        self.iconFrame:SetSize(self.db.BasicIconSize, self.db.BasicIconSize)
         self.frame:SetSize(self.db.BasicIconSize, self.db.BasicIconSize)
     else
         self.frame:SetSize(FRAME_SIZE, FRAME_SIZE)
@@ -770,12 +776,12 @@ function BLT:ShowPreview()
         self.spriteTexture:SetTexture(MEDIA_PATH .. preset.sheet)
         self:SetSpriteFrame(0)
         self.spriteTexture:Show()
-        self.iconTexture:Hide()
+        self.iconFrame:Hide()
         self.countdownText:Hide()
         HideSoftOutline(self.countdownText)
     else
         self.spriteTexture:Hide()
-        self.iconTexture:Show()
+        self.iconFrame:Show()
         KE:ApplyFontToText(self.countdownText, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
         local color = self.db.CountdownColor or { 1, 1, 1, 1 }
         self.countdownText:SetTextColor(color[1], color[2], color[3], color[4] or 1)

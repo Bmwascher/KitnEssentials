@@ -212,8 +212,15 @@ function CR:ApplyBackdropSettings()
 
     local backdrop = self.db.Backdrop or {}
 
-    -- Set frame size from backdrop config
-    self.frame:SetSize(backdrop.bgWidth or 100, backdrop.bgHeight or 26)
+    -- Size frame from content
+    local totalWidth = 8 -- padding
+    for _, fs in ipairs({ self.frame.bracketOpen, self.frame.CRText, self.frame.charge, self.frame.separator, self.frame.timerText, self.frame.bracketClose }) do
+        if fs and fs:GetText() and fs:GetText() ~= "" then
+            totalWidth = totalWidth + fs:GetStringWidth() + (self.db.TextSpacing or 4)
+        end
+    end
+    local h = (self.db.FontSize or 16) + 10
+    self.frame:SetSize(math.max(totalWidth, 80), h)
 
     if backdrop.Enabled then
         local bgColor = backdrop.Color or { 0, 0, 0, 0.6 }

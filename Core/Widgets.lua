@@ -589,3 +589,35 @@ function KE:ApplyBackdrop(frame, backdropConfig)
         frame:SetBackdrop(nil)
     end
 end
+
+-- Standard icon zoom (crops icon edges for clean look)
+-- zoom: 0.3 = standard (7.5% crop), 0 = no crop, 1 = max crop
+function KE:ApplyIconZoom(tex, zoom)
+    zoom = zoom or 0.3
+    local texMin = 0.25 * zoom
+    local texMax = 1 - 0.25 * zoom
+    tex:SetTexCoord(texMin, texMax, texMin, texMax)
+end
+
+-- Pixel-perfect 1px borders on a frame (standard for icon modules)
+function KE:AddIconBorders(frame, color)
+    color = color or { 0, 0, 0, 1 }
+    frame.borders = {}
+
+    local function MakeBorder(point1, rel1, point2, rel2, w, h)
+        local tex = frame:CreateTexture(nil, "OVERLAY", nil, 7)
+        tex:SetColorTexture(unpack(color))
+        tex:SetTexelSnappingBias(0)
+        tex:SetSnapToPixelGrid(false)
+        tex:SetPoint(point1, frame, rel1, 0, 0)
+        tex:SetPoint(point2, frame, rel2, 0, 0)
+        if w then tex:SetWidth(w) end
+        if h then tex:SetHeight(h) end
+        return tex
+    end
+
+    frame.borders.top    = MakeBorder("TOPLEFT", "TOPLEFT", "TOPRIGHT", "TOPRIGHT", nil, 1)
+    frame.borders.bottom = MakeBorder("BOTTOMLEFT", "BOTTOMLEFT", "BOTTOMRIGHT", "BOTTOMRIGHT", nil, 1)
+    frame.borders.left   = MakeBorder("TOPLEFT", "TOPLEFT", "BOTTOMLEFT", "BOTTOMLEFT", 1, nil)
+    frame.borders.right  = MakeBorder("TOPRIGHT", "TOPRIGHT", "BOTTOMRIGHT", "BOTTOMRIGHT", 1, nil)
+end
