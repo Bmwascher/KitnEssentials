@@ -1,10 +1,18 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  PixelPerfect.lua                                        ║
+-- ║  Purpose: Pixel-perfect UI scaling helper based on       ║
+-- ║           physical screen dimensions.                    ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 
 local math_floor = math.floor
 
--- Get pixel-perfect scale
+---------------------------------------------------------------------------------
+-- Public API
+---------------------------------------------------------------------------------
+
 function KE:GetPixelScale()
     local physicalWidth, physicalHeight = GetPhysicalScreenSize()
     if physicalHeight then
@@ -13,14 +21,13 @@ function KE:GetPixelScale()
     return 1
 end
 
--- Round to nearest pixel
 function KE:PixelRound(value)
     local scale = self:GetPixelScale()
     if scale == 0 then return value end
     return math_floor(value / scale + 0.5) * scale
 end
 
--- Get best pixel size (clamped 0.4-1.15)
+-- Clamped 0.4-1.15
 function KE:PixelBestSize()
     local scale = self:GetPixelScale()
     if scale < 0.4 then return 0.4 end
@@ -28,7 +35,6 @@ function KE:PixelBestSize()
     return scale
 end
 
--- Snap a frame to pixel grid
 function KE:SnapFrameToPixels(frame)
     if not frame then return end
     local point, relativeTo, relativePoint, xOfs, yOfs = frame:GetPoint()

@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GreatVaultAlert.lua                                     ║
+-- ║  Module: Great Vault Alert                               ║
+-- ║  Purpose: Shows loot spec when opening the Great Vault   ║
+-- ║           with class color and sound alert.              ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
@@ -19,21 +25,21 @@ local string_format = string.format
 local VAULT_SPELL_ID = 1271478
 
 ---------------------------------------------------------------------------------
--- Module state
+-- Module State
 ---------------------------------------------------------------------------------
 GVA.alertFrame = nil
 GVA.isPreview = false
 GVA.editModeRegistered = false
 
 ---------------------------------------------------------------------------------
--- UpdateDB
+-- DB Helper
 ---------------------------------------------------------------------------------
 function GVA:UpdateDB()
     self.db = KE.db.profile.GreatVaultAlert
 end
 
 ---------------------------------------------------------------------------------
--- Spec Resolution
+-- Core Logic
 ---------------------------------------------------------------------------------
 function GVA:GetLootSpecInfo()
     local specID = GetLootSpecialization()
@@ -59,7 +65,7 @@ function GVA:GetLootSpecInfo()
 end
 
 ---------------------------------------------------------------------------------
--- Alert Frame
+-- Frame Creation
 ---------------------------------------------------------------------------------
 function GVA:CreateAlertFrame()
     if self.alertFrame then return end
@@ -151,7 +157,7 @@ function GVA:OnSpellcastInterrupted(_, unit, _, spellID)
 end
 
 ---------------------------------------------------------------------------------
--- Apply Settings
+-- Settings
 ---------------------------------------------------------------------------------
 function GVA:ApplySettings()
     if not self.alertFrame then return end

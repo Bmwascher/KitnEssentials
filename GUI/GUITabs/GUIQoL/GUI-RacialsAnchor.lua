@@ -1,11 +1,11 @@
--- ============================================================
--- GUI-RacialsAnchor.lua
--- GUI tab: Racials Anchor
--- Purpose: Configuration panel for the RacialsAnchor module.
--- Author: Bitebtw
--- ============================================================
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-RacialsAnchor.lua                                   ║
+-- ║  GUI: Racials Anchor                                     ║
+-- ║  Purpose: Configuration panel for the                    ║
+-- ║           RacialsAnchor module.                          ║
+-- ║  Credit: Bitebtw                                         ║
+-- ╚══════════════════════════════════════════════════════════╝
 
--- KitnEssentials namespace
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame     = KE.GUIFrame
@@ -48,9 +48,9 @@ GUIFrame:RegisterContent("RacialsAnchor", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Racials Anchor (Enable + description)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Racials Anchor", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, 36)
@@ -94,9 +94,9 @@ GUIFrame:RegisterContent("RacialsAnchor", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Offset Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Anchor Settings", yOffset)
     table_insert(allWidgets, card2)
 
@@ -160,9 +160,9 @@ GUIFrame:RegisterContent("RacialsAnchor", function(scrollChild, yOffset)
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Pet Bar Offset
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Pet Bar Offset", yOffset)
     table_insert(allWidgets, card3)
 
@@ -181,9 +181,9 @@ GUIFrame:RegisterContent("RacialsAnchor", function(scrollChild, yOffset)
 
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Final widget state sync
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     UpdateAllWidgetStates()
     yOffset = yOffset - (Theme.paddingSmall * 3)
     return yOffset

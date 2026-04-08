@@ -1,18 +1,18 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  PotionReady.lua                                         ║
+-- ║  Module: Combat Potion Ready                             ║
+-- ║  Purpose: Shows "Potion Ready" text when a combat        ║
+-- ║           potion is in bags and off cooldown. Respects   ║
+-- ║           instance, combat, and healer visibility.       ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
--- Module: PotionReady
--- Purpose: Shows "Potion Ready" text when the player has a combat potion in bags
---          that is off cooldown. Respects InstanceOnly, CombatOnly, and DisableOnHealer
---          visibility toggles.
--- Author: Bitebtw
-
 ---@class PotionReady: AceModule, AceEvent-3.0
 local PR = KitnEssentials:NewModule("PotionReady", "AceEvent-3.0")
 
--- Localization
 local C_Item           = C_Item
 local C_Container      = C_Container
 local C_Timer          = C_Timer
@@ -22,11 +22,9 @@ local GetSpecializationRole = GetSpecializationRole
 local IsInInstance     = IsInInstance
 local UIParent         = UIParent
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Constants
---------------------------------------------------------------------------------
-
--- Combat potion item IDs (Midnight / patch 12.0 season potions)
+---------------------------------------------------------------------------------
 local POTION_IDS = {
     -- Regular potions
     241308, 241309,                 -- Light's Potential (Gold, Silver)
@@ -43,9 +41,9 @@ local POTION_IDS = {
     245904, 245905,                 -- Fleeting Potion of Devoured Dreams (Gold, Silver)
 }
 
---------------------------------------------------------------------------------
--- Module state
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Module State
+---------------------------------------------------------------------------------
 PR.frame    = nil
 PR.text     = nil
 PR.isPreview          = false
@@ -53,37 +51,30 @@ PR.editModeRegistered = false
 PR.inCombat           = false
 PR.inInstance         = false
 
---------------------------------------------------------------------------------
--- DB helper
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 function PR:UpdateDB()
     self.db = KE.db.profile.PotionReady
 end
 
---------------------------------------------------------------------------------
--- Potion helpers
---------------------------------------------------------------------------------
-
--- Returns true when the player has at least one of this item in their bags.
+---------------------------------------------------------------------------------
+-- Helpers
+---------------------------------------------------------------------------------
 local function HasPotion(id)
     local count = C_Item.GetItemCount(id, false, false, true)
     return count and count > 0
 end
 
--- Returns true when the item is off cooldown and usable.
--- C_Container.GetItemCooldown returns: startTime, duration, enable
--- enable == 1 means the cooldown system is active for this item.
--- Ready when enable == 1 AND (startTime == 0 OR duration == 0).
 local function IsPotionReady(id)
     local start, duration, enable = C_Container.GetItemCooldown(id)
     if not start or not enable then return false end
     return enable == 1 and (start == 0 or duration == 0)
 end
 
---------------------------------------------------------------------------------
--- Visibility checks
---------------------------------------------------------------------------------
-
+---------------------------------------------------------------------------------
+-- Visibility Checks
+---------------------------------------------------------------------------------
 local function IsHealer()
     local specIndex = GetSpecialization()
     if not specIndex then return false end
@@ -91,7 +82,6 @@ local function IsHealer()
     return role == "HEALER"
 end
 
--- Returns true when all active visibility toggles are satisfied.
 function PR:PassesVisibility()
     local db = self.db
     if db.InstanceOnly and not self.inInstance then return false end
@@ -100,10 +90,9 @@ function PR:PassesVisibility()
     return true
 end
 
---------------------------------------------------------------------------------
--- Core check
---------------------------------------------------------------------------------
-
+---------------------------------------------------------------------------------
+-- Core Logic
+---------------------------------------------------------------------------------
 function PR:CheckPotions()
     if not self.frame then return end
     if self.isPreview then return end
@@ -122,10 +111,9 @@ function PR:CheckPotions()
     self.frame:Hide()
 end
 
---------------------------------------------------------------------------------
--- Frame creation and settings
---------------------------------------------------------------------------------
-
+---------------------------------------------------------------------------------
+-- Frame Creation
+---------------------------------------------------------------------------------
 function PR:CreateFrame()
     if self.frame then return end
 
@@ -140,6 +128,9 @@ function PR:CreateFrame()
     self.text  = t
 end
 
+---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
 function PR:ApplySettings()
     if not self.frame or not self.text then return end
     local db = self.db
@@ -154,10 +145,9 @@ function PR:ApplySettings()
     KE:ApplyFramePosition(self.frame, db.Position, db)
 end
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Edit Mode
---------------------------------------------------------------------------------
-
+---------------------------------------------------------------------------------
 function PR:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
@@ -178,10 +168,9 @@ function PR:RegWithEditMode()
     end
 end
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Preview
---------------------------------------------------------------------------------
-
+---------------------------------------------------------------------------------
 function PR:ShowPreview()
     if not self.frame then self:CreateFrame() end
     self:RegWithEditMode()
@@ -200,10 +189,9 @@ function PR:HidePreview()
     end
 end
 
---------------------------------------------------------------------------------
--- Event handlers
---------------------------------------------------------------------------------
-
+---------------------------------------------------------------------------------
+-- Event Handlers
+---------------------------------------------------------------------------------
 function PR:PLAYER_ENTERING_WORLD()
     local inInstance = IsInInstance()
     self.inInstance = inInstance == true
@@ -241,10 +229,9 @@ function PR:PLAYER_SPECIALIZATION_CHANGED()
     self:CheckPotions()
 end
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Lifecycle
---------------------------------------------------------------------------------
-
+---------------------------------------------------------------------------------
 function PR:OnInitialize()
     self:UpdateDB()
     self:SetEnabledState(false)

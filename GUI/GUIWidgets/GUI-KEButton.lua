@@ -1,4 +1,8 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-KEButton.lua                                        ║
+-- ║  Purpose: Custom button widget for the settings panel.   ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -7,6 +11,10 @@ local Theme = KE.Theme
 -- Localization Setup
 local CreateFrame = CreateFrame
 local type = type
+
+---------------------------------------------------------------------------------
+-- Widget Creation
+---------------------------------------------------------------------------------
 
 -- Button widgt
 function GUIFrame:CreateButton(parent, labelText, config)

@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  CombatTimer.lua                                         ║
+-- ║  Module: Combat Timer                                    ║
+-- ║  Purpose: Configurable in-combat duration display        ║
+-- ║           with multiple format options.                  ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
@@ -6,6 +12,9 @@ if not KitnEssentials then return end
 ---@class CombatTimer: AceModule, AceEvent-3.0
 local CT = KitnEssentials:NewModule("CombatTimer", "AceEvent-3.0")
 
+---------------------------------------------------------------------------------
+-- Constants
+---------------------------------------------------------------------------------
 local CreateFrame = CreateFrame
 local GetTime = GetTime
 local math_floor, math_max = math.floor, math.max
@@ -20,6 +29,9 @@ CT.isPreview = false
 
 KE.lastCombatDuration = 0
 
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 function CT:UpdateDB()
     self.db = KE.db.profile.CombatTimer
 end
@@ -29,6 +41,9 @@ function CT:OnInitialize()
     self:SetEnabledState(false)
 end
 
+---------------------------------------------------------------------------------
+-- Formatting
+---------------------------------------------------------------------------------
 local function GetBrackets(style)
     if style == "round" then return "(", ")"
     elseif style == "none" then return "", ""
@@ -51,6 +66,9 @@ local function GetRefreshRate(format)
     return (format == "MM:SS:MS") and 0.1 or 0.25
 end
 
+---------------------------------------------------------------------------------
+-- Frame Creation
+---------------------------------------------------------------------------------
 function CT:CreateFrame()
     if self.frame then return end
     local frame = CreateFrame("Frame", "KE_CombatTimerFrame", UIParent, BackdropTemplateMixin and "BackdropTemplate")
@@ -74,6 +92,9 @@ function CT:CreateFrame()
     self.text = text
 end
 
+---------------------------------------------------------------------------------
+-- Update Logic
+---------------------------------------------------------------------------------
 function CT:UpdateFrameSize()
     if not self.frame then return end
     local textWidth = self.text and self.text:GetStringWidth()
@@ -98,6 +119,9 @@ function CT:UpdateText()
     end
 end
 
+---------------------------------------------------------------------------------
+-- Apply Settings
+---------------------------------------------------------------------------------
 function CT:ApplySettings()
     if not self.text then return end
     KE:ApplyFontToText(self.text, self.db.FontFace, self.db.FontSize, self.db.FontOutline, self.db.FontShadow)
@@ -126,6 +150,9 @@ function CT:ApplySettings()
     self:ApplyPosition()
 end
 
+---------------------------------------------------------------------------------
+-- Core Logic
+---------------------------------------------------------------------------------
 function CT:OnUpdate(elapsed)
     if not self.running and not self.isPreview then return end
     self.elapsed = (self.elapsed or 0) + elapsed
@@ -159,6 +186,9 @@ function CT:OnExitCombat()
     self:UpdateText()
 end
 
+---------------------------------------------------------------------------------
+-- Edit Mode
+---------------------------------------------------------------------------------
 function CT:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
@@ -172,6 +202,9 @@ function CT:RegWithEditMode()
     end
 end
 
+---------------------------------------------------------------------------------
+-- Preview
+---------------------------------------------------------------------------------
 function CT:ShowPreview()
     if not self.frame then self:CreateFrame() end
     self:RegWithEditMode()
@@ -193,6 +226,9 @@ function CT:ApplyPosition()
     KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
 end
 
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
 function CT:OnEnable()
     if not self.db.Enabled then return end
     self:CreateFrame()

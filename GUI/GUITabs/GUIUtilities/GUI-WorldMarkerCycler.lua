@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-WorldMarkerCycler.lua                               ║
+-- ║  GUI: World Marker Cycler                                ║
+-- ║  Purpose: Configuration panel for the WorldMarkerCycler ║
+-- ║  module.                                                 ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -60,9 +66,9 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Enable
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "World Marker Cycler", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, 36)
@@ -89,9 +95,9 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Keybinds (interactive capture)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Keybinds", yOffset)
     table_insert(allWidgets, card2)
 
@@ -278,9 +284,9 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Marker Order (drag to reorder)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Marker Order", yOffset)
     table_insert(allWidgets, card3)
 

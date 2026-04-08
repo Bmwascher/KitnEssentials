@@ -1,10 +1,16 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-BlizzardRaidmanager.lua                             ║
+-- ║  GUI: Raid Manager Panel                                 ║
+-- ║  Purpose: Configuration panel for the                    ║
+-- ║           BlizzardRaidmanager module.                    ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 
--- Localization
+-- Local references
 local table_insert = table.insert
 local ipairs = ipairs
 
@@ -50,9 +56,9 @@ GUIFrame:RegisterContent("SkinRaidManager", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Raid Manager (Enable)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Raid Manager", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, 40)
@@ -72,9 +78,9 @@ GUIFrame:RegisterContent("SkinRaidManager", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Position Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Position Settings", yOffset)
     table_insert(allWidgets, card2)
 
@@ -91,9 +97,9 @@ GUIFrame:RegisterContent("SkinRaidManager", function(scrollChild, yOffset)
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Mouseover Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Mouseover Settings", yOffset)
     table_insert(allWidgets, card3)
 

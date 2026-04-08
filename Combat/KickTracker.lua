@@ -1,4 +1,11 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  KickTracker.lua                                         ║
+-- ║  Module: Interrupt Tracker                               ║
+-- ║  Purpose: Party interrupt cooldown bars with class       ║
+-- ║           colors, dark mode, channel kick detection,     ║
+-- ║           and healer position override.                  ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
@@ -6,7 +13,9 @@ if not KitnEssentials then return end
 ---@class KickTracker: AceModule, AceEvent-3.0, AceTimer-3.0
 local KT = KitnEssentials:NewModule("KickTracker", "AceEvent-3.0", "AceTimer-3.0")
 
--- Localized globals
+---------------------------------------------------------------------------------
+-- Constants
+---------------------------------------------------------------------------------
 local GetTime = GetTime
 local CreateFrame = CreateFrame
 local UnitGUID = UnitGUID
@@ -35,10 +44,10 @@ local wipe = wipe
 local table_insert = table.insert
 local table_sort = table.sort
 
--- =============================================================
--- Interrupt Database (from ExwindDB, verified values)
--- Only core kick abilities. Specs without a kick have id = 0.
--- =============================================================
+---------------------------------------------------------------------------------
+-- Interrupt Database
+---------------------------------------------------------------------------------
+-- From ExwindDB, verified values. Specs without a kick have id = 0.
 local INTERRUPT_DATA = {
     -- Death Knight: Mind Freeze 12s
     [250]  = { id = 47528,  cd = 12, role = "TANK" },
@@ -95,66 +104,54 @@ local INTERRUPT_DATA = {
     [73]   = { id = 6552,   cd = 15, role = "TANK" },
 }
 
--- Reverse lookup: spellID -> true (for fast filtering in UNIT_SPELLCAST_SUCCEEDED)
 local INTERRUPT_SPELL_IDS = {}
 for _, data in pairs(INTERRUPT_DATA) do
     if data.id and data.id > 0 then
         INTERRUPT_SPELL_IDS[data.id] = true
     end
 end
--- Warlock pet interrupt variants (Command Demon / pet actual spell IDs)
 INTERRUPT_SPELL_IDS[119910] = true  -- Command Demon: Spell Lock
 INTERRUPT_SPELL_IDS[132409] = true  -- Command Demon: Fel Ravager kick
 INTERRUPT_SPELL_IDS[89766]  = true  -- Axe Toss (Felguard pet actual)
 INTERRUPT_SPELL_IDS[119914] = true  -- Command Demon: Axe Toss
 
--- =============================================================
--- Constants
--- =============================================================
 local TIME_WINDOW = 0.050
 local PROCESS_DELAY = 0.030
 local CACHE_TTL = 300
 local INSPECT_THROTTLE = 1.2
 
--- =============================================================
--- Module State
--- =============================================================
 KT.containerFrame = nil
 KT.isPreview = false
 KT.editModeRegistered = false
 
--- Party tracking
 KT.partyMembers = {}     -- [guid] = { unit, name, classToken, specID, interruptData, kickStart, kickDuration }
 KT.specCache = {}         -- [guid] = { specID, classToken, timestamp }
 KT.inspectQueue = {}      -- array of { guid, unit }
 KT.inspectPending = nil   -- guid currently being inspected
 
--- Event correlation
 KT.pendingInterrupts = {} -- [nameplateUnit] = { time, interruptedBy }
 KT.pendingCasts = {}      -- [partyUnit] = { time }
 KT.processScheduled = false
 
--- Bar display
 KT.barPool = {}           -- array of reusable bar frames
 KT.activeBars = {}        -- [guid] = barFrame
 KT.sortedBars = {}        -- ordered array for layout
 KT._coolingList = {}      -- reusable temp table for LayoutBars
 KT._readyList = {}        -- reusable temp table for LayoutBars
 
--- Environment
 KT.isActive = false
 KT.combatEventsRegistered = false
 
--- =============================================================
--- DB Access
--- =============================================================
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 function KT:UpdateDB()
     self.db = KE.db.profile.KickTracker
 end
 
--- =============================================================
+---------------------------------------------------------------------------------
 -- Party Spec Tracking
--- =============================================================
+---------------------------------------------------------------------------------
 local function GetPlayerSpecID()
     local specIndex = GetSpecialization()
     if specIndex then
@@ -338,9 +335,9 @@ function KT:OnPlayerSpecChanged()
     end
 end
 
--- =============================================================
+---------------------------------------------------------------------------------
 -- Event Correlator
--- =============================================================
+---------------------------------------------------------------------------------
 function KT:ScheduleProcessing()
     if self.processScheduled then return end
     self.processScheduled = true
@@ -446,9 +443,9 @@ function KT:ConfirmKick(guid)
     self:LayoutBars()
 end
 
--- =============================================================
--- Event Handlers (Combat)
--- =============================================================
+---------------------------------------------------------------------------------
+-- Event Handlers
+---------------------------------------------------------------------------------
 function KT:OnSpellcastInterrupted(_, unit, _, _, interruptedBy)
     if not self.db.Enabled or self.isPreview or not self.isActive then return end
     if not unit or not string_find(unit, "nameplate") then return end
@@ -506,9 +503,9 @@ function KT:OnSpellcastSucceeded(_, unit, _, spellID)
     end
 end
 
--- =============================================================
+---------------------------------------------------------------------------------
 -- Combat Event Registration
--- =============================================================
+---------------------------------------------------------------------------------
 function KT:RegisterCombatEvents()
     if self.combatEventsRegistered then return end
     self:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED", "OnSpellcastInterrupted")
@@ -529,9 +526,9 @@ function KT:UnregisterCombatEvents()
     self.processScheduled = false
 end
 
--- =============================================================
+---------------------------------------------------------------------------------
 -- Environment Detection
--- =============================================================
+---------------------------------------------------------------------------------
 function KT:ShouldBeActive()
     if not self.db or not self.db.Enabled then return false end
     local inInstance, instanceType = IsInInstance()
@@ -585,9 +582,9 @@ function KT:OnCombatEnd()
     end
 end
 
--- =============================================================
+---------------------------------------------------------------------------------
 -- Bar Creation & Pool
--- =============================================================
+---------------------------------------------------------------------------------
 function KT:CreateBar()
     local db = self.db
     local barFrame = CreateFrame("Frame", nil, self.containerFrame, "BackdropTemplate")
@@ -685,10 +682,9 @@ function KT:HideAllBars()
     wipe(self.sortedBars)
 end
 
--- =============================================================
+---------------------------------------------------------------------------------
 -- Bar Visual Updates
--- =============================================================
--- Helper: get class color or nil
+---------------------------------------------------------------------------------
 local function GetClassColor(classToken)
     if not classToken then return nil end
     return C_ClassColor.GetClassColor(classToken)
@@ -794,10 +790,6 @@ function KT:UpdateBarVisuals(bar, member)
 
 end
 
--- Centralized bar color logic
--- Dark mode colors matched to reference screenshot:
--- Ready = very dark, barely distinguishable from background
--- Cooling = slightly brighter dark grey for subtle progress visibility
 function KT:ApplyBarColor(bar, member, isCooling)
     local db = self.db
     local isDarkMode = db.ColorMode == "dark"
@@ -834,9 +826,9 @@ function KT:ApplyBarColor(bar, member, isCooling)
     end
 end
 
--- =============================================================
+---------------------------------------------------------------------------------
 -- Bar Sorting & Layout
--- =============================================================
+---------------------------------------------------------------------------------
 function KT:GetRolePriority(member)
     if not member or not member.interruptData then return 999 end
     local role = member.interruptData.role
@@ -954,9 +946,9 @@ function KT:LayoutBars()
     self.containerFrame:SetSize(db.BarWidth, math.max(totalHeight, barHeight))
 end
 
--- =============================================================
--- OnUpdate (cooldown progress)
--- =============================================================
+---------------------------------------------------------------------------------
+-- OnUpdate (Cooldown Progress)
+---------------------------------------------------------------------------------
 function KT:StartOnUpdate()
     if not self.containerFrame then return end
     self.containerFrame:SetScript("OnUpdate", function(_, elapsed)
@@ -1031,9 +1023,9 @@ function KT:OnUpdateBars(elapsed)
     end
 end
 
--- =============================================================
+---------------------------------------------------------------------------------
 -- Frame Creation
--- =============================================================
+---------------------------------------------------------------------------------
 function KT:CreateFrames()
     if self.containerFrame then return end
 
@@ -1044,9 +1036,9 @@ function KT:CreateFrames()
     self.containerFrame = frame
 end
 
--- =============================================================
--- Preview / EditMode
--- =============================================================
+---------------------------------------------------------------------------------
+-- Preview / Edit Mode
+---------------------------------------------------------------------------------
 function KT:ShowPreview()
     if not self.containerFrame then
         self:CreateFrames()
@@ -1186,9 +1178,9 @@ function KT:RegWithEditMode()
     end
 end
 
--- =============================================================
--- Module Lifecycle
--- =============================================================
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
 function KT:OnInitialize()
     self:UpdateDB()
     self:SetEnabledState(false)

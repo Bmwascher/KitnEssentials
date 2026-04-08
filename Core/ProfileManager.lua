@@ -1,26 +1,31 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  ProfileManager.lua                                      ║
+-- ║  Purpose: Profile import/export with compression,        ║
+-- ║           per-character and global profile management.   ║
+-- ║  Note: Uses AceSerializer-3.0 and LibDeflate.            ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
-
--- Profile Manager Module
 local ProfileManager = {}
 KE.ProfileManager = ProfileManager
 
--- Libraries
 local AceSerializer = LibStub("AceSerializer-3.0")
 local LibDeflate = LibStub("LibDeflate")
 
--- Constants
 local EXPORT_PREFIX = "!KE1!"
 local DEFAULT_PROFILE = "Default"
 
--- Localization
 local pairs = pairs
 local type = type
 local time = time
 local wipe = wipe
 local tostring = tostring
 local next = next
+
+---------------------------------------------------------------------------------
+-- Profile CRUD
+---------------------------------------------------------------------------------
 
 --- Get list of all available profiles
 ---@return table List of profile names
@@ -205,6 +210,10 @@ function ProfileManager:ResetProfile()
     return true
 end
 
+---------------------------------------------------------------------------------
+-- Global Profile Management
+---------------------------------------------------------------------------------
+
 --- Enable or disable global profile mode
 ---@param enabled boolean Whether to use global profile
 ---@return boolean success
@@ -253,6 +262,10 @@ function ProfileManager:GetGlobalProfile()
     if KE.db and KE.db.global then return KE.db.global.GlobalProfile or DEFAULT_PROFILE end
     return DEFAULT_PROFILE
 end
+
+---------------------------------------------------------------------------------
+-- Import / Export
+---------------------------------------------------------------------------------
 
 --- Export a profile to a string
 ---@param profileName string|nil Profile to export (current if nil)
@@ -381,6 +394,10 @@ function ProfileManager:ImportProfile(importString, targetName)
     return true, finalName
 end
 
+---------------------------------------------------------------------------------
+-- Module Refresh
+---------------------------------------------------------------------------------
+
 --- Refresh all enabled modules to apply new settings
 function ProfileManager:RefreshAllModules()
     local KitnEssentials = _G.KitnEssentials
@@ -405,10 +422,10 @@ function ProfileManager:RefreshAllModules()
     if KE.PreviewManager then KE.PreviewManager:StartAllPreviews() end
 end
 
--- WagoUI Integration API --
+---------------------------------------------------------------------------------
+-- WagoUI Integration API
+---------------------------------------------------------------------------------
 
--- Global API table for WagoUI Packs compatibility
--- Uses C_EncodingUtil as per official Wago implementation guide
 -- https://github.com/methodgg/Wago-Creator-UI/blob/main/WagoUI_Libraries/LibAddonProfiles/ImplementationGuide.lua
 KitnEssentialsAPI = KitnEssentialsAPI or {}
 

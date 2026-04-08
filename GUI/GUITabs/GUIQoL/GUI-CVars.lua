@@ -1,4 +1,9 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-CVars.lua                                           ║
+-- ║  GUI: CVars                                              ║
+-- ║  Purpose: Configuration panel for the CVars module.      ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -22,9 +27,9 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
     local AU = GetAutomationModule()
     local allWidgets = {}
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: CVars Enable
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "CVars", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, 36)
@@ -39,9 +44,9 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Floating Combat Text
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Floating Combat Text", yOffset)
     table_insert(allWidgets, card2)
 
@@ -75,9 +80,9 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Character & Effects
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Character & Effects", yOffset)
     table_insert(allWidgets, card3)
 
@@ -98,9 +103,9 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
 
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Tooltips
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4t = GUIFrame:CreateCard(scrollChild, "Tooltips", yOffset)
     table_insert(allWidgets, card4t)
 
@@ -114,9 +119,9 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
 
     yOffset = yOffset + card4t:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 5a: Nameplates
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Nameplates", yOffset)
     table_insert(allWidgets, card4)
 
@@ -132,9 +137,9 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
 
     yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 5: Sliders
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Sliders", yOffset)
     table_insert(allWidgets, card5)
 
@@ -172,7 +177,7 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
 
     yOffset = yOffset + card5:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local function UpdateAllWidgetStates()
         local enabled = db.CVarsEnabled ~= false
         for _, widget in ipairs(allWidgets) do

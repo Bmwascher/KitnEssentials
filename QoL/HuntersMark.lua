@@ -1,4 +1,11 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  HuntersMark.lua                                         ║
+-- ║  Module: Hunter's Mark Missing                           ║
+-- ║  Purpose: Alert when Hunter's Mark is not applied to     ║
+-- ║           the current target.                            ║
+-- ║  Note: Hunter only.                                      ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
@@ -17,21 +24,36 @@ local next = next
 local wipe = wipe
 local type = type
 
--- Class check
+---------------------------------------------------------------------------------
+-- Constants
+---------------------------------------------------------------------------------
 local _, playerClass = UnitClass("player")
 local isHunter = playerClass == "HUNTER"
-
--- Module locals
 local SPELL_ID = 257284 -- Hunter's Mark
-local markedUnits = {}
 
+---------------------------------------------------------------------------------
+-- Module State
+---------------------------------------------------------------------------------
+local markedUnits = {}
 HM.isPreview = false
 
---------------------------------------------------------------------------------
--- Inline helpers (KE has no core ApplyZoom/AddBorders/CreateIconFrame)
---------------------------------------------------------------------------------
--- Icon helpers: KE:ApplyIconZoom() and KE:AddIconBorders() in Core/Widgets.lua
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
+function HM:UpdateDB()
+    self.db = KE.db.profile.HuntersMark
+end
 
+function HM:OnInitialize()
+    self:UpdateDB()
+    self:SetEnabledState(false)
+end
+
+---------------------------------------------------------------------------------
+-- Core Logic
+---------------------------------------------------------------------------------
+
+-- Icon helpers: KE:ApplyIconZoom() and KE:AddIconBorders() in Core/Widgets.lua
 local function CreateIconFrame(parent, iconSize)
     local frame = CreateFrame("Frame", nil, parent)
     frame:SetSize(iconSize, iconSize)
@@ -50,61 +72,11 @@ local function CreateIconFrame(parent, iconSize)
     return frame
 end
 
---------------------------------------------------------------------------------
--- DB
---------------------------------------------------------------------------------
-function HM:UpdateDB()
-    self.db = KE.db.profile.HuntersMark
-end
-
-function HM:OnInitialize()
-    self:UpdateDB()
-    self:SetEnabledState(false)
-end
-
---------------------------------------------------------------------------------
--- Raid check
---------------------------------------------------------------------------------
 local function IsInRaid()
     local inInstance, instanceType = IsInInstance()
     return inInstance and instanceType == "raid"
 end
 
---------------------------------------------------------------------------------
--- Warning frame
---------------------------------------------------------------------------------
-function HM:CreateWarningFrame()
-    if self.frame then return end
-
-    local frame = CreateFrame("Frame", "KE_HuntersMarkWarning", UIParent)
-    frame:SetSize(200, 40)
-
-    -- Center text
-    local text = frame:CreateFontString(nil, "OVERLAY")
-    text:SetFont(KE.FONT, self.db.FontSize or 16, "")
-    text:SetPoint("CENTER")
-    text:SetText("MISSING MARK")
-    frame.text = text
-
-    -- Left icon
-    local iconSize = self.db.FontSize or 16
-    local leftIcon = CreateIconFrame(frame, iconSize)
-    leftIcon:SetPoint("RIGHT", text, "LEFT", -4, 0)
-    frame.leftIcon = leftIcon
-
-    -- Right icon
-    local rightIcon = CreateIconFrame(frame, iconSize)
-    rightIcon:SetPoint("LEFT", text, "RIGHT", 4, 0)
-    frame.rightIcon = rightIcon
-
-    frame:Hide()
-    self.frame = frame
-    self:ApplySettings()
-end
-
---------------------------------------------------------------------------------
--- Warning display logic
---------------------------------------------------------------------------------
 function HM:UpdateWarningDisplay()
     if not isHunter then return end
     if self.isPreview then return end
@@ -128,9 +100,6 @@ function HM:UpdateWarningDisplay()
     self.frame:Show()
 end
 
---------------------------------------------------------------------------------
--- Aura scanning
---------------------------------------------------------------------------------
 function HM:CheckUnitForMark(unit)
     if not isHunter then return end
     if not unit or not UnitExists(unit) or not UnitIsBossMob(unit) then return end
@@ -147,9 +116,6 @@ function HM:CheckUnitForMark(unit)
     self:UpdateWarningDisplay()
 end
 
---------------------------------------------------------------------------------
--- Enable/disable nameplate scanning
---------------------------------------------------------------------------------
 function HM:SetScanningActive(active)
     if not isHunter then return end
     if not self.scannerFrame then return end
@@ -173,9 +139,35 @@ function HM:SetScanningActive(active)
     end
 end
 
---------------------------------------------------------------------------------
--- Scanner setup
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Frame Creation
+---------------------------------------------------------------------------------
+function HM:CreateWarningFrame()
+    if self.frame then return end
+
+    local frame = CreateFrame("Frame", "KE_HuntersMarkWarning", UIParent)
+    frame:SetSize(200, 40)
+
+    local text = frame:CreateFontString(nil, "OVERLAY")
+    text:SetFont(KE.FONT, self.db.FontSize or 16, "")
+    text:SetPoint("CENTER")
+    text:SetText("MISSING MARK")
+    frame.text = text
+
+    local iconSize = self.db.FontSize or 16
+    local leftIcon = CreateIconFrame(frame, iconSize)
+    leftIcon:SetPoint("RIGHT", text, "LEFT", -4, 0)
+    frame.leftIcon = leftIcon
+
+    local rightIcon = CreateIconFrame(frame, iconSize)
+    rightIcon:SetPoint("LEFT", text, "RIGHT", 4, 0)
+    frame.rightIcon = rightIcon
+
+    frame:Hide()
+    self.frame = frame
+    self:ApplySettings()
+end
+
 function HM:StartScanning()
     if not isHunter then return end
     if self.isPreview then return end
@@ -229,9 +221,9 @@ function HM:StartScanning()
     end
 end
 
---------------------------------------------------------------------------------
--- Apply settings
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
 function HM:ApplySettings()
     if not self.db or not self.frame then return end
 
@@ -259,33 +251,9 @@ function HM:ApplySettings()
     end
 end
 
---------------------------------------------------------------------------------
--- Enable / Disable
---------------------------------------------------------------------------------
-function HM:OnEnable()
-    if not isHunter then return end
-    if not self.db.Enabled then return end
-    self:StartScanning()
-    self:RegWithEditMode()
-end
-
-function HM:OnDisable()
-    if self.scannerFrame then
-        self.scannerFrame:UnregisterAllEvents()
-        self.scannerFrame:SetScript("OnEvent", nil)
-        self.scannerFrame = nil
-    end
-    if self.frame then
-        self.frame:Hide()
-        self.frame = nil
-    end
-    wipe(markedUnits)
-    self.isPreview = false
-end
-
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Edit Mode
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 function HM:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
@@ -299,9 +267,9 @@ function HM:RegWithEditMode()
     end
 end
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Preview
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 function HM:ShowPreview()
     if not self.frame then
         self:CreateWarningFrame()
@@ -335,4 +303,28 @@ function HM:HidePreview()
             end
         end
     end
+end
+
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
+function HM:OnEnable()
+    if not isHunter then return end
+    if not self.db.Enabled then return end
+    self:StartScanning()
+    self:RegWithEditMode()
+end
+
+function HM:OnDisable()
+    if self.scannerFrame then
+        self.scannerFrame:UnregisterAllEvents()
+        self.scannerFrame:SetScript("OnEvent", nil)
+        self.scannerFrame = nil
+    end
+    if self.frame then
+        self.frame:Hide()
+        self.frame = nil
+    end
+    wipe(markedUnits)
+    self.isPreview = false
 end

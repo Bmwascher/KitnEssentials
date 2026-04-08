@@ -1,11 +1,16 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  Tooltips.lua                                            ║
+-- ║  Module: Blizzard Tooltips                               ║
+-- ║  Purpose: Tooltip backdrop, font, and border             ║
+-- ║           restyling.                                     ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
 local SK = KitnEssentials:NewModule("SkinTooltips", "AceEvent-3.0", "AceHook-3.0")
 
--- Localization
 local hooksecurefunc = hooksecurefunc
 local issecretvalue = issecretvalue
 local pcall = pcall
@@ -35,13 +40,10 @@ function SetTooltipMoney(frame, money, type, prefixText, suffixText)
     frame:AddLine((prefixText or "") .. "  " .. GetCoinTextureString(money) .. " " .. (suffixText or ""), 0, 1, 1)
 end
 
--- Module State tracking
-local isInitialized = false
-local hookedTooltips = {}
-local tooltipBackdrops = {}
-local hookedStatusBars = {}
+---------------------------------------------------------------------------------
+-- Constants
+---------------------------------------------------------------------------------
 
--- List of common tooltips to skin
 local TOOLTIPS_TO_SKIN = {
     "GameTooltip",
     "ItemRefTooltip",
@@ -58,7 +60,6 @@ local TOOLTIPS_TO_SKIN = {
     "SettingsTooltip",
 }
 
--- Spec icon table for spec and class matching
 local SPEC_ICONS = {
     -- Death Knight
     ["Blood Death Knight"]     = 135770,
@@ -115,16 +116,26 @@ local SPEC_ICONS = {
     ["Protection Warrior"]     = 132341,
 }
 
--- Update db, used for profile changes
+---------------------------------------------------------------------------------
+-- Module State
+---------------------------------------------------------------------------------
+
+local isInitialized = false
+local hookedTooltips = {}
+local tooltipBackdrops = {}
+local hookedStatusBars = {}
+
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
+
 function SK:UpdateDB()
     self.db = KE.db.profile.Skinning.Tooltips
 end
 
--- Module init
-function SK:OnInitialize()
-    self:UpdateDB()
-    self:SetEnabledState(false)
-end
+---------------------------------------------------------------------------------
+-- Tooltip Styling
+---------------------------------------------------------------------------------
 
 -- Get or create custom backdrop for a tooltip
 -- Uses manual textures instead of BackdropTemplate to completely avoid
@@ -138,13 +149,11 @@ function SK:GetOrCreateBackdrop(tooltip)
     backdrop:SetFrameLevel(level > 0 and level - 1 or 0)
     backdrop:SetAllPoints(tooltip)
 
-    -- Background fill
     local bg = backdrop:CreateTexture(nil, "BACKGROUND")
     bg:SetTexture("Interface\\Buttons\\WHITE8X8")
     bg:SetAllPoints(backdrop)
     backdrop.bg = bg
 
-    -- Border edges (top, bottom, left, right)
     local borderSize = self.db and self.db.BorderSize or 1
 
     local top = backdrop:CreateTexture(nil, "BORDER")
@@ -179,7 +188,6 @@ function SK:GetOrCreateBackdrop(tooltip)
     return backdrop
 end
 
--- Update backdrop colors
 function SK:UpdateBackdrop(backdrop)
     if not self.db then return end
 
@@ -197,7 +205,6 @@ function SK:UpdateBackdrop(backdrop)
     if backdrop.borderRight then backdrop.borderRight:SetVertexColor(br, bg, bb, ba) end
 end
 
--- Re-apply full backdrop settings (called from Refresh when user changes settings like BorderSize)
 function SK:ApplyBackdropSettings(backdrop)
     if not self.db then return end
 
@@ -210,7 +217,6 @@ function SK:ApplyBackdropSettings(backdrop)
     self:UpdateBackdrop(backdrop)
 end
 
--- Fetch color info from unit if unit is a player
 function SK:FetchUnitColour(unit)
     local success, _ = pcall(UnitIsPlayer, unit)
     if not success then return end
@@ -233,7 +239,6 @@ function SK:FetchUnitColour(unit)
     return 1, 1, 1, 1
 end
 
--- Fetch guild info from unit if unit is a player
 function SK:FetchUnitGuild(unit)
     local success, _ = pcall(UnitIsPlayer, unit)
     if not success then return end
@@ -254,7 +259,6 @@ function SK:FetchUnitGuild(unit)
     end
 end
 
--- Fetch units level and race type
 function SK:FetchUnitLevelRace(unit)
     if not unit then return end
     local race = UnitRace(unit)
@@ -271,7 +275,6 @@ function SK:FetchUnitLevelRace(unit)
     return race, levelOut
 end
 
--- Fetch units classname only if its from a player
 function SK:FetchUnitClassInfo(unit)
     if not unit then return end
     local unitIsPlayer = UnitIsPlayer(unit)
@@ -282,7 +285,6 @@ function SK:FetchUnitClassInfo(unit)
     end
 end
 
--- Check Class and Spec string, match it to correct icon, return it
 function SK:FetchUnitSpecInfo(text)
     if not text or issecretvalue(text) then return nil, nil end
     local matchedSpec
@@ -299,7 +301,6 @@ function SK:FetchUnitSpecInfo(text)
     return matchedSpec, matchedIcon
 end
 
--- Hide the default Blizzard NineSlice border
 function SK:HideNineSlice(tooltip)
     if tooltip.NineSlice then
         tooltip.NineSlice:SetAlpha(0)
@@ -334,7 +335,6 @@ function SK:HideNineSlice(tooltip)
     end
 end
 
--- Permanently hide a status bar by hooking its Show method
 function SK:PermanentlyHideStatusBar(statusBar)
     if not statusBar then return end
     if hookedStatusBars[statusBar] then return end
@@ -346,7 +346,6 @@ function SK:PermanentlyHideStatusBar(statusBar)
     hookedStatusBars[statusBar] = true
 end
 
--- Perma hide health bars for a tooltip
 function SK:HideHealthBars(tooltip)
     if not self.db.HideHealthBar then return end
 
@@ -360,12 +359,10 @@ function SK:HideHealthBars(tooltip)
     end
 end
 
--- Helper function to apply coloring
 function SK:ColorText(text, r, g, b)
     return string.format("|cff%02x%02x%02x%s|r", r * 255, g * 255, b * 255, text)
 end
 
--- Tooltip Styling
 function SK:StyleTooltip(tooltip, unit)
     if not self.db.Enabled then return end
     if not tooltip then return end
@@ -398,7 +395,10 @@ function SK:StyleTooltip(tooltip, unit)
     SK:HideHealthBars(tooltip)
 end
 
--- Add tooltip processor for unit tooltips
+---------------------------------------------------------------------------------
+-- Hooks
+---------------------------------------------------------------------------------
+
 local tooltipProcessorRegistered = false
 function SK:InitializeTooltipProcessor()
     if tooltipProcessorRegistered then return end
@@ -427,7 +427,6 @@ function SK:InitializeTooltipProcessor()
         if (secretEnv and not nonSecretEnv) or (not secretEnv and nonSecretEnv) then
             local r, g, b, a = SK:FetchUnitColour(unit)
 
-            -- Name skin
             local className = SK:FetchUnitClassInfo(unit)
             if className then
                 local nameLine = _G["GameTooltipTextLeft1"]
@@ -438,7 +437,6 @@ function SK:InitializeTooltipProcessor()
                 end
             end
 
-            -- Guild skin
             local guildName, guildRank = SK:FetchUnitGuild(unit)
             local guildLine = _G["GameTooltipTextLeft2"]
             if guildLine then
@@ -449,7 +447,6 @@ function SK:InitializeTooltipProcessor()
                 end
             end
 
-            -- Race and Level skin
             local lineOffset = guildName and 0 or -1
             local race, level = SK:FetchUnitLevelRace(unit)
             local raceLevelLine = _G["GameTooltipTextLeft" .. (3 + lineOffset)]
@@ -468,7 +465,6 @@ function SK:InitializeTooltipProcessor()
                 if not level and not race then return end
             end
 
-            -- Spec and Class skin
             if className then
                 local classLine = _G["GameTooltipTextLeft" .. (4 + lineOffset)]
                 if classLine then
@@ -489,7 +485,6 @@ function SK:InitializeTooltipProcessor()
                 end
             end
 
-            -- Faction Skin
             for i = 2, tooltip:NumLines() do
                 local line = _G["GameTooltipTextLeft" .. i]
                 if line then
@@ -510,7 +505,6 @@ function SK:InitializeTooltipProcessor()
     end)
 end
 
--- Hook a tooltip to apply styling
 function SK:HookTooltip(tooltip)
     if not tooltip then return end
     if hookedTooltips[tooltip] then return end
@@ -526,48 +520,6 @@ function SK:HookTooltip(tooltip)
     hookedTooltips[tooltip] = true
 end
 
--- Refresh styling on all hooked tooltips
-function SK:Refresh()
-    SK:InitializeTooltipProcessor()
-
-    for _, tooltipName in ipairs(TOOLTIPS_TO_SKIN) do
-        local tooltip = _G[tooltipName]
-        if tooltip then
-            SK:HookTooltip(tooltip)
-        end
-    end
-
-    for tooltip in pairs(hookedTooltips) do
-        if tooltip:IsShown() then
-            SK:StyleTooltip(tooltip)
-        end
-        local backdrop = tooltipBackdrops[tooltip]
-        if backdrop then
-            SK:ApplyBackdropSettings(backdrop)
-        end
-    end
-end
-
--- ApplySettings
-function SK:ApplySettings()
-    if KE:ShouldNotLoadModule() then return end
-    self:Refresh()
-end
-
--- Create our own anchor frame that we later use to anchor tooltip to
-function SK:CreateTooltipAnchorFrame()
-    local TTAnchor = CreateFrame("Frame", "KE_ToolTipAnchorFrame", UIParent)
-    TTAnchor:SetSize(170, 60)
-    TTAnchor:ClearAllPoints()
-    TTAnchor:SetPoint(self.db.Position.AnchorFrom, UIParent, self.db.Position.AnchorTo, self.db.Position.XOffset,
-        self.db.Position.YOffset)
-    TTAnchor:SetClampedToScreen(true)
-
-    self.TTAnchor = TTAnchor
-    return TTAnchor
-end
-
--- Remove tooltip anchoring Edit Mode UI since we do position changes in our custom Edit mode
 local function DisableTooltipEditMode()
     if GameTooltipDefaultContainer then
         GameTooltipDefaultContainer.SetIsInEditMode = nop
@@ -580,20 +532,6 @@ local function DisableTooltipEditMode()
     end
 end
 
-function SK:AnchorTooltip(tooltip)
-    if not tooltip or tooltip:IsForbidden() then return end
-    tooltip:ClearAllPoints()
-    tooltip:SetOwner(UIParent, "ANCHOR_NONE")
-    tooltip:SetPoint("BOTTOMRIGHT", self.TTAnchor, "BOTTOMRIGHT", 0, 0)
-end
-
-local function tooltipAnchorReg()
-    hooksecurefunc("GameTooltip_SetDefaultAnchor", function(self)
-        SK:AnchorTooltip(self)
-    end)
-end
-
--- Skin QueueStatusFrame
 local function SkinQueueStatus()
     local frame = QueueStatusFrame
     if not frame then return end
@@ -635,7 +573,70 @@ local function SkinQueueStatus()
     end)
 end
 
--- Initialize tooltip skinning
+---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
+
+function SK:Refresh()
+    SK:InitializeTooltipProcessor()
+
+    for _, tooltipName in ipairs(TOOLTIPS_TO_SKIN) do
+        local tooltip = _G[tooltipName]
+        if tooltip then
+            SK:HookTooltip(tooltip)
+        end
+    end
+
+    for tooltip in pairs(hookedTooltips) do
+        if tooltip:IsShown() then
+            SK:StyleTooltip(tooltip)
+        end
+        local backdrop = tooltipBackdrops[tooltip]
+        if backdrop then
+            SK:ApplyBackdropSettings(backdrop)
+        end
+    end
+end
+
+function SK:ApplySettings()
+    if KE:ShouldNotLoadModule() then return end
+    self:Refresh()
+end
+
+function SK:CreateTooltipAnchorFrame()
+    local TTAnchor = CreateFrame("Frame", "KE_ToolTipAnchorFrame", UIParent)
+    TTAnchor:SetSize(170, 60)
+    TTAnchor:ClearAllPoints()
+    TTAnchor:SetPoint(self.db.Position.AnchorFrom, UIParent, self.db.Position.AnchorTo, self.db.Position.XOffset,
+        self.db.Position.YOffset)
+    TTAnchor:SetClampedToScreen(true)
+
+    self.TTAnchor = TTAnchor
+    return TTAnchor
+end
+
+function SK:AnchorTooltip(tooltip)
+    if not tooltip or tooltip:IsForbidden() then return end
+    tooltip:ClearAllPoints()
+    tooltip:SetOwner(UIParent, "ANCHOR_NONE")
+    tooltip:SetPoint("BOTTOMRIGHT", self.TTAnchor, "BOTTOMRIGHT", 0, 0)
+end
+
+local function tooltipAnchorReg()
+    hooksecurefunc("GameTooltip_SetDefaultAnchor", function(self)
+        SK:AnchorTooltip(self)
+    end)
+end
+
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
+
+function SK:OnInitialize()
+    self:UpdateDB()
+    self:SetEnabledState(false)
+end
+
 function SK:OnEnable()
     if KE:ShouldNotLoadModule() then return end
     if not self.db.Enabled then return end
@@ -651,7 +652,6 @@ function SK:OnEnable()
         DisableTooltipEditMode()
     end)
 
-    -- Register with custom edit mode
     local config = {
         key = "TooltipModule",
         displayName = "Tooltip Anchor",

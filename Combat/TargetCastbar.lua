@@ -1,13 +1,21 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  TargetCastbar.lua                                       ║
+-- ║  Module: Target Castbar                                  ║
+-- ║  Purpose: Repositionable target cast bar with kick       ║
+-- ║           indicators, target name, color settings,       ║
+-- ║           and cast sound alert.                          ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
--- Create module
 ---@class TargetCastbar: AceModule, AceEvent-3.0
 local TC = KitnEssentials:NewModule("TargetCastbar", "AceEvent-3.0")
 
--- Localization
+---------------------------------------------------------------------------------
+-- Constants
+---------------------------------------------------------------------------------
 local CreateFrame = CreateFrame
 local UnitCastingInfo, UnitChannelInfo = UnitCastingInfo, UnitChannelInfo
 local UnitCastingDuration, UnitChannelDuration = UnitCastingDuration, UnitChannelDuration
@@ -25,7 +33,6 @@ local GetPlayerInfoByGUID = GetPlayerInfoByGUID
 local ipairs = ipairs
 local type = type
 
--- Map anchor string to frame point
 local function GetPointFromAnchor(anchor)
     if anchor == "LEFT" then return "LEFT"
     elseif anchor == "RIGHT" then return "RIGHT"
@@ -33,12 +40,10 @@ local function GetPointFromAnchor(anchor)
     return "CENTER"
 end
 
--- Module locals
 local FALLBACK_ICON = 136243
 local PREVIEW_DURATION = 20
 local MAX_TARGET_NAMES = 5
 
--- Class interrupt spell IDs
 local CLASS_INTERRUPTS = {
     [1] = { 6552 },                         -- Warrior
     [2] = { 31935, 96231 },                 -- Paladin
@@ -55,18 +60,18 @@ local CLASS_INTERRUPTS = {
     [13] = { 351338 },                      -- Evoker
 }
 
--- Update db
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 function TC:UpdateDB()
     self.db = KE.db.profile.TargetCastbar
 end
 
--- Module init
 function TC:OnInitialize()
     self:UpdateDB()
     self:SetEnabledState(false)
 end
 
--- Create pre-cached color objects
 function TC:CreateColorObjects()
     local kick = self.db.KickIndicator or {}
     local ready = kick.ReadyColor or { 0.1, 0.8, 0.1, 1 }
@@ -79,7 +84,6 @@ function TC:CreateColorObjects()
     }
 end
 
--- Reset cast state
 function TC:ResetCastState()
     self.casting, self.channeling, self.empowering = nil, nil, nil
     self.castID, self.spellID, self.spellName = nil, nil, nil
@@ -87,7 +91,6 @@ function TC:ResetCastState()
     self.cachedDuration = nil
 end
 
--- Apply backdrop to a frame
 local function ApplyFrameBackdrop(frame, bgColor, borderColor)
     frame:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
@@ -101,7 +104,9 @@ local function ApplyFrameBackdrop(frame, bgColor, borderColor)
     frame:SetBackdropBorderColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4] or 1)
 end
 
--- Create castbar frame
+---------------------------------------------------------------------------------
+-- Frame Creation
+---------------------------------------------------------------------------------
 function TC:CreateFrame()
     if self.frame then return end
     local db = self.db
@@ -212,7 +217,9 @@ function TC:CreateFrame()
     self:ApplySettings()
 end
 
--- Apply visual settings
+---------------------------------------------------------------------------------
+-- Apply Settings
+---------------------------------------------------------------------------------
 function TC:ApplySettings()
     if not self.frame then return end
     self:CreateColorObjects()
@@ -262,13 +269,14 @@ function TC:ApplySettings()
     self:ApplyPosition()
 end
 
--- Apply position
 function TC:ApplyPosition()
     if not self.frame then return end
     KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
 end
 
--- Update bar color based on kick ready state
+---------------------------------------------------------------------------------
+-- Kick Indicator
+---------------------------------------------------------------------------------
 function TC:UpdateBarColor(interruptDuration)
     if not self.castBar then return end
     local kick = self.db.KickIndicator
@@ -309,7 +317,6 @@ function TC:UpdateBarColor(interruptDuration)
     texture:SetVertexColor(color[1], color[2], color[3], color[4] or 1)
 end
 
--- Detect and cache interrupt spell ID
 function TC:CacheInterruptId()
     local playerClass = select(3, UnitClass("player"))
     local interrupts = CLASS_INTERRUPTS[playerClass]
@@ -328,7 +335,6 @@ function TC:CacheInterruptId()
     self.interruptId = nil
 end
 
--- Update kick indicator tick visibility and bar color
 function TC:UpdateKickIndicator()
     local kick = self.db.KickIndicator
     if not kick or not kick.Enabled or not self.interruptId then
@@ -350,7 +356,6 @@ function TC:UpdateKickIndicator()
     self:UpdateBarColor(cooldown)
 end
 
--- Update tick position based on interrupt cooldown
 function TC:UpdateTickPosition(duration)
     local kick = self.db.KickIndicator
     if not kick or not kick.Enabled or not self.interruptId then return end
@@ -363,7 +368,9 @@ function TC:UpdateTickPosition(duration)
     self.kickCooldownBar:SetValue(cooldown:GetRemainingDuration())
 end
 
--- Update target name display
+---------------------------------------------------------------------------------
+-- Target Names
+---------------------------------------------------------------------------------
 function TC:UpdateTargetNames()
     if not self.targetNames then return end
     local targetSettings = self.db.TargetNames or {}
@@ -403,7 +410,6 @@ function TC:UpdateTargetNames()
     end
 end
 
--- Hide all target names
 function TC:HideTargetNames()
     if not self.targetNames then return end
     for i = 1, MAX_TARGET_NAMES do
@@ -411,7 +417,6 @@ function TC:HideTargetNames()
     end
 end
 
--- Get colored name from GUID
 function TC:GetColoredNameFromGUID(guid)
     if guid == nil then return nil end
 
@@ -425,7 +430,6 @@ function TC:GetColoredNameFromGUID(guid)
     return color:WrapTextInColorCode(name)
 end
 
--- Setup kick cooldown bar direction based on cast type
 function TC:SetupKickCooldownBar()
     local kick = self.db.KickIndicator
     if not kick or not kick.Enabled or not self.interruptId then
@@ -462,7 +466,9 @@ function TC:SetupKickCooldownBar()
     end
 end
 
--- Cast events
+---------------------------------------------------------------------------------
+-- Cast Logic
+---------------------------------------------------------------------------------
 function TC:OnCastEvent(event, unit, ...)
     if unit ~= "target" then return end
     if event:find("START") then
@@ -486,7 +492,6 @@ function TC:OnCastEvent(event, unit, ...)
     end
 end
 
--- Start displaying a cast
 function TC:StartCast()
     if not self.frame or not UnitExists("target") then return end
     local name, text, texture, castID, notInterruptible, spellID, isEmpowered
@@ -562,7 +567,6 @@ function TC:StartCast()
     self.frame:Show()
 end
 
--- End cast (stop, fail, or interrupt)
 function TC:EndCast(showHold, wasInterrupted, interruptedBy)
     if not self.frame or not self.frame:IsShown() then return end
     if self.holdTimer then return end
@@ -616,7 +620,6 @@ function TC:EndCast(showHold, wasInterrupted, interruptedBy)
     end)
 end
 
--- Update interruptible state mid-cast
 function TC:UpdateInterruptible()
     if not self.frame or not self.frame:IsShown() then return end
     -- notInterruptible is a secret boolean in 12.0.5 — cannot use `or` operator
@@ -635,7 +638,9 @@ function TC:UpdateInterruptible()
     self:UpdateBarColor()
 end
 
--- Target changed handler
+---------------------------------------------------------------------------------
+-- Event Handlers
+---------------------------------------------------------------------------------
 function TC:PLAYER_TARGET_CHANGED()
     if UnitExists("target") then
         self:StartCast()
@@ -650,7 +655,9 @@ function TC:PLAYER_TARGET_CHANGED()
     end
 end
 
--- Start preview cast timer
+---------------------------------------------------------------------------------
+-- OnUpdate
+---------------------------------------------------------------------------------
 function TC:StartPreviewTimer()
     local duration = C_DurationUtil.CreateDuration()
     duration:SetTimeFromStart(GetTime(), PREVIEW_DURATION)
@@ -663,7 +670,6 @@ function TC:StartPreviewTimer()
     self.positioner:SetValue(0)
 end
 
--- Frame update handler
 local updateThrottle = 0.1
 local updateElapsed = 0
 
@@ -722,13 +728,15 @@ function TC:OnUpdate(elapsed)
     updateElapsed = 0
 end
 
--- Ensure OnUpdate script is set
 function TC:EnsureOnUpdate()
     if self.frame and not self.frame:GetScript("OnUpdate") then
         self.frame:SetScript("OnUpdate", function(_, elapsed) self:OnUpdate(elapsed) end)
     end
 end
 
+---------------------------------------------------------------------------------
+-- Edit Mode
+---------------------------------------------------------------------------------
 function TC:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
@@ -742,7 +750,9 @@ function TC:RegWithEditMode()
     end
 end
 
--- Preview mode
+---------------------------------------------------------------------------------
+-- Preview
+---------------------------------------------------------------------------------
 function TC:ShowPreview()
     if not self.frame then self:CreateFrame() end
     self:RegWithEditMode()
@@ -789,7 +799,9 @@ function TC:HidePreview()
     end
 end
 
--- Module enable
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
 function TC:OnEnable()
     if not self.db.Enabled then return end
     self:CreateColorObjects()
@@ -816,7 +828,6 @@ function TC:OnEnable()
     self:CacheInterruptId()
 end
 
--- Module disable
 function TC:OnDisable()
     if self.frame then
         self.frame:SetScript("OnUpdate", nil)

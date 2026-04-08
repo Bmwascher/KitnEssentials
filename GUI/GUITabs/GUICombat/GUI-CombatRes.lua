@@ -1,4 +1,9 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-CombatRes.lua                                       ║
+-- ║  GUI: Battle Res                                         ║
+-- ║  Purpose: Configuration panel for the CombatRes module.  ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -56,9 +61,9 @@ GUIFrame:RegisterContent("CombatRes", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Combat Res Tracker (Enable + Formatting Options)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Combat Res Tracker", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, 40)
@@ -111,9 +116,9 @@ GUIFrame:RegisterContent("CombatRes", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Position Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2, newOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = db,
         dbKeys = {
@@ -138,9 +143,9 @@ GUIFrame:RegisterContent("CombatRes", function(scrollChild, yOffset)
     table_insert(allWidgets, card2)
     yOffset = newOffset
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Font Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
     table_insert(allWidgets, card3)
 
@@ -218,9 +223,9 @@ GUIFrame:RegisterContent("CombatRes", function(scrollChild, yOffset)
 
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Colors
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
     table_insert(allWidgets, card4)
 
@@ -266,9 +271,9 @@ GUIFrame:RegisterContent("CombatRes", function(scrollChild, yOffset)
 
     yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 5: Backdrop
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Backdrop", yOffset)
     table_insert(allWidgets, card5)
     db.Backdrop = db.Backdrop or {}

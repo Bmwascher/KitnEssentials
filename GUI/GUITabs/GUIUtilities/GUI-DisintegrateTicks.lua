@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-DisintegrateTicks.lua                               ║
+-- ║  GUI: Disintegrate Ticks                                 ║
+-- ║  Purpose: Configuration panel for the DisintegrateTicks ║
+-- ║  module.                                                 ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -60,9 +66,9 @@ GUIFrame:RegisterContent("DisintegrateTicks", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Enable
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Disintegrate Ticks", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, 36)
@@ -89,9 +95,9 @@ GUIFrame:RegisterContent("DisintegrateTicks", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Tick Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Tick Settings", yOffset)
     table_insert(allWidgets, card2)
 
@@ -118,9 +124,9 @@ GUIFrame:RegisterContent("DisintegrateTicks", function(scrollChild, yOffset)
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Clip Warning
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local cw = db.ClipWarning or {}
     local card3 = GUIFrame:CreateCard(scrollChild, "Mass Disintegrate Clip Warning", yOffset)
     table_insert(allWidgets, card3)
@@ -164,9 +170,9 @@ GUIFrame:RegisterContent("DisintegrateTicks", function(scrollChild, yOffset)
 
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Warning Position
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4, newOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         title = "Warning Position",
         db = db,
@@ -191,9 +197,9 @@ GUIFrame:RegisterContent("DisintegrateTicks", function(scrollChild, yOffset)
     table_insert(allWidgets, card4)
     yOffset = newOffset
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 5: Warning Font Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Warning Font Settings", yOffset)
     table_insert(allWidgets, card5)
 

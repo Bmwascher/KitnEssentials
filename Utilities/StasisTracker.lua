@@ -1,4 +1,11 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  StasisTracker.lua                                       ║
+-- ║  Module: Stasis Tracker                                  ║
+-- ║  Purpose: Tracks Stasis spell/countdown with icon        ║
+-- ║           display and status bar.                        ║
+-- ║  Note: Evoker only (Preservation).                       ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
@@ -6,7 +13,6 @@ if not KitnEssentials then return end
 local ST = KitnEssentials:NewModule("StasisTracker", "AceEvent-3.0")
 ST.classRestriction = "EVOKER"
 
--- Localization
 local CreateFrame = CreateFrame
 local GetTime = GetTime
 local C_Spell = C_Spell
@@ -17,7 +23,9 @@ local issecretvalue = issecretvalue
 local PlayerUtil = PlayerUtil
 local UnitClass = UnitClass
 
--- Spell constants
+---------------------------------------------------------------------------------
+-- Constants
+---------------------------------------------------------------------------------
 local STASIS_STORE = 370537
 local STASIS_RELEASE = 370564
 local TTS = 370553 -- Temporal Transcendence
@@ -37,16 +45,13 @@ local TRACKED_SPELLS = {
 local DREAM_BREATH = { [355936] = true, [382614] = true }
 local FIRE_BREATH = { [357208] = true, [382266] = true }
 
--- Spec ID
 local PRESERVATION = 1468
-
--- Placeholder icon (question mark)
 local PLACEHOLDER_ICON = 134400
-
--- Stasis duration (seconds)
 local STASIS_DURATION = 30
 
--- Module state
+---------------------------------------------------------------------------------
+-- Module State
+---------------------------------------------------------------------------------
 ST.containerFrame = nil
 ST.icons = {}
 ST.bar = nil
@@ -60,6 +65,9 @@ ST.state = {
     tts = false,
 }
 
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 function ST:UpdateDB()
     self.db = KE.db.profile.StasisTracker
 end
@@ -74,9 +82,9 @@ function ST:IsValidSpec()
     return specId == PRESERVATION
 end
 
---------------------------------------------------------------------------------
--- Frame creation
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Frame Creation
+---------------------------------------------------------------------------------
 function ST:CreateFrames()
     if self.containerFrame then return end
     local db = self.db
@@ -126,9 +134,9 @@ function ST:CreateFrames()
     self:ApplySettings()
 end
 
---------------------------------------------------------------------------------
--- Layout — handles Horizontal / Vertical growth
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Layout
+---------------------------------------------------------------------------------
 function ST:LayoutFrames()
     if not self.containerFrame then return end
     local db = self.db
@@ -195,9 +203,9 @@ function ST:LayoutFrames()
     end
 end
 
---------------------------------------------------------------------------------
--- Apply settings
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
 function ST:ApplySettings()
     if not self.containerFrame then return end
     local db = self.db
@@ -243,9 +251,9 @@ function ST:ApplyPosition()
     KE:ApplyFramePosition(self.containerFrame, self.db.Position, self.db)
 end
 
---------------------------------------------------------------------------------
--- Stasis state machine
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Core Logic
+---------------------------------------------------------------------------------
 function ST:StartStasis()
     self.state.storedSpells = 0
     self.state.showing = true
@@ -316,9 +324,9 @@ function ST:StartCountdown()
     end)
 end
 
---------------------------------------------------------------------------------
--- Event handling
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Event Handlers
+---------------------------------------------------------------------------------
 function ST:OnEvent(event, unit, ...)
     if event == "UNIT_SPELLCAST_SUCCEEDED" then
         if unit ~= "player" then return end
@@ -373,9 +381,9 @@ function ST:UnregisterSpellEvents()
     self:UnregisterEvent("UNIT_SPELLCAST_EMPOWER_STOP")
 end
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Edit Mode
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 function ST:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
@@ -393,9 +401,9 @@ function ST:RegWithEditMode()
     end
 end
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Preview
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 function ST:ShowPreview()
     self:CreateFrames()
     self:RegWithEditMode()
@@ -429,9 +437,9 @@ function ST:HidePreview()
     end
 end
 
---------------------------------------------------------------------------------
--- Module lifecycle
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
 function ST:OnEnable()
     if not self.db.Enabled then return end
 

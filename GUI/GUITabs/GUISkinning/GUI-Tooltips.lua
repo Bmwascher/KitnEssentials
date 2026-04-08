@@ -1,11 +1,16 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-Tooltips.lua                                        ║
+-- ║  GUI: Blizzard Tooltips                                  ║
+-- ║  Purpose: Configuration panel for the Tooltips module.   ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
 
--- Localization
+-- Local references
 local table_insert = table.insert
 local string_format = string.format
 
@@ -59,9 +64,9 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Enable + General Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Tooltip Skinning", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, 40)
@@ -107,9 +112,9 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1b: General Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1b = GUIFrame:CreateCard(scrollChild, "General Settings", yOffset)
     table_insert(allWidgets, card1b)
 
@@ -128,9 +133,9 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1b:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Position Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2, newOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         title = "Position",
         db = db.Position,
@@ -157,9 +162,9 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
     end
     yOffset = newOffset
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Font Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
     table_insert(allWidgets, card3)
 
@@ -286,9 +291,9 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
 
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Backdrop
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Backdrop", yOffset)
     table_insert(allWidgets, card4)
 

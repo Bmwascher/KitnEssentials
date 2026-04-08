@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-GreatVaultAlert.lua                                 ║
+-- ║  GUI: Great Vault Alert                                  ║
+-- ║  Purpose: Configuration panel for the                    ║
+-- ║           GreatVaultAlert module.                        ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -59,9 +65,9 @@ GUIFrame:RegisterContent("GreatVaultAlert", function(scrollChild, yOffset)
         { key = "Ambience", text = "Ambience" },
     }
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Enable
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Great Vault Spec Alert", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, 40)
@@ -87,9 +93,9 @@ GUIFrame:RegisterContent("GreatVaultAlert", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Alert Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Alert Settings", yOffset)
     table_insert(allWidgets, card2)
 
@@ -131,9 +137,9 @@ GUIFrame:RegisterContent("GreatVaultAlert", function(scrollChild, yOffset)
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Position Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         title = "Position Settings",
         db = db,
@@ -145,9 +151,9 @@ GUIFrame:RegisterContent("GreatVaultAlert", function(scrollChild, yOffset)
     table_insert(allWidgets, card3)
     yOffset = posOffset
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Font Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
     table_insert(allWidgets, card4)
 

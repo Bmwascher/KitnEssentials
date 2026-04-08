@@ -1,9 +1,13 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  EditMode.lua                                            ║
+-- ║  Purpose: In-game frame positioning interface — drag to  ║
+-- ║           reposition, nudge tool, anchor/strata controls.║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local Theme = KE.Theme
 
--- Localization
 local CreateFrame = CreateFrame
 local InCombatLockdown = InCombatLockdown
 local pairs = pairs
@@ -15,11 +19,9 @@ local IsMouseButtonDown = IsMouseButtonDown
 local STANDARD_TEXT_FONT = STANDARD_TEXT_FONT
 local UIParent = UIParent
 
--- EditMode module
 local EditMode = {}
 KE.EditMode = EditMode
 
--- State
 EditMode.isActive = false
 EditMode.registeredElements = {}
 EditMode.overlayFrames = {}
@@ -27,13 +29,15 @@ EditMode.selectedElementKey = nil
 EditMode.nudgeFrame = nil
 EditMode.isShiftFaded = false
 
--- Constants
 local BORDER_SIZE = 2
 local FILL_ALPHA = 0.25
 local TEXT_FONT_SIZE = 14
 local SHIFT_FADE_ALPHA = 0.1
 
--- Register a moveable UI element
+---------------------------------------------------------------------------------
+-- Element Registration
+---------------------------------------------------------------------------------
+
 function EditMode:RegisterElement(config)
     if not config or not config.key then return end
     if not config.frame and not config.frameName then return end
@@ -55,7 +59,6 @@ function EditMode:RegisterElement(config)
     if self.isActive then self:CreateOverlayForElement(config.key) end
 end
 
--- Remove an element from edit mode
 function EditMode:UnregisterElement(key)
     if not key then return end
 
@@ -67,7 +70,6 @@ function EditMode:UnregisterElement(key)
     self.registeredElements[key] = nil
 end
 
--- Resolve frame reference for an element
 function EditMode:GetElementFrame(element)
     if element.frame then
         return element.frame
@@ -77,7 +79,10 @@ function EditMode:GetElementFrame(element)
     return nil
 end
 
--- Create a themed overlay frame for an element
+---------------------------------------------------------------------------------
+-- Overlay Frame Creation
+---------------------------------------------------------------------------------
+
 function EditMode:CreateOverlayFrame(element)
     local targetFrame = self:GetElementFrame(element)
     if not targetFrame then return nil end
@@ -118,7 +123,6 @@ function EditMode:CreateOverlayFrame(element)
     return overlay
 end
 
--- Position overlay to match target frame
 function EditMode:UpdateOverlayPosition(overlay)
     local element = overlay.element
     local targetFrame = self:GetElementFrame(element)
@@ -134,7 +138,6 @@ function EditMode:UpdateOverlayPosition(overlay)
     overlay:Show()
 end
 
--- Create overlay for a specific element
 function EditMode:CreateOverlayForElement(key)
     local element = self.registeredElements[key]
     if not element then return end
@@ -152,7 +155,10 @@ function EditMode:CreateOverlayForElement(key)
     end
 end
 
--- Setup mouse drag behavior for overlay
+---------------------------------------------------------------------------------
+-- Drag Handling
+---------------------------------------------------------------------------------
+
 function EditMode:SetupDragHandlers(overlay, element)
     overlay:EnableMouse(true)
     overlay:SetMovable(true)
@@ -329,7 +335,10 @@ function EditMode:SetupDragHandlers(overlay, element)
     end)
 end
 
--- Activate edit mode
+---------------------------------------------------------------------------------
+-- Enter / Exit / Toggle
+---------------------------------------------------------------------------------
+
 function EditMode:Enter()
     if self.isActive then return end
     if InCombatLockdown() then
@@ -356,7 +365,6 @@ function EditMode:Enter()
     KE:CreateMessagePopup(20, EnterMsg, 14, UIParent, 200, 0)
 end
 
--- Deactivate edit mode
 function EditMode:Exit()
     if not self.isActive then return end
     self.isActive = false
@@ -383,7 +391,6 @@ function EditMode:Exit()
     KE:CreateMessagePopup(1, ExitMsg, 14, UIParent, 200, 0)
 end
 
--- Toggle edit mode on/off
 function EditMode:Toggle()
     if self.isActive then
         self:Exit()
@@ -392,12 +399,14 @@ function EditMode:Toggle()
     end
 end
 
--- Check if edit mode is active
 function EditMode:IsActive()
     return self.isActive
 end
 
--- Register ESC key to exit edit mode
+---------------------------------------------------------------------------------
+-- Keyboard and Input Handlers
+---------------------------------------------------------------------------------
+
 function EditMode:SetupEscapeHandler()
     if self.escapeFrame then return end
 
@@ -413,7 +422,6 @@ function EditMode:SetupEscapeHandler()
     end)
 end
 
--- Unregister ESC handler
 function EditMode:RemoveEscapeHandler()
     if self.escapeFrame then
         self.escapeFrame:SetScript("OnKeyDown", nil)
@@ -423,7 +431,10 @@ function EditMode:RemoveEscapeHandler()
     end
 end
 
--- Setup Shift key handler for fading selected overlay
+---------------------------------------------------------------------------------
+-- Shift-Fade Effect
+---------------------------------------------------------------------------------
+
 function EditMode:SetupShiftHandler()
     if self.shiftFrame then return end
     self.shiftFrame = CreateFrame("Frame", "KE_EditModeShift", UIParent)
@@ -443,7 +454,6 @@ function EditMode:SetupShiftHandler()
     end)
 end
 
--- Remove Shift key handler
 function EditMode:RemoveShiftHandler()
     if self.shiftFrame then
         self.shiftFrame:SetScript("OnUpdate", nil)
@@ -456,7 +466,6 @@ function EditMode:RemoveShiftHandler()
     end
 end
 
--- Animate backdrop + border + text alpha together
 local function AnimateOverlayAlpha(overlay, duration, fromAlpha, toAlpha, fillAlpha)
     -- Cancel any existing fade animation
     if overlay._fadeFrame then
@@ -484,7 +493,6 @@ local function AnimateOverlayAlpha(overlay, duration, fromAlpha, toAlpha, fillAl
     end)
 end
 
--- Apply or remove Shift fade effect on selected overlay
 function EditMode:ApplyShiftFade(fade)
     self.isShiftFaded = fade
 
@@ -500,7 +508,10 @@ function EditMode:ApplyShiftFade(fade)
     end
 end
 
--- Start checking for mouse clicks outside of overlays to deselect
+---------------------------------------------------------------------------------
+-- Deselect Checker
+---------------------------------------------------------------------------------
+
 function EditMode:StartDeselectChecker()
     if not self.deselectChecker then
         self.deselectChecker = CreateFrame("Frame", nil, UIParent)
@@ -552,7 +563,10 @@ function EditMode:StopDeselectChecker()
     end
 end
 
--- Auto-exit edit mode when entering combat
+---------------------------------------------------------------------------------
+-- Combat Handler
+---------------------------------------------------------------------------------
+
 function EditMode:SetupCombatHandler()
     if self.combatFrame then return end
 
@@ -566,7 +580,6 @@ function EditMode:SetupCombatHandler()
     end)
 end
 
--- Unregister combat handler
 function EditMode:RemoveCombatHandler()
     if self.combatFrame then
         self.combatFrame:UnregisterAllEvents()
@@ -575,7 +588,10 @@ function EditMode:RemoveCombatHandler()
     end
 end
 
--- Update overlay styling after theme change
+---------------------------------------------------------------------------------
+-- Theme Refresh
+---------------------------------------------------------------------------------
+
 function EditMode:RefreshOverlays()
     if not self.isActive then return end
 
@@ -592,7 +608,10 @@ function EditMode:RefreshOverlays()
     end
 end
 
--- Select an element for nudging
+---------------------------------------------------------------------------------
+-- Element Selection
+---------------------------------------------------------------------------------
+
 function EditMode:SelectElement(key)
     -- Deselect previous
     if self.selectedElementKey and self.overlayFrames[self.selectedElementKey] then
@@ -636,7 +655,10 @@ function EditMode:SelectElement(key)
     self:UpdateNudgeFrameInfo()
 end
 
--- Create the nudge frame with D-pad controls
+---------------------------------------------------------------------------------
+-- Nudge Frame
+---------------------------------------------------------------------------------
+
 function EditMode:CreateNudgeFrame()
     if self.nudgeFrame then return self.nudgeFrame end
     local arrowTexture = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.tga"
@@ -990,7 +1012,6 @@ function EditMode:CreateNudgeFrame()
     return frame
 end
 
--- Update nudge frame info display
 function EditMode:UpdateNudgeFrameInfo()
     if not self.nudgeFrame then return end
 
@@ -1025,7 +1046,10 @@ function EditMode:UpdateNudgeFrameInfo()
     end
 end
 
--- Open the GUI settings for the selected element
+---------------------------------------------------------------------------------
+-- GUI Integration
+---------------------------------------------------------------------------------
+
 function EditMode:OpenElementSettings()
     if not self.selectedElementKey then
         KE:Print("No element selected.")
@@ -1071,7 +1095,6 @@ function EditMode:OpenElementSettings()
     GUIFrame:OpenPage(itemId, sectionId, element.guiContext)
 end
 
--- Update nudge frame theme colors
 function EditMode:UpdateNudgeFrameTheme()
     if not self.nudgeFrame then return end
 
@@ -1083,7 +1106,10 @@ function EditMode:UpdateNudgeFrameTheme()
     self:UpdateNudgeFrameInfo()
 end
 
--- Nudge the selected element by X/Y pixels
+---------------------------------------------------------------------------------
+-- Nudge Logic
+---------------------------------------------------------------------------------
+
 function EditMode:NudgeSelectedElement(deltaX, deltaY)
     if not self.selectedElementKey then
         KE:Print("No element selected. Click an overlay to select it.")
@@ -1122,7 +1148,6 @@ function EditMode:NudgeSelectedElement(deltaX, deltaY)
     end
 end
 
--- Show nudge frame
 function EditMode:ShowNudgeFrame()
     if not self.nudgeFrame then
         self:CreateNudgeFrame()
@@ -1131,7 +1156,6 @@ function EditMode:ShowNudgeFrame()
     self:UpdateNudgeFrameInfo()
 end
 
--- Hide nudge frame
 function EditMode:HideNudgeFrame()
     if self.nudgeFrame then
         self.nudgeFrame:Hide()
@@ -1139,7 +1163,10 @@ function EditMode:HideNudgeFrame()
     self.selectedElementKey = nil
 end
 
--- Start updating overlay positions
+---------------------------------------------------------------------------------
+-- Position Updates
+---------------------------------------------------------------------------------
+
 function EditMode:StartPositionUpdates()
     if self.updateFrame then return end
 
@@ -1155,7 +1182,6 @@ function EditMode:StartPositionUpdates()
     end)
 end
 
--- Stop updating overlay positions
 function EditMode:StopPositionUpdates()
     if self.updateFrame then
         self.updateFrame:SetScript("OnUpdate", nil)

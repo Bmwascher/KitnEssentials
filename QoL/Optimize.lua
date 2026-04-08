@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  Optimize.lua                                            ║
+-- ║  Module: CVars                                           ║
+-- ║  Purpose: One-click CVar optimization panel for          ║
+-- ║           graphics, UI, and performance settings.        ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 
@@ -19,10 +25,12 @@ local tostring = tostring
 local tonumber = tonumber
 local string_format = string.format
 
-------------------------------------------------------------------------
--- Separate SavedVariables for optimization backups
--- This persists in KitnEssentialsOptimizeDB so installer won't overwrite it
-------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
+
+-- Separate SavedVariables for optimization backups.
+-- This persists in KitnEssentialsOptimizeDB so installer won't overwrite it.
 local function GetBackupDB()
     if not KitnEssentialsOptimizeDB then
         KitnEssentialsOptimizeDB = {}
@@ -33,9 +41,9 @@ local function GetBackupDB()
     return KitnEssentialsOptimizeDB
 end
 
-------------------------------------------------------------------------
--- CVar Definitions grouped by category
-------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Constants
+---------------------------------------------------------------------------------
 OPT.Categories = {
     {
         id = "render",
@@ -126,9 +134,7 @@ OPT.Categories = {
     },
 }
 
-------------------------------------------------------------------------
 -- Friendly display labels for CVar values
-------------------------------------------------------------------------
 local VALUE_LABELS = {
     renderScale = function(v)
         return string_format("%d%%", (tonumber(v) or 1) * 100)
@@ -227,10 +233,9 @@ local VALUE_LABELS = {
     ffxLingeringVenari = function(v) return v == "1" and "Enabled" or "Disabled" end,
 }
 
-------------------------------------------------------------------------
--- Public API
-------------------------------------------------------------------------
-
+---------------------------------------------------------------------------------
+-- Core Logic
+---------------------------------------------------------------------------------
 function OPT:GetValueLabel(cvar, value)
     local fn = VALUE_LABELS[cvar]
     if fn then return fn(value) end
@@ -334,18 +339,18 @@ function OPT:HasAnySavedSettings()
     return backup.SavedSettings and next(backup.SavedSettings) ~= nil
 end
 
-------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Lifecycle
-------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 function OPT:OnInitialize()
 end
 
 function OPT:OnEnable()
 end
 
-------------------------------------------------------------------------
--- Static popup
-------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Frame Creation
+---------------------------------------------------------------------------------
 StaticPopupDialogs["KE_OPTIMIZE_RELOAD"] = {
     text = "Settings applied. Some changes require a reload to take effect.\n\nReload now?",
     button1 = "Reload",

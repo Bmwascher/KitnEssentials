@@ -1,11 +1,10 @@
--- ============================================================
--- GUI-BossDebuffs.lua
--- GUI tab: Boss Debuffs
--- Purpose: Configuration panel for the BossDebuffs module.
--- Author: Bitebtw
--- ============================================================
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-BossDebuffs.lua                                     ║
+-- ║  GUI: Boss Debuffs                                       ║
+-- ║  Purpose: Configuration panel for the BossDebuffs module.║
+-- ║  Credit: Bitebtw                                         ║
+-- ╚══════════════════════════════════════════════════════════╝
 
--- KitnEssentials namespace
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame     = KE.GUIFrame
@@ -54,9 +53,9 @@ GUIFrame:RegisterContent("BossDebuffs", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Boss Debuffs (Enable)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Boss Debuffs", yOffset)
 
     local row1a = GUIFrame:CreateRow(card1.content, 36)
@@ -76,9 +75,9 @@ GUIFrame:RegisterContent("BossDebuffs", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Visibility
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Visibility", yOffset)
     table_insert(allWidgets, card2)
 
@@ -158,9 +157,9 @@ GUIFrame:RegisterContent("BossDebuffs", function(scrollChild, yOffset)
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Display
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Display", yOffset)
     table_insert(allWidgets, card3)
 
@@ -250,9 +249,9 @@ GUIFrame:RegisterContent("BossDebuffs", function(scrollChild, yOffset)
 
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Position Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4, newOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = db,
         dbKeys = {
@@ -277,9 +276,9 @@ GUIFrame:RegisterContent("BossDebuffs", function(scrollChild, yOffset)
     table_insert(allWidgets, card4)
     yOffset = newOffset
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Final widget state sync
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     UpdateAllWidgetStates()
     yOffset = yOffset - (Theme.paddingSmall * 3)
     return yOffset

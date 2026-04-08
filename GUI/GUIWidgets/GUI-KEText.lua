@@ -1,4 +1,8 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-KEText.lua                                          ║
+-- ║  Purpose: Text display widget with header and body.      ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -8,6 +12,10 @@ local Theme = KE.Theme
 local CreateFrame = CreateFrame
 local type = type
 local ipairs = ipairs
+
+---------------------------------------------------------------------------------
+-- Widget Creation
+---------------------------------------------------------------------------------
 
 -- Text widget
 function GUIFrame:CreateText(parent, titleTex, labelText, customRowHeight, bgShow, wrapOn)

@@ -1,10 +1,14 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  Globals.lua                                             ║
+-- ║  Purpose: Global constants, helper functions, preview    ║
+-- ║           manager, and edit mode integration.            ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 ---@diagnostic disable: undefined-field
 local KE = select(2, ...)
 local addonName = select(1, ...)
 
--- Localization
 local ipairs = ipairs
 local print = print
 local string_gsub = string.gsub
@@ -14,22 +18,26 @@ local C_Timer = C_Timer
 local EditModeManagerFrame = EditModeManagerFrame
 local _G = _G
 
--- Libraries
+---------------------------------------------------------------------------------
+-- Libraries and Media
+---------------------------------------------------------------------------------
+
 KE.LSM = LibStub("LibSharedMedia-3.0")
 KE.LDS = LibStub("LibDualSpec-1.0", true)
 
--- Addon media paths
 KE.PATH = ([[Interface\AddOns\%s\Media\]]):format(addonName)
 KE.FONT = KE.PATH .. [[Fonts\]] .. "Expressway.TTF"
 
--- Register LSM media
 if KE.LSM then
     KE.LSM:Register("font", "Expressway", KE.FONT)
     KE.LSM:Register("statusbar", "KitnUI", KE.PATH .. [[Statusbars\KitnEssentials.blp]])
     KE.LSM:Register("border", "WHITE8X8", [[Interface\Buttons\WHITE8X8]])
 end
 
--- Helper to get font path from name
+---------------------------------------------------------------------------------
+-- Media Helpers
+---------------------------------------------------------------------------------
+
 function KE:GetFontPath(fontName)
     if KE.LSM and fontName then
         local path = KE.LSM:Fetch("font", fontName)
@@ -38,7 +46,6 @@ function KE:GetFontPath(fontName)
     return "Fonts\\FRIZQT__.TTF"
 end
 
--- Helper to get statusbar path from name
 function KE:GetStatusbarPath(barName)
     if KE.LSM and barName then
         local path = KE.LSM:Fetch("statusbar", barName)
@@ -47,7 +54,10 @@ function KE:GetStatusbarPath(barName)
     return "Interface\\TargetingFrame\\UI-StatusBar"
 end
 
--- Addon metadata
+---------------------------------------------------------------------------------
+-- Addon Metadata
+---------------------------------------------------------------------------------
+
 local function GetAddonMetadata()
     if not C_AddOns then return end
     KE.AddOnName = C_AddOns.GetAddOnMetadata(addonName, "Title")
@@ -60,22 +70,27 @@ local function GetAddonMetadata()
 end
 GetAddonMetadata()
 
--- ElvUI detection: returns true when ElvUI is active and user wants ElvUI to handle skinning
+---------------------------------------------------------------------------------
+-- Utility Helpers
+---------------------------------------------------------------------------------
+
+-- Returns true when ElvUI is active and user wants ElvUI to handle skinning
 function KE:ShouldNotLoadModule()
     return C_AddOns.IsAddOnLoaded("ElvUI") and self.db and self.db.profile.UseElvUI and self.db.profile.UseElvUI.Enabled
 end
 
--- Check if Edit Mode is active
 function KE:IsEditModeActive()
     return EditModeManagerFrame and EditModeManagerFrame:IsShown()
 end
 
--- Print message to chat with addon prefix
 function KE:Print(msg)
     print(self:ColorTextByTheme("Kitn") .. "Essentials:|r " .. msg)
 end
 
--- Slash commands
+---------------------------------------------------------------------------------
+-- Slash Commands
+---------------------------------------------------------------------------------
+
 SLASH_KITNESSENTIALS1 = "/kes"
 SLASH_KITNESSENTIALS2 = "/kitnessentials"
 SLASH_KITNESSENTIALS3 = "/dunnigan"
@@ -100,7 +115,10 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
     end
 end
 
--- Initialization message
+---------------------------------------------------------------------------------
+-- Initialization Message
+---------------------------------------------------------------------------------
+
 function KE:Init()
     C_Timer.After(2, function()
         if KE.db and KE.db.global and KE.db.global._guiReset then
@@ -112,7 +130,10 @@ function KE:Init()
     end)
 end
 
--- Resolve anchor frame from db settings
+---------------------------------------------------------------------------------
+-- Frame Positioning
+---------------------------------------------------------------------------------
+
 function KE:ResolveAnchorFrame(anchorFrameType, parentFrameName)
     if anchorFrameType == "SCREEN" or anchorFrameType == "UIPARENT" then
         return UIParent
@@ -123,7 +144,11 @@ function KE:ResolveAnchorFrame(anchorFrameType, parentFrameName)
     return UIParent
 end
 
--- Convert font outline value for SetFont API
+---------------------------------------------------------------------------------
+-- Font Helpers
+---------------------------------------------------------------------------------
+
+-- Filters SOFTOUTLINE to "" since it uses a custom shadow system instead
 function KE:GetFontOutline(outline)
     if not outline or outline == "NONE" or outline == "SOFTOUTLINE" or outline == "" then
         return ""
@@ -131,7 +156,6 @@ function KE:GetFontOutline(outline)
     return outline
 end
 
--- Safely apply font settings to a FontString
 function KE:ApplyFont(fontString, fontName, fontSize, fontOutline)
     if not fontString then return false end
     local fontPath = self:GetFontPath(fontName)
@@ -148,7 +172,10 @@ function KE:ApplyFont(fontString, fontName, fontSize, fontOutline)
     return success
 end
 
--- Get text justification from anchor point
+---------------------------------------------------------------------------------
+-- Text Justification
+---------------------------------------------------------------------------------
+
 function KE:GetTextJustifyFromAnchor(anchorPoint)
     if not anchorPoint then return "CENTER" end
     if anchorPoint == "RIGHT" or anchorPoint == "TOPRIGHT" or anchorPoint == "BOTTOMRIGHT" then
@@ -166,7 +193,10 @@ function KE:GetTextPointFromAnchor(anchorPoint)
     return "CENTER"
 end
 
+---------------------------------------------------------------------------------
 -- Preview Manager
+---------------------------------------------------------------------------------
+
 local PreviewManager = {}
 KE.PreviewManager = PreviewManager
 
@@ -232,7 +262,10 @@ function PreviewManager:IsPreviewActive()
     return self.previewsActive
 end
 
--- Check if the player's current spec is a healer role
+---------------------------------------------------------------------------------
+-- Healer Position Override
+---------------------------------------------------------------------------------
+
 function KE:IsPlayerHealerSpec()
     local specIndex = _G.GetSpecialization()
     if not specIndex then return false end
@@ -240,8 +273,6 @@ function KE:IsPlayerHealerSpec()
     return role == "HEALER"
 end
 
--- Returns the active position config based on healer override state
--- Returns: posConfig, anchorFrameType, parentFrame, strata
 function KE:GetActivePositionConfig(db)
     if db.UseHealerPosition and self:IsPlayerHealerSpec() and db.HealerPosition then
         return db.HealerPosition,
@@ -252,14 +283,12 @@ function KE:GetActivePositionConfig(db)
     return db.Position, db.anchorFrameType, db.ParentFrame, db.Strata
 end
 
--- Convenience wrapper: resolve active position and apply it
 function KE:ApplyActivePosition(frame, db, setParent)
     local posConfig, aft, pf, strata = self:GetActivePositionConfig(db)
     local config = { anchorFrameType = aft, ParentFrame = pf, Strata = strata }
     self:ApplyFramePosition(frame, posConfig, config, setParent)
 end
 
--- Apply frame position from config
 function KE:ApplyFramePosition(frame, posConfig, Config, SetParent)
     if not frame or not posConfig then return end
     local parent = self:ResolveAnchorFrame(Config.anchorFrameType, Config.ParentFrame)

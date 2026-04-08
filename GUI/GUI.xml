@@ -76,16 +76,12 @@
 
     <!-- Skinning tabs -->
     <Script file="GUITabs\GUISkinning\GUI-Tooltips.lua" />
-    <Script file="GUITabs\GUISkinning\GUI-Chat.lua" />
     <Script file="GUITabs\GUISkinning\GUI-BlizzardMessages.lua" />
     <Script file="GUITabs\GUISkinning\GUI-BlizzardMouseover.lua" />
     <Script file="GUITabs\GUISkinning\GUI-BlizzardMicroMenu.lua" />
-    <Script file="GUITabs\GUISkinning\GUI-Minimap.lua" />
     <Script file="GUITabs\GUISkinning\GUI-DetailsBackdrop.lua" />
     <Script file="GUITabs\GUISkinning\GUI-ActionBars.lua" />
     <Script file="GUITabs\GUISkinning\GUI-Auras.lua" />
-    <Script file="GUITabs\GUISkinning\GUI-CDMOverlay.lua" />
-    <Script file="GUITabs\GUISkinning\GUI-CDMGlow.lua" />
     <Script file="GUITabs\GUISkinning\GUI-UICleanup.lua" />
     <Script file="GUITabs\GUISkinning\GUI-Battlenet.lua" />
     <Script file="GUITabs\GUISkinning\GUI-BlizzardRaidmanager.lua" />

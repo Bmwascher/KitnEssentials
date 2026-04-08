@@ -1,4 +1,11 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  Automation.lua                                          ║
+-- ║  Module: Automation                                      ║
+-- ║  Purpose: Auto-repair, auto-sell, auto-confirm queue,    ║
+-- ║           auto-slot keystone, skip cinematics, hide      ║
+-- ║           event toasts/zone text, and more.              ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
@@ -26,9 +33,9 @@ local C_Timer = C_Timer
 local StaticPopupDialogs = StaticPopupDialogs
 local _G = _G
 
---------------------------------------------------------------------------------
--- CVars definitions (merged from separate CVars module)
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Constants
+---------------------------------------------------------------------------------
 AU.CVAR_DEFS = {
     -- Floating Combat Text
     {
@@ -134,8 +141,14 @@ AU.CVAR_SLIDER_DEFS = {
     },
 }
 
+---------------------------------------------------------------------------------
+-- Module State
+---------------------------------------------------------------------------------
 AU._suppressCVarUpdate = false
 
+---------------------------------------------------------------------------------
+-- CVar Helpers
+---------------------------------------------------------------------------------
 local function ToCVarValue(value, cvarType)
     if cvarType == "boolean" then
         return value and 1 or 0
@@ -189,9 +202,9 @@ function AU:SyncFromCVars()
     end
 end
 
---------------------------------------------------------------------------------
--- DB
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 function AU:UpdateDB()
     self.db = KE.db.profile.Automation
 end
@@ -202,9 +215,12 @@ function AU:OnInitialize()
     self:SetEnabledState(false)
 end
 
---------------------------------------------------------------------------------
--- Skip Cinematics
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Core Logic
+---------------------------------------------------------------------------------
+
+-- Skip Cinematics --
+
 local cinematicFrame
 local function SetupSkipCinematics()
     if not AU.db.SkipCinematics then return end
@@ -221,9 +237,8 @@ local function SetupSkipCinematics()
     end)
 end
 
---------------------------------------------------------------------------------
--- Hide Talking Head
---------------------------------------------------------------------------------
+-- Hide Talking Head --
+
 function AU:SetupTalkingHeadHider()
     if self._talkingHeadHooked then return end
     local function HideTalkingHead(frame)
@@ -245,9 +260,8 @@ function AU:SetupTalkingHeadHider()
     self._talkingHeadHooked = true
 end
 
---------------------------------------------------------------------------------
--- Hide Event Toasts
---------------------------------------------------------------------------------
+-- Hide Event Toasts --
+
 local function SetupHideEventToasts()
     if AU._eventToastsHooked then return end
     AU._eventToastsHooked = true
@@ -264,9 +278,8 @@ local function SetupHideEventToasts()
     end
 end
 
---------------------------------------------------------------------------------
--- Hide Zone Text
---------------------------------------------------------------------------------
+-- Hide Zone Text --
+
 local function SetupHideZoneText()
     if AU._zoneTextHooked then return end
     AU._zoneTextHooked = true
@@ -282,9 +295,8 @@ local function SetupHideZoneText()
     end
 end
 
---------------------------------------------------------------------------------
--- Auto Sell Junk + Auto Repair
---------------------------------------------------------------------------------
+-- Auto Sell Junk + Auto Repair --
+
 local function SellJunkItems()
     if not AU.db.AutoSellJunk then return end
     for bagID = 0, 4 do
@@ -326,9 +338,8 @@ local function SetupAutoSellRepair()
     end)
 end
 
---------------------------------------------------------------------------------
--- Auto Role Check
---------------------------------------------------------------------------------
+-- Auto Role Check --
+
 local function SetupAutoRoleCheck()
     if not AU.db.AutoRoleCheck then return end
     if AU._lfdHooked then return end
@@ -342,9 +353,8 @@ local function SetupAutoRoleCheck()
     end
 end
 
---------------------------------------------------------------------------------
--- Auto Queue Confirm (skip LFG application dialog)
---------------------------------------------------------------------------------
+-- Auto Queue Confirm --
+
 local function SetupAutoQueueConfirm()
     if AU._lfgHooked then return end
     AU._lfgHooked = true
@@ -360,9 +370,8 @@ local function SetupAutoQueueConfirm()
     end)
 end
 
---------------------------------------------------------------------------------
--- Auto Slot Keystone
---------------------------------------------------------------------------------
+-- Auto Slot Keystone --
+
 local function SetupAutoSlotKeystone()
     if AU._keystoneHooked then return end
     AU._keystoneHooked = true
@@ -403,9 +412,8 @@ local function SetupAutoSlotKeystone()
     end)
 end
 
---------------------------------------------------------------------------------
--- Auto Fill DELETE
---------------------------------------------------------------------------------
+-- Auto Fill DELETE --
+
 local function SetupAutoFillDelete()
     if not AU.db.AutoFillDelete then return end
     if AU._deleteHooked then return end
@@ -417,17 +425,15 @@ local function SetupAutoFillDelete()
     end)
 end
 
---------------------------------------------------------------------------------
--- Auto Loot
---------------------------------------------------------------------------------
+-- Auto Loot --
+
 local function ApplyAutoLoot()
     if not AU.db.AutoLoot then return end
     C_CVar.SetCVar("autoLootDefault", AU.db.AutoLoot and "1" or "0")
 end
 
---------------------------------------------------------------------------------
--- Quest Automation
---------------------------------------------------------------------------------
+-- Quest Automation --
+
 local function IsQuestModifierHeld()
     local mod = AU.db.QuestModifier
     if not mod or mod == "" or mod == "NONE" then return false end
@@ -500,9 +506,8 @@ local function SetupAutoQuests()
     end)
 end
 
---------------------------------------------------------------------------------
--- Auto Decline Duels / Pet Battles
---------------------------------------------------------------------------------
+-- Auto Decline Duels / Pet Battles --
+
 local duelFrame
 local function SetupAutoDeclineDuels()
     if duelFrame then return end
@@ -528,9 +533,9 @@ local function SetupAutoDeclinePetBattles()
     end)
 end
 
---------------------------------------------------------------------------------
--- CVAR_UPDATE event handler
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Event Handlers
+---------------------------------------------------------------------------------
 function AU:CVAR_UPDATE(_, cvarName)
     for _, def in ipairs(self.CVAR_DEFS) do
         if def.key == cvarName then
@@ -549,9 +554,9 @@ function AU:CVAR_UPDATE(_, cvarName)
     end
 end
 
---------------------------------------------------------------------------------
--- Apply / Enable / Disable
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
 function AU:ApplySettings()
     if not self.db.Enabled then return end
     SetupSkipCinematics()
@@ -570,6 +575,9 @@ function AU:ApplySettings()
     self:ApplyCVars()
 end
 
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
 function AU:OnEnable()
     if not self.db.Enabled then return end
     self:RegisterEvent("CVAR_UPDATE")

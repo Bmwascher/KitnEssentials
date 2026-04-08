@@ -1,15 +1,19 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-RangeChecker.lua                                    ║
+-- ║  GUI: Range Display                                      ║
+-- ║  Purpose: Configuration panel for the RangeChecker       ║
+-- ║  module.                                                 ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
 
--- Localization
 local table_insert = table.insert
 local pairs, ipairs = pairs, ipairs
 
--- Helper to get module
 local function GetModule()
     return KitnEssentials:GetModule("RangeChecker", true)
 end
@@ -58,9 +62,9 @@ GUIFrame:RegisterContent("RangeChecker", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Range Checker Text (Enable)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Range Checker Text", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, 36)
@@ -77,9 +81,9 @@ GUIFrame:RegisterContent("RangeChecker", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: General Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "General Settings", yOffset)
     table_insert(allWidgets, card2)
 
@@ -113,9 +117,9 @@ GUIFrame:RegisterContent("RangeChecker", function(scrollChild, yOffset)
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Position Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3, newOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = db,
         dbKeys = {
@@ -140,9 +144,9 @@ GUIFrame:RegisterContent("RangeChecker", function(scrollChild, yOffset)
     table_insert(allWidgets, card3)
     yOffset = newOffset
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Font Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
     table_insert(allWidgets, card4)
 
@@ -195,9 +199,9 @@ GUIFrame:RegisterContent("RangeChecker", function(scrollChild, yOffset)
 
     yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 5: Color Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Color Settings", yOffset)
     table_insert(allWidgets, card5)
 

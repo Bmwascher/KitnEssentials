@@ -1,4 +1,9 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  AddonTheme.lua                                          ║
+-- ║  Purpose: Addon-wide theme system — 8 WoW-themed color   ║
+-- ║           presets, class color mode, and custom colors.  ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local type = type
@@ -8,7 +13,10 @@ local RAID_CLASS_COLORS = RAID_CLASS_COLORS
 local UnitClass = UnitClass
 local pcall = pcall
 
--- Base theme (dark backgrounds, neutral text — shared by all presets)
+---------------------------------------------------------------------------------
+-- Theme Defaults
+---------------------------------------------------------------------------------
+
 local ThemeDefaults = {
     bgDark         = { 0.0627, 0.0627, 0.0627, 0.60 },
     bgMedium       = { 0.0902, 0.0902, 0.0902, 0.60 },
@@ -51,9 +59,9 @@ local ThemeDefaults = {
 }
 KE.ThemeDefaults = ThemeDefaults
 
---------------------------------------------------------------------------------
--- Theme Presets (only accent-family colors differ per preset)
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Theme Presets
+---------------------------------------------------------------------------------
 local function MakePreset(r, g, b)
     return {
         accent      = { r, g, b, 1 },
@@ -83,14 +91,12 @@ KE.ThemeModeOptions = {
     { key = "custom", text = "Custom" },
 }
 
--- Keys that change per theme (accent-family)
 local ACCENT_KEYS = { "accent", "accentHover", "accentDim", "selectedBg", "selectedText" }
--- Keys derived from class color in "class" mode
 local CLASS_COLOR_KEYS = { accent = true, accentHover = true, accentDim = true, selectedBg = true }
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Helpers
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 local function CopyColor(color)
     if type(color) ~= "table" then return { 1, 1, 1, 1 } end
     return { color[1] or 1, color[2] or 1, color[3] or 1, color[4] or 1 }
@@ -105,9 +111,9 @@ local function GetPlayerClassRGB()
     return 1, 1, 1
 end
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Theme Color Resolution
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 function KE:GetThemeColor(key)
     local db = self.db and self.db.global and self.db.global.Theme
     if not db then return ThemeDefaults[key] end
@@ -143,17 +149,17 @@ function KE:GetThemeColor(key)
     return ThemeDefaults[key] and CopyColor(ThemeDefaults[key]) or nil
 end
 
---------------------------------------------------------------------------------
--- Live Theme Table (initialized from defaults — DB-driven after OnInitialize)
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Live Theme Table
+---------------------------------------------------------------------------------
 KE.Theme = {}
 for k, v in pairs(ThemeDefaults) do
     if type(v) == "table" then KE.Theme[k] = CopyColor(v) else KE.Theme[k] = v end
 end
 
---------------------------------------------------------------------------------
--- Refresh Theme (mutates KE.Theme in-place)
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Refresh Theme
+---------------------------------------------------------------------------------
 local isRefreshing = false
 function KE:RefreshTheme()
     if isRefreshing then return end
@@ -184,9 +190,9 @@ function KE:RefreshTheme()
     isRefreshing = false
 end
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Theme Setters
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 function KE:SetThemeMode(mode)
     if not self.db or not self.db.global then return end
     self.db.global.Theme.Mode = mode
@@ -238,9 +244,9 @@ function KE:ResetTheme()
     self:RefreshTheme()
 end
 
---------------------------------------------------------------------------------
--- Theme Change Notification (broadcasts to modules using "theme" ColorMode)
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Theme Change Notification
+---------------------------------------------------------------------------------
 function KE:NotifyThemeChange()
     if not KitnEssentials then return end
     for _, module in KitnEssentials:IterateModules() do
@@ -250,9 +256,9 @@ function KE:NotifyThemeChange()
     end
 end
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Font Helper
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 function KE:ApplyThemeFont(fontString, size)
     if not fontString or not fontString.SetFont then return end
     local T = self.Theme

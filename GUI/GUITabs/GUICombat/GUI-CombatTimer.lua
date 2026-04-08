@@ -1,4 +1,9 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-CombatTimer.lua                                     ║
+-- ║  GUI: Combat Timer                                       ║
+-- ║  Purpose: Configuration panel for the CombatTimer module.║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -55,9 +60,9 @@ GUIFrame:RegisterContent("CombatTimer", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Combat Timer (Enable + Format + Bracket + Chat)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Combat Timer", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, 36)
@@ -112,9 +117,9 @@ GUIFrame:RegisterContent("CombatTimer", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Position Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2, newOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = db,
         dbKeys = {
@@ -139,9 +144,9 @@ GUIFrame:RegisterContent("CombatTimer", function(scrollChild, yOffset)
     table_insert(allWidgets, card2)
     yOffset = newOffset
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Font Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
     table_insert(allWidgets, card3)
 
@@ -189,9 +194,9 @@ GUIFrame:RegisterContent("CombatTimer", function(scrollChild, yOffset)
 
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Colors
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
     table_insert(allWidgets, card4)
 
@@ -216,9 +221,9 @@ GUIFrame:RegisterContent("CombatTimer", function(scrollChild, yOffset)
 
     yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 5: Backdrop
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Backdrop", yOffset)
     table_insert(allWidgets, card5)
     db.Backdrop = db.Backdrop or {}

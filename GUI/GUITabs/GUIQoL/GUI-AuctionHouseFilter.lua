@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-AuctionHouseFilter.lua                              ║
+-- ║  GUI: Auction House Filter                               ║
+-- ║  Purpose: Configuration panel for the                    ║
+-- ║           AuctionHouseFilter module.                     ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -34,9 +40,9 @@ GUIFrame:RegisterContent("AuctionHouseFilter", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Master Enable
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Auction House Filter", yOffset)
     local row1 = GUIFrame:CreateRow(card1.content, 36)
     local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Auction House Filter", db.Enabled ~= false,
@@ -50,9 +56,9 @@ GUIFrame:RegisterContent("AuctionHouseFilter", function(scrollChild, yOffset)
     card1:AddRow(row1, 36)
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Blizzard Auction House
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Blizzard Auction House", yOffset)
     table_insert(allWidgets, card2)
 
@@ -73,9 +79,9 @@ GUIFrame:RegisterContent("AuctionHouseFilter", function(scrollChild, yOffset)
     card2:AddRow(row2, 40)
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Craft Orders
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Craft Orders", yOffset)
     table_insert(allWidgets, card3)
 

@@ -1,4 +1,9 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-HomePage.lua                                        ║
+-- ║  Purpose: Home page with general settings and            ║
+-- ║  minimap/chat toggles.                                   ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -11,16 +16,23 @@ local ipairs = ipairs
 local string_format = string.format
 local ReloadUI = ReloadUI
 
--- Register HomePage content
+---------------------------------------------------------------------------------
+-- Helpers
+---------------------------------------------------------------------------------
+
+---------------------------------------------------------------------------------
+-- Card Sections
+---------------------------------------------------------------------------------
+
 GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
     local T = Theme
     local _, class = UnitClass("player")
     local classColor = RAID_CLASS_COLORS[class] or { r = 1, g = 1, b = 1 }
     local playerName = UnitName("player") or "Adventurer"
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Welcome
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Welcome to " .. KE:ColorTextByTheme("Kitn") .. "Essentials", yOffset)
 
     -- Player greeting with class color
@@ -40,9 +52,9 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + T.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Quick Actions
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Quick Actions", yOffset)
 
     local row1 = GUIFrame:CreateRow(card2.content, 38)
@@ -80,9 +92,9 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
 
     yOffset = yOffset + card2:GetContentHeight() + T.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: General Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local db = KE.db and KE.db.profile
     local cardSettings = GUIFrame:CreateCard(scrollChild, "General Settings", yOffset)
 
@@ -115,9 +127,9 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
 
     yOffset = yOffset + cardSettings:GetContentHeight() + T.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Getting Started
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Getting Started", yOffset)
 
     local tips = {
@@ -133,9 +145,9 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
 
     yOffset = yOffset + card3:GetContentHeight() + T.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Profile
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Profile", yOffset)
 
     local profileName = KE.db and KE.db.GetCurrentProfile and KE.db:GetCurrentProfile() or "Default"
@@ -148,9 +160,9 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
 
     yOffset = yOffset + card4:GetContentHeight() + T.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 5: ElvUI Integration (only when ElvUI is loaded)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     if C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("ElvUI") then
         local elvCard = GUIFrame:CreateCard(scrollChild, "ElvUI Integration", yOffset)
         local useElvUI = KE.db and KE.db.profile and KE.db.profile.UseElvUI and KE.db.profile.UseElvUI.Enabled
@@ -165,9 +177,9 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
         yOffset = yOffset + elvCard:GetContentHeight() + T.paddingSmall
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 6: Support
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card6 = GUIFrame:CreateCard(scrollChild, "Support", yOffset)
 
     card6:AddLabel("Found a bug or have a suggestion?")

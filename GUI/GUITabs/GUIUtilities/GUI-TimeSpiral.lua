@@ -1,15 +1,18 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-TimeSpiral.lua                                      ║
+-- ║  GUI: Time Spiral Tracker                                ║
+-- ║  Purpose: Configuration panel for the TimeSpiral module. ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
 
--- Localization
 local table_insert = table.insert
 local pairs, ipairs = pairs, ipairs
 
--- Helper to get module
 local function GetModule()
     return KitnEssentials:GetModule("TimeSpiral", true)
 end
@@ -84,9 +87,9 @@ GUIFrame:RegisterContent("TimeSpiral", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Time Spiral Enable
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Time Spiral Tracker", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, 36)
@@ -113,9 +116,9 @@ GUIFrame:RegisterContent("TimeSpiral", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Display & Glow Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Display & Glow Settings", yOffset)
     table_insert(allWidgets, card2)
 
@@ -180,9 +183,9 @@ GUIFrame:RegisterContent("TimeSpiral", function(scrollChild, yOffset)
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Position Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3, newOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = db,
         dbKeys = {
@@ -207,9 +210,9 @@ GUIFrame:RegisterContent("TimeSpiral", function(scrollChild, yOffset)
     table_insert(allWidgets, card3)
     yOffset = newOffset
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Text Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Text Settings", yOffset)
     table_insert(allWidgets, card4)
 
@@ -249,9 +252,9 @@ GUIFrame:RegisterContent("TimeSpiral", function(scrollChild, yOffset)
 
     yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 5: Font Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
     table_insert(allWidgets, card5)
 

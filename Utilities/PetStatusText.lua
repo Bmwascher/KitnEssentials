@@ -1,13 +1,17 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  PetStatusText.lua                                       ║
+-- ║  Module: Pet Status Text                                 ║
+-- ║  Purpose: Displays pet status text on screen for pet     ║
+-- ║           classes (Hunter, Warlock, DK, Mage).           ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
--- Create module
 ---@class PetStatusText: AceModule, AceEvent-3.0
 local PS = KitnEssentials:NewModule("PetStatusText", "AceEvent-3.0")
 
--- Localization
 local UnitClass = UnitClass
 local IsMounted = IsMounted
 local UnitOnTaxi = UnitOnTaxi
@@ -24,6 +28,9 @@ local IsPlayerSpell = IsPlayerSpell
 local C_Timer = C_Timer
 local C_SpellBook = C_SpellBook
 
+---------------------------------------------------------------------------------
+-- Constants
+---------------------------------------------------------------------------------
 -- Tracked pet classes
 local PET_CLASSES = {
     ["HUNTER"] = { summonSpellId = 883, reviveSpellId = 982, specId = nil },
@@ -32,11 +39,12 @@ local PET_CLASSES = {
     ["MAGE"] = { summonSpellId = 31687, reviveSpellId = nil, specId = 64 },
 }
 
--- Module state
+---------------------------------------------------------------------------------
+-- Module State
+---------------------------------------------------------------------------------
 local petInfo = nil
 local petDeathTracked = false
 
--- Pet status enum
 local PET_STATUS = {
     NONE = 0,
     MISSING = 1,
@@ -44,16 +52,17 @@ local PET_STATUS = {
     PASSIVE = 3,
 }
 
--- Module state
 PS.frame = nil
 PS.text = nil
 
--- Helper: Is player mounted or in vehicle
+---------------------------------------------------------------------------------
+-- Helpers
+---------------------------------------------------------------------------------
+-- Is player mounted or in vehicle
 local function IsPlayerMounted()
     return IsMounted() or UnitOnTaxi("player") or UnitInVehicle("player") or UnitHasVehicleUI("player")
 end
 
--- Helper: Check if pet is on passive stance
 local function IsPetOnPassive()
     if not UnitExists("pet") or not PetHasActionBar() then return false end
     for slot = 1, 10 do
@@ -63,7 +72,6 @@ local function IsPetOnPassive()
     return false
 end
 
--- Helper: Check and track pet death state
 local function CheckAndUpdatePetDeathState()
     if UnitExists("pet") and not UnitIsDeadOrGhost("pet") then
         petDeathTracked = false
@@ -80,12 +88,13 @@ local function CheckAndUpdatePetDeathState()
     return false
 end
 
--- Reset death tracking
 local function ResetPetDeathTracking()
     petDeathTracked = false
 end
 
--- Check pet status and return status code + text + color
+---------------------------------------------------------------------------------
+-- Core Logic
+---------------------------------------------------------------------------------
 local function CheckPetStatus()
     if not petInfo then return PET_STATUS.NONE, nil, nil end
     if IsPlayerMounted() then return PET_STATUS.NONE, nil, nil end
@@ -127,12 +136,13 @@ local function CheckPetStatus()
     end
 end
 
--- Update db
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 function PS:UpdateDB()
     self.db = KE.db.profile.PetStatusText
 end
 
--- Module init
 function PS:OnInitialize()
     self:UpdateDB()
 
@@ -142,7 +152,9 @@ function PS:OnInitialize()
     self:SetEnabledState(false)
 end
 
--- Create the display frame
+---------------------------------------------------------------------------------
+-- Frame Creation
+---------------------------------------------------------------------------------
 function PS:CreateFrame()
     if self.frame then return end
 
@@ -166,7 +178,6 @@ function PS:CreateFrame()
     self.frame:Hide()
 end
 
--- Update the displayed text
 function PS:UpdatePetText()
     local status, message, color = CheckPetStatus()
 
@@ -179,7 +190,9 @@ function PS:UpdatePetText()
     end
 end
 
--- Apply all settings
+---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
 function PS:ApplySettings()
     if not self.frame then return end
 
@@ -191,6 +204,9 @@ function PS:ApplySettings()
     end
 end
 
+---------------------------------------------------------------------------------
+-- Edit Mode
+---------------------------------------------------------------------------------
 function PS:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
@@ -204,7 +220,9 @@ function PS:RegWithEditMode()
     end
 end
 
--- Preview mode for GUI
+---------------------------------------------------------------------------------
+-- Preview
+---------------------------------------------------------------------------------
 function PS:ShowPreview(state)
     if not self.frame then
         self:CreateFrame()
@@ -243,7 +261,9 @@ function PS:HidePreview()
     end
 end
 
--- Module OnEnable
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
 function PS:OnEnable()
     if not self.db.Enabled then return end
     if not petInfo then return end
@@ -279,7 +299,6 @@ function PS:OnEnable()
     end)
 end
 
--- Module OnDisable
 function PS:OnDisable()
     if self.frame then self.frame:Hide() end
     self:UnregisterAllEvents()

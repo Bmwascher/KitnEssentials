@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-SlashCommands.lua                                   ║
+-- ║  GUI: Slash Commands                                     ║
+-- ║  Purpose: Configuration panel for the                    ║
+-- ║           SlashCommands module.                          ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -8,9 +14,9 @@ GUIFrame:RegisterContent("SlashCommands", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.SlashCommands
     if not db then return yOffset end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Cooldown Manager (/cd, /wa)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Cooldown Manager Slash Commands", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, 36)
@@ -27,9 +33,9 @@ GUIFrame:RegisterContent("SlashCommands", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Shortcut Commands (/rl, /fs)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Shortcut Commands", yOffset)
 
     local row3 = GUIFrame:CreateRow(card3.content, 36)
@@ -55,9 +61,9 @@ GUIFrame:RegisterContent("SlashCommands", function(scrollChild, yOffset)
 
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Party & Instance (/leave, /drop, /reset)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Party & Instance", yOffset)
 
     local row4 = GUIFrame:CreateRow(card4.content, 36)
@@ -83,9 +89,9 @@ GUIFrame:RegisterContent("SlashCommands", function(scrollChild, yOffset)
 
     yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 5: Sound Toggles (/mute, /music)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Sound Toggles", yOffset)
 
     local row5 = GUIFrame:CreateRow(card5.content, 36)
@@ -111,9 +117,9 @@ GUIFrame:RegisterContent("SlashCommands", function(scrollChild, yOffset)
 
     yOffset = yOffset + card5:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 6: /kitn Commands (info-only)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card6 = GUIFrame:CreateCard(scrollChild, "/kitn Subcommands", yOffset)
 
     card6:AddLabel("|cff888888These commands are always available via " .. KE:ColorTextByTheme("/kitn <command>") .. ":|r")

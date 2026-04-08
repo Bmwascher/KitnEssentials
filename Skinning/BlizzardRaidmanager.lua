@@ -1,31 +1,34 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  BlizzardRaidmanager.lua                                 ║
+-- ║  Module: Raid Manager Panel                              ║
+-- ║  Purpose: Raid manager panel appearance with dark        ║
+-- ║           theme styling.                                 ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
--- Create module
 ---@class SkinBlizzardRaidmanager: AceModule, AceEvent-3.0
 local SK = KitnEssentials:NewModule("SkinBlizzardRaidmanager", "AceEvent-3.0")
 
--- Localization
 local hooksecurefunc = hooksecurefunc
 local InCombatLockdown = InCombatLockdown
 local C_Timer = C_Timer
 local MouseIsOver = MouseIsOver
 
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 
--- Update db
 function SK:UpdateDB()
     self.db = KE.db.profile.Skinning.RaidManager
 end
 
--- Module init
-function SK:OnInitialize()
-    self:UpdateDB()
-    self:SetEnabledState(false)
-end
+---------------------------------------------------------------------------------
+-- Fade Logic
+---------------------------------------------------------------------------------
 
--- Fade in function
 local function FadeIn()
     if not SK:IsEnabled() then return end
     if CompactRaidFrameManager._isMouseOver then return end
@@ -37,7 +40,6 @@ local function FadeIn()
     KE:CombatSafeFade(CompactRaidFrameManager, 1, dur)
 end
 
--- Fade out function
 local function FadeOut()
     if not SK:IsEnabled() then return end
     if not CompactRaidFrameManager._isMouseOver then return end
@@ -51,7 +53,10 @@ local function FadeOut()
     KE:CombatSafeFade(CompactRaidFrameManager, SK.db.Alpha, SK.db.FadeOutDuration)
 end
 
--- Apply Y position
+---------------------------------------------------------------------------------
+-- Core Logic
+---------------------------------------------------------------------------------
+
 function SK:ApplyPosition()
     local point, relTo, relPoint, x = CompactRaidFrameManager:GetPoint()
     if point then
@@ -60,14 +65,11 @@ function SK:ApplyPosition()
     end
 end
 
--- Setup styling and hooks
 function SK:SetupRaidManager()
     if not CompactRaidFrameManager or SK._raidManagerHooked then return end
 
-    -- Apply Strata
     CompactRaidFrameManager:SetFrameStrata(self.db.Strata)
 
-    -- Hook fade updates
     if not SK._raidManagerHooked then
         CompactRaidFrameManager:HookScript("OnEnter", function()
             FadeIn()
@@ -103,6 +105,10 @@ function SK:SetupRaidManager()
     end
 end
 
+---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
+
 function SK:ApplySettings()
     if KE:ShouldNotLoadModule() then return end
     self:SetupRaidManager()
@@ -116,7 +122,15 @@ function SK:ApplySettings()
     end
 end
 
--- Module OnEnable
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
+
+function SK:OnInitialize()
+    self:UpdateDB()
+    self:SetEnabledState(false)
+end
+
 function SK:OnEnable()
     if KE:ShouldNotLoadModule() then return end
     if not self.db.Enabled then return end
@@ -125,7 +139,6 @@ function SK:OnEnable()
     end)
 end
 
--- Module OnDisable
 function SK:OnDisable()
     if CompactRaidFrameManager then
         CompactRaidFrameManager:SetAlpha(1)

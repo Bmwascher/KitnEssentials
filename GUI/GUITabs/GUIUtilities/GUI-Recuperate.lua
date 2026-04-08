@@ -1,4 +1,9 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-Recuperate.lua                                      ║
+-- ║  GUI: Recuperate Button                                  ║
+-- ║  Purpose: Configuration panel for the Recuperate module. ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -38,9 +43,9 @@ GUIFrame:RegisterContent("Recuperate", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Enable + Load Conditions
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Recuperate Button", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, 40)
@@ -61,9 +66,9 @@ GUIFrame:RegisterContent("Recuperate", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: General Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "General Settings", yOffset)
     table_insert(allWidgets, card2)
 
@@ -99,9 +104,9 @@ GUIFrame:RegisterContent("Recuperate", function(scrollChild, yOffset)
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Position Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3, newOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = db,
         dbKeys = {

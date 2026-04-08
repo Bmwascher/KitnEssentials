@@ -1,4 +1,9 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-Optimize.lua                                        ║
+-- ║  GUI: CVars (Optimize Panel)                             ║
+-- ║  Purpose: Configuration panel for the Optimize module.   ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -9,6 +14,9 @@ local ipairs = ipairs
 local CreateFrame = CreateFrame
 local C_Timer = C_Timer
 
+---------------------------------------------------------------------------------
+-- Helpers
+---------------------------------------------------------------------------------
 local function GetModule()
     if KitnEssentials then
         return KitnEssentials:GetModule("Optimize", true)
@@ -37,9 +45,9 @@ local function InstallCloseHook()
     end)
 end
 
-------------------------------------------------------------------------
--- Content builder
-------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Content Registration
+---------------------------------------------------------------------------------
 GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
     local OPT = GetModule()
     if not OPT then

@@ -1,13 +1,17 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  BloodlustTracker.lua                                    ║
+-- ║  Module: Bloodlust Tracker                               ║
+-- ║  Purpose: Animated sprite overlay + sound on Bloodlust   ║
+-- ║           /Heroism with presets and icon+countdown mode. ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
--- Create module
 ---@class BloodlustTracker: AceModule, AceEvent-3.0, AceTimer-3.0
 local BLT = KitnEssentials:NewModule("BloodlustTracker", "AceEvent-3.0", "AceTimer-3.0")
 
--- Localization
 local GetTime = GetTime
 local CreateFrame = CreateFrame
 local UnitSpellHaste = UnitSpellHaste
@@ -22,9 +26,9 @@ local math_floor = math.floor
 local math_max = math.max
 
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Constants
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 local TIMER_DURATION = 40
 local BASE_FPS = 15
 local FRAME_SIZE = 256
@@ -58,9 +62,9 @@ local PRESET_ORDER = { "pedro", "chipi", "ninemm", "erm" }
 BLT.PRESETS = PRESETS
 BLT.PRESET_ORDER = PRESET_ORDER
 
---------------------------------------------------------------------------------
--- Module state
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Module State
+---------------------------------------------------------------------------------
 BLT.frame = nil
 BLT.spriteTexture = nil
 BLT.iconTexture = nil
@@ -69,8 +73,6 @@ BLT.isPreview = false
 BLT.testMode = false
 BLT.lustActive = false
 BLT.endTime = 0
-
--- Animation state
 BLT.animAccum = 0
 BLT.frameIndex = 0
 BLT.secondsPerFrame = 1 / BASE_FPS
@@ -79,25 +81,19 @@ BLT.sheetH = 0
 BLT.framesPerRow = 0
 BLT.sheetRows = 0
 BLT.numFrames = 0
-
--- Sound state
 BLT.soundHandle = nil
 BLT.soundLoopTimer = nil
 BLT.soundEndTimer = nil
-
--- Haste detection state
 BLT.lastFactor = nil
 BLT.preLustFactor = nil
 BLT.pollTimer = nil
 BLT.hadLustDebuff = nil
 BLT.lustTimer = nil
-
--- Sheet probing
 BLT._sheetProbeTimer = nil
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Helpers
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 local function FloorDiv(a, b)
     if type(a) ~= "number" or type(b) ~= "number" or b <= 0 then return 0 end
     return math_floor((a / b) + 1e-6)
@@ -107,9 +103,9 @@ local function GetPreset(presetId)
     return PRESETS[presetId] or PRESETS.pedro
 end
 
---------------------------------------------------------------------------------
--- Sheet probing (auto-detect grid from TGA dimensions)
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Sheet Probing
+---------------------------------------------------------------------------------
 function BLT:ComputeSheetLayoutFromDims(sheetW, sheetH, preset)
     -- Allow presets to hardcode cols/rows for non-standard grids
     local cols, rows
@@ -163,16 +159,16 @@ function BLT:CalculateSpriteSheetLayout()
     end, 0.05)
 end
 
---------------------------------------------------------------------------------
--- Update db
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 function BLT:UpdateDB()
     self.db = KE.db.profile.BloodlustTracker
 end
 
---------------------------------------------------------------------------------
--- Frame creation
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Frame Creation
+---------------------------------------------------------------------------------
 function BLT:CreateFrames()
     if self.frame then return end
 
@@ -211,9 +207,9 @@ function BLT:CreateFrames()
     self.countdownText = text
 end
 
---------------------------------------------------------------------------------
--- Soft outline helper
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Soft Outline Helpers
+---------------------------------------------------------------------------------
 local function HideSoftOutline(fontString)
     if fontString and fontString._keSoftOutline then
         fontString._keSoftOutline:SetShown(false)
@@ -226,9 +222,9 @@ local function ShowSoftOutline(fontString)
     end
 end
 
---------------------------------------------------------------------------------
--- Sprite animation
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Sprite Animation
+---------------------------------------------------------------------------------
 function BLT:SetSpriteFrame(i)
     local tex = self.spriteTexture
     if not tex or not self.framesPerRow or self.framesPerRow == 0 or self.sheetW == 0 or self.sheetH == 0 then return end
@@ -320,9 +316,9 @@ function BLT:StopAnimation()
     self.animAccum = 0
 end
 
---------------------------------------------------------------------------------
--- Basic mode countdown
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Basic Mode Countdown
+---------------------------------------------------------------------------------
 function BLT:BasicOnUpdate(dt)
     self.animAccum = self.animAccum + dt
     if self.animAccum < 0.1 then return end
@@ -339,9 +335,9 @@ function BLT:BasicOnUpdate(dt)
     self.countdownText:SetText(string.format("%d", remaining))
 end
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Sound
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 function BLT:PlaySoundOnce()
     if not self.db.SoundEnabled then return end
 
@@ -424,9 +420,9 @@ function BLT:StopSoundLoop()
     end
 end
 
---------------------------------------------------------------------------------
--- Detection: sated debuff
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Detection: Sated Debuff
+---------------------------------------------------------------------------------
 function BLT:GetPlayerDebuffBySpellID(spellID)
     if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
         return C_UnitAuras.GetPlayerAuraBySpellID(spellID)
@@ -480,9 +476,9 @@ function BLT:UpdateDebuffDetection(isStartupSync)
     self.hadLustDebuff = hasDebuff
 end
 
---------------------------------------------------------------------------------
--- Detection: haste approximation
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Detection: Haste Approximation
+---------------------------------------------------------------------------------
 function BLT:GetHasteFactor()
     local hastePct = UnitSpellHaste("player") or 0
     return 1 + (hastePct / 100)
@@ -525,9 +521,9 @@ function BLT:UpdateHasteApproxDetection()
     self.lastFactor = cur
 end
 
---------------------------------------------------------------------------------
--- Detection: shared
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Detection: Shared
+---------------------------------------------------------------------------------
 function BLT:IsDetectionAllowed()
     if not self.db.InstanceOnly then return true end
     local inInstance, instanceType = IsInInstance()
@@ -566,9 +562,9 @@ function BLT:ResetDetectionState()
     end
 end
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Orchestration
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 function BLT:SetActive(active)
     if not active and self.lustTimer then
         self:CancelTimer(self.lustTimer)
@@ -633,9 +629,9 @@ function BLT:StopBloodlust()
     end
 end
 
---------------------------------------------------------------------------------
--- Haste poll timer
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Haste Poll Timer
+---------------------------------------------------------------------------------
 function BLT:ReschedulePollTimer()
     if self.pollTimer then
         self:CancelTimer(self.pollTimer)
@@ -647,9 +643,9 @@ function BLT:ReschedulePollTimer()
     self.pollTimer = self:ScheduleRepeatingTimer("UpdateHasteApproxDetection", HASTE_POLL_INTERVAL)
 end
 
---------------------------------------------------------------------------------
--- Test mode
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Test Mode
+---------------------------------------------------------------------------------
 function BLT:SetTestMode(enabled)
     enabled = not not enabled
     if enabled == self.testMode then return end
@@ -687,9 +683,9 @@ function BLT:ToggleTestMode()
     self:SetTestMode(not self.testMode)
 end
 
---------------------------------------------------------------------------------
--- Apply settings
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
 function BLT:ApplySettings()
     if not self.frame then return end
 
@@ -746,9 +742,9 @@ function BLT:RegWithEditMode()
     end
 end
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Preview
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 function BLT:ShowPreview()
     if not self.frame then
         self:CreateFrames()
@@ -804,9 +800,9 @@ function BLT:HidePreview()
     self.frame:Hide()
 end
 
---------------------------------------------------------------------------------
--- Event handlers
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Event Handlers
+---------------------------------------------------------------------------------
 function BLT:OnAuraChange(_, unit)
     if unit ~= "player" then return end
     if self.db.HasteApproxEnabled then return end
@@ -822,9 +818,9 @@ function BLT:OnCombatRatingUpdate()
     self:UpdateDetection()
 end
 
---------------------------------------------------------------------------------
--- Module lifecycle
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
 function BLT:OnInitialize()
     self:UpdateDB()
     self:SetEnabledState(false)

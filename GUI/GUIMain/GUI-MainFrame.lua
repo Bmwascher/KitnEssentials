@@ -1,4 +1,9 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-MainFrame.lua                                       ║
+-- ║  Purpose: Main settings frame, sidebar navigation,       ║
+-- ║  and content area.                                       ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -7,6 +12,10 @@ local Theme = KE.Theme
 local CreateFrame = CreateFrame
 local C_Timer = C_Timer
 local math = math
+
+---------------------------------------------------------------------------------
+-- Sidebar Data
+---------------------------------------------------------------------------------
 
 -- Sidebar configuration
 GUIFrame.sidebarConfig = {
@@ -112,9 +121,9 @@ GUIFrame.sidebarConfig = {
     },
 }
 
---------------------------------------------------------------------------------
--- Create Content Area (right panel with scroll frame)
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Content Area
+---------------------------------------------------------------------------------
 function GUIFrame:CreateContentArea(parent)
     local T = Theme
 
@@ -212,9 +221,9 @@ function GUIFrame:CreateContentArea(parent)
     return content
 end
 
---------------------------------------------------------------------------------
--- Create the main GUI frame
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Navigation
+---------------------------------------------------------------------------------
 function GUIFrame:CreateMainFrame()
     if self.mainFrame then return end
 
@@ -559,6 +568,10 @@ function GUIFrame:CreateMainFrame()
         self.contentArea:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -T.borderSize, T.footerHeight)
     end
 end
+
+---------------------------------------------------------------------------------
+-- Page Rendering
+---------------------------------------------------------------------------------
 
 -- Combat handling: Close GUI on entering combat, reopen on leaving combat
 local combatFrame = CreateFrame("Frame")

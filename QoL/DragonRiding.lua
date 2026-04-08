@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  DragonRiding.lua                                        ║
+-- ║  Module: Skyriding UI                                    ║
+-- ║  Purpose: Reskinned skyriding vigor bar with custom      ║
+-- ║           styling and positioning.                       ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
@@ -16,12 +22,18 @@ local UnregisterStateDriver = UnregisterStateDriver
 local math = math
 local pcall = pcall
 
+---------------------------------------------------------------------------------
+-- Constants
+---------------------------------------------------------------------------------
 local VIGOR_SPELL = 372610
 local THRILL_SPELL = 377234
 local SECOND_WIND_SPELL = 425782
 local WHIRLING_SURGE_SPELL = 361584
 local BORDER_WIDTH = 1
 
+---------------------------------------------------------------------------------
+-- Module State
+---------------------------------------------------------------------------------
 local numVigor = 0
 
 DR.container = nil
@@ -32,6 +44,9 @@ DR.secondWindFrame = nil
 DR.speedText = nil
 DR.isPreview = false
 
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 function DR:UpdateDB()
     self.db = KE.db.profile.DragonRiding
 end
@@ -41,9 +56,9 @@ function DR:OnInitialize()
     self:SetEnabledState(false)
 end
 
---------------------------------------------------------------------------------
--- Pill creation and layout
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Core Logic
+---------------------------------------------------------------------------------
 local function CreatePill(parent, height)
     local pill = CreateFrame("StatusBar", nil, parent, BackdropTemplateMixin and "BackdropTemplate")
     pill:SetBackdrop({
@@ -79,9 +94,6 @@ local function ResizePillsToFit(container, pills, numPills, spacing)
     end
 end
 
---------------------------------------------------------------------------------
--- Update functions
---------------------------------------------------------------------------------
 local function UpdateWhirlingSurge(self)
     local pill = self.surgeFrame[1]
     if not pill then return end
@@ -239,9 +251,9 @@ local function UpdateSpeed(self)
     end
 end
 
---------------------------------------------------------------------------------
--- Frame creation
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Frame Creation
+---------------------------------------------------------------------------------
 function DR:CreateFrames()
     if self.container then return end
     local db = self.db
@@ -309,9 +321,9 @@ function DR:CreateFrames()
     self.speedText:SetText("")
 end
 
---------------------------------------------------------------------------------
--- Refresh / Apply
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
 function DR:Refresh()
     if not self.container then return end
     local db = self.db
@@ -397,9 +409,9 @@ function DR:ApplySettings()
     end
 end
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Edit Mode
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 function DR:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
@@ -413,9 +425,9 @@ function DR:RegWithEditMode()
     end
 end
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Preview
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 function DR:ShowPreview()
     if InCombatLockdown() then return end
     if not self.container then
@@ -499,9 +511,9 @@ function DR:HidePreview()
     end
 end
 
---------------------------------------------------------------------------------
--- Event handlers
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Event Handlers
+---------------------------------------------------------------------------------
 function DR:OnShowHandler()
     if self.isPreview then return end
 
@@ -551,9 +563,9 @@ function DR:OnHideHandler()
     end
 end
 
---------------------------------------------------------------------------------
--- Module lifecycle
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
 function DR:OnEnable()
     if not self.db.Enabled then return end
 

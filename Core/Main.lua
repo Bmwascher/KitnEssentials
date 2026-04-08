@@ -1,8 +1,12 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  Main.lua                                                ║
+-- ║  Purpose: Main addon initialization, AceAddon setup,     ║
+-- ║           slash command registration, and login flow.    ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 
--- Localization
 local IsInInstance = IsInInstance
 local LibStub = LibStub
 
@@ -10,13 +14,15 @@ local aceAddon = LibStub("AceAddon-3.0")
 
 local DEFAULT_PROFILE = "Default"
 
--- Create the main addon object
 ---@class KitnEssentials : AceAddon-3.0, AceEvent-3.0, AceHook-3.0
 local KitnEssentials = aceAddon:NewAddon("KitnEssentials", "AceEvent-3.0", "AceHook-3.0")
 _G.KitnEssentials = KitnEssentials
 
--- Encounter state
 KE.encounterActive = false
+
+---------------------------------------------------------------------------------
+-- AceAddon Lifecycle
+---------------------------------------------------------------------------------
 
 function KitnEssentials:OnInitialize()
     local defaults = KE:GetDefaultDB()
@@ -53,7 +59,10 @@ function KitnEssentials:OnInitialize()
     if KE.RefreshTheme then KE:RefreshTheme() end
 end
 
--- Setup minimap icon using LibDataBroker and LibDBIcon
+---------------------------------------------------------------------------------
+-- Minimap Icon
+---------------------------------------------------------------------------------
+
 function KE:SetupMinimapIcon()
     local LDB = LibStub("LibDataBroker-1.1", true)
     local LDBIcon = LibStub("LibDBIcon-1.0", true)
@@ -85,6 +94,10 @@ function KE:SetupMinimapIcon()
     KE.minimapIcon = LDBIcon
 end
 
+---------------------------------------------------------------------------------
+-- Event Handlers
+---------------------------------------------------------------------------------
+
 local function OnEncounterEnd()
     local _, instanceType = IsInInstance()
     if instanceType == "raid" and KE.encounterActive then
@@ -106,6 +119,10 @@ local function OnPlayerEnteringWorld()
         end
     end
 end
+
+---------------------------------------------------------------------------------
+-- Addon Enable
+---------------------------------------------------------------------------------
 
 function KitnEssentials:OnEnable()
     if KE.RefreshTheme then KE:RefreshTheme() end

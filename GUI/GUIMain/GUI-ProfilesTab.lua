@@ -1,4 +1,9 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-ProfilesTab.lua                                     ║
+-- ║  Purpose: Profile management — import, export, copy,     ║
+-- ║  and reset.                                              ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -7,6 +12,10 @@ local Theme = KE.Theme
 -- Localization
 local pairs = pairs
 local C_Timer = C_Timer
+
+---------------------------------------------------------------------------------
+-- Helpers
+---------------------------------------------------------------------------------
 
 -- Build profile options for dropdowns
 local function BuildProfileOptions()
@@ -21,7 +30,10 @@ local function BuildProfileOptions()
     return options
 end
 
--- Register Profiles content
+---------------------------------------------------------------------------------
+-- Card Sections
+---------------------------------------------------------------------------------
+
 GUIFrame:RegisterContent("Profiles", function(scrollChild, yOffset)
     local PM = KE.ProfileManager
     if not PM then
@@ -30,9 +42,9 @@ GUIFrame:RegisterContent("Profiles", function(scrollChild, yOffset)
         return yOffset + errorCard:GetContentHeight() + Theme.paddingSmall
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Current Profile
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Current Profile", yOffset)
 
     local useGlobal = PM:GetUseGlobalProfile()
@@ -62,9 +74,9 @@ GUIFrame:RegisterContent("Profiles", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Global Profile
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Global Profile", yOffset)
 
     local globalProfile = PM:GetGlobalProfile()
@@ -113,9 +125,9 @@ GUIFrame:RegisterContent("Profiles", function(scrollChild, yOffset)
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Profile Actions
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Profile Actions", yOffset)
 
     -- Create New Profile
@@ -276,9 +288,9 @@ GUIFrame:RegisterContent("Profiles", function(scrollChild, yOffset)
 
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Import/Export
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Import / Export", yOffset)
 
     -- Import section
@@ -402,9 +414,9 @@ GUIFrame:RegisterContent("Profiles", function(scrollChild, yOffset)
 
     yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 5: Rename Profile
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Rename Profile", yOffset)
 
     local row5a = GUIFrame:CreateRow(card5.content, 40)

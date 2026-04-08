@@ -1,9 +1,12 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  Widgets.lua                                             ║
+-- ║  Purpose: Common widget helpers used by modules —        ║
+-- ║           prompts, font, backdrop, icon zoom/borders.    ║
+-- ║  Note: Full GUI widget library is in GUI/GUIWidgets/.    ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
-
--- Common widget creation helpers used by modules
--- Full GUI widget library is in GUI/GUIWidgets/
 
 local CreateFrame = CreateFrame
 local UIFrameFadeIn = UIFrameFadeIn
@@ -18,9 +21,10 @@ local ReloadUI = ReloadUI
 local ACCEPT = ACCEPT
 local CANCEL = CANCEL
 
---------------------------------------------------------------------------------
--- Message Popup (centered on-screen toast with fade out)
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Message Popup
+---------------------------------------------------------------------------------
+
 local MESSAGE_POPUP_SIZE = 64
 
 local function ValidateThemeColor(color, default)
@@ -72,15 +76,15 @@ function KE:CreateMessagePopup(timer, text, fontSize, parentFrame, xOffset, yOff
     return msgContainer
 end
 
---------------------------------------------------------------------------------
--- Prompt Dialog (themed confirmation / editbox popup)
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Prompt Dialog
+---------------------------------------------------------------------------------
+
 local POPUP_WIDTH = 360
 local POPUP_HEIGHT = 120
 local BUTTON_WIDTH = 100
 local BUTTON_HEIGHT = 26
 
--- Create themed button for prompts
 local function CreateThemedButton(parent, Theme, labelText, isPrimary)
     local btn = CreateFrame("Button", nil, parent, "BackdropTemplate")
     btn:SetSize(BUTTON_WIDTH, BUTTON_HEIGHT)
@@ -485,9 +489,11 @@ function KE:SkinningReloadPrompt()
     return self:CreateReloadPrompt("Changing this setting may require a reload to take full effect.")
 end
 
---------------------------------------------------------------------------------
--- Combat-Safe Fade (smooth alpha transition via OnUpdate, avoids taint)
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Combat-Safe Fade
+---------------------------------------------------------------------------------
+
+-- Smooth alpha transition via OnUpdate, avoids taint
 function KE:CombatSafeFade(frame, targetAlpha, duration)
     if frame._fadeTimer then frame._fadeTimer:Hide() end
 
@@ -514,11 +520,10 @@ function KE:CombatSafeFade(frame, targetAlpha, duration)
     timer:Show()
 end
 
---------------------------------------------------------------------------------
--- Font & Backdrop helpers
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Font and Backdrop Helpers
+---------------------------------------------------------------------------------
 
--- Apply font to a FontString with font shadow and soft outline support
 function KE:ApplyFontToText(fontString, fontName, fontSize, fontOutline, shadowConfig)
     if not fontString then return end
 
@@ -547,7 +552,6 @@ function KE:ApplyFontToText(fontString, fontName, fontSize, fontOutline, shadowC
         return success
     end
 
-    -- Hide soft outline if switching away from SOFTOUTLINE
     if fontString.softOutline then
         fontString.softOutline:SetShown(false)
     end
@@ -568,7 +572,6 @@ function KE:ApplyFontToText(fontString, fontName, fontSize, fontOutline, shadowC
     end
 end
 
--- Create a simple backdrop on a frame
 function KE:ApplyBackdrop(frame, backdropConfig)
     if not frame or not backdropConfig then return end
     if backdropConfig.Enabled then
@@ -590,7 +593,10 @@ function KE:ApplyBackdrop(frame, backdropConfig)
     end
 end
 
--- Standard icon zoom (crops icon edges for clean look)
+---------------------------------------------------------------------------------
+-- Icon Helpers
+---------------------------------------------------------------------------------
+
 -- zoom: 0.3 = standard (7.5% crop), 0 = no crop, 1 = max crop
 function KE:ApplyIconZoom(tex, zoom)
     zoom = zoom or 0.3
@@ -599,7 +605,6 @@ function KE:ApplyIconZoom(tex, zoom)
     tex:SetTexCoord(texMin, texMax, texMin, texMax)
 end
 
--- Pixel-perfect 1px borders on a frame (standard for icon modules)
 function KE:AddIconBorders(frame, color)
     color = color or { 0, 0, 0, 1 }
     frame.borders = {}

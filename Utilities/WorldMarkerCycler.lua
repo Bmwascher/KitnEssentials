@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  WorldMarkerCycler.lua                                   ║
+-- ║  Module: World Marker Cycler                             ║
+-- ║  Purpose: Cycle through world markers at cursor with     ║
+-- ║           drag-to-reorder priority.                      ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
@@ -13,15 +19,15 @@ local ClearOverrideBindings = ClearOverrideBindings
 local CreateFrame = CreateFrame
 local string_format = string.format
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- NOTE: Blizzard limits world marker placement/clearing to 3 per second.
 -- Markers beyond that rate are silently dropped. This is a server-side
 -- restriction and cannot be bypassed.
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Secure buttons (created at file scope — must exist before combat)
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 local cycleBtn = CreateFrame("Button", "KE_WorldMarkerCycleBtn", nil, "SecureActionButtonTemplate")
 cycleBtn:SetAttribute("type", "macro")
 cycleBtn:RegisterForClicks("AnyUp", "AnyDown")
@@ -46,9 +52,9 @@ clearBtn:SetScript("PostClick", function()
     end
 end)
 
---------------------------------------------------------------------------------
--- Module methods
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 function WMC:UpdateDB()
     self.db = KE.db.profile.WorldMarkerCycler
 end
@@ -58,6 +64,9 @@ function WMC:OnInitialize()
     self:SetEnabledState(false)
 end
 
+---------------------------------------------------------------------------------
+-- Core Logic
+---------------------------------------------------------------------------------
 function WMC:BuildOrderTable()
     if InCombatLockdown() then
         self.pendingOrderBuild = true
@@ -98,11 +107,17 @@ function WMC:UpdateBindings()
     self.pendingBindings = false
 end
 
+---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
 function WMC:ApplySettings()
     self:BuildOrderTable()
     self:UpdateBindings()
 end
 
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
 function WMC:OnEnable()
     if not self.db.Enabled then return end
     self:BuildOrderTable()

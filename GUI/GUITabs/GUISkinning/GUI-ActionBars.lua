@@ -1,4 +1,9 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-ActionBars.lua                                      ║
+-- ║  GUI: Action Bars                                        ║
+-- ║  Purpose: Configuration panel for the ActionBars module. ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -175,9 +180,9 @@ local function RenderGlobalTab(scrollChild, yOffset, activeCards)
         fontList["Friz Quadrata TT"] = "Friz Quadrata TT"
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: ActionBars Master Enable
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Action Bars", yOffset)
     table_insert(activeCards, card1)
 
@@ -196,9 +201,9 @@ local function RenderGlobalTab(scrollChild, yOffset, activeCards)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: General Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "General Settings", yOffset)
     table_insert(activeCards, card2)
     table_insert(allWidgets, card2)
@@ -225,9 +230,9 @@ local function RenderGlobalTab(scrollChild, yOffset, activeCards)
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Global Font Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Global Font Settings", yOffset)
     table_insert(activeCards, card3)
     table_insert(allWidgets, card3)
@@ -307,9 +312,9 @@ local function RenderGlobalTab(scrollChild, yOffset, activeCards)
 
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Global Mouseover Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Global Mouseover Settings", yOffset)
     table_insert(activeCards, card4)
     table_insert(allWidgets, card4)
@@ -379,9 +384,9 @@ local function RenderGlobalTab(scrollChild, yOffset, activeCards)
 
     yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 5: Bar Enable/Disable
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Bar Enable/Disable", yOffset)
     table_insert(activeCards, card5)
     table_insert(allWidgets, card5)
@@ -451,9 +456,9 @@ local function RenderPositionTab(scrollChild, yOffset, activeCards)
     local curEdit = GetCurrentBarKey()
     local barDB = GetCurrentBarDB()
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Bar Selection
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Select Bar", yOffset)
     table_insert(activeCards, card1)
     table_insert(allWidgets, card1)
@@ -472,9 +477,9 @@ local function RenderPositionTab(scrollChild, yOffset, activeCards)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Layout Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild,
         "Layout: " .. "|cffFFFFFF" .. (BAR_LIST_KV[curEdit] or curEdit) .. "|r", yOffset)
     table_insert(activeCards, card2)
@@ -560,9 +565,9 @@ local function RenderPositionTab(scrollChild, yOffset, activeCards)
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Position Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3, newOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         title = "Position: " .. "|cffFFFFFF" .. (BAR_LIST_KV[curEdit] or curEdit) .. "|r",
         db = barDB and barDB.Position or {},
@@ -587,9 +592,9 @@ local function RenderPositionTab(scrollChild, yOffset, activeCards)
     table_insert(barWidgets, card3)
     yOffset = newOffset
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Mouseover Settings (Per-Bar)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild,
         "Mouseover: " .. "|cffFFFFFF" .. (BAR_LIST_KV[curEdit] or curEdit) .. "|r", yOffset)
     table_insert(activeCards, card4)
@@ -670,9 +675,9 @@ local function RenderTextTab(scrollChild, yOffset, activeCards)
     local curEdit = GetCurrentBarKey()
     local barDB = GetCurrentBarDB()
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Bar Selection
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Select Bar", yOffset)
     table_insert(activeCards, card1)
     table_insert(allWidgets, card1)
@@ -691,9 +696,9 @@ local function RenderTextTab(scrollChild, yOffset, activeCards)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Global Override Toggle
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild,
         "Text Settings: " .. "|cffFFFFFF" .. (BAR_LIST_KV[curEdit] or curEdit) .. "|r", yOffset)
     table_insert(activeCards, card2)
@@ -739,9 +744,9 @@ local function RenderTextTab(scrollChild, yOffset, activeCards)
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Per-Bar Font Sizes (only if not using global)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local useGlobalFonts = barDB and barDB.FontSizes and barDB.FontSizes.GlobalOverride == true
     if not useGlobalFonts then
         local card3 = GUIFrame:CreateCard(scrollChild,
@@ -813,9 +818,9 @@ local function RenderTextTab(scrollChild, yOffset, activeCards)
         yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Per-Bar Text Positions (only if not using global)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local useGlobalPos = barDB and barDB.TextPositions and barDB.TextPositions.GlobalOverride == true
     if not useGlobalPos then
         local card4 = GUIFrame:CreateCard(scrollChild,
@@ -983,9 +988,9 @@ local function RenderBackdropTab(scrollChild, yOffset, activeCards)
     local curEdit = GetCurrentBarKey()
     local barDB = GetCurrentBarDB()
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Bar Selection
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Select Bar", yOffset)
     table_insert(activeCards, card1)
     table_insert(allWidgets, card1)
@@ -1004,9 +1009,9 @@ local function RenderBackdropTab(scrollChild, yOffset, activeCards)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Backdrop Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild,
         "Backdrop: " .. "|cffFFFFFF" .. (BAR_LIST_KV[curEdit] or curEdit) .. "|r", yOffset)
     table_insert(activeCards, card2)

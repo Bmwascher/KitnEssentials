@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-Theme.lua                                           ║
+-- ║  GUI: Addon Theme                                        ║
+-- ║  Purpose: Configuration panel for addon theme —          ║
+-- ║  presets, class color, custom colors.                    ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -8,9 +14,9 @@ local table_insert = table.insert
 local ipairs = ipairs
 local math_floor = math.floor
 
---------------------------------------------------------------------------------
--- Preset Selector Widget
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Helpers
+---------------------------------------------------------------------------------
 local function CreatePresetSelector(parent, presets, presetOrder, currentPreset, onSelect)
     local container = CreateFrame("Frame", nil, parent)
     local buttons = {}
@@ -135,9 +141,9 @@ local function CreatePresetSelector(parent, presets, presetOrder, currentPreset,
     return container
 end
 
---------------------------------------------------------------------------------
--- Theme Tab Content
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Card Sections
+---------------------------------------------------------------------------------
 GUIFrame:RegisterContent("Theme", function(scrollChild, yOffset)
     local db = KE.db and KE.db.global and KE.db.global.Theme
     if not db then
@@ -171,9 +177,9 @@ GUIFrame:RegisterContent("Theme", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Theme Mode
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Theme Mode", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, 40)
@@ -189,9 +195,9 @@ GUIFrame:RegisterContent("Theme", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Preset Themes
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Preset Themes", yOffset)
     table_insert(presetWidgets, card2)
 
@@ -213,9 +219,9 @@ GUIFrame:RegisterContent("Theme", function(scrollChild, yOffset)
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Class Color Info
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Class Color", yOffset)
     table_insert(classWidgets, card3)
 
@@ -243,9 +249,9 @@ GUIFrame:RegisterContent("Theme", function(scrollChild, yOffset)
 
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Custom Colors
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Custom Colors", yOffset)
     table_insert(customWidgets, card4)
 

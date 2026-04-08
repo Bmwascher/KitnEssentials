@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.9.2
+### Changes
+- **Code Standards**: Unicode box headers, 81-dash section dividers, and `-- Local references` cleanup across all 138+ Lua files. Removed 8 stub files (CDMGlow, CDMOverlay, Chat, Minimap). Suppressed unused `self` warnings in `.luacheckrc`.
+
 ## v1.9.1
 ### Fixes
 - **GetStringWidth taint**: CombatRes, CombatTimer, and NoMovementAlert now guard against secret values from `GetStringWidth()` after combat — prevents crash when opening GUI post-encounter.

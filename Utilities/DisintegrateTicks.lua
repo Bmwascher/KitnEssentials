@@ -1,4 +1,11 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  DisintegrateTicks.lua                                   ║
+-- ║  Module: Disintegrate Ticks                              ║
+-- ║  Purpose: Displays tick marks on cast bar during         ║
+-- ║           Disintegrate channels.                         ║
+-- ║  Note: Evoker only (Devastation/Preservation).           ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
@@ -6,7 +13,6 @@ if not KitnEssentials then return end
 local DT = KitnEssentials:NewModule("DisintegrateTicks", "AceEvent-3.0")
 DT.classRestriction = "EVOKER"
 
--- Localization
 local CreateFrame = CreateFrame
 local GetTime = GetTime
 local C_SpellBook = C_SpellBook
@@ -20,7 +26,9 @@ local UnitChannelInfo = UnitChannelInfo
 local UnitSpellHaste = UnitSpellHaste
 
 
--- Spell constants
+---------------------------------------------------------------------------------
+-- Constants
+---------------------------------------------------------------------------------
 local DISINTEGRATE = 356995
 local MASS_DISINTEGRATE = 436335
 local DISINTEGRATE_TALENT = 1219723 -- gives 5th tick
@@ -31,11 +39,12 @@ local ETERNITY_SURGE_FONT = 382411
 local NATURAL_CONVERGENCE = 369913
 local STACK_EXPIRY = 15
 
--- Spec IDs (Devastation / Preservation)
 local DEVASTATION = 1467
 local PRESERVATION = 1468
 
--- Module state
+---------------------------------------------------------------------------------
+-- Module State
+---------------------------------------------------------------------------------
 DT.ticks = {}
 DT.maxTicks = 4
 DT.channeling = false
@@ -50,6 +59,9 @@ DT.prevHastedTickInterval = nil
 DT.castBarInfo = { width = 0, height = 0, anchor = nil }
 DT.hooksInstalled = false
 
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 function DT:UpdateDB()
     self.db = KE.db.profile.DisintegrateTicks
 end
@@ -80,9 +92,9 @@ function DT:QueryTalentsAndHide()
     self:HideTicks()
 end
 
---------------------------------------------------------------------------------
--- Cast bar discovery
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Cast Bar Discovery
+---------------------------------------------------------------------------------
 function DT:DiscoverCastBar()
     if self.castBarInfo.anchor then return self.castBarInfo.anchor end
 
@@ -133,9 +145,9 @@ function DT:AdjustDimensions(width, height)
     end
 end
 
---------------------------------------------------------------------------------
--- Haste / tick interval helpers
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Haste / Tick Helpers
+---------------------------------------------------------------------------------
 function DT:GetHaste()
     return 1 + UnitSpellHaste("player") / 100
 end
@@ -153,9 +165,9 @@ function DT:GetTickInterval()
     return base
 end
 
---------------------------------------------------------------------------------
--- Tick management
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Tick Management
+---------------------------------------------------------------------------------
 function DT:CreateTick(index)
     local anchor = self.castBarInfo.anchor
     if not anchor then return nil end
@@ -221,9 +233,9 @@ function DT:ApplyTickColor()
     end
 end
 
---------------------------------------------------------------------------------
--- Warning frame
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Warning Frame
+---------------------------------------------------------------------------------
 function DT:CreateWarningFrame()
     if self.warningFrame then return end
 
@@ -296,9 +308,9 @@ function DT:HideWarning()
     end
 end
 
---------------------------------------------------------------------------------
--- Cast bar addon hooks (installed once)
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Cast Bar Hooks
+---------------------------------------------------------------------------------
 function DT:InstallCastBarHooks()
     if self.hooksInstalled then return end
     self.hooksInstalled = true
@@ -351,9 +363,9 @@ function DT:InstallCastBarHooks()
     end
 end
 
---------------------------------------------------------------------------------
--- Event handling
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Event Handlers
+---------------------------------------------------------------------------------
 function DT:OnEvent(event, unit, ...)
     -- Filter unit-specific events to player only
     if event == "UNIT_SPELLCAST_CHANNEL_START" or event == "UNIT_SPELLCAST_CHANNEL_STOP"
@@ -510,9 +522,9 @@ function DT:UnregisterSpecEvents()
     self:UnregisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE")
 end
 
---------------------------------------------------------------------------------
--- Apply settings
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
 function DT:ApplySettings()
     self:ApplyTickColor()
     self:ApplyWarningSettings()
@@ -524,9 +536,9 @@ function DT:ApplyPosition()
     self:UpdateWarningPosition()
 end
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Edit Mode
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 function DT:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
@@ -542,9 +554,9 @@ function DT:RegWithEditMode()
     end
 end
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Preview
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 function DT:ShowPreview()
     self:CreateWarningFrame()
     self:RegWithEditMode()
@@ -575,9 +587,9 @@ function DT:HidePreview()
     self:HideTicks()
 end
 
---------------------------------------------------------------------------------
--- Module lifecycle
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
 function DT:OnEnable()
     if not self.db.Enabled then return end
 

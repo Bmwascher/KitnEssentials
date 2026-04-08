@@ -1,16 +1,19 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  TimeSpiral.lua                                          ║
+-- ║  Module: Time Spiral Tracker                             ║
+-- ║  Purpose: Movement spell proc tracker with glow effects  ║
+-- ║           and cooldown spiral. All classes supported.    ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
--- Create module
 ---@class TimeSpiral: AceModule, AceEvent-3.0
 local TSP = KitnEssentials:NewModule("TimeSpiral", "AceEvent-3.0")
 
--- Libraries
 local LCG = LibStub("LibCustomGlow-1.0", true)
 
--- Localization
 local CreateFrame = CreateFrame
 local GetSpellTexture = C_Spell.GetSpellTexture
 local IsPlayerSpell = IsPlayerSpell
@@ -19,14 +22,17 @@ local pairs = pairs
 local next = next
 local UnitClass = UnitClass
 
--- Module state
+---------------------------------------------------------------------------------
+-- Module State
+---------------------------------------------------------------------------------
 TSP.activeProcs = {}
 
--- Default Time Spiral icon texture
+---------------------------------------------------------------------------------
+-- Constants
+---------------------------------------------------------------------------------
 local TIME_SPIRAL_ICON = 4622479
 local TIME_SPIRAL_DURATION = 10.5
 
--- Table that holds movement spells that can proc from Time Spiral
 local MOVEMENT_SPELLS = {
     [48265]  = "DEATHKNIGHT", -- Death's Advance
     [195072] = "DEMONHUNTER", -- Fel Rush
@@ -49,19 +55,19 @@ local MOVEMENT_SPELLS = {
     [6544]   = "WARRIOR",     -- Heroic Leap
 }
 
--- Filter some spells that can cause false procs
 local FILTER_TALENTS = {
     [427640] = { [195072] = true }, -- Inertia
     [427794] = { [195072] = true }, -- Dash of Chaos
     [385899] = { [385899] = true }, -- Soulburn
 }
 
--- Update db, used for profile changes
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 function TSP:UpdateDB()
     self.db = KE.db.profile.TimeSpiral
 end
 
--- Detect the player's movement spell
 function TSP:DetectPlayerSpell()
     local _, playerClass = UnitClass("player")
     for spellId, class in pairs(MOVEMENT_SPELLS) do
@@ -73,7 +79,6 @@ function TSP:DetectPlayerSpell()
     return nil
 end
 
--- Get the icon texture for the display
 function TSP:GetDisplayIcon()
     if self.playerSpellId then
         local texture = GetSpellTexture(self.playerSpellId)
@@ -95,16 +100,14 @@ function TSP:GetDisplayIcon()
     return TIME_SPIRAL_ICON
 end
 
--- Module init
 function TSP:OnInitialize()
     self:UpdateDB()
     self:SetEnabledState(false)
 end
 
--- Helper: apply zoom to a texture via TexCoord
--- Icon helpers: KE:ApplyIconZoom() and KE:AddIconBorders() in Core/Widgets.lua
-
--- Create the display frame
+---------------------------------------------------------------------------------
+-- Frame Creation
+---------------------------------------------------------------------------------
 function TSP:CreateFrame()
     if self.frame then return end
 
@@ -151,7 +154,9 @@ function TSP:CreateFrame()
     self:ApplySettings()
 end
 
--- Check if a spell should be filtered out to avoid false procs
+---------------------------------------------------------------------------------
+-- Core Logic
+---------------------------------------------------------------------------------
 function TSP:FilterSpell(spellId)
     for talentId, spells in pairs(FILTER_TALENTS) do
         if spells[spellId] and IsPlayerSpell(talentId) then
@@ -161,7 +166,9 @@ function TSP:FilterSpell(spellId)
     return false
 end
 
--- Apply settings, called from GUI or profile switching
+---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
 function TSP:ApplySettings()
     if not self.frame then return end
     local db = self.db
@@ -206,14 +213,15 @@ function TSP:ApplySettings()
     end
 end
 
--- Apply position
 function TSP:ApplyPosition()
     if not self.db.Enabled then return end
     if not self.frame then return end
     KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
 end
 
--- Setup and start the glow effect
+---------------------------------------------------------------------------------
+-- Glow Effects
+---------------------------------------------------------------------------------
 function TSP:StartGlow()
     if not self.frame then return end
     if not self.db.GlowEnabled then return end
@@ -239,7 +247,6 @@ function TSP:StartGlow()
     self.glowActive = true
 end
 
--- Stop the glow effect
 function TSP:StopGlow()
     if not self.frame then return end
     if not LCG then return end
@@ -252,7 +259,6 @@ function TSP:StopGlow()
     self.glowActive = false
 end
 
--- Show the proc indicator
 function TSP:ShowProc()
     if not self.frame then self:CreateFrame() end
     if not self.frame then return end
@@ -272,7 +278,6 @@ function TSP:ShowProc()
     self.hideTimer = C_Timer.NewTimer(TIME_SPIRAL_DURATION, function() self:HideProc() end)
 end
 
--- Hide the proc indicator
 function TSP:HideProc()
     if not self.frame then return end
 
@@ -286,6 +291,9 @@ function TSP:HideProc()
     end
 end
 
+---------------------------------------------------------------------------------
+-- Edit Mode
+---------------------------------------------------------------------------------
 function TSP:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
@@ -299,7 +307,9 @@ function TSP:RegWithEditMode()
     end
 end
 
+---------------------------------------------------------------------------------
 -- Preview
+---------------------------------------------------------------------------------
 function TSP:ShowPreview()
     if not self.frame then self:CreateFrame() end
     self:RegWithEditMode()
@@ -320,7 +330,9 @@ function TSP:HidePreview()
     end
 end
 
--- Module OnEnable
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
 function TSP:OnEnable()
     if not self.db.Enabled then return end
     self:DetectPlayerSpell()
@@ -353,7 +365,6 @@ function TSP:OnEnable()
     end)
 end
 
--- Module OnDisable
 function TSP:OnDisable()
     if self.frame then
         self:StopGlow()

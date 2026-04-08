@@ -1,4 +1,8 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-KEEditBox.lua                                       ║
+-- ║  Purpose: Text input widget with validation.             ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -8,6 +12,10 @@ local Theme = KE.Theme
 local tostring = tostring
 local type = type
 local CreateFrame = CreateFrame
+
+---------------------------------------------------------------------------------
+-- Widget Creation
+---------------------------------------------------------------------------------
 
 -- EditBox widget
 function GUIFrame:CreateEditBox(parent, labelText, value, callback)
@@ -50,7 +58,9 @@ function GUIFrame:CreateEditBox(parent, labelText, value, callback)
     container:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
     container:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
 
-    --- ANIMATION
+    ---------------------------------------------------------------------------------
+    -- Animation
+    ---------------------------------------------------------------------------------
 
     -- EditBox border hover animation
     local editBoxAnimGroup = container:CreateAnimationGroup()
@@ -92,8 +102,6 @@ function GUIFrame:CreateEditBox(parent, labelText, value, callback)
         container:SetBackdropBorderColor(editBoxColorTo.r, editBoxColorTo.g, editBoxColorTo.b, 1)
         editBoxR, editBoxG, editBoxB = editBoxColorTo.r, editBoxColorTo.g, editBoxColorTo.b
     end)
-
-    --------
 
     local editBox = CreateFrame("EditBox", nil, container)
     editBox:SetPoint("TOPLEFT", container, "TOPLEFT", 6, -4)

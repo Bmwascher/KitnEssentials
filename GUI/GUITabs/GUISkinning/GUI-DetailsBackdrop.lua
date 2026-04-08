@@ -1,10 +1,16 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-DetailsBackdrop.lua                                 ║
+-- ║  GUI: Details Backdrop                                   ║
+-- ║  Purpose: Configuration panel for the                    ║
+-- ║           DetailsBackdrop module.                        ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 
--- Localization
+-- Local references
 local table_insert = table.insert
 local ipairs = ipairs
 
@@ -119,9 +125,9 @@ GUIFrame:RegisterContent("SkinDetails", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Details Backdrop Enable
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Details Backdrop", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, 36)
@@ -184,9 +190,9 @@ GUIFrame:RegisterContent("SkinDetails", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Size Mode
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Size Mode", yOffset)
     table_insert(allWidgets, card2)
     local currentDB = GetCurrentBackdropDB()
@@ -284,9 +290,9 @@ GUIFrame:RegisterContent("SkinDetails", function(scrollChild, yOffset)
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 5: Backdrop Color
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Backdrop Color", yOffset)
     table_insert(allWidgets, card5)
 
@@ -314,9 +320,9 @@ GUIFrame:RegisterContent("SkinDetails", function(scrollChild, yOffset)
 
     yOffset = yOffset + card5:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Position Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local newOffset
     card3, newOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = GetCurrentBackdropDB(),
@@ -339,9 +345,9 @@ GUIFrame:RegisterContent("SkinDetails", function(scrollChild, yOffset)
     table_insert(allWidgets, card3)
     yOffset = newOffset
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Manual Backdrop Size
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Backdrop Size (Manual)", yOffset)
     table_insert(allWidgets, card4)
     table_insert(manualSizeWidgets, card4)

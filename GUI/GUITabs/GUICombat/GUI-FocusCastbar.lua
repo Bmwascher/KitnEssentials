@@ -1,16 +1,20 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-FocusCastbar.lua                                    ║
+-- ║  GUI: Focus Castbar                                      ║
+-- ║  Purpose: Configuration panel for the FocusCastbar       ║
+-- ║  module.                                                 ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
 
--- Localization
 local table_insert = table.insert
 local ipairs = ipairs
 local pairs = pairs
 
--- Helper to get module
 local function GetModule()
     return KitnEssentials:GetModule("FocusCastbar", true)
 end
@@ -74,9 +78,9 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
         statusbarList["Blizzard"] = "Blizzard"
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Focus Castbar (Enable)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Focus Castbar", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, 36)
@@ -93,9 +97,9 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: General Settings (Width, Height, Bar Texture)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "General Settings", yOffset)
     table_insert(allWidgets, card2)
 
@@ -130,9 +134,9 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Position Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3, newYOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = db,
         dbKeys = {
@@ -157,9 +161,9 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     table_insert(allWidgets, card3)
     yOffset = newYOffset
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Font Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
     table_insert(allWidgets, card4)
 
@@ -202,9 +206,9 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
 
     yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 5: Target Names
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Target Names", yOffset)
     table_insert(allWidgets, card5)
 
@@ -280,9 +284,9 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
 
     yOffset = yOffset + card5:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 6: Colors
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card7 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
     table_insert(allWidgets, card7)
 
@@ -381,9 +385,9 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
 
     yOffset = yOffset + card7:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 7b: Sound Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local cardSound = GUIFrame:CreateCard(scrollChild, "Sound Settings", yOffset)
     table_insert(allWidgets, cardSound)
 
@@ -448,9 +452,9 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
 
     yOffset = yOffset + cardSound:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 8: Hold Timer
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card8 = GUIFrame:CreateCard(scrollChild, "Hold Timer", yOffset)
     table_insert(allWidgets, card8)
 
@@ -518,9 +522,9 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
 
     yOffset = yOffset + card8:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 9: Kick Indicator
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card9 = GUIFrame:CreateCard(scrollChild, "Kick Indicator", yOffset)
     table_insert(allWidgets, card9)
 

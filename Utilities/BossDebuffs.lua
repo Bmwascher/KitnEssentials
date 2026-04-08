@@ -1,24 +1,19 @@
--- ============================================================
--- BossDebuffs.lua
--- Module: Boss Debuffs
--- Purpose: Displays icons for harmful auras on the player that
---          were NOT self-cast. Designed for tracking boss mechanics.
---          Supports 1-5 icons with configurable growth direction,
---          cooldown spirals, and visibility gating by encounter,
---          instance, or combat context.
--- Author: Bitebtw
--- ============================================================
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  BossDebuffs.lua                                         ║
+-- ║  Module: Boss Debuffs                                    ║
+-- ║  Purpose: Displays icons for harmful auras on the player ║
+-- ║           that were NOT self-cast. Designed for tracking ║
+-- ║           boss mechanics with cooldown spirals and       ║
+-- ║           encounter/instance visibility gating.          ║
+-- ╚══════════════════════════════════════════════════════════╝
 
--- KitnEssentials namespace
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
--- Create module
 ---@class BossDebuffs: AceModule, AceEvent-3.0
 local BD = KitnEssentials:NewModule("BossDebuffs", "AceEvent-3.0")
 
--- Localization
 local C_UnitAuras    = C_UnitAuras
 local C_Timer        = C_Timer
 local CreateFrame    = CreateFrame
@@ -45,7 +40,6 @@ BD.isPreview          = false
 BD.editModeRegistered = false
 BD.durationTicker     = nil
 
--- Sample icons for preview mode (Midnight boss debuff icons)
 local PREVIEW_ICONS = {
     7636525,
     7636520,

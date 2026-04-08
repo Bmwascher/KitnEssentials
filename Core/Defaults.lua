@@ -1,8 +1,16 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  Defaults.lua                                            ║
+-- ║  Purpose: Default configuration templates for all        ║
+-- ║           modules, positions, fonts, and backdrops.      ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 
--- Default position template
+---------------------------------------------------------------------------------
+-- Default Templates
+---------------------------------------------------------------------------------
+
 local function DefaultPosition(xOff, yOff)
     return {
         AnchorFrom = "CENTER",
@@ -12,7 +20,6 @@ local function DefaultPosition(xOff, yOff)
     }
 end
 
--- Default font shadow template
 local function DefaultFontShadow()
     return {
         Enabled = false,
@@ -22,7 +29,6 @@ local function DefaultFontShadow()
     }
 end
 
--- Default backdrop template
 local function DefaultBackdrop()
     return {
         Enabled = false,
@@ -33,6 +39,10 @@ local function DefaultBackdrop()
         bgHeight = 5,
     }
 end
+
+---------------------------------------------------------------------------------
+-- Saved Variables Schema
+---------------------------------------------------------------------------------
 
 local Defaults = {
     global = {
@@ -72,9 +82,9 @@ local Defaults = {
             Enabled = true,
         },
 
-        ----------------------------------------------------------------
-        -- COMBAT MODULES
-        ----------------------------------------------------------------
+        -----------------------------------------------------------------
+        -- Combat Modules
+        -----------------------------------------------------------------
 
         CombatTimer = {
             Enabled = false,
@@ -420,9 +430,9 @@ local Defaults = {
             SoundChannel = "Master",
         },
 
-        ----------------------------------------------------------------
-        -- QOL MODULES
-        ----------------------------------------------------------------
+        -----------------------------------------------------------------
+        -- QoL Modules
+        -----------------------------------------------------------------
 
         Automation = {
             Enabled = false,
@@ -808,9 +818,9 @@ local Defaults = {
             Position = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = -360, YOffset = -55 },
         },
 
-        ----------------------------------------------------------------
-        -- SKINNING MODULES (disabled when ElvUI active)
-        ----------------------------------------------------------------
+        -----------------------------------------------------------------
+        -- Skinning Modules
+        -----------------------------------------------------------------
 
         Skinning = {
             Tooltips = {
@@ -833,7 +843,6 @@ local Defaults = {
                     YOffset = 350,
                 },
             },
-            Chat         = { Enabled = false },
             Messages = {
                 Enabled = false,
                 Font = "Expressway",
@@ -912,7 +921,6 @@ local Defaults = {
                     FadeOutDuration = 0.2,
                 },
             },
-            Minimap      = { Enabled = false },
             Details = {
                 Enabled = false,
                 detailsBarH = 26,
@@ -1099,8 +1107,6 @@ local Defaults = {
                 defSize = 42,
                 defBorderColor = { 0, 0, 0, 1 },
             },
-            CDMOverlay   = { Enabled = false },
-            CDMGlow      = { Enabled = false },
             UICleanup    = { Enabled = false },
             Battlenet    = { Enabled = false },
             RaidManager  = {
@@ -1118,6 +1124,10 @@ local Defaults = {
 
     },
 }
+
+---------------------------------------------------------------------------------
+-- Public API
+---------------------------------------------------------------------------------
 
 function KE:GetDefaultDB()
     return Defaults

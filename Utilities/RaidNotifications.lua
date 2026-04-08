@@ -1,13 +1,17 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  RaidNotifications.lua                                   ║
+-- ║  Module: Raid Notifications                              ║
+-- ║  Purpose: Gateway usability, reset boss reminder, and    ║
+-- ║           loot boss reminder with per-alert toggles.     ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
--- Create module
 ---@class RaidNotifications: AceModule, AceEvent-3.0
 local RN = KitnEssentials:NewModule("RaidNotifications", "AceEvent-3.0")
 
--- Localization
 local C_Item = C_Item
 local C_Timer = C_Timer
 local C_UnitAuras = C_UnitAuras
@@ -18,7 +22,6 @@ local CreateFrame = CreateFrame
 local InCombatLockdown = InCombatLockdown
 local GetInstanceInfo = GetInstanceInfo
 
--- Check if player is in a Normal/Heroic/Mythic raid (difficultyID 14-16)
 local function IsInRaidInstance()
     local difficultyID = select(3, GetInstanceInfo()) or 0
     return difficultyID >= 14 and difficultyID <= 16
@@ -43,32 +46,26 @@ local ALERT_DEFS = {
     { key = "LootBoss",  text = "LOOT BOSS",   icon = "Interface\\AddOns\\KitnEssentials\\Media\\Icon\\Cat_Head.png", enableKey = "LootBossEnabled" },
 }
 
--- Build key → def lookup
 local ALERT_BY_KEY = {}
 for _, def in ipairs(ALERT_DEFS) do
     ALERT_BY_KEY[def.key] = def
 end
 
 ---------------------------------------------------------------------------------
--- Module state
+-- Module State
 ---------------------------------------------------------------------------------
 RN.frame = nil
 RN.rows = {}
 RN.activeAlerts = {}
 RN.isPreview = false
 RN.editModeRegistered = false
-
--- Gateway state
 RN.hasItem = false
 RN.wasUsable = nil
-
--- Timer generation counters
 RN.resetBossGen = 0
 RN.lootBossGen = 0
 
-
 ---------------------------------------------------------------------------------
--- UpdateDB / Migration
+-- DB Helper
 ---------------------------------------------------------------------------------
 function RN:UpdateDB()
     self.db = KE.db.profile.RaidNotifications
@@ -249,7 +246,7 @@ function RN:OnZoneChange()
 end
 
 ---------------------------------------------------------------------------------
--- Gateway Logic (absorbed from GatewayAlert)
+-- Gateway Logic
 ---------------------------------------------------------------------------------
 function RN:GatewayFullUpdate()
     C_Timer.After(0.5, function()
@@ -291,7 +288,6 @@ end
 ---------------------------------------------------------------------------------
 -- Reset Boss Logic
 ---------------------------------------------------------------------------------
--- Cache aura API at load time
 local GetPlayerAuraBySpellID = C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID
 
 function RN:HasLustDebuff()

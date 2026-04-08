@@ -1,14 +1,17 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  CustomOutline.lua                                       ║
+-- ║  Purpose: SOFTOUTLINE system — creates 8 shadow          ║
+-- ║           FontStrings around a main FontString for a     ║
+-- ║           custom soft outline effect.                    ║
+-- ║  Credit: Adapted from atrocityEssentials/NorskenUI.      ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
-
--- Soft Outline: Creates 8 shadow FontStrings around a main FontString for a custom soft outline effect
--- Adapted from atrocityEssentials/NorskenUI
 
 local SoftOutline = {}
 SoftOutline.__index = SoftOutline
 
--- Localization
 local ipairs = ipairs
 local hooksecurefunc = hooksecurefunc
 local setmetatable = setmetatable
@@ -17,7 +20,10 @@ local UIFrameFade = UIFrameFade
 local UIFrameFadeIn = UIFrameFadeIn
 local UIFrameFadeOut = UIFrameFadeOut
 
--- 8-direction offsets
+---------------------------------------------------------------------------------
+-- Constants
+---------------------------------------------------------------------------------
+
 local SHADOW_OFFSETS = {
     { 0,  1 },  -- N
     { 1,  1 },  -- NE
@@ -29,7 +35,6 @@ local SHADOW_OFFSETS = {
     { -1, 1 },  -- NW
 }
 
--- Alpha falloff (cardinals full, diagonals softer)
 local ALPHA_STRENGTH = {
     1.0, 0.7,
     1.0, 0.7,
@@ -37,12 +42,15 @@ local ALPHA_STRENGTH = {
     1.0, 0.7,
 }
 
--- Check if a value is secret/tainted (safe to call even if issecretvalue doesn't exist)
+---------------------------------------------------------------------------------
+-- Helpers
+---------------------------------------------------------------------------------
+
+-- Safe to call even if issecretvalue doesn't exist
 local function isSecret(val)
     return issecretvalue and issecretvalue(val)
 end
 
--- Strip WoW escape codes from text for solid outline
 local function StripEscapeCodes(text)
     if not text then return "" end
     if isSecret(text) then return "" end
@@ -53,7 +61,10 @@ local function StripEscapeCodes(text)
     return text
 end
 
--- Internal: Apply shadow offsets based on thickness
+---------------------------------------------------------------------------------
+-- Internal Methods
+---------------------------------------------------------------------------------
+
 function SoftOutline:_ApplyOffsets()
     if not self.shadows then return end
     for i, shadow in ipairs(self.shadows) do
@@ -65,7 +76,6 @@ function SoftOutline:_ApplyOffsets()
     end
 end
 
--- Internal: Apply color and alpha to all shadows
 function SoftOutline:_ApplyColor()
     if not self.shadows then return end
     for i, shadow in ipairs(self.shadows) do
@@ -79,7 +89,10 @@ function SoftOutline:_ApplyColor()
     end
 end
 
+---------------------------------------------------------------------------------
 -- Public API
+---------------------------------------------------------------------------------
+
 function SoftOutline:SetText(text)
     if not self.shadows then return end
     local cleanText = StripEscapeCodes(text)
@@ -172,7 +185,11 @@ function SoftOutline:Release()
     self.isShown = false
 end
 
--- Hook sync - only hooks once per FontString
+---------------------------------------------------------------------------------
+-- Hook Sync
+---------------------------------------------------------------------------------
+
+-- Only hooks once per FontString
 function SoftOutline:_HookMain()
     local main = self.main
 
@@ -350,7 +367,10 @@ function SoftOutline:_HookMain()
     end
 end
 
--- Factory: Create or update a soft outline for a FontString
+---------------------------------------------------------------------------------
+-- Factory
+---------------------------------------------------------------------------------
+
 function KE:CreateSoftOutline(mainText, options)
     if not mainText then return nil end
     options = options or {}

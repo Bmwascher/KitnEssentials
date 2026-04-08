@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  BlizzardMouseover.lua                                   ║
+-- ║  Module: Blizzard Mouseover                              ║
+-- ║  Purpose: Highlight and tooltip behavior tweaks          ║
+-- ║           for Blizzard frames.                           ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
@@ -11,35 +17,30 @@ local ipairs = ipairs
 local pairs = pairs
 local BagsBar = BagsBar
 
--- Track which hooks are applied
+---------------------------------------------------------------------------------
+-- Module State
+---------------------------------------------------------------------------------
+
 local appliedHooks = {
     bags = false,
 }
+
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 
 function SK:UpdateDB()
     self.db = KE.db.profile.Skinning.Mouseover
 end
 
-function SK:OnInitialize()
-    self:UpdateDB()
-    self:SetEnabledState(false)
-end
+---------------------------------------------------------------------------------
+-- Hooks
+---------------------------------------------------------------------------------
 
-function SK:OnEnable()
-    if KE:ShouldNotLoadModule() then return end
-    if not self.db.Enabled then return end
-    C_Timer.After(0.5, function()
-        self:SetupAllHooks()
-        self:UpdateAllAlpha()
-    end)
-end
-
--- Setup all element hooks
 function SK:SetupAllHooks()
     self:SetupBagHooks()
 end
 
--- Setup BagBar hooks
 function SK:SetupBagHooks()
     if appliedHooks.bags or not BagsBar then return end
     if not self.db.BagMouseover.Enabled then return end
@@ -63,12 +64,14 @@ function SK:SetupBagHooks()
     appliedHooks.bags = true
 end
 
--- Update all element alphas
+---------------------------------------------------------------------------------
+-- Core Logic
+---------------------------------------------------------------------------------
+
 function SK:UpdateAllAlpha()
     self:UpdateBagAlpha()
 end
 
--- Update bag alpha
 function SK:UpdateBagAlpha()
     if not BagsBar then return end
     if not self.db.Enabled or not self.db.BagMouseover.Enabled then
@@ -78,7 +81,6 @@ function SK:UpdateBagAlpha()
     end
 end
 
--- Toggle individual element
 function SK:ToggleElement(elementName, enabled)
     if elementName == "bags" then
         self.db.BagMouseover.Enabled = enabled
@@ -89,7 +91,14 @@ function SK:ToggleElement(elementName, enabled)
     end
 end
 
--- Apply settings (called from GUI)
+function SK:Reset()
+    if BagsBar then BagsBar:SetAlpha(1.0) end
+end
+
+---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
+
 function SK:ApplySettings()
     if KE:ShouldNotLoadModule() then return end
     if self.db.Enabled then
@@ -97,9 +106,22 @@ function SK:ApplySettings()
     end
 end
 
--- Reset all elements
-function SK:Reset()
-    if BagsBar then BagsBar:SetAlpha(1.0) end
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
+
+function SK:OnInitialize()
+    self:UpdateDB()
+    self:SetEnabledState(false)
+end
+
+function SK:OnEnable()
+    if KE:ShouldNotLoadModule() then return end
+    if not self.db.Enabled then return end
+    C_Timer.After(0.5, function()
+        self:SetupAllHooks()
+        self:UpdateAllAlpha()
+    end)
 end
 
 function SK:OnDisable()

@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-DragonRiding.lua                                    ║
+-- ║  GUI: Skyriding UI                                       ║
+-- ║  Purpose: Configuration panel for the                    ║
+-- ║           DragonRiding module.                           ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -40,9 +46,9 @@ GUIFrame:RegisterContent("DragonRiding", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Enable
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Skyriding UI", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, 36)
@@ -69,9 +75,9 @@ GUIFrame:RegisterContent("DragonRiding", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Size Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Size Settings", yOffset)
     table_insert(allWidgets, card2)
 
@@ -109,9 +115,9 @@ GUIFrame:RegisterContent("DragonRiding", function(scrollChild, yOffset)
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Colors
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
     table_insert(allWidgets, card3)
 
@@ -161,9 +167,9 @@ GUIFrame:RegisterContent("DragonRiding", function(scrollChild, yOffset)
 
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Position Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4, newOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = db,
         dbKeys = {

@@ -1,11 +1,17 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  EbonMightHelper.lua                                     ║
+-- ║  Module: Ebon Might Helper                               ║
+-- ║  Purpose: Ebon Might extension warning for Augmentation  ║
+-- ║           Evoker with sound alert.                       ║
+-- ║  Note: Evoker only (Augmentation).                       ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
 local EM = KitnEssentials:NewModule("EbonMightHelper", "AceEvent-3.0")
 
--- Localization
 local GetTime = GetTime
 local select = select
 local pcall = pcall
@@ -21,7 +27,9 @@ local RunNextFrame = RunNextFrame
 local GetUnitEmpowerMinHoldTime = GetUnitEmpowerMinHoldTime
 local LibStub = LibStub
 
--- Spell constants
+---------------------------------------------------------------------------------
+-- Constants
+---------------------------------------------------------------------------------
 local ERUPTION = 395160
 local UPHEAVAL_FONT = 408092
 local FIRE_BREATH_FONT = 382266
@@ -30,17 +38,19 @@ local FIRE_BREATH = 357208
 local EBON_MIGHT_CAST = 395152
 local EBON_MIGHT_AURA = 395296
 
--- Spec ID
 local AUGMENTATION = 1473
-
--- Max poll attempts for timing verification
 local MAX_POLL_ATTEMPTS = 5
 
--- Module state
+---------------------------------------------------------------------------------
+-- Module State
+---------------------------------------------------------------------------------
 EM.expirationTime = 0
 EM.lastEbonMightCast = 0
 EM.soundHandle = nil
 
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 function EM:UpdateDB()
     self.db = KE.db.profile.EbonMightHelper
 end
@@ -55,9 +65,9 @@ function EM:IsValidSpec()
     return specId == AUGMENTATION
 end
 
---------------------------------------------------------------------------------
--- Spell helpers
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Helpers
+---------------------------------------------------------------------------------
 local function IsExtender(spellId)
     return spellId == ERUPTION
         or spellId == UPHEAVAL_FONT
@@ -79,9 +89,9 @@ local function GetEbonMightExpiration()
     return auraData and auraData.expirationTime or 0
 end
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Sound
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 function EM:PlayWarningSound()
     if self.soundHandle then
         StopSound(self.soundHandle)
@@ -103,9 +113,9 @@ function EM:PlayWarningSound()
     end
 end
 
---------------------------------------------------------------------------------
--- Polling mechanism — handles haste changes mid-cast
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Core Logic
+---------------------------------------------------------------------------------
 function EM:QueueTimingCheck(expectedCastEnd, previousExpiration, count)
     RunNextFrame(function()
         self:OnTimingCheck(expectedCastEnd, previousExpiration, count)
@@ -150,9 +160,9 @@ function EM:OnTimingCheck(expectedCastEnd, previousExpiration, count)
     end
 end
 
---------------------------------------------------------------------------------
--- Event handling
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Event Handlers
+---------------------------------------------------------------------------------
 function EM:OnEvent(event, unit, ...)
     if event == "UNIT_SPELLCAST_START" or event == "UNIT_SPELLCAST_EMPOWER_START" then
         if unit ~= "player" then return end
@@ -229,9 +239,9 @@ function EM:UnregisterSpellEvents()
     self:UnregisterEvent("UNIT_AURA")
 end
 
---------------------------------------------------------------------------------
--- Module lifecycle
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
 function EM:OnEnable()
     if not self.db.Enabled then return end
 

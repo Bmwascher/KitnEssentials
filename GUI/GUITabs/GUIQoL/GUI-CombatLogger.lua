@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-CombatLogger.lua                                    ║
+-- ║  GUI: Combat Logger                                      ║
+-- ║  Purpose: Configuration panel for the                    ║
+-- ║           CombatLogger module.                           ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -39,9 +45,9 @@ GUIFrame:RegisterContent("CombatLogger", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Enable
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Combat Logger", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, 36)
@@ -68,9 +74,9 @@ GUIFrame:RegisterContent("CombatLogger", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Settings", yOffset)
     table_insert(allWidgets, card2)
 
@@ -94,9 +100,9 @@ GUIFrame:RegisterContent("CombatLogger", function(scrollChild, yOffset)
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Dungeons
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Dungeons", yOffset)
     table_insert(allWidgets, card3)
 
@@ -120,9 +126,9 @@ GUIFrame:RegisterContent("CombatLogger", function(scrollChild, yOffset)
 
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Raids
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Raids", yOffset)
     table_insert(allWidgets, card4)
 
@@ -146,9 +152,9 @@ GUIFrame:RegisterContent("CombatLogger", function(scrollChild, yOffset)
 
     yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 5: PvP & Other
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "PvP & Other", yOffset)
     table_insert(allWidgets, card5)
 

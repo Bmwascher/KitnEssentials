@@ -1,6 +1,10 @@
--- KitnEssentials Missing Enchants - GUI Tab
--- Configuration page for the MissingEnchants QoL module.
--- Author: Kitn
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-MissingEnchants.lua                                 ║
+-- ║  GUI: Missing Enchants/Gems                              ║
+-- ║  Purpose: Configuration panel for the                    ║
+-- ║           MissingEnchants module.                        ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -36,9 +40,9 @@ GUIFrame:RegisterContent("MissingEnchants", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Enable Toggles
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Missing Enchants/Gems", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, 36)
@@ -84,9 +88,9 @@ GUIFrame:RegisterContent("MissingEnchants", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Font Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
     table_insert(allWidgets, card2)
 

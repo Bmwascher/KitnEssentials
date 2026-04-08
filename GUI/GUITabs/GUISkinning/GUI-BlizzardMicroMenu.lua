@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-BlizzardMicroMenu.lua                               ║
+-- ║  GUI: Micro Menu                                         ║
+-- ║  Purpose: Configuration panel for the                    ║
+-- ║           BlizzardMicroMenu module.                      ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -75,9 +81,9 @@ GUIFrame:RegisterContent("SkinMicroMenu", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Enable
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Micro Menu Skinning", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, 36)
@@ -98,9 +104,9 @@ GUIFrame:RegisterContent("SkinMicroMenu", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Position Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2, newOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = db,
         dbKeys = {
@@ -124,9 +130,9 @@ GUIFrame:RegisterContent("SkinMicroMenu", function(scrollChild, yOffset)
     table_insert(allWidgets, card2)
     yOffset = newOffset
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Mouseover Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Mouseover Settings", yOffset)
     table_insert(allWidgets, card3)
 
@@ -181,9 +187,9 @@ GUIFrame:RegisterContent("SkinMicroMenu", function(scrollChild, yOffset)
 
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Button Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Button Settings", yOffset)
     table_insert(allWidgets, card4)
 
@@ -222,9 +228,9 @@ GUIFrame:RegisterContent("SkinMicroMenu", function(scrollChild, yOffset)
 
     yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 5: Backdrop Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Backdrop Settings", yOffset)
     table_insert(allWidgets, card5)
 

@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  HideBars.lua                                            ║
+-- ║  Module: Hide ActionBars                                 ║
+-- ║  Purpose: Hide specific action bar rows in/out of        ║
+-- ║           combat with keybind support.                   ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
@@ -14,11 +20,21 @@ local SaveBindings = SaveBindings
 local GetCurrentBindingSet = GetCurrentBindingSet
 local CreateFrame = CreateFrame
 
+---------------------------------------------------------------------------------
+-- Constants
+---------------------------------------------------------------------------------
 local VISIBLE_STATE = "[petbattle]hide;show"
 local HIDDEN_STATE = "hide"
+
+---------------------------------------------------------------------------------
+-- Module State
+---------------------------------------------------------------------------------
 local barsHidden = false
 local toggleButton
 
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 function HB:UpdateDB()
     self.db = KE.db.profile.HideBars
 end
@@ -28,6 +44,9 @@ function HB:OnInitialize()
     self:SetEnabledState(false)
 end
 
+---------------------------------------------------------------------------------
+-- Core Logic
+---------------------------------------------------------------------------------
 function HB:ToggleBars()
     if not self.db or not self.db.Enabled then return end
     if InCombatLockdown() then return end
@@ -51,6 +70,9 @@ function HB:ToggleBars()
     end
 end
 
+---------------------------------------------------------------------------------
+-- Frame Creation
+---------------------------------------------------------------------------------
 function HB:CreateToggleButton()
     if toggleButton then return end
     toggleButton = CreateFrame("Button", "KE_HideBarsToggle", UIParent, "SecureActionButtonTemplate")
@@ -64,6 +86,9 @@ function HB:CreateToggleButton()
     end)
 end
 
+---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
 function HB:ApplyKeybind()
     if not self.db then return end
     if InCombatLockdown() then return end
@@ -98,6 +123,9 @@ function HB:ApplySettings()
     self:ApplyKeybind()
 end
 
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
 function HB:OnEnable()
     self:CreateToggleButton()
     C_Timer.After(1, function()

@@ -1,4 +1,9 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-KickTracker.lua                                     ║
+-- ║  GUI: Interrupt Tracker                                  ║
+-- ║  Purpose: Configuration panel for the KickTracker module.║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -72,9 +77,9 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
         { key = "THICKOUTLINE", text = "Thick" },
     }
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Interrupt Tracker (Enable)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Interrupt Tracker", yOffset)
 
     local row1a = GUIFrame:CreateRow(card1.content, 36)
@@ -93,9 +98,9 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Position Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         title = "Position Settings",
         db = db,
@@ -109,9 +114,9 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     if isHealerActive then posCard:SetEnabled(false) end
     yOffset = posOffset + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2b: Healer Position Override
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local healerCard = GUIFrame:CreateCard(scrollChild, "Healer Position Override", yOffset)
 
     local healerRow1 = GUIFrame:CreateRow(healerCard.content, 36)
@@ -159,9 +164,9 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
         yOffset = healerPosOffset + Theme.paddingSmall
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Bar Appearance
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Bar Appearance", yOffset)
 
     -- Width + Height
@@ -259,9 +264,9 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
 
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Text Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Text Settings", yOffset)
 
     -- Show Name + Show Timer
@@ -332,9 +337,9 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
 
     yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 5: Colors
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
 
     -- Color Mode dropdown + Class Color Cooling toggle
@@ -393,9 +398,9 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
 
     yOffset = yOffset + card5:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 6: Sort Priority
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card6 = GUIFrame:CreateCard(scrollChild, "Sort Priority", yOffset)
 
     card6:AddLabel("|cff888888Ready bars sorted by role priority, cooling bars sorted by remaining time (shortest first).|r")

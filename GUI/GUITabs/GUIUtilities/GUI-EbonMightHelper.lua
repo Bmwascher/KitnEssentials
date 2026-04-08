@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-EbonMightHelper.lua                                 ║
+-- ║  GUI: Ebon Might Helper                                  ║
+-- ║  Purpose: Configuration panel for the EbonMightHelper   ║
+-- ║  module.                                                 ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -41,9 +47,9 @@ GUIFrame:RegisterContent("EbonMightHelper", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Enable
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Ebon Might Extension Helper", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, 36)
@@ -72,9 +78,9 @@ GUIFrame:RegisterContent("EbonMightHelper", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Sound Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Sound Settings", yOffset)
     table_insert(allWidgets, card2)
 

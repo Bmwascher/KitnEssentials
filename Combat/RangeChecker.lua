@@ -1,32 +1,42 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  RangeChecker.lua                                        ║
+-- ║  Module: Range Display                                   ║
+-- ║  Purpose: Target range text with out-of-range color      ║
+-- ║           warning using LibRangeCheck-3.0.               ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
--- Create module
 ---@class RangeChecker: AceModule, AceEvent-3.0
 local RC = KitnEssentials:NewModule("RangeChecker", "AceEvent-3.0")
 local LRC = LibStub("LibRangeCheck-3.0", true)
 
--- Localization
+---------------------------------------------------------------------------------
+-- Constants
+---------------------------------------------------------------------------------
 local CreateFrame = CreateFrame
 local UnitExists, UnitIsUnit = UnitExists, UnitIsUnit
 local InCombatLockdown = InCombatLockdown
 local unpack = unpack
 local tostring = tostring
 
--- Update db
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 function RC:UpdateDB()
     self.db = KE.db.profile.RangeChecker
 end
 
--- Module init
 function RC:OnInitialize()
     self:UpdateDB()
     self:SetEnabledState(false)
 end
 
--- Build color gradient palette from 4 colors
+---------------------------------------------------------------------------------
+-- Color
+---------------------------------------------------------------------------------
 function RC:BuildGradientPalette()
     local c1 = self.db.ColorOne or { 1, 0, 0 }
     local c2 = self.db.ColorTwo or { 1, 0.42, 0 }
@@ -41,7 +51,6 @@ function RC:BuildGradientPalette()
     }
 end
 
--- Get color based on range via gradient
 function RC:GetColorForRange(minRange)
     local maxRange = self.db.MaxRange or 40
 
@@ -52,7 +61,6 @@ function RC:GetColorForRange(minRange)
     )
 end
 
--- Format range text
 function RC:FormatRangeText(minRange, maxRange)
     if minRange and maxRange then
         return minRange .. " - " .. maxRange
@@ -65,7 +73,9 @@ function RC:FormatRangeText(minRange, maxRange)
     end
 end
 
--- Create range display frame
+---------------------------------------------------------------------------------
+-- Frame Creation
+---------------------------------------------------------------------------------
 function RC:CreateFrame()
     if self.frame then return end
     local parent = KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
@@ -87,7 +97,9 @@ function RC:CreateFrame()
     self:ApplySettings()
 end
 
--- Apply settings
+---------------------------------------------------------------------------------
+-- Apply Settings
+---------------------------------------------------------------------------------
 function RC:ApplySettings()
     self:BuildGradientPalette()
     if not self.frame or not self.text then return end
@@ -96,14 +108,15 @@ function RC:ApplySettings()
     self:ApplyPosition()
 end
 
--- Apply position
 function RC:ApplyPosition()
     if not self.db.Enabled then return end
     if not self.frame then return end
     KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
 end
 
--- Check if we should show the range display
+---------------------------------------------------------------------------------
+-- Core Logic
+---------------------------------------------------------------------------------
 function RC:ShouldShow()
     if not self.db.Enabled then return false end
     if self.isPreview then return true end
@@ -113,7 +126,6 @@ function RC:ShouldShow()
     return true
 end
 
--- Update range display
 function RC:UpdateRange()
     if not self.frame or not self.text then return end
 
@@ -149,7 +161,6 @@ function RC:UpdateRange()
     self.frame:Show()
 end
 
--- OnUpdate handler
 local updateElapsed = 0
 function RC:OnUpdate(elapsed)
     updateElapsed = updateElapsed + elapsed
@@ -158,6 +169,9 @@ function RC:OnUpdate(elapsed)
     self:UpdateRange()
 end
 
+---------------------------------------------------------------------------------
+-- Edit Mode
+---------------------------------------------------------------------------------
 function RC:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
@@ -171,7 +185,9 @@ function RC:RegWithEditMode()
     end
 end
 
--- Preview mode
+---------------------------------------------------------------------------------
+-- Preview
+---------------------------------------------------------------------------------
 function RC:ShowPreview()
     if not self.frame then self:CreateFrame() end
     self:RegWithEditMode()
@@ -185,7 +201,9 @@ function RC:HidePreview()
     self:UpdateRange()
 end
 
--- Module enable
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
 function RC:OnEnable()
     if not self.db.Enabled then return end
     if not LRC then
@@ -204,7 +222,6 @@ function RC:OnEnable()
     self:UpdateRange()
 end
 
--- Module disable
 function RC:OnDisable()
     if self.frame then
         self.frame:SetScript("OnUpdate", nil)

@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-BlizzardMouseover.lua                               ║
+-- ║  GUI: Blizzard Mouseover                                 ║
+-- ║  Purpose: Configuration panel for the                    ║
+-- ║           BlizzardMouseover module.                      ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -79,9 +85,9 @@ GUIFrame:RegisterContent("SkinMouseover", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Enable + About
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Blizzard Mouseover", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, 40)
@@ -119,9 +125,9 @@ GUIFrame:RegisterContent("SkinMouseover", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Bag Bar (owned by this module — full settings here)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Bag Bar", yOffset)
     table_insert(allWidgets, card2)
 
@@ -175,9 +181,9 @@ GUIFrame:RegisterContent("SkinMouseover", function(scrollChild, yOffset)
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Other Elements (cross-module toggles)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Other Elements", yOffset)
     table_insert(allWidgets, card3)
 

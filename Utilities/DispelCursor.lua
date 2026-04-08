@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  DispelCursor.lua                                        ║
+-- ║  Module: Dispel CD on Cursor                             ║
+-- ║  Purpose: Shows dispel cooldown timer following the      ║
+-- ║           cursor. Auto-detects class dispel spell.       ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
@@ -13,8 +19,9 @@ local C_SpellBook = C_SpellBook
 local ipairs = ipairs
 local UIParent = UIParent
 
-
--- Dispel spell IDs per class
+---------------------------------------------------------------------------------
+-- Constants
+---------------------------------------------------------------------------------
 local DISPEL_SPELL_IDS = {
     -- Healer dispels
     115450, -- Detox (Monk - MW)
@@ -34,9 +41,15 @@ local DISPEL_SPELL_IDS = {
     51886,  -- Cleanse Spirit (Shaman - Elemental/Enhancement)
 }
 
+---------------------------------------------------------------------------------
+-- Module State
+---------------------------------------------------------------------------------
 DC.frame = nil
 DC.trackedSpellId = nil
 
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 function DC:UpdateDB()
     self.db = KE.db.profile.DispelCursor
 end
@@ -46,6 +59,9 @@ function DC:OnInitialize()
     self:SetEnabledState(false)
 end
 
+---------------------------------------------------------------------------------
+-- Core Logic
+---------------------------------------------------------------------------------
 function DC:FindDispelSpell()
     self.trackedSpellId = nil
     for _, spellID in ipairs(DISPEL_SPELL_IDS) do
@@ -56,6 +72,9 @@ function DC:FindDispelSpell()
     end
 end
 
+---------------------------------------------------------------------------------
+-- Frame Creation
+---------------------------------------------------------------------------------
 function DC:CreateFrame()
     if self.frame then return end
     local db = self.db
@@ -149,6 +168,9 @@ function DC:CreateFrame()
     self.frame = frame
 end
 
+---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
 function DC:ApplySettings()
     if not self.frame or not self.frame.cooldownText then return end
     local db = self.db
@@ -158,6 +180,9 @@ function DC:ApplySettings()
     self.frame.cooldownText:SetTextColor(c[1], c[2], c[3], c[4] or 1)
 end
 
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
 function DC:OnEnable()
     if not self.db.Enabled then return end
     self:CreateFrame()
@@ -173,6 +198,9 @@ function DC:OnDisable()
     end
 end
 
+---------------------------------------------------------------------------------
+-- Preview
+---------------------------------------------------------------------------------
 function DC:ShowPreview()
     if not self.frame then self:CreateFrame() end
     self:ApplySettings()
