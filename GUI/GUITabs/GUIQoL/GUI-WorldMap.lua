@@ -1,9 +1,17 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-WorldMap.lua                                        ║
+-- ║  GUI: World Map Scaler                                   ║
+-- ║  Purpose: Configuration panel for the WorldMap module.   ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 
+---------------------------------------------------------------------------------
+-- Helpers
+---------------------------------------------------------------------------------
 local function GetModule()
     if KitnEssentials then
         return KitnEssentials:GetModule("WorldMap", true)
@@ -11,6 +19,9 @@ local function GetModule()
     return nil
 end
 
+---------------------------------------------------------------------------------
+-- Content Registration
+---------------------------------------------------------------------------------
 GUIFrame:RegisterContent("WorldMap", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.WorldMap
     if not db then

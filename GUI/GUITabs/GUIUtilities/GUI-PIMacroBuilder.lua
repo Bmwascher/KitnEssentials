@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-PIMacroBuilder.lua                                  ║
+-- ║  GUI: PI Macro Builder                                   ║
+-- ║  Purpose: Configuration panel for the PIMacroBuilder    ║
+-- ║  module.                                                 ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -69,9 +75,9 @@ GUIFrame:RegisterContent("PIMacroBuilder", function(scrollChild, yOffset)
         return displayName
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Enable
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Power Infusion", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, 36)
@@ -97,9 +103,9 @@ GUIFrame:RegisterContent("PIMacroBuilder", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: How to Use
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "How to Use", yOffset)
     table_insert(allWidgets, card2)
 
@@ -118,9 +124,9 @@ GUIFrame:RegisterContent("PIMacroBuilder", function(scrollChild, yOffset)
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Core Abilities
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3a = GUIFrame:CreateCard(scrollChild, "Core Abilities", yOffset)
     table_insert(allWidgets, card3a)
 
@@ -143,9 +149,9 @@ GUIFrame:RegisterContent("PIMacroBuilder", function(scrollChild, yOffset)
 
     yOffset = yOffset + card3a:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Optional Extras
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Optional Extras", yOffset)
     table_insert(allWidgets, card3)
 
@@ -214,9 +220,9 @@ GUIFrame:RegisterContent("PIMacroBuilder", function(scrollChild, yOffset)
 
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Advanced
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Advanced", yOffset)
     table_insert(allWidgets, card4)
 

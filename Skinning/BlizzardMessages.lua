@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  BlizzardMessages.lua                                    ║
+-- ║  Module: Blizzard Texts                                  ║
+-- ║  Purpose: Font and outline changes for Blizzard          ║
+-- ║           messages like zone change.                     ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
@@ -15,26 +21,18 @@ local C_Timer = C_Timer
 local UIParent = UIParent
 local _G = _G
 
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
+
 function SK:UpdateDB()
     self.db = KE.db.profile.Skinning.Messages
 end
 
-function SK:OnInitialize()
-    self:UpdateDB()
-    self:SetEnabledState(false)
-end
+---------------------------------------------------------------------------------
+-- Styling
+---------------------------------------------------------------------------------
 
-function SK:OnEnable()
-    if KE:ShouldNotLoadModule() then return end
-    if not self.db.Enabled then return end
-    C_Timer.After(1.0, function()
-        if self:IsEnabled() then
-            self:ApplySettings()
-        end
-    end)
-end
-
--- Zone text styling
 function SK:ZoneTextStyling()
     local zoneDB = self.db.ZoneText
     if zoneDB.Hide then
@@ -66,7 +64,6 @@ function SK:ZoneTextStyling()
     end
 end
 
--- UI error text styling
 function SK:StyleUIErrorsFrame()
     local errorsDB = self.db.UIErrorsFrame
     if not errorsDB or not UIErrorsFrame then return end
@@ -94,7 +91,6 @@ function SK:StyleUIErrorsFrame()
     end
 end
 
--- Action status text styling
 function SK:StyleActionStatusText()
     local statusDB = self.db.ActionStatusText
     if not statusDB or not ActionStatus or not ActionStatus.Text then return end
@@ -122,7 +118,6 @@ function SK:StyleActionStatusText()
     end
 end
 
--- Chat bubble styling
 function SK:StyleChatBubbles()
     local bubblesDB = self.db.ChatBubbles
     if not bubblesDB or not bubblesDB.Enabled or not ChatBubbleFont then return end
@@ -132,7 +127,6 @@ function SK:StyleChatBubbles()
     ChatBubbleFont:SetFont(fontPath, bubblesDB.Size, outline)
 end
 
--- Objective tracker styling
 function SK:StyleObjectiveTracker()
     local trackerDB = self.db.ObjectiveTracker
     if not trackerDB or not trackerDB.Enabled then return end
@@ -152,7 +146,10 @@ function SK:StyleObjectiveTracker()
     end
 end
 
--- Reset to Blizzard defaults
+---------------------------------------------------------------------------------
+-- Reset
+---------------------------------------------------------------------------------
+
 function SK:ResetUIErrorsFrame()
     if not UIErrorsFrame then return end
     UIErrorsFrame:Show()
@@ -171,7 +168,15 @@ function SK:ResetActionStatusText()
     ActionStatus.Text:SetPoint("TOP", UIParent, "TOP", 0, -150)
 end
 
--- Apply all styles
+function SK:Reset()
+    self:ResetUIErrorsFrame()
+    self:ResetActionStatusText()
+end
+
+---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
+
 function SK:ApplySettings()
     if KE:ShouldNotLoadModule() then return end
     if not self.db or not self.db.Enabled then
@@ -185,13 +190,10 @@ function SK:ApplySettings()
     self:ZoneTextStyling()
 end
 
--- Reset all styled elements
-function SK:Reset()
-    self:ResetUIErrorsFrame()
-    self:ResetActionStatusText()
-end
+---------------------------------------------------------------------------------
+-- Preview
+---------------------------------------------------------------------------------
 
--- Preview functions for GUI
 function SK:PreviewUIErrors()
     if UIErrorsFrame then
         UIErrorsFrame:Clear()
@@ -240,6 +242,25 @@ function SK:PreviewZone()
 
     SK:PreviewUIErrors()
     SK:PreviewActionStatus()
+end
+
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
+
+function SK:OnInitialize()
+    self:UpdateDB()
+    self:SetEnabledState(false)
+end
+
+function SK:OnEnable()
+    if KE:ShouldNotLoadModule() then return end
+    if not self.db.Enabled then return end
+    C_Timer.After(1.0, function()
+        if self:IsEnabled() then
+            self:ApplySettings()
+        end
+    end)
 end
 
 function SK:OnDisable()

@@ -1,8 +1,12 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-Core.lua                                            ║
+-- ║  Purpose: Core GUI framework — frame creation,           ║
+-- ║  show/hide, theme initialization.                        ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 
--- GUIFrame namespace for the configuration window
 local GUIFrame = {}
 KE.GUIFrame = GUIFrame
 
@@ -18,6 +22,10 @@ local C_Timer = C_Timer
 local math_min = math.min
 
 local Theme = KE.Theme
+
+---------------------------------------------------------------------------------
+-- Frame Creation
+---------------------------------------------------------------------------------
 
 -- Content registration
 GUIFrame.registeredContent = {}
@@ -58,6 +66,10 @@ function GUIFrame:FireOnCloseCallbacks()
         pcall(callback)
     end
 end
+
+---------------------------------------------------------------------------------
+-- Show / Hide
+---------------------------------------------------------------------------------
 
 -- Toggle the GUI window
 function GUIFrame:Toggle()
@@ -122,6 +134,10 @@ function GUIFrame:Hide()
     end
 end
 
+---------------------------------------------------------------------------------
+-- Theme
+---------------------------------------------------------------------------------
+
 -- Apply theme colors to all GUI elements
 function GUIFrame:ApplyThemeColors()
     if not self.mainFrame then return end
@@ -168,9 +184,9 @@ function GUIFrame:ApplyThemeColors()
     end
 end
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Card System
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 function GUIFrame:CreateCard(parent, title, yOffset, width)
     local T = Theme
     local card = CreateFrame("Frame", nil, parent, "BackdropTemplate")
@@ -317,9 +333,9 @@ function GUIFrame:CreateCard(parent, title, yOffset, width)
     return card
 end
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Row System
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 function GUIFrame:CreateRow(parent, height)
     local T = Theme
     height = height or 24
@@ -362,9 +378,9 @@ function GUIFrame:CreateRow(parent, height)
     return row
 end
 
---------------------------------------------------------------------------------
--- RefreshContent - loads registered content for the selected sidebar item
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- RefreshContent
+---------------------------------------------------------------------------------
 function GUIFrame:RefreshContent()
     if not self.contentArea then return end
 

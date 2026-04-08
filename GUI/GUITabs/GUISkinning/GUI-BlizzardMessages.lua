@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-BlizzardMessages.lua                                ║
+-- ║  GUI: Blizzard Texts                                     ║
+-- ║  Purpose: Configuration panel for the                    ║
+-- ║           BlizzardMessages module.                       ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -120,9 +126,9 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
     end
     local fontList = GetFontList()
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Master Toggle
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Blizzard Texts", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, 36)
@@ -147,9 +153,9 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Global Font Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Font Settings For Blizzard Texts", yOffset)
     table_insert(allWidgets, card2)
 
@@ -173,9 +179,9 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Error Messages (UIErrorsFrame)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local errDb = db.UIErrorsFrame
     local card3 = GUIFrame:CreateCard(scrollChild, "Error Messages (Red Text)", yOffset)
     table_insert(allWidgets, card3)
@@ -256,9 +262,9 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
 
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Action Status Text
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local actDb = db.ActionStatusText
     local card4 = GUIFrame:CreateCard(scrollChild, "Action Status Text (Yellow Text)", yOffset)
     table_insert(allWidgets, card4)
@@ -339,9 +345,9 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
 
     yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 5: Chat Bubbles
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local bubbleDb = db.ChatBubbles
     local card5 = GUIFrame:CreateCard(scrollChild, "Chat Bubbles", yOffset)
     table_insert(allWidgets, card5)
@@ -413,9 +419,9 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
 
     yOffset = yOffset + card5:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 6: Objective Tracker
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local objDb = db.ObjectiveTracker
     local card6 = GUIFrame:CreateCard(scrollChild, "Objective Tracker", yOffset)
     table_insert(allWidgets, card6)
@@ -456,9 +462,9 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
 
     yOffset = yOffset + card6:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 7: Zone Texts
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local zoneDB = db.ZoneText
     local card7 = GUIFrame:CreateCard(scrollChild, "Zone Texts", yOffset)
     table_insert(allWidgets, card7)

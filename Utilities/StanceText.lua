@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  StanceText.lua                                          ║
+-- ║  Module: Stance Text                                     ║
+-- ║  Purpose: Displays current stance/shapeshift form name   ║
+-- ║           as configurable text on screen.                ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
@@ -6,7 +12,6 @@ if not KitnEssentials then return end
 ---@class StanceText: AceModule, AceEvent-3.0
 local ST = KitnEssentials:NewModule("StanceText", "AceEvent-3.0")
 
--- Localization
 local CreateFrame = CreateFrame
 local GetShapeshiftForm, GetShapeshiftFormInfo = GetShapeshiftForm, GetShapeshiftFormInfo
 local tostring = tostring
@@ -15,13 +20,15 @@ local UnitClass = UnitClass
 local issecretvalue = issecretvalue
 local UIParent = UIParent
 
--- Module state
+---------------------------------------------------------------------------------
+-- Module State
+---------------------------------------------------------------------------------
 local playerClass = nil
 local stanceTextFrame = nil
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Helpers
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 local function PlayerHasBuff(spellId)
     if not spellId then return false end
     if issecretvalue(spellId) then return false end
@@ -29,9 +36,9 @@ local function PlayerHasBuff(spellId)
     return auraData ~= nil
 end
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Frame creation
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 local function CreateStanceTextFrame()
     if stanceTextFrame then return end
     local db = ST.db
@@ -57,9 +64,9 @@ local function CreateStanceTextFrame()
     ST.container = stanceTextFrame
 end
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Core update
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 local function UpdateStanceTextDisplay()
     if not ST.db then return end
     local db = ST.db
@@ -134,9 +141,9 @@ local function UpdateStanceTextDisplay()
     stanceTextFrame:Show()
 end
 
---------------------------------------------------------------------------------
--- DB
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 function ST:UpdateDB()
     self.db = KE.db.profile.StanceText
 end
@@ -148,9 +155,9 @@ function ST:OnInitialize()
     self:SetEnabledState(false)
 end
 
---------------------------------------------------------------------------------
--- Enable / Disable
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
 function ST:OnEnable()
     if not self.db or not self.db.Enabled then return end
 
@@ -181,9 +188,9 @@ function ST:OnDisable()
     if stanceTextFrame then stanceTextFrame:Hide() end
 end
 
---------------------------------------------------------------------------------
--- Public API
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
 function ST:Refresh()
     if self.db and self.db.Enabled then
         self:OnEnable()
@@ -212,9 +219,9 @@ function ST:ApplySettings()
     UpdateStanceTextDisplay()
 end
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Preview
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 function ST:ShowPreview()
     if not stanceTextFrame then CreateStanceTextFrame() end
     self:RegWithEditMode()
@@ -267,9 +274,9 @@ function ST:HidePreview()
     end
 end
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Edit Mode
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 function ST:RegWithEditMode()
     if not KE.EditMode then return end
     if self.container and not self.editModeRegistered then

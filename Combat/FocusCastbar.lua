@@ -1,13 +1,21 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  FocusCastbar.lua                                        ║
+-- ║  Module: Focus Castbar                                   ║
+-- ║  Purpose: Repositionable focus cast bar with kick        ║
+-- ║           indicators, target name, color settings,       ║
+-- ║           and cast sound alert.                          ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
--- Create module
 ---@class FocusCastbar: AceModule, AceEvent-3.0
 local FC = KitnEssentials:NewModule("FocusCastbar", "AceEvent-3.0")
 
--- Localization
+---------------------------------------------------------------------------------
+-- Constants
+---------------------------------------------------------------------------------
 local PlaySoundFile = PlaySoundFile
 local CreateFrame = CreateFrame
 local UnitCastingInfo, UnitChannelInfo = UnitCastingInfo, UnitChannelInfo
@@ -26,13 +34,10 @@ local GetPlayerInfoByGUID = GetPlayerInfoByGUID
 local ipairs = ipairs
 local type = type
 
--- Module locals
 local FALLBACK_ICON = 136243
 local PREVIEW_DURATION = 20
 local MAX_TARGET_NAMES = 5
 
--- Interrupt data keyed by spec ID (matches KickTracker's INTERRUPT_DATA)
--- Specs with id=0 have no interrupt (Holy Priest, Resto Druid, etc.)
 local INTERRUPT_BY_SPEC = {
     -- Death Knight: Mind Freeze 12s
     [250] = { id = 47528,  cd = 12 },
@@ -82,7 +87,6 @@ local INTERRUPT_BY_SPEC = {
     [73]  = { id = 6552,   cd = 15 },
 }
 
--- Map anchor string to frame point
 local function GetPointFromAnchor(anchor)
     if anchor == "LEFT" then return "LEFT"
     elseif anchor == "RIGHT" then return "RIGHT"
@@ -90,18 +94,18 @@ local function GetPointFromAnchor(anchor)
     return "CENTER"
 end
 
--- Update db
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 function FC:UpdateDB()
     self.db = KE.db.profile.FocusCastbar
 end
 
--- Module init
 function FC:OnInitialize()
     self:UpdateDB()
     self:SetEnabledState(false)
 end
 
--- Create pre-cached color objects
 function FC:CreateColorObjects()
     local kick = self.db.KickIndicator or {}
     local ready = kick.ReadyColor or { 0.1, 0.8, 0.1, 1 }
@@ -114,7 +118,6 @@ function FC:CreateColorObjects()
     }
 end
 
--- Reset cast state
 function FC:ResetCastState()
     self.casting, self.channeling, self.empowering = nil, nil, nil
     self.castID, self.spellID, self.spellName = nil, nil, nil
@@ -122,7 +125,6 @@ function FC:ResetCastState()
     self.cachedDuration = nil
 end
 
--- Apply backdrop to a frame
 local function ApplyFrameBackdrop(frame, bgColor, borderColor)
     frame:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
@@ -136,7 +138,9 @@ local function ApplyFrameBackdrop(frame, bgColor, borderColor)
     frame:SetBackdropBorderColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4] or 1)
 end
 
--- Create castbar frame
+---------------------------------------------------------------------------------
+-- Frame Creation
+---------------------------------------------------------------------------------
 function FC:CreateFrame()
     if self.frame then return end
     local db = self.db
@@ -247,7 +251,9 @@ function FC:CreateFrame()
     self:ApplySettings()
 end
 
--- Apply visual settings
+---------------------------------------------------------------------------------
+-- Apply Settings
+---------------------------------------------------------------------------------
 function FC:ApplySettings()
     if not self.frame then return end
     self:CreateColorObjects()
@@ -297,13 +303,14 @@ function FC:ApplySettings()
     self:ApplyPosition()
 end
 
--- Apply position
 function FC:ApplyPosition()
     if not self.frame then return end
     KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
 end
 
--- Update bar color based on kick ready state
+---------------------------------------------------------------------------------
+-- Kick Indicator
+---------------------------------------------------------------------------------
 function FC:UpdateBarColor(interruptDuration)
     if not self.castBar then return end
     local kick = self.db.KickIndicator
@@ -340,7 +347,6 @@ function FC:UpdateBarColor(interruptDuration)
     texture:SetVertexColor(color[1], color[2], color[3], color[4] or 1)
 end
 
--- Detect and cache interrupt spell ID + cooldown from spec
 function FC:CacheInterruptId()
     self.interruptId = nil
     self.interruptCD = nil
@@ -357,7 +363,6 @@ function FC:CacheInterruptId()
     end
 end
 
--- Update kick indicator tick visibility and bar color
 function FC:UpdateKickIndicator(cooldown)
     local kick = self.db.KickIndicator
     if not kick or not kick.Enabled or not self.interruptId then
@@ -378,7 +383,6 @@ function FC:UpdateKickIndicator(cooldown)
     self:UpdateBarColor(cooldown)
 end
 
--- Update tick position based on interrupt cooldown
 function FC:UpdateTickPosition(duration, cooldown)
     local kick = self.db.KickIndicator
     if not kick or not kick.Enabled or not self.interruptId then return end
@@ -390,7 +394,9 @@ function FC:UpdateTickPosition(duration, cooldown)
     self.kickCooldownBar:SetValue(cooldown:GetRemainingDuration())
 end
 
--- Update target name display
+---------------------------------------------------------------------------------
+-- Target Names
+---------------------------------------------------------------------------------
 function FC:UpdateTargetNames()
     if not self.targetNames then return end
     local targetSettings = self.db.TargetNames or {}
@@ -430,7 +436,6 @@ function FC:UpdateTargetNames()
     end
 end
 
--- Hide all target names
 function FC:HideTargetNames()
     if not self.targetNames then return end
     for i = 1, MAX_TARGET_NAMES do
@@ -438,7 +443,6 @@ function FC:HideTargetNames()
     end
 end
 
--- Get colored name from GUID
 function FC:GetColoredNameFromGUID(guid)
     if guid == nil then return nil end
 
@@ -452,7 +456,6 @@ function FC:GetColoredNameFromGUID(guid)
     return color:WrapTextInColorCode(name)
 end
 
--- Setup kick cooldown bar direction based on cast type
 function FC:SetupKickCooldownBar()
     local kick = self.db.KickIndicator
     if not kick or not kick.Enabled or not self.interruptId then
@@ -489,7 +492,9 @@ function FC:SetupKickCooldownBar()
     end
 end
 
--- Cast events
+---------------------------------------------------------------------------------
+-- Cast Logic
+---------------------------------------------------------------------------------
 function FC:OnCastEvent(event, unit, ...)
     if unit ~= "focus" then return end
     if event:find("START") then
@@ -513,7 +518,7 @@ function FC:OnCastEvent(event, unit, ...)
     end
 end
 
--- Track player kick usage via events (Duration APIs return secret values)
+-- Duration APIs return secret values, so track via events instead
 function FC:OnPlayerCastSucceeded(_, unit, _, spellID)
     if unit ~= "player" and unit ~= "pet" then return end
     if not self.interruptId or spellID ~= self.interruptId then return end
@@ -525,7 +530,6 @@ function FC:OnPlayerCastSucceeded(_, unit, _, spellID)
     end)
 end
 
--- Play sound alert when focus starts casting
 function FC:PlayCastSound()
     if not self.db.SoundEnabled then return end
     if self.isPreview then return end
@@ -541,7 +545,6 @@ function FC:PlayCastSound()
     end
 end
 
--- Start displaying a cast
 function FC:StartCast()
     if not self.frame or not UnitExists("focus") then return end
     local name, text, texture, castID, notInterruptible, spellID, isEmpowered
@@ -611,7 +614,6 @@ function FC:StartCast()
     self.frame:Show()
 end
 
--- End cast (stop, fail, or interrupt)
 function FC:EndCast(showHold, wasInterrupted, interruptedBy)
     if not self.frame or not self.frame:IsShown() then return end
     if self.holdTimer then return end
@@ -664,7 +666,6 @@ function FC:EndCast(showHold, wasInterrupted, interruptedBy)
     end)
 end
 
--- Update interruptible state mid-cast
 function FC:UpdateInterruptible()
     if not self.frame or not self.frame:IsShown() then return end
     -- notInterruptible is a secret boolean in 12.0.5 — cannot use `or` operator
@@ -683,7 +684,9 @@ function FC:UpdateInterruptible()
     self:UpdateBarColor()
 end
 
--- Focus changed handler
+---------------------------------------------------------------------------------
+-- Event Handlers
+---------------------------------------------------------------------------------
 function FC:PLAYER_FOCUS_CHANGED()
     if UnitExists("focus") then
         self:StartCast()
@@ -698,7 +701,9 @@ function FC:PLAYER_FOCUS_CHANGED()
     end
 end
 
--- Start preview cast timer
+---------------------------------------------------------------------------------
+-- OnUpdate
+---------------------------------------------------------------------------------
 function FC:StartPreviewTimer()
     local duration = C_DurationUtil.CreateDuration()
     duration:SetTimeFromStart(GetTime(), PREVIEW_DURATION)
@@ -711,7 +716,6 @@ function FC:StartPreviewTimer()
     self.positioner:SetValue(0)
 end
 
--- Frame update handler
 local updateThrottle = 0.1
 local updateElapsed = 0
 
@@ -765,13 +769,15 @@ function FC:OnUpdate(elapsed)
     updateElapsed = 0
 end
 
--- Ensure OnUpdate script is set
 function FC:EnsureOnUpdate()
     if self.frame and not self.frame:GetScript("OnUpdate") then
         self.frame:SetScript("OnUpdate", function(_, elapsed) self:OnUpdate(elapsed) end)
     end
 end
 
+---------------------------------------------------------------------------------
+-- Edit Mode
+---------------------------------------------------------------------------------
 function FC:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
@@ -785,7 +791,9 @@ function FC:RegWithEditMode()
     end
 end
 
--- Preview mode
+---------------------------------------------------------------------------------
+-- Preview
+---------------------------------------------------------------------------------
 function FC:ShowPreview()
     if not self.frame then self:CreateFrame() end
     self:RegWithEditMode()
@@ -832,7 +840,9 @@ function FC:HidePreview()
     end
 end
 
--- Module enable
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
 function FC:OnEnable()
     if not self.db.Enabled then return end
     self:CreateColorObjects()
@@ -860,7 +870,6 @@ function FC:OnEnable()
     self:CacheInterruptId()
 end
 
--- Module disable
 function FC:OnDisable()
     if self.frame then
         self.frame:SetScript("OnUpdate", nil)

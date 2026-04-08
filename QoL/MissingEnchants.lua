@@ -1,7 +1,10 @@
--- KitnEssentials Missing Enchants & Gems
--- Shows "No Enchant" / "No Gem" warnings on the character panel.
--- Only displays at max level. Based on BetterCharacterPanel by Grimonja.
--- Author: Bitebtw
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  MissingEnchants.lua                                     ║
+-- ║  Module: Missing Enchants/Gems                           ║
+-- ║  Purpose: Red warnings on character panel for missing    ║
+-- ║           enchants and empty gem sockets. Max level only.║
+-- ║  Credit: Based on BetterCharacterPanel by Grimonja.      ║
+-- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
 local KE = select(2, ...)
@@ -36,6 +39,10 @@ local INVSLOT_FINGER1   = INVSLOT_FINGER1
 local INVSLOT_FINGER2   = INVSLOT_FINGER2
 local INVSLOT_MAINHAND  = INVSLOT_MAINHAND
 local INVSLOT_OFFHAND   = INVSLOT_OFFHAND
+
+---------------------------------------------------------------------------------
+-- Constants
+---------------------------------------------------------------------------------
 
 -- Enchantable slots per expansion (keyed by GetExpansionForLevel() return value)
 local expansionEnchantableSlots = {
@@ -87,15 +94,20 @@ local gemSlotButtons = {
     [INVSLOT_FINGER2] = "CharacterFinger1Slot",
 }
 
-----------------------------------------------------------------
--- Local state
-----------------------------------------------------------------
+-- Combined set of all slots that need checking
+local allCheckSlots = {}
+for slot, btn in pairs(enchantSlotButtons) do allCheckSlots[slot] = btn end
+for slot, btn in pairs(gemSlotButtons) do allCheckSlots[slot] = btn end
+
+---------------------------------------------------------------------------------
+-- Module State
+---------------------------------------------------------------------------------
 local slotTexts = {}
 local hooked = false
 
-----------------------------------------------------------------
--- Helpers
-----------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Core Logic
+---------------------------------------------------------------------------------
 local function HasEnchant(itemLink)
     if not itemLink then return false end
     local itemString = itemLink:match("item[%-?%d:]+")
@@ -143,6 +155,9 @@ local function GetFontSettings()
     return fontPath, fontSize, fontOutline
 end
 
+---------------------------------------------------------------------------------
+-- Frame Creation
+---------------------------------------------------------------------------------
 local function CreateSlotText(button, slot)
     local fontPath, fontSize, fontOutline = GetFontSettings()
     local text = button:CreateFontString(nil, "OVERLAY")
@@ -171,11 +186,9 @@ local function ApplyFontToAll()
     end
 end
 
--- Combined set of all slots that need checking
-local allCheckSlots = {}
-for slot, btn in pairs(enchantSlotButtons) do allCheckSlots[slot] = btn end
-for slot, btn in pairs(gemSlotButtons) do allCheckSlots[slot] = btn end
-
+---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
 local function UpdateDisplay()
     local db = ME.db
     local enchantEnabled = db and db.Enabled ~= false
@@ -251,9 +264,6 @@ local function HookCharacterPanel()
     hooked = true
 end
 
-----------------------------------------------------------------
--- Module API
-----------------------------------------------------------------
 function ME:Refresh()
     if C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("BetterCharacterPanel") then return end
     HookCharacterPanel()
@@ -267,9 +277,9 @@ function ME:ClearAll()
     for _, text in pairs(slotTexts) do text:SetText("") end
 end
 
-----------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Lifecycle
-----------------------------------------------------------------
+---------------------------------------------------------------------------------
 function ME:OnInitialize()
     self.db = KE.db.profile.MissingEnchants
     self:SetEnabledState(false)

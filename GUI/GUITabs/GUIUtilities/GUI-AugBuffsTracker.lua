@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-AugBuffsTracker.lua                                 ║
+-- ║  GUI: Aug Buffs Tracker                                  ║
+-- ║  Purpose: Configuration panel for the AugBuffsTracker   ║
+-- ║  module.                                                 ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -45,9 +51,9 @@ GUIFrame:RegisterContent("AugBuffsTracker", function(scrollChild, yOffset)
     local a = Theme.accent
     local accentDash = string.format("|cff%02x%02x%02x—|r", a[1]*255, a[2]*255, a[3]*255)
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Aug Buffs Tracker (Enable + Buff Toggles)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Aug Buffs Tracker", yOffset)
 
     local row1a = GUIFrame:CreateRow(card1.content, 36)
@@ -92,9 +98,9 @@ GUIFrame:RegisterContent("AugBuffsTracker", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Position Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = db,
         dbKeys = {
@@ -118,9 +124,9 @@ GUIFrame:RegisterContent("AugBuffsTracker", function(scrollChild, yOffset)
     table_insert(allWidgets, card2)
     yOffset = posOffset
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Display Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
     table_insert(allWidgets, card3)
 
@@ -189,9 +195,9 @@ GUIFrame:RegisterContent("AugBuffsTracker", function(scrollChild, yOffset)
 
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Name Text Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Name Text", yOffset)
     table_insert(allWidgets, card4)
 
@@ -258,9 +264,9 @@ GUIFrame:RegisterContent("AugBuffsTracker", function(scrollChild, yOffset)
 
     yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 5: Timer Text Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Timer Text", yOffset)
     table_insert(allWidgets, card5)
 
@@ -294,9 +300,9 @@ GUIFrame:RegisterContent("AugBuffsTracker", function(scrollChild, yOffset)
 
     yOffset = yOffset + card5:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 6: Colors
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card6 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
     table_insert(allWidgets, card6)
 

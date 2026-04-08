@@ -1,13 +1,17 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  NoMovementAlert.lua                                     ║
+-- ║  Module: No Movement Alert                               ║
+-- ║  Purpose: Shows remaining cooldown when movement ability ║
+-- ║           is unavailable. Auto-detects movement spell.   ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
--- Create module
 ---@class NoMovementAlert: AceModule, AceEvent-3.0
 local NMA = KitnEssentials:NewModule("NoMovementAlert", "AceEvent-3.0")
 
--- Localization
 local C_Spell = C_Spell
 local C_SpellBook = C_SpellBook
 local C_Timer = C_Timer
@@ -23,8 +27,6 @@ local string_gsub = string.gsub
 ---------------------------------------------------------------------------------
 local REFRESH_INTERVAL = 0.1
 
--- Class spell lists: priority order (first known spell wins)
--- { spellID, displayName }
 local CLASS_SPELLS = {
     ["DEATHKNIGHT"] = {
         { 48265, "DA" },          -- Death's Advance
@@ -73,7 +75,7 @@ local CLASS_SPELLS = {
 }
 
 ---------------------------------------------------------------------------------
--- Module state
+-- Module State
 ---------------------------------------------------------------------------------
 NMA.frame = nil
 NMA.text = nil
@@ -83,12 +85,11 @@ NMA.playerClass = nil
 NMA.activeSpellID = nil
 NMA.activeDisplayName = nil
 NMA.elapsed = 0
--- Pre-parsed format template (rebuilt in ParseDisplayFormat)
 NMA.fmtBefore = "NO MOVE ("
 NMA.fmtAfter = ")"
 
 ---------------------------------------------------------------------------------
--- UpdateDB
+-- DB Helper
 ---------------------------------------------------------------------------------
 function NMA:UpdateDB()
     self.db = KE.db.profile.NoMovementAlert
@@ -125,8 +126,6 @@ function NMA:CacheMovementSpell()
     end
 end
 
--- Pre-parse display format into before/after parts around %t
--- Eliminates gsub + match from the OnUpdate hot path
 function NMA:ParseDisplayFormat()
     local fmt = self.db.DisplayFormat or "NO %n (%t)"
     local name = self.activeDisplayName or "MOVE"

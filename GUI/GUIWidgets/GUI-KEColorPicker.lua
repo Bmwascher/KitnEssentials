@@ -1,4 +1,8 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-KEColorPicker.lua                                   ║
+-- ║  Purpose: Color picker widget with hex input.            ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -7,6 +11,10 @@ local Theme = KE.Theme
 -- Localization Setup
 local CreateFrame = CreateFrame
 local ColorPickerFrame = ColorPickerFrame
+
+---------------------------------------------------------------------------------
+-- Widget Creation
+---------------------------------------------------------------------------------
 
 -- ColorPicker widget
 function GUIFrame:CreateColorPicker(parent, labelText, color, callback)
@@ -119,6 +127,10 @@ function GUIFrame:CreateColorPicker(parent, labelText, color, callback)
         AnimateBorderColor(false)
         GameTooltip:Hide()
     end)
+
+    ---------------------------------------------------------------------------------
+    -- Color Logic
+    ---------------------------------------------------------------------------------
 
     swatch:SetScript("OnClick", function()
         local prevR, prevG, prevB, prevA = swatch.r, swatch.g, swatch.b, swatch.a

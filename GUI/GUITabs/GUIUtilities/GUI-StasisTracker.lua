@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-StasisTracker.lua                                   ║
+-- ║  GUI: Stasis Tracker                                     ║
+-- ║  Purpose: Configuration panel for the StasisTracker     ║
+-- ║  module.                                                 ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -48,9 +54,9 @@ GUIFrame:RegisterContent("StasisTracker", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Enable
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Stasis Tracker", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, 36)
@@ -77,9 +83,9 @@ GUIFrame:RegisterContent("StasisTracker", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Display Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
     table_insert(allWidgets, card2)
 
@@ -147,9 +153,9 @@ GUIFrame:RegisterContent("StasisTracker", function(scrollChild, yOffset)
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Position
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3, newOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         title = "Position Settings",
         db = db,
@@ -174,9 +180,9 @@ GUIFrame:RegisterContent("StasisTracker", function(scrollChild, yOffset)
     table_insert(allWidgets, card3)
     yOffset = newOffset
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Font Settings (countdown text)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
     table_insert(allWidgets, card4)
 
@@ -226,9 +232,9 @@ GUIFrame:RegisterContent("StasisTracker", function(scrollChild, yOffset)
 
     yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 5: Colors
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
     table_insert(allWidgets, card5)
 

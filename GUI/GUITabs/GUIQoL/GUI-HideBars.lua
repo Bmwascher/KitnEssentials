@@ -1,4 +1,9 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-HideBars.lua                                        ║
+-- ║  GUI: Hide ActionBars                                    ║
+-- ║  Purpose: Configuration panel for the HideBars module.   ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -39,9 +44,9 @@ GUIFrame:RegisterContent("HideBars", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Enable
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Hide ActionBars", yOffset)
     local row1 = GUIFrame:CreateRow(card1.content, 36)
     local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Hide ActionBars", db.Enabled ~= false,
@@ -55,9 +60,9 @@ GUIFrame:RegisterContent("HideBars", function(scrollChild, yOffset)
     card1:AddRow(row1, 36)
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Bar Selection
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Bar Selection", yOffset)
     table_insert(allWidgets, card2)
 
@@ -83,9 +88,9 @@ GUIFrame:RegisterContent("HideBars", function(scrollChild, yOffset)
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Keybind
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Keybind", yOffset)
     table_insert(allWidgets, card3)
 
@@ -158,9 +163,9 @@ GUIFrame:RegisterContent("HideBars", function(scrollChild, yOffset)
     card3:AddRow(keybindRow, 36)
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Note
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Note", yOffset)
     table_insert(allWidgets, card4)
 

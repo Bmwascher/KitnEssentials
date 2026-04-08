@@ -1,13 +1,20 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  CursorCircle.lua                                        ║
+-- ║  Module: Cursor Circle                                   ║
+-- ║  Purpose: Cursor-following ring with GCD overlay and     ║
+-- ║           multiple texture options.                      ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
--- Create module
 ---@class CursorCircle: AceModule, AceEvent-3.0
 local CC = KitnEssentials:NewModule("CursorCircle", "AceEvent-3.0")
 
--- Localization
+---------------------------------------------------------------------------------
+-- Constants
+---------------------------------------------------------------------------------
 local CreateFrame = CreateFrame
 local GetCursorPosition = GetCursorPosition
 local InCombatLockdown = InCombatLockdown
@@ -16,10 +23,9 @@ local C_Spell = C_Spell
 local UIParent = UIParent
 
 
--- GCD spell ID (standard global cooldown reference)
 local GCD_SPELL_ID = 61304
 
--- Define available textures
+-- Available textures
 CC.Textures = {
     ["Circle 1"] = "Interface\\AddOns\\KitnEssentials\\Media\\CursorCircles\\Circle.tga",
     ["Circle 2"] = "Interface\\AddOns\\KitnEssentials\\Media\\CursorCircles\\Aura73.tga",
@@ -32,43 +38,41 @@ CC.Textures = {
     ["Heart"]        = "Interface\\AddOns\\KitnEssentials\\Media\\CursorCircles\\cursor heart corsshair 1.tga",
 }
 
--- Texture display order for GUI
 CC.TextureOrder = { "Circle 1", "Circle 2", "Circle 3", "Circle 4", "Circle 5", "Circle 6" }
 -- CC.TextureOrder = { "Circle 1", "Circle 2", "Circle 3", "Circle 4", "Circle 5", "Circle 6", "Crosshair 1", "Crosshair 2", "Heart" }
 
--- GCD Ring textures (same set)
 CC.GCDRingTextures = CC.Textures
 CC.GCDRingTextureOrder = CC.TextureOrder
 
--- GCD Mode options for GUI (KE array-of-objects format)
 CC.GCDModeOptions = {
     { key = "disabled",   text = "Disabled" },
     { key = "integrated", text = "Integrated (overlay on circle)" },
     { key = "separate",   text = "Separate (own ring)" },
 }
 
--- Visibility Mode options for GUI (KE array-of-objects format)
 CC.VisibilityModeOptions = {
     { key = "always",    text = "Always Visible" },
     { key = "mouseDown", text = "Only When Mouse Button Held" },
 }
 
--- Module state
 CC.frame = nil
 CC.gcdFrame = nil
 
--- Update db, used for profile changes
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 function CC:UpdateDB()
     self.db = KE.db.profile.CursorCircle
 end
 
--- Module init
 function CC:OnInitialize()
     self:UpdateDB()
     self:SetEnabledState(false)
 end
 
--- Read GCD cooldown info
+---------------------------------------------------------------------------------
+-- Frame Creation
+---------------------------------------------------------------------------------
 local function GetGCDCooldown()
     local info = C_Spell.GetSpellCooldown(GCD_SPELL_ID)
     if info then
@@ -77,7 +81,6 @@ local function GetGCDCooldown()
     return nil, nil, nil
 end
 
--- Create the cursor circle frame
 function CC:CreateFrame()
     if self.frame then return end
 
@@ -152,7 +155,6 @@ function CC:CreateFrame()
     self:CreateGCDRing()
 end
 
--- Create the separate GCD ring frame
 function CC:CreateGCDRing()
     if self.gcdFrame then return end
 
@@ -225,7 +227,9 @@ function CC:CreateGCDRing()
     self:ApplyGCDColor()
 end
 
--- Apply color to the cursor circle
+---------------------------------------------------------------------------------
+-- Color
+---------------------------------------------------------------------------------
 function CC:ApplyColor()
     if not self.frame or not self.frame.texture then return end
     local db = self.db
@@ -240,7 +244,6 @@ function CC:ApplyColor()
     end
 end
 
--- Apply color to GCD ring
 function CC:ApplyGCDColor()
     local db = self.db
     local gcd = db.GCD or {}
@@ -285,7 +288,9 @@ function CC:ApplyGCDColor()
     end
 end
 
--- Apply all settings
+---------------------------------------------------------------------------------
+-- Apply Settings
+---------------------------------------------------------------------------------
 function CC:ApplySettings()
     local db = self.db
     if not self.frame then self:CreateFrame() end
@@ -322,7 +327,9 @@ function CC:ApplySettings()
     end
 end
 
--- Update GCD visibility based on mode and combat state
+---------------------------------------------------------------------------------
+-- GCD Logic
+---------------------------------------------------------------------------------
 function CC:UpdateGCDVisibility()
     local db = self.db
     local gcd = db.GCD or {}
@@ -342,7 +349,6 @@ function CC:UpdateGCDVisibility()
     end
 end
 
--- Update GCD cooldown display
 function CC:UpdateGCDCooldown()
     local db = self.db
     local gcd = db.GCD or {}
@@ -399,7 +405,9 @@ function CC:UpdateGCDCooldown()
     end
 end
 
--- Combat handlers
+---------------------------------------------------------------------------------
+-- Event Handlers
+---------------------------------------------------------------------------------
 function CC:OnCombatStart()
     self:UpdateGCDVisibility()
     self:UpdateGCDCooldown()
@@ -409,7 +417,9 @@ function CC:OnCombatEnd()
     self:UpdateGCDVisibility()
 end
 
--- Module OnEnable
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
 function CC:OnEnable()
     if not self.db.Enabled then return end
 
@@ -425,7 +435,6 @@ function CC:OnEnable()
     if self.db.Enabled then self.frame:Show() end
 end
 
--- Handle spell cast for immediate GCD update
 function CC:UNIT_SPELLCAST_SUCCEEDED(_, unit)
     if unit ~= "player" then return end
     local gcd = self.db.GCD or {}
@@ -433,7 +442,6 @@ function CC:UNIT_SPELLCAST_SUCCEEDED(_, unit)
     self:UpdateGCDCooldown()
 end
 
--- Theme change handler (called by KE:NotifyThemeChange)
 function CC:OnThemeChanged()
     if not self.db or not self.db.Enabled then return end
     if self.db.ColorMode == "theme" then
@@ -445,7 +453,6 @@ function CC:OnThemeChanged()
     end
 end
 
--- Module OnDisable
 function CC:OnDisable()
     if self.frame then
         self.frame:Hide()

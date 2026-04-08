@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-DispelCursor.lua                                    ║
+-- ║  GUI: Dispel CD on Cursor                                ║
+-- ║  Purpose: Configuration panel for the DispelCursor      ║
+-- ║  module.                                                 ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -47,9 +53,9 @@ GUIFrame:RegisterContent("DispelCursor", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Enable
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Dispel on Cursor", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, 36)
@@ -75,9 +81,9 @@ GUIFrame:RegisterContent("DispelCursor", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Display Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
     table_insert(allWidgets, card2)
 

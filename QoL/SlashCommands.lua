@@ -1,11 +1,13 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  SlashCommands.lua                                       ║
+-- ║  Module: Slash Commands                                  ║
+-- ║  Purpose: Registers /cd, /wa, /rl, /fs, /leave, /drop,   ║
+-- ║           /reset, /mute, /music, and macro helpers.      ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
-
--- Slash Commands: /cd, /wa (Cooldown Manager), /rl (Reload UI), /fs (Frame Stack),
--- /leave + /drop (Leave Party), /reset (Reset Instances), /mute, /music,
--- SetPITarget macro helper, and /kitn subcommand integration
 
 local InCombatLockdown = InCombatLockdown
 local ReloadUI = ReloadUI
@@ -17,12 +19,18 @@ local _G = _G
 local table_insert = table.insert
 local print = print
 
+---------------------------------------------------------------------------------
+-- Module State
+---------------------------------------------------------------------------------
 local db
 local PREFIX = "|cffFF008CKitn:|r "
 
-------------------------------------------------------------------------
--- CDM Slash Command (/cd and /wa)
-------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Core Logic
+---------------------------------------------------------------------------------
+
+-- /cd and /wa --
+
 local cdmRegistered = false
 
 local function ShowCooldownViewerSettings()
@@ -58,9 +66,8 @@ local function UnregisterCDM()
     cdmRegistered = false
 end
 
-------------------------------------------------------------------------
--- /rl Slash Command (Reload UI)
-------------------------------------------------------------------------
+-- /rl --
+
 local rlRegistered = false
 
 local function RegisterRL()
@@ -79,9 +86,8 @@ local function UnregisterRL()
     rlRegistered = false
 end
 
-------------------------------------------------------------------------
--- /fs Slash Command (Frame Stack)
-------------------------------------------------------------------------
+-- /fs --
+
 local fsRegistered = false
 
 local function RegisterFS()
@@ -101,9 +107,8 @@ local function UnregisterFS()
     fsRegistered = false
 end
 
-------------------------------------------------------------------------
--- /leave + /drop Slash Command (Leave Party/Raid)
-------------------------------------------------------------------------
+-- /leave + /drop --
+
 local leaveRegistered = false
 
 local function RegisterLeaveParty()
@@ -129,9 +134,8 @@ local function UnregisterLeaveParty()
     leaveRegistered = false
 end
 
-------------------------------------------------------------------------
--- /reset Slash Command (Reset Instances)
-------------------------------------------------------------------------
+-- /reset --
+
 local resetRegistered = false
 
 local function RegisterResetInstances()
@@ -155,9 +159,8 @@ local function UnregisterResetInstances()
     resetRegistered = false
 end
 
-------------------------------------------------------------------------
--- /mute Slash Command (Toggle Master Sound)
-------------------------------------------------------------------------
+-- /mute --
+
 local muteRegistered = false
 
 local function RegisterMute()
@@ -180,9 +183,8 @@ local function UnregisterMute()
     muteRegistered = false
 end
 
-------------------------------------------------------------------------
--- /music Slash Command (Toggle Music)
-------------------------------------------------------------------------
+-- /music --
+
 local musicRegistered = false
 
 local function RegisterMusic()
@@ -205,9 +207,8 @@ local function UnregisterMusic()
     musicRegistered = false
 end
 
-------------------------------------------------------------------------
--- /kitn subcommand integration
-------------------------------------------------------------------------
+-- /kitn subcommands --
+
 local kitnHooked = false
 
 local function ToggleCVar(cvar)
@@ -309,9 +310,9 @@ local function RegisterKitnCommands()
     kitnHooked = true
 end
 
-------------------------------------------------------------------------
--- Module init — called from Main.lua profile callbacks
-------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
 function KE:ApplySlashCommands()
     db = KE.db and KE.db.profile.SlashCommands
     if not db then return end

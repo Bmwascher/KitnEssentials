@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  ActionBars.lua                                          ║
+-- ║  Module: Action Bars                                     ║
+-- ║  Purpose: Dark themed backdrops, cooldown text           ║
+-- ║           styling, and proc glow sizing.                 ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
@@ -6,7 +12,6 @@ if not KitnEssentials then return end
 ---@class SkinActionBars: AceModule, AceEvent-3.0, AceHook-3.0
 local SK = KitnEssentials:NewModule("SkinActionBars", "AceEvent-3.0", "AceHook-3.0")
 
--- Localization
 local CreateFrame = CreateFrame
 local ipairs = ipairs
 local pairs = pairs
@@ -24,7 +29,9 @@ local table_insert = table.insert
 local unpack = unpack
 local _G = _G
 
--- Frame map
+---------------------------------------------------------------------------------
+-- Constants
+---------------------------------------------------------------------------------
 local BAR_FRAME_MAP = {
     Bar1 = { frame = "MainActionBar", prefix = "ActionButton" },
     Bar2 = { frame = "MultiBarBottomLeft", prefix = "MultiBarBottomLeftButton" },
@@ -38,9 +45,18 @@ local BAR_FRAME_MAP = {
     StanceBar = { frame = "StanceBar", prefix = "StanceButton" },
 }
 
--- Hidden frame for hiding Blizzard elements
+---------------------------------------------------------------------------------
+-- Module State
+---------------------------------------------------------------------------------
+
 local hiddenFrame = CreateFrame("Frame")
 hiddenFrame:Hide()
+
+local configTable = {}
+
+---------------------------------------------------------------------------------
+-- Styling Helpers
+---------------------------------------------------------------------------------
 
 -- Hide a Blizzard element by re-parenting to hidden frame
 local function HideElement(object, ...)
@@ -142,8 +158,6 @@ local function BlizzBarMouseToggle(barKey)
     if frame then frame:EnableMouse(false) end
 end
 
--- Build config for a single bar from DB
-local configTable = {}
 local function BuildBarConfig(barKey, barDB, globalMouseover)
     local frameInfo = BAR_FRAME_MAP[barKey]
     if not frameInfo or not barDB then return nil end
@@ -187,6 +201,9 @@ local function BuildBarConfig(barKey, barDB, globalMouseover)
     }
 end
 
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 function SK:UpdateDB()
     self.db = KE.db.profile.Skinning.ActionBars
 end
@@ -213,7 +230,9 @@ function SK:BuildConfigTable()
     end
 end
 
--- Remap keybind text to shorter versions
+---------------------------------------------------------------------------------
+-- Font Settings
+---------------------------------------------------------------------------------
 local function RemapKeyText(button)
     local text = button.HotKey:GetText() or ""
     if not text or text == "" then return end
@@ -409,7 +428,9 @@ function SK:StyleButtonText(button, barKey)
     end
 end
 
--- Button texture styling/hiding
+---------------------------------------------------------------------------------
+-- Button Styling
+---------------------------------------------------------------------------------
 function SK:StyleButtonTextures(button)
     if not button then return end
 
@@ -609,7 +630,9 @@ local function CalculateButtonPosition(index, layout, columns, rows, growLeft, b
     return dx, dy
 end
 
--- Layout function
+---------------------------------------------------------------------------------
+-- Layout
+---------------------------------------------------------------------------------
 local function SkinBar(cfg)
     if not cfg or not cfg.frame then return end
     local buttonsPerLine = math.max(1, math.min(cfg.buttonsPerLine, cfg.totalButtons))
@@ -658,7 +681,9 @@ local function SkinBar(cfg)
 end
 
 
--- Mouseover polling
+---------------------------------------------------------------------------------
+-- Hooks
+---------------------------------------------------------------------------------
 local function SetupMouseoverScript(container)
     if not container then return end
     if container._mouseoverScriptSetup then return end
@@ -880,7 +905,6 @@ local function RegisterBarWithEditMode(barName, barDB, barContainer, relativeTo)
     })
 end
 
--- Module OnEnable
 function SK:OnEnable()
     if KE:ShouldNotLoadModule() then return end
     if not self.db.Enabled then return end
@@ -1019,7 +1043,9 @@ function SK:SetupDragDetection()
     self.dragFrame = dragFrame
 end
 
--- Update functions for GUI
+---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
 
 function SK:UpdateButtonTexts()
     for _, cfg in ipairs(configTable) do
@@ -1259,7 +1285,6 @@ function SK:HideBlizzardBars()
     end
 end
 
--- Apply all settings
 function SK:ApplySettings()
     if KE:ShouldNotLoadModule() then return end
     C_Timer.After(0.1, function()
@@ -1327,6 +1352,9 @@ function SK:UpdateAllBackdropColors()
     end
 end
 
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
 function SK:OnDisable()
     self:UnregisterAllEvents()
     self:UnhookAll()

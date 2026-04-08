@@ -1,14 +1,19 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  AugBuffsTracker.lua                                     ║
+-- ║  Module: Aug Buffs Tracker                               ║
+-- ║  Purpose: Tracks Prescience and Shifting Sands on        ║
+-- ║           party/raid members with icon display.          ║
+-- ║  Note: Evoker only (Augmentation).                       ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
--- Create module
 ---@class AugBuffsTracker: AceModule, AceEvent-3.0
 local ABT = KitnEssentials:NewModule("AugBuffsTracker", "AceEvent-3.0")
 ABT.classRestriction = "EVOKER"
 
--- Localization
 local C_UnitAuras = C_UnitAuras
 local C_Spell = C_Spell
 local C_Timer = C_Timer
@@ -38,13 +43,11 @@ local SHIFTING_SANDS_ICON = 5199633
 local AUG_SPEC_ID = 1473
 local REFRESH_INTERVAL = 0.1
 
--- Buff definitions
 local BUFF_DEFS = {
     [PRESCIENCE_ID] = { icon = PRESCIENCE_ICON, key = "ShowPrescience", label = "Prescience" },
     [SHIFTING_SANDS_ID] = { icon = SHIFTING_SANDS_ICON, key = "ShowShiftingSands", label = "Shifting Sands" },
 }
 
--- Spell names cached at load (resolved once)
 local SPELL_NAMES = {}
 
 local ROLE_ATLASES = {
@@ -54,7 +57,7 @@ local ROLE_ATLASES = {
 }
 
 ---------------------------------------------------------------------------------
--- Module state
+-- Module State
 ---------------------------------------------------------------------------------
 ABT.containerFrame = nil
 ABT.tickerFrame = nil
@@ -68,7 +71,7 @@ ABT.editModeRegistered = false
 ABT.elapsed = 0
 
 ---------------------------------------------------------------------------------
--- UpdateDB
+-- DB Helper
 ---------------------------------------------------------------------------------
 function ABT:UpdateDB()
     self.db = KE.db.profile.AugBuffsTracker
@@ -143,8 +146,6 @@ function ABT:ScanAllUnits()
     self:LayoutEntries()
 end
 
--- Additive re-scan: check all roster units without wiping existing data.
--- Matching reference FullRaidCheck: just scans and adds, safe to call in combat.
 function ABT:RescanRoster()
     if not self.isAugSpec then return end
     self:ScanRoster()
@@ -152,7 +153,6 @@ function ABT:RescanRoster()
     self:LayoutEntries()
 end
 
--- Shared roster iteration for both full and additive scans
 function ABT:ScanRoster()
     self:ScanUnit("player")
     local size = GetNumGroupMembers()
@@ -364,7 +364,6 @@ function ABT:ClearAllEntries()
     wipe(self.sortedEntries)
 end
 
--- Sync display entries with tracked buffs
 function ABT:SyncEntries()
     -- Release entries for buffs no longer tracked
     for id in pairs(self.activeEntries) do

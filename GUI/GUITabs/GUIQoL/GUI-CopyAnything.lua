@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-CopyAnything.lua                                    ║
+-- ║  GUI: Copy Anything                                      ║
+-- ║  Purpose: Configuration panel for the                    ║
+-- ║           CopyAnything module.                           ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -34,9 +40,9 @@ GUIFrame:RegisterContent("CopyAnything", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Enable + Info
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Copy Anything", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, 40)
@@ -65,9 +71,9 @@ GUIFrame:RegisterContent("CopyAnything", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Keybinding
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Keybinding", yOffset)
     table_insert(allWidgets, card2)
 

@@ -1,15 +1,23 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-PositionCard.lua                                    ║
+-- ║  Purpose: Position settings card with anchor points,     ║
+-- ║  offsets, and strata.                                    ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 
--- Style inspired by weakauras
 
 local table_insert = table.insert
 local CreateFrame = CreateFrame
 local ipairs = ipairs
 local pairs = pairs
+
+---------------------------------------------------------------------------------
+-- Constants
+---------------------------------------------------------------------------------
 
 -- Direction order (matches visual layout)
 local ANCHOR_DIRECTIONS = {
@@ -38,9 +46,9 @@ local ANCHOR_FRAME_TYPES = {
     { key = "SELECTFRAME", text = "Select Frame" },
 }
 
-----------------------------------------------------------------
--- Create Anchor Buttons Widget (9-point selector)
-----------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Anchor Buttons
+---------------------------------------------------------------------------------
 local function CreateAnchorButtons(parent, labelText, value, callback)
     local buttonSize = 10
     local frameWidth = 101
@@ -179,9 +187,9 @@ local function CreateAnchorButtons(parent, labelText, value, callback)
     return container
 end
 
-----------------------------------------------------------------
--- Create Position Settings Card
-----------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Card Creation
+---------------------------------------------------------------------------------
 function GUIFrame:CreatePositionCard(scrollChild, yOffset, config)
     config = config or {}
     local title = config.title or "Position Settings"

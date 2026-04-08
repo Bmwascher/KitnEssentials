@@ -1,4 +1,9 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-Sidebar.lua                                         ║
+-- ║  Purpose: Sidebar navigation with collapsible sections   ║
+-- ║  and search.                                             ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -12,6 +17,10 @@ local wipe = wipe
 local C_Timer = C_Timer
 local table_insert = table.insert
 
+---------------------------------------------------------------------------------
+-- Constants
+---------------------------------------------------------------------------------
+
 -- Sidebar state
 GUIFrame.sidebarHeaderPool = {}
 GUIFrame.staticSidebarItemPool = {}
@@ -22,9 +31,9 @@ GUIFrame.sidebarRefreshPending = false
 local headerHeight = 32
 local itemHeight = 28
 
---------------------------------------------------------------------------------
--- Section Header Pool
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Section Rendering
+---------------------------------------------------------------------------------
 function GUIFrame:ReleaseSectionHeaders()
     for _, header in ipairs(self.sidebarHeaderPool or {}) do
         header.inUse = false
@@ -201,9 +210,9 @@ function GUIFrame:GetHeaderBySectionId(sectionId)
     end
 end
 
---------------------------------------------------------------------------------
--- Initialize sidebar expansion from defaults
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Search
+---------------------------------------------------------------------------------
 local sidebarInitialized = false
 function GUIFrame:InitializeSidebarExpansion()
     if sidebarInitialized then return end
@@ -221,9 +230,9 @@ function GUIFrame:InitializeSidebarExpansion()
     sidebarInitialized = true
 end
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Toggle Section
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 function GUIFrame:ToggleSection(sectionId)
     if self.sidebarExpanded[sectionId] then
         self.sidebarExpanded[sectionId] = nil
@@ -239,9 +248,9 @@ function GUIFrame:ToggleSection(sectionId)
     end)
 end
 
---------------------------------------------------------------------------------
--- Static Sidebar Items (child items under sections)
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Static Sidebar Items
+---------------------------------------------------------------------------------
 function GUIFrame:ReleaseStaticSidebarItems()
     for _, item in ipairs(self.staticSidebarItemPool) do
         item.inUse = false
@@ -342,9 +351,9 @@ function GUIFrame:GetStaticSidebarItem()
     return item
 end
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Select Sidebar Item
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 function GUIFrame:SelectSidebarItem(itemId)
     local T = Theme
     self.selectedSidebarItem = itemId
@@ -374,9 +383,9 @@ function GUIFrame:SelectSidebarItem(itemId)
     self:RefreshContent()
 end
 
---------------------------------------------------------------------------------
--- Create Sidebar
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Sidebar Creation
+---------------------------------------------------------------------------------
 function GUIFrame:CreateSidebar(parent)
     local T = Theme
 
@@ -565,9 +574,9 @@ function GUIFrame:CreateSidebar(parent)
     return sidebar
 end
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Refresh Sidebar
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 function GUIFrame:RefreshSidebar()
     if not self.sidebar then return end
     local T = Theme
@@ -691,9 +700,9 @@ function GUIFrame:RefreshSidebar()
     scrollChild:SetHeight(yOffset + T.paddingSmall)
 end
 
---------------------------------------------------------------------------------
--- OpenPage - programmatic navigation
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- OpenPage
+---------------------------------------------------------------------------------
 function GUIFrame:OpenPage(itemId, sectionId, context)
     self.pendingContext = context
     self:Show()

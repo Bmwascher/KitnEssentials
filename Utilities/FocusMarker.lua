@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  FocusMarker.lua                                         ║
+-- ║  Module: Focus Marker                                    ║
+-- ║  Purpose: Auto-creates a macro for focus targeting and   ║
+-- ║           raid marker assignment.                        ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
@@ -16,7 +22,9 @@ local GetSpecialization = GetSpecialization
 local GetSpecializationInfo = GetSpecializationInfo
 local table_concat = table.concat
 
--- Specs without an interrupt ability (skip ready check announce for these)
+---------------------------------------------------------------------------------
+-- Constants
+---------------------------------------------------------------------------------
 local NO_KICK_SPECS = {
     [102]  = true, -- Balance Druid
     [105]  = true, -- Resto Druid
@@ -36,9 +44,9 @@ local NAME_TO_INDEX = {
     Moon = 5, Square = 6, Cross = 7, Skull = 8, None = 0,
 }
 
---------------------------------------------------------------------------------
--- Module methods
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 function FM:UpdateDB()
     self.db = KE.db.profile.FocusMarker
 end
@@ -48,6 +56,9 @@ function FM:OnInitialize()
     self:SetEnabledState(false)
 end
 
+---------------------------------------------------------------------------------
+-- Core Logic
+---------------------------------------------------------------------------------
 function FM:GetConditionals()
     local cond = self.db.MacroConditionals
     if not cond or cond == "" then
@@ -125,10 +136,16 @@ function FM:ApplyMacro()
     self.pendingMacro = false
 end
 
+---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
 function FM:ApplySettings()
     self:ApplyMacro()
 end
 
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
 function FM:OnEnable()
     self:ApplyMacro()
 

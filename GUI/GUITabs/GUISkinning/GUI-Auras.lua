@@ -1,4 +1,9 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-Auras.lua                                           ║
+-- ║  GUI: Buffs, Debuffs & Externals                         ║
+-- ║  Purpose: Configuration panel for the Auras module.      ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -52,9 +57,9 @@ GUIFrame:RegisterContent("SkinAuras", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Enable
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Buffs, Debuffs & Externals", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, 36)
@@ -79,9 +84,9 @@ GUIFrame:RegisterContent("SkinAuras", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: General Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "General Settings", yOffset)
 
     -- Disable flashing checkbox
@@ -150,9 +155,9 @@ GUIFrame:RegisterContent("SkinAuras", function(scrollChild, yOffset)
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Buff Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Buff Settings", yOffset)
 
     local row3 = GUIFrame:CreateRow(card3.content, 39)
@@ -167,9 +172,9 @@ GUIFrame:RegisterContent("SkinAuras", function(scrollChild, yOffset)
 
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Debuff Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Debuff Settings", yOffset)
 
     local row4 = GUIFrame:CreateRow(card4.content, 39)
@@ -184,9 +189,9 @@ GUIFrame:RegisterContent("SkinAuras", function(scrollChild, yOffset)
 
     yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 5: External Defensive Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "External Defensive Settings", yOffset)
 
     local row5 = GUIFrame:CreateRow(card5.content, 39)

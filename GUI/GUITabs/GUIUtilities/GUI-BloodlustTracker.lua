@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-BloodlustTracker.lua                                ║
+-- ║  GUI: Bloodlust Tracker                                  ║
+-- ║  Purpose: Configuration panel for the BloodlustTracker  ║
+-- ║  module.                                                 ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -50,9 +56,9 @@ GUIFrame:RegisterContent("BloodlustTracker", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Bloodlust Tracker (Enable + Display + Preset + Scale + Test)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Bloodlust Tracker", yOffset)
 
     -- Enable toggle
@@ -131,9 +137,9 @@ GUIFrame:RegisterContent("BloodlustTracker", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Position Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2, newOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = db,
         dbKeys = {
@@ -158,9 +164,9 @@ GUIFrame:RegisterContent("BloodlustTracker", function(scrollChild, yOffset)
     table_insert(allWidgets, card2)
     yOffset = newOffset
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Sound Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Sound Settings", yOffset)
     table_insert(allWidgets, card3)
     table_insert(animatedOnlyWidgets, card3)
@@ -192,9 +198,9 @@ GUIFrame:RegisterContent("BloodlustTracker", function(scrollChild, yOffset)
 
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Basic Mode Settings (Font + Icon Size + Colors)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Basic Mode Settings", yOffset)
     table_insert(allWidgets, card4)
     table_insert(basicOnlyWidgets, card4)
@@ -268,9 +274,9 @@ GUIFrame:RegisterContent("BloodlustTracker", function(scrollChild, yOffset)
 
     yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 5: Detection Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Detection Settings", yOffset)
     table_insert(allWidgets, card5)
 

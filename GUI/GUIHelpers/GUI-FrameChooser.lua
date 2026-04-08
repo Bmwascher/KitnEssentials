@@ -1,13 +1,17 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-FrameChooser.lua                                    ║
+-- ║  Purpose: Frame picker utility for selecting anchor      ║
+-- ║  frames.                                                 ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 
--- Frame Chooser: Click-to-select a frame as anchor target
 KE.FrameChooser = {}
 local FC = KE.FrameChooser
 local Theme = KE.Theme
 
--- Localization
+-- Local references
 local ResetCursor = ResetCursor
 local tostring = tostring
 local pairs = pairs
@@ -16,6 +20,10 @@ local IsMouseButtonDown = IsMouseButtonDown
 local SetCursor = SetCursor
 local GetMouseFoci = GetMouseFoci
 local GetMouseFocus = GetMouseFocus
+
+---------------------------------------------------------------------------------
+-- Frame Creation
+---------------------------------------------------------------------------------
 
 -- State
 local chooserFrame = nil
@@ -144,6 +152,10 @@ local function OnUpdateHandler(self, elapsed)
         end
     end
 end
+
+---------------------------------------------------------------------------------
+-- Logic
+---------------------------------------------------------------------------------
 
 -- Start frame chooser mode
 function FC:Start(callback, initialValue)

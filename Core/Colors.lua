@@ -1,9 +1,13 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  Colors.lua                                              ║
+-- ║  Purpose: Color utility functions — class colors, theme  ║
+-- ║           accent, color mode resolution, hex helpers.    ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local Theme = KE.Theme
 
--- Localization
 local UnitClass = UnitClass
 local math_floor = math.floor
 local string_format = string.format
@@ -15,7 +19,10 @@ local unpack = unpack
 local modf = math.modf
 local RAID_CLASS_COLORS = RAID_CLASS_COLORS
 
--- Class color hex codes
+---------------------------------------------------------------------------------
+-- Class Color Data
+---------------------------------------------------------------------------------
+
 KE.ClassColorHex = {
     DEATHKNIGHT = "C41E3A",
     DEMONHUNTER = "A330C9",
@@ -31,6 +38,10 @@ KE.ClassColorHex = {
     WARLOCK = "8788EE",
     WARRIOR = "C69B6D",
 }
+
+---------------------------------------------------------------------------------
+-- Class Color Lookups
+---------------------------------------------------------------------------------
 
 function KE:GetPlayerClassColor()
     local _, class = UnitClass("player")
@@ -66,6 +77,10 @@ function KE:ColorTextByClass(text, classToken)
     return "|cFF" .. hex .. text .. "|r"
 end
 
+---------------------------------------------------------------------------------
+-- Hex Conversion
+---------------------------------------------------------------------------------
+
 function KE:RGBAToHex(r, g, b)
     r = math_floor((r or 1) * 255 + 0.5)
     g = math_floor((g or 1) * 255 + 0.5)
@@ -85,6 +100,10 @@ function KE:ColorTextByTheme(text)
     return "|cFF" .. hex .. text .. "|r"
 end
 
+---------------------------------------------------------------------------------
+-- Accent Color Resolution
+---------------------------------------------------------------------------------
+
 function KE:GetAccentColor(colorMode, customColor)
     colorMode = colorMode or "custom"
     if colorMode == "class" then
@@ -102,6 +121,10 @@ function KE:GetAccentColor(colorMode, customColor)
         return 1, 1, 1, 1
     end
 end
+
+---------------------------------------------------------------------------------
+-- Color Factory
+---------------------------------------------------------------------------------
 
 function KE:CreateColor(r, g, b, a)
     if type(r) == "table" then
@@ -126,11 +149,19 @@ function KE:CreateColor(r, g, b, a)
     return CreateColor(r, g, b, a)
 end
 
+---------------------------------------------------------------------------------
+-- Color Mode Options
+---------------------------------------------------------------------------------
+
 KE.ColorModeOptions = {
     { key = "class",  text = "Class Color" },
     { key = "custom", text = "Custom Color" },
     { key = "theme",  text = "Theme Color" },
 }
+
+---------------------------------------------------------------------------------
+-- Gradient and Formatting
+---------------------------------------------------------------------------------
 
 function KE:ColorGradient(Min, Max, ...)
     local Percent = (Max == 0) and 0 or (Min / Max)

@@ -1,4 +1,9 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-StanceText.lua                                      ║
+-- ║  GUI: Stance Text                                        ║
+-- ║  Purpose: Configuration panel for the StanceText module. ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -239,9 +244,9 @@ GUIFrame:RegisterContent("StanceText", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Enable
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Class Stance Texts", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, 36)
@@ -256,9 +261,9 @@ GUIFrame:RegisterContent("StanceText", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Position Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     db.Position = db.Position or {}
     local positionCard
     positionCard, yOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
@@ -292,9 +297,9 @@ GUIFrame:RegisterContent("StanceText", function(scrollChild, yOffset)
     end
     table_insert(allWidgets, positionCard)
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Font Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local fontList = BuildFontList()
 
     local card3 = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
@@ -324,19 +329,19 @@ GUIFrame:RegisterContent("StanceText", function(scrollChild, yOffset)
 
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Warrior Stance Texts
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     yOffset = CreateStanceTextCard(scrollChild, yOffset, "WARRIOR", "Warrior Stance Texts", db, allWidgets)
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 5: Paladin Aura Texts
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     yOffset = CreateStanceTextCard(scrollChild, yOffset, "PALADIN", "Paladin Aura Texts", db, allWidgets)
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 6: Evoker Attunement Texts
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     yOffset = CreateStanceTextCard(scrollChild, yOffset, "EVOKER", "Evoker Attunement Texts", db, allWidgets)
 
     UpdateAllWidgetStates()

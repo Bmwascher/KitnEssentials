@@ -1,4 +1,9 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-CombatTexts.lua                                     ║
+-- ║  GUI: Combat Texts                                       ║
+-- ║  Purpose: Configuration panel for the CombatTexts module.║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -76,9 +81,9 @@ GUIFrame:RegisterContent("CombatTexts", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Combat Texts (Enable + Spacing)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Combat Texts", yOffset)
 
     local row1a = GUIFrame:CreateRow(card1.content, 36)
@@ -114,9 +119,9 @@ GUIFrame:RegisterContent("CombatTexts", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Position Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2, newOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = db,
         dbKeys = {
@@ -141,9 +146,9 @@ GUIFrame:RegisterContent("CombatTexts", function(scrollChild, yOffset)
     table_insert(allWidgets, card2)
     yOffset = newOffset
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Font Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
     table_insert(allWidgets, card3)
 
@@ -190,9 +195,9 @@ GUIFrame:RegisterContent("CombatTexts", function(scrollChild, yOffset)
 
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Combat Messages (combined Enter + Exit)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Combat Messages", yOffset)
     table_insert(allWidgets, card4)
 
@@ -281,9 +286,9 @@ GUIFrame:RegisterContent("CombatTexts", function(scrollChild, yOffset)
 
     yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 5: Interrupt Text
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Interrupt Text", yOffset)
     table_insert(allWidgets, card5)
 
@@ -340,9 +345,9 @@ GUIFrame:RegisterContent("CombatTexts", function(scrollChild, yOffset)
 
     yOffset = yOffset + card5:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 6: Low Durability Warning
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card6 = GUIFrame:CreateCard(scrollChild, "Low Durability Warning", yOffset)
     table_insert(allWidgets, card6)
 
@@ -398,9 +403,9 @@ GUIFrame:RegisterContent("CombatTexts", function(scrollChild, yOffset)
 
     yOffset = yOffset + card6:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 7: Backdrop
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card7 = GUIFrame:CreateCard(scrollChild, "Backdrop", yOffset)
     table_insert(allWidgets, card7)
     db.Backdrop = db.Backdrop or {}

@@ -1,16 +1,17 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  WorldMap.lua                                            ║
+-- ║  Module: World Map Scaler                                ║
+-- ║  Purpose: Adjustable minimized map scale and coordinate  ║
+-- ║           waypoint search bar with live preview.         ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
--- WorldMap module
--- Purpose: Adds configurable world map scaling and a coordinate waypoint search bar.
--- Author: Bitebtw (ported from atrocityEssentials by Bitebtw)
-
 ---@class WorldMap: AceModule, AceEvent-3.0
 local WM = KitnEssentials:NewModule("WorldMap", "AceEvent-3.0")
 
--- Locals
 local CreateFrame = CreateFrame
 local tonumber = tonumber
 local format = string.format
@@ -21,25 +22,27 @@ local C_SuperTrack = C_SuperTrack
 local UiMapPoint = UiMapPoint
 local EventRegistry = EventRegistry
 
--- Module state
+---------------------------------------------------------------------------------
+-- Module State
+---------------------------------------------------------------------------------
 WM.searchBar = nil
 WM.scaleCallbacksRegistered = false
 
--- Update db
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 function WM:UpdateDB()
     self.db = KE.db.profile.WorldMap
 end
 
--- Module init
 function WM:OnInitialize()
     self:UpdateDB()
     self:SetEnabledState(false)
 end
 
--- ================================================================
--- SCALE
--- ================================================================
-
+---------------------------------------------------------------------------------
+-- Core Logic
+---------------------------------------------------------------------------------
 function WM:ApplyScale()
     if not self.db or not self.db.ScaleEnabled then
         -- Reset scale when disabled
@@ -67,10 +70,6 @@ function WM:ApplyScale()
         self.scaleCallbacksRegistered = true
     end
 end
-
--- ================================================================
--- WAYPOINT SEARCH BAR
--- ================================================================
 
 -- Parse coordinate text into x, y values.
 -- Accepts formats like: 45 67, 45.2 67.8, 45, 67, /way 45 67
@@ -104,7 +103,6 @@ local function ParseCoordinates(text)
     return x, y
 end
 
--- Set a waypoint on the current map
 local function SetWaypoint(x, y)
     local mapID = WorldMapFrame:IsShown() and WorldMapFrame:GetMapID()
         or C_Map.GetBestMapForUnit("player")
@@ -127,6 +125,9 @@ local function SetWaypoint(x, y)
     return true, format("%s (%.1f, %.1f)", mapName, x * 100, y * 100)
 end
 
+---------------------------------------------------------------------------------
+-- Frame Creation
+---------------------------------------------------------------------------------
 function WM:CreateSearchBar()
     if self.searchBar then return end
     if not WorldMapFrame then return end
@@ -242,10 +243,9 @@ function WM:CreateSearchBar()
     self.searchBar = editBox
 end
 
--- ================================================================
--- APPLY / ENABLE
--- ================================================================
-
+---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
 function WM:ApplySettings()
     self:UpdateDB()
     if not self.db then return end
@@ -268,6 +268,9 @@ function WM:ApplySettings()
     end
 end
 
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
 function WM:OnEnable()
     if not self.db or not self.db.Enabled then return end
     C_Timer.After(0, function()

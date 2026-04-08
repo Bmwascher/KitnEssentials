@@ -1,4 +1,9 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-KEDropdown.lua                                      ║
+-- ║  Purpose: Dropdown selector widget for the settings      ║
+-- ║  panel.                                                  ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -16,6 +21,10 @@ local wipe = wipe
 local IsMouseButtonDown = IsMouseButtonDown
 local ipairs = ipairs
 local pairs = pairs
+
+---------------------------------------------------------------------------------
+-- Widget Creation
+---------------------------------------------------------------------------------
 
 -- Configuration constants
 local DROPDOWN_HEIGHT = 24
@@ -346,6 +355,10 @@ function GUIFrame:CreateDropdown(parent, labelText, options, selected, labelWidt
             end
         end
     end
+
+    ---------------------------------------------------------------------------------
+    -- Dropdown Logic
+    ---------------------------------------------------------------------------------
 
     -- Close dropdown function
     local function CloseDropdown(instant)

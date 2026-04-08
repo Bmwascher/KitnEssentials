@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  VantusRune.lua                                          ║
+-- ║  Module: Vantus Rune                                     ║
+-- ║  Purpose: One-click Vantus Rune withdrawal from Guild    ║
+-- ║           Bank with priority search and confirmation.    ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
@@ -25,21 +31,21 @@ local RUNE_SET = {}
 for _, id in ipairs(RUNE_PRIORITY) do RUNE_SET[id] = true end
 
 ---------------------------------------------------------------------------------
--- Module state
+-- Module State
 ---------------------------------------------------------------------------------
 VR.vantusButton = nil
 VR.popup = nil
 VR.popupEndTime = nil
 
 ---------------------------------------------------------------------------------
--- UpdateDB
+-- DB Helper
 ---------------------------------------------------------------------------------
 function VR:UpdateDB()
     self.db = KE.db.profile.VantusRune
 end
 
 ---------------------------------------------------------------------------------
--- Bag Helpers
+-- Core Logic
 ---------------------------------------------------------------------------------
 function VR:PlayerHasRune()
     for bag = 0, 4 do
@@ -64,9 +70,6 @@ function VR:FindEmptyBagSlot()
     return nil, nil
 end
 
----------------------------------------------------------------------------------
--- Guild Bank Search
----------------------------------------------------------------------------------
 function VR:FindRuneInGuildBank()
     local numTabs = GetNumGuildBankTabs()
     for _, targetID in ipairs(RUNE_PRIORITY) do
@@ -88,9 +91,6 @@ function VR:FindRuneInGuildBank()
     return nil
 end
 
----------------------------------------------------------------------------------
--- Withdrawal
----------------------------------------------------------------------------------
 function VR:WithdrawRune(guildTab, guildSlot, bagIndex, bagSlot)
     ClearCursor()
     SplitGuildBankItem(guildTab, guildSlot, 1)
@@ -142,7 +142,7 @@ function VR:StartWithdrawal()
 end
 
 ---------------------------------------------------------------------------------
--- Confirmation Popup
+-- Frame Creation
 ---------------------------------------------------------------------------------
 function VR:CreatePopup()
     if self.popup then return end
@@ -287,9 +287,6 @@ function VR:ClosePopup()
     if self.popup then self.popup:Hide() end
 end
 
----------------------------------------------------------------------------------
--- Guild Bank Button
----------------------------------------------------------------------------------
 function VR:CreateGuildBankButton()
     if self.vantusButton then
         self.vantusButton:Show()
@@ -345,9 +342,6 @@ function VR:CreateGuildBankButton()
     self.vantusButton = btn
 end
 
----------------------------------------------------------------------------------
--- Event Handlers
----------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------
 -- Lifecycle
 ---------------------------------------------------------------------------------

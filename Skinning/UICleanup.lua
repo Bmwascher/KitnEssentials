@@ -1,11 +1,20 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  UICleanup.lua                                           ║
+-- ║  Module: General UI Clean Up                             ║
+-- ║  Purpose: Hide unnecessary Blizzard UI elements for      ║
+-- ║           a cleaner interface.                           ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
 local SK = KitnEssentials:NewModule("SkinUICleanup", "AceEvent-3.0", "AceHook-3.0")
 
--- Localization Setup
+---------------------------------------------------------------------------------
+-- Constants
+---------------------------------------------------------------------------------
+
 local ipairs = ipairs
 local ObjectiveTrackerFrame = ObjectiveTrackerFrame
 local QuestObjectiveTracker = QuestObjectiveTracker
@@ -17,16 +26,6 @@ local ProfessionsRecipeTracker = ProfessionsRecipeTracker
 local AchievementObjectiveTracker = AchievementObjectiveTracker
 local CampaignQuestObjectiveTracker = CampaignQuestObjectiveTracker
 
-function SK:UpdateDB()
-    self.db = KE.db.profile.Skinning.UICleanup
-end
-
-function SK:OnInitialize()
-    self:UpdateDB()
-    self:SetEnabledState(false)
-end
-
--- Elements to hide
 local hiddenElements = {
     { name = "Objective Tracker Background", frame = ObjectiveTrackerFrame and ObjectiveTrackerFrame.Header and ObjectiveTrackerFrame.Header.Background },
     { name = "Quest Tracker Background", frame = QuestObjectiveTracker and QuestObjectiveTracker.Header and QuestObjectiveTracker.Header.Background },
@@ -39,6 +38,18 @@ local hiddenElements = {
     { name = "Campaign Tracker Background", frame = CampaignQuestObjectiveTracker and CampaignQuestObjectiveTracker.Header and CampaignQuestObjectiveTracker.Header.Background },
 }
 
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
+
+function SK:UpdateDB()
+    self.db = KE.db.profile.Skinning.UICleanup
+end
+
+---------------------------------------------------------------------------------
+-- Core Logic
+---------------------------------------------------------------------------------
+
 local function SetupHideBlizzardClutter()
     if not SK.db.Enabled then return end
     for _, entry in ipairs(hiddenElements) do
@@ -48,9 +59,22 @@ local function SetupHideBlizzardClutter()
     end
 end
 
+---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
+
 function SK:ApplySettings()
     if KE:ShouldNotLoadModule() then return end
     SetupHideBlizzardClutter()
+end
+
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
+
+function SK:OnInitialize()
+    self:UpdateDB()
+    self:SetEnabledState(false)
 end
 
 function SK:OnEnable()

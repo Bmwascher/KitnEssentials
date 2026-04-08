@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  CombatCross.lua                                         ║
+-- ║  Module: Player Crosshair                                ║
+-- ║  Purpose: Static crosshair overlay with range-based      ║
+-- ║           color warning (melee/ranged/healer).           ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
@@ -6,7 +12,9 @@ if not KitnEssentials then return end
 ---@class CombatCross: AceModule, AceEvent-3.0
 local CC = KitnEssentials:NewModule("CombatCross", "AceEvent-3.0")
 
--- Localization
+---------------------------------------------------------------------------------
+-- Constants
+---------------------------------------------------------------------------------
 local select = select
 local CreateFrame = CreateFrame
 local InCombatLockdown = InCombatLockdown
@@ -17,12 +25,10 @@ local GetSpecializationInfo = GetSpecializationInfo
 local C_Spell = C_Spell
 local UnitExists = UnitExists
 
--- Constants
 local FONT_SIZE_MULTIPLIER = 2
 local RANGE_UPDATE_THROTTLE = 0.1
 local rangeUpdateElapsed = 0
 
--- Melee specs: specID -> spellID
 local MELEE_RANGE_ABILITIES = {
     -- Melee DPS
     [71]  = 6552,   -- Arms Warrior: Pummel
@@ -47,7 +53,6 @@ local MELEE_RANGE_ABILITIES = {
     [66]  = 35395,  -- Protection Paladin: Crusader Strike
 }
 
--- Ranged specs: specID -> spellID
 local RANGED_RANGE_ABILITIES = {
     [102]  = 5176,   -- Balance Druid: Wrath (40yd)
     [1467] = 361469, -- Devastation Evoker: Living Flame (25yd)
@@ -65,7 +70,6 @@ local RANGED_RANGE_ABILITIES = {
     [1480] = 473662, -- Devourer Demon Hunter: Consume (25yd)
 }
 
--- Healer specs: specID -> spellID
 local HEALER_RANGE_ABILITIES = {
     [105]  = 8936,   -- Restoration Druid: Regrowth (40yd)
     [1468] = 361469, -- Preservation Evoker: Living Flame (25yd)
@@ -76,7 +80,6 @@ local HEALER_RANGE_ABILITIES = {
     [264]  = 8004,   -- Restoration Shaman: Healing Surge (40yd)
 }
 
--- Module state
 CC.frame = nil
 CC.text = nil
 CC.previewActive = false
@@ -86,6 +89,9 @@ CC.specType = nil
 CC.lastInRange = nil
 CC.onUpdateActive = false
 
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 function CC:UpdateDB()
     self.db = KE.db.profile.CombatCross
 end
@@ -95,7 +101,9 @@ function CC:OnInitialize()
     self:SetEnabledState(false)
 end
 
--- Resolve the range ability and spec type for the current spec
+---------------------------------------------------------------------------------
+-- Range Detection
+---------------------------------------------------------------------------------
 function CC:ResolveRangeAbility()
     local specIndex = GetSpecialization()
     if not specIndex then
@@ -124,7 +132,6 @@ function CC:ResolveRangeAbility()
     end
 end
 
--- Update cross color based on current range to target
 function CC:UpdateRangeColor()
     if not self.text then return end
     if not UnitExists("target") then
@@ -160,7 +167,6 @@ function CC:UpdateRangeColor()
     end
 end
 
--- Check if range coloring should be active
 function CC:ShouldRunRangeUpdate()
     if not self.combatActive then return false end
     if not self.rangeAbility or not self.specType then return false end
@@ -169,7 +175,6 @@ function CC:ShouldRunRangeUpdate()
     return true
 end
 
--- Enable or disable the OnUpdate script based on current state
 function CC:UpdateOnUpdateState()
     if not self.frame then return end
 
@@ -193,7 +198,6 @@ function CC:UpdateOnUpdateState()
     end
 end
 
--- OnUpdate handler (throttled)
 function CC:OnUpdate(elapsed)
     rangeUpdateElapsed = rangeUpdateElapsed + elapsed
     if rangeUpdateElapsed < RANGE_UPDATE_THROTTLE then return end
@@ -202,13 +206,14 @@ function CC:OnUpdate(elapsed)
     self:UpdateRangeColor()
 end
 
--- Get color based on color mode
 function CC:GetColor()
     local colorMode = self.db.ColorMode or "custom"
     return KE:GetAccentColor(colorMode, self.db.Color)
 end
 
--- Create the combat cross frame
+---------------------------------------------------------------------------------
+-- Frame Creation
+---------------------------------------------------------------------------------
 function CC:CreateFrame()
     if self.frame then return end
 
@@ -240,7 +245,9 @@ function CC:CreateFrame()
     self.text:SetPoint("CENTER", self.frame, "CENTER", 0, 0)
 end
 
--- Apply settings from profile
+---------------------------------------------------------------------------------
+-- Apply Settings
+---------------------------------------------------------------------------------
 function CC:ApplySettings()
     if not self.frame or not self.text then return end
 
@@ -279,13 +286,14 @@ function CC:ApplySettings()
     self:UpdateOnUpdateState()
 end
 
--- Apply position only
 function CC:ApplyPosition()
     if not self.frame then return end
     KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
 end
 
--- Show combat cross
+---------------------------------------------------------------------------------
+-- Show / Hide
+---------------------------------------------------------------------------------
 function CC:Show(isPreview)
     if not self.frame then
         self:CreateFrame()
@@ -308,7 +316,6 @@ function CC:Show(isPreview)
     end
 end
 
--- Hide combat cross
 function CC:Hide(isPreview)
     if not self.frame then return end
 
@@ -329,6 +336,9 @@ function CC:Hide(isPreview)
     end
 end
 
+---------------------------------------------------------------------------------
+-- Edit Mode
+---------------------------------------------------------------------------------
 function CC:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
@@ -342,7 +352,9 @@ function CC:RegWithEditMode()
     end
 end
 
--- Preview support
+---------------------------------------------------------------------------------
+-- Preview
+---------------------------------------------------------------------------------
 function CC:ShowPreview()
     if InCombatLockdown() then return end
     self:RegWithEditMode()
@@ -355,14 +367,15 @@ function CC:HidePreview()
     self:Hide(true)
 end
 
--- Spec changed handler
+---------------------------------------------------------------------------------
+-- Event Handlers
+---------------------------------------------------------------------------------
 function CC:OnSpecChanged()
     self:ResolveRangeAbility()
     self.lastInRange = nil
     self:UpdateOnUpdateState()
 end
 
--- Combat events
 function CC:OnEnterCombat()
     if not self.db.Enabled then return end
     self:Show(false)
@@ -375,12 +388,13 @@ function CC:OnExitCombat()
     self:UpdateOnUpdateState()
 end
 
--- Refresh (called from GUI)
 function CC:Refresh()
     self:ApplySettings()
 end
 
--- Module OnEnable
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
 function CC:OnEnable()
     if not self.db.Enabled then return end
     self:CreateFrame()
@@ -393,7 +407,6 @@ function CC:OnEnable()
     self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnSpecChanged")
 end
 
--- Theme change handler (called by KE:NotifyThemeChange)
 function CC:OnThemeChanged()
     if not self.db or not self.db.Enabled then return end
     if (self.db.ColorMode or "custom") == "theme" and self.text then
@@ -403,7 +416,6 @@ function CC:OnThemeChanged()
     end
 end
 
--- Module OnDisable
 function CC:OnDisable()
     self:UnregisterAllEvents()
     if self.frame then

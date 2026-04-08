@@ -1,4 +1,11 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  CombatTexts.lua                                         ║
+-- ║  Module: Combat Texts                                    ║
+-- ║  Purpose: Floating text notifications for combat enter/  ║
+-- ║           exit, interrupt announce with spell icon,      ║
+-- ║           and low durability warnings.                   ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
@@ -6,6 +13,9 @@ if not KitnEssentials then return end
 ---@class CombatTexts: AceModule, AceEvent-3.0
 local CM = KitnEssentials:NewModule("CombatTexts", "AceEvent-3.0")
 
+---------------------------------------------------------------------------------
+-- Constants
+---------------------------------------------------------------------------------
 local CreateFrame = CreateFrame
 local UIFrameFadeRemoveFrame = UIFrameFadeRemoveFrame
 local UIFrameFadeOut = UIFrameFadeOut
@@ -19,12 +29,8 @@ local ipairs, pairs = ipairs, pairs
 local math_max = math.max
 local string_format = string.format
 
--- Equipment slots to check for durability
 local EQUIP_SLOTS = { 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 }
 
-------------------------------------------------------------------------
--- Interrupt spell IDs by spec (for detecting player's own kicks)
-------------------------------------------------------------------------
 local SPEC_INTERRUPTS = {
     -- Warrior
     [71]   = { [6552] = true },                                         -- Arms: Pummel
@@ -75,7 +81,6 @@ local SPEC_INTERRUPTS = {
     [1473] = { [351338] = true },                                       -- Augmentation: Quell
 }
 
--- Message types (order determines vertical stacking)
 local MESSAGE_TYPES = {
     "enterCombat",
     "exitCombat",
@@ -83,7 +88,6 @@ local MESSAGE_TYPES = {
     "interrupt",
 }
 
--- Module state
 CM.container = nil
 CM.messageFrames = {}
 CM.activeMessages = {}
@@ -93,6 +97,9 @@ CM.interruptFlag = false
 CM.interruptTimer = nil
 CM.currentInterrupts = nil
 
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 function CM:UpdateDB()
     self.db = KE.db.profile.CombatTexts
 end
@@ -102,7 +109,6 @@ function CM:OnInitialize()
     self:SetEnabledState(false)
 end
 
--- Get message config from flat DB keys
 local function GetMessageConfig(db, msgType)
     if msgType == "enterCombat" then
         return db.EnterEnabled ~= false,
@@ -124,7 +130,9 @@ local function GetMessageConfig(db, msgType)
     return false, "", { 1, 1, 1, 1 }
 end
 
--- Create container frame
+---------------------------------------------------------------------------------
+-- Frame Creation
+---------------------------------------------------------------------------------
 function CM:CreateContainer()
     if self.container then return end
 
@@ -136,7 +144,6 @@ function CM:CreateContainer()
     self.container = container
 end
 
--- Create or get a message frame for a given type
 function CM:GetMessageFrame(msgType)
     if self.messageFrames[msgType] then
         return self.messageFrames[msgType]
@@ -171,7 +178,9 @@ function CM:GetMessageFrame(msgType)
     return frame
 end
 
--- Arrange visible messages vertically
+---------------------------------------------------------------------------------
+-- Layout
+---------------------------------------------------------------------------------
 function CM:ArrangeMessages()
     local spacing = self.db.Spacing or 4
     local yOffset = 0
@@ -190,8 +199,9 @@ function CM:ArrangeMessages()
     end
 end
 
--- Show a flash message (fades out after duration)
--- textOverride: optional dynamic text (used by interrupt announce)
+---------------------------------------------------------------------------------
+-- Core Logic
+---------------------------------------------------------------------------------
 function CM:ShowFlashMessage(msgType, textOverride)
     if not self.db or self.db.Enabled == false then return end
     if self.isPreview then return end
@@ -247,7 +257,6 @@ function CM:ShowFlashMessage(msgType, textOverride)
     end
 end
 
--- Show a persistent message (stays until explicitly hidden)
 function CM:ShowPersistentMessage(msgType)
     if not self.db or self.db.Enabled == false then return end
     if self.isPreview then return end
@@ -273,7 +282,6 @@ function CM:ShowPersistentMessage(msgType)
     self:ArrangeMessages()
 end
 
--- Hide a persistent message
 function CM:HidePersistentMessage(msgType)
     local frame = self.messageFrames[msgType]
     if frame then
@@ -283,7 +291,9 @@ function CM:HidePersistentMessage(msgType)
     end
 end
 
--- Combat event handlers
+---------------------------------------------------------------------------------
+-- Event Handlers
+---------------------------------------------------------------------------------
 function CM:OnEnterCombat()
     self.inCombat = true
     self:HidePersistentMessage("lowDurability")
@@ -296,7 +306,6 @@ function CM:OnExitCombat()
     self:CheckDurability()
 end
 
--- Check equipped gear durability
 function CM:CheckDurability()
     if not self.db or self.db.Enabled == false then return end
     if self.isPreview then return end
@@ -331,7 +340,9 @@ function CM:CheckDurability()
     end
 end
 
--- Apply all settings
+---------------------------------------------------------------------------------
+-- Apply Settings
+---------------------------------------------------------------------------------
 function CM:ApplySettings()
     if not self.container then return end
     KE:ApplyFramePosition(self.container, self.db.Position, self.db)
@@ -368,17 +379,18 @@ function CM:ApplySettings()
     end
 end
 
--- Apply position only
 function CM:ApplyPosition()
     if not self.container then return end
     KE:ApplyFramePosition(self.container, self.db.Position, self.db)
 end
 
--- Refresh
 function CM:Refresh()
     self:ApplySettings()
 end
 
+---------------------------------------------------------------------------------
+-- Edit Mode
+---------------------------------------------------------------------------------
 function CM:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
@@ -392,7 +404,9 @@ function CM:RegWithEditMode()
     end
 end
 
--- Preview mode: show all message types
+---------------------------------------------------------------------------------
+-- Preview
+---------------------------------------------------------------------------------
 function CM:ShowPreview()
     if not self.container then
         self:CreateContainer()
@@ -428,9 +442,9 @@ function CM:HidePreview()
     end
 end
 
-------------------------------------------------------------------------
--- Interrupt announce
-------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Interrupt Announce
+---------------------------------------------------------------------------------
 function CM:CacheInterruptSpells()
     local specIndex = GetSpecialization()
     if not specIndex then
@@ -484,7 +498,9 @@ function CM:OnSpellcastInterrupted(_, _, _, spellID, interruptedBy)
     end
 end
 
--- Module OnEnable
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
 function CM:OnEnable()
     if not self.db.Enabled then return end
 
@@ -522,7 +538,6 @@ function CM:OnEnable()
     end
 end
 
--- Module OnDisable
 function CM:OnDisable()
     for _, frame in pairs(self.messageFrames) do
         frame:Hide()

@@ -1,4 +1,9 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-Automation.lua                                      ║
+-- ║  GUI: Automation                                         ║
+-- ║  Purpose: Configuration panel for the Automation module. ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -38,9 +43,9 @@ GUIFrame:RegisterContent("Automation", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Enable
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Automation", yOffset)
     local row1 = GUIFrame:CreateRow(card1.content, 36)
     local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Automation", db.Enabled ~= false,
@@ -50,9 +55,9 @@ GUIFrame:RegisterContent("Automation", function(scrollChild, yOffset)
     card1:AddRow(row1, 36)
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Cinematics & Dialogs
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Cinematics & Dialogs", yOffset)
     table_insert(allWidgets, card2)
 
@@ -82,9 +87,9 @@ GUIFrame:RegisterContent("Automation", function(scrollChild, yOffset)
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Merchant Automation
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Merchant Automation", yOffset)
     table_insert(allWidgets, card3)
 
@@ -110,9 +115,9 @@ GUIFrame:RegisterContent("Automation", function(scrollChild, yOffset)
 
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Group Finder
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Group Finder", yOffset)
     table_insert(allWidgets, card4)
 
@@ -137,9 +142,9 @@ GUIFrame:RegisterContent("Automation", function(scrollChild, yOffset)
 
     yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 5: Quest Automation
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Quest Automation", yOffset)
     table_insert(allWidgets, card5)
 
@@ -172,9 +177,9 @@ GUIFrame:RegisterContent("Automation", function(scrollChild, yOffset)
 
     yOffset = yOffset + card5:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 6: Social
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card6 = GUIFrame:CreateCard(scrollChild, "Social", yOffset)
     table_insert(allWidgets, card6)
 
@@ -192,9 +197,9 @@ GUIFrame:RegisterContent("Automation", function(scrollChild, yOffset)
 
     yOffset = yOffset + card6:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 7: Convenience
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card7 = GUIFrame:CreateCard(scrollChild, "Convenience", yOffset)
     table_insert(allWidgets, card7)
 
@@ -212,9 +217,9 @@ GUIFrame:RegisterContent("Automation", function(scrollChild, yOffset)
 
     yOffset = yOffset + card7:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 8: Vantus Rune Withdrawer
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local vrDB = KE.db and KE.db.profile.VantusRune
     if vrDB then
         local VR = KitnEssentials and KitnEssentials:GetModule("VantusRune", true)
@@ -253,7 +258,7 @@ GUIFrame:RegisterContent("Automation", function(scrollChild, yOffset)
         yOffset = yOffset + card8:GetContentHeight() + Theme.paddingSmall
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     UpdateAllWidgetStates()
     yOffset = yOffset - (Theme.paddingSmall * 2)
     return yOffset

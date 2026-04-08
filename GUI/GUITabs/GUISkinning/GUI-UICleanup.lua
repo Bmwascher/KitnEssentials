@@ -1,4 +1,9 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-UICleanup.lua                                       ║
+-- ║  GUI: General UI Clean Up                                ║
+-- ║  Purpose: Configuration panel for the UICleanup module.  ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -45,9 +50,9 @@ GUIFrame:RegisterContent("SkinUICleanup", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: UICleanup Toggle
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "General UI Cleanup", yOffset)
 
     -- Enable Checkbox

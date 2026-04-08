@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  Recuperate.lua                                          ║
+-- ║  Module: Recuperate Button                               ║
+-- ║  Purpose: One-click self-heal button with configurable   ║
+-- ║           raid/party visibility and health-based alpha.  ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
@@ -19,14 +25,9 @@ local spellInfo = C_Spell.GetSpellInfo(RECUPERATE_SPELL_ID)
 
 REC.isPreview = false
 
---------------------------------------------------------------------------------
--- Inline helpers
---------------------------------------------------------------------------------
--- Icon helpers: KE:ApplyIconZoom() and KE:AddIconBorders() in Core/Widgets.lua
-
---------------------------------------------------------------------------------
--- DB
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 function REC:UpdateDB()
     self.db = KE.db.profile.Recuperate
 end
@@ -36,9 +37,9 @@ function REC:OnInitialize()
     self:SetEnabledState(false)
 end
 
---------------------------------------------------------------------------------
--- Health alpha (step curve: visible when missing health, hidden at full)
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Core Logic
+---------------------------------------------------------------------------------
 function REC:UpdateAlpha()
     if self.isPreview then return end
     if not self.button then return end
@@ -60,9 +61,9 @@ function REC:OnHealthChange(_, unit)
     self:UpdateAlpha()
 end
 
---------------------------------------------------------------------------------
--- Visibility state driver (configurable raid/party load conditions)
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Visibility State Driver
+---------------------------------------------------------------------------------
 function REC:GetVisibilityString()
     local loadInRaid = self.db.LoadInRaid
     local loadInParty = self.db.LoadInParty
@@ -95,9 +96,9 @@ function REC:UpdateStateDriver()
     self:UpdateAlpha()
 end
 
---------------------------------------------------------------------------------
--- Create button
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Frame Creation
+---------------------------------------------------------------------------------
 function REC:CreateButton()
     if self.button then return end
 
@@ -134,9 +135,9 @@ function REC:CreateButton()
     return button
 end
 
---------------------------------------------------------------------------------
--- Apply / Enable / Disable
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
 function REC:ApplySettings()
     if not self.button then return end
     if InCombatLockdown() then return end
@@ -144,6 +145,9 @@ function REC:ApplySettings()
     KE:ApplyFramePosition(self.button, self.db.Position, self.db)
 end
 
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
 function REC:OnEnable()
     if not self.db.Enabled then return end
     self:CreateButton()
@@ -169,9 +173,9 @@ function REC:OnDisable()
     self.isPreview = false
 end
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Edit Mode
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 function REC:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
@@ -185,9 +189,9 @@ function REC:RegWithEditMode()
     end
 end
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Preview
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 function REC:ShowPreview()
     if not self.button then self:CreateButton() end
     self:RegWithEditMode()

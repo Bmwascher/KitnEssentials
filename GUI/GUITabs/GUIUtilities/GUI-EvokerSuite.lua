@@ -1,4 +1,9 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-EvokerSuite.lua                                     ║
+-- ║  GUI: Evoker Suite                                       ║
+-- ║  Purpose: Configuration panel for the EvokerSuite module.║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -7,10 +12,14 @@ local Theme = KE.Theme
 local CreateFrame = CreateFrame
 local ipairs = ipairs
 
--- Persistent tab state (survives RefreshContent rebuilds)
+---------------------------------------------------------------------------------
+-- Tab State
+---------------------------------------------------------------------------------
 local activeTab = "DisintegrateTicks"
 
--- Tab bar builder
+---------------------------------------------------------------------------------
+-- Tab Bar
+---------------------------------------------------------------------------------
 local function BuildTabBar(scrollChild, yOffset)
     local T = Theme
     local a = T.accent
@@ -88,7 +97,9 @@ local function BuildTabBar(scrollChild, yOffset)
     return yOffset + tabHeight + T.paddingSmall
 end
 
--- Combined Evoker suite content: tab bar + delegate to active sub-builder
+---------------------------------------------------------------------------------
+-- Content Registration
+---------------------------------------------------------------------------------
 GUIFrame:RegisterContent("EvokerSuite", function(scrollChild, yOffset)
     yOffset = BuildTabBar(scrollChild, yOffset)
 

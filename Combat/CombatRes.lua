@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  CombatRes.lua                                           ║
+-- ║  Module: Battle Res                                      ║
+-- ║  Purpose: Tracks battle resurrection charges and         ║
+-- ║           cooldown with configurable text display.       ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
@@ -6,7 +12,9 @@ if not KitnEssentials then return end
 ---@class CombatRes: AceModule, AceEvent-3.0
 local CR = KitnEssentials:NewModule("CombatRes", "AceEvent-3.0")
 
--- Localization
+---------------------------------------------------------------------------------
+-- Constants
+---------------------------------------------------------------------------------
 local CreateFrame = CreateFrame
 local UIParent = UIParent
 local pcall = pcall
@@ -17,11 +25,9 @@ local string_format = string.format
 local math_floor = math.floor
 
 
--- Module constants
 local SPELL_ID = 20484 -- Rebirth
 local UPDATE_INTERVAL = 0.1
 
--- Module state
 CR.frame = nil
 CR.lastUpdate = 0
 CR.lastTimerText = ""
@@ -29,10 +35,12 @@ CR.lastChargeText = ""
 CR.lastChargeColor = nil
 CR.isPreview = false
 
--- Default colors (fallbacks if DB keys missing)
 local DEFAULT_CHARGE_AVAILABLE = { 0.3, 1, 0.3, 1 }
 local DEFAULT_CHARGE_UNAVAILABLE = { 1, 0.3, 0.3, 1 }
 
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 function CR:UpdateDB()
     self.db = KE.db.profile.CombatRes
 end
@@ -42,7 +50,9 @@ function CR:OnInitialize()
     self:SetEnabledState(false)
 end
 
--- Update text element anchors based on growth direction
+---------------------------------------------------------------------------------
+-- Layout
+---------------------------------------------------------------------------------
 function CR:UpdateAnchors()
     if not self.frame or not self.frame.content then return end
 
@@ -94,7 +104,9 @@ function CR:UpdateAnchors()
     end
 end
 
--- Create the main frame
+---------------------------------------------------------------------------------
+-- Frame Creation
+---------------------------------------------------------------------------------
 function CR:CreateFrame()
     if self.frame then return end
 
@@ -155,7 +167,9 @@ function CR:CreateFrame()
     self.frame = frame
 end
 
--- Apply text/font settings to all font strings
+---------------------------------------------------------------------------------
+-- Text Settings
+---------------------------------------------------------------------------------
 function CR:ApplyTextSettings()
     if not self.frame then return end
 
@@ -206,7 +220,9 @@ function CR:ApplyTextSettings()
     self:ApplyBackdropSettings()
 end
 
--- Apply backdrop settings
+---------------------------------------------------------------------------------
+-- Backdrop Settings
+---------------------------------------------------------------------------------
 function CR:ApplyBackdropSettings()
     if not self.frame then return end
 
@@ -250,7 +266,9 @@ function CR:ApplyBackdropSettings()
     end
 end
 
--- Update display with current battle res data
+---------------------------------------------------------------------------------
+-- Update Logic
+---------------------------------------------------------------------------------
 function CR:Update()
     if not self.frame then return end
 
@@ -334,7 +352,6 @@ function CR:Update()
     end
 end
 
--- OnUpdate handler (throttled)
 function CR:OnUpdate(elapsed)
     self.lastUpdate = self.lastUpdate + elapsed
     if self.lastUpdate < UPDATE_INTERVAL then return end
@@ -342,7 +359,9 @@ function CR:OnUpdate(elapsed)
     self:Update()
 end
 
--- Apply all settings
+---------------------------------------------------------------------------------
+-- Apply Settings
+---------------------------------------------------------------------------------
 function CR:ApplySettings()
     if not self.frame then
         self:CreateFrame()
@@ -358,12 +377,14 @@ function CR:ApplySettings()
     self:Update()
 end
 
--- Apply position only
 function CR:ApplyPosition()
     if not self.frame then return end
     KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
 end
 
+---------------------------------------------------------------------------------
+-- Edit Mode
+---------------------------------------------------------------------------------
 function CR:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
@@ -377,7 +398,9 @@ function CR:RegWithEditMode()
     end
 end
 
--- Preview mode
+---------------------------------------------------------------------------------
+-- Preview
+---------------------------------------------------------------------------------
 function CR:ShowPreview()
     if not self.frame then
         self:CreateFrame()
@@ -395,12 +418,13 @@ function CR:HidePreview()
     self:Update()
 end
 
--- Refresh
 function CR:Refresh()
     self:ApplySettings()
 end
 
--- Event handler — show frame and start OnUpdate when charges become available
+---------------------------------------------------------------------------------
+-- Event Handlers
+---------------------------------------------------------------------------------
 function CR:OnCombatEvent()
     if not self.db.Enabled then return end
     if not self.frame then return end
@@ -422,7 +446,9 @@ function CR:OnCombatEvent()
     end
 end
 
--- Module OnEnable
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
 function CR:OnEnable()
     if not self.db.Enabled then return end
     self:CreateFrame()
@@ -447,7 +473,6 @@ function CR:OnEnable()
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnCombatEvent")
 end
 
--- Module OnDisable
 function CR:OnDisable()
     if self.frame then
         self.frame:SetScript("OnUpdate", nil)

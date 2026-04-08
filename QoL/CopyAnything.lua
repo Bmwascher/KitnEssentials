@@ -1,9 +1,14 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  CopyAnything.lua                                        ║
+-- ║  Module: Copy Anything                                   ║
+-- ║  Purpose: Copy any chat message or tooltip text with     ║
+-- ║           modifier key clicks.                           ║
+-- ║  Credit: Built on original WA code by Nnoggie.           ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
-
--- Credit: Built on original WA code created by Nnoggie
 
 ---@class CopyAnything: AceModule, AceEvent-3.0
 local CA = KitnEssentials:NewModule("CopyAnything", "AceEvent-3.0")
@@ -26,6 +31,9 @@ local InCombatLockdown = InCombatLockdown
 local C_AddOns = C_AddOns
 local StaticPopupDialogs = StaticPopupDialogs
 
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 function CA:UpdateDB()
     self.db = KE.db.profile.CopyAnything
 end
@@ -35,9 +43,9 @@ function CA:OnInitialize()
     self:SetEnabledState(false)
 end
 
---------------------------------------------------------------------------------
--- Static Popup
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Frame Creation
+---------------------------------------------------------------------------------
 local DIALOG_NAME = "KE_COPY_ANY_ID_DIALOG"
 local popupInitialized = false
 
@@ -69,9 +77,9 @@ local function CreatePopup()
     popupInitialized = true
 end
 
---------------------------------------------------------------------------------
--- Modifier check
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Core Logic
+---------------------------------------------------------------------------------
 local function CheckModifiers(mod)
     if not mod then return true end
     if type(mod) == "string" then
@@ -93,9 +101,6 @@ local function GetNPCIDFromGUID(guid)
     return select(6, strsplit("-", guid))
 end
 
---------------------------------------------------------------------------------
--- Copy logic
---------------------------------------------------------------------------------
 function CA:TryCopy(key)
     if C_ChallengeMode.IsChallengeModeActive() or InCombatLockdown() then return end
     local db = self.db
@@ -209,10 +214,16 @@ function CA:TryCopy(key)
     end
 end
 
+---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
 function CA:ApplySettings()
     self:UpdateDB()
 end
 
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
 function CA:OnEnable()
     if not self.db.Enabled then return end
     CreatePopup()

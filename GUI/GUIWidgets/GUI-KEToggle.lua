@@ -1,4 +1,8 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-KEToggle.lua                                        ║
+-- ║  Purpose: Toggle/checkbox widget for the settings panel. ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -8,6 +12,10 @@ local Theme = KE.Theme
 local CreateFrame = CreateFrame
 local C_Timer = C_Timer
 local select = select
+
+---------------------------------------------------------------------------------
+-- Widget Creation
+---------------------------------------------------------------------------------
 
 -- Checkbox Widget
 function GUIFrame:CreateCheckbox(parent, labelText, initialState, onValueChanged, msgPopup, msgText, msgOn, msgOff)
@@ -83,6 +91,10 @@ function GUIFrame:CreateCheckbox(parent, labelText, initialState, onValueChanged
     crossmark:SetTexelSnappingBias(0)
     crossmark:SetSnapToPixelGrid(false)
     crossmark:Hide()
+
+    ---------------------------------------------------------------------------------
+    -- Animation
+    ---------------------------------------------------------------------------------
 
     local animGroup = knob:CreateAnimationGroup()
     local slideAnim = animGroup:CreateAnimation("Translation")

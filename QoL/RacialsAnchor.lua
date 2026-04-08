@@ -1,14 +1,12 @@
--- ============================================================
--- RacialsAnchor.lua
--- Module: Racials Anchor
--- Purpose: Hooks CDM's (Ayije_CDM) AnchorToPlayerFrame to reposition
---          CDM_RacialsContainer using custom anchor settings. Adds an
---          additional Y offset for pet classes when the pet bar is visible.
---          Supports both ElvUI (ElvUF_Pet) and UUI (UUF_Pet) pet frames.
--- Author: Bitebtw
--- ============================================================
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  RacialsAnchor.lua                                       ║
+-- ║  Module: Racials Anchor                                  ║
+-- ║  Purpose: Hooks Ayije CDM's AnchorToPlayerFrame to       ║
+-- ║           reposition CDM_RacialsContainer with custom    ║
+-- ║           offsets. Adds pet bar Y offset for pet classes.║
+-- ║  Note: Supports ElvUI (ElvUF_Pet) and UUF (UUF_Pet).     ║
+-- ╚══════════════════════════════════════════════════════════╝
 
--- KitnEssentials namespace
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
@@ -19,12 +17,16 @@ local RA = KitnEssentials:NewModule("RacialsAnchor", "AceEvent-3.0")
 local _G = _G
 local C_Timer = C_Timer
 
--- Hook state
+---------------------------------------------------------------------------------
+-- Module State
+---------------------------------------------------------------------------------
 local hooked = false
 local originalAnchor = nil
-
--- Pet watcher state
 local petWatcherAttached = false
+
+---------------------------------------------------------------------------------
+-- Core Logic
+---------------------------------------------------------------------------------
 
 -- Returns the pet unit frame from ElvUI or UUF, whichever is present.
 local function GetPetFrame()
@@ -108,14 +110,52 @@ initFrame:SetScript("OnUpdate", function(self)
     end
 end)
 
-----------------------------------------------------------------
--- Module lifecycle
-----------------------------------------------------------------
-
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 function RA:UpdateDB()
     self.db = KE.db and KE.db.profile.RacialsAnchor
 end
 
+---------------------------------------------------------------------------------
+-- Event Handlers
+---------------------------------------------------------------------------------
+function RA:PLAYER_ENTERING_WORLD()
+    if not TryHook() then
+        -- CDM may not be loaded yet; try again after a short delay.
+        C_Timer.After(1, function()
+            TryHook()
+        end)
+    end
+    C_Timer.After(1, AttachPetWatcher)
+end
+
+function RA:UNIT_PET(unit)
+    if unit ~= "player" then return end
+    C_Timer.After(1, AttachPetWatcher)
+end
+
+---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
+function RA:ApplySettings()
+    TryHook()
+    AttachPetWatcher()
+    ForceRacialsReanchor()
+end
+
+function RA:HasPetBar()
+    local petFrame = GetPetFrame()
+    return petFrame ~= nil and petFrame:IsShown() == true
+end
+
+function RA:IsPetFrame()
+    return GetPetFrame() ~= nil
+end
+
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
 function RA:OnInitialize()
     self:UpdateDB()
     self:SetEnabledState(false)
@@ -133,38 +173,4 @@ function RA:OnDisable()
     self:UnregisterAllEvents()
     -- The hook itself cannot be undone once set, but db.Enabled = false
     -- causes the hook body to fall through to originalAnchor automatically.
-end
-
-function RA:PLAYER_ENTERING_WORLD()
-    if not TryHook() then
-        -- CDM may not be loaded yet; try again after a short delay.
-        C_Timer.After(1, function()
-            TryHook()
-        end)
-    end
-    C_Timer.After(1, AttachPetWatcher)
-end
-
-function RA:UNIT_PET(unit)
-    if unit ~= "player" then return end
-    C_Timer.After(1, AttachPetWatcher)
-end
-
-----------------------------------------------------------------
--- Public API (called by GUI)
-----------------------------------------------------------------
-
-function RA:ApplySettings()
-    TryHook()
-    AttachPetWatcher()
-    ForceRacialsReanchor()
-end
-
-function RA:HasPetBar()
-    local petFrame = GetPetFrame()
-    return petFrame ~= nil and petFrame:IsShown() == true
-end
-
-function RA:IsPetFrame()
-    return GetPetFrame() ~= nil
 end

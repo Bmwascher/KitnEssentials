@@ -1,4 +1,8 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-KESlider.lua                                        ║
+-- ║  Purpose: Slider widget with numeric input.              ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -11,6 +15,10 @@ local CreateFrame = CreateFrame
 local C_Timer = C_Timer
 local math_floor, math_max, math_min = math.floor, math.max, math.min
 local GetTime = GetTime
+
+---------------------------------------------------------------------------------
+-- Widget Creation
+---------------------------------------------------------------------------------
 
 -- Slider widget
 function GUIFrame:CreateSlider(parent, labelText, min, max, step, value, labelWidth, callback)
@@ -334,6 +342,10 @@ function GUIFrame:CreateSlider(parent, labelText, min, max, step, value, labelWi
     -- Store references
     row.leftStepper = leftStepper
     row.rightStepper = rightStepper
+
+    ---------------------------------------------------------------------------------
+    -- Input Handling
+    ---------------------------------------------------------------------------------
 
     -- Value editbox
     local valueContainer = CreateFrame("Frame", nil, slider, "BackdropTemplate")

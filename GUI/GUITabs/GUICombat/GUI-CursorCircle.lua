@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-CursorCircle.lua                                    ║
+-- ║  GUI: Cursor Circle                                      ║
+-- ║  Purpose: Configuration panel for the CursorCircle       ║
+-- ║  module.                                                 ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -280,9 +286,9 @@ GUIFrame:RegisterContent("CursorCircle", function(scrollChild, yOffset)
     end
     local gcd = db.GCD
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Cursor Circle (Enable + GCD Mode + Throttle)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Cursor Circle", yOffset)
 
     -- Enable checkbox
@@ -340,9 +346,9 @@ GUIFrame:RegisterContent("CursorCircle", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Main Ring Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Main Ring Settings", yOffset)
     table_insert(allWidgets, card2)
 
@@ -390,9 +396,9 @@ GUIFrame:RegisterContent("CursorCircle", function(scrollChild, yOffset)
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Main Ring Texture
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Main Ring Texture", yOffset)
     table_insert(allWidgets, card3)
 
@@ -417,9 +423,9 @@ GUIFrame:RegisterContent("CursorCircle", function(scrollChild, yOffset)
 
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: GCD Swipe Settings
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "GCD Swipe Settings", yOffset)
     table_insert(allWidgets, card4)
     table_insert(gcdWidgets, card4)
@@ -472,9 +478,9 @@ GUIFrame:RegisterContent("CursorCircle", function(scrollChild, yOffset)
 
     yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 5: GCD Ring Texture (separate mode only)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "GCD Ring Texture", yOffset)
     table_insert(allWidgets, card5)
     table_insert(gcdWidgets, card5)
@@ -504,9 +510,9 @@ GUIFrame:RegisterContent("CursorCircle", function(scrollChild, yOffset)
 
     yOffset = yOffset + card5:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 6: GCD Ring Background (separate mode only)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card6 = GUIFrame:CreateCard(scrollChild, "GCD Ring Background", yOffset)
     table_insert(allWidgets, card6)
     table_insert(gcdWidgets, card6)

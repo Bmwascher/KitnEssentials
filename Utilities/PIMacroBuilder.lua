@@ -1,11 +1,16 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  PIMacroBuilder.lua                                      ║
+-- ║  Module: Power Infusion Macro Builder                    ║
+-- ║  Purpose: Dynamically builds PI macro with trinkets,     ║
+-- ║           racials, and potions.                          ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
 local PI = KitnEssentials:NewModule("PIMacroBuilder", "AceEvent-3.0")
 
--- Localization
 local InCombatLockdown = InCombatLockdown
 local GetMacroIndexByName = GetMacroIndexByName
 local EditMacro = EditMacro
@@ -16,6 +21,9 @@ local table_insert = table.insert
 local tostring = tostring
 local ipairs = ipairs
 
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 function PI:UpdateDB()
     self.db = KE.db.profile.PIMacroBuilder
 end
@@ -25,6 +33,9 @@ function PI:OnInitialize()
     self:SetEnabledState(false)
 end
 
+---------------------------------------------------------------------------------
+-- Core Logic
+---------------------------------------------------------------------------------
 function PI:BuildMacroBody(targetName)
     local db = self.db
     targetName = targetName or "target"
@@ -105,10 +116,16 @@ function PI:SetPITarget()
     KE:Print( "PI macro updated to " .. n)
 end
 
+---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
 function PI:ApplySettings()
     self:ApplyMacro()
 end
 
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
 function PI:OnEnable()
     if not self.db.Enabled then return end
 

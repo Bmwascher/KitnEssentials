@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-ClassStatusTexts.lua                                ║
+-- ║  GUI: Class Status Texts                                 ║
+-- ║  Purpose: Configuration panel for the ClassStatusTexts  ║
+-- ║  module.                                                 ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -7,10 +13,14 @@ local Theme = KE.Theme
 local CreateFrame = CreateFrame
 local ipairs = ipairs
 
--- Persistent tab state (survives RefreshContent rebuilds)
+---------------------------------------------------------------------------------
+-- Tab State
+---------------------------------------------------------------------------------
 local activeTab = "PetStatusText"
 
--- Tab bar builder
+---------------------------------------------------------------------------------
+-- Tab Bar
+---------------------------------------------------------------------------------
 local function BuildTabBar(scrollChild, yOffset)
     local T = Theme
     local a = T.accent
@@ -103,7 +113,9 @@ local function BuildTabBar(scrollChild, yOffset)
     return yOffset + tabHeight + T.paddingSmall
 end
 
--- Combined class status texts: tab bar + delegate to active sub-builder
+---------------------------------------------------------------------------------
+-- Content Registration
+---------------------------------------------------------------------------------
 GUIFrame:RegisterContent("ClassStatusTexts", function(scrollChild, yOffset)
     yOffset = BuildTabBar(scrollChild, yOffset)
 

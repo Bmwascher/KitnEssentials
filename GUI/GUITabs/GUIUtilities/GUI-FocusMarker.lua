@@ -1,4 +1,9 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-FocusMarker.lua                                     ║
+-- ║  GUI: Focus Marker                                       ║
+-- ║  Purpose: Configuration panel for the FocusMarker module.║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -52,9 +57,9 @@ GUIFrame:RegisterContent("FocusMarker", function(scrollChild, yOffset)
         end
     end
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 1: Enable
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Focus Marker", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, 36)
@@ -80,9 +85,9 @@ GUIFrame:RegisterContent("FocusMarker", function(scrollChild, yOffset)
 
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 2: Marker Selection (icon grid)
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Marker Selection", yOffset)
     table_insert(allWidgets, card2)
 
@@ -172,9 +177,9 @@ GUIFrame:RegisterContent("FocusMarker", function(scrollChild, yOffset)
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 3: Macro Options
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Macro Options", yOffset)
     table_insert(allWidgets, card3)
 
@@ -199,9 +204,9 @@ GUIFrame:RegisterContent("FocusMarker", function(scrollChild, yOffset)
 
     yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     -- Card 4: Advanced
-    ----------------------------------------------------------------
+    ---------------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Advanced", yOffset)
     table_insert(allWidgets, card4)
 

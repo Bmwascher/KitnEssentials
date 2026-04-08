@@ -1,4 +1,10 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  Auras.lua                                               ║
+-- ║  Module: Buffs, Debuffs & Externals                      ║
+-- ║  Purpose: Restyle aura icons and bars with custom        ║
+-- ║           sizing and formatting.                         ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
@@ -6,30 +12,30 @@ if not KitnEssentials then return end
 ---@class SkinAuras: AceModule, AceEvent-3.0, AceHook-3.0
 local SK = KitnEssentials:NewModule("SkinAuras", "AceEvent-3.0", "AceHook-3.0")
 
--- Localization
 local CreateFrame = CreateFrame
 local pairs = pairs
 local unpack = unpack
 local hooksecurefunc = hooksecurefunc
 local C_Timer = C_Timer
 
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
+
 function SK:UpdateDB()
     self.db = KE.db.profile.Skinning.Auras
 end
 
-function SK:OnInitialize()
-    self:UpdateDB()
-    self:SetEnabledState(false)
-end
+---------------------------------------------------------------------------------
+-- Styling Helpers
+---------------------------------------------------------------------------------
 
--- Icon zoom (same as BuffIcons, etc.)
 local function ApplyZoom(tex, zoom)
     local texMin = 0.25 * zoom
     local texMax = 1 - 0.25 * zoom
     tex:SetTexCoord(texMin, texMax, texMin, texMax)
 end
 
--- Create 1px pixel border overlay on an aura frame
 local function BorderOverlay(aura, borderColor)
     if not aura.PixelBorder then
         local auraBorder = CreateFrame("Frame", nil, aura)
@@ -72,7 +78,46 @@ local function BorderOverlay(aura, borderColor)
     end
 end
 
--- Style aura icons (buffs/debuffs)
+local function DisableAuraPulse(aura)
+    if not aura.__NoPulseHooked then
+        aura.__NoPulseHooked = true
+        hooksecurefunc(aura, "SetAlpha", function(self, alpha)
+            if alpha ~= 1 then
+                self:SetAlpha(1)
+            end
+        end)
+    end
+end
+
+local function SpaceRows(self)
+    if not self or not self.AuraContainer or not self.auraFrames then return end
+    local iconStride = self.AuraContainer.iconStride or 12
+    local iconPadding = self.AuraContainer.iconPadding or 5
+    local previousAura, rowAnchor
+    for i = 1, #self.auraFrames do
+        local aura = self.auraFrames[i]
+        if aura then
+            aura:ClearAllPoints()
+            local index = (i - 1) % iconStride
+            if index == 0 then
+                if not rowAnchor then
+                    aura:SetPoint("TOPRIGHT", self, "TOPRIGHT", -iconPadding, 0)
+                else
+                    aura:SetPoint("TOPRIGHT", rowAnchor, "BOTTOMRIGHT", 0, 1)
+                end
+                rowAnchor = aura
+            else
+                aura:SetPoint("TOPRIGHT", previousAura, "TOPLEFT", -iconPadding, 0)
+            end
+            previousAura = aura
+        end
+    end
+end
+
+---------------------------------------------------------------------------------
+-- Styling
+---------------------------------------------------------------------------------
+
 local function StyleAuraFrame(aura, size, borderColor)
     if aura.isAuraAnchor or not aura.Icon then return end
     local auraIcon, auraDuration, auraCount = aura.Icon, aura.Duration, aura.Count
@@ -114,7 +159,6 @@ local function StyleAuraFrame(aura, size, borderColor)
     end
 end
 
--- Style external defensive aura icons
 local function StyleExternalAuraFrame(aura, size, borderColor)
     if aura.isAuraAnchor or not aura.Icon then return end
     local auraIcon, auraDuration, auraCount = aura.Icon, aura.Duration, aura.Count
@@ -147,45 +191,6 @@ local function StyleExternalAuraFrame(aura, size, borderColor)
     end
 end
 
--- Re-space buff rows
-local function SpaceRows(self)
-    if not self or not self.AuraContainer or not self.auraFrames then return end
-    local iconStride = self.AuraContainer.iconStride or 12
-    local iconPadding = self.AuraContainer.iconPadding or 5
-    local previousAura, rowAnchor
-    for i = 1, #self.auraFrames do
-        local aura = self.auraFrames[i]
-        if aura then
-            aura:ClearAllPoints()
-            local index = (i - 1) % iconStride
-            if index == 0 then
-                if not rowAnchor then
-                    aura:SetPoint("TOPRIGHT", self, "TOPRIGHT", -iconPadding, 0)
-                else
-                    aura:SetPoint("TOPRIGHT", rowAnchor, "BOTTOMRIGHT", 0, 1)
-                end
-                rowAnchor = aura
-            else
-                aura:SetPoint("TOPRIGHT", previousAura, "TOPLEFT", -iconPadding, 0)
-            end
-            previousAura = aura
-        end
-    end
-end
-
--- Disable blizzard alpha pulse on low duration auras
-local function DisableAuraPulse(aura)
-    if not aura.__NoPulseHooked then
-        aura.__NoPulseHooked = true
-        hooksecurefunc(aura, "SetAlpha", function(self, alpha)
-            if alpha ~= 1 then
-                self:SetAlpha(1)
-            end
-        end)
-    end
-end
-
--- Style buffs
 local function StyleBuffs()
     if not BuffFrame then return end
     local buffSize = SK.db.buffSize
@@ -202,7 +207,6 @@ local function StyleBuffs()
     end
 end
 
--- Style debuffs
 local function StyleDebuffs()
     if not DebuffFrame then return end
     local debuffSize = SK.db.debuffSize
@@ -218,7 +222,6 @@ local function StyleDebuffs()
     end
 end
 
--- Style external defensives
 local function StyleExternalDefensives()
     if not ExternalDefensivesFrame then return end
     local defSize = SK.db.defSize
@@ -233,28 +236,9 @@ local function StyleExternalDefensives()
     ExternalDefensivesFrame:SetFrameStrata("MEDIUM")
 end
 
-function SK:ApplySettings()
-    if KE:ShouldNotLoadModule() then return end
-    if self:IsEnabled() then
-        self:Refresh()
-    end
-end
-
-function SK:Refresh()
-    if not self.db.Enabled then return end
-    StyleBuffs()
-    StyleDebuffs()
-    StyleExternalDefensives()
-    SpaceRows(BuffFrame)
-end
-
-function SK:SetupAuras()
-    if not self.db.Enabled then return end
-    StyleBuffs()
-    StyleDebuffs()
-    StyleExternalDefensives()
-    SpaceRows(BuffFrame)
-end
+---------------------------------------------------------------------------------
+-- Hooks
+---------------------------------------------------------------------------------
 
 function SK:SetupAuraHooks()
     if not self.db.Enabled then return end
@@ -269,6 +253,42 @@ function SK:SetupAuraHooks()
     hooksecurefunc(DebuffFrame, "UpdateAuraButtons", function()
         StyleDebuffs()
     end)
+end
+
+---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
+
+function SK:SetupAuras()
+    if not self.db.Enabled then return end
+    StyleBuffs()
+    StyleDebuffs()
+    StyleExternalDefensives()
+    SpaceRows(BuffFrame)
+end
+
+function SK:Refresh()
+    if not self.db.Enabled then return end
+    StyleBuffs()
+    StyleDebuffs()
+    StyleExternalDefensives()
+    SpaceRows(BuffFrame)
+end
+
+function SK:ApplySettings()
+    if KE:ShouldNotLoadModule() then return end
+    if self:IsEnabled() then
+        self:Refresh()
+    end
+end
+
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
+
+function SK:OnInitialize()
+    self:UpdateDB()
+    self:SetEnabledState(false)
 end
 
 function SK:OnEnable()

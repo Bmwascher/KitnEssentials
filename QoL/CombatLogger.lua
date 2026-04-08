@@ -1,11 +1,16 @@
--- KitnEssentials namespace
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  CombatLogger.lua                                        ║
+-- ║  Module: Combat Logger                                   ║
+-- ║  Purpose: Automatic combat logging for raids, dungeons,  ║
+-- ║           M+, PvP, and arenas with per-content toggles.  ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
 local CL = KitnEssentials:NewModule("CombatLogger", "AceEvent-3.0", "AceTimer-3.0")
 
--- Localization
 local GetInstanceInfo = GetInstanceInfo
 local LoggingCombat = LoggingCombat
 local C_CVar = C_CVar
@@ -15,11 +20,16 @@ local IsArenaSkirmish = C_PvP.IsArenaSkirmish
 local IsWargame = IsWargame
 local ReloadUI = ReloadUI
 
--- Module state
+---------------------------------------------------------------------------------
+-- Module State
+---------------------------------------------------------------------------------
 CL.isLogging = false
 CL.delayStopTimer = nil
 CL.arenaCheckTimer = nil
 
+---------------------------------------------------------------------------------
+-- DB Helper
+---------------------------------------------------------------------------------
 function CL:UpdateDB()
     self.db = KE.db.profile.CombatLogger
 end
@@ -29,9 +39,9 @@ function CL:OnInitialize()
     self:SetEnabledState(false)
 end
 
---------------------------------------------------------------------------------
--- ACL (Advanced Combat Logging) check
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Frame Creation
+---------------------------------------------------------------------------------
 StaticPopupDialogs["KE_COMBATLOGGER_ACL_PROMPT"] = {
     text = "|cffFF008CKitnEssentials|r\n\nAdvanced Combat Logging is disabled. This is required for detailed log analysis on Warcraft Logs.\n\nEnable it now?",
     button1 = "Enable & Reload",
@@ -46,6 +56,9 @@ StaticPopupDialogs["KE_COMBATLOGGER_ACL_PROMPT"] = {
     preferredIndex = 3,
 }
 
+---------------------------------------------------------------------------------
+-- Core Logic
+---------------------------------------------------------------------------------
 function CL:CheckACL()
     if self.db.DisableACLPrompt then return true end
     local acl = C_CVar.GetCVar("advancedCombatLogging")
@@ -56,9 +69,6 @@ function CL:CheckACL()
     return true
 end
 
---------------------------------------------------------------------------------
--- Start / Stop logging
---------------------------------------------------------------------------------
 function CL:StartLogging()
     -- Cancel any pending delayed stop
     if self.delayStopTimer then
@@ -105,9 +115,6 @@ function CL:StopLoggingNow()
     end
 end
 
---------------------------------------------------------------------------------
--- Instance / difficulty mapping
---------------------------------------------------------------------------------
 function CL:ShouldLog(instanceType, difficultyID, maxPlayers)
     local db = self.db
 
@@ -142,9 +149,6 @@ function CL:ShouldLog(instanceType, difficultyID, maxPlayers)
     return false
 end
 
---------------------------------------------------------------------------------
--- Arena check (needs 5s delay for API readiness)
---------------------------------------------------------------------------------
 function CL:CheckArenaLogging()
     local db = self.db
     local shouldLog = false
@@ -168,9 +172,6 @@ function CL:CheckArenaLogging()
     end
 end
 
---------------------------------------------------------------------------------
--- Zone check handlers
---------------------------------------------------------------------------------
 function CL:CheckEnableLogging()
     if not self.db.Enabled then return end
 
@@ -210,9 +211,9 @@ function CL:CheckDisableLogging()
     end
 end
 
---------------------------------------------------------------------------------
--- Event handlers
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Event Handlers
+---------------------------------------------------------------------------------
 function CL:OnEvent_InstanceInfo()
     self:CheckEnableLogging()
 end
@@ -240,22 +241,24 @@ function CL:OnEvent_EnteringWorld()
     end
 end
 
---------------------------------------------------------------------------------
--- Module lifecycle
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
 function CL:ApplySettings()
     if not self.db.Enabled then return end
     -- Re-evaluate current zone with new settings
     self:OnEvent_EnteringWorld()
 end
 
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
 function CL:OnEnable()
     if not self.db.Enabled then return end
 
     -- Sync initial logging state (LoggingCombat() with no args returns current state)
     self.isLogging = LoggingCombat() or false
 
-    -- Register events
     self:RegisterEvent("UPDATE_INSTANCE_INFO", "OnEvent_InstanceInfo")
     self:RegisterEvent("PLAYER_DIFFICULTY_CHANGED", "OnEvent_InstanceInfo")
     self:RegisterEvent("ZONE_CHANGED_NEW_AREA", "OnEvent_ZoneChanged")
