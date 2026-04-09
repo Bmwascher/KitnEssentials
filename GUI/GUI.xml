@@ -61,6 +61,7 @@
 
     <!-- Dungeons tabs -->
     <Script file="GUITabs\GUIDungeons\GUI-WarpDepleteForces.lua" />
+    <Script file="GUITabs\GUIDungeons\GUI-EnemyCounter.lua" />
 
     <!-- QoL tabs -->
     <Script file="GUITabs\GUIQoL\GUI-Automation.lua" />

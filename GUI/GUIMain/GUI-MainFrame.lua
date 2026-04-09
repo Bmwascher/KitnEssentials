@@ -111,15 +111,16 @@ GUIFrame.sidebarConfig = {
             { id = "SkinRaidManager",  text = "Raid Manager Panel" },
         },
     },
-    -- {
-    --     id = "dungeons_section",
-    --     type = "header",
-    --     text = "\226\128\162 Dungeons",
-    --     defaultExpanded = true,
-    --     items = {
-    --         { id = "WarpDepleteForces", text = "WarpDeplete Forces" },
-    --     },
-    -- },
+    {
+        id = "dungeons_section",
+        type = "header",
+        text = "\226\128\162 Dungeons",
+        defaultExpanded = true,
+        items = {
+            { id = "EnemyCounter",      text = "Enemy Counter" },
+            { id = "WarpDepleteForces", text = "WarpDeplete Forces" },
+        },
+    },
     {
         id = "encounter_section",
         type = "header",
