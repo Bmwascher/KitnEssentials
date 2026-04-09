@@ -118,7 +118,7 @@ GUIFrame.sidebarConfig = {
         defaultExpanded = true,
         items = {
             { id = "EnemyCounter",      text = "Enemy Counter" },
-            { id = "WarpDepleteForces", text = "WarpDeplete Forces" },
+            { id = "WarpDepleteForces", text = "WarpDeplete+" },
         },
     },
     {
