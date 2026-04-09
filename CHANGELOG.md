@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.10.0
+### Additions
+- New module: **Battle.net Toast** (Skinning) — dark theme skinning for BNet notification toasts with custom anchor positioning and EditMode support. Ported from NorskenUI.
+- New module: **WarpDeplete Forces** (Dungeons) — restores live pull forces tracking to WarpDeplete using fingerprint-based mob identification to bypass 12.0 Secret Values. Tooltip shows per-mob forces in M+. Covers all 8 Midnight Season 1 dungeons.
+- New ElvUI tag: **[kes:group]** — shows "Group: X" only while in a raid group.
+
+### Changes
+- New sidebar section: **Dungeons** (hidden pending further testing).
+- `.luacheckrc`: Added missing WoW API globals (Mixin, UnitClassification, UnitSex, UnitPowerType, C_ScenarioInfo, GetRaidRosterInfo, WarpDeplete).
+
 ## v1.9.2
 ### Changes
 - **Code Standards**: Unicode box headers, 81-dash section dividers, and `-- Local references` cleanup across all 138+ Lua files. Removed 8 stub files (CDMGlow, CDMOverlay, Chat, Minimap). Suppressed unused `self` warnings in `.luacheckrc`.

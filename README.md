@@ -6,7 +6,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 
 ## Features
 
-- **40+ modules** — combat HUD, buff tracking, automation, and UI skinning
+- **45+ modules** — combat HUD, buff tracking, automation, dungeon tools, and UI skinning
 - **Dark themed GUI** — custom settings panel with sidebar navigation and 8 color themes
 - **Edit mode** — drag any element to reposition, with anchor and strata controls
 - **Profile system** — save, copy, and reset per-character or shared profiles
@@ -70,14 +70,30 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Blizzard Texts | Font and outline changes for Blizzard text |
 | Blizzard Tooltips | Tooltip backdrop and font restyling |
 | Micro Menu | Micro menu bar appearance |
+| Battle.net Toast | Dark theme for BNet notification toasts with custom anchor positioning |
 | Details Backdrop | Details! Damage Meter backdrop styling |
 | Raid Manager Panel | Raid manager panel appearance |
+
+## Dungeons
+
+| Module | Description |
+|---|---|
+| WarpDeplete Forces | Restores live pull forces tracking to WarpDeplete using fingerprint-based mob identification — updates every 0.5s during M+ combat with per-mob tooltip forces |
 
 ## Encounter Tools
 
 | Module | Description |
 |---|---|
 | Boss Debuffs | External debuff icon display with cooldown spiral, duration text, encounter blacklist, and visibility gating |
+
+## ElvUI Tags
+
+| Tag | Description |
+|---|---|
+| `[kes:name-classcolor]` | Unit name with class/reaction color |
+| `[kes:target:separator]` | White » separator, hidden when no target |
+| `[kes:target:name-classcolor]` | Target name with class/reaction color |
+| `[kes:group]` | Shows "Group: X" only while in a raid |
 
 ## Settings
 
