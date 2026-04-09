@@ -3,6 +3,8 @@
 -- ║  Module: WarpDeplete Forces Tracker                      ║
 -- ║  Purpose: Injects live pull forces tracking into         ║
 -- ║           WarpDeplete using fingerprint-based mob ID.    ║
+-- ║  Fixes: Death tooltip missing in M+ (secret GUID),      ║
+-- ║         death names not class-colored (wrong API return).║
 -- ║  Requires: WarpDeplete addon                             ║
 -- ║  Data: MythicPlusCount (Midnight Season 1)               ║
 -- ╚══════════════════════════════════════════════════════════╝
@@ -25,9 +27,12 @@ local UnitSex = UnitSex
 local UnitClass = UnitClass
 local UnitPowerType = UnitPowerType
 local C_ChallengeMode = C_ChallengeMode
-local C_ScenarioInfo = C_ScenarioInfo
 local C_UnitAuras = C_UnitAuras
 local UnitGUID = UnitGUID
+local UnitName = UnitName
+local GetNumGroupMembers = GetNumGroupMembers
+local IsInRaid = IsInRaid
+local wipe = wipe
 local C_Timer = C_Timer
 local pcall = pcall
 local tonumber = tonumber
@@ -360,34 +365,6 @@ local function GetMobForces(npcID, mapID)
 end
 
 ---------------------------------------------------------------------------------
--- Scenario Forces Reading
----------------------------------------------------------------------------------
-
-local function ReadEnemyForcesRaw()
-    if not C_ScenarioInfo or not C_ScenarioInfo.GetScenarioStepInfo then return 0, 0 end
-    local stepInfo = C_ScenarioInfo.GetScenarioStepInfo()
-    if not stepInfo or not stepInfo.numCriteria then return 0, 0 end
-    if issecretvalue(stepInfo.numCriteria) then return 0, 0 end
-
-    for i = 1, stepInfo.numCriteria do
-        local cInfo = C_ScenarioInfo.GetCriteriaInfo(i)
-        if cInfo and cInfo.isWeightedProgress then
-            local total = cInfo.totalQuantity
-            if not total or issecretvalue(total) then return 0, 0 end
-            local qStr = cInfo.quantityString
-            if qStr and not issecretvalue(qStr) then
-                local rawCount = tonumber(qStr:match("(%d+)"))
-                if rawCount then return rawCount, total end
-            end
-            local qty = cInfo.quantity
-            if qty and not issecretvalue(qty) then return qty, total end
-            return 0, total
-        end
-    end
-    return 0, 0
-end
-
----------------------------------------------------------------------------------
 -- DB Helper
 ---------------------------------------------------------------------------------
 
@@ -400,7 +377,6 @@ end
 ---------------------------------------------------------------------------------
 
 local inCombat = false
-local combatStartQty = 0
 local currentMapID = nil
 local ticker = nil
 
@@ -415,15 +391,10 @@ end
 local function ScanPullForces()
     if not inCombat or not currentMapID then return 0 end
 
-    -- Killed forces (scenario delta)
-    local qty, _ = ReadEnemyForcesRaw()
-    local killedCount = 0
-    if qty > 0 then
-        killedCount = qty - combatStartQty
-        if killedCount < 0 then killedCount = 0 end
-    end
-
-    -- Alive forces (nameplate fingerprint scan)
+    -- Only count ALIVE mobs in combat on nameplates.
+    -- WarpDeplete already tracks killed forces via its own
+    -- SCENARIO_CRITERIA_UPDATE → SetForcesCurrent() pipeline.
+    -- SetForcesPull is the OVERLAY showing what's still alive.
     local aliveCount = 0
     for i = 1, 40 do
         local unit = "nameplate" .. i
@@ -443,7 +414,7 @@ local function ScanPullForces()
         end
     end
 
-    return killedCount + aliveCount
+    return aliveCount
 end
 
 local function PushToWarpDeplete(pullCount)
@@ -502,6 +473,69 @@ local function SetupTooltip()
 end
 
 ---------------------------------------------------------------------------------
+-- Death Tracking Fix
+-- WarpDeplete's UNIT_DIED bails when guid is secret (Midnight M+).
+-- We register our own UNIT_DIED and scan the roster for dead players,
+-- injecting directly into WarpDeplete.state.deathDetails with the
+-- correct class token from UnitClass (not UnitClassFromGUID).
+---------------------------------------------------------------------------------
+
+local deathFixApplied = false
+local recentDeaths = {} -- [name] = true, prevents duplicate entries per death
+
+local function SetupDeathClassFix()
+    if deathFixApplied then return end
+    if not WarpDeplete then return end
+
+    -- Our own UNIT_DIED handler — bypasses WarpDeplete's GUID check
+    local deathFrame = CreateFrame("Frame")
+    deathFrame:RegisterEvent("UNIT_DIED")
+    deathFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+    deathFrame:SetScript("OnEvent", function(_, event)
+        if not WarpDeplete or not WarpDeplete.state then return end
+
+        if event == "PLAYER_REGEN_ENABLED" then
+            wipe(recentDeaths)
+            return
+        end
+
+        -- UNIT_DIED: scan roster for who just died
+        local timer = WarpDeplete.state.timer or 0
+
+        -- Check player
+        if UnitIsDead("player") and not recentDeaths[UnitName("player")] then
+            local name = UnitName("player")
+            local _, classToken = UnitClass("player")
+            if name and classToken then
+                recentDeaths[name] = true
+                WarpDeplete:AddDeathDetails(timer, name, classToken)
+            end
+        end
+
+        -- Check party/raid
+        local size = GetNumGroupMembers()
+        if size > 0 then
+            local token = IsInRaid() and "raid" or "party"
+            for i = 1, size do
+                local unit = token .. i
+                if UnitExists(unit) and UnitIsDead(unit) then
+                    local name = UnitName(unit)
+                    if name and not recentDeaths[name] then
+                        local _, classToken = UnitClass(unit)
+                        if classToken then
+                            recentDeaths[name] = true
+                            WarpDeplete:AddDeathDetails(timer, name, classToken)
+                        end
+                    end
+                end
+            end
+        end
+    end)
+
+    deathFixApplied = true
+end
+
+---------------------------------------------------------------------------------
 -- Event Handlers
 ---------------------------------------------------------------------------------
 
@@ -509,8 +543,6 @@ function WDF:PLAYER_REGEN_DISABLED()
     currentMapID = GetActiveMapID()
     if not currentMapID then return end
     inCombat = true
-    local qty, _ = ReadEnemyForcesRaw()
-    combatStartQty = qty
     OnCombatTick()
 
     -- Start nameplate scan ticker for this combat
@@ -544,7 +576,6 @@ end
 
 function WDF:CHALLENGE_MODE_START()
     currentMapID = GetActiveMapID()
-    combatStartQty = 0
     inCombat = false
     PushToWarpDeplete(0)
 end
@@ -558,7 +589,6 @@ end
 function WDF:CHALLENGE_MODE_RESET()
     currentMapID = nil
     inCombat = false
-    combatStartQty = 0
 end
 
 function WDF:ZONE_CHANGED_NEW_AREA()
@@ -589,7 +619,7 @@ end
 function WDF:OnEnable()
     -- Require WarpDeplete
     if not WarpDeplete then
-        KE:Print("WarpDeplete Forces: WarpDeplete addon not found. Module disabled.")
+        KE:Print("WarpDeplete+: WarpDeplete addon not found. Module disabled.")
         self:SetEnabledState(false)
         return
     end
@@ -611,6 +641,9 @@ function WDF:OnEnable()
 
     -- Tooltip hook
     SetupTooltip()
+
+    -- Fix WarpDeplete death class colors (uses className instead of classFilename)
+    SetupDeathClassFix()
 end
 
 function WDF:OnDisable()

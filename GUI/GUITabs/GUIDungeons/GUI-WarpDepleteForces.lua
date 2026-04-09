@@ -56,7 +56,7 @@ GUIFrame:RegisterContent("WarpDepleteForces", function(scrollChild, yOffset)
     ---------------------------------------------------------------------------------
     -- Card 1: Enable
     ---------------------------------------------------------------------------------
-    local card1 = GUIFrame:CreateCard(scrollChild, "WarpDeplete Forces", yOffset)
+    local card1 = GUIFrame:CreateCard(scrollChild, "WarpDeplete+", yOffset)
 
     -- WarpDeplete status
     local row0 = GUIFrame:CreateRow(card1.content, 20)
@@ -77,7 +77,7 @@ GUIFrame:RegisterContent("WarpDepleteForces", function(scrollChild, yOffset)
 
     -- Enable + Tooltip toggles (same row)
     local row1 = GUIFrame:CreateRow(card1.content, 40)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Forces Tracker", db.Enabled ~= false,
+    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable WarpDeplete+", db.Enabled ~= false,
         function(checked)
             if not warpDepleteLoaded then
                 checked = false
@@ -86,11 +86,11 @@ GUIFrame:RegisterContent("WarpDepleteForces", function(scrollChild, yOffset)
             ApplyModuleState(checked)
             UpdateAllWidgetStates()
         end,
-        true, "Forces Tracker", "On", "Off"
+        true, "WarpDeplete+", "On", "Off"
     )
     row1:AddWidget(enableCheck, 0.5)
 
-    local tooltipCheck = GUIFrame:CreateCheckbox(row1, "Show Forces on Tooltip", db.Tooltip ~= false,
+    local tooltipCheck = GUIFrame:CreateCheckbox(row1, "Enemy Count on Tooltip", db.Tooltip ~= false,
         function(checked)
             db.Tooltip = checked
         end
@@ -108,11 +108,12 @@ GUIFrame:RegisterContent("WarpDepleteForces", function(scrollChild, yOffset)
 
     -- Info text
     local infoLines = {
-        "Restores live pull forces tracking to WarpDeplete enemy forces bar.",
-        "Uses fingerprint-based mob identification to bypass 12.0 secret values.",
+        "Restores live pull forces tracking to WarpDeplete.",
+        "Fixes death tooltip and class-colored names in M+.",
+        "Per-mob forces shown on tooltip mouseover.",
         "Data: Midnight Season 1 (8 dungeons).",
     }
-    local rowHeight = 65
+    local rowHeight = 80
     local row3 = GUIFrame:CreateRow(card1.content, rowHeight)
     local infoWidget = GUIFrame:CreateText(
         row3,

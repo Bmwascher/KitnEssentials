@@ -824,7 +824,7 @@ local Defaults = {
 
         Dungeons = {
             WarpDepleteForces = {
-                Enabled = false,
+                Enabled = true,
                 Tooltip = true,
             },
             EnemyCounter = {

@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.10.2
+### Fixes
+- **WarpDeplete+**: Fixed pull forces overlay only counting alive mobs (was double-counting with WarpDeplete's own killed tracking).
+- **WarpDeplete+**: Fixed death tooltip showing "No Recorded Player Deaths" in M+ (GUID is secret, bypassed with roster scan).
+- **WarpDeplete+**: Fixed death names not class-colored (was using localized className instead of classFilename token).
+
+### Changes
+- **WarpDeplete+**: Renamed from "WarpDeplete Forces" to reflect expanded scope (forces + death fixes + tooltip).
+
 ## v1.10.1
 ### Additions
 - New module: **Enemy Counter** (Dungeons) — displays the number of enemies currently in combat via nameplate scanning. Editable prefix with toggle, combat-only visibility option, standard font/color settings.
