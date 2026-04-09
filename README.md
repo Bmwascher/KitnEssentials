@@ -78,6 +78,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 
 | Module | Description |
 |---|---|
+| Enemy Counter | Displays the number of enemies currently in combat via nameplate scanning with editable prefix and combat-only visibility |
 | WarpDeplete Forces | Restores live pull forces tracking to WarpDeplete using fingerprint-based mob identification — updates every 0.5s during M+ combat with per-mob tooltip forces |
 
 ## Encounter Tools

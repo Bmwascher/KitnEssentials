@@ -827,6 +827,21 @@ local Defaults = {
                 Enabled = false,
                 Tooltip = true,
             },
+            EnemyCounter = {
+                Enabled = false,
+                CombatOnly = false,
+                ShowPrefix = true,
+                Prefix = "Enemies:",
+                FontSize = 20,
+                FontFace = "Expressway",
+                FontOutline = "SOFTOUTLINE",
+                ColorMode = "theme",
+                Color = { 1, 1, 1, 1 },
+                Strata = "MEDIUM",
+                anchorFrameType = "UIPARENT",
+                ParentFrame = "UIParent",
+                Position = DefaultPosition(0, 215),
+            },
         },
 
         -----------------------------------------------------------------
@@ -918,7 +933,7 @@ local Defaults = {
                 BackdropBorderColor = { 0, 0, 0, 1 },
                 anchorFrameType = "SELECTFRAME",
                 ParentFrame = "Minimap",
-                Strata = "HIGH",
+                Strata = "MEDIUM",
                 Position = {
                     AnchorFrom = "TOP",
                     AnchorTo = "BOTTOM",

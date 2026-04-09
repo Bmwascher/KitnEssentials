@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.10.1
+### Additions
+- New module: **Enemy Counter** (Dungeons) — displays the number of enemies currently in combat via nameplate scanning. Editable prefix with toggle, combat-only visibility option, standard font/color settings.
+- **WarpDeplete Forces**: Unhidden sidebar entry for Dungeons section.
+
 ## v1.10.0
 ### Additions
 - New module: **Battle.net Toast** (Skinning) — dark theme skinning for BNet notification toasts with custom anchor positioning and EditMode support. Ported from NorskenUI.

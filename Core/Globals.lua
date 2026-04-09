@@ -206,6 +206,7 @@ local PREVIEW_MODULES = {
     "FocusCastbar", "RaidNotifications", "HuntersMark", "RangeChecker",
     "TimeSpiral", "DisintegrateTicks", "StasisTracker", "Recuperate", "BloodlustTracker", "KickTracker",
     "NoMovementAlert", "AugBuffsTracker", "GreatVaultAlert", "PotionReady", "BossDebuffs",
+    "EnemyCounter",
 }
 
 PreviewManager.guiOpen = false
