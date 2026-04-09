@@ -102,6 +102,7 @@ GUIFrame.sidebarConfig = {
             { id = "SkinUICleanup",    text = "General UI Clean Up" },
             { id = "SkinAuras",        text = "Buffs, Debuffs & Externals" },
             { id = "SkinActionBars",   text = "Action Bars" },
+            { id = "SkinBattlenet",    text = "Battle.net Toast" },
             { id = "SkinMouseover",    text = "Blizzard Mouseover" },
             { id = "SkinMessages",     text = "Blizzard Texts" },
             { id = "SkinTooltips",     text = "Blizzard Tooltips" },
@@ -110,6 +111,15 @@ GUIFrame.sidebarConfig = {
             { id = "SkinRaidManager",  text = "Raid Manager Panel" },
         },
     },
+    -- {
+    --     id = "dungeons_section",
+    --     type = "header",
+    --     text = "\226\128\162 Dungeons",
+    --     defaultExpanded = true,
+    --     items = {
+    --         { id = "WarpDepleteForces", text = "WarpDeplete Forces" },
+    --     },
+    -- },
     {
         id = "encounter_section",
         type = "header",

@@ -819,6 +819,17 @@ local Defaults = {
         },
 
         -----------------------------------------------------------------
+        -- Dungeons Modules
+        -----------------------------------------------------------------
+
+        Dungeons = {
+            WarpDepleteForces = {
+                Enabled = false,
+                Tooltip = true,
+            },
+        },
+
+        -----------------------------------------------------------------
         -- Skinning Modules
         -----------------------------------------------------------------
 
@@ -1108,7 +1119,15 @@ local Defaults = {
                 defBorderColor = { 0, 0, 0, 1 },
             },
             UICleanup    = { Enabled = false },
-            Battlenet    = { Enabled = false },
+            Battlenet    = {
+                Enabled = false,
+                Position = {
+                    AnchorFrom = "BOTTOMLEFT",
+                    AnchorTo = "LEFT",
+                    XOffset = 1,
+                    YOffset = 0,
+                },
+            },
             RaidManager  = {
                 Enabled = false,
                 Position = {

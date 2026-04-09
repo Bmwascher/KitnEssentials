@@ -18,6 +18,9 @@ local UnitIsPlayer = UnitIsPlayer
 local UnitReaction = UnitReaction
 local UnitExists = UnitExists
 local UnitInPartyIsAI = UnitInPartyIsAI
+local IsInRaid = IsInRaid
+local GetNumGroupMembers = GetNumGroupMembers
+local GetRaidRosterInfo = GetRaidRosterInfo
 local format = string.format
 
 local ElvUF_colors_class = ElvUF.colors.class
@@ -77,3 +80,15 @@ E:AddTag('kes:target:name-classcolor', 'UNIT_TARGET UNIT_FACTION', function(unit
     return GetUnitColor(targetUnit) .. name .. '|r'
 end)
 E:AddTagInfo('kes:target:name-classcolor', 'KitnEssentials', "Target name with class/reaction color")
+
+E:AddTag('kes:group', 'GROUP_ROSTER_UPDATE', function()
+    if not IsInRaid() then return end
+    local playerName = UnitName('player')
+    for i = 1, GetNumGroupMembers() do
+        local name, _, subgroup = GetRaidRosterInfo(i)
+        if name == playerName then
+            return 'Group: ' .. subgroup
+        end
+    end
+end)
+E:AddTagInfo('kes:group', 'KitnEssentials', "Shows 'Group: X' only while in a raid")

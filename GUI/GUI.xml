@@ -59,6 +59,9 @@
     <Script file="GUITabs\GUIUtilities\GUI-PotionReady.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-BossDebuffs.lua" />
 
+    <!-- Dungeons tabs -->
+    <Script file="GUITabs\GUIDungeons\GUI-WarpDepleteForces.lua" />
+
     <!-- QoL tabs -->
     <Script file="GUITabs\GUIQoL\GUI-Automation.lua" />
     <Script file="GUITabs\GUIQoL\GUI-CVars.lua" />
