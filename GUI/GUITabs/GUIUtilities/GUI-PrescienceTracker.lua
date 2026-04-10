@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  GUI-AugBuffsTracker.lua                                 ║
--- ║  GUI: Aug Buffs Tracker                                  ║
--- ║  Purpose: Configuration panel for the AugBuffsTracker   ║
+-- ║  GUI-PrescienceTracker.lua                               ║
+-- ║  GUI: Prescience Tracker                                 ║
+-- ║  Purpose: Configuration panel for the PrescienceTracker  ║
 -- ║  module.                                                 ║
 -- ╚══════════════════════════════════════════════════════════╝
 
@@ -12,8 +12,8 @@ local Theme = KE.Theme
 local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
 local table_insert = table.insert
 
-GUIFrame:RegisterContent("AugBuffsTracker", function(scrollChild, yOffset)
-    local db = KE.db and KE.db.profile.AugBuffsTracker
+GUIFrame:RegisterContent("PrescienceTracker", function(scrollChild, yOffset)
+    local db = KE.db and KE.db.profile.PrescienceTracker
     if not db then
         local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
         errorCard:AddLabel("Database not available")
@@ -21,23 +21,24 @@ GUIFrame:RegisterContent("AugBuffsTracker", function(scrollChild, yOffset)
     end
 
     local allWidgets = {}
+    local nameColorWidget  -- forward-declared so UpdateAllWidgetStates can reference it
 
     local function ApplySettings()
         if KitnEssentials then
-            local mod = KitnEssentials:GetModule("AugBuffsTracker", true)
+            local mod = KitnEssentials:GetModule("PrescienceTracker", true)
             if mod and mod.ApplySettings then mod:ApplySettings() end
         end
     end
 
     local function ApplyModuleState(enabled)
         if not KitnEssentials then return end
-        local mod = KitnEssentials:GetModule("AugBuffsTracker", true)
+        local mod = KitnEssentials:GetModule("PrescienceTracker", true)
         if not mod then return end
         mod.db.Enabled = enabled
         if enabled then
-            KitnEssentials:EnableModule("AugBuffsTracker")
+            KitnEssentials:EnableModule("PrescienceTracker")
         else
-            KitnEssentials:DisableModule("AugBuffsTracker")
+            KitnEssentials:DisableModule("PrescienceTracker")
         end
     end
 
@@ -46,24 +47,29 @@ GUIFrame:RegisterContent("AugBuffsTracker", function(scrollChild, yOffset)
         for _, widget in ipairs(allWidgets) do
             if widget.SetEnabled then widget:SetEnabled(mainEnabled) end
         end
+        -- Override: Name Color picker is disabled while Class Color Names is on,
+        -- regardless of module enable state (as long as module is enabled).
+        if mainEnabled and db.ClassColorNames and nameColorWidget and nameColorWidget.SetEnabled then
+            nameColorWidget:SetEnabled(false)
+        end
     end
 
     local a = Theme.accent
     local accentDash = string.format("|cff%02x%02x%02x—|r", a[1]*255, a[2]*255, a[3]*255)
 
     ---------------------------------------------------------------------------------
-    -- Card 1: Aug Buffs Tracker (Enable + Buff Toggles)
+    -- Card 1: Prescience Tracker (Enable + Buff Toggles)
     ---------------------------------------------------------------------------------
-    local card1 = GUIFrame:CreateCard(scrollChild, "Aug Buffs Tracker", yOffset)
+    local card1 = GUIFrame:CreateCard(scrollChild, "Prescience Tracker", yOffset)
 
     local row1a = GUIFrame:CreateRow(card1.content, 36)
-    local enableCheck = GUIFrame:CreateCheckbox(row1a, "Enable Aug Buffs Tracker", db.Enabled ~= false,
+    local enableCheck = GUIFrame:CreateCheckbox(row1a, "Enable Prescience Tracker", db.Enabled ~= false,
         function(checked)
             db.Enabled = checked
             ApplyModuleState(checked)
             UpdateAllWidgetStates()
         end,
-        true, "Aug Buffs Tracker", "On", "Off"
+        true, "Prescience Tracker", "On", "Off"
     )
     row1a:AddWidget(enableCheck, 1)
     card1:AddRow(row1a, 36)
@@ -308,14 +314,11 @@ GUIFrame:RegisterContent("AugBuffsTracker", function(scrollChild, yOffset)
 
     -- Class Color Names toggle
     local row6a = GUIFrame:CreateRow(card6.content, 36)
-    local nameColorWidget  -- forward declare for conditional enable
     local classColorCheck = GUIFrame:CreateCheckbox(row6a, "Class Color Names", db.ClassColorNames == true,
         function(checked)
             db.ClassColorNames = checked
             ApplySettings()
-            if nameColorWidget and nameColorWidget.SetEnabled then
-                nameColorWidget:SetEnabled(not checked)
-            end
+            UpdateAllWidgetStates()
         end)
     row6a:AddWidget(classColorCheck, 1)
     table_insert(allWidgets, classColorCheck)
@@ -348,13 +351,6 @@ GUIFrame:RegisterContent("AugBuffsTracker", function(scrollChild, yOffset)
     row6b:AddWidget(critPicker, 0.34)
     table_insert(allWidgets, critPicker)
     card6:AddRow(row6b, 40)
-
-    -- Disable Name Color picker when Class Color Names is on
-    if db.ClassColorNames then
-        if nameColorWidget and nameColorWidget.SetEnabled then
-            nameColorWidget:SetEnabled(false)
-        end
-    end
 
     card6:AddLabel(accentDash .. " |cff888888Crit color applies to Prescience when it has a critical strike bonus.|r")
 

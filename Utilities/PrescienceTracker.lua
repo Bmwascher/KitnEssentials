@@ -1,6 +1,6 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  AugBuffsTracker.lua                                     ║
--- ║  Module: Aug Buffs Tracker                               ║
+-- ║  PrescienceTracker.lua                                   ║
+-- ║  Module: Prescience Tracker                              ║
 -- ║  Purpose: Tracks Prescience and Shifting Sands on        ║
 -- ║           party/raid members with icon display.          ║
 -- ║  Note: Evoker only (Augmentation).                       ║
@@ -10,9 +10,9 @@
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
----@class AugBuffsTracker: AceModule, AceEvent-3.0
-local ABT = KitnEssentials:NewModule("AugBuffsTracker", "AceEvent-3.0")
-ABT.classRestriction = "EVOKER"
+---@class PrescienceTracker: AceModule, AceEvent-3.0
+local PT = KitnEssentials:NewModule("PrescienceTracker", "AceEvent-3.0")
+PT.classRestriction = "EVOKER"
 
 local C_UnitAuras = C_UnitAuras
 local C_Spell = C_Spell
@@ -59,22 +59,22 @@ local ROLE_ATLASES = {
 ---------------------------------------------------------------------------------
 -- Module State
 ---------------------------------------------------------------------------------
-ABT.containerFrame = nil
-ABT.tickerFrame = nil
-ABT.trackedBuffs = {}     -- [auraInstanceID] = { unit, name, spellID, expirationTime, role, isCrit }
-ABT.activeEntries = {}    -- [auraInstanceID] = entryFrame
-ABT.entryPool = {}        -- reusable display entries
-ABT.sortedEntries = {}    -- ordered for layout
-ABT.isAugSpec = false
-ABT.isPreview = false
-ABT.editModeRegistered = false
-ABT.elapsed = 0
+PT.containerFrame = nil
+PT.tickerFrame = nil
+PT.trackedBuffs = {}     -- [auraInstanceID] = { unit, name, spellID, expirationTime, role, isCrit }
+PT.activeEntries = {}    -- [auraInstanceID] = entryFrame
+PT.entryPool = {}        -- reusable display entries
+PT.sortedEntries = {}    -- ordered for layout
+PT.isAugSpec = false
+PT.isPreview = false
+PT.editModeRegistered = false
+PT.elapsed = 0
 
 ---------------------------------------------------------------------------------
 -- DB Helper
 ---------------------------------------------------------------------------------
-function ABT:UpdateDB()
-    self.db = KE.db.profile.AugBuffsTracker
+function PT:UpdateDB()
+    self.db = KE.db.profile.PrescienceTracker
 end
 
 ---------------------------------------------------------------------------------
@@ -87,7 +87,7 @@ local function IsAugSpec()
     return specID == AUG_SPEC_ID
 end
 
-function ABT:OnSpecChanged()
+function PT:OnSpecChanged()
     self.isAugSpec = IsAugSpec()
     if self.isPreview then return end
 
@@ -116,7 +116,7 @@ end
 ---------------------------------------------------------------------------------
 -- Aura Detection
 ---------------------------------------------------------------------------------
-function ABT:ScanUnit(unit)
+function PT:ScanUnit(unit)
     if not UnitExists(unit) then return end
 
     for spellID, def in pairs(BUFF_DEFS) do
@@ -135,7 +135,7 @@ function ABT:ScanUnit(unit)
     end
 end
 
-function ABT:ScanAllUnits()
+function PT:ScanAllUnits()
     -- Clear existing tracked data
     wipe(self.trackedBuffs)
 
@@ -146,14 +146,14 @@ function ABT:ScanAllUnits()
     self:LayoutEntries()
 end
 
-function ABT:RescanRoster()
+function PT:RescanRoster()
     if not self.isAugSpec then return end
     self:ScanRoster()
     self:SyncEntries()
     self:LayoutEntries()
 end
 
-function ABT:ScanRoster()
+function PT:ScanRoster()
     self:ScanUnit("player")
     local size = GetNumGroupMembers()
     if size > 0 then
@@ -167,7 +167,7 @@ function ABT:ScanRoster()
     end
 end
 
-function ABT:AddTrackedBuff(unit, aura, spellID)
+function PT:AddTrackedBuff(unit, aura, spellID)
     if not aura.auraInstanceID then return end
 
     -- Guard: if expirationTime is secret (API call in combat), skip — can't track timer
@@ -196,12 +196,12 @@ function ABT:AddTrackedBuff(unit, aura, spellID)
     }
 end
 
-function ABT:RemoveTrackedBuff(auraInstanceID)
+function PT:RemoveTrackedBuff(auraInstanceID)
     self.trackedBuffs[auraInstanceID] = nil
     self:ReleaseEntry(auraInstanceID)
 end
 
-function ABT:OnUnitAura(_, unit, info)
+function PT:OnUnitAura(_, unit, info)
     if not unit then return end
     if not self.db.Enabled or self.isPreview then return end
     if not self.isAugSpec then return end
@@ -280,10 +280,10 @@ end
 ---------------------------------------------------------------------------------
 -- Display
 ---------------------------------------------------------------------------------
-function ABT:CreateFrames()
+function PT:CreateFrames()
     if self.containerFrame then return end
 
-    local frame = CreateFrame("Frame", "KE_AugBuffsTrackerFrame", UIParent)
+    local frame = CreateFrame("Frame", "KE_PrescienceTrackerFrame", UIParent)
     frame:SetSize(1, 1)
     frame:SetFrameStrata(self.db.Strata or "MEDIUM")
     self.containerFrame = frame
@@ -296,7 +296,7 @@ function ABT:CreateFrames()
     self.tickerFrame = ticker
 end
 
-function ABT:CreateEntry()
+function PT:CreateEntry()
     local db = self.db
     local entry = CreateFrame("Frame", nil, self.containerFrame)
     entry:SetSize(db.IconSize or 32, (db.IconSize or 32) + 20)
@@ -313,10 +313,12 @@ function ABT:CreateEntry()
     entry.icon = icon
     KE:AddIconBorders(iconFrame)
 
-    -- Role badge (small overlay on icon)
-    local roleBadge = entry:CreateTexture(nil, "OVERLAY")
+    -- Role badge (small overlay on icon). Parent to iconFrame (not entry) so it
+    -- sits at the same frame level as the icon. Sublevel 7 is the max for textures;
+    -- creation order puts it above the borders (also OVERLAY/7) within the same sublevel.
+    local roleBadge = iconFrame:CreateTexture(nil, "OVERLAY", nil, 7)
     roleBadge:SetSize(12, 12)
-    roleBadge:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", 2, -2)
+    roleBadge:SetPoint("BOTTOMRIGHT", iconFrame, "BOTTOMRIGHT", 2, -2)
     entry.roleBadge = roleBadge
 
     -- Timer text (on icon frame, above borders)
@@ -333,7 +335,7 @@ function ABT:CreateEntry()
     return entry
 end
 
-function ABT:GetOrCreateEntry(auraInstanceID)
+function PT:GetOrCreateEntry(auraInstanceID)
     if self.activeEntries[auraInstanceID] then
         return self.activeEntries[auraInstanceID]
     end
@@ -347,7 +349,7 @@ function ABT:GetOrCreateEntry(auraInstanceID)
     return entry
 end
 
-function ABT:ReleaseEntry(auraInstanceID)
+function PT:ReleaseEntry(auraInstanceID)
     local entry = self.activeEntries[auraInstanceID]
     if not entry then return end
 
@@ -356,7 +358,7 @@ function ABT:ReleaseEntry(auraInstanceID)
     table_insert(self.entryPool, entry)
 end
 
-function ABT:ClearAllEntries()
+function PT:ClearAllEntries()
     for id in pairs(self.activeEntries) do
         self:ReleaseEntry(id)
     end
@@ -364,7 +366,7 @@ function ABT:ClearAllEntries()
     wipe(self.sortedEntries)
 end
 
-function ABT:SyncEntries()
+function PT:SyncEntries()
     -- Release entries for buffs no longer tracked
     for id in pairs(self.activeEntries) do
         if not self.trackedBuffs[id] then
@@ -380,7 +382,7 @@ function ABT:SyncEntries()
     end
 end
 
-function ABT:UpdateEntryVisuals(entry, data)
+function PT:UpdateEntryVisuals(entry, data)
     local db = self.db
 
     -- Icon
@@ -439,7 +441,7 @@ function ABT:UpdateEntryVisuals(entry, data)
     entry:SetSize(iconSize, iconSize + nameHeight)
 end
 
-function ABT:LayoutEntries()
+function PT:LayoutEntries()
     if not self.containerFrame then return end
 
     local db = self.db
@@ -519,7 +521,7 @@ end
 ---------------------------------------------------------------------------------
 -- OnUpdate Ticker
 ---------------------------------------------------------------------------------
-function ABT:StartOnUpdate()
+function PT:StartOnUpdate()
     if not self.tickerFrame then return end
     self.tickerFrame:SetScript("OnUpdate", function(_, dt)
         if self.isPreview then return end
@@ -530,14 +532,14 @@ function ABT:StartOnUpdate()
     end)
 end
 
-function ABT:StopOnUpdate()
+function PT:StopOnUpdate()
     if self.tickerFrame then
         self.tickerFrame:SetScript("OnUpdate", nil)
     end
     self.elapsed = 0
 end
 
-function ABT:UpdateTimers()
+function PT:UpdateTimers()
     if not self.isAugSpec or not self.db.Enabled then return end
 
     local now = GetTime()
@@ -578,7 +580,7 @@ end
 ---------------------------------------------------------------------------------
 -- Apply Settings
 ---------------------------------------------------------------------------------
-function ABT:ApplySettings()
+function PT:ApplySettings()
     if not self.containerFrame then return end
 
     KE:ApplyFramePosition(self.containerFrame, self.db.Position, self.db)
@@ -601,11 +603,11 @@ end
 ---------------------------------------------------------------------------------
 -- EditMode
 ---------------------------------------------------------------------------------
-function ABT:RegWithEditMode()
+function PT:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
-            key = "AugBuffsTracker",
-            displayName = "Aug Buffs Tracker",
+            key = "PrescienceTracker",
+            displayName = "Prescience Tracker",
             frame = self.containerFrame,
             getPosition = function() return self.db.Position end,
             setPosition = function(pos)
@@ -615,7 +617,7 @@ function ABT:RegWithEditMode()
             getParentFrame = function()
                 return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
             end,
-            guiPath = "AugBuffsTracker",
+            guiPath = "PrescienceTracker",
         })
         self.editModeRegistered = true
     end
@@ -624,7 +626,7 @@ end
 ---------------------------------------------------------------------------------
 -- Preview
 ---------------------------------------------------------------------------------
-function ABT:ShowPreview()
+function PT:ShowPreview()
     if not self.containerFrame then
         self:CreateFrames()
     end
@@ -677,7 +679,7 @@ function ABT:ShowPreview()
     self:ApplySettings()
 end
 
-function ABT:HidePreview()
+function PT:HidePreview()
     self.isPreview = false
     self:ClearAllEntries()
 
@@ -692,13 +694,13 @@ end
 ---------------------------------------------------------------------------------
 -- Lifecycle
 ---------------------------------------------------------------------------------
-function ABT:OnInitialize()
+function PT:OnInitialize()
     self:UpdateDB()
     self.isAugSpec = IsAugSpec()
     self:SetEnabledState(false)
 end
 
-function ABT:OnEnable()
+function PT:OnEnable()
     if not self.db.Enabled then return end
     if select(2, UnitClass("player")) ~= "EVOKER" then return end
 
@@ -724,7 +726,7 @@ function ABT:OnEnable()
     end)
 end
 
-function ABT:OnRosterUpdate()
+function PT:OnRosterUpdate()
     -- Roster changes don't invalidate existing buff data.
     -- Out of combat: additive re-scan to pick up new members.
     -- In combat: skip — UNIT_AURA handles everything, API unreliable.
@@ -733,7 +735,7 @@ function ABT:OnRosterUpdate()
     end
 end
 
-function ABT:OnZoneChange()
+function PT:OnZoneChange()
     if not self.db.Enabled then return end
     C_Timer.After(0.5, function()
         if not self.db or not self.db.Enabled then return end
@@ -744,7 +746,7 @@ function ABT:OnZoneChange()
     end)
 end
 
-function ABT:OnDisable()
+function PT:OnDisable()
     self:UnregisterAllEvents()
     self:StopOnUpdate()
     self:ClearAllEntries()

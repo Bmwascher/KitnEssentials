@@ -20,6 +20,13 @@ local function GetModule()
 end
 
 GUIFrame:RegisterContent("EbonMightHelper", function(scrollChild, yOffset)
+    -- Render the Ebon Might Tracker cards first so the shared "Ebon Might" tab
+    -- contains both modules' configuration stacked in one view.
+    local trackerBuilder = GUIFrame.registeredContent and GUIFrame.registeredContent["EbonMightTracker"]
+    if trackerBuilder then
+        yOffset = trackerBuilder(scrollChild, yOffset)
+    end
+
     local db = KE.db and KE.db.profile.EbonMightHelper
     if not db then
         local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)

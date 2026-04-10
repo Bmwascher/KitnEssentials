@@ -49,8 +49,9 @@
     <Script file="GUITabs\GUIUtilities\GUI-Recuperate.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-DisintegrateTicks.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-StasisTracker.lua" />
+    <Script file="GUITabs\GUIUtilities\GUI-EbonMightTracker.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-EbonMightHelper.lua" />
-    <Script file="GUITabs\GUIUtilities\GUI-AugBuffsTracker.lua" />
+    <Script file="GUITabs\GUIUtilities\GUI-PrescienceTracker.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-EvokerSuite.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-WorldMarkerCycler.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-FocusMarker.lua" />

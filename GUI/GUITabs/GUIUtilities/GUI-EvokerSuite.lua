@@ -11,11 +11,17 @@ local Theme = KE.Theme
 
 local CreateFrame = CreateFrame
 local ipairs = ipairs
+local C_Timer = C_Timer
 
 ---------------------------------------------------------------------------------
 -- Tab State
 ---------------------------------------------------------------------------------
 local activeTab = "DisintegrateTicks"
+-- Debounces rapid tab clicks. Rapid click-through (e.g. from Disintegrate to
+-- another sub-tab in the same frame / back-to-back frames) was leaving the
+-- tab row in a state where only the first button was rendered. Collapsing
+-- multiple clicks into a single end-of-frame RefreshContent avoids the race.
+local refreshScheduled = false
 
 ---------------------------------------------------------------------------------
 -- Tab Bar
@@ -34,7 +40,7 @@ local function BuildTabBar(scrollChild, yOffset)
         { id = "DisintegrateTicks", label = "Disintegrate" },
         { id = "StasisTracker",     label = "Stasis" },
         { id = "EbonMightHelper",   label = "Ebon Might" },
-        { id = "AugBuffsTracker",   label = "Aug Buffs" },
+        { id = "PrescienceTracker", label = "Prescience" },
     }
 
     local tabWidth = 128
@@ -75,7 +81,13 @@ local function BuildTabBar(scrollChild, yOffset)
         btn:SetScript("OnClick", function()
             if activeTab ~= def.id then
                 activeTab = def.id
-                GUIFrame:RefreshContent()
+                if not refreshScheduled then
+                    refreshScheduled = true
+                    C_Timer.After(0, function()
+                        refreshScheduled = false
+                        GUIFrame:RefreshContent()
+                    end)
+                end
             end
         end)
 

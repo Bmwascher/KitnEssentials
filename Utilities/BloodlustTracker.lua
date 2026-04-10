@@ -1,8 +1,8 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  BloodlustTracker.lua                                    ║
 -- ║  Module: Bloodlust Tracker                               ║
--- ║  Purpose: Animated sprite overlay + sound on Bloodlust   ║
--- ║           /Heroism with presets and icon+countdown mode. ║
+-- ║  Purpose: Pedro overlay or icon alert on Bloodlust,      ║
+-- ║           Heroism, and Time Warp.                         ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -14,10 +14,10 @@ local BLT = KitnEssentials:NewModule("BloodlustTracker", "AceEvent-3.0", "AceTim
 
 local GetTime = GetTime
 local CreateFrame = CreateFrame
-local UnitSpellHaste = UnitSpellHaste
 local IsInInstance = IsInInstance
 local PlaySoundFile = PlaySoundFile
 local StopSound = StopSound
+local issecretvalue = issecretvalue
 local C_Sound = C_Sound
 local C_UnitAuras = C_UnitAuras
 local C_Timer = C_Timer
@@ -25,19 +25,19 @@ local pairs = pairs
 local math_floor = math.floor
 local math_max = math.max
 
-
 ---------------------------------------------------------------------------------
 -- Constants
 ---------------------------------------------------------------------------------
 local TIMER_DURATION = 40
 local BASE_FPS = 15
 local FRAME_SIZE = 256
-local HASTE_POLL_INTERVAL = 0.20
-local START_RATIO_MIN = 1.27
-local END_RATIO_MAX = 1.24
 local BLOODLUST_ICON = 136012
 
 local MEDIA_PATH = "Interface\\AddOns\\KitnEssentials\\Media\\BloodlustTracker\\"
+local PEDRO_SHEET = MEDIA_PATH .. "pedro.tga"
+local PEDRO_SOUND = MEDIA_PATH .. "pedro.mp3"
+local PEDRO_FRAMES = 64
+local PEDRO_FPS_RATIO = 0.8
 
 local SATED_DEBUFFS = {
     [57723]  = true, -- Exhaustion (Heroism)
@@ -49,47 +49,31 @@ local SATED_DEBUFFS = {
     [390435] = true, -- Exhaustion (Fury of the Aspects)
 }
 
-local PRESETS = {
-    pedro       = { label = "Pedro",         sheet = "pedro.tga",       sound = "pedro.mp3",       frames = 64, fpsRatio = 0.8, loop = true },
-    chipi       = { label = "Chipi Chipi",   sheet = "chipi.tga",       sound = "chipi.mp3",       frames = 14, fpsRatio = 1.1, loop = true },
-    ninemm      = { label = "9MM Bang",      sound = "9mm.mp3", soundOnly = true, loop = false },
-    erm         = { label = "Sarah Gamer Word", sound = "ERM.mp3",       soundOnly = true, loop = false },
-}
-
-local PRESET_ORDER = { "pedro", "chipi", "ninemm", "erm" }
-
--- Expose for GUI
-BLT.PRESETS = PRESETS
-BLT.PRESET_ORDER = PRESET_ORDER
-
 ---------------------------------------------------------------------------------
 -- Module State
 ---------------------------------------------------------------------------------
 BLT.frame = nil
 BLT.spriteTexture = nil
-BLT.iconTexture = nil
+BLT.iconFrame = nil
 BLT.countdownText = nil
 BLT.isPreview = false
 BLT.testMode = false
 BLT.lustActive = false
+BLT._shown = false
+BLT._renderedMode = nil
 BLT.endTime = 0
 BLT.animAccum = 0
 BLT.frameIndex = 0
-BLT.secondsPerFrame = 1 / BASE_FPS
+BLT.secondsPerFrame = 0
 BLT.sheetW = 0
 BLT.sheetH = 0
 BLT.framesPerRow = 0
-BLT.sheetRows = 0
 BLT.numFrames = 0
 BLT.soundHandle = nil
 BLT.soundLoopTimer = nil
-BLT.soundEndTimer = nil
-BLT.lastFactor = nil
-BLT.preLustFactor = nil
-BLT.pollTimer = nil
-BLT.hadLustDebuff = nil
 BLT.lustTimer = nil
 BLT._sheetProbeTimer = nil
+BLT.inCombat = false
 
 ---------------------------------------------------------------------------------
 -- Helpers
@@ -99,62 +83,34 @@ local function FloorDiv(a, b)
     return math_floor((a / b) + 1e-6)
 end
 
-local function GetPreset(presetId)
-    return PRESETS[presetId] or PRESETS.pedro
-end
-
 ---------------------------------------------------------------------------------
 -- Sheet Probing
 ---------------------------------------------------------------------------------
-function BLT:ComputeSheetLayoutFromDims(sheetW, sheetH, preset)
-    -- Allow presets to hardcode cols/rows for non-standard grids
-    local cols, rows
-    if preset.cols and preset.rows then
-        cols = preset.cols
-        rows = preset.rows
-    else
-        local frameSize = preset.frameSize or FRAME_SIZE
-        cols = FloorDiv(sheetW, frameSize)
-        rows = FloorDiv(sheetH, frameSize)
-    end
-    local capacity = cols * rows
-    local numFrames = (type(preset.frames) == "number" and preset.frames > 0)
-        and math.min(preset.frames, capacity) or capacity
-
-    return sheetW, sheetH, cols, rows, numFrames
-end
-
 function BLT:CalculateSpriteSheetLayout()
-    local preset = GetPreset(self.db.Preset)
-    if preset.soundOnly then return end
-    if self._sheetProbeTimer then return false end
+    if self._sheetProbeTimer then return end
 
-    local path = MEDIA_PATH .. preset.sheet
     local probe = UIParent:CreateTexture(nil, "BACKGROUND")
-    probe:SetTexture(path)
+    probe:SetTexture(PEDRO_SHEET)
 
     self._sheetProbeTimer = self:ScheduleRepeatingTimer(function()
         if probe.IsObjectLoaded and probe:IsObjectLoaded() then
             local w, h = probe:GetSize()
-
-            -- Cleanup
             probe:SetTexture(nil)
             if self._sheetProbeTimer then
                 self:CancelTimer(self._sheetProbeTimer)
                 self._sheetProbeTimer = nil
             end
 
-            -- Sanity
             if type(w) ~= "number" or type(h) ~= "number" or w <= 0 or h <= 0 then
                 w, h = FRAME_SIZE, FRAME_SIZE
             end
 
-            local sheetW, sheetH, cols, rows, numFrames = self:ComputeSheetLayoutFromDims(w, h, preset)
-            self.sheetW = sheetW
-            self.sheetH = sheetH
-            self.framesPerRow = cols
-            self.sheetRows = rows
-            self.numFrames = numFrames
+            self.sheetW = w
+            self.sheetH = h
+            self.framesPerRow = FloorDiv(w, FRAME_SIZE)
+            local rows = FloorDiv(h, FRAME_SIZE)
+            local capacity = self.framesPerRow * rows
+            self.numFrames = math.min(PEDRO_FRAMES, capacity)
         end
     end, 0.05)
 end
@@ -176,14 +132,14 @@ function BLT:CreateFrames()
     frame:SetSize(FRAME_SIZE, FRAME_SIZE)
     frame:Hide()
 
-    -- Sprite texture for animated mode
+    -- Sprite texture for Pedro mode
     local sprite = frame:CreateTexture(nil, "ARTWORK")
     sprite:SetAllPoints()
     sprite:Hide()
 
-    -- Icon container for basic mode (separate frame for borders)
+    -- Icon container for icon mode
     local iconFrame = CreateFrame("Frame", nil, frame)
-    iconFrame:SetSize(self.db.BasicIconSize, self.db.BasicIconSize)
+    iconFrame:SetSize(self.db.BasicIconSize or 48, self.db.BasicIconSize or 48)
     iconFrame:SetPoint("CENTER", frame, "CENTER", 0, 0)
     iconFrame:Hide()
 
@@ -193,18 +149,21 @@ function BLT:CreateFrames()
     KE:ApplyIconZoom(icon)
     KE:AddIconBorders(iconFrame)
 
-    -- Countdown text for basic mode (on iconFrame, above borders)
+    -- Countdown text for icon mode
     local text = iconFrame:CreateFontString(nil, "OVERLAY", nil, 8)
     local fontPath = KE:GetFontPath(self.db.FontFace)
-    text:SetFont(fontPath, self.db.FontSize, KE:GetFontOutline(self.db.FontOutline) or "")
+    text:SetFont(fontPath, self.db.FontSize or 22, KE:GetFontOutline(self.db.FontOutline) or "")
     text:SetPoint("CENTER", iconFrame, "CENTER", 0, 0)
     text:Hide()
 
     self.frame = frame
     self.spriteTexture = sprite
     self.iconFrame = iconFrame
-    self.iconTexture = icon
     self.countdownText = text
+
+    -- Probe sheet layout as soon as frames exist so test mode can work
+    -- before the module is enabled
+    self:CalculateSpriteSheetLayout()
 end
 
 ---------------------------------------------------------------------------------
@@ -229,7 +188,8 @@ function BLT:SetSpriteFrame(i)
     local tex = self.spriteTexture
     if not tex or not self.framesPerRow or self.framesPerRow == 0 or self.sheetW == 0 or self.sheetH == 0 then return end
 
-    i = i % self.numFrames
+    local frameCount = self.numFrames > 0 and self.numFrames or PEDRO_FRAMES
+    i = i % frameCount
 
     local col = i % self.framesPerRow
     local row = math_floor(i / self.framesPerRow)
@@ -244,68 +204,39 @@ end
 
 function BLT:AnimOnUpdate(elapsed)
     self.animAccum = self.animAccum + elapsed
-
-    local preset = GetPreset(self.db.Preset)
-    local frameCount = self.numFrames or preset.frames or 1
-    local lastFrame = frameCount - 1
-
+    local frameCount = self.numFrames > 0 and self.numFrames or PEDRO_FRAMES
     while self.animAccum >= self.secondsPerFrame do
         self.animAccum = self.animAccum - self.secondsPerFrame
-
-        if preset.loop then
-            self.frameIndex = (self.frameIndex + 1) % frameCount
-            self:SetSpriteFrame(self.frameIndex)
-        else
-            if self.frameIndex < lastFrame then
-                self.frameIndex = self.frameIndex + 1
-                self:SetSpriteFrame(self.frameIndex)
-            else
-                self:StopAnimation()
-                if self.testMode then
-                    self:SetTestMode(false)
-                elseif not self.isPreview then
-                    self.frame:Hide()
-                end
-                break
-            end
-        end
+        self.frameIndex = (self.frameIndex + 1) % frameCount
+        self:SetSpriteFrame(self.frameIndex)
     end
 end
 
 function BLT:StartAnimation()
     if not self.frame then return end
 
-    local preset = GetPreset(self.db.Preset)
     self.animAccum = 0
     self.frameIndex = 0
 
-    if self.db.DisplayMode == "animated" and not preset.soundOnly then
-        -- Animated sprite mode
-        self.secondsPerFrame = 1 / math_max(1, (BASE_FPS * (preset.fpsRatio or 1)))
-        local path = MEDIA_PATH .. preset.sheet
-        self.spriteTexture:SetTexture(path)
+    if self.db.Mode == "pedro" then
+        self.secondsPerFrame = 1 / math_max(1, BASE_FPS * PEDRO_FPS_RATIO)
+        self.spriteTexture:SetTexture(PEDRO_SHEET)
         self:SetSpriteFrame(0)
         self.spriteTexture:Show()
         self.iconFrame:Hide()
         self.countdownText:Hide()
         HideSoftOutline(self.countdownText)
 
-        self.frame:SetScript("OnUpdate", function(_, dt)
-            self:AnimOnUpdate(dt)
-        end)
+        self.frame:SetScript("OnUpdate", function(_, dt) self:AnimOnUpdate(dt) end)
     else
-        -- Basic mode OR sound-only preset: icon + countdown
         self.spriteTexture:Hide()
         self.iconFrame:Show()
         self.countdownText:Show()
         ShowSoftOutline(self.countdownText)
-
         local color = self.db.CountdownColor or { 1, 1, 1, 1 }
         self.countdownText:SetTextColor(color[1], color[2], color[3], color[4] or 1)
 
-        self.frame:SetScript("OnUpdate", function(_, dt)
-            self:BasicOnUpdate(dt)
-        end)
+        self.frame:SetScript("OnUpdate", function(_, dt) self:BasicOnUpdate(dt) end)
     end
 end
 
@@ -317,7 +248,7 @@ function BLT:StopAnimation()
 end
 
 ---------------------------------------------------------------------------------
--- Basic Mode Countdown
+-- Icon Mode Countdown
 ---------------------------------------------------------------------------------
 function BLT:BasicOnUpdate(dt)
     self.animAccum = self.animAccum + dt
@@ -326,9 +257,7 @@ function BLT:BasicOnUpdate(dt)
 
     local remaining = self.endTime - GetTime()
     if remaining <= 0 then
-        if not self.testMode then
-            self:StopBloodlust()
-        end
+        self.countdownText:SetText("0")
         return
     end
 
@@ -340,16 +269,10 @@ end
 ---------------------------------------------------------------------------------
 function BLT:PlaySoundOnce()
     if not self.db.SoundEnabled then return end
-
-    local preset = GetPreset(self.db.Preset)
-    local soundPath = MEDIA_PATH .. preset.sound
-    local willPlay, handle = PlaySoundFile(soundPath, self.db.SoundChannel or "Master")
-
+    local willPlay, handle = PlaySoundFile(PEDRO_SOUND, self.db.SoundChannel or "Master")
     if willPlay and handle then
         self.soundHandle = handle
     end
-
-    return willPlay, handle
 end
 
 function BLT:StartSoundLoop()
@@ -357,38 +280,9 @@ function BLT:StartSoundLoop()
         self:CancelTimer(self.soundLoopTimer)
         self.soundLoopTimer = nil
     end
-    if self.soundEndTimer then
-        self:CancelTimer(self.soundEndTimer)
-        self.soundEndTimer = nil
-    end
 
     self:PlaySoundOnce()
 
-    local preset = GetPreset(self.db.Preset)
-
-    if not preset.loop then
-        -- One-shot: poll until sound finishes
-        self.soundEndTimer = self:ScheduleRepeatingTimer(function()
-            local handle = self.soundHandle
-            local playing = false
-            if handle and C_Sound and C_Sound.IsPlaying then
-                playing = C_Sound.IsPlaying(handle)
-            end
-            if not playing then
-                if self.soundEndTimer then
-                    self:CancelTimer(self.soundEndTimer)
-                    self.soundEndTimer = nil
-                end
-                self.soundHandle = nil
-                if self.testMode then
-                    self:SetTestMode(false)
-                end
-            end
-        end, 0.05)
-        return
-    end
-
-    -- Looping: re-play when sound finishes
     self.soundLoopTimer = self:ScheduleRepeatingTimer(function()
         if not self.lustActive and not self.testMode then
             self:StopSoundLoop()
@@ -410,10 +304,6 @@ function BLT:StopSoundLoop()
         self:CancelTimer(self.soundLoopTimer)
         self.soundLoopTimer = nil
     end
-    if self.soundEndTimer then
-        self:CancelTimer(self.soundEndTimer)
-        self.soundEndTimer = nil
-    end
     if self.soundHandle then
         StopSound(self.soundHandle, 150)
         self.soundHandle = nil
@@ -421,108 +311,7 @@ function BLT:StopSoundLoop()
 end
 
 ---------------------------------------------------------------------------------
--- Detection: Sated Debuff
----------------------------------------------------------------------------------
-function BLT:GetPlayerDebuffBySpellID(spellID)
-    if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
-        return C_UnitAuras.GetPlayerAuraBySpellID(spellID)
-    end
-end
-
-function BLT:FindLustLockoutAura()
-    for spellID in pairs(SATED_DEBUFFS) do
-        local aura = self:GetPlayerDebuffBySpellID(spellID)
-        if aura then
-            aura.spellId = aura.spellId or spellID
-            return aura
-        end
-    end
-end
-
-function BLT:UpdateDebuffDetection(isStartupSync)
-    if self.testMode then return end
-    if not self:IsDetectionAllowed() then
-        self.hadLustDebuff = nil
-        self:SetActive(false)
-        return
-    end
-
-    local aura = self:FindLustLockoutAura()
-    local hasDebuff = aura ~= nil
-
-    if aura and aura.duration and aura.duration > 0 and aura.expirationTime and aura.expirationTime > 0 then
-        local startedAt = aura.expirationTime - aura.duration
-        local remaining = (startedAt + TIMER_DURATION) - GetTime()
-
-        self.hadLustDebuff = true
-
-        if remaining > 0 then
-            self:StartTimedLust(remaining)
-        else
-            self:SetActive(false)
-        end
-        return
-    end
-
-    if isStartupSync then
-        self.hadLustDebuff = hasDebuff
-        return
-    end
-
-    if hasDebuff and not self.hadLustDebuff then
-        self:StartTimedLust(TIMER_DURATION)
-    end
-
-    self.hadLustDebuff = hasDebuff
-end
-
----------------------------------------------------------------------------------
--- Detection: Haste Approximation
----------------------------------------------------------------------------------
-function BLT:GetHasteFactor()
-    local hastePct = UnitSpellHaste("player") or 0
-    return 1 + (hastePct / 100)
-end
-
-function BLT:UpdateHasteApproxDetection()
-    if self.testMode then
-        self.lastFactor = self:GetHasteFactor()
-        return
-    end
-
-    if not self:IsDetectionAllowed() then
-        self.lastFactor = nil
-        self.preLustFactor = nil
-        self:SetActive(false)
-        return
-    end
-
-    local cur = self:GetHasteFactor()
-
-    if not self.lastFactor then
-        self.lastFactor = cur
-        return
-    end
-
-    local ratio = cur / self.lastFactor
-
-    if not self.lustActive then
-        if ratio >= START_RATIO_MIN then
-            self.preLustFactor = self.lastFactor
-            self:SetActive(true)
-        end
-    else
-        if self.preLustFactor and cur <= (self.preLustFactor * END_RATIO_MAX) then
-            self.preLustFactor = nil
-            self:SetActive(false)
-        end
-    end
-
-    self.lastFactor = cur
-end
-
----------------------------------------------------------------------------------
--- Detection: Shared
+-- Detection
 ---------------------------------------------------------------------------------
 function BLT:IsDetectionAllowed()
     if not self.db.InstanceOnly then return true end
@@ -530,35 +319,69 @@ function BLT:IsDetectionAllowed()
     return inInstance and (instanceType == "party" or instanceType == "raid")
 end
 
-function BLT:UpdateDetection()
-    if self.db.HasteApproxEnabled then
-        self:UpdateHasteApproxDetection()
-    else
-        self:UpdateDebuffDetection(false)
+-- Edge-triggered: only fires on newly added sated debuffs (matches reference)
+function BLT:CheckAddedAuras(addedAuras)
+    if self.isPreview or self.testMode then return end
+    if not addedAuras then return end
+    for _, auraInfo in pairs(addedAuras) do
+        if auraInfo and auraInfo.auraInstanceID then
+            local fullAuraData = C_UnitAuras.GetAuraDataByAuraInstanceID("player", auraInfo.auraInstanceID)
+            if fullAuraData and fullAuraData.spellId and not issecretvalue(fullAuraData.spellId) then
+                if SATED_DEBUFFS[fullAuraData.spellId] then
+                    self:StartTimedLust(TIMER_DURATION)
+                    return
+                end
+            end
+        end
     end
 end
 
-function BLT:RefreshDetectionState()
-    self:ResetDetectionState()
-    if self.db.HasteApproxEnabled then
-        self:UpdateHasteApproxDetection()
-    else
-        self:UpdateDebuffDetection(true)
+-- Reload/zone sync: scan for an existing sated debuff and show remaining time
+function BLT:SyncFromExistingAura()
+    if self.testMode or self.isPreview then return end
+    if not self:IsDetectionAllowed() then
+        -- Zoned out of instance with InstanceOnly on — hide any active display
+        if self.lustActive then self:SetActive(false) end
+        return
+    end
+
+    for spellID in pairs(SATED_DEBUFFS) do
+        local aura = C_UnitAuras.GetPlayerAuraBySpellID(spellID)
+        if aura and aura.duration and aura.duration > 0 and aura.expirationTime and aura.expirationTime > 0 then
+            local startedAt = aura.expirationTime - aura.duration
+            local remaining = (startedAt + TIMER_DURATION) - GetTime()
+            if remaining > 0 then
+                self:StartTimedLust(remaining)
+            end
+            return
+        end
     end
 end
 
-function BLT:ResetDetectionState()
-    self.lastFactor = nil
-    self.preLustFactor = nil
-    self.hadLustDebuff = nil
+---------------------------------------------------------------------------------
+-- Show / Hide Lust (idempotent — safe to call repeatedly)
+---------------------------------------------------------------------------------
+function BLT:ShowLust()
+    if self._shown then return end
+    self._shown = true
+    self._renderedMode = self.db.Mode
 
-    if self.lustTimer then
-        self:CancelTimer(self.lustTimer)
-        self.lustTimer = nil
+    if self.db.Mode == "pedro" then
+        self:StartSoundLoop()
     end
+    if self.frame then self.frame:Show() end
+    self:StartAnimation()
+end
 
-    if not self.testMode then
-        self:SetActive(false)
+function BLT:HideLust()
+    if not self._shown then return end
+    self._shown = false
+    self._renderedMode = nil
+
+    self:StopSoundLoop()
+    self:StopAnimation()
+    if self.frame and not self.isPreview then
+        self.frame:Hide()
     end
 end
 
@@ -575,17 +398,26 @@ function BLT:SetActive(active)
     self.lustActive = active
 
     if active then
-        if self.db.DisplayMode == "animated" then
-            self:StartSoundLoop()
+        -- CombatOnly suppresses the initial show until combat starts
+        if self.db.CombatOnly and not self.inCombat then
+            return
         end
-        self.frame:Show()
-        self:StartAnimation()
+        self:ShowLust()
     else
-        self:StopSoundLoop()
-        self:StopAnimation()
-        if self.frame and not self.isPreview then
-            self.frame:Hide()
-        end
+        self:HideLust()
+    end
+end
+
+-- Only relevant when CombatOnly is on — toggles visibility based on combat state
+function BLT:UpdateCombatVisibility()
+    if not self.db.CombatOnly then return end
+    if self.isPreview or self.testMode then return end
+    if not self.lustActive or not self.frame then return end
+
+    if self.inCombat then
+        self:ShowLust()
+    else
+        self:HideLust()
     end
 end
 
@@ -612,37 +444,6 @@ function BLT:StartTimedLust(duration)
     end, duration)
 end
 
-function BLT:StartBloodlust()
-    self:StartTimedLust(TIMER_DURATION)
-end
-
-function BLT:StopBloodlust()
-    self.lustActive = false
-    self:StopAnimation()
-    self:StopSoundLoop()
-    if self.lustTimer then
-        self:CancelTimer(self.lustTimer)
-        self.lustTimer = nil
-    end
-    if self.frame and not self.isPreview then
-        self.frame:Hide()
-    end
-end
-
----------------------------------------------------------------------------------
--- Haste Poll Timer
----------------------------------------------------------------------------------
-function BLT:ReschedulePollTimer()
-    if self.pollTimer then
-        self:CancelTimer(self.pollTimer)
-        self.pollTimer = nil
-    end
-
-    if not self.db.HasteApproxEnabled then return end
-
-    self.pollTimer = self:ScheduleRepeatingTimer("UpdateHasteApproxDetection", HASTE_POLL_INTERVAL)
-end
-
 ---------------------------------------------------------------------------------
 -- Test Mode
 ---------------------------------------------------------------------------------
@@ -651,30 +452,46 @@ function BLT:SetTestMode(enabled)
     if enabled == self.testMode then return end
     self.testMode = enabled
 
-    -- Cancel any existing test timer
     if self.testTimer then
         self:CancelTimer(self.testTimer)
         self.testTimer = nil
     end
 
     if enabled then
-        self.endTime = GetTime() + TIMER_DURATION
-        self:SetActive(true)
+        -- Stop any current display first so the sound/animation don't overlap
+        self:HideLust()
 
-        -- Auto-stop after 40s (needed for looping presets)
+        -- Ensure frame is sized correctly (handles test-from-disabled-module)
+        self:ApplySettings()
+
+        -- Save any real lust endTime before stomping it
+        self._testSavedEndTime = self.endTime
+        self.endTime = GetTime() + TIMER_DURATION
+
+        self:ShowLust()
+
         self.testTimer = self:ScheduleTimer(function()
             self.testTimer = nil
             self:SetTestMode(false)
         end, TIMER_DURATION)
     else
-        self:SetActive(false)
-        self.lastFactor = self:GetHasteFactor()
-        self.preLustFactor = nil
-        -- Restore preview state or hide frame
+        -- Hide test display
+        self:HideLust()
+
+        -- Restore real lust endTime if it was saved
+        if self._testSavedEndTime then
+            self.endTime = self._testSavedEndTime
+            self._testSavedEndTime = nil
+        end
+
+        -- Restore real display: preview first, then actual lust visibility
         if self.isPreview then
             self:ShowPreview()
-        elseif self.frame then
-            self.frame:Hide()
+        elseif self.lustActive then
+            -- Real lust was running under the test — re-show
+            if not self.db.CombatOnly or self.inCombat then
+                self:ShowLust()
+            end
         end
     end
 end
@@ -689,43 +506,32 @@ end
 function BLT:ApplySettings()
     if not self.frame then return end
 
+    self.frame:SetScale(1)
     KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
 
-    local preset = GetPreset(self.db.Preset)
-    local useSprite = self.db.DisplayMode == "animated" and not preset.soundOnly
-
-    -- Scale only applies in animated sprite mode
-    if useSprite then
-        self.frame:SetScale(self.db.Scale or 0.5)
+    if self.db.Mode == "pedro" then
+        local size = FRAME_SIZE * (self.db.Scale or 0.5)
+        self.frame:SetSize(size, size)
+        self.spriteTexture:SetTexture(PEDRO_SHEET)
+        self:CalculateSpriteSheetLayout()
     else
-        self.frame:SetScale(1)
+        KE:ApplyFontToText(self.countdownText, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
+        local color = self.db.CountdownColor or { 1, 1, 1, 1 }
+        self.countdownText:SetTextColor(color[1], color[2], color[3], color[4] or 1)
+        self.iconFrame:SetSize(self.db.BasicIconSize, self.db.BasicIconSize)
+        self.frame:SetSize(self.db.BasicIconSize, self.db.BasicIconSize)
     end
 
     if self.db.Strata then
         self.frame:SetFrameStrata(self.db.Strata)
     end
 
-    -- Mode-specific settings
-    if not useSprite then
-        KE:ApplyFontToText(self.countdownText, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
-        local color = self.db.CountdownColor or { 1, 1, 1, 1 }
-        self.countdownText:SetTextColor(color[1], color[2], color[3], color[4] or 1)
-        self.iconFrame:SetSize(self.db.BasicIconSize, self.db.BasicIconSize)
-        self.frame:SetSize(self.db.BasicIconSize, self.db.BasicIconSize)
-    else
-        self.frame:SetSize(FRAME_SIZE, FRAME_SIZE)
-    end
-
-    -- Apply sprite texture for current preset (skip for soundOnly)
-    if preset.sheet then
-        self.spriteTexture:SetTexture(MEDIA_PATH .. preset.sheet)
-    end
-
-    -- Re-probe sheet layout
-    self:CalculateSpriteSheetLayout()
-
-    if self.isPreview then
+    if self.isPreview and not self.testMode then
         self:ShowPreview()
+    elseif self._shown and self._renderedMode ~= self.db.Mode then
+        -- Mode changed while showing — restart display in new mode
+        self:HideLust()
+        self:ShowLust()
     end
 end
 
@@ -746,36 +552,25 @@ end
 -- Preview
 ---------------------------------------------------------------------------------
 function BLT:ShowPreview()
-    if not self.frame then
-        self:CreateFrames()
-    end
+    if not self.frame then self:CreateFrames() end
     self:RegWithEditMode()
-
     self.isPreview = true
 
+    self.frame:SetScale(1)
     KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
 
-    local preset = GetPreset(self.db.Preset)
-    local useSprite = self.db.DisplayMode == "animated" and not preset.soundOnly
-
-    if useSprite then
-        self.frame:SetScale(self.db.Scale or 0.5)
-    else
-        self.frame:SetScale(1)
-    end
-
-    if self.db.Strata then
-        self.frame:SetFrameStrata(self.db.Strata)
-    end
-
-    if useSprite then
-        self.spriteTexture:SetTexture(MEDIA_PATH .. preset.sheet)
+    if self.db.Mode == "pedro" then
+        local size = FRAME_SIZE * (self.db.Scale or 0.5)
+        self.frame:SetSize(size, size)
+        self.spriteTexture:SetTexture(PEDRO_SHEET)
         self:SetSpriteFrame(0)
         self.spriteTexture:Show()
         self.iconFrame:Hide()
         self.countdownText:Hide()
         HideSoftOutline(self.countdownText)
     else
+        self.frame:SetSize(self.db.BasicIconSize, self.db.BasicIconSize)
+        self.iconFrame:SetSize(self.db.BasicIconSize, self.db.BasicIconSize)
         self.spriteTexture:Hide()
         self.iconFrame:Show()
         KE:ApplyFontToText(self.countdownText, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
@@ -786,6 +581,10 @@ function BLT:ShowPreview()
         ShowSoftOutline(self.countdownText)
     end
 
+    if self.db.Strata then
+        self.frame:SetFrameStrata(self.db.Strata)
+    end
+
     self.frame:SetAlpha(1)
     self.frame:Show()
 end
@@ -793,9 +592,7 @@ end
 function BLT:HidePreview()
     self.isPreview = false
     if not self.frame then return end
-    -- If test is running, let it continue (testTimer will clean up)
     if self.testMode then return end
-    -- If real lust is active and module enabled, keep showing
     if self.db.Enabled and self.lustActive then return end
     self.frame:Hide()
 end
@@ -803,19 +600,10 @@ end
 ---------------------------------------------------------------------------------
 -- Event Handlers
 ---------------------------------------------------------------------------------
-function BLT:OnAuraChange(_, unit)
+function BLT:OnAuraChange(_, unit, updateInfo)
     if unit ~= "player" then return end
-    if self.db.HasteApproxEnabled then return end
-    self:UpdateDebuffDetection(false)
-end
-
-function BLT:OnHasteChange(_, unit)
-    if unit ~= "player" then return end
-    self:UpdateDetection()
-end
-
-function BLT:OnCombatRatingUpdate()
-    self:UpdateDetection()
+    if not updateInfo or not updateInfo.addedAuras then return end
+    self:CheckAddedAuras(updateInfo.addedAuras)
 end
 
 ---------------------------------------------------------------------------------
@@ -831,46 +619,59 @@ function BLT:OnEnable()
 
     self:CreateFrames()
     self:RegWithEditMode()
-    self:CalculateSpriteSheetLayout()
 
-    -- Register events
     self:RegisterEvent("UNIT_AURA", "OnAuraChange")
-    self:RegisterEvent("UNIT_SPELL_HASTE", "OnHasteChange")
-    self:RegisterEvent("COMBAT_RATING_UPDATE", "OnCombatRatingUpdate")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", function()
-        self.lustActive = false
-        self:RefreshDetectionState()
+        -- Only sync if not already tracking (handles reload + zone changes)
+        if not self.lustActive then
+            self:SyncFromExistingAura()
+        elseif not self:IsDetectionAllowed() then
+            -- Zoned out of allowed area mid-lust
+            self:SetActive(false)
+        end
     end)
-    self:RegisterEvent("ZONE_CHANGED_NEW_AREA", function()
-        self:RefreshDetectionState()
+    self:RegisterEvent("PLAYER_REGEN_DISABLED", function()
+        self.inCombat = true
+        self:UpdateCombatVisibility()
+    end)
+    self:RegisterEvent("PLAYER_REGEN_ENABLED", function()
+        self.inCombat = false
+        self:UpdateCombatVisibility()
     end)
 
-    self:ReschedulePollTimer()
+    -- Initialize combat state
+    self.inCombat = InCombatLockdown() and true or false
 
     C_Timer.After(0.5, function()
         self:ApplySettings()
-        self:RefreshDetectionState()
+        if not self.lustActive then
+            self:SyncFromExistingAura()
+        end
     end)
 end
 
 function BLT:OnDisable()
     self:UnregisterAllEvents()
-    self:StopBloodlust()
 
+    if self.lustTimer then
+        self:CancelTimer(self.lustTimer)
+        self.lustTimer = nil
+    end
     if self.testTimer then
         self:CancelTimer(self.testTimer)
         self.testTimer = nil
-    end
-    if self.pollTimer then
-        self:CancelTimer(self.pollTimer)
-        self.pollTimer = nil
     end
     if self._sheetProbeTimer then
         self:CancelTimer(self._sheetProbeTimer)
         self._sheetProbeTimer = nil
     end
 
-    if self.frame then self.frame:Hide() end
+    self:HideLust()
+    self.lustActive = false
+    self._shown = false
     self.isPreview = false
     self.testMode = false
+    self.inCombat = false
+
+    if self.frame then self.frame:Hide() end
 end

@@ -12,7 +12,8 @@
     <Script file="DisintegrateTicks.lua" />
     <Script file="StasisTracker.lua" />
     <Script file="EbonMightHelper.lua" />
-    <Script file="AugBuffsTracker.lua" />
+    <Script file="EbonMightTracker.lua" />
+    <Script file="PrescienceTracker.lua" />
     <Script file="WorldMarkerCycler.lua" />
     <Script file="FocusMarker.lua" />
     <Script file="PIMacroBuilder.lua" />
