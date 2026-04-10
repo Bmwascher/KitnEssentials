@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.10.3
+### Additions
+- New module: **Ebon Might Tracker** (Evoker Suite) — Augmentation Evoker tracker that shows active Ebon Might duration with crit and duped cast detection via mainStat ratio math against ally aura values. Two display modes: **Icon + Countdown** (spell icon with centered countdown timer) and **Border + State Label** (iconless border with "CRIT"/"DUPE" label above). Border dynamically recolors and thickens (transparent → magenta/orange, 1px → 2px) when a crit or duped cast is detected. Only Show on Crit toggle hides the tracker except during crit casts. Standard Position/Font/Color cards, EditMode integration, class-gated to Evoker. Ported from EMTracker by Baumritter.
+
+### Changes
+- **Rename**: "Aug Buffs Tracker" → **Prescience Tracker**. The module only tracks Prescience and Shifting Sands, so the narrower name better reflects its scope and frees the "aug" namespace for the new Ebon Might Tracker. DB key `AugBuffsTracker` renamed to `PrescienceTracker` — existing profiles will reset this module's settings to defaults.
+- **Evoker Suite**: Tab order and labels updated — "Disintegrate", "Stasis", "Ebon Might", "Prescience" (4 tabs, unchanged count). The Ebon Might tab now houses both the Extension Helper (sound alert) and the new Tracker (visual display) in a shared card stack.
+
+### Fixes
+- **Bloodlust Tracker**: Simplified to two modes only (Pedro animated overlay + Static Icon with countdown). Removed chipi/ninemm/erm presets, haste approximation detection, sound-only mode, and DisplayMode concept. Removed ~1.8MB of unused media files. Added Combat Only toggle, fixed edge-triggered detection to use `updateInfo.addedAuras` instead of re-scanning (prevents multi-trigger sound bug), unified anchor behavior across both modes via `SetScale(1)` + computed size.
+- **Prescience Tracker**: Role icon no longer drawn behind the main buff icon — reparented to iconFrame with correct sublevel, matching the `timer` FontString pattern.
+- **Prescience Tracker**: Class Color Names toggle no longer leaks widget state across GUI page rebuilds — override logic folded into `UpdateAllWidgetStates` so initial build, manual toggle, and tab switches all flow through the same code path.
+- **Evoker Suite**: Tab bar no longer corrupts when rapidly switching away from the Disintegrate tab. Tab clicks are now debounced to frame boundaries via `C_Timer.After(0, ...)`, collapsing multiple rapid clicks into a single `RefreshContent` call.
+- **GUI**: `scrollChild` is now sized synchronously at creation instead of via a deferred timer, eliminating a latent zero-width-parent race for tabbed pages.
+
 ## v1.10.2
 ### Fixes
 - **WarpDeplete+**: Fixed pull forces overlay only counting alive mobs (was double-counting with WarpDeplete's own killed tracking).

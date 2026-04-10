@@ -430,6 +430,24 @@ local Defaults = {
             SoundChannel = "Master",
         },
 
+        EbonMightTracker = {
+            Enabled = false,
+            Mode = "icon",          -- "icon" = icon + border + countdown, "text" = border + state label only
+            Strata = "MEDIUM",
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            Position = DefaultPosition(0, -150),
+            IconSize = 48,
+            FontFace = "Expressway",
+            FontSize = 22,
+            FontOutline = "OUTLINE",
+            BaseColor = { 1, 1, 1, 1 },
+            CritColor = { 1, 0, 1, 1 },
+            DupeColor = { 1, 0.5, 0, 1 },
+            OnlyShowCrit = false,
+            CombatOnly = false,
+        },
+
         -----------------------------------------------------------------
         -- QoL Modules
         -----------------------------------------------------------------
@@ -545,8 +563,7 @@ local Defaults = {
 
         BloodlustTracker = {
             Enabled = false,
-            DisplayMode = "animated",
-            Preset = "pedro",
+            Mode = "pedro",
             Scale = 0.5,
             BasicIconSize = 48,
             FontSize = 22,
@@ -555,15 +572,15 @@ local Defaults = {
             CountdownColor = { 1, 1, 1, 1 },
             SoundEnabled = true,
             SoundChannel = "Master",
-            HasteApproxEnabled = false,
             InstanceOnly = false,
+            CombatOnly = false,
             Strata = "MEDIUM",
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, 500),
         },
 
-        AugBuffsTracker = {
+        PrescienceTracker = {
             Enabled = false,
             Strata = "MEDIUM",
             anchorFrameType = "UIPARENT",

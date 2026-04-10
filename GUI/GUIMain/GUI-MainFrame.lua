@@ -184,9 +184,12 @@ function GUIFrame:CreateContentArea(parent)
         end
     end)
 
-    -- Scroll child
+    -- Scroll child. Initial width set synchronously so content builders never
+    -- see a zero-width parent (the existing deferred UpdateScrollChildWidth
+    -- below still runs to handle scrollbar width adjustments later).
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
     scrollChild:SetHeight(1)
+    scrollChild:SetWidth(T.contentWidth)
     scrollFrame:SetScrollChild(scrollChild)
 
     -- Scrollbar visibility

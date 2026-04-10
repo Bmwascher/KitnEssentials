@@ -32,10 +32,10 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 |---|---|
 | Raid Notifications | Gateway usability, reset boss reminder, loot boss reminder with per-alert toggles |
 | Class Status Texts | Pet status, class stance, movement alert, and dispel CD — 4 class-specific text alerts in one tabbed GUI |
-| Bloodlust Tracker | Animated sprite overlay + sound on Bloodlust/Heroism with 4 presets, basic icon+countdown mode, and haste detection fallback |
+| Bloodlust Tracker | Animated Pedro overlay + sound or static icon with countdown on Bloodlust/Heroism/Time Warp |
 | Time Spiral Tracker | Movement spell proc tracker with glow effects and cooldown spiral (all classes) |
 | Recuperate Button | One-click self-heal with configurable raid/party visibility and health-based alpha |
-| Evoker Suite | Disintegrate tick marks, Preservation Stasis tracker, Ebon Might extension warning, and Aug Buffs Tracker (Prescience/Shifting Sands) with growth direction — tabbed GUI |
+| Evoker Suite | Disintegrate tick marks, Preservation Stasis tracker, Ebon Might extension warning + crit tracker, and Prescience Tracker (Prescience/Shifting Sands on allies) — tabbed GUI |
 | World Marker Cycler | Cycle through world markers at cursor with drag-to-reorder priority |
 | Macro Builders | Focus Marker and Power Infusion macro builders in one tabbed GUI |
 | Combat Potion Ready | "Potion Ready" text when a combat potion is in bags and off cooldown, with instance/combat/healer visibility toggles |
