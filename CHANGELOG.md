@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.10.4
+### Fixes
+- **WarpDeplete+**: Death tracking rewrite — fixed duplicate death entries caused by `UNIT_DIED` firing for every mob death and time-window dedup failing as the M+ timer advanced past the death penalty jump. Replaced with state-based per-player dedup (`recordedDeaths`) that tracks each player's current death and clears when they're alive again (battle-rez safe). Added `UNIT_DIED` debounce so the roster scan runs at most once per 150ms instead of per mob death.
+- **WarpDeplete+**: Fixed death names not class-colored — WarpDeplete's CLEU path ships a localized class string (e.g. `"Druid"`) instead of the classFilename token (`"DRUID"`) that `GetClassColor` expects. Hooked `AddDeathDetails` to always prefer a roster-based `UnitClass(unit)` lookup over the input value.
+- **WarpDeplete+**: Fixed death header count not matching the tooltip list — hooked `SetDeathCount` to use `max(gameCount, listCount)` so deaths the game undercounts are still reflected in the header. Per-death time penalty is learned dynamically from `C_ChallengeMode.GetDeathCount()` reports (5s below +12, 15s with Xal'atath's Guile).
+- **WarpDeplete+**: Fixed pull forces overlay disappearing when re-entering combat within 0.5s of a drop — the delayed `PushToWarpDeplete(0)` callback from `PLAYER_REGEN_ENABLED` was unconditionally clobbering the new pull's state. Added `UnitAffectingCombat("player")` guard.
+
+### Changes
+- **Ebon Might Tracker**: GUI reorganized — Mode dropdown and toggles (Only Show on Crit, Combat Only) moved from the Enable card to a separate **Display Settings** card. Color pickers (Base, Crit, Dupe) consolidated to a single horizontal row.
+
 ## v1.10.3
 ### Additions
 - New module: **Ebon Might Tracker** (Evoker Suite) — Augmentation Evoker tracker that shows active Ebon Might duration with crit and duped cast detection via mainStat ratio math against ally aura values. Two display modes: **Icon + Countdown** (spell icon with centered countdown timer) and **Border + State Label** (iconless border with "CRIT"/"DUPE" label above). Border dynamically recolors and thickens (transparent → magenta/orange, 1px → 2px) when a crit or duped cast is detected. Only Show on Crit toggle hides the tracker except during crit casts. Standard Position/Font/Color cards, EditMode integration, class-gated to Evoker. Ported from EMTracker by Baumritter.
