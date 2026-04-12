@@ -32,7 +32,6 @@ local UnitGUID = UnitGUID
 local UnitName = UnitName
 local GetNumGroupMembers = GetNumGroupMembers
 local IsInRaid = IsInRaid
-local wipe = wipe
 local C_Timer = C_Timer
 local pcall = pcall
 local tonumber = tonumber
@@ -473,63 +472,205 @@ local function SetupTooltip()
 end
 
 ---------------------------------------------------------------------------------
--- Death Tracking Fix
--- WarpDeplete's UNIT_DIED bails when guid is secret (Midnight M+).
--- We register our own UNIT_DIED and scan the roster for dead players,
--- injecting directly into WarpDeplete.state.deathDetails with the
--- correct class token from UnitClass (not UnitClassFromGUID).
+-- Death Tracking Fix (state-based dedup)
+-- Dedup is tracked per-player-name: once a player's current death is recorded,
+-- we don't record it again until we've seen them alive (battle-rez handles
+-- correctly). UNIT_DIED fires for every mob in the pull, so we also debounce
+-- the roster scan to one pass per PROCESS_DEFER seconds.
+-- CLEU ships a localized class string (e.g. "Druid" not "DRUID"), so we
+-- ALWAYS prefer a roster lookup over the class value passed to AddDeathDetails.
 ---------------------------------------------------------------------------------
 
+local PROCESS_DEFER = 0.15 -- seconds; debounce + lets CHALLENGE_MODE_DEATH_COUNT_UPDATED fire first
+-- Flip to true to trace death events in chat (hook calls, dedup clears, count sync).
+local DEBUG_DEATHS = false
 local deathFixApplied = false
-local recentDeaths = {} -- [name] = true, prevents duplicate entries per death
+-- Per-death time penalty in seconds. Learned from the game's own reports:
+-- 5s below +12, 15s on +12 and above with Xal'atath's Guile. Stays nil until
+-- we see a real (count > 0) report so we never fabricate a value.
+local lastDeathPenalty = nil
+-- Set while our own hook self-triggers SetDeathCount, to keep that call from
+-- polluting lastDeathPenalty with a pre-game-update timeLost of 0.
+local suppressLearning = false
+-- Set of player names whose CURRENT death we've already recorded. An entry
+-- is removed when we next see that player alive (battle-rez) so their next
+-- death is recorded as a new event.
+local recordedDeaths = {}
+-- Debounce flag so UNIT_DIED spam collapses to one ProcessDeaths per window.
+local processScheduled = false
+
+-- A class token is valid if GetClassColor returns a hex value for it.
+local function IsValidClassToken(class)
+    if not class or class == "" then return false end
+    local _, _, _, hex = GetClassColor(class)
+    return hex ~= nil
+end
+
+-- Look up the class token for a player by name from the party/raid roster.
+-- Returns nil if the name isn't in the current group.
+local function GetClassTokenForName(name)
+    if not name then return nil end
+    if UnitName("player") == name then
+        return select(2, UnitClass("player"))
+    end
+    local token = IsInRaid() and "raid" or "party"
+    local size = GetNumGroupMembers()
+    for i = 1, size do
+        local unit = token .. i
+        if UnitExists(unit) and UnitName(unit) == name then
+            return select(2, UnitClass(unit))
+        end
+    end
+    return nil
+end
+
+-- Is this named player currently alive (or not in the group)?
+local function IsPlayerNameAlive(name)
+    if not name then return true end
+    if UnitName("player") == name then
+        return not UnitIsDead("player")
+    end
+    local token = IsInRaid() and "raid" or "party"
+    local size = GetNumGroupMembers()
+    for i = 1, size do
+        local unit = token .. i
+        if UnitExists(unit) and UnitName(unit) == name then
+            return not UnitIsDead(unit)
+        end
+    end
+    return true -- not found (left group); treat as alive so entry gets cleared
+end
+
+-- Scan the roster and append any dead player we haven't already recorded.
+local function ProcessDeaths()
+    if not WarpDeplete or not WarpDeplete.state then return end
+    local timer = WarpDeplete.state.timer or 0
+
+    -- Clear recorded-death state for any player who is alive again (BRez).
+    for name in pairs(recordedDeaths) do
+        if IsPlayerNameAlive(name) then
+            recordedDeaths[name] = nil
+            if DEBUG_DEATHS then KE:Print(format("[clear] %s (now alive)", name)) end
+        end
+    end
+
+    -- Player
+    if UnitIsDead("player") then
+        local name = UnitName("player")
+        if name and not recordedDeaths[name] then
+            local _, classToken = UnitClass("player")
+            if classToken then
+                recordedDeaths[name] = true
+                if DEBUG_DEATHS then
+                    KE:Print(format("[proc-add] player=%s cls=%s t=%.1f", name, classToken, timer))
+                end
+                WarpDeplete:AddDeathDetails(timer, name, classToken)
+            end
+        end
+    end
+
+    -- Party/raid
+    local size = GetNumGroupMembers()
+    if size > 0 then
+        local token = IsInRaid() and "raid" or "party"
+        for i = 1, size do
+            local unit = token .. i
+            if UnitExists(unit) and UnitIsDead(unit) then
+                local name = UnitName(unit)
+                if name and not recordedDeaths[name] then
+                    local _, classToken = UnitClass(unit)
+                    if classToken then
+                        recordedDeaths[name] = true
+                        if DEBUG_DEATHS then
+                            KE:Print(format("[proc-add] %s=%s cls=%s t=%.1f", unit, name, classToken, timer))
+                        end
+                        WarpDeplete:AddDeathDetails(timer, name, classToken)
+                    end
+                end
+            end
+        end
+    end
+end
 
 local function SetupDeathClassFix()
     if deathFixApplied then return end
     if not WarpDeplete then return end
 
-    -- Our own UNIT_DIED handler — bypasses WarpDeplete's GUID check
+    -- Hook SetDeathCount: keep header in sync with max(gameCount, listCount).
+    local originalSetDeathCount = WarpDeplete.SetDeathCount
+    WarpDeplete.SetDeathCount = function(self, count, timeLost) -- luacheck: ignore 122
+        local rawCount, rawTimeLost = count or 0, timeLost or 0
+        count = rawCount
+        timeLost = rawTimeLost
+        if count > 0 and not suppressLearning then
+            lastDeathPenalty = timeLost / count
+        end
+        local listCount = #self.state.deathDetails
+        if listCount > count then
+            count = listCount
+            if lastDeathPenalty then
+                timeLost = math.floor(listCount * lastDeathPenalty + 0.5)
+            end
+        end
+        if DEBUG_DEATHS then
+            KE:Print(format("[setCount] in=(%d,%.0f) list=%d out=(%d,%.0f) pen=%s supp=%s",
+                rawCount, rawTimeLost, listCount, count, timeLost,
+                tostring(lastDeathPenalty), suppressLearning and "Y" or "N"))
+        end
+        originalSetDeathCount(self, count, timeLost)
+    end
+
+    -- Hook AddDeathDetails: always prefer roster class token over whatever
+    -- value was passed in (CLEU ships a localized name like "Druid" which
+    -- is not what GetClassColor expects). Mark the name as recorded so our
+    -- ProcessDeaths backstop doesn't re-add the same death.
+    local originalAdd = WarpDeplete.AddDeathDetails
+    WarpDeplete.AddDeathDetails = function(self, time, name, class) -- luacheck: ignore 122
+        local originalClass = class
+        local rosterClass = GetClassTokenForName(name)
+        if rosterClass then
+            class = rosterClass
+        elseif type(class) == "string" and not IsValidClassToken(class) then
+            -- Last-ditch: uppercase it in case CLEU shipped localized form.
+            local up = class:upper()
+            if IsValidClassToken(up) then class = up end
+        end
+        if DEBUG_DEATHS then
+            KE:Print(format("[add] t=%.1f name=%s orig=%s roster=%s final=%s",
+                time or 0, tostring(name), tostring(originalClass),
+                tostring(rosterClass), tostring(class)))
+        end
+        originalAdd(self, time, name, class)
+        if name then
+            recordedDeaths[name] = true
+        end
+        local listCount = #self.state.deathDetails
+        local timeLost
+        if lastDeathPenalty then
+            timeLost = math.floor(listCount * lastDeathPenalty + 0.5)
+        else
+            timeLost = self.state.deathTimeLost or 0
+        end
+        suppressLearning = true
+        self:SetDeathCount(listCount, timeLost)
+        suppressLearning = false
+    end
+
+    -- UNIT_DIED fires for every mob death in the pull. Debounce into a
+    -- single ProcessDeaths call per window so we don't re-scan the roster
+    -- hundreds of times per pull. The PROCESS_DEFER delay also gives the
+    -- game time to fire CHALLENGE_MODE_DEATH_COUNT_UPDATED first so
+    -- lastDeathPenalty is learned before our scan runs.
     local deathFrame = CreateFrame("Frame")
     deathFrame:RegisterEvent("UNIT_DIED")
-    deathFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
-    deathFrame:SetScript("OnEvent", function(_, event)
+    deathFrame:SetScript("OnEvent", function()
         if not WarpDeplete or not WarpDeplete.state then return end
-
-        if event == "PLAYER_REGEN_ENABLED" then
-            wipe(recentDeaths)
-            return
-        end
-
-        -- UNIT_DIED: scan roster for who just died
-        local timer = WarpDeplete.state.timer or 0
-
-        -- Check player
-        if UnitIsDead("player") and not recentDeaths[UnitName("player")] then
-            local name = UnitName("player")
-            local _, classToken = UnitClass("player")
-            if name and classToken then
-                recentDeaths[name] = true
-                WarpDeplete:AddDeathDetails(timer, name, classToken)
-            end
-        end
-
-        -- Check party/raid
-        local size = GetNumGroupMembers()
-        if size > 0 then
-            local token = IsInRaid() and "raid" or "party"
-            for i = 1, size do
-                local unit = token .. i
-                if UnitExists(unit) and UnitIsDead(unit) then
-                    local name = UnitName(unit)
-                    if name and not recentDeaths[name] then
-                        local _, classToken = UnitClass(unit)
-                        if classToken then
-                            recentDeaths[name] = true
-                            WarpDeplete:AddDeathDetails(timer, name, classToken)
-                        end
-                    end
-                end
-            end
-        end
+        if processScheduled then return end
+        processScheduled = true
+        C_Timer.After(PROCESS_DEFER, function()
+            processScheduled = false
+            ProcessDeaths()
+        end)
     end)
 
     deathFixApplied = true
@@ -563,6 +704,10 @@ function WDF:PLAYER_REGEN_ENABLED()
     end
 
     C_Timer.After(0.5, function()
+        -- Guard: if a new pull started during the 0.5s grace window,
+        -- PLAYER_REGEN_DISABLED already rebuilt state and restarted the
+        -- ticker. Don't clobber it back to 0.
+        if UnitAffectingCombat("player") then return end
         inCombat = false
         PushToWarpDeplete(0)
     end)
