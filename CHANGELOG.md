@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.10.5
+### Fixes
+- **Enemy Counter**: Fixed inaccurate mob count — added `UnitIsDead` filter so dead mobs with lingering nameplates are no longer counted, and `UnitCanAttack` filter so friendly NPC nameplates are excluded. Added persistent `DEBUG_EC` flag for future diagnostics.
+
 ## v1.10.4
 ### Fixes
 - **WarpDeplete+**: Death tracking rewrite — fixed duplicate death entries caused by `UNIT_DIED` firing for every mob death and time-window dedup failing as the M+ timer advanced past the death penalty jump. Replaced with state-based per-player dedup (`recordedDeaths`) that tracks each player's current death and clears when they're alive again (battle-rez safe). Added `UNIT_DIED` debounce so the roster scan runs at most once per 150ms instead of per mob death.

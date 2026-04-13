@@ -14,8 +14,13 @@ local EC = KitnEssentials:NewModule("EnemyCounter", "AceEvent-3.0")
 -- Local references
 local UnitExists = UnitExists
 local UnitAffectingCombat = UnitAffectingCombat
+local UnitIsDead = UnitIsDead
+local UnitCanAttack = UnitCanAttack
 local tostring = tostring
 local issecretvalue = issecretvalue or function() return false end
+
+local DEBUG_EC = false
+local lastDebugCount = -1
 
 ---------------------------------------------------------------------------------
 -- Module State
@@ -40,11 +45,27 @@ end
 
 local function GetEnemyCount()
     local count = 0
+    local debugLines = DEBUG_EC and {} or nil
     for i = 1, 40 do
         local unit = "nameplate" .. i
-        if UnitExists(unit) and UnitAffectingCombat(unit) then
-            count = count + 1
+        if UnitExists(unit) then
+            local combat = UnitAffectingCombat(unit)
+            local dead = UnitIsDead(unit)
+            local hostile = UnitCanAttack("player", unit)
+            if debugLines then
+                debugLines[#debugLines + 1] = ("[EC] %s cmb=%s dead=%s hostile=%s"):format(
+                    unit, tostring(combat), tostring(dead), tostring(hostile))
+            end
+            if combat and not dead and hostile then
+                count = count + 1
+            end
         end
+    end
+    -- Only print when count changes
+    if DEBUG_EC and count ~= lastDebugCount then
+        for _, line in ipairs(debugLines) do print(line) end
+        print(("[EC] count=%d (was %d)"):format(count, lastDebugCount))
+        lastDebugCount = count
     end
     return count
 end
@@ -164,25 +185,30 @@ end
 -- Event Handlers
 ---------------------------------------------------------------------------------
 
-function EC:NAME_PLATE_UNIT_ADDED()
+function EC:NAME_PLATE_UNIT_ADDED(_, unit)
+    if DEBUG_EC then print("[EC] event=NP_ADDED", unit) end
     self:UpdateText()
 end
 
-function EC:NAME_PLATE_UNIT_REMOVED()
+function EC:NAME_PLATE_UNIT_REMOVED(_, unit)
+    if DEBUG_EC then print("[EC] event=NP_REMOVED", unit) end
     self:UpdateText()
 end
 
 function EC:UNIT_FLAGS(_, unit)
     if unit and unit:find("nameplate", 1, true) then
+        if DEBUG_EC then print("[EC] event=UNIT_FLAGS", unit) end
         self:UpdateText()
     end
 end
 
 function EC:PLAYER_REGEN_DISABLED()
+    if DEBUG_EC then print("[EC] event=REGEN_DISABLED") end
     self:UpdateText()
 end
 
 function EC:PLAYER_REGEN_ENABLED()
+    if DEBUG_EC then print("[EC] event=REGEN_ENABLED") end
     if self.db.CombatOnly then
         self.frame:Hide()
     else
