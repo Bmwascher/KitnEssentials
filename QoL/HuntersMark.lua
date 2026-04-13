@@ -18,7 +18,6 @@ local CreateFrame = CreateFrame
 local UnitExists = UnitExists
 local UnitClass = UnitClass
 local UnitIsBossMob = UnitIsBossMob
-local InCombatLockdown = InCombatLockdown
 local IsInInstance = IsInInstance
 local next = next
 local wipe = wipe
@@ -36,6 +35,15 @@ local SPELL_ID = 257284 -- Hunter's Mark
 ---------------------------------------------------------------------------------
 local markedUnits = {}
 HM.isPreview = false
+
+-- Get safe unit token from nameplate
+local function GetSafeUnitToken(namePlate)
+    if not namePlate then return nil end
+    local unit = namePlate.unitToken
+    if not KE:IsSafeValue(unit) then return nil end
+    if type(unit) ~= "string" then return nil end
+    return unit
+end
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -82,6 +90,13 @@ function HM:UpdateWarningDisplay()
     if self.isPreview then return end
     if not self.frame then return end
 
+    -- During full restriction: hide and stop tracking entirely
+    if KE:IsFullyRestricted() then
+        wipe(markedUnits)
+        self.frame:Hide()
+        return
+    end
+
     -- No boss nameplates visible
     if not next(markedUnits) then
         self.frame:Hide()
@@ -102,17 +117,38 @@ end
 
 function HM:CheckUnitForMark(unit)
     if not isHunter then return end
-    if not unit or not UnitExists(unit) or not UnitIsBossMob(unit) then return end
+    if KE:IsFullyRestricted() then return end
+
+    -- Validate unit is safe to use
+    if not KE:IsSafeValue(unit) then return end
+    if type(unit) ~= "string" then return end
+    if not UnitExists(unit) or not UnitIsBossMob(unit) then return end
 
     local hasMarkNow = false
+    local hitSecret = false
+
     AuraUtil.ForEachAura(unit, "HARMFUL", nil, function(auraInfo)
-        if auraInfo and auraInfo.spellId == SPELL_ID and auraInfo.sourceUnit == "player" then
+        if not auraInfo then return end
+
+        -- If any aura field is secret, flag it and skip this aura
+        if KE:IsSecretValue(auraInfo.spellId) or KE:IsSecretValue(auraInfo.sourceUnit) then
+            hitSecret = true
+            return
+        end
+
+        if auraInfo.spellId == SPELL_ID and auraInfo.sourceUnit == "player" then
             hasMarkNow = true
             return true
         end
     end, true)
 
-    markedUnits[unit] = hasMarkNow
+    -- If we hit secrets, assume mark is present (avoid false warnings)
+    if hitSecret then
+        markedUnits[unit] = true
+    else
+        markedUnits[unit] = hasMarkNow
+    end
+
     self:UpdateWarningDisplay()
 end
 
@@ -125,6 +161,8 @@ function HM:SetScanningActive(active)
         self.scannerFrame:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
         self.scannerFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
         self.scannerFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+        self.scannerFrame:RegisterEvent("ENCOUNTER_START")
+        self.scannerFrame:RegisterEvent("ENCOUNTER_END")
         self.scannerFrame:RegisterUnitEvent("UNIT_AURA",
             "nameplate1", "nameplate2", "nameplate3", "nameplate4", "nameplate5",
             "nameplate6", "nameplate7", "nameplate8", "nameplate9", "nameplate10", "target")
@@ -133,6 +171,8 @@ function HM:SetScanningActive(active)
         self.scannerFrame:UnregisterEvent("NAME_PLATE_UNIT_REMOVED")
         self.scannerFrame:UnregisterEvent("PLAYER_REGEN_DISABLED")
         self.scannerFrame:UnregisterEvent("PLAYER_REGEN_ENABLED")
+        self.scannerFrame:UnregisterEvent("ENCOUNTER_START")
+        self.scannerFrame:UnregisterEvent("ENCOUNTER_END")
         self.scannerFrame:UnregisterEvent("UNIT_AURA")
         wipe(markedUnits)
         if self.frame then self.frame:Hide() end
@@ -188,22 +228,30 @@ function HM:StartScanning()
 
         if not IsInRaid() then return end
 
-        if event == "PLAYER_REGEN_DISABLED" then
+        -- Combat/encounter events: wipe and hide
+        if event == "ENCOUNTER_START" or event == "PLAYER_REGEN_DISABLED" then
+            wipe(markedUnits)
             if self.frame then self.frame:Hide() end
             return
         end
 
-        if event == "PLAYER_REGEN_ENABLED" then
+        -- When restrictions release, rescan all nameplates
+        if event == "ENCOUNTER_END" or event == "PLAYER_REGEN_ENABLED" then
+            if KE:IsFullyRestricted() then return end
             wipe(markedUnits)
             for _, namePlate in next, C_NamePlate.GetNamePlates() do
-                if namePlate.unitToken then
-                    self:CheckUnitForMark(namePlate.unitToken)
+                local safeUnit = GetSafeUnitToken(namePlate)
+                if safeUnit then
+                    self:CheckUnitForMark(safeUnit)
                 end
             end
             return
         end
 
-        if InCombatLockdown() then return end
+        if KE:IsFullyRestricted() then return end
+
+        -- Validate unit is safe before processing
+        if not KE:IsSafeValue(unit) then return end
         if type(unit) ~= "string" then return end
 
         if event == "NAME_PLATE_UNIT_REMOVED" then
@@ -297,9 +345,9 @@ function HM:HidePreview()
     if IsInRaid() then
         wipe(markedUnits)
         for _, namePlate in next, C_NamePlate.GetNamePlates() do
-            local unit = namePlate.unitToken
-            if unit then
-                self:CheckUnitForMark(unit)
+            local safeUnit = GetSafeUnitToken(namePlate)
+            if safeUnit then
+                self:CheckUnitForMark(safeUnit)
             end
         end
     end

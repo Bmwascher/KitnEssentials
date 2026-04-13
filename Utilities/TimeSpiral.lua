@@ -17,6 +17,7 @@ local LCG = LibStub("LibCustomGlow-1.0", true)
 local CreateFrame = CreateFrame
 local GetSpellTexture = C_Spell.GetSpellTexture
 local IsPlayerSpell = IsPlayerSpell
+local IsSpellKnown = IsSpellKnown
 local GetTime = GetTime
 local pairs = pairs
 local next = next
@@ -26,6 +27,7 @@ local UnitClass = UnitClass
 -- Module State
 ---------------------------------------------------------------------------------
 TSP.activeProcs = {}
+TSP.durationObject = nil
 
 ---------------------------------------------------------------------------------
 -- Constants
@@ -35,8 +37,9 @@ local TIME_SPIRAL_DURATION = 10.5
 
 local MOVEMENT_SPELLS = {
     [48265]  = "DEATHKNIGHT", -- Death's Advance
-    [195072] = "DEMONHUNTER", -- Fel Rush
-    [189110] = "DEMONHUNTER", -- Infernal Strike
+    [195072]  = "DEMONHUNTER", -- Fel Rush
+    [1234796] = "DEMONHUNTER", -- Infernal Strike
+    [189110]  = "DEMONHUNTER", -- Shift
     [1850]   = "DRUID",       -- Dash
     [252216] = "DRUID",       -- Tiger Dash
     [358267] = "EVOKER",      -- Hover
@@ -145,11 +148,18 @@ function TSP:CreateFrame()
     cooldown:SetHideCountdownNumbers(true)
     cooldown:SetDrawBling(false)
 
+    -- Timer text on top of the cooldown swipe
+    local timerText = cooldown:CreateFontString(nil, "OVERLAY")
+    timerText:SetFont(KE.FONT, 16, "OUTLINE")
+    timerText:SetPoint("CENTER", f, "CENTER", 0, 0)
+    timerText:SetText("")
+
     -- Store references
     self.frame = f
     self.icon = f.icon
     self.text = f.text
     self.cooldown = cooldown
+    self.timerText = timerText
 
     self:ApplySettings()
 end
@@ -157,9 +167,23 @@ end
 ---------------------------------------------------------------------------------
 -- Core Logic
 ---------------------------------------------------------------------------------
+-- Check if a talent is known using multiple detection methods
+local function IsTalentKnown(talentId)
+    if IsPlayerSpell(talentId) then return true end
+    if IsSpellKnown(talentId) then return true end
+
+    local spellInfo = C_Spell.GetSpellInfo(talentId)
+    if spellInfo then
+        local isUsable = C_Spell.IsSpellUsable(talentId)
+        if isUsable then return true end
+    end
+
+    return false
+end
+
 function TSP:FilterSpell(spellId)
     for talentId, spells in pairs(FILTER_TALENTS) do
-        if spells[spellId] and IsPlayerSpell(talentId) then
+        if spells[spellId] and IsTalentKnown(talentId) then
             return true
         end
     end
@@ -198,6 +222,28 @@ function TSP:ApplySettings()
         self.text:Hide()
         if self.text.softOutline then
             self.text.softOutline:SetShown(false)
+        end
+    end
+
+    -- Update timer text settings
+    if self.timerText then
+        local showTimer = self.db.ShowTimer ~= false
+        KE:ApplyFontToText(self.timerText, self.db.TimerFontFace, self.db.TimerFontSize, self.db.TimerFontOutline)
+
+        local timerColor = self.db.TimerTextColor or { 1, 1, 1, 1 }
+        self.timerText:SetTextColor(timerColor[1], timerColor[2], timerColor[3], timerColor[4] or 1)
+
+        if showTimer then
+            self.timerText:Show()
+            if self.timerText.softOutline then
+                local usingSoftOutline = (self.db.TimerFontOutline == "SOFTOUTLINE")
+                self.timerText.softOutline:SetShown(usingSoftOutline)
+            end
+        else
+            self.timerText:Hide()
+            if self.timerText.softOutline then
+                self.timerText.softOutline:SetShown(false)
+            end
         end
     end
 
@@ -259,6 +305,29 @@ function TSP:StopGlow()
     self.glowActive = false
 end
 
+---------------------------------------------------------------------------------
+-- Timer OnUpdate
+---------------------------------------------------------------------------------
+function TSP:OnUpdate()
+    if not self.durationObject then return end
+    if not self.timerText then return end
+    if not self.db.ShowTimer then return end
+
+    local remaining = self.durationObject:GetRemainingDuration()
+    if not remaining or remaining <= 0 then
+        self.timerText:SetText("")
+        return
+    end
+
+    local decimals = self.durationObject:EvaluateRemainingDuration(KE.curves.DurationDecimals)
+    self.timerText:SetFormattedText("%." .. decimals .. "f", remaining)
+
+    -- Update soft outline text if it exists
+    if self.timerText.softOutline and self.timerText.softOutline.main then
+        self.timerText.softOutline.main:SetFormattedText("%." .. decimals .. "f", remaining)
+    end
+end
+
 function TSP:ShowProc()
     if not self.frame then self:CreateFrame() end
     if not self.frame then return end
@@ -266,6 +335,10 @@ function TSP:ShowProc()
 
     -- Set up cooldown spiral
     self.cooldown:SetCooldown(self.procStartTime, TIME_SPIRAL_DURATION)
+
+    -- Create duration object for timer text
+    self.durationObject = C_DurationUtil.CreateDuration()
+    self.durationObject:SetTimeFromStart(self.procStartTime, TIME_SPIRAL_DURATION)
 
     -- Start glow
     self:StartGlow()
@@ -284,6 +357,14 @@ function TSP:HideProc()
     self:StopGlow()
     self.frame:Hide()
     self.procStartTime = nil
+    self.durationObject = nil
+
+    if self.timerText then
+        self.timerText:SetText("")
+        if self.timerText.softOutline and self.timerText.softOutline.main then
+            self.timerText.softOutline.main:SetText("")
+        end
+    end
 
     if self.hideTimer then
         self.hideTimer:Cancel()
@@ -317,7 +398,13 @@ function TSP:ShowPreview()
     self:ApplySettings()
 
     -- Show with fake cooldown
-    self.cooldown:SetCooldown(GetTime(), TIME_SPIRAL_DURATION)
+    local now = GetTime()
+    self.cooldown:SetCooldown(now, TIME_SPIRAL_DURATION)
+
+    -- Create duration object for preview timer
+    self.durationObject = C_DurationUtil.CreateDuration()
+    self.durationObject:SetTimeFromStart(now, TIME_SPIRAL_DURATION)
+
     self:StartGlow()
     self.frame:Show()
 end
@@ -325,6 +412,15 @@ end
 function TSP:HidePreview()
     self.isPreview = false
     self:StopGlow()
+    self.durationObject = nil
+
+    if self.timerText then
+        self.timerText:SetText("")
+        if self.timerText.softOutline and self.timerText.softOutline.main then
+            self.timerText.softOutline.main:SetText("")
+        end
+    end
+
     if self.frame then
         self.frame:Hide()
     end
@@ -339,6 +435,11 @@ function TSP:OnEnable()
     self:CreateFrame()
     self:RegWithEditMode()
     C_Timer.After(0.5, function() self:ApplyPosition() end)
+
+    -- Set up OnUpdate for timer text
+    self.frame:SetScript("OnUpdate", function(_, elapsed)
+        self:OnUpdate(elapsed)
+    end)
 
     -- Register events
     self:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW", function(_, spellId)
@@ -368,11 +469,13 @@ end
 function TSP:OnDisable()
     if self.frame then
         self:StopGlow()
+        self.frame:SetScript("OnUpdate", nil)
         self.frame:Hide()
     end
     self.isPreview = false
     self.activeProcs = {}
     self.glowActive = false
+    self.durationObject = nil
     if self.hideTimer then
         self.hideTimer:Cancel()
         self.hideTimer = nil

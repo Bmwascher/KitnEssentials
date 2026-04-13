@@ -250,9 +250,18 @@ function SK:SetupAuraHooks()
         SK:SetupAuras()
         SpaceRows(BuffFrame)
     end)
+    hooksecurefunc(BuffFrame, "UpdateAuraButtons", function()
+        StyleBuffs()
+        SpaceRows(BuffFrame)
+    end)
     hooksecurefunc(DebuffFrame, "UpdateAuraButtons", function()
         StyleDebuffs()
     end)
+    if ExternalDefensivesFrame then
+        hooksecurefunc(ExternalDefensivesFrame, "UpdateAuraButtons", function()
+            StyleExternalDefensives()
+        end)
+    end
 end
 
 ---------------------------------------------------------------------------------

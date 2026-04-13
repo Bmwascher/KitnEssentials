@@ -15,9 +15,9 @@ local AU = KitnEssentials:NewModule("Automation", "AceEvent-3.0", "AceHook-3.0")
 
 local pcall = pcall
 local ipairs = ipairs
-local select = select
 local hooksecurefunc = hooksecurefunc
 local CreateFrame = CreateFrame
+local IsShiftKeyDown = IsShiftKeyDown
 local RepairAllItems = RepairAllItems
 local CanMerchantRepair = CanMerchantRepair
 local GetRepairAllCost = GetRepairAllCost
@@ -32,6 +32,17 @@ local C_CVar = C_CVar
 local C_Timer = C_Timer
 local StaticPopupDialogs = StaticPopupDialogs
 local _G = _G
+
+---------------------------------------------------------------------------------
+-- Hide Helptips (runs at load time)
+---------------------------------------------------------------------------------
+C_CVar.RegisterCVar("hideHelptips", 1)
+for index = 1, NUM_LE_FRAME_TUTORIALS do
+    C_CVar.SetCVarBitfield("closedInfoFrames", index, true)
+end
+for index = 1, #Enum.FrameTutorialAccount do
+    C_CVar.SetCVarBitfield("closedInfoFramesAccountWide", index, true)
+end
 
 ---------------------------------------------------------------------------------
 -- Constants
@@ -297,29 +308,15 @@ end
 
 -- Auto Sell Junk + Auto Repair --
 
-local function SellJunkItems()
-    if not AU.db.AutoSellJunk then return end
-    for bagID = 0, 4 do
-        for slot = 1, C_Container.GetContainerNumSlots(bagID) do
-            local itemLink = C_Container.GetContainerItemLink(bagID, slot)
-            if itemLink then
-                local itemQuality = select(3, C_Item.GetItemInfo(itemLink))
-                local itemSellPrice = select(11, C_Item.GetItemInfo(itemLink))
-                if itemQuality == 0 and itemSellPrice and itemSellPrice > 0 then
-                    C_Container.UseContainerItem(bagID, slot)
-                end
-            end
-        end
-    end
-end
-
 local merchantFrame
 local function SetupAutoSellRepair()
     if merchantFrame then return end
     merchantFrame = CreateFrame("Frame")
     merchantFrame:RegisterEvent("MERCHANT_SHOW")
     merchantFrame:SetScript("OnEvent", function()
-        if AU.db.AutoSellJunk then SellJunkItems() end
+        if AU.db.AutoSellJunk and not IsShiftKeyDown() and C_MerchantFrame.GetNumJunkItems() > 0 then
+            C_MerchantFrame.SellAllJunkItems()
+        end
         if AU.db.AutoRepair and CanMerchantRepair() then
             local repairCost, canRepair = GetRepairAllCost()
             if repairCost and canRepair and repairCost > 0 then
