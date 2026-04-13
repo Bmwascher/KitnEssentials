@@ -30,6 +30,7 @@ GUIFrame:RegisterContent("TimeSpiral", function(scrollChild, yOffset)
     local allWidgets = {}
     local glowWidgets = {}
     local textWidgets = {}
+    local timerWidgets = {}
 
     local function ApplySettings()
         if TSP and TSP.ApplySettings then
@@ -71,6 +72,15 @@ GUIFrame:RegisterContent("TimeSpiral", function(scrollChild, yOffset)
         end
     end
 
+    local function UpdateTimerWidgetStates()
+        local timerEnabled = db.ShowTimer ~= false
+        for _, widget in ipairs(timerWidgets) do
+            if widget.SetEnabled then
+                widget:SetEnabled(timerEnabled)
+            end
+        end
+    end
+
     local function UpdateAllWidgetStates()
         local mainEnabled = db.Enabled ~= false
 
@@ -84,6 +94,7 @@ GUIFrame:RegisterContent("TimeSpiral", function(scrollChild, yOffset)
         if mainEnabled then
             UpdateGlowWidgetStates()
             UpdateTextWidgetStates()
+            UpdateTimerWidgetStates()
         end
     end
 
@@ -210,10 +221,18 @@ GUIFrame:RegisterContent("TimeSpiral", function(scrollChild, yOffset)
     table_insert(allWidgets, card3)
     yOffset = newOffset
 
+    -- Font lookup (shared by label and timer cards)
+    local fontList = {}
+    if LSM then
+        for name in pairs(LSM:HashTable("font")) do fontList[name] = name end
+    else
+        fontList["Friz Quadrata TT"] = "Friz Quadrata TT"
+    end
+
     ---------------------------------------------------------------------------------
-    -- Card 4: Text Settings
+    -- Card 4: Label Text
     ---------------------------------------------------------------------------------
-    local card4 = GUIFrame:CreateCard(scrollChild, "Text Settings", yOffset)
+    local card4 = GUIFrame:CreateCard(scrollChild, "Label Text", yOffset)
     table_insert(allWidgets, card4)
 
     -- Show Text Checkbox and Text Color Picker
@@ -250,63 +269,135 @@ GUIFrame:RegisterContent("TimeSpiral", function(scrollChild, yOffset)
     table_insert(textWidgets, textLabelEdit)
     card4:AddRow(row4b, 40)
 
-    yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
-
-    ---------------------------------------------------------------------------------
-    -- Card 5: Font Settings
-    ---------------------------------------------------------------------------------
-    local card5 = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
-    table_insert(allWidgets, card5)
-
-    -- Font lookup
-    local fontList = {}
-    if LSM then
-        for name in pairs(LSM:HashTable("font")) do fontList[name] = name end
-    else
-        fontList["Friz Quadrata TT"] = "Friz Quadrata TT"
-    end
+    -- Separator
+    local row4sep = GUIFrame:CreateRow(card4.content, 8)
+    local sep4 = GUIFrame:CreateSeparator(row4sep)
+    row4sep:AddWidget(sep4, 1)
+    table_insert(allWidgets, sep4)
+    table_insert(textWidgets, sep4)
+    card4:AddRow(row4sep, 8)
 
     -- Font Face + Font Size
-    local row5a = GUIFrame:CreateRow(card5.content, 40)
-    local fontDropdown = GUIFrame:CreateDropdown(row5a, "Font", fontList,
+    local row4c = GUIFrame:CreateRow(card4.content, 40)
+    local fontDropdown = GUIFrame:CreateDropdown(row4c, "Font", fontList,
         db.FontFace or "Expressway", 30,
         function(key)
             db.FontFace = key
             ApplySettings()
         end)
-    row5a:AddWidget(fontDropdown, 0.5)
+    row4c:AddWidget(fontDropdown, 0.5)
     table_insert(allWidgets, fontDropdown)
     table_insert(textWidgets, fontDropdown)
 
-    local fontSizeSlider = GUIFrame:CreateSlider(row5a, "Font Size", 8, 36, 1,
+    local fontSizeSlider = GUIFrame:CreateSlider(row4c, "Font Size", 8, 36, 1,
         db.FontSize or 14, nil,
         function(val)
             db.FontSize = val
             ApplySettings()
         end)
-    row5a:AddWidget(fontSizeSlider, 0.5)
+    row4c:AddWidget(fontSizeSlider, 0.5)
     table_insert(allWidgets, fontSizeSlider)
     table_insert(textWidgets, fontSizeSlider)
-    card5:AddRow(row5a, 40)
+    card4:AddRow(row4c, 40)
 
     -- Font Outline Dropdown
-    local row5b = GUIFrame:CreateRow(card5.content, 37)
+    local row4d = GUIFrame:CreateRow(card4.content, 37)
     local outlineList = {
         { key = "NONE",         text = "None" },
         { key = "OUTLINE",      text = "Outline" },
         { key = "THICKOUTLINE", text = "Thick" },
         { key = "SOFTOUTLINE",  text = "Soft" },
     }
-    local outlineDropdown = GUIFrame:CreateDropdown(row5b, "Outline", outlineList,
+    local outlineDropdown = GUIFrame:CreateDropdown(row4d, "Outline", outlineList,
         db.FontOutline or "SOFTOUTLINE", 45,
         function(key)
             db.FontOutline = key
             ApplySettings()
         end)
-    row5b:AddWidget(outlineDropdown, 1)
+    row4d:AddWidget(outlineDropdown, 1)
     table_insert(allWidgets, outlineDropdown)
     table_insert(textWidgets, outlineDropdown)
-    card5:AddRow(row5b, 37)
+    card4:AddRow(row4d, 37)
+
+    yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
+
+    ---------------------------------------------------------------------------------
+    -- Card 5: Timer Settings (countdown on icon)
+    ---------------------------------------------------------------------------------
+    local card5 = GUIFrame:CreateCard(scrollChild, "Timer Settings", yOffset)
+    table_insert(allWidgets, card5)
+
+    -- Show Timer Checkbox and Timer Color Picker
+    local row5ta = GUIFrame:CreateRow(card5.content, 40)
+    local showTimerCheck = GUIFrame:CreateCheckbox(row5ta, "Show Countdown Timer", db.ShowTimer ~= false,
+        function(checked)
+            db.ShowTimer = checked
+            UpdateTimerWidgetStates()
+            ApplySettings()
+        end)
+    row5ta:AddWidget(showTimerCheck, 0.5)
+    table_insert(allWidgets, showTimerCheck)
+
+    local timerColorPicker = GUIFrame:CreateColorPicker(row5ta, "Timer Color",
+        db.TimerTextColor or { 1, 1, 1, 1 },
+        function(r, g, b, a)
+            db.TimerTextColor = { r, g, b, a }
+            ApplySettings()
+        end)
+    row5ta:AddWidget(timerColorPicker, 0.5)
+    table_insert(allWidgets, timerColorPicker)
+    table_insert(timerWidgets, timerColorPicker)
+    card5:AddRow(row5ta, 40)
+
+    -- Separator
+    local rowSepT = GUIFrame:CreateRow(card5.content, 8)
+    local sepT = GUIFrame:CreateSeparator(rowSepT)
+    rowSepT:AddWidget(sepT, 1)
+    table_insert(allWidgets, sepT)
+    table_insert(timerWidgets, sepT)
+    card5:AddRow(rowSepT, 8)
+
+    -- Timer Font + Size
+    local row5tb = GUIFrame:CreateRow(card5.content, 40)
+    local timerFontDropdown = GUIFrame:CreateDropdown(row5tb, "Font", fontList,
+        db.TimerFontFace or "Expressway", 30,
+        function(key)
+            db.TimerFontFace = key
+            ApplySettings()
+        end)
+    row5tb:AddWidget(timerFontDropdown, 0.5)
+    table_insert(allWidgets, timerFontDropdown)
+    table_insert(timerWidgets, timerFontDropdown)
+
+    local timerFontSizeSlider = GUIFrame:CreateSlider(row5tb, "Font Size", 8, 36, 1,
+        db.TimerFontSize or 16, nil,
+        function(val)
+            db.TimerFontSize = val
+            ApplySettings()
+        end)
+    row5tb:AddWidget(timerFontSizeSlider, 0.5)
+    table_insert(allWidgets, timerFontSizeSlider)
+    table_insert(timerWidgets, timerFontSizeSlider)
+    card5:AddRow(row5tb, 40)
+
+    -- Timer Outline
+    local row5tc = GUIFrame:CreateRow(card5.content, 37)
+    local timerOutlineList = {
+        { key = "NONE",         text = "None" },
+        { key = "OUTLINE",      text = "Outline" },
+        { key = "THICKOUTLINE", text = "Thick" },
+        { key = "SOFTOUTLINE",  text = "Soft" },
+    }
+    local timerOutlineDropdown = GUIFrame:CreateDropdown(row5tc, "Outline", timerOutlineList,
+        db.TimerFontOutline or "OUTLINE", 45,
+        function(key)
+            db.TimerFontOutline = key
+            ApplySettings()
+        end)
+    row5tc:AddWidget(timerOutlineDropdown, 1)
+    table_insert(allWidgets, timerOutlineDropdown)
+    table_insert(timerWidgets, timerOutlineDropdown)
+    card5:AddRow(row5tc, 37)
 
     yOffset = yOffset + card5:GetContentHeight() + Theme.paddingSmall
 

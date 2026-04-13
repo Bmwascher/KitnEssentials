@@ -20,6 +20,8 @@ local CreateFrame = CreateFrame
 local UIFrameFadeRemoveFrame = UIFrameFadeRemoveFrame
 local UIFrameFadeOut = UIFrameFadeOut
 local InCombatLockdown = InCombatLockdown
+local UnitExists = UnitExists
+local UnitIsDeadOrGhost = UnitIsDeadOrGhost
 local GetInventoryItemDurability = GetInventoryItemDurability
 local C_Spell_GetSpellInfo = C_Spell.GetSpellInfo
 local GetSpecialization = C_SpecializationInfo.GetSpecialization or GetSpecialization
@@ -84,6 +86,7 @@ local SPEC_INTERRUPTS = {
 local MESSAGE_TYPES = {
     "enterCombat",
     "exitCombat",
+    "noTarget",
     "lowDurability",
     "interrupt",
 }
@@ -93,6 +96,7 @@ CM.messageFrames = {}
 CM.activeMessages = {}
 CM.isPreview = false
 CM.inCombat = false
+CM.noTargetCheckGeneration = 0
 CM.interruptFlag = false
 CM.interruptTimer = nil
 CM.currentInterrupts = nil
@@ -118,6 +122,10 @@ local function GetMessageConfig(db, msgType)
         return db.ExitEnabled ~= false,
             db.ExitCombatText or "- Combat",
             db.ExitColor or { 0.1, 1, 0.1, 1 }
+    elseif msgType == "noTarget" then
+        return db.NoTargetEnabled == true,
+            db.NoTargetText or "NO TARGET",
+            db.NoTargetColor or { 1, 0.8, 0, 1 }
     elseif msgType == "lowDurability" then
         return db.DurabilityEnabled ~= false,
             db.DurabilityText or "LOW DURABILITY",
@@ -292,18 +300,64 @@ function CM:HidePersistentMessage(msgType)
 end
 
 ---------------------------------------------------------------------------------
+-- No Target Warning
+---------------------------------------------------------------------------------
+function CM:CheckNoTarget()
+    if not self.db or self.db.Enabled == false then return end
+    if self.isPreview then return end
+
+    if UnitIsDeadOrGhost("player") then
+        self:HidePersistentMessage("noTarget")
+        return
+    end
+
+    if self.inCombat and self.db.NoTargetEnabled then
+        self.noTargetCheckGeneration = self.noTargetCheckGeneration + 1
+        local myGeneration = self.noTargetCheckGeneration
+
+        C_Timer.After(0.1, function()
+            if self.noTargetCheckGeneration ~= myGeneration then return end
+            if not self.inCombat then return end
+            if UnitIsDeadOrGhost("player") then
+                self:HidePersistentMessage("noTarget")
+                return
+            end
+            if not UnitExists("target") then
+                self:ShowPersistentMessage("noTarget")
+            else
+                self:HidePersistentMessage("noTarget")
+            end
+        end)
+    else
+        self:HidePersistentMessage("noTarget")
+    end
+end
+
+---------------------------------------------------------------------------------
 -- Event Handlers
 ---------------------------------------------------------------------------------
 function CM:OnEnterCombat()
     self.inCombat = true
     self:HidePersistentMessage("lowDurability")
     self:ShowFlashMessage("enterCombat")
+    self:CheckNoTarget()
 end
 
 function CM:OnExitCombat()
     self.inCombat = false
+    self.noTargetCheckGeneration = self.noTargetCheckGeneration + 1
+    self:HidePersistentMessage("noTarget")
     self:ShowFlashMessage("exitCombat")
     self:CheckDurability()
+end
+
+function CM:OnTargetChanged()
+    self:CheckNoTarget()
+end
+
+function CM:OnPlayerDead()
+    self.noTargetCheckGeneration = self.noTargetCheckGeneration + 1
+    self:HidePersistentMessage("noTarget")
 end
 
 function CM:CheckDurability()
@@ -376,6 +430,8 @@ function CM:ApplySettings()
             end
         end
         self:ArrangeMessages()
+    else
+        self:CheckNoTarget()
     end
 end
 
@@ -439,6 +495,11 @@ function CM:HidePreview()
     for msgType, frame in pairs(self.messageFrames) do
         frame:Hide()
         self.activeMessages[msgType] = nil
+    end
+
+    -- Re-check actual state
+    if self.inCombat then
+        self:CheckNoTarget()
     end
 end
 
@@ -519,6 +580,8 @@ function CM:OnEnable()
     -- Register events
     self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnEnterCombat")
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnExitCombat")
+    self:RegisterEvent("PLAYER_TARGET_CHANGED", "OnTargetChanged")
+    self:RegisterEvent("PLAYER_DEAD", "OnPlayerDead")
     self:RegisterEvent("UPDATE_INVENTORY_DURABILITY", "CheckDurability")
 
     -- Interrupt announce events
@@ -532,8 +595,10 @@ function CM:OnEnable()
     -- Track initial combat state
     self.inCombat = InCombatLockdown()
 
-    -- Initial durability check (delayed to ensure frames exist)
-    if not self.inCombat then
+    -- Initial checks (delayed to ensure frames exist)
+    if self.inCombat then
+        self:CheckNoTarget()
+    else
         C_Timer.After(1, function() self:CheckDurability() end)
     end
 end
@@ -545,6 +610,7 @@ function CM:OnDisable()
     self.activeMessages = {}
     self.isPreview = false
     self.inCombat = false
+    self.noTargetCheckGeneration = self.noTargetCheckGeneration + 1
     self.interruptFlag = false
     if self.interruptTimer then
         self.interruptTimer:Cancel()
