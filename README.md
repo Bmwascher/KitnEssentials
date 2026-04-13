@@ -20,7 +20,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Battle Res | Battle res charge tracker with timer |
 | Combat Timer | Configurable in-combat duration display |
 | Player Crosshair | Static crosshair overlay with range warning (melee/ranged/healer) |
-| Combat Texts | Combat enter/exit, interrupt announce with spell icon, and low durability warnings |
+| Combat Texts | Combat enter/exit, no target warning, interrupt announce with spell icon, and low durability warnings |
 | Cursor Circle | Cursor-following ring with GCD overlay, multiple texture options |
 | Range Display | Target range text with out-of-range color warning |
 | Focus & Target Castbar | Repositionable cast bars with kick indicators, target names, color settings, and cast sound alert (tabbed GUI) |
@@ -33,7 +33,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Raid Notifications | Gateway usability, reset boss reminder, loot boss reminder with per-alert toggles |
 | Class Status Texts | Pet status, class stance, movement alert, and dispel CD — 4 class-specific text alerts in one tabbed GUI |
 | Bloodlust Tracker | Animated Pedro overlay + sound or static icon with countdown on Bloodlust/Heroism/Time Warp |
-| Time Spiral Tracker | Movement spell proc tracker with glow effects and cooldown spiral (all classes) |
+| Time Spiral Tracker | Movement spell proc tracker with glow effects, cooldown spiral, and countdown timer (all classes) |
 | Recuperate Button | One-click self-heal with configurable raid/party visibility and health-based alpha |
 | Evoker Suite | Disintegrate tick marks, Preservation Stasis tracker, Ebon Might extension warning + crit tracker, and Prescience Tracker (Prescience/Shifting Sands on allies) — tabbed GUI |
 | World Marker Cycler | Cycle through world markers at cursor with drag-to-reorder priority |
