@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.11.0
+### Additions
+- **Core**: New centralized secret value API (`Secret.lua`) — `KE:IsSecretValue()`, `KE:IsSafeValue()`, `KE:IsFullyRestricted()`, `KE:DeferUntilUnrestricted()` and restriction state tracking for combat, M+, encounters, and PvP. Protected function violation listener for debugging.
+- **Combat Texts**: New "No Target" warning — persistent text displayed when in combat with no target selected. Generation-based debounce prevents flicker during rapid target changes. Disabled by default, configurable text and color.
+- **Time Spiral**: Countdown timer text overlay on the icon showing remaining proc duration with dynamic decimal formatting via `C_DurationUtil`. Configurable font, size, outline, and color.
+- **Time Spiral**: Added Infernal Strike (spell 1234796) for Demon Hunter.
+- **Automation**: Hide all tutorial/helptip popups at load time.
+- **Automation**: Hold Shift when opening a vendor to bypass auto-sell junk.
+
+### Fixes
+- **Hunter's Mark**: Replaced `InCombatLockdown()` gate with restriction state system — nameplate tracking now works during combat instead of being completely blocked. Added `issecretvalue` guards on aura scanning (`spellId`, `sourceUnit`) to prevent false "missing mark" warnings from secret values. Added `ENCOUNTER_START`/`ENCOUNTER_END` events for better state management.
+- **Auras Skinning**: Added missing `BuffFrame:UpdateAuraButtons` hook — buff icons are now re-styled when buffs are gained or lost, not just on initial setup. Added `SpaceRows` call for live row layout. Added `ExternalDefensivesFrame:UpdateAuraButtons` hook for live restyling of defensive auras.
+- **Automation**: Replaced manual bag iteration for junk selling with `C_MerchantFrame.SellAllJunkItems()`.
+- **Time Spiral**: Improved talent detection with multi-method `IsTalentKnown` (IsPlayerSpell + IsSpellKnown + C_Spell.GetSpellInfo/IsSpellUsable).
+
+### Changes
+- **Core**: Added `KE:AddBorders()` — enhanced border helper with optional `borderParent` for frame level control and `SetBorderColor` method.
+- **Combat Texts GUI**: Added "No Target Warning" card with enable toggle, color picker, and text input.
+- **Time Spiral GUI**: Merged "Text Settings" and "Font Settings" into a single "Label Text" card. Added new "Timer Settings" card for countdown display configuration.
+
 ## v1.10.5
 ### Fixes
 - **Enemy Counter**: Fixed inaccurate mob count — added `UnitIsDead` filter so dead mobs with lingering nameplates are no longer counted, and `UnitCanAttack` filter so friendly NPC nameplates are excluded. Added persistent `DEBUG_EC` flag for future diagnostics.
