@@ -1,4 +1,7 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
     <Script file="WarpDepleteForces.lua" />
     <Script file="EnemyCounter.lua" />
+    <Script file="KickTracker.lua" />
+    <Script file="DungeonTimers.lua" />
+    <Script file="DungeonCasts.lua" />
 </Ui>

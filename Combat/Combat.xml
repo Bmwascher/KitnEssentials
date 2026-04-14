@@ -9,5 +9,5 @@
     <Script file="TargetCastbar.lua" />
     <Script file="FocusCastbar.lua" />
     <Script file="RangeChecker.lua" />
-    <Script file="KickTracker.lua" />
+    <Script file="BossDebuffs.lua" />
 </Ui>

@@ -206,7 +206,7 @@ local PREVIEW_MODULES = {
     "FocusCastbar", "RaidNotifications", "HuntersMark", "RangeChecker",
     "TimeSpiral", "DisintegrateTicks", "StasisTracker", "Recuperate", "BloodlustTracker", "KickTracker",
     "NoMovementAlert", "PrescienceTracker", "GreatVaultAlert", "PotionReady", "BossDebuffs",
-    "EnemyCounter", "EbonMightTracker",
+    "EnemyCounter", "EbonMightTracker", "DungeonCasts", "DungeonTimers",
 }
 
 PreviewManager.guiOpen = false

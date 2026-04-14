@@ -165,12 +165,12 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     end
 
     ---------------------------------------------------------------------------------
-    -- Card 3: Bar Appearance
+    -- Card 3: Frame Settings
     ---------------------------------------------------------------------------------
-    local card3 = GUIFrame:CreateCard(scrollChild, "Bar Appearance", yOffset)
+    local card3 = GUIFrame:CreateCard(scrollChild, "Frame Settings", yOffset)
 
     -- Width + Height
-    local row3a = GUIFrame:CreateRow(card3.content, 40)
+    local row3a = GUIFrame:CreateRow(card3.content, 36)
     local widthSlider = GUIFrame:CreateSlider(row3a, "Bar Width", 80, 400, 1, db.BarWidth or 180, nil,
         function(val)
             db.BarWidth = val
@@ -186,22 +186,10 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
         end)
     row3a:AddWidget(heightSlider, 0.5)
     table_insert(allWidgets, heightSlider)
-    card3:AddRow(row3a, 40)
+    card3:AddRow(row3a, 36)
 
-    -- Growth Direction + Max Bars
-    local row3b = GUIFrame:CreateRow(card3.content, 40)
-    local growList = {
-        { key = "DOWN", text = "Down" },
-        { key = "UP", text = "Up" },
-    }
-    local growDropdown = GUIFrame:CreateDropdown(row3b, "Growth Direction", growList, db.GrowthDirection or "DOWN", 30,
-        function(key)
-            db.GrowthDirection = key
-            ApplySettings()
-        end)
-    row3b:AddWidget(growDropdown, 0.5)
-    table_insert(allWidgets, growDropdown)
-
+    -- Max Bars + Spacing
+    local row3b = GUIFrame:CreateRow(card3.content, 36)
     local maxBarsSlider = GUIFrame:CreateSlider(row3b, "Max Bars", 1, 5, 1, db.MaxBars or 5, nil,
         function(val)
             db.MaxBars = val
@@ -209,131 +197,155 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
         end)
     row3b:AddWidget(maxBarsSlider, 0.5)
     table_insert(allWidgets, maxBarsSlider)
-    card3:AddRow(row3b, 40)
 
-    -- Spacing + Bar Texture
-    local row3c = GUIFrame:CreateRow(card3.content, 40)
-    local spacingSlider = GUIFrame:CreateSlider(row3c, "Bar Spacing", 0, 10, 1, db.BarSpacing or 2, nil,
+    local spacingSlider = GUIFrame:CreateSlider(row3b, "Bar Spacing", 0, 10, 1, db.BarSpacing or 2, nil,
         function(val)
             db.BarSpacing = val
             ApplySettings()
         end)
-    row3c:AddWidget(spacingSlider, 0.5)
+    row3b:AddWidget(spacingSlider, 0.5)
     table_insert(allWidgets, spacingSlider)
+    card3:AddRow(row3b, 36)
 
-    local statusbarDropdown = GUIFrame:CreateDropdown(row3c, "Bar Texture", statusbarList,
-        db.StatusBarTexture or "KitnUI", 70,
+    -- Growth Direction + Icon Side
+    local row3c = GUIFrame:CreateRow(card3.content, 36)
+    local growList = {
+        { key = "DOWN", text = "Down" },
+        { key = "UP", text = "Up" },
+    }
+    local growDropdown = GUIFrame:CreateDropdown(row3c, "Growth Direction", growList, db.GrowthDirection or "DOWN", 30,
         function(key)
-            db.StatusBarTexture = key
+            db.GrowthDirection = key
             ApplySettings()
         end)
-    row3c:AddWidget(statusbarDropdown, 0.5)
-    table_insert(allWidgets, statusbarDropdown)
-    card3:AddRow(row3c, 40)
-
-    -- Show Icon + Icon Size + Icon Side
-    local row3d = GUIFrame:CreateRow(card3.content, 40)
-    local iconCheck = GUIFrame:CreateCheckbox(row3d, "Show Icon", db.ShowIcon ~= false,
-        function(checked)
-            db.ShowIcon = checked
-            ApplySettings()
-        end)
-    row3d:AddWidget(iconCheck, 0.33)
-    table_insert(allWidgets, iconCheck)
-
-    local iconSizeSlider = GUIFrame:CreateSlider(row3d, "Icon Size", 12, 40, 1, db.IconSize or 20, nil,
-        function(val)
-            db.IconSize = val
-            ApplySettings()
-        end)
-    row3d:AddWidget(iconSizeSlider, 0.33)
-    table_insert(allWidgets, iconSizeSlider)
+    row3c:AddWidget(growDropdown, 0.5)
+    table_insert(allWidgets, growDropdown)
 
     local sideList = {
         { key = "LEFT", text = "Left" },
         { key = "RIGHT", text = "Right" },
     }
-    local sideDropdown = GUIFrame:CreateDropdown(row3d, "Icon Side", sideList, db.IconSide or "LEFT", 30,
+    local sideDropdown = GUIFrame:CreateDropdown(row3c, "Icon Side", sideList, db.IconSide or "LEFT", 30,
         function(key)
             db.IconSide = key
             ApplySettings()
         end)
-    row3d:AddWidget(sideDropdown, 0.34)
+    row3c:AddWidget(sideDropdown, 0.5)
     table_insert(allWidgets, sideDropdown)
-    card3:AddRow(row3d, 40)
+    card3:AddRow(row3c, 36)
 
-    yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
+    yOffset = yOffset + card3:GetContentHeight() + (Theme.paddingMedium or 10)
 
     ---------------------------------------------------------------------------------
-    -- Card 4: Text Settings
+    -- Card 4: Bar Appearance
     ---------------------------------------------------------------------------------
-    local card4 = GUIFrame:CreateCard(scrollChild, "Text Settings", yOffset)
+    local card4 = GUIFrame:CreateCard(scrollChild, "Bar Appearance", yOffset)
 
-    -- Show Name + Show Timer
-    local row4a = GUIFrame:CreateRow(card4.content, 40)
-    local nameCheck = GUIFrame:CreateCheckbox(row4a, "Show Player Name", db.ShowName ~= false,
-        function(checked)
-            db.ShowName = checked
+    -- Bar Texture (full width)
+    local row4a = GUIFrame:CreateRow(card4.content, 36)
+    local statusbarDropdown = GUIFrame:CreateDropdown(row4a, "Bar Texture", statusbarList,
+        db.StatusBarTexture or "KitnUI", 70,
+        function(key)
+            db.StatusBarTexture = key
             ApplySettings()
         end)
-    row4a:AddWidget(nameCheck, 0.5)
-    table_insert(allWidgets, nameCheck)
+    row4a:AddWidget(statusbarDropdown, 1)
+    table_insert(allWidgets, statusbarDropdown)
+    card4:AddRow(row4a, 36)
 
-    local timerCheck = GUIFrame:CreateCheckbox(row4a, "Show Timer", db.ShowTimer ~= false,
-        function(checked)
-            db.ShowTimer = checked
-            ApplySettings()
-        end)
-    row4a:AddWidget(timerCheck, 0.5)
-    table_insert(allWidgets, timerCheck)
-    card4:AddRow(row4a, 40)
-
-    -- Font + Font Size + Outline (shared for name and timer)
-    local row4b = GUIFrame:CreateRow(card4.content, 40)
-    local fontDropdown = GUIFrame:CreateDropdown(row4b, "Font", fontList, db.FontFace or "Expressway", 70,
+    -- Font + Font Size
+    local row3e = GUIFrame:CreateRow(card4.content, 36)
+    local fontDropdown = GUIFrame:CreateDropdown(row3e, "Font", fontList, db.FontFace or "Expressway", 70,
         function(key)
             db.FontFace = key
             ApplySettings()
-        end)
-    row4b:AddWidget(fontDropdown, 0.4)
+        end, true)
+    row3e:AddWidget(fontDropdown, 0.5)
     table_insert(allWidgets, fontDropdown)
 
-    local fontSizeSlider = GUIFrame:CreateSlider(row4b, "Font Size", 8, 24, 1, db.FontSize or 11, nil,
+    local fontSizeSlider = GUIFrame:CreateSlider(row3e, "Font Size", 8, 24, 1, db.FontSize or 11, nil,
         function(val)
             db.FontSize = val
             ApplySettings()
         end)
-    row4b:AddWidget(fontSizeSlider, 0.3)
+    row3e:AddWidget(fontSizeSlider, 0.5)
     table_insert(allWidgets, fontSizeSlider)
+    card4:AddRow(row3e, 36)
 
-    local fontOutlineDropdown = GUIFrame:CreateDropdown(row4b, "Outline", outlineList, db.FontOutline or "SOFTOUTLINE", 45,
+    -- Font Outline
+    local row3f = GUIFrame:CreateRow(card4.content, 36)
+    local fontOutlineDropdown = GUIFrame:CreateDropdown(row3f, "Font Outline", outlineList, db.FontOutline or "SOFTOUTLINE", 45,
         function(key)
             db.FontOutline = key
             ApplySettings()
         end)
-    row4b:AddWidget(fontOutlineDropdown, 0.3)
+    row3f:AddWidget(fontOutlineDropdown, 1)
     table_insert(allWidgets, fontOutlineDropdown)
-    card4:AddRow(row4b, 40)
+    card4:AddRow(row3f, 36)
 
-    -- Show Ready Text + Ready Text
-    local row4c = GUIFrame:CreateRow(card4.content, 40)
-    local readyCheck = GUIFrame:CreateCheckbox(row4c, "Show Ready Text", db.ShowReadyText ~= false,
+    -- Separator
+    local rowSep4 = GUIFrame:CreateRow(card4.content, 8)
+    local sep4 = GUIFrame:CreateSeparator(rowSep4)
+    rowSep4:AddWidget(sep4, 1)
+    table_insert(allWidgets, sep4)
+    card4:AddRow(rowSep4, 8)
+
+    -- Show Player Name + Show Timer
+    local row3g = GUIFrame:CreateRow(card4.content, 36)
+    local nameCheck = GUIFrame:CreateCheckbox(row3g, "Show Player Name", db.ShowName ~= false,
+        function(checked)
+            db.ShowName = checked
+            ApplySettings()
+        end)
+    row3g:AddWidget(nameCheck, 0.5)
+    table_insert(allWidgets, nameCheck)
+
+    local timerCheck = GUIFrame:CreateCheckbox(row3g, "Show Timer", db.ShowTimer ~= false,
+        function(checked)
+            db.ShowTimer = checked
+            ApplySettings()
+        end)
+    row3g:AddWidget(timerCheck, 0.5)
+    table_insert(allWidgets, timerCheck)
+    card4:AddRow(row3g, 36)
+
+    -- Show Kick Icon + Show Ready Text
+    local row3h = GUIFrame:CreateRow(card4.content, 36)
+    local iconCheck = GUIFrame:CreateCheckbox(row3h, "Show Kick Icon", db.ShowIcon ~= false,
+        function(checked)
+            db.ShowIcon = checked
+            ApplySettings()
+        end)
+    row3h:AddWidget(iconCheck, 0.5)
+    table_insert(allWidgets, iconCheck)
+
+    local readyCheck = GUIFrame:CreateCheckbox(row3h, "Show Ready Text", db.ShowReadyText ~= false,
         function(checked)
             db.ShowReadyText = checked
             ApplySettings()
         end)
-    row4c:AddWidget(readyCheck, 0.5)
+    row3h:AddWidget(readyCheck, 0.5)
     table_insert(allWidgets, readyCheck)
+    card4:AddRow(row3h, 36)
 
-    local readyTextInput = GUIFrame:CreateEditBox(row4c, "Ready Text", db.ReadyText or "Ready",
+    -- Icon Size + Ready Text
+    local row3i = GUIFrame:CreateRow(card4.content, 36)
+    local iconSizeSlider = GUIFrame:CreateSlider(row3i, "Icon Size", 12, 40, 1, db.IconSize or 20, nil,
+        function(val)
+            db.IconSize = val
+            ApplySettings()
+        end)
+    row3i:AddWidget(iconSizeSlider, 0.5)
+    table_insert(allWidgets, iconSizeSlider)
+
+    local readyTextInput = GUIFrame:CreateEditBox(row3i, "Ready Text", db.ReadyText or "Ready",
         function(text)
             db.ReadyText = text
             ApplySettings()
         end)
-    row4c:AddWidget(readyTextInput, 0.5)
+    row3i:AddWidget(readyTextInput, 0.5)
     table_insert(allWidgets, readyTextInput)
-
-    card4:AddRow(row4c, 40)
+    card4:AddRow(row3i, 36)
 
     yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
 

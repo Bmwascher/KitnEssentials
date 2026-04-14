@@ -35,7 +35,8 @@
     <Script file="GUITabs\GUICombat\GUI-FocusCastbar.lua" />
     <Script file="GUITabs\GUICombat\GUI-Castbars.lua" />
     <Script file="GUITabs\GUICombat\GUI-RangeChecker.lua" />
-    <Script file="GUITabs\GUICombat\GUI-KickTracker.lua" />
+    <Script file="GUITabs\GUICombat\GUI-BossDebuffs.lua" />
+    <Script file="GUITabs\GUIDungeons\GUI-KickTracker.lua" />
 
     <!-- Utilities tabs -->
     <Script file="GUITabs\GUIUtilities\GUI-RaidNotifications.lua" />
@@ -58,9 +59,10 @@
     <Script file="GUITabs\GUIUtilities\GUI-PIMacroBuilder.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-MacroBuilders.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-PotionReady.lua" />
-    <Script file="GUITabs\GUIUtilities\GUI-BossDebuffs.lua" />
 
     <!-- Dungeons tabs -->
+    <Script file="GUITabs\GUIDungeons\GUI-DungeonTimers.lua" />
+    <Script file="GUITabs\GUIDungeons\GUI-DungeonCasts.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-WarpDepleteForces.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-EnemyCounter.lua" />
 
