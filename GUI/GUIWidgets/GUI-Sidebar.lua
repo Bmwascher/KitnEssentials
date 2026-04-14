@@ -389,6 +389,11 @@ function GUIFrame:SelectSidebarItem(itemId)
         end
     end
 
+    -- Update section-based previews
+    if KE.PreviewManager then
+        KE.PreviewManager:SetActivePage(itemId)
+    end
+
     self:RefreshContent()
 end
 
