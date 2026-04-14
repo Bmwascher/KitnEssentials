@@ -460,6 +460,14 @@ function ST:OnEnable()
     end
 end
 
+function ST:OnThemeChanged()
+    if not self.db or not self.db.Enabled then return end
+    if (self.db.ColorMode or "custom") == "theme" and self.bar then
+        local r, g, b, a = KE:GetAccentColor(self.db.ColorMode, self.db.Color)
+        self.bar:SetStatusBarColor(r, g, b, a)
+    end
+end
+
 function ST:OnDisable()
     self:ReleaseStasis()
     self.isPreview = false

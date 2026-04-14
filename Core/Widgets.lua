@@ -62,12 +62,12 @@ function KE:CreateMessagePopup(timer, text, fontSize, parentFrame, xOffset, yOff
     msgText:SetTextColor(accent[1], accent[2], accent[3], 1)
     msgText:SetShadowColor(0, 0, 0, 0)
 
-    UIFrameFadeIn(msgText, 0.2, 0, 1)
+    msgText:SetAlpha(1)
     msgContainer:Show()
 
     C_Timer.After(timer, function()
-        UIFrameFadeOut(msgText, 1.5, 1, 0)
-        C_Timer.After(1.6, function()
+        msgText:SetAlpha(0)
+        C_Timer.After(0.1, function()
             msgContainer:Hide()
         end)
     end)

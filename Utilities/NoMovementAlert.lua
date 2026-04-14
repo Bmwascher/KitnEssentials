@@ -342,6 +342,14 @@ function NMA:OnEnable()
     self:StartOnUpdate()
 end
 
+function NMA:OnThemeChanged()
+    if not self.db or not self.db.Enabled then return end
+    if (self.db.ColorMode or "custom") == "theme" and self.text then
+        local r, g, b, a = KE:GetAccentColor(self.db.ColorMode, self.db.Color)
+        self.text:SetTextColor(r, g, b, a)
+    end
+end
+
 function NMA:OnDisable()
     self:UnregisterAllEvents()
     self:StopOnUpdate()

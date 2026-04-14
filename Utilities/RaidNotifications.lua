@@ -505,6 +505,18 @@ function RN:OnEnable()
     self:GatewayFullUpdate()
 end
 
+function RN:OnThemeChanged()
+    if not self.db or not self.db.Enabled then return end
+    if (self.db.ColorMode or "custom") == "theme" and self.rows then
+        local r, g, b, a = KE:GetAccentColor(self.db.ColorMode, self.db.Color)
+        for _, row in ipairs(self.rows) do
+            if row.text then
+                row.text:SetTextColor(r, g, b, a)
+            end
+        end
+    end
+end
+
 function RN:OnDisable()
     self:UnregisterAllEvents()
     self:HideAllAlerts()
