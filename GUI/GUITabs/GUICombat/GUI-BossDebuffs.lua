@@ -124,7 +124,7 @@ GUIFrame:RegisterContent("BossDebuffs", function(scrollChild, yOffset)
             db.EncounterBlacklist = cleaned
             -- Update edit box to show cleaned text
             blacklistUpdating = true
-            blacklistBox:SetValue(cleaned)
+            if blacklistBox then blacklistBox:SetValue(cleaned) end
             blacklistUpdating = false
             local mod = KitnEssentials and KitnEssentials:GetModule("BossDebuffs", true)
             if mod and mod.RefreshBlacklist then mod:RefreshBlacklist() end

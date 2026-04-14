@@ -203,22 +203,73 @@ KE.PreviewManager = PreviewManager
 local PREVIEW_MODULES = {
     "StanceText", "CombatCross", "CombatTexts", "CombatRes",
     "CombatTimer", "PetStatusText", "DragonRiding",
-    "FocusCastbar", "RaidNotifications", "HuntersMark", "RangeChecker",
+    "FocusCastbar", "TargetCastbar", "RaidNotifications", "HuntersMark", "RangeChecker",
     "TimeSpiral", "DisintegrateTicks", "StasisTracker", "Recuperate", "BloodlustTracker", "KickTracker",
     "NoMovementAlert", "PrescienceTracker", "GreatVaultAlert", "PotionReady", "BossDebuffs",
     "EnemyCounter", "EbonMightTracker", "DungeonCasts", "DungeonTimers",
 }
 
+-- Section → preview module mapping for section-based previews
+-- Sections not listed here (Settings, Optimize, Skinning) have no previews
+local SECTION_PREVIEW_MODULES = {
+    combat_section = {
+        "CombatRes", "BossDebuffs", "CombatTexts", "CombatTimer",
+        "FocusCastbar", "TargetCastbar", "CombatCross", "RangeChecker",
+    },
+    utilities_section = {
+        "BloodlustTracker", "StanceText", "PetStatusText", "PotionReady",
+        "DisintegrateTicks", "StasisTracker", "EbonMightTracker", "PrescienceTracker",
+        "RaidNotifications", "Recuperate", "TimeSpiral", "NoMovementAlert",
+    },
+    qol_section = {
+        "DragonRiding", "HuntersMark", "GreatVaultAlert",
+    },
+    dungeons_section = {
+        "EnemyCounter", "KickTracker", "DungeonCasts",
+    },
+    dungeon_timers_section = {
+        "DungeonTimers",
+    },
+}
+
+-- Reverse lookup: sidebar item ID → section ID (built lazily)
+local ITEM_TO_SECTION = nil
+
+local function GetItemToSection()
+    if ITEM_TO_SECTION then return ITEM_TO_SECTION end
+    ITEM_TO_SECTION = {}
+    local GUIFrame = KE.GUIFrame
+    local sidebarConfig = GUIFrame and GUIFrame.sidebarConfig
+    if sidebarConfig then
+        for _, section in ipairs(sidebarConfig) do
+            if section.items then
+                for _, item in ipairs(section.items) do
+                    ITEM_TO_SECTION[item.id] = section.id
+                end
+            end
+        end
+    end
+    return ITEM_TO_SECTION
+end
+
 PreviewManager.guiOpen = false
 PreviewManager.editModeActive = false
 PreviewManager.previewsActive = false
+PreviewManager.activeSection = nil
 
 function PreviewManager:UpdatePreviewState()
-    local shouldShowPreviews = self.guiOpen or self.editModeActive
-    if shouldShowPreviews and not self.previewsActive then
-        self:StartAllPreviews()
+    if self.editModeActive then
+        -- Edit mode: show ALL previews regardless of section
+        self:ShowModules(PREVIEW_MODULES)
         self.previewsActive = true
-    elseif not shouldShowPreviews and self.previewsActive then
+        return
+    end
+
+    if self.guiOpen then
+        -- GUI open: show only the active section's previews
+        self.previewsActive = true
+        self:ShowSectionPreviews(self.activeSection)
+    elseif self.previewsActive then
         self:StopAllPreviews()
         self.previewsActive = false
     end
@@ -234,11 +285,54 @@ function PreviewManager:SetEditModeActive(active)
     self:UpdatePreviewState()
 end
 
-function PreviewManager:StartAllPreviews()
+function PreviewManager:SetActiveSection(sectionId)
+    if self.activeSection == sectionId then return end
+    self.activeSection = sectionId
+    if self.guiOpen and not self.editModeActive then
+        self:ShowSectionPreviews(sectionId)
+    end
+end
+
+-- Resolve section from a sidebar item ID and activate it
+function PreviewManager:SetActivePage(itemId)
+    local lookup = GetItemToSection()
+    local sectionId = lookup[itemId]
+    self:SetActiveSection(sectionId)
+end
+
+function PreviewManager:ShowSectionPreviews(sectionId)
+    local Addon = KitnEssentials
+    if not Addon then return end
+
+    local wantedModules = sectionId and SECTION_PREVIEW_MODULES[sectionId]
+    local wantedSet = {}
+    if wantedModules then
+        for _, name in ipairs(wantedModules) do
+            wantedSet[name] = true
+        end
+    end
+
+    local classMatch = { [select(2, UnitClass("player"))] = true }
+
+    for _, moduleName in ipairs(PREVIEW_MODULES) do
+        local module = Addon:GetModule(moduleName, true)
+        if module then
+            if wantedSet[moduleName] and module.ShowPreview and module.db and module.db.Enabled then
+                if not module.classRestriction or classMatch[module.classRestriction] then
+                    module:ShowPreview()
+                end
+            elseif module.HidePreview then
+                module:HidePreview()
+            end
+        end
+    end
+end
+
+function PreviewManager:ShowModules(moduleList)
     local Addon = KitnEssentials
     if not Addon then return end
     local classMatch = { [select(2, UnitClass("player"))] = true }
-    for _, moduleName in ipairs(PREVIEW_MODULES) do
+    for _, moduleName in ipairs(moduleList) do
         local module = Addon:GetModule(moduleName, true)
         if module and module.ShowPreview and module.db and module.db.Enabled then
             if not module.classRestriction or classMatch[module.classRestriction] then
