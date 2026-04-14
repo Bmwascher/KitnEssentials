@@ -240,6 +240,14 @@ function EC:OnEnable()
     self:ApplySettings()
 end
 
+function EC:OnThemeChanged()
+    if not self.db or not self.db.Enabled then return end
+    if (self.db.ColorMode or "custom") == "theme" and self.text then
+        local r, g, b, a = KE:GetAccentColor(self.db.ColorMode, self.db.Color)
+        self.text:SetTextColor(r, g, b, a or 1)
+    end
+end
+
 function EC:OnDisable()
     self:UnregisterAllEvents()
     if self.frame then self.frame:Hide() end
