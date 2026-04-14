@@ -309,9 +309,8 @@ function CC:Show(isPreview)
 
     if self.previewActive or self.combatActive then
         if not self.frame:IsShown() then
+            self.frame:SetAlpha(1)
             self.frame:Show()
-            self.frame:SetAlpha(0)
-            UIFrameFadeIn(self.frame, 0.3, 0, 1)
         end
     end
 end

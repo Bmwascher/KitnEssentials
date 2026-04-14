@@ -867,6 +867,169 @@ local Defaults = {
                 ParentFrame = "UIParent",
                 Position = DefaultPosition(0, 215),
             },
+            DungeonTimers = {
+                Enabled = false,
+
+                -- Bar display defaults
+                BarDisplay = {
+                    barWidth = 200,
+                    barHeight = 20,
+                    barTexture = "KitnUI",
+                    fontFace = "Expressway",
+                    fontSize = 12,
+                    fontOutline = "OUTLINE",
+                    iconEnabled = true,
+                },
+
+                -- Text display defaults
+                TextDisplay = {
+                    fontFace = "Expressway",
+                    fontSize = 14,
+                    fontOutline = "SOFTOUTLINE",
+                    textAlign = "CENTER",
+                },
+
+                -- Bar group positioning
+                BarGroup = {
+                    Position = {
+                        AnchorFrom = "CENTER",
+                        AnchorTo = "CENTER",
+                        XOffset = 0,
+                        YOffset = 100,
+                    },
+                    GrowthDirection = "DOWN",
+                    Spacing = 2,
+                },
+
+                -- Text group positioning
+                TextGroup = {
+                    Position = {
+                        AnchorFrom = "CENTER",
+                        AnchorTo = "CENTER",
+                        XOffset = 0,
+                        YOffset = -100,
+                    },
+                    GrowthDirection = "DOWN",
+                    Spacing = 2,
+                },
+
+                -- Per-dungeon triggers (instanceId maps to BigWigs/LittleWigs boss modules)
+                Dungeons = {
+                    MagistersTerrace   = { Enabled = true, instanceId = 2811, Triggers = {} },
+                    MaisaraCaverns     = { Enabled = true, instanceId = 2874, Triggers = {} },
+                    NexusPointXenas    = { Enabled = true, instanceId = 2915, Triggers = {} },
+                    WindrunnerSpire    = { Enabled = true, instanceId = 2805, Triggers = {} },
+                    AlgetharAcademy    = { Enabled = true, instanceId = 2526, Triggers = {} },
+                    PitOfSaron         = { Enabled = true, instanceId = 658, Triggers = {} },
+                    SeatOfTriumvirate  = { Enabled = true, instanceId = 1753, Triggers = {} },
+                    Skyreach           = { Enabled = true, instanceId = 1209, Triggers = {} },
+                },
+
+                -- Default values for new triggers
+                TriggerDefaults = {
+                    enabled = true,
+                    triggerType = "timer",
+                    spellId = "",
+                    message = "",
+                    messageOperator = "find",
+                    remainingEnabled = true,
+                    remainingOperator = "<=",
+                    remainingValue = 5,
+                    countEnabled = false,
+                    countOperator = "==",
+                    countValue = 1,
+                    extendTimer = 0,
+                    displayType = "bar",
+                    useBigWigsColors = true,
+                    barColor = { 0.772, 0.168, 0.168, 1 },
+                    backgroundColor = { 0.1, 0.1, 0.1, 0.8 },
+                    textColor = { 1, 1, 1, 1 },
+                    barText1Format = "Tank Hit",
+                    barText1Justify = "LEFT",
+                    barText1XOffset = 3,
+                    barText1YOffset = 0,
+                    barText2Format = "%p",
+                    barText2Justify = "RIGHT",
+                    barText2XOffset = -3,
+                    barText2YOffset = 0,
+                    textFormat = "%n \194\187 %p",
+                    textJustify = "LEFT",
+                    showDecimals = true,
+                    decimalThreshold = 1,
+                    customText = "",
+                    loadRoleEnabled = false,
+                    loadRoleTank = true,
+                    loadRoleHealer = true,
+                    loadRoleDPS = true,
+                    actionOnShowSound = "None",
+                    actionOnHideSound = "None",
+                },
+            },
+            DungeonCasts = {
+                Enabled = true,
+
+                -- Frame settings
+                Frame = {
+                    MaxBars = 5,
+                    Width = 279,
+                    Height = 27,
+                    Spacing = 1,
+                    GrowthDirection = "UP",
+                    Strata = "MEDIUM",
+                    anchorFrameType = "UIPARENT",
+                    ParentFrame = "UIParent",
+                    Position = {
+                        AnchorFrom = "CENTER",
+                        AnchorTo = "CENTER",
+                        XOffset = -325,
+                        YOffset = 105,
+                    },
+                },
+
+                -- Bar appearance
+                BarDisplay = {
+                    StatusBarTexture = "KitnUI",
+                    FontFace = "Expressway",
+                    FontSize = 14,
+                    FontOutline = "OUTLINE",
+                    SparkEnabled = true,
+                },
+
+                -- Icon settings
+                Icon = {
+                    Enabled = true,
+                    Zoom = 0.3,
+                },
+
+                -- Colors
+                CastingColor = { 1.0, 0.0, 0.784, 1 },
+                ChannelingColor = { 0.0, 0.7, 1.0, 1 },
+                NotInterruptibleColor = { 0.6, 0.6, 0.6, 1 },
+                BackgroundColor = { 0.031, 0.031, 0.031, 0.80 },
+                BorderColor = { 0, 0, 0, 1 },
+
+                -- Raid target icon
+                RaidIcon = {
+                    Enabled = true,
+                    Size = 20,
+                },
+
+                -- Text settings
+                Text = {
+                    NameAlign = "LEFT",
+                    TimeAlign = "RIGHT",
+                    ShowTime = true,
+                    TextColor = { 1, 1, 1, 1 },
+                },
+
+                -- Target display settings
+                Target = {
+                    Enabled = true,
+                    ShowClassColor = true,
+                    Position = "RIGHT",
+                    Separator = "»",
+                },
+            },
         },
 
         -----------------------------------------------------------------

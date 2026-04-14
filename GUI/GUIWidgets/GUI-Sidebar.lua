@@ -185,8 +185,15 @@ function GUIFrame:ConfigureSectionHeader(header, config, yOffset, isExpanded)
     header.sectionId = config.id
     header.label:SetText(config.text or "")
 
-    -- Grey out if ElvUI-disabled
+    -- Grey out if disabled (ElvUI check or custom disabledCheck function)
+    local isDisabled = false
     if config.elvUIDisabled and KE.ShouldNotLoadModule and KE:ShouldNotLoadModule() then
+        isDisabled = true
+    elseif config.disabledCheck and type(config.disabledCheck) == "function" then
+        isDisabled = config.disabledCheck()
+    end
+
+    if isDisabled then
         header.label:SetTextColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 0.35)
         header.arrow:SetVertexColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 0.35)
         header.disabled = true
@@ -220,7 +227,9 @@ function GUIFrame:InitializeSidebarExpansion()
 
     for _, section in ipairs(self.sidebarConfig) do
         if section.type == "header" and section.defaultExpanded then
-            if section.elvUIDisabled and KE.ShouldNotLoadModule and KE:ShouldNotLoadModule() then
+            local sectionOff = (section.elvUIDisabled and KE.ShouldNotLoadModule and KE:ShouldNotLoadModule())
+                or (section.disabledCheck and type(section.disabledCheck) == "function" and section.disabledCheck())
+            if sectionOff then
                 self.sidebarExpanded[section.id] = nil
             else
                 self.sidebarExpanded[section.id] = true
@@ -631,7 +640,8 @@ function GUIFrame:RefreshSidebar()
                 yOffset = yOffset + headerHeight
 
                 if isExpanded and visibleItems then
-                    local sectionDisabled = sectionConfig.elvUIDisabled and KE.ShouldNotLoadModule and KE:ShouldNotLoadModule()
+                    local sectionDisabled = (sectionConfig.elvUIDisabled and KE.ShouldNotLoadModule and KE:ShouldNotLoadModule())
+                        or (sectionConfig.disabledCheck and type(sectionConfig.disabledCheck) == "function" and sectionConfig.disabledCheck())
 
                     for _, itemConfig in ipairs(visibleItems) do
                         local item = self:GetStaticSidebarItem()
@@ -651,7 +661,7 @@ function GUIFrame:RefreshSidebar()
                             CreateColor(T.accent[1], T.accent[2], T.accent[3], 0.25),
                             CreateColor(T.accent[1], T.accent[2], T.accent[3], 0))
 
-                        if sectionDisabled then
+                        if sectionDisabled and not itemConfig.alwaysEnabled then
                             item.label:SetTextColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 0.35)
                             item.selectedOverlay:Hide()
                             item.selectedBar:Hide()

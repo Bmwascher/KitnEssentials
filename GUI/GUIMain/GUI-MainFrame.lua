@@ -45,11 +45,11 @@ GUIFrame.sidebarConfig = {
         defaultExpanded = true,
         items = {
             { id = "CombatRes",     text = "Battle Res" },
+            { id = "BossDebuffs",   text = "Boss Debuffs" },
             { id = "CombatTexts",   text = "Combat Texts" },
             { id = "CombatTimer",   text = "Combat Timer" },
             { id = "CursorCircle",  text = "Cursor Circle" },
             { id = "Castbars",      text = "Focus & Target Castbar" },
-            { id = "KickTracker",   text = "Interrupt Tracker" },
             { id = "CombatCross",   text = "Player Crosshair" },
             { id = "RangeChecker",  text = "Range Display" },
         },
@@ -117,17 +117,32 @@ GUIFrame.sidebarConfig = {
         text = "\226\128\162 Dungeons",
         defaultExpanded = true,
         items = {
-            { id = "EnemyCounter",      text = "Enemy Counter" },
-            { id = "WarpDepleteForces", text = "WarpDeplete+" },
+            { id = "WarpDepleteForces",           text = "WarpDeplete+" },
+            { id = "EnemyCounter",                text = "Enemy Counter" },
+            { id = "KickTracker",                 text = "Interrupt Tracker" },
+            { id = "DungeonCasts",                text = "Dungeon Casts" },
         },
     },
     {
-        id = "encounter_section",
+        id = "dungeon_timers_section",
         type = "header",
-        text = "\226\128\162 Encounter Tools",
+        text = "\226\128\162 Dungeon Timers",
         defaultExpanded = true,
+        disabledCheck = function()
+            return not (KE.db and KE.db.profile and KE.db.profile.Dungeons
+                and KE.db.profile.Dungeons.DungeonTimers
+                and KE.db.profile.Dungeons.DungeonTimers.Enabled)
+        end,
         items = {
-            { id = "BossDebuffs",   text = "Boss Debuffs" },
+            { id = "Dungeon_Settings",            text = "Timers Settings", alwaysEnabled = true },
+            { id = "Dungeon_MagistersTerrace",    text = "Magisters' Terrace" },
+            { id = "Dungeon_MaisaraCaverns",      text = "Maisara Caverns" },
+            { id = "Dungeon_NexusPointXenas",     text = "Nexus-Point Xenas" },
+            { id = "Dungeon_WindrunnerSpire",      text = "Windrunner Spire" },
+            { id = "Dungeon_AlgetharAcademy",     text = "Algeth'ar Academy" },
+            { id = "Dungeon_PitOfSaron",          text = "Pit of Saron" },
+            { id = "Dungeon_SeatOfTriumvirate",   text = "Seat of the Triumvirate" },
+            { id = "Dungeon_Skyreach",            text = "Skyreach" },
         },
     },
 }
@@ -250,7 +265,7 @@ function GUIFrame:CreateMainFrame()
     frame:SetToplevel(true)
     frame:SetMovable(true)
     frame:SetResizable(true)
-    frame:SetResizeBounds(810, 550)
+    frame:SetResizeBounds(945, 550)
     frame:EnableMouse(true)
     frame:SetClampedToScreen(true)
     frame:RegisterForDrag("LeftButton")

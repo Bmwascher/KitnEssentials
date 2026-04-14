@@ -257,12 +257,8 @@ function CM:ShowFlashMessage(msgType, textOverride)
         end
     end
 
-    if UIFrameFadeOut then
-        UIFrameFadeOut(frame, duration, 1, 0)
-        C_Timer.After(duration, HideIfCurrent)
-    else
-        C_Timer.After(duration, HideIfCurrent)
-    end
+    -- Timer-based hide (avoid UIFrameFadeOut — causes stack overflow with soft outline hooks)
+    C_Timer.After(duration, HideIfCurrent)
 end
 
 function CM:ShowPersistentMessage(msgType)
