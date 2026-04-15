@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.12.2
+### Fixes
+- **Dungeon Timers**: Fixed bar previews invisible when bar group is anchored to non-UIParent frames (e.g. ElvUI unit frames) — parent frame clipping no longer hides bars.
+- **Dungeon Timers / Dungeon Casts / Interrupt Tracker**: Unified anchor pattern — all three modules now use the user's configured AnchorFrom for bar positioning, so identical X/Y offsets produce identical positions across modules.
+- **Dungeon Casts / Interrupt Tracker**: Edit mode overlay now wraps the anchor bar instead of the full stack, fixing misalignment with CENTER-based anchor points.
+
 ## v1.12.1
 ### Additions
 - **Dungeon Timers**: 14 color-coded display presets (AOE, DODGE, SOAK, FRONTAL, KICK, TANK HIT, etc.) — one-click label + color for common warning types.
