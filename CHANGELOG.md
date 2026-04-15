@@ -1,5 +1,27 @@
 # Changelog
 
+## v1.12.0
+### Additions
+- New module: **Dungeon Casts** — enemy cast bars for M+ nameplates with icon, target text, raid icons, bar stacking, and interruptible/shielded status colors. Only active in 5-player dungeons.
+- New module: **Dungeon Timers** — BigWigs-integrated per-dungeon timer system with trigger editor, bar/text display groups, role-based load conditions, and spell browser. Configurable per-trigger display overrides.
+- **Dungeon Timers**: Import/Export system — share timer configurations per-dungeon or all-at-once with AceSerializer + LibDeflate encoding. Reset all triggers with confirmation prompt.
+- **GUI**: Section-based previews — opening the GUI now only shows previews for the active sidebar section instead of all modules simultaneously. Edit mode still shows all.
+- **GUI**: Panel builder system (`RegisterPanel`, `RegisterWidePanel`) for full content area takeover on dungeon trigger editor pages.
+- **GUI**: Sidebar `disabledCheck` and `alwaysEnabled` support for the Dungeon Timers section.
+
+### Fixes
+- **CombatCross**: Fixed C stack overflow caused by `UIFrameFadeIn` on frames with soft outline children.
+- **CombatTexts**: Fixed C stack overflow caused by `UIFrameFadeOut` on frames with soft outline children.
+- **Core**: Fixed C stack overflow in `CreateMessagePopup` — same UIFrameFade + soft outline interaction.
+- **BossDebuffs**: Fixed `blacklistBox` nil upvalue error when edit box loses focus.
+- **Theme**: Added missing `OnThemeChanged` handler to PotionReady, EnemyCounter, RaidNotifications, NoMovementAlert, and StasisTracker — theme color changes now update these modules immediately.
+- **TargetCastbar**: Added to preview system (was missing).
+
+### Changes
+- **Interrupt Tracker**: Moved from Combat to Dungeons section. GUI restructured into Frame Settings and Bar Appearance cards matching Dungeon Casts pattern.
+- **Boss Debuffs**: Moved from Encounter Tools to Combat section. Encounter Tools section removed.
+- **Dungeon Timers sidebar**: Dungeons sorted alphabetically, separate collapsible section with disable state.
+
 ## v1.11.0
 ### Additions
 - **Core**: New centralized secret value API (`Secret.lua`) — `KE:IsSecretValue()`, `KE:IsSafeValue()`, `KE:IsFullyRestricted()`, `KE:DeferUntilUnrestricted()` and restriction state tracking for combat, M+, encounters, and PvP. Protected function violation listener for debugging.
