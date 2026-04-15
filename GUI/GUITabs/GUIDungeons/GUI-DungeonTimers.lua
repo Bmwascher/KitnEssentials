@@ -2292,6 +2292,123 @@ local function RenderGeneralTab(scrollChild, yOffset, activeCards)
     card1:AddRow(row1, 36)
     yOffset = yOffset + card1:GetContentHeight() + (Theme.paddingSmall or 8)
 
+    ----------------------------------------------------------------
+    -- Card 2: Import / Export
+    ----------------------------------------------------------------
+    local card2 = GUIFrame:CreateCard(scrollChild, "Import / Export", yOffset)
+    table_insert(activeCards, card2)
+
+    -- Description
+    local bullet = KE:ColorTextByTheme("-")
+    card2:AddLabel("|cff888888" .. bullet .. " Includes triggers, display overrides, and load conditions.\n" ..
+        bullet .. " Bar/Text appearance (Bars/Texts tabs) is saved per-profile, not per-export.|r")
+
+    -- Dungeon dropdown
+    local scopeOptions = {
+        { key = "_all", text = "All Dungeons" },
+    }
+    for _, info in pairs(DUNGEON_INFO) do
+        table_insert(scopeOptions, { key = info.key, text = info.name })
+    end
+    table.sort(scopeOptions, function(a, b)
+        if a.key == "_all" then return true end
+        if b.key == "_all" then return false end
+        return a.text < b.text
+    end)
+
+    local selectedScope = "_all"
+
+    local scopeRow = GUIFrame:CreateRow(card2.content, 28)
+    local scopeDropdown = GUIFrame:CreateDropdown(scopeRow, "Dungeon", scopeOptions, selectedScope, nil,
+        function(key) selectedScope = key end)
+    scopeRow:AddWidget(scopeDropdown, 1)
+    card2:AddRow(scopeRow, 28)
+    card2:AddSeparator()
+
+    -- Edit box
+    local editBoxRow = GUIFrame:CreateRow(card2.content, 50)
+    local importExportBox = GUIFrame:CreateEditBox(editBoxRow, "Paste import string or click Export...", "", function() end)
+    editBoxRow:AddWidget(importExportBox, 1)
+    card2:AddRow(editBoxRow, 50)
+
+    -- Export / Import buttons
+    local buttonRow = GUIFrame:CreateRow(card2.content, 28)
+
+    local exportBtn = GUIFrame:CreateButton(buttonRow, "Export", { callback = function()
+        local DT_mod = KitnEssentials:GetModule("DungeonTimers", true)
+        if not DT_mod then return end
+        local dungeonKey = selectedScope ~= "_all" and selectedScope or nil
+        local result, err = DT_mod:ExportTriggers(dungeonKey)
+        if result then
+            KE:CreatePrompt(
+                "Export Timers",
+                result,
+                true,
+                "Copy the string above (Ctrl+C)",
+                false
+            )
+        else
+            KE:Print("Export failed: " .. (err or "unknown error"))
+        end
+    end })
+    buttonRow:AddWidget(exportBtn, 0.5)
+
+    local importBtn = GUIFrame:CreateButton(buttonRow, "Import", { callback = function()
+        local DT_mod = KitnEssentials:GetModule("DungeonTimers", true)
+        if not DT_mod then return end
+        local text = (importExportBox.GetValue and importExportBox:GetValue()) or ""
+        if text == "" then
+            KE:Print("Paste an import string first.")
+            return
+        end
+        local ok, msg = DT_mod:ImportTriggers(text)
+        if ok then
+            KE:Print(msg)
+            importExportBox:SetValue("")
+        else
+            KE:Print("Import failed: " .. (msg or "unknown error"))
+        end
+    end })
+    buttonRow:AddWidget(importBtn, 0.5)
+    card2:AddRow(buttonRow, 28)
+    card2:AddLabel("|cff888888" .. bullet .. " Importing adds to your existing timers — use Reset below to start fresh.|r")
+
+    yOffset = yOffset + card2:GetContentHeight() + (Theme.paddingSmall or 8)
+
+    ----------------------------------------------------------------
+    -- Card 3: Reset
+    ----------------------------------------------------------------
+    local card3 = GUIFrame:CreateCard(scrollChild, "Reset", yOffset)
+    table_insert(activeCards, card3)
+
+    card3:AddLabel("|cff888888Remove all timer configurations across every dungeon. This cannot be undone.|r")
+
+    local resetRow = GUIFrame:CreateRow(card3.content, 28)
+    local resetBtn = GUIFrame:CreateButton(resetRow, "Reset All Triggers", { callback = function()
+        KE:CreatePrompt(
+            "Reset All Triggers",
+            "This will permanently remove all timer configurations for every dungeon.\n\nAre you sure?",
+            false, nil, false, nil, nil, nil, nil,
+            function()
+                local dtDb = GetSettingsDB()
+                if dtDb and dtDb.Dungeons then
+                    for _, dungeon in pairs(dtDb.Dungeons) do
+                        if dungeon.Triggers then
+                            wipe(dungeon.Triggers)
+                        end
+                    end
+                end
+                KE:Print("All triggers have been reset.")
+            end,
+            nil, "Reset", "Cancel"
+        )
+    end })
+    if resetBtn.text then resetBtn.text:SetTextColor(0.9, 0.2, 0.2, 1) end
+    resetRow:AddWidget(resetBtn, 1)
+    card3:AddRow(resetRow, 28)
+
+    yOffset = yOffset + card3:GetContentHeight() + (Theme.paddingSmall or 8)
+
     return yOffset
 end
 
