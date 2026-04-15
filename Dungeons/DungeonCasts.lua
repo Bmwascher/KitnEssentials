@@ -127,7 +127,7 @@ end
 function DC:CreateAnchorFrame()
     if self.anchorFrame then return end
     local anchor = CreateFrame("Frame", "KE_DungeonCastsAnchor", UIParent)
-    anchor:SetSize(self.db.Frame.Width, self.db.Frame.Height)
+    anchor:SetSize(1, 1)
     anchor:SetFrameStrata("HIGH")
     self.anchorFrame = anchor
     self:ApplyAnchorPosition()
@@ -592,25 +592,30 @@ function DC:PositionAllBars()
     local height = frameDb.Height
     local spacing = frameDb.Spacing
     local growUp = frameDb.GrowthDirection == "UP"
-    local step = height + spacing
-    local barCount = #self.sortedUnits
+    local maxBars = frameDb.MaxBars or 5
 
-    -- Resize anchor to encompass all bars (for EditMode dragging)
-    local totalHeight = barCount > 0 and (barCount * step - spacing) or height
-    self.anchorFrame:SetSize(frameDb.Width, totalHeight)
-
+    -- 1x1 anchor point — bars stack outward from it (matches KickTracker pattern)
+    -- Grow DOWN: first bar TOP anchors to anchor, subsequent bars below
+    -- Grow UP: first bar BOTTOM anchors to anchor, subsequent bars above
     for i, unit in ipairs(self.sortedUnits) do
         local bar = self.activeFrames[unit]
         if bar then
-            bar:ClearAllPoints()
-            local offset = (i - 1) * step
-            if growUp then
-                bar:SetPoint("BOTTOM", self.anchorFrame, "BOTTOM", 0, offset)
-            else
-                bar:SetPoint("TOP", self.anchorFrame, "TOP", 0, -offset)
+            if i <= maxBars then
+                bar:ClearAllPoints()
+                local offset = (i - 1) * (height + spacing)
+                if growUp then
+                    bar:SetPoint("BOTTOMLEFT", self.anchorFrame, "BOTTOMLEFT", 0, offset)
+                else
+                    bar:SetPoint("TOPLEFT", self.anchorFrame, "TOPLEFT", 0, -offset)
+                end
             end
         end
     end
+
+    -- Resize anchor to encompass visible bars (for EditMode overlay)
+    local visibleCount = math.min(#self.sortedUnits, maxBars)
+    local totalHeight = visibleCount > 0 and (visibleCount * (height + spacing) - spacing) or height
+    self.anchorFrame:SetSize(frameDb.Width, math.max(totalHeight, height))
 end
 
 ---------------------------------------------------------------------------------

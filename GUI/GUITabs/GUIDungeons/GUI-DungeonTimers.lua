@@ -47,6 +47,24 @@ local SUB_TABS = {
 -- Constants
 local TAB_BAR_HEIGHT = 32
 
+-- Display presets: quick-apply label + color for common warning types
+local DISPLAY_PRESETS = {
+    { key = "_none",    text = "None (Custom)" },
+    { key = "ADD",      text = "ADD",      label = "ADD",      format = "ADD \194\187 %p",     color = { 1.0, 0.3, 0.8, 1 } },
+    { key = "AMP",      text = "AMP",      label = "AMP",      format = "AMP \194\187 %p",     color = { 0.9, 0.5, 1.0, 1 } },
+    { key = "AOE",      text = "AOE",      label = "AOE",      format = "AOE \194\187 %p",     color = { 1.0, 1.0, 0.2, 1 } },
+    { key = "DODGE",    text = "DODGE",    label = "DODGE",    format = "DODGE \194\187 %p",   color = { 1.0, 0.6, 0.0, 1 } },
+    { key = "FEET",     text = "FEET",     label = "FEET",     format = "FEET \194\187 %p",    color = { 1.0, 0.6, 0.0, 1 } },
+    { key = "FRONTAL",  text = "FRONTAL",  label = "FRONTAL",  format = "FRONTAL \194\187 %p", color = { 0.77, 0.17, 0.17, 1 } },
+    { key = "HIDE",     text = "HIDE",     label = "HIDE",     format = "HIDE \194\187 %p",    color = { 0.3, 0.9, 1.0, 1 } },
+    { key = "KICK",     text = "KICK",     label = "KICK",     format = "KICK \194\187 %p",    color = { 1.0, 0.85, 0.0, 1 } },
+    { key = "PULL",     text = "PULL",     label = "PULL",     format = "PULL \194\187 %p",    color = { 0.3, 0.9, 1.0, 1 } },
+    { key = "SOAK",     text = "SOAK",     label = "SOAK",     format = "SOAK \194\187 %p",    color = { 0.2, 1.0, 0.4, 1 } },
+    { key = "SPREAD",   text = "SPREAD",   label = "SPREAD",   format = "SPREAD \194\187 %p",  color = { 1.0, 0.6, 0.0, 1 } },
+    { key = "STACK",    text = "STACK",    label = "STACK",    format = "STACK \194\187 %p",   color = { 0.2, 1.0, 0.4, 1 } },
+    { key = "TANK",     text = "TANK HIT", label = "TANK HIT", format = "TANK HIT \194\187 %p", color = { 0.77, 0.17, 0.17, 1 } },
+}
+
 -- State per dungeon
 local dungeonStates = {}
 
@@ -1308,6 +1326,49 @@ local function CreateDungeonPanel(dungeonId)
 
             yOffset = yOffset + card1:GetContentHeight() + padding
 
+            -- Quick Preset Card
+            local presetCard = GUIFrame:CreateCard(scrollChild, "Quick Preset", yOffset)
+            table_insert(activeCards, presetCard)
+
+            presetCard:AddLabel("|cff888888Apply a preset label and color. You can still customize after.|r")
+
+            -- Detect current preset from textFormat
+            local currentPreset = "_none"
+            for _, p in ipairs(DISPLAY_PRESETS) do
+                if p.format and selectedTrigger.textFormat == p.format then
+                    currentPreset = p.key
+                    break
+                end
+            end
+
+            local presetRow = GUIFrame:CreateRow(presetCard.content, 40)
+            local presetDropdown = GUIFrame:CreateDropdown(presetRow, "Preset", DISPLAY_PRESETS,
+                currentPreset, nil,
+                function(key)
+                    if key == "_none" then return end
+                    for _, p in ipairs(DISPLAY_PRESETS) do
+                        if p.key == key and p.format then
+                            selectedTrigger.textFormat = p.format
+                            selectedTrigger.barText1Format = p.label
+                            selectedTrigger.barColor = { p.color[1], p.color[2], p.color[3], p.color[4] or 1 }
+                            -- Text mode: color the text. Bar mode: keep text white, color the bar.
+                            if (selectedTrigger.displayType or "bar") == "bar" then
+                                selectedTrigger.textColor = { 1, 1, 1, 1 }
+                            else
+                                selectedTrigger.textColor = { p.color[1], p.color[2], p.color[3], p.color[4] or 1 }
+                            end
+                            selectedTrigger.useBigWigsColors = false
+                            ApplySettings()
+                            RefreshContent()
+                            break
+                        end
+                    end
+                end)
+            presetRow:AddWidget(presetDropdown, 1)
+            presetCard:AddRow(presetRow, 40)
+
+            yOffset = yOffset + presetCard:GetContentHeight() + padding
+
             -- Text Settings - Different for Bar vs Text mode
             if isBar then
                 -- BAR MODE: Two separate text elements
@@ -2000,6 +2061,7 @@ local function ApplySettingsChanges()
     if mod then
         if mod.Refresh then mod:Refresh() end
         if mod.ApplySettings then mod:ApplySettings() end
+        if mod.RefreshPositions then mod:RefreshPositions() end
     end
 end
 
@@ -2190,16 +2252,18 @@ local function ShowSettingsBarPreviews()
     local barSpacing = db.BarGroup.Spacing or 2
     local barGrowUp = barGrowth == "UP"
 
+    local barParent = KE:ResolveAnchorFrame(db.BarGroup.anchorFrameType, db.BarGroup.ParentFrame)
+
     for i, data in ipairs(SETTINGS_BAR_PREVIEWS) do
         local frame = CreateSettingsBarPreview(i, data)
         if frame then
             frame:ClearAllPoints()
             local offset = (i - 1) * (barHeight + barSpacing)
             if barGrowUp then
-                frame:SetPoint(barPos.AnchorFrom or "CENTER", UIParent, barPos.AnchorTo or "CENTER",
+                frame:SetPoint(barPos.AnchorFrom or "CENTER", barParent, barPos.AnchorTo or "CENTER",
                     barPos.XOffset or 0, (barPos.YOffset or 100) + offset)
             else
-                frame:SetPoint(barPos.AnchorFrom or "CENTER", UIParent, barPos.AnchorTo or "CENTER",
+                frame:SetPoint(barPos.AnchorFrom or "CENTER", barParent, barPos.AnchorTo or "CENTER",
                     barPos.XOffset or 0, (barPos.YOffset or 100) - offset)
             end
             frame:Show()
@@ -2219,16 +2283,18 @@ local function ShowSettingsTextPreviews()
     local textSpacing = db.TextGroup.Spacing or 2
     local textGrowUp = textGrowth == "UP"
 
+    local textParent = KE:ResolveAnchorFrame(db.TextGroup.anchorFrameType, db.TextGroup.ParentFrame)
+
     for i, data in ipairs(SETTINGS_TEXT_PREVIEWS) do
         local frame = CreateSettingsTextPreview(i, data)
         if frame then
             frame:ClearAllPoints()
             local offset = (i - 1) * (textLineHeight + textSpacing)
             if textGrowUp then
-                frame:SetPoint(textPos.AnchorFrom or "CENTER", UIParent, textPos.AnchorTo or "CENTER",
+                frame:SetPoint(textPos.AnchorFrom or "CENTER", textParent, textPos.AnchorTo or "CENTER",
                     textPos.XOffset or 0, (textPos.YOffset or -100) + offset)
             else
-                frame:SetPoint(textPos.AnchorFrom or "CENTER", UIParent, textPos.AnchorTo or "CENTER",
+                frame:SetPoint(textPos.AnchorFrom or "CENTER", textParent, textPos.AnchorTo or "CENTER",
                     textPos.XOffset or 0, (textPos.YOffset or -100) - offset)
             end
             frame:Show()
@@ -2555,21 +2621,15 @@ local function RenderBarsTab(scrollChild, yOffset, activeCards)
     ----------------------------------------------------------------
     local barPosCard, barPosYOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         title = "Bar Group Position",
-        db = db.BarGroup.Position,
+        db = db.BarGroup,
         dbKeys = {
             xOffset = "XOffset",
             yOffset = "YOffset",
             selfPoint = "AnchorFrom",
             anchorPoint = "AnchorTo",
         },
-        defaults = {
-            xOffset = 0,
-            yOffset = 100,
-            selfPoint = "CENTER",
-            anchorPoint = "CENTER",
-        },
-        showAnchorFrameType = false,
-        showStrata = false,
+        showAnchorFrameType = true,
+        showStrata = true,
         sliderRange = { -800, 800 },
         onChangeCallback = ApplyAndUpdate,
     })
@@ -2688,21 +2748,15 @@ local function RenderTextsTab(scrollChild, yOffset, activeCards)
     ----------------------------------------------------------------
     local textPosCard, textPosYOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         title = "Text Group Position",
-        db = db.TextGroup.Position,
+        db = db.TextGroup,
         dbKeys = {
             xOffset = "XOffset",
             yOffset = "YOffset",
             selfPoint = "AnchorFrom",
             anchorPoint = "AnchorTo",
         },
-        defaults = {
-            xOffset = 0,
-            yOffset = -100,
-            selfPoint = "CENTER",
-            anchorPoint = "CENTER",
-        },
-        showAnchorFrameType = false,
-        showStrata = false,
+        showAnchorFrameType = true,
+        showStrata = true,
         sliderRange = { -800, 800 },
         onChangeCallback = ApplyAndUpdate,
     })
