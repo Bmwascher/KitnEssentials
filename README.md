@@ -23,8 +23,8 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Combat Texts | Combat enter/exit, no target warning, interrupt announce with spell icon, and low durability warnings |
 | Cursor Circle | Cursor-following ring with GCD overlay, multiple texture options |
 | Range Display | Target range text with out-of-range color warning |
+| Boss Debuffs | External debuff icon display with cooldown spiral, duration text, encounter blacklist, and visibility gating |
 | Focus & Target Castbar | Repositionable cast bars with kick indicators, target names, color settings, and cast sound alert (tabbed GUI) |
-| Interrupt Tracker | Party interrupt cooldown bars with class colors, dark mode, channel kick detection, and healer position override |
 
 ## Utilities
 
@@ -78,14 +78,11 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 
 | Module | Description |
 |---|---|
+| Dungeon Casts | Enemy cast bars for M+ nameplates with icon, target text, raid icons, bar stacking, and interruptible/shielded status colors |
+| Dungeon Timers | BigWigs-integrated per-dungeon timer system with trigger editor, bar/text display groups, import/export, and role-based load conditions |
 | Enemy Counter | Displays the number of enemies currently in combat via nameplate scanning with editable prefix and combat-only visibility |
+| Interrupt Tracker | Party interrupt cooldown bars with class colors, dark mode, channel kick detection, and healer position override |
 | WarpDeplete+ | Restores live pull forces tracking, fixes death tooltip and class-colored names in M+, per-mob forces on tooltip mouseover |
-
-## Encounter Tools
-
-| Module | Description |
-|---|---|
-| Boss Debuffs | External debuff icon display with cooldown spiral, duration text, encounter blacklist, and visibility gating |
 
 ## ElvUI Tags
 
