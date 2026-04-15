@@ -135,14 +135,14 @@ GUIFrame.sidebarConfig = {
         end,
         items = {
             { id = "Dungeon_Settings",            text = "Timers Settings", alwaysEnabled = true },
+            { id = "Dungeon_AlgetharAcademy",     text = "Algeth'ar Academy" },
             { id = "Dungeon_MagistersTerrace",    text = "Magisters' Terrace" },
             { id = "Dungeon_MaisaraCaverns",      text = "Maisara Caverns" },
             { id = "Dungeon_NexusPointXenas",     text = "Nexus-Point Xenas" },
-            { id = "Dungeon_WindrunnerSpire",      text = "Windrunner Spire" },
-            { id = "Dungeon_AlgetharAcademy",     text = "Algeth'ar Academy" },
             { id = "Dungeon_PitOfSaron",          text = "Pit of Saron" },
             { id = "Dungeon_SeatOfTriumvirate",   text = "Seat of the Triumvirate" },
             { id = "Dungeon_Skyreach",            text = "Skyreach" },
+            { id = "Dungeon_WindrunnerSpire",      text = "Windrunner Spire" },
         },
     },
 }

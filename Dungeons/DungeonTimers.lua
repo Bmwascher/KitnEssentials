@@ -1837,3 +1837,163 @@ function DT:ClearSpellCache(dungeonKey)
         wipe(self.spellCache)
     end
 end
+
+---------------------------------------------------------------------------------
+-- Import / Export
+---------------------------------------------------------------------------------
+local TRIGGER_EXPORT_PREFIX = "!KET1!"
+
+local DUNGEON_DISPLAY_NAMES = {
+    MagistersTerrace   = "Magisters' Terrace",
+    MaisaraCaverns     = "Maisara Caverns",
+    NexusPointXenas    = "Nexus-Point Xenas",
+    WindrunnerSpire    = "Windrunner Spire",
+    AlgetharAcademy    = "Algeth'ar Academy",
+    PitOfSaron         = "Pit of Saron",
+    SeatOfTriumvirate  = "Seat of the Triumvirate",
+    Skyreach           = "Skyreach",
+}
+
+local function GetSerializer()
+    return LibStub("AceSerializer-3.0")
+end
+
+local function GetDeflate()
+    return LibStub("LibDeflate")
+end
+
+--- Export triggers for a single dungeon or all dungeons
+---@param dungeonKey string|nil Specific dungeon key, or nil for all
+---@return string|nil encoded, string|nil error
+function DT:ExportTriggers(dungeonKey)
+    local db = self.db
+    if not db or not db.Dungeons then return nil, "No trigger data" end
+
+    local Serializer = GetSerializer()
+    local Deflate = GetDeflate()
+    if not Serializer or not Deflate then return nil, "Missing libraries" end
+
+    local exportData
+    if dungeonKey then
+        local dungeon = db.Dungeons[dungeonKey]
+        if not dungeon or not dungeon.Triggers or #dungeon.Triggers == 0 then
+            return nil, "No triggers for this dungeon"
+        end
+        exportData = {
+            v = 1,
+            t = "dungeon",
+            k = dungeonKey,
+            d = CopyTable(dungeon.Triggers),
+        }
+    else
+        -- All dungeons
+        local allTriggers = {}
+        local count = 0
+        for key, dungeon in pairs(db.Dungeons) do
+            if dungeon.Triggers and #dungeon.Triggers > 0 then
+                allTriggers[key] = CopyTable(dungeon.Triggers)
+                count = count + #dungeon.Triggers
+            end
+        end
+        if count == 0 then return nil, "No triggers to export" end
+        exportData = {
+            v = 1,
+            t = "all",
+            d = allTriggers,
+        }
+    end
+
+    local serialized = Serializer:Serialize(exportData)
+    if not serialized then return nil, "Serialization failed" end
+
+    local compressed = Deflate:CompressDeflate(serialized, { level = 9 })
+    if not compressed then return nil, "Compression failed" end
+
+    local encoded = Deflate:EncodeForPrint(compressed)
+    if not encoded then return nil, "Encoding failed" end
+
+    return TRIGGER_EXPORT_PREFIX .. encoded
+end
+
+--- Import triggers from an encoded string
+---@param importString string The export string
+---@return boolean success, string|nil message
+function DT:ImportTriggers(importString)
+    if not importString or importString == "" then return false, "Import string is empty" end
+    if importString:sub(1, #TRIGGER_EXPORT_PREFIX) ~= TRIGGER_EXPORT_PREFIX then
+        return false, "Invalid format — this doesn't look like a KE trigger export"
+    end
+
+    local db = self.db
+    if not db or not db.Dungeons then return false, "Module not initialized" end
+
+    local Serializer = GetSerializer()
+    local Deflate = GetDeflate()
+    if not Serializer or not Deflate then return false, "Missing libraries" end
+
+    local encoded = importString:sub(#TRIGGER_EXPORT_PREFIX + 1)
+
+    local compressed = Deflate:DecodeForPrint(encoded)
+    if not compressed then return false, "Failed to decode string" end
+
+    local serialized = Deflate:DecompressDeflate(compressed)
+    if not serialized then return false, "Failed to decompress" end
+
+    local ok, exportData = Serializer:Deserialize(serialized)
+    if not ok or type(exportData) ~= "table" then return false, "Failed to deserialize" end
+
+    if not exportData.v or not exportData.t or not exportData.d then
+        return false, "Invalid export data structure"
+    end
+
+    local defaults = db.TriggerDefaults or {}
+    local imported = 0
+
+    if exportData.t == "dungeon" then
+        local key = exportData.k
+        if not key or not db.Dungeons[key] then
+            return false, "Unknown dungeon: " .. tostring(key)
+        end
+        if type(exportData.d) ~= "table" then return false, "Invalid trigger data" end
+
+        local triggers = db.Dungeons[key].Triggers
+        for _, trigger in ipairs(exportData.d) do
+            if type(trigger) == "table" then
+                local merged = CopyTable(defaults)
+                for k, v in pairs(trigger) do merged[k] = v end
+                table_insert(triggers, merged)
+                imported = imported + 1
+            end
+        end
+
+        if imported == 0 then return false, "No timers were imported" end
+        local name = DUNGEON_DISPLAY_NAMES[key] or key
+        return true, imported .. " timer(s) imported to " .. name
+
+    elseif exportData.t == "all" then
+        if type(exportData.d) ~= "table" then return false, "Invalid trigger data" end
+
+        local dungeonCount = 0
+        for key, triggerList in pairs(exportData.d) do
+            if db.Dungeons[key] and type(triggerList) == "table" then
+                local triggers = db.Dungeons[key].Triggers
+                local added = false
+                for _, trigger in ipairs(triggerList) do
+                    if type(trigger) == "table" then
+                        local merged = CopyTable(defaults)
+                        for k, v in pairs(trigger) do merged[k] = v end
+                        table_insert(triggers, merged)
+                        imported = imported + 1
+                        added = true
+                    end
+                end
+                if added then dungeonCount = dungeonCount + 1 end
+            end
+        end
+
+        if imported == 0 then return false, "No timers were imported" end
+        return true, imported .. " timer(s) imported across " .. dungeonCount .. " dungeon(s)"
+    else
+        return false, "Unknown export type: " .. tostring(exportData.t)
+    end
+end
