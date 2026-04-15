@@ -593,10 +593,9 @@ function DC:PositionAllBars()
     local spacing = frameDb.Spacing
     local growUp = frameDb.GrowthDirection == "UP"
     local maxBars = frameDb.MaxBars or 5
+    local anchorFrom = frameDb.Position.AnchorFrom or "CENTER"
 
-    -- 1x1 anchor point — bars stack outward from it (matches KickTracker pattern)
-    -- Grow DOWN: first bar TOP anchors to anchor, subsequent bars below
-    -- Grow UP: first bar BOTTOM anchors to anchor, subsequent bars above
+    -- 1x1 anchor point — bars stack outward from it using user's AnchorFrom
     for i, unit in ipairs(self.sortedUnits) do
         local bar = self.activeFrames[unit]
         if bar then
@@ -604,18 +603,16 @@ function DC:PositionAllBars()
                 bar:ClearAllPoints()
                 local offset = (i - 1) * (height + spacing)
                 if growUp then
-                    bar:SetPoint("BOTTOMLEFT", self.anchorFrame, "BOTTOMLEFT", 0, offset)
+                    bar:SetPoint(anchorFrom, self.anchorFrame, anchorFrom, 0, offset)
                 else
-                    bar:SetPoint("TOPLEFT", self.anchorFrame, "TOPLEFT", 0, -offset)
+                    bar:SetPoint(anchorFrom, self.anchorFrame, anchorFrom, 0, -offset)
                 end
             end
         end
     end
 
-    -- Resize anchor to encompass visible bars (for EditMode overlay)
-    local visibleCount = math.min(#self.sortedUnits, maxBars)
-    local totalHeight = visibleCount > 0 and (visibleCount * (height + spacing) - spacing) or height
-    self.anchorFrame:SetSize(frameDb.Width, math.max(totalHeight, height))
+    -- Resize anchor to match first bar for EditMode overlay
+    self.anchorFrame:SetSize(frameDb.Width, height)
 end
 
 ---------------------------------------------------------------------------------

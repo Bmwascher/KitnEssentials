@@ -921,18 +921,17 @@ function KT:LayoutBars()
     local spacing = db.BarSpacing or 2
     local barHeight = db.BarHeight or 20
 
-    -- Container is a fixed 1x1 anchor point. Bars stack from it.
-    -- Grow DOWN: first bar TOP anchors to container, subsequent bars below
-    -- Grow UP: first bar BOTTOM anchors to container, subsequent bars above
+    -- 1x1 anchor point — bars stack outward using user's AnchorFrom
+    local anchorFrom = db.Position.AnchorFrom or "CENTER"
     for i, entry in ipairs(self.sortedBars) do
         local bar = entry.bar
         if i <= maxBars then
             bar:ClearAllPoints()
             local offset = (i - 1) * (barHeight + spacing)
             if growUp then
-                bar:SetPoint("BOTTOMLEFT", self.containerFrame, "BOTTOMLEFT", 0, offset)
+                bar:SetPoint(anchorFrom, self.containerFrame, anchorFrom, 0, offset)
             else
-                bar:SetPoint("TOPLEFT", self.containerFrame, "TOPLEFT", 0, -offset)
+                bar:SetPoint(anchorFrom, self.containerFrame, anchorFrom, 0, -offset)
             end
             bar:Show()
         else
@@ -940,10 +939,8 @@ function KT:LayoutBars()
         end
     end
 
-    -- Resize container to encompass all visible bars (for EditMode dragging)
-    local visibleCount = math.min(#self.sortedBars, maxBars)
-    local totalHeight = visibleCount > 0 and (visibleCount * (barHeight + spacing) - spacing) or barHeight
-    self.containerFrame:SetSize(db.BarWidth, math.max(totalHeight, barHeight))
+    -- Resize container to match first bar for EditMode overlay
+    self.containerFrame:SetSize(db.BarWidth, barHeight)
 end
 
 ---------------------------------------------------------------------------------
@@ -1120,11 +1117,12 @@ function KT:ShowPreview()
         end
 
         bar:ClearAllPoints()
+        local anchorFrom = db.Position.AnchorFrom or "CENTER"
         local offset = (i - 1) * (barHeight + spacing)
         if growUp then
-            bar:SetPoint("BOTTOMLEFT", self.containerFrame, "BOTTOMLEFT", 0, offset)
+            bar:SetPoint(anchorFrom, self.containerFrame, anchorFrom, 0, offset)
         else
-            bar:SetPoint("TOPLEFT", self.containerFrame, "TOPLEFT", 0, -offset)
+            bar:SetPoint(anchorFrom, self.containerFrame, anchorFrom, 0, -offset)
         end
         bar:Show()
 
@@ -1132,8 +1130,7 @@ function KT:ShowPreview()
         self.activeBars["preview_" .. i] = bar
     end
 
-    local previewHeight = 5 * ((db.BarHeight or 27) + (db.BarSpacing or 1)) - (db.BarSpacing or 1)
-    self.containerFrame:SetSize(db.BarWidth, math.max(previewHeight, db.BarHeight or 27))
+    self.containerFrame:SetSize(db.BarWidth, db.BarHeight or 27)
     self.containerFrame:Show()
 end
 

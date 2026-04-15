@@ -216,7 +216,10 @@ function DT:UpdateBarGroupPosition()
     local pos = settings.Position
     local parent = KE:ResolveAnchorFrame(settings.anchorFrameType, settings.ParentFrame)
 
-    group:SetParent(parent)
+    -- 1x1 anchor pattern (matches DungeonCasts/KickTracker):
+    -- Group stays parented to UIParent to avoid clipping by anchor frame parents
+    -- (e.g. ElvUI unit frames clip descendants), but anchors TO the resolved
+    -- parent for positioning. Individual bars anchor to the group frame.
     group:ClearAllPoints()
     group:SetPoint(pos.AnchorFrom, parent, pos.AnchorTo, pos.XOffset, pos.YOffset)
     group:SetFrameStrata(settings.Strata or "HIGH")
@@ -228,7 +231,6 @@ function DT:UpdateTextGroupPosition()
     local pos = settings.Position
     local parent = KE:ResolveAnchorFrame(settings.anchorFrameType, settings.ParentFrame)
 
-    group:SetParent(parent)
     group:ClearAllPoints()
     group:SetPoint(pos.AnchorFrom, parent, pos.AnchorTo, pos.XOffset, pos.YOffset)
     group:SetFrameStrata(settings.Strata or "HIGH")
@@ -242,12 +244,12 @@ function DT:PositionAllBars()
     self:UpdateBarGroupPosition()
 
     local settings = self:GetGroupSettings("bar")
-    local pos = settings.Position
     local spacing = settings.Spacing
     local growUp = settings.GrowthDirection == "UP"
     local barDisplay = self:GetBarDisplaySettings()
     local barHeight = barDisplay.barHeight or 20
     local barWidth = barDisplay.barWidth or 200
+    local group = self:GetBarGroupFrame()
 
     local frames = {}
     for _, frame in pairs(self.triggerFrames) do
@@ -263,24 +265,20 @@ function DT:PositionAllBars()
         return (tonumber(a.triggerId) or 0) < (tonumber(b.triggerId) or 0)
     end)
 
-    local anchorFrom = pos.AnchorFrom
-    local anchorTo = pos.AnchorTo
-    local baseX = pos.XOffset
-    local baseY = pos.YOffset
+    -- 1x1 anchor pattern: bars grow outward from the group anchor point.
+    -- Use the user's AnchorFrom so CENTER stays centered, TOPLEFT stays left-aligned, etc.
+    local anchorFrom = settings.Position.AnchorFrom or "CENTER"
 
     for i, frame in ipairs(frames) do
         frame:SetSize(barWidth, barHeight)
         frame:ClearAllPoints()
 
         local offset = (i - 1) * (barHeight + spacing)
-        local yPos
         if growUp then
-            yPos = baseY + offset
+            frame:SetPoint(anchorFrom, group, anchorFrom, 0, offset)
         else
-            yPos = baseY - offset
+            frame:SetPoint(anchorFrom, group, anchorFrom, 0, -offset)
         end
-
-        frame:SetPoint(anchorFrom, UIParent, anchorTo, baseX, yPos)
     end
 end
 
@@ -288,13 +286,13 @@ function DT:PositionAllTexts()
     self:UpdateTextGroupPosition()
 
     local settings = self:GetGroupSettings("text")
-    local pos = settings.Position
     local spacing = settings.Spacing
     local growUp = settings.GrowthDirection == "UP"
     local textDisplay = self:GetTextDisplaySettings()
     local textFontSize = textDisplay.fontSize or 14
     local textHeight = textFontSize + 4
     local textWidth = 400
+    local group = self:GetTextGroupFrame()
 
     local frames = {}
     for _, frame in pairs(self.triggerFrames) do
@@ -310,24 +308,18 @@ function DT:PositionAllTexts()
         return (tonumber(a.triggerId) or 0) < (tonumber(b.triggerId) or 0)
     end)
 
-    local anchorFrom = pos.AnchorFrom
-    local anchorTo = pos.AnchorTo
-    local baseX = pos.XOffset
-    local baseY = pos.YOffset
+    local anchorFrom = settings.Position.AnchorFrom or "CENTER"
 
     for i, frame in ipairs(frames) do
         frame:SetSize(textWidth, textHeight)
         frame:ClearAllPoints()
 
         local offset = (i - 1) * (textHeight + spacing)
-        local yPos
         if growUp then
-            yPos = baseY + offset
+            frame:SetPoint(anchorFrom, group, anchorFrom, 0, offset)
         else
-            yPos = baseY - offset
+            frame:SetPoint(anchorFrom, group, anchorFrom, 0, -offset)
         end
-
-        frame:SetPoint(anchorFrom, UIParent, anchorTo, baseX, yPos)
     end
 end
 
