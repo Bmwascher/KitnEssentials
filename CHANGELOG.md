@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.12.1
+### Additions
+- **Dungeon Timers**: 14 color-coded display presets (AOE, DODGE, SOAK, FRONTAL, KICK, TANK HIT, etc.) — one-click label + color for common warning types.
+- **Dungeon Timers**: Full anchor system for bar/text groups — anchor frame type, parent frame selection, and strata control.
+
+### Fixes
+- **Dungeon Timers**: Fixed extendTimer/timer offset — `BigWigs_StopBar` no longer kills timers that still have extended time remaining.
+- **Dungeon Timers**: Fixed pull/break countdown triggering unrelated timers with empty spell ID filters.
+- **Dungeon Timers**: Fixed position changes not applying until reload.
+- **Dungeon Timers**: Fixed bar/text previews ignoring anchor frame setting.
+- **Dungeon Casts**: Fixed cast bar group shifting position when bar count changes — switched to 1x1 anchor pattern matching Interrupt Tracker.
+
 ## v1.12.0
 ### Additions
 - New module: **Dungeon Casts** — enemy cast bars for M+ nameplates with icon, target text, raid icons, bar stacking, and interruptible/shielded status colors. Only active in 5-player dungeons.
