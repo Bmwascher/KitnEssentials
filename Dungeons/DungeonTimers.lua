@@ -214,18 +214,24 @@ function DT:UpdateBarGroupPosition()
     local group = self:GetBarGroupFrame()
     local settings = self:GetGroupSettings("bar")
     local pos = settings.Position
+    local parent = KE:ResolveAnchorFrame(settings.anchorFrameType, settings.ParentFrame)
 
+    group:SetParent(parent)
     group:ClearAllPoints()
-    group:SetPoint(pos.AnchorFrom, UIParent, pos.AnchorTo, pos.XOffset, pos.YOffset)
+    group:SetPoint(pos.AnchorFrom, parent, pos.AnchorTo, pos.XOffset, pos.YOffset)
+    group:SetFrameStrata(settings.Strata or "HIGH")
 end
 
 function DT:UpdateTextGroupPosition()
     local group = self:GetTextGroupFrame()
     local settings = self:GetGroupSettings("text")
     local pos = settings.Position
+    local parent = KE:ResolveAnchorFrame(settings.anchorFrameType, settings.ParentFrame)
 
+    group:SetParent(parent)
     group:ClearAllPoints()
-    group:SetPoint(pos.AnchorFrom, UIParent, pos.AnchorTo, pos.XOffset, pos.YOffset)
+    group:SetPoint(pos.AnchorFrom, parent, pos.AnchorTo, pos.XOffset, pos.YOffset)
+    group:SetFrameStrata(settings.Strata or "HIGH")
 end
 
 ---------------------------------------------------------------------------------
@@ -671,6 +677,10 @@ end
 
 function DT:MatchesTrigger(trigger, barData)
     if not CheckLoadConditions(trigger, barData.isPreview) then return false end
+    -- Pull/break timers only match triggers that explicitly target them
+    if (barData.spellId == "-2" or barData.spellId == "-1") and (not trigger.spellId or trigger.spellId == "") then
+        return false
+    end
     if not self:CheckSpellId(trigger, barData.spellId) then return false end
     if not self:CheckMessage(trigger, barData.text) then return false end
     if not self:CheckCount(trigger, barData.count) then return false end
@@ -1072,8 +1082,9 @@ function DT:ProcessTimerTriggers(barData)
             if self:MatchesTrigger(trigger, barData) then
                 local adjustedBar = {}
                 for k, v in pairs(barData) do adjustedBar[k] = v end
-                adjustedBar.expirationTime = adjustedBar.expirationTime + (trigger.extendTimer or 0)
-                adjustedBar.duration = adjustedBar.duration + (trigger.extendTimer or 0)
+                adjustedBar.extendTimer = trigger.extendTimer or 0
+                adjustedBar.expirationTime = adjustedBar.expirationTime + adjustedBar.extendTimer
+                adjustedBar.duration = adjustedBar.duration + adjustedBar.extendTimer
                 self:ShowTriggerDisplay(dungeonKey, triggerId, trigger, adjustedBar)
             end
         end
@@ -1111,9 +1122,15 @@ end
 ---------------------------------------------------------------------------------
 
 function DT:StopBar(text)
+    local now = GetTime()
     for frameKey, barData in pairs(self.triggerBars) do
         if barData and barData.text == text then
-            self:HideTriggerDisplay(frameKey)
+            -- If this trigger has extendTimer, don't stop while extended time remains
+            if barData.extendTimer and barData.extendTimer > 0 and barData.expirationTime > now then
+                -- BigWigs bar ended but our extended timer is still active — let it run
+            else
+                self:HideTriggerDisplay(frameKey)
+            end
         end
     end
 end

@@ -899,6 +899,9 @@ local Defaults = {
                     },
                     GrowthDirection = "DOWN",
                     Spacing = 2,
+                    Strata = "HIGH",
+                    anchorFrameType = "UIPARENT",
+                    ParentFrame = "UIParent",
                 },
 
                 -- Text group positioning
@@ -911,6 +914,9 @@ local Defaults = {
                     },
                     GrowthDirection = "DOWN",
                     Spacing = 2,
+                    Strata = "HIGH",
+                    anchorFrameType = "UIPARENT",
+                    ParentFrame = "UIParent",
                 },
 
                 -- Per-dungeon triggers (instanceId maps to BigWigs/LittleWigs boss modules)
