@@ -1,12 +1,15 @@
 # Changelog
 
 ## v1.13.1
-### Additions
-- **Custom Nicknames**: Tag registration extended to Unhalted Unit Frames (UUF). Same `kes:nickname` family as ElvUI plus UUF-only class-color variants `[kes:nickname:color]`, `[kes:nickname:color:N]` (N = 1-30), and `:color:short|medium|long`. UUF's tag browser shows four representative entries (full, shortened, full-colored, shortened-colored); the other width variants are registered via a hidden category so they work when typed in by hand without cluttering the browser. ElvUI users continue to use the built-in `[classcolor]` prefix — no `:color` variants needed on that side.
-- **Custom Nicknames GUI**: Note section gains a UUF-path placeholder (will become the real navigation once UUF ships party/raid frame configuration), and the Available Tags section splits into a shared block + a small "UUF only" subsection for color variants.
+### Custom Nicknames
+- **NEW:** Unhalted Unit Frames support via the `[kes:nickname]` tag family
+- **NEW:** Class color variants `[kes:nickname:color]` and `[kes:nickname:color:N]` (N = 1-30) for UUF
+- **NEW:** `:color:short` / `:color:medium` / `:color:long` named width variants for UUF
+- Available Tags card split into shared block + UUF-only subsection
+- UUF path placeholder added to the Note section
 
-### Fixes
-- **ProfileManager**: Fixed a long-standing nil-call crash where `RefreshAllModules` invoked `PreviewManager:StartAllPreviews()` — a method that never existed (typo for `UpdatePreviewState`). The crash fired on every profile create/switch/copy/rename/reset, halting execution mid-SetProfile and leaving the active profile stuck in whatever intermediate state the error interrupted. This was the root cause of "my profile disappeared after creating a new one" reports.
+### ProfileManager
+- Fixed nil-call crash on profile create / switch / copy / rename / reset (root cause of "my profile disappeared" reports)
 
 ## v1.13.0
 ### Additions
