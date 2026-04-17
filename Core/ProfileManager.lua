@@ -418,8 +418,15 @@ function ProfileManager:RefreshAllModules()
     -- Refresh GUI frame if open
     if KE.GUIFrame and KE.GUIFrame.ApplyThemeColors then KE.GUIFrame:ApplyThemeColors() end
 
-    -- Start previews again
-    if KE.PreviewManager then KE.PreviewManager:StartAllPreviews() end
+    -- Re-evaluate previews based on current GUI / edit-mode state (this was
+    -- historically a call to `StartAllPreviews`, which has never existed on
+    -- PreviewManager — it was a typo for `UpdatePreviewState` that crashed
+    -- every profile operation, halting execution inside SetProfile callbacks
+    -- and leaving the active profile stuck at whatever intermediate state
+    -- the error interrupted).
+    if KE.PreviewManager and KE.PreviewManager.UpdatePreviewState then
+        KE.PreviewManager:UpdatePreviewState()
+    end
 end
 
 ---------------------------------------------------------------------------------
