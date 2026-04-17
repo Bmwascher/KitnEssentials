@@ -53,7 +53,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Skyriding UI | Reskinned skyriding vigor bar |
 | Racials Anchor | Repositions CDM racials bar with custom offsets and pet bar adjustment |
 | Copy Anything | Copy any chat message or tooltip text |
-| Custom Nicknames | Map characters to personal nicknames on ElvUI unit frames via the `[kes:nickname]` tag family; includes a management GUI with search, import/export, and replace/merge modes |
+| Custom Nicknames | Map characters to personal nicknames on ElvUI and Unhalted Unit Frames via the `[kes:nickname]` tag family (plus class-color variants `[kes:nickname:color]` for UUF); includes a management GUI with search, import/export, and replace/merge modes |
 | Hide ActionBars | Hide specific action bar rows in/out of combat |
 | Great Vault Alert | Shows your loot spec when opening the Great Vault with class color and sound |
 | Missing Enchants/Gems | Red warnings on character panel for missing enchants and empty gem sockets |
