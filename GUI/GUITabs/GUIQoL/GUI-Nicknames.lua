@@ -294,7 +294,123 @@ GUIFrame:RegisterContent("Nicknames", function(scrollChild, yOffset)
     yOffset = yOffset + addCard:GetContentHeight() + T.paddingMedium
 
     ---------------------------------------------------------------------------------
-    -- Card 3: Saved Nicknames (column layout + row separators)
+    -- Card 3: Import / Export
+    ---------------------------------------------------------------------------------
+    -- Mirrors the Dungeon Timers Import/Export card: a single edit box, an
+    -- Export button that opens a copyable popup, and an Import button that
+    -- consumes the current edit box text. Format is a compact
+    -- AceSerializer+LibDeflate payload behind the "!KEN1!" prefix.
+    -- Sits above Saved Nicknames so the action buttons stay reachable without
+    -- scrolling past a long list.
+    local ioCard = GUIFrame:CreateCard(scrollChild, "Import / Export", yOffset)
+
+    local bullet = KE:ColorTextByTheme("-")
+    ioCard:AddLabel("|cff888888" .. bullet .. " Export produces a compact string you can share with friends.\n" ..
+        bullet .. " Import merges by default. Toggle Replace to wipe first.|r")
+
+    local ioRow = GUIFrame:CreateRow(ioCard.content, 50)
+    local ioBox = GUIFrame:CreateEditBox(ioRow, "Paste import string or click Export...", "", function() end)
+    ioRow:AddWidget(ioBox, 1)
+    ioCard:AddRow(ioRow, 50)
+
+    -- Mode toggle for Import. Sits in the right half of its own row so it
+    -- visually stacks above the Import button below — making the pairing
+    -- obvious without needing extra "affects Import only" copy. Export is
+    -- always a full dump of the local table and is unaffected.
+    local replaceMode = false
+    local toggleRow = GUIFrame:CreateRow(ioCard.content, 36)
+
+    -- Empty left half (under Export) — pushes the toggle into the right half.
+    local toggleSpacer = CreateFrame("Frame", nil, toggleRow)
+    toggleRow:AddWidget(toggleSpacer, 0.5, 0)
+
+    local replaceCheck = GUIFrame:CreateCheckbox(toggleRow,
+        "Replace entire list",
+        false,
+        function(state) replaceMode = state end)
+    toggleRow:AddWidget(replaceCheck, 0.5)
+
+    -- On/off descriptor to the right of the toggle knob. Same #888888 gray as
+    -- the card's intro bullets so it reads as "helper" and not as a secondary
+    -- label. Knob center sits at y=-26 inside the 36px row; nudged 2px lower
+    -- because the FontString's visual midline reads slightly high of its
+    -- anchor center.
+    local replaceDesc = replaceCheck:CreateFontString(nil, "OVERLAY")
+    replaceDesc:SetPoint("LEFT", replaceCheck, "TOPLEFT", 56, -28)
+    replaceDesc:SetJustifyH("LEFT")
+    KE:ApplyThemeFont(replaceDesc, "small")
+    replaceDesc:SetTextColor(0x88 / 0xFF, 0x88 / 0xFF, 0x88 / 0xFF, 1)
+    replaceDesc:SetText("ON wipes  ·  OFF merges")
+
+    ioCard:AddRow(toggleRow, 36)
+
+    local ioBtnRow = GUIFrame:CreateRow(ioCard.content, 28)
+
+    local exportBtn = GUIFrame:CreateButton(ioBtnRow, "Export", {
+        height = 26,
+        callback = function()
+            local encoded, err, count = KE:ExportNicknames()
+            if encoded then
+                KE:CreatePrompt(
+                    "Export Nicknames (" .. count .. ")",
+                    encoded,
+                    true,
+                    "Copy the string above (Ctrl+C)",
+                    false
+                )
+            else
+                KE:Print("Export failed: " .. (err or "unknown error"))
+            end
+        end,
+    })
+    ioBtnRow:AddWidget(exportBtn, 0.5)
+
+    local importBtn = GUIFrame:CreateButton(ioBtnRow, "Import", {
+        height = 26,
+        callback = function()
+            local text = (ioBox.GetValue and ioBox:GetValue()) or ""
+            if text == "" then
+                KE:Print("Paste an import string first.")
+                return
+            end
+            -- Replace mode is destructive in the same way Clear All is:
+            -- require confirmation before wiping the local list.
+            if replaceMode then
+                KE:CreatePrompt(
+                    "Replace Your Nickname List",
+                    "This will wipe your current list before applying the import.\n\nAre you sure?",
+                    false, nil, false, nil, nil, nil, nil,
+                    function()
+                        local ok, msg = KE:ImportNicknames(text, true)
+                        if ok then
+                            KE:Print(msg)
+                            ioBox:SetValue("")
+                            GUIFrame:RefreshContent()
+                        else
+                            KE:Print("Import failed: " .. (msg or "unknown error"))
+                        end
+                    end,
+                    nil, "Replace", "Cancel"
+                )
+                return
+            end
+            local ok, msg = KE:ImportNicknames(text, false)
+            if ok then
+                KE:Print(msg)
+                ioBox:SetValue("")
+                GUIFrame:RefreshContent()
+            else
+                KE:Print("Import failed: " .. (msg or "unknown error"))
+            end
+        end,
+    })
+    ioBtnRow:AddWidget(importBtn, 0.5)
+    ioCard:AddRow(ioBtnRow, 28)
+
+    yOffset = yOffset + ioCard:GetContentHeight() + T.paddingMedium
+
+    ---------------------------------------------------------------------------------
+    -- Card 4: Saved Nicknames (column layout + row separators)
     ---------------------------------------------------------------------------------
     local sorted = SortedKeys(nicks)
     local countSuffix = (#sorted > 0) and ("  (" .. #sorted .. ")") or ""
@@ -402,5 +518,40 @@ GUIFrame:RegisterContent("Nicknames", function(scrollChild, yOffset)
     end
 
     yOffset = yOffset + listCard:GetContentHeight() + T.paddingMedium
+
+    ---------------------------------------------------------------------------------
+    -- Card 5: Clear All
+    ---------------------------------------------------------------------------------
+    -- Destructive bulk-delete with a confirmation popup. Mirrors the Reset
+    -- pattern from Timer Settings; the button's text is tinted red to match
+    -- the Remove buttons in the Saved Nicknames list.
+    local clearCard = GUIFrame:CreateCard(scrollChild, "Clear All", yOffset)
+    clearCard:AddLabel("|cff888888Remove every saved nickname. This cannot be undone.|r")
+
+    local clearRow = GUIFrame:CreateRow(clearCard.content, 28)
+    local clearBtn = GUIFrame:CreateButton(clearRow, "Clear All Nicknames", {
+        height = 26,
+        callback = function()
+            KE:CreatePrompt(
+                "Clear All Nicknames",
+                "This will permanently remove every saved nickname.\n\nAre you sure?",
+                false, nil, false, nil, nil, nil, nil,
+                function()
+                    local removed = KE:ClearAllNicknames()
+                    KE:Print("Cleared " .. removed .. " nickname(s).")
+                    GUIFrame:RefreshContent()
+                end,
+                nil, "Clear", "Cancel"
+            )
+        end,
+    })
+    if clearBtn.text then
+        clearBtn.text:SetTextColor(REMOVE_COLOR[1], REMOVE_COLOR[2], REMOVE_COLOR[3], REMOVE_COLOR[4])
+    end
+    clearRow:AddWidget(clearBtn, 1.0, 0)
+    clearCard:AddRow(clearRow, 28)
+
+    yOffset = yOffset + clearCard:GetContentHeight() + T.paddingMedium
+
     return yOffset
 end)
