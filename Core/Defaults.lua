@@ -68,6 +68,12 @@ local Defaults = {
             Preset = "KitnUI",
             Custom = {},
         },
+
+        -- Map of "Fullname-NormalizedRealm" -> "Nickname".
+        -- Global so nicknames persist across characters/profiles.
+        -- Realm portion uses GetNormalizedRealmName() (no spaces/apostrophes)
+        -- for NSRT-compatible keys if we ever add import/export.
+        Nicknames = {},
     },
     profile = {
         -- Global
