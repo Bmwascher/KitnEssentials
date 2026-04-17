@@ -164,3 +164,27 @@ function KE:ClearAllNicknames()
     NotifyChange()
     return count
 end
+
+---------------------------------------------------------------------------------
+-- Tag Refresh
+---------------------------------------------------------------------------------
+-- Invalidates cached tag output in each supported frame library after the
+-- nicknames table changes. Defined here (rather than in Tags.lua) so it's
+-- available in UUF-only setups where Tags.lua early-returns. Safe no-op if
+-- neither lib is loaded.
+
+function KE:RefreshNicknameTags()
+    local ElvUF = _G.ElvUF
+    if ElvUF and ElvUF.Tags and ElvUF.Tags.RefreshMethods then
+        local names = KE._nickElvTagNames
+        if names then
+            for i = 1, #names do
+                ElvUF.Tags:RefreshMethods(names[i])
+            end
+        end
+    end
+    local UUFG = _G.UUFG
+    if UUFG and UUFG.UpdateAllTags then
+        UUFG:UpdateAllTags()
+    end
+end

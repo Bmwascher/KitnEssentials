@@ -14,5 +14,6 @@
     <Script file="Colors.lua" />
     <Script file="Curves.lua" />
     <Script file="Tags.lua" />
+    <Script file="Tags-UUF.lua" />
     <Script file="Nicknames.lua" />
 </Ui>
