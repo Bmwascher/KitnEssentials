@@ -248,6 +248,21 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
         messageLabel:SetText(text or "")
         messageLabel:SetTextColor(textPrimary[1], textPrimary[2], textPrimary[3], 1)
         messageLabel:SetShadowColor(0, 0, 0, 0)
+        dialog.messageLabel = messageLabel
+
+        -- Adaptive height for confirmation-style prompts. Default POPUP_HEIGHT (120)
+        -- leaves only ~26px of message space between header and buttons — enough for
+        -- one line, but text with "\n\nAre you sure?" wraps past the button row and
+        -- renders under it. Measure the rendered text and expand the dialog if
+        -- needed. Editbox-mode prompts use their own SetHeight path (line ~409).
+        if not showEditBox then
+            local textHeight = messageLabel:GetStringHeight() or 0
+            -- header(28) + topMargin(12) + text + bottomMargin(12) + buttons(30) + bottomMargin(12)
+            local needed = 28 + 12 + textHeight + 12 + 30 + 12
+            if needed > POPUP_HEIGHT then
+                dialog:SetHeight(needed)
+            end
+        end
     end
 
     if showEditBox and not dialog.editBox then
