@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.13.0
+### Additions
+- **Custom Nicknames**: New QoL module. Map characters (`Name-Realm`) to personal nicknames displayed on ElvUI unit frames via a new tag family: `[kes:nickname]`, `[kes:nickname:N]` (1-30), and named variants `:short` (6), `:medium` (10), `:long` (20). Falls back to `UnitName` when no nickname is set.
+- **Custom Nicknames GUI**: Dedicated QoL page with Add/Update form (Use Current Target helper + realm auto-append), saved list grouped by nickname with click-to-edit rows, Import/Export via `!KEN1!`-prefixed AceSerializer+LibDeflate payload (same pipeline as Dungeon Timers), Replace-mode toggle paired with the Import button, and a Clear All danger-zone button.
+- **Custom Nicknames polish**: Search box in the Saved list header with live filter and filter-aware count (`N of M`), row flash on save/import, disabled Export/Clear All when empty, and popup-based error surfacing so import failures are visible with chat hidden.
+
+### Fixes
+- **CreatePrompt** (shared widget): Fixed confirmation popups clipping their text under the button row when the message wrapped past the default 120px dialog height. Affects Dungeon Timers' *Reset All Triggers* and every other prompt with `\n\n`-separated body text — dialogs now measure the rendered FontString height and expand only when needed.
+
 ## v1.12.3
 ### Fixes
 - **Bloodlust Tracker**: Fixed sound stutter during heavy raid combat — reduced poll rate from 0.10s to 0.50s and added a 1.5s minimum between restarts so the loop no longer spams `PlaySoundFile` when the sound channel saturates.
