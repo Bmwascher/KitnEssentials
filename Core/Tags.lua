@@ -138,9 +138,12 @@ end
 -- GROUP_ROSTER_UPDATE covers roster entry/exit.
 local NICK_EVENTS = 'UNIT_NAME_UPDATE GROUP_ROSTER_UPDATE'
 
--- Registered tag names, used by RefreshNicknameTags to invalidate ElvUF's
--- per-unit tag cache after the nicknames table is edited.
-local NICK_TAG_NAMES = {}
+-- Registered tag names, used by KE:RefreshNicknameTags (in Nicknames.lua) to
+-- invalidate ElvUF's per-unit tag cache after the nicknames table is edited.
+-- Exposed on KE so the refresh hook can read it from a file that loads even
+-- when ElvUI is absent (UUF-only users).
+KE._nickElvTagNames = KE._nickElvTagNames or {}
+local NICK_TAG_NAMES = KE._nickElvTagNames
 
 -- Prefer ElvUI's UTF-8 aware truncation so multi-byte names don't break.
 local function Truncate(str, n)
@@ -175,12 +178,5 @@ AddNicknameTag('kes:nickname:short',  6,  "Nickname (or name), max 6 chars")
 AddNicknameTag('kes:nickname:medium', 10, "Nickname (or name), max 10 chars")
 AddNicknameTag('kes:nickname:long',   20, "Nickname (or name), max 20 chars")
 
--- Refresh hook for GUI / slash commands to call after editing the nicknames
--- table. ElvUF caches tag results per unit; RefreshMethods invalidates the
--- cache so the next UNIT_NAME_UPDATE (or forced update) re-runs our function.
-function KE:RefreshNicknameTags()
-    if not ElvUF or not ElvUF.Tags or not ElvUF.Tags.RefreshMethods then return end
-    for i = 1, #NICK_TAG_NAMES do
-        ElvUF.Tags:RefreshMethods(NICK_TAG_NAMES[i])
-    end
-end
+-- KE:RefreshNicknameTags lives in Core/Nicknames.lua so it's defined whether
+-- or not ElvUI is loaded (UUF-only users still need the refresh hook).

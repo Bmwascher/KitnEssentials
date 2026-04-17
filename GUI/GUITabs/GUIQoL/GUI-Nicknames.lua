@@ -146,9 +146,11 @@ local function MakeLinkButton(parent, text, onClick)
 end
 
 -- Renders a `tag  desc` row with both cells aligned via a fixed tag-column
--- width. Flush-left to match the "Tags for..." header above.
+-- width. Flush-left to match the "Tags for..." header above. Width tuned to
+-- fit the longest tag (`[kes:nickname:colour:N]`) plus gutter, leaving the
+-- remaining card width to the description so longer explanations don't clip.
 local function AddTagRow(card, tagText, descText)
-    local TAG_COL_WIDTH = 210
+    local TAG_COL_WIDTH = 180
 
     local row = CreateFrame("Frame", nil, card.content)
     row:SetHeight(18)
@@ -202,10 +204,10 @@ GUIFrame:RegisterContent("Nicknames", function(scrollChild, yOffset)
     local noteRow = GUIFrame:CreateRow(aboutCard.content, noteHeight)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Map a character to a nickname displayed on ElvUI unit frames.\n" ..
+        KE:ColorTextByTheme("-") .. " Map a character to a nickname displayed on ElvUI and Unhalted Unit Frames.\n" ..
         KE:ColorTextByTheme("-") .. " Falls back to the character name when no nickname is set.\n" ..
-        KE:ColorTextByTheme("-") .. " ElvUI path: UnitFrames > Group Units > Party/Raid Tabs > Name > Text Format\n" ..
-        KE:ColorTextByTheme("-") .. " Example: [classcolor][kes:nickname]",
+        KE:ColorTextByTheme("-") .. " ElvUI path: UnitFrames \194\187 Group Units \194\187 Party/Raid Tabs \194\187 Name \194\187 Text Format\n" ..
+        KE:ColorTextByTheme("-") .. " UUF path: coming soon \194\187 party/raid frames in development",
         noteHeight, "hide")
     noteRow:AddWidget(noteText, 1)
     aboutCard:AddRow(noteRow, noteHeight)
@@ -235,11 +237,54 @@ GUIFrame:RegisterContent("Nicknames", function(scrollChild, yOffset)
     aboutCard.content:SetHeight(aboutCard.currentY)
     aboutCard:UpdateHeight()
 
-    AddTagRow(aboutCard, "[kes:nickname]",        "Full nickname")
-    AddTagRow(aboutCard, "[kes:nickname:N]",      "First N characters  (N is any number from 1 to 30)")
-    AddTagRow(aboutCard, "[kes:nickname:short]",  "6 characters")
-    AddTagRow(aboutCard, "[kes:nickname:medium]", "10 characters")
-    AddTagRow(aboutCard, "[kes:nickname:long]",   "20 characters")
+    AddTagRow(aboutCard, "[kes:nickname]",            "Full nickname")
+    AddTagRow(aboutCard, "[kes:nickname:N]",          "First N characters  (N is 1 to 30)")
+    AddTagRow(aboutCard, "[kes:nickname:short]",      "6 characters")
+    AddTagRow(aboutCard, "[kes:nickname:medium]",     "10 characters")
+    AddTagRow(aboutCard, "[kes:nickname:long]",       "20 characters")
+
+    -- ElvUI class-color hint, placed just above the separator so it reads as
+    -- "last thing in the shared block". Same gray as the UUF note below —
+    -- parallel structure, each side documents its class-color path.
+    local elvuiHint = aboutCard.content:CreateFontString(nil, "OVERLAY")
+    elvuiHint:SetPoint("TOPLEFT", aboutCard.content, "TOPLEFT", 0, -aboutCard.currentY)
+    elvuiHint:SetPoint("TOPRIGHT", aboutCard.content, "TOPRIGHT", 0, -aboutCard.currentY)
+    elvuiHint:SetJustifyH("LEFT")
+    KE:ApplyThemeFont(elvuiHint, "small")
+    elvuiHint:SetTextColor(0x88 / 0xFF, 0x88 / 0xFF, 0x88 / 0xFF, 1)
+    elvuiHint:SetText("ElvUI class color: prefix any KES tag with [classcolor].")
+    aboutCard.currentY = aboutCard.currentY + (elvuiHint:GetStringHeight() or 12) + 4
+    aboutCard.content:SetHeight(aboutCard.currentY)
+    aboutCard:UpdateHeight()
+
+    -- Subsection divider: tags above work in both ElvUI and UUF; the tags
+    -- below are UUF-only because ElvUI users get class color by prefixing
+    -- any name tag with ElvUI's built-in [classcolor] (see hint above).
+    aboutCard:AddSeparator()
+
+    local uufHeader = aboutCard.content:CreateFontString(nil, "OVERLAY")
+    uufHeader:SetPoint("TOPLEFT", aboutCard.content, "TOPLEFT", 0, -aboutCard.currentY)
+    uufHeader:SetJustifyH("LEFT")
+    KE:ApplyThemeFont(uufHeader, "normal")
+    uufHeader:SetTextColor(T.accent[1], T.accent[2], T.accent[3], 1)
+    uufHeader:SetText("UUF only")
+    aboutCard.currentY = aboutCard.currentY + (uufHeader:GetStringHeight() or 14) + 2
+    aboutCard.content:SetHeight(aboutCard.currentY)
+    aboutCard:UpdateHeight()
+
+    local uufNote = aboutCard.content:CreateFontString(nil, "OVERLAY")
+    uufNote:SetPoint("TOPLEFT", aboutCard.content, "TOPLEFT", 0, -aboutCard.currentY)
+    uufNote:SetPoint("TOPRIGHT", aboutCard.content, "TOPRIGHT", 0, -aboutCard.currentY)
+    uufNote:SetJustifyH("LEFT")
+    KE:ApplyThemeFont(uufNote, "small")
+    uufNote:SetTextColor(0x88 / 0xFF, 0x88 / 0xFF, 0x88 / 0xFF, 1)
+    uufNote:SetText("All tags above also work in UUF.")
+    aboutCard.currentY = aboutCard.currentY + (uufNote:GetStringHeight() or 12) + 6
+    aboutCard.content:SetHeight(aboutCard.currentY)
+    aboutCard:UpdateHeight()
+
+    AddTagRow(aboutCard, "[kes:nickname:color]",      "Class color")
+    AddTagRow(aboutCard, "[kes:nickname:color:N]",    "Class color + first N chars  (N is 1 to 30)")
     yOffset = yOffset + aboutCard:GetContentHeight() + T.paddingMedium
 
     ---------------------------------------------------------------------------------
