@@ -55,6 +55,9 @@ DT.positionDirty = false
 local instanceIdToDungeonKey = nil
 local VISUAL_UPDATE_INTERVAL = 0.033
 
+-- Flip to true to trace BigWigs events, bar lifecycle, and extendTimer guards.
+local DEBUG_DT = false
+
 -- BigWigs events to register
 local BIGWIGS_EVENTS = {
     "BigWigs_Timer",
@@ -949,9 +952,41 @@ function DT:ShowTriggerDisplay(dungeonKey, triggerId, trigger, barData)
 
     if not frame then return end
 
+    local now = GetTime()
+
+    -- Overwrite-race guard: if BigWigs sends the next cast's Timer while the
+    -- previous cast's extension is still visible, overwriting here would
+    -- silently hide the visible extension (new bar's remaining > threshold
+    -- triggers the HIDE branch below). Defer the new bar until the existing
+    -- extension naturally expires via RecheckTimers.
+    local existingBarData = self.triggerBars[frameKey]
+    if existingBarData
+       and not barData.isPreview
+       and existingBarData.extendTimer and existingBarData.extendTimer > 0
+       and existingBarData.expirationTime > now
+       and frame:IsShown()
+       and config.remainingEnabled then
+        local newRemaining = barData.expirationTime - now
+        if not self:CheckRemainingTime(config, newRemaining) then
+            local delay = (existingBarData.expirationTime - now) + 0.05
+            if DEBUG_DT then
+                KE:Print(string.format("[DT] ShowTriggerDisplay DEFER new=%s delay=%.2f (existing=%s still extending)",
+                    tostring(barData.text), delay, tostring(existingBarData.text)))
+            end
+            self:ScheduleTimer(function()
+                if self.currentDungeonKey ~= dungeonKey then return end
+                local d = self.db and self.db.Dungeons and self.db.Dungeons[dungeonKey]
+                local t = d and d.Triggers and d.Triggers[triggerId]
+                if t and t.enabled ~= false then
+                    self:ShowTriggerDisplay(dungeonKey, triggerId, t, barData)
+                end
+            end, delay)
+            return
+        end
+    end
+
     frame.config = config
 
-    local now = GetTime()
     local effectiveDuration = self:GetEffectiveBarDuration(config, barData)
     barData.effectiveDuration = effectiveDuration
 
@@ -1014,6 +1049,10 @@ function DT:ShowTriggerDisplay(dungeonKey, triggerId, trigger, barData)
 
     if shouldShowNow then
         if not frame:IsShown() then
+            if DEBUG_DT then
+                KE:Print(string.format("[DT] ShowTriggerDisplay SHOW key=%s text=%s remain=%.2f",
+                    tostring(frameKey), tostring(barData.text), remaining))
+            end
             PlayTriggerSound(config.actionOnShowSound, barData.isPreview)
         end
         frame:Show()
@@ -1021,12 +1060,21 @@ function DT:ShowTriggerDisplay(dungeonKey, triggerId, trigger, barData)
         self:PositionAllFrames()
         self:StartVisualUpdates()
     else
+        if DEBUG_DT then
+            KE:Print(string.format("[DT] ShowTriggerDisplay HIDE(threshold) key=%s text=%s remain=%.2f",
+                tostring(frameKey), tostring(barData.text), remaining))
+        end
         frame:Hide()
         self:PositionAllFrames()
     end
 end
 
 function DT:HideTriggerDisplay(frameKey)
+    if DEBUG_DT then
+        local bd = self.triggerBars[frameKey]
+        KE:Print(string.format("[DT] HideTriggerDisplay key=%s text=%s",
+            tostring(frameKey), tostring(bd and bd.text)))
+    end
     local frame = self.triggerFrames[frameKey]
     if frame then
         local isPreview = frame.barData and frame.barData.isPreview
@@ -1077,6 +1125,11 @@ function DT:ProcessTimerTriggers(barData)
                 adjustedBar.extendTimer = trigger.extendTimer or 0
                 adjustedBar.expirationTime = adjustedBar.expirationTime + adjustedBar.extendTimer
                 adjustedBar.duration = adjustedBar.duration + adjustedBar.extendTimer
+                if DEBUG_DT and adjustedBar.extendTimer > 0 then
+                    KE:Print(string.format("[DT] trigger match text=%s extend=%.1fs totalRemain=%.2f",
+                        tostring(adjustedBar.text), adjustedBar.extendTimer,
+                        adjustedBar.expirationTime - GetTime()))
+                end
                 self:ShowTriggerDisplay(dungeonKey, triggerId, trigger, adjustedBar)
             end
         end
@@ -1115,19 +1168,35 @@ end
 
 function DT:StopBar(text)
     local now = GetTime()
+    local matched = false
     for frameKey, barData in pairs(self.triggerBars) do
         if barData and barData.text == text then
+            matched = true
             -- If this trigger has extendTimer, don't stop while extended time remains
             if barData.extendTimer and barData.extendTimer > 0 and barData.expirationTime > now then
                 -- BigWigs bar ended but our extended timer is still active — let it run
+                if DEBUG_DT then
+                    KE:Print(string.format("[DT] StopBar HOLD text=%s remain=%.2f extend=%.1f",
+                        tostring(text), barData.expirationTime - now, barData.extendTimer))
+                end
             else
+                if DEBUG_DT then
+                    KE:Print(string.format("[DT] StopBar HIDE text=%s extend=%s expInPast=%s",
+                        tostring(text),
+                        tostring(barData.extendTimer),
+                        tostring(barData.expirationTime and (barData.expirationTime <= now))))
+                end
                 self:HideTriggerDisplay(frameKey)
             end
         end
     end
+    if DEBUG_DT and not matched then
+        KE:Print(string.format("[DT] StopBar ORPHAN (no matching bar) text=%s", tostring(text)))
+    end
 end
 
 function DT:StopAllBars()
+    if DEBUG_DT then KE:Print("[DT] StopAllBars (unconditional)") end
     for frameKey, _ in pairs(self.triggerBars) do
         local frame = self.triggerFrames[frameKey]
         if frame then
@@ -1137,6 +1206,27 @@ function DT:StopAllBars()
     end
     wipe(self.triggerBars)
     self:StopAllTimers()
+end
+
+-- Like StopAllBars, but honors extendTimer: bars whose extended expirationTime
+-- has not yet elapsed are left alone. Used for BigWigs cleanup events
+-- (StopBars, OnBossDisable) where we want the extended display to ride through.
+function DT:StopAllBarsRespectExtend()
+    local now = GetTime()
+    for frameKey, barData in pairs(self.triggerBars) do
+        if barData and barData.extendTimer and barData.extendTimer > 0 and barData.expirationTime > now then
+            if DEBUG_DT then
+                KE:Print(string.format("[DT] StopAllBarsRespectExtend HOLD text=%s remain=%.2f",
+                    tostring(barData.text), barData.expirationTime - now))
+            end
+        else
+            if DEBUG_DT then
+                KE:Print(string.format("[DT] StopAllBarsRespectExtend HIDE text=%s",
+                    tostring(barData and barData.text)))
+            end
+            self:HideTriggerDisplay(frameKey)
+        end
+    end
 end
 
 function DT:PauseBar(text)
@@ -1191,6 +1281,7 @@ end
 ---------------------------------------------------------------------------------
 
 function DT:EventCallback(event, ...)
+    if DEBUG_DT then KE:Print("[DT] event=" .. tostring(event)) end
     if event == "BigWigs_Timer" or event == "BigWigs_TargetTimer" or event == "BigWigs_CastTimer" then
         local addon, spellId, duration, _, text, count, icon = ...
         local barData = self:CreateBarData(addon, spellId, duration, text, count, icon, event)
@@ -1210,7 +1301,7 @@ function DT:EventCallback(event, ...)
         local _, text = ...
         self:StopBar(text)
     elseif event == "BigWigs_StopBars" or event == "BigWigs_OnBossDisable" then
-        self:StopAllBars()
+        self:StopAllBarsRespectExtend()
     elseif event == "BigWigs_PauseBar" then
         local _, text = ...
         self:PauseBar(text)
@@ -1251,6 +1342,10 @@ function DT:DoScheduledScan(fireTime)
                 if config.remainingEnabled and remaining > 0 then
                     local shouldShow = self:CheckRemainingTime(config, remaining)
                     if shouldShow and not frame:IsShown() then
+                        if DEBUG_DT then
+                            KE:Print(string.format("[DT] DoScheduledScan SHOW key=%s text=%s remain=%.2f",
+                                tostring(frameKey), tostring(barData.text), remaining))
+                        end
                         PlayTriggerSound(config.actionOnShowSound, barData.isPreview)
                         frame:Show()
                         self.positionDirty = true
@@ -1281,6 +1376,10 @@ function DT:RecheckTimers()
             local expirationTime = barData.expirationTime
 
             if expirationTime <= now then
+                if DEBUG_DT then
+                    KE:Print(string.format("[DT] RecheckTimers EXPIRE text=%s extend=%.1f",
+                        tostring(barData.text), barData.extendTimer or 0))
+                end
                 if barData.isPreview and barData.loopCallback and self.previewsAllowed then
                     table_insert(callbacksToRun, barData.loopCallback)
                 end

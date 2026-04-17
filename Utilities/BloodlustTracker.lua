@@ -272,6 +272,7 @@ function BLT:PlaySoundOnce()
     local willPlay, handle = PlaySoundFile(PEDRO_SOUND, self.db.SoundChannel or "Master")
     if willPlay and handle then
         self.soundHandle = handle
+        self.soundStartTime = GetTime()
     end
 end
 
@@ -283,6 +284,9 @@ function BLT:StartSoundLoop()
 
     self:PlaySoundOnce()
 
+    -- Poll less aggressively (0.5s) and enforce a minimum 1.5s between restarts.
+    -- Raid combat saturates the sound channel and can evict sounds briefly;
+    -- without a cooldown the loop would spam PlaySoundFile causing start/stop stutter.
     self.soundLoopTimer = self:ScheduleRepeatingTimer(function()
         if not self.lustActive and not self.testMode then
             self:StopSoundLoop()
@@ -293,10 +297,10 @@ function BLT:StartSoundLoop()
         if handle and C_Sound and C_Sound.IsPlaying then
             playing = C_Sound.IsPlaying(handle)
         end
-        if not playing then
+        if not playing and (GetTime() - (self.soundStartTime or 0)) >= 1.5 then
             self:PlaySoundOnce()
         end
-    end, 0.10)
+    end, 0.50)
 end
 
 function BLT:StopSoundLoop()
@@ -308,6 +312,7 @@ function BLT:StopSoundLoop()
         StopSound(self.soundHandle, 150)
         self.soundHandle = nil
     end
+    self.soundStartTime = nil
 end
 
 ---------------------------------------------------------------------------------

@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.12.3
+### Fixes
+- **Bloodlust Tracker**: Fixed sound stutter during heavy raid combat — reduced poll rate from 0.10s to 0.50s and added a 1.5s minimum between restarts so the loop no longer spams `PlaySoundFile` when the sound channel saturates.
+- **Dungeon Timers**: Fixed extendTimer overwrite race — when BigWigs sends the next cast's `BigWigs_Timer` while a previous cast's extension is still visible, the new bar now defers instead of silently hiding the visible extension.
+- **Dungeon Timers**: `BigWigs_StopBars` and `BigWigs_OnBossDisable` now honor `extendTimer` via a new `StopAllBarsRespectExtend` path — extended bars ride through BigWigs cleanup events.
+- **Cursor Circle**: Removed 3 non-functional crosshair/heart textures (Crosshair 1, Crosshair 2, Heart) from the texture dropdown.
+
+### Internal
+- **Dungeon Timers**: Added persistent `DEBUG_DT` flag for tracing BigWigs event flow, bar lifecycle, and extendTimer guard branches.
+
 ## v1.12.2
 ### Fixes
 - **Dungeon Timers**: Fixed bar previews invisible when bar group is anchored to non-UIParent frames (e.g. ElvUI unit frames) — parent frame clipping no longer hides bars.
