@@ -81,6 +81,7 @@ GUIFrame.sidebarConfig = {
             { id = "Automation",        text = "Automation" },
             { id = "CombatLogger",      text = "Combat Logger" },
             { id = "CopyAnything",      text = "Copy Anything" },
+            { id = "Nicknames",         text = "Custom Nicknames" },
             { id = "CVars",             text = "CVars" },
             { id = "GreatVaultAlert",   text = "Great Vault Alert" },
             { id = "HideBars",          text = "Hide ActionBars" },
