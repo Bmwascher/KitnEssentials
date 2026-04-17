@@ -27,6 +27,21 @@ local SEP = "\194\187\194\187"
 -- Destructive-action color, matching "Reset All Triggers" in Timer Settings
 local REMOVE_COLOR = { 0.9, 0.2, 0.2, 1 }
 
+-- Persisted across GUIFrame:RefreshContent() so typing into the search box
+-- doesn't wipe the filter on every keystroke.
+local currentFilter = ""
+
+-- Set to true in the search box's OnTextChanged so the next build re-focuses
+-- the new search box (the old one gets destroyed by RefreshContent). Consumed
+-- and cleared on that build. Flag-based rather than "re-focus whenever filter
+-- is non-empty" so backspacing to empty text still keeps focus mid-typing.
+local searchShouldFocus = false
+
+-- Keys scheduled to flash an accent overlay on the next build. Populated by
+-- save/import/replace handlers; each row consumes (and clears) its own entry
+-- as the list rebuilds. Using a set lets bulk imports flash every new row.
+local flashKeys = {}
+
 ---------------------------------------------------------------------------------
 -- Helpers
 ---------------------------------------------------------------------------------
@@ -61,9 +76,18 @@ end
 -- group together, matching NSRT's Management panel behavior), secondary by
 -- character name within each group. Case-insensitive to keep "Bite" and
 -- "bite" in the same bucket.
-local function SortedKeys(tbl)
+-- When `filter` is non-empty, only includes keys whose Name-Realm or nickname
+-- contains the filter as a case-insensitive substring.
+local function SortedKeys(tbl, filter)
     local keys = {}
-    for k in pairs(tbl) do keys[#keys + 1] = k end
+    local lowerFilter = filter and filter ~= "" and filter:lower() or nil
+    for k, v in pairs(tbl) do
+        if not lowerFilter
+            or k:lower():find(lowerFilter, 1, true)
+            or (v or ""):lower():find(lowerFilter, 1, true) then
+            keys[#keys + 1] = k
+        end
+    end
     table_sort(keys, function(a, b)
         local na = (tbl[a] or ""):lower()
         local nb = (tbl[b] or ""):lower()
@@ -258,6 +282,7 @@ GUIFrame:RegisterContent("Nicknames", function(scrollChild, yOffset)
         end
         nicks[key] = nick
         KE:Print(string_format("Saved: %s %s %s", key, SEP, nick))
+        flashKeys[key] = true
         NotifyChange()
         GUIFrame:RefreshContent()
     end
@@ -292,6 +317,34 @@ GUIFrame:RegisterContent("Nicknames", function(scrollChild, yOffset)
     end
 
     yOffset = yOffset + addCard:GetContentHeight() + T.paddingMedium
+
+    -- Total count (filter-independent). Drives the Export / Clear All disabled
+    -- state and the Saved Nicknames header's "N of M" display.
+    local totalCount = 0
+    for _ in pairs(nicks) do totalCount = totalCount + 1 end
+
+    -- Display shared "Something went wrong" popup instead of a chat line —
+    -- error state is important enough to surface even when chat is hidden.
+    local function ShowErrorPopup(title, msg)
+        KE:CreatePrompt(title, msg or "unknown error",
+            false, nil, false, nil, nil, nil, nil,
+            function() end, nil, "OK", nil)
+    end
+
+    -- Snapshot-diff around an import so we can populate flashKeys with only
+    -- the rows that were added or updated. For replace-mode imports the
+    -- backend wipes first, so any key present afterwards is "touched".
+    local function ImportWithFlash(text, replaceAll)
+        local before = {}
+        for k, v in pairs(nicks) do before[k] = v end
+        local ok, msg = KE:ImportNicknames(text, replaceAll)
+        if ok then
+            for k, v in pairs(nicks) do
+                if before[k] ~= v then flashKeys[k] = true end
+            end
+        end
+        return ok, msg
+    end
 
     ---------------------------------------------------------------------------------
     -- Card 3: Import / Export
@@ -359,18 +412,21 @@ GUIFrame:RegisterContent("Nicknames", function(scrollChild, yOffset)
                     false
                 )
             else
-                KE:Print("Export failed: " .. (err or "unknown error"))
+                ShowErrorPopup("Export Failed", err)
             end
         end,
     })
     ioBtnRow:AddWidget(exportBtn, 0.5)
+    -- Nothing to export from an empty table — gray out so the button doesn't
+    -- open a popup with a "No nicknames to export" error.
+    if exportBtn.SetEnabled then exportBtn:SetEnabled(totalCount > 0) end
 
     local importBtn = GUIFrame:CreateButton(ioBtnRow, "Import", {
         height = 26,
         callback = function()
             local text = (ioBox.GetValue and ioBox:GetValue()) or ""
             if text == "" then
-                KE:Print("Paste an import string first.")
+                ShowErrorPopup("Import", "Paste an import string first.")
                 return
             end
             -- Replace mode is destructive in the same way Clear All is:
@@ -381,26 +437,26 @@ GUIFrame:RegisterContent("Nicknames", function(scrollChild, yOffset)
                     "This will wipe your current list before applying the import.\n\nAre you sure?",
                     false, nil, false, nil, nil, nil, nil,
                     function()
-                        local ok, msg = KE:ImportNicknames(text, true)
+                        local ok, msg = ImportWithFlash(text, true)
                         if ok then
                             KE:Print(msg)
                             ioBox:SetValue("")
                             GUIFrame:RefreshContent()
                         else
-                            KE:Print("Import failed: " .. (msg or "unknown error"))
+                            ShowErrorPopup("Import Failed", msg)
                         end
                     end,
                     nil, "Replace", "Cancel"
                 )
                 return
             end
-            local ok, msg = KE:ImportNicknames(text, false)
+            local ok, msg = ImportWithFlash(text, false)
             if ok then
                 KE:Print(msg)
                 ioBox:SetValue("")
                 GUIFrame:RefreshContent()
             else
-                KE:Print("Import failed: " .. (msg or "unknown error"))
+                ShowErrorPopup("Import Failed", msg)
             end
         end,
     })
@@ -412,12 +468,105 @@ GUIFrame:RegisterContent("Nicknames", function(scrollChild, yOffset)
     ---------------------------------------------------------------------------------
     -- Card 4: Saved Nicknames (column layout + row separators)
     ---------------------------------------------------------------------------------
-    local sorted = SortedKeys(nicks)
-    local countSuffix = (#sorted > 0) and ("  (" .. #sorted .. ")") or ""
+    local sorted = SortedKeys(nicks, currentFilter)
+    local hasFilter = currentFilter ~= ""
+    local countSuffix
+    if hasFilter then
+        countSuffix = " (" .. #sorted .. " of " .. totalCount .. ")"
+    elseif totalCount > 0 then
+        countSuffix = " (" .. totalCount .. ")"
+    else
+        countSuffix = ""
+    end
     local listCard = GUIFrame:CreateCard(scrollChild, "Saved Nicknames" .. countSuffix, yOffset)
 
+    -- Search box in the card header (right side). Filters the Saved list
+    -- live; the filter persists across GUIFrame:RefreshContent() via the
+    -- module-level currentFilter so typing doesn't wipe on each keystroke.
+    -- Only shown once the user has actually saved something — an empty
+    -- database has nothing to filter.
+    if totalCount > 0 and listCard.header then
+        local searchBox = CreateFrame("EditBox", nil, listCard.header, "BackdropTemplate")
+        searchBox:SetSize(200, 20)
+        searchBox:SetPoint("RIGHT", listCard.header, "RIGHT", -T.paddingMedium, 0)
+        searchBox:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Buttons\\WHITE8X8",
+            edgeSize = 1,
+        })
+        searchBox:SetBackdropColor(T.bgDark[1], T.bgDark[2], T.bgDark[3], 1)
+        searchBox:SetBackdropBorderColor(T.border[1], T.border[2], T.border[3], 1)
+        searchBox:SetTextInsets(6, 6, 0, 0)
+        KE:ApplyThemeFont(searchBox, "small")
+        searchBox:SetTextColor(T.textPrimary[1], T.textPrimary[2], T.textPrimary[3], 1)
+        searchBox:SetAutoFocus(false)
+        searchBox:SetMaxLetters(40)
+        searchBox:SetText(currentFilter)
+
+        -- Muted placeholder "Search..." shown only when the box is empty AND
+        -- not focused — the standard input placeholder pattern.
+        local placeholder = searchBox:CreateFontString(nil, "OVERLAY")
+        placeholder:SetPoint("LEFT", searchBox, "LEFT", 6, 0)
+        KE:ApplyThemeFont(placeholder, "small")
+        placeholder:SetTextColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 0.6)
+        placeholder:SetText("Search...")
+        if currentFilter ~= "" then placeholder:Hide() end
+
+        local function UpdatePlaceholder()
+            if searchBox:GetText() == "" and not searchBox:HasFocus() then
+                placeholder:Show()
+            else
+                placeholder:Hide()
+            end
+        end
+
+        searchBox:SetScript("OnEditFocusGained", function()
+            searchBox:SetBackdropBorderColor(T.accent[1], T.accent[2], T.accent[3], 1)
+            placeholder:Hide()
+        end)
+        searchBox:SetScript("OnEditFocusLost", function()
+            searchBox:SetBackdropBorderColor(T.border[1], T.border[2], T.border[3], 1)
+            UpdatePlaceholder()
+        end)
+        searchBox:SetScript("OnEscapePressed", function(self)
+            self:SetText("")
+            self:ClearFocus()
+            searchShouldFocus = false
+            if currentFilter ~= "" then
+                currentFilter = ""
+                GUIFrame:RefreshContent()
+            end
+        end)
+        -- Only rebuild on actual user typing (userInput==true). SetText from
+        -- the restore-state path above fires OnTextChanged with userInput=false,
+        -- which would infinitely rebuild if we didn't guard.
+        searchBox:SetScript("OnTextChanged", function(self, userInput)
+            if not userInput then return end
+            currentFilter = self:GetText() or ""
+            searchShouldFocus = true
+            GUIFrame:RefreshContent()
+        end)
+        searchBox:SetScript("OnEnterPressed", function(self)
+            self:ClearFocus()
+            searchShouldFocus = false
+        end)
+
+        -- Hand focus back to the new search box when the rebuild was triggered
+        -- by the user typing into the old one. Consumed immediately so
+        -- unrelated rebuilds (Save, Remove, Import) don't steal focus.
+        if searchShouldFocus then
+            searchShouldFocus = false
+            searchBox:SetFocus()
+            searchBox:SetCursorPosition(#currentFilter)
+        end
+    end
+
     if #sorted == 0 then
-        listCard:AddLabel("No nicknames saved yet. Add one above.")
+        if hasFilter then
+            listCard:AddLabel("No matches for \"" .. currentFilter .. "\".")
+        elseif totalCount == 0 then
+            listCard:AddLabel("No nicknames saved yet. Add one above, or paste an import string in Import/Export.")
+        end
     else
         -- Tighter column widths so the Remove button hugs the right edge
         local COL_CHAR   = 0.50
@@ -476,6 +625,26 @@ GUIFrame:RegisterContent("Nicknames", function(scrollChild, yOffset)
             hoverBg:Hide()
             row:SetScript("OnEnter", function() hoverBg:Show() end)
             row:SetScript("OnLeave", function() hoverBg:Hide() end)
+
+            -- Flash overlay: when this key was just saved/imported, briefly
+            -- pulse an accent texture on its own layer (ARTWORK, above hoverBg)
+            -- so it survives hover interactions. Fades from full alpha to 0
+            -- over 0.8s, then removes itself. flashKeys is cleared immediately
+            -- so a second refresh without a new mutation doesn't re-flash.
+            if flashKeys[key] then
+                flashKeys[key] = nil
+                local flashTex = row:CreateTexture(nil, "ARTWORK")
+                flashTex:SetAllPoints(row)
+                flashTex:SetColorTexture(T.accent[1], T.accent[2], T.accent[3], 0.45)
+                local ag = flashTex:CreateAnimationGroup()
+                local alpha = ag:CreateAnimation("Alpha")
+                alpha:SetFromAlpha(1)
+                alpha:SetToAlpha(0)
+                alpha:SetDuration(0.8)
+                alpha:SetSmoothing("OUT")
+                ag:SetScript("OnFinished", function() flashTex:Hide() end)
+                ag:Play()
+            end
             row:SetScript("OnMouseDown", function(_, button)
                 if button ~= "LeftButton" then return end
                 nameRow:SetValue(key)
@@ -549,6 +718,9 @@ GUIFrame:RegisterContent("Nicknames", function(scrollChild, yOffset)
         clearBtn.text:SetTextColor(REMOVE_COLOR[1], REMOVE_COLOR[2], REMOVE_COLOR[3], REMOVE_COLOR[4])
     end
     clearRow:AddWidget(clearBtn, 1.0, 0)
+    -- Empty list → nothing to clear; disable the button so clicking doesn't
+    -- pop a pointless confirmation.
+    if clearBtn.SetEnabled then clearBtn:SetEnabled(totalCount > 0) end
     clearCard:AddRow(clearRow, 28)
 
     yOffset = yOffset + clearCard:GetContentHeight() + T.paddingMedium
