@@ -69,6 +69,8 @@ function TC:OnEnable()
     self:RegisterEvent("LOADING_SCREEN_DISABLED", "CacheInterruptId")
     self:RegisterEvent("ZONE_CHANGED_NEW_AREA", "CacheInterruptId")
     self:RegisterEvent("SPELLS_CHANGED", "CacheInterruptId")
+    self:RegisterEvent("UNIT_TARGET", "OnUnitTarget")
+    self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnGroupRosterUpdate")
 
     H.EnsureOnUpdate(self)
     self:CacheInterruptId()
@@ -130,4 +132,12 @@ end
 
 function TC:PLAYER_TARGET_CHANGED()
     H.OnUnitChanged(self)
+end
+
+function TC:OnUnitTarget(event, unit)
+    H.OnUnitTarget(self, event, unit)
+end
+
+function TC:OnGroupRosterUpdate()
+    H.OnGroupRosterUpdate(self)
 end

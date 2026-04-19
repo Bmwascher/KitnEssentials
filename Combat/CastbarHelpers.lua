@@ -494,6 +494,7 @@ function H.StartCast(self)
 
     H.UpdateBarColor(self)
     H.SetupKickCooldownBar(self)
+    H.UpdateTargetNames(self)
     if self.PlayCastSound then self:PlayCastSound() end
     H.EnsureOnUpdate(self)
     self.frame:Show()
@@ -608,6 +609,19 @@ function H.OnUnitChanged(self)
     end
 end
 
+-- Called from UNIT_TARGET. Refresh target-name overlay when a party member or
+-- the tracked unit retargets; ignore unrelated units.
+function H.OnUnitTarget(self, _, unit)
+    if not unit then return end
+    if unit == self.unit or unit == "player" or unit:find("^party") then
+        H.UpdateTargetNames(self)
+    end
+end
+
+function H.OnGroupRosterUpdate(self)
+    H.UpdateTargetNames(self)
+end
+
 ---------------------------------------------------------------------------------
 -- OnUpdate / preview
 ---------------------------------------------------------------------------------
@@ -625,17 +639,17 @@ function H.StartPreviewTimer(self)
 end
 
 local UPDATE_THROTTLE = 0.1
+local TARGET_NAMES_THROTTLE = 0.5  -- belt-and-suspenders fallback; primary driver is UNIT_TARGET / GROUP_ROSTER_UPDATE events
 
 function H.OnUpdate(self, elapsed)
     self._updateElapsed = (self._updateElapsed or 0) + elapsed
+    self._targetNamesElapsed = (self._targetNamesElapsed or 0) + elapsed
     local hasActiveCast = self.casting or self.channeling or self.empowering
+    local duration = self.cachedDuration
 
-    if hasActiveCast then
+    if hasActiveCast and duration then
         local cooldown = self.interruptId and C_Spell.GetSpellCooldownDuration(self.interruptId) or nil
-        local duration = self.castBar:GetTimerDuration()
-        if duration and self.cachedDuration then
-            H.UpdateTickPosition(self, duration, cooldown)
-        end
+        H.UpdateTickPosition(self, duration, cooldown)
         H.UpdateKickIndicator(self, cooldown)
     else
         self.kickTick:SetAlpha(0)
@@ -648,7 +662,6 @@ function H.OnUpdate(self, elapsed)
         return
     end
 
-    local duration = self.castBar:GetTimerDuration()
     if not duration then
         self._updateElapsed = 0
         return
@@ -663,8 +676,9 @@ function H.OnUpdate(self, elapsed)
     local decimals = duration:EvaluateRemainingDuration(KE.curves.DurationDecimals)
     self.time:SetFormattedText('%.' .. decimals .. 'f', remaining)
 
-    if hasActiveCast then
+    if hasActiveCast and self._targetNamesElapsed >= TARGET_NAMES_THROTTLE then
         H.UpdateTargetNames(self)
+        self._targetNamesElapsed = 0
     end
 
     if not hasActiveCast then
