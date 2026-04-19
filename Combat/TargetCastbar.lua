@@ -44,22 +44,6 @@ local FALLBACK_ICON = 136243
 local PREVIEW_DURATION = 20
 local MAX_TARGET_NAMES = 5
 
-local CLASS_INTERRUPTS = {
-    [1] = { 6552 },                         -- Warrior
-    [2] = { 31935, 96231 },                 -- Paladin
-    [3] = { 147362, 187707 },               -- Hunter
-    [4] = { 1766 },                         -- Rogue
-    [5] = { 15487 },                        -- Priest
-    [6] = { 47528 },                        -- Death Knight
-    [7] = { 57994 },                        -- Shaman
-    [8] = { 2139 },                         -- Mage
-    [9] = { 19647, 89766, 119910, 132409 }, -- Warlock
-    [10] = { 116705 },                      -- Monk
-    [11] = { 78675, 106839 },               -- Druid
-    [12] = { 183752 },                      -- Demon Hunter
-    [13] = { 351338 },                      -- Evoker
-}
-
 ---------------------------------------------------------------------------------
 -- DB Helper
 ---------------------------------------------------------------------------------
@@ -318,21 +302,17 @@ function TC:UpdateBarColor(interruptDuration)
 end
 
 function TC:CacheInterruptId()
-    local playerClass = select(3, UnitClass("player"))
-    local interrupts = CLASS_INTERRUPTS[playerClass]
-    if not interrupts then
-        self.interruptId = nil
-        return
-    end
-    for i = 1, #interrupts do
-        local id = interrupts[i]
-        if C_SpellBook.IsSpellKnownOrInSpellBook(id)
-            or C_SpellBook.IsSpellKnownOrInSpellBook(id, Enum.SpellBookSpellBank.Pet) then
-            self.interruptId = id
-            return
-        end
-    end
     self.interruptId = nil
+    local specIndex = GetSpecialization()
+    if not specIndex then return end
+    local specID = GetSpecializationInfo(specIndex)
+    if not specID then return end
+    local data = KE:GetInterruptForSpec(specID)
+    if not data then return end
+    if C_SpellBook.IsSpellKnownOrInSpellBook(data.id)
+        or C_SpellBook.IsSpellKnownOrInSpellBook(data.id, Enum.SpellBookSpellBank.Pet) then
+        self.interruptId = data.id
+    end
 end
 
 function TC:UpdateKickIndicator()
