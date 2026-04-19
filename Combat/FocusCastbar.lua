@@ -38,55 +38,6 @@ local FALLBACK_ICON = 136243
 local PREVIEW_DURATION = 20
 local MAX_TARGET_NAMES = 5
 
-local INTERRUPT_BY_SPEC = {
-    -- Death Knight: Mind Freeze 12s
-    [250] = { id = 47528,  cd = 12 },
-    [251] = { id = 47528,  cd = 12 },
-    [252] = { id = 47528,  cd = 12 },
-    -- Demon Hunter: Disrupt 15s
-    [577] = { id = 183752, cd = 15 },
-    [581] = { id = 183752, cd = 15 },
-    [1480] = { id = 183752, cd = 15 },
-    -- Druid: Skull Bash 15s (Feral/Guardian only)
-    [103] = { id = 106839, cd = 15 },
-    [104] = { id = 106839, cd = 15 },
-    -- Evoker: Quell 20s (Dev) / 18s (Aug)
-    [1467] = { id = 351338, cd = 20 },
-    [1473] = { id = 351338, cd = 18 },
-    -- Hunter: Counter Shot 24s / Muzzle 15s
-    [253] = { id = 147362, cd = 24 },
-    [254] = { id = 147362, cd = 24 },
-    [255] = { id = 187707, cd = 15 },
-    -- Mage: Counterspell 20s
-    [62]  = { id = 2139,   cd = 20 },
-    [63]  = { id = 2139,   cd = 20 },
-    [64]  = { id = 2139,   cd = 20 },
-    -- Monk: Spear Hand Strike 15s (Brew/WW only)
-    [268] = { id = 116705, cd = 15 },
-    [269] = { id = 116705, cd = 15 },
-    -- Paladin: Rebuke 15s (Prot/Ret only)
-    [66]  = { id = 96231,  cd = 15 },
-    [70]  = { id = 96231,  cd = 15 },
-    -- Priest: Silence 30s (Shadow only)
-    [258] = { id = 15487,  cd = 30 },
-    -- Rogue: Kick 15s
-    [259] = { id = 1766,   cd = 15 },
-    [260] = { id = 1766,   cd = 15 },
-    [261] = { id = 1766,   cd = 15 },
-    -- Shaman: Wind Shear 12s (Ele/Enh), 30s (Resto)
-    [262] = { id = 57994,  cd = 12 },
-    [263] = { id = 57994,  cd = 12 },
-    [264] = { id = 57994,  cd = 30 },
-    -- Warlock: Spell Lock 24s (Aff/Destro), 30s (Demo)
-    [265] = { id = 19647,  cd = 24 },
-    [266] = { id = 19647,  cd = 30 },
-    [267] = { id = 19647,  cd = 24 },
-    -- Warrior: Pummel 15s
-    [71]  = { id = 6552,   cd = 15 },
-    [72]  = { id = 6552,   cd = 15 },
-    [73]  = { id = 6552,   cd = 15 },
-}
-
 local function GetPointFromAnchor(anchor)
     if anchor == "LEFT" then return "LEFT"
     elseif anchor == "RIGHT" then return "RIGHT"
@@ -354,8 +305,8 @@ function FC:CacheInterruptId()
     if not specIndex then return end
     local specID = GetSpecializationInfo(specIndex)
     if not specID then return end
-    local data = INTERRUPT_BY_SPEC[specID]
-    if not data or data.id == 0 then return end
+    local data = KE:GetInterruptForSpec(specID)
+    if not data then return end
     if C_SpellBook.IsSpellKnownOrInSpellBook(data.id)
         or C_SpellBook.IsSpellKnownOrInSpellBook(data.id, Enum.SpellBookSpellBank.Pet) then
         self.interruptId = data.id

@@ -33,56 +33,6 @@ local string_format = string.format
 
 local EQUIP_SLOTS = { 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 }
 
-local SPEC_INTERRUPTS = {
-    -- Warrior
-    [71]   = { [6552] = true },                                         -- Arms: Pummel
-    [72]   = { [6552] = true },                                         -- Fury: Pummel
-    [73]   = { [6552] = true, [386071] = true },                        -- Prot: Pummel + Disrupting Shout
-    -- Rogue
-    [259]  = { [1766] = true },                                         -- Assassination: Kick
-    [260]  = { [1766] = true },                                         -- Outlaw: Kick
-    [261]  = { [1766] = true },                                         -- Subtlety: Kick
-    -- Mage
-    [62]   = { [2139] = true },                                         -- Arcane: Counterspell
-    [63]   = { [2139] = true },                                         -- Fire: Counterspell
-    [64]   = { [2139] = true },                                         -- Frost: Counterspell
-    -- Shaman
-    [262]  = { [57994] = true },                                        -- Elemental: Wind Shear
-    [263]  = { [57994] = true },                                        -- Enhancement: Wind Shear
-    [264]  = { [57994] = true },                                        -- Restoration: Wind Shear
-    -- Druid
-    [102]  = { [78675] = true },                                        -- Balance: Solar Beam
-    [103]  = { [106839] = true },                                       -- Feral: Skull Bash
-    [104]  = { [106839] = true },                                       -- Guardian: Skull Bash
-    -- Death Knight
-    [250]  = { [47528] = true },                                        -- Blood: Mind Freeze
-    [251]  = { [47528] = true },                                        -- Frost: Mind Freeze
-    [252]  = { [47528] = true },                                        -- Unholy: Mind Freeze
-    -- Paladin
-    [66]   = { [96231] = true, [375576] = true, [31935] = true },       -- Prot: Rebuke + Divine Toll + Avenger's Shield
-    [70]   = { [96231] = true },                                        -- Retribution: Rebuke
-    -- Demon Hunter
-    [577]  = { [183752] = true },                                       -- Havoc: Disrupt
-    [581]  = { [183752] = true },                                       -- Vengeance: Disrupt
-    [1480] = { [183752] = true },                                       -- Devourer: Disrupt
-    -- Monk
-    [268]  = { [116705] = true },                                       -- Brewmaster: Spear Hand Strike
-    [269]  = { [116705] = true },                                       -- Windwalker: Spear Hand Strike
-    -- Priest
-    [258]  = { [15487] = true },                                        -- Shadow: Silence
-    -- Hunter
-    [253]  = { [147362] = true },                                       -- Beast Mastery: Counter Shot
-    [254]  = { [147362] = true },                                       -- Marksmanship: Counter Shot
-    [255]  = { [187707] = true },                                       -- Survival: Muzzle
-    -- Warlock (pet interrupts)
-    [265]  = { [19647] = true, [119910] = true, [132409] = true },      -- Affliction: Spell Lock variants
-    [266]  = { [19647] = true, [119910] = true, [119914] = true },      -- Demonology: Spell Lock + Felstorm
-    [267]  = { [19647] = true, [119910] = true, [132409] = true },      -- Destruction: Spell Lock variants
-    -- Evoker
-    [1467] = { [351338] = true },                                       -- Devastation: Quell
-    [1473] = { [351338] = true },                                       -- Augmentation: Quell
-}
-
 local MESSAGE_TYPES = {
     "enterCombat",
     "exitCombat",
@@ -513,7 +463,7 @@ function CM:CacheInterruptSpells()
         self.currentInterrupts = nil
         return
     end
-    self.currentInterrupts = SPEC_INTERRUPTS[specID]
+    self.currentInterrupts = KE:GetInterruptSpellSet(specID)
 end
 
 function CM:OnSpellcastSucceeded(_, unit, _, spellID)
