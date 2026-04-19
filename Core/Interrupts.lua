@@ -5,16 +5,20 @@
 -- ║           sets for interrupt text notifications).        ║
 -- ╚══════════════════════════════════════════════════════════╝
 --
--- Data shape per spec:
---   primary        - { id, cd } for the spec's tracked kick (CD bar). Nil for
---                    specs that have no tracked interrupt (e.g. Balance Druid).
---   announceExtras - optional array of additional spell IDs that should count
---                    as interrupts for announce purposes but not CD tracking
---                    (e.g. Prot Pal Avenger's Shield, Warlock pet variants).
+-- Data shape per spec (one of):
+--   primary        - { id, cd } for the spec's single tracked kick.
+--   candidates     - ordered list of { id, cd } entries to try in priority
+--                    order (for pet-dependent specs where the available kick
+--                    changes with active pet, e.g. Warlock Felhunter vs
+--                    Felguard). CacheInterruptId iterates and picks the first
+--                    that is actually known in the player or pet spellbook.
+--   announceExtras - optional array of additional spell IDs that count as
+--                    interrupts for announce purposes but not CD tracking.
 --
 -- Accessors:
---   KE:GetInterruptForSpec(specID)  -> { id, cd } or nil  (for castbars)
---   KE:GetInterruptSpellSet(specID) -> { [id]=true, ... } or nil  (for CombatTexts)
+--   KE:GetInterruptCandidatesForSpec(specID) -> list of { id, cd } in priority
+--                                              order, or nil.
+--   KE:GetInterruptSpellSet(specID) -> { [id]=true, ... } or nil.
 
 ---@class KE
 local KE = select(2, ...)
@@ -52,10 +56,33 @@ local INTERRUPTS = {
     [62]   = { primary = { id = 2139, cd = 20 } },
     [63]   = { primary = { id = 2139, cd = 20 } },
     [64]   = { primary = { id = 2139, cd = 20 } },
-    -- Warlock: Spell Lock 24s (Aff/Destro), 30s (Demo). Pet variants announce only.
-    [265]  = { primary = { id = 19647, cd = 24 }, announceExtras = { 119910, 132409 } },
-    [266]  = { primary = { id = 19647, cd = 30 }, announceExtras = { 119910, 119914 } },
-    [267]  = { primary = { id = 19647, cd = 24 }, announceExtras = { 119910, 132409 } },
+    -- Warlock: interrupt depends on active pet. Candidates in priority order:
+    --   19647 Spell Lock (Felhunter), 89766 Axe Toss (Felguard),
+    --   119910 Command Demon (player-cast meta), 132409 pet variant.
+    [265]  = {
+        candidates = {
+            { id = 19647,  cd = 24 },
+            { id = 89766,  cd = 30 },
+            { id = 119910, cd = 24 },
+            { id = 132409, cd = 24 },
+        },
+    },
+    [266]  = {
+        candidates = {
+            { id = 19647,  cd = 30 },
+            { id = 89766,  cd = 30 },
+            { id = 119910, cd = 24 },
+            { id = 119914, cd = 30 },
+        },
+    },
+    [267]  = {
+        candidates = {
+            { id = 19647,  cd = 24 },
+            { id = 89766,  cd = 30 },
+            { id = 119910, cd = 24 },
+            { id = 132409, cd = 24 },
+        },
+    },
     -- Monk: Spear Hand Strike 15s (Brew/WW only)
     [268]  = { primary = { id = 116705, cd = 15 } },
     [269]  = { primary = { id = 116705, cd = 15 } },
@@ -72,11 +99,23 @@ local INTERRUPTS = {
     [1473] = { primary = { id = 351338, cd = 18 } },
 }
 
--- Precompute announce set per spec (primary.id + announceExtras) at file load time.
+-- Precompute per-spec:
+--   entry.candidateList: normalized list of { id, cd } (primary becomes 1-entry list).
+--   entry.announceSet:   { [spellID] = true } union of all candidate IDs + announceExtras.
 for _, entry in pairs(INTERRUPTS) do
+    local list
+    if entry.candidates then
+        list = entry.candidates
+    elseif entry.primary then
+        list = { entry.primary }
+    else
+        list = {}
+    end
+    entry.candidateList = list
+
     local set = {}
-    if entry.primary and entry.primary.id then
-        set[entry.primary.id] = true
+    for _, c in ipairs(list) do
+        if c.id then set[c.id] = true end
     end
     if entry.announceExtras then
         for _, id in ipairs(entry.announceExtras) do
@@ -90,14 +129,19 @@ end
 -- Accessors
 ---------------------------------------------------------------------------------
 
--- Returns { id = spellID, cd = seconds } for the spec's tracked kick, or nil.
-function KE:GetInterruptForSpec(specID)
+-- Returns an ordered list of { id, cd } entries to try in priority order.
+-- Caller iterates and picks the first entry whose id is actually known in the
+-- player's or pet's spellbook. Returns nil if spec is unknown or has no kick.
+function KE:GetInterruptCandidatesForSpec(specID)
     local d = INTERRUPTS[specID]
     if not d then return nil end
-    return d.primary
+    local list = d.candidateList
+    if not list or #list == 0 then return nil end
+    return list
 end
 
--- Returns { [spellID] = true, ... } — union of primary and announce extras. Nil if spec unknown.
+-- Returns { [spellID] = true, ... } — union of all candidate IDs + announce extras.
+-- Nil if spec unknown.
 function KE:GetInterruptSpellSet(specID)
     local d = INTERRUPTS[specID]
     if not d then return nil end

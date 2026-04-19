@@ -97,12 +97,16 @@ function H.CacheInterruptId(self)
     if not specIndex then return end
     local specID = GetSpecializationInfo(specIndex)
     if not specID then return end
-    local data = KE:GetInterruptForSpec(specID)
-    if not data then return end
-    if C_SpellBook.IsSpellKnownOrInSpellBook(data.id)
-        or C_SpellBook.IsSpellKnownOrInSpellBook(data.id, Enum.SpellBookSpellBank.Pet) then
-        self.interruptId = data.id
-        self.interruptCD = data.cd
+    local candidates = KE:GetInterruptCandidatesForSpec(specID)
+    if not candidates then return end
+    for i = 1, #candidates do
+        local data = candidates[i]
+        if C_SpellBook.IsSpellKnownOrInSpellBook(data.id)
+            or C_SpellBook.IsSpellKnownOrInSpellBook(data.id, Enum.SpellBookSpellBank.Pet) then
+            self.interruptId = data.id
+            self.interruptCD = data.cd
+            return
+        end
     end
 end
 
