@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.14.0
+### Ready Check Consumables (new module)
+- **NEW:** Clickable consumable icon row attached to the ready check popup — tracks food, flask, main-hand & off-hand weapon enhancements (oils/stones/ammo), augment rune, healthstone, and Warlock Soulstone
+- **NEW:** Click-to-use via SecureActionButton with `/stopmacro [combat]`-gated macros so clicks are combat-safe
+- **NEW:** Context-aware slot visibility — off-hand enhancement hides when no OH weapon equipped, healthstone hides when no Warlock in group, class slot Warlock-only
+- **NEW:** Dual-mode positioning — auto-anchor to the ready check popup for non-starters, fallback UIParent anchor for the starter (Blizzard skips the popup for whoever initiates), plus a full custom-anchor mode
+- **NEW:** Close button for the ready check starter so the icon row can be dismissed without waiting for the timeout
+- **NEW:** Compatibility toggles — *Use flasks only from raid cauldron* (Fleeting variants only) and *Use only unlimited augment rune* (DF/TWW unlimited only, with LibCustomGlow pixel-glow prompt when the rune is in bags but not applied)
+- **NEW:** GUI configuration panel under **Utilities** → *Ready Check Consumables* with Enable / General / Visible Consumables / Position / Font / Colors cards plus a mock ready check preview popup for settings preview
+- Ported from MRT's `RaidCheck.lua` and trimmed to Midnight 12.0 consumables only
+
+### Combat Potion Ready
+- **UX:** Display Text moved out of the Enable card into a new *Display & Visibility* card; three visibility toggles flattened into a single 3-column row
+
 ## v1.13.1
 ### Custom Nicknames
 - **NEW:** Unhalted Unit Frames support via the `[kes:nickname]` tag family
