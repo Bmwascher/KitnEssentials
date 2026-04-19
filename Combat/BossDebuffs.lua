@@ -20,7 +20,6 @@ local CreateFrame    = CreateFrame
 local IsInInstance   = IsInInstance
 local GameTooltip    = GameTooltip
 local GetTime        = GetTime
-local issecretvalue  = issecretvalue
 local wipe           = wipe
 local table_insert   = table.insert
 local string_gmatch  = string.gmatch
@@ -131,7 +130,7 @@ function BD:CreateFrames()
         -- Duration text overlay
         local durationText = icon:CreateFontString(nil, "OVERLAY")
         durationText:SetPoint("CENTER", icon, "CENTER", 0, 0)
-        durationText:SetFont(KE.FONT, 12, "OUTLINE")
+        KE:ApplyFont(durationText, "Expressway", 12, "OUTLINE")
         durationText:SetTextColor(1, 1, 1, 1)
         icon.durationText = durationText
 
@@ -178,9 +177,7 @@ function BD:LayoutIcons()
             end
 
             -- Cooldown spiral (skip when values are secret — can't do arithmetic)
-            if db.ShowDuration and data.expirationTime and data.duration
-                and not issecretvalue(data.expirationTime)
-                and not issecretvalue(data.duration) then
+            if db.ShowDuration and KE:IsSafeValue(data.expirationTime) and KE:IsSafeValue(data.duration) then
                 icon.cooldown:SetCooldown(data.expirationTime - data.duration, data.duration)
                 icon.cooldown:Show()
             else
@@ -206,7 +203,7 @@ function BD:LayoutIcons()
             -- Duration text sizing
             if icon.durationText then
                 local fontSize = math.max(10, math.floor(iconSize * 0.38))
-                icon.durationText:SetFont(KE.FONT, fontSize, "OUTLINE")
+                KE:ApplyFont(icon.durationText, "Expressway", fontSize, "OUTLINE")
                 if not db.ShowDurationText then
                     icon.durationText:Hide()
                 end
@@ -245,7 +242,7 @@ function BD:ScanDebuffs()
     local selfSet = {}
     if selfCastIDs then
         for _, id in ipairs(selfCastIDs) do
-            if id and not issecretvalue(id) then
+            if KE:IsSafeValue(id) then
                 selfSet[id] = true
             end
         end
@@ -261,7 +258,7 @@ function BD:ScanDebuffs()
     local maxDebuffs = self.db.MaxDebuffs or 3
 
     for _, instanceID in ipairs(allIDs) do
-        if instanceID and not issecretvalue(instanceID) then
+        if KE:IsSafeValue(instanceID) then
             -- Skip self-cast
             if not selfSet[instanceID] then
                 local aura = C_UnitAuras.GetAuraDataByAuraInstanceID("player", instanceID)
@@ -337,10 +334,9 @@ function BD:UpdateDurationTexts()
     for i = 1, 5 do
         local icon = self.icons[i]
         local data = self.debuffs[i]
-        if icon and icon:IsShown() and data and data.expirationTime
-            and data.duration
-            and not issecretvalue(data.expirationTime)
-            and not issecretvalue(data.duration) then
+        if icon and icon:IsShown() and data
+            and KE:IsSafeValue(data.expirationTime)
+            and KE:IsSafeValue(data.duration) then
             local remaining = data.expirationTime - now
             if remaining > 0 then
                 icon.durationText:SetText(FormatDuration(remaining))
