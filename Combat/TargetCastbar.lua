@@ -33,13 +33,6 @@ local GetPlayerInfoByGUID = GetPlayerInfoByGUID
 local ipairs = ipairs
 local type = type
 
-local function GetPointFromAnchor(anchor)
-    if anchor == "LEFT" then return "LEFT"
-    elseif anchor == "RIGHT" then return "RIGHT"
-    end
-    return "CENTER"
-end
-
 local FALLBACK_ICON = 136243
 local PREVIEW_DURATION = 20
 local MAX_TARGET_NAMES = 5
@@ -117,7 +110,7 @@ function TC:CreateFrame()
     local icon = iconFrame:CreateTexture(nil, "ARTWORK")
     icon:SetPoint("TOPLEFT", 1, -1)
     icon:SetPoint("BOTTOMRIGHT", -1, 1)
-    icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    KE:ApplyIconZoom(icon)
 
     -- Castbar
     local castBar = CreateFrame("StatusBar", nil, frame)
@@ -240,7 +233,7 @@ function TC:ApplySettings()
     -- Target name positioning
     if self.targetNames then
         local targetSettings = db.TargetNames or {}
-        local anchorPoint = GetPointFromAnchor(targetSettings.Anchor)
+        local anchorPoint = KE:GetPointFromAnchor(targetSettings.Anchor)
         for i = 1, MAX_TARGET_NAMES do
             local targetText = self.targetNames[i]
             targetText:ClearAllPoints()

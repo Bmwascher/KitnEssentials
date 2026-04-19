@@ -193,6 +193,15 @@ function KE:GetTextPointFromAnchor(anchorPoint)
     return "CENTER"
 end
 
+-- Simple 3-way anchor → point mapping: LEFT/RIGHT pass through, everything else → CENTER.
+-- Differs from GetTextPointFromAnchor by NOT expanding TOPRIGHT/BOTTOMRIGHT to RIGHT.
+function KE:GetPointFromAnchor(anchor)
+    if anchor == "LEFT" then return "LEFT"
+    elseif anchor == "RIGHT" then return "RIGHT"
+    end
+    return "CENTER"
+end
+
 ---------------------------------------------------------------------------------
 -- Preview Manager
 ---------------------------------------------------------------------------------

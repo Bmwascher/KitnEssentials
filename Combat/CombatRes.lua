@@ -234,7 +234,7 @@ function CR:ApplyBackdropSettings()
     for _, fs in ipairs({ self.frame.bracketOpen, self.frame.CRText, self.frame.charge, self.frame.separator, self.frame.timerText, self.frame.bracketClose }) do
         if fs and fs:GetText() and fs:GetText() ~= "" then
             local sw = fs:GetStringWidth()
-            if sw and not issecretvalue(sw) then
+            if KE:IsSafeValue(sw) then
                 totalWidth = totalWidth + sw + (self.db.TextSpacing or 4)
             else
                 tainted = true

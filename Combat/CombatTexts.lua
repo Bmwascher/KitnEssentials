@@ -26,7 +26,6 @@ local GetInventoryItemDurability = GetInventoryItemDurability
 local C_Spell_GetSpellInfo = C_Spell.GetSpellInfo
 local GetSpecialization = C_SpecializationInfo.GetSpecialization or GetSpecialization
 local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
-local issecretvalue = issecretvalue
 local ipairs, pairs = ipairs, pairs
 local math_max = math.max
 local string_format = string.format
@@ -469,9 +468,9 @@ end
 function CM:OnSpellcastSucceeded(_, unit, _, spellID)
     if not self.db or self.db.InterruptEnabled == false then return end
     if not self.currentInterrupts then return end
-    if issecretvalue(unit) then return end
+    if KE:IsSecretValue(unit) then return end
     if unit ~= "player" and unit ~= "pet" then return end
-    if issecretvalue(spellID) or not self.currentInterrupts[spellID] then return end
+    if KE:IsSecretValue(spellID) or not self.currentInterrupts[spellID] then return end
 
     self.interruptFlag = true
     if self.interruptTimer then

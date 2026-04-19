@@ -81,7 +81,7 @@ function CT:CreateFrame()
 
     local text = frame:CreateFontString("KE_CombatTimerText", "OVERLAY")
     text:SetPoint("CENTER", frame, "CENTER", 0, 0)
-    text:SetFont(KE.FONT, 14, "")
+    KE:ApplyFont(text, "Expressway", 14, "")
     local open, close = GetBrackets(self.db.BracketStyle)
     text:SetText(open .. "00:00" .. close)
     text:SetJustifyH("CENTER")
@@ -98,7 +98,7 @@ end
 function CT:UpdateFrameSize()
     if not self.frame then return end
     local textWidth = self.text and self.text:GetStringWidth()
-    if textWidth and not issecretvalue(textWidth) then
+    if KE:IsSafeValue(textWidth) then
         self.frame:SetSize(textWidth + 16, (self.db.FontSize or 28) + 8)
     end
 end
