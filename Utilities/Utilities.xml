@@ -18,4 +18,5 @@
     <Script file="FocusMarker.lua" />
     <Script file="PIMacroBuilder.lua" />
     <Script file="PotionReady.lua" />
+    <Script file="ReadyCheckConsumables.lua" />
 </Ui>

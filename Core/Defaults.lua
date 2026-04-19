@@ -832,6 +832,53 @@ local Defaults = {
             PetBarOffset = -13,
         },
 
+        ReadyCheckConsumables = {
+            Enabled = true,
+            -- Position override (default is auto-anchor to ReadyCheckListenerFrame)
+            PositionMode = "auto",  -- "auto" or "custom"
+            SelfPoint = "BOTTOM",
+            AnchorFrame = "UIParent",
+            AnchorPoint = "CENTER",
+            XOffset = 0,
+            YOffset = 100,
+
+            -- Per-category toggles
+            ShowFood = true,
+            ShowFlask = true,
+            ShowWeaponOil = true,    -- main-hand weapon enhancement (slot 16: oil/stone/ammo)
+            ShowOffHandOil = true,   -- off-hand weapon enhancement (slot 17)
+            ShowAugmentRune = true,
+            ShowHealthstone = true,
+            ShowClassItem = true,    -- Warlock: Soulstone; hidden for other classes
+
+            -- Runtime memory (persisted): last weapon enhancement item used. Seeds
+            -- the click button so the tracker offers your preferred oil/stone/ammo
+            -- on future ready checks. Auto-updates when a different enchant is detected.
+            LastWeaponEnchantItem = nil,
+
+            -- Behavior
+            HideForStarter      = false,  -- suppress if you initiated the ready check
+            HidePreviewMock     = true,  -- hide the fake Ready Check popup in the GUI preview
+            CauldronFlasksOnly  = false,  -- click button only offers Fleeting (raid cauldron) flasks
+            UnlimitedRunesOnly  = false,  -- click button only offers unlimited runes (DF/TWW)
+
+            -- Visuals
+            IconSize = 46,
+            IconSpacing = 1,
+
+            -- Font settings (for duration text above icons)
+            FontFace = "Expressway",
+            FontSize = 13,
+            FontOutline = "SOFTOUTLINE",
+
+            -- Colors
+            -- HeartyFoodColor: tints the food slot's duration text when the active
+            -- food buff persists through death (a raid-group convention indicator).
+            -- DurationColor: base color for duration + count text on all slots.
+            HeartyFoodColor = { 0.2, 1.0, 0.2, 1.0 },
+            DurationColor  = { 1.0, 1.0, 1.0, 1.0 },
+        },
+
         BossDebuffs = {
             Enabled = false,
             VisibilityMode = "boss",
@@ -1335,7 +1382,7 @@ local Defaults = {
             },
             UICleanup    = { Enabled = false },
             Battlenet    = {
-                Enabled = false,
+                Enabled = true,
                 Position = {
                     AnchorFrom = "BOTTOMLEFT",
                     AnchorTo = "LEFT",

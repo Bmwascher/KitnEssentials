@@ -54,11 +54,10 @@ GUIFrame:RegisterContent("PotionReady", function(scrollChild, yOffset)
     end
 
     ---------------------------------------------------------------------------------
-    -- Card 1: Combat Potion Ready (Enable + Display Text)
+    -- Card 1: Combat Potion Ready (Enable only)
     ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Combat Potion Ready", yOffset)
 
-    -- Enable toggle
     local row1a = GUIFrame:CreateRow(card1.content, 36)
     local enableCheck = GUIFrame:CreateCheckbox(row1a,
         "Enable Combat Potion Ready", db.Enabled ~= false,
@@ -72,61 +71,58 @@ GUIFrame:RegisterContent("PotionReady", function(scrollChild, yOffset)
     row1a:AddWidget(enableCheck, 1)
     card1:AddRow(row1a, 36)
 
+    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+
+    ---------------------------------------------------------------------------------
+    -- Card 2: Display & Visibility (Display Text + 3-column toggle row)
+    ---------------------------------------------------------------------------------
+    local card2 = GUIFrame:CreateCard(scrollChild, "Display & Visibility", yOffset)
+    table_insert(allWidgets, card2)
+
     -- Display text
-    local row1b = GUIFrame:CreateRow(card1.content, 40)
-    local textBox = GUIFrame:CreateEditBox(row1b, "Display Text",
+    local row2a = GUIFrame:CreateRow(card2.content, 40)
+    local textBox = GUIFrame:CreateEditBox(row2a, "Display Text",
         db.Text or "Potion Ready",
         function(text)
             db.Text = text
             ApplySettings()
         end)
-    row1b:AddWidget(textBox, 1)
+    row2a:AddWidget(textBox, 1)
     table_insert(allWidgets, textBox)
-    card1:AddRow(row1b, 40)
+    card2:AddRow(row2a, 40)
 
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
-
-    ---------------------------------------------------------------------------------
-    -- Card 2: Visibility
-    ---------------------------------------------------------------------------------
-    local card2 = GUIFrame:CreateCard(scrollChild, "Visibility", yOffset)
-    table_insert(allWidgets, card2)
-
-    local row2a = GUIFrame:CreateRow(card2.content, 36)
-    local instanceCheck = GUIFrame:CreateCheckbox(row2a,
-        "Show in Instances Only", db.InstanceOnly ~= false,
+    -- Three visibility toggles on one row (1/3 width each)
+    local row2b = GUIFrame:CreateRow(card2.content, 36)
+    local instanceCheck = GUIFrame:CreateCheckbox(row2b,
+        "Instances Only", db.InstanceOnly ~= false,
         function(checked)
             db.InstanceOnly = checked
             ApplySettings()
         end
     )
-    row2a:AddWidget(instanceCheck, 1)
+    row2b:AddWidget(instanceCheck, 1/3)
     table_insert(allWidgets, instanceCheck)
-    card2:AddRow(row2a, 36)
 
-    local row2b = GUIFrame:CreateRow(card2.content, 36)
     local combatCheck = GUIFrame:CreateCheckbox(row2b,
-        "Show in Combat Only", db.CombatOnly,
+        "In Combat Only", db.CombatOnly,
         function(checked)
             db.CombatOnly = checked
             ApplySettings()
         end
     )
-    row2b:AddWidget(combatCheck, 1)
+    row2b:AddWidget(combatCheck, 1/3)
     table_insert(allWidgets, combatCheck)
-    card2:AddRow(row2b, 36)
 
-    local row2c = GUIFrame:CreateRow(card2.content, 36)
-    local healerCheck = GUIFrame:CreateCheckbox(row2c,
-        "Hide for Healer Specs", db.DisableOnHealer,
+    local healerCheck = GUIFrame:CreateCheckbox(row2b,
+        "Hide for Healers", db.DisableOnHealer,
         function(checked)
             db.DisableOnHealer = checked
             ApplySettings()
         end
     )
-    row2c:AddWidget(healerCheck, 1)
+    row2b:AddWidget(healerCheck, 1/3)
     table_insert(allWidgets, healerCheck)
-    card2:AddRow(row2c, 36)
+    card2:AddRow(row2b, 36)
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
