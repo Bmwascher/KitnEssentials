@@ -59,6 +59,7 @@
     <Script file="GUITabs\GUIUtilities\GUI-PIMacroBuilder.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-MacroBuilders.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-PotionReady.lua" />
+    <Script file="GUITabs\GUIUtilities\GUI-ReadyCheckConsumables.lua" />
 
     <!-- Dungeons tabs -->
     <Script file="GUITabs\GUIDungeons\GUI-DungeonTimers.lua" />

@@ -66,6 +66,7 @@ GUIFrame.sidebarConfig = {
             { id = "EvokerSuite",   text = "Evoker Suite" },
             { id = "MacroBuilders", text = "Macro Builders" },
             { id = "RaidNotifications", text = "Raid Notifications" },
+            { id = "ReadyCheckConsumables", text = "Ready Check Consumables" },
             { id = "Recuperate",    text = "Recuperate Button" },
             { id = "TimeSpiral",    text = "Time Spiral Tracker" },
             { id = "WorldMarkerCycler", text = "World Marker Cycler" },

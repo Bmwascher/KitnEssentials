@@ -207,6 +207,7 @@ local PREVIEW_MODULES = {
     "TimeSpiral", "DisintegrateTicks", "StasisTracker", "Recuperate", "BloodlustTracker", "KickTracker",
     "NoMovementAlert", "PrescienceTracker", "GreatVaultAlert", "PotionReady", "BossDebuffs",
     "EnemyCounter", "EbonMightTracker", "DungeonCasts", "DungeonTimers",
+    "ReadyCheckConsumables",
 }
 
 -- Section → preview module mapping for section-based previews
@@ -220,6 +221,7 @@ local SECTION_PREVIEW_MODULES = {
         "BloodlustTracker", "StanceText", "PetStatusText", "PotionReady",
         "DisintegrateTicks", "StasisTracker", "EbonMightTracker", "PrescienceTracker",
         "RaidNotifications", "Recuperate", "TimeSpiral", "NoMovementAlert",
+        "ReadyCheckConsumables",
     },
     qol_section = {
         "DragonRiding", "HuntersMark", "GreatVaultAlert",
