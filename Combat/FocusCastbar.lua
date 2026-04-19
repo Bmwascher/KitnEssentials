@@ -71,6 +71,8 @@ function FC:OnEnable()
     self:RegisterEvent("LOADING_SCREEN_DISABLED", "CacheInterruptId")
     self:RegisterEvent("ZONE_CHANGED_NEW_AREA", "CacheInterruptId")
     self:RegisterEvent("SPELLS_CHANGED", "CacheInterruptId")
+    self:RegisterEvent("UNIT_TARGET", "OnUnitTarget")
+    self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnGroupRosterUpdate")
     self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", "OnPlayerCastSucceeded")
 
     H.EnsureOnUpdate(self)
@@ -138,6 +140,14 @@ end
 
 function FC:PLAYER_FOCUS_CHANGED()
     H.OnUnitChanged(self)
+end
+
+function FC:OnUnitTarget(event, unit)
+    H.OnUnitTarget(self, event, unit)
+end
+
+function FC:OnGroupRosterUpdate()
+    H.OnGroupRosterUpdate(self)
 end
 
 ---------------------------------------------------------------------------------
