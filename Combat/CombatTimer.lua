@@ -29,11 +29,16 @@ CT.isPreview = false
 
 KE.lastCombatDuration = 0
 
+local function GetRefreshRate(format)
+    return (format == "MM:SS:MS") and 0.1 or 0.25
+end
+
 ---------------------------------------------------------------------------------
 -- DB Helper
 ---------------------------------------------------------------------------------
 function CT:UpdateDB()
     self.db = KE.db.profile.CombatTimer
+    self.refreshRate = GetRefreshRate(self.db.Format)
 end
 
 function CT:OnInitialize()
@@ -60,10 +65,6 @@ local function FormatTime(total_seconds, format, bracketStyle)
         return string_format("%s%02d:%02d:%d%s", open, mins, secs, ms, close)
     end
     return string_format("%s%02d:%02d%s", open, mins, secs, close)
-end
-
-local function GetRefreshRate(format)
-    return (format == "MM:SS:MS") and 0.1 or 0.25
 end
 
 ---------------------------------------------------------------------------------
@@ -124,6 +125,7 @@ end
 ---------------------------------------------------------------------------------
 function CT:ApplySettings()
     if not self.text then return end
+    self.refreshRate = GetRefreshRate(self.db.Format)
     KE:ApplyFontToText(self.text, self.db.FontFace, self.db.FontSize, self.db.FontOutline, self.db.FontShadow)
     local justify = KE:GetTextJustifyFromAnchor(self.db.Position.AnchorFrom)
     local point = KE:GetTextPointFromAnchor(self.db.Position.AnchorFrom)
@@ -156,7 +158,7 @@ end
 function CT:OnUpdate(elapsed)
     if not self.running and not self.isPreview then return end
     self.elapsed = (self.elapsed or 0) + elapsed
-    local refresh = GetRefreshRate(self.db.Format)
+    local refresh = self.refreshRate or GetRefreshRate(self.db.Format)
     if self.elapsed < refresh then return end
     self.elapsed = self.elapsed - refresh
     self:UpdateText()

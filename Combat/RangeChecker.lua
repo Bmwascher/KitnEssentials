@@ -105,6 +105,8 @@ function RC:ApplySettings()
     if not self.frame or not self.text then return end
     KE:ApplyFontToText(self.text, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
     self.frame:SetFrameStrata(self.db.Strata or "HIGH")
+    -- Invalidate cached text dimensions — font/size may have changed.
+    self.lastSizedText = nil
     self:ApplyPosition()
 end
 
@@ -155,9 +157,14 @@ function RC:UpdateRange()
         self.text:SetTextColor(r, g, b, 1)
     end
 
-    local textWidth = self.text:GetStringWidth() or 50
-    local textHeight = self.text:GetStringHeight() or 20
-    self.frame:SetSize(textWidth + 10, textHeight + 4)
+    -- Only re-query frame size when the displayed text actually changes
+    -- (GetStringWidth/GetStringHeight are not cheap in the throttled poll).
+    if rangeText ~= self.lastSizedText then
+        self.lastSizedText = rangeText
+        local textWidth = self.text:GetStringWidth() or 50
+        local textHeight = self.text:GetStringHeight() or 20
+        self.frame:SetSize(textWidth + 10, textHeight + 4)
+    end
     self.frame:Show()
 end
 
