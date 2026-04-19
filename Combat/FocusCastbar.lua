@@ -4,6 +4,10 @@
 -- ║  Purpose: Repositionable focus cast bar with kick        ║
 -- ║           indicators, target name, color settings,       ║
 -- ║           and cast sound alert.                          ║
+-- ║                                                          ║
+-- ║  Shared logic lives in Combat/CastbarHelpers.lua (KE.H). ║
+-- ║  This file owns focus-specific events, FC-only sound     ║
+-- ║  hook, and config-bearing opts tables.                   ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -12,239 +16,96 @@ if not KitnEssentials then return end
 
 ---@class FocusCastbar: AceModule, AceEvent-3.0
 local FC = KitnEssentials:NewModule("FocusCastbar", "AceEvent-3.0")
+local H = KE.CastbarHelpers
 
----------------------------------------------------------------------------------
--- Constants
----------------------------------------------------------------------------------
 local PlaySoundFile = PlaySoundFile
-local CreateFrame = CreateFrame
-local UnitCastingInfo, UnitChannelInfo = UnitCastingInfo, UnitChannelInfo
-local UnitCastingDuration, UnitChannelDuration = UnitCastingDuration, UnitChannelDuration
-local UnitEmpoweredChannelDuration = UnitEmpoweredChannelDuration
-local UnitExists = UnitExists
-local select = select
-local UnitClass = UnitClass
-local UnitName = UnitName
-local CreateColor = CreateColor
-local GetTime = GetTime
-local GetNumGroupMembers = GetNumGroupMembers
-local IsInGroup = IsInGroup
-local UnitIsSpellTarget = UnitIsSpellTarget
-local GetPlayerInfoByGUID = GetPlayerInfoByGUID
-local ipairs = ipairs
-local type = type
+local C_Timer = C_Timer
 
-local FALLBACK_ICON = 136243
-local PREVIEW_DURATION = 20
-local MAX_TARGET_NAMES = 5
+local UNIT = "focus"
+local FRAME_OPTS = {
+    frameName = "KE_FocusCastbarFrame",
+    defaultWidth = 200,
+    defaultHeight = 18,
+    defaultYOffset = 200,
+}
+local SETTINGS_OPTS = { defaultWidth = 200 }
+local EDITMODE_OPTS = {
+    key = "FocusCastbar",
+    displayName = "Focus Castbar",
+    guiPath = "FocusCastbar",
+}
+local PREVIEW_OPTS = { previewText = "Focus Castbar" }
 
 ---------------------------------------------------------------------------------
--- DB Helper
+-- Lifecycle
 ---------------------------------------------------------------------------------
 function FC:UpdateDB()
     self.db = KE.db.profile.FocusCastbar
 end
 
 function FC:OnInitialize()
+    self.unit = UNIT
     self:UpdateDB()
     self:SetEnabledState(false)
 end
 
-function FC:CreateColorObjects()
-    local kick = self.db.KickIndicator or {}
-    local ready = kick.ReadyColor or { 0.1, 0.8, 0.1, 1 }
-    local notReady = kick.NotReadyColor or { 0.5, 0.5, 0.5, 1 }
-    local uninterruptible = self.db.NotInterruptibleColor or { 0.7, 0.7, 0.7, 1 }
-    self.colors = {
-        Ready = CreateColor(ready[1], ready[2], ready[3]),
-        NotReady = CreateColor(notReady[1], notReady[2], notReady[3]),
-        Uninterruptible = CreateColor(uninterruptible[1], uninterruptible[2], uninterruptible[3]),
+function FC:OnEnable()
+    if not self.db.Enabled then return end
+    H.CreateColorObjects(self)
+    self:CreateFrame()
+    self:RegWithEditMode()
+    C_Timer.After(0.5, function() self:ApplyPosition() end)
+
+    local castEvents = {
+        "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_CHANNEL_START", "UNIT_SPELLCAST_EMPOWER_START",
+        "UNIT_SPELLCAST_STOP", "UNIT_SPELLCAST_CHANNEL_STOP", "UNIT_SPELLCAST_EMPOWER_STOP",
+        "UNIT_SPELLCAST_FAILED", "UNIT_SPELLCAST_INTERRUPTED",
+        "UNIT_SPELLCAST_INTERRUPTIBLE", "UNIT_SPELLCAST_NOT_INTERRUPTIBLE",
     }
+    for _, event in ipairs(castEvents) do
+        self:RegisterEvent(event, "OnCastEvent")
+    end
+
+    self:RegisterEvent("PLAYER_FOCUS_CHANGED")
+    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "CacheInterruptId")
+    self:RegisterEvent("LOADING_SCREEN_DISABLED", "CacheInterruptId")
+    self:RegisterEvent("ZONE_CHANGED_NEW_AREA", "CacheInterruptId")
+    self:RegisterEvent("SPELLS_CHANGED", "CacheInterruptId")
+    self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", "OnPlayerCastSucceeded")
+
+    H.EnsureOnUpdate(self)
+    self:CacheInterruptId()
 end
 
-function FC:ResetCastState()
-    self.casting, self.channeling, self.empowering = nil, nil, nil
-    self.castID, self.spellID, self.spellName = nil, nil, nil
-    self.notInterruptible = nil
-    self.cachedDuration = nil
-end
-
-local function ApplyFrameBackdrop(frame, bgColor, borderColor)
-    frame:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",
-        tile = false,
-        tileSize = 0,
-        edgeSize = 1,
-        insets = { left = 0, right = 0, top = 0, bottom = 0 },
-    })
-    frame:SetBackdropColor(bgColor[1], bgColor[2], bgColor[3], bgColor[4] or 0.8)
-    frame:SetBackdropBorderColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4] or 1)
+function FC:OnDisable()
+    if self.frame then
+        self.frame:SetScript("OnUpdate", nil)
+        self.frame:Hide()
+    end
+    if self.holdTimer then
+        self.holdTimer:Cancel()
+        self.holdTimer = nil
+    end
+    if self.kickCDTimer then
+        self.kickCDTimer:Cancel()
+        self.kickCDTimer = nil
+    end
+    self.kickOnCD = false
+    H.HideTargetNames(self)
+    H.ResetCastState(self)
+    self.isPreview = false
+    self:UnregisterAllEvents()
 end
 
 ---------------------------------------------------------------------------------
--- Frame Creation
+-- Public methods (called from GUI / EditMode / helpers)
 ---------------------------------------------------------------------------------
 function FC:CreateFrame()
-    if self.frame then return end
-    local db = self.db
-    local parent = KE:ResolveAnchorFrame(db.anchorFrameType, db.ParentFrame)
-    local height = db.Height or 18
-
-    -- Main container with backdrop
-    local frame = CreateFrame("Frame", "KE_FocusCastbarFrame", parent, "BackdropTemplate")
-    frame:SetSize(db.Width or 200, height)
-    frame:SetPoint(db.Position.AnchorFrom or "CENTER", parent, db.Position.AnchorTo or "CENTER",
-        db.Position.XOffset or 0, db.Position.YOffset or 200)
-    frame:SetFrameStrata(db.Strata or "HIGH")
-    frame:EnableMouse(false)
-    ApplyFrameBackdrop(frame, db.BackdropColor or { 0, 0, 0, 0.8 }, db.BorderColor or { 0, 0, 0, 1 })
-    frame:Hide()
-
-    -- Icon frame with backdrop
-    local iconFrame = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-    iconFrame:SetSize(height, height)
-    iconFrame:SetPoint("LEFT", frame, "LEFT", 0, 0)
-    ApplyFrameBackdrop(iconFrame, { 0, 0, 0, 0.8 }, db.BorderColor or { 0, 0, 0, 1 })
-
-    -- Icon texture with zoom
-    local icon = iconFrame:CreateTexture(nil, "ARTWORK")
-    icon:SetPoint("TOPLEFT", 1, -1)
-    icon:SetPoint("BOTTOMRIGHT", -1, 1)
-    KE:ApplyIconZoom(icon)
-
-    -- Castbar
-    local castBar = CreateFrame("StatusBar", nil, frame)
-    castBar:SetPoint("LEFT", iconFrame, "RIGHT", 0, 0)
-    castBar:SetPoint("RIGHT", frame, "RIGHT", -1, 0)
-    castBar:SetPoint("TOP", frame, "TOP", 0, -1)
-    castBar:SetPoint("BOTTOM", frame, "BOTTOM", 0, 1)
-    castBar:SetStatusBarTexture(KE:GetStatusbarPath(db.StatusBarTexture))
-    castBar:SetMinMaxValues(0, 1)
-    castBar:SetValue(0)
-
-    -- Spark
-    local spark = castBar:CreateTexture(nil, "OVERLAY")
-    spark:SetSize(12, height)
-    spark:SetBlendMode("ADD")
-    spark:SetTexture([[Interface\CastingBar\UI-CastingBar-Spark]])
-    spark:SetPoint("CENTER", castBar:GetStatusBarTexture(), "RIGHT", 0, 0)
-    spark:Hide()
-
-    -- Invisible positioner for tick
-    local positioner = CreateFrame("StatusBar", nil, castBar)
-    positioner:SetAllPoints(castBar)
-    positioner:SetStatusBarTexture(KE:GetStatusbarPath(db.StatusBarTexture))
-    positioner:SetStatusBarColor(0, 0, 0, 0)
-    positioner:SetMinMaxValues(0, 1)
-    positioner:SetValue(0)
-    positioner:SetFrameLevel(castBar:GetFrameLevel() + 1)
-
-    -- Kick cooldown bar
-    local kickCooldownBar = CreateFrame("StatusBar", nil, castBar)
-    kickCooldownBar:SetAllPoints(castBar)
-    kickCooldownBar:SetStatusBarTexture(KE:GetStatusbarPath(db.StatusBarTexture))
-    kickCooldownBar:SetStatusBarColor(0, 0, 0, 0)
-    kickCooldownBar:SetClipsChildren(true)
-    kickCooldownBar:SetMinMaxValues(0, 1)
-    kickCooldownBar:SetValue(0)
-    kickCooldownBar:SetFrameLevel(castBar:GetFrameLevel() + 4)
-
-    -- Mask texture to clip tick at castbar bounds
-    local tickMask = castBar:CreateMaskTexture()
-    tickMask:SetAllPoints(castBar)
-    tickMask:SetTexture("Interface\\BUTTONS\\WHITE8X8", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-
-    -- Tick texture
-    local kickTick = kickCooldownBar:CreateTexture(nil, "OVERLAY", nil, 7)
-    kickTick:SetSize(2, height)
-    kickTick:SetColorTexture(1, 1, 1, 1)
-    kickTick:SetPoint("CENTER", kickCooldownBar:GetStatusBarTexture(), "RIGHT", 0, 0)
-    kickTick:AddMaskTexture(tickMask)
-    kickTick:SetAlpha(0)
-
-    -- Text elements
-    local text = castBar:CreateFontString(nil, "OVERLAY")
-    text:SetPoint("LEFT", castBar, "LEFT", 4, 0)
-    text:SetJustifyH("LEFT")
-    KE:ApplyFontToText(text, db.FontFace, db.FontSize, db.FontOutline)
-
-    local time = castBar:CreateFontString(nil, "OVERLAY")
-    time:SetPoint("RIGHT", castBar, "RIGHT", -4, 0)
-    time:SetJustifyH("RIGHT")
-    KE:ApplyFontToText(time, db.FontFace, db.FontSize, db.FontOutline)
-
-    -- Target name texts
-    local targetNames = {}
-    for i = 1, MAX_TARGET_NAMES do
-        local nameText = frame:CreateFontString(nil, "OVERLAY")
-        nameText:SetParent(castBar)
-        nameText:SetAlpha(0)
-        targetNames[i] = nameText
-    end
-
-    -- Store references
-    self.positioner = positioner
-    self.frame, self.iconFrame, self.icon = frame, iconFrame, icon
-    self.castBar, self.spark = castBar, spark
-    self.kickCooldownBar, self.kickTick = kickCooldownBar, kickTick
-    self.text, self.time = text, time
-    self.targetNames = targetNames
-    self.holdTimer = nil
-
-    self:ApplySettings()
+    H.CreateFrame(self, FRAME_OPTS)
 end
 
----------------------------------------------------------------------------------
--- Apply Settings
----------------------------------------------------------------------------------
 function FC:ApplySettings()
-    if not self.frame then return end
-    self:CreateColorObjects()
-
-    local db = self.db
-    local bgColor = db.BackdropColor or { 0, 0, 0, 0.8 }
-    local borderColor = db.BorderColor or { 0, 0, 0, 1 }
-    local textColor = db.TextColor or { 1, 1, 1, 1 }
-    local kickColors = db.KickIndicator or {}
-
-    self.frame:SetSize(db.Width or 200, db.Height)
-    ApplyFrameBackdrop(self.frame, bgColor, borderColor)
-    self.frame:SetFrameStrata(db.Strata or "HIGH")
-
-    self.iconFrame:SetSize(db.Height, db.Height)
-    ApplyFrameBackdrop(self.iconFrame, bgColor, borderColor)
-
-    local texturePath = KE:GetStatusbarPath(db.StatusBarTexture)
-    self.castBar:SetStatusBarTexture(texturePath)
-    self.positioner:SetStatusBarTexture(texturePath)
-    self.kickCooldownBar:SetStatusBarTexture(texturePath)
-    self.spark:SetSize(12, db.Height)
-
-    -- Kick tick settings
-    self.kickTick:SetSize(2, db.Height)
-    local tickColor = kickColors.TickColor or { 1, 1, 1, 1 }
-    self.kickTick:SetColorTexture(tickColor[1], tickColor[2], tickColor[3], tickColor[4] or 1)
-
-    KE:ApplyFontToText(self.text, db.FontFace, db.FontSize, db.FontOutline)
-    KE:ApplyFontToText(self.time, db.FontFace, db.FontSize, db.FontOutline)
-    self.text:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4] or 1)
-    self.time:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4] or 1)
-
-    -- Target name positioning
-    if self.targetNames then
-        local targetSettings = db.TargetNames or {}
-        local anchorPoint = KE:GetPointFromAnchor(targetSettings.Anchor)
-        for i = 1, MAX_TARGET_NAMES do
-            local targetText = self.targetNames[i]
-            targetText:ClearAllPoints()
-            targetText:SetPoint(anchorPoint, self.frame, anchorPoint, targetSettings.XOffset or 0, targetSettings.YOffset or 14)
-            targetText:SetJustifyH(anchorPoint)
-            KE:ApplyFontToText(targetText, db.FontFace, targetSettings.FontSize or 12, db.FontOutline)
-        end
-    end
-
-    self:ApplyPosition()
+    H.ApplySettings(self, SETTINGS_OPTS)
 end
 
 function FC:ApplyPosition()
@@ -252,217 +113,38 @@ function FC:ApplyPosition()
     KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
 end
 
----------------------------------------------------------------------------------
--- Kick Indicator
----------------------------------------------------------------------------------
-function FC:UpdateBarColor(interruptDuration)
-    if not self.castBar then return end
-    local kick = self.db.KickIndicator
-    local texture = self.castBar:GetStatusBarTexture()
-    local hasActiveCast = self.casting or self.channeling or self.empowering
-
-    if self.isPreview then
-        local color = self.db.CastingColor or { 1, 0.7, 0, 1 }
-        texture:SetVertexColor(color[1], color[2], color[3], color[4] or 1)
-        return
-    end
-
-    if kick and kick.Enabled and self.interruptId and hasActiveCast then
-        local cooldown = interruptDuration or C_Spell.GetSpellCooldownDuration(self.interruptId)
-        if not cooldown then return end
-
-        local interruptibleColor = C_CurveUtil.EvaluateColorFromBoolean(
-            cooldown:IsZero(),
-            self.colors.Ready,
-            self.colors.NotReady
-        )
-        texture:SetVertexColorFromBoolean(self.notInterruptible, self.colors.Uninterruptible, interruptibleColor)
-        return
-    end
-
-    if kick and kick.Enabled and hasActiveCast then
-        texture:SetVertexColorFromBoolean(self.notInterruptible, self.colors.Uninterruptible, self.colors.NotReady)
-        return
-    end
-
-    local color = self.channeling and (self.db.ChannelingColor or { 0, 0.7, 1, 1 })
-        or self.empowering and (self.db.EmpoweringColor or { 0.8, 0.4, 1, 1 })
-        or (self.db.CastingColor or { 1, 0.7, 0, 1 })
-    texture:SetVertexColor(color[1], color[2], color[3], color[4] or 1)
+function FC:RegWithEditMode()
+    H.RegWithEditMode(self, EDITMODE_OPTS)
 end
 
+function FC:ShowPreview()
+    H.ShowPreview(self, PREVIEW_OPTS)
+end
+
+function FC:HidePreview()
+    H.HidePreview(self)
+end
+
+---------------------------------------------------------------------------------
+-- Event handlers (Ace3 dispatches by method name)
+---------------------------------------------------------------------------------
 function FC:CacheInterruptId()
-    self.interruptId = nil
-    self.interruptCD = nil
-    local specIndex = GetSpecialization()
-    if not specIndex then return end
-    local specID = GetSpecializationInfo(specIndex)
-    if not specID then return end
-    local data = KE:GetInterruptForSpec(specID)
-    if not data then return end
-    if C_SpellBook.IsSpellKnownOrInSpellBook(data.id)
-        or C_SpellBook.IsSpellKnownOrInSpellBook(data.id, Enum.SpellBookSpellBank.Pet) then
-        self.interruptId = data.id
-        self.interruptCD = data.cd
-    end
+    H.CacheInterruptId(self)
 end
 
-function FC:UpdateKickIndicator(cooldown)
-    local kick = self.db.KickIndicator
-    if not kick or not kick.Enabled or not self.interruptId then
-        self.kickTick:SetAlpha(0)
-        return
-    end
-
-    if self.isPreview then
-        self.kickTick:SetAlpha(0)
-        return
-    end
-
-    if not cooldown then return end
-
-    self.kickTick:SetAlphaFromBoolean(cooldown:IsZero(), 0,
-        C_CurveUtil.EvaluateColorValueFromBoolean(self.notInterruptible, 0, 1))
-
-    self:UpdateBarColor(cooldown)
-end
-
-function FC:UpdateTickPosition(duration, cooldown)
-    local kick = self.db.KickIndicator
-    if not kick or not kick.Enabled or not self.interruptId then return end
-
-    self.positioner:SetValue(duration:GetElapsedDuration())
-
-    if not cooldown then return end
-
-    self.kickCooldownBar:SetValue(cooldown:GetRemainingDuration())
-end
-
----------------------------------------------------------------------------------
--- Target Names
----------------------------------------------------------------------------------
-function FC:UpdateTargetNames()
-    if not self.targetNames then return end
-    local targetSettings = self.db.TargetNames or {}
-    if not targetSettings.Enabled then
-        for i = 1, MAX_TARGET_NAMES do
-            self.targetNames[i]:SetAlpha(0)
-        end
-        return
-    end
-    if self.isPreview then return end
-
-    for i = 1, MAX_TARGET_NAMES do
-        self.targetNames[i]:SetAlpha(0)
-    end
-
-    if not UnitExists("focus") then return end
-    if not (self.casting or self.channeling or self.empowering) then return end
-
-    if IsInGroup() then
-        local numMembers = GetNumGroupMembers()
-        for i = 1, math.min(numMembers, MAX_TARGET_NAMES) do
-            local unit = i == numMembers and "player" or ("party" .. i)
-            local name = UnitName(unit)
-            local targetText = self.targetNames[i]
-
-            if name then
-                local classToken = select(2, UnitClass(unit))
-                targetText:SetText(KE:ColorTextByClass(name, classToken))
-                targetText:SetAlphaFromBoolean(UnitIsSpellTarget("focus", unit), 1, 0)
-            end
-        end
-    else
-        local name = UnitName("player")
-        local classToken = select(2, UnitClass("player"))
-        self.targetNames[1]:SetText(KE:ColorTextByClass(name, classToken))
-        self.targetNames[1]:SetAlphaFromBoolean(UnitIsSpellTarget("focus", "player"), 1, 0)
-    end
-end
-
-function FC:HideTargetNames()
-    if not self.targetNames then return end
-    for i = 1, MAX_TARGET_NAMES do
-        self.targetNames[i]:SetAlpha(0)
-    end
-end
-
-function FC:GetColoredNameFromGUID(guid)
-    if guid == nil then return nil end
-
-    local _, classToken, _, _, _, name = GetPlayerInfoByGUID(guid)
-    if name == nil then return nil end
-    if type(classToken) ~= "string" then return name end
-
-    local color = C_ClassColor.GetClassColor(classToken)
-    if color == nil then return name end
-
-    return color:WrapTextInColorCode(name)
-end
-
-function FC:SetupKickCooldownBar()
-    local kick = self.db.KickIndicator
-    if not kick or not kick.Enabled or not self.interruptId then
-        self.kickTick:SetAlpha(0)
-        return
-    end
-
-    local duration = self.cachedDuration
-    if not duration then
-        self.kickTick:SetAlpha(0)
-        return
-    end
-
-    local width, height = self.castBar:GetSize()
-    local isChannel = self.channeling or false
-
-    self.positioner:SetMinMaxValues(0, duration:GetTotalDuration())
-    self.positioner:SetReverseFill(isChannel)
-
-    self.kickCooldownBar:ClearAllPoints()
-    self.kickCooldownBar:SetSize(width, height)
-    self.kickCooldownBar:SetReverseFill(isChannel)
-    self.kickCooldownBar:SetMinMaxValues(0, duration:GetTotalDuration())
-
-    self.kickTick:ClearAllPoints()
-    self.kickTick:SetSize(2, height)
-
-    if isChannel then
-        self.kickCooldownBar:SetPoint("RIGHT", self.positioner:GetStatusBarTexture(), "LEFT")
-        self.kickTick:SetPoint("RIGHT", self.kickCooldownBar:GetStatusBarTexture(), "LEFT")
-    else
-        self.kickCooldownBar:SetPoint("LEFT", self.positioner:GetStatusBarTexture(), "RIGHT")
-        self.kickTick:SetPoint("LEFT", self.kickCooldownBar:GetStatusBarTexture(), "RIGHT")
-    end
-end
-
----------------------------------------------------------------------------------
--- Cast Logic
----------------------------------------------------------------------------------
 function FC:OnCastEvent(event, unit, ...)
-    if unit ~= "focus" then return end
-    if event:find("START") then
-        self:StartCast()
-    elseif event:find("STOP") then
-        local interruptedBy
-        if event:find("CHANNEL") then
-            interruptedBy = select(3, ...)
-        elseif event:find("EMPOWER") then
-            interruptedBy = select(4, ...)
-        end
-        local wasInterrupted = interruptedBy ~= nil
-        self:EndCast(wasInterrupted, wasInterrupted, interruptedBy)
-    elseif event:find("INTERRUPTED") then
-        local interruptedBy = select(3, ...)
-        self:EndCast(true, true, interruptedBy)
-    elseif event:find("FAILED") then
-        self:EndCast(true, false)
-    elseif event:find("INTERRUPTIBLE") then
-        self:UpdateInterruptible()
-    end
+    H.OnCastEvent(self, event, unit, ...)
 end
 
--- Duration APIs return secret values, so track via events instead
+function FC:PLAYER_FOCUS_CHANGED()
+    H.OnUnitChanged(self)
+end
+
+---------------------------------------------------------------------------------
+-- FC-only: cast-sound alert with kick-CD muting
+---------------------------------------------------------------------------------
+-- Tracks interrupt cooldown via UNIT_SPELLCAST_SUCCEEDED because
+-- C_Spell.GetSpellCooldownDuration can return secret values during combat.
 function FC:OnPlayerCastSucceeded(_, unit, _, spellID)
     if unit ~= "player" and unit ~= "pet" then return end
     if not self.interruptId or spellID ~= self.interruptId then return end
@@ -487,349 +169,4 @@ function FC:PlayCastSound()
             PlaySoundFile(path, self.db.SoundChannel or "SFX")
         end
     end
-end
-
-function FC:StartCast()
-    if not self.frame or not UnitExists("focus") then return end
-    local name, text, texture, castID, notInterruptible, spellID, isEmpowered
-    local duration, direction = nil, Enum.StatusBarTimerDirection.ElapsedTime
-
-    name, text, texture, _, _, _, castID, notInterruptible, spellID = UnitCastingInfo("focus")
-    if name then
-        self.casting, self.channeling, self.empowering = true, nil, nil
-        duration = UnitCastingDuration("focus")
-    else
-        name, text, texture, _, _, _, notInterruptible, spellID, isEmpowered, _, castID = UnitChannelInfo("focus")
-        if name then
-            self.casting = nil
-            if isEmpowered then
-                self.empowering, self.channeling = true, nil
-                duration = UnitEmpoweredChannelDuration("focus")
-            else
-                self.channeling, self.empowering = true, nil
-                duration = UnitChannelDuration("focus")
-                direction = Enum.StatusBarTimerDirection.RemainingTime
-            end
-        end
-    end
-
-    if not name then
-        if not self.holdTimer then
-            self:ResetCastState()
-            self.frame:Hide()
-        end
-        return
-    end
-
-    if self.holdTimer then
-        self.holdTimer:Cancel()
-        self.holdTimer = nil
-    end
-
-    self.castID, self.spellID, self.spellName = castID, spellID, text or name
-    self.notInterruptible = notInterruptible
-
-    if self.db.HideNotInterruptible then
-        self.frame:SetAlphaFromBoolean(notInterruptible, 0, 1)
-    else
-        self.frame:SetAlpha(1)
-    end
-
-    self.castBar:SetTimerDuration(duration, Enum.StatusBarInterpolation.Immediate, direction)
-    self.cachedDuration = duration
-
-    local isChannel = self.channeling == true
-    self.positioner:SetReverseFill(isChannel)
-
-    if duration then
-        self.positioner:SetMinMaxValues(0, duration:GetTotalDuration())
-    end
-    self.positioner:SetValue(0)
-
-    self.icon:SetTexture(texture or FALLBACK_ICON)
-    self.spark:Show()
-    self.text:SetText(text or name or "")
-    self.time:SetText("")
-
-    self:UpdateBarColor()
-    self:SetupKickCooldownBar()
-    self:PlayCastSound()
-    self:EnsureOnUpdate()
-    self.frame:Show()
-end
-
-function FC:EndCast(showHold, wasInterrupted, interruptedBy)
-    if not self.frame or not self.frame:IsShown() then return end
-    if self.holdTimer then return end
-
-    local holdSettings = self.db.HoldTimer
-    if not holdSettings or not holdSettings.Enabled then
-        self.spark:Hide()
-        self:HideTargetNames()
-        self:ResetCastState()
-        self.frame:Hide()
-        return
-    end
-
-    self.spark:Hide()
-    self.kickTick:SetAlpha(0)
-    self:HideTargetNames()
-
-    self.castBar:SetMinMaxValues(0, 1)
-    self.castBar:SetValue(1)
-    self.positioner:SetMinMaxValues(0, 1)
-    self.positioner:SetValue(1)
-    self.time:SetText("")
-
-    local texture = self.castBar:GetStatusBarTexture()
-    if wasInterrupted then
-        local interrupterName = interruptedBy and self:GetColoredNameFromGUID(interruptedBy)
-        if interrupterName then
-            self.text:SetText(("Interrupted by %s"):format(interrupterName))
-        else
-            self.text:SetText("Interrupted")
-        end
-        local color = holdSettings.InterruptedColor or { 0.1, 0.8, 0.1, 1 }
-        texture:SetVertexColor(color[1], color[2], color[3], color[4] or 1)
-    elseif showHold then
-        local color = holdSettings.FailedColor or { 0.5, 0.5, 0.5, 1 }
-        texture:SetVertexColor(color[1], color[2], color[3], color[4] or 1)
-    else
-        local color = holdSettings.SuccessColor or { 0.8, 0.1, 0.1, 1 }
-        texture:SetVertexColor(color[1], color[2], color[3], color[4] or 1)
-    end
-
-    self:ResetCastState()
-
-    local holdDuration = holdSettings.Duration or 0.5
-    self.holdTimer = C_Timer.NewTimer(holdDuration, function()
-        self.holdTimer = nil
-        if self.frame and not (self.casting or self.channeling or self.empowering) then
-            self.frame:Hide()
-        end
-    end)
-end
-
-function FC:UpdateInterruptible()
-    if not self.frame or not self.frame:IsShown() then return end
-    -- notInterruptible is a secret boolean in 12.0.5 — cannot use `or` operator
-    local notInterruptible
-    if self.casting then
-        notInterruptible = select(8, UnitCastingInfo("focus"))
-    else
-        notInterruptible = select(7, UnitChannelInfo("focus"))
-    end
-    self.notInterruptible = notInterruptible
-
-    if self.db.HideNotInterruptible and notInterruptible ~= nil then
-        self.frame:SetAlphaFromBoolean(notInterruptible, 0, 1)
-    end
-
-    self:UpdateBarColor()
-end
-
----------------------------------------------------------------------------------
--- Event Handlers
----------------------------------------------------------------------------------
-function FC:PLAYER_FOCUS_CHANGED()
-    if UnitExists("focus") then
-        self:StartCast()
-    else
-        self:HideTargetNames()
-        self:ResetCastState()
-        if self.holdTimer then
-            self.holdTimer:Cancel()
-            self.holdTimer = nil
-        end
-        if self.frame then self.frame:Hide() end
-    end
-end
-
----------------------------------------------------------------------------------
--- OnUpdate
----------------------------------------------------------------------------------
-function FC:StartPreviewTimer()
-    local duration = C_DurationUtil.CreateDuration()
-    duration:SetTimeFromStart(GetTime(), PREVIEW_DURATION)
-    self.castBar:SetTimerDuration(duration, Enum.StatusBarInterpolation.Immediate,
-        Enum.StatusBarTimerDirection.ElapsedTime)
-
-    self.cachedDuration = duration
-    self.positioner:SetMinMaxValues(0, PREVIEW_DURATION)
-    self.positioner:SetReverseFill(false)
-    self.positioner:SetValue(0)
-end
-
-local updateThrottle = 0.1
-local updateElapsed = 0
-
-function FC:OnUpdate(elapsed)
-    updateElapsed = updateElapsed + elapsed
-    local hasActiveCast = self.casting or self.channeling or self.empowering
-
-    if hasActiveCast then
-        local cooldown = self.interruptId and C_Spell.GetSpellCooldownDuration(self.interruptId) or nil
-        local duration = self.castBar:GetTimerDuration()
-        if duration and self.cachedDuration then
-            self:UpdateTickPosition(duration, cooldown)
-        end
-        self:UpdateKickIndicator(cooldown)
-    else
-        self.kickTick:SetAlpha(0)
-    end
-
-    if updateElapsed < updateThrottle then return end
-
-    if self.holdTimer then
-        updateElapsed = 0
-        return
-    end
-
-    local duration = self.castBar:GetTimerDuration()
-    if not duration then
-        updateElapsed = 0
-        return
-    end
-
-    local remaining = duration:GetRemainingDuration()
-    if not remaining then
-        updateElapsed = 0
-        return
-    end
-
-    local decimals = duration:EvaluateRemainingDuration(KE.curves.DurationDecimals)
-    self.time:SetFormattedText('%.' .. decimals .. 'f', remaining)
-
-    if hasActiveCast then
-        self:UpdateTargetNames()
-    end
-
-    if not hasActiveCast then
-        self:HideTargetNames()
-        self:ResetCastState()
-        if self.frame then self.frame:Hide() end
-    end
-
-    updateElapsed = 0
-end
-
-function FC:EnsureOnUpdate()
-    if self.frame and not self.frame:GetScript("OnUpdate") then
-        self.frame:SetScript("OnUpdate", function(_, elapsed) self:OnUpdate(elapsed) end)
-    end
-end
-
----------------------------------------------------------------------------------
--- Edit Mode
----------------------------------------------------------------------------------
-function FC:RegWithEditMode()
-    if KE.EditMode and not self.editModeRegistered then
-        KE.EditMode:RegisterElement({
-            key = "FocusCastbar", displayName = "Focus Castbar", frame = self.frame,
-            getPosition = function() return self.db.Position end,
-            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePosition(self.frame, self.db.Position, self.db) end,
-            getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
-            guiPath = "FocusCastbar",
-        })
-        self.editModeRegistered = true
-    end
-end
-
----------------------------------------------------------------------------------
--- Preview
----------------------------------------------------------------------------------
-function FC:ShowPreview()
-    if not self.frame then self:CreateFrame() end
-    self:RegWithEditMode()
-    self.isPreview, self.casting = true, true
-    self.icon:SetTexture(FALLBACK_ICON)
-    self.text:SetText("Focus Castbar")
-    self.spark:Show()
-    self.kickTick:SetAlpha(0)
-    self:UpdateBarColor()
-    self:ApplySettings()
-    self:StartPreviewTimer()
-    self:EnsureOnUpdate()
-    self.frame:Show()
-
-    -- Show player name in preview
-    if self.targetNames then
-        local name = UnitName("player")
-        local classToken = select(2, UnitClass("player"))
-        self.targetNames[1]:SetText(KE:ColorTextByClass(name, classToken))
-        self.targetNames[1]:SetAlpha(1)
-        for i = 2, MAX_TARGET_NAMES do
-            self.targetNames[i]:SetAlpha(0)
-        end
-    end
-
-    -- Loop preview
-    if self.previewTicker then self.previewTicker:Cancel() end
-    self.previewTicker = C_Timer.NewTicker(PREVIEW_DURATION, function()
-        if self.isPreview then
-            self:StartPreviewTimer()
-        end
-    end)
-end
-
-function FC:HidePreview()
-    self.isPreview, self.casting = false, nil
-    if self.previewTicker then
-        self.previewTicker:Cancel()
-        self.previewTicker = nil
-    end
-    self:HideTargetNames()
-    if self.frame and not (self.casting or self.channeling or self.empowering) then
-        self.frame:Hide()
-    end
-end
-
----------------------------------------------------------------------------------
--- Lifecycle
----------------------------------------------------------------------------------
-function FC:OnEnable()
-    if not self.db.Enabled then return end
-    self:CreateColorObjects()
-    self:CreateFrame()
-    self:RegWithEditMode()
-    C_Timer.After(0.5, function() self:ApplyPosition() end)
-
-    local castEvents = {
-        "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_CHANNEL_START", "UNIT_SPELLCAST_EMPOWER_START",
-        "UNIT_SPELLCAST_STOP", "UNIT_SPELLCAST_CHANNEL_STOP", "UNIT_SPELLCAST_EMPOWER_STOP",
-        "UNIT_SPELLCAST_FAILED", "UNIT_SPELLCAST_INTERRUPTED",
-        "UNIT_SPELLCAST_INTERRUPTIBLE", "UNIT_SPELLCAST_NOT_INTERRUPTIBLE",
-    }
-    for _, event in ipairs(castEvents) do
-        self:RegisterEvent(event, "OnCastEvent")
-    end
-
-    self:RegisterEvent("PLAYER_FOCUS_CHANGED")
-    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "CacheInterruptId")
-    self:RegisterEvent("LOADING_SCREEN_DISABLED", "CacheInterruptId")
-    self:RegisterEvent("ZONE_CHANGED_NEW_AREA", "CacheInterruptId")
-    self:RegisterEvent("SPELLS_CHANGED", "CacheInterruptId")
-    self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", "OnPlayerCastSucceeded")
-    self:EnsureOnUpdate()
-    self:CacheInterruptId()
-end
-
-function FC:OnDisable()
-    if self.frame then
-        self.frame:SetScript("OnUpdate", nil)
-        self.frame:Hide()
-    end
-    if self.holdTimer then
-        self.holdTimer:Cancel()
-        self.holdTimer = nil
-    end
-    if self.kickCDTimer then
-        self.kickCDTimer:Cancel()
-        self.kickCDTimer = nil
-    end
-    self.kickOnCD = false
-    self:HideTargetNames()
-    self:ResetCastState()
-    self.isPreview = false
-    self:UnregisterAllEvents()
 end

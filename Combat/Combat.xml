@@ -6,6 +6,7 @@
     <Script file="CombatRes.lua" />
     <Script file="CombatTexts.lua" />
     <Script file="CursorCircle.lua" />
+    <Script file="CastbarHelpers.lua" />
     <Script file="TargetCastbar.lua" />
     <Script file="FocusCastbar.lua" />
     <Script file="RangeChecker.lua" />
