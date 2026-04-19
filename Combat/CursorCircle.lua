@@ -111,12 +111,13 @@ function CC:CreateFrame()
     gcdIntegrated:Hide()
     f.gcdCooldown = gcdIntegrated
 
-    -- OnUpdate for cursor following
+    -- Single OnUpdate drives both the main circle and the GCD ring.
+    -- GCD frame has no OnUpdate of its own (positioning + mouse-down color
+    -- are done here when the GCD frame is visible).
     local updateElapsed = 0
     local mouseHoldTime = 0
     f:SetScript("OnUpdate", function(frame, elapsed)
-        local useThrottle = db.UseUpdateInterval
-        if useThrottle then
+        if db.UseUpdateInterval then
             local updateInterval = db.UpdateInterval or 0.016
             updateElapsed = updateElapsed + elapsed
             if updateElapsed < updateInterval then return end
@@ -128,20 +129,29 @@ function CC:CreateFrame()
         frame:ClearAllPoints()
         frame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale, y / scale)
 
-        -- Handle visibility mode
-        local visMode = db.VisibilityMode or "always"
-        if visMode == "mouseDown" then
-            local isMouseDown = IsMouseButtonDown("LeftButton") or IsMouseButtonDown("RightButton")
-            local r, g, b, a = KE:GetAccentColor(db.ColorMode, db.Color)
+        local gcdFrame = self.gcdFrame
+        if gcdFrame then
+            local gcdScale = gcdFrame:GetEffectiveScale()
+            gcdFrame:ClearAllPoints()
+            gcdFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / gcdScale, y / gcdScale)
+        end
 
+        if (db.VisibilityMode or "always") == "mouseDown" then
+            local isMouseDown = IsMouseButtonDown("LeftButton") or IsMouseButtonDown("RightButton")
             if isMouseDown then
                 mouseHoldTime = mouseHoldTime + elapsed
-                if mouseHoldTime >= 0.15 then
-                    frame.texture:SetVertexColor(r, g, b, a)
-                end
             else
                 mouseHoldTime = 0
-                frame.texture:SetVertexColor(r, g, b, 0)
+            end
+            local shown = isMouseDown and mouseHoldTime >= 0.15
+
+            local r, g, b, a = KE:GetAccentColor(db.ColorMode, db.Color)
+            frame.texture:SetVertexColor(r, g, b, shown and a or 0)
+
+            if gcdFrame and gcdFrame.texture then
+                local gcd = db.GCD or {}
+                local gr, gg, gb, ga = KE:GetAccentColor(gcd.RingColorMode or "theme", gcd.RingColor)
+                gcdFrame.texture:SetVertexColor(gr, gg, gb, shown and ga or 0)
             end
         end
     end)
@@ -183,41 +193,8 @@ function CC:CreateGCDRing()
     gf.gcdCooldown = gcdCooldown
     gf:Hide()
 
-    -- OnUpdate for cursor following
-    local updateElapsed = 0
-    local mouseHoldTime = 0
-    gf:SetScript("OnUpdate", function(frame, elapsed)
-        local useThrottle = db.UseUpdateInterval
-        if useThrottle then
-            local updateInterval = db.UpdateInterval or 0.016
-            updateElapsed = updateElapsed + elapsed
-            if updateElapsed < updateInterval then return end
-            updateElapsed = 0
-        end
-
-        local x, y = GetCursorPosition()
-        local scale = frame:GetEffectiveScale()
-        frame:ClearAllPoints()
-        frame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale, y / scale)
-
-        -- Handle visibility mode
-        local visMode = db.VisibilityMode or "always"
-        if visMode == "mouseDown" then
-            local isMouseDown = IsMouseButtonDown("LeftButton") or IsMouseButtonDown("RightButton")
-            local gcd = db.GCD or {}
-            local r, g, b, a = KE:GetAccentColor(gcd.RingColorMode or "theme", gcd.RingColor)
-
-            if isMouseDown then
-                mouseHoldTime = mouseHoldTime + elapsed
-                if mouseHoldTime >= 0.15 then
-                    frame.texture:SetVertexColor(r, g, b, a)
-                end
-            else
-                mouseHoldTime = 0
-                frame.texture:SetVertexColor(r, g, b, 0)
-            end
-        end
-    end)
+    -- Positioning + mouse-down color are driven by the main frame's OnUpdate
+    -- (see CC:CreateFrame). No OnUpdate script on the GCD frame.
 
     self.gcdFrame = gf
     self:ApplyGCDColor()
