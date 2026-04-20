@@ -157,7 +157,11 @@ end
 -- C_Spell.GetSpellCooldownDuration can return secret values during combat.
 function FC:OnPlayerCastSucceeded(_, unit, _, spellID)
     if unit ~= "player" and unit ~= "pet" then return end
-    if not self.interruptId or spellID ~= self.interruptId then return end
+    -- Set-membership match (not single-ID equality). CacheInterruptId's
+    -- priority pick may not equal the spell actually cast when multiple
+    -- pet-dependent variants are known (e.g. Demo Warlock with Spell Lock
+    -- AND Axe Toss both accessible). Match against the full spec set.
+    if not self.interruptSpellSet or not self.interruptSpellSet[spellID] then return end
     self.kickOnCD = true
     if self.kickCDTimer then self.kickCDTimer:Cancel() end
     self.kickCDTimer = C_Timer.NewTimer(self.interruptCD or 15, function()
