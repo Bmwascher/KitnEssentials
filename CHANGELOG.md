@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.14.2
+### Combat Castbars (Warlock)
+- **Fixed:** Focus castbar sound never muted and the bar stayed in "kick ready" color after casting Axe Toss (Felguard) as Demonology Warlock. `CacheInterruptId` walks the spec candidates in priority order and picks the first known — Spell Lock (19647) was picked first because a Grimoire talent exposes it in the player spellbook, so the old single-ID equality check silently rejected actual Axe Toss casts (89766). Now matches against the full `KE:GetInterruptSpellSet(specID)` so any known pet-variant interrupt counts. Mirrors the set-membership pattern in `Dungeons/KickTracker.lua`.
+
 ## v1.14.1
 ### Ready Check Consumables
 - **Fixed:** `ADDON_ACTION_BLOCKED` taint when a ready check started or finished during combat. `self.frame` is a `SecureHandlerStateTemplate`, so `Show`/`Hide`/`ClearAllPoints`/`SetParent`/`SetPoint` are combat-protected — `HideFrame` now defers the frame hide via `PLAYER_REGEN_ENABLED` (with `SetAlpha(0)` so the bar doesn't linger on-screen mid-fight), and `ShowFrame` skips entirely when combat is active.

@@ -93,10 +93,16 @@ end
 function H.CacheInterruptId(self)
     self.interruptId = nil
     self.interruptCD = nil
+    self.interruptSpellSet = nil
     local specIndex = GetSpecialization()
     if not specIndex then return end
     local specID = GetSpecializationInfo(specIndex)
     if not specID then return end
+    -- Full set of valid interrupt spell IDs for this spec, used by the kick-CD
+    -- tracker so any known pet-swap variant (e.g. Demo Warlock with Spell Lock
+    -- in the player spellbook AND Axe Toss in the pet spellbook) counts as a
+    -- cast. Priority-picked interruptId/CD still drive the visible bar.
+    self.interruptSpellSet = KE:GetInterruptSpellSet(specID)
     local candidates = KE:GetInterruptCandidatesForSpec(specID)
     if not candidates then return end
     for i = 1, #candidates do
