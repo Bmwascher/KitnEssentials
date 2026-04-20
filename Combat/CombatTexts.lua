@@ -30,6 +30,12 @@ local ipairs, pairs = ipairs, pairs
 local math_max = math.max
 local string_format = string.format
 
+-- Flip to true to trace the interrupt-announce event flow. Logs at every
+-- decision point (SUCCEEDED entry, flag set/skip, INTERRUPTED entry, GUID
+-- check, announce trigger). Leave this in place after diagnosis — free
+-- tracing if a regression surfaces later.
+local DEBUG_CT = false
+
 local EQUIP_SLOTS = { 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 }
 
 local MESSAGE_TYPES = {
@@ -201,13 +207,39 @@ function CM:ShowFlashMessage(msgType, textOverride)
     local function HideIfCurrent()
         if frame.generation == myGeneration and not self.isPreview then
             frame:Hide()
+            -- Don't reset alpha here. Render tick can process a SetAlpha(1)
+            -- as a visible frame before the Hide takes effect, flashing the
+            -- text at full alpha (especially with soft-outline shadows).
+            -- ShowFlashMessage does SetAlpha(1) on the next show path instead.
             self.activeMessages[msgType] = nil
             self:ArrangeMessages()
         end
     end
 
-    -- Timer-based hide (avoid UIFrameFadeOut — causes stack overflow with soft outline hooks)
-    C_Timer.After(duration, HideIfCurrent)
+    -- Manual alpha fade. UIFrameFadeOut is unsafe — it causes a stack overflow
+    -- on frames whose children use the SOFTOUTLINE shadow system. SetAlpha on
+    -- the parent propagates to soft-outline children without that hook path.
+    -- OnUpdate only runs during the fadeDuration window itself (not the full
+    -- message duration), so per-frame cost is limited to ~0.4s per message.
+    local fadeDuration = 0.4
+    C_Timer.After(duration - fadeDuration, function()
+        if frame.generation ~= myGeneration or self.isPreview then return end
+        if not frame:IsShown() then return end
+        local fadeStart = GetTime()
+        frame:SetScript("OnUpdate", function(f)
+            if f.generation ~= myGeneration or self.isPreview then
+                f:SetScript("OnUpdate", nil)
+                return
+            end
+            local progress = (GetTime() - fadeStart) / fadeDuration
+            if progress >= 1 then
+                f:SetScript("OnUpdate", nil)
+                HideIfCurrent()
+            else
+                f:SetAlpha(1 - progress)
+            end
+        end)
+    end)
 end
 
 function CM:ShowPersistentMessage(msgType)
@@ -467,23 +499,71 @@ end
 
 function CM:OnSpellcastSucceeded(_, unit, _, spellID)
     if not self.db or self.db.InterruptEnabled == false then return end
-    if not self.currentInterrupts then return end
-    if KE:IsSecretValue(unit) then return end
+    if not self.currentInterrupts then
+        if DEBUG_CT then KE:Print("[CT] SUCCEEDED: currentInterrupts nil (spec not cached)") end
+        return
+    end
+    if KE:IsSecretValue(unit) then
+        if DEBUG_CT then KE:Print("[CT] SUCCEEDED: unit is secret, skip") end
+        return
+    end
     if unit ~= "player" and unit ~= "pet" then return end
-    if KE:IsSecretValue(spellID) or not self.currentInterrupts[spellID] then return end
+    if KE:IsSecretValue(spellID) then
+        if DEBUG_CT then KE:Print(string_format("[CT] SUCCEEDED: unit=%s spellID is secret, skip", tostring(unit))) end
+        return
+    end
+    if not self.currentInterrupts[spellID] then
+        if DEBUG_CT then KE:Print(string_format("[CT] SUCCEEDED: unit=%s spellID=%s NOT in interrupt set", tostring(unit), tostring(spellID))) end
+        return
+    end
 
+    if DEBUG_CT then KE:Print(string_format("[CT] SUCCEEDED: flag SET for unit=%s spellID=%s (window 0.35s)", tostring(unit), tostring(spellID))) end
+
+    -- 0.5s window covers close-to-mid range projectile interrupts (e.g.
+    -- Avenger's Shield) that fire UNIT_SPELLCAST_INTERRUPTED on projectile
+    -- landing. Blizzard omits interruptedBy for AS-style interrupts in 12.0,
+    -- so we fall back to flag correlation — any INTERRUPTED within the
+    -- window after our known-interrupt cast is presumed ours. Max-range AS
+    -- on high-latency connections may occasionally exceed this window.
     self.interruptFlag = true
     if self.interruptTimer then
         self.interruptTimer:Cancel()
     end
-    self.interruptTimer = C_Timer.NewTimer(0.1, function()
+    self.interruptTimer = C_Timer.NewTimer(0.35, function()
+        if DEBUG_CT and self.interruptFlag then KE:Print("[CT] flag TIMEOUT (0.35s elapsed, no interrupt landed)") end
         self.interruptFlag = false
     end)
 end
 
 function CM:OnSpellcastInterrupted(_, _, _, spellID, interruptedBy)
-    if not self.interruptFlag then return end
-    if not interruptedBy then return end
+    if not self.interruptFlag then
+        if DEBUG_CT then KE:Print(string_format("[CT] INTERRUPTED: no pending flag, skip (spellID=%s)", tostring(spellID))) end
+        return
+    end
+
+    if DEBUG_CT then
+        local isSafe = interruptedBy and KE:IsSafeValue(interruptedBy) or false
+        local byStr = interruptedBy and (isSafe and tostring(interruptedBy) or "<secret>") or "<nil>"
+        local playerGUID = UnitGUID("player")
+        local petGUID = UnitGUID("pet")
+        KE:Print(string_format("[CT] INTERRUPTED: spellID=%s interruptedBy=%s safe=%s playerGUID=%s petGUID=%s",
+            tostring(spellID), byStr, tostring(isSafe), tostring(playerGUID), tostring(petGUID)))
+    end
+
+    -- When interruptedBy is present and safe, verify it matches our player
+    -- or pet GUID to filter out ally interrupts landing in the window. When
+    -- interruptedBy is nil (Avenger's Shield, some projectile interrupts)
+    -- or secret (M+/rated PvP), trust the flag correlation alone.
+    if interruptedBy and KE:IsSafeValue(interruptedBy) then
+        local playerGUID = UnitGUID("player")
+        local petGUID = UnitGUID("pet")
+        if interruptedBy ~= playerGUID and interruptedBy ~= petGUID then
+            if DEBUG_CT then KE:Print("[CT] INTERRUPTED: GUID mismatch (ally interrupt), skip") end
+            return
+        end
+    end
+
+    if DEBUG_CT then KE:Print("[CT] INTERRUPTED: announcing") end
 
     self.interruptFlag = false
     if self.interruptTimer then
