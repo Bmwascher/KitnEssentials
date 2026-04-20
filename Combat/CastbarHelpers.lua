@@ -573,7 +573,13 @@ function H.UpdateInterruptible(self)
     else
         notInterruptible = select(7, UnitChannelInfo(unit))
     end
-    self.notInterruptible = notInterruptible
+    -- Guard against transient nil (UnitCastingInfo/UnitChannelInfo can return
+    -- empty during a race between the event firing and cast-state settling).
+    -- SetVertexColorFromBoolean rejects nil, so keep the prior cast's flag
+    -- rather than overwriting with nil. Next INTERRUPTIBLE event resolves.
+    if notInterruptible ~= nil then
+        self.notInterruptible = notInterruptible
+    end
 
     if self.db.HideNotInterruptible and notInterruptible ~= nil then
         self.frame:SetAlphaFromBoolean(notInterruptible, 0, 1)

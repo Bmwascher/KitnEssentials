@@ -27,12 +27,13 @@ local ipairs = ipairs
 local pairs = pairs
 
 local INTERRUPTS = {
-    -- Warrior: Pummel 15s (+ Prot Disrupting Shout for announce)
+    -- Warrior: Pummel 15s
     [71]   = { primary = { id = 6552,  cd = 15 } },
     [72]   = { primary = { id = 6552,  cd = 15 } },
-    [73]   = { primary = { id = 6552,  cd = 15 }, announceExtras = { 386071 } },
-    -- Paladin: Rebuke 15s (Prot/Ret). Prot also announces Divine Toll + Avenger's Shield.
-    [66]   = { primary = { id = 96231, cd = 15 }, announceExtras = { 375576, 31935 } },
+    [73]   = { primary = { id = 6552,  cd = 15 } },
+    -- Paladin: Rebuke 15s (Prot/Ret). Prot also announces Avenger's Shield
+    -- (single-target projectile interrupt that lands as a confirmed kick).
+    [66]   = { primary = { id = 96231, cd = 15 }, announceExtras = { 31935, 375576 } },
     [70]   = { primary = { id = 96231, cd = 15 } },
     -- Hunter: Counter Shot 24s (BM/MM), Muzzle 15s (SV)
     [253]  = { primary = { id = 147362, cd = 24 } },
@@ -86,8 +87,9 @@ local INTERRUPTS = {
     -- Monk: Spear Hand Strike 15s (Brew/WW only)
     [268]  = { primary = { id = 116705, cd = 15 } },
     [269]  = { primary = { id = 116705, cd = 15 } },
-    -- Druid: Skull Bash 15s (Feral/Guardian). Balance announces Solar Beam only.
-    [102]  = { primary = nil, announceExtras = { 78675 } },
+    -- Druid: Skull Bash 15s (Feral/Guardian). Balance has no single-target
+    -- interrupt and AoE-only spells (Solar Beam) are excluded by design.
+    [102]  = { primary = nil },
     [103]  = { primary = { id = 106839, cd = 15 } },
     [104]  = { primary = { id = 106839, cd = 15 } },
     -- Demon Hunter: Disrupt 15s
