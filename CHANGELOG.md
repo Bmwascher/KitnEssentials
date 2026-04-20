@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.14.3
+### Combat Castbars
+- **Fixed:** Green kick-ready tick marker on Focus/Target castbars wiggled between adjacent pixels during some casts. `kickCooldownBar`'s value was `SetValue`'d every frame with `cooldown:GetRemainingDuration()`, which carries sub-millisecond noise from 12.0's secret-value laundering; rounded to the nearest pixel, the tick snapped back and forth between two positions. Converted `kickCooldownBar` to an independent full-width overlay with `SetValue` called once at cast start (matching ExwindTools' `InterruptMarkerBar` pattern). Tick position is now locked for the life of each cast.
+
 ## v1.14.2
 ### Combat Castbars (Warlock)
 - **Fixed:** Focus castbar sound never muted and the bar stayed in "kick ready" color after casting Axe Toss (Felguard) as Demonology Warlock. `CacheInterruptId` walks the spec candidates in priority order and picks the first known — Spell Lock (19647) was picked first because a Grimoire talent exposes it in the player spellbook, so the old single-ID equality check silently rejected actual Axe Toss casts (89766). Now matches against the full `KE:GetInterruptSpellSet(specID)` so any known pet-variant interrupt counts. Mirrors the set-membership pattern in `Dungeons/KickTracker.lua`.

@@ -330,18 +330,15 @@ function H.UpdateKickIndicator(self, cooldown)
     H.UpdateBarColor(self, cooldown)
 end
 
-function H.UpdateTickPosition(self, duration, cooldown)
+function H.UpdateTickPosition(self, duration)
     local kick = self.db.KickIndicator
     if not kick or not kick.Enabled or not self.interruptId then return end
 
+    -- kickCooldownBar's value is set once in SetupKickCooldownBar (ExwindTools
+    -- pattern); the tick's pixel position is locked for the life of the cast.
+    -- Only the invisible positioner still tracks cast elapsed here — kept in
+    -- case other code reads it, but no longer anchors anything.
     self.positioner:SetValue(duration:GetElapsedDuration())
-
-    if not cooldown and self.interruptId then
-        cooldown = C_Spell.GetSpellCooldownDuration(self.interruptId)
-    end
-    if not cooldown then return end
-
-    self.kickCooldownBar:SetValue(cooldown:GetRemainingDuration())
 end
 
 function H.SetupKickCooldownBar(self)
@@ -357,25 +354,33 @@ function H.SetupKickCooldownBar(self)
         return
     end
 
-    local width, height = self.castBar:GetSize()
+    local _, height = self.castBar:GetSize()
     local isChannel = self.channeling or false
 
     self.positioner:SetMinMaxValues(0, duration:GetTotalDuration())
     self.positioner:SetReverseFill(isChannel)
 
+    -- ExwindTools-style: kickCooldownBar is a full-width overlay on castBar
+    -- (not chain-anchored to positioner). Value is set ONCE here to the
+    -- current kick CD remaining; the tick anchored to the bar's fill edge
+    -- then stays pinned for the life of the cast. SetValue accepts the
+    -- secret Duration return natively — no arithmetic or laundering needed.
     self.kickCooldownBar:ClearAllPoints()
-    self.kickCooldownBar:SetSize(width, height)
+    self.kickCooldownBar:SetAllPoints(self.castBar)
     self.kickCooldownBar:SetReverseFill(isChannel)
     self.kickCooldownBar:SetMinMaxValues(0, duration:GetTotalDuration())
+    local cooldown = C_Spell.GetSpellCooldownDuration(self.interruptId)
+    if cooldown then
+        self.kickCooldownBar:SetValue(cooldown:GetRemainingDuration())
+    else
+        self.kickCooldownBar:SetValue(0)
+    end
 
     self.kickTick:ClearAllPoints()
     self.kickTick:SetSize(2, height)
-
     if isChannel then
-        self.kickCooldownBar:SetPoint("RIGHT", self.positioner:GetStatusBarTexture(), "LEFT")
         self.kickTick:SetPoint("RIGHT", self.kickCooldownBar:GetStatusBarTexture(), "LEFT")
     else
-        self.kickCooldownBar:SetPoint("LEFT", self.positioner:GetStatusBarTexture(), "RIGHT")
         self.kickTick:SetPoint("LEFT", self.kickCooldownBar:GetStatusBarTexture(), "RIGHT")
     end
 end
@@ -655,7 +660,7 @@ function H.OnUpdate(self, elapsed)
 
     if hasActiveCast and duration then
         local cooldown = self.interruptId and C_Spell.GetSpellCooldownDuration(self.interruptId) or nil
-        H.UpdateTickPosition(self, duration, cooldown)
+        H.UpdateTickPosition(self, duration)
         H.UpdateKickIndicator(self, cooldown)
     else
         self.kickTick:SetAlpha(0)
