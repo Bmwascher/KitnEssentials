@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  Secret.lua                                             ║
--- ║  Purpose: Centralized secret value utilities and        ║
--- ║           restriction state management for 12.0.        ║
+-- ║  Secret.lua                                              ║
+-- ║  Purpose: Centralized secret value utilities and         ║
+-- ║           restriction state management for 12.0.         ║
 -- ╚══════════════════════════════════════════════════════════╝
 --
 -- Restriction States:
