@@ -2,26 +2,21 @@
 
 ## v1.14.3
 ### Combat Castbars
-- **Fixed:** Green kick-ready tick marker on Focus/Target castbars wiggled between adjacent pixels during some casts. `kickCooldownBar`'s value was `SetValue`'d every frame with `cooldown:GetRemainingDuration()`, which carries sub-millisecond noise from 12.0's secret-value laundering; rounded to the nearest pixel, the tick snapped back and forth between two positions. Converted `kickCooldownBar` to an independent full-width overlay with `SetValue` called once at cast start (matching ExwindTools' `InterruptMarkerBar` pattern). Tick position is now locked for the life of each cast.
+- Fixed green kick-ready tick marker wiggling between pixels during enemy casts — now stays rock-steady for the life of each cast.
 
 ## v1.14.2
 ### Combat Castbars (Warlock)
-- **Fixed:** Focus castbar sound never muted and the bar stayed in "kick ready" color after casting Axe Toss (Felguard) as Demonology Warlock. `CacheInterruptId` walks the spec candidates in priority order and picks the first known — Spell Lock (19647) was picked first because a Grimoire talent exposes it in the player spellbook, so the old single-ID equality check silently rejected actual Axe Toss casts (89766). Now matches against the full `KE:GetInterruptSpellSet(specID)` so any known pet-variant interrupt counts. Mirrors the set-membership pattern in `Dungeons/KickTracker.lua`.
+- Fixed Focus/Target castbar sound not muting and bar staying in "kick not ready" color after casting Axe Toss on Demonology Warlock with Felguard out.
 
 ## v1.14.1
 ### Ready Check Consumables
-- **Fixed:** `ADDON_ACTION_BLOCKED` taint when a ready check started or finished during combat. `self.frame` is a `SecureHandlerStateTemplate`, so `Show`/`Hide`/`ClearAllPoints`/`SetParent`/`SetPoint` are combat-protected — `HideFrame` now defers the frame hide via `PLAYER_REGEN_ENABLED` (with `SetAlpha(0)` so the bar doesn't linger on-screen mid-fight), and `ShowFrame` skips entirely when combat is active.
+- Fixed `ADDON_ACTION_BLOCKED` error when a ready check started or finished during combat — the consumable row now hides cleanly once combat ends.
 
 ### Combat Castbars (Warlock)
-- **Fixed:** Warlock Target/Focus castbars showing "kick not ready" color and playing the interrupt sound even when a kick was available. Interrupt data was flattened to Spell Lock only; now iterates all pet-dependent candidates (Spell Lock 19647, Axe Toss 89766, Command Demon 119910) and picks the first known in the player or pet spellbook.
+- Fixed castbars showing "kick not ready" color and playing the interrupt sound even when a pet kick was available.
 
-### Combat Castbars (internal)
-- **Refactor:** Shared Target/Focus castbar logic extracted to `Combat/CastbarHelpers.lua` — ~560 net lines removed across the two modules. Interrupt spell data centralized to `Core/Interrupts.lua` as a single source of truth.
-- **Perf:** OnUpdate no longer polls `C_Spell.GetSpellCooldownDuration` per frame — cooldown, tick position, and kick indicator values cached on event, read as pure math per frame.
-- **Perf:** Target-name overlay driven by `UNIT_TARGET` + `GROUP_ROSTER_UPDATE` instead of a 0.1s polling loop.
-
-### Miscellaneous
-- **Perf:** `CursorCircle` unified two per-frame handlers into one. `CombatTimer` and `RangeChecker` cache config-derived values on `UpdateDB` instead of re-reading every frame.
+### Internal
+- Combat folder restructure — shared Focus/Target castbar logic extracted, interrupt spell data centralized, per-frame API polls moved to event-driven updates. Smoother feel, no user-visible behavior changes.
 
 ## v1.14.0
 ### Ready Check Consumables (new module)
