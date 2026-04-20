@@ -34,6 +34,7 @@ local SPELL_ID = 257284 -- Hunter's Mark
 -- Module State
 ---------------------------------------------------------------------------------
 local markedUnits = {}
+local pendingUnitUpdates = {} -- Coalescing table for UNIT_AURA events
 HM.isPreview = false
 
 -- Get safe unit token from nameplate
@@ -256,9 +257,19 @@ function HM:StartScanning()
 
         if event == "NAME_PLATE_UNIT_REMOVED" then
             markedUnits[unit] = nil
+            pendingUnitUpdates[unit] = nil
             self:UpdateWarningDisplay()
-        elseif event == "NAME_PLATE_UNIT_ADDED" or event == "UNIT_AURA" then
+        elseif event == "NAME_PLATE_UNIT_ADDED" then
             self:CheckUnitForMark(unit)
+        elseif event == "UNIT_AURA" then
+            -- Coalesce UNIT_AURA events per-unit to prevent redundant scans
+            if pendingUnitUpdates[unit] then return end
+            pendingUnitUpdates[unit] = true
+            C_Timer.After(0, function()
+                pendingUnitUpdates[unit] = nil
+                if KE:IsFullyRestricted() then return end
+                self:CheckUnitForMark(unit)
+            end)
         end
     end)
 
