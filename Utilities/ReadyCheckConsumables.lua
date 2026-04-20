@@ -1082,6 +1082,21 @@ function RCC:ShowFrame(initiatorUnit)
         return
     end
 
+    -- ClearAllPoints/SetParent/SetPoint/Show are all combat-protected on the
+    -- SecureHandlerStateTemplate. The RC's 15s window is too short for
+    -- re-showing at combat-end to be useful, so skip entirely. Leave any
+    -- pending PLAYER_REGEN_ENABLED (from a prior deferred hide) registered
+    -- so the previous RC's frame still tears down cleanly.
+    if InCombatLockdown() then
+        if DEBUG_RCC then KE:Print("[RCC] ShowFrame: skipped (in combat).") end
+        return
+    end
+
+    -- Cancel any pending deferred hide from a previous RC that finished in
+    -- combat. Without this, a PLAYER_REGEN_ENABLED left over from the prior
+    -- HideFrame would fire after combat and hide this new RC mid-interaction.
+    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+
     -- Build frame on first use (lazy fallback; normally built at OnEnable).
     if not self.frame then
         self:BuildFrame()
@@ -1090,6 +1105,9 @@ function RCC:ShowFrame(initiatorUnit)
             return
         end
     end
+
+    -- Restore alpha in case a prior deferred hide set it to 0 (see HideFrame).
+    self.frame:SetAlpha(1)
 
     -- Anchor selection — three cases:
     --   1. Custom position: user-defined anchor (honors db settings).
@@ -1183,6 +1201,20 @@ function RCC:HideFrame()
         end
     end
 
+    -- self.frame is a SecureHandlerStateTemplate — Hide() is combat-protected.
+    -- Defer via PLAYER_REGEN_ENABLED if we're in combat. The LCG stops and
+    -- IsON clears above are unprotected and already ran, so the non-deferrable
+    -- cleanup is complete before we return. SetAlpha is unprotected too, so
+    -- we use it to make the frame visually disappear immediately — otherwise
+    -- the bar lingers on-screen until combat ends.
+    if InCombatLockdown() then
+        self.frame:SetAlpha(0)
+        self:RegisterEvent("PLAYER_REGEN_ENABLED", "HideFrame")
+        if DEBUG_RCC then KE:Print("[RCC] HideFrame: deferred (in combat, alpha=0).") end
+        return
+    end
+
+    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
     self.frame:Hide()
 
     if DEBUG_RCC then KE:Print("[RCC] HideFrame: hidden (full cleanup).") end
