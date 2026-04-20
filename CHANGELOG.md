@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.14.1
+### Ready Check Consumables
+- **Fixed:** `ADDON_ACTION_BLOCKED` taint when a ready check started or finished during combat. `self.frame` is a `SecureHandlerStateTemplate`, so `Show`/`Hide`/`ClearAllPoints`/`SetParent`/`SetPoint` are combat-protected — `HideFrame` now defers the frame hide via `PLAYER_REGEN_ENABLED` (with `SetAlpha(0)` so the bar doesn't linger on-screen mid-fight), and `ShowFrame` skips entirely when combat is active.
+
+### Combat Castbars (Warlock)
+- **Fixed:** Warlock Target/Focus castbars showing "kick not ready" color and playing the interrupt sound even when a kick was available. Interrupt data was flattened to Spell Lock only; now iterates all pet-dependent candidates (Spell Lock 19647, Axe Toss 89766, Command Demon 119910) and picks the first known in the player or pet spellbook.
+
+### Combat Castbars (internal)
+- **Refactor:** Shared Target/Focus castbar logic extracted to `Combat/CastbarHelpers.lua` — ~560 net lines removed across the two modules. Interrupt spell data centralized to `Core/Interrupts.lua` as a single source of truth.
+- **Perf:** OnUpdate no longer polls `C_Spell.GetSpellCooldownDuration` per frame — cooldown, tick position, and kick indicator values cached on event, read as pure math per frame.
+- **Perf:** Target-name overlay driven by `UNIT_TARGET` + `GROUP_ROSTER_UPDATE` instead of a 0.1s polling loop.
+
+### Miscellaneous
+- **Perf:** `CursorCircle` unified two per-frame handlers into one. `CombatTimer` and `RangeChecker` cache config-derived values on `UpdateDB` instead of re-reading every frame.
+
 ## v1.14.0
 ### Ready Check Consumables (new module)
 - **NEW:** Clickable consumable icon row attached to the ready check popup — tracks food, flask, main-hand & off-hand weapon enhancements (oils/stones/ammo), augment rune, healthstone, and Warlock Soulstone
