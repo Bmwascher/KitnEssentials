@@ -1970,6 +1970,36 @@ local function GetDeflate()
     return LibStub("LibDeflate")
 end
 
+-- Compact a keyed Triggers table into a dense array sorted by id.
+-- DT:DeleteTrigger leaves Triggers[id] = nil holes, which break ipairs/#.
+-- Returns the dense array and its count.
+local function CompactTriggers(triggers)
+    local dense = {}
+    if type(triggers) ~= "table" then return dense, 0 end
+
+    local ids = {}
+    for id in pairs(triggers) do table_insert(ids, id) end
+    table.sort(ids, function(a, b) return tonumber(a) < tonumber(b) end)
+
+    for _, id in ipairs(ids) do
+        table_insert(dense, CopyTable(triggers[id]))
+    end
+    return dense, #dense
+end
+
+-- Next safe trigger id for a potentially sparse Triggers table.
+-- Matches DT:CreateTrigger's max-id + 1 scheme so we never overwrite holes.
+local function NextTriggerId(triggers)
+    local maxId = 0
+    if type(triggers) == "table" then
+        for id in pairs(triggers) do
+            local numId = tonumber(id)
+            if numId and numId > maxId then maxId = numId end
+        end
+    end
+    return maxId + 1
+end
+
 --- Export triggers for a single dungeon or all dungeons
 ---@param dungeonKey string|nil Specific dungeon key, or nil for all
 ---@return string|nil encoded, string|nil error
@@ -1984,23 +2014,28 @@ function DT:ExportTriggers(dungeonKey)
     local exportData
     if dungeonKey then
         local dungeon = db.Dungeons[dungeonKey]
-        if not dungeon or not dungeon.Triggers or #dungeon.Triggers == 0 then
+        if not dungeon or not dungeon.Triggers then
             return nil, "No triggers for this dungeon"
         end
+        local dense, dCount = CompactTriggers(dungeon.Triggers)
+        if dCount == 0 then return nil, "No triggers for this dungeon" end
         exportData = {
             v = 1,
             t = "dungeon",
             k = dungeonKey,
-            d = CopyTable(dungeon.Triggers),
+            d = dense,
         }
     else
         -- All dungeons
         local allTriggers = {}
         local count = 0
         for key, dungeon in pairs(db.Dungeons) do
-            if dungeon.Triggers and #dungeon.Triggers > 0 then
-                allTriggers[key] = CopyTable(dungeon.Triggers)
-                count = count + #dungeon.Triggers
+            if dungeon.Triggers then
+                local dense, dCount = CompactTriggers(dungeon.Triggers)
+                if dCount > 0 then
+                    allTriggers[key] = dense
+                    count = count + dCount
+                end
             end
         end
         if count == 0 then return nil, "No triggers to export" end
@@ -2069,7 +2104,9 @@ function DT:ImportTriggers(importString)
             if type(trigger) == "table" then
                 local merged = CopyTable(defaults)
                 for k, v in pairs(trigger) do merged[k] = v end
-                table_insert(triggers, merged)
+                local newId = NextTriggerId(triggers)
+                merged.id = newId
+                triggers[newId] = merged
                 imported = imported + 1
             end
         end
@@ -2090,7 +2127,9 @@ function DT:ImportTriggers(importString)
                     if type(trigger) == "table" then
                         local merged = CopyTable(defaults)
                         for k, v in pairs(trigger) do merged[k] = v end
-                        table_insert(triggers, merged)
+                        local newId = NextTriggerId(triggers)
+                        merged.id = newId
+                        triggers[newId] = merged
                         imported = imported + 1
                         added = true
                     end
@@ -2104,4 +2143,207 @@ function DT:ImportTriggers(importString)
     else
         return false, "Unknown export type: " .. tostring(exportData.t)
     end
+end
+
+---------------------------------------------------------------------------------
+-- KES Presets: Canned triggers loaded from DungeonTimerPresets.lua
+---------------------------------------------------------------------------------
+
+-- Dedup match: same spellId + name is considered an existing trigger.
+-- Uses pairs because the target (DB) Triggers table can be sparse.
+local function TriggerExists(existingTriggers, newTrigger)
+    if type(existingTriggers) ~= "table" or type(newTrigger) ~= "table" then return false end
+    local newSpellId = tostring(newTrigger.spellId or "")
+    local newName = newTrigger.name or ""
+    for _, existing in pairs(existingTriggers) do
+        if tostring(existing.spellId or "") == newSpellId and (existing.name or "") == newName then
+            return true
+        end
+    end
+    return false
+end
+
+-- Merge preset triggers for a single dungeon (internal helper)
+-- Returns (importedCount, skippedCount)
+local function MergePresetDungeon(self, dungeonKey, presetTriggers)
+    local db = self.db
+    if not db or not db.Dungeons[dungeonKey] then return 0, 0 end
+    if type(presetTriggers) ~= "table" then return 0, 0 end
+
+    local defaults = db.TriggerDefaults or {}
+    local target = db.Dungeons[dungeonKey].Triggers
+    local imported, skipped = 0, 0
+
+    for _, trigger in ipairs(presetTriggers) do
+        if type(trigger) == "table" and trigger.name and trigger.triggerType then
+            if TriggerExists(target, trigger) then
+                skipped = skipped + 1
+            else
+                local merged = CopyTable(defaults)
+                for k, v in pairs(trigger) do merged[k] = v end
+                local newId = NextTriggerId(target)
+                merged.id = newId
+                target[newId] = merged
+                imported = imported + 1
+            end
+        end
+    end
+
+    return imported, skipped
+end
+
+--- Import KES preset triggers for a dungeon (or all dungeons if nil)
+---@param dungeonKey string|nil Specific dungeon key, or nil for all
+---@return boolean success, string|nil message
+function DT:ImportKESPresets(dungeonKey)
+    if not KE.DungeonTimerPresets then return false, "Presets not loaded" end
+    local db = self.db
+    if not db or not db.Dungeons then return false, "Module not initialized" end
+
+    if dungeonKey then
+        local preset = KE.DungeonTimerPresets[dungeonKey]
+        if type(preset) ~= "table" or not preset.Triggers or #preset.Triggers == 0 then
+            return false, "No presets available for this dungeon"
+        end
+        local imported, skipped = MergePresetDungeon(self, dungeonKey, preset.Triggers)
+        if imported == 0 and skipped == 0 then return false, "No presets imported" end
+        local name = DUNGEON_DISPLAY_NAMES[dungeonKey] or dungeonKey
+        local msg = imported .. " timer(s) loaded for " .. name
+        if skipped > 0 then msg = msg .. " (" .. skipped .. " duplicate(s) skipped)" end
+        if imported == 0 then return false, msg end
+        return true, msg
+    end
+
+    -- All dungeons
+    local totalImported, totalSkipped, dungeonCount = 0, 0, 0
+    for key, preset in pairs(KE.DungeonTimerPresets) do
+        if key ~= "_version" and type(preset) == "table" and preset.Triggers and db.Dungeons[key] then
+            local imported, skipped = MergePresetDungeon(self, key, preset.Triggers)
+            totalImported = totalImported + imported
+            totalSkipped = totalSkipped + skipped
+            if imported > 0 then dungeonCount = dungeonCount + 1 end
+        end
+    end
+
+    if totalImported == 0 and totalSkipped == 0 then
+        return false, "No presets available"
+    end
+    local msg = totalImported .. " timer(s) loaded from " .. dungeonCount .. " dungeon(s)"
+    if totalSkipped > 0 then msg = msg .. " (" .. totalSkipped .. " duplicate(s) skipped)" end
+    if totalImported == 0 then return false, msg end
+    return true, msg
+end
+
+-- Serialize a Lua value to a code string (for GeneratePresetsCode)
+local function SerializeValue(val, indent)
+    indent = indent or ""
+    local nextIndent = indent .. "    "
+    local t = type(val)
+    if t == "string" then
+        local escaped = val:gsub("\\", "\\\\"):gsub("\"", "\\\""):gsub("\n", "\\n"):gsub("|", "\\124")
+        return "\"" .. escaped .. "\""
+    elseif t == "number" or t == "boolean" then
+        return tostring(val)
+    elseif t == "table" then
+        local parts = {}
+        local isArray, maxIndex = true, 0
+        for k in pairs(val) do
+            if type(k) ~= "number" or k < 1 or math.floor(k) ~= k then isArray = false; break end
+            if k > maxIndex then maxIndex = k end
+        end
+        if isArray and maxIndex > 0 then
+            for i = 1, maxIndex do
+                local v = val[i]
+                if v ~= nil then table_insert(parts, nextIndent .. SerializeValue(v, nextIndent)) end
+            end
+        else
+            local keys = {}
+            for k in pairs(val) do table_insert(keys, k) end
+            table.sort(keys, function(a, b)
+                if type(a) == type(b) then return tostring(a) < tostring(b) end
+                return type(a) < type(b)
+            end)
+            for _, k in ipairs(keys) do
+                local v = val[k]
+                local keyStr
+                if type(k) == "number" then
+                    keyStr = "[" .. k .. "]"
+                elseif type(k) == "string" and k:match("^[%a_][%w_]*$") then
+                    keyStr = k
+                else
+                    keyStr = "[" .. SerializeValue(k, nextIndent) .. "]"
+                end
+                table_insert(parts, nextIndent .. keyStr .. " = " .. SerializeValue(v, nextIndent))
+            end
+        end
+        if #parts == 0 then return "{}" end
+        return "{\n" .. table.concat(parts, ",\n") .. ",\n" .. indent .. "}"
+    end
+    return "nil"
+end
+
+--- Generate Lua code representing the current triggers, for pasting into DungeonTimerPresets.lua.
+--- Usage: /run KitnEssentials:GetModule("DungeonTimers"):GeneratePresetsCode()
+function DT:GeneratePresetsCode()
+    self:UpdateDB()
+    local db = self.db
+    if not db or not db.Dungeons then
+        KE:Print("Database not initialized")
+        return
+    end
+
+    local out = {}
+    table_insert(out, "-- Generated by DT:GeneratePresetsCode()")
+    table_insert(out, "-- Replace the KE.DungeonTimerPresets block in Dungeons/DungeonTimerPresets.lua with this:")
+    table_insert(out, "")
+    table_insert(out, "KE.DungeonTimerPresets = {")
+    table_insert(out, "    _version = 1,")
+    table_insert(out, "")
+
+    -- Sort by display name for stable output
+    local sortedKeys = {}
+    for key in pairs(DUNGEON_DISPLAY_NAMES) do table_insert(sortedKeys, key) end
+    table.sort(sortedKeys, function(a, b)
+        return (DUNGEON_DISPLAY_NAMES[a] or a) < (DUNGEON_DISPLAY_NAMES[b] or b)
+    end)
+
+    for _, dungeonKey in ipairs(sortedKeys) do
+        local name = DUNGEON_DISPLAY_NAMES[dungeonKey] or dungeonKey
+        local dungeonData = db.Dungeons[dungeonKey]
+        local triggers = dungeonData and dungeonData.Triggers
+
+        -- Triggers can be a sparse/keyed table (DeleteTrigger leaves holes),
+        -- so collect + sort the keys via pairs rather than relying on ipairs/#.
+        local triggerIds = {}
+        if triggers then
+            for id in pairs(triggers) do table_insert(triggerIds, id) end
+            table.sort(triggerIds, function(a, b) return tonumber(a) < tonumber(b) end)
+        end
+
+        table_insert(out, "    -- " .. name)
+        if #triggerIds > 0 then
+            table_insert(out, "    " .. dungeonKey .. " = {")
+            table_insert(out, "        Triggers = {")
+            for _, id in ipairs(triggerIds) do
+                table_insert(out, "            " .. SerializeValue(triggers[id], "            ") .. ",")
+            end
+            table_insert(out, "        },")
+            table_insert(out, "    },")
+        else
+            table_insert(out, "    " .. dungeonKey .. " = { Triggers = {} },")
+        end
+        table_insert(out, "")
+    end
+
+    table_insert(out, "}")
+    local code = table.concat(out, "\n")
+
+    KE:CreatePrompt(
+        "Generated Presets Code",
+        code,
+        true,
+        "Copy (Ctrl+C) and paste into Dungeons/DungeonTimerPresets.lua",
+        false
+    )
+    KE:Print("Presets code generated — copy from the dialog.")
 end

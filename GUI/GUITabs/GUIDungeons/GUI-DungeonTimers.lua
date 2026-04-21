@@ -2383,21 +2383,26 @@ local function RenderGeneralTab(scrollChild, yOffset, activeCards)
     end)
 
     local selectedScope = "_all"
+    local resetBtn -- forward decl; assigned in Card 3 below
 
     local scopeRow = GUIFrame:CreateRow(card2.content, 28)
     local scopeDropdown = GUIFrame:CreateDropdown(scopeRow, "Dungeon", scopeOptions, selectedScope, nil,
-        function(key) selectedScope = key end)
+        function(key)
+            selectedScope = key
+            if resetBtn and resetBtn.text then
+                if key == "_all" then
+                    resetBtn.text:SetText("Reset All Dungeons")
+                else
+                    local info = DUNGEON_INFO["Dungeon_" .. key]
+                    resetBtn.text:SetText("Reset " .. (info and info.name or key))
+                end
+            end
+        end)
     scopeRow:AddWidget(scopeDropdown, 1)
     card2:AddRow(scopeRow, 28)
     card2:AddSeparator()
 
-    -- Edit box
-    local editBoxRow = GUIFrame:CreateRow(card2.content, 50)
-    local importExportBox = GUIFrame:CreateEditBox(editBoxRow, "Paste import string or click Export...", "", function() end)
-    editBoxRow:AddWidget(importExportBox, 1)
-    card2:AddRow(editBoxRow, 50)
-
-    -- Export / Import buttons
+    -- Export / Import / Presets buttons
     local buttonRow = GUIFrame:CreateRow(card2.content, 28)
 
     local exportBtn = GUIFrame:CreateButton(buttonRow, "Export", { callback = function()
@@ -2417,27 +2422,65 @@ local function RenderGeneralTab(scrollChild, yOffset, activeCards)
             KE:Print("Export failed: " .. (err or "unknown error"))
         end
     end })
-    buttonRow:AddWidget(exportBtn, 0.5)
+    buttonRow:AddWidget(exportBtn, 0.333)
 
     local importBtn = GUIFrame:CreateButton(buttonRow, "Import", { callback = function()
+        KE:CreatePrompt(
+            "Import Timers",
+            "",
+            true,
+            "Paste Import String",
+            false, nil, nil, nil, nil,
+            function(importString)
+                local DT_mod = KitnEssentials:GetModule("DungeonTimers", true)
+                if not DT_mod then return end
+                if not importString or importString == "" then
+                    KE:Print("Please paste an import string")
+                    return
+                end
+                local ok, msg = DT_mod:ImportTriggers(importString)
+                if ok then
+                    KE:Print(msg)
+                    if GUIFrame.RefreshContent then
+                        C_Timer.After(0.1, function() GUIFrame:RefreshContent() end)
+                    end
+                else
+                    KE:Print("Import failed: " .. (msg or "unknown error"))
+                end
+            end,
+            nil,
+            "Import",
+            "Cancel"
+        )
+    end })
+    buttonRow:AddWidget(importBtn, 0.333)
+
+    local presetsBtn = GUIFrame:CreateButton(buttonRow, "Load KES Presets", { callback = function()
         local DT_mod = KitnEssentials:GetModule("DungeonTimers", true)
         if not DT_mod then return end
-        local text = (importExportBox.GetValue and importExportBox:GetValue()) or ""
-        if text == "" then
-            KE:Print("Paste an import string first.")
-            return
-        end
-        local ok, msg = DT_mod:ImportTriggers(text)
-        if ok then
-            KE:Print(msg)
-            importExportBox:SetValue("")
-        else
-            KE:Print("Import failed: " .. (msg or "unknown error"))
-        end
+        local dungeonKey = selectedScope ~= "_all" and selectedScope or nil
+        local scopeName = dungeonKey and (DUNGEON_INFO["Dungeon_" .. dungeonKey] and DUNGEON_INFO["Dungeon_" .. dungeonKey].name or dungeonKey) or "all dungeons"
+        KE:CreatePrompt(
+            "Load KES Presets",
+            "Load curated preset timers for " .. scopeName .. "?\n\nDuplicates (same spell + name) are skipped automatically.",
+            false, nil, false, nil, nil, nil, nil,
+            function()
+                local ok, msg = DT_mod:ImportKESPresets(dungeonKey)
+                if ok then
+                    KE:Print(msg)
+                    if GUIFrame.RefreshContent then
+                        C_Timer.After(0.1, function() GUIFrame:RefreshContent() end)
+                    end
+                else
+                    KE:Print("Load presets failed: " .. (msg or "unknown error"))
+                end
+            end,
+            nil, "Load", "Cancel"
+        )
     end })
-    buttonRow:AddWidget(importBtn, 0.5)
+    buttonRow:AddWidget(presetsBtn, 0.334)
     card2:AddRow(buttonRow, 28)
-    card2:AddLabel("|cff888888" .. bullet .. " Importing adds to your existing timers — use Reset below to start fresh.|r")
+    card2:AddLabel("|cff888888" .. bullet .. " Importing or loading presets adds to your existing timers — use Reset below to start fresh.|r")
 
     yOffset = yOffset + card2:GetContentHeight() + (Theme.paddingSmall or 8)
 
@@ -2447,24 +2490,46 @@ local function RenderGeneralTab(scrollChild, yOffset, activeCards)
     local card3 = GUIFrame:CreateCard(scrollChild, "Reset", yOffset)
     table_insert(activeCards, card3)
 
-    card3:AddLabel("|cff888888Remove all timer configurations across every dungeon. This cannot be undone.|r")
+    card3:AddLabel("|cff888888Remove all configurations for the Dungeon selected above. This cannot be undone.|r")
 
     local resetRow = GUIFrame:CreateRow(card3.content, 28)
-    local resetBtn = GUIFrame:CreateButton(resetRow, "Reset All Triggers", { callback = function()
+    resetBtn = GUIFrame:CreateButton(resetRow, "Reset All Dungeons", { callback = function()
+        local dungeonKey = selectedScope ~= "_all" and selectedScope or nil
+        local scopeName, confirmTitle, confirmText, successMsg
+        if dungeonKey then
+            local info = DUNGEON_INFO["Dungeon_" .. dungeonKey]
+            scopeName = info and info.name or dungeonKey
+            confirmTitle = "Reset " .. scopeName
+            confirmText = "This will permanently remove all timer configurations for " .. scopeName .. ".\n\nAre you sure?"
+            successMsg = "Triggers reset for " .. scopeName
+        else
+            confirmTitle = "Reset All Dungeons"
+            confirmText = "This will permanently remove all timer configurations for every dungeon.\n\nAre you sure?"
+            successMsg = "All triggers have been reset."
+        end
         KE:CreatePrompt(
-            "Reset All Triggers",
-            "This will permanently remove all timer configurations for every dungeon.\n\nAre you sure?",
+            confirmTitle,
+            confirmText,
             false, nil, false, nil, nil, nil, nil,
             function()
                 local dtDb = GetSettingsDB()
                 if dtDb and dtDb.Dungeons then
-                    for _, dungeon in pairs(dtDb.Dungeons) do
-                        if dungeon.Triggers then
-                            wipe(dungeon.Triggers)
+                    if dungeonKey then
+                        if dtDb.Dungeons[dungeonKey] and dtDb.Dungeons[dungeonKey].Triggers then
+                            wipe(dtDb.Dungeons[dungeonKey].Triggers)
+                        end
+                    else
+                        for _, dungeon in pairs(dtDb.Dungeons) do
+                            if dungeon.Triggers then
+                                wipe(dungeon.Triggers)
+                            end
                         end
                     end
                 end
-                KE:Print("All triggers have been reset.")
+                KE:Print(successMsg)
+                if GUIFrame.RefreshContent then
+                    C_Timer.After(0.1, function() GUIFrame:RefreshContent() end)
+                end
             end,
             nil, "Reset", "Cancel"
         )

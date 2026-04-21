@@ -2,6 +2,7 @@
     <Script file="WarpDepleteForces.lua" />
     <Script file="EnemyCounter.lua" />
     <Script file="KickTracker.lua" />
+    <Script file="DungeonTimerPresets.lua" />
     <Script file="DungeonTimers.lua" />
     <Script file="DungeonCasts.lua" />
 </Ui>
