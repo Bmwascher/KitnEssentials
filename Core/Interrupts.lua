@@ -88,8 +88,8 @@ local INTERRUPTS = {
     [268]  = { primary = { id = 116705, cd = 15 } },
     [269]  = { primary = { id = 116705, cd = 15 } },
     -- Druid: Skull Bash 15s (Feral/Guardian). Balance has no single-target
-    -- interrupt and AoE-only spells (Solar Beam) are excluded by design.
-    [102]  = { primary = nil },
+    -- interrupt; Solar Beam is their only kick and is announce-worthy.
+    [102]  = { primary = nil, announceExtras = { 78675 } },
     [103]  = { primary = { id = 106839, cd = 15 } },
     [104]  = { primary = { id = 106839, cd = 15 } },
     -- Demon Hunter: Disrupt 15s
