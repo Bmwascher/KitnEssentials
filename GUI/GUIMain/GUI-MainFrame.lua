@@ -33,7 +33,7 @@ GUIFrame.sidebarConfig = {
         id = "optimize_section",
         type = "header",
         text = "\226\128\162 Optimize",
-        defaultExpanded = true,
+        defaultExpanded = false,
         items = {
             { id = "Optimize", text = "System Optimization" },
         },
@@ -42,7 +42,7 @@ GUIFrame.sidebarConfig = {
         id = "combat_section",
         type = "header",
         text = "\226\128\162 Combat",
-        defaultExpanded = true,
+        defaultExpanded = false,
         items = {
             { id = "CombatRes",     text = "Battle Res" },
             { id = "BossDebuffs",   text = "Boss Debuffs" },
@@ -58,7 +58,7 @@ GUIFrame.sidebarConfig = {
         id = "utilities_section",
         type = "header",
         text = "\226\128\162 Utilities",
-        defaultExpanded = true,
+        defaultExpanded = false,
         items = {
             { id = "BloodlustTracker", text = "Bloodlust Tracker" },
             { id = "ClassStatusTexts", text = "Class Status Texts" },
@@ -76,7 +76,7 @@ GUIFrame.sidebarConfig = {
         id = "qol_section",
         type = "header",
         text = "\226\128\162 Quality of Life",
-        defaultExpanded = true,
+        defaultExpanded = false,
         items = {
             { id = "AuctionHouseFilter", text = "Auction House Filter" },
             { id = "Automation",        text = "Automation" },
@@ -98,7 +98,7 @@ GUIFrame.sidebarConfig = {
         id = "skinning_section",
         type = "header",
         text = "\226\128\162 Skinning",
-        defaultExpanded = true,
+        defaultExpanded = false,
         elvUIDisabled = true,
         items = {
             { id = "SkinUICleanup",    text = "General UI Clean Up" },
@@ -117,21 +117,21 @@ GUIFrame.sidebarConfig = {
         id = "dungeons_section",
         type = "header",
         text = "\226\128\162 Dungeons",
-        defaultExpanded = true,
+        defaultExpanded = false,
         items = {
-            { id = "WarpDepleteForces",           text = "WarpDeplete+" },
-            { id = "EnemyCounter",                text = "Enemy Counter" },
-            { id = "KickTracker",                 text = "Interrupt Tracker" },
             { id = "DungeonCasts",                text = "Dungeon Casts" },
+            { id = "EnemyCounter",                text = "Enemy Counter" },
             { id = "HealerMana",                  text = "Healer Mana" },
             { id = "InstanceReset",               text = "Instance Reset" },
+            { id = "KickTracker",                 text = "Interrupt Tracker" },
+            { id = "WarpDepleteForces",           text = "WarpDeplete+" },
         },
     },
     {
         id = "dungeon_timers_section",
         type = "header",
         text = "\226\128\162 Dungeon Timers",
-        defaultExpanded = true,
+        defaultExpanded = false,
         disabledCheck = function()
             return not (KE.db and KE.db.profile and KE.db.profile.Dungeons
                 and KE.db.profile.Dungeons.DungeonTimers

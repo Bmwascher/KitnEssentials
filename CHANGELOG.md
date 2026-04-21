@@ -1,5 +1,32 @@
 # Changelog
 
+## v1.15.0
+### Healer Mana (new module)
+- **NEW:** Shows the party healer's name, mana %, and spec or class icon — configurable font, position, color, icon size, and icon type
+- **NEW:** "Hide when my spec is a healer" toggle for self-healers
+- Custom Nicknames apply automatically to the display
+- Preview defers to the real healer when one's in your party
+
+### Instance Reset (new module)
+- **NEW:** Announces to party/raid chat when you reset instances — configurable message
+
+### Dungeon Timers
+- **NEW:** "Load KES Presets" button — imports curated preset triggers for the selected dungeon scope (dedup on repeat clicks)
+- Reset button now scope-aware — "Reset All Dungeons" or "Reset [Dungeon Name]" based on the Dungeon dropdown
+- Fixed Export/Import silently dropping triggers after a deleted entry (sparse-table iteration bug in `ipairs`/`#`)
+
+### Combat
+- Protection Paladin Avenger's Shield announce + fade-out restored, with `notInterruptible` nil-guard
+- Balance Druid Solar Beam announce via Combat Texts
+
+### CreatePrompt (shared widget)
+- Fixed single-edit-box dialogs clipping their label (adaptive height, mirroring the v1.13.0 confirmation-prompt fix)
+
+### Misc
+- 12.0.5 interface support
+- Sidebar sections default to collapsed (except Settings)
+- Dungeons sidebar alphabetical
+
 ## v1.14.3
 ### Combat Castbars
 - Fixed green kick-ready tick marker wiggling between pixels during enemy casts — now stays rock-steady for the life of each cast.
