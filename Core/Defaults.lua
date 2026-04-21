@@ -1024,6 +1024,31 @@ local Defaults = {
                     actionOnHideSound = "None",
                 },
             },
+            HealerMana = {
+                Enabled = false,
+                DisableOnHealer = false,
+                Strata = "HIGH",
+                anchorFrameType = "UIPARENT",
+                ParentFrame = "UIParent",
+                Position = DefaultPosition(-400, 200),
+                FrameWidth = 120,
+                IconSize = 24,
+                IconType = "spec",
+
+                NameFontSize = 14,
+                NameXOffset = 4,
+                NameYOffset = 2,
+                ManaFontSize = 14,
+                ManaXOffset = 4,
+                ManaYOffset = -2,
+                FontFace = "Expressway",
+                FontOutline = "SOFTOUTLINE",
+                HighManaColor = { 1, 1, 1, 1 },
+            },
+            InstanceReset = {
+                Enabled = true,
+                Message = "Instance reset!",
+            },
             DungeonCasts = {
                 Enabled = true,
 

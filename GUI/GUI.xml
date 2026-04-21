@@ -66,6 +66,8 @@
     <Script file="GUITabs\GUIDungeons\GUI-DungeonCasts.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-WarpDepleteForces.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-EnemyCounter.lua" />
+    <Script file="GUITabs\GUIDungeons\GUI-HealerMana.lua" />
+    <Script file="GUITabs\GUIDungeons\GUI-InstanceReset.lua" />
 
     <!-- QoL tabs -->
     <Script file="GUITabs\GUIQoL\GUI-Automation.lua" />

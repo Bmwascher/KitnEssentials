@@ -13,6 +13,10 @@ local LibStub = LibStub
 local type = type
 local pairs = pairs
 local wipe = wipe
+local UnitName = UnitName
+local UnitFullName = UnitFullName
+local UnitIsPlayer = UnitIsPlayer
+local GetNormalizedRealmName = GetNormalizedRealmName
 
 -- Versioned prefix. Bump the digit if the payload shape ever changes so older
 -- clients surface a clean error instead of decoding garbage.
@@ -32,6 +36,34 @@ end
 
 local function NotifyChange()
     if KE.RefreshNicknameTags then KE:RefreshNicknameTags() end
+end
+
+---------------------------------------------------------------------------------
+-- Public Lookup
+---------------------------------------------------------------------------------
+-- Returns the saved nickname for a unit, or its UnitName if none is set.
+-- Loads regardless of ElvUI presence so non-ElvUI modules (HealerMana, etc.)
+-- can use it. Mirrors the lookup pattern used by Core/Tags.lua's ElvUI tags
+-- (key format "Fullname-NormalizedRealm").
+---@param unit string Unit token (e.g., "player", "party2")
+---@return string name Nickname if set, else raw UnitName
+function KE:GetNicknameOrName(unit)
+    if not unit then return "" end
+    if not UnitIsPlayer(unit) then
+        return UnitName(unit) or ""
+    end
+    local nicks = GetDB()
+    if nicks then
+        local name, realm = UnitFullName(unit)
+        if name and name ~= "" then
+            if not realm or realm == "" then realm = GetNormalizedRealmName() end
+            if realm and realm ~= "" then
+                local nick = nicks[name .. "-" .. realm]
+                if nick and nick ~= "" then return nick end
+            end
+        end
+    end
+    return UnitName(unit) or ""
 end
 
 ---------------------------------------------------------------------------------

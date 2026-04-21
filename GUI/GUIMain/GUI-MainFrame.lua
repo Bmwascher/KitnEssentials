@@ -123,6 +123,8 @@ GUIFrame.sidebarConfig = {
             { id = "EnemyCounter",                text = "Enemy Counter" },
             { id = "KickTracker",                 text = "Interrupt Tracker" },
             { id = "DungeonCasts",                text = "Dungeon Casts" },
+            { id = "HealerMana",                  text = "Healer Mana" },
+            { id = "InstanceReset",               text = "Instance Reset" },
         },
     },
     {
