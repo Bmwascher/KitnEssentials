@@ -355,6 +355,18 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
 
         dialog.editBox = editBox
         dialog.editBoxLabel = editBoxLabel or editBox1Label
+
+        -- Adaptive height for single-field prompts so the below-editbox label
+        -- doesn't clip. header(28) + topMargin(12) + editBox(24) + gap(6) +
+        -- labelHeight + bottomMargin(12) + buttons(30) + bottomMargin(12).
+        -- Two-field mode has its own SetHeight below.
+        if not showSecondEditBox and editBoxLabel then
+            local labelHeight = editBoxLabel:GetStringHeight() or 0
+            local needed = 28 + 12 + 24 + 6 + labelHeight + 12 + 30 + 12
+            if needed > POPUP_HEIGHT then
+                dialog:SetHeight(needed)
+            end
+        end
     end
 
     -- Second editbox (for two-field prompts like import: name + string)
