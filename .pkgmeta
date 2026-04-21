@@ -39,7 +39,24 @@ externals:
     url: https://repos.curseforge.com/wow/libdbicon-1-0/trunk/LibDBIcon-1.0
   Libs/LibDataBroker-1.1:
     url: https://github.com/tekkub/libdatabroker-1-1
+  Libs/LibDeflate:
+    url: https://github.com/SafeteeWoW/LibDeflate.git
+    tag: latest
+  Libs/LibDualSpec-1.0:
+    url: https://github.com/AdiAddons/LibDualSpec-1.0.git
+    branch: master
+  Libs/LibEditMode:
+    url: https://github.com/p3lim-wow/LibEditMode.git
+    tag: master
+  Libs/LibEditModeOverride:
+    url: https://github.com/plusmouse/LibEditModeOverride
+    tag: main
   Libs/LibRangeCheck-3.0:
     url: https://github.com/WeakAuras/LibRangeCheck-3.0
   Libs/LibSharedMedia-3.0:
     url: https://repos.curseforge.com/wow/libsharedmedia-3-0/trunk/LibSharedMedia-3.0
+  Libs/LibStub:
+    url: https://repos.curseforge.com/wow/libstub/trunk
+  Libs/TaintLess:
+    url: https://www.townlong-yak.com/addons.git/taintless
+    commit: default

@@ -74,18 +74,6 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
     row1:AddWidget(enableCheck, 1)
     card1:AddRow(row1, 36)
 
-    local row1b = GUIFrame:CreateRow(card1.content, 36)
-    local disableOnHealerCheck = GUIFrame:CreateCheckbox(row1b, "Hide when my spec is a healer", db.DisableOnHealer == true,
-        function(checked)
-            db.DisableOnHealer = checked
-            Refresh()
-        end,
-        false, nil, "On", "Off"
-    )
-    row1b:AddWidget(disableOnHealerCheck, 1)
-    table_insert(allWidgets, disableOnHealerCheck)
-    card1:AddRow(row1b, 36)
-
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
     ---------------------------------------------------------------------------------
@@ -117,7 +105,7 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
     table_insert(allWidgets, iconTypeDropdown)
     cardAppearance:AddRow(rowAppearance1, 36)
 
-    -- Mana Text Color
+    -- Mana Text Color + Hide when healer spec
     local rowAppearance2 = GUIFrame:CreateRow(cardAppearance.content, 37)
     local manaColorPicker = GUIFrame:CreateColorPicker(rowAppearance2, "Mana Text Color",
         db.HighManaColor or { 1, 1, 1, 1 },
@@ -125,8 +113,18 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
             db.HighManaColor = { r, g, b, a }
             ApplySettings()
         end)
-    rowAppearance2:AddWidget(manaColorPicker, 1)
+    rowAppearance2:AddWidget(manaColorPicker, 0.5)
     table_insert(allWidgets, manaColorPicker)
+
+    local disableOnHealerCheck = GUIFrame:CreateCheckbox(rowAppearance2, "Hide when my spec is a healer", db.DisableOnHealer == true,
+        function(checked)
+            db.DisableOnHealer = checked
+            Refresh()
+        end,
+        false, nil, "On", "Off"
+    )
+    rowAppearance2:AddWidget(disableOnHealerCheck, 0.5)
+    table_insert(allWidgets, disableOnHealerCheck)
     cardAppearance:AddRow(rowAppearance2, 37)
 
     yOffset = yOffset + cardAppearance:GetContentHeight() + Theme.paddingSmall
