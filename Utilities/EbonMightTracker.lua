@@ -21,7 +21,6 @@ local C_SpellBook     = C_SpellBook
 local CreateFrame     = CreateFrame
 local UnitClass       = UnitClass
 local UnitExists      = UnitExists
-local UnitStat        = UnitStat
 local GetTime         = GetTime
 local GetSpecialization     = GetSpecialization
 local GetSpecializationInfo = GetSpecializationInfo
@@ -33,7 +32,6 @@ local pcall           = pcall
 local pairs           = pairs
 local ipairs          = ipairs
 local wipe            = wipe
-local math_max        = math.max
 local math_floor      = math.floor
 
 ---------------------------------------------------------------------------------
@@ -41,16 +39,21 @@ local math_floor      = math.floor
 ---------------------------------------------------------------------------------
 local EBON_MIGHT_SELF    = 395296     -- Aura on self
 local EBON_MIGHT_OTHERS  = 395152     -- Aura on allies
-local CHRONO_CRIT_TALENT = 431874     -- Chronowarden "canCrit" talent
+local CHRONO_CRIT_TALENT = 431874     -- Chronowarden "canCrit" talent (Double Time)
+local DUPE_TALENT        = 1259175    -- "canDupe" talent (apex dupe proc)
 local AUG_SPEC_ID        = 1473       -- Augmentation spec ID
 
--- Crit detection constants (from reference)
-local CRIT_FACTOR           = 1.5    -- Crit multiplier
-local DUPE_FACTOR           = 1.75   -- Duped multiplier
-local RATIO_LOWER           = 0.95   -- Lower tolerance
-local RATIO_UPPER           = 1.05   -- Upper tolerance
-local MAIN_STAT_COEFFICIENT = 0.16   -- Ebon Might mainStat % coefficient
-local MIN_TARGETS           = 2      -- Minimum targets divisor
+-- Baseline classifier midpoints (from EbonMightTracker v1.0.6 reference).
+-- Relative multiplier against learned baseline for target count. Chosen
+-- midway between expected discrete tiers so bucket boundaries are stable
+-- under the ±5% server-side value noise. Specifically:
+--   base    = ~1.00x baseline
+--   crit    = ~1.50x baseline   → MULT_CRIT at 1.25 catches anything ≥1.25
+--   dupe    = ~1.75x baseline   → MULT_DUPE at 1.625 catches anything ≥1.625
+--   both    = 1.5*1.75 = 2.625x → MULT_DUPE_CRIT at 2.1875 catches anything ≥2.1875
+local MULT_CRIT      = 1.25
+local MULT_DUPE      = 1.625
+local MULT_DUPE_CRIT = 2.1875
 
 local ICON_ID          = 5061347     -- Ebon Might spell icon
 local REFRESH_INTERVAL = 0.5         -- Countdown update rate (seconds)
@@ -66,6 +69,7 @@ EMT.stateLabel          = nil
 EMT.ticker              = nil
 EMT.isAugSpec           = false
 EMT.canCrit             = false
+EMT.canDupe             = false
 EMT.isPreview           = false
 EMT.inGroup             = false
 EMT._shown              = false
@@ -105,6 +109,35 @@ end
 function EMT:UpdateCanCrit()
     local ok, known = pcall(C_SpellBook.IsSpellKnown, CHRONO_CRIT_TALENT)
     self.canCrit = ok and known == true
+end
+
+function EMT:UpdateCanDupe()
+    local ok, known = pcall(C_SpellBook.IsSpellKnown, DUPE_TALENT)
+    self.canDupe = ok and known == true
+end
+
+function EMT:UpdateTalents()
+    self:UpdateCanCrit()
+    self:UpdateCanDupe()
+end
+
+---------------------------------------------------------------------------------
+-- Aura Value Extraction
+---------------------------------------------------------------------------------
+-- Pick the largest positive point value from aura.points. Replaces the
+-- hardcoded points[2] read — Blizzard has reshuffled the points table in
+-- the past and may again. Largest positive is always the mainstat delta
+-- (the other entries are usually 0 or small secondary stats).
+function EMT:BestPoint(aura)
+    if not aura or not aura.points then return nil end
+    if issecretvalue(aura.points) then return nil end
+    local best
+    for _, v in pairs(aura.points) do
+        if type(v) == "number" and v > 0 and (not best or v > best) then
+            best = v
+        end
+    end
+    return best
 end
 
 ---------------------------------------------------------------------------------
@@ -150,10 +183,7 @@ function EMT:ScanAuras()
                 if UnitExists(unit) then
                     local auraData = C_UnitAuras.GetAuraDataBySpellName(unit, othersName, "HELPFUL|PLAYER")
                     if auraData and auraData.auraInstanceID and not issecretvalue(auraData.applications) then
-                        local value = 0
-                        if auraData.points and not issecretvalue(auraData.points) and auraData.points[2] then
-                            value = auraData.points[2]
-                        end
+                        local value = self:BestPoint(auraData) or 0
                         self.allyAuras[auraData.auraInstanceID] = {
                             value = value,
                             unit  = unit,
@@ -166,45 +196,86 @@ function EMT:ScanAuras()
 end
 
 ---------------------------------------------------------------------------------
--- Crit Calculation (ported from reference EMTracker)
+-- Classifier (baseline-relative — 12.0.5 safe)
 ---------------------------------------------------------------------------------
-function EMT:CalcCrit()
+-- 12.0.5 made UnitStat return secret values during encounters, so the
+-- previous cross-API ratio (aura.points vs UnitStat*0.16) became unreliable.
+-- This replacement compares ONLY aura-to-aura: the current observed average
+-- mainstat bonus vs a learned baseline for the same target count. Baseline
+-- is persisted in AceDB so it survives /reload and zone changes.
+--
+-- Bucketing (multiplier m = observed / baseline):
+--   m < 1.25   → base     (also re-baseline if m < 1, so baseline self-corrects downward)
+--   m < 1.625  → crit
+--   m < 2.1875 → dupe
+--   else        → dupe+crit
+--
+-- Talent gates (canCrit / canDupe) are applied AFTER classification so a
+-- player without Chronowarden can never see a "crit" false positive.
+function EMT:Classify(observedAvg, targetCount)
     self.isCrit  = false
     self.isDuped = false
 
-    if not self.inGroup then return end
+    if targetCount <= 0 or observedAvg <= 0 then return end
 
-    -- Read player main stat (first return = base stat, matching reference)
-    local mainStat = UnitStat("player", 4)
-    if not mainStat or mainStat <= 0 then return end
+    local db = self.db
+    if not db then return end
+    db.BaselineObserved = db.BaselineObserved or {}
+    local baseline = db.BaselineObserved[targetCount]
 
-    -- Sum ally aura values; auraInstanceID keys naturally deduplicate
-    local sum   = 0
-    local count = 0
-    for _, data in pairs(self.allyAuras) do
-        sum   = sum + (data.value or 0)
-        count = count + 1
-    end
-
-    if count == 0 then return end
-
-    local avgMainStat  = sum / count
-    local expected     = mainStat * MAIN_STAT_COEFFICIENT / math_max(MIN_TARGETS, count)
-
-    -- Duped check (1.75x)
-    if avgMainStat >= expected * DUPE_FACTOR * RATIO_LOWER then
-        self.isDuped = true
-        expected = expected * DUPE_FACTOR
-    end
-
-    -- Crit check (1.5x) — only if Chronowarden talent is known
-    if self.canCrit then
-        local critLower = expected * CRIT_FACTOR * RATIO_LOWER
-        local critUpper = expected * CRIT_FACTOR * RATIO_UPPER
-        if avgMainStat > critLower and critUpper > avgMainStat then
-            self.isCrit = true
+    local isCrit, isDuped
+    if not baseline or baseline <= 0 then
+        -- First observation at this target count — treat as baseline.
+        db.BaselineObserved[targetCount] = observedAvg
+        isCrit, isDuped = false, false
+    else
+        local m = observedAvg / baseline
+        if m < MULT_CRIT then
+            -- Observed is smaller than baseline — the old baseline was a
+            -- crit/dupe by mistake. Re-baseline down to current observation.
+            if observedAvg < baseline then
+                db.BaselineObserved[targetCount] = observedAvg
+            end
+            isCrit, isDuped = false, false
+        elseif m < MULT_DUPE then
+            isCrit, isDuped = true, false
+        elseif m < MULT_DUPE_CRIT then
+            isCrit, isDuped = false, true
+        else
+            isCrit, isDuped = true, true
         end
     end
+
+    -- Talent gates: strip false-positives the player can't actually roll.
+    if not self.canCrit then isCrit = false end
+    if not self.canDupe then isDuped = false end
+
+    self.isCrit  = isCrit
+    self.isDuped = isDuped
+end
+
+-- Compute inputs to Classify from current tracked ally auras.
+function EMT:RecomputeClassification()
+    if not self.inGroup then
+        self.isCrit, self.isDuped = false, false
+        return
+    end
+
+    local sum, count = 0, 0
+    for _, data in pairs(self.allyAuras) do
+        local v = data.value or 0
+        if v > 0 then
+            sum   = sum + v
+            count = count + 1
+        end
+    end
+
+    if count == 0 then
+        self.isCrit, self.isDuped = false, false
+        return
+    end
+
+    self:Classify(sum / count, count)
 end
 
 ---------------------------------------------------------------------------------
@@ -268,9 +339,9 @@ function EMT:UpdateDisplay()
         self.countdownText:SetText(tostring(remaining))
     end
 
-    -- Calculate crit state
-    self:CalcCrit()
-    -- Preview override: CalcCrit requires a real group + ally auras, which
+    -- Classify crit/dupe state from tracked ally auras
+    self:RecomputeClassification()
+    -- Preview override: Classify needs a real group + ally aura values, which
     -- previews don't have. Force CRIT so the user can see the border + label
     -- highlighting in the GUI preview regardless of mode.
     if self.isPreview then
@@ -534,10 +605,7 @@ function EMT:OnUnitAura(_, unit, updateInfo)
                 end
                 -- EM on ally
                 if self.inGroup and aura.spellId == EBON_MIGHT_OTHERS and aura.sourceUnit == "player" then
-                    local value = 0
-                    if aura.points and not issecretvalue(aura.points) and aura.points[2] then
-                        value = aura.points[2]
-                    end
+                    local value = self:BestPoint(aura) or 0
                     self.allyAuras[aura.auraInstanceID] = {
                         value = value,
                         unit  = unit,
@@ -563,8 +631,9 @@ function EMT:OnUnitAura(_, unit, updateInfo)
             local tracked = self.allyAuras[instanceID]
             if tracked and tracked.unit == unit then
                 local auraData = C_UnitAuras.GetAuraDataByAuraInstanceID(unit, instanceID)
-                if auraData and auraData.points and not issecretvalue(auraData.points) and auraData.points[2] then
-                    tracked.value = auraData.points[2]
+                local value = auraData and self:BestPoint(auraData) or nil
+                if value and value > 0 then
+                    tracked.value = value
                     changed = true
                 end
             end
@@ -574,9 +643,12 @@ function EMT:OnUnitAura(_, unit, updateInfo)
     if updateInfo.removedAuraInstanceIDs then
         for _, instanceID in ipairs(updateInfo.removedAuraInstanceIDs) do
             if instanceID == self.selfAuraInstanceID and unit == "player" then
-                -- Self removal → wipe all state (ally EMs end with the self aura,
-                -- matching reference behaviour and preventing stale ally data
-                -- from skewing CalcCrit on the next cast).
+                -- Self removal → wipe all state. Stricter than reference v1.0.6
+                -- (which only clears selfAura and lets ally removes arrive
+                -- naturally): under heavy combat Blizzard can deliver removes
+                -- out of order, and a stale ally value slipping into the next
+                -- Classify() would poison the baseline. Any ally removes that
+                -- still arrive for IDs we already wiped are a harmless no-op.
                 self:ClearData()
                 changed = true
             else
@@ -603,7 +675,7 @@ end
 ---------------------------------------------------------------------------------
 function EMT:PLAYER_ENTERING_WORLD()
     self.isAugSpec = self:IsValidSpec()
-    self:UpdateCanCrit()
+    self:UpdateTalents()
     self.inGroup = IsInGroup()
     self:ScanAuras()
     self:UpdateDisplay()
@@ -611,9 +683,9 @@ end
 
 function EMT:ACTIVE_PLAYER_SPECIALIZATION_CHANGED()
     self.isAugSpec = self:IsValidSpec()
-    -- Re-check Chronowarden talent — a spec change may load a different
-    -- talent loadout that affects canCrit even without a TRAIT_CONFIG_UPDATED.
-    self:UpdateCanCrit()
+    -- Re-check talents — a spec change may load a different talent loadout
+    -- that affects canCrit / canDupe even without a TRAIT_CONFIG_UPDATED.
+    self:UpdateTalents()
     if not self.isAugSpec then
         self:HideTracker()
         self:ClearData()
@@ -624,7 +696,7 @@ function EMT:ACTIVE_PLAYER_SPECIALIZATION_CHANGED()
 end
 
 function EMT:TRAIT_CONFIG_UPDATED()
-    self:UpdateCanCrit()
+    self:UpdateTalents()
 end
 
 function EMT:GROUP_JOINED()
@@ -639,6 +711,17 @@ end
 
 function EMT:GROUP_ROSTER_UPDATE()
     self.inGroup = IsInGroup()
+end
+
+-- UNIT_FLAGS fires on death, charm, afk-enter, etc. Recompute whenever a
+-- tracked group member's flags change so the state reflects current alive /
+-- present members. Matches reference v1.0.6 behavior.
+function EMT:UNIT_FLAGS(_, unit)
+    if not self.isAugSpec or self.isPreview then return end
+    if not unit then return end
+    if unit ~= "player" and not unit:find("^party%d") and not unit:find("^raid%d") then return end
+    if unit:find("pet") then return end
+    self:UpdateDisplay()
 end
 
 ---------------------------------------------------------------------------------
@@ -666,6 +749,7 @@ function EMT:OnEnable()
     self:RegisterEvent("GROUP_LEFT")
     self:RegisterEvent("GROUP_ROSTER_UPDATE")
     self:RegisterEvent("UNIT_AURA", "OnUnitAura")
+    self:RegisterEvent("UNIT_FLAGS")
 end
 
 function EMT:OnDisable()

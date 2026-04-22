@@ -460,6 +460,12 @@ local Defaults = {
             DupeColor = { 1, 0.5, 0, 1 },
             OnlyShowCrit = false,
             CombatOnly = false,
+            -- 12.0.5: UnitStat-based ratio detection broke (stats become secret
+            -- values mid-encounter). Replaced with baseline classifier that
+            -- learns the "clean" average EM value per target count and detects
+            -- crit/dupe by relative multiplier. Persisted so it doesn't need
+            -- to relearn every /reload. Keyed by targetCount.
+            BaselineObserved = {},
         },
 
         -----------------------------------------------------------------
@@ -586,6 +592,7 @@ local Defaults = {
             CountdownColor = { 1, 1, 1, 1 },
             SoundEnabled = true,
             SoundChannel = "Master",
+            LoopSound = false,
             InstanceOnly = false,
             CombatOnly = false,
             Strata = "MEDIUM",
@@ -821,6 +828,9 @@ local Defaults = {
             ScaleEnabled = true,
             Scale = 1.2,
             WaypointBarEnabled = true,
+            MapIconsEnabled = true,
+            MapIconsProfessionFilter = true,
+            MapIconsStyle = "small", -- "regular" or "small"
         },
 
         RacialsAnchor = {
@@ -829,7 +839,7 @@ local Defaults = {
             AnchorTo = "",
             XOffset = 0,
             YOffset = -2,
-            PetBarOffset = -13,
+            PetBarOffset = -15,
         },
 
         ReadyCheckConsumables = {
@@ -904,6 +914,23 @@ local Defaults = {
             WarpDepleteForces = {
                 Enabled = true,
                 Tooltip = true,
+                -- Nameplate % overlay (per-mob contribution shown on nameplate)
+                NameplatePercent = false,
+                NameplateCombatOnly = true,
+                NameplateFontFace = "Expressway",
+                NameplateFontSize = 12,
+                NameplateFontOutline = "OUTLINE",
+                NameplateColorMode = "theme",
+                NameplateColor = { 1, 1, 1, 1 },
+                NameplateAnchor = "TOPRIGHT",
+                NameplateXOffset = -20,
+                NameplateYOffset = 2,
+                -- Death log persistence (survives /reload within same M+ run)
+                DeathLog = {
+                    mapID = nil,
+                    keyLevel = nil,
+                    details = {},
+                },
             },
             EnemyCounter = {
                 Enabled = false,

@@ -91,7 +91,7 @@ GUIFrame.sidebarConfig = {
             { id = "RacialsAnchor",     text = "Racials Anchor" },
             { id = "DragonRiding",      text = "Skyriding UI" },
             { id = "SlashCommands",     text = "Slash Commands" },
-            { id = "WorldMap",          text = "World Map Scaler" },
+            { id = "WorldMap",          text = "World Map" },
         },
     },
     {

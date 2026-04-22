@@ -1,5 +1,32 @@
 # Changelog
 
+## v1.16.0
+### World Map
+- **NEW:** City Map Icons for Silvermoon, Stormwind, and Orgrimmar — trainers, innkeepers, portals, vendors, and class-hall teleports. Click an icon to set a waypoint
+- **NEW:** Icon Style selector (Regular item icons / Small minimap-style with glow backdrop)
+- **NEW:** "Only Show Trainers for Learned Professions" filter
+- Renamed module from "World Map Scaler" → "World Map"
+
+### WarpDeplete+
+- **NEW:** Per-mob nameplate % overlay with configurable font, color mode (theme/custom), and anchor
+- **NEW:** Death log persists across /reload within the same M+ key
+- Rewrote forces tracking to use `C_ScenarioInfo.GetUnitCriteriaProgressValues` (added 12.0.5)
+- Live pull-forces overlay removed — 12.0.5 blocks SecretValue arithmetic in tainted context. Tooltip and nameplate % still work
+- Fixed death tooltip and class-color path for 12.0.5 localized CLEU
+
+### Ebon Might Tracker
+- Fixed 12.0.5 crit/dupe detection — `UnitStat` returns a secret value mid-encounter, breaking the old ratio math. Replaced with a baseline classifier that learns the clean EM average per target count and persists it across /reload
+- **NEW:** Chronowarden apex Dupe proc detection (spellId 1259175)
+- **NEW:** Recomputes on `UNIT_FLAGS` so death/charm/afk state changes feed the classifier
+
+### Bloodlust Tracker
+- Fixed repeated sound triggers in heavy raid combat — sound plays once by default instead of looping until the bar ends (matches upstream HighOnHaste v0.5.4)
+- Added `numFrames` guard preventing divide-by-zero when sprite-sheet dimensions are degenerate
+
+### Disintegrate Ticks
+- Fixed 12.0.5 tick spacing — `UnitSpellHaste` returns a secret value in encounters; haste is now back-solved from the channel's actual duration
+- Synced to upstream DisintegrateTicks v2.1.1
+
 ## v1.15.0
 ### Healer Mana (new module)
 - **NEW:** Shows the party healer's name, mana %, and spec or class icon — configurable font, position, color, icon size, and icon type

@@ -110,7 +110,9 @@ function BLT:CalculateSpriteSheetLayout()
             self.framesPerRow = FloorDiv(w, FRAME_SIZE)
             local rows = FloorDiv(h, FRAME_SIZE)
             local capacity = self.framesPerRow * rows
-            self.numFrames = math.min(PEDRO_FRAMES, capacity)
+            -- Guard against 0-frame sheet breaking the animation pipeline
+            -- when sheet dimensions are degenerate (upstream v0.5.4 fix).
+            self.numFrames = math.max(1, math.min(PEDRO_FRAMES, capacity))
         end
     end, 0.05)
 end
@@ -372,7 +374,14 @@ function BLT:ShowLust()
     self._renderedMode = self.db.Mode
 
     if self.db.Mode == "pedro" then
-        self:StartSoundLoop()
+        -- Default: play once. Raid combat briefly evicts sounds from the audio
+        -- channel, and a retry-loop interprets that as "sound stopped" and
+        -- spams re-plays. Matches upstream HighOnHaste v0.5.4 fix (LOOP_SOUND=false).
+        if self.db.LoopSound then
+            self:StartSoundLoop()
+        else
+            self:PlaySoundOnce()
+        end
     end
     if self.frame then self.frame:Show() end
     self:StartAnimation()
