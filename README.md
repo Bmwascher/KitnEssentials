@@ -57,7 +57,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Hide ActionBars | Hide specific action bar rows in/out of combat |
 | Great Vault Alert | Shows your loot spec when opening the Great Vault with class color and sound |
 | Missing Enchants/Gems | Red warnings on character panel for missing enchants and empty gem sockets |
-| World Map Scaler | Adjustable minimized map scale and coordinate waypoint search bar |
+| World Map | Adjustable minimized map scale, coordinate waypoint search bar, and city map icons for Silvermoon / Stormwind / Orgrimmar |
 | Vantus Rune | One-click Vantus Rune withdrawal from Guild Bank with priority and confirmation |
 
 ## Skinning

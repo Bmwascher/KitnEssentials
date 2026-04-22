@@ -1,12 +1,16 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  WarpDepleteForces.lua                                   ║
 -- ║  Module: WarpDeplete Forces Tracker                      ║
--- ║  Purpose: Injects live pull forces tracking into         ║
--- ║           WarpDeplete using fingerprint-based mob ID.    ║
--- ║  Fixes: Death tooltip missing in M+ (secret GUID),      ║
--- ║         death names not class-colored (wrong API return).║
+-- ║  Purpose: Enemy-count tooltip + nameplate % overlay via  ║
+-- ║           C_ScenarioInfo.GetUnitCriteriaProgressValues   ║
+-- ║           (added 12.0.5). Also fixes WarpDeplete death   ║
+-- ║           tooltip + class-color path (CLEU localized).   ║
+-- ║                                                          ║
+-- ║  NOTE: Live pull overlay (SetForcesPull feed) removed    ║
+-- ║  2026-04-22 — blocked by 12.0.5 SecretValue arithmetic   ║
+-- ║  restriction. See memory: project_warpdeplete_pull_     ║
+-- ║  blocked.md for full restore path when Blizzard relaxes.║
 -- ║  Requires: WarpDeplete addon                             ║
--- ║  Data: MythicPlusCount (Midnight Season 1)               ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -19,349 +23,23 @@ local WDF = KitnEssentials:NewModule("WarpDepleteForces", "AceEvent-3.0")
 local CreateFrame = CreateFrame
 local UnitExists = UnitExists
 local UnitIsDead = UnitIsDead
+local UnitIsDeadOrGhost = UnitIsDeadOrGhost
 local UnitCanAttack = UnitCanAttack
 local UnitAffectingCombat = UnitAffectingCombat
-local UnitLevel = UnitLevel
-local UnitClassification = UnitClassification
-local UnitSex = UnitSex
 local UnitClass = UnitClass
-local UnitPowerType = UnitPowerType
 local C_ChallengeMode = C_ChallengeMode
-local C_UnitAuras = C_UnitAuras
-local UnitGUID = UnitGUID
+local C_ScenarioInfo = C_ScenarioInfo
+local C_NamePlate = C_NamePlate
 local UnitName = UnitName
 local GetNumGroupMembers = GetNumGroupMembers
 local IsInRaid = IsInRaid
 local C_Timer = C_Timer
-local pcall = pcall
-local tonumber = tonumber
 local format = string.format
-local strsplit = strsplit
+local pairs = pairs
+local ipairs = ipairs
+local table_remove = table.remove
+local wipe = wipe
 local issecretvalue = issecretvalue or function() return false end
-
----------------------------------------------------------------------------------
--- Dungeon Data (Midnight Season 1 — from MythicPlusCount / MDT)
----------------------------------------------------------------------------------
-
-local DUNGEON_DATA = {
-    [558] = { -- Magisters' Terrace
-        totalForces = 585,
-        mobs = {
-            [232369] = 7, [251861] = 12, [240973] = 12, [234069] = 1,
-            [234065] = 5, [234064] = 7, [234068] = 12, [234066] = 12,
-            [249086] = 7, [232106] = 1, [234062] = 16, [234124] = 5,
-            [234486] = 5, [241354] = 1, [257447] = 5,
-        },
-    },
-    [560] = { -- Maisara Caverns
-        totalForces = 607,
-        mobs = {
-            [248684] = 5, [242964] = 7, [248686] = 15, [248685] = 7,
-            [249020] = 3, [253302] = 15, [249002] = 2, [249022] = 5,
-            [248693] = 1, [248678] = 15, [254740] = 5, [249030] = 15,
-            [248692] = 2, [248690] = 2, [249036] = 7, [253683] = 10,
-            [249025] = 15, [249024] = 15, [253458] = 7, [253473] = 5,
-        },
-    },
-    [559] = { -- Nexus-Point Xenas
-        totalForces = 596,
-        mobs = {
-            [241643] = 6, [248501] = 1, [241644] = 5, [241645] = 3,
-            [241647] = 6, [248708] = 7, [248373] = 15, [248706] = 3,
-            [248506] = 8, [241660] = 15, [251853] = 7, [248502] = 15,
-            [241642] = 15, [254932] = 2, [254926] = 7, [254928] = 3,
-        },
-    },
-    [557] = { -- Windrunner Spire
-        totalForces = 591,
-        mobs = {
-            [232070] = 7, [232071] = 4, [232113] = 15, [232116] = 5,
-            [232173] = 5, [232171] = 6, [232232] = 4, [232175] = 15,
-            [232176] = 20, [232056] = 7, [234673] = 1, [232067] = 7,
-            [232063] = 15, [238099] = 1, [236894] = 17, [238049] = 5,
-            [232119] = 7, [232122] = 15, [232283] = 5, [232147] = 6,
-            [232148] = 7, [232146] = 15, [258868] = 4, [250883] = 2,
-        },
-    },
-    [402] = { -- Algeth'ar Academy
-        totalForces = 460,
-        mobs = {
-            [196045] = 5, [196577] = 5, [196671] = 15, [196694] = 4,
-            [196044] = 4, [192680] = 18, [192329] = 2, [192333] = 15,
-            [197406] = 4, [197219] = 9, [197398] = 2, [196200] = 15,
-            [196202] = 5,
-        },
-    },
-    [239] = { -- Seat of the Triumvirate
-        totalForces = 568,
-        mobs = {
-            [124171] = 10, [122571] = 20, [122413] = 9, [255320] = 8,
-            [122421] = 15, [122404] = 8, [252756] = 15, [122423] = 15,
-            [122322] = 1, [122403] = 3, [122405] = 7,
-        },
-    },
-    [161] = { -- Skyreach
-        totalForces = 431,
-        mobs = {
-            [76132] = 5, [78932] = 7, [250992] = 1, [75976] = 1,
-            [79462] = 5, [79466] = 7, [79467] = 7, [78933] = 15,
-            [76087] = 12, [79093] = 2, [76154] = 5, [76149] = 15,
-            [76205] = 5, [79303] = 12,
-        },
-    },
-    [556] = { -- Pit of Saron
-        totalForces = 643,
-        mobs = {
-            [252551] = 15, [252567] = 7, [252561] = 5, [252563] = 15,
-            [252558] = 5, [252610] = 11, [252559] = 2, [252606] = 6,
-            [252555] = 6, [257190] = 9, [252565] = 5, [252566] = 7,
-            [252564] = 20,
-        },
-    },
-}
-
----------------------------------------------------------------------------------
--- Fingerprint Data (Midnight Season 1 — from MythicPlusCount)
----------------------------------------------------------------------------------
-
-local FINGERPRINTS = {
-    [402] = {
-        ["1102558:0:elite:1:WARRIOR:1"] = 196694,
-        ["3952432:0:elite:1:WARRIOR:1"] = 196045,
-        ["3951256:0:elite:1:WARRIOR:1"] = 197406,
-        ["4077816:1:elite:1:WARRIOR:1"] = 192333,
-        ["4033880:1:elite:1:WARRIOR:1"] = 192680,
-        ["1100483:0:minus:1:WARRIOR:1"] = 192329,
-        ["4216711:0:elite:3:PALADIN:0"] = 196202,
-        ["617127:0:elite:1:WARRIOR:1"] = 196044,
-        ["4217881:1:elite:3:WARRIOR:1"] = 196200,
-        ["1382579:0:elite:2:WARRIOR:1"] = 196577,
-        ["1722688:0:normal:1:WARRIOR:1"] = 197398,
-        ["1722688:1:elite:1:WARRIOR:1"] = 197219,
-    },
-    [560] = {
-        ["6875167:0:elite:3:WARRIOR:1"] = 249036,
-        ["6875167:0:elite:3:PALADIN:0"] = 254740,
-        ["6366139:0:elite:3:WARRIOR:1"] = 242964,
-        ["6366139:0:elite:3:WARRIOR:1:0"] = 248693,
-        ["6366139:0:elite:3:WARRIOR:1:1"] = 242964,
-        ["6366139:1:elite:3:PALADIN:0"] = 248686,
-        ["6366141:0:elite:2:WARRIOR:1"] = 248684,
-        ["6366141:1:elite:2:PALADIN:0"] = 253458,
-        ["1716306:0:elite:1:WARRIOR:1"] = 248690,
-        ["1716306:0:elite:1:WARRIOR:1:1"] = 248690,
-        ["6875165:0:elite:2:PALADIN:0"] = 248685,
-        ["6875165:1:elite:2:PALADIN:0"] = 253683,
-        ["6875165:0:elite:2:WARRIOR:1"] = 249036,
-        ["7127711:1:elite:2:WARRIOR:1"] = 249030,
-        ["7127711:1:elite:2:WARRIOR:1:1"] = 249030,
-        ["4034801:1:elite:1:WARRIOR:1"] = 248678,
-        ["1695668:1:elite:1:PALADIN:0"] = 249024,
-        ["804504:0:elite:1:WARRIOR:1"] = 253473,
-        ["6163242:0:elite:1:WARRIOR:1"] = 249020,
-        ["1266661:0:elite:1:WARRIOR:1"] = 249022,
-        ["1719446:1:elite:1:WARRIOR:1"] = 249025,
-        ["1719446:1:elite:1:WARRIOR:1:1"] = 249025,
-        ["124640:0:normal:1:WARRIOR:1"] = 249002,
-        ["124640:0:normal:1:WARRIOR:1:1"] = 249002,
-        ["124640:1:elite:1:PALADIN:0"] = 253302,
-        ["1716306:0:elite:1:WARRIOR:1:0"] = 248692,
-    },
-    [239] = {
-        ["6152557:0:elite:3:PALADIN:0"] = 122404,
-        ["6152557:1:elite:3:PALADIN:0"] = 122423,
-        ["6152557:0:elite:3:WARRIOR:1"] = 122403,
-        ["1572365:0:elite:2:WARRIOR:1"] = 122413,
-        ["5926159:1:elite:2:WARRIOR:1"] = 122421,
-        ["6705352:1:elite:1:WARRIOR:1"] = 122571,
-        ["6705352:1:elite:1:WARRIOR:1:1"] = 122571,
-        ["6254042:1:elite:1:WARRIOR:1"] = 252756,
-        ["1574725:0:normal:0:?:-1:0"] = 255320,
-        ["1570694:0:elite:1:WARRIOR:1"] = 255320,
-        ["1574725:0:normal:1:WARRIOR:1"] = 122322,
-        ["1572377:1:elite:3:PALADIN:0"] = 124171,
-        ["6152557:0:elite:3:PALADIN:0:1"] = 122405,
-    },
-    [557] = {
-        ["1100258:0:elite:3:WARRIOR:1"] = 232070,
-        ["1100087:0:elite:2:WARRIOR:1"] = 232071,
-        ["1100087:1:elite:2:PALADIN:0"] = 232113,
-        ["6251997:1:elite:1:PALADIN:0"] = 232122,
-        ["997378:0:elite:3:WARRIOR:1"] = 232173,
-        ["959310:0:elite:2:WARRIOR:1"] = 232171,
-        ["1252028:1:elite:3:WARRIOR:1"] = 232175,
-        ["1598184:1:elite:1:WARRIOR:1"] = 232176,
-        ["6119019:0:elite:1:WARRIOR:1"] = 232056,
-        ["1513629:0:normal:1:WARRIOR:1"] = 234673,
-        ["1513629:0:elite:1:WARRIOR:1"] = 232067,
-        ["6338575:1:elite:1:WARRIOR:1"] = 232063,
-        ["5095674:0:normal:1:WARRIOR:1"] = 238099,
-        ["5095674:1:elite:1:ROGUE:3"] = 236894,
-        ["1373320:0:elite:1:WARRIOR:1"] = 232283,
-        ["6366139:0:elite:3:WARRIOR:1"] = 232148,
-        ["930099:1:elite:2:PALADIN:0"] = 232146,
-        ["917116:0:elite:2:WARRIOR:1"] = 258868,
-    },
-    [559] = {
-        ["6152557:0:elite:3:WARRIOR:1"] = 241643,
-        ["6152557:0:elite:3:WARRIOR:1:1"] = 241643,
-        ["6152557:0:elite:3:PALADIN:0"] = 241644,
-        ["6152557:0:elite:3:PALADIN:0:1"] = 241644,
-        ["6377937:0:elite:1:WARRIOR:1"] = 241645,
-        ["6377937:0:elite:1:WARRIOR:1:1"] = 241645,
-        ["5926159:0:elite:2:WARRIOR:1"] = 241647,
-        ["5926159:0:elite:2:WARRIOR:1:1"] = 241647,
-        ["5926159:0:normal:2:PALADIN:0"] = 248708,
-        ["5926159:1:elite:1:MAGE:0"] = 248373,
-        ["5926159:1:elite:1:MAGE:0:1"] = 248373,
-        ["6705352:0:normal:1:PALADIN:0"] = 248706,
-        ["6705352:0:normal:1:PALADIN:0:1"] = 248706,
-        ["6705352:0:elite:1:PALADIN:0"] = 251853,
-        ["6705352:0:elite:1:PALADIN:0:1"] = 251853,
-        ["6181818:1:elite:1:WARRIOR:1"] = 248506,
-        ["6181816:1:elite:1:MAGE:0"] = 241660,
-        ["6181814:1:elite:1:WARRIOR:1"] = 248502,
-        ["6730408:1:elite:2:PALADIN:0"] = 241642,
-        ["124640:0:minus:1:WARRIOR:1"] = 254932,
-        ["124640:0:minus:1:WARRIOR:1:1"] = 254932,
-        ["3952432:0:elite:1:WARRIOR:1"] = 254926,
-        ["2966279:0:normal:1:WARRIOR:1"] = 254928,
-        ["2966279:0:normal:1:WARRIOR:1:1"] = 254928,
-        ["7344962:0:normal:1:WARRIOR:1"] = 248501,
-        ["7344962:0:normal:1:WARRIOR:1:1"] = 248501,
-    },
-    [161] = {
-        ["986699:0:elite:1:WARRIOR:1"] = 76132,
-        ["986699:0:elite:1:PALADIN:0"] = 78932,
-        ["986699:1:elite:1:WARRIOR:1"] = 79303,
-        ["1033563:0:elite:1:WARRIOR:1"] = 75976,
-        ["1000727:1:elite:1:PALADIN:0"] = 76087,
-        ["3952432:1:elite:1:PALADIN:0"] = 78933,
-        ["1031301:1:normal:1:WARRIOR:1"] = 79093,
-        ["948417:1:elite:1:WARRIOR:1"] = 76149,
-        ["3946582:0:elite:1:ROGUE:3"] = 250992,
-    },
-    [556] = {
-        ["3087468:0:elite:2:WARRIOR:1"] = 252551,
-        ["3487358:0:elite:2:PALADIN:0"] = 252566,
-        ["3487358:0:elite:2:WARRIOR:1"] = 252561,
-        ["1574421:0:elite:1:WARRIOR:1"] = 252558,
-        ["125234:0:normal:1:WARRIOR:1"] = 252559,
-        ["122815:1:elite:2:WARRIOR:1"] = 252610,
-        ["124131:0:elite:3:WARRIOR:1"] = 252606,
-        ["3197237:0:elite:1:WARRIOR:1"] = 252555,
-        ["4672491:1:elite:1:WARRIOR:1"] = 257190,
-        ["3482565:1:elite:2:WARRIOR:1"] = 252563,
-        ["1709401:1:elite:1:WARRIOR:1"] = 252564,
-    },
-    [558] = {
-        ["1100258:0:elite:3:PALADIN:0"] = 232369,
-        ["1100258:1:elite:3:PALADIN:0"] = 251861,
-        ["1100087:0:elite:2:WARRIOR:1"] = 234124,
-        ["1100087:0:elite:2:PALADIN:0"] = 234486,
-        ["6705352:1:elite:1:ROGUE:3"] = 234068,
-        ["1410362:1:elite:1:WARRIOR:1"] = 234066,
-        ["3087474:0:elite:1:PALADIN:0"] = 234064,
-        ["7344962:0:normal:1:WARRIOR:1"] = 234069,
-        ["6316091:1:elite:1:ROGUE:3"] = 234062,
-        ["6253063:0:normal:1:PALADIN:0"] = 232106,
-        ["1102558:0:normal:1:PALADIN:0"] = 241354,
-        ["6377937:0:elite:1:WARRIOR:1"] = 257447,
-    },
-}
-
----------------------------------------------------------------------------------
--- Fingerprint System
----------------------------------------------------------------------------------
-
-local modelFrame = nil
-
-local function safeRead(fn, default)
-    local ok, val = pcall(fn)
-    if ok and val ~= nil and not issecretvalue(val) then return val end
-    return default
-end
-
-local function GetModelFileID(unit)
-    if not modelFrame then
-        modelFrame = CreateFrame("PlayerModel")
-    end
-    local ok, fileID = pcall(function()
-        modelFrame:SetUnit(unit)
-        local id = modelFrame:GetModelFileID()
-        if id and not issecretvalue(id) and id > 0 then return id end
-        return nil
-    end)
-    if ok then return fileID end
-    return nil
-end
-
-local function GetBuffCount(unit)
-    if not C_UnitAuras or not C_UnitAuras.GetAuraDataByIndex then return 0 end
-    local count = 0
-    for i = 1, 20 do
-        local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, unit, i, "HELPFUL")
-        if ok and aura then
-            count = count + 1
-        else
-            break
-        end
-    end
-    return count
-end
-
-local function GetFingerprint(unit)
-    local modelID = GetModelFileID(unit)
-    if not modelID then return nil end
-
-    local level  = safeRead(function() return UnitLevel(unit) end, 0)
-    local classn = safeRead(function() return UnitClassification(unit) end, "?")
-    local sex    = safeRead(function() return UnitSex(unit) end, 0)
-    local class  = safeRead(function() return select(2, UnitClass(unit)) end, "?")
-    local ptype  = safeRead(function() return UnitPowerType(unit) end, -1)
-
-    local relLevel = level % 10
-    return format("%d:%d:%s:%d:%s:%d", modelID, relLevel, classn, sex, class, ptype)
-end
-
-local function GetNpcIDFromGUID(guid)
-    if not guid or issecretvalue(guid) then return nil end
-    if type(guid) ~= "string" then return nil end
-    local guidType = strsplit("-", guid)
-    if guidType ~= "Creature" and guidType ~= "Vehicle" then return nil end
-    local _, _, _, _, _, npcID = strsplit("-", guid)
-    return npcID and tonumber(npcID)
-end
-
-local function GetNpcIDForUnit(unit, mapID)
-    if not unit or not mapID then return nil end
-    local fpMap = FINGERPRINTS[mapID]
-    if not fpMap then return nil end
-
-    -- Strategy 1: GUID (works outside instances)
-    local guid = UnitGUID(unit)
-    if guid and not issecretvalue(guid) then
-        local npcID = GetNpcIDFromGUID(guid)
-        if npcID then return npcID end
-    end
-
-    -- Strategy 2: Extended fingerprint (with buff count tiebreaker)
-    local baseFP = GetFingerprint(unit)
-    if not baseFP then return nil end
-    local extFP = baseFP .. ":" .. GetBuffCount(unit)
-    if fpMap[extFP] then return fpMap[extFP] end
-
-    -- Strategy 3: Primary fingerprint
-    if fpMap[baseFP] then return fpMap[baseFP] end
-
-    return nil
-end
-
-local function GetMobForces(npcID, mapID)
-    local dungeon = DUNGEON_DATA[mapID]
-    if not dungeon then return 0 end
-    return dungeon.mobs[npcID] or 0
-end
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -372,65 +50,16 @@ function WDF:UpdateDB()
 end
 
 ---------------------------------------------------------------------------------
--- Pull Tracking State
+-- API Gate
 ---------------------------------------------------------------------------------
 
-local inCombat = false
-local currentMapID = nil
-local ticker = nil
+-- Feature-gate: the module is a no-op if the 12.0.5 API is unavailable.
+local HasProgressAPI = C_ScenarioInfo and C_ScenarioInfo.GetUnitCriteriaProgressValues
+local GetProgress = HasProgressAPI and C_ScenarioInfo.GetUnitCriteriaProgressValues
 
-local function GetActiveMapID()
-    if C_ChallengeMode and C_ChallengeMode.GetActiveChallengeMapID then
-        local mapID = C_ChallengeMode.GetActiveChallengeMapID()
-        if mapID and not issecretvalue(mapID) then return mapID end
-    end
-    return nil
-end
-
-local function ScanPullForces()
-    if not inCombat or not currentMapID then return 0 end
-
-    -- Only count ALIVE mobs in combat on nameplates.
-    -- WarpDeplete already tracks killed forces via its own
-    -- SCENARIO_CRITERIA_UPDATE → SetForcesCurrent() pipeline.
-    -- SetForcesPull is the OVERLAY showing what's still alive.
-    local aliveCount = 0
-    for i = 1, 40 do
-        local unit = "nameplate" .. i
-        if UnitExists(unit) and not UnitIsDead(unit)
-           and UnitCanAttack("player", unit) and UnitAffectingCombat(unit) then
-            -- Skip bosses (level 92+)
-            local level = safeRead(function() return UnitLevel(unit) end, 0)
-            if level < 92 then
-                local npcID = GetNpcIDForUnit(unit, currentMapID)
-                if npcID then
-                    local forces = GetMobForces(npcID, currentMapID)
-                    if forces > 0 then
-                        aliveCount = aliveCount + forces
-                    end
-                end
-            end
-        end
-    end
-
-    return aliveCount
-end
-
-local function PushToWarpDeplete(pullCount)
-    if not WarpDeplete then return end
-    if WarpDeplete.SetForcesPull then
-        WarpDeplete:SetForcesPull(pullCount)
-    end
-end
-
-local function OnCombatTick()
-    if not inCombat then return end
-    local mapID = GetActiveMapID()
-    if not mapID then return end
-    currentMapID = mapID
-
-    local pullForces = ScanPullForces()
-    PushToWarpDeplete(pullForces)
+local function IsInChallengeMode()
+    return C_ChallengeMode and C_ChallengeMode.IsChallengeModeActive
+        and C_ChallengeMode.IsChallengeModeActive()
 end
 
 ---------------------------------------------------------------------------------
@@ -438,37 +67,185 @@ end
 ---------------------------------------------------------------------------------
 
 local function SetupTooltip()
-    if not WDF.db.Tooltip then return end
-    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tooltip, data)
+    if not WDF.db.Tooltip or not GetProgress then return end
+    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tooltip)
         if not WDF.db or not WDF.db.Tooltip then return end
-        if not currentMapID then return end
-        if not C_ChallengeMode.IsChallengeModeActive() then return end
+        if not IsInChallengeMode() then return end
 
-        local npcID = nil
+        -- The mouseover unit token is what Blizzard's tooltip frame resolves
+        -- against, so we read progress values directly off that. We mirror
+        -- BigWigs' Keystones pattern here — truthy check only, no numeric
+        -- comparisons (those crash on secret values). Pass values straight
+        -- through to format; BigWigs does this in the same context without
+        -- issue, suggesting format tolerates secret numeric args.
+        local value, percent = GetProgress("mouseover")
+        if not value or not percent then return end
 
-        -- Try GUID first
-        if data and data.guid and not issecretvalue(data.guid) then
-            npcID = GetNpcIDFromGUID(data.guid)
-        end
-
-        -- Try fingerprint via mouseover
-        if not npcID and UnitExists("mouseover") then
-            npcID = GetNpcIDForUnit("mouseover", currentMapID)
-        end
-
-        if not npcID then return end
-
-        local forces = GetMobForces(npcID, currentMapID)
-        if forces <= 0 then return end
-
-        local dungeon = DUNGEON_DATA[currentMapID]
-        if not dungeon then return end
-
-        local pct = (forces / dungeon.totalForces) * 100
         local themeHex = KE:GetThemeColorHex()
-        tooltip:AddLine(format("|cff%sCount:|r |cffffffff+%d / %.2f%%|r", themeHex, forces, pct))
+        -- Inline KE minimap icon to the left of "Count:". `:0:0` auto-sizes
+        -- the texture to the tooltip line's text height, matching BigWigs'
+        -- progressPercentTooltipText pattern.
+        tooltip:AddLine(format("|TInterface\\AddOns\\KitnEssentials\\Media\\Icon\\KitnUI:0:0|t|cff%sCount:|r |cffffffff+%d | %.2f%%|r",
+            themeHex, value, percent))
         tooltip:Show()
     end)
+end
+
+---------------------------------------------------------------------------------
+-- Nameplate % Overlay
+-- Shows each mob's forces contribution as a floating text on its nameplate.
+-- Follows BigWigs' text-pool pattern (Tools/Keystones.lua) — reusable Frame +
+-- FontString objects recycled when a nameplate leaves, so we don't churn
+-- frames on busy pulls. All style/position updates flow through ApplySettings
+-- so the GUI can live-refresh without reload.
+---------------------------------------------------------------------------------
+
+local activeTexts = {}   -- [unitToken] = textObj
+local storedTexts = {}   -- object pool (popped by Acquire)
+local nameplateTicker = nil
+
+local function CreateNameplateTextObject()
+    local frame = CreateFrame("Frame", nil, UIParent)
+    frame:SetSize(1, 1)
+    frame:SetFrameStrata("MEDIUM")
+    frame:SetFrameLevel(6200)
+    frame:Hide()
+    local fs = frame:CreateFontString(nil, "OVERLAY")
+    fs:SetPoint("CENTER")
+    return { frame = frame, fs = fs }
+end
+
+local function ApplyNameplateStyle(obj)
+    local db = WDF.db
+    if not db then return end
+    local fontPath = KE:GetFontPath(db.NameplateFontFace) or KE.FONT
+    local size = db.NameplateFontSize or 11
+    local outline = db.NameplateFontOutline or "OUTLINE"
+    if outline == "NONE" then outline = "" end
+    obj.fs:SetFont(fontPath, size, outline)
+    local r, g, b, a = KE:GetAccentColor(db.NameplateColorMode or "theme", db.NameplateColor)
+    obj.fs:SetTextColor(r, g, b, a or 1)
+end
+
+local function AttachNameplateText(obj, unit)
+    local plate = C_NamePlate and C_NamePlate.GetNamePlateForUnit and C_NamePlate.GetNamePlateForUnit(unit)
+    if not plate then return false end
+    local db = WDF.db
+    -- Self-anchor stays CENTER; parent anchor is user-configurable so the text
+    -- can hover above/below/beside the nameplate. X/Y are the offset from
+    -- that anchor, so adjusting both sliders + dropdown gives full placement.
+    obj.frame:ClearAllPoints()
+    obj.frame:SetParent(plate)
+    obj.frame:SetPoint("CENTER", plate, db.NameplateAnchor or "CENTER",
+        db.NameplateXOffset or 25, db.NameplateYOffset or 15)
+    obj.frame:Show()
+    return true
+end
+
+local function AcquireNameplateText()
+    local obj = table_remove(storedTexts)
+    if not obj then obj = CreateNameplateTextObject() end
+    ApplyNameplateStyle(obj)
+    return obj
+end
+
+local function ReleaseNameplateText(unit)
+    local obj = activeTexts[unit]
+    if not obj then return end
+    obj.frame:Hide()
+    obj.frame:ClearAllPoints()
+    obj.frame:SetParent(UIParent)
+    activeTexts[unit] = nil
+    storedTexts[#storedTexts + 1] = obj
+end
+
+local function UpdateNameplateTextFor(unit)
+    if not WDF.db or not WDF.db.NameplatePercent then return end
+    if not GetProgress then return end
+    if not IsInChallengeMode() then
+        ReleaseNameplateText(unit)
+        return
+    end
+    if not UnitExists(unit) or UnitIsDead(unit) or not UnitCanAttack("player", unit) then
+        ReleaseNameplateText(unit)
+        return
+    end
+    if WDF.db.NameplateCombatOnly then
+        if not UnitAffectingCombat(unit) then
+            ReleaseNameplateText(unit)
+            return
+        end
+        -- Hide while the player is dead/ghost. Mobs may still be in combat
+        -- with the rest of the party, but the overlay is visual noise while
+        -- corpse-running — re-appears within 0.5s of resurrection.
+        if UnitIsDeadOrGhost("player") then
+            ReleaseNameplateText(unit)
+            return
+        end
+    end
+
+    local _, percent = GetProgress(unit)
+    if not percent then
+        ReleaseNameplateText(unit)
+        return
+    end
+
+    local obj = activeTexts[unit]
+    if not obj then
+        obj = AcquireNameplateText()
+        activeTexts[unit] = obj
+    end
+    if not AttachNameplateText(obj, unit) then
+        ReleaseNameplateText(unit)
+        return
+    end
+    obj.fs:SetText(format("%.2f%%", percent))
+end
+
+local function UpdateAllNameplateTexts()
+    for i = 1, 40 do
+        local unit = "nameplate" .. i
+        if UnitExists(unit) then
+            UpdateNameplateTextFor(unit)
+        end
+    end
+    -- Clean up entries whose unit token is no longer present
+    for unit in pairs(activeTexts) do
+        if not UnitExists(unit) then
+            ReleaseNameplateText(unit)
+        end
+    end
+end
+
+local function ReleaseAllNameplateTexts()
+    for unit in pairs(activeTexts) do
+        ReleaseNameplateText(unit)
+    end
+end
+
+local function RefreshAllNameplateStyle()
+    for _, obj in pairs(activeTexts) do ApplyNameplateStyle(obj) end
+    for _, obj in pairs(storedTexts) do ApplyNameplateStyle(obj) end
+end
+
+local function RefreshAllNameplatePositions()
+    for unit, obj in pairs(activeTexts) do
+        AttachNameplateText(obj, unit)
+    end
+end
+
+local function StartNameplateTicker()
+    if nameplateTicker then return end
+    if not WDF.db or not WDF.db.NameplatePercent then return end
+    if not IsInChallengeMode() then return end
+    nameplateTicker = C_Timer.NewTicker(0.5, UpdateAllNameplateTexts)
+end
+
+local function StopNameplateTicker()
+    if nameplateTicker then
+        nameplateTicker:Cancel()
+        nameplateTicker = nil
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -498,6 +275,12 @@ local suppressLearning = false
 local recordedDeaths = {}
 -- Debounce flag so UNIT_DIED spam collapses to one ProcessDeaths per window.
 local processScheduled = false
+-- 0.5s ticker that clears recordedDeaths entries for players who've since
+-- revived. Without this, the "die → release → run back → resurrect → die
+-- again" loop leaves the first death's name pinned in recordedDeaths, so
+-- the second death is filtered out when ProcessDeaths scans (no intervening
+-- UNIT_DIED event triggered a scan that saw them alive).
+local aliveScanTicker = nil
 
 -- A class token is valid if GetClassColor returns a hex value for it.
 local function IsValidClassToken(class)
@@ -525,20 +308,50 @@ local function GetClassTokenForName(name)
 end
 
 -- Is this named player currently alive (or not in the group)?
+-- Uses UnitIsDeadOrGhost so a player who released to ghost is still treated as
+-- "dead" for recordedDeaths purposes — otherwise fast-release players would be
+-- cleared from the dedup set and re-added on the next scan (or never recorded
+-- at all if release happens inside the PROCESS_DEFER window).
 local function IsPlayerNameAlive(name)
     if not name then return true end
     if UnitName("player") == name then
-        return not UnitIsDead("player")
+        return not UnitIsDeadOrGhost("player")
     end
     local token = IsInRaid() and "raid" or "party"
     local size = GetNumGroupMembers()
     for i = 1, size do
         local unit = token .. i
         if UnitExists(unit) and UnitName(unit) == name then
-            return not UnitIsDead(unit)
+            return not UnitIsDeadOrGhost(unit)
         end
     end
     return true -- not found (left group); treat as alive so entry gets cleared
+end
+
+-- Called on a 0.5s ticker during M+. Iterates recordedDeaths; if the named
+-- player is now alive (resurrected or brez'd), remove them so their NEXT
+-- death is recognized as new. This is the fix for "die → revive → die again
+-- with no other UNIT_DIED in between" — the ProcessDeaths-time cleanup only
+-- runs on UNIT_DIED events, which miss pure revival transitions.
+local function CleanupAliveRecorded()
+    for name in pairs(recordedDeaths) do
+        if IsPlayerNameAlive(name) then
+            recordedDeaths[name] = nil
+            if DEBUG_DEATHS then KE:Print(format("[poll-clear] %s alive again", name)) end
+        end
+    end
+end
+
+local function StartAliveScanTicker()
+    if aliveScanTicker then return end
+    aliveScanTicker = C_Timer.NewTicker(0.5, CleanupAliveRecorded)
+end
+
+local function StopAliveScanTicker()
+    if aliveScanTicker then
+        aliveScanTicker:Cancel()
+        aliveScanTicker = nil
+    end
 end
 
 -- Scan the roster and append any dead player we haven't already recorded.
@@ -554,8 +367,8 @@ local function ProcessDeaths()
         end
     end
 
-    -- Player
-    if UnitIsDead("player") then
+    -- Player — catch dead + ghost so fast releasers still get recorded.
+    if UnitIsDeadOrGhost("player") then
         local name = UnitName("player")
         if name and not recordedDeaths[name] then
             local _, classToken = UnitClass("player")
@@ -575,7 +388,7 @@ local function ProcessDeaths()
         local token = IsInRaid() and "raid" or "party"
         for i = 1, size do
             local unit = token .. i
-            if UnitExists(unit) and UnitIsDead(unit) then
+            if UnitExists(unit) and UnitIsDeadOrGhost(unit) then
                 local name = UnitName(unit)
                 if name and not recordedDeaths[name] then
                     local _, classToken = UnitClass(unit)
@@ -643,16 +456,43 @@ local function SetupDeathClassFix()
         originalAdd(self, time, name, class)
         if name then
             recordedDeaths[name] = true
+            -- Mirror to SavedVariables so the list survives /reload. We only
+            -- persist when DeathLog has a captured mapID (set on CHALLENGE_
+            -- MODE_START) — ensures we don't hoard entries from non-M+ deaths.
+            local log = WDF.db and WDF.db.DeathLog
+            if log and log.mapID then
+                log.details[#log.details + 1] = {
+                    time = time, name = name, class = class,
+                }
+                if DEBUG_DEATHS then
+                    KE:Print(format("[persist] saved %d entries", #log.details))
+                end
+            end
         end
+
+        -- Sync the header count. We want max(gameCount, listCount): the game
+        -- count is authoritative (persists across /reload), the listCount is
+        -- our tracked detail rows. Using only listCount breaks after reload
+        -- because listCount starts at 0 while the game says e.g. 11 — feeding
+        -- SetDeathCount(1) when the first new death hits would yank the
+        -- display from 11 to 1. Reading GetDeathCount() here keeps the header
+        -- accurate without waiting for Blizzard's next event to catch up.
         local listCount = #self.state.deathDetails
+        local gameCount, gameTimeLost = 0, 0
+        if C_ChallengeMode and C_ChallengeMode.GetDeathCount then
+            local c, t = C_ChallengeMode.GetDeathCount()
+            if c and not issecretvalue(c) then gameCount = c end
+            if t and not issecretvalue(t) then gameTimeLost = t end
+        end
+        local finalCount = gameCount > listCount and gameCount or listCount
         local timeLost
         if lastDeathPenalty then
-            timeLost = math.floor(listCount * lastDeathPenalty + 0.5)
+            timeLost = math.floor(finalCount * lastDeathPenalty + 0.5)
         else
-            timeLost = self.state.deathTimeLost or 0
+            timeLost = gameTimeLost
         end
         suppressLearning = true
-        self:SetDeathCount(listCount, timeLost)
+        self:SetDeathCount(finalCount, timeLost)
         suppressLearning = false
     end
 
@@ -680,68 +520,147 @@ end
 -- Event Handlers
 ---------------------------------------------------------------------------------
 
-function WDF:PLAYER_REGEN_DISABLED()
-    currentMapID = GetActiveMapID()
-    if not currentMapID then return end
-    inCombat = true
-    OnCombatTick()
-
-    -- Start nameplate scan ticker for this combat
-    if not ticker then
-        ticker = C_Timer.NewTicker(0.5, function()
-            if inCombat and currentMapID then
-                OnCombatTick()
-            end
-        end)
-    end
+-- Clear the persisted death log — called from CHALLENGE_MODE_COMPLETED/RESET.
+local function ClearDeathLog()
+    local log = WDF.db and WDF.db.DeathLog
+    if not log then return end
+    log.mapID = nil
+    log.keyLevel = nil
+    if log.details then wipe(log.details) end
+    wipe(recordedDeaths)
+    if DEBUG_DEATHS then KE:Print("[persist] log cleared") end
 end
 
-function WDF:PLAYER_REGEN_ENABLED()
-    -- Stop ticker
-    if ticker then
-        ticker:Cancel()
-        ticker = nil
+-- Read current M+ identity. Guards against secret values returned by the
+-- keystone API (observed in other 12.0.5 scenario reads).
+local function GetMPlusIdentity()
+    local mapID = C_ChallengeMode and C_ChallengeMode.GetActiveChallengeMapID
+        and C_ChallengeMode.GetActiveChallengeMapID()
+    if mapID and issecretvalue(mapID) then mapID = nil end
+    local level
+    if C_ChallengeMode and C_ChallengeMode.GetActiveKeystoneInfo then
+        level = C_ChallengeMode.GetActiveKeystoneInfo()
+        if level and issecretvalue(level) then level = nil end
     end
-
-    C_Timer.After(0.5, function()
-        -- Guard: if a new pull started during the 0.5s grace window,
-        -- PLAYER_REGEN_DISABLED already rebuilt state and restarted the
-        -- ticker. Don't clobber it back to 0.
-        if UnitAffectingCombat("player") then return end
-        inCombat = false
-        PushToWarpDeplete(0)
-    end)
-end
-
-function WDF:SCENARIO_CRITERIA_UPDATE()
-    if inCombat then
-        OnCombatTick()
-    end
+    return mapID, level
 end
 
 function WDF:CHALLENGE_MODE_START()
-    currentMapID = GetActiveMapID()
-    inCombat = false
-    PushToWarpDeplete(0)
+    -- Fresh run begins — capture identity, wipe any stale saved entries.
+    local mapID, level = GetMPlusIdentity()
+    self.db.DeathLog.mapID = mapID
+    self.db.DeathLog.keyLevel = level
+    wipe(self.db.DeathLog.details)
+    wipe(recordedDeaths)
+    if DEBUG_DEATHS then
+        KE:Print(format("[start] mapID=%s level=%s", tostring(mapID), tostring(level)))
+    end
+
+    StartAliveScanTicker()
+    if self.db.NameplatePercent then
+        StartNameplateTicker()
+    end
 end
 
 function WDF:CHALLENGE_MODE_COMPLETED()
-    inCombat = false
-    currentMapID = nil
-    PushToWarpDeplete(0)
+    ClearDeathLog()
+    StopAliveScanTicker()
+    StopNameplateTicker()
+    ReleaseAllNameplateTexts()
 end
 
 function WDF:CHALLENGE_MODE_RESET()
-    currentMapID = nil
-    inCombat = false
+    ClearDeathLog()
+    StopAliveScanTicker()
+    StopNameplateTicker()
+    ReleaseAllNameplateTexts()
 end
 
-function WDF:ZONE_CHANGED_NEW_AREA()
-    currentMapID = GetActiveMapID()
+-- Called after a /reload: if the saved log matches the current M+ run, restore
+-- the entries into WarpDeplete's runtime state and sync the header count.
+-- If mapID or keyLevel differ, the log is stale → wipe.
+function WDF:RestoreDeathLog()
+    if not WarpDeplete or not WarpDeplete.state then return end
+    if not IsInChallengeMode() then return end
+
+    local log = self.db and self.db.DeathLog
+    if not log then
+        if DEBUG_DEATHS then KE:Print("[restore] DB missing") end
+        return
+    end
+
+    local currentMap, currentLevel = GetMPlusIdentity()
+
+    -- If mapID was never captured for this run (typically: addon updated
+    -- mid-run, so CHALLENGE_MODE_START fired with the older non-persisting
+    -- code), capture it now. Subsequent deaths will persist correctly even
+    -- without a fresh START event this session.
+    if not log.mapID and currentMap then
+        log.mapID = currentMap
+        log.keyLevel = currentLevel
+        if not log.details then log.details = {} end
+        if DEBUG_DEATHS then
+            KE:Print(format("[restore] captured mapID=%s level=%s (was unset)",
+                tostring(currentMap), tostring(currentLevel)))
+        end
+        return  -- nothing pre-saved to rehydrate; persistence active going forward
+    end
+
+    if not log.details or #log.details == 0 then
+        if DEBUG_DEATHS then KE:Print("[restore] no saved entries to rehydrate") end
+        return
+    end
+
+    if log.mapID ~= currentMap or log.keyLevel ~= currentLevel then
+        if DEBUG_DEATHS then
+            KE:Print(format("[restore] stale (saved=%s/%s vs now=%s/%s) — wiping",
+                tostring(log.mapID), tostring(log.keyLevel),
+                tostring(currentMap), tostring(currentLevel)))
+        end
+        ClearDeathLog()
+        -- Capture the new run's identity so future deaths persist.
+        log.mapID = currentMap
+        log.keyLevel = currentLevel
+        return
+    end
+
+    -- Same run — rehydrate WarpDeplete.state.deathDetails so the tooltip list
+    -- isn't empty after reload. Also populate recordedDeaths so ProcessDeaths
+    -- doesn't re-add the same entries.
+    for _, entry in ipairs(log.details) do
+        if entry.time and entry.name and entry.class then
+            -- luacheck: ignore 122 (writing to WarpDeplete-owned state table)
+            WarpDeplete.state.deathDetails[#WarpDeplete.state.deathDetails + 1] = {
+                time = entry.time, name = entry.name, class = entry.class,
+            }
+            recordedDeaths[entry.name] = true
+        end
+    end
+
+    -- Sync header. suppressLearning prevents our SetDeathCount hook from
+    -- re-deriving lastDeathPenalty during this restore pump.
+    local gameCount, gameTimeLost = 0, 0
+    if C_ChallengeMode and C_ChallengeMode.GetDeathCount then
+        local c, t = C_ChallengeMode.GetDeathCount()
+        gameCount = (c and not issecretvalue(c)) and c or 0
+        gameTimeLost = (t and not issecretvalue(t)) and t or 0
+    end
+    suppressLearning = true
+    WarpDeplete:SetDeathCount(gameCount, gameTimeLost)
+    suppressLearning = false
+
+    if DEBUG_DEATHS then
+        KE:Print(format("[restore] rehydrated %d entries (gameCount=%d)",
+            #log.details, gameCount))
+    end
 end
 
-function WDF:PLAYER_ENTERING_WORLD()
-    currentMapID = GetActiveMapID()
+function WDF:NAME_PLATE_UNIT_ADDED(_, unit)
+    UpdateNameplateTextFor(unit)
+end
+
+function WDF:NAME_PLATE_UNIT_REMOVED(_, unit)
+    ReleaseNameplateText(unit)
 end
 
 ---------------------------------------------------------------------------------
@@ -749,7 +668,33 @@ end
 ---------------------------------------------------------------------------------
 
 function WDF:ApplySettings()
-    -- No visual settings to apply — this module feeds WarpDeplete
+    -- Tooltip conflict: WarpDeplete 5.1.0 ships its own "Count:" tooltip line
+    -- gated by showTooltipCount + MDT. Bind our toggle as the master:
+    --   our Tooltip ON  → force WD's off (only ours shows)
+    --   our Tooltip OFF → force WD's on  (WD's shows if MDT is loaded)
+    -- Users get exactly one "Count:" line regardless of WD's own setting.
+    if WarpDeplete and WarpDeplete.db and WarpDeplete.db.profile then
+        -- luacheck: ignore 122 (writing to WarpDeplete-owned config table)
+        WarpDeplete.db.profile.showTooltipCount = not self.db.Tooltip
+    end
+
+    -- Nameplate % subsystem: re-wire events/ticker on toggle, and live-refresh
+    -- style/position on font/color/offset changes so the GUI reflects instantly.
+    if self.db.NameplatePercent then
+        self:RegisterEvent("NAME_PLATE_UNIT_ADDED")
+        self:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
+        if IsInChallengeMode() then
+            StartNameplateTicker()
+            UpdateAllNameplateTexts()
+        end
+    else
+        self:UnregisterEvent("NAME_PLATE_UNIT_ADDED")
+        self:UnregisterEvent("NAME_PLATE_UNIT_REMOVED")
+        StopNameplateTicker()
+        ReleaseAllNameplateTexts()
+    end
+    RefreshAllNameplateStyle()
+    RefreshAllNameplatePositions()
 end
 
 ---------------------------------------------------------------------------------
@@ -771,32 +716,40 @@ function WDF:OnEnable()
 
     if not self.db.Enabled then return end
 
+    if not HasProgressAPI then
+        KE:Print("WarpDeplete+: C_ScenarioInfo.GetUnitCriteriaProgressValues unavailable on this client; pull forces + count tooltip disabled.")
+    end
+
     -- Register events
-    self:RegisterEvent("PLAYER_REGEN_DISABLED")
-    self:RegisterEvent("PLAYER_REGEN_ENABLED")
-    self:RegisterEvent("SCENARIO_CRITERIA_UPDATE")
     self:RegisterEvent("CHALLENGE_MODE_START")
     self:RegisterEvent("CHALLENGE_MODE_COMPLETED")
     self:RegisterEvent("CHALLENGE_MODE_RESET")
-    self:RegisterEvent("ZONE_CHANGED_NEW_AREA")
-    self:RegisterEvent("PLAYER_ENTERING_WORLD")
-
-    -- Detect current dungeon (covers /reload inside M+)
-    currentMapID = GetActiveMapID()
 
     -- Tooltip hook
     SetupTooltip()
 
     -- Fix WarpDeplete death class colors (uses className instead of classFilename)
     SetupDeathClassFix()
+
+    -- Nameplate % subsystem — wires events + seeds existing nameplates if in M+
+    self:ApplySettings()
+
+    -- Post-reload death log rehydration. Deferred so WarpDeplete has time to
+    -- finish its own init (state tables populated, CHALLENGE_MODE_DEATH_COUNT_
+    -- UPDATED fired) before we pump entries back into its state.
+    C_Timer.After(1.5, function()
+        self:RestoreDeathLog()
+        -- Start the alive-cleanup ticker if we're in an active M+ (covers
+        -- /reload inside a run — CHALLENGE_MODE_START won't fire again).
+        if IsInChallengeMode() then
+            StartAliveScanTicker()
+        end
+    end)
 end
 
 function WDF:OnDisable()
     self:UnregisterAllEvents()
-    if ticker then
-        ticker:Cancel()
-        ticker = nil
-    end
-    inCombat = false
-    PushToWarpDeplete(0)
+    StopAliveScanTicker()
+    StopNameplateTicker()
+    ReleaseAllNameplateTexts()
 end

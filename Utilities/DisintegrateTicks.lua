@@ -23,7 +23,6 @@ local hooksecurefunc = hooksecurefunc
 local math_ceil = math.ceil
 local math_max = math.max
 local UnitChannelInfo = UnitChannelInfo
-local UnitSpellHaste = UnitSpellHaste
 
 
 ---------------------------------------------------------------------------------
@@ -38,6 +37,7 @@ local ETERNITY_SURGE = 359073
 local ETERNITY_SURGE_FONT = 382411
 local NATURAL_CONVERGENCE = 369913
 local STACK_EXPIRY = 15
+local DISINTEGRATE_BASE_DURATION = 3.0  -- Seconds at 0% haste (pre-Natural Convergence)
 
 local DEVASTATION = 1467
 local PRESERVATION = 1468
@@ -56,6 +56,7 @@ DT.lastStart = 0
 DT.firstTick = 0
 DT.prevEndTime = nil
 DT.prevHastedTickInterval = nil
+DT.lastKnownHaste = 0  -- 12.0.5: derived from cast duration instead of UnitSpellHaste (secret-valued)
 DT.castBarInfo = { width = 0, height = 0, anchor = nil }
 DT.hooksInstalled = false
 
@@ -148,8 +149,24 @@ end
 ---------------------------------------------------------------------------------
 -- Haste / Tick Helpers
 ---------------------------------------------------------------------------------
-function DT:GetHaste()
-    return 1 + UnitSpellHaste("player") / 100
+-- 12.0.5: UnitSpellHaste("player") returns a secret value in encounters, so we
+-- back-solve haste from the actual Disintegrate channel length instead. At 0%
+-- haste with no Natural Convergence the base channel is 3.0s; Natural
+-- Convergence shortens by 20%. `actualDuration` (endTime - startTime) plus the
+-- NC talent state gives us haste multiplier = baseDuration / actualDuration.
+-- Result is cached in self.lastKnownHaste so no-arg calls (UpdateTicks, preview)
+-- can read it without another stat-API query.
+function DT:GetHaste(actualDuration)
+    if actualDuration ~= nil and actualDuration > 0 then
+        local baseDuration = DISINTEGRATE_BASE_DURATION
+        if C_SpellBook.IsSpellKnown(NATURAL_CONVERGENCE) then
+            baseDuration = baseDuration * 0.8
+        end
+        local hasteMultiplier = baseDuration / actualDuration
+        self.lastKnownHaste = (hasteMultiplier - 1) * 100
+        return hasteMultiplier
+    end
+    return 1 + self.lastKnownHaste / 100
 end
 
 function DT:GetTickInterval()
@@ -460,7 +477,9 @@ function DT:OnEvent(event, unit, ...)
         end
 
         local nextEndTime = endTimeMS / 1000
-        local hastedTickInterval = self:GetTickInterval() / self:GetHaste()
+        -- Pass actualDuration so GetHaste primes self.lastKnownHaste. UpdateTicks
+        -- below reads it via the no-arg form.
+        local hastedTickInterval = self:GetTickInterval() / self:GetHaste(nextEndTime - startTime)
 
         self.firstTick = 0
 
