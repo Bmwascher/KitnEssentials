@@ -1172,19 +1172,29 @@ function DT:StopBar(text)
     for frameKey, barData in pairs(self.triggerBars) do
         if barData and barData.text == text then
             matched = true
-            -- If this trigger has extendTimer, don't stop while extended time remains
-            if barData.extendTimer and barData.extendTimer > 0 and barData.expirationTime > now then
-                -- BigWigs bar ended but our extended timer is still active — let it run
+            -- Only HOLD when we're inside the extension tail — i.e. the original
+            -- BigWigs bar has already elapsed and only the extendTimer remains.
+            -- If BW stops the bar mid-countdown (cancel, phase end, boss death),
+            -- originalEnd > now and we HIDE so the tail doesn't ride through.
+            local extend = barData.extendTimer or 0
+            local originalEnd = barData.expirationTime - extend
+            if extend > 0 and barData.expirationTime > now and originalEnd <= now then
                 if DEBUG_DT then
                     KE:Print(string.format("[DT] StopBar HOLD text=%s remain=%.2f extend=%.1f",
-                        tostring(text), barData.expirationTime - now, barData.extendTimer))
+                        tostring(text), barData.expirationTime - now, extend))
                 end
             else
                 if DEBUG_DT then
-                    KE:Print(string.format("[DT] StopBar HIDE text=%s extend=%s expInPast=%s",
-                        tostring(text),
-                        tostring(barData.extendTimer),
-                        tostring(barData.expirationTime and (barData.expirationTime <= now))))
+                    local reason
+                    if extend <= 0 then
+                        reason = "no-extend"
+                    elseif barData.expirationTime <= now then
+                        reason = "already-expired"
+                    else
+                        reason = "mid-countdown"
+                    end
+                    KE:Print(string.format("[DT] StopBar HIDE text=%s reason=%s extend=%.1f origRemain=%.2f",
+                        tostring(text), reason, extend, originalEnd - now))
                 end
                 self:HideTriggerDisplay(frameKey)
             end
@@ -1208,21 +1218,36 @@ function DT:StopAllBars()
     self:StopAllTimers()
 end
 
--- Like StopAllBars, but honors extendTimer: bars whose extended expirationTime
--- has not yet elapsed are left alone. Used for BigWigs cleanup events
--- (StopBars, OnBossDisable) where we want the extended display to ride through.
+-- Like StopAllBars, but honors extendTimer: bars whose original BigWigs end has
+-- already passed (i.e. we're inside the extension tail) are left alone. Used
+-- for BigWigs cleanup events (StopBars, OnBossDisable) so a naturally-ending
+-- bar's tail rides through. If BW stops bars while countdowns are still
+-- running (boss dies mid-fight), HIDE so stale warnings don't fire post-death.
 function DT:StopAllBarsRespectExtend()
     local now = GetTime()
     for frameKey, barData in pairs(self.triggerBars) do
-        if barData and barData.extendTimer and barData.extendTimer > 0 and barData.expirationTime > now then
+        local extend = barData and barData.extendTimer or 0
+        local originalEnd = barData and (barData.expirationTime - extend)
+        if barData and extend > 0 and barData.expirationTime > now and originalEnd <= now then
             if DEBUG_DT then
                 KE:Print(string.format("[DT] StopAllBarsRespectExtend HOLD text=%s remain=%.2f",
                     tostring(barData.text), barData.expirationTime - now))
             end
         else
             if DEBUG_DT then
-                KE:Print(string.format("[DT] StopAllBarsRespectExtend HIDE text=%s",
-                    tostring(barData and barData.text)))
+                local reason
+                if not barData then
+                    reason = "no-data"
+                elseif extend <= 0 then
+                    reason = "no-extend"
+                elseif barData.expirationTime <= now then
+                    reason = "already-expired"
+                else
+                    reason = "mid-countdown"
+                end
+                KE:Print(string.format("[DT] StopAllBarsRespectExtend HIDE text=%s reason=%s origRemain=%.2f",
+                    tostring(barData and barData.text), reason,
+                    originalEnd and (originalEnd - now) or 0))
             end
             self:HideTriggerDisplay(frameKey)
         end
