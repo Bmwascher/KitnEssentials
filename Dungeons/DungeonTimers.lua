@@ -1,9 +1,9 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  DungeonTimers.lua                                      ║
--- ║  Module: Dungeon Timers                                 ║
--- ║  Purpose: BigWigs-integrated dungeon timer system with  ║
--- ║           per-dungeon triggers, bar/text groups, and    ║
--- ║           role-based load conditions.                   ║
+-- ║  DungeonTimers.lua                                       ║
+-- ║  Module: Dungeon Timers                                  ║
+-- ║  Purpose: BigWigs-integrated dungeon timer system with   ║
+-- ║           per-dungeon triggers, bar/text groups, and     ║
+-- ║           role-based load conditions.                    ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE

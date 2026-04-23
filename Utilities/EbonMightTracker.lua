@@ -2,7 +2,7 @@
 -- ║  EbonMightTracker.lua                                    ║
 -- ║  Module: Ebon Might Tracker                              ║
 -- ║  Purpose: Displays Ebon Might buff duration with crit    ║
--- ║           and duped cast detection for Augmentation.    ║
+-- ║           and duped cast detection for Augmentation.     ║
 -- ║  Note: Evoker only (Augmentation).                       ║
 -- ╚══════════════════════════════════════════════════════════╝
 

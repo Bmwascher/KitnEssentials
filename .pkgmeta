@@ -2,7 +2,9 @@ package-as: KitnEssentials
 
 changelog-title: KitnEssentials
 
-manual-changelog: CHANGELOG.md
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
 
 ignore:
   - .pkgmeta
