@@ -1,8 +1,8 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  DungeonCasts.lua                                       ║
--- ║  Module: Dungeon Casts                                  ║
--- ║  Purpose: Enemy cast bars for M+ nameplates with icon,  ║
--- ║           target text, raid icons, and bar stacking.    ║
+-- ║  DungeonCasts.lua                                        ║
+-- ║  Module: Dungeon Casts                                   ║
+-- ║  Purpose: Enemy cast bars for M+ nameplates with icon,   ║
+-- ║           target text, raid icons, and bar stacking.     ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -175,12 +175,48 @@ function DC:CreateBarFrame()
     frame.nameText = frame.castBar:CreateFontString(nil, "OVERLAY")
     frame.timeText = frame.castBar:CreateFontString(nil, "OVERLAY")
     frame.targetText = frame.castBar:CreateFontString(nil, "OVERLAY")
+    -- Separator is a sibling FontString so targetText never needs |cff..|r
+    -- concatenation (UnitSpellTargetName returns a secret string in 12.0
+    -- for player targets, and concat semantics on secret strings are unsafe).
+    frame.targetSeparator = frame.castBar:CreateFontString(nil, "OVERLAY")
 
     frame.raidIcon = frame:CreateTexture(nil, "OVERLAY")
     frame.raidIcon:SetTexture("Interface/TargetingFrame/UI-RaidTargetingIcons")
     frame.raidIcon:Hide()
 
     return frame
+end
+
+-- Lazy-create a hidden module-level FontString used ONLY for measuring text
+-- widths in untainted contexts. Parented to UIParent so it persists for the
+-- session; we never attach it to a bar.
+function DC:EnsureMeasureFS()
+    if not self.measureFS then
+        local fs = UIParent:CreateFontString(nil, "OVERLAY")
+        fs:Hide()
+        self.measureFS = fs
+    end
+    return self.measureFS
+end
+
+-- Measure the widest natural 3-char time ("9.9") at the current font/size/
+-- outline and cache the result on self.timeWidthReserve. MUST be called from
+-- an untainted context (OnEnable, ApplySettings via GUI). ConfigureBar runs
+-- from nameplate event handlers (tainted) and cannot measure directly —
+-- GetStringWidth returns a secret number there and math.ceil on it errors.
+function DC:RefreshTimeWidthReserve()
+    if not (self.db and self.db.BarDisplay) then return end
+    local barDb = self.db.BarDisplay
+    local fs = self:EnsureMeasureFS()
+    KE:ApplyFont(fs, barDb.FontFace, barDb.FontSize, barDb.FontOutline)
+    fs:SetText("9.9")
+    local width = fs:GetStringWidth()
+    if type(width) == "number" and width > 0 then
+        self.timeWidthReserve = math.ceil(width) + 2
+    end
+    -- Leave self.timeWidthReserve alone on measurement failure so a previous
+    -- good value is preserved; ConfigureBar falls back to a static multiplier
+    -- if this was never set at all.
 end
 
 -- Applies current settings to a bar frame
@@ -258,21 +294,53 @@ function DC:ConfigureBar(bar)
     KE:ApplyFont(bar.timeText, barDb.FontFace, barDb.FontSize, barDb.FontOutline)
     bar.timeText:SetTextColor(tc[1], tc[2], tc[3], tc[4])
     bar.timeText:SetShown(textDb.ShowTime)
+    -- Reserve fixed width for the widest natural 3-char time ("9.9" / "0.9").
+    -- ConfigureBar runs from nameplate event handlers (tainted), so we cannot
+    -- call GetStringWidth here — math.ceil on a secret number errors. Instead
+    -- we use the cached measurement taken in clean contexts (OnEnable and
+    -- ApplySettings via DC:RefreshTimeWidthReserve). Fallback is a conservative
+    -- static multiplier for the rare race window before the first measurement.
+    -- We intentionally do NOT test `remaining < 10` to decide the format —
+    -- that comparison would produce a secret boolean for hostile-unit casts.
+    bar.timeText:SetWidth(self.timeWidthReserve or math.ceil((barDb.FontSize or 12) * 2))
+    bar.timeText:SetWordWrap(false)
+    bar.timeText:SetNonSpaceWrap(false)
 
-    -- Target text (positioned between name and time)
+    -- Target text + sibling separator (positioned between name and time).
+    -- Chain layout avoids any string concatenation with the target name, which
+    -- may be a secret string (UnitSpellTargetName returns SecretReturns=true
+    -- when target is a player in 12.0).
     local targetDb = db.Target
     bar.targetText:ClearAllPoints()
+    bar.targetSeparator:ClearAllPoints()
     KE:ApplyFont(bar.targetText, barDb.FontFace, barDb.FontSize, barDb.FontOutline)
+    KE:ApplyFont(bar.targetSeparator, barDb.FontFace, barDb.FontSize, barDb.FontOutline)
     bar.targetText:SetTextColor(tc[1], tc[2], tc[3], tc[4])
+    bar.targetSeparator:SetTextColor(tc[1], tc[2], tc[3], tc[4])
     if targetDb and targetDb.Position == "LEFT" then
-        bar.targetText:SetPoint("LEFT", bar.nameText, "RIGHT", 2, 0)
+        -- Visible order: [nameText] » TargetName ... [timeText]
+        bar.targetSeparator:SetPoint("LEFT", bar.nameText, "RIGHT", 2, 0)
+        bar.targetSeparator:SetJustifyH("LEFT")
+        -- Dual anchor bounds the region; long names truncate at timeText's edge
+        -- instead of overflowing into the time column.
+        bar.targetText:SetPoint("LEFT", bar.targetSeparator, "RIGHT", 2, 0)
+        bar.targetText:SetPoint("RIGHT", bar.timeText, "LEFT", -2, 0)
         bar.targetText:SetJustifyH("LEFT")
     else
-        -- Default to RIGHT, positioned left of time text
-        bar.targetText:SetPoint("RIGHT", bar.timeText, "LEFT", -4, 0)
+        -- Default RIGHT. Visible order: [nameText] ... TargetName » [timeText]
+        bar.targetSeparator:SetPoint("RIGHT", bar.timeText, "LEFT", -2, 0)
+        bar.targetSeparator:SetJustifyH("RIGHT")
+        -- Dual anchor bounds the region; long names truncate at nameText's edge
+        -- instead of overflowing into the spell name.
+        bar.targetText:SetPoint("RIGHT", bar.targetSeparator, "LEFT", -2, 0)
+        bar.targetText:SetPoint("LEFT", bar.nameText, "RIGHT", 4, 0)
         bar.targetText:SetJustifyH("RIGHT")
     end
+    -- Prevent multi-line wrap; long names clip at the region edge.
+    bar.targetText:SetWordWrap(false)
+    bar.targetText:SetNonSpaceWrap(false)
     bar.targetText:Hide()
+    bar.targetSeparator:Hide()
 
     -- Raid icon sits to the left of the bar and is optional
     if raidDb.Enabled then
@@ -312,6 +380,7 @@ function DC:ReleaseBar(bar)
     bar.previewTargetClass = nil
     bar.raidIcon:Hide()
     bar.targetText:Hide()
+    bar.targetSeparator:Hide()
     tinsert(self.framePool, bar)
 end
 
@@ -398,46 +467,43 @@ local TARGET_SEPARATORS = {
 }
 
 function DC:UpdateTargetText(bar, targetName, targetClass)
-    if not bar.targetText then return end
+    if not bar.targetText or not bar.targetSeparator then return end
 
     local targetDb = self.db.Target
     if not targetDb or not targetDb.Enabled or not targetName then
         bar.targetText:Hide()
+        bar.targetSeparator:Hide()
         return
     end
 
-    -- Get separator
-    local separator = TARGET_SEPARATORS[targetDb.Separator] or targetDb.Separator or "»"
+    -- SetText + SetTextColor on separate FontStrings — no concatenation with
+    -- targetName, which may be a secret string from UnitSpellTargetName.
+    -- C_ClassColor.GetClassColor is SecretArguments=AllowedWhenTainted and
+    -- returns a clean ColorMixin, so r/g/b are always safe plain numbers.
     local tc = self.db.Text.TextColor
-    local textColorMarkup = string.format("|cff%02x%02x%02x", tc[1] * 255, tc[2] * 255, tc[3] * 255)
-    local coloredTarget
+    local classColored = false
     if targetDb.ShowClassColor and targetClass then
         local color = C_ClassColor.GetClassColor(targetClass)
-        if color and color.WrapTextInColorCode then
-            coloredTarget = color:WrapTextInColorCode(targetName)
-        else
-            coloredTarget = textColorMarkup .. targetName .. "|r"
+        if color then
+            bar.targetText:SetTextColor(color.r, color.g, color.b, color.a or 1)
+            classColored = true
         end
-    else
-        coloredTarget = textColorMarkup .. targetName .. "|r"
     end
-
-    -- Build display text with separator
-    local coloredSeparator = textColorMarkup .. separator .. "|r"
-    local displayText
-
-    if separator ~= "" then
-        if targetDb.Position == "LEFT" then
-            displayText = coloredSeparator .. " " .. coloredTarget
-        else
-            displayText = coloredTarget .. " " .. coloredSeparator
-        end
-    else
-        displayText = coloredTarget
+    if not classColored then
+        bar.targetText:SetTextColor(tc[1], tc[2], tc[3], tc[4])
     end
+    bar.targetSeparator:SetTextColor(tc[1], tc[2], tc[3], tc[4])
 
-    bar.targetText:SetText(displayText)
+    bar.targetText:SetText(targetName)
     bar.targetText:Show()
+
+    local separator = TARGET_SEPARATORS[targetDb.Separator] or targetDb.Separator or "»"
+    if separator ~= "" then
+        bar.targetSeparator:SetText(separator)
+        bar.targetSeparator:Show()
+    else
+        bar.targetSeparator:Hide()
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -450,10 +516,11 @@ end
 function DC:FetchCastData(unit)
     local name, text, texture, _, _, _, castID, notInterruptible, spellID = UnitCastingInfo(unit)
     if name then
-        -- Fetch target information
-        local targetToken = UnitSpellTargetName and UnitSpellTargetName(unit) or nil
-        local targetName = targetToken and (UnitName(targetToken) or targetToken) or nil
-        local targetClass = targetToken and UnitSpellTargetClass and UnitSpellTargetClass(unit) or nil
+        -- UnitSpellTargetName returns the target's NAME directly (cstring), not a
+        -- unit token. Do not pass to UnitName — the return may be a secret string
+        -- for player targets in 12.0 and UnitName rejects secret arguments.
+        local targetName = UnitSpellTargetName and UnitSpellTargetName(unit) or nil
+        local targetClass = targetName and UnitSpellTargetClass and UnitSpellTargetClass(unit) or nil
 
         return {
             name = name,
@@ -473,10 +540,9 @@ function DC:FetchCastData(unit)
 
     name, text, texture, _, _, _, notInterruptible, spellID = UnitChannelInfo(unit)
     if name then
-        -- Fetch target information for channels too
-        local targetToken = UnitSpellTargetName and UnitSpellTargetName(unit) or nil
-        local targetName = targetToken and (UnitName(targetToken) or targetToken) or nil
-        local targetClass = targetToken and UnitSpellTargetClass and UnitSpellTargetClass(unit) or nil
+        -- See note above: UnitSpellTargetName returns the name directly, not a token.
+        local targetName = UnitSpellTargetName and UnitSpellTargetName(unit) or nil
+        local targetClass = targetName and UnitSpellTargetClass and UnitSpellTargetClass(unit) or nil
 
         return {
             name = name,
@@ -727,6 +793,9 @@ function DC:ApplySettings()
     self:UpdateDB()
     self:CreateColorObjects()
     self:ApplyAnchorPosition()
+    -- Re-measure in untainted context whenever settings change (font, size,
+    -- outline, anything that affects timeText's natural width).
+    self:RefreshTimeWidthReserve()
 
     if self.isPreview then
         -- Rebuild preview so style/layout changes are visible immediately
@@ -869,6 +938,9 @@ function DC:OnEnable()
     self:CreateColorObjects()
     self:CreateAnchorFrame()
     self:CreateUpdateFrame()
+    -- Pre-populate the timeText width cache before any nameplate event can
+    -- fire a ConfigureBar in tainted context.
+    self:RefreshTimeWidthReserve()
 
     self:RegisterEvent("NAME_PLATE_UNIT_ADDED", "OnNameplateAdded")
     self:RegisterEvent("NAME_PLATE_UNIT_REMOVED", "OnNameplateRemoved")
