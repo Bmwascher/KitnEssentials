@@ -18,9 +18,9 @@ local UnitEmpoweredChannelDuration = UnitEmpoweredChannelDuration
 local UnitExists = UnitExists
 local UnitName = UnitName
 local UnitClass = UnitClass
-local UnitIsSpellTarget = UnitIsSpellTarget
-local GetNumGroupMembers = GetNumGroupMembers
-local IsInGroup = IsInGroup
+local UnitSpellTargetName = UnitSpellTargetName
+local UnitSpellTargetClass = UnitSpellTargetClass
+local C_ClassColor = C_ClassColor
 local GetPlayerInfoByGUID = GetPlayerInfoByGUID
 local GetTime = GetTime
 local select = select
@@ -392,41 +392,56 @@ end
 function H.UpdateTargetNames(self)
     if not self.targetNames then return end
     local targetSettings = self.db.TargetNames or {}
-    if not targetSettings.Enabled then
-        for i = 1, MAX_TARGET_NAMES do
-            self.targetNames[i]:SetAlpha(0)
-        end
-        return
-    end
-    if self.isPreview then return end
 
-    for i = 1, MAX_TARGET_NAMES do
+    -- Always hide the 2..N slots. The old per-party-member pattern relied on
+    -- UnitIsSpellTarget(caster, partyUnit) returning true when a teammate was
+    -- being targeted, but 12.0 locked that down (only PlayerIsSpellTarget is
+    -- documented, and party-member checks silently fail). We now show a single
+    -- target name via UnitSpellTargetName — same pattern as DungeonCasts.
+    for i = 2, MAX_TARGET_NAMES do
         self.targetNames[i]:SetAlpha(0)
     end
 
-    local unit = self.unit
-    if not UnitExists(unit) then return end
-    if not (self.casting or self.channeling or self.empowering) then return end
-
-    if IsInGroup() then
-        local numMembers = GetNumGroupMembers()
-        for i = 1, math.min(numMembers, MAX_TARGET_NAMES) do
-            local member = i == numMembers and "player" or ("party" .. i)
-            local name = UnitName(member)
-            local targetText = self.targetNames[i]
-
-            if name then
-                local classToken = select(2, UnitClass(member))
-                targetText:SetText(KE:ColorTextByClass(name, classToken))
-                targetText:SetAlphaFromBoolean(UnitIsSpellTarget(unit, member), 1, 0)
-            end
-        end
-    else
-        local name = UnitName("player")
-        local classToken = select(2, UnitClass("player"))
-        self.targetNames[1]:SetText(KE:ColorTextByClass(name, classToken))
-        self.targetNames[1]:SetAlphaFromBoolean(UnitIsSpellTarget(unit, "player"), 1, 0)
+    local targetText = self.targetNames[1]
+    if not targetSettings.Enabled or self.isPreview then
+        targetText:SetAlpha(0)
+        return
     end
+
+    local unit = self.unit
+    if not UnitExists(unit) or not (self.casting or self.channeling or self.empowering) then
+        targetText:SetAlpha(0)
+        return
+    end
+
+    -- UnitSpellTargetName returns the target's NAME (cstring), secret when
+    -- the target is a player. SetText accepts secret strings directly
+    -- (confirmed by TargetedSpells v3.2.0). Do NOT concat with color codes.
+    local targetName = UnitSpellTargetName and UnitSpellTargetName(unit) or nil
+    if not targetName then
+        targetText:SetAlpha(0)
+        return
+    end
+
+    -- Class color via C_ClassColor.GetClassColor (SecretArguments=AllowedWhenTainted,
+    -- returns a clean ColorMixin). SetTextColor with clean r/g/b values avoids
+    -- any concatenation with the (possibly secret) target name.
+    local targetClass = UnitSpellTargetClass and UnitSpellTargetClass(unit) or nil
+    local textColor = self.db.TextColor or { 1, 1, 1, 1 }
+    local colored = false
+    if targetClass then
+        local color = C_ClassColor.GetClassColor(targetClass)
+        if color then
+            targetText:SetTextColor(color.r, color.g, color.b, color.a or 1)
+            colored = true
+        end
+    end
+    if not colored then
+        targetText:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4] or 1)
+    end
+
+    targetText:SetText(targetName)
+    targetText:SetAlpha(1)
 end
 
 function H.HideTargetNames(self)
@@ -747,10 +762,21 @@ function H.ShowPreview(self, opts)
     self.frame:Show()
 
     if self.targetNames then
+        -- Preview mirrors the live single-target-name pattern: one slot,
+        -- class-colored via SetTextColor, others hidden. Uses the player's
+        -- own name/class since there's no real caster targeting anyone.
+        local targetText = self.targetNames[1]
         local name = UnitName("player")
         local classToken = select(2, UnitClass("player"))
-        self.targetNames[1]:SetText(KE:ColorTextByClass(name, classToken))
-        self.targetNames[1]:SetAlpha(1)
+        targetText:SetText(name or "")
+        local color = classToken and C_ClassColor.GetClassColor(classToken)
+        if color then
+            targetText:SetTextColor(color.r, color.g, color.b, color.a or 1)
+        else
+            local tc = self.db.TextColor or { 1, 1, 1, 1 }
+            targetText:SetTextColor(tc[1], tc[2], tc[3], tc[4] or 1)
+        end
+        targetText:SetAlpha(1)
         for i = 2, MAX_TARGET_NAMES do
             self.targetNames[i]:SetAlpha(0)
         end
