@@ -111,7 +111,6 @@ for _, data in pairs(INTERRUPT_DATA) do
     end
 end
 INTERRUPT_SPELL_IDS[119910] = true  -- Command Demon: Spell Lock
-INTERRUPT_SPELL_IDS[132409] = true  -- Command Demon: Fel Ravager kick
 INTERRUPT_SPELL_IDS[89766]  = true  -- Axe Toss (Felguard pet actual)
 INTERRUPT_SPELL_IDS[119914] = true  -- Command Demon: Axe Toss
 

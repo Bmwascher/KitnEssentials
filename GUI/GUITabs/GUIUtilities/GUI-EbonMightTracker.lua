@@ -80,49 +80,132 @@ GUIFrame:RegisterContent("EbonMightTracker", function(scrollChild, yOffset)
     yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
     ---------------------------------------------------------------------------------
-    -- Card 2: Display Settings (Mode + Toggles)
+    -- Card 2: Main Stat
+    --
+    -- 12.0.5 encounters return UnitStat as a secret value, so crit detection
+    -- can't read it live. EMTracker v1.2.0's workaround: the player saves
+    -- their mainstat manually out of combat and the math uses the cached value.
+    -- UI here is: status text (red "Not Set" / green "Set: N") + Update button.
     ---------------------------------------------------------------------------------
-    local card2 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
+    local card2 = GUIFrame:CreateCard(scrollChild, "Main Stat", yOffset)
     table_insert(allWidgets, card2)
 
-    -- Mode dropdown
-    local row2a = GUIFrame:CreateRow(card2.content, 40)
-    local modeList = {
-        { key = "icon", text = "Icon + Countdown" },
-        { key = "text", text = "Border + State Label" },
-    }
-    local modeDropdown = GUIFrame:CreateDropdown(row2a, "Mode", modeList, db.Mode or "icon", 30,
-        function(key)
-            db.Mode = key
-            ApplySettings()
-        end)
-    row2a:AddWidget(modeDropdown, 1)
-    table_insert(allWidgets, modeDropdown)
-    card2:AddRow(row2a, 40)
+    local statusHeight = 52
+    local statusRow = GUIFrame:CreateRow(card2.content, statusHeight)
+    local statusText = GUIFrame:CreateText(statusRow, "Saved Value", "", statusHeight, "hide")
+    statusRow:AddWidget(statusText, 1)
+    card2:AddRow(statusRow, statusHeight)
 
-    -- Only Show on Crit + Combat Only
-    local row2b = GUIFrame:CreateRow(card2.content, 36)
-    local onlyCritCheck = GUIFrame:CreateCheckbox(row2b, "Only Show on Crit", db.OnlyShowCrit == true,
-        function(checked)
-            db.OnlyShowCrit = checked
-            ApplySettings()
-        end)
-    row2b:AddWidget(onlyCritCheck, 0.5)
-    table_insert(allWidgets, onlyCritCheck)
+    local function RefreshStatus()
+        local label = statusText.container and statusText.container.label
+        if not label then return end
+        local stat = db.MainStat or 0
+        if stat > 0 then
+            label:SetText(("Set: %d"):format(stat))
+            label:SetTextColor(0.3, 0.9, 0.3, 1)
+        else
+            label:SetText("Not set — open the options out of combat and click Update.")
+            label:SetTextColor(0.95, 0.35, 0.35, 1)
+        end
+    end
+    RefreshStatus()
 
-    local combatCheck = GUIFrame:CreateCheckbox(row2b, "Combat Only", db.CombatOnly == true,
-        function(checked)
-            db.CombatOnly = checked
-            ApplySettings()
-        end)
-    row2b:AddWidget(combatCheck, 0.5)
-    table_insert(allWidgets, combatCheck)
-    card2:AddRow(row2b, 36)
+    -- Update button + note row
+    local updateRow = GUIFrame:CreateRow(card2.content, 36)
+    local updateBtn = GUIFrame:CreateButton(updateRow, "Update from Current Stat", {
+        width = 200,
+        callback = function()
+            if EMT and EMT.UpdateMainStat then
+                EMT:UpdateMainStat()
+            end
+            RefreshStatus()
+        end,
+        tooltip = "Manual fallback. Auto-saves on combat exit and /reload — click this if auto-save missed a gear/stat change. Arcane Intellect is divided out automatically, safe with it up.",
+    })
+    updateRow:AddWidget(updateBtn, 1)
+    table_insert(allWidgets, updateBtn)
+    card2:AddRow(updateRow, 36)
+
+    card2:AddLabel("|cff888888Auto-saves on combat exit and /reload. Button is a manual fallback. \nArcane Intellect is factored out automatically. Food and Augment Runes are not.|r")
 
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
     ---------------------------------------------------------------------------------
-    -- Card 3: Position Settings
+    -- Card 3: Display Settings (Mode + Toggles)
+    ---------------------------------------------------------------------------------
+    local card3 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
+    table_insert(allWidgets, card3)
+
+    -- Mode dropdown
+    local row3a = GUIFrame:CreateRow(card3.content, 40)
+    local modeList = {
+        { key = "icon", text = "Icon + Countdown" },
+        { key = "text", text = "Border + State Label" },
+    }
+    local modeDropdown = GUIFrame:CreateDropdown(row3a, "Mode", modeList, db.Mode or "icon", 30,
+        function(key)
+            db.Mode = key
+            ApplySettings()
+        end)
+    row3a:AddWidget(modeDropdown, 1)
+    table_insert(allWidgets, modeDropdown)
+    card3:AddRow(row3a, 40)
+
+    -- Only Show on Crit + Combat Only
+    local row3b = GUIFrame:CreateRow(card3.content, 36)
+    local onlyCritCheck = GUIFrame:CreateCheckbox(row3b, "Only Show on Crit", db.OnlyShowCrit == true,
+        function(checked)
+            db.OnlyShowCrit = checked
+            ApplySettings()
+        end)
+    row3b:AddWidget(onlyCritCheck, 0.5)
+    table_insert(allWidgets, onlyCritCheck)
+
+    local combatCheck = GUIFrame:CreateCheckbox(row3b, "Combat Only", db.CombatOnly == true,
+        function(checked)
+            db.CombatOnly = checked
+            ApplySettings()
+        end)
+    row3b:AddWidget(combatCheck, 0.5)
+    table_insert(allWidgets, combatCheck)
+    card3:AddRow(row3b, 36)
+
+    -- Separator between cast-visibility toggles and pandemic settings
+    local row3sep = GUIFrame:CreateRow(card3.content, 8)
+    row3sep:AddWidget(GUIFrame:CreateSeparator(row3sep), 1)
+    card3:AddRow(row3sep, 8)
+
+    -- Pandemic Highlight + glow type
+    local row3c = GUIFrame:CreateRow(card3.content, 40)
+    local pandemicCheck = GUIFrame:CreateCheckbox(row3c, "Pandemic Highlight",
+        db.PandemicHighlight == true,
+        function(checked)
+            db.PandemicHighlight = checked
+            ApplySettings()
+        end)
+    row3c:AddWidget(pandemicCheck, 0.5)
+    table_insert(allWidgets, pandemicCheck)
+
+    local glowList = {
+        { key = "pixel",    text = "Pixel" },
+        { key = "autocast", text = "Autocast" },
+        { key = "button",   text = "Button" },
+        { key = "proc",     text = "Proc" },
+    }
+    local glowDropdown = GUIFrame:CreateDropdown(row3c, "Glow Style", glowList,
+        db.PandemicGlowType or "pixel", 30,
+        function(key)
+            db.PandemicGlowType = key
+            ApplySettings()
+        end)
+    row3c:AddWidget(glowDropdown, 0.5)
+    table_insert(allWidgets, glowDropdown)
+    card3:AddRow(row3c, 40)
+
+    yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
+
+    ---------------------------------------------------------------------------------
+    -- Card 4: Position Settings
     ---------------------------------------------------------------------------------
     local card3pos, newOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = db,
@@ -148,7 +231,7 @@ GUIFrame:RegisterContent("EbonMightTracker", function(scrollChild, yOffset)
     yOffset = newOffset
 
     ---------------------------------------------------------------------------------
-    -- Card 4: Font Settings
+    -- Card 5: Font Settings
     ---------------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
     table_insert(allWidgets, card4)
@@ -207,19 +290,19 @@ GUIFrame:RegisterContent("EbonMightTracker", function(scrollChild, yOffset)
     yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
 
     ---------------------------------------------------------------------------------
-    -- Card 5: Colors
+    -- Card 6: Colors (2x2 grid: Base / Crit / Dupe / Pandemic)
     ---------------------------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
     table_insert(allWidgets, card5)
 
-    -- All three pickers in a single row (1/3 width each)
+    -- Row 1: Base + Crit
     local row5a = GUIFrame:CreateRow(card5.content, 40)
     local basePicker = GUIFrame:CreateColorPicker(row5a, "Base Color", db.BaseColor or { 1, 1, 1, 1 },
         function(r, g, b, a)
             db.BaseColor = { r, g, b, a }
             ApplySettings()
         end)
-    row5a:AddWidget(basePicker, 0.33)
+    row5a:AddWidget(basePicker, 0.5)
     table_insert(allWidgets, basePicker)
 
     local critPicker = GUIFrame:CreateColorPicker(row5a, "Crit Color", db.CritColor or { 1, 0, 1, 1 },
@@ -227,17 +310,29 @@ GUIFrame:RegisterContent("EbonMightTracker", function(scrollChild, yOffset)
             db.CritColor = { r, g, b, a }
             ApplySettings()
         end)
-    row5a:AddWidget(critPicker, 0.33)
+    row5a:AddWidget(critPicker, 0.5)
     table_insert(allWidgets, critPicker)
+    card5:AddRow(row5a, 40)
 
-    local dupePicker = GUIFrame:CreateColorPicker(row5a, "Dupe Color", db.DupeColor or { 1, 0.5, 0, 1 },
+    -- Row 2: Dupe + Pandemic
+    local row5b = GUIFrame:CreateRow(card5.content, 40)
+    local dupePicker = GUIFrame:CreateColorPicker(row5b, "Dupe Color", db.DupeColor or { 1, 0.5, 0, 1 },
         function(r, g, b, a)
             db.DupeColor = { r, g, b, a }
             ApplySettings()
         end)
-    row5a:AddWidget(dupePicker, 0.34)
+    row5b:AddWidget(dupePicker, 0.5)
     table_insert(allWidgets, dupePicker)
-    card5:AddRow(row5a, 40)
+
+    local pandemicPicker = GUIFrame:CreateColorPicker(row5b, "Pandemic Color",
+        db.PandemicColor or { 1, 1, 0, 1 },
+        function(r, g, b, a)
+            db.PandemicColor = { r, g, b, a }
+            ApplySettings()
+        end)
+    row5b:AddWidget(pandemicPicker, 0.5)
+    table_insert(allWidgets, pandemicPicker)
+    card5:AddRow(row5b, 40)
 
     yOffset = yOffset + card5:GetContentHeight() + Theme.paddingSmall
 

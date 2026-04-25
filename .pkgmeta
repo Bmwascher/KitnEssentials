@@ -13,11 +13,14 @@ ignore:
   - .gitattributes
   - .gitignore
   - .luacheckrc
+  - .markdownlint.json
   - .wow-api-reference
   - CLAUDE.md
   - CHANGELOG.md
   - README.md
   - References
+  - SKILLS.md
+  - SKILLS-Discord.md
   - diff_output.txt
 
 externals:

@@ -460,12 +460,15 @@ local Defaults = {
             DupeColor = { 1, 0.5, 0, 1 },
             OnlyShowCrit = false,
             CombatOnly = false,
-            -- 12.0.5: UnitStat-based ratio detection broke (stats become secret
-            -- values mid-encounter). Replaced with baseline classifier that
-            -- learns the "clean" average EM value per target count and detects
-            -- crit/dupe by relative multiplier. Persisted so it doesn't need
-            -- to relearn every /reload. Keyed by targetCount.
-            BaselineObserved = {},
+            PandemicHighlight = false,
+            PandemicGlowType = "pixel",        -- pixel / autocast / button / proc (LibCustomGlow)
+            PandemicColor = { 1, 1, 0, 1 },    -- yellow
+            -- 12.0.5 made UnitStat secret during encounters. EMTracker v1.2.0
+            -- workaround: player saves their mainstat manually (out of combat)
+            -- and the crit-detection math uses that cached value. Refreshed via
+            -- the "Update from Current Stat" button in the GUI card. 0 = not set
+            -- (crit detection is disabled until the user sets it).
+            MainStat = 0,
         },
 
         -----------------------------------------------------------------

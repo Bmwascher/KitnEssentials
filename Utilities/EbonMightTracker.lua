@@ -4,6 +4,7 @@
 -- ║  Purpose: Displays Ebon Might buff duration with crit    ║
 -- ║           and duped cast detection for Augmentation.     ║
 -- ║  Note: Evoker only (Augmentation).                       ║
+-- ║  Logic adapted from EMTracker v1.2.0 by Baumritter.      ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -14,6 +15,8 @@ if not KitnEssentials then return end
 local EMT = KitnEssentials:NewModule("EbonMightTracker", "AceEvent-3.0")
 EMT.classRestriction = "EVOKER"
 
+local LCG = LibStub("LibCustomGlow-1.0", true)
+
 local C_UnitAuras     = C_UnitAuras
 local C_Spell         = C_Spell
 local C_Timer         = C_Timer
@@ -21,18 +24,21 @@ local C_SpellBook     = C_SpellBook
 local CreateFrame     = CreateFrame
 local UnitClass       = UnitClass
 local UnitExists      = UnitExists
+local UnitStat        = UnitStat
 local GetTime         = GetTime
 local GetSpecialization     = GetSpecialization
 local GetSpecializationInfo = GetSpecializationInfo
 local GetNumGroupMembers    = GetNumGroupMembers
-local IsInGroup       = IsInGroup
-local IsInRaid        = IsInRaid
+local IsInGroup             = IsInGroup
+local IsInRaid              = IsInRaid
+local InCombatLockdown      = InCombatLockdown
 local issecretvalue   = issecretvalue
 local pcall           = pcall
 local pairs           = pairs
 local ipairs          = ipairs
 local wipe            = wipe
 local math_floor      = math.floor
+local math_max        = math.max
 
 ---------------------------------------------------------------------------------
 -- Constants
@@ -43,20 +49,35 @@ local CHRONO_CRIT_TALENT = 431874     -- Chronowarden "canCrit" talent (Double T
 local DUPE_TALENT        = 1259175    -- "canDupe" talent (apex dupe proc)
 local AUG_SPEC_ID        = 1473       -- Augmentation spec ID
 
--- Baseline classifier midpoints (from EbonMightTracker v1.0.6 reference).
--- Relative multiplier against learned baseline for target count. Chosen
--- midway between expected discrete tiers so bucket boundaries are stable
--- under the ±5% server-side value noise. Specifically:
---   base    = ~1.00x baseline
---   crit    = ~1.50x baseline   → MULT_CRIT at 1.25 catches anything ≥1.25
---   dupe    = ~1.75x baseline   → MULT_DUPE at 1.625 catches anything ≥1.625
---   both    = 1.5*1.75 = 2.625x → MULT_DUPE_CRIT at 2.1875 catches anything ≥2.1875
-local MULT_CRIT      = 1.25
-local MULT_DUPE      = 1.625
-local MULT_DUPE_CRIT = 2.1875
+-- Cast multiplier ratio threshold. History entries are normalized by dividing
+-- out the dupe factor at observation time (norm / 1.75 if totem was on),
+-- collapsing all entries into "as-if-no-dupe" space. The classifier then
+-- only needs to tell base (1.0×) from crit (1.5×) — single threshold at the
+-- midpoint, 1.25.
+local MULT_CRIT  = 1.25
+-- Dupe boost factor — divided out at observation to normalize history entries.
+local DUPE_FACTOR = 1.75
+
+-- Cast history sliding window for relative classification.
+--   MAX_HISTORY_AGE — entries older than this decay out. Short enough that
+--     mid-fight stat changes (trinket proc up/down) recalibrate quickly.
+--   MAX_HISTORY_SIZE — hard upper bound on entries kept.
+local MAX_HISTORY_AGE  = 30
+local MAX_HISTORY_SIZE = 20
+
+-- Pandemic glow shown when aura has <=4s remaining. Overlays the icon without
+-- replacing the crit/dupe border. Color + type configurable via DB (pixel /
+-- autocast / button / proc — see LibCustomGlow).
+local PANDEMIC_WINDOW            = 4
+local PANDEMIC_GLOW_COLOR_FALLBACK = { 1, 1, 0, 1 }  -- used when db is unset
 
 local ICON_ID          = 5061347     -- Ebon Might spell icon
 local REFRESH_INTERVAL = 0.5         -- Countdown update rate (seconds)
+
+-- Debug flag. Gate every log with `if DEBUG_EMT then ... end`. Leave in place
+-- after diagnosing so the next regression gets free instrumentation.
+-- Flip to true to see per-cast classification (crit + totem) and seed refresh.
+local DEBUG_EMT = false
 
 ---------------------------------------------------------------------------------
 -- Module State
@@ -75,14 +96,81 @@ EMT.inGroup             = false
 EMT._shown              = false
 EMT.editModeRegistered  = false
 
+-- Cast-to-cast relative classification state.
+--
+-- Why this approach: in WoW 12.0 encounters, UnitStat returns secret values
+-- for ALL addons regardless of execution context (confirmed via a zero-lib
+-- sibling addon still hitting the same wall). Absolute mainstat-based
+-- classification therefore requires a stale saved snapshot which misclassifies
+-- whenever stats shift mid-fight (trinket procs, gear swaps).
+--
+-- Relative classification sidesteps the problem: we don't need the absolute
+-- mainstat. Every EM cast produces observable aura values on allies
+-- (aura.points is AllowedWhenTainted). The MINIMUM observed value within the
+-- rolling window is the "base per ally" — crits are strictly larger. Current
+-- cast value divided by that minimum gives the cast multiplier (1.0 = base,
+-- 1.5 = crit), which maps to a single classification threshold (1.25).
+--
+-- Dupe is NOT determined by ratio. Instead, history entries are normalized
+-- by dividing out the dupe factor (1.75x) when the duplicate totem was
+-- active at the moment of observation. That collapses every history entry
+-- into pure base/crit space, so the ratio comparison only has to handle
+-- one binary decision. `isDuped` itself is set live in UpdateDisplay from
+-- the totem state, independently of any history math.
+--
+-- Caveats:
+--   - First cast with empty history compares against the seed (saved
+--     mainstat × 0.16) if available, else defaults to "base".
+--   - 30s window: stat shifts mid-fight recalibrate as new casts age out
+--     pre-shift entries.
+--
+-- Entries shape: { time, norm, exp } where:
+--   - norm = (targetMS × max(2, count)) / (totemAtObservation ? 1.75 : 1.0)
+--   - exp  = selfExpirationTime — identifies which cast the entry belongs to
+--     (distinguishes new casts from additional ally auras for the same cast).
+EMT._castHistory             = {}
+EMT._lastRecordedExpiration  = 0
+-- `_castNeedsPush` is set true by the UNIT_AURA handler ONLY when an EM
+-- ally-aura `addedAuras` event fires (i.e. a new cast just landed on an
+-- ally, so targetMainStat reflects the cast's roll outcome). CalcCrit checks
+-- this flag to gate history writes + classification updates. Mid-buff
+-- updatedAuraInstanceIDs events (live mainstat tracking) DON'T set this
+-- flag, so classification stays locked to the cast-time outcome.
+EMT._castNeedsPush           = false
+
+-- Seed norm = bootstrap baseline derived from db.MainStat, used ONLY when
+-- history is empty (first cast of a session). Without a seed, the first
+-- cast is its own min → always classified as base. Computed as MainStat ×
+-- 0.16, which equals the normalized value of a base-multiplier cast at the
+-- saved mainstat. Once any real cast lands, that real cast's norm becomes
+-- the min and the seed is ignored — keeping it bootstrap-only avoids the
+-- stale-seed-inflates-ratios trap when saved stat is below current. Auto-
+-- refreshed on combat exit (PLAYER_REGEN_ENABLED) + manual GUI button.
+EMT._seedNorm                = nil
+
 -- Tracked aura state
 EMT.selfAuraInstanceID  = 0
 EMT.selfExpirationTime  = 0
-EMT.allyAuras           = {}   -- [auraInstanceID] = { value, unit }
+-- ebonMight: flat list of { auraId, value, target } — mirrors v1.2.0's structure
+-- (preserved because CalcCrit iterates values linearly and dedupes on auraId).
+EMT.ebonMight           = {}
 
--- Calculated state
+-- Calc outputs
+EMT.calc = {
+    calcMainStat   = 0,
+    targetMainStat = 0,
+    targetcount    = 0,
+}
+
+-- Display flags (fed to the UI color picker).
+--   isCrit  — locked per cast; set by CalcCrit from the relative ratio.
+--   isDuped — LIVE; set every UpdateDisplay tick from IsDuplicateActive(),
+--             flips with the duplicate totem spawning/expiring during a buff.
 EMT.isCrit  = false
 EMT.isDuped = false
+
+-- Border tracking for pandemic highlighting (avoids re-applying the same style)
+EMT._pandemicActive = false
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -92,7 +180,7 @@ function EMT:UpdateDB()
 end
 
 ---------------------------------------------------------------------------------
--- Spec Detection
+-- Spec / Talent Detection
 ---------------------------------------------------------------------------------
 function EMT:IsValidSpec()
     local _, classToken = UnitClass("player")
@@ -103,9 +191,6 @@ function EMT:IsValidSpec()
     return specID == AUG_SPEC_ID
 end
 
----------------------------------------------------------------------------------
--- Talent Detection
----------------------------------------------------------------------------------
 function EMT:UpdateCanCrit()
     local ok, known = pcall(C_SpellBook.IsSpellKnown, CHRONO_CRIT_TALENT)
     self.canCrit = ok and known == true
@@ -126,8 +211,7 @@ end
 ---------------------------------------------------------------------------------
 -- Pick the largest positive point value from aura.points. Replaces the
 -- hardcoded points[2] read — Blizzard has reshuffled the points table in
--- the past and may again. Largest positive is always the mainstat delta
--- (the other entries are usually 0 or small secondary stats).
+-- the past and may again. Largest positive is always the mainstat delta.
 function EMT:BestPoint(aura)
     if not aura or not aura.points then return nil end
     if issecretvalue(aura.points) then return nil end
@@ -146,13 +230,19 @@ end
 function EMT:ClearData()
     self.selfAuraInstanceID = 0
     self.selfExpirationTime = 0
-    wipe(self.allyAuras)
+    wipe(self.ebonMight)
+    self.calc.calcMainStat   = 0
+    self.calc.targetMainStat = 0
+    self.calc.targetcount    = 0
     self.isCrit  = false
     self.isDuped = false
+    -- Note: _castHistory is intentionally NOT wiped here. History persists
+    -- across aura full-refreshes (isFullUpdate) and EM drop/reapply cycles so
+    -- we don't lose calibration. It IS wiped on OnDisable / group change.
 end
 
 ---------------------------------------------------------------------------------
--- Aura Scanning (full refresh)
+-- Aura Scanning (full refresh on isFullUpdate)
 ---------------------------------------------------------------------------------
 function EMT:ScanAuras()
     self:ClearData()
@@ -184,10 +274,11 @@ function EMT:ScanAuras()
                     local auraData = C_UnitAuras.GetAuraDataBySpellName(unit, othersName, "HELPFUL|PLAYER")
                     if auraData and auraData.auraInstanceID and not issecretvalue(auraData.applications) then
                         local value = self:BestPoint(auraData) or 0
-                        self.allyAuras[auraData.auraInstanceID] = {
-                            value = value,
-                            unit  = unit,
-                        }
+                        table.insert(self.ebonMight, {
+                            auraId = auraData.auraInstanceID,
+                            value  = value,
+                            target = unit,
+                        })
                     end
                 end
             end
@@ -196,86 +287,307 @@ function EMT:ScanAuras()
 end
 
 ---------------------------------------------------------------------------------
--- Classifier (baseline-relative — 12.0.5 safe)
+-- Cast History (sliding window for relative classification)
 ---------------------------------------------------------------------------------
--- 12.0.5 made UnitStat return secret values during encounters, so the
--- previous cross-API ratio (aura.points vs UnitStat*0.16) became unreliable.
--- This replacement compares ONLY aura-to-aura: the current observed average
--- mainstat bonus vs a learned baseline for the same target count. Baseline
--- is persisted in AceDB so it survives /reload and zone changes.
+-- All entries store NORMALIZED norm (count-corrected AND dupe-divided-out)
+-- so they're directly comparable in pure base/crit space regardless of how
+-- many allies a cast hit or whether the duplicate totem was active when the
+-- cast landed. Caller computes the effective norm and passes it in.
 --
--- Bucketing (multiplier m = observed / baseline):
---   m < 1.25   → base     (also re-baseline if m < 1, so baseline self-corrects downward)
---   m < 1.625  → crit
---   m < 2.1875 → dupe
---   else        → dupe+crit
---
--- Talent gates (canCrit / canDupe) are applied AFTER classification so a
--- player without Chronowarden can never see a "crit" false positive.
-function EMT:Classify(observedAvg, targetCount)
-    self.isCrit  = false
-    self.isDuped = false
-
-    if targetCount <= 0 or observedAvg <= 0 then return end
-
-    local db = self.db
-    if not db then return end
-    db.BaselineObserved = db.BaselineObserved or {}
-    local baseline = db.BaselineObserved[targetCount]
-
-    local isCrit, isDuped
-    if not baseline or baseline <= 0 then
-        -- First observation at this target count — treat as baseline.
-        db.BaselineObserved[targetCount] = observedAvg
-        isCrit, isDuped = false, false
-    else
-        local m = observedAvg / baseline
-        if m < MULT_CRIT then
-            -- Observed is smaller than baseline — the old baseline was a
-            -- crit/dupe by mistake. Re-baseline down to current observation.
-            if observedAvg < baseline then
-                db.BaselineObserved[targetCount] = observedAvg
-            end
-            isCrit, isDuped = false, false
-        elseif m < MULT_DUPE then
-            isCrit, isDuped = true, false
-        elseif m < MULT_DUPE_CRIT then
-            isCrit, isDuped = false, true
-        else
-            isCrit, isDuped = true, true
-        end
+-- Push happens ONCE per cast, triggered by the `_castNeedsPush` flag set on
+-- an ally `addedAuras` event. We deliberately DO NOT update on later mid-
+-- buff `updatedAuraInstanceIDs` events: those reflect live mainstat shifts
+-- after the cast, which would contaminate the cast's roll outcome.
+function EMT:PushCastHistory(effectiveNorm, now, exp)
+    if not effectiveNorm or effectiveNorm <= 0 then return end
+    table.insert(self._castHistory, { time = now, norm = effectiveNorm, exp = exp })
+    if #self._castHistory > MAX_HISTORY_SIZE then
+        table.remove(self._castHistory, 1)
     end
-
-    -- Talent gates: strip false-positives the player can't actually roll.
-    if not self.canCrit then isCrit = false end
-    if not self.canDupe then isDuped = false end
-
-    self.isCrit  = isCrit
-    self.isDuped = isDuped
 end
 
--- Compute inputs to Classify from current tracked ally auras.
-function EMT:RecomputeClassification()
-    if not self.inGroup then
-        self.isCrit, self.isDuped = false, false
-        return
+-- RefreshCurrentCastNorm: refresh the latest entry when another ally's aura
+-- arrives in a later UNIT_AURA event for the same cast (staggered raid
+-- application). The per-ally value is identical for all allies in one cast,
+-- so only the observed count grows — and the effective norm with it.
+function EMT:RefreshCurrentCastNorm(effectiveNorm, now, exp)
+    if not effectiveNorm or effectiveNorm <= 0 then return end
+    if #self._castHistory == 0 then return end
+    local last = self._castHistory[#self._castHistory]
+    if last.exp ~= exp then return end
+    last.norm = effectiveNorm
+    last.time = now
+end
+
+-- PruneCastHistory + minimum extraction in one pass. Returns (minNorm, fromSeed).
+-- Real-cast min wins if any exists; seed is used only as a bootstrap when
+-- history is empty (first cast of a session). Keeping seed as bootstrap-only
+-- (rather than a floor on min) prevents the stale-seed-inflates-ratios trap
+-- when the saved mainstat is lower than the current in-combat stat.
+function EMT:GetHistoryMin(now)
+    local cutoff = now - MAX_HISTORY_AGE
+    local writeIdx = 1
+    local realMin
+    for readIdx = 1, #self._castHistory do
+        local entry = self._castHistory[readIdx]
+        if entry.time >= cutoff then
+            self._castHistory[writeIdx] = entry
+            writeIdx = writeIdx + 1
+            if not realMin or entry.norm < realMin then
+                realMin = entry.norm
+            end
+        end
+    end
+    -- Clear trailing entries we kept above writeIdx.
+    for i = #self._castHistory, writeIdx, -1 do
+        self._castHistory[i] = nil
     end
 
-    local sum, count = 0, 0
-    for _, data in pairs(self.allyAuras) do
-        local v = data.value or 0
-        if v > 0 then
-            sum   = sum + v
-            count = count + 1
+    if realMin then return realMin, false end
+    if self._seedNorm then return self._seedNorm, true end
+    return nil, false
+end
+
+-- RefreshSeed: recompute the seed floor from the saved mainstat. Seed norm
+-- equals mainstat × 0.16, which is the normalized value of a base-multiplier
+-- cast (count-independent because targetMS × max(2, count) cancels the
+-- division by max(2, count) in basePerAlly).
+function EMT:RefreshSeed()
+    if self.db and self.db.MainStat and self.db.MainStat > 0 then
+        self._seedNorm = self.db.MainStat * 0.16
+    else
+        self._seedNorm = nil
+    end
+end
+
+---------------------------------------------------------------------------------
+-- Duplicate Entity Poll (authoritative dupe signal)
+---------------------------------------------------------------------------------
+-- Augmentation's "Duplicate" apex-talent (spellID 1259175) summons a future
+-- version of the player. Talent text: "While your duplicate is active, your
+-- Ebon Might grants 75% additional stats." The boost applies dynamically
+-- based on the duplicate's CURRENT state — EM aura values change as the
+-- duplicate spawns/despawns mid-buff.
+--
+-- TotemFrame.totemPool tracks the player's totem/summon frames. Polling
+-- GetNumActive() is read-only and safe. This poll is the AUTHORITATIVE dupe
+-- signal: it drives the live `isDuped` display flag in UpdateDisplay AND is
+-- read at cast-observation time in CalcCrit to normalize history entries
+-- (divide out the 1.75x dupe boost so all entries sit in pure base/crit
+-- space).
+function EMT:IsDuplicateActive()
+    if not self.canDupe then return false end
+    if not TotemFrame or not TotemFrame.totemPool or not TotemFrame.totemPool.GetNumActive then
+        return false
+    end
+    local ok, n = pcall(TotemFrame.totemPool.GetNumActive, TotemFrame.totemPool)
+    if not ok or type(n) ~= "number" then return false end
+    return n > 0
+end
+
+---------------------------------------------------------------------------------
+-- Crit Classification (relative, history-based, locked per cast)
+---------------------------------------------------------------------------------
+-- CalcCrit: gated by `_castNeedsPush`. Runs ONLY when an ally's EM aura was
+-- freshly added via `addedAuras` — meaning the current cast just landed and
+-- targetMainStat reflects the cast's roll value.
+--
+-- Sets `isCrit` only. `isDuped` is handled live in UpdateDisplay from the
+-- totem signal — it can flip mid-buff as the duplicate spawns/expires.
+--
+-- Mid-buff stat tracking (updatedAuraInstanceIDs) is IGNORED here so the
+-- crit classification locks to the cast-time outcome. Ticker refreshes also
+-- early-exit and reuse the stored isCrit.
+--
+-- Flow when the flag is set:
+--   1. Collapse current self.ebonMight into max ally value + ally count.
+--   2. Read totem-at-observation. Compute effectiveNorm = (targetMS ×
+--      max(2, count)) / (totem ? 1.75 : 1.0) — collapses the entry into
+--      pure base/crit space regardless of dupe state.
+--   3. Get prior history's min (and a seed bootstrap if history is empty).
+--   4. ratio = effectiveNorm / minNorm; isCrit = ratio >= 1.25.
+--   5. Push/refresh history with effectiveNorm AFTER classification, so the
+--      current cast feeds the next cast's calibration but never its own.
+--
+-- Caveats:
+--   - First cast with empty history AND no seed: defaults to "base". The
+--     seed (saved mainstat × 0.16) covers the common case.
+--   - If every cast in the 30s window happens to be a crit, min is inflated
+--     and subsequent crits look like base. Statistically rare over a full
+--     fight; the next base cast recalibrates within seconds.
+--   - Mainstat shifts mid-fight: all entries in the window pre-shift become
+--     stale relative to current. Within ~30s the window recycles to current-
+--     stat-regime entries.
+function EMT:CalcCrit()
+    -- Mid-buff stat updates and ticker refreshes skip the whole pipeline —
+    -- the cast's classification is already locked. Display stays stable.
+    if not self._castNeedsPush then return end
+    self._castNeedsPush = false
+
+    self.calc.targetcount    = 0
+    self.calc.targetMainStat = 0
+
+    local addedIds = {}
+    for _, aura in pairs(self.ebonMight) do
+        local dup = false
+        for _, id in pairs(addedIds) do
+            if aura.auraId == id then dup = true; break end
+        end
+        if not dup then
+            if self.calc.targetMainStat < aura.value then
+                self.calc.targetMainStat = aura.value
+            end
+            self.calc.targetcount = self.calc.targetcount + 1
+            table.insert(addedIds, aura.auraId)
         end
     end
 
-    if count == 0 then
-        self.isCrit, self.isDuped = false, false
+    if self.calc.targetcount == 0 or self.calc.targetMainStat <= 0 then
+        self.calc.calcMainStat = 0
+        self.isCrit  = false
         return
     end
 
-    self:Classify(sum / count, count)
+    local now = GetTime()
+    local exp = self.selfExpirationTime
+
+    -- Normalize observed value to "as-if-no-dupe" space by dividing out the
+    -- 1.75x dupe boost when the totem is currently active. The EM aura value
+    -- updates dynamically with totem state, so totem-at-observation tells us
+    -- whether the read includes the dupe boost. Both history entries and
+    -- currentNorm sit in the same crit-only space after this normalization,
+    -- so the classifier just needs base-vs-crit (single threshold at 1.25).
+    local totemAtObs = self:IsDuplicateActive()
+    local rawNorm = self.calc.targetMainStat * math_max(2, self.calc.targetcount)
+    local effectiveNorm = totemAtObs and (rawNorm / DUPE_FACTOR) or rawNorm
+
+    -- Classify FIRST against prior history only (current cast not yet pushed)
+    -- so cast 1 of a session compares against seed/empty rather than itself.
+    local minNorm, fromSeed = self:GetHistoryMin(now)
+    local ratio
+    local isCrit
+    if not minNorm or minNorm <= 0 then
+        -- No baseline. Default to non-crit; isDuped is filled in live by
+        -- UpdateDisplay.
+        ratio  = 1.0
+        isCrit = false
+    else
+        ratio  = effectiveNorm / minNorm
+        isCrit = ratio >= MULT_CRIT
+    end
+
+    -- Talent gate.
+    if not self.canCrit then isCrit = false end
+    self.isCrit = isCrit
+
+    -- Push/refresh history AFTER classification so the current cast feeds
+    -- the NEXT cast's calibration but never its own.
+    if exp > self._lastRecordedExpiration then
+        self._lastRecordedExpiration = exp
+        self:PushCastHistory(effectiveNorm, now, exp)
+    else
+        self:RefreshCurrentCastNorm(effectiveNorm, now, exp)
+    end
+
+    self.calc.calcMainStat = minNorm or 0   -- debug/inspection surface
+
+    if DEBUG_EMT then
+        local n = #self._castHistory
+        local seedTag = fromSeed and " (seed)" or ""
+        KE:Print(("[EMT] tc=%d targetMS=%d effNorm=%d minNorm=%d%s n=%d ratio=%.2f totem=%s -> crit=%s")
+            :format(self.calc.targetcount, self.calc.targetMainStat,
+                    math_floor(effectiveNorm + 0.5), math_floor((minNorm or 0) + 0.5),
+                    seedTag, n, ratio, tostring(totemAtObs), tostring(self.isCrit)))
+    end
+end
+
+---------------------------------------------------------------------------------
+-- Main Stat Update (GUI button — feeds the first-cast seed)
+---------------------------------------------------------------------------------
+-- Saves UnitStat → db.MainStat → seed (via RefreshSeed). The seed is used
+-- ONLY for the very first cast of a session (when the rolling window has
+-- nothing to compare against); thereafter real casts take over the min and
+-- the saved value becomes inert. AutoRefreshSeed updates this automatically
+-- on combat exit, so the button is mostly a manual fallback.
+function EMT:UpdateMainStat()
+    if InCombatLockdown() then
+        KE:Print("|cffff3333Ebon Might Tracker:|r Can't save while in combat.")
+        return false
+    end
+    local stat = UnitStat("player", 4)
+    if issecretvalue(stat) then
+        KE:Print("|cffff3333Ebon Might Tracker:|r Primary stat is currently secret — step out of combat/encounter and try again.")
+        return false
+    end
+    stat = math_floor(stat + 0.5)
+    self.db.MainStat = stat
+    self:RefreshSeed()
+    KE:Print(("|cff33ff33Ebon Might Tracker:|r Saved primary stat: %d (used as the first-cast baseline; later casts auto-calibrate)."):format(stat))
+    self:UpdateDisplay()
+    return true
+end
+
+-- Auto-refresh seed on combat exit. Out-of-combat UnitStat reads are
+-- usually non-secret even from our (tainted) execution context, so we can
+-- update the saved baseline without the user having to press the button.
+function EMT:AutoRefreshSeed()
+    if not self.isAugSpec then return end
+    if InCombatLockdown() then return end
+    local stat = UnitStat("player", 4)
+    if issecretvalue(stat) or stat <= 0 then return end
+    stat = math_floor(stat + 0.5)
+    if self.db.MainStat == stat then return end
+    self.db.MainStat = stat
+    self:RefreshSeed()
+    if DEBUG_EMT then
+        KE:Print(("[EMT] seed auto-refreshed: %d"):format(stat))
+    end
+end
+
+---------------------------------------------------------------------------------
+-- Pandemic Glow (LibCustomGlow dispatch)
+---------------------------------------------------------------------------------
+-- Dispatches across LCG's four glow styles. All types are stopped on Stop so
+-- a user-initiated type-change mid-active-window cleans up the old overlay
+-- before Start applies the new one. Defaults + tuning mirror TimeSpiral.
+function EMT:StartPandemicGlow()
+    if not LCG or not self.frame then return end
+    local color = self.db.PandemicColor or PANDEMIC_GLOW_COLOR_FALLBACK
+    local glowType = self.db.PandemicGlowType or "pixel"
+
+    if glowType == "pixel" then
+        LCG.PixelGlow_Start(self.frame, color, 8, 0.25, 8, 2, 1, 1, false, nil)
+    elseif glowType == "autocast" then
+        LCG.AutoCastGlow_Start(self.frame, color, 8, 0.25, 1, 1, 1, nil)
+    elseif glowType == "button" then
+        LCG.ButtonGlow_Start(self.frame, color, 0)
+    elseif glowType == "proc" then
+        LCG.ProcGlow_Start(self.frame, {
+            color = color,
+            startAnim = false,
+            duration = 1,
+        })
+    end
+end
+
+function EMT:StopPandemicGlow()
+    if not LCG or not self.frame then return end
+    -- Stop all four types defensively — covers the case where the user swapped
+    -- glow type while the old one was still running.
+    LCG.PixelGlow_Stop(self.frame)
+    LCG.AutoCastGlow_Stop(self.frame)
+    LCG.ButtonGlow_Stop(self.frame)
+    LCG.ProcGlow_Stop(self.frame)
+end
+
+-- Restart the glow with current DB settings if pandemic is currently active.
+-- Called from ApplySettings so that glow-type or color changes made in the
+-- GUI take effect immediately without waiting for the next edge transition.
+function EMT:RefreshPandemicGlow()
+    if self._pandemicActive then
+        self:StopPandemicGlow()
+        self:StartPandemicGlow()
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -308,9 +620,6 @@ local function SetTextElementShown(fontString, shown)
 end
 
 -- Recolor and resize the four border strips created by KE:AddIconBorders.
--- Resize grows inward (borders are anchored to the outer corners), so larger
--- sizes eat into the icon edge slightly. At 2-3px on a 48px icon this sits
--- inside the KE:ApplyIconZoom crop region and is barely visible.
 function EMT:SetBorderStyle(color, size)
     if not self.iconFrame or not self.iconFrame.borders then return end
     local r, g, b, a = color[1], color[2], color[3], color[4] or 1
@@ -329,29 +638,41 @@ end
 function EMT:UpdateDisplay()
     if not self.countdownText then return end
 
-    -- Update countdown text (Icon mode shows this; Text mode hides the widget
-    -- but we still update it so a mode switch mid-cast shows correct time).
+    -- Update countdown text
+    local remaining = 0
     if self.selfAuraInstanceID == 0 then
         self.countdownText:SetText("0")
     else
-        local remaining = math_floor(self.selfExpirationTime - GetTime())
+        remaining = self.selfExpirationTime - GetTime()
         if remaining < 0 then remaining = 0 end
-        self.countdownText:SetText(tostring(remaining))
+        self.countdownText:SetText(tostring(math_floor(remaining)))
     end
 
-    -- Classify crit/dupe state from tracked ally auras
-    self:RecomputeClassification()
-    -- Preview override: Classify needs a real group + ally aura values, which
-    -- previews don't have. Force CRIT so the user can see the border + label
-    -- highlighting in the GUI preview regardless of mode.
+    -- Classify current cast. CalcCrit early-exits unless _castNeedsPush is
+    -- set (cast just landed on an ally) — so isCrit is locked per cast and
+    -- mid-buff stat updates don't flip it. Out of group = no allies = nothing
+    -- to classify against.
+    if self.inGroup then
+        self:CalcCrit()
+    else
+        self.isCrit = false
+    end
+
+    -- isDuped is LIVE: equals the duplicate totem's current state. Updates
+    -- every UpdateDisplay tick (0.5s ticker) and on PLAYER_TOTEM_UPDATE for
+    -- instant feedback. The talent boosts EM aura value dynamically while
+    -- the duplicate is alive, so the display reflects current reality
+    -- regardless of whether the duplicate spawned before or after the cast.
+    self.isDuped = self.inGroup and self:IsDuplicateActive() or false
+
+    -- Preview override: forces a CRIT look regardless of detection so the user
+    -- can see the highlight style in the GUI preview.
     if self.isPreview then
-        self.isCrit = true
+        self.isCrit  = true
         self.isDuped = false
     end
 
-    -- Pick text + border color + border size + state-label text based on state.
-    -- Base uses BaseColor for text but default black 1px borders so borders
-    -- only visually "light up" when something interesting happens.
+    -- Pick text + border color + border size + state-label text.
     local textColor, borderColor, borderSize, labelText
     if self.isCrit then
         textColor = self.db.CritColor or { 1, 0, 1, 1 }
@@ -369,6 +690,23 @@ function EMT:UpdateDisplay()
         borderSize = BASE_BORDER_SIZE
         labelText = ""
     end
+
+    -- Pandemic pixel glow (only when enabled + aura is running + <=4s left).
+    -- Separate from the crit/dupe border colors so the refresh cue stacks on
+    -- top of whatever color the underlying cast was (crit purple, dupe orange,
+    -- or base). Edge-triggered: only call Start/Stop on transitions.
+    local wantPandemic = false
+    if self.db.PandemicHighlight and self.selfAuraInstanceID > 0 and remaining > 0 and remaining <= PANDEMIC_WINDOW then
+        wantPandemic = true
+    end
+    if wantPandemic and not self._pandemicActive then
+        self:StartPandemicGlow()
+        self._pandemicActive = true
+    elseif not wantPandemic and self._pandemicActive then
+        self:StopPandemicGlow()
+        self._pandemicActive = false
+    end
+
     self.countdownText:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4] or 1)
     if self.stateLabel then
         self.stateLabel:SetText(labelText)
@@ -376,10 +714,16 @@ function EMT:UpdateDisplay()
     end
     self:SetBorderStyle(borderColor, borderSize)
 
-    -- Handle OnlyShowCrit visibility
-    if self.db.OnlyShowCrit and not self.isCrit then
+    -- Visibility: OnlyShowCrit hides non-crit casts, BUT the pandemic glow is
+    -- a refresh cue — more important than a display preference — so we force
+    -- the frame visible during the pandemic window even when OnlyShowCrit is
+    -- on. Result: during a non-crit EM's last 4s, the frame reappears with
+    -- its base color and the pandemic glow overlaid.
+    local suppressForCritOnly = self.db.OnlyShowCrit and not self.isCrit
+        and not self.isPreview and not wantPandemic
+    if suppressForCritOnly then
         self:HideTracker()
-    elseif self.selfAuraInstanceID > 0 then
+    elseif self.selfAuraInstanceID > 0 or self.isPreview then
         self:ShowTracker()
     else
         self:HideTracker()
@@ -456,15 +800,12 @@ function EMT:CreateFrames()
 
     -- Countdown text inside the icon (Icon mode). Parent to iconFrame with
     -- sublevel 8 so it draws above the icon texture and border strips.
-    -- Set font BEFORE any SetText call; calling SetText on a FontString without
-    -- a font raises a 12.0 taint error.
     local countdownText = iconFrame:CreateFontString(nil, "OVERLAY", nil, 8)
     countdownText:SetFont(fontPath, fontSize, wowOutline)
     countdownText:SetPoint("CENTER", iconFrame, "CENTER", 0, 0)
     countdownText:SetText("0")
 
     -- State label above the frame (Text mode). "CRIT" / "DUPE" / empty.
-    -- Parented to the outer frame so it isn't clipped by iconFrame.
     local stateLabel = frame:CreateFontString(nil, "OVERLAY")
     stateLabel:SetFont(fontPath, fontSize, wowOutline)
     stateLabel:SetPoint("BOTTOM", frame, "TOP", 0, 2)
@@ -498,9 +839,6 @@ function EMT:ApplySettings()
 
     -- Mode-specific element visibility. Both elements always exist; we just
     -- toggle visibility so mode switches are cheap (no frame recreation).
-    -- Soft outlines are a separate object (fontString._keSoftOutline) and
-    -- must be shown/hidden alongside the main FontString, otherwise the
-    -- 8 shadow FontStrings "ghost" behind the intended-hidden element.
     local isText = self.db.Mode == "text"
     if self.iconTexture then
         if isText then self.iconTexture:Hide() else self.iconTexture:Show() end
@@ -509,6 +847,9 @@ function EMT:ApplySettings()
     SetTextElementShown(self.stateLabel, isText)
 
     self:UpdateDisplay()
+    -- Pick up glow-type / color changes mid-active. UpdateDisplay's edge-only
+    -- Start/Stop won't fire when _pandemicActive hasn't transitioned.
+    self:RefreshPandemicGlow()
 end
 
 ---------------------------------------------------------------------------------
@@ -541,27 +882,18 @@ function EMT:ShowPreview()
     if not self.frame then self:CreateFrames() end
     self:RegWithEditMode()
     self.isPreview = true
-    -- Sync _shown with the direct frame:Show() below so ShowTracker/HideTracker
-    -- stay consistent if called while previewing.
     self._shown = true
     self.selfAuraInstanceID = 1
     self.selfExpirationTime = GetTime() + 20
-    -- ApplySettings handles mode visibility + calls UpdateDisplay, which
-    -- sees isPreview=true and forces CRIT visuals (border + label + color).
     self:ApplySettings()
     self.frame:Show()
 end
 
 function EMT:HidePreview()
     self.isPreview = false
-    -- Reset _shown so the next real-aura ShowTracker isn't short-circuited
-    -- by a stale "already shown" flag from the preview flow.
     self._shown = false
     if self.frame then self.frame:Hide() end
-    -- Re-sync with actual game state. ShowPreview overwrote selfAuraInstanceID
-    -- with a fake ID, so without a rescan the module would stay desynced from
-    -- any real Ebon Might that was active when the preview started, until the
-    -- next isFullUpdate or re-cast.
+    -- Re-sync with actual game state after the fake preview aura is cleared.
     self:ScanAuras()
     self:TickerHandling()
     self:UpdateDisplay()
@@ -592,7 +924,6 @@ function EMT:OnUnitAura(_, unit, updateInfo)
 
     if updateInfo.addedAuras then
         for _, aura in ipairs(updateInfo.addedAuras) do
-            -- aura.applications is secret-tainted; use as gate
             if not issecretvalue(aura.applications) then
                 -- EM on self
                 if aura.spellId == EBON_MIGHT_SELF and aura.sourceUnit == "player" and unit == "player" then
@@ -601,17 +932,31 @@ function EMT:OnUnitAura(_, unit, updateInfo)
                         self.selfExpirationTime = aura.expirationTime
                     end
                     changed = true
-                    break
                 end
                 -- EM on ally
                 if self.inGroup and aura.spellId == EBON_MIGHT_OTHERS and aura.sourceUnit == "player" then
                     local value = self:BestPoint(aura) or 0
-                    self.allyAuras[aura.auraInstanceID] = {
-                        value = value,
-                        unit  = unit,
-                    }
+                    table.insert(self.ebonMight, {
+                        auraId = aura.auraInstanceID,
+                        value  = value,
+                        target = unit,
+                    })
+                    -- UNIT_AURA event ordering isn't guaranteed — if the ally
+                    -- aura event arrives before the self aura event, advance
+                    -- selfExpirationTime via the ally aura so CalcCrit can tell
+                    -- a new cast is in flight (ally + self auras have matching
+                    -- expiration within a cast).
+                    if aura.expirationTime and not issecretvalue(aura.expirationTime)
+                       and aura.expirationTime > self.selfExpirationTime then
+                        self.selfExpirationTime = aura.expirationTime
+                    end
+                    -- Cast-roll moment: this ally's aura just landed with the
+                    -- cast's roll value baked in. Flag CalcCrit to (re)classify.
+                    -- Additional ally adds for the same cast (staggered raid
+                    -- application) re-set this flag; CalcCrit refreshes the
+                    -- entry's normalization to match the higher count.
+                    self._castNeedsPush = true
                     changed = true
-                    break
                 end
             end
         end
@@ -619,7 +964,7 @@ function EMT:OnUnitAura(_, unit, updateInfo)
 
     if updateInfo.updatedAuraInstanceIDs then
         for _, instanceID in ipairs(updateInfo.updatedAuraInstanceIDs) do
-            -- Self update
+            -- Self update (refresh / extension)
             if instanceID == self.selfAuraInstanceID and unit == "player" then
                 local auraData = C_UnitAuras.GetAuraDataByAuraInstanceID("player", instanceID)
                 if auraData and auraData.expirationTime and not issecretvalue(auraData.expirationTime) then
@@ -628,13 +973,16 @@ function EMT:OnUnitAura(_, unit, updateInfo)
                 end
             end
             -- Ally update
-            local tracked = self.allyAuras[instanceID]
-            if tracked and tracked.unit == unit then
-                local auraData = C_UnitAuras.GetAuraDataByAuraInstanceID(unit, instanceID)
-                local value = auraData and self:BestPoint(auraData) or nil
-                if value and value > 0 then
-                    tracked.value = value
-                    changed = true
+            for _, em in ipairs(self.ebonMight) do
+                if em.auraId == instanceID and em.target == unit then
+                    local auraData = C_UnitAuras.GetAuraDataByAuraInstanceID(unit, instanceID)
+                    if auraData then
+                        local value = self:BestPoint(auraData)
+                        if value and value > 0 then
+                            em.value = value
+                            changed = true
+                        end
+                    end
                 end
             end
         end
@@ -643,22 +991,18 @@ function EMT:OnUnitAura(_, unit, updateInfo)
     if updateInfo.removedAuraInstanceIDs then
         for _, instanceID in ipairs(updateInfo.removedAuraInstanceIDs) do
             if instanceID == self.selfAuraInstanceID and unit == "player" then
-                -- Self removal → wipe all state. Stricter than reference v1.0.6
-                -- (which only clears selfAura and lets ally removes arrive
-                -- naturally): under heavy combat Blizzard can deliver removes
-                -- out of order, and a stale ally value slipping into the next
-                -- Classify() would poison the baseline. Any ally removes that
-                -- still arrive for IDs we already wiped are a harmless no-op.
+                -- Self removal — wipe all state so a stale ally value can't
+                -- poison the next cast's detection.
                 self:ClearData()
                 changed = true
             else
-                -- Ally removal. Check unit alongside instanceID — aura instance
-                -- IDs are per-unit, not global, so cross-unit ID collisions in
-                -- raids can cause false removals without the unit guard.
-                local tracked = self.allyAuras[instanceID]
-                if tracked and tracked.unit == unit then
-                    self.allyAuras[instanceID] = nil
-                    changed = true
+                -- Ally removal (guarded by unit — instance IDs are per-unit).
+                for i = #self.ebonMight, 1, -1 do
+                    local em = self.ebonMight[i]
+                    if em.auraId == instanceID and em.target == unit then
+                        table.remove(self.ebonMight, i)
+                        changed = true
+                    end
                 end
             end
         end
@@ -678,13 +1022,16 @@ function EMT:PLAYER_ENTERING_WORLD()
     self:UpdateTalents()
     self.inGroup = IsInGroup()
     self:ScanAuras()
+    self:AutoRefreshSeed()
     self:UpdateDisplay()
+end
+
+function EMT:PLAYER_REGEN_ENABLED()
+    self:AutoRefreshSeed()
 end
 
 function EMT:ACTIVE_PLAYER_SPECIALIZATION_CHANGED()
     self.isAugSpec = self:IsValidSpec()
-    -- Re-check talents — a spec change may load a different talent loadout
-    -- that affects canCrit / canDupe even without a TRAIT_CONFIG_UPDATED.
     self:UpdateTalents()
     if not self.isAugSpec then
         self:HideTracker()
@@ -706,6 +1053,10 @@ end
 function EMT:GROUP_LEFT()
     self.inGroup = false
     self:ClearData()
+    -- History was calibrated against group-cast values; solo content has
+    -- no ally auras to compare so the history is stale on rejoin.
+    wipe(self._castHistory)
+    self._lastRecordedExpiration = 0
     self:UpdateDisplay()
 end
 
@@ -715,12 +1066,19 @@ end
 
 -- UNIT_FLAGS fires on death, charm, afk-enter, etc. Recompute whenever a
 -- tracked group member's flags change so the state reflects current alive /
--- present members. Matches reference v1.0.6 behavior.
+-- present members.
 function EMT:UNIT_FLAGS(_, unit)
     if not self.isAugSpec or self.isPreview then return end
     if not unit then return end
     if unit ~= "player" and not unit:find("^party%d") and not unit:find("^raid%d") then return end
     if unit:find("pet") then return end
+    self:UpdateDisplay()
+end
+
+-- PLAYER_TOTEM_UPDATE fires when the duplicate spawns or expires. Refresh
+-- the display so the live `isDuped` flips immediately.
+function EMT:PLAYER_TOTEM_UPDATE()
+    if not self.isAugSpec or self.isPreview then return end
     self:UpdateDisplay()
 end
 
@@ -735,14 +1093,15 @@ end
 function EMT:OnEnable()
     self:UpdateDB()
     -- Hard class gate: non-Evokers get no frame, no EditMode registration, no events.
-    -- Matches PrescienceTracker / BloodlustTracker pattern.
     if not self.db.Enabled then return end
     if select(2, UnitClass("player")) ~= "EVOKER" then return end
 
     self:CreateFrames()
     self:RegWithEditMode()
     self:ApplySettings()
+    self:RefreshSeed()
     self:RegisterEvent("PLAYER_ENTERING_WORLD")
+    self:RegisterEvent("PLAYER_REGEN_ENABLED")
     self:RegisterEvent("ACTIVE_PLAYER_SPECIALIZATION_CHANGED")
     self:RegisterEvent("TRAIT_CONFIG_UPDATED")
     self:RegisterEvent("GROUP_JOINED")
@@ -750,11 +1109,19 @@ function EMT:OnEnable()
     self:RegisterEvent("GROUP_ROSTER_UPDATE")
     self:RegisterEvent("UNIT_AURA", "OnUnitAura")
     self:RegisterEvent("UNIT_FLAGS")
+    self:RegisterEvent("PLAYER_TOTEM_UPDATE")
 end
 
 function EMT:OnDisable()
     self:UnregisterAllEvents()
     self:StopTicker()
     self:HideTracker()
+    if self._pandemicActive then
+        self:StopPandemicGlow()
+        self._pandemicActive = false
+    end
     self:ClearData()
+    wipe(self._castHistory)
+    self._lastRecordedExpiration = 0
+    self._castNeedsPush = false
 end
