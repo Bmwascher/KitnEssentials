@@ -17,7 +17,7 @@ local CT = KitnEssentials:NewModule("CombatTimer", "AceEvent-3.0")
 ---------------------------------------------------------------------------------
 local CreateFrame = CreateFrame
 local GetTime = GetTime
-local math_floor, math_max = math.floor, math.max
+local math_floor = math.floor
 local string_format = string.format
 
 CT.frame = nil
@@ -55,16 +55,18 @@ local function GetBrackets(style)
     else return "[", "]" end
 end
 
-local function FormatTime(total_seconds, format, bracketStyle)
+-- Returns the digits-only timer string (no brackets). Brackets are rendered
+-- as separate FontStrings pinned to the frame's edges so they don't shift
+-- as proportional digit widths vary.
+local function FormatTime(total_seconds, format)
     local mins = math_floor(total_seconds / 60)
     local secs = math_floor(total_seconds % 60)
-    local open, close = GetBrackets(bracketStyle)
     if format == "MM:SS:MS" then
         local frac = total_seconds - math_floor(total_seconds)
         local ms = math_floor(frac * 10)
-        return string_format("%s%02d:%02d:%d%s", open, mins, secs, ms, close)
+        return string_format("%02d:%02d:%d", mins, secs, ms)
     end
-    return string_format("%s%02d:%02d%s", open, mins, secs, close)
+    return string_format("%02d:%02d", mins, secs)
 end
 
 ---------------------------------------------------------------------------------
@@ -80,28 +82,68 @@ function CT:CreateFrame()
     frame:SetMouseClickEnabled(false)
     frame:Hide()
 
+    -- Brackets are separate FontStrings pinned to the frame's edges so they
+    -- don't shift as proportional digit widths vary in the digits FontString.
+    -- Inset is 0 so the brackets sit snug to the frame edge — visual gap to
+    -- the digits is controlled by the small safety pad in UpdateFrameSize.
+    local bracketL = frame:CreateFontString(nil, "OVERLAY")
+    bracketL:SetPoint("LEFT", frame, "LEFT", 0, 0)
+    bracketL:SetJustifyH("LEFT")
+    bracketL:SetJustifyV("MIDDLE")
+    KE:ApplyFont(bracketL, "Expressway", 14, "")
+
+    local bracketR = frame:CreateFontString(nil, "OVERLAY")
+    bracketR:SetPoint("RIGHT", frame, "RIGHT", 0, 0)
+    bracketR:SetJustifyH("RIGHT")
+    bracketR:SetJustifyV("MIDDLE")
+    KE:ApplyFont(bracketR, "Expressway", 14, "")
+
     local text = frame:CreateFontString("KE_CombatTimerText", "OVERLAY")
     text:SetPoint("CENTER", frame, "CENTER", 0, 0)
-    KE:ApplyFont(text, "Expressway", 14, "")
-    local open, close = GetBrackets(self.db.BracketStyle)
-    text:SetText(open .. "00:00" .. close)
     text:SetJustifyH("CENTER")
     text:SetJustifyV("MIDDLE")
+    KE:ApplyFont(text, "Expressway", 14, "")
+    text:SetText("00:00")
 
     self.frame = frame
     frame.text = text
     self.text = text
+    self.bracketL = bracketL
+    self.bracketR = bracketR
 end
 
 ---------------------------------------------------------------------------------
 -- Update Logic
 ---------------------------------------------------------------------------------
 function CT:UpdateFrameSize()
-    if not self.frame then return end
-    local textWidth = self.text and self.text:GetStringWidth()
-    if KE:IsSafeValue(textWidth) then
-        self.frame:SetSize(textWidth + 16, (self.db.FontSize or 28) + 8)
+    if not self.frame or not self.text then return end
+
+    -- Measure against a fixed reference string so frame width stays stable
+    -- regardless of which digits are currently rendered (proportional fonts
+    -- give "1" a different width than "0", which would shift bracket
+    -- positions if the brackets shared a FontString with the digits).
+    local current = self.text:GetText()
+    local refDigits = (self.db.Format == "MM:SS:MS") and "00:00:0" or "00:00"
+    self.text:SetText(refDigits)
+
+    local digitsW = self.text:GetStringWidth() or 0
+    local bracketW = 0
+    if self.bracketL and self.bracketL:IsShown() then
+        bracketW = (self.bracketL:GetStringWidth() or 0) + (self.bracketR:GetStringWidth() or 0)
     end
+
+    -- Frame width = digits + brackets + 2px (1px each side). The 1px
+    -- clearance keeps the bracket characters' soft-outline eastern/western
+    -- shadows from bleeding into the adjacent digits, while staying tight
+    -- enough that there's no visible gap. ceil rounds up to even pixels so
+    -- text centering doesn't land on a sub-pixel boundary.
+    local total = math.ceil(digitsW + bracketW)
+    if total % 2 == 1 then total = total + 1 end
+    if KE:IsSafeValue(total) then
+        self.frame:SetSize(total, (self.db.FontSize or 28) + 8)
+    end
+
+    if current ~= nil then self.text:SetText(current) end
 end
 
 function CT:UpdateText()
@@ -112,7 +154,7 @@ function CT:UpdateText()
     else
         total_time = KE.lastCombatDuration or 0
     end
-    local status = FormatTime(total_time, self.db.Format, self.db.BracketStyle)
+    local status = FormatTime(total_time, self.db.Format)
     if status ~= self.lastDisplayedText then
         self.text:SetText(status)
         self.lastDisplayedText = status
@@ -126,24 +168,58 @@ end
 function CT:ApplySettings()
     if not self.text then return end
     self.refreshRate = GetRefreshRate(self.db.Format)
+
+    -- Same font on all three FontStrings so brackets and digits visually
+    -- align (matching x-height, weight, soft-outline rendering).
     KE:ApplyFontToText(self.text, self.db.FontFace, self.db.FontSize, self.db.FontOutline, self.db.FontShadow)
-    local justify = KE:GetTextJustifyFromAnchor(self.db.Position.AnchorFrom)
-    local point = KE:GetTextPointFromAnchor(self.db.Position.AnchorFrom)
+    KE:ApplyFontToText(self.bracketL, self.db.FontFace, self.db.FontSize, self.db.FontOutline, self.db.FontShadow)
+    KE:ApplyFontToText(self.bracketR, self.db.FontFace, self.db.FontSize, self.db.FontOutline, self.db.FontShadow)
+
+    -- Bracket characters + visibility per BracketStyle. When the style is
+    -- "none" the digits FontString takes over the full frame width and
+    -- respects the user's anchor-justify preference (legacy behavior).
+    local open, close = GetBrackets(self.db.BracketStyle)
     self.text:ClearAllPoints()
-    self.text:SetJustifyH(justify)
-    if point == "LEFT" then
-        self.text:SetPoint("LEFT", self.frame, "LEFT", 4, 0)
-    elseif point == "RIGHT" then
-        self.text:SetPoint("RIGHT", self.frame, "RIGHT", -4, 0)
+    if open == "" then
+        self.bracketL:Hide()
+        self.bracketR:Hide()
+        -- Soft-outline shadows are parented to the FRAME, not the bracket
+        -- FontString, so :Hide() on the bracket alone leaves 8 shadow ghosts
+        -- visible. Explicitly hide the .softOutline as well.
+        if self.bracketL.softOutline then self.bracketL.softOutline:SetShown(false) end
+        if self.bracketR.softOutline then self.bracketR.softOutline:SetShown(false) end
+        local justify = KE:GetTextJustifyFromAnchor(self.db.Position.AnchorFrom)
+        local point = KE:GetTextPointFromAnchor(self.db.Position.AnchorFrom)
+        self.text:SetJustifyH(justify)
+        if point == "LEFT" then
+            self.text:SetPoint("LEFT", self.frame, "LEFT", 4, 0)
+        elseif point == "RIGHT" then
+            self.text:SetPoint("RIGHT", self.frame, "RIGHT", -4, 0)
+        else
+            self.text:SetPoint("CENTER", self.frame, "CENTER", 0, 0)
+        end
     else
+        self.bracketL:SetText(open)
+        self.bracketR:SetText(close)
+        self.bracketL:Show()
+        self.bracketR:Show()
+        self.text:SetJustifyH("CENTER")
         self.text:SetPoint("CENTER", self.frame, "CENTER", 0, 0)
     end
+
+    -- Colors apply to all three so the timer reads as one piece.
     local textColor = self.running and self.db.ColorInCombat or self.db.ColorOutOfCombat
+    local r, g, b, a = 1, 1, 1, 1
     if textColor then
-        self.text:SetTextColor(textColor[1] or 1, textColor[2] or 1, textColor[3] or 1, textColor[4] or 1)
-    else
-        self.text:SetTextColor(1, 1, 1, 1)
+        r = textColor[1] or 1
+        g = textColor[2] or 1
+        b = textColor[3] or 1
+        a = textColor[4] or 1
     end
+    self.text:SetTextColor(r, g, b, a)
+    self.bracketL:SetTextColor(r, g, b, a)
+    self.bracketR:SetTextColor(r, g, b, a)
+
     if self.frame then
         KE:ApplyBackdrop(self.frame, self.db.Backdrop)
     end
@@ -181,7 +257,7 @@ function CT:OnExitCombat()
     self.running = false
     self.startTime = 0
     if self.db.ShowChatMessage ~= false then
-        local duration = FormatTime(KE.lastCombatDuration, self.db.Format, self.db.BracketStyle)
+        local duration = FormatTime(KE.lastCombatDuration, self.db.Format)
         KE:Print("Combat lasted " .. duration)
     end
     self:ApplySettings()

@@ -303,6 +303,12 @@ function HM:ApplySettings()
     KE:ApplyFramePosition(self.containerFrame, self.db.Position, self.db)
     self.containerFrame:SetFrameStrata(self.db.Strata or "HIGH")
 
+    -- Apply font/size/offset changes to already-created frames so live edits
+    -- take effect without a Refresh()/reload.
+    for _, frame in pairs(self.healerFrames) do
+        self:UpdateFrameAppearance(frame)
+    end
+
     if self.isPreview then
         self:UpdateHealerFrame()
     else
