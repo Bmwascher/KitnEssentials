@@ -21,6 +21,10 @@ local GetItemInfo = C_Item.GetItemInfo
 local CreateFrame = CreateFrame
 local InCombatLockdown = InCombatLockdown
 local GetInstanceInfo = GetInstanceInfo
+local UnitClass = UnitClass
+local IsInGroup = IsInGroup
+local IsInRaid = IsInRaid
+local GetNumGroupMembers = GetNumGroupMembers
 
 local function IsInRaidInstance()
     local difficultyID = select(3, GetInstanceInfo()) or 0
@@ -60,6 +64,7 @@ RN.activeAlerts = {}
 RN.isPreview = false
 RN.editModeRegistered = false
 RN.hasItem = false
+RN.hasWarlockInGroup = false
 RN.wasUsable = nil
 RN.resetBossGen = 0
 RN.lootBossGen = 0
@@ -248,9 +253,45 @@ end
 ---------------------------------------------------------------------------------
 -- Gateway Logic
 ---------------------------------------------------------------------------------
+-- Gates can only be placed by Warlocks. If no Warlock is in the group (and the
+-- player isn't one), the alert is meaningless — suppress it.
+function RN:CheckGroupForWarlock()
+    local _, _, playerClassID = UnitClass("player")
+    if playerClassID == 9 then
+        self.hasWarlockInGroup = true
+        return true
+    end
+
+    if not IsInGroup() then
+        self.hasWarlockInGroup = false
+        return false
+    end
+
+    local numMembers = GetNumGroupMembers() or 0
+    local prefix = IsInRaid() and "raid" or "party"
+    local maxCheck = IsInRaid() and numMembers or (numMembers - 1)
+
+    for i = 1, maxCheck do
+        local _, _, classID = UnitClass(prefix .. i)
+        if classID == 9 then
+            self.hasWarlockInGroup = true
+            return true
+        end
+    end
+
+    self.hasWarlockInGroup = false
+    return false
+end
+
+function RN:OnGroupChanged()
+    self:CheckGroupForWarlock()
+    self:GatewayCheckUsable()
+end
+
 function RN:GatewayFullUpdate()
     C_Timer.After(0.5, function()
         if not self.db or not self.db.Enabled then return end
+        self:CheckGroupForWarlock()
         local count = GetItemCount(GATEWAY_ITEM_ID)
         self.hasItem = count and count > 0
         if self.hasItem then
@@ -262,7 +303,7 @@ function RN:GatewayFullUpdate()
 end
 
 function RN:GatewayCheckUsable()
-    if not self.hasItem then
+    if not self.hasItem or not self.hasWarlockInGroup then
         self:GatewayUpdateState(false)
         return
     end
@@ -490,6 +531,7 @@ function RN:OnEnable()
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnZoneChange")
     self:RegisterEvent("BAG_UPDATE", "GatewayFullUpdate")
     self:RegisterEvent("SPELL_UPDATE_USABLE", "GatewayCheckUsable")
+    self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnGroupChanged")
 
     -- Reset Boss events
     self:RegisterEvent("UNIT_AURA", "OnUnitAura")
@@ -522,6 +564,7 @@ function RN:OnDisable()
     self:HideAllAlerts()
     self.wasUsable = nil
     self.hasItem = false
+    self.hasWarlockInGroup = false
     self.isPreview = false
     self.resetBossGen = self.resetBossGen + 1
     self.lootBossGen = self.lootBossGen + 1

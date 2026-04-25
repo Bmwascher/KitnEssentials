@@ -15,13 +15,13 @@ local TSP = KitnEssentials:NewModule("TimeSpiral", "AceEvent-3.0")
 local LCG = LibStub("LibCustomGlow-1.0", true)
 
 local CreateFrame = CreateFrame
-local GetSpellTexture = C_Spell.GetSpellTexture
 local IsPlayerSpell = IsPlayerSpell
 local IsSpellKnown = IsSpellKnown
+local GetSpecialization = GetSpecialization
+local GetSpecializationInfo = GetSpecializationInfo
 local GetTime = GetTime
 local pairs = pairs
 local next = next
-local UnitClass = UnitClass
 
 ---------------------------------------------------------------------------------
 -- Module State
@@ -35,34 +35,97 @@ TSP.durationObject = nil
 local TIME_SPIRAL_ICON = 4622479
 local TIME_SPIRAL_DURATION = 10.5
 
-local MOVEMENT_SPELLS = {
-    [48265]  = "DEATHKNIGHT", -- Death's Advance
-    [195072]  = "DEMONHUNTER", -- Fel Rush
-    [1234796] = "DEMONHUNTER", -- Infernal Strike
-    [189110]  = "DEMONHUNTER", -- Shift
-    [1850]   = "DRUID",       -- Dash
-    [252216] = "DRUID",       -- Tiger Dash
-    [358267] = "EVOKER",      -- Hover
-    [186257] = "HUNTER",      -- Aspect of the Cheetah
-    [1953]   = "MAGE",        -- Blink
-    [212653] = "MAGE",        -- Shimmer
-    [109132] = "MONK",        -- Roll
-    [119085] = "MONK",        -- Chi Torpedo
-    [190784] = "PALADIN",     -- Divine Steed
-    [73325]  = "PRIEST",      -- Leap of Faith
-    [2983]   = "ROGUE",       -- Sprint
-    [192063] = "SHAMAN",      -- Gust of Wind
-    [58875]  = "SHAMAN",      -- Spirit Walk
-    [79206]  = "SHAMAN",      -- Spiritwalker's Grace
-    [48020]  = "WARLOCK",     -- Demonic Circle: Teleport
-    [6544]   = "WARRIOR",     -- Heroic Leap
+-- Per-spec movement spell priority list. Each entry is { spellID, iconID }
+-- in priority order. DetectPlayerSpell picks the first entry where the
+-- player has the spell (via IsPlayerSpell). Specs with talent alternates
+-- (Druid Dash/Tiger Dash, Mage Blink/Shimmer, Monk Roll/Chi Torpedo,
+-- Shaman Gust of Wind/Spirit Walk/Spiritwalker's Grace) list multiple
+-- entries so detection works regardless of which talent the player took.
+-- Adapted from NorskenUI v3.5 Core/Constants.lua + KE-specific extensions.
+local PRIMARY_BY_SPEC = {
+    -- Death Knight
+    [250]  = { { 48265, 237561 } },                                    -- Blood: Death's Advance
+    [251]  = { { 48265, 237561 } },                                    -- Frost: Death's Advance
+    [252]  = { { 48265, 237561 } },                                    -- Unholy: Death's Advance
+    -- Demon Hunter
+    [577]  = { { 195072, 1247261 } },                                  -- Havoc: Fel Rush
+    [581]  = { { 189110, 1344650 } },                                  -- Vengeance: Infernal Strike
+    [1480] = { { 1234796, 7554213 } },                                 -- Devourer: Shift
+    -- Druid (Dash > Tiger Dash)
+    [102]  = { { 1850, 132120 }, { 252216, 1817485 } },                -- Balance
+    [103]  = { { 1850, 132120 }, { 252216, 1817485 } },                -- Feral
+    [104]  = { { 1850, 132120 }, { 252216, 1817485 } },                -- Guardian
+    [105]  = { { 1850, 132120 }, { 252216, 1817485 } },                -- Restoration
+    -- Evoker
+    [1467] = { { 358267, 4622463 } },                                  -- Devastation: Hover
+    [1468] = { { 358267, 4622463 } },                                  -- Preservation: Hover
+    [1473] = { { 358267, 4622463 } },                                  -- Augmentation: Hover
+    -- Hunter
+    [253]  = { { 186257, 132242 } },                                   -- Beast Mastery: Cheetah
+    [254]  = { { 186257, 132242 } },                                   -- Marksmanship: Cheetah
+    [255]  = { { 186257, 132242 } },                                   -- Survival: Cheetah
+    -- Mage (Blink > Shimmer)
+    [62]   = { { 1953, 135736 }, { 212653, 135739 } },                 -- Arcane
+    [63]   = { { 1953, 135736 }, { 212653, 135739 } },                 -- Fire
+    [64]   = { { 1953, 135736 }, { 212653, 135739 } },                 -- Frost
+    -- Monk (Roll > Chi Torpedo)
+    [268]  = { { 109132, 574574 }, { 115008, 607849 } },               -- Brewmaster
+    [270]  = { { 109132, 574574 }, { 115008, 607849 } },               -- Mistweaver
+    [269]  = { { 109132, 574574 }, { 115008, 607849 } },               -- Windwalker
+    -- Paladin
+    [65]   = { { 190784, 1360759 } },                                  -- Holy: Divine Steed
+    [66]   = { { 190784, 1360759 } },                                  -- Protection: Divine Steed
+    [70]   = { { 190784, 1360759 } },                                  -- Retribution: Divine Steed
+    -- Priest
+    [256]  = { { 73325, 463835 } },                                    -- Discipline: Leap of Faith
+    [257]  = { { 73325, 463835 } },                                    -- Holy: Leap of Faith
+    [258]  = { { 73325, 463835 } },                                    -- Shadow: Leap of Faith
+    -- Rogue
+    [259]  = { { 2983, 132307 } },                                     -- Assassination: Sprint
+    [260]  = { { 2983, 132307 } },                                     -- Outlaw: Sprint
+    [261]  = { { 2983, 132307 } },                                     -- Subtlety: Sprint
+    -- Shaman: Gust of Wind / Spirit Walk are talent-choice (mutually
+    -- exclusive); Spiritwalker's Grace is a separate talent stackable
+    -- on top. Per-spec priority reflects typical spec preference, with
+    -- the alternates listed as fallbacks so detection always lands on
+    -- something the player actually has.
+    [262]  = { { 79206, 451170 }, { 192063, 463565 }, { 58875, 132328 } }, -- Elemental: SWG > GoW > SW
+    [263]  = { { 58875, 132328 }, { 192063, 463565 }, { 79206, 451170 } }, -- Enhancement: SW > GoW > SWG
+    [264]  = { { 79206, 451170 }, { 192063, 463565 }, { 58875, 132328 } }, -- Restoration: SWG > GoW > SW
+    -- Warlock
+    [265]  = { { 48020, 237560 } },                                    -- Affliction: Demonic Circle: Teleport
+    [266]  = { { 48020, 237560 } },                                    -- Demonology: Demonic Circle: Teleport
+    [267]  = { { 48020, 237560 } },                                    -- Destruction: Demonic Circle: Teleport
+    -- Warrior
+    [71]   = { { 6544, 236171 } },                                     -- Arms: Heroic Leap
+    [72]   = { { 6544, 236171 } },                                     -- Fury: Heroic Leap
+    [73]   = { { 6544, 236171 } },                                     -- Protection: Heroic Leap
 }
+
+-- Built once in OnEnable from PRIMARY_BY_SPEC. Used by the
+-- SPELL_ACTIVATION_OVERLAY_GLOW_SHOW/HIDE handlers as an O(1) filter, and
+-- to look up the icon to swap to when an alternate spell procs.
+local MOVEMENT_SPELL_FILTER -- spellID -> iconID
 
 local FILTER_TALENTS = {
     [427640] = { [195072] = true }, -- Inertia
     [427794] = { [195072] = true }, -- Dash of Chaos
     [385899] = { [385899] = true }, -- Soulburn
 }
+
+-- IsPlayerSpell alone misses some talents (especially capstone-style nodes
+-- like Spiritwalker's Grace) — full check uses IsSpellKnown and IsSpellUsable
+-- as backstops.
+local function IsTalentKnown(talentId)
+    if IsPlayerSpell(talentId) then return true end
+    if IsSpellKnown(talentId) then return true end
+
+    local spellInfo = C_Spell.GetSpellInfo(talentId)
+    if spellInfo and C_Spell.IsSpellUsable(talentId) then
+        return true
+    end
+    return false
+end
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -72,35 +135,30 @@ function TSP:UpdateDB()
 end
 
 function TSP:DetectPlayerSpell()
-    local _, playerClass = UnitClass("player")
-    for spellId, class in pairs(MOVEMENT_SPELLS) do
-        if class == playerClass and IsPlayerSpell(spellId) then
-            self.playerSpellId = spellId
-            return spellId
+    local specID = GetSpecializationInfo(GetSpecialization() or 0)
+    if not specID then return nil end
+
+    local list = PRIMARY_BY_SPEC[specID]
+    if not list then return nil end
+
+    -- IsPlayerSpell only — IsSpellKnown / IsSpellUsable return true for any
+    -- spell defined in the class spellbook regardless of whether the talent
+    -- is actively selected, which would mis-detect untalented spells.
+    for _, entry in ipairs(list) do
+        local spellID, iconID = entry[1], entry[2]
+        if IsPlayerSpell(spellID) then
+            self.playerSpellId = spellID
+            self.playerIconId = iconID
+            return spellID
         end
     end
     return nil
 end
 
 function TSP:GetDisplayIcon()
-    if self.playerSpellId then
-        local texture = GetSpellTexture(self.playerSpellId)
-        if texture then
-            return texture
-        end
-    end
-
-    -- Try to detect the spell if we haven't yet
-    local spellId = self:DetectPlayerSpell()
-    if spellId then
-        local texture = GetSpellTexture(spellId)
-        if texture then
-            return texture
-        end
-    end
-
-    -- Fallback to Time Spiral icon
-    return TIME_SPIRAL_ICON
+    if self.playerIconId then return self.playerIconId end
+    self:DetectPlayerSpell()
+    return self.playerIconId or TIME_SPIRAL_ICON
 end
 
 function TSP:OnInitialize()
@@ -167,20 +225,6 @@ end
 ---------------------------------------------------------------------------------
 -- Core Logic
 ---------------------------------------------------------------------------------
--- Check if a talent is known using multiple detection methods
-local function IsTalentKnown(talentId)
-    if IsPlayerSpell(talentId) then return true end
-    if IsSpellKnown(talentId) then return true end
-
-    local spellInfo = C_Spell.GetSpellInfo(talentId)
-    if spellInfo then
-        local isUsable = C_Spell.IsSpellUsable(talentId)
-        if isUsable then return true end
-    end
-
-    return false
-end
-
 function TSP:FilterSpell(spellId)
     for talentId, spells in pairs(FILTER_TALENTS) do
         if spells[spellId] and IsTalentKnown(talentId) then
@@ -431,6 +475,16 @@ end
 ---------------------------------------------------------------------------------
 function TSP:OnEnable()
     if not self.db.Enabled then return end
+
+    if not MOVEMENT_SPELL_FILTER then
+        MOVEMENT_SPELL_FILTER = {}
+        for _, list in pairs(PRIMARY_BY_SPEC) do
+            for _, entry in ipairs(list) do
+                MOVEMENT_SPELL_FILTER[entry[1]] = entry[2]
+            end
+        end
+    end
+
     self:DetectPlayerSpell()
     self:CreateFrame()
     self:RegWithEditMode()
@@ -444,12 +498,22 @@ function TSP:OnEnable()
     -- Register events
     self:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW", function(_, spellId)
         if not spellId then return end
-        if not MOVEMENT_SPELLS[spellId] then return end
+        local procIcon = MOVEMENT_SPELL_FILTER[spellId]
+        if not procIcon then return end
         if self:FilterSpell(spellId) then return end
 
-        self.playerSpellId = spellId
-        if self.icon then
-            self.icon:SetTexture(self:GetDisplayIcon())
+        -- Don't let a proc overwrite the icon picked by DetectPlayerSpell.
+        -- Time Spiral can proc multiple movement spells simultaneously
+        -- (Shaman has 3 — SWG + GoW + SW), so last-write-wins would pick
+        -- whichever the engine fires last instead of the user's priority.
+        -- Bootstrap exception: if detection never landed (e.g. spec data
+        -- not loaded at OnEnable), use the first proc as a fallback.
+        if not self.playerSpellId then
+            self.playerSpellId = spellId
+            self.playerIconId = procIcon
+            if self.icon then
+                self.icon:SetTexture(procIcon)
+            end
         end
 
         self.activeProcs[spellId] = true
@@ -458,12 +522,27 @@ function TSP:OnEnable()
 
     self:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE", function(_, spellId)
         if not spellId then return end
-        if not MOVEMENT_SPELLS[spellId] then return end
+        if not MOVEMENT_SPELL_FILTER[spellId] then return end
         self.activeProcs[spellId] = nil
         if not next(self.activeProcs) then
             self:HideProc()
         end
     end)
+
+    -- Re-detect on spec switch or talent loadout change so the icon reflects
+    -- the player's current movement spell instead of staying stale.
+    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnTalentChange")
+    self:RegisterEvent("TRAIT_CONFIG_UPDATED", "OnTalentChange")
+end
+
+function TSP:OnTalentChange()
+    -- Clear cached pick so DetectPlayerSpell walks the priority list fresh.
+    self.playerSpellId = nil
+    self.playerIconId = nil
+    self:DetectPlayerSpell()
+    if self.icon then
+        self.icon:SetTexture(self:GetDisplayIcon())
+    end
 end
 
 function TSP:OnDisable()
