@@ -47,7 +47,7 @@ function H.ApplyFrameBackdrop(frame, bgColor, borderColor)
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         tile = false,
         tileSize = 0,
-        edgeSize = 1,
+        edgeSize = KE:GetPixelSize(),
         insets = { left = 0, right = 0, top = 0, bottom = 0 },
     })
     frame:SetBackdropColor(bgColor[1], bgColor[2], bgColor[3], bgColor[4] or 0.8)
@@ -141,16 +141,17 @@ function H.CreateFrame(self, opts)
     iconFrame:SetPoint("LEFT", frame, "LEFT", 0, 0)
     H.ApplyFrameBackdrop(iconFrame, { 0, 0, 0, 0.8 }, db.BorderColor or { 0, 0, 0, 1 })
 
+    local px = KE:GetPixelSize()
     local icon = iconFrame:CreateTexture(nil, "ARTWORK")
-    icon:SetPoint("TOPLEFT", 1, -1)
-    icon:SetPoint("BOTTOMRIGHT", -1, 1)
+    icon:SetPoint("TOPLEFT", px, -px)
+    icon:SetPoint("BOTTOMRIGHT", -px, px)
     KE:ApplyIconZoom(icon)
 
     local castBar = CreateFrame("StatusBar", nil, frame)
     castBar:SetPoint("LEFT", iconFrame, "RIGHT", 0, 0)
-    castBar:SetPoint("RIGHT", frame, "RIGHT", -1, 0)
-    castBar:SetPoint("TOP", frame, "TOP", 0, -1)
-    castBar:SetPoint("BOTTOM", frame, "BOTTOM", 0, 1)
+    castBar:SetPoint("RIGHT", frame, "RIGHT", -px, 0)
+    castBar:SetPoint("TOP", frame, "TOP", 0, -px)
+    castBar:SetPoint("BOTTOM", frame, "BOTTOM", 0, px)
     castBar:SetStatusBarTexture(KE:GetStatusbarPath(db.StatusBarTexture))
     castBar:SetMinMaxValues(0, 1)
     castBar:SetValue(0)

@@ -620,19 +620,22 @@ local function SetTextElementShown(fontString, shown)
 end
 
 -- Recolor and resize the four border strips created by KE:AddIconBorders.
+-- `size` is screen-pixel intent (1 = base, 2 = crit/dupe); multiply by
+-- KE:GetPixelSize() so the highlight renders crisply at any UI scale.
 function EMT:SetBorderStyle(color, size)
     if not self.iconFrame or not self.iconFrame.borders then return end
     local r, g, b, a = color[1], color[2], color[3], color[4] or 1
     local borders = self.iconFrame.borders
+    local px = size * KE:GetPixelSize()
     for _, tex in pairs(borders) do
         if tex.SetColorTexture then
             tex:SetColorTexture(r, g, b, a)
         end
     end
-    if borders.top    and borders.top.SetHeight    then borders.top:SetHeight(size)    end
-    if borders.bottom and borders.bottom.SetHeight then borders.bottom:SetHeight(size) end
-    if borders.left   and borders.left.SetWidth    then borders.left:SetWidth(size)    end
-    if borders.right  and borders.right.SetWidth   then borders.right:SetWidth(size)   end
+    if borders.top    and borders.top.SetHeight    then borders.top:SetHeight(px)    end
+    if borders.bottom and borders.bottom.SetHeight then borders.bottom:SetHeight(px) end
+    if borders.left   and borders.left.SetWidth    then borders.left:SetWidth(px)    end
+    if borders.right  and borders.right.SetWidth   then borders.right:SetWidth(px)   end
 end
 
 function EMT:UpdateDisplay()

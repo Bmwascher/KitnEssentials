@@ -91,7 +91,7 @@ local function CreateThemedButton(parent, Theme, labelText, isPrimary)
     btn:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
-        edgeSize = 1,
+        edgeSize = KE:GetPixelSize(),
     })
     local textColor = isPrimary and Theme.accent or Theme.textPrimary
     local bgMedium = ValidateThemeColor(Theme.bgMedium, { 0.1, 0.1, 0.1, 1 })
@@ -169,18 +169,19 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     dialog:SetScript("OnDragStart", dialog.StartMoving)
     dialog:SetScript("OnDragStop", dialog.StopMovingOrSizing)
 
+    local dialogPx = KE:GetPixelSize()
     dialog:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
-        edgeSize = 1,
+        edgeSize = dialogPx,
     })
     dialog:SetBackdropColor(bgLight[1], bgLight[2], bgLight[3], bgLight[4] or 1)
     dialog:SetBackdropBorderColor(border[1], border[2], border[3], 1)
 
     local header = CreateFrame("Frame", nil, dialog, "BackdropTemplate")
     header:SetHeight(28)
-    header:SetPoint("TOPLEFT", dialog, "TOPLEFT", 1, -1)
-    header:SetPoint("TOPRIGHT", dialog, "TOPRIGHT", -1, -1)
+    header:SetPoint("TOPLEFT", dialog, "TOPLEFT", dialogPx, -dialogPx)
+    header:SetPoint("TOPRIGHT", dialog, "TOPRIGHT", -dialogPx, -dialogPx)
     header:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
     header:SetBackdropColor(bgMedium[1], bgMedium[2], bgMedium[3], 1)
 
@@ -297,7 +298,7 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
         editBox:SetBackdrop({
             bgFile = "Interface\\Buttons\\WHITE8X8",
             edgeFile = "Interface\\Buttons\\WHITE8X8",
-            edgeSize = 1,
+            edgeSize = KE:GetPixelSize(),
         })
         editBox:SetBackdropColor(bgMedium[1], bgMedium[2], bgMedium[3], 1)
         editBox:SetBackdropBorderColor(border[1], border[2], border[3], 1)
@@ -395,7 +396,7 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
         editBox2:SetBackdrop({
             bgFile = "Interface\\Buttons\\WHITE8X8",
             edgeFile = "Interface\\Buttons\\WHITE8X8",
-            edgeSize = 1,
+            edgeSize = KE:GetPixelSize(),
         })
         editBox2:SetBackdropColor(bgMedium[1], bgMedium[2], bgMedium[3], 1)
         editBox2:SetBackdropBorderColor(border[1], border[2], border[3], 1)
@@ -648,10 +649,11 @@ function KE:AddIconBorders(frame, color)
         return tex
     end
 
-    frame.borders.top    = MakeBorder("TOPLEFT", "TOPLEFT", "TOPRIGHT", "TOPRIGHT", nil, 1)
-    frame.borders.bottom = MakeBorder("BOTTOMLEFT", "BOTTOMLEFT", "BOTTOMRIGHT", "BOTTOMRIGHT", nil, 1)
-    frame.borders.left   = MakeBorder("TOPLEFT", "TOPLEFT", "BOTTOMLEFT", "BOTTOMLEFT", 1, nil)
-    frame.borders.right  = MakeBorder("TOPRIGHT", "TOPRIGHT", "BOTTOMRIGHT", "BOTTOMRIGHT", 1, nil)
+    local px = KE:GetPixelSize()
+    frame.borders.top    = MakeBorder("TOPLEFT", "TOPLEFT", "TOPRIGHT", "TOPRIGHT", nil, px)
+    frame.borders.bottom = MakeBorder("BOTTOMLEFT", "BOTTOMLEFT", "BOTTOMRIGHT", "BOTTOMRIGHT", nil, px)
+    frame.borders.left   = MakeBorder("TOPLEFT", "TOPLEFT", "BOTTOMLEFT", "BOTTOMLEFT", px, nil)
+    frame.borders.right  = MakeBorder("TOPRIGHT", "TOPRIGHT", "BOTTOMRIGHT", "BOTTOMRIGHT", px, nil)
 end
 
 ---------------------------------------------------------------------------------
@@ -683,20 +685,21 @@ function KE:AddBorders(frame, color, borderParent)
         return tex
     end
 
-    frame.borders.top = CreateBorder("TOPLEFT", "TOPRIGHT", nil, 1)
+    local px = KE:GetPixelSize()
+    frame.borders.top = CreateBorder("TOPLEFT", "TOPRIGHT", nil, px)
 
     frame.borders.bottom = borderParent:CreateTexture(nil, "OVERLAY", nil, 7)
-    frame.borders.bottom:SetHeight(1)
+    frame.borders.bottom:SetHeight(px)
     frame.borders.bottom:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
     frame.borders.bottom:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
     frame.borders.bottom:SetColorTexture(unpack(color))
     frame.borders.bottom:SetTexelSnappingBias(0)
     frame.borders.bottom:SetSnapToPixelGrid(false)
 
-    frame.borders.left = CreateBorder("TOPLEFT", "BOTTOMLEFT", 1, nil)
+    frame.borders.left = CreateBorder("TOPLEFT", "BOTTOMLEFT", px, nil)
 
     frame.borders.right = borderParent:CreateTexture(nil, "OVERLAY", nil, 7)
-    frame.borders.right:SetWidth(1)
+    frame.borders.right:SetWidth(px)
     frame.borders.right:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
     frame.borders.right:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
     frame.borders.right:SetColorTexture(unpack(color))

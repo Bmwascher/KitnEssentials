@@ -154,7 +154,7 @@ function VR:CreatePopup()
     popup:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
-        edgeSize = 1,
+        edgeSize = KE:GetPixelSize(),
     })
     popup:SetBackdropColor(0.06, 0.06, 0.06, 0.95)
     popup:SetBackdropBorderColor(0, 0, 0, 1)
@@ -190,10 +190,11 @@ function VR:CreatePopup()
     barBg:SetAllPoints()
     barBg:SetColorTexture(0.06, 0.06, 0.06, 0.95)
 
+    -- Border drawn within the bar's bounds (not outset) so the bar+border
+    -- combo fits inside the popup width exactly.
     local barBorder = CreateFrame("Frame", nil, bar, "BackdropTemplate")
-    barBorder:SetPoint("TOPLEFT", -1, 1)
-    barBorder:SetPoint("BOTTOMRIGHT", 1, -1)
-    barBorder:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+    barBorder:SetAllPoints()
+    barBorder:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = KE:GetPixelSize() })
     barBorder:SetBackdropBorderColor(0, 0, 0, 1)
 
     local barText = barBorder:CreateFontString(nil, "OVERLAY")
@@ -207,7 +208,7 @@ function VR:CreatePopup()
     local yesBtn = CreateFrame("Button", nil, popup, "BackdropTemplate")
     yesBtn:SetSize(120, 30)
     yesBtn:SetPoint("BOTTOM", popup, "BOTTOM", -70, 14)
-    yesBtn:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+    yesBtn:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = KE:GetPixelSize() })
     yesBtn:SetBackdropColor(0.15, 0.15, 0.15, 1)
     yesBtn:SetBackdropBorderColor(0, 0, 0, 1)
     local yesTxt = yesBtn:CreateFontString(nil, "OVERLAY")
@@ -223,7 +224,7 @@ function VR:CreatePopup()
     local noBtn = CreateFrame("Button", nil, popup, "BackdropTemplate")
     noBtn:SetSize(120, 30)
     noBtn:SetPoint("BOTTOM", popup, "BOTTOM", 70, 14)
-    noBtn:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+    noBtn:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = KE:GetPixelSize() })
     noBtn:SetBackdropColor(0.15, 0.15, 0.15, 1)
     noBtn:SetBackdropBorderColor(0, 0, 0, 1)
     local noTxt = noBtn:CreateFontString(nil, "OVERLAY")
@@ -313,9 +314,12 @@ function VR:CreateGuildBankButton()
 
     -- Border frame
     btn.border = CreateFrame("Frame", nil, btn, "BackdropTemplate")
-    btn.border:SetPoint("TOPLEFT", -1, 1)
-    btn.border:SetPoint("BOTTOMRIGHT", 1, -1)
-    btn.border:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+    do
+        local px = KE:GetPixelSize()
+        btn.border:SetPoint("TOPLEFT", -px, px)
+        btn.border:SetPoint("BOTTOMRIGHT", px, -px)
+        btn.border:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = px })
+    end
     btn.border:SetBackdropBorderColor(0, 0, 0, 1)
 
     -- Text

@@ -49,26 +49,27 @@ local function BorderOverlay(aura, borderColor)
         end
 
         local edges = {}
+        local px = KE:GetPixelSize()
 
         edges.top = Edge(auraBorder)
         edges.top:SetPoint("TOPLEFT", 0, 0)
         edges.top:SetPoint("TOPRIGHT", 0, 0)
-        edges.top:SetHeight(1)
+        edges.top:SetHeight(px)
 
         edges.bottom = Edge(auraBorder)
         edges.bottom:SetPoint("BOTTOMLEFT", 0, 0)
         edges.bottom:SetPoint("BOTTOMRIGHT", 0, 0)
-        edges.bottom:SetHeight(1)
+        edges.bottom:SetHeight(px)
 
         edges.left = Edge(auraBorder)
         edges.left:SetPoint("TOPLEFT", 0, 0)
         edges.left:SetPoint("BOTTOMLEFT", 0, 0)
-        edges.left:SetWidth(1)
+        edges.left:SetWidth(px)
 
         edges.right = Edge(auraBorder)
         edges.right:SetPoint("TOPRIGHT", 0, 0)
         edges.right:SetPoint("BOTTOMRIGHT", 0, 0)
-        edges.right:SetWidth(1)
+        edges.right:SetWidth(px)
 
         aura.PixelBorder.edges = edges
     end

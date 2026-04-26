@@ -752,20 +752,21 @@ function DT:CreateBarFrame(dungeonKey, triggerId, trigger)
     frame:SetFrameStrata("HIGH")
     frame:Hide()
 
+    local px = KE:GetPixelSize()
     frame.barContainer = CreateFrame("Frame", nil, frame, "BackdropTemplate")
     frame.barContainer:SetPoint("TOPLEFT", iconSize, 0)
     frame.barContainer:SetPoint("BOTTOMRIGHT", 0, 0)
     frame.barContainer:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
-        edgeSize = 1,
+        edgeSize = px,
     })
     frame.barContainer:SetBackdropColor(0, 0, 0, 0.8)
     frame.barContainer:SetBackdropBorderColor(0, 0, 0, 1)
 
     frame.bar = CreateFrame("StatusBar", nil, frame.barContainer)
-    frame.bar:SetPoint("TOPLEFT", 1, -1)
-    frame.bar:SetPoint("BOTTOMRIGHT", -1, 1)
+    frame.bar:SetPoint("TOPLEFT", px, -px)
+    frame.bar:SetPoint("BOTTOMRIGHT", -px, px)
     frame.bar:SetStatusBarTexture(self:GetStatusbarPath())
     frame.bar:SetStatusBarColor(unpack(config.barColor))
     frame.bar:SetMinMaxValues(0, 1)
@@ -780,8 +781,8 @@ function DT:CreateBarFrame(dungeonKey, triggerId, trigger)
         KE:AddBorders(frame.iconFrame)
 
         frame.icon = frame.iconFrame:CreateTexture(nil, "ARTWORK")
-        frame.icon:SetPoint("TOPLEFT", 1, -1)
-        frame.icon:SetPoint("BOTTOMRIGHT", -1, 1)
+        frame.icon:SetPoint("TOPLEFT", px, -px)
+        frame.icon:SetPoint("BOTTOMRIGHT", -px, px)
         KE:ApplyIconZoom(frame.icon)
     end
 

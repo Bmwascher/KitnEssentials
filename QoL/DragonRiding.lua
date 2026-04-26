@@ -29,7 +29,6 @@ local VIGOR_SPELL = 372610
 local THRILL_SPELL = 377234
 local SECOND_WIND_SPELL = 425782
 local WHIRLING_SURGE_SPELL = 361584
-local BORDER_WIDTH = 1
 
 ---------------------------------------------------------------------------------
 -- Module State
@@ -60,12 +59,13 @@ end
 -- Core Logic
 ---------------------------------------------------------------------------------
 local function CreatePill(parent, height)
+    local px = KE:GetPixelSize()
     local pill = CreateFrame("StatusBar", nil, parent, BackdropTemplateMixin and "BackdropTemplate")
     pill:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = BORDER_WIDTH,
-        insets = { left = -1, right = -1, top = -1, bottom = -1 },
+        edgeSize = px,
+        insets = { left = -px, right = -px, top = -px, bottom = -px },
     })
     pill:SetBackdropColor(0, 0, 0, 0.8)
     pill:SetBackdropBorderColor(0, 0, 0, 1)

@@ -208,7 +208,9 @@ function DT:UpdateTicks(castBarFrame, duration)
     if not castBarFrame then return end
 
     local db = self.db
-    local tickWidth = db.TickWidth or 2
+    -- TickWidth is screen-pixel intent; multiply by GetPixelSize so a
+    -- value of 2 renders as exactly 2 screen pixels at any UI scale.
+    local tickWidth = (db.TickWidth or 2) * KE:GetPixelSize()
     local hastedTickInterval = self:GetTickInterval() / self:GetHaste()
     local pixelsPerSecond = self.castBarInfo.width / duration
 

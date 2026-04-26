@@ -58,7 +58,7 @@ local function SkinFrame(frame)
             bgFile = "Interface\\Buttons\\WHITE8x8",
             edgeFile = "Interface\\Buttons\\WHITE8x8",
             tile = false,
-            edgeSize = 1,
+            edgeSize = KE:GetPixelSize(),
         })
         frame:SetBackdropColor(0, 0, 0, 0.8)
         frame:SetBackdropBorderColor(0, 0, 0, 1)

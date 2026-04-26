@@ -4,12 +4,12 @@
     <Script file="Secret.lua" />
     <Script file="Interrupts.lua" />
     <Script file="AddonTheme.lua" />
+    <Script file="PixelPerfect.lua" />
     <Script file="CustomOutline.lua" />
     <Script file="Widgets.lua" />
     <Script file="Defaults.lua"/>
     <Script file="Globals.lua" />
     <Script file="EditMode.lua" />
-    <Script file="PixelPerfect.lua" />
     <Script file="Main.lua" />
     <Script file="ProfileManager.lua" />
     <Script file="Colors.lua" />
