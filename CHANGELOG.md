@@ -1,5 +1,53 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v1.17.0
+
+### Death Notifications (new module)
+- **NEW:** On-screen alerts when party/raid members or your focus target dies. Lives under the Dungeons section in the sidebar, active in 5-man dungeons by default with an opt-in toggle for raids
+- **NEW:** Party/raid death messages render the dying player's name in their class color with a high-resolution circular class portrait next to it (Custom Nicknames apply automatically — a nicknamed party member shows their nickname instead of character name). Configurable text format with `%name` placeholder
+- **NEW:** Focus death gets its own configurable text + color (defaults to `FOCUS DIED` in red)
+- **NEW:** Soft-outline 8-shadow rendering, smooth alpha fade-out at end of duration, throttled to 4 party deaths per 10s so a wipe doesn't spam the screen
+- Standard KE config surface — Behavior toggles (per-context activation, class color, class icon, format), Font Settings, Display (duration / spacing / grow direction), Position card with Snap to Pixel Grid
+
+### Skyriding UI
+- **NEW:** Reworked pill rendering — each charge has a 1px outset border that overlaps cleanly with adjacent pills for sharp shared dividers; pill background is a darkened version of the bar color so empty/recharging pills read as "dark <color>" instead of translucent black over the world
+- **NEW:** Whirling Surge converted from a third bar row to a square icon with cooldown sweep and countdown text — sits to the side of the bars (configurable left/right), auto-sizes to match the bar block height or accepts a manual 16-64px override
+- **NEW:** Behavior card with six toggles — Hide When Grounded, Hide When Full, Use Thrill Color, Show Second Wind, Flip Bar Order, Show Speed Text
+- Recharging vigor pill no longer uses a special "lighter" color — partial fill against the dark bg reads as the recharging state naturally
+- Colors card collapsed to a 1×3 layout; orphan `WhirlingSurge`, `WhirlingSurgeCD`, and `SecondWindCD` entries removed
+- Card order updated: Enable → Behavior → Size → Colors → Surge Icon → Position
+- Default colors changed: pink Vigor (`#FF008C`) and light cyan Second Wind (`#90F3F3`); default Bar Height bumped to 16; Thrill color override defaults off
+
+### Pixel-Perfect Rendering
+- **NEW:** Per-module *Snap to Pixel Grid* checkbox in the Position card — fixes soft-outline halos when frames anchor to ElvUI panels at sub-pixel screen positions (e.g. LeftChatPanel sits at 0.6/0.6 sub-pixel). Default OFF preserves precise integer-offset slider behavior; flip ON once positioned. Available on Combat Timer, Battle Res, Combat Texts, Range Display, Combat Potion Ready, Class Status Texts (Stance / Pet Status), Raid Notifications, Enemy Counter, and Healer Mana
+- New pixel-snap helpers (`KE:GetPixelSize`, `KE:PixelSnap`, `KE:PixelSnapEven`) replace ad-hoc `math.ceil`/`math.floor` width math. Right-anchored frame edges (Combat Timer's right bracket at non-zero X offsets, Range Display, Enemy Counter, Action Bars column positioning) now land on exact integer pixels, eliminating residual halos at non-1.0 UI scales
+- 1px borders across the skinning suite (Action Bars, Micro Menu, Auras, Battle.net, Tooltips, Details Backdrop) and standalone modules (Dungeon Timers, Dungeon Casts, Vantus Rune, World Map search box, Disintegrate tick width, Ebon Might Tracker border, Skyriding UI pills) all route through `KE:GetPixelSize()` for crisp edges at any UI scale
+
+### Range Display
+- Now shows `28+` (or whatever cap your class has) instead of just `28` when the target is beyond LibRangeCheck-3.0's longest available checker — typically opposite-faction players or hostile NPCs where hostile spell ranges cap at ~25-40y depending on class/spec. The `+` indicates the value is a lower bound, not an exact distance
+
+### Combat Timer
+- Brackets split into edge-pinned FontStrings — eliminates the right-bracket "shifting" that occurred when digit width changed (9 → 10, 99 → 100) due to the previous shared-FontString layout
+- Soft-outline ghost shadows now properly clear when switching the outline style to "None" instead of lingering until reload
+
+### Time Spiral Tracker
+- Spec-keyed priority list with alt-talent fallbacks — picks the right movement spell for your current spec/talent automatically; handles spec changes (`PLAYER_SPECIALIZATION_CHANGED`) and talent reconfiguration (`TRAIT_CONFIG_UPDATED`) live without reload
+- Multi-spell proc handler preserves the spec-detected spell pick when several procs fire in quick succession
+
+### Raid Notifications
+- Gateway Usable Reminder now suppresses itself when there's no Warlock in the group — wires `GROUP_ROSTER_UPDATE` to recheck on roster changes
+
+### Healer Mana
+- Settings edits now refresh existing frames in place instead of requiring a `/reload`
+
+### Vantus Rune
+- Fixed the confirmation popup's withdrawal bar overhanging the popup's right edge — bar borders now sit cleanly within the popup background
+
+### Edit Mode / GUI
+- Position Card row heights tightened (~16px overall) — dropdown/slider rows reduced from 40 → 36, snap row at 44; snap toggle reordered between offsets and strata since it directly affects offset behavior
+
+---
+
 ## v1.16.3
 
 ### Ebon Might Tracker
@@ -68,7 +116,6 @@
 
 ### Disintegrate Ticks
 - Fixed 12.0.5 tick spacing — `UnitSpellHaste` returns a secret value in encounters; haste is now back-solved from the channel's actual duration
-- Synced to upstream DisintegrateTicks v2.1.1
 
 ---
 
