@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-InstanceReset.lua                                   ║
 -- ║  GUI: Instance Reset                                     ║
--- ║  Purpose: Configuration panel for the InstanceReset     ║
+-- ║  Purpose: Configuration panel for the InstanceReset      ║
 -- ║           module.                                        ║
 -- ╚══════════════════════════════════════════════════════════╝
 

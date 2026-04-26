@@ -1,6 +1,6 @@
 # KitnEssentials
 
-Standalone combat, utilites, quality of life, and skinning modules for **KitnUI**.
+Standalone combat, utilities, quality of life, dungeons, and skinning modules for **KitnUI**.
 
 KitnEssentials adds HUD elements, buff trackers, automation features, and Blizzard UI skinning through a fully themed settings panel. Every module is independently toggleable and repositionable via a built-in edit mode.
 
@@ -35,10 +35,11 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Bloodlust Tracker | Animated Pedro overlay + sound or static icon with countdown on Bloodlust/Heroism/Time Warp |
 | Time Spiral Tracker | Movement spell proc tracker with glow effects, cooldown spiral, and countdown timer (all classes) |
 | Recuperate Button | One-click self-heal with configurable raid/party visibility and health-based alpha |
-| Evoker Suite | Disintegrate tick marks, Preservation Stasis tracker, Ebon Might crit/dupe tracker with pandemic refresh glow, and Prescience Tracker (Prescience/Shifting Sands on allies) — tabbed GUI |
+| Evoker Suite | Disintegrate tick marks, Preservation Stasis tracker, Ebon Might crit/dupe tracker with pandemic refresh glow and ally extension warning, and Prescience Tracker (Prescience/Shifting Sands on allies) — tabbed GUI |
 | World Marker Cycler | Cycle through world markers at cursor with drag-to-reorder priority |
 | Macro Builders | Focus Marker and Power Infusion macro builders in one tabbed GUI |
 | Combat Potion Ready | "Potion Ready" text when a combat potion is in bags and off cooldown, with instance/combat/healer visibility toggles |
+| Ready Check Consumables | On ready check, attaches a row of clickable consumable icons (food, flask, weapon enhancement MH/OH, augment rune, healthstone) for one-click application |
 
 ## Quality of Life
 
@@ -51,8 +52,8 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Auction House Filter | Auto-filter AH to current expansion, auto-focus search bar, craft orders filter |
 | Hunter's Mark Missing | Alert when Hunter's Mark is not applied |
 | Skyriding UI | Skyriding vigor bar with second wind tracker and whirling surge cooldown icon |
-| Racials Anchor | Repositions CDM racials bar with custom offsets and pet bar adjustment |
-| Copy Anything | Copy any chat message or tooltip text |
+| Position Controller | Anchors ElvUI Player/Target/Focus/Pet frames to other frames, plus CDM racials bar offset with pet detection (works with ElvUI and UUF). Yields to the standalone ElvUI_Anchor addon if loaded; ignores healer specs by default |
+| Spell Alert Opacity | Per-spec toggle for Blizzard's proc activation overlay flashes, plus an opacity slider for the overlay |
 | Custom Nicknames | Map characters to personal nicknames on ElvUI and Unhalted Unit Frames via the `[kes:nickname]` tag family (plus class-color variants `[kes:nickname:color]` for UUF); includes a management GUI with search, import/export, and replace/merge modes |
 | Hide ActionBars | Hide specific action bar rows in/out of combat |
 | Great Vault Alert | Shows your loot spec when opening the Great Vault with class color and sound |
@@ -83,7 +84,9 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Dungeon Casts | Enemy cast bars for M+ nameplates with icon, target text, raid icons, bar stacking, and interruptible/shielded status colors |
 | Dungeon Timers | BigWigs-integrated per-dungeon timer system with trigger editor, bar/text display groups, import/export, and role-based load conditions |
 | Enemy Counter | Displays the number of enemies currently in combat via nameplate scanning with editable prefix and combat-only visibility |
-| Interrupt Tracker | Party interrupt cooldown bars with class colors, dark mode, channel kick detection, and healer position override |
+| Healer Mana Tracker | Displays the current party healer's name, spec icon, and mana % (party-only; hidden in raid) |
+| Instance Reset Announcer | Announces to party/raid chat when the player resets instances |
+| Interrupt Tracker | Party interrupt cooldown bars with class colors, dark mode, channel kick detection, and healer position override (currently non-functional in 12.0.5 due to API changes — under investigation) |
 | WarpDeplete+ | Restores live pull forces tracking, fixes death tooltip and class-colored names in M+, per-mob forces on tooltip mouseover |
 
 ## ElvUI Tags
@@ -112,6 +115,10 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | `/kes` or `/kitnessentials` | Toggle settings GUI |
 | `/kes edit` | Toggle edit mode |
 | `/kes resetgui` | Reset GUI position and size |
+
+## Credits
+
+Built on the **NorskenUI** framework. Both **NorskenUI** and **AtrocityEssentials** have been a steady source of ideas — thanks to both projects.
 
 ## Related Addons
 

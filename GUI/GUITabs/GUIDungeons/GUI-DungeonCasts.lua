@@ -1,8 +1,8 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  GUI-DungeonCasts.lua                                   ║
--- ║  GUI: Dungeon Casts                                     ║
--- ║  Purpose: Configuration panel for the DungeonCasts      ║
--- ║           module.                                       ║
+-- ║  GUI-DungeonCasts.lua                                    ║
+-- ║  GUI: Dungeon Casts                                      ║
+-- ║  Purpose: Configuration panel for the DungeonCasts       ║
+-- ║           module.                                        ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE

@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-RaidNotifications.lua                               ║
 -- ║  GUI: Raid Notifications                                 ║
--- ║  Purpose: Configuration panel for the RaidNotifications ║
+-- ║  Purpose: Configuration panel for the RaidNotifications  ║
 -- ║  module.                                                 ║
 -- ╚══════════════════════════════════════════════════════════╝
 

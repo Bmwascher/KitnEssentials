@@ -562,12 +562,6 @@ local Defaults = {
             ScenarioTorghast = false,
         },
 
-        CopyAnything = {
-            Enabled = false,
-            mod = "ctrl",
-            key = "C",
-        },
-
         DragonRiding = {
             Enabled = false,
             HideWhenGrounded = false,
@@ -851,6 +845,9 @@ local Defaults = {
             MapIconsStyle = "small", -- "regular" or "small"
         },
 
+        -- Old standalone RacialsAnchor kept for one-time migration into
+        -- PositionController.CDMRacials below. Do not edit; PositionController
+        -- consumes its values on first init then sets _migrated = true.
         RacialsAnchor = {
             Enabled = false,
             AnchorFrom = "",
@@ -858,6 +855,71 @@ local Defaults = {
             XOffset = 0,
             YOffset = -2,
             PetBarOffset = -15,
+        },
+
+        PositionController = {
+            Enabled = false,
+            -- When true, unit frame anchoring goes no-op on healer specs so
+            -- ElvUI's profile positions take back over (matches AE behavior).
+            -- Set false to apply anchoring on every spec including healer.
+            IgnoreHealerSpec = true,
+            PlayerFrame = {
+                Enabled = true,
+                anchorFrameType = "SELECTFRAME",
+                ParentFrame = "EssentialCooldownViewer",
+                Position = {
+                    AnchorFrom = "RIGHT",
+                    AnchorTo = "LEFT",
+                    XOffset = -20,
+                    YOffset = 0,
+                },
+            },
+            TargetFrame = {
+                Enabled = true,
+                anchorFrameType = "SELECTFRAME",
+                ParentFrame = "EssentialCooldownViewer",
+                Position = {
+                    AnchorFrom = "LEFT",
+                    AnchorTo = "RIGHT",
+                    XOffset = 20,
+                    YOffset = 0,
+                },
+            },
+            FocusFrame = {
+                Enabled = false,
+                anchorFrameType = "SELECTFRAME",
+                ParentFrame = "ElvUF_Target",
+                Position = {
+                    AnchorFrom = "TOPLEFT",
+                    AnchorTo = "TOPRIGHT",
+                    XOffset = 10,
+                    YOffset = 0,
+                },
+            },
+            PetFrame = {
+                Enabled = true,
+                anchorFrameType = "SELECTFRAME",
+                ParentFrame = "ElvUF_Player",
+                Position = {
+                    AnchorFrom = "CENTER",
+                    AnchorTo = "BOTTOM",
+                    XOffset = 0,
+                    YOffset = -10,
+                },
+            },
+            CDMRacials = {
+                Enabled = false,
+                AnchorFrom = "",
+                AnchorTo = "",
+                XOffset = 0,
+                YOffset = -2,
+                PetBarOffset = -15,
+            },
+        },
+
+        SpellAlerts = {
+            Enabled = false,
+            EnabledSpecs = {},  -- nil/missing = ON, false = OFF (per spec index)
         },
 
         ReadyCheckConsumables = {

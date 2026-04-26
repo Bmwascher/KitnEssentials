@@ -8,8 +8,8 @@
 -- ║                                                          ║
 -- ║  NOTE: Live pull overlay (SetForcesPull feed) removed    ║
 -- ║  2026-04-22 — blocked by 12.0.5 SecretValue arithmetic   ║
--- ║  restriction. See memory: project_warpdeplete_pull_     ║
--- ║  blocked.md for full restore path when Blizzard relaxes.║
+-- ║  restriction. See memory: project_warpdeplete_pull_      ║
+-- ║  blocked.md for full restore path when Blizzard relaxes. ║
 -- ║  Requires: WarpDeplete addon                             ║
 -- ╚══════════════════════════════════════════════════════════╝
 

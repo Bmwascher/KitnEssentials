@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-WorldMarkerCycler.lua                               ║
 -- ║  GUI: World Marker Cycler                                ║
--- ║  Purpose: Configuration panel for the WorldMarkerCycler ║
+-- ║  Purpose: Configuration panel for the WorldMarkerCycler  ║
 -- ║  module.                                                 ║
 -- ╚══════════════════════════════════════════════════════════╝
 

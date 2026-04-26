@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-NoMovementAlert.lua                                 ║
 -- ║  GUI: No Movement Alert                                  ║
--- ║  Purpose: Configuration panel for the NoMovementAlert   ║
+-- ║  Purpose: Configuration panel for the NoMovementAlert    ║
 -- ║  module.                                                 ║
 -- ╚══════════════════════════════════════════════════════════╝
 

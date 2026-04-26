@@ -2,7 +2,6 @@
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/ ..\FrameXML\UI.xsd">
 
     <Script file="Automation.lua" />
-    <Script file="CopyAnything.lua" />
     <Script file="DragonRiding.lua" />
     <Script file="HuntersMark.lua" />
     <Script file="HideBars.lua" />
@@ -14,5 +13,6 @@
     <Script file="VantusRune.lua" />
     <Script file="MissingEnchants.lua" />
     <Script file="WorldMap.lua" />
-    <Script file="RacialsAnchor.lua" />
+    <Script file="PositionController.lua" />
+    <Script file="SpellAlerts.lua" />
 </Ui>

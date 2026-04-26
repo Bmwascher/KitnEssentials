@@ -78,12 +78,10 @@ end
 ---------------------------------------------------------------------------------
 function WM:ApplyScale()
     if not self.db or not self.db.ScaleEnabled then
-        -- Reset scale when disabled
-        if WorldMapFrame then
-            WorldMapFrame:SetScale(1)
-        end
+        self:RevertScale()
         return
     end
+    if not WorldMapFrame then return end
 
     local size = self.db.Scale or 1.2
 
@@ -101,6 +99,17 @@ function WM:ApplyScale()
             WorldMapFrame:SetScale(1)
         end, self)
         self.scaleCallbacksRegistered = true
+    end
+end
+
+function WM:RevertScale()
+    if WorldMapFrame then
+        WorldMapFrame:SetScale(1)
+    end
+    if self.scaleCallbacksRegistered then
+        EventRegistry:UnregisterCallback("WorldMapMinimized", self)
+        EventRegistry:UnregisterCallback("WorldMapMaximized", self)
+        self.scaleCallbacksRegistered = false
     end
 end
 
@@ -735,10 +744,7 @@ function WM:OnEnable()
 end
 
 function WM:OnDisable()
-    -- Reset scale
-    if WorldMapFrame then
-        WorldMapFrame:SetScale(1)
-    end
+    self:RevertScale()
     -- Hide search bar
     if self.searchBar then
         self.searchBar:Hide()

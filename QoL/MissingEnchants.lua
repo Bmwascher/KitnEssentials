@@ -104,6 +104,16 @@ for slot, btn in pairs(gemSlotButtons) do allCheckSlots[slot] = btn end
 ---------------------------------------------------------------------------------
 local slotTexts = {}
 local hooked = false
+local updatePending = false
+local backgroundsHidden = false
+local backgroundOriginalState = {}
+
+local UPDATE_DEBOUNCE = 0.1
+local CHARACTER_BACKGROUND_TEXTURES = {
+    "BackgroundTopLeft", "BackgroundTopRight",
+    "BackgroundBotLeft", "BackgroundBotRight",
+    "BackgroundOverlay",
+}
 
 ---------------------------------------------------------------------------------
 -- Core Logic
@@ -224,18 +234,69 @@ local function UpdateDisplay()
     end
 end
 
+-- Debounced update — collapses bursts of equipment events into one update
+local function QueueUpdate()
+    if updatePending then return end
+    if not (CharacterFrame and CharacterFrame:IsShown()) then return end
+    updatePending = true
+    C_Timer.After(UPDATE_DEBOUNCE, function()
+        updatePending = false
+        if CharacterFrame and CharacterFrame:IsShown() then
+            UpdateDisplay()
+        end
+    end)
+end
+
 local function HideCharacterBackground()
     local scene = _G.CharacterModelScene
     if not scene then return end
-    if scene.BackgroundTopLeft  then scene.BackgroundTopLeft:Hide()  end
-    if scene.BackgroundTopRight then scene.BackgroundTopRight:Hide() end
-    if scene.BackgroundBotLeft  then scene.BackgroundBotLeft:Hide()  end
-    if scene.BackgroundBotRight then scene.BackgroundBotRight:Hide() end
-    if scene.BackgroundOverlay  then scene.BackgroundOverlay:Hide()  end
+
+    if not backgroundsHidden then
+        for _, texName in pairs(CHARACTER_BACKGROUND_TEXTURES) do
+            local tex = scene[texName]
+            if tex then
+                backgroundOriginalState[texName] = tex:IsShown()
+            end
+        end
+        if scene.backdrop then
+            backgroundOriginalState.backdrop = scene.backdrop:IsShown()
+        end
+        if _G.CharacterModelFrameBackgroundOverlay then
+            backgroundOriginalState.frameOverlay = _G.CharacterModelFrameBackgroundOverlay:IsShown()
+        end
+    end
+
+    for _, texName in pairs(CHARACTER_BACKGROUND_TEXTURES) do
+        local tex = scene[texName]
+        if tex then tex:Hide() end
+    end
     if scene.backdrop then scene.backdrop:Hide() end
     if _G.CharacterModelFrameBackgroundOverlay then
         _G.CharacterModelFrameBackgroundOverlay:Hide()
     end
+
+    backgroundsHidden = true
+end
+
+local function RestoreCharacterBackground()
+    if not backgroundsHidden then return end
+    local scene = _G.CharacterModelScene
+    if not scene then return end
+
+    for _, texName in pairs(CHARACTER_BACKGROUND_TEXTURES) do
+        local tex = scene[texName]
+        if tex and backgroundOriginalState[texName] then
+            tex:Show()
+        end
+    end
+    if scene.backdrop and backgroundOriginalState.backdrop then
+        scene.backdrop:Show()
+    end
+    if _G.CharacterModelFrameBackgroundOverlay and backgroundOriginalState.frameOverlay then
+        _G.CharacterModelFrameBackgroundOverlay:Show()
+    end
+
+    backgroundsHidden = false
 end
 
 local function HookCharacterPanel()
@@ -243,7 +304,7 @@ local function HookCharacterPanel()
 
     if PaperDollFrame then
         PaperDollFrame:HookScript("OnShow", function()
-            C_Timer.After(0.1, UpdateDisplay)
+            QueueUpdate()
             local db = ME.db
             if db and db.HideCharacterBackground then
                 HideCharacterBackground()
@@ -251,13 +312,12 @@ local function HookCharacterPanel()
         end)
     end
 
+    -- PEC alone is the direct signal; UIC was duplicative.
     ME.eventFrame = CreateFrame("Frame")
     ME.eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
-    ME.eventFrame:RegisterEvent("UNIT_INVENTORY_CHANGED")
-    ME.eventFrame:SetScript("OnEvent", function(_, event, unit)
-        if event == "UNIT_INVENTORY_CHANGED" and unit ~= "player" then return end
-        if CharacterFrame and CharacterFrame:IsShown() then
-            C_Timer.After(0.1, UpdateDisplay)
+    ME.eventFrame:SetScript("OnEvent", function(_, event)
+        if event == "PLAYER_EQUIPMENT_CHANGED" then
+            QueueUpdate()
         end
     end)
 
@@ -300,4 +360,6 @@ function ME:OnDisable()
     if self.eventFrame then
         self.eventFrame:UnregisterAllEvents()
     end
+    RestoreCharacterBackground()
+    updatePending = false
 end

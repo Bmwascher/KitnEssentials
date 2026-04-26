@@ -2,7 +2,7 @@
 -- ║  BloodlustTracker.lua                                    ║
 -- ║  Module: Bloodlust Tracker                               ║
 -- ║  Purpose: Pedro overlay or icon alert on Bloodlust,      ║
--- ║           Heroism, and Time Warp.                         ║
+-- ║           Heroism, and Time Warp.                        ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE

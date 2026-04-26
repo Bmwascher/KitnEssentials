@@ -375,6 +375,11 @@ function CR:ApplySettings()
         return
     end
     self:Update()
+    -- ApplyTextSettings -> ApplyBackdropSettings sized the frame from
+    -- GetStringWidth before Update populated the timer/charge FontStrings,
+    -- so the result was too narrow until something re-sized it (e.g. a
+    -- second edit-mode entry). Re-size now that all content is in place.
+    self:ApplyBackdropSettings()
 end
 
 function CR:ApplyPosition()
