@@ -660,10 +660,21 @@ function DR:OnShowHandler()
         end
     end
 
+    -- Plain RegisterEvent + manual unit filter on the handler (project rule:
+    -- avoid RegisterUnitEvent because of known interaction with AceEvent's
+    -- dispatcher). Without filtering, UNIT_AURA would fire for every party/
+    -- raid member's aura change and run UpdateVigor + UpdateVigorColor on
+    -- each, which is wasteful in a full group.
     self.vigorFrame:RegisterEvent("SPELL_UPDATE_CHARGES")
-    self.vigorFrame:SetScript("OnEvent", function() UpdateVigor(self) end)
-    self.vigorFrame:RegisterUnitEvent("UNIT_AURA", "player")
-    self.vigorFrame:HookScript("OnEvent", function() UpdateVigorColor(self) end)
+    self.vigorFrame:RegisterEvent("UNIT_AURA")
+    self.vigorFrame:SetScript("OnEvent", function(_, event, unit)
+        if event == "UNIT_AURA" and unit ~= "player" then return end
+        UpdateVigor(self)
+    end)
+    self.vigorFrame:HookScript("OnEvent", function(_, event, unit)
+        if event == "UNIT_AURA" and unit ~= "player" then return end
+        UpdateVigorColor(self)
+    end)
 
     self.surgeFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
     self.surgeFrame:RegisterEvent("SPELL_UPDATE_CHARGES")
