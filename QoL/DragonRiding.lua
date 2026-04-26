@@ -58,20 +58,68 @@ end
 ---------------------------------------------------------------------------------
 -- Core Logic
 ---------------------------------------------------------------------------------
-local function CreatePill(parent, height)
+-- 1px outset outline: four strips that sit 1px OUTSIDE the frame's edges.
+-- With spacing=1 between adjacent pills, neighbour outsets land on the same
+-- 1px column (pillA.right outset and pillB.left outset both occupy the
+-- column at pillA.right) — clean shared 1px divider, matching outer 1px
+-- borders. Hand-rolled equivalent of Falcon's PixelOutline.tga slice.
+local function AddPillOutsetBorders(frame, color)
+    color = color or { 0, 0, 0, 1 }
     local px = KE:GetPixelSize()
-    local pill = CreateFrame("StatusBar", nil, parent, BackdropTemplateMixin and "BackdropTemplate")
-    pill:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = px,
-        insets = { left = -px, right = -px, top = -px, bottom = -px },
-    })
-    pill:SetBackdropColor(0, 0, 0, 0.8)
-    pill:SetBackdropBorderColor(0, 0, 0, 1)
+
+    local function MakeStrip()
+        local tex = frame:CreateTexture(nil, "OVERLAY", nil, 7)
+        tex:SetColorTexture(unpack(color))
+        tex:SetTexelSnappingBias(0)
+        tex:SetSnapToPixelGrid(false)
+        return tex
+    end
+
+    -- Top: 1px tall, sits 1px above frame, spans the full outer width
+    -- (extending 1px past frame on each side so the corners read solid).
+    local top = MakeStrip()
+    top:SetHeight(px)
+    top:SetPoint("BOTTOMLEFT", frame, "TOPLEFT", -px, 0)
+    top:SetPoint("BOTTOMRIGHT", frame, "TOPRIGHT", px, 0)
+
+    -- Bottom: mirror of top.
+    local bottom = MakeStrip()
+    bottom:SetHeight(px)
+    bottom:SetPoint("TOPLEFT", frame, "BOTTOMLEFT", -px, 0)
+    bottom:SetPoint("TOPRIGHT", frame, "BOTTOMRIGHT", px, 0)
+
+    -- Left: 1px wide, sits 1px left of frame, spans frame height only
+    -- (corners are already covered by the top/bottom strips' outset).
+    local left = MakeStrip()
+    left:SetWidth(px)
+    left:SetPoint("TOPRIGHT", frame, "TOPLEFT", 0, 0)
+    left:SetPoint("BOTTOMRIGHT", frame, "BOTTOMLEFT", 0, 0)
+
+    -- Right: mirror of left.
+    local right = MakeStrip()
+    right:SetWidth(px)
+    right:SetPoint("TOPLEFT", frame, "TOPRIGHT", 0, 0)
+    right:SetPoint("BOTTOMLEFT", frame, "BOTTOMRIGHT", 0, 0)
+end
+
+local function CreatePill(parent, height)
+    local pill = CreateFrame("StatusBar", nil, parent)
     pill:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
     pill:SetHeight(height)
     pill:SetStatusBarColor(0.75, 0.75, 0.75)
+
+    -- Bg under the bar texture. Color is set dynamically to a darkened
+    -- version of the bar color (Falcon's pattern) so empty/recharging
+    -- pills read as "dark <color>" rather than translucent dark over the
+    -- world. Initial color is irrelevant — UpdateVigor / UpdateSecondWind
+    -- will overwrite it on first draw.
+    local bg = pill:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0, 0, 0, 1)
+    pill.bg = bg
+
+    AddPillOutsetBorders(pill, { 0, 0, 0, 1 })
+
     return pill
 end
 
@@ -95,44 +143,14 @@ local function ResizePillsToFit(container, pills, numPills, spacing)
 end
 
 local function UpdateWhirlingSurge(self)
-    local pill = self.surgeFrame[1]
-    if not pill then return end
+    local cd = self.surgeFrame and self.surgeFrame.cooldown
+    if not cd then return end
 
-    local db = self.db
-    local readyColor = db.Colors and db.Colors.WhirlingSurge or { 0.6, 0.4, 0.9, 1 }
-    local cdColor = db.Colors and db.Colors.WhirlingSurgeCD or { 0.3, 0.3, 0.3, 1 }
-
-    local charges = C_Spell.GetSpellCharges(WHIRLING_SURGE_SPELL)
-    if charges then
-        if charges.currentCharges > 0 then
-            pill:SetStatusBarColor(readyColor[1], readyColor[2], readyColor[3])
-            local duration = C_Spell.GetSpellChargeDuration(WHIRLING_SURGE_SPELL)
-            if duration and not duration:IsZero() then
-                pill:SetTimerDuration(duration)
-            else
-                pill:SetMinMaxValues(0, 1)
-                pill:SetValue(1)
-            end
-        else
-            pill:SetStatusBarColor(cdColor[1], cdColor[2], cdColor[3])
-            local duration = C_Spell.GetSpellCooldownDuration(WHIRLING_SURGE_SPELL)
-            if duration and not duration:IsZero() then
-                pill:SetTimerDuration(duration)
-            else
-                pill:SetMinMaxValues(0, 1)
-                pill:SetValue(1)
-            end
-        end
+    local cdInfo = C_Spell.GetSpellCooldown(WHIRLING_SURGE_SPELL)
+    if cdInfo and cdInfo.startTime > 0 and cdInfo.duration > 1.5 then
+        cd:SetCooldown(cdInfo.startTime, cdInfo.duration)
     else
-        local duration = C_Spell.GetSpellCooldownDuration(WHIRLING_SURGE_SPELL)
-        if duration and not duration:IsZero() then
-            pill:SetStatusBarColor(cdColor[1], cdColor[2], cdColor[3])
-            pill:SetTimerDuration(duration)
-        else
-            pill:SetStatusBarColor(readyColor[1], readyColor[2], readyColor[3])
-            pill:SetMinMaxValues(0, 1)
-            pill:SetValue(1)
-        end
+        cd:Clear()
     end
 end
 
@@ -142,23 +160,23 @@ local function UpdateSecondWind(self)
 
     local db = self.db
     local readyColor = db.Colors and db.Colors.SecondWind or { 0.3, 0.7, 1, 1 }
-    local cdColor = db.Colors and db.Colors.SecondWindCD or { 0.3, 0.3, 0.3, 1 }
+    local r, g, b = readyColor[1], readyColor[2], readyColor[3]
+    local dr, dg, db_ = r * 0.25, g * 0.25, b * 0.25
 
     for index = 1, 3 do
         local pill = self.secondWindFrame[index]
         if pill then
+            pill.bg:SetColorTexture(dr, dg, db_, 1)
+            pill:SetStatusBarColor(r, g, b)
             if charges.currentCharges >= index then
-                pill:SetStatusBarColor(readyColor[1], readyColor[2], readyColor[3])
                 pill:SetMinMaxValues(0, 1)
                 pill:SetValue(1)
             elseif charges.currentCharges + 1 == index then
-                pill:SetStatusBarColor(cdColor[1], cdColor[2], cdColor[3])
                 local duration = C_Spell.GetSpellChargeDuration(SECOND_WIND_SPELL)
                 if duration then
                     pill:SetTimerDuration(duration)
                 end
             else
-                pill:SetStatusBarColor(cdColor[1], cdColor[2], cdColor[3])
                 pill:SetMinMaxValues(0, 1)
                 pill:SetValue(0)
             end
@@ -170,7 +188,23 @@ local function UpdateVigor(self)
     local charges = C_Spell.GetSpellCharges(VIGOR_SPELL)
     if not charges then return end
 
-    local spacing = self.db.Spacing or 1
+    local db = self.db
+    local spacing = db.Spacing or 1
+
+    local r, g, b
+    ---@diagnostic disable-next-line
+    local thrillUp = db.EnableThrillColor ~= false
+        and C_UnitAuras.GetAuraDataBySpellName("player", C_Spell.GetSpellName(THRILL_SPELL), "HELPFUL")
+    if thrillUp then
+        local color = db.Colors and db.Colors.VigorThrill or { 0.2, 0.8, 0.2, 1 }
+        r, g, b = color[1], color[2], color[3]
+    else
+        local color = db.Colors and db.Colors.Vigor or { 0.898, 0.063, 0.224, 1 }
+        r, g, b = color[1], color[2], color[3]
+    end
+    -- Darkened shade for the empty/unfilled bg (Falcon-style fade).
+    local dr, dg, db_ = r * 0.25, g * 0.25, b * 0.25
+
     for index = 1, charges.maxCharges do
         local pill = self.vigorFrame[index]
         if not pill then
@@ -183,6 +217,9 @@ local function UpdateVigor(self)
                 pill:SetPoint("LEFT", self.vigorFrame[index - 1], "RIGHT", spacing, 0)
             end
         end
+
+        pill.bg:SetColorTexture(dr, dg, db_, 1)
+        pill:SetStatusBarColor(r, g, b)
 
         if charges.currentCharges >= index then
             pill:SetMinMaxValues(0, 1)
@@ -204,24 +241,10 @@ local function UpdateVigor(self)
     end
 end
 
+-- Re-routes color refresh through UpdateVigor so Thrill state (UNIT_AURA)
+-- and recharging-pill state (SPELL_UPDATE_CHARGES) stay in sync.
 local function UpdateVigorColor(self)
-    local db = self.db
-    local r, g, b
-    ---@diagnostic disable-next-line
-    if C_UnitAuras.GetAuraDataBySpellName("player", C_Spell.GetSpellName(THRILL_SPELL), "HELPFUL") then
-        local color = db.Colors and db.Colors.VigorThrill or { 0.2, 0.8, 0.2, 1 }
-        r, g, b = color[1], color[2], color[3]
-    else
-        local color = db.Colors and db.Colors.Vigor or { 0.898, 0.063, 0.224, 1 }
-        r, g, b = color[1], color[2], color[3]
-    end
-
-    local count = self.isPreview and 6 or numVigor
-    for index = 1, count do
-        if self.vigorFrame[index] then
-            self.vigorFrame[index]:SetStatusBarColor(r, g, b)
-        end
-    end
+    UpdateVigor(self)
 end
 
 local function UpdateSpeed(self)
@@ -240,13 +263,29 @@ local function UpdateSpeed(self)
     local isGliding, _, forwardSpeed = C_PlayerInfo.GetGlidingInfo()
     if isGliding then
         pcall(speed.SetFormattedText, speed, "%d%%", forwardSpeed / BASE_MOVEMENT_SPEED * 100 + 0.5)
-        if self.db.HideWhenGrounded and self.container and not self.container:IsShown() then
-            self.container:Show()
-        end
     else
         pcall(speed.SetText, speed, "")
-        if self.db.HideWhenGrounded and self.container and self.container:IsShown() then
+    end
+
+    -- Visibility (independent OR semantics): hide if either flag's
+    -- condition is met. Bars stay visible if neither flag is set or
+    -- neither condition matches.
+    local db = self.db
+    local shouldHide = false
+    if db.HideWhenGrounded and not isGliding then
+        shouldHide = true
+    end
+    if not shouldHide and db.HideWhenFull then
+        local charges = C_Spell.GetSpellCharges(VIGOR_SPELL)
+        if charges and charges.currentCharges >= charges.maxCharges then
+            shouldHide = true
+        end
+    end
+    if self.container then
+        if shouldHide and self.container:IsShown() then
             self.container:Hide()
+        elseif not shouldHide and not self.container:IsShown() then
+            self.container:Show()
         end
     end
 end
@@ -265,17 +304,16 @@ function DR:CreateFrames()
     self.parent = CreateFrame("Frame", nil, UIParent, "SecureHandlerStateTemplate")
     self.parent:Hide()
 
-    -- Container
+    -- Container — sized for the bars block only; the surge icon hangs off
+    -- to the side and is not counted in the container width.
     self.container = CreateFrame("Frame", "KE_DragonRidingContainer", self.parent)
-    local totalHeight = (barHeight * 3) + (spacing * 2) + 20
-    self.container:SetSize(barWidth, totalHeight)
+    self.container:SetSize(barWidth, (barHeight * 2) + spacing + 20)
 
     KE:ApplyFramePosition(self.container, db.Position, db)
 
-    -- Row 3: Second Wind (bottom)
+    -- Both rows are created up-front; ApplyBarLayout decides which one is on
+    -- top, which is on bottom, whether secondWind is hidden, etc.
     self.secondWindFrame = CreateFrame("Frame", nil, self.container)
-    self.secondWindFrame:SetPoint("BOTTOMLEFT", self.container, "BOTTOMLEFT", 0, 0)
-    self.secondWindFrame:SetPoint("BOTTOMRIGHT", self.container, "BOTTOMRIGHT", 0, 0)
     self.secondWindFrame:SetHeight(barHeight)
 
     local swColor = db.Colors and db.Colors.SecondWind or { 0.3, 0.7, 1, 1 }
@@ -291,62 +329,109 @@ function DR:CreateFrames()
     end
     ResizePillsToFit(self.secondWindFrame, self.secondWindFrame, 3, spacing)
 
-    -- Row 2: Whirling Surge (middle)
-    self.surgeFrame = CreateFrame("Frame", nil, self.container)
-    self.surgeFrame:SetPoint("BOTTOMLEFT", self.secondWindFrame, "TOPLEFT", 0, spacing)
-    self.surgeFrame:SetPoint("BOTTOMRIGHT", self.secondWindFrame, "TOPRIGHT", 0, spacing)
-    self.surgeFrame:SetHeight(barHeight)
-
-    local surgePill = CreatePill(self.surgeFrame, barHeight)
-    local surgeColor = db.Colors and db.Colors.WhirlingSurge or { 0.6, 0.4, 0.9, 1 }
-    surgePill:SetStatusBarColor(surgeColor[1], surgeColor[2], surgeColor[3])
-    surgePill:SetPoint("LEFT")
-    surgePill:SetPoint("RIGHT")
-    self.surgeFrame[1] = surgePill
-
-    -- Row 1: Vigor (top)
     self.vigorFrame = CreateFrame("Frame", nil, self.container)
-    self.vigorFrame:SetPoint("BOTTOMLEFT", self.surgeFrame, "TOPLEFT", 0, spacing)
-    self.vigorFrame:SetPoint("BOTTOMRIGHT", self.surgeFrame, "TOPRIGHT", 0, spacing)
     self.vigorFrame:SetHeight(barHeight)
 
-    -- Speed text above vigor
-    self.speedText = self.vigorFrame:CreateFontString(nil, "OVERLAY")
+    -- Whirling Surge as a square icon next to the bars. Anchor + size are
+    -- handled in ApplySurgeIcon (which depends on which row is at the
+    -- bottom — see ApplyBarLayout).
+    self.surgeFrame = CreateFrame("Frame", nil, self.container)
+    self.surgeFrame.icon = self.surgeFrame:CreateTexture(nil, "ARTWORK")
+    self.surgeFrame.icon:SetAllPoints()
+    KE:ApplyIconZoom(self.surgeFrame.icon)
+    self.surgeFrame.icon:SetTexture(C_Spell.GetSpellTexture(WHIRLING_SURGE_SPELL))
+
+    self.surgeFrame.cooldown = CreateFrame("Cooldown", nil, self.surgeFrame, "CooldownFrameTemplate")
+    self.surgeFrame.cooldown:SetAllPoints()
+    self.surgeFrame.cooldown:SetHideCountdownNumbers(false)
+    self.surgeFrame.cooldown:SetDrawBling(false)
+    self.surgeFrame.cooldown:SetDrawEdge(false)
+
+    KE:AddIconBorders(self.surgeFrame, { 0, 0, 0, 1 })
+
+    -- Speed text — parented to the container so it can re-anchor to whichever
+    -- row ends up on top (vigor or secondWind, depending on FlipBars).
+    self.speedText = self.container:CreateFontString(nil, "OVERLAY")
     local fontFile = KE:GetFontPath(self.db.FontFace) or KE.FONT or "Fonts\\FRIZQT__.TTF"
     local fontSize = self.db.SpeedFontSize or 14
     self.speedText:SetFont(fontFile, fontSize, "OUTLINE")
     self.speedText:SetWordWrap(false)
-    self.speedText:SetPoint("BOTTOM", self.vigorFrame, "TOP", 0, 2)
     self.speedText:SetShadowOffset(0, 0)
     self.speedText:SetText("")
+
+    self:ApplyBarLayout()
+    self:ApplySurgeIcon()
 end
 
 ---------------------------------------------------------------------------------
 -- Settings
 ---------------------------------------------------------------------------------
+function DR:ApplyBarLayout()
+    if not self.container then return end
+    local db = self.db
+    local barHeight = db.BarHeight or 12
+    local spacing = db.Spacing or 1
+    local rowGap = KE:PixelSnap(spacing)
+    local showSW = db.ShowSecondWind ~= false
+    local flip = db.FlipBars == true
+
+    -- Decide which row is the bottom (anchored to container) and which is
+    -- the top (stacked above bottom). With ShowSecondWind off, vigor is the
+    -- only row regardless of flip.
+    local bottomRow, topRow
+    if not showSW then
+        bottomRow, topRow = self.vigorFrame, nil
+        self.secondWindFrame:Hide()
+    else
+        self.secondWindFrame:Show()
+        if flip then
+            bottomRow, topRow = self.vigorFrame, self.secondWindFrame
+        else
+            bottomRow, topRow = self.secondWindFrame, self.vigorFrame
+        end
+    end
+
+    bottomRow:ClearAllPoints()
+    bottomRow:SetPoint("BOTTOMLEFT", self.container, "BOTTOMLEFT", 0, 0)
+    bottomRow:SetPoint("BOTTOMRIGHT", self.container, "BOTTOMRIGHT", 0, 0)
+    bottomRow:SetHeight(barHeight)
+    bottomRow:Show()
+
+    if topRow then
+        topRow:ClearAllPoints()
+        topRow:SetPoint("BOTTOMLEFT", bottomRow, "TOPLEFT", 0, rowGap)
+        topRow:SetPoint("BOTTOMRIGHT", bottomRow, "TOPRIGHT", 0, rowGap)
+        topRow:SetHeight(barHeight)
+    end
+
+    -- Speed text anchors above whichever row is on top (or the only row).
+    local anchorRow = topRow or bottomRow
+    self.speedText:ClearAllPoints()
+    self.speedText:SetPoint("BOTTOM", anchorRow, "TOP", 0, 2)
+    if db.ShowSpeedText == false then
+        self.speedText:Hide()
+    else
+        self.speedText:Show()
+    end
+
+    -- Track for ApplySurgeIcon (icon always anchors to the bottom row).
+    self._bottomRow = bottomRow
+
+    -- Resize container: rows + gap + speed text headroom (only if shown).
+    local rowsHeight = barHeight * (topRow and 2 or 1) + (topRow and rowGap or 0)
+    local speedSpace = (db.ShowSpeedText == false) and 0 or 20
+    self.container:SetSize(db.Width or 252, rowsHeight + speedSpace)
+end
+
 function DR:Refresh()
     if not self.container then return end
     local db = self.db
-    local barWidth = db.Width or 252
     local barHeight = db.BarHeight or 12
     local spacing = db.Spacing or 1
-    local totalHeight = (barHeight * 3) + (spacing * 2) + 20
 
-    self.container:SetSize(barWidth, totalHeight)
+    self:ApplyBarLayout()
 
-    self.secondWindFrame:SetHeight(barHeight)
-    self.surgeFrame:SetHeight(barHeight)
-    self.vigorFrame:SetHeight(barHeight)
-
-    self.surgeFrame:ClearAllPoints()
-    self.surgeFrame:SetPoint("BOTTOMLEFT", self.secondWindFrame, "TOPLEFT", 0, spacing)
-    self.surgeFrame:SetPoint("BOTTOMRIGHT", self.secondWindFrame, "TOPRIGHT", 0, spacing)
-
-    self.vigorFrame:ClearAllPoints()
-    self.vigorFrame:SetPoint("BOTTOMLEFT", self.surgeFrame, "TOPLEFT", 0, spacing)
-    self.vigorFrame:SetPoint("BOTTOMRIGHT", self.surgeFrame, "TOPRIGHT", 0, spacing)
-
-    -- Update Second Wind pills
+    -- Update Second Wind pills (color/spacing/size)
     local swColor = db.Colors and db.Colors.SecondWind or { 0.3, 0.7, 1, 1 }
     for i = 1, 3 do
         if self.secondWindFrame[i] then
@@ -360,12 +445,7 @@ function DR:Refresh()
     end
     ResizePillsToFit(self.secondWindFrame, self.secondWindFrame, 3, spacing)
 
-    -- Update Whirling Surge pill
-    local surgeColor = db.Colors and db.Colors.WhirlingSurge or { 0.6, 0.4, 0.9, 1 }
-    if self.surgeFrame[1] then
-        self.surgeFrame[1]:SetHeight(barHeight)
-        self.surgeFrame[1]:SetStatusBarColor(surgeColor[1], surgeColor[2], surgeColor[3])
-    end
+    self:ApplySurgeIcon()
 
     -- Update Vigor pills
     local vigorCount = self.isPreview and 6 or numVigor
@@ -383,12 +463,52 @@ function DR:Refresh()
     end
     UpdateVigorColor(self)
 
-    -- Update speed font
+    -- Speed font
     local fontFile = KE:GetFontPath(self.db.FontFace) or KE.FONT or "Fonts\\FRIZQT__.TTF"
     local fontSize = self.db.SpeedFontSize or 14
     self.speedText:SetFont(fontFile, fontSize, "OUTLINE")
     if self.isPreview then
         self.speedText:SetText("420%")
+    end
+end
+
+function DR:ApplySurgeIcon()
+    if not self.surgeFrame then return end
+    local db = self.db
+    if db.ShowSurgeIcon == false then
+        self.surgeFrame:Hide()
+        return
+    end
+    self.surgeFrame:Show()
+
+    local barHeight = db.BarHeight or 12
+    local spacing = db.Spacing or 1
+    local gap = db.SurgeIconGap or 4
+    local px = KE:GetPixelSize() or 1
+
+    -- Anchor to whichever row is currently at the bottom (set by
+    -- ApplyBarLayout). Falls back to secondWindFrame if layout hasn't run.
+    local bottomRow = self._bottomRow or self.secondWindFrame
+
+    -- Bars block visual extent. Use PixelSnap'd row gap because that's what
+    -- the bars actually render with at non-pixel-aligned UI scales.
+    local rowGap = KE:PixelSnap(spacing)
+    local rowCount = (db.ShowSecondWind ~= false) and 2 or 1
+    local barsHeight = barHeight * rowCount + (rowCount > 1 and rowGap or 0)
+    local autoSize = barsHeight + 2 * px
+
+    local size = (db.SurgeIconAutoSize ~= false) and autoSize
+        or (db.SurgeIconSize or autoSize)
+    self.surgeFrame:SetSize(size, size)
+
+    -- Vertically center the icon on the bars block.
+    local yOffset = (barsHeight - size) / 2
+
+    self.surgeFrame:ClearAllPoints()
+    if db.SurgeIconOnLeft then
+        self.surgeFrame:SetPoint("BOTTOMRIGHT", bottomRow, "BOTTOMLEFT", -gap, yOffset)
+    else
+        self.surgeFrame:SetPoint("BOTTOMLEFT", bottomRow, "BOTTOMRIGHT", gap, yOffset)
     end
 end
 
@@ -476,8 +596,15 @@ function DR:ShowPreview()
 
     self:ApplySettings()
 
-    -- Set preview values
+    -- Set preview values. Pill 5 demos the recharging state via partial
+    -- fill (the dark bg shows through the unfilled portion); pills 1-4
+    -- are fully charged; pill 6 is empty.
+    local vColor = self.db.Colors and self.db.Colors.Vigor or { 0.898, 0.063, 0.224 }
+    local vr, vg, vb = vColor[1], vColor[2], vColor[3]
+    local vdr, vdg, vdb = vr * 0.25, vg * 0.25, vb * 0.25
     for i = 1, 6 do
+        self.vigorFrame[i].bg:SetColorTexture(vdr, vdg, vdb, 1)
+        self.vigorFrame[i]:SetStatusBarColor(vr, vg, vb)
         self.vigorFrame[i]:SetMinMaxValues(0, 1)
         if i <= 4 then
             self.vigorFrame[i]:SetValue(1)
@@ -488,7 +615,12 @@ function DR:ShowPreview()
         end
     end
 
+    local swColor = self.db.Colors and self.db.Colors.SecondWind or { 0.3, 0.7, 1 }
+    local sr, sg, sb = swColor[1], swColor[2], swColor[3]
+    local sdr, sdg, sdb = sr * 0.25, sg * 0.25, sb * 0.25
     for i = 1, 3 do
+        self.secondWindFrame[i].bg:SetColorTexture(sdr, sdg, sdb, 1)
+        self.secondWindFrame[i]:SetStatusBarColor(sr, sg, sb)
         self.secondWindFrame[i]:SetMinMaxValues(0, 1)
         if i <= 2 then
             self.secondWindFrame[i]:SetValue(1)
@@ -497,8 +629,10 @@ function DR:ShowPreview()
         end
     end
 
-    self.surgeFrame[1]:SetMinMaxValues(0, 1)
-    self.surgeFrame[1]:SetValue(1)
+    -- Surge icon: clear cooldown so the icon shows ready in preview.
+    if self.surgeFrame.cooldown then
+        self.surgeFrame.cooldown:Clear()
+    end
 end
 
 function DR:HidePreview()
