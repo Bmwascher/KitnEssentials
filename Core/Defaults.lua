@@ -1096,6 +1096,38 @@ local Defaults = {
                 Enabled = true,
                 Message = "Instance reset!",
             },
+            DeathNotifications = {
+                Enabled = false,
+                EnableInDungeons = true,
+                EnableInRaids = false,
+                SnapToPixelGrid = true,
+
+                FontFace = "Expressway",
+                FontSize = 34,
+                FontOutline = "SOFTOUTLINE",
+
+                Duration = 3,
+                Spacing = 4,
+                Grow = "DOWN",
+                ShowClassIcon = true,
+
+                PartyDeath = {
+                    Enabled = true,
+                    UseClassColor = true,
+                    TextFormat = "%name DIED",
+                    TextColor = { 1, 1, 1, 1 },
+                },
+                FocusDeath = {
+                    Enabled = true,
+                    Text = "FOCUS DIED",
+                    Color = { 1, 0.3, 0.3, 1 },
+                },
+
+                anchorFrameType = "UIPARENT",
+                ParentFrame = "UIParent",
+                Strata = "MEDIUM",
+                Position = DefaultPosition(0, 312),
+            },
             DungeonCasts = {
                 Enabled = true,
 

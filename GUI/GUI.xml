@@ -68,6 +68,7 @@
     <Script file="GUITabs\GUIDungeons\GUI-EnemyCounter.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-HealerMana.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-InstanceReset.lua" />
+    <Script file="GUITabs\GUIDungeons\GUI-DeathNotifications.lua" />
 
     <!-- QoL tabs -->
     <Script file="GUITabs\GUIQoL\GUI-Automation.lua" />

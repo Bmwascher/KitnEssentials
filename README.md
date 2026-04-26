@@ -50,7 +50,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Slash Commands | Custom slash command utilities |
 | Auction House Filter | Auto-filter AH to current expansion, auto-focus search bar, craft orders filter |
 | Hunter's Mark Missing | Alert when Hunter's Mark is not applied |
-| Skyriding UI | Reskinned skyriding vigor bar |
+| Skyriding UI | Skyriding vigor bar with second wind tracker and whirling surge cooldown icon |
 | Racials Anchor | Repositions CDM racials bar with custom offsets and pet bar adjustment |
 | Copy Anything | Copy any chat message or tooltip text |
 | Custom Nicknames | Map characters to personal nicknames on ElvUI and Unhalted Unit Frames via the `[kes:nickname]` tag family (plus class-color variants `[kes:nickname:color]` for UUF); includes a management GUI with search, import/export, and replace/merge modes |
@@ -79,6 +79,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 
 | Module | Description |
 |---|---|
+| Death Notifications | On-screen alert when party/raid members or your focus target dies, with class portrait + color and configurable text format. Active in dungeons by default; raid activation is opt-in |
 | Dungeon Casts | Enemy cast bars for M+ nameplates with icon, target text, raid icons, bar stacking, and interruptible/shielded status colors |
 | Dungeon Timers | BigWigs-integrated per-dungeon timer system with trigger editor, bar/text display groups, import/export, and role-based load conditions |
 | Enemy Counter | Displays the number of enemies currently in combat via nameplate scanning with editable prefix and combat-only visibility |

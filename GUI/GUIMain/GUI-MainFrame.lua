@@ -119,6 +119,7 @@ GUIFrame.sidebarConfig = {
         text = "\226\128\162 Dungeons",
         defaultExpanded = false,
         items = {
+            { id = "DeathNotifications",          text = "Death Notifications" },
             { id = "DungeonCasts",                text = "Dungeon Casts" },
             { id = "EnemyCounter",                text = "Enemy Counter" },
             { id = "HealerMana",                  text = "Healer Mana" },

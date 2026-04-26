@@ -216,7 +216,7 @@ local PREVIEW_MODULES = {
     "TimeSpiral", "DisintegrateTicks", "StasisTracker", "Recuperate", "BloodlustTracker", "KickTracker",
     "NoMovementAlert", "PrescienceTracker", "GreatVaultAlert", "PotionReady", "BossDebuffs",
     "EnemyCounter", "EbonMightTracker", "DungeonCasts", "DungeonTimers", "HealerMana",
-    "ReadyCheckConsumables",
+    "ReadyCheckConsumables", "DeathNotifications",
 }
 
 -- Section → preview module mapping for section-based previews
@@ -236,7 +236,7 @@ local SECTION_PREVIEW_MODULES = {
         "DragonRiding", "HuntersMark", "GreatVaultAlert",
     },
     dungeons_section = {
-        "EnemyCounter", "KickTracker", "DungeonCasts", "HealerMana",
+        "EnemyCounter", "KickTracker", "DungeonCasts", "HealerMana", "DeathNotifications",
     },
     dungeon_timers_section = {
         "DungeonTimers",
