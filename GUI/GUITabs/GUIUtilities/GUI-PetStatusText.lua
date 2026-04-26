@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-PetStatusText.lua                                   ║
 -- ║  GUI: Pet Status Text                                    ║
--- ║  Purpose: Configuration panel for the PetStatusText     ║
+-- ║  Purpose: Configuration panel for the PetStatusText      ║
 -- ║  module.                                                 ║
 -- ╚══════════════════════════════════════════════════════════╝
 

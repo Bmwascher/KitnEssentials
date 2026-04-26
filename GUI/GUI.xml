@@ -17,6 +17,7 @@
     <Script file="GUIWidgets\GUI-KEText.lua" />
     <Script file="GUIWidgets\GUI-PositionCard.lua" />
     <Script file="GUIWidgets\GUI-Sidebar.lua" />
+    <Script file="GUIWidgets\GUI-KESubTabs.lua" />
 
     <!-- Main frame and pages -->
     <Script file="GUIMain\GUI-MainFrame.lua" />
@@ -74,7 +75,6 @@
     <Script file="GUITabs\GUIQoL\GUI-Automation.lua" />
     <Script file="GUITabs\GUIQoL\GUI-CVars.lua" />
     <Script file="GUITabs\GUIQoL\GUI-SlashCommands.lua" />
-    <Script file="GUITabs\GUIQoL\GUI-CopyAnything.lua" />
     <Script file="GUITabs\GUIQoL\GUI-DragonRiding.lua" />
     <Script file="GUITabs\GUIQoL\GUI-HuntersMark.lua" />
     <Script file="GUITabs\GUIQoL\GUI-HideBars.lua" />
@@ -84,7 +84,8 @@
     <Script file="GUITabs\GUIQoL\GUI-MissingEnchants.lua" />
     <Script file="GUITabs\GUIQoL\GUI-Nicknames.lua" />
     <Script file="GUITabs\GUIQoL\GUI-WorldMap.lua" />
-    <Script file="GUITabs\GUIQoL\GUI-RacialsAnchor.lua" />
+    <Script file="GUITabs\GUIQoL\GUI-PositionController.lua" />
+    <Script file="GUITabs\GUIQoL\GUI-SpellAlerts.lua" />
 
     <!-- Skinning tabs -->
     <Script file="GUITabs\GUISkinning\GUI-Tooltips.lua" />

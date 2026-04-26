@@ -405,9 +405,23 @@ function DR:ApplyBarLayout()
     end
 
     -- Speed text anchors above whichever row is on top (or the only row).
+    -- Shift X by half the icon footprint so the text reads centered over the
+    -- visible (bars + icon) extent, not just the bars themselves.
     local anchorRow = topRow or bottomRow
+    local speedX = 0
+    if db.ShowSurgeIcon ~= false then
+        local px = KE:GetPixelSize() or 1
+        local rowCount = (db.ShowSecondWind ~= false) and 2 or 1
+        local barsBlockH = barHeight * rowCount + (rowCount > 1 and rowGap or 0)
+        local autoSize = barsBlockH + 2 * px
+        local iconSize = (db.SurgeIconAutoSize ~= false) and autoSize
+            or (db.SurgeIconSize or autoSize)
+        local iconGap = db.SurgeIconGap or 4
+        local shift = (iconSize + iconGap) / 2
+        speedX = db.SurgeIconOnLeft and -shift or shift
+    end
     self.speedText:ClearAllPoints()
-    self.speedText:SetPoint("BOTTOM", anchorRow, "TOP", 0, 2)
+    self.speedText:SetPoint("BOTTOM", anchorRow, "TOP", speedX, 2)
     if db.ShowSpeedText == false then
         self.speedText:Hide()
     else

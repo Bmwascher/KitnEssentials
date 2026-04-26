@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-StasisTracker.lua                                   ║
 -- ║  GUI: Stasis Tracker                                     ║
--- ║  Purpose: Configuration panel for the StasisTracker     ║
+-- ║  Purpose: Configuration panel for the StasisTracker      ║
 -- ║  module.                                                 ║
 -- ╚══════════════════════════════════════════════════════════╝
 

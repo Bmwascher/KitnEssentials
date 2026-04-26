@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-DispelCursor.lua                                    ║
 -- ║  GUI: Dispel CD on Cursor                                ║
--- ║  Purpose: Configuration panel for the DispelCursor      ║
+-- ║  Purpose: Configuration panel for the DispelCursor       ║
 -- ║  module.                                                 ║
 -- ╚══════════════════════════════════════════════════════════╝
 

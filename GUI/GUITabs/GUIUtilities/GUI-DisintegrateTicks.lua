@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-DisintegrateTicks.lua                               ║
 -- ║  GUI: Disintegrate Ticks                                 ║
--- ║  Purpose: Configuration panel for the DisintegrateTicks ║
+-- ║  Purpose: Configuration panel for the DisintegrateTicks  ║
 -- ║  module.                                                 ║
 -- ╚══════════════════════════════════════════════════════════╝
 

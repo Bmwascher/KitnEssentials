@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-PIMacroBuilder.lua                                  ║
 -- ║  GUI: PI Macro Builder                                   ║
--- ║  Purpose: Configuration panel for the PIMacroBuilder    ║
+-- ║  Purpose: Configuration panel for the PIMacroBuilder     ║
 -- ║  module.                                                 ║
 -- ╚══════════════════════════════════════════════════════════╝
 

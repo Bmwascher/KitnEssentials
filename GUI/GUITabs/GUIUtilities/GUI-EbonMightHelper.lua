@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-EbonMightHelper.lua                                 ║
 -- ║  GUI: Ebon Might Helper                                  ║
--- ║  Purpose: Configuration panel for the EbonMightHelper   ║
+-- ║  Purpose: Configuration panel for the EbonMightHelper    ║
 -- ║  module.                                                 ║
 -- ╚══════════════════════════════════════════════════════════╝
 

@@ -1,5 +1,37 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v1.18.0
+
+### Position Controller (new module — replaces Racials Anchor)
+- **NEW:** Anchors ElvUI Player / Target / Focus / Pet frames to other frames (the Essential Cooldown Viewer by default), with a per-frame chooser for the parent target and per-frame anchor + offset overrides. Includes a Focus frame option that the upstream reference doesn't ship
+- **NEW:** Live status indicator on the top card — green when ElvUI is loaded, yellow when the standalone ElvUI_Anchor addon is detected (we yield to it to avoid two layers competing), red when ElvUI is missing
+- **NEW:** Ignore Healer Specs toggle (default on) — anchoring no-ops on healer specs so ElvUI's profile positions take back over for healing layouts
+- **NEW:** CDM Racials Anchor section consolidated into this module, fully independent of the master toggle. Live pet-status indicator (green when a pet bar is visible, red when not). Supports both ElvUI's `ElvUF_Pet` and UUF's `UUF_Pet`
+- One-time migration carries the previous Racials Anchor settings (anchor points, offsets, pet bar offset) into the new CDM Racials section on first login
+
+### Spell Alert Opacity (new module)
+- **NEW:** Per-spec toggle for Blizzard's spell activation overlay (proc flashes), with each spec's icon rendered inline before its name. Useful for silencing proc flashes on tank/healer specs that don't need them
+- **NEW:** Opacity slider for `spellActivationOverlayOpacity` so the flashes can be dimmed without hiding them entirely
+
+### Missing Enchants/Gems
+- Equipment-change updates now collapse rapid swaps into a single 0.1s debounced update, instead of running a full re-scan per `PLAYER_EQUIPMENT_CHANGED` event. Drops the duplicate `UNIT_INVENTORY_CHANGED` handler that fired alongside it
+- Disabling the module now restores the Blizzard character-panel background textures it hid, instead of leaving the model scene blank until reload
+
+### World Map
+- Map scale callbacks (`WorldMapMinimized` / `WorldMapMaximized`) now properly unregister when the module is disabled or the Scale toggle is turned off, instead of staying registered as no-op closures
+
+### Combat Resurrection
+- Frame width is now sized correctly on first apply — the timer and charge text used to render too narrow until something forced a re-size (e.g. opening Edit Mode twice)
+
+### Skyriding UI
+- Speed text now centers over the visible bars + surge icon extent, not just the bars — when the icon is on the left or right of the bar block, the text shifts so it stays visually centered over the whole module
+
+### GUI
+- New reusable sub-tab widget — Castbars, Evoker Suite, Macro Builders, and Class Status Texts now share a single tab implementation. Tabs span the full content width on each page (matching the upstream layout), and an end-of-frame click debounce prevents the rapid-click render race that previously affected Evoker Suite
+- Copy Anything module removed — the QoL sidebar was getting long and the feature wasn't widely used
+
+---
+
 ## v1.17.0
 
 ### Death Notifications (new module)
