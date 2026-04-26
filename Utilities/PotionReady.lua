@@ -142,7 +142,7 @@ function PR:ApplySettings()
     self.text:SetText(db.Text or "Potion Ready")
 
     self.frame:SetFrameStrata(db.Strata or "HIGH")
-    KE:ApplyFramePosition(self.frame, db.Position, db)
+    KE:ApplyFramePositionWithSnap(self.frame, db.Position, db)
 end
 
 ---------------------------------------------------------------------------------
@@ -157,7 +157,7 @@ function PR:RegWithEditMode()
             getPosition = function() return self.db.Position end,
             setPosition = function(pos)
                 self.db.Position = pos
-                KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
+                KE:ApplyFramePositionWithSnap(self.frame, self.db.Position, self.db)
             end,
             getParentFrame = function()
                 return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)

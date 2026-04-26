@@ -130,7 +130,7 @@ function EC:ApplySettings()
 
     local db = self.db
     self.frame:SetFrameStrata(db.Strata or "HIGH")
-    KE:ApplyFramePosition(self.frame, db.Position, db)
+    KE:ApplyFramePositionWithSnap(self.frame, db.Position, db)
 
     -- Font + color
     local r, g, b, a = KE:GetAccentColor(db.ColorMode, db.Color)
@@ -153,7 +153,7 @@ function EC:RegWithEditMode()
             getPosition = function() return self.db.Position end,
             setPosition = function(pos)
                 self.db.Position = pos
-                KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
+                KE:ApplyFramePositionWithSnap(self.frame, self.db.Position, self.db)
             end,
             getParentFrame = function()
                 return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)

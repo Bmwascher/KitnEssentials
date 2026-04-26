@@ -199,6 +199,7 @@ function GUIFrame:CreatePositionCard(scrollChild, yOffset, config)
     local onChange = config.onChangeCallback
     local showAnchorFrameType = config.showAnchorFrameType ~= false
     local showStrata = config.showStrata == true
+    local showPixelSnap = config.showPixelSnap == true
     local sliderRange = config.sliderRange or { -1000, 1000 }
 
     -- Map field names to actual db keys
@@ -262,7 +263,7 @@ function GUIFrame:CreatePositionCard(scrollChild, yOffset, config)
 
     -- Row 1: Anchored To dropdown
     if showAnchorFrameType then
-        local row1 = GUIFrame:CreateRow(card.content, 40)
+        local row1 = GUIFrame:CreateRow(card.content, 36)
 
         local anchorTypeList = {}
         for _, opt in ipairs(ANCHOR_FRAME_TYPES) do
@@ -279,11 +280,11 @@ function GUIFrame:CreatePositionCard(scrollChild, yOffset, config)
             end)
         row1:AddWidget(anchorTypeDropdown, 1)
         table_insert(widgets, anchorTypeDropdown)
-        card:AddRow(row1, 40)
+        card:AddRow(row1, 36)
 
         -- Row 2: Frame input + Select Frame button (only if SELECTFRAME)
         if currentType == "SELECTFRAME" then
-            local row2 = GUIFrame:CreateRow(card.content, 40)
+            local row2 = GUIFrame:CreateRow(card.content, 36)
 
             local frameInput = GUIFrame:CreateEditBox(row2, "Frame", getValue(keys.anchorFrameFrame, ""), function(val)
                 setValue(keys.anchorFrameFrame, val ~= "" and val or nil)
@@ -309,7 +310,7 @@ function GUIFrame:CreatePositionCard(scrollChild, yOffset, config)
             })
             row2:AddWidget(selectFrameBtn, 0.5, nil, 0, -14)
             table_insert(widgets, selectFrameBtn)
-            card:AddRow(row2, 40)
+            card:AddRow(row2, 36)
         end
     end
 
@@ -337,7 +338,7 @@ function GUIFrame:CreatePositionCard(scrollChild, yOffset, config)
     card:AddRow(row3, 80)
 
     -- Row 4: X and Y offset sliders
-    local row4 = GUIFrame:CreateRow(card.content, 40)
+    local row4 = GUIFrame:CreateRow(card.content, 36)
 
     local xSlider = GUIFrame:CreateSlider(row4, "X Offset", sliderRange[1], sliderRange[2], 1,
         getValue(keys.xOffset, defaults.xOffset or 0), 55,
@@ -354,11 +355,42 @@ function GUIFrame:CreatePositionCard(scrollChild, yOffset, config)
         end)
     row4:AddWidget(ySlider, 0.5)
     table_insert(widgets, ySlider)
-    card:AddRow(row4, 40)
+    card:AddRow(row4, 36)
 
-    -- Row 5: Strata dropdown (optional, below offsets)
+    -- Row 5: Snap to Pixel Grid toggle (optional). Placed right after the
+    -- X/Y sliders since the toggle directly modifies how those sliders feel
+    -- (while ON, slider clicks may absorb sub-pixel deltas at sub-pixel
+    -- anchors). Recommended workflow: position with it OFF, flip ON when
+    -- done. Soft-outline modules anchored to ElvUI panels benefit most.
+    if showPixelSnap then
+        local row5 = GUIFrame:CreateRow(card.content, 44)
+        local currentSnap = db.SnapToPixelGrid == true
+        local snapToggle = GUIFrame:CreateCheckbox(row5, "Snap to Pixel Grid", currentSnap,
+            function(value)
+                db.SnapToPixelGrid = value
+                if onChange then onChange() end
+            end)
+        row5:AddWidget(snapToggle, 1)
+        table_insert(widgets, snapToggle)
+
+        -- Two-line gray descriptor to the right of the toggle. Line 1 explains
+        -- what each state does; line 2 gives the recommended workflow.
+        local snapDesc = row5:CreateFontString(nil, "OVERLAY")
+        snapDesc:SetPoint("TOPLEFT", row5, "TOPLEFT", 60, -10)
+        snapDesc:SetPoint("BOTTOMRIGHT", row5, "BOTTOMRIGHT", 0, 0)
+        KE:ApplyThemeFont(snapDesc, "small")
+        snapDesc:SetTextColor(0x88 / 0xFF, 0x88 / 0xFF, 0x88 / 0xFF, 1)
+        snapDesc:SetJustifyH("LEFT")
+        snapDesc:SetJustifyV("MIDDLE")
+        snapDesc:SetWordWrap(true)
+        snapDesc:SetText("ON: cleaner text. OFF: precise position slider clicks.\nTurn OFF to position the module, ON once in place.")
+
+        card:AddRow(row5, 44)
+    end
+
+    -- Row 6: Strata dropdown (optional, set-once "advanced" control at bottom)
     if showStrata then
-        local row5 = GUIFrame:CreateRow(card.content, 37)
+        local row6 = GUIFrame:CreateRow(card.content, 37)
         -- Ordered from highest to lowest strata
         local strataList = {
             { key = "TOOLTIP",           text = "Tooltip" },
@@ -371,13 +403,13 @@ function GUIFrame:CreatePositionCard(scrollChild, yOffset, config)
             { key = "BACKGROUND",        text = "Background" },
         }
         local currentStrata = getValue(keys.strata, defaults.strata or "HIGH")
-        local strataDropdown = GUIFrame:CreateDropdown(row5, "Strata", strataList, currentStrata, 39,
+        local strataDropdown = GUIFrame:CreateDropdown(row6, "Strata", strataList, currentStrata, 39,
             function(key)
                 setValue(keys.strata, key)
             end)
-        row5:AddWidget(strataDropdown, 1)
+        row6:AddWidget(strataDropdown, 1)
         table_insert(widgets, strataDropdown)
-        card:AddRow(row5, 37)
+        card:AddRow(row6, 37)
     end
 
     -- Store widgets for external enable/disable

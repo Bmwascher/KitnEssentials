@@ -101,7 +101,7 @@ function CM:CreateContainer()
 
     local container = CreateFrame("Frame", "KE_CombatTextsContainer", UIParent)
     container:SetSize(200, 100)
-    KE:ApplyFramePosition(container, self.db.Position, self.db)
+    KE:ApplyFramePositionWithSnap(container, self.db.Position, self.db)
     container:SetFrameLevel(100)
 
     self.container = container
@@ -376,7 +376,7 @@ end
 ---------------------------------------------------------------------------------
 function CM:ApplySettings()
     if not self.container then return end
-    KE:ApplyFramePosition(self.container, self.db.Position, self.db)
+    KE:ApplyFramePositionWithSnap(self.container, self.db.Position, self.db)
 
     -- Update font settings and frame height for all message frames
     local fontSize = self.db.FontSize or 16
@@ -414,7 +414,7 @@ end
 
 function CM:ApplyPosition()
     if not self.container then return end
-    KE:ApplyFramePosition(self.container, self.db.Position, self.db)
+    KE:ApplyFramePositionWithSnap(self.container, self.db.Position, self.db)
 end
 
 function CM:Refresh()
@@ -429,7 +429,7 @@ function CM:RegWithEditMode()
         KE.EditMode:RegisterElement({
             key = "CombatTexts", displayName = "Combat Texts", frame = self.container,
             getPosition = function() return self.db.Position end,
-            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePosition(self.container, self.db.Position, self.db) end,
+            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePositionWithSnap(self.container, self.db.Position, self.db) end,
             getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
             guiPath = "CombatTexts",
         })

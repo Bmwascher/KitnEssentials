@@ -428,7 +428,7 @@ end
 function RN:ApplySettings()
     if not self.frame then return end
 
-    KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
+    KE:ApplyFramePositionWithSnap(self.frame, self.db.Position, self.db)
 
     if self.db.Strata then
         self.frame:SetFrameStrata(self.db.Strata)
@@ -464,7 +464,7 @@ function RN:RegWithEditMode()
         KE.EditMode:RegisterElement({
             key = "RaidNotifications", displayName = "Raid Notifications", frame = self.frame,
             getPosition = function() return self.db.Position end,
-            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePosition(self.frame, self.db.Position, self.db) end,
+            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePositionWithSnap(self.frame, self.db.Position, self.db) end,
             getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
             guiPath = "RaidNotifications",
         })

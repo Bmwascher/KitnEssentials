@@ -113,7 +113,7 @@ end
 function RC:ApplyPosition()
     if not self.db.Enabled then return end
     if not self.frame then return end
-    KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
+    KE:ApplyFramePositionWithSnap(self.frame, self.db.Position, self.db)
 end
 
 ---------------------------------------------------------------------------------
@@ -184,7 +184,7 @@ function RC:RegWithEditMode()
         KE.EditMode:RegisterElement({
             key = "RangeChecker", displayName = "Range Checker", frame = self.frame,
             getPosition = function() return self.db.Position end,
-            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePosition(self.frame, self.db.Position, self.db) end,
+            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePositionWithSnap(self.frame, self.db.Position, self.db) end,
             getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
             guiPath = "RangeChecker",
         })
