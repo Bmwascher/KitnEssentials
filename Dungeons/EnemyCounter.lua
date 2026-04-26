@@ -86,10 +86,13 @@ function EC:UpdateText()
         self.text:SetText(tostring(count))
     end
 
-    -- Dynamic frame sizing (guard against GetStringWidth taint post-combat)
+    -- Dynamic frame sizing (guard against GetStringWidth taint post-combat).
+    -- Snap derived size to the pixel grid so the frame's right edge lands on
+    -- an integer pixel (text centered inside an odd-width frame would
+    -- otherwise sit at sub-pixel and halo).
     local textWidth = self.text:GetStringWidth()
     if textWidth and not issecretvalue(textWidth) then
-        self.frame:SetSize(textWidth + 16, (self.db.FontSize or 20) + 10)
+        self.frame:SetSize(KE:PixelSnap(textWidth + 16), (self.db.FontSize or 20) + 10)
     end
 
     -- Visibility
