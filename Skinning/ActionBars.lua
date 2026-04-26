@@ -97,59 +97,7 @@ local function ApplyZoom(tex, zoom)
 end
 
 -- Add pixel-perfect borders to a frame
-local function AddBorders(frame, color, borderParent)
-    if not frame then return end
-    color = color or { 0, 0, 0, 1 }
-    borderParent = borderParent or frame
-
-    frame.borders = frame.borders or {}
-
-    local function CreateBorder(point1, point2, width, height)
-        local tex = borderParent:CreateTexture(nil, "OVERLAY", nil, 7)
-        tex:SetColorTexture(unpack(color))
-        tex:SetTexelSnappingBias(0)
-        tex:SetSnapToPixelGrid(false)
-        if width then
-            tex:SetWidth(width)
-            tex:SetPoint("TOPLEFT", frame, point1, 0, 0)
-            tex:SetPoint("BOTTOMLEFT", frame, point2, 0, 0)
-        else
-            tex:SetHeight(height)
-            tex:SetPoint("TOPLEFT", frame, point1, 0, 0)
-            tex:SetPoint("TOPRIGHT", frame, point2, 0, 0)
-        end
-        return tex
-    end
-
-    frame.borders.top = CreateBorder("TOPLEFT", "TOPRIGHT", nil, 1)
-
-    frame.borders.bottom = borderParent:CreateTexture(nil, "OVERLAY", nil, 7)
-    frame.borders.bottom:SetHeight(1)
-    frame.borders.bottom:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
-    frame.borders.bottom:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
-    frame.borders.bottom:SetColorTexture(unpack(color))
-    frame.borders.bottom:SetTexelSnappingBias(0)
-    frame.borders.bottom:SetSnapToPixelGrid(false)
-
-    frame.borders.left = CreateBorder("TOPLEFT", "BOTTOMLEFT", 1, nil)
-
-    frame.borders.right = borderParent:CreateTexture(nil, "OVERLAY", nil, 7)
-    frame.borders.right:SetWidth(1)
-    frame.borders.right:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
-    frame.borders.right:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
-    frame.borders.right:SetColorTexture(unpack(color))
-    frame.borders.right:SetTexelSnappingBias(0)
-    frame.borders.right:SetSnapToPixelGrid(false)
-
-    function frame:SetBorderColor(r, g, b, a)
-        if not self.borders then return end
-        for _, tex in pairs(self.borders) do
-            tex:SetColorTexture(r, g, b, a or 1)
-        end
-    end
-
-    return frame
-end
+-- Border helper lives in Core/Widgets.lua as KE:AddBorders. Call sites use it directly.
 
 -- Disable Blizzard bar mouse interaction
 local function BlizzBarMouseToggle(barKey)
@@ -511,7 +459,7 @@ function SK:CreateButtonBackdrop(button, barName, index, buttonSize)
     borderFrame:SetFrameLevel(backdrop:GetFrameLevel() + 1)
     backdrop._borderFrame = borderFrame
 
-    AddBorders(backdrop, borderColor, borderFrame)
+    KE:AddBorders(backdrop, borderColor, borderFrame)
     backdrop._barName = barName
 
     -- Re-parent button to backdrop

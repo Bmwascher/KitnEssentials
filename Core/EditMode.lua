@@ -92,12 +92,15 @@ function EditMode:CreateOverlayFrame(element)
     overlay:SetFrameStrata("TOOLTIP")
     overlay:SetFrameLevel(1000)
 
-    -- Set backdrop with border
+    -- Set backdrop with border. BORDER_SIZE is intent in screen pixels;
+    -- multiply by KE:GetPixelSize() so the 2-screen-pixel highlight
+    -- renders crisply regardless of UI scale.
+    local overlayBorder = BORDER_SIZE * KE:GetPixelSize()
     overlay:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
-        edgeSize = BORDER_SIZE,
-        insets = { left = BORDER_SIZE, right = BORDER_SIZE, top = BORDER_SIZE, bottom = BORDER_SIZE },
+        edgeSize = overlayBorder,
+        insets = { left = overlayBorder, right = overlayBorder, top = overlayBorder, bottom = overlayBorder },
     })
 
     -- Apply colors
@@ -681,7 +684,7 @@ function EditMode:CreateNudgeFrame()
     frame:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
-        edgeSize = 1,
+        edgeSize = KE:GetPixelSize(),
     })
     frame:SetBackdropColor(Theme.bgLight[1], Theme.bgLight[2], Theme.bgLight[3], 1)
     frame:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
@@ -726,7 +729,7 @@ function EditMode:CreateNudgeFrame()
         container:SetBackdrop({
             bgFile = "Interface\\Buttons\\WHITE8X8",
             edgeFile = "Interface\\Buttons\\WHITE8X8",
-            edgeSize = 1,
+            edgeSize = KE:GetPixelSize(),
         })
         container:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
         container:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
@@ -870,7 +873,7 @@ function EditMode:CreateNudgeFrame()
         container:SetBackdrop({
             bgFile = "Interface\\Buttons\\WHITE8X8",
             edgeFile = "Interface\\Buttons\\WHITE8X8",
-            edgeSize = 1,
+            edgeSize = KE:GetPixelSize(),
         })
         container:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
         container:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
@@ -954,7 +957,7 @@ function EditMode:CreateNudgeFrame()
     settingsBtn:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
-        edgeSize = 1,
+        edgeSize = KE:GetPixelSize(),
     })
     settingsBtn:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
     settingsBtn:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)

@@ -154,7 +154,8 @@ function SK:GetOrCreateBackdrop(tooltip)
     bg:SetAllPoints(backdrop)
     backdrop.bg = bg
 
-    local borderSize = self.db and self.db.BorderSize or 1
+    -- BorderSize is screen-pixel intent; multiply by GetPixelSize for crisp rendering.
+    local borderSize = (self.db and self.db.BorderSize or 1) * KE:GetPixelSize()
 
     local top = backdrop:CreateTexture(nil, "BORDER")
     top:SetTexture("Interface\\Buttons\\WHITE8X8")
@@ -208,7 +209,7 @@ end
 function SK:ApplyBackdropSettings(backdrop)
     if not self.db then return end
 
-    local borderSize = self.db.BorderSize or 1
+    local borderSize = (self.db.BorderSize or 1) * KE:GetPixelSize()
     if backdrop.borderTop then backdrop.borderTop:SetHeight(borderSize) end
     if backdrop.borderBottom then backdrop.borderBottom:SetHeight(borderSize) end
     if backdrop.borderLeft then backdrop.borderLeft:SetWidth(borderSize) end

@@ -180,11 +180,12 @@ function WM:CreateSearchBar()
     local bg = CreateFrame("Frame", nil, editBox, BackdropTemplateMixin and "BackdropTemplate")
     bg:SetAllPoints(editBox)
     bg:SetFrameLevel(editBox:GetFrameLevel() - 1)
+    local px = KE:GetPixelSize()
     bg:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
-        edgeSize = 1,
-        insets = { left = 1, right = 1, top = 1, bottom = 1 },
+        edgeSize = px,
+        insets = { left = px, right = px, top = px, bottom = px },
     })
     bg:SetBackdropColor(0, 0, 0, 0.7)
     bg:SetBackdropBorderColor(0, 0, 0, 1)

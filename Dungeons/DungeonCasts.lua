@@ -161,8 +161,11 @@ function DC:CreateBarFrame()
     frame.iconFrame:SetPoint("LEFT", frame, "LEFT", 0, 0)
 
     frame.icon = frame.iconFrame:CreateTexture(nil, "ARTWORK")
-    frame.icon:SetPoint("TOPLEFT", 1, -1)
-    frame.icon:SetPoint("BOTTOMRIGHT", -1, 1)
+    do
+        local px = KE:GetPixelSize()
+        frame.icon:SetPoint("TOPLEFT", px, -px)
+        frame.icon:SetPoint("BOTTOMRIGHT", -px, px)
+    end
 
     frame.castBar = CreateFrame("StatusBar", nil, frame)
     frame.castBar:SetMinMaxValues(0, 1)
@@ -263,15 +266,16 @@ function DC:ConfigureBar(bar)
     end
 
     -- Cast bar positioning
+    local px = KE:GetPixelSize()
     bar.castBar:ClearAllPoints()
     if iconDb.Enabled then
         bar.castBar:SetPoint("LEFT", bar.iconFrame, "RIGHT", 0, 0)
     else
-        bar.castBar:SetPoint("LEFT", bar, "LEFT", 1, 0)
+        bar.castBar:SetPoint("LEFT", bar, "LEFT", px, 0)
     end
-    bar.castBar:SetPoint("RIGHT", bar, "RIGHT", -1, 0)
-    bar.castBar:SetPoint("TOP", bar, "TOP", 0, -1)
-    bar.castBar:SetPoint("BOTTOM", bar, "BOTTOM", 0, 1)
+    bar.castBar:SetPoint("RIGHT", bar, "RIGHT", -px, 0)
+    bar.castBar:SetPoint("TOP", bar, "TOP", 0, -px)
+    bar.castBar:SetPoint("BOTTOM", bar, "BOTTOM", 0, px)
     bar.castBar:SetStatusBarTexture(KE:GetStatusbarPath(barDb.StatusBarTexture))
 
     -- Spark pinned to the right edge of the fill texture so it tracks progress
