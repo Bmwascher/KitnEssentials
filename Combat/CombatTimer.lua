@@ -132,13 +132,12 @@ function CT:UpdateFrameSize()
         bracketW = (self.bracketL:GetStringWidth() or 0) + (self.bracketR:GetStringWidth() or 0)
     end
 
-    -- Frame width = digits + brackets + 2px (1px each side). The 1px
-    -- clearance keeps the bracket characters' soft-outline eastern/western
-    -- shadows from bleeding into the adjacent digits, while staying tight
-    -- enough that there's no visible gap. ceil rounds up to even pixels so
-    -- text centering doesn't land on a sub-pixel boundary.
-    local total = math.ceil(digitsW + bracketW)
-    if total % 2 == 1 then total = total + 1 end
+    -- Frame width = digits + brackets, snapped to an even pixel multiple.
+    -- digitsW comes from GetStringWidth() and is a float; rounding to even
+    -- pixels keeps text-CENTER on integer pixels and the right edge on the
+    -- pixel grid (so the right bracket renders crisply when SnapToPixelGrid
+    -- is ON — the toggle only snaps LEFT/BOTTOM, not width).
+    local total = KE:PixelSnapEven(digitsW + bracketW)
     if KE:IsSafeValue(total) then
         self.frame:SetSize(total, (self.db.FontSize or 28) + 8)
     end

@@ -573,8 +573,10 @@ local function CalculateButtonPosition(index, layout, columns, rows, growLeft, b
         col = math.floor(index / rows)
     end
     local rawCol = growLeft and (columns - 1 - col) or col
-    local dx = math.floor(rawCol * (buttonSize + spacing) + 0.5)
-    local dy = -math.floor(row * (buttonSize + spacing) + 0.5)
+    -- PixelSnap handles non-perfect UI scales correctly (symmetric rounding
+    -- to the pixel grid, not just integer addon-coords).
+    local dx = KE:PixelSnap(rawCol * (buttonSize + spacing))
+    local dy = -KE:PixelSnap(row * (buttonSize + spacing))
     return dx, dy
 end
 

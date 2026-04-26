@@ -20,7 +20,6 @@ local CreateFrame = CreateFrame
 local UnitExists, UnitIsUnit = UnitExists, UnitIsUnit
 local InCombatLockdown = InCombatLockdown
 local unpack = unpack
-local tostring = tostring
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -67,7 +66,12 @@ function RC:FormatRangeText(minRange, maxRange)
     elseif maxRange then
         return "0 - " .. maxRange
     elseif minRange then
-        return tostring(minRange)
+        -- minRange-only = target is beyond LibRangeCheck's longest checker for
+        -- this target relation (typically opposite-faction / hostile NPC, where
+        -- hostile-spell ranges cap at ~25-40y depending on class/spec). The
+        -- "+" indicates "at least this far"; the actual distance can't be
+        -- measured further without a longer-range checker spell on the player.
+        return minRange .. "+"
     else
         return "--"
     end
@@ -163,7 +167,9 @@ function RC:UpdateRange()
         self.lastSizedText = rangeText
         local textWidth = self.text:GetStringWidth() or 50
         local textHeight = self.text:GetStringHeight() or 20
-        self.frame:SetSize(textWidth + 10, textHeight + 4)
+        -- GetStringWidth returns a float; snap derived size to pixel grid so
+        -- the frame's right/bottom edges land on integer pixels.
+        self.frame:SetSize(KE:PixelSnap(textWidth + 10), KE:PixelSnap(textHeight + 4))
     end
     self.frame:Show()
 end
