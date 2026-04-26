@@ -107,6 +107,7 @@ local Defaults = {
             ParentFrame = "UIParent",
             Strata = "HIGH",
             Position = DefaultPosition(0, -100),
+            SnapToPixelGrid = false,
             Backdrop = DefaultBackdrop(),
         },
 
@@ -131,6 +132,7 @@ local Defaults = {
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, -60),
+            SnapToPixelGrid = false,
             FontSize = 16,
             FontFace = "Expressway",
             FontOutline = "SOFTOUTLINE",
@@ -155,6 +157,7 @@ local Defaults = {
             FontSize = 16,
             FontOutline = "SOFTOUTLINE",
             Position = DefaultPosition(0, 125),
+            SnapToPixelGrid = false,
             Spacing = 0,
             EnterEnabled = true,
             EnterCombatText = "+Combat",
@@ -205,6 +208,7 @@ local Defaults = {
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, 100),
+            SnapToPixelGrid = false,
             FontSize = 26,
             FontFace = "Expressway",
             FontOutline = "SOFTOUTLINE",
@@ -237,6 +241,7 @@ local Defaults = {
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, 350),
+            SnapToPixelGrid = false,
             FontSize = 37,
             FontFace = "Expressway",
             FontOutline = "SOFTOUTLINE",
@@ -375,6 +380,7 @@ local Defaults = {
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, -140),
+            SnapToPixelGrid = false,
         },
 
         TimeSpiral = {
@@ -685,6 +691,7 @@ local Defaults = {
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
             Position = DefaultPosition(-250, -130),
+            SnapToPixelGrid = false,
             WARRIOR = {
                 ["386164"] = { Enabled = true, Text = "Battle Stance", Color = { 1, 0, 0, 1 } },
                 ["386196"] = { Enabled = true, Text = "Berserker Stance", Color = { 1, 0, 0, 1 } },
@@ -728,6 +735,7 @@ local Defaults = {
             anchorFrameType = "SELECTFRAME",
             ParentFrame = "UtilityCooldownViewer",
             Position = { AnchorFrom = "TOP", AnchorTo = "BOTTOMRIGHT", XOffset = 0, YOffset = 5 },
+            SnapToPixelGrid = false,
         },
 
 
@@ -949,6 +957,7 @@ local Defaults = {
                 anchorFrameType = "UIPARENT",
                 ParentFrame = "UIParent",
                 Position = DefaultPosition(0, 215),
+                SnapToPixelGrid = false,
             },
             DungeonTimers = {
                 Enabled = false,
@@ -1061,6 +1070,7 @@ local Defaults = {
                 anchorFrameType = "UIPARENT",
                 ParentFrame = "UIParent",
                 Position = DefaultPosition(-400, 200),
+                SnapToPixelGrid = false,
                 FrameWidth = 120,
                 IconSize = 24,
                 IconType = "spec",

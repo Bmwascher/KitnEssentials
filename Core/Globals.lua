@@ -411,3 +411,17 @@ function KE:ApplyFramePosition(frame, posConfig, Config, SetParent)
     )
     frame:SetFrameStrata(Config.Strata or "MEDIUM")
 end
+
+-- Like ApplyFramePosition but additionally snaps the frame's resulting screen
+-- position to the integer pixel grid when Config.SnapToPixelGrid is true.
+-- Use this for soft-outline modules whose anchor frames may end up at sub-
+-- pixel screen positions (some ElvUI panels), which causes the soft-outline
+-- shadows to anti-alias and look like a halo. The snap can absorb sub-pixel
+-- offset deltas, so the user toggles it OFF while adjusting sliders, ON when
+-- they want crisp text.
+function KE:ApplyFramePositionWithSnap(frame, posConfig, Config, SetParent)
+    self:ApplyFramePosition(frame, posConfig, Config, SetParent)
+    if Config and Config.SnapToPixelGrid then
+        self:SnapFrameToPixels(frame)
+    end
+end

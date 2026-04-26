@@ -367,7 +367,7 @@ function CR:ApplySettings()
         self:CreateFrame()
     end
 
-    KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
+    KE:ApplyFramePositionWithSnap(self.frame, self.db.Position, self.db)
     self:ApplyTextSettings()
 
     if not self.db.Enabled and not self.isPreview then
@@ -379,7 +379,7 @@ end
 
 function CR:ApplyPosition()
     if not self.frame then return end
-    KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
+    KE:ApplyFramePositionWithSnap(self.frame, self.db.Position, self.db)
 end
 
 ---------------------------------------------------------------------------------
@@ -390,7 +390,7 @@ function CR:RegWithEditMode()
         KE.EditMode:RegisterElement({
             key = "CombatRes", displayName = "Combat Res", frame = self.frame,
             getPosition = function() return self.db.Position end,
-            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePosition(self.frame, self.db.Position, self.db) end,
+            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePositionWithSnap(self.frame, self.db.Position, self.db) end,
             getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
             guiPath = "CombatRes",
         })
