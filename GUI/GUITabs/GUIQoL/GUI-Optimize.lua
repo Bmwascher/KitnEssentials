@@ -8,15 +8,9 @@
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
-
-local table_insert = table.insert
-local ipairs = ipairs
 local CreateFrame = CreateFrame
 local C_Timer = C_Timer
 
----------------------------------------------------------------------------------
--- Helpers
----------------------------------------------------------------------------------
 local function GetModule()
     if KitnEssentials then
         return KitnEssentials:GetModule("Optimize", true)
@@ -45,15 +39,12 @@ local function InstallCloseHook()
     end)
 end
 
----------------------------------------------------------------------------------
--- Content Registration
----------------------------------------------------------------------------------
 GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
     local OPT = GetModule()
     if not OPT then
         local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
         errorCard:AddLabel("Optimize module not available")
-        return yOffset + errorCard:GetContentHeight() + Theme.paddingMedium
+        return errorCard:GetNextOffset()
     end
 
     InstallCloseHook()
@@ -61,21 +52,19 @@ GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
     local refreshCallbacks = {}
 
     local function RefreshAllRows()
-        for _, fn in ipairs(refreshCallbacks) do
-            fn()
-        end
+        for _, fn in ipairs(refreshCallbacks) do fn() end
     end
 
     local function MarkDirty()
         optimizeDirty = true
     end
 
-    --------------------------------------------------------------------------
-    -- Card 1: Presets (Optimize All / Revert All)
-    --------------------------------------------------------------------------
+    ----------------------------------------------------------------
+    -- Card 1: Presets
+    ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Presets", yOffset)
 
-    local row1 = GUIFrame:CreateRow(card1.content, 40)
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
 
     local optimizeBtn = GUIFrame:CreateButton(row1, "Optimize All", {
         width = 140,
@@ -98,13 +87,13 @@ GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
         end,
     })
     row1:AddWidget(revertBtn, 0.5)
+    card1:AddRow(row1, Theme.rowHeightLast, 0)
 
-    card1:AddRow(row1, 40)
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+    yOffset = card1:GetNextOffset()
 
-    --------------------------------------------------------------------------
-    -- Helper: add column header row to a card
-    --------------------------------------------------------------------------
+    ----------------------------------------------------------------
+    -- Helper: column headers row
+    ----------------------------------------------------------------
     local function AddColumnHeaders(card)
         local row = GUIFrame:CreateRow(card.content, 20)
 
@@ -144,10 +133,10 @@ GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
         card:AddRow(row, 20)
     end
 
-    --------------------------------------------------------------------------
-    -- Helper: build a single CVar status row inside a card
-    --------------------------------------------------------------------------
-    local function AddCVarRow(card, entry, widgets)
+    ----------------------------------------------------------------
+    -- Helper: bespoke per-CVar status row (Apply/Revert + tooltip)
+    ----------------------------------------------------------------
+    local function AddCVarRow(card, entry)
         local row = GUIFrame:CreateRow(card.content, 32)
 
         local container = CreateFrame("Frame", nil, row)
@@ -174,7 +163,6 @@ GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
         local arrowRot = math.pi / 2
         local arrowR, arrowG, arrowB = Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3]
 
-        -- Center the arrow pair in the 30px gap between currentLabel and optimalLabel
         local arrow1 = container:CreateTexture(nil, "OVERLAY")
         arrow1:SetSize(10, 10)
         arrow1:SetPoint("LEFT", currentLabel, "RIGHT", 0, 0)
@@ -192,7 +180,6 @@ GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
         optimalLabel:SetJustifyH("LEFT")
         KE:ApplyThemeFont(optimalLabel, "normal")
 
-        -- Apply button
         local applyBtn = CreateFrame("Button", nil, container, "BackdropTemplate")
         applyBtn:SetSize(50, 20)
         applyBtn:SetPoint("RIGHT", container, "RIGHT", -60, 0)
@@ -209,7 +196,6 @@ GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
         applyText:SetText("Apply")
         applyText:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
 
-        -- Revert button
         local revertBtnSmall = CreateFrame("Button", nil, container, "BackdropTemplate")
         revertBtnSmall:SetSize(50, 20)
         revertBtnSmall:SetPoint("RIGHT", container, "RIGHT", -4, 0)
@@ -226,7 +212,6 @@ GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
         revertText:SetText("Revert")
         revertText:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
 
-        -- "Optimal" label (shown when current matches recommended)
         local optimalStatusLabel = container:CreateFontString(nil, "OVERLAY")
         KE:ApplyThemeFont(optimalStatusLabel, "normal")
         optimalStatusLabel:SetPoint("CENTER", applyBtn, "CENTER", 0, 0)
@@ -245,30 +230,6 @@ GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
         SetupHover(applyBtn)
         SetupHover(revertBtnSmall)
 
-        --[[ BACKUP: Original RefreshRow
-        local function RefreshRow()
-            local current = OPT:GetCurrentValue(entry.cvar) or "?"
-            local isOpt = OPT:IsOptimal(entry.cvar, entry.optimal)
-            local currentDisplay = OPT:GetValueLabel(entry.cvar, current)
-            local optimalDisplay = OPT:GetValueLabel(entry.cvar, entry.optimal)
-            if isOpt then
-                currentLabel:SetTextColor(0.3, 1, 0.3, 1)
-            else
-                currentLabel:SetTextColor(1, 0.55, 0, 1)
-            end
-            currentLabel:SetText(currentDisplay)
-            optimalLabel:SetText(optimalDisplay)
-            optimalLabel:SetTextColor(0.3, 1, 0.3, 1)
-            if OPT:HasBackup(entry.cvar) then
-                revertBtnSmall:SetAlpha(1)
-                revertBtnSmall:EnableMouse(true)
-            else
-                revertBtnSmall:SetAlpha(0.35)
-                revertBtnSmall:EnableMouse(false)
-            end
-        end
-        --]]
-
         local function RefreshRow()
             local current = OPT:GetCurrentValue(entry.cvar) or "?"
             local isOpt = OPT:IsOptimal(entry.cvar, entry.optimal)
@@ -286,20 +247,16 @@ GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
             optimalLabel:SetTextColor(0.3, 1, 0.3, 1)
 
             if isOpt then
-                -- Optimal: hide Apply, show checkmark
                 applyBtn:Hide()
                 optimalStatusLabel:Show()
                 if hasBackup then
-                    -- User applied this session, allow revert
                     revertBtnSmall:Show()
                     revertBtnSmall:SetAlpha(1)
                     revertBtnSmall:EnableMouse(true)
                 else
-                    -- Already optimal, nothing to revert
                     revertBtnSmall:Hide()
                 end
             else
-                -- Not optimal: show Apply, hide checkmark
                 applyBtn:Show()
                 optimalStatusLabel:Hide()
                 if hasBackup then
@@ -316,17 +273,13 @@ GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
 
         applyBtn:SetScript("OnClick", function()
             OPT:ApplyCVar(entry.cvar, entry.optimal)
-            C_Timer.After(0.1, function()
-                RefreshRow()
-            end)
+            C_Timer.After(0.1, RefreshRow)
             MarkDirty()
         end)
 
         revertBtnSmall:SetScript("OnClick", function()
             OPT:RevertCVar(entry.cvar)
-            C_Timer.After(0.1, function()
-                RefreshRow()
-            end)
+            C_Timer.After(0.1, RefreshRow)
             MarkDirty()
         end)
 
@@ -345,32 +298,25 @@ GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
             end
             GameTooltip:Show()
         end)
-        container:SetScript("OnLeave", function()
-            GameTooltip:Hide()
-        end)
+        container:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
         row:AddWidget(container, 1)
         card:AddRow(row, 32)
-        table_insert(widgets, row)
-        table_insert(refreshCallbacks, RefreshRow)
+        table.insert(refreshCallbacks, RefreshRow)
 
         RefreshRow()
     end
 
-    --------------------------------------------------------------------------
-    -- Build a card per category
-    --------------------------------------------------------------------------
+    ----------------------------------------------------------------
+    -- Cards 2-N: One card per category
+    ----------------------------------------------------------------
     for _, cat in ipairs(OPT.Categories) do
         local card = GUIFrame:CreateCard(scrollChild, cat.name, yOffset)
-        local widgets = {}
-
         AddColumnHeaders(card)
-
         for _, entry in ipairs(cat.cvars) do
-            AddCVarRow(card, entry, widgets)
+            AddCVarRow(card, entry)
         end
-
-        yOffset = yOffset + card:GetContentHeight() + Theme.paddingSmall
+        yOffset = card:GetNextOffset()
     end
 
     return yOffset

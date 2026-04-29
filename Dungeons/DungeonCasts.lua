@@ -240,14 +240,14 @@ function DC:ConfigureBar(bar)
     -- Main frame
     bar:SetSize(width, height)
     bar:SetFrameStrata(frameDb.Strata)
-    local bg = db.BackgroundColor
-    bar:SetBackdropColor(bg[1], bg[2], bg[3], bg[4])
+    local bgr, bgg, bgb, bga = KE:ResolveColor(db.BackgroundColor, { 0, 0, 0, 0.8 })
+    bar:SetBackdropColor(bgr, bgg, bgb, bga)
 
-    local borderColor = db.BorderColor
+    local bdr, bdg, bdb, bda = KE:ResolveColor(db.BorderColor, { 0, 0, 0, 1 })
     if not bar.borders then
-        KE:AddBorders(bar, borderColor)
+        KE:AddBorders(bar, db.BorderColor)
     else
-        bar:SetBorderColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4])
+        bar:SetBorderColor(bdr, bdg, bdb, bda)
     end
 
     -- Icon frame (always square, matching bar height)
@@ -256,9 +256,9 @@ function DC:ConfigureBar(bar)
         bar.iconFrame:Show()
         bar.iconFrame:SetBackdropColor(0, 0, 0, 0.8)
         if not bar.iconFrame.borders then
-            KE:AddBorders(bar.iconFrame, borderColor)
+            KE:AddBorders(bar.iconFrame, db.BorderColor)
         else
-            bar.iconFrame:SetBorderColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4])
+            bar.iconFrame:SetBorderColor(bdr, bdg, bdb, bda)
         end
         KE:ApplyIconZoom(bar.icon, iconDb.Zoom)
     else
@@ -285,18 +285,18 @@ function DC:ConfigureBar(bar)
     bar.spark:SetShown(barDb.SparkEnabled)
 
     -- Text
-    local tc = textDb.TextColor
+    local tcr, tcg, tcb, tca = KE:ResolveColor(textDb.TextColor, { 1, 1, 1, 1 })
     bar.nameText:ClearAllPoints()
     bar.nameText:SetPoint("LEFT", bar.castBar, "LEFT", 4, 0)
     bar.nameText:SetJustifyH(textDb.NameAlign)
     KE:ApplyFont(bar.nameText, barDb.FontFace, barDb.FontSize, barDb.FontOutline)
-    bar.nameText:SetTextColor(tc[1], tc[2], tc[3], tc[4])
+    bar.nameText:SetTextColor(tcr, tcg, tcb, tca)
 
     bar.timeText:ClearAllPoints()
     bar.timeText:SetPoint("RIGHT", bar.castBar, "RIGHT", -4, 0)
     bar.timeText:SetJustifyH(textDb.TimeAlign)
     KE:ApplyFont(bar.timeText, barDb.FontFace, barDb.FontSize, barDb.FontOutline)
-    bar.timeText:SetTextColor(tc[1], tc[2], tc[3], tc[4])
+    bar.timeText:SetTextColor(tcr, tcg, tcb, tca)
     bar.timeText:SetShown(textDb.ShowTime)
     -- Reserve fixed width for the widest natural 3-char time ("9.9" / "0.9").
     -- ConfigureBar runs from nameplate event handlers (tainted), so we cannot
@@ -319,8 +319,8 @@ function DC:ConfigureBar(bar)
     bar.targetSeparator:ClearAllPoints()
     KE:ApplyFont(bar.targetText, barDb.FontFace, barDb.FontSize, barDb.FontOutline)
     KE:ApplyFont(bar.targetSeparator, barDb.FontFace, barDb.FontSize, barDb.FontOutline)
-    bar.targetText:SetTextColor(tc[1], tc[2], tc[3], tc[4])
-    bar.targetSeparator:SetTextColor(tc[1], tc[2], tc[3], tc[4])
+    bar.targetText:SetTextColor(tcr, tcg, tcb, tca)
+    bar.targetSeparator:SetTextColor(tcr, tcg, tcb, tca)
     if targetDb and targetDb.Position == "LEFT" then
         -- Visible order: [nameText] » TargetName ... [timeText]
         bar.targetSeparator:SetPoint("LEFT", bar.nameText, "RIGHT", 2, 0)
@@ -422,10 +422,16 @@ function DC:UpdateBarColor(bar)
 
     if self.isPreview then
         local db = self.db
-        local c = bar.notInterruptible and db.NotInterruptibleColor
-            or (bar.channeling and db.ChannelingColor
-                or db.CastingColor)
-        texture:SetVertexColor(c[1], c[2], c[3], c[4])
+        local saved
+        if bar.notInterruptible then
+            saved = db.NotInterruptibleColor
+        elseif bar.channeling then
+            saved = db.ChannelingColor
+        else
+            saved = db.CastingColor
+        end
+        local r, g, b, a = KE:ResolveColor(saved, { 1, 0.7, 0, 1 })
+        texture:SetVertexColor(r, g, b, a)
         return
     end
 
@@ -575,7 +581,7 @@ function DC:GetOrAcquireBar(unit)
     local bar = self.activeFrames[unit]
     if bar then return bar end
 
-    if self.activeCount >= self.db.Frame.MaxBars then return nil end
+    if self.activeCount >= ((self.db.Frame and self.db.Frame.MaxBars) or 8) then return nil end
 
     bar = self:AcquireBar()
     self.activeFrames[unit] = bar
@@ -812,6 +818,32 @@ function DC:ApplySettings()
     if self.instanceActive then
         self:ScanExistingNameplates()
     end
+end
+
+-- In-place visual refresh: re-applies size/font/texture/colors/anchor to all
+-- live bars without releasing them. Preserves cast progress, so GUI tweaks
+-- like color or font changes don't reset bar countdowns. Called from GUI
+-- callbacks that change purely visual settings; MaxBars and other structural
+-- changes still go through ApplySettings since they need new bars.
+function DC:UpdateFrameVisuals()
+    self:UpdateDB()
+    self:CreateColorObjects()
+    self:RefreshTimeWidthReserve()
+    self:ApplyAnchorPosition()
+
+    for _, bar in pairs(self.activeFrames) do
+        self:ConfigureBar(bar)
+        self:UpdateBarColor(bar)
+        -- Target visibility/styling reacts to GUI Target.* changes. Real-mode
+        -- bars refresh target text every OnUpdate tick from live cast data,
+        -- so we only need to re-run it for preview-mode bars (which cache
+        -- previewTarget at creation time).
+        if self.isPreview and bar.previewTarget ~= nil then
+            self:UpdateTargetText(bar, bar.previewTarget, bar.previewTargetClass)
+        end
+    end
+
+    self:PositionAllBars()
 end
 
 function DC:ApplyPosition()

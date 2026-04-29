@@ -20,7 +20,6 @@ local pairs = pairs
 local type = type
 local time = time
 local wipe = wipe
-local tostring = tostring
 local next = next
 
 ---------------------------------------------------------------------------------

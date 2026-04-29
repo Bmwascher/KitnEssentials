@@ -18,7 +18,6 @@ local CM = KitnEssentials:NewModule("CombatTexts", "AceEvent-3.0")
 ---------------------------------------------------------------------------------
 local CreateFrame = CreateFrame
 local UIFrameFadeRemoveFrame = UIFrameFadeRemoveFrame
-local UIFrameFadeOut = UIFrameFadeOut
 local InCombatLockdown = InCombatLockdown
 local UnitExists = UnitExists
 local UnitIsDeadOrGhost = UnitIsDeadOrGhost

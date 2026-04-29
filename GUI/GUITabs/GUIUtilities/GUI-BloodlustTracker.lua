@@ -9,32 +9,34 @@
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
-local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
-local table_insert = table.insert
-local ipairs = ipairs
+
+local function GetModule()
+    if KitnEssentials then
+        return KitnEssentials:GetModule("BloodlustTracker", true)
+    end
+    return nil
+end
 
 GUIFrame:RegisterContent("BloodlustTracker", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.BloodlustTracker
     if not db then
         local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
         errorCard:AddLabel("Database not available")
-        return yOffset + errorCard:GetContentHeight() + Theme.paddingMedium
+        return errorCard:GetNextOffset()
     end
 
-    local BLT = KitnEssentials and KitnEssentials:GetModule("BloodlustTracker", true)
-    local allWidgets = {}
-    local pedroOnlyWidgets = {}
-    local iconOnlyWidgets = {}
+    local BLT = GetModule()
+    local manager = GUIFrame:CreateWidgetStateManager()
+    manager:SetCondition("pedro", function() return db.Mode == "pedro" end)
+    manager:SetCondition("icon",  function() return db.Mode ~= "pedro" end)
 
     local function ApplySettings()
         if BLT and BLT.ApplySettings then BLT:ApplySettings() end
     end
 
     local function ApplyModuleState(enabled)
-        if not KitnEssentials then return end
-        local mod = KitnEssentials:GetModule("BloodlustTracker", true)
-        if not mod then return end
-        mod.db.Enabled = enabled
+        if not BLT then return end
+        BLT.db.Enabled = enabled
         if enabled then
             KitnEssentials:EnableModule("BloodlustTracker")
         else
@@ -42,55 +44,55 @@ GUIFrame:RegisterContent("BloodlustTracker", function(scrollChild, yOffset)
         end
     end
 
-    local function UpdateAllWidgetStates()
-        local mainEnabled = db.Enabled ~= false
-        local isPedro = db.Mode == "pedro"
-
-        for _, widget in ipairs(allWidgets) do
-            if widget.SetEnabled then widget:SetEnabled(mainEnabled) end
-        end
-        for _, widget in ipairs(pedroOnlyWidgets) do
-            if widget.SetEnabled then widget:SetEnabled(mainEnabled and isPedro) end
-        end
-        for _, widget in ipairs(iconOnlyWidgets) do
-            if widget.SetEnabled then widget:SetEnabled(mainEnabled and not isPedro) end
-        end
+    local function RefreshStates()
+        manager:UpdateAll(db.Enabled ~= false)
     end
 
-    ---------------------------------------------------------------------------------
-    -- Card 1: Bloodlust Tracker
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
+    -- Card 1: Enable + Mode + Filters
+    ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Bloodlust Tracker", yOffset)
 
-    -- Enable toggle
-    local row1a = GUIFrame:CreateRow(card1.content, 36)
-    local enableCheck = GUIFrame:CreateCheckbox(row1a, "Enable Bloodlust Tracker", db.Enabled ~= false,
-        function(checked)
+    local row1a = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local enableCheck = GUIFrame:CreateCheckbox(row1a, "Enable Bloodlust Tracker", {
+        value = db.Enabled ~= false,
+        callback = function(checked)
             db.Enabled = checked
             ApplyModuleState(checked)
-            UpdateAllWidgetStates()
+            RefreshStates()
         end,
-        true, "Bloodlust Tracker", "On", "Off"
-    )
+        msgPopup = true,
+        msgText = "Bloodlust Tracker",
+        msgOn = "On",
+        msgOff = "Off",
+    })
     row1a:AddWidget(enableCheck, 1)
-    card1:AddRow(row1a, 36)
+    card1:AddRow(row1a, Theme.rowHeight)
 
-    card1:AddLabel("|cff888888Animated overlay or icon alert on Bloodlust, Heroism, and Time Warp. Detected via sated debuffs.|r")
+    local noteRow = GUIFrame:CreateRow(card1.content, 50)
+    local noteText = GUIFrame:CreateText(noteRow,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " Animated overlay or icon alert on Bloodlust, Heroism, and Time Warp.\n" ..
+        KE:ColorTextByTheme("-") .. " Detected via sated debuffs.",
+        50, "hide")
+    noteRow:AddWidget(noteText, 1)
+    card1:AddRow(noteRow, 50)
 
-    -- Mode + Test button
-    local row1b = GUIFrame:CreateRow(card1.content, 40)
-    local modeList = {
-        { key = "pedro", text = "Pedro Animated" },
-        { key = "icon", text = "Static Icon + Countdown" },
-    }
-    local modeDropdown = GUIFrame:CreateDropdown(row1b, "Mode", modeList, db.Mode or "pedro", 30,
-        function(key)
+    local row1b = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local modeDropdown = GUIFrame:CreateDropdown(row1b, "Mode", {
+        options = {
+            { key = "pedro", text = "Pedro Animated" },
+            { key = "icon",  text = "Static Icon + Countdown" },
+        },
+        value = db.Mode or "pedro",
+        callback = function(key)
             db.Mode = key
             ApplySettings()
-            UpdateAllWidgetStates()
-        end)
+            RefreshStates()
+        end,
+    })
     row1b:AddWidget(modeDropdown, 0.5)
-    table_insert(allWidgets, modeDropdown)
+    manager:Register(modeDropdown, "all")
 
     local testBtn = GUIFrame:CreateButton(row1b, "Test", {
         callback = function()
@@ -102,38 +104,37 @@ GUIFrame:RegisterContent("BloodlustTracker", function(scrollChild, yOffset)
         width = 80,
     })
     row1b:AddWidget(testBtn, 0.5)
-    table_insert(allWidgets, testBtn)
-    card1:AddRow(row1b, 40)
+    manager:Register(testBtn, "all")
+    card1:AddRow(row1b, Theme.rowHeight)
 
-    -- Separator
-    local row1sep = GUIFrame:CreateRow(card1.content, 8)
-    local sep1 = GUIFrame:CreateSeparator(row1sep)
-    row1sep:AddWidget(sep1, 1)
-    card1:AddRow(row1sep, 8)
+    local rowSep = GUIFrame:CreateRow(card1.content, Theme.rowHeightSeparator)
+    local sep1 = GUIFrame:CreateSeparator(rowSep)
+    rowSep:AddWidget(sep1, 1)
+    manager:Register(sep1, "all")
+    card1:AddRow(rowSep, Theme.rowHeightSeparator)
 
-    -- Instance Only + Combat Only
-    local row1c = GUIFrame:CreateRow(card1.content, 36)
-    local instanceCheck = GUIFrame:CreateCheckbox(row1c, "Instance Only", db.InstanceOnly == true,
-        function(checked)
-            db.InstanceOnly = checked
-        end)
+    local row1c = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local instanceCheck = GUIFrame:CreateCheckbox(row1c, "Instance Only", {
+        value = db.InstanceOnly == true,
+        callback = function(checked) db.InstanceOnly = checked end,
+    })
     row1c:AddWidget(instanceCheck, 0.5)
-    table_insert(allWidgets, instanceCheck)
+    manager:Register(instanceCheck, "all")
 
-    local combatCheck = GUIFrame:CreateCheckbox(row1c, "Combat Only", db.CombatOnly == true,
-        function(checked)
-            db.CombatOnly = checked
-        end)
+    local combatCheck = GUIFrame:CreateCheckbox(row1c, "Combat Only", {
+        value = db.CombatOnly == true,
+        callback = function(checked) db.CombatOnly = checked end,
+    })
     row1c:AddWidget(combatCheck, 0.5)
-    table_insert(allWidgets, combatCheck)
-    card1:AddRow(row1c, 36)
+    manager:Register(combatCheck, "all")
+    card1:AddRow(row1c, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+    yOffset = card1:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 2: Position Settings
-    ---------------------------------------------------------------------------------
-    local card2, newOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+    ----------------------------------------------------------------
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = db,
         dbKeys = {
             anchorFrameType = "anchorFrameType",
@@ -148,139 +149,104 @@ GUIFrame:RegisterContent("BloodlustTracker", function(scrollChild, yOffset)
         showStrata = true,
         onChangeCallback = ApplySettings,
     })
-    if card2.positionWidgets then
-        for _, widget in ipairs(card2.positionWidgets) do
-            table_insert(allWidgets, widget)
-        end
-    end
-    table_insert(allWidgets, card2)
-    yOffset = newOffset
 
-    ---------------------------------------------------------------------------------
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
+    end
+    manager:Register(posCard, "all")
+    yOffset = posOffset
+
+    ----------------------------------------------------------------
     -- Card 3: Pedro Overlay Settings
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Pedro Overlay Settings", yOffset)
-    table_insert(allWidgets, card3)
-    table_insert(pedroOnlyWidgets, card3)
+    manager:Register(card3, "pedro")
 
-    -- Overlay Scale
-    local row3a = GUIFrame:CreateRow(card3.content, 40)
-    local scaleSlider = GUIFrame:CreateSlider(row3a, "Overlay Scale", 0.25, 3.0, 0.05, db.Scale or 0.5, 60,
-        function(val)
-            db.Scale = val
-            ApplySettings()
-        end)
+    local row3a = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local scaleSlider = GUIFrame:CreateSlider(row3a, "Overlay Scale", {
+        min = 0.25, max = 3.0, step = 0.05,
+        value = db.Scale or 0.5,
+        callback = function(val) db.Scale = val; ApplySettings() end,
+    })
     row3a:AddWidget(scaleSlider, 1)
-    table_insert(allWidgets, scaleSlider)
-    table_insert(pedroOnlyWidgets, scaleSlider)
-    card3:AddRow(row3a, 40)
+    manager:Register(scaleSlider, "pedro")
+    card3:AddRow(row3a, Theme.rowHeight)
 
-    -- Sound Enable + Channel
-    local row3b = GUIFrame:CreateRow(card3.content, 36)
-    local soundCheck = GUIFrame:CreateCheckbox(row3b, "Enable Sound", db.SoundEnabled ~= false,
-        function(checked)
-            db.SoundEnabled = checked
-        end)
+    local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
+    local soundCheck = GUIFrame:CreateCheckbox(row3b, "Enable Sound", {
+        value = db.SoundEnabled ~= false,
+        callback = function(checked) db.SoundEnabled = checked end,
+    })
     row3b:AddWidget(soundCheck, 0.5)
-    table_insert(allWidgets, soundCheck)
-    table_insert(pedroOnlyWidgets, soundCheck)
+    manager:Register(soundCheck, "pedro")
 
-    local channelList = {
-        { key = "Master", text = "Master" },
-        { key = "SFX", text = "SFX" },
-        { key = "Music", text = "Music" },
-        { key = "Ambience", text = "Ambience" },
-        { key = "Dialog", text = "Dialog" },
-    }
-    local channelDropdown = GUIFrame:CreateDropdown(row3b, "Sound Channel", channelList, db.SoundChannel or "Master", 30,
-        function(key)
-            db.SoundChannel = key
-        end)
+    local channelDropdown = GUIFrame:CreateDropdown(row3b, "Sound Channel", {
+        options = {
+            { key = "Master", text = "Master" },
+            { key = "SFX", text = "SFX" },
+            { key = "Music", text = "Music" },
+            { key = "Ambience", text = "Ambience" },
+            { key = "Dialog", text = "Dialog" },
+        },
+        value = db.SoundChannel or "Master",
+        callback = function(key) db.SoundChannel = key end,
+    })
     row3b:AddWidget(channelDropdown, 0.5)
-    table_insert(allWidgets, channelDropdown)
-    table_insert(pedroOnlyWidgets, channelDropdown)
-    card3:AddRow(row3b, 36)
+    manager:Register(channelDropdown, "pedro")
+    card3:AddRow(row3b, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
+    yOffset = card3:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
-    -- Card 4: Icon Mode Settings
-    ---------------------------------------------------------------------------------
-    local card4 = GUIFrame:CreateCard(scrollChild, "Icon Mode Settings", yOffset)
-    table_insert(allWidgets, card4)
-    table_insert(iconOnlyWidgets, card4)
-
-    local fontList = {}
-    if LSM then
-        for name in pairs(LSM:HashTable("font")) do fontList[name] = name end
-    else
-        fontList["Friz Quadrata TT"] = "Friz Quadrata TT"
+    ----------------------------------------------------------------
+    -- Card 4: Icon Mode — Font Settings
+    ----------------------------------------------------------------
+    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        title = "Icon Mode — Font",
+        db = db,
+        dbKeys = {
+            fontFace = "FontFace",
+            fontSize = "FontSize",
+            fontOutline = "FontOutline",
+        },
+        includeSoftOutline = true,
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(fontCard, "icon")
+    if fontWidgets then
+        manager:RegisterGroup(fontWidgets, "icon")
     end
+    yOffset = fontOffset
 
-    -- Font Face + Font Size
-    local row4a = GUIFrame:CreateRow(card4.content, 40)
-    local fontDropdown = GUIFrame:CreateDropdown(row4a, "Font", fontList, db.FontFace or "Expressway", 30,
-        function(key)
-            db.FontFace = key
-            ApplySettings()
-        end)
-    row4a:AddWidget(fontDropdown, 0.5)
-    table_insert(allWidgets, fontDropdown)
-    table_insert(iconOnlyWidgets, fontDropdown)
+    ----------------------------------------------------------------
+    -- Card 5: Icon Mode — Display
+    ----------------------------------------------------------------
+    local card5 = GUIFrame:CreateCard(scrollChild, "Icon Mode — Display", yOffset)
+    manager:Register(card5, "icon")
 
-    local fontSizeSlider = GUIFrame:CreateSlider(row4a, "Font Size", 8, 72, 1, db.FontSize or 22, 60,
-        function(val)
-            db.FontSize = val
-            ApplySettings()
-        end)
-    row4a:AddWidget(fontSizeSlider, 0.5)
-    table_insert(allWidgets, fontSizeSlider)
-    table_insert(iconOnlyWidgets, fontSizeSlider)
-    card4:AddRow(row4a, 40)
+    local row5a = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
+    local iconSizeSlider = GUIFrame:CreateSlider(row5a, "Icon Size", {
+        min = 16, max = 128, step = 1,
+        value = db.BasicIconSize or 48,
+        callback = function(val) db.BasicIconSize = val; ApplySettings() end,
+    })
+    row5a:AddWidget(iconSizeSlider, 1)
+    manager:Register(iconSizeSlider, "icon")
+    card5:AddRow(row5a, Theme.rowHeight)
 
-    -- Outline + Icon Size
-    local row4b = GUIFrame:CreateRow(card4.content, 40)
-    local outlineList = {
-        { key = "NONE", text = "None" },
-        { key = "OUTLINE", text = "Outline" },
-        { key = "THICKOUTLINE", text = "Thick" },
-        { key = "SOFTOUTLINE", text = "Soft" },
-    }
-    local outlineDropdown = GUIFrame:CreateDropdown(row4b, "Outline", outlineList, db.FontOutline or "SOFTOUTLINE", 45,
-        function(key)
-            db.FontOutline = key
-            ApplySettings()
-        end)
-    row4b:AddWidget(outlineDropdown, 0.5)
-    table_insert(allWidgets, outlineDropdown)
-    table_insert(iconOnlyWidgets, outlineDropdown)
-
-    local iconSizeSlider = GUIFrame:CreateSlider(row4b, "Icon Size", 16, 128, 1, db.BasicIconSize or 48, 60,
-        function(val)
-            db.BasicIconSize = val
-            ApplySettings()
-        end)
-    row4b:AddWidget(iconSizeSlider, 0.5)
-    table_insert(allWidgets, iconSizeSlider)
-    table_insert(iconOnlyWidgets, iconSizeSlider)
-    card4:AddRow(row4b, 40)
-
-    -- Countdown Color
-    local row4c = GUIFrame:CreateRow(card4.content, 40)
-    local colorPicker = GUIFrame:CreateColorPicker(row4c, "Countdown Text Color", db.CountdownColor or { 1, 1, 1, 1 },
-        function(r, g, b, a)
+    local row5b = GUIFrame:CreateRow(card5.content, Theme.rowHeightLast)
+    local colorPicker = GUIFrame:CreateColorPicker(row5b, "Countdown Text Color", {
+        color = db.CountdownColor or { 1, 1, 1, 1 },
+        callback = function(r, g, b, a)
             db.CountdownColor = { r, g, b, a }
             ApplySettings()
-        end)
-    row4c:AddWidget(colorPicker, 1)
-    table_insert(allWidgets, colorPicker)
-    table_insert(iconOnlyWidgets, colorPicker)
-    card4:AddRow(row4c, 40)
+        end,
+    })
+    row5b:AddWidget(colorPicker, 1)
+    manager:Register(colorPicker, "icon")
+    card5:AddRow(row5b, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
+    yOffset = card5:GetNextOffset()
 
-    -- Apply initial widget states
-    UpdateAllWidgetStates()
-    yOffset = yOffset - (Theme.paddingSmall * 3)
+    RefreshStates()
     return yOffset
 end)

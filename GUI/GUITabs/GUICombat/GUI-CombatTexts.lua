@@ -8,23 +8,33 @@
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
-local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
-local table_insert = table.insert
 
 GUIFrame:RegisterContent("CombatTexts", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.CombatTexts
     if not db then
         local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
         errorCard:AddLabel("Database not available")
-        return yOffset + errorCard:GetContentHeight() + Theme.paddingMedium
+        return errorCard:GetNextOffset()
     end
 
-    local allWidgets = {}
-    local bgWidgets = {}
-    local combatMsgWidgets = {}
-    local noTargetWidgets = {}
-    local durabilityWidgets = {}
-    local interruptWidgets = {}
+    db.Backdrop = db.Backdrop or {}
+
+    local manager = GUIFrame:CreateWidgetStateManager()
+    manager:SetCondition("backdrop", function()
+        return db.Backdrop and db.Backdrop.Enabled == true
+    end)
+    manager:SetCondition("combatMsg", function()
+        return db.EnterEnabled ~= false
+    end)
+    manager:SetCondition("noTarget", function()
+        return db.NoTargetEnabled == true
+    end)
+    manager:SetCondition("durability", function()
+        return db.DurabilityEnabled ~= false
+    end)
+    manager:SetCondition("interrupt", function()
+        return db.InterruptEnabled ~= false
+    end)
 
     local function ApplySettings()
         if KitnEssentials then
@@ -45,91 +55,37 @@ GUIFrame:RegisterContent("CombatTexts", function(scrollChild, yOffset)
         end
     end
 
-    local function UpdateAllWidgetStates()
-        local mainEnabled = db.Enabled ~= false
-        local bgEnabled = db.Backdrop and db.Backdrop.Enabled == true
-        local combatEnabled = db.EnterEnabled ~= false
-        local noTargetEnabled = db.NoTargetEnabled == true
-        local durabilityEnabled = db.DurabilityEnabled ~= false
-        local interruptEnabled = db.InterruptEnabled ~= false
-
-        for _, widget in ipairs(allWidgets) do
-            if widget.SetEnabled then
-                widget:SetEnabled(mainEnabled)
-            end
-        end
-
-        if mainEnabled then
-            for _, widget in ipairs(bgWidgets) do
-                if widget.SetEnabled then
-                    widget:SetEnabled(bgEnabled)
-                end
-            end
-            for _, widget in ipairs(combatMsgWidgets) do
-                if widget.SetEnabled then
-                    widget:SetEnabled(combatEnabled)
-                end
-            end
-            for _, widget in ipairs(noTargetWidgets) do
-                if widget.SetEnabled then
-                    widget:SetEnabled(noTargetEnabled)
-                end
-            end
-            for _, widget in ipairs(durabilityWidgets) do
-                if widget.SetEnabled then
-                    widget:SetEnabled(durabilityEnabled)
-                end
-            end
-            for _, widget in ipairs(interruptWidgets) do
-                if widget.SetEnabled then
-                    widget:SetEnabled(interruptEnabled)
-                end
-            end
-        end
+    local function RefreshStates()
+        manager:UpdateAll(db.Enabled ~= false)
     end
 
-    ---------------------------------------------------------------------------------
-    -- Card 1: Combat Texts (Enable + Spacing)
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
+    -- Card 1: Enable
+    ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Combat Texts", yOffset)
 
-    local row1a = GUIFrame:CreateRow(card1.content, 36)
-    local enableCheck = GUIFrame:CreateCheckbox(row1a, "Enable Combat Texts", db.Enabled ~= false, function(checked)
+    local row1a = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local enableCheck = GUIFrame:CreateCheckbox(row1a, "Enable Combat Texts", {
+        value = db.Enabled ~= false,
+        callback = function(checked)
             db.Enabled = checked
             ApplyModuleState(checked)
-            UpdateAllWidgetStates()
+            RefreshStates()
         end,
-        true,
-        "Combat Texts",
-        "On",
-        "Off"
-    )
-    row1a:AddWidget(enableCheck, 0.5)
-    card1:AddRow(row1a, 36)
+        msgPopup = true,
+        msgText = "Combat Texts",
+        msgOn = "On",
+        msgOff = "Off",
+    })
+    row1a:AddWidget(enableCheck, 1)
+    card1:AddRow(row1a, Theme.rowHeightLast, 0)
 
-    -- Separator
-    local row1sep = GUIFrame:CreateRow(card1.content, 8)
-    local sep1 = GUIFrame:CreateSeparator(row1sep)
-    row1sep:AddWidget(sep1, 1)
-    table_insert(allWidgets, sep1)
-    card1:AddRow(row1sep, 8)
+    yOffset = card1:GetNextOffset()
 
-    local row1b = GUIFrame:CreateRow(card1.content, 40)
-    local spacingSlider = GUIFrame:CreateSlider(row1b, "Message Spacing", 0, 20, 1, db.Spacing or 4, 100,
-        function(val)
-            db.Spacing = val
-            ApplySettings()
-        end)
-    row1b:AddWidget(spacingSlider, 1)
-    table_insert(allWidgets, spacingSlider)
-    card1:AddRow(row1b, 40)
-
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
-
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 2: Position Settings
-    ---------------------------------------------------------------------------------
-    local card2, newOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+    ----------------------------------------------------------------
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = db,
         dbKeys = {
             anchorFrameType = "anchorFrameType",
@@ -145,391 +101,358 @@ GUIFrame:RegisterContent("CombatTexts", function(scrollChild, yOffset)
         showPixelSnap = true,
         onChangeCallback = ApplySettings,
     })
-
-    if card2.positionWidgets then
-        for _, widget in ipairs(card2.positionWidgets) do
-            table_insert(allWidgets, widget)
-        end
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
     end
-    table_insert(allWidgets, card2)
-    yOffset = newOffset
+    manager:Register(posCard, "all")
+    yOffset = posOffset
 
-    ---------------------------------------------------------------------------------
-    -- Card 3: Font Settings
-    ---------------------------------------------------------------------------------
-    local card3 = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
-    table_insert(allWidgets, card3)
-
-    local fontList = {}
-    if LSM then
-        for name in pairs(LSM:HashTable("font")) do fontList[name] = name end
-    else
-        fontList["Friz Quadrata TT"] = "Friz Quadrata TT"
+    ----------------------------------------------------------------
+    -- Card 3: Font Settings (Font Size shares row with Message Spacing)
+    ----------------------------------------------------------------
+    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        db = db,
+        dbKeys = {
+            fontFace = "FontFace",
+            fontSize = "FontSize",
+            fontOutline = "FontOutline",
+        },
+        includeSoftOutline = true,
+        extraSlider = {
+            label = "Message Spacing",
+            dbKey = "Spacing",
+            min = 0, max = 20, step = 1,
+            default = 4,
+        },
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(fontCard, "all")
+    if fontWidgets then
+        manager:RegisterGroup(fontWidgets, "all")
     end
+    yOffset = fontOffset
 
-    local row3a = GUIFrame:CreateRow(card3.content, 40)
-    local fontDropdown = GUIFrame:CreateDropdown(row3a, "Font", fontList, db.FontFace or "Expressway", 30,
-        function(key)
-            db.FontFace = key
-            ApplySettings()
-        end)
-    row3a:AddWidget(fontDropdown, 0.5)
-    table_insert(allWidgets, fontDropdown)
-
-    local outlineList = {
-        { key = "NONE",         text = "None" },
-        { key = "OUTLINE",      text = "Outline" },
-        { key = "THICKOUTLINE", text = "Thick" },
-        { key = "SOFTOUTLINE",  text = "Soft" },
-    }
-    local outlineDropdown = GUIFrame:CreateDropdown(row3a, "Outline", outlineList, db.FontOutline or "SOFTOUTLINE", 45,
-        function(key)
-            db.FontOutline = key
-            ApplySettings()
-        end)
-    row3a:AddWidget(outlineDropdown, 0.5)
-    table_insert(allWidgets, outlineDropdown)
-    card3:AddRow(row3a, 40)
-
-    local row3b = GUIFrame:CreateRow(card3.content, 37)
-    local fontSizeSlider = GUIFrame:CreateSlider(row3b, "Font Size", 8, 72, 1, db.FontSize or 16, 60,
-        function(val)
-            db.FontSize = val
-            ApplySettings()
-        end)
-    row3b:AddWidget(fontSizeSlider, 1)
-    table_insert(allWidgets, fontSizeSlider)
-    card3:AddRow(row3b, 37)
-
-    yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
-
-    ---------------------------------------------------------------------------------
-    -- Card 4: Combat Messages (combined Enter + Exit)
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
+    -- Card 4: Combat Messages (Enter + Exit)
+    ----------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Combat Messages", yOffset)
-    table_insert(allWidgets, card4)
+    manager:Register(card4, "all")
 
-    local row4en = GUIFrame:CreateRow(card4.content, 38)
-    local combatEnableCheck = GUIFrame:CreateCheckbox(row4en, "Enabled", db.EnterEnabled ~= false,
-        function(checked)
+    local row4en = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local combatEnableCheck = GUIFrame:CreateCheckbox(row4en, "Enabled", {
+        value = db.EnterEnabled ~= false,
+        callback = function(checked)
             db.EnterEnabled = checked
             db.ExitEnabled = checked
             ApplySettings()
-            UpdateAllWidgetStates()
-        end)
+            RefreshStates()
+        end,
+    })
     row4en:AddWidget(combatEnableCheck, 1)
-    table_insert(allWidgets, combatEnableCheck)
-    card4:AddRow(row4en, 38)
+    manager:Register(combatEnableCheck, "all")
+    card4:AddRow(row4en, Theme.rowHeight)
 
-    -- Separator
-    local row4sep1 = GUIFrame:CreateRow(card4.content, 8)
+    local row4sep1 = GUIFrame:CreateRow(card4.content, Theme.rowHeightSeparator)
     local sep4a = GUIFrame:CreateSeparator(row4sep1)
     row4sep1:AddWidget(sep4a, 1)
-    table_insert(allWidgets, sep4a)
-    table_insert(combatMsgWidgets, sep4a)
-    card4:AddRow(row4sep1, 8)
+    manager:Register(sep4a, "combatMsg")
+    card4:AddRow(row4sep1, Theme.rowHeightSeparator)
 
-    -- Enter Combat row
-    local row4enter = GUIFrame:CreateRow(card4.content, 38)
-    local enterColorPicker = GUIFrame:CreateColorPicker(row4enter, "Enter Color",
-        db.EnterColor or { 1, 0.1, 0.1, 1 },
-        function(r, g, b, a)
+    local row4enter = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local enterColorPicker = GUIFrame:CreateColorPicker(row4enter, "Enter Color", {
+        color = db.EnterColor or { 1, 0.1, 0.1, 1 },
+        callback = function(r, g, b, a)
             db.EnterColor = { r, g, b, a }
             ApplySettings()
-        end)
+        end,
+    })
     row4enter:AddWidget(enterColorPicker, 0.3)
-    table_insert(allWidgets, enterColorPicker)
-    table_insert(combatMsgWidgets, enterColorPicker)
+    manager:Register(enterColorPicker, "combatMsg")
 
-    local enterTextInput = GUIFrame:CreateEditBox(row4enter, "Enter Text", db.EnterCombatText or "+ Combat", function(val)
-        db.EnterCombatText = val
-        ApplySettings()
-    end)
+    local enterTextInput = GUIFrame:CreateEditBox(row4enter, "Enter Text", {
+        value = db.EnterCombatText or "+ Combat",
+        callback = function(val) db.EnterCombatText = val; ApplySettings() end,
+    })
     row4enter:AddWidget(enterTextInput, 0.7)
-    table_insert(allWidgets, enterTextInput)
-    table_insert(combatMsgWidgets, enterTextInput)
-    card4:AddRow(row4enter, 38)
+    manager:Register(enterTextInput, "combatMsg")
+    card4:AddRow(row4enter, Theme.rowHeight)
 
-    -- Exit Combat row
-    local row4exit = GUIFrame:CreateRow(card4.content, 38)
-    local exitColorPicker = GUIFrame:CreateColorPicker(row4exit, "Exit Color",
-        db.ExitColor or { 0.1, 1, 0.1, 1 },
-        function(r, g, b, a)
+    local row4exit = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local exitColorPicker = GUIFrame:CreateColorPicker(row4exit, "Exit Color", {
+        color = db.ExitColor or { 0.1, 1, 0.1, 1 },
+        callback = function(r, g, b, a)
             db.ExitColor = { r, g, b, a }
             ApplySettings()
-        end)
+        end,
+    })
     row4exit:AddWidget(exitColorPicker, 0.3)
-    table_insert(allWidgets, exitColorPicker)
-    table_insert(combatMsgWidgets, exitColorPicker)
+    manager:Register(exitColorPicker, "combatMsg")
 
-    local exitTextInput = GUIFrame:CreateEditBox(row4exit, "Exit Text", db.ExitCombatText or "- Combat", function(val)
-        db.ExitCombatText = val
-        ApplySettings()
-    end)
+    local exitTextInput = GUIFrame:CreateEditBox(row4exit, "Exit Text", {
+        value = db.ExitCombatText or "- Combat",
+        callback = function(val) db.ExitCombatText = val; ApplySettings() end,
+    })
     row4exit:AddWidget(exitTextInput, 0.7)
-    table_insert(allWidgets, exitTextInput)
-    table_insert(combatMsgWidgets, exitTextInput)
-    card4:AddRow(row4exit, 38)
+    manager:Register(exitTextInput, "combatMsg")
+    card4:AddRow(row4exit, Theme.rowHeight)
 
-    -- Separator
-    local row4sep2 = GUIFrame:CreateRow(card4.content, 8)
+    local row4sep2 = GUIFrame:CreateRow(card4.content, Theme.rowHeightSeparator)
     local sep4b = GUIFrame:CreateSeparator(row4sep2)
     row4sep2:AddWidget(sep4b, 1)
-    table_insert(allWidgets, sep4b)
-    table_insert(combatMsgWidgets, sep4b)
-    card4:AddRow(row4sep2, 8)
+    manager:Register(sep4b, "combatMsg")
+    card4:AddRow(row4sep2, Theme.rowHeightSeparator)
 
-    -- Fade Duration
-    local row4dur = GUIFrame:CreateRow(card4.content, 40)
-    local combatDurationSlider = GUIFrame:CreateSlider(row4dur, "Fade Duration", 0.5, 5.0, 0.1,
-        db.CombatDuration or 1.5, 90,
-        function(val)
-            db.CombatDuration = val
-            ApplySettings()
-        end)
+    local row4dur = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
+    local combatDurationSlider = GUIFrame:CreateSlider(row4dur, "Fade Duration", {
+        min = 0.5, max = 5.0, step = 0.1,
+        value = db.CombatDuration or 1.5,
+        callback = function(val) db.CombatDuration = val; ApplySettings() end,
+    })
     row4dur:AddWidget(combatDurationSlider, 1)
-    table_insert(allWidgets, combatDurationSlider)
-    table_insert(combatMsgWidgets, combatDurationSlider)
-    card4:AddRow(row4dur, 40)
+    manager:Register(combatDurationSlider, "combatMsg")
+    card4:AddRow(row4dur, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
+    yOffset = card4:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 5: No Target Warning
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "No Target Warning", yOffset)
-    table_insert(allWidgets, card5)
+    manager:Register(card5, "all")
 
-    local row5nt = GUIFrame:CreateRow(card5.content, 38)
-    local noTargetEnableCheck = GUIFrame:CreateCheckbox(row5nt, "Enabled", db.NoTargetEnabled == true,
-        function(checked)
+    local row5nt = GUIFrame:CreateRow(card5.content, Theme.rowHeightLast)
+    local noTargetEnableCheck = GUIFrame:CreateCheckbox(row5nt, "Enabled", {
+        value = db.NoTargetEnabled == true,
+        callback = function(checked)
             db.NoTargetEnabled = checked
             ApplySettings()
-            UpdateAllWidgetStates()
-        end)
+            RefreshStates()
+        end,
+    })
     row5nt:AddWidget(noTargetEnableCheck, 0.2)
-    table_insert(allWidgets, noTargetEnableCheck)
+    manager:Register(noTargetEnableCheck, "all")
 
-    local noTargetColorPicker = GUIFrame:CreateColorPicker(row5nt, "Color",
-        db.NoTargetColor or { 1, 0.8, 0, 1 },
-        function(r, g, b, a)
+    local noTargetColorPicker = GUIFrame:CreateColorPicker(row5nt, "Color", {
+        color = db.NoTargetColor or { 1, 0.8, 0, 1 },
+        callback = function(r, g, b, a)
             db.NoTargetColor = { r, g, b, a }
             ApplySettings()
-        end)
+        end,
+    })
     row5nt:AddWidget(noTargetColorPicker, 0.3)
-    table_insert(allWidgets, noTargetColorPicker)
-    table_insert(noTargetWidgets, noTargetColorPicker)
+    manager:Register(noTargetColorPicker, "noTarget")
 
-    local noTargetTextInput = GUIFrame:CreateEditBox(row5nt, "Text", db.NoTargetText or "NO TARGET", function(val)
-        db.NoTargetText = val
-        ApplySettings()
-    end)
+    local noTargetTextInput = GUIFrame:CreateEditBox(row5nt, "Text", {
+        value = db.NoTargetText or "NO TARGET",
+        callback = function(val) db.NoTargetText = val; ApplySettings() end,
+    })
     row5nt:AddWidget(noTargetTextInput, 0.5)
-    table_insert(allWidgets, noTargetTextInput)
-    table_insert(noTargetWidgets, noTargetTextInput)
-    card5:AddRow(row5nt, 38)
+    manager:Register(noTargetTextInput, "noTarget")
+    card5:AddRow(row5nt, Theme.rowHeightLast)
 
-    card5:AddLabel("|cff888888Shows persistent warning when in combat with no target selected|r")
+    local row5note = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
+    local note5 = GUIFrame:CreateText(row5note,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " Shows persistent warning when in combat with no target selected.",
+        Theme.rowHeight, "hide")
+    row5note:AddWidget(note5, 1)
+    manager:Register(note5, "noTarget")
+    card5:AddRow(row5note, Theme.rowHeight, 0)
 
-    yOffset = yOffset + card5:GetContentHeight() + Theme.paddingSmall
+    yOffset = card5:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 6: Interrupt Text
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card6 = GUIFrame:CreateCard(scrollChild, "Interrupt Text", yOffset)
-    table_insert(allWidgets, card6)
+    manager:Register(card6, "all")
 
-    local row6a = GUIFrame:CreateRow(card6.content, 38)
-    local intEnableCheck = GUIFrame:CreateCheckbox(row6a, "Enabled", db.InterruptEnabled ~= false,
-        function(checked)
+    local row6a = GUIFrame:CreateRow(card6.content, Theme.rowHeight)
+    local intEnableCheck = GUIFrame:CreateCheckbox(row6a, "Enabled", {
+        value = db.InterruptEnabled ~= false,
+        callback = function(checked)
             db.InterruptEnabled = checked
             ApplySettings()
-            UpdateAllWidgetStates()
-        end)
+            RefreshStates()
+        end,
+    })
     row6a:AddWidget(intEnableCheck, 0.2)
-    table_insert(allWidgets, intEnableCheck)
+    manager:Register(intEnableCheck, "all")
 
-    local intColorPicker = GUIFrame:CreateColorPicker(row6a, "Color",
-        db.InterruptColor or { 1, 1, 1, 1 },
-        function(r, g, b, a)
+    local intColorPicker = GUIFrame:CreateColorPicker(row6a, "Color", {
+        color = db.InterruptColor or { 1, 1, 1, 1 },
+        callback = function(r, g, b, a)
             db.InterruptColor = { r, g, b, a }
             ApplySettings()
-        end)
+        end,
+    })
     row6a:AddWidget(intColorPicker, 0.3)
-    table_insert(allWidgets, intColorPicker)
-    table_insert(interruptWidgets, intColorPicker)
+    manager:Register(intColorPicker, "interrupt")
 
-    local intTextInput = GUIFrame:CreateEditBox(row6a, "Text", db.InterruptText or "Interrupted", function(val)
-        db.InterruptText = val
-        ApplySettings()
-    end)
+    local intTextInput = GUIFrame:CreateEditBox(row6a, "Text", {
+        value = db.InterruptText or "Interrupted",
+        callback = function(val) db.InterruptText = val; ApplySettings() end,
+    })
     row6a:AddWidget(intTextInput, 0.5)
-    table_insert(allWidgets, intTextInput)
-    table_insert(interruptWidgets, intTextInput)
-    card6:AddRow(row6a, 38)
+    manager:Register(intTextInput, "interrupt")
+    card6:AddRow(row6a, Theme.rowHeight)
 
-    -- Separator
-    local row6sep = GUIFrame:CreateRow(card6.content, 8)
+    local row6sep = GUIFrame:CreateRow(card6.content, Theme.rowHeightSeparator)
     local sep6 = GUIFrame:CreateSeparator(row6sep)
     row6sep:AddWidget(sep6, 1)
-    table_insert(allWidgets, sep6)
-    table_insert(interruptWidgets, sep6)
-    card6:AddRow(row6sep, 8)
+    manager:Register(sep6, "interrupt")
+    card6:AddRow(row6sep, Theme.rowHeightSeparator)
 
-    local row6b = GUIFrame:CreateRow(card6.content, 40)
-    local intDurationSlider = GUIFrame:CreateSlider(row6b, "Fade Duration", 0.5, 8.0, 0.1,
-        db.InterruptDuration or 3.0, 90,
-        function(val)
-            db.InterruptDuration = val
-            ApplySettings()
-        end)
+    local row6b = GUIFrame:CreateRow(card6.content, Theme.rowHeightLast)
+    local intDurationSlider = GUIFrame:CreateSlider(row6b, "Fade Duration", {
+        min = 0.5, max = 8.0, step = 0.1,
+        value = db.InterruptDuration or 3.0,
+        callback = function(val) db.InterruptDuration = val; ApplySettings() end,
+    })
     row6b:AddWidget(intDurationSlider, 1)
-    table_insert(allWidgets, intDurationSlider)
-    table_insert(interruptWidgets, intDurationSlider)
-    card6:AddRow(row6b, 40)
+    manager:Register(intDurationSlider, "interrupt")
+    card6:AddRow(row6b, Theme.rowHeightLast)
 
-    card6:AddLabel("|cff888888Displays: [text] [spell icon] [spell name] on successful interrupt|r")
+    local row6note = GUIFrame:CreateRow(card6.content, Theme.rowHeight)
+    local note6 = GUIFrame:CreateText(row6note,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " Displays [text] [spell icon] [spell name] on successful interrupt.",
+        Theme.rowHeight, "hide")
+    row6note:AddWidget(note6, 1)
+    manager:Register(note6, "interrupt")
+    card6:AddRow(row6note, Theme.rowHeight, 0)
 
-    yOffset = yOffset + card6:GetContentHeight() + Theme.paddingSmall
+    yOffset = card6:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 7: Low Durability Warning
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card7 = GUIFrame:CreateCard(scrollChild, "Low Durability Warning", yOffset)
-    table_insert(allWidgets, card7)
+    manager:Register(card7, "all")
 
-    local row7a = GUIFrame:CreateRow(card7.content, 38)
-    local durabilityEnableCheck = GUIFrame:CreateCheckbox(row7a, "Enabled", db.DurabilityEnabled ~= false,
-        function(checked)
+    local row7a = GUIFrame:CreateRow(card7.content, Theme.rowHeight)
+    local durabilityEnableCheck = GUIFrame:CreateCheckbox(row7a, "Enabled", {
+        value = db.DurabilityEnabled ~= false,
+        callback = function(checked)
             db.DurabilityEnabled = checked
             ApplySettings()
-            UpdateAllWidgetStates()
-        end)
+            RefreshStates()
+        end,
+    })
     row7a:AddWidget(durabilityEnableCheck, 0.2)
-    table_insert(allWidgets, durabilityEnableCheck)
+    manager:Register(durabilityEnableCheck, "all")
 
-    local durabilityColorPicker = GUIFrame:CreateColorPicker(row7a, "Color",
-        db.DurabilityColor or { 1, 0.3, 0.3, 1 },
-        function(r, g, b, a)
+    local durabilityColorPicker = GUIFrame:CreateColorPicker(row7a, "Color", {
+        color = db.DurabilityColor or { 1, 0.3, 0.3, 1 },
+        callback = function(r, g, b, a)
             db.DurabilityColor = { r, g, b, a }
             ApplySettings()
-        end)
+        end,
+    })
     row7a:AddWidget(durabilityColorPicker, 0.3)
-    table_insert(allWidgets, durabilityColorPicker)
-    table_insert(durabilityWidgets, durabilityColorPicker)
+    manager:Register(durabilityColorPicker, "durability")
 
-    local durabilityTextInput = GUIFrame:CreateEditBox(row7a, "Text", db.DurabilityText or "LOW DURABILITY", function(val)
-        db.DurabilityText = val
-        ApplySettings()
-    end)
+    local durabilityTextInput = GUIFrame:CreateEditBox(row7a, "Text", {
+        value = db.DurabilityText or "LOW DURABILITY",
+        callback = function(val) db.DurabilityText = val; ApplySettings() end,
+    })
     row7a:AddWidget(durabilityTextInput, 0.5)
-    table_insert(allWidgets, durabilityTextInput)
-    table_insert(durabilityWidgets, durabilityTextInput)
-    card7:AddRow(row7a, 38)
+    manager:Register(durabilityTextInput, "durability")
+    card7:AddRow(row7a, Theme.rowHeight)
 
-    -- Separator
-    local row7sep = GUIFrame:CreateRow(card7.content, 8)
+    local row7sep = GUIFrame:CreateRow(card7.content, Theme.rowHeightSeparator)
     local sep7 = GUIFrame:CreateSeparator(row7sep)
     row7sep:AddWidget(sep7, 1)
-    table_insert(allWidgets, sep7)
-    table_insert(durabilityWidgets, sep7)
-    card7:AddRow(row7sep, 8)
+    manager:Register(sep7, "durability")
+    card7:AddRow(row7sep, Theme.rowHeightSeparator)
 
-    -- Threshold slider
-    local row7b = GUIFrame:CreateRow(card7.content, 40)
-    local thresholdSlider = GUIFrame:CreateSlider(row7b, "Durability Threshold (%)", 5, 50, 1,
-        db.DurabilityThreshold or 25, nil,
-        function(val)
-            db.DurabilityThreshold = val
-            ApplySettings()
-        end)
+    local row7b = GUIFrame:CreateRow(card7.content, Theme.rowHeightLast)
+    local thresholdSlider = GUIFrame:CreateSlider(row7b, "Durability Threshold (%)", {
+        min = 5, max = 50, step = 1,
+        value = db.DurabilityThreshold or 25,
+        callback = function(val) db.DurabilityThreshold = val; ApplySettings() end,
+    })
     row7b:AddWidget(thresholdSlider, 1)
-    table_insert(allWidgets, thresholdSlider)
-    table_insert(durabilityWidgets, thresholdSlider)
-    card7:AddRow(row7b, 40)
+    manager:Register(thresholdSlider, "durability")
+    card7:AddRow(row7b, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card7:GetContentHeight() + Theme.paddingSmall
+    yOffset = card7:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 8: Backdrop
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card8 = GUIFrame:CreateCard(scrollChild, "Backdrop", yOffset)
-    table_insert(allWidgets, card8)
-    db.Backdrop = db.Backdrop or {}
+    manager:Register(card8, "all")
 
-    local row8a = GUIFrame:CreateRow(card8.content, 39)
-    local backdropCheck = GUIFrame:CreateCheckbox(row8a, "Enable Backdrop", db.Backdrop.Enabled ~= false,
-        function(checked)
+    local row8a = GUIFrame:CreateRow(card8.content, Theme.rowHeight)
+    local backdropCheck = GUIFrame:CreateCheckbox(row8a, "Enable Backdrop", {
+        value = db.Backdrop.Enabled ~= false,
+        callback = function(checked)
             db.Backdrop.Enabled = checked
             ApplySettings()
-            UpdateAllWidgetStates()
-        end)
+            RefreshStates()
+        end,
+    })
     row8a:AddWidget(backdropCheck, 1)
-    table_insert(allWidgets, backdropCheck)
-    card8:AddRow(row8a, 39)
+    manager:Register(backdropCheck, "all")
+    card8:AddRow(row8a, Theme.rowHeight)
 
-    local row8b = GUIFrame:CreateRow(card8.content, 39)
-    local bgWidth = GUIFrame:CreateSlider(row8b, "Backdrop Width", 1, 600, 1, db.Backdrop.bgWidth or 100, 0,
-        function(val)
-            db.Backdrop.bgWidth = val
-            ApplySettings()
-        end)
+    local row8b = GUIFrame:CreateRow(card8.content, Theme.rowHeight)
+    local bgWidth = GUIFrame:CreateSlider(row8b, "Width", {
+        min = 1, max = 600, step = 1,
+        value = db.Backdrop.bgWidth or 100,
+        callback = function(val) db.Backdrop.bgWidth = val; ApplySettings() end,
+    })
     row8b:AddWidget(bgWidth, 0.4)
-    table_insert(allWidgets, bgWidth)
-    table_insert(bgWidgets, bgWidth)
+    manager:Register(bgWidth, "backdrop")
 
-    local bgHeight = GUIFrame:CreateSlider(row8b, "Backdrop Height", 1, 600, 1, db.Backdrop.bgHeight or 40, 0,
-        function(val)
-            db.Backdrop.bgHeight = val
-            ApplySettings()
-        end)
-    row8b:AddWidget(bgHeight, 0.39)
-    table_insert(allWidgets, bgHeight)
-    table_insert(bgWidgets, bgHeight)
+    local bgHeight = GUIFrame:CreateSlider(row8b, "Height", {
+        min = 1, max = 600, step = 1,
+        value = db.Backdrop.bgHeight or 40,
+        callback = function(val) db.Backdrop.bgHeight = val; ApplySettings() end,
+    })
+    row8b:AddWidget(bgHeight, 0.4)
+    manager:Register(bgHeight, "backdrop")
 
-    local bgColor = GUIFrame:CreateColorPicker(row8b, "Backdrop Color", db.Backdrop.Color or { 0, 0, 0, 0.6 },
-        function(r, g, b, a)
+    local bgColor = GUIFrame:CreateColorPicker(row8b, "Color", {
+        color = db.Backdrop.Color or { 0, 0, 0, 0.6 },
+        callback = function(r, g, b, a)
             db.Backdrop.Color = { r, g, b, a }
             ApplySettings()
-        end)
-    row8b:AddWidget(bgColor, 0.21)
-    table_insert(allWidgets, bgColor)
-    table_insert(bgWidgets, bgColor)
-    card8:AddRow(row8b, 39)
+        end,
+    })
+    row8b:AddWidget(bgColor, 0.2)
+    manager:Register(bgColor, "backdrop")
+    card8:AddRow(row8b, Theme.rowHeight)
 
-    -- Separator
-    local row8sep = GUIFrame:CreateRow(card8.content, 8)
+    local row8sep = GUIFrame:CreateRow(card8.content, Theme.rowHeightSeparator)
     local sepBg = GUIFrame:CreateSeparator(row8sep)
     row8sep:AddWidget(sepBg, 1)
-    table_insert(allWidgets, sepBg)
-    table_insert(bgWidgets, sepBg)
-    card8:AddRow(row8sep, 8)
+    manager:Register(sepBg, "backdrop")
+    card8:AddRow(row8sep, Theme.rowHeightSeparator)
 
-    local row8c = GUIFrame:CreateRow(card8.content, 39)
-    local borderSize = GUIFrame:CreateSlider(row8c, "Border Size", 1, 10, 1, db.Backdrop.BorderSize or 1, 0,
-        function(val)
-            db.Backdrop.BorderSize = val
-            ApplySettings()
-        end)
-    row8c:AddWidget(borderSize, 0.79)
-    table_insert(allWidgets, borderSize)
-    table_insert(bgWidgets, borderSize)
+    local row8c = GUIFrame:CreateRow(card8.content, Theme.rowHeightLast)
+    local borderSize = GUIFrame:CreateSlider(row8c, "Border Size", {
+        min = 1, max = 10, step = 1,
+        value = db.Backdrop.BorderSize or 1,
+        callback = function(val) db.Backdrop.BorderSize = val; ApplySettings() end,
+    })
+    row8c:AddWidget(borderSize, 0.8)
+    manager:Register(borderSize, "backdrop")
 
-    local borderColor = GUIFrame:CreateColorPicker(row8c, "Border Color",
-        db.Backdrop.BorderColor or { 0, 0, 0, 1 },
-        function(r, g, b, a)
+    local borderColor = GUIFrame:CreateColorPicker(row8c, "Border Color", {
+        color = db.Backdrop.BorderColor or { 0, 0, 0, 1 },
+        callback = function(r, g, b, a)
             db.Backdrop.BorderColor = { r, g, b, a }
             ApplySettings()
-        end)
-    row8c:AddWidget(borderColor, 0.21)
-    table_insert(allWidgets, borderColor)
-    table_insert(bgWidgets, borderColor)
-    card8:AddRow(row8c, 39)
+        end,
+    })
+    row8c:AddWidget(borderColor, 0.2)
+    manager:Register(borderColor, "backdrop")
+    card8:AddRow(row8c, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card8:GetContentHeight() + Theme.paddingSmall
+    yOffset = card8:GetNextOffset()
 
-    -- Apply initial widget states
-    UpdateAllWidgetStates()
-    yOffset = yOffset - (Theme.paddingSmall * 3)
+    RefreshStates()
     return yOffset
 end)

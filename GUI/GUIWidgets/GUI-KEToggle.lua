@@ -17,9 +17,16 @@ local select = select
 -- Widget Creation
 ---------------------------------------------------------------------------------
 
--- Checkbox Widget
-function GUIFrame:CreateCheckbox(parent, labelText, initialState, onValueChanged, msgPopup, msgText, msgOn, msgOff)
-    local tooltip = nil
+-- Checkbox Widget — config-table API: { value, callback, msgPopup, msgText, msgOn, msgOff, tooltip }
+function GUIFrame:CreateCheckbox(parent, labelText, config)
+    config = config or {}
+    local initialState = config.value
+    local onValueChanged = config.callback
+    local msgPopup = config.msgPopup
+    local msgText = config.msgText
+    local msgOn = config.msgOn
+    local msgOff = config.msgOff
+    local tooltip = config.tooltip
     local customHeight = nil
     local TOGGLE_WIDTH = 48
     local TOGGLE_HEIGHT = 24
@@ -238,7 +245,7 @@ function GUIFrame:CreateCheckbox(parent, labelText, initialState, onValueChanged
         end
     end)
 
-    button:SetScript("OnEnter", function()
+    button:SetScript("OnEnter", function(self)
         local hoverBrightness = 1.2
         knobTexture:SetColorTexture(
             Theme.accent[1] * hoverBrightness,

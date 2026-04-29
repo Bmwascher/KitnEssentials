@@ -190,9 +190,9 @@ function DT:CreateTick(index)
     if not anchor then return nil end
 
     local db = self.db
-    local color = db.TickColor or { 1, 1, 1, 0.8 }
+    local r, g, b, a = KE:ResolveColor(db.TickColor, { 1, 1, 1, 0.8 })
     local tick = anchor:CreateTexture("KE_DisintegrateTick" .. index, "OVERLAY")
-    tick:SetColorTexture(color[1], color[2], color[3], color[4])
+    tick:SetColorTexture(r, g, b, a)
     tick:Hide()
     return tick
 end
@@ -246,9 +246,9 @@ end
 
 function DT:ApplyTickColor()
     local db = self.db
-    local color = db.TickColor or { 1, 1, 1, 0.8 }
+    local r, g, b, a = KE:ResolveColor(db.TickColor, { 1, 1, 1, 0.8 })
     for _, tick in next, self.ticks do
-        tick:SetColorTexture(color[1], color[2], color[3], color[4])
+        tick:SetColorTexture(r, g, b, a)
     end
 end
 
@@ -288,8 +288,8 @@ function DT:ApplyWarningSettings()
     )
 
     self.warningText:SetText(cw.Text or "DON'T CLIP")
-    local color = cw.Color or { 1, 0, 0, 1 }
-    self.warningText:SetTextColor(color[1], color[2], color[3], color[4] or 1)
+    local cr, cg, cb, ca = KE:ResolveColor(cw.Color, { 1, 0, 0, 1 })
+    self.warningText:SetTextColor(cr, cg, cb, ca)
 
     -- ApplyFontToText may create/show soft outline shadows — hide them
     -- ShowWarning() will re-show when actually needed during combat
@@ -300,7 +300,7 @@ end
 
 function DT:UpdateWarningPosition()
     if not self.warningFrame then return end
-    KE:ApplyFramePosition(self.warningFrame, self.db.Position, self.db)
+    KE:ApplyFramePositionWithSnap(self.warningFrame, self.db.Position, self.db)
 end
 
 function DT:ShowWarning()

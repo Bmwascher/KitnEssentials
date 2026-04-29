@@ -20,18 +20,21 @@ local GetTime = GetTime
 -- Widget Creation
 ---------------------------------------------------------------------------------
 
--- Slider widget
-function GUIFrame:CreateSlider(parent, labelText, min, max, step, value, labelWidth, callback)
-    local tooltip = nil
+-- Slider widget — config-table API: { min, max, step, value, callback, tooltip, isPercent }
+-- TODO: `labelWidth` accepted in API for forward-compat with NUI v3.7 but not
+-- yet wired into the widget body. Callers (e.g. `labelWidth = 60`) won't see
+-- the effect — config key passes silently. Implement when needed.
+function GUIFrame:CreateSlider(parent, labelText, config)
+    config = config or {}
+    local min = tonumber(config.min) or 0
+    local max = tonumber(config.max) or 100
+    local step = tonumber(config.step) or 1
+    local value = tonumber(config.value) or min
+    local callback = config.callback
+    local tooltip = config.tooltip
+    local isPercent = config.isPercent
     local customHeight = nil
-    local isPercent = nil
     local stepperTexture = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.tga"
-
-    -- Ensure min/max are valid numbers
-    min = tonumber(min) or 0
-    max = tonumber(max) or 100
-    step = tonumber(step) or 1
-    value = tonumber(value) or min
 
     -- Row
     local rowHeight = customHeight or 36

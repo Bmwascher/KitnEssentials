@@ -235,8 +235,8 @@ function BLT:StartAnimation()
         self.iconFrame:Show()
         self.countdownText:Show()
         ShowSoftOutline(self.countdownText)
-        local color = self.db.CountdownColor or { 1, 1, 1, 1 }
-        self.countdownText:SetTextColor(color[1], color[2], color[3], color[4] or 1)
+        local r, g, b, a = KE:ResolveColor(self.db.CountdownColor, { 1, 1, 1, 1 })
+        self.countdownText:SetTextColor(r, g, b, a)
 
         self.frame:SetScript("OnUpdate", function(_, dt) self:BasicOnUpdate(dt) end)
     end
@@ -530,8 +530,8 @@ function BLT:ApplySettings()
         self:CalculateSpriteSheetLayout()
     else
         KE:ApplyFontToText(self.countdownText, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
-        local color = self.db.CountdownColor or { 1, 1, 1, 1 }
-        self.countdownText:SetTextColor(color[1], color[2], color[3], color[4] or 1)
+        local r, g, b, a = KE:ResolveColor(self.db.CountdownColor, { 1, 1, 1, 1 })
+        self.countdownText:SetTextColor(r, g, b, a)
         self.iconFrame:SetSize(self.db.BasicIconSize, self.db.BasicIconSize)
         self.frame:SetSize(self.db.BasicIconSize, self.db.BasicIconSize)
     end
@@ -588,8 +588,8 @@ function BLT:ShowPreview()
         self.spriteTexture:Hide()
         self.iconFrame:Show()
         KE:ApplyFontToText(self.countdownText, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
-        local color = self.db.CountdownColor or { 1, 1, 1, 1 }
-        self.countdownText:SetTextColor(color[1], color[2], color[3], color[4] or 1)
+        local r, g, b, a = KE:ResolveColor(self.db.CountdownColor, { 1, 1, 1, 1 })
+        self.countdownText:SetTextColor(r, g, b, a)
         self.countdownText:SetText("40")
         self.countdownText:Show()
         ShowSoftOutline(self.countdownText)

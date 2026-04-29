@@ -39,7 +39,7 @@ GUIFrame:RegisterContent("Profiles", function(scrollChild, yOffset)
     if not PM then
         local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
         errorCard:AddLabel("ProfileManager not initialized. Please reload UI.")
-        return yOffset + errorCard:GetContentHeight() + Theme.paddingSmall
+        return errorCard:GetNextOffset()
     end
 
     ---------------------------------------------------------------------------------
@@ -52,9 +52,12 @@ GUIFrame:RegisterContent("Profiles", function(scrollChild, yOffset)
     local profileOptions = BuildProfileOptions()
     local noGlobal = useGlobal == false
 
-    local row1 = GUIFrame:CreateRow(card1.content, 40)
-    local profileDropdown = GUIFrame:CreateDropdown(row1, "Active Profile", profileOptions, currentProfile, 100,
-        function(key)
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local profileDropdown = GUIFrame:CreateDropdown(row1, "Active Profile", {
+        options = profileOptions,
+        value = currentProfile,
+        labelWidth = 100,
+        callback = function(key)
             if key == currentProfile then return end
 
             local success, err = PM:SetProfile(key)
@@ -63,16 +66,17 @@ GUIFrame:RegisterContent("Profiles", function(scrollChild, yOffset)
             else
                 KE:CreateReloadPrompt("Profile changed. Reload UI to apply?")
             end
-        end)
+        end,
+    })
     row1:AddWidget(profileDropdown, 1)
-    card1:AddRow(row1, 40)
+    card1:AddRow(row1, Theme.rowHeightLast, 0)
 
     profileDropdown:SetEnabled(noGlobal)
 
     local descLabel = card1:AddLabel("Select which profile to use for this character.")
     descLabel:SetTextColor(Theme.textMuted[1], Theme.textMuted[2], Theme.textMuted[3], 1)
 
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+    yOffset = card1:GetNextOffset()
 
     ---------------------------------------------------------------------------------
     -- Card 2: Global Profile
@@ -82,9 +86,10 @@ GUIFrame:RegisterContent("Profiles", function(scrollChild, yOffset)
     local globalProfile = PM:GetGlobalProfile()
 
     -- Toggle for global mode
-    local row2a = GUIFrame:CreateRow(card2.content, 36)
-    local globalToggle = GUIFrame:CreateCheckbox(row2a, "Use Global Profile", useGlobal,
-        function(newState)
+    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local globalToggle = GUIFrame:CreateCheckbox(row2a, "Use Global Profile", {
+        value = useGlobal,
+        callback = function(newState)
             local success = PM:SetUseGlobalProfile(newState)
             if success then
                 if not newState then
@@ -96,14 +101,18 @@ GUIFrame:RegisterContent("Profiles", function(scrollChild, yOffset)
                     end)
                 end
             end
-        end)
+        end,
+    })
     row2a:AddWidget(globalToggle, 1)
-    card2:AddRow(row2a, 36)
+    card2:AddRow(row2a, Theme.rowHeight)
 
     -- Global profile selection
-    local row2b = GUIFrame:CreateRow(card2.content, 40)
-    local globalDropdown = GUIFrame:CreateDropdown(row2b, "Global Profile", profileOptions, globalProfile, 100,
-        function(key)
+    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local globalDropdown = GUIFrame:CreateDropdown(row2b, "Global Profile", {
+        options = profileOptions,
+        value = globalProfile,
+        labelWidth = 100,
+        callback = function(key)
             local success, err = PM:SetGlobalProfile(key)
             if not success then
                 KE:Print("Failed to set global profile: " .. (err or "Unknown error"))
@@ -112,9 +121,10 @@ GUIFrame:RegisterContent("Profiles", function(scrollChild, yOffset)
                     KE:Print("Global profile set to: " .. key)
                 end
             end
-        end)
+        end,
+    })
     row2b:AddWidget(globalDropdown, 1)
-    card2:AddRow(row2b, 40)
+    card2:AddRow(row2b, Theme.rowHeightLast, 0)
 
     -- Enable/disable global dropdown based on toggle state
     globalDropdown:SetEnabled(useGlobal)
@@ -123,7 +133,7 @@ GUIFrame:RegisterContent("Profiles", function(scrollChild, yOffset)
     local globalDesc = card2:AddLabel("When enabled, all characters will use the same profile.")
     globalDesc:SetTextColor(Theme.textMuted[1], Theme.textMuted[2], Theme.textMuted[3], 1)
 
-    yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
+    yOffset = card2:GetNextOffset()
 
     ---------------------------------------------------------------------------------
     -- Card 3: Profile Actions
@@ -133,8 +143,11 @@ GUIFrame:RegisterContent("Profiles", function(scrollChild, yOffset)
     -- Create New Profile
     card3:AddLabel("Create New Profile")
 
-    local row3a = GUIFrame:CreateRow(card3.content, 40)
-    local newProfileInput = GUIFrame:CreateEditBox(row3a, "Profile Name", "", function() end)
+    local row3a = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local newProfileInput = GUIFrame:CreateEditBox(row3a, "Profile Name", {
+        value = "",
+        callback = function() end,
+    })
     row3a:AddWidget(newProfileInput, 0.65)
 
     local createBtn = GUIFrame:CreateButton(row3a, "Create", {
@@ -161,19 +174,24 @@ GUIFrame:RegisterContent("Profiles", function(scrollChild, yOffset)
         end
     })
     row3a:AddWidget(createBtn, 0.35, nil, 0, -14)
-    card3:AddRow(row3a, 40)
+    card3:AddRow(row3a, Theme.rowHeight)
 
     -- Separator
-    local row3asep = GUIFrame:CreateRow(card3.content, 8)
+    local row3asep = GUIFrame:CreateRow(card3.content, Theme.rowHeightSeparator)
     local seprow3a = GUIFrame:CreateSeparator(row3asep)
     row3asep:AddWidget(seprow3a, 1)
-    card3:AddRow(row3asep, 8)
+    card3:AddRow(row3asep, Theme.rowHeightSeparator)
 
     -- Copy Profile
     card3:AddLabel("Copy From Profile")
 
-    local row3b = GUIFrame:CreateRow(card3.content, 40)
-    local copyDropdown = GUIFrame:CreateDropdown(row3b, "Source Profile", profileOptions, "", 100, function() end)
+    local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local copyDropdown = GUIFrame:CreateDropdown(row3b, "Source Profile", {
+        options = profileOptions,
+        value = "",
+        labelWidth = 100,
+        callback = function() end,
+    })
     row3b:AddWidget(copyDropdown, 0.65)
 
     local copyBtn = GUIFrame:CreateButton(row3b, "Copy", {
@@ -203,19 +221,24 @@ GUIFrame:RegisterContent("Profiles", function(scrollChild, yOffset)
         end
     })
     row3b:AddWidget(copyBtn, 0.35, nil, 0, -14)
-    card3:AddRow(row3b, 40)
+    card3:AddRow(row3b, Theme.rowHeight)
 
     -- Separator
-    local row3bsep = GUIFrame:CreateRow(card3.content, 8)
+    local row3bsep = GUIFrame:CreateRow(card3.content, Theme.rowHeightSeparator)
     local seprow3b = GUIFrame:CreateSeparator(row3bsep)
     row3bsep:AddWidget(seprow3b, 1)
-    card3:AddRow(row3bsep, 8)
+    card3:AddRow(row3bsep, Theme.rowHeightSeparator)
 
     -- Delete Profile
     card3:AddLabel("Delete Profile")
 
-    local row3c = GUIFrame:CreateRow(card3.content, 40)
-    local deleteDropdown = GUIFrame:CreateDropdown(row3c, "Profile to Delete", profileOptions, "", 100, function() end)
+    local row3c = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local deleteDropdown = GUIFrame:CreateDropdown(row3c, "Profile to Delete", {
+        options = profileOptions,
+        value = "",
+        labelWidth = 100,
+        callback = function() end,
+    })
     row3c:AddWidget(deleteDropdown, 0.65)
 
     local deleteBtn = GUIFrame:CreateButton(row3c, "Delete", {
@@ -255,16 +278,16 @@ GUIFrame:RegisterContent("Profiles", function(scrollChild, yOffset)
         end
     })
     row3c:AddWidget(deleteBtn, 0.35, nil, 0, -14)
-    card3:AddRow(row3c, 40)
+    card3:AddRow(row3c, Theme.rowHeight)
 
     -- Separator
-    local row3dsep = GUIFrame:CreateRow(card3.content, 8)
+    local row3dsep = GUIFrame:CreateRow(card3.content, Theme.rowHeightSeparator)
     local seprow3d = GUIFrame:CreateSeparator(row3dsep)
     row3dsep:AddWidget(seprow3d, 1)
-    card3:AddRow(row3dsep, 8)
+    card3:AddRow(row3dsep, Theme.rowHeightSeparator)
 
     -- Reset Profile
-    local row3d = GUIFrame:CreateRow(card3.content, 36)
+    local row3d = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
     local resetBtn = GUIFrame:CreateButton(row3d, "Reset Current Profile to Defaults", {
         callback = function()
             KE:CreatePrompt(
@@ -284,9 +307,9 @@ GUIFrame:RegisterContent("Profiles", function(scrollChild, yOffset)
         end
     })
     row3d:AddWidget(resetBtn, 1)
-    card3:AddRow(row3d, 36)
+    card3:AddRow(row3d, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
+    yOffset = card3:GetNextOffset()
 
     ---------------------------------------------------------------------------------
     -- Card 4: Import/Export
@@ -296,7 +319,7 @@ GUIFrame:RegisterContent("Profiles", function(scrollChild, yOffset)
     -- Import section
     card4:AddLabel("Import Profile")
 
-    local row4a = GUIFrame:CreateRow(card4.content, 36)
+    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
     local importBtn = GUIFrame:CreateButton(row4a, "Import Profile from String", {
         callback = function()
             KE:CreatePrompt(
@@ -334,18 +357,18 @@ GUIFrame:RegisterContent("Profiles", function(scrollChild, yOffset)
         end
     })
     row4a:AddWidget(importBtn, 1)
-    card4:AddRow(row4a, 36)
+    card4:AddRow(row4a, Theme.rowHeight)
 
     -- Separator
-    local row4asep = GUIFrame:CreateRow(card4.content, 8)
+    local row4asep = GUIFrame:CreateRow(card4.content, Theme.rowHeightSeparator)
     local seprow4a = GUIFrame:CreateSeparator(row4asep)
     row4asep:AddWidget(seprow4a, 1)
-    card4:AddRow(row4asep, 8)
+    card4:AddRow(row4asep, Theme.rowHeightSeparator)
 
     -- Export section
     card4:AddLabel("Export Current Profile")
 
-    local row4b = GUIFrame:CreateRow(card4.content, 36)
+    local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
     local exportBtn = GUIFrame:CreateButton(row4b, "Export Profile to String", {
         callback = function()
             local exportString, err = PM:ExportProfile()
@@ -364,7 +387,7 @@ GUIFrame:RegisterContent("Profiles", function(scrollChild, yOffset)
         end
     })
     row4b:AddWidget(exportBtn, 1)
-    card4:AddRow(row4b, 36)
+    card4:AddRow(row4b, Theme.rowHeightLast, 0)
 
     --[[ BACKUP: Original import with inline name input
     card4:AddLabel("Import Profile")
@@ -412,20 +435,28 @@ GUIFrame:RegisterContent("Profiles", function(scrollChild, yOffset)
     card4:AddRow(row4c, 36)
     --]]
 
-    yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
+    yOffset = card4:GetNextOffset()
 
     ---------------------------------------------------------------------------------
     -- Card 5: Rename Profile
     ---------------------------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Rename Profile", yOffset)
 
-    local row5a = GUIFrame:CreateRow(card5.content, 40)
-    local renameDropdown = GUIFrame:CreateDropdown(row5a, "Profile to Rename", profileOptions, "", 100, function() end)
+    local row5a = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
+    local renameDropdown = GUIFrame:CreateDropdown(row5a, "Profile to Rename", {
+        options = profileOptions,
+        value = "",
+        labelWidth = 100,
+        callback = function() end,
+    })
     row5a:AddWidget(renameDropdown, 1)
-    card5:AddRow(row5a, 40)
+    card5:AddRow(row5a, Theme.rowHeight)
 
-    local row5b = GUIFrame:CreateRow(card5.content, 40)
-    local newNameInput = GUIFrame:CreateEditBox(row5b, "New Name", "", function() end)
+    local row5b = GUIFrame:CreateRow(card5.content, Theme.rowHeightLast)
+    local newNameInput = GUIFrame:CreateEditBox(row5b, "New Name", {
+        value = "",
+        callback = function() end,
+    })
     row5b:AddWidget(newNameInput, 0.65)
 
     local renameBtn = GUIFrame:CreateButton(row5b, "Rename", {
@@ -460,9 +491,9 @@ GUIFrame:RegisterContent("Profiles", function(scrollChild, yOffset)
         end
     })
     row5b:AddWidget(renameBtn, 0.35, nil, 0, -14)
-    card5:AddRow(row5b, 40)
+    card5:AddRow(row5b, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card5:GetContentHeight() + Theme.paddingSmall
+    yOffset = card5:GetNextOffset()
 
     yOffset = yOffset - (Theme.paddingSmall * 2)
     return yOffset

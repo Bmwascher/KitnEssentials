@@ -10,21 +10,13 @@ local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 
-local table_insert = table.insert
-local ipairs = ipairs
-local tonumber = tonumber
-
 local function GetModule()
-    return KitnEssentials:GetModule("WorldMarkerCycler", true)
+    if KitnEssentials then
+        return KitnEssentials:GetModule("WorldMarkerCycler", true)
+    end
+    return nil
 end
 
--- Marker names for display
-local MARKER_NAMES = {
-    [1] = "Star", [2] = "Circle", [3] = "Diamond", [4] = "Triangle",
-    [5] = "Moon", [6] = "Square", [7] = "Cross", [8] = "Skull",
-}
-
--- Format a keybind for display (e.g. "SHIFT-E" → "Shift+E")
 local function FormatKeybind(modifier, key)
     if not key or key == "" then return "Not Set" end
     local display = ""
@@ -39,11 +31,11 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
     if not db then
         local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
         errorCard:AddLabel("Database not available")
-        return yOffset + errorCard:GetContentHeight() + Theme.paddingMedium
+        return errorCard:GetNextOffset()
     end
 
     local WMC = GetModule()
-    local allWidgets = {}
+    local manager = GUIFrame:CreateWidgetStateManager()
 
     local function ApplySettings()
         if WMC and WMC.ApplySettings then WMC:ApplySettings() end
@@ -59,55 +51,53 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
         end
     end
 
-    local function UpdateAllWidgetStates()
-        local mainEnabled = db.Enabled ~= false
-        for _, widget in ipairs(allWidgets) do
-            if widget.SetEnabled then widget:SetEnabled(mainEnabled) end
-        end
+    local function RefreshStates()
+        manager:UpdateAll(db.Enabled ~= false)
     end
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 1: Enable
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "World Marker Cycler", yOffset)
 
-    local row1 = GUIFrame:CreateRow(card1.content, 36)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable World Marker Cycler", db.Enabled ~= false,
-        function(checked)
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable World Marker Cycler", {
+        value = db.Enabled ~= false,
+        callback = function(checked)
             db.Enabled = checked
             ApplyModuleState(checked)
-            UpdateAllWidgetStates()
+            RefreshStates()
         end,
-        true, "World Marker Cycler", "On", "Off"
-    )
+        msgPopup = true,
+        msgText = "World Marker Cycler",
+        msgOn = "On",
+        msgOff = "Off",
+    })
     row1:AddWidget(enableCheck, 0.5)
-    card1:AddRow(row1, 36)
+    card1:AddRow(row1, Theme.rowHeight)
 
-    -- Note
-    local noteHeight = 50
-    local noteRow = GUIFrame:CreateRow(card1.content, noteHeight)
+    local noteRow = GUIFrame:CreateRow(card1.content, 50)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Cycles through world markers at your cursor position.\n" .. KE:ColorTextByTheme("-") .. " Requires raid assist or leader to place markers.",
-        noteHeight, "hide")
+        KE:ColorTextByTheme("-") .. " Cycles through world markers at your cursor position.\n" ..
+        KE:ColorTextByTheme("-") .. " Requires raid assist or leader to place markers.",
+        50, "hide")
     noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, noteHeight)
+    card1:AddRow(noteRow, 50, 0)
 
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+    yOffset = card1:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
-    -- Card 2: Keybinds (interactive capture)
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
+    -- Card 2: Keybinds (custom capture buttons)
+    ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Keybinds", yOffset)
-    table_insert(allWidgets, card2)
+    manager:Register(card2, "all")
 
-    -- Keybind capture helper
-    local activeCapture = nil -- tracks which bind is being captured
+    local activeCapture
 
     local function CreateKeybindButton(parent, label, modifier, key, onBind)
         local row = GUIFrame:CreateRow(parent, 40)
 
-        -- Label row above button
         local labelRow = GUIFrame:CreateRow(parent, 16)
         local labelText = labelRow:CreateFontString(nil, "OVERLAY")
         labelText:SetPoint("CENTER", labelRow, "CENTER", 0, 0)
@@ -116,7 +106,6 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
         labelText:SetText(label)
         labelRow:AddWidget(labelText, 1)
 
-        -- Bind button (full width)
         local btn = CreateFrame("Button", nil, row, "BackdropTemplate")
         btn:SetHeight(26)
         btn:SetBackdrop({
@@ -133,7 +122,6 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
         btnText:SetText(FormatKeybind(modifier, key))
         btnText:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
 
-        -- Hover
         btn:SetScript("OnEnter", function()
             btn:SetBackdropBorderColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
         end)
@@ -143,7 +131,6 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
             end
         end)
 
-        -- Capture frame — fullscreen overlay that intercepts all input including ESC
         local captureFrame = CreateFrame("Button", nil, UIParent)
         captureFrame:SetFrameStrata("FULLSCREEN_DIALOG")
         captureFrame:SetAllPoints(UIParent)
@@ -152,10 +139,7 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
         captureFrame:SetPropagateKeyboardInput(false)
         captureFrame:Hide()
 
-        -- Clicking anywhere outside cancels
-        captureFrame:SetScript("OnClick", function(self)
-            self:Hide()
-        end)
+        captureFrame:SetScript("OnClick", function(self) self:Hide() end)
 
         local function CancelCapture()
             captureFrame:Hide()
@@ -166,37 +150,29 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
         end
 
         captureFrame:SetScript("OnHide", function()
-            if activeCapture == btn then
-                CancelCapture()
-            end
+            if activeCapture == btn then CancelCapture() end
         end)
 
         captureFrame:SetScript("OnKeyDown", function(self, capturedKey)
-            -- ESC cancels
             if capturedKey == "ESCAPE" then
                 CancelCapture()
                 return
             end
-
-            -- Ignore bare modifier keys
             if capturedKey == "LSHIFT" or capturedKey == "RSHIFT"
                 or capturedKey == "LCTRL" or capturedKey == "RCTRL"
                 or capturedKey == "LALT" or capturedKey == "RALT" then
                 return
             end
 
-            -- Build modifier string
             local mod = ""
             if IsControlKeyDown() then mod = mod .. "CTRL-" end
             if IsAltKeyDown() then mod = mod .. "ALT-" end
             if IsShiftKeyDown() then mod = mod .. "SHIFT-" end
 
-            -- Save
             modifier = mod
             key = capturedKey
             onBind(mod, capturedKey)
 
-            -- Update display
             btnText:SetText(FormatKeybind(mod, capturedKey))
             btnText:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
             btn:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
@@ -209,7 +185,6 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
             if activeCapture == btn then
                 CancelCapture()
             else
-                -- Start capture
                 activeCapture = btn
                 btnText:SetText("Press a key...")
                 btnText:SetTextColor(1, 1, 0, 1)
@@ -218,7 +193,6 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
             end
         end)
 
-        -- Right-click to clear
         btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         btn:HookScript("OnClick", function(_, button)
             if button == "RightButton" then
@@ -239,62 +213,54 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
         return labelRow, row, btn
     end
 
-    -- Place keybind
-    local placeLabelRow, placeRow, placeBtn = CreateKeybindButton(card2.content, "Place Marker",
+    local placeLabelRow, placeRow = CreateKeybindButton(card2.content, "Place Marker",
         db.PlaceModifier or "", db.PlaceKey or "",
         function(mod, key)
             db.PlaceModifier = mod
             db.PlaceKey = key
             ApplySettings()
         end)
-    table_insert(allWidgets, placeBtn)
     card2:AddRow(placeLabelRow, 16)
     card2:AddRow(placeRow, 30)
 
-    -- Spacer
     local spacer1 = GUIFrame:CreateRow(card2.content, 8)
     card2:AddRow(spacer1, 8)
 
-    -- Clear keybind
-    local clearLabelRow, clearRow, clearBtn = CreateKeybindButton(card2.content, "Clear Markers",
+    local clearLabelRow, clearRow = CreateKeybindButton(card2.content, "Clear Markers",
         db.ClearModifier or "", db.ClearKey or "",
         function(mod, key)
             db.ClearModifier = mod
             db.ClearKey = key
             ApplySettings()
         end)
-    table_insert(allWidgets, clearBtn)
     card2:AddRow(clearLabelRow, 16)
     card2:AddRow(clearRow, 30)
 
-    -- Spacer
     local spacer2 = GUIFrame:CreateRow(card2.content, 6)
     card2:AddRow(spacer2, 6)
 
-    -- Hint text
-    local hintHeight = 18
-    local hintRow = GUIFrame:CreateRow(card2.content, hintHeight)
+    local hintRow = GUIFrame:CreateRow(card2.content, 18)
     local hintText = hintRow:CreateFontString(nil, "OVERLAY")
     hintText:SetPoint("LEFT", hintRow, "LEFT", 0, 0)
     KE:ApplyThemeFont(hintText, "small")
     hintText:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 0.7)
     hintText:SetText("Click to set  |  Right-click to clear  |  ESC to cancel")
     hintRow:AddWidget(hintText, 1)
-    card2:AddRow(hintRow, hintHeight)
+    card2:AddRow(hintRow, 18)
 
-    yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
+    yOffset = card2:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
-    -- Card 3: Marker Order (drag to reorder)
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
+    -- Card 3: Marker Order (drag-reorder grid)
+    ----------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Marker Order", yOffset)
-    table_insert(allWidgets, card3)
+    manager:Register(card3, "all")
 
     local ICON_SIZE = 36
     local ICON_SPACING = 8
     local MARKER_TEX = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_"
 
-    -- World marker ID → raid target icon ID mapping
+    -- World marker ID → raid target icon ID mapping.
     -- /worldmarker uses: 1=Square, 2=Triangle, 3=Diamond, 4=Cross, 5=Star, 6=Circle, 7=Moon, 8=Skull
     -- UI-RaidTargetingIcon uses: 1=Star, 2=Circle, 3=Diamond, 4=Triangle, 5=Moon, 6=Square, 7=Cross, 8=Skull
     local WORLD_TO_ICON = { [1]=6, [2]=4, [3]=3, [4]=7, [5]=1, [6]=2, [7]=5, [8]=8 }
@@ -303,7 +269,6 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
         return MARKER_TEX .. (WORLD_TO_ICON[worldId] or worldId)
     end
 
-    -- Label (centered)
     local dragLabel = GUIFrame:CreateRow(card3.content, 18)
     local dragLabelText = dragLabel:CreateFontString(nil, "OVERLAY")
     dragLabelText:SetPoint("CENTER", dragLabel, "CENTER", 0, 0)
@@ -313,7 +278,6 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
     dragLabel:AddWidget(dragLabelText, 1)
     card3:AddRow(dragLabel, 18)
 
-    -- Drag container (centered)
     local totalIconsWidth = (8 * ICON_SIZE) + (7 * ICON_SPACING)
     local dragRowHeight = ICON_SIZE + 12
     local dragRow = GUIFrame:CreateRow(card3.content, dragRowHeight)
@@ -321,8 +285,8 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
     dragContainer:SetSize(totalIconsWidth, dragRowHeight)
     dragContainer:SetPoint("CENTER", dragRow, "CENTER", 0, 0)
 
-    local orderSlots = {} -- the 8 draggable button frames
-    local dragState = { dragging = false, dragIndex = nil, ghostTex = nil }
+    local orderSlots = {}
+    local dragState = { dragging = false, dragIndex = nil }
 
     local function SaveOrder()
         db.OrderList = {}
@@ -341,19 +305,16 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
         end
     end
 
-    -- Ghost texture (follows cursor during drag)
     local ghost = dragContainer:CreateTexture(nil, "OVERLAY", nil, 7)
     ghost:SetSize(ICON_SIZE, ICON_SIZE)
     ghost:SetAlpha(0.7)
     ghost:Hide()
 
-    -- Drop position indicator (vertical line showing where icon will land)
     local dropIndicator = dragContainer:CreateTexture(nil, "OVERLAY", nil, 6)
     dropIndicator:SetSize(2, ICON_SIZE + 4)
     dropIndicator:SetColorTexture(Theme.accent[1], Theme.accent[2], Theme.accent[3], 0.9)
     dropIndicator:Hide()
 
-    -- Determine drop position from cursor
     local function GetDropIndex(cursorX)
         local containerLeft = dragContainer:GetLeft()
         if not containerLeft then return 1 end
@@ -377,7 +338,6 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
         dropIndicator:Show()
     end
 
-    -- Create 8 draggable slots
     local initOrder = db.OrderList or { 1, 2, 3, 4, 5, 6, 7, 8 }
     for i = 1, 8 do
         local slot = CreateFrame("Button", nil, dragContainer)
@@ -389,7 +349,6 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
         icon:SetTexture(MarkerTexture(slot.markerId))
         slot.icon = icon
 
-        -- Border on hover
         slot:SetHighlightTexture("Interface\\Buttons\\WHITE8X8")
         local hl = slot:GetHighlightTexture()
         if hl then
@@ -402,21 +361,18 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
         slot:SetScript("OnDragStart", function(self)
             dragState.dragging = true
             dragState.dragIndex = i
-
-            -- Find current index of this slot
             for idx, s in ipairs(orderSlots) do
                 if s == self then
                     dragState.dragIndex = idx
                     break
                 end
             end
-
             ghost:SetTexture(MarkerTexture(self.markerId))
             ghost:Show()
             self:SetAlpha(0.3)
         end)
 
-        slot:SetScript("OnDragStop", function(self)
+        slot:SetScript("OnDragStop", function()
             if not dragState.dragging then return end
             dragState.dragging = false
             ghost:Hide()
@@ -447,7 +403,6 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
                 ghost:ClearAllPoints()
                 ghost:SetPoint("CENTER", UIParent, "BOTTOMLEFT", cursorX, cursorY)
 
-                -- Update drop indicator position
                 local dropIdx = GetDropIndex(cursorX)
                 UpdateDropIndicator(dropIdx)
             end
@@ -457,11 +412,9 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
     end
 
     LayoutSlots()
-    -- Don't use AddWidget — it overrides CENTER anchoring
     card3:AddRow(dragRow, dragRowHeight)
 
-    -- Default Order button (centered)
-    local ctrlRow = GUIFrame:CreateRow(card3.content, 30)
+    local ctrlRow = GUIFrame:CreateRow(card3.content, Theme.rowHeightSeparator + 22)
     local defaultBtn = GUIFrame:CreateButton(ctrlRow, "Default Order", {
         width = 140,
         callback = function()
@@ -473,17 +426,13 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
             SaveOrder()
         end,
     })
-    -- Center the button manually instead of AddWidget
-    local btnFrame = defaultBtn
-    btnFrame:ClearAllPoints()
-    btnFrame:SetPoint("CENTER", ctrlRow, "CENTER", 0, 0)
-    table_insert(allWidgets, defaultBtn)
-    card3:AddRow(ctrlRow, 30)
+    defaultBtn:ClearAllPoints()
+    defaultBtn:SetPoint("CENTER", ctrlRow, "CENTER", 0, 0)
+    manager:Register(defaultBtn, "all")
+    card3:AddRow(ctrlRow, Theme.rowHeightSeparator + 22, 0)
 
-    yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
+    yOffset = card3:GetNextOffset()
 
-    -- Apply initial widget states
-    UpdateAllWidgetStates()
-    yOffset = yOffset - (Theme.paddingSmall * 2)
+    RefreshStates()
     return yOffset
 end)

@@ -51,6 +51,7 @@ function EditMode:RegisterElement(config)
         getPosition = config.getPosition,
         setPosition = config.setPosition,
         getParentFrame = config.getParentFrame,
+        getAnchorFrom = config.getAnchorFrom,
         guiPath = config.guiPath,
         guiContext = config.guiContext,
     }
@@ -207,7 +208,8 @@ function EditMode:SetupDragHandlers(overlay, element)
 
         -- Get the current position/anchor settings from the module's DB
         local currentPos = element.getPosition()
-        local anchorFrom = currentPos.AnchorFrom or "CENTER"
+        local anchorFrom = element.getAnchorFrom and element.getAnchorFrom()
+            or currentPos.AnchorFrom or "CENTER"
         local anchorTo = currentPos.AnchorTo or "CENTER"
 
         -- Get the parent frame
@@ -352,7 +354,7 @@ function EditMode:Enter()
     self.isActive = true
 
     -- Create overlays for all registered elements
-    for key, element in pairs(self.registeredElements) do
+    for key in pairs(self.registeredElements) do
         self:CreateOverlayForElement(key)
     end
 
@@ -378,7 +380,7 @@ function EditMode:Exit()
         KE.PreviewManager:SetEditModeActive(false)
     end
     -- Hide and destroy all overlays
-    for key, overlay in pairs(self.overlayFrames) do
+    for _, overlay in pairs(self.overlayFrames) do
         if overlay then
             overlay:Hide()
         end
@@ -598,7 +600,7 @@ end
 function EditMode:RefreshOverlays()
     if not self.isActive then return end
 
-    for key, overlay in pairs(self.overlayFrames) do
+    for _, overlay in pairs(self.overlayFrames) do
         if overlay then
             overlay:SetBackdropColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], FILL_ALPHA)
             overlay:SetBackdropBorderColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
@@ -1177,7 +1179,7 @@ function EditMode:StartPositionUpdates()
     self.updateFrame:SetScript("OnUpdate", function()
         if not self.isActive then return end
 
-        for key, overlay in pairs(self.overlayFrames) do
+        for _, overlay in pairs(self.overlayFrames) do
             if overlay and not overlay.isDragging then
                 self:UpdateOverlayPosition(overlay)
             end

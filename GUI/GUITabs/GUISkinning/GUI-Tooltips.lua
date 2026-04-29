@@ -10,17 +10,20 @@ local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
 
--- Local references
-local table_insert = table.insert
+local pairs = pairs
 local string_format = string.format
 
--- Helper to color text with theme accent
 local function AccentText(text)
     local a = KE.Theme.accent
     return string_format("|cff%02x%02x%02x%s|r", a[1] * 255, a[2] * 255, a[3] * 255, text)
 end
 
--- Helper to get Tooltips module
+local SETTINGS_OUTLINE_OPTIONS = {
+    { key = "NONE",         text = "None" },
+    { key = "OUTLINE",      text = "Outline" },
+    { key = "THICKOUTLINE", text = "Thick" },
+}
+
 local function GetTooltipsModule()
     if KitnEssentials then
         return KitnEssentials:GetModule("SkinTooltips", true)
@@ -28,21 +31,16 @@ local function GetTooltipsModule()
     return nil
 end
 
--- Register Content
 GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
     if KE:ShouldNotLoadModule() then return end
     local db = KE.db and KE.db.profile.Skinning.Tooltips
     if not db then return yOffset end
 
     local TT = GetTooltipsModule()
-
-    -- Track widgets for enable/disable logic
-    local allWidgets = {}
+    local manager = GUIFrame:CreateWidgetStateManager()
 
     local function ApplySettings()
-        if TT then
-            TT:Refresh()
-        end
+        if TT then TT:Refresh() end
     end
 
     local function ApplyTooltipState(enabled)
@@ -55,48 +53,44 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
         end
     end
 
-    local function UpdateAllWidgetStates()
-        local mainEnabled = db.Enabled ~= false
-        for _, widget in ipairs(allWidgets) do
-            if widget.SetEnabled then
-                widget:SetEnabled(mainEnabled)
-            end
-        end
+    local fontList = {}
+    if LSM then
+        for name in pairs(LSM:HashTable("font")) do fontList[name] = name end
+    else
+        fontList["Friz Quadrata TT"] = "Friz Quadrata TT"
     end
 
-    ---------------------------------------------------------------------------------
-    -- Card 1: Enable + General Settings
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
+    -- Card 1: Enable + Info
+    ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Tooltip Skinning", yOffset)
 
-    local row1 = GUIFrame:CreateRow(card1.content, 40)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Tooltip Skinning", db.Enabled ~= false,
-        function(checked)
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Tooltip Skinning", {
+        value = db.Enabled ~= false,
+        callback = function(checked)
             db.Enabled = checked
             ApplyTooltipState(checked)
-            UpdateAllWidgetStates()
+            manager:UpdateAll(checked)
             if not checked then
                 KE:CreateReloadPrompt("Enabling Blizzard UI elements requires a reload to take full effect.")
             end
         end,
-        true,
-        "Tooltip Skinning",
-        "On",
-        "Off"
-    )
+        msgPopup = true,
+        msgText = "Tooltip Skinning",
+        msgOn = "On",
+        msgOff = "Off",
+    })
     row1:AddWidget(enableCheck, 0.5)
-    card1:AddRow(row1, 40)
+    card1:AddRow(row1, Theme.rowHeight)
 
-    -- Separator
-    local row1sep = GUIFrame:CreateRow(card1.content, 8)
-    local sep1 = GUIFrame:CreateSeparator(row1sep)
-    row1sep:AddWidget(sep1, 1)
-    table_insert(allWidgets, sep1)
-    card1:AddRow(row1sep, 8)
+    local sepRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightSeparator)
+    local sep1 = GUIFrame:CreateSeparator(sepRow)
+    sepRow:AddWidget(sep1, 1)
+    card1:AddRow(sepRow, Theme.rowHeightSeparator)
 
-    -- Info text
-    local textRow1Size = 140
-    local row1b = GUIFrame:CreateRow(card1.content, textRow1Size)
+    local textRowSize = 140
+    local row1b = GUIFrame:CreateRow(card1.content, textRowSize)
     local ttInfoText = GUIFrame:CreateText(row1b,
         AccentText("Important Tooltip Info"),
         AccentText("- ") ..
@@ -105,38 +99,40 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
         AccentText("- ") .. "Blizzard_SharedXML/Backdrop.lua" .. "\n" ..
         AccentText("- ") .. "Blizzard_MoneyFrame/Mainline/MoneyFrame.lua" .. "\n" ..
         AccentText("- ") .. "Blizzard_SharedXML/Tooltip/TooltipComparisonManager.lua",
-        textRow1Size, "hide")
+        textRowSize, "hide")
     row1b:AddWidget(ttInfoText, 1)
-    table_insert(allWidgets, ttInfoText)
-    card1:AddRow(row1b, textRow1Size)
+    manager:Register(ttInfoText, "all")
+    card1:AddRow(row1b, textRowSize, 0)
 
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+    yOffset = card1:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
-    -- Card 1b: General Settings
-    ---------------------------------------------------------------------------------
-    local card1b = GUIFrame:CreateCard(scrollChild, "General Settings", yOffset)
-    table_insert(allWidgets, card1b)
+    ----------------------------------------------------------------
+    -- Card 2: General Settings
+    ----------------------------------------------------------------
+    local card2 = GUIFrame:CreateCard(scrollChild, "General Settings", yOffset)
+    manager:Register(card2, "all")
 
-    local row1c = GUIFrame:CreateRow(card1b.content, 34)
-    local hideHealthCheck = GUIFrame:CreateCheckbox(row1c, "Hide Health Bar", db.HideHealthBar ~= false,
-        function(checked)
+    local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local hideHealthCheck = GUIFrame:CreateCheckbox(row2, "Hide Health Bar", {
+        value = db.HideHealthBar ~= false,
+        callback = function(checked)
             db.HideHealthBar = checked
             ApplySettings()
             if not checked then
                 KE:CreateReloadPrompt("Enabling Blizzard UI elements requires a reload to take full effect.")
             end
-        end)
-    row1c:AddWidget(hideHealthCheck, 1)
-    table_insert(allWidgets, hideHealthCheck)
-    card1b:AddRow(row1c, 34)
+        end,
+    })
+    row2:AddWidget(hideHealthCheck, 1)
+    manager:Register(hideHealthCheck, "all")
+    card2:AddRow(row2, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card1b:GetContentHeight() + Theme.paddingSmall
+    yOffset = card2:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
-    -- Card 2: Position Settings
-    ---------------------------------------------------------------------------------
-    local card2, newOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+    ----------------------------------------------------------------
+    -- Card 3: Position Settings
+    ----------------------------------------------------------------
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         title = "Position",
         db = db.Position,
         dbKeys = {
@@ -154,183 +150,122 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
             end
         end,
     })
-    table_insert(allWidgets, card2)
-    if card2.positionWidgets then
-        for _, widget in ipairs(card2.positionWidgets) do
-            table_insert(allWidgets, widget)
-        end
-    end
-    yOffset = newOffset
+    manager:Register(posCard, "all")
+    yOffset = posOffset
 
-    ---------------------------------------------------------------------------------
-    -- Card 3: Font Settings
-    ---------------------------------------------------------------------------------
-    local card3 = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
-    table_insert(allWidgets, card3)
+    ----------------------------------------------------------------
+    -- Card 4: Font Settings
+    ----------------------------------------------------------------
+    local card4 = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
+    manager:Register(card4, "all")
 
-    -- Font Face + Outline
-    local fontList = {}
-    if LSM then
-        for name in pairs(LSM:HashTable("font")) do fontList[name] = name end
-    else
-        fontList["Friz Quadrata TT"] = "Friz Quadrata TT"
-    end
-
-    local row3a = GUIFrame:CreateRow(card3.content, 40)
-    local fontDropdown = GUIFrame:CreateDropdown(row3a, "Font", fontList, db.FontFace or "Expressway", 30,
-        function(key)
+    local rowFont = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local fontDropdown = GUIFrame:CreateDropdown(rowFont, "Font", {
+        options = fontList,
+        value = db.FontFace or "Expressway",
+        callback = function(key)
             db.FontFace = key
             ApplySettings()
-        end)
-    row3a:AddWidget(fontDropdown, 0.5)
-    table_insert(allWidgets, fontDropdown)
+        end,
+        searchable = true,
+        isFontPreview = true,
+    })
+    rowFont:AddWidget(fontDropdown, 0.5)
+    manager:Register(fontDropdown, "all")
 
-    local outlineList = {
-        { key = "NONE",         text = "None" },
-        { key = "OUTLINE",      text = "Outline" },
-        { key = "THICKOUTLINE", text = "Thick" },
-    }
-    local outlineDropdown = GUIFrame:CreateDropdown(row3a, "Outline", outlineList, db.FontOutline or "OUTLINE", 45,
-        function(key)
+    local outlineDropdown = GUIFrame:CreateDropdown(rowFont, "Outline", {
+        options = SETTINGS_OUTLINE_OPTIONS,
+        value = db.FontOutline or "OUTLINE",
+        callback = function(key)
             db.FontOutline = key
             ApplySettings()
-        end)
-    row3a:AddWidget(outlineDropdown, 0.5)
-    table_insert(allWidgets, outlineDropdown)
-    card3:AddRow(row3a, 40)
+        end,
+    })
+    rowFont:AddWidget(outlineDropdown, 0.5)
+    manager:Register(outlineDropdown, "all")
+    card4:AddRow(rowFont, Theme.rowHeight)
 
-    -- Separator
-    local row3sep = GUIFrame:CreateRow(card3.content, 8)
-    local sep3 = GUIFrame:CreateSeparator(row3sep)
-    row3sep:AddWidget(sep3, 1)
-    table_insert(allWidgets, sep3)
-    card3:AddRow(row3sep, 8)
+    local fontSepRow = GUIFrame:CreateRow(card4.content, Theme.rowHeightSeparator)
+    local fontSep = GUIFrame:CreateSeparator(fontSepRow)
+    fontSepRow:AddWidget(fontSep, 1)
+    card4:AddRow(fontSepRow, Theme.rowHeightSeparator)
 
-    -- Name Font Size
-    local row3b = GUIFrame:CreateRow(card3.content, 40)
-    local nameSizeSlider = GUIFrame:CreateSlider(row3b, "Player Name Font Size", 8, 72, 1, db.NameFontSize or 17, 60,
-        function(val)
-            db.NameFontSize = val
+    local fontSizeDefs = {
+        { key = "NameFontSize",      label = "Player Name Font Size",  default = 17 },
+        { key = "GuildFontSize",     label = "Guild Font Size",        default = 14 },
+        { key = "RaceLevelFontSize", label = "Race & Level Font Size", default = 14 },
+        { key = "SpecFontSize",      label = "Spec Font Size",         default = 14 },
+        { key = "FactionFontSize",   label = "Faction Font Size",      default = 14 },
+    }
+
+    for i, def in ipairs(fontSizeDefs) do
+        local isLast = i == #fontSizeDefs
+        local rowHeight = isLast and Theme.rowHeightLast or Theme.rowHeight
+        local row = GUIFrame:CreateRow(card4.content, rowHeight)
+        local slider = GUIFrame:CreateSlider(row, def.label, {
+            min = 8, max = 72, step = 1,
+            value = db[def.key] or def.default,
+            labelWidth = 60,
+            callback = function(val)
+                db[def.key] = val
+                ApplySettings()
+            end,
+        })
+        row:AddWidget(slider, 1)
+        manager:Register(slider, "all")
+        if isLast then
+            card4:AddRow(row, rowHeight, 0)
+        else
+            card4:AddRow(row, rowHeight)
+        end
+    end
+
+    yOffset = card4:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 5: Backdrop
+    ----------------------------------------------------------------
+    local card5 = GUIFrame:CreateCard(scrollChild, "Backdrop", yOffset)
+    manager:Register(card5, "all")
+
+    local row5a = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
+    local bgColorPicker = GUIFrame:CreateColorPicker(row5a, "Background Color", {
+        color = db.BackgroundColor or { 0, 0, 0, 0.8 },
+        callback = function(r, g, b, a)
+            db.BackgroundColor = { r, g, b, a }
             ApplySettings()
-        end)
-    row3b:AddWidget(nameSizeSlider, 1)
-    table_insert(allWidgets, nameSizeSlider)
-    card3:AddRow(row3b, 40)
+        end,
+    })
+    row5a:AddWidget(bgColorPicker, 1)
+    manager:Register(bgColorPicker, "all")
+    card5:AddRow(row5a, Theme.rowHeight)
 
-    -- Separator
-    local row3bsep = GUIFrame:CreateRow(card3.content, 8)
-    local sep3b = GUIFrame:CreateSeparator(row3bsep)
-    row3bsep:AddWidget(sep3b, 1)
-    table_insert(allWidgets, sep3b)
-    card3:AddRow(row3bsep, 8)
-
-    -- Guild Font Size
-    local row3c = GUIFrame:CreateRow(card3.content, 40)
-    local guildSizeSlider = GUIFrame:CreateSlider(row3c, "Guild Font Size", 8, 72, 1, db.GuildFontSize or 14, 60,
-        function(val)
-            db.GuildFontSize = val
+    local row5b = GUIFrame:CreateRow(card5.content, Theme.rowHeightLast)
+    local borderColorPicker = GUIFrame:CreateColorPicker(row5b, "Border Color", {
+        color = db.BorderColor or { 0, 0, 0, 1 },
+        callback = function(r, g, b, a)
+            db.BorderColor = { r, g, b, a }
             ApplySettings()
-        end)
-    row3c:AddWidget(guildSizeSlider, 1)
-    table_insert(allWidgets, guildSizeSlider)
-    card3:AddRow(row3c, 40)
+        end,
+    })
+    row5b:AddWidget(borderColorPicker, 0.5)
+    manager:Register(borderColorPicker, "all")
 
-    -- Separator
-    local row3csep = GUIFrame:CreateRow(card3.content, 8)
-    local sep3c = GUIFrame:CreateSeparator(row3csep)
-    row3csep:AddWidget(sep3c, 1)
-    table_insert(allWidgets, sep3c)
-    card3:AddRow(row3csep, 8)
-
-    -- Race & Level Font Size
-    local row3d = GUIFrame:CreateRow(card3.content, 40)
-    local raceLevelSizeSlider = GUIFrame:CreateSlider(row3d, "Race & Level Font Size", 8, 72, 1, db.RaceLevelFontSize or 14, 60,
-        function(val)
-            db.RaceLevelFontSize = val
-            ApplySettings()
-        end)
-    row3d:AddWidget(raceLevelSizeSlider, 1)
-    table_insert(allWidgets, raceLevelSizeSlider)
-    card3:AddRow(row3d, 40)
-
-    -- Separator
-    local row3dsep = GUIFrame:CreateRow(card3.content, 8)
-    local sep3d = GUIFrame:CreateSeparator(row3dsep)
-    row3dsep:AddWidget(sep3d, 1)
-    table_insert(allWidgets, sep3d)
-    card3:AddRow(row3dsep, 8)
-
-    -- Spec Font Size
-    local row3e = GUIFrame:CreateRow(card3.content, 40)
-    local specSizeSlider = GUIFrame:CreateSlider(row3e, "Spec Font Size", 8, 72, 1, db.SpecFontSize or 14, 60,
-        function(val)
-            db.SpecFontSize = val
-            ApplySettings()
-        end)
-    row3e:AddWidget(specSizeSlider, 1)
-    table_insert(allWidgets, specSizeSlider)
-    card3:AddRow(row3e, 40)
-
-    -- Separator
-    local row3esep = GUIFrame:CreateRow(card3.content, 8)
-    local sep3e = GUIFrame:CreateSeparator(row3esep)
-    row3esep:AddWidget(sep3e, 1)
-    table_insert(allWidgets, sep3e)
-    card3:AddRow(row3esep, 8)
-
-    -- Faction Font Size
-    local row3f = GUIFrame:CreateRow(card3.content, 40)
-    local factionSizeSlider = GUIFrame:CreateSlider(row3f, "Faction Font Size", 8, 72, 1, db.FactionFontSize or 14, 60,
-        function(val)
-            db.FactionFontSize = val
-            ApplySettings()
-        end)
-    row3f:AddWidget(factionSizeSlider, 1)
-    table_insert(allWidgets, factionSizeSlider)
-    card3:AddRow(row3f, 40)
-
-    yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
-
-    ---------------------------------------------------------------------------------
-    -- Card 4: Backdrop
-    ---------------------------------------------------------------------------------
-    local card4 = GUIFrame:CreateCard(scrollChild, "Backdrop", yOffset)
-    table_insert(allWidgets, card4)
-
-    -- Background Color
-    local row4a = GUIFrame:CreateRow(card4.content, 40)
-    local bgColor = db.BackgroundColor or { 0, 0, 0, 0.8 }
-    local bgColorPicker = GUIFrame:CreateColorPicker(row4a, "Background Color", bgColor, function(r, g, b, a)
-        db.BackgroundColor = { r, g, b, a }
-        ApplySettings()
-    end)
-    row4a:AddWidget(bgColorPicker, 1)
-    table_insert(allWidgets, bgColorPicker)
-    card4:AddRow(row4a, 40)
-
-    -- Border Color + Border Size
-    local row4b = GUIFrame:CreateRow(card4.content, 34)
-    local borderColor = db.BorderColor or { 0, 0, 0, 1 }
-    local borderColorPicker = GUIFrame:CreateColorPicker(row4b, "Border Color", borderColor, function(r, g, b, a)
-        db.BorderColor = { r, g, b, a }
-        ApplySettings()
-    end)
-    row4b:AddWidget(borderColorPicker, 0.5)
-    table_insert(allWidgets, borderColorPicker)
-
-    local borderSlider = GUIFrame:CreateSlider(row4b, "Border Size", 0, 4, 1, db.BorderSize or 1, 60,
-        function(value)
+    local borderSlider = GUIFrame:CreateSlider(row5b, "Border Size", {
+        min = 0, max = 4, step = 1,
+        value = db.BorderSize or 1,
+        labelWidth = 60,
+        callback = function(value)
             db.BorderSize = value
             ApplySettings()
-        end)
-    row4b:AddWidget(borderSlider, 0.5)
-    table_insert(allWidgets, borderSlider)
-    card4:AddRow(row4b, 34)
+        end,
+    })
+    row5b:AddWidget(borderSlider, 0.5)
+    manager:Register(borderSlider, "all")
+    card5:AddRow(row5b, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
+    yOffset = card5:GetNextOffset()
 
-    -- Apply initial widget states
-    UpdateAllWidgetStates()
-    yOffset = yOffset - (Theme.paddingSmall * 3)
+    manager:UpdateAll(db.Enabled ~= false)
     return yOffset
 end)

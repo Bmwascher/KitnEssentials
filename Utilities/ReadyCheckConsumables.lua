@@ -325,8 +325,8 @@ function RCC:BuildFrame()
             db.FontFace    or "Expressway",
             db.FontSize    or 11,
             db.FontOutline or "OUTLINE")
-        local dc = db.DurationColor or { 1, 1, 1, 1 }
-        timeLeft:SetTextColor(dc[1], dc[2], dc[3], dc[4] or 1)
+        local dr, dg, db_, da = KE:ResolveColor(db.DurationColor, { 1, 1, 1, 1 })
+        timeLeft:SetTextColor(dr, dg, db_, da)
         timeLeft:SetText("")
         btn.timeLeft = timeLeft
 
@@ -337,7 +337,7 @@ function RCC:BuildFrame()
             db.FontFace    or "Expressway",
             db.FontSize    or 11,
             db.FontOutline or "OUTLINE")
-        countText:SetTextColor(dc[1], dc[2], dc[3], dc[4] or 1)
+        countText:SetTextColor(dr, dg, db_, da)
         countText:SetText("")
         btn.countText = countText
 
@@ -568,13 +568,13 @@ function RCC:UpdateFood(auras)
             btn.timeLeft:SetText(formatDurationText(self:GetAuraRemaining(aura)))
 
             -- Hearty annotation: tint duration text green to flag "persists through death"
+            local cr, cg, cb, ca
             if HEARTY_FOOD_BUFFS[spellId] then
-                local c = self.db.HeartyFoodColor or { 0.2, 1.0, 0.2, 1.0 }
-                btn.timeLeft:SetTextColor(c[1], c[2], c[3], c[4] or 1)
+                cr, cg, cb, ca = KE:ResolveColor(self.db.HeartyFoodColor, { 0.2, 1.0, 0.2, 1.0 })
             else
-                local dc = self.db.DurationColor or { 1, 1, 1, 1 }
-                btn.timeLeft:SetTextColor(dc[1], dc[2], dc[3], dc[4] or 1)
+                cr, cg, cb, ca = KE:ResolveColor(self.db.DurationColor, { 1, 1, 1, 1 })
             end
+            btn.timeLeft:SetTextColor(cr, cg, cb, ca)
             btn.countText:SetText("")
             return
         end
@@ -1022,7 +1022,7 @@ function RCC:ApplySettings()
     -- Re-apply font + base text color to all buttons. ApplyFontToText handles
     -- SOFTOUTLINE properly via KE's custom shadow system. Hearty food color
     -- is re-applied per update cycle inside UpdateFood when applicable.
-    local dc = db.DurationColor or { 1, 1, 1, 1 }
+    local dr, dg, db_, da = KE:ResolveColor(db.DurationColor, { 1, 1, 1, 1 })
     for i = 1, NUM_SLOTS do
         local btn = self.buttons[i]
         if btn then
@@ -1031,14 +1031,14 @@ function RCC:ApplySettings()
                     db.FontFace    or "Expressway",
                     db.FontSize    or 11,
                     db.FontOutline or "OUTLINE")
-                btn.timeLeft:SetTextColor(dc[1], dc[2], dc[3], dc[4] or 1)
+                btn.timeLeft:SetTextColor(dr, dg, db_, da)
             end
             if btn.countText then
                 KE:ApplyFontToText(btn.countText,
                     db.FontFace    or "Expressway",
                     db.FontSize    or 11,
                     db.FontOutline or "OUTLINE")
-                btn.countText:SetTextColor(dc[1], dc[2], dc[3], dc[4] or 1)
+                btn.countText:SetTextColor(dr, dg, db_, da)
             end
         end
     end

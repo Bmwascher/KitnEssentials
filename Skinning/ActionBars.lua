@@ -19,14 +19,12 @@ local InCombatLockdown = InCombatLockdown
 local PetHasActionBar = PetHasActionBar
 local GetNumShapeshiftForms = GetNumShapeshiftForms
 local GetCursorPosition = GetCursorPosition
-local pcall = pcall
 local SecureCmdOptionParse = SecureCmdOptionParse
 local hooksecurefunc = hooksecurefunc
 local GetPetActionInfo = GetPetActionInfo
 local GetShapeshiftFormInfo = GetShapeshiftFormInfo
 local getmetatable = getmetatable
 local table_insert = table.insert
-local unpack = unpack
 local _G = _G
 
 ---------------------------------------------------------------------------------
@@ -438,8 +436,8 @@ function SK:CreateButtonBackdrop(button, barName, index, buttonSize)
     buttonSize = buttonSize or 40
 
     local barConfig = self:GetBarConfig(barName)
-    local backdropColor = barConfig and barConfig.BackdropColor or { 0, 0, 0, 0.8 }
-    local borderColor = barConfig and barConfig.BorderColor or { 0, 0, 0, 1 }
+    local bgr, bgg, bgb, bga = KE:ResolveColor(barConfig and barConfig.BackdropColor, { 0, 0, 0, 0.8 })
+    local borderColor = (barConfig and barConfig.BorderColor) or { 0, 0, 0, 1 }
 
     local backdrop = CreateFrame("Frame", "KE_" .. barName .. "Backdrop" .. index, UIParent, "BackdropTemplate")
     backdrop:SetSize(buttonSize, buttonSize)
@@ -452,7 +450,7 @@ function SK:CreateButtonBackdrop(button, barName, index, buttonSize)
         tileSize = 0,
         insets = { left = 0, right = 0, top = 0, bottom = 0 }
     })
-    backdrop:SetBackdropColor(backdropColor[1], backdropColor[2], backdropColor[3], backdropColor[4] or 0.8)
+    backdrop:SetBackdropColor(bgr, bgg, bgb, bga)
 
     local borderFrame = CreateFrame("Frame", nil, backdrop)
     borderFrame:SetAllPoints(backdrop)
@@ -1273,8 +1271,8 @@ function SK:UpdateBarBackdropColors(barKey)
     local barConfig = self:GetBarConfig(barKey)
     if not barConfig then return end
 
-    local backdropColor = barConfig.BackdropColor or { 0, 0, 0, 0.8 }
-    local borderColor = barConfig.BorderColor or { 0, 0, 0, 1 }
+    local bgr, bgg, bgb, bga = KE:ResolveColor(barConfig.BackdropColor, { 0, 0, 0, 0.8 })
+    local bdr, bdg, bdb, bda = KE:ResolveColor(barConfig.BorderColor, { 0, 0, 0, 1 })
     local hideEmpty = barConfig.HideEmptyBackdrops == true
 
     local i = 1
@@ -1282,8 +1280,8 @@ function SK:UpdateBarBackdropColors(barKey)
         local backdrop = _G["KE_" .. barKey .. "Backdrop" .. i]
         if not backdrop then break end
 
-        backdrop:SetBackdropColor(backdropColor[1], backdropColor[2], backdropColor[3], backdropColor[4] or 0.8)
-        backdrop:SetBorderColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4] or 1)
+        backdrop:SetBackdropColor(bgr, bgg, bgb, bga)
+        backdrop:SetBorderColor(bdr, bdg, bdb, bda)
 
         if backdrop._updateVisibility and hideEmpty then
             backdrop._updateVisibility()

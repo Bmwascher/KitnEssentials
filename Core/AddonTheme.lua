@@ -38,15 +38,22 @@ local ThemeDefaults = {
     -- Dimensions
     headerHeight   = 32,
     footerHeight   = 24,
-    sidebarWidth   = 200,
-    contentWidth   = 540,
+    sidebarWidth   = 242,
+    contentWidth   = 679,
     borderSize     = 1,
+
+    -- Row heights (used by NUI v3.7-style cards: FontSettingsCard, GlowSettingsCard, etc.)
+    rowHeight          = 40,   -- Standard row height
+    rowHeightLast      = 44,   -- Last row in a card (use 0 spacing in AddRow)
+    rowHeightTall      = 80,   -- Anchor point selector rows
+    rowHeightSeparator = 8,    -- Separator-only rows
 
     -- Spacing
     paddingSmall   = 4,
     paddingMedium  = 8,
-    paddingLarge   = 12,
+    paddingLarge   = 16,
     scrollbarWidth = 14,
+    animDuration   = 0.18, -- Standard hover animation duration
 
     -- Font settings
     fontFace       = "Fonts\\FRIZQT__.TTF",

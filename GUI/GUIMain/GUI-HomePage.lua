@@ -50,14 +50,14 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
     local creditLabel = card1:AddLabel("Built on the foundation of |cffffffffNorsken|r and Atrocity")
     creditLabel:SetTextColor(T.textMuted[1], T.textMuted[2], T.textMuted[3], 1)
 
-    yOffset = yOffset + card1:GetContentHeight() + T.paddingSmall
+    yOffset = card1:GetNextOffset()
 
     ---------------------------------------------------------------------------------
     -- Card 2: Quick Actions
     ---------------------------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Quick Actions", yOffset)
 
-    local row1 = GUIFrame:CreateRow(card2.content, 38)
+    local row1 = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
 
     -- Edit Mode Button
     local editModeBtn = GUIFrame:CreateButton(row1, "Toggle Anchors", {
@@ -81,7 +81,7 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
     })
     row1:AddWidget(reloadBtn, 0.5)
 
-    card2:AddRow(row1, 38)
+    card2:AddRow(row1, Theme.rowHeightLast, 0)
 
     card2:AddSpacing(4)
     local tipLabel = card2:AddLabel(
@@ -90,7 +90,7 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
         KE:ColorTextByTheme("/rl") .. " to reload.")
     tipLabel:SetTextColor(T.textMuted[1], T.textMuted[2], T.textMuted[3], 1)
 
-    yOffset = yOffset + card2:GetContentHeight() + T.paddingSmall
+    yOffset = card2:GetNextOffset()
 
     ---------------------------------------------------------------------------------
     -- Card 3: General Settings
@@ -98,10 +98,10 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile
     local cardSettings = GUIFrame:CreateCard(scrollChild, "General Settings", yOffset)
 
-    local row3a = GUIFrame:CreateRow(cardSettings.content, 36)
-    local minimapCheck = GUIFrame:CreateCheckbox(row3a, "Show Minimap Button",
-        not (db and db.Minimap and db.Minimap.hide),
-        function(checked)
+    local row3a = GUIFrame:CreateRow(cardSettings.content, Theme.rowHeightLast)
+    local minimapCheck = GUIFrame:CreateCheckbox(row3a, "Show Minimap Button", {
+        value = not (db and db.Minimap and db.Minimap.hide),
+        callback = function(checked)
             if not db then return end
             db.Minimap = db.Minimap or {}
             db.Minimap.hide = not checked
@@ -113,22 +113,24 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
                     icon:Hide("KitnEssentials")
                 end
             end
-        end)
+        end,
+    })
     row3a:AddWidget(minimapCheck, 0.5)
 
-    local chatCheck = GUIFrame:CreateCheckbox(row3a, "Show Command in Chat on Login",
-        db and db.ShowChatMessage ~= false,
-        function(checked)
+    local chatCheck = GUIFrame:CreateCheckbox(row3a, "Show Command in Chat on Login", {
+        value = db and db.ShowChatMessage ~= false,
+        callback = function(checked)
             if not db then return end
             db.ShowChatMessage = checked
-        end)
+        end,
+    })
     row3a:AddWidget(chatCheck, 0.5)
-    cardSettings:AddRow(row3a, 36)
+    cardSettings:AddRow(row3a, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + cardSettings:GetContentHeight() + T.paddingSmall
+    yOffset = cardSettings:GetNextOffset()
 
     ---------------------------------------------------------------------------------
-    -- Card 3: Getting Started
+    -- Card 4: Getting Started
     ---------------------------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Getting Started", yOffset)
 
@@ -143,10 +145,10 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
         card3:AddSpacing(2)
     end
 
-    yOffset = yOffset + card3:GetContentHeight() + T.paddingSmall
+    yOffset = card3:GetNextOffset()
 
     ---------------------------------------------------------------------------------
-    -- Card 4: Profile
+    -- Card 5: Profile
     ---------------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Profile", yOffset)
 
@@ -158,10 +160,10 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
     local charLabel = card4:AddLabel("Character: |cff" .. colorHex .. playerName .. "|r - " .. realmName)
     charLabel:SetTextColor(T.textMuted[1], T.textMuted[2], T.textMuted[3], 1)
 
-    yOffset = yOffset + card4:GetContentHeight() + T.paddingSmall
+    yOffset = card4:GetNextOffset()
 
     ---------------------------------------------------------------------------------
-    -- Card 5: ElvUI Integration (only when ElvUI is loaded)
+    -- Card 6: ElvUI Integration (only when ElvUI is loaded)
     ---------------------------------------------------------------------------------
     if C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("ElvUI") then
         local elvCard = GUIFrame:CreateCard(scrollChild, "ElvUI Integration", yOffset)
@@ -174,11 +176,11 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
             "This way you can still use the non skinning features of the addon without conflict.")
         elvDesc:SetTextColor(T.textMuted[1], T.textMuted[2], T.textMuted[3], 1)
 
-        yOffset = yOffset + elvCard:GetContentHeight() + T.paddingSmall
+        yOffset = elvCard:GetNextOffset()
     end
 
     ---------------------------------------------------------------------------------
-    -- Card 6: Support
+    -- Card 7: Support
     ---------------------------------------------------------------------------------
     local card6 = GUIFrame:CreateCard(scrollChild, "Support", yOffset)
 
@@ -187,7 +189,7 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
     local discordLabel = card6:AddLabel("Send a message for support directly on Discord: |cff20d00bglizzygordo|r or |cff20d00bdunnni|r")
     discordLabel:SetTextColor(T.textMuted[1], T.textMuted[2], T.textMuted[3], 1)
 
-    yOffset = yOffset + card6:GetContentHeight() + T.paddingSmall
+    yOffset = card6:GetNextOffset()
 
     yOffset = yOffset - (T.paddingSmall * 3)
     return yOffset

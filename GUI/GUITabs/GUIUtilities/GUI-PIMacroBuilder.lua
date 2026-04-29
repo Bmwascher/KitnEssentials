@@ -10,10 +10,6 @@ local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 
-local table_insert = table.insert
-local ipairs = ipairs
-local tostring = tostring
-local tonumber = tonumber
 local C_Spell = C_Spell
 local C_Item = C_Item
 local GetInventoryItemTexture = GetInventoryItemTexture
@@ -30,7 +26,7 @@ GUIFrame:RegisterContent("PIMacroBuilder", function(scrollChild, yOffset)
     if not db then return yOffset end
 
     local PI = GetModule()
-    local allWidgets = {}
+    local manager = GUIFrame:CreateWidgetStateManager()
 
     local function ApplySettings()
         if PI and PI.ApplySettings then PI:ApplySettings() end
@@ -43,14 +39,10 @@ GUIFrame:RegisterContent("PIMacroBuilder", function(scrollChild, yOffset)
         else KitnEssentials:DisableModule("PIMacroBuilder") end
     end
 
-    local function UpdateAllWidgetStates()
-        local mainEnabled = db.Enabled ~= false
-        for _, widget in ipairs(allWidgets) do
-            if widget.SetEnabled then widget:SetEnabled(mainEnabled) end
-        end
+    local function RefreshStates()
+        manager:UpdateAll(db.Enabled ~= false)
     end
 
-    -- Icon helpers
     local function SpellIcon(spellID, displayName)
         local info = C_Spell.GetSpellInfo(spellID)
         if info and info.iconID then
@@ -75,60 +67,62 @@ GUIFrame:RegisterContent("PIMacroBuilder", function(scrollChild, yOffset)
         return displayName
     end
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 1: Enable
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Power Infusion", yOffset)
 
-    local row1 = GUIFrame:CreateRow(card1.content, 36)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Power Infusion", db.Enabled ~= false,
-        function(checked)
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Power Infusion", {
+        value = db.Enabled ~= false,
+        callback = function(checked)
             db.Enabled = checked
             ApplyModuleState(checked)
-            UpdateAllWidgetStates()
+            RefreshStates()
         end,
-        true, "Power Infusion", "On", "Off")
+        msgPopup = true,
+        msgText = "Power Infusion",
+        msgOn = "On",
+        msgOff = "Off",
+    })
     row1:AddWidget(enableCheck, 0.5)
-    card1:AddRow(row1, 36)
+    card1:AddRow(row1, Theme.rowHeight)
 
-    local noteHeight = 50
-    local noteRow = GUIFrame:CreateRow(card1.content, noteHeight)
+    local noteRow = GUIFrame:CreateRow(card1.content, 50)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " Auto-creates a macro for Power Infusion with optional extras.\n" ..
         KE:ColorTextByTheme("-") .. " Drag the macro from " .. KE:ColorTextByTheme("/macro") .. " to your action bar.",
-        noteHeight, "hide")
+        50, "hide")
     noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, noteHeight)
+    card1:AddRow(noteRow, 50, 0)
 
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+    yOffset = card1:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 2: How to Use
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "How to Use", yOffset)
-    table_insert(allWidgets, card2)
+    manager:Register(card2, "all")
 
-    local usageHeight = 85
-    local usageRow = GUIFrame:CreateRow(card2.content, usageHeight)
+    local usageRow = GUIFrame:CreateRow(card2.content, 70)
     local usageText = GUIFrame:CreateText(usageRow,
         "",
         KE:ColorTextByTheme("-") .. " Configure the macro options below to customize your PI macro.\n" ..
         KE:ColorTextByTheme("-") .. " Use " .. KE:ColorTextByTheme("/kitn pi") .. " while hovering or targeting a friendly player to update the macro target.\n" ..
         "   (out of combat only)\n" ..
-        KE:ColorTextByTheme("-") .. " We recommend creating a helper macro containing " .. KE:ColorTextByTheme("/kitn pi") .. "\n" ..
-        "   for easy instant target updating!",
-        usageHeight, "hide")
+        KE:ColorTextByTheme("-") .. " We recommend creating a helper macro containing " .. KE:ColorTextByTheme("/kitn pi") .. " for easy instant target updating!",
+        70, "hide")
     usageRow:AddWidget(usageText, 1)
-    card2:AddRow(usageRow, usageHeight)
+    card2:AddRow(usageRow, 70, 0)
 
-    yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
+    yOffset = card2:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 3: Core Abilities
-    ---------------------------------------------------------------------------------
-    local card3a = GUIFrame:CreateCard(scrollChild, "Core Abilities", yOffset)
-    table_insert(allWidgets, card3a)
+    ----------------------------------------------------------------
+    local cardCore = GUIFrame:CreateCard(scrollChild, "Core Abilities", yOffset)
+    manager:Register(cardCore, "all")
 
     local abilityDefs = {
         { key = "Trinket1", label = TrinketIcon(13) .. "Trinket 1  |cff888888- Add /use 13 to the macro.|r", default = true },
@@ -136,134 +130,163 @@ GUIFrame:RegisterContent("PIMacroBuilder", function(scrollChild, yOffset)
         { key = "VampiricEmbrace", label = SpellIcon(15286, "Vampiric Embrace") .. "  |cff888888- Add Vampiric Embrace to the macro.|r", default = true },
     }
 
-    for _, def in ipairs(abilityDefs) do
+    for i, def in ipairs(abilityDefs) do
         local checked = db[def.key]
         if checked == nil then checked = def.default end
-        local row = GUIFrame:CreateRow(card3a.content, 42)
-        local checkbox = GUIFrame:CreateCheckbox(row, def.label, checked,
-            function(val) db[def.key] = val; ApplySettings() end)
+        local isLast = i == #abilityDefs
+        local rowHeight = isLast and Theme.rowHeightLast or Theme.rowHeight
+        local row = GUIFrame:CreateRow(cardCore.content, rowHeight)
+        local checkbox = GUIFrame:CreateCheckbox(row, def.label, {
+            value = checked,
+            callback = function(val) db[def.key] = val; ApplySettings() end,
+        })
         row:AddWidget(checkbox, 1)
-        table_insert(allWidgets, checkbox)
-        card3a:AddRow(row, 42)
+        manager:Register(checkbox, "all")
+        if isLast then
+            cardCore:AddRow(row, rowHeight, 0)
+        else
+            cardCore:AddRow(row, rowHeight)
+        end
     end
 
-    yOffset = yOffset + card3a:GetContentHeight() + Theme.paddingSmall
+    yOffset = cardCore:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
-    -- Card 3: Optional Extras
-    ---------------------------------------------------------------------------------
-    local card3 = GUIFrame:CreateCard(scrollChild, "Optional Extras", yOffset)
-    table_insert(allWidgets, card3)
+    ----------------------------------------------------------------
+    -- Card 4: Optional Extras
+    ----------------------------------------------------------------
+    local cardExtras = GUIFrame:CreateCard(scrollChild, "Optional Extras", yOffset)
+    manager:Register(cardExtras, "all")
 
-    -- Racial dropdown
     local racialOptions = {
-        { value = "", text = "None" },
-        { value = "Ancestral Call", text = SpellIcon(274738, "Ancestral Call") },
-        { value = "Berserking", text = SpellIcon(26297, "Berserking") },
-        { value = "Blood Fury", text = SpellIcon(20572, "Blood Fury") },
-        { value = "Fireblood", text = SpellIcon(265221, "Fireblood") },
+        { key = "", text = "None" },
+        { key = "Ancestral Call", text = SpellIcon(274738, "Ancestral Call") },
+        { key = "Berserking", text = SpellIcon(26297, "Berserking") },
+        { key = "Blood Fury", text = SpellIcon(20572, "Blood Fury") },
+        { key = "Fireblood", text = SpellIcon(265221, "Fireblood") },
     }
+    local rowRacial = GUIFrame:CreateRow(cardExtras.content, Theme.rowHeight)
+    local racialDropdown = GUIFrame:CreateDropdown(rowRacial, "Racial", {
+        options = racialOptions,
+        value = db.Racial or "",
+        callback = function(val) db.Racial = val; ApplySettings() end,
+    })
+    rowRacial:AddWidget(racialDropdown, 1)
+    manager:Register(racialDropdown, "all")
+    cardExtras:AddRow(rowRacial, Theme.rowHeight)
 
-    local racialDropdown = GUIFrame:CreateDropdown(card3.content, "Racial", racialOptions, db.Racial or "", 40, function(val)
-        db.Racial = val; ApplySettings()
-    end)
-    table_insert(allWidgets, racialDropdown)
-    card3:AddRow(racialDropdown, 40)
-
-    -- Potion dropdown
     local potionOptions = {
-        { value = "", text = "None" },
-        { value = "item:241309", text = ItemIcon(241309, "Light's Potential (Silver)") },
-        { value = "item:241308", text = ItemIcon(241308, "Light's Potential (Gold)") },
-        { value = "item:241289", text = ItemIcon(241289, "Potion of Recklessness (Silver)") },
-        { value = "item:241288", text = ItemIcon(241288, "Potion of Recklessness (Gold)") },
-        { value = "item:241293", text = ItemIcon(241293, "Draught of Rampant Abandon (Silver)") },
-        { value = "item:241292", text = ItemIcon(241292, "Draught of Rampant Abandon (Gold)") },
+        { key = "", text = "None" },
+        { key = "item:241309", text = ItemIcon(241309, "Light's Potential (Silver)") },
+        { key = "item:241308", text = ItemIcon(241308, "Light's Potential (Gold)") },
+        { key = "item:241289", text = ItemIcon(241289, "Potion of Recklessness (Silver)") },
+        { key = "item:241288", text = ItemIcon(241288, "Potion of Recklessness (Gold)") },
+        { key = "item:241293", text = ItemIcon(241293, "Draught of Rampant Abandon (Silver)") },
+        { key = "item:241292", text = ItemIcon(241292, "Draught of Rampant Abandon (Gold)") },
     }
+    local rowPotion = GUIFrame:CreateRow(cardExtras.content, Theme.rowHeight)
+    local potionDropdown = GUIFrame:CreateDropdown(rowPotion, "Potion", {
+        options = potionOptions,
+        value = db.Potion or "",
+        callback = function(val) db.Potion = val; ApplySettings() end,
+    })
+    rowPotion:AddWidget(potionDropdown, 1)
+    manager:Register(potionDropdown, "all")
+    cardExtras:AddRow(rowPotion, Theme.rowHeight)
 
-    local potionDropdown = GUIFrame:CreateDropdown(card3.content, "Potion", potionOptions, db.Potion or "", 70, function(val)
-        db.Potion = val; ApplySettings()
-    end)
-    table_insert(allWidgets, potionDropdown)
-    card3:AddRow(potionDropdown, 40)
-
-    -- Fleeting Potion dropdown
     local fleetingOptions = {
-        { value = "", text = "None" },
-        { value = "item:245897", text = ItemIcon(245897, "Fleeting Light's Potential (Silver)") },
-        { value = "item:245898", text = ItemIcon(245898, "Fleeting Light's Potential (Gold)") },
-        { value = "item:245903", text = ItemIcon(245903, "Fleeting Potion of Recklessness (Silver)") },
-        { value = "item:245902", text = ItemIcon(245902, "Fleeting Potion of Recklessness (Gold)") },
-        { value = "item:245911", text = ItemIcon(245911, "Fleeting Draught of Rampant Abandon (Silver)") },
-        { value = "item:245910", text = ItemIcon(245910, "Fleeting Draught of Rampant Abandon (Gold)") },
+        { key = "", text = "None" },
+        { key = "item:245897", text = ItemIcon(245897, "Fleeting Light's Potential (Silver)") },
+        { key = "item:245898", text = ItemIcon(245898, "Fleeting Light's Potential (Gold)") },
+        { key = "item:245903", text = ItemIcon(245903, "Fleeting Potion of Recklessness (Silver)") },
+        { key = "item:245902", text = ItemIcon(245902, "Fleeting Potion of Recklessness (Gold)") },
+        { key = "item:245911", text = ItemIcon(245911, "Fleeting Draught of Rampant Abandon (Silver)") },
+        { key = "item:245910", text = ItemIcon(245910, "Fleeting Draught of Rampant Abandon (Gold)") },
     }
+    local rowFleeting = GUIFrame:CreateRow(cardExtras.content, Theme.rowHeight)
+    local fleetingDropdown = GUIFrame:CreateDropdown(rowFleeting, "Fleeting Potion", {
+        options = fleetingOptions,
+        value = db.FleetingPotion or "",
+        callback = function(val) db.FleetingPotion = val; ApplySettings() end,
+    })
+    rowFleeting:AddWidget(fleetingDropdown, 1)
+    manager:Register(fleetingDropdown, "all")
+    cardExtras:AddRow(rowFleeting, Theme.rowHeight)
 
-    local fleetingDropdown = GUIFrame:CreateDropdown(card3.content, "Fleeting Potion", fleetingOptions, db.FleetingPotion or "", 70, function(val)
-        db.FleetingPotion = val; ApplySettings()
-    end)
-    table_insert(allWidgets, fleetingDropdown)
-    card3:AddRow(fleetingDropdown, 40)
+    local rowFleetNote = GUIFrame:CreateRow(cardExtras.content, Theme.rowHeight)
+    local fleetNote = GUIFrame:CreateText(rowFleetNote,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " Fleeting potions are placed first in the macro so they are used before regular potions when available.",
+        Theme.rowHeight, "hide")
+    rowFleetNote:AddWidget(fleetNote, 1)
+    manager:Register(fleetNote, "all")
+    cardExtras:AddRow(rowFleetNote, Theme.rowHeight)
 
-    card3:AddLabel("|cff888888Fleeting potions are placed first in the macro so they are used before regular potions when available.|r")
-
-    -- Additional /use line
-    local rowCustom = GUIFrame:CreateRow(card3.content, 30)
-    local customInput = GUIFrame:CreateEditBox(rowCustom, "Additional /use Line", db.Custom or "", function(val)
-        db.Custom = val; ApplySettings()
-    end)
+    local rowCustom = GUIFrame:CreateRow(cardExtras.content, Theme.rowHeight)
+    local customInput = GUIFrame:CreateEditBox(rowCustom, "Additional /use Line", {
+        value = db.Custom or "",
+        callback = function(val) db.Custom = val; ApplySettings() end,
+    })
     rowCustom:AddWidget(customInput, 1)
-    table_insert(allWidgets, customInput)
-    card3:AddRow(rowCustom, 30)
+    manager:Register(customInput, "all")
+    cardExtras:AddRow(rowCustom, Theme.rowHeight)
 
-    card3:AddSpacing(4)
-    card3:AddLabel("|cff888888Add any spell or item to the macro. Example: " .. KE:ColorTextByTheme("Shadowfiend") .. " or " .. KE:ColorTextByTheme("item:12345") .. "|r")
+    local rowCustomNote = GUIFrame:CreateRow(cardExtras.content, Theme.rowHeight)
+    local customNote = GUIFrame:CreateText(rowCustomNote,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " Add any spell or item to the macro. Example: " .. KE:ColorTextByTheme("Shadowfiend") .. " or " .. KE:ColorTextByTheme("item:12345"),
+        Theme.rowHeight, "hide")
+    rowCustomNote:AddWidget(customNote, 1)
+    manager:Register(customNote, "all")
+    cardExtras:AddRow(rowCustomNote, Theme.rowHeight, 0)
 
-    yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
+    yOffset = cardExtras:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
-    -- Card 4: Advanced
-    ---------------------------------------------------------------------------------
-    local card4 = GUIFrame:CreateCard(scrollChild, "Advanced", yOffset)
-    table_insert(allWidgets, card4)
+    ----------------------------------------------------------------
+    -- Card 5: Advanced
+    ----------------------------------------------------------------
+    local card5 = GUIFrame:CreateCard(scrollChild, "Advanced", yOffset)
+    manager:Register(card5, "all")
 
-    local row4a = GUIFrame:CreateRow(card4.content, 40)
-    local nameEditBox = GUIFrame:CreateEditBox(row4a, "Macro Name", db.MacroName or "PI",
-        function(val)
+    local row5a = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
+    local nameEditBox = GUIFrame:CreateEditBox(row5a, "Macro Name", {
+        value = db.MacroName or "PI",
+        callback = function(val)
             if val and val ~= "" then
                 db.MacroName = val
             else
                 db.MacroName = "PI"
             end
             ApplySettings()
-        end)
-    row4a:AddWidget(nameEditBox, 0.5)
-    table_insert(allWidgets, nameEditBox)
+        end,
+    })
+    row5a:AddWidget(nameEditBox, 0.5)
+    manager:Register(nameEditBox, "all")
 
-    local iconEditBox = GUIFrame:CreateEditBox(row4a, "Macro Icon ID", tostring(db.MacroIcon or 135939),
-        function(val)
+    local iconEditBox = GUIFrame:CreateEditBox(row5a, "Macro Icon ID", {
+        value = tostring(db.MacroIcon or 135939),
+        callback = function(val)
             local num = tonumber(val)
             if num then
                 db.MacroIcon = num
                 ApplySettings()
             end
-        end)
-    row4a:AddWidget(iconEditBox, 0.5)
-    table_insert(allWidgets, iconEditBox)
-    card4:AddRow(row4a, 40)
+        end,
+    })
+    row5a:AddWidget(iconEditBox, 0.5)
+    manager:Register(iconEditBox, "all")
+    card5:AddRow(row5a, Theme.rowHeight)
 
-    local advNoteHeight = 55
-    local advNoteRow = GUIFrame:CreateRow(card4.content, advNoteHeight)
+    local advNoteRow = GUIFrame:CreateRow(card5.content, 55)
     local advNoteText = GUIFrame:CreateText(advNoteRow,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " Macro icon accepts numeric icon IDs. Default is " .. KE:ColorTextByTheme("135939") .. " (Power Infusion).\n   " ..
         KE:ColorTextByTheme(">") .. " Find IDs by clicking any spell or item icon on Wowhead.",
-        advNoteHeight, "hide")
+        55, "hide")
     advNoteRow:AddWidget(advNoteText, 1)
-    card4:AddRow(advNoteRow, advNoteHeight)
+    card5:AddRow(advNoteRow, 55, 0)
 
-    yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
+    yOffset = card5:GetNextOffset()
 
-    UpdateAllWidgetStates()
-    yOffset = yOffset - Theme.paddingSmall
+    RefreshStates()
     return yOffset
 end)

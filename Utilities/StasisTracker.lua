@@ -224,8 +224,8 @@ function ST:ApplySettings()
     self.bar:SetStatusBarColor(r, g, b, a)
 
     -- Bar background
-    local bg = db.BarBackgroundColor or { 0, 0, 0, 0.8 }
-    self.barBackground:SetColorTexture(bg[1], bg[2], bg[3], bg[4] or 0.8)
+    local bgr, bgg, bgb, bga = KE:ResolveColor(db.BarBackgroundColor, { 0, 0, 0, 0.8 })
+    self.barBackground:SetColorTexture(bgr, bgg, bgb, bga)
 
     -- Font
     KE:ApplyFontToText(self.countdownText,

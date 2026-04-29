@@ -27,6 +27,10 @@ local GetTime = GetTime
 local ipairs, pairs = ipairs, pairs
 local max = math.max
 
+-- Flip to true, /reload, repro, paste the log. Logs OnUnitDied entry,
+-- IsContextActive result, and the focus-death GUID comparison branches.
+local DEBUG_DN = false
+
 -- Fade tail length: messages hold full opacity until (Duration - FADE_DURATION),
 -- then OnUpdate-driven alpha fade over this window. Matches Combat Texts.
 local FADE_DURATION = 0.4
@@ -97,7 +101,8 @@ local function IsContextActive(db)
 end
 
 local function FormatDeathMessage(format, name, nameColor, textColor)
-    local textHex = KE:RGBAToHex(textColor[1], textColor[2], textColor[3])
+    local tr, tg, tb = KE:ResolveColor(textColor, { 1, 1, 1, 1 })
+    local textHex = KE:RGBAToHex(tr, tg, tb)
     local textStart = "|cFF" .. textHex
     local textEnd = "|r"
 
@@ -105,7 +110,8 @@ local function FormatDeathMessage(format, name, nameColor, textColor)
     if nameColor.WrapTextInColorCode then
         coloredName = nameColor:WrapTextInColorCode(name)
     else
-        local nameHex = KE:RGBAToHex(nameColor[1], nameColor[2], nameColor[3])
+        local nr, ng, nb = KE:ResolveColor(nameColor, { 1, 1, 1, 1 })
+        local nameHex = KE:RGBAToHex(nr, ng, nb)
         coloredName = "|cFF" .. nameHex .. name .. "|r"
     end
 
@@ -249,7 +255,8 @@ function DN:SetMessageContent(frame, msgText, color, iconAtlas)
 
     frame.text:SetText("")
     frame.text:SetText(msgText)
-    frame.text:SetTextColor(color[1], color[2], color[3], color[4] or 1)
+    local r, g, b, a = KE:ResolveColor(color, { 1, 1, 1, 1 })
+    frame.text:SetTextColor(r, g, b, a)
 
     local textWidth = frame.text:GetStringWidth() or 100
     local textHeight = frame.text:GetStringHeight() or 12
@@ -361,23 +368,84 @@ end
 -- Event handlers
 ---------------------------------------------------------------------------------
 function DN:CheckFocusDeath(deadGUID)
-    if not self.db.FocusDeath.Enabled then return end
+    local fdCfg = self.db.FocusDeath
+    if not fdCfg or not fdCfg.Enabled then
+        if DEBUG_DN then KE:Print("[DN] focus check skipped — FocusDeath disabled or missing") end
+        return
+    end
+
+    if not UnitExists("focus") then
+        self.lastFocusDeadState = false
+        return
+    end
 
     local focusGUID = UnitGUID("focus")
-    if not focusGUID or KE:IsSecretValue(focusGUID) or KE:IsSecretValue(deadGUID) then return end
-    if focusGUID ~= deadGUID then return end
+    local focusSecret = KE:IsSecretValue(focusGUID)
+    local deadSecret = KE:IsSecretValue(deadGUID)
+    if DEBUG_DN then
+        KE:Print(string.format("[DN] focus check: focusGUID=%s (secret=%s), deadSecret=%s",
+            tostring(focusGUID), tostring(focusSecret), tostring(deadSecret)))
+    end
 
-    local cfg = self.db.FocusDeath
-    self:ShowFlashMessage("focusDeath", cfg.Text or "FOCUS DIED", cfg.Color or { 1, 0.3, 0.3, 1 })
+    -- Primary path: clean GUID equality. Deterministic, no dedup needed —
+    -- a single UNIT_DIED maps to a single GUID match.
+    if focusGUID and not focusSecret and not deadSecret then
+        if focusGUID == deadGUID then
+            if DEBUG_DN then KE:Print("[DN] focus death FIRING (GUID match)") end
+            self.lastFocusDeadState = true
+            local cfg = self.db.FocusDeath
+            self:ShowFlashMessage("focusDeath", cfg.Text or "FOCUS DIED", cfg.Color or { 1, 0.3, 0.3, 1 })
+        elseif DEBUG_DN then
+            KE:Print("[DN] focus check returned — GUIDs do not match")
+        end
+        return
+    end
+
+    -- Fallback path: UNIT_DIED's unitGUID is SecretWhenUnitIdentityRestricted,
+    -- and UnitGUID("focus") may also be secret in encounters with restricted
+    -- identities. Skip GUID compare and poll UnitIsDead("focus") directly,
+    -- with state-based dedup so we don't re-fire on every mob death in the
+    -- pull while the focus stays dead.
+    local dead = UnitIsDead("focus")
+    if KE:IsSecretValue(dead) then dead = true end
+    if dead and not self.lastFocusDeadState then
+        if DEBUG_DN then KE:Print("[DN] focus death FIRING (secret-fallback path)") end
+        self.lastFocusDeadState = true
+        local cfg = self.db.FocusDeath
+        self:ShowFlashMessage("focusDeath", cfg.Text or "FOCUS DIED", cfg.Color or { 1, 0.3, 0.3, 1 })
+    elseif not dead then
+        self.lastFocusDeadState = false
+    end
+end
+
+function DN:OnFocusChanged()
+    -- Reset dedup so the new focus dying triggers a fresh alert even if the
+    -- previous focus was dead when we swapped.
+    self.lastFocusDeadState = false
 end
 
 function DN:OnUnitDied(_, deadGUID)
-    if not self.db.Enabled or self.isPreview then return end
-    if not IsContextActive(self.db) then return end
+    if DEBUG_DN then
+        KE:Print(string.format("[DN] OnUnitDied fired (deadGUID=%s, secret=%s)",
+            tostring(deadGUID), tostring(KE:IsSecretValue(deadGUID))))
+    end
+    if not self.db.Enabled or self.isPreview then
+        if DEBUG_DN then KE:Print("[DN] returned — Enabled=false or in preview") end
+        return
+    end
 
+    -- Focus is user-set — fire anywhere (open world, dungeon, raid). Only
+    -- party-death gating depends on instance context.
     self:CheckFocusDeath(deadGUID)
 
-    if not self.db.PartyDeath.Enabled then return end
+    if not IsContextActive(self.db) then
+        local _, instType = IsInInstance()
+        if DEBUG_DN then KE:Print(string.format("[DN] party-death gate — context inactive (instanceType=%s)", tostring(instType))) end
+        return
+    end
+
+    local pdCfg = self.db.PartyDeath
+    if not pdCfg or not pdCfg.Enabled then return end
 
     -- Throttle: at most 4 party-death announcements per 10s window so a
     -- raid wipe doesn't spam the screen.
@@ -424,7 +492,7 @@ function DN:ApplySettings()
         local frame = self.messageFrames[msgType]
         if frame and frame:IsShown() then
             if msgType == "focusDeath" then
-                local cfg = self.db.FocusDeath
+                local cfg = self.db.FocusDeath or {}
                 self:SetMessageContent(frame, cfg.Text or "FOCUS DIED",
                     cfg.Color or { 1, 0.3, 0.3, 1 }, nil)
             end
@@ -440,7 +508,7 @@ function DN:UpdatePreview()
     -- Party death preview — uses player's own name + class color so users
     -- see how the format renders.
     local pdCfg = self.db.PartyDeath
-    if pdCfg.Enabled then
+    if pdCfg and pdCfg.Enabled then
         local frame = self:GetMessageFrame("partyDeath")
         local msgText, iconAtlas = FormatPartyDeathMessage(self.db, "player", "Player")
         msgText = msgText or "PLAYER DIED"
@@ -453,7 +521,7 @@ function DN:UpdatePreview()
     end
 
     local fdCfg = self.db.FocusDeath
-    if fdCfg.Enabled then
+    if fdCfg and fdCfg.Enabled then
         local frame = self:GetMessageFrame("focusDeath")
         self:SetMessageContent(frame, fdCfg.Text or "FOCUS DIED",
             fdCfg.Color or { 1, 0.3, 0.3, 1 }, nil)
@@ -492,6 +560,7 @@ function DN:OnEnable()
 
     self.isPreview = false
     self.deathThrottle = { count = 0, resetTime = 0 }
+    self.lastFocusDeadState = false
 
     self:CreateContainer()
     for _, msgType in ipairs(MESSAGE_TYPES) do self:GetMessageFrame(msgType) end
@@ -499,6 +568,7 @@ function DN:OnEnable()
     C_Timer.After(0.5, function() self:ApplySettings() end)
 
     self:RegisterEvent("UNIT_DIED", "OnUnitDied")
+    self:RegisterEvent("PLAYER_FOCUS_CHANGED", "OnFocusChanged")
 
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({

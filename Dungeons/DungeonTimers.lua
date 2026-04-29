@@ -1598,6 +1598,137 @@ function DT:Refresh()
     end
 end
 
+-- In-place visual update: re-applies size/font/texture/colors/text-format to one frame
+-- without destroying it. Returns true if applied, false if a structural rebuild is needed
+-- (displayType change, icon toggle, soft-outline mode toggle).
+function DT:UpdateFrameVisualsInPlace(frame, config)
+    if not frame or not config then return false end
+
+    local wantBar = config.displayType == "bar"
+    if wantBar ~= (frame.isBarDisplay == true) then return false end
+    if wantBar and (frame.showIcon == true) ~= (config.iconEnabled == true) then return false end
+
+    local fontPath = KE:GetFontPath(config.fontFace) or KE.FONT or "Fonts\\FRIZQT__.TTF"
+    local fontSize = config.fontSize or 12
+    local fontOutline = config.fontOutline or "OUTLINE"
+    local useSoftOutline = fontOutline == "SOFTOUTLINE"
+    local actualOutline = useSoftOutline and "" or (fontOutline == "NONE" and "" or fontOutline)
+
+    -- Soft-outline toggle requires shadow recreation; let caller rebuild.
+    local hadSoftOutline = (frame.text1 and frame.text1.softOutline ~= nil)
+        or (frame.displayText and frame.displayText.softOutline ~= nil)
+    if hadSoftOutline ~= useSoftOutline then return false end
+
+    if frame.isBarDisplay then
+        frame:SetSize(config.barWidth or 200, config.barHeight or 20)
+        if frame.iconFrame then
+            frame.iconFrame:SetSize(config.barHeight or 20, config.barHeight or 20)
+        end
+        if frame.bar then
+            frame.bar:SetStatusBarTexture(self:GetStatusbarPath(config.barTexture))
+        end
+        if frame.text1 then
+            frame.text1:SetFont(fontPath, fontSize, actualOutline)
+            frame.text1:ClearAllPoints()
+            frame.text1:SetPoint("LEFT", frame.bar, "LEFT", config.barText1XOffset or 4, config.barText1YOffset or 0)
+            frame.text1:SetPoint("RIGHT", frame.bar, "RIGHT", (config.barText1XOffset or 4) - 8, config.barText1YOffset or 0)
+            frame.text1:SetJustifyH(config.barText1Justify or "LEFT")
+        end
+        if frame.text2 then
+            frame.text2:SetFont(fontPath, fontSize, actualOutline)
+            frame.text2:ClearAllPoints()
+            frame.text2:SetPoint("LEFT", frame.bar, "LEFT", (config.barText2XOffset or -4) + 8, config.barText2YOffset or 0)
+            frame.text2:SetPoint("RIGHT", frame.bar, "RIGHT", config.barText2XOffset or -4, config.barText2YOffset or 0)
+            frame.text2:SetJustifyH(config.barText2Justify or "RIGHT")
+        end
+    else
+        frame:SetSize(config.barWidth or 200, fontSize + 4)
+        if frame.displayText then
+            frame.displayText:SetFont(fontPath, fontSize, actualOutline)
+            frame.displayText:SetJustifyH(config.textJustify or "LEFT")
+        end
+    end
+
+    local barData = frame.barData or { isPreview = true }
+    if frame.bar then
+        self:ApplyBarColors(frame, config, barData)
+    elseif frame.displayText then
+        -- ApplyBarColors early-returns on text frames; apply text color directly
+        local textColor = config.textColor
+        if config.useBigWigsColors and barData.bwTextColor then
+            textColor = barData.bwTextColor
+        end
+        if textColor and type(textColor) == "table" then
+            frame.displayText:SetTextColor(textColor[1] or 1, textColor[2] or 1, textColor[3] or 1, textColor[4] or 1)
+        end
+    end
+
+    frame.config = config
+    return true
+end
+
+-- Update visual settings on existing frames without a full rebuild.
+-- With (dungeonKey, triggerId): targets one frame (used by per-dungeon GUI panel).
+-- With no args: iterates all frames (used by DT_Bars / DT_Texts global pages).
+-- Falls back to delete+rebuild for any frame that can't be updated in place.
+function DT:UpdateFrameVisuals(dungeonKey, triggerId)
+    if not self.db or not self.db.Dungeons then return end
+
+    local function getTrigger(dKey, tId)
+        -- Real triggers from saved DB
+        local d = self.db.Dungeons[dKey]
+        local trigger = d and d.Triggers and d.Triggers[tId]
+        if trigger then return trigger end
+        -- Settings preview synthetic triggers (DT_Bars / DT_Texts pages)
+        if self.settingsPreviewTriggers and self.settingsPreviewTriggers[dKey] then
+            return self.settingsPreviewTriggers[dKey][tId]
+        end
+        return nil
+    end
+
+    local function rebuildOne(frameKey, dKey, tId, frame)
+        local trigger = getTrigger(dKey, tId)
+        if not trigger then return end
+        local wasShown = frame:IsShown()
+        local barData = self.triggerBars[frameKey]
+        frame:Hide()
+        self.triggerFrames[frameKey] = nil
+        if wasShown and barData then
+            self:ShowTriggerDisplay(dKey, tId, trigger, barData)
+        end
+    end
+
+    if dungeonKey and triggerId then
+        local frameKey = dungeonKey .. "_" .. triggerId
+        local frame = self.triggerFrames[frameKey]
+        local trigger = getTrigger(dungeonKey, triggerId)
+        if not frame or not trigger then return end
+
+        local config = self:GetTriggerConfig(trigger)
+        if not self:UpdateFrameVisualsInPlace(frame, config) then
+            rebuildOne(frameKey, dungeonKey, triggerId, frame)
+        end
+    else
+        local rebuildList = {}
+        for frameKey, frame in pairs(self.triggerFrames) do
+            local dKey = frame.dungeonKey
+            local tId = frame.triggerId
+            local trigger = dKey and tId and getTrigger(dKey, tId)
+            if trigger then
+                local config = self:GetTriggerConfig(trigger)
+                if not self:UpdateFrameVisualsInPlace(frame, config) then
+                    table_insert(rebuildList, { fk = frameKey, dKey = dKey, tId = tId, frame = frame })
+                end
+            end
+        end
+        for _, info in ipairs(rebuildList) do
+            rebuildOne(info.fk, info.dKey, info.tId, info.frame)
+        end
+    end
+
+    self:PositionAllFrames()
+end
+
 function DT:DeleteTrigger(dungeonKey, triggerId)
     if not self.db or not self.db.Dungeons then return end
     local dungeonData = self.db.Dungeons[dungeonKey]
@@ -1846,6 +1977,132 @@ function DT:DisablePreviews()
     self:HideAllPreviews()
 end
 
+---------------------------------------------------------------------------------
+-- Settings Previews (DT_Bars / DT_Texts pages)
+---------------------------------------------------------------------------------
+
+local SETTINGS_BAR_KEY = "__settings_bar__"
+local SETTINGS_TEXT_KEY = "__settings_text__"
+local SETTINGS_PREVIEW_LABELS = { "Sample Timer A", "Sample Timer B", "Sample Timer C" }
+local SETTINGS_PREVIEW_COUNT = 3
+
+local function buildSettingsPreviewTrigger(displayType, idx)
+    return {
+        id = idx,
+        name = SETTINGS_PREVIEW_LABELS[idx] or ("Sample " .. idx),
+        displayType = displayType,
+        triggerType = "Timer",
+        enabled = true,
+        useBigWigsColors = false,
+        barColor = { 1, 0.5, 0, 1 },
+        textColor = { 1, 1, 1, 1 },
+        barText1Format = "%n",
+        barText1Justify = "LEFT",
+        barText1XOffset = 4,
+        barText1YOffset = 0,
+        barText2Format = "%p",
+        barText2Justify = "RIGHT",
+        barText2XOffset = -4,
+        barText2YOffset = 0,
+        textFormat = "%n %p",
+        showDecimals = true,
+        decimalThreshold = 5,
+    }
+end
+
+function DT:_runSettingsPreviewIteration(dungeonKey, triggerId, displayType)
+    if not self.previewsAllowed then return end
+    self.settingsPreviewTriggers = self.settingsPreviewTriggers or {}
+    self.settingsPreviewTriggers[dungeonKey] = self.settingsPreviewTriggers[dungeonKey]
+        or { [1] = buildSettingsPreviewTrigger(displayType, 1),
+             [2] = buildSettingsPreviewTrigger(displayType, 2),
+             [3] = buildSettingsPreviewTrigger(displayType, 3) }
+
+    local trigger = self.settingsPreviewTriggers[dungeonKey][triggerId]
+    if not trigger then return end
+    trigger.displayType = displayType
+
+    local duration = 12 + (triggerId - 1) * 4
+    local selfRef = self
+    local barData = {
+        text = trigger.name,
+        icon = 136116,
+        duration = duration,
+        effectiveDuration = duration,
+        expirationTime = GetTime() + duration,
+        spellId = "",
+        count = 0,
+        isPreview = true,
+        spellName = trigger.name,
+    }
+    barData.loopCallback = function()
+        if selfRef.previewsAllowed and selfRef.settingsPreviewTriggers
+           and selfRef.settingsPreviewTriggers[dungeonKey] then
+            selfRef:_runSettingsPreviewIteration(dungeonKey, triggerId, displayType)
+        end
+    end
+    self:ShowTriggerDisplay(dungeonKey, triggerId, trigger, barData)
+end
+
+function DT:_startSettingsPreviews(dungeonKey, displayType)
+    self.previewsAllowed = true
+
+    -- Clear stale frames before restarting (covers refresh-after-settings-change path)
+    for frameKey, frame in pairs(self.triggerFrames) do
+        if frame.dungeonKey == dungeonKey then
+            frame:Hide()
+            self.triggerFrames[frameKey] = nil
+            self.triggerBars[frameKey] = nil
+        end
+    end
+    self.settingsPreviewTriggers = self.settingsPreviewTriggers or {}
+    self.settingsPreviewTriggers[dungeonKey] = nil
+
+    for i = 1, SETTINGS_PREVIEW_COUNT do
+        self:_runSettingsPreviewIteration(dungeonKey, i, displayType)
+    end
+    self:PositionAllFrames()
+end
+
+function DT:_clearSettingsPreviews(dungeonKey)
+    if self.settingsPreviewTriggers then
+        self.settingsPreviewTriggers[dungeonKey] = nil
+    end
+    for frameKey, frame in pairs(self.triggerFrames) do
+        if frame.dungeonKey == dungeonKey then
+            frame:Hide()
+            self.triggerFrames[frameKey] = nil
+            self.triggerBars[frameKey] = nil
+        end
+    end
+    self:PositionAllFrames()
+end
+
+function DT:ShowSettingsBarPreviews()  self:_startSettingsPreviews(SETTINGS_BAR_KEY, "bar")  end
+function DT:HideSettingsBarPreviews()  self:_clearSettingsPreviews(SETTINGS_BAR_KEY)         end
+
+-- Refresh applies visual changes in place to existing previews so the bar
+-- countdown stays smooth across setting changes. Falls back to a full restart
+-- only if previews aren't running yet (e.g. first time the page is opened).
+function DT:RefreshSettingsBarPreviews()
+    if self.settingsPreviewTriggers and self.settingsPreviewTriggers[SETTINGS_BAR_KEY] then
+        self:UpdateFrameVisuals()
+    else
+        self:_startSettingsPreviews(SETTINGS_BAR_KEY, "bar")
+    end
+end
+
+function DT:ShowSettingsTextPreviews() self:_startSettingsPreviews(SETTINGS_TEXT_KEY, "text") end
+function DT:HideSettingsTextPreviews() self:_clearSettingsPreviews(SETTINGS_TEXT_KEY)         end
+
+function DT:RefreshSettingsTextPreviews()
+    if self.settingsPreviewTriggers and self.settingsPreviewTriggers[SETTINGS_TEXT_KEY] then
+        self:UpdateFrameVisuals()
+    else
+        self:_startSettingsPreviews(SETTINGS_TEXT_KEY, "text")
+    end
+end
+
 function DT:RefreshPositions()
     self:UpdateBarGroupPosition()
     self:UpdateTextGroupPosition()
@@ -1859,6 +2116,12 @@ end
 function DT:GetBigWigsModulesForInstance(instanceId)
     local modules = {}
     if not BigWigs or not BigWigs.IterateBossModules then return modules end
+
+    if BigWigsLoader and BigWigsLoader.GetZoneMenus then
+        local menus = BigWigsLoader:GetZoneMenus()
+        local moduleList = menus and menus[instanceId]
+        if type(moduleList) == "table" then return moduleList end
+    end
 
     for _, module in BigWigs:IterateBossModules() do
         if module.instanceId == instanceId then
@@ -1881,18 +2144,23 @@ function DT:LoadBigWigsZone(instanceId)
     return false
 end
 
-function DT:GetSpellsForDungeon(dungeonKey, forceRefresh)
+function DT:GetSpellsForDungeon(dungeonKey, forceRefresh, isRetry)
     self:UpdateDB()
     if not self.db or not self.db.Dungeons then return {} end
 
     local dungeonData = self.db.Dungeons[dungeonKey]
     if not dungeonData or not dungeonData.instanceId then return {} end
 
-    if not forceRefresh and self.spellCache[dungeonKey] then
+    if forceRefresh then self.spellCache[dungeonKey] = nil end
+    if self.spellCache[dungeonKey] then
         return self.spellCache[dungeonKey]
     end
 
-    self:LoadBigWigsZone(dungeonData.instanceId)
+    if self:LoadBigWigsZone(dungeonData.instanceId) then
+        if not isRetry and not self.spellCache[dungeonKey] then
+            C_Timer.After(0.5, function() self:GetSpellsForDungeon(dungeonKey, true, true) end)
+        end
+    end
 
     local spells = {}
     local seenSpells = {}
@@ -1900,7 +2168,7 @@ function DT:GetSpellsForDungeon(dungeonKey, forceRefresh)
     local bossOrder = {}
     local bossNumberMap = {}
     for _, module in ipairs(modules) do
-        if module.GetOptions then
+        if module.GetOptions or module.toggleOptions then
             local sortKey = module.journalId or module.engageId or 999999
             table_insert(bossOrder, {
                 module = module,
@@ -1916,8 +2184,8 @@ function DT:GetSpellsForDungeon(dungeonKey, forceRefresh)
     end
 
     for _, module in ipairs(modules) do
-        if module.GetOptions then
-            local options = module:GetOptions()
+        if module.GetOptions or module.toggleOptions then
+            local options = module.toggleOptions or (module.GetOptions and module:GetOptions())
             if options then
                 local bossName = module.displayName or module.moduleName
                 local bossNum = bossNumberMap[bossName] or 0

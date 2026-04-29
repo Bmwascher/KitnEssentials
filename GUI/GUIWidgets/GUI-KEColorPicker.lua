@@ -16,11 +16,13 @@ local ColorPickerFrame = ColorPickerFrame
 -- Widget Creation
 ---------------------------------------------------------------------------------
 
--- ColorPicker widget
-function GUIFrame:CreateColorPicker(parent, labelText, color, callback)
-    local tooltip = nil
-    local customHeight = nil
-    local rowHeight = customHeight or 34
+-- ColorPicker widget — config-table API: { color = {r,g,b,a}, callback, tooltip }
+function GUIFrame:CreateColorPicker(parent, labelText, config)
+    config = config or {}
+    local color = config.color
+    local callback = config.callback
+    local tooltip = config.tooltip
+    local rowHeight = 34
     local ANIMATION_DURATION = 0.18
     local texPath = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\KitnColorPickerBG.png"
 

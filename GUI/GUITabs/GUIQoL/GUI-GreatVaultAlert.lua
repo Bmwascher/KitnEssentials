@@ -11,8 +11,6 @@ local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 local LSM = KE.LSM
 local PlaySoundFile = PlaySoundFile
-local table_insert = table.insert
-local ipairs, pairs = ipairs, pairs
 
 local function GetModule()
     if KitnEssentials then
@@ -26,7 +24,7 @@ GUIFrame:RegisterContent("GreatVaultAlert", function(scrollChild, yOffset)
     if not db then return yOffset end
 
     local GVA = GetModule()
-    local allWidgets = {}
+    local manager = GUIFrame:CreateWidgetStateManager()
 
     local function ApplySettings()
         if GVA then GVA:ApplySettings() end
@@ -39,25 +37,10 @@ GUIFrame:RegisterContent("GreatVaultAlert", function(scrollChild, yOffset)
         else KitnEssentials:DisableModule("GreatVaultAlert") end
     end
 
-    local function UpdateAllWidgetStates()
-        local mainEnabled = db.Enabled ~= false
-        for _, widget in ipairs(allWidgets) do
-            if widget.SetEnabled then widget:SetEnabled(mainEnabled) end
-        end
+    local function RefreshStates()
+        manager:UpdateAll(db.Enabled ~= false)
     end
 
-    -- Font / outline lists
-    local fontList = {}
-    if LSM then
-        for name in pairs(LSM:HashTable("font")) do fontList[name] = name end
-    else
-        fontList["Friz Quadrata TT"] = "Friz Quadrata TT"
-    end
-    local outlineList = {
-        { key = "NONE", text = "None" },
-        { key = "OUTLINE", text = "Outline" },
-        { key = "THICKOUTLINE", text = "Thick" },
-    }
     local channelList = {
         { key = "Master", text = "Master" },
         { key = "SFX", text = "SFX" },
@@ -65,119 +48,153 @@ GUIFrame:RegisterContent("GreatVaultAlert", function(scrollChild, yOffset)
         { key = "Ambience", text = "Ambience" },
     }
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 1: Enable
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Great Vault Spec Alert", yOffset)
 
-    local row1 = GUIFrame:CreateRow(card1.content, 40)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Great Vault Alert", db.Enabled ~= false,
-        function(checked) db.Enabled = checked; ApplyState(checked); UpdateAllWidgetStates() end,
-        true, "Great Vault Spec Alert", "On", "Off")
-    row1:AddWidget(enableCheck, 0.5)
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Great Vault Alert", {
+        value = db.Enabled ~= false,
+        callback = function(checked)
+            db.Enabled = checked
+            ApplyState(checked)
+            RefreshStates()
+        end,
+        msgPopup = true,
+        msgText = "Great Vault Spec Alert",
+        msgOn = "On",
+        msgOff = "Off",
+    })
+    row1:AddWidget(enableCheck, 1)
+    card1:AddRow(row1, Theme.rowHeight)
 
-    local chatCheck = GUIFrame:CreateCheckbox(row1, "Show Chat Message", db.ShowChatMessage ~= false,
-        function(checked) db.ShowChatMessage = checked end)
-    row1:AddWidget(chatCheck, 0.5)
-    table_insert(allWidgets, chatCheck)
-    card1:AddRow(row1, 40)
-
-    local noteHeight = 40
-    local noteRow = GUIFrame:CreateRow(card1.content, noteHeight)
+    local noteRow = GUIFrame:CreateRow(card1.content, 40)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " Shows your loot specialization when opening the Great Vault.",
-        noteHeight, "hide")
+        40, "hide")
     noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, noteHeight)
+    card1:AddRow(noteRow, 40, 0)
 
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+    yOffset = card1:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 2: Alert Settings
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Alert Settings", yOffset)
-    table_insert(allWidgets, card2)
-
-    -- Sound toggle + sound picker
-    local row2a = GUIFrame:CreateRow(card2.content, 40)
-    local soundCheck = GUIFrame:CreateCheckbox(row2a, "Play Sound", db.PlaySound ~= false,
-        function(checked) db.PlaySound = checked end)
-    row2a:AddWidget(soundCheck, 0.4)
-    table_insert(allWidgets, soundCheck)
+    manager:Register(card2, "all")
 
     local soundList = {}
     if LSM then
         for name in pairs(LSM:HashTable("sound")) do soundList[name] = name end
     end
-    local soundDropdown = GUIFrame:CreateDropdown(row2a, "Sound", soundList, db.SoundFile or "None", 50,
-        function(key)
+
+    -- Alert modes (chat + sound on/off)
+    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local chatCheck = GUIFrame:CreateCheckbox(row2a, "Show Chat Message", {
+        value = db.ShowChatMessage ~= false,
+        callback = function(checked) db.ShowChatMessage = checked end,
+    })
+    row2a:AddWidget(chatCheck, 0.5)
+    manager:Register(chatCheck, "all")
+
+    local soundCheck = GUIFrame:CreateCheckbox(row2a, "Play Sound", {
+        value = db.PlaySound ~= false,
+        callback = function(checked) db.PlaySound = checked end,
+    })
+    row2a:AddWidget(soundCheck, 0.5)
+    manager:Register(soundCheck, "all")
+    card2:AddRow(row2a, Theme.rowHeight)
+
+    local row2sep = GUIFrame:CreateRow(card2.content, Theme.rowHeightSeparator)
+    local sep2 = GUIFrame:CreateSeparator(row2sep)
+    row2sep:AddWidget(sep2, 1)
+    manager:Register(sep2, "all")
+    card2:AddRow(row2sep, Theme.rowHeightSeparator)
+
+    -- Sound config (both relevant only if Play Sound is on)
+    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local soundDropdown = GUIFrame:CreateDropdown(row2b, "Sound", {
+        options = soundList,
+        value = db.SoundFile or "None",
+        callback = function(key)
             db.SoundFile = key
             if key ~= "None" and LSM then
                 local path = LSM:Fetch("sound", key)
                 if path then PlaySoundFile(path, db.SoundChannel or "Master") end
             end
-        end)
-    row2a:AddWidget(soundDropdown, 0.6)
-    table_insert(allWidgets, soundDropdown)
-    card2:AddRow(row2a, 40)
+        end,
+    })
+    row2b:AddWidget(soundDropdown, 0.5)
+    manager:Register(soundDropdown, "all")
 
-    -- Sound channel
-    local row2b = GUIFrame:CreateRow(card2.content, 40)
-    local channelDropdown = GUIFrame:CreateDropdown(row2b, "Sound Channel", channelList, db.SoundChannel or "Master", 45,
-        function(key) db.SoundChannel = key end)
+    local channelDropdown = GUIFrame:CreateDropdown(row2b, "Sound Channel", {
+        options = channelList,
+        value = db.SoundChannel or "Master",
+        callback = function(key) db.SoundChannel = key end,
+    })
     row2b:AddWidget(channelDropdown, 0.5)
-    table_insert(allWidgets, channelDropdown)
+    manager:Register(channelDropdown, "all")
+    card2:AddRow(row2b, Theme.rowHeight)
 
-    local durationSlider = GUIFrame:CreateSlider(row2b, "Alert Duration", 1, 10, 0.5, db.AlertDuration or 3, 50,
-        function(val) db.AlertDuration = val end)
-    row2b:AddWidget(durationSlider, 0.5)
-    table_insert(allWidgets, durationSlider)
-    card2:AddRow(row2b, 40)
+    -- Visual timing
+    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local durationSlider = GUIFrame:CreateSlider(row2c, "Alert Duration", {
+        min = 1, max = 10, step = 0.5,
+        value = db.AlertDuration or 3,
+        callback = function(val) db.AlertDuration = val end,
+    })
+    row2c:AddWidget(durationSlider, 1)
+    manager:Register(durationSlider, "all")
+    card2:AddRow(row2c, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
+    yOffset = card2:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 3: Position Settings
-    ---------------------------------------------------------------------------------
-    local card3, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+    ----------------------------------------------------------------
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         title = "Position Settings",
         db = db,
-        dbKeys = { selfPoint = "AnchorFrom", anchorPoint = "AnchorTo", xOffset = "XOffset", yOffset = "YOffset" },
+        dbKeys = {
+            selfPoint = "AnchorFrom",
+            anchorPoint = "AnchorTo",
+            xOffset = "XOffset",
+            yOffset = "YOffset",
+        },
         showAnchorFrameType = true,
         showStrata = true,
+        showPixelSnap = true,
         onChangeCallback = ApplySettings,
     })
-    table_insert(allWidgets, card3)
+
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
+    end
+    manager:Register(posCard, "all")
     yOffset = posOffset
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 4: Font Settings
-    ---------------------------------------------------------------------------------
-    local card4 = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
-    table_insert(allWidgets, card4)
+    ----------------------------------------------------------------
+    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        db = db,
+        dbKeys = {
+            fontFace = "FontFace",
+            fontSize = "FontSize",
+            fontOutline = "FontOutline",
+        },
+        fontSizeRange = { 8, 32 },
+        includeSoftOutline = true,
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(fontCard, "all")
+    if fontWidgets then
+        manager:RegisterGroup(fontWidgets, "all")
+    end
+    yOffset = fontOffset
 
-    local row4a = GUIFrame:CreateRow(card4.content, 40)
-    local fontDropdown = GUIFrame:CreateDropdown(row4a, "Font", fontList, db.FontFace or "Expressway", 30,
-        function(key) db.FontFace = key; ApplySettings() end)
-    row4a:AddWidget(fontDropdown, 0.5)
-    table_insert(allWidgets, fontDropdown)
-
-    local outlineDropdown = GUIFrame:CreateDropdown(row4a, "Outline", outlineList, db.FontOutline or "SOFTOUTLINE", 45,
-        function(key) db.FontOutline = key; ApplySettings() end)
-    row4a:AddWidget(outlineDropdown, 0.5)
-    table_insert(allWidgets, outlineDropdown)
-    card4:AddRow(row4a, 40)
-
-    local row4b = GUIFrame:CreateRow(card4.content, 40)
-    local sizeSlider = GUIFrame:CreateSlider(row4b, "Font Size", 8, 32, 1, db.FontSize or 22, 50,
-        function(val) db.FontSize = val; ApplySettings() end)
-    row4b:AddWidget(sizeSlider, 0.5)
-    table_insert(allWidgets, sizeSlider)
-    card4:AddRow(row4b, 40)
-
-    yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
-
-    UpdateAllWidgetStates()
+    RefreshStates()
     return yOffset
 end)

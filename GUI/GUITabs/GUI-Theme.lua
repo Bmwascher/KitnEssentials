@@ -14,9 +14,6 @@ local table_insert = table.insert
 local ipairs = ipairs
 local math_floor = math.floor
 
----------------------------------------------------------------------------------
--- Helpers
----------------------------------------------------------------------------------
 local function CreatePresetSelector(parent, presets, presetOrder, currentPreset, onSelect)
     local container = CreateFrame("Frame", nil, parent)
     local buttons = {}
@@ -40,7 +37,6 @@ local function CreatePresetSelector(parent, presets, presetOrder, currentPreset,
         btn:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
         btn.presetName = presetName
 
-        -- Color swatch
         local swatch = btn:CreateTexture(nil, "ARTWORK")
         swatch:SetSize(14, 14)
         swatch:SetPoint("LEFT", btn, "LEFT", 8, 0)
@@ -49,7 +45,6 @@ local function CreatePresetSelector(parent, presets, presetOrder, currentPreset,
         swatch:SetVertexColor(ac[1], ac[2], ac[3], ac[4])
         btn.swatch = swatch
 
-        -- Label
         local label = btn:CreateFontString(nil, "OVERLAY")
         label:SetPoint("LEFT", swatch, "RIGHT", 6, 0)
         label:SetPoint("RIGHT", btn, "RIGHT", -6, 0)
@@ -102,7 +97,6 @@ local function CreatePresetSelector(parent, presets, presetOrder, currentPreset,
         table_insert(buttons, btn)
     end
 
-    -- Grid layout
     local numButtons = #buttons
     local numRows = math.ceil(numButtons / maxColumns)
     container:SetHeight(numRows * buttonHeight + (numRows - 1) * rowSpacing)
@@ -141,65 +135,52 @@ local function CreatePresetSelector(parent, presets, presetOrder, currentPreset,
     return container
 end
 
----------------------------------------------------------------------------------
--- Card Sections
----------------------------------------------------------------------------------
 GUIFrame:RegisterContent("Theme", function(scrollChild, yOffset)
     local db = KE.db and KE.db.global and KE.db.global.Theme
     if not db then
         local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
         errorCard:AddLabel("Database not available")
-        return yOffset + errorCard:GetContentHeight() + Theme.paddingMedium
+        return errorCard:GetNextOffset()
     end
 
-    local allWidgets = {}
-    local presetWidgets = {}
-    local classWidgets = {}
-    local customWidgets = {}
-    local presetSelector = nil
-
+    local manager = GUIFrame:CreateWidgetStateManager()
     local currentMode = db.Mode or "preset"
+    local presetSelector
 
-    local function UpdateAllWidgetStates()
-        local isPreset = currentMode == "preset"
-        local isClass = currentMode == "class"
-        local isCustom = currentMode == "custom"
+    manager:SetCondition("preset", function() return currentMode == "preset" end)
+    manager:SetCondition("class", function() return currentMode == "class" end)
+    manager:SetCondition("custom", function() return currentMode == "custom" end)
 
-        for _, w in ipairs(presetWidgets) do
-            if w.SetEnabled then w:SetEnabled(isPreset) end
-        end
-        if presetSelector then presetSelector:SetEnabled(isPreset) end
-        for _, w in ipairs(classWidgets) do
-            if w.SetEnabled then w:SetEnabled(isClass) end
-        end
-        for _, w in ipairs(customWidgets) do
-            if w.SetEnabled then w:SetEnabled(isCustom) end
-        end
+    local function RefreshStates()
+        manager:UpdateAll(true)
+        if presetSelector then presetSelector:SetEnabled(currentMode == "preset") end
     end
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 1: Theme Mode
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Theme Mode", yOffset)
 
-    local row1 = GUIFrame:CreateRow(card1.content, 40)
-    local modeDropdown = GUIFrame:CreateDropdown(row1, "Color Mode", KE.ThemeModeOptions,
-        currentMode, 120,
-        function(key)
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local modeDropdown = GUIFrame:CreateDropdown(row1, "Color Mode", {
+        options = KE.ThemeModeOptions,
+        value = currentMode,
+        callback = function(key)
             currentMode = key
             KE:SetThemeMode(key)
-            UpdateAllWidgetStates()
-        end)
+            RefreshStates()
+        end,
+    })
     row1:AddWidget(modeDropdown, 0.5)
-    card1:AddRow(row1, 40)
+    card1:AddRow(row1, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+    yOffset = card1:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 2: Preset Themes
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Preset Themes", yOffset)
-    table_insert(presetWidgets, card2)
+    manager:Register(card2, "preset")
 
     presetSelector = CreatePresetSelector(
         card2.content,
@@ -215,20 +196,19 @@ GUIFrame:RegisterContent("Theme", function(scrollChild, yOffset)
     presetSelector:SetParent(row2)
     presetSelector:SetPoint("TOPLEFT", row2, "TOPLEFT", 0, 0)
     presetSelector:SetPoint("TOPRIGHT", row2, "TOPRIGHT", 0, 0)
-    card2:AddRow(row2, selectorHeight)
+    card2:AddRow(row2, selectorHeight, 0)
 
-    yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
+    yOffset = card2:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 3: Class Color Info
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Class Color", yOffset)
-    table_insert(classWidgets, card3)
+    manager:Register(card3, "class")
 
-    local row3 = GUIFrame:CreateRow(card3.content, 40)
+    local row3 = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
     local classColor = KE:GetPlayerClassColor()
 
-    -- Class color swatch
     local classSwatchFrame = CreateFrame("Frame", nil, row3, "BackdropTemplate")
     classSwatchFrame:SetSize(24, 24)
     classSwatchFrame:SetBackdrop({
@@ -243,79 +223,76 @@ GUIFrame:RegisterContent("Theme", function(scrollChild, yOffset)
     local classLabel = GUIFrame:CreateText(row3,
         "Your class color will be used as the theme accent.",
         "Background colors remain dark.",
-        40, "hide")
+        Theme.rowHeightLast, "hide")
     row3:AddWidget(classLabel, 0.9)
-    card3:AddRow(row3, 40)
+    card3:AddRow(row3, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
+    yOffset = card3:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 4: Custom Colors
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Custom Colors", yOffset)
-    table_insert(customWidgets, card4)
+    manager:Register(card4, "custom")
 
-    -- Accent color
-    local row4a = GUIFrame:CreateRow(card4.content, 40)
-    local accentPicker = GUIFrame:CreateColorPicker(row4a, "Accent Color",
-        (db.Custom and db.Custom.accent) or KE.ThemeDefaults.accent,
-        function(r, g, b, a) KE:SetCustomColor("accent", r, g, b, a) end)
+    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local accentPicker = GUIFrame:CreateColorPicker(row4a, "Accent Color", {
+        color = (db.Custom and db.Custom.accent) or KE.ThemeDefaults.accent,
+        callback = function(r, g, b, a) KE:SetCustomColor("accent", r, g, b, a) end,
+    })
     row4a:AddWidget(accentPicker, 0.5)
-    table_insert(customWidgets, accentPicker)
+    manager:Register(accentPicker, "custom")
 
-    local accentDimPicker = GUIFrame:CreateColorPicker(row4a, "Accent Dim",
-        (db.Custom and db.Custom.accentDim) or KE.ThemeDefaults.accentDim,
-        function(r, g, b, a) KE:SetCustomColor("accentDim", r, g, b, a) end)
+    local accentDimPicker = GUIFrame:CreateColorPicker(row4a, "Accent Dim", {
+        color = (db.Custom and db.Custom.accentDim) or KE.ThemeDefaults.accentDim,
+        callback = function(r, g, b, a) KE:SetCustomColor("accentDim", r, g, b, a) end,
+    })
     row4a:AddWidget(accentDimPicker, 0.5)
-    table_insert(customWidgets, accentDimPicker)
-    card4:AddRow(row4a, 40)
+    manager:Register(accentDimPicker, "custom")
+    card4:AddRow(row4a, Theme.rowHeight)
 
-    -- Selected colors
-    local row4b = GUIFrame:CreateRow(card4.content, 40)
-    local selectedBgPicker = GUIFrame:CreateColorPicker(row4b, "Selected Background",
-        (db.Custom and db.Custom.selectedBg) or KE.ThemeDefaults.selectedBg,
-        function(r, g, b, a) KE:SetCustomColor("selectedBg", r, g, b, a) end)
+    local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local selectedBgPicker = GUIFrame:CreateColorPicker(row4b, "Selected Background", {
+        color = (db.Custom and db.Custom.selectedBg) or KE.ThemeDefaults.selectedBg,
+        callback = function(r, g, b, a) KE:SetCustomColor("selectedBg", r, g, b, a) end,
+    })
     row4b:AddWidget(selectedBgPicker, 0.5)
-    table_insert(customWidgets, selectedBgPicker)
+    manager:Register(selectedBgPicker, "custom")
 
-    local selectedTextPicker = GUIFrame:CreateColorPicker(row4b, "Selected Text",
-        (db.Custom and db.Custom.selectedText) or KE.ThemeDefaults.selectedText,
-        function(r, g, b, a) KE:SetCustomColor("selectedText", r, g, b, a) end)
+    local selectedTextPicker = GUIFrame:CreateColorPicker(row4b, "Selected Text", {
+        color = (db.Custom and db.Custom.selectedText) or KE.ThemeDefaults.selectedText,
+        callback = function(r, g, b, a) KE:SetCustomColor("selectedText", r, g, b, a) end,
+    })
     row4b:AddWidget(selectedTextPicker, 0.5)
-    table_insert(customWidgets, selectedTextPicker)
-    card4:AddRow(row4b, 40)
+    manager:Register(selectedTextPicker, "custom")
+    card4:AddRow(row4b, Theme.rowHeight)
 
-    -- Separator
-    local row4sep = GUIFrame:CreateRow(card4.content, 8)
+    local row4sep = GUIFrame:CreateRow(card4.content, Theme.rowHeightSeparator)
     local sep = GUIFrame:CreateSeparator(row4sep)
     row4sep:AddWidget(sep, 1)
-    table_insert(customWidgets, sep)
-    card4:AddRow(row4sep, 8)
+    card4:AddRow(row4sep, Theme.rowHeightSeparator)
 
-    -- Copy from preset + Reset
-    local row4c = GUIFrame:CreateRow(card4.content, 36)
+    local row4c = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
     local copyBtn = GUIFrame:CreateButton(row4c, "Copy From Current Preset", {
         callback = function()
             KE:CopyPresetToCustom()
             KE:RefreshTheme()
-        end
+        end,
     })
     row4c:AddWidget(copyBtn, 0.5)
-    table_insert(customWidgets, copyBtn)
+    manager:Register(copyBtn, "custom")
 
     local resetBtn = GUIFrame:CreateButton(row4c, "Reset Theme", {
         callback = function()
             KE:ResetTheme()
-        end
+        end,
     })
     row4c:AddWidget(resetBtn, 0.5)
-    table_insert(customWidgets, resetBtn)
-    card4:AddRow(row4c, 36)
+    manager:Register(resetBtn, "custom")
+    card4:AddRow(row4c, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
+    yOffset = card4:GetNextOffset()
 
-    -- Apply initial states
-    UpdateAllWidgetStates()
-    yOffset = yOffset - (Theme.paddingSmall * 3)
+    RefreshStates()
     return yOffset
 end)

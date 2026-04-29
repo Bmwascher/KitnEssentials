@@ -201,7 +201,7 @@ end
 ---------------------------------------------------------------------------------
 local function UpdateDisplay()
     local db = ME.db
-    local enchantEnabled = db and db.Enabled ~= false
+    local enchantEnabled = db and db.ShowEnchants ~= false
     local gemEnabled = db and db.GemEnabled ~= false
     local isMaxLevel = IsLevelAtEffectiveMaxLevel(UnitLevel("player"))
 
@@ -348,7 +348,7 @@ end
 function ME:OnEnable()
     -- Skip if BetterCharacterPanel is loaded (provides same functionality)
     if C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("BetterCharacterPanel") then return end
-    if not self.db.Enabled and not self.db.GemEnabled and not self.db.HideCharacterBackground then return end
+    if not self.db.ShowEnchants and not self.db.GemEnabled and not self.db.HideCharacterBackground then return end
     HookCharacterPanel()
     if CharacterFrame and CharacterFrame:IsShown() then
         UpdateDisplay()

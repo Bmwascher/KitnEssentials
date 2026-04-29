@@ -11,11 +11,26 @@ local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
 
-local pairs, ipairs = pairs, ipairs
-local table_insert = table.insert
-local table_sort = table.sort
+local pairs = pairs
 
--- Helper to get BlizzardMessages module
+local ANCHOR_POINTS = {
+    { key = "TOPLEFT",     text = "Top Left" },
+    { key = "TOP",         text = "Top" },
+    { key = "TOPRIGHT",    text = "Top Right" },
+    { key = "LEFT",        text = "Left" },
+    { key = "CENTER",      text = "Center" },
+    { key = "RIGHT",       text = "Right" },
+    { key = "BOTTOMLEFT",  text = "Bottom Left" },
+    { key = "BOTTOM",      text = "Bottom" },
+    { key = "BOTTOMRIGHT", text = "Bottom Right" },
+}
+
+local OUTLINE_OPTIONS = {
+    { key = "NONE",         text = "None" },
+    { key = "OUTLINE",      text = "Outline" },
+    { key = "THICKOUTLINE", text = "Thick" },
+}
+
 local function GetBlizzardMessagesModule()
     if KitnEssentials then
         return KitnEssentials:GetModule("SkinBlizzardMessages", true)
@@ -29,18 +44,11 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
     if not db then
         local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
         errorCard:AddLabel("Database not available")
-        return yOffset + errorCard:GetContentHeight() + Theme.paddingMedium
+        return errorCard:GetNextOffset()
     end
 
     local BM = GetBlizzardMessagesModule()
-
-    -- Track widgets for enable/disable logic
-    local allWidgets = {}
-    local errorWidgets = {}
-    local actionWidgets = {}
-    local bubbleWidgets = {}
-    local objectiveWidgets = {}
-    local zoneWidgets = {}
+    local manager = GUIFrame:CreateWidgetStateManager()
 
     local function ApplySettings()
         if BM and BM:IsEnabled() then
@@ -58,331 +66,307 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
         if BM then BM:PreviewActionStatus() end
     end
 
-    -- Comprehensive widget state update
-    local function UpdateAllWidgetStates()
-        local mainEnabled = db.Enabled ~= false
-        local errorEnabled = db.UIErrorsFrame and db.UIErrorsFrame.Hide == false
-        local actionEnabled = db.ActionStatusText and db.ActionStatusText.Hide == false
-        local bubbleEnabled = db.ChatBubbles and db.ChatBubbles.Enabled ~= false
-        local objectiveEnabled = db.ObjectiveTracker and db.ObjectiveTracker.Enabled ~= false
-        local zoneEnabled = db.ZoneText and db.ZoneText.Hide == false
+    manager:SetCondition("error", function()
+        return db.UIErrorsFrame and db.UIErrorsFrame.Hide == false
+    end)
+    manager:SetCondition("action", function()
+        return db.ActionStatusText and db.ActionStatusText.Hide == false
+    end)
+    manager:SetCondition("bubble", function()
+        return db.ChatBubbles and db.ChatBubbles.Enabled ~= false
+    end)
+    manager:SetCondition("objective", function()
+        return db.ObjectiveTracker and db.ObjectiveTracker.Enabled ~= false
+    end)
+    manager:SetCondition("zone", function()
+        return db.ZoneText and db.ZoneText.Hide == false
+    end)
 
-        for _, widget in ipairs(allWidgets) do
-            if widget.SetEnabled then
-                widget:SetEnabled(mainEnabled)
-            end
-        end
-
-        if mainEnabled then
-            for _, widget in ipairs(errorWidgets) do
-                if widget.SetEnabled then widget:SetEnabled(errorEnabled) end
-            end
-            for _, widget in ipairs(actionWidgets) do
-                if widget.SetEnabled then widget:SetEnabled(actionEnabled) end
-            end
-            for _, widget in ipairs(bubbleWidgets) do
-                if widget.SetEnabled then widget:SetEnabled(bubbleEnabled) end
-            end
-            for _, widget in ipairs(objectiveWidgets) do
-                if widget.SetEnabled then widget:SetEnabled(objectiveEnabled) end
-            end
-            for _, widget in ipairs(zoneWidgets) do
-                if widget.SetEnabled then widget:SetEnabled(zoneEnabled) end
-            end
-        end
+    local function RefreshStates()
+        manager:UpdateAll(db.Enabled ~= false)
     end
 
-    -- Anchor points list
-    local ANCHOR_POINTS = {
-        { key = "TOPLEFT",     text = "Top Left" },
-        { key = "TOP",         text = "Top" },
-        { key = "TOPRIGHT",    text = "Top Right" },
-        { key = "LEFT",        text = "Left" },
-        { key = "CENTER",      text = "Center" },
-        { key = "RIGHT",       text = "Right" },
-        { key = "BOTTOMLEFT",  text = "Bottom Left" },
-        { key = "BOTTOM",      text = "Bottom" },
-        { key = "BOTTOMRIGHT", text = "Bottom Right" },
-    }
-
-    local OUTLINE_OPTIONS = {
-        { key = "NONE",         text = "None" },
-        { key = "OUTLINE",      text = "Outline" },
-        { key = "THICKOUTLINE", text = "Thick" },
-    }
-
-    -- Build font list
-    local function GetFontList()
-        local fontList = {}
-        if LSM then
-            for name in pairs(LSM:HashTable("font")) do
-                table_insert(fontList, { key = name, text = name })
-            end
-            table_sort(fontList, function(a, b) return a.text < b.text end)
-        else
-            table_insert(fontList, { key = "Friz Quadrata TT", text = "Friz Quadrata TT" })
-        end
-        return fontList
+    local fontList = {}
+    if LSM then
+        for name in pairs(LSM:HashTable("font")) do fontList[name] = name end
+    else
+        fontList["Friz Quadrata TT"] = "Friz Quadrata TT"
     end
-    local fontList = GetFontList()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 1: Master Toggle
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Blizzard Texts", yOffset)
 
-    local row1 = GUIFrame:CreateRow(card1.content, 36)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Blizzard Text Skinning", db.Enabled ~= false,
-        function(checked)
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Blizzard Text Skinning", {
+        value = db.Enabled ~= false,
+        callback = function(checked)
             db.Enabled = checked
             if checked then
                 KitnEssentials:EnableModule("SkinBlizzardMessages")
                 ApplySettings()
             else
                 KitnEssentials:DisableModule("SkinBlizzardMessages")
+                KE:SkinningReloadPrompt()
             end
-            UpdateAllWidgetStates()
+            RefreshStates()
         end,
-        true,
-        "Blizzard Text Skinning",
-        "On",
-        "Off"
-    )
+        msgPopup = true,
+        msgText = "Blizzard Text Skinning",
+        msgOn = "On",
+        msgOff = "Off",
+    })
     row1:AddWidget(enableCheck, 1)
-    card1:AddRow(row1, 36)
+    card1:AddRow(row1, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+    yOffset = card1:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 2: Global Font Settings
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Font Settings For Blizzard Texts", yOffset)
-    table_insert(allWidgets, card2)
+    manager:Register(card2, "all")
 
-    local row2a = GUIFrame:CreateRow(card2.content, 36)
-    local fontDropdown = GUIFrame:CreateDropdown(row2a, "Font", fontList, db.Font or "Friz Quadrata TT", 30,
-        function(key)
+    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local fontDropdown = GUIFrame:CreateDropdown(row2a, "Font", {
+        options = fontList,
+        value = db.Font or "Friz Quadrata TT",
+        callback = function(key)
             db.Font = key
             ApplySettings()
-        end)
+        end,
+        searchable = true,
+        isFontPreview = true,
+    })
     row2a:AddWidget(fontDropdown, 0.5)
-    table_insert(allWidgets, fontDropdown)
+    manager:Register(fontDropdown, "all")
 
-    local outlineDropdown = GUIFrame:CreateDropdown(row2a, "Outline", OUTLINE_OPTIONS, db.FontOutline or "OUTLINE", 45,
-        function(key)
+    local outlineDropdown = GUIFrame:CreateDropdown(row2a, "Outline", {
+        options = OUTLINE_OPTIONS,
+        value = db.FontOutline or "OUTLINE",
+        callback = function(key)
             db.FontOutline = key
             ApplySettings()
-        end)
+        end,
+    })
     row2a:AddWidget(outlineDropdown, 0.5)
-    table_insert(allWidgets, outlineDropdown)
-    card2:AddRow(row2a, 36)
+    manager:Register(outlineDropdown, "all")
+    card2:AddRow(row2a, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
+    yOffset = card2:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 3: Error Messages (UIErrorsFrame)
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local errDb = db.UIErrorsFrame
     local card3 = GUIFrame:CreateCard(scrollChild, "Error Messages (Red Text)", yOffset)
-    table_insert(allWidgets, card3)
+    manager:Register(card3, "all")
 
-    -- Hide toggle + Preview
-    local row3a = GUIFrame:CreateRow(card3.content, 40)
-    local hideErrCheck = GUIFrame:CreateCheckbox(row3a, "Hide Error Messages", errDb.Hide == true,
-        function(checked)
+    local row3a = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local hideErrCheck = GUIFrame:CreateCheckbox(row3a, "Hide Error Messages", {
+        value = errDb.Hide == true,
+        callback = function(checked)
             errDb.Hide = checked
             ApplySettings()
-            UpdateAllWidgetStates()
-        end)
+            RefreshStates()
+        end,
+    })
     row3a:AddWidget(hideErrCheck, 0.5)
-    table_insert(allWidgets, hideErrCheck)
+    manager:Register(hideErrCheck, "all")
 
     local previewErrBtn = GUIFrame:CreateButton(row3a, "Preview", {
-        callback = function() ShowErrorPreview() end,
+        callback = ShowErrorPreview,
         width = 80,
     })
     row3a:AddWidget(previewErrBtn, 0.5)
-    table_insert(allWidgets, previewErrBtn)
-    table_insert(errorWidgets, previewErrBtn)
-    card3:AddRow(row3a, 40)
+    manager:Register(previewErrBtn, "error")
+    card3:AddRow(row3a, Theme.rowHeight)
 
-    -- Font Size
-    local row3b = GUIFrame:CreateRow(card3.content, 40)
-    local errSizeSlider = GUIFrame:CreateSlider(row3b, "Font Size", 8, 24, 1, errDb.Size or 14, 60,
-        function(val)
+    local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local errSizeSlider = GUIFrame:CreateSlider(row3b, "Font Size", {
+        min = 8, max = 24, step = 1,
+        value = errDb.Size or 14,
+        labelWidth = 60,
+        callback = function(val)
             errDb.Size = val
             ApplySettings()
-        end)
+        end,
+    })
     row3b:AddWidget(errSizeSlider, 1)
-    table_insert(allWidgets, errSizeSlider)
-    table_insert(errorWidgets, errSizeSlider)
-    card3:AddRow(row3b, 40)
+    manager:Register(errSizeSlider, "error")
+    card3:AddRow(row3b, Theme.rowHeight)
 
-    -- Separator
-    local row3sep = GUIFrame:CreateRow(card3.content, 8)
+    local row3sep = GUIFrame:CreateRow(card3.content, Theme.rowHeightSeparator)
     local sep3 = GUIFrame:CreateSeparator(row3sep)
     row3sep:AddWidget(sep3, 1)
-    table_insert(allWidgets, sep3)
-    table_insert(errorWidgets, sep3)
-    card3:AddRow(row3sep, 8)
+    card3:AddRow(row3sep, Theme.rowHeightSeparator)
 
-    -- Anchor
-    local row3c = GUIFrame:CreateRow(card3.content, 42)
-    local errAnchorDropdown = GUIFrame:CreateDropdown(row3c, "Anchor", ANCHOR_POINTS,
-        errDb.Position.Anchor or "TOP", 50,
-        function(key)
+    local row3c = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local errAnchorDropdown = GUIFrame:CreateDropdown(row3c, "Anchor", {
+        options = ANCHOR_POINTS,
+        value = errDb.Position.Anchor or "TOP",
+        callback = function(key)
             errDb.Position.Anchor = key
             ApplySettings()
-        end)
+        end,
+    })
     row3c:AddWidget(errAnchorDropdown, 1)
-    table_insert(allWidgets, errAnchorDropdown)
-    table_insert(errorWidgets, errAnchorDropdown)
-    card3:AddRow(row3c, 42)
+    manager:Register(errAnchorDropdown, "error")
+    card3:AddRow(row3c, Theme.rowHeight)
 
-    -- X/Y Offsets
-    local row3d = GUIFrame:CreateRow(card3.content, 36)
-    local errXSlider = GUIFrame:CreateSlider(row3d, "X Offset", -500, 500, 1, errDb.Position.X or 0, 50,
-        function(val)
+    local row3d = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
+    local errXSlider = GUIFrame:CreateSlider(row3d, "X Offset", {
+        min = -500, max = 500, step = 1,
+        value = errDb.Position.X or 0,
+        labelWidth = 50,
+        callback = function(val)
             errDb.Position.X = val
             ApplySettings()
-        end)
+        end,
+    })
     row3d:AddWidget(errXSlider, 0.5)
-    table_insert(allWidgets, errXSlider)
-    table_insert(errorWidgets, errXSlider)
+    manager:Register(errXSlider, "error")
 
-    local errYSlider = GUIFrame:CreateSlider(row3d, "Y Offset", -500, 500, 1, errDb.Position.Y or -281, 50,
-        function(val)
+    local errYSlider = GUIFrame:CreateSlider(row3d, "Y Offset", {
+        min = -500, max = 500, step = 1,
+        value = errDb.Position.Y or -281,
+        labelWidth = 50,
+        callback = function(val)
             errDb.Position.Y = val
             ApplySettings()
-        end)
+        end,
+    })
     row3d:AddWidget(errYSlider, 0.5)
-    table_insert(allWidgets, errYSlider)
-    table_insert(errorWidgets, errYSlider)
-    card3:AddRow(row3d, 36)
+    manager:Register(errYSlider, "error")
+    card3:AddRow(row3d, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
+    yOffset = card3:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 4: Action Status Text
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local actDb = db.ActionStatusText
     local card4 = GUIFrame:CreateCard(scrollChild, "Action Status Text (Yellow Text)", yOffset)
-    table_insert(allWidgets, card4)
+    manager:Register(card4, "all")
 
-    -- Hide toggle + Preview
-    local row4a = GUIFrame:CreateRow(card4.content, 40)
-    local hideActCheck = GUIFrame:CreateCheckbox(row4a, "Hide Action Status", actDb.Hide == true,
-        function(checked)
+    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local hideActCheck = GUIFrame:CreateCheckbox(row4a, "Hide Action Status", {
+        value = actDb.Hide == true,
+        callback = function(checked)
             actDb.Hide = checked
             ApplySettings()
-            UpdateAllWidgetStates()
-        end)
+            RefreshStates()
+        end,
+    })
     row4a:AddWidget(hideActCheck, 0.5)
-    table_insert(allWidgets, hideActCheck)
+    manager:Register(hideActCheck, "all")
 
     local previewActBtn = GUIFrame:CreateButton(row4a, "Preview", {
-        callback = function() ShowActionStatusPreview() end,
+        callback = ShowActionStatusPreview,
         width = 80,
     })
     row4a:AddWidget(previewActBtn, 0.5)
-    table_insert(allWidgets, previewActBtn)
-    table_insert(actionWidgets, previewActBtn)
-    card4:AddRow(row4a, 40)
+    manager:Register(previewActBtn, "action")
+    card4:AddRow(row4a, Theme.rowHeight)
 
-    -- Font Size
-    local row4b = GUIFrame:CreateRow(card4.content, 40)
-    local actSizeSlider = GUIFrame:CreateSlider(row4b, "Font Size", 8, 24, 1, actDb.Size or 14, 60,
-        function(val)
+    local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local actSizeSlider = GUIFrame:CreateSlider(row4b, "Font Size", {
+        min = 8, max = 24, step = 1,
+        value = actDb.Size or 14,
+        labelWidth = 60,
+        callback = function(val)
             actDb.Size = val
             ApplySettings()
-        end)
+        end,
+    })
     row4b:AddWidget(actSizeSlider, 1)
-    table_insert(allWidgets, actSizeSlider)
-    table_insert(actionWidgets, actSizeSlider)
-    card4:AddRow(row4b, 40)
+    manager:Register(actSizeSlider, "action")
+    card4:AddRow(row4b, Theme.rowHeight)
 
-    -- Separator
-    local row4sep = GUIFrame:CreateRow(card4.content, 8)
+    local row4sep = GUIFrame:CreateRow(card4.content, Theme.rowHeightSeparator)
     local sep4 = GUIFrame:CreateSeparator(row4sep)
     row4sep:AddWidget(sep4, 1)
-    table_insert(allWidgets, sep4)
-    table_insert(actionWidgets, sep4)
-    card4:AddRow(row4sep, 8)
+    card4:AddRow(row4sep, Theme.rowHeightSeparator)
 
-    -- Anchor
-    local row4c = GUIFrame:CreateRow(card4.content, 42)
-    local actAnchorDropdown = GUIFrame:CreateDropdown(row4c, "Anchor", ANCHOR_POINTS,
-        actDb.Position.Anchor or "TOP", 50,
-        function(key)
+    local row4c = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local actAnchorDropdown = GUIFrame:CreateDropdown(row4c, "Anchor", {
+        options = ANCHOR_POINTS,
+        value = actDb.Position.Anchor or "TOP",
+        callback = function(key)
             actDb.Position.Anchor = key
             ApplySettings()
-        end)
+        end,
+    })
     row4c:AddWidget(actAnchorDropdown, 1)
-    table_insert(allWidgets, actAnchorDropdown)
-    table_insert(actionWidgets, actAnchorDropdown)
-    card4:AddRow(row4c, 42)
+    manager:Register(actAnchorDropdown, "action")
+    card4:AddRow(row4c, Theme.rowHeight)
 
-    -- X/Y Offsets
-    local row4d = GUIFrame:CreateRow(card4.content, 36)
-    local actXSlider = GUIFrame:CreateSlider(row4d, "X Offset", -500, 500, 1, actDb.Position.X or 0, 50,
-        function(val)
+    local row4d = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
+    local actXSlider = GUIFrame:CreateSlider(row4d, "X Offset", {
+        min = -500, max = 500, step = 1,
+        value = actDb.Position.X or 0,
+        labelWidth = 50,
+        callback = function(val)
             actDb.Position.X = val
             ApplySettings()
-        end)
+        end,
+    })
     row4d:AddWidget(actXSlider, 0.5)
-    table_insert(allWidgets, actXSlider)
-    table_insert(actionWidgets, actXSlider)
+    manager:Register(actXSlider, "action")
 
-    local actYSlider = GUIFrame:CreateSlider(row4d, "Y Offset", -500, 500, 1, actDb.Position.Y or -251, 50,
-        function(val)
+    local actYSlider = GUIFrame:CreateSlider(row4d, "Y Offset", {
+        min = -500, max = 500, step = 1,
+        value = actDb.Position.Y or -251,
+        labelWidth = 50,
+        callback = function(val)
             actDb.Position.Y = val
             ApplySettings()
-        end)
+        end,
+    })
     row4d:AddWidget(actYSlider, 0.5)
-    table_insert(allWidgets, actYSlider)
-    table_insert(actionWidgets, actYSlider)
-    card4:AddRow(row4d, 36)
+    manager:Register(actYSlider, "action")
+    card4:AddRow(row4d, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
+    yOffset = card4:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 5: Chat Bubbles
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local bubbleDb = db.ChatBubbles
     local card5 = GUIFrame:CreateCard(scrollChild, "Chat Bubbles", yOffset)
-    table_insert(allWidgets, card5)
+    manager:Register(card5, "all")
 
-    -- Enable + Font Size
-    local row5a = GUIFrame:CreateRow(card5.content, 40)
-    local enableBubblesCheck = GUIFrame:CreateCheckbox(row5a, "Enable Chat Bubble Styling",
-        bubbleDb.Enabled ~= false,
-        function(checked)
+    local row5a = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
+    local enableBubblesCheck = GUIFrame:CreateCheckbox(row5a, "Enable Chat Bubble Styling", {
+        value = bubbleDb.Enabled ~= false,
+        callback = function(checked)
             bubbleDb.Enabled = checked
             ApplySettings()
-            UpdateAllWidgetStates()
-        end)
+            RefreshStates()
+        end,
+    })
     row5a:AddWidget(enableBubblesCheck, 0.5)
-    table_insert(allWidgets, enableBubblesCheck)
+    manager:Register(enableBubblesCheck, "all")
 
-    local bubbleSizeSlider = GUIFrame:CreateSlider(row5a, "Font Size", 6, 18, 1, bubbleDb.Size or 8, 60,
-        function(val)
+    local bubbleSizeSlider = GUIFrame:CreateSlider(row5a, "Font Size", {
+        min = 6, max = 18, step = 1,
+        value = bubbleDb.Size or 8,
+        labelWidth = 60,
+        callback = function(val)
             bubbleDb.Size = val
             ApplySettings()
-        end)
+        end,
+    })
     row5a:AddWidget(bubbleSizeSlider, 0.5)
-    table_insert(allWidgets, bubbleSizeSlider)
-    table_insert(bubbleWidgets, bubbleSizeSlider)
-    card5:AddRow(row5a, 40)
+    manager:Register(bubbleSizeSlider, "bubble")
+    card5:AddRow(row5a, Theme.rowHeight)
 
-    -- Separator
-    local row5sep = GUIFrame:CreateRow(card5.content, 8)
+    local row5sep = GUIFrame:CreateRow(card5.content, Theme.rowHeightSeparator)
     local sep5 = GUIFrame:CreateSeparator(row5sep)
     row5sep:AddWidget(sep5, 1)
-    table_insert(allWidgets, sep5)
-    table_insert(bubbleWidgets, sep5)
-    card5:AddRow(row5sep, 8)
+    card5:AddRow(row5sep, Theme.rowHeightSeparator)
 
-    -- Recommended addon text + button
     local textRow5Size = 145
     local row5b = GUIFrame:CreateRow(card5.content, textRow5Size)
     local chatBubbleText = GUIFrame:CreateText(row5b,
@@ -396,8 +380,7 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
             "\n" .. KE:ColorTextByTheme("• ") .. "Large Backdrop"),
         textRow5Size, "hide")
     row5b:AddWidget(chatBubbleText, 0.5)
-    table_insert(allWidgets, chatBubbleText)
-    table_insert(bubbleWidgets, chatBubbleText)
+    manager:Register(chatBubbleText, "bubble")
 
     local getLinkBtn = GUIFrame:CreateButton(row5b, "Get Skin Here", {
         callback = function()
@@ -413,148 +396,157 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
         height = 40,
     })
     row5b:AddWidget(getLinkBtn, 0.5)
-    table_insert(allWidgets, getLinkBtn)
-    table_insert(bubbleWidgets, getLinkBtn)
-    card5:AddRow(row5b, textRow5Size)
+    manager:Register(getLinkBtn, "bubble")
+    card5:AddRow(row5b, textRow5Size, 0)
 
-    yOffset = yOffset + card5:GetContentHeight() + Theme.paddingSmall
+    yOffset = card5:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 6: Objective Tracker
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local objDb = db.ObjectiveTracker
     local card6 = GUIFrame:CreateCard(scrollChild, "Objective Tracker", yOffset)
-    table_insert(allWidgets, card6)
+    manager:Register(card6, "all")
 
-    -- Enable toggle
-    local row6a = GUIFrame:CreateRow(card6.content, 40)
-    local enableObjCheck = GUIFrame:CreateCheckbox(row6a, "Enable Objective Tracker Styling",
-        objDb.Enabled ~= false,
-        function(checked)
+    local row6a = GUIFrame:CreateRow(card6.content, Theme.rowHeight)
+    local enableObjCheck = GUIFrame:CreateCheckbox(row6a, "Enable Objective Tracker Styling", {
+        value = objDb.Enabled ~= false,
+        callback = function(checked)
             objDb.Enabled = checked
             ApplySettings()
-            UpdateAllWidgetStates()
-        end)
+            RefreshStates()
+        end,
+    })
     row6a:AddWidget(enableObjCheck, 1)
-    table_insert(allWidgets, enableObjCheck)
-    card6:AddRow(row6a, 40)
+    manager:Register(enableObjCheck, "all")
+    card6:AddRow(row6a, Theme.rowHeight)
 
-    -- Title + Text size sliders
-    local row6b = GUIFrame:CreateRow(card6.content, 36)
-    local questTitleSlider = GUIFrame:CreateSlider(row6b, "Quest Title Size", 8, 20, 1, objDb.QuestTitleSize or 13, 80,
-        function(val)
+    local row6b = GUIFrame:CreateRow(card6.content, Theme.rowHeightLast)
+    local questTitleSlider = GUIFrame:CreateSlider(row6b, "Quest Title Size", {
+        min = 8, max = 20, step = 1,
+        value = objDb.QuestTitleSize or 13,
+        labelWidth = 80,
+        callback = function(val)
             objDb.QuestTitleSize = val
             ApplySettings()
-        end)
+        end,
+    })
     row6b:AddWidget(questTitleSlider, 0.5)
-    table_insert(allWidgets, questTitleSlider)
-    table_insert(objectiveWidgets, questTitleSlider)
+    manager:Register(questTitleSlider, "objective")
 
-    local questTextSlider = GUIFrame:CreateSlider(row6b, "Quest Text Size", 8, 20, 1, objDb.QuestTextSize or 12, 80,
-        function(val)
+    local questTextSlider = GUIFrame:CreateSlider(row6b, "Quest Text Size", {
+        min = 8, max = 20, step = 1,
+        value = objDb.QuestTextSize or 12,
+        labelWidth = 80,
+        callback = function(val)
             objDb.QuestTextSize = val
             ApplySettings()
-        end)
+        end,
+    })
     row6b:AddWidget(questTextSlider, 0.5)
-    table_insert(allWidgets, questTextSlider)
-    table_insert(objectiveWidgets, questTextSlider)
-    card6:AddRow(row6b, 36)
+    manager:Register(questTextSlider, "objective")
+    card6:AddRow(row6b, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card6:GetContentHeight() + Theme.paddingSmall
+    yOffset = card6:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 7: Zone Texts
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local zoneDB = db.ZoneText
     local card7 = GUIFrame:CreateCard(scrollChild, "Zone Texts", yOffset)
-    table_insert(allWidgets, card7)
+    manager:Register(card7, "all")
 
-    -- Hide toggle + Preview
-    local row7 = GUIFrame:CreateRow(card7.content, 40)
-    local zoneHideCheck = GUIFrame:CreateCheckbox(row7, "Hide Zone Texts", zoneDB.Hide == true,
-        function(checked)
+    local row7 = GUIFrame:CreateRow(card7.content, Theme.rowHeight)
+    local zoneHideCheck = GUIFrame:CreateCheckbox(row7, "Hide Zone Texts", {
+        value = zoneDB.Hide == true,
+        callback = function(checked)
             zoneDB.Hide = checked
             ApplySettings()
-            UpdateAllWidgetStates()
-        end)
+            RefreshStates()
+        end,
+    })
     row7:AddWidget(zoneHideCheck, 0.5)
-    table_insert(allWidgets, zoneHideCheck)
+    manager:Register(zoneHideCheck, "all")
 
     local previewZoneBtn = GUIFrame:CreateButton(row7, "Preview", {
-        callback = function() ShowZonePreview() end,
+        callback = ShowZonePreview,
         width = 80,
     })
     row7:AddWidget(previewZoneBtn, 0.5)
-    table_insert(allWidgets, previewZoneBtn)
-    table_insert(zoneWidgets, previewZoneBtn)
-    card7:AddRow(row7, 40)
+    manager:Register(previewZoneBtn, "zone")
+    card7:AddRow(row7, Theme.rowHeight)
 
-    -- Main Zone + Sub Zone size
-    local row8 = GUIFrame:CreateRow(card7.content, 36)
-    local mainZoneSlider = GUIFrame:CreateSlider(row8, "Main Zone Size", 8, 100, 1, zoneDB.MainZone.Size, 80,
-        function(val)
+    local row8 = GUIFrame:CreateRow(card7.content, Theme.rowHeight)
+    local mainZoneSlider = GUIFrame:CreateSlider(row8, "Main Zone Size", {
+        min = 8, max = 100, step = 1,
+        value = zoneDB.MainZone.Size,
+        labelWidth = 80,
+        callback = function(val)
             zoneDB.MainZone.Size = val
             ApplySettings()
-        end)
+        end,
+    })
     row8:AddWidget(mainZoneSlider, 0.5)
-    table_insert(allWidgets, mainZoneSlider)
-    table_insert(zoneWidgets, mainZoneSlider)
+    manager:Register(mainZoneSlider, "zone")
 
-    local subZoneSlider = GUIFrame:CreateSlider(row8, "Sub Zone Size", 8, 100, 1, zoneDB.SubZone.Size, _,
-        function(val)
+    local subZoneSlider = GUIFrame:CreateSlider(row8, "Sub Zone Size", {
+        min = 8, max = 100, step = 1,
+        value = zoneDB.SubZone.Size,
+        callback = function(val)
             zoneDB.SubZone.Size = val
             ApplySettings()
-        end)
+        end,
+    })
     row8:AddWidget(subZoneSlider, 0.5)
-    table_insert(allWidgets, subZoneSlider)
-    table_insert(zoneWidgets, subZoneSlider)
-    card7:AddRow(row8, 36)
+    manager:Register(subZoneSlider, "zone")
+    card7:AddRow(row8, Theme.rowHeight)
 
-    -- Separator
-    local row7sep = GUIFrame:CreateRow(card7.content, 8)
+    local row7sep = GUIFrame:CreateRow(card7.content, Theme.rowHeightSeparator)
     local sep7 = GUIFrame:CreateSeparator(row7sep)
     row7sep:AddWidget(sep7, 1)
-    table_insert(allWidgets, sep7)
-    table_insert(zoneWidgets, sep7)
-    card7:AddRow(row7sep, 8)
+    card7:AddRow(row7sep, Theme.rowHeightSeparator)
 
-    -- Anchor
-    local row9 = GUIFrame:CreateRow(card7.content, 42)
-    local zoneAnchorDropdown = GUIFrame:CreateDropdown(row9, "Anchor", ANCHOR_POINTS,
-        zoneDB.MainZone.Anchor or "TOP", 50,
-        function(key)
+    local row9 = GUIFrame:CreateRow(card7.content, Theme.rowHeight)
+    local zoneAnchorDropdown = GUIFrame:CreateDropdown(row9, "Anchor", {
+        options = ANCHOR_POINTS,
+        value = zoneDB.MainZone.Anchor or "TOP",
+        callback = function(key)
             zoneDB.MainZone.Anchor = key
             ApplySettings()
-        end)
+        end,
+    })
     row9:AddWidget(zoneAnchorDropdown, 1)
-    table_insert(allWidgets, zoneAnchorDropdown)
-    table_insert(zoneWidgets, zoneAnchorDropdown)
-    card7:AddRow(row9, 42)
+    manager:Register(zoneAnchorDropdown, "zone")
+    card7:AddRow(row9, Theme.rowHeight)
 
-    -- X/Y Offsets
-    local row10 = GUIFrame:CreateRow(card7.content, 36)
-    local zoneXSlider = GUIFrame:CreateSlider(row10, "X Offset", -500, 500, 1, zoneDB.MainZone.X, 50,
-        function(val)
+    local row10 = GUIFrame:CreateRow(card7.content, Theme.rowHeightLast)
+    local zoneXSlider = GUIFrame:CreateSlider(row10, "X Offset", {
+        min = -500, max = 500, step = 1,
+        value = zoneDB.MainZone.X,
+        labelWidth = 50,
+        callback = function(val)
             zoneDB.MainZone.X = val
             ApplySettings()
-        end)
+        end,
+    })
     row10:AddWidget(zoneXSlider, 0.5)
-    table_insert(allWidgets, zoneXSlider)
-    table_insert(zoneWidgets, zoneXSlider)
+    manager:Register(zoneXSlider, "zone")
 
-    local zoneYSlider = GUIFrame:CreateSlider(row10, "Y Offset", -500, 500, 1, zoneDB.MainZone.Y, 50,
-        function(val)
+    local zoneYSlider = GUIFrame:CreateSlider(row10, "Y Offset", {
+        min = -500, max = 500, step = 1,
+        value = zoneDB.MainZone.Y,
+        labelWidth = 50,
+        callback = function(val)
             zoneDB.MainZone.Y = val
             ApplySettings()
-        end)
+        end,
+    })
     row10:AddWidget(zoneYSlider, 0.5)
-    table_insert(allWidgets, zoneYSlider)
-    table_insert(zoneWidgets, zoneYSlider)
-    card7:AddRow(row10, 36)
+    manager:Register(zoneYSlider, "zone")
+    card7:AddRow(row10, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card7:GetContentHeight() + Theme.paddingSmall
+    yOffset = card7:GetNextOffset()
 
-    UpdateAllWidgetStates()
-    yOffset = yOffset - (Theme.paddingSmall * 5)
+    RefreshStates()
     return yOffset
 end)

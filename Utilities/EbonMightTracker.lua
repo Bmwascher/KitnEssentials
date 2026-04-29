@@ -4,7 +4,6 @@
 -- ║  Purpose: Displays Ebon Might buff duration with crit    ║
 -- ║           and duped cast detection for Augmentation.     ║
 -- ║  Note: Evoker only (Augmentation).                       ║
--- ║  Logic adapted from EMTracker v1.2.0 by Baumritter.      ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -624,7 +623,7 @@ end
 -- KE:GetPixelSize() so the highlight renders crisply at any UI scale.
 function EMT:SetBorderStyle(color, size)
     if not self.iconFrame or not self.iconFrame.borders then return end
-    local r, g, b, a = color[1], color[2], color[3], color[4] or 1
+    local r, g, b, a = KE:ResolveColor(color, { 0, 0, 0, 1 })
     local borders = self.iconFrame.borders
     local px = size * KE:GetPixelSize()
     for _, tex in pairs(borders) do
@@ -676,19 +675,23 @@ function EMT:UpdateDisplay()
     end
 
     -- Pick text + border color + border size + state-label text.
-    local textColor, borderColor, borderSize, labelText
+    -- OnlyShowCrit suppresses the DUPE branch: when the user has opted into
+    -- "crits only", the orange DUPE overlay isn't a crit and shouldn't paint
+    -- on top of pandemic-forced visibility. Crits still surface normally.
+    local effectiveDuped = self.isDuped and not self.db.OnlyShowCrit
+    local tr, tg, tb, ta, borderColor, borderSize, labelText
     if self.isCrit then
-        textColor = self.db.CritColor or { 1, 0, 1, 1 }
-        borderColor = textColor
+        tr, tg, tb, ta = KE:ResolveColor(self.db.CritColor, { 1, 0, 1, 1 })
+        borderColor = self.db.CritColor or { 1, 0, 1, 1 }
         borderSize = CRIT_BORDER_SIZE
         labelText = "CRIT"
-    elseif self.isDuped then
-        textColor = self.db.DupeColor or { 1, 0.5, 0, 1 }
-        borderColor = textColor
+    elseif effectiveDuped then
+        tr, tg, tb, ta = KE:ResolveColor(self.db.DupeColor, { 1, 0.5, 0, 1 })
+        borderColor = self.db.DupeColor or { 1, 0.5, 0, 1 }
         borderSize = DUPE_BORDER_SIZE
         labelText = "DUPE"
     else
-        textColor = self.db.BaseColor or { 1, 1, 1, 1 }
+        tr, tg, tb, ta = KE:ResolveColor(self.db.BaseColor, { 1, 1, 1, 1 })
         borderColor = DEFAULT_BORDER_COLOR
         borderSize = BASE_BORDER_SIZE
         labelText = ""
@@ -710,10 +713,10 @@ function EMT:UpdateDisplay()
         self._pandemicActive = false
     end
 
-    self.countdownText:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4] or 1)
+    self.countdownText:SetTextColor(tr, tg, tb, ta)
     if self.stateLabel then
         self.stateLabel:SetText(labelText)
-        self.stateLabel:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4] or 1)
+        self.stateLabel:SetTextColor(tr, tg, tb, ta)
     end
     self:SetBorderStyle(borderColor, borderSize)
 
@@ -721,7 +724,10 @@ function EMT:UpdateDisplay()
     -- a refresh cue — more important than a display preference — so we force
     -- the frame visible during the pandemic window even when OnlyShowCrit is
     -- on. Result: during a non-crit EM's last 4s, the frame reappears with
-    -- its base color and the pandemic glow overlaid.
+    -- BASE styling (the dupe branch above is gated on OnlyShowCrit so it
+    -- can't paint here) and the pandemic glow overlaid. Works the same for
+    -- Chronowarden and non-Chronowarden users — pandemic is decoupled from
+    -- crit-talent state.
     local suppressForCritOnly = self.db.OnlyShowCrit and not self.isCrit
         and not self.isPreview and not wantPandemic
     if suppressForCritOnly then
@@ -895,7 +901,8 @@ end
 function EMT:HidePreview()
     self.isPreview = false
     self._shown = false
-    if self.frame then self.frame:Hide() end
+    if not self.frame then return end
+    self.frame:Hide()
     -- Re-sync with actual game state after the fake preview aura is cleared.
     self:ScanAuras()
     self:TickerHandling()

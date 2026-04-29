@@ -9,8 +9,6 @@
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
-local table_insert = table.insert
-local ipairs = ipairs
 
 local function GetModule()
     if KitnEssentials then
@@ -24,7 +22,7 @@ GUIFrame:RegisterContent("AuctionHouseFilter", function(scrollChild, yOffset)
     if not db then return yOffset end
 
     local AHF = GetModule()
-    local allWidgets = {}
+    local manager = GUIFrame:CreateWidgetStateManager()
 
     local function ApplyModuleState(enabled)
         if not AHF then return end
@@ -33,77 +31,81 @@ GUIFrame:RegisterContent("AuctionHouseFilter", function(scrollChild, yOffset)
         else KitnEssentials:DisableModule("AuctionHouseFilter") end
     end
 
-    local function UpdateAllWidgetStates()
-        local mainEnabled = db.Enabled ~= false
-        for _, widget in ipairs(allWidgets) do
-            if widget.SetEnabled then widget:SetEnabled(mainEnabled) end
-        end
+    local function RefreshStates()
+        manager:UpdateAll(db.Enabled ~= false)
     end
 
-    ---------------------------------------------------------------------------------
-    -- Card 1: Master Enable
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
+    -- Card 1: Enable
+    ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Auction House Filter", yOffset)
-    local row1 = GUIFrame:CreateRow(card1.content, 36)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Auction House Filter", db.Enabled ~= false,
-        function(checked)
+
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Auction House Filter", {
+        value = db.Enabled ~= false,
+        callback = function(checked)
             db.Enabled = checked
             ApplyModuleState(checked)
-            UpdateAllWidgetStates()
+            RefreshStates()
         end,
-        true, "Auction House Filter", "On", "Off")
+        msgPopup = true,
+        msgText = "Auction House Filter",
+        msgOn = "On",
+        msgOff = "Off",
+    })
     row1:AddWidget(enableCheck, 0.5)
-    card1:AddRow(row1, 36)
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+    card1:AddRow(row1, Theme.rowHeightLast, 0)
 
-    ---------------------------------------------------------------------------------
+    yOffset = card1:GetNextOffset()
+
+    ----------------------------------------------------------------
     -- Card 2: Blizzard Auction House
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Blizzard Auction House", yOffset)
-    table_insert(allWidgets, card2)
+    manager:Register(card2, "all")
 
-    local row2 = GUIFrame:CreateRow(card2.content, 40)
-
-    local ahExpansionCheck = GUIFrame:CreateCheckbox(row2, "Current Expansion Only",
-        db.AuctionHouse.CurrentExpansion ~= false,
-        function(checked) db.AuctionHouse.CurrentExpansion = checked end)
+    local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local ahExpansionCheck = GUIFrame:CreateCheckbox(row2, "Current Expansion Only", {
+        value = db.AuctionHouse.CurrentExpansion ~= false,
+        callback = function(checked) db.AuctionHouse.CurrentExpansion = checked end,
+    })
     row2:AddWidget(ahExpansionCheck, 0.5)
-    table_insert(allWidgets, ahExpansionCheck)
+    manager:Register(ahExpansionCheck, "all")
 
-    local ahFocusCheck = GUIFrame:CreateCheckbox(row2, "Focus Search Bar",
-        db.AuctionHouse.FocusSearchBar == true,
-        function(checked) db.AuctionHouse.FocusSearchBar = checked end)
+    local ahFocusCheck = GUIFrame:CreateCheckbox(row2, "Focus Search Bar", {
+        value = db.AuctionHouse.FocusSearchBar == true,
+        callback = function(checked) db.AuctionHouse.FocusSearchBar = checked end,
+    })
     row2:AddWidget(ahFocusCheck, 0.5)
-    table_insert(allWidgets, ahFocusCheck)
+    manager:Register(ahFocusCheck, "all")
+    card2:AddRow(row2, Theme.rowHeightLast, 0)
 
-    card2:AddRow(row2, 40)
-    yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
+    yOffset = card2:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 3: Craft Orders
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Craft Orders", yOffset)
-    table_insert(allWidgets, card3)
+    manager:Register(card3, "all")
 
-    local row3 = GUIFrame:CreateRow(card3.content, 40)
-
-    local coExpansionCheck = GUIFrame:CreateCheckbox(row3, "Current Expansion Only",
-        db.CraftOrders.CurrentExpansion ~= false,
-        function(checked) db.CraftOrders.CurrentExpansion = checked end)
+    local row3 = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
+    local coExpansionCheck = GUIFrame:CreateCheckbox(row3, "Current Expansion Only", {
+        value = db.CraftOrders.CurrentExpansion ~= false,
+        callback = function(checked) db.CraftOrders.CurrentExpansion = checked end,
+    })
     row3:AddWidget(coExpansionCheck, 0.5)
-    table_insert(allWidgets, coExpansionCheck)
+    manager:Register(coExpansionCheck, "all")
 
-    local coFocusCheck = GUIFrame:CreateCheckbox(row3, "Focus Search Bar",
-        db.CraftOrders.FocusSearchBar == true,
-        function(checked) db.CraftOrders.FocusSearchBar = checked end)
+    local coFocusCheck = GUIFrame:CreateCheckbox(row3, "Focus Search Bar", {
+        value = db.CraftOrders.FocusSearchBar == true,
+        callback = function(checked) db.CraftOrders.FocusSearchBar = checked end,
+    })
     row3:AddWidget(coFocusCheck, 0.5)
-    table_insert(allWidgets, coFocusCheck)
+    manager:Register(coFocusCheck, "all")
+    card3:AddRow(row3, Theme.rowHeightLast, 0)
 
-    card3:AddRow(row3, 40)
-    yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
+    yOffset = card3:GetNextOffset()
 
-    -- Apply initial widget states
-    UpdateAllWidgetStates()
-    yOffset = yOffset - (Theme.paddingSmall * 2)
+    RefreshStates()
     return yOffset
 end)

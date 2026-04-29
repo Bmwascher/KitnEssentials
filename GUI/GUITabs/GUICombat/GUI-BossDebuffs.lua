@@ -1,21 +1,19 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-BossDebuffs.lua                                     ║
 -- ║  GUI: Boss Debuffs                                       ║
--- ║  Purpose: Configuration panel for the BossDebuffs module.║
--- ║  Credit: Bitebtw                                         ║
+-- ║  Purpose: Configuration panel for the BossDebuffs module.║                                       
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
 local KE = select(2, ...)
-local GUIFrame     = KE.GUIFrame
-local Theme        = KE.Theme
-local table_insert = table.insert
+local GUIFrame = KE.GUIFrame
+local Theme    = KE.Theme
 
 -- Encounter ID reference data (update each tier)
 local ENCOUNTER_DATA = {
-    { header = "Midnight",           bosses = { { "Lu'ashai", 3454 }, { "Thorm'belan", 3459 }, { "Predaxas", 3431 }, { "Cragpine", 3436 } } },
-    { header = "The Dreamrift",      bosses = { { "Chimaerus the Undreamt God", 3306 } } },
-    { header = "The Voidspire",      bosses = { { "Imperator Averzian", 3176 }, { "Vorasius", 3177 }, { "Fallen-King Salhadaar", 3179 }, { "Vaelgor & Ezzorak", 3178 }, { "Lightblinded Vanguard", 3180 }, { "Crown of the Cosmos", 3181 } } },
+    { header = "Midnight",            bosses = { { "Lu'ashai", 3454 }, { "Thorm'belan", 3459 }, { "Predaxas", 3431 }, { "Cragpine", 3436 } } },
+    { header = "The Dreamrift",       bosses = { { "Chimaerus the Undreamt God", 3306 } } },
+    { header = "The Voidspire",       bosses = { { "Imperator Averzian", 3176 }, { "Vorasius", 3177 }, { "Fallen-King Salhadaar", 3179 }, { "Vaelgor & Ezzorak", 3178 }, { "Lightblinded Vanguard", 3180 }, { "Crown of the Cosmos", 3181 } } },
     { header = "March on Quel'Danas", bosses = { { "Belo'ren, Child of Al'ar", 3182 }, { "Midnight Falls", 3183 } } },
 }
 
@@ -24,10 +22,10 @@ GUIFrame:RegisterContent("BossDebuffs", function(scrollChild, yOffset)
     if not db then
         local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
         errorCard:AddLabel("Database not available")
-        return yOffset + errorCard:GetContentHeight() + Theme.paddingMedium
+        return errorCard:GetNextOffset()
     end
 
-    local allWidgets = {}
+    local manager = GUIFrame:CreateWidgetStateManager()
 
     local function ApplySettings()
         local mod = KitnEssentials and KitnEssentials:GetModule("BossDebuffs", true)
@@ -46,67 +44,78 @@ GUIFrame:RegisterContent("BossDebuffs", function(scrollChild, yOffset)
         end
     end
 
-    local function UpdateAllWidgetStates()
-        local mainEnabled = db.Enabled ~= false
-        for _, widget in ipairs(allWidgets) do
-            if widget.SetEnabled then widget:SetEnabled(mainEnabled) end
-        end
+    local function RefreshStates()
+        manager:UpdateAll(db.Enabled ~= false)
     end
 
-    ---------------------------------------------------------------------------------
-    -- Card 1: Boss Debuffs (Enable)
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
+    -- Card 1: Enable
+    ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Boss Debuffs", yOffset)
 
-    local row1a = GUIFrame:CreateRow(card1.content, 36)
-    local enableCheck = GUIFrame:CreateCheckbox(row1a,
-        "Enable Boss Debuffs", db.Enabled ~= false,
-        function(checked)
+    local row1a = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local enableCheck = GUIFrame:CreateCheckbox(row1a, "Enable Boss Debuffs", {
+        value = db.Enabled ~= false,
+        callback = function(checked)
             db.Enabled = checked
             ApplyModuleState(checked)
-            UpdateAllWidgetStates()
+            RefreshStates()
         end,
-        true, "Boss Debuffs", "On", "Off"
-    )
+        msgPopup = true,
+        msgText = "Boss Debuffs",
+        msgOn = "On",
+        msgOff = "Off",
+    })
     row1a:AddWidget(enableCheck, 1)
-    card1:AddRow(row1a, 36)
+    card1:AddRow(row1a, Theme.rowHeight)
 
-    card1:AddLabel("|cff888888Shows large icons for debuffs applied to you by bosses and mobs. Filters out self-cast debuffs. Duration spiral and text may be unavailable due to Blizzard restrictions.|r")
+    local noteRow = GUIFrame:CreateRow(card1.content, 65)
+    local noteText = GUIFrame:CreateText(noteRow,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " Shows large icons for debuffs applied to you by bosses and mobs.\n" ..
+        KE:ColorTextByTheme("-") .. " Filters out self-cast debuffs.\n" ..
+        KE:ColorTextByTheme("-") .. " Duration spiral and text may be unavailable due to Blizzard restrictions.",
+        65, "hide")
+    noteRow:AddWidget(noteText, 1)
+    card1:AddRow(noteRow, 65, 0)
 
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+    yOffset = card1:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 2: Visibility
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Visibility", yOffset)
-    table_insert(allWidgets, card2)
+    manager:Register(card2, "all")
 
-    -- VisibilityMode dropdown
-    local visiModeOptions = {
-        { key = "boss",     text = "Boss Encounters" },
-        { key = "instance", text = "Instance Combat"  },
-        { key = "always",   text = "Always in Combat"  },
-    }
-
-    local row2a = GUIFrame:CreateRow(card2.content, 40)
-    local visiDropdown = GUIFrame:CreateDropdown(row2a, "Visibility Mode", visiModeOptions,
-        db.VisibilityMode or "boss", 70,
-        function(key)
-            db.VisibilityMode = key
-            ApplySettings()
-        end)
+    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local visiDropdown = GUIFrame:CreateDropdown(row2a, "Visibility Mode", {
+        options = {
+            { key = "boss",     text = "Boss Encounters" },
+            { key = "instance", text = "Instance Combat" },
+            { key = "always",   text = "Always in Combat" },
+        },
+        value = db.VisibilityMode or "boss",
+        callback = function(key) db.VisibilityMode = key; ApplySettings() end,
+    })
     row2a:AddWidget(visiDropdown, 1)
-    table_insert(allWidgets, visiDropdown)
-    card2:AddRow(row2a, 40)
+    manager:Register(visiDropdown, "all")
+    card2:AddRow(row2a, Theme.rowHeight)
 
-    card2:AddLabel("|cff888888Encounter Blacklist — comma-separated IDs to exclude (boss mode only). Hover for IDs.|r")
+    local rowBlacklistNote = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local blacklistNote = GUIFrame:CreateText(rowBlacklistNote,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " Encounter Blacklist — comma-separated IDs to exclude (boss mode only). Hover for IDs.",
+        Theme.rowHeight, "hide")
+    rowBlacklistNote:AddWidget(blacklistNote, 1)
+    manager:Register(blacklistNote, "all")
+    card2:AddRow(rowBlacklistNote, Theme.rowHeight)
 
-    -- Encounter Blacklist edit box
-    local row2c = GUIFrame:CreateRow(card2.content, 40)
+    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
     local blacklistUpdating = false
-    local blacklistBox = GUIFrame:CreateEditBox(row2c, "e.g. 3306,3454",
-        db.EncounterBlacklist or "",
-        function(text)
+    local blacklistBox
+    blacklistBox = GUIFrame:CreateEditBox(row2c, "e.g. 3306,3454", {
+        value = db.EncounterBlacklist or "",
+        callback = function(text)
             if blacklistUpdating then return end
             -- Clean input: keep only valid numeric IDs
             local valid = {}
@@ -122,16 +131,16 @@ GUIFrame:RegisterContent("BossDebuffs", function(scrollChild, yOffset)
             end
             local cleaned = table.concat(valid, ",")
             db.EncounterBlacklist = cleaned
-            -- Update edit box to show cleaned text
             blacklistUpdating = true
             if blacklistBox then blacklistBox:SetValue(cleaned) end
             blacklistUpdating = false
             local mod = KitnEssentials and KitnEssentials:GetModule("BossDebuffs", true)
             if mod and mod.RefreshBlacklist then mod:RefreshBlacklist() end
-        end)
+        end,
+    })
     row2c:AddWidget(blacklistBox, 1)
-    table_insert(allWidgets, blacklistBox)
-    card2:AddRow(row2c, 40)
+    manager:Register(blacklistBox, "all")
+    card2:AddRow(row2c, Theme.rowHeightLast, 0)
 
     -- Encounter ID tooltip — hook into the editBox's existing OnEnter
     local tooltipTarget = blacklistBox.editBox
@@ -145,7 +154,7 @@ GUIFrame:RegisterContent("BossDebuffs", function(scrollChild, yOffset)
                 GameTooltip:AddLine(" ")
                 GameTooltip:AddLine(raid.header, ar, ag, ab)
                 for _, boss in ipairs(raid.bosses) do
-                    GameTooltip:AddDoubleLine(boss[1], tostring(boss[2]), 1,1,1, 0.7,0.7,0.7)
+                    GameTooltip:AddDoubleLine(boss[1], tostring(boss[2]), 1, 1, 1, 0.7, 0.7, 0.7)
                 end
             end
             GameTooltip:Show()
@@ -155,104 +164,90 @@ GUIFrame:RegisterContent("BossDebuffs", function(scrollChild, yOffset)
         end)
     end
 
-    yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
+    yOffset = card2:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 3: Display
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Display", yOffset)
-    table_insert(allWidgets, card3)
+    manager:Register(card3, "all")
 
-    -- MaxDebuffs and IconSize on one row
-    local row3a = GUIFrame:CreateRow(card3.content, 40)
-    local maxSlider = GUIFrame:CreateSlider(row3a, "Max Icons", 1, 5, 1,
-        db.MaxDebuffs or 3, 60,
-        function(val)
-            db.MaxDebuffs = val
-            ApplySettings()
-        end)
+    local row3a = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local maxSlider = GUIFrame:CreateSlider(row3a, "Max Icons", {
+        min = 1, max = 5, step = 1,
+        value = db.MaxDebuffs or 3,
+        callback = function(val) db.MaxDebuffs = val; ApplySettings() end,
+    })
     row3a:AddWidget(maxSlider, 0.5)
-    table_insert(allWidgets, maxSlider)
+    manager:Register(maxSlider, "all")
 
-    local sizeSlider = GUIFrame:CreateSlider(row3a, "Icon Size", 48, 128, 1,
-        db.IconSize or 32, 60,
-        function(val)
-            db.IconSize = val
-            ApplySettings()
-        end)
+    local sizeSlider = GUIFrame:CreateSlider(row3a, "Icon Size", {
+        min = 48, max = 128, step = 1,
+        value = db.IconSize or 32,
+        callback = function(val) db.IconSize = val; ApplySettings() end,
+    })
     row3a:AddWidget(sizeSlider, 0.5)
-    table_insert(allWidgets, sizeSlider)
-    card3:AddRow(row3a, 40)
+    manager:Register(sizeSlider, "all")
+    card3:AddRow(row3a, Theme.rowHeight)
 
-    -- Spacing and GrowthDirection on one row
-    local row3b = GUIFrame:CreateRow(card3.content, 40)
-    local spacingSlider = GUIFrame:CreateSlider(row3b, "Spacing", 0, 20, 1,
-        db.Spacing or 4, 60,
-        function(val)
-            db.Spacing = val
-            ApplySettings()
-        end)
+    local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local spacingSlider = GUIFrame:CreateSlider(row3b, "Spacing", {
+        min = 0, max = 20, step = 1,
+        value = db.Spacing or 4,
+        callback = function(val) db.Spacing = val; ApplySettings() end,
+    })
     row3b:AddWidget(spacingSlider, 0.5)
-    table_insert(allWidgets, spacingSlider)
+    manager:Register(spacingSlider, "all")
 
-    local growthOptions = {
-        { key = "RIGHT", text = "Right" },
-        { key = "LEFT",  text = "Left"  },
-        { key = "UP",    text = "Up"    },
-        { key = "DOWN",  text = "Down"  },
-    }
-    local growthDropdown = GUIFrame:CreateDropdown(row3b, "Growth Direction", growthOptions,
-        db.GrowthDirection or "RIGHT", 45,
-        function(key)
-            db.GrowthDirection = key
-            ApplySettings()
-        end)
+    local growthDropdown = GUIFrame:CreateDropdown(row3b, "Growth Direction", {
+        options = {
+            { key = "RIGHT", text = "Right" },
+            { key = "LEFT",  text = "Left"  },
+            { key = "UP",    text = "Up"    },
+            { key = "DOWN",  text = "Down"  },
+        },
+        value = db.GrowthDirection or "RIGHT",
+        callback = function(key) db.GrowthDirection = key; ApplySettings() end,
+    })
     row3b:AddWidget(growthDropdown, 0.5)
-    table_insert(allWidgets, growthDropdown)
-    card3:AddRow(row3b, 40)
+    manager:Register(growthDropdown, "all")
+    card3:AddRow(row3b, Theme.rowHeight)
 
-    -- ShowDuration and ShowTooltip toggles
-    local row3c = GUIFrame:CreateRow(card3.content, 36)
-    local durationCheck = GUIFrame:CreateCheckbox(row3c,
-        "Show Duration Spiral", db.ShowDuration ~= false,
-        function(checked)
-            db.ShowDuration = checked
-            ApplySettings()
-        end
-    )
-    row3c:AddWidget(durationCheck, 0.5)
-    table_insert(allWidgets, durationCheck)
+    local row3bsep = GUIFrame:CreateRow(card3.content, Theme.rowHeightSeparator)
+    local sep3b = GUIFrame:CreateSeparator(row3bsep)
+    row3bsep:AddWidget(sep3b, 1)
+    manager:Register(sep3b, "all")
+    card3:AddRow(row3bsep, Theme.rowHeightSeparator)
 
-    local tooltipCheck = GUIFrame:CreateCheckbox(row3c,
-        "Show Mouseover Tooltip", db.ShowTooltip ~= false,
-        function(checked)
-            db.ShowTooltip = checked
-            ApplySettings()
-        end
-    )
-    row3c:AddWidget(tooltipCheck, 0.5)
-    table_insert(allWidgets, tooltipCheck)
-    card3:AddRow(row3c, 36)
+    local row3c = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
+    local durationCheck = GUIFrame:CreateCheckbox(row3c, "Show Duration Spiral", {
+        value = db.ShowDuration ~= false,
+        callback = function(checked) db.ShowDuration = checked; ApplySettings() end,
+    })
+    row3c:AddWidget(durationCheck, 1/3)
+    manager:Register(durationCheck, "all")
 
-    -- ShowDurationText toggle
-    local row3d = GUIFrame:CreateRow(card3.content, 36)
-    local durationTextCheck = GUIFrame:CreateCheckbox(row3d,
-        "Show Duration Text", db.ShowDurationText ~= false,
-        function(checked)
-            db.ShowDurationText = checked
-            ApplySettings()
-        end
-    )
-    row3d:AddWidget(durationTextCheck, 1)
-    table_insert(allWidgets, durationTextCheck)
-    card3:AddRow(row3d, 36)
+    local tooltipCheck = GUIFrame:CreateCheckbox(row3c, "Show Mouseover Tooltip", {
+        value = db.ShowTooltip ~= false,
+        callback = function(checked) db.ShowTooltip = checked; ApplySettings() end,
+    })
+    row3c:AddWidget(tooltipCheck, 1/3)
+    manager:Register(tooltipCheck, "all")
 
-    yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
+    local durationTextCheck = GUIFrame:CreateCheckbox(row3c, "Show Duration Text", {
+        value = db.ShowDurationText ~= false,
+        callback = function(checked) db.ShowDurationText = checked; ApplySettings() end,
+    })
+    row3c:AddWidget(durationTextCheck, 1/3)
+    manager:Register(durationTextCheck, "all")
+    card3:AddRow(row3c, Theme.rowHeightLast, 0)
 
-    ---------------------------------------------------------------------------------
+    yOffset = card3:GetNextOffset()
+
+    ----------------------------------------------------------------
     -- Card 4: Position Settings
-    ---------------------------------------------------------------------------------
-    local card4, newOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+    ----------------------------------------------------------------
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = db,
         dbKeys = {
             anchorFrameType = "anchorFrameType",
@@ -268,18 +263,12 @@ GUIFrame:RegisterContent("BossDebuffs", function(scrollChild, yOffset)
         onChangeCallback    = ApplySettings,
     })
 
-    if card4.positionWidgets then
-        for _, widget in ipairs(card4.positionWidgets) do
-            table_insert(allWidgets, widget)
-        end
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
     end
-    table_insert(allWidgets, card4)
-    yOffset = newOffset
+    manager:Register(posCard, "all")
+    yOffset = posOffset
 
-    ---------------------------------------------------------------------------------
-    -- Final widget state sync
-    ---------------------------------------------------------------------------------
-    UpdateAllWidgetStates()
-    yOffset = yOffset - (Theme.paddingSmall * 3)
+    RefreshStates()
     return yOffset
 end)

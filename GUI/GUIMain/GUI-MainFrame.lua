@@ -123,7 +123,6 @@ GUIFrame.sidebarConfig = {
             { id = "DungeonCasts",                text = "Dungeon Casts" },
             { id = "EnemyCounter",                text = "Enemy Counter" },
             { id = "HealerMana",                  text = "Healer Mana" },
-            { id = "InstanceReset",               text = "Instance Reset" },
             { id = "KickTracker",                 text = "Interrupt Tracker" },
             { id = "WarpDepleteForces",           text = "WarpDeplete+" },
         },
@@ -139,7 +138,9 @@ GUIFrame.sidebarConfig = {
                 and KE.db.profile.Dungeons.DungeonTimers.Enabled)
         end,
         items = {
-            { id = "Dungeon_Settings",            text = "Timers Settings", alwaysEnabled = true },
+            { id = "DT_General",                  text = "General",         alwaysEnabled = true },
+            { id = "DT_Bars",                     text = "Bar Settings" },
+            { id = "DT_Texts",                    text = "Text Settings" },
             { id = "Dungeon_AlgetharAcademy",     text = "Algeth'ar Academy" },
             { id = "Dungeon_MagistersTerrace",    text = "Magisters' Terrace" },
             { id = "Dungeon_MaisaraCaverns",      text = "Maisara Caverns" },
@@ -264,13 +265,13 @@ function GUIFrame:CreateMainFrame()
     local T = Theme
 
     local frame = CreateFrame("Frame", "KE_GUIFrame", UIParent, BackdropTemplateMixin and "BackdropTemplate")
-    frame:SetSize(870, 800)
+    frame:SetSize(950, 700)
     frame:SetPoint("CENTER", UIParent, "CENTER", 0, 50)
     frame:SetFrameStrata("DIALOG")
     frame:SetToplevel(true)
     frame:SetMovable(true)
     frame:SetResizable(true)
-    frame:SetResizeBounds(945, 550)
+    frame:SetResizeBounds(950, 550)
     frame:EnableMouse(true)
     frame:SetClampedToScreen(true)
     frame:RegisterForDrag("LeftButton")
@@ -575,21 +576,38 @@ function GUIFrame:CreateMainFrame()
     resizeTex:SetAllPoints()
     resizeTex:SetTexture("Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\KitnCustomResizeHandle23px.png")
     resizeTex:SetVertexColor(T.textMuted[1], T.textMuted[2], T.textMuted[3], 0.6)
+    -- WoW suppresses OnMouseUp once RegisterForDrag's drag threshold trips, so
+    -- OnDragStop must also run the stop-and-save path. A guard flag keeps the
+    -- cleanup idempotent when both events fire for a single resize.
+    local isResizing = false
+    local function stopAndSaveResize()
+        if not isResizing then return end
+        isResizing = false
+        frame:StopMovingOrSizing()
+        -- StartSizing re-anchors to TOPLEFT internally; persist the new anchor
+        -- alongside size so the next session restores a consistent layout.
+        local point, _, relativePoint, xOfs, yOfs = frame:GetPoint()
+        if KE.db and KE.db.global then
+            local gs = KE.db.global.GUIState.frame
+            gs.width = frame:GetWidth()
+            gs.height = frame:GetHeight()
+            gs.point = point
+            gs.relativePoint = relativePoint
+            gs.xOffset = xOfs
+            gs.yOffset = yOfs
+        end
+    end
     resizeGrip:RegisterForDrag("LeftButton")
-    resizeGrip:SetScript("OnMouseDown", function(self, button)
-        if button == "LeftButton" then
+    resizeGrip:SetScript("OnMouseDown", function(_, button)
+        if button == "LeftButton" and not isResizing then
+            isResizing = true
             frame:StartSizing("BOTTOMRIGHT")
         end
     end)
-    resizeGrip:SetScript("OnMouseUp", function()
-        frame:StopMovingOrSizing()
-        if KE.db and KE.db.global then
-            KE.db.global.GUIState.frame.width = frame:GetWidth()
-            KE.db.global.GUIState.frame.height = frame:GetHeight()
-        end
-    end)
+    resizeGrip:SetScript("OnMouseUp", stopAndSaveResize)
     resizeGrip:SetScript("OnDragStart", function() end)
-    resizeGrip:SetScript("OnDragStop", function() end)
+    resizeGrip:SetScript("OnDragStop", stopAndSaveResize)
+    resizeGrip:SetScript("OnHide", stopAndSaveResize)
     resizeGrip:SetScript("OnEnter", function()
         resizeTex:SetVertexColor(T.accent[1], T.accent[2], T.accent[3], 0.8)
     end)

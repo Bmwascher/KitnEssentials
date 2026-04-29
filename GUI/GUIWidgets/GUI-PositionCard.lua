@@ -270,14 +270,17 @@ function GUIFrame:CreatePositionCard(scrollChild, yOffset, config)
             anchorTypeList[opt.key] = opt.text
         end
 
-        local anchorTypeDropdown = GUIFrame:CreateDropdown(row1, "Anchored To", anchorTypeList, currentType, 70,
-            function(key)
+        local anchorTypeDropdown = GUIFrame:CreateDropdown(row1, "Anchored To", {
+            options = anchorTypeList,
+            value = currentType,
+            labelWidth = 70,
+            callback = function(key)
                 setValue(keys.anchorFrameType, key)
-                -- Refresh to show/hide frame input
                 C_Timer.After(0.25, function()
                     GUIFrame:RefreshContent()
                 end)
-            end)
+            end,
+        })
         row1:AddWidget(anchorTypeDropdown, 1)
         table_insert(widgets, anchorTypeDropdown)
         card:AddRow(row1, 36)
@@ -286,9 +289,12 @@ function GUIFrame:CreatePositionCard(scrollChild, yOffset, config)
         if currentType == "SELECTFRAME" then
             local row2 = GUIFrame:CreateRow(card.content, 36)
 
-            local frameInput = GUIFrame:CreateEditBox(row2, "Frame", getValue(keys.anchorFrameFrame, ""), function(val)
-                setValue(keys.anchorFrameFrame, val ~= "" and val or nil)
-            end)
+            local frameInput = GUIFrame:CreateEditBox(row2, "Frame", {
+                value = getValue(keys.anchorFrameFrame, ""),
+                callback = function(val)
+                    setValue(keys.anchorFrameFrame, val ~= "" and val or nil)
+                end,
+            })
             row2:AddWidget(frameInput, 0.5)
             table_insert(widgets, frameInput)
 
@@ -340,76 +346,121 @@ function GUIFrame:CreatePositionCard(scrollChild, yOffset, config)
     -- Row 4: X and Y offset sliders
     local row4 = GUIFrame:CreateRow(card.content, 36)
 
-    local xSlider = GUIFrame:CreateSlider(row4, "X Offset", sliderRange[1], sliderRange[2], 1,
-        getValue(keys.xOffset, defaults.xOffset or 0), 55,
-        function(val)
+    local xSlider = GUIFrame:CreateSlider(row4, "X Offset", {
+        min = sliderRange[1], max = sliderRange[2], step = 1,
+        value = getValue(keys.xOffset, defaults.xOffset or 0),
+        labelWidth = 55,
+        callback = function(val)
             setValue(keys.xOffset, val)
-        end)
+        end,
+    })
     row4:AddWidget(xSlider, 0.5)
     table_insert(widgets, xSlider)
 
-    local ySlider = GUIFrame:CreateSlider(row4, "Y Offset", sliderRange[1], sliderRange[2], 1,
-        getValue(keys.yOffset, defaults.yOffset or 0), 55,
-        function(val)
+    local ySlider = GUIFrame:CreateSlider(row4, "Y Offset", {
+        min = sliderRange[1], max = sliderRange[2], step = 1,
+        value = getValue(keys.yOffset, defaults.yOffset or 0),
+        labelWidth = 55,
+        callback = function(val)
             setValue(keys.yOffset, val)
-        end)
+        end,
+    })
     row4:AddWidget(ySlider, 0.5)
     table_insert(widgets, ySlider)
     card:AddRow(row4, 36)
 
-    -- Row 5: Snap to Pixel Grid toggle (optional). Placed right after the
-    -- X/Y sliders since the toggle directly modifies how those sliders feel
-    -- (while ON, slider clicks may absorb sub-pixel deltas at sub-pixel
-    -- anchors). Recommended workflow: position with it OFF, flip ON when
-    -- done. Soft-outline modules anchored to ElvUI panels benefit most.
-    if showPixelSnap then
-        local row5 = GUIFrame:CreateRow(card.content, 44)
-        local currentSnap = db.SnapToPixelGrid == true
-        local snapToggle = GUIFrame:CreateCheckbox(row5, "Snap to Pixel Grid", currentSnap,
-            function(value)
-                db.SnapToPixelGrid = value
-                if onChange then onChange() end
-            end)
-        row5:AddWidget(snapToggle, 1)
-        table_insert(widgets, snapToggle)
+    -- Strata dropdown options (ordered highest → lowest)
+    local strataList = {
+        { key = "TOOLTIP",           text = "Tooltip" },
+        { key = "FULLSCREEN_DIALOG", text = "Fullscreen Dialog" },
+        { key = "FULLSCREEN",        text = "Fullscreen" },
+        { key = "DIALOG",            text = "Dialog" },
+        { key = "HIGH",              text = "High" },
+        { key = "MEDIUM",            text = "Medium" },
+        { key = "LOW",               text = "Low" },
+        { key = "BACKGROUND",        text = "Background" },
+    }
 
-        -- Two-line gray descriptor to the right of the toggle. Line 1 explains
-        -- what each state does; line 2 gives the recommended workflow.
-        local snapDesc = row5:CreateFontString(nil, "OVERLAY")
-        snapDesc:SetPoint("TOPLEFT", row5, "TOPLEFT", 60, -10)
-        snapDesc:SetPoint("BOTTOMRIGHT", row5, "BOTTOMRIGHT", 0, 0)
+    local snapTooltip = "Snap to Pixel Grid\n\nON: text outlines render crisper at sub-pixel anchors.\nOFF: position sliders apply every tick of movement (recommended while placing the frame).\n\nWorkflow: position with OFF, flip ON when done."
+    local snapDescText = "ON for crisper text\nOFF for precise positioning"
+
+    -- Helper: pin a 2-line muted descriptor to the right of a toggle widget.
+    -- Toggle box is 48px wide at the toggle frame's left edge; descriptor
+    -- starts at x=60 (clear of the box) and fills the rest of the toggle frame.
+    local function AddInlineSnapDesc(parentToggle)
+        local snapDesc = parentToggle:CreateFontString(nil, "OVERLAY")
+        snapDesc:SetPoint("TOPLEFT", parentToggle, "TOPLEFT", 60, -10)
+        snapDesc:SetPoint("BOTTOMRIGHT", parentToggle, "BOTTOMRIGHT", 0, 0)
         KE:ApplyThemeFont(snapDesc, "small")
         snapDesc:SetTextColor(0x88 / 0xFF, 0x88 / 0xFF, 0x88 / 0xFF, 1)
         snapDesc:SetJustifyH("LEFT")
         snapDesc:SetJustifyV("MIDDLE")
         snapDesc:SetWordWrap(true)
-        snapDesc:SetText("ON: cleaner text. OFF: precise position slider clicks.\nTurn OFF to position the module, ON once in place.")
-
-        card:AddRow(row5, 44)
+        snapDesc:SetText(snapDescText)
     end
 
-    -- Row 6: Strata dropdown (optional, set-once "advanced" control at bottom)
-    if showStrata then
-        local row6 = GUIFrame:CreateRow(card.content, 37)
-        -- Ordered from highest to lowest strata
-        local strataList = {
-            { key = "TOOLTIP",           text = "Tooltip" },
-            { key = "FULLSCREEN_DIALOG", text = "Fullscreen Dialog" },
-            { key = "FULLSCREEN",        text = "Fullscreen" },
-            { key = "DIALOG",            text = "Dialog" },
-            { key = "HIGH",              text = "High" },
-            { key = "MEDIUM",            text = "Medium" },
-            { key = "LOW",               text = "Low" },
-            { key = "BACKGROUND",        text = "Background" },
-        }
+    -- Combined row: strata (left half) | snap toggle + inline descriptor (right half)
+    if showStrata and showPixelSnap then
+        local rowCombined = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
+
         local currentStrata = getValue(keys.strata, defaults.strata or "HIGH")
-        local strataDropdown = GUIFrame:CreateDropdown(row6, "Strata", strataList, currentStrata, 39,
-            function(key)
+        local strataDropdown = GUIFrame:CreateDropdown(rowCombined, "Strata", {
+            options = strataList,
+            value = currentStrata,
+            labelWidth = 39,
+            callback = function(key)
                 setValue(keys.strata, key)
-            end)
+            end,
+        })
+        rowCombined:AddWidget(strataDropdown, 0.5, 20)
+        table_insert(widgets, strataDropdown)
+
+        local currentSnap = db.SnapToPixelGrid == true
+        local snapToggle = GUIFrame:CreateCheckbox(rowCombined, "Snap to Pixel Grid", {
+            value = currentSnap,
+            tooltip = snapTooltip,
+            callback = function(value)
+                db.SnapToPixelGrid = value
+                if onChange then onChange() end
+            end,
+        })
+        rowCombined:AddWidget(snapToggle, 0.5)
+        table_insert(widgets, snapToggle)
+        AddInlineSnapDesc(snapToggle)
+        card:AddRow(rowCombined, Theme.rowHeightLast, 0)
+
+    -- Snap-only path: full-width toggle row with inline descriptor
+    elseif showPixelSnap then
+        local row5 = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
+        local currentSnap = db.SnapToPixelGrid == true
+        local snapToggle = GUIFrame:CreateCheckbox(row5, "Snap to Pixel Grid", {
+            value = currentSnap,
+            tooltip = snapTooltip,
+            callback = function(value)
+                db.SnapToPixelGrid = value
+                if onChange then onChange() end
+            end,
+        })
+        row5:AddWidget(snapToggle, 1)
+        table_insert(widgets, snapToggle)
+        AddInlineSnapDesc(snapToggle)
+        card:AddRow(row5, Theme.rowHeightLast, 0)
+
+    -- Strata-only path: full-width dropdown at the bottom
+    elseif showStrata then
+        local row6 = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
+        local currentStrata = getValue(keys.strata, defaults.strata or "HIGH")
+        local strataDropdown = GUIFrame:CreateDropdown(row6, "Strata", {
+            options = strataList,
+            value = currentStrata,
+            labelWidth = 39,
+            callback = function(key)
+                setValue(keys.strata, key)
+            end,
+        })
         row6:AddWidget(strataDropdown, 1)
         table_insert(widgets, strataDropdown)
-        card:AddRow(row6, 37)
+        card:AddRow(row6, Theme.rowHeightLast, 0)
     end
 
     -- Store widgets for external enable/disable

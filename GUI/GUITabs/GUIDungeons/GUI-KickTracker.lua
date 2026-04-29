@@ -9,19 +9,36 @@ local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
-local table_insert = table.insert
+
+local pairs = pairs
 
 GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.KickTracker
     if not db then
         local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
         errorCard:AddLabel("Database not available")
-        return yOffset + errorCard:GetContentHeight() + Theme.paddingMedium
+        return errorCard:GetNextOffset()
     end
 
     local KT = KitnEssentials and KitnEssentials:GetModule("KickTracker", true)
-    local allWidgets = {}
-    local classOnlyWidgets = {}  -- widgets only relevant in "class" color mode
+
+    local manager = GUIFrame:CreateWidgetStateManager()
+    -- "position" group is enabled when main is on AND healer override isn't
+    -- currently overriding the standard position (i.e. user is not playing
+    -- healer or hasn't enabled healer override).
+    manager:SetCondition("position", function()
+        local healerActive = db.UseHealerPosition
+            and KE.IsPlayerHealerSpec and KE:IsPlayerHealerSpec()
+        return not healerActive
+    end)
+    -- "classOnly": widgets only meaningful when ColorMode is "class"
+    manager:SetCondition("classOnly", function()
+        return db.ColorMode ~= "dark"
+    end)
+    -- "cooling": cooling color picker requires class mode AND ClassColorCooling off
+    manager:SetCondition("cooling", function()
+        return db.ColorMode ~= "dark" and not db.ClassColorCooling
+    end)
 
     local function ApplySettings()
         if KT and KT.ApplySettings then KT:ApplySettings() end
@@ -39,21 +56,8 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
         end
     end
 
-    local coolingColorWidget = nil  -- tracked separately for compound condition
-
-    local function UpdateAllWidgetStates()
-        local mainEnabled = db.Enabled ~= false
-        local isClassMode = db.ColorMode ~= "dark"
-        for _, widget in ipairs(allWidgets) do
-            if widget.SetEnabled then widget:SetEnabled(mainEnabled) end
-        end
-        for _, widget in ipairs(classOnlyWidgets) do
-            if widget.SetEnabled then widget:SetEnabled(mainEnabled and isClassMode) end
-        end
-        -- Cooling color only relevant when class mode + ClassColorCooling is OFF
-        if coolingColorWidget and coolingColorWidget.SetEnabled then
-            coolingColorWidget:SetEnabled(mainEnabled and isClassMode and not db.ClassColorCooling)
-        end
+    local function RefreshStates()
+        manager:UpdateAll(db.Enabled ~= false)
     end
 
     -- Build LSM lists
@@ -71,71 +75,92 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
         statusbarList["Blizzard"] = "Blizzard"
     end
 
-    local outlineList = {
-        { key = "NONE", text = "None" },
-        { key = "OUTLINE", text = "Outline" },
-        { key = "THICKOUTLINE", text = "Thick" },
-    }
-
-    ---------------------------------------------------------------------------------
-    -- Card 1: Interrupt Tracker (Enable)
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
+    -- Card 1: Enable
+    ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Interrupt Tracker", yOffset)
 
-    local row1a = GUIFrame:CreateRow(card1.content, 36)
-    local enableCheck = GUIFrame:CreateCheckbox(row1a, "Enable Interrupt Tracker", db.Enabled ~= false,
-        function(checked)
+    local row1a = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local enableCheck = GUIFrame:CreateCheckbox(row1a, "Enable Interrupt Tracker", {
+        value = db.Enabled ~= false,
+        callback = function(checked)
             db.Enabled = checked
             ApplyModuleState(checked)
-            UpdateAllWidgetStates()
+            RefreshStates()
         end,
-        true, "Interrupt Tracker", "On", "Off"
-    )
+        msgPopup = true,
+        msgText = "Interrupt Tracker",
+        msgOn = "On",
+        msgOff = "Off",
+    })
     row1a:AddWidget(enableCheck, 1)
-    card1:AddRow(row1a, 36)
+    card1:AddRow(row1a, Theme.rowHeight)
 
-    card1:AddLabel("|cff888888" .. KE:ColorTextByTheme("-") .. " Tracks party interrupt cooldowns in real-time using status bars.\n" .. KE:ColorTextByTheme("-") .. " Only active in 5-player dungeons.|r")
+    local noteRow = GUIFrame:CreateRow(card1.content, 50)
+    local noteText = GUIFrame:CreateText(noteRow,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " Tracks party interrupt cooldowns in real-time using status bars.\n" ..
+        KE:ColorTextByTheme("-") .. " Only active in 5-player dungeons.",
+        50, "hide")
+    noteRow:AddWidget(noteText, 1)
+    card1:AddRow(noteRow, 50, 0)
 
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+    yOffset = card1:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
-    -- Card 2: Position Settings
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
+    -- Card 2: Position Settings (gated by "position" condition so the
+    -- healer override can hide/disable it when active for a healer spec)
+    ----------------------------------------------------------------
     local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         title = "Position Settings",
         db = db,
-        dbKeys = { selfPoint = "AnchorFrom", anchorPoint = "AnchorTo", xOffset = "XOffset", yOffset = "YOffset" },
+        dbKeys = {
+            selfPoint = "AnchorFrom",
+            anchorPoint = "AnchorTo",
+            xOffset = "XOffset",
+            yOffset = "YOffset",
+        },
         showAnchorFrameType = true,
         showStrata = true,
         onChangeCallback = ApplySettings,
     })
-    -- Disable standard position card when healer override is active for a healer spec
-    local isHealerActive = db.UseHealerPosition and KE.IsPlayerHealerSpec and KE:IsPlayerHealerSpec()
-    if isHealerActive then posCard:SetEnabled(false) end
-    yOffset = posOffset + Theme.paddingSmall
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "position")
+    end
+    manager:Register(posCard, "position")
+    yOffset = posOffset
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 2b: Healer Position Override
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local healerCard = GUIFrame:CreateCard(scrollChild, "Healer Position Override", yOffset)
 
-    local healerRow1 = GUIFrame:CreateRow(healerCard.content, 36)
-    local healerEnableCheck = GUIFrame:CreateCheckbox(healerRow1, "Use Healer Position",
-        db.UseHealerPosition == true,
-        function(checked)
+    local healerRow1 = GUIFrame:CreateRow(healerCard.content, Theme.rowHeightLast)
+    local healerEnableCheck = GUIFrame:CreateCheckbox(healerRow1, "Use Healer Position", {
+        value = db.UseHealerPosition == true,
+        callback = function(checked)
             db.UseHealerPosition = checked
             ApplySettings()
+            -- Re-render so healer position card appears/disappears
             C_Timer.After(0.05, function() GUIFrame:RefreshContent() end)
-        end)
+        end,
+    })
     healerRow1:AddWidget(healerEnableCheck, 1)
-    healerCard:AddRow(healerRow1, 36)
+    healerCard:AddRow(healerRow1, Theme.rowHeightLast)
 
-    healerCard:AddLabel("|cff888888" .. KE:ColorTextByTheme("-") .. " Auto-swap to a separate position when playing a healer spec.|r")
+    local healerNoteRow = GUIFrame:CreateRow(healerCard.content, Theme.rowHeight)
+    local healerNote = GUIFrame:CreateText(healerNoteRow,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " Auto-swap to a separate position when playing a healer spec.",
+        Theme.rowHeight, "hide")
+    healerNoteRow:AddWidget(healerNote, 1)
+    healerCard:AddRow(healerNoteRow, Theme.rowHeight, 0)
 
-    yOffset = yOffset + healerCard:GetContentHeight() + Theme.paddingSmall
+    yOffset = healerCard:GetNextOffset()
 
     if db.UseHealerPosition then
         -- Metatable wrapper so CreatePositionCard reads/writes healer keys
+        -- via the same dbKeys mapping as the standard position card.
         local healerDb = setmetatable({
             Position = db.HealerPosition,
         }, {
@@ -153,300 +178,326 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
             end,
         })
 
-        local _, healerPosOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        local healerPosCard, healerPosOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
             title = "Healer Position",
             db = healerDb,
-            dbKeys = { selfPoint = "AnchorFrom", anchorPoint = "AnchorTo", xOffset = "XOffset", yOffset = "YOffset" },
+            dbKeys = {
+                selfPoint = "AnchorFrom",
+                anchorPoint = "AnchorTo",
+                xOffset = "XOffset",
+                yOffset = "YOffset",
+            },
             showAnchorFrameType = true,
             showStrata = true,
             onChangeCallback = ApplySettings,
         })
-        yOffset = healerPosOffset + Theme.paddingSmall
+        if healerPosCard.positionWidgets then
+            manager:RegisterGroup(healerPosCard.positionWidgets, "all")
+        end
+        manager:Register(healerPosCard, "all")
+        yOffset = healerPosOffset
     end
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 3: Frame Settings
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Frame Settings", yOffset)
+    manager:Register(card3, "all")
 
-    -- Width + Height
-    local row3a = GUIFrame:CreateRow(card3.content, 36)
-    local widthSlider = GUIFrame:CreateSlider(row3a, "Bar Width", 80, 400, 1, db.BarWidth or 180, nil,
-        function(val)
-            db.BarWidth = val
-            ApplySettings()
-        end)
+    local row3a = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local widthSlider = GUIFrame:CreateSlider(row3a, "Bar Width", {
+        min = 80, max = 400, step = 1,
+        value = db.BarWidth or 180,
+        callback = function(val) db.BarWidth = val; ApplySettings() end,
+    })
     row3a:AddWidget(widthSlider, 0.5)
-    table_insert(allWidgets, widthSlider)
+    manager:Register(widthSlider, "all")
 
-    local heightSlider = GUIFrame:CreateSlider(row3a, "Bar Height", 12, 40, 1, db.BarHeight or 20, nil,
-        function(val)
-            db.BarHeight = val
-            ApplySettings()
-        end)
+    local heightSlider = GUIFrame:CreateSlider(row3a, "Bar Height", {
+        min = 12, max = 40, step = 1,
+        value = db.BarHeight or 20,
+        callback = function(val) db.BarHeight = val; ApplySettings() end,
+    })
     row3a:AddWidget(heightSlider, 0.5)
-    table_insert(allWidgets, heightSlider)
-    card3:AddRow(row3a, 36)
+    manager:Register(heightSlider, "all")
+    card3:AddRow(row3a, Theme.rowHeight)
 
-    -- Max Bars + Spacing
-    local row3b = GUIFrame:CreateRow(card3.content, 36)
-    local maxBarsSlider = GUIFrame:CreateSlider(row3b, "Max Bars", 1, 5, 1, db.MaxBars or 5, nil,
-        function(val)
-            db.MaxBars = val
-            ApplySettings()
-        end)
+    local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local maxBarsSlider = GUIFrame:CreateSlider(row3b, "Max Bars", {
+        min = 1, max = 5, step = 1,
+        value = db.MaxBars or 5,
+        callback = function(val) db.MaxBars = val; ApplySettings() end,
+    })
     row3b:AddWidget(maxBarsSlider, 0.5)
-    table_insert(allWidgets, maxBarsSlider)
+    manager:Register(maxBarsSlider, "all")
 
-    local spacingSlider = GUIFrame:CreateSlider(row3b, "Bar Spacing", 0, 10, 1, db.BarSpacing or 2, nil,
-        function(val)
-            db.BarSpacing = val
-            ApplySettings()
-        end)
+    local spacingSlider = GUIFrame:CreateSlider(row3b, "Bar Spacing", {
+        min = 0, max = 10, step = 1,
+        value = db.BarSpacing or 2,
+        callback = function(val) db.BarSpacing = val; ApplySettings() end,
+    })
     row3b:AddWidget(spacingSlider, 0.5)
-    table_insert(allWidgets, spacingSlider)
-    card3:AddRow(row3b, 36)
+    manager:Register(spacingSlider, "all")
+    card3:AddRow(row3b, Theme.rowHeight)
 
-    -- Growth Direction + Icon Side
-    local row3c = GUIFrame:CreateRow(card3.content, 36)
-    local growList = {
-        { key = "DOWN", text = "Down" },
-        { key = "UP", text = "Up" },
-    }
-    local growDropdown = GUIFrame:CreateDropdown(row3c, "Growth Direction", growList, db.GrowthDirection or "DOWN", 30,
-        function(key)
-            db.GrowthDirection = key
-            ApplySettings()
-        end)
+    local row3c = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
+    local growDropdown = GUIFrame:CreateDropdown(row3c, "Growth Direction", {
+        options = {
+            { key = "DOWN", text = "Down" },
+            { key = "UP",   text = "Up" },
+        },
+        value = db.GrowthDirection or "DOWN",
+        callback = function(key) db.GrowthDirection = key; ApplySettings() end,
+    })
     row3c:AddWidget(growDropdown, 0.5)
-    table_insert(allWidgets, growDropdown)
+    manager:Register(growDropdown, "all")
 
-    local sideList = {
-        { key = "LEFT", text = "Left" },
-        { key = "RIGHT", text = "Right" },
-    }
-    local sideDropdown = GUIFrame:CreateDropdown(row3c, "Icon Side", sideList, db.IconSide or "LEFT", 30,
-        function(key)
-            db.IconSide = key
-            ApplySettings()
-        end)
+    local sideDropdown = GUIFrame:CreateDropdown(row3c, "Icon Side", {
+        options = {
+            { key = "LEFT",  text = "Left" },
+            { key = "RIGHT", text = "Right" },
+        },
+        value = db.IconSide or "LEFT",
+        callback = function(key) db.IconSide = key; ApplySettings() end,
+    })
     row3c:AddWidget(sideDropdown, 0.5)
-    table_insert(allWidgets, sideDropdown)
-    card3:AddRow(row3c, 36)
+    manager:Register(sideDropdown, "all")
+    card3:AddRow(row3c, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card3:GetContentHeight() + (Theme.paddingMedium or 10)
+    yOffset = card3:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 4: Bar Appearance
-    ---------------------------------------------------------------------------------
+    -- Outline list intentionally excludes SOFTOUTLINE — bar text is small
+    -- and SOFTOUTLINE produces visible halo artifacts on tiny text.
+    -- Default is still SOFTOUTLINE for backward compat with existing saves.
+    ----------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Bar Appearance", yOffset)
+    manager:Register(card4, "all")
 
-    -- Bar Texture (full width)
-    local row4a = GUIFrame:CreateRow(card4.content, 36)
-    local statusbarDropdown = GUIFrame:CreateDropdown(row4a, "Bar Texture", statusbarList,
-        db.StatusBarTexture or "KitnUI", 70,
-        function(key)
-            db.StatusBarTexture = key
-            ApplySettings()
-        end)
+    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local statusbarDropdown = GUIFrame:CreateDropdown(row4a, "Bar Texture", {
+        options = statusbarList,
+        value = db.StatusBarTexture or "KitnUI",
+        callback = function(key) db.StatusBarTexture = key; ApplySettings() end,
+        searchable = true,
+    })
     row4a:AddWidget(statusbarDropdown, 1)
-    table_insert(allWidgets, statusbarDropdown)
-    card4:AddRow(row4a, 36)
+    manager:Register(statusbarDropdown, "all")
+    card4:AddRow(row4a, Theme.rowHeight)
 
-    -- Font + Font Size
-    local row3e = GUIFrame:CreateRow(card4.content, 36)
-    local fontDropdown = GUIFrame:CreateDropdown(row3e, "Font", fontList, db.FontFace or "Expressway", 70,
-        function(key)
-            db.FontFace = key
-            ApplySettings()
-        end, true)
-    row3e:AddWidget(fontDropdown, 0.5)
-    table_insert(allWidgets, fontDropdown)
+    local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local fontDropdown = GUIFrame:CreateDropdown(row4b, "Font", {
+        options = fontList,
+        value = db.FontFace or "Expressway",
+        callback = function(key) db.FontFace = key; ApplySettings() end,
+        searchable = true,
+        isFontPreview = true,
+    })
+    row4b:AddWidget(fontDropdown, 0.5)
+    manager:Register(fontDropdown, "all")
 
-    local fontSizeSlider = GUIFrame:CreateSlider(row3e, "Font Size", 8, 24, 1, db.FontSize or 11, nil,
-        function(val)
-            db.FontSize = val
-            ApplySettings()
-        end)
-    row3e:AddWidget(fontSizeSlider, 0.5)
-    table_insert(allWidgets, fontSizeSlider)
-    card4:AddRow(row3e, 36)
+    local fontSizeSlider = GUIFrame:CreateSlider(row4b, "Font Size", {
+        min = 8, max = 24, step = 1,
+        value = db.FontSize or 11,
+        callback = function(val) db.FontSize = val; ApplySettings() end,
+    })
+    row4b:AddWidget(fontSizeSlider, 0.5)
+    manager:Register(fontSizeSlider, "all")
+    card4:AddRow(row4b, Theme.rowHeight)
 
-    -- Font Outline
-    local row3f = GUIFrame:CreateRow(card4.content, 36)
-    local fontOutlineDropdown = GUIFrame:CreateDropdown(row3f, "Font Outline", outlineList, db.FontOutline or "SOFTOUTLINE", 45,
-        function(key)
-            db.FontOutline = key
-            ApplySettings()
-        end)
-    row3f:AddWidget(fontOutlineDropdown, 1)
-    table_insert(allWidgets, fontOutlineDropdown)
-    card4:AddRow(row3f, 36)
+    local row4c = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local fontOutlineDropdown = GUIFrame:CreateDropdown(row4c, "Font Outline", {
+        options = {
+            { key = "NONE",         text = "None" },
+            { key = "OUTLINE",      text = "Outline" },
+            { key = "THICKOUTLINE", text = "Thick" },
+        },
+        value = db.FontOutline or "SOFTOUTLINE",
+        callback = function(key) db.FontOutline = key; ApplySettings() end,
+    })
+    row4c:AddWidget(fontOutlineDropdown, 1)
+    manager:Register(fontOutlineDropdown, "all")
+    card4:AddRow(row4c, Theme.rowHeight)
 
-    -- Separator
-    local rowSep4 = GUIFrame:CreateRow(card4.content, 8)
+    local rowSep4 = GUIFrame:CreateRow(card4.content, Theme.rowHeightSeparator)
     local sep4 = GUIFrame:CreateSeparator(rowSep4)
     rowSep4:AddWidget(sep4, 1)
-    table_insert(allWidgets, sep4)
-    card4:AddRow(rowSep4, 8)
+    manager:Register(sep4, "all")
+    card4:AddRow(rowSep4, Theme.rowHeightSeparator)
 
-    -- Show Player Name + Show Timer
-    local row3g = GUIFrame:CreateRow(card4.content, 36)
-    local nameCheck = GUIFrame:CreateCheckbox(row3g, "Show Player Name", db.ShowName ~= false,
-        function(checked)
-            db.ShowName = checked
-            ApplySettings()
-        end)
-    row3g:AddWidget(nameCheck, 0.5)
-    table_insert(allWidgets, nameCheck)
+    local row4d = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local nameCheck = GUIFrame:CreateCheckbox(row4d, "Show Player Name", {
+        value = db.ShowName ~= false,
+        callback = function(checked) db.ShowName = checked; ApplySettings() end,
+    })
+    row4d:AddWidget(nameCheck, 0.5)
+    manager:Register(nameCheck, "all")
 
-    local timerCheck = GUIFrame:CreateCheckbox(row3g, "Show Timer", db.ShowTimer ~= false,
-        function(checked)
-            db.ShowTimer = checked
-            ApplySettings()
-        end)
-    row3g:AddWidget(timerCheck, 0.5)
-    table_insert(allWidgets, timerCheck)
-    card4:AddRow(row3g, 36)
+    local timerCheck = GUIFrame:CreateCheckbox(row4d, "Show Timer", {
+        value = db.ShowTimer ~= false,
+        callback = function(checked) db.ShowTimer = checked; ApplySettings() end,
+    })
+    row4d:AddWidget(timerCheck, 0.5)
+    manager:Register(timerCheck, "all")
+    card4:AddRow(row4d, Theme.rowHeight)
 
-    -- Show Kick Icon + Show Ready Text
-    local row3h = GUIFrame:CreateRow(card4.content, 36)
-    local iconCheck = GUIFrame:CreateCheckbox(row3h, "Show Kick Icon", db.ShowIcon ~= false,
-        function(checked)
-            db.ShowIcon = checked
-            ApplySettings()
-        end)
-    row3h:AddWidget(iconCheck, 0.5)
-    table_insert(allWidgets, iconCheck)
+    local row4e = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local iconCheck = GUIFrame:CreateCheckbox(row4e, "Show Kick Icon", {
+        value = db.ShowIcon ~= false,
+        callback = function(checked) db.ShowIcon = checked; ApplySettings() end,
+    })
+    row4e:AddWidget(iconCheck, 0.5)
+    manager:Register(iconCheck, "all")
 
-    local readyCheck = GUIFrame:CreateCheckbox(row3h, "Show Ready Text", db.ShowReadyText ~= false,
-        function(checked)
-            db.ShowReadyText = checked
-            ApplySettings()
-        end)
-    row3h:AddWidget(readyCheck, 0.5)
-    table_insert(allWidgets, readyCheck)
-    card4:AddRow(row3h, 36)
+    local readyCheck = GUIFrame:CreateCheckbox(row4e, "Show Ready Text", {
+        value = db.ShowReadyText ~= false,
+        callback = function(checked) db.ShowReadyText = checked; ApplySettings() end,
+    })
+    row4e:AddWidget(readyCheck, 0.5)
+    manager:Register(readyCheck, "all")
+    card4:AddRow(row4e, Theme.rowHeight)
 
-    -- Icon Size + Ready Text
-    local row3i = GUIFrame:CreateRow(card4.content, 36)
-    local iconSizeSlider = GUIFrame:CreateSlider(row3i, "Icon Size", 12, 40, 1, db.IconSize or 20, nil,
-        function(val)
-            db.IconSize = val
-            ApplySettings()
-        end)
-    row3i:AddWidget(iconSizeSlider, 0.5)
-    table_insert(allWidgets, iconSizeSlider)
+    local row4f = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
+    local iconSizeSlider = GUIFrame:CreateSlider(row4f, "Icon Size", {
+        min = 12, max = 40, step = 1,
+        value = db.IconSize or 20,
+        callback = function(val) db.IconSize = val; ApplySettings() end,
+    })
+    row4f:AddWidget(iconSizeSlider, 0.5)
+    manager:Register(iconSizeSlider, "all")
 
-    local readyTextInput = GUIFrame:CreateEditBox(row3i, "Ready Text", db.ReadyText or "Ready",
-        function(text)
-            db.ReadyText = text
-            ApplySettings()
-        end)
-    row3i:AddWidget(readyTextInput, 0.5)
-    table_insert(allWidgets, readyTextInput)
-    card4:AddRow(row3i, 36)
+    local readyTextInput = GUIFrame:CreateEditBox(row4f, "Ready Text", {
+        value = db.ReadyText or "Ready",
+        callback = function(text) db.ReadyText = text; ApplySettings() end,
+    })
+    row4f:AddWidget(readyTextInput, 0.5)
+    manager:Register(readyTextInput, "all")
+    card4:AddRow(row4f, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
+    yOffset = card4:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 5: Colors
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
+    manager:Register(card5, "all")
 
-    -- Color Mode dropdown + Class Color Cooling toggle
-    local row5a = GUIFrame:CreateRow(card5.content, 40)
-    local colorModeList = {
-        { key = "class", text = "Class Colored Bars" },
-        { key = "dark",  text = "Dark Bars" },
-    }
-    local colorModeDropdown = GUIFrame:CreateDropdown(row5a, "Color Mode", colorModeList, db.ColorMode or "class", 50,
-        function(key)
+    local row5a = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
+    local colorModeDropdown = GUIFrame:CreateDropdown(row5a, "Color Mode", {
+        options = {
+            { key = "class", text = "Class Colored Bars" },
+            { key = "dark",  text = "Dark Bars" },
+        },
+        value = db.ColorMode or "class",
+        callback = function(key)
             db.ColorMode = key
             ApplySettings()
-            UpdateAllWidgetStates()
-        end)
+            RefreshStates()
+        end,
+    })
     row5a:AddWidget(colorModeDropdown, 0.5)
-    table_insert(allWidgets, colorModeDropdown)
+    manager:Register(colorModeDropdown, "all")
 
-    local classColorCDCheck = GUIFrame:CreateCheckbox(row5a, "Class Color While Cooling", db.ClassColorCooling == true,
-        function(checked)
+    local classColorCDCheck = GUIFrame:CreateCheckbox(row5a, "Class Color While Cooling", {
+        value = db.ClassColorCooling == true,
+        callback = function(checked)
             db.ClassColorCooling = checked
             ApplySettings()
-            UpdateAllWidgetStates()
-        end)
+            RefreshStates()
+        end,
+    })
     row5a:AddWidget(classColorCDCheck, 0.5)
-    table_insert(classOnlyWidgets, classColorCDCheck)
-    card5:AddRow(row5a, 40)
+    manager:Register(classColorCDCheck, "classOnly")
+    card5:AddRow(row5a, Theme.rowHeight)
 
-    card5:AddLabel("|cff888888" .. KE:ColorTextByTheme("Class Colored") .. " - Class-colored bars with white names.\n" .. KE:ColorTextByTheme("Dark") .. " - Dark bars with class-colored names.|r")
+    local row5note = GUIFrame:CreateRow(card5.content, 50)
+    local note5 = GUIFrame:CreateText(row5note,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " " .. KE:ColorTextByTheme("Class Colored") .. " — class-colored bars with white names.\n" ..
+        KE:ColorTextByTheme("-") .. " " .. KE:ColorTextByTheme("Dark") .. " — dark bars with class-colored names.",
+        50, "hide")
+    row5note:AddWidget(note5, 1)
+    manager:Register(note5, "all")
+    card5:AddRow(row5note, 50)
 
-    -- Cooling color + Ready color (class mode only) + Background color (always)
-    local row5b = GUIFrame:CreateRow(card5.content, 40)
-    local coolingPicker = GUIFrame:CreateColorPicker(row5b, "Cooling Color", db.CoolingColor or { 0.8, 0.2, 0.2, 1 },
-        function(r, g, b, a)
+    local row5b = GUIFrame:CreateRow(card5.content, Theme.rowHeightLast)
+    local coolingPicker = GUIFrame:CreateColorPicker(row5b, "Cooling Color", {
+        color = db.CoolingColor or { 0.8, 0.2, 0.2, 1 },
+        callback = function(r, g, b, a)
             db.CoolingColor = { r, g, b, a }
             ApplySettings()
-        end)
+        end,
+    })
     row5b:AddWidget(coolingPicker, 0.33)
-    coolingColorWidget = coolingPicker
+    manager:Register(coolingPicker, "cooling")
 
-    local readyPicker = GUIFrame:CreateColorPicker(row5b, "Ready Color", db.ReadyColor or { 0.2, 0.8, 0.2, 1 },
-        function(r, g, b, a)
+    local readyPicker = GUIFrame:CreateColorPicker(row5b, "Ready Color", {
+        color = db.ReadyColor or { 0.2, 0.8, 0.2, 1 },
+        callback = function(r, g, b, a)
             db.ReadyColor = { r, g, b, a }
             ApplySettings()
-        end)
+        end,
+    })
     row5b:AddWidget(readyPicker, 0.33)
-    table_insert(classOnlyWidgets, readyPicker)
+    manager:Register(readyPicker, "classOnly")
 
-    local bgPicker = GUIFrame:CreateColorPicker(row5b, "Background Color", db.BackgroundColor or { 0.031, 0.031, 0.031, 0.80 },
-        function(r, g, b, a)
+    local bgPicker = GUIFrame:CreateColorPicker(row5b, "Background Color", {
+        color = db.BackgroundColor or { 0.031, 0.031, 0.031, 0.80 },
+        callback = function(r, g, b, a)
             db.BackgroundColor = { r, g, b, a }
             ApplySettings()
-        end)
+        end,
+    })
     row5b:AddWidget(bgPicker, 0.34)
-    table_insert(allWidgets, bgPicker)
-    card5:AddRow(row5b, 40)
+    manager:Register(bgPicker, "all")
+    card5:AddRow(row5b, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card5:GetContentHeight() + Theme.paddingSmall
+    yOffset = card5:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 6: Sort Priority
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card6 = GUIFrame:CreateCard(scrollChild, "Sort Priority", yOffset)
+    manager:Register(card6, "all")
 
-    card6:AddLabel("|cff888888Ready bars sorted by role priority, cooling bars sorted by remaining time (shortest first).|r")
+    local row6note = GUIFrame:CreateRow(card6.content, Theme.rowHeight)
+    local note6 = GUIFrame:CreateText(row6note,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " Ready bars sorted by role priority, cooling bars sorted by remaining time (shortest first).",
+        Theme.rowHeight, "hide")
+    row6note:AddWidget(note6, 1)
+    manager:Register(note6, "all")
+    card6:AddRow(row6note, Theme.rowHeight)
 
-    local row6a = GUIFrame:CreateRow(card6.content, 40)
-    local tankSlider = GUIFrame:CreateSlider(row6a, "Tank Priority", 1, 3, 1, db.SortTankPriority or 1, nil,
-        function(val)
-            db.SortTankPriority = val
-            ApplySettings()
-        end)
+    local row6a = GUIFrame:CreateRow(card6.content, Theme.rowHeightLast)
+    local tankSlider = GUIFrame:CreateSlider(row6a, "Tank", {
+        min = 1, max = 3, step = 1,
+        value = db.SortTankPriority or 1,
+        callback = function(val) db.SortTankPriority = val; ApplySettings() end,
+    })
     row6a:AddWidget(tankSlider, 0.33)
-    table_insert(allWidgets, tankSlider)
+    manager:Register(tankSlider, "all")
 
-    local healerSlider = GUIFrame:CreateSlider(row6a, "Healer Priority", 1, 3, 1, db.SortHealerPriority or 2, nil,
-        function(val)
-            db.SortHealerPriority = val
-            ApplySettings()
-        end)
+    local healerSlider = GUIFrame:CreateSlider(row6a, "Healer", {
+        min = 1, max = 3, step = 1,
+        value = db.SortHealerPriority or 2,
+        callback = function(val) db.SortHealerPriority = val; ApplySettings() end,
+    })
     row6a:AddWidget(healerSlider, 0.33)
-    table_insert(allWidgets, healerSlider)
+    manager:Register(healerSlider, "all")
 
-    local dpsSlider = GUIFrame:CreateSlider(row6a, "DPS Priority", 1, 3, 1, db.SortDPSPriority or 3, nil,
-        function(val)
-            db.SortDPSPriority = val
-            ApplySettings()
-        end)
+    local dpsSlider = GUIFrame:CreateSlider(row6a, "DPS", {
+        min = 1, max = 3, step = 1,
+        value = db.SortDPSPriority or 3,
+        callback = function(val) db.SortDPSPriority = val; ApplySettings() end,
+    })
     row6a:AddWidget(dpsSlider, 0.34)
-    table_insert(allWidgets, dpsSlider)
-    card6:AddRow(row6a, 40)
+    manager:Register(dpsSlider, "all")
+    card6:AddRow(row6a, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card6:GetContentHeight() + Theme.paddingSmall
+    yOffset = card6:GetNextOffset()
 
-    -- Apply initial widget states
-    UpdateAllWidgetStates()
-
+    RefreshStates()
     return yOffset
 end)

@@ -8,10 +8,8 @@
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
-local table_insert = table.insert
-local ipairs = ipairs
 
-local function GetHideBarsModule()
+local function GetModule()
     if KitnEssentials then
         return KitnEssentials:GetModule("HideBars", true)
     end
@@ -27,8 +25,8 @@ GUIFrame:RegisterContent("HideBars", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.HideBars
     if not db then return yOffset end
 
-    local HB = GetHideBarsModule()
-    local allWidgets = {}
+    local HB = GetModule()
+    local manager = GUIFrame:CreateWidgetStateManager()
 
     local function ApplyModuleState(enabled)
         if not HB then return end
@@ -37,64 +35,72 @@ GUIFrame:RegisterContent("HideBars", function(scrollChild, yOffset)
         else KitnEssentials:DisableModule("HideBars") end
     end
 
-    local function UpdateAllWidgetStates()
-        local mainEnabled = db.Enabled ~= false
-        for _, widget in ipairs(allWidgets) do
-            if widget.SetEnabled then widget:SetEnabled(mainEnabled) end
-        end
+    local function RefreshStates()
+        manager:UpdateAll(db.Enabled ~= false)
     end
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 1: Enable
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Hide ActionBars", yOffset)
-    local row1 = GUIFrame:CreateRow(card1.content, 36)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Hide ActionBars", db.Enabled ~= false,
-        function(checked)
+
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Hide ActionBars", {
+        value = db.Enabled ~= false,
+        callback = function(checked)
             db.Enabled = checked
             ApplyModuleState(checked)
-            UpdateAllWidgetStates()
+            RefreshStates()
         end,
-        true, "Hide ActionBars", "On", "Off")
+        msgPopup = true,
+        msgText = "Hide ActionBars",
+        msgOn = "On",
+        msgOff = "Off",
+    })
     row1:AddWidget(enableCheck, 1)
-    card1:AddRow(row1, 36)
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+    card1:AddRow(row1, Theme.rowHeightLast, 0)
 
-    ---------------------------------------------------------------------------------
+    yOffset = card1:GetNextOffset()
+
+    ----------------------------------------------------------------
     -- Card 2: Bar Selection
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Bar Selection", yOffset)
-    table_insert(allWidgets, card2)
+    manager:Register(card2, "all")
 
     local barNames = { "Bar 1", "Bar 2", "Bar 3", "Bar 4", "Bar 5", "Bar 6" }
 
-    local row2a = GUIFrame:CreateRow(card2.content, 36)
+    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     for i = 1, 3 do
-        local check = GUIFrame:CreateCheckbox(row2a, barNames[i], db.Bars[i] == true,
-            function(checked) db.Bars[i] = checked end)
-        row2a:AddWidget(check, 1 / 3)
-        table_insert(allWidgets, check)
+        local check = GUIFrame:CreateCheckbox(row2a, barNames[i], {
+            value = db.Bars[i] == true,
+            callback = function(checked) db.Bars[i] = checked end,
+        })
+        row2a:AddWidget(check, 1/3)
+        manager:Register(check, "all")
     end
-    card2:AddRow(row2a, 36)
+    card2:AddRow(row2a, Theme.rowHeight)
 
-    local row2b = GUIFrame:CreateRow(card2.content, 36)
+    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
     for i = 4, 6 do
-        local check = GUIFrame:CreateCheckbox(row2b, barNames[i], db.Bars[i] == true,
-            function(checked) db.Bars[i] = checked end)
-        row2b:AddWidget(check, 1 / 3)
-        table_insert(allWidgets, check)
+        local check = GUIFrame:CreateCheckbox(row2b, barNames[i], {
+            value = db.Bars[i] == true,
+            callback = function(checked) db.Bars[i] = checked end,
+        })
+        row2b:AddWidget(check, 1/3)
+        manager:Register(check, "all")
     end
-    card2:AddRow(row2b, 36)
+    card2:AddRow(row2b, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
+    yOffset = card2:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
-    -- Card 3: Keybind
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
+    -- Card 3: Keybind (custom capture button)
+    ----------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Keybind", yOffset)
-    table_insert(allWidgets, card3)
+    manager:Register(card3, "all")
 
-    local keybindRow = GUIFrame:CreateRow(card3.content, 36)
+    local keybindRow = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
     local isListening = false
     local keybindBtn
 
@@ -145,6 +151,7 @@ GUIFrame:RegisterContent("HideBars", function(scrollChild, yOffset)
         end,
     })
     keybindRow:AddWidget(keybindBtn, 0.5)
+    manager:Register(keybindBtn, "all")
 
     local clearBtn = GUIFrame:CreateButton(keybindRow, "Clear", {
         width = 80,
@@ -159,24 +166,27 @@ GUIFrame:RegisterContent("HideBars", function(scrollChild, yOffset)
         end,
     })
     keybindRow:AddWidget(clearBtn, 0.5)
+    manager:Register(clearBtn, "all")
+    card3:AddRow(keybindRow, Theme.rowHeightLast, 0)
 
-    card3:AddRow(keybindRow, 36)
-    yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
+    yOffset = card3:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 4: Note
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Note", yOffset)
-    table_insert(allWidgets, card4)
+    manager:Register(card4, "all")
 
-    local noteWidget = GUIFrame:CreateText(card4.content,
+    local noteRow = GUIFrame:CreateRow(card4.content, 60)
+    local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Out of Combat Only"),
         KE:ColorTextByTheme("-") .. " The keybind will only work out of combat. Action bars cannot be toggled\n  during combat due to Blizzard's secure frame restrictions.",
-        60, "hide", true)
-    card4:AddRow(noteWidget, 60)
-    yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
+        60, "hide")
+    noteRow:AddWidget(noteText, 1)
+    card4:AddRow(noteRow, 60, 0)
 
-    UpdateAllWidgetStates()
-    yOffset = yOffset - Theme.paddingSmall
+    yOffset = card4:GetNextOffset()
+
+    RefreshStates()
     return yOffset
 end)

@@ -192,14 +192,13 @@ end
 function SK:UpdateBackdrop(backdrop)
     if not self.db then return end
 
-    local bgColor = self.db.BackgroundColor or { 0, 0, 0, 0.8 }
-    local borderColor = self.db.BorderColor or { 0, 0, 0, 1 }
+    local bgr, bgg, bgb, bga = KE:ResolveColor(self.db.BackgroundColor, { 0, 0, 0, 0.8 })
+    local br, bg, bb, ba = KE:ResolveColor(self.db.BorderColor, { 0, 0, 0, 1 })
 
     if backdrop.bg then
-        backdrop.bg:SetVertexColor(bgColor[1], bgColor[2], bgColor[3], bgColor[4] or 0.8)
+        backdrop.bg:SetVertexColor(bgr, bgg, bgb, bga)
     end
 
-    local br, bg, bb, ba = borderColor[1], borderColor[2], borderColor[3], borderColor[4] or 1
     if backdrop.borderTop then backdrop.borderTop:SetVertexColor(br, bg, bb, ba) end
     if backdrop.borderBottom then backdrop.borderBottom:SetVertexColor(br, bg, bb, ba) end
     if backdrop.borderLeft then backdrop.borderLeft:SetVertexColor(br, bg, bb, ba) end
@@ -417,7 +416,8 @@ function SK:InitializeTooltipProcessor()
             fontPath = STANDARD_TEXT_FONT
         end
         local outline = KE:GetFontOutline(db.FontOutline)
-        local _, unit = tooltip:GetUnit()
+        local okGet, _, unit = pcall(tooltip.GetUnit, tooltip)
+        if not okGet or not unit then return end
         local success, _ = pcall(UnitIsPlayer, unit)
         local inInstance, instanceType = IsInInstance()
 

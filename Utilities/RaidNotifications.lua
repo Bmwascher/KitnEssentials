@@ -17,7 +17,6 @@ local C_Timer = C_Timer
 local C_UnitAuras = C_UnitAuras
 local IsUsableItem = C_Item.IsUsableItem
 local GetItemCount = C_Item.GetItemCount
-local GetItemInfo = C_Item.GetItemInfo
 local CreateFrame = CreateFrame
 local InCombatLockdown = InCombatLockdown
 local GetInstanceInfo = GetInstanceInfo
@@ -497,8 +496,11 @@ function RN:HidePreview()
     self.isPreview = false
     self:HideAllAlerts()
 
-    if self.db.Enabled then
-        -- Re-evaluate real state
+    -- Only re-evaluate live state if the AceModule is actually enabled.
+    -- During profile change, db.Enabled may flip true under the new profile
+    -- before OnEnable fires — driving Gateway/Reset checks before frames
+    -- exist would crash on nil indexing.
+    if self.db.Enabled and self:IsEnabled() then
         self.wasUsable = nil
         self:GatewayCheckUsable()
         self:CheckResetBoss()

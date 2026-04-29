@@ -17,7 +17,7 @@
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
-local WDF = KitnEssentials:NewModule("WarpDepleteForces", "AceEvent-3.0")
+local WDF = KitnEssentials:NewModule("WarpDepleteForces", "AceEvent-3.0", "AceHook-3.0")
 
 -- Local references
 local CreateFrame = CreateFrame
@@ -40,6 +40,8 @@ local ipairs = ipairs
 local table_remove = table.remove
 local wipe = wipe
 local issecretvalue = issecretvalue or function() return false end
+local SendChatMessage = SendChatMessage
+local IsInGroup = IsInGroup
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -47,6 +49,20 @@ local issecretvalue = issecretvalue or function() return false end
 
 function WDF:UpdateDB()
     self.db = KE.db.profile.Dungeons.WarpDepleteForces
+
+    -- Migrate from the deprecated InstanceReset module (merged 2026-04-28).
+    -- Copies any explicitly-set values from the old saved table into the new
+    -- WDF-scoped fields, then wipes the old table so this runs once.
+    local oldIR = KE.db.profile.Dungeons.InstanceReset
+    if oldIR then
+        if oldIR.Enabled ~= nil then
+            self.db.InstanceResetEnabled = oldIR.Enabled
+        end
+        if oldIR.Message ~= nil and oldIR.Message ~= "" then
+            self.db.InstanceResetMessage = oldIR.Message
+        end
+        KE.db.profile.Dungeons.InstanceReset = nil
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -695,6 +711,26 @@ function WDF:ApplySettings()
     end
     RefreshAllNameplateStyle()
     RefreshAllNameplatePositions()
+
+    -- Instance Reset Announcer: hook ResetInstances when sub-feature is on.
+    if self.db.InstanceResetEnabled then
+        if not self:IsHooked("ResetInstances") then
+            self:SecureHook("ResetInstances", function()
+                if not WDF.db or not WDF.db.InstanceResetEnabled then return end
+                local channel
+                if IsInRaid() then
+                    channel = "RAID"
+                elseif IsInGroup() then
+                    channel = "PARTY"
+                end
+                if channel then
+                    SendChatMessage(WDF.db.InstanceResetMessage or "Instance reset!", channel)
+                end
+            end)
+        end
+    elseif self:IsHooked("ResetInstances") then
+        self:Unhook("ResetInstances")
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -749,6 +785,7 @@ end
 
 function WDF:OnDisable()
     self:UnregisterAllEvents()
+    self:UnhookAll()
     StopAliveScanTicker()
     StopNameplateTicker()
     ReleaseAllNameplateTexts()

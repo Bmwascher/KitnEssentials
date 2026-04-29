@@ -162,7 +162,7 @@ end
 function GVA:ApplySettings()
     if not self.alertFrame then return end
 
-    KE:ApplyFramePosition(self.alertFrame, self.db.Position, self.db)
+    KE:ApplyFramePositionWithSnap(self.alertFrame, self.db.Position, self.db)
 
     if self.db.Strata then
         self.alertFrame:SetFrameStrata(self.db.Strata)
@@ -185,7 +185,7 @@ function GVA:RegWithEditMode()
             getPosition = function() return self.db.Position end,
             setPosition = function(pos)
                 self.db.Position = pos
-                KE:ApplyFramePosition(self.alertFrame, self.db.Position, self.db)
+                KE:ApplyFramePositionWithSnap(self.alertFrame, self.db.Position, self.db)
             end,
             getParentFrame = function()
                 return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)

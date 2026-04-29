@@ -128,8 +128,17 @@ local function ReleaseItemButton(btn)
     table_insert(itemButtonPool, btn)
 end
 
-function GUIFrame:CreateDropdown(parent, labelText, options, selected, labelWidth, callback)
-    local tooltip = nil
+-- Dropdown Widget — config-table API: { options, value, callback, tooltip }
+-- TODO: `labelWidth`, `searchable`, and `isFontPreview` are accepted in the
+-- API for forward-compat with NUI v3.7 but not yet wired into the widget body.
+-- Callers (e.g. font dropdowns passing `searchable = true, isFontPreview = true`)
+-- won't see those behaviors. Implement when needed; config keys pass silently.
+function GUIFrame:CreateDropdown(parent, labelText, config)
+    config = config or {}
+    local options = config.options
+    local selected = config.value or config.selected
+    local callback = config.callback
+    local tooltip = config.tooltip
     local sorting = nil
     local customHeight = nil
 

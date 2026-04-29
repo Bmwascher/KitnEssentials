@@ -184,10 +184,11 @@ function SK:UpdateMicroBar()
 
     if microBar and microBar.backdrop then
         microBar.backdrop:SetShown(self.db.ShowBackdrop ~= false)
-        microBar.backdrop:SetBackdropColor(unpack(self.db.BackdropColor))
+        local bgr, bgg, bgb, bga = KE:ResolveColor(self.db.BackdropColor, { 0, 0, 0, 0.8 })
+        microBar.backdrop:SetBackdropColor(bgr, bgg, bgb, bga)
 
-        local borderColor = self.db.BackdropBorderColor
-        microBar.backdrop:SetBorderColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4])
+        local bdr, bdg, bdb, bda = KE:ResolveColor(self.db.BackdropBorderColor, { 0, 0, 0, 1 })
+        microBar.backdrop:SetBorderColor(bdr, bdg, bdb, bda)
     end
 
     SK:UpdateAlpha()
