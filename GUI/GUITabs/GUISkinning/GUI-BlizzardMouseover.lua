@@ -10,10 +10,6 @@ local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 
-local table_insert = table.insert
-local ipairs = ipairs
-
--- Helper to get modules
 local function GetBlizzardMouseoverModule()
     if KitnEssentials then
         return KitnEssentials:GetModule("SkinBlizzardMouseover", true)
@@ -41,16 +37,14 @@ GUIFrame:RegisterContent("SkinMouseover", function(scrollChild, yOffset)
     if not db then
         local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
         errorCard:AddLabel("Database not available")
-        return yOffset + errorCard:GetContentHeight() + Theme.paddingMedium
+        return errorCard:GetNextOffset()
     end
 
     local BMO = GetBlizzardMouseoverModule()
     local abDB = KE.db and KE.db.profile.Skinning.ActionBars
     local mmDB = KE.db and KE.db.profile.Skinning.MicroMenu
 
-    -- Track widgets for enable/disable logic
-    local allWidgets = {}
-    local bagWidgets = {}
+    local manager = GUIFrame:CreateWidgetStateManager()
 
     local function ApplySettings()
         if BMO then BMO:ApplySettings() end
@@ -66,53 +60,43 @@ GUIFrame:RegisterContent("SkinMouseover", function(scrollChild, yOffset)
         end
     end
 
-    local function UpdateAllWidgetStates()
-        local mainEnabled = db.Enabled ~= false
-        local bagEnabled = db.BagMouseover and db.BagMouseover.Enabled ~= false
+    manager:SetCondition("bag", function()
+        return db.BagMouseover and db.BagMouseover.Enabled ~= false
+    end)
 
-        for _, widget in ipairs(allWidgets) do
-            if widget.SetEnabled then
-                widget:SetEnabled(mainEnabled)
-            end
-        end
-
-        if mainEnabled then
-            for _, widget in ipairs(bagWidgets) do
-                if widget.SetEnabled then
-                    widget:SetEnabled(bagEnabled)
-                end
-            end
-        end
+    local function RefreshStates()
+        manager:UpdateAll(db.Enabled ~= false)
     end
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 1: Enable + About
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Blizzard Mouseover", yOffset)
 
-    local row1 = GUIFrame:CreateRow(card1.content, 40)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Blizzard Mouseover", db.Enabled ~= false,
-        function(checked)
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Blizzard Mouseover", {
+        value = db.Enabled ~= false,
+        callback = function(checked)
             db.Enabled = checked
             ApplyMouseoverState(checked)
-            UpdateAllWidgetStates()
+            if not checked then
+                KE:SkinningReloadPrompt()
+            end
+            RefreshStates()
         end,
-        true,
-        "Blizzard Mouseover",
-        "On",
-        "Off"
-    )
+        msgPopup = true,
+        msgText = "Blizzard Mouseover",
+        msgOn = "On",
+        msgOff = "Off",
+    })
     row1:AddWidget(enableCheck, 1)
-    card1:AddRow(row1, 40)
+    card1:AddRow(row1, Theme.rowHeight)
 
-    -- Separator
-    local rowSep1 = GUIFrame:CreateRow(card1.content, 8)
-    local sep1 = GUIFrame:CreateSeparator(rowSep1)
-    rowSep1:AddWidget(sep1, 1)
-    table_insert(allWidgets, sep1)
-    card1:AddRow(rowSep1, 8)
+    local sepRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightSeparator)
+    local sepWidget = GUIFrame:CreateSeparator(sepRow)
+    sepRow:AddWidget(sepWidget, 1)
+    card1:AddRow(sepRow, Theme.rowHeightSeparator)
 
-    -- Description
     local descRowSize = 30
     local rowDesc = GUIFrame:CreateRow(card1.content, descRowSize)
     local descText = GUIFrame:CreateText(rowDesc,
@@ -120,74 +104,76 @@ GUIFrame:RegisterContent("SkinMouseover", function(scrollChild, yOffset)
         "Fades supported Blizzard UI elements until you mouseover them.",
         descRowSize, "hide")
     rowDesc:AddWidget(descText, 1)
-    table_insert(allWidgets, descText)
-    card1:AddRow(rowDesc, descRowSize)
+    manager:Register(descText, "all")
+    card1:AddRow(rowDesc, descRowSize, 0)
 
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+    yOffset = card1:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 2: Bag Bar (owned by this module — full settings here)
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Bag Bar", yOffset)
-    table_insert(allWidgets, card2)
+    manager:Register(card2, "all")
 
-    -- Bag enable toggle
-    local rowBagEnable = GUIFrame:CreateRow(card2.content, 40)
-    local bagEnableCheck = GUIFrame:CreateCheckbox(rowBagEnable, "Enable BagBar Mouseover",
-        db.BagMouseover.Enabled ~= false,
-        function(checked)
+    local rowBagEnable = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local bagEnableCheck = GUIFrame:CreateCheckbox(rowBagEnable, "Enable BagBar Mouseover", {
+        value = db.BagMouseover.Enabled ~= false,
+        callback = function(checked)
             db.BagMouseover.Enabled = checked
             if BMO then
                 BMO:ToggleElement("bags", checked)
                 ApplySettings()
             end
-            UpdateAllWidgetStates()
-        end)
+            RefreshStates()
+        end,
+    })
     rowBagEnable:AddWidget(bagEnableCheck, 1)
-    table_insert(allWidgets, bagEnableCheck)
-    card2:AddRow(rowBagEnable, 40)
+    manager:Register(bagEnableCheck, "all")
+    card2:AddRow(rowBagEnable, Theme.rowHeight)
 
-    -- Alpha when not hovered
-    local rowAlpha = GUIFrame:CreateRow(card2.content, 40)
-    local nonMouseoverAlpha = GUIFrame:CreateSlider(rowAlpha, "Alpha When No Mouseover", 0, 1, 0.1, db.Alpha, _,
-        function(val)
+    local rowAlpha = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local nonMouseoverAlpha = GUIFrame:CreateSlider(rowAlpha, "Alpha When No Mouseover", {
+        min = 0, max = 1, step = 0.1,
+        value = db.Alpha,
+        callback = function(val)
             db.Alpha = val
             ApplySettings()
-        end)
+        end,
+    })
     rowAlpha:AddWidget(nonMouseoverAlpha, 1)
-    table_insert(allWidgets, nonMouseoverAlpha)
-    table_insert(bagWidgets, nonMouseoverAlpha)
-    card2:AddRow(rowAlpha, 40)
+    manager:Register(nonMouseoverAlpha, "bag")
+    card2:AddRow(rowAlpha, Theme.rowHeight)
 
-    -- Fade durations
-    local rowFade = GUIFrame:CreateRow(card2.content, 36)
-    local fadeInSlider = GUIFrame:CreateSlider(rowFade, "Fade In Duration", 0, 10, 0.1, db.FadeInDuration, _,
-        function(val)
+    local rowFade = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local fadeInSlider = GUIFrame:CreateSlider(rowFade, "Fade In Duration", {
+        min = 0, max = 10, step = 0.1,
+        value = db.FadeInDuration,
+        callback = function(val)
             db.FadeInDuration = val
-        end)
+        end,
+    })
     rowFade:AddWidget(fadeInSlider, 0.5)
-    table_insert(allWidgets, fadeInSlider)
-    table_insert(bagWidgets, fadeInSlider)
+    manager:Register(fadeInSlider, "bag")
 
-    local fadeOutSlider = GUIFrame:CreateSlider(rowFade, "Fade Out Duration", 0, 10, 0.1, db.FadeOutDuration, _,
-        function(val)
+    local fadeOutSlider = GUIFrame:CreateSlider(rowFade, "Fade Out Duration", {
+        min = 0, max = 10, step = 0.1,
+        value = db.FadeOutDuration,
+        callback = function(val)
             db.FadeOutDuration = val
-        end)
+        end,
+    })
     rowFade:AddWidget(fadeOutSlider, 0.5)
-    table_insert(allWidgets, fadeOutSlider)
-    table_insert(bagWidgets, fadeOutSlider)
+    manager:Register(fadeOutSlider, "bag")
+    card2:AddRow(rowFade, Theme.rowHeightLast, 0)
 
-    card2:AddRow(rowFade, 36)
+    yOffset = card2:GetNextOffset()
 
-    yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
-
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 3: Other Elements (cross-module toggles)
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Other Elements", yOffset)
-    table_insert(allWidgets, card3)
+    manager:Register(card3, "all")
 
-    -- Info text explaining these are cross-module toggles
     local infoRowSize = 30
     local rowInfo = GUIFrame:CreateRow(card3.content, infoRowSize)
     local infoText = GUIFrame:CreateText(rowInfo,
@@ -195,22 +181,23 @@ GUIFrame:RegisterContent("SkinMouseover", function(scrollChild, yOffset)
         KE:ColorTextByTheme("• ") .. "These elements have their own mouseover settings in their respective pages.",
         infoRowSize, "hide")
     rowInfo:AddWidget(infoText, 1)
-    table_insert(allWidgets, infoText)
+    manager:Register(infoText, "all")
     card3:AddRow(rowInfo, infoRowSize)
 
-    -- Separator between info text and toggles
-    local rowSep2 = GUIFrame:CreateRow(card3.content, 8)
+    local rowSep2 = GUIFrame:CreateRow(card3.content, Theme.rowHeightSeparator)
     local sep2 = GUIFrame:CreateSeparator(rowSep2)
     rowSep2:AddWidget(sep2, 1)
-    table_insert(allWidgets, sep2)
-    card3:AddRow(rowSep2, 8)
+    card3:AddRow(rowSep2, Theme.rowHeightSeparator)
 
-    -- ActionBars mouseover toggle
-    if abDB then
-        local rowAB = GUIFrame:CreateRow(card3.content, 40)
+    local hasAB = abDB ~= nil
+    local hasMM = mmDB ~= nil
+
+    if hasAB then
+        local rowAB = GUIFrame:CreateRow(card3.content, hasMM and Theme.rowHeight or Theme.rowHeightLast)
         local abMouseoverEnabled = abDB.Mouseover and abDB.Mouseover.Enabled ~= false
-        local abCheck = GUIFrame:CreateCheckbox(rowAB, "Action Bars Mouseover", abMouseoverEnabled,
-            function(checked)
+        local abCheck = GUIFrame:CreateCheckbox(rowAB, "Action Bars Mouseover", {
+            value = abMouseoverEnabled,
+            callback = function(checked)
                 if abDB.Mouseover then
                     abDB.Mouseover.Enabled = checked
                 end
@@ -218,18 +205,23 @@ GUIFrame:RegisterContent("SkinMouseover", function(scrollChild, yOffset)
                 if abModule and abModule.UpdateSettings then
                     abModule:UpdateSettings("mouseover")
                 end
-            end)
+            end,
+        })
         rowAB:AddWidget(abCheck, 1)
-        table_insert(allWidgets, abCheck)
-        card3:AddRow(rowAB, 40)
+        manager:Register(abCheck, "all")
+        if hasMM then
+            card3:AddRow(rowAB, Theme.rowHeight)
+        else
+            card3:AddRow(rowAB, Theme.rowHeightLast, 0)
+        end
     end
 
-    -- MicroMenu mouseover toggle
-    if mmDB then
-        local rowMM = GUIFrame:CreateRow(card3.content, 40)
+    if hasMM then
+        local rowMM = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
         local mmMouseoverEnabled = mmDB.Mouseover and mmDB.Mouseover.Enabled ~= false
-        local mmCheck = GUIFrame:CreateCheckbox(rowMM, "Micro Menu Mouseover", mmMouseoverEnabled,
-            function(checked)
+        local mmCheck = GUIFrame:CreateCheckbox(rowMM, "Micro Menu Mouseover", {
+            value = mmMouseoverEnabled,
+            callback = function(checked)
                 if mmDB.Mouseover then
                     mmDB.Mouseover.Enabled = checked
                 end
@@ -237,16 +229,15 @@ GUIFrame:RegisterContent("SkinMouseover", function(scrollChild, yOffset)
                 if mmModule and mmModule.UpdateAlpha then
                     mmModule:UpdateAlpha()
                 end
-            end)
+            end,
+        })
         rowMM:AddWidget(mmCheck, 1)
-        table_insert(allWidgets, mmCheck)
-        card3:AddRow(rowMM, 40)
+        manager:Register(mmCheck, "all")
+        card3:AddRow(rowMM, Theme.rowHeightLast, 0)
     end
 
-    yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
+    yOffset = card3:GetNextOffset()
 
-    -- Apply initial widget states
-    UpdateAllWidgetStates()
-    yOffset = yOffset - (Theme.paddingSmall * 2)
+    RefreshStates()
     return yOffset
 end)

@@ -411,19 +411,19 @@ function PT:UpdateEntryVisuals(entry, data)
         end
         entry.nameText:SetText(displayName)
         if data.isCrit then
-            local cc = db.CritColor
-            entry.nameText:SetTextColor(cc[1], cc[2], cc[3], cc[4] or 1)
+            local r, g, b, a = KE:ResolveColor(db.CritColor, { 1, 0, 1, 1 })
+            entry.nameText:SetTextColor(r, g, b, a)
         elseif db.ClassColorNames and data.classToken then
             local color = C_ClassColor and C_ClassColor.GetClassColor(data.classToken)
             if color then
                 entry.nameText:SetTextColor(color.r, color.g, color.b, 1)
             else
-                local nc = db.NameColor
-                entry.nameText:SetTextColor(nc[1], nc[2], nc[3], nc[4] or 1)
+                local r, g, b, a = KE:ResolveColor(db.NameColor, { 1, 1, 1, 1 })
+                entry.nameText:SetTextColor(r, g, b, a)
             end
         else
-            local nc = db.NameColor
-            entry.nameText:SetTextColor(nc[1], nc[2], nc[3], nc[4] or 1)
+            local r, g, b, a = KE:ResolveColor(db.NameColor, { 1, 1, 1, 1 })
+            entry.nameText:SetTextColor(r, g, b, a)
         end
         entry.nameText:Show()
     else
@@ -432,8 +432,13 @@ function PT:UpdateEntryVisuals(entry, data)
 
     -- Timer
     KE:ApplyFont(entry.timer, db.TimerFontFace, db.TimerFontSize, db.TimerFontOutline)
-    local tc = data.isCrit and db.CritColor or db.TimerColor
-    entry.timer:SetTextColor(tc[1], tc[2], tc[3], tc[4] or 1)
+    local r, g, b, a
+    if data.isCrit then
+        r, g, b, a = KE:ResolveColor(db.CritColor, { 1, 0, 1, 1 })
+    else
+        r, g, b, a = KE:ResolveColor(db.TimerColor, { 1, 1, 1, 1 })
+    end
+    entry.timer:SetTextColor(r, g, b, a)
 
     -- Entry size
     local iconSize = db.IconSize or 32
@@ -683,7 +688,9 @@ function PT:HidePreview()
     self.isPreview = false
     self:ClearAllEntries()
 
-    if self.db.Enabled and self.isAugSpec then
+    -- Need live containerFrame; on profile change AceModule may not yet have
+    -- enabled and CreateContainer hasn't run.
+    if self.db.Enabled and self.isAugSpec and self.containerFrame then
         self:ScanAllUnits()
         self.containerFrame:Show()
     else

@@ -828,6 +828,7 @@ local Defaults = {
 
         MissingEnchants = {
             Enabled = true,
+            ShowEnchants = true,
             GemEnabled = true,
             FontFace = "Expressway",
             FontSize = 13,
@@ -1005,6 +1006,9 @@ local Defaults = {
                 NameplateAnchor = "TOPRIGHT",
                 NameplateXOffset = -20,
                 NameplateYOffset = 2,
+                -- Instance Reset Announcer (merged from former InstanceReset module)
+                InstanceResetEnabled = true,
+                InstanceResetMessage = "Instance reset!",
                 -- Death log persistence (survives /reload within same M+ run)
                 DeathLog = {
                     mapID = nil,
@@ -1153,10 +1157,6 @@ local Defaults = {
                 FontFace = "Expressway",
                 FontOutline = "SOFTOUTLINE",
                 HighManaColor = { 1, 1, 1, 1 },
-            },
-            InstanceReset = {
-                Enabled = true,
-                Message = "Instance reset!",
             },
             DeathNotifications = {
                 Enabled = false,

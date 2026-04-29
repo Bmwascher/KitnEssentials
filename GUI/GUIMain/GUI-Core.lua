@@ -18,8 +18,6 @@ local tostring = tostring
 local wipe = wipe
 local CreateFrame = CreateFrame
 local table_insert = table.insert
-local C_Timer = C_Timer
-local math_min = math.min
 
 local Theme = KE.Theme
 
@@ -49,15 +47,6 @@ end
 
 function GUIFrame:HasPanel(itemId)
     return self.PanelBuilders[itemId] ~= nil
-end
-
--- Wide panel registry (panels that need extra content width, e.g. trigger editors with sidebar)
-GUIFrame.WidePanelBuilders = {}
-
-function GUIFrame:RegisterWidePanel(itemId, builderFunc)
-    if type(builderFunc) ~= "function" then return end
-    self.PanelBuilders[itemId] = builderFunc
-    self.WidePanelBuilders[itemId] = true
 end
 
 -- Content cleanup callbacks
@@ -231,6 +220,7 @@ function GUIFrame:CreateCard(parent, title, yOffset, width)
 
     card.contentHeight = 0
     card.rows = {}
+    card._yOffset = yOffset or 0
 
     -- Header
     local headerHeight = 0
@@ -324,6 +314,10 @@ function GUIFrame:CreateCard(parent, title, yOffset, width)
 
     function card:GetContentHeight()
         return self.contentHeight
+    end
+
+    function card:GetNextOffset()
+        return self._yOffset + self:GetContentHeight() + Theme.paddingSmall
     end
 
     function card:SetEnabled(enabled)
@@ -439,25 +433,13 @@ function GUIFrame:RefreshContent()
     local yOffset = T.paddingMedium
     local itemId = self.selectedSidebarItem or "HomePage"
 
-    -- Check for panel builders (wider content area, no scroll frame)
+    -- Check for panel builders (full content-area takeover, no scroll frame)
     if itemId and self.PanelBuilders and self.PanelBuilders[itemId] then
         if self.contentArea.scrollFrame then
             self.contentArea.scrollFrame:Hide()
         end
 
-        -- Widen content area for wide panels (e.g. dungeon trigger editors with sidebar)
         local contentFrame = self.contentArea
-        local needsWide = self.WidePanelBuilders and self.WidePanelBuilders[itemId]
-        if needsWide and not contentFrame._panelExpanded then
-            contentFrame._panelExpanded = true
-            contentFrame._savedWidth = T.contentWidth
-            contentFrame:SetWidth(T.contentWidth + 150)
-        elseif not needsWide and contentFrame._panelExpanded then
-            contentFrame:SetWidth(contentFrame._savedWidth or T.contentWidth)
-            contentFrame._panelExpanded = nil
-            contentFrame._savedWidth = nil
-        end
-
         local ok, panel = pcall(self.PanelBuilders[itemId], contentFrame)
         if ok and panel then
             contentFrame._customPanel = panel
@@ -470,13 +452,6 @@ function GUIFrame:RefreshContent()
             errorCard:AddLabel("Panel builder failed: " .. tostring(panel))
         end
         return
-    end
-
-    -- Restore content area width if it was expanded for a panel
-    if self.contentArea._panelExpanded then
-        self.contentArea:SetWidth(self.contentArea._savedWidth or T.contentWidth)
-        self.contentArea._panelExpanded = nil
-        self.contentArea._savedWidth = nil
     end
 
     if itemId and self.registeredContent[itemId] then

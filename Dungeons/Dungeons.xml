@@ -6,6 +6,5 @@
     <Script file="DungeonTimers.lua" />
     <Script file="DungeonCasts.lua" />
     <Script file="HealerMana.lua" />
-    <Script file="InstanceReset.lua" />
     <Script file="DeathNotifications.lua" />
 </Ui>

@@ -9,11 +9,6 @@ local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 
--- Localization Setup
-local table_insert = table.insert
-local ipairs = ipairs
-
--- Helper to get UICleanup module
 local function GetUICleanupModule()
     if KitnEssentials then
         return KitnEssentials:GetModule("SkinUICleanup", true)
@@ -27,9 +22,7 @@ GUIFrame:RegisterContent("SkinUICleanup", function(scrollChild, yOffset)
     if not db then return yOffset end
 
     local UIC = GetUICleanupModule()
-
-    -- Track widgets for enable/disable logic
-    local allWidgets = {}
+    local manager = GUIFrame:CreateWidgetStateManager()
 
     local function ApplyUICleanupState(enabled)
         if not UIC then return end
@@ -41,47 +34,35 @@ GUIFrame:RegisterContent("SkinUICleanup", function(scrollChild, yOffset)
         end
     end
 
-    local function UpdateAllWidgetStates()
-        local mainEnabled = db.Enabled ~= false
-        for _, widget in ipairs(allWidgets) do
-            if widget.SetEnabled then
-                widget:SetEnabled(mainEnabled)
-            end
-        end
-    end
-
-    ---------------------------------------------------------------------------------
-    -- Card 1: UICleanup Toggle
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
+    -- Card 1: Enable + Description
+    ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "General UI Cleanup", yOffset)
 
-    -- Enable Checkbox
-    local row1 = GUIFrame:CreateRow(card1.content, 40)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable UI Cleanup", db.Enabled ~= false,
-        function(checked)
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable UI Cleanup", {
+        value = db.Enabled ~= false,
+        callback = function(checked)
             db.Enabled = checked
             ApplyUICleanupState(checked)
-            UpdateAllWidgetStates()
+            manager:UpdateAll(checked)
             if not checked then
                 KE:CreateReloadPrompt("Enabling Blizzard UI elements requires a reload to take full effect.")
             end
         end,
-        true,
-        "UI Cleanup",
-        "On",
-        "Off"
-    )
+        msgPopup = true,
+        msgText = "UI Cleanup",
+        msgOn = "On",
+        msgOff = "Off",
+    })
     row1:AddWidget(enableCheck, 1)
-    card1:AddRow(row1, 40)
+    card1:AddRow(row1, Theme.rowHeight)
 
-    -- Separator
-    local row1sep = GUIFrame:CreateRow(card1.content, 8)
-    local sepWidget = GUIFrame:CreateSeparator(row1sep)
-    row1sep:AddWidget(sepWidget, 1)
-    table_insert(allWidgets, sepWidget)
-    card1:AddRow(row1sep, 8)
+    local sepRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightSeparator)
+    local sepWidget = GUIFrame:CreateSeparator(sepRow)
+    sepRow:AddWidget(sepWidget, 1)
+    card1:AddRow(sepRow, Theme.rowHeightSeparator)
 
-    -- Info text listing hidden elements
     local hiddenNames = {
         "Objective Tracker Background",
         "Quest Tracker Background",
@@ -93,25 +74,21 @@ GUIFrame:RegisterContent("SkinUICleanup", function(scrollChild, yOffset)
         "Achievement Tracker Background",
         "Campaign Tracker Background",
     }
-    local rowHeight = 165
-    local row2 = GUIFrame:CreateRow(card1.content, rowHeight)
+    local infoRowHeight = 165
+    local row2 = GUIFrame:CreateRow(card1.content, infoRowHeight)
     local textWidget = GUIFrame:CreateText(
         row2,
         KE:ColorTextByTheme("Hides The Following Frames"),
-        function()
-            return hiddenNames
-        end,
-        rowHeight,
+        function() return hiddenNames end,
+        infoRowHeight,
         "hide"
     )
     row2:AddWidget(textWidget, 1)
-    table_insert(allWidgets, textWidget)
-    card1:AddRow(row2, rowHeight)
+    manager:Register(textWidget, "all")
+    card1:AddRow(row2, infoRowHeight, 0)
 
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+    yOffset = card1:GetNextOffset()
 
-    -- Apply initial widget states
-    UpdateAllWidgetStates()
-    yOffset = yOffset - Theme.paddingSmall
+    manager:UpdateAll(db.Enabled ~= false)
     return yOffset
 end)

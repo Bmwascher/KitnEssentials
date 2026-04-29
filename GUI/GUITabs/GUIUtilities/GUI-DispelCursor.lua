@@ -9,8 +9,6 @@
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
-local ipairs = ipairs
-local table_insert = table.insert
 
 local function GetModule()
     if KitnEssentials then
@@ -24,11 +22,11 @@ GUIFrame:RegisterContent("DispelCursor", function(scrollChild, yOffset)
     if not db then
         local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
         errorCard:AddLabel("Database not available")
-        return yOffset + errorCard:GetContentHeight() + Theme.paddingMedium
+        return errorCard:GetNextOffset()
     end
 
     local DC = GetModule()
-    local allWidgets = {}
+    local manager = GUIFrame:CreateWidgetStateManager()
 
     local function ApplySettings()
         if DC then DC:ApplySettings() end
@@ -44,86 +42,88 @@ GUIFrame:RegisterContent("DispelCursor", function(scrollChild, yOffset)
         end
     end
 
-    local function UpdateAllWidgetStates()
-        local mainEnabled = db.Enabled ~= false
-        for _, widget in ipairs(allWidgets) do
-            if widget.SetEnabled then
-                widget:SetEnabled(mainEnabled)
-            end
-        end
+    local function RefreshStates()
+        manager:UpdateAll(db.Enabled ~= false)
     end
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 1: Enable
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Dispel on Cursor", yOffset)
 
-    local row1 = GUIFrame:CreateRow(card1.content, 36)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Dispel on Cursor", db.Enabled ~= false,
-        function(checked)
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Dispel on Cursor", {
+        value = db.Enabled ~= false,
+        callback = function(checked)
             db.Enabled = checked
             ApplyModuleState(checked)
-            UpdateAllWidgetStates()
+            RefreshStates()
         end,
-        true, "Dispel on Cursor", "On", "Off"
-    )
+        msgPopup = true,
+        msgText = "Dispel on Cursor",
+        msgOn = "On",
+        msgOff = "Off",
+    })
     row1:AddWidget(enableCheck, 1)
-    card1:AddRow(row1, 36)
+    card1:AddRow(row1, Theme.rowHeight)
 
-    local noteHeight = 50
-    local noteRow = GUIFrame:CreateRow(card1.content, noteHeight)
+    local noteRow = GUIFrame:CreateRow(card1.content, 50)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Shows your dispel cooldown timer following your cursor.\n" .. KE:ColorTextByTheme("-") .. " Auto-detects your class dispel spell.",
-        noteHeight, "hide")
+        KE:ColorTextByTheme("-") .. " Shows your dispel cooldown timer following your cursor.\n" ..
+        KE:ColorTextByTheme("-") .. " Auto-detects your class dispel spell.",
+        50, "hide")
     noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, noteHeight)
+    card1:AddRow(noteRow, 50, 0)
 
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+    yOffset = card1:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 2: Display Settings
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
-    table_insert(allWidgets, card2)
+    manager:Register(card2, "all")
 
-    local row2a = GUIFrame:CreateRow(card2.content, 40)
-    local fontSizeSlider = GUIFrame:CreateSlider(row2a, "Font Size", 8, 36, 1, db.FontSize or 18, 60,
-        function(val)
-            db.FontSize = val
-            ApplySettings()
-        end)
+    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local fontSizeSlider = GUIFrame:CreateSlider(row2a, "Font Size", {
+        min = 8, max = 36, step = 1,
+        value = db.FontSize or 18,
+        callback = function(val) db.FontSize = val; ApplySettings() end,
+    })
     row2a:AddWidget(fontSizeSlider, 0.5)
-    table_insert(allWidgets, fontSizeSlider)
+    manager:Register(fontSizeSlider, "all")
 
-    local colorPicker = GUIFrame:CreateColorPicker(row2a, "Text Color", db.TextColor or { 1, 1, 1, 1 },
-        function(r, g, b, a)
+    local colorPicker = GUIFrame:CreateColorPicker(row2a, "Text Color", {
+        color = db.TextColor or { 1, 1, 1, 1 },
+        callback = function(r, g, b, a)
             db.TextColor = { r, g, b, a }
             ApplySettings()
-        end)
+        end,
+    })
     row2a:AddWidget(colorPicker, 0.5)
-    table_insert(allWidgets, colorPicker)
-    card2:AddRow(row2a, 40)
+    manager:Register(colorPicker, "all")
+    card2:AddRow(row2a, Theme.rowHeight)
 
-    local row2b = GUIFrame:CreateRow(card2.content, 40)
-    local xSlider = GUIFrame:CreateSlider(row2b, "X Offset from Cursor", -50, 50, 1, db.XOffset or 10, 60,
-        function(val)
-            db.XOffset = val
-        end)
+    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local xSlider = GUIFrame:CreateSlider(row2b, "X Offset from Cursor", {
+        min = -50, max = 50, step = 1,
+        value = db.XOffset or 10,
+        callback = function(val) db.XOffset = val end,
+    })
     row2b:AddWidget(xSlider, 0.5)
-    table_insert(allWidgets, xSlider)
+    manager:Register(xSlider, "all")
 
-    local ySlider = GUIFrame:CreateSlider(row2b, "Y Offset from Cursor", -50, 50, 1, db.YOffset or 10, 60,
-        function(val)
-            db.YOffset = val
-        end)
+    local ySlider = GUIFrame:CreateSlider(row2b, "Y Offset from Cursor", {
+        min = -50, max = 50, step = 1,
+        value = db.YOffset or 10,
+        callback = function(val) db.YOffset = val end,
+    })
     row2b:AddWidget(ySlider, 0.5)
-    table_insert(allWidgets, ySlider)
-    card2:AddRow(row2b, 40)
+    manager:Register(ySlider, "all")
+    card2:AddRow(row2b, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
+    yOffset = card2:GetNextOffset()
 
-    UpdateAllWidgetStates()
-    yOffset = yOffset - (Theme.paddingSmall * 3)
+    RefreshStates()
     return yOffset
 end)

@@ -5,9 +5,6 @@
 -- ║           graphics, UI, and performance settings.        ║
 -- ╚══════════════════════════════════════════════════════════╝
 
----@class KE
-local KE = select(2, ...)
-
 ---@type KitnEssentials
 local KitnEssentials = _G.KitnEssentials
 if not KitnEssentials then

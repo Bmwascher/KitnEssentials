@@ -8,21 +8,24 @@
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
-local table_insert = table.insert
 
 GUIFrame:RegisterContent("CombatCross", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.CombatCross
     if not db then
         local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
         errorCard:AddLabel("Database not available")
-        return yOffset + errorCard:GetContentHeight() + Theme.paddingMedium
+        return errorCard:GetNextOffset()
     end
 
     local CC = KitnEssentials and KitnEssentials:GetModule("CombatCross", true)
 
-    local allWidgets = {}
-    local colorModeWidgets = {}
-    local rangeColorWidgets = {}
+    local manager = GUIFrame:CreateWidgetStateManager()
+    manager:SetCondition("customColor", function()
+        return (db.ColorMode or "custom") == "custom"
+    end)
+    manager:SetCondition("rangeColor", function()
+        return db.RangeColorMeleeEnabled == true or db.RangeColorRangedEnabled == true
+    end)
 
     local function ApplySettings()
         if CC then CC:ApplySettings() end
@@ -38,90 +41,70 @@ GUIFrame:RegisterContent("CombatCross", function(scrollChild, yOffset)
         end
     end
 
-    local function UpdateAllWidgetStates()
-        local mainEnabled = db.Enabled ~= false
-        local isCustomColor = (db.ColorMode or "custom") == "custom"
-        local isRangeEnabled = db.RangeColorMeleeEnabled == true or db.RangeColorRangedEnabled == true
-
-        for _, widget in ipairs(allWidgets) do
-            if widget.SetEnabled then
-                widget:SetEnabled(mainEnabled)
-            end
-        end
-
-        if mainEnabled then
-            for _, widget in ipairs(colorModeWidgets) do
-                if widget.SetEnabled then
-                    widget:SetEnabled(isCustomColor)
-                end
-            end
-            for _, widget in ipairs(rangeColorWidgets) do
-                if widget.SetEnabled then
-                    widget:SetEnabled(isRangeEnabled)
-                end
-            end
-        end
+    local function RefreshStates()
+        manager:UpdateAll(db.Enabled ~= false)
     end
 
-    ---------------------------------------------------------------------------------
-    -- Card 1: Combat Cross (Enable + Thickness + Outline)
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
+    -- Card 1: Enable
+    ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Combat Cross", yOffset)
 
-    local row1 = GUIFrame:CreateRow(card1.content, 36)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Combat Cross", db.Enabled ~= false, function(checked)
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Combat Cross", {
+        value = db.Enabled ~= false,
+        callback = function(checked)
             db.Enabled = checked
             ApplyModuleState(checked)
-            UpdateAllWidgetStates()
+            RefreshStates()
         end,
-        true,
-        "Combat Cross",
-        "On",
-        "Off"
-    )
-    row1:AddWidget(enableCheck, 0.5)
-    card1:AddRow(row1, 36)
+        msgPopup = true,
+        msgText = "Combat Cross",
+        msgOn = "On",
+        msgOff = "Off",
+    })
+    row1:AddWidget(enableCheck, 1)
+    card1:AddRow(row1, Theme.rowHeight)
 
-    -- Info note
-    local noteRow = GUIFrame:CreateRow(card1.content, 40)
+    local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " This is a static crosshair overlay and will not adjust with camera panning.",
-        40, "hide")
+        Theme.rowHeight, "hide")
     noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, 40)
+    card1:AddRow(noteRow, Theme.rowHeight, 0)
 
-    -- Separator
-    local row1sep = GUIFrame:CreateRow(card1.content, 8)
-    local sep1 = GUIFrame:CreateSeparator(row1sep)
-    row1sep:AddWidget(sep1, 1)
-    table_insert(allWidgets, sep1)
-    card1:AddRow(row1sep, 8)
+    yOffset = card1:GetNextOffset()
 
-    local row1b = GUIFrame:CreateRow(card1.content, 36)
-    local thicknessSlider = GUIFrame:CreateSlider(row1b, "Size", 8, 72, 1, db.Thickness or 22, 60,
-        function(val)
-            db.Thickness = val
-            ApplySettings()
-        end)
-    row1b:AddWidget(thicknessSlider, 0.5)
-    table_insert(allWidgets, thicknessSlider)
+    ----------------------------------------------------------------
+    -- Card 2: General Settings (Size + Font Outline)
+    ----------------------------------------------------------------
+    local card2 = GUIFrame:CreateCard(scrollChild, "General Settings", yOffset)
+    manager:Register(card2, "all")
 
-    local outlineCheck = GUIFrame:CreateCheckbox(row1b, "Font Outline", db.Outline ~= false,
-        function(checked)
-            db.Outline = checked
-            ApplySettings()
-        end)
-    row1b:AddWidget(outlineCheck, 0.5)
-    table_insert(allWidgets, outlineCheck)
-    card1:AddRow(row1b, 36)
+    local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local thicknessSlider = GUIFrame:CreateSlider(row2, "Size", {
+        min = 8, max = 72, step = 1,
+        value = db.Thickness or 22,
+        callback = function(val) db.Thickness = val; ApplySettings() end,
+    })
+    row2:AddWidget(thicknessSlider, 0.5)
+    manager:Register(thicknessSlider, "all")
 
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+    local outlineCheck = GUIFrame:CreateCheckbox(row2, "Font Outline", {
+        value = db.Outline ~= false,
+        callback = function(checked) db.Outline = checked; ApplySettings() end,
+    })
+    row2:AddWidget(outlineCheck, 0.5)
+    manager:Register(outlineCheck, "all")
+    card2:AddRow(row2, Theme.rowHeightLast, 0)
 
-    ---------------------------------------------------------------------------------
-    -- Card 2: Position Settings
-    ---------------------------------------------------------------------------------
-    local card2, newOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+    yOffset = card2:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 3: Position Settings
+    ----------------------------------------------------------------
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = db,
         dbKeys = {
             anchorFrameType = "anchorFrameType",
@@ -137,81 +120,86 @@ GUIFrame:RegisterContent("CombatCross", function(scrollChild, yOffset)
         onChangeCallback = ApplySettings,
     })
 
-    if card2.positionWidgets then
-        for _, widget in ipairs(card2.positionWidgets) do
-            table_insert(allWidgets, widget)
-        end
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
     end
-    table_insert(allWidgets, card2)
-    yOffset = newOffset
+    manager:Register(posCard, "all")
+    yOffset = posOffset
 
-    ---------------------------------------------------------------------------------
-    -- Card 3: Colors
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
+    -- Card 4: Colors
+    ----------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
-    table_insert(allWidgets, card3)
+    manager:Register(card3, "all")
 
-    local row3 = GUIFrame:CreateRow(card3.content, 36)
-    local colorModeDropdown = GUIFrame:CreateDropdown(row3, "Color Mode", KE.ColorModeOptions,
-        db.ColorMode or "custom", 70,
-        function(key)
+    local row3 = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
+    local colorModeDropdown = GUIFrame:CreateDropdown(row3, "Color Mode", {
+        options = KE.ColorModeOptions,
+        value = db.ColorMode or "custom",
+        callback = function(key)
             db.ColorMode = key
             ApplySettings()
-            UpdateAllWidgetStates()
-        end)
+            RefreshStates()
+        end,
+    })
     row3:AddWidget(colorModeDropdown, 0.5)
-    table_insert(allWidgets, colorModeDropdown)
+    manager:Register(colorModeDropdown, "all")
 
-    local colorPicker = GUIFrame:CreateColorPicker(row3, "Custom Color", db.Color or { 0, 1, 0.169, 1 },
-        function(r, g, b, a)
+    local colorPicker = GUIFrame:CreateColorPicker(row3, "Custom Color", {
+        color = db.Color or { 0, 1, 0.169, 1 },
+        callback = function(r, g, b, a)
             db.Color = { r, g, b, a }
             ApplySettings()
-        end)
+        end,
+    })
     row3:AddWidget(colorPicker, 0.5)
-    table_insert(allWidgets, colorPicker)
-    table_insert(colorModeWidgets, colorPicker)
-    card3:AddRow(row3, 36)
+    manager:Register(colorPicker, "customColor")
+    card3:AddRow(row3, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
+    yOffset = card3:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
-    -- Card 4: Range Warning
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
+    -- Card 5: Range Warning (1×3: melee | ranged | color)
+    ----------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Range Warning", yOffset)
+    manager:Register(card4, "all")
 
-    local row4a = GUIFrame:CreateRow(card4.content, 40)
-    local meleeRangeCheck = GUIFrame:CreateCheckbox(row4a, "Enable for melee specs", db.RangeColorMeleeEnabled == true,
-        function(checked)
+    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
+    local meleeRangeCheck = GUIFrame:CreateCheckbox(row4a, "Enable for melee specs", {
+        value = db.RangeColorMeleeEnabled == true,
+        callback = function(checked)
             db.RangeColorMeleeEnabled = checked
             ApplySettings()
-            UpdateAllWidgetStates()
-        end)
-    row4a:AddWidget(meleeRangeCheck, 0.5)
+            RefreshStates()
+        end,
+    })
+    row4a:AddWidget(meleeRangeCheck, 1/3)
+    manager:Register(meleeRangeCheck, "all")
 
-    local rangedRangeCheck = GUIFrame:CreateCheckbox(row4a, "Enable for ranged specs", db.RangeColorRangedEnabled == true,
-        function(checked)
+    local rangedRangeCheck = GUIFrame:CreateCheckbox(row4a, "Enable for ranged specs", {
+        value = db.RangeColorRangedEnabled == true,
+        callback = function(checked)
             db.RangeColorRangedEnabled = checked
             ApplySettings()
-            UpdateAllWidgetStates()
-        end)
-    row4a:AddWidget(rangedRangeCheck, 0.5)
-    card4:AddRow(row4a, 40)
+            RefreshStates()
+        end,
+    })
+    row4a:AddWidget(rangedRangeCheck, 1/3)
+    manager:Register(rangedRangeCheck, "all")
 
-    local row4c = GUIFrame:CreateRow(card4.content, 36)
-    local outOfRangeColorPicker = GUIFrame:CreateColorPicker(row4c, "Out of Range Color",
-        db.OutOfRangeColor or { 1, 0, 0, 1 },
-        function(r, g, b, a)
+    local outOfRangeColorPicker = GUIFrame:CreateColorPicker(row4a, "Out of Range Color", {
+        color = db.OutOfRangeColor or { 1, 0, 0, 1 },
+        callback = function(r, g, b, a)
             db.OutOfRangeColor = { r, g, b, a }
             if CC then CC.lastInRange = nil end
-        end)
-    row4c:AddWidget(outOfRangeColorPicker, 1)
-    table_insert(rangeColorWidgets, outOfRangeColorPicker)
-    card4:AddRow(row4c, 36)
+        end,
+    })
+    row4a:AddWidget(outOfRangeColorPicker, 1/3)
+    manager:Register(outOfRangeColorPicker, "rangeColor")
+    card4:AddRow(row4a, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
+    yOffset = card4:GetNextOffset()
 
-    -- Apply initial widget states
-    UpdateAllWidgetStates()
-    yOffset = yOffset - (Theme.paddingSmall * 3)
+    RefreshStates()
     return yOffset
 end)

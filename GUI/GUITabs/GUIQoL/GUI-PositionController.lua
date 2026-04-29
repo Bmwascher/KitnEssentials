@@ -13,8 +13,6 @@ local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 
-local ipairs = ipairs
-
 local FEATURE_ORDER = {
     { key = "PlayerFrame", title = "Player Frame" },
     { key = "TargetFrame", title = "Target Frame" },
@@ -47,7 +45,7 @@ GUIFrame:RegisterContent("PositionController", function(scrollChild, yOffset)
     local PC = GetModule()
     local elvUIPresent = HasElvUI()
     local anchorAddonPresent = HasElvUIAnchor()
-    -- Anchoring half is available only when ElvUI is loaded AND no competing
+    -- Anchoring is available only when ElvUI is loaded AND no competing
     -- ElvUI_Anchor addon is present (we yield to that addon when it is).
     local anchoringAvailable = elvUIPresent and not anchorAddonPresent
 
@@ -55,61 +53,50 @@ GUIFrame:RegisterContent("PositionController", function(scrollChild, yOffset)
         if PC and PC.ApplySettings then PC:ApplySettings() end
     end
 
-    local featureToggles = {}    -- key -> checkbox
-    local featureCards = {}      -- key -> position card
-    local healerToggle           -- Ignore Healer Specs checkbox
-    local masterCheck            -- master enable checkbox (greyed if no ElvUI)
+    -- Master gates the whole top half. Per-feature sub-conditions gate each
+    -- frame's position card on its own enable toggle. CDM Racials uses its
+    -- own independent manager.
+    local manager = GUIFrame:CreateWidgetStateManager()
+    for _, f in ipairs(FEATURE_ORDER) do
+        local key = f.key
+        manager:SetCondition("feature_" .. key, function()
+            return db[key] and db[key].Enabled == true
+        end)
+    end
 
-    local function RefreshEnableStates()
-        local masterOn = db.Enabled == true
+    local masterCheck
 
-        -- Master toggle is greyed when anchoring isn't available (no ElvUI,
-        -- or ElvUI_Anchor is handling it). CDM Racials below stays interactive
-        -- regardless.
+    local function RefreshStates()
+        local masterOn = db.Enabled == true and anchoringAvailable
+        manager:UpdateAll(masterOn)
+        -- Master toggle itself is editable whenever anchoring is available.
         if masterCheck and masterCheck.SetEnabled then
             masterCheck:SetEnabled(anchoringAvailable)
         end
-
-        -- Top half — requires ElvUI and no competing anchor addon.
-        for _, f in ipairs(FEATURE_ORDER) do
-            local toggle = featureToggles[f.key]
-            local card   = featureCards[f.key]
-            local sub    = db[f.key]
-            if toggle and toggle.SetEnabled then
-                toggle:SetEnabled(masterOn and anchoringAvailable)
-            end
-            if card and card.SetEnabled then
-                local featureOn = masterOn and anchoringAvailable and (sub and sub.Enabled == true)
-                card:SetEnabled(featureOn)
-            end
-        end
-        if healerToggle and healerToggle.SetEnabled then
-            healerToggle:SetEnabled(masterOn and anchoringAvailable)
-        end
-        -- Bottom half (CDM Racials) is fully independent — never gated here.
     end
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 1: Position Controller — master enable + intro note
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Position Controller", yOffset)
 
-    local masterRow = GUIFrame:CreateRow(card1.content, 36)
-    masterCheck = GUIFrame:CreateCheckbox(masterRow, "Enable Position Controller",
-        db.Enabled == true,
-        function(checked)
+    local masterRow = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    masterCheck = GUIFrame:CreateCheckbox(masterRow, "Enable Position Controller", {
+        value = db.Enabled == true,
+        callback = function(checked)
             db.Enabled = checked
             ApplySettings()
-            RefreshEnableStates()
+            RefreshStates()
         end,
-        true, "Position Controller", "On", "Off")
+        msgPopup = true,
+        msgText = "Position Controller",
+        msgOn = "On",
+        msgOff = "Off",
+    })
     masterRow:AddWidget(masterCheck, 1)
-    card1:AddRow(masterRow, 36)
+    card1:AddRow(masterRow, Theme.rowHeight)
 
-    -- Intro + ElvUI requirement + live status indicator (3 states):
-    --   * Green:  ElvUI present, no competing anchor addon — we run.
-    --   * Yellow: ElvUI_Anchor present — we stand down, that addon runs.
-    --   * Red:    ElvUI not detected — anchoring unavailable.
+    -- Intro + ElvUI requirement + live status indicator (3 states).
     local introLine = KE:ColorTextByTheme("-") ..
         " Anchors unit frames and adjusts CDM Racials placement."
     local requirementLine = KE:ColorTextByTheme("-") ..
@@ -122,52 +109,55 @@ GUIFrame:RegisterContent("PositionController", function(scrollChild, yOffset)
     else
         statusLine = "|cff00ff00- ElvUI detected. Unit frame anchoring is available. |r"
     end
-    local noteHeight = 86
-    local noteRow = GUIFrame:CreateRow(card1.content, noteHeight)
+    local noteRow = GUIFrame:CreateRow(card1.content, 86)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
         introLine .. "\n" .. requirementLine .. "\n" .. statusLine,
-        noteHeight, "hide")
+        86, "hide")
     noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, noteHeight)
+    card1:AddRow(noteRow, 86, 0)
 
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+    yOffset = card1:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 2: Behavior — per-frame toggles + healer-spec gate
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Behavior", yOffset)
+    manager:Register(card2, "all")
 
-    -- Per-feature enable toggles, 4 across
-    local togglesRow = GUIFrame:CreateRow(card2.content, 40)
+    local togglesRow = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     for _, f in ipairs(FEATURE_ORDER) do
-        local subDB = db[f.key]
-        local cb = GUIFrame:CreateCheckbox(togglesRow, f.title,
-            subDB and subDB.Enabled == true,
-            function(checked)
+        local key = f.key
+        local subDB = db[key]
+        local cb = GUIFrame:CreateCheckbox(togglesRow, f.title, {
+            value = subDB and subDB.Enabled == true,
+            callback = function(checked)
                 if subDB then subDB.Enabled = checked end
                 ApplySettings()
-                RefreshEnableStates()
-            end)
+                RefreshStates()
+            end,
+        })
         togglesRow:AddWidget(cb, 1 / #FEATURE_ORDER)
-        featureToggles[f.key] = cb
+        manager:Register(cb, "all")
     end
-    card2:AddRow(togglesRow, 40)
+    card2:AddRow(togglesRow, Theme.rowHeight)
 
-    -- Ignore Healer Specs toggle on its own row, with a gray descriptor to
-    -- the right of the toggle knob (#888888, same gray as other descriptor
-    -- lines). The descriptor is a child of the checkbox row so it sits
-    -- alongside the knob and label. Row height bumped to 50 so the
-    -- descriptor can wrap to two lines if needed.
+    -- Ignore Healer Specs toggle on its own row, with a gray descriptor
+    -- alongside the knob.
     local healerRow = GUIFrame:CreateRow(card2.content, 50)
-    healerToggle = GUIFrame:CreateCheckbox(healerRow, "Ignore Healer Specs",
-        db.IgnoreHealerSpec ~= false,
-        function(checked)
+    local healerToggle = GUIFrame:CreateCheckbox(healerRow, "Ignore Healer Specs", {
+        value = db.IgnoreHealerSpec ~= false,
+        callback = function(checked)
             db.IgnoreHealerSpec = checked
             ApplySettings()
         end,
-        true, "Ignore Healer Specs", "Yes", "No")
+        msgPopup = true,
+        msgText = "Ignore Healer Specs",
+        msgOn = "Yes",
+        msgOff = "No",
+    })
     healerRow:AddWidget(healerToggle, 1)
+    manager:Register(healerToggle, "all")
 
     local healerDesc = healerToggle:CreateFontString(nil, "OVERLAY")
     healerDesc:SetPoint("TOPLEFT", healerToggle, "TOPLEFT", 56, -16)
@@ -176,18 +166,19 @@ GUIFrame:RegisterContent("PositionController", function(scrollChild, yOffset)
     healerDesc:SetJustifyV("TOP")
     healerDesc:SetWordWrap(true)
     KE:ApplyThemeFont(healerDesc, "small")
-    healerDesc:SetTextColor(0x88 / 0xFF, 0x88 / 0xFF, 0x88 / 0xFF, 1)
+    healerDesc:SetTextColor(0x88/0xFF, 0x88/0xFF, 0x88/0xFF, 1)
     healerDesc:SetText("Leaves your unit frames where ElvUI placed them while you're on a healer spec.")
 
-    card2:AddRow(healerRow, 50)
+    card2:AddRow(healerRow, 50, 0)
 
-    yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
+    yOffset = card2:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Cards 3-6: Position cards for each unit frame feature
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     for _, f in ipairs(FEATURE_ORDER) do
-        local subDB = db[f.key]
+        local key = f.key
+        local subDB = db[key]
         if subDB then
             local card, newOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
                 title = f.title,
@@ -204,44 +195,56 @@ GUIFrame:RegisterContent("PositionController", function(scrollChild, yOffset)
                 showStrata = false,
                 onChangeCallback = ApplySettings,
             })
-            featureCards[f.key] = card
+
+            if card.positionWidgets then
+                manager:RegisterGroup(card.positionWidgets, "feature_" .. key)
+            end
+            manager:Register(card, "feature_" .. key)
             yOffset = newOffset
         end
     end
 
-    ---------------------------------------------------------------------------------
-    -- Card 7: CDM Racials Anchor (bottom — fully independent of master)
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
+    -- Card 7: CDM Racials Anchor (independent module — own cascade)
+    ----------------------------------------------------------------
     local cdmDB = db.CDMRacials
     if cdmDB then
-        local card7 = GUIFrame:CreateCard(scrollChild, "CDM Racials Anchor", yOffset)
+        local cdmManager = GUIFrame:CreateWidgetStateManager()
 
-        local row1 = GUIFrame:CreateRow(card7.content, 36)
-        local cdmCheck = GUIFrame:CreateCheckbox(row1, "Enable CDM Racials Anchor",
-            cdmDB.Enabled == true,
-            function(checked)
+        local function RefreshCDMStates()
+            cdmManager:UpdateAll(cdmDB.Enabled == true)
+        end
+
+        local card7 = GUIFrame:CreateCard(scrollChild, "CDM Racials Anchor", yOffset)
+        cdmManager:Register(card7, "all")
+
+        local row1 = GUIFrame:CreateRow(card7.content, Theme.rowHeight)
+        local cdmCheck = GUIFrame:CreateCheckbox(row1, "Enable CDM Racials Anchor", {
+            value = cdmDB.Enabled == true,
+            callback = function(checked)
                 cdmDB.Enabled = checked
                 ApplySettings()
+                RefreshCDMStates()
             end,
-            true, "CDM Racials Anchor", "On", "Off")
+            msgPopup = true,
+            msgText = "CDM Racials Anchor",
+            msgOn = "On",
+            msgOff = "Off",
+        })
         row1:AddWidget(cdmCheck, 1)
-        card7:AddRow(row1, 36)
+        card7:AddRow(row1, Theme.rowHeight)
 
-        local row2 = GUIFrame:CreateRow(card7.content, 40)
-        local cdmPetSlider = GUIFrame:CreateSlider(row2, "Pet Bar Y Offset",
-            -100, 0, 1, cdmDB.PetBarOffset or -15, 60,
-            function(val)
-                cdmDB.PetBarOffset = val
-                ApplySettings()
-            end)
+        local row2 = GUIFrame:CreateRow(card7.content, Theme.rowHeightLast)
+        local cdmPetSlider = GUIFrame:CreateSlider(row2, "Pet Bar Y Offset", {
+            min = -100, max = 0, step = 1,
+            value = cdmDB.PetBarOffset or -15,
+            callback = function(val) cdmDB.PetBarOffset = val; ApplySettings() end,
+        })
         row2:AddWidget(cdmPetSlider, 1)
-        card7:AddRow(row2, 40)
+        cdmManager:Register(cdmPetSlider, "all")
+        card7:AddRow(row2, Theme.rowHeightLast, 0)
 
-        -- Note + live pet-status indicator (legacy pattern from the old
-        -- RacialsAnchor module). Green when the pet bar is currently visible,
-        -- red when the spec/class doesn't have one out right now. Indicator is
-        -- skipped entirely on petless classes/specs since the status would
-        -- never change.
+        -- Note + live pet-status indicator (legacy pattern from RacialsAnchor).
         local cdmIntro = KE:ColorTextByTheme("-") ..
             " Hooks Ayije CDM to nudge the racials bar when a pet is summoned."
         local petLine = ""
@@ -253,32 +256,31 @@ GUIFrame:RegisterContent("PositionController", function(scrollChild, yOffset)
             end
         end
 
-        local cdmNoteText
-        local cdmNoteHeight
         if petLine ~= "" then
-            cdmNoteHeight = 70
-            local cdmNoteRow = GUIFrame:CreateRow(card7.content, cdmNoteHeight)
-            cdmNoteText = GUIFrame:CreateText(cdmNoteRow,
+            local cdmNoteRow = GUIFrame:CreateRow(card7.content, 70)
+            local cdmNoteText = GUIFrame:CreateText(cdmNoteRow,
                 KE:ColorTextByTheme("Note"),
                 cdmIntro .. "\n" .. petLine,
-                cdmNoteHeight, "hide")
+                70, "hide")
             cdmNoteRow:AddWidget(cdmNoteText, 1)
-            card7:AddRow(cdmNoteRow, cdmNoteHeight)
+            cdmManager:Register(cdmNoteText, "all")
+            card7:AddRow(cdmNoteRow, 70)
         else
-            cdmNoteHeight = 50
-            local cdmNoteRow = GUIFrame:CreateRow(card7.content, cdmNoteHeight)
-            cdmNoteText = GUIFrame:CreateText(cdmNoteRow,
+            local cdmNoteRow = GUIFrame:CreateRow(card7.content, 50)
+            local cdmNoteText = GUIFrame:CreateText(cdmNoteRow,
                 KE:ColorTextByTheme("Note"),
                 cdmIntro,
-                cdmNoteHeight, "hide")
+                50, "hide")
             cdmNoteRow:AddWidget(cdmNoteText, 1)
-            card7:AddRow(cdmNoteRow, cdmNoteHeight)
+            cdmManager:Register(cdmNoteText, "all")
+            card7:AddRow(cdmNoteRow, 50)
         end
 
-        yOffset = yOffset + card7:GetContentHeight() + Theme.paddingSmall
+        yOffset = card7:GetNextOffset()
+
+        RefreshCDMStates()
     end
 
-    RefreshEnableStates()
-    yOffset = yOffset - (Theme.paddingSmall * 3)
+    RefreshStates()
     return yOffset
 end)

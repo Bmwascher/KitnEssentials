@@ -100,18 +100,13 @@ function DC:CreateFrame()
         end
     end
 
-    if cooldownText then
-        local fontPath = KE:GetFontPath(db.FontFace) or KE.FONT
-        cooldownText:SetFont(fontPath, db.FontSize or 18, "OUTLINE")
-        local c = db.TextColor or { 1, 1, 1, 1 }
-        cooldownText:SetTextColor(c[1], c[2], c[3], c[4] or 1)
-    else
+    if not cooldownText then
         cooldownText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-        local fontPath = KE:GetFontPath(db.FontFace) or KE.FONT
-        cooldownText:SetFont(fontPath, db.FontSize or 18, "OUTLINE")
-        local c = db.TextColor or { 1, 1, 1, 1 }
-        cooldownText:SetTextColor(c[1], c[2], c[3], c[4] or 1)
     end
+    local fontPath = KE:GetFontPath(db.FontFace) or KE.FONT
+    cooldownText:SetFont(fontPath, db.FontSize or 18, "OUTLINE")
+    local cr, cg, cb, ca = KE:ResolveColor(db.TextColor, { 1, 1, 1, 1 })
+    cooldownText:SetTextColor(cr, cg, cb, ca)
 
     cooldownText:SetPoint("CENTER", UIParent, "BOTTOMLEFT", 0, 0)
 
@@ -176,8 +171,8 @@ function DC:ApplySettings()
     local db = self.db
     local fontPath = KE:GetFontPath(db.FontFace) or KE.FONT
     self.frame.cooldownText:SetFont(fontPath, db.FontSize or 18, "OUTLINE")
-    local c = db.TextColor or { 1, 1, 1, 1 }
-    self.frame.cooldownText:SetTextColor(c[1], c[2], c[3], c[4] or 1)
+    local cr, cg, cb, ca = KE:ResolveColor(db.TextColor, { 1, 1, 1, 1 })
+    self.frame.cooldownText:SetTextColor(cr, cg, cb, ca)
 end
 
 ---------------------------------------------------------------------------------

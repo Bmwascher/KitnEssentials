@@ -182,7 +182,7 @@ end
 
 function PR:HidePreview()
     self.isPreview = false
-    if self.db and self.db.Enabled then
+    if self.db and self.db.Enabled and self.frame then
         self:CheckPotions()
     elseif self.frame then
         self.frame:Hide()

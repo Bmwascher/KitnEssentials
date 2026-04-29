@@ -293,7 +293,7 @@ GUIFrame:RegisterContent("Nicknames", function(scrollChild, yOffset)
     local addCard = GUIFrame:CreateCard(scrollChild, "Add / Update Nickname", yOffset)
 
     -- Character editbox (full width) — tight spacing so the link feels attached
-    local nameRow = GUIFrame:CreateEditBox(addCard.content, "Character  (Name-Realm)", "", nil)
+    local nameRow = GUIFrame:CreateEditBox(addCard.content, "Character  (Name-Realm)", { value = "" })
     -- Bump label font from "small" default to "normal" for readability
     if nameRow.label then KE:ApplyThemeFont(nameRow.label, "normal") end
     addCard:AddRow(nameRow, 40, 2)
@@ -310,7 +310,7 @@ GUIFrame:RegisterContent("Nicknames", function(scrollChild, yOffset)
     addCard:AddRow(linkRow, 14)
 
     -- Nickname editbox (full width, uniform with Character)
-    local nickRow = GUIFrame:CreateEditBox(addCard.content, "Nickname", "", nil)
+    local nickRow = GUIFrame:CreateEditBox(addCard.content, "Nickname", { value = "" })
     if nickRow.label then KE:ApplyThemeFont(nickRow.label, "normal") end
     addCard:AddRow(nickRow, 40)
 
@@ -407,7 +407,10 @@ GUIFrame:RegisterContent("Nicknames", function(scrollChild, yOffset)
         bullet .. " Import merges by default. Toggle Replace to wipe first.|r")
 
     local ioRow = GUIFrame:CreateRow(ioCard.content, 50)
-    local ioBox = GUIFrame:CreateEditBox(ioRow, "Paste import string or click Export...", "", function() end)
+    local ioBox = GUIFrame:CreateEditBox(ioRow, "Paste import string or click Export...", {
+        value = "",
+        callback = function() end,
+    })
     ioRow:AddWidget(ioBox, 1)
     ioCard:AddRow(ioRow, 50)
 
@@ -422,10 +425,10 @@ GUIFrame:RegisterContent("Nicknames", function(scrollChild, yOffset)
     local toggleSpacer = CreateFrame("Frame", nil, toggleRow)
     toggleRow:AddWidget(toggleSpacer, 0.5, 0)
 
-    local replaceCheck = GUIFrame:CreateCheckbox(toggleRow,
-        "Replace entire list",
-        false,
-        function(state) replaceMode = state end)
+    local replaceCheck = GUIFrame:CreateCheckbox(toggleRow, "Replace entire list", {
+        value = false,
+        callback = function(state) replaceMode = state end,
+    })
     toggleRow:AddWidget(replaceCheck, 0.5)
 
     -- On/off descriptor to the right of the toggle knob. Same #888888 gray as

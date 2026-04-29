@@ -10,11 +10,6 @@ local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 
--- Local references
-local table_insert = table.insert
-local ipairs = ipairs
-
--- Helper to get module
 local function GetRaidManagerModule()
     if KitnEssentials then
         return KitnEssentials:GetModule("SkinBlizzardRaidmanager", true)
@@ -22,14 +17,13 @@ local function GetRaidManagerModule()
     return nil
 end
 
--- Register Content
 GUIFrame:RegisterContent("SkinRaidManager", function(scrollChild, yOffset)
     if KE:ShouldNotLoadModule() then return end
     local db = KE.db and KE.db.profile.Skinning.RaidManager
     if not db then return yOffset end
 
     local BRMG = GetRaidManagerModule()
-    local allWidgets = {}
+    local manager = GUIFrame:CreateWidgetStateManager()
 
     local function ApplySettings()
         if BRMG then
@@ -47,117 +41,115 @@ GUIFrame:RegisterContent("SkinRaidManager", function(scrollChild, yOffset)
         end
     end
 
-    local function UpdateAllWidgetStates()
-        local mainEnabled = db.Enabled ~= false
-        for _, widget in ipairs(allWidgets) do
-            if widget.SetEnabled then
-                widget:SetEnabled(mainEnabled)
-            end
-        end
-    end
-
-    ---------------------------------------------------------------------------------
-    -- Card 1: Raid Manager (Enable)
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
+    -- Card 1: Enable
+    ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Raid Manager", yOffset)
 
-    local row1 = GUIFrame:CreateRow(card1.content, 40)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Raid Manager Styling", db.Enabled ~= false,
-        function(checked)
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Raid Manager Styling", {
+        value = db.Enabled ~= false,
+        callback = function(checked)
             db.Enabled = checked
             ApplyModuleState(checked)
-            UpdateAllWidgetStates()
+            manager:UpdateAll(checked)
             if not checked then
                 KE:SkinningReloadPrompt()
             end
         end,
-        true, "Raid Manager Styling", "On", "Off"
-    )
+        msgPopup = true,
+        msgText = "Raid Manager Styling",
+        msgOn = "On",
+        msgOff = "Off",
+    })
     row1:AddWidget(enableCheck, 1)
-    card1:AddRow(row1, 40)
+    card1:AddRow(row1, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+    yOffset = card1:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 2: Position Settings
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Position Settings", yOffset)
-    table_insert(allWidgets, card2)
+    manager:Register(card2, "all")
 
-    local row2 = GUIFrame:CreateRow(card2.content, 40)
-    local ySlider = GUIFrame:CreateSlider(row2, "Y Offset", -1100, 100, 1,
-        db.Position.YOffset, nil,
-        function(val)
+    local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local ySlider = GUIFrame:CreateSlider(row2, "Y Offset", {
+        min = -1100, max = 100, step = 1,
+        value = db.Position.YOffset,
+        callback = function(val)
             db.Position.YOffset = val
             ApplySettings()
-        end)
+        end,
+    })
     row2:AddWidget(ySlider, 1)
-    table_insert(allWidgets, ySlider)
-    card2:AddRow(row2, 40)
+    manager:Register(ySlider, "all")
+    card2:AddRow(row2, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
+    yOffset = card2:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 3: Mouseover Settings
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Mouseover Settings", yOffset)
-    table_insert(allWidgets, card3)
+    manager:Register(card3, "all")
 
-    -- Toggle mouseover
-    local row3 = GUIFrame:CreateRow(card3.content, 40)
-    local useFade = GUIFrame:CreateCheckbox(row3, "Enable Mouseover", db.FadeOnMouseOut ~= false,
-        function(checked)
+    local row3 = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local useFade = GUIFrame:CreateCheckbox(row3, "Enable Mouseover", {
+        value = db.FadeOnMouseOut ~= false,
+        callback = function(checked)
             db.FadeOnMouseOut = checked
             ApplySettings()
-        end)
+        end,
+    })
     row3:AddWidget(useFade, 1)
-    table_insert(allWidgets, useFade)
-    card3:AddRow(row3, 40)
+    manager:Register(useFade, "all")
+    card3:AddRow(row3, Theme.rowHeight)
 
-    -- Separator
-    local row3sep = GUIFrame:CreateRow(card3.content, 8)
-    local sep3 = GUIFrame:CreateSeparator(row3sep)
-    row3sep:AddWidget(sep3, 1)
-    table_insert(allWidgets, sep3)
-    card3:AddRow(row3sep, 8)
+    local sepRow = GUIFrame:CreateRow(card3.content, Theme.rowHeightSeparator)
+    local sep3 = GUIFrame:CreateSeparator(sepRow)
+    sepRow:AddWidget(sep3, 1)
+    card3:AddRow(sepRow, Theme.rowHeightSeparator)
 
-    -- Fade in/out durations
-    local row4 = GUIFrame:CreateRow(card3.content, 40)
-    local fadeInSlider = GUIFrame:CreateSlider(row4, "Fade In Duration", 0, 20, 0.1,
-        db.FadeInDuration, nil,
-        function(val)
+    local row4 = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local fadeInSlider = GUIFrame:CreateSlider(row4, "Fade In Duration", {
+        min = 0, max = 20, step = 0.1,
+        value = db.FadeInDuration,
+        callback = function(val)
             db.FadeInDuration = val
             ApplySettings()
-        end)
+        end,
+    })
     row4:AddWidget(fadeInSlider, 0.5)
-    table_insert(allWidgets, fadeInSlider)
+    manager:Register(fadeInSlider, "all")
 
-    local fadeOutSlider = GUIFrame:CreateSlider(row4, "Fade Out Duration", 0, 20, 0.1,
-        db.FadeOutDuration, nil,
-        function(val)
+    local fadeOutSlider = GUIFrame:CreateSlider(row4, "Fade Out Duration", {
+        min = 0, max = 20, step = 0.1,
+        value = db.FadeOutDuration,
+        callback = function(val)
             db.FadeOutDuration = val
             ApplySettings()
-        end)
+        end,
+    })
     row4:AddWidget(fadeOutSlider, 0.5)
-    table_insert(allWidgets, fadeOutSlider)
-    card3:AddRow(row4, 40)
+    manager:Register(fadeOutSlider, "all")
+    card3:AddRow(row4, Theme.rowHeight)
 
-    -- Alpha slider
-    local row5 = GUIFrame:CreateRow(card3.content, 40)
-    local alphaSlider = GUIFrame:CreateSlider(row5, "Alpha", 0, 1, 0.1,
-        db.Alpha, nil,
-        function(val)
+    local row5 = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
+    local alphaSlider = GUIFrame:CreateSlider(row5, "Alpha", {
+        min = 0, max = 1, step = 0.1,
+        value = db.Alpha,
+        callback = function(val)
             db.Alpha = val
             ApplySettings()
-        end)
+        end,
+    })
     row5:AddWidget(alphaSlider, 1)
-    table_insert(allWidgets, alphaSlider)
-    card3:AddRow(row5, 40)
+    manager:Register(alphaSlider, "all")
+    card3:AddRow(row5, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
+    yOffset = card3:GetNextOffset()
 
-    -- Apply initial widget states
-    UpdateAllWidgetStates()
-    yOffset = yOffset - (Theme.paddingSmall * 2)
+    manager:UpdateAll(db.Enabled ~= false)
     return yOffset
 end)

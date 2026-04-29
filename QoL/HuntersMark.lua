@@ -164,9 +164,11 @@ function HM:SetScanningActive(active)
         self.scannerFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
         self.scannerFrame:RegisterEvent("ENCOUNTER_START")
         self.scannerFrame:RegisterEvent("ENCOUNTER_END")
-        self.scannerFrame:RegisterUnitEvent("UNIT_AURA",
-            "nameplate1", "nameplate2", "nameplate3", "nameplate4", "nameplate5",
-            "nameplate6", "nameplate7", "nameplate8", "nameplate9", "nameplate10", "target")
+        -- Plain RegisterEvent + manual unit filter on the handler (project rule:
+        -- avoid RegisterUnitEvent because of known interaction with AceEvent's
+        -- dispatcher). The handler at line 264 already discriminates on `event`,
+        -- so add the unit filter alongside it.
+        self.scannerFrame:RegisterEvent("UNIT_AURA")
     else
         self.scannerFrame:UnregisterEvent("NAME_PLATE_UNIT_ADDED")
         self.scannerFrame:UnregisterEvent("NAME_PLATE_UNIT_REMOVED")
@@ -262,6 +264,10 @@ function HM:StartScanning()
         elseif event == "NAME_PLATE_UNIT_ADDED" then
             self:CheckUnitForMark(unit)
         elseif event == "UNIT_AURA" then
+            -- Manual unit filter (replaces RegisterUnitEvent's built-in filter):
+            -- only nameplate units and the player's target.
+            if not unit then return end
+            if unit ~= "target" and not unit:match("^nameplate%d+$") then return end
             -- Coalesce UNIT_AURA events per-unit to prevent redundant scans
             if pendingUnitUpdates[unit] then return end
             pendingUnitUpdates[unit] = true
@@ -291,9 +297,9 @@ function HM:ApplySettings()
     -- Text settings
     local text = self.frame.text
     if text then
-        local color = self.db.Color or { 1, 0.82, 0, 1 }
+        local r, g, b, a = KE:ResolveColor(self.db.Color, { 1, 0.82, 0, 1 })
         KE:ApplyFontToText(text, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
-        text:SetTextColor(color[1], color[2], color[3], color[4] or 1)
+        text:SetTextColor(r, g, b, a)
     end
 
     -- Icon settings

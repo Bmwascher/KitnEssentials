@@ -37,16 +37,16 @@ end
 -- Color
 ---------------------------------------------------------------------------------
 function RC:BuildGradientPalette()
-    local c1 = self.db.ColorOne or { 1, 0, 0 }
-    local c2 = self.db.ColorTwo or { 1, 0.42, 0 }
-    local c3 = self.db.ColorThree or { 1, 0.82, 0 }
-    local c4 = self.db.ColorFour or { 0, 1, 0 }
+    local r1, g1, b1 = KE:ResolveColor(self.db.ColorOne,   { 1, 0, 0, 1 })
+    local r2, g2, b2 = KE:ResolveColor(self.db.ColorTwo,   { 1, 0.42, 0, 1 })
+    local r3, g3, b3 = KE:ResolveColor(self.db.ColorThree, { 1, 0.82, 0, 1 })
+    local r4, g4, b4 = KE:ResolveColor(self.db.ColorFour,  { 0, 1, 0, 1 })
 
     self.gradientPalette = {
-        c1[1], c1[2], c1[3],
-        c2[1], c2[2], c2[3],
-        c3[1], c3[2], c3[3],
-        c4[1], c4[2], c4[3],
+        r1, g1, b1,
+        r2, g2, b2,
+        r3, g3, b3,
+        r4, g4, b4,
     }
 end
 
@@ -177,7 +177,7 @@ end
 local updateElapsed = 0
 function RC:OnUpdate(elapsed)
     updateElapsed = updateElapsed + elapsed
-    if updateElapsed < self.db.UpdateThrottle then return end
+    if updateElapsed < (self.db.UpdateThrottle or 0.1) then return end
     updateElapsed = 0
     self:UpdateRange()
 end

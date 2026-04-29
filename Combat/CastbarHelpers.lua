@@ -42,6 +42,8 @@ H.MAX_TARGET_NAMES = MAX_TARGET_NAMES
 ---------------------------------------------------------------------------------
 
 function H.ApplyFrameBackdrop(frame, bgColor, borderColor)
+    local bgr, bgg, bgb, bga = KE:ResolveColor(bgColor, { 0, 0, 0, 0.8 })
+    local bdr, bdg, bdb, bda = KE:ResolveColor(borderColor, { 0, 0, 0, 1 })
     frame:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
@@ -50,19 +52,19 @@ function H.ApplyFrameBackdrop(frame, bgColor, borderColor)
         edgeSize = KE:GetPixelSize(),
         insets = { left = 0, right = 0, top = 0, bottom = 0 },
     })
-    frame:SetBackdropColor(bgColor[1], bgColor[2], bgColor[3], bgColor[4] or 0.8)
-    frame:SetBackdropBorderColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4] or 1)
+    frame:SetBackdropColor(bgr, bgg, bgb, bga)
+    frame:SetBackdropBorderColor(bdr, bdg, bdb, bda)
 end
 
 function H.CreateColorObjects(self)
     local kick = self.db.KickIndicator or {}
-    local ready = kick.ReadyColor or { 0.1, 0.8, 0.1, 1 }
-    local notReady = kick.NotReadyColor or { 0.5, 0.5, 0.5, 1 }
-    local uninterruptible = self.db.NotInterruptibleColor or { 0.7, 0.7, 0.7, 1 }
+    local rr, rg, rb = KE:ResolveColor(kick.ReadyColor, { 0.1, 0.8, 0.1, 1 })
+    local nr, ng, nb = KE:ResolveColor(kick.NotReadyColor, { 0.5, 0.5, 0.5, 1 })
+    local ur, ug, ub = KE:ResolveColor(self.db.NotInterruptibleColor, { 0.7, 0.7, 0.7, 1 })
     self.colors = {
-        Ready = CreateColor(ready[1], ready[2], ready[3]),
-        NotReady = CreateColor(notReady[1], notReady[2], notReady[3]),
-        Uninterruptible = CreateColor(uninterruptible[1], uninterruptible[2], uninterruptible[3]),
+        Ready = CreateColor(rr, rg, rb),
+        NotReady = CreateColor(nr, ng, nb),
+        Uninterruptible = CreateColor(ur, ug, ub),
     }
 end
 
@@ -226,17 +228,15 @@ function H.ApplySettings(self, opts)
     H.CreateColorObjects(self)
 
     local db = self.db
-    local bgColor = db.BackdropColor or { 0, 0, 0, 0.8 }
-    local borderColor = db.BorderColor or { 0, 0, 0, 1 }
-    local textColor = db.TextColor or { 1, 1, 1, 1 }
     local kickColors = db.KickIndicator or {}
+    local tr, tg, tb, ta = KE:ResolveColor(db.TextColor, { 1, 1, 1, 1 })
 
     self.frame:SetSize(db.Width or opts.defaultWidth, db.Height)
-    H.ApplyFrameBackdrop(self.frame, bgColor, borderColor)
+    H.ApplyFrameBackdrop(self.frame, db.BackdropColor, db.BorderColor)
     self.frame:SetFrameStrata(db.Strata or "HIGH")
 
     self.iconFrame:SetSize(db.Height, db.Height)
-    H.ApplyFrameBackdrop(self.iconFrame, bgColor, borderColor)
+    H.ApplyFrameBackdrop(self.iconFrame, db.BackdropColor, db.BorderColor)
 
     local texturePath = KE:GetStatusbarPath(db.StatusBarTexture)
     self.castBar:SetStatusBarTexture(texturePath)
@@ -245,13 +245,13 @@ function H.ApplySettings(self, opts)
     self.spark:SetSize(12, db.Height)
 
     self.kickTick:SetSize(2, db.Height)
-    local tickColor = kickColors.TickColor or { 1, 1, 1, 1 }
-    self.kickTick:SetColorTexture(tickColor[1], tickColor[2], tickColor[3], tickColor[4] or 1)
+    local kr, kg, kb, ka = KE:ResolveColor(kickColors.TickColor, { 1, 1, 1, 1 })
+    self.kickTick:SetColorTexture(kr, kg, kb, ka)
 
     KE:ApplyFontToText(self.text, db.FontFace, db.FontSize, db.FontOutline)
     KE:ApplyFontToText(self.time, db.FontFace, db.FontSize, db.FontOutline)
-    self.text:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4] or 1)
-    self.time:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4] or 1)
+    self.text:SetTextColor(tr, tg, tb, ta)
+    self.time:SetTextColor(tr, tg, tb, ta)
 
     if self.targetNames then
         local targetSettings = db.TargetNames or {}
@@ -279,8 +279,8 @@ function H.UpdateBarColor(self, interruptDuration)
     local hasActiveCast = self.casting or self.channeling or self.empowering
 
     if self.isPreview then
-        local color = self.db.CastingColor or { 1, 0.7, 0, 1 }
-        texture:SetVertexColor(color[1], color[2], color[3], color[4] or 1)
+        local r, g, b, a = KE:ResolveColor(self.db.CastingColor, { 1, 0.7, 0, 1 })
+        texture:SetVertexColor(r, g, b, a)
         return
     end
 
@@ -302,10 +302,15 @@ function H.UpdateBarColor(self, interruptDuration)
         return
     end
 
-    local color = self.channeling and (self.db.ChannelingColor or { 0, 0.7, 1, 1 })
-        or self.empowering and (self.db.EmpoweringColor or { 0.8, 0.4, 1, 1 })
-        or (self.db.CastingColor or { 1, 0.7, 0, 1 })
-    texture:SetVertexColor(color[1], color[2], color[3], color[4] or 1)
+    local r, g, b, a
+    if self.channeling then
+        r, g, b, a = KE:ResolveColor(self.db.ChannelingColor, { 0, 0.7, 1, 1 })
+    elseif self.empowering then
+        r, g, b, a = KE:ResolveColor(self.db.EmpoweringColor, { 0.8, 0.4, 1, 1 })
+    else
+        r, g, b, a = KE:ResolveColor(self.db.CastingColor, { 1, 0.7, 0, 1 })
+    end
+    texture:SetVertexColor(r, g, b, a)
 end
 
 function H.UpdateKickIndicator(self, cooldown)
@@ -558,14 +563,14 @@ function H.EndCast(self, showHold, wasInterrupted, interruptedBy)
         else
             self.text:SetText("Interrupted")
         end
-        local color = holdSettings.InterruptedColor or { 0.1, 0.8, 0.1, 1 }
-        texture:SetVertexColor(color[1], color[2], color[3], color[4] or 1)
+        local r, g, b, a = KE:ResolveColor(holdSettings.InterruptedColor, { 0.1, 0.8, 0.1, 1 })
+        texture:SetVertexColor(r, g, b, a)
     elseif showHold then
-        local color = holdSettings.FailedColor or { 0.5, 0.5, 0.5, 1 }
-        texture:SetVertexColor(color[1], color[2], color[3], color[4] or 1)
+        local r, g, b, a = KE:ResolveColor(holdSettings.FailedColor, { 0.5, 0.5, 0.5, 1 })
+        texture:SetVertexColor(r, g, b, a)
     else
-        local color = holdSettings.SuccessColor or { 0.8, 0.1, 0.1, 1 }
-        texture:SetVertexColor(color[1], color[2], color[3], color[4] or 1)
+        local r, g, b, a = KE:ResolveColor(holdSettings.SuccessColor, { 0.8, 0.1, 0.1, 1 })
+        texture:SetVertexColor(r, g, b, a)
     end
 
     H.ResetCastState(self)
@@ -774,8 +779,8 @@ function H.ShowPreview(self, opts)
         if color then
             targetText:SetTextColor(color.r, color.g, color.b, color.a or 1)
         else
-            local tc = self.db.TextColor or { 1, 1, 1, 1 }
-            targetText:SetTextColor(tc[1], tc[2], tc[3], tc[4] or 1)
+            local tr, tg, tb, ta = KE:ResolveColor(self.db.TextColor, { 1, 1, 1, 1 })
+            targetText:SetTextColor(tr, tg, tb, ta)
         end
         targetText:SetAlpha(1)
         for i = 2, MAX_TARGET_NAMES do

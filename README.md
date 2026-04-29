@@ -11,7 +11,6 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 - **Edit mode** — drag any element to reposition, with anchor and strata controls
 - **Profile system** — save, copy, and reset per-character or shared profiles
 - **Minimap button** — quick access to settings, edit mode, and reload
-- **Zero dependencies** — works standalone, no ElvUI required
 
 ## Combat
 
@@ -85,9 +84,8 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Dungeon Timers | BigWigs-integrated per-dungeon timer system with trigger editor, bar/text display groups, import/export, and role-based load conditions |
 | Enemy Counter | Displays the number of enemies currently in combat via nameplate scanning with editable prefix and combat-only visibility |
 | Healer Mana Tracker | Displays the current party healer's name, spec icon, and mana % (party-only; hidden in raid) |
-| Instance Reset Announcer | Announces to party/raid chat when the player resets instances |
 | Interrupt Tracker | Party interrupt cooldown bars with class colors, dark mode, channel kick detection, and healer position override (currently non-functional in 12.0.5 due to API changes — under investigation) |
-| WarpDeplete+ | Restores live pull forces tracking, fixes death tooltip and class-colored names in M+, per-mob forces on tooltip mouseover |
+| WarpDeplete+ | Restores live pull forces tracking, fixes death tooltip and class-colored names in M+, per-mob forces on tooltip mouseover, and announces instance resets to party/raid chat |
 
 ## ElvUI Tags
 

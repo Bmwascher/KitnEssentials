@@ -38,18 +38,31 @@ function KitnEssentials:OnInitialize()
         KE.db:SetProfile(profileName)
     end
 
+    -- Backfill missing nested defaults into the saved profile (AceDB's defaults
+    -- system doesn't deep-fill sub-tables that already exist in saved data),
+    -- then validate font keys against LSM. Order matters — fill first so the
+    -- font validator can see all expected keys.
+    KE:FillProfileDefaults()
+    KE:ValidateProfileFonts()
+
     -- Profile change callbacks
     KE.db.RegisterCallback(KE, "OnProfileChanged", function()
+        KE:FillProfileDefaults()
+        KE:ValidateProfileFonts()
         if KE.ProfileManager then
             KE.ProfileManager:RefreshAllModules()
         end
     end)
     KE.db.RegisterCallback(KE, "OnProfileCopied", function()
+        KE:FillProfileDefaults()
+        KE:ValidateProfileFonts()
         if KE.ProfileManager then
             KE.ProfileManager:RefreshAllModules()
         end
     end)
     KE.db.RegisterCallback(KE, "OnProfileReset", function()
+        KE:FillProfileDefaults()
+        KE:ValidateProfileFonts()
         if KE.ProfileManager then
             KE.ProfileManager:RefreshAllModules()
         end
@@ -68,7 +81,6 @@ function KE:SetupMinimapIcon()
     local LDBIcon = LibStub("LibDBIcon-1.0", true)
     if not LDB or not LDBIcon then return end
 
-    local Theme = KE.Theme
     local MyLDB = LDB:NewDataObject("KitnEssentials", {
         type = "launcher",
         text = "KitnEssentials",
@@ -113,7 +125,7 @@ local function OnEncounterStart()
 end
 
 local function OnPlayerEnteringWorld()
-    for name, module in KitnEssentials:IterateModules() do
+    for _, module in KitnEssentials:IterateModules() do
         if module:IsEnabled() and module.ApplySettings then
             module:ApplySettings()
         end

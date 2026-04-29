@@ -156,15 +156,108 @@ function KE:GetFontOutline(outline)
     return outline
 end
 
+---------------------------------------------------------------------------------
+-- Font Validation
+---------------------------------------------------------------------------------
+-- TODO: 12.0.7 introduces a native font/asset validation API; until then,
+-- a hidden FontString + pcall(SetFont) is the most reliable probe.
+
+local fontProbe = UIParent:CreateFontString()
+fontProbe:Hide()
+
+local DEFAULT_FONT = "Expressway"
+
+function KE:IsFontValid(fontPath)
+    if not fontPath or fontPath == "" then return false end
+    return pcall(fontProbe.SetFont, fontProbe, fontPath, 12, "")
+end
+
+-- Match KE's flat-DB font key convention. New modules adding a font reference
+-- should use one of these key shapes so ValidateProfileFonts repairs them.
+local function IsFontKey(key)
+    if type(key) ~= "string" then return false end
+    return key == "Font" or key:match("FontFace$")
+end
+
+local function ValidateFontsRecursive(tbl, defaults)
+    if type(tbl) ~= "table" then return end
+    local LSM = KE.LSM
+    if not LSM then return end
+
+    for key, value in pairs(tbl) do
+        if IsFontKey(key) and type(value) == "string" then
+            if not LSM:IsValid("font", value) then
+                local defaultVal = defaults and defaults[key] or DEFAULT_FONT
+                if not LSM:IsValid("font", defaultVal) then
+                    defaultVal = DEFAULT_FONT
+                end
+                tbl[key] = defaultVal
+            end
+        elseif type(value) == "table" then
+            local subDefaults = defaults and defaults[key]
+            ValidateFontsRecursive(value, subDefaults)
+        end
+    end
+end
+
+function KE:ValidateProfileFonts()
+    if not self.db or not self.db.profile then return end
+    local defaults = self.db.defaults and self.db.defaults.profile
+    ValidateFontsRecursive(self.db.profile, defaults)
+end
+
+-- AceDB defaults backfill works at the top profile level via __index, but it
+-- does NOT deep-fill missing keys inside nested sub-tables that already exist
+-- in saved data. When a new key (e.g. `DeathNotifications.FocusDeath`) is
+-- added to defaults after a profile was saved, the old profile's nested table
+-- stays missing that key, and code that does `db.DeathNotifications.FocusDeath.Enabled`
+-- crashes with "attempt to index field (a nil value)". CopyMissingKeys walks
+-- defaults and copies any missing key into saved, recursing into sub-tables.
+local function CopyMissingKeys(tbl, defaults)
+    if type(tbl) ~= "table" or type(defaults) ~= "table" then return end
+    for k, v in pairs(defaults) do
+        if type(v) == "table" then
+            if type(tbl[k]) ~= "table" then tbl[k] = {} end
+            CopyMissingKeys(tbl[k], v)
+        elseif tbl[k] == nil then
+            tbl[k] = v
+        end
+    end
+end
+
+function KE:FillProfileDefaults()
+    if not self.db or not self.db.profile then return end
+    local defaults = self.db.defaults and self.db.defaults.profile
+    if not defaults then return end
+    CopyMissingKeys(self.db.profile, defaults)
+end
+
+---------------------------------------------------------------------------------
+-- Color Resolution
+---------------------------------------------------------------------------------
+-- AceDB stores user-edited color tables sparsely (e.g. {[3]=0.549}) when only
+-- one channel was changed via the GUI, and may leave the whole table missing
+-- after a profile reset. ResolveColor returns r,g,b,a as four values, falling
+-- back to the caller-supplied default per index. Callers should pass the same
+-- default array they ship in Defaults.lua.
+function KE:ResolveColor(saved, default)
+    if not saved then
+        return default[1], default[2], default[3], default[4] or 1
+    end
+    return saved[1] or default[1],
+           saved[2] or default[2],
+           saved[3] or default[3],
+           saved[4] or default[4] or 1
+end
+
 function KE:ApplyFont(fontString, fontName, fontSize, fontOutline)
     if not fontString then return false end
     local fontPath = self:GetFontPath(fontName)
-    if not fontPath or fontPath == "" then
+    if not self:IsFontValid(fontPath) then
         fontPath = "Fonts\\FRIZQT__.TTF"
     end
     local outline = self:GetFontOutline(fontOutline)
-    local size = fontSize
-    if not size or size <= 0 then size = 12 end
+    local size = (fontSize and fontSize > 0) and fontSize or 12
     local success = fontString:SetFont(fontPath, size, outline)
     if not success then
         success = fontString:SetFont("Fonts\\FRIZQT__.TTF", size, outline)

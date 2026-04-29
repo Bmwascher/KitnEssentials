@@ -9,16 +9,15 @@
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme    = KE.Theme
-local LSM      = KE.LSM or LibStub("LibSharedMedia-3.0", true)
-
-local table_insert = table.insert
-local ipairs, pairs = ipairs, pairs
 
 GUIFrame:RegisterContent("DeathNotifications", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.Dungeons.DeathNotifications
     if not db then return yOffset end
 
-    local allWidgets = {}
+    db.PartyDeath = db.PartyDeath or {}
+    db.FocusDeath = db.FocusDeath or {}
+
+    local manager = GUIFrame:CreateWidgetStateManager()
 
     local function GetModule()
         return KitnEssentials and KitnEssentials:GetModule("DeathNotifications", true)
@@ -41,224 +40,69 @@ GUIFrame:RegisterContent("DeathNotifications", function(scrollChild, yOffset)
         end
     end
 
-    local function UpdateAllWidgetStates()
-        local mainEnabled = db.Enabled ~= false
-        for _, widget in ipairs(allWidgets) do
-            if widget.SetEnabled then widget:SetEnabled(mainEnabled) end
-        end
+    local function RefreshStates()
+        manager:UpdateAll(db.Enabled ~= false)
     end
 
-    db.PartyDeath = db.PartyDeath or {}
-    db.FocusDeath = db.FocusDeath or {}
-
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 1: Enable
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Death Notifications", yOffset)
 
-    local row1 = GUIFrame:CreateRow(card1.content, 36)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Death Notifications",
-        db.Enabled ~= false,
-        function(checked)
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Death Notifications", {
+        value = db.Enabled ~= false,
+        callback = function(checked)
             db.Enabled = checked
             ApplyModuleState(checked)
-            UpdateAllWidgetStates()
+            RefreshStates()
         end,
-        true, "Death Notifications", "On", "Off")
+        msgPopup = true,
+        msgText = "Death Notifications",
+        msgOn = "On",
+        msgOff = "Off",
+    })
     row1:AddWidget(enableCheck, 1)
-    card1:AddRow(row1, 36)
+    card1:AddRow(row1, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+    yOffset = card1:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 2: Activation Context
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local cardContext = GUIFrame:CreateCard(scrollChild, "Active In", yOffset)
-    table_insert(allWidgets, cardContext)
+    manager:Register(cardContext, "all")
 
-    local cRow = GUIFrame:CreateRow(cardContext.content, 36)
-    local dungeonsCheck = GUIFrame:CreateCheckbox(cRow, "Dungeons (5-man)",
-        db.EnableInDungeons ~= false,
-        function(checked) db.EnableInDungeons = checked end,
-        true, "Dungeons", "On", "Off")
+    local cRow = GUIFrame:CreateRow(cardContext.content, Theme.rowHeightLast)
+    local dungeonsCheck = GUIFrame:CreateCheckbox(cRow, "Dungeons (5-man)", {
+        value = db.EnableInDungeons ~= false,
+        callback = function(checked) db.EnableInDungeons = checked end,
+        msgPopup = true,
+        msgText = "Dungeons",
+        msgOn = "On",
+        msgOff = "Off",
+    })
     cRow:AddWidget(dungeonsCheck, 0.5)
-    table_insert(allWidgets, dungeonsCheck)
+    manager:Register(dungeonsCheck, "all")
 
-    local raidsCheck = GUIFrame:CreateCheckbox(cRow, "Raids", db.EnableInRaids == true,
-        function(checked) db.EnableInRaids = checked end,
-        true, "Raids", "On", "Off")
+    local raidsCheck = GUIFrame:CreateCheckbox(cRow, "Raids", {
+        value = db.EnableInRaids == true,
+        callback = function(checked) db.EnableInRaids = checked end,
+        msgPopup = true,
+        msgText = "Raids",
+        msgOn = "On",
+        msgOff = "Off",
+    })
     cRow:AddWidget(raidsCheck, 0.5)
-    table_insert(allWidgets, raidsCheck)
-    cardContext:AddRow(cRow, 36)
+    manager:Register(raidsCheck, "all")
+    cardContext:AddRow(cRow, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + cardContext:GetContentHeight() + Theme.paddingSmall
+    yOffset = cardContext:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
-    -- Card 3: Party / Raid Death
-    ---------------------------------------------------------------------------------
-    local cardPD = GUIFrame:CreateCard(scrollChild, "Party / Raid Death", yOffset)
-    table_insert(allWidgets, cardPD)
-
-    local pdRow1 = GUIFrame:CreateRow(cardPD.content, 36)
-    local pdEnableCheck = GUIFrame:CreateCheckbox(pdRow1, "Show Party Death",
-        db.PartyDeath.Enabled ~= false,
-        function(checked) db.PartyDeath.Enabled = checked; ApplySettings() end,
-        true, "Party Death", "On", "Off")
-    pdRow1:AddWidget(pdEnableCheck, 0.5)
-    table_insert(allWidgets, pdEnableCheck)
-
-    local pdClassCheck = GUIFrame:CreateCheckbox(pdRow1, "Use Class Color for Name",
-        db.PartyDeath.UseClassColor ~= false,
-        function(checked) db.PartyDeath.UseClassColor = checked; ApplySettings() end,
-        true, "Class Color", "On", "Off")
-    pdRow1:AddWidget(pdClassCheck, 0.5)
-    table_insert(allWidgets, pdClassCheck)
-    cardPD:AddRow(pdRow1, 36)
-
-    local pdRow2 = GUIFrame:CreateRow(cardPD.content, 40)
-    local pdFormatBox = GUIFrame:CreateEditBox(pdRow2, "Text Format (use %name)",
-        db.PartyDeath.TextFormat or "%name DIED",
-        function(value)
-            db.PartyDeath.TextFormat = value
-            ApplySettings()
-        end)
-    pdRow2:AddWidget(pdFormatBox, 0.7)
-    table_insert(allWidgets, pdFormatBox)
-
-    local pdColorPicker = GUIFrame:CreateColorPicker(pdRow2, "Text Color",
-        db.PartyDeath.TextColor or { 1, 1, 1, 1 },
-        function(r, g, b, a)
-            db.PartyDeath.TextColor = { r, g, b, a }
-            ApplySettings()
-        end)
-    pdRow2:AddWidget(pdColorPicker, 0.3)
-    table_insert(allWidgets, pdColorPicker)
-    cardPD:AddRow(pdRow2, 40)
-
-    yOffset = yOffset + cardPD:GetContentHeight() + Theme.paddingSmall
-
-    ---------------------------------------------------------------------------------
-    -- Card 4: Focus Death
-    ---------------------------------------------------------------------------------
-    local cardFD = GUIFrame:CreateCard(scrollChild, "Focus Death", yOffset)
-    table_insert(allWidgets, cardFD)
-
-    local fdRow1 = GUIFrame:CreateRow(cardFD.content, 36)
-    local fdEnableCheck = GUIFrame:CreateCheckbox(fdRow1, "Show Focus Death",
-        db.FocusDeath.Enabled ~= false,
-        function(checked) db.FocusDeath.Enabled = checked; ApplySettings() end,
-        true, "Focus Death", "On", "Off")
-    fdRow1:AddWidget(fdEnableCheck, 1)
-    table_insert(allWidgets, fdEnableCheck)
-    cardFD:AddRow(fdRow1, 36)
-
-    local fdRow2 = GUIFrame:CreateRow(cardFD.content, 40)
-    local fdTextBox = GUIFrame:CreateEditBox(fdRow2, "Text",
-        db.FocusDeath.Text or "FOCUS DIED",
-        function(value)
-            db.FocusDeath.Text = value
-            ApplySettings()
-        end)
-    fdRow2:AddWidget(fdTextBox, 0.7)
-    table_insert(allWidgets, fdTextBox)
-
-    local fdColorPicker = GUIFrame:CreateColorPicker(fdRow2, "Text Color",
-        db.FocusDeath.Color or { 1, 0.3, 0.3, 1 },
-        function(r, g, b, a)
-            db.FocusDeath.Color = { r, g, b, a }
-            ApplySettings()
-        end)
-    fdRow2:AddWidget(fdColorPicker, 0.3)
-    table_insert(allWidgets, fdColorPicker)
-    cardFD:AddRow(fdRow2, 40)
-
-    yOffset = yOffset + cardFD:GetContentHeight() + Theme.paddingSmall
-
-    ---------------------------------------------------------------------------------
-    -- Card 5: Font Settings
-    ---------------------------------------------------------------------------------
-    local cardFont = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
-    table_insert(allWidgets, cardFont)
-
-    local fontList = {}
-    if LSM then
-        for name in pairs(LSM:HashTable("font")) do fontList[name] = name end
-    else
-        fontList["Friz Quadrata TT"] = "Friz Quadrata TT"
-    end
-
-    local fRow1 = GUIFrame:CreateRow(cardFont.content, 40)
-    local fontDropdown = GUIFrame:CreateDropdown(fRow1, "Font", fontList,
-        db.FontFace or "Expressway", 30,
-        function(key) db.FontFace = key; ApplySettings() end)
-    fRow1:AddWidget(fontDropdown, 0.5)
-    table_insert(allWidgets, fontDropdown)
-
-    local outlineList = {
-        { key = "NONE",         text = "None" },
-        { key = "OUTLINE",      text = "Outline" },
-        { key = "THICKOUTLINE", text = "Thick" },
-        { key = "SOFTOUTLINE",  text = "Soft" },
-    }
-    local outlineDropdown = GUIFrame:CreateDropdown(fRow1, "Outline", outlineList,
-        db.FontOutline or "SOFTOUTLINE", 45,
-        function(key) db.FontOutline = key; ApplySettings() end)
-    fRow1:AddWidget(outlineDropdown, 0.5)
-    table_insert(allWidgets, outlineDropdown)
-    cardFont:AddRow(fRow1, 40)
-
-    local fRow2 = GUIFrame:CreateRow(cardFont.content, 37)
-    local fontSizeSlider = GUIFrame:CreateSlider(fRow2, "Font Size", 12, 64, 1,
-        db.FontSize or 18, 60,
-        function(val) db.FontSize = val; ApplySettings() end)
-    fRow2:AddWidget(fontSizeSlider, 1)
-    table_insert(allWidgets, fontSizeSlider)
-    cardFont:AddRow(fRow2, 37)
-
-    yOffset = yOffset + cardFont:GetContentHeight() + Theme.paddingSmall
-
-    ---------------------------------------------------------------------------------
-    -- Card 6: Display
-    ---------------------------------------------------------------------------------
-    local cardDisplay = GUIFrame:CreateCard(scrollChild, "Display", yOffset)
-    table_insert(allWidgets, cardDisplay)
-
-    local dRow1 = GUIFrame:CreateRow(cardDisplay.content, 40)
-    local durationSlider = GUIFrame:CreateSlider(dRow1, "Duration (s)", 1, 10, 1,
-        db.Duration or 3, nil,
-        function(val) db.Duration = val; ApplySettings() end)
-    dRow1:AddWidget(durationSlider, 0.5)
-    table_insert(allWidgets, durationSlider)
-
-    local spacingSlider = GUIFrame:CreateSlider(dRow1, "Spacing", 0, 20, 1,
-        db.Spacing or 4, nil,
-        function(val) db.Spacing = val; ApplySettings() end)
-    dRow1:AddWidget(spacingSlider, 0.5)
-    table_insert(allWidgets, spacingSlider)
-    cardDisplay:AddRow(dRow1, 40)
-
-    local dRow2 = GUIFrame:CreateRow(cardDisplay.content, 40)
-    local growDropdown = GUIFrame:CreateDropdown(dRow2, "Grow Direction",
-        { { value = "DOWN", text = "Down" }, { value = "UP", text = "Up" } },
-        db.Grow or "DOWN",
-        function(value) db.Grow = value; ApplySettings() end)
-    dRow2:AddWidget(growDropdown, 0.5)
-    table_insert(allWidgets, growDropdown)
-
-    local classIconCheck = GUIFrame:CreateCheckbox(dRow2, "Show Class Icon",
-        db.ShowClassIcon ~= false,
-        function(checked) db.ShowClassIcon = checked; ApplySettings() end,
-        true, "Class Icon", "On", "Off")
-    dRow2:AddWidget(classIconCheck, 0.5)
-    table_insert(allWidgets, classIconCheck)
-    cardDisplay:AddRow(dRow2, 40)
-
-    yOffset = yOffset + cardDisplay:GetContentHeight() + Theme.paddingSmall
-
-    ---------------------------------------------------------------------------------
-    -- Card 6: Position
-    ---------------------------------------------------------------------------------
-    local cardPos, newOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+    ----------------------------------------------------------------
+    -- Card 3: Position Settings
+    ----------------------------------------------------------------
+    local cardPos, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = db,
         dbKeys = {
             anchorFrameType = "anchorFrameType",
@@ -277,14 +121,175 @@ GUIFrame:RegisterContent("DeathNotifications", function(scrollChild, yOffset)
     })
 
     if cardPos.positionWidgets then
-        for _, widget in ipairs(cardPos.positionWidgets) do
-            table_insert(allWidgets, widget)
-        end
+        manager:RegisterGroup(cardPos.positionWidgets, "all")
     end
-    table_insert(allWidgets, cardPos)
-    yOffset = newOffset
+    manager:Register(cardPos, "all")
+    yOffset = posOffset
 
-    UpdateAllWidgetStates()
-    yOffset = yOffset - Theme.paddingSmall
+    ----------------------------------------------------------------
+    -- Card 4: Party / Raid Death
+    ----------------------------------------------------------------
+    local cardPD = GUIFrame:CreateCard(scrollChild, "Party / Raid Death", yOffset)
+    manager:Register(cardPD, "all")
+
+    local pdRow1 = GUIFrame:CreateRow(cardPD.content, Theme.rowHeight)
+    local pdEnableCheck = GUIFrame:CreateCheckbox(pdRow1, "Show Party Death", {
+        value = db.PartyDeath.Enabled ~= false,
+        callback = function(checked) db.PartyDeath.Enabled = checked; ApplySettings() end,
+        msgPopup = true,
+        msgText = "Party Death",
+        msgOn = "On",
+        msgOff = "Off",
+    })
+    pdRow1:AddWidget(pdEnableCheck, 0.5)
+    manager:Register(pdEnableCheck, "all")
+
+    local pdClassCheck = GUIFrame:CreateCheckbox(pdRow1, "Use Class Color for Name", {
+        value = db.PartyDeath.UseClassColor ~= false,
+        callback = function(checked) db.PartyDeath.UseClassColor = checked; ApplySettings() end,
+        msgPopup = true,
+        msgText = "Class Color",
+        msgOn = "On",
+        msgOff = "Off",
+    })
+    pdRow1:AddWidget(pdClassCheck, 0.5)
+    manager:Register(pdClassCheck, "all")
+    cardPD:AddRow(pdRow1, Theme.rowHeight)
+
+    local pdRow2 = GUIFrame:CreateRow(cardPD.content, Theme.rowHeightLast)
+    local pdFormatBox = GUIFrame:CreateEditBox(pdRow2, "Text Format (use %name)", {
+        value = db.PartyDeath.TextFormat or "%name DIED",
+        callback = function(value)
+            db.PartyDeath.TextFormat = value
+            ApplySettings()
+        end,
+    })
+    pdRow2:AddWidget(pdFormatBox, 0.7)
+    manager:Register(pdFormatBox, "all")
+
+    local pdColorPicker = GUIFrame:CreateColorPicker(pdRow2, "Text Color", {
+        color = db.PartyDeath.TextColor or { 1, 1, 1, 1 },
+        callback = function(r, g, b, a)
+            db.PartyDeath.TextColor = { r, g, b, a }
+            ApplySettings()
+        end,
+    })
+    pdRow2:AddWidget(pdColorPicker, 0.3)
+    manager:Register(pdColorPicker, "all")
+    cardPD:AddRow(pdRow2, Theme.rowHeightLast, 0)
+
+    yOffset = cardPD:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 5: Focus Death
+    ----------------------------------------------------------------
+    local cardFD = GUIFrame:CreateCard(scrollChild, "Focus Death", yOffset)
+    manager:Register(cardFD, "all")
+
+    local fdRow1 = GUIFrame:CreateRow(cardFD.content, Theme.rowHeight)
+    local fdEnableCheck = GUIFrame:CreateCheckbox(fdRow1, "Show Focus Death", {
+        value = db.FocusDeath.Enabled ~= false,
+        callback = function(checked) db.FocusDeath.Enabled = checked; ApplySettings() end,
+        msgPopup = true,
+        msgText = "Focus Death",
+        msgOn = "On",
+        msgOff = "Off",
+    })
+    fdRow1:AddWidget(fdEnableCheck, 1)
+    manager:Register(fdEnableCheck, "all")
+    cardFD:AddRow(fdRow1, Theme.rowHeight)
+
+    local fdRow2 = GUIFrame:CreateRow(cardFD.content, Theme.rowHeightLast)
+    local fdTextBox = GUIFrame:CreateEditBox(fdRow2, "Text", {
+        value = db.FocusDeath.Text or "FOCUS DIED",
+        callback = function(value)
+            db.FocusDeath.Text = value
+            ApplySettings()
+        end,
+    })
+    fdRow2:AddWidget(fdTextBox, 0.7)
+    manager:Register(fdTextBox, "all")
+
+    local fdColorPicker = GUIFrame:CreateColorPicker(fdRow2, "Text Color", {
+        color = db.FocusDeath.Color or { 1, 0.3, 0.3, 1 },
+        callback = function(r, g, b, a)
+            db.FocusDeath.Color = { r, g, b, a }
+            ApplySettings()
+        end,
+    })
+    fdRow2:AddWidget(fdColorPicker, 0.3)
+    manager:Register(fdColorPicker, "all")
+    cardFD:AddRow(fdRow2, Theme.rowHeightLast, 0)
+
+    yOffset = cardFD:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 6: Font Settings
+    ----------------------------------------------------------------
+    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        db = db,
+        dbKeys = {
+            fontFace = "FontFace",
+            fontSize = "FontSize",
+            fontOutline = "FontOutline",
+        },
+        fontSizeRange = { 12, 64 },
+        includeSoftOutline = true,
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(fontCard, "all")
+    if fontWidgets then
+        manager:RegisterGroup(fontWidgets, "all")
+    end
+    yOffset = fontOffset
+
+    ----------------------------------------------------------------
+    -- Card 7: Display
+    ----------------------------------------------------------------
+    local cardDisplay = GUIFrame:CreateCard(scrollChild, "Display", yOffset)
+    manager:Register(cardDisplay, "all")
+
+    local dRow1 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
+    local durationSlider = GUIFrame:CreateSlider(dRow1, "Duration (s)", {
+        min = 1, max = 10, step = 1,
+        value = db.Duration or 3,
+        callback = function(val) db.Duration = val; ApplySettings() end,
+    })
+    dRow1:AddWidget(durationSlider, 0.5)
+    manager:Register(durationSlider, "all")
+
+    local spacingSlider = GUIFrame:CreateSlider(dRow1, "Spacing", {
+        min = 0, max = 20, step = 1,
+        value = db.Spacing or 4,
+        callback = function(val) db.Spacing = val; ApplySettings() end,
+    })
+    dRow1:AddWidget(spacingSlider, 0.5)
+    manager:Register(spacingSlider, "all")
+    cardDisplay:AddRow(dRow1, Theme.rowHeight)
+
+    local dRow2 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeightLast)
+    local growDropdown = GUIFrame:CreateDropdown(dRow2, "Grow Direction", {
+        options = { { key = "DOWN", text = "Down" }, { key = "UP", text = "Up" } },
+        value = db.Grow or "DOWN",
+        callback = function(key) db.Grow = key; ApplySettings() end,
+    })
+    dRow2:AddWidget(growDropdown, 0.5)
+    manager:Register(growDropdown, "all")
+
+    local classIconCheck = GUIFrame:CreateCheckbox(dRow2, "Show Class Icon", {
+        value = db.ShowClassIcon ~= false,
+        callback = function(checked) db.ShowClassIcon = checked; ApplySettings() end,
+        msgPopup = true,
+        msgText = "Class Icon",
+        msgOn = "On",
+        msgOff = "Off",
+    })
+    dRow2:AddWidget(classIconCheck, 0.5)
+    manager:Register(classIconCheck, "all")
+    cardDisplay:AddRow(dRow2, Theme.rowHeightLast, 0)
+
+    yOffset = cardDisplay:GetNextOffset()
+
+    RefreshStates()
     return yOffset
 end)

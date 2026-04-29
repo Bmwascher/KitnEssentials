@@ -10,12 +10,14 @@ local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
 
--- Localization Setup
-local table_insert = table.insert
-local ipairs = ipairs
 local pairs = pairs
 
--- Helper to get Auras module
+local SETTINGS_OUTLINE_OPTIONS = {
+    { key = "NONE",         text = "None" },
+    { key = "OUTLINE",      text = "Outline" },
+    { key = "THICKOUTLINE", text = "Thick" },
+}
+
 local function GetAurasModule()
     if KitnEssentials then
         return KitnEssentials:GetModule("SkinAuras", true)
@@ -29,9 +31,7 @@ GUIFrame:RegisterContent("SkinAuras", function(scrollChild, yOffset)
     if not db then return yOffset end
 
     local AURAS = GetAurasModule()
-
-    -- Track widgets for enable/disable logic
-    local allWidgets = {}
+    local manager = GUIFrame:CreateWidgetStateManager()
 
     local function ApplySettings()
         if not AURAS or not AURAS:IsEnabled() then return end
@@ -48,81 +48,6 @@ GUIFrame:RegisterContent("SkinAuras", function(scrollChild, yOffset)
         end
     end
 
-    local function UpdateAllWidgetStates()
-        local mainEnabled = db.Enabled ~= false
-        for _, widget in ipairs(allWidgets) do
-            if widget.SetEnabled then
-                widget:SetEnabled(mainEnabled)
-            end
-        end
-    end
-
-    ---------------------------------------------------------------------------------
-    -- Card 1: Enable
-    ---------------------------------------------------------------------------------
-    local card1 = GUIFrame:CreateCard(scrollChild, "Buffs, Debuffs & Externals", yOffset)
-
-    local row1 = GUIFrame:CreateRow(card1.content, 36)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Buffs, Debuffs & Externals Skinning", db.Enabled ~= false,
-        function(checked)
-            db.Enabled = checked
-            ApplyAurasState(checked)
-            UpdateAllWidgetStates()
-            if not checked then
-                KE:CreateReloadPrompt("Enabling/Disabling this UI element requires a reload to take full effect.")
-            end
-        end,
-        true,
-        "Buffs, Debuffs & Externals Skinning",
-        "On",
-        "Off"
-    )
-    row1:AddWidget(enableCheck, 0.5)
-    card1:AddRow(row1, 36)
-
-    card1:AddLabel("|cff888888" .. KE:ColorTextByTheme("Tip:") .. " Use Blizzard Edit Mode to adjust icon size and positioning.|r")
-
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
-
-    ---------------------------------------------------------------------------------
-    -- Card 2: General Settings
-    ---------------------------------------------------------------------------------
-    local card2 = GUIFrame:CreateCard(scrollChild, "General Settings", yOffset)
-
-    -- Disable flashing checkbox
-    local row2 = GUIFrame:CreateRow(card2.content, 40)
-    local disableFlashing = GUIFrame:CreateCheckbox(row2, "Disable flashing when low duration",
-        db.disableFlashing ~= false,
-        function(checked)
-            db.disableFlashing = checked
-            ApplySettings()
-            if not checked then
-                KE:CreateReloadPrompt("Disabling this UI element requires a reload to take full effect.")
-            end
-        end)
-    row2:AddWidget(disableFlashing, 0.5)
-    table_insert(allWidgets, disableFlashing)
-    card2:AddRow(row2, 40)
-
-    -- Separator
-    local row2sep = GUIFrame:CreateRow(card2.content, 8)
-    local sepWidget = GUIFrame:CreateSeparator(row2sep)
-    row2sep:AddWidget(sepWidget, 1)
-    table_insert(allWidgets, sepWidget)
-    card2:AddRow(row2sep, 8)
-
-    -- Font color
-    local row2c = GUIFrame:CreateRow(card2.content, 40)
-    local fontColor = GUIFrame:CreateColorPicker(row2c, "Font color", db.FontColor,
-        function(r, g, b, a)
-            db.FontColor = { r, g, b, a }
-            ApplySettings()
-        end)
-    row2c:AddWidget(fontColor, 1)
-    table_insert(allWidgets, fontColor)
-    card2:AddRow(row2c, 40)
-
-    -- Font face + outline dropdowns
     local fontList = {}
     if LSM then
         for name in pairs(LSM:HashTable("font")) do fontList[name] = name end
@@ -130,84 +55,160 @@ GUIFrame:RegisterContent("SkinAuras", function(scrollChild, yOffset)
         fontList["Friz Quadrata TT"] = "Friz Quadrata TT"
     end
 
-    local row2a = GUIFrame:CreateRow(card2.content, 40)
-    local fontDropdown = GUIFrame:CreateDropdown(row2a, "Font", fontList, db.FontFace, 30,
-        function(key)
+    ----------------------------------------------------------------
+    -- Card 1: Enable
+    ----------------------------------------------------------------
+    local card1 = GUIFrame:CreateCard(scrollChild, "Buffs, Debuffs & Externals", yOffset)
+
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Buffs, Debuffs & Externals Skinning", {
+        value = db.Enabled ~= false,
+        callback = function(checked)
+            db.Enabled = checked
+            ApplyAurasState(checked)
+            manager:UpdateAll(checked)
+            if not checked then
+                KE:CreateReloadPrompt("Enabling/Disabling this UI element requires a reload to take full effect.")
+            end
+        end,
+        msgPopup = true,
+        msgText = "Buffs, Debuffs & Externals Skinning",
+        msgOn = "On",
+        msgOff = "Off",
+    })
+    row1:AddWidget(enableCheck, 0.5)
+    card1:AddRow(row1, Theme.rowHeight, 0)
+
+    card1:AddLabel("|cff888888" .. KE:ColorTextByTheme("Tip:") .. " Use Blizzard Edit Mode to adjust icon size and positioning.|r")
+
+    yOffset = card1:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 2: General Settings
+    ----------------------------------------------------------------
+    local card2 = GUIFrame:CreateCard(scrollChild, "General Settings", yOffset)
+    manager:Register(card2, "all")
+
+    local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local disableFlashing = GUIFrame:CreateCheckbox(row2, "Disable flashing when low duration", {
+        value = db.disableFlashing ~= false,
+        callback = function(checked)
+            db.disableFlashing = checked
+            ApplySettings()
+            if not checked then
+                KE:CreateReloadPrompt("Disabling this UI element requires a reload to take full effect.")
+            end
+        end,
+    })
+    row2:AddWidget(disableFlashing, 0.5)
+    manager:Register(disableFlashing, "all")
+    card2:AddRow(row2, Theme.rowHeight)
+
+    local sepRow = GUIFrame:CreateRow(card2.content, Theme.rowHeightSeparator)
+    local sepWidget = GUIFrame:CreateSeparator(sepRow)
+    sepRow:AddWidget(sepWidget, 1)
+    card2:AddRow(sepRow, Theme.rowHeightSeparator)
+
+    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local fontColor = GUIFrame:CreateColorPicker(row2c, "Font color", {
+        color = db.FontColor,
+        callback = function(r, g, b, a)
+            db.FontColor = { r, g, b, a }
+            ApplySettings()
+        end,
+    })
+    row2c:AddWidget(fontColor, 1)
+    manager:Register(fontColor, "all")
+    card2:AddRow(row2c, Theme.rowHeight)
+
+    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local fontDropdown = GUIFrame:CreateDropdown(row2a, "Font", {
+        options = fontList,
+        value = db.FontFace,
+        callback = function(key)
             db.FontFace = key
             ApplySettings()
-        end)
+        end,
+        searchable = true,
+        isFontPreview = true,
+    })
     row2a:AddWidget(fontDropdown, 0.5)
-    table_insert(allWidgets, fontDropdown)
+    manager:Register(fontDropdown, "all")
 
-    local outlineList = {
-        { key = "NONE",         text = "None" },
-        { key = "OUTLINE",      text = "Outline" },
-        { key = "THICKOUTLINE", text = "Thick" },
-    }
-    local outlineDropdown = GUIFrame:CreateDropdown(row2a, "Outline", outlineList, db.FontOutline or "OUTLINE", 45,
-        function(key)
+    local outlineDropdown = GUIFrame:CreateDropdown(row2a, "Outline", {
+        options = SETTINGS_OUTLINE_OPTIONS,
+        value = db.FontOutline or "OUTLINE",
+        callback = function(key)
             db.FontOutline = key
             ApplySettings()
-        end)
+        end,
+    })
     row2a:AddWidget(outlineDropdown, 0.5)
-    table_insert(allWidgets, outlineDropdown)
-    card2:AddRow(row2a, 40)
+    manager:Register(outlineDropdown, "all")
+    card2:AddRow(row2a, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
+    yOffset = card2:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 3: Buff Settings
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Buff Settings", yOffset)
+    manager:Register(card3, "all")
 
-    local row3 = GUIFrame:CreateRow(card3.content, 39)
-    local buffBorderColor = GUIFrame:CreateColorPicker(row3, "Buff border color", db.buffBorderColor,
-        function(r, g, b, a)
+    local row3 = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
+    local buffBorderColor = GUIFrame:CreateColorPicker(row3, "Buff border color", {
+        color = db.buffBorderColor,
+        callback = function(r, g, b, a)
             db.buffBorderColor = { r, g, b, a }
             ApplySettings()
-        end)
+        end,
+    })
     row3:AddWidget(buffBorderColor, 0.5)
-    table_insert(allWidgets, buffBorderColor)
-    card3:AddRow(row3, 36)
+    manager:Register(buffBorderColor, "all")
+    card3:AddRow(row3, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
+    yOffset = card3:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 4: Debuff Settings
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Debuff Settings", yOffset)
+    manager:Register(card4, "all")
 
-    local row4 = GUIFrame:CreateRow(card4.content, 39)
-    local debuffBorderColor = GUIFrame:CreateColorPicker(row4, "Debuff border color", db.debuffBorderColor,
-        function(r, g, b, a)
+    local row4 = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
+    local debuffBorderColor = GUIFrame:CreateColorPicker(row4, "Debuff border color", {
+        color = db.debuffBorderColor,
+        callback = function(r, g, b, a)
             db.debuffBorderColor = { r, g, b, a }
             ApplySettings()
-        end)
+        end,
+    })
     row4:AddWidget(debuffBorderColor, 0.5)
-    table_insert(allWidgets, debuffBorderColor)
-    card4:AddRow(row4, 36)
+    manager:Register(debuffBorderColor, "all")
+    card4:AddRow(row4, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
+    yOffset = card4:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 5: External Defensive Settings
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "External Defensive Settings", yOffset)
+    manager:Register(card5, "all")
 
-    local row5 = GUIFrame:CreateRow(card5.content, 39)
-    local defBorderColor = GUIFrame:CreateColorPicker(row5, "External Defensive border color", db.defBorderColor,
-        function(r, g, b, a)
+    local row5 = GUIFrame:CreateRow(card5.content, Theme.rowHeightLast)
+    local defBorderColor = GUIFrame:CreateColorPicker(row5, "External Defensive border color", {
+        color = db.defBorderColor,
+        callback = function(r, g, b, a)
             db.defBorderColor = { r, g, b, a }
             ApplySettings()
-        end)
+        end,
+    })
     row5:AddWidget(defBorderColor, 0.5)
-    table_insert(allWidgets, defBorderColor)
-    card5:AddRow(row5, 36)
+    manager:Register(defBorderColor, "all")
+    card5:AddRow(row5, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card5:GetContentHeight() + Theme.paddingSmall
+    yOffset = card5:GetNextOffset()
 
-    -- Apply initial widget states
-    UpdateAllWidgetStates()
-    yOffset = yOffset - (Theme.paddingSmall * 3)
+    manager:UpdateAll(db.Enabled ~= false)
     return yOffset
 end)

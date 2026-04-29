@@ -183,7 +183,8 @@ function PS:UpdatePetText()
 
     if message and color then
         self.text:SetText(message)
-        self.text:SetTextColor(color[1], color[2], color[3], color[4] or 1)
+        local r, g, b, a = KE:ResolveColor(color, { 1, 1, 1, 1 })
+        self.text:SetTextColor(r, g, b, a)
         self.frame:Show()
     else
         if self.frame then self.frame:Hide() end
@@ -235,20 +236,20 @@ function PS:ShowPreview(state)
     KE:ApplyFramePositionWithSnap(self.frame, self.db.Position, self.db)
     KE:ApplyFontToText(self.text, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
 
-    local previewText, previewColor
+    local previewText, r, g, b, a
     if self.previewState == "dead" then
         previewText = self.db.PetDead or "PET DEAD"
-        previewColor = self.db.DeadColor or { 1, 0.2, 0.2, 1 }
+        r, g, b, a = KE:ResolveColor(self.db.DeadColor, { 1, 0.2, 0.2, 1 })
     elseif self.previewState == "passive" then
         previewText = self.db.PetPassive or "PET PASSIVE"
-        previewColor = self.db.PassiveColor or { 0.3, 0.7, 1, 1 }
+        r, g, b, a = KE:ResolveColor(self.db.PassiveColor, { 0.3, 0.7, 1, 1 })
     else
         previewText = self.db.PetMissing or "PET MISSING"
-        previewColor = self.db.MissingColor or { 1, 0.82, 0, 1 }
+        r, g, b, a = KE:ResolveColor(self.db.MissingColor, { 1, 0.82, 0, 1 })
     end
 
     self.text:SetText(previewText)
-    self.text:SetTextColor(previewColor[1], previewColor[2], previewColor[3], previewColor[4] or 1)
+    self.text:SetTextColor(r, g, b, a)
     self.frame:Show()
 end
 

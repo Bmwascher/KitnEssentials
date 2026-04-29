@@ -8,8 +8,6 @@
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
-local table_insert = table.insert
-local ipairs = ipairs
 
 local C_CVar = C_CVar
 
@@ -25,50 +23,65 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
     if not db then return yOffset end
 
     local AU = GetAutomationModule()
-    local allWidgets = {}
+    local manager = GUIFrame:CreateWidgetStateManager()
 
-    ---------------------------------------------------------------------------------
-    -- Card 1: CVars Enable
-    ---------------------------------------------------------------------------------
-    local card1 = GUIFrame:CreateCard(scrollChild, "CVars", yOffset)
+    local function RefreshStates()
+        manager:UpdateAll(db.CVarsEnabled ~= false)
+    end
 
-    local row1 = GUIFrame:CreateRow(card1.content, 36)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Apply CVars on Login", db.CVarsEnabled ~= false,
-        function(checked)
-            db.CVarsEnabled = checked
-            if AU and checked then AU:ApplyCVars() end
-        end,
-        true, "CVars", "On", "Off")
-    row1:AddWidget(enableCheck, 1)
-    card1:AddRow(row1, 36)
-
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
-
-    ---------------------------------------------------------------------------------
-    -- Card 2: Floating Combat Text
-    ---------------------------------------------------------------------------------
-    local card2 = GUIFrame:CreateCard(scrollChild, "Floating Combat Text", yOffset)
-    table_insert(allWidgets, card2)
-
-    -- Helper to add a CVar checkbox + desc/note to a card
-    local function AddCVarCheckbox(card, def)
+    local function AddCVarCheckbox(card, def, existingRow, widthPct)
         local key = def.key
         local label = def.label
         if def.desc then
             label = label .. "  |cff888888- " .. def.desc .. "|r"
         end
-        local row = GUIFrame:CreateRow(card.content, 38)
-        local checkbox = GUIFrame:CreateCheckbox(row, label, db[key],
-            function(checked)
+        local row = existingRow or GUIFrame:CreateRow(card.content, Theme.rowHeight)
+        local checkbox = GUIFrame:CreateCheckbox(row, label, {
+            value = db[key],
+            callback = function(checked)
                 db[key] = checked
-                AU._suppressCVarUpdate = true
-                AU:ApplyCVars()
-                AU._suppressCVarUpdate = false
-            end)
-        row:AddWidget(checkbox, 1.0)
-        table_insert(allWidgets, checkbox)
-        card:AddRow(row, 38)
+                if AU then
+                    AU._suppressCVarUpdate = true
+                    AU:ApplyCVars()
+                    AU._suppressCVarUpdate = false
+                end
+            end,
+        })
+        row:AddWidget(checkbox, widthPct or 1)
+        manager:Register(checkbox, "all")
+        if not existingRow then
+            card:AddRow(row, Theme.rowHeight)
+        end
     end
+
+    ----------------------------------------------------------------
+    -- Card 1: CVars Enable
+    ----------------------------------------------------------------
+    local card1 = GUIFrame:CreateCard(scrollChild, "CVars", yOffset)
+
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local enableCheck = GUIFrame:CreateCheckbox(row1, "Apply CVars on Login", {
+        value = db.CVarsEnabled ~= false,
+        callback = function(checked)
+            db.CVarsEnabled = checked
+            if AU and checked then AU:ApplyCVars() end
+            RefreshStates()
+        end,
+        msgPopup = true,
+        msgText = "CVars",
+        msgOn = "On",
+        msgOff = "Off",
+    })
+    row1:AddWidget(enableCheck, 1)
+    card1:AddRow(row1, Theme.rowHeightLast, 0)
+
+    yOffset = card1:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 2: Floating Combat Text
+    ----------------------------------------------------------------
+    local card2 = GUIFrame:CreateCard(scrollChild, "Floating Combat Text", yOffset)
+    manager:Register(card2, "all")
 
     if AU then
         for _, def in ipairs(AU.CVAR_DEFS) do
@@ -78,13 +91,13 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
         end
     end
 
-    yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
+    yOffset = card2:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 3: Character & Effects
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Character & Effects", yOffset)
-    table_insert(allWidgets, card3)
+    manager:Register(card3, "all")
 
     if AU then
         local charEffectKeys = {
@@ -101,49 +114,66 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
         end
     end
 
-    yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
+    yOffset = card3:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 4: Tooltips
-    ---------------------------------------------------------------------------------
-    local card4t = GUIFrame:CreateCard(scrollChild, "Tooltips", yOffset)
-    table_insert(allWidgets, card4t)
+    ----------------------------------------------------------------
+    local card4 = GUIFrame:CreateCard(scrollChild, "Tooltips", yOffset)
+    manager:Register(card4, "all")
 
     if AU then
         for _, def in ipairs(AU.CVAR_DEFS) do
             if def.key == "alwaysCompareItems" then
-                AddCVarCheckbox(card4t, def)
-            end
-        end
-    end
-
-    yOffset = yOffset + card4t:GetContentHeight() + Theme.paddingSmall
-
-    ---------------------------------------------------------------------------------
-    -- Card 5a: Nameplates
-    ---------------------------------------------------------------------------------
-    local card4 = GUIFrame:CreateCard(scrollChild, "Nameplates", yOffset)
-    table_insert(allWidgets, card4)
-
-    card4:AddLabel("|cffCC8800Friendly Player Nameplates must be |cff33ff33enabled|r|cffCC8800 for these to work.|r")
-
-    if AU then
-        for _, def in ipairs(AU.CVAR_DEFS) do
-            if def.key:find("^nameplate") then
                 AddCVarCheckbox(card4, def)
             end
         end
     end
 
-    yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
+    yOffset = card4:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
-    -- Card 5: Sliders
-    ---------------------------------------------------------------------------------
-    local card5 = GUIFrame:CreateCard(scrollChild, "Sliders", yOffset)
-    table_insert(allWidgets, card5)
+    ----------------------------------------------------------------
+    -- Card 5: Nameplates
+    ----------------------------------------------------------------
+    local card5 = GUIFrame:CreateCard(scrollChild, "Nameplates", yOffset)
+    manager:Register(card5, "all")
+
+    card5:AddLabel("|cffCC8800Friendly Player Nameplates must be |cff33ff33enabled|r|cffCC8800 for these to work.|r")
 
     if AU then
+        local nameplateDefs = {}
+        for _, def in ipairs(AU.CVAR_DEFS) do
+            if def.key:find("^nameplate") then
+                nameplateDefs[#nameplateDefs + 1] = def
+            end
+        end
+        local n = #nameplateDefs
+        for i = 1, n, 2 do
+            local isLastPair = (i + 1 >= n)
+            local rowHeight = isLastPair and Theme.rowHeightLast or Theme.rowHeight
+            local row = GUIFrame:CreateRow(card5.content, rowHeight)
+            AddCVarCheckbox(card5, nameplateDefs[i], row, 0.5)
+            if nameplateDefs[i + 1] then
+                AddCVarCheckbox(card5, nameplateDefs[i + 1], row, 0.5)
+            end
+            if isLastPair then
+                card5:AddRow(row, rowHeight, 0)
+            else
+                card5:AddRow(row, rowHeight)
+            end
+        end
+    end
+
+    yOffset = card5:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 6: Sliders
+    ----------------------------------------------------------------
+    local card6 = GUIFrame:CreateCard(scrollChild, "Sliders", yOffset)
+    manager:Register(card6, "all")
+
+    if AU then
+        local currentSliderRow
         for i, def in ipairs(AU.CVAR_SLIDER_DEFS) do
             local key = def.key
             local currentVal = db[key]
@@ -155,37 +185,36 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
             local isLastDef = (i == #AU.CVAR_SLIDER_DEFS)
 
             if isFirstInPair then
-                card5._currentSliderRow = GUIFrame:CreateRow(card5.content, 60)
+                currentSliderRow = GUIFrame:CreateRow(card6.content, 60)
             end
 
-            local slider = GUIFrame:CreateSlider(card5._currentSliderRow, def.label,
-                def.min, def.max, def.step, currentVal, 60,
-                function(val)
+            local slider = GUIFrame:CreateSlider(currentSliderRow, def.label, {
+                min = def.min, max = def.max, step = def.step,
+                value = currentVal,
+                callback = function(val)
                     db[key] = val
-                    AU._suppressCVarUpdate = true
-                    C_CVar.SetCVar(key, tostring(val))
-                    AU._suppressCVarUpdate = false
-                end)
-            card5._currentSliderRow:AddWidget(slider, 0.5)
-            table_insert(allWidgets, slider)
+                    if AU then
+                        AU._suppressCVarUpdate = true
+                        C_CVar.SetCVar(key, tostring(val))
+                        AU._suppressCVarUpdate = false
+                    end
+                end,
+            })
+            currentSliderRow:AddWidget(slider, 0.5)
+            manager:Register(slider, "all")
 
             if not isFirstInPair or isLastDef then
-                card5:AddRow(card5._currentSliderRow, 60)
+                if isLastDef then
+                    card6:AddRow(currentSliderRow, 60, 0)
+                else
+                    card6:AddRow(currentSliderRow, 60)
+                end
             end
         end
     end
 
-    yOffset = yOffset + card5:GetContentHeight() + Theme.paddingSmall
+    yOffset = card6:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
-    local function UpdateAllWidgetStates()
-        local enabled = db.CVarsEnabled ~= false
-        for _, widget in ipairs(allWidgets) do
-            if widget.SetEnabled then widget:SetEnabled(enabled) end
-        end
-    end
-    UpdateAllWidgetStates()
-
-    yOffset = yOffset - (Theme.paddingSmall * 2)
+    RefreshStates()
     return yOffset
 end)

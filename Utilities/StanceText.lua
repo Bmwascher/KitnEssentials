@@ -125,10 +125,10 @@ local function UpdateStanceTextDisplay()
     end
 
     local text = stanceSettings.Text or "Stance"
-    local color = stanceSettings.Color or { 1, 1, 1, 1 }
+    local cr, cg, cb, ca = KE:ResolveColor(stanceSettings.Color, { 1, 1, 1, 1 })
 
     stanceTextFrame.text:SetText(text)
-    stanceTextFrame.text:SetTextColor(color[1], color[2], color[3], color[4] or 1)
+    stanceTextFrame.text:SetTextColor(cr, cg, cb, ca)
 
     KE:ApplyFontToText(stanceTextFrame.text, db.FontFace, db.FontSize, db.FontOutline)
     KE:ApplyFramePositionWithSnap(stanceTextFrame, db.Position, db)
@@ -254,7 +254,8 @@ function ST:ShowPreview()
     end
 
     stanceTextFrame.text:SetText(previewText)
-    stanceTextFrame.text:SetTextColor(previewColor[1], previewColor[2], previewColor[3], previewColor[4] or 1)
+    local pr, pg, pb, pa = KE:ResolveColor(previewColor, { 1, 1, 1, 1 })
+    stanceTextFrame.text:SetTextColor(pr, pg, pb, pa)
 
     KE:ApplyFramePositionWithSnap(stanceTextFrame, db.Position, db)
 

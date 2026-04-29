@@ -11,11 +11,6 @@ local GUIFrame = KE.GUIFrame
 local Theme    = KE.Theme
 local LSM      = KE.LSM or LibStub("LibSharedMedia-3.0", true)
 local pairs = pairs
-local table_insert = table.insert
-
----------------------------------------------------------------------------------
--- Content Registration
----------------------------------------------------------------------------------
 
 GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.Dungeons.DungeonCasts
@@ -23,44 +18,34 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
 
     local DC = KitnEssentials and KitnEssentials:GetModule("DungeonCasts", true) or nil
 
-    -- Track widgets for enable/disable logic
-    local allWidgets = {}
+    local manager = GUIFrame:CreateWidgetStateManager()
 
-    -- Build statusbar list from LSM
     local statusbarList = {}
     if LSM then
-        for name in pairs(LSM:HashTable("statusbar")) do
-            statusbarList[name] = name
-        end
+        for name in pairs(LSM:HashTable("statusbar")) do statusbarList[name] = name end
     else
         statusbarList["Blizzard"] = "Blizzard"
     end
 
-    -- Build font list from LSM
-    local fontList = {}
-    if LSM then
-        for name in pairs(LSM:HashTable("font")) do
-            fontList[name] = name
-        end
-    else
-        fontList["Friz Quadrata TT"] = "Friz Quadrata TT"
+    local function ApplySettings()
+        if DC and DC.ApplySettings then DC:ApplySettings() end
     end
 
-    -- Helper to apply settings changes
-    local function ApplySettings()
-        if DC and DC.ApplySettings then
+    -- Visual-only changes (color/font/texture/icon toggle) refresh existing
+    -- bars in place so the cast progress doesn't reset on every slider tweak.
+    -- ApplySettings is reserved for structural changes (e.g. MaxBars).
+    local function ApplyVisuals()
+        if DC and DC.UpdateFrameVisuals then
+            DC:UpdateFrameVisuals()
+        elseif DC and DC.ApplySettings then
             DC:ApplySettings()
         end
     end
 
-    -- Helper to apply position changes
     local function ApplyPosition()
-        if DC and DC.ApplyPosition then
-            DC:ApplyPosition()
-        end
+        if DC and DC.ApplyPosition then DC:ApplyPosition() end
     end
 
-    -- Helper to apply new state
     local function ApplyModuleState(enabled)
         if not KitnEssentials then return end
         db.Enabled = enabled
@@ -71,14 +56,8 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
         end
     end
 
-    -- Widget state update
-    local function UpdateAllWidgetStates()
-        local mainEnabled = db.Enabled ~= false
-        for _, widget in ipairs(allWidgets) do
-            if widget.SetEnabled then
-                widget:SetEnabled(mainEnabled)
-            end
-        end
+    local function RefreshStates()
+        manager:UpdateAll(db.Enabled ~= false)
     end
 
     ----------------------------------------------------------------
@@ -86,27 +65,38 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Dungeon Casts", yOffset)
 
-    local row1a = GUIFrame:CreateRow(card1.content, 36)
-    local enableCheck = GUIFrame:CreateCheckbox(row1a, "Enable Dungeon Casts", db.Enabled ~= false,
-        function(checked)
+    local row1a = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local enableCheck = GUIFrame:CreateCheckbox(row1a, "Enable Dungeon Casts", {
+        value = db.Enabled ~= false,
+        callback = function(checked)
             ApplyModuleState(checked)
-            UpdateAllWidgetStates()
+            RefreshStates()
             ApplySettings()
             KE:CreateReloadPrompt("Enabling/Disabling this module requires a reload to take full effect.")
         end,
-        true, "Dungeon Casts", "On", "Off"
-    )
+        msgPopup = true,
+        msgText = "Dungeon Casts",
+        msgOn = "On",
+        msgOff = "Off",
+    })
     row1a:AddWidget(enableCheck, 1)
-    card1:AddRow(row1a, 36)
+    card1:AddRow(row1a, Theme.rowHeight)
 
-    card1:AddLabel("|cff888888Displays enemy nameplate casts in a configurable stack.\nOnly active in M+ dungeons.|r")
+    local noteRow = GUIFrame:CreateRow(card1.content, 50)
+    local noteText = GUIFrame:CreateText(noteRow,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " Displays enemy nameplate casts in a configurable stack.\n" ..
+        KE:ColorTextByTheme("-") .. " Only active in M+ dungeons.",
+        50, "hide")
+    noteRow:AddWidget(noteText, 1)
+    card1:AddRow(noteRow, 50, 0)
 
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+    yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 2: Position Settings
     ----------------------------------------------------------------
-    local _, newYOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = db.Frame,
         dbKeys = {
             anchorFrameType = "anchorFrameType",
@@ -121,287 +111,281 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
         showStrata = true,
         onChangeCallback = ApplyPosition,
     })
-    yOffset = newYOffset
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
+    end
+    manager:Register(posCard, "all")
+    yOffset = posOffset
 
     ----------------------------------------------------------------
     -- Card 3: Frame Settings
     ----------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Frame Settings", yOffset)
+    manager:Register(card3, "all")
 
-    local row3a = GUIFrame:CreateRow(card3.content, 36)
-    local widthSlider = GUIFrame:CreateSlider(row3a, "Bar Width", 100, 400, 1,
-        db.Frame.Width or 220, nil,
-        function(value)
-            db.Frame.Width = value
-            ApplySettings()
-        end)
+    local row3a = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local widthSlider = GUIFrame:CreateSlider(row3a, "Bar Width", {
+        min = 100, max = 400, step = 1,
+        value = db.Frame.Width or 220,
+        callback = function(value) db.Frame.Width = value; ApplyVisuals() end,
+    })
     row3a:AddWidget(widthSlider, 0.5)
-    table_insert(allWidgets, widthSlider)
+    manager:Register(widthSlider, "all")
 
-    local heightSlider = GUIFrame:CreateSlider(row3a, "Bar Height", 16, 40, 1,
-        db.Frame.Height or 24, nil,
-        function(value)
-            db.Frame.Height = value
-            ApplySettings()
-        end)
+    local heightSlider = GUIFrame:CreateSlider(row3a, "Bar Height", {
+        min = 16, max = 40, step = 1,
+        value = db.Frame.Height or 24,
+        callback = function(value) db.Frame.Height = value; ApplyVisuals() end,
+    })
     row3a:AddWidget(heightSlider, 0.5)
-    table_insert(allWidgets, heightSlider)
-    card3:AddRow(row3a, 36)
+    manager:Register(heightSlider, "all")
+    card3:AddRow(row3a, Theme.rowHeight)
 
-    local row3b = GUIFrame:CreateRow(card3.content, 36)
-    local maxBarsSlider = GUIFrame:CreateSlider(row3b, "Max Bars", 1, 10, 1,
-        db.Frame.MaxBars or 5, nil,
-        function(value)
-            db.Frame.MaxBars = value
-            ApplySettings()
-        end)
+    local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local maxBarsSlider = GUIFrame:CreateSlider(row3b, "Max Bars", {
+        min = 1, max = 10, step = 1,
+        value = db.Frame.MaxBars or 5,
+        callback = function(value) db.Frame.MaxBars = value; ApplySettings() end,
+    })
     row3b:AddWidget(maxBarsSlider, 0.5)
-    table_insert(allWidgets, maxBarsSlider)
+    manager:Register(maxBarsSlider, "all")
 
-    local spacingSlider = GUIFrame:CreateSlider(row3b, "Spacing", 0, 10, 1,
-        db.Frame.Spacing or 2, nil,
-        function(value)
-            db.Frame.Spacing = value
-            ApplySettings()
-        end)
+    local spacingSlider = GUIFrame:CreateSlider(row3b, "Spacing", {
+        min = 0, max = 10, step = 1,
+        value = db.Frame.Spacing or 2,
+        callback = function(value) db.Frame.Spacing = value; ApplyVisuals() end,
+    })
     row3b:AddWidget(spacingSlider, 0.5)
-    table_insert(allWidgets, spacingSlider)
-    card3:AddRow(row3b, 36)
+    manager:Register(spacingSlider, "all")
+    card3:AddRow(row3b, Theme.rowHeight)
 
-    local row3c = GUIFrame:CreateRow(card3.content, 36)
-    local growthOptions = { DOWN = "Down", UP = "Up" }
-    local growthDropdown = GUIFrame:CreateDropdown(row3c, "Growth Direction", growthOptions,
-        db.Frame.GrowthDirection or "DOWN", 70,
-        function(selected)
-            db.Frame.GrowthDirection = selected
-            ApplySettings()
-        end)
+    local row3c = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
+    local growthDropdown = GUIFrame:CreateDropdown(row3c, "Growth Direction", {
+        options = { { key = "DOWN", text = "Down" }, { key = "UP", text = "Up" } },
+        value = db.Frame.GrowthDirection or "DOWN",
+        callback = function(key) db.Frame.GrowthDirection = key; ApplyVisuals() end,
+    })
     row3c:AddWidget(growthDropdown, 1)
-    table_insert(allWidgets, growthDropdown)
-    card3:AddRow(row3c, 36)
+    manager:Register(growthDropdown, "all")
+    card3:AddRow(row3c, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card3:GetContentHeight() + (Theme.paddingMedium or 10)
+    yOffset = card3:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 4: Bar Appearance
+    -- Card 4: Bar Appearance (texture + icons + spark + time)
     ----------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Bar Appearance", yOffset)
+    manager:Register(card4, "all")
 
-    local row4a = GUIFrame:CreateRow(card4.content, 36)
-    local textureDropdown = GUIFrame:CreateDropdown(row4a, "Bar Texture", statusbarList,
-        db.BarDisplay.StatusBarTexture or "KitnUI", 70,
-        function(selected)
-            db.BarDisplay.StatusBarTexture = selected
-            ApplySettings()
-        end)
+    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local textureDropdown = GUIFrame:CreateDropdown(row4a, "Bar Texture", {
+        options = statusbarList,
+        value = db.BarDisplay.StatusBarTexture or "KitnUI",
+        callback = function(key) db.BarDisplay.StatusBarTexture = key; ApplyVisuals() end,
+        searchable = true,
+    })
     row4a:AddWidget(textureDropdown, 1)
-    table_insert(allWidgets, textureDropdown)
-    card4:AddRow(row4a, 36)
+    manager:Register(textureDropdown, "all")
+    card4:AddRow(row4a, Theme.rowHeight)
 
-    local row4b = GUIFrame:CreateRow(card4.content, 36)
-    local fontDropdown = GUIFrame:CreateDropdown(row4b, "Font", fontList,
-        db.BarDisplay.FontFace or "Expressway", 70,
-        function(selected)
-            db.BarDisplay.FontFace = selected
-            ApplySettings()
-        end, true)
-    row4b:AddWidget(fontDropdown, 0.5)
-    table_insert(allWidgets, fontDropdown)
+    local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local iconCheck = GUIFrame:CreateCheckbox(row4b, "Show Spell Icon", {
+        value = db.Icon.Enabled ~= false,
+        callback = function(checked) db.Icon.Enabled = checked; ApplyVisuals() end,
+    })
+    row4b:AddWidget(iconCheck, 0.5)
+    manager:Register(iconCheck, "all")
 
-    local fontSizeSlider = GUIFrame:CreateSlider(row4b, "Font Size", 8, 24, 1,
-        db.BarDisplay.FontSize or 12, nil,
-        function(value)
-            db.BarDisplay.FontSize = value
-            ApplySettings()
-        end)
-    row4b:AddWidget(fontSizeSlider, 0.5)
-    table_insert(allWidgets, fontSizeSlider)
-    card4:AddRow(row4b, 36)
+    local sparkCheck = GUIFrame:CreateCheckbox(row4b, "Show Spark", {
+        value = db.BarDisplay.SparkEnabled ~= false,
+        callback = function(checked) db.BarDisplay.SparkEnabled = checked; ApplyVisuals() end,
+    })
+    row4b:AddWidget(sparkCheck, 0.5)
+    manager:Register(sparkCheck, "all")
+    card4:AddRow(row4b, Theme.rowHeight)
 
-    local row4c = GUIFrame:CreateRow(card4.content, 36)
-    local outlineOptions = { NONE = "None", OUTLINE = "Outline", THICKOUTLINE = "Thick Outline" }
-    local outlineDropdown = GUIFrame:CreateDropdown(row4c, "Font Outline", outlineOptions,
-        db.BarDisplay.FontOutline or "OUTLINE", 70,
-        function(selected)
-            db.BarDisplay.FontOutline = selected
-            ApplySettings()
-        end)
-    row4c:AddWidget(outlineDropdown, 1)
-    table_insert(allWidgets, outlineDropdown)
-    card4:AddRow(row4c, 36)
+    local row4c = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local raidIconCheck = GUIFrame:CreateCheckbox(row4c, "Show Raid Target Icon", {
+        value = db.RaidIcon.Enabled ~= false,
+        callback = function(checked) db.RaidIcon.Enabled = checked; ApplyVisuals() end,
+    })
+    row4c:AddWidget(raidIconCheck, 0.5)
+    manager:Register(raidIconCheck, "all")
 
-    -- Separator
-    local rowSep4 = GUIFrame:CreateRow(card4.content, 8)
-    local sep4 = GUIFrame:CreateSeparator(rowSep4)
-    rowSep4:AddWidget(sep4, 1)
-    table_insert(allWidgets, sep4)
-    card4:AddRow(rowSep4, 8)
+    local showTimeCheck = GUIFrame:CreateCheckbox(row4c, "Show Cast Time", {
+        value = db.Text.ShowTime ~= false,
+        callback = function(checked) db.Text.ShowTime = checked; ApplyVisuals() end,
+    })
+    row4c:AddWidget(showTimeCheck, 0.5)
+    manager:Register(showTimeCheck, "all")
+    card4:AddRow(row4c, Theme.rowHeight)
 
-    local row4d = GUIFrame:CreateRow(card4.content, 36)
-    local iconCheck = GUIFrame:CreateCheckbox(row4d, "Show Spell Icon", db.Icon.Enabled ~= false, function(checked)
-        db.Icon.Enabled = checked
-        ApplySettings()
-    end)
-    row4d:AddWidget(iconCheck, 0.5)
-    table_insert(allWidgets, iconCheck)
+    local row4d = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
+    local raidIconSizeSlider = GUIFrame:CreateSlider(row4d, "Raid Icon Size", {
+        min = 12, max = 40, step = 1,
+        value = db.RaidIcon.Size or 20,
+        callback = function(value) db.RaidIcon.Size = value; ApplyVisuals() end,
+    })
+    row4d:AddWidget(raidIconSizeSlider, 1)
+    manager:Register(raidIconSizeSlider, "all")
+    card4:AddRow(row4d, Theme.rowHeightLast, 0)
 
-    local sparkCheck = GUIFrame:CreateCheckbox(row4d, "Show Spark", db.BarDisplay.SparkEnabled ~= false, function(checked)
-        db.BarDisplay.SparkEnabled = checked
-        ApplySettings()
-    end)
-    row4d:AddWidget(sparkCheck, 0.5)
-    table_insert(allWidgets, sparkCheck)
-    card4:AddRow(row4d, 36)
-
-    local row4e = GUIFrame:CreateRow(card4.content, 36)
-    local raidIconCheck = GUIFrame:CreateCheckbox(row4e, "Show Raid Target Icon", db.RaidIcon.Enabled ~= false, function(checked)
-        db.RaidIcon.Enabled = checked
-        ApplySettings()
-    end)
-    row4e:AddWidget(raidIconCheck, 0.5)
-    table_insert(allWidgets, raidIconCheck)
-
-    local showTimeCheck = GUIFrame:CreateCheckbox(row4e, "Show Cast Time", db.Text.ShowTime ~= false, function(checked)
-        db.Text.ShowTime = checked
-        ApplySettings()
-    end)
-    row4e:AddWidget(showTimeCheck, 0.5)
-    table_insert(allWidgets, showTimeCheck)
-    card4:AddRow(row4e, 36)
-
-    local row4f = GUIFrame:CreateRow(card4.content, 36)
-    local raidIconSizeSlider = GUIFrame:CreateSlider(row4f, "Raid Icon Size", 12, 40, 1,
-        db.RaidIcon.Size or 20, nil,
-        function(value)
-            db.RaidIcon.Size = value
-            ApplySettings()
-        end)
-    row4f:AddWidget(raidIconSizeSlider, 0.5)
-    table_insert(allWidgets, raidIconSizeSlider)
-    card4:AddRow(row4f, 36)
-
-    yOffset = yOffset + card4:GetContentHeight() + (Theme.paddingMedium or 10)
+    yOffset = card4:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 5: Colors
+    -- Card 5: Font Settings
     ----------------------------------------------------------------
-    local card5 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
-
-    card5:AddLabel("|cff888888Cast bar status colors|r")
-
-    local row5a = GUIFrame:CreateRow(card5.content, 36)
-    local castingColorPicker = GUIFrame:CreateColorPicker(row5a, "Casting", db.CastingColor, function(r, g, b, a)
-        db.CastingColor = { r, g, b, a }
-        ApplySettings()
-    end)
-    row5a:AddWidget(castingColorPicker, 0.33)
-    table_insert(allWidgets, castingColorPicker)
-
-    local channelingColorPicker = GUIFrame:CreateColorPicker(row5a, "Channeling", db.ChannelingColor, function(r, g, b, a)
-        db.ChannelingColor = { r, g, b, a }
-        ApplySettings()
-    end)
-    row5a:AddWidget(channelingColorPicker, 0.33)
-    table_insert(allWidgets, channelingColorPicker)
-
-    local shieldedColorPicker = GUIFrame:CreateColorPicker(row5a, "Shielded", db.NotInterruptibleColor, function(r, g, b, a)
-        db.NotInterruptibleColor = { r, g, b, a }
-        ApplySettings()
-    end)
-    row5a:AddWidget(shieldedColorPicker, 0.34)
-    table_insert(allWidgets, shieldedColorPicker)
-    card5:AddRow(row5a, 36)
-
-    -- Separator
-    local rowSep5 = GUIFrame:CreateRow(card5.content, 8)
-    local sep5 = GUIFrame:CreateSeparator(rowSep5)
-    rowSep5:AddWidget(sep5, 1)
-    table_insert(allWidgets, sep5)
-    card5:AddRow(rowSep5, 8)
-
-    card5:AddLabel("|cff888888Frame colors|r")
-
-    local row5b = GUIFrame:CreateRow(card5.content, 36)
-    local bgColorPicker = GUIFrame:CreateColorPicker(row5b, "Background", db.BackgroundColor, function(r, g, b, a)
-        db.BackgroundColor = { r, g, b, a }
-        ApplySettings()
-    end)
-    row5b:AddWidget(bgColorPicker, 0.33)
-    table_insert(allWidgets, bgColorPicker)
-
-    local borderColorPicker = GUIFrame:CreateColorPicker(row5b, "Border", db.BorderColor, function(r, g, b, a)
-        db.BorderColor = { r, g, b, a }
-        ApplySettings()
-    end)
-    row5b:AddWidget(borderColorPicker, 0.33)
-    table_insert(allWidgets, borderColorPicker)
-
-    local textColorPicker = GUIFrame:CreateColorPicker(row5b, "Text", db.Text.TextColor, function(r, g, b, a)
-        db.Text.TextColor = { r, g, b, a }
-        ApplySettings()
-    end)
-    row5b:AddWidget(textColorPicker, 0.34)
-    table_insert(allWidgets, textColorPicker)
-    card5:AddRow(row5b, 36)
-
-    yOffset = yOffset + card5:GetContentHeight() + (Theme.paddingMedium or 10)
+    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        db = db.BarDisplay,
+        dbKeys = {
+            fontFace = "FontFace",
+            fontSize = "FontSize",
+            fontOutline = "FontOutline",
+        },
+        fontSizeRange = { 8, 24 },
+        includeSoftOutline = false,
+        onChangeCallback = ApplyVisuals,
+    })
+    manager:Register(fontCard, "all")
+    if fontWidgets then
+        manager:RegisterGroup(fontWidgets, "all")
+    end
+    yOffset = fontOffset
 
     ----------------------------------------------------------------
-    -- Card 6: Target Settings
+    -- Card 6: Colors
     ----------------------------------------------------------------
-    local card6 = GUIFrame:CreateCard(scrollChild, "Target Settings", yOffset)
+    local card6 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
+    manager:Register(card6, "all")
 
-    local row6a = GUIFrame:CreateRow(card6.content, 36)
-    local targetCheck = GUIFrame:CreateCheckbox(row6a, "Show Cast Target", db.Target and db.Target.Enabled ~= false, function(checked)
-        db.Target.Enabled = checked
-        ApplySettings()
-    end)
-    row6a:AddWidget(targetCheck, 0.5)
-    table_insert(allWidgets, targetCheck)
+    card6:AddLabel("|cff888888Cast bar status colors|r")
 
-    local classColorCheck = GUIFrame:CreateCheckbox(row6a, "Use Class Colors", db.Target and db.Target.ShowClassColor ~= false, function(checked)
-        db.Target.ShowClassColor = checked
-        ApplySettings()
-    end)
-    row6a:AddWidget(classColorCheck, 0.5)
-    table_insert(allWidgets, classColorCheck)
-    card6:AddRow(row6a, 36)
+    local row6a = GUIFrame:CreateRow(card6.content, Theme.rowHeight)
+    local castingColorPicker = GUIFrame:CreateColorPicker(row6a, "Casting", {
+        color = db.CastingColor,
+        callback = function(r, g, b, a)
+            db.CastingColor = { r, g, b, a }
+            ApplyVisuals()
+        end,
+    })
+    row6a:AddWidget(castingColorPicker, 0.33)
+    manager:Register(castingColorPicker, "all")
 
-    local row6b = GUIFrame:CreateRow(card6.content, 36)
-    local positionOptions = { LEFT = "Left", RIGHT = "Right" }
-    local positionDropdown = GUIFrame:CreateDropdown(row6b, "Target Position", positionOptions,
-        (db.Target and db.Target.Position) or "RIGHT", 70,
-        function(selected)
-            db.Target.Position = selected
-            ApplySettings()
-        end)
-    row6b:AddWidget(positionDropdown, 0.5)
-    table_insert(allWidgets, positionDropdown)
+    local channelingColorPicker = GUIFrame:CreateColorPicker(row6a, "Channeling", {
+        color = db.ChannelingColor,
+        callback = function(r, g, b, a)
+            db.ChannelingColor = { r, g, b, a }
+            ApplyVisuals()
+        end,
+    })
+    row6a:AddWidget(channelingColorPicker, 0.33)
+    manager:Register(channelingColorPicker, "all")
+
+    local shieldedColorPicker = GUIFrame:CreateColorPicker(row6a, "Shielded", {
+        color = db.NotInterruptibleColor,
+        callback = function(r, g, b, a)
+            db.NotInterruptibleColor = { r, g, b, a }
+            ApplyVisuals()
+        end,
+    })
+    row6a:AddWidget(shieldedColorPicker, 0.34)
+    manager:Register(shieldedColorPicker, "all")
+    card6:AddRow(row6a, Theme.rowHeight)
+
+    local rowSep = GUIFrame:CreateRow(card6.content, Theme.rowHeightSeparator)
+    local sep = GUIFrame:CreateSeparator(rowSep)
+    rowSep:AddWidget(sep, 1)
+    manager:Register(sep, "all")
+    card6:AddRow(rowSep, Theme.rowHeightSeparator)
+
+    card6:AddLabel("|cff888888Frame colors|r")
+
+    local row6b = GUIFrame:CreateRow(card6.content, Theme.rowHeightLast)
+    local bgColorPicker = GUIFrame:CreateColorPicker(row6b, "Background", {
+        color = db.BackgroundColor,
+        callback = function(r, g, b, a)
+            db.BackgroundColor = { r, g, b, a }
+            ApplyVisuals()
+        end,
+    })
+    row6b:AddWidget(bgColorPicker, 0.33)
+    manager:Register(bgColorPicker, "all")
+
+    local borderColorPicker = GUIFrame:CreateColorPicker(row6b, "Border", {
+        color = db.BorderColor,
+        callback = function(r, g, b, a)
+            db.BorderColor = { r, g, b, a }
+            ApplyVisuals()
+        end,
+    })
+    row6b:AddWidget(borderColorPicker, 0.33)
+    manager:Register(borderColorPicker, "all")
+
+    local textColorPicker = GUIFrame:CreateColorPicker(row6b, "Text", {
+        color = db.Text.TextColor,
+        callback = function(r, g, b, a)
+            db.Text.TextColor = { r, g, b, a }
+            ApplyVisuals()
+        end,
+    })
+    row6b:AddWidget(textColorPicker, 0.34)
+    manager:Register(textColorPicker, "all")
+    card6:AddRow(row6b, Theme.rowHeightLast, 0)
+
+    yOffset = card6:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 7: Target Settings
+    ----------------------------------------------------------------
+    local card7 = GUIFrame:CreateCard(scrollChild, "Target Settings", yOffset)
+    manager:Register(card7, "all")
+
+    local row7a = GUIFrame:CreateRow(card7.content, Theme.rowHeight)
+    local targetCheck = GUIFrame:CreateCheckbox(row7a, "Show Cast Target", {
+        value = db.Target and db.Target.Enabled ~= false,
+        callback = function(checked) db.Target.Enabled = checked; ApplyVisuals() end,
+    })
+    row7a:AddWidget(targetCheck, 0.5)
+    manager:Register(targetCheck, "all")
+
+    local classColorCheck = GUIFrame:CreateCheckbox(row7a, "Use Class Colors", {
+        value = db.Target and db.Target.ShowClassColor ~= false,
+        callback = function(checked) db.Target.ShowClassColor = checked; ApplyVisuals() end,
+    })
+    row7a:AddWidget(classColorCheck, 0.5)
+    manager:Register(classColorCheck, "all")
+    card7:AddRow(row7a, Theme.rowHeight)
+
+    local row7b = GUIFrame:CreateRow(card7.content, Theme.rowHeightLast)
+    local positionDropdown = GUIFrame:CreateDropdown(row7b, "Target Position", {
+        options = { { key = "LEFT", text = "Left" }, { key = "RIGHT", text = "Right" } },
+        value = (db.Target and db.Target.Position) or "RIGHT",
+        callback = function(key) db.Target.Position = key; ApplyVisuals() end,
+    })
+    row7b:AddWidget(positionDropdown, 0.5)
+    manager:Register(positionDropdown, "all")
 
     local separatorOptions = {
-        ["\194\187"] = "\194\187",
-        ["-"] = "-",
-        [">"] = ">",
-        [">>"] = ">>",
-        ["\226\128\162"] = "\226\128\162",
-        ["None"] = "None",
+        { key = "\194\187",       text = "\194\187"       },
+        { key = "-",              text = "-"              },
+        { key = ">",              text = ">"              },
+        { key = ">>",             text = ">>"             },
+        { key = "\226\128\162",   text = "\226\128\162"   },
+        { key = "None",           text = "None"           },
     }
-    local separatorDropdown = GUIFrame:CreateDropdown(row6b, "Separator", separatorOptions,
-        (db.Target and db.Target.Separator) or "\194\187", 70,
-        function(selected)
-            db.Target.Separator = selected
-            ApplySettings()
-        end)
-    row6b:AddWidget(separatorDropdown, 0.5)
-    table_insert(allWidgets, separatorDropdown)
-    card6:AddRow(row6b, 36)
+    local separatorDropdown = GUIFrame:CreateDropdown(row7b, "Separator", {
+        options = separatorOptions,
+        value = (db.Target and db.Target.Separator) or "\194\187",
+        callback = function(key) db.Target.Separator = key; ApplyVisuals() end,
+    })
+    row7b:AddWidget(separatorDropdown, 0.5)
+    manager:Register(separatorDropdown, "all")
+    card7:AddRow(row7b, Theme.rowHeightLast, 0)
 
-    card6:AddLabel("|cff888888Show the target of enemy casts on the cast bar.|r")
+    card7:AddLabel("|cff888888Show the target of enemy casts on the cast bar.|r")
 
-    yOffset = yOffset + card6:GetContentHeight() + (Theme.paddingMedium or 10)
+    yOffset = card7:GetNextOffset()
 
-    -- Apply initial widget states
-    UpdateAllWidgetStates()
-
+    RefreshStates()
     return yOffset
 end)

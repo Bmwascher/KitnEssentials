@@ -79,17 +79,13 @@ function GUIFrame:CreateSubTabs(parent, yOffset, config)
         btnList[i] = btn
 
         if fill then
-            -- Evenly distribute tabs to fill container width
+            -- Evenly distribute tabs to fill container width.
+            -- TOPLEFT chains; widths are assigned reactively from the
+            -- container's actual width via the OnSizeChanged handler below.
             if i == 1 then
                 btn:SetPoint("TOPLEFT", container, "TOPLEFT", 0, 0)
             else
                 btn:SetPoint("TOPLEFT", btnList[i - 1], "TOPRIGHT", spacing, 0)
-            end
-            if i == numTabs then
-                btn:SetPoint("TOPRIGHT", container, "TOPRIGHT", 0, 0)
-            else
-                local totalSpacing = spacing * (numTabs - 1)
-                btn:SetWidth((540 - totalSpacing) / numTabs)
             end
         else
             btn:SetSize(tabWidth, tabHeight)
@@ -150,5 +146,21 @@ function GUIFrame:CreateSubTabs(parent, yOffset, config)
     end
 
     container.buttons = buttons
+
+    if fill and numTabs > 0 then
+        local function ResizeTabs(width)
+            if not width or width <= 0 then return end
+            local totalSpacing = spacing * (numTabs - 1)
+            local btnWidth = (width - totalSpacing) / numTabs
+            for _, btn in ipairs(btnList) do
+                btn:SetWidth(btnWidth)
+            end
+        end
+        container:SetScript("OnSizeChanged", function(_, w) ResizeTabs(w) end)
+        -- Apply once on next frame in case the container is laid out after this
+        -- function returns (e.g. if the parent's anchors haven't settled yet).
+        C_Timer.After(0, function() ResizeTabs(container:GetWidth()) end)
+    end
+
     return container, yOffset + tabHeight + T.paddingSmall
 end

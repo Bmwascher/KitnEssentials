@@ -8,10 +8,8 @@
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
-local table_insert = table.insert
-local ipairs = ipairs
 
-local function GetRecuperateModule()
+local function GetModule()
     if KitnEssentials then
         return KitnEssentials:GetModule("Recuperate", true)
     end
@@ -22,8 +20,8 @@ GUIFrame:RegisterContent("Recuperate", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.Recuperate
     if not db then return yOffset end
 
-    local REC = GetRecuperateModule()
-    local allWidgets = {}
+    local REC = GetModule()
+    local manager = GUIFrame:CreateWidgetStateManager()
 
     local function ApplySettings()
         if REC then REC:ApplySettings() end
@@ -36,78 +34,91 @@ GUIFrame:RegisterContent("Recuperate", function(scrollChild, yOffset)
         else KitnEssentials:DisableModule("Recuperate") end
     end
 
-    local function UpdateAllWidgetStates()
-        local mainEnabled = db.Enabled ~= false
-        for _, widget in ipairs(allWidgets) do
-            if widget.SetEnabled then widget:SetEnabled(mainEnabled) end
-        end
+    local function UpdateStateDriver()
+        if REC and REC.UpdateStateDriver then REC:UpdateStateDriver() end
     end
 
-    ---------------------------------------------------------------------------------
-    -- Card 1: Enable + Load Conditions
-    ---------------------------------------------------------------------------------
+    local function RefreshStates()
+        manager:UpdateAll(db.Enabled ~= false)
+    end
+
+    ----------------------------------------------------------------
+    -- Card 1: Enable
+    ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Recuperate Button", yOffset)
 
-    local row1 = GUIFrame:CreateRow(card1.content, 40)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Recuperate Button", db.Enabled ~= false,
-        function(checked) db.Enabled = checked; ApplyState(checked); UpdateAllWidgetStates() end,
-        true, "Recuperate Button", "On", "Off")
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Recuperate Button", {
+        value = db.Enabled ~= false,
+        callback = function(checked)
+            db.Enabled = checked
+            ApplyState(checked)
+            RefreshStates()
+        end,
+        msgPopup = true,
+        msgText = "Recuperate Button",
+        msgOn = "On",
+        msgOff = "Off",
+    })
     row1:AddWidget(enableCheck, 1)
-    card1:AddRow(row1, 40)
+    card1:AddRow(row1, Theme.rowHeight)
 
-    local noteHeight = 40
-    local noteRow = GUIFrame:CreateRow(card1.content, noteHeight)
+    local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " Visible out of combat in selected group types. Fades based on missing health.",
-        noteHeight, "hide")
+        Theme.rowHeight, "hide")
     noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, noteHeight)
+    card1:AddRow(noteRow, Theme.rowHeight, 0)
 
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+    yOffset = card1:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 2: General Settings
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "General Settings", yOffset)
-    table_insert(allWidgets, card2)
+    manager:Register(card2, "all")
 
-    local row2a = GUIFrame:CreateRow(card2.content, 36)
-    local loadInRaid2 = GUIFrame:CreateCheckbox(row2a, "Load in Raid", db.LoadInRaid ~= false,
-        function(checked)
-            db.LoadInRaid = checked
-            if REC then REC:UpdateStateDriver() end
-        end,
-        true, "Load in Raid", "On", "Off")
-    row2a:AddWidget(loadInRaid2, 0.5)
-    table_insert(allWidgets, loadInRaid2)
+    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local loadInRaid = GUIFrame:CreateCheckbox(row2a, "Load in Raid", {
+        value = db.LoadInRaid ~= false,
+        callback = function(checked) db.LoadInRaid = checked; UpdateStateDriver() end,
+        msgPopup = true,
+        msgText = "Load in Raid",
+        msgOn = "On",
+        msgOff = "Off",
+    })
+    row2a:AddWidget(loadInRaid, 0.5)
+    manager:Register(loadInRaid, "all")
 
-    local loadInParty2 = GUIFrame:CreateCheckbox(row2a, "Load in Party", db.LoadInParty == true,
-        function(checked)
-            db.LoadInParty = checked
-            if REC then REC:UpdateStateDriver() end
-        end,
-        true, "Load in Party", "On", "Off")
-    row2a:AddWidget(loadInParty2, 0.5)
-    table_insert(allWidgets, loadInParty2)
-    card2:AddRow(row2a, 36)
+    local loadInParty = GUIFrame:CreateCheckbox(row2a, "Load in Party", {
+        value = db.LoadInParty == true,
+        callback = function(checked) db.LoadInParty = checked; UpdateStateDriver() end,
+        msgPopup = true,
+        msgText = "Load in Party",
+        msgOn = "On",
+        msgOff = "Off",
+    })
+    row2a:AddWidget(loadInParty, 0.5)
+    manager:Register(loadInParty, "all")
+    card2:AddRow(row2a, Theme.rowHeight)
 
-    local row2b = GUIFrame:CreateRow(card2.content, 40)
-    local sizeSlider = GUIFrame:CreateSlider(card2.content, "Button Size", 1, 1000, 1, db.Size or 40, 60,
-        function(val)
-            db.Size = val
-            ApplySettings()
-        end)
+    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local sizeSlider = GUIFrame:CreateSlider(row2b, "Button Size", {
+        min = 1, max = 1000, step = 1,
+        value = db.Size or 40,
+        callback = function(val) db.Size = val; ApplySettings() end,
+    })
     row2b:AddWidget(sizeSlider, 1)
-    table_insert(allWidgets, sizeSlider)
-    card2:AddRow(row2b, 40)
+    manager:Register(sizeSlider, "all")
+    card2:AddRow(row2b, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
+    yOffset = card2:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 3: Position Settings
-    ---------------------------------------------------------------------------------
-    local card3, newOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+    ----------------------------------------------------------------
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = db,
         dbKeys = {
             anchorFrameType = "anchorFrameType",
@@ -123,16 +134,12 @@ GUIFrame:RegisterContent("Recuperate", function(scrollChild, yOffset)
         onChangeCallback = ApplySettings,
     })
 
-    if card3.positionWidgets then
-        for _, widget in ipairs(card3.positionWidgets) do
-            table_insert(allWidgets, widget)
-        end
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
     end
-    table_insert(allWidgets, card3)
+    manager:Register(posCard, "all")
+    yOffset = posOffset
 
-    yOffset = newOffset
-
-    UpdateAllWidgetStates()
-    yOffset = yOffset - Theme.paddingSmall
+    RefreshStates()
     return yOffset
 end)

@@ -9,29 +9,33 @@
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
-local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
-local table_insert = table.insert
+
+local function GetModule()
+    if KitnEssentials then
+        return KitnEssentials:GetModule("NoMovementAlert", true)
+    end
+    return nil
+end
 
 GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.NoMovementAlert
     if not db then
         local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
         errorCard:AddLabel("Database not available")
-        return yOffset + errorCard:GetContentHeight() + Theme.paddingMedium
+        return errorCard:GetNextOffset()
     end
 
-    local allWidgets = {}
+    local mod = GetModule()
+    local manager = GUIFrame:CreateWidgetStateManager()
+    manager:SetCondition("customColor", function()
+        return (db.ColorMode or "custom") == "custom"
+    end)
 
     local function ApplySettings()
-        if KitnEssentials then
-            local mod = KitnEssentials:GetModule("NoMovementAlert", true)
-            if mod and mod.ApplySettings then mod:ApplySettings() end
-        end
+        if mod and mod.ApplySettings then mod:ApplySettings() end
     end
 
     local function ApplyModuleState(enabled)
-        if not KitnEssentials then return end
-        local mod = KitnEssentials:GetModule("NoMovementAlert", true)
         if not mod then return end
         mod.db.Enabled = enabled
         if enabled then
@@ -41,80 +45,97 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
         end
     end
 
-    local function UpdateAllWidgetStates()
-        local mainEnabled = db.Enabled ~= false
-        for _, widget in ipairs(allWidgets) do
-            if widget.SetEnabled then widget:SetEnabled(mainEnabled) end
-        end
+    local function RefreshStates()
+        manager:UpdateAll(db.Enabled ~= false)
     end
 
-    ---------------------------------------------------------------------------------
-    -- Card 1: No Movement Alert (Enable)
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
+    -- Card 1: Enable
+    ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "No Movement Alert", yOffset)
 
-    local row1a = GUIFrame:CreateRow(card1.content, 36)
-    local enableCheck = GUIFrame:CreateCheckbox(row1a, "Enable No Movement Alert", db.Enabled ~= false,
-        function(checked)
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable No Movement Alert", {
+        value = db.Enabled ~= false,
+        callback = function(checked)
             db.Enabled = checked
             ApplyModuleState(checked)
-            UpdateAllWidgetStates()
+            RefreshStates()
         end,
-        true, "No Movement Alert", "On", "Off"
-    )
-    row1a:AddWidget(enableCheck, 1)
-    card1:AddRow(row1a, 36)
+        msgPopup = true,
+        msgText = "No Movement Alert",
+        msgOn = "On",
+        msgOff = "Off",
+    })
+    row1:AddWidget(enableCheck, 1)
+    card1:AddRow(row1, Theme.rowHeight)
 
-    local a = Theme.accent
-    local accentDash = string.format("|cff%02x%02x%02x—|r", a[1]*255, a[2]*255, a[3]*255)
-    local noteHeight = 50
-    local noteRow = GUIFrame:CreateRow(card1.content, noteHeight)
+    local noteRow = GUIFrame:CreateRow(card1.content, 50)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Shows remaining cooldown when your movement ability is unavailable.\n" .. KE:ColorTextByTheme("-") .. " Supports all classes. Auto-detects your highest priority movement spell.",
-        noteHeight, "hide")
+        KE:ColorTextByTheme("-") .. " Shows remaining cooldown when your movement ability is unavailable.\n" ..
+        KE:ColorTextByTheme("-") .. " Supports all classes. Auto-detects your highest priority movement spell.",
+        50, "hide")
     noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, noteHeight)
+    card1:AddRow(noteRow, 50, 0)
 
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+    yOffset = card1:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 2: Alert Settings
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Alert Settings", yOffset)
-    table_insert(allWidgets, card2)
+    manager:Register(card2, "all")
 
-    -- Display Format
-    local row2a = GUIFrame:CreateRow(card2.content, 40)
-    local formatBox = GUIFrame:CreateEditBox(row2a, "Display Format", db.DisplayFormat or "NO %n (%t)",
-        function(text)
-            db.DisplayFormat = text
-            ApplySettings()
-        end)
+    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local formatBox = GUIFrame:CreateEditBox(row2a, "Display Format", {
+        value = db.DisplayFormat or "NO %n (%t)",
+        callback = function(text) db.DisplayFormat = text; ApplySettings() end,
+    })
     row2a:AddWidget(formatBox, 1)
-    table_insert(allWidgets, formatBox)
-    card2:AddRow(row2a, 40)
+    manager:Register(formatBox, "all")
+    card2:AddRow(row2a, Theme.rowHeight)
 
-    card2:AddLabel(accentDash .. " |cff888888%n = spell name, %t = remaining time.|r")
+    local row2note = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local note2 = GUIFrame:CreateText(row2note,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " %n = spell name, %t = remaining time.",
+        Theme.rowHeight, "hide")
+    row2note:AddWidget(note2, 1)
+    manager:Register(note2, "all")
+    card2:AddRow(row2note, Theme.rowHeight)
 
-    -- Max Cooldown threshold
-    local row2b = GUIFrame:CreateRow(card2.content, 40)
-    local maxCDSlider = GUIFrame:CreateSlider(row2b, "Max Cooldown", 5, 120, 1, db.MaxCooldown or 30, 60,
-        function(val)
-            db.MaxCooldown = val
-        end)
+    local row2sep = GUIFrame:CreateRow(card2.content, Theme.rowHeightSeparator)
+    local sep2 = GUIFrame:CreateSeparator(row2sep)
+    row2sep:AddWidget(sep2, 1)
+    manager:Register(sep2, "all")
+    card2:AddRow(row2sep, Theme.rowHeightSeparator)
+
+    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local maxCDSlider = GUIFrame:CreateSlider(row2b, "Max Cooldown", {
+        min = 5, max = 120, step = 1,
+        value = db.MaxCooldown or 30,
+        callback = function(val) db.MaxCooldown = val end,
+    })
     row2b:AddWidget(maxCDSlider, 1)
-    table_insert(allWidgets, maxCDSlider)
-    card2:AddRow(row2b, 40)
+    manager:Register(maxCDSlider, "all")
+    card2:AddRow(row2b, Theme.rowHeight)
 
-    card2:AddLabel(accentDash .. " |cff888888Only show alert when the spell's total cooldown is under this threshold (seconds).|r")
+    local row2cdnote = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local cdnote = GUIFrame:CreateText(row2cdnote,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " Only show alert when the spell's total cooldown is under this threshold (seconds).",
+        Theme.rowHeight, "hide")
+    row2cdnote:AddWidget(cdnote, 1)
+    manager:Register(cdnote, "all")
+    card2:AddRow(row2cdnote, Theme.rowHeight, 0)
 
-    yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
+    yOffset = card2:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 3: Position Settings
-    ---------------------------------------------------------------------------------
-    local card3, newOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+    ----------------------------------------------------------------
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = db,
         dbKeys = {
             anchorFrameType = "anchorFrameType",
@@ -127,107 +148,67 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
         },
         showAnchorFrameType = true,
         showStrata = true,
+        showPixelSnap = true,
         onChangeCallback = ApplySettings,
     })
 
-    if card3.positionWidgets then
-        for _, widget in ipairs(card3.positionWidgets) do
-            table_insert(allWidgets, widget)
-        end
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
     end
-    table_insert(allWidgets, card3)
-    yOffset = newOffset
+    manager:Register(posCard, "all")
+    yOffset = posOffset
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 4: Font Settings
-    ---------------------------------------------------------------------------------
-    local card4 = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
-    table_insert(allWidgets, card4)
-
-    local fontList = {}
-    if LSM then
-        for name in pairs(LSM:HashTable("font")) do fontList[name] = name end
-    else
-        fontList["Friz Quadrata TT"] = "Friz Quadrata TT"
+    ----------------------------------------------------------------
+    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        db = db,
+        dbKeys = {
+            fontFace = "FontFace",
+            fontSize = "FontSize",
+            fontOutline = "FontOutline",
+        },
+        includeSoftOutline = true,
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(fontCard, "all")
+    if fontWidgets then
+        manager:RegisterGroup(fontWidgets, "all")
     end
+    yOffset = fontOffset
 
-    local row4a = GUIFrame:CreateRow(card4.content, 40)
-    local fontDropdown = GUIFrame:CreateDropdown(row4a, "Font", fontList, db.FontFace or "Expressway", 30,
-        function(key)
-            db.FontFace = key
-            ApplySettings()
-        end)
-    row4a:AddWidget(fontDropdown, 0.5)
-    table_insert(allWidgets, fontDropdown)
-
-    local fontSizeSlider = GUIFrame:CreateSlider(row4a, "Font Size", 8, 72, 1, db.FontSize or 24, 60,
-        function(val)
-            db.FontSize = val
-            ApplySettings()
-        end)
-    row4a:AddWidget(fontSizeSlider, 0.5)
-    table_insert(allWidgets, fontSizeSlider)
-    card4:AddRow(row4a, 40)
-
-    local row4b = GUIFrame:CreateRow(card4.content, 37)
-    local outlineList = {
-        { key = "NONE", text = "None" },
-        { key = "OUTLINE", text = "Outline" },
-        { key = "THICKOUTLINE", text = "Thick" },
-        { key = "SOFTOUTLINE", text = "Soft" },
-    }
-    local outlineDropdown = GUIFrame:CreateDropdown(row4b, "Outline", outlineList, db.FontOutline or "OUTLINE", 45,
-        function(key)
-            db.FontOutline = key
-            ApplySettings()
-        end)
-    row4b:AddWidget(outlineDropdown, 1)
-    table_insert(allWidgets, outlineDropdown)
-    card4:AddRow(row4b, 37)
-
-    yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
-
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 5: Colors
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
-    table_insert(allWidgets, card5)
+    manager:Register(card5, "all")
 
-    local customColorWidgets = {}
-
-    local row5a = GUIFrame:CreateRow(card5.content, 40)
-    local colorModeDropdown = GUIFrame:CreateDropdown(row5a, "Color Mode", KE.ColorModeOptions,
-        db.ColorMode or "custom", 70,
-        function(key)
+    local row5 = GUIFrame:CreateRow(card5.content, Theme.rowHeightLast)
+    local colorModeDropdown = GUIFrame:CreateDropdown(row5, "Color Mode", {
+        options = KE.ColorModeOptions,
+        value = db.ColorMode or "custom",
+        callback = function(key)
             db.ColorMode = key
             ApplySettings()
-            local isCustom = key == "custom"
-            for _, w in ipairs(customColorWidgets) do
-                if w.SetEnabled then w:SetEnabled(isCustom) end
-            end
-        end)
-    row5a:AddWidget(colorModeDropdown, 0.5)
-    table_insert(allWidgets, colorModeDropdown)
+            RefreshStates()
+        end,
+    })
+    row5:AddWidget(colorModeDropdown, 0.5)
+    manager:Register(colorModeDropdown, "all")
 
-    local colorPicker = GUIFrame:CreateColorPicker(row5a, "Custom Color", db.Color or { 1, 0.2, 0.2, 1 },
-        function(r, g, b, a2)
-            db.Color = { r, g, b, a2 }
+    local colorPicker = GUIFrame:CreateColorPicker(row5, "Custom Color", {
+        color = db.Color or { 1, 0.2, 0.2, 1 },
+        callback = function(r, g, b, a)
+            db.Color = { r, g, b, a }
             ApplySettings()
-        end)
-    row5a:AddWidget(colorPicker, 0.5)
-    table_insert(allWidgets, colorPicker)
-    table_insert(customColorWidgets, colorPicker)
-    card5:AddRow(row5a, 40)
+        end,
+    })
+    row5:AddWidget(colorPicker, 0.5)
+    manager:Register(colorPicker, "customColor")
+    card5:AddRow(row5, Theme.rowHeightLast, 0)
 
-    if (db.ColorMode or "custom") ~= "custom" then
-        for _, w in ipairs(customColorWidgets) do
-            if w.SetEnabled then w:SetEnabled(false) end
-        end
-    end
+    yOffset = card5:GetNextOffset()
 
-    yOffset = yOffset + card5:GetContentHeight() + Theme.paddingSmall
-
-    UpdateAllWidgetStates()
-    yOffset = yOffset - (Theme.paddingSmall * 3)
+    RefreshStates()
     return yOffset
 end)

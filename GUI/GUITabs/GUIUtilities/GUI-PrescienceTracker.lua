@@ -9,30 +9,31 @@
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
-local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
-local table_insert = table.insert
+
+local function GetModule()
+    if KitnEssentials then
+        return KitnEssentials:GetModule("PrescienceTracker", true)
+    end
+    return nil
+end
 
 GUIFrame:RegisterContent("PrescienceTracker", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.PrescienceTracker
     if not db then
         local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
         errorCard:AddLabel("Database not available")
-        return yOffset + errorCard:GetContentHeight() + Theme.paddingMedium
+        return errorCard:GetNextOffset()
     end
 
-    local allWidgets = {}
-    local nameColorWidget  -- forward-declared so UpdateAllWidgetStates can reference it
+    local mod = GetModule()
+    local manager = GUIFrame:CreateWidgetStateManager()
+    manager:SetCondition("nameColor", function() return not db.ClassColorNames end)
 
     local function ApplySettings()
-        if KitnEssentials then
-            local mod = KitnEssentials:GetModule("PrescienceTracker", true)
-            if mod and mod.ApplySettings then mod:ApplySettings() end
-        end
+        if mod and mod.ApplySettings then mod:ApplySettings() end
     end
 
     local function ApplyModuleState(enabled)
-        if not KitnEssentials then return end
-        local mod = KitnEssentials:GetModule("PrescienceTracker", true)
         if not mod then return end
         mod.db.Enabled = enabled
         if enabled then
@@ -42,72 +43,46 @@ GUIFrame:RegisterContent("PrescienceTracker", function(scrollChild, yOffset)
         end
     end
 
-    local function UpdateAllWidgetStates()
-        local mainEnabled = db.Enabled ~= false
-        for _, widget in ipairs(allWidgets) do
-            if widget.SetEnabled then widget:SetEnabled(mainEnabled) end
-        end
-        -- Override: Name Color picker is disabled while Class Color Names is on,
-        -- regardless of module enable state (as long as module is enabled).
-        if mainEnabled and db.ClassColorNames and nameColorWidget and nameColorWidget.SetEnabled then
-            nameColorWidget:SetEnabled(false)
-        end
+    local function RefreshStates()
+        manager:UpdateAll(db.Enabled ~= false)
     end
 
-    local a = Theme.accent
-    local accentDash = string.format("|cff%02x%02x%02x—|r", a[1]*255, a[2]*255, a[3]*255)
-
-    ---------------------------------------------------------------------------------
-    -- Card 1: Prescience Tracker (Enable + Buff Toggles)
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
+    -- Card 1: Enable
+    ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Prescience Tracker", yOffset)
 
-    local row1a = GUIFrame:CreateRow(card1.content, 36)
-    local enableCheck = GUIFrame:CreateCheckbox(row1a, "Enable Prescience Tracker", db.Enabled ~= false,
-        function(checked)
+    local row1a = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local enableCheck = GUIFrame:CreateCheckbox(row1a, "Enable Prescience Tracker", {
+        value = db.Enabled ~= false,
+        callback = function(checked)
             db.Enabled = checked
             ApplyModuleState(checked)
-            UpdateAllWidgetStates()
+            RefreshStates()
         end,
-        true, "Prescience Tracker", "On", "Off"
-    )
+        msgPopup = true,
+        msgText = "Prescience Tracker",
+        msgOn = "On",
+        msgOff = "Off",
+    })
     row1a:AddWidget(enableCheck, 1)
-    card1:AddRow(row1a, 36)
+    card1:AddRow(row1a, Theme.rowHeight)
 
-    -- Buff toggles
-    local row1b = GUIFrame:CreateRow(card1.content, 36)
-    local presCheck = GUIFrame:CreateCheckbox(row1b, "Prescience", db.ShowPrescience ~= false,
-        function(checked)
-            db.ShowPrescience = checked
-            ApplySettings()
-        end)
-    row1b:AddWidget(presCheck, 0.5)
-    table_insert(allWidgets, presCheck)
-
-    local sandCheck = GUIFrame:CreateCheckbox(row1b, "Shifting Sands", db.ShowShiftingSands == true,
-        function(checked)
-            db.ShowShiftingSands = checked
-            ApplySettings()
-        end)
-    row1b:AddWidget(sandCheck, 0.5)
-    table_insert(allWidgets, sandCheck)
-    card1:AddRow(row1b, 36)
-
-    local noteHeight = 50
-    local noteRow = GUIFrame:CreateRow(card1.content, noteHeight)
+    local noteRow = GUIFrame:CreateRow(card1.content, 50)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Tracks Prescience and Shifting Sands on party/raid members.\n" .. KE:ColorTextByTheme("-") .. " Only active for Augmentation Evoker.",
-        noteHeight, "hide")
+        KE:ColorTextByTheme("-") .. " Tracks Prescience and Shifting Sands on party/raid members.\n" ..
+        KE:ColorTextByTheme("-") .. " Only active for Augmentation Evoker.",
+        50, "hide")
     noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, noteHeight)
+    card1:AddRow(noteRow, 50, 0)
 
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+    yOffset = card1:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 2: Position Settings
-    ---------------------------------------------------------------------------------
-    local card2, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+    ----------------------------------------------------------------
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = db,
         dbKeys = {
             anchorFrameType = "anchorFrameType",
@@ -122,241 +97,231 @@ GUIFrame:RegisterContent("PrescienceTracker", function(scrollChild, yOffset)
         showStrata = true,
         onChangeCallback = ApplySettings,
     })
-    if card2.positionWidgets then
-        for _, widget in ipairs(card2.positionWidgets) do
-            table_insert(allWidgets, widget)
-        end
+
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
     end
-    table_insert(allWidgets, card2)
+    manager:Register(posCard, "all")
     yOffset = posOffset
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 3: Display Settings
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
-    table_insert(allWidgets, card3)
+    manager:Register(card3, "all")
 
-    -- Growth Direction + Max Entries
-    local row3a = GUIFrame:CreateRow(card3.content, 40)
-    local growthOptions = {
-        { key = "DOWN", text = "Down" },
-        { key = "UP", text = "Up" },
-        { key = "RIGHT", text = "Right" },
-        { key = "LEFT", text = "Left" },
-    }
-    local growthDropdown = GUIFrame:CreateDropdown(row3a, "Growth Direction", growthOptions, db.GrowthDirection or "DOWN", 45,
-        function(key)
-            db.GrowthDirection = key
-            ApplySettings()
-        end)
+    -- Tracked buffs
+    local row3buffs = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local presCheck = GUIFrame:CreateCheckbox(row3buffs, "Prescience", {
+        value = db.ShowPrescience ~= false,
+        callback = function(checked) db.ShowPrescience = checked; ApplySettings() end,
+    })
+    row3buffs:AddWidget(presCheck, 0.5)
+    manager:Register(presCheck, "all")
+
+    local sandCheck = GUIFrame:CreateCheckbox(row3buffs, "Shifting Sands", {
+        value = db.ShowShiftingSands == true,
+        callback = function(checked) db.ShowShiftingSands = checked; ApplySettings() end,
+    })
+    row3buffs:AddWidget(sandCheck, 0.5)
+    manager:Register(sandCheck, "all")
+    card3:AddRow(row3buffs, Theme.rowHeight)
+
+    local row3sep1 = GUIFrame:CreateRow(card3.content, Theme.rowHeightSeparator)
+    local sep3a = GUIFrame:CreateSeparator(row3sep1)
+    row3sep1:AddWidget(sep3a, 1)
+    manager:Register(sep3a, "all")
+    card3:AddRow(row3sep1, Theme.rowHeightSeparator)
+
+    -- Layout
+    local row3a = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local growthDropdown = GUIFrame:CreateDropdown(row3a, "Growth Direction", {
+        options = {
+            { key = "DOWN",  text = "Down" },
+            { key = "UP",    text = "Up" },
+            { key = "RIGHT", text = "Right" },
+            { key = "LEFT",  text = "Left" },
+        },
+        value = db.GrowthDirection or "DOWN",
+        callback = function(key) db.GrowthDirection = key; ApplySettings() end,
+    })
     row3a:AddWidget(growthDropdown, 0.5)
-    table_insert(allWidgets, growthDropdown)
+    manager:Register(growthDropdown, "all")
 
-    local maxSlider = GUIFrame:CreateSlider(row3a, "Max Entries", 1, 20, 1, db.MaxEntries or 6, 50,
-        function(val)
-            db.MaxEntries = val
-            ApplySettings()
-        end)
+    local maxSlider = GUIFrame:CreateSlider(row3a, "Max Entries", {
+        min = 1, max = 20, step = 1,
+        value = db.MaxEntries or 6,
+        callback = function(val) db.MaxEntries = val; ApplySettings() end,
+    })
     row3a:AddWidget(maxSlider, 0.5)
-    table_insert(allWidgets, maxSlider)
-    card3:AddRow(row3a, 40)
+    manager:Register(maxSlider, "all")
+    card3:AddRow(row3a, Theme.rowHeight)
 
-    -- Icon Size + Spacing
-    local row3c = GUIFrame:CreateRow(card3.content, 40)
-    local iconSlider = GUIFrame:CreateSlider(row3c, "Icon Size", 16, 64, 2, db.IconSize or 32, 50,
-        function(val)
-            db.IconSize = val
-            ApplySettings()
-        end)
-    row3c:AddWidget(iconSlider, 0.5)
-    table_insert(allWidgets, iconSlider)
+    local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local iconSlider = GUIFrame:CreateSlider(row3b, "Icon Size", {
+        min = 16, max = 64, step = 2,
+        value = db.IconSize or 32,
+        callback = function(val) db.IconSize = val; ApplySettings() end,
+    })
+    row3b:AddWidget(iconSlider, 0.5)
+    manager:Register(iconSlider, "all")
 
-    local spacingSlider = GUIFrame:CreateSlider(row3c, "Spacing", 0, 20, 1, db.Spacing or 4, 50,
-        function(val)
-            db.Spacing = val
-            ApplySettings()
-        end)
-    row3c:AddWidget(spacingSlider, 0.5)
-    table_insert(allWidgets, spacingSlider)
-    card3:AddRow(row3c, 40)
+    local spacingSlider = GUIFrame:CreateSlider(row3b, "Spacing", {
+        min = 0, max = 20, step = 1,
+        value = db.Spacing or 4,
+        callback = function(val) db.Spacing = val; ApplySettings() end,
+    })
+    row3b:AddWidget(spacingSlider, 0.5)
+    manager:Register(spacingSlider, "all")
+    card3:AddRow(row3b, Theme.rowHeight)
 
-    -- Show Role Icons + Role Icon Scale
-    local row3d = GUIFrame:CreateRow(card3.content, 40)
-    local roleCheck = GUIFrame:CreateCheckbox(row3d, "Show Role Icons", db.ShowRoleIcon ~= false,
-        function(checked)
-            db.ShowRoleIcon = checked
-            ApplySettings()
-        end)
-    row3d:AddWidget(roleCheck, 0.4)
-    table_insert(allWidgets, roleCheck)
+    local row3sep2 = GUIFrame:CreateRow(card3.content, Theme.rowHeightSeparator)
+    local sep3b = GUIFrame:CreateSeparator(row3sep2)
+    row3sep2:AddWidget(sep3b, 1)
+    manager:Register(sep3b, "all")
+    card3:AddRow(row3sep2, Theme.rowHeightSeparator)
 
-    local roleScaleSlider = GUIFrame:CreateSlider(row3d, "Role Icon Scale", 0.5, 3.0, 0.1, db.RoleIconScale or 1.0, 50,
-        function(val)
-            db.RoleIconScale = val
-            ApplySettings()
-        end)
-    row3d:AddWidget(roleScaleSlider, 0.6)
-    table_insert(allWidgets, roleScaleSlider)
-    card3:AddRow(row3d, 40)
+    -- Per-entry decorations
+    local row3c = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local roleCheck = GUIFrame:CreateCheckbox(row3c, "Show Role Icons", {
+        value = db.ShowRoleIcon ~= false,
+        callback = function(checked) db.ShowRoleIcon = checked; ApplySettings() end,
+    })
+    row3c:AddWidget(roleCheck, 0.4)
+    manager:Register(roleCheck, "all")
 
-    yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
+    local roleScaleSlider = GUIFrame:CreateSlider(row3c, "Role Icon Scale", {
+        min = 0.5, max = 3.0, step = 0.1,
+        value = db.RoleIconScale or 1.0,
+        callback = function(val) db.RoleIconScale = val; ApplySettings() end,
+    })
+    row3c:AddWidget(roleScaleSlider, 0.6)
+    manager:Register(roleScaleSlider, "all")
+    card3:AddRow(row3c, Theme.rowHeight)
 
-    ---------------------------------------------------------------------------------
-    -- Card 4: Name Text Settings
-    ---------------------------------------------------------------------------------
-    local card4 = GUIFrame:CreateCard(scrollChild, "Name Text", yOffset)
-    table_insert(allWidgets, card4)
+    local row3d = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
+    local nameCheck = GUIFrame:CreateCheckbox(row3d, "Show Names", {
+        value = db.ShowNames ~= false,
+        callback = function(checked) db.ShowNames = checked; ApplySettings() end,
+    })
+    row3d:AddWidget(nameCheck, 0.4)
+    manager:Register(nameCheck, "all")
 
-    local fontList = {}
-    if LSM then
-        for name in pairs(LSM:HashTable("font")) do fontList[name] = name end
-    else
-        fontList["Friz Quadrata TT"] = "Friz Quadrata TT"
+    local maxLenSlider = GUIFrame:CreateSlider(row3d, "Max Characters", {
+        min = 0, max = 12, step = 1,
+        value = db.NameMaxLength or 0,
+        callback = function(val) db.NameMaxLength = val; ApplySettings() end,
+    })
+    row3d:AddWidget(maxLenSlider, 0.6)
+    manager:Register(maxLenSlider, "all")
+    card3:AddRow(row3d, Theme.rowHeightLast, 0)
+
+    yOffset = card3:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 4: Name Font
+    ----------------------------------------------------------------
+    local nameFontCard, nameFontOffset, nameFontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        title = "Name Font",
+        db = db,
+        dbKeys = {
+            fontFace = "NameFontFace",
+            fontSize = "NameFontSize",
+            fontOutline = "NameFontOutline",
+        },
+        fontSizeRange = { 8, 32 },
+        includeSoftOutline = true,
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(nameFontCard, "all")
+    if nameFontWidgets then
+        manager:RegisterGroup(nameFontWidgets, "all")
     end
+    yOffset = nameFontOffset
 
-    local outlineList = {
-        { key = "NONE", text = "None" },
-        { key = "OUTLINE", text = "Outline" },
-        { key = "THICKOUTLINE", text = "Thick" },
-        { key = "SOFTOUTLINE", text = "Soft" },
-    }
+    ----------------------------------------------------------------
+    -- Card 5: Timer Font
+    ----------------------------------------------------------------
+    local timerFontCard, timerFontOffset, timerFontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        title = "Timer Font",
+        db = db,
+        dbKeys = {
+            fontFace = "TimerFontFace",
+            fontSize = "TimerFontSize",
+            fontOutline = "TimerFontOutline",
+        },
+        fontSizeRange = { 8, 32 },
+        includeSoftOutline = true,
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(timerFontCard, "all")
+    if timerFontWidgets then
+        manager:RegisterGroup(timerFontWidgets, "all")
+    end
+    yOffset = timerFontOffset
 
-    -- Show Names toggle + Max Length
-    local row4a = GUIFrame:CreateRow(card4.content, 40)
-    local nameCheck = GUIFrame:CreateCheckbox(row4a, "Show Names", db.ShowNames ~= false,
-        function(checked)
-            db.ShowNames = checked
-            ApplySettings()
-        end)
-    row4a:AddWidget(nameCheck, 0.4)
-    table_insert(allWidgets, nameCheck)
-
-    local maxLenSlider = GUIFrame:CreateSlider(row4a, "Max Characters", 0, 12, 1, db.NameMaxLength or 0, 50,
-        function(val)
-            db.NameMaxLength = val
-            ApplySettings()
-        end)
-    row4a:AddWidget(maxLenSlider, 0.6)
-    table_insert(allWidgets, maxLenSlider)
-    card4:AddRow(row4a, 40)
-
-    local row4b = GUIFrame:CreateRow(card4.content, 40)
-    local nameFontDropdown = GUIFrame:CreateDropdown(row4b, "Font", fontList, db.NameFontFace or "Expressway", 30,
-        function(key)
-            db.NameFontFace = key
-            ApplySettings()
-        end)
-    row4b:AddWidget(nameFontDropdown, 0.5)
-    table_insert(allWidgets, nameFontDropdown)
-
-    local nameFontSizeSlider = GUIFrame:CreateSlider(row4b, "Font Size", 8, 32, 1, db.NameFontSize or 12, 50,
-        function(val)
-            db.NameFontSize = val
-            ApplySettings()
-        end)
-    row4b:AddWidget(nameFontSizeSlider, 0.5)
-    table_insert(allWidgets, nameFontSizeSlider)
-    card4:AddRow(row4b, 40)
-
-    local row4c = GUIFrame:CreateRow(card4.content, 37)
-    local nameOutlineDropdown = GUIFrame:CreateDropdown(row4c, "Outline", outlineList, db.NameFontOutline or "OUTLINE", 45,
-        function(key)
-            db.NameFontOutline = key
-            ApplySettings()
-        end)
-    row4c:AddWidget(nameOutlineDropdown, 1)
-    table_insert(allWidgets, nameOutlineDropdown)
-    card4:AddRow(row4c, 37)
-
-    yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
-
-    ---------------------------------------------------------------------------------
-    -- Card 5: Timer Text Settings
-    ---------------------------------------------------------------------------------
-    local card5 = GUIFrame:CreateCard(scrollChild, "Timer Text", yOffset)
-    table_insert(allWidgets, card5)
-
-    local row5a = GUIFrame:CreateRow(card5.content, 40)
-    local timerFontDropdown = GUIFrame:CreateDropdown(row5a, "Font", fontList, db.TimerFontFace or "Expressway", 30,
-        function(key)
-            db.TimerFontFace = key
-            ApplySettings()
-        end)
-    row5a:AddWidget(timerFontDropdown, 0.5)
-    table_insert(allWidgets, timerFontDropdown)
-
-    local timerFontSizeSlider = GUIFrame:CreateSlider(row5a, "Font Size", 8, 32, 1, db.TimerFontSize or 14, 50,
-        function(val)
-            db.TimerFontSize = val
-            ApplySettings()
-        end)
-    row5a:AddWidget(timerFontSizeSlider, 0.5)
-    table_insert(allWidgets, timerFontSizeSlider)
-    card5:AddRow(row5a, 40)
-
-    local row5b = GUIFrame:CreateRow(card5.content, 37)
-    local timerOutlineDropdown = GUIFrame:CreateDropdown(row5b, "Outline", outlineList, db.TimerFontOutline or "OUTLINE", 45,
-        function(key)
-            db.TimerFontOutline = key
-            ApplySettings()
-        end)
-    row5b:AddWidget(timerOutlineDropdown, 1)
-    table_insert(allWidgets, timerOutlineDropdown)
-    card5:AddRow(row5b, 37)
-
-    yOffset = yOffset + card5:GetContentHeight() + Theme.paddingSmall
-
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 6: Colors
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card6 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
-    table_insert(allWidgets, card6)
+    manager:Register(card6, "all")
 
-    -- Class Color Names toggle
-    local row6a = GUIFrame:CreateRow(card6.content, 36)
-    local classColorCheck = GUIFrame:CreateCheckbox(row6a, "Class Color Names", db.ClassColorNames == true,
-        function(checked)
+    local row6a = GUIFrame:CreateRow(card6.content, Theme.rowHeight)
+    local classColorCheck = GUIFrame:CreateCheckbox(row6a, "Class Color Names", {
+        value = db.ClassColorNames == true,
+        callback = function(checked)
             db.ClassColorNames = checked
             ApplySettings()
-            UpdateAllWidgetStates()
-        end)
+            RefreshStates()
+        end,
+    })
     row6a:AddWidget(classColorCheck, 1)
-    table_insert(allWidgets, classColorCheck)
-    card6:AddRow(row6a, 36)
+    manager:Register(classColorCheck, "all")
+    card6:AddRow(row6a, Theme.rowHeight)
 
-    -- Color pickers
-    local row6b = GUIFrame:CreateRow(card6.content, 40)
-    local namePicker = GUIFrame:CreateColorPicker(row6b, "Name Color", db.NameColor or { 1, 1, 1, 1 },
-        function(r, g, b, a2)
-            db.NameColor = { r, g, b, a2 }
+    local row6b = GUIFrame:CreateRow(card6.content, Theme.rowHeight)
+    local namePicker = GUIFrame:CreateColorPicker(row6b, "Name Color", {
+        color = db.NameColor or { 1, 1, 1, 1 },
+        callback = function(r, g, b, a)
+            db.NameColor = { r, g, b, a }
             ApplySettings()
-        end)
+        end,
+    })
     row6b:AddWidget(namePicker, 0.33)
-    table_insert(allWidgets, namePicker)
-    nameColorWidget = namePicker
+    manager:Register(namePicker, "nameColor")
 
-    local timerPicker = GUIFrame:CreateColorPicker(row6b, "Timer Color", db.TimerColor or { 1, 1, 1, 1 },
-        function(r, g, b, a2)
-            db.TimerColor = { r, g, b, a2 }
+    local timerPicker = GUIFrame:CreateColorPicker(row6b, "Timer Color", {
+        color = db.TimerColor or { 1, 1, 1, 1 },
+        callback = function(r, g, b, a)
+            db.TimerColor = { r, g, b, a }
             ApplySettings()
-        end)
+        end,
+    })
     row6b:AddWidget(timerPicker, 0.33)
-    table_insert(allWidgets, timerPicker)
+    manager:Register(timerPicker, "all")
 
-    local critPicker = GUIFrame:CreateColorPicker(row6b, "Crit Color", db.CritColor or { 1, 0, 1, 1 },
-        function(r, g, b, a2)
-            db.CritColor = { r, g, b, a2 }
+    local critPicker = GUIFrame:CreateColorPicker(row6b, "Crit Color", {
+        color = db.CritColor or { 1, 0, 1, 1 },
+        callback = function(r, g, b, a)
+            db.CritColor = { r, g, b, a }
             ApplySettings()
-        end)
+        end,
+    })
     row6b:AddWidget(critPicker, 0.34)
-    table_insert(allWidgets, critPicker)
-    card6:AddRow(row6b, 40)
+    manager:Register(critPicker, "all")
+    card6:AddRow(row6b, Theme.rowHeight)
 
-    card6:AddLabel(accentDash .. " |cff888888Crit color applies to Prescience when it has a critical strike bonus.|r")
+    local row6note = GUIFrame:CreateRow(card6.content, Theme.rowHeight)
+    local note6 = GUIFrame:CreateText(row6note,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " Crit color applies to Prescience when it has a critical strike bonus.",
+        Theme.rowHeight, "hide")
+    row6note:AddWidget(note6, 1)
+    manager:Register(note6, "all")
+    card6:AddRow(row6note, Theme.rowHeight, 0)
 
-    yOffset = yOffset + card6:GetContentHeight() + Theme.paddingSmall
+    yOffset = card6:GetNextOffset()
 
-    UpdateAllWidgetStates()
-    yOffset = yOffset - (Theme.paddingSmall * 3)
+    RefreshStates()
     return yOffset
 end)

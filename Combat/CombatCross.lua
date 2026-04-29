@@ -18,7 +18,6 @@ local CC = KitnEssentials:NewModule("CombatCross", "AceEvent-3.0")
 local select = select
 local CreateFrame = CreateFrame
 local InCombatLockdown = InCombatLockdown
-local UIFrameFadeIn = UIFrameFadeIn
 local UIParent = UIParent
 local GetSpecialization = GetSpecialization
 local GetSpecializationInfo = GetSpecializationInfo

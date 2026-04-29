@@ -9,32 +9,19 @@ local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 
-local table_insert = table.insert
-local ipairs = ipairs
-
 local function GetModule()
-    return KitnEssentials:GetModule("FocusMarker", true)
+    if KitnEssentials then
+        return KitnEssentials:GetModule("FocusMarker", true)
+    end
+    return nil
 end
-
--- Marker options with inline icon textures for dropdown display
-local MARKER_OPTIONS = {
-    { key = "Star",     text = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_1:16|t  Star" },
-    { key = "Circle",   text = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_2:16|t  Circle" },
-    { key = "Diamond",  text = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_3:16|t  Diamond" },
-    { key = "Triangle", text = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_4:16|t  Triangle" },
-    { key = "Moon",     text = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_5:16|t  Moon" },
-    { key = "Square",   text = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_6:16|t  Square" },
-    { key = "Cross",    text = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_7:16|t  Cross" },
-    { key = "Skull",    text = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_8:16|t  Skull" },
-    { key = "None",     text = "|TInterface\\Buttons\\UI-GroupLoot-Pass-Up:16|t  None" },
-}
 
 GUIFrame:RegisterContent("FocusMarker", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.FocusMarker
     if not db then return yOffset end
 
     local FM = GetModule()
-    local allWidgets = {}
+    local manager = GUIFrame:CreateWidgetStateManager()
 
     local function ApplySettings()
         if FM and FM.ApplySettings then FM:ApplySettings() end
@@ -50,46 +37,47 @@ GUIFrame:RegisterContent("FocusMarker", function(scrollChild, yOffset)
         end
     end
 
-    local function UpdateAllWidgetStates()
-        local mainEnabled = db.Enabled ~= false
-        for _, widget in ipairs(allWidgets) do
-            if widget.SetEnabled then widget:SetEnabled(mainEnabled) end
-        end
+    local function RefreshStates()
+        manager:UpdateAll(db.Enabled ~= false)
     end
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 1: Enable
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Focus Marker", yOffset)
 
-    local row1 = GUIFrame:CreateRow(card1.content, 36)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Focus Marker", db.Enabled ~= false,
-        function(checked)
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Focus Marker", {
+        value = db.Enabled ~= false,
+        callback = function(checked)
             db.Enabled = checked
             ApplyModuleState(checked)
-            UpdateAllWidgetStates()
+            RefreshStates()
         end,
-        true, "Focus Marker", "On", "Off"
-    )
+        msgPopup = true,
+        msgText = "Focus Marker",
+        msgOn = "On",
+        msgOff = "Off",
+    })
     row1:AddWidget(enableCheck, 0.5)
-    card1:AddRow(row1, 36)
+    card1:AddRow(row1, Theme.rowHeight)
 
-    local noteHeight = 50
-    local noteRow = GUIFrame:CreateRow(card1.content, noteHeight)
+    local noteRow = GUIFrame:CreateRow(card1.content, 50)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Auto-creates a macro for focus targeting + raid marker assignment.\n" .. KE:ColorTextByTheme("-") .. " Drag the macro from /macro to your action bar.",
-        noteHeight, "hide")
+        KE:ColorTextByTheme("-") .. " Auto-creates a macro for focus targeting + raid marker assignment.\n" ..
+        KE:ColorTextByTheme("-") .. " Drag the macro from /macro to your action bar.",
+        50, "hide")
     noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, noteHeight)
+    card1:AddRow(noteRow, 50, 0)
 
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+    yOffset = card1:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 2: Marker Selection (icon grid)
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Marker Selection", yOffset)
-    table_insert(allWidgets, card2)
+    manager:Register(card2, "all")
 
     local ICON_SIZE = 40
     local ICON_SPACING = 8
@@ -142,7 +130,6 @@ GUIFrame:RegisterContent("FocusMarker", function(scrollChild, yOffset)
             icon:SetTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
         end
 
-        -- Accent border frame (shown on selected)
         local borderFrame = CreateFrame("Frame", nil, btn, "BackdropTemplate")
         borderFrame:SetAllPoints()
         borderFrame:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
@@ -150,7 +137,6 @@ GUIFrame:RegisterContent("FocusMarker", function(scrollChild, yOffset)
         borderFrame:Hide()
         btn.border = borderFrame
 
-        -- Hover highlight
         btn:SetScript("OnEnter", function(self)
             if self.markerName ~= db.SelectedMarker then
                 self:SetAlpha(0.8)
@@ -168,20 +154,20 @@ GUIFrame:RegisterContent("FocusMarker", function(scrollChild, yOffset)
             ApplySettings()
         end)
 
-        table_insert(markerButtons, btn)
+        table.insert(markerButtons, btn)
     end
 
-    card2:AddRow(gridRow, gridRowHeight + 24) -- extra space for the name label below
+    card2:AddRow(gridRow, gridRowHeight + 24, 0)
 
     UpdateMarkerSelection()
 
-    yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
+    yOffset = card2:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 3: Macro Options
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Macro Options", yOffset)
-    table_insert(allWidgets, card3)
+    manager:Register(card3, "all")
 
     local macroOptionDefs = {
         { key = "MarkOnly",   label = "Mark Only",   desc = "Only apply raid marker, do not set focus.", default = false },
@@ -190,73 +176,84 @@ GUIFrame:RegisterContent("FocusMarker", function(scrollChild, yOffset)
         { key = "AnnounceReadyCheck", label = "Ready Check Announce", desc = "Announce your marker in party chat on ready check.", default = true },
     }
 
-    for _, def in ipairs(macroOptionDefs) do
+    for i, def in ipairs(macroOptionDefs) do
         local checked = db[def.key]
         if checked == nil then checked = def.default end
         local label = def.label .. "  |cff888888- " .. def.desc .. "|r"
-        local row = GUIFrame:CreateRow(card3.content, 38)
-        local checkbox = GUIFrame:CreateCheckbox(row, label, checked,
-            function(val) db[def.key] = val; ApplySettings() end)
+        local isLast = i == #macroOptionDefs
+        local rowHeight = isLast and Theme.rowHeightLast or Theme.rowHeight
+        local row = GUIFrame:CreateRow(card3.content, rowHeight)
+        local checkbox = GUIFrame:CreateCheckbox(row, label, {
+            value = checked,
+            callback = function(val) db[def.key] = val; ApplySettings() end,
+        })
         row:AddWidget(checkbox, 1)
-        table_insert(allWidgets, checkbox)
-        card3:AddRow(row, 38)
+        manager:Register(checkbox, "all")
+        if isLast then
+            card3:AddRow(row, rowHeight, 0)
+        else
+            card3:AddRow(row, rowHeight)
+        end
     end
 
-    yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
+    yOffset = card3:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 4: Advanced
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Advanced", yOffset)
-    table_insert(allWidgets, card4)
+    manager:Register(card4, "all")
 
-    local row4a = GUIFrame:CreateRow(card4.content, 40)
-    local nameEditBox = GUIFrame:CreateEditBox(row4a, "Macro Name", db.MacroName or "FocusMarker",
-        function(val)
+    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local nameEditBox = GUIFrame:CreateEditBox(row4a, "Macro Name", {
+        value = db.MacroName or "FocusMarker",
+        callback = function(val)
             if val and val ~= "" then
                 db.MacroName = val
             else
                 db.MacroName = "FocusMarker"
             end
             ApplySettings()
-        end)
+        end,
+    })
     row4a:AddWidget(nameEditBox, 0.5)
-    table_insert(allWidgets, nameEditBox)
+    manager:Register(nameEditBox, "all")
 
-    local iconEditBox = GUIFrame:CreateEditBox(row4a, "Macro Icon ID", tostring(db.MacroIcon or 1033497),
-        function(val)
+    local iconEditBox = GUIFrame:CreateEditBox(row4a, "Macro Icon ID", {
+        value = tostring(db.MacroIcon or 1033497),
+        callback = function(val)
             local num = tonumber(val)
             if num then
                 db.MacroIcon = num
                 ApplySettings()
             end
-        end)
+        end,
+    })
     row4a:AddWidget(iconEditBox, 0.5)
-    table_insert(allWidgets, iconEditBox)
-    card4:AddRow(row4a, 40)
+    manager:Register(iconEditBox, "all")
+    card4:AddRow(row4a, Theme.rowHeight)
 
-    local row4b = GUIFrame:CreateRow(card4.content, 40)
-    local condEditBox = GUIFrame:CreateEditBox(row4b, "Macro Conditionals (empty = default)", db.MacroConditionals or "",
-        function(val)
-            db.MacroConditionals = val or ""
-            ApplySettings()
-        end)
+    local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local condEditBox = GUIFrame:CreateEditBox(row4b, "Macro Conditionals (empty = default)", {
+        value = db.MacroConditionals or "",
+        callback = function(val) db.MacroConditionals = val or ""; ApplySettings() end,
+    })
     row4b:AddWidget(condEditBox, 1)
-    table_insert(allWidgets, condEditBox)
-    card4:AddRow(row4b, 40)
+    manager:Register(condEditBox, "all")
+    card4:AddRow(row4b, Theme.rowHeight)
 
-    local advNoteHeight = 75
-    local advNoteRow = GUIFrame:CreateRow(card4.content, advNoteHeight)
+    local advNoteRow = GUIFrame:CreateRow(card4.content, 75)
     local advNoteText = GUIFrame:CreateText(advNoteRow,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Leave conditionals empty to use default: [@mouseover,exists,nodead][]\n" .. KE:ColorTextByTheme("-") .. " Macro icon accepts numeric icon IDs.\n   " .. KE:ColorTextByTheme(">") .. " Find IDs by clicking any spell or item icon on Wowhead.",
-        advNoteHeight, "hide")
+        KE:ColorTextByTheme("-") .. " Leave conditionals empty to use default: [@mouseover,exists,nodead][]\n" ..
+        KE:ColorTextByTheme("-") .. " Macro icon accepts numeric icon IDs.\n   " ..
+        KE:ColorTextByTheme(">") .. " Find IDs by clicking any spell or item icon on Wowhead.",
+        75, "hide")
     advNoteRow:AddWidget(advNoteText, 1)
-    card4:AddRow(advNoteRow, advNoteHeight)
+    card4:AddRow(advNoteRow, 75, 0)
 
-    yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
+    yOffset = card4:GetNextOffset()
 
-    UpdateAllWidgetStates()
-    yOffset = yOffset - Theme.paddingSmall
+    RefreshStates()
     return yOffset
 end)

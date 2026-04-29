@@ -1,5 +1,34 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v1.19.0
+
+### GUI
+- **NEW:** Refreshed settings panel — bigger default window, full-width tabs across the top, and a sidebar that no longer squishes when you open a Dungeon Timer page
+- **NEW:** Snap to Pixel Grid toggle now sits inline next to the Strata dropdown in every Position card with a short "ON for crisper text / OFF for precise positioning" hint
+- Card 1 across modules trimmed to Enable + a one-line Note. Format/Display options moved into a dedicated card between Position and Font (Battle Res, Combat Timer, etc.)
+- Several module pages reorganized for breathing room — notably Boss Debuffs, Combat Cross, Prescience Tracker, Ready Check Consumables, CVars Nameplates, and Great Vault Alert
+
+### Dungeon Timers
+- Settings now split into three sub-pages — Bars / Texts / General — instead of one tall scroll
+
+### Skyriding UI
+- The bars and Whirling Surge icon now center as a single visual unit — previously, setting Position XOffset = 0 centered just the bars while the icon hung off to one side
+
+### Missing Enchants/Gems
+- **NEW:** Master Enable toggle on Card 1, with the existing per-feature toggles (gem sockets, enchants, BetterCharacterPanel skip) moved into a General Settings card so individual checks can be turned off without disabling the whole module
+
+### WarpDeplete+
+- The standalone Instance Reset Announcer module is now folded into WarpDeplete+'s settings — same toggle and editable message, one less sidebar entry. Existing settings migrate automatically on first reload
+
+### Profile resilience
+- Switching profiles via the Profiles tab no longer leaves modules in a broken state — modules with active previews, partial color edits, or new-since-last-version settings all survive the switch cleanly
+- Profiles auto-repair on load: saved font names that no longer resolve (e.g. an LSM-providing addon was uninstalled) reset to the project default, and settings added in newer versions get filled in for older saved profiles
+
+### Under the hood
+- Most module pages were touched as part of the GUI layout port — shared widgets for Font / Glow / Sound / Spell Browser / Text Format settings now replace the ad-hoc card layouts each page used to roll its own, so the look stays consistent across modules and adding a new module is a smaller diff going forward
+
+---
+
 ## v1.18.0
 
 ### Position Controller (new module — replaces Racials Anchor)

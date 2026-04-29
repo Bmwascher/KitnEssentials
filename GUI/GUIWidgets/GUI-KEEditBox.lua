@@ -10,29 +10,19 @@ local Theme = KE.Theme
 
 -- Localization Setup
 local tostring = tostring
-local type = type
 local CreateFrame = CreateFrame
 
 ---------------------------------------------------------------------------------
 -- Widget Creation
 ---------------------------------------------------------------------------------
 
--- EditBox widget
-function GUIFrame:CreateEditBox(parent, labelText, value, callback)
-    local tooltip = nil
-    local customHeight = nil
-    -- Detect AceConfig table format: second param is number (yOffset), third is table
-    if type(labelText) == "number" and type(value) == "table" then
-        local config = value
-        labelText = config.label
-        value = config.value or ""
-        callback = config.callback
-        tooltip = config.tooltip
-        customHeight = config.height
-    end
-
-    -- Ensure value is a string
-    value = tostring(value or "")
+-- EditBox widget — config-table API: { value, callback, tooltip, height }
+function GUIFrame:CreateEditBox(parent, labelText, config)
+    config = config or {}
+    local value = tostring(config.value or "")
+    local callback = config.callback
+    local tooltip = config.tooltip
+    local customHeight = config.height
 
     local rowHeight = customHeight or 34
     local row = CreateFrame("Frame", nil, parent)

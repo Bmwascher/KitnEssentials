@@ -9,12 +9,10 @@ local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 
-local table_insert = table.insert
-local ipairs = ipairs
 local pcall = pcall
 local tonumber = tonumber
-local math_floor = math.floor
 local tostring = tostring
+local math_floor = math.floor
 
 local GetSpecializationInfo = GetSpecializationInfo
 
@@ -30,7 +28,7 @@ GUIFrame:RegisterContent("SpellAlerts", function(scrollChild, yOffset)
     if not db then return yOffset end
 
     local SA = GetModule()
-    local allWidgets = {}
+    local manager = GUIFrame:CreateWidgetStateManager()
 
     local function ApplyModuleState(enabled)
         if not KitnEssentials then return end
@@ -42,61 +40,55 @@ GUIFrame:RegisterContent("SpellAlerts", function(scrollChild, yOffset)
         end
     end
 
-    local function UpdateAllWidgetStates()
-        local mainEnabled = db.Enabled ~= false
-        for _, widget in ipairs(allWidgets) do
-            if widget.SetEnabled then
-                widget:SetEnabled(mainEnabled)
-            end
-        end
+    local function RefreshStates()
+        manager:UpdateAll(db.Enabled ~= false)
     end
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 1: Enable
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Spell Alert Opacity", yOffset)
 
-    local row1 = GUIFrame:CreateRow(card1.content, 40)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Spell Alert Opacity", db.Enabled ~= false,
-        function(checked)
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Spell Alert Opacity", {
+        value = db.Enabled ~= false,
+        callback = function(checked)
             ApplyModuleState(checked)
-            UpdateAllWidgetStates()
+            RefreshStates()
         end,
-        true, "Spell Alert Opacity", "On", "Off")
+        msgPopup = true,
+        msgText = "Spell Alert Opacity",
+        msgOn = "On",
+        msgOff = "Off",
+    })
     row1:AddWidget(enableCheck, 1)
-    card1:AddRow(row1, 40)
+    card1:AddRow(row1, Theme.rowHeight)
 
-    local noteHeight = 40
-    local noteRow = GUIFrame:CreateRow(card1.content, noteHeight)
+    local noteRow = GUIFrame:CreateRow(card1.content, 40)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " Toggles Blizzard's spell activation overlay (proc flashes) per spec.",
-        noteHeight, "hide")
+        40, "hide")
     noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, noteHeight)
+    card1:AddRow(noteRow, 40, 0)
 
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+    yOffset = card1:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 2: Per-spec toggles
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local numSpecs = _G.GetNumSpecializations and _G.GetNumSpecializations() or 0
     if numSpecs > 0 then
         local card2 = GUIFrame:CreateCard(scrollChild, "Enable Alerts per Spec", yOffset)
-        table_insert(allWidgets, card2)
+        manager:Register(card2, "all")
 
-        if not db.EnabledSpecs then
-            db.EnabledSpecs = {}
-        end
+        if not db.EnabledSpecs then db.EnabledSpecs = {} end
 
-        -- All specs on a single horizontal row with the spec icon inline before
-        -- the name. For 3-spec classes that's 1x3, 2-spec is 1x2, druid is 1x4.
-        -- We post-shift the label and toggle within each cell for some
-        -- breathing room: icon nudged right, toggle dropped lower below the
-        -- label so the spec name and the checkbox aren't crowded together.
-        local LABEL_INDENT = 8   -- horizontal nudge of icon+name
-        local TOGGLE_GAP   = 18  -- y-offset of toggle below row top (default 14)
-        local specRow = GUIFrame:CreateRow(card2.content, 40)
+        -- Single horizontal row: spec icon + name on top, toggle below.
+        -- Manual re-anchoring of checkbox internals for breathing room.
+        local LABEL_INDENT = 8
+        local TOGGLE_GAP = 18
+        local specRow = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
         for i = 1, numSpecs do
             local _, specName, _, specIcon = GetSpecializationInfo(i)
             if specName then
@@ -105,14 +97,19 @@ GUIFrame:RegisterContent("SpellAlerts", function(scrollChild, yOffset)
                     label = "|T" .. specIcon .. ":16:16:0:0:64:64:5:59:5:59|t " .. specName
                 end
                 local current = db.EnabledSpecs[i] ~= false  -- default ON
-                local specCheck = GUIFrame:CreateCheckbox(specRow, label, current,
-                    function(checked)
+                local specCheck = GUIFrame:CreateCheckbox(specRow, label, {
+                    value = current,
+                    callback = function(checked)
                         db.EnabledSpecs[i] = checked
                         if SA and SA.ApplyForCurrentSpec then
                             SA:ApplyForCurrentSpec()
                         end
                     end,
-                    true, specName, "Show", "Hide")
+                    msgPopup = true,
+                    msgText = specName,
+                    msgOn = "Show",
+                    msgOff = "Hide",
+                })
                 if specCheck.label then
                     specCheck.label:ClearAllPoints()
                     specCheck.label:SetPoint("TOPLEFT", specCheck, "TOPLEFT", LABEL_INDENT, 1)
@@ -122,34 +119,35 @@ GUIFrame:RegisterContent("SpellAlerts", function(scrollChild, yOffset)
                     specCheck.toggle:SetPoint("TOPLEFT", specCheck, "TOPLEFT", LABEL_INDENT, -TOGGLE_GAP)
                 end
                 specRow:AddWidget(specCheck, 1 / numSpecs)
-                table_insert(allWidgets, specCheck)
+                manager:Register(specCheck, "all")
             end
         end
-        card2:AddRow(specRow, 40)
+        card2:AddRow(specRow, Theme.rowHeightLast, 0)
 
-        yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
+        yOffset = card2:GetNextOffset()
     end
 
-    ---------------------------------------------------------------------------------
-    -- Card 3: Spell Alert Opacity
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
+    -- Card 3: Opacity (CVar slider)
+    ----------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Opacity", yOffset)
-    table_insert(allWidgets, card3)
+    manager:Register(card3, "all")
 
     local currentOpacity = tonumber(C_CVar.GetCVar("spellActivationOverlayOpacity")) or 0.65
-    local row3 = GUIFrame:CreateRow(card3.content, 40)
-    local opacitySlider = GUIFrame:CreateSlider(row3, "Opacity", 0, 100, 5,
-        math_floor(currentOpacity * 100), nil,
-        function(val)
+    local row3 = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
+    local opacitySlider = GUIFrame:CreateSlider(row3, "Opacity", {
+        min = 0, max = 100, step = 5,
+        value = math_floor(currentOpacity * 100),
+        callback = function(val)
             pcall(C_CVar.SetCVar, "spellActivationOverlayOpacity", tostring(val / 100))
-        end)
+        end,
+    })
     row3:AddWidget(opacitySlider, 1)
-    table_insert(allWidgets, opacitySlider)
-    card3:AddRow(row3, 40)
+    manager:Register(opacitySlider, "all")
+    card3:AddRow(row3, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
+    yOffset = card3:GetNextOffset()
 
-    UpdateAllWidgetStates()
-    yOffset = yOffset - Theme.paddingSmall
+    RefreshStates()
     return yOffset
 end)

@@ -382,7 +382,7 @@ function KE:CreateSoftOutline(mainText, options)
         existingOutline.alpha = options.alpha or existingOutline.alpha or 0.9
         existingOutline.thickness = options.thickness or existingOutline.thickness or 1
 
-        local font, size, flags = mainText:GetFont()
+        local font, size = mainText:GetFont()
         font = (font and font ~= "") and font or options.fontPath or "Fonts\\FRIZQT__.TTF"
         size = (size and size > 0) and size or options.fontSize or 14
 
@@ -408,7 +408,7 @@ function KE:CreateSoftOutline(mainText, options)
     mainText:SetShadowColor(0, 0, 0, 0)
     mainText:SetShadowOffset(0, 0)
 
-    local font, size, flags = mainText:GetFont()
+    local font, size = mainText:GetFont()
     font = (font and font ~= "") and font or options.fontPath or "Fonts\\FRIZQT__.TTF"
     size = (size and size > 0) and size or options.fontSize or 14
 

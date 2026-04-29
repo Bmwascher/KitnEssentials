@@ -253,8 +253,8 @@ function TSP:ApplySettings()
     KE:ApplyFontToText(self.text, db.FontFace, db.FontSize, db.FontOutline)
 
     -- Apply text color
-    local textColor = db.TextColor or { 1, 1, 1, 1 }
-    self.text:SetTextColor(textColor[1], textColor[2], textColor[3], textColor[4] or 1)
+    local tr, tg, tb, ta = KE:ResolveColor(db.TextColor, { 1, 1, 1, 1 })
+    self.text:SetTextColor(tr, tg, tb, ta)
 
     if showText then
         self.text:Show()
@@ -274,8 +274,8 @@ function TSP:ApplySettings()
         local showTimer = self.db.ShowTimer ~= false
         KE:ApplyFontToText(self.timerText, self.db.TimerFontFace, self.db.TimerFontSize, self.db.TimerFontOutline)
 
-        local timerColor = self.db.TimerTextColor or { 1, 1, 1, 1 }
-        self.timerText:SetTextColor(timerColor[1], timerColor[2], timerColor[3], timerColor[4] or 1)
+        local tcr, tcg, tcb, tca = KE:ResolveColor(self.db.TimerTextColor, { 1, 1, 1, 1 })
+        self.timerText:SetTextColor(tcr, tcg, tcb, tca)
 
         if showTimer then
             self.timerText:Show()
@@ -306,7 +306,7 @@ end
 function TSP:ApplyPosition()
     if not self.db.Enabled then return end
     if not self.frame then return end
-    KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
+    KE:ApplyFramePositionWithSnap(self.frame, self.db.Position, self.db)
 end
 
 ---------------------------------------------------------------------------------
@@ -424,7 +424,7 @@ function TSP:RegWithEditMode()
         KE.EditMode:RegisterElement({
             key = "TimeSpiral", displayName = "Time Spiral", frame = self.frame,
             getPosition = function() return self.db.Position end,
-            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePosition(self.frame, self.db.Position, self.db) end,
+            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePositionWithSnap(self.frame, self.db.Position, self.db) end,
             getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
             guiPath = "TimeSpiral",
         })

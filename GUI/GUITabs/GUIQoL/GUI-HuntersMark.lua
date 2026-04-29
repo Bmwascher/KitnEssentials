@@ -9,11 +9,8 @@
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
-local LSM = KE.LSM
-local table_insert = table.insert
-local pairs, ipairs = pairs, ipairs
 
-local function GetHuntersMarkModule()
+local function GetModule()
     if KitnEssentials then
         return KitnEssentials:GetModule("HuntersMark", true)
     end
@@ -24,8 +21,8 @@ GUIFrame:RegisterContent("HuntersMark", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.HuntersMark
     if not db then return yOffset end
 
-    local HM = GetHuntersMarkModule()
-    local allWidgets = {}
+    local HM = GetModule()
+    local manager = GUIFrame:CreateWidgetStateManager()
 
     local function ApplySettings()
         if HM then HM:ApplySettings() end
@@ -38,40 +35,45 @@ GUIFrame:RegisterContent("HuntersMark", function(scrollChild, yOffset)
         else KitnEssentials:DisableModule("HuntersMark") end
     end
 
-    local function UpdateAllWidgetStates()
-        local mainEnabled = db.Enabled ~= false
-        for _, widget in ipairs(allWidgets) do
-            if widget.SetEnabled then widget:SetEnabled(mainEnabled) end
-        end
+    local function RefreshStates()
+        manager:UpdateAll(db.Enabled ~= false)
     end
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 1: Enable
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Hunter's Mark Tracking", yOffset)
 
-    local row1 = GUIFrame:CreateRow(card1.content, 40)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Hunter's Mark Tracking", db.Enabled ~= false,
-        function(checked) db.Enabled = checked; ApplyState(checked); UpdateAllWidgetStates() end,
-        true, "Hunter's Mark Tracking", "On", "Off")
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Hunter's Mark Tracking", {
+        value = db.Enabled ~= false,
+        callback = function(checked)
+            db.Enabled = checked
+            ApplyState(checked)
+            RefreshStates()
+        end,
+        msgPopup = true,
+        msgText = "Hunter's Mark Tracking",
+        msgOn = "On",
+        msgOff = "Off",
+    })
     row1:AddWidget(enableCheck, 1)
-    card1:AddRow(row1, 40)
+    card1:AddRow(row1, Theme.rowHeight)
 
-    local noteHeight = 40
-    local noteRow = GUIFrame:CreateRow(card1.content, noteHeight)
+    local noteRow = GUIFrame:CreateRow(card1.content, 40)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " This module only works inside raid instances and while out of combat.",
-        noteHeight, "hide")
+        40, "hide")
     noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, noteHeight)
+    card1:AddRow(noteRow, 40, 0)
 
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+    yOffset = card1:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 2: Position Settings
-    ---------------------------------------------------------------------------------
-    local card2, newOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+    ----------------------------------------------------------------
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = db,
         dbKeys = {
             anchorFrameType = "anchorFrameType",
@@ -87,70 +89,48 @@ GUIFrame:RegisterContent("HuntersMark", function(scrollChild, yOffset)
         onChangeCallback = ApplySettings,
     })
 
-    if card2.positionWidgets then
-        for _, widget in ipairs(card2.positionWidgets) do
-            table_insert(allWidgets, widget)
-        end
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
     end
-    table_insert(allWidgets, card2)
-    yOffset = newOffset
+    manager:Register(posCard, "all")
+    yOffset = posOffset
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 3: Font Settings
-    ---------------------------------------------------------------------------------
-    local card3 = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
-    table_insert(allWidgets, card3)
-
-    local fontList = {}
-    if LSM then
-        for name in pairs(LSM:HashTable("font")) do fontList[name] = name end
-    else
-        fontList["Friz Quadrata TT"] = "Friz Quadrata TT"
+    ----------------------------------------------------------------
+    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        db = db,
+        dbKeys = {
+            fontFace = "FontFace",
+            fontSize = "FontSize",
+            fontOutline = "FontOutline",
+        },
+        includeSoftOutline = true,
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(fontCard, "all")
+    if fontWidgets then
+        manager:RegisterGroup(fontWidgets, "all")
     end
+    yOffset = fontOffset
 
-    local row3a = GUIFrame:CreateRow(card3.content, 40)
-    local fontDropdown = GUIFrame:CreateDropdown(row3a, "Font", fontList, db.FontFace or "Expressway", 30,
-        function(key) db.FontFace = key; ApplySettings() end)
-    row3a:AddWidget(fontDropdown, 0.5)
-    table_insert(allWidgets, fontDropdown)
-
-    local fontSizeSlider = GUIFrame:CreateSlider(card3.content, "Font Size", 8, 72, 1, db.FontSize or 16, 60,
-        function(val) db.FontSize = val; ApplySettings() end)
-    row3a:AddWidget(fontSizeSlider, 0.5)
-    table_insert(allWidgets, fontSizeSlider)
-    card3:AddRow(row3a, 40)
-
-    local row3b = GUIFrame:CreateRow(card3.content, 37)
-    local outlineList = {
-        { key = "NONE", text = "None" },
-        { key = "OUTLINE", text = "Outline" },
-        { key = "THICKOUTLINE", text = "Thick" },
-        { key = "SOFTOUTLINE", text = "Soft" },
-    }
-    local outlineDropdown = GUIFrame:CreateDropdown(row3b, "Outline", outlineList, db.FontOutline or "OUTLINE", 45,
-        function(key) db.FontOutline = key; ApplySettings() end)
-    row3b:AddWidget(outlineDropdown, 1)
-    table_insert(allWidgets, outlineDropdown)
-    card3:AddRow(row3b, 37)
-
-    yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
-
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 4: Colors
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
-    table_insert(allWidgets, card4)
+    manager:Register(card4, "all")
 
-    local row4 = GUIFrame:CreateRow(card4.content, 40)
-    local colorPicker = GUIFrame:CreateColorPicker(row4, "Alert Color", db.Color or { 1, 0.82, 0, 1 },
-        function(r, g, b, a) db.Color = { r, g, b, a }; ApplySettings() end)
+    local row4 = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
+    local colorPicker = GUIFrame:CreateColorPicker(row4, "Alert Color", {
+        color = db.Color or { 1, 0.82, 0, 1 },
+        callback = function(r, g, b, a) db.Color = { r, g, b, a }; ApplySettings() end,
+    })
     row4:AddWidget(colorPicker, 1)
-    table_insert(allWidgets, colorPicker)
-    card4:AddRow(row4, 40)
+    manager:Register(colorPicker, "all")
+    card4:AddRow(row4, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
+    yOffset = card4:GetNextOffset()
 
-    UpdateAllWidgetStates()
-    yOffset = yOffset - Theme.paddingSmall
+    RefreshStates()
     return yOffset
 end)

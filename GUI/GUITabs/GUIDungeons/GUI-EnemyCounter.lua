@@ -9,15 +9,15 @@
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme    = KE.Theme
-local LSM      = KE.LSM or LibStub("LibSharedMedia-3.0", true)
-local table_insert = table.insert
 
 GUIFrame:RegisterContent("EnemyCounter", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.Dungeons.EnemyCounter
     if not db then return yOffset end
 
-    local allWidgets = {}
-    local customColorWidgets = {}
+    local manager = GUIFrame:CreateWidgetStateManager()
+    manager:SetCondition("customColor", function()
+        return (db.ColorMode or "custom") == "custom"
+    end)
 
     local function ApplySettings()
         local mod = KitnEssentials and KitnEssentials:GetModule("EnemyCounter", true)
@@ -36,83 +36,88 @@ GUIFrame:RegisterContent("EnemyCounter", function(scrollChild, yOffset)
         end
     end
 
-    local function UpdateAllWidgetStates()
-        local mainEnabled = db.Enabled ~= false
-        local isCustomColor = (db.ColorMode or "custom") == "custom"
-        for _, widget in ipairs(allWidgets) do
-            if widget.SetEnabled then widget:SetEnabled(mainEnabled) end
-        end
-        if mainEnabled then
-            for _, widget in ipairs(customColorWidgets) do
-                if widget.SetEnabled then widget:SetEnabled(isCustomColor) end
-            end
-        end
+    local function RefreshStates()
+        manager:UpdateAll(db.Enabled ~= false)
     end
 
-    ---------------------------------------------------------------------------------
-    -- Card 1: Enable + Text
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
+    -- Card 1: Enable
+    ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Enemy Counter", yOffset)
 
-    -- Enable toggle
-    local row1a = GUIFrame:CreateRow(card1.content, 36)
-    local enableCheck = GUIFrame:CreateCheckbox(row1a,
-        "Enable Enemy Counter", db.Enabled ~= false,
-        function(checked)
+    local row1a = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local enableCheck = GUIFrame:CreateCheckbox(row1a, "Enable Enemy Counter", {
+        value = db.Enabled ~= false,
+        callback = function(checked)
             db.Enabled = checked
             ApplyModuleState(checked)
-            UpdateAllWidgetStates()
+            RefreshStates()
         end,
-        true, "Enemy Counter", "On", "Off"
-    )
-    row1a:AddWidget(enableCheck, 0.5)
+        msgPopup = true,
+        msgText = "Enemy Counter",
+        msgOn = "On",
+        msgOff = "Off",
+    })
+    row1a:AddWidget(enableCheck, 1)
+    card1:AddRow(row1a, Theme.rowHeight)
 
-    local combatCheck = GUIFrame:CreateCheckbox(row1a,
-        "Combat Only", db.CombatOnly,
-        function(checked)
+    local noteRow = GUIFrame:CreateRow(card1.content, 50)
+    local noteText = GUIFrame:CreateText(noteRow,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " Shows the number of attackable enemies currently visible on nameplates.\n" ..
+        KE:ColorTextByTheme("-") .. " Useful for pull sizing in M+ and group content.",
+        50, "hide")
+    noteRow:AddWidget(noteText, 1)
+    card1:AddRow(noteRow, 50, 0)
+
+    yOffset = card1:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 2: General Settings
+    ----------------------------------------------------------------
+    local cardGen = GUIFrame:CreateCard(scrollChild, "General Settings", yOffset)
+    manager:Register(cardGen, "all")
+
+    local rowGen1 = GUIFrame:CreateRow(cardGen.content, Theme.rowHeight)
+    local combatCheck = GUIFrame:CreateCheckbox(rowGen1, "Combat Only", {
+        value = db.CombatOnly,
+        callback = function(checked)
             db.CombatOnly = checked
             ApplySettings()
-        end
-    )
-    row1a:AddWidget(combatCheck, 0.5)
-    table_insert(allWidgets, combatCheck)
-    card1:AddRow(row1a, 36)
+        end,
+    })
+    rowGen1:AddWidget(combatCheck, 1)
+    manager:Register(combatCheck, "all")
+    cardGen:AddRow(rowGen1, Theme.rowHeight)
 
-    -- Separator
-    local row1sep = GUIFrame:CreateRow(card1.content, 8)
-    local sep1 = GUIFrame:CreateSeparator(row1sep)
-    row1sep:AddWidget(sep1, 1)
-    table_insert(allWidgets, sep1)
-    card1:AddRow(row1sep, 8)
-
-    -- Show prefix toggle + prefix text
-    local row1b = GUIFrame:CreateRow(card1.content, 40)
-    local prefixCheck = GUIFrame:CreateCheckbox(row1b,
-        "Show Prefix", db.ShowPrefix ~= false,
-        function(checked)
+    local rowGen2 = GUIFrame:CreateRow(cardGen.content, Theme.rowHeightLast)
+    local prefixCheck = GUIFrame:CreateCheckbox(rowGen2, "Show Prefix", {
+        value = db.ShowPrefix ~= false,
+        callback = function(checked)
             db.ShowPrefix = checked
             ApplySettings()
-        end
-    )
-    row1b:AddWidget(prefixCheck, 0.35)
-    table_insert(allWidgets, prefixCheck)
+        end,
+    })
+    rowGen2:AddWidget(prefixCheck, 0.35)
+    manager:Register(prefixCheck, "all")
 
-    local prefixBox = GUIFrame:CreateEditBox(row1b, "Prefix Text",
-        db.Prefix or "Enemies:",
-        function(text)
+    local prefixBox = GUIFrame:CreateEditBox(rowGen2, "Prefix Text", {
+        value = db.Prefix or "Enemies:",
+        callback = function(text)
             db.Prefix = text
             ApplySettings()
-        end)
-    row1b:AddWidget(prefixBox, 0.65)
-    table_insert(allWidgets, prefixBox)
-    card1:AddRow(row1b, 40)
+        end,
+    })
+    rowGen2:AddWidget(prefixBox, 0.65)
+    manager:Register(prefixBox, "all")
+    cardGen:AddRow(rowGen2, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+    yOffset = cardGen:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 2: Position Settings
-    ---------------------------------------------------------------------------------
-    local card2, newOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+    ----------------------------------------------------------------
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = db,
         dbKeys = {
             anchorFrameType = "anchorFrameType",
@@ -129,98 +134,63 @@ GUIFrame:RegisterContent("EnemyCounter", function(scrollChild, yOffset)
         onChangeCallback    = ApplySettings,
     })
 
-    if card2.positionWidgets then
-        for _, widget in ipairs(card2.positionWidgets) do
-            table_insert(allWidgets, widget)
-        end
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
     end
-    table_insert(allWidgets, card2)
-    yOffset = newOffset
+    manager:Register(posCard, "all")
+    yOffset = posOffset
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 3: Font Settings
-    ---------------------------------------------------------------------------------
-    local card3 = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
-    table_insert(allWidgets, card3)
-
-    local fontList = {}
-    if LSM then
-        for name in pairs(LSM:HashTable("font")) do fontList[name] = name end
-    else
-        fontList["Friz Quadrata TT"] = "Friz Quadrata TT"
+    ----------------------------------------------------------------
+    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        db = db,
+        dbKeys = {
+            fontFace = "FontFace",
+            fontSize = "FontSize",
+            fontOutline = "FontOutline",
+        },
+        includeSoftOutline = true,
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(fontCard, "all")
+    if fontWidgets then
+        manager:RegisterGroup(fontWidgets, "all")
     end
+    yOffset = fontOffset
 
-    local row3a = GUIFrame:CreateRow(card3.content, 40)
-    local fontDropdown = GUIFrame:CreateDropdown(row3a, "Font", fontList,
-        db.FontFace or "Expressway", 30,
-        function(key)
-            db.FontFace = key
-            ApplySettings()
-        end)
-    row3a:AddWidget(fontDropdown, 0.5)
-    table_insert(allWidgets, fontDropdown)
-
-    local fontSizeSlider = GUIFrame:CreateSlider(row3a, "Font Size", 8, 72, 1,
-        db.FontSize or 20, 60,
-        function(val)
-            db.FontSize = val
-            ApplySettings()
-        end)
-    row3a:AddWidget(fontSizeSlider, 0.5)
-    table_insert(allWidgets, fontSizeSlider)
-    card3:AddRow(row3a, 40)
-
-    local row3b = GUIFrame:CreateRow(card3.content, 37)
-    local outlineList = {
-        { key = "NONE",         text = "None"  },
-        { key = "OUTLINE",      text = "Outline" },
-        { key = "THICKOUTLINE", text = "Thick" },
-        { key = "SOFTOUTLINE",  text = "Soft"  },
-    }
-    local outlineDropdown = GUIFrame:CreateDropdown(row3b, "Outline", outlineList,
-        db.FontOutline or "OUTLINE", 45,
-        function(key)
-            db.FontOutline = key
-            ApplySettings()
-        end)
-    row3b:AddWidget(outlineDropdown, 1)
-    table_insert(allWidgets, outlineDropdown)
-    card3:AddRow(row3b, 37)
-
-    yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
-
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 4: Colors
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
-    table_insert(allWidgets, card4)
+    manager:Register(card4, "all")
 
-    local row4a = GUIFrame:CreateRow(card4.content, 40)
-    local colorModeDropdown = GUIFrame:CreateDropdown(row4a, "Color Mode", KE.ColorModeOptions,
-        db.ColorMode or "custom", 70,
-        function(key)
+    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
+    local colorModeDropdown = GUIFrame:CreateDropdown(row4a, "Color Mode", {
+        options = KE.ColorModeOptions,
+        value = db.ColorMode or "custom",
+        callback = function(key)
             db.ColorMode = key
             ApplySettings()
-            UpdateAllWidgetStates()
-        end)
+            RefreshStates()
+        end,
+    })
     row4a:AddWidget(colorModeDropdown, 0.5)
-    table_insert(allWidgets, colorModeDropdown)
+    manager:Register(colorModeDropdown, "all")
 
-    local colorPicker = GUIFrame:CreateColorPicker(row4a, "Custom Color",
-        db.Color or { 1, 1, 1, 1 },
-        function(r, g, b, a)
+    local colorPicker = GUIFrame:CreateColorPicker(row4a, "Custom Color", {
+        color = db.Color or { 1, 1, 1, 1 },
+        callback = function(r, g, b, a)
             db.Color = { r, g, b, a }
             ApplySettings()
-        end)
+        end,
+    })
     row4a:AddWidget(colorPicker, 0.5)
-    table_insert(allWidgets, colorPicker)
-    table_insert(customColorWidgets, colorPicker)
-    card4:AddRow(row4a, 40)
+    manager:Register(colorPicker, "customColor")
+    card4:AddRow(row4a, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
+    yOffset = card4:GetNextOffset()
 
-    -- Apply initial widget states
-    UpdateAllWidgetStates()
-    yOffset = yOffset - Theme.paddingSmall
+    RefreshStates()
     return yOffset
 end)

@@ -11,11 +11,8 @@ local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
 
--- Local references
-local table_insert = table.insert
-local ipairs = ipairs
+local pairs = pairs
 
--- Helper to get module
 local function GetWDFModule()
     if KitnEssentials then
         return KitnEssentials:GetModule("WarpDepleteForces", true)
@@ -23,19 +20,21 @@ local function GetWDFModule()
     return nil
 end
 
----------------------------------------------------------------------------------
--- Content Registration
----------------------------------------------------------------------------------
-
 GUIFrame:RegisterContent("WarpDepleteForces", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.Dungeons.WarpDepleteForces
     if not db then return yOffset end
 
     local WDF = GetWDFModule()
-    local allWidgets = {}
-    local nameplateWidgets = {}
-    local nameplateCustomColorWidgets = {}
     local warpDepleteLoaded = WarpDeplete ~= nil
+
+    local manager = GUIFrame:CreateWidgetStateManager()
+    manager:SetCondition("nameplate", function()
+        return db.NameplatePercent == true
+    end)
+    manager:SetCondition("nameplateCustomColor", function()
+        return db.NameplatePercent == true
+            and (db.NameplateColorMode or "theme") == "custom"
+    end)
 
     local function ApplySettings()
         if WDF and WDF.ApplySettings then WDF:ApplySettings() end
@@ -51,27 +50,17 @@ GUIFrame:RegisterContent("WarpDepleteForces", function(scrollChild, yOffset)
         end
     end
 
-    local function UpdateAllWidgetStates()
+    local function RefreshStates()
         local mainEnabled = db.Enabled ~= false and warpDepleteLoaded
-        for _, widget in ipairs(allWidgets) do
-            if widget.SetEnabled then widget:SetEnabled(mainEnabled) end
-        end
-        local nameplateEnabled = mainEnabled and db.NameplatePercent == true
-        for _, widget in ipairs(nameplateWidgets) do
-            if widget.SetEnabled then widget:SetEnabled(nameplateEnabled) end
-        end
-        local isCustomColor = (db.NameplateColorMode or "theme") == "custom"
-        for _, widget in ipairs(nameplateCustomColorWidgets) do
-            if widget.SetEnabled then widget:SetEnabled(nameplateEnabled and isCustomColor) end
-        end
+        manager:UpdateAll(mainEnabled)
     end
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 1: WarpDeplete+
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "WarpDeplete+", yOffset)
 
-    -- WarpDeplete status
+    -- WarpDeplete status (no SetEnabled — display-only)
     local row0 = GUIFrame:CreateRow(card1.content, 20)
     local statusColor = warpDepleteLoaded and "|cff00ff00" or "|cffff0000"
     local statusText = warpDepleteLoaded and "Detected" or "Not Found"
@@ -82,44 +71,47 @@ GUIFrame:RegisterContent("WarpDepleteForces", function(scrollChild, yOffset)
     row0:AddWidget(noteWidget, 1)
     card1:AddRow(row0, 20)
 
-    -- Separator
-    local row0sep = GUIFrame:CreateRow(card1.content, 8)
+    local row0sep = GUIFrame:CreateRow(card1.content, Theme.rowHeightSeparator)
     local sep0 = GUIFrame:CreateSeparator(row0sep)
     row0sep:AddWidget(sep0, 1)
-    card1:AddRow(row0sep, 8)
+    card1:AddRow(row0sep, Theme.rowHeightSeparator)
 
-    -- Enable + Tooltip toggles (same row)
-    local row1 = GUIFrame:CreateRow(card1.content, 40)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable WarpDeplete+", db.Enabled ~= false,
-        function(checked)
+    -- Enable + Tooltip toggles
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable WarpDeplete+", {
+        value = db.Enabled ~= false,
+        callback = function(checked)
             if not warpDepleteLoaded then checked = false end
             db.Enabled = checked
             ApplyModuleState(checked)
-            UpdateAllWidgetStates()
+            RefreshStates()
         end,
-        true, "WarpDeplete+", "On", "Off"
-    )
+        msgPopup = true,
+        msgText = "WarpDeplete+",
+        msgOn = "On",
+        msgOff = "Off",
+    })
     row1:AddWidget(enableCheck, 0.5)
 
-    local tooltipCheck = GUIFrame:CreateCheckbox(row1, "Enemy Count on Tooltip", db.Tooltip ~= false,
-        function(checked)
+    local tooltipCheck = GUIFrame:CreateCheckbox(row1, "Enemy Count on Tooltip", {
+        value = db.Tooltip ~= false,
+        callback = function(checked)
             db.Tooltip = checked
             -- ApplySettings mirrors this to WarpDeplete.db.profile.show-
             -- TooltipCount (inverted) so WD's 5.1.0+ tooltip auto-toggles
             -- off when ours is on and vice-versa.
             ApplySettings()
-        end
-    )
+        end,
+    })
     row1:AddWidget(tooltipCheck, 0.5)
-    table_insert(allWidgets, tooltipCheck)
-    card1:AddRow(row1, 40)
+    manager:Register(tooltipCheck, "all")
+    card1:AddRow(row1, Theme.rowHeight)
 
-    -- Separator
-    local row1sep = GUIFrame:CreateRow(card1.content, 8)
+    local row1sep = GUIFrame:CreateRow(card1.content, Theme.rowHeightSeparator)
     local sep1 = GUIFrame:CreateSeparator(row1sep)
     row1sep:AddWidget(sep1, 1)
-    table_insert(allWidgets, sep1)
-    card1:AddRow(row1sep, 8)
+    manager:Register(sep1, "all")
+    card1:AddRow(row1sep, Theme.rowHeightSeparator)
 
     -- Info text
     local infoLines = {
@@ -127,58 +119,57 @@ GUIFrame:RegisterContent("WarpDepleteForces", function(scrollChild, yOffset)
         "Optional % overlay on nameplates (M+ only).",
         "Fixes WarpDeplete death tooltip + class colors.",
     }
-    local rowHeight = 80
-    local row3 = GUIFrame:CreateRow(card1.content, rowHeight)
+    local infoHeight = 80
+    local row3 = GUIFrame:CreateRow(card1.content, infoHeight)
     local infoWidget = GUIFrame:CreateText(
         row3,
         KE:ColorTextByTheme("How It Works"),
         function() return infoLines end,
-        rowHeight,
+        infoHeight,
         "hide"
     )
     row3:AddWidget(infoWidget, 1)
-    table_insert(allWidgets, infoWidget)
-    card1:AddRow(row3, rowHeight)
+    manager:Register(infoWidget, "all")
+    card1:AddRow(row3, infoHeight, 0)
 
-    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+    yOffset = card1:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 2: Nameplate % — Enable
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Nameplate %", yOffset)
+    manager:Register(card2, "all")
 
-    local row2 = GUIFrame:CreateRow(card2.content, 40)
-    local nameplateCheck = GUIFrame:CreateCheckbox(row2, "Show % on Nameplates",
-        db.NameplatePercent == true,
-        function(checked)
+    local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local nameplateCheck = GUIFrame:CreateCheckbox(row2, "Show % on Nameplates", {
+        value = db.NameplatePercent == true,
+        callback = function(checked)
             db.NameplatePercent = checked
             ApplySettings()
-            UpdateAllWidgetStates()
-        end
-    )
+            RefreshStates()
+        end,
+    })
     row2:AddWidget(nameplateCheck, 0.5)
-    table_insert(allWidgets, nameplateCheck)
+    manager:Register(nameplateCheck, "all")
 
-    local combatOnlyCheck = GUIFrame:CreateCheckbox(row2, "Only in Combat",
-        db.NameplateCombatOnly ~= false,
-        function(checked)
+    local combatOnlyCheck = GUIFrame:CreateCheckbox(row2, "Only in Combat", {
+        value = db.NameplateCombatOnly ~= false,
+        callback = function(checked)
             db.NameplateCombatOnly = checked
             ApplySettings()
-        end
-    )
+        end,
+    })
     row2:AddWidget(combatOnlyCheck, 0.5)
-    table_insert(allWidgets, combatOnlyCheck)
-    table_insert(nameplateWidgets, combatOnlyCheck)
-    card2:AddRow(row2, 40)
+    manager:Register(combatOnlyCheck, "nameplate")
+    card2:AddRow(row2, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
+    yOffset = card2:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 3: Nameplate % — Position
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Nameplate % — Position", yOffset)
-    table_insert(allWidgets, card3)
-    table_insert(nameplateWidgets, card3)
+    manager:Register(card3, "nameplate")
 
     local anchorOptions = {
         { key = "CENTER",      text = "Center"       },
@@ -192,48 +183,53 @@ GUIFrame:RegisterContent("WarpDepleteForces", function(scrollChild, yOffset)
         { key = "BOTTOMRIGHT", text = "Bottom Right" },
     }
 
-    local row3a = GUIFrame:CreateRow(card3.content, 40)
-    local anchorDropdown = GUIFrame:CreateDropdown(row3a, "Anchor", anchorOptions,
-        db.NameplateAnchor or "CENTER", 50,
-        function(key)
+    local row3a = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local anchorDropdown = GUIFrame:CreateDropdown(row3a, "Anchor", {
+        options = anchorOptions,
+        value = db.NameplateAnchor or "CENTER",
+        callback = function(key)
             db.NameplateAnchor = key
             ApplySettings()
-        end)
+        end,
+    })
     row3a:AddWidget(anchorDropdown, 1)
-    table_insert(allWidgets, anchorDropdown)
-    table_insert(nameplateWidgets, anchorDropdown)
-    card3:AddRow(row3a, 40)
+    manager:Register(anchorDropdown, "nameplate")
+    card3:AddRow(row3a, Theme.rowHeight)
 
-    local row3b = GUIFrame:CreateRow(card3.content, 40)
-    local xSlider = GUIFrame:CreateSlider(row3b, "X Offset", -100, 100, 1,
-        db.NameplateXOffset or 25, 60,
-        function(val)
+    local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
+    local xSlider = GUIFrame:CreateSlider(row3b, "X Offset", {
+        min = -100, max = 100, step = 1,
+        value = db.NameplateXOffset or 25,
+        callback = function(val)
             db.NameplateXOffset = val
             ApplySettings()
-        end)
+        end,
+    })
     row3b:AddWidget(xSlider, 0.5)
-    table_insert(allWidgets, xSlider)
-    table_insert(nameplateWidgets, xSlider)
+    manager:Register(xSlider, "nameplate")
 
-    local ySlider = GUIFrame:CreateSlider(row3b, "Y Offset", -100, 100, 1,
-        db.NameplateYOffset or 15, 60,
-        function(val)
+    local ySlider = GUIFrame:CreateSlider(row3b, "Y Offset", {
+        min = -100, max = 100, step = 1,
+        value = db.NameplateYOffset or 15,
+        callback = function(val)
             db.NameplateYOffset = val
             ApplySettings()
-        end)
+        end,
+    })
     row3b:AddWidget(ySlider, 0.5)
-    table_insert(allWidgets, ySlider)
-    table_insert(nameplateWidgets, ySlider)
-    card3:AddRow(row3b, 40)
+    manager:Register(ySlider, "nameplate")
+    card3:AddRow(row3b, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
+    yOffset = card3:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 4: Nameplate % — Font Settings
-    ---------------------------------------------------------------------------------
+    -- (Custom card: WD nameplate uses MONOCHROME outline option, not the
+    -- standard NONE/OUTLINE/THICKOUTLINE/SOFTOUTLINE set, so we don't use
+    -- the shared FontSettingsCard.)
+    ----------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Nameplate % — Font Settings", yOffset)
-    table_insert(allWidgets, card4)
-    table_insert(nameplateWidgets, card4)
+    manager:Register(card4, "nameplate")
 
     local fontList = {}
     if LSM then
@@ -242,83 +238,114 @@ GUIFrame:RegisterContent("WarpDepleteForces", function(scrollChild, yOffset)
         fontList["Friz Quadrata TT"] = "Friz Quadrata TT"
     end
 
-    local row4a = GUIFrame:CreateRow(card4.content, 40)
-    local fontDropdown = GUIFrame:CreateDropdown(row4a, "Font", fontList,
-        db.NameplateFontFace or "Expressway", 30,
-        function(key)
+    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local fontDropdown = GUIFrame:CreateDropdown(row4a, "Font", {
+        options = fontList,
+        value = db.NameplateFontFace or "Expressway",
+        callback = function(key)
             db.NameplateFontFace = key
             ApplySettings()
-        end)
+        end,
+        searchable = true,
+        isFontPreview = true,
+    })
     row4a:AddWidget(fontDropdown, 0.5)
-    table_insert(allWidgets, fontDropdown)
-    table_insert(nameplateWidgets, fontDropdown)
+    manager:Register(fontDropdown, "nameplate")
 
-    local sizeSlider = GUIFrame:CreateSlider(row4a, "Size", 8, 20, 1,
-        db.NameplateFontSize or 11, 40,
-        function(val)
+    local sizeSlider = GUIFrame:CreateSlider(row4a, "Size", {
+        min = 8, max = 20, step = 1,
+        value = db.NameplateFontSize or 11,
+        callback = function(val)
             db.NameplateFontSize = val
             ApplySettings()
-        end)
+        end,
+    })
     row4a:AddWidget(sizeSlider, 0.5)
-    table_insert(allWidgets, sizeSlider)
-    table_insert(nameplateWidgets, sizeSlider)
-    card4:AddRow(row4a, 40)
+    manager:Register(sizeSlider, "nameplate")
+    card4:AddRow(row4a, Theme.rowHeight)
 
-    local row4b = GUIFrame:CreateRow(card4.content, 37)
+    local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
     local outlineList = {
         { key = "NONE",         text = "None"  },
         { key = "OUTLINE",      text = "Outline" },
         { key = "THICKOUTLINE", text = "Thick" },
         { key = "MONOCHROME",   text = "Monochrome" },
     }
-    local outlineDropdown = GUIFrame:CreateDropdown(row4b, "Outline", outlineList,
-        db.NameplateFontOutline or "OUTLINE", 45,
-        function(key)
+    local outlineDropdown = GUIFrame:CreateDropdown(row4b, "Outline", {
+        options = outlineList,
+        value = db.NameplateFontOutline or "OUTLINE",
+        callback = function(key)
             db.NameplateFontOutline = key
             ApplySettings()
-        end)
+        end,
+    })
     row4b:AddWidget(outlineDropdown, 1)
-    table_insert(allWidgets, outlineDropdown)
-    table_insert(nameplateWidgets, outlineDropdown)
-    card4:AddRow(row4b, 37)
+    manager:Register(outlineDropdown, "nameplate")
+    card4:AddRow(row4b, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
+    yOffset = card4:GetNextOffset()
 
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     -- Card 5: Nameplate % — Colors
-    ---------------------------------------------------------------------------------
+    ----------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Nameplate % — Colors", yOffset)
-    table_insert(allWidgets, card5)
-    table_insert(nameplateWidgets, card5)
+    manager:Register(card5, "nameplate")
 
-    local row5 = GUIFrame:CreateRow(card5.content, 40)
-    local colorModeDropdown = GUIFrame:CreateDropdown(row5, "Color Mode", KE.ColorModeOptions,
-        db.NameplateColorMode or "theme", 70,
-        function(key)
+    local row5 = GUIFrame:CreateRow(card5.content, Theme.rowHeightLast)
+    local colorModeDropdown = GUIFrame:CreateDropdown(row5, "Color Mode", {
+        options = KE.ColorModeOptions,
+        value = db.NameplateColorMode or "theme",
+        callback = function(key)
             db.NameplateColorMode = key
             ApplySettings()
-            UpdateAllWidgetStates()
-        end)
+            RefreshStates()
+        end,
+    })
     row5:AddWidget(colorModeDropdown, 0.5)
-    table_insert(allWidgets, colorModeDropdown)
-    table_insert(nameplateWidgets, colorModeDropdown)
+    manager:Register(colorModeDropdown, "nameplate")
 
-    local colorPicker = GUIFrame:CreateColorPicker(row5, "Custom Color",
-        db.NameplateColor or { 1, 1, 1, 1 },
-        function(r, g, b, a)
+    local colorPicker = GUIFrame:CreateColorPicker(row5, "Custom Color", {
+        color = db.NameplateColor or { 1, 1, 1, 1 },
+        callback = function(r, g, b, a)
             db.NameplateColor = { r, g, b, a }
             ApplySettings()
-        end)
+        end,
+    })
     row5:AddWidget(colorPicker, 0.5)
-    table_insert(allWidgets, colorPicker)
-    table_insert(nameplateWidgets, colorPicker)
-    table_insert(nameplateCustomColorWidgets, colorPicker)
-    card5:AddRow(row5, 40)
+    manager:Register(colorPicker, "nameplateCustomColor")
+    card5:AddRow(row5, Theme.rowHeightLast, 0)
 
-    yOffset = yOffset + card5:GetContentHeight() + Theme.paddingSmall
+    yOffset = card5:GetNextOffset()
 
-    -- Apply initial widget states
-    UpdateAllWidgetStates()
-    yOffset = yOffset - Theme.paddingSmall
+    ----------------------------------------------------------------
+    -- Card 6: Instance Reset Announcer
+    ----------------------------------------------------------------
+    local card6 = GUIFrame:CreateCard(scrollChild, "Instance Reset Announcer", yOffset)
+    manager:Register(card6, "all")
+
+    local row6a = GUIFrame:CreateRow(card6.content, Theme.rowHeight)
+    local irEnableCheck = GUIFrame:CreateCheckbox(row6a, "Announce on /reset to party/raid", {
+        value = db.InstanceResetEnabled ~= false,
+        callback = function(checked)
+            db.InstanceResetEnabled = checked
+            ApplySettings()
+        end,
+    })
+    row6a:AddWidget(irEnableCheck, 1)
+    manager:Register(irEnableCheck, "all")
+    card6:AddRow(row6a, Theme.rowHeight)
+
+    local row6b = GUIFrame:CreateRow(card6.content, Theme.rowHeightLast)
+    local irMessageBox = GUIFrame:CreateEditBox(row6b, "Message", {
+        value = db.InstanceResetMessage or "Instance reset!",
+        callback = function(text) db.InstanceResetMessage = text end,
+    })
+    row6b:AddWidget(irMessageBox, 1)
+    manager:Register(irMessageBox, "all")
+    card6:AddRow(row6b, Theme.rowHeightLast, 0)
+
+    yOffset = card6:GetNextOffset()
+
+    RefreshStates()
     return yOffset
 end)

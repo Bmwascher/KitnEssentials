@@ -17,7 +17,6 @@ local CR = KitnEssentials:NewModule("CombatRes", "AceEvent-3.0")
 ---------------------------------------------------------------------------------
 local CreateFrame = CreateFrame
 local UIParent = UIParent
-local pcall = pcall
 local C_Spell = C_Spell
 local tostring = tostring
 local GetTime = GetTime
@@ -186,17 +185,17 @@ function CR:ApplyTextSettings()
     KE:ApplyFontToText(self.frame.bracketOpen, fontName, fontSize, fontOutline)
     KE:ApplyFontToText(self.frame.bracketClose, fontName, fontSize, fontOutline)
 
-    -- Per-element colors from DB
-    local sepColor = db.SeparatorColor or { 1, 1, 1, 1 }
-    local timerColor = db.TimerColor or { 1, 1, 1, 1 }
+    -- Per-element colors from DB (sparse-table-safe via ResolveColor)
+    local sr, sg, sb, sa = KE:ResolveColor(db.SeparatorColor, { 1, 1, 1, 1 })
+    local tr, tg, tb, ta = KE:ResolveColor(db.TimerColor, { 1, 1, 1, 1 })
 
     -- Set separator text and color
     self.frame.separator:SetText(db.Separator or "|")
-    self.frame.separator:SetTextColor(sepColor[1], sepColor[2], sepColor[3], sepColor[4] or 1)
+    self.frame.separator:SetTextColor(sr, sg, sb, sa)
 
     -- Set charge prefix text and color (uses separator color)
     self.frame.CRText:SetText(db.SeparatorCharges or "CR:")
-    self.frame.CRText:SetTextColor(sepColor[1], sepColor[2], sepColor[3], sepColor[4] or 1)
+    self.frame.CRText:SetTextColor(sr, sg, sb, sa)
 
     -- Set bracket text from style
     local bracketStyle = db.BracketStyle or "square"
@@ -210,11 +209,11 @@ function CR:ApplyTextSettings()
         self.frame.bracketOpen:SetText("")
         self.frame.bracketClose:SetText("")
     end
-    self.frame.bracketOpen:SetTextColor(sepColor[1], sepColor[2], sepColor[3], sepColor[4] or 1)
-    self.frame.bracketClose:SetTextColor(sepColor[1], sepColor[2], sepColor[3], sepColor[4] or 1)
+    self.frame.bracketOpen:SetTextColor(sr, sg, sb, sa)
+    self.frame.bracketClose:SetTextColor(sr, sg, sb, sa)
 
     -- Timer text color
-    self.frame.timerText:SetTextColor(timerColor[1], timerColor[2], timerColor[3], timerColor[4] or 1)
+    self.frame.timerText:SetTextColor(tr, tg, tb, ta)
 
     self:UpdateAnchors()
     self:ApplyBackdropSettings()
@@ -247,8 +246,8 @@ function CR:ApplyBackdropSettings()
     end
 
     if backdrop.Enabled then
-        local bgColor = backdrop.Color or { 0, 0, 0, 0.6 }
-        local borderColor = backdrop.BorderColor or { 0, 0, 0, 1 }
+        local bgr, bgg, bgb, bga = KE:ResolveColor(backdrop.Color, { 0, 0, 0, 0.6 })
+        local bdr, bdg, bdb, bda = KE:ResolveColor(backdrop.BorderColor, { 0, 0, 0, 1 })
         local borderSize = backdrop.BorderSize or 1
         self.frame:SetBackdrop({
             bgFile = "Interface\\Buttons\\WHITE8X8",
@@ -258,8 +257,8 @@ function CR:ApplyBackdropSettings()
             edgeSize = borderSize,
             insets = { left = 0, right = 0, top = 0, bottom = 0 },
         })
-        self.frame:SetBackdropColor(bgColor[1], bgColor[2], bgColor[3], bgColor[4] or 0.6)
-        self.frame:SetBackdropBorderColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4] or 1)
+        self.frame:SetBackdropColor(bgr, bgg, bgb, bga)
+        self.frame:SetBackdropBorderColor(bdr, bdg, bdb, bda)
     else
         self.frame:SetBackdropColor(0, 0, 0, 0)
         self.frame:SetBackdropBorderColor(0, 0, 0, 0)
@@ -286,10 +285,10 @@ function CR:Update()
                 self.lastChargeText = "2"
                 self.frame.charge:SetText("2")
             end
-            local ac = self.db.ChargeAvailableColor or DEFAULT_CHARGE_AVAILABLE
             if self.lastChargeColor ~= "available" then
                 self.lastChargeColor = "available"
-                self.frame.charge:SetTextColor(ac[1], ac[2], ac[3], ac[4] or 1)
+                local r, g, b, a = KE:ResolveColor(self.db.ChargeAvailableColor, DEFAULT_CHARGE_AVAILABLE)
+                self.frame.charge:SetTextColor(r, g, b, a)
             end
         else
             self.frame:Hide()
@@ -345,10 +344,13 @@ function CR:Update()
     local colorKey = hasCharges and "available" or "unavailable"
     if colorKey ~= self.lastChargeColor then
         self.lastChargeColor = colorKey
-        local color = hasCharges
-            and (self.db.ChargeAvailableColor or DEFAULT_CHARGE_AVAILABLE)
-            or (self.db.ChargeUnavailableColor or DEFAULT_CHARGE_UNAVAILABLE)
-        self.frame.charge:SetTextColor(color[1], color[2], color[3], color[4] or 1)
+        local r, g, b, a
+        if hasCharges then
+            r, g, b, a = KE:ResolveColor(self.db.ChargeAvailableColor, DEFAULT_CHARGE_AVAILABLE)
+        else
+            r, g, b, a = KE:ResolveColor(self.db.ChargeUnavailableColor, DEFAULT_CHARGE_UNAVAILABLE)
+        end
+        self.frame.charge:SetTextColor(r, g, b, a)
     end
 end
 
@@ -417,7 +419,8 @@ end
 
 function CR:HidePreview()
     self.isPreview = false
-    if not self.db.Enabled and self.frame then
+    if not self.frame then return end
+    if not self.db.Enabled then
         self.frame:Hide()
     end
     self:Update()

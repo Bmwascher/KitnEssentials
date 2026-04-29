@@ -159,8 +159,7 @@ local function UpdateSecondWind(self)
     if not charges then return end
 
     local db = self.db
-    local readyColor = db.Colors and db.Colors.SecondWind or { 0.3, 0.7, 1, 1 }
-    local r, g, b = readyColor[1], readyColor[2], readyColor[3]
+    local r, g, b = KE:ResolveColor(db.Colors and db.Colors.SecondWind, { 0.3, 0.7, 1, 1 })
     local dr, dg, db_ = r * 0.25, g * 0.25, b * 0.25
 
     for index = 1, 3 do
@@ -196,11 +195,9 @@ local function UpdateVigor(self)
     local thrillUp = db.EnableThrillColor ~= false
         and C_UnitAuras.GetAuraDataBySpellName("player", C_Spell.GetSpellName(THRILL_SPELL), "HELPFUL")
     if thrillUp then
-        local color = db.Colors and db.Colors.VigorThrill or { 0.2, 0.8, 0.2, 1 }
-        r, g, b = color[1], color[2], color[3]
+        r, g, b = KE:ResolveColor(db.Colors and db.Colors.VigorThrill, { 0.2, 0.8, 0.2, 1 })
     else
-        local color = db.Colors and db.Colors.Vigor or { 0.898, 0.063, 0.224, 1 }
-        r, g, b = color[1], color[2], color[3]
+        r, g, b = KE:ResolveColor(db.Colors and db.Colors.Vigor, { 0.898, 0.063, 0.224, 1 })
     end
     -- Darkened shade for the empty/unfilled bg (Falcon-style fade).
     local dr, dg, db_ = r * 0.25, g * 0.25, b * 0.25
@@ -309,17 +306,17 @@ function DR:CreateFrames()
     self.container = CreateFrame("Frame", "KE_DragonRidingContainer", self.parent)
     self.container:SetSize(barWidth, (barHeight * 2) + spacing + 20)
 
-    KE:ApplyFramePosition(self.container, db.Position, db)
+    KE:ApplyFramePositionWithSnap(self.container, db.Position, db)
 
     -- Both rows are created up-front; ApplyBarLayout decides which one is on
     -- top, which is on bottom, whether secondWind is hidden, etc.
     self.secondWindFrame = CreateFrame("Frame", nil, self.container)
     self.secondWindFrame:SetHeight(barHeight)
 
-    local swColor = db.Colors and db.Colors.SecondWind or { 0.3, 0.7, 1, 1 }
+    local swr, swg, swb = KE:ResolveColor(db.Colors and db.Colors.SecondWind, { 0.3, 0.7, 1, 1 })
     for i = 1, 3 do
         local pill = CreatePill(self.secondWindFrame, barHeight)
-        pill:SetStatusBarColor(swColor[1], swColor[2], swColor[3])
+        pill:SetStatusBarColor(swr, swg, swb)
         self.secondWindFrame[i] = pill
         if i == 1 then
             pill:SetPoint("LEFT")
@@ -391,9 +388,34 @@ function DR:ApplyBarLayout()
         end
     end
 
+    -- Compute icon footprint upfront so the container can encompass the
+    -- whole visual unit (bars + icon). This makes "center" actually center
+    -- the visual unit and gives EditMode a correctly-sized overlay.
+    local barWidth = db.Width or 252
+    local iconShown = db.ShowSurgeIcon ~= false
+    local iconSize, iconGap = 0, 0
+    if iconShown then
+        local px = KE:GetPixelSize() or 1
+        local rowCount = (db.ShowSecondWind ~= false) and 2 or 1
+        local barsBlockH = barHeight * rowCount + (rowCount > 1 and rowGap or 0)
+        local autoSize = barsBlockH + 2 * px
+        iconSize = (db.SurgeIconAutoSize ~= false) and autoSize
+            or (db.SurgeIconSize or autoSize)
+        iconGap = db.SurgeIconGap or 4
+    end
+    local totalWidth = barWidth + (iconShown and (iconGap + iconSize) or 0)
+    local iconOnLeft = iconShown and db.SurgeIconOnLeft
+
+    -- Anchor bottomRow to one side of the container; explicit width keeps
+    -- the bars at barWidth even though the container is wider when icon
+    -- is shown. (The icon hangs off the opposite side via ApplySurgeIcon.)
     bottomRow:ClearAllPoints()
-    bottomRow:SetPoint("BOTTOMLEFT", self.container, "BOTTOMLEFT", 0, 0)
-    bottomRow:SetPoint("BOTTOMRIGHT", self.container, "BOTTOMRIGHT", 0, 0)
+    if iconOnLeft then
+        bottomRow:SetPoint("BOTTOMRIGHT", self.container, "BOTTOMRIGHT", 0, 0)
+    else
+        bottomRow:SetPoint("BOTTOMLEFT", self.container, "BOTTOMLEFT", 0, 0)
+    end
+    bottomRow:SetWidth(barWidth)
     bottomRow:SetHeight(barHeight)
     bottomRow:Show()
 
@@ -404,24 +426,13 @@ function DR:ApplyBarLayout()
         topRow:SetHeight(barHeight)
     end
 
-    -- Speed text anchors above whichever row is on top (or the only row).
-    -- Shift X by half the icon footprint so the text reads centered over the
-    -- visible (bars + icon) extent, not just the bars themselves.
-    local anchorRow = topRow or bottomRow
-    local speedX = 0
-    if db.ShowSurgeIcon ~= false then
-        local px = KE:GetPixelSize() or 1
-        local rowCount = (db.ShowSecondWind ~= false) and 2 or 1
-        local barsBlockH = barHeight * rowCount + (rowCount > 1 and rowGap or 0)
-        local autoSize = barsBlockH + 2 * px
-        local iconSize = (db.SurgeIconAutoSize ~= false) and autoSize
-            or (db.SurgeIconSize or autoSize)
-        local iconGap = db.SurgeIconGap or 4
-        local shift = (iconSize + iconGap) / 2
-        speedX = db.SurgeIconOnLeft and -shift or shift
-    end
+    -- Speed text centers over the visual unit (which now equals the
+    -- container itself, since the container encompasses bars + icon).
+    local rowsHeight = barHeight * (topRow and 2 or 1) + (topRow and rowGap or 0)
     self.speedText:ClearAllPoints()
-    self.speedText:SetPoint("BOTTOM", anchorRow, "TOP", speedX, 2)
+    self.speedText:SetPoint("BOTTOM", self.container, "BOTTOM", 0, rowsHeight + 2)
+    self.speedText:SetWidth(totalWidth)
+    self.speedText:SetJustifyH("CENTER")
     if db.ShowSpeedText == false then
         self.speedText:Hide()
     else
@@ -431,10 +442,9 @@ function DR:ApplyBarLayout()
     -- Track for ApplySurgeIcon (icon always anchors to the bottom row).
     self._bottomRow = bottomRow
 
-    -- Resize container: rows + gap + speed text headroom (only if shown).
-    local rowsHeight = barHeight * (topRow and 2 or 1) + (topRow and rowGap or 0)
+    -- Resize container to encompass the full visual unit (bars + icon + gap).
     local speedSpace = (db.ShowSpeedText == false) and 0 or 20
-    self.container:SetSize(db.Width or 252, rowsHeight + speedSpace)
+    self.container:SetSize(totalWidth, rowsHeight + speedSpace)
 end
 
 function DR:Refresh()
@@ -446,11 +456,11 @@ function DR:Refresh()
     self:ApplyBarLayout()
 
     -- Update Second Wind pills (color/spacing/size)
-    local swColor = db.Colors and db.Colors.SecondWind or { 0.3, 0.7, 1, 1 }
+    local swr, swg, swb = KE:ResolveColor(db.Colors and db.Colors.SecondWind, { 0.3, 0.7, 1, 1 })
     for i = 1, 3 do
         if self.secondWindFrame[i] then
             self.secondWindFrame[i]:SetHeight(barHeight)
-            self.secondWindFrame[i]:SetStatusBarColor(swColor[1], swColor[2], swColor[3])
+            self.secondWindFrame[i]:SetStatusBarColor(swr, swg, swb)
             if i > 1 then
                 self.secondWindFrame[i]:ClearAllPoints()
                 self.secondWindFrame[i]:SetPoint("LEFT", self.secondWindFrame[i - 1], "RIGHT", spacing, 0)
@@ -528,7 +538,7 @@ end
 
 function DR:ApplyPosition()
     if not self.container then return end
-    KE:ApplyFramePosition(self.container, self.db.Position, self.db)
+    KE:ApplyFramePositionWithSnap(self.container, self.db.Position, self.db)
 end
 
 function DR:ApplySettings()
@@ -551,7 +561,7 @@ function DR:RegWithEditMode()
         KE.EditMode:RegisterElement({
             key = "DragonRiding", displayName = "Dragon Riding", frame = self.container,
             getPosition = function() return self.db.Position end,
-            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePosition(self.container, self.db.Position, self.db) end,
+            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePositionWithSnap(self.container, self.db.Position, self.db) end,
             getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
             guiPath = "DragonRiding",
         })
@@ -613,8 +623,7 @@ function DR:ShowPreview()
     -- Set preview values. Pill 5 demos the recharging state via partial
     -- fill (the dark bg shows through the unfilled portion); pills 1-4
     -- are fully charged; pill 6 is empty.
-    local vColor = self.db.Colors and self.db.Colors.Vigor or { 0.898, 0.063, 0.224 }
-    local vr, vg, vb = vColor[1], vColor[2], vColor[3]
+    local vr, vg, vb = KE:ResolveColor(self.db.Colors and self.db.Colors.Vigor, { 0.898, 0.063, 0.224, 1 })
     local vdr, vdg, vdb = vr * 0.25, vg * 0.25, vb * 0.25
     for i = 1, 6 do
         self.vigorFrame[i].bg:SetColorTexture(vdr, vdg, vdb, 1)
@@ -629,8 +638,7 @@ function DR:ShowPreview()
         end
     end
 
-    local swColor = self.db.Colors and self.db.Colors.SecondWind or { 0.3, 0.7, 1 }
-    local sr, sg, sb = swColor[1], swColor[2], swColor[3]
+    local sr, sg, sb = KE:ResolveColor(self.db.Colors and self.db.Colors.SecondWind, { 0.3, 0.7, 1, 1 })
     local sdr, sdg, sdb = sr * 0.25, sg * 0.25, sb * 0.25
     for i = 1, 3 do
         self.secondWindFrame[i].bg:SetColorTexture(sdr, sdg, sdb, 1)

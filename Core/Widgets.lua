@@ -9,8 +9,6 @@
 local KE = select(2, ...)
 
 local CreateFrame = CreateFrame
-local UIFrameFadeIn = UIFrameFadeIn
-local UIFrameFadeOut = UIFrameFadeOut
 local C_Timer = C_Timer
 local UIParent = UIParent
 local type = type
@@ -612,10 +610,10 @@ function KE:ApplyBackdrop(frame, backdropConfig)
             edgeSize = borderSize,
             insets = { left = 0, right = 0, top = 0, bottom = 0 },
         })
-        local bgColor = backdropConfig.Color or { 0, 0, 0, 0.6 }
-        local borderColor = backdropConfig.BorderColor or { 0, 0, 0, 1 }
-        frame:SetBackdropColor(bgColor[1], bgColor[2], bgColor[3], bgColor[4] or 0.6)
-        frame:SetBackdropBorderColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4] or 1)
+        local bgr, bgg, bgb, bga = KE:ResolveColor(backdropConfig.Color, { 0, 0, 0, 0.6 })
+        local bdr, bdg, bdb, bda = KE:ResolveColor(backdropConfig.BorderColor, { 0, 0, 0, 1 })
+        frame:SetBackdropColor(bgr, bgg, bgb, bga)
+        frame:SetBackdropBorderColor(bdr, bdg, bdb, bda)
     else
         frame:SetBackdrop(nil)
     end
@@ -634,12 +632,12 @@ function KE:ApplyIconZoom(tex, zoom)
 end
 
 function KE:AddIconBorders(frame, color)
-    color = color or { 0, 0, 0, 1 }
+    local r, g, b, a = self:ResolveColor(color, { 0, 0, 0, 1 })
     frame.borders = {}
 
     local function MakeBorder(point1, rel1, point2, rel2, w, h)
         local tex = frame:CreateTexture(nil, "OVERLAY", nil, 7)
-        tex:SetColorTexture(unpack(color))
+        tex:SetColorTexture(r, g, b, a)
         tex:SetTexelSnappingBias(0)
         tex:SetSnapToPixelGrid(false)
         tex:SetPoint(point1, frame, rel1, 0, 0)
@@ -662,14 +660,14 @@ end
 
 function KE:AddBorders(frame, color, borderParent)
     if not frame then return end
-    color = color or { 0, 0, 0, 1 }
+    local cr, cg, cb, ca = self:ResolveColor(color, { 0, 0, 0, 1 })
     borderParent = borderParent or frame
 
     frame.borders = frame.borders or {}
 
     local function CreateBorder(point1, point2, width, height)
         local tex = borderParent:CreateTexture(nil, "OVERLAY", nil, 7)
-        tex:SetColorTexture(unpack(color))
+        tex:SetColorTexture(cr, cg, cb, ca)
         tex:SetTexelSnappingBias(0)
         tex:SetSnapToPixelGrid(false)
 
@@ -692,7 +690,7 @@ function KE:AddBorders(frame, color, borderParent)
     frame.borders.bottom:SetHeight(px)
     frame.borders.bottom:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
     frame.borders.bottom:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
-    frame.borders.bottom:SetColorTexture(unpack(color))
+    frame.borders.bottom:SetColorTexture(cr, cg, cb, ca)
     frame.borders.bottom:SetTexelSnappingBias(0)
     frame.borders.bottom:SetSnapToPixelGrid(false)
 
@@ -702,7 +700,7 @@ function KE:AddBorders(frame, color, borderParent)
     frame.borders.right:SetWidth(px)
     frame.borders.right:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
     frame.borders.right:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
-    frame.borders.right:SetColorTexture(unpack(color))
+    frame.borders.right:SetColorTexture(cr, cg, cb, ca)
     frame.borders.right:SetTexelSnappingBias(0)
     frame.borders.right:SetSnapToPixelGrid(false)
 

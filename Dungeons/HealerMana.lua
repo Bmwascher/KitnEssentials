@@ -261,9 +261,13 @@ function HM:UpdateHealerFrame()
     local cc = healer.classColor
     frame.name:SetTextColor(cc[1], cc[2], cc[3])
 
-    -- Mana color
+    -- Mana color (per-index fallback guards against missing/sparse saved color)
     local mc = self.db.HighManaColor
-    frame.mana:SetTextColor(mc[1], mc[2], mc[3])
+    frame.mana:SetTextColor(
+        (mc and mc[1]) or 1,
+        (mc and mc[2]) or 1,
+        (mc and mc[3]) or 1
+    )
 
     -- Mana value (preview uses canned text; real healer reads live)
     if self.isPreview then
@@ -414,7 +418,11 @@ end
 function HM:HidePreview()
     if DEBUG_HM then KE:Print("[HM] HidePreview entry, will FindHealer if enabled") end
     self.isPreview = false
-    if self.db and self.db.Enabled then
+    -- Need both db.Enabled AND a live containerFrame. On profile change the
+    -- AceModule may not yet have been enabled (so OnEnable→ApplySettings→
+    -- CreateContainer hasn't run), but db.Enabled is already true under the
+    -- new profile — driving FindHealer here would crash on a nil container.
+    if self.db and self.db.Enabled and self.containerFrame then
         self:FindHealer()
     else
         if self.healerFrames[1] then self.healerFrames[1]:Hide() end

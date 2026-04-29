@@ -4,6 +4,12 @@
     <!-- Core must load first (creates GUIFrame namespace) -->
     <Script file="GUIMain\GUI-Core.lua" />
 
+    <!-- Reusable GUI infrastructure (KE.GUI factories) -->
+    <Script file="GUIMain\GUI-KEScrollbar.lua" />
+    <Script file="GUIMain\GUI-ContentAreas.lua" />
+    <Script file="GUIMain\GUI-KESubTabPanel.lua" />
+    <Script file="GUIMain\GUI-WidgetStateManager.lua" />
+
     <!-- Utilities -->
     <Script file="GUIHelpers\GUI-FrameChooser.lua" />
 
@@ -16,6 +22,11 @@
     <Script file="GUIWidgets\GUI-KEEditBox.lua" />
     <Script file="GUIWidgets\GUI-KEText.lua" />
     <Script file="GUIWidgets\GUI-PositionCard.lua" />
+    <Script file="GUIWidgets\GUI-FontSettingsCard.lua" />
+    <Script file="GUIWidgets\GUI-GlowSettingsCard.lua" />
+    <Script file="GUIWidgets\GUI-SoundSettingsCard.lua" />
+    <Script file="GUIWidgets\GUI-SpellBrowserCard.lua" />
+    <Script file="GUIWidgets\GUI-TextFormatCard.lua" />
     <Script file="GUIWidgets\GUI-Sidebar.lua" />
     <Script file="GUIWidgets\GUI-KESubTabs.lua" />
 
@@ -64,11 +75,13 @@
 
     <!-- Dungeons tabs -->
     <Script file="GUITabs\GUIDungeons\GUI-DungeonTimers.lua" />
+    <Script file="GUITabs\GUIDungeons\GUI-DungeonTimersCfg.lua" />
+    <Script file="GUITabs\GUIDungeons\GUI-DungeonTimersBars.lua" />
+    <Script file="GUITabs\GUIDungeons\GUI-DungeonTimersTexts.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-DungeonCasts.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-WarpDepleteForces.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-EnemyCounter.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-HealerMana.lua" />
-    <Script file="GUITabs\GUIDungeons\GUI-InstanceReset.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-DeathNotifications.lua" />
 
     <!-- QoL tabs -->
