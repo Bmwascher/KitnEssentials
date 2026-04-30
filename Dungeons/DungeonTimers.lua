@@ -469,93 +469,65 @@ function DT:FormatTime(remaining, showDecimals, decimalThreshold)
     return tostring(floor(remaining + 0.5))
 end
 
+-- File-local replacements buffer reused across all FormatText calls.
+-- OnVisualUpdate fires at 30 FPS × N visible bars × 2 (text1+text2) — a fresh
+-- table per call would burn ~600 tables/sec for a typical dungeon preview.
+local replacementsBuf = {}
+
 function DT:BuildReplacements(config, barData, remaining)
-    local replacements = {}
+    local r = replacementsBuf
+    wipe(r)
 
     if barData.icon then
-        replacements["i"] = string.format("|T%s:0:0:0:0:64:64:4:60:4:60|t", barData.icon)
+        r["i"] = string.format("|T%s:0:0:0:0:64:64:4:60:4:60|t", barData.icon)
     else
-        replacements["i"] = ""
+        r["i"] = ""
     end
 
-    replacements["n"] = barData.text or config.name or ""
-    replacements["p"] = remaining and self:FormatTime(remaining, config.showDecimals, config.decimalThreshold) or ""
-    replacements["s"] = barData.count and tostring(barData.count) or "0"
-    replacements["d"] = barData.duration and tostring(floor(barData.duration + 0.5)) or ""
+    r["n"] = barData.text or config.name or ""
+    r["p"] = remaining and self:FormatTime(remaining, config.showDecimals, config.decimalThreshold) or ""
+    r["s"] = barData.count and tostring(barData.count) or "0"
+    r["d"] = barData.duration and tostring(floor(barData.duration + 0.5)) or ""
 
     if barData.customValues then
-        replacements["c"] = tostring(barData.customValues[1] or "")
+        r["c"] = tostring(barData.customValues[1] or "")
         for i, val in ipairs(barData.customValues) do
-            replacements["c" .. i] = tostring(val or "")
+            r["c" .. i] = tostring(val or "")
         end
     else
-        replacements["c"] = ""
+        r["c"] = ""
     end
 
-    return replacements
+    return r
 end
 
--- State machine parser for format strings
-local STATE_NORMAL = 0
-local STATE_PERCENT = 1
-local STATE_PLACEHOLDER = 2
+-- gsub-based replacement. The previous per-char state machine allocated a
+-- new string for every character via the `result = result .. char` pattern;
+-- on a 30 FPS preview that was the dominant source of GC churn (memory
+-- climbing 25→60 MB before each GC sweep). One gsub call = one alloc.
+local function ReplacementLookup(key)
+    return replacementsBuf[key] or ""
+end
 
 function DT:FormatText(formatStr, config, barData, remaining)
     if not formatStr or formatStr == "" then return "" end
 
-    local replacements = self:BuildReplacements(config, barData, remaining)
+    self:BuildReplacements(config, barData, remaining)
 
-    local result = ""
-    local state = STATE_NORMAL
-    local placeholderStart = nil
-    local pos = 1
-    local len = #formatStr
-
-    while pos <= len do
-        local char = formatStr:sub(pos, pos)
-        local byte = string.byte(char)
-
-        if state == STATE_NORMAL then
-            if char == "%" then
-                state = STATE_PERCENT
-                placeholderStart = pos
-            else
-                result = result .. char
-            end
-        elseif state == STATE_PERCENT then
-            if char == "%" then
-                result = result .. "%"
-                state = STATE_NORMAL
-            elseif (byte >= 97 and byte <= 122) or (byte >= 48 and byte <= 57) then
-                state = STATE_PLACEHOLDER
-            else
-                result = result .. "%"
-                result = result .. char
-                state = STATE_NORMAL
-            end
-        elseif state == STATE_PLACEHOLDER then
-            if (byte >= 97 and byte <= 122) or (byte >= 48 and byte <= 57) then
-                -- Continue reading placeholder
-            else
-                local placeholder = formatStr:sub(placeholderStart + 1, pos - 1)
-                local replacement = replacements[placeholder] or ""
-                result = result .. replacement
-                result = result .. char
-                state = STATE_NORMAL
-            end
-        end
-        pos = pos + 1
+    -- %%(%w+) catches placeholders like %i, %n, %p, %c1. To preserve the
+    -- old behavior of `%%` → literal `%`, swap escaped pairs to a sentinel
+    -- byte first and restore after. Most format strings have no `%%`, so
+    -- the fast path is a single gsub.
+    local result
+    if formatStr:find("%%", 1, true) then
+        result = formatStr:gsub("%%%%", "\1"):gsub("%%(%w+)", ReplacementLookup):gsub("\1", "%%")
+    else
+        result = formatStr:gsub("%%(%w+)", ReplacementLookup)
     end
 
-    if state == STATE_PLACEHOLDER then
-        local placeholder = formatStr:sub(placeholderStart + 1)
-        local replacement = replacements[placeholder] or ""
-        result = result .. replacement
-    elseif state == STATE_PERCENT then
-        result = result .. "%"
+    if result:find("\\n", 1, true) then
+        result = result:gsub("\\n", "\n")
     end
-
-    result = result:gsub("\\n", "\n")
 
     return result
 end
@@ -690,7 +662,10 @@ function DT:GetBigWigsColors(addon, spellId)
     local barColor, textColor, bgColor
 
     if BigWigs and BigWigs.GetPlugin then
-        local colorModule = BigWigs:GetPlugin("Colors")
+        -- silent=true: when Plugins addon isn't loaded yet (e.g. previewing
+        -- in town with only Core force-loaded) GetPlugin would otherwise
+        -- error("No plugin named 'Colors' found").
+        local colorModule = BigWigs:GetPlugin("Colors", true)
         if colorModule and colorModule.GetColorTable then
             barColor = colorModule:GetColorTable("barColor", addon, spellId)
             textColor = colorModule:GetColorTable("barText", addon, spellId)
@@ -1466,25 +1441,47 @@ function DT:OnVisualUpdate()
                 if remaining > 0 then
                     local config = frame.config
 
+                    -- Bar fill: keep updating every frame for smooth animation.
                     if frame.bar then
                         local effectiveDuration = barData.effectiveDuration or barData.duration
                         frame.bar:SetValue(math_min(remaining, effectiveDuration))
                     end
 
+                    -- Text updates: gate by whether the displayed time string
+                    -- would actually change. SetText invalidates font-string
+                    -- layout, the dominant per-tick CPU cost. Computing
+                    -- FormatTime is one string.format call; comparing the
+                    -- result to the last value short-circuits both FormatText
+                    -- and SetText for the ~96% of frames where the rendered
+                    -- value is identical (integer mode = once/sec change;
+                    -- decimal mode = once/100ms change). Updates fire on the
+                    -- exact frame the digit flips, no drift.
+                    -- Custom-text funcs can return time-independent values,
+                    -- so we can't skip them — always update when present.
+                    local needTextUpdate = false
                     if frame.customTextFunc then
                         barData.customValues = self:RunCustomTextFunc(frame.customTextFunc, barData, remaining)
+                        needTextUpdate = true
+                    else
+                        local timeStr = self:FormatTime(remaining, config.showDecimals, config.decimalThreshold)
+                        if timeStr ~= barData._lastTimeStr then
+                            barData._lastTimeStr = timeStr
+                            needTextUpdate = true
+                        end
                     end
 
-                    if frame.isBarDisplay then
-                        if frame.text1 then
-                            frame.text1:SetText(self:GetBarText1(config, barData, remaining))
-                        end
-                        if frame.text2 then
-                            frame.text2:SetText(self:GetBarText2(config, barData, remaining))
-                        end
-                    else
-                        if frame.displayText then
-                            frame.displayText:SetText(self:GetDisplayText(config, barData, remaining))
+                    if needTextUpdate then
+                        if frame.isBarDisplay then
+                            if frame.text1 then
+                                frame.text1:SetText(self:GetBarText1(config, barData, remaining))
+                            end
+                            if frame.text2 then
+                                frame.text2:SetText(self:GetBarText2(config, barData, remaining))
+                            end
+                        else
+                            if frame.displayText then
+                                frame.displayText:SetText(self:GetDisplayText(config, barData, remaining))
+                            end
                         end
                     end
                 end
@@ -2134,9 +2131,20 @@ end
 
 function DT:LoadBigWigsZone(instanceId)
     if not instanceId then return false end
+    if not BigWigsLoader then return false end
 
-    -- BigWigs core must be fully loaded, not just the Loader
-    if BigWigs and BigWigsLoader and BigWigsLoader.LoadZone then
+    -- Force-load Core so the spell browser works in town/open world.
+    -- BigWigsLoader:LoadZone() doesn't auto-load Core; boss-module addons
+    -- short-circuit if `BigWigs` global is missing. C_AddOns.LoadAddOn is
+    -- synchronous and BigWigs_Core/Core.lua sets the global at file-end,
+    -- so on success BigWigs is populated when this returns.
+    if not BigWigs then
+        if not (C_AddOns and C_AddOns.LoadAddOn) then return false end
+        local loaded = C_AddOns.LoadAddOn("BigWigs_Core")
+        if not loaded or not BigWigs then return false end
+    end
+
+    if BigWigsLoader.LoadZone then
         BigWigsLoader:LoadZone(instanceId)
         return true
     end

@@ -14,7 +14,9 @@ ignore:
   - .gitignore
   - .luacheckrc
   - .markdownlint.json
+  - .wowluarc.json
   - .wow-api-reference
+  - Annotations
   - CLAUDE.md
   - CHANGELOG.md
   - README.md
@@ -22,6 +24,7 @@ ignore:
   - SKILLS.md
   - SKILLS-Discord.md
   - diff_output.txt
+
 
 externals:
   Libs/AceAddon-3.0:
