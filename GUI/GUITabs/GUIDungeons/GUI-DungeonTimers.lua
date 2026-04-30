@@ -235,7 +235,6 @@ local function ConfigureTimerButtonKit(kit, parent, index, triggerId, triggerDat
     kit._triggerId = triggerId
     kit._state = panelState
     kit._onClick = panelOnClick
-    kit.btn.triggerId = triggerId  -- compat: UpdateTimerListSelectionVisuals reads btn.triggerId
 
     -- Position relative to current parent. Acquire just reparented kit to
     -- `parent`, but sub-anchor refs need re-pinning explicitly.
@@ -553,15 +552,17 @@ local function CreateDungeonPanel(dungeonId)
         end
 
         local function UpdateTimerListSelectionVisuals()
-            for _, btn in ipairs(timerButtons) do
-                if btn.triggerId == state.selectedTriggerId then
-                    btn.selected:Show()
-                    btn.accentBar:Show()
-                    btn.label:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+            -- timerButtons holds kits (not buttons) post-pool-refactor: the
+            -- kit has the textures, the kit's btn has the click target.
+            for _, kit in ipairs(timerButtons) do
+                if kit._triggerId == state.selectedTriggerId then
+                    kit.selected:Show()
+                    kit.accentBar:Show()
+                    kit.label:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
                 else
-                    btn.selected:Hide()
-                    btn.accentBar:Hide()
-                    btn.label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
+                    kit.selected:Hide()
+                    kit.accentBar:Hide()
+                    kit.label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
                 end
             end
         end
@@ -583,7 +584,7 @@ local function CreateDungeonPanel(dungeonId)
             for i, item in ipairs(sortedTriggers) do
                 local kit = timerButtonPool:Acquire(listChild)
                 ConfigureTimerButtonKit(kit, listChild, i, item.id, item.data, state, panelOnTimerClick)
-                table_insert(timerButtons, kit.btn)
+                table_insert(timerButtons, kit)
             end
 
             local listHeight = #sortedTriggers * (BUTTON_HEIGHT + 2)
