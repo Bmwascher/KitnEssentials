@@ -11,26 +11,17 @@ local Theme = KE.Theme
 -- Localization Setup
 local tostring = tostring
 local CreateFrame = CreateFrame
-local C_Timer = C_Timer
-local GetTime = GetTime
 
 ---------------------------------------------------------------------------------
 -- Widget Creation
 ---------------------------------------------------------------------------------
 
--- EditBox widget — config-table API: { value, callback, tooltip, height,
---   onTextChanged, textChangedDelay }.
--- onTextChanged: optional debounced callback that fires DURING typing
--- (not on Enter/blur — that's `callback`'s job). Useful for live filters
--- like the BigWigs spell-search box. Debounce defaults to 150ms;
--- override via textChangedDelay.
+-- EditBox widget — config-table API: { value, callback, tooltip, height }
 function GUIFrame:CreateEditBox(parent, labelText, config)
     config = config or {}
     local value = tostring(config.value or "")
     local tooltip = config.tooltip
     local customHeight = config.height
-    local onTextChanged = config.onTextChanged
-    local textChangedDelay = config.textChangedDelay or 0.15
 
     local rowHeight = customHeight or 34
     local row = CreateFrame("Frame", nil, parent)
@@ -124,25 +115,6 @@ function GUIFrame:CreateEditBox(parent, labelText, config)
     editBox:SetScript("OnEditFocusGained", function()
         container:SetBackdropBorderColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
     end)
-
-    -- Live-typing callback: only wired when the consumer asked for it.
-    -- Debounced via fire-token so each keystroke schedules ONE pending
-    -- C_Timer.After; intermediate strokes invalidate prior tokens by
-    -- bumping `lastFireToken`. No timer-cancel API needed.
-    if onTextChanged then
-        local lastFireToken = 0
-        editBox:SetScript("OnTextChanged", function(self, userInput)
-            if not userInput then return end
-            local fireToken = GetTime()
-            lastFireToken = fireToken
-            local text = self:GetText()
-            C_Timer.After(textChangedDelay, function()
-                if lastFireToken == fireToken then
-                    onTextChanged(text)
-                end
-            end)
-        end)
-    end
 
     -- Add tooltip support for the editBox itself
     editBox:SetScript("OnEnter", function()
