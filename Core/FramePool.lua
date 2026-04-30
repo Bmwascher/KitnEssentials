@@ -15,7 +15,14 @@
 
 ---@class KE
 local KE = select(2, ...)
-if not KitnEssentials then return end
+
+-- This file is loaded by Core/Core.xml before Main.lua creates the
+-- `KitnEssentials` AceAddon global. The pool primitive doesn't use that
+-- global anywhere — only the addon-private `KE` namespace, CreateFrame,
+-- and UIParent. Do NOT add an `if not KitnEssentials then return end`
+-- guard here; that's a module-file pattern, and copying it caused this
+-- file to silently early-return at first load, leaving `KE.FramePool`
+-- nil at the bottom of the file.
 
 local CreateFrame = CreateFrame
 local UIParent = UIParent
