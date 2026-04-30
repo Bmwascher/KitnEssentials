@@ -320,15 +320,36 @@ function GUIFrame:CreateCard(parent, title, yOffset, width)
         return self._yOffset + self:GetContentHeight() + Theme.paddingSmall
     end
 
+    -- Lazy-create a transparent click-blocker overlay above the card content.
+    -- Shown when the card is disabled to make widget interactions non-functional
+    -- without recursively walking row.widgets / kit subframes (which would need
+    -- per-widget knowledge of how each card type lays out its children).
+    local function GetMouseBlocker(c)
+        if c._mouseBlocker then return c._mouseBlocker end
+        local blocker = CreateFrame("Frame", nil, c)
+        blocker:SetAllPoints(c)
+        -- +100 above the card's own frame level should cover all default-level
+        -- descendants. Cards don't generally bump child frame levels.
+        blocker:SetFrameLevel(c:GetFrameLevel() + 100)
+        blocker:EnableMouse(true)
+        -- Don't capture mouse wheel — let scroll events bubble up to the
+        -- scrollFrame so the user can still scroll past a disabled card.
+        blocker:Hide()
+        c._mouseBlocker = blocker
+        return blocker
+    end
+
     function card:SetEnabled(enabled)
         if enabled then
             self:SetAlpha(1)
             if self.header then self.header:SetAlpha(1) end
             if self.titleText then self.titleText:SetAlpha(1) end
+            if self._mouseBlocker then self._mouseBlocker:Hide() end
         else
             self:SetAlpha(0.5)
             if self.header then self.header:SetAlpha(0.5) end
             if self.titleText then self.titleText:SetAlpha(0.5) end
+            GetMouseBlocker(self):Show()
         end
     end
 
