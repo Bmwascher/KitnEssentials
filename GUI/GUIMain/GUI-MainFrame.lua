@@ -576,9 +576,18 @@ function GUIFrame:CreateMainFrame()
     resizeTex:SetAllPoints()
     resizeTex:SetTexture("Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\KitnCustomResizeHandle23px.png")
     resizeTex:SetVertexColor(T.textMuted[1], T.textMuted[2], T.textMuted[3], 0.6)
-    -- WoW suppresses OnMouseUp once RegisterForDrag's drag threshold trips, so
-    -- OnDragStop must also run the stop-and-save path. A guard flag keeps the
-    -- cleanup idempotent when both events fire for a single resize.
+    -- StartSizing is bound to OnDragStart, NOT OnMouseDown. WoW only fires
+    -- OnDragStart after the cursor moves past the drag threshold, so a plain
+    -- click no longer enters sizing mode. The previous OnMouseDown wiring
+    -- caused rapid-click "spazzing": every click started a size operation,
+    -- WoW's per-frame cursor polling registered 1-2px jitter as a delta, and
+    -- each click contributed cumulative drift to the frame size.
+    --
+    -- Both OnDragStop and OnMouseUp call stopAndSaveResize because WoW
+    -- suppresses OnMouseUp once the drag threshold has tripped (only
+    -- OnDragStop fires for completed drags), but OnMouseUp is still needed
+    -- for clicks that never reached drag threshold. The isResizing guard
+    -- keeps the cleanup idempotent.
     local isResizing = false
     local function stopAndSaveResize()
         if not isResizing then return end
@@ -598,15 +607,13 @@ function GUIFrame:CreateMainFrame()
         end
     end
     resizeGrip:RegisterForDrag("LeftButton")
-    resizeGrip:SetScript("OnMouseDown", function(_, button)
-        if button == "LeftButton" and not isResizing then
-            isResizing = true
-            frame:StartSizing("BOTTOMRIGHT")
-        end
+    resizeGrip:SetScript("OnDragStart", function()
+        if isResizing then return end
+        isResizing = true
+        frame:StartSizing("BOTTOMRIGHT")
     end)
-    resizeGrip:SetScript("OnMouseUp", stopAndSaveResize)
-    resizeGrip:SetScript("OnDragStart", function() end)
     resizeGrip:SetScript("OnDragStop", stopAndSaveResize)
+    resizeGrip:SetScript("OnMouseUp", stopAndSaveResize)
     resizeGrip:SetScript("OnHide", stopAndSaveResize)
     resizeGrip:SetScript("OnEnter", function()
         resizeTex:SetVertexColor(T.accent[1], T.accent[2], T.accent[3], 0.8)
