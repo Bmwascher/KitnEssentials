@@ -137,6 +137,159 @@ local function GetDungeonState(dungeonKey)
     return dungeonStates[dungeonKey]
 end
 
+---------------------------------------------------------------------------------
+-- Sidebar trigger-list button pool (KE.FramePool adoption)
+---------------------------------------------------------------------------------
+-- Pre-pool: every BuildTimerList() called btn:Hide() + btn:SetParent(nil) on
+-- each existing button, then CreateFrame'd a new one per trigger. SetParent(nil)
+-- doesn't free a frame — it reparents to UIParent — so the addon leaked one
+-- WoW frame per trigger per panel-rebuild. The pool reuses kit instances.
+
+local function CreateTimerButtonKit(holder)
+    local btn = CreateFrame("Button", nil, holder)
+    btn:SetHeight(BUTTON_HEIGHT)
+
+    local hover = btn:CreateTexture(nil, "BACKGROUND", nil, 1)
+    hover:SetAllPoints()
+    hover:SetColorTexture(1, 1, 1, 0.05)
+    hover:Hide()
+
+    local selected = btn:CreateTexture(nil, "BACKGROUND", nil, 2)
+    selected:SetAllPoints()
+    selected:Hide()
+
+    local accentBar = btn:CreateTexture(nil, "OVERLAY")
+    accentBar:SetWidth(2)
+    accentBar:SetPoint("TOPLEFT", btn, "TOPLEFT", 0, 0)
+    accentBar:SetPoint("BOTTOMLEFT", btn, "BOTTOMLEFT", 0, 0)
+    accentBar:Hide()
+
+    local iconSize = BUTTON_HEIGHT - 6
+    local iconBorder = CreateFrame("Frame", nil, btn, "BackdropTemplate")
+    iconBorder:SetSize(iconSize + 2, iconSize + 2)
+    iconBorder:SetPoint("LEFT", btn, "LEFT", 5, 0)
+    iconBorder:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+
+    local spellIcon = btn:CreateTexture(nil, "ARTWORK")
+    spellIcon:SetSize(iconSize, iconSize)
+    spellIcon:SetPoint("CENTER", iconBorder, "CENTER", 0, 0)
+
+    local typeIndicator = btn:CreateFontString(nil, "OVERLAY")
+    typeIndicator:SetPoint("RIGHT", btn, "RIGHT", -4, 0)
+    KE:ApplyThemeFont(typeIndicator, "small")
+
+    local soundIndicator = btn:CreateFontString(nil, "OVERLAY")
+    soundIndicator:SetPoint("RIGHT", typeIndicator, "LEFT", -2, 0)
+    KE:ApplyThemeFont(soundIndicator, "small")
+
+    local label = btn:CreateFontString(nil, "OVERLAY")
+    label:SetPoint("LEFT", iconBorder, "RIGHT", 6, 0)
+    label:SetPoint("RIGHT", soundIndicator, "LEFT", -2, 0)
+    label:SetJustifyH("LEFT")
+    KE:ApplyThemeFont(label, "small")
+
+    local kit = {
+        row = btn,
+        btn = btn,
+        hover = hover,
+        selected = selected,
+        accentBar = accentBar,
+        iconBorder = iconBorder,
+        spellIcon = spellIcon,
+        typeIndicator = typeIndicator,
+        soundIndicator = soundIndicator,
+        label = label,
+        -- per-render mutable state, updated by ConfigureTimerButtonKit
+        _triggerId = nil,
+        _state = nil,    -- per-panel state table (we read selectedTriggerId from it)
+        _onClick = nil,  -- per-panel OnClick closure
+    }
+
+    -- Wire scripts ONCE; they read mutable state from kit slots that
+    -- Configure updates per-render. Avoids the closure-per-render trap.
+    btn:SetScript("OnEnter", function()
+        local s = kit._state
+        if s and s.selectedTriggerId ~= kit._triggerId then
+            kit.hover:Show()
+            kit.label:SetTextColor(1, 1, 1, 1)
+        end
+    end)
+    btn:SetScript("OnLeave", function()
+        kit.hover:Hide()
+        local s = kit._state
+        if s and s.selectedTriggerId ~= kit._triggerId then
+            local t = KE.Theme
+            kit.label:SetTextColor(t.textSecondary[1], t.textSecondary[2], t.textSecondary[3], 1)
+        end
+    end)
+    btn:SetScript("OnClick", function()
+        if kit._onClick then kit._onClick(kit._triggerId) end
+    end)
+
+    return kit
+end
+
+local function ConfigureTimerButtonKit(kit, parent, index, triggerId, triggerData, panelState, panelOnClick)
+    local Theme = KE.Theme
+
+    kit._triggerId = triggerId
+    kit._state = panelState
+    kit._onClick = panelOnClick
+
+    -- Position relative to current parent. Acquire just reparented kit to
+    -- `parent`, but sub-anchor refs need re-pinning explicitly.
+    kit.btn:ClearAllPoints()
+    local y = -(index - 1) * (BUTTON_HEIGHT + 2)
+    kit.btn:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, y)
+    kit.btn:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, y)
+
+    -- Theme-tinted textures (re-applied each render in case theme changed
+    -- while a kit was idle in the pool).
+    kit.selected:SetColorTexture(Theme.accent[1], Theme.accent[2], Theme.accent[3], 0.15)
+    kit.accentBar:SetColorTexture(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+    kit.iconBorder:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+
+    -- Spell icon
+    local spellId = triggerData.spellId and tonumber(triggerData.spellId)
+    if spellId and spellId > 0 and C_Spell and C_Spell.GetSpellTexture then
+        kit.spellIcon:SetTexture(C_Spell.GetSpellTexture(spellId) or 134400)
+    else
+        kit.spellIcon:SetTexture(134400)
+    end
+    if KE.ApplyIconZoom then KE:ApplyIconZoom(kit.spellIcon, 0.1) end
+
+    -- Type indicator
+    if triggerData.displayType == "bar" then
+        kit.typeIndicator:SetText("Bar")
+        kit.typeIndicator:SetTextColor(0.4, 0.7, 1.0, 0.9)
+    else
+        kit.typeIndicator:SetText("Text")
+        kit.typeIndicator:SetTextColor(0.4, 1.0, 0.5, 0.9)
+    end
+
+    -- Sound indicator
+    local hasSound = (triggerData.actionOnShowSound and triggerData.actionOnShowSound ~= "" and triggerData.actionOnShowSound ~= "None")
+        or (triggerData.actionOnHideSound and triggerData.actionOnHideSound ~= "" and triggerData.actionOnHideSound ~= "None")
+    if hasSound then
+        kit.soundIndicator:SetText("S")
+        kit.soundIndicator:SetTextColor(1.0, 0.8, 0.3, 0.9)
+    else
+        kit.soundIndicator:SetText("")
+    end
+
+    -- Label
+    local displayName = triggerData.name or ("Timer " .. triggerId)
+    if #displayName > 21 then displayName = displayName:sub(1, 21) .. ".." end
+    kit.label:SetText(displayName)
+    kit.label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
+
+    -- Reset transient visuals; UpdateTimerListSelectionVisuals re-shows
+    -- selected/accentBar for the active row.
+    kit.hover:Hide()
+end
+
+local timerButtonPool = KE.FramePool:New(CreateTimerButtonKit)
+
 local function CreateSpellIconPreview(parent, spellId, size)
     local Theme = KE.Theme
     size = size or 32
@@ -384,129 +537,42 @@ local function CreateDungeonPanel(dungeonId)
 
         local timerButtons = {}
 
-        local function CreateTimerButton(index, triggerId, triggerData)
-            local btn = CreateFrame("Button", nil, listChild)
-            btn:SetHeight(BUTTON_HEIGHT)
-            btn:SetPoint("TOPLEFT", listChild, "TOPLEFT", 0, -(index - 1) * (BUTTON_HEIGHT + 2))
-            btn:SetPoint("TOPRIGHT", listChild, "TOPRIGHT", 0, -(index - 1) * (BUTTON_HEIGHT + 2))
-            btn.triggerId = triggerId
-
-            local hover = btn:CreateTexture(nil, "BACKGROUND", nil, 1)
-            hover:SetAllPoints()
-            hover:SetColorTexture(1, 1, 1, 0.05)
-            hover:Hide()
-            btn.hover = hover
-
-            local selected = btn:CreateTexture(nil, "BACKGROUND", nil, 2)
-            selected:SetAllPoints()
-            selected:SetColorTexture(Theme.accent[1], Theme.accent[2], Theme.accent[3], 0.15)
-            selected:Hide()
-            btn.selected = selected
-
-            local accentBar = btn:CreateTexture(nil, "OVERLAY")
-            accentBar:SetWidth(2)
-            accentBar:SetPoint("TOPLEFT", btn, "TOPLEFT", 0, 0)
-            accentBar:SetPoint("BOTTOMLEFT", btn, "BOTTOMLEFT", 0, 0)
-            accentBar:SetColorTexture(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
-            accentBar:Hide()
-            btn.accentBar = accentBar
-
-            local iconSize = BUTTON_HEIGHT - 6
-            local iconBorder = CreateFrame("Frame", nil, btn, "BackdropTemplate")
-            iconBorder:SetSize(iconSize + 2, iconSize + 2)
-            iconBorder:SetPoint("LEFT", btn, "LEFT", 5, 0)
-            iconBorder:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
-            iconBorder:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
-
-            local spellIcon = btn:CreateTexture(nil, "ARTWORK")
-            spellIcon:SetSize(iconSize, iconSize)
-            spellIcon:SetPoint("CENTER", iconBorder, "CENTER", 0, 0)
-
-            local spellId = triggerData.spellId and tonumber(triggerData.spellId)
-            if spellId and spellId > 0 and C_Spell and C_Spell.GetSpellTexture then
-                spellIcon:SetTexture(C_Spell.GetSpellTexture(spellId) or 134400)
-            else
-                spellIcon:SetTexture(134400)
-            end
-            if KE.ApplyIconZoom then KE:ApplyIconZoom(spellIcon, 0.1) end
-
-            local typeIndicator = btn:CreateFontString(nil, "OVERLAY")
-            typeIndicator:SetPoint("RIGHT", btn, "RIGHT", -4, 0)
-            KE:ApplyThemeFont(typeIndicator, "small")
-            local isBar = triggerData.displayType == "bar"
-            if isBar then
-                typeIndicator:SetText("Bar")
-                typeIndicator:SetTextColor(0.4, 0.7, 1.0, 0.9)
-            else
-                typeIndicator:SetText("Text")
-                typeIndicator:SetTextColor(0.4, 1.0, 0.5, 0.9)
-            end
-
-            local hasSound = (triggerData.actionOnShowSound and triggerData.actionOnShowSound ~= "" and triggerData.actionOnShowSound ~= "None")
-                or (triggerData.actionOnHideSound and triggerData.actionOnHideSound ~= "" and triggerData.actionOnHideSound ~= "None")
-            local soundIndicator = btn:CreateFontString(nil, "OVERLAY")
-            soundIndicator:SetPoint("RIGHT", typeIndicator, "LEFT", -2, 0)
-            KE:ApplyThemeFont(soundIndicator, "small")
-            if hasSound then
-                soundIndicator:SetText("S")
-                soundIndicator:SetTextColor(1.0, 0.8, 0.3, 0.9)
-            end
-
-            local label = btn:CreateFontString(nil, "OVERLAY")
-            label:SetPoint("LEFT", iconBorder, "RIGHT", 6, 0)
-            label:SetPoint("RIGHT", soundIndicator, "LEFT", -2, 0)
-            label:SetJustifyH("LEFT")
-            KE:ApplyThemeFont(label, "small")
-            local displayName = triggerData.name or ("Timer " .. triggerId)
-            if #displayName > 21 then displayName = displayName:sub(1, 21) .. ".." end
-            label:SetText(displayName)
-            label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
-            btn.label = label
-
-            btn:SetScript("OnEnter", function(self)
-                if state.selectedTriggerId ~= self.triggerId then
-                    self.hover:Show()
-                    self.label:SetTextColor(1, 1, 1, 1)
-                end
-            end)
-
-            btn:SetScript("OnLeave", function(self)
-                self.hover:Hide()
-                if state.selectedTriggerId ~= self.triggerId then
-                    self.label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
-                end
-            end)
-
-            btn:SetScript("OnClick", function(self)
-                state.selectedTriggerId = self.triggerId
-                selectedTrigger = dungeonDb.Triggers[state.selectedTriggerId]
-                UpdateTimerListSelection()
-                RenderContent(state.currentSubTab)
-                StartDungeonPreview(dungeonKey)
-            end)
-
-            return btn
+        -- Captured ONCE per panel and assigned to every kit's _onClick slot.
+        -- Reused across every BuildTimerList call. RenderContent / dungeonDb /
+        -- selectedTrigger are upvalues that are bound late-style — they may
+        -- be nil when this closure is created but are populated by the time
+        -- a button actually fires. UpdateTimerListSelection / dungeonKey are
+        -- already in scope here.
+        local panelOnTimerClick = function(triggerId)
+            state.selectedTriggerId = triggerId
+            selectedTrigger = dungeonDb.Triggers[triggerId]
+            UpdateTimerListSelection()
+            RenderContent(state.currentSubTab)
+            StartDungeonPreview(dungeonKey)
         end
 
         local function UpdateTimerListSelectionVisuals()
-            for _, btn in ipairs(timerButtons) do
-                if btn.triggerId == state.selectedTriggerId then
-                    btn.selected:Show()
-                    btn.accentBar:Show()
-                    btn.label:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+            -- timerButtons holds kits (not buttons) post-pool-refactor: the
+            -- kit has the textures, the kit's btn has the click target.
+            for _, kit in ipairs(timerButtons) do
+                if kit._triggerId == state.selectedTriggerId then
+                    kit.selected:Show()
+                    kit.accentBar:Show()
+                    kit.label:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
                 else
-                    btn.selected:Hide()
-                    btn.accentBar:Hide()
-                    btn.label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
+                    kit.selected:Hide()
+                    kit.accentBar:Hide()
+                    kit.label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
                 end
             end
         end
 
         BuildTimerList = function()
-            for _, btn in ipairs(timerButtons) do
-                btn:Hide()
-                btn:SetParent(nil)
-            end
+            -- ReleaseAll reparents every prior kit back to the pool's hidden
+            -- holder, so when listChild is later cleared (or this panel is
+            -- closed) those kits are NOT orphaned to UIParent. Then Acquire
+            -- borrows them back to listChild for the new render pass.
+            timerButtonPool:ReleaseAll()
             wipe(timerButtons)
 
             local sortedTriggers = {}
@@ -516,8 +582,9 @@ local function CreateDungeonPanel(dungeonId)
             table.sort(sortedTriggers, function(a, b) return tonumber(a.id) < tonumber(b.id) end)
 
             for i, item in ipairs(sortedTriggers) do
-                local btn = CreateTimerButton(i, item.id, item.data)
-                table_insert(timerButtons, btn)
+                local kit = timerButtonPool:Acquire(listChild)
+                ConfigureTimerButtonKit(kit, listChild, i, item.id, item.data, state, panelOnTimerClick)
+                table_insert(timerButtons, kit)
             end
 
             local listHeight = #sortedTriggers * (BUTTON_HEIGHT + 2)
