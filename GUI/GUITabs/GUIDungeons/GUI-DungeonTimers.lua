@@ -349,6 +349,10 @@ local function CreateBasicSettingsCardKit(holder)
         local t = kit._trigger
         if t then t.enabled = checked end
         if kit._applySettings then kit._applySettings() end
+        -- Re-render the sub-tab so the trigger-disabled gray-out on cards
+        -- 2+ updates immediately. Cheap thanks to the in-place RefreshContent
+        -- + card pool path (no preview flash, no allocation churn).
+        if kit._refreshContentDeferred then kit._refreshContentDeferred() end
     end)
     nameInput:SetCallback(function(text)
         local t = kit._trigger
@@ -914,6 +918,20 @@ local function CreateDungeonPanel(dungeonId)
             end
         end)
 
+        -- Re-start preview on GUI reopen. OnShow fires when the panel
+        -- transitions from hidden to visible — i.e. when GUIFrame:Show()
+        -- re-shows the cached _customPanel after a prior GUIFrame:Hide()
+        -- stopped the preview. Initial panel creation does NOT fire OnShow
+        -- (no transition); the C_Timer.After at the bottom of this function
+        -- handles the first render.
+        panel:SetScript("OnShow", function()
+            -- db is captured by the enclosing closure; re-check at fire time
+            -- because the user may have toggled the module between renders.
+            if db.Enabled == false then return end
+            if previewActive and currentPreviewDungeon == dungeonKey then return end
+            StartDungeonPreview(dungeonKey)
+        end)
+
         local RenderContent
         local BuildTimerList
         local UpdateTimerListSelection
@@ -1182,6 +1200,16 @@ local function CreateDungeonPanel(dungeonId)
             })
             table_insert(activeCards, browserCard)
 
+            -- Gray out cards 2+ when the trigger is disabled to make the
+            -- disabled state obvious. Card 1 (Basic Settings) keeps full
+            -- alpha so the Enable toggle stays prominent. SetEnabled is
+            -- called for both states so a re-enable resets alpha back to 1
+            -- on pooled card kits that previously had alpha=0.5 set.
+            local triggerEnabled = selectedTrigger.enabled ~= false
+            for i = 2, #activeCards do
+                if activeCards[i].SetEnabled then activeCards[i]:SetEnabled(triggerEnabled) end
+            end
+
             return yOffset
         end
 
@@ -1366,6 +1394,14 @@ local function CreateDungeonPanel(dungeonId)
 
             yOffset = yOffset + card4:GetContentHeight() + padding
 
+            -- Trigger-disabled gray-out: Display tab has no Enable toggle so
+            -- gray every card. The user can re-enable from the Trigger tab.
+            if selectedTrigger.enabled == false then
+                for _, c in ipairs(activeCards) do
+                    if c.SetEnabled then c:SetEnabled(false) end
+                end
+            end
+
             return yOffset
         end
 
@@ -1391,6 +1427,14 @@ local function CreateDungeonPanel(dungeonId)
 
             yOffset = yOffset + card1:GetContentHeight() + padding
 
+            -- Trigger-disabled gray-out: Load tab has no Enable toggle so
+            -- gray every card. The user can re-enable from the Trigger tab.
+            if selectedTrigger.enabled == false then
+                for _, c in ipairs(activeCards) do
+                    if c.SetEnabled then c:SetEnabled(false) end
+                end
+            end
+
             return yOffset
         end
 
@@ -1411,6 +1455,14 @@ local function CreateDungeonPanel(dungeonId)
                 onChangeCallback = ApplySettings,
             })
             table_insert(activeCards, card1)
+
+            -- Trigger-disabled gray-out: Actions tab has no Enable toggle so
+            -- gray every card. The user can re-enable from the Trigger tab.
+            if selectedTrigger.enabled == false then
+                for _, c in ipairs(activeCards) do
+                    if c.SetEnabled then c:SetEnabled(false) end
+                end
+            end
 
             return yOffset
         end
