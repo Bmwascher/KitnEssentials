@@ -3,6 +3,10 @@
 -- ║  Purpose: BigWigs spell browser. Search field +          ║
 -- ║  per-boss grouped spell list with icons + Use buttons.   ║
 -- ║  Used by DungeonTimers per-trigger Cfg page.             ║
+-- ║                                                          ║
+-- ║  Frames are pooled via KE.FramePool — spell rows, boss   ║
+-- ║  headers, and separators reuse instances across renders  ║
+-- ║  instead of leaking to UIParent on each ClearContent.    ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -14,6 +18,129 @@ local table_insert = table.insert
 local ipairs = ipairs
 local CreateFrame = CreateFrame
 
+---------------------------------------------------------------------------------
+-- Factories: build kit shape once, parent to pool's hidden holder
+---------------------------------------------------------------------------------
+
+local function CreateSpellRowKit(holder)
+    local row = CreateFrame("Frame", nil, holder)
+    row:SetHeight(28)
+    row:EnableMouse(true)
+
+    local iconFrame = CreateFrame("Frame", nil, row)
+    iconFrame:SetSize(24, 24)
+    iconFrame:SetPoint("LEFT", row, "LEFT", 4, 0)
+
+    local iconTexture = iconFrame:CreateTexture(nil, "ARTWORK")
+    iconTexture:SetPoint("TOPLEFT", 1, -1)
+    iconTexture:SetPoint("BOTTOMRIGHT", -1, 1)
+
+    local iconBorder = CreateFrame("Frame", nil, iconFrame, "BackdropTemplate")
+    iconBorder:SetAllPoints()
+    iconBorder:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+    iconBorder:SetBackdropBorderColor(0, 0, 0, 1)
+
+    local label = row:CreateFontString(nil, "OVERLAY")
+    label:SetPoint("LEFT", iconFrame, "RIGHT", 6, 0)
+    label:SetPoint("RIGHT", row, "RIGHT", -70, 0)
+    label:SetJustifyH("LEFT")
+    KE:ApplyThemeFont(label, "small")
+
+    local useBtn = GUIFrame:CreateButton(row, "Use", { width = 80, height = 22 })
+    useBtn:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+
+    return {
+        row = row,
+        iconFrame = iconFrame,
+        iconTexture = iconTexture,
+        iconBorder = iconBorder,
+        label = label,
+        useBtn = useBtn,
+    }
+end
+
+local function CreateBossHeaderKit(holder)
+    local row = CreateFrame("Frame", nil, holder)
+    row:SetHeight(14)
+
+    local label = row:CreateFontString(nil, "OVERLAY")
+    label:SetPoint("LEFT", row, "LEFT", 4, -4)
+    KE:ApplyThemeFont(label, "normal")
+
+    return { row = row, label = label }
+end
+
+local function CreateSeparatorKit(holder)
+    -- Mirrors GUIFrame:CreateSeparator: a Frame with a 1px texture child.
+    local row = CreateFrame("Frame", nil, holder)
+    row:SetHeight(1)
+
+    local tex = row:CreateTexture(nil, "ARTWORK")
+    tex:SetAllPoints()
+    tex:SetColorTexture(Theme.border[1], Theme.border[2], Theme.border[3], 0.5)
+
+    return { row = row, tex = tex }
+end
+
+---------------------------------------------------------------------------------
+-- Pool instances: per-kit-type, file scope, live for the session
+---------------------------------------------------------------------------------
+
+local spellRowPool   = KE.FramePool:New(CreateSpellRowKit)
+local bossHeaderPool = KE.FramePool:New(CreateBossHeaderKit)
+local separatorPool  = KE.FramePool:New(CreateSeparatorKit)
+
+---------------------------------------------------------------------------------
+-- Configure: per-render data goes here. Uses SetScript (not HookScript) so
+-- handlers don't accumulate across reuses.
+---------------------------------------------------------------------------------
+
+local function ConfigureSpellRow(kit, spell, onSpellSelect)
+    kit.iconTexture:SetTexture(spell.icon or 134400)
+    KE:ApplyIconZoom(kit.iconTexture)
+
+    kit.label:SetText(spell.name .. "|cffffffff (" .. spell.spellId .. ")|r")
+    kit.label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
+
+    local capturedSpellId = spell.spellId
+    kit.row:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_CURSOR_RIGHT", 30, 0)
+        GameTooltip:SetSpellByID(capturedSpellId)
+        GameTooltip:Show()
+    end)
+    kit.row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    -- SetScript (not HookScript) — overwrites prior handlers so stale
+    -- closures from previous reuses don't accumulate. The previous
+    -- implementation used HookScript, which leaked closures even without
+    -- pooling. Fixed in passing.
+    kit.useBtn:SetScript("OnClick", function()
+        if onSpellSelect then onSpellSelect(capturedSpellId) end
+    end)
+    kit.useBtn:SetScript("OnEnter", function(btn)
+        GameTooltip:SetOwner(btn, "ANCHOR_CURSOR_RIGHT", 30, 0)
+        GameTooltip:SetSpellByID(capturedSpellId)
+        GameTooltip:Show()
+    end)
+    kit.useBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+end
+
+local function ConfigureBossHeader(kit, headerText)
+    kit.label:SetText(headerText)
+    kit.label:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+end
+
+local function ConfigureSeparator(kit)
+    -- Color is set in factory and doesn't change per-render. Kept as a
+    -- function so future style variants (e.g. accent separator) have a
+    -- clear extension point.
+    kit.tex:SetColorTexture(Theme.border[1], Theme.border[2], Theme.border[3], 0.5)
+end
+
+---------------------------------------------------------------------------------
+-- Public entry: CreateSpellBrowserCard
+---------------------------------------------------------------------------------
+
 function GUIFrame:CreateSpellBrowserCard(scrollChild, yOffset, config)
     config = config or {}
     local title = config.title or "Browse BigWigs Spells"
@@ -21,6 +148,13 @@ function GUIFrame:CreateSpellBrowserCard(scrollChild, yOffset, config)
     local searchFilter = config.searchFilter or ""
     local onSearchChange = config.onSearchChange
     local onSpellSelect = config.onSpellSelect
+
+    -- Release every pooled kit at the top of every render. Kits reparent
+    -- back to their pools' hidden holders; the orphaned old card from
+    -- the previous render is left empty and eligible for GC.
+    spellRowPool:ReleaseAll()
+    bossHeaderPool:ReleaseAll()
+    separatorPool:ReleaseAll()
 
     if #spells == 0 then
         local noBwCard = GUIFrame:CreateCard(scrollChild, "BigWigs Spell Browser", yOffset)
@@ -73,73 +207,18 @@ function GUIFrame:CreateSpellBrowserCard(scrollChild, yOffset, config)
             and string.format("B%d %s", boss.num, boss.name)
             or string.format("— %s —", boss.name)
 
-        local headerRow = GUIFrame:CreateRow(card.content, 14)
-        local headerLabel = headerRow:CreateFontString(nil, "OVERLAY")
-        headerLabel:SetPoint("LEFT", headerRow, "LEFT", 4, -4)
-        KE:ApplyThemeFont(headerLabel, "normal")
-        headerLabel:SetText(headerText)
-        headerLabel:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
-        card:AddRow(headerRow, 14)
+        local headerKit = bossHeaderPool:Acquire(card.content)
+        ConfigureBossHeader(headerKit, headerText)
+        card:AddRow(headerKit.row, 14)
 
-        local separator1 = GUIFrame:CreateSeparator(card.content)
-        card:AddRow(separator1, 4)
+        local separatorKit = separatorPool:Acquire(card.content)
+        ConfigureSeparator(separatorKit)
+        card:AddRow(separatorKit.row, 4)
 
         for _, spell in ipairs(bossGroups[bossKey]) do
-            local spellRow = GUIFrame:CreateRow(card.content, 28)
-
-            spellRow:EnableMouse(true)
-            local capturedSpellIdForTooltip = spell.spellId
-            spellRow:SetScript("OnEnter", function(self)
-                GameTooltip:SetOwner(self, "ANCHOR_CURSOR_RIGHT", 30, 0)
-                GameTooltip:SetSpellByID(capturedSpellIdForTooltip)
-                GameTooltip:Show()
-            end)
-            spellRow:SetScript("OnLeave", function()
-                GameTooltip:Hide()
-            end)
-
-            local iconFrame = CreateFrame("Frame", nil, spellRow)
-            iconFrame:SetSize(24, 24)
-            iconFrame:SetPoint("LEFT", spellRow, "LEFT", 4, 0)
-
-            local iconTexture = iconFrame:CreateTexture(nil, "ARTWORK")
-            iconTexture:SetPoint("TOPLEFT", 1, -1)
-            iconTexture:SetPoint("BOTTOMRIGHT", -1, 1)
-            iconTexture:SetTexture(spell.icon or 134400)
-            KE:ApplyIconZoom(iconTexture)
-
-            local iconBorder = CreateFrame("Frame", nil, iconFrame, "BackdropTemplate")
-            iconBorder:SetAllPoints()
-            iconBorder:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
-            iconBorder:SetBackdropBorderColor(0, 0, 0, 1)
-
-            local spellLabel = spellRow:CreateFontString(nil, "OVERLAY")
-            spellLabel:SetPoint("LEFT", iconFrame, "RIGHT", 6, 0)
-            spellLabel:SetPoint("RIGHT", spellRow, "RIGHT", -70, 0)
-            spellLabel:SetJustifyH("LEFT")
-            KE:ApplyThemeFont(spellLabel, "small")
-            spellLabel:SetText(spell.name .. "|cffffffff (" .. spell.spellId .. ")|r")
-            spellLabel:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
-
-            local capturedSpellId = spell.spellId
-            local useBtn = GUIFrame:CreateButton(spellRow, "Use", {
-                width = 80,
-                height = 22,
-                callback = function()
-                    if onSpellSelect then
-                        onSpellSelect(capturedSpellId)
-                    end
-                end,
-            })
-            useBtn:SetPoint("RIGHT", spellRow, "RIGHT", -4, 0)
-
-            useBtn:HookScript("OnEnter", function(btn)
-                GameTooltip:SetOwner(btn, "ANCHOR_CURSOR_RIGHT", 30, 0)
-                GameTooltip:SetSpellByID(capturedSpellIdForTooltip)
-                GameTooltip:Show()
-            end)
-
-            card:AddRow(spellRow, 28)
+            local rowKit = spellRowPool:Acquire(card.content)
+            ConfigureSpellRow(rowKit, spell, onSpellSelect)
+            card:AddRow(rowKit.row, 28)
         end
     end
 
