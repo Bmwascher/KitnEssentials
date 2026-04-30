@@ -901,6 +901,14 @@ local function CreateDungeonPanel(dungeonId)
         panel:SetAllPoints()
 
         panel:SetScript("OnHide", function()
+            -- In-place RefreshContent (same-itemId rebuild from a card edit)
+            -- keeps the preview running across the panel teardown so the
+            -- user doesn't see a flash on every keystroke. The new panel's
+            -- end-of-build auto-StartDungeonPreview likewise no-ops when
+            -- preview is already running for this dungeon.
+            if GUIFrame.contentArea and GUIFrame.contentArea._inPlaceRefresh then
+                return
+            end
             if currentPreviewDungeon == dungeonKey then
                 StopPreview()
             end
@@ -1434,9 +1442,14 @@ local function CreateDungeonPanel(dungeonId)
         end
 
         C_Timer.After(0.1, function()
-            if panel:IsShown() and not isModuleDisabled then
-                StartDungeonPreview(dungeonKey)
-            end
+            if not (panel:IsShown() and not isModuleDisabled) then return end
+            -- Skip when preview is already running for this dungeon. After
+            -- an in-place RefreshContent, the OnHide above kept the preview
+            -- alive across the rebuild — re-running StartDungeonPreview here
+            -- (which calls StopPreview internally) would cause a visible
+            -- bar/text flash on every keystroke that triggered the refresh.
+            if previewActive and currentPreviewDungeon == dungeonKey then return end
+            StartDungeonPreview(dungeonKey)
         end)
 
         return panel

@@ -1699,7 +1699,33 @@ function DT:UpdateFrameVisuals(dungeonKey, triggerId)
         local frameKey = dungeonKey .. "_" .. triggerId
         local frame = self.triggerFrames[frameKey]
         local trigger = getTrigger(dungeonKey, triggerId)
-        if not frame or not trigger then return end
+        if not trigger then return end
+
+        -- Trigger toggled disabled: hide + drop the preview frame so the
+        -- user sees the change immediately. PreviewDungeon and combat
+        -- ProcessTimerTriggers / ProcessAnnounceTriggers all gate on
+        -- trigger.enabled, so the frame won't reappear until re-enabled.
+        if trigger.enabled == false then
+            if frame then
+                frame:Hide()
+                self.triggerBars[frameKey] = nil
+                self.triggerFrames[frameKey] = nil
+            end
+            self:PositionAllFrames()
+            return
+        end
+
+        -- Trigger toggled re-enabled but a prior disable hid+dropped the
+        -- frame. Force a PreviewTrigger so the user sees it reappear
+        -- immediately instead of waiting for the next preview-loop tick
+        -- (which can be many seconds away on long-duration bars).
+        if not frame then
+            if self.previewsAllowed and self.PreviewTrigger then
+                self:PreviewTrigger(dungeonKey, triggerId)
+            end
+            self:PositionAllFrames()
+            return
+        end
 
         local config = self:GetTriggerConfig(trigger)
         if not self:UpdateFrameVisualsInPlace(frame, config) then
@@ -1712,9 +1738,18 @@ function DT:UpdateFrameVisuals(dungeonKey, triggerId)
             local tId = frame.triggerId
             local trigger = dKey and tId and getTrigger(dKey, tId)
             if trigger then
-                local config = self:GetTriggerConfig(trigger)
-                if not self:UpdateFrameVisualsInPlace(frame, config) then
-                    table_insert(rebuildList, { fk = frameKey, dKey = dKey, tId = tId, frame = frame })
+                if trigger.enabled == false then
+                    -- Disabled trigger left a stale frame behind (probably
+                    -- from before the toggle gating in this same function).
+                    -- Drop it now so the batch update doesn't keep showing it.
+                    frame:Hide()
+                    self.triggerBars[frameKey] = nil
+                    self.triggerFrames[frameKey] = nil
+                else
+                    local config = self:GetTriggerConfig(trigger)
+                    if not self:UpdateFrameVisualsInPlace(frame, config) then
+                        table_insert(rebuildList, { fk = frameKey, dKey = dKey, tId = tId, frame = frame })
+                    end
                 end
             end
         end
