@@ -23,7 +23,6 @@ local UnitSpellTargetClass = UnitSpellTargetClass
 local C_ClassColor = C_ClassColor
 local GetPlayerInfoByGUID = GetPlayerInfoByGUID
 local GetTime = GetTime
-local string_format = string.format
 local select = select
 local type = type
 
@@ -677,14 +676,8 @@ function H.StartPreviewTimer(self)
     self.positioner:SetValue(0)
 end
 
--- 30 FPS sampling so every decimal in the 0.9 → 0.1 window is observable.
--- A dirty-check below gates SetText so the actual layout-invalidating call
--- only fires when the formatted string changes — matches the
--- DungeonTimers OnVisualUpdate pattern (DungeonTimers.lua:1466-1470).
-local UPDATE_THROTTLE = 0.033
+local UPDATE_THROTTLE = 0.1
 local TARGET_NAMES_THROTTLE = 0.5  -- belt-and-suspenders fallback; primary driver is UNIT_TARGET / GROUP_ROSTER_UPDATE events
-local FMT_INT = "%.0f"
-local FMT_DEC = "%.1f"
 
 function H.OnUpdate(self, elapsed)
     self._updateElapsed = (self._updateElapsed or 0) + elapsed
@@ -719,11 +712,7 @@ function H.OnUpdate(self, elapsed)
     end
 
     local decimals = duration:EvaluateRemainingDuration(KE.curves.DurationDecimals)
-    local timeStr = string_format(decimals == 1 and FMT_DEC or FMT_INT, remaining)
-    if timeStr ~= self._lastTimeStr then
-        self._lastTimeStr = timeStr
-        self.time:SetText(timeStr)
-    end
+    self.time:SetFormattedText('%.' .. decimals .. 'f', remaining)
 
     if hasActiveCast and self._targetNamesElapsed >= TARGET_NAMES_THROTTLE then
         H.UpdateTargetNames(self)
@@ -733,7 +722,6 @@ function H.OnUpdate(self, elapsed)
     if not hasActiveCast then
         H.HideTargetNames(self)
         H.ResetCastState(self)
-        self._lastTimeStr = nil
         if self.frame then self.frame:Hide() end
     end
 
