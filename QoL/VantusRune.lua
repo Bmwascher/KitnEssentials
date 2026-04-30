@@ -79,7 +79,7 @@ function VR:FindRuneInGuildBank()
                 for slot = 1, 98 do
                     local link = GetGuildBankItemLink(tab, slot)
                     if link then
-                        local itemID = GetItemInfoInstant(link)
+                        local itemID = C_Item.GetItemInfoInstant(link)
                         if itemID == targetID then
                             return tab, slot, itemID
                         end
