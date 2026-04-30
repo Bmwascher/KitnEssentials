@@ -1156,8 +1156,13 @@ local function CreateDungeonPanel(dungeonId)
                 spells = spells,
                 searchFilter = state.spellSearchFilter or "",
                 onSearchChange = function(text)
+                    -- Persist the filter only. The spell-browser kit pools
+                    -- the outer card + searchInput, so RebuildSpellList runs
+                    -- inline on every (debounced) keystroke without tearing
+                    -- down the EditBox — focus survives across live-typing.
+                    -- A RefreshContentDeferred() here would re-render the
+                    -- whole tab and reset the trigger detail-pane scroll.
                     state.spellSearchFilter = text
-                    RefreshContentDeferred()
                 end,
                 onSpellSelect = function(spellId)
                     if selectedTrigger then
