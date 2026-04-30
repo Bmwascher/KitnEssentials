@@ -290,52 +290,551 @@ end
 
 local timerButtonPool = KE.FramePool:New(CreateTimerButtonKit)
 
-local function CreateSpellIconPreview(parent, spellId, size)
-    local Theme = KE.Theme
-    size = size or 32
-    local container = CreateFrame("Frame", nil, parent)
-    container:SetHeight(size)
+---------------------------------------------------------------------------------
+-- Detail-pane card pools
+--
+-- Every card in the right-side detail pane (Trigger / Display / Load / Actions
+-- sub-tabs) used to be rebuilt from scratch on every render. The outer
+-- contentArea:ClearContent() does Hide() + SetParent(nil) on each old child,
+-- which orphans WoW frames to UIParent — they're never GC'd. Heavy widgets
+-- (dropdowns, toggles, edit boxes) ended up costing ~370–455 KB per detail
+-- render, which compounded across the M+ dungeon-tab navigation users do.
+--
+-- Pattern: build the entire card kit (card frame, rows, widgets) ONCE in a
+-- factory under the pool's hidden holder. Wire script callbacks ONCE so they
+-- read mutable kit slots (_trigger, _applySettings, _refreshContentDeferred)
+-- that Configure swaps per render. Sets values via the widget's silent /
+-- instant API path so callbacks don't fire during programmatic refresh.
+---------------------------------------------------------------------------------
 
-    local iconFrame = CreateFrame("Frame", nil, container)
-    iconFrame:SetSize(size, size)
-    iconFrame:SetPoint("LEFT", container, "LEFT", 0, -6)
+local function CreateBasicSettingsCardKit(holder)
+    local T = KE.Theme
+    local card = GUIFrame:CreateCard(holder, "Basic Settings", 0)
 
-    iconFrame.texture = iconFrame:CreateTexture(nil, "ARTWORK")
-    iconFrame.texture:SetPoint("TOPLEFT", 1, -1)
-    iconFrame.texture:SetPoint("BOTTOMRIGHT", -1, 1)
+    local row1 = GUIFrame:CreateRow(card.content, T.rowHeight)
+    local enableTrigger = GUIFrame:CreateCheckbox(row1, "Enabled", { value = true })
+    row1:AddWidget(enableTrigger, 1)
+    card:AddRow(row1, T.rowHeight)
 
-    local texture = spellId and spellId ~= "" and C_Spell.GetSpellTexture(tonumber(spellId))
-    if texture then
-        iconFrame.texture:SetTexture(texture)
-        if KE.ApplyIconZoom then KE:ApplyIconZoom(iconFrame.texture, 0.1) end
-    else
-        iconFrame.texture:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
-    end
+    local separator1 = GUIFrame:CreateSeparator(card.content)
+    card:AddRow(separator1, T.rowHeightSeparator)
 
-    local border = CreateFrame("Frame", nil, iconFrame, "BackdropTemplate")
-    border:SetAllPoints()
-    border:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
-    border:SetBackdropBorderColor(0, 0, 0, 1)
+    local row2 = GUIFrame:CreateRow(card.content, T.rowHeightLast)
+    local nameInput = GUIFrame:CreateEditBox(row2, "Timer Name", { value = "" })
+    row2:AddWidget(nameInput, 0.5)
+    local typeDropdown = GUIFrame:CreateDropdown(row2, "Trigger Type", {
+        options = TRIGGER_TYPE_OPTIONS,
+        value = "timer",
+    })
+    row2:AddWidget(typeDropdown, 0.5)
+    card:AddRow(row2, T.rowHeightLast, 0)
 
-    local spellInfo = spellId and spellId ~= "" and C_Spell.GetSpellInfo(tonumber(spellId))
-    local spellName = spellInfo and spellInfo.name or "No spell selected"
+    local kit = {
+        row = card,                  -- pool reads kit.row as the root frame
+        card = card,
+        enableTrigger = enableTrigger,
+        nameInput = nameInput,
+        typeDropdown = typeDropdown,
+        -- per-render mutable state, updated by Configure
+        _trigger = nil,
+        _applySettings = nil,
+        _refreshContentDeferred = nil,
+    }
 
-    local nameLabel = container:CreateFontString(nil, "OVERLAY")
-    nameLabel:SetPoint("LEFT", iconFrame, "RIGHT", Theme.paddingSmall, 0)
-    nameLabel:SetFont(KE.FONT or "Fonts\\FRIZQT__.TTF", Theme.fontSizeSmall, "OUTLINE")
-    nameLabel:SetTextColor(Theme.textPrimary[1], Theme.textPrimary[2], Theme.textPrimary[3], 1)
-    nameLabel:SetText(spellName)
+    -- Wire callbacks ONCE; they read kit slots that Configure swaps per
+    -- render. This keeps closure count bounded to kit lifetime, not render
+    -- count, and avoids the leak where each render allocated 3 fresh
+    -- closures over the prior selectedTrigger.
+    enableTrigger:SetCallback(function(checked)
+        local t = kit._trigger
+        if t then t.enabled = checked end
+        if kit._applySettings then kit._applySettings() end
+    end)
+    nameInput:SetCallback(function(text)
+        local t = kit._trigger
+        if t then t.name = text end
+        if kit._applySettings then kit._applySettings() end
+        if kit._refreshContentDeferred then kit._refreshContentDeferred() end
+    end)
+    typeDropdown:SetCallback(function(key)
+        local t = kit._trigger
+        if t then t.triggerType = key end
+        if kit._applySettings then kit._applySettings() end
+    end)
 
-    container:SetScript("OnEnter", function(self)
-        if not spellId or spellId == "" then return end
+    return kit
+end
+
+local function ConfigureBasicSettingsCardKit(kit, parent, yOffset, trigger, applySettings, refreshContentDeferred)
+    local T = KE.Theme
+
+    -- Re-anchor the card to its new parent at the requested yOffset.
+    -- Acquire reparented kit.card to `parent`, but card's TOPLEFT/RIGHT
+    -- points still reference the pool's hidden holder — they need to be
+    -- re-set explicitly.
+    kit.card:ClearAllPoints()
+    kit.card:SetPoint("TOPLEFT", parent, "TOPLEFT", T.paddingSmall, -(yOffset or 0) + T.paddingSmall)
+    kit.card:SetPoint("RIGHT", parent, "RIGHT", -T.paddingSmall, 0)
+    kit.card._yOffset = yOffset or 0
+
+    -- Update slots BEFORE setting widget values so the silent/instant set
+    -- path doesn't fire stale callbacks even if a widget bypasses silent.
+    kit._trigger = trigger
+    kit._applySettings = applySettings
+    kit._refreshContentDeferred = refreshContentDeferred
+
+    -- Set values without firing callbacks:
+    -- - Toggle.SetValue(value, instant=true) skips the deferred callback fire
+    -- - EditBox.SetValue → editBox:SetText, which doesn't fire OnEnterPressed
+    -- - Dropdown.SetValue(value, silent=true) skips the callback
+    kit.enableTrigger.toggle:SetValue(trigger.enabled ~= false, true)
+    kit.nameInput:SetValue(trigger.name or "")
+    kit.typeDropdown:SetValue(trigger.triggerType or "timer", true)
+
+    return kit.card
+end
+
+local basicSettingsCardPool = KE.FramePool:New(CreateBasicSettingsCardKit)
+
+local function CreateTriggerFiltersCardKit(holder)
+    local T = KE.Theme
+    local card = GUIFrame:CreateCard(holder, "Trigger Filters", 0)
+
+    -- Row 1: spell ID input + spell icon preview
+    local row3 = GUIFrame:CreateRow(card.content, T.rowHeight)
+    local spellInput = GUIFrame:CreateEditBox(row3, "Spell ID (optional)", { value = "" })
+    row3:AddWidget(spellInput, 0.5)
+
+    -- Inline spell-icon-preview kit: container + icon + border + name label,
+    -- with the texture/name/tooltip-spellId driven by Configure-set kit slots
+    -- so a single instance can swap spells without re-allocating frames.
+    local previewContainer = CreateFrame("Frame", nil, row3)
+    previewContainer:SetHeight(32)
+
+    local iconFrame = CreateFrame("Frame", nil, previewContainer)
+    iconFrame:SetSize(24, 24)
+    iconFrame:SetPoint("LEFT", previewContainer, "LEFT", 0, -6)
+
+    local iconTexture = iconFrame:CreateTexture(nil, "ARTWORK")
+    iconTexture:SetPoint("TOPLEFT", 1, -1)
+    iconTexture:SetPoint("BOTTOMRIGHT", -1, 1)
+
+    local iconBorder = CreateFrame("Frame", nil, iconFrame, "BackdropTemplate")
+    iconBorder:SetAllPoints()
+    iconBorder:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+    iconBorder:SetBackdropBorderColor(0, 0, 0, 1)
+
+    local nameLabel = previewContainer:CreateFontString(nil, "OVERLAY")
+    nameLabel:SetPoint("LEFT", iconFrame, "RIGHT", T.paddingSmall, 0)
+    nameLabel:SetFont(KE.FONT or "Fonts\\FRIZQT__.TTF", T.fontSizeSmall, "OUTLINE")
+    nameLabel:SetTextColor(T.textPrimary[1], T.textPrimary[2], T.textPrimary[3], 1)
+
+    row3:AddWidget(previewContainer, 0.5)
+    card:AddRow(row3, T.rowHeight)
+
+    -- Row 2: message filter + match-mode dropdown
+    local row4 = GUIFrame:CreateRow(card.content, T.rowHeight)
+    local msgInput = GUIFrame:CreateEditBox(row4, "Message Filter (optional)", { value = "" })
+    row4:AddWidget(msgInput, 0.5)
+
+    local msgOpDropdown = GUIFrame:CreateDropdown(row4, "Match", {
+        options = MESSAGE_OPERATOR_OPTIONS,
+        value = "find",
+    })
+    row4:AddWidget(msgOpDropdown, 0.5)
+    card:AddRow(row4, T.rowHeightLast, 0)
+
+    local kit = {
+        row = card,
+        card = card,
+        spellInput = spellInput,
+        previewContainer = previewContainer,
+        iconTexture = iconTexture,
+        nameLabel = nameLabel,
+        msgInput = msgInput,
+        msgOpDropdown = msgOpDropdown,
+        -- per-render mutable state
+        _trigger = nil,
+        _applySettings = nil,
+        _refreshContentDeferred = nil,
+        _previewSpellId = nil,
+    }
+
+    -- Wire callbacks ONCE; read kit slots updated by Configure.
+    spellInput:SetCallback(function(text)
+        local t = kit._trigger
+        if t then t.spellId = text end
+        if kit._applySettings then kit._applySettings() end
+        if kit._refreshContentDeferred then kit._refreshContentDeferred() end
+    end)
+    msgInput:SetCallback(function(text)
+        local t = kit._trigger
+        if t then t.message = text end
+        if kit._applySettings then kit._applySettings() end
+    end)
+    msgOpDropdown:SetCallback(function(key)
+        local t = kit._trigger
+        if t then t.messageOperator = key end
+        if kit._applySettings then kit._applySettings() end
+    end)
+
+    -- Tooltip wired ONCE; reads kit._previewSpellId set by Configure.
+    previewContainer:SetScript("OnEnter", function(self)
+        local sid = kit._previewSpellId
+        if not sid or sid == "" then return end
         GameTooltip:SetOwner(self, "ANCHOR_CURSOR_RIGHT", 30, 0)
-        GameTooltip:SetSpellByID(tonumber(spellId))
+        GameTooltip:SetSpellByID(tonumber(sid))
         GameTooltip:Show()
     end)
-    container:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    previewContainer:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    return container
+    return kit
 end
+
+local function ConfigureTriggerFiltersCardKit(kit, parent, yOffset, trigger, applySettings, refreshContentDeferred)
+    local T = KE.Theme
+
+    kit.card:ClearAllPoints()
+    kit.card:SetPoint("TOPLEFT", parent, "TOPLEFT", T.paddingSmall, -(yOffset or 0) + T.paddingSmall)
+    kit.card:SetPoint("RIGHT", parent, "RIGHT", -T.paddingSmall, 0)
+    kit.card._yOffset = yOffset or 0
+
+    kit._trigger = trigger
+    kit._applySettings = applySettings
+    kit._refreshContentDeferred = refreshContentDeferred
+    kit._previewSpellId = trigger.spellId
+
+    -- Update spell icon preview based on current trigger.spellId.
+    local spellIdNum = trigger.spellId and trigger.spellId ~= "" and tonumber(trigger.spellId)
+    local texture = spellIdNum and C_Spell.GetSpellTexture(spellIdNum)
+    if texture then
+        kit.iconTexture:SetTexture(texture)
+        if KE.ApplyIconZoom then KE:ApplyIconZoom(kit.iconTexture, 0.1) end
+    else
+        kit.iconTexture:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+    end
+
+    local spellInfo = spellIdNum and C_Spell.GetSpellInfo(spellIdNum)
+    kit.nameLabel:SetText((spellInfo and spellInfo.name) or "No spell selected")
+
+    -- Set values without firing callbacks (editbox SetText is silent;
+    -- dropdown SetValue with silent=true skips callback).
+    kit.spellInput:SetValue(trigger.spellId or "")
+    kit.msgInput:SetValue(trigger.message or "")
+    kit.msgOpDropdown:SetValue(trigger.messageOperator or "find", true)
+
+    return kit.card
+end
+
+local triggerFiltersCardPool = KE.FramePool:New(CreateTriggerFiltersCardKit)
+
+local function CreateTimeConditionsCardKit(holder)
+    local T = KE.Theme
+    local card = GUIFrame:CreateCard(holder, "Time Conditions", 0)
+
+    -- Row 6: remaining-time enable checkbox (always visible)
+    local row6 = GUIFrame:CreateRow(card.content, T.rowHeight)
+    local remCheck = GUIFrame:CreateCheckbox(row6, "Enable remaining time condition", { value = false })
+    row6:AddWidget(remCheck, 1)
+    card:AddRow(row6, T.rowHeight)
+
+    -- Row 7: operator + seconds (conditionally visible based on remainingEnabled).
+    -- Built once at factory time; Configure shows/hides it and re-anchors
+    -- separator/row8 so the layout matches the old conditional-build behavior.
+    local row7 = GUIFrame:CreateRow(card.content, T.rowHeight)
+    local remOpDropdown = GUIFrame:CreateDropdown(row7, "Operator", {
+        options = COMPARISON_OPTIONS,
+        value = "<",
+    })
+    row7:AddWidget(remOpDropdown, 0.5)
+    local remSlider = GUIFrame:CreateSlider(row7, "Seconds", {
+        min = 1, max = 60, step = 1,
+        value = 5,
+        labelWidth = 60,
+    })
+    row7:AddWidget(remSlider, 0.5)
+    card:AddRow(row7, T.rowHeight)
+
+    -- Separator
+    local separator2 = GUIFrame:CreateSeparator(card.content)
+    card:AddRow(separator2, T.rowHeightSeparator)
+
+    -- Row 8: timer offset slider
+    local row8 = GUIFrame:CreateRow(card.content, T.rowHeightLast)
+    local offsetSlider = GUIFrame:CreateSlider(row8, "Timer Offset (seconds)", {
+        min = -10, max = 10, step = 0.5,
+        value = 0,
+        labelWidth = 80,
+    })
+    row8:AddWidget(offsetSlider, 1)
+    card:AddRow(row8, T.rowHeightLast, 0)
+
+    local kit = {
+        row = card,
+        card = card,
+        remCheck = remCheck,
+        row7 = row7,
+        remOpDropdown = remOpDropdown,
+        remSlider = remSlider,
+        separator2 = separator2,
+        row8 = row8,
+        offsetSlider = offsetSlider,
+        _trigger = nil,
+        _applySettings = nil,
+        _refreshContentDeferred = nil,
+    }
+
+    -- Wire callbacks ONCE; read kit slots updated by Configure.
+    remCheck:SetCallback(function(checked)
+        local t = kit._trigger
+        if t then t.remainingEnabled = checked end
+        if kit._applySettings then kit._applySettings() end
+        if kit._refreshContentDeferred then kit._refreshContentDeferred() end
+    end)
+    remOpDropdown:SetCallback(function(key)
+        local t = kit._trigger
+        if t then t.remainingOperator = key end
+        if kit._applySettings then kit._applySettings() end
+    end)
+    remSlider:SetCallback(function(val)
+        local t = kit._trigger
+        if t then t.remainingValue = val end
+        if kit._applySettings then kit._applySettings() end
+    end)
+    offsetSlider:SetCallback(function(val)
+        local t = kit._trigger
+        if t then t.extendTimer = val end
+        if kit._applySettings then kit._applySettings() end
+    end)
+
+    return kit
+end
+
+local function ConfigureTimeConditionsCardKit(kit, parent, yOffset, trigger, applySettings, refreshContentDeferred)
+    local T = KE.Theme
+
+    kit.card:ClearAllPoints()
+    kit.card:SetPoint("TOPLEFT", parent, "TOPLEFT", T.paddingSmall, -(yOffset or 0) + T.paddingSmall)
+    kit.card:SetPoint("RIGHT", parent, "RIGHT", -T.paddingSmall, 0)
+    kit.card._yOffset = yOffset or 0
+
+    kit._trigger = trigger
+    kit._applySettings = applySettings
+    kit._refreshContentDeferred = refreshContentDeferred
+
+    -- Set values without firing callbacks.
+    kit.remCheck.toggle:SetValue(trigger.remainingEnabled == true, true)
+    kit.remOpDropdown:SetValue(trigger.remainingOperator or "<", true)
+    kit.remSlider:SetValue(trigger.remainingValue or 5, true)
+    kit.offsetSlider:SetValue(trigger.extendTimer or 0, true)
+
+    -- Show/hide row7 and re-anchor downstream rows so the card matches the
+    -- old conditional-build layout (no gap when row7 is hidden).
+    local showRow7 = trigger.remainingEnabled == true
+    local content = kit.card.content
+    local padding = T.paddingSmall
+
+    local y7 = T.rowHeight + padding
+    local ySep = showRow7
+        and (T.rowHeight * 2 + padding * 2)
+        or (T.rowHeight + padding)
+    local y8 = ySep + T.rowHeightSeparator + padding
+
+    kit.row7:ClearAllPoints()
+    if showRow7 then
+        kit.row7:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -y7)
+        kit.row7:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -y7)
+        kit.row7:Show()
+    else
+        kit.row7:Hide()
+    end
+
+    kit.separator2:ClearAllPoints()
+    kit.separator2:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -ySep)
+    kit.separator2:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -ySep)
+
+    kit.row8:ClearAllPoints()
+    kit.row8:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -y8)
+    kit.row8:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -y8)
+
+    -- Recompute total content height for GetContentHeight()/GetNextOffset().
+    local totalContent = y8 + T.rowHeightLast
+    content:SetHeight(totalContent)
+    kit.card.currentY = totalContent
+    kit.card:UpdateHeight()
+
+    return kit.card
+end
+
+local timeConditionsCardPool = KE.FramePool:New(CreateTimeConditionsCardKit)
+
+local function CreateDisplayTypeCardKit(holder)
+    local T = KE.Theme
+    local card = GUIFrame:CreateCard(holder, "Display Type", 0)
+
+    local row1 = GUIFrame:CreateRow(card.content, T.rowHeightLast)
+    local displayDropdown = GUIFrame:CreateDropdown(row1, "Style", {
+        options = DISPLAY_TYPE_OPTIONS,
+        value = "bar",
+    })
+    row1:AddWidget(displayDropdown, 1)
+    card:AddRow(row1, T.rowHeightLast, 0)
+
+    local kit = {
+        row = card,
+        card = card,
+        displayDropdown = displayDropdown,
+        _trigger = nil,
+        _applySettings = nil,
+        _refreshContentDeferred = nil,
+    }
+
+    displayDropdown:SetCallback(function(key)
+        local t = kit._trigger
+        if t then t.displayType = key end
+        if kit._applySettings then kit._applySettings() end
+        if kit._refreshContentDeferred then kit._refreshContentDeferred() end
+    end)
+
+    return kit
+end
+
+local function ConfigureDisplayTypeCardKit(kit, parent, yOffset, trigger, applySettings, refreshContentDeferred)
+    local T = KE.Theme
+
+    kit.card:ClearAllPoints()
+    kit.card:SetPoint("TOPLEFT", parent, "TOPLEFT", T.paddingSmall, -(yOffset or 0) + T.paddingSmall)
+    kit.card:SetPoint("RIGHT", parent, "RIGHT", -T.paddingSmall, 0)
+    kit.card._yOffset = yOffset or 0
+
+    kit._trigger = trigger
+    kit._applySettings = applySettings
+    kit._refreshContentDeferred = refreshContentDeferred
+
+    kit.displayDropdown:SetValue(trigger.displayType or "bar", true)
+
+    return kit.card
+end
+
+local displayTypeCardPool = KE.FramePool:New(CreateDisplayTypeCardKit)
+
+local function CreateRoleCardKit(holder)
+    local T = KE.Theme
+    local card = GUIFrame:CreateCard(holder, "Role", 0)
+
+    -- Row 1: filter toggle (always shown)
+    local row1 = GUIFrame:CreateRow(card.content, T.rowHeight)
+    local roleToggle = GUIFrame:CreateCheckbox(row1, "Filter by Role", { value = false })
+    row1:AddWidget(roleToggle, 1)
+    card:AddRow(row1, T.rowHeight)
+
+    -- Separator + 3 role rows: built once, shown/hidden per Configure based
+    -- on loadRoleEnabled. Layout uses GUIFrame:CreateSeparator (a Frame) so
+    -- we can Hide it cleanly; AddSeparator creates a Texture which is
+    -- harder to manage in a conditional layout.
+    local separator = GUIFrame:CreateSeparator(card.content)
+    card:AddRow(separator, T.rowHeightSeparator)
+
+    local row2 = GUIFrame:CreateRow(card.content, T.rowHeight)
+    local tankCheck = GUIFrame:CreateCheckbox(row2, "Tank", { value = true })
+    row2:AddWidget(tankCheck, 1)
+    card:AddRow(row2, T.rowHeight)
+
+    local row3 = GUIFrame:CreateRow(card.content, T.rowHeight)
+    local healerCheck = GUIFrame:CreateCheckbox(row3, "Healer", { value = true })
+    row3:AddWidget(healerCheck, 1)
+    card:AddRow(row3, T.rowHeight)
+
+    local row4 = GUIFrame:CreateRow(card.content, T.rowHeightLast)
+    local dpsCheck = GUIFrame:CreateCheckbox(row4, "DPS", { value = true })
+    row4:AddWidget(dpsCheck, 1)
+    card:AddRow(row4, T.rowHeightLast, 0)
+
+    local kit = {
+        row = card,
+        card = card,
+        roleToggle = roleToggle,
+        separator = separator,
+        row2 = row2, tankCheck = tankCheck,
+        row3 = row3, healerCheck = healerCheck,
+        row4 = row4, dpsCheck = dpsCheck,
+        _trigger = nil,
+        _applySettings = nil,
+        _refreshContentDeferred = nil,
+    }
+
+    roleToggle:SetCallback(function(checked)
+        local t = kit._trigger
+        if t then t.loadRoleEnabled = checked end
+        if kit._applySettings then kit._applySettings() end
+        if kit._refreshContentDeferred then kit._refreshContentDeferred() end
+    end)
+    tankCheck:SetCallback(function(checked)
+        local t = kit._trigger
+        if t then t.loadRoleTank = checked end
+        if kit._applySettings then kit._applySettings() end
+    end)
+    healerCheck:SetCallback(function(checked)
+        local t = kit._trigger
+        if t then t.loadRoleHealer = checked end
+        if kit._applySettings then kit._applySettings() end
+    end)
+    dpsCheck:SetCallback(function(checked)
+        local t = kit._trigger
+        if t then t.loadRoleDPS = checked end
+        if kit._applySettings then kit._applySettings() end
+    end)
+
+    return kit
+end
+
+local function ConfigureRoleCardKit(kit, parent, yOffset, trigger, applySettings, refreshContentDeferred)
+    local T = KE.Theme
+
+    kit.card:ClearAllPoints()
+    kit.card:SetPoint("TOPLEFT", parent, "TOPLEFT", T.paddingSmall, -(yOffset or 0) + T.paddingSmall)
+    kit.card:SetPoint("RIGHT", parent, "RIGHT", -T.paddingSmall, 0)
+    kit.card._yOffset = yOffset or 0
+
+    kit._trigger = trigger
+    kit._applySettings = applySettings
+    kit._refreshContentDeferred = refreshContentDeferred
+
+    kit.roleToggle.toggle:SetValue(trigger.loadRoleEnabled == true, true)
+    kit.tankCheck.toggle:SetValue(trigger.loadRoleTank ~= false, true)
+    kit.healerCheck.toggle:SetValue(trigger.loadRoleHealer ~= false, true)
+    kit.dpsCheck.toggle:SetValue(trigger.loadRoleDPS ~= false, true)
+
+    local enabled = trigger.loadRoleEnabled == true
+    local padding = T.paddingSmall
+
+    if enabled then
+        kit.separator:Show()
+        kit.row2:Show(); kit.row3:Show(); kit.row4:Show()
+        -- Recompute card content height using the factory's full layout:
+        -- row1 + padding + sep + padding + row2 + padding + row3 + padding + row4
+        local total = T.rowHeight + padding
+            + T.rowHeightSeparator + padding
+            + T.rowHeight + padding
+            + T.rowHeight + padding
+            + T.rowHeightLast
+        kit.card.content:SetHeight(total)
+        kit.card.currentY = total
+    else
+        kit.separator:Hide()
+        kit.row2:Hide(); kit.row3:Hide(); kit.row4:Hide()
+        -- Only row1 visible. Use rowHeightLast spacing to match the original
+        -- "shape A" branch (`card1:AddRow(row1, Theme.rowHeightLast, 0)`).
+        local total = T.rowHeightLast
+        kit.card.content:SetHeight(total)
+        kit.card.currentY = total
+    end
+    kit.card:UpdateHeight()
+
+    return kit.card
+end
+
+local roleCardPool = KE.FramePool:New(CreateRoleCardKit)
 
 local function CreateDungeonPanel(dungeonId)
     local info = DUNGEON_INFO[dungeonId]
@@ -611,117 +1110,30 @@ local function CreateDungeonPanel(dungeonId)
 
             local padding = Theme.paddingSmall
 
-            -- Card 1: Basic Settings
-            local card1 = GUIFrame:CreateCard(scrollChild, "Basic Settings", yOffset)
+            -- Card 1: Basic Settings (pooled — see CreateBasicSettingsCardKit)
+            basicSettingsCardPool:ReleaseAll()
+            local basicKit = basicSettingsCardPool:Acquire(scrollChild)
+            local card1 = ConfigureBasicSettingsCardKit(basicKit, scrollChild, yOffset,
+                selectedTrigger, ApplySettings, RefreshContentDeferred)
             table_insert(activeCards, card1)
-
-            local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-            local enableTrigger = GUIFrame:CreateCheckbox(row1, "Enabled", {
-                value = selectedTrigger.enabled ~= false,
-                callback = function(checked) selectedTrigger.enabled = checked; ApplySettings() end,
-            })
-            row1:AddWidget(enableTrigger, 1)
-            card1:AddRow(row1, Theme.rowHeight)
-
-            local separator1 = GUIFrame:CreateSeparator(card1.content)
-            card1:AddRow(separator1, Theme.rowHeightSeparator)
-
-            local row2 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
-            local nameInput = GUIFrame:CreateEditBox(row2, "Timer Name", {
-                value = selectedTrigger.name or "",
-                callback = function(text) selectedTrigger.name = text; ApplySettings(); RefreshContentDeferred() end,
-            })
-            row2:AddWidget(nameInput, 0.5)
-
-            local typeDropdown = GUIFrame:CreateDropdown(row2, "Trigger Type", {
-                options = TRIGGER_TYPE_OPTIONS,
-                value = selectedTrigger.triggerType or "timer",
-                callback = function(key) selectedTrigger.triggerType = key; ApplySettings() end,
-            })
-            row2:AddWidget(typeDropdown, 0.5)
-            card1:AddRow(row2, Theme.rowHeightLast, 0)
 
             yOffset = yOffset + card1:GetContentHeight() + padding
 
-            -- Card 2: Trigger Filters
-            local card2 = GUIFrame:CreateCard(scrollChild, "Trigger Filters", yOffset)
+            -- Card 2: Trigger Filters (pooled — see CreateTriggerFiltersCardKit)
+            triggerFiltersCardPool:ReleaseAll()
+            local filtersKit = triggerFiltersCardPool:Acquire(scrollChild)
+            local card2 = ConfigureTriggerFiltersCardKit(filtersKit, scrollChild, yOffset,
+                selectedTrigger, ApplySettings, RefreshContentDeferred)
             table_insert(activeCards, card2)
-
-            local row3 = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-            local spellInput = GUIFrame:CreateEditBox(row3, "Spell ID (optional)", {
-                value = selectedTrigger.spellId or "",
-                callback = function(text) selectedTrigger.spellId = text; ApplySettings(); RefreshContentDeferred() end,
-            })
-            row3:AddWidget(spellInput, 0.5)
-
-            local iconPreview = CreateSpellIconPreview(row3, selectedTrigger.spellId, 24)
-            row3:AddWidget(iconPreview, 0.5)
-            card2:AddRow(row3, Theme.rowHeight)
-
-            local row4 = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-            local msgInput = GUIFrame:CreateEditBox(row4, "Message Filter (optional)", {
-                value = selectedTrigger.message or "",
-                callback = function(text) selectedTrigger.message = text; ApplySettings() end,
-            })
-            row4:AddWidget(msgInput, 0.5)
-
-            local msgOpDropdown = GUIFrame:CreateDropdown(row4, "Match", {
-                options = MESSAGE_OPERATOR_OPTIONS,
-                value = selectedTrigger.messageOperator or "find",
-                callback = function(key) selectedTrigger.messageOperator = key; ApplySettings() end,
-            })
-            row4:AddWidget(msgOpDropdown, 0.5)
-            card2:AddRow(row4, Theme.rowHeightLast, 0)
 
             yOffset = yOffset + card2:GetContentHeight() + padding
 
-            -- Card 3: Time Conditions
-            local card3 = GUIFrame:CreateCard(scrollChild, "Time Conditions", yOffset)
+            -- Card 3: Time Conditions (pooled — see CreateTimeConditionsCardKit)
+            timeConditionsCardPool:ReleaseAll()
+            local timeKit = timeConditionsCardPool:Acquire(scrollChild)
+            local card3 = ConfigureTimeConditionsCardKit(timeKit, scrollChild, yOffset,
+                selectedTrigger, ApplySettings, RefreshContentDeferred)
             table_insert(activeCards, card3)
-
-            local row6 = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
-            local remCheck = GUIFrame:CreateCheckbox(row6, "Enable remaining time condition", {
-                value = selectedTrigger.remainingEnabled == true,
-                callback = function(checked)
-                    selectedTrigger.remainingEnabled = checked
-                    ApplySettings()
-                    RefreshContentDeferred()
-                end,
-            })
-            row6:AddWidget(remCheck, 1)
-            card3:AddRow(row6, Theme.rowHeight)
-
-            if selectedTrigger.remainingEnabled then
-                local row7 = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
-                local remOpDropdown = GUIFrame:CreateDropdown(row7, "Operator", {
-                    options = COMPARISON_OPTIONS,
-                    value = selectedTrigger.remainingOperator or "<",
-                    callback = function(key) selectedTrigger.remainingOperator = key; ApplySettings() end,
-                })
-                row7:AddWidget(remOpDropdown, 0.5)
-
-                local remSlider = GUIFrame:CreateSlider(row7, "Seconds", {
-                    min = 1, max = 60, step = 1,
-                    value = selectedTrigger.remainingValue or 5,
-                    labelWidth = 60,
-                    callback = function(val) selectedTrigger.remainingValue = val; ApplySettings() end,
-                })
-                row7:AddWidget(remSlider, 0.5)
-                card3:AddRow(row7, Theme.rowHeight)
-            end
-
-            local separator2 = GUIFrame:CreateSeparator(card3.content)
-            card3:AddRow(separator2, Theme.rowHeightSeparator)
-
-            local row8 = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
-            local offsetSlider = GUIFrame:CreateSlider(row8, "Timer Offset (seconds)", {
-                min = -10, max = 10, step = 0.5,
-                value = selectedTrigger.extendTimer or 0,
-                labelWidth = 80,
-                callback = function(val) selectedTrigger.extendTimer = val; ApplySettings() end,
-            })
-            row8:AddWidget(offsetSlider, 1)
-            card3:AddRow(row8, Theme.rowHeightLast, 0)
 
             yOffset = yOffset + card3:GetContentHeight() + padding
 
@@ -774,22 +1186,12 @@ local function CreateDungeonPanel(dungeonId)
             local padding = Theme.paddingSmall
             local isBar = (selectedTrigger.displayType or "bar") == "bar"
 
-            -- Card 1: Display type
-            local card1 = GUIFrame:CreateCard(scrollChild, "Display Type", yOffset)
+            -- Card 1: Display Type (pooled — see CreateDisplayTypeCardKit)
+            displayTypeCardPool:ReleaseAll()
+            local displayKit = displayTypeCardPool:Acquire(scrollChild)
+            local card1 = ConfigureDisplayTypeCardKit(displayKit, scrollChild, yOffset,
+                selectedTrigger, ApplySettings, RefreshContentDeferred)
             table_insert(activeCards, card1)
-
-            local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-            local displayDropdown = GUIFrame:CreateDropdown(row1, "Style", {
-                options = DISPLAY_TYPE_OPTIONS,
-                value = selectedTrigger.displayType or "bar",
-                callback = function(key)
-                    selectedTrigger.displayType = key
-                    ApplySettings()
-                    RefreshContentDeferred()
-                end,
-            })
-            row1:AddWidget(displayDropdown, 1)
-            card1:AddRow(row1, Theme.rowHeight)
 
             yOffset = yOffset + card1:GetContentHeight() + padding
 
@@ -967,49 +1369,12 @@ local function CreateDungeonPanel(dungeonId)
 
             local padding = Theme.paddingSmall
 
-            local card1 = GUIFrame:CreateCard(scrollChild, "Role", yOffset)
+            -- Card 1: Role filter (pooled — see CreateRoleCardKit)
+            roleCardPool:ReleaseAll()
+            local roleKit = roleCardPool:Acquire(scrollChild)
+            local card1 = ConfigureRoleCardKit(roleKit, scrollChild, yOffset,
+                selectedTrigger, ApplySettings, RefreshContentDeferred)
             table_insert(activeCards, card1)
-
-            local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
-            local roleToggle = GUIFrame:CreateCheckbox(row1, "Filter by Role", {
-                value = selectedTrigger.loadRoleEnabled or false,
-                callback = function(checked)
-                    selectedTrigger.loadRoleEnabled = checked
-                    ApplySettings()
-                    RefreshContentDeferred()
-                end,
-            })
-            row1:AddWidget(roleToggle, 1)
-            if selectedTrigger.loadRoleEnabled then
-                card1:AddRow(row1, Theme.rowHeight)
-                card1:AddSeparator()
-
-                local row2 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-                local tankCheck = GUIFrame:CreateCheckbox(row2, "Tank", {
-                    value = selectedTrigger.loadRoleTank ~= false,
-                    callback = function(checked) selectedTrigger.loadRoleTank = checked; ApplySettings() end,
-                })
-                row2:AddWidget(tankCheck, 1)
-                card1:AddRow(row2, Theme.rowHeight)
-
-                local row3 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-                local healerCheck = GUIFrame:CreateCheckbox(row3, "Healer", {
-                    value = selectedTrigger.loadRoleHealer ~= false,
-                    callback = function(checked) selectedTrigger.loadRoleHealer = checked; ApplySettings() end,
-                })
-                row3:AddWidget(healerCheck, 1)
-                card1:AddRow(row3, Theme.rowHeight)
-
-                local row4 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
-                local dpsCheck = GUIFrame:CreateCheckbox(row4, "DPS", {
-                    value = selectedTrigger.loadRoleDPS ~= false,
-                    callback = function(checked) selectedTrigger.loadRoleDPS = checked; ApplySettings() end,
-                })
-                row4:AddWidget(dpsCheck, 1)
-                card1:AddRow(row4, Theme.rowHeightLast, 0)
-            else
-                card1:AddRow(row1, Theme.rowHeightLast, 0)
-            end
 
             yOffset = yOffset + card1:GetContentHeight() + padding
 

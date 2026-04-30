@@ -21,7 +21,6 @@ local select = select
 function GUIFrame:CreateCheckbox(parent, labelText, config)
     config = config or {}
     local initialState = config.value
-    local onValueChanged = config.callback
     local msgPopup = config.msgPopup
     local msgText = config.msgText
     local msgOn = config.msgOn
@@ -225,13 +224,15 @@ function GUIFrame:CreateCheckbox(parent, labelText, config)
         if AnyAnimating() then return end
         local newState = not state
         AnimateToState(newState, false)
-        if onValueChanged then
+        if row._callback then
             C_Timer.After(ANIMATION_DURATION, function()
-                onValueChanged(newState, function(revert)
-                    if revert then
-                        AnimateToState(not newState, false)
-                    end
-                end)
+                if row._callback then
+                    row._callback(newState, function(revert)
+                        if revert then
+                            AnimateToState(not newState, false)
+                        end
+                    end)
+                end
             end)
         end
         if msgPopup then
@@ -280,9 +281,9 @@ function GUIFrame:CreateCheckbox(parent, labelText, config)
     toggle.SetValue = function(_, value, instant)
         if value ~= state then
             AnimateToState(value, instant)
-            if onValueChanged and not instant then
+            if row._callback and not instant then
                 C_Timer.After(ANIMATION_DURATION, function()
-                    onValueChanged(value)
+                    if row._callback then row._callback(value) end
                 end)
             end
         end
@@ -305,5 +306,16 @@ function GUIFrame:CreateCheckbox(parent, labelText, config)
     end
 
     row.toggle = toggle
+
+    -- Pool-friendly callback slot. Internal scripts read row._callback at
+    -- click time (late-bound), so consumers can swap the callback after
+    -- creation by calling row:SetCallback(fn). Required for widget pooling
+    -- where one widget instance is reused across renders bound to different
+    -- data sources.
+    row._callback = config.callback
+    function row:SetCallback(fn)
+        self._callback = fn
+    end
+
     return row
 end
