@@ -13,7 +13,7 @@ local C_CVar_GetCVar     = C_CVar.GetCVar
 local C_CVar_SetCVar     = C_CVar.SetCVar
 local GetAddOnCPUUsage   = GetAddOnCPUUsage
 local GetAddOnMemoryUsage = GetAddOnMemoryUsage
-local GetFunctionCPUUsage = GetFunctionCPUUsage
+local GetFrameCPUUsage   = GetFrameCPUUsage
 local UpdateAddOnCPUUsage = UpdateAddOnCPUUsage
 local UpdateAddOnMemoryUsage = UpdateAddOnMemoryUsage
 local ResetCPUUsage      = ResetCPUUsage
@@ -66,72 +66,75 @@ end
 ---------------------------------------------------------------------------------
 
 local function ProfilingEnabled()
+    -- C_AddOnProfiler.IsEnabled is the canonical 12.0 check; the cvar is the
+    -- legacy path. Prefer the namespaced API; fall back to the cvar if the
+    -- namespace ever isn't there (e.g. very early load, classic builds).
+    if C_AddOnProfiler and C_AddOnProfiler.IsEnabled then
+        return C_AddOnProfiler.IsEnabled() and true or false
+    end
     return tonumber(C_CVar_GetCVar("scriptProfile")) == 1
 end
 
 ---------------------------------------------------------------------------------
--- Function discovery
+-- Frame discovery
 ---------------------------------------------------------------------------------
--- Walk a single table; collect direct function children only. Avoids deep
--- recursion (which over-collects helpers from libs and ace internals).
+-- 12.0 removed GetFunctionCPUUsage. Per-frame CPU is now the finest granularity
+-- available. We walk _G for KE-named globals + Ace modules' .frame attribute
+-- and call GetFrameCPUUsage(frame, true) to get inclusive CPU per subtree.
+--
+-- Inclusive (includeChildren=true) over-counts when both a parent and its child
+-- frame are reported separately, but it's the right default for "which module
+-- is hot" — the parent rises to the top with the cost of its bars/icons folded in.
 
-local function CollectFunctions(out, prefix, t, skipKey)
-    if type(t) ~= "table" then return end
-    for k, v in pairs(t) do
-        if type(k) == "string" and type(v) == "function" then
-            if not skipKey or not skipKey[k] then
-                insert(out, { name = prefix .. k, fn = v })
-            end
-        end
+local function IsFrame(v)
+    if type(v) ~= "table" then return false end
+    if not v.GetObjectType then return false end
+    local ok = pcall(v.GetObjectType, v)
+    return ok
+end
+
+local function TryAddFrame(rows, name, frame, seen)
+    if not IsFrame(frame) then return end
+    if seen[frame] then return end
+    seen[frame] = true
+    local ok, ms, calls = pcall(GetFrameCPUUsage, frame, true)
+    if ok and type(ms) == "number" and ms > 0 then
+        insert(rows, { name = name, ms = ms, calls = calls or 0 })
     end
 end
 
--- Methods inherited from AceAddon / AceEvent / AceHook / AceTimer / etc.
--- We don't want to surface these — they're framework noise, not KE code.
-local ACE_SKIP = {
-    Print = true, Printf = true,
-    NewModule = true, GetModule = true, IterateModules = true,
-    SetDefaultModuleState = true, SetDefaultModuleLibraries = true,
-    SetDefaultModulePrototype = true, SetDefaultModuleStorage = true,
-    Enable = true, Disable = true, IsEnabled = true,
-    GetName = true, EnableModule = true, DisableModule = true,
-    SetEnabledState = true, OnInitialize = true,
-    RegisterEvent = true, UnregisterEvent = true,
-    UnregisterAllEvents = true, IsEventRegistered = true,
-    RegisterMessage = true, UnregisterMessage = true, SendMessage = true,
-    UnregisterAllMessages = true, IsMessageRegistered = true,
-    Hook = true, SecureHook = true, RawHook = true, Unhook = true,
-    UnhookAll = true, IsHooked = true, HookScript = true, SecureHookScript = true,
-    RawHookScript = true, SecureRawHook = true,
-    ScheduleTimer = true, ScheduleRepeatingTimer = true,
-    CancelTimer = true, CancelAllTimers = true, TimeLeft = true,
-    Serialize = true, Deserialize = true,
-    callbacks = true,
-}
-
 local function GatherCpuRows()
     UpdateAddOnCPUUsage()
-    local funcs = {}
+    local rows = {}
+    local seen = {}
 
-    -- KE namespace top-level helpers (KE:ApplyFontToText, KE:ColorTextByTheme, ...)
-    CollectFunctions(funcs, "KE.", KE)
+    -- 1) KE-named globals. Project convention: KE_ModuleName + KitnEssentials_*.
+    for k, v in pairs(_G) do
+        if type(k) == "string" then
+            if k:sub(1, 3) == "KE_" or k:sub(1, 14) == "KitnEssentials" then
+                TryAddFrame(rows, k, v, seen)
+            end
+        end
+    end
 
-    -- Each Ace module (module-level methods only)
+    -- 2) Ace module-owned frames. Try common attribute names; .frame is the
+    --    canonical one in this codebase, .bar / .container show up too.
     if KitnEssentials and KitnEssentials.IterateModules then
         for name, mod in KitnEssentials:IterateModules() do
-            CollectFunctions(funcs, name .. ":", mod, ACE_SKIP)
+            TryAddFrame(rows, name .. ".frame",     mod.frame,     seen)
+            TryAddFrame(rows, name .. ".bar",       mod.bar,       seen)
+            TryAddFrame(rows, name .. ".container", mod.container, seen)
+            TryAddFrame(rows, name .. ".panel",     mod.panel,     seen)
         end
     end
 
-    local rows = {}
-    for _, entry in ipairs(funcs) do
-        -- false = exclusive (self-time only). Inclusive over-counts when both
-        -- a wrapper and its callee are in the namespace.
-        local ok, ms, calls = pcall(GetFunctionCPUUsage, entry.fn, false)
-        if ok and type(ms) == "number" and ms > 0 then
-            insert(rows, { name = entry.name, ms = ms, calls = calls or 0 })
-        end
+    -- 3) KE.GUIFrame is a known top-level GUI host that lives on the KE table,
+    --    not a global. Surface its underlying frame if exposed.
+    if KE and type(KE.GUIFrame) == "table" then
+        TryAddFrame(rows, "KE.GUIFrame.frame", KE.GUIFrame.frame, seen)
+        TryAddFrame(rows, "KE.GUIFrame",        KE.GUIFrame,       seen)
     end
+
     sort(rows, function(a, b) return a.ms > b.ms end)
     return rows
 end
@@ -155,18 +158,18 @@ end
 
 local function PrintCpuTop(arg)
     if not ProfilingEnabled() then
-        p("scriptProfile is OFF.  Run /kes profiler on then /reload to enable CPU profiling.")
+        p("Profiling is OFF.  /kes profiler on then /reload to enable CPU profiling.")
         return
     end
     local n = tonumber(arg) or 15
     local rows = GatherCpuRows()
     if #rows == 0 then
-        p("No CPU samples yet.  Try /kes profiler reset, exercise the UI for a bit, then /kes profiler cpu again.")
+        p("No frame CPU samples yet.  Try /kes profiler reset, exercise the UI for a bit, then /kes profiler cpu again.")
         return
     end
     UpdateAddOnCPUUsage()
     local addonMs = GetAddOnCPUUsage("KitnEssentials") or 0
-    pf("Top %d KE functions by self-ms (KitnEssentials total: %.2f ms):", n, addonMs)
+    pf("Top %d KE frames by inclusive ms (KitnEssentials total: %.2f ms):", n, addonMs)
     for i = 1, math_min(n, #rows) do
         local r = rows[i]
         local perCall = (r.calls > 0) and (r.ms / r.calls) or 0
@@ -287,14 +290,65 @@ local function ClearSnapshots()
 end
 
 ---------------------------------------------------------------------------------
+-- C_AddOnProfiler-backed live metrics
+---------------------------------------------------------------------------------
+
+local function GetMetricEnum(name)
+    local enum = Enum and Enum.AddOnProfilerMetric
+    return enum and enum[name]
+end
+
+local function PrintTopAddOns(arg)
+    if not (C_AddOnProfiler and C_AddOnProfiler.GetTopKAddOnsForMetric) then
+        p("C_AddOnProfiler.GetTopKAddOnsForMetric not available.")
+        return
+    end
+    local n = tonumber(arg) or 10
+    local metric = GetMetricEnum("RecentAverageTime")
+    if not metric then p("Enum.AddOnProfilerMetric.RecentAverageTime missing."); return end
+    local results = C_AddOnProfiler.GetTopKAddOnsForMetric(metric, n)
+    if not results or #results == 0 then
+        p("No addon metrics returned.")
+        return
+    end
+    pf("Top %d addons by RecentAverageTime (60-tick avg, ms):", n)
+    for i, r in ipairs(results) do
+        pf("  %2d. %.4f ms  %s", i, r.metricValue or 0, r.addOnName or "?")
+    end
+end
+
+local function PrintPeak()
+    if not (C_AddOnProfiler and C_AddOnProfiler.GetAddOnMetric) then
+        p("C_AddOnProfiler.GetAddOnMetric not available.")
+        return
+    end
+    local function get(metricName)
+        local m = GetMetricEnum(metricName)
+        if not m then return 0 end
+        return C_AddOnProfiler.GetAddOnMetric("KitnEssentials", m) or 0
+    end
+    pf("KitnEssentials live metrics:")
+    pf("  Last tick:            %.4f ms", get("LastTime"))
+    pf("  Recent avg (60 tick): %.4f ms", get("RecentAverageTime"))
+    pf("  Session avg:          %.4f ms", get("SessionAverageTime"))
+    pf("  Peak (since launch):  %.4f ms", get("PeakTime"))
+    pf("  Ticks > 1ms:  %d", get("CountTimeOver1Ms"))
+    pf("  Ticks > 5ms:  %d", get("CountTimeOver5Ms"))
+    pf("  Ticks > 10ms: %d", get("CountTimeOver10Ms"))
+    pf("  Ticks > 50ms: %d", get("CountTimeOver50Ms"))
+end
+
+---------------------------------------------------------------------------------
 -- Help
 ---------------------------------------------------------------------------------
 
 local function PrintHelp()
     p("Usage: /kes profiler <subcommand>")
-    p("  on | off          — toggle scriptProfile cvar (CPU sampling). /reload required.")
-    p("  status            — show whether scriptProfile is ON/OFF.")
-    p("  cpu [N]           — top-N hottest KE functions by self-ms (default 15).")
+    p("  on | off          — toggle scriptProfile cvar. /reload required to take effect.")
+    p("  status            — show whether profiling is ON/OFF.")
+    p("  cpu [N]           — top-N hottest KE frames by inclusive ms (default 15).")
+    p("  top [N]           — top-N addons (any) by RecentAverageTime (default 10).")
+    p("  peak              — KE live metrics: last tick / recent avg / session avg / peak.")
     p("  mem               — KE memory + delta from previous mem call.")
     p("  reset             — reset CPU counters (fresh sampling window).")
     p("  snap <label>      — capture a labeled snapshot to KitnEssentialsDB.")
@@ -324,6 +378,10 @@ function Profiler.RunCommand(input)
         ToggleProfile()
     elseif cmd == "cpu" then
         PrintCpuTop(rest)
+    elseif cmd == "top" then
+        PrintTopAddOns(rest)
+    elseif cmd == "peak" then
+        PrintPeak()
     elseif cmd == "mem" or cmd == "memory" then
         PrintMemory()
     elseif cmd == "reset" then
@@ -346,6 +404,8 @@ end
 
 -- Expose individual entry points for future GUI hookup
 Profiler.PrintCpuTop    = PrintCpuTop
+Profiler.PrintTopAddOns = PrintTopAddOns
+Profiler.PrintPeak      = PrintPeak
 Profiler.PrintMemory    = PrintMemory
 Profiler.TakeSnapshot   = TakeSnapshot
 Profiler.DiffSnapshots  = DiffSnapshots
