@@ -192,16 +192,9 @@ function GUIFrame:CreateSpellBrowserCard(scrollChild, yOffset, config)
     local searchRow = GUIFrame:CreateRow(card.content, Theme.rowHeight)
     local searchInput = GUIFrame:CreateEditBox(searchRow, "Search spells", {
         value = searchFilter,
-        -- Enter / focus-loss path: commits the text. Live filtering is on
-        -- onTextChanged below, so this is mostly redundant for keyboard
-        -- users but harmless (the deferred refresh dedupes by text).
         callback = function(text)
             if onSearchChange then onSearchChange(text) end
-        end,
-        -- Live filter as the user types, debounced 150ms.
-        onTextChanged = function(text)
-            if onSearchChange then onSearchChange(text) end
-        end,
+        end
     })
     searchRow:AddWidget(searchInput, 1)
     card:AddRow(searchRow, Theme.rowHeight)
