@@ -49,14 +49,52 @@ local function CreateSpellRowKit(holder)
     local useBtn = GUIFrame:CreateButton(row, "Use", { width = 80, height = 22 })
     useBtn:SetPoint("RIGHT", row, "RIGHT", -4, 0)
 
-    return {
+    local kit = {
         row = row,
         iconFrame = iconFrame,
         iconTexture = iconTexture,
         iconBorder = iconBorder,
         label = label,
         useBtn = useBtn,
+        -- Per-render mutable state, updated by ConfigureSpellRow:
+        _spellId = nil,
+        _onSpellSelect = nil,
     }
+
+    -- Wire scripts ONCE at kit creation. They read mutable state from kit
+    -- fields that ConfigureSpellRow updates per-render. Doing this in the
+    -- factory (not Configure) preserves the "no accumulating closures
+    -- across renders" property the pool refactor is after — hooks are
+    -- bounded to kit lifetime, not render count.
+
+    -- Row is a bare Frame we own; SetScript is safe.
+    row:SetScript("OnEnter", function(self)
+        if not kit._spellId then return end
+        GameTooltip:SetOwner(self, "ANCHOR_CURSOR_RIGHT", 30, 0)
+        GameTooltip:SetSpellByID(kit._spellId)
+        GameTooltip:Show()
+    end)
+    row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    -- Use button: KEButton already owns OnEnter (border-fade animation)
+    -- and OnLeave (animation reverse + GameTooltip:Hide). We HookScript
+    -- OnEnter to LAYER the spell tooltip on top of the animation, and we
+    -- don't touch OnLeave — KEButton's own OnLeave already hides the
+    -- tooltip. OnClick is overridden because KEButton's internal OnClick
+    -- would call a nil callback (we didn't pass one to CreateButton).
+    useBtn:HookScript("OnEnter", function(btn)
+        if not kit._spellId then return end
+        GameTooltip:SetOwner(btn, "ANCHOR_CURSOR_RIGHT", 30, 0)
+        GameTooltip:SetSpellByID(kit._spellId)
+        GameTooltip:Show()
+    end)
+    useBtn:SetScript("OnClick", function()
+        if kit._onSpellSelect and kit._spellId then
+            kit._onSpellSelect(kit._spellId)
+        end
+    end)
+
+    return kit
 end
 
 local function CreateBossHeaderKit(holder)
@@ -91,8 +129,10 @@ local bossHeaderPool = KE.FramePool:New(CreateBossHeaderKit)
 local separatorPool  = KE.FramePool:New(CreateSeparatorKit)
 
 ---------------------------------------------------------------------------------
--- Configure: per-render data goes here. Uses SetScript (not HookScript) so
--- handlers don't accumulate across reuses.
+-- Configure: per-render data update only. Script handlers are factory-bound
+-- (see CreateSpellRowKit) and read mutable state (_spellId, _onSpellSelect)
+-- set here. No SetScript / HookScript in Configure — keeps closures bounded
+-- to kit lifetime, not render count.
 ---------------------------------------------------------------------------------
 
 local function ConfigureSpellRow(kit, spell, onSpellSelect)
@@ -102,27 +142,11 @@ local function ConfigureSpellRow(kit, spell, onSpellSelect)
     kit.label:SetText(spell.name .. "|cffffffff (" .. spell.spellId .. ")|r")
     kit.label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
 
-    local capturedSpellId = spell.spellId
-    kit.row:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_CURSOR_RIGHT", 30, 0)
-        GameTooltip:SetSpellByID(capturedSpellId)
-        GameTooltip:Show()
-    end)
-    kit.row:SetScript("OnLeave", function() GameTooltip:Hide() end)
-
-    -- SetScript (not HookScript) — overwrites prior handlers so stale
-    -- closures from previous reuses don't accumulate. The previous
-    -- implementation used HookScript, which leaked closures even without
-    -- pooling. Fixed in passing.
-    kit.useBtn:SetScript("OnClick", function()
-        if onSpellSelect then onSpellSelect(capturedSpellId) end
-    end)
-    kit.useBtn:SetScript("OnEnter", function(btn)
-        GameTooltip:SetOwner(btn, "ANCHOR_CURSOR_RIGHT", 30, 0)
-        GameTooltip:SetSpellByID(capturedSpellId)
-        GameTooltip:Show()
-    end)
-    kit.useBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    -- Update mutable state read by the kit's permanently-bound scripts
+    -- (wired in CreateSpellRowKit). No SetScript / HookScript here —
+    -- handlers are factory-bound and live for the kit's lifetime.
+    kit._spellId = spell.spellId
+    kit._onSpellSelect = onSpellSelect
 end
 
 local function ConfigureBossHeader(kit, headerText)
