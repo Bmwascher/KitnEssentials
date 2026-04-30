@@ -105,7 +105,9 @@ function CC:CreateFrame()
     if gcdIntegrated.SetUseCircularEdge then gcdIntegrated:SetUseCircularEdge(true) end
 
     if gcdIntegrated.SetSwipeTexture then
-        gcdIntegrated:SetSwipeTexture(mainTexPath)
+        -- White modulation (1,1,1,1) is a visual no-op vs the texture's
+        -- own colors. Args are non-nilable per the API spec.
+        gcdIntegrated:SetSwipeTexture(mainTexPath, 1, 1, 1, 1)
     end
     gcdIntegrated:SetFrameLevel(f:GetFrameLevel() + 2)
     gcdIntegrated:Hide()
@@ -187,7 +189,7 @@ function CC:CreateGCDRing()
     if gcdCooldown.SetDrawBling then gcdCooldown:SetDrawBling(false) end
     if gcdCooldown.SetUseCircularEdge then gcdCooldown:SetUseCircularEdge(true) end
     if gcdCooldown.SetSwipeTexture then
-        gcdCooldown:SetSwipeTexture(texPath)
+        gcdCooldown:SetSwipeTexture(texPath, 1, 1, 1, 1)
     end
     gcdCooldown:SetFrameLevel(gf:GetFrameLevel() + 2)
     gf.gcdCooldown = gcdCooldown

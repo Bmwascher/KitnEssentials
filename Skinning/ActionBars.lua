@@ -426,7 +426,7 @@ local function ButtonHasContent(barName, button)
         local texture = GetShapeshiftFormInfo(id)
         return texture ~= nil
     else
-        return button.action and HasAction(button.action)
+        return button.action and C_ActionBar.HasAction(button.action)
     end
 end
 
