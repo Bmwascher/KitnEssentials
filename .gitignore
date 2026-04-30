@@ -4,6 +4,7 @@ CURSEFORGE_README.md
 .wow-api-reference/
 .wowluarc.json
 Annotations/
+docs/
 .markdownlint.json
 .luacheckrc
 References/
