@@ -182,6 +182,10 @@ function GUIFrame:ConfigureSectionHeader(header, config, yOffset, isExpanded)
     header:SetParent(scrollChild)
     header:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", T.paddingSmall, -yOffset)
     header:SetPoint("TOPRIGHT", scrollChild, "TOPRIGHT", -T.paddingSmall, -yOffset)
+    -- Reset to enabled — the sidebar filter path (BuildSidebar) sets
+    -- EnableMouse(false) on headers while filtering. Without this reset,
+    -- pooled headers reused after a filter clear stay click-disabled.
+    header:EnableMouse(true)
     header.sectionId = config.id
     header.label:SetText(config.text or "")
 
