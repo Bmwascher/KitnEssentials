@@ -20,7 +20,6 @@ local ColorPickerFrame = ColorPickerFrame
 function GUIFrame:CreateColorPicker(parent, labelText, config)
     config = config or {}
     local color = config.color
-    local callback = config.callback
     local tooltip = config.tooltip
     local rowHeight = 34
     local ANIMATION_DURATION = 0.18
@@ -72,7 +71,7 @@ function GUIFrame:CreateColorPicker(parent, labelText, config)
         swatch.r, swatch.g, swatch.b, swatch.a = r, g, b, a or 1
         swatch:SetBackdropColor(r, g, b, a or 1)
         hexText:SetText("#" .. KE:RGBAToHex(r, g, b))
-        if callback then callback(r, g, b, a or 1) end
+        if row._callback then row._callback(r, g, b, a or 1) end
     end
 
     -- Hover fade animation for border color
@@ -169,5 +168,12 @@ function GUIFrame:CreateColorPicker(parent, labelText, config)
     end
 
     row.swatch = swatch
+
+    -- Pool-friendly callback slot; UpdateColor reads late-bound.
+    row._callback = config.callback
+    function row:SetCallback(fn)
+        self._callback = fn
+    end
+
     return row
 end

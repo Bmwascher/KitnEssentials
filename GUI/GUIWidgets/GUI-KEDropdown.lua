@@ -137,7 +137,6 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
     config = config or {}
     local options = config.options
     local selected = config.value or config.selected
-    local callback = config.callback
     local tooltip = config.tooltip
     local sorting = nil
     local customHeight = nil
@@ -533,8 +532,8 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
 
                 CloseDropdown()
 
-                if callback then
-                    callback(btn._itemValue)
+                if row._callback then
+                    row._callback(btn._itemValue)
                 end
             end)
 
@@ -690,8 +689,8 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
             end
         end
 
-        if callback and not silent then
-            callback(value)
+        if row._callback and not silent then
+            row._callback(value)
         end
     end
 
@@ -762,6 +761,12 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
 
     dropdownButton.closeDropdown = CloseDropdown
     row.dropdown = dropdownButton
+
+    -- Pool-friendly callback slot; item OnClick + row:SetValue read late-bound.
+    row._callback = config.callback
+    function row:SetCallback(fn)
+        self._callback = fn
+    end
 
     return row
 end
