@@ -399,6 +399,16 @@ end
 function GUIFrame:RefreshContent()
     if not self.contentArea then return end
 
+    -- In-place refresh detection: when the same panel is being rebuilt
+    -- (e.g. RefreshContentDeferred fired by a card edit on the DungeonTimers
+    -- panel), skip the teardown side effects (cleanup callbacks, panel
+    -- OnHide preview teardown). Otherwise the live preview stops + restarts
+    -- across the rebuild and the user sees a visible bar/text flash on every
+    -- keystroke. Cleared at the end of this function before the next call.
+    local itemId = self.selectedSidebarItem or "HomePage"
+    local sameItem = (self.contentArea._lastItemId == itemId)
+    self.contentArea._inPlaceRefresh = sameItem
+
     -- Clean up custom panel if exists (e.g. sub-tab panel)
     if self.contentArea._customPanel then
         self.contentArea._customPanel:Hide()
@@ -406,10 +416,20 @@ function GUIFrame:RefreshContent()
         self.contentArea._customPanel = nil
     end
 
-    -- Fire content cleanup callbacks on tab switch
-    for _, callback in pairs(self.contentCleanupCallbacks) do
-        pcall(callback)
+    -- Fire content cleanup callbacks ONLY on real item switch — same-item
+    -- refreshes shouldn't tear down preview state.
+    if not sameItem then
+        for _, callback in pairs(self.contentCleanupCallbacks) do
+            pcall(callback)
+        end
     end
+
+    -- Flag is only needed across the synchronous teardown above (panel
+    -- :Hide() fires OnHide handlers in-place). Clear before the new panel
+    -- is built; record the itemId so the next RefreshContent can detect
+    -- in-place vs. switch.
+    self.contentArea._inPlaceRefresh = false
+    self.contentArea._lastItemId = itemId
 
     -- Show scroll frame
     if self.contentArea.scrollFrame then
@@ -431,7 +451,6 @@ function GUIFrame:RefreshContent()
 
     local T = Theme
     local yOffset = T.paddingMedium
-    local itemId = self.selectedSidebarItem or "HomePage"
 
     -- Check for panel builders (full content-area takeover, no scroll frame)
     if itemId and self.PanelBuilders and self.PanelBuilders[itemId] then
