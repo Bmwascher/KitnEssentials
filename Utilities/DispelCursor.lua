@@ -128,8 +128,14 @@ function DC:CreateFrame()
         end
     end
 
-    -- Follow cursor (throttled to ~60fps)
+    -- Follow cursor (throttled to ~60fps).
+    -- Skip-if-stationary cache: when (cursor, scale, offsets) all match the
+    -- prior tick, ClearAllPoints+SetPoint is a no-op so we return early.
+    -- Offsets are part of the key so a live GUI offset edit still repositions
+    -- without the user needing to nudge the cursor. Sentinel -1 ensures the
+    -- first tick always runs.
     local cursorElapsed = 0
+    local lastX, lastY, lastScale, lastXOff, lastYOff = -1, -1, -1, -1, -1
     frame:SetScript("OnUpdate", function(_, elapsed)
         cursorElapsed = cursorElapsed + elapsed
         if cursorElapsed < 0.016 then return end
@@ -142,10 +148,18 @@ function DC:CreateFrame()
         end
         local x, y = GetCursorPosition()
         local scale = UIParent:GetEffectiveScale()
+        local xOff = sdb.XOffset or 10
+        local yOff = sdb.YOffset or 10
+        if x == lastX and y == lastY and scale == lastScale
+           and xOff == lastXOff and yOff == lastYOff then
+            return
+        end
+        lastX, lastY, lastScale, lastXOff, lastYOff = x, y, scale, xOff, yOff
+
         cooldownText:ClearAllPoints()
         cooldownText:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT",
-            (x / scale) + (sdb.XOffset or 10),
-            (y / scale) + (sdb.YOffset or 10))
+            (x / scale) + xOff,
+            (y / scale) + yOff)
     end)
 
     -- Events
