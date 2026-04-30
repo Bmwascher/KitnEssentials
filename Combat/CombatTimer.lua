@@ -17,6 +17,7 @@ local CT = KitnEssentials:NewModule("CombatTimer", "AceEvent-3.0")
 ---------------------------------------------------------------------------------
 local CreateFrame = CreateFrame
 local GetTime = GetTime
+local InCombatLockdown = InCombatLockdown
 local math_floor = math.floor
 local string_format = string.format
 
@@ -231,12 +232,31 @@ end
 -- Core Logic
 ---------------------------------------------------------------------------------
 function CT:OnUpdate(elapsed)
+    -- Caller is responsible for attaching/detaching this script — we should
+    -- only ever fire when running or previewing. Defensive guard preserved
+    -- in case of a missed detach.
     if not self.running and not self.isPreview then return end
     self.elapsed = (self.elapsed or 0) + elapsed
     local refresh = self.refreshRate or GetRefreshRate(self.db.Format)
     if self.elapsed < refresh then return end
     self.elapsed = self.elapsed - refresh
     self:UpdateText()
+end
+
+-- Attach/detach the OnUpdate script based on whether work is needed. Out of
+-- combat with no preview, the script is detached entirely so the frame pays
+-- zero dispatch overhead per render tick.
+function CT:_SetOnUpdateActive(active)
+    if not self.frame then return end
+    if active then
+        if self._onUpdateActive then return end
+        self.frame:SetScript("OnUpdate", function(_, elapsed) self:OnUpdate(elapsed) end)
+        self._onUpdateActive = true
+    else
+        if not self._onUpdateActive then return end
+        self.frame:SetScript("OnUpdate", nil)
+        self._onUpdateActive = false
+    end
 end
 
 function CT:OnEnterCombat()
@@ -246,6 +266,7 @@ function CT:OnEnterCombat()
     KE.lastCombatDuration = 0
     self.lastDisplayedText = ""
     if self.frame then self.frame:Show() end
+    self:_SetOnUpdateActive(true)
     self:ApplySettings()
     self:UpdateText()
 end
@@ -255,6 +276,9 @@ function CT:OnExitCombat()
     KE.lastCombatDuration = GetTime() - self.startTime
     self.running = false
     self.startTime = 0
+    -- Final UpdateText below paints the closing duration; after that, drop
+    -- the OnUpdate so we don't tick at idle. Preview can keep us awake.
+    if not self.isPreview then self:_SetOnUpdateActive(false) end
     if self.db.ShowChatMessage ~= false then
         local duration = FormatTime(KE.lastCombatDuration, self.db.Format)
         KE:Print("Combat lasted " .. duration)
@@ -288,6 +312,7 @@ function CT:ShowPreview()
     self.isPreview = true
     self.frame:Show()
     self:ApplySettings()
+    self:_SetOnUpdateActive(true)
 end
 
 function CT:HidePreview()
@@ -295,6 +320,7 @@ function CT:HidePreview()
     if self.frame and not self.running and not self.db.Enabled then
         self.frame:Hide()
     end
+    if not self.running then self:_SetOnUpdateActive(false) end
 end
 
 function CT:ApplyPosition()
@@ -314,13 +340,17 @@ function CT:OnEnable()
     C_Timer.After(0.5, function() self:ApplyPosition() end)
     self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnEnterCombat")
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnExitCombat")
-    self.frame:SetScript("OnUpdate", function(_, elapsed) self:OnUpdate(elapsed) end)
+    -- Don't attach OnUpdate here. OnEnterCombat / ShowPreview will attach it
+    -- when work is actually needed; OnExitCombat / HidePreview detach it.
+    -- Module enabled mid-combat: re-arm via OnEnterCombat using the running
+    -- combat lockdown.
     if self.db.Enabled then self.frame:Show() end
+    if InCombatLockdown() then self:OnEnterCombat() end
 end
 
 function CT:OnDisable()
     if self.frame then
-        self.frame:SetScript("OnUpdate", nil)
+        self:_SetOnUpdateActive(false)
         self.frame:Hide()
     end
     self.running = false
