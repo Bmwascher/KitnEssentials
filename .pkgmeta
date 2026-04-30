@@ -16,6 +16,7 @@ ignore:
   - .markdownlint.json
   - .wowluarc.json
   - .wow-api-reference
+  - docs
   - Annotations
   - CLAUDE.md
   - CHANGELOG.md
