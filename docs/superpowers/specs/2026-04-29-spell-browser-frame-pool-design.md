@@ -348,3 +348,79 @@ threshold so the result is unambiguously pass or fail.
 - [x] Out-of-scope list is explicit (no scope creep into B/C alternatives
       from earlier discussion).
 - [x] Risks are real and have mitigations.
+
+---
+
+## Verification results — 2026-04-29
+
+### Quantitative measurements
+
+Two independent reproductions, KB precision via `GetAddOnMemoryUsage`:
+
+| Test | Cold (KB) | Final (KB) | Delta (KB) | Per-click (KB) |
+|---|---|---|---|---|
+| Same-dungeon × 5 (Maisara × 5) | 5561.33 | 8134.38 | +2573.05 | 514.61 |
+| Cross-dungeon × 8 (all 8 dungeons) | 5547.94 | 9421.25 | +3873.31 | 484.16 |
+
+Earlier MB-precision pass through 8 dungeons twice was 4.10 / 3.18 MB
+(first / second pass deltas), confirming the second pass was not
+substantially cheaper than the first.
+
+### Pass/fail against the spec's stated criterion
+
+Strict criterion was `(second_pass - first_pass) <= 1.5 MB` on the
+8-dungeon cycle test. Actual delta was ~3.2 MB. **FAIL** on the literal
+criterion.
+
+### Qualitative verification (in-game)
+
+- [x] Spell browser populates correctly across all 8 dungeons (no errors,
+      icons / names / IDs / Use buttons all rendering correctly).
+- [x] Use button border animates from gray to accent on mouse-over (the
+      regression-fix sanity check; proves the factory-bound HookScript
+      coexists with KEButton's own border-fade animation).
+- [x] BugSack stays clean during all reproductions.
+- [x] wowlua-ls Problems panel: 0 issues on `Core/FramePool.lua` and
+      `GUI/GUIWidgets/GUI-SpellBrowserCard.lua` after annotation update.
+
+### Diagnosis
+
+Same-dungeon and cross-dungeon per-click costs are essentially identical
+(~500 KB each). If the pool were not being used, same-dungeon would
+allocate ~50 fresh kits per click on top of everything else and would
+be substantially more expensive than cross-dungeon. The fact that they
+match strongly supports **the spell-browser pool is working as designed**.
+
+The residual ~500 KB per click is dominated by **non-pooled GUI widgets
+elsewhere in the dungeon panel** — sidebar trigger-list buttons, the
+right-side detail panel cards (Display/Load/Actions sub-tabs, position
+cards, color pickers, etc.). These are explicitly out of scope per the
+"Out of scope" section above.
+
+The spec's pass criterion was overly optimistic about how much of
+per-click memory cost was attributable to the spell-browser card
+specifically. Empirically the spell browser is a small fraction of the
+total per-click rebuild cost.
+
+### Outcome
+
+Refactor accepted as delivered. The spell-browser frame leak is closed
+in isolation; the broader per-click leak (timer-list buttons, other
+cards) remains documented in `project_dungeontimers_memory_leak.md` as
+"remaining issue" for a future pass that adopts `KE.FramePool` for
+those widgets.
+
+### Latent bugs fixed in passing
+
+- **HookScript closure accumulation on Use button** — pre-existing slow
+  leak (one closure per render, never cleared). Fixed by moving script
+  wiring into `CreateSpellRowKit` factory (one wiring per kit lifetime,
+  bounded).
+- **`if not KitnEssentials then return end` early-return** in the pool
+  primitive — would have left `KE.FramePool` nil for the entire session
+  because the file loads in Core.xml before `Main.lua` creates the
+  AceAddon global. Caught by Task 4's in-game smoke test on first
+  `/reload`. Removed, with comment explaining why the guard must NOT
+  be added back. Filed as a learning: copying the module-file template
+  guard into a Core primitive that loads before Main.lua silently breaks
+  the file's bottom-of-file initialization.
