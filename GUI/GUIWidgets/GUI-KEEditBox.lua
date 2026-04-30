@@ -20,7 +20,6 @@ local CreateFrame = CreateFrame
 function GUIFrame:CreateEditBox(parent, labelText, config)
     config = config or {}
     local value = tostring(config.value or "")
-    local callback = config.callback
     local tooltip = config.tooltip
     local customHeight = config.height
 
@@ -105,12 +104,12 @@ function GUIFrame:CreateEditBox(parent, labelText, config)
 
     editBox:SetScript("OnEnterPressed", function(self)
         self:ClearFocus()
-        if callback then callback(self:GetText()) end
+        if row._callback then row._callback(self:GetText()) end
     end)
 
     editBox:SetScript("OnEditFocusLost", function(self)
         container:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
-        if callback then callback(self:GetText()) end
+        if row._callback then row._callback(self:GetText()) end
     end)
 
     editBox:SetScript("OnEditFocusGained", function()
@@ -167,5 +166,12 @@ function GUIFrame:CreateEditBox(parent, labelText, config)
 
     row.editBox = editBox
     row.container = container
+
+    -- Pool-friendly callback slot; OnEnterPressed/OnEditFocusLost read late-bound.
+    row._callback = config.callback
+    function row:SetCallback(fn)
+        self._callback = fn
+    end
+
     return row
 end
