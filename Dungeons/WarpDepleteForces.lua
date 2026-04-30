@@ -40,7 +40,7 @@ local ipairs = ipairs
 local table_remove = table.remove
 local wipe = wipe
 local issecretvalue = issecretvalue or function() return false end
-local SendChatMessage = SendChatMessage
+local SendChatMessage = C_ChatInfo.SendChatMessage
 local IsInGroup = IsInGroup
 
 ---------------------------------------------------------------------------------

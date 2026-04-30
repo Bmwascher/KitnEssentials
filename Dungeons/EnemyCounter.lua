@@ -63,7 +63,7 @@ local function GetEnemyCount()
     end
     -- Only print when count changes
     if DEBUG_EC and count ~= lastDebugCount then
-        for _, line in ipairs(debugLines) do print(line) end
+        for _, line in ipairs(debugLines --[[@as table]]) do print(line) end
         print(("[EC] count=%d (was %d)"):format(count, lastDebugCount))
         lastDebugCount = count
     end

@@ -73,7 +73,9 @@ end
 -- prefixed with EXPORT_PREFIX. Mirrors DungeonTimers' trigger export pipeline
 -- (AceSerializer -> LibDeflate:CompressDeflate -> LibDeflate:EncodeForPrint).
 
----@return string|nil encoded, string|nil error, number|nil count
+---@return string|nil encoded
+---@return string|nil error
+---@return number|nil count
 function KE:ExportNicknames()
     local nicks = GetDB()
     if not nicks then return nil, "Nicknames database not available" end
@@ -116,7 +118,8 @@ end
 
 ---@param importString string
 ---@param replaceAll boolean|nil wipe local entries before applying the import
----@return boolean success, string message
+---@return boolean success
+---@return string message
 function KE:ImportNicknames(importString, replaceAll)
     if not importString or importString == "" then
         return false, "Import string is empty"
