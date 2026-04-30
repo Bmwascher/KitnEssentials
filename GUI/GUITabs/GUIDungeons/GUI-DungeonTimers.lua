@@ -668,6 +668,174 @@ end
 
 local timeConditionsCardPool = KE.FramePool:New(CreateTimeConditionsCardKit)
 
+local function CreateDisplayTypeCardKit(holder)
+    local T = KE.Theme
+    local card = GUIFrame:CreateCard(holder, "Display Type", 0)
+
+    local row1 = GUIFrame:CreateRow(card.content, T.rowHeightLast)
+    local displayDropdown = GUIFrame:CreateDropdown(row1, "Style", {
+        options = DISPLAY_TYPE_OPTIONS,
+        value = "bar",
+    })
+    row1:AddWidget(displayDropdown, 1)
+    card:AddRow(row1, T.rowHeightLast, 0)
+
+    local kit = {
+        row = card,
+        card = card,
+        displayDropdown = displayDropdown,
+        _trigger = nil,
+        _applySettings = nil,
+        _refreshContentDeferred = nil,
+    }
+
+    displayDropdown:SetCallback(function(key)
+        local t = kit._trigger
+        if t then t.displayType = key end
+        if kit._applySettings then kit._applySettings() end
+        if kit._refreshContentDeferred then kit._refreshContentDeferred() end
+    end)
+
+    return kit
+end
+
+local function ConfigureDisplayTypeCardKit(kit, parent, yOffset, trigger, applySettings, refreshContentDeferred)
+    local T = KE.Theme
+
+    kit.card:ClearAllPoints()
+    kit.card:SetPoint("TOPLEFT", parent, "TOPLEFT", T.paddingSmall, -(yOffset or 0) + T.paddingSmall)
+    kit.card:SetPoint("RIGHT", parent, "RIGHT", -T.paddingSmall, 0)
+    kit.card._yOffset = yOffset or 0
+
+    kit._trigger = trigger
+    kit._applySettings = applySettings
+    kit._refreshContentDeferred = refreshContentDeferred
+
+    kit.displayDropdown:SetValue(trigger.displayType or "bar", true)
+
+    return kit.card
+end
+
+local displayTypeCardPool = KE.FramePool:New(CreateDisplayTypeCardKit)
+
+local function CreateRoleCardKit(holder)
+    local T = KE.Theme
+    local card = GUIFrame:CreateCard(holder, "Role", 0)
+
+    -- Row 1: filter toggle (always shown)
+    local row1 = GUIFrame:CreateRow(card.content, T.rowHeight)
+    local roleToggle = GUIFrame:CreateCheckbox(row1, "Filter by Role", { value = false })
+    row1:AddWidget(roleToggle, 1)
+    card:AddRow(row1, T.rowHeight)
+
+    -- Separator + 3 role rows: built once, shown/hidden per Configure based
+    -- on loadRoleEnabled. Layout uses GUIFrame:CreateSeparator (a Frame) so
+    -- we can Hide it cleanly; AddSeparator creates a Texture which is
+    -- harder to manage in a conditional layout.
+    local separator = GUIFrame:CreateSeparator(card.content)
+    card:AddRow(separator, T.rowHeightSeparator)
+
+    local row2 = GUIFrame:CreateRow(card.content, T.rowHeight)
+    local tankCheck = GUIFrame:CreateCheckbox(row2, "Tank", { value = true })
+    row2:AddWidget(tankCheck, 1)
+    card:AddRow(row2, T.rowHeight)
+
+    local row3 = GUIFrame:CreateRow(card.content, T.rowHeight)
+    local healerCheck = GUIFrame:CreateCheckbox(row3, "Healer", { value = true })
+    row3:AddWidget(healerCheck, 1)
+    card:AddRow(row3, T.rowHeight)
+
+    local row4 = GUIFrame:CreateRow(card.content, T.rowHeightLast)
+    local dpsCheck = GUIFrame:CreateCheckbox(row4, "DPS", { value = true })
+    row4:AddWidget(dpsCheck, 1)
+    card:AddRow(row4, T.rowHeightLast, 0)
+
+    local kit = {
+        row = card,
+        card = card,
+        roleToggle = roleToggle,
+        separator = separator,
+        row2 = row2, tankCheck = tankCheck,
+        row3 = row3, healerCheck = healerCheck,
+        row4 = row4, dpsCheck = dpsCheck,
+        _trigger = nil,
+        _applySettings = nil,
+        _refreshContentDeferred = nil,
+    }
+
+    roleToggle:SetCallback(function(checked)
+        local t = kit._trigger
+        if t then t.loadRoleEnabled = checked end
+        if kit._applySettings then kit._applySettings() end
+        if kit._refreshContentDeferred then kit._refreshContentDeferred() end
+    end)
+    tankCheck:SetCallback(function(checked)
+        local t = kit._trigger
+        if t then t.loadRoleTank = checked end
+        if kit._applySettings then kit._applySettings() end
+    end)
+    healerCheck:SetCallback(function(checked)
+        local t = kit._trigger
+        if t then t.loadRoleHealer = checked end
+        if kit._applySettings then kit._applySettings() end
+    end)
+    dpsCheck:SetCallback(function(checked)
+        local t = kit._trigger
+        if t then t.loadRoleDPS = checked end
+        if kit._applySettings then kit._applySettings() end
+    end)
+
+    return kit
+end
+
+local function ConfigureRoleCardKit(kit, parent, yOffset, trigger, applySettings, refreshContentDeferred)
+    local T = KE.Theme
+
+    kit.card:ClearAllPoints()
+    kit.card:SetPoint("TOPLEFT", parent, "TOPLEFT", T.paddingSmall, -(yOffset or 0) + T.paddingSmall)
+    kit.card:SetPoint("RIGHT", parent, "RIGHT", -T.paddingSmall, 0)
+    kit.card._yOffset = yOffset or 0
+
+    kit._trigger = trigger
+    kit._applySettings = applySettings
+    kit._refreshContentDeferred = refreshContentDeferred
+
+    kit.roleToggle.toggle:SetValue(trigger.loadRoleEnabled == true, true)
+    kit.tankCheck.toggle:SetValue(trigger.loadRoleTank ~= false, true)
+    kit.healerCheck.toggle:SetValue(trigger.loadRoleHealer ~= false, true)
+    kit.dpsCheck.toggle:SetValue(trigger.loadRoleDPS ~= false, true)
+
+    local enabled = trigger.loadRoleEnabled == true
+    local padding = T.paddingSmall
+
+    if enabled then
+        kit.separator:Show()
+        kit.row2:Show(); kit.row3:Show(); kit.row4:Show()
+        -- Recompute card content height using the factory's full layout:
+        -- row1 + padding + sep + padding + row2 + padding + row3 + padding + row4
+        local total = T.rowHeight + padding
+            + T.rowHeightSeparator + padding
+            + T.rowHeight + padding
+            + T.rowHeight + padding
+            + T.rowHeightLast
+        kit.card.content:SetHeight(total)
+        kit.card.currentY = total
+    else
+        kit.separator:Hide()
+        kit.row2:Hide(); kit.row3:Hide(); kit.row4:Hide()
+        -- Only row1 visible. Use rowHeightLast spacing to match the original
+        -- "shape A" branch (`card1:AddRow(row1, Theme.rowHeightLast, 0)`).
+        local total = T.rowHeightLast
+        kit.card.content:SetHeight(total)
+        kit.card.currentY = total
+    end
+    kit.card:UpdateHeight()
+
+    return kit.card
+end
+
+local roleCardPool = KE.FramePool:New(CreateRoleCardKit)
+
 local function CreateDungeonPanel(dungeonId)
     local info = DUNGEON_INFO[dungeonId]
     if not info then return nil end
@@ -1018,22 +1186,12 @@ local function CreateDungeonPanel(dungeonId)
             local padding = Theme.paddingSmall
             local isBar = (selectedTrigger.displayType or "bar") == "bar"
 
-            -- Card 1: Display type
-            local card1 = GUIFrame:CreateCard(scrollChild, "Display Type", yOffset)
+            -- Card 1: Display Type (pooled — see CreateDisplayTypeCardKit)
+            displayTypeCardPool:ReleaseAll()
+            local displayKit = displayTypeCardPool:Acquire(scrollChild)
+            local card1 = ConfigureDisplayTypeCardKit(displayKit, scrollChild, yOffset,
+                selectedTrigger, ApplySettings, RefreshContentDeferred)
             table_insert(activeCards, card1)
-
-            local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-            local displayDropdown = GUIFrame:CreateDropdown(row1, "Style", {
-                options = DISPLAY_TYPE_OPTIONS,
-                value = selectedTrigger.displayType or "bar",
-                callback = function(key)
-                    selectedTrigger.displayType = key
-                    ApplySettings()
-                    RefreshContentDeferred()
-                end,
-            })
-            row1:AddWidget(displayDropdown, 1)
-            card1:AddRow(row1, Theme.rowHeight)
 
             yOffset = yOffset + card1:GetContentHeight() + padding
 
@@ -1211,49 +1369,12 @@ local function CreateDungeonPanel(dungeonId)
 
             local padding = Theme.paddingSmall
 
-            local card1 = GUIFrame:CreateCard(scrollChild, "Role", yOffset)
+            -- Card 1: Role filter (pooled — see CreateRoleCardKit)
+            roleCardPool:ReleaseAll()
+            local roleKit = roleCardPool:Acquire(scrollChild)
+            local card1 = ConfigureRoleCardKit(roleKit, scrollChild, yOffset,
+                selectedTrigger, ApplySettings, RefreshContentDeferred)
             table_insert(activeCards, card1)
-
-            local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
-            local roleToggle = GUIFrame:CreateCheckbox(row1, "Filter by Role", {
-                value = selectedTrigger.loadRoleEnabled or false,
-                callback = function(checked)
-                    selectedTrigger.loadRoleEnabled = checked
-                    ApplySettings()
-                    RefreshContentDeferred()
-                end,
-            })
-            row1:AddWidget(roleToggle, 1)
-            if selectedTrigger.loadRoleEnabled then
-                card1:AddRow(row1, Theme.rowHeight)
-                card1:AddSeparator()
-
-                local row2 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-                local tankCheck = GUIFrame:CreateCheckbox(row2, "Tank", {
-                    value = selectedTrigger.loadRoleTank ~= false,
-                    callback = function(checked) selectedTrigger.loadRoleTank = checked; ApplySettings() end,
-                })
-                row2:AddWidget(tankCheck, 1)
-                card1:AddRow(row2, Theme.rowHeight)
-
-                local row3 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-                local healerCheck = GUIFrame:CreateCheckbox(row3, "Healer", {
-                    value = selectedTrigger.loadRoleHealer ~= false,
-                    callback = function(checked) selectedTrigger.loadRoleHealer = checked; ApplySettings() end,
-                })
-                row3:AddWidget(healerCheck, 1)
-                card1:AddRow(row3, Theme.rowHeight)
-
-                local row4 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
-                local dpsCheck = GUIFrame:CreateCheckbox(row4, "DPS", {
-                    value = selectedTrigger.loadRoleDPS ~= false,
-                    callback = function(checked) selectedTrigger.loadRoleDPS = checked; ApplySettings() end,
-                })
-                row4:AddWidget(dpsCheck, 1)
-                card1:AddRow(row4, Theme.rowHeightLast, 0)
-            else
-                card1:AddRow(row1, Theme.rowHeightLast, 0)
-            end
 
             yOffset = yOffset + card1:GetContentHeight() + padding
 
