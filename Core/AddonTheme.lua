@@ -159,7 +159,7 @@ end
 ---------------------------------------------------------------------------------
 -- Live Theme Table
 ---------------------------------------------------------------------------------
-KE.Theme = {}
+KE.Theme = {} --[[@as KETheme]]
 for k, v in pairs(ThemeDefaults) do
     if type(v) == "table" then KE.Theme[k] = CopyColor(v) else KE.Theme[k] = v end
 end

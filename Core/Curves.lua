@@ -7,7 +7,7 @@
 
 ---@class KE
 local KE = select(2, ...)
-KE.curves = {}
+KE.curves = {} --[[@as KE.Curves]]
 
 ---------------------------------------------------------------------------------
 -- Curve Definitions

@@ -9,6 +9,17 @@
 ---@class KE
 local KE = select(2, ...)
 
+-- Custom soft-outline shadow system. Eight FontString siblings layered around
+-- a main FontString to fake an outline glow without the hard-edged Blizzard
+-- OUTLINE flag.
+---@class SoftOutline
+---@field main FontString?
+---@field shadows FontString[]?
+---@field thickness number
+---@field color number[]
+---@field alpha number
+---@field isShown boolean
+
 local SoftOutline = {}
 SoftOutline.__index = SoftOutline
 
@@ -192,6 +203,7 @@ end
 -- Only hooks once per FontString
 function SoftOutline:_HookMain()
     local main = self.main
+    if not main then return end
 
     if main._keSoftOutlineHooked then return end
     main._keSoftOutlineHooked = true

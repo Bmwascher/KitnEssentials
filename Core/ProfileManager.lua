@@ -43,7 +43,8 @@ end
 
 --- Switch to a different profile
 ---@param profileName string The profile name to switch to
----@return boolean success, string|nil error
+---@return boolean success
+---@return string|nil error
 function ProfileManager:SetProfile(profileName)
     if not profileName or profileName == "" then return false, "Invalid profile name" end
     if not KE.db then return false, "Database not initialized" end
@@ -57,7 +58,8 @@ end
 
 --- Create a new profile with default values
 ---@param profileName string The name for the new profile
----@return boolean success, string|nil error
+---@return boolean success
+---@return string|nil error
 function ProfileManager:CreateProfile(profileName)
     if not profileName or profileName == "" then return false, "Profile name cannot be empty" end
     if not KE.db then return false, "Database not initialized" end
@@ -86,7 +88,8 @@ end
 --- Copy settings from one profile to another
 ---@param sourceProfile string Source profile name
 ---@param targetProfile string|nil Target profile name (current if nil)
----@return boolean success, string|nil error
+---@return boolean success
+---@return string|nil error
 function ProfileManager:CopyProfile(sourceProfile, targetProfile)
     if not sourceProfile or sourceProfile == "" then return false, "Source profile name cannot be empty" end
     if not KE.db then return false, "Database not initialized" end
@@ -122,7 +125,8 @@ end
 
 --- Delete a profile
 ---@param profileName string The profile name to delete
----@return boolean success, string|nil error
+---@return boolean success
+---@return string|nil error
 function ProfileManager:DeleteProfile(profileName)
     if not profileName or profileName == "" then return false, "Profile name cannot be empty" end
     if not KE.db then return false, "Database not initialized" end
@@ -156,7 +160,8 @@ end
 --- Rename a profile
 ---@param oldName string Current profile name
 ---@param newName string New profile name
----@return boolean success, string|nil error
+---@return boolean success
+---@return string|nil error
 function ProfileManager:RenameProfile(oldName, newName)
     if not oldName or oldName == "" then return false, "Current name cannot be empty" end
     if not newName or newName == "" then return false, "New name cannot be empty" end
@@ -239,7 +244,8 @@ end
 
 --- Set which profile to use as global
 ---@param profileName string The profile name to use globally
----@return boolean success, string|nil error
+---@return boolean success
+---@return string|nil error
 function ProfileManager:SetGlobalProfile(profileName)
     if not profileName or profileName == "" then return false, "Profile name cannot be empty" end
     if not KE.db or not KE.db.global then return false, "Database not initialized" end
@@ -268,7 +274,8 @@ end
 
 --- Export a profile to a string
 ---@param profileName string|nil Profile to export (current if nil)
----@return string|nil exportString, string|nil error
+---@return string|nil exportString
+---@return string|nil error
 function ProfileManager:ExportProfile(profileName)
     profileName = profileName or self:GetCurrentProfile()
 
@@ -303,7 +310,8 @@ end
 --- Import a profile from a string
 ---@param importString string The export string
 ---@param targetName string|nil Name for the imported profile (uses embedded name if nil)
----@return boolean success, string|nil nameOrError
+---@return boolean success
+---@return string|nil nameOrError
 function ProfileManager:ImportProfile(importString, targetName)
     if not importString or importString == "" then return false, "Import string is empty" end
     -- Validate prefix

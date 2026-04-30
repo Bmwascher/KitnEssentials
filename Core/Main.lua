@@ -29,7 +29,7 @@ function KitnEssentials:OnInitialize()
     if not defaults then
         defaults = { profile = {} }
     end
-    KE.db = LibStub("AceDB-3.0"):New("KitnEssentialsDB", defaults, true)
+    KE.db = LibStub("AceDB-3.0"):New("KitnEssentialsDB", defaults, true) --[[@as AceDB]]
     if KE.LDS then
         KE.LDS:EnhanceDatabase(KE.db, "KitnEssentials")
     end
