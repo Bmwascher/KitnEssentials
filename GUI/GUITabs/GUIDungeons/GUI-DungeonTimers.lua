@@ -528,6 +528,146 @@ end
 
 local triggerFiltersCardPool = KE.FramePool:New(CreateTriggerFiltersCardKit)
 
+local function CreateTimeConditionsCardKit(holder)
+    local T = KE.Theme
+    local card = GUIFrame:CreateCard(holder, "Time Conditions", 0)
+
+    -- Row 6: remaining-time enable checkbox (always visible)
+    local row6 = GUIFrame:CreateRow(card.content, T.rowHeight)
+    local remCheck = GUIFrame:CreateCheckbox(row6, "Enable remaining time condition", { value = false })
+    row6:AddWidget(remCheck, 1)
+    card:AddRow(row6, T.rowHeight)
+
+    -- Row 7: operator + seconds (conditionally visible based on remainingEnabled).
+    -- Built once at factory time; Configure shows/hides it and re-anchors
+    -- separator/row8 so the layout matches the old conditional-build behavior.
+    local row7 = GUIFrame:CreateRow(card.content, T.rowHeight)
+    local remOpDropdown = GUIFrame:CreateDropdown(row7, "Operator", {
+        options = COMPARISON_OPTIONS,
+        value = "<",
+    })
+    row7:AddWidget(remOpDropdown, 0.5)
+    local remSlider = GUIFrame:CreateSlider(row7, "Seconds", {
+        min = 1, max = 60, step = 1,
+        value = 5,
+        labelWidth = 60,
+    })
+    row7:AddWidget(remSlider, 0.5)
+    card:AddRow(row7, T.rowHeight)
+
+    -- Separator
+    local separator2 = GUIFrame:CreateSeparator(card.content)
+    card:AddRow(separator2, T.rowHeightSeparator)
+
+    -- Row 8: timer offset slider
+    local row8 = GUIFrame:CreateRow(card.content, T.rowHeightLast)
+    local offsetSlider = GUIFrame:CreateSlider(row8, "Timer Offset (seconds)", {
+        min = -10, max = 10, step = 0.5,
+        value = 0,
+        labelWidth = 80,
+    })
+    row8:AddWidget(offsetSlider, 1)
+    card:AddRow(row8, T.rowHeightLast, 0)
+
+    local kit = {
+        row = card,
+        card = card,
+        remCheck = remCheck,
+        row7 = row7,
+        remOpDropdown = remOpDropdown,
+        remSlider = remSlider,
+        separator2 = separator2,
+        row8 = row8,
+        offsetSlider = offsetSlider,
+        _trigger = nil,
+        _applySettings = nil,
+        _refreshContentDeferred = nil,
+    }
+
+    -- Wire callbacks ONCE; read kit slots updated by Configure.
+    remCheck:SetCallback(function(checked)
+        local t = kit._trigger
+        if t then t.remainingEnabled = checked end
+        if kit._applySettings then kit._applySettings() end
+        if kit._refreshContentDeferred then kit._refreshContentDeferred() end
+    end)
+    remOpDropdown:SetCallback(function(key)
+        local t = kit._trigger
+        if t then t.remainingOperator = key end
+        if kit._applySettings then kit._applySettings() end
+    end)
+    remSlider:SetCallback(function(val)
+        local t = kit._trigger
+        if t then t.remainingValue = val end
+        if kit._applySettings then kit._applySettings() end
+    end)
+    offsetSlider:SetCallback(function(val)
+        local t = kit._trigger
+        if t then t.extendTimer = val end
+        if kit._applySettings then kit._applySettings() end
+    end)
+
+    return kit
+end
+
+local function ConfigureTimeConditionsCardKit(kit, parent, yOffset, trigger, applySettings, refreshContentDeferred)
+    local T = KE.Theme
+
+    kit.card:ClearAllPoints()
+    kit.card:SetPoint("TOPLEFT", parent, "TOPLEFT", T.paddingSmall, -(yOffset or 0) + T.paddingSmall)
+    kit.card:SetPoint("RIGHT", parent, "RIGHT", -T.paddingSmall, 0)
+    kit.card._yOffset = yOffset or 0
+
+    kit._trigger = trigger
+    kit._applySettings = applySettings
+    kit._refreshContentDeferred = refreshContentDeferred
+
+    -- Set values without firing callbacks.
+    kit.remCheck.toggle:SetValue(trigger.remainingEnabled == true, true)
+    kit.remOpDropdown:SetValue(trigger.remainingOperator or "<", true)
+    kit.remSlider:SetValue(trigger.remainingValue or 5)
+    kit.offsetSlider:SetValue(trigger.extendTimer or 0)
+
+    -- Show/hide row7 and re-anchor downstream rows so the card matches the
+    -- old conditional-build layout (no gap when row7 is hidden).
+    local showRow7 = trigger.remainingEnabled == true
+    local content = kit.card.content
+    local padding = T.paddingSmall
+
+    local y7 = T.rowHeight + padding
+    local ySep = showRow7
+        and (T.rowHeight * 2 + padding * 2)
+        or (T.rowHeight + padding)
+    local y8 = ySep + T.rowHeightSeparator + padding
+
+    kit.row7:ClearAllPoints()
+    if showRow7 then
+        kit.row7:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -y7)
+        kit.row7:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -y7)
+        kit.row7:Show()
+    else
+        kit.row7:Hide()
+    end
+
+    kit.separator2:ClearAllPoints()
+    kit.separator2:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -ySep)
+    kit.separator2:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -ySep)
+
+    kit.row8:ClearAllPoints()
+    kit.row8:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -y8)
+    kit.row8:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -y8)
+
+    -- Recompute total content height for GetContentHeight()/GetNextOffset().
+    local totalContent = y8 + T.rowHeightLast
+    content:SetHeight(totalContent)
+    kit.card.currentY = totalContent
+    kit.card:UpdateHeight()
+
+    return kit.card
+end
+
+local timeConditionsCardPool = KE.FramePool:New(CreateTimeConditionsCardKit)
+
 local function CreateDungeonPanel(dungeonId)
     local info = DUNGEON_INFO[dungeonId]
     if not info then return nil end
@@ -820,53 +960,12 @@ local function CreateDungeonPanel(dungeonId)
 
             yOffset = yOffset + card2:GetContentHeight() + padding
 
-            -- Card 3: Time Conditions
-            local card3 = GUIFrame:CreateCard(scrollChild, "Time Conditions", yOffset)
+            -- Card 3: Time Conditions (pooled — see CreateTimeConditionsCardKit)
+            timeConditionsCardPool:ReleaseAll()
+            local timeKit = timeConditionsCardPool:Acquire(scrollChild)
+            local card3 = ConfigureTimeConditionsCardKit(timeKit, scrollChild, yOffset,
+                selectedTrigger, ApplySettings, RefreshContentDeferred)
             table_insert(activeCards, card3)
-
-            local row6 = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
-            local remCheck = GUIFrame:CreateCheckbox(row6, "Enable remaining time condition", {
-                value = selectedTrigger.remainingEnabled == true,
-                callback = function(checked)
-                    selectedTrigger.remainingEnabled = checked
-                    ApplySettings()
-                    RefreshContentDeferred()
-                end,
-            })
-            row6:AddWidget(remCheck, 1)
-            card3:AddRow(row6, Theme.rowHeight)
-
-            if selectedTrigger.remainingEnabled then
-                local row7 = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
-                local remOpDropdown = GUIFrame:CreateDropdown(row7, "Operator", {
-                    options = COMPARISON_OPTIONS,
-                    value = selectedTrigger.remainingOperator or "<",
-                    callback = function(key) selectedTrigger.remainingOperator = key; ApplySettings() end,
-                })
-                row7:AddWidget(remOpDropdown, 0.5)
-
-                local remSlider = GUIFrame:CreateSlider(row7, "Seconds", {
-                    min = 1, max = 60, step = 1,
-                    value = selectedTrigger.remainingValue or 5,
-                    labelWidth = 60,
-                    callback = function(val) selectedTrigger.remainingValue = val; ApplySettings() end,
-                })
-                row7:AddWidget(remSlider, 0.5)
-                card3:AddRow(row7, Theme.rowHeight)
-            end
-
-            local separator2 = GUIFrame:CreateSeparator(card3.content)
-            card3:AddRow(separator2, Theme.rowHeightSeparator)
-
-            local row8 = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
-            local offsetSlider = GUIFrame:CreateSlider(row8, "Timer Offset (seconds)", {
-                min = -10, max = 10, step = 0.5,
-                value = selectedTrigger.extendTimer or 0,
-                labelWidth = 80,
-                callback = function(val) selectedTrigger.extendTimer = val; ApplySettings() end,
-            })
-            row8:AddWidget(offsetSlider, 1)
-            card3:AddRow(row8, Theme.rowHeightLast, 0)
 
             yOffset = yOffset + card3:GetContentHeight() + padding
 
