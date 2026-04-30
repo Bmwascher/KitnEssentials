@@ -396,52 +396,137 @@ end
 
 local basicSettingsCardPool = KE.FramePool:New(CreateBasicSettingsCardKit)
 
-local function CreateSpellIconPreview(parent, spellId, size)
-    local Theme = KE.Theme
-    size = size or 32
-    local container = CreateFrame("Frame", nil, parent)
-    container:SetHeight(size)
+local function CreateTriggerFiltersCardKit(holder)
+    local T = KE.Theme
+    local card = GUIFrame:CreateCard(holder, "Trigger Filters", 0)
 
-    local iconFrame = CreateFrame("Frame", nil, container)
-    iconFrame:SetSize(size, size)
-    iconFrame:SetPoint("LEFT", container, "LEFT", 0, -6)
+    -- Row 1: spell ID input + spell icon preview
+    local row3 = GUIFrame:CreateRow(card.content, T.rowHeight)
+    local spellInput = GUIFrame:CreateEditBox(row3, "Spell ID (optional)", { value = "" })
+    row3:AddWidget(spellInput, 0.5)
 
-    iconFrame.texture = iconFrame:CreateTexture(nil, "ARTWORK")
-    iconFrame.texture:SetPoint("TOPLEFT", 1, -1)
-    iconFrame.texture:SetPoint("BOTTOMRIGHT", -1, 1)
+    -- Inline spell-icon-preview kit: container + icon + border + name label,
+    -- with the texture/name/tooltip-spellId driven by Configure-set kit slots
+    -- so a single instance can swap spells without re-allocating frames.
+    local previewContainer = CreateFrame("Frame", nil, row3)
+    previewContainer:SetHeight(32)
 
-    local texture = spellId and spellId ~= "" and C_Spell.GetSpellTexture(tonumber(spellId))
-    if texture then
-        iconFrame.texture:SetTexture(texture)
-        if KE.ApplyIconZoom then KE:ApplyIconZoom(iconFrame.texture, 0.1) end
-    else
-        iconFrame.texture:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
-    end
+    local iconFrame = CreateFrame("Frame", nil, previewContainer)
+    iconFrame:SetSize(24, 24)
+    iconFrame:SetPoint("LEFT", previewContainer, "LEFT", 0, -6)
 
-    local border = CreateFrame("Frame", nil, iconFrame, "BackdropTemplate")
-    border:SetAllPoints()
-    border:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
-    border:SetBackdropBorderColor(0, 0, 0, 1)
+    local iconTexture = iconFrame:CreateTexture(nil, "ARTWORK")
+    iconTexture:SetPoint("TOPLEFT", 1, -1)
+    iconTexture:SetPoint("BOTTOMRIGHT", -1, 1)
 
-    local spellInfo = spellId and spellId ~= "" and C_Spell.GetSpellInfo(tonumber(spellId))
-    local spellName = spellInfo and spellInfo.name or "No spell selected"
+    local iconBorder = CreateFrame("Frame", nil, iconFrame, "BackdropTemplate")
+    iconBorder:SetAllPoints()
+    iconBorder:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+    iconBorder:SetBackdropBorderColor(0, 0, 0, 1)
 
-    local nameLabel = container:CreateFontString(nil, "OVERLAY")
-    nameLabel:SetPoint("LEFT", iconFrame, "RIGHT", Theme.paddingSmall, 0)
-    nameLabel:SetFont(KE.FONT or "Fonts\\FRIZQT__.TTF", Theme.fontSizeSmall, "OUTLINE")
-    nameLabel:SetTextColor(Theme.textPrimary[1], Theme.textPrimary[2], Theme.textPrimary[3], 1)
-    nameLabel:SetText(spellName)
+    local nameLabel = previewContainer:CreateFontString(nil, "OVERLAY")
+    nameLabel:SetPoint("LEFT", iconFrame, "RIGHT", T.paddingSmall, 0)
+    nameLabel:SetFont(KE.FONT or "Fonts\\FRIZQT__.TTF", T.fontSizeSmall, "OUTLINE")
+    nameLabel:SetTextColor(T.textPrimary[1], T.textPrimary[2], T.textPrimary[3], 1)
 
-    container:SetScript("OnEnter", function(self)
-        if not spellId or spellId == "" then return end
+    row3:AddWidget(previewContainer, 0.5)
+    card:AddRow(row3, T.rowHeight)
+
+    -- Row 2: message filter + match-mode dropdown
+    local row4 = GUIFrame:CreateRow(card.content, T.rowHeight)
+    local msgInput = GUIFrame:CreateEditBox(row4, "Message Filter (optional)", { value = "" })
+    row4:AddWidget(msgInput, 0.5)
+
+    local msgOpDropdown = GUIFrame:CreateDropdown(row4, "Match", {
+        options = MESSAGE_OPERATOR_OPTIONS,
+        value = "find",
+    })
+    row4:AddWidget(msgOpDropdown, 0.5)
+    card:AddRow(row4, T.rowHeightLast, 0)
+
+    local kit = {
+        row = card,
+        card = card,
+        spellInput = spellInput,
+        previewContainer = previewContainer,
+        iconTexture = iconTexture,
+        nameLabel = nameLabel,
+        msgInput = msgInput,
+        msgOpDropdown = msgOpDropdown,
+        -- per-render mutable state
+        _trigger = nil,
+        _applySettings = nil,
+        _refreshContentDeferred = nil,
+        _previewSpellId = nil,
+    }
+
+    -- Wire callbacks ONCE; read kit slots updated by Configure.
+    spellInput:SetCallback(function(text)
+        local t = kit._trigger
+        if t then t.spellId = text end
+        if kit._applySettings then kit._applySettings() end
+        if kit._refreshContentDeferred then kit._refreshContentDeferred() end
+    end)
+    msgInput:SetCallback(function(text)
+        local t = kit._trigger
+        if t then t.message = text end
+        if kit._applySettings then kit._applySettings() end
+    end)
+    msgOpDropdown:SetCallback(function(key)
+        local t = kit._trigger
+        if t then t.messageOperator = key end
+        if kit._applySettings then kit._applySettings() end
+    end)
+
+    -- Tooltip wired ONCE; reads kit._previewSpellId set by Configure.
+    previewContainer:SetScript("OnEnter", function(self)
+        local sid = kit._previewSpellId
+        if not sid or sid == "" then return end
         GameTooltip:SetOwner(self, "ANCHOR_CURSOR_RIGHT", 30, 0)
-        GameTooltip:SetSpellByID(tonumber(spellId))
+        GameTooltip:SetSpellByID(tonumber(sid))
         GameTooltip:Show()
     end)
-    container:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    previewContainer:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    return container
+    return kit
 end
+
+local function ConfigureTriggerFiltersCardKit(kit, parent, yOffset, trigger, applySettings, refreshContentDeferred)
+    local T = KE.Theme
+
+    kit.card:ClearAllPoints()
+    kit.card:SetPoint("TOPLEFT", parent, "TOPLEFT", T.paddingSmall, -(yOffset or 0) + T.paddingSmall)
+    kit.card:SetPoint("RIGHT", parent, "RIGHT", -T.paddingSmall, 0)
+    kit.card._yOffset = yOffset or 0
+
+    kit._trigger = trigger
+    kit._applySettings = applySettings
+    kit._refreshContentDeferred = refreshContentDeferred
+    kit._previewSpellId = trigger.spellId
+
+    -- Update spell icon preview based on current trigger.spellId.
+    local spellIdNum = trigger.spellId and trigger.spellId ~= "" and tonumber(trigger.spellId)
+    local texture = spellIdNum and C_Spell.GetSpellTexture(spellIdNum)
+    if texture then
+        kit.iconTexture:SetTexture(texture)
+        if KE.ApplyIconZoom then KE:ApplyIconZoom(kit.iconTexture, 0.1) end
+    else
+        kit.iconTexture:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+    end
+
+    local spellInfo = spellIdNum and C_Spell.GetSpellInfo(spellIdNum)
+    kit.nameLabel:SetText((spellInfo and spellInfo.name) or "No spell selected")
+
+    -- Set values without firing callbacks (editbox SetText is silent;
+    -- dropdown SetValue with silent=true skips callback).
+    kit.spellInput:SetValue(trigger.spellId or "")
+    kit.msgInput:SetValue(trigger.message or "")
+    kit.msgOpDropdown:SetValue(trigger.messageOperator or "find", true)
+
+    return kit.card
+end
+
+local triggerFiltersCardPool = KE.FramePool:New(CreateTriggerFiltersCardKit)
 
 local function CreateDungeonPanel(dungeonId)
     local info = DUNGEON_INFO[dungeonId]
@@ -726,35 +811,12 @@ local function CreateDungeonPanel(dungeonId)
 
             yOffset = yOffset + card1:GetContentHeight() + padding
 
-            -- Card 2: Trigger Filters
-            local card2 = GUIFrame:CreateCard(scrollChild, "Trigger Filters", yOffset)
+            -- Card 2: Trigger Filters (pooled — see CreateTriggerFiltersCardKit)
+            triggerFiltersCardPool:ReleaseAll()
+            local filtersKit = triggerFiltersCardPool:Acquire(scrollChild)
+            local card2 = ConfigureTriggerFiltersCardKit(filtersKit, scrollChild, yOffset,
+                selectedTrigger, ApplySettings, RefreshContentDeferred)
             table_insert(activeCards, card2)
-
-            local row3 = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-            local spellInput = GUIFrame:CreateEditBox(row3, "Spell ID (optional)", {
-                value = selectedTrigger.spellId or "",
-                callback = function(text) selectedTrigger.spellId = text; ApplySettings(); RefreshContentDeferred() end,
-            })
-            row3:AddWidget(spellInput, 0.5)
-
-            local iconPreview = CreateSpellIconPreview(row3, selectedTrigger.spellId, 24)
-            row3:AddWidget(iconPreview, 0.5)
-            card2:AddRow(row3, Theme.rowHeight)
-
-            local row4 = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-            local msgInput = GUIFrame:CreateEditBox(row4, "Message Filter (optional)", {
-                value = selectedTrigger.message or "",
-                callback = function(text) selectedTrigger.message = text; ApplySettings() end,
-            })
-            row4:AddWidget(msgInput, 0.5)
-
-            local msgOpDropdown = GUIFrame:CreateDropdown(row4, "Match", {
-                options = MESSAGE_OPERATOR_OPTIONS,
-                value = selectedTrigger.messageOperator or "find",
-                callback = function(key) selectedTrigger.messageOperator = key; ApplySettings() end,
-            })
-            row4:AddWidget(msgOpDropdown, 0.5)
-            card2:AddRow(row4, Theme.rowHeightLast, 0)
 
             yOffset = yOffset + card2:GetContentHeight() + padding
 
