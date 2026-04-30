@@ -290,112 +290,6 @@ end
 
 local timerButtonPool = KE.FramePool:New(CreateTimerButtonKit)
 
----------------------------------------------------------------------------------
--- Detail-pane card pools
---
--- Every card in the right-side detail pane (Trigger / Display / Load / Actions
--- sub-tabs) used to be rebuilt from scratch on every render. The outer
--- contentArea:ClearContent() does Hide() + SetParent(nil) on each old child,
--- which orphans WoW frames to UIParent — they're never GC'd. Heavy widgets
--- (dropdowns, toggles, edit boxes) ended up costing ~370–455 KB per detail
--- render, which compounded across the M+ dungeon-tab navigation users do.
---
--- Pattern: build the entire card kit (card frame, rows, widgets) ONCE in a
--- factory under the pool's hidden holder. Wire script callbacks ONCE so they
--- read mutable kit slots (_trigger, _applySettings, _refreshContentDeferred)
--- that Configure swaps per render. Sets values via the widget's silent /
--- instant API path so callbacks don't fire during programmatic refresh.
----------------------------------------------------------------------------------
-
-local function CreateBasicSettingsCardKit(holder)
-    local T = KE.Theme
-    local card = GUIFrame:CreateCard(holder, "Basic Settings", 0)
-
-    local row1 = GUIFrame:CreateRow(card.content, T.rowHeight)
-    local enableTrigger = GUIFrame:CreateCheckbox(row1, "Enabled", { value = true })
-    row1:AddWidget(enableTrigger, 1)
-    card:AddRow(row1, T.rowHeight)
-
-    local separator1 = GUIFrame:CreateSeparator(card.content)
-    card:AddRow(separator1, T.rowHeightSeparator)
-
-    local row2 = GUIFrame:CreateRow(card.content, T.rowHeightLast)
-    local nameInput = GUIFrame:CreateEditBox(row2, "Timer Name", { value = "" })
-    row2:AddWidget(nameInput, 0.5)
-    local typeDropdown = GUIFrame:CreateDropdown(row2, "Trigger Type", {
-        options = TRIGGER_TYPE_OPTIONS,
-        value = "timer",
-    })
-    row2:AddWidget(typeDropdown, 0.5)
-    card:AddRow(row2, T.rowHeightLast, 0)
-
-    local kit = {
-        row = card,                  -- pool reads kit.row as the root frame
-        card = card,
-        enableTrigger = enableTrigger,
-        nameInput = nameInput,
-        typeDropdown = typeDropdown,
-        -- per-render mutable state, updated by Configure
-        _trigger = nil,
-        _applySettings = nil,
-        _refreshContentDeferred = nil,
-    }
-
-    -- Wire callbacks ONCE; they read kit slots that Configure swaps per
-    -- render. This keeps closure count bounded to kit lifetime, not render
-    -- count, and avoids the leak where each render allocated 3 fresh
-    -- closures over the prior selectedTrigger.
-    enableTrigger:SetCallback(function(checked)
-        local t = kit._trigger
-        if t then t.enabled = checked end
-        if kit._applySettings then kit._applySettings() end
-    end)
-    nameInput:SetCallback(function(text)
-        local t = kit._trigger
-        if t then t.name = text end
-        if kit._applySettings then kit._applySettings() end
-        if kit._refreshContentDeferred then kit._refreshContentDeferred() end
-    end)
-    typeDropdown:SetCallback(function(key)
-        local t = kit._trigger
-        if t then t.triggerType = key end
-        if kit._applySettings then kit._applySettings() end
-    end)
-
-    return kit
-end
-
-local function ConfigureBasicSettingsCardKit(kit, parent, yOffset, trigger, applySettings, refreshContentDeferred)
-    local T = KE.Theme
-
-    -- Re-anchor the card to its new parent at the requested yOffset.
-    -- Acquire reparented kit.card to `parent`, but card's TOPLEFT/RIGHT
-    -- points still reference the pool's hidden holder — they need to be
-    -- re-set explicitly.
-    kit.card:ClearAllPoints()
-    kit.card:SetPoint("TOPLEFT", parent, "TOPLEFT", T.paddingSmall, -(yOffset or 0) + T.paddingSmall)
-    kit.card:SetPoint("RIGHT", parent, "RIGHT", -T.paddingSmall, 0)
-    kit.card._yOffset = yOffset or 0
-
-    -- Update slots BEFORE setting widget values so the silent/instant set
-    -- path doesn't fire stale callbacks even if a widget bypasses silent.
-    kit._trigger = trigger
-    kit._applySettings = applySettings
-    kit._refreshContentDeferred = refreshContentDeferred
-
-    -- Set values without firing callbacks:
-    -- - Toggle.SetValue(value, instant=true) skips the deferred callback fire
-    -- - EditBox.SetValue → editBox:SetText, which doesn't fire OnEnterPressed
-    -- - Dropdown.SetValue(value, silent=true) skips the callback
-    kit.enableTrigger.toggle:SetValue(trigger.enabled ~= false, true)
-    kit.nameInput:SetValue(trigger.name or "")
-    kit.typeDropdown:SetValue(trigger.triggerType or "timer", true)
-
-    return kit.card
-end
-
-local basicSettingsCardPool = KE.FramePool:New(CreateBasicSettingsCardKit)
-
 local function CreateSpellIconPreview(parent, spellId, size)
     local Theme = KE.Theme
     size = size or 32
@@ -717,12 +611,35 @@ local function CreateDungeonPanel(dungeonId)
 
             local padding = Theme.paddingSmall
 
-            -- Card 1: Basic Settings (pooled — see CreateBasicSettingsCardKit)
-            basicSettingsCardPool:ReleaseAll()
-            local basicKit = basicSettingsCardPool:Acquire(scrollChild)
-            local card1 = ConfigureBasicSettingsCardKit(basicKit, scrollChild, yOffset,
-                selectedTrigger, ApplySettings, RefreshContentDeferred)
+            -- Card 1: Basic Settings
+            local card1 = GUIFrame:CreateCard(scrollChild, "Basic Settings", yOffset)
             table_insert(activeCards, card1)
+
+            local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+            local enableTrigger = GUIFrame:CreateCheckbox(row1, "Enabled", {
+                value = selectedTrigger.enabled ~= false,
+                callback = function(checked) selectedTrigger.enabled = checked; ApplySettings() end,
+            })
+            row1:AddWidget(enableTrigger, 1)
+            card1:AddRow(row1, Theme.rowHeight)
+
+            local separator1 = GUIFrame:CreateSeparator(card1.content)
+            card1:AddRow(separator1, Theme.rowHeightSeparator)
+
+            local row2 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+            local nameInput = GUIFrame:CreateEditBox(row2, "Timer Name", {
+                value = selectedTrigger.name or "",
+                callback = function(text) selectedTrigger.name = text; ApplySettings(); RefreshContentDeferred() end,
+            })
+            row2:AddWidget(nameInput, 0.5)
+
+            local typeDropdown = GUIFrame:CreateDropdown(row2, "Trigger Type", {
+                options = TRIGGER_TYPE_OPTIONS,
+                value = selectedTrigger.triggerType or "timer",
+                callback = function(key) selectedTrigger.triggerType = key; ApplySettings() end,
+            })
+            row2:AddWidget(typeDropdown, 0.5)
+            card1:AddRow(row2, Theme.rowHeightLast, 0)
 
             yOffset = yOffset + card1:GetContentHeight() + padding
 
