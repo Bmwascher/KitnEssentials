@@ -625,8 +625,8 @@ local function ConfigureTimeConditionsCardKit(kit, parent, yOffset, trigger, app
     -- Set values without firing callbacks.
     kit.remCheck.toggle:SetValue(trigger.remainingEnabled == true, true)
     kit.remOpDropdown:SetValue(trigger.remainingOperator or "<", true)
-    kit.remSlider:SetValue(trigger.remainingValue or 5)
-    kit.offsetSlider:SetValue(trigger.extendTimer or 0)
+    kit.remSlider:SetValue(trigger.remainingValue or 5, true)
+    kit.offsetSlider:SetValue(trigger.extendTimer or 0, true)
 
     -- Show/hide row7 and re-anchor downstream rows so the card matches the
     -- old conditional-build layout (no gap when row7 is hidden).
