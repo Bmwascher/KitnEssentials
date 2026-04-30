@@ -2304,7 +2304,8 @@ end
 
 --- Export triggers for a single dungeon or all dungeons
 ---@param dungeonKey string|nil Specific dungeon key, or nil for all
----@return string|nil encoded, string|nil error
+---@return string|nil encoded
+---@return string|nil error
 function DT:ExportTriggers(dungeonKey)
     local db = self.db
     if not db or not db.Dungeons then return nil, "No trigger data" end
@@ -2362,7 +2363,8 @@ end
 
 --- Import triggers from an encoded string
 ---@param importString string The export string
----@return boolean success, string|nil message
+---@return boolean success
+---@return string|nil message
 function DT:ImportTriggers(importString)
     if not importString or importString == "" then return false, "Import string is empty" end
     if importString:sub(1, #TRIGGER_EXPORT_PREFIX) ~= TRIGGER_EXPORT_PREFIX then
@@ -2496,7 +2498,8 @@ end
 
 --- Import KES preset triggers for a dungeon (or all dungeons if nil)
 ---@param dungeonKey string|nil Specific dungeon key, or nil for all
----@return boolean success, string|nil message
+---@return boolean success
+---@return string|nil message
 function DT:ImportKESPresets(dungeonKey)
     if not KE.DungeonTimerPresets then return false, "Presets not loaded" end
     local db = self.db

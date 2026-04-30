@@ -676,7 +676,12 @@ function H.StartPreviewTimer(self)
     self.positioner:SetValue(0)
 end
 
-local UPDATE_THROTTLE = 0.1
+-- 30 FPS sampling — smoother decimal sweep in the 0.9 -> 0.1 window than
+-- 10 Hz, and matches the throttle used by DungeonCasts. We can't apply the
+-- DungeonTimers dirty-check (`if timeStr ~= _lastTimeStr`) here because
+-- duration is secret for hostile/encounter casts and equality on a secret
+-- value is forbidden — see feedback_dirty_check_secret_durations memory.
+local UPDATE_THROTTLE = 0.033
 local TARGET_NAMES_THROTTLE = 0.5  -- belt-and-suspenders fallback; primary driver is UNIT_TARGET / GROUP_ROSTER_UPDATE events
 
 function H.OnUpdate(self, elapsed)
