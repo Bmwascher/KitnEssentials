@@ -655,6 +655,7 @@ function KT:GetOrCreateBar(guid)
     end
 
     self.activeBars[guid] = bar
+    self:_RefreshOnUpdate()
     return bar
 end
 
@@ -667,6 +668,7 @@ function KT:ReleaseBar(guid)
 
     self.activeBars[guid] = nil
     table_insert(self.barPool, bar)
+    self:_RefreshOnUpdate()
 end
 
 function KT:HideAllBars()
@@ -946,15 +948,30 @@ end
 -- OnUpdate (Cooldown Progress)
 ---------------------------------------------------------------------------------
 function KT:StartOnUpdate()
+    if self._onUpdateActive then return end
     if not self.containerFrame then return end
     self.containerFrame:SetScript("OnUpdate", function(_, elapsed)
         self:OnUpdateBars(elapsed)
     end)
+    self._onUpdateActive = true
 end
 
 function KT:StopOnUpdate()
+    if not self._onUpdateActive then return end
     if self.containerFrame then
         self.containerFrame:SetScript("OnUpdate", nil)
+    end
+    self._onUpdateActive = false
+end
+
+-- Attach OnUpdate while there is at least one active/preview bar; detach
+-- otherwise. Out-of-combat with no group, no kicks → script detached, zero
+-- per-frame dispatch cost. Call after every mutation of activeBars.
+function KT:_RefreshOnUpdate()
+    if next(self.activeBars) then
+        self:StartOnUpdate()
+    else
+        self:StopOnUpdate()
     end
 end
 
@@ -1131,6 +1148,7 @@ function KT:ShowPreview()
 
     self.containerFrame:SetSize(db.BarWidth, db.BarHeight or 27)
     self.containerFrame:Show()
+    self:_RefreshOnUpdate()
 end
 
 function KT:HidePreview()
@@ -1196,7 +1214,9 @@ function KT:OnEnable()
     self:RegisterEvent("INSPECT_READY", "OnInspectReady")
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnCombatEnd")
 
-    self:StartOnUpdate()
+    -- OnUpdate is gated by _RefreshOnUpdate based on activeBars membership.
+    -- It attaches the first time a bar is created (group entered, party
+    -- inspected, or preview shown) and detaches when the last bar releases.
 
     C_Timer.After(0.5, function()
         self:ApplySettings()
