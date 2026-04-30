@@ -11,12 +11,20 @@ local Theme = KE.Theme
 -- Localization Setup
 local tostring = tostring
 local CreateFrame = CreateFrame
+local C_Timer = C_Timer
+local GetTime = GetTime
 
 ---------------------------------------------------------------------------------
 -- Widget Creation
 ---------------------------------------------------------------------------------
 
--- EditBox widget — config-table API: { value, callback, tooltip, height }
+-- EditBox widget — config-table API:
+--   { value, callback, tooltip, height, onTextChanged, textChangedDelay }
+-- onTextChanged: optional debounced callback that fires DURING typing (not
+-- on Enter/blur — that's `callback`'s job). Useful for live filters like the
+-- BigWigs spell-search box. Debounce defaults to 150ms; override via
+-- textChangedDelay. Pool-friendly: stored in row._onTextChanged and
+-- swappable via row:SetOnTextChanged(fn).
 function GUIFrame:CreateEditBox(parent, labelText, config)
     config = config or {}
     local value = tostring(config.value or "")
@@ -147,7 +155,21 @@ function GUIFrame:CreateEditBox(parent, labelText, config)
         GameTooltip:Hide()
     end)
 
-    function row:SetValue(val) editBox:SetText(val or "") end
+    -- silent: suppress the OnTextChanged debounce + pool-bound _onTextChanged
+    -- callback. EditBox:SetText fires OnTextChanged with userInput=false, but
+    -- we already gate on userInput so silent only matters if a future change
+    -- ever lifts that gate. Cheap to track and matches Slider/Dropdown API.
+    function row:SetValue(val, silent)
+        local saved
+        if silent then
+            saved = row._onTextChanged
+            row._onTextChanged = nil
+        end
+        editBox:SetText(val or "")
+        if silent then
+            row._onTextChanged = saved
+        end
+    end
 
     function row:GetValue() return editBox:GetText() end
 
@@ -167,11 +189,40 @@ function GUIFrame:CreateEditBox(parent, labelText, config)
     row.editBox = editBox
     row.container = container
 
-    -- Pool-friendly callback slot; OnEnterPressed/OnEditFocusLost read late-bound.
+    -- Pool-friendly callback slots; OnEnterPressed/OnEditFocusLost read
+    -- _callback late-bound, OnTextChanged reads _onTextChanged late-bound.
     row._callback = config.callback
     function row:SetCallback(fn)
         self._callback = fn
     end
+
+    row._onTextChanged = config.onTextChanged
+    row._textChangedDelay = config.textChangedDelay or 0.15
+    function row:SetOnTextChanged(fn)
+        self._onTextChanged = fn
+    end
+
+    -- Live-typing OnTextChanged: wired ONCE at factory time and reads the
+    -- _onTextChanged slot late-bound, so a pooled editbox kit can swap its
+    -- live-filter callback per render without re-binding scripts. Debounced
+    -- via fire-token: each keystroke schedules one C_Timer.After; intermediate
+    -- strokes invalidate prior tokens by bumping lastFireToken (no cancel API
+    -- needed). userInput=false (programmatic SetText) is ignored.
+    local lastFireToken = 0
+    editBox:SetScript("OnTextChanged", function(self, userInput)
+        if not userInput then return end
+        if not row._onTextChanged then return end
+        local fireToken = GetTime()
+        lastFireToken = fireToken
+        local text = self:GetText()
+        local delay = row._textChangedDelay or 0.15
+        C_Timer.After(delay, function()
+            if lastFireToken == fireToken then
+                local fn = row._onTextChanged
+                if fn then fn(text) end
+            end
+        end)
+    end)
 
     return row
 end
