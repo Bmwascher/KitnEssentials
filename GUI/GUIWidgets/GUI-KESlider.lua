@@ -30,7 +30,6 @@ function GUIFrame:CreateSlider(parent, labelText, config)
     local max = tonumber(config.max) or 100
     local step = tonumber(config.step) or 1
     local value = tonumber(config.value) or min
-    local callback = config.callback
     local tooltip = config.tooltip
     local isPercent = config.isPercent
     local customHeight = nil
@@ -445,7 +444,7 @@ function GUIFrame:CreateSlider(parent, labelText, config)
             return
         end
         lastUpdate = currentTime
-        if callback then callback(val) end
+        if row._callback then row._callback(val) end
     end)
 
     slider:SetScript("OnSizeChanged", UpdateFill)
@@ -616,5 +615,12 @@ function GUIFrame:CreateSlider(parent, labelText, config)
     end
 
     row.slider = slider
+
+    -- Pool-friendly callback slot; OnValueChanged reads late-bound.
+    row._callback = config.callback
+    function row:SetCallback(fn)
+        self._callback = fn
+    end
+
     return row
 end
