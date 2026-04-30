@@ -24,9 +24,9 @@ local CreateFrame = CreateFrame
 local GetPetActionInfo = GetPetActionInfo
 local PetHasActionBar = PetHasActionBar
 local UnitIsDeadOrGhost = UnitIsDeadOrGhost
-local IsPlayerSpell = IsPlayerSpell
 local C_Timer = C_Timer
 local C_SpellBook = C_SpellBook
+local SpellBookBank_Player = Enum.SpellBookSpellBank.Player
 
 ---------------------------------------------------------------------------------
 -- Constants
@@ -103,7 +103,7 @@ local function CheckPetStatus()
     local specID = GetSpecializationInfo(specIndex)
 
     -- MM Hunter with Unbreakable Bond (466867) or Spotter's Mark (466872) — both replace the pet
-    if specID == 254 and (IsPlayerSpell(466867) or IsPlayerSpell(466872)) then
+    if specID == 254 and (C_SpellBook.IsSpellKnown(466867, SpellBookBank_Player) or C_SpellBook.IsSpellKnown(466872, SpellBookBank_Player)) then
         return PET_STATUS.NONE, nil, nil
     end
 

@@ -24,7 +24,8 @@ local UIParent = UIParent
 -- Module State
 ---------------------------------------------------------------------------------
 local playerClass = nil
-local stanceTextFrame = nil
+---@type Frame
+local stanceTextFrame
 
 ---------------------------------------------------------------------------------
 -- Helpers

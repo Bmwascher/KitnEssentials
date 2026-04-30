@@ -95,9 +95,24 @@ SLASH_KITNESSENTIALS1 = "/kes"
 SLASH_KITNESSENTIALS2 = "/kitnessentials"
 SLASH_KITNESSENTIALS3 = "/dunnigan"
 SlashCmdList["KITNESSENTIALS"] = function(msg)
-    msg = (msg or ""):lower()
+    msg = msg or ""
     msg = string_gsub(msg, "^%s+", "")
     msg = string_gsub(msg, "%s+$", "")
+
+    -- /kes profiler <...> routes to the profiler with case preserved
+    -- (snapshot labels are case-sensitive). Match before the lowercase pass.
+    local profileRest = msg:match("^[Pp][Rr][Oo][Ff][Ii][Ll][Ee][Rr]%s*(.*)$")
+                     or msg:match("^[Pp][Rr][Oo][Ff]%s*(.*)$")
+    if profileRest then
+        if KE.Profiler and KE.Profiler.RunCommand then
+            KE.Profiler.RunCommand(profileRest)
+        else
+            print("|cffFF008CKitn|r|cffffffffEssentials:|r profiler not loaded.")
+        end
+        return
+    end
+
+    msg = msg:lower()
     if msg == "" or msg == "gui" then
         if KE.GUIFrame then
             KE.GUIFrame:Toggle()

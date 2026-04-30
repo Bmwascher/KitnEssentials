@@ -15,8 +15,8 @@ local TSP = KitnEssentials:NewModule("TimeSpiral", "AceEvent-3.0")
 local LCG = LibStub("LibCustomGlow-1.0", true)
 
 local CreateFrame = CreateFrame
-local IsPlayerSpell = IsPlayerSpell
-local IsSpellKnown = IsSpellKnown
+local C_SpellBook = C_SpellBook
+local SpellBookBank_Player = Enum.SpellBookSpellBank.Player
 local GetSpecialization = GetSpecialization
 local GetSpecializationInfo = GetSpecializationInfo
 local GetTime = GetTime
@@ -113,12 +113,12 @@ local FILTER_TALENTS = {
     [385899] = { [385899] = true }, -- Soulburn
 }
 
--- IsPlayerSpell alone misses some talents (especially capstone-style nodes
--- like Spiritwalker's Grace) — full check uses IsSpellKnown and IsSpellUsable
--- as backstops.
+-- C_SpellBook.IsSpellKnown alone misses some talents (especially capstone-style
+-- nodes like Spiritwalker's Grace) — full check uses IsSpellInSpellBook and
+-- IsSpellUsable as backstops.
 local function IsTalentKnown(talentId)
-    if IsPlayerSpell(talentId) then return true end
-    if IsSpellKnown(talentId) then return true end
+    if C_SpellBook.IsSpellKnown(talentId, SpellBookBank_Player) then return true end
+    if C_SpellBook.IsSpellInSpellBook(talentId, SpellBookBank_Player) then return true end
 
     local spellInfo = C_Spell.GetSpellInfo(talentId)
     if spellInfo and C_Spell.IsSpellUsable(talentId) then
@@ -141,12 +141,12 @@ function TSP:DetectPlayerSpell()
     local list = PRIMARY_BY_SPEC[specID]
     if not list then return nil end
 
-    -- IsPlayerSpell only — IsSpellKnown / IsSpellUsable return true for any
-    -- spell defined in the class spellbook regardless of whether the talent
-    -- is actively selected, which would mis-detect untalented spells.
+    -- C_SpellBook.IsSpellKnown only — IsSpellInSpellBook / IsSpellUsable return
+    -- true for any spell defined in the class spellbook regardless of whether
+    -- the talent is actively selected, which would mis-detect untalented spells.
     for _, entry in ipairs(list) do
         local spellID, iconID = entry[1], entry[2]
-        if IsPlayerSpell(spellID) then
+        if C_SpellBook.IsSpellKnown(spellID, SpellBookBank_Player) then
             self.playerSpellId = spellID
             self.playerIconId = iconID
             return spellID

@@ -19,4 +19,5 @@
     <Script file="PIMacroBuilder.lua" />
     <Script file="PotionReady.lua" />
     <Script file="ReadyCheckConsumables.lua" />
+    <Script file="Profiler.lua" />
 </Ui>

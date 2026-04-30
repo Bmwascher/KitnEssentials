@@ -49,8 +49,13 @@ function REC:UpdateAlpha()
         return
     end
 
-    -- UnitHealthPercent with curve handles secret values safely
-    -- Returns 1 when missing health, 0 when full
+    -- UnitHealthPercent with curve handles secret values safely.
+    -- Returns 1 when missing health, 0 when full. The curve only has number
+    -- outputs (HealthMissingAlpha:AddPoint takes numbers), so the LS-narrow
+    -- to number is correct — without the @type, alpha is typed as
+    -- `number | colorRGBA` because UnitHealthPercent's stub return is
+    -- LuaCurveEvaluatedResult, which is polymorphic across curve types.
+    ---@type number
     local alpha = UnitHealthPercent("player", true, KE.curves.HealthMissingAlpha)
     self.button:SetAlpha(alpha)
 end

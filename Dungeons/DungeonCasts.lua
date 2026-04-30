@@ -35,10 +35,16 @@ local pairs, ipairs = pairs, ipairs
 local wipe = wipe
 local tinsert, tremove, tsort = table.insert, table.remove, table.sort
 local strmatch = string.match
+local string_format = string.format
 local mmin = math.min
 
 local FALLBACK_ICON = 136243
 local UPDATE_THROTTLE = 0.033
+-- Pre-cached format strings for the OnUpdate text refresh — avoids
+-- per-frame `'%.' .. decimals .. 'f'` concat allocation. Decimals comes
+-- from KE.curves.DurationDecimals which is a Step curve outputting 0 or 1.
+local FMT_INT = "%.0f"
+local FMT_DEC = "%.1f"
 local PREVIEW_DURATION = 8
 local NAMEPLATE_PATTERN = "^nameplate%d+$"
 local MAX_NAMEPLATES = 40
@@ -376,6 +382,7 @@ function DC:ReleaseBar(bar)
     bar.channeling = nil
     bar.notInterruptible = nil
     bar.cachedDuration = nil
+    bar._lastTimeStr = nil
     bar.spellName = nil
     bar.startTime = nil
     bar.previewRaidIcon = nil
@@ -783,11 +790,22 @@ function DC:OnUpdate()
             if duration then
                 local remaining = duration:GetRemainingDuration()
                 if remaining then
+                    -- Dirty-check + pre-cached format strings avoid per-frame
+                    -- font-string layout invalidation (the dominant SetText
+                    -- cost). Same pattern as DungeonTimers OnVisualUpdate
+                    -- (DungeonTimers.lua:1466-1470) and CastbarHelpers
+                    -- (CastbarHelpers.lua OnUpdate).
+                    local fmt
                     if decimalsCurve then
                         local decimals = duration:EvaluateRemainingDuration(decimalsCurve)
-                        bar.timeText:SetFormattedText("%." .. decimals .. "f", remaining)
+                        fmt = (decimals == 1) and FMT_DEC or FMT_INT
                     else
-                        bar.timeText:SetFormattedText("%.1f", remaining)
+                        fmt = FMT_DEC
+                    end
+                    local timeStr = string_format(fmt, remaining)
+                    if timeStr ~= bar._lastTimeStr then
+                        bar._lastTimeStr = timeStr
+                        bar.timeText:SetText(timeStr)
                     end
                 end
             end

@@ -17,7 +17,7 @@ local C_SpellBook = C_SpellBook
 local C_Timer = C_Timer
 local CreateFrame = CreateFrame
 local UnitClass = UnitClass
-local IsPlayerSpell = IsPlayerSpell
+local SpellBookBank_Player = Enum.SpellBookSpellBank.Player
 local GetTime = GetTime
 local string_format = string.format
 local string_gsub = string.gsub
@@ -100,10 +100,7 @@ end
 ---------------------------------------------------------------------------------
 local function IsSpellKnownSafe(spellID)
     if C_SpellBook and C_SpellBook.IsSpellKnown then
-        if C_SpellBook.IsSpellKnown(spellID) then return true end
-    end
-    if IsPlayerSpell then
-        return IsPlayerSpell(spellID)
+        return C_SpellBook.IsSpellKnown(spellID, SpellBookBank_Player) or false
     end
     return false
 end
