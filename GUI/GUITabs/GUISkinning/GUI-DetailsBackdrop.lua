@@ -36,6 +36,7 @@ GUIFrame:RegisterContent("SkinDetails", function(scrollChild, yOffset)
 
     local curEdit = db.currentEdit or "bgOne"
 
+    ---@return table
     local function GetCurrentBackdropDB()
         if curEdit == "bgTwo" then
             return db.backDropTwo
@@ -147,7 +148,8 @@ GUIFrame:RegisterContent("SkinDetails", function(scrollChild, yOffset)
     local perEnableCheck = GUIFrame:CreateCheckbox(row1b, "Enable " .. backdropLabel, {
         value = GetCurrentBackdropDB().Enabled ~= false,
         callback = function(checked)
-            GetCurrentBackdropDB().Enabled = checked
+            local cur = GetCurrentBackdropDB()
+            cur.Enabled = checked
             if DBG then DBG:ApplySettings() end
             RefreshStates()
             if not checked then
@@ -173,7 +175,8 @@ GUIFrame:RegisterContent("SkinDetails", function(scrollChild, yOffset)
         value = currentDB.autoSize,
         callback = function(checked, revert)
             if not checked then
-                GetCurrentBackdropDB().autoSize = checked
+                local cur = GetCurrentBackdropDB()
+                cur.autoSize = checked
                 ApplySettings()
                 RefreshStates()
                 return
@@ -184,7 +187,8 @@ GUIFrame:RegisterContent("SkinDetails", function(scrollChild, yOffset)
                 "This will override your current Details sizing, are you sure you want to use this feature?",
                 false, nil, false, nil, nil, nil, nil,
                 function()
-                    GetCurrentBackdropDB().autoSize = checked
+                    local cur = GetCurrentBackdropDB()
+                    cur.autoSize = checked
                     ApplySettings()
                     RefreshStates()
                 end,
@@ -205,7 +209,8 @@ GUIFrame:RegisterContent("SkinDetails", function(scrollChild, yOffset)
         min = 1, max = 25, step = 1,
         value = currentDB.detailsBars or db.detailsBars or 7,
         callback = function(val)
-            GetCurrentBackdropDB().detailsBars = val
+            local cur = GetCurrentBackdropDB()
+            cur.detailsBars = val
             ApplySettings()
         end,
     })
@@ -273,7 +278,8 @@ GUIFrame:RegisterContent("SkinDetails", function(scrollChild, yOffset)
     local bgColorPicker = GUIFrame:CreateColorPicker(row3a, "Backdrop Color", {
         color = GetCurrentBackdropDB().BackgroundColor,
         callback = function(r, g, b, a)
-            GetCurrentBackdropDB().BackgroundColor = { r, g, b, a }
+            local cur = GetCurrentBackdropDB()
+            cur.BackgroundColor = { r, g, b, a }
             ApplySettings()
         end,
     })
@@ -285,7 +291,8 @@ GUIFrame:RegisterContent("SkinDetails", function(scrollChild, yOffset)
     local borderColorPicker = GUIFrame:CreateColorPicker(row3b, "Backdrop Border Color", {
         color = GetCurrentBackdropDB().BorderColor,
         callback = function(r, g, b, a)
-            GetCurrentBackdropDB().BorderColor = { r, g, b, a }
+            local cur = GetCurrentBackdropDB()
+            cur.BorderColor = { r, g, b, a }
             ApplySettings()
         end,
     })
@@ -326,7 +333,8 @@ GUIFrame:RegisterContent("SkinDetails", function(scrollChild, yOffset)
         min = 10, max = 1000, step = 1,
         value = GetCurrentBackdropDB().width,
         callback = function(val)
-            GetCurrentBackdropDB().width = val
+            local cur = GetCurrentBackdropDB()
+            cur.width = val
             ApplySettings()
         end,
     })
@@ -337,7 +345,8 @@ GUIFrame:RegisterContent("SkinDetails", function(scrollChild, yOffset)
         min = 10, max = 1000, step = 1,
         value = GetCurrentBackdropDB().height,
         callback = function(val)
-            GetCurrentBackdropDB().height = val
+            local cur = GetCurrentBackdropDB()
+            cur.height = val
             ApplySettings()
         end,
     })
