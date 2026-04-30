@@ -118,6 +118,11 @@ function CC:CreateFrame()
     -- are done here when the GCD frame is visible).
     local updateElapsed = 0
     local mouseHoldTime = 0
+    -- Position cache: skip the ClearAllPoints+SetPoint pair when the cursor
+    -- and effective scale are unchanged. Idle CPU here was 73% of total KE
+    -- idle CPU before this gate (every-frame layout work on a stationary
+    -- cursor). Sentinel -1 ensures the first tick always positions.
+    local lastX, lastY, lastScale = -1, -1, -1
     f:SetScript("OnUpdate", function(frame, elapsed)
         if db.UseUpdateInterval then
             local updateInterval = db.UpdateInterval or 0.016
@@ -126,17 +131,7 @@ function CC:CreateFrame()
             updateElapsed = 0
         end
 
-        local x, y = GetCursorPosition()
-        local scale = frame:GetEffectiveScale()
-        frame:ClearAllPoints()
-        frame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale, y / scale)
-
         local gcdFrame = self.gcdFrame
-        if gcdFrame then
-            local gcdScale = gcdFrame:GetEffectiveScale()
-            gcdFrame:ClearAllPoints()
-            gcdFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / gcdScale, y / gcdScale)
-        end
 
         if (db.VisibilityMode or "always") == "mouseDown" then
             local isMouseDown = IsMouseButtonDown("LeftButton") or IsMouseButtonDown("RightButton")
@@ -155,6 +150,27 @@ function CC:CreateFrame()
                 local gr, gg, gb, ga = KE:GetAccentColor(gcd.RingColorMode or "theme", gcd.RingColor)
                 gcdFrame.texture:SetVertexColor(gr, gg, gb, shown and ga or 0)
             end
+
+            -- Invisible: skip position work; invalidate cache so the next
+            -- shown tick repositions even if the cursor pixel-coord matches.
+            if not shown then
+                lastX, lastY, lastScale = -1, -1, -1
+                return
+            end
+        end
+
+        local x, y = GetCursorPosition()
+        local scale = frame:GetEffectiveScale()
+        if x == lastX and y == lastY and scale == lastScale then return end
+        lastX, lastY, lastScale = x, y, scale
+
+        frame:ClearAllPoints()
+        frame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale, y / scale)
+
+        if gcdFrame then
+            local gcdScale = gcdFrame:GetEffectiveScale()
+            gcdFrame:ClearAllPoints()
+            gcdFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / gcdScale, y / gcdScale)
         end
     end)
 
