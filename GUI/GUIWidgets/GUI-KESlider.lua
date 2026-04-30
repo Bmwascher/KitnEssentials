@@ -587,7 +587,16 @@ function GUIFrame:CreateSlider(parent, labelText, config)
 
     C_Timer.After(0, UpdateFill)
 
-    function row:SetValue(val) slider:SetValue(val) end
+    function row:SetValue(val, silent)
+        if silent then
+            local saved = row._callback
+            row._callback = nil
+            slider:SetValue(val)
+            row._callback = saved
+        else
+            slider:SetValue(val)
+        end
+    end
 
     function row:GetValue() return slider:GetValue() end
 
