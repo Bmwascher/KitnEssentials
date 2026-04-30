@@ -66,12 +66,15 @@ end
 ---------------------------------------------------------------------------------
 
 local function ProfilingEnabled()
-    -- C_AddOnProfiler.IsEnabled is the canonical 12.0 check; the cvar is the
-    -- legacy path. Prefer the namespaced API; fall back to the cvar if the
-    -- namespace ever isn't there (e.g. very early load, classic builds).
-    if C_AddOnProfiler and C_AddOnProfiler.IsEnabled then
-        return C_AddOnProfiler.IsEnabled() and true or false
-    end
+    -- The legacy GetAddOnCPUUsage / UpdateAddOnCPUUsage path that this
+    -- profiler uses depends specifically on the `scriptProfile` cvar.
+    -- `C_AddOnProfiler.IsEnabled()` returns true for all users (per its
+    -- docs: "AddOn profiler will be enabled for all users"), but it
+    -- governs the *new* C_AddOnProfiler.GetAddOnMetric data path —
+    -- a different data source. If we trust IsEnabled() and scriptProfile
+    -- happens to be 0, snap output reads `cpu=0.00 ms, fns=0` while
+    -- claiming profiling is on. The cvar is the authoritative gate for
+    -- the legacy API we actually call.
     return tonumber(C_CVar_GetCVar("scriptProfile")) == 1
 end
 
@@ -151,8 +154,15 @@ local function ToggleProfile(state)
         C_CVar_SetCVar("scriptProfile", "0")
         p("scriptProfile = 0.  /reload to stop sampling.")
     else
-        local on = ProfilingEnabled()
-        pf("scriptProfile is currently %s.  Use /kes profiler on or /kes profiler off.", on and "ON" or "OFF")
+        local cvarOn = tonumber(C_CVar_GetCVar("scriptProfile")) == 1
+        local namespaceOn = (C_AddOnProfiler and C_AddOnProfiler.IsEnabled and C_AddOnProfiler.IsEnabled()) and true or false
+        pf("scriptProfile cvar:        %s  (drives GetAddOnCPUUsage — the legacy path /kes profiler uses)",
+            cvarOn and "ON" or "OFF")
+        pf("C_AddOnProfiler.IsEnabled: %s  (drives the new GetAddOnMetric path — separate data source)",
+            namespaceOn and "ON" or "OFF")
+        if not cvarOn then
+            p("To enable CPU profiling: /kes profiler on, then /reload.  The cvar requires a /reload to start sampling.")
+        end
     end
 end
 
