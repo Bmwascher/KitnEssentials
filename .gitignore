@@ -2,6 +2,8 @@
 CLAUDE.md
 CURSEFORGE_README.md
 .wow-api-reference/
+.wowluarc.json
+Annotations/
 .markdownlint.json
 .luacheckrc
 References/
