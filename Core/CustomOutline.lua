@@ -46,6 +46,85 @@ local SHADOW_OFFSETS = {
     { -1, 1 },  -- NW
 }
 
+local SOFT_OUTLINE_FADEOUT_SPEED = 0.85
+
+---------------------------------------------------------------------------------
+-- Global fade hooks (installed ONCE at module load — see NorskenUI/Core/CustomOutline.lua
+-- for the reference pattern).
+--
+-- Critical fix vs. earlier: these were previously installed inside _HookMain,
+-- which meant a fresh global hook on UIFrameFade / UIFrameFadeIn /
+-- UIFrameFadeOut was registered for EVERY soft-outlined FontString. Over a
+-- session — especially with DungeonTimers preview cycling — hundreds of
+-- redundant entries piled up on each global's post-call list. Each chat
+-- scrollbar fade then ran all of them via secureexecuterange, blowing the C
+-- stack via ScrollingMessageFrame:RefreshDisplay / FCF_FadeInScrollbar paths.
+--
+-- These three hooks dispatch purely off `frame._keSoftOutline` — no closure
+-- capture of any specific instance is needed.
+---------------------------------------------------------------------------------
+
+local fadeHookRunning = false
+
+hooksecurefunc("UIFrameFade", function(frame, fadeInfo)
+    if fadeHookRunning then return end
+    if not frame or not fadeInfo then return end
+    local outline = frame._keSoftOutline
+    if not outline or not outline.shadows then return end
+
+    local isFadeOut = fadeInfo.mode == "OUT"
+        or (fadeInfo.startAlpha and fadeInfo.endAlpha
+            and fadeInfo.endAlpha < fadeInfo.startAlpha)
+
+    fadeHookRunning = true
+    for _, shadow in ipairs(outline.shadows) do
+        local shadowFade = {
+            mode = fadeInfo.mode,
+            startAlpha = fadeInfo.startAlpha,
+            endAlpha = fadeInfo.endAlpha,
+            diffAlpha = fadeInfo.diffAlpha,
+            timeToFade = isFadeOut
+                and fadeInfo.timeToFade * SOFT_OUTLINE_FADEOUT_SPEED
+                or fadeInfo.timeToFade,
+        }
+        if fadeInfo.endAlpha == 0 then
+            shadowFade.finishedFunc = function() shadow:Hide() end
+        end
+        UIFrameFade(shadow, shadowFade)
+    end
+    fadeHookRunning = false
+end)
+
+if UIFrameFadeIn then
+    hooksecurefunc("UIFrameFadeIn", function(frame, _, startAlpha)
+        if fadeHookRunning then return end
+        if not frame then return end
+        local outline = frame._keSoftOutline
+        if not outline or not outline.shadows or not outline.isShown then return end
+        local _, _, _, textAlpha = frame:GetTextColor()
+        if issecretvalue(textAlpha) or textAlpha == 0 then return end
+        for _, shadow in ipairs(outline.shadows) do
+            shadow:SetAlpha(startAlpha or 0)
+            shadow:Show()
+        end
+    end)
+end
+
+if UIFrameFadeOut then
+    hooksecurefunc("UIFrameFadeOut", function(frame, _, startAlpha)
+        if fadeHookRunning then return end
+        if not frame then return end
+        local outline = frame._keSoftOutline
+        if not outline or not outline.shadows or not outline.isShown then return end
+        local _, _, _, textAlpha = frame:GetTextColor()
+        if issecretvalue(textAlpha) or textAlpha == 0 then return end
+        for _, shadow in ipairs(outline.shadows) do
+            shadow:SetAlpha(startAlpha or 1)
+            shadow:Show()
+        end
+    end)
+end
+
 local ALPHA_STRENGTH = {
     1.0, 0.7,
     1.0, 0.7,
@@ -209,89 +288,11 @@ function SoftOutline:_HookMain()
     main._keSoftOutlineHooked = true
     main._keSoftOutline = self
 
-    local SOFT_OUTLINE_FADEOUT_SPEED = 0.85
-
-    -- Re-entrancy guard. The hook below calls UIFrameFade(shadow, ...) for
-    -- each shadow, and that re-fires this hook. The shadow's frame._keSoftOutline
-    -- is nil so the inner call returns immediately — but interactions with
-    -- third-party hooks (ElvUI, Blizzard chat frame fade callbacks) and odd
-    -- frame-state combinations have been seen to chain into a C stack overflow
-    -- via FCF_FadeInScrollbar / ScrollingMessageFrame:RefreshDisplay paths.
-    -- A flag here makes the propagation strictly one-level deep regardless
-    -- of who else is on the call stack. Documented bug class:
-    -- project_uiframefade_softoutline.md.
-    local _inFadeHook = false
-    hooksecurefunc("UIFrameFade", function(frame, fadeInfo)
-        if _inFadeHook then return end
-        if not frame or not fadeInfo then return end
-        if frame._keSoftOutline then
-            local outline = frame._keSoftOutline
-            if not outline or not outline.shadows then return end
-
-            local isFadeOut = fadeInfo.mode == "OUT"
-                or (fadeInfo.startAlpha and fadeInfo.endAlpha
-                    and fadeInfo.endAlpha < fadeInfo.startAlpha)
-
-            _inFadeHook = true
-            for _, shadow in ipairs(outline.shadows) do
-                local shadowFade = {}
-                shadowFade.mode = fadeInfo.mode
-                shadowFade.startAlpha = fadeInfo.startAlpha
-                shadowFade.endAlpha = fadeInfo.endAlpha
-                shadowFade.diffAlpha = fadeInfo.diffAlpha
-                if isFadeOut then
-                    shadowFade.timeToFade = fadeInfo.timeToFade * SOFT_OUTLINE_FADEOUT_SPEED
-                else
-                    shadowFade.timeToFade = fadeInfo.timeToFade
-                end
-
-                if fadeInfo.endAlpha == 0 then
-                    shadowFade.finishedFunc = function()
-                        shadow:Hide()
-                    end
-                end
-
-                UIFrameFade(shadow, shadowFade)
-            end
-            _inFadeHook = false
-        end
-    end)
-
-    if UIFrameFadeIn then
-        hooksecurefunc("UIFrameFadeIn", function(frame, timeToFade, startAlpha, endAlpha)
-            if not frame then return end
-            if frame._keSoftOutline then
-                local outline = frame._keSoftOutline
-                if outline and outline.shadows and outline.isShown then
-                    local _, _, _, textAlpha = frame:GetTextColor()
-                    if not isSecret(textAlpha) and textAlpha ~= 0 then
-                        for _, shadow in ipairs(outline.shadows) do
-                            shadow:SetAlpha(startAlpha or 0)
-                            shadow:Show()
-                        end
-                    end
-                end
-            end
-        end)
-    end
-
-    if UIFrameFadeOut then
-        hooksecurefunc("UIFrameFadeOut", function(frame, timeToFade, startAlpha, endAlpha)
-            if not frame then return end
-            if frame._keSoftOutline then
-                local outline = frame._keSoftOutline
-                if outline and outline.shadows and outline.isShown then
-                    local _, _, _, textAlpha = frame:GetTextColor()
-                    if not isSecret(textAlpha) and textAlpha ~= 0 then
-                        for _, shadow in ipairs(outline.shadows) do
-                            shadow:SetAlpha(startAlpha or 1)
-                            shadow:Show()
-                        end
-                    end
-                end
-            end
-        end)
-    end
+    -- The 3 global UIFrameFade / UIFrameFadeIn / UIFrameFadeOut hooks are
+    -- installed ONCE at file scope (above) — not per-FontString here. They
+    -- dispatch off frame._keSoftOutline so they don't need closure capture
+    -- of any specific main. Per-instance hooks below DO need `main` from
+    -- closure (to read main._keSoftOutline at hook-fire time).
 
     hooksecurefunc(main, "SetText", function(_, text)
         local outline = main._keSoftOutline
