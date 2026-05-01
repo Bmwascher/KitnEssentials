@@ -1460,7 +1460,16 @@ local function CreateDungeonPanel(dungeonId)
             local card1
             card1, yOffset = GUIFrame:CreateSoundSettingsCard(scrollChild, yOffset, {
                 db = selectedTrigger,
-                onChangeCallback = ApplySettings,
+                onChangeCallback = function()
+                    ApplySettings()
+                    -- Refresh the sidebar so the "S" sound indicator on the
+                    -- selected trigger's button updates immediately. The
+                    -- sound dropdown only writes db[keys.onShowSound]; it
+                    -- doesn't rebuild the sidebar list, so without this the
+                    -- S would only appear after the user navigates away
+                    -- and back.
+                    if BuildTimerList then BuildTimerList() end
+                end,
             })
             table_insert(activeCards, card1)
 
