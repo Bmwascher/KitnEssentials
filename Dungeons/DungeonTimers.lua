@@ -824,30 +824,19 @@ function DT:CreateTextFrame(dungeonKey, triggerId, trigger)
     frame.displayText:SetTextColor(unpack(config.textColor))
 
     if useSoftOutline then
-        local outline = KE:CreateSoftOutline(frame.displayText, {
+        -- Manual TOPLEFT/BOTTOMRIGHT re-anchoring used to live here as a
+        -- workaround for _ApplyOffsets' single-CENTER anchoring (which
+        -- caused ghosting on left/right-justified text in a wide container).
+        -- That fix now lives in _ApplyOffsets itself, applying universally
+        -- to every soft outline call site (including the bar text1/text2
+        -- which had the same bug).
+        frame.displayText.softOutline = KE:CreateSoftOutline(frame.displayText, {
             thickness = 1,
             color = { 0, 0, 0 },
             alpha = 0.9,
             fontPath = fontPath,
             fontSize = fontSize,
         })
-        if outline and outline.shadows then
-            local SHADOW_OFFSETS = {
-                { 0,  1 },  { 1,  1 },  { 1,  0 },  { 1,  -1 },
-                { 0,  -1 }, { -1, -1 }, { -1, 0 },  { -1, 1 },
-            }
-            local thickness = outline.thickness or 1
-            for i, shadow in ipairs(outline.shadows) do
-                local offset = SHADOW_OFFSETS[i]
-                local xOff = offset[1] * thickness
-                local yOff = offset[2] * thickness
-                shadow:ClearAllPoints()
-                shadow:SetPoint("TOPLEFT", frame.displayText, "TOPLEFT", xOff, yOff)
-                shadow:SetPoint("BOTTOMRIGHT", frame.displayText, "BOTTOMRIGHT", xOff, yOff)
-                shadow:SetJustifyH(justify)
-            end
-            outline:SetShown(true)
-        end
     end
 
     frame.config = config
