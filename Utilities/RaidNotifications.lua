@@ -475,6 +475,13 @@ end
 -- Preview
 ---------------------------------------------------------------------------------
 function RN:ShowPreview()
+    -- Idempotent guard: bail when preview is already active. Prevents
+    -- PreviewManager's per-section-navigation ShowSectionPreviews from
+    -- redundantly re-applying fonts/colors/sizes to all rows on every
+    -- transition. The GUI's per-toggle onChangeCallback calls
+    -- ApplySettings directly, so live edits still propagate.
+    if self.isPreview then return end
+
     if not self.frame then
         self:CreateFrames()
     end
@@ -493,6 +500,11 @@ function RN:ShowPreview()
 end
 
 function RN:HidePreview()
+    -- Idempotent guard: bail if preview was already off. Avoids redundant
+    -- HideAllAlerts + GatewayCheckUsable + CheckResetBoss on every
+    -- non-utilities section navigation.
+    if not self.isPreview then return end
+
     self.isPreview = false
     self:HideAllAlerts()
 
@@ -565,6 +577,12 @@ function RN:OnDisable()
     self:UnregisterAllEvents()
     self:HideAllAlerts()
     self.wasUsable = nil
+    -- Clear isPreview so a future OnEnable starts from a known-good state.
+    -- Without this, a GUI-open disable→re-enable cycle could leave isPreview
+    -- stuck true, which would make CheckResetBoss + GatewayUpdateState +
+    -- OnEncounterEnd silently skip real-combat alerts (they all early-return
+    -- on `if self.isPreview then return end`).
+    self.isPreview = false
     self.hasItem = false
     self.hasWarlockInGroup = false
     self.isPreview = false
