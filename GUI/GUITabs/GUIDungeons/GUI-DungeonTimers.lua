@@ -1201,11 +1201,17 @@ local function CreateDungeonPanel(dungeonId)
             table_insert(activeCards, browserCard)
 
             -- Gray out cards 2+ when the trigger is disabled to make the
-            -- disabled state obvious. Card 1 (Basic Settings) keeps full
-            -- alpha so the Enable toggle stays prominent. SetEnabled is
-            -- called for both states so a re-enable resets alpha back to 1
-            -- on pooled card kits that previously had alpha=0.5 set.
+            -- disabled state obvious. Card 1 (Basic Settings) MUST stay
+            -- enabled so the user can re-toggle the trigger. SetEnabled is
+            -- called explicitly on every card every render — pooled kits
+            -- carry over their previous alpha + click-blocker state, so
+            -- skipping a card here would leave any stale state from a
+            -- prior module-disabled or trigger-disabled render still in
+            -- effect (the card 1 toggle becoming unreachable bug).
             local triggerEnabled = selectedTrigger.enabled ~= false
+            if activeCards[1] and activeCards[1].SetEnabled then
+                activeCards[1]:SetEnabled(true)
+            end
             for i = 2, #activeCards do
                 if activeCards[i].SetEnabled then activeCards[i]:SetEnabled(triggerEnabled) end
             end
@@ -1395,11 +1401,12 @@ local function CreateDungeonPanel(dungeonId)
             yOffset = yOffset + card4:GetContentHeight() + padding
 
             -- Trigger-disabled gray-out: Display tab has no Enable toggle so
-            -- gray every card. The user can re-enable from the Trigger tab.
-            if selectedTrigger.enabled == false then
-                for _, c in ipairs(activeCards) do
-                    if c.SetEnabled then c:SetEnabled(false) end
-                end
+            -- gray every card. SetEnabled called explicitly on every render
+            -- to clear stale state from pooled card kits whose alpha +
+            -- click-blocker may have been left from a prior render.
+            local triggerEnabled = selectedTrigger.enabled ~= false
+            for _, c in ipairs(activeCards) do
+                if c.SetEnabled then c:SetEnabled(triggerEnabled) end
             end
 
             return yOffset
@@ -1428,11 +1435,12 @@ local function CreateDungeonPanel(dungeonId)
             yOffset = yOffset + card1:GetContentHeight() + padding
 
             -- Trigger-disabled gray-out: Load tab has no Enable toggle so
-            -- gray every card. The user can re-enable from the Trigger tab.
-            if selectedTrigger.enabled == false then
-                for _, c in ipairs(activeCards) do
-                    if c.SetEnabled then c:SetEnabled(false) end
-                end
+            -- gray every card. SetEnabled called explicitly on every render
+            -- to clear stale state from pooled card kits whose alpha +
+            -- click-blocker may have been left from a prior render.
+            local triggerEnabled = selectedTrigger.enabled ~= false
+            for _, c in ipairs(activeCards) do
+                if c.SetEnabled then c:SetEnabled(triggerEnabled) end
             end
 
             return yOffset
@@ -1457,11 +1465,12 @@ local function CreateDungeonPanel(dungeonId)
             table_insert(activeCards, card1)
 
             -- Trigger-disabled gray-out: Actions tab has no Enable toggle so
-            -- gray every card. The user can re-enable from the Trigger tab.
-            if selectedTrigger.enabled == false then
-                for _, c in ipairs(activeCards) do
-                    if c.SetEnabled then c:SetEnabled(false) end
-                end
+            -- gray every card. SetEnabled called explicitly on every render
+            -- to clear stale state from pooled card kits whose alpha +
+            -- click-blocker may have been left from a prior render.
+            local triggerEnabled = selectedTrigger.enabled ~= false
+            for _, c in ipairs(activeCards) do
+                if c.SetEnabled then c:SetEnabled(triggerEnabled) end
             end
 
             return yOffset
