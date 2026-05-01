@@ -49,7 +49,8 @@ function GUIFrame:HasPanel(itemId)
     return self.PanelBuilders[itemId] ~= nil
 end
 
--- Content cleanup callbacks
+-- Content cleanup callbacks (fire on REAL item switch only — used by modules
+-- that need to tear down preview state, etc.)
 GUIFrame.contentCleanupCallbacks = {}
 
 function GUIFrame:RegisterContentCleanup(key, callback)
@@ -60,6 +61,22 @@ end
 
 function GUIFrame:UnregisterContentCleanup(key)
     if key then self.contentCleanupCallbacks[key] = nil end
+end
+
+-- Content rebuild callbacks (fire UNCONDITIONALLY at the start of every
+-- RefreshContent — used by widget pools to ReleaseAll before the new render
+-- starts so kits can be re-acquired into the fresh scrollChild without
+-- being orphaned by ClearContent's SetParent(nil) loop).
+GUIFrame.contentRebuildCallbacks = {}
+
+function GUIFrame:RegisterContentRebuildCallback(key, callback)
+    if type(key) == "string" and type(callback) == "function" then
+        self.contentRebuildCallbacks[key] = callback
+    end
+end
+
+function GUIFrame:UnregisterContentRebuildCallback(key)
+    if key then self.contentRebuildCallbacks[key] = nil end
 end
 
 -- On-close callbacks
@@ -419,6 +436,15 @@ end
 ---------------------------------------------------------------------------------
 function GUIFrame:RefreshContent()
     if not self.contentArea then return end
+
+    -- Fire rebuild callbacks FIRST so widget pools can ReleaseAll their
+    -- kits back to their hidden holders before the SetParent(nil) loop
+    -- below would orphan them. Always fires regardless of in-place vs.
+    -- item-switch — pools need to release every render, not just on
+    -- item changes.
+    for _, callback in pairs(self.contentRebuildCallbacks) do
+        pcall(callback)
+    end
 
     -- In-place refresh detection: when the same panel is being rebuilt
     -- (e.g. RefreshContentDeferred fired by a card edit on the DungeonTimers
