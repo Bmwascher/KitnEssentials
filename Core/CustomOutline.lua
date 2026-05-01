@@ -162,7 +162,17 @@ function SoftOutline:_ApplyOffsets()
         local x = offset[1] * self.thickness
         local y = offset[2] * self.thickness
         shadow:ClearAllPoints()
-        shadow:SetPoint("CENTER", self.main, "CENTER", x, y)
+        -- Anchor on BOTH corners so the shadow inherits main's bounding box.
+        -- Single-CENTER anchoring (the previous behavior) gave each shadow
+        -- only its own string-width box, which broke left/right-justified
+        -- text in a wide container — e.g. DungeonTimers bar text1 anchored
+        -- LEFT+RIGHT on the bar appeared once at the left (main) plus once
+        -- centered (shadows) producing a visible ghost. With TOPLEFT +
+        -- BOTTOMRIGHT, shadows match main's box exactly and the synced
+        -- JustifyH from CreateSoftOutline (and the SetJustifyH hook on
+        -- main) keeps the shadow text aligned with the main text.
+        shadow:SetPoint("TOPLEFT",     self.main, "TOPLEFT",     x, y)
+        shadow:SetPoint("BOTTOMRIGHT", self.main, "BOTTOMRIGHT", x, y)
     end
 end
 
