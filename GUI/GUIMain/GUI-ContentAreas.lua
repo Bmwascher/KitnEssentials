@@ -215,6 +215,9 @@ function KE.GUI.CreateMiniSidebar(container, options)
     local hasButtons = (buttonAreaConfig.buttons and #buttonAreaConfig.buttons > 0) or
         (buttonAreaConfig.rows and #buttonAreaConfig.rows > 0)
 
+    -- Hoisted so ApplyThemeColors can re-tint after a theme switch (the
+    -- accent line under the action button area). nil when hasButtons=false.
+    local actionAccentBorder
     if hasButtons then
         local btnHeight = buttonAreaConfig.buttonHeight or 22
         local layout = buttonAreaConfig.layout or "vertical"
@@ -223,6 +226,7 @@ function KE.GUI.CreateMiniSidebar(container, options)
         local bgColor = Theme.bgLight
 
         local borderBottom = buttonArea:CreateTexture(nil, "ARTWORK")
+        actionAccentBorder = borderBottom
         borderBottom:SetHeight(1)
         borderBottom:SetPoint("BOTTOMLEFT", buttonArea, "BOTTOMLEFT", 0, -Theme.paddingSmall)
         borderBottom:SetPoint("BOTTOMRIGHT", buttonArea, "BOTTOMRIGHT", 0, 0)
@@ -595,6 +599,27 @@ function KE.GUI.CreateMiniSidebar(container, options)
             btn._iconBorder:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
         end
         UpdateSelectionVisuals()
+
+        -- Refresh the action-button area too. KE:RefreshTheme replaces the
+        -- color tables (Theme.bgLight, Theme.accent, Theme.border) with new
+        -- ones via CopyColor, so any captured table reference becomes stale.
+        -- Re-bind btn._bgColor to the live Theme.bgLight so OnLeave / OnMouseUp
+        -- handlers see the new palette, and re-apply the visible colors set
+        -- at construction time.
+        if actionAccentBorder then
+            actionAccentBorder:SetColorTexture(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+        end
+        for _, btn in ipairs(actionButtons) do
+            btn._bgColor = Theme.bgLight
+            btn:SetBackdropColor(Theme.bgLight[1], Theme.bgLight[2], Theme.bgLight[3], 1)
+            btn:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+            if btn._icon then
+                btn._icon:SetVertexColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+            end
+            if btn._label then
+                btn._label:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+            end
+        end
 
         if contentArea.ApplyThemeColors then
             contentArea.ApplyThemeColors()

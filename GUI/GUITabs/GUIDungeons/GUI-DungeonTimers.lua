@@ -1782,6 +1782,16 @@ local function CreateDungeonPanel(dungeonId)
 
         RenderContent = function(tabId)
             contentArea:ClearContent()
+            -- Wipe our shadow activeCards every render. SubTabPanel's api
+            -- doesn't expose its internal activeCards (only BasicContentArea
+            -- does), so `contentArea.activeCards or {}` always evaluated to
+            -- a fresh `{}` in the pre-cache code (one per call). Now that
+            -- activeCards lives at outer scope, we have to clear it
+            -- explicitly — otherwise table_insert grows it unbounded across
+            -- renders and the trailing trigger-disabled SetEnabled loop
+            -- starts hitting stale duplicates of card 1, which re-creates
+            -- the "card 1 unreachable" bug.
+            wipe(activeCards)
             local yOffset = Theme.paddingSmall
             if tabId == "trigger" then
                 yOffset = RenderTriggerTab(yOffset)
@@ -1832,6 +1842,14 @@ local function CreateDungeonPanel(dungeonId)
             panel:ClearAllPoints()
             panel:SetAllPoints()
             panel:Show()
+            -- Re-apply theme colors. Theme switches route through
+            -- GUIFrame:ApplyThemeColors → RefreshContent, but our cached
+            -- miniSidebar's textures were SetColorTexture'd at construction
+            -- time. Old code rebuilt miniSidebar each render and picked up
+            -- the new palette implicitly; the cache breaks that. Cards
+            -- inside the panel are pooled and re-Configured per render so
+            -- they self-update. Only the miniSidebar shell needs this.
+            if miniSidebar.ApplyThemeColors then miniSidebar.ApplyThemeColors() end
         end
 
         local isModuleDisabled = db.Enabled == false
@@ -1842,18 +1860,20 @@ local function CreateDungeonPanel(dungeonId)
 
         BuildTimerList()
 
+        -- Re-apply mouse-enabled state to timer buttons unconditionally on
+        -- every render — kit.btn:EnableMouse needs a paired re-enable path
+        -- when the module gets re-enabled, otherwise toggling module off
+        -- then on leaves the timer list permanently click-disabled until
+        -- /reload. Matches the action-button pattern above.
+        for _, kit in ipairs(timerButtons) do
+            if kit.btn then kit.btn:EnableMouse(not isModuleDisabled) end
+        end
+
         RenderContent(state.currentSubTab)
 
         if isModuleDisabled then
             for _, card in ipairs(activeCards) do
                 if card.SetEnabled then card:SetEnabled(false) end
-            end
-            -- timerButtons stores kits, not buttons. The click target is
-            -- kit.btn — the prior code did `kit:EnableMouse` which would've
-            -- errored if it ever ran with isModuleDisabled = true at first
-            -- build (kit is a plain table, no EnableMouse method).
-            for _, kit in ipairs(timerButtons) do
-                if kit.btn then kit.btn:EnableMouse(false) end
             end
         end
 
