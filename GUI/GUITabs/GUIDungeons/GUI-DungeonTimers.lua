@@ -349,6 +349,10 @@ local function CreateBasicSettingsCardKit(holder)
         local t = kit._trigger
         if t then t.enabled = checked end
         if kit._applySettings then kit._applySettings() end
+        -- Re-render the sub-tab so the trigger-disabled gray-out on cards
+        -- 2+ updates immediately. Cheap thanks to the in-place RefreshContent
+        -- + card pool path (no preview flash, no allocation churn).
+        if kit._refreshContentDeferred then kit._refreshContentDeferred() end
     end)
     nameInput:SetCallback(function(text)
         local t = kit._trigger
@@ -901,9 +905,31 @@ local function CreateDungeonPanel(dungeonId)
         panel:SetAllPoints()
 
         panel:SetScript("OnHide", function()
+            -- In-place RefreshContent (same-itemId rebuild from a card edit)
+            -- keeps the preview running across the panel teardown so the
+            -- user doesn't see a flash on every keystroke. The new panel's
+            -- end-of-build auto-StartDungeonPreview likewise no-ops when
+            -- preview is already running for this dungeon.
+            if GUIFrame.contentArea and GUIFrame.contentArea._inPlaceRefresh then
+                return
+            end
             if currentPreviewDungeon == dungeonKey then
                 StopPreview()
             end
+        end)
+
+        -- Re-start preview on GUI reopen. OnShow fires when the panel
+        -- transitions from hidden to visible — i.e. when GUIFrame:Show()
+        -- re-shows the cached _customPanel after a prior GUIFrame:Hide()
+        -- stopped the preview. Initial panel creation does NOT fire OnShow
+        -- (no transition); the C_Timer.After at the bottom of this function
+        -- handles the first render.
+        panel:SetScript("OnShow", function()
+            -- db is captured by the enclosing closure; re-check at fire time
+            -- because the user may have toggled the module between renders.
+            if db.Enabled == false then return end
+            if previewActive and currentPreviewDungeon == dungeonKey then return end
+            StartDungeonPreview(dungeonKey)
         end)
 
         local RenderContent
@@ -1174,6 +1200,22 @@ local function CreateDungeonPanel(dungeonId)
             })
             table_insert(activeCards, browserCard)
 
+            -- Gray out cards 2+ when the trigger is disabled to make the
+            -- disabled state obvious. Card 1 (Basic Settings) MUST stay
+            -- enabled so the user can re-toggle the trigger. SetEnabled is
+            -- called explicitly on every card every render — pooled kits
+            -- carry over their previous alpha + click-blocker state, so
+            -- skipping a card here would leave any stale state from a
+            -- prior module-disabled or trigger-disabled render still in
+            -- effect (the card 1 toggle becoming unreachable bug).
+            local triggerEnabled = selectedTrigger.enabled ~= false
+            if activeCards[1] and activeCards[1].SetEnabled then
+                activeCards[1]:SetEnabled(true)
+            end
+            for i = 2, #activeCards do
+                if activeCards[i].SetEnabled then activeCards[i]:SetEnabled(triggerEnabled) end
+            end
+
             return yOffset
         end
 
@@ -1358,6 +1400,15 @@ local function CreateDungeonPanel(dungeonId)
 
             yOffset = yOffset + card4:GetContentHeight() + padding
 
+            -- Trigger-disabled gray-out: Display tab has no Enable toggle so
+            -- gray every card. SetEnabled called explicitly on every render
+            -- to clear stale state from pooled card kits whose alpha +
+            -- click-blocker may have been left from a prior render.
+            local triggerEnabled = selectedTrigger.enabled ~= false
+            for _, c in ipairs(activeCards) do
+                if c.SetEnabled then c:SetEnabled(triggerEnabled) end
+            end
+
             return yOffset
         end
 
@@ -1383,6 +1434,15 @@ local function CreateDungeonPanel(dungeonId)
 
             yOffset = yOffset + card1:GetContentHeight() + padding
 
+            -- Trigger-disabled gray-out: Load tab has no Enable toggle so
+            -- gray every card. SetEnabled called explicitly on every render
+            -- to clear stale state from pooled card kits whose alpha +
+            -- click-blocker may have been left from a prior render.
+            local triggerEnabled = selectedTrigger.enabled ~= false
+            for _, c in ipairs(activeCards) do
+                if c.SetEnabled then c:SetEnabled(triggerEnabled) end
+            end
+
             return yOffset
         end
 
@@ -1403,6 +1463,15 @@ local function CreateDungeonPanel(dungeonId)
                 onChangeCallback = ApplySettings,
             })
             table_insert(activeCards, card1)
+
+            -- Trigger-disabled gray-out: Actions tab has no Enable toggle so
+            -- gray every card. SetEnabled called explicitly on every render
+            -- to clear stale state from pooled card kits whose alpha +
+            -- click-blocker may have been left from a prior render.
+            local triggerEnabled = selectedTrigger.enabled ~= false
+            for _, c in ipairs(activeCards) do
+                if c.SetEnabled then c:SetEnabled(triggerEnabled) end
+            end
 
             return yOffset
         end
@@ -1434,9 +1503,14 @@ local function CreateDungeonPanel(dungeonId)
         end
 
         C_Timer.After(0.1, function()
-            if panel:IsShown() and not isModuleDisabled then
-                StartDungeonPreview(dungeonKey)
-            end
+            if not (panel:IsShown() and not isModuleDisabled) then return end
+            -- Skip when preview is already running for this dungeon. After
+            -- an in-place RefreshContent, the OnHide above kept the preview
+            -- alive across the rebuild — re-running StartDungeonPreview here
+            -- (which calls StopPreview internally) would cause a visible
+            -- bar/text flash on every keystroke that triggered the refresh.
+            if previewActive and currentPreviewDungeon == dungeonKey then return end
+            StartDungeonPreview(dungeonKey)
         end)
 
         return panel

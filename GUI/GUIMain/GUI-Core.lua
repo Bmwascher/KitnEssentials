@@ -320,15 +320,36 @@ function GUIFrame:CreateCard(parent, title, yOffset, width)
         return self._yOffset + self:GetContentHeight() + Theme.paddingSmall
     end
 
+    -- Lazy-create a transparent click-blocker overlay above the card content.
+    -- Shown when the card is disabled to make widget interactions non-functional
+    -- without recursively walking row.widgets / kit subframes (which would need
+    -- per-widget knowledge of how each card type lays out its children).
+    local function GetMouseBlocker(c)
+        if c._mouseBlocker then return c._mouseBlocker end
+        local blocker = CreateFrame("Frame", nil, c)
+        blocker:SetAllPoints(c)
+        -- +100 above the card's own frame level should cover all default-level
+        -- descendants. Cards don't generally bump child frame levels.
+        blocker:SetFrameLevel(c:GetFrameLevel() + 100)
+        blocker:EnableMouse(true)
+        -- Don't capture mouse wheel — let scroll events bubble up to the
+        -- scrollFrame so the user can still scroll past a disabled card.
+        blocker:Hide()
+        c._mouseBlocker = blocker
+        return blocker
+    end
+
     function card:SetEnabled(enabled)
         if enabled then
             self:SetAlpha(1)
             if self.header then self.header:SetAlpha(1) end
             if self.titleText then self.titleText:SetAlpha(1) end
+            if self._mouseBlocker then self._mouseBlocker:Hide() end
         else
             self:SetAlpha(0.5)
             if self.header then self.header:SetAlpha(0.5) end
             if self.titleText then self.titleText:SetAlpha(0.5) end
+            GetMouseBlocker(self):Show()
         end
     end
 
@@ -399,6 +420,16 @@ end
 function GUIFrame:RefreshContent()
     if not self.contentArea then return end
 
+    -- In-place refresh detection: when the same panel is being rebuilt
+    -- (e.g. RefreshContentDeferred fired by a card edit on the DungeonTimers
+    -- panel), skip the teardown side effects (cleanup callbacks, panel
+    -- OnHide preview teardown). Otherwise the live preview stops + restarts
+    -- across the rebuild and the user sees a visible bar/text flash on every
+    -- keystroke. Cleared at the end of this function before the next call.
+    local itemId = self.selectedSidebarItem or "HomePage"
+    local sameItem = (self.contentArea._lastItemId == itemId)
+    self.contentArea._inPlaceRefresh = sameItem
+
     -- Clean up custom panel if exists (e.g. sub-tab panel)
     if self.contentArea._customPanel then
         self.contentArea._customPanel:Hide()
@@ -406,10 +437,20 @@ function GUIFrame:RefreshContent()
         self.contentArea._customPanel = nil
     end
 
-    -- Fire content cleanup callbacks on tab switch
-    for _, callback in pairs(self.contentCleanupCallbacks) do
-        pcall(callback)
+    -- Fire content cleanup callbacks ONLY on real item switch — same-item
+    -- refreshes shouldn't tear down preview state.
+    if not sameItem then
+        for _, callback in pairs(self.contentCleanupCallbacks) do
+            pcall(callback)
+        end
     end
+
+    -- Flag is only needed across the synchronous teardown above (panel
+    -- :Hide() fires OnHide handlers in-place). Clear before the new panel
+    -- is built; record the itemId so the next RefreshContent can detect
+    -- in-place vs. switch.
+    self.contentArea._inPlaceRefresh = false
+    self.contentArea._lastItemId = itemId
 
     -- Show scroll frame
     if self.contentArea.scrollFrame then
@@ -431,7 +472,6 @@ function GUIFrame:RefreshContent()
 
     local T = Theme
     local yOffset = T.paddingMedium
-    local itemId = self.selectedSidebarItem or "HomePage"
 
     -- Check for panel builders (full content-area takeover, no scroll frame)
     if itemId and self.PanelBuilders and self.PanelBuilders[itemId] then
