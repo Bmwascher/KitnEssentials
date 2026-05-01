@@ -376,6 +376,15 @@ PreviewManager.editModeActive = false
 PreviewManager.previewsActive = false
 PreviewManager.activeSection = nil
 
+-- Per-module preview state cache (moduleName → "preview" | "hidden") so
+-- ShowSectionPreviews / ShowModules only fire module:ShowPreview /
+-- :HidePreview when the state actually changes. Without this, every
+-- cross-section GUI nav re-fires ShowPreview on every preview module —
+-- modules like RaidNotifications redundantly re-apply fonts/colors/sizes
+-- to all rows on each transition. Wiped on StopAllPreviews so the next
+-- show does fresh setup.
+PreviewManager._moduleStates = {}
+
 function PreviewManager:UpdatePreviewState()
     if self.editModeActive then
         -- Edit mode: show ALL previews regardless of section
@@ -432,16 +441,24 @@ function PreviewManager:ShowSectionPreviews(sectionId)
     end
 
     local classMatch = { [select(2, UnitClass("player"))] = true }
+    local states = self._moduleStates
 
     for _, moduleName in ipairs(PREVIEW_MODULES) do
         local module = Addon:GetModule(moduleName, true)
         if module then
-            if wantedSet[moduleName] and module.ShowPreview and module.db and module.db.Enabled then
-                if not module.classRestriction or classMatch[module.classRestriction] then
+            local wantPreview = wantedSet[moduleName]
+                and module.ShowPreview and module.db and module.db.Enabled
+                and (not module.classRestriction or classMatch[module.classRestriction])
+            if wantPreview then
+                if states[moduleName] ~= "preview" then
                     module:ShowPreview()
+                    states[moduleName] = "preview"
                 end
             elseif module.HidePreview then
-                module:HidePreview()
+                if states[moduleName] ~= "hidden" then
+                    module:HidePreview()
+                    states[moduleName] = "hidden"
+                end
             end
         end
     end
@@ -451,11 +468,15 @@ function PreviewManager:ShowModules(moduleList)
     local Addon = KitnEssentials
     if not Addon then return end
     local classMatch = { [select(2, UnitClass("player"))] = true }
+    local states = self._moduleStates
     for _, moduleName in ipairs(moduleList) do
         local module = Addon:GetModule(moduleName, true)
         if module and module.ShowPreview and module.db and module.db.Enabled then
             if not module.classRestriction or classMatch[module.classRestriction] then
-                module:ShowPreview()
+                if states[moduleName] ~= "preview" then
+                    module:ShowPreview()
+                    states[moduleName] = "preview"
+                end
             end
         end
     end
@@ -464,10 +485,14 @@ end
 function PreviewManager:StopAllPreviews()
     local Addon = KitnEssentials
     if not Addon then return end
+    local states = self._moduleStates
     for _, moduleName in ipairs(PREVIEW_MODULES) do
         local module = Addon:GetModule(moduleName, true)
         if module and module.HidePreview then
-            module:HidePreview()
+            if states[moduleName] ~= "hidden" then
+                module:HidePreview()
+                states[moduleName] = "hidden"
+            end
         end
     end
 end
