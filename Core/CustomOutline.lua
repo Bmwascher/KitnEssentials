@@ -210,7 +210,19 @@ function SoftOutline:_HookMain()
     main._keSoftOutline = self
 
     local SOFT_OUTLINE_FADEOUT_SPEED = 0.85
+
+    -- Re-entrancy guard. The hook below calls UIFrameFade(shadow, ...) for
+    -- each shadow, and that re-fires this hook. The shadow's frame._keSoftOutline
+    -- is nil so the inner call returns immediately — but interactions with
+    -- third-party hooks (ElvUI, Blizzard chat frame fade callbacks) and odd
+    -- frame-state combinations have been seen to chain into a C stack overflow
+    -- via FCF_FadeInScrollbar / ScrollingMessageFrame:RefreshDisplay paths.
+    -- A flag here makes the propagation strictly one-level deep regardless
+    -- of who else is on the call stack. Documented bug class:
+    -- project_uiframefade_softoutline.md.
+    local _inFadeHook = false
     hooksecurefunc("UIFrameFade", function(frame, fadeInfo)
+        if _inFadeHook then return end
         if not frame or not fadeInfo then return end
         if frame._keSoftOutline then
             local outline = frame._keSoftOutline
@@ -220,6 +232,7 @@ function SoftOutline:_HookMain()
                 or (fadeInfo.startAlpha and fadeInfo.endAlpha
                     and fadeInfo.endAlpha < fadeInfo.startAlpha)
 
+            _inFadeHook = true
             for _, shadow in ipairs(outline.shadows) do
                 local shadowFade = {}
                 shadowFade.mode = fadeInfo.mode
@@ -240,6 +253,7 @@ function SoftOutline:_HookMain()
 
                 UIFrameFade(shadow, shadowFade)
             end
+            _inFadeHook = false
         end
     end)
 
