@@ -1250,35 +1250,38 @@ local function CreateDungeonPanel(dungeonId)
     local dungeonKey = info.key
     local state = GetDungeonState(dungeonKey)
 
-    return function(container)
+    -- Per-panel cache. The outer frames (panel, sidebar shell, action buttons,
+    -- sub-tab bar, scroll plumbing) are built ONCE and reparented across
+    -- RefreshContent calls. GUI-Core's RefreshContent does Hide()+SetParent(nil)
+    -- on the prior _customPanel; on the next call we re-parent + re-show. The
+    -- frames themselves persist (held by these upvalues), so allocation cost
+    -- drops from ~25 frames per click to 0 after the first build.
+    local db                 -- KE.db.profile.Dungeons.DungeonTimers (re-fetched per call)
+    local dungeonDb          -- db.Dungeons[dungeonKey] (re-fetched per call)
+    local panel
+    local miniSidebar, listChild, contentArea, scrollChild, activeCards
+    local timerButtons = {}
+
+    -- Late-bound closures defined inside BuildPanelInitial. The action buttons
+    -- + sub-tab handlers + timer-list onClick close over these as upvalues so
+    -- they always invoke the current render path even after the panel is
+    -- rebuilt-in-place (which doesn't actually rebuild anymore — see cache).
+    local ApplySettings, RefreshContentDeferred, RenderContent, BuildTimerList,
+          UpdateTimerListSelection
+
+    -- Resolved on demand from the live state + dungeonDb. Replaces the prior
+    -- `local selectedTrigger` upvalue that had to be reassigned by every click
+    -- handler. Render functions read fresh on entry so a stale capture is
+    -- impossible.
+    local function GetSelectedTrigger()
+        if not dungeonDb then return nil end
+        return state.selectedTriggerId and dungeonDb.Triggers[state.selectedTriggerId] or nil
+    end
+
+    local function BuildPanelInitial(container)
         local Theme = KE.Theme
 
-        -- Hide module-level previews when entering a dungeon page
-        local DT_GUI = KE.GUI and KE.GUI.DungeonTimers
-        if DT_GUI then
-            if DT_GUI.HideBarPreviews then DT_GUI.HideBarPreviews() end
-            if DT_GUI.HideTextPreviews then DT_GUI.HideTextPreviews() end
-        end
-
-        local db = KE.db and KE.db.profile.Dungeons and KE.db.profile.Dungeons.DungeonTimers
-        if not db then return nil end
-
-        if not db.Dungeons then db.Dungeons = {} end
-        if not db.Dungeons[dungeonKey] then
-            db.Dungeons[dungeonKey] = { Enabled = true, Triggers = {} }
-        end
-
-        local dungeonDb = db.Dungeons[dungeonKey]
-        if not dungeonDb.Triggers then dungeonDb.Triggers = {} end
-
-        if state.selectedTriggerId and not dungeonDb.Triggers[state.selectedTriggerId] then
-            state.selectedTriggerId = nil
-            StopPreview()
-        end
-
-        local selectedTrigger = state.selectedTriggerId and dungeonDb.Triggers[state.selectedTriggerId] or nil
-
-        local function ApplySettings()
+        ApplySettings = function()
             local mod = GetModule()
             local previewAlreadyRunning = previewActive and currentPreviewDungeon == dungeonKey
             if mod then
@@ -1298,13 +1301,13 @@ local function CreateDungeonPanel(dungeonId)
             end
         end
 
-        local function RefreshContentDeferred()
+        RefreshContentDeferred = function()
             C_Timer.After(0.05, function()
                 if GUIFrame.RefreshContent then GUIFrame:RefreshContent() end
             end)
         end
 
-        local panel = CreateFrame("Frame", nil, container)
+        panel = CreateFrame("Frame", nil, container)
         panel:SetAllPoints()
 
         panel:SetScript("OnHide", function()
@@ -1328,16 +1331,10 @@ local function CreateDungeonPanel(dungeonId)
         -- (no transition); the C_Timer.After at the bottom of this function
         -- handles the first render.
         panel:SetScript("OnShow", function()
-            -- db is captured by the enclosing closure; re-check at fire time
-            -- because the user may have toggled the module between renders.
-            if db.Enabled == false then return end
+            if not db or db.Enabled == false then return end
             if previewActive and currentPreviewDungeon == dungeonKey then return end
             StartDungeonPreview(dungeonKey)
         end)
-
-        local RenderContent
-        local BuildTimerList
-        local UpdateTimerListSelection
 
         local function MoveTrigger(direction)
             if not state.selectedTriggerId then return end
@@ -1351,14 +1348,13 @@ local function CreateDungeonPanel(dungeonId)
             end
             if newId then
                 state.selectedTriggerId = newId
-                selectedTrigger = dungeonDb.Triggers[newId]
                 BuildTimerList()
                 RenderContent(state.currentSubTab)
                 StartDungeonPreview(dungeonKey)
             end
         end
 
-        local miniSidebar = KE.GUI.CreateMiniSidebar(panel, {
+        miniSidebar = KE.GUI.CreateMiniSidebar(panel, {
             sidebarWidth = SIDEBAR_WIDTH,
             listPadding = LIST_PADDING,
             itemHeight = BUTTON_HEIGHT,
@@ -1380,7 +1376,6 @@ local function CreateDungeonPanel(dungeonId)
                                     local newId = mod:CreateTrigger(dungeonKey)
                                     if newId then
                                         state.selectedTriggerId = newId
-                                        selectedTrigger = dungeonDb.Triggers[newId]
                                         BuildTimerList()
                                         RenderContent(state.currentSubTab)
                                         StartDungeonPreview(dungeonKey)
@@ -1398,7 +1393,6 @@ local function CreateDungeonPanel(dungeonId)
                                         local newId = mod:DuplicateTrigger(dungeonKey, state.selectedTriggerId)
                                         if newId then
                                             state.selectedTriggerId = newId
-                                            selectedTrigger = dungeonDb.Triggers[newId]
                                             BuildTimerList()
                                             RenderContent(state.currentSubTab)
                                             StartDungeonPreview(dungeonKey)
@@ -1416,7 +1410,6 @@ local function CreateDungeonPanel(dungeonId)
                                     if mod and mod.DeleteTrigger then
                                         mod:DeleteTrigger(dungeonKey, state.selectedTriggerId)
                                         state.selectedTriggerId = nil
-                                        selectedTrigger = nil
                                         BuildTimerList()
                                         RenderContent(state.currentSubTab)
                                         StopPreview()
@@ -1450,30 +1443,17 @@ local function CreateDungeonPanel(dungeonId)
             end,
         })
 
-        local listChild = miniSidebar.listChild
-        local contentArea = miniSidebar.contentArea
-        local scrollChild = contentArea.scrollChild
-        local activeCards = contentArea.activeCards or {}
-
-        local isModuleDisabled = db.Enabled == false
-        if isModuleDisabled then
-            miniSidebar.panel:SetAlpha(0.5)
-            for _, btn in ipairs(miniSidebar.actionButtons or {}) do
-                btn:EnableMouse(false)
-            end
-        end
-
-        local timerButtons = {}
+        listChild = miniSidebar.listChild
+        contentArea = miniSidebar.contentArea
+        scrollChild = contentArea.scrollChild
+        activeCards = contentArea.activeCards or {}
 
         -- Captured ONCE per panel and assigned to every kit's _onClick slot.
-        -- Reused across every BuildTimerList call. RenderContent / dungeonDb /
-        -- selectedTrigger are upvalues that are bound late-style — they may
-        -- be nil when this closure is created but are populated by the time
-        -- a button actually fires. UpdateTimerListSelection / dungeonKey are
-        -- already in scope here.
+        -- Reused across every BuildTimerList call. RenderContent /
+        -- UpdateTimerListSelection / dungeonKey are upvalues that are stable
+        -- for the panel's lifetime (BuildPanelInitial only fires once).
         local panelOnTimerClick = function(triggerId)
             state.selectedTriggerId = triggerId
-            selectedTrigger = dungeonDb.Triggers[triggerId]
             UpdateTimerListSelection()
             RenderContent(state.currentSubTab)
             StartDungeonPreview(dungeonKey)
@@ -1524,12 +1504,11 @@ local function CreateDungeonPanel(dungeonId)
             UpdateTimerListSelectionVisuals()
         end
 
-        BuildTimerList()
-
         ----------------------------------------------------------------
         -- Render: Trigger sub-tab
         ----------------------------------------------------------------
         local function RenderTriggerTab(yOffset)
+            local selectedTrigger = GetSelectedTrigger()
             if not selectedTrigger then
                 local card = GUIFrame:CreateCard(scrollChild, "No Timer Selected", yOffset)
                 card:AddLabel("Click + to create a new timer or select one from the list on the left.")
@@ -1594,8 +1573,9 @@ local function CreateDungeonPanel(dungeonId)
                     state.spellSearchFilter = text
                 end,
                 onSpellSelect = function(spellId)
-                    if selectedTrigger then
-                        selectedTrigger.spellId = tostring(spellId)
+                    local t = GetSelectedTrigger()
+                    if t then
+                        t.spellId = tostring(spellId)
                         ApplySettings()
                         RefreshContentDeferred()
                     end
@@ -1626,6 +1606,7 @@ local function CreateDungeonPanel(dungeonId)
         -- Render: Display sub-tab
         ----------------------------------------------------------------
         local function RenderDisplayTab(yOffset)
+            local selectedTrigger = GetSelectedTrigger()
             if not selectedTrigger then
                 local card = GUIFrame:CreateCard(scrollChild, "No Timer Selected", yOffset)
                 card:AddLabel("Click + to create a new timer, or select one from the list on the left.")
@@ -1728,6 +1709,7 @@ local function CreateDungeonPanel(dungeonId)
         -- Render: Load sub-tab (role filter only — pos filter deferred)
         ----------------------------------------------------------------
         local function RenderLoadTab(yOffset)
+            local selectedTrigger = GetSelectedTrigger()
             if not selectedTrigger then
                 local card = GUIFrame:CreateCard(scrollChild, "No Timer Selected", yOffset)
                 card:AddLabel("Click + to create a new timer, or select one from the list on the left.")
@@ -1762,6 +1744,7 @@ local function CreateDungeonPanel(dungeonId)
         -- Render: Actions sub-tab
         ----------------------------------------------------------------
         local function RenderActionsTab(yOffset)
+            local selectedTrigger = GetSelectedTrigger()
             if not selectedTrigger then
                 local card = GUIFrame:CreateCard(scrollChild, "No Timer Selected", yOffset)
                 card:AddLabel("Click + to create a new timer, or select one from the list on the left.")
@@ -1811,6 +1794,53 @@ local function CreateDungeonPanel(dungeonId)
             end
             contentArea:SetContentHeight(yOffset)
         end
+    end
+
+    return function(container)
+        -- Hide module-level previews when entering a dungeon page
+        local DT_GUI = KE.GUI and KE.GUI.DungeonTimers
+        if DT_GUI then
+            if DT_GUI.HideBarPreviews then DT_GUI.HideBarPreviews() end
+            if DT_GUI.HideTextPreviews then DT_GUI.HideTextPreviews() end
+        end
+
+        db = KE.db and KE.db.profile.Dungeons and KE.db.profile.Dungeons.DungeonTimers
+        if not db then return nil end
+
+        if not db.Dungeons then db.Dungeons = {} end
+        if not db.Dungeons[dungeonKey] then
+            db.Dungeons[dungeonKey] = { Enabled = true, Triggers = {} }
+        end
+        dungeonDb = db.Dungeons[dungeonKey]
+        if not dungeonDb.Triggers then dungeonDb.Triggers = {} end
+
+        if state.selectedTriggerId and not dungeonDb.Triggers[state.selectedTriggerId] then
+            state.selectedTriggerId = nil
+            StopPreview()
+        end
+
+        if not panel then
+            BuildPanelInitial(container)
+        else
+            -- Cached path: re-parent the existing panel and show. GUI-Core's
+            -- prior RefreshContent did SetParent(nil) on _customPanel; we
+            -- re-attach here. The OnHide handler ran during teardown — for
+            -- in-place rebuilds it returned early and preserved the preview;
+            -- for item switches it called StopPreview, which we re-establish
+            -- via the C_Timer.After at the bottom of this function.
+            panel:SetParent(container)
+            panel:ClearAllPoints()
+            panel:SetAllPoints()
+            panel:Show()
+        end
+
+        local isModuleDisabled = db.Enabled == false
+        miniSidebar.panel:SetAlpha(isModuleDisabled and 0.5 or 1)
+        for _, btn in ipairs(miniSidebar.actionButtons or {}) do
+            btn:EnableMouse(not isModuleDisabled)
+        end
+
+        BuildTimerList()
 
         RenderContent(state.currentSubTab)
 
@@ -1818,8 +1848,12 @@ local function CreateDungeonPanel(dungeonId)
             for _, card in ipairs(activeCards) do
                 if card.SetEnabled then card:SetEnabled(false) end
             end
-            for _, btn in ipairs(timerButtons) do
-                btn:EnableMouse(false)
+            -- timerButtons stores kits, not buttons. The click target is
+            -- kit.btn — the prior code did `kit:EnableMouse` which would've
+            -- errored if it ever ran with isModuleDisabled = true at first
+            -- build (kit is a plain table, no EnableMouse method).
+            for _, kit in ipairs(timerButtons) do
+                if kit.btn then kit.btn:EnableMouse(false) end
             end
         end
 
