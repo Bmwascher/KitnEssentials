@@ -555,6 +555,13 @@ local function ConfigurePositionCardKit(kit, scrollChild, yOffset, config)
     kit.frameInput:SetValue(kitGetValue(kit, keys.anchorFrameFrame, ""))
     kit.selfPointWidget:SetValue(kitGetValue(kit, keys.selfPoint, defaults.selfPoint or "CENTER"))
     kit.anchorPointWidget:SetValue(kitGetValue(kit, keys.anchorPoint, defaults.anchorPoint or "CENTER"))
+
+    -- Slider range may be overridden per consumer (DungeonTimersBars/Texts
+    -- use ±800 instead of the default ±1000). Apply per render before
+    -- SetValue so the value isn't clamped by a stale range.
+    local sliderRange = config.sliderRange or { -1000, 1000 }
+    kit.xSlider:SetMinMaxValues(sliderRange[1], sliderRange[2])
+    kit.ySlider:SetMinMaxValues(sliderRange[1], sliderRange[2])
     kit.xSlider:SetValue(kitGetValue(kit, keys.xOffset, defaults.xOffset or 0), true)
     kit.ySlider:SetValue(kitGetValue(kit, keys.yOffset, defaults.yOffset or 0), true)
 
