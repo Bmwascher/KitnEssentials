@@ -87,6 +87,8 @@ GUIFrame:RegisterContent("DT_General", function(scrollChild, yOffset)
         end,
         msgPopup = true,
         msgText = "Dungeon Timers",
+        msgOn = "On",
+        msgOff = "Off",
     })
     row1:AddWidget(enableCheck, 1)
     card1:AddRow(row1, Theme.rowHeightLast, 0)
