@@ -183,7 +183,6 @@ local function ConfigureFontSettingsCardKit(kit, scrollChild, yOffset, config)
     local dbKeys = config.dbKeys or {}
     local onChange = config.onChangeCallback
     local fontSizeRange = config.fontSizeRange or { 8, 72 }
-    local searchable = config.searchable ~= false
     local includeSoftOutline = config.includeSoftOutline == true
 
     local keys = {
@@ -217,14 +216,9 @@ local function ConfigureFontSettingsCardKit(kit, scrollChild, yOffset, config)
     -- different module pages that reuse the same instance.
     kit.outlineDropdown:SetOptions(BuildOutlineOptions(includeSoftOutline))
 
-    -- Note: searchable is set on the dropdown at construction; KEDropdown has
-    -- no setter for it. The factory builds with searchable=true (matches the
-    -- legacy default). No live caller passes searchable=false, so the pooled
-    -- path silently ignores it. A future caller needing to disable search
-    -- would need either a dropdown setter or a separate non-searchable kit
-    -- pool — at that point fall back through the legacy path by signaling
-    -- via a config field the pool doesn't accept.
-    local _ = searchable
+    -- Note: searchable=false is handled at the public-API level by routing
+    -- to the legacy build-fresh path. The pooled factory always builds with
+    -- searchable=true since KEDropdown's searchable is fixed at construction.
 
     -- Set values silently (silent flag suppresses callback).
     kit.fontDropdown:SetValue(GetDbValue(db, keys.fontFace, "Friz Quadrata TT"), true)
@@ -388,8 +382,14 @@ function GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, config)
     -- Outlier shapes — legacy path. fontSizes (HealerMana) and extraSlider
     -- (CombatTexts) need shapes the single-shape factory doesn't cover. The
     -- pool's per-render cost matters less for these (page-navigation only)
-    -- so building fresh is fine.
-    if (config.fontSizes and #config.fontSizes > 0) or config.extraSlider then
+    -- so building fresh is fine. searchable=false also routes here defensively
+    -- — KEDropdown's searchable is set at construction with no setter, and
+    -- the pooled factory builds with searchable=true. Currently no live
+    -- caller passes false, but a future caller would get the correct
+    -- non-searchable dropdown via this path.
+    if (config.fontSizes and #config.fontSizes > 0)
+        or config.extraSlider
+        or config.searchable == false then
         return CreateFontSettingsCardLegacy(scrollChild, yOffset, config)
     end
 
