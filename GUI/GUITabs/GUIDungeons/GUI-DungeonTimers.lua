@@ -722,6 +722,409 @@ end
 
 local displayTypeCardPool = KE.FramePool:New(CreateDisplayTypeCardKit)
 
+---------------------------------------------------------------------------------
+-- Display tab: branched cards (Time Display / Text Format inline / Colors).
+-- These have shape variants per `isBar` / `useBigWigsColors` so they need
+-- per-shape kits. Build all rows in factory; Configure shows/hides + manually
+-- re-anchors and recomputes content height (matches the CreateTimeConditions
+-- pattern above).
+---------------------------------------------------------------------------------
+
+-- Helper: write a color into a KEColorPicker without firing its callback.
+-- The picker's UpdateColor fires _callback unconditionally on SetColor, so
+-- a direct SetColor would invoke ApplySettings every render. A nil trigger
+-- color falls back to white — matches CreateColorPicker's own nil-config
+-- default and avoids leaking stale color from a prior pooled render.
+local function setColorSilent(picker, c)
+    if not picker then return end
+    local saved = picker._callback
+    picker._callback = nil
+    if c and type(c) == "table" then
+        picker:SetColor(c[1] or 1, c[2] or 1, c[3] or 1, c[4] or 1)
+    else
+        picker:SetColor(1, 1, 1, 1)
+    end
+    picker._callback = saved
+end
+
+-- Helper: when a row's _widthPct is changed dynamically, force the row's
+-- OnSizeChanged handler to re-run so widget layout reflects the new pcts.
+local function forceRowLayout(row)
+    if not row then return end
+    local handler = row:GetScript("OnSizeChanged")
+    if handler then handler(row, row:GetWidth()) end
+end
+
+---------------------------------------------------------------------------------
+-- Time Display card (isBar variant): showDecimals + conditional threshold.
+---------------------------------------------------------------------------------
+
+local function CreateTimeDisplayCardKit(holder)
+    local T = KE.Theme
+    local card = GUIFrame:CreateCard(holder, "Time Display", 0)
+
+    local row1 = GUIFrame:CreateRow(card.content, T.rowHeightLast)
+    local decimalsCheck = GUIFrame:CreateCheckbox(row1, "Show Decimals", { value = false })
+    row1:AddWidget(decimalsCheck, 0.5)
+    local thresholdSlider = GUIFrame:CreateSlider(row1, "Below (seconds)", {
+        min = 1, max = 30, step = 1, value = 3, labelWidth = 50,
+    })
+    row1:AddWidget(thresholdSlider, 0.5)
+    card:AddRow(row1, T.rowHeightLast, 0)
+
+    local kit = {
+        row = card,
+        card = card,
+        row1 = row1,
+        decimalsCheck = decimalsCheck,
+        thresholdSlider = thresholdSlider,
+        _trigger = nil,
+        _applySettings = nil,
+        _refreshContentDeferred = nil,
+    }
+
+    decimalsCheck:SetCallback(function(checked)
+        local t = kit._trigger
+        if t then t.showDecimals = checked end
+        if kit._applySettings then kit._applySettings() end
+        if kit._refreshContentDeferred then kit._refreshContentDeferred() end
+    end)
+    thresholdSlider:SetCallback(function(val)
+        local t = kit._trigger
+        if t then t.decimalThreshold = val end
+        if kit._applySettings then kit._applySettings() end
+    end)
+
+    return kit
+end
+
+local function ConfigureTimeDisplayCardKit(kit, parent, yOffset, trigger, applySettings, refreshContentDeferred)
+    local T = KE.Theme
+    local card = kit.card
+
+    card:ClearAllPoints()
+    card:SetPoint("TOPLEFT", parent, "TOPLEFT", T.paddingSmall, -(yOffset or 0) + T.paddingSmall)
+    card:SetPoint("RIGHT", parent, "RIGHT", -T.paddingSmall, 0)
+    card._yOffset = yOffset or 0
+
+    kit._trigger = trigger
+    kit._applySettings = applySettings
+    kit._refreshContentDeferred = refreshContentDeferred
+
+    local showDecimals = trigger.showDecimals == true
+    kit.decimalsCheck.toggle:SetValue(showDecimals, true)
+    kit.thresholdSlider:SetValue(trigger.decimalThreshold or 3, true)
+
+    -- Adjust per-widget _widthPct so the checkbox takes the whole row when
+    -- the threshold slider is hidden. forceRowLayout re-runs the row's
+    -- OnSizeChanged so the new pct values take effect.
+    if showDecimals then
+        kit.decimalsCheck._widthPct = 0.5
+        kit.thresholdSlider._widthPct = 0.5
+        kit.thresholdSlider:Show()
+    else
+        kit.decimalsCheck._widthPct = 1
+        kit.thresholdSlider._widthPct = 0
+        kit.thresholdSlider:Hide()
+    end
+    forceRowLayout(kit.row1)
+
+    return card
+end
+
+local timeDisplayCardPool = KE.FramePool:New(CreateTimeDisplayCardKit)
+
+---------------------------------------------------------------------------------
+-- Text Format inline card (!isBar variant): format input + showDecimals row.
+---------------------------------------------------------------------------------
+
+local function CreateTextFormatInlineCardKit(holder)
+    local T = KE.Theme
+    local card = GUIFrame:CreateCard(holder, "Text Format", 0)
+
+    local row1 = GUIFrame:CreateRow(card.content, T.rowHeight)
+    local formatInput = GUIFrame:CreateEditBox(row1, "Format String", { value = "" })
+    row1:AddWidget(formatInput, 1)
+    card:AddRow(row1, T.rowHeight)
+
+    local row2 = GUIFrame:CreateRow(card.content, T.rowHeightLast)
+    local decimalsCheck = GUIFrame:CreateCheckbox(row2, "Show Decimals", { value = false })
+    row2:AddWidget(decimalsCheck, 0.5)
+    local thresholdSlider = GUIFrame:CreateSlider(row2, "Below (seconds)", {
+        min = 1, max = 30, step = 1, value = 3, labelWidth = 50,
+    })
+    row2:AddWidget(thresholdSlider, 0.5)
+    card:AddRow(row2, T.rowHeightLast, 0)
+
+    local kit = {
+        row = card,
+        card = card,
+        row1 = row1,
+        row2 = row2,
+        formatInput = formatInput,
+        decimalsCheck = decimalsCheck,
+        thresholdSlider = thresholdSlider,
+        _trigger = nil,
+        _applySettings = nil,
+        _refreshContentDeferred = nil,
+    }
+
+    formatInput:SetCallback(function(text)
+        local t = kit._trigger
+        if t then t.textFormat = text end
+        if kit._applySettings then kit._applySettings() end
+        if kit._refreshContentDeferred then kit._refreshContentDeferred() end
+    end)
+    decimalsCheck:SetCallback(function(checked)
+        local t = kit._trigger
+        if t then t.showDecimals = checked end
+        if kit._applySettings then kit._applySettings() end
+        if kit._refreshContentDeferred then kit._refreshContentDeferred() end
+    end)
+    thresholdSlider:SetCallback(function(val)
+        local t = kit._trigger
+        if t then t.decimalThreshold = val end
+        if kit._applySettings then kit._applySettings() end
+    end)
+
+    return kit
+end
+
+local function ConfigureTextFormatInlineCardKit(kit, parent, yOffset, trigger, applySettings, refreshContentDeferred)
+    local T = KE.Theme
+    local card = kit.card
+
+    card:ClearAllPoints()
+    card:SetPoint("TOPLEFT", parent, "TOPLEFT", T.paddingSmall, -(yOffset or 0) + T.paddingSmall)
+    card:SetPoint("RIGHT", parent, "RIGHT", -T.paddingSmall, 0)
+    card._yOffset = yOffset or 0
+
+    kit._trigger = trigger
+    kit._applySettings = applySettings
+    kit._refreshContentDeferred = refreshContentDeferred
+
+    kit.formatInput:SetValue(trigger.textFormat or "%i %n %p")
+
+    local showDecimals = trigger.showDecimals == true
+    kit.decimalsCheck.toggle:SetValue(showDecimals, true)
+    kit.thresholdSlider:SetValue(trigger.decimalThreshold or 3, true)
+
+    if showDecimals then
+        kit.decimalsCheck._widthPct = 0.5
+        kit.thresholdSlider._widthPct = 0.5
+        kit.thresholdSlider:Show()
+    else
+        kit.decimalsCheck._widthPct = 1
+        kit.thresholdSlider._widthPct = 0
+        kit.thresholdSlider:Hide()
+    end
+    forceRowLayout(kit.row2)
+
+    return card
+end
+
+local textFormatInlineCardPool = KE.FramePool:New(CreateTextFormatInlineCardKit)
+
+---------------------------------------------------------------------------------
+-- Colors card (isBar variant): BW sync toggle + conditional 3 color rows.
+---------------------------------------------------------------------------------
+
+local function CreateColorsBarCardKit(holder)
+    local T = KE.Theme
+    local card = GUIFrame:CreateCard(holder, "Colors", 0)
+
+    -- Row 1: BW sync toggle. Row height swaps between rowHeight (when other
+    -- rows show below) and rowHeightLast (when alone) — handled via Configure
+    -- by re-anchoring downstream rows; the row frame itself is one fixed
+    -- height. Use rowHeight here (the expanded layout's spacing).
+    local row1 = GUIFrame:CreateRow(card.content, T.rowHeight)
+    local bwCheck = GUIFrame:CreateCheckbox(row1, "Sync With BigWigs Bar Coloring", { value = true })
+    row1:AddWidget(bwCheck, 1)
+    card:AddRow(row1, T.rowHeight)
+
+    local separator = GUIFrame:CreateSeparator(card.content)
+    card:AddRow(separator, T.rowHeightSeparator)
+
+    local row2 = GUIFrame:CreateRow(card.content, T.rowHeight)
+    local barColorPicker = GUIFrame:CreateColorPicker(row2, "Bar Color", { color = { 1, 1, 1, 1 } })
+    row2:AddWidget(barColorPicker, 1)
+    card:AddRow(row2, T.rowHeight)
+
+    local row3 = GUIFrame:CreateRow(card.content, T.rowHeight)
+    local bgColorPicker = GUIFrame:CreateColorPicker(row3, "Background Color", { color = { 0, 0, 0, 1 } })
+    row3:AddWidget(bgColorPicker, 1)
+    card:AddRow(row3, T.rowHeight)
+
+    local row4 = GUIFrame:CreateRow(card.content, T.rowHeightLast)
+    local textColorPicker = GUIFrame:CreateColorPicker(row4, "Text Color", { color = { 1, 1, 1, 1 } })
+    row4:AddWidget(textColorPicker, 1)
+    card:AddRow(row4, T.rowHeightLast, 0)
+
+    local kit = {
+        row = card,
+        card = card,
+        row1 = row1,
+        bwCheck = bwCheck,
+        separator = separator,
+        row2 = row2,
+        barColorPicker = barColorPicker,
+        row3 = row3,
+        bgColorPicker = bgColorPicker,
+        row4 = row4,
+        textColorPicker = textColorPicker,
+        _trigger = nil,
+        _applySettings = nil,
+        _refreshContentDeferred = nil,
+    }
+
+    bwCheck:SetCallback(function(checked)
+        local t = kit._trigger
+        if t then t.useBigWigsColors = checked end
+        if kit._applySettings then kit._applySettings() end
+        if kit._refreshContentDeferred then kit._refreshContentDeferred() end
+    end)
+    barColorPicker:SetCallback(function(r, g, b, a)
+        local t = kit._trigger
+        if t then t.barColor = { r, g, b, a } end
+        if kit._applySettings then kit._applySettings() end
+    end)
+    bgColorPicker:SetCallback(function(r, g, b, a)
+        local t = kit._trigger
+        if t then t.backgroundColor = { r, g, b, a } end
+        if kit._applySettings then kit._applySettings() end
+    end)
+    textColorPicker:SetCallback(function(r, g, b, a)
+        local t = kit._trigger
+        if t then t.textColor = { r, g, b, a } end
+        if kit._applySettings then kit._applySettings() end
+    end)
+
+    return kit
+end
+
+local function ConfigureColorsBarCardKit(kit, parent, yOffset, trigger, applySettings, refreshContentDeferred)
+    local T = KE.Theme
+    local card = kit.card
+    local content = card.content
+    local padding = T.paddingSmall
+
+    card:ClearAllPoints()
+    card:SetPoint("TOPLEFT", parent, "TOPLEFT", T.paddingSmall, -(yOffset or 0) + T.paddingSmall)
+    card:SetPoint("RIGHT", parent, "RIGHT", -T.paddingSmall, 0)
+    card._yOffset = yOffset or 0
+
+    kit._trigger = trigger
+    kit._applySettings = applySettings
+    kit._refreshContentDeferred = refreshContentDeferred
+
+    local useBW = trigger.useBigWigsColors ~= false
+
+    kit.bwCheck.toggle:SetValue(useBW, true)
+    setColorSilent(kit.barColorPicker, trigger.barColor)
+    setColorSilent(kit.bgColorPicker, trigger.backgroundColor)
+    setColorSilent(kit.textColorPicker, trigger.textColor)
+
+    -- Layout: row1 always at top. When useBW, hide separator + 3 color rows
+    -- and shrink card to row1 height. When !useBW, show separator + 3 colors
+    -- below row1 with proper spacing.
+    kit.row1:ClearAllPoints()
+    kit.row1:SetPoint("TOPLEFT", content, "TOPLEFT", 0, 0)
+    kit.row1:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, 0)
+    kit.row1:Show()
+
+    if useBW then
+        kit.separator:Hide()
+        kit.row2:Hide()
+        kit.row3:Hide()
+        kit.row4:Hide()
+        local total = T.rowHeightLast
+        content:SetHeight(total)
+        card.currentY = total
+    else
+        local ySep = T.rowHeight + padding
+        kit.separator:ClearAllPoints()
+        kit.separator:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -ySep)
+        kit.separator:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -ySep)
+        kit.separator:Show()
+
+        local y2 = ySep + T.rowHeightSeparator + padding
+        kit.row2:ClearAllPoints()
+        kit.row2:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -y2)
+        kit.row2:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -y2)
+        kit.row2:Show()
+
+        local y3 = y2 + T.rowHeight + padding
+        kit.row3:ClearAllPoints()
+        kit.row3:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -y3)
+        kit.row3:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -y3)
+        kit.row3:Show()
+
+        local y4 = y3 + T.rowHeight + padding
+        kit.row4:ClearAllPoints()
+        kit.row4:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -y4)
+        kit.row4:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -y4)
+        kit.row4:Show()
+
+        local total = y4 + T.rowHeightLast
+        content:SetHeight(total)
+        card.currentY = total
+    end
+    card:UpdateHeight()
+
+    return card
+end
+
+local colorsBarCardPool = KE.FramePool:New(CreateColorsBarCardKit)
+
+---------------------------------------------------------------------------------
+-- Colors card (!isBar variant): just text color picker.
+---------------------------------------------------------------------------------
+
+local function CreateColorsTextCardKit(holder)
+    local T = KE.Theme
+    local card = GUIFrame:CreateCard(holder, "Colors", 0)
+
+    local row1 = GUIFrame:CreateRow(card.content, T.rowHeightLast)
+    local textColorPicker = GUIFrame:CreateColorPicker(row1, "Text Color", { color = { 1, 1, 1, 1 } })
+    row1:AddWidget(textColorPicker, 1)
+    card:AddRow(row1, T.rowHeightLast, 0)
+
+    local kit = {
+        row = card,
+        card = card,
+        textColorPicker = textColorPicker,
+        _trigger = nil,
+        _applySettings = nil,
+    }
+
+    textColorPicker:SetCallback(function(r, g, b, a)
+        local t = kit._trigger
+        if t then t.textColor = { r, g, b, a } end
+        if kit._applySettings then kit._applySettings() end
+    end)
+
+    return kit
+end
+
+local function ConfigureColorsTextCardKit(kit, parent, yOffset, trigger, applySettings)
+    local T = KE.Theme
+    local card = kit.card
+
+    card:ClearAllPoints()
+    card:SetPoint("TOPLEFT", parent, "TOPLEFT", T.paddingSmall, -(yOffset or 0) + T.paddingSmall)
+    card:SetPoint("RIGHT", parent, "RIGHT", -T.paddingSmall, 0)
+    card._yOffset = yOffset or 0
+
+    kit._trigger = trigger
+    kit._applySettings = applySettings
+
+    setColorSilent(kit.textColorPicker, trigger.textColor)
+
+    return card
+end
+
+local colorsTextCardPool = KE.FramePool:New(CreateColorsTextCardKit)
+
 local function CreateRoleCardKit(holder)
     local T = KE.Theme
     local card = GUIFrame:CreateCard(holder, "Role", 0)
@@ -1273,130 +1676,39 @@ local function CreateDungeonPanel(dungeonId)
                 })
                 table_insert(activeCards, card3b)
 
-                local card3c = GUIFrame:CreateCard(scrollChild, "Time Display", yOffset)
+                -- Time Display card (pooled — see CreateTimeDisplayCardKit)
+                timeDisplayCardPool:ReleaseAll()
+                local timeDisplayKit = timeDisplayCardPool:Acquire(scrollChild)
+                local card3c = ConfigureTimeDisplayCardKit(timeDisplayKit, scrollChild, yOffset,
+                    selectedTrigger, ApplySettings, RefreshContentDeferred)
                 table_insert(activeCards, card3c)
-
-                local row3e = GUIFrame:CreateRow(card3c.content, Theme.rowHeightLast)
-                local showDecimalsCheck = GUIFrame:CreateCheckbox(row3e, "Show Decimals", {
-                    value = selectedTrigger.showDecimals == true,
-                    callback = function(checked)
-                        selectedTrigger.showDecimals = checked
-                        ApplySettings()
-                        RefreshContentDeferred()
-                    end,
-                })
-                row3e:AddWidget(showDecimalsCheck, selectedTrigger.showDecimals and 0.5 or 1)
-
-                if selectedTrigger.showDecimals then
-                    local decimalThresholdSlider = GUIFrame:CreateSlider(row3e, "Below (seconds)", {
-                        min = 1, max = 30, step = 1,
-                        value = selectedTrigger.decimalThreshold or 3,
-                        labelWidth = 50,
-                        callback = function(val) selectedTrigger.decimalThreshold = val; ApplySettings() end,
-                    })
-                    row3e:AddWidget(decimalThresholdSlider, 0.5)
-                end
-                card3c:AddRow(row3e, Theme.rowHeightLast, 0)
 
                 yOffset = yOffset + card3c:GetContentHeight() + padding
             else
-                local card3 = GUIFrame:CreateCard(scrollChild, "Text Format", yOffset)
+                -- Text Format inline card (pooled — see CreateTextFormatInlineCardKit)
+                textFormatInlineCardPool:ReleaseAll()
+                local textInlineKit = textFormatInlineCardPool:Acquire(scrollChild)
+                local card3 = ConfigureTextFormatInlineCardKit(textInlineKit, scrollChild, yOffset,
+                    selectedTrigger, ApplySettings, RefreshContentDeferred)
                 table_insert(activeCards, card3)
-
-                local row3 = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
-                local formatInput = GUIFrame:CreateEditBox(row3, "Format String", {
-                    value = selectedTrigger.textFormat or "%i %n %p",
-                    callback = function(text)
-                        selectedTrigger.textFormat = text
-                        ApplySettings()
-                        RefreshContentDeferred()
-                    end,
-                })
-                row3:AddWidget(formatInput, 1)
-                card3:AddRow(row3, Theme.rowHeight)
-
-                local row3c = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
-                local showDecimalsCheck = GUIFrame:CreateCheckbox(row3c, "Show Decimals", {
-                    value = selectedTrigger.showDecimals == true,
-                    callback = function(checked)
-                        selectedTrigger.showDecimals = checked
-                        ApplySettings()
-                        RefreshContentDeferred()
-                    end,
-                })
-                row3c:AddWidget(showDecimalsCheck, selectedTrigger.showDecimals and 0.5 or 1)
-
-                if selectedTrigger.showDecimals then
-                    local decimalThresholdSlider = GUIFrame:CreateSlider(row3c, "Below (seconds)", {
-                        min = 1, max = 30, step = 1,
-                        value = selectedTrigger.decimalThreshold or 3,
-                        labelWidth = 50,
-                        callback = function(val) selectedTrigger.decimalThreshold = val; ApplySettings() end,
-                    })
-                    row3c:AddWidget(decimalThresholdSlider, 0.5)
-                end
-                card3:AddRow(row3c, Theme.rowHeightLast, 0)
 
                 yOffset = yOffset + card3:GetContentHeight() + padding
             end
 
-            -- Card: Colors
-            local card4 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
-            table_insert(activeCards, card4)
-
+            -- Colors card (pooled — see CreateColorsBarCardKit / CreateColorsTextCardKit)
+            local card4
             if isBar then
-                local row4 = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
-                local bwColorCheck = GUIFrame:CreateCheckbox(row4, "Sync With BigWigs Bar Coloring", {
-                    value = selectedTrigger.useBigWigsColors ~= false,
-                    callback = function(checked)
-                        selectedTrigger.useBigWigsColors = checked
-                        ApplySettings()
-                        RefreshContentDeferred()
-                    end,
-                })
-                row4:AddWidget(bwColorCheck, 1)
-
-                if selectedTrigger.useBigWigsColors then
-                    card4:AddRow(row4, Theme.rowHeightLast, 0)
-                else
-                    card4:AddRow(row4, Theme.rowHeight)
-
-                    local separator = GUIFrame:CreateSeparator(card4.content)
-                    card4:AddRow(separator, Theme.rowHeightSeparator)
-
-                    local row5 = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-                    local barColorPicker = GUIFrame:CreateColorPicker(row5, "Bar Color", {
-                        color = selectedTrigger.barColor,
-                        callback = function(r, g, b, a) selectedTrigger.barColor = { r, g, b, a }; ApplySettings() end,
-                    })
-                    row5:AddWidget(barColorPicker, 1)
-                    card4:AddRow(row5, Theme.rowHeight)
-
-                    local row5b = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-                    local bgColorPicker = GUIFrame:CreateColorPicker(row5b, "Background Color", {
-                        color = selectedTrigger.backgroundColor,
-                        callback = function(r, g, b, a) selectedTrigger.backgroundColor = { r, g, b, a }; ApplySettings() end,
-                    })
-                    row5b:AddWidget(bgColorPicker, 1)
-                    card4:AddRow(row5b, Theme.rowHeight)
-
-                    local row6 = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
-                    local textColorPicker = GUIFrame:CreateColorPicker(row6, "Text Color", {
-                        color = selectedTrigger.textColor,
-                        callback = function(r, g, b, a) selectedTrigger.textColor = { r, g, b, a }; ApplySettings() end,
-                    })
-                    row6:AddWidget(textColorPicker, 1)
-                    card4:AddRow(row6, Theme.rowHeightLast, 0)
-                end
+                colorsBarCardPool:ReleaseAll()
+                local colorsKit = colorsBarCardPool:Acquire(scrollChild)
+                card4 = ConfigureColorsBarCardKit(colorsKit, scrollChild, yOffset,
+                    selectedTrigger, ApplySettings, RefreshContentDeferred)
             else
-                local row4 = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
-                local textColorPicker = GUIFrame:CreateColorPicker(row4, "Text Color", {
-                    color = selectedTrigger.textColor,
-                    callback = function(r, g, b, a) selectedTrigger.textColor = { r, g, b, a }; ApplySettings() end,
-                })
-                row4:AddWidget(textColorPicker, 1)
-                card4:AddRow(row4, Theme.rowHeightLast, 0)
+                colorsTextCardPool:ReleaseAll()
+                local colorsKit = colorsTextCardPool:Acquire(scrollChild)
+                card4 = ConfigureColorsTextCardKit(colorsKit, scrollChild, yOffset,
+                    selectedTrigger, ApplySettings)
             end
+            table_insert(activeCards, card4)
 
             yOffset = yOffset + card4:GetContentHeight() + padding
 
