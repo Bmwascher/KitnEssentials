@@ -577,6 +577,12 @@ function RN:OnDisable()
     self:UnregisterAllEvents()
     self:HideAllAlerts()
     self.wasUsable = nil
+    -- Clear isPreview so a future OnEnable starts from a known-good state.
+    -- Without this, a GUI-open disable→re-enable cycle could leave isPreview
+    -- stuck true, which would make CheckResetBoss + GatewayUpdateState +
+    -- OnEncounterEnd silently skip real-combat alerts (they all early-return
+    -- on `if self.isPreview then return end`).
+    self.isPreview = false
     self.hasItem = false
     self.hasWarlockInGroup = false
     self.isPreview = false
