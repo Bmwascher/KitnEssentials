@@ -558,10 +558,14 @@ local function ConfigurePositionCardKit(kit, scrollChild, yOffset, config)
 
     -- Slider range may be overridden per consumer (DungeonTimersBars/Texts
     -- use ±800 instead of the default ±1000). Apply per render before
-    -- SetValue so the value isn't clamped by a stale range.
+    -- SetValue so the value isn't clamped by a stale range. Pass silent=true
+    -- so the clamp Blizzard performs when shrinking the range doesn't fire
+    -- OnValueChanged → write the clamp value to db before SetValue below
+    -- restores the saved value (latent before the FontSettingsCard pool
+    -- bug surfaced the same pattern).
     local sliderRange = config.sliderRange or { -1000, 1000 }
-    kit.xSlider:SetMinMaxValues(sliderRange[1], sliderRange[2])
-    kit.ySlider:SetMinMaxValues(sliderRange[1], sliderRange[2])
+    kit.xSlider:SetMinMaxValues(sliderRange[1], sliderRange[2], true)
+    kit.ySlider:SetMinMaxValues(sliderRange[1], sliderRange[2], true)
     kit.xSlider:SetValue(kitGetValue(kit, keys.xOffset, defaults.xOffset or 0), true)
     kit.ySlider:SetValue(kitGetValue(kit, keys.yOffset, defaults.yOffset or 0), true)
 

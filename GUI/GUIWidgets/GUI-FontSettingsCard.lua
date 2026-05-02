@@ -220,10 +220,15 @@ local function ConfigureFontSettingsCardKit(kit, scrollChild, yOffset, config)
     -- to the legacy build-fresh path. The pooled factory always builds with
     -- searchable=true since KEDropdown's searchable is fixed at construction.
 
-    -- Set values silently (silent flag suppresses callback).
+    -- Set values silently (silent flag suppresses callback). SetMinMaxValues
+    -- needs silent=true too — Blizzard's slider clamps the previous render's
+    -- leftover value to the new range and fires OnValueChanged on clamp,
+    -- which would otherwise write the clamp value to db before the SetValue
+    -- below can restore it. (Surfaces as "font size resets to max" when
+    -- navigating between modules with different fontSizeRanges.)
     kit.fontDropdown:SetValue(GetDbValue(db, keys.fontFace, "Friz Quadrata TT"), true)
     kit.outlineDropdown:SetValue(GetDbValue(db, keys.fontOutline, "OUTLINE"), true)
-    kit.fontSizeSlider:SetMinMaxValues(fontSizeRange[1], fontSizeRange[2])
+    kit.fontSizeSlider:SetMinMaxValues(fontSizeRange[1], fontSizeRange[2], true)
     kit.fontSizeSlider:SetValue(GetDbValue(db, keys.fontSize, 18), true)
 
     return card

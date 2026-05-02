@@ -600,8 +600,23 @@ function GUIFrame:CreateSlider(parent, labelText, config)
 
     function row:GetValue() return slider:GetValue() end
 
-    function row:SetMinMaxValues(minVal, maxVal)
-        slider:SetMinMaxValues(minVal, maxVal)
+    function row:SetMinMaxValues(minVal, maxVal, silent)
+        -- Blizzard's slider:SetMinMaxValues clamps the current value to the
+        -- new range and fires OnValueChanged if a clamp occurs. For pooled
+        -- callers reconfiguring a slider whose previous render's value is
+        -- outside the new range, that callback would write the clamp value
+        -- to db before any subsequent SetValue can restore the actual saved
+        -- value — surfacing as "font size resets to max" when navigating
+        -- between modules with different ranges. silent=true suppresses by
+        -- the same save/clear/restore pattern row:SetValue uses.
+        if silent then
+            local saved = row._callback
+            row._callback = nil
+            slider:SetMinMaxValues(minVal, maxVal)
+            row._callback = saved
+        else
+            slider:SetMinMaxValues(minVal, maxVal)
+        end
         UpdateFill()
     end
 
