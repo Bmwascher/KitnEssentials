@@ -14,15 +14,18 @@ local wipe = wipe
 local CreateFrame = CreateFrame
 local C_Timer = C_Timer
 
+-- Order matches the alphabetical sidebar list under Dungeon Timers in
+-- GUI-MainFrame.lua so the General page listing stays consistent with the
+-- left nav.
 local DUNGEON_ORDER = {
+    { key = "AlgetharAcademy",   name = "Algeth'ar Academy",       iconID = 4578414 },
     { key = "MagistersTerrace",  name = "Magisters' Terrace",      iconID = 7439625 },
     { key = "MaisaraCaverns",    name = "Maisara Caverns",         iconID = 7322719 },
     { key = "NexusPointXenas",   name = "Nexus-Point Xenas",       iconID = 7553062 },
-    { key = "WindrunnerSpire",   name = "Windrunner Spire",        iconID = 7266215 },
-    { key = "AlgetharAcademy",   name = "Algeth'ar Academy",       iconID = 4578414 },
     { key = "PitOfSaron",        name = "Pit of Saron",            iconID = 343641 },
     { key = "SeatOfTriumvirate", name = "Seat of the Triumvirate", iconID = 1711340 },
     { key = "Skyreach",          name = "Skyreach",                iconID = 1002596 },
+    { key = "WindrunnerSpire",   name = "Windrunner Spire",        iconID = 7266215 },
 }
 
 local function GetSettingsDB()
