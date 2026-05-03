@@ -151,6 +151,9 @@ local function ConfigureTextFormatCardKit(kit, scrollChild, yOffset, config)
     card._yOffset = yOffset or 0
     if card.titleText then card.titleText:SetText(title) end
 
+    -- Refresh theme colors lazily — only when KE._themeVersion has advanced.
+    GUIFrame:RefreshKitThemeIfNeeded(kit, card.textWidgets)
+
     -- Set widget values without firing callbacks. EditBox.SetValue is
     -- silent (doesn't fire OnEnterPressed/OnEditFocusLost). Dropdown
     -- and Slider take a silent flag.

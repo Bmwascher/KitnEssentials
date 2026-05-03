@@ -538,6 +538,9 @@ local function ConfigurePositionCardKit(kit, scrollChild, yOffset, config)
     card._yOffset = yOffset or 0
     if card.titleText then card.titleText:SetText(title) end
 
+    -- Refresh theme colors lazily — only when KE._themeVersion has advanced.
+    GUIFrame:RefreshKitThemeIfNeeded(kit, kit.allWidgets)
+
     -- Update anchorPoint label based on currentType (matches original).
     local currentType = kitGetValue(kit, keys.anchorFrameType, defaults.anchorFrameType or "SCREEN")
     local anchorPointLabel = showAnchorFrameType and
