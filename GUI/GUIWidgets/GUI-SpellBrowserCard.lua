@@ -284,6 +284,12 @@ local function CreateSpellBrowserCardKit(holder)
     noMatchRow:Hide()
     kit.noMatchRow = noMatchRow
 
+    -- Walked by GUIFrame:RefreshKitThemeIfNeeded on theme switch. searchInput
+    -- is the only theme-tied widget on this card; the dynamic spell-result
+    -- rows are pooled inside RebuildSpellList and re-tinted from current
+    -- Theme on each rebuild.
+    kit.themeWidgets = { searchInput }
+
     return kit
 end
 
@@ -306,6 +312,9 @@ local function ConfigureSpellBrowserCardKit(kit, scrollChild, yOffset, config)
     card:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", Theme.paddingSmall, -(yOffset or 0) + Theme.paddingSmall)
     card:SetPoint("RIGHT", scrollChild, "RIGHT", -Theme.paddingSmall, 0)
     card._yOffset = yOffset or 0
+
+    -- Refresh theme colors lazily — only when KE._themeVersion has advanced.
+    GUIFrame:RefreshKitThemeIfNeeded(kit)
 
     -- Update mutable kit slots BEFORE setting the searchInput value, so the
     -- silent SetValue doesn't accidentally fire a live-rebuild path (the

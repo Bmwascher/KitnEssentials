@@ -186,6 +186,18 @@ function GUIFrame:CreateEditBox(parent, labelText, config)
         end
     end
 
+    -- Re-apply theme-tied state after KE:RefreshTheme replaces Theme color
+    -- tables. Hover/focus handlers read live values via Theme.accent[1]
+    -- indexing each call so they self-recover. Pool consumers call this
+    -- when KE._themeVersion has advanced.
+    function row:ApplyThemeColors()
+        local TT = Theme
+        label:SetTextColor(TT.textSecondary[1], TT.textSecondary[2], TT.textSecondary[3], 1)
+        container:SetBackdropColor(TT.bgDark[1], TT.bgDark[2], TT.bgDark[3], 1)
+        container:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], 1)
+        editBox:SetTextColor(TT.accent[1], TT.accent[2], TT.accent[3], 1)
+    end
+
     row.editBox = editBox
     row.container = container
 

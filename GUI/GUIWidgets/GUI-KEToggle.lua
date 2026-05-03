@@ -305,6 +305,19 @@ function GUIFrame:CreateCheckbox(parent, labelText, config)
         end
     end
 
+    -- Re-apply theme-tied state after KE:RefreshTheme replaces Theme color
+    -- tables. Toggle is stateful — colors depend on the current on/off
+    -- state (toggle bg uses accent*0.5 when on, bgDark when off; knob
+    -- uses accent at full alpha when on, accent at 0.4 when off). Defer
+    -- to UpdateColors(state, true) which handles both cases.
+    function row:ApplyThemeColors()
+        local TT = Theme
+        label:SetTextColor(TT.textSecondary[1], TT.textSecondary[2], TT.textSecondary[3], 1)
+        toggle:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], 1)
+        knob:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], 1)
+        UpdateColors(state, true)
+    end
+
     row.toggle = toggle
 
     -- Pool-friendly callback slot. Internal scripts read row._callback at
