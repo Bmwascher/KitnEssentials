@@ -1477,10 +1477,28 @@ function DT:OnVisualUpdate()
                 if remaining > 0 then
                     local config = frame.config
 
-                    -- Bar fill: keep updating every frame for smooth animation.
+                    -- Bar fill: gate SetValue by whether the new value would
+                    -- move the bar by at least one pixel — same philosophy as
+                    -- the text gating below, just the perceptual unit is the
+                    -- pixel instead of the rendered digit. SetValue with a
+                    -- visually-identical value still uploads vertices, so
+                    -- skipping sub-pixel deltas is pure win with zero visible
+                    -- difference. For short preview bars (5s on 200px) one
+                    -- tick drains > 1 pixel — fires every tick, unchanged.
+                    -- For long-duration combat bars or narrow displays, many
+                    -- ticks render identically and get skipped.
                     if frame.bar then
                         local effectiveDuration = barData.effectiveDuration or barData.duration
-                        frame.bar:SetValue(math_min(remaining, effectiveDuration))
+                        local newValue = math_min(remaining, effectiveDuration)
+                        local barWidth = (frame.config and frame.config.barWidth) or 200
+                        if barWidth < 1 then barWidth = 1 end
+                        local pixelTime = effectiveDuration / barWidth
+                        local lastValue = barData._lastBarValue
+                        if not lastValue or (lastValue - newValue) >= pixelTime
+                                          or (newValue - lastValue) >= pixelTime then
+                            frame.bar:SetValue(newValue)
+                            barData._lastBarValue = newValue
+                        end
                     end
 
                     -- Text updates: gate by whether the displayed time string
