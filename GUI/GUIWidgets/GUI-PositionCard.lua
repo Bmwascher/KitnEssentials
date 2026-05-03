@@ -195,6 +195,17 @@ local function CreateAnchorButtons(parent, labelText, outerKit, callbackSlot)
         end
     end
 
+    -- Re-apply theme-tied state. Label (accent), background bg/border, and
+    -- button vertex colors all set at construction; the selected button's
+    -- accent gets refreshed when SetValue() runs (which Configure calls
+    -- after this), so we just refresh static chrome here.
+    function container:ApplyThemeColors()
+        local TT = Theme
+        label:SetTextColor(TT.accent[1], TT.accent[2], TT.accent[3], 1)
+        background:SetBackdropColor(TT.bgDark[1], TT.bgDark[2], TT.bgDark[3], 1)
+        background:SetBackdropBorderColor(TT.textMuted[1], TT.textMuted[2], TT.textMuted[3], 1)
+    end
+
     return container
 end
 
@@ -537,6 +548,9 @@ local function ConfigurePositionCardKit(kit, scrollChild, yOffset, config)
     card:SetPoint("RIGHT", scrollChild, "RIGHT", -T.paddingSmall, 0)
     card._yOffset = yOffset or 0
     if card.titleText then card.titleText:SetText(title) end
+
+    -- Refresh theme colors lazily — only when KE._themeVersion has advanced.
+    GUIFrame:RefreshKitThemeIfNeeded(kit, kit.allWidgets)
 
     -- Update anchorPoint label based on currentType (matches original).
     local currentType = kitGetValue(kit, keys.anchorFrameType, defaults.anchorFrameType or "SCREEN")

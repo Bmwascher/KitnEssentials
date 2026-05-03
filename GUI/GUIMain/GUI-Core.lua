@@ -79,6 +79,29 @@ function GUIFrame:UnregisterContentRebuildCallback(key)
     if key then self.contentRebuildCallbacks[key] = nil end
 end
 
+-- Refresh a pool kit's theme-tied colors lazily — only on the first Configure
+-- after KE:RefreshTheme bumped the theme version. Each kit caches the version
+-- it was last refreshed at; mismatch triggers card-level + widget-level
+-- ApplyThemeColors. Pools call this from their Configure path; non-pool
+-- callers (which build cards from scratch each render) pick up the new
+-- palette implicitly so they never need this helper.
+function GUIFrame:RefreshKitThemeIfNeeded(kit, widgets)
+    local v = (KE._themeVersion or 0)
+    if kit._themeVersion == v then return end
+    if kit.card and kit.card.ApplyThemeColors then
+        kit.card:ApplyThemeColors()
+    end
+    -- widgets param overrides the kit-level convention; fall back to
+    -- kit.themeWidgets which factories can set once.
+    widgets = widgets or kit.themeWidgets
+    if widgets then
+        for _, w in ipairs(widgets) do
+            if w and w.ApplyThemeColors then w:ApplyThemeColors() end
+        end
+    end
+    kit._themeVersion = v
+end
+
 -- On-close callbacks
 GUIFrame.onCloseCallbacks = {}
 
@@ -367,6 +390,25 @@ function GUIFrame:CreateCard(parent, title, yOffset, width)
             if self.header then self.header:SetAlpha(0.5) end
             if self.titleText then self.titleText:SetAlpha(0.5) end
             GetMouseBlocker(self):Show()
+        end
+    end
+
+    -- Re-apply theme-tied colors. KE:RefreshTheme replaces Theme.bgLight /
+    -- accent / border tables via CopyColor; values copied at construction
+    -- (SetBackdropColor, SetTextColor) become stale. Pool-reused cards keep
+    -- the old palette across renders unless this is called. Pool Configures
+    -- invoke this; non-pooled callers (which rebuild the card per render)
+    -- pick up the new palette implicitly so calling here is harmless.
+    function card:ApplyThemeColors()
+        local TT = Theme
+        self:SetBackdropColor(TT.bgLight[1], TT.bgLight[2], TT.bgLight[3], TT.bgLight[4])
+        self:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], TT.border[4])
+        if self.header then
+            self.header:SetBackdropColor(TT.bgMedium[1], TT.bgMedium[2], TT.bgMedium[3], TT.bgMedium[4])
+            self.header:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], TT.border[4])
+        end
+        if self.titleText then
+            self.titleText:SetTextColor(TT.accent[1], TT.accent[2], TT.accent[3], 1)
         end
     end
 

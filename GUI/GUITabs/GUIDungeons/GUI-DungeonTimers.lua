@@ -340,6 +340,8 @@ local function CreateBasicSettingsCardKit(holder)
         _applySettings = nil,
         _refreshContentDeferred = nil,
     }
+    -- Widgets walked by GUIFrame:RefreshKitThemeIfNeeded on theme switch.
+    kit.themeWidgets = { enableTrigger, nameInput, typeDropdown }
 
     -- Wire callbacks ONCE; they read kit slots that Configure swaps per
     -- render. This keeps closure count bounded to kit lifetime, not render
@@ -386,6 +388,9 @@ local function ConfigureBasicSettingsCardKit(kit, parent, yOffset, trigger, appl
     kit._trigger = trigger
     kit._applySettings = applySettings
     kit._refreshContentDeferred = refreshContentDeferred
+
+    -- Refresh theme colors lazily — only when KE._themeVersion has advanced.
+    GUIFrame:RefreshKitThemeIfNeeded(kit)
 
     -- Set values without firing callbacks:
     -- - Toggle.SetValue(value, instant=true) skips the deferred callback fire
@@ -463,6 +468,7 @@ local function CreateTriggerFiltersCardKit(holder)
         _refreshContentDeferred = nil,
         _previewSpellId = nil,
     }
+    kit.themeWidgets = { spellInput, msgInput, msgOpDropdown }
 
     -- Wire callbacks ONCE; read kit slots updated by Configure.
     spellInput:SetCallback(function(text)
@@ -507,6 +513,9 @@ local function ConfigureTriggerFiltersCardKit(kit, parent, yOffset, trigger, app
     kit._applySettings = applySettings
     kit._refreshContentDeferred = refreshContentDeferred
     kit._previewSpellId = trigger.spellId
+
+    -- Refresh theme colors lazily — only when KE._themeVersion has advanced.
+    GUIFrame:RefreshKitThemeIfNeeded(kit)
 
     -- Update spell icon preview based on current trigger.spellId.
     local spellIdNum = trigger.spellId and trigger.spellId ~= "" and tonumber(trigger.spellId)
@@ -587,6 +596,7 @@ local function CreateTimeConditionsCardKit(holder)
         _applySettings = nil,
         _refreshContentDeferred = nil,
     }
+    kit.themeWidgets = { remCheck, remOpDropdown, remSlider, offsetSlider }
 
     -- Wire callbacks ONCE; read kit slots updated by Configure.
     remCheck:SetCallback(function(checked)
@@ -625,6 +635,9 @@ local function ConfigureTimeConditionsCardKit(kit, parent, yOffset, trigger, app
     kit._trigger = trigger
     kit._applySettings = applySettings
     kit._refreshContentDeferred = refreshContentDeferred
+
+    -- Refresh theme colors lazily — only when KE._themeVersion has advanced.
+    GUIFrame:RefreshKitThemeIfNeeded(kit)
 
     -- Set values without firing callbacks.
     kit.remCheck.toggle:SetValue(trigger.remainingEnabled == true, true)
@@ -692,6 +705,7 @@ local function CreateDisplayTypeCardKit(holder)
         _applySettings = nil,
         _refreshContentDeferred = nil,
     }
+    kit.themeWidgets = { displayDropdown }
 
     displayDropdown:SetCallback(function(key)
         local t = kit._trigger
@@ -714,6 +728,9 @@ local function ConfigureDisplayTypeCardKit(kit, parent, yOffset, trigger, applyS
     kit._trigger = trigger
     kit._applySettings = applySettings
     kit._refreshContentDeferred = refreshContentDeferred
+
+    -- Refresh theme colors lazily — only when KE._themeVersion has advanced.
+    GUIFrame:RefreshKitThemeIfNeeded(kit)
 
     kit.displayDropdown:SetValue(trigger.displayType or "bar", true)
 
@@ -782,6 +799,7 @@ local function CreateTimeDisplayCardKit(holder)
         _applySettings = nil,
         _refreshContentDeferred = nil,
     }
+    kit.themeWidgets = { decimalsCheck, thresholdSlider }
 
     decimalsCheck:SetCallback(function(checked)
         local t = kit._trigger
@@ -810,6 +828,9 @@ local function ConfigureTimeDisplayCardKit(kit, parent, yOffset, trigger, applyS
     kit._trigger = trigger
     kit._applySettings = applySettings
     kit._refreshContentDeferred = refreshContentDeferred
+
+    -- Refresh theme colors lazily — only when KE._themeVersion has advanced.
+    GUIFrame:RefreshKitThemeIfNeeded(kit)
 
     local showDecimals = trigger.showDecimals == true
     kit.decimalsCheck.toggle:SetValue(showDecimals, true)
@@ -868,6 +889,7 @@ local function CreateTextFormatInlineCardKit(holder)
         _applySettings = nil,
         _refreshContentDeferred = nil,
     }
+    kit.themeWidgets = { formatInput, decimalsCheck, thresholdSlider }
 
     formatInput:SetCallback(function(text)
         local t = kit._trigger
@@ -902,6 +924,9 @@ local function ConfigureTextFormatInlineCardKit(kit, parent, yOffset, trigger, a
     kit._trigger = trigger
     kit._applySettings = applySettings
     kit._refreshContentDeferred = refreshContentDeferred
+
+    -- Refresh theme colors lazily — only when KE._themeVersion has advanced.
+    GUIFrame:RefreshKitThemeIfNeeded(kit)
 
     kit.formatInput:SetValue(trigger.textFormat or "%i %n %p")
 
@@ -976,6 +1001,10 @@ local function CreateColorsBarCardKit(holder)
         _applySettings = nil,
         _refreshContentDeferred = nil,
     }
+    -- ColorPickers don't expose ApplyThemeColors (no construction-time accent
+    -- captures — swatch shows the user's color). Helper safely skips widgets
+    -- without the method.
+    kit.themeWidgets = { bwCheck }
 
     bwCheck:SetCallback(function(checked)
         local t = kit._trigger
@@ -1016,6 +1045,9 @@ local function ConfigureColorsBarCardKit(kit, parent, yOffset, trigger, applySet
     kit._trigger = trigger
     kit._applySettings = applySettings
     kit._refreshContentDeferred = refreshContentDeferred
+
+    -- Refresh theme colors lazily — only when KE._themeVersion has advanced.
+    GUIFrame:RefreshKitThemeIfNeeded(kit)
 
     local useBW = trigger.useBigWigsColors ~= false
 
@@ -1118,6 +1150,10 @@ local function ConfigureColorsTextCardKit(kit, parent, yOffset, trigger, applySe
     kit._trigger = trigger
     kit._applySettings = applySettings
 
+    -- Refresh card-level theme colors lazily — the picker has nothing
+    -- accent-tinted at construction.
+    GUIFrame:RefreshKitThemeIfNeeded(kit)
+
     setColorSilent(kit.textColorPicker, trigger.textColor)
 
     return card
@@ -1169,6 +1205,7 @@ local function CreateRoleCardKit(holder)
         _applySettings = nil,
         _refreshContentDeferred = nil,
     }
+    kit.themeWidgets = { roleToggle, tankCheck, healerCheck, dpsCheck }
 
     roleToggle:SetCallback(function(checked)
         local t = kit._trigger
@@ -1206,6 +1243,9 @@ local function ConfigureRoleCardKit(kit, parent, yOffset, trigger, applySettings
     kit._trigger = trigger
     kit._applySettings = applySettings
     kit._refreshContentDeferred = refreshContentDeferred
+
+    -- Refresh theme colors lazily — only when KE._themeVersion has advanced.
+    GUIFrame:RefreshKitThemeIfNeeded(kit)
 
     kit.roleToggle.toggle:SetValue(trigger.loadRoleEnabled == true, true)
     kit.tankCheck.toggle:SetValue(trigger.loadRoleTank ~= false, true)

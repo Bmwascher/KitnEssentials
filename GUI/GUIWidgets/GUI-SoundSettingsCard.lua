@@ -160,6 +160,9 @@ local function ConfigureSoundSettingsCardKit(kit, scrollChild, yOffset, config)
     card._yOffset = yOffset or 0
     if card.titleText then card.titleText:SetText(title) end
 
+    -- Refresh theme colors lazily — only when KE._themeVersion has advanced.
+    GUIFrame:RefreshKitThemeIfNeeded(kit, card.soundWidgets)
+
     -- Rebuild the LSM sound list per Configure so a sound media addon that
     -- loaded after the first render gets picked up. SetOptions is cheap
     -- when the dropdown's item buttons aren't already created (collapsed

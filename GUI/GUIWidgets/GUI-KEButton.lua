@@ -180,6 +180,18 @@ function GUIFrame:CreateButton(parent, labelText, config)
         end
     end
 
+    -- Re-apply theme-tied state after KE:RefreshTheme replaces Theme color
+    -- tables. Hover animation handlers read live values so they self-recover.
+    -- Pool consumers call this when KE._themeVersion has advanced.
+    function button:ApplyThemeColors()
+        local TT = Theme
+        button:SetBackdropColor(TT.bgMedium[1], TT.bgMedium[2], TT.bgMedium[3], 1)
+        button:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], 1)
+        if textWidget then
+            textWidget:SetTextColor(TT.accent[1], TT.accent[2], TT.accent[3], 1)
+        end
+    end
+
     button.icon = iconWidget
     button.text = textWidget
     return button
