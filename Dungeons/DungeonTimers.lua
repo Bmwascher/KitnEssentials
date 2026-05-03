@@ -15,6 +15,7 @@ local DT = KitnEssentials:NewModule("DungeonTimers", "AceEvent-3.0", "AceTimer-3
 
 local CreateFrame = CreateFrame
 local GetTime = GetTime
+local C_Timer = C_Timer
 local unpack = unpack
 local floor = math.floor
 local pairs = pairs
@@ -57,6 +58,11 @@ local VISUAL_UPDATE_INTERVAL = 0.033
 
 -- Flip to true to trace BigWigs events, bar lifecycle, and extendTimer guards.
 local DEBUG_DT = false
+
+-- Preview-teardown investigation tick counter — every Nth OnVisualUpdate emits
+-- a state snapshot. Cheap when DEBUG_DT is false (single increment + compare).
+local _dtTickCounter = 0
+local DT_TICK_LOG_EVERY = 30   -- ~once/second at 0.033s interval
 
 -- BigWigs events to register
 local BIGWIGS_EVENTS = {
@@ -255,10 +261,17 @@ function DT:PositionAllBars()
     local group = self:GetBarGroupFrame()
 
     local frames = {}
+    local scannedFrames = 0
     for _, frame in pairs(self.triggerFrames) do
+        scannedFrames = scannedFrames + 1
         if frame and frame:IsShown() and frame.isBarDisplay == true then
             table_insert(frames, frame)
         end
+    end
+
+    if DEBUG_DT then
+        KE:Print(string.format("[DT] PositionAllBars scanned=%d positioned=%d",
+            scannedFrames, #frames))
     end
 
     table.sort(frames, function(a, b)
@@ -327,8 +340,27 @@ function DT:PositionAllTexts()
 end
 
 function DT:PositionAllFrames()
+    -- Eager call clears any pending deferred call so the next-frame timer
+    -- (scheduled by _RequestPositionUpdate) skips redundant work.
+    self._pendingPositionUpdate = false
     self:PositionAllBars()
     self:PositionAllTexts()
+end
+
+-- Coalesce per-trigger position updates into one call per frame. Inside
+-- ShowTriggerDisplay/HideTriggerDisplay each call would otherwise scan the
+-- full triggerFrames cache (which grows with every visited dungeon panel),
+-- so a 12-trigger dungeon click did 12+ scans. The deferred timer fires on
+-- the next frame so multiple show/hide calls within one frame collapse to a
+-- single PositionAllFrames pass.
+function DT:_RequestPositionUpdate()
+    if self._pendingPositionUpdate then return end
+    self._pendingPositionUpdate = true
+    C_Timer.After(0, function()
+        if self._pendingPositionUpdate then
+            self:PositionAllFrames()
+        end
+    end)
 end
 
 ---------------------------------------------------------------------------------
@@ -1022,7 +1054,7 @@ function DT:ShowTriggerDisplay(dungeonKey, triggerId, trigger, barData)
         end
         frame:Show()
 
-        self:PositionAllFrames()
+        self:_RequestPositionUpdate()
         self:StartVisualUpdates()
     else
         if DEBUG_DT then
@@ -1030,7 +1062,7 @@ function DT:ShowTriggerDisplay(dungeonKey, triggerId, trigger, barData)
                 tostring(frameKey), tostring(barData.text), remaining))
         end
         frame:Hide()
-        self:PositionAllFrames()
+        self:_RequestPositionUpdate()
     end
 end
 
@@ -1062,7 +1094,7 @@ function DT:HideTriggerDisplay(frameKey)
     end
 
     if anyRemaining then
-        self:PositionAllFrames()
+        self:_RequestPositionUpdate()
         self.positionDirty = false
     else
         self:StopAllTimers()
@@ -1418,6 +1450,21 @@ function DT:OnVisualUpdate()
     local now = GetTime()
     local anyVisible = false
 
+    if DEBUG_DT then
+        _dtTickCounter = _dtTickCounter + 1
+        if _dtTickCounter >= DT_TICK_LOG_EVERY then
+            _dtTickCounter = 0
+            local barCount, frameCount, shownCount = 0, 0, 0
+            for _ in pairs(self.triggerBars) do barCount = barCount + 1 end
+            for _, f in pairs(self.triggerFrames) do
+                frameCount = frameCount + 1
+                if f:IsShown() then shownCount = shownCount + 1 end
+            end
+            KE:Print(string.format("[DT] tick: triggerBars=%d triggerFrames=%d shown=%d",
+                barCount, frameCount, shownCount))
+        end
+    end
+
     for frameKey, barData in pairs(self.triggerBars) do
         if barData then
             local frame = self.triggerFrames[frameKey]
@@ -1430,10 +1477,28 @@ function DT:OnVisualUpdate()
                 if remaining > 0 then
                     local config = frame.config
 
-                    -- Bar fill: keep updating every frame for smooth animation.
+                    -- Bar fill: gate SetValue by whether the new value would
+                    -- move the bar by at least one pixel — same philosophy as
+                    -- the text gating below, just the perceptual unit is the
+                    -- pixel instead of the rendered digit. SetValue with a
+                    -- visually-identical value still uploads vertices, so
+                    -- skipping sub-pixel deltas is pure win with zero visible
+                    -- difference. For short preview bars (5s on 200px) one
+                    -- tick drains > 1 pixel — fires every tick, unchanged.
+                    -- For long-duration combat bars or narrow displays, many
+                    -- ticks render identically and get skipped.
                     if frame.bar then
                         local effectiveDuration = barData.effectiveDuration or barData.duration
-                        frame.bar:SetValue(math_min(remaining, effectiveDuration))
+                        local newValue = math_min(remaining, effectiveDuration)
+                        local barWidth = (frame.config and frame.config.barWidth) or 200
+                        if barWidth < 1 then barWidth = 1 end
+                        local pixelTime = effectiveDuration / barWidth
+                        local lastValue = barData._lastBarValue
+                        if not lastValue or (lastValue - newValue) >= pixelTime
+                                          or (newValue - lastValue) >= pixelTime then
+                            frame.bar:SetValue(newValue)
+                            barData._lastBarValue = newValue
+                        end
                     end
 
                     -- Text updates: gate by whether the displayed time string
@@ -1959,6 +2024,16 @@ function DT:PreviewDungeon(dungeonKey, loopCallback)
 end
 
 function DT:HideAll()
+    if DEBUG_DT then
+        local frameCount, shownCount, barCount = 0, 0, 0
+        for _, f in pairs(self.triggerFrames) do
+            frameCount = frameCount + 1
+            if f:IsShown() then shownCount = shownCount + 1 end
+        end
+        for _ in pairs(self.triggerBars) do barCount = barCount + 1 end
+        KE:Print(string.format("[DT] HideAll start: frames=%d shown=%d bars=%d",
+            frameCount, shownCount, barCount))
+    end
     for _, frame in pairs(self.triggerFrames) do
         frame:Hide()
         frame.barData = nil
@@ -1969,8 +2044,10 @@ end
 
 function DT:HideAllPreviews()
     local hasRemainingFrames = false
+    local previewCount, otherCount = 0, 0
     for frameKey, barData in pairs(self.triggerBars) do
         if barData and barData.isPreview then
+            previewCount = previewCount + 1
             local frame = self.triggerFrames[frameKey]
             if frame then
                 frame:Hide()
@@ -1978,8 +2055,13 @@ function DT:HideAllPreviews()
             end
             self.triggerBars[frameKey] = nil
         elseif barData then
+            otherCount = otherCount + 1
             hasRemainingFrames = true
         end
+    end
+    if DEBUG_DT then
+        KE:Print(string.format("[DT] HideAllPreviews: previews=%d other=%d hasRemaining=%s",
+            previewCount, otherCount, tostring(hasRemainingFrames)))
     end
 
     if hasRemainingFrames then
