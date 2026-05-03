@@ -69,6 +69,10 @@ local dungeonStates = {}
 local currentPreviewDungeon = nil
 local previewActive = false
 
+-- Mirrors DungeonTimers.lua DEBUG_DT — flip both true together to trace
+-- the GUI-side preview flow alongside the module-side bar lifecycle.
+local DEBUG_DT_GUI = false
+
 local function GetModule()
     if KitnEssentials then
         return KitnEssentials:GetModule("DungeonTimers", true)
@@ -77,6 +81,15 @@ local function GetModule()
 end
 
 local function StopPreview()
+    if DEBUG_DT_GUI then
+        KE:Print(string.format("[DT-GUI] StopPreview prev=%s active=%s",
+            tostring(currentPreviewDungeon), tostring(previewActive)))
+    end
+    -- Idempotent fast-path. RefreshContent fires panel:OnHide AND
+    -- contentCleanupCallbacks; StartDungeonPreview adds a third call. With
+    -- 21+ cached triggerFrames, three HideAll iterations per dungeon switch
+    -- adds up. After the first call clears state, follow-ups have no work.
+    if not previewActive and currentPreviewDungeon == nil then return end
     previewActive = false
     currentPreviewDungeon = nil
     local mod = GetModule()
@@ -88,6 +101,11 @@ end
 
 local function StartDungeonPreview(dungeonKey)
     if not GUIFrame or not GUIFrame:IsShown() then return end
+
+    if DEBUG_DT_GUI then
+        KE:Print(string.format("[DT-GUI] StartDungeonPreview key=%s (was %s)",
+            tostring(dungeonKey), tostring(currentPreviewDungeon)))
+    end
 
     StopPreview()
     if not dungeonKey then return end
