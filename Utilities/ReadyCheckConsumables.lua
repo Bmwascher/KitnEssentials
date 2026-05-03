@@ -658,9 +658,22 @@ function RCC:UpdateWeaponEnchant(slotKey, invSlot)
 
     local hasMH, mhExp, _, mhEnchID, hasOH, ohExp, _, ohEnchID = GetWeaponEnchantInfo()
     local isMH  = (invSlot == 16)
-    local has   = isMH and hasMH   or hasOH
-    local exp   = isMH and mhExp   or ohExp
-    local enchID = isMH and mhEnchID or ohEnchID
+    -- The `a and b or c` ternary fails when b is false/nil — for slotKey="oil"
+    -- (isMH=true) when hasMH is false, the result is `false or hasOH` = hasOH,
+    -- which makes the MH slot mirror the OH slot's enchant state. Use explicit
+    -- if/else to keep MH and OH detection independent.
+    local has, exp, enchID
+    if isMH then
+        has, exp, enchID = hasMH, mhExp, mhEnchID
+    else
+        has, exp, enchID = hasOH, ohExp, ohEnchID
+    end
+
+    if DEBUG_RCC then
+        KE:Print(string.format("[RCC] UpdateWeaponEnchant slot=%s invSlot=%d hasMH=%s hasOH=%s mhEnch=%s ohEnch=%s -> has=%s",
+            tostring(slotKey), invSlot, tostring(hasMH), tostring(hasOH),
+            tostring(mhEnchID), tostring(ohEnchID), tostring(has)))
+    end
 
     if has then
         btn.statusTexture:SetTexture(READY_TEXTURE)
