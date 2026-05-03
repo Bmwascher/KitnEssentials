@@ -359,16 +359,30 @@ function TSP:OnUpdate()
 
     local remaining = self.durationObject:GetRemainingDuration()
     if not remaining or remaining <= 0 then
-        self.timerText:SetText("")
+        if self._lastTimerStr ~= "" then
+            self._lastTimerStr = ""
+            self.timerText:SetText("")
+            if self.timerText.softOutline and self.timerText.softOutline.main then
+                self.timerText.softOutline.main:SetText("")
+            end
+        end
         return
     end
 
+    -- Last-string gate: SetFormattedText invalidates the FontString layout
+    -- regardless of whether the rendered output changed. Skip when the formatted
+    -- string is identical to last tick. Safe because remaining derives from a
+    -- player-owned proc start time + constant TIME_SPIRAL_DURATION (non-secret).
+    -- Same pattern as DungeonTimers OnVisualUpdate timeStr gate.
     local decimals = self.durationObject:EvaluateRemainingDuration(KE.curves.DurationDecimals)
-    self.timerText:SetFormattedText("%." .. decimals .. "f", remaining)
-
-    -- Update soft outline text if it exists
-    if self.timerText.softOutline and self.timerText.softOutline.main then
-        self.timerText.softOutline.main:SetFormattedText("%." .. decimals .. "f", remaining)
+    local fmt = "%." .. decimals .. "f"
+    local newStr = string.format(fmt, remaining)
+    if newStr ~= self._lastTimerStr then
+        self._lastTimerStr = newStr
+        self.timerText:SetText(newStr)
+        if self.timerText.softOutline and self.timerText.softOutline.main then
+            self.timerText.softOutline.main:SetText(newStr)
+        end
     end
 end
 
