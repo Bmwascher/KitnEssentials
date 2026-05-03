@@ -84,6 +84,11 @@ GUIFrame:RegisterContent("DT_General", function(scrollChild, yOffset)
         value = db.Enabled ~= false,
         callback = function(checked)
             ApplyModuleState(checked)
+            -- Re-render whatever panel is active so its dim/un-dim logic
+            -- runs immediately. Cards are pooled and theme refresh is
+            -- lazy, so this is essentially free. Without this the per-
+            -- dungeon panels only pick up the new state on revisit.
+            if GUIFrame.RefreshContent then GUIFrame:RefreshContent() end
             KE:CreateReloadPrompt("Enabling/Disabling this module requires a reload to take full effect.")
         end,
         msgPopup = true,
