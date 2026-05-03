@@ -1302,6 +1302,12 @@ local function CreateDungeonPanel(dungeonId)
     local miniSidebar, listChild, contentArea, scrollChild, activeCards
     local timerButtons = {}
 
+    -- Cached "No Timer Selected" placeholder. All four sub-tab render
+    -- functions (Trigger / Display / Load / Actions) early-return with this
+    -- card when nothing is selected. Build lazily on first show, reuse
+    -- thereafter — same pattern as the pooled detail-pane cards.
+    local noTriggerCard
+
     -- Late-bound closures defined inside BuildPanelInitial. The action buttons
     -- + sub-tab handlers + timer-list onClick close over these as upvalues so
     -- they always invoke the current render path even after the panel is
@@ -1545,15 +1551,43 @@ local function CreateDungeonPanel(dungeonId)
         end
 
         ----------------------------------------------------------------
+        -- Shared "No Timer Selected" placeholder. Lazily built on first
+        -- show, reused thereafter. Single frame total per dungeon panel
+        -- — pre-pool every render created a fresh card and orphaned it
+        -- to UIParent on the next ClearContent. ApplyThemeColors fires
+        -- every show to pick up theme switches; cheap and only runs when
+        -- there's no trigger selected.
+        ----------------------------------------------------------------
+        local function ShowNoTriggerCard(yOffset, message)
+            local T = Theme
+            if not noTriggerCard then
+                noTriggerCard = GUIFrame:CreateCard(scrollChild, "No Timer Selected", yOffset)
+                noTriggerCard._label = noTriggerCard:AddLabel(message)
+            else
+                noTriggerCard:SetParent(scrollChild)
+                noTriggerCard:ClearAllPoints()
+                noTriggerCard:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", T.paddingSmall, -(yOffset or 0) + T.paddingSmall)
+                noTriggerCard:SetPoint("RIGHT", scrollChild, "RIGHT", -T.paddingSmall, 0)
+                noTriggerCard._yOffset = yOffset or 0
+                noTriggerCard._label:SetText(message)
+                noTriggerCard:Show()
+            end
+            -- Carry-clear: SetEnabled(false) may have been left on by the
+            -- module-disabled post-render loop. Restore enabled so the
+            -- placeholder doesn't render grayed when the module re-enables.
+            if noTriggerCard.SetEnabled then noTriggerCard:SetEnabled(true) end
+            if noTriggerCard.ApplyThemeColors then noTriggerCard:ApplyThemeColors() end
+            table_insert(activeCards, noTriggerCard)
+            return yOffset + noTriggerCard:GetContentHeight() + T.paddingSmall
+        end
+
+        ----------------------------------------------------------------
         -- Render: Trigger sub-tab
         ----------------------------------------------------------------
         local function RenderTriggerTab(yOffset)
             local selectedTrigger = GetSelectedTrigger()
             if not selectedTrigger then
-                local card = GUIFrame:CreateCard(scrollChild, "No Timer Selected", yOffset)
-                card:AddLabel("Click + to create a new timer or select one from the list on the left.")
-                table_insert(activeCards, card)
-                return yOffset + card:GetContentHeight() + Theme.paddingSmall
+                return ShowNoTriggerCard(yOffset, "Click + to create a new timer or select one from the list on the left.")
             end
 
             local padding = Theme.paddingSmall
@@ -1648,10 +1682,7 @@ local function CreateDungeonPanel(dungeonId)
         local function RenderDisplayTab(yOffset)
             local selectedTrigger = GetSelectedTrigger()
             if not selectedTrigger then
-                local card = GUIFrame:CreateCard(scrollChild, "No Timer Selected", yOffset)
-                card:AddLabel("Click + to create a new timer, or select one from the list on the left.")
-                table_insert(activeCards, card)
-                return yOffset + card:GetContentHeight() + Theme.paddingSmall
+                return ShowNoTriggerCard(yOffset, "Click + to create a new timer, or select one from the list on the left.")
             end
 
             local padding = Theme.paddingSmall
@@ -1751,10 +1782,7 @@ local function CreateDungeonPanel(dungeonId)
         local function RenderLoadTab(yOffset)
             local selectedTrigger = GetSelectedTrigger()
             if not selectedTrigger then
-                local card = GUIFrame:CreateCard(scrollChild, "No Timer Selected", yOffset)
-                card:AddLabel("Click + to create a new timer, or select one from the list on the left.")
-                table_insert(activeCards, card)
-                return yOffset + card:GetContentHeight() + Theme.paddingSmall
+                return ShowNoTriggerCard(yOffset, "Click + to create a new timer, or select one from the list on the left.")
             end
 
             local padding = Theme.paddingSmall
@@ -1786,10 +1814,7 @@ local function CreateDungeonPanel(dungeonId)
         local function RenderActionsTab(yOffset)
             local selectedTrigger = GetSelectedTrigger()
             if not selectedTrigger then
-                local card = GUIFrame:CreateCard(scrollChild, "No Timer Selected", yOffset)
-                card:AddLabel("Click + to create a new timer, or select one from the list on the left.")
-                table_insert(activeCards, card)
-                return yOffset + card:GetContentHeight() + Theme.paddingSmall
+                return ShowNoTriggerCard(yOffset, "Click + to create a new timer, or select one from the list on the left.")
             end
 
             local card1
