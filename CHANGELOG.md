@@ -1,5 +1,65 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v1.20.0
+
+### Dungeon Timers
+- **NEW:** Spell browser updates results live as you type — no more clicking through pages to find what you typed
+- **NEW:** "No Timer Selected" placeholder card now shown on every sub-tab (Trigger / Display / Load / Actions) when nothing is selected, instead of a blank panel
+- General page dungeon list now sorted alphabetically to match the sidebar order
+- Master Enable toggle now prompts for a reload when toggled and grays out all sections + sub-tab buttons immediately so you don't accidentally edit while the module is off
+- Sub-tab clicks (Trigger / Display / Load / Actions) are now properly disabled when the module is off — was just visually grayed before
+- Trigger Enable toggle now applies immediately (no need to click another timer to see the preview update)
+- Switching trigger types in the dropdown no longer flashes a stale bar before the new type renders
+- Disabled triggers in the timer list are now visibly grayed instead of looking the same as enabled ones
+- Trigger note grammar tightened — "Trigger" tab said "Click +" instead of "Click New" with an inconsistent comma vs. the other three tabs
+- Switching between dungeons no longer leaves the previous dungeon's preview bars ticking in the background — sharp drop in CPU when navigating across dungeon panels
+- Bar fill animation no longer redraws every frame when the change wouldn't move the bar by even one pixel — same smoothness, less CPU
+- BigWigs encounter timers no longer overwrite a still-extending in-progress bar from the same trigger; the new bar defers until the extension naturally expires
+- Bar / Texts settings sliders no longer fire a stray callback when their min/max values are reconfigured
+
+### Ready Check Consumables
+- **Fixed:** with two 1H weapons, applying oil to the off-hand no longer lit up the main-hand slot too. The detection logic was tripping a Lua ternary gotcha that made the main-hand slot mirror the off-hand state when the main-hand was unenchanted
+
+### Interrupt Tracker
+- Cooling preview bars now skip per-frame redraws when the bar wouldn't visibly move
+- OnUpdate detaches entirely when no bars are active — zero per-frame dispatch cost when idle
+
+### Combat Timer
+- OnUpdate detaches when not running — zero per-frame cost out of combat with no preview
+
+### Cursor Circle / Dispel Cursor
+- Per-frame position work skips when the cursor is stationary — these were the largest single source of idle CPU usage
+
+### Time Spiral / Range Display
+- Timer text and range text skip the redraw when the displayed string is identical to the prior tick
+
+### Castbar (Focus / Target) and Dungeon Casts
+- Throttled from 10 Hz to 30 FPS so every decimal tick in the 0.9 → 0.1 final-second window is visible
+
+### Soft Outline (font rendering)
+- Shadows on wide left/right-justified text no longer ghost in the opposite corner when the FontString is in a stretched container
+- Fade-in/out animations no longer break when multiple soft-outlined FontStrings are on screen at once
+- Eliminates the rare "stack overflow" crash from rapid fade transitions on soft-outline text
+
+### Raid Notifications
+- Clears its preview state on disable so re-enabling doesn't show a stale preview
+
+### GUI
+- Theme switching now properly refreshes pool-reused cards and widgets (some cached cards previously kept the old palette until /reload)
+- Resize-grip on the GUI window no longer spazzes when clicked rapidly
+
+### Profiler (`/kes profiler`)
+- **NEW:** In-game CPU + memory profiler with named snapshots, top-function deltas, and per-walk diffing. Useful for diagnosing performance regressions
+- Migrated to the 12.0 `GetFrameCPUUsage` + `C_AddOnProfiler` APIs for accurate measurements
+
+### Under the hood
+- New shared frame-pool primitive used by GUI cards across the addon — switching between module pages reuses widget frames instead of creating fresh ones, dropping rebuild cost dramatically
+- Detail-pane card pooling on Dungeon Timers cuts ~20% memory and ~9% CPU per timer-click
+- Module-preview Show/Hide calls are now skipped when the state hasn't actually changed, so cross-section navigation doesn't redundantly re-fire previews on every module
+- Many small widget polish items — slider clamp silence, dropdown / colorpicker / editbox / toggle row callback hookups for pool reuse
+
+---
+
 ## v1.19.0
 
 ### GUI
