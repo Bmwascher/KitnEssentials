@@ -151,7 +151,14 @@ function RC:UpdateRange()
     end
 
     local rangeText = self:FormatRangeText(minRange, maxRange)
-    self.text:SetText(rangeText)
+    -- Last-string gate: range text changes infrequently relative to the 10fps
+    -- poll. SetText invalidates FontString layout even when the rendered output
+    -- is identical. Safe because rangeText derives from LibRangeCheck integers,
+    -- not secret-tainted unit data. Same pattern as DungeonTimers timeStr gate.
+    if rangeText ~= self.lastRangeText then
+        self.lastRangeText = rangeText
+        self.text:SetText(rangeText)
+    end
 
     local rangeValue = minRange or maxRange or 40
 
