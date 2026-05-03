@@ -721,6 +721,21 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
         end
     end
 
+    -- Re-apply theme-tied state after KE:RefreshTheme replaces Theme color
+    -- tables. Hover/animation handlers read live values via Theme.accent[1]
+    -- indexing each call so they self-recover. Pool consumers call this
+    -- when KE._themeVersion has advanced. Dropdown list, item buttons, and
+    -- scrollbar thumb are recreated on next open via UpdateOptions →
+    -- CreateItemButtons, so we only need the always-visible chrome here.
+    function row:ApplyThemeColors()
+        local TT = Theme
+        label:SetTextColor(TT.textSecondary[1], TT.textSecondary[2], TT.textSecondary[3], 1)
+        dropdownButton:SetBackdropColor(TT.bgMedium[1], TT.bgMedium[2], TT.bgMedium[3], 1)
+        dropdownButton:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], 1)
+        selectedText:SetTextColor(TT.accent[1], TT.accent[2], TT.accent[3], 1)
+        arrow:SetVertexColor(TT.accent[1], TT.accent[2], TT.accent[3], 1)
+    end
+
     function row:UpdateOptions(newOptions)
         normalizedOptions = {}
         orderedKeys = nil

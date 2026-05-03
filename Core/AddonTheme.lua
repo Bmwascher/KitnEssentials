@@ -168,6 +168,15 @@ end
 -- Refresh Theme
 ---------------------------------------------------------------------------------
 local isRefreshing = false
+-- Theme version counter — incremented on every successful RefreshTheme.
+-- Pool consumers cache the version their kits were last refreshed at and
+-- re-apply theme colors lazily inside their Configure path when the
+-- counter has advanced. Avoids per-render theme-apply cost on hot paths
+-- (e.g. DungeonTimers timer-clicks) while still updating cached pool
+-- kits when the user actually switches themes. See `card:ApplyThemeColors`
+-- in GUI-Core and `:ApplyThemeColors` on KESlider/KEDropdown/KEEditBox/KEToggle.
+KE._themeVersion = 0
+
 function KE:RefreshTheme()
     if isRefreshing then return end
     isRefreshing = true
@@ -185,6 +194,10 @@ function KE:RefreshTheme()
             if resolved then T[key] = resolved end
         end
     end
+
+    -- Bump version BEFORE GUI propagation so RefreshContent's pool Configures
+    -- can pick up the new value during the synchronous re-render below.
+    KE._themeVersion = (KE._themeVersion or 0) + 1
 
     -- Propagate to GUI and EditMode
     if self.GUIFrame and self.GUIFrame.mainFrame and self.GUIFrame.mainFrame:IsShown() then

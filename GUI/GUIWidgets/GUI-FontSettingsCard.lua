@@ -220,6 +220,11 @@ local function ConfigureFontSettingsCardKit(kit, scrollChild, yOffset, config)
     -- to the legacy build-fresh path. The pooled factory always builds with
     -- searchable=true since KEDropdown's searchable is fixed at construction.
 
+    -- Refresh theme colors lazily — only when KE._themeVersion has advanced
+    -- since this kit was last configured. No-op on hot-path renders, fires
+    -- after the user switches theme preset.
+    GUIFrame:RefreshKitThemeIfNeeded(kit, card.fontWidgets)
+
     -- Set values silently (silent flag suppresses callback). SetMinMaxValues
     -- needs silent=true too — Blizzard's slider clamps the previous render's
     -- leftover value to the new range and fires OnValueChanged on clamp,

@@ -638,6 +638,26 @@ function GUIFrame:CreateSlider(parent, labelText, config)
         end
     end
 
+    -- Re-apply theme-tied state after KE:RefreshTheme replaces Theme color
+    -- tables. Construction-time copies go stale; hover/animation handlers
+    -- read live values via Theme.accent[1] indexing each call so they
+    -- self-recover. Pool consumers call this from Configure when the
+    -- KE._themeVersion has advanced since the kit's last refresh.
+    function row:ApplyThemeColors()
+        local TT = Theme
+        label:SetTextColor(TT.textSecondary[1], TT.textSecondary[2], TT.textSecondary[3], 1)
+        sliderBG:SetBackdropColor(TT.bgDark[1], TT.bgDark[2], TT.bgDark[3], 1)
+        sliderBG:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], 1)
+        fill:SetColorTexture(TT.accent[1], TT.accent[2], TT.accent[3], 1)
+        thumbFrameBG:SetBackdropColor(TT.bgLight[1], TT.bgLight[2], TT.bgLight[3], 1)
+        valueContainer:SetBackdropColor(TT.bgDark[1], TT.bgDark[2], TT.bgDark[3], 1)
+        valueContainer:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], 1)
+        valueEdit:SetTextColor(TT.accent[1], TT.accent[2], TT.accent[3], 1)
+        leftIcon:SetVertexColor(TT.textSecondary[1], TT.textSecondary[2], TT.textSecondary[3], 1)
+        rightIcon:SetVertexColor(TT.textSecondary[1], TT.textSecondary[2], TT.textSecondary[3], 1)
+        UpdateFill()
+    end
+
     row.slider = slider
 
     -- Pool-friendly callback slot; OnValueChanged reads late-bound.
