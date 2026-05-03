@@ -1587,7 +1587,7 @@ local function CreateDungeonPanel(dungeonId)
         local function RenderTriggerTab(yOffset)
             local selectedTrigger = GetSelectedTrigger()
             if not selectedTrigger then
-                return ShowNoTriggerCard(yOffset, "Click + to create a new timer or select one from the list on the left.")
+                return ShowNoTriggerCard(yOffset, "Click New to create a new timer or select one from the list on the left.")
             end
 
             local padding = Theme.paddingSmall
@@ -1682,7 +1682,7 @@ local function CreateDungeonPanel(dungeonId)
         local function RenderDisplayTab(yOffset)
             local selectedTrigger = GetSelectedTrigger()
             if not selectedTrigger then
-                return ShowNoTriggerCard(yOffset, "Click + to create a new timer, or select one from the list on the left.")
+                return ShowNoTriggerCard(yOffset, "Click New to create a new timer or select one from the list on the left.")
             end
 
             local padding = Theme.paddingSmall
@@ -1782,7 +1782,7 @@ local function CreateDungeonPanel(dungeonId)
         local function RenderLoadTab(yOffset)
             local selectedTrigger = GetSelectedTrigger()
             if not selectedTrigger then
-                return ShowNoTriggerCard(yOffset, "Click + to create a new timer, or select one from the list on the left.")
+                return ShowNoTriggerCard(yOffset, "Click New to create a new timer or select one from the list on the left.")
             end
 
             local padding = Theme.paddingSmall
@@ -1814,7 +1814,7 @@ local function CreateDungeonPanel(dungeonId)
         local function RenderActionsTab(yOffset)
             local selectedTrigger = GetSelectedTrigger()
             if not selectedTrigger then
-                return ShowNoTriggerCard(yOffset, "Click + to create a new timer, or select one from the list on the left.")
+                return ShowNoTriggerCard(yOffset, "Click New to create a new timer or select one from the list on the left.")
             end
 
             local card1
@@ -1921,6 +1921,13 @@ local function CreateDungeonPanel(dungeonId)
         miniSidebar.panel:SetAlpha(isModuleDisabled and 0.5 or 1)
         for _, btn in ipairs(miniSidebar.actionButtons or {}) do
             btn:EnableMouse(not isModuleDisabled)
+        end
+        -- Block sub-tab clicks while module is disabled. Panel alpha
+        -- already grays the tab strip; this kills the click target so
+        -- the user can't switch tabs (the tabs would otherwise still
+        -- respond to clicks because EnableMouse defaults to true).
+        if contentArea.SetTabsEnabled then
+            contentArea:SetTabsEnabled(not isModuleDisabled)
         end
 
         BuildTimerList()

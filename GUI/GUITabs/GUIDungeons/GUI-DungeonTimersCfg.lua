@@ -84,6 +84,7 @@ GUIFrame:RegisterContent("DT_General", function(scrollChild, yOffset)
         value = db.Enabled ~= false,
         callback = function(checked)
             ApplyModuleState(checked)
+            KE:CreateReloadPrompt("Enabling/Disabling this module requires a reload to take full effect.")
         end,
         msgPopup = true,
         msgText = "Dungeon Timers",
