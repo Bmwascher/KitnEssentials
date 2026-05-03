@@ -119,6 +119,14 @@ local PROCESS_DELAY = 0.030
 local CACHE_TTL = 300
 local INSPECT_THROTTLE = 1.2
 
+-- Flip true to trace preview lifecycle, cooling-bar OnUpdate cadence, and
+-- container OnUpdate ticks. Default false; revert after diagnosis.
+local DEBUG_KT = false
+local _ktContainerTickCounter = 0
+local _ktCoolingTickCounter = 0
+local KT_TICK_LOG_EVERY = 20   -- container OnUpdate at 20fps -> ~once/sec
+local KT_COOLING_LOG_EVERY = 60  -- cooling per-bar at ~60fps -> ~once/sec
+
 KT.containerFrame = nil
 KT.isPreview = false
 KT.editModeRegistered = false
@@ -985,6 +993,17 @@ function KT:OnUpdateBars(elapsed)
     local needsRelayout = false
     local anyCooling = false
 
+    if DEBUG_KT then
+        _ktContainerTickCounter = _ktContainerTickCounter + 1
+        if _ktContainerTickCounter >= KT_TICK_LOG_EVERY then
+            _ktContainerTickCounter = 0
+            local activeCount = 0
+            for _ in pairs(self.activeBars) do activeCount = activeCount + 1 end
+            KE:Print(string.format("[KT] OnUpdateBars tick: activeBars=%d isPreview=%s",
+                activeCount, tostring(self.isPreview)))
+        end
+    end
+
     for guid, bar in pairs(self.activeBars) do
         local member = self.partyMembers[guid]
         if member and member.kickStart and member.kickDuration then
@@ -1053,6 +1072,12 @@ end
 -- Preview / Edit Mode
 ---------------------------------------------------------------------------------
 function KT:ShowPreview()
+    if DEBUG_KT then
+        local activeCount = 0
+        for _ in pairs(self.activeBars) do activeCount = activeCount + 1 end
+        KE:Print(string.format("[KT] ShowPreview enter, activeBars=%d isPreview=%s",
+            activeCount, tostring(self.isPreview)))
+    end
     if not self.containerFrame then
         self:CreateFrames()
     end
@@ -1107,26 +1132,58 @@ function KT:ShowPreview()
             -- Animate the cooling bars
             local startTime = GetTime() - elapsed
             local cdDuration = data.cd
+            -- Per-cooling-bar gating state. Closure captures these as fresh
+            -- upvalues per OnUpdate attachment so each bar tracks its own
+            -- last-applied value/string. Pixel-aware SetValue + last-string
+            -- SetText match the patterns used elsewhere in KE
+            -- (DungeonTimers OnVisualUpdate, status bars).
+            local barWidth = (db.BarWidth or 200)
+            if barWidth < 1 then barWidth = 1 end
+            local pixelRatio = 1 / barWidth
+            local lastBarValue
+            local lastTimerStr
             bar:SetScript("OnUpdate", function(self)
                 local now = GetTime()
                 local rem = cdDuration - (now - startTime)
                 if rem <= 0 then
+                    if DEBUG_KT then
+                        KE:Print(string.format("[KT] cooling bar EXPIRE name=%s",
+                            tostring(fakeMember.name)))
+                    end
                     self:SetScript("OnUpdate", nil)
                     -- Restore ready state
                     fakeMember.kickStart = nil
                     KT:UpdateBarVisuals(bar, fakeMember)
                     return
                 end
+                if DEBUG_KT then
+                    _ktCoolingTickCounter = _ktCoolingTickCounter + 1
+                    if _ktCoolingTickCounter >= KT_COOLING_LOG_EVERY then
+                        _ktCoolingTickCounter = 0
+                        KE:Print(string.format("[KT] cooling tick name=%s rem=%.2f",
+                            tostring(fakeMember.name), rem))
+                    end
+                end
+                local newValue
                 if isDark then
-                    bar.statusBar:SetValue(rem / cdDuration)
+                    newValue = rem / cdDuration
                 else
-                    bar.statusBar:SetValue((now - startTime) / cdDuration)
+                    newValue = (now - startTime) / cdDuration
+                end
+                if not lastBarValue or math_abs(newValue - lastBarValue) >= pixelRatio then
+                    bar.statusBar:SetValue(newValue)
+                    lastBarValue = newValue
                 end
                 if db.ShowTimer and bar.timerText then
+                    local newStr
                     if rem > 6 then
-                        bar.timerText:SetText(string_format("%d", math_floor(rem)))
+                        newStr = string_format("%d", math_floor(rem))
                     else
-                        bar.timerText:SetText(string_format("%.1f", rem))
+                        newStr = string_format("%.1f", rem)
+                    end
+                    if newStr ~= lastTimerStr then
+                        bar.timerText:SetText(newStr)
+                        lastTimerStr = newStr
                     end
                 end
             end)
@@ -1152,6 +1209,11 @@ function KT:ShowPreview()
 end
 
 function KT:HidePreview()
+    if DEBUG_KT then
+        local activeCount = 0
+        for _ in pairs(self.activeBars) do activeCount = activeCount + 1 end
+        KE:Print(string.format("[KT] HidePreview enter, activeBars=%d", activeCount))
+    end
     self.isPreview = false
     if not self.containerFrame then return end
 
