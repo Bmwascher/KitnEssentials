@@ -236,6 +236,16 @@ function KE.GUI.CreateSubTabPanel(container, tabs, options)
         contentArea.UpdateScrollBarVisibility()
     end
 
+    -- Block tab clicks (used when the parent module is disabled). Visual
+    -- gray comes from the panel-level alpha set by the caller; we just
+    -- need to disable the click target so the user can't switch tabs
+    -- while the module is off.
+    function api:SetTabsEnabled(enabled)
+        for _, btn in ipairs(tabButtons) do
+            btn:EnableMouse(enabled)
+        end
+    end
+
     function api:ApplyThemeColors()
         tabBarBg:SetColorTexture(Theme.bgMedium[1], Theme.bgMedium[2], Theme.bgMedium[3], 1)
         tabBarBorder:SetColorTexture(Theme.border[1], Theme.border[2], Theme.border[3], 1)
