@@ -740,8 +740,15 @@ function DR:OnEnable()
     self:RegWithEditMode()
     self:ApplySettings()
 
-    self.parent:HookScript("OnShow", function() self:OnShowHandler() end)
-    self.parent:HookScript("OnHide", function() self:OnHideHandler() end)
+    -- HookScript can't be uninstalled, so guard against re-install on
+    -- toggle off->on. Without this guard, each toggle cycle stacks an
+    -- additional pair of OnShow/OnHide callbacks, leaking redundant
+    -- vigor/surge/secondWind work and concurrent speedTickers per cycle.
+    if not self._parentHooked then
+        self.parent:HookScript("OnShow", function() self:OnShowHandler() end)
+        self.parent:HookScript("OnHide", function() self:OnHideHandler() end)
+        self._parentHooked = true
+    end
 
     RegisterStateDriver(self.parent, "visibility", "[bonusbar:5] show; hide")
 end
