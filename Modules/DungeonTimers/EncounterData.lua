@@ -26,6 +26,17 @@
 -- ║                                  -- "SPREAD". Fall back  ║
 -- ║                                  -- to BigWigs name when ║
 -- ║                                  -- absent.              ║
+-- ║                showAtSeconds   = <seconds>,    -- (N13a) ║
+-- ║                                  -- per-spell visibility ║
+-- ║                                  -- override. Hides the  ║
+-- ║                                  -- bar until last N sec ║
+-- ║                                  -- of total lifetime.   ║
+-- ║                                  -- Wins over the group  ║
+-- ║                                  -- ShowAtSeconds slider.║
+-- ║                                  -- 0 = force always     ║
+-- ║                                  -- visible even when    ║
+-- ║                                  -- group hides. Omit    ║
+-- ║                                  -- to inherit group.    ║
 -- ║            },                                            ║
 -- ║            ...                                           ║
 -- ║        },                                                ║
