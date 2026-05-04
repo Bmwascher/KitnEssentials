@@ -28,6 +28,9 @@ local InCombatLockdown      = InCombatLockdown
 local UnitClass             = UnitClass
 local UnitIsUnit            = UnitIsUnit
 local UnitExists            = UnitExists
+local UnitIsDeadOrGhost     = UnitIsDeadOrGhost
+local UnitGroupRolesAssigned = UnitGroupRolesAssigned
+local GetUnitName           = GetUnitName
 local IsInRaid              = IsInRaid
 local IsInGroup             = IsInGroup
 local GetItemCount          = C_Item.GetItemCount
@@ -206,11 +209,14 @@ local HEALTHSTONES = {
 --
 -- Click target priority: mouseover friendly → target friendly → self.
 -- Self fallback prevents wasted casts if no appropriate target is hovered.
+--- macrotext is `string | function(self) -> string`. Functions are invoked at
+--- UpdateClassSlot time so the macrotext can be re-derived from world state
+--- (used by Warlock Soulstone for healer-targeting priority chain).
 local CLASS_SLOT = {
     WARLOCK = {
         spellID   = 20707,
         name      = "Soulstone",
-        macrotext = "/stopmacro [combat]\n/cast [@mouseover,help][@target,help][@player] Soulstone",
+        macrotext = function(rcc) return rcc:_BuildSoulstoneMacrotext() end,
     },
 }
 
@@ -507,6 +513,112 @@ function RCC:IsWarlockInGroup()
         end
     end
     return false
+end
+
+--- _GetSoulstonedTarget
+--- Returns the name of the first group member who currently has a Soulstone
+--- aura cast by the player ("Name-Realm" format), or nil if nobody is stoned.
+---
+--- Mirrors BuffReminders' "sticky last target" behavior — once we Soulstone
+--- someone, they stay the click target until the aura drops (consumed on
+--- death). Synchronously scanned at macrotext refresh time rather than
+--- event-tracked, so no UNIT_AURA bookkeeping needed: each call rebuilds
+--- from current world state.
+---
+--- Secret-value guards: aura sourceUnit can be secret in chat-messaging
+--- lockdown; treat secret/missing source as "not from us." Iteration uses
+--- the same group-scan pattern as IsWarlockInGroup.
+function RCC:_GetSoulstonedTarget()
+    local function check(unit)
+        if not UnitExists(unit) then return nil end
+        if UnitIsDeadOrGhost(unit) then return nil end
+        local auraData = C_UnitAuras.GetAuraDataBySpellName(unit, "Soulstone", "HELPFUL")
+        if not auraData then return nil end
+        local source = auraData.sourceUnit
+        if not KE:IsSafeValue(source) then return nil end
+        if not (source == "player" or UnitIsUnit(source, "player")) then return nil end
+        local n = GetUnitName(unit, true)
+        if not KE:IsSafeValue(n) then return nil end
+        return n
+    end
+
+    local selfName = check("player")
+    if selfName then return selfName end
+
+    if IsInRaid() then
+        for i = 1, 40 do
+            local name = check("raid" .. i)
+            if name then return name end
+        end
+    elseif IsInGroup() then
+        for i = 1, 4 do
+            local name = check("party" .. i)
+            if name then return name end
+        end
+    end
+    return nil
+end
+
+--- _GetFirstLivingHealer
+--- Returns the name of the first living group member assigned the HEALER role
+--- ("Name-Realm" format), or nil if no living healer exists. Iteration order
+--- matches raid/party slot order — same as BuffReminders.
+function RCC:_GetFirstLivingHealer()
+    local function check(unit)
+        if not UnitExists(unit) then return nil end
+        if UnitIsDeadOrGhost(unit) then return nil end
+        if UnitGroupRolesAssigned(unit) ~= "HEALER" then return nil end
+        local n = GetUnitName(unit, true)
+        if not KE:IsSafeValue(n) then return nil end
+        return n
+    end
+
+    if IsInRaid() then
+        for i = 1, 40 do
+            local name = check("raid" .. i)
+            if name then return name end
+        end
+    elseif IsInGroup() then
+        for i = 1, 4 do
+            local name = check("party" .. i)
+            if name then return name end
+        end
+    end
+    return nil
+end
+
+--- _BuildSoulstoneMacrotext
+--- Composes the dynamic macro string for the Warlock CLASS_SLOT click button.
+--- Priority chain matches BuffReminders' clickMacro shape:
+---   1. Sticky last target (whoever already has my Soulstone aura)
+---   2. First living healer in group
+---   3. mouseover → target → player fallback chain
+---
+--- The `,help,nodead` macro conditionals self-correct in combat if a cached
+--- name has died or left group (the conditional fails and the chain falls
+--- through), so out-of-combat-only refresh is sufficient.
+---
+--- Stays well under WoW's 255-char macro limit:
+---   ~80 chars base + ~30 chars per dynamic prefix * 2 = ~140 chars max.
+function RCC:_BuildSoulstoneMacrotext()
+    local stoned = self:_GetSoulstonedTarget()
+    local healer = self:_GetFirstLivingHealer()
+
+    local cast = "/cast "
+    if stoned then
+        cast = cast .. "[@" .. stoned .. ",help,nodead]"
+    end
+    if healer and healer ~= stoned then
+        cast = cast .. "[@" .. healer .. ",help,nodead]"
+    end
+    cast = cast .. "[@mouseover,help,nodead][@target,help,nodead][@player] Soulstone"
+
+    if DEBUG_RCC then
+        KE:Print(string_format("[RCC] BuildSoulstoneMacrotext: stoned=%s healer=%s",
+            tostring(stoned), tostring(healer)))
+    end
+
+    return "/stopmacro [combat]\n" .. cast
 end
 
 --- CountItems
@@ -912,8 +1024,12 @@ function RCC:UpdateClassSlot()
     btn.countText:SetText("")
 
     if click and not InCombatLockdown() then
+        local macrotext = classData.macrotext
+        if type(macrotext) == "function" then
+            macrotext = macrotext(self)
+        end
         click:SetAttribute("type", "macro")
-        click:SetAttribute("macrotext", classData.macrotext)
+        click:SetAttribute("macrotext", macrotext)
         click:Show()
         click.IsON = true
     end
@@ -1267,13 +1383,28 @@ function RCC:READY_CHECK_FINISHED()
 end
 
 --- UNIT_AURA fires when a unit's aura set changes.
---- We only care about the local player since we check our own consumable buffs.
+--- Player auras drive consumable status, so a player-unit change does the
+--- full UpdateAllIcons sweep. Group-unit changes only matter to the Warlock
+--- class slot (Soulstone target tracking) — we do a lightweight class-slot
+--- refresh in that case rather than re-scanning all consumables.
 --- @param _ string   event name (unused)
 --- @param unit string
 function RCC:UNIT_AURA(_, unit)
-    if unit ~= "player" then return end
-    if DEBUG_RCC then KE:Print("[RCC] UNIT_AURA: player auras changed, refreshing.") end
-    self:UpdateAllIcons()
+    if unit == "player" then
+        if DEBUG_RCC then KE:Print("[RCC] UNIT_AURA: player auras changed, refreshing.") end
+        self:UpdateAllIcons()
+        return
+    end
+
+    -- Group-unit aura change: only the Warlock dynamic class slot cares.
+    local _, playerClass = UnitClass("player")
+    if playerClass == "WARLOCK" and self.frame and self.frame:IsShown() then
+        if DEBUG_RCC then
+            KE:Print(string_format("[RCC] UNIT_AURA: group unit %s changed, refreshing class slot.",
+                tostring(unit)))
+        end
+        self:UpdateClassSlot()
+    end
 end
 
 --- UNIT_INVENTORY_CHANGED fires when equipped items change (weapon oils).
