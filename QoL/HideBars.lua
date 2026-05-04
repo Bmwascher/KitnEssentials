@@ -114,9 +114,9 @@ function HB:ClearKeybind()
     if old2 then SetBinding(old2) end
     SaveBindings(GetCurrentBindingSet())
 
-    if self.db then
-        self.db.Keybind = ""
-    end
+    -- Do NOT wipe self.db.Keybind here — the user's preferred keybind must
+    -- survive a disable/re-enable cycle. ClearKeybind only removes the live
+    -- binding; OnEnable's ApplyKeybind re-installs it from the saved value.
 end
 
 function HB:ApplySettings()
