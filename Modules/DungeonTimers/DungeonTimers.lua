@@ -129,10 +129,19 @@ function DT:GetSpellInfo(spellId)
     return lookup[spellId]
 end
 
+-- Only `castDuration` extends the bar past BigWigs's countdown.
+-- BigWigs's bar represents "time until cast/channel starts"; bar hitting
+-- zero means the spell is about to fire. For pure casts, the actual hit
+-- lands at end-of-cast — so we extend by castDuration to drain the bar to
+-- zero AT impact. For channels, the first damage tick lands right at the
+-- channel's start (= BigWigs zero), so extending by channelDuration would
+-- push our "now!" cue past when damage actually arrives. Mixed cast+channel
+-- (boss casts 1s, then channels) still extends only by castDuration so the
+-- bar hits zero at the cast→channel boundary (= first damage tick).
 function DT:GetSpellExtension(spellId)
     local data = self:GetSpellInfo(spellId)
     if not data then return 0 end
-    return (data.castDuration or 0) + (data.channelDuration or 0)
+    return data.castDuration or 0
 end
 
 function DT:GetSpellDisplay(spellId)
