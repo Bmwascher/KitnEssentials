@@ -1,9 +1,9 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  GUI-DungeonTimers.lua                                   ║
+-- ║  GUI-BigWigsTimers.lua                                   ║
 -- ║  Purpose: Per-dungeon panel — sidebar trigger list +     ║
 -- ║  4 sub-tabs (Trigger / Display / Load / Actions).        ║
 -- ║  Module-level pages (DT_General, DT_Bars, DT_Texts) live ║
--- ║  in their own files (GUI-DungeonTimersCfg/Bars/Texts).   ║
+-- ║  in their own files (GUI-BigWigsTimersCfg/Bars/Texts).   ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -110,7 +110,7 @@ local DEBUG_DT_GUI = false
 
 local function GetModule()
     if KitnEssentials then
-        return KitnEssentials:GetModule("DungeonTimers", true)
+        return KitnEssentials:GetModule("BigWigsTimers", true)
     end
     return nil
 end
@@ -169,10 +169,10 @@ local function StartDungeonPreview(dungeonKey)
 end
 
 GUIFrame.contentCleanupCallbacks = GUIFrame.contentCleanupCallbacks or {}
-GUIFrame.contentCleanupCallbacks["DungeonTimers"] = StopPreview
+GUIFrame.contentCleanupCallbacks["BigWigsTimers"] = StopPreview
 
 GUIFrame.onCloseCallbacks = GUIFrame.onCloseCallbacks or {}
-GUIFrame.onCloseCallbacks["DungeonTimers"] = StopPreview
+GUIFrame.onCloseCallbacks["BigWigsTimers"] = StopPreview
 
 local VALID_SUB_TABS = { trigger = true, display = true, load = true, actions = true }
 
@@ -1444,7 +1444,7 @@ local function CreateDungeonPanel(dungeonId)
     -- on the prior _customPanel; on the next call we re-parent + re-show. The
     -- frames themselves persist (held by these upvalues), so allocation cost
     -- drops from ~25 frames per click to 0 after the first build.
-    local db                 -- KE.db.profile.Dungeons.DungeonTimers (re-fetched per call)
+    local db                 -- KE.db.profile.Dungeons.BigWigsTimers (re-fetched per call)
     local dungeonDb          -- db.Dungeons[dungeonKey] (re-fetched per call)
     local panel
     local miniSidebar, listChild, contentArea, scrollChild, activeCards
@@ -2033,13 +2033,13 @@ local function CreateDungeonPanel(dungeonId)
 
     return function(container)
         -- Hide module-level previews when entering a dungeon page
-        local DT_GUI = KE.GUI and KE.GUI.DungeonTimers
+        local DT_GUI = KE.GUI and KE.GUI.BigWigsTimers
         if DT_GUI then
             if DT_GUI.HideBarPreviews then DT_GUI.HideBarPreviews() end
             if DT_GUI.HideTextPreviews then DT_GUI.HideTextPreviews() end
         end
 
-        db = KE.db and KE.db.profile.Dungeons and KE.db.profile.Dungeons.DungeonTimers
+        db = KE.db and KE.db.profile.Dungeons and KE.db.profile.Dungeons.BigWigsTimers
         if not db then return nil end
 
         if not db.Dungeons then db.Dungeons = {} end

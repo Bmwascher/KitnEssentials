@@ -1040,7 +1040,7 @@ local Defaults = {
                 Position = DefaultPosition(0, 215),
                 SnapToPixelGrid = false,
             },
-            DungeonTimers = {
+            BigWigsTimers = {
                 Enabled = false,
 
                 -- Bar display defaults

@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  GUI-DungeonTimersTexts.lua                              ║
+-- ║  GUI-BigWigsTimersTexts.lua                              ║
 -- ║  Purpose: DT_Texts sidebar page — global text display    ║
 -- ║  settings (font, alignment, growth, position).           ║
 -- ╚══════════════════════════════════════════════════════════╝
@@ -11,7 +11,7 @@ local GUIFrame = KE.GUIFrame
 local pairs = pairs
 
 KE.GUI = KE.GUI or {}
-KE.GUI.DungeonTimers = KE.GUI.DungeonTimers or {}
+KE.GUI.BigWigsTimers = KE.GUI.BigWigsTimers or {}
 
 local SETTINGS_GROWTH_OPTIONS = {
     { key = "DOWN", text = "Down" },
@@ -33,12 +33,12 @@ local SETTINGS_TEXT_ALIGN_OPTIONS = {
 
 local function GetSettingsDB()
     if not KE.db or not KE.db.profile then return nil end
-    return KE.db.profile.Dungeons and KE.db.profile.Dungeons.DungeonTimers
+    return KE.db.profile.Dungeons and KE.db.profile.Dungeons.BigWigsTimers
 end
 
 local function GetModule()
     if KitnEssentials then
-        return KitnEssentials:GetModule("DungeonTimers", true)
+        return KitnEssentials:GetModule("BigWigsTimers", true)
     end
     return nil
 end
@@ -77,14 +77,14 @@ local function RefreshTextPreviews()
     end
 end
 
-KE.GUI.DungeonTimers.HideTextPreviews = HideTextPreviews
+KE.GUI.BigWigsTimers.HideTextPreviews = HideTextPreviews
 GUIFrame.onCloseCallbacks = GUIFrame.onCloseCallbacks or {}
 GUIFrame.onCloseCallbacks["DT_Texts"] = HideTextPreviews
 
 GUIFrame:RegisterContent("DT_Texts", function(scrollChild, yOffset)
     local Theme = KE.Theme
 
-    local DT_GUI = KE.GUI.DungeonTimers
+    local DT_GUI = KE.GUI.BigWigsTimers
     if DT_GUI.HideBarPreviews then DT_GUI.HideBarPreviews() end
 
     local db = GetSettingsDB()
