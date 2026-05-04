@@ -157,6 +157,15 @@ function DT:GetSpellDisplayText(spellId)
     return data and data.displayText or nil
 end
 
+-- Curated per-spell visibility threshold. Returns the EncounterData
+-- showAtSeconds (number) or nil if no override. RenderBar's resolver
+-- uses this BEFORE falling back to the group default. 0 is a meaningful
+-- override that forces "always visible" even when the group hides.
+function DT:GetSpellShowAtSeconds(spellId)
+    local data = self:GetSpellInfo(spellId)
+    return data and data.showAtSeconds or nil
+end
+
 -- One-time migration: early DungeonTimers schema nested AnchorFrom/To/XOffset/
 -- YOffset under `BarGroup.Position` / `TextGroup.Position`. The flat shape (all
 -- position keys at the group level) is required for PositionCard's full anchor
@@ -772,7 +781,7 @@ function DT:RevealBar(key)
     self:LayoutBars()
 end
 
-function DT:RenderBar(text, baseDur, extension, displayMode, iconID, displayText)
+function DT:RenderBar(text, baseDur, extension, displayMode, iconID, displayText, spellId)
     if not text or not baseDur or baseDur <= 0 then return end
     local existing = self.bars[text]
     if existing then
@@ -799,10 +808,17 @@ function DT:RenderBar(text, baseDur, extension, displayMode, iconID, displayText
     -- curated cast extension). Using baseDur instead would tack the cast
     -- duration on as extra visible time. ShowAtSeconds == 0 means always
     -- show (default).
+    --
+    -- Resolution chain (per-spell override wins):
+    --   spell.showAtSeconds (EncounterData) → group.ShowAtSeconds (slider) → 0
+    -- Spell-level 0 is a meaningful override that forces always-visible even
+    -- when the group default would hide. Lua's `or` treats 0 as truthy, so
+    -- nil-vs-0 distinction is preserved through the chain.
     self:UpdateDB()
     local groupCfg = (displayMode == "bar") and (self.db and self.db.BarGroup)
                                             or (self.db and self.db.TextGroup)
-    local showWindow = (groupCfg and groupCfg.ShowAtSeconds) or 0
+    local spellShowAt = self:GetSpellShowAtSeconds(spellId)
+    local showWindow = spellShowAt or (groupCfg and groupCfg.ShowAtSeconds) or 0
     local total = baseDur + (extension or 0)
     if showWindow > 0 and total > showWindow then
         bar:Hide()
@@ -1071,7 +1087,7 @@ function DT:EventCallback(event, ...)
             tostring(addon and addon.moduleName or addon),
             tostring(count),
             tostring(icon)))
-        self:RenderBar(text, baseDur, ext, displayMode, icon, displayText)
+        self:RenderBar(text, baseDur, ext, displayMode, icon, displayText, spellIdNum)
     elseif event == "BigWigs_StopBar" then
         local _, text = ...
         dprint("StopBar text=" .. tostring(text))
