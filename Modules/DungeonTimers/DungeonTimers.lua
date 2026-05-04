@@ -848,6 +848,12 @@ function DT:RefreshSettingsTextPreviews()
 end
 
 function DT:OnInitialize()
+    -- self.db must be populated BEFORE KitnEssentials:OnEnable runs its
+    -- auto-enable loop (Core/Main.lua), which checks `module.db.Enabled`
+    -- to decide whether to call EnableModule() at startup. Without this,
+    -- the module never auto-enables across /reload — only the GUI checkbox
+    -- can enable it for the current session.
+    self:UpdateDB()
     self:SetEnabledState(false)
 end
 
