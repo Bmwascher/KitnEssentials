@@ -258,7 +258,7 @@ function CC:ApplyGCDColor()
             self.gcdFrame.gcdCooldown:SetSwipeColor(swipeR, swipeG, swipeB, swipeA)
             if self.gcdFrame.gcdCooldown.SetSwipeTexture then
                 local texPath = CC.GCDRingTextures[gcd.Texture] or CC.GCDRingTextures["Circle 5"]
-                self.gcdFrame.gcdCooldown:SetSwipeTexture(texPath)
+                self.gcdFrame.gcdCooldown:SetSwipeTexture(texPath, swipeR, swipeG, swipeB, swipeA)
             end
             if self.gcdFrame.gcdCooldown.SetReverse then
                 self.gcdFrame.gcdCooldown:SetReverse(gcd.Reverse or false)
@@ -271,7 +271,7 @@ function CC:ApplyGCDColor()
         self.frame.gcdCooldown:SetSwipeColor(swipeR, swipeG, swipeB, swipeA)
         if self.frame.gcdCooldown.SetSwipeTexture then
             local texPath = CC.Textures[db.Texture] or CC.Textures["Circle 3"]
-            self.frame.gcdCooldown:SetSwipeTexture(texPath)
+            self.frame.gcdCooldown:SetSwipeTexture(texPath, swipeR, swipeG, swipeB, swipeA)
         end
         if self.frame.gcdCooldown.SetReverse then
             self.frame.gcdCooldown:SetReverse(gcd.Reverse or false)
@@ -291,9 +291,10 @@ function CC:ApplySettings()
     self.frame:SetSize(db.Size or 50, db.Size or 50)
     local texPath = CC.Textures[db.Texture] or CC.Textures["Circle 3"]
     self.frame.texture:SetTexture(texPath)
-    if self.frame.gcdCooldown and self.frame.gcdCooldown.SetSwipeTexture then
-        self.frame.gcdCooldown:SetSwipeTexture(texPath)
-    end
+    -- Note: gcdCooldown swipe texture/color is fully reapplied by ApplyGCDColor
+    -- (called below at line 311). No need to set it here — the prior call in
+    -- this position passed only the texture without color args, which the
+    -- wowlua-ls annotation flags as missing-parameter.
 
     self:ApplyColor()
 
