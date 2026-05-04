@@ -350,6 +350,16 @@ function ME:OnEnable()
     if C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("BetterCharacterPanel") then return end
     if not self.db.ShowEnchants and not self.db.GemEnabled and not self.db.HideCharacterBackground then return end
     HookCharacterPanel()
+
+    -- HookCharacterPanel short-circuits via the file-local `hooked` flag, so
+    -- the eventFrame is created exactly once. After a disable cycle,
+    -- OnDisable's UnregisterAllEvents stripped PLAYER_EQUIPMENT_CHANGED but
+    -- HookCharacterPanel won't re-register it (hooked == true). Explicitly
+    -- re-register here so equipment-change updates resume on re-enable.
+    if self.eventFrame then
+        self.eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+    end
+
     if CharacterFrame and CharacterFrame:IsShown() then
         UpdateDisplay()
     end

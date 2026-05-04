@@ -136,7 +136,7 @@ function DC:CreateFrame()
     -- first tick always runs.
     local cursorElapsed = 0
     local lastX, lastY, lastScale, lastXOff, lastYOff = -1, -1, -1, -1, -1
-    frame:SetScript("OnUpdate", function(_, elapsed)
+    frame._onUpdate = function(_, elapsed)
         cursorElapsed = cursorElapsed + elapsed
         if cursorElapsed < 0.016 then return end
         cursorElapsed = 0
@@ -160,21 +160,47 @@ function DC:CreateFrame()
         cooldownText:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT",
             (x / scale) + xOff,
             (y / scale) + yOff)
-    end)
+    end
 
-    -- Events
-    frame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
-    frame:RegisterEvent("PLAYER_ENTERING_WORLD")
-    frame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
-    frame:SetScript("OnEvent", function(_, event)
+    -- Event handler stashed on the frame so re-enable can re-attach it
+    -- without needing to recreate the closures over UpdateCooldown / locals.
+    frame._onEvent = function(_, event)
         if event == "PLAYER_ENTERING_WORLD" or event == "PLAYER_SPECIALIZATION_CHANGED" then
             DC:FindDispelSpell()
         end
         UpdateCooldown()
-    end)
+    end
 
-    frame:Show()
     self.frame = frame
+    self:_AttachScripts()
+end
+
+---------------------------------------------------------------------------------
+-- Script attach / detach (live-toggle support)
+---------------------------------------------------------------------------------
+-- CreateFrame is idempotent (early-returns if self.frame exists), so a
+-- toggle off->on cycle skipped re-attaching scripts and the frame stayed
+-- visible-but-frozen — no cursor follow, no cooldown numbers — until
+-- /reload. The OnEnable / OnDisable lifecycle now flows through these
+-- helpers so the scripts live and die with the module's enabled state.
+function DC:_AttachScripts()
+    local frame = self.frame
+    if not frame then return end
+    frame:SetScript("OnUpdate", frame._onUpdate)
+    frame:SetScript("OnEvent",  frame._onEvent)
+    frame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
+    frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+    frame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+    frame:Show()
+end
+
+function DC:_DetachScripts()
+    local frame = self.frame
+    if not frame then return end
+    frame:UnregisterAllEvents()
+    frame:SetScript("OnUpdate", nil)
+    frame:SetScript("OnEvent",  nil)
+    frame:Hide()
 end
 
 ---------------------------------------------------------------------------------
@@ -195,16 +221,12 @@ end
 function DC:OnEnable()
     if not self.db.Enabled then return end
     self:CreateFrame()
+    self:_AttachScripts()  -- idempotent re-enable: CreateFrame above is a no-op, this re-arms the scripts
     self:FindDispelSpell()
 end
 
 function DC:OnDisable()
-    if self.frame then
-        self.frame:UnregisterAllEvents()
-        self.frame:SetScript("OnUpdate", nil)
-        self.frame:SetScript("OnEvent", nil)
-        self.frame:Hide()
-    end
+    self:_DetachScripts()
 end
 
 ---------------------------------------------------------------------------------
