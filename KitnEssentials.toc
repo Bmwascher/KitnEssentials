@@ -18,6 +18,7 @@ Utilities\Utilities.xml
 
 Combat\Combat.xml
 Dungeons\Dungeons.xml
+Modules\DungeonTimers\DungeonTimers.xml
 QoL\QoL.xml
 Skinning\Skinning.xml
 

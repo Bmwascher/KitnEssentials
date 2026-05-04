@@ -1144,6 +1144,50 @@ local Defaults = {
                     actionOnHideSound = "None",
                 },
             },
+            DungeonTimers = {
+                Enabled = false,
+
+                BarDisplay = {
+                    barWidth = 250,
+                    barHeight = 22,
+                    fontFace = "Expressway",
+                    fontSize = 12,
+                    fontOutline = "OUTLINE",
+                    barTexture = "KitnUI",
+                    iconEnabled = true,
+                },
+
+                BarGroup = {
+                    AnchorFrom = "CENTER",
+                    AnchorTo = "CENTER",
+                    XOffset = 0,
+                    YOffset = 250,
+                    GrowthDirection = "DOWN",
+                    Spacing = 2,
+                    Strata = "HIGH",
+                    anchorFrameType = "UIPARENT",
+                    ParentFrame = "UIParent",
+                },
+
+                TextDisplay = {
+                    fontFace = "Expressway",
+                    fontSize = 14,
+                    fontOutline = "SOFTOUTLINE",
+                    textAlign = "CENTER",
+                },
+
+                TextGroup = {
+                    AnchorFrom = "CENTER",
+                    AnchorTo = "CENTER",
+                    XOffset = 0,
+                    YOffset = 100,
+                    GrowthDirection = "DOWN",
+                    Spacing = 0,
+                    Strata = "HIGH",
+                    anchorFrameType = "UIPARENT",
+                    ParentFrame = "UIParent",
+                },
+            },
             HealerMana = {
                 Enabled = false,
                 DisableOnHealer = false,
