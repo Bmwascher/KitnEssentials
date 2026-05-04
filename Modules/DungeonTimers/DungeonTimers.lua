@@ -52,6 +52,45 @@ local FALLBACK_TEXT_HEIGHT = 22
 
 local STOP_TOLERANCE = 0.5  -- seconds: StopBar within this window of the cast-phase boundary is treated as natural countdown expiry
 
+-- Curated display presets — same keys + colors as BigWigsTimers
+-- DISPLAY_PRESETS so users get consistent UX across both modules. A spell
+-- whose `displayText = "DODGE"` (etc.) gets the matching label AND color.
+-- Custom strings render as-is with the default base color.
+local DEFAULT_BAR_COLOR = { 0.3, 0.5, 0.9 }
+local DISPLAY_PRESETS = {
+    ADD     = { label = "ADD",      color = { 1.0,  0.3,  0.8  } },
+    AMP     = { label = "AMP",      color = { 0.9,  0.5,  1.0  } },
+    AOE     = { label = "AOE",      color = { 1.0,  1.0,  0.2  } },
+    DODGE   = { label = "DODGE",    color = { 1.0,  0.6,  0.0  } },
+    FEET    = { label = "FEET",     color = { 1.0,  0.6,  0.0  } },
+    FRONTAL = { label = "FRONTAL",  color = { 0.77, 0.17, 0.17 } },
+    HIDE    = { label = "HIDE",     color = { 0.3,  0.9,  1.0  } },
+    KICK    = { label = "KICK",     color = { 1.0,  0.85, 0.0  } },
+    PULL    = { label = "PULL",     color = { 0.3,  0.9,  1.0  } },
+    SOAK    = { label = "SOAK",     color = { 0.2,  1.0,  0.4  } },
+    SPREAD  = { label = "SPREAD",   color = { 1.0,  0.6,  0.0  } },
+    STACK   = { label = "STACK",    color = { 0.2,  1.0,  0.4  } },
+    TANK    = { label = "TANK HIT", color = { 0.77, 0.17, 0.17 } },
+}
+
+-- Resolve a displayText value to (label, color):
+--   nil           → nil label (CreateBar falls back to BigWigs spell name),
+--                   default color
+--   preset key    → preset label + preset color (e.g. "TANK" → "TANK HIT")
+--   preset label  → preset label + preset color (e.g. "TANK HIT" → same)
+--   custom string → string as label, default color
+-- The label fallback is a 13-entry linear scan; happens once per RenderBar
+-- (not per OnUpdate tick), well below noise.
+local function ResolveDisplayPreset(displayText)
+    if not displayText then return nil, DEFAULT_BAR_COLOR end
+    local preset = DISPLAY_PRESETS[displayText]
+    if preset then return preset.label, preset.color end
+    for _, p in pairs(DISPLAY_PRESETS) do
+        if p.label == displayText then return p.label, p.color end
+    end
+    return displayText, DEFAULT_BAR_COLOR
+end
+
 DT.bars = {}
 DT.barGroup = nil
 DT.textGroup = nil
@@ -99,6 +138,14 @@ end
 function DT:GetSpellDisplay(spellId)
     local data = self:GetSpellInfo(spellId)
     return (data and data.display) or "text"
+end
+
+-- Curated short-label override. Returns the EncounterData displayText
+-- ("DODGE", "TANK HIT", "INTERRUPT" etc.) or nil if none. RenderBar /
+-- CreateBar fall back to the BigWigs spell name when nil.
+function DT:GetSpellDisplayText(spellId)
+    local data = self:GetSpellInfo(spellId)
+    return data and data.displayText or nil
 end
 
 -- One-time migration: early DungeonTimers schema nested AnchorFrom/To/XOffset/
@@ -294,11 +341,18 @@ local function BarOnUpdate(self)
             if self.loop then
                 self.phase = "countdown"
                 self.startTime = GetTime()
-                if self.displayMode == "bar" and self.bar then
-                    self.bar:SetStatusBarColor(0.3, 0.5, 0.9)
+                local c = self.barColor or DEFAULT_BAR_COLOR
+                if self.displayMode == "bar" then
+                    if self.bar then
+                        self.bar:SetStatusBarColor(c[1], c[2], c[3])
+                    end
+                    -- Bar mode: labels stay white over the colored fill.
+                    if self.timerText then self.timerText:SetTextColor(1, 1, 1) end
+                    if self.label then self.label:SetTextColor(1, 1, 1) end
+                else
+                    -- Text mode: restore preset color on the combined label.
+                    if self.label then self.label:SetTextColor(c[1], c[2], c[3]) end
                 end
-                if self.timerText then self.timerText:SetTextColor(1, 1, 1) end
-                if self.label then self.label:SetTextColor(1, 1, 1) end
                 self._lastValue = nil
                 self._lastTimerStr = nil
                 return
@@ -399,8 +453,12 @@ local function ApplyVisualsToBar(frame)
 
         if frame.bar and barDisplay then
             frame.bar:SetStatusBarTexture(ResolveTexture(barDisplay.barTexture))
+            -- Countdown color = bar's preset color (or default blue when no
+            -- preset). Cast phase has already overwritten this elsewhere,
+            -- don't stomp on the cast tint here.
             if frame.phase ~= "cast" then
-                frame.bar:SetStatusBarColor(0.3, 0.5, 0.9)
+                local c = frame.barColor or DEFAULT_BAR_COLOR
+                frame.bar:SetStatusBarColor(c[1], c[2], c[3])
             end
         end
 
@@ -439,6 +497,20 @@ local function ApplyVisualsToBar(frame)
         frame.timerText:SetFont(ResolveFontPath(face), size, KE.GetFontOutline and KE:GetFontOutline(outline) or outline)
     end
 
+    -- Initial text color. Bar mode: white labels overlaid on the colored
+    -- fill — high-contrast, matches BigWigsTimers convention. Text mode:
+    -- the label IS the visible color cue (no fill texture), so it gets
+    -- the preset color directly. Cast phase overrides this elsewhere.
+    if frame.phase ~= "cast" then
+        local c = frame.barColor or DEFAULT_BAR_COLOR
+        if isBar then
+            if frame.label then frame.label:SetTextColor(1, 1, 1) end
+            if frame.timerText then frame.timerText:SetTextColor(1, 1, 1) end
+        else
+            if frame.label then frame.label:SetTextColor(c[1], c[2], c[3]) end
+        end
+    end
+
     -- Text anchoring within the bar.
     -- Bars: separate label (LEFT-justified) and timer (RIGHT-justified)
     -- FontStrings, both with 4px padding so the bar's empty middle visually
@@ -467,7 +539,7 @@ local function ApplyVisualsToBar(frame)
     end
 end
 
-function DT:CreateBar(text, baseDuration, extension, displayMode)
+function DT:CreateBar(text, baseDuration, extension, displayMode, displayText)
     displayMode = displayMode or "text"
     local isBar = (displayMode == "bar")
     local group = isBar and self:EnsureBarGroup() or self:EnsureTextGroup()
@@ -549,8 +621,20 @@ function DT:CreateBar(text, baseDuration, extension, displayMode)
     -- All sizing/font/anchoring derived from DB. Must run BEFORE the first
     -- SetText call below — WoW errors `FontString:SetText(): Font not set`
     -- if the FontString has no font assigned yet.
+    -- Resolve the display preset BEFORE ApplyVisualsToBar so the bar's
+    -- countdown color reflects the preset (DODGE → orange, TANK HIT → red,
+    -- etc.) instead of always starting blue and shifting on next tick.
+    -- Custom strings keep DEFAULT_BAR_COLOR; nil falls back to BigWigs name.
+    local resolvedLabel, resolvedColor = ResolveDisplayPreset(displayText)
+    frame.barColor = resolvedColor
+
     ApplyVisualsToBar(frame)
-    frame.baseText = StripBigWigsCounter(text)
+    -- Curated short label wins when present; otherwise we strip BigWigs'
+    -- " (N)" iteration counter from the spell name and use that. frame.text
+    -- stays as the BigWigs raw text so DT.bars[] keying + StopBar routing
+    -- match BigWigs's identifier. frame.baseText is the rendered label;
+    -- OnUpdate composes "baseText » timer" for text-mode bars.
+    frame.baseText = resolvedLabel or StripBigWigsCounter(text)
     if isBar then
         frame.label:SetText(frame.baseText)
     else
@@ -679,7 +763,7 @@ function DT:RevealBar(key)
     self:LayoutBars()
 end
 
-function DT:RenderBar(text, baseDur, extension, displayMode, iconID)
+function DT:RenderBar(text, baseDur, extension, displayMode, iconID, displayText)
     if not text or not baseDur or baseDur <= 0 then return end
     local existing = self.bars[text]
     if existing then
@@ -687,7 +771,7 @@ function DT:RenderBar(text, baseDur, extension, displayMode, iconID)
         existing:SetScript("OnUpdate", nil)
         existing:Hide()
     end
-    local bar = self:CreateBar(text, baseDur, extension, displayMode)
+    local bar = self:CreateBar(text, baseDur, extension, displayMode, displayText)
     self._barSortCounter = self._barSortCounter + 1
     bar.sortIndex = self._barSortCounter
     self.bars[text] = bar
@@ -776,15 +860,12 @@ function DT:StopBar(text)
         -- fire on time so the bar is visible for exactly showWindow seconds.
         -- RevealBar mid-cast just tightens the range and shows; OnUpdate's
         -- castFromValue / castDuration math keeps the visual coherent.
-        if bar.displayMode == "bar" and bar.bar then
-            bar.bar:SetStatusBarColor(0.9, 0.45, 0.3)
-        end
-        -- Tint whichever FontString actually shows the timer.
-        if bar.timerText then
-            bar.timerText:SetTextColor(0.95, 0.55, 0.35)
-        elseif bar.label then
-            bar.label:SetTextColor(0.95, 0.55, 0.35)
-        end
+        -- No cast-phase color shift. Tried lighten-toward-white (looked
+        -- like fading-out) and multiply-by-0.7 (looked muddy); both lost
+        -- the preset's semantic color during the most important phase.
+        -- The visible cue at cast start is already the bar draining over a
+        -- shorter window with the timer counting down — that's sufficient.
+        -- Matches BigWigs's own bar behavior (no color shift across phases).
         dprint(string_format("StopBar %s → cast phase (fromValue=%.2f late=%.2fs)",
             text, currentValue, elapsed - bar.duration))
     else
@@ -969,17 +1050,19 @@ function DT:EventCallback(event, ...)
         local ext = self:GetSpellExtension(spellIdNum)
         local total = baseDur + ext
         local displayMode = self:GetSpellDisplay(spellIdNum)
-        dprint(string_format("Timer text=%s spellId=%s base=%.2f ext=%.2f total=%.2f display=%s mod=%s count=%s icon=%s",
+        local displayText = self:GetSpellDisplayText(spellIdNum)
+        dprint(string_format("Timer text=%s spellId=%s base=%.2f ext=%.2f total=%.2f display=%s label=%s mod=%s count=%s icon=%s",
             tostring(text),
             tostring(spellId),
             baseDur,
             ext,
             total,
             displayMode,
+            tostring(displayText),
             tostring(addon and addon.moduleName or addon),
             tostring(count),
             tostring(icon)))
-        self:RenderBar(text, baseDur, ext, displayMode, icon)
+        self:RenderBar(text, baseDur, ext, displayMode, icon, displayText)
     elseif event == "BigWigs_StopBar" then
         local _, text = ...
         dprint("StopBar text=" .. tostring(text))
