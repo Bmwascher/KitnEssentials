@@ -87,6 +87,14 @@ GUIFrame:RegisterContent("PositionController", function(scrollChild, yOffset)
             db.Enabled = checked
             ApplySettings()
             RefreshStates()
+            -- Disabling suppresses behavior immediately (hooks self-gate on
+            -- db.Enabled), but the installed HookScript callbacks on the
+            -- ElvUI cooldown viewer + pet frames can't be uninstalled. Prompt
+            -- for /reload to fully unload them. Re-enable is clean and
+            -- intentionally not prompted.
+            if not checked then
+                KE:CreateReloadPrompt("Disabling Position Controller requires a /reload to fully unload its hooks.")
+            end
         end,
         msgPopup = true,
         msgText = "Position Controller",
