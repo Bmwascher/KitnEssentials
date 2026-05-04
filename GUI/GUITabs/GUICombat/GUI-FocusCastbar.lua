@@ -42,6 +42,15 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
             SuccessColor = { 0.8, 0.1, 0.1, 1 },
         }
     end
+    if not db.TargetMarker then
+        db.TargetMarker = {
+            Enabled = true,
+            Size = 26,
+            XOffset = -30,
+            YOffset = 0,
+            Anchor = "LEFT",
+        }
+    end
     db.KickIndicator = db.KickIndicator or {}
 
     local mod = GetModule()
@@ -251,7 +260,73 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     yOffset = card5:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 6: Colors
+    -- Card 6: Raid Marker
+    ----------------------------------------------------------------
+    local cardMarker = GUIFrame:CreateCard(scrollChild, "Raid Marker", yOffset)
+    manager:Register(cardMarker, "all")
+
+    local rowMarkerEnable = GUIFrame:CreateRow(cardMarker.content, Theme.rowHeight)
+    local markerEnableCheck = GUIFrame:CreateCheckbox(rowMarkerEnable, "Show Raid Marker", {
+        value = db.TargetMarker.Enabled ~= false,
+        callback = function(checked)
+            db.TargetMarker.Enabled = checked
+            if mod and mod.ToggleTargetMarkerIntegration then
+                mod:ToggleTargetMarkerIntegration()
+            end
+        end,
+        msgPopup = true,
+        msgText = "Raid Marker",
+        msgOn = "On",
+        msgOff = "Off",
+    })
+    rowMarkerEnable:AddWidget(markerEnableCheck, 1)
+    manager:Register(markerEnableCheck, "all")
+    cardMarker:AddRow(rowMarkerEnable, Theme.rowHeight)
+
+    local rowMarkerA = GUIFrame:CreateRow(cardMarker.content, Theme.rowHeight)
+    local markerAnchorDropdown = GUIFrame:CreateDropdown(rowMarkerA, "Anchor", {
+        options = {
+            { key = "LEFT",   text = "Left" },
+            { key = "CENTER", text = "Center" },
+            { key = "RIGHT",  text = "Right" },
+        },
+        value = db.TargetMarker.Anchor or "LEFT",
+        callback = function(key) db.TargetMarker.Anchor = key; ApplySettings() end,
+    })
+    rowMarkerA:AddWidget(markerAnchorDropdown, 0.5)
+    manager:Register(markerAnchorDropdown, "all")
+
+    local markerSizeSlider = GUIFrame:CreateSlider(rowMarkerA, "Size", {
+        min = 1, max = 100, step = 1,
+        value = db.TargetMarker.Size or 26,
+        callback = function(val) db.TargetMarker.Size = val; ApplySettings() end,
+    })
+    rowMarkerA:AddWidget(markerSizeSlider, 0.5)
+    manager:Register(markerSizeSlider, "all")
+    cardMarker:AddRow(rowMarkerA, Theme.rowHeight)
+
+    local rowMarkerB = GUIFrame:CreateRow(cardMarker.content, Theme.rowHeightLast)
+    local markerXSlider = GUIFrame:CreateSlider(rowMarkerB, "X Offset", {
+        min = -100, max = 100, step = 1,
+        value = db.TargetMarker.XOffset or -30,
+        callback = function(val) db.TargetMarker.XOffset = val; ApplySettings() end,
+    })
+    rowMarkerB:AddWidget(markerXSlider, 0.5)
+    manager:Register(markerXSlider, "all")
+
+    local markerYSlider = GUIFrame:CreateSlider(rowMarkerB, "Y Offset", {
+        min = -50, max = 100, step = 1,
+        value = db.TargetMarker.YOffset or 0,
+        callback = function(val) db.TargetMarker.YOffset = val; ApplySettings() end,
+    })
+    rowMarkerB:AddWidget(markerYSlider, 0.5)
+    manager:Register(markerYSlider, "all")
+    cardMarker:AddRow(rowMarkerB, Theme.rowHeightLast, 0)
+
+    yOffset = cardMarker:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 7: Colors
     ----------------------------------------------------------------
     local cardColors = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
     manager:Register(cardColors, "all")
@@ -362,7 +437,7 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     yOffset = cardColors:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 7: Sound Settings
+    -- Card 8: Sound Settings
     ----------------------------------------------------------------
     local cardSound = GUIFrame:CreateCard(scrollChild, "Sound Settings", yOffset)
     manager:Register(cardSound, "all")
@@ -436,7 +511,7 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     yOffset = cardSound:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 8: Hold Timer
+    -- Card 9: Hold Timer
     ----------------------------------------------------------------
     local cardHold = GUIFrame:CreateCard(scrollChild, "Hold Timer", yOffset)
     manager:Register(cardHold, "all")
@@ -490,7 +565,7 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     yOffset = cardHold:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 9: Kick Indicator
+    -- Card 10: Kick Indicator
     ----------------------------------------------------------------
     local cardKick = GUIFrame:CreateCard(scrollChild, "Kick Indicator", yOffset)
     manager:Register(cardKick, "all")

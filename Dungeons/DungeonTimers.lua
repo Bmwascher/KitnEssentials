@@ -1202,6 +1202,10 @@ function DT:StopBar(text)
     end
 end
 
+-- Whole-fight cleanup. Called on BigWigs_StopBars / BigWigs_OnBossDisable
+-- (boss died or wipe) and on disable / dungeon change. Tails are intentionally
+-- killed because the encounter is over; per-bar HOLD lives in StopBar (which
+-- handles single-bar early-stop mid-fight, where tail-extension is desired).
 function DT:StopAllBars()
     if DEBUG_DT then KE:Print("[DT] StopAllBars (unconditional)") end
     for frameKey, _ in pairs(self.triggerBars) do
@@ -1213,42 +1217,6 @@ function DT:StopAllBars()
     end
     wipe(self.triggerBars)
     self:StopAllTimers()
-end
-
--- Like StopAllBars, but honors extendTimer: bars whose original BigWigs end has
--- already passed (i.e. we're inside the extension tail) are left alone. Used
--- for BigWigs cleanup events (StopBars, OnBossDisable) so a naturally-ending
--- bar's tail rides through. If BW stops bars while countdowns are still
--- running (boss dies mid-fight), HIDE so stale warnings don't fire post-death.
-function DT:StopAllBarsRespectExtend()
-    local now = GetTime()
-    for frameKey, barData in pairs(self.triggerBars) do
-        local extend = barData and barData.extendTimer or 0
-        local originalEnd = barData and (barData.expirationTime - extend)
-        if barData and extend > 0 and barData.expirationTime > now and originalEnd <= now then
-            if DEBUG_DT then
-                KE:Print(string.format("[DT] StopAllBarsRespectExtend HOLD text=%s remain=%.2f",
-                    tostring(barData.text), barData.expirationTime - now))
-            end
-        else
-            if DEBUG_DT then
-                local reason
-                if not barData then
-                    reason = "no-data"
-                elseif extend <= 0 then
-                    reason = "no-extend"
-                elseif barData.expirationTime <= now then
-                    reason = "already-expired"
-                else
-                    reason = "mid-countdown"
-                end
-                KE:Print(string.format("[DT] StopAllBarsRespectExtend HIDE text=%s reason=%s origRemain=%.2f",
-                    tostring(barData and barData.text), reason,
-                    originalEnd and (originalEnd - now) or 0))
-            end
-            self:HideTriggerDisplay(frameKey)
-        end
-    end
 end
 
 function DT:PauseBar(text)
@@ -1323,7 +1291,7 @@ function DT:EventCallback(event, ...)
         local _, text = ...
         self:StopBar(text)
     elseif event == "BigWigs_StopBars" or event == "BigWigs_OnBossDisable" then
-        self:StopAllBarsRespectExtend()
+        self:StopAllBars()
     elseif event == "BigWigs_PauseBar" then
         local _, text = ...
         self:PauseBar(text)

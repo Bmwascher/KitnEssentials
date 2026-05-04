@@ -85,6 +85,7 @@ GUIFrame:RegisterContent("RaidNotifications", function(scrollChild, yOffset)
         { dbKey = "GatewayEnabled",  label = "Gateway",     desc = "- Shows when Demonic Gateway is usable.",    default = true },
         { dbKey = "ResetBossEnabled", label = "Reset Boss",  desc = "- Reminder when lust debuff is active between pulls.", default = true },
         { dbKey = "LootBossEnabled",  label = "Loot Boss",   desc = "- Reminder to loot after a boss kill.",       default = true },
+        { dbKey = "BenchEnabled",     label = "Benched",     desc = "- Alerts when sitting in raid group 7 or 8 of a Mythic raid.", default = true },
     }
 
     for _, alert in ipairs(alertTypes) do

@@ -23,13 +23,13 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Cursor Circle | Cursor-following ring with GCD overlay, multiple texture options |
 | Range Display | Target range text with out-of-range color warning |
 | Boss Debuffs | External debuff icon display with cooldown spiral, duration text, encounter blacklist, and visibility gating |
-| Focus & Target Castbar | Repositionable cast bars with kick indicators, target names, color settings, and cast sound alert (tabbed GUI) |
+| Focus & Target Castbar | Repositionable cast bars with kick indicators, target names, focus raid marker, color settings, and cast sound alert (tabbed GUI) |
 
 ## Utilities
 
 | Module | Description |
 |---|---|
-| Raid Notifications | Gateway usability, reset boss reminder, loot boss reminder with per-alert toggles |
+| Raid Notifications | Gateway usability, reset boss reminder, loot boss reminder, and Mythic raid bench alert with per-alert toggles |
 | Class Status Texts | Pet status, class stance, movement alert, and dispel CD — 4 class-specific text alerts in one tabbed GUI |
 | Bloodlust Tracker | Animated Pedro overlay + sound or static icon with countdown on Bloodlust/Heroism/Time Warp |
 | Time Spiral Tracker | Movement spell proc tracker with glow effects, cooldown spiral, and countdown timer (all classes) |
@@ -38,7 +38,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | World Marker Cycler | Cycle through world markers at cursor with drag-to-reorder priority |
 | Macro Builders | Focus Marker and Power Infusion macro builders in one tabbed GUI |
 | Combat Potion Ready | "Potion Ready" text when a combat potion is in bags and off cooldown, with instance/combat/healer visibility toggles |
-| Ready Check Consumables | On ready check, attaches a row of clickable consumable icons (food, flask, weapon enhancement MH/OH, augment rune, healthstone) for one-click application |
+| Ready Check Consumables | On ready check, attaches a row of clickable consumable icons (food, flask, weapon enhancement MH/OH, augment rune, healthstone, and Warlock Soulstone with auto-target healer) for one-click application |
 
 ## Quality of Life
 
@@ -83,7 +83,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Dungeon Casts | Enemy cast bars for M+ nameplates with icon, target text, raid icons, bar stacking, and interruptible/shielded status colors |
 | Dungeon Timers | BigWigs-integrated per-dungeon timer system with trigger editor, bar/text display groups, import/export, and role-based load conditions |
 | Enemy Counter | Displays the number of enemies currently in combat via nameplate scanning with editable prefix and combat-only visibility |
-| Healer Mana Tracker | Displays the current party healer's name, spec icon, and mana % (party-only; hidden in raid) |
+| Healer Mana Tracker | Displays the current party healer's name, spec icon, and mana % (party-only; hidden in raid); shows OFFLINE when the healer disconnects |
 | Interrupt Tracker | Party interrupt cooldown bars with class colors, dark mode, channel kick detection, and healer position override (currently non-functional in 12.0.5 due to API changes — under investigation) |
 | WarpDeplete+ | Restores live pull forces tracking, fixes death tooltip and class-colored names in M+, per-mob forces on tooltip mouseover, and announces instance resets to party/raid chat |
 

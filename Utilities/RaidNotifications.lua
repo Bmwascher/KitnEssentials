@@ -21,9 +21,13 @@ local CreateFrame = CreateFrame
 local InCombatLockdown = InCombatLockdown
 local GetInstanceInfo = GetInstanceInfo
 local UnitClass = UnitClass
+local UnitName = UnitName
+local IsInInstance = IsInInstance
 local IsInGroup = IsInGroup
 local IsInRaid = IsInRaid
 local GetNumGroupMembers = GetNumGroupMembers
+local GetRaidDifficultyID = GetRaidDifficultyID
+local GetRaidRosterInfo = GetRaidRosterInfo
 
 local function IsInRaidInstance()
     local difficultyID = select(3, GetInstanceInfo()) or 0
@@ -43,10 +47,14 @@ local SATED_DEBUFFS = {
     390435, -- Exhaustion (Fury of the Aspects)
 }
 
+-- Alerts may set `icon = nil` to render text-only. The display layer
+-- (ShowAlert + ApplyRowVisuals) hides the left/right icon holders for
+-- nil-icon alerts regardless of the global ShowIcons toggle.
 local ALERT_DEFS = {
-    { key = "Gateway",   text = "GATE USABLE", icon = 607513,  enableKey = "GatewayEnabled" },
-    { key = "ResetBoss", text = "RESET BOSS",  icon = 136090,  enableKey = "ResetBossEnabled" },  -- Spell_Nature_Exhaustion
-    { key = "LootBoss",  text = "LOOT BOSS",   icon = "Interface\\AddOns\\KitnEssentials\\Media\\Icon\\Cat_Head.png", enableKey = "LootBossEnabled" },
+    { key = "Gateway",    text = "GATE USABLE", icon = 607513,  enableKey = "GatewayEnabled" },
+    { key = "ResetBoss",  text = "RESET BOSS",  icon = 136090,  enableKey = "ResetBossEnabled" },  -- Spell_Nature_Exhaustion
+    { key = "LootBoss",   text = "LOOT BOSS",   icon = "Interface\\AddOns\\KitnEssentials\\Media\\Icon\\Cat_Head.png", enableKey = "LootBossEnabled" },
+    { key = "BenchAlert", text = "BENCHED",     icon = 134414, enableKey = "BenchEnabled" },  -- INV_Misc_Rune_01
 }
 
 local ALERT_BY_KEY = {}
@@ -172,6 +180,9 @@ function RN:ShowAlert(key)
     local row = self:GetFreeRow()
     row.alertKey = key
     row.text:SetText(def.text)
+    -- def.icon may be nil for text-only alerts (e.g. BenchAlert). The icon
+    -- holders are still positioned around the text, but ApplyRowVisuals
+    -- hides them when def.icon is nil. SetTexture(nil) is harmless.
     row.leftIcon.tex:SetTexture(def.icon)
     row.rightIcon.tex:SetTexture(def.icon)
     row:Show()
@@ -232,7 +243,12 @@ function RN:ApplyRowVisuals(row)
     local r, g, b, a = KE:GetAccentColor(db.ColorMode, db.Color)
     row.text:SetTextColor(r, g, b, a)
 
-    local showIcons = db.ShowIcons ~= false
+    -- Icon visibility = global ShowIcons toggle AND this alert has an icon
+    -- defined. Text-only alerts (def.icon == nil) always render without
+    -- icon holders, regardless of the global toggle.
+    local def = row.alertKey and ALERT_BY_KEY[row.alertKey]
+    local rowHasIcon = def and def.icon ~= nil
+    local showIcons = db.ShowIcons ~= false and rowHasIcon
     row.leftIcon:SetShown(showIcons)
     row.rightIcon:SetShown(showIcons)
     if showIcons then
@@ -247,6 +263,7 @@ end
 ---------------------------------------------------------------------------------
 function RN:OnZoneChange()
     self:GatewayFullUpdate()
+    self:CheckBench()
 end
 
 ---------------------------------------------------------------------------------
@@ -285,6 +302,7 @@ end
 function RN:OnGroupChanged()
     self:CheckGroupForWarlock()
     self:GatewayCheckUsable()
+    self:CheckBench()
 end
 
 function RN:GatewayFullUpdate()
@@ -422,6 +440,64 @@ function RN:ClearLootBoss()
 end
 
 ---------------------------------------------------------------------------------
+-- Bench Alert Logic
+---------------------------------------------------------------------------------
+-- Mythic raid is fixed 20 active players in a roster supporting up to 30 across
+-- 8 subgroups. There is no Blizzard API for "is this player benched" — the
+-- detection is convention-based. Subgroups 1-4 hold the active 20 (5 per group)
+-- across most raid teams; 5-6 are typically left empty as buffer; 7-8 are the
+-- two conventional bench groups. We treat subgroup 7 OR 8 as benched.
+function RN:CheckBench()
+    if self.isPreview then return end
+    if not self.db or not self.db.Enabled then return end
+    if self.db.BenchEnabled == false then
+        self:HideAlert("BenchAlert")
+        return
+    end
+
+    if not IsInRaid() then
+        self:HideAlert("BenchAlert")
+        return
+    end
+
+    local inInstance, instanceType = IsInInstance()
+    if not inInstance or instanceType ~= "raid" then
+        self:HideAlert("BenchAlert")
+        return
+    end
+
+    -- Difficulty 16 = Mythic raid. Heroic/Normal raids cap at 30 players, no
+    -- bench mechanic. Only Mythic supports the 20-player active + bench split.
+    if GetRaidDifficultyID() ~= 16 then
+        self:HideAlert("BenchAlert")
+        return
+    end
+
+    local playerName = UnitName("player")
+    if not playerName then
+        self:HideAlert("BenchAlert")
+        return
+    end
+
+    -- Walk the raid roster (max 40 slots) to find the player's subgroup.
+    -- GetRaidRosterInfo returns nil for empty slots. Convention: subgroups
+    -- 7 and 8 are the bench (1-4 active 20, 5-6 buffer/unused, 7-8 bench).
+    for i = 1, 40 do
+        local name, _, subgroup = GetRaidRosterInfo(i)
+        if name and name == playerName then
+            if subgroup == 7 or subgroup == 8 then
+                self:ShowAlert("BenchAlert")
+            else
+                self:HideAlert("BenchAlert")
+            end
+            return
+        end
+    end
+
+    self:HideAlert("BenchAlert")
+end
+
+---------------------------------------------------------------------------------
 -- Apply Settings
 ---------------------------------------------------------------------------------
 function RN:ApplySettings()
@@ -516,6 +592,7 @@ function RN:HidePreview()
         self.wasUsable = nil
         self:GatewayCheckUsable()
         self:CheckResetBoss()
+        self:CheckBench()
         -- LootBoss is event-driven only, no re-check needed
     end
 end
@@ -558,7 +635,13 @@ function RN:OnEnable()
     self:RegisterEvent("CHAT_MSG_MONEY", "ClearLootBoss")
     self:RegisterEvent("ENCOUNTER_START", "ClearLootBoss")
 
+    -- Bench Alert: re-evaluate when raid leader switches difficulty mid-session
+    -- (PLAYER_ENTERING_WORLD + GROUP_ROSTER_UPDATE already routed via
+    -- OnZoneChange + OnGroupChanged above for the other lifecycle events).
+    self:RegisterEvent("PLAYER_DIFFICULTY_CHANGED", "CheckBench")
+
     self:GatewayFullUpdate()
+    self:CheckBench()
 end
 
 function RN:OnThemeChanged()

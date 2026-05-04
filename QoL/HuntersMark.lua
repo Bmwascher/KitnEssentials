@@ -19,6 +19,7 @@ local UnitExists = UnitExists
 local UnitClass = UnitClass
 local UnitIsBossMob = UnitIsBossMob
 local IsInInstance = IsInInstance
+local C_NamePlate = C_NamePlate
 local next = next
 local wipe = wipe
 local type = type
@@ -322,7 +323,7 @@ end
 function HM:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
-            key = "HuntersMark", displayName = "Hunter's Mark", frame = self.frame,
+            key = "HuntersMark", displayName = "Hunter's Mark Warning", frame = self.frame,
             getPosition = function() return self.db.Position end,
             setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePosition(self.frame, self.db.Position, self.db) end,
             getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
