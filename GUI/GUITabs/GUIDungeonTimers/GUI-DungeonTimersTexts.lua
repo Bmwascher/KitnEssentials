@@ -160,7 +160,7 @@ GUIFrame:RegisterContent("DTimers_Texts", function(scrollChild, yOffset)
     local textGroupCard = GUIFrame:CreateCard(scrollChild, "Text Group", yOffset)
     manager:Register(textGroupCard, "all")
 
-    local textRow1 = GUIFrame:CreateRow(textGroupCard.content, Theme.rowHeightLast)
+    local textRow1 = GUIFrame:CreateRow(textGroupCard.content, Theme.rowHeight)
     local textGrowthDropdown = GUIFrame:CreateDropdown(textRow1, "Growth Direction", {
         options = SETTINGS_GROWTH_OPTIONS,
         value = db.TextGroup.GrowthDirection or "DOWN",
@@ -175,7 +175,17 @@ GUIFrame:RegisterContent("DTimers_Texts", function(scrollChild, yOffset)
         callback = function(val) db.TextGroup.Spacing = val; ApplyAndUpdate() end,
     })
     textRow1:AddWidget(textSpacingSlider, 0.5)
-    textGroupCard:AddRow(textRow1, Theme.rowHeightLast, 0)
+    textGroupCard:AddRow(textRow1, Theme.rowHeight)
+
+    local textRow2 = GUIFrame:CreateRow(textGroupCard.content, Theme.rowHeightLast)
+    local textShowSlider = GUIFrame:CreateSlider(textRow2, "Show In Last (s)", {
+        min = 0, max = 30, step = 1,
+        value = db.TextGroup.ShowAtSeconds or 0,
+        labelWidth = 100,
+        callback = function(val) db.TextGroup.ShowAtSeconds = val; ApplyAndUpdate() end,
+    })
+    textRow2:AddWidget(textShowSlider, 1)
+    textGroupCard:AddRow(textRow2, Theme.rowHeightLast, 0)
 
     yOffset = textGroupCard:GetNextOffset()
 
