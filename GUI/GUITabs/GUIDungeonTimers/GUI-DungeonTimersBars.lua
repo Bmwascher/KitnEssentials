@@ -179,7 +179,7 @@ GUIFrame:RegisterContent("DTimers_Bars", function(scrollChild, yOffset)
     local barGroupCard = GUIFrame:CreateCard(scrollChild, "Bar Group", yOffset)
     manager:Register(barGroupCard, "all")
 
-    local barRow1 = GUIFrame:CreateRow(barGroupCard.content, Theme.rowHeightLast)
+    local barRow1 = GUIFrame:CreateRow(barGroupCard.content, Theme.rowHeight)
     local barGrowthDropdown = GUIFrame:CreateDropdown(barRow1, "Growth Direction", {
         options = SETTINGS_GROWTH_OPTIONS,
         value = db.BarGroup.GrowthDirection or "DOWN",
@@ -194,7 +194,17 @@ GUIFrame:RegisterContent("DTimers_Bars", function(scrollChild, yOffset)
         callback = function(val) db.BarGroup.Spacing = val; ApplyAndUpdate() end,
     })
     barRow1:AddWidget(barSpacingSlider, 0.5)
-    barGroupCard:AddRow(barRow1, Theme.rowHeightLast, 0)
+    barGroupCard:AddRow(barRow1, Theme.rowHeight)
+
+    local barRow2 = GUIFrame:CreateRow(barGroupCard.content, Theme.rowHeightLast)
+    local barShowSlider = GUIFrame:CreateSlider(barRow2, "Show In Last (s)", {
+        min = 0, max = 30, step = 1,
+        value = db.BarGroup.ShowAtSeconds or 0,
+        labelWidth = 100,
+        callback = function(val) db.BarGroup.ShowAtSeconds = val; ApplyAndUpdate() end,
+    })
+    barRow2:AddWidget(barShowSlider, 1)
+    barGroupCard:AddRow(barRow2, Theme.rowHeightLast, 0)
 
     yOffset = barGroupCard:GetNextOffset()
 

@@ -472,20 +472,17 @@ function DT:CreateBar(text, baseDuration, extension, displayMode)
     local isBar = (displayMode == "bar")
     local group = isBar and self:EnsureBarGroup() or self:EnsureTextGroup()
 
-    -- Outer container. BackdropTemplate so we get the 1px black border that
-    -- gives the bar a polished, framed look (matches BigWigsTimers).
-    local frame = CreateFrame("Frame", nil, group, "BackdropTemplate")
+    -- Pixel-perfect border thickness. KE:GetPixelSize returns logical units
+    -- that map to exactly 1 physical pixel at the current UI scale; using a
+    -- literal 1 instead would render fuzzy at non-1x scale.
+    local px = (KE.GetPixelSize and KE:GetPixelSize()) or 1
+
+    -- Outer container. No backdrop — barContainer's border + iconFrame's
+    -- border cover the visible area, matching BigWigsTimers' pattern.
+    local frame = CreateFrame("Frame", nil, group)
     frame.displayMode = displayMode
 
     if isBar then
-        frame:SetBackdrop({
-            bgFile = "Interface\\Buttons\\WHITE8X8",
-            edgeFile = "Interface\\Buttons\\WHITE8X8",
-            edgeSize = 1,
-        })
-        frame:SetBackdropColor(0, 0, 0, 0.8)
-        frame:SetBackdropBorderColor(0, 0, 0, 1)
-
         -- Icon container. Square, anchored LEFT. Size set in ApplyVisualsToBar.
         frame.iconFrame = CreateFrame("Frame", nil, frame, "BackdropTemplate")
         frame.iconFrame:SetPoint("LEFT", frame, "LEFT", 0, 0)
@@ -496,21 +493,27 @@ function DT:CreateBar(text, baseDuration, extension, displayMode)
         end
 
         frame.icon = frame.iconFrame:CreateTexture(nil, "ARTWORK")
-        frame.icon:SetPoint("TOPLEFT", 1, -1)
-        frame.icon:SetPoint("BOTTOMRIGHT", -1, 1)
+        frame.icon:SetPoint("TOPLEFT", px, -px)
+        frame.icon:SetPoint("BOTTOMRIGHT", -px, px)
         if KE.ApplyIconZoom then KE:ApplyIconZoom(frame.icon) end
         -- Default placeholder until the caller assigns a real iconID.
         frame.icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
 
-        -- Bar container holds the StatusBar inset by 1px so the outer border
-        -- shows. ApplyVisualsToBar repositions barContainer based on icon state.
+        -- Bar container holds the StatusBar inset by px so the pixel-perfect
+        -- outer border shows. ApplyVisualsToBar repositions barContainer based
+        -- on icon state.
         frame.barContainer = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-        frame.barContainer:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8" })
+        frame.barContainer:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            edgeSize = px,
+        })
         frame.barContainer:SetBackdropColor(0, 0, 0, 0.8)
+        frame.barContainer:SetBackdropBorderColor(0, 0, 0, 1)
 
         frame.bar = CreateFrame("StatusBar", nil, frame.barContainer)
-        frame.bar:SetPoint("TOPLEFT", 1, -1)
-        frame.bar:SetPoint("BOTTOMRIGHT", -1, 1)
+        frame.bar:SetPoint("TOPLEFT", px, -px)
+        frame.bar:SetPoint("BOTTOMRIGHT", -px, px)
     else
         -- Text mode: no border, no icon, no fill. Bar is a transparent
         -- container so the FontStrings have something to anchor to.
@@ -645,10 +648,42 @@ end
 -- previews and in BigWigs-event order. Bumped each RenderBar call.
 DT._barSortCounter = 1000
 
-function DT:RenderBar(text, baseDur, extension, displayMode)
+-- Cancels any pending reveal timer on a bar. Called from KillBar /
+-- StopBar's cast-phase transition / StopAllBars so timers don't fire
+-- against bars that no longer exist.
+local function CancelRevealTimer(self, bar)
+    if bar.revealTimer then
+        self:CancelTimer(bar.revealTimer)
+        bar.revealTimer = nil
+    end
+end
+
+function DT:RevealBar(key)
+    local bar = self.bars[key]
+    if not bar then return end
+    bar.revealTimer = nil
+
+    -- Reset the StatusBar's visual range so the bar appears full at reveal
+    -- time and drains over the show window. Without this, a 45s base timer
+    -- revealed at showWindow=10 would render as a 22% sliver (10/45) instead
+    -- of a full bar draining to empty over the visible window.
+    -- The countdown calc in BarOnUpdate stays unchanged (uses startTime +
+    -- totalDuration); only the displayed bar range is tightened.
+    if bar.bar and bar.showWindow and bar.showWindow > 0 then
+        bar.bar:SetMinMaxValues(0, bar.showWindow)
+        bar.bar:SetValue(bar.showWindow)
+        bar._lastValue = nil
+    end
+
+    bar:Show()
+    self:LayoutBars()
+end
+
+function DT:RenderBar(text, baseDur, extension, displayMode, iconID)
     if not text or not baseDur or baseDur <= 0 then return end
     local existing = self.bars[text]
     if existing then
+        CancelRevealTimer(self, existing)
         existing:SetScript("OnUpdate", nil)
         existing:Hide()
     end
@@ -656,12 +691,40 @@ function DT:RenderBar(text, baseDur, extension, displayMode)
     self._barSortCounter = self._barSortCounter + 1
     bar.sortIndex = self._barSortCounter
     self.bars[text] = bar
+
+    -- Real icon from the BigWigs_Timer event (BigWigs forwards the spell's
+    -- iconID as the 7th arg). Falls through to the "?" placeholder set in
+    -- CreateBar if the caller didn't supply one (e.g. preview bars use
+    -- their own curated icons via CreatePreviewBar).
+    if iconID and bar.icon then
+        bar.icon:SetTexture(iconID)
+    end
+
+    -- Visibility threshold: hide bars whose total lifetime is longer than
+    -- ShowAtSeconds; reveal via AceTimer at `total - showWindow` so the bar
+    -- is visible for exactly `showWindow` seconds end-to-end (including any
+    -- curated cast extension). Using baseDur instead would tack the cast
+    -- duration on as extra visible time. ShowAtSeconds == 0 means always
+    -- show (default).
+    self:UpdateDB()
+    local groupCfg = (displayMode == "bar") and (self.db and self.db.BarGroup)
+                                            or (self.db and self.db.TextGroup)
+    local showWindow = (groupCfg and groupCfg.ShowAtSeconds) or 0
+    local total = baseDur + (extension or 0)
+    if showWindow > 0 and total > showWindow then
+        bar:Hide()
+        bar.showWindow = showWindow
+        local delay = total - showWindow
+        bar.revealTimer = self:ScheduleTimer("RevealBar", delay, text)
+    end
+
     self:LayoutBars()
 end
 
 local function KillBar(self, text)
     local bar = self.bars[text]
     if not bar then return end
+    CancelRevealTimer(self, bar)
     bar:SetScript("OnUpdate", nil)
     bar:Hide()
     self.bars[text] = nil
@@ -706,6 +769,13 @@ function DT:StopBar(text)
         bar.castStartTime = GetTime()
         bar.castFromValue = currentValue
         bar.castDuration = extension
+        -- Don't force-show or cancel revealTimer here — the AceTimer scheduled
+        -- in RenderBar uses (total - showWindow) which already accounts for
+        -- the cast phase. If the bar's still hidden at cast transition, that
+        -- means showWindow < extension and the timer hasn't fired yet; let it
+        -- fire on time so the bar is visible for exactly showWindow seconds.
+        -- RevealBar mid-cast just tightens the range and shows; OnUpdate's
+        -- castFromValue / castDuration math keeps the visual coherent.
         if bar.displayMode == "bar" and bar.bar then
             bar.bar:SetStatusBarColor(0.9, 0.45, 0.3)
         end
@@ -730,6 +800,7 @@ function DT:StopAllBars()
         -- BigWigs encounter lifecycle. Real-boss StopBars/disable shouldn't
         -- nuke them mid-edit.
         if not bar.isPreview then
+            CancelRevealTimer(self, bar)
             bar:SetScript("OnUpdate", nil)
             bar:Hide()
             self.bars[text] = nil
@@ -908,7 +979,7 @@ function DT:EventCallback(event, ...)
             tostring(addon and addon.moduleName or addon),
             tostring(count),
             tostring(icon)))
-        self:RenderBar(text, baseDur, ext, displayMode)
+        self:RenderBar(text, baseDur, ext, displayMode, icon)
     elseif event == "BigWigs_StopBar" then
         local _, text = ...
         dprint("StopBar text=" .. tostring(text))
