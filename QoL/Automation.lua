@@ -240,6 +240,8 @@ local function SetupSkipCinematics()
     cinematicFrame:RegisterEvent("CINEMATIC_START")
     cinematicFrame:RegisterEvent("PLAY_MOVIE")
     cinematicFrame:SetScript("OnEvent", function(_, event)
+        if not AU.db or not AU.db.Enabled then return end
+        if not AU.db.SkipCinematics then return end
         if event == "CINEMATIC_START" then
             CinematicFrame_CancelCinematic()
         elseif event == "PLAY_MOVIE" then
@@ -253,7 +255,8 @@ end
 function AU:SetupTalkingHeadHider()
     if self._talkingHeadHooked then return end
     local function HideTalkingHead(frame)
-        if AU.db and AU.db.HideTalkingHead and frame then
+        if not AU.db or not AU.db.Enabled then return end
+        if AU.db.HideTalkingHead and frame then
             frame:Hide()
         end
     end
@@ -279,7 +282,8 @@ local function SetupHideEventToasts()
     if not EventToastManagerFrame then return end
     if EventToastManagerFrame.DisplayToast then
         hooksecurefunc(EventToastManagerFrame, "DisplayToast", function(self)
-            if not AU.db or not AU.db.HideEventToasts then return end
+            if not AU.db or not AU.db.Enabled then return end
+            if not AU.db.HideEventToasts then return end
             C_Timer.After(0.05, function()
                 if self:IsShown() then
                     self:CloseActiveToasts()
@@ -298,7 +302,8 @@ local function SetupHideZoneText()
     for _, frame in ipairs(frames) do
         if frame then
             hooksecurefunc(frame, "Show", function(self)
-                if AU.db and AU.db.HideZoneText then
+                if not AU.db or not AU.db.Enabled then return end
+                if AU.db.HideZoneText then
                     self:Hide()
                 end
             end)
@@ -314,6 +319,7 @@ local function SetupAutoSellRepair()
     merchantFrame = CreateFrame("Frame")
     merchantFrame:RegisterEvent("MERCHANT_SHOW")
     merchantFrame:SetScript("OnEvent", function()
+        if not AU.db or not AU.db.Enabled then return end
         if AU.db.AutoSellJunk and not IsShiftKeyDown() and C_MerchantFrame.GetNumJunkItems() > 0 then
             C_MerchantFrame.SellAllJunkItems()
         end
@@ -343,6 +349,8 @@ local function SetupAutoRoleCheck()
     AU._lfdHooked = true
     if LFDRoleCheckPopup then
         LFDRoleCheckPopup:HookScript("OnShow", function()
+            if not AU.db or not AU.db.Enabled then return end
+            if not AU.db.AutoRoleCheck then return end
             if LFDRoleCheckPopupAcceptButton then
                 LFDRoleCheckPopupAcceptButton:Click()
             end
@@ -358,7 +366,8 @@ local function SetupAutoQueueConfirm()
     local dialog = LFGListApplicationDialog
     if not dialog then return end
     dialog:HookScript("OnShow", function(dlg)
-        if not AU.db or not AU.db.AutoQueueConfirm then return end
+        if not AU.db or not AU.db.Enabled then return end
+        if not AU.db.AutoQueueConfirm then return end
         if IsControlKeyDown() then return end
         local confirmBtn = dlg.SignUpButton
         if confirmBtn and confirmBtn:IsEnabled() then
@@ -383,7 +392,8 @@ local function SetupAutoSlotKeystone()
         if not keystoneUI then return end
 
         keystoneUI:HookScript("OnShow", function()
-            if not AU.db or not AU.db.AutoSlotKeystone then return end
+            if not AU.db or not AU.db.Enabled then return end
+            if not AU.db.AutoSlotKeystone then return end
             if C_ChallengeMode.HasSlottedKeystone() then return end
 
             local reagentType = Enum.ItemClass.Reagent
@@ -416,6 +426,8 @@ local function SetupAutoFillDelete()
     if AU._deleteHooked then return end
     AU._deleteHooked = true
     hooksecurefunc(StaticPopupDialogs["DELETE_GOOD_ITEM"], "OnShow", function(self)
+        if not AU.db or not AU.db.Enabled then return end
+        if not AU.db.AutoFillDelete then return end
         if self.EditBox then
             self.EditBox:SetText("DELETE")
         end
@@ -451,6 +463,7 @@ local function SetupAutoQuests()
     questFrame:RegisterEvent("QUEST_GREETING")
     questFrame:RegisterEvent("GOSSIP_SHOW")
     questFrame:SetScript("OnEvent", function(_, event)
+        if not AU.db or not AU.db.Enabled then return end
         if IsQuestModifierHeld() then return end
 
         if event == "QUEST_DETAIL" then
@@ -511,7 +524,8 @@ local function SetupAutoDeclineDuels()
     duelFrame = CreateFrame("Frame")
     duelFrame:RegisterEvent("DUEL_REQUESTED")
     duelFrame:SetScript("OnEvent", function()
-        if AU.db and AU.db.AutoDeclineDuels then
+        if not AU.db or not AU.db.Enabled then return end
+        if AU.db.AutoDeclineDuels then
             CancelDuel()
             StaticPopup_Hide("DUEL_REQUESTED")
         end
@@ -524,7 +538,8 @@ local function SetupAutoDeclinePetBattles()
     petDuelFrame = CreateFrame("Frame")
     petDuelFrame:RegisterEvent("PET_BATTLE_PVP_DUEL_REQUESTED")
     petDuelFrame:SetScript("OnEvent", function()
-        if AU.db and AU.db.AutoDeclinePetBattles then
+        if not AU.db or not AU.db.Enabled then return end
+        if AU.db.AutoDeclinePetBattles then
             C_PetBattles.CancelPVPDuel()
         end
     end)
