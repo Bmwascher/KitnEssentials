@@ -24,12 +24,8 @@ local UnitClass = UnitClass
 local UnitExists = UnitExists
 local IsInInstance = IsInInstance
 local IsInGroup = IsInGroup
-local InCombatLockdown = InCombatLockdown
-local CanInspect = CanInspect
-local NotifyInspect = NotifyInspect
 local GetSpecialization = GetSpecialization
 local GetSpecializationInfo = GetSpecializationInfo
-local GetInspectSpecialization = GetInspectSpecialization
 local C_Timer = C_Timer
 local C_ClassColor = C_ClassColor
 local C_Spell = C_Spell
@@ -43,6 +39,13 @@ local ipairs = ipairs
 local wipe = wipe
 local table_insert = table.insert
 local table_sort = table.sort
+
+-- LibSpecialization: passive group spec/role tracking via addon comms.
+-- Replaces the prior CanInspect/NotifyInspect/INSPECT_READY plumbing
+-- (~75 lines of throttle/queue management). Optional load — module
+-- degrades to "no party member specs known until you re-zone with the
+-- lib loaded" if absent.
+local LibSpec = LibStub("LibSpecialization", true)
 
 ---------------------------------------------------------------------------------
 -- Interrupt Database
@@ -116,8 +119,6 @@ INTERRUPT_SPELL_IDS[119914] = true  -- Command Demon: Axe Toss
 
 local TIME_WINDOW = 0.050
 local PROCESS_DELAY = 0.030
-local CACHE_TTL = 300
-local INSPECT_THROTTLE = 1.2
 
 -- Flip true to trace preview lifecycle, cooling-bar OnUpdate cadence, and
 -- container OnUpdate ticks. Default false; revert after diagnosis.
@@ -132,9 +133,7 @@ KT.isPreview = false
 KT.editModeRegistered = false
 
 KT.partyMembers = {}     -- [guid] = { unit, name, classToken, specID, interruptData, kickStart, kickDuration }
-KT.specCache = {}         -- [guid] = { specID, classToken, timestamp }
-KT.inspectQueue = {}      -- array of { guid, unit }
-KT.inspectPending = nil   -- guid currently being inspected
+KT.nameSpecCache = {}    -- [playerName] = specID, fed by LibSpec.RegisterGroup callback
 
 KT.pendingInterrupts = {} -- [nameplateUnit] = { time, interruptedBy }
 KT.pendingCasts = {}      -- [partyUnit] = { time }
@@ -201,20 +200,19 @@ function KT:RefreshPartyRoster()
                 member.name = name
                 member.classToken = classToken
 
-                -- Get spec
+                -- Spec lookup: player via GetSpecialization (always reliable for
+                -- self), party via the LibSpec name cache. If the cache hasn't
+                -- yet been populated for this party member (e.g. they just
+                -- joined and the comm hasn't arrived), specID stays 0 and the
+                -- LibSpec callback will fill it in shortly via ApplySpecData.
+                -- IsSafeValue mirrors HealerMana's pattern: UnitName for friendly
+                -- party members hasn't been observed secret in M+, but a secret
+                -- string used as a table key would silently miss every lookup.
                 local specID = 0
                 if unit == "player" then
                     specID = GetPlayerSpecID() or 0
-                else
-                    -- Check cache first
-                    local cached = self.specCache[guid]
-                    if cached and (GetTime() - cached.timestamp) < CACHE_TTL then
-                        specID = cached.specID
-                    else
-                        -- Queue for inspect
-                        specID = 0
-                        self:QueueInspect(guid, unit)
-                    end
+                elseif name and KE:IsSafeValue(name) then
+                    specID = self.nameSpecCache[name] or 0
                 end
 
                 if specID > 0 then
@@ -229,7 +227,6 @@ function KT:RefreshPartyRoster()
     for guid in pairs(self.partyMembers) do
         if not currentGuids[guid] then
             self.partyMembers[guid] = nil
-            self.specCache[guid] = nil
             if self.activeBars[guid] then
                 self:ReleaseBar(guid)
             end
@@ -240,83 +237,8 @@ function KT:RefreshPartyRoster()
     self:LayoutBars()
 end
 
-function KT:QueueInspect(guid, unit)
-    -- Don't double-queue
-    for _, entry in ipairs(self.inspectQueue) do
-        if entry.guid == guid then return end
-    end
-    table_insert(self.inspectQueue, { guid = guid, unit = unit })
-    self:ProcessInspectQueue()
-end
-
-function KT:ProcessInspectQueue()
-    if self.inspectPending then return end
-    if #self.inspectQueue == 0 then return end
-    if InCombatLockdown() then return end
-
-    local entry = table.remove(self.inspectQueue, 1)
-    if not entry then return end
-
-    local unit = entry.unit
-    if not UnitExists(unit) then
-        -- Try next
-        self:ProcessInspectQueue()
-        return
-    end
-
-    -- Check if we already have cached data
-    local specID = GetInspectSpecialization(unit)
-    if specID and specID > 0 then
-        self:ApplySpecData(entry.guid, unit, specID)
-        self:ProcessInspectQueue()
-        return
-    end
-
-    if CanInspect(unit) then
-        self.inspectPending = entry.guid
-        NotifyInspect(unit)
-        -- Timeout: clear pending after 3s if no response
-        self:ScheduleTimer(function()
-            if self.inspectPending == entry.guid then
-                self.inspectPending = nil
-                self:ProcessInspectQueue()
-            end
-        end, 3)
-    else
-        self:ProcessInspectQueue()
-    end
-end
-
-function KT:OnInspectReady(_, guid)
-    if self.inspectPending and self.inspectPending == guid then
-        self.inspectPending = nil
-    end
-
-    -- Find the unit for this guid
-    for _, member in pairs(self.partyMembers) do
-        if UnitGUID(member.unit) == guid then
-            local specID = GetInspectSpecialization(member.unit)
-            if specID and specID > 0 then
-                self:ApplySpecData(guid, member.unit, specID)
-            end
-            break
-        end
-    end
-
-    -- Continue queue
-    self:ScheduleTimer(function()
-        self:ProcessInspectQueue()
-    end, INSPECT_THROTTLE)
-end
-
 function KT:ApplySpecData(guid, unit, specID)
     local _, classToken = UnitClass(unit)
-    self.specCache[guid] = {
-        specID = specID,
-        classToken = classToken,
-        timestamp = GetTime(),
-    }
-
     local member = self.partyMembers[guid]
     if member then
         member.specID = specID
@@ -324,6 +246,23 @@ function KT:ApplySpecData(guid, unit, specID)
         member.interruptData = self:GetInterruptDataForSpec(specID)
         self:UpdateBars()
         self:LayoutBars()
+    end
+end
+
+-- LibSpec group callback: per-member spec/role updates via addon comms. Find
+-- the matching partyMembers entry by name and apply the spec. New members may
+-- arrive here BEFORE GROUP_ROSTER_UPDATE has populated partyMembers — in that
+-- case we just cache the spec and the next RefreshPartyRoster will read it.
+function KT:OnLibSpecGroupUpdate(specID, _, _, playerName)
+    if not specID or specID == 0 or not playerName then return end
+    self.nameSpecCache[playerName] = specID
+
+    if not self.isActive then return end
+    for guid, member in pairs(self.partyMembers) do
+        if member.name == playerName and member.unit ~= "player" then
+            self:ApplySpecData(guid, member.unit, specID)
+            return
+        end
     end
 end
 
@@ -561,8 +500,6 @@ function KT:CheckActivation()
         self:HideAllBars()
         if self.containerFrame then self.containerFrame:Hide() end
         wipe(self.partyMembers)
-        wipe(self.inspectQueue)
-        self.inspectPending = nil
     end
 end
 
@@ -577,15 +514,6 @@ function KT:OnRosterUpdate()
         self:RefreshPartyRoster()
     else
         self:CheckActivation()
-    end
-end
-
-function KT:OnCombatEnd()
-    -- Process inspect queue when leaving combat
-    if self.isActive and #self.inspectQueue > 0 then
-        self:ScheduleTimer(function()
-            self:ProcessInspectQueue()
-        end, 0.5)
     end
 end
 
@@ -1268,13 +1196,18 @@ function KT:OnEnable()
     self:CreateFrames()
     self:RegWithEditMode()
 
-    -- Register non-combat events
+    -- Register non-combat events. INSPECT_READY/PLAYER_REGEN_ENABLED no longer
+    -- needed — LibSpec handles party spec discovery passively via comms.
     self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnRosterUpdate")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnZoneChange")
     self:RegisterEvent("ZONE_CHANGED_NEW_AREA", "OnZoneChange")
     self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnPlayerSpecChanged")
-    self:RegisterEvent("INSPECT_READY", "OnInspectReady")
-    self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnCombatEnd")
+
+    if LibSpec then
+        LibSpec.RegisterGroup(self, function(specID, role, position, playerName)
+            KT:OnLibSpecGroupUpdate(specID, role, position, playerName)
+        end)
+    end
 
     -- OnUpdate is gated by _RefreshOnUpdate based on activeBars membership.
     -- It attaches the first time a bar is created (group entered, party
@@ -1288,18 +1221,17 @@ end
 
 function KT:OnDisable()
     self:UnregisterAllEvents()
+    if LibSpec then LibSpec.UnregisterGroup(self) end
     self.combatEventsRegistered = false
     self:CancelAllTimers()
     self:StopOnUpdate()
 
     self:HideAllBars()
     wipe(self.partyMembers)
-    wipe(self.specCache)
-    wipe(self.inspectQueue)
+    wipe(self.nameSpecCache)
     wipe(self.pendingInterrupts)
     wipe(self.pendingCasts)
 
-    self.inspectPending = nil
     self.isActive = false
     self.isPreview = false
     self.processScheduled = false

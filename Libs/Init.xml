@@ -15,6 +15,7 @@
     <Script file="LibDualSpec-1.0/LibDualSpec-1.0.lua" />
     <Script file="LibRangeCheck-3.0/LibRangeCheck-3.0.lua" />
     <Script file="LibCustomGlow-1.0/LibCustomGlow-1.0.lua" />
+    <Include file="LibSpecialization/LibSpecialization.xml" />
     <Include file="TaintLess/TaintLess.xml" />
     <Script file="LibEditModeOverride/LibEditModeOverride.lua" />
     <Include file="LibEditMode/embed.xml" />

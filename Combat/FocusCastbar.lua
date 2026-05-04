@@ -77,6 +77,7 @@ function FC:OnEnable()
 
     H.EnsureOnUpdate(self)
     self:CacheInterruptId()
+    self:ToggleTargetMarkerIntegration()
 end
 
 function FC:OnDisable()
@@ -148,6 +149,22 @@ end
 
 function FC:OnGroupRosterUpdate()
     H.OnGroupRosterUpdate(self)
+end
+
+function FC:OnRaidTargetUpdate()
+    H.UpdateTargetMarker(self)
+end
+
+-- Live-toggle helper for db.TargetMarker.Enabled. Called from OnEnable; can
+-- also be called from a future GUI toggle without re-running OnEnable.
+function FC:ToggleTargetMarkerIntegration()
+    if self.db.TargetMarker and self.db.TargetMarker.Enabled then
+        self:RegisterEvent("RAID_TARGET_UPDATE", "OnRaidTargetUpdate")
+        H.UpdateTargetMarker(self)
+    else
+        self:UnregisterEvent("RAID_TARGET_UPDATE")
+        H.HideTargetMarker(self)
+    end
 end
 
 ---------------------------------------------------------------------------------

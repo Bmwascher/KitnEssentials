@@ -47,6 +47,19 @@ local MESSAGE_OPERATOR_OPTIONS = {
     { key = "match", text = "Pattern" },
 }
 
+-- FAQ tooltip for the Message Filter input + Match dropdown. Module-level
+-- constant — allocated once at file parse, shared by both widgets via the
+-- KEEditBox/KEDropdown built-in `tooltip` config slot. GameTooltip is a
+-- Blizzard-shared frame so no allocation per show. Zero hot-path cost.
+local MESSAGE_FILTER_TOOLTIP =
+    "|cffffd700Message Filter|r\n\n" ..
+    "Filters BigWigs bar text against this string. Leave blank to match any text. " ..
+    "Use the Match dropdown to choose how:\n\n" ..
+    "|cffaaffaaContains|r  Substring match (default). The Message string can appear anywhere in the bar text.\n\n" ..
+    "|cffaaffaaExact Match|r  Full-string equality. The bar text must equal Message exactly.\n\n" ..
+    "|cffaaffaaPattern|r  Lua pattern. Use |cffffea00^|r to anchor to the start of text, |cffffea00$|r to anchor to the end, |cffffea00%d|r for any digit, |cffffea00%a|r for any letter.\n\n" ..
+    "|cffffd700Tip:|r If a boss spell has both a countdown bar and a |cffaaaaaa<Cast: ...>|r in-progress bar (and they share the same Spell ID), set Match to |cffaaffaaPattern|r and use |cffffea00^Spell Name|r to fire only on the countdown — the cast wrapper starts with |cffaaaaaa<|r and won't match the |cffffea00^|r anchor."
+
 local COMPARISON_OPTIONS = {
     { key = "<",  text = "< (less than)" },
     { key = "<=", text = "<= (less or equal)" },
@@ -58,6 +71,28 @@ local COMPARISON_OPTIONS = {
 local DISPLAY_TYPE_OPTIONS = {
     { key = "bar",  text = "Bar" },
     { key = "text", text = "Text Only" },
+}
+
+-- Display presets: quick-apply label + color combos for common warning types.
+-- Selecting a preset writes textFormat / barText1Format / barColor / textColor
+-- onto the trigger in one shot so labels and colors stay consistent across
+-- triggers without retyping. `_none` is a no-op sentinel for "trigger doesn't
+-- match any preset" (custom format).
+local DISPLAY_PRESETS = {
+    { key = "_none",   text = "None (Custom)" },
+    { key = "ADD",     text = "ADD",      label = "ADD",      format = "ADD \194\187 %p",      color = { 1.0,  0.3,  0.8,  1 } },
+    { key = "AMP",     text = "AMP",      label = "AMP",      format = "AMP \194\187 %p",      color = { 0.9,  0.5,  1.0,  1 } },
+    { key = "AOE",     text = "AOE",      label = "AOE",      format = "AOE \194\187 %p",      color = { 1.0,  1.0,  0.2,  1 } },
+    { key = "DODGE",   text = "DODGE",    label = "DODGE",    format = "DODGE \194\187 %p",    color = { 1.0,  0.6,  0.0,  1 } },
+    { key = "FEET",    text = "FEET",     label = "FEET",     format = "FEET \194\187 %p",     color = { 1.0,  0.6,  0.0,  1 } },
+    { key = "FRONTAL", text = "FRONTAL",  label = "FRONTAL",  format = "FRONTAL \194\187 %p",  color = { 0.77, 0.17, 0.17, 1 } },
+    { key = "HIDE",    text = "HIDE",     label = "HIDE",     format = "HIDE \194\187 %p",     color = { 0.3,  0.9,  1.0,  1 } },
+    { key = "KICK",    text = "KICK",     label = "KICK",     format = "KICK \194\187 %p",     color = { 1.0,  0.85, 0.0,  1 } },
+    { key = "PULL",    text = "PULL",     label = "PULL",     format = "PULL \194\187 %p",     color = { 0.3,  0.9,  1.0,  1 } },
+    { key = "SOAK",    text = "SOAK",     label = "SOAK",     format = "SOAK \194\187 %p",     color = { 0.2,  1.0,  0.4,  1 } },
+    { key = "SPREAD",  text = "SPREAD",   label = "SPREAD",   format = "SPREAD \194\187 %p",   color = { 1.0,  0.6,  0.0,  1 } },
+    { key = "STACK",   text = "STACK",    label = "STACK",    format = "STACK \194\187 %p",    color = { 0.2,  1.0,  0.4,  1 } },
+    { key = "TANK",    text = "TANK HIT", label = "TANK HIT", format = "TANK HIT \194\187 %p", color = { 0.77, 0.17, 0.17, 1 } },
 }
 
 local SIDEBAR_WIDTH = 191
@@ -459,14 +494,20 @@ local function CreateTriggerFiltersCardKit(holder)
     row3:AddWidget(previewContainer, 0.5)
     card:AddRow(row3, T.rowHeight)
 
-    -- Row 2: message filter + match-mode dropdown
+    -- Row 2: message filter + match-mode dropdown. Both widgets share the
+    -- same FAQ tooltip via the built-in `tooltip` config slot — hovering
+    -- either gets the user the same explanation.
     local row4 = GUIFrame:CreateRow(card.content, T.rowHeight)
-    local msgInput = GUIFrame:CreateEditBox(row4, "Message Filter (optional)", { value = "" })
+    local msgInput = GUIFrame:CreateEditBox(row4, "Message Filter (optional)", {
+        value = "",
+        tooltip = MESSAGE_FILTER_TOOLTIP,
+    })
     row4:AddWidget(msgInput, 0.5)
 
     local msgOpDropdown = GUIFrame:CreateDropdown(row4, "Match", {
         options = MESSAGE_OPERATOR_OPTIONS,
         value = "find",
+        tooltip = MESSAGE_FILTER_TOOLTIP,
     })
     row4:AddWidget(msgOpDropdown, 0.5)
     card:AddRow(row4, T.rowHeightLast, 0)
@@ -756,6 +797,95 @@ local function ConfigureDisplayTypeCardKit(kit, parent, yOffset, trigger, applyS
 end
 
 local displayTypeCardPool = KE.FramePool:New(CreateDisplayTypeCardKit)
+
+---------------------------------------------------------------------------------
+-- Display Preset card (pooled): quick-apply label + color combo for the
+-- selected trigger. Writes textFormat, barText1Format, barColor, textColor,
+-- and clears useBigWigsColors. Detects the current preset on render so the
+-- dropdown reflects whatever the trigger already has set (or "None (Custom)").
+---------------------------------------------------------------------------------
+
+local function CreateDisplayPresetCardKit(holder)
+    local T = KE.Theme
+    local card = GUIFrame:CreateCard(holder, "Quick Preset", 0)
+
+    local descLabel = card:AddLabel("|cff888888Apply a preset label and color. You can still customize after.|r")
+
+    local row1 = GUIFrame:CreateRow(card.content, T.rowHeightLast)
+    local presetDropdown = GUIFrame:CreateDropdown(row1, "Preset", {
+        options = DISPLAY_PRESETS,
+        value = "_none",
+    })
+    row1:AddWidget(presetDropdown, 1)
+    card:AddRow(row1, T.rowHeightLast, 0)
+
+    local kit = {
+        row = card,
+        card = card,
+        descLabel = descLabel,
+        presetDropdown = presetDropdown,
+        _trigger = nil,
+        _applySettings = nil,
+        _refreshContentDeferred = nil,
+    }
+    kit.themeWidgets = { presetDropdown }
+
+    presetDropdown:SetCallback(function(key)
+        if key == "_none" then return end
+        local t = kit._trigger
+        if not t then return end
+        for _, p in ipairs(DISPLAY_PRESETS) do
+            if p.key == key and p.format then
+                t.textFormat = p.format
+                t.barText1Format = p.label
+                t.barColor = { p.color[1], p.color[2], p.color[3], p.color[4] or 1 }
+                -- Bar mode: text stays white (color shows on the bar fill).
+                -- Text mode: text takes the preset color (no bar to color).
+                if (t.displayType or "bar") == "bar" then
+                    t.textColor = { 1, 1, 1, 1 }
+                else
+                    t.textColor = { p.color[1], p.color[2], p.color[3], p.color[4] or 1 }
+                end
+                t.useBigWigsColors = false
+                break
+            end
+        end
+        if kit._applySettings then kit._applySettings() end
+        if kit._refreshContentDeferred then kit._refreshContentDeferred() end
+    end)
+
+    return kit
+end
+
+local function ConfigureDisplayPresetCardKit(kit, parent, yOffset, trigger, applySettings, refreshContentDeferred)
+    local T = KE.Theme
+
+    kit.card:ClearAllPoints()
+    kit.card:SetPoint("TOPLEFT", parent, "TOPLEFT", T.paddingSmall, -(yOffset or 0) + T.paddingSmall)
+    kit.card:SetPoint("RIGHT", parent, "RIGHT", -T.paddingSmall, 0)
+    kit.card._yOffset = yOffset or 0
+
+    kit._trigger = trigger
+    kit._applySettings = applySettings
+    kit._refreshContentDeferred = refreshContentDeferred
+
+    GUIFrame:RefreshKitThemeIfNeeded(kit)
+
+    -- Detect current preset by matching textFormat against each preset's
+    -- format string. No match -> "None (Custom)" sentinel.
+    local currentPreset = "_none"
+    for _, p in ipairs(DISPLAY_PRESETS) do
+        if p.format and trigger.textFormat == p.format then
+            currentPreset = p.key
+            break
+        end
+    end
+    kit.presetDropdown:SetValue(currentPreset, true)
+
+    return kit.card
+end
+
+local displayPresetCardPool = KE.FramePool:New(CreateDisplayPresetCardKit)
 
 ---------------------------------------------------------------------------------
 -- Display tab: branched cards (Time Display / Text Format inline / Colors).
@@ -1714,6 +1844,18 @@ local function CreateDungeonPanel(dungeonId)
             table_insert(activeCards, card1)
 
             yOffset = yOffset + card1:GetContentHeight() + padding
+
+            -- Card 2: Quick Preset (pooled — see CreateDisplayPresetCardKit).
+            -- Restored from f584a49 (lost in v1.19.0 GUI port). Sits between
+            -- Display Type and the per-mode cards so users can stamp a
+            -- consistent label+color combo before fine-tuning below.
+            displayPresetCardPool:ReleaseAll()
+            local presetKit = displayPresetCardPool:Acquire(scrollChild)
+            local cardPreset = ConfigureDisplayPresetCardKit(presetKit, scrollChild, yOffset,
+                selectedTrigger, ApplySettings, RefreshContentDeferred)
+            table_insert(activeCards, cardPreset)
+
+            yOffset = yOffset + cardPreset:GetContentHeight() + padding
 
             if isBar then
                 local card3

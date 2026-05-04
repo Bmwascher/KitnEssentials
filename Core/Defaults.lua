@@ -253,6 +253,7 @@ local Defaults = {
             GatewayEnabled = true,
             ResetBossEnabled = true,
             LootBossEnabled = true,
+            BenchEnabled = true,
         },
 
         NoMovementAlert = {
@@ -353,6 +354,13 @@ local Defaults = {
                 XOffset = 0,
                 YOffset = 14,
                 FontSize = 13,
+            },
+            TargetMarker = {
+                Enabled = true,
+                Size = 26,
+                XOffset = -30,
+                YOffset = 0,
+                Anchor = "LEFT",
             },
         },
 

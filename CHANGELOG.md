@@ -1,5 +1,62 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v1.21.0
+
+### Ready Check Consumables
+- **NEW:** Warlock Soulstone slot now auto-targets a healer. Click priority: your current target (if friendly) > the healer who currently has your Soulstone aura > the first living healer in your group > mouseover/target/self fallback chain
+- Once you Soulstone a specific healer, the slot remembers them and re-targets them on every subsequent click — even after the buff is consumed on death — until they leave the group or you manually pick someone else
+- To switch healers manually: click on the new healer to make them your target, then click the Soulstone icon. The cast goes to your manual pick and the sticky cache updates so the new healer auto-receives every cast going forward
+
+### Focus Castbar
+- **NEW:** Raid Marker — shows the focus target's raid marker icon (Skull, Cross, etc.) next to the cast bar when they're casting. Configurable anchor (Left/Center/Right), size, and X/Y offsets in a new "Raid Marker" card. Per-card "Show Raid Marker" toggle (default on) — disables the marker without affecting the rest of the focus bar
+
+### Raid Notifications
+- **NEW:** Bench Alert — shows "BENCHED" with a hearthstone icon when sitting in subgroup 7 or 8 of a Mythic raid (the conventional bench groups). Per-alert toggle in the GUI (default on); hides automatically when you're moved off the bench, the raid leader switches difficulty off Mythic, you leave the raid group, or you zone out of the instance
+
+### Healer Mana Tracker
+- **NEW:** OFFLINE display state — when the party healer disconnects, the row stays visible with greyed text reading "OFFLINE" and a dimmed icon, instead of vanishing entirely. Reconnect restores the live mana % automatically on the next 1-second tick
+- Cross-realm Discipline vs Holy priest icons now resolve correctly. Previously defaulted to Disc icon for any cross-realm priest healer because the legacy inspect path didn't return spec data without a manual inspect
+
+### Castbar (Focus / Target)
+- "Interrupted by `<name>`" text now resolves correctly for warlock pet kicks (Felhunter Spell Lock, Felguard Axe Toss) and any non-player interrupter. Previously degraded to bare "Interrupted" with no name attribution. Works in non-restricted contexts (open world / quest mobs); in M+ / raids / rated PvP, Blizzard secures the interrupter GUID server-side and the bar falls back to "Interrupted"
+
+### Cursor Circle
+- **Fixed:** GCD ring color no longer briefly flashes uncolored when the texture refreshes — the texture and color are now applied in a single call (matches the 12.0 `SetSwipeTexture` API signature)
+
+### Hide Bars
+- **Fixed:** disabling Hide Bars no longer wipes your saved keybind. Toggle off → toggle on → your hotkey still works without re-entering it in the GUI
+
+### Dragon Riding
+- **Fixed:** toggling Dragon Riding off then on used to stack a duplicate set of frame hooks each cycle. After 3 toggles, every mount-up was running speed/vigor/secondWind work 4× per change with 4 concurrent timers competing. Hooks now install exactly once per session
+
+### Missing Enchants
+- **Fixed:** equipment-change updates no longer die after toggling Missing Enchants off then on. The slot warning text now refreshes on gear swap as expected without needing a `/reload`
+
+### Dispel Cursor
+- **Fixed:** toggling Dispel Cursor off then on no longer leaves the cursor text frame visible-but-frozen with no cursor-follow or cooldown numbers. Full functionality now restores on re-enable without a `/reload`
+
+### Automation
+- **Fixed:** the master Enable toggle now actually disables every behavior. Previously, flipping it off only unsubscribed from CVAR_UPDATE while every other behavior (hide toasts, hide zone text, auto-sell, auto-repair, auto-quest, auto-decline duels, skip cinematics, etc.) silently kept firing until `/reload`
+- Auto Role Check and Auto Fill DELETE sub-toggles now respect runtime changes — flipping them off mid-session immediately suppresses the behavior, where previously they were only checked at install time
+
+### Position Controller
+- Disabling the master "Enable Position Controller" toggle now prompts for a reload. Behavior is suppressed immediately on disable, but the underlying frame hooks remain installed until `/reload` (re-enabling does not prompt — it's a clean path)
+
+### Hunter's Mark Warning
+- Edit Mode label renamed from "Hunter's Mark" to "Hunter's Mark Warning" — clearer when browsing modules in the Edit Mode panel
+
+### Dungeon Timers
+- **Restored:** Quick Preset card on every trigger's Display tab — pick from 14 color-coded labels (ADD, AMP, AOE, DODGE, FEET, FRONTAL, HIDE, KICK, PULL, SOAK, SPREAD, STACK, TANK HIT) and the dropdown stamps a consistent label and color onto the trigger so styling stays uniform across dungeons. Detected automatically on render — if the trigger already matches a preset, the dropdown shows it; otherwise it shows "None (Custom)" and edits stay non-destructive. (Lost during the v1.19.0 GUI layout port; restored from the original v1.12.1 implementation.)
+- **NEW:** Hover-tooltip FAQ on the Message Filter input and Match dropdown — explains the three Match modes (Contains, Exact Match, Pattern) with examples, plus the recipe for filtering out BigWigs `<Cast: ...>` in-progress wrappers when a spell has both a countdown bar and a cast-duration bar that share the same Spell ID
+
+### Interrupt Tracker
+- Replaced the inspect-throttle / queue plumbing (~75 lines) with passive spec discovery via addon comms. Party member specs now populate automatically without an explicit inspect, and there's no inspect-API contention with other addons (Details, inspect tools, etc.)
+
+### Libraries
+- **NEW:** Embedded LibSpecialization (BigWigs upstream) for passive group spec/role tracking via addon comms. Powers the Healer Mana Tracker priest icon fix and the Interrupt Tracker spec lookup
+
+---
+
 ## v1.20.0
 
 ### Dungeon Timers

@@ -21,14 +21,24 @@ local UnitClass = UnitClass
 local UnitSpellTargetName = UnitSpellTargetName
 local UnitSpellTargetClass = UnitSpellTargetClass
 local C_ClassColor = C_ClassColor
-local GetPlayerInfoByGUID = GetPlayerInfoByGUID
+local UnitNameFromGUID = UnitNameFromGUID
+local UnitClassFromGUID = UnitClassFromGUID
+local GetRaidTargetIndex = GetRaidTargetIndex
+local SetRaidTargetIconTexture = SetRaidTargetIconTexture
 local GetTime = GetTime
 local select = select
 local type = type
+local random = math.random
 
 local FALLBACK_ICON = 136243
 local PREVIEW_DURATION = 20
 local MAX_TARGET_NAMES = 5
+
+-- Set to true to trace UNIT_SPELLCAST_INTERRUPTED payload + GUID resolution.
+-- Logs each interrupt event with: interruptedBy GUID (or <nil>/<secret>),
+-- UnitNameFromGUID return, UnitClassFromGUID return, IsSafeValue verdict,
+-- and the player/pet GUIDs for cross-check. Flip back to false after diagnosis.
+local DEBUG_CB = false
 
 local H = {}
 KE.CastbarHelpers = H
@@ -75,11 +85,62 @@ function H.ResetCastState(self)
     self.cachedDuration = nil
 end
 
+-- UnitNameFromGUID + UnitClassFromGUID resolve for ALL unit GUIDs (player,
+-- pet, NPC), not just players. GetPlayerInfoByGUID silently returned nil for
+-- non-player interrupters — Demo warlock Felhunter Spell Lock and any pet/NPC
+-- kick degraded to bare "Interrupted" with no "by X". NUI v3.10 fix.
+--
+-- IMPORTANT 12.0 limitation: UNIT_SPELLCAST_INTERRUPTED's interruptedBy GUID
+-- is itself SecretWhenUnitSpellCastRestricted in instanced PvE/PvP (M+, raid,
+-- rated PvP, training dummy zones with restriction). When the GUID is secret,
+-- both APIs return secret strings; we bail at the IsSafeValue check below and
+-- the caller falls back to plain "Interrupted". This is parity with NUI v3.10
+-- behavior in restricted contexts — Blizzard secured the data, no API can
+-- recover the name. See CombatTexts.lua for the same observation, where
+-- self-attribution uses flag correlation instead. The swap still helps in
+-- non-restricted contexts (open world) where interpolated GUIDs are plain.
+-- UnitNameFromGUID + UnitClassFromGUID resolve for ALL unit GUIDs (player,
+-- pet, NPC), not just players. GetPlayerInfoByGUID silently returned nil for
+-- non-player interrupters — Demo warlock Felhunter Spell Lock and Felguard
+-- Axe Toss kicks degraded to bare "Interrupted" with no "by X". NUI v3.10
+-- fix verbatim.
+--
+-- 12.0 secret-value note: in restricted contexts (M+ / raids / outdoor cast
+-- restrictions), the interrupter GUID itself is SecretWhenUnitSpellCastRestricted,
+-- and so are UnitNameFromGUID's name return and UnitClassFromGUID's classFile.
+-- Empirically (DEBUG_CB trace, open-world Felhunter/Felguard test 2026-05-03),
+-- secret cstrings flow through WrapTextInColorCode -> string.format -> SetText
+-- without taint errors and render as their underlying values. So we deliberately
+-- do NOT bail on secret-name; only on truly nil. This contradicts the "Do NOT
+-- concat with color codes" guidance documented for TargetedSpells v3.2.0 in
+-- another module's surface — that warning is module-context-dependent, not
+-- universal. The castbar interrupt text path is safe.
+--
+-- The `if interruptedBy ~= nil` case (Blizzard omits the GUID for some
+-- player-cast interrupts like Avenger's Shield, sometimes for warlock kicks)
+-- is handled by the caller's `interruptedBy and H.GetColoredNameFromGUID(...)`
+-- short-circuit, which falls back to plain "Interrupted".
 function H.GetColoredNameFromGUID(guid)
-    if guid == nil then return nil end
+    if guid == nil then
+        if DEBUG_CB then KE:Print("[CB] GetColoredNameFromGUID: guid=<nil>") end
+        return nil
+    end
 
-    local _, classToken, _, _, _, name = GetPlayerInfoByGUID(guid)
+    local name = UnitNameFromGUID(guid)
+    if DEBUG_CB then
+        local guidStr = KE:IsSafeValue(guid) and tostring(guid) or "<secret>"
+        local nameSafe = KE:IsSafeValue(name)
+        local nameStr = nameSafe and tostring(name) or (name == nil and "<nil>" or "<secret>")
+        KE:Print(("[CB] GetColoredNameFromGUID: guid=%s name=%s safe=%s"):format(guidStr, nameStr, tostring(nameSafe)))
+    end
     if name == nil then return nil end
+
+    local classToken = select(2, UnitClassFromGUID(guid))
+    if DEBUG_CB then
+        local tokenSafe = KE:IsSafeValue(classToken)
+        local tokenStr = tokenSafe and tostring(classToken) or (classToken == nil and "<nil>" or "<secret>")
+        KE:Print(("[CB]   classToken=%s safe=%s"):format(tokenStr, tostring(tokenSafe)))
+    end
     if type(classToken) ~= "string" then return name end
 
     local color = C_ClassColor.GetClassColor(classToken)
@@ -211,11 +272,25 @@ function H.CreateFrame(self, opts)
         targetNames[i] = nameText
     end
 
+    -- Optional raid-target marker. Only created when the
+    -- module's defaults populate `db.TargetMarker` — FocusCastbar opts in,
+    -- TargetCastbar does not. When the marker exists, H.UpdateTargetMarker
+    -- and the cast lifecycle handle visibility; otherwise all marker code
+    -- silently no-ops via `if self.targetMarker` guards.
+    local targetMarker
+    if db.TargetMarker then
+        targetMarker = frame:CreateTexture(nil, "OVERLAY")
+        targetMarker:SetTexture("Interface/TargetingFrame/UI-RaidTargetingIcons")
+        targetMarker:SetParent(castBar)
+        targetMarker:Hide()
+    end
+
     self.positioner = positioner
     self.frame, self.iconFrame, self.icon = frame, iconFrame, icon
     self.castBar, self.spark = castBar, spark
     self.kickCooldownBar, self.kickTick = kickCooldownBar, kickTick
     self.text, self.time = text, time
+    self.targetMarker = targetMarker
     self.targetNames = targetNames
     self.holdTimer = nil
 
@@ -263,6 +338,16 @@ function H.ApplySettings(self, opts)
             targetText:SetJustifyH(anchorPoint)
             KE:ApplyFontToText(targetText, db.FontFace, targetSettings.FontSize or 12, db.FontOutline)
         end
+    end
+
+    if self.targetMarker and db.TargetMarker then
+        local markerSettings = db.TargetMarker
+        local anchorPoint = KE:GetPointFromAnchor(markerSettings.Anchor) or "LEFT"
+        local size = markerSettings.Size or 26
+        self.targetMarker:SetSize(size, size)
+        self.targetMarker:ClearAllPoints()
+        self.targetMarker:SetPoint(anchorPoint, self.frame, anchorPoint,
+            markerSettings.XOffset or 0, markerSettings.YOffset or 0)
     end
 
     self:ApplyPosition()
@@ -421,8 +506,13 @@ function H.UpdateTargetNames(self)
     end
 
     -- UnitSpellTargetName returns the target's NAME (cstring), secret when
-    -- the target is a player. SetText accepts secret strings directly
-    -- (confirmed by TargetedSpells v3.2.0). Do NOT concat with color codes.
+    -- the target is a player. SetText accepts secret strings directly. We
+    -- separate name (SetText) and color (SetTextColor with clean r/g/b)
+    -- here for clarity, but empirical testing on UNIT_SPELLCAST_INTERRUPTED
+    -- (see H.GetColoredNameFromGUID above, 2026-05-03) shows that secret
+    -- cstrings ALSO survive WrapTextInColorCode/string.format/SetText
+    -- without taint errors — so concat with color codes is not a hazard,
+    -- just less readable than the split SetText + SetTextColor pattern.
     local targetName = UnitSpellTargetName and UnitSpellTargetName(unit) or nil
     if not targetName then
         targetText:SetAlpha(0)
@@ -527,6 +617,7 @@ function H.StartCast(self)
     H.UpdateBarColor(self)
     H.SetupKickCooldownBar(self)
     H.UpdateTargetNames(self)
+    H.UpdateTargetMarker(self)
     if self.PlayCastSound then self:PlayCastSound() end
     H.EnsureOnUpdate(self)
     self.frame:Show()
@@ -540,6 +631,7 @@ function H.EndCast(self, showHold, wasInterrupted, interruptedBy)
     if not holdSettings or not holdSettings.Enabled then
         self.spark:Hide()
         H.HideTargetNames(self)
+        H.HideTargetMarker(self)
         H.ResetCastState(self)
         self.frame:Hide()
         return
@@ -548,6 +640,7 @@ function H.EndCast(self, showHold, wasInterrupted, interruptedBy)
     self.spark:Hide()
     self.kickTick:SetAlpha(0)
     H.HideTargetNames(self)
+    H.HideTargetMarker(self)
 
     self.castBar:SetMinMaxValues(0, 1)
     self.castBar:SetValue(1)
@@ -624,6 +717,20 @@ function H.OnCastEvent(self, event, unit, ...)
         H.EndCast(self, wasInterrupted, wasInterrupted, interruptedBy)
     elseif event:find("INTERRUPTED") then
         local interruptedBy = select(3, ...)
+        if DEBUG_CB then
+            local byStr
+            if interruptedBy == nil then
+                byStr = "<nil>"
+            elseif KE:IsSafeValue(interruptedBy) then
+                byStr = tostring(interruptedBy)
+            else
+                byStr = "<secret>"
+            end
+            local playerGUID = UnitGUID("player")
+            local petGUID = UnitGUID("pet")
+            KE:Print(("[CB] INTERRUPTED unit=%s interruptedBy=%s player=%s pet=%s"):format(
+                tostring(unit), byStr, tostring(playerGUID), tostring(petGUID)))
+        end
         H.EndCast(self, true, true, interruptedBy)
     elseif event:find("FAILED") then
         H.EndCast(self, true, false)
@@ -636,6 +743,7 @@ function H.OnUnitChanged(self)
     local unit = self.unit
     if UnitExists(unit) then
         H.StartCast(self)
+        H.UpdateTargetMarker(self)
     else
         H.HideTargetNames(self)
         H.ResetCastState(self)
@@ -643,8 +751,37 @@ function H.OnUnitChanged(self)
             self.holdTimer:Cancel()
             self.holdTimer = nil
         end
+        if self.targetMarker then self.targetMarker:Hide() end
         if self.frame then self.frame:Hide() end
     end
+end
+
+---------------------------------------------------------------------------------
+-- Raid-target marker (NUI v3.10 port). Module opts in by populating
+-- db.TargetMarker; FocusCastbar does, TargetCastbar does not. The owning
+-- module wires RAID_TARGET_UPDATE -> H.UpdateTargetMarker via its own event
+-- registration; H.ToggleTargetMarkerIntegration is a convenience for live
+-- toggle of the Enabled flag.
+---------------------------------------------------------------------------------
+function H.UpdateTargetMarker(self)
+    if not self.targetMarker then return end
+    local markerSettings = self.db.TargetMarker
+    if not markerSettings or not markerSettings.Enabled then
+        self.targetMarker:Hide()
+        return
+    end
+
+    local index = GetRaidTargetIndex(self.unit)
+    if index == nil then
+        self.targetMarker:Hide()
+    else
+        SetRaidTargetIconTexture(self.targetMarker, index)
+        self.targetMarker:Show()
+    end
+end
+
+function H.HideTargetMarker(self)
+    if self.targetMarker then self.targetMarker:Hide() end
 end
 
 -- Called from UNIT_TARGET. Refresh target-name overlay when a party member or
@@ -793,6 +930,18 @@ function H.ShowPreview(self, opts)
         end
     end
 
+    -- Preview shows a random raid icon (1-8) when the marker is enabled, so
+    -- users can position/size visually without needing a marked focus target.
+    if self.targetMarker then
+        local markerSettings = self.db.TargetMarker
+        if markerSettings and markerSettings.Enabled then
+            SetRaidTargetIconTexture(self.targetMarker, random(1, 8))
+            self.targetMarker:Show()
+        else
+            self.targetMarker:Hide()
+        end
+    end
+
     if self.previewTicker then self.previewTicker:Cancel() end
     self.previewTicker = C_Timer.NewTicker(PREVIEW_DURATION, function()
         if self.isPreview then
@@ -808,6 +957,7 @@ function H.HidePreview(self)
         self.previewTicker = nil
     end
     H.HideTargetNames(self)
+    H.HideTargetMarker(self)
     if self.frame and not (self.casting or self.channeling or self.empowering) then
         self.frame:Hide()
     end
