@@ -1,0 +1,4 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+    <Script file="EncounterData.lua" />
+    <Script file="DungeonTimers.lua" />
+</Ui>

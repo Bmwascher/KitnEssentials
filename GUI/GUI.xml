@@ -74,15 +74,20 @@
     <Script file="GUITabs\GUIUtilities\GUI-ReadyCheckConsumables.lua" />
 
     <!-- Dungeons tabs -->
-    <Script file="GUITabs\GUIDungeons\GUI-DungeonTimers.lua" />
-    <Script file="GUITabs\GUIDungeons\GUI-DungeonTimersCfg.lua" />
-    <Script file="GUITabs\GUIDungeons\GUI-DungeonTimersBars.lua" />
-    <Script file="GUITabs\GUIDungeons\GUI-DungeonTimersTexts.lua" />
+    <Script file="GUITabs\GUIDungeons\GUI-BigWigsTimers.lua" />
+    <Script file="GUITabs\GUIDungeons\GUI-BigWigsTimersCfg.lua" />
+    <Script file="GUITabs\GUIDungeons\GUI-BigWigsTimersBars.lua" />
+    <Script file="GUITabs\GUIDungeons\GUI-BigWigsTimersTexts.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-DungeonCasts.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-WarpDepleteForces.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-EnemyCounter.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-HealerMana.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-DeathNotifications.lua" />
+
+    <!-- DungeonsTimers tabs -->
+    <Script file="GUITabs\GUIDungeonTimers\GUI-DungeonTimersCfg.lua" />
+    <Script file="GUITabs\GUIDungeonTimers\GUI-DungeonTimersBars.lua" />
+    <Script file="GUITabs\GUIDungeonTimers\GUI-DungeonTimersTexts.lua" />
 
     <!-- QoL tabs -->
     <Script file="GUITabs\GUIQoL\GUI-Automation.lua" />
