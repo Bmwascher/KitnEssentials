@@ -16,6 +16,16 @@
 -- ║                channelDuration = <seconds>,  -- optional ║
 -- ║                role            = "tank"|"heal"|          ║
 -- ║                                  "mechanic"|"other",     ║
+-- ║                display         = "bar"|"text",           ║
+-- ║                displayText     = "DODGE"|...,  -- (N12)  ║
+-- ║                                  -- short curated label  ║
+-- ║                                  -- shown instead of the ║
+-- ║                                  -- BigWigs spell name.  ║
+-- ║                                  -- e.g. "TANK HIT",     ║
+-- ║                                  -- "INTERRUPT",         ║
+-- ║                                  -- "SPREAD". Fall back  ║
+-- ║                                  -- to BigWigs name when ║
+-- ║                                  -- absent.              ║
 -- ║            },                                            ║
 -- ║            ...                                           ║
 -- ║        },                                                ║
@@ -50,12 +60,12 @@ KE.EncounterData[3212] = {
     name = "Muro'jin and Nekraxx",
     dungeon = "MaisaraCaverns",
     spells = {
-        [1266480] = { name = "Flanking Spear",   castType = "begincast", castDuration = 2.5, role = "tank", display = "bar" },
-        [1243900] = { name = "Fetid Quillstorm", castType = "begincast", castDuration = 3,   role = "other" },
-        [1260731] = { name = "Freezing Trap",    castType = "begincast", castDuration = 2,   role = "mechanic" },
-        [1260643] = { name = "Barrage",          castType = "cast",      channelDuration = 5, role = "heal" },
-        [1246666] = { name = "Infected Pinions", castType = "begincast", castDuration = 1.5, role = "heal" },
-        [1249479] = { name = "Carrion Swoop",    castType = "begincast", castDuration = 4.5, role = "mechanic" },
+        [1266480] = { name = "Flanking Spear",   castType = "begincast", castDuration = 2.5, role = "tank",     display = "bar", displayText = "TANK HIT" },
+        [1243900] = { name = "Fetid Quillstorm", castType = "begincast", castDuration = 3,   role = "other",                     displayText = "FEET" },
+        [1260731] = { name = "Freezing Trap",    castType = "begincast", castDuration = 2,   role = "mechanic",                  displayText = "FEET" },
+        [1260643] = { name = "Barrage",          castType = "cast",      channelDuration = 5, role = "heal",                  displayText = "FRONTAL" },
+        [1246666] = { name = "Infected Pinions", castType = "begincast", castDuration = 1.5,  role = "heal",                  displayText = "AOE"     },
+        [1249479] = { name = "Carrion Swoop",    castType = "begincast", castDuration = 4.5,  role = "mechanic",              displayText = "DODGE"   },
     },
 }
 
