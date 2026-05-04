@@ -323,7 +323,7 @@ local PREVIEW_MODULES = {
     "FocusCastbar", "TargetCastbar", "RaidNotifications", "HuntersMark", "RangeChecker",
     "TimeSpiral", "DisintegrateTicks", "StasisTracker", "Recuperate", "BloodlustTracker", "KickTracker",
     "NoMovementAlert", "PrescienceTracker", "GreatVaultAlert", "PotionReady", "BossDebuffs",
-    "EnemyCounter", "EbonMightTracker", "DungeonCasts", "DungeonTimers", "HealerMana",
+    "EnemyCounter", "EbonMightTracker", "DungeonCasts", "BigWigsTimers", "HealerMana",
     "ReadyCheckConsumables", "DeathNotifications",
 }
 
@@ -346,8 +346,8 @@ local SECTION_PREVIEW_MODULES = {
     dungeons_section = {
         "EnemyCounter", "KickTracker", "DungeonCasts", "HealerMana", "DeathNotifications",
     },
-    dungeon_timers_section = {
-        "DungeonTimers",
+    bigwigs_timers_section = {
+        "BigWigsTimers",
     },
 }
 

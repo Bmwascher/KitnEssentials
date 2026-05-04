@@ -128,14 +128,14 @@ GUIFrame.sidebarConfig = {
         },
     },
     {
-        id = "dungeon_timers_section",
+        id = "bigwigs_timers_section",
         type = "header",
-        text = "\226\128\162 Dungeon Timers",
+        text = "\226\128\162 BigWigs Timers",
         defaultExpanded = false,
         disabledCheck = function()
             return not (KE.db and KE.db.profile and KE.db.profile.Dungeons
-                and KE.db.profile.Dungeons.DungeonTimers
-                and KE.db.profile.Dungeons.DungeonTimers.Enabled)
+                and KE.db.profile.Dungeons.BigWigsTimers
+                and KE.db.profile.Dungeons.BigWigsTimers.Enabled)
         end,
         items = {
             { id = "DT_General",                  text = "General",         alwaysEnabled = true },

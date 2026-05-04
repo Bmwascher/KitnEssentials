@@ -1,17 +1,23 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  DungeonTimers.lua                                       ║
--- ║  Module: Dungeon Timers                                  ║
+-- ║  BigWigsTimers.lua                                       ║
+-- ║  Module: BigWigs Timers                                  ║
 -- ║  Purpose: BigWigs-integrated dungeon timer system with   ║
 -- ║           per-dungeon triggers, bar/text groups, and     ║
 -- ║           role-based load conditions.                    ║
+-- ║                                                          ║
+-- ║  Renamed 2026-05-04 from "DungeonTimers" — the           ║
+-- ║  "DungeonTimers" name was freed up for the new curated   ║
+-- ║  module at Modules/DungeonTimers/. Local var still uses  ║
+-- ║  shorthand DT throughout this file (rename was only the  ║
+-- ║  module identifier + DB key + display labels).           ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
----@class DungeonTimers: AceModule, AceEvent-3.0, AceTimer-3.0
-local DT = KitnEssentials:NewModule("DungeonTimers", "AceEvent-3.0", "AceTimer-3.0")
+---@class BigWigsTimers: AceModule, AceEvent-3.0, AceTimer-3.0
+local DT = KitnEssentials:NewModule("BigWigsTimers", "AceEvent-3.0", "AceTimer-3.0")
 
 local CreateFrame = CreateFrame
 local GetTime = GetTime
@@ -118,7 +124,7 @@ end
 
 function DT:UpdateDB()
     if KE.db and KE.db.profile then
-        self.db = KE.db.profile.Dungeons.DungeonTimers
+        self.db = KE.db.profile.Dungeons.BigWigsTimers
         if self.db and not self.db.Dungeons then
             self.db.Dungeons = {}
         end
@@ -168,7 +174,76 @@ function DT:UpdateCurrentDungeon()
     end
 end
 
+-- AceDB migration (2026-05-04, fixed 2026-05-04): copy any existing legacy
+-- `db.profile.Dungeons.DungeonTimers` saved data into the new
+-- `db.profile.Dungeons.BigWigsTimers` slot so users don't lose their
+-- configured triggers after the rename.
+--
+-- Why the trigger-count comparison: the GUI's CreateTrigger / panel-init
+-- paths can create empty per-dungeon shells (Enabled=true, Triggers={})
+-- in `BigWigsTimers.Dungeons` when the user navigates to a dungeon page,
+-- BEFORE the migration fires on a subsequent reload. Those shells have
+-- non-empty `next(dungeons)` so a "is the new slot empty?" check
+-- early-returns without migrating, stranding the legacy data.
+--
+-- Real test: count actual triggers in each slot; migrate only if legacy
+-- has more triggers than the new slot. Idempotent — once both slots have
+-- the same data (or new slot has more), this becomes a no-op.
+--
+-- Uses bare print() instead of KE:Print to avoid dependency on KE.Theme
+-- being initialized at OnInitialize time.
+local function CountTriggers(slot)
+    local n = 0
+    if not slot or not slot.Dungeons then return 0 end
+    for _, dungeon in pairs(slot.Dungeons) do
+        if dungeon and dungeon.Triggers then
+            for _ in pairs(dungeon.Triggers) do n = n + 1 end
+        end
+    end
+    return n
+end
+
+local function MigrateLegacyDB()
+    if not (KE.db and KE.db.profile and KE.db.profile.Dungeons) then return end
+    local d = KE.db.profile.Dungeons
+    local legacy = d.DungeonTimers
+    if not legacy then return end
+
+    -- Hard guard: the curated DungeonTimers module (Modules/DungeonTimers/)
+    -- stores its config under the SAME key but with a totally different
+    -- schema (BarGroup/TextGroup, no Dungeons sub-table). If we see that
+    -- shape, this isn't legacy — bail without touching it. Without this
+    -- guard, every /reload would wipe the new module's saved settings.
+    if legacy.Dungeons == nil then return end
+
+    local legacyCount = CountTriggers(legacy)
+    if legacyCount == 0 then
+        -- Empty legacy slot — just clean up the key, no data to copy.
+        d.DungeonTimers = nil
+        return
+    end
+
+    local newCount = CountTriggers(d.BigWigsTimers)
+    if newCount >= legacyCount then
+        -- New slot already has equal-or-more data. Don't clobber.
+        return
+    end
+
+    -- Legacy has more triggers. Replace new slot with legacy data, nil out legacy.
+    d.BigWigsTimers = legacy
+    d.DungeonTimers = nil
+    -- Re-fill schema defaults: the legacy table may be missing fields that the
+    -- pre-migration BWT slot had filled (e.g. TextGroup.Position.AnchorFrom
+    -- added in a more recent schema version). Without this, downstream SetPoint
+    -- calls fail when trying to read missing position fields.
+    if KE.FillProfileDefaults then KE:FillProfileDefaults() end
+    print(string.format(
+        "|cffFF008CKitn|r|cffffffffEssentials:|r BigWigsTimers migrated %d trigger(s) from legacy DungeonTimers slot (was %d in new slot).",
+        legacyCount, newCount))
+end
+
 function DT:OnInitialize()
+    MigrateLegacyDB()
     self:UpdateDB()
     self:SetEnabledState(false)
 end
@@ -199,7 +274,7 @@ end
 
 function DT:GetBarGroupFrame()
     if not self.barGroupFrame then
-        local frame = CreateFrame("Frame", "KE_DungeonTimers_BarGroup", UIParent)
+        local frame = CreateFrame("Frame", "KE_BigWigsTimers_BarGroup", UIParent)
         frame:SetSize(1, 1)
         frame:SetFrameStrata("HIGH")
         frame:Show()
@@ -210,7 +285,7 @@ end
 
 function DT:GetTextGroupFrame()
     if not self.textGroupFrame then
-        local frame = CreateFrame("Frame", "KE_DungeonTimers_TextGroup", UIParent)
+        local frame = CreateFrame("Frame", "KE_BigWigsTimers_TextGroup", UIParent)
         frame:SetSize(1, 1)
         frame:SetFrameStrata("HIGH")
         frame:Show()
@@ -1587,13 +1662,13 @@ function DT:ApplySettings()
     self:UpdateDB()
     if self.db and self.db.Enabled then
         if not self:IsEnabled() then
-            KitnEssentials:EnableModule("DungeonTimers")
+            KitnEssentials:EnableModule("BigWigsTimers")
         else
             self:RegisterBigWigsCallbacks()
         end
     else
         if self:IsEnabled() then
-            KitnEssentials:DisableModule("DungeonTimers")
+            KitnEssentials:DisableModule("BigWigsTimers")
         end
     end
 end
@@ -2524,7 +2599,7 @@ function DT:ImportTriggers(importString)
 end
 
 ---------------------------------------------------------------------------------
--- KES Presets: Canned triggers loaded from DungeonTimerPresets.lua
+-- KES Presets: Canned triggers loaded from BigWigsTimerPresets.lua
 ---------------------------------------------------------------------------------
 
 -- Dedup match: same spellId + name is considered an existing trigger.
@@ -2575,12 +2650,12 @@ end
 ---@return boolean success
 ---@return string|nil message
 function DT:ImportKESPresets(dungeonKey)
-    if not KE.DungeonTimerPresets then return false, "Presets not loaded" end
+    if not KE.BigWigsTimerPresets then return false, "Presets not loaded" end
     local db = self.db
     if not db or not db.Dungeons then return false, "Module not initialized" end
 
     if dungeonKey then
-        local preset = KE.DungeonTimerPresets[dungeonKey]
+        local preset = KE.BigWigsTimerPresets[dungeonKey]
         if type(preset) ~= "table" or not preset.Triggers or #preset.Triggers == 0 then
             return false, "No presets available for this dungeon"
         end
@@ -2595,7 +2670,7 @@ function DT:ImportKESPresets(dungeonKey)
 
     -- All dungeons
     local totalImported, totalSkipped, dungeonCount = 0, 0, 0
-    for key, preset in pairs(KE.DungeonTimerPresets) do
+    for key, preset in pairs(KE.BigWigsTimerPresets) do
         if key ~= "_version" and type(preset) == "table" and preset.Triggers and db.Dungeons[key] then
             local imported, skipped = MergePresetDungeon(self, key, preset.Triggers)
             totalImported = totalImported + imported
@@ -2661,8 +2736,8 @@ local function SerializeValue(val, indent)
     return "nil"
 end
 
---- Generate Lua code representing the current triggers, for pasting into DungeonTimerPresets.lua.
---- Usage: /run KitnEssentials:GetModule("DungeonTimers"):GeneratePresetsCode()
+--- Generate Lua code representing the current triggers, for pasting into BigWigsTimerPresets.lua.
+--- Usage: /run KitnEssentials:GetModule("BigWigsTimers"):GeneratePresetsCode()
 function DT:GeneratePresetsCode()
     self:UpdateDB()
     local db = self.db
@@ -2673,9 +2748,9 @@ function DT:GeneratePresetsCode()
 
     local out = {}
     table_insert(out, "-- Generated by DT:GeneratePresetsCode()")
-    table_insert(out, "-- Replace the KE.DungeonTimerPresets block in Dungeons/DungeonTimerPresets.lua with this:")
+    table_insert(out, "-- Replace the KE.BigWigsTimerPresets block in Dungeons/BigWigsTimerPresets.lua with this:")
     table_insert(out, "")
-    table_insert(out, "KE.DungeonTimerPresets = {")
+    table_insert(out, "KE.BigWigsTimerPresets = {")
     table_insert(out, "    _version = 1,")
     table_insert(out, "")
 
@@ -2721,7 +2796,7 @@ function DT:GeneratePresetsCode()
         "Generated Presets Code",
         code,
         true,
-        "Copy (Ctrl+C) and paste into Dungeons/DungeonTimerPresets.lua",
+        "Copy (Ctrl+C) and paste into Dungeons/BigWigsTimerPresets.lua",
         false
     )
     KE:Print("Presets code generated — copy from the dialog.")

@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  GUI-DungeonTimersBars.lua                               ║
+-- ║  GUI-BigWigsTimersBars.lua                               ║
 -- ║  Purpose: DT_Bars sidebar page — global bar display      ║
 -- ║  settings (texture, font, growth, position).             ║
 -- ╚══════════════════════════════════════════════════════════╝
@@ -13,7 +13,7 @@ local ipairs = ipairs
 local pairs = pairs
 
 KE.GUI = KE.GUI or {}
-KE.GUI.DungeonTimers = KE.GUI.DungeonTimers or {}
+KE.GUI.BigWigsTimers = KE.GUI.BigWigsTimers or {}
 
 local SETTINGS_GROWTH_OPTIONS = {
     { key = "DOWN", text = "Down" },
@@ -29,12 +29,12 @@ local SETTINGS_TEXT_OUTLINE_OPTIONS = {
 
 local function GetSettingsDB()
     if not KE.db or not KE.db.profile then return nil end
-    return KE.db.profile.Dungeons and KE.db.profile.Dungeons.DungeonTimers
+    return KE.db.profile.Dungeons and KE.db.profile.Dungeons.BigWigsTimers
 end
 
 local function GetModule()
     if KitnEssentials then
-        return KitnEssentials:GetModule("DungeonTimers", true)
+        return KitnEssentials:GetModule("BigWigsTimers", true)
     end
     return nil
 end
@@ -73,7 +73,7 @@ local function RefreshBarPreviews()
     end
 end
 
-KE.GUI.DungeonTimers.HideBarPreviews = HideBarPreviews
+KE.GUI.BigWigsTimers.HideBarPreviews = HideBarPreviews
 GUIFrame.onCloseCallbacks = GUIFrame.onCloseCallbacks or {}
 GUIFrame.onCloseCallbacks["DT_Bars"] = HideBarPreviews
 
@@ -81,7 +81,7 @@ GUIFrame:RegisterContent("DT_Bars", function(scrollChild, yOffset)
     local Theme = KE.Theme
 
     -- Hide other DT preview before showing ours
-    local DT_GUI = KE.GUI.DungeonTimers
+    local DT_GUI = KE.GUI.BigWigsTimers
     if DT_GUI.HideTextPreviews then DT_GUI.HideTextPreviews() end
 
     local db = GetSettingsDB()

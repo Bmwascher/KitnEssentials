@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  GUI-DungeonTimersCfg.lua                                ║
+-- ║  GUI-BigWigsTimersCfg.lua                                ║
 -- ║  Purpose: DT_General sidebar page — module enable +      ║
 -- ║  per-dungeon import / export / preset / reset.           ║
 -- ╚══════════════════════════════════════════════════════════╝
@@ -30,7 +30,7 @@ local DUNGEON_ORDER = {
 
 local function GetSettingsDB()
     if not KE.db or not KE.db.profile then return nil end
-    return KE.db.profile.Dungeons and KE.db.profile.Dungeons.DungeonTimers
+    return KE.db.profile.Dungeons and KE.db.profile.Dungeons.BigWigsTimers
 end
 
 local function CreateSpellIconPreview(parent, iconId, size)
@@ -66,31 +66,31 @@ GUIFrame:RegisterContent("DT_General", function(scrollChild, yOffset)
     local db = GetSettingsDB()
     if not db then return yOffset end
 
-    local DT = KitnEssentials and KitnEssentials:GetModule("DungeonTimers", true)
+    local DT = KitnEssentials and KitnEssentials:GetModule("BigWigsTimers", true)
     local manager = GUIFrame:CreateWidgetStateManager()
 
     local function ApplyModuleState(enabled)
         db.Enabled = enabled
         if not DT then return end
         if enabled then
-            KitnEssentials:EnableModule("DungeonTimers")
+            KitnEssentials:EnableModule("BigWigsTimers")
         else
-            KitnEssentials:DisableModule("DungeonTimers")
+            KitnEssentials:DisableModule("BigWigsTimers")
         end
         manager:UpdateAll(enabled)
     end
 
-    local card1 = GUIFrame:CreateCard(scrollChild, "Dungeon Timers", yOffset)
+    local card1 = GUIFrame:CreateCard(scrollChild, "BigWigs Timers", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Dungeon Timers", {
+    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable BigWigs Timers", {
         value = db.Enabled ~= false,
         callback = function(checked)
             ApplyModuleState(checked)
             KE:CreateReloadPrompt("Enabling/Disabling this module requires a reload to take full effect.")
         end,
         msgPopup = true,
-        msgText = "Dungeon Timers",
+        msgText = "BigWigs Timers",
         msgOn = "On",
         msgOff = "Off",
     })
