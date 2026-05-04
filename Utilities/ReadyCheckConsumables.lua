@@ -655,29 +655,47 @@ end
 
 --- _BuildSoulstoneMacrotext
 --- Composes the dynamic macro string for the Warlock CLASS_SLOT click button.
---- Priority chain matches BuffReminders' clickMacro shape:
----   1. Sticky last target (whoever already has my Soulstone aura)
----   2. First living healer in group
----   3. mouseover → target → player fallback chain
 ---
---- The `,help,nodead` macro conditionals self-correct in combat if a cached
---- name has died or left group (the conditional fails and the chain falls
---- through), so out-of-combat-only refresh is sufficient.
+--- Priority chain (intentionally diverges from BR's sticky-first ordering):
+---   1. @mouseover (kept for macro-pattern consistency; effectively
+---      unreachable since clicking the icon steals mouseover focus)
+---   2. @target — lets the warlock manually override the sticky for one
+---      pull by clicking on a different friendly first, then clicking the
+---      RCC icon. The post-cast UNIT_AURA refresh updates the sticky
+---      cache to the new target, so subsequent pulls auto-route to them
+---      until the next manual override.
+---   3. Sticky last target (sourced from _GetSoulstonedTarget — live scan
+---      OR cache fallback) — the dominant priority during normal flow
+---      because the warlock usually has the boss (hostile) targeted, so
+---      the @target,help conditional fails and falls through here.
+---   4. First living healer in group — fallback when no sticky exists yet
+---      (first cast of the session before any soulstone has been placed).
+---   5. @player — final self-fallback.
+---
+--- Why not sticky-first (BR's order at Buffs.lua:488)? With sticky-first,
+--- a live sticky target shadows @target — the warlock can't override by
+--- targeting a different healer; the click always routes to the cached
+--- name. Putting @target before sticky makes "click target → click icon"
+--- the natural manual-override flow.
+---
+--- The `,help,nodead` conditionals self-correct if a cached name is dead
+--- (chain falls through to the next prefix), so out-of-combat-only
+--- refresh remains sufficient.
 ---
 --- Stays well under WoW's 255-char macro limit:
----   ~80 chars base + ~30 chars per dynamic prefix * 2 = ~140 chars max.
+---   ~70 chars base + ~30 chars per dynamic prefix * 2 = ~150 chars max.
 function RCC:_BuildSoulstoneMacrotext()
     local stoned = self:_GetSoulstonedTarget()
     local healer = self:_GetFirstLivingHealer()
 
-    local cast = "/cast "
+    local cast = "/cast [@mouseover,help,nodead][@target,help,nodead]"
     if stoned then
         cast = cast .. "[@" .. stoned .. ",help,nodead]"
     end
     if healer and healer ~= stoned then
         cast = cast .. "[@" .. healer .. ",help,nodead]"
     end
-    cast = cast .. "[@mouseover,help,nodead][@target,help,nodead][@player] Soulstone"
+    cast = cast .. "[@player] Soulstone"
 
     if DEBUG_RCC then
         KE:Print(string_format("[RCC] BuildSoulstoneMacrotext: stoned=%s healer=%s",
