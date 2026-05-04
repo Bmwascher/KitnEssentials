@@ -542,9 +542,10 @@ function RCC:_GetSoulstonedTarget()
         return n
     end
 
-    local selfName = check("player")
-    if selfName then return selfName end
-
+    -- Skip player intentionally — matches BuffReminders' `not UnitIsUnit(data.unit, "player")`
+    -- guard. Self-stones are covered by the macro's final [@player] fallback; pinning the
+    -- sticky priority to self would route the next click back at us instead of letting the
+    -- warlock target a healer.
     if IsInRaid() then
         for i = 1, 40 do
             local name = check("raid" .. i)
