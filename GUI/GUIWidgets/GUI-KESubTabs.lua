@@ -116,7 +116,12 @@ function GUIFrame:CreateSubTabs(parent, yOffset, config)
         if isActive then
             label:SetTextColor(a[1], a[2], a[3], 1)
         else
-            label:SetTextColor(1, 1, 1, 0.6)
+            -- Full white for inactive tabs — accent-on-active vs
+            -- white-on-inactive gives clearer contrast than the previous
+            -- gray (0.6 alpha) which read as washed-out on dark
+            -- backdrops. Hover state uses the backdrop tint for
+            -- differentiation, not text alpha.
+            label:SetTextColor(1, 1, 1, 1)
         end
 
         btn.tabId = def.id
@@ -131,14 +136,14 @@ function GUIFrame:CreateSubTabs(parent, yOffset, config)
         btn:SetScript("OnEnter", function(b)
             if b.tabId ~= activeId then
                 b:SetBackdropColor(a[1], a[2], a[3], 0.12)
-                b.label:SetTextColor(1, 1, 1, 0.9)
+                b.label:SetTextColor(1, 1, 1, 1)
             end
         end)
 
         btn:SetScript("OnLeave", function(b)
             if b.tabId ~= activeId then
                 b:SetBackdropColor(T.bgMedium[1], T.bgMedium[2], T.bgMedium[3], T.bgMedium[4] or 0.6)
-                b.label:SetTextColor(1, 1, 1, 0.6)
+                b.label:SetTextColor(1, 1, 1, 1)
             end
         end)
 

@@ -301,13 +301,13 @@ local function ConfigureListRow(kit, spellId, spell, isSelected)
         end
     end
 
-    -- Sound indicator — placeholder slot anchored left of the tag. Today
-    -- nothing turns this on (no Actions tab yet); when N13g lands the
-    -- check below flips to read DT:HasSpellSound(spellId) or similar.
-    -- Empty string keeps the FontString width zero so the label can grow
-    -- into the slot when no sound is set.
+    -- Sound indicator — "S" appears on the right when the spell has any
+    -- onShow or onHide sound configured. Empty string keeps the
+    -- FontString width zero when no sound is set so the label can grow
+    -- into the slot.
     if kit.soundLabel then
-        local hasSound = false  -- TODO N13g: check DT.SpellSounds[spellId]
+        local DT_mod = GetModule()
+        local hasSound = (DT_mod and DT_mod.HasSpellSound and DT_mod:HasSpellSound(spellId)) or false
         if hasSound then
             kit.soundLabel:SetText("S")
             kit.soundLabel:SetTextColor(1.0, 0.8, 0.3, 0.9)
@@ -453,6 +453,28 @@ local function RefreshOverrideStripe(spellId)
 end
 
 -- Targeted refresh: walks active kits in the pool and re-applies the
+-- "S" sound indicator on the kit matching `spellId`. Called from the
+-- Actions tab's sound dropdowns so the indicator flips on/off
+-- immediately when a sound is set or cleared.
+local function RefreshListRowSound(spellId)
+    if not spellId then return end
+    local DT = GetModule()
+    local hasSound = (DT and DT.HasSpellSound and DT:HasSpellSound(spellId)) or false
+    for i = 1, listRowPool._activeCount do
+        local kit = listRowPool._kits[i]
+        if kit and kit._spellId == spellId and kit.soundLabel then
+            if hasSound then
+                kit.soundLabel:SetText("S")
+                kit.soundLabel:SetTextColor(1.0, 0.8, 0.3, 0.9)
+            else
+                kit.soundLabel:SetText("")
+            end
+            return
+        end
+    end
+end
+
+-- Targeted refresh: walks active kits in the pool and re-applies the
 -- "Bar" / "Text" tag (text + color) on the kit matching `spellId`. Used
 -- by the Display tab's mode toggle so the left-pane tag flips
 -- immediately on click without a full RefreshContent (which would
@@ -582,17 +604,19 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
         _ = i
     end
 
-    -- Curator default — anchored to the RIGHT side of the body, centered
-    -- vertically on the toggle BOX (not the label above it). Toggle row
-    -- is 36px tall: label ~14px at top, then box ~22px below; centering
-    -- on the box puts this at -25 from the row top.
+    -- Curator default — anchored BELOW the first toggle (Tank column),
+    -- left-justified. The label can extend past the column's 110px width
+    -- since "Default: Everyone (uncurated)" is wider than that; SetWordWrap
+    -- false keeps it on one line. The next section (When It Appears)
+    -- anchors to this label, not firstToggle, so it sits below correctly.
+    local defaultLabel
     if firstToggle then
-        local defaultLabel = body:CreateFontString(nil, "OVERLAY")
+        defaultLabel = body:CreateFontString(nil, "OVERLAY")
         KE:ApplyFontToText(defaultLabel, "Expressway", 12, "OUTLINE")
-        defaultLabel:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
-        defaultLabel:SetPoint("TOP", firstToggle, "TOP", 0, -25)
+        defaultLabel:SetPoint("TOPLEFT", firstToggle, "BOTTOMLEFT", 0, -8)
         defaultLabel:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
-        defaultLabel:SetJustifyH("RIGHT")
+        defaultLabel:SetJustifyH("LEFT")
+        defaultLabel:SetWordWrap(false)
         if spell.role then
             local friendly = ROLE_TAG_FRIENDLY[spell.role] or spell.role
             defaultLabel:SetText(string_format("Default: %s", friendly))
@@ -601,11 +625,13 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
         end
     end
 
-    -- Section: WHEN IT APPEARS — anchored to firstToggle, leaves the
-    -- toggle-row's vertical footprint between this header and the toggles.
+    -- Section: WHEN IT APPEARS — anchored to the defaultLabel so the
+    -- section header sits below it (instead of overlapping). When the
+    -- toggle list is empty (no firstToggle), fall back to sectionLabel.
     local whenHeader
-    if firstToggle then
-        whenHeader = CreateSectionHeader(body, firstToggle, "When It Appears", 18)
+    local whenAnchor = defaultLabel or firstToggle or sectionLabel
+    if whenAnchor then
+        whenHeader = CreateSectionHeader(body, whenAnchor, "When It Appears", 18)
     end
 
     -- "Reveal at (s remaining)" slider — per-spell visibility threshold.
@@ -725,9 +751,19 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
     -- Uses GUIFrame:CreateButton (KE button factory) so hover styling
     -- matches the rest of the addon (Nicknames Remove, Reset All Triggers).
     -- Red text + StaticPopup confirmation signal destructive intent.
+    --
+    -- Anchored TOP-down (under the time-offset caption) instead of
+    -- bottom-up. The rightCol's min height is sized for the tallest tab
+    -- (Display) and dominates when listY < that minimum, so a bottom-
+    -- anchored Reset button leaves a big visual gap between the
+    -- "When It Appears" sliders and the button. Top-down anchoring
+    -- keeps the button right below the content; empty space (when any)
+    -- now accumulates at the bottom edge of the panel where it reads
+    -- as natural margin rather than a layout glitch.
     local resetRow = GUIFrame:CreateRow(body, 28)
-    resetRow:SetPoint("BOTTOMLEFT", body, "BOTTOMLEFT", DETAIL_PADDING, 4)
-    resetRow:SetPoint("BOTTOMRIGHT", body, "BOTTOMRIGHT", -DETAIL_PADDING, 4)
+    resetRow:SetPoint("LEFT", body, "LEFT", DETAIL_PADDING, 0)
+    resetRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    resetRow:SetPoint("TOP", timeOffsetCaption, "BOTTOM", 0, -16)
     local resetBtn = GUIFrame:CreateButton(resetRow, "Reset spell to default", {
         height = 26,
         callback = function()
@@ -767,16 +803,146 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
     return body
 end
 
--- Builds a placeholder tab body with a "Coming soon" notice. Used for the
--- Display + Actions tabs until N13f / N13g land.
-local function BuildPlaceholderTabBody(parent, message)
+-- Builds the Actions tab body. Two sound dropdowns: "On Show" plays
+-- when the bar becomes visible (after the showAt delay if any); "On
+-- Hide" plays when it expires or is cancelled. Selecting a sound also
+-- previews it so users can hear what they're picking. "None" entry
+-- clears the override.
+local function BuildActionsTabBody(parent, spellId)
+    local DT = GetModule()
     local body = CreateFrame("Frame", nil, parent)
     body:SetAllPoints()
-    local label = body:CreateFontString(nil, "OVERLAY")
-    KE:ApplyFontToText(label, "Expressway", 12, "OUTLINE")
-    label:SetPoint("CENTER", body, "CENTER", 0, 0)
-    label:SetText(message)
-    label:SetTextColor(0.65, 0.65, 0.65)
+
+    -- Build sound list from LibSharedMedia. "None" prepended explicitly
+    -- since LSM doesn't include it; the setter recognizes "None" as
+    -- "no sound" and prunes the entry.
+    local soundList = { ["None"] = "None" }
+    local LSM = KE.LSM
+    if LSM then
+        for name in pairs(LSM:HashTable("sound")) do soundList[name] = name end
+    end
+
+    local function PreviewSound(soundKey)
+        if not soundKey or soundKey == "None" or soundKey == "" then return end
+        if not LSM then return end
+        local file = LSM:Fetch("sound", soundKey)
+        if file then PlaySoundFile(file, "Master") end
+    end
+
+    local secondaryWidgets = {}
+
+    ---------------------------------------------------------------------------
+    -- Section: On Show
+    ---------------------------------------------------------------------------
+    local showHeader = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(showHeader, "Expressway", 13, "OUTLINE")
+    showHeader:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
+    showHeader:SetText("On Show")
+    showHeader:SetPoint("TOPLEFT", body, "TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING)
+    do
+        local underline = body:CreateTexture(nil, "ARTWORK")
+        underline:SetHeight(1)
+        underline:SetColorTexture(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3], 0.4)
+        underline:SetPoint("LEFT", showHeader, "RIGHT", 6, 0)
+        underline:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+        underline:SetPoint("TOP", showHeader, "TOP", 0, -8)
+    end
+
+    local showRow = GUIFrame:CreateRow(body, 36)
+    showRow:SetPoint("TOPLEFT", showHeader, "BOTTOMLEFT", 0, -10)
+    showRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    local showDropdown = GUIFrame:CreateDropdown(showRow, "Sound when bar appears", {
+        options = soundList,
+        value = (DT and DT:GetSpellSoundOnShow(spellId)) or "None",
+        callback = function(key)
+            if not (DT and DT.SetSpellSoundOnShow) then return end
+            DT:SetSpellSoundOnShow(spellId, key)
+            PreviewSound(key)
+            RefreshOverrideStripe(spellId)
+            RefreshListRowSound(spellId)
+        end,
+        searchable = true,
+    })
+    showRow:AddWidget(showDropdown, 0.7)
+    secondaryWidgets[#secondaryWidgets + 1] = showDropdown
+
+    -- Test button — replays whatever sound is currently saved (or no-op
+    -- when set to "None"). Reads from DB so it always reflects the
+    -- current selection without needing a dropdown:GetValue() call.
+    -- yOffset=-12 vertically centers the 28px button on the dropdown
+    -- bar (which sits at row + (0, -14) and is 24px tall, center y=-26;
+    -- button top at -12 puts its center at -26).
+    local showTestBtn = GUIFrame:CreateButton(showRow, "Test", {
+        height = 28,
+        callback = function()
+            if not (DT and DT.GetSpellSoundOnShow) then return end
+            PreviewSound(DT:GetSpellSoundOnShow(spellId))
+        end,
+    })
+    showRow:AddWidget(showTestBtn, 0.3, 0, 0, -12)
+    secondaryWidgets[#secondaryWidgets + 1] = showTestBtn
+
+    local showCaption = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(showCaption, "Expressway", 11, "OUTLINE")
+    showCaption:SetPoint("TOPLEFT", showRow, "BOTTOMLEFT", 0, -8)
+    showCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    showCaption:SetJustifyH("LEFT")
+    showCaption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2],
+                             CURATED_TAG_COLOR[3])
+    showCaption:SetText(
+        "Plays when the bar appears on screen (after the Reveal at delay if set).")
+
+    ---------------------------------------------------------------------------
+    -- Section: On Hide
+    ---------------------------------------------------------------------------
+    local hideHeader = CreateSectionHeader(body, showCaption, "On Hide", 22)
+
+    local hideRow = GUIFrame:CreateRow(body, 36)
+    hideRow:SetPoint("TOPLEFT", hideHeader, "BOTTOMLEFT", 0, -10)
+    hideRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    local hideDropdown = GUIFrame:CreateDropdown(hideRow, "Sound when bar disappears", {
+        options = soundList,
+        value = (DT and DT:GetSpellSoundOnHide(spellId)) or "None",
+        callback = function(key)
+            if not (DT and DT.SetSpellSoundOnHide) then return end
+            DT:SetSpellSoundOnHide(spellId, key)
+            PreviewSound(key)
+            RefreshOverrideStripe(spellId)
+            RefreshListRowSound(spellId)
+        end,
+        searchable = true,
+    })
+    hideRow:AddWidget(hideDropdown, 0.7)
+    secondaryWidgets[#secondaryWidgets + 1] = hideDropdown
+
+    local hideTestBtn = GUIFrame:CreateButton(hideRow, "Test", {
+        height = 28,
+        callback = function()
+            if not (DT and DT.GetSpellSoundOnHide) then return end
+            PreviewSound(DT:GetSpellSoundOnHide(spellId))
+        end,
+    })
+    hideRow:AddWidget(hideTestBtn, 0.3, 0, 0, -12)
+    secondaryWidgets[#secondaryWidgets + 1] = hideTestBtn
+
+    local hideCaption = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(hideCaption, "Expressway", 11, "OUTLINE")
+    hideCaption:SetPoint("TOPLEFT", hideRow, "BOTTOMLEFT", 0, -8)
+    hideCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    hideCaption:SetJustifyH("LEFT")
+    hideCaption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2],
+                             CURATED_TAG_COLOR[3])
+    hideCaption:SetText(
+        "Plays when the bar finishes naturally or is interrupted. "
+        .. "Doesn't fire on encounter wipes (mass cleanup).")
+
+    -- Initial disabled-state propagation. Mirror the other tabs.
+    if DT and DT:IsSpellDisabled(spellId) then
+        for _, w in ipairs(secondaryWidgets) do
+            if w.SetEnabled then w:SetEnabled(false) end
+        end
+    end
+
     return body
 end
 
@@ -793,8 +959,8 @@ end
 -- caller can flip selection without rebuilding. SetEnabled toggles the
 -- whole widget's interactivity (used by the disabled-spell propagation).
 ---------------------------------------------------------------------------------
-local SEG_BTN_WIDTH    = 80
-local SEG_BTN_HEIGHT   = 26
+local SEG_BTN_WIDTH    = 100
+local SEG_BTN_HEIGHT   = 30
 local SEG_BTN_SPACING  = 4
 
 local function CreateSegmentedToggle(parent, options, currentId, onChange)
@@ -951,17 +1117,18 @@ local function BuildDisplayTabBody(parent, spellId, spell)
     toggle:SetPoint("TOPLEFT", sectionLabel, "BOTTOMLEFT", 0, -8)
     secondaryWidgets[#secondaryWidgets + 1] = toggle
 
-    -- Curator default caption — anchored RIGHT of the body, vertically
-    -- centered on the toggle row. Tells the user what they're deviating
-    -- from. "Bar" / "Text" capitalized to match the button labels.
+    -- Curator default caption — anchored next to the buttons, vertically
+    -- centered on the toggle row. Sits ~16px right of the segmented
+    -- toggle's RIGHT edge (which is at the second button's right side)
+    -- so the "Default: X" reads as a label for the button cluster, not
+    -- a floating tag at the panel's far edge.
     local curatedDisplay = (DT and DT:GetSpellCuratorDisplay(spellId)) or "text"
     local curatedFriendly = (curatedDisplay == "bar") and "Bar" or "Text"
     local defaultLabel = body:CreateFontString(nil, "OVERLAY")
     KE:ApplyFontToText(defaultLabel, "Expressway", 12, "OUTLINE")
-    defaultLabel:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
-    defaultLabel:SetPoint("TOP", toggle, "TOP", 0, -6)
+    defaultLabel:SetPoint("LEFT", toggle, "RIGHT", 16, 0)
     defaultLabel:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
-    defaultLabel:SetJustifyH("RIGHT")
+    defaultLabel:SetJustifyH("LEFT")
     defaultLabel:SetText(string_format("Default: %s", curatedFriendly))
 
     -- Caption below the toggle — explains what each mode looks like.
@@ -971,7 +1138,9 @@ local function BuildDisplayTabBody(parent, spellId, spell)
     caption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
     caption:SetJustifyH("LEFT")
     caption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
-    caption:SetText("Bar = filled progress bar with icon and timer overlay. Text = single-line label that updates each second.")
+    caption:SetText(
+        "Bar = filled progress bar with icon and timer overlay.\n"
+        .. "Text = single-line label that updates each second.")
 
     ---------------------------------------------------------------------------
     -- Section: Custom Label
@@ -1141,8 +1310,164 @@ local function BuildDisplayTabBody(parent, spellId, spell)
     presetCaption:SetText(
         "Click a preset to use it. Each preset comes with its own color.")
 
+    ---------------------------------------------------------------------------
+    -- Section: Time Format
+    -- Per-spell decimal threshold. Below the threshold, timer text shows
+    -- one decimal ("0.8"); at or above, whole seconds ("5"). Slider 0 →
+    -- always integer; slider 30 (max) → always decimal (preserves the
+    -- pre-knob behavior, matches the module default).
+    ---------------------------------------------------------------------------
+    local timeFmtHeader = CreateSectionHeader(body, presetCaption, "Time Format", 22)
+
+    local currentThreshold = (DT and DT:GetSpellDecimalThreshold(spellId)) or 30
+    local thresholdRow = GUIFrame:CreateRow(body, 36)
+    thresholdRow:SetPoint("TOPLEFT", timeFmtHeader, "BOTTOMLEFT", 0, -10)
+    thresholdRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    local thresholdSlider = GUIFrame:CreateSlider(thresholdRow,
+        "Show decimals under (s)", {
+        min = 0, max = 30, step = 1,
+        value = currentThreshold,
+        labelWidth = 160,
+        callback = function(val)
+            if not (DT and DT.SetSpellDecimalThreshold) then return end
+            DT:SetSpellDecimalThreshold(spellId, val)
+            RefreshOverrideStripe(spellId)
+            -- Threshold changes the timer string format; re-render the
+            -- preview so the user sees the effect immediately.
+            RefreshSpellPreview()
+        end,
+    })
+    thresholdRow:AddWidget(thresholdSlider, 1.0, 0)
+    secondaryWidgets[#secondaryWidgets + 1] = thresholdSlider
+
+    -- Caption under the slider — explains the boundary semantics.
+    -- x=0 (not 8) so subsequent CreateSectionHeader chains don't inherit
+    -- an indent. Other Display-tab captions all use x=0; mirroring keeps
+    -- the section-header anchor chain at body.left + DETAIL_PADDING.
+    local thresholdCaption = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(thresholdCaption, "Expressway", 11, "OUTLINE")
+    thresholdCaption:SetPoint("TOPLEFT", thresholdRow, "BOTTOMLEFT", 0, -12)
+    thresholdCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    thresholdCaption:SetJustifyH("LEFT")
+    thresholdCaption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2],
+                                  CURATED_TAG_COLOR[3])
+    thresholdCaption:SetText(
+        "0 = always show whole seconds. 30 = always show decimals (default).")
+
+    ---------------------------------------------------------------------------
+    -- Section: Spell Color
+    -- Per-spell color override. Applies in BOTH display modes — bar mode
+    -- uses it as the StatusBar fill; text mode uses it as the label
+    -- color. ColorPicker shows the EFFECTIVE color (override → preset →
+    -- default) so users see the current color regardless of override
+    -- state. "Reset to default" button clears the override and the
+    -- picker re-syncs to the preset/default chain. Section name avoids
+    -- "Bar Color" because it'd misleadingly suggest bar-mode-only scope.
+    ---------------------------------------------------------------------------
+    local colorHeader = CreateSectionHeader(body, thresholdCaption, "Color", 22)
+
+    -- Resolve the effective color for the picker's initial value:
+    -- override → preset (from effective displayText) → default blue.
+    local DEFAULT_BAR_COLOR_LOCAL = { 0.3, 0.5, 0.9 }
+    local function ResolveEffectiveColor()
+        if not DT then return DEFAULT_BAR_COLOR_LOCAL end
+        local override = DT:GetSpellColorOverride(spellId)
+        if override then return override end
+        -- Effective displayText = override → curator. Find a matching
+        -- preset and use its color; otherwise fall back to default.
+        local effectiveText = DT:GetSpellDisplayText(spellId)
+        if effectiveText and DT.DISPLAY_PRESETS then
+            local upper = effectiveText:upper()
+            local preset = DT.DISPLAY_PRESETS[upper]
+            if not preset then
+                for _, p in pairs(DT.DISPLAY_PRESETS) do
+                    if p.label:upper() == upper then preset = p; break end
+                end
+            end
+            if preset then return preset.color end
+        end
+        return DEFAULT_BAR_COLOR_LOCAL
+    end
+
+    local effectiveColor = ResolveEffectiveColor()
+
+    -- Bar Color row uses direct positioning instead of CreateRow + AddWidget
+    -- because AddWidget stretches widgets to fill their widthPct slice,
+    -- which forces the swatch's row to be ~half the body width (lots of
+    -- dead space on the swatch's right) AND stretches the Reset button
+    -- from its natural 130px to ~220px. Direct positioning lets each
+    -- widget keep its natural width and the swatch sits next to the
+    -- button instead of half a screen apart.
+    local colorRow = CreateFrame("Frame", nil, body)
+    colorRow:SetHeight(36)
+    colorRow:SetPoint("TOPLEFT", colorHeader, "BOTTOMLEFT", 0, -10)
+    colorRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+
+    local colorPicker = GUIFrame:CreateColorPicker(colorRow, "Color", {
+        color = { effectiveColor[1], effectiveColor[2], effectiveColor[3], 1 },
+        callback = function(r, g, b)
+            if not (DT and DT.SetSpellColorOverride) then return end
+            DT:SetSpellColorOverride(spellId, { r, g, b })
+            RefreshOverrideStripe(spellId)
+            RefreshSpellPreview()
+        end,
+        tooltip = "Custom spell color. Applies to the bar fill in Bar mode and the label in Text mode.\n"
+               .. "Overrides the preset color (e.g. DODGE for orange).\n"
+               .. "Click 'Reset to default' to clear the override and use the preset.",
+    })
+    -- Picker's natural content (label + swatch + hex) is ~120px; pin to
+    -- the row's left edge with a fixed width so the swatch lands exactly
+    -- where other left-aligned content lives.
+    colorPicker:ClearAllPoints()
+    colorPicker:SetPoint("TOPLEFT", colorRow, "TOPLEFT", 0, 0)
+    colorPicker:SetWidth(150)
+
+    local resetColorBtn = GUIFrame:CreateButton(colorRow, "Reset to default", {
+        height = 24,
+        width = 130,
+        callback = function()
+            if not (DT and DT.SetSpellColorOverride) then return end
+            DT:SetSpellColorOverride(spellId, nil)
+            -- Re-sync the picker to the now-effective color (preset or
+            -- default). SetColor invokes the picker's UpdateColor which
+            -- fires our callback — but our callback would WRITE that
+            -- color as a new override, defeating the reset. Use silent
+            -- write: temporarily clear _callback, SetColor, restore.
+            local saved = colorPicker._callback
+            colorPicker._callback = nil
+            local newColor = ResolveEffectiveColor()
+            colorPicker:SetColor(newColor[1], newColor[2], newColor[3], 1)
+            colorPicker._callback = saved
+            RefreshOverrideStripe(spellId)
+            RefreshSpellPreview()
+        end,
+    })
+    -- Sit the button next to the picker, vertically centered on the
+    -- swatch (picker's swatch is at row + (0, -14), 24px tall, so its
+    -- vertical center is at y = -14 - 12 = -26 from row top; button is
+    -- 24px tall, top at y = -26 + 12 = -14).
+    resetColorBtn:ClearAllPoints()
+    resetColorBtn:SetPoint("LEFT", colorPicker, "RIGHT", 12, -7)
+
+    secondaryWidgets[#secondaryWidgets + 1] = colorPicker
+    secondaryWidgets[#secondaryWidgets + 1] = resetColorBtn
+
+    -- Caption under the color row — explains the resolution chain so
+    -- users understand what "default" means in this context.
+    local colorCaption = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(colorCaption, "Expressway", 11, "OUTLINE")
+    colorCaption:SetPoint("TOPLEFT", colorRow, "BOTTOMLEFT", 0, -8)
+    colorCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    colorCaption:SetJustifyH("LEFT")
+    colorCaption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2],
+                              CURATED_TAG_COLOR[3])
+    -- ASCII-only — WoW fonts don't render U+2192 →; use » or plain text.
+    colorCaption:SetText(
+        "Default = the matching preset color (DODGE \194\187 orange, etc.), "
+        .. "or blue if there's no preset.")
+
     -- Suppress the unused-variable luacheck — `spell` is available for
-    -- future knobs (color override) that need curator-side data.
+    -- future knobs that need curator-side data.
     _ = spell
 
     -- Initial disabled-state propagation. Mirror the Visibility tab:
@@ -1383,18 +1708,18 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
         elseif state.selectedTab == "Display" then
             BuildDisplayTabBody(tabBody, selectedSpell.id, selectedSpellData)
         elseif state.selectedTab == "Actions" then
-            BuildPlaceholderTabBody(tabBody, "Action options coming soon (N13g).")
+            BuildActionsTabBody(tabBody, selectedSpell.id)
         end
     end
 
     -- Right column height — match left column so the page footprint is
     -- predictable. Min sized to fit the tallest tab body:
     --   Visibility ~408px stack + 97px chrome → 510
-    --   Display    ~420px stack + 97px chrome → 580 (with breathing room)
-    -- Display grew with the Available Presets chip grid (3 rows of chips
-    -- + section header + caption). Below this, content overflows the
-    -- rightCol's BOTTOM anchor and the Reset button row's hit zone.
-    local rightHeight = math.max(listY + Theme.paddingSmall, 580)
+    --   Display    ~640px stack + 97px chrome → 760 (with breathing room)
+    -- Display grew with Available Presets + Time Format + Bar Color
+    -- sections. Below this, content overflows the rightCol's BOTTOM
+    -- anchor and the Reset button row's hit zone.
+    local rightHeight = math.max(listY + Theme.paddingSmall, 760)
     rightCol:SetHeight(rightHeight)
 
     return yOffset + math.max(listY, rightHeight) + Theme.paddingSmall
