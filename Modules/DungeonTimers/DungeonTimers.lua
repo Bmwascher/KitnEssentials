@@ -34,6 +34,7 @@ local table_sort = table.sort
 local CreateFrame = CreateFrame
 local GetTime = GetTime
 local UIParent = UIParent
+local PlaySoundFile = PlaySoundFile
 
 local DEBUG_DT2 = true
 
@@ -69,6 +70,15 @@ local FALLBACK_BAR_HEIGHT = 22
 local FALLBACK_TEXT_HEIGHT = 22
 
 local STOP_TOLERANCE = 0.5  -- seconds: StopBar within this window of the cast-phase boundary is treated as natural countdown expiry
+
+-- Decimal threshold default. Below this remaining time, the timer text
+-- shows one decimal place ("0.8"); at or above, whole seconds ("5").
+-- 30 effectively means "always show decimals" for typical bar lifetimes
+-- (BigWigs timers are usually 0–30s) — preserves the pre-knob behavior.
+-- A user-configured threshold of 1, for example, would render "5 4 3 2
+-- 1 0.9 0.8 0.7" — clean integers above 1s, fine grain in the last
+-- second.
+local DECIMAL_THRESHOLD_DEFAULT = 30
 
 -- Curated display presets — same keys + colors as BigWigsTimers
 -- DISPLAY_PRESETS so users get consistent UX across both modules. A spell
@@ -146,6 +156,28 @@ DT.spellLookup = nil
 local function dprint(msg)
     if DEBUG_DT2 then
         KE:Print("[DT2] " .. tostring(msg))
+    end
+end
+
+-- Play a per-spell sound by LSM key. Called from the bar lifecycle
+-- hooks (Show fires when the bar becomes visible; Hide fires on natural
+-- expiration / interrupt). Preview bars are gated out — they loop
+-- endlessly and would spam the sound channel.
+local function PlayBarSound(self, key)
+    if self.isPreview then return end
+    if not self.spellId then return end
+    local soundKey
+    if key == "show" then
+        soundKey = DT:GetSpellSoundOnShow(self.spellId)
+    elseif key == "hide" then
+        soundKey = DT:GetSpellSoundOnHide(self.spellId)
+    end
+    if not soundKey or soundKey == "" or soundKey == "None" then return end
+    local LSM = KE.LSM
+    if not LSM then return end
+    local file = LSM:Fetch("sound", soundKey)
+    if file then
+        PlaySoundFile(file, "Master")
     end
 end
 
@@ -336,6 +368,95 @@ function DT:SetSpellDisplayTextOverride(spellId, str)
         end
     end
     self.db.SpellDisplayTextOverrides[spellId] = str
+end
+
+-- Per-spell sound on bar show. Returns LSM sound key or nil. "None"
+-- and empty string also mean "no sound" — the setter prunes them so
+-- only meaningful values are stored.
+function DT:GetSpellSoundOnShow(spellId)
+    if not (self.db and self.db.SpellSoundsOnShow and spellId) then return nil end
+    return self.db.SpellSoundsOnShow[spellId]
+end
+
+function DT:SetSpellSoundOnShow(spellId, soundKey)
+    if not (self.db and spellId) then return end
+    self.db.SpellSoundsOnShow = self.db.SpellSoundsOnShow or {}
+    if not soundKey or soundKey == "" or soundKey == "None" then
+        self.db.SpellSoundsOnShow[spellId] = nil
+    else
+        self.db.SpellSoundsOnShow[spellId] = soundKey
+    end
+end
+
+-- Per-spell sound on bar hide.
+function DT:GetSpellSoundOnHide(spellId)
+    if not (self.db and self.db.SpellSoundsOnHide and spellId) then return nil end
+    return self.db.SpellSoundsOnHide[spellId]
+end
+
+function DT:SetSpellSoundOnHide(spellId, soundKey)
+    if not (self.db and spellId) then return end
+    self.db.SpellSoundsOnHide = self.db.SpellSoundsOnHide or {}
+    if not soundKey or soundKey == "" or soundKey == "None" then
+        self.db.SpellSoundsOnHide[spellId] = nil
+    else
+        self.db.SpellSoundsOnHide[spellId] = soundKey
+    end
+end
+
+-- Convenience: true when the spell has any sound set (either show or
+-- hide). Used by the GUI's spell list to flip the "S" indicator on the
+-- row icon strip.
+function DT:HasSpellSound(spellId)
+    return self:GetSpellSoundOnShow(spellId) ~= nil
+        or self:GetSpellSoundOnHide(spellId) ~= nil
+end
+
+-- Per-spell color override. Returns {r, g, b} or nil. Resolution chain
+-- is applied in ApplyVisualsToBar: user override → preset color (from
+-- effective displayText) → DEFAULT_BAR_COLOR.
+function DT:GetSpellColorOverride(spellId)
+    if not (self.db and self.db.SpellColorOverrides and spellId) then return nil end
+    return self.db.SpellColorOverrides[spellId]
+end
+
+-- Sets the user color override. color = {r, g, b} stores the override;
+-- color = nil clears it. No auto-prune against the curator default
+-- because float comparison on color components is unreliable — users
+-- click "Reset to default" explicitly to clear.
+function DT:SetSpellColorOverride(spellId, color)
+    if not (self.db and spellId) then return end
+    self.db.SpellColorOverrides = self.db.SpellColorOverrides or {}
+    if not color then
+        self.db.SpellColorOverrides[spellId] = nil
+        return
+    end
+    self.db.SpellColorOverrides[spellId] = { color[1], color[2], color[3] }
+end
+
+-- Per-spell decimal threshold. Returns the user override or the module-
+-- level default (DECIMAL_THRESHOLD_DEFAULT, currently 30 = always
+-- decimal). Used by UpdateTimeString to decide between "5.3" and "5"
+-- formatting per tick.
+function DT:GetSpellDecimalThreshold(spellId)
+    if not (self.db and self.db.SpellDecimalThresholds and spellId) then
+        return DECIMAL_THRESHOLD_DEFAULT
+    end
+    local stored = self.db.SpellDecimalThresholds[spellId]
+    return stored or DECIMAL_THRESHOLD_DEFAULT
+end
+
+-- Sets the user's decimal threshold. Auto-prunes the entry when value
+-- matches the module default so dragging back to default leaves no
+-- stored override and the modified-stripe clears.
+function DT:SetSpellDecimalThreshold(spellId, value)
+    if not (self.db and spellId) then return end
+    self.db.SpellDecimalThresholds = self.db.SpellDecimalThresholds or {}
+    if value == DECIMAL_THRESHOLD_DEFAULT then
+        self.db.SpellDecimalThresholds[spellId] = nil
+    else
+        self.db.SpellDecimalThresholds[spellId] = value
+    end
 end
 
 -- Curated per-spell visibility threshold. Returns the EncounterData
@@ -553,6 +674,18 @@ function DT:HasSpellOverrides(spellId)
     if self.db.SpellDisplayTextOverrides and self.db.SpellDisplayTextOverrides[spellId] ~= nil then
         return true
     end
+    if self.db.SpellDecimalThresholds and self.db.SpellDecimalThresholds[spellId] ~= nil then
+        return true
+    end
+    if self.db.SpellColorOverrides and self.db.SpellColorOverrides[spellId] ~= nil then
+        return true
+    end
+    if self.db.SpellSoundsOnShow and self.db.SpellSoundsOnShow[spellId] ~= nil then
+        return true
+    end
+    if self.db.SpellSoundsOnHide and self.db.SpellSoundsOnHide[spellId] ~= nil then
+        return true
+    end
     if self.db.SpellRoleOverrides then
         local entry = self.db.SpellRoleOverrides[spellId]
         if entry and next(entry) ~= nil then return true end
@@ -582,6 +715,18 @@ function DT:ResetSpellOverrides(spellId)
     end
     if self.db.SpellDisplayTextOverrides then
         self.db.SpellDisplayTextOverrides[spellId] = nil
+    end
+    if self.db.SpellDecimalThresholds then
+        self.db.SpellDecimalThresholds[spellId] = nil
+    end
+    if self.db.SpellColorOverrides then
+        self.db.SpellColorOverrides[spellId] = nil
+    end
+    if self.db.SpellSoundsOnShow then
+        self.db.SpellSoundsOnShow[spellId] = nil
+    end
+    if self.db.SpellSoundsOnHide then
+        self.db.SpellSoundsOnHide[spellId] = nil
     end
 end
 
@@ -759,8 +904,22 @@ end
 -- Updates the visible time string. Bar mode writes to the right-justified
 -- timerText FontString; text mode rewrites label as "name » timer" (one
 -- FontString avoids the same-alignment overlap of two).
+--
+-- Decimal threshold semantics: below the threshold show "%.1f" (e.g.
+-- "0.8"), at or above the threshold show whole seconds via ceil ("5"
+-- means "5+ seconds left", matches WoW addon convention). Frame caches
+-- the threshold at CreateBar time / ApplyVisualsToBar refresh — no DB
+-- lookup per OnUpdate tick. Default DECIMAL_THRESHOLD_DEFAULT preserves
+-- pre-knob "always decimal" behavior for bars without a per-spell
+-- override.
 local function UpdateTimeString(self, displayedTime)
-    local timerStr = string_format("%.1f", displayedTime)
+    local threshold = self.decimalThreshold or DECIMAL_THRESHOLD_DEFAULT
+    local timerStr
+    if displayedTime < threshold then
+        timerStr = string_format("%.1f", displayedTime)
+    else
+        timerStr = string_format("%d", math.ceil(displayedTime))
+    end
     if self.timerText then
         GatedSetText(self.timerText, self, "_lastTimerStr", timerStr)
     elseif self.label and self.baseText then
@@ -794,6 +953,10 @@ local function BarOnUpdate(self)
                 self._lastTimerStr = nil
                 return
             end
+            -- Cast phase finished naturally (impact moment passed) → bar
+            -- self-destructs. Fire hide sound first so the cue lands at
+            -- the actual end-of-cast.
+            PlayBarSound(self, "hide")
             self:SetScript("OnUpdate", nil)
             self:Hide()
             DT.bars[self.text] = nil
@@ -817,6 +980,10 @@ local function BarOnUpdate(self)
             -- Bars with extension > 0 keep their value clamped at 0 and wait for
             -- StopBar so the cast-phase transition can capture the right moment.
             elseif (self.extension or 0) <= 0 then
+                -- Countdown ended with no cast extension (e.g. respawn
+                -- timer or curator chose not to extend) → bar self-
+                -- destructs. Fire hide sound at the zero crossing.
+                PlayBarSound(self, "hide")
                 self:SetScript("OnUpdate", nil)
                 self:Hide()
                 DT.bars[self.text] = nil
@@ -854,6 +1021,25 @@ local function ApplyVisualsToBar(frame)
     local isBar = (frame.displayMode == "bar")
     local barDisplay = GetBarDisplay()
     local textDisplay = GetTextDisplay()
+
+    -- Resolve per-spell knobs FIRST so the rest of the function reads
+    -- fresh values. The bar-mode StatusBar color application (below)
+    -- reads frame.barColor; if we resolve color further down it would
+    -- paint with stale (or nil → default blue) data on the first pass.
+    --
+    -- Color chain: user override → preset (from displayTextRaw) →
+    --              DEFAULT_BAR_COLOR (blue).
+    -- Threshold: user override → DECIMAL_THRESHOLD_DEFAULT (always-decimal).
+    -- Bars without spellId (preview Sample bars, Wipe-module Respawn
+    -- timers) fall back to module defaults.
+    if frame.spellId then
+        frame.decimalThreshold = DT:GetSpellDecimalThreshold(frame.spellId)
+    else
+        frame.decimalThreshold = DECIMAL_THRESHOLD_DEFAULT
+    end
+    local _, presetColor = ResolveDisplayPreset(frame.displayTextRaw)
+    local userColor = frame.spellId and DT:GetSpellColorOverride(frame.spellId) or nil
+    frame.barColor = userColor or presetColor or DEFAULT_BAR_COLOR
 
     local w, h
     if isBar then
@@ -976,7 +1162,7 @@ local function ApplyVisualsToBar(frame)
     end
 end
 
-function DT:CreateBar(text, baseDuration, extension, displayMode, displayText)
+function DT:CreateBar(text, baseDuration, extension, displayMode, displayText, spellId)
     displayMode = displayMode or "text"
     local isBar = (displayMode == "bar")
     local group = isBar and self:EnsureBarGroup() or self:EnsureTextGroup()
@@ -1040,6 +1226,12 @@ function DT:CreateBar(text, baseDuration, extension, displayMode, displayText)
     frame.totalDuration = total
     frame.phase = "countdown"
     frame.text = text
+    -- Optional spellId binding. When provided, ApplyVisualsToBar reads
+    -- per-spell DB knobs (decimal threshold, future color/format) and
+    -- caches them on the frame so the OnUpdate hot path doesn't pay a
+    -- DB lookup per tick. Bars without a spellId (preview Sample bars,
+    -- Wipe-module Respawn timers) fall back to module defaults.
+    frame.spellId = spellId
 
     -- FontStrings parented to the StatusBar so they overlay the fill texture
     -- (same as BigWigsTimers).
@@ -1058,12 +1250,12 @@ function DT:CreateBar(text, baseDuration, extension, displayMode, displayText)
     -- All sizing/font/anchoring derived from DB. Must run BEFORE the first
     -- SetText call below — WoW errors `FontString:SetText(): Font not set`
     -- if the FontString has no font assigned yet.
-    -- Resolve the display preset BEFORE ApplyVisualsToBar so the bar's
-    -- countdown color reflects the preset (DODGE → orange, TANK HIT → red,
-    -- etc.) instead of always starting blue and shifting on next tick.
-    -- Custom strings keep DEFAULT_BAR_COLOR; nil falls back to BigWigs name.
-    local resolvedLabel, resolvedColor = ResolveDisplayPreset(displayText)
-    frame.barColor = resolvedColor
+    -- Stash the raw displayText so ApplyVisualsToBar can re-resolve color
+    -- on every settings refresh (lets the GUI color picker take effect
+    -- live without rebuilding the bar). The label only needs resolving
+    -- once at create time (preset key/label → canonical label).
+    frame.displayTextRaw = displayText
+    local resolvedLabel = ResolveDisplayPreset(displayText)
 
     ApplyVisualsToBar(frame)
     -- Curated short label wins when present; otherwise we strip BigWigs'
@@ -1078,8 +1270,17 @@ function DT:CreateBar(text, baseDuration, extension, displayMode, displayText)
         -- Initial combined string; first OnUpdate tick refreshes the timer
         -- portion. Without an initial SetText the first frame would render
         -- empty; with this it renders the same combined shape it'll have
-        -- one frame later.
-        frame.label:SetText(frame.baseText .. " \194\187 " .. string_format("%.1f", total))
+        -- one frame later. Threshold-aware so a bar with threshold=1
+        -- starts as "name » 8" (integer above 1s) instead of "name » 8.0"
+        -- and then snapping to "name » 8" one tick later.
+        local initialThreshold = frame.decimalThreshold or DECIMAL_THRESHOLD_DEFAULT
+        local initialStr
+        if total < initialThreshold then
+            initialStr = string_format("%.1f", total)
+        else
+            initialStr = string_format("%d", math.ceil(total))
+        end
+        frame.label:SetText(frame.baseText .. " \194\187 " .. initialStr)
     end
 
     frame:SetScript("OnUpdate", BarOnUpdate)
@@ -1197,6 +1398,8 @@ function DT:RevealBar(key)
     end
 
     bar:Show()
+    -- Bar just became visible after the showAt delay → fire show sound.
+    PlayBarSound(bar, "show")
     self:LayoutBars()
 end
 
@@ -1208,7 +1411,7 @@ function DT:RenderBar(text, baseDur, extension, displayMode, iconID, displayText
         existing:SetScript("OnUpdate", nil)
         existing:Hide()
     end
-    local bar = self:CreateBar(text, baseDur, extension, displayMode, displayText)
+    local bar = self:CreateBar(text, baseDur, extension, displayMode, displayText, spellId)
     self._barSortCounter = self._barSortCounter + 1
     bar.sortIndex = self._barSortCounter
     self.bars[text] = bar
@@ -1244,6 +1447,11 @@ function DT:RenderBar(text, baseDur, extension, displayMode, iconID, displayText
         bar.showWindow = showWindow
         local delay = total - showWindow
         bar.revealTimer = self:ScheduleTimer("RevealBar", delay, text)
+    else
+        -- Bar is immediately visible (no showAt delay or total fits in
+        -- the window). Fire show sound now; RevealBar fires it for the
+        -- delayed-reveal case.
+        PlayBarSound(bar, "show")
     end
 
     self:LayoutBars()
@@ -1254,6 +1462,14 @@ local function KillBar(self, text)
     if not bar then return end
     CancelRevealTimer(self, bar)
     bar:SetScript("OnUpdate", nil)
+    -- Bar going away due to interrupt or external Stop. Fire hide sound
+    -- BEFORE Hide() so the cue plays even if the frame is invisible
+    -- next frame. Gated on bar:IsShown() so a bar killed during its
+    -- showAt delay (still hidden) doesn't fire — there was nothing on
+    -- screen to "hide" cleanly.
+    if bar:IsShown() then
+        PlayBarSound(bar, "hide")
+    end
     bar:Hide()
     self.bars[text] = nil
     self:LayoutBars()
@@ -1528,7 +1744,7 @@ function DT:ShowSpellPreview(spellId)
     end
 
     local bar = self:CreateBar(label, baseDuration, extension,
-                               displayMode, displayText)
+                               displayMode, displayText, spellId)
     bar.isPreview = true
     bar.loop = true
     -- sortIndex 1 keeps the preview bar at the top of the stack regardless
