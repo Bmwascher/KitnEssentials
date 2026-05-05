@@ -1146,6 +1146,7 @@ local Defaults = {
             },
             DungeonTimers = {
                 Enabled = false,
+                RoleFilterEnabled = false,
 
                 BarDisplay = {
                     barWidth = 250,

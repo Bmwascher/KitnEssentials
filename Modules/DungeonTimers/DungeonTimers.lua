@@ -44,6 +44,24 @@ local BIGWIGS_EVENTS = {
     "BigWigs_OnBossDisable",
 }
 
+-- LibSpec: same library KickTracker uses for party-spec tracking. Here we
+-- only need the player's own role ("TANK" / "HEALER" / "DAMAGER"), but
+-- registering via RegisterGroup is the project-standard pattern and gives
+-- us automatic refresh on spec change without wiring up
+-- PLAYER_SPECIALIZATION_CHANGED / ACTIVE_COMBAT_CONFIG_CHANGED ourselves.
+-- Optional load — module degrades to "no role filter" if absent.
+local LibSpec = LibStub("LibSpecialization", true)
+
+-- Spell.role → which player roles see this bar.
+-- tank/heal-tagged bars are role-specific (only that role); mechanic/other
+-- show for everyone since they're class-agnostic dodge/positioning cues.
+-- Spells with no role tag (uncurated) always show — fail open.
+local ROLE_ALLOW_LIST = {
+    TANK    = { tank = true,             mechanic = true, other = true },
+    HEALER  = {             heal = true, mechanic = true, other = true },
+    DAMAGER = {                          mechanic = true, other = true },
+}
+
 -- Fallback hardcoded sizes used only when DB hasn't been resolved yet (very
 -- early init). Live values come from db.BarDisplay / db.TextDisplay.
 local FALLBACK_BAR_WIDTH = 250
@@ -164,6 +182,44 @@ end
 function DT:GetSpellShowAtSeconds(spellId)
     local data = self:GetSpellInfo(spellId)
     return data and data.showAtSeconds or nil
+end
+
+-- Curated spell role tag (tank/heal/mechanic/other) — populated from
+-- EXBoss seed. Returns lowercase string or nil. Used by the role filter
+-- to decide whether the player's current role should see this bar.
+function DT:GetSpellRole(spellId)
+    local data = self:GetSpellInfo(spellId)
+    return data and data.role or nil
+end
+
+-- Player role cache. Defaults to DAMAGER so the allow-list never goes
+-- empty before LibSpec resolves — a "show everything except heal/tank-
+-- tagged" baseline is the safest fail-open default for uncurated content.
+DT.playerRole = "DAMAGER"
+
+-- LibSpec group callback. Fires for player + party members on spec change
+-- AND once on PLAYER_LOGIN. We only care about the player's own row;
+-- other-member updates are irrelevant for visibility filtering.
+function DT:OnLibSpecGroupUpdate(_, role, _, playerName)
+    if not playerName or playerName ~= UnitName("player") then return end
+    if role and role ~= self.playerRole then
+        self.playerRole = role
+        dprint("playerRole=" .. tostring(role))
+    end
+end
+
+-- Should this spell's bar render given the player's current role?
+-- Filter is OFF by default (db.RoleFilterEnabled=false → always true).
+-- When ON: spells with no role tag fail open; tagged spells consult the
+-- allow-list. Per-spell user overrides (N13c, future) will plug in here
+-- before the allow-list check.
+function DT:ShouldShowSpellRole(spellId)
+    if not (self.db and self.db.RoleFilterEnabled) then return true end
+    local role = self:GetSpellRole(spellId)
+    if not role then return true end
+    local allow = ROLE_ALLOW_LIST[self.playerRole]
+    if not allow then return true end
+    return allow[role] == true
 end
 
 -- One-time migration: early DungeonTimers schema nested AnchorFrom/To/XOffset/
@@ -1056,6 +1112,17 @@ function DT:OnEnable()
     else
         dprint("BigWigsLoader missing — event registration skipped")
     end
+
+    -- LibSpec gives us the player's role auto-refreshed on spec change.
+    -- The callback fires once on PLAYER_LOGIN (or immediately on register
+    -- if PLAYER_LOGIN already happened) and again whenever the player or
+    -- a party member respecs. We filter to player-only inside the callback.
+    if LibSpec then
+        LibSpec.RegisterGroup(self, function(...) DT:OnLibSpecGroupUpdate(...) end)
+        dprint("LibSpec registered")
+    else
+        dprint("LibSpec missing — role filter degraded to always-DAMAGER")
+    end
 end
 
 function DT:OnDisable()
@@ -1065,6 +1132,9 @@ function DT:OnDisable()
             BigWigsLoader.UnregisterMessage(self, event)
         end
     end
+    if LibSpec then
+        LibSpec.UnregisterGroup(self)
+    end
 end
 
 function DT:EventCallback(event, ...)
@@ -1072,6 +1142,16 @@ function DT:EventCallback(event, ...)
         local addon, spellId, duration, _, text, count, icon = ...
         local baseDur = tonumber(duration) or 0
         local spellIdNum = tonumber(spellId)
+
+        -- Role filter: gate before bar allocation so we don't churn frames
+        -- for bars that would just be hidden. Defaults OFF — when disabled
+        -- ShouldShowSpellRole returns true unconditionally.
+        if not self:ShouldShowSpellRole(spellIdNum) then
+            dprint(string_format("Timer FILTERED text=%s role=%s player=%s",
+                tostring(text), tostring(self:GetSpellRole(spellIdNum)), tostring(self.playerRole)))
+            return
+        end
+
         local ext = self:GetSpellExtension(spellIdNum)
         local total = baseDur + ext
         local displayMode = self:GetSpellDisplay(spellIdNum)
