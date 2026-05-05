@@ -26,6 +26,21 @@
 -- ║                                  -- "SPREAD". Fall back  ║
 -- ║                                  -- to BigWigs name when ║
 -- ║                                  -- absent.              ║
+-- ║                extendByChannel = true,                   ║
+-- ║                                  -- opt-in: extend the   ║
+-- ║                                  -- bar by channelDuration║
+-- ║                                  -- on top of castDuration║
+-- ║                                  -- so the bar hits 0 at ║
+-- ║                                  -- end-of-channel. Use  ║
+-- ║                                  -- for spells whose     ║
+-- ║                                  -- effect lands at the  ║
+-- ║                                  -- END of the channel   ║
+-- ║                                  -- (e.g. adds spawn     ║
+-- ║                                  -- after a 4s channel   ║
+-- ║                                  -- finishes), NOT the   ║
+-- ║                                  -- start. Default off — ║
+-- ║                                  -- channels normally    ║
+-- ║                                  -- damage at zero.      ║
 -- ║                showAtSeconds   = <seconds>,    -- (N13a) ║
 -- ║                                  -- per-spell visibility ║
 -- ║                                  -- override. Hides the  ║
@@ -84,23 +99,19 @@ KE.EncounterData[3213] = {
     name = "Vordaza",
     dungeon = "MaisaraCaverns",
     spells = {
-        -- TODO: fill in English `name` fields after engaging this boss in-game
-        [1251554] = { castType = "begincast", castDuration = 1,   channelDuration = 4,   role = "tank" },
-        [1252054] = { castType = "begincast", castDuration = 2.5, channelDuration = 4.5, role = "other" },
-        [1251204] = { castType = "cast",                          channelDuration = 4,   role = "mechanic" },
-        [1250708] = { castType = "channel",                       channelDuration = 60,  role = "heal" },
-        -- 1251775 omitted: EXBoss has channelDuration=604800 ("until killed" sentinel); not a real cast
-        -- 1251996 omitted: EXBoss has castType=nil (passive/aura, no cast bar)
+        [1251554] = { name = "Drain Soul",           castType = "begincast", castDuration = 1,   channelDuration = 4,   role = "tank",     display = "bar", displayText = "TANK HIT"     },
+        [1252054] = { name = "Unmake",               castType = "begincast", castDuration = 2.5, channelDuration = 4.5, role = "other",                     displayText = "FRONTAL"      },
+        [1251204] = { name = "Wrest Phantoms",       castType = "cast",                          channelDuration = 4,   role = "mechanic", extendByChannel = true, displayText = "ADDS" },
+        [1250708] = { name = "Necrotic Convergence", castType = "channel",                       channelDuration = 60,  role = "other",                     displayText = "INTERMISSION" },
     },
 }
 
 KE.EncounterData[3214] = {
-    name = "Raktul, the Soulvessel",
+    name = "Rak'tul, Vessel of Souls",
     dungeon = "MaisaraCaverns",
     spells = {
-        -- TODO: fill in English `name` fields after engaging this boss in-game
-        [1251023] = { castType = "channel",                       channelDuration = 4.5, role = "tank" },
-        [1252676] = { castType = "begincast", castDuration = 4.5,                        role = "heal" },
-        [1253788] = { castType = "begincast", castDuration = 3,                          role = "mechanic" },
+        [1251023] = { name = "Spiritbreaker",      castType = "channel",                       channelDuration = 4.5, role = "tank",     display = "bar", displayText = "TANK HIT"     },
+        [1252676] = { name = "Crush Souls",        castType = "begincast", castDuration = 4.5,                        role = "mechanic", displayText = "TOTEMS"       },
+        [1253788] = { name = "Soulrending Roar",   castType = "begincast", castDuration = 3,                          role = "mechanic", displayText = "INTERMISSION" },
     },
 }

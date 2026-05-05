@@ -400,7 +400,7 @@ local function CreateListRowKit(holder)
     kit.soundLabel:SetPoint("RIGHT", kit.tagLabel, "LEFT", -4, 0)
 
     kit.label = row:CreateFontString(nil, "OVERLAY")
-    KE:ApplyFontToText(kit.label, "Expressway", 13, "OUTLINE")
+    KE:ApplyFontToText(kit.label, "Expressway", 12, "OUTLINE")
     kit.label:SetPoint("LEFT", kit.iconFrame, "RIGHT", 6, 0)
     kit.label:SetPoint("RIGHT", kit.soundLabel, "LEFT", -4, 0)
     kit.label:SetJustifyH("LEFT")
@@ -1095,9 +1095,18 @@ local function BuildDisplayTabBody(parent, spellId, spell)
     KE:ApplyFontToText(sectionLabel, "Expressway", 12, "OUTLINE")
     sectionLabel:SetPoint("TOPLEFT", modeHeader, "BOTTOMLEFT", 0, -14)
     sectionLabel:SetTextColor(0.85, 0.85, 0.85)
-    sectionLabel:SetText("Render this spell as:")
+    sectionLabel:SetText("Render this ability as:")
 
     local secondaryWidgets = {}
+
+    -- Forward declared. Assigned after the Color section's ColorPicker is
+    -- built (see end of this function). Re-syncs the picker swatch when
+    -- the EFFECTIVE color changes — e.g. user picks a different preset via
+    -- the EditBox or chip grid, and the picker should now reflect the
+    -- preset-color fallback instead of the old preset's color. Called from
+    -- displayText change handlers below; nil-checked because the picker
+    -- doesn't exist when those handlers are first wired up.
+    local refreshColorPicker
 
     local currentMode = (DT and DT:GetSpellDisplay(spellId)) or "text"
     local toggle = CreateSegmentedToggle(body,
@@ -1161,10 +1170,11 @@ local function BuildDisplayTabBody(parent, spellId, spell)
         callback = function(text)
             if not (DT and DT.SetSpellDisplayTextOverride) then return end
             DT:SetSpellDisplayTextOverride(spellId, text)
-            -- Live updates: override stripe + preview bar's label.
-            -- The list-row tag (Bar/Text) doesn't depend on displayText,
-            -- so no RefreshListRowTag here.
+            -- Live updates: override stripe + color picker (preset fallback
+            -- changed) + preview bar's label. The list-row tag (Bar/Text)
+            -- doesn't depend on displayText, so no RefreshListRowTag here.
             RefreshOverrideStripe(spellId)
+            if refreshColorPicker then refreshColorPicker() end
             RefreshSpellPreview()
         end,
         tooltip = "Custom short label for the bar (e.g. DODGE, HIDE, SOAK).\n"
@@ -1272,6 +1282,7 @@ local function BuildDisplayTabBody(parent, spellId, spell)
             local actual = DT:GetSpellDisplayTextOverride(spellId) or ""
             if labelEdit.SetValue then labelEdit:SetValue(actual, true) end
             RefreshOverrideStripe(spellId)
+            if refreshColorPicker then refreshColorPicker() end
             RefreshSpellPreview()
         end)
 
@@ -1384,6 +1395,13 @@ local function BuildDisplayTabBody(parent, spellId, spell)
                     if p.label:upper() == upper then preset = p; break end
                 end
             end
+            -- Alias check ("ADDS" → ADD's color) when no direct match.
+            -- Mirrors ResolveDisplayPreset's alias path so the picker
+            -- swatch matches what the bar will actually render.
+            if not preset and DT.DISPLAY_PRESET_ALIASES then
+                local aliasKey = DT.DISPLAY_PRESET_ALIASES[upper]
+                if aliasKey then preset = DT.DISPLAY_PRESETS[aliasKey] end
+            end
             if preset then return preset.color end
         end
         return DEFAULT_BAR_COLOR_LOCAL
@@ -1451,6 +1469,19 @@ local function BuildDisplayTabBody(parent, spellId, spell)
 
     secondaryWidgets[#secondaryWidgets + 1] = colorPicker
     secondaryWidgets[#secondaryWidgets + 1] = resetColorBtn
+
+    -- Assign the forward-declared refreshColorPicker now that the picker
+    -- itself exists. Same silent-write pattern as Reset (clear _callback,
+    -- SetColor, restore) so the re-sync doesn't fire a feedback-write
+    -- that would store the resolved color as a fresh override.
+    refreshColorPicker = function()
+        if not colorPicker then return end
+        local newColor = ResolveEffectiveColor()
+        local saved = colorPicker._callback
+        colorPicker._callback = nil
+        colorPicker:SetColor(newColor[1], newColor[2], newColor[3], 1)
+        colorPicker._callback = saved
+    end
 
     -- Caption under the color row — explains the resolution chain so
     -- users understand what "default" means in this context.
@@ -1556,7 +1587,7 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
         -- spell rows back to which boss they belong to (matches the
         -- BigWigs in-fight shorthand convention).
         local header = leftCol:CreateFontString(nil, "OVERLAY")
-        KE:ApplyFontToText(header, "Expressway", 16, "OUTLINE")
+        KE:ApplyFontToText(header, "Expressway", 15, "OUTLINE")
         header:SetPoint("TOPLEFT", leftCol, "TOPLEFT", 4, -listY - 6)
         header:SetText(string_format("B%d - %s", encIndex, enc.name))
         header:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])

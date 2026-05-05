@@ -103,6 +103,16 @@ local DISPLAY_PRESETS = {
     TANK    = { label = "TANK HIT", color = { 0.77, 0.17, 0.17 } },
 }
 
+-- Color-only aliases for common variants of a preset name. The user's
+-- ORIGINAL text is preserved as the rendered label so "ADDS" renders
+-- "ADDS" (not canonicalized to "ADD") — only the color is borrowed from
+-- the aliased preset so plural-add mechanics group visually with single-
+-- add ones. Add new aliases here as they come up.
+local DISPLAY_PRESET_ALIASES = {
+    ADDS   = "ADD",
+    TOTEMS = "ADD",
+}
+
 -- Lookup helper: returns the preset table entry for a string by matching
 -- against keys then labels (case-insensitive both ways). Returns nil for
 -- custom strings. The setter uses this for equivalence-pruning ("dodge"
@@ -125,6 +135,8 @@ end
 --                   default color
 --   preset key    → preset label + preset color (e.g. "TANK" → "TANK HIT")
 --   preset label  → preset label + preset color (e.g. "TANK HIT" → same)
+--   alias key     → user's ORIGINAL text + aliased preset's color (e.g.
+--                   "ADDS" → label "ADDS", color of ADD preset)
 --   custom string → string as label, default color
 --
 -- Case-insensitive match against both keys and labels — humans don't
@@ -136,17 +148,26 @@ local function ResolveDisplayPreset(displayText)
     if not displayText then return nil, DEFAULT_BAR_COLOR end
     local preset = ResolvePresetByText(displayText)
     if preset then return preset.label, preset.color end
+    -- Alias check — match "ADDS" / "Adds" / "adds" to the ADD preset's
+    -- color while keeping the user's text as the rendered label.
+    local aliasKey = DISPLAY_PRESET_ALIASES[displayText:upper()]
+    if aliasKey and DISPLAY_PRESETS[aliasKey] then
+        return displayText, DISPLAY_PRESETS[aliasKey].color
+    end
     return displayText, DEFAULT_BAR_COLOR
 end
 
 -- Internal access for the override setter's equivalence check.
 DT._ResolvePresetByText = ResolvePresetByText
 
--- Expose DISPLAY_PRESETS for GUI consumption (preset chip grid in the
--- Display tab). Read-only by convention; mutating this would break the
--- ResolveDisplayPreset closure. GUI walks DT.DISPLAY_PRESETS.<key> to
--- get { label, color } pairs.
+-- Expose DISPLAY_PRESETS + DISPLAY_PRESET_ALIASES for GUI consumption
+-- (preset chip grid + Color picker effective-color resolver in the
+-- Display tab). Read-only by convention; mutating either would break
+-- the ResolveDisplayPreset closure. GUI walks DT.DISPLAY_PRESETS.<key>
+-- to get { label, color } pairs and DT.DISPLAY_PRESET_ALIASES.<key>
+-- to map alternate inputs to a preset key.
 DT.DISPLAY_PRESETS = DISPLAY_PRESETS
+DT.DISPLAY_PRESET_ALIASES = DISPLAY_PRESET_ALIASES
 
 DT.bars = {}
 DT.barGroup = nil
@@ -208,15 +229,23 @@ function DT:GetSpellInfo(spellId)
     return lookup[spellId]
 end
 
--- Only `castDuration` extends the bar past BigWigs's countdown.
+-- Bar extension past BigWigs's countdown: castDuration always counts;
+-- channelDuration ONLY when the spell's effect lands at end-of-channel.
+--
 -- BigWigs's bar represents "time until cast/channel starts"; bar hitting
 -- zero means the spell is about to fire. For pure casts, the actual hit
 -- lands at end-of-cast — so we extend by castDuration to drain the bar to
--- zero AT impact. For channels, the first damage tick lands right at the
--- channel's start (= BigWigs zero), so extending by channelDuration would
--- push our "now!" cue past when damage actually arrives. Mixed cast+channel
--- (boss casts 1s, then channels) still extends only by castDuration so the
--- bar hits zero at the cast→channel boundary (= first damage tick).
+-- zero AT impact. For most channels, the first damage tick lands right at
+-- the channel's start (= BigWigs zero), so extending by channelDuration
+-- would push our "now!" cue past when damage actually arrives. Mixed
+-- cast+channel (boss casts 1s, then channels) extends only by castDuration
+-- so the bar hits zero at the cast→channel boundary (= first damage tick).
+--
+-- The exception: spells whose payload arrives at END of channel (e.g. adds
+-- spawn after a 4s channel finishes, not as it starts) opt in via
+-- `extendByChannel = true` on their EncounterData entry. Their extension
+-- becomes castDuration + channelDuration so the bar hits zero at the
+-- effect's actual landing moment.
 --
 -- User time offset (per-spell): added to the curated value. Floored at 0
 -- so a large negative offset makes the bar auto-hide at countdown end
@@ -225,18 +254,28 @@ end
 function DT:GetSpellExtension(spellId)
     local data = self:GetSpellInfo(spellId)
     local curated = (data and data.castDuration) or 0
+    if data and data.extendByChannel and data.channelDuration then
+        curated = curated + data.channelDuration
+    end
     local userOffset = self:GetSpellTimeOffset(spellId) or 0
     local result = curated + userOffset
     if result < 0 then result = 0 end
     return result
 end
 
--- Curator's raw cast duration (no user offset). Used by the GUI to
--- compute the per-spell slider's lower bound — slider can drop to
--- -curated (so resulting extension reaches 0) but no further.
+-- Curator's raw extension (no user offset). Used by the GUI to compute
+-- the per-spell time-offset slider's lower bound — slider can drop to
+-- -curated (so resulting extension reaches 0) but no further. Mirrors
+-- GetSpellExtension's curated portion (castDuration + channelDuration
+-- when extendByChannel) so the slider's negative travel correctly
+-- accounts for the full bar lifetime.
 function DT:GetSpellCuratorCastDuration(spellId)
     local data = self:GetSpellInfo(spellId)
-    return (data and data.castDuration) or 0
+    local curated = (data and data.castDuration) or 0
+    if data and data.extendByChannel and data.channelDuration then
+        curated = curated + data.channelDuration
+    end
+    return curated
 end
 
 -- User per-spell time offset. nil = no override (extension is curated
