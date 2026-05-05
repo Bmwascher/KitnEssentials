@@ -67,5 +67,20 @@ GUIFrame:RegisterContent("DTimers_General", function(scrollChild, yOffset)
     card1:AddRow(row1, Theme.rowHeightLast, 0)
     yOffset = card1:GetNextOffset()
 
+    -- Role Filter card: master toggle for spec-aware bar visibility.
+    -- When ON, tank-tagged spells only show for tanks, heal-tagged only
+    -- for healers; mechanic / other / uncurated spells always show.
+    local card2 = GUIFrame:CreateCard(scrollChild, "Role Filter", yOffset)
+    local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local roleCheck = GUIFrame:CreateCheckbox(row2, "Filter bars by your role/spec", {
+        value = db.RoleFilterEnabled == true,
+        callback = function(checked)
+            db.RoleFilterEnabled = checked
+        end,
+    })
+    row2:AddWidget(roleCheck, 1)
+    card2:AddRow(row2, Theme.rowHeightLast, 0)
+    yOffset = card2:GetNextOffset()
+
     return yOffset
 end)
