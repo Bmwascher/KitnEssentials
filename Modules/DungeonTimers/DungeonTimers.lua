@@ -156,10 +156,49 @@ end
 -- push our "now!" cue past when damage actually arrives. Mixed cast+channel
 -- (boss casts 1s, then channels) still extends only by castDuration so the
 -- bar hits zero at the cast→channel boundary (= first damage tick).
+--
+-- User time offset (per-spell): added to the curated value. Floored at 0
+-- so a large negative offset makes the bar auto-hide at countdown end
+-- (no cast phase) rather than going into undefined negative-extension
+-- territory. The setter also clamps so this floor only fires defensively.
 function DT:GetSpellExtension(spellId)
     local data = self:GetSpellInfo(spellId)
-    if not data then return 0 end
-    return data.castDuration or 0
+    local curated = (data and data.castDuration) or 0
+    local userOffset = self:GetSpellTimeOffset(spellId) or 0
+    local result = curated + userOffset
+    if result < 0 then result = 0 end
+    return result
+end
+
+-- Curator's raw cast duration (no user offset). Used by the GUI to
+-- compute the per-spell slider's lower bound — slider can drop to
+-- -curated (so resulting extension reaches 0) but no further.
+function DT:GetSpellCuratorCastDuration(spellId)
+    local data = self:GetSpellInfo(spellId)
+    return (data and data.castDuration) or 0
+end
+
+-- User per-spell time offset. nil = no override (extension is curated
+-- value unchanged).
+function DT:GetSpellTimeOffset(spellId)
+    if not (self.db and self.db.SpellTimeOffsets and spellId) then return nil end
+    return self.db.SpellTimeOffsets[spellId]
+end
+
+-- Sets the user time offset. Auto-prunes the entry when value rounds
+-- to 0 so dragging the slider back to default leaves no stored override
+-- and the modified indicator clears. Clamps at -curated (defensive —
+-- the GUI also constrains the slider range).
+function DT:SetSpellTimeOffset(spellId, value)
+    if not (self.db and spellId) then return end
+    self.db.SpellTimeOffsets = self.db.SpellTimeOffsets or {}
+    local curated = self:GetSpellCuratorCastDuration(spellId)
+    if value < -curated then value = -curated end
+    if value == 0 then
+        self.db.SpellTimeOffsets[spellId] = nil
+    else
+        self.db.SpellTimeOffsets[spellId] = value
+    end
 end
 
 function DT:GetSpellDisplay(spellId)
@@ -179,9 +218,54 @@ end
 -- showAtSeconds (number) or nil if no override. RenderBar's resolver
 -- uses this BEFORE falling back to the group default. 0 is a meaningful
 -- override that forces "always visible" even when the group hides.
+--
+-- Resolution order (per-spell visibility threshold):
+--   db.SpellShowAtOverrides[spellId] (user override)  → wins
+--   spell.showAtSeconds (curator default)             → fallback
+--   nil                                                → no per-spell value
+-- Lua's `or` treats 0 as truthy, so a user override of 0 correctly
+-- forces "always visible" even when the curator set a non-zero default.
 function DT:GetSpellShowAtSeconds(spellId)
+    local userOverride = self:GetSpellShowAtOverride(spellId)
+    if userOverride ~= nil then return userOverride end
     local data = self:GetSpellInfo(spellId)
     return data and data.showAtSeconds or nil
+end
+
+-- Curator's raw value from EncounterData. Used by the GUI to display
+-- "default" indicators distinct from the user's override.
+function DT:GetSpellCuratorShowAt(spellId)
+    local data = self:GetSpellInfo(spellId)
+    return data and data.showAtSeconds or nil
+end
+
+-- User per-spell override on the visibility threshold. nil = no override
+-- (fall through to curator + group default chain).
+function DT:GetSpellShowAtOverride(spellId)
+    if not (self.db and self.db.SpellShowAtOverrides and spellId) then return nil end
+    return self.db.SpellShowAtOverrides[spellId]
+end
+
+-- Sets the user override for showAt. Auto-clears the entry when the
+-- value matches the effective default chain (curator → group → 0) so
+-- dragging the slider back to the default position leaves no stored
+-- override and the modified indicator clears correctly.
+function DT:SetSpellShowAtOverride(spellId, value)
+    if not (self.db and spellId) then return end
+    self.db.SpellShowAtOverrides = self.db.SpellShowAtOverrides or {}
+
+    local effectiveDefault = self:GetSpellCuratorShowAt(spellId)
+    if effectiveDefault == nil then
+        local mode = self:GetSpellDisplay(spellId)
+        local groupCfg = self.db[(mode == "bar") and "BarGroup" or "TextGroup"]
+        effectiveDefault = (groupCfg and groupCfg.ShowAtSeconds) or 0
+    end
+
+    if value == effectiveDefault then
+        self.db.SpellShowAtOverrides[spellId] = nil
+    else
+        self.db.SpellShowAtOverrides[spellId] = value
+    end
 end
 
 -- Curated spell role tag (tank/heal/mechanic/other) — populated from
@@ -208,18 +292,161 @@ function DT:OnLibSpecGroupUpdate(_, role, _, playerName)
     end
 end
 
--- Should this spell's bar render given the player's current role?
--- Filter is OFF by default (db.RoleFilterEnabled=false → always true).
--- When ON: spells with no role tag fail open; tagged spells consult the
--- allow-list. Per-spell user overrides (N13c, future) will plug in here
--- before the allow-list check.
-function DT:ShouldShowSpellRole(spellId)
-    if not (self.db and self.db.RoleFilterEnabled) then return true end
+-- Resolves "for this spell, would playerRoleToken see it?". Used by both
+-- the live filter (ShouldShowSpellRole) AND the GUI role-overrides page —
+-- a checkbox's value is just IsSpellAllowedForRole(spellId, "TANK") etc.
+--
+-- Resolution order (per role token):
+--   db.SpellRoleOverrides[spellId][playerRoleToken] (if set) → wins
+--   ROLE_ALLOW_LIST[playerRoleToken][spell.role]      → curated default
+--   true                                              → fail open (uncurated)
+--
+-- Per-(spell,role) granularity in the override table: setting only
+-- TANK = false leaves HEAL/DAMAGER reading curated. Mental model: the
+-- override table only stores explicit deviations from curated.
+function DT:IsSpellAllowedForRole(spellId, playerRoleToken)
+    local overrides = self.db and self.db.SpellRoleOverrides
+    local entry = overrides and spellId and overrides[spellId]
+    if entry and entry[playerRoleToken] ~= nil then
+        return entry[playerRoleToken] == true
+    end
     local role = self:GetSpellRole(spellId)
     if not role then return true end
-    local allow = ROLE_ALLOW_LIST[self.playerRole]
+    local allow = ROLE_ALLOW_LIST[playerRoleToken]
     if not allow then return true end
     return allow[role] == true
+end
+
+-- Should this spell's bar render given the player's current role?
+-- Filter is OFF by default (db.RoleFilterEnabled=false → always true).
+function DT:ShouldShowSpellRole(spellId)
+    if not (self.db and self.db.RoleFilterEnabled) then return true end
+    return self:IsSpellAllowedForRole(spellId, self.playerRole)
+end
+
+-- Set a single (spell, playerRole) override. After writing, prune the
+-- entry if every stored key now matches the curated default — auto-
+-- clears redundant overrides so the "modified" indicator stays accurate
+-- when users manually toggle a value back to its default. Cheap: one
+-- comparison per write, never on render.
+function DT:SetSpellRoleOverride(spellId, playerRoleToken, allowed)
+    if not (self.db and spellId and playerRoleToken) then return end
+    self.db.SpellRoleOverrides = self.db.SpellRoleOverrides or {}
+    local overrides = self.db.SpellRoleOverrides
+    overrides[spellId] = overrides[spellId] or {}
+    overrides[spellId][playerRoleToken] = allowed and true or false
+
+    -- Prune: walk every stored key and check if it matches the curated
+    -- value. If all match, drop the entry entirely.
+    local entry = overrides[spellId]
+    local curatedRole = self:GetSpellRole(spellId)
+    local allMatch = true
+    for token, stored in pairs(entry) do
+        local curatedAllow
+        if curatedRole then
+            local allow = ROLE_ALLOW_LIST[token]
+            curatedAllow = allow and (allow[curatedRole] == true) or false
+        else
+            curatedAllow = true  -- uncurated → fail open default
+        end
+        if stored ~= curatedAllow then
+            allMatch = false
+            break
+        end
+    end
+    if allMatch then
+        overrides[spellId] = nil
+    end
+end
+
+-- Wipe the override entry for a spell (all 3 player roles return to
+-- curated defaults).
+function DT:ResetSpellRoleOverride(spellId)
+    if not (self.db and self.db.SpellRoleOverrides and spellId) then return end
+    self.db.SpellRoleOverrides[spellId] = nil
+end
+
+-- Wipe overrides for every spell in every encounter under a given
+-- dungeon key (e.g. "MaisaraCaverns"). Used by the per-dungeon Reset
+-- button on the role-overrides GUI page.
+function DT:ResetDungeonRoleOverrides(dungeonKey)
+    if not (self.db and self.db.SpellRoleOverrides and dungeonKey) then return end
+    for _, enc in pairs(KE.EncounterData or {}) do
+        if enc.dungeon == dungeonKey and enc.spells then
+            for spellId in pairs(enc.spells) do
+                self.db.SpellRoleOverrides[spellId] = nil
+            end
+        end
+    end
+end
+
+-- Per-spell hard disable. Always-active filter (independent of the role
+-- master toggle) — when set, the bar never renders regardless of role.
+-- DB stores only deviations from default (nil = enabled, true = disabled);
+-- saved-vars stay tiny.
+function DT:IsSpellDisabled(spellId)
+    if not (self.db and self.db.SpellDisabled and spellId) then return false end
+    return self.db.SpellDisabled[spellId] == true
+end
+
+function DT:SetSpellDisabled(spellId, disabled)
+    if not (self.db and spellId) then return end
+    self.db.SpellDisabled = self.db.SpellDisabled or {}
+    if disabled then
+        self.db.SpellDisabled[spellId] = true
+    else
+        self.db.SpellDisabled[spellId] = nil
+    end
+end
+
+-- Combined per-spell filter. Used by EventCallback as the single gate
+-- before bar allocation — runs both the always-active disable check AND
+-- the (optional) role-filter check. Returns true when the bar should
+-- render, false when any filter trips.
+function DT:ShouldShowSpell(spellId)
+    if self:IsSpellDisabled(spellId) then return false end
+    return self:ShouldShowSpellRole(spellId)
+end
+
+-- True when ANY user override exists for this spell (role allow-list,
+-- hard disable, showAt threshold; future Display + Actions tabs will
+-- extend this list). Drives the "modified" indicator on the spell list
+-- rows so users can see at a glance which spells they've customized.
+function DT:HasSpellOverrides(spellId)
+    if not (self.db and spellId) then return false end
+    if self.db.SpellDisabled and self.db.SpellDisabled[spellId] == true then
+        return true
+    end
+    if self.db.SpellShowAtOverrides and self.db.SpellShowAtOverrides[spellId] ~= nil then
+        return true
+    end
+    if self.db.SpellTimeOffsets and self.db.SpellTimeOffsets[spellId] ~= nil then
+        return true
+    end
+    if self.db.SpellRoleOverrides then
+        local entry = self.db.SpellRoleOverrides[spellId]
+        if entry and next(entry) ~= nil then return true end
+    end
+    return false
+end
+
+-- Reset all per-spell overrides (role + disable + showAt). The GUI's
+-- "Reset spell to default" button calls this so a single click returns
+-- the spell to pure curated behavior across every per-spell knob.
+function DT:ResetSpellOverrides(spellId)
+    if not (self.db and spellId) then return end
+    if self.db.SpellRoleOverrides then
+        self.db.SpellRoleOverrides[spellId] = nil
+    end
+    if self.db.SpellDisabled then
+        self.db.SpellDisabled[spellId] = nil
+    end
+    if self.db.SpellShowAtOverrides then
+        self.db.SpellShowAtOverrides[spellId] = nil
+    end
+    if self.db.SpellTimeOffsets then
+        self.db.SpellTimeOffsets[spellId] = nil
+    end
 end
 
 -- One-time migration: early DungeonTimers schema nested AnchorFrom/To/XOffset/
@@ -1143,12 +1370,15 @@ function DT:EventCallback(event, ...)
         local baseDur = tonumber(duration) or 0
         local spellIdNum = tonumber(spellId)
 
-        -- Role filter: gate before bar allocation so we don't churn frames
-        -- for bars that would just be hidden. Defaults OFF — when disabled
-        -- ShouldShowSpellRole returns true unconditionally.
-        if not self:ShouldShowSpellRole(spellIdNum) then
-            dprint(string_format("Timer FILTERED text=%s role=%s player=%s",
-                tostring(text), tostring(self:GetSpellRole(spellIdNum)), tostring(self.playerRole)))
+        -- Combined per-spell filter: hard-disable (always-active) +
+        -- role allow-list (only when RoleFilterEnabled). Gates BEFORE
+        -- bar allocation so we don't churn frames for hidden bars.
+        if not self:ShouldShowSpell(spellIdNum) then
+            local reason = self:IsSpellDisabled(spellIdNum) and "disabled" or "role"
+            dprint(string_format("Timer FILTERED text=%s reason=%s role=%s player=%s",
+                tostring(text), reason,
+                tostring(self:GetSpellRole(spellIdNum)),
+                tostring(self.playerRole)))
             return
         end
 

@@ -162,9 +162,17 @@ GUIFrame.sidebarConfig = {
                 and KE.db.profile.Dungeons.DungeonTimers.Enabled)
         end,
         items = {
-            { id = "DTimers_General", text = "General",       alwaysEnabled = true },
-            { id = "DTimers_Bars",    text = "Bar Settings" },
-            { id = "DTimers_Texts",   text = "Text Settings" },
+            { id = "DTimers_General",                  text = "General",         alwaysEnabled = true },
+            { id = "DTimers_Bars",                     text = "Bar Settings" },
+            { id = "DTimers_Texts",                    text = "Text Settings" },
+            { id = "DTimers_Dungeon_AlgetharAcademy",  text = "Algeth'ar Academy" },
+            { id = "DTimers_Dungeon_MagistersTerrace", text = "Magisters' Terrace" },
+            { id = "DTimers_Dungeon_MaisaraCaverns",   text = "Maisara Caverns" },
+            { id = "DTimers_Dungeon_NexusPointXenas",  text = "Nexus-Point Xenas" },
+            { id = "DTimers_Dungeon_PitOfSaron",       text = "Pit of Saron" },
+            { id = "DTimers_Dungeon_SeatOfTriumvirate",text = "Seat of the Triumvirate" },
+            { id = "DTimers_Dungeon_Skyreach",         text = "Skyreach" },
+            { id = "DTimers_Dungeon_WindrunnerSpire",  text = "Windrunner Spire" },
         },
     },
 }
