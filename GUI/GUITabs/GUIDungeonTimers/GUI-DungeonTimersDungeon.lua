@@ -136,6 +136,41 @@ local function GetModule()
 end
 
 ---------------------------------------------------------------------------------
+-- Per-spell preview thunks. Wrap the DT module methods so callers can use
+-- them as `KE.GUI.DungeonTimers.<name>()` from sibling DT settings pages
+-- (Bars/Texts/Cfg) and the GUIFrame's onCloseCallbacks dispatch — same
+-- pattern as HideBarPreviews / HideTextPreviews exposed by those files.
+---------------------------------------------------------------------------------
+local function HideSpellPreview()
+    local mod = GetModule()
+    if mod and mod.HideSpellPreview then
+        mod:HideSpellPreview()
+    end
+end
+
+local function RefreshSpellPreview()
+    local mod = GetModule()
+    if mod and mod.RefreshSpellPreview then
+        mod:RefreshSpellPreview()
+    end
+end
+
+local function ShowSpellPreview(spellId)
+    if not GUIFrame or not GUIFrame:IsShown() then return end
+    local sel = GUIFrame.selectedSidebarItem or ""
+    -- Only render the preview while a per-dungeon page is active. If the
+    -- user navigated away mid-build (rare), don't accidentally spawn a
+    -- preview into a settings page's preview group.
+    if not sel:find("^DTimers_Dungeon_") then return end
+    local mod = GetModule()
+    if mod and mod.ShowSpellPreview then
+        mod:ShowSpellPreview(spellId)
+    end
+end
+
+KE.GUI.DungeonTimers.HideSpellPreview = HideSpellPreview
+
+---------------------------------------------------------------------------------
 -- Per-dungeon sticky state. Survives RefreshContent rebuilds so spell + tab
 -- selection persist as the user clicks around. Reset only when EncounterData
 -- changes shape (rare; runtime-static).
@@ -250,8 +285,14 @@ local function ConfigureListRow(kit, spellId, spell, isSelected)
     -- fill texture). Both render through the same DungeonTimers pipeline;
     -- the difference is just visual style. Colors match BigWigsTimers'
     -- tag palette so the two modules feel consistent.
+    -- Reads via DT:GetSpellDisplay so the user's per-spell override wins
+    -- over the curator's default; the tag flips live when the override
+    -- changes (RefreshListRowTag is the targeted update from the Display
+    -- tab's toggle).
     if kit.tagLabel then
-        if spell.display == "bar" then
+        local DT = GetModule()
+        local effectiveDisplay = (DT and DT:GetSpellDisplay(spellId)) or spell.display or "text"
+        if effectiveDisplay == "bar" then
             kit.tagLabel:SetText("Bar")
             kit.tagLabel:SetTextColor(0.4, 0.7, 1.0, 0.9)
         else
@@ -411,6 +452,30 @@ local function RefreshOverrideStripe(spellId)
     end
 end
 
+-- Targeted refresh: walks active kits in the pool and re-applies the
+-- "Bar" / "Text" tag (text + color) on the kit matching `spellId`. Used
+-- by the Display tab's mode toggle so the left-pane tag flips
+-- immediately on click without a full RefreshContent (which would
+-- destroy the toggle widget mid-animation).
+local function RefreshListRowTag(spellId)
+    if not spellId then return end
+    local DT = GetModule()
+    local effectiveDisplay = (DT and DT:GetSpellDisplay(spellId)) or "text"
+    for i = 1, listRowPool._activeCount do
+        local kit = listRowPool._kits[i]
+        if kit and kit._spellId == spellId and kit.tagLabel then
+            if effectiveDisplay == "bar" then
+                kit.tagLabel:SetText("Bar")
+                kit.tagLabel:SetTextColor(0.4, 0.7, 1.0, 0.9)
+            else
+                kit.tagLabel:SetText("Text")
+                kit.tagLabel:SetTextColor(0.4, 1.0, 0.5, 0.9)
+            end
+            return
+        end
+    end
+end
+
 ---------------------------------------------------------------------------------
 -- Detail pane (right column). Built fresh per render — Show/Hide on tab
 -- content frames toggles which body is visible. State writes go straight
@@ -548,7 +613,11 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
     -- default → group fallback). Slider directly sets the user override;
     -- Reset button clears it. 0 = always visible (overrides group hide).
     -- Range 0–30s, step 1 — matches the group sliders for consistency.
-    local groupCfgKey = (spell.display == "bar") and "BarGroup" or "TextGroup"
+    -- Effective display drives which group's defaults apply. If the user
+    -- has overridden bar→text, the showAt slider should default to the
+    -- TextGroup's value, not the curator's BarGroup default.
+    local effectiveDisplayForGroup = (DT and DT:GetSpellDisplay(spellId)) or spell.display or "text"
+    local groupCfgKey = (effectiveDisplayForGroup == "bar") and "BarGroup" or "TextGroup"
     local groupCfg = (KE.db and KE.db.profile and KE.db.profile.Dungeons
                       and KE.db.profile.Dungeons.DungeonTimers
                       and KE.db.profile.Dungeons.DungeonTimers[groupCfgKey])
@@ -571,6 +640,10 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
             if not (DT and DT.SetSpellShowAtOverride) then return end
             DT:SetSpellShowAtOverride(spellId, val)
             RefreshOverrideStripe(spellId)
+            -- Reveal-at value drives the preview's visible-window
+            -- duration (countdown + cast = showAt), so re-render to
+            -- match what the user will see in a real fight.
+            RefreshSpellPreview()
         end,
     })
     revealSliderRow:AddWidget(revealSlider, 1.0, 0)
@@ -620,6 +693,10 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
             if not (DT and DT.SetSpellTimeOffset) then return end
             DT:SetSpellTimeOffset(spellId, val)
             RefreshOverrideStripe(spellId)
+            -- Time offset changes the bar's total duration (and
+            -- therefore its visible drain rate during the cast phase),
+            -- so re-render the preview to match.
+            RefreshSpellPreview()
         end,
     })
     timeOffsetRow:AddWidget(timeOffsetSlider, 1.0, 0)
@@ -661,6 +738,11 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
                 false, nil, false, nil, nil, nil, nil,
                 function()
                     DT:ResetSpellOverrides(spellId)
+                    -- Force the preview to re-render. RefreshContent's
+                    -- ShowSpellPreview call would short-circuit on the
+                    -- same spellId guard otherwise, leaving the preview
+                    -- stuck on pre-reset visuals.
+                    if DT.RefreshSpellPreview then DT:RefreshSpellPreview() end
                     if GUIFrame.RefreshContent then GUIFrame:RefreshContent() end
                 end,
                 nil, "Reset", "Cancel"
@@ -695,6 +777,383 @@ local function BuildPlaceholderTabBody(parent, message)
     label:SetPoint("CENTER", body, "CENTER", 0, 0)
     label:SetText(message)
     label:SetTextColor(0.65, 0.65, 0.65)
+    return body
+end
+
+---------------------------------------------------------------------------------
+-- Segmented two-button widget. Used by the Display tab's bar/text toggle.
+-- One button per option; clicking a non-active option flips the state and
+-- fires the onChange callback. Active button gets accent border + accent-
+-- tinted fill; inactive gets the standard border with a hover-to-accent
+-- effect (same visual grammar as CreateButton's hover). Lighter than two
+-- CreateButton widgets because we don't need the animation group — one
+-- click = one repaint, no transition.
+--
+-- Returns the row frame and a `SetActive(id)` method on the row so the
+-- caller can flip selection without rebuilding. SetEnabled toggles the
+-- whole widget's interactivity (used by the disabled-spell propagation).
+---------------------------------------------------------------------------------
+local SEG_BTN_WIDTH    = 80
+local SEG_BTN_HEIGHT   = 26
+local SEG_BTN_SPACING  = 4
+
+local function CreateSegmentedToggle(parent, options, currentId, onChange)
+    local row = CreateFrame("Frame", nil, parent)
+    row:SetHeight(SEG_BTN_HEIGHT)
+    row:SetWidth((#options * SEG_BTN_WIDTH) + ((#options - 1) * SEG_BTN_SPACING))
+
+    local buttons = {}
+    local enabled = true
+
+    local function PaintButton(btn, isActive, isHover)
+        local T = KE.Theme
+        if not enabled then
+            btn:SetBackdropColor(T.bgMedium[1], T.bgMedium[2], T.bgMedium[3], 1)
+            btn:SetBackdropBorderColor(T.border[1], T.border[2], T.border[3], 1)
+            btn:SetAlpha(0.5)
+            if btn.text then btn.text:SetTextColor(T.accent[1], T.accent[2], T.accent[3], 1) end
+            return
+        end
+        btn:SetAlpha(1)
+        if isActive then
+            -- Active = accent-tinted fill + accent border. Brighter than hover
+            -- so the selected option reads as "stuck on" not "transient hover".
+            btn:SetBackdropColor(T.accent[1] * 0.35, T.accent[2] * 0.35, T.accent[3] * 0.35, 0.9)
+            btn:SetBackdropBorderColor(T.accent[1], T.accent[2], T.accent[3], 1)
+            if btn.text then btn.text:SetTextColor(1, 1, 1, 1) end
+        elseif isHover then
+            -- Hover on inactive: accent border only, fill stays neutral.
+            btn:SetBackdropColor(T.bgMedium[1], T.bgMedium[2], T.bgMedium[3], 1)
+            btn:SetBackdropBorderColor(T.accent[1], T.accent[2], T.accent[3], 1)
+            if btn.text then btn.text:SetTextColor(T.accent[1], T.accent[2], T.accent[3], 1) end
+        else
+            -- Idle inactive
+            btn:SetBackdropColor(T.bgMedium[1], T.bgMedium[2], T.bgMedium[3], 1)
+            btn:SetBackdropBorderColor(T.border[1], T.border[2], T.border[3], 1)
+            if btn.text then btn.text:SetTextColor(T.accent[1], T.accent[2], T.accent[3], 1) end
+        end
+    end
+
+    local activeId = currentId
+
+    local function RepaintAll()
+        for _, btn in ipairs(buttons) do
+            PaintButton(btn, btn._id == activeId, false)
+        end
+    end
+
+    for i, opt in ipairs(options) do
+        local btn = CreateFrame("Button", nil, row, "BackdropTemplate")
+        btn:SetSize(SEG_BTN_WIDTH, SEG_BTN_HEIGHT)
+        btn:SetPoint("LEFT", row, "LEFT",
+            (i - 1) * (SEG_BTN_WIDTH + SEG_BTN_SPACING), 0)
+        btn:SetBackdrop({
+            bgFile   = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Buttons\\WHITE8X8",
+            edgeSize = 1,
+        })
+        btn._id = opt.id
+
+        btn.text = btn:CreateFontString(nil, "OVERLAY")
+        KE:ApplyThemeFont(btn.text, "normal")
+        btn.text:SetPoint("CENTER")
+        btn.text:SetText(opt.label)
+
+        btn:SetScript("OnEnter", function(self)
+            if not enabled then return end
+            if self._id ~= activeId then
+                PaintButton(self, false, true)
+            end
+        end)
+        btn:SetScript("OnLeave", function(self)
+            if not enabled then return end
+            if self._id ~= activeId then
+                PaintButton(self, false, false)
+            end
+        end)
+        btn:SetScript("OnClick", function(self)
+            if not enabled then return end
+            if self._id == activeId then return end
+            activeId = self._id
+            RepaintAll()
+            if onChange then onChange(self._id) end
+        end)
+
+        buttons[#buttons + 1] = btn
+    end
+
+    RepaintAll()
+
+    function row:SetActive(newId)
+        if newId == activeId then return end
+        activeId = newId
+        RepaintAll()
+    end
+
+    function row:SetEnabled(isEnabled)
+        enabled = isEnabled and true or false
+        RepaintAll()
+        for _, btn in ipairs(buttons) do
+            btn:EnableMouse(enabled)
+        end
+    end
+
+    return row
+end
+
+-- Builds the Display tab body. N13f's first knob: bar/text mode toggle.
+-- Future knobs (custom displayText, format string, color override) slot
+-- below the mode section as additional CreateSectionHeader blocks.
+local function BuildDisplayTabBody(parent, spellId, spell)
+    local DT = GetModule()
+    local body = CreateFrame("Frame", nil, parent)
+    body:SetAllPoints()
+
+    -- Section: Display Mode
+    local modeHeader = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(modeHeader, "Expressway", 13, "OUTLINE")
+    modeHeader:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
+    modeHeader:SetText("Display Mode")
+    modeHeader:SetPoint("TOPLEFT", body, "TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING)
+    do
+        local underline = body:CreateTexture(nil, "ARTWORK")
+        underline:SetHeight(1)
+        underline:SetColorTexture(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3], 0.4)
+        underline:SetPoint("LEFT", modeHeader, "RIGHT", 6, 0)
+        underline:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+        underline:SetPoint("TOP", modeHeader, "TOP", 0, -8)
+    end
+
+    -- Sub-label above the toggle row.
+    local sectionLabel = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(sectionLabel, "Expressway", 12, "OUTLINE")
+    sectionLabel:SetPoint("TOPLEFT", modeHeader, "BOTTOMLEFT", 0, -14)
+    sectionLabel:SetTextColor(0.85, 0.85, 0.85)
+    sectionLabel:SetText("Render this spell as:")
+
+    local secondaryWidgets = {}
+
+    local currentMode = (DT and DT:GetSpellDisplay(spellId)) or "text"
+    local toggle = CreateSegmentedToggle(body,
+        { { id = "bar", label = "Bar" }, { id = "text", label = "Text" } },
+        currentMode,
+        function(newId)
+            if not (DT and DT.SetSpellDisplayOverride) then return end
+            DT:SetSpellDisplayOverride(spellId, newId)
+            -- Live updates without RefreshContent: the override stripe
+            -- on the list row + the Bar/Text tag on that same row both
+            -- need to reflect the new state, and the in-game preview
+            -- bar needs to re-render in the new mode.
+            RefreshOverrideStripe(spellId)
+            RefreshListRowTag(spellId)
+            RefreshSpellPreview()
+        end)
+    toggle:SetPoint("TOPLEFT", sectionLabel, "BOTTOMLEFT", 0, -8)
+    secondaryWidgets[#secondaryWidgets + 1] = toggle
+
+    -- Curator default caption — anchored RIGHT of the body, vertically
+    -- centered on the toggle row. Tells the user what they're deviating
+    -- from. "Bar" / "Text" capitalized to match the button labels.
+    local curatedDisplay = (DT and DT:GetSpellCuratorDisplay(spellId)) or "text"
+    local curatedFriendly = (curatedDisplay == "bar") and "Bar" or "Text"
+    local defaultLabel = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(defaultLabel, "Expressway", 12, "OUTLINE")
+    defaultLabel:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    defaultLabel:SetPoint("TOP", toggle, "TOP", 0, -6)
+    defaultLabel:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
+    defaultLabel:SetJustifyH("RIGHT")
+    defaultLabel:SetText(string_format("Default: %s", curatedFriendly))
+
+    -- Caption below the toggle — explains what each mode looks like.
+    local caption = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(caption, "Expressway", 11, "OUTLINE")
+    caption:SetPoint("TOPLEFT", toggle, "BOTTOMLEFT", 0, -12)
+    caption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    caption:SetJustifyH("LEFT")
+    caption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
+    caption:SetText("Bar = filled progress bar with icon and timer overlay. Text = single-line label that updates each second.")
+
+    ---------------------------------------------------------------------------
+    -- Section: Custom Label
+    ---------------------------------------------------------------------------
+    local labelHeader = CreateSectionHeader(body, caption, "Custom Label", 22)
+
+    -- EditBox row. CreateEditBox renders a label-on-top + 24px input field
+    -- inside a self-anchored row frame; we stuff it into a CreateRow + AddWidget
+    -- so it stretches to fill the right pane width, mirroring how
+    -- DisintegrateTicks / FocusMarker use the widget.
+    local labelEditRow = GUIFrame:CreateRow(body, 40)
+    labelEditRow:SetPoint("TOPLEFT", labelHeader, "BOTTOMLEFT", 0, -12)
+    labelEditRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+
+    local currentOverride = (DT and DT:GetSpellDisplayTextOverride(spellId)) or ""
+    local labelEdit = GUIFrame:CreateEditBox(labelEditRow, "Override", {
+        value = currentOverride,
+        callback = function(text)
+            if not (DT and DT.SetSpellDisplayTextOverride) then return end
+            DT:SetSpellDisplayTextOverride(spellId, text)
+            -- Live updates: override stripe + preview bar's label.
+            -- The list-row tag (Bar/Text) doesn't depend on displayText,
+            -- so no RefreshListRowTag here.
+            RefreshOverrideStripe(spellId)
+            RefreshSpellPreview()
+        end,
+        tooltip = "Custom short label for the bar (e.g. DODGE, HIDE, SOAK).\n"
+               .. "Empty = use built-in label.\n"
+               .. "Typing a preset name (DODGE, FEET, KICK, etc.) picks up\n"
+               .. "the matching color automatically.",
+    })
+    labelEditRow:AddWidget(labelEdit, 1)
+    secondaryWidgets[#secondaryWidgets + 1] = labelEdit
+
+    -- Caption below the editbox. Reads the curator's default. When no
+    -- curated value exists, the bar falls back to the BigWigs spell name —
+    -- explain that so users know what "default" looks like.
+    local labelCaption = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(labelCaption, "Expressway", 11, "OUTLINE")
+    labelCaption:SetPoint("TOPLEFT", labelEditRow, "BOTTOMLEFT", 0, -8)
+    labelCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    labelCaption:SetJustifyH("LEFT")
+    labelCaption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
+    local curatedLabel = (DT and DT:GetSpellCuratorDisplayText(spellId))
+    if curatedLabel and curatedLabel ~= "" then
+        labelCaption:SetText(string_format(
+            "Empty = use the built-in label. Default: %s.", curatedLabel))
+    else
+        labelCaption:SetText(
+            "Empty = show the spell's full name. No built-in short label.")
+    end
+
+    ---------------------------------------------------------------------------
+    -- Section: Available Presets
+    -- Clickable chips, one per DISPLAY_PRESET. Click writes the preset's
+    -- canonical label into the override + updates the editbox + refreshes
+    -- the preview. Presets render in their own preset color so users can
+    -- see the palette at a glance.
+    ---------------------------------------------------------------------------
+    local presetHeader = CreateSectionHeader(body, labelCaption, "Available Presets", 22)
+
+    -- Sort preset keys alphabetically for stable display order. pairs()
+    -- is hash-order which shuffles across reloads.
+    local presetKeys = {}
+    if DT and DT.DISPLAY_PRESETS then
+        for k in pairs(DT.DISPLAY_PRESETS) do presetKeys[#presetKeys + 1] = k end
+        table_sort(presetKeys)
+    end
+
+    -- Layout grid: 5 chips per row. Each chip is 80×24 with 4px gap. Last
+    -- row left-aligned even if not full. Anchored to the section header
+    -- and stacked downward.
+    local CHIP_WIDTH   = 80
+    local CHIP_HEIGHT  = 24
+    local CHIP_HGAP    = 4
+    local CHIP_VGAP    = 4
+    local CHIPS_PER_ROW = 5
+
+    local presetGrid = CreateFrame("Frame", nil, body)
+    presetGrid:SetPoint("TOPLEFT", presetHeader, "BOTTOMLEFT", 0, -10)
+    presetGrid:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+
+    for i, key in ipairs(presetKeys) do
+        local p = DT.DISPLAY_PRESETS[key]
+        local row = math.floor((i - 1) / CHIPS_PER_ROW)
+        local col = (i - 1) % CHIPS_PER_ROW
+
+        local chip = CreateFrame("Button", nil, presetGrid, "BackdropTemplate")
+        chip:SetSize(CHIP_WIDTH, CHIP_HEIGHT)
+        chip:SetPoint("TOPLEFT", presetGrid, "TOPLEFT",
+            col * (CHIP_WIDTH + CHIP_HGAP),
+            -row * (CHIP_HEIGHT + CHIP_VGAP))
+        chip:SetBackdrop({
+            bgFile   = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Buttons\\WHITE8X8",
+            edgeSize = 1,
+        })
+        chip:SetBackdropColor(KE.Theme.bgMedium[1], KE.Theme.bgMedium[2],
+                              KE.Theme.bgMedium[3], 1)
+        chip:SetBackdropBorderColor(KE.Theme.border[1], KE.Theme.border[2],
+                                    KE.Theme.border[3], 1)
+
+        local txt = chip:CreateFontString(nil, "OVERLAY")
+        KE:ApplyFontToText(txt, "Expressway", 12, "OUTLINE")
+        txt:SetPoint("CENTER")
+        txt:SetText(p.label)
+        -- Render the chip text in the preset's own color so the palette
+        -- is self-documenting — DODGE shows orange, TANK HIT shows red,
+        -- etc. The bar will look identical when this preset is applied.
+        txt:SetTextColor(p.color[1], p.color[2], p.color[3], 1)
+        chip._txt = txt
+
+        chip:SetScript("OnEnter", function(self)
+            self:SetBackdropBorderColor(KE.Theme.accent[1], KE.Theme.accent[2],
+                                        KE.Theme.accent[3], 1)
+        end)
+        chip:SetScript("OnLeave", function(self)
+            self:SetBackdropBorderColor(KE.Theme.border[1], KE.Theme.border[2],
+                                        KE.Theme.border[3], 1)
+        end)
+
+        local chipLabel = p.label  -- captured for the click closure
+        chip:SetScript("OnClick", function()
+            if not (DT and DT.SetSpellDisplayTextOverride) then return end
+            DT:SetSpellDisplayTextOverride(spellId, chipLabel)
+            -- Sync the editbox with whatever was actually stored. If the
+            -- click matched the curator's default, the setter pruned and
+            -- the editbox should clear; otherwise it shows the new value.
+            local actual = DT:GetSpellDisplayTextOverride(spellId) or ""
+            if labelEdit.SetValue then labelEdit:SetValue(actual, true) end
+            RefreshOverrideStripe(spellId)
+            RefreshSpellPreview()
+        end)
+
+        function chip:SetEnabled(enabled)
+            if enabled then
+                self:Enable()
+                self:EnableMouse(true)
+                self:SetAlpha(1)
+            else
+                self:Disable()
+                self:EnableMouse(false)
+                self:SetAlpha(0.5)
+            end
+        end
+
+        secondaryWidgets[#secondaryWidgets + 1] = chip
+    end
+
+    -- Size the grid frame to its content height.
+    if #presetKeys > 0 then
+        local totalRows = math.ceil(#presetKeys / CHIPS_PER_ROW)
+        presetGrid:SetHeight(totalRows * CHIP_HEIGHT
+                             + (totalRows - 1) * CHIP_VGAP)
+    else
+        presetGrid:SetHeight(1)
+    end
+
+    -- Caption under the grid — explains the click + custom-text behavior.
+    local presetCaption = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(presetCaption, "Expressway", 11, "OUTLINE")
+    presetCaption:SetPoint("TOPLEFT", presetGrid, "BOTTOMLEFT", 0, -8)
+    presetCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    presetCaption:SetJustifyH("LEFT")
+    presetCaption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2],
+                               CURATED_TAG_COLOR[3])
+    presetCaption:SetText(
+        "Click a preset to use it. Each preset comes with its own color.")
+
+    -- Suppress the unused-variable luacheck — `spell` is available for
+    -- future knobs (color override) that need curator-side data.
+    _ = spell
+
+    -- Initial disabled-state propagation. Mirror the Visibility tab:
+    -- when the spell starts disabled, the mode toggle is inert and
+    -- greyed out so the UX signals that overrides won't render.
+    if DT and DT:IsSpellDisabled(spellId) then
+        for _, w in ipairs(secondaryWidgets) do
+            if w.SetEnabled then w:SetEnabled(false) end
+        end
+    end
+
     return body
 end
 
@@ -744,6 +1203,18 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
         state.selectedSpellId = ResolveFirstSpellId(encounters)
     end
     if not state.selectedTab then state.selectedTab = "Visibility" end
+
+    -- Live preview of the selected spell. ShowSpellPreview is idempotent
+    -- on identical spellId — re-calls from RefreshContent (tab switches,
+    -- toggle clicks) don't restart the loop. Different spellId tears the
+    -- old preview down and recreates with the new one's effective
+    -- settings. Internally hides the group settings previews so the two
+    -- systems don't double-render.
+    if state.selectedSpellId then
+        ShowSpellPreview(state.selectedSpellId)
+    else
+        HideSpellPreview()
+    end
 
     ---------------------------------------------------------------------------
     -- LEFT COLUMN: spell list, encounter-grouped via section-header rows.
@@ -910,21 +1381,20 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
         if state.selectedTab == "Visibility" then
             BuildVisibilityTabBody(tabBody, selectedSpell.id, selectedSpellData)
         elseif state.selectedTab == "Display" then
-            BuildPlaceholderTabBody(tabBody, "Display options coming soon (N13f).")
+            BuildDisplayTabBody(tabBody, selectedSpell.id, selectedSpellData)
         elseif state.selectedTab == "Actions" then
             BuildPlaceholderTabBody(tabBody, "Action options coming soon (N13g).")
         end
     end
 
     -- Right column height — match left column so the page footprint is
-    -- predictable. Min 280 so empty-tab placeholders aren't squished.
-    -- Right column min height needs to fit the Visibility tab content
-    -- (master + who sees + when appears + reset). Calculated empirically:
-    -- ~408px body required at the bottom of the time-offset caption +
-    -- ~97px chrome (title row + tab bar + separator + paddings) → 510.
-    -- Below this, the reset row's frame would draw over the time-offset
-    -- caption since they'd share the same y-band.
-    local rightHeight = math.max(listY + Theme.paddingSmall, 510)
+    -- predictable. Min sized to fit the tallest tab body:
+    --   Visibility ~408px stack + 97px chrome → 510
+    --   Display    ~420px stack + 97px chrome → 580 (with breathing room)
+    -- Display grew with the Available Presets chip grid (3 rows of chips
+    -- + section header + caption). Below this, content overflows the
+    -- rightCol's BOTTOM anchor and the Reset button row's hit zone.
+    local rightHeight = math.max(listY + Theme.paddingSmall, 580)
     rightCol:SetHeight(rightHeight)
 
     return yOffset + math.max(listY, rightHeight) + Theme.paddingSmall
@@ -935,10 +1405,16 @@ end
 -- once at file-load time — per-render allocation is just the function-call
 -- frame, no per-render closure or table allocation.
 ---------------------------------------------------------------------------------
+GUIFrame.onCloseCallbacks = GUIFrame.onCloseCallbacks or {}
 for _, d in ipairs(DUNGEONS) do
     local dungeonKey  = d.key
     local dungeonName = d.name
     GUIFrame:RegisterContent("DTimers_Dungeon_" .. dungeonKey, function(scrollChild, yOffset)
         return BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     end)
+    -- Each dungeon ID points at the same HideSpellPreview thunk. The
+    -- onCloseCallbacks dispatch is keyed by id, so registering all 8
+    -- means GUI-close cleanup fires regardless of which dungeon page
+    -- was last visited (FireOnCloseCallbacks iterates all entries).
+    GUIFrame.onCloseCallbacks["DTimers_Dungeon_" .. dungeonKey] = HideSpellPreview
 end

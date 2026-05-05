@@ -1151,6 +1151,8 @@ local Defaults = {
                 SpellDisabled = {},
                 SpellShowAtOverrides = {},
                 SpellTimeOffsets = {},
+                SpellDisplayOverrides = {},
+                SpellDisplayTextOverrides = {},
 
                 BarDisplay = {
                     barWidth = 250,
