@@ -178,10 +178,10 @@ GUIFrame:RegisterContent("DTimers_Texts", function(scrollChild, yOffset)
     textGroupCard:AddRow(textRow1, Theme.rowHeight)
 
     local textRow2 = GUIFrame:CreateRow(textGroupCard.content, Theme.rowHeightLast)
-    local textShowSlider = GUIFrame:CreateSlider(textRow2, "Show In Last (s)", {
+    local textShowSlider = GUIFrame:CreateSlider(textRow2, "Reveal at (s remaining)", {
         min = 0, max = 30, step = 1,
         value = db.TextGroup.ShowAtSeconds or 0,
-        labelWidth = 100,
+        labelWidth = 140,
         callback = function(val) db.TextGroup.ShowAtSeconds = val; ApplyAndUpdate() end,
     })
     textRow2:AddWidget(textShowSlider, 1)

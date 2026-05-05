@@ -197,10 +197,10 @@ GUIFrame:RegisterContent("DTimers_Bars", function(scrollChild, yOffset)
     barGroupCard:AddRow(barRow1, Theme.rowHeight)
 
     local barRow2 = GUIFrame:CreateRow(barGroupCard.content, Theme.rowHeightLast)
-    local barShowSlider = GUIFrame:CreateSlider(barRow2, "Show In Last (s)", {
+    local barShowSlider = GUIFrame:CreateSlider(barRow2, "Reveal at (s remaining)", {
         min = 0, max = 30, step = 1,
         value = db.BarGroup.ShowAtSeconds or 0,
-        labelWidth = 100,
+        labelWidth = 140,
         callback = function(val) db.BarGroup.ShowAtSeconds = val; ApplyAndUpdate() end,
     })
     barRow2:AddWidget(barShowSlider, 1)

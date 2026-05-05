@@ -1147,6 +1147,10 @@ local Defaults = {
             DungeonTimers = {
                 Enabled = false,
                 RoleFilterEnabled = false,
+                SpellRoleOverrides = {},
+                SpellDisabled = {},
+                SpellShowAtOverrides = {},
+                SpellTimeOffsets = {},
 
                 BarDisplay = {
                     barWidth = 250,
