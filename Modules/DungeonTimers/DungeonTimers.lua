@@ -79,11 +79,13 @@ local DISPLAY_PRESETS = {
     ADD     = { label = "ADD",      color = { 1.0,  0.3,  0.8  } },
     AMP     = { label = "AMP",      color = { 0.9,  0.5,  1.0  } },
     AOE     = { label = "AOE",      color = { 1.0,  1.0,  0.2  } },
+    CLEAR   = { label = "CLEAR",    color = { 0.95, 0.95, 0.95 } },
     DODGE   = { label = "DODGE",    color = { 1.0,  0.6,  0.0  } },
     FEET    = { label = "FEET",     color = { 1.0,  0.6,  0.0  } },
     FRONTAL = { label = "FRONTAL",  color = { 0.77, 0.17, 0.17 } },
     HIDE    = { label = "HIDE",     color = { 0.3,  0.9,  1.0  } },
     KICK    = { label = "KICK",     color = { 1.0,  0.85, 0.0  } },
+    MOVE    = { label = "MOVE",     color = { 1.0,  0.6,  0.0  } },
     PULL    = { label = "PULL",     color = { 0.3,  0.9,  1.0  } },
     SOAK    = { label = "SOAK",     color = { 0.2,  1.0,  0.4  } },
     SPREAD  = { label = "SPREAD",   color = { 1.0,  0.6,  0.0  } },
@@ -91,23 +93,50 @@ local DISPLAY_PRESETS = {
     TANK    = { label = "TANK HIT", color = { 0.77, 0.17, 0.17 } },
 }
 
+-- Lookup helper: returns the preset table entry for a string by matching
+-- against keys then labels (case-insensitive both ways). Returns nil for
+-- custom strings. The setter uses this for equivalence-pruning ("dodge"
+-- and "DODGE" resolve to the same preset → both equivalent to a
+-- curated "DODGE" → no override needed). Cheap: at most one hash lookup
+-- + one 13-entry scan, on user-write only.
+local function ResolvePresetByText(str)
+    if not str then return nil end
+    local upper = str:upper()
+    local preset = DISPLAY_PRESETS[upper]
+    if preset then return preset end
+    for _, p in pairs(DISPLAY_PRESETS) do
+        if p.label:upper() == upper then return p end
+    end
+    return nil
+end
+
 -- Resolve a displayText value to (label, color):
 --   nil           → nil label (CreateBar falls back to BigWigs spell name),
 --                   default color
 --   preset key    → preset label + preset color (e.g. "TANK" → "TANK HIT")
 --   preset label  → preset label + preset color (e.g. "TANK HIT" → same)
 --   custom string → string as label, default color
--- The label fallback is a 13-entry linear scan; happens once per RenderBar
--- (not per OnUpdate tick), well below noise.
+--
+-- Case-insensitive match against both keys and labels — humans don't
+-- always type in caps. Typing "dodge" / "Dodge" / "DODGE" all pick up
+-- the orange preset, and the rendered label is the preset's canonical
+-- form ("DODGE", uppercase) regardless of input casing. Custom strings
+-- preserve their casing in the rendered output.
 local function ResolveDisplayPreset(displayText)
     if not displayText then return nil, DEFAULT_BAR_COLOR end
-    local preset = DISPLAY_PRESETS[displayText]
+    local preset = ResolvePresetByText(displayText)
     if preset then return preset.label, preset.color end
-    for _, p in pairs(DISPLAY_PRESETS) do
-        if p.label == displayText then return p.label, p.color end
-    end
     return displayText, DEFAULT_BAR_COLOR
 end
+
+-- Internal access for the override setter's equivalence check.
+DT._ResolvePresetByText = ResolvePresetByText
+
+-- Expose DISPLAY_PRESETS for GUI consumption (preset chip grid in the
+-- Display tab). Read-only by convention; mutating this would break the
+-- ResolveDisplayPreset closure. GUI walks DT.DISPLAY_PRESETS.<key> to
+-- get { label, color } pairs.
+DT.DISPLAY_PRESETS = DISPLAY_PRESETS
 
 DT.bars = {}
 DT.barGroup = nil
@@ -201,17 +230,112 @@ function DT:SetSpellTimeOffset(spellId, value)
     end
 end
 
+-- Effective display mode (override → curator → "text" fallback). Used by
+-- EventCallback to pick which group ("bar" or "text") a spawning bar
+-- belongs to, and by the GUI tag rendering so the per-spell list shows
+-- the user's overridden mode instead of the curator's default. Lua's
+-- `or` chain works here because override values are always strings;
+-- nil-vs-empty distinction can't sneak in.
 function DT:GetSpellDisplay(spellId)
+    local override = self:GetSpellDisplayOverride(spellId)
+    if override then return override end
     local data = self:GetSpellInfo(spellId)
     return (data and data.display) or "text"
 end
 
--- Curated short-label override. Returns the EncounterData displayText
--- ("DODGE", "TANK HIT", "INTERRUPT" etc.) or nil if none. RenderBar /
--- CreateBar fall back to the BigWigs spell name when nil.
+-- Curator's raw display field — ignores user override. Used by the GUI
+-- to render the "Default: ..." caption next to the bar/text toggle so
+-- users can see what they've deviated from.
+function DT:GetSpellCuratorDisplay(spellId)
+    local data = self:GetSpellInfo(spellId)
+    return (data and data.display) or "text"
+end
+
+-- User per-spell display override. Returns "bar" / "text" / nil. nil
+-- means "fall through to curator default".
+function DT:GetSpellDisplayOverride(spellId)
+    if not (self.db and self.db.SpellDisplayOverrides and spellId) then return nil end
+    return self.db.SpellDisplayOverrides[spellId]
+end
+
+-- Sets the user override for display mode. Auto-prunes when the value
+-- matches the curated default so toggling back to default leaves no
+-- stored entry and the modified-stripe clears. Only "bar" / "text" are
+-- accepted; anything else short-circuits.
+function DT:SetSpellDisplayOverride(spellId, mode)
+    if not (self.db and spellId) then return end
+    if mode ~= "bar" and mode ~= "text" then return end
+    self.db.SpellDisplayOverrides = self.db.SpellDisplayOverrides or {}
+    local curated = self:GetSpellCuratorDisplay(spellId)
+    if mode == curated then
+        self.db.SpellDisplayOverrides[spellId] = nil
+    else
+        self.db.SpellDisplayOverrides[spellId] = mode
+    end
+end
+
+-- Curated short-label override. Returns the user override (when set) or
+-- the EncounterData displayText ("DODGE", "TANK HIT", "INTERRUPT" etc.)
+-- or nil if none. RenderBar / CreateBar fall back to the BigWigs spell
+-- name when nil. Resolution chain:
+--   db.SpellDisplayTextOverrides[spellId] (user)  → wins
+--   spell.displayText (curator)                    → fallback
+--   nil                                            → no short label
 function DT:GetSpellDisplayText(spellId)
+    local override = self:GetSpellDisplayTextOverride(spellId)
+    if override then return override end
     local data = self:GetSpellInfo(spellId)
     return data and data.displayText or nil
+end
+
+-- Curator's raw displayText — ignores user override. Used by the GUI
+-- to render the "Default: X" caption next to the custom-label editor.
+function DT:GetSpellCuratorDisplayText(spellId)
+    local data = self:GetSpellInfo(spellId)
+    return data and data.displayText or nil
+end
+
+-- User per-spell custom label. Returns a string or nil.
+function DT:GetSpellDisplayTextOverride(spellId)
+    if not (self.db and self.db.SpellDisplayTextOverrides and spellId) then return nil end
+    return self.db.SpellDisplayTextOverrides[spellId]
+end
+
+-- Sets the custom label override. Whitespace is trimmed from the input.
+-- Empty string OR string matching the curator default → entry is dropped
+-- so toggling back leaves no stored override and the modified-stripe
+-- clears. Otherwise stores the trimmed string verbatim. The display
+-- preset resolver (DODGE / TANK HIT / etc.) runs at bar-creation time
+-- against whatever this returns, so typing "DODGE" picks up the orange
+-- preset color automatically.
+function DT:SetSpellDisplayTextOverride(spellId, str)
+    if not (self.db and spellId) then return end
+    self.db.SpellDisplayTextOverrides = self.db.SpellDisplayTextOverrides or {}
+    if str then str = str:match("^%s*(.-)%s*$") end
+    if not str or str == "" then
+        self.db.SpellDisplayTextOverrides[spellId] = nil
+        return
+    end
+    local curated = self:GetSpellCuratorDisplayText(spellId)
+    if curated then
+        -- Equivalence prune: if both user input and curator resolve to
+        -- the same preset, they render identically — drop the override.
+        -- Catches "dodge" vs "DODGE" vs "Dodge" all matching curator
+        -- "DODGE" and not creating a stored deviation. For non-preset
+        -- strings, fall back to exact-match (case-sensitive because
+        -- non-preset rendering preserves casing).
+        local userPreset = self._ResolvePresetByText(str)
+        local curatorPreset = self._ResolvePresetByText(curated)
+        if userPreset and userPreset == curatorPreset then
+            self.db.SpellDisplayTextOverrides[spellId] = nil
+            return
+        end
+        if not userPreset and not curatorPreset and str == curated then
+            self.db.SpellDisplayTextOverrides[spellId] = nil
+            return
+        end
+    end
+    self.db.SpellDisplayTextOverrides[spellId] = str
 end
 
 -- Curated per-spell visibility threshold. Returns the EncounterData
@@ -423,6 +547,12 @@ function DT:HasSpellOverrides(spellId)
     if self.db.SpellTimeOffsets and self.db.SpellTimeOffsets[spellId] ~= nil then
         return true
     end
+    if self.db.SpellDisplayOverrides and self.db.SpellDisplayOverrides[spellId] ~= nil then
+        return true
+    end
+    if self.db.SpellDisplayTextOverrides and self.db.SpellDisplayTextOverrides[spellId] ~= nil then
+        return true
+    end
     if self.db.SpellRoleOverrides then
         local entry = self.db.SpellRoleOverrides[spellId]
         if entry and next(entry) ~= nil then return true end
@@ -446,6 +576,12 @@ function DT:ResetSpellOverrides(spellId)
     end
     if self.db.SpellTimeOffsets then
         self.db.SpellTimeOffsets[spellId] = nil
+    end
+    if self.db.SpellDisplayOverrides then
+        self.db.SpellDisplayOverrides[spellId] = nil
+    end
+    if self.db.SpellDisplayTextOverrides then
+        self.db.SpellDisplayTextOverrides[spellId] = nil
     end
 end
 
@@ -1240,6 +1376,9 @@ local function CreatePreviewBar(self, key, label, duration, displayMode, iconID,
 end
 
 function DT:ShowSettingsBarPreviews()
+    -- Group preview owns the BarGroup while active; clear the single-spell
+    -- preview so the two systems don't double-render in the same group.
+    self:HideSpellPreview()
     if self.previewBarShown then
         self:ApplySettings()
         return
@@ -1274,6 +1413,9 @@ function DT:RefreshSettingsBarPreviews()
 end
 
 function DT:ShowSettingsTextPreviews()
+    -- Group preview owns the TextGroup while active; clear the single-spell
+    -- preview so the two systems don't double-render in the same group.
+    self:HideSpellPreview()
     if self.previewTextShown then
         self:ApplySettings()
         return
@@ -1305,6 +1447,138 @@ function DT:RefreshSettingsTextPreviews()
     else
         self:ShowSettingsTextPreviews()
     end
+end
+
+---------------------------------------------------------------------------------
+-- Per-spell preview (Dungeon page selection feedback).
+-- Renders ONE looping bar/text using the currently-selected spell's effective
+-- settings (display mode, effective extension from time offset, real spell
+-- name + icon, curated displayText). Lives in the user's configured BarGroup
+-- or TextGroup so the preview spawns where real bars will appear.
+--
+-- Show is idempotent on identical spellId — a re-call from RefreshContent on
+-- the same spell does nothing. Show on a DIFFERENT spell hides the old bar
+-- and creates a new one. Refresh kills + recreates with current effective
+-- settings (used by the Display-tab mode toggle and the time-offset slider
+-- so visual updates land instantly without a full RefreshContent).
+---------------------------------------------------------------------------------
+local SPELL_PREVIEW_KEY = "__spell_preview"
+local SPELL_PREVIEW_BASE_DURATION = 8
+
+DT.spellPreviewSpellId = nil
+
+function DT:ShowSpellPreview(spellId)
+    if not spellId then
+        self:HideSpellPreview()
+        return
+    end
+    -- Idempotent guard: same spell already previewing? Don't restart its
+    -- loop — RefreshContent fires on every tab switch / list click and we
+    -- don't want the bar to visually reset each time.
+    if self.spellPreviewSpellId == spellId and self.bars[SPELL_PREVIEW_KEY] then
+        return
+    end
+    self:HideSpellPreview()
+    -- Single-spell preview owns the group while active. Clear group
+    -- previews so the two systems don't double-render. HideSettings*
+    -- functions are idempotent guards on `previewBarShown` — cheap no-op
+    -- when nothing's showing.
+    self:HideSettingsBarPreviews()
+    self:HideSettingsTextPreviews()
+
+    local data = self:GetSpellInfo(spellId) or {}
+    local extension = self:GetSpellExtension(spellId) or 0
+    local displayMode = self:GetSpellDisplay(spellId) or "text"
+    local displayText = self:GetSpellDisplayText(spellId)
+
+    -- Label resolution: curated name → "Spell <id>" fallback. CreateBar
+    -- internally resolves displayText through the preset table (DODGE,
+    -- TANK HIT, etc.) so the rendered label respects curator overrides.
+    local label = data.name or string_format("Spell %d", spellId)
+
+    -- Preview duration: when showAt is set, we want the preview's visible
+    -- window to match what the user will see in a real fight. In live
+    -- gameplay, bars hide until (total - showAt) and then drain for
+    -- exactly `showAt` seconds. For preview we don't need the hidden
+    -- prelude — looping the visible portion is what the user is
+    -- editing — so total visible = countdown + cast = showAt.
+    --   countdown phase length = showAt - extension
+    --   cast phase length      = extension
+    -- Floor countdown at 1s so weird configs (showAt < extension) still
+    -- produce a renderable bar.
+    -- showAt == 0 (always visible): no visible-window semantic, fall
+    -- back to the static 8s default + curated extension.
+    --
+    -- Resolution chain MUST mirror RenderBar's (override → curator →
+    -- group default → 0). GetSpellShowAtSeconds only returns the first
+    -- two; if those are nil, the live runtime applies the group default
+    -- as a final fallback. Without that fallback the preview lies about
+    -- what the user will see — e.g. group default 6, no per-spell
+    -- override, GetSpellShowAtSeconds returns nil, preview would render
+    -- the 8s static instead of 6s.
+    local groupKey = (displayMode == "bar") and "BarGroup" or "TextGroup"
+    local groupCfg = self.db and self.db[groupKey]
+    local groupDefault = (groupCfg and groupCfg.ShowAtSeconds) or 0
+    local effectiveShowAt = self:GetSpellShowAtSeconds(spellId) or groupDefault
+    local baseDuration
+    if effectiveShowAt > 0 then
+        baseDuration = math.max(1, effectiveShowAt - extension)
+    else
+        baseDuration = SPELL_PREVIEW_BASE_DURATION
+    end
+
+    local bar = self:CreateBar(label, baseDuration, extension,
+                               displayMode, displayText)
+    bar.isPreview = true
+    bar.loop = true
+    -- sortIndex 1 keeps the preview bar at the top of the stack regardless
+    -- of how many real bars spawn during a fight (their counter starts at
+    -- 1000). 1 also matches the existing __preview_bar_1/2/3 ordering so
+    -- if the Bars/Texts settings page IS active and shows its own previews,
+    -- ours sits cleanly above without interleaving.
+    bar.sortIndex = 1
+    bar.text = SPELL_PREVIEW_KEY
+
+    -- Bar mode: real spell icon (C_Spell.GetSpellTexture is taint-clean
+    -- for curated spellIds — they're well-defined boss spells in the spell
+    -- DB). Text mode: no icon, no-op.
+    if bar.icon then
+        local tex = (C_Spell and C_Spell.GetSpellTexture
+                     and C_Spell.GetSpellTexture(spellId))
+                    or 134400
+        bar.icon:SetTexture(tex)
+    end
+
+    self.bars[SPELL_PREVIEW_KEY] = bar
+    self.spellPreviewSpellId = spellId
+    self:LayoutBars()
+end
+
+function DT:HideSpellPreview()
+    local bar = self.bars[SPELL_PREVIEW_KEY]
+    if bar then
+        if bar.revealTimer then
+            self:CancelTimer(bar.revealTimer)
+            bar.revealTimer = nil
+        end
+        bar:SetScript("OnUpdate", nil)
+        bar:Hide()
+        self.bars[SPELL_PREVIEW_KEY] = nil
+    end
+    self.spellPreviewSpellId = nil
+    self:LayoutBars()
+end
+
+-- Re-renders the active preview using the spell's current effective
+-- settings. No-op when no preview is active. Used after the GUI changes
+-- a setting that affects the bar's visual or duration (display mode,
+-- time offset). Settings that affect ONLY the layout (group font/size/
+-- spacing) flow through ApplySettings instead.
+function DT:RefreshSpellPreview()
+    if not self.spellPreviewSpellId then return end
+    local id = self.spellPreviewSpellId
+    self:HideSpellPreview()
+    self:ShowSpellPreview(id)
 end
 
 function DT:OnInitialize()
