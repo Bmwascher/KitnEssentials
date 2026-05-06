@@ -210,13 +210,23 @@ local function CollectEncountersForDungeon(dungeonKey)
             end
             table_sort(spellPairs, function(a, b) return a.id < b.id end)
             table_insert(encList, {
-                id     = encId,
-                name   = enc.name or string_format("Encounter %d", encId),
-                spells = spellPairs,
+                id        = encId,
+                name      = enc.name or string_format("Encounter %d", encId),
+                bossOrder = enc.bossOrder,
+                spells    = spellPairs,
             })
         end
     end
-    table_sort(encList, function(a, b) return a.id < b.id end)
+    -- Sort by explicit bossOrder when present (older dungeons whose
+    -- encounterIDs don't reflect in-dungeon order, e.g. Pit of Saron),
+    -- otherwise fall back to encounterID-ascending. Two-key sort keeps
+    -- ordering deterministic when bossOrder is partially populated.
+    table_sort(encList, function(a, b)
+        local ao = a.bossOrder or a.id
+        local bo = b.bossOrder or b.id
+        if ao ~= bo then return ao < bo end
+        return a.id < b.id
+    end)
     _encListCache[dungeonKey] = encList
     return encList
 end
@@ -344,6 +354,14 @@ local function ResetListRow(kit)
     if kit.tagLabel then kit.tagLabel:SetText("") end
     if kit.soundLabel then kit.soundLabel:SetText("") end
     if kit.overrideStripe then kit.overrideStripe:Hide() end
+    -- Clear anchors so re-Acquire's SetPoint starts from a clean slate. Without
+    -- this, in rare cases the kit can hold a stale TOPLEFT anchor referencing
+    -- the previous render's leftCol (which has since been SetParent(nil)'d
+    -- during ClearContent). The new SetPoint usually replaces cleanly, but if
+    -- WoW's frame system delivers a layout pass between the SetParent + SetPoint
+    -- calls, the row can render at the stale position (off-screen relative to
+    -- the new leftCol) and look "missing".
+    if kit.row and kit.row.ClearAllPoints then kit.row:ClearAllPoints() end
 end
 
 local function CreateListRowKit(holder)
@@ -540,9 +558,14 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
     local secondaryWidgets = {}
 
     -- Enable toggle (top of Visibility tab body). Hard-disable filter that
-    -- runs always-on (independent of the role master toggle). Default = on
-    -- (no DB entry); flipping off writes db.SpellDisabled[spellId] = true.
-    local enableState = DT and (not DT:IsSpellDisabled(spellId)) or true
+    -- runs always-on (independent of the role master toggle). Default
+    -- follows the curator's `disabled` flag (false unless set), with the
+    -- user's tristate override winning when present.
+    -- Don't collapse this to `DT and (not IsSpellDisabled) or true` —
+    -- Lua's `and/or` precedence makes `false or true` always `true`,
+    -- erasing the disabled-state read.
+    local enableState = true
+    if DT then enableState = not DT:IsSpellDisabled(spellId) end
     local enableToggle = GUIFrame:CreateCheckbox(body, "Enable this spell", {
         value = enableState,
         callback = function(checked)
@@ -1762,6 +1785,7 @@ end
 -- frame, no per-render closure or table allocation.
 ---------------------------------------------------------------------------------
 GUIFrame.onCloseCallbacks = GUIFrame.onCloseCallbacks or {}
+GUIFrame.contentCleanupCallbacks = GUIFrame.contentCleanupCallbacks or {}
 for _, d in ipairs(DUNGEONS) do
     local dungeonKey  = d.key
     local dungeonName = d.name
@@ -1774,3 +1798,11 @@ for _, d in ipairs(DUNGEONS) do
     -- was last visited (FireOnCloseCallbacks iterates all entries).
     GUIFrame.onCloseCallbacks["DTimers_Dungeon_" .. dungeonKey] = HideSpellPreview
 end
+-- Single contentCleanupCallback (separate from per-dungeon onClose entries).
+-- contentCleanupCallbacks fires on REAL sidebar item switches; we want a
+-- spell preview started in any dungeon page to vanish when the user clicks
+-- a non-DungeonTimers sidebar entry. RefreshContent iterates ALL cleanup
+-- callbacks unconditionally, so one entry suffices regardless of which
+-- dungeon was active. Keyed distinct from "DungeonTimers" (used by
+-- DungeonTimersCfg for Settings previews) so the two don't clobber.
+GUIFrame.contentCleanupCallbacks["DTimers_Dungeon_SpellPreview"] = HideSpellPreview

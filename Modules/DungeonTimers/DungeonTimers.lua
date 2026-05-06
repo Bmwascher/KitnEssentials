@@ -90,11 +90,11 @@ local DISPLAY_PRESETS = {
     AMP     = { label = "AMP",      color = { 0.9,  0.5,  1.0  } },
     AOE     = { label = "AOE",      color = { 1.0,  1.0,  0.2  } },
     CLEAR   = { label = "CLEAR",    color = { 0.95, 0.95, 0.95 } },
+    DANCE   = { label = "DANCE",    color = { 0.7,  0.4,  1.0  } },
     DODGE   = { label = "DODGE",    color = { 1.0,  0.6,  0.0  } },
     FEET    = { label = "FEET",     color = { 1.0,  0.6,  0.0  } },
     FRONTAL = { label = "FRONTAL",  color = { 0.77, 0.17, 0.17 } },
     HIDE    = { label = "HIDE",     color = { 0.3,  0.9,  1.0  } },
-    KICK    = { label = "KICK",     color = { 1.0,  0.85, 0.0  } },
     MOVE    = { label = "MOVE",     color = { 1.0,  0.6,  0.0  } },
     PULL    = { label = "PULL",     color = { 0.3,  0.9,  1.0  } },
     SOAK    = { label = "SOAK",     color = { 0.2,  1.0,  0.4  } },
@@ -109,8 +109,13 @@ local DISPLAY_PRESETS = {
 -- the aliased preset so plural-add mechanics group visually with single-
 -- add ones. Add new aliases here as they come up.
 local DISPLAY_PRESET_ALIASES = {
-    ADDS   = "ADD",
-    TOTEMS = "ADD",
+    ADDS         = "ADD",
+    CLEARS       = "CLEAR",
+    DROPS        = "SPREAD",
+    HOOK         = "FRONTAL",
+    INTERMISSION = "DANCE",
+    LEAP         = "PULL",
+    TOTEMS       = "ADD",
 }
 
 -- Lookup helper: returns the preset table entry for a string by matching
@@ -666,20 +671,37 @@ end
 
 -- Per-spell hard disable. Always-active filter (independent of the role
 -- master toggle) — when set, the bar never renders regardless of role.
--- DB stores only deviations from default (nil = enabled, true = disabled);
--- saved-vars stay tiny.
+-- Tristate DB storage:
+--   nil   = use curator default (data.disabled, defaults to false)
+--   true  = explicit user disable (overrides curator)
+--   false = explicit user enable (overrides curator-disabled default)
+-- Storing only deviations keeps saved-vars tiny — when the user's setting
+-- matches the curator default, SetSpellDisabled prunes to nil.
+function DT:GetSpellCuratorDisabled(spellId)
+    local data = self:GetSpellInfo(spellId)
+    return (data and data.disabled) == true
+end
+
 function DT:IsSpellDisabled(spellId)
-    if not (self.db and self.db.SpellDisabled and spellId) then return false end
-    return self.db.SpellDisabled[spellId] == true
+    if not spellId then return false end
+    if self.db and self.db.SpellDisabled then
+        local override = self.db.SpellDisabled[spellId]
+        if override == true then return true end
+        if override == false then return false end
+    end
+    return self:GetSpellCuratorDisabled(spellId)
 end
 
 function DT:SetSpellDisabled(spellId, disabled)
     if not (self.db and spellId) then return end
     self.db.SpellDisabled = self.db.SpellDisabled or {}
-    if disabled then
-        self.db.SpellDisabled[spellId] = true
-    else
+    local curated = self:GetSpellCuratorDisabled(spellId)
+    if disabled == curated then
+        -- Matches curator default — drop the override so the entry doesn't
+        -- bloat saved-vars and "modified" indicator clears.
         self.db.SpellDisabled[spellId] = nil
+    else
+        self.db.SpellDisabled[spellId] = disabled
     end
 end
 
@@ -698,7 +720,11 @@ end
 -- rows so users can see at a glance which spells they've customized.
 function DT:HasSpellOverrides(spellId)
     if not (self.db and spellId) then return false end
-    if self.db.SpellDisabled and self.db.SpellDisabled[spellId] == true then
+    -- Disabled override deviates from curator default whenever the user
+    -- has stored an explicit value (tristate: nil = use default, true/false
+    -- = explicit). Store-time auto-pruning keeps `false-on-curator-false`
+    -- and `true-on-curator-true` from leaking in here as false positives.
+    if self.db.SpellDisabled and self.db.SpellDisabled[spellId] ~= nil then
         return true
     end
     if self.db.SpellShowAtOverrides and self.db.SpellShowAtOverrides[spellId] ~= nil then
@@ -1898,6 +1924,18 @@ function DT:EventCallback(event, ...)
         local addon, spellId, duration, _, text, count, icon = ...
         local baseDur = tonumber(duration) or 0
         local spellIdNum = tonumber(spellId)
+
+        -- Curated-only gate: skip any BigWigs_Timer event for a spell that
+        -- we don't have curated data for. Without this filter, raid bosses
+        -- + uncurated dungeons would still spawn bars in default blue
+        -- whenever BigWigs fires, polluting the user's screen with the
+        -- wrong content. The module is M+-curation-driven; if a spell isn't
+        -- in EncounterData, BigWigs's own bars handle display (we don't
+        -- duplicate). Filters BEFORE role/disable so the dprint trace doesn't
+        -- spam for non-curated content.
+        if not self:GetSpellInfo(spellIdNum) then
+            return
+        end
 
         -- Combined per-spell filter: hard-disable (always-active) +
         -- role allow-list (only when RoleFilterEnabled). Gates BEFORE
