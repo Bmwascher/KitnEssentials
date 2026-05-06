@@ -87,7 +87,6 @@ local DISPLAY_PRESETS = {
     { key = "FEET",    text = "FEET",     label = "FEET",     format = "FEET \194\187 %p",     color = { 1.0,  0.6,  0.0,  1 } },
     { key = "FRONTAL", text = "FRONTAL",  label = "FRONTAL",  format = "FRONTAL \194\187 %p",  color = { 0.77, 0.17, 0.17, 1 } },
     { key = "HIDE",    text = "HIDE",     label = "HIDE",     format = "HIDE \194\187 %p",     color = { 0.3,  0.9,  1.0,  1 } },
-    { key = "KICK",    text = "KICK",     label = "KICK",     format = "KICK \194\187 %p",     color = { 1.0,  0.85, 0.0,  1 } },
     { key = "PULL",    text = "PULL",     label = "PULL",     format = "PULL \194\187 %p",     color = { 0.3,  0.9,  1.0,  1 } },
     { key = "SOAK",    text = "SOAK",     label = "SOAK",     format = "SOAK \194\187 %p",     color = { 0.2,  1.0,  0.4,  1 } },
     { key = "SPREAD",  text = "SPREAD",   label = "SPREAD",   format = "SPREAD \194\187 %p",   color = { 1.0,  0.6,  0.0,  1 } },
