@@ -388,9 +388,9 @@ KE.EncounterData[1698] = {
     dungeon = "Skyreach",
     spells = {
         [1252690] = { name = "Gale Surge",     castType = "begincast", castDuration = 3,                       role = "other",    displayText = "DROPS"   },
-        [153757]  = { name = "Fan of Blades",  castType = "begincast", castDuration = 2,                       role = "heal"     },
+        [153757]  = { name = "Fan of Blades",  castType = "begincast", castDuration = 2,                       role = "mechanic", displayText = "AOE"     },
         [1258152] = { name = "Wind Chakram",   castType = "begincast", castDuration = 3,                       role = "other",    displayText = "FRONTAL" },
-        [156793]  = { name = "Chakram Vortex", castType = "begincast", castDuration = 3,                       role = "mechanic", displayText = "AOE"     },
+        [156793]  = { name = "Chakram Vortex", castType = "begincast", castDuration = 3,                       role = "mechanic", displayText = "DODGE"   },
     },
 }
 
