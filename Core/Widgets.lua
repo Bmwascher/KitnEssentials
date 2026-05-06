@@ -164,7 +164,7 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     dialog:EnableMouse(true)
     dialog:SetMovable(true)
     dialog:RegisterForDrag("LeftButton")
-    dialog:SetScript("OnDragStart", dialog.StartMoving)
+    dialog:SetScript("OnDragStart", function(d) d:StartMoving(true) end)
     dialog:SetScript("OnDragStop", dialog.StopMovingOrSizing)
 
     local dialogPx = KE:GetPixelSize()
