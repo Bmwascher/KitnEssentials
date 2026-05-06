@@ -20,6 +20,7 @@ local GetItemCount = C_Item.GetItemCount
 local CreateFrame = CreateFrame
 local InCombatLockdown = InCombatLockdown
 local GetInstanceInfo = GetInstanceInfo
+local C_CurrencyInfo = C_CurrencyInfo
 local UnitClass = UnitClass
 local UnitName = UnitName
 local IsInInstance = IsInInstance
@@ -269,11 +270,52 @@ function RN:ApplyRowVisuals(row)
 end
 
 ---------------------------------------------------------------------------------
+-- Voidcore — seasonal currency cap alert
+---------------------------------------------------------------------------------
+-- Fires while the player is inside a seasonal instance (dungeon/raid) AND
+-- has earned less than the weekly cap of Nebulous Voidcore. Hides during
+-- combat to avoid mid-pull screen clutter. Subscription to the currency +
+-- combat events is zone-conditional (managed by VoidcoreUpdateSubscriptions)
+-- so we don't pay event-dispatch overhead while the player is outside the
+-- relevant 11 instances.
+function RN:EvaluateVoidcore()
+    if not self.db.VoidcoreEnabled then self:HideAlert("Voidcore"); return end
+    if InCombatLockdown() then self:HideAlert("Voidcore"); return end
+    if not VOIDCORE_ZONE_IDS[select(8, GetInstanceInfo())] then
+        self:HideAlert("Voidcore"); return
+    end
+    local info = C_CurrencyInfo.GetCurrencyInfo(VOIDCORE_CURRENCY_ID)
+    if info and info.quantityEarnedThisWeek < info.maxWeeklyQuantity then
+        self:ShowAlert("Voidcore")
+    else
+        self:HideAlert("Voidcore")
+    end
+end
+
+function RN:VoidcoreUpdateSubscriptions()
+    local shouldSubscribe = self.db.VoidcoreEnabled
+        and VOIDCORE_ZONE_IDS[select(8, GetInstanceInfo())] ~= nil
+    if shouldSubscribe and not self._voidcoreSubscribed then
+        self:RegisterEvent("CURRENCY_DISPLAY_UPDATE", "EvaluateVoidcore")
+        self:RegisterEvent("PLAYER_REGEN_DISABLED",   "EvaluateVoidcore")
+        self:RegisterEvent("PLAYER_REGEN_ENABLED",    "EvaluateVoidcore")
+        self._voidcoreSubscribed = true
+    elseif not shouldSubscribe and self._voidcoreSubscribed then
+        self:UnregisterEvent("CURRENCY_DISPLAY_UPDATE")
+        self:UnregisterEvent("PLAYER_REGEN_DISABLED")
+        self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+        self._voidcoreSubscribed = false
+    end
+    self:EvaluateVoidcore()
+end
+
+---------------------------------------------------------------------------------
 -- Zone Change
 ---------------------------------------------------------------------------------
 function RN:OnZoneChange()
     self:GatewayFullUpdate()
     self:CheckBench()
+    self:VoidcoreUpdateSubscriptions()
 end
 
 ---------------------------------------------------------------------------------
@@ -538,6 +580,7 @@ function RN:ApplySettings()
         end
     end
 
+    self:VoidcoreUpdateSubscriptions()
     self:LayoutRows()
 end
 
@@ -679,6 +722,7 @@ function RN:OnDisable()
     self.hasItem = false
     self.hasWarlockInGroup = false
     self.isPreview = false
+    self._voidcoreSubscribed = false
     self.resetBossGen = self.resetBossGen + 1
     self.lootBossGen = self.lootBossGen + 1
 end
