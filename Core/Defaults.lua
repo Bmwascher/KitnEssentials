@@ -254,6 +254,7 @@ local Defaults = {
             ResetBossEnabled = true,
             LootBossEnabled = true,
             BenchEnabled = true,
+            VoidcoreEnabled = true,
         },
 
         NoMovementAlert = {
