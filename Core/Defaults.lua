@@ -507,6 +507,7 @@ local Defaults = {
             AutoConfirmLootRoll = true,
             AutoPassHousing = false,
             AutoPassHousingMode = "PASS",  -- "PASS" or "NEED"
+            ConfirmBonusRoll = false,
             AutoAcceptQuests = false,
             AutoTurnInQuests = false,
             QuestModifier = "SHIFT",

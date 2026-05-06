@@ -258,8 +258,15 @@ GUIFrame:RegisterContent("Automation", function(scrollChild, yOffset)
         value = db.AutoConfirmLootRoll == true,
         callback = function(checked) db.AutoConfirmLootRoll = checked; ApplySettings() end,
     })
-    row7b:AddWidget(autoConfirmLootRollCheck, 1)
+    row7b:AddWidget(autoConfirmLootRollCheck, 0.5)
     autoManager:Register(autoConfirmLootRollCheck, "all")
+
+    local confirmBonusRollCheck = GUIFrame:CreateCheckbox(row7b, "Confirm Bonus Roll", {
+        value = db.ConfirmBonusRoll == true,
+        callback = function(checked) db.ConfirmBonusRoll = checked; ApplySettings() end,
+    })
+    row7b:AddWidget(confirmBonusRollCheck, 0.5)
+    autoManager:Register(confirmBonusRollCheck, "all")
     card7:AddRow(row7b, Theme.rowHeightLast, 0)
 
     yOffset = card7:GetNextOffset()
