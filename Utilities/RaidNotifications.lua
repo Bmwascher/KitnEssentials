@@ -328,7 +328,18 @@ function RN:EvaluateVoidcore()
     if InCombatLockdown() then self:HideAlert("Voidcore"); return end
     if not IsInSeasonalZone() then self:HideAlert("Voidcore"); return end
     local info = C_CurrencyInfo.GetCurrencyInfo(VOIDCORE_CURRENCY_ID)
-    if info and info.quantityEarnedThisWeek < info.maxWeeklyQuantity then
+    if not info then self:HideAlert("Voidcore"); return end
+    -- Voidcore is season-capped (useTotalEarnedForMaxQty=true): the cap lives
+    -- in totalEarned vs maxQuantity, and the weekly fields are both 0. Branch
+    -- on the field rather than hardcoding to the season-cap path so a future
+    -- weekly-capped seasonal currency works without a code change.
+    local uncapped
+    if info.useTotalEarnedForMaxQty then
+        uncapped = info.totalEarned < info.maxQuantity
+    else
+        uncapped = info.quantityEarnedThisWeek < info.maxWeeklyQuantity
+    end
+    if uncapped then
         self:ShowAlert("Voidcore")
     else
         self:HideAlert("Voidcore")
