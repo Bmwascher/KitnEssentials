@@ -7,5 +7,4 @@
     <Script file="DungeonCasts.lua" />
     <Script file="HealerMana.lua" />
     <Script file="DeathNotifications.lua" />
-    <Script file="FriendlyAutoMarker.lua" />
 </Ui>
