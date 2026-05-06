@@ -39,6 +39,15 @@ end
 ---------------------------------------------------------------------------------
 local GATEWAY_ITEM_ID = 188152
 
+-- Nebulous Voidcore — 12.0 Midnight Season 1 currency for bonus rolls in
+-- seasonal dungeons + raids. Bought from an NPC; no over-cap possible.
+local VOIDCORE_CURRENCY_ID = 3418
+
+-- Instance IDs (8 seasonal M+ dungeons + 3 raids). Filled in Task 4.
+-- Empty table → alert eval falls through zone check → never shows. Safe to
+-- ship as a no-op until populated.
+local VOIDCORE_ZONE_IDS = {}
+
 local SATED_DEBUFFS = {
     57723,  -- Exhaustion (Heroism)
     57724,  -- Sated (Bloodlust)
@@ -55,6 +64,7 @@ local ALERT_DEFS = {
     { key = "ResetBoss",  text = "RESET BOSS",  icon = 136090,  enableKey = "ResetBossEnabled" },  -- Spell_Nature_Exhaustion
     { key = "LootBoss",   text = "LOOT BOSS",   icon = "Interface\\AddOns\\KitnEssentials\\Media\\Icon\\Cat_Head.png", enableKey = "LootBossEnabled" },
     { key = "BenchAlert", text = "BENCHED",     icon = 134414, enableKey = "BenchEnabled" },  -- INV_Misc_Rune_01
+    { key = "Voidcore",   text = "BONUS ROLLS MISSING", icon = 7658128, enableKey = "VoidcoreEnabled" },
 }
 
 local ALERT_BY_KEY = {}
