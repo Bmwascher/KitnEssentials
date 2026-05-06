@@ -31,6 +31,13 @@ local C_Item = C_Item
 local C_CVar = C_CVar
 local C_Timer = C_Timer
 local StaticPopupDialogs = StaticPopupDialogs
+local StaticPopup_FindVisible = StaticPopup_FindVisible
+local StaticPopup_Hide = StaticPopup_Hide
+local GetLootRollItemLink = GetLootRollItemLink
+local RollOnLoot = RollOnLoot
+local ConfirmLootRoll = ConfirmLootRoll
+local Item = Item
+local Enum = Enum
 local _G = _G
 
 ---------------------------------------------------------------------------------
@@ -441,6 +448,91 @@ local function ApplyAutoLoot()
     C_CVar.SetCVar("autoLootDefault", AU.db.AutoLoot and "1" or "0")
 end
 
+-- Auto-Confirm Loot Roll Popup --
+-- Hooks StaticPopup_Show to auto-click "Yes" on CONFIRM_LOOT_ROLL (the
+-- "[item] will become Soulbound. Continue?" prompt that appears after
+-- Need rolls on BoP items). Defers via C_Timer.After(0) so the popup
+-- frame exists before we try to find/click it.
+
+local autoConfirmHooked = false
+local function SetupAutoConfirmLootRoll()
+    if autoConfirmHooked then return end
+    autoConfirmHooked = true
+    hooksecurefunc("StaticPopup_Show", function(which)
+        if not AU.db or not AU.db.Enabled then return end
+        if not AU.db.AutoConfirmLootRoll then return end
+        if which ~= "CONFIRM_LOOT_ROLL" then return end
+        C_Timer.After(0, function()
+            local popup = StaticPopup_FindVisible and StaticPopup_FindVisible("CONFIRM_LOOT_ROLL")
+            if popup and popup.button1 and popup.button1:IsEnabled() then
+                popup.button1:Click()
+            end
+        end)
+    end)
+end
+
+-- Auto-Pass Housing Items --
+-- Listens for START_LOOT_ROLL, filters by Enum.ItemClass.Housing, then calls
+-- RollOnLoot + ConfirmLootRoll with the configured mode (PASS or NEED).
+-- Item-load fallback handles the case where GetItemInfo's class fields aren't
+-- cached yet on the first event. Adapted from Caboodle Utilities.lua "Roll
+-- Away" feature, simplified — no instance-type gating, no loot-history hide.
+
+local AUTO_ROLL_MAP = { PASS = 0, NEED = 1 }
+
+local lootRollFrame
+local function SetupAutoPassHousing()
+    if lootRollFrame then return end
+    lootRollFrame = CreateFrame("Frame")
+    lootRollFrame:RegisterEvent("START_LOOT_ROLL")
+    lootRollFrame:SetScript("OnEvent", function(self, event, ...)
+        local rollID = ...
+        if not AU.db or not AU.db.Enabled then return end
+        if not AU.db.AutoPassHousing then return end
+
+        local link = GetLootRollItemLink(rollID)
+        if not link then return end
+
+        local HOUSING_CLASS = (Enum.ItemClass and Enum.ItemClass.Housing) or 20
+        local mode = AUTO_ROLL_MAP[AU.db.AutoPassHousingMode] or 0
+
+        local function execute(classID)
+            if classID ~= HOUSING_CLASS then return end
+            local ok = pcall(RollOnLoot, rollID, mode)
+            if not ok then return end
+            if ConfirmLootRoll then pcall(ConfirmLootRoll, rollID, mode) end
+            -- Dismiss the secondary CONFIRM_LOOT_ROLL popup defensively (matches
+            -- Caboodle Utilities.lua:425-428). RollOnLoot+ConfirmLootRoll already
+            -- went through programmatically; the popup is just stale UI to clear.
+            -- This makes housing auto-roll work end-to-end without requiring the
+            -- separate Auto-Confirm Loot Roll Popup toggle.
+            C_Timer.After(0.1, function()
+                if StaticPopup_FindVisible and StaticPopup_FindVisible("CONFIRM_LOOT_ROLL") then
+                    StaticPopup_Hide("CONFIRM_LOOT_ROLL")
+                end
+            end)
+        end
+
+        local info = { C_Item.GetItemInfo(link) }
+        if info[12] then
+            execute(info[12])
+            return
+        end
+
+        -- Item not yet cached — defer via ContinueOnItemLoad
+        if Item and Item.CreateFromItemLink then
+            local ok, item = pcall(Item.CreateFromItemLink, Item, link)
+            if ok and item then
+                item:ContinueOnItemLoad(function()
+                    if not GetLootRollItemLink(rollID) then return end
+                    local info2 = { C_Item.GetItemInfo(link) }
+                    if info2[12] then execute(info2[12]) end
+                end)
+            end
+        end
+    end)
+end
+
 -- Quest Automation --
 
 local function IsQuestModifierHeld()
@@ -581,6 +673,8 @@ function AU:ApplySettings()
     SetupAutoSlotKeystone()
     SetupAutoFillDelete()
     ApplyAutoLoot()
+    SetupAutoConfirmLootRoll()
+    SetupAutoPassHousing()
     SetupAutoQuests()
     SetupAutoDeclineDuels()
     SetupAutoDeclinePetBattles()
