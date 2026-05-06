@@ -534,6 +534,15 @@ local Defaults = {
             autoLootRate = nil,
         },
 
+        FriendlyAutoMarker = {
+            Enabled = false,
+            InstanceOnly = true,
+            MarkTank = true,
+            MarkHealer = true,
+            TankIcon = 6,    -- Square
+            HealerIcon = 1,  -- Star
+        },
+
         AuctionHouseFilter = {
             Enabled = true,
             AuctionHouse = {

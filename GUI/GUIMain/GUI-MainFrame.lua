@@ -122,6 +122,7 @@ GUIFrame.sidebarConfig = {
             { id = "DeathNotifications",          text = "Death Notifications" },
             { id = "DungeonCasts",                text = "Dungeon Casts" },
             { id = "EnemyCounter",                text = "Enemy Counter" },
+            { id = "FriendlyAutoMarker",          text = "Friendly Auto Marker" },
             { id = "HealerMana",                  text = "Healer Mana" },
             { id = "KickTracker",                 text = "Interrupt Tracker" },
             { id = "WarpDepleteForces",           text = "WarpDeplete+" },
