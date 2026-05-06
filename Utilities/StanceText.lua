@@ -77,6 +77,11 @@ local function UpdateStanceTextDisplay()
         return
     end
 
+    if not playerClass then
+        if stanceTextFrame then stanceTextFrame:Hide() end
+        return
+    end
+
     if playerClass ~= "WARRIOR" and playerClass ~= "PALADIN" and playerClass ~= "EVOKER" then
         if stanceTextFrame then stanceTextFrame:Hide() end
         return
