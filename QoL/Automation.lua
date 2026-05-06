@@ -533,6 +533,102 @@ local function SetupAutoPassHousing()
     end)
 end
 
+-- Confirm Bonus Roll --
+-- Hooks BonusRollFrame's Roll button to show a confirmation dialog before
+-- the bonus roll commits, preventing accidental clicks on the costly action.
+-- The Pass-button confirm code is left in place but commented out — uncomment
+-- the pass branch in HookBonusChild to re-enable it.
+
+StaticPopupDialogs["KE_BONUS_ROLL_CONFIRM"] = {
+    text    = "Use your bonus roll?",
+    button1 = "Confirm",
+    button2 = "Cancel",
+    OnAccept = nil,  -- filled in per-click
+    OnCancel = function() end,
+    timeout = 0,
+    whileDead = false,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+-- Pass-button dialog kept defined for symmetry with the commented-out hook
+-- branch below. Activates only if the pass branch in HookBonusChild is uncommented.
+StaticPopupDialogs["KE_BONUS_PASS_CONFIRM"] = {
+    text    = "Pass on this bonus roll?",
+    button1 = "Confirm",
+    button2 = "Cancel",
+    OnAccept = nil,
+    OnCancel = function() end,
+    timeout = 0,
+    whileDead = false,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+local bonusFrameHooked = false
+
+local function HookBonusChild(child, isRoll)
+    if not child or child._keBonusHooked then return end
+    if not child:IsObjectType("Button") then return end
+    local orig = child:GetScript("OnClick")
+    if not orig then return end
+    child._keBonusHooked = true
+
+    -- Roll-button confirm (active).
+    if isRoll then
+        child:SetScript("OnClick", function(self, btn, down)
+            if not AU.db or not AU.db.Enabled then orig(self, btn, down); return end
+            if not AU.db.ConfirmBonusRoll then orig(self, btn, down); return end
+            StaticPopupDialogs["KE_BONUS_ROLL_CONFIRM"].OnAccept =
+                function() orig(self, btn, down) end
+            StaticPopup_Show("KE_BONUS_ROLL_CONFIRM")
+        end)
+    end
+
+    -- Pass-button confirm — disabled by default. Uncomment the block below
+    -- (and the matching KE_BONUS_PASS_CONFIRM dialog) to re-enable.
+    --[[
+    if not isRoll then
+        child:SetScript("OnClick", function(self, btn, down)
+            if not AU.db or not AU.db.Enabled then orig(self, btn, down); return end
+            if not AU.db.ConfirmBonusRoll then orig(self, btn, down); return end
+            StaticPopupDialogs["KE_BONUS_PASS_CONFIRM"].OnAccept =
+                function() orig(self, btn, down) end
+            StaticPopup_Show("KE_BONUS_PASS_CONFIRM")
+        end)
+    end
+    --]]
+end
+
+local function HookBonusFrame()
+    if bonusFrameHooked or not BonusRollFrame then return end
+    local rollBtn = (BonusRollFrame.PromptFrame and BonusRollFrame.PromptFrame.RollButton)
+                 or BonusRollFrame.RollButton
+    local function Walk(frame)
+        for i = 1, frame:GetNumChildren() do
+            local child = select(i, frame:GetChildren())
+            HookBonusChild(child, child == rollBtn)
+            Walk(child)
+        end
+    end
+    Walk(BonusRollFrame)
+    bonusFrameHooked = true
+end
+
+local bonusInitFrame
+local function SetupConfirmBonusRoll()
+    if bonusInitFrame then return end
+    if BonusRollFrame_StartBonusRoll then
+        hooksecurefunc("BonusRollFrame_StartBonusRoll", HookBonusFrame)
+    end
+    bonusInitFrame = CreateFrame("Frame")
+    bonusInitFrame:RegisterEvent("BONUS_ROLL_STARTED")
+    bonusInitFrame:SetScript("OnEvent", function(self, event)
+        HookBonusFrame()
+        self:UnregisterAllEvents()
+    end)
+end
+
 -- Quest Automation --
 
 local function IsQuestModifierHeld()
@@ -675,6 +771,7 @@ function AU:ApplySettings()
     ApplyAutoLoot()
     SetupAutoConfirmLootRoll()
     SetupAutoPassHousing()
+    SetupConfirmBonusRoll()
     SetupAutoQuests()
     SetupAutoDeclineDuels()
     SetupAutoDeclinePetBattles()
