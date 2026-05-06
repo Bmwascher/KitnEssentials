@@ -21,6 +21,7 @@ local CreateFrame = CreateFrame
 local InCombatLockdown = InCombatLockdown
 local GetInstanceInfo = GetInstanceInfo
 local C_CurrencyInfo = C_CurrencyInfo
+local C_Map = C_Map
 local UnitClass = UnitClass
 local UnitName = UnitName
 local IsInInstance = IsInInstance
@@ -44,10 +45,54 @@ local GATEWAY_ITEM_ID = 188152
 -- seasonal dungeons + raids. Bought from an NPC; no over-cap possible.
 local VOIDCORE_CURRENCY_ID = 3418
 
--- Instance IDs (8 seasonal M+ dungeons + 3 raids). Filled in Task 4.
--- Empty table → alert eval falls through zone check → never shows. Safe to
--- ship as a no-op until populated.
-local VOIDCORE_ZONE_IDS = {}
+-- Seasonal zone detection uses uiMapIDs and uiMapGroupIDs (matching the
+-- identifier scheme that WeakAuras' Player Location feature exposes). The
+-- player is "in a seasonal zone" if their current uiMapID — or any ancestor
+-- in the parent-map chain — appears in either table, OR if any ancestor's
+-- mapGroupID appears in VOIDCORE_MAP_GROUPS.
+--
+-- Single-floor dungeons / raids use a uiMapID directly. Multi-floor zones
+-- use a mapGroupID umbrella. The "Keystone Dungeons" entry (2266) covers
+-- all 8 active M+ rotation dungeons via the keystone-eligibility umbrella.
+-- Individual dungeon entries are kept alongside it for belt-and-suspenders
+-- coverage when the player walks in via Heroic / Find Group rather than
+-- via an active keystone.
+--
+-- Source: in-game player-location IDs (verified via WeakAuras' Player
+-- Location trigger 2026-05-06).
+local VOIDCORE_UI_MAPS = {
+    [2266] = true,  -- Keystone Dungeons (umbrella for all 8 active M+ rotation maps)
+    [2501] = true,  -- Maisara Caverns
+    [2556] = true,  -- Nexus-Point Xenas
+    [184]  = true,  -- Pit of Saron
+    [903]  = true,  -- Seat of the Triumvirate
+}
+
+local VOIDCORE_MAP_GROUPS = {
+    [469] = true,  -- Magister's Terrace
+    [465] = true,  -- Windrunner Spire
+    [433] = true,  -- Algeth'ar Academy
+    [226] = true,  -- Skyreach
+    [468] = true,  -- The Dreamfit (raid)
+    [466] = true,  -- The Voidspire (raid)
+    [467] = true,  -- March on Quel'Danas (raid)
+}
+
+-- Walks the player's current uiMap parent chain. Returns true on the first
+-- match against either VOIDCORE_UI_MAPS (direct uiMapID) or VOIDCORE_MAP_GROUPS
+-- (the uiMap's group). Sub-area maps within a dungeon (different rooms,
+-- different floors) inherit the dungeon's identity through this walk.
+local function IsInSeasonalZone()
+    local cur = C_Map.GetBestMapForUnit("player")
+    while cur and cur > 0 do
+        if VOIDCORE_UI_MAPS[cur] then return true end
+        local groupID = C_Map.GetMapGroupID(cur)
+        if groupID and VOIDCORE_MAP_GROUPS[groupID] then return true end
+        local info = C_Map.GetMapInfo(cur)
+        cur = info and info.parentMapID
+    end
+    return false
+end
 
 local SATED_DEBUFFS = {
     57723,  -- Exhaustion (Heroism)
@@ -281,9 +326,7 @@ end
 function RN:EvaluateVoidcore()
     if not self.db.VoidcoreEnabled then self:HideAlert("Voidcore"); return end
     if InCombatLockdown() then self:HideAlert("Voidcore"); return end
-    if not VOIDCORE_ZONE_IDS[select(8, GetInstanceInfo())] then
-        self:HideAlert("Voidcore"); return
-    end
+    if not IsInSeasonalZone() then self:HideAlert("Voidcore"); return end
     local info = C_CurrencyInfo.GetCurrencyInfo(VOIDCORE_CURRENCY_ID)
     if info and info.quantityEarnedThisWeek < info.maxWeeklyQuantity then
         self:ShowAlert("Voidcore")
@@ -293,8 +336,7 @@ function RN:EvaluateVoidcore()
 end
 
 function RN:VoidcoreUpdateSubscriptions()
-    local shouldSubscribe = self.db.VoidcoreEnabled
-        and VOIDCORE_ZONE_IDS[select(8, GetInstanceInfo())] ~= nil
+    local shouldSubscribe = self.db.VoidcoreEnabled and IsInSeasonalZone()
     if shouldSubscribe and not self._voidcoreSubscribed then
         self:RegisterEvent("CURRENCY_DISPLAY_UPDATE", "EvaluateVoidcore")
         self:RegisterEvent("PLAYER_REGEN_DISABLED",   "EvaluateVoidcore")
