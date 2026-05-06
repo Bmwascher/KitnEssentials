@@ -39,6 +39,13 @@ local ConfirmLootRoll = ConfirmLootRoll
 local Item = Item
 local Enum = Enum
 local _G = _G
+local string_format = string.format
+local UnitClass = UnitClass
+local RAID_CLASS_COLORS = RAID_CLASS_COLORS
+local GetLootSpecialization = GetLootSpecialization
+local GetSpecialization = GetSpecialization
+local GetSpecializationInfo = GetSpecializationInfo
+local GetSpecializationInfoByID = GetSpecializationInfoByID
 
 ---------------------------------------------------------------------------------
 -- Hide Helptips (runs at load time)
@@ -539,12 +546,52 @@ end
 -- The Pass-button confirm code is left in place but commented out — uncomment
 -- the pass branch in HookBonusChild to re-enable it.
 
+-- Returns "Loot Spec: |c<class>|T<icon>:0|t <name>|r" for the active loot spec.
+-- Mirrors GreatVaultAlert:GetLootSpecInfo: GetLootSpecialization() returns 0
+-- when the player is set to "use current spec," so fall back to the active
+-- talent spec in that case.
+local function BuildLootSpecLine()
+    local specID = GetLootSpecialization and GetLootSpecialization()
+    local name, icon
+    if specID == 0 then
+        local index = GetSpecialization and GetSpecialization()
+        if index then
+            local info = { GetSpecializationInfo(index) }
+            name = info[2]
+            icon = info[4]
+        end
+    elseif specID then
+        local info = { GetSpecializationInfoByID(specID) }
+        name = info[2]
+        icon = info[4]
+    end
+    if not name then return "" end
+    local _, class = UnitClass("player")
+    local color = (RAID_CLASS_COLORS[class] and RAID_CLASS_COLORS[class].colorStr) or "ffffffff"
+    return string_format("Loot Spec: |c%s|T%d:0|t %s|r", color, icon or 0, name)
+end
+
+-- Bump popup text font on show, restore on hide. The underlying StaticPopup<n>
+-- frame is shared across dialogs, so leaving the larger font set would leak
+-- into unrelated popups (raid invites, item destroy confirms, etc.). Args via
+-- ... because the wowlua-ls OnShow signature omits the popup-frame self param.
+local function BonusPopup_OnShow(...)
+    local self = ...
+    if self and self.text then self.text:SetFontObject("GameFontHighlightLarge") end
+end
+local function BonusPopup_OnHide(...)
+    local self = ...
+    if self and self.text then self.text:SetFontObject("GameFontHighlight") end
+end
+
 StaticPopupDialogs["KE_BONUS_ROLL_CONFIRM"] = {
-    text    = "Use your bonus roll?",
+    text    = "Use your bonus roll?",  -- replaced per-click with spec line appended
     button1 = "Confirm",
     button2 = "Cancel",
     OnAccept = nil,  -- filled in per-click
     OnCancel = function() end,
+    OnShow  = BonusPopup_OnShow,
+    OnHide  = BonusPopup_OnHide,
     timeout = 0,
     whileDead = false,
     hideOnEscape = true,
@@ -579,8 +626,11 @@ local function HookBonusChild(child, isRoll)
         child:SetScript("OnClick", function(self, btn, down)
             if not AU.db or not AU.db.Enabled then orig(self, btn, down); return end
             if not AU.db.ConfirmBonusRoll then orig(self, btn, down); return end
-            StaticPopupDialogs["KE_BONUS_ROLL_CONFIRM"].OnAccept =
-                function() orig(self, btn, down) end
+            local specLine = BuildLootSpecLine()
+            local dlg = StaticPopupDialogs["KE_BONUS_ROLL_CONFIRM"]
+            dlg.text = (specLine ~= "" and ("Use your bonus roll?\n\n" .. specLine))
+                or "Use your bonus roll?"
+            dlg.OnAccept = function() orig(self, btn, down) end
             StaticPopup_Show("KE_BONUS_ROLL_CONFIRM")
         end)
     end

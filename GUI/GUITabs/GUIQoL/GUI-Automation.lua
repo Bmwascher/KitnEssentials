@@ -261,7 +261,7 @@ GUIFrame:RegisterContent("Automation", function(scrollChild, yOffset)
     row7b:AddWidget(autoConfirmLootRollCheck, 0.5)
     autoManager:Register(autoConfirmLootRollCheck, "all")
 
-    local confirmBonusRollCheck = GUIFrame:CreateCheckbox(row7b, "Confirm Bonus Roll", {
+    local confirmBonusRollCheck = GUIFrame:CreateCheckbox(row7b, "Confirm Bonus Rolls", {
         value = db.ConfirmBonusRoll == true,
         callback = function(checked) db.ConfirmBonusRoll = checked; ApplySettings() end,
     })
