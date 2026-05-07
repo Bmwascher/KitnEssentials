@@ -85,10 +85,18 @@ local FELGUARD_NPC_IDS = {
 -- The <Type> prefix is normally "Pet-" but Sayaad (Succubus successor) uses
 -- "Creature-". Position 6 is the NPC ID regardless, so the same extraction
 -- works for both prefixes.
+--
+-- IMPORTANT: select(6, ...) returns position 6 AND everything after. Passing
+-- that directly to tonumber() means the 7th segment (spawn UID like
+-- "0104E40414") becomes the BASE argument; the "E" is parsed as scientific
+-- notation, the value coerces to infinity, and tonumber crashes with
+-- "integer overflow attempting to store inf." Assign to a local first to
+-- truncate to a single value.
 local function IsPetFelguard()
     local guid = UnitGUID("pet")
     if not guid then return false end
-    local npcID = tonumber(select(6, strsplit("-", guid)))
+    local segment = select(6, strsplit("-", guid))
+    local npcID = tonumber(segment)
     return (npcID and FELGUARD_NPC_IDS[npcID]) or false
 end
 
