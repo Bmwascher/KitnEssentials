@@ -27,7 +27,6 @@ local UnitIsDeadOrGhost = UnitIsDeadOrGhost
 local C_Timer = C_Timer
 local C_SpellBook = C_SpellBook
 local SpellBookBank_Player = Enum.SpellBookSpellBank.Player
-local UnitGUID = UnitGUID
 local strsplit = strsplit
 
 ---------------------------------------------------------------------------------
@@ -86,6 +85,17 @@ local FELGUARD_NPC_IDS = {
 -- "Creature-". Position 6 is the NPC ID regardless, so the same extraction
 -- works for both prefixes.
 --
+-- Tri-state return:
+--   true  — pet GUID resolved to a known Felguard NPC ID
+--   false — pet GUID resolved to a known non-Felguard NPC ID
+--   nil   — cannot determine (no pet, GUID is a 12.0 secret value, or GUID
+--           is malformed). The WRONG branch in CheckPetStatus only fires on
+--           an explicit `false` so secret-GUID contexts don't false-positive.
+--
+-- KE:GetSafeUnitGUID returns nil when UnitGUID returns a secret string —
+-- without this, calling strsplit on a secret value triggers
+-- "attempt to perform string conversion on a secret string value (tainted)."
+--
 -- IMPORTANT: select(6, ...) returns position 6 AND everything after. Passing
 -- that directly to tonumber() means the 7th segment (spawn UID like
 -- "0104E40414") becomes the BASE argument; the "E" is parsed as scientific
@@ -93,11 +103,12 @@ local FELGUARD_NPC_IDS = {
 -- "integer overflow attempting to store inf." Assign to a local first to
 -- truncate to a single value.
 local function IsPetFelguard()
-    local guid = UnitGUID("pet")
-    if not guid then return false end
+    local guid = KE:GetSafeUnitGUID("pet")
+    if not guid then return nil end
     local segment = select(6, strsplit("-", guid))
     local npcID = tonumber(segment)
-    return (npcID and FELGUARD_NPC_IDS[npcID]) or false
+    if not npcID then return nil end
+    return FELGUARD_NPC_IDS[npcID] == true
 end
 
 local function CheckAndUpdatePetDeathState()
@@ -146,7 +157,11 @@ local function CheckPetStatus()
 
     -- Demo Warlock with non-Felguard pet. Priority above DEAD because the
     -- actionable fix is "dismiss + re-summon Felguard," not "revive."
-    if specID == 266 and UnitExists("pet") and not IsPetFelguard() then
+    -- IsPetFelguard returns nil when the pet GUID is a 12.0 secret value or
+    -- otherwise unresolvable — explicitly compare to false so an unknown
+    -- pet identity falls through to the existing DEAD/PASSIVE/MISSING chain
+    -- rather than false-positive a WRONG warning we can't actually verify.
+    if specID == 266 and UnitExists("pet") and IsPetFelguard() == false then
         return PET_STATUS.WRONG, PS.db.PetWrong, PS.db.WrongColor
     end
 
