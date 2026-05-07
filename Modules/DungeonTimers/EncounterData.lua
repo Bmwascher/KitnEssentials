@@ -156,12 +156,11 @@ KE.EncounterData[3071] = {
     dungeon = "MagistersTerrace",
     spells = {
         [474496]  = { name = "Repulsing Slam",     castType = "begincast", castDuration = 2.5,                     role = "tank",     display = "bar", displayText = "TANK HIT" },
-        [1214081] = { name = "Arcane Expulsion",   castType = "begincast", castDuration = 3,                       role = "other"    },
-        [1214032] = { name = "Ethereal Shackles",  castType = "cast",                                              role = "heal"     },
+        [1214081] = { name = "Arcane Expulsion",   castType = "begincast", castDuration = 3,                       role = "other",                displayText = "AOE"      },
+        [1214032] = { name = "Ethereal Shackles",  castType = "cast",                                              role = "heal",                 displayText = "DISPEL"   },
         -- Refueling Protocol is the intermission/phase-transition ability
         -- (LittleWigs flags it as CASTBAR; EXBoss voice = "转阶段" / phase change).
-        -- DANCE displayText (aliased to INTERMISSION color), role = "other" for everyone-visibility.
-        [474345]  = { name = "Refueling Protocol", castType = "begincast", castDuration = 3,   channelDuration = 20, role = "other",                displayText = "DANCE"    },
+        [474345]  = { name = "Refueling Protocol", castType = "begincast", castDuration = 3,   channelDuration = 20, role = "other",                displayText = "AMP"      },
     },
 }
 
@@ -438,7 +437,7 @@ KE.EncounterData[3056] = {
     name = "Emberdawn",
     dungeon = "WindrunnerSpire",
     spells = {
-        [466556] = { name = "Flaming Updraft", castType = "begincast", castDuration = 1.5,                       role = "heal",                   displayText = "DROPS" },
+        [466556] = { name = "Flaming Updraft", castType = "begincast", castDuration = 1.5,                       role = "mechanic",               displayText = "DROPS" },
         [466064] = { name = "Searing Beak",    castType = "begincast", castDuration = 3,                         role = "tank",  display = "bar", displayText = "TANK HIT" },
         [465904] = { name = "Burning Gale",    castType = "begincast", castDuration = 3,   channelDuration = 18, role = "other",                  displayText = "DANCE" },
     },
@@ -450,13 +449,13 @@ KE.EncounterData[3057] = {
     spells = {
         [472745] = { name = "Splattering Spew",    castType = "begincast", castDuration = 4,                      role = "other",                  displayText = "SPREAD"  },
         [472888] = { name = "Bone Hack",           castType = "begincast", castDuration = 2,  channelDuration = 3, role = "tank",  display = "bar", displayText = "TANK HIT" },
-        [474105] = { name = "Curse of Darkness",   castType = "begincast", castDuration = 4,                      role = "heal",                   displayText = "ADDS"    },
+        [474105] = { name = "Curse of Darkness",   castType = "begincast", castDuration = 4,                      role = "other",                  displayText = "ADDS"    },
         -- 472736 Debilitating Shriek's actual mechanic is the follow-on Heaving Yank (472793, 7s
         -- cast on the 2nd boss). BigWigs only fires Timer for Shriek, so we extend the bar by 7s
         -- so it hits 0 at the moment the hook actually pulls — the "now!" we want users to react
         -- to. role flipped to "other" so all 3 role filters see it. EXBoss's sentinel
         -- channelDuration=604800 deliberately omitted.
-        [472736] = { name = "Debilitating Shriek", castType = "begincast", castDuration = 7,                      role = "other",                  displayText = "HOOK"    },
+        [472736] = { name = "Debilitating Shriek", castType = "begincast", castDuration = 7,                      role = "other",                  displayText = "HOOK",    showAtSeconds = 10 },
     },
 }
 
@@ -466,10 +465,10 @@ KE.EncounterData[3058] = {
     spells = {
         [467620]  = { name = "Rampage",            castType = "begincast", castDuration = 2,   channelDuration = 5, role = "tank",     display = "bar", displayText = "TANK HIT" },
         -- 472081 vs EXBoss 472053 — LittleWigs ID wins (BigWigs Timer key); cast data assumed same as 472053
-        [472081]  = { name = "Reckless Leap",      castType = "begincast", castDuration = 3,                        role = "heal",                     displayText = "FEET"     },
+        [472081]  = { name = "Reckless Leap",      castType = "begincast", castDuration = 3,                        role = "other",                    displayText = "FEET"     },
         [1253272] = { name = "Intimidating Shout", castType = "begincast", castDuration = 5,                        role = "mechanic",                 displayText = "STACK"    },
-        -- 470963 vs EXBoss 1271676 — LittleWigs ID wins (BigWigs Timer key); cast data assumed same as 1271676
-        [470963]  = { name = "Bladestorm",         castType = "begincast", castDuration = 3,                        role = "other",                    displayText = "DODGE"    },
+        -- 470963 vs EXBoss 1271676 — LittleWigs ID wins (BigWigs Timer key); cast data adjusted to 2s based on live log late values
+        [470963]  = { name = "Bladestorm",         castType = "begincast", castDuration = 2,                        role = "other",                    displayText = "DODGE"    },
     },
 }
 
@@ -480,7 +479,7 @@ KE.EncounterData[3059] = {
         [472556]  = { name = "Arrow Rain",         castType = "channel",                          channelDuration = 2.5, role = "other",    extendByChannel = true, displayText = "FEET"     },
         [472662]  = { name = "Tempest Slash",      castType = "begincast", castDuration = 2.5,                           role = "tank",     display = "bar",        displayText = "TANK HIT" },
         [1253986] = { name = "Gust Shot",          castType = "cast",                                                    role = "mechanic",                         displayText = "CLEARS"   },
-        [468429]  = { name = "Bullseye Windblast", castType = "begincast", castDuration = 7,                             role = "mechanic",                         displayText = "LEAP"     },
+        [468429]  = { name = "Bullseye Windblast", castType = "cast",                                                    role = "mechanic",                         displayText = "LEAP"     },
         [474528]  = { name = "Bolt Gale",          castType = "begincast", castDuration = 4,      channelDuration = 5,   role = "mechanic",                         displayText = "FRONTAL"  },
     },
 }
