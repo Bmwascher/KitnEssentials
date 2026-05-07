@@ -70,6 +70,7 @@ local FALLBACK_BAR_HEIGHT = 22
 local FALLBACK_TEXT_HEIGHT = 22
 
 local STOP_TOLERANCE = 0.5  -- seconds: StopBar within this window of the cast-phase boundary is treated as natural countdown expiry
+local STALE_GRACE = 1.5     -- seconds: extension-bearing bar at 0 self-destructs if StopBar hasn't arrived within this window (boss phased out, BigWigs missed StopBar, etc.)
 
 -- Decimal threshold default. Below this remaining time, the timer text
 -- shows one decimal place ("0.8"); at or above, whole seconds ("5").
@@ -111,6 +112,7 @@ local DISPLAY_PRESETS = {
 local DISPLAY_PRESET_ALIASES = {
     ADDS         = "ADD",
     CLEARS       = "CLEAR",
+    DISPEL       = "CLEAR",
     DROPS        = "SPREAD",
     HOOK         = "FRONTAL",
     INTERMISSION = "DANCE",
@@ -1048,6 +1050,19 @@ local function BarOnUpdate(self)
                 -- Countdown ended with no cast extension (e.g. respawn
                 -- timer or curator chose not to extend) → bar self-
                 -- destructs. Fire hide sound at the zero crossing.
+                PlayBarSound(self, "hide")
+                self:SetScript("OnUpdate", nil)
+                self:Hide()
+                DT.bars[self.text] = nil
+                DT:LayoutBars()
+                return
+            elseif -remaining >= STALE_GRACE then
+                -- Extension-bearing bar has waited STALE_GRACE seconds at 0
+                -- without StopBar — boss phased out, BigWigs missed StopBar,
+                -- or interrupt removed the cast. Self-destruct so the bar
+                -- doesn't sit at 0 indefinitely until OnBossDisable.
+                dprint(string_format("BarOnUpdate %s → killed (stale grace, overdue=%.2f total=%.2f)",
+                    self.text or "?", -remaining, self.totalDuration))
                 PlayBarSound(self, "hide")
                 self:SetScript("OnUpdate", nil)
                 self:Hide()
