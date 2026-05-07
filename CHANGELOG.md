@@ -1,5 +1,28 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v1.22.0
+
+### Raid Notifications
+- **NEW:** Bonus Rolls Missing — shows "BONUS ROLLS MISSING" while inside one of the 8 seasonal Mythic+ dungeons or 3 seasonal raids and your Nebulous Voidcore is below the seasonal cap. Hides automatically during combat, when an M+ keystone activates, when you cap, and when you leave the seasonal zones. Per-alert toggle in the GUI (default on); skips characters who haven't yet engaged with the currency system
+
+### Class Status Texts
+- **NEW:** Wrong Pet warning — Demonology Warlock only. Shows "WRONG PET" in orange when a pet other than the Felguard is summoned (Imp, Voidwalker, Felhunter, Sayaad). Priority above the existing Dead and Passive warnings — fixing the wrong pet supersedes reviving it. Configurable text and color in the Pet Status sub-tab
+- No Movement Alert: Warlock Demonic Circle: Teleport label changed from "CIRCLE" to "PORT" for clarity (the alert fires on the teleport, not the circle placement)
+
+### Automation
+- **NEW:** Auto-Confirm Loot Roll Popup — auto-dismisses the Need / Greed / Disenchant confirmation dialog so a single Roll click commits the action
+- **NEW:** Housing Item Auto-Roll — auto-passes (or auto-needs, configurable) on housing items detected via item class. Dismisses any resulting confirm popup automatically
+- **NEW:** Confirm Bonus Rolls — adds a confirmation dialog before the M+ end-of-dungeon and raid bonus roll commits, preventing accidental clicks. The popup shows your active loot spec inline (icon + class-colored name) so you can verify before committing
+
+### Ready Check Consumables
+- **NEW:** Warlock Soulstone slot pulses a yellow pixel-glow when the spell is off cooldown but no group member currently has a Soulstone — a visible "go cast it" nudge. Stops once Soulstone is applied (slot enters cooldown / ready state)
+- **NEW:** Warlock Healthstone slot is now clickable — left-click out of combat casts Create Soulwell (spell ID `29893`). Non-Warlocks see no clickable behavior
+
+### Time Spiral Tracker
+- Countdown text always shows 1 decimal place. Previously switched to whole-second mode under 10 seconds, which produced awkward "10.5 → 10" jumps during the first half-second of the 10.5s buff
+
+---
+
 ## v1.21.0
 
 ### Ready Check Consumables
