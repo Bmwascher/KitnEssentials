@@ -571,27 +571,12 @@ local function BuildLootSpecLine()
     return string_format("Loot Spec: |c%s|T%d:0|t %s|r", color, icon or 0, name)
 end
 
--- Bump popup text font on show, restore on hide. The underlying StaticPopup<n>
--- frame is shared across dialogs, so leaving the larger font set would leak
--- into unrelated popups (raid invites, item destroy confirms, etc.). Args via
--- ... because the wowlua-ls OnShow signature omits the popup-frame self param.
-local function BonusPopup_OnShow(...)
-    local self = ...
-    if self and self.text then self.text:SetFontObject("GameFontHighlightLarge") end
-end
-local function BonusPopup_OnHide(...)
-    local self = ...
-    if self and self.text then self.text:SetFontObject("GameFontHighlight") end
-end
-
 StaticPopupDialogs["KE_BONUS_ROLL_CONFIRM"] = {
     text    = "Use your bonus roll?",  -- replaced per-click with spec line appended
     button1 = "Confirm",
     button2 = "Cancel",
     OnAccept = nil,  -- filled in per-click
     OnCancel = function() end,
-    OnShow  = BonusPopup_OnShow,
-    OnHide  = BonusPopup_OnHide,
     timeout = 0,
     whileDead = false,
     hideOnEscape = true,
