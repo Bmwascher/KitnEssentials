@@ -67,7 +67,7 @@ local CLASS_SPELLS = {
         { 192063, "GUST" },       -- Gust of Wind
     },
     ["WARLOCK"] = {
-        { 48020, "CIRCLE" },      -- Demonic Circle: Teleport
+        { 48020, "PORT" },      -- Demonic Circle: Teleport
     },
     ["WARRIOR"] = {
         { 6544, "LEAP" },         -- Heroic Leap

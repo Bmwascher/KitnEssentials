@@ -139,51 +139,51 @@ local VALUE_LABELS = {
     VSync = function(v) return v == "1" and "Enabled" or "Disabled" end,
     MSAAQuality = function(v)
         local t = { [0] = "None", [1] = "2x", [2] = "4x", [3] = "8x" }
-        return t[tonumber(v)] or v
+        return t[tonumber(v) or -1] or v
     end,
     LowLatencyMode = function(v)
         local t = { [0] = "None", [1] = "Built-In", [2] = "Reflex", [3] = "Reflex+Boost", [4] = "XeLL" }
-        return t[tonumber(v)] or v
+        return t[tonumber(v) or -1] or v
     end,
     ffxAntiAliasingMode = function(v)
         local t = { [0] = "None", [1] = "Image-Based", [2] = "Multisample", [4] = "CMAA2" }
-        return t[tonumber(v)] or v
+        return t[tonumber(v) or -1] or v
     end,
     graphicsShadowQuality = function(v)
         local t = { [0] = "Low", [1] = "Fair", [2] = "Good", [3] = "High", [4] = "Ultra" }
-        return t[tonumber(v)] or v
+        return t[tonumber(v) or -1] or v
     end,
     graphicsLiquidDetail = function(v)
         local t = { [0] = "Low", [1] = "Fair", [2] = "Good", [3] = "High" }
-        return t[tonumber(v)] or v
+        return t[tonumber(v) or -1] or v
     end,
     graphicsParticleDensity = function(v)
         local t = { [0] = "Disabled", [1] = "Low", [2] = "Fair", [3] = "Good", [4] = "High", [5] = "Ultra" }
-        return t[tonumber(v)] or v
+        return t[tonumber(v) or -1] or v
     end,
     graphicsSSAO = function(v)
         local t = { [0] = "Disabled", [1] = "Low", [2] = "Good", [3] = "High", [4] = "Ultra" }
-        return t[tonumber(v)] or v
+        return t[tonumber(v) or -1] or v
     end,
     graphicsDepthEffects = function(v)
         local t = { [0] = "Disabled", [1] = "Low", [2] = "Good", [3] = "High" }
-        return t[tonumber(v)] or v
+        return t[tonumber(v) or -1] or v
     end,
     graphicsComputeEffects = function(v)
         local t = { [0] = "Disabled", [1] = "Low", [2] = "Good", [3] = "High" }
-        return t[tonumber(v)] or v
+        return t[tonumber(v) or -1] or v
     end,
     graphicsOutlineMode = function(v)
         local t = { [1] = "Low", [2] = "High", [3] = "Ultra High" }
-        return t[tonumber(v)] or v
+        return t[tonumber(v) or -1] or v
     end,
     graphicsTextureResolution = function(v)
         local t = { [1] = "Low", [2] = "High", [3] = "Ultra" }
-        return t[tonumber(v)] or v
+        return t[tonumber(v) or -1] or v
     end,
     graphicsSpellDensity = function(v)
         local t = { [0] = "Essential", [1] = "Low", [2] = "Fair", [3] = "Good", [4] = "High", [5] = "Ultra" }
-        return t[tonumber(v)] or v
+        return t[tonumber(v) or -1] or v
     end,
     graphicsProjectedTextures = function(v) return v == "1" and "Enabled" or "Disabled" end,
     graphicsViewDistance = function(v) return "Level " .. ((tonumber(v) or 0) + 1) end,
@@ -192,15 +192,15 @@ local VALUE_LABELS = {
     GxMaxFrameLatency = function(v) return tonumber(v) == 3 and "Enabled" or "Disabled" end,
     TextureFilteringMode = function(v)
         local t = { [0] = "Bilinear", [1] = "Trilinear", [2] = "2x Aniso", [3] = "4x Aniso", [4] = "8x Aniso", [5] = "16x Aniso" }
-        return t[tonumber(v)] or v
+        return t[tonumber(v) or -1] or v
     end,
     shadowRt = function(v)
         local t = { [0] = "Disabled", [1] = "Low", [2] = "Good", [3] = "High", [4] = "Ultra" }
-        return t[tonumber(v)] or v
+        return t[tonumber(v) or -1] or v
     end,
     ResampleQuality = function(v)
         local t = { [0] = "Point", [1] = "Bilinear", [2] = "Bicubic", [3] = "FidelityFX SR 1.0" }
-        return t[tonumber(v)] or v
+        return t[tonumber(v) or -1] or v
     end,
     GxApi = function(v)
         local u = (v or ""):upper()
@@ -211,7 +211,7 @@ local VALUE_LABELS = {
     end,
     physicsLevel = function(v)
         local t = { [0] = "None", [1] = "Player Only", [2] = "Full" }
-        return t[tonumber(v)] or v
+        return t[tonumber(v) or -1] or v
     end,
     useTargetFPS = function(v) return v == "1" and "Enabled" or "Disabled" end,
     useMaxFPSBk = function(v) return v == "1" and "Enabled" or "Disabled" end,

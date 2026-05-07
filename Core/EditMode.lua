@@ -679,7 +679,7 @@ function EditMode:CreateNudgeFrame()
     frame:EnableMouse(true)
     frame:SetMovable(true)
     frame:RegisterForDrag("LeftButton")
-    frame:SetScript("OnDragStart", frame.StartMoving)
+    frame:SetScript("OnDragStart", function(f) f:StartMoving(true) end)
     frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
 
     -- Backdrop

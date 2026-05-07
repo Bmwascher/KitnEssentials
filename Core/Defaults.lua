@@ -215,9 +215,11 @@ local Defaults = {
             PetMissing = "PET MISSING",
             PetDead = "PET DEAD",
             PetPassive = "PET PASSIVE",
+            PetWrong = "WRONG PET",
             MissingColor = { 1, 0.82, 0, 1 },       -- #FFD100
             DeadColor = { 1, 0.2, 0.2, 1 },          -- #FF3333
             PassiveColor = { 1, 0, 0.549, 1 },        -- #FF008C
+            WrongColor = { 1, 0.4, 0, 1 },            -- #FF6600
         },
 
         -- Old GatewayAlert kept for migration (absorbed into RaidNotifications)
@@ -254,6 +256,7 @@ local Defaults = {
             ResetBossEnabled = true,
             LootBossEnabled = true,
             BenchEnabled = true,
+            VoidcoreEnabled = true,
         },
 
         NoMovementAlert = {
@@ -504,6 +507,10 @@ local Defaults = {
             AutoSlotKeystone = true,
             AutoFillDelete = true,
             AutoLoot = true,
+            AutoConfirmLootRoll = true,
+            AutoPassHousing = false,
+            AutoPassHousingMode = "PASS",  -- "PASS" or "NEED"
+            ConfirmBonusRoll = false,
             AutoAcceptQuests = false,
             AutoTurnInQuests = false,
             QuestModifier = "SHIFT",
