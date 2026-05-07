@@ -526,7 +526,10 @@ end
 function RN:OnCombatStart()
     if not self.db.Enabled or self.isPreview then return end
     self:HideAlert("ResetBoss")
-    self:EvaluateVoidcore()  -- combat lockdown check inside hides Voidcore alert
+    -- Direct hide rather than going through EvaluateVoidcore. PLAYER_REGEN_DISABLED
+    -- fires fractionally before InCombatLockdown() returns true, so the eval's
+    -- lockdown gate could fall through and re-show the alert.
+    self:HideAlert("Voidcore")
 end
 
 function RN:OnCombatEnd()
