@@ -20,6 +20,8 @@ local GetItemCount = C_Item.GetItemCount
 local CreateFrame = CreateFrame
 local InCombatLockdown = InCombatLockdown
 local GetInstanceInfo = GetInstanceInfo
+local C_CurrencyInfo = C_CurrencyInfo
+local C_Map = C_Map
 local UnitClass = UnitClass
 local UnitName = UnitName
 local IsInInstance = IsInInstance
@@ -39,6 +41,59 @@ end
 ---------------------------------------------------------------------------------
 local GATEWAY_ITEM_ID = 188152
 
+-- Nebulous Voidcore — 12.0 Midnight Season 1 currency for bonus rolls in
+-- seasonal dungeons + raids. Bought from an NPC; no over-cap possible.
+local VOIDCORE_CURRENCY_ID = 3418
+
+-- Seasonal zone detection uses uiMapIDs and uiMapGroupIDs (matching the
+-- identifier scheme that WeakAuras' Player Location feature exposes). The
+-- player is "in a seasonal zone" if their current uiMapID — or any ancestor
+-- in the parent-map chain — appears in either table, OR if any ancestor's
+-- mapGroupID appears in VOIDCORE_MAP_GROUPS.
+--
+-- Single-floor dungeons / raids use a uiMapID directly. Multi-floor zones
+-- use a mapGroupID umbrella. The "Keystone Dungeons" entry (2266) covers
+-- all 8 active M+ rotation dungeons via the keystone-eligibility umbrella.
+-- Individual dungeon entries are kept alongside it for belt-and-suspenders
+-- coverage when the player walks in via Heroic / Find Group rather than
+-- via an active keystone.
+--
+-- Source: in-game player-location IDs (verified via WeakAuras' Player
+-- Location trigger 2026-05-06).
+local VOIDCORE_UI_MAPS = {
+    [2266] = true,  -- Keystone Dungeons (umbrella for all 8 active M+ rotation maps)
+    [2501] = true,  -- Maisara Caverns
+    [2556] = true,  -- Nexus-Point Xenas
+    [184]  = true,  -- Pit of Saron
+    [903]  = true,  -- Seat of the Triumvirate
+}
+
+local VOIDCORE_MAP_GROUPS = {
+    [469] = true,  -- Magister's Terrace
+    [465] = true,  -- Windrunner Spire
+    [433] = true,  -- Algeth'ar Academy
+    [226] = true,  -- Skyreach
+    [468] = true,  -- The Dreamfit (raid)
+    [466] = true,  -- The Voidspire (raid)
+    [467] = true,  -- March on Quel'Danas (raid)
+}
+
+-- Walks the player's current uiMap parent chain. Returns true on the first
+-- match against either VOIDCORE_UI_MAPS (direct uiMapID) or VOIDCORE_MAP_GROUPS
+-- (the uiMap's group). Sub-area maps within a dungeon (different rooms,
+-- different floors) inherit the dungeon's identity through this walk.
+local function IsInSeasonalZone()
+    local cur = C_Map.GetBestMapForUnit("player")
+    while cur and cur > 0 do
+        if VOIDCORE_UI_MAPS[cur] then return true end
+        local groupID = C_Map.GetMapGroupID(cur)
+        if groupID and VOIDCORE_MAP_GROUPS[groupID] then return true end
+        local info = C_Map.GetMapInfo(cur)
+        cur = info and info.parentMapID
+    end
+    return false
+end
+
 local SATED_DEBUFFS = {
     57723,  -- Exhaustion (Heroism)
     57724,  -- Sated (Bloodlust)
@@ -55,6 +110,7 @@ local ALERT_DEFS = {
     { key = "ResetBoss",  text = "RESET BOSS",  icon = 136090,  enableKey = "ResetBossEnabled" },  -- Spell_Nature_Exhaustion
     { key = "LootBoss",   text = "LOOT BOSS",   icon = "Interface\\AddOns\\KitnEssentials\\Media\\Icon\\Cat_Head.png", enableKey = "LootBossEnabled" },
     { key = "BenchAlert", text = "BENCHED",     icon = 134414, enableKey = "BenchEnabled" },  -- INV_Misc_Rune_01
+    { key = "Voidcore",   text = "BONUS ROLLS MISSING", icon = 7658128, enableKey = "VoidcoreEnabled" },
 }
 
 local ALERT_BY_KEY = {}
@@ -75,6 +131,11 @@ RN.hasWarlockInGroup = false
 RN.wasUsable = nil
 RN.resetBossGen = 0
 RN.lootBossGen = 0
+-- Voidcore: set true on CHALLENGE_MODE_START, cleared when leaving a
+-- seasonal zone. Once a key is active the player cannot meaningfully act
+-- on the alert (no leaving the run to buy cores), so suppress display
+-- until the next zone change.
+RN._voidcoreKeyActive = false
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -259,11 +320,75 @@ function RN:ApplyRowVisuals(row)
 end
 
 ---------------------------------------------------------------------------------
+-- Voidcore — seasonal currency cap alert
+---------------------------------------------------------------------------------
+-- Fires while the player is inside a seasonal instance (dungeon/raid) AND
+-- has earned less than the weekly cap of Nebulous Voidcore. Hides during
+-- combat to avoid mid-pull screen clutter. Subscription to the currency +
+-- combat events is zone-conditional (managed by VoidcoreUpdateSubscriptions)
+-- so we don't pay event-dispatch overhead while the player is outside the
+-- relevant 11 instances.
+function RN:OnChallengeModeStart()
+    self._voidcoreKeyActive = true
+    self:HideAlert("Voidcore")
+end
+
+function RN:EvaluateVoidcore()
+    if not self.db.VoidcoreEnabled then self:HideAlert("Voidcore"); return end
+    if self._voidcoreKeyActive then self:HideAlert("Voidcore"); return end
+    if InCombatLockdown() then self:HideAlert("Voidcore"); return end
+    if not IsInSeasonalZone() then self:HideAlert("Voidcore"); return end
+    local info = C_CurrencyInfo.GetCurrencyInfo(VOIDCORE_CURRENCY_ID)
+    if not info then self:HideAlert("Voidcore"); return end
+    -- Voidcore is season-capped (useTotalEarnedForMaxQty=true): the cap lives
+    -- in totalEarned vs maxQuantity, and the weekly fields are both 0. Branch
+    -- on the field rather than hardcoding to the season-cap path so a future
+    -- weekly-capped seasonal currency works without a code change.
+    local uncapped
+    if info.useTotalEarnedForMaxQty then
+        uncapped = info.totalEarned < info.maxQuantity
+    else
+        uncapped = info.quantityEarnedThisWeek < info.maxWeeklyQuantity
+    end
+    if uncapped then
+        self:ShowAlert("Voidcore")
+    else
+        self:HideAlert("Voidcore")
+    end
+end
+
+function RN:VoidcoreUpdateSubscriptions()
+    -- Defer 0.5s so C_Map.GetBestMapForUnit returns fresh data after a zone
+    -- transition. Without this, the immediate eval after PEW/ZCNA can read
+    -- stale or nil map data and either fail to subscribe on entry or fail to
+    -- unsubscribe on exit. Mirrors the deferred pattern in GatewayFullUpdate
+    -- (line ~309).
+    C_Timer.After(0.5, function()
+        local inZone = IsInSeasonalZone()
+        if not inZone then
+            -- Left the seasonal zone — clear the M+ key suppression flag so
+            -- the alert is eligible to show again on the next entry.
+            self._voidcoreKeyActive = false
+        end
+        local shouldSubscribe = self.db and self.db.VoidcoreEnabled and inZone
+        if shouldSubscribe and not self._voidcoreSubscribed then
+            self:RegisterEvent("CURRENCY_DISPLAY_UPDATE", "EvaluateVoidcore")
+            self._voidcoreSubscribed = true
+        elseif not shouldSubscribe and self._voidcoreSubscribed then
+            self:UnregisterEvent("CURRENCY_DISPLAY_UPDATE")
+            self._voidcoreSubscribed = false
+        end
+        self:EvaluateVoidcore()
+    end)
+end
+
+---------------------------------------------------------------------------------
 -- Zone Change
 ---------------------------------------------------------------------------------
 function RN:OnZoneChange()
     self:GatewayFullUpdate()
     self:CheckBench()
+    self:VoidcoreUpdateSubscriptions()
 end
 
 ---------------------------------------------------------------------------------
@@ -401,6 +526,10 @@ end
 function RN:OnCombatStart()
     if not self.db.Enabled or self.isPreview then return end
     self:HideAlert("ResetBoss")
+    -- Direct hide rather than going through EvaluateVoidcore. PLAYER_REGEN_DISABLED
+    -- fires fractionally before InCombatLockdown() returns true, so the eval's
+    -- lockdown gate could fall through and re-show the alert.
+    self:HideAlert("Voidcore")
 end
 
 function RN:OnCombatEnd()
@@ -410,6 +539,7 @@ function RN:OnCombatEnd()
         if not self.db or not self.db.Enabled then return end
         self:CheckResetBoss()
     end)
+    self:EvaluateVoidcore()  -- re-show if still uncapped + in zone
 end
 
 ---------------------------------------------------------------------------------
@@ -528,6 +658,7 @@ function RN:ApplySettings()
         end
     end
 
+    self:VoidcoreUpdateSubscriptions()
     self:LayoutRows()
 end
 
@@ -618,8 +749,13 @@ function RN:OnEnable()
         self:ApplySettings()
     end)
 
-    -- Zone change: update gateway + cache saved encounters
+    -- Zone change: update gateway + cache saved encounters. ZONE_CHANGED_NEW_AREA
+    -- registered alongside PEW because PEW can fire before C_Map data is fully
+    -- populated on a fresh zone-in — ZCNA is the canonical "I've arrived"
+    -- signal and is required for Voidcore zone detection to work reliably.
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnZoneChange")
+    self:RegisterEvent("ZONE_CHANGED_NEW_AREA", "OnZoneChange")
+    self:RegisterEvent("CHALLENGE_MODE_START",  "OnChallengeModeStart")
     self:RegisterEvent("BAG_UPDATE", "GatewayFullUpdate")
     self:RegisterEvent("SPELL_UPDATE_USABLE", "GatewayCheckUsable")
     self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnGroupChanged")
@@ -669,6 +805,8 @@ function RN:OnDisable()
     self.hasItem = false
     self.hasWarlockInGroup = false
     self.isPreview = false
+    self._voidcoreSubscribed = false
+    self._voidcoreKeyActive = false
     self.resetBossGen = self.resetBossGen + 1
     self.lootBossGen = self.lootBossGen + 1
 end

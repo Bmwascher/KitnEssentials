@@ -374,9 +374,9 @@ function TSP:OnUpdate()
     -- string is identical to last tick. Safe because remaining derives from a
     -- player-owned proc start time + constant TIME_SPIRAL_DURATION (non-secret).
     -- Same pattern as DungeonTimers OnVisualUpdate timeStr gate.
-    local decimals = self.durationObject:EvaluateRemainingDuration(KE.curves.DurationDecimals)
-    local fmt = "%." .. decimals .. "f"
-    local newStr = string.format(fmt, remaining)
+    -- Always show 1 decimal — duration is 10.5s, so whole-second mode would
+    -- jump from "10.5" to "10" awkwardly during the first half-second.
+    local newStr = string.format("%.1f", remaining)
     if newStr ~= self._lastTimerStr then
         self._lastTimerStr = newStr
         self.timerText:SetText(newStr)
