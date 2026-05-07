@@ -334,6 +334,11 @@ function RN:OnChallengeModeStart()
 end
 
 function RN:EvaluateVoidcore()
+    -- Preview mode drives visibility directly via ApplySettings's force-show
+    -- loop. Bail out so the natural eval path doesn't hide the preview-shown
+    -- alert based on out-of-game-zone state. Mirrors the isPreview gate in
+    -- CheckResetBoss / OnCombatStart / OnCombatEnd / OnEncounterEnd.
+    if self.isPreview then return end
     if not self.db.VoidcoreEnabled then self:HideAlert("Voidcore"); return end
     if self._voidcoreKeyActive then self:HideAlert("Voidcore"); return end
     if InCombatLockdown() then self:HideAlert("Voidcore"); return end
