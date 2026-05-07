@@ -347,19 +347,26 @@ function RN:EvaluateVoidcore()
 end
 
 function RN:VoidcoreUpdateSubscriptions()
-    local shouldSubscribe = self.db.VoidcoreEnabled and IsInSeasonalZone()
-    if shouldSubscribe and not self._voidcoreSubscribed then
-        self:RegisterEvent("CURRENCY_DISPLAY_UPDATE", "EvaluateVoidcore")
-        self:RegisterEvent("PLAYER_REGEN_DISABLED",   "EvaluateVoidcore")
-        self:RegisterEvent("PLAYER_REGEN_ENABLED",    "EvaluateVoidcore")
-        self._voidcoreSubscribed = true
-    elseif not shouldSubscribe and self._voidcoreSubscribed then
-        self:UnregisterEvent("CURRENCY_DISPLAY_UPDATE")
-        self:UnregisterEvent("PLAYER_REGEN_DISABLED")
-        self:UnregisterEvent("PLAYER_REGEN_ENABLED")
-        self._voidcoreSubscribed = false
-    end
-    self:EvaluateVoidcore()
+    -- Defer 0.5s so C_Map.GetBestMapForUnit returns fresh data after a zone
+    -- transition. Without this, the immediate eval after PEW/ZCNA can read
+    -- stale or nil map data and either fail to subscribe on entry or fail to
+    -- unsubscribe on exit. Mirrors the deferred pattern in GatewayFullUpdate
+    -- (line ~309).
+    C_Timer.After(0.5, function()
+        local shouldSubscribe = self.db and self.db.VoidcoreEnabled and IsInSeasonalZone()
+        if shouldSubscribe and not self._voidcoreSubscribed then
+            self:RegisterEvent("CURRENCY_DISPLAY_UPDATE", "EvaluateVoidcore")
+            self:RegisterEvent("PLAYER_REGEN_DISABLED",   "EvaluateVoidcore")
+            self:RegisterEvent("PLAYER_REGEN_ENABLED",    "EvaluateVoidcore")
+            self._voidcoreSubscribed = true
+        elseif not shouldSubscribe and self._voidcoreSubscribed then
+            self:UnregisterEvent("CURRENCY_DISPLAY_UPDATE")
+            self:UnregisterEvent("PLAYER_REGEN_DISABLED")
+            self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+            self._voidcoreSubscribed = false
+        end
+        self:EvaluateVoidcore()
+    end)
 end
 
 ---------------------------------------------------------------------------------
@@ -724,8 +731,12 @@ function RN:OnEnable()
         self:ApplySettings()
     end)
 
-    -- Zone change: update gateway + cache saved encounters
+    -- Zone change: update gateway + cache saved encounters. ZONE_CHANGED_NEW_AREA
+    -- registered alongside PEW because PEW can fire before C_Map data is fully
+    -- populated on a fresh zone-in — ZCNA is the canonical "I've arrived"
+    -- signal and is required for Voidcore zone detection to work reliably.
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnZoneChange")
+    self:RegisterEvent("ZONE_CHANGED_NEW_AREA", "OnZoneChange")
     self:RegisterEvent("BAG_UPDATE", "GatewayFullUpdate")
     self:RegisterEvent("SPELL_UPDATE_USABLE", "GatewayCheckUsable")
     self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnGroupChanged")
