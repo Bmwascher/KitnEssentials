@@ -344,18 +344,17 @@ function RN:EvaluateVoidcore()
     if InCombatLockdown() then self:HideAlert("Voidcore"); return end
     if not IsInSeasonalZone() then self:HideAlert("Voidcore"); return end
     local info = C_CurrencyInfo.GetCurrencyInfo(VOIDCORE_CURRENCY_ID)
-    if not info then self:HideAlert("Voidcore"); return end
-    -- Voidcore is season-capped (useTotalEarnedForMaxQty=true): the cap lives
-    -- in totalEarned vs maxQuantity, and the weekly fields are both 0. Branch
-    -- on the field rather than hardcoding to the season-cap path so a future
-    -- weekly-capped seasonal currency works without a code change.
-    local uncapped
-    if info.useTotalEarnedForMaxQty then
-        uncapped = info.totalEarned < info.maxQuantity
-    else
-        uncapped = info.quantityEarnedThisWeek < info.maxWeeklyQuantity
-    end
-    if uncapped then
+    -- discovered=false on characters who've never interacted with the currency
+    -- system (verified via /dump on a fresh 90: discovered=false flips to true
+    -- after the first NPC purchase). Without this gate, a fresh alt walking
+    -- into a seasonal dungeon would see "BONUS ROLLS MISSING" despite having
+    -- no way to engage with the currency yet.
+    if not info or not info.discovered then self:HideAlert("Voidcore"); return end
+    -- Voidcore is season-capped: cap is on lifetime earnings (totalEarned) up
+    -- to maxQuantity, which grows by 2 each week of the season. The weekly-
+    -- quantity fields (quantityEarnedThisWeek / maxWeeklyQuantity) are both 0
+    -- and unused by this currency model.
+    if info.totalEarned < info.maxQuantity then
         self:ShowAlert("Voidcore")
     else
         self:HideAlert("Voidcore")
