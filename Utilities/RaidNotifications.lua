@@ -356,13 +356,9 @@ function RN:VoidcoreUpdateSubscriptions()
         local shouldSubscribe = self.db and self.db.VoidcoreEnabled and IsInSeasonalZone()
         if shouldSubscribe and not self._voidcoreSubscribed then
             self:RegisterEvent("CURRENCY_DISPLAY_UPDATE", "EvaluateVoidcore")
-            self:RegisterEvent("PLAYER_REGEN_DISABLED",   "EvaluateVoidcore")
-            self:RegisterEvent("PLAYER_REGEN_ENABLED",    "EvaluateVoidcore")
             self._voidcoreSubscribed = true
         elseif not shouldSubscribe and self._voidcoreSubscribed then
             self:UnregisterEvent("CURRENCY_DISPLAY_UPDATE")
-            self:UnregisterEvent("PLAYER_REGEN_DISABLED")
-            self:UnregisterEvent("PLAYER_REGEN_ENABLED")
             self._voidcoreSubscribed = false
         end
         self:EvaluateVoidcore()
@@ -513,6 +509,7 @@ end
 function RN:OnCombatStart()
     if not self.db.Enabled or self.isPreview then return end
     self:HideAlert("ResetBoss")
+    self:EvaluateVoidcore()  -- combat lockdown check inside hides Voidcore alert
 end
 
 function RN:OnCombatEnd()
@@ -522,6 +519,7 @@ function RN:OnCombatEnd()
         if not self.db or not self.db.Enabled then return end
         self:CheckResetBoss()
     end)
+    self:EvaluateVoidcore()  -- re-show if still uncapped + in zone
 end
 
 ---------------------------------------------------------------------------------
@@ -737,6 +735,7 @@ function RN:OnEnable()
     -- signal and is required for Voidcore zone detection to work reliably.
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnZoneChange")
     self:RegisterEvent("ZONE_CHANGED_NEW_AREA", "OnZoneChange")
+    self:RegisterEvent("CHALLENGE_MODE_START",  "EvaluateVoidcore")
     self:RegisterEvent("BAG_UPDATE", "GatewayFullUpdate")
     self:RegisterEvent("SPELL_UPDATE_USABLE", "GatewayCheckUsable")
     self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnGroupChanged")
