@@ -215,9 +215,11 @@ local Defaults = {
             PetMissing = "PET MISSING",
             PetDead = "PET DEAD",
             PetPassive = "PET PASSIVE",
+            PetWrong = "WRONG PET",
             MissingColor = { 1, 0.82, 0, 1 },       -- #FFD100
             DeadColor = { 1, 0.2, 0.2, 1 },          -- #FF3333
             PassiveColor = { 1, 0, 0.549, 1 },        -- #FF008C
+            WrongColor = { 1, 0.4, 0, 1 },            -- #FF6600
         },
 
         -- Old GatewayAlert kept for migration (absorbed into RaidNotifications)
