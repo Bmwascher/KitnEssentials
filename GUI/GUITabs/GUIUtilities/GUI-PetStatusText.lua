@@ -127,6 +127,8 @@ GUIFrame:RegisterContent("PetStatusText", function(scrollChild, yOffset)
           dbColor = "DeadColor",    defaultColor = { 1, 0.2, 0.2, 1 }, colorLabel = "Dead Color" },
         { dbText = "PetPassive",  defaultText = "PET PASSIVE",  textLabel = "Pet Passive Text",
           dbColor = "PassiveColor", defaultColor = { 1, 0, 0.549, 1 }, colorLabel = "Passive Color" },
+        { dbText = "PetWrong",    defaultText = "WRONG PET",    textLabel = "Wrong Pet Text",
+          dbColor = "WrongColor",   defaultColor = { 1, 0.4, 0, 1 }, colorLabel = "Wrong Color" },
     }
 
     for i, state in ipairs(states) do
