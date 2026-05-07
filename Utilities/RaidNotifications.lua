@@ -131,6 +131,11 @@ RN.hasWarlockInGroup = false
 RN.wasUsable = nil
 RN.resetBossGen = 0
 RN.lootBossGen = 0
+-- Voidcore: set true on CHALLENGE_MODE_START, cleared when leaving a
+-- seasonal zone. Once a key is active the player cannot meaningfully act
+-- on the alert (no leaving the run to buy cores), so suppress display
+-- until the next zone change.
+RN._voidcoreKeyActive = false
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -323,8 +328,14 @@ end
 -- combat events is zone-conditional (managed by VoidcoreUpdateSubscriptions)
 -- so we don't pay event-dispatch overhead while the player is outside the
 -- relevant 11 instances.
+function RN:OnChallengeModeStart()
+    self._voidcoreKeyActive = true
+    self:HideAlert("Voidcore")
+end
+
 function RN:EvaluateVoidcore()
     if not self.db.VoidcoreEnabled then self:HideAlert("Voidcore"); return end
+    if self._voidcoreKeyActive then self:HideAlert("Voidcore"); return end
     if InCombatLockdown() then self:HideAlert("Voidcore"); return end
     if not IsInSeasonalZone() then self:HideAlert("Voidcore"); return end
     local info = C_CurrencyInfo.GetCurrencyInfo(VOIDCORE_CURRENCY_ID)
@@ -353,7 +364,13 @@ function RN:VoidcoreUpdateSubscriptions()
     -- unsubscribe on exit. Mirrors the deferred pattern in GatewayFullUpdate
     -- (line ~309).
     C_Timer.After(0.5, function()
-        local shouldSubscribe = self.db and self.db.VoidcoreEnabled and IsInSeasonalZone()
+        local inZone = IsInSeasonalZone()
+        if not inZone then
+            -- Left the seasonal zone — clear the M+ key suppression flag so
+            -- the alert is eligible to show again on the next entry.
+            self._voidcoreKeyActive = false
+        end
+        local shouldSubscribe = self.db and self.db.VoidcoreEnabled and inZone
         if shouldSubscribe and not self._voidcoreSubscribed then
             self:RegisterEvent("CURRENCY_DISPLAY_UPDATE", "EvaluateVoidcore")
             self._voidcoreSubscribed = true
@@ -735,7 +752,7 @@ function RN:OnEnable()
     -- signal and is required for Voidcore zone detection to work reliably.
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnZoneChange")
     self:RegisterEvent("ZONE_CHANGED_NEW_AREA", "OnZoneChange")
-    self:RegisterEvent("CHALLENGE_MODE_START",  "EvaluateVoidcore")
+    self:RegisterEvent("CHALLENGE_MODE_START",  "OnChallengeModeStart")
     self:RegisterEvent("BAG_UPDATE", "GatewayFullUpdate")
     self:RegisterEvent("SPELL_UPDATE_USABLE", "GatewayCheckUsable")
     self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnGroupChanged")
@@ -786,6 +803,7 @@ function RN:OnDisable()
     self.hasWarlockInGroup = false
     self.isPreview = false
     self._voidcoreSubscribed = false
+    self._voidcoreKeyActive = false
     self.resetBossGen = self.resetBossGen + 1
     self.lootBossGen = self.lootBossGen + 1
 end
