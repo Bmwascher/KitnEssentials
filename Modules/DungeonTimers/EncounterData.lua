@@ -158,8 +158,6 @@ KE.EncounterData[3071] = {
         [474496]  = { name = "Repulsing Slam",     castType = "begincast", castDuration = 2.5,                     role = "tank",     display = "bar", displayText = "TANK HIT" },
         [1214081] = { name = "Arcane Expulsion",   castType = "begincast", castDuration = 3,                       role = "other",                displayText = "AOE"      },
         [1214032] = { name = "Ethereal Shackles",  castType = "cast",                                              role = "heal",                 displayText = "DISPEL"   },
-        -- Refueling Protocol is the intermission/phase-transition ability
-        -- (LittleWigs flags it as CASTBAR; EXBoss voice = "转阶段" / phase change).
         [474345]  = { name = "Refueling Protocol", castType = "begincast", castDuration = 3,   channelDuration = 20, role = "other",                displayText = "AMP"      },
     },
 }
@@ -168,11 +166,11 @@ KE.EncounterData[3072] = {
     name = "Seranel Sunlash",
     dungeon = "MagistersTerrace",
     spells = {
-        -- 1225787 vs EXBoss 1225792 — LittleWigs ID wins (BigWigs Timer key); cast data assumed same as 1225792
-        [1225787] = { name = "Runic Mark",         castType = "begincast", castDuration = 3,                       role = "heal"     },
-        [1224903] = { name = "Suppression Zone",   castType = "begincast", castDuration = 3,                       role = "mechanic" },
-        [1248689] = { name = "Hastening Ward",     castType = "cast",                                              role = "tank",     display = "bar", displayText = "TANK HIT" },
-        [1225193] = { name = "Wave of Silence",    castType = "begincast", castDuration = 5,                       role = "mechanic" },
+        -- castDuration=3 assumed from EXBoss 1225792 — live verification pending (was role=heal so previously filtered)
+        [1225787] = { name = "Runic Mark",         castType = "begincast", castDuration = 3,                       role = "other",                     displayText = "MARKS"     },
+        [1224903] = { name = "Suppression Zone",   castType = "begincast", castDuration = 3,                       role = "mechanic",                  displayText = "CLEAR"     },
+        [1248689] = { name = "Hastening Ward",     castType = "cast",                                              role = "tank",     display = "bar", displayText = "BOSS BUFFED" },
+        [1225193] = { name = "Wave of Silence",    castType = "begincast", castDuration = 5,                       role = "other",                     displayText = "HIDE"      },
     },
 }
 
@@ -180,10 +178,10 @@ KE.EncounterData[3073] = {
     name = "Gemellus",
     dungeon = "MagistersTerrace",
     spells = {
-        [1223847] = { name = "Triplicate",         castType = "begincast", castDuration = 2.5,                     role = "mechanic" },
-        [1284954] = { name = "Cosmic Sting",       castType = "begincast", castDuration = 4,                       role = "heal"     },
-        [1253709] = { name = "Neural Link",        castType = "begincast", castDuration = 2,                       role = "mechanic" },
-        [1224299] = { name = "Astral Grasp",       castType = "begincast", castDuration = 4,   channelDuration = 8, role = "heal"     },
+        [1223847] = { name = "Triplicate",         castType = "begincast", castDuration = 2.5,                     role = "other",    displayText = "SPLIT" },
+        [1284954] = { name = "Cosmic Sting",       castType = "begincast", castDuration = 4,                       role = "other",    displayText = "DROPS" },
+        [1253709] = { name = "Neural Link",        castType = "begincast", castDuration = 2,                       role = "other",    displayText = "CLEAR" },
+        [1224299] = { name = "Astral Grasp",       castType = "begincast", castDuration = 4,   channelDuration = 8, role = "other",    displayText = "PULL"  },
     },
 }
 
@@ -192,9 +190,8 @@ KE.EncounterData[3074] = {
     dungeon = "MagistersTerrace",
     spells = {
         [1280113] = { name = "Hulking Fragment",      castType = "begincast", castDuration = 3,                    role = "tank",     display = "bar", displayText = "TANK HIT" },
-        -- 1215897 vs EXBoss 1215893 — LittleWigs ID wins (BigWigs Timer key); cast data assumed same as 1215893
-        [1215897] = { name = "Devouring Entropy",     castType = "cast",                                           role = "heal"     },
-        [1215087] = { name = "Unstable Void Essence", castType = "begincast", castDuration = 2.5,                  role = "other"    },
+        [1215897] = { name = "Devouring Entropy",     castType = "cast",                                           role = "other",                     displayText = "SPREAD"   },
+        [1215087] = { name = "Unstable Void Essence", castType = "begincast", castDuration = 2.5,                  role = "other",                     displayText = "SOAK"     },
     },
 }
 
