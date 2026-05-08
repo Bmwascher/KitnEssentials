@@ -117,6 +117,8 @@ local DISPLAY_PRESET_ALIASES = {
     HOOK         = "FRONTAL",
     INTERMISSION = "DANCE",
     LEAP         = "PULL",
+    MARKS        = "FRONTAL",
+    SPLIT        = "AMP",
     TOTEMS       = "ADD",
 }
 
