@@ -105,11 +105,10 @@ KE.EncounterData[2562] = {
     name = "Vexamus",
     dungeon = "AlgetharAcademy",
     spells = {
-        -- 386544 vs EXBoss 387691 — LittleWigs ID wins (BigWigs Timer key); EXBoss had no cast data for either ID
-        [386544] = { name = "Arcane Orbs",       castType = "cast",                                          role = "other"    },
+        [386544] = { name = "Arcane Orbs",       castType = "cast",                                          role = "other",                     displayText = "SOAK"     },
         [385958] = { name = "Arcane Expulsion",  castType = "begincast", castDuration = 4,                   role = "tank",     display = "bar", displayText = "TANK HIT" },
-        [386173] = { name = "Mana Bombs",        castType = "begincast", castDuration = 2.5,                 role = "heal"     },
-        [388537] = { name = "Arcane Fissure",    castType = "begincast", castDuration = 3,                   role = "mechanic" },
+        [386173] = { name = "Mana Bombs",        castType = "begincast", castDuration = 2.5,                 role = "other",                     displayText = "SPREAD"   },
+        [388537] = { name = "Arcane Fissure",    castType = "begincast", castDuration = 3,                   role = "mechanic",                  displayText = "AOE"      },
     },
 }
 
@@ -118,9 +117,9 @@ KE.EncounterData[2563] = {
     dungeon = "AlgetharAcademy",
     spells = {
         [388544] = { name = "Barkbreaker",  castType = "begincast", castDuration = 1,                      role = "tank",     display = "bar", displayText = "TANK HIT" },
-        [388796] = { name = "Germinate",    castType = "cast",                       channelDuration = 4,  role = "other"    },
-        [388623] = { name = "Branch Out",   castType = "begincast", castDuration = 2.5,                    role = "mechanic" },
-        [388923] = { name = "Burst Forth",  castType = "begincast", castDuration = 3,                      role = "mechanic" },
+        [388796] = { name = "Germinate",    castType = "cast",                       channelDuration = 4,  role = "other",                     displayText = "STACK"    },
+        [388623] = { name = "Branch Out",   castType = "begincast", castDuration = 2.5,                    role = "other",                     displayText = "ADD"      },
+        [388923] = { name = "Burst Forth",  castType = "begincast", castDuration = 3,                      role = "other",                     displayText = "AOE"      },
     },
 }
 
@@ -129,8 +128,8 @@ KE.EncounterData[2564] = {
     dungeon = "AlgetharAcademy",
     spells = {
         [376997] = { name = "Savage Peck",       castType = "begincast", castDuration = 3,                   role = "tank",     display = "bar", displayText = "TANK HIT" },
-        [377004] = { name = "Deafening Screech", castType = "begincast", castDuration = 2.5,                 role = "heal"     },
-        [377034] = { name = "Overpowering Gust", castType = "begincast", castDuration = 4,                   role = "other"    },
+        [377004] = { name = "Deafening Screech", castType = "begincast", castDuration = 2.5,                 role = "other",                     displayText = "AOE"      },
+        [377034] = { name = "Overpowering Gust", castType = "begincast", castDuration = 4,                   role = "other",                     displayText = "FRONTAL"  },
     },
 }
 
@@ -138,12 +137,12 @@ KE.EncounterData[2565] = {
     name = "Echo of Doragosa",
     dungeon = "AlgetharAcademy",
     spells = {
-        -- 373326 vs EXBoss 373325 — LittleWigs ID wins (BigWigs fires Timer with the LittleWigs one)
-        [373326]  = { name = "Arcane Missiles", castType = "cast",                                           role = "other"    },
+        -- Disabled by default: random single-target hit, fires frequently — opt-in via GUI
+        [373326]  = { name = "Arcane Missiles", castType = "cast",                                           role = "other",                                       disabled = true },
         [1282251] = { name = "Astral Blast",    castType = "begincast", castDuration = 3,                    role = "tank",     display = "bar", displayText = "TANK HIT" },
-        -- 374343 vs EXBoss 374350 — LittleWigs ID wins (BigWigs Timer key); cast data assumed same as 374350
-        [374343]  = { name = "Energy Bomb",     castType = "begincast", castDuration = 1.5,                  role = "heal"     },
-        [388822]  = { name = "Power Vacuum",    castType = "begincast", castDuration = 4,                    role = "other"    },
+        -- castDuration=1.5 assumed from EXBoss 374350 — live verification pending (role=heal so filtered for DAMAGER logs)
+        [374343]  = { name = "Energy Bomb",     castType = "begincast", castDuration = 1.5,                  role = "heal",                      displayText = "DISPEL" },
+        [388822]  = { name = "Power Vacuum",    castType = "begincast", castDuration = 4,                    role = "other",                     displayText = "PULL"   },
     },
 }
 
