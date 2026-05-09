@@ -55,12 +55,14 @@ local LibSpec = LibStub("LibSpecialization", true)
 
 -- Spell.role → which player roles see this bar.
 -- tank/heal-tagged bars are role-specific (only that role); mechanic/other
--- show for everyone since they're class-agnostic dodge/positioning cues.
--- Spells with no role tag (uncurated) always show — fail open.
+-- show for everyone since they're class-agnostic dodge/positioning cues;
+-- kick-tagged bars show only for TANK + DAMAGER (interrupt duty — healers
+-- typically focus on healing during the cast). Spells with no role tag
+-- (uncurated) always show — fail open.
 local ROLE_ALLOW_LIST = {
-    TANK    = { tank = true,             mechanic = true, other = true },
-    HEALER  = {             heal = true, mechanic = true, other = true },
-    DAMAGER = {                          mechanic = true, other = true },
+    TANK    = { tank = true,             mechanic = true, other = true, kick = true },
+    HEALER  = {             heal = true, mechanic = true, other = true              },
+    DAMAGER = {                          mechanic = true, other = true, kick = true },
 }
 
 -- Fallback hardcoded sizes used only when DB hasn't been resolved yet (very
@@ -111,14 +113,18 @@ local DISPLAY_PRESETS = {
 -- add ones. Add new aliases here as they come up.
 local DISPLAY_PRESET_ALIASES = {
     ADDS         = "ADD",
+    ["AIM BEAMS"] = "CLEAR",
+    ["CC ADDS"]  = "ADD",
     CLEARS       = "CLEAR",
     DISPEL       = "CLEAR",
     DROPS        = "SPREAD",
     HOOK         = "FRONTAL",
     INTERMISSION = "DANCE",
+    KNOCK        = "PULL",
     LEAP         = "PULL",
     MARKS        = "FRONTAL",
     SPLIT        = "AMP",
+    SUCC         = "AOE",
     TOTEMS       = "ADD",
 }
 
@@ -373,6 +379,16 @@ end
 function DT:GetSpellCuratorDisplayText(spellId)
     local data = self:GetSpellInfo(spellId)
     return data and data.displayText or nil
+end
+
+-- Curated cast-phase displayText. When set, the bar's label + color swap
+-- to this string when the bar transitions from countdown to cast phase.
+-- Lets one spell render two different cues — e.g. "CC ADDS" during the
+-- pre-cast countdown, "AOE" during the cast itself. nil = no swap (bar
+-- keeps its countdown label/color through the cast phase).
+function DT:GetSpellCastDisplayText(spellId)
+    local data = self:GetSpellInfo(spellId)
+    return data and data.castDisplayText or nil
 end
 
 -- User per-spell custom label. Returns a string or nil.
@@ -1244,7 +1260,7 @@ local function ApplyVisualsToBar(frame)
     end
 end
 
-function DT:CreateBar(text, baseDuration, extension, displayMode, displayText, spellId)
+function DT:CreateBar(text, baseDuration, extension, displayMode, displayText, spellId, castDisplayText)
     displayMode = displayMode or "text"
     local isBar = (displayMode == "bar")
     local group = isBar and self:EnsureBarGroup() or self:EnsureTextGroup()
@@ -1338,6 +1354,17 @@ function DT:CreateBar(text, baseDuration, extension, displayMode, displayText, s
     -- once at create time (preset key/label → canonical label).
     frame.displayTextRaw = displayText
     local resolvedLabel = ResolveDisplayPreset(displayText)
+
+    -- Optional cast-phase label/color swap. When castDisplayText is set,
+    -- pre-resolve its label + color so StopBar's cast-phase transition is
+    -- a cheap field-swap, no per-event lookup. nil castDisplayText means
+    -- the bar keeps its countdown label/color through the cast phase.
+    frame.castDisplayTextRaw = castDisplayText
+    if castDisplayText then
+        local castLabel, castColor = ResolveDisplayPreset(castDisplayText)
+        frame.castBaseText = castLabel or castDisplayText
+        frame.castColor = castColor or DEFAULT_BAR_COLOR
+    end
 
     ApplyVisualsToBar(frame)
     -- Curated short label wins when present; otherwise we strip BigWigs'
@@ -1485,7 +1512,7 @@ function DT:RevealBar(key)
     self:LayoutBars()
 end
 
-function DT:RenderBar(text, baseDur, extension, displayMode, iconID, displayText, spellId)
+function DT:RenderBar(text, baseDur, extension, displayMode, iconID, displayText, spellId, castDisplayText)
     if not text or not baseDur or baseDur <= 0 then return end
     local existing = self.bars[text]
     if existing then
@@ -1493,7 +1520,7 @@ function DT:RenderBar(text, baseDur, extension, displayMode, iconID, displayText
         existing:SetScript("OnUpdate", nil)
         existing:Hide()
     end
-    local bar = self:CreateBar(text, baseDur, extension, displayMode, displayText, spellId)
+    local bar = self:CreateBar(text, baseDur, extension, displayMode, displayText, spellId, castDisplayText)
     self._barSortCounter = self._barSortCounter + 1
     bar.sortIndex = self._barSortCounter
     self.bars[text] = bar
@@ -1602,12 +1629,32 @@ function DT:StopBar(text)
         -- fire on time so the bar is visible for exactly showWindow seconds.
         -- RevealBar mid-cast just tightens the range and shows; OnUpdate's
         -- castFromValue / castDuration math keeps the visual coherent.
-        -- No cast-phase color shift. Tried lighten-toward-white (looked
-        -- like fading-out) and multiply-by-0.7 (looked muddy); both lost
-        -- the preset's semantic color during the most important phase.
+        -- No cast-phase color shift by default. Tried lighten-toward-white
+        -- (looked like fading-out) and multiply-by-0.7 (looked muddy); both
+        -- lost the preset's semantic color during the most important phase.
         -- The visible cue at cast start is already the bar draining over a
         -- shorter window with the timer counting down — that's sufficient.
         -- Matches BigWigs's own bar behavior (no color shift across phases).
+        --
+        -- Opt-in exception: castDisplayText. When the curator sets it on a
+        -- spell, swap the label text + color at cast-phase entry so the
+        -- bar shows two distinct cues (e.g. "CC ADDS" countdown then "AOE"
+        -- during the cast). Bar mode swaps StatusBar fill color (labels
+        -- stay white over the colored fill); text mode swaps the label
+        -- text color directly (label IS the visible cue). baseText update
+        -- propagates through BarOnUpdate's text-mode "name » timer"
+        -- composition automatically; bar mode needs explicit SetText.
+        if bar.castDisplayTextRaw then
+            local cc = bar.castColor or DEFAULT_BAR_COLOR
+            bar.baseText = bar.castBaseText or bar.baseText
+            if bar.displayMode == "bar" then
+                if bar.bar then bar.bar:SetStatusBarColor(cc[1], cc[2], cc[3]) end
+                if bar.label then bar.label:SetText(bar.baseText) end
+            else
+                if bar.label then bar.label:SetTextColor(cc[1], cc[2], cc[3]) end
+                bar._lastTimerStr = nil  -- force re-composition next OnUpdate tick
+            end
+        end
         dprint(string_format("StopBar %s → cast phase (fromValue=%.2f late=%.2fs)",
             text, currentValue, elapsed - bar.duration))
     else
@@ -1970,7 +2017,8 @@ function DT:EventCallback(event, ...)
         local total = baseDur + ext
         local displayMode = self:GetSpellDisplay(spellIdNum)
         local displayText = self:GetSpellDisplayText(spellIdNum)
-        dprint(string_format("Timer text=%s spellId=%s base=%.2f ext=%.2f total=%.2f display=%s label=%s mod=%s count=%s icon=%s",
+        local castDisplayText = self:GetSpellCastDisplayText(spellIdNum)
+        dprint(string_format("Timer text=%s spellId=%s base=%.2f ext=%.2f total=%.2f display=%s label=%s castLabel=%s mod=%s count=%s icon=%s",
             tostring(text),
             tostring(spellId),
             baseDur,
@@ -1978,10 +2026,11 @@ function DT:EventCallback(event, ...)
             total,
             displayMode,
             tostring(displayText),
+            tostring(castDisplayText),
             tostring(addon and addon.moduleName or addon),
             tostring(count),
             tostring(icon)))
-        self:RenderBar(text, baseDur, ext, displayMode, icon, displayText, spellIdNum)
+        self:RenderBar(text, baseDur, ext, displayMode, icon, displayText, spellIdNum, castDisplayText)
     elseif event == "BigWigs_StopBar" then
         local _, text = ...
         dprint("StopBar text=" .. tostring(text))

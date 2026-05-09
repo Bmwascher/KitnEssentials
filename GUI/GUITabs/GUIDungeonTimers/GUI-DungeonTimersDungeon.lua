@@ -78,6 +78,7 @@ local ROLE_TAG_FRIENDLY = {
     heal     = "Healers only",
     mechanic = "Everyone",
     other    = "Everyone",
+    kick     = "Tanks + DPS",
 }
 
 local DETAIL_TABS = {
