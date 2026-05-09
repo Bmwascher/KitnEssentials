@@ -26,6 +26,18 @@
 -- ║                                  -- "SPREAD". Fall back  ║
 -- ║                                  -- to BigWigs name when ║
 -- ║                                  -- absent.              ║
+-- ║                castDisplayText = "AOE"|...,    -- (N13h) ║
+-- ║                                  -- optional cast-phase  ║
+-- ║                                  -- label/color swap.    ║
+-- ║                                  -- When set, the bar    ║
+-- ║                                  -- swaps to this text + ║
+-- ║                                  -- preset color when    ║
+-- ║                                  -- the cast actually    ║
+-- ║                                  -- starts. Lets a spell ║
+-- ║                                  -- show two cues — e.g. ║
+-- ║                                  -- "CC ADDS" during the ║
+-- ║                                  -- countdown then "AOE" ║
+-- ║                                  -- during the cast.     ║
 -- ║                extendByChannel = true,                   ║
 -- ║                                  -- opt-in: extend the   ║
 -- ║                                  -- bar by channelDuration║
@@ -73,9 +85,9 @@
 -- ║    }                                                     ║
 -- ║                                                          ║
 -- ║  Cast durations + role classifications cross-referenced  ║
--- ║  against EXBossData (C:\...\AddOns\EXBossData\            ║
+-- ║  against EXBossData (C:\...\AddOns\EXBossData\           ║
 -- ║  EncounterData.lua). EXBoss eventType is Chinese:        ║
--- ║  坦克=tank, 治疗=heal, 机制=mechanic, 其他=other.            ║
+-- ║  坦克=tank, 治疗=heal, 机制=mechanic, 其他=other.         ║
 -- ║                                                          ║
 -- ║  Lookup at BigWigs_Timer time: O(1) by encounterID +     ║
 -- ║  spellID. The BigWigs spellId we receive matches         ║
@@ -325,11 +337,11 @@ KE.EncounterData[2065] = {
     name = "Zuraal",
     dungeon = "SeatOfTriumvirate",
     spells = {
-        [1263440] = { name = "Void Slash",     castType = "cast",                        channelDuration = 1.5, role = "tank",     display = "bar", displayText = "TANK HIT" },
-        [1263282] = { name = "Decimate",       castType = "begincast", castDuration = 5,                        role = "mechanic" },
-        [1268916] = { name = "Null Palm",      castType = "begincast", castDuration = 3.5,                      role = "other"    },
-        [1263399] = { name = "Oozing Slam",    castType = "begincast", castDuration = 3,                        role = "heal"     },
-        [1263297] = { name = "Crashing Void",  castType = "begincast", castDuration = 5,                        role = "mechanic" },
+        [1263440] = { name = "Void Slash",     castType = "cast",                        channelDuration = 1.5, role = "tank",     display = "bar", displayText = "TANK HIT"  },
+        [1263282] = { name = "Decimate",       castType = "begincast", castDuration = 5,                        role = "other",    display = "bar", displayText = "DROP POOL" },
+        [1268916] = { name = "Null Palm",      castType = "begincast", castDuration = 2.5,                      role = "other",                     displayText = "FRONTAL"   },
+        [1263399] = { name = "Oozing Slam",    castType = "begincast", castDuration = 3,                        role = "other",                     displayText = "AOE"       },
+        [1263297] = { name = "Crashing Void",  castType = "begincast", castDuration = 4,                        role = "other",                     displayText = "CC ADDS",  castDisplayText = "AOE" },
     },
 }
 
@@ -337,13 +349,10 @@ KE.EncounterData[2066] = {
     name = "Saprish",
     dungeon = "SeatOfTriumvirate",
     spells = {
-        -- 245742 vs EXBoss 245738 — LittleWigs ID wins (BigWigs Timer key); cast data assumed same as 245738 ("Shadow Strike")
-        [245742]  = { name = "Shadow Pounce",  castType = "cast",                                          role = "heal"     },
-        -- 1248219 vs EXBoss 247175 — LittleWigs ID wins (BigWigs Timer key); EXBoss had no cast data either way (passive)
-        [1248219] = { name = "Void Bomb",      castType = "cast",                                          role = "other"    },
-        -- 1280065 vs EXBoss 1263509 — LittleWigs ID wins (BigWigs Timer key); cast data assumed same as 1263509 ("Phase Charge")
-        [1280065] = { name = "Phase Dash",     castType = "cast",                                          role = "mechanic" },
-        [1263523] = { name = "Overload",       castType = "begincast", castDuration = 4,                   role = "heal"     },
+        [245742]  = { name = "Shadow Pounce",  castType = "cast",                                          role = "other",    display = "bar", displayText = "Cat Jumping" },
+        [1248219] = { name = "Void Bomb",      castType = "cast",                                          role = "other",                     displayText = "FEET"        },
+        [1280065] = { name = "Phase Dash",     castType = "cast",                                          role = "mechanic",                  displayText = "CLEAR"       },
+        [1263523] = { name = "Overload",       castType = "begincast", castDuration = 4,                   role = "other",                     displayText = "AOE"         },
     },
 }
 
@@ -351,11 +360,12 @@ KE.EncounterData[2067] = {
     name = "Viceroy Nezhar",
     dungeon = "SeatOfTriumvirate",
     spells = {
-        [244750]  = { name = "Mind Blast",          castType = "begincast", castDuration = 2,                   role = "other"    },
-        [1277358] = { name = "Gates of the Abyss",  castType = "cast",                                          role = "other"    },
-        [1263542] = { name = "Mass Void Infusion",  castType = "begincast", castDuration = 2, channelDuration = 5, role = "heal"  },
-        [1263538] = { name = "Umbral Tentacles",    castType = "begincast", castDuration = 3,                   role = "heal"     },
-        [1263528] = { name = "Repulse",             castType = "begincast", castDuration = 2,                   role = "mechanic" },
+        -- Disabled by default: spammable kick target (24 fires per ~3 min). Opt-in via GUI.
+        [244750]  = { name = "Mind Blast",          castType = "begincast", castDuration = 2,                   role = "kick",                      displayText = "KICK",         disabled = true },
+        [1277358] = { name = "Gates of the Abyss",  castType = "cast",                                          role = "other",  display = "bar",   displayText = "ORB SPAWNING"  },
+        [1263542] = { name = "Mass Void Infusion",  castType = "begincast", castDuration = 2, channelDuration = 5, role = "other",                  displayText = "SUCC"          },
+        [1263538] = { name = "Umbral Tentacles",    castType = "begincast", castDuration = 3,                   role = "other",                     displayText = "ADDS"          },
+        [1263528] = { name = "Repulse",             castType = "begincast", castDuration = 2,                   role = "other",                     displayText = "KNOCK"         },
     },
 }
 
@@ -363,14 +373,13 @@ KE.EncounterData[2068] = {
     name = "L'ura",
     dungeon = "SeatOfTriumvirate",
     spells = {
-        [1265421] = { name = "Dirge of Despair",            castType = "begincast", castDuration = 4,                   role = "heal"     },
-        [1264196] = { name = "Disintegrate",                castType = "begincast", castDuration = 3, channelDuration = 5, role = "other" },
-        [1265463] = { name = "Discordant Beam",             castType = "begincast", castDuration = 7,                   role = "other"    },
-        [1265689] = { name = "Grim Chorus",                 castType = "begincast", castDuration = 5.5,                 role = "other"    },
-        -- Symphony of the Eternal Night is the intermission/phase-transition (EXBoss voice = "转阶段");
-        -- DANCE displayText (aliased to INTERMISSION color), role = "other" for everyone-visibility.
-        [1266003] = { name = "Symphony of the Eternal Night", castType = "begincast", castDuration = 10,                role = "other",                  displayText = "DANCE" },
-        [1266001] = { name = "Backlash",                    castType = "cast",                                          role = "mechanic" },
+        [1265421] = { name = "Dirge of Despair",            castType = "begincast", castDuration = 4,                   role = "other",                  displayText = "AOE"       },
+        [1264196] = { name = "Disintegrate",                castType = "begincast", castDuration = 3, channelDuration = 5, role = "other",               displayText = "DODGE"     },
+        [1265463] = { name = "Discordant Beam",             castType = "begincast", castDuration = 7,                   role = "other",                  displayText = "AIM BEAMS" },
+        [1265689] = { name = "Grim Chorus",                 castType = "begincast", castDuration = 5.5,                 role = "other",                  displayText = "FEET"      },
+        -- Symphony of the Eternal Night is the intermission/phase-transition (EXBoss voice = "转阶段").
+        [1266003] = { name = "Symphony of the Eternal Night", castType = "begincast", castDuration = 10,                role = "other",                  displayText = "AMP"       },
+        [1266001] = { name = "Backlash",                    castType = "cast",                                          role = "other",                  displayText = "KNOCK"     },
     },
 }
 
