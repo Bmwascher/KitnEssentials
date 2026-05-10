@@ -76,6 +76,12 @@ local FALLBACK_TEXT_HEIGHT = 22
 local STOP_TOLERANCE = 0.5  -- seconds: StopBar within this window of the cast-phase boundary is treated as natural countdown expiry
 local STALE_GRACE = 1.5     -- seconds: extension-bearing bar at 0 self-destructs if StopBar hasn't arrived within this window (boss phased out, BigWigs missed StopBar, etc.)
 
+-- Suffix appended to a Timer event's text to derive the secondary bar's
+-- key in self.bars. Non-printable so it never collides with a real
+-- BigWigs spell-name string. RenderBar/StopBar/KillBar all key by this
+-- suffixed string for the secondary entry.
+local SECONDARY_KEY_SUFFIX = "\1S"
+
 -- Decimal threshold default. Below this remaining time, the timer text
 -- shows one decimal place ("0.8"); at or above, whole seconds ("5").
 -- 30 effectively means "always show decimals" for typical bar lifetimes
@@ -116,10 +122,12 @@ local DISPLAY_PRESETS = {
 local DISPLAY_PRESET_ALIASES = {
     ADDS         = "ADD",
     ["AIM BEAMS"] = "CLEAR",
+    ["AOE + FEET"] = "FEET",
     ["CC ADDS"]  = "ADD",
     CLEARS       = "CLEAR",
     DISPEL       = "CLEAR",
     DROPS        = "SPREAD",
+    FIXATES      = "FRONTAL",
     HOOK         = "FRONTAL",
     INTERMISSION = "DANCE",
     KNOCK        = "PULL",
@@ -480,11 +488,30 @@ function DT:HasSpellSound(spellId)
 end
 
 -- Per-spell color override. Returns {r, g, b} or nil. Resolution chain
--- is applied in ApplyVisualsToBar: user override → preset color (from
--- effective displayText) → DEFAULT_BAR_COLOR.
+-- is applied in ApplyVisualsToBar: user override → curator color (from
+-- EncounterData) → preset color (from effective displayText) →
+-- DEFAULT_BAR_COLOR.
 function DT:GetSpellColorOverride(spellId)
     if not (self.db and self.db.SpellColorOverrides and spellId) then return nil end
     return self.db.SpellColorOverrides[spellId]
+end
+
+-- Curator-default RGB color from EncounterData. Used by the resolver
+-- chain when no preset matches the displayText (e.g. custom labels like
+-- "Lines Spawning"). Returns {r, g, b} or nil.
+function DT:GetSpellCuratorColor(spellId)
+    local data = self:GetSpellInfo(spellId)
+    return data and data.color or nil
+end
+
+-- Secondary display sub-table for spells that need two simultaneous
+-- bars per Timer event (e.g. Orebreaker rendering "TANK HIT" bar to
+-- tank AND a "FEET" text to all roles). Returns the secondary table
+-- (with role/display/displayText/color fields) or nil. The secondary
+-- bar is created with a key suffix and gates on its own role tag.
+function DT:GetSpellSecondary(spellId)
+    local data = self:GetSpellInfo(spellId)
+    return data and data.secondary or nil
 end
 
 -- Sets the user color override. color = {r, g, b} stores the override;
@@ -1140,7 +1167,18 @@ local function ApplyVisualsToBar(frame)
     end
     local _, presetColor = ResolveDisplayPreset(frame.displayTextRaw)
     local userColor = frame.spellId and DT:GetSpellColorOverride(frame.spellId) or nil
-    frame.barColor = userColor or presetColor or DEFAULT_BAR_COLOR
+    -- Curator color: secondary bars look up their own secondary.color;
+    -- primary bars use spell.color.
+    local curatorColor
+    if frame.spellId then
+        if frame.isSecondary then
+            local secondary = DT:GetSpellSecondary(frame.spellId)
+            curatorColor = secondary and secondary.color or nil
+        else
+            curatorColor = DT:GetSpellCuratorColor(frame.spellId)
+        end
+    end
+    frame.barColor = userColor or curatorColor or presetColor or DEFAULT_BAR_COLOR
 
     local w, h
     if isBar then
@@ -1263,7 +1301,7 @@ local function ApplyVisualsToBar(frame)
     end
 end
 
-function DT:CreateBar(text, baseDuration, extension, displayMode, displayText, spellId, castDisplayText)
+function DT:CreateBar(text, baseDuration, extension, displayMode, displayText, spellId, castDisplayText, isSecondary)
     displayMode = displayMode or "text"
     local isBar = (displayMode == "bar")
     local group = isBar and self:EnsureBarGroup() or self:EnsureTextGroup()
@@ -1333,6 +1371,10 @@ function DT:CreateBar(text, baseDuration, extension, displayMode, displayText, s
     -- DB lookup per tick. Bars without a spellId (preview Sample bars,
     -- Wipe-module Respawn timers) fall back to module defaults.
     frame.spellId = spellId
+    -- Secondary-display flag. When true, ApplyVisualsToBar resolves the
+    -- curator color from `spell.secondary.color` instead of `spell.color`,
+    -- letting one spell paint two visually distinct bars.
+    frame.isSecondary = isSecondary
 
     -- FontStrings parented to the StatusBar so they overlay the fill texture
     -- (same as BigWigsTimers).
@@ -1515,7 +1557,7 @@ function DT:RevealBar(key)
     self:LayoutBars()
 end
 
-function DT:RenderBar(text, baseDur, extension, displayMode, iconID, displayText, spellId, castDisplayText)
+function DT:RenderBar(text, baseDur, extension, displayMode, iconID, displayText, spellId, castDisplayText, isSecondary)
     if not text or not baseDur or baseDur <= 0 then return end
     local existing = self.bars[text]
     if existing then
@@ -1523,7 +1565,7 @@ function DT:RenderBar(text, baseDur, extension, displayMode, iconID, displayText
         existing:SetScript("OnUpdate", nil)
         existing:Hide()
     end
-    local bar = self:CreateBar(text, baseDur, extension, displayMode, displayText, spellId, castDisplayText)
+    local bar = self:CreateBar(text, baseDur, extension, displayMode, displayText, spellId, castDisplayText, isSecondary)
     self._barSortCounter = self._barSortCounter + 1
     bar.sortIndex = self._barSortCounter
     self.bars[text] = bar
@@ -1588,6 +1630,16 @@ local function KillBar(self, text)
 end
 
 function DT:StopBar(text)
+    if not text then return end
+    -- Primary bar handles its own logic; secondary bar (if any) is
+    -- always paired with the primary's lifetime, so a StopBar from
+    -- BigWigs for `text` must stop both keys. Process primary first
+    -- so dprint output is in natural order.
+    self:_StopBarKey(text)
+    self:_StopBarKey(text .. SECONDARY_KEY_SUFFIX)
+end
+
+function DT:_StopBarKey(text)
     if not text then return end
     local bar = self.bars[text]
     if not bar then return end
@@ -2004,14 +2056,35 @@ function DT:EventCallback(event, ...)
             return
         end
 
-        -- Combined per-spell filter: hard-disable (always-active) +
-        -- role allow-list (only when RoleFilterEnabled). Gates BEFORE
-        -- bar allocation so we don't churn frames for hidden bars.
-        if not self:ShouldShowSpell(spellIdNum) then
-            local reason = self:IsSpellDisabled(spellIdNum) and "disabled" or "role"
-            dprint(string_format("Timer FILTERED text=%s reason=%s role=%s player=%s",
-                tostring(text), reason,
+        -- Disable check applies to both primary and secondary displays.
+        if self:IsSpellDisabled(spellIdNum) then
+            dprint(string_format("Timer FILTERED text=%s reason=disabled player=%s",
+                tostring(text), tostring(self.playerRole)))
+            return
+        end
+
+        -- Per-display role allow-list. Primary uses ShouldShowSpellRole
+        -- (which honors user overrides); secondary uses curated default
+        -- only (no user override yet — future GUI work).
+        local primaryAllowed = self:ShouldShowSpellRole(spellIdNum)
+        local secondary = self:GetSpellSecondary(spellIdNum)
+        local secondaryAllowed = false
+        if secondary then
+            if not (self.db and self.db.RoleFilterEnabled) then
+                secondaryAllowed = true
+            elseif not secondary.role then
+                secondaryAllowed = true  -- untagged → fail open
+            else
+                local allow = ROLE_ALLOW_LIST[self.playerRole]
+                secondaryAllowed = allow and (allow[secondary.role] == true) or false
+            end
+        end
+
+        if not primaryAllowed and not secondaryAllowed then
+            dprint(string_format("Timer FILTERED text=%s reason=role role=%s secRole=%s player=%s",
+                tostring(text),
                 tostring(self:GetSpellRole(spellIdNum)),
+                tostring(secondary and secondary.role),
                 tostring(self.playerRole)))
             return
         end
@@ -2021,7 +2094,7 @@ function DT:EventCallback(event, ...)
         local displayMode = self:GetSpellDisplay(spellIdNum)
         local displayText = self:GetSpellDisplayText(spellIdNum)
         local castDisplayText = self:GetSpellCastDisplayText(spellIdNum)
-        dprint(string_format("Timer text=%s spellId=%s base=%.2f ext=%.2f total=%.2f display=%s label=%s castLabel=%s mod=%s count=%s icon=%s",
+        dprint(string_format("Timer text=%s spellId=%s base=%.2f ext=%.2f total=%.2f display=%s label=%s castLabel=%s mod=%s count=%s icon=%s primary=%s secondary=%s",
             tostring(text),
             tostring(spellId),
             baseDur,
@@ -2032,8 +2105,18 @@ function DT:EventCallback(event, ...)
             tostring(castDisplayText),
             tostring(addon and addon.moduleName or addon),
             tostring(count),
-            tostring(icon)))
-        self:RenderBar(text, baseDur, ext, displayMode, icon, displayText, spellIdNum, castDisplayText)
+            tostring(icon),
+            tostring(primaryAllowed),
+            tostring(secondaryAllowed)))
+
+        if primaryAllowed then
+            self:RenderBar(text, baseDur, ext, displayMode, icon, displayText, spellIdNum, castDisplayText, false)
+        end
+        if secondaryAllowed and secondary then
+            local secText = secondary.displayText
+            local secMode = secondary.display or "text"
+            self:RenderBar(text .. SECONDARY_KEY_SUFFIX, baseDur, ext, secMode, icon, secText, spellIdNum, nil, true)
+        end
     elseif event == "BigWigs_StopBar" then
         local _, text = ...
         dprint("StopBar text=" .. tostring(text))

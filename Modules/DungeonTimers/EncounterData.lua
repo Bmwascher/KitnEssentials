@@ -79,6 +79,34 @@
 -- ║                                  -- visible even when    ║
 -- ║                                  -- group hides. Omit    ║
 -- ║                                  -- to inherit group.    ║
+-- ║                color           = { r, g, b },  -- (N13i) ║
+-- ║                                  -- curator-default RGB  ║
+-- ║                                  -- color. Overrides the ║
+-- ║                                  -- displayText preset   ║
+-- ║                                  -- color. Use for bars  ║
+-- ║                                  -- that need a specific ║
+-- ║                                  -- hue not covered by   ║
+-- ║                                  -- the preset palette.  ║
+-- ║                                  -- User color override  ║
+-- ║                                  -- still wins over this.║
+-- ║                secondary       = {             -- (N13j) ║
+-- ║                                    role = ...,           ║
+-- ║                                    display = ...,        ║
+-- ║                                    displayText = ...,    ║
+-- ║                                    color = { r, g, b },  ║
+-- ║                                  },                      ║
+-- ║                                  -- optional second bar  ║
+-- ║                                  -- spawned alongside    ║
+-- ║                                  -- the primary on each  ║
+-- ║                                  -- Timer event. Has its ║
+-- ║                                  -- own role gate, mode, ║
+-- ║                                  -- text, and color. Use ║
+-- ║                                  -- for spells that need ║
+-- ║                                  -- a tank-only bar AND  ║
+-- ║                                  -- an everyone-text     ║
+-- ║                                  -- (e.g. Orebreaker:    ║
+-- ║                                  -- "TANK HIT" bar +     ║
+-- ║                                  -- "FEET" text).        ║
 -- ║            },                                            ║
 -- ║            ...                                           ║
 -- ║        },                                                ║
@@ -294,10 +322,13 @@ KE.EncounterData[1999] = {
     dungeon = "PitOfSaron",
     bossOrder = 1,
     spells = {
-        [1261299] = { name = "Throw Saronite",   castType = "begincast", castDuration = 2,   channelDuration = 6,   role = "other"    },
-        [1261546] = { name = "Orebreaker",       castType = "begincast", castDuration = 4.5,                        role = "tank",     display = "bar", displayText = "TANK HIT" },
-        [1262029] = { name = "Glacial Overload", castType = "begincast", castDuration = 5,   channelDuration = 3.5, role = "other"    },
-        [1261847] = { name = "Cryostomp",        castType = "begincast", castDuration = 2.5,                        role = "heal"     },
+        [1261299] = { name = "Throw Saronite",   castType = "begincast", castDuration = 2,   channelDuration = 6,   role = "other",  display = "bar", displayText = "Drop Ore",   color = { 0.7725, 0.4980, 0.1176 } }, -- #c57f1e
+        -- Primary "FEET" (everyone, text) so the GUI preview shows the broadly-relevant cue.
+        -- Secondary "TANK HIT" (tank-only, bar) renders alongside in-game for the tank.
+        [1261546] = { name = "Orebreaker",       castType = "begincast", castDuration = 4.5,                        role = "other",                   displayText = "FEET",
+                                                  secondary = { role = "tank", display = "bar", displayText = "TANK HIT" } },
+        [1262029] = { name = "Glacial Overload", castType = "begincast", castDuration = 5,   channelDuration = 3.5, role = "other",                   displayText = "HIDE"     },
+        [1261847] = { name = "Cryostomp",        castType = "begincast", castDuration = 2.5,                        role = "other",                   displayText = "AOE + FEET" },
     },
 }
 
@@ -307,9 +338,9 @@ KE.EncounterData[2001] = {
     bossOrder = 2,
     spells = {
         [1264287] = { name = "Blight Smash",     castType = "begincast", castDuration = 4,                          role = "tank",     display = "bar", displayText = "TANK HIT" },
-        [1264336] = { name = "Plague Expulsion", castType = "begincast", castDuration = 2.5,                        role = "other"    },
-        [1264027] = { name = "Shade Shift",      castType = "begincast", castDuration = 4,                          role = "mechanic" },
-        [1264363] = { name = "Get 'Em, Ick!",    castType = "begincast", castDuration = 4,                          role = "mechanic" },
+        [1264336] = { name = "Plague Expulsion", castType = "begincast", castDuration = 2.5,                        role = "move",                      displayText = "AOE + FEET" },
+        [1264027] = { name = "Shade Shift",      castType = "begincast", castDuration = 4,                          role = "other",                     displayText = "ADDS"     },
+        [1264363] = { name = "Get 'Em, Ick!",    castType = "begincast", castDuration = 4,                          role = "move",                      displayText = "FIXATES"  },
     },
 }
 
@@ -318,12 +349,12 @@ KE.EncounterData[2000] = {
     dungeon = "PitOfSaron",
     bossOrder = 3,
     spells = {
-        [1262745] = { name = "Rime Blast",          castType = "begincast", castDuration = 6,                       role = "mechanic" },
-        [1262582] = { name = "Scourgelord's Brand", castType = "begincast", castDuration = 2.5,                     role = "tank",     display = "bar", displayText = "TANK HIT" },
-        [1263756] = { name = "Death's Grasp",       castType = "cast",                          channelDuration = 6, role = "other"   },
-        [1263406] = { name = "Army of the Dead",    castType = "begincast", castDuration = 5,                       role = "mechanic" },
-        [1276948] = { name = "Ice Barrage",         castType = "cast",                          channelDuration = 4.5, role = "other" },
-        [1276648] = { name = "Bone Infusion",       castType = "begincast", castDuration = 3,                       role = "heal"     },
+        [1262745] = { name = "Rime Blast",          castType = "begincast", castDuration = 6,                         role = "move",                      displayText = "CLEAR"    },
+        [1262582] = { name = "Scourgelord's Brand", castType = "begincast", castDuration = 2.5,                       role = "tank",     display = "bar", displayText = "TANK HIT" },
+        [1263756] = { name = "Death's Grasp",       castType = "cast",                          channelDuration = 6,  role = "other",                     displayText = "FEET"     },
+        [1263406] = { name = "Army of the Dead",    castType = "begincast", castDuration = 5,                         role = "other",                     displayText = "ADDS"     },
+        [1276948] = { name = "Ice Barrage",         castType = "cast",                          channelDuration = 4.5, role = "other",                     displayText = "FEET"     },
+        [1276648] = { name = "Bone Infusion",       castType = "begincast", castDuration = 3,                         role = "other",                     displayText = "AOE"      },
     },
 }
 
