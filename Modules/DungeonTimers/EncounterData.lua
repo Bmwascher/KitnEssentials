@@ -252,11 +252,11 @@ KE.EncounterData[3328] = {
     name = "Chief Corewright Kasreth",
     dungeon = "NexusPointXenas",
     spells = {
-        -- 1251579 vs EXBoss 1251183 — LittleWigs ID wins (BigWigs Timer key); EXBoss has no cast data for either ID
-        [1251579] = { name = "Leyline Array",          castType = "cast",                                          role = "other"    },
-        [1251772] = { name = "Reflux Charge",          castType = "begincast", castDuration = 2.1,                 role = "other"    },
-        [1264048] = { name = "Flux Collapse",          castType = "cast",                                          role = "other"    },
-        [1257509] = { name = "Corespark Detonation",   castType = "begincast", castDuration = 5,                   role = "heal"     },
+        [1251579] = { name = "Leyline Array",          castType = "cast",      castDuration = 6,                   role = "other",  display = "bar",   displayText = "Lines Spawning" },
+        [1251772] = { name = "Reflux Charge",          castType = "begincast", castDuration = 2.1,                 role = "other",  display = "bar",   displayText = "Clear Lines"   },
+        [1264048] = { name = "Flux Collapse",          castType = "cast",      castDuration = 3,                   role = "other",                     displayText = "FEET"          },
+        -- Disabled by default: opt-in heal-only AOE warning
+        [1257509] = { name = "Corespark Detonation",   castType = "begincast", castDuration = 5,                   role = "heal",                      displayText = "AOE",            disabled = true },
     },
 }
 
@@ -264,12 +264,13 @@ KE.EncounterData[3332] = {
     name = "Corewarden Nysarra",
     dungeon = "NexusPointXenas",
     spells = {
-        [1247937] = { name = "Umbral Lash",           castType = "begincast", castDuration = 0.8,                   role = "tank",     display = "bar", displayText = "TANK HIT" },
-        -- 1249014 vs EXBoss 1249027 — LittleWigs ID wins (BigWigs Timer key); cast data assumed same as 1249027
-        [1249014] = { name = "Eclipsing Step",        castType = "begincast", castDuration = 2.5, channelDuration = 2, role = "heal"  },
-        [1252703] = { name = "Null Vanguard",         castType = "cast",                                            role = "mechanic" },
-        [1264439] = { name = "Lightscar Flare",       castType = "cast",                          castDuration = 4.2, role = "mechanic" },
-        [1271684] = { name = "Devour the Unworthy",   castType = "begincast", castDuration = 3.4, channelDuration = 5, role = "other"   },
+        [1247937] = { name = "Umbral Lash",           castType = "begincast", castDuration = 0.8,                       role = "tank",     display = "bar", displayText = "TANK HIT" },
+        [1249014] = { name = "Eclipsing Step",        castType = "begincast", castDuration = 2.5, channelDuration = 2,  role = "move",                      displayText = "SPREAD"   },
+        [1252703] = { name = "Null Vanguard",         castType = "cast",      castDuration = 6,                         role = "other",                     displayText = "ADDS"     },
+        -- castDuration=10 is rough — Lightscar Flare timing varies in-game; adjust per future logs.
+        [1264439] = { name = "Lightscar Flare",       castType = "cast",      castDuration = 10,                        role = "other",                     displayText = "AMP"      },
+        -- Disabled by default: BigWigs fires Timer but the spell may not actually exist in-game.
+        [1271684] = { name = "Devour the Unworthy",   castType = "begincast", castDuration = 3.4, channelDuration = 5,  role = "other",                     displayText = "AOE",     disabled = true },
     },
 }
 
@@ -278,12 +279,9 @@ KE.EncounterData[3333] = {
     dungeon = "NexusPointXenas",
     spells = {
         [1253950] = { name = "Searing Rend",         castType = "begincast", castDuration = 3,                     role = "tank",     display = "bar", displayText = "TANK HIT" },
-        [1253855] = { name = "Brilliant Dispersion", castType = "begincast", castDuration = 4,                     role = "heal"     },
-        [1255531] = { name = "Flicker",              castType = "cast",                                            role = "other"    },
-        -- 1257595 vs EXBoss 1257601 — LittleWigs ID wins (BigWigs Timer key); cast data assumed same as 1257601.
-        -- Divine Guile is an intermission/phase-transition (EXBoss voice = "转阶段", sentinel channelDuration);
-        -- DANCE displayText (aliased to INTERMISSION color), role = "other" for everyone-visibility.
-        [1257595] = { name = "Divine Guile",         castType = "begincast", castDuration = 0.5,                   role = "other",                  displayText = "DANCE"    },
+        [1253855] = { name = "Brilliant Dispersion", castType = "begincast", castDuration = 4,                     role = "other",                     displayText = "DROPS"    },
+        [1255531] = { name = "Flicker",              castType = "cast",                                            role = "other",                     displayText = "DODGE"    },
+        [1257595] = { name = "Divine Guile",         castType = "begincast", castDuration = 7,                     role = "other",                     displayText = "Minigame" },
     },
 }
 
