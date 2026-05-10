@@ -57,12 +57,14 @@ local LibSpec = LibStub("LibSpecialization", true)
 -- tank/heal-tagged bars are role-specific (only that role); mechanic/other
 -- show for everyone since they're class-agnostic dodge/positioning cues;
 -- kick-tagged bars show only for TANK + DAMAGER (interrupt duty — healers
--- typically focus on healing during the cast). Spells with no role tag
--- (uncurated) always show — fail open.
+-- typically focus on healing during the cast); move-tagged bars show only
+-- for HEALER + DAMAGER (movement/spread/positional mechanics — tank is
+-- anchored on the boss and not the typical target). Spells with no role
+-- tag (uncurated) always show — fail open.
 local ROLE_ALLOW_LIST = {
-    TANK    = { tank = true,             mechanic = true, other = true, kick = true },
-    HEALER  = {             heal = true, mechanic = true, other = true              },
-    DAMAGER = {                          mechanic = true, other = true, kick = true },
+    TANK    = { tank = true,             mechanic = true, other = true, kick = true              },
+    HEALER  = {             heal = true, mechanic = true, other = true,             move = true },
+    DAMAGER = {                          mechanic = true, other = true, kick = true, move = true },
 }
 
 -- Fallback hardcoded sizes used only when DB hasn't been resolved yet (very
@@ -123,6 +125,7 @@ local DISPLAY_PRESET_ALIASES = {
     KNOCK        = "PULL",
     LEAP         = "PULL",
     MARKS        = "FRONTAL",
+    MINIGAME     = "DANCE",
     SPLIT        = "AMP",
     SUCC         = "AOE",
     TOTEMS       = "ADD",
