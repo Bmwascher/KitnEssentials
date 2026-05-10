@@ -15,9 +15,15 @@
 -- ║                castDuration    = <seconds>,  -- optional ║
 -- ║                channelDuration = <seconds>,  -- optional ║
 -- ║                role            = "tank"|"heal"|          ║
--- ║                                  "mechanic"|"other",     ║
+-- ║                                  "mechanic"|"other"|     ║
+-- ║                                  "kick"|"move",          ║
+-- ║                                  -- kick = TANK + DPS    ║
+-- ║                                  --   (interrupt duty)   ║
+-- ║                                  -- move = HEAL + DPS    ║
+-- ║                                  --   (spread/movement;  ║
+-- ║                                  --    tank anchored)    ║
 -- ║                display         = "bar"|"text",           ║
--- ║                displayText     = "DODGE"|...,  -- (N12)  ║
+-- ║                displayText     = "DODGE"|...,           ║
 -- ║                                  -- short curated label  ║
 -- ║                                  -- shown instead of the ║
 -- ║                                  -- BigWigs spell name.  ║
@@ -26,7 +32,7 @@
 -- ║                                  -- "SPREAD". Fall back  ║
 -- ║                                  -- to BigWigs name when ║
 -- ║                                  -- absent.              ║
--- ║                castDisplayText = "AOE"|...,    -- (N13h) ║
+-- ║                castDisplayText = "AOE"|...,             ║
 -- ║                                  -- optional cast-phase  ║
 -- ║                                  -- label/color swap.    ║
 -- ║                                  -- When set, the bar    ║
@@ -68,7 +74,7 @@
 -- ║                                  -- that would clutter   ║
 -- ║                                  -- the screen by        ║
 -- ║                                  -- default.             ║
--- ║                showAtSeconds   = <seconds>,    -- (N13a) ║
+-- ║                showAtSeconds   = <seconds>,             ║
 -- ║                                  -- per-spell visibility ║
 -- ║                                  -- override. Hides the  ║
 -- ║                                  -- bar until last N sec ║
@@ -79,7 +85,7 @@
 -- ║                                  -- visible even when    ║
 -- ║                                  -- group hides. Omit    ║
 -- ║                                  -- to inherit group.    ║
--- ║                color           = { r, g, b },  -- (N13i) ║
+-- ║                color           = { r, g, b },          ║
 -- ║                                  -- curator-default RGB  ║
 -- ║                                  -- color. Overrides the ║
 -- ║                                  -- displayText preset   ║
@@ -89,7 +95,7 @@
 -- ║                                  -- the preset palette.  ║
 -- ║                                  -- User color override  ║
 -- ║                                  -- still wins over this.║
--- ║                secondary       = {             -- (N13j) ║
+-- ║                secondary       = {                      ║
 -- ║                                    role = ...,           ║
 -- ║                                    display = ...,        ║
 -- ║                                    displayText = ...,    ║
@@ -148,7 +154,7 @@ KE.EncounterData[2562] = {
         [386544] = { name = "Arcane Orbs",       castType = "cast",                                          role = "other",                     displayText = "SOAK"     },
         [385958] = { name = "Arcane Expulsion",  castType = "begincast", castDuration = 4,                   role = "tank",     display = "bar", displayText = "TANK HIT" },
         [386173] = { name = "Mana Bombs",        castType = "begincast", castDuration = 2.5,                 role = "other",                     displayText = "SPREAD"   },
-        [388537] = { name = "Arcane Fissure",    castType = "begincast", castDuration = 3,                   role = "mechanic",                  displayText = "AOE"      },
+        [388537] = { name = "Arcane Fissure",    castType = "begincast", castDuration = 3,                   role = "mechanic",                  displayText = "AOE + FEET" },
     },
 }
 
@@ -245,8 +251,8 @@ KE.EncounterData[3212] = {
         [1266480] = { name = "Flanking Spear",   castType = "begincast", castDuration = 2.5, role = "tank",     display = "bar", displayText = "TANK HIT" },
         [1243900] = { name = "Fetid Quillstorm", castType = "begincast", castDuration = 3,   role = "other",                     displayText = "FEET" },
         [1260731] = { name = "Freezing Trap",    castType = "begincast", castDuration = 2,   role = "mechanic",                  displayText = "FEET" },
-        [1260643] = { name = "Barrage",          castType = "cast",      channelDuration = 5, role = "heal",                  displayText = "FRONTAL" },
-        [1246666] = { name = "Infected Pinions", castType = "begincast", castDuration = 1.5,  role = "heal",                  displayText = "AOE"     },
+        [1260643] = { name = "Barrage",          castType = "cast",      channelDuration = 5, role = "move",                  displayText = "FRONTAL" },
+        [1246666] = { name = "Infected Pinions", castType = "begincast", castDuration = 1.5,  role = "other",                 displayText = "AOE"     },
         [1249479] = { name = "Carrion Swoop",    castType = "begincast", castDuration = 4.5,  role = "mechanic",              displayText = "DODGE"   },
     },
 }
@@ -280,8 +286,8 @@ KE.EncounterData[3328] = {
     name = "Chief Corewright Kasreth",
     dungeon = "NexusPointXenas",
     spells = {
-        [1251579] = { name = "Leyline Array",          castType = "cast",      castDuration = 6,                   role = "other",  display = "bar",   displayText = "Lines Spawning" },
-        [1251772] = { name = "Reflux Charge",          castType = "begincast", castDuration = 2.1,                 role = "other",  display = "bar",   displayText = "Clear Lines"   },
+        [1251579] = { name = "Leyline Array",          castType = "cast",      castDuration = 6,                   role = "other",  display = "bar",   displayText = "Lines Spawning", color = { 0.302, 0.800, 1.0 } }, -- #4dccff
+        [1251772] = { name = "Reflux Charge",          castType = "begincast", castDuration = 2.1,                 role = "other",  display = "bar",   displayText = "Clear Lines",   color = { 1.0, 0.302, 0.800 } }, -- #ff4dcc
         [1264048] = { name = "Flux Collapse",          castType = "cast",      castDuration = 3,                   role = "other",                     displayText = "FEET"          },
         -- Disabled by default: opt-in heal-only AOE warning
         [1257509] = { name = "Corespark Detonation",   castType = "begincast", castDuration = 5,                   role = "heal",                      displayText = "AOE",            disabled = true },
@@ -367,7 +373,7 @@ KE.EncounterData[2065] = {
     dungeon = "SeatOfTriumvirate",
     spells = {
         [1263440] = { name = "Void Slash",     castType = "cast",                        channelDuration = 1.5, role = "tank",     display = "bar", displayText = "TANK HIT"  },
-        [1263282] = { name = "Decimate",       castType = "begincast", castDuration = 5,                        role = "other",    display = "bar", displayText = "DROP POOL" },
+        [1263282] = { name = "Decimate",       castType = "begincast", castDuration = 5,                        role = "other",    display = "bar", displayText = "DROP POOL", color = { 0.365, 0.082, 0.773 } }, -- #5d15c5
         [1268916] = { name = "Null Palm",      castType = "begincast", castDuration = 2.5,                      role = "other",                     displayText = "FRONTAL"   },
         [1263399] = { name = "Oozing Slam",    castType = "begincast", castDuration = 3,                        role = "other",                     displayText = "AOE"       },
         [1263297] = { name = "Crashing Void",  castType = "begincast", castDuration = 4,                        role = "other",                     displayText = "CC ADDS",  castDisplayText = "AOE" },
@@ -378,7 +384,7 @@ KE.EncounterData[2066] = {
     name = "Saprish",
     dungeon = "SeatOfTriumvirate",
     spells = {
-        [245742]  = { name = "Shadow Pounce",  castType = "cast",                                          role = "other",    display = "bar", displayText = "Cat Jumping" },
+        [245742]  = { name = "Shadow Pounce",  castType = "cast",                                          role = "other",    display = "bar", displayText = "Cat Jumping", color = { 0.769, 0.169, 0.169 } }, -- #c42b2b
         [1248219] = { name = "Void Bomb",      castType = "cast",                                          role = "other",                     displayText = "FEET"        },
         [1280065] = { name = "Phase Dash",     castType = "cast",                                          role = "mechanic",                  displayText = "CLEAR"       },
         [1263523] = { name = "Overload",       castType = "begincast", castDuration = 4,                   role = "other",                     displayText = "AOE"         },
@@ -391,7 +397,7 @@ KE.EncounterData[2067] = {
     spells = {
         -- Disabled by default: spammable kick target (24 fires per ~3 min). Opt-in via GUI.
         [244750]  = { name = "Mind Blast",          castType = "begincast", castDuration = 2,                   role = "kick",                      displayText = "KICK",         disabled = true },
-        [1277358] = { name = "Gates of the Abyss",  castType = "cast",                                          role = "other",  display = "bar",   displayText = "ORB SPAWNING"  },
+        [1277358] = { name = "Gates of the Abyss",  castType = "cast",                                          role = "other",  display = "bar",   displayText = "ORB SPAWNING",  color = { 1.0, 0.302, 0.800 } }, -- #ff4dcc
         [1263542] = { name = "Mass Void Infusion",  castType = "begincast", castDuration = 2, channelDuration = 5, role = "other",                  displayText = "SUCC"          },
         [1263538] = { name = "Umbral Tentacles",    castType = "begincast", castDuration = 3,                   role = "other",                     displayText = "ADDS"          },
         [1263528] = { name = "Repulse",             castType = "begincast", castDuration = 2,                   role = "other",                     displayText = "KNOCK"         },
@@ -454,9 +460,7 @@ KE.EncounterData[1701] = {
     dungeon = "Skyreach",
     spells = {
         [1253538] = { name = "Scorching Ray",  castType = "cast",                                              role = "heal",                     displayText = "AOE"  },
-        -- Solar Blast is a spammable interrupt — every ~12s on cooldown, more
-        -- noise than signal for non-interrupters. Curated as disabled by default;
-        -- user can flip the Enable toggle in GUI to opt in.
+        -- Disabled by default: spammable interrupt, opt-in via GUI.
         [154396]  = { name = "Solar Blast",    castType = "begincast", castDuration = 3,                       role = "other",    disabled = true, displayText = "KICK" },
         [153954]  = { name = "Cast Down",      castType = "cast",                                              role = "mechanic",                  displayText = "ADD"  },
         [1253840] = { name = "Lens Flare",     castType = "begincast", castDuration = 3,                       role = "mechanic",                  displayText = "FEET" },
@@ -484,11 +488,7 @@ KE.EncounterData[3057] = {
         [472745] = { name = "Splattering Spew",    castType = "begincast", castDuration = 4,                      role = "other",                  displayText = "SPREAD"  },
         [472888] = { name = "Bone Hack",           castType = "begincast", castDuration = 2,  channelDuration = 3, role = "tank",  display = "bar", displayText = "TANK HIT" },
         [474105] = { name = "Curse of Darkness",   castType = "begincast", castDuration = 4,                      role = "other",                  displayText = "ADDS"    },
-        -- 472736 Debilitating Shriek's actual mechanic is the follow-on Heaving Yank (472793, 7s
-        -- cast on the 2nd boss). BigWigs only fires Timer for Shriek, so we extend the bar by 7s
-        -- so it hits 0 at the moment the hook actually pulls — the "now!" we want users to react
-        -- to. role flipped to "other" so all 3 role filters see it. EXBoss's sentinel
-        -- channelDuration=604800 deliberately omitted.
+        -- castDuration=7 covers the follow-on Heaving Yank (BigWigs only fires Timer for Shriek).
         [472736] = { name = "Debilitating Shriek", castType = "begincast", castDuration = 7,                      role = "other",                  displayText = "HOOK",    showAtSeconds = 10 },
     },
 }
