@@ -224,7 +224,12 @@ GUIFrame:RegisterContent("PositionController", function(scrollChild, yOffset)
         end
 
         local card7 = GUIFrame:CreateCard(scrollChild, "CDM Racials Anchor", yOffset)
-        cdmManager:Register(card7, "all")
+        -- Don't register the card itself in cdmManager — card:SetEnabled(false)
+        -- shows a full-card mouse blocker that intercepts the enable toggle's
+        -- clicks, leaving the section permanently grayed out for any user
+        -- whose CDMRacials.Enabled defaults to false. Mirrors Card 1 (master
+        -- Position Controller enable) which is also intentionally unregistered.
+        -- Only the dependent widgets (slider + note) are gated below.
 
         local row1 = GUIFrame:CreateRow(card7.content, Theme.rowHeight)
         local cdmCheck = GUIFrame:CreateCheckbox(row1, "Enable CDM Racials Anchor", {
