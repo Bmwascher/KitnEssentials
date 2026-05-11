@@ -195,9 +195,18 @@ end
 
 function SoftOutline:SetText(text)
     if not self.shadows then return end
-    local cleanText = StripEscapeCodes(text)
+    -- StripEscapeCodes returns "" for secret strings (gsub on a secret would taint).
+    -- For our use case (e.g. DungeonTimers phase bars displaying AbbreviateNumbers
+    -- output) the string has no escape codes — passing it through directly keeps the
+    -- shadow in sync with the main text. FontString:SetText is AllowedWhenTainted.
+    local shadowText
+    if text and isSecret(text) then
+        shadowText = text
+    else
+        shadowText = StripEscapeCodes(text)
+    end
     for _, shadow in ipairs(self.shadows) do
-        shadow:SetText(cleanText)
+        shadow:SetText(shadowText)
     end
 end
 
@@ -348,13 +357,20 @@ function SoftOutline:_HookMain()
     hooksecurefunc(main, "SetAlpha", function(_, a)
         local outline = main._keSoftOutline
         if outline and outline.shadows then
-            if isSecret(a) or a == 0 then
+            -- Clean zero → hide outright. Secret alpha (could be 0 or 1) → propagate
+            -- the same value to shadows so they track main's visibility via Blizzard's
+            -- alpha multiplication. FontString:SetAlpha is AllowedWhenTainted, so
+            -- secret values flow through safely. The previous "isSecret → hide" branch
+            -- broke DungeonTimers' phase-bar transitionText, whose alpha is driven by
+            -- a secret HP-curve output that's 1 inside the transitioned band.
+            if not isSecret(a) and a == 0 then
                 for _, shadow in ipairs(outline.shadows) do
                     shadow:Hide()
                 end
             elseif outline.isShown then
                 for _, shadow in ipairs(outline.shadows) do
                     shadow:Show()
+                    shadow:SetAlpha(a)
                 end
             end
         end
@@ -363,7 +379,17 @@ function SoftOutline:_HookMain()
     hooksecurefunc(main, "SetTextColor", function(_, r, g, b, a)
         local outline = main._keSoftOutline
         if outline and outline.shadows then
-            if isSecret(a) or a == 0 then
+            -- Hide if EITHER the text-color alpha is zero OR the frame alpha is
+            -- zero. Previously this only checked text-color alpha — and 3-arg
+            -- SetTextColor(r,g,b) passes a=nil, which fell into the elseif and
+            -- unconditionally Show()'d the shadows. That re-surfaced DungeonTimers'
+            -- transitionText shadows (showing "Phase Transitioned") even though
+            -- the main FontString had been SetAlpha(0)'d in CreatePhaseBar —
+            -- producing a visible "ghost" string behind the label.
+            local frameAlpha = main:GetAlpha()
+            local textAlphaZero = (not isSecret(a)) and a == 0
+            local frameAlphaZero = (not isSecret(frameAlpha)) and frameAlpha == 0
+            if textAlphaZero or frameAlphaZero then
                 for _, shadow in ipairs(outline.shadows) do
                     shadow:Hide()
                 end
@@ -451,10 +477,17 @@ function KE:CreateSoftOutline(mainText, options)
 
     -- Create shadow FontStrings
     local parent = mainText:GetParent()
+    local initialText = mainText:GetText() or ""
+    local shadowInitial
+    if isSecret(initialText) then
+        shadowInitial = initialText
+    else
+        shadowInitial = StripEscapeCodes(initialText)
+    end
     for i = 1, #SHADOW_OFFSETS do
         local shadow = parent:CreateFontString(nil, "ARTWORK", nil, 7)
         shadow:SetFont(font, size, "")
-        shadow:SetText(StripEscapeCodes(mainText:GetText() or ""))
+        shadow:SetText(shadowInitial)
         shadow:SetJustifyH(mainText:GetJustifyH())
         shadow:SetJustifyV(mainText:GetJustifyV())
         outline.shadows[i] = shadow

@@ -157,6 +157,13 @@ local function RefreshSpellPreview()
     end
 end
 
+local function RefreshPhasePreview()
+    local mod = GetModule()
+    if mod and mod.RefreshPhasePreview then
+        mod:RefreshPhasePreview()
+    end
+end
+
 local function ShowSpellPreview(spellId)
     if not GUIFrame or not GUIFrame:IsShown() then return end
     local sel = GUIFrame.selectedSidebarItem or ""
@@ -210,7 +217,28 @@ local function CollectEncountersForDungeon(dungeonKey)
                     table_insert(spellPairs, { id = spellId, data = spell })
                 end
             end
-            table_sort(spellPairs, function(a, b) return a.id < b.id end)
+            -- Two-key sort: spells with `sortAtEnd = true` (vulnerability phases) go to
+            -- the end of the regular spell list while preserving spellId-ascending order
+            -- for everything else. Phase rules are appended after this sort.
+            table_sort(spellPairs, function(a, b)
+                local aEnd = (a.data and a.data.sortAtEnd) and 1 or 0
+                local bEnd = (b.data and b.data.sortAtEnd) and 1 or 0
+                if aEnd ~= bEnd then return aEnd < bEnd end
+                return a.id < b.id
+            end)
+            -- Append phase rules after spells. Synthetic id "phase:<encId>:<idx>"
+            -- so the same kit pool + selection state path handles both row types.
+            if enc.phases then
+                for ruleIdx, rule in ipairs(enc.phases) do
+                    table_insert(spellPairs, {
+                        id        = string_format("phase:%d:%d", encId, ruleIdx),
+                        data      = rule,
+                        isPhase   = true,
+                        ruleIndex = ruleIdx,
+                        encId     = encId,
+                    })
+                end
+            end
             table_insert(encList, {
                 id        = encId,
                 name      = enc.name or string_format("Encounter %d", encId),
@@ -239,6 +267,22 @@ local function ResolveSpellDisplayName(spellId, spell)
     return string_format("Spell %d", spellId)
 end
 
+-- Phase rule rows render label as "Phase <N> - <threshold>%"; e.g. "Phase 1 - 75%".
+local function ResolvePhaseRowLabel(item)
+    local rule = item and item.data
+    local idx = item and item.ruleIndex or 1
+    local thr = rule and rule.threshold
+    if thr then
+        return string_format("Phase %d - %d%%", idx, thr)
+    end
+    return string_format("Phase %d", idx)
+end
+
+-- Detects synthetic phase rule keys — string-form "phase:<encId>:<idx>".
+local function IsPhaseKey(key)
+    return type(key) == "string" and key:find("^phase:%d+:%d+$") ~= nil
+end
+
 -- Resolves the first selectable spellId in a dungeon. Used to default the
 -- sticky selection when the user hasn't clicked anything yet OR when a stale
 -- selection points to a spell no longer in EncounterData (rare).
@@ -265,45 +309,57 @@ local STRIPE_YELLOW = { 1.0, 0.85, 0.0,  1.0 }
 local function ApplyOverrideStripe(kit, spellId)
     if not (kit and kit.overrideStripe) then return end
     local DT = GetModule()
-    local hasOverrides = (DT and DT.HasSpellOverrides and DT:HasSpellOverrides(spellId)) or false
+    local hasOverrides, isDisabled
+    if IsPhaseKey(spellId) then
+        hasOverrides = (DT and DT.HasPhaseOverrides and DT:HasPhaseOverrides(spellId)) or false
+        isDisabled   = (DT and DT.IsPhaseDisabled   and DT:IsPhaseDisabled(spellId))   or false
+    else
+        hasOverrides = (DT and DT.HasSpellOverrides and DT:HasSpellOverrides(spellId)) or false
+        isDisabled   = (DT and DT.IsSpellDisabled   and DT:IsSpellDisabled(spellId))   or false
+    end
     if not hasOverrides then
         kit.overrideStripe:Hide()
         return
     end
-    local isDisabled = (DT and DT.IsSpellDisabled and DT:IsSpellDisabled(spellId)) or false
     local c = isDisabled and STRIPE_RED or STRIPE_YELLOW
     kit.overrideStripe:SetColorTexture(c[1], c[2], c[3], c[4])
     kit.overrideStripe:Show()
 end
 
-local function ConfigureListRow(kit, spellId, spell, isSelected)
+-- Icon for phase rule rows in the encounter list. Same texture used for the
+-- in-game bar's icon (PHASE_BAR_ICON in DungeonTimers.lua) so the GUI row and
+-- the live bar visually match.
+local PHASE_ROW_ICON = 6013778
+
+local function ConfigureListRow(kit, spellId, spell, isSelected, item)
     kit._spellId = spellId
+    local isPhase = item and item.isPhase or false
+    kit._isPhase = isPhase
     -- Cache curated role on the kit so future hover handlers don't pay a
     -- DT helper lookup at hover time — pure-table read.
-    kit._roleTag = spell.role
+    kit._roleTag = (not isPhase) and spell.role or nil
 
-    kit.label:SetText(ResolveSpellDisplayName(spellId, spell))
+    if isPhase then
+        kit.label:SetText(ResolvePhaseRowLabel(item))
+    else
+        kit.label:SetText(ResolveSpellDisplayName(spellId, spell))
+    end
 
-    -- Override marker: 2px-wide stripe on the LEFT edge of the row.
-    -- Red when the spell is disabled (most destructive override),
-    -- yellow when any other override exists, hidden otherwise. Visible
-    -- against any row state (idle / hover / selected). Setters auto-
-    -- prune redundant overrides, so this stripe stays accurate when
-    -- users toggle a value back to its curated default.
+    -- Override stripe — phase rules use HasPhaseOverrides / IsPhaseDisabled;
+    -- spells use the existing spell helpers. ApplyOverrideStripe routes
+    -- internally based on key shape.
     ApplyOverrideStripe(kit, spellId)
 
-    -- Display-mode tag — colored mini-label on the right. "Bar" = filled
-    -- bar with countdown overlay; "Text" = plain text-only line (no
-    -- fill texture). Both render through the same DungeonTimers pipeline;
-    -- the difference is just visual style. Colors match BigWigsTimers'
-    -- tag palette so the two modules feel consistent.
-    -- Reads via DT:GetSpellDisplay so the user's per-spell override wins
-    -- over the curator's default; the tag flips live when the override
-    -- changes (RefreshListRowTag is the targeted update from the Display
-    -- tab's toggle).
+    -- Display-mode tag (Bar / Text). Phase rules read via GetPhaseDisplay;
+    -- spells via GetSpellDisplay. RefreshListRowTag updates on Display tab toggles.
     if kit.tagLabel then
         local DT = GetModule()
-        local effectiveDisplay = (DT and DT:GetSpellDisplay(spellId)) or spell.display or "text"
+        local effectiveDisplay
+        if isPhase then
+            effectiveDisplay = (DT and DT:GetPhaseDisplay(spellId)) or "text"
+        else
+            effectiveDisplay = (DT and DT:GetSpellDisplay(spellId)) or spell.display or "text"
+        end
         if effectiveDisplay == "bar" then
             kit.tagLabel:SetText("Bar")
             kit.tagLabel:SetTextColor(0.4, 0.7, 1.0, 0.9)
@@ -313,13 +369,15 @@ local function ConfigureListRow(kit, spellId, spell, isSelected)
         end
     end
 
-    -- Sound indicator — "S" appears on the right when the spell has any
-    -- onShow or onHide sound configured. Empty string keeps the
-    -- FontString width zero when no sound is set so the label can grow
-    -- into the slot.
+    -- Sound indicator: "S" if any onShow/onHide sound configured.
     if kit.soundLabel then
         local DT_mod = GetModule()
-        local hasSound = (DT_mod and DT_mod.HasSpellSound and DT_mod:HasSpellSound(spellId)) or false
+        local hasSound
+        if isPhase then
+            hasSound = (DT_mod and DT_mod.HasPhaseSound and DT_mod:HasPhaseSound(spellId)) or false
+        else
+            hasSound = (DT_mod and DT_mod.HasSpellSound and DT_mod:HasSpellSound(spellId)) or false
+        end
         if hasSound then
             kit.soundLabel:SetText("S")
             kit.soundLabel:SetTextColor(1.0, 0.8, 0.3, 0.9)
@@ -328,13 +386,18 @@ local function ConfigureListRow(kit, spellId, spell, isSelected)
         end
     end
 
-    -- Spell icon. C_Spell.GetSpellTexture is clean (no secret-value taint)
-    -- for curated spellIds since they're well-defined boss spells with
-    -- entries in the spell DB.
+    -- Icon: phase rules get a heart texture; spells route through DT:ResolveSpellIcon
+    -- so curator iconOverride (e.g. Backlash → 4914666) wins over the spell's default.
     if kit.icon then
-        local tex = (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(spellId))
-                    or 134400
-        kit.icon:SetTexture(tex)
+        if isPhase then
+            kit.icon:SetTexture(PHASE_ROW_ICON)
+        else
+            local DT = GetModule()
+            local tex = (DT and DT.ResolveSpellIcon and DT:ResolveSpellIcon(spellId))
+                        or (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(spellId))
+                        or 134400
+            kit.icon:SetTexture(tex)
+        end
     end
 
     if isSelected then
@@ -350,6 +413,7 @@ end
 local function ResetListRow(kit)
     kit._spellId = nil
     kit._roleTag = nil
+    kit._isPhase = nil
     if kit.label then kit.label:SetText("") end
     if kit.bg then kit.bg:SetColorTexture(0, 0, 0, 0) end
     if kit.icon then kit.icon:SetTexture(134400) end
@@ -479,7 +543,12 @@ end
 local function RefreshListRowSound(spellId)
     if not spellId then return end
     local DT = GetModule()
-    local hasSound = (DT and DT.HasSpellSound and DT:HasSpellSound(spellId)) or false
+    local hasSound
+    if IsPhaseKey(spellId) then
+        hasSound = (DT and DT.HasPhaseSound and DT:HasPhaseSound(spellId)) or false
+    else
+        hasSound = (DT and DT.HasSpellSound and DT:HasSpellSound(spellId)) or false
+    end
     for i = 1, listRowPool._activeCount do
         local kit = listRowPool._kits[i]
         if kit and kit._spellId == spellId and kit.soundLabel then
@@ -502,7 +571,12 @@ end
 local function RefreshListRowTag(spellId)
     if not spellId then return end
     local DT = GetModule()
-    local effectiveDisplay = (DT and DT:GetSpellDisplay(spellId)) or "text"
+    local effectiveDisplay
+    if IsPhaseKey(spellId) then
+        effectiveDisplay = (DT and DT:GetPhaseDisplay(spellId)) or "text"
+    else
+        effectiveDisplay = (DT and DT:GetSpellDisplay(spellId)) or "text"
+    end
     for i = 1, listRowPool._activeCount do
         local kit = listRowPool._kits[i]
         if kit and kit._spellId == spellId and kit.tagLabel then
@@ -1238,10 +1312,15 @@ local function BuildDisplayTabBody(parent, spellId, spell)
     local presetHeader = CreateSectionHeader(body, labelCaption, "Available Presets", 22)
 
     -- Sort preset keys alphabetically for stable display order. pairs()
-    -- is hash-order which shuffles across reloads.
+    -- is hash-order which shuffles across reloads. Skip presets flagged
+    -- `hidden = true` (e.g. VULN) so the visible grid stays a clean 3x5.
     local presetKeys = {}
     if DT and DT.DISPLAY_PRESETS then
-        for k in pairs(DT.DISPLAY_PRESETS) do presetKeys[#presetKeys + 1] = k end
+        for k, p in pairs(DT.DISPLAY_PRESETS) do
+            if not (p and p.hidden) then
+                presetKeys[#presetKeys + 1] = k
+            end
+        end
         table_sort(presetKeys)
     end
 
@@ -1539,6 +1618,455 @@ local function BuildDisplayTabBody(parent, spellId, spell)
 end
 
 ---------------------------------------------------------------------------------
+-- Phase rule tab bodies. Mirror spell tabs (Visibility / Display / Actions)
+-- but read/write phase-rule overrides via DT:GetPhase* / SetPhase* helpers.
+-- Phase rules are encounter-level mechanics (always shown to everyone) so
+-- the role toggles + showAt slider from BuildVisibilityTabBody are absent.
+---------------------------------------------------------------------------------
+
+local function BuildPhaseVisibilityTabBody(parent, phaseKey, rule)
+    local DT = GetModule()
+    local body = CreateFrame("Frame", nil, parent)
+    body:SetAllPoints()
+
+    -- Section: Master.
+    local masterHeader = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(masterHeader, "Expressway", 13, "OUTLINE")
+    masterHeader:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
+    masterHeader:SetText("Master")
+    masterHeader:SetPoint("TOPLEFT", body, "TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING)
+    do
+        local underline = body:CreateTexture(nil, "ARTWORK")
+        underline:SetHeight(1)
+        underline:SetColorTexture(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3], 0.4)
+        underline:SetPoint("LEFT", masterHeader, "RIGHT", 6, 0)
+        underline:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+        underline:SetPoint("TOP", masterHeader, "TOP", 0, -8)
+    end
+
+    local secondaryWidgets = {}
+
+    local enableState = true
+    if DT then enableState = not DT:IsPhaseDisabled(phaseKey) end
+    local enableToggle = GUIFrame:CreateCheckbox(body, "Enable this phase alert", {
+        value = enableState,
+        callback = function(checked)
+            if not (DT and DT.SetPhaseDisabled) then return end
+            DT:SetPhaseDisabled(phaseKey, not checked)
+            for i = 1, listRowPool._activeCount do
+                local kit = listRowPool._kits[i]
+                if kit and kit._spellId == phaseKey then
+                    ApplyOverrideStripe(kit, phaseKey)
+                    break
+                end
+            end
+            for _, w in ipairs(secondaryWidgets) do
+                if w.SetEnabled then w:SetEnabled(checked) end
+            end
+        end,
+    })
+    enableToggle:SetPoint("TOPLEFT", masterHeader, "BOTTOMLEFT", 0, -10)
+    enableToggle:SetWidth(220)
+
+    -- Section: When It Fires
+    local windowHeader = CreateSectionHeader(body, enableToggle, "When It Fires", 18)
+
+    -- Description: explains threshold + lead window.
+    local desc = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(desc, "Expressway", 12, "OUTLINE")
+    desc:SetPoint("TOPLEFT", windowHeader, "BOTTOMLEFT", 0, -10)
+    desc:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    desc:SetJustifyH("LEFT")
+    desc:SetWordWrap(true)
+    desc:SetTextColor(0.85, 0.85, 0.85)
+    local thr = (rule and rule.threshold) or 0
+    local curatedLead = (rule and rule.lead) or 0
+    desc:SetText(string_format(
+        "The bar appears when the boss drops below %d%% HP and counts down each percent until the phase fires at %d%%.",
+        thr + curatedLead, thr))
+
+    -- Lead override slider — additive offset on top of curated lead.
+    -- Range: -3 (shrink) to +5 (extend); step 1.
+    local currentOffset = (DT and DT:GetPhaseLeadOffset(phaseKey)) or 0
+    local leadRow = GUIFrame:CreateRow(body, 36)
+    leadRow:SetPoint("TOPLEFT", desc, "BOTTOMLEFT", 0, -16)
+    leadRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    local leadSlider = GUIFrame:CreateSlider(leadRow, "Alert window offset (%)", {
+        min = -3, max = 5, step = 1,
+        value = currentOffset,
+        labelWidth = 160,
+        callback = function(val)
+            if not (DT and DT.SetPhaseLeadOffset) then return end
+            DT:SetPhaseLeadOffset(phaseKey, val)
+            for i = 1, listRowPool._activeCount do
+                local kit = listRowPool._kits[i]
+                if kit and kit._spellId == phaseKey then
+                    ApplyOverrideStripe(kit, phaseKey)
+                    break
+                end
+            end
+            RefreshPhasePreview()
+        end,
+    })
+    leadRow:AddWidget(leadSlider, 1.0, 0)
+    secondaryWidgets[#secondaryWidgets + 1] = leadSlider
+
+    local leadCaption = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(leadCaption, "Expressway", 11, "OUTLINE")
+    leadCaption:SetPoint("TOPLEFT", leadRow, "BOTTOMLEFT", 8, -12)
+    leadCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    leadCaption:SetJustifyH("LEFT")
+    leadCaption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
+    leadCaption:SetText(string_format(
+        "Negative = shorter alert. Positive = earlier alert. Built-in window: %d%%.",
+        curatedLead))
+
+    -- Reset overrides button.
+    local resetRow = GUIFrame:CreateRow(body, 28)
+    resetRow:SetPoint("LEFT", body, "LEFT", DETAIL_PADDING, 0)
+    resetRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    resetRow:SetPoint("TOP", leadCaption, "BOTTOM", 0, -16)
+    local resetBtn = GUIFrame:CreateButton(resetRow, "Reset phase to default", {
+        height = 26,
+        callback = function()
+            if not (DT and DT.ResetPhaseOverrides) then return end
+            KE:CreatePrompt(
+                "Reset phase to default",
+                "Clear all overrides for this phase rule?\n\nVisibility, display, and actions overrides will revert to curated defaults. This cannot be undone.",
+                false, nil, false, nil, nil, nil, nil,
+                function()
+                    DT:ResetPhaseOverrides(phaseKey)
+                    RefreshPhasePreview()
+                    if GUIFrame.RefreshContent then GUIFrame:RefreshContent() end
+                end,
+                nil, "Reset", "Cancel"
+            )
+        end,
+    })
+    if resetBtn.text then
+        resetBtn.text:SetTextColor(REMOVE_COLOR[1], REMOVE_COLOR[2], REMOVE_COLOR[3], REMOVE_COLOR[4])
+    end
+    resetRow:AddWidget(resetBtn, 1.0, 0)
+
+    if not enableState then
+        for _, w in ipairs(secondaryWidgets) do
+            if w.SetEnabled then w:SetEnabled(false) end
+        end
+    end
+
+    return body
+end
+
+local function BuildPhaseDisplayTabBody(parent, phaseKey, _)
+    local DT = GetModule()
+    local body = CreateFrame("Frame", nil, parent)
+    body:SetAllPoints()
+
+    -- Section: Display Mode
+    local modeHeader = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(modeHeader, "Expressway", 13, "OUTLINE")
+    modeHeader:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
+    modeHeader:SetText("Display Mode")
+    modeHeader:SetPoint("TOPLEFT", body, "TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING)
+    do
+        local underline = body:CreateTexture(nil, "ARTWORK")
+        underline:SetHeight(1)
+        underline:SetColorTexture(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3], 0.4)
+        underline:SetPoint("LEFT", modeHeader, "RIGHT", 6, 0)
+        underline:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+        underline:SetPoint("TOP", modeHeader, "TOP", 0, -8)
+    end
+
+    local sectionLabel = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(sectionLabel, "Expressway", 12, "OUTLINE")
+    sectionLabel:SetPoint("TOPLEFT", modeHeader, "BOTTOMLEFT", 0, -14)
+    sectionLabel:SetTextColor(0.85, 0.85, 0.85)
+    sectionLabel:SetText("Render this phase alert as:")
+
+    local secondaryWidgets = {}
+
+    local currentMode = (DT and DT:GetPhaseDisplay(phaseKey)) or "text"
+    local toggle = CreateSegmentedToggle(body,
+        { { id = "bar", label = "Bar" }, { id = "text", label = "Text" } },
+        currentMode,
+        function(newId)
+            if not (DT and DT.SetPhaseDisplay) then return end
+            DT:SetPhaseDisplay(phaseKey, newId)
+            for i = 1, listRowPool._activeCount do
+                local kit = listRowPool._kits[i]
+                if kit and kit._spellId == phaseKey then
+                    ApplyOverrideStripe(kit, phaseKey)
+                    break
+                end
+            end
+            RefreshListRowTag(phaseKey)
+            RefreshPhasePreview()
+        end)
+    toggle:SetPoint("TOPLEFT", sectionLabel, "BOTTOMLEFT", 0, -8)
+    secondaryWidgets[#secondaryWidgets + 1] = toggle
+
+    local defaultLabel = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(defaultLabel, "Expressway", 12, "OUTLINE")
+    defaultLabel:SetPoint("LEFT", toggle, "RIGHT", 16, 0)
+    defaultLabel:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
+    defaultLabel:SetJustifyH("LEFT")
+    defaultLabel:SetText("Default: Text")
+
+    local caption = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(caption, "Expressway", 11, "OUTLINE")
+    caption:SetPoint("TOPLEFT", toggle, "BOTTOMLEFT", 0, -12)
+    caption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    caption:SetJustifyH("LEFT")
+    caption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
+    caption:SetText(
+        "Bar = filled progress bar that drains as the boss approaches the phase.\n"
+        .. "Text = single-line label updating each percent.")
+
+    -- Section: Custom Label
+    local labelHeader = CreateSectionHeader(body, caption, "Custom Label", 22)
+
+    local labelEditRow = GUIFrame:CreateRow(body, 40)
+    labelEditRow:SetPoint("TOPLEFT", labelHeader, "BOTTOMLEFT", 0, -12)
+    labelEditRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+
+    local currentOverride = (DT and DT:GetPhaseLabelOverride(phaseKey)) or ""
+    local labelEdit = GUIFrame:CreateEditBox(labelEditRow, "Override", {
+        value = currentOverride,
+        callback = function(text)
+            if not (DT and DT.SetPhaseLabelOverride) then return end
+            DT:SetPhaseLabelOverride(phaseKey, text)
+            for i = 1, listRowPool._activeCount do
+                local kit = listRowPool._kits[i]
+                if kit and kit._spellId == phaseKey then
+                    ApplyOverrideStripe(kit, phaseKey)
+                    break
+                end
+            end
+            RefreshPhasePreview()
+        end,
+        tooltip = "Custom label for this phase alert (e.g. P2 INC, BOSS PUSH, INTERMISSION).\n"
+               .. "Empty = use the built-in 'Phase Transition' label.\n"
+               .. "Bar mode shows label + percent on opposite ends; text mode shows 'LABEL X%'.",
+    })
+    labelEditRow:AddWidget(labelEdit, 1)
+    secondaryWidgets[#secondaryWidgets + 1] = labelEdit
+
+    local labelCaption = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(labelCaption, "Expressway", 11, "OUTLINE")
+    labelCaption:SetPoint("TOPLEFT", labelEditRow, "BOTTOMLEFT", 0, -8)
+    labelCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    labelCaption:SetJustifyH("LEFT")
+    labelCaption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
+    labelCaption:SetText("Default: Phase Transition")
+
+    -- Section: Color
+    local colorHeader = CreateSectionHeader(body, labelCaption, "Bar Color", 22)
+
+    local DEFAULT_PHASE_COLOR = { 1, 1, 1 }  -- white default — matches CreatePhaseBar's no-override fallback
+    local function ResolveEffectivePhaseColor()
+        if DT and DT.GetPhaseColorOverride then
+            local user = DT:GetPhaseColorOverride(phaseKey)
+            if user then return user end
+        end
+        return DEFAULT_PHASE_COLOR
+    end
+
+    local effectiveColor = ResolveEffectivePhaseColor()
+
+    local colorRow = CreateFrame("Frame", nil, body)
+    colorRow:SetHeight(36)
+    colorRow:SetPoint("TOPLEFT", colorHeader, "BOTTOMLEFT", 0, -10)
+    colorRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+
+    local colorPicker = GUIFrame:CreateColorPicker(colorRow, "Color", {
+        color = { effectiveColor[1], effectiveColor[2], effectiveColor[3], 1 },
+        callback = function(r, g, b)
+            if not (DT and DT.SetPhaseColorOverride) then return end
+            DT:SetPhaseColorOverride(phaseKey, { r, g, b })
+            for i = 1, listRowPool._activeCount do
+                local kit = listRowPool._kits[i]
+                if kit and kit._spellId == phaseKey then
+                    ApplyOverrideStripe(kit, phaseKey)
+                    break
+                end
+            end
+            RefreshPhasePreview()
+        end,
+        tooltip = "Custom color for this phase alert. Applies to the bar fill in Bar mode and the label in Text mode.",
+    })
+    colorPicker:ClearAllPoints()
+    colorPicker:SetPoint("TOPLEFT", colorRow, "TOPLEFT", 0, 0)
+    colorPicker:SetWidth(150)
+
+    local resetColorBtn = GUIFrame:CreateButton(colorRow, "Reset to default", {
+        height = 24,
+        width = 130,
+        callback = function()
+            if not (DT and DT.SetPhaseColorOverride) then return end
+            DT:SetPhaseColorOverride(phaseKey, nil)
+            local saved = colorPicker._callback
+            colorPicker._callback = nil
+            local newColor = ResolveEffectivePhaseColor()
+            colorPicker:SetColor(newColor[1], newColor[2], newColor[3], 1)
+            colorPicker._callback = saved
+            for i = 1, listRowPool._activeCount do
+                local kit = listRowPool._kits[i]
+                if kit and kit._spellId == phaseKey then
+                    ApplyOverrideStripe(kit, phaseKey)
+                    break
+                end
+            end
+            RefreshPhasePreview()
+        end,
+    })
+    resetColorBtn:ClearAllPoints()
+    resetColorBtn:SetPoint("LEFT", colorPicker, "RIGHT", 12, -7)
+
+    secondaryWidgets[#secondaryWidgets + 1] = colorPicker
+    secondaryWidgets[#secondaryWidgets + 1] = resetColorBtn
+
+    if DT and DT:IsPhaseDisabled(phaseKey) then
+        for _, w in ipairs(secondaryWidgets) do
+            if w.SetEnabled then w:SetEnabled(false) end
+        end
+    end
+
+    return body
+end
+
+local function BuildPhaseActionsTabBody(parent, phaseKey)
+    local DT = GetModule()
+    local body = CreateFrame("Frame", nil, parent)
+    body:SetAllPoints()
+
+    local soundList = { ["None"] = "None" }
+    local LSM = KE.LSM
+    if LSM then
+        for name in pairs(LSM:HashTable("sound")) do soundList[name] = name end
+    end
+
+    local function PreviewSound(soundKey)
+        if not soundKey or soundKey == "None" or soundKey == "" then return end
+        if not LSM then return end
+        local file = LSM:Fetch("sound", soundKey)
+        if file then PlaySoundFile(file, "Master") end
+    end
+
+    local secondaryWidgets = {}
+
+    -- Section: On Show
+    local showHeader = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(showHeader, "Expressway", 13, "OUTLINE")
+    showHeader:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
+    showHeader:SetText("On Show")
+    showHeader:SetPoint("TOPLEFT", body, "TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING)
+    do
+        local underline = body:CreateTexture(nil, "ARTWORK")
+        underline:SetHeight(1)
+        underline:SetColorTexture(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3], 0.4)
+        underline:SetPoint("LEFT", showHeader, "RIGHT", 6, 0)
+        underline:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+        underline:SetPoint("TOP", showHeader, "TOP", 0, -8)
+    end
+
+    local showRow = GUIFrame:CreateRow(body, 36)
+    showRow:SetPoint("TOPLEFT", showHeader, "BOTTOMLEFT", 0, -10)
+    showRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    local showDropdown = GUIFrame:CreateDropdown(showRow, "Sound when alert appears", {
+        options = soundList,
+        value = (DT and DT:GetPhaseSoundOnShow(phaseKey)) or "None",
+        callback = function(key)
+            if not (DT and DT.SetPhaseSoundOnShow) then return end
+            DT:SetPhaseSoundOnShow(phaseKey, key)
+            PreviewSound(key)
+            for i = 1, listRowPool._activeCount do
+                local kit = listRowPool._kits[i]
+                if kit and kit._spellId == phaseKey then
+                    ApplyOverrideStripe(kit, phaseKey)
+                    break
+                end
+            end
+            RefreshListRowSound(phaseKey)
+        end,
+        searchable = true,
+    })
+    showRow:AddWidget(showDropdown, 0.7)
+    secondaryWidgets[#secondaryWidgets + 1] = showDropdown
+
+    local showTestBtn = GUIFrame:CreateButton(showRow, "Test", {
+        height = 28,
+        callback = function()
+            if not (DT and DT.GetPhaseSoundOnShow) then return end
+            PreviewSound(DT:GetPhaseSoundOnShow(phaseKey))
+        end,
+    })
+    showRow:AddWidget(showTestBtn, 0.3, 0, 0, -12)
+    secondaryWidgets[#secondaryWidgets + 1] = showTestBtn
+
+    local showCaption = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(showCaption, "Expressway", 11, "OUTLINE")
+    showCaption:SetPoint("TOPLEFT", showRow, "BOTTOMLEFT", 0, -8)
+    showCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    showCaption:SetJustifyH("LEFT")
+    showCaption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
+    showCaption:SetText("Plays when the boss enters the alert window.")
+
+    -- Section: On Hide
+    local hideHeader = CreateSectionHeader(body, showCaption, "On Hide", 22)
+
+    local hideRow = GUIFrame:CreateRow(body, 36)
+    hideRow:SetPoint("TOPLEFT", hideHeader, "BOTTOMLEFT", 0, -10)
+    hideRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    local hideDropdown = GUIFrame:CreateDropdown(hideRow, "Sound when phase fires", {
+        options = soundList,
+        value = (DT and DT:GetPhaseSoundOnHide(phaseKey)) or "None",
+        callback = function(key)
+            if not (DT and DT.SetPhaseSoundOnHide) then return end
+            DT:SetPhaseSoundOnHide(phaseKey, key)
+            PreviewSound(key)
+            for i = 1, listRowPool._activeCount do
+                local kit = listRowPool._kits[i]
+                if kit and kit._spellId == phaseKey then
+                    ApplyOverrideStripe(kit, phaseKey)
+                    break
+                end
+            end
+            RefreshListRowSound(phaseKey)
+        end,
+        searchable = true,
+    })
+    hideRow:AddWidget(hideDropdown, 0.7)
+    secondaryWidgets[#secondaryWidgets + 1] = hideDropdown
+
+    local hideTestBtn = GUIFrame:CreateButton(hideRow, "Test", {
+        height = 28,
+        callback = function()
+            if not (DT and DT.GetPhaseSoundOnHide) then return end
+            PreviewSound(DT:GetPhaseSoundOnHide(phaseKey))
+        end,
+    })
+    hideRow:AddWidget(hideTestBtn, 0.3, 0, 0, -12)
+    secondaryWidgets[#secondaryWidgets + 1] = hideTestBtn
+
+    local hideCaption = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(hideCaption, "Expressway", 11, "OUTLINE")
+    hideCaption:SetPoint("TOPLEFT", hideRow, "BOTTOMLEFT", 0, -8)
+    hideCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    hideCaption:SetJustifyH("LEFT")
+    hideCaption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
+    hideCaption:SetText(
+        "Plays when the phase fires (boss crosses the threshold) or the boss leaves the alert window.")
+
+    if DT and DT:IsPhaseDisabled(phaseKey) then
+        for _, w in ipairs(secondaryWidgets) do
+            if w.SetEnabled then w:SetEnabled(false) end
+        end
+    end
+
+    return body
+end
+
+---------------------------------------------------------------------------------
 -- Page builder. Called from the per-dungeon RegisterContent factory below.
 ---------------------------------------------------------------------------------
 local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
@@ -1568,33 +2096,47 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     hint:SetPoint("LEFT", hintRow, "LEFT", 8, 0)
     hint:SetPoint("RIGHT", hintRow, "RIGHT", -8, 0)
     hint:SetJustifyH("LEFT")
-    hint:SetText("Pick a spell on the left to edit its overrides. Role filter must be enabled on the General page.")
+    hint:SetText("Pick a spell or phase rule on the left to edit its overrides. Role filter must be enabled on the General page.")
     hint:SetTextColor(0.85, 0.85, 0.85)
     hintCard:AddRow(hintRow, Theme.rowHeightLast, 0)
     yOffset = hintCard:GetNextOffset()
 
     -- Resolve sticky selection. If the previous selection no longer maps to
-    -- an existing spell (data shape changed), fall back to first spell.
+    -- an existing list item (data shape changed), fall back to first row.
+    -- The list now mixes numeric spellIds and string phase keys — both go
+    -- through the same selectedSpellId field.
     local state = GetState(dungeonKey)
-    local validSpellIds = {}
+    local validIds = {}
     for _, enc in ipairs(encounters) do
-        for _, sItem in ipairs(enc.spells) do validSpellIds[sItem.id] = true end
+        for _, sItem in ipairs(enc.spells) do validIds[sItem.id] = true end
     end
-    if not (state.selectedSpellId and validSpellIds[state.selectedSpellId]) then
+    if not (state.selectedSpellId and validIds[state.selectedSpellId]) then
         state.selectedSpellId = ResolveFirstSpellId(encounters)
     end
     if not state.selectedTab then state.selectedTab = "Visibility" end
 
-    -- Live preview of the selected spell. ShowSpellPreview is idempotent
-    -- on identical spellId — re-calls from RefreshContent (tab switches,
-    -- toggle clicks) don't restart the loop. Different spellId tears the
-    -- old preview down and recreates with the new one's effective
-    -- settings. Internally hides the group settings previews so the two
-    -- systems don't double-render.
+    local selectedIsPhase = IsPhaseKey(state.selectedSpellId)
+
+    -- Live preview. Spells route through ShowSpellPreview; phase rules use
+    -- ShowPhasePreview (a static "Phase Transition X%" sample bar with the
+    -- rule's effective settings). Either path internally hides the other,
+    -- so swapping selection types is clean.
     if state.selectedSpellId then
-        ShowSpellPreview(state.selectedSpellId)
+        if selectedIsPhase then
+            HideSpellPreview()
+            local mod = GetModule()
+            if mod and mod.ShowPhasePreview then
+                mod:ShowPhasePreview(state.selectedSpellId)
+            end
+        else
+            local mod = GetModule()
+            if mod and mod.HidePhasePreview then mod:HidePhasePreview() end
+            ShowSpellPreview(state.selectedSpellId)
+        end
     else
         HideSpellPreview()
+        local mod = GetModule()
+        if mod and mod.HidePhasePreview then mod:HidePhasePreview() end
     end
 
     ---------------------------------------------------------------------------
@@ -1626,7 +2168,8 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
             kit.row:SetWidth(LEFT_COL_WIDTH)
             kit.row:SetPoint("TOPLEFT", leftCol, "TOPLEFT", 0, -listY)
             ConfigureListRow(kit, sItem.id, sItem.data,
-                             sItem.id == state.selectedSpellId)
+                             sItem.id == state.selectedSpellId,
+                             sItem)
             listY = listY + LIST_ROW_HEIGHT
         end
     end
@@ -1648,7 +2191,9 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     rightCol:SetBackdropColor(Theme.bgLight[1], Theme.bgLight[2], Theme.bgLight[3], Theme.bgLight[4])
     rightCol:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], Theme.border[4])
 
-    -- Spell title at top of right pane.
+    -- Spell title at top of right pane. selectedSpell holds the matched
+    -- list item (spell or phase rule). selectedIsPhase tells the title +
+    -- tab body which path to render.
     local selectedSpell, selectedSpellData
     for _, enc in ipairs(encounters) do
         for _, sItem in ipairs(enc.spells) do
@@ -1660,6 +2205,8 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
         end
         if selectedSpell then break end
     end
+    -- Re-derive in case selection got resolved during validity-fallback above.
+    selectedIsPhase = selectedSpell and selectedSpell.isPhase or false
 
     -- Title row: spell icon + spell name wrapped in a single Frame so the
     -- whole "icon-and-name area" is one tooltip hover target. Wrapping the
@@ -1684,10 +2231,16 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     titleIcon:SetPoint("BOTTOMRIGHT", -1, 1)
     if KE.ApplyIconZoom then KE:ApplyIconZoom(titleIcon) end
     if selectedSpell then
-        titleIcon:SetTexture(
-            (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(selectedSpell.id))
-            or 134400
-        )
+        if selectedIsPhase then
+            titleIcon:SetTexture(PHASE_ROW_ICON)
+        else
+            local DT = GetModule()
+            titleIcon:SetTexture(
+                (DT and DT.ResolveSpellIcon and DT:ResolveSpellIcon(selectedSpell.id))
+                or (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(selectedSpell.id))
+                or 134400
+            )
+        end
     else
         titleIcon:SetTexture(134400)
     end
@@ -1696,7 +2249,11 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     KE:ApplyFontToText(titleFs, "Expressway", 16, "OUTLINE")
     titleFs:SetPoint("LEFT", titleIconFrame, "RIGHT", 8, 0)
     if selectedSpell then
-        titleFs:SetText(ResolveSpellDisplayName(selectedSpell.id, selectedSpellData))
+        if selectedIsPhase then
+            titleFs:SetText(ResolvePhaseRowLabel(selectedSpell))
+        else
+            titleFs:SetText(ResolveSpellDisplayName(selectedSpell.id, selectedSpellData))
+        end
     else
         titleFs:SetText("(no selection)")
     end
@@ -1708,23 +2265,35 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     -- selected spellId at render time which is fine since titleRow is
     -- recreated each RefreshContent (one frame per click).
     if selectedSpell then
-        local hoverSpellId = selectedSpell.id
-        local hoverRoleTag = selectedSpellData and selectedSpellData.role
+        local hoverId = selectedSpell.id
+        local hoverIsPhase = selectedIsPhase
+        local hoverRoleTag = (not hoverIsPhase) and selectedSpellData and selectedSpellData.role or nil
+        local hoverPhaseRule = hoverIsPhase and selectedSpellData or nil
+        local hoverPhaseIdx = hoverIsPhase and (selectedSpell.ruleIndex or 1) or nil
         titleRow:EnableMouse(true)
         titleRow:SetScript("OnEnter", function(b)
             -- ANCHOR_CURSOR_RIGHT places the tooltip's left edge at the
-            -- cursor's right side, top-aligned with cursor — "top-right of
-            -- cursor". Standard for hover-context tooltips so the popup
-            -- doesn't fly to a fixed screen corner.
+            -- cursor's right side. Standard for hover-context tooltips.
             GameTooltip:SetOwner(b, "ANCHOR_CURSOR_RIGHT")
-            GameTooltip:SetSpellByID(hoverSpellId)
-            if hoverRoleTag then
-                GameTooltip:AddLine(" ")
-                GameTooltip:AddLine(string_format("Curated role: %s", hoverRoleTag),
-                                    0.7, 0.7, 0.7)
+            if hoverIsPhase then
+                GameTooltip:AddLine(string_format("Phase Transition %d", hoverPhaseIdx))
+                if hoverPhaseRule then
+                    local thr = hoverPhaseRule.threshold or "?"
+                    local lead = hoverPhaseRule.lead or "?"
+                    GameTooltip:AddLine(" ")
+                    GameTooltip:AddLine(string_format("Triggers when the boss drops below %s%% HP (alert window: %s%%).",
+                                                       tostring(thr), tostring(lead)),
+                                        0.85, 0.85, 0.85, true)
+                end
+            else
+                GameTooltip:SetSpellByID(hoverId)
+                if hoverRoleTag then
+                    GameTooltip:AddLine(" ")
+                    GameTooltip:AddLine(string_format("Curated role: %s", hoverRoleTag),
+                                        0.7, 0.7, 0.7)
+                end
+                GameTooltip:AddLine(string_format("Spell ID: %d", hoverId), 1, 1, 1)
             end
-            GameTooltip:AddLine(string_format("Spell ID: %d", hoverSpellId),
-                                1, 1, 1)
             GameTooltip:Show()
         end)
         titleRow:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -1759,12 +2328,22 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     tabBody:SetPoint("BOTTOMRIGHT", rightCol, "BOTTOMRIGHT", -DETAIL_PADDING, DETAIL_PADDING)
 
     if selectedSpell then
-        if state.selectedTab == "Visibility" then
-            BuildVisibilityTabBody(tabBody, selectedSpell.id, selectedSpellData)
-        elseif state.selectedTab == "Display" then
-            BuildDisplayTabBody(tabBody, selectedSpell.id, selectedSpellData)
-        elseif state.selectedTab == "Actions" then
-            BuildActionsTabBody(tabBody, selectedSpell.id)
+        if selectedIsPhase then
+            if state.selectedTab == "Visibility" then
+                BuildPhaseVisibilityTabBody(tabBody, selectedSpell.id, selectedSpellData)
+            elseif state.selectedTab == "Display" then
+                BuildPhaseDisplayTabBody(tabBody, selectedSpell.id, selectedSpellData)
+            elseif state.selectedTab == "Actions" then
+                BuildPhaseActionsTabBody(tabBody, selectedSpell.id)
+            end
+        else
+            if state.selectedTab == "Visibility" then
+                BuildVisibilityTabBody(tabBody, selectedSpell.id, selectedSpellData)
+            elseif state.selectedTab == "Display" then
+                BuildDisplayTabBody(tabBody, selectedSpell.id, selectedSpellData)
+            elseif state.selectedTab == "Actions" then
+                BuildActionsTabBody(tabBody, selectedSpell.id)
+            end
         end
     end
 
@@ -1798,13 +2377,21 @@ for _, d in ipairs(DUNGEONS) do
     -- onCloseCallbacks dispatch is keyed by id, so registering all 8
     -- means GUI-close cleanup fires regardless of which dungeon page
     -- was last visited (FireOnCloseCallbacks iterates all entries).
-    GUIFrame.onCloseCallbacks["DTimers_Dungeon_" .. dungeonKey] = HideSpellPreview
+    GUIFrame.onCloseCallbacks["DTimers_Dungeon_" .. dungeonKey] = function()
+        HideSpellPreview()
+        local mod = GetModule()
+        if mod and mod.HidePhasePreview then mod:HidePhasePreview() end
+    end
 end
 -- Single contentCleanupCallback (separate from per-dungeon onClose entries).
 -- contentCleanupCallbacks fires on REAL sidebar item switches; we want a
--- spell preview started in any dungeon page to vanish when the user clicks
--- a non-DungeonTimers sidebar entry. RefreshContent iterates ALL cleanup
--- callbacks unconditionally, so one entry suffices regardless of which
--- dungeon was active. Keyed distinct from "DungeonTimers" (used by
--- DungeonTimersCfg for Settings previews) so the two don't clobber.
-GUIFrame.contentCleanupCallbacks["DTimers_Dungeon_SpellPreview"] = HideSpellPreview
+-- spell or phase preview started in any dungeon page to vanish when the
+-- user clicks a non-DungeonTimers sidebar entry. RefreshContent iterates
+-- ALL cleanup callbacks unconditionally, so one entry suffices regardless
+-- of which dungeon was active. Keyed distinct from "DungeonTimers" (used
+-- by DungeonTimersCfg for Settings previews) so the two don't clobber.
+GUIFrame.contentCleanupCallbacks["DTimers_Dungeon_SpellPreview"] = function()
+    HideSpellPreview()
+    local mod = GetModule()
+    if mod and mod.HidePhasePreview then mod:HidePhasePreview() end
+end

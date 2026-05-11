@@ -95,6 +95,169 @@
 -- ║                                  -- the preset palette.  ║
 -- ║                                  -- User color override  ║
 -- ║                                  -- still wins over this.║
+-- ║                sortAtEnd      = true,                   ║
+-- ║                                  -- push this entry to   ║
+-- ║                                  -- the end of the spell ║
+-- ║                                  -- list in the GUI      ║
+-- ║                                  -- (before phase rules).║
+-- ║                                  -- Used for vulnerability║
+-- ║                                  -- phase entries that   ║
+-- ║                                  -- belong with phases   ║
+-- ║                                  -- conceptually rather  ║
+-- ║                                  -- than mixed in with   ║
+-- ║                                  -- regular cast warnings║
+-- ║                iconOverride   = <textureID|path>,       ║
+-- ║                                  -- replace BigWigs's    ║
+-- ║                                  -- supplied icon. Useful║
+-- ║                                  -- when the spell's     ║
+-- ║                                  -- default icon is      ║
+-- ║                                  -- ambiguous (e.g.      ║
+-- ║                                  -- a generic shadow     ║
+-- ║                                  -- texture) and a more  ║
+-- ║                                  -- recognizable icon    ║
+-- ║                                  -- aids identification. ║
+-- ║                                  -- Accepts a texture    ║
+-- ║                                  -- file ID or path.     ║
+-- ║                forceDuration  = <seconds>,              ║
+-- ║                                  -- override the BigWigs ║
+-- ║                                  -- duration with a      ║
+-- ║                                  -- known-correct value. ║
+-- ║                                  -- Used for "amp" /     ║
+-- ║                                  -- vulnerability bars   ║
+-- ║                                  -- where LittleWigs's   ║
+-- ║                                  -- hardcoded duration   ║
+-- ║                                  -- doesn't match the    ║
+-- ║                                  -- actual buff lifetime ║
+-- ║                                  -- (e.g. Backlash 20s   ║
+-- ║                                  -- vs LW's 12.5s). Bar  ║
+-- ║                                  -- self-drains over     ║
+-- ║                                  -- forceDuration; we    ║
+-- ║                                  -- ignore BigWigs's     ║
+-- ║                                  -- StopBar so its early ║
+-- ║                                  -- end doesn't kill us. ║
+-- ║                postCastBar    = {                       ║
+-- ║                                    duration    = <s>,    ║
+-- ║                                    display     = "bar"|  ║
+-- ║                                                  "text", ║
+-- ║                                    displayText = ...,    ║
+-- ║                                    iconOverride= <tex>,  ║
+-- ║                                  },                      ║
+-- ║                                  -- follow-up bar that   ║
+-- ║                                  -- spawns at a parent   ║
+-- ║                                  -- bar's natural end.   ║
+-- ║                                  -- Two trigger paths:   ║
+-- ║                                  --  (a) parent has      ║
+-- ║                                  --   castDuration → fires║
+-- ║                                  --   when cast phase    ║
+-- ║                                  --   ends (Nysarra Flare║
+-- ║                                  --   → 17s BEAM).       ║
+-- ║                                  --  (b) parent has no   ║
+-- ║                                  --   castDuration →     ║
+-- ║                                  --   fires on BigWigs's ║
+-- ║                                  --   StopBar at natural ║
+-- ║                                  --   countdown end (L'ura║
+-- ║                                  --   Backlash → 19.5s   ║
+-- ║                                  --   VULNERABILITY).    ║
+-- ║                                  -- Use for buff/window  ║
+-- ║                                  -- bars that follow a   ║
+-- ║                                  -- cast when SPELL_AURA_║
+-- ║                                  -- APPLIED is unreliable║
+-- ║                                  -- (most boss-applied   ║
+-- ║                                  -- auras in 12.0).      ║
+-- ║                                  -- iconOverride wins    ║
+-- ║                                  -- over the parent's    ║
+-- ║                                  -- inherited icon when  ║
+-- ║                                  -- set; useful when the ║
+-- ║                                  -- follow-up represents ║
+-- ║                                  -- a different visual   ║
+-- ║                                  -- cue. Always shown to ║
+-- ║                                  -- everyone (no role).  ║
+-- ║                phantomFollowupOf =                       ║
+-- ║                                  <parentSpellId>,        ║
+-- ║                duration       = <s>,                    ║
+-- ║                                  -- top-level GUI entry  ║
+-- ║                                  -- that opts out of the ║
+-- ║                                  -- BigWigs_Timer path   ║
+-- ║                                  -- and instead spawns   ║
+-- ║                                  -- when the parent's    ║
+-- ║                                  -- BigWigs_StopBar fires║
+-- ║                                  -- naturally (cast      ║
+-- ║                                  -- finished = buff      ║
+-- ║                                  -- applied). Use when   ║
+-- ║                                  -- you want a follow-up ║
+-- ║                                  -- bar to have its own  ║
+-- ║                                  -- configurable row in  ║
+-- ║                                  -- the GUI (vs nesting  ║
+-- ║                                  -- as the parent's      ║
+-- ║                                  -- postCastBar which    ║
+-- ║                                  -- hides under one row).║
+-- ║                                  -- L'ura's 247816       ║
+-- ║                                  -- (VULNERABILITY)      ║
+-- ║                                  -- follows 1266001      ║
+-- ║                                  -- (Backlash KNOCK).    ║
+-- ║                                  -- Pairs naturally with ║
+-- ║                                  -- iconOverride/color/  ║
+-- ║                                  -- displayText for the  ║
+-- ║                                  -- follow-up's visuals. ║
+-- ║                spawnOnMessage = true,                   ║
+-- ║                duration       = <s>,                    ║
+-- ║                leadDelay      = <s>,  -- optional       ║
+-- ║                                  -- BigWigs_Message-    ║
+-- ║                                  -- driven spawn. Used  ║
+-- ║                                  -- for vulnerability   ║
+-- ║                                  -- bars whose trigger  ║
+-- ║                                  -- is a non-cast event ║
+-- ║                                  -- (widget update,     ║
+-- ║                                  -- boss emote) that    ║
+-- ║                                  -- LittleWigs surfaces ║
+-- ║                                  -- via self:Message(   ║
+-- ║                                  -- spellId, ...). When ║
+-- ║                                  -- BigWigs_Message     ║
+-- ║                                  -- fires with this     ║
+-- ║                                  -- spellId, we spawn a ║
+-- ║                                  -- bar of `duration`   ║
+-- ║                                  -- seconds (optionally ║
+-- ║                                  -- after `leadDelay`   ║
+-- ║                                  -- seconds, matching   ║
+-- ║                                  -- ExBoss's "prepare"  ║
+-- ║                                  -- phase before the    ║
+-- ║                                  -- active window).     ║
+-- ║                                  -- Use this when       ║
+-- ║                                  -- SPELL_AURA_APPLIED  ║
+-- ║                                  -- doesn't fire in 12.0║
+-- ║                                  -- (most boss-applied  ║
+-- ║                                  -- auras). Entry skips ║
+-- ║                                  -- BigWigs_Timer path. ║
+-- ║                shieldBar      = {                       ║
+-- ║                                    baseAmount = <number>,║
+-- ║                                    displayText = ...,    ║
+-- ║                                  },                      ║
+-- ║                                  -- opt-in absorb-tracker║
+-- ║                                  -- bar for boss shield  ║
+-- ║                                  -- channels (e.g.       ║
+-- ║                                  -- Vordaza's Necrotic   ║
+-- ║                                  -- Convergence). Spawns ║
+-- ║                                  -- on UNIT_SPELLCAST_   ║
+-- ║                                  -- CHANNEL_START for the║
+-- ║                                  -- parent spellID and   ║
+-- ║                                  -- drains as the boss   ║
+-- ║                                  -- takes damage. Max =  ║
+-- ║                                  -- baseAmount × M+      ║
+-- ║                                  -- multiplier. Inherits ║
+-- ║                                  -- parent spell's       ║
+-- ║                                  -- icon/color/font/     ║
+-- ║                                  -- enable/role gate.    ║
+-- ║                                  -- displayText is the   ║
+-- ║                                  -- shield bar's label   ║
+-- ║                                  -- (separate from the   ║
+-- ║                                  -- parent's countdown   ║
+-- ║                                  -- bar). Secret-safe —  ║
+-- ║                                  -- absorb is read with  ║
+-- ║                                  -- UnitGetTotalAbsorbs  ║
+-- ║                                  -- (secret on hostile)  ║
+-- ║                                  -- and passed only to   ║
+-- ║                                  -- allowed-when-tainted ║
+-- ║                                  -- formatters.          ║
 -- ║                secondary       = {                      ║
 -- ║                                    role = ...,           ║
 -- ║                                    display = ...,        ║
@@ -116,6 +279,23 @@
 -- ║            },                                            ║
 -- ║            ...                                           ║
 -- ║        },                                                ║
+-- ║        phases  = {                                       ║
+-- ║            {                                             ║
+-- ║                unit      = "boss1",  -- default boss1    ║
+-- ║                threshold = 75,       -- HP% phase fires  ║
+-- ║                lead      = 5,        -- alert window     ║
+-- ║                                       --   (HP between   ║
+-- ║                                       --   threshold and ║
+-- ║                                       --   threshold+lead║
+-- ║                                       --   shows alert)  ║
+-- ║            },                                            ║
+-- ║            ...                                           ║
+-- ║        },                                                ║
+-- ║                -- optional: HP%-driven "Phase Transition ║
+-- ║                -- X%" text bar mimicking ExBoss alert.   ║
+-- ║                -- Fires while unit HP is in              ║
+-- ║                -- (threshold, threshold + lead]. Always  ║
+-- ║                -- shown to everyone (no role filter).    ║
 -- ║    }                                                     ║
 -- ║                                                          ║
 -- ║  Cast durations + role classifications cross-referenced  ║
@@ -151,9 +331,11 @@ KE.EncounterData[2562] = {
     name = "Vexamus",
     dungeon = "AlgetharAcademy",
     spells = {
-        [386544] = { name = "Arcane Orbs",       castType = "cast",                                          role = "other",                     displayText = "SOAK"     },
+        -- Orbs take ~4s to start spawning after the cast ends — castDuration=4 extends the bar
+        -- into a 4s "cast phase" tail so the SOAK cue stays visible until the soak moment.
+        [386544] = { name = "Arcane Orbs",       castType = "cast",      castDuration = 4,                   role = "other",                     displayText = "SOAK"     },
         [385958] = { name = "Arcane Expulsion",  castType = "begincast", castDuration = 4,                   role = "tank",     display = "bar", displayText = "TANK HIT" },
-        [386173] = { name = "Mana Bombs",        castType = "begincast", castDuration = 2.5,                 role = "other",                     displayText = "SPREAD"   },
+        [386173] = { name = "Mana Bombs",        castType = "begincast", castDuration = 2.5,                 role = "other",                     displayText = "DROPS"    },
         [388537] = { name = "Arcane Fissure",    castType = "begincast", castDuration = 3,                   role = "mechanic",                  displayText = "AOE + FEET" },
     },
 }
@@ -175,7 +357,16 @@ KE.EncounterData[2564] = {
     spells = {
         [376997] = { name = "Savage Peck",       castType = "begincast", castDuration = 3,                   role = "tank",     display = "bar", displayText = "TANK HIT" },
         [377004] = { name = "Deafening Screech", castType = "begincast", castDuration = 2.5,                 role = "other",                     displayText = "AOE"      },
-        [377034] = { name = "Overpowering Gust", castType = "begincast", castDuration = 4,                   role = "other",                     displayText = "FRONTAL"  },
+        [377034] = { name = "Overpowering Gust", castType = "begincast", castDuration = 3,                   role = "other",                     displayText = "FRONTAL"  },
+        -- LittleWigs's SPELL_AURA_APPLIED handler for aura 376781 doesn't fire in 12.0 (same root cause
+        -- as L'ura's Backlash). Instead we spawn off LittleWigs's reliable widget-driven Message(376448),
+        -- which fires from the UPDATE_UI_WIDGET handler when goal-tracker widget 4183 reaches barValue=3.
+        -- ExBoss uses the same widget signal and a 2s lead-in before the 12s active phase begins.
+        [376448] = { name = "Vulnerability Phase", spawnOnMessage = true, duration = 12, leadDelay = 2,      role = "other",    display = "bar",  displayText = "VULNERABILITY", iconOverride = 135821, showAtSeconds = 0, sortAtEnd = true },
+    },
+    phases = {
+        { unit = "boss1", threshold = 75, lead = 5 },
+        { unit = "boss1", threshold = 45, lead = 5 },
     },
 }
 
@@ -186,9 +377,14 @@ KE.EncounterData[2565] = {
         -- Disabled by default: random single-target hit, fires frequently — opt-in via GUI
         [373326]  = { name = "Arcane Missiles", castType = "cast",                                           role = "other",                                       disabled = true },
         [1282251] = { name = "Astral Blast",    castType = "begincast", castDuration = 3,                    role = "tank",     display = "bar", displayText = "TANK HIT" },
-        -- castDuration=1.5 assumed from EXBoss 374350 — live verification pending (role=heal so filtered for DAMAGER logs)
+        -- castDuration=1.5 assumed from EXBoss 374350 — live verification still pending (role=heal so filtered for DAMAGER logs, can't see in this run).
         [374343]  = { name = "Energy Bomb",     castType = "begincast", castDuration = 1.5,                  role = "heal",                      displayText = "DISPEL" },
-        [388822]  = { name = "Power Vacuum",    castType = "begincast", castDuration = 4,                    role = "other",                     displayText = "PULL"   },
+        -- The pull effect fires AT the end of BigWigs's predictive countdown (= start of the boss
+        -- cast). No castDuration extension because the pull is instantaneous from the player's POV
+        -- — we don't want the bar lingering past the moment of effect. No showAtSeconds either:
+        -- visibility is left to the user's group "Reveal at" slider, since there's no mechanical
+        -- reason this specific bar should override the user's global preference.
+        [388822]  = { name = "Power Vacuum",    castType = "begincast",                                      role = "other",                     displayText = "PULL" },
     },
 }
 
@@ -211,7 +407,6 @@ KE.EncounterData[3072] = {
     name = "Seranel Sunlash",
     dungeon = "MagistersTerrace",
     spells = {
-        -- castDuration=3 assumed from EXBoss 1225792 — live verification pending (was role=heal so previously filtered)
         [1225787] = { name = "Runic Mark",         castType = "begincast", castDuration = 3,                       role = "other",                     displayText = "MARKS"     },
         [1224903] = { name = "Suppression Zone",   castType = "begincast", castDuration = 3,                       role = "mechanic",                  displayText = "CLEAR"     },
         [1248689] = { name = "Hastening Ward",     castType = "cast",                                              role = "tank",     display = "bar", displayText = "BOSS BUFFED" },
@@ -227,6 +422,9 @@ KE.EncounterData[3073] = {
         [1284954] = { name = "Cosmic Sting",       castType = "begincast", castDuration = 4,                       role = "other",    displayText = "DROPS" },
         [1253709] = { name = "Neural Link",        castType = "begincast", castDuration = 2,                       role = "other",    displayText = "CLEAR" },
         [1224299] = { name = "Astral Grasp",       castType = "begincast", castDuration = 4,   channelDuration = 8, role = "other",    displayText = "PULL"  },
+    },
+    phases = {
+        { unit = "boss1", threshold = 50, lead = 5 },
     },
 }
 
@@ -264,7 +462,14 @@ KE.EncounterData[3213] = {
         [1251554] = { name = "Drain Soul",           castType = "begincast", castDuration = 1,   channelDuration = 4,   role = "tank",     display = "bar", displayText = "TANK HIT"     },
         [1252054] = { name = "Unmake",               castType = "begincast", castDuration = 2.5, channelDuration = 4.5, role = "other",                     displayText = "FRONTAL"      },
         [1251204] = { name = "Wrest Phantoms",       castType = "cast",                          channelDuration = 4,   role = "mechanic", extendByChannel = true, displayText = "ADDS" },
-        [1250708] = { name = "Necrotic Convergence", castType = "channel",                       channelDuration = 60,  role = "other",                     displayText = "INTERMISSION" },
+        -- Necrotic Convergence is a 60s intermission channel where the boss
+        -- casts an absorb shield (UnitGetTotalAbsorbs, secret on hostile units).
+        -- Two bars surface for one mechanic: the BigWigs-driven INTERMISSION
+        -- countdown (channelDuration=60) and an opt-in absorb-tracking shieldBar
+        -- that drains as the team breaks the shield. baseAmount sourced from
+        -- ExBoss/EXDB; M+ scaling applied automatically by DungeonTimers.
+        [1250708] = { name = "Necrotic Convergence", castType = "channel",                       channelDuration = 60,  role = "other",                     displayText = "INTERMISSION",
+                      shieldBar = { baseAmount = 1160814, displayText = "SHIELD" } },
     },
 }
 
@@ -302,7 +507,14 @@ KE.EncounterData[3332] = {
         [1249014] = { name = "Eclipsing Step",        castType = "begincast", castDuration = 2.5, channelDuration = 2,  role = "move",                      displayText = "SPREAD"   },
         [1252703] = { name = "Null Vanguard",         castType = "cast",      castDuration = 6,                         role = "other",                     displayText = "ADDS"     },
         -- castDuration=10 is rough — Lightscar Flare timing varies in-game; adjust per future logs.
-        [1264439] = { name = "Lightscar Flare",       castType = "cast",      castDuration = 10,                        role = "other",                     displayText = "AMP"      },
+        -- postCastBar: 17s damage-amp window after the cast finishes — boss channels a beam that buffs
+        -- player damage for everyone standing in it. Synthesized bar (no separate BigWigs Timer fires
+        -- for the channel) — spawns at cast-phase end, doesn't fire on cast interrupts. Bundled into
+        -- Flare's entry rather than split as a `phantomFollowupOf` row because the beam channel has
+        -- no clean spellID — both LittleWigs and ExBoss detect it by watching for a level-92 mob's
+        -- UNIT_SPELLCAST_CHANNEL_START, not a curated ID we could surface in the GUI list.
+        [1264439] = { name = "Lightscar Flare",       castType = "cast",      castDuration = 10,                        role = "other",                     displayText = "AMP",
+            postCastBar = { duration = 17, display = "bar", displayText = "BEAM" } },
         -- Disabled by default: BigWigs fires Timer but the spell may not actually exist in-game.
         [1271684] = { name = "Devour the Unworthy",   castType = "begincast", castDuration = 3.4, channelDuration = 5,  role = "other",                     displayText = "AOE",     disabled = true },
     },
@@ -409,12 +621,19 @@ KE.EncounterData[2068] = {
     dungeon = "SeatOfTriumvirate",
     spells = {
         [1265421] = { name = "Dirge of Despair",            castType = "begincast", castDuration = 4,                   role = "other",                  displayText = "AOE"       },
-        [1264196] = { name = "Disintegrate",                castType = "begincast", castDuration = 3, channelDuration = 5, role = "other",               displayText = "DODGE"     },
+        [1264196] = { name = "Disintegrate",                castType = "begincast", castDuration = 3, channelDuration = 5, role = "other",               displayText = "DANCE"     },
         [1265463] = { name = "Discordant Beam",             castType = "begincast", castDuration = 7,                   role = "other",                  displayText = "AIM BEAMS" },
         [1265689] = { name = "Grim Chorus",                 castType = "begincast", castDuration = 5.5,                 role = "other",                  displayText = "FEET"      },
-        -- Symphony of the Eternal Night is the intermission/phase-transition (EXBoss voice = "转阶段").
+        -- Symphony of the Eternal Night is the intermission/phase-transition.
         [1266003] = { name = "Symphony of the Eternal Night", castType = "begincast", castDuration = 10,                role = "other",                  displayText = "AMP"       },
-        [1266001] = { name = "Backlash",                    castType = "cast",                                          role = "other",                  displayText = "KNOCK"     },
+        [1266001] = { name = "Backlash", castType = "cast", role = "other", displayText = "KNOCK" },
+        -- LittleWigs's SPELL_AURA_APPLIED handler for aura 247816 doesn't fire in 12.0
+        -- (confirmed via in-game log — Bar message never arrived). Instead this entry
+        -- spawns when 1266001's BigWigs_StopBar fires naturally (cast finished = buff
+        -- applied). LittleWigs drives that StopBar via ENCOUNTER_TIMELINE_EVENT_*,
+        -- the same reliable Blizzard API ExBoss uses; ExBoss measures the active
+        -- phase at 19.5s.
+        [247816]  = { name = "Vulnerability Phase", phantomFollowupOf = 1266001, duration = 20, role = "other", display = "bar", displayText = "VULNERABILITY", iconOverride = 4914666, showAtSeconds = 0, sortAtEnd = true },
     },
 }
 
@@ -503,6 +722,10 @@ KE.EncounterData[3058] = {
         [1253272] = { name = "Intimidating Shout", castType = "begincast", castDuration = 5,                        role = "mechanic",                 displayText = "STACK"    },
         -- 470963 vs EXBoss 1271676 — LittleWigs ID wins (BigWigs Timer key); cast data adjusted to 2s based on live log late values
         [470963]  = { name = "Bladestorm",         castType = "begincast", castDuration = 2,                        role = "other",                    displayText = "DODGE"    },
+    },
+    phases = {
+        { unit = "boss1", threshold = 66, lead = 5 },
+        { unit = "boss1", threshold = 33, lead = 5 },
     },
 }
 
