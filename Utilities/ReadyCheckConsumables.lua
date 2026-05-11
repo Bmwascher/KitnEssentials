@@ -8,7 +8,6 @@
 -- ║           Icons show ready/missing status and remaining  ║
 -- ║           buff duration. Click uses the item via         ║
 -- ║           SecureActionButton.                            ║
--- ║  Reference: MRT RaidCheck.lua lines 3610-4438            ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -100,12 +99,15 @@ local DEFAULT_ICONS = {
 local FOOD_BUFFS = {
     -- Feasts (+98 Stam)
     [1232585] = 50,   -- Harandar Celebration / Silvermoon Parade (primary; also Royal Roast / Impossible Royal Roast)
-    [1232086] = 65,   -- Blooming Feast / Quel'dorei Medley (highest secondary)
+    [1232086] = 65,   -- Quel'dorei Medley (highest secondary)
+    [1232087] = 65,   -- Blooming Feast (highest secondary)
     -- Hearty Feasts (+98 Stam, persists through death)
     [1285644] = 50,   -- Hearty Harandar Celebration / Hearty Silvermoon Parade (primary)
-    [1232076] = 65,   -- Hearty Blooming Feast / Hearty Quel'dorei Medley (highest secondary)
+    [1232076] = 65,   -- Hearty Quel'dorei Medley (highest secondary)
+    [1232078] = 65,   -- Hearty Blooing Feast (highest secondary)
     -- Regular Food
-    [1284616] = 65,   -- Flora Frenzy / Champion's Bento (highest secondary)
+    [1284616] = 65,   -- Flora Frenzy (highest secondary)
+    [1284617] = 65,   -- Champion's Bento (highest secondary)
     -- Hearty Food (persists through death)
     [1233724] = 50,   -- Hearty Impossible Royal Roast / Hearty Royal Roast (primary)
     [1233703] = 65,   -- Hearty Flora Frenzy / Hearty Champion's Bento (highest secondary)
@@ -117,6 +119,7 @@ local HEARTY_FOOD_BUFFS = {
     [1232076] = true,
     [1233724] = true,
     [1233703] = true,
+    [1232078] = true
 }
 
 -- Weapon enhancements — unified table for oils, weapon stones, and ammo mods.
@@ -231,8 +234,7 @@ RCC.db          = nil
 -- Sticky last-target for the Warlock CLASS slot (Soulstone). Holds the name
 -- of the most recently confirmed Soulstone recipient so the click macro keeps
 -- nominating the same healer after the aura drops (consumed/expired).
--- Mirrors BuffReminders' lastTargets["soulstone"] runtime cache. Not persisted
--- to SavedVariables — wiped on /reload, regenerates on the next live scan.
+-- Not persisted to SavedVariables — wiped on /reload, regenerates on the next live scan.
 -- Pruned in _GetSoulstonedTarget when the cached name is no longer in group.
 RCC._lastSoulstoneTarget = nil
 
@@ -274,7 +276,7 @@ function RCC:BuildFrame()
     f:SetFrameStrata("HIGH")
     f:Hide()
 
-    -- SecureHandlerState for combat visibility (mirrors MRT pattern).
+    -- SecureHandlerState for combat visibility.
     -- Slots with click buttons are hidden in combat via state driver.
     local stateFrame = CreateFrame("Frame", "KE_ReadyCheckConsumables_State", nil, "SecureHandlerStateTemplate")
     stateFrame:SetAttribute("_onstate-combat", [=[
