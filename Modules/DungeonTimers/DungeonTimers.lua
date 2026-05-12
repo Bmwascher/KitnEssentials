@@ -36,7 +36,7 @@ local AbbreviateNumbers = AbbreviateNumbers
 local pcall = pcall
 local type = type
 
-local DEBUG_DT2 = true
+local DEBUG_DT2 = false
 
 local BIGWIGS_EVENTS = {
     "BigWigs_Timer",
@@ -140,19 +140,36 @@ local function ResolveBossUnit()
     return nil
 end
 
--- Secret-safe percentage formatter. AbbreviateNumbers with breakpointData
+-- Secret-safe percent + max-raw formatter. AbbreviateNumbers with breakpointData
 -- divides the secret absorb token by 1% of the max (significandDivisor =
--- maxNum / 100), returning the bucket as a numeric percentage like "67%".
--- Direct arithmetic on the secret value would crash; AbbreviateNumbers is
--- allowed-when-tainted in 12.0 and produces a non-secret string.
-local function FormatShieldPercent(secretValue, maxNum)
-    if secretValue == nil or not maxNum or maxNum <= 0 then return "" end
+-- maxNum / 100), returning the bucket as a numeric percentage with our
+-- abbreviation suffix appended. We bake the max raw amount (a plain number,
+-- safely abbreviated) into the suffix so the displayed text reads like
+-- "82% / 1.16M" — live percent, static total reference. Direct arithmetic or
+-- comparison on the secret return value would crash; this path only feeds the
+-- resulting string straight into FontString:SetText (allowed-when-tainted).
+local function FormatShieldDisplay(currentValue, maxNum)
+    if currentValue == nil or not maxNum or maxNum <= 0 then return "" end
     if type(AbbreviateNumbers) ~= "function" then return "" end
-    local ok, text = pcall(AbbreviateNumbers, secretValue, {
+
+    -- Manual abbreviation of the plain max so "1.16M" reads cleaner than
+    -- AbbreviateLargeNumbers' default high-threshold "1160K" output. maxNum
+    -- is plain (baseAmount × multiplier), so no secret-value concerns here.
+    local maxText
+    if maxNum >= 1e6 then
+        maxText = string.format("%.2fM", maxNum / 1e6)
+    elseif maxNum >= 1e3 then
+        maxText = string.format("%.0fK", maxNum / 1e3)
+    else
+        maxText = tostring(maxNum)
+    end
+    local suffix = "% / " .. maxText
+
+    local ok, text = pcall(AbbreviateNumbers, currentValue, {
         breakpointData = {
             {
                 breakpoint           = 0,
-                abbreviation         = "%",
+                abbreviation         = suffix,
                 significandDivisor   = maxNum / 100,
                 fractionDivisor      = 1,
                 abbreviationIsGlobal = false,
@@ -2366,29 +2383,39 @@ end
 DT._shieldRefreshTimers = DT._shieldRefreshTimers or {}
 DT._absorbEventRegistered = false
 -- Plain-number spell IDs in the active encounter that have shieldBar config.
--- Built at ENCOUNTER_START, cleared at ENCOUNTER_END. Iterated by the absorb
--- handler to decide whether a non-zero boss absorb should spawn/refresh a
--- shield bar. Storing the literals here means we never have to recover them
--- from a (potentially secret) cast event.
+-- Built at ENCOUNTER_START, cleared at ENCOUNTER_END. Storing the literals
+-- here means we never have to recover them from a (potentially secret) cast
+-- event — CHANNEL_START's spellId on hostiles is a secret value in 12.0.
 DT._activeShieldSpellIds = DT._activeShieldSpellIds or {}
+-- Arming state for the channel-start spawn path. _ArmShieldChannelWatch sets
+-- _shieldArming[spellId] = true ~1s before the curated cast time, then a
+-- 5s expiry timer auto-disarms it. The CHANNEL_START handler walks this
+-- table on every fire (no secret-spellId match needed — we trust the timing).
+DT._shieldArming = DT._shieldArming or {}
+DT._shieldArmingTimers = DT._shieldArmingTimers or {}  -- pending arm + auto-disarm handles
+-- Fallback hide timers: scheduled at bar-spawn to clean up if neither
+-- INTERRUPTIBLE (shield broken) nor ENCOUNTER_END (run reset) fires before
+-- the channel's natural end (e.g. team gets full-wiped without breaking it).
+DT._shieldFallbackTimers = DT._shieldFallbackTimers or {}
 
--- Why we drive the shield bar off UNIT_ABSORB_AMOUNT_CHANGED only:
---   1. UNIT_SPELLCAST_CHANNEL_START's spellID is SECRET on hostile units in
---      12.0; using it as a table key crashes. ExBoss works around this with
---      RegisterUnitEvent + an ExBoss-engine-driven arming flag we don't have.
---   2. BigWigs_Timer for the same spellID is the wrong moment — LittleWigs
---      uses Blizzard's encounter timeline (ENCOUNTER_TIMELINE_EVENT_ADDED)
---      and CDBar to render a COUNTDOWN UNTIL the next intermission, then
---      StopBar when the countdown ends (= boss begins casting). Spawning on
---      Timer would land 70s early (before the shield exists) and StopBar
---      would kill the bar at the exact moment the shield goes up.
---   3. The absorb amount is the source of truth: zero → no shield, non-zero
---      → shield up. `secret == 0` returns a clean non-secret boolean (same
---      operation EbonMightHelper uses for spellID matching), so we can tell
---      "shield up" from "shield broken" without secret-key indexing.
+-- Lifecycle (mirrors ExBoss/3213_Vordaza.lua):
+--   BigWigs_Timer for shieldBar parent → _ArmShieldChannelWatch arms a flag
+--                                        ~1s before the curated cast time
+--   UNIT_SPELLCAST_CHANNEL_START on bossN, while armed → _ShowShieldBar
+--   UNIT_SPELLCAST_INTERRUPTIBLE on bossN → _HideAllShieldBars (shield broken)
+--   UNIT_ABSORB_AMOUNT_CHANGED on bossN → _ScheduleShieldRefresh (value only,
+--                                         never compares the secret token)
+--   ENCOUNTER_END / BigWigs_StopBars / OnBossDisable → _HideAllShieldBars
+--
+-- We never compare the secret absorb value to 0 (or anything else) — 12.0.5
+-- escalates `secret == literal` to "attempt to compare ... while execution
+-- tainted" in some paths. The CHANNEL_START arming + INTERRUPTIBLE kill
+-- combo gives us the same lifecycle signal without ever inspecting the
+-- secret value.
+--
 -- Limitation: assumes one shieldBar entry per encounter — if multiple bosses
 -- in one encounter ever each have an absorb shield we'd need to disambiguate
--- by unit. Not a current concern (Vordaza is the only shieldBar boss).
+-- arming by unit. Not a current concern (Vordaza is the only shieldBar boss).
 
 function DT:_ShowShieldBar(spellId, unit)
     if not (spellId and unit) then return end
@@ -2416,6 +2443,11 @@ function DT:_ShowShieldBar(spellId, unit)
         if bar.icon then
             bar.icon:SetTexture(self:ResolveSpellIcon(spellId) or 134400)
         end
+        -- Dark forest green to match the Necrotic Convergence icon's swirl.
+        -- Hardcoded for now — overrides whatever default CreateBar applied.
+        if bar.bar then
+            bar.bar:SetStatusBarColor(0.137, 0.325, 0.278)  -- #235347
+        end
     end
 
     bar.shieldUnit = unit
@@ -2427,10 +2459,12 @@ function DT:_ShowShieldBar(spellId, unit)
     bar.bar:SetValue(bar.shieldMax)
     bar._lastValue = nil  -- invalidate gating cache so first SetValue takes
     if bar.timerText then
-        bar.timerText:SetText("100%")
+        bar.timerText:SetText(FormatShieldDisplay(bar.shieldMax, bar.shieldMax))
     end
     bar:Show()
-    PlayBarSound(bar, "show")
+    -- No PlayBarSound here — shield bar is a secondary display of the same
+    -- spell event the text/bar primary already announced. Playing the curated
+    -- sound again would double-fire (e.g. "Intermission" heard twice).
     self:LayoutBars()
     self:_RefreshShieldBar(spellId)
 end
@@ -2442,10 +2476,16 @@ function DT:_HideShieldBar(spellId)
         self:CancelTimer(timer)
         self._shieldRefreshTimers[spellId] = nil
     end
+    local fallback = self._shieldFallbackTimers[spellId]
+    if fallback then
+        self:CancelTimer(fallback)
+        self._shieldFallbackTimers[spellId] = nil
+    end
     local key = ShieldBarKey(spellId)
     local bar = self.bars[key]
     if not bar then return end
-    PlayBarSound(bar, "hide")
+    -- No PlayBarSound here — see _ShowShieldBar for rationale. Primary text/bar
+    -- already plays the curated sound on its own hide/StopBar path.
     bar:SetScript("OnUpdate", nil)
     bar:Hide()
     self.bars[key] = nil
@@ -2475,7 +2515,7 @@ function DT:_RefreshShieldBar(spellId)
     -- SetValue directly here.
     bar.bar:SetValue(absorbAmount)
     if bar.timerText then
-        bar.timerText:SetText(FormatShieldPercent(absorbAmount, bar.shieldMax))
+        bar.timerText:SetText(FormatShieldDisplay(absorbAmount, bar.shieldMax))
     end
 end
 
@@ -2491,6 +2531,17 @@ function DT:_HideAllShieldBars()
         if timer then self:CancelTimer(timer) end
         self._shieldRefreshTimers[spellId] = nil
     end
+    for spellId in pairs(self._shieldFallbackTimers) do
+        local timer = self._shieldFallbackTimers[spellId]
+        if timer then self:CancelTimer(timer) end
+        self._shieldFallbackTimers[spellId] = nil
+    end
+    for spellId, pending in pairs(self._shieldArmingTimers) do
+        if pending.arm then self:CancelTimer(pending.arm) end
+        if pending.disarm then self:CancelTimer(pending.disarm) end
+        self._shieldArmingTimers[spellId] = nil
+        self._shieldArming[spellId] = false
+    end
     local changed = false
     for k, bar in pairs(self.bars) do
         if bar.isShieldBar then
@@ -2503,37 +2554,101 @@ function DT:_HideAllShieldBars()
     if changed then self:LayoutBars() end
 end
 
--- Drives the entire shield-bar lifecycle. UNIT_ABSORB_AMOUNT_CHANGED fires for
--- bossN whenever the unit's total absorb changes (shield applied, drained,
--- consumed). For each shieldBar entry in the active encounter:
---   absorb == 0 → kill bar if it exists (shield broken or never spawned)
---   absorb non-zero → spawn the bar if missing, otherwise refresh it
--- Comparing the secret absorb token to the literal 0 returns a clean
--- non-secret boolean (allowed-when-tainted). Only the LITERAL spellId from
--- _activeShieldSpellIds is used for any table indexing.
+-- Refreshes any active shield bar on the firing boss unit. Pure value-only
+-- path: feeds the secret absorb token straight into SetValue + AbbreviateNumbers
+-- (both AllowedWhenTainted) inside _RefreshShieldBar. Never compares the
+-- secret value to anything — spawn lives on CHANNEL_START, kill lives on
+-- INTERRUPTIBLE / ENCOUNTER_END.
 function DT:OnUnitAbsorbAmountChanged(_, unit)
     if type(unit) ~= "string" or not unit:match("^boss%d$") then return end
     if #self._activeShieldSpellIds == 0 then return end
 
-    local absorb = UnitGetTotalAbsorbs(unit)
-    if absorb == nil then return end
-    local isZero = (absorb == 0)
+    for i = 1, #self._activeShieldSpellIds do
+        local spellId = self._activeShieldSpellIds[i]
+        local bar = self.bars[ShieldBarKey(spellId)]
+        if bar and bar:IsShown() then
+            if bar.shieldUnit ~= unit then bar.shieldUnit = unit end
+            self:_ScheduleShieldRefresh(spellId)
+        end
+    end
+end
+
+-- Schedule the arming flag for `spellId` to flip true ~1s before the curated
+-- cast lands, then auto-disarm 5s after that to bound the false-positive
+-- window. Mirrors ExBoss's ArmShieldChannelWatch(remaining - 1) pattern.
+-- leadTime is the BigWigs_Timer reported duration (countdown to next cast).
+function DT:_ArmShieldChannelWatch(spellId, leadTime)
+    if not spellId then return end
+    -- Cancel any pending arm scheduler for this spellId.
+    local pending = self._shieldArmingTimers[spellId]
+    if pending then
+        if pending.arm then self:CancelTimer(pending.arm) end
+        if pending.disarm then self:CancelTimer(pending.disarm) end
+    end
+    self._shieldArmingTimers[spellId] = {}
+    self._shieldArming[spellId] = false
+
+    local armDelay = math.max(0, (tonumber(leadTime) or 1) - 1)
+    self._shieldArmingTimers[spellId].arm = self:ScheduleTimer(function()
+        if not self.db or not self.db.Enabled then return end
+        self._shieldArming[spellId] = true
+        self._shieldArmingTimers[spellId] = self._shieldArmingTimers[spellId] or {}
+        self._shieldArmingTimers[spellId].disarm = self:ScheduleTimer(function()
+            self._shieldArming[spellId] = false
+            if self._shieldArmingTimers[spellId] then
+                self._shieldArmingTimers[spellId].disarm = nil
+            end
+        end, 5)
+    end, armDelay)
+end
+
+-- Channel-start spawn: walks the active shieldBar spell list and spawns the
+-- first one currently armed. We cannot read CHANNEL_START's spellId on a
+-- hostile boss (it's a secret value), so the arming flag set 1s before the
+-- curated cast time is the disambiguation signal.
+function DT:OnUnitChannelStart(_, unit)
+    if type(unit) ~= "string" or not unit:match("^boss%d$") then return end
+    if #self._activeShieldSpellIds == 0 then return end
 
     for i = 1, #self._activeShieldSpellIds do
         local spellId = self._activeShieldSpellIds[i]
-        local key = ShieldBarKey(spellId)
-        local existing = self.bars[key]
-        if isZero then
-            if existing then self:_HideShieldBar(spellId) end
-        else
-            if not existing then
-                self:_ShowShieldBar(spellId, unit)
-            else
-                if existing.shieldUnit ~= unit then existing.shieldUnit = unit end
-                self:_ScheduleShieldRefresh(spellId)
+        if self._shieldArming[spellId] then
+            -- Disarm immediately so a re-fire (rare, but BigWigs can re-Timer)
+            -- doesn't trigger a second spawn.
+            self._shieldArming[spellId] = false
+            local pending = self._shieldArmingTimers[spellId]
+            if pending then
+                if pending.arm then self:CancelTimer(pending.arm); pending.arm = nil end
+                if pending.disarm then self:CancelTimer(pending.disarm); pending.disarm = nil end
             end
+
+            self:_ShowShieldBar(spellId, unit)
+
+            -- Fallback hide if neither INTERRUPTIBLE nor ENCOUNTER_END fires
+            -- before natural channel end. Uses the curated channelDuration so
+            -- the safety net matches the encounter timing.
+            local spellData = self:GetSpellInfo(spellId)
+            local channelDur = (spellData and (spellData.channelDuration or spellData.castDuration)) or 60
+            if self._shieldFallbackTimers[spellId] then
+                self:CancelTimer(self._shieldFallbackTimers[spellId])
+            end
+            self._shieldFallbackTimers[spellId] = self:ScheduleTimer(function()
+                self._shieldFallbackTimers[spellId] = nil
+                self:_HideShieldBar(spellId)
+            end, channelDur + 2)
+            return
         end
     end
+end
+
+-- Vordaza's channel becomes interruptible only after the shield is consumed
+-- (see ExBoss/3213_Vordaza.lua:510). For any other shieldBar boss we'd want
+-- this same signal — non-interruptible while shield is up, interruptible
+-- after. Hide all active shields on the firing unit.
+function DT:OnUnitSpellcastInterruptible(_, unit)
+    if type(unit) ~= "string" or not unit:match("^boss%d$") then return end
+    if #self._activeShieldSpellIds == 0 then return end
+    self:_HideAllShieldBars()
 end
 
 -- Collects the plain-integer spell IDs in the encounter that have shieldBar
@@ -2551,15 +2666,19 @@ end
 function DT:_RegisterAbsorbEvent()
     if self._absorbEventRegistered then return end
     self:RegisterEvent("UNIT_ABSORB_AMOUNT_CHANGED", "OnUnitAbsorbAmountChanged")
+    self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START", "OnUnitChannelStart")
+    self:RegisterEvent("UNIT_SPELLCAST_INTERRUPTIBLE", "OnUnitSpellcastInterruptible")
     self._absorbEventRegistered = true
-    dprint("ShieldBar absorb event registered")
+    dprint("ShieldBar events registered (absorb + channel + interruptible)")
 end
 
 function DT:_UnregisterAbsorbEvent()
     if not self._absorbEventRegistered then return end
     self:UnregisterEvent("UNIT_ABSORB_AMOUNT_CHANGED")
+    self:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_START")
+    self:UnregisterEvent("UNIT_SPELLCAST_INTERRUPTIBLE")
     self._absorbEventRegistered = false
-    dprint("ShieldBar absorb event unregistered")
+    dprint("ShieldBar events unregistered")
 end
 
 function DT:OnEncounterStart(_, encounterID)
@@ -2921,6 +3040,15 @@ function DT:EventCallback(event, ...)
         local spellData = self:GetSpellInfo(spellIdNum)
         if not spellData then
             return
+        end
+
+        -- Shield-bar arming: if this Timer is for a shieldBar parent (e.g. Vordaza's
+        -- Necrotic Convergence), schedule the channel-start watch to arm ~1s before
+        -- the cast lands. CHANNEL_START on bossN while armed → _ShowShieldBar.
+        -- Done BEFORE the spawnOnMessage / phantomFollowupOf early-returns so the
+        -- arming is independent of whichever Timer-rendering path this spell uses.
+        if spellData.shieldBar then
+            self:_ArmShieldChannelWatch(spellIdNum, baseDur)
         end
 
         -- spawnOnMessage entries opt out of the BigWigs_Timer path entirely —
