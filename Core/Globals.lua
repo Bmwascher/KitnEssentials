@@ -23,6 +23,7 @@ local _G = _G
 ---------------------------------------------------------------------------------
 
 KE.LSM = LibStub("LibSharedMedia-3.0")
+---@type LibDualSpec-1.0?
 KE.LDS = LibStub("LibDualSpec-1.0", true)
 
 KE.PATH = ([[Interface\AddOns\%s\Media\]]):format(addonName)
@@ -255,6 +256,12 @@ end
 -- after a profile reset. ResolveColor returns r,g,b,a as four values, falling
 -- back to the caller-supplied default per index. Callers should pass the same
 -- default array they ship in Defaults.lua.
+---@param saved number[]?
+---@param default number[]
+---@return number r
+---@return number g
+---@return number b
+---@return number a
 function KE:ResolveColor(saved, default)
     if not saved then
         return default[1], default[2], default[3], default[4] or 1
