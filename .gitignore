@@ -1,13 +1,13 @@
+Annotations/
 .claude/
 CLAUDE.md
 CURSEFORGE_README.md
-.wow-api-reference/
-.wowluarc.json
-Annotations/
 docs/
-.markdownlint.json
 .luacheckrc
+.markdownlint.json
 References/
 REFERENCES.md
 SKILLS.md
 SKILLS-Discord.md
+.wow-api-reference/
+.wowluarc.json
