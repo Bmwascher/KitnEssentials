@@ -154,7 +154,7 @@ GUIFrame:RegisterContent("BossDebuffs", function(scrollChild, yOffset)
                 GameTooltip:AddLine(" ")
                 GameTooltip:AddLine(raid.header, ar, ag, ab)
                 for _, boss in ipairs(raid.bosses) do
-                    GameTooltip:AddDoubleLine(boss[1], tostring(boss[2]), 1, 1, 1, 0.7, 0.7, 0.7)
+                    GameTooltip:AddDoubleLine(tostring(boss[1]), tostring(boss[2]), 1, 1, 1, 0.7, 0.7, 0.7)
                 end
             end
             GameTooltip:Show()

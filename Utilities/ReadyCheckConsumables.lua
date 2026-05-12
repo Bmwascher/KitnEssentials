@@ -364,7 +364,7 @@ function RCC:BuildFrame()
         -- Macrotext is set dynamically in UpdateAllIcons based on the active consumable.
         local hasClickFrame = (i == SLOT_FLASK or
                                i == SLOT_OIL  or i == SLOT_OILOH or
-                               i == SLOT_RUNE or i == SLOT_CLASS)
+                               i == SLOT_RUNE or i == SLOT_HS or i == SLOT_CLASS)
         if hasClickFrame then
             local click = CreateFrame("Button", nil, btn, "SecureActionButtonTemplate")
             click:SetAllPoints()
@@ -1030,11 +1030,14 @@ function RCC:UpdateRune(auras)
 end
 
 --- UpdateHealthstone
---- Counts Standard + Demonic (warlock-only) HS in bags. Display-only slot —
---- the actual healthstone action is bound by the player's keybinds, not by us.
+--- Counts Standard + Demonic (warlock-only) HS in bags. Display-only for
+--- non-Warlocks. For Warlocks, clicking the slot casts Create Soulwell (29893)
+--- to drop a fresh well — the source healthstones come from. Mirrors
+--- BuffReminders' Healthstone reminder click (Data/Buffs.lua:1170 castSpellID).
 function RCC:UpdateHealthstone()
     local btn = self.buttons.hs
     if not btn then return end
+    local click = btn.click
 
     local _, playerClass = UnitClass("player")
     local items = {}
@@ -1056,6 +1059,20 @@ function RCC:UpdateHealthstone()
     end
     btn.countText:SetText(count > 0 and tostring(count) or "")
     btn.timeLeft:SetText("")
+
+    -- Warlock-only click wiring: cast Create Soulwell. Hidden for other classes
+    -- (slot stays display-only — healthstone use is on the player's keybinds).
+    if click and not InCombatLockdown() then
+        if playerClass == "WARLOCK" then
+            click:SetAttribute("type", "macro")
+            click:SetAttribute("macrotext", "/stopmacro [combat]\n/cast Create Soulwell")
+            click:Show()
+            click.IsON = true
+        else
+            click:Hide()
+            click.IsON = false
+        end
+    end
 end
 
 --- UpdateClassSlot
@@ -1108,6 +1125,17 @@ function RCC:UpdateClassSlot()
         btn.timeLeft:SetText("")
     end
     btn.countText:SetText("")
+
+    -- Yellow pixel glow when Soulstone is missing (grayed-out state).
+    -- Stops automatically when the slot transitions to ready (onCD branch).
+    -- HideFrame stops all glows defensively on RC teardown.
+    if LCG then
+        if not onCD then
+            LCG.PixelGlow_Start(btn, {1, 1, 0, 1}, 8, 0.25, 8, 2, 1, 1, false, nil)
+        else
+            LCG.PixelGlow_Stop(btn)
+        end
+    end
 
     if click and not InCombatLockdown() then
         local macrotext = classData.macrotext
@@ -1392,8 +1420,8 @@ function RCC:HideFrame()
     if not self.frame then return end
 
     -- Stop all LibCustomGlow animations on any slot that might have one.
-    -- Currently only the rune slot uses glow, but stopping all defensively
-    -- future-proofs the cleanup if more glow effects are added.
+    -- Rune and class (warlock soulstone) slots currently use glow; stopping
+    -- all defensively future-proofs the cleanup if more glow effects are added.
     if LCG then
         for i = 1, NUM_SLOTS do
             local btn = self.buttons[i]

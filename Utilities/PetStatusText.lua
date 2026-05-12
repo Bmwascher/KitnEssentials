@@ -27,6 +27,7 @@ local UnitIsDeadOrGhost = UnitIsDeadOrGhost
 local C_Timer = C_Timer
 local C_SpellBook = C_SpellBook
 local SpellBookBank_Player = Enum.SpellBookSpellBank.Player
+local strsplit = strsplit
 
 ---------------------------------------------------------------------------------
 -- Constants
@@ -50,6 +51,7 @@ local PET_STATUS = {
     MISSING = 1,
     DEAD = 2,
     PASSIVE = 3,
+    WRONG = 4,
 }
 
 PS.frame = nil
@@ -70,6 +72,43 @@ local function IsPetOnPassive()
         if isToken and name == "PET_MODE_PASSIVE" and isActive then return true end
     end
     return false
+end
+
+-- Verified via /dump UnitGUID("pet") on 2026-05-07. Single NPC ID — no
+-- Wrathguard / talent variants in modern Demo.
+local FELGUARD_NPC_IDS = {
+    [17252] = true,  -- Felguard
+}
+
+-- Pet GUID format: <Type>-0-<Realm>-<Map>-<Zone>-<NpcID>-<SpawnUID>.
+-- The <Type> prefix is normally "Pet-" but Sayaad (Succubus successor) uses
+-- "Creature-". Position 6 is the NPC ID regardless, so the same extraction
+-- works for both prefixes.
+--
+-- Tri-state return:
+--   true  — pet GUID resolved to a known Felguard NPC ID
+--   false — pet GUID resolved to a known non-Felguard NPC ID
+--   nil   — cannot determine (no pet, GUID is a 12.0 secret value, or GUID
+--           is malformed). The WRONG branch in CheckPetStatus only fires on
+--           an explicit `false` so secret-GUID contexts don't false-positive.
+--
+-- KE:GetSafeUnitGUID returns nil when UnitGUID returns a secret string —
+-- without this, calling strsplit on a secret value triggers
+-- "attempt to perform string conversion on a secret string value (tainted)."
+--
+-- IMPORTANT: select(6, ...) returns position 6 AND everything after. Passing
+-- that directly to tonumber() means the 7th segment (spawn UID like
+-- "0104E40414") becomes the BASE argument; the "E" is parsed as scientific
+-- notation, the value coerces to infinity, and tonumber crashes with
+-- "integer overflow attempting to store inf." Assign to a local first to
+-- truncate to a single value.
+local function IsPetFelguard()
+    local guid = KE:GetSafeUnitGUID("pet")
+    if not guid then return nil end
+    local segment = select(6, strsplit("-", guid))
+    local npcID = tonumber(segment)
+    if not npcID then return nil end
+    return FELGUARD_NPC_IDS[npcID] == true
 end
 
 local function CheckAndUpdatePetDeathState()
@@ -116,7 +155,17 @@ local function CheckPetStatus()
 
     if not C_SpellBook.IsSpellKnown(petInfo.summonSpellId) then return PET_STATUS.NONE, nil, nil end
 
-    -- Priority: Dead > Passive > Missing
+    -- Demo Warlock with non-Felguard pet. Priority above DEAD because the
+    -- actionable fix is "dismiss + re-summon Felguard," not "revive."
+    -- IsPetFelguard returns nil when the pet GUID is a 12.0 secret value or
+    -- otherwise unresolvable — explicitly compare to false so an unknown
+    -- pet identity falls through to the existing DEAD/PASSIVE/MISSING chain
+    -- rather than false-positive a WRONG warning we can't actually verify.
+    if specID == 266 and UnitExists("pet") and IsPetFelguard() == false then
+        return PET_STATUS.WRONG, PS.db.PetWrong, PS.db.WrongColor
+    end
+
+    -- Remaining priority: Dead > Passive > Missing
     if CheckAndUpdatePetDeathState() then
         return PET_STATUS.DEAD, PS.db.PetDead, PS.db.DeadColor
     end
@@ -243,6 +292,9 @@ function PS:ShowPreview(state)
     elseif self.previewState == "passive" then
         previewText = self.db.PetPassive or "PET PASSIVE"
         r, g, b, a = KE:ResolveColor(self.db.PassiveColor, { 0.3, 0.7, 1, 1 })
+    elseif self.previewState == "wrong" then
+        previewText = self.db.PetWrong or "WRONG PET"
+        r, g, b, a = KE:ResolveColor(self.db.WrongColor, { 1, 0.4, 0, 1 })
     else
         previewText = self.db.PetMissing or "PET MISSING"
         r, g, b, a = KE:ResolveColor(self.db.MissingColor, { 1, 0.82, 0, 1 })
