@@ -104,7 +104,7 @@ local FOOD_BUFFS = {
     -- Hearty Feasts (+98 Stam, persists through death)
     [1285644] = 50,   -- Hearty Harandar Celebration / Hearty Silvermoon Parade (primary)
     [1232076] = 65,   -- Hearty Quel'dorei Medley (highest secondary)
-    [1232078] = 65,   -- Hearty Blooing Feast (highest secondary)
+    [1232078] = 65,   -- Hearty Blooming Feast (highest secondary)
     -- Regular Food
     [1284616] = 65,   -- Flora Frenzy (highest secondary)
     [1284617] = 65,   -- Champion's Bento (highest secondary)
