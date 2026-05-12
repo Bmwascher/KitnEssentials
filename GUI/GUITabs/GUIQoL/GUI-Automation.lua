@@ -237,7 +237,7 @@ GUIFrame:RegisterContent("Automation", function(scrollChild, yOffset)
     local card7 = GUIFrame:CreateCard(scrollChild, "Convenience", yOffset)
     autoManager:Register(card7, "all")
 
-    local row7 = GUIFrame:CreateRow(card7.content, Theme.rowHeightLast)
+    local row7 = GUIFrame:CreateRow(card7.content, Theme.rowHeight)
     local autoFillDeleteCheck = GUIFrame:CreateCheckbox(row7, "Auto-Fill DELETE Text", {
         value = db.AutoFillDelete ~= false,
         callback = function(checked) db.AutoFillDelete = checked; ApplySettings() end,
@@ -251,12 +251,58 @@ GUIFrame:RegisterContent("Automation", function(scrollChild, yOffset)
     })
     row7:AddWidget(autoLootCheck, 0.5)
     autoManager:Register(autoLootCheck, "all")
-    card7:AddRow(row7, Theme.rowHeightLast, 0)
+    card7:AddRow(row7, Theme.rowHeight)
+
+    local row7b = GUIFrame:CreateRow(card7.content, Theme.rowHeightLast)
+    local autoConfirmLootRollCheck = GUIFrame:CreateCheckbox(row7b, "Auto-Confirm Loot Roll Popup", {
+        value = db.AutoConfirmLootRoll == true,
+        callback = function(checked) db.AutoConfirmLootRoll = checked; ApplySettings() end,
+    })
+    row7b:AddWidget(autoConfirmLootRollCheck, 0.5)
+    autoManager:Register(autoConfirmLootRollCheck, "all")
+
+    local confirmBonusRollCheck = GUIFrame:CreateCheckbox(row7b, "Confirm Bonus Rolls", {
+        value = db.ConfirmBonusRoll == true,
+        callback = function(checked) db.ConfirmBonusRoll = checked; ApplySettings() end,
+    })
+    row7b:AddWidget(confirmBonusRollCheck, 0.5)
+    autoManager:Register(confirmBonusRollCheck, "all")
+    card7:AddRow(row7b, Theme.rowHeightLast, 0)
 
     yOffset = card7:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 8: Vantus Rune Withdrawer (independent module — own cascade)
+    -- Card 8: Housing Auto-Roll
+    ----------------------------------------------------------------
+    local card8 = GUIFrame:CreateCard(scrollChild, "Housing Item Auto-Roll", yOffset)
+    autoManager:Register(card8, "all")
+
+    local row8 = GUIFrame:CreateRow(card8.content, Theme.rowHeightLast)
+    local autoPassHousingCheck = GUIFrame:CreateCheckbox(row8, "Auto-Roll on Housing Items", {
+        value = db.AutoPassHousing == true,
+        callback = function(checked) db.AutoPassHousing = checked; ApplySettings() end,
+    })
+    row8:AddWidget(autoPassHousingCheck, 0.5)
+    autoManager:Register(autoPassHousingCheck, "all")
+
+    local rollModeDropdown = GUIFrame:CreateDropdown(row8, "Roll Type", {
+        options = {
+            { key = "PASS", text = "Pass" },
+            { key = "NEED", text = "Need" },
+        },
+        value = db.AutoPassHousingMode or "PASS",
+        callback = function(val) db.AutoPassHousingMode = val end,
+    })
+    row8:AddWidget(rollModeDropdown, 0.5)
+    autoManager:Register(rollModeDropdown, "all")
+    card8:AddRow(row8, Theme.rowHeightLast, 0)
+
+    card8:AddLabel("|cff888888Auto-rolls on Housing items based on your roll type selection. Useful in raids/dungeons where housing decor drops aren't gear upgrades.|r")
+
+    yOffset = card8:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 9: Vantus Rune Withdrawer (independent module — own cascade)
     ----------------------------------------------------------------
     local vrDB = KE.db and KE.db.profile.VantusRune
     if vrDB then
@@ -272,11 +318,11 @@ GUIFrame:RegisterContent("Automation", function(scrollChild, yOffset)
             vrManager:UpdateAll(vrDB.Enabled ~= false)
         end
 
-        local card8 = GUIFrame:CreateCard(scrollChild, "Vantus Rune Withdrawer", yOffset)
-        vrManager:Register(card8, "all")
+        local card9 = GUIFrame:CreateCard(scrollChild, "Vantus Rune Withdrawer", yOffset)
+        vrManager:Register(card9, "all")
 
-        local row8a = GUIFrame:CreateRow(card8.content, Theme.rowHeight)
-        local vrEnableCheck = GUIFrame:CreateCheckbox(row8a, "Enable Vantus Rune", {
+        local row9a = GUIFrame:CreateRow(card9.content, Theme.rowHeight)
+        local vrEnableCheck = GUIFrame:CreateCheckbox(row9a, "Enable Vantus Rune", {
             value = vrDB.Enabled ~= false,
             callback = function(checked)
                 ApplyVRState(checked)
@@ -287,29 +333,29 @@ GUIFrame:RegisterContent("Automation", function(scrollChild, yOffset)
             msgOn = "On",
             msgOff = "Off",
         })
-        row8a:AddWidget(vrEnableCheck, 0.5)
+        row9a:AddWidget(vrEnableCheck, 0.5)
 
-        local vrChatCheck = GUIFrame:CreateCheckbox(row8a, "Show Chat Messages", {
+        local vrChatCheck = GUIFrame:CreateCheckbox(row9a, "Show Chat Messages", {
             value = vrDB.ShowChatMessages ~= false,
             callback = function(checked) vrDB.ShowChatMessages = checked end,
         })
-        row8a:AddWidget(vrChatCheck, 0.5)
+        row9a:AddWidget(vrChatCheck, 0.5)
         vrManager:Register(vrChatCheck, "all")
-        card8:AddRow(row8a, Theme.rowHeight)
+        card9:AddRow(row9a, Theme.rowHeight)
 
-        local row8b = GUIFrame:CreateRow(card8.content, Theme.rowHeightLast)
-        local vrTimeoutSlider = GUIFrame:CreateSlider(row8b, "Confirm Timeout", {
+        local row9b = GUIFrame:CreateRow(card9.content, Theme.rowHeightLast)
+        local vrTimeoutSlider = GUIFrame:CreateSlider(row9b, "Confirm Timeout", {
             min = 5, max = 30, step = 1,
             value = vrDB.ConfirmationTimeout or 15,
             callback = function(val) vrDB.ConfirmationTimeout = val end,
         })
-        row8b:AddWidget(vrTimeoutSlider, 0.5)
+        row9b:AddWidget(vrTimeoutSlider, 0.5)
         vrManager:Register(vrTimeoutSlider, "all")
-        card8:AddRow(row8b, Theme.rowHeightLast, 0)
+        card9:AddRow(row9b, Theme.rowHeightLast, 0)
 
-        card8:AddLabel("|cff888888Adds a button to the Guild Bank to withdraw one Vantus Rune.\nPriority: Radiant Gold (245880) > Radiant Silver (245879).\nYou must be on the same realm as your guild to withdraw.|r")
+        card9:AddLabel("|cff888888Adds a button to the Guild Bank to withdraw one Vantus Rune.\nPriority: Radiant Gold (245880) > Radiant Silver (245879).\nYou must be on the same realm as your guild to withdraw.|r")
 
-        yOffset = card8:GetNextOffset()
+        yOffset = card9:GetNextOffset()
 
         RefreshVRStates()
     end

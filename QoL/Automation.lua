@@ -31,7 +31,21 @@ local C_Item = C_Item
 local C_CVar = C_CVar
 local C_Timer = C_Timer
 local StaticPopupDialogs = StaticPopupDialogs
+local StaticPopup_FindVisible = StaticPopup_FindVisible
+local StaticPopup_Hide = StaticPopup_Hide
+local GetLootRollItemLink = GetLootRollItemLink
+local RollOnLoot = RollOnLoot
+local ConfirmLootRoll = ConfirmLootRoll
+local Item = Item
+local Enum = Enum
 local _G = _G
+local string_format = string.format
+local UnitClass = UnitClass
+local RAID_CLASS_COLORS = RAID_CLASS_COLORS
+local GetLootSpecialization = GetLootSpecialization
+local GetSpecialization = GetSpecialization
+local GetSpecializationInfo = GetSpecializationInfo
+local GetSpecializationInfoByID = GetSpecializationInfoByID
 
 ---------------------------------------------------------------------------------
 -- Hide Helptips (runs at load time)
@@ -441,6 +455,215 @@ local function ApplyAutoLoot()
     C_CVar.SetCVar("autoLootDefault", AU.db.AutoLoot and "1" or "0")
 end
 
+-- Auto-Confirm Loot Roll Popup --
+-- Hooks StaticPopup_Show to auto-click "Yes" on CONFIRM_LOOT_ROLL (the
+-- "[item] will become Soulbound. Continue?" prompt that appears after
+-- Need rolls on BoP items). Defers via C_Timer.After(0) so the popup
+-- frame exists before we try to find/click it.
+
+local autoConfirmHooked = false
+local function SetupAutoConfirmLootRoll()
+    if autoConfirmHooked then return end
+    autoConfirmHooked = true
+    hooksecurefunc("StaticPopup_Show", function(which)
+        if not AU.db or not AU.db.Enabled then return end
+        if not AU.db.AutoConfirmLootRoll then return end
+        if which ~= "CONFIRM_LOOT_ROLL" then return end
+        C_Timer.After(0, function()
+            local popup = StaticPopup_FindVisible and StaticPopup_FindVisible("CONFIRM_LOOT_ROLL")
+            if popup and popup.button1 and popup.button1:IsEnabled() then
+                popup.button1:Click()
+            end
+        end)
+    end)
+end
+
+-- Auto-Pass Housing Items --
+-- Listens for START_LOOT_ROLL, filters by Enum.ItemClass.Housing, then calls
+-- RollOnLoot + ConfirmLootRoll with the configured mode (PASS or NEED).
+-- Item-load fallback handles the case where GetItemInfo's class fields aren't
+-- cached yet on the first event. Adapted from Caboodle Utilities.lua "Roll
+-- Away" feature, simplified — no instance-type gating, no loot-history hide.
+
+local AUTO_ROLL_MAP = { PASS = 0, NEED = 1 }
+
+local lootRollFrame
+local function SetupAutoPassHousing()
+    if lootRollFrame then return end
+    lootRollFrame = CreateFrame("Frame")
+    lootRollFrame:RegisterEvent("START_LOOT_ROLL")
+    lootRollFrame:SetScript("OnEvent", function(self, event, ...)
+        local rollID = ...
+        if not AU.db or not AU.db.Enabled then return end
+        if not AU.db.AutoPassHousing then return end
+
+        local link = GetLootRollItemLink(rollID)
+        if not link then return end
+
+        local HOUSING_CLASS = (Enum.ItemClass and Enum.ItemClass.Housing) or 20
+        local mode = AUTO_ROLL_MAP[AU.db.AutoPassHousingMode] or 0
+
+        local function execute(classID)
+            if classID ~= HOUSING_CLASS then return end
+            local ok = pcall(RollOnLoot, rollID, mode)
+            if not ok then return end
+            if ConfirmLootRoll then pcall(ConfirmLootRoll, rollID, mode) end
+            -- Dismiss the secondary CONFIRM_LOOT_ROLL popup defensively (matches
+            -- Caboodle Utilities.lua:425-428). RollOnLoot+ConfirmLootRoll already
+            -- went through programmatically; the popup is just stale UI to clear.
+            -- This makes housing auto-roll work end-to-end without requiring the
+            -- separate Auto-Confirm Loot Roll Popup toggle.
+            C_Timer.After(0.1, function()
+                if StaticPopup_FindVisible and StaticPopup_FindVisible("CONFIRM_LOOT_ROLL") then
+                    StaticPopup_Hide("CONFIRM_LOOT_ROLL")
+                end
+            end)
+        end
+
+        local info = { C_Item.GetItemInfo(link) }
+        if info[12] then
+            execute(info[12])
+            return
+        end
+
+        -- Item not yet cached — defer via ContinueOnItemLoad
+        if Item and Item.CreateFromItemLink then
+            local ok, item = pcall(Item.CreateFromItemLink, Item, link)
+            if ok and item then
+                item:ContinueOnItemLoad(function()
+                    if not GetLootRollItemLink(rollID) then return end
+                    local info2 = { C_Item.GetItemInfo(link) }
+                    if info2[12] then execute(info2[12]) end
+                end)
+            end
+        end
+    end)
+end
+
+-- Confirm Bonus Roll --
+-- Hooks BonusRollFrame's Roll button to show a confirmation dialog before
+-- the bonus roll commits, preventing accidental clicks on the costly action.
+-- The Pass-button confirm code is left in place but commented out — uncomment
+-- the pass branch in HookBonusChild to re-enable it.
+
+-- Returns "Loot Spec: |c<class>|T<icon>:0|t <name>|r" for the active loot spec.
+-- Mirrors GreatVaultAlert:GetLootSpecInfo: GetLootSpecialization() returns 0
+-- when the player is set to "use current spec," so fall back to the active
+-- talent spec in that case.
+local function BuildLootSpecLine()
+    local specID = GetLootSpecialization and GetLootSpecialization()
+    local name, icon
+    if specID == 0 then
+        local index = GetSpecialization and GetSpecialization()
+        if index then
+            local info = { GetSpecializationInfo(index) }
+            name = info[2]
+            icon = info[4]
+        end
+    elseif specID then
+        local info = { GetSpecializationInfoByID(specID) }
+        name = info[2]
+        icon = info[4]
+    end
+    if not name then return "" end
+    local _, class = UnitClass("player")
+    local color = (RAID_CLASS_COLORS[class] and RAID_CLASS_COLORS[class].colorStr) or "ffffffff"
+    return string_format("Loot Spec: |c%s|T%d:0|t %s|r", color, icon or 0, name)
+end
+
+StaticPopupDialogs["KE_BONUS_ROLL_CONFIRM"] = {
+    text    = "Use your bonus roll?",  -- replaced per-click with spec line appended
+    button1 = "Confirm",
+    button2 = "Cancel",
+    OnAccept = nil,  -- filled in per-click
+    OnCancel = function() end,
+    timeout = 0,
+    whileDead = false,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+-- Pass-button dialog kept defined for symmetry with the commented-out hook
+-- branch below. Activates only if the pass branch in HookBonusChild is uncommented.
+StaticPopupDialogs["KE_BONUS_PASS_CONFIRM"] = {
+    text    = "Pass on this bonus roll?",
+    button1 = "Confirm",
+    button2 = "Cancel",
+    OnAccept = nil,
+    OnCancel = function() end,
+    timeout = 0,
+    whileDead = false,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+local bonusFrameHooked = false
+
+local function HookBonusChild(child, isRoll)
+    if not child or child._keBonusHooked then return end
+    if not child:IsObjectType("Button") then return end
+    local orig = child:GetScript("OnClick")
+    if not orig then return end
+    child._keBonusHooked = true
+
+    -- Roll-button confirm (active).
+    if isRoll then
+        child:SetScript("OnClick", function(self, btn, down)
+            if not AU.db or not AU.db.Enabled then orig(self, btn, down); return end
+            if not AU.db.ConfirmBonusRoll then orig(self, btn, down); return end
+            local specLine = BuildLootSpecLine()
+            local dlg = StaticPopupDialogs["KE_BONUS_ROLL_CONFIRM"]
+            dlg.text = (specLine ~= "" and ("Use your bonus roll?\n\n" .. specLine))
+                or "Use your bonus roll?"
+            dlg.OnAccept = function() orig(self, btn, down) end
+            StaticPopup_Show("KE_BONUS_ROLL_CONFIRM")
+        end)
+    end
+
+    -- Pass-button confirm — disabled by default. Uncomment the block below
+    -- (and the matching KE_BONUS_PASS_CONFIRM dialog) to re-enable.
+    --[[
+    if not isRoll then
+        child:SetScript("OnClick", function(self, btn, down)
+            if not AU.db or not AU.db.Enabled then orig(self, btn, down); return end
+            if not AU.db.ConfirmBonusRoll then orig(self, btn, down); return end
+            StaticPopupDialogs["KE_BONUS_PASS_CONFIRM"].OnAccept =
+                function() orig(self, btn, down) end
+            StaticPopup_Show("KE_BONUS_PASS_CONFIRM")
+        end)
+    end
+    --]]
+end
+
+local function HookBonusFrame()
+    if bonusFrameHooked or not BonusRollFrame then return end
+    local rollBtn = (BonusRollFrame.PromptFrame and BonusRollFrame.PromptFrame.RollButton)
+                 or BonusRollFrame.RollButton
+    local function Walk(frame)
+        for i = 1, frame:GetNumChildren() do
+            local child = select(i, frame:GetChildren())
+            HookBonusChild(child, child == rollBtn)
+            Walk(child)
+        end
+    end
+    Walk(BonusRollFrame)
+    bonusFrameHooked = true
+end
+
+local bonusInitFrame
+local function SetupConfirmBonusRoll()
+    if bonusInitFrame then return end
+    if BonusRollFrame_StartBonusRoll then
+        hooksecurefunc("BonusRollFrame_StartBonusRoll", HookBonusFrame)
+    end
+    bonusInitFrame = CreateFrame("Frame")
+    bonusInitFrame:RegisterEvent("BONUS_ROLL_STARTED")
+    bonusInitFrame:SetScript("OnEvent", function(self, event)
+        HookBonusFrame()
+        self:UnregisterAllEvents()
+    end)
+end
+
 -- Quest Automation --
 
 local function IsQuestModifierHeld()
@@ -581,6 +804,9 @@ function AU:ApplySettings()
     SetupAutoSlotKeystone()
     SetupAutoFillDelete()
     ApplyAutoLoot()
+    SetupAutoConfirmLootRoll()
+    SetupAutoPassHousing()
+    SetupConfirmBonusRoll()
     SetupAutoQuests()
     SetupAutoDeclineDuels()
     SetupAutoDeclinePetBattles()
