@@ -74,10 +74,6 @@
     <Script file="GUITabs\GUIUtilities\GUI-ReadyCheckConsumables.lua" />
 
     <!-- Dungeons tabs -->
-    <Script file="GUITabs\GUIDungeons\GUI-BigWigsTimers.lua" />
-    <Script file="GUITabs\GUIDungeons\GUI-BigWigsTimersCfg.lua" />
-    <Script file="GUITabs\GUIDungeons\GUI-BigWigsTimersBars.lua" />
-    <Script file="GUITabs\GUIDungeons\GUI-BigWigsTimersTexts.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-DungeonCasts.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-WarpDepleteForces.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-EnemyCounter.lua" />

@@ -10,7 +10,7 @@ local GUIFrame = KE.GUIFrame
 
 local function GetSettingsDB()
     if not KE.db or not KE.db.profile then return nil end
-    return KE.db.profile.Dungeons and KE.db.profile.Dungeons.DungeonTimers
+    return KE.db.profile.DungeonTimers
 end
 
 -- Module-level preview teardown. Fires whenever the user switches to ANY
