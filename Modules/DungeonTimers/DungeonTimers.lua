@@ -1016,16 +1016,35 @@ local function MigratePositionToFlat(group)
     group.Position = nil
 end
 
+-- Silent orphan cleanup. Two legacy slots can exist in saved profiles from
+-- pre-1.23.0 versions of this addon — both now point at no live code:
+--   * db.profile.Dungeons.DungeonTimers — the pre-1.23.0 BigWigs-trigger
+--     module's slot (also the dungeontimers-rebuild branch's transitional
+--     location for the new curated module before the top-level move).
+--   * db.profile.Dungeons.BigWigsTimers — the same module under its short-
+--     lived rename on the dungeontimers-rebuild branch.
+-- The active module reads/writes db.profile.DungeonTimers, so these are
+-- harmless but they bloat SavedVariables. Nil them out. Named-key-only,
+-- existence-guarded, idempotent — re-running is a no-op.
+local function MigrateLegacyDungeonTimers()
+    if not (KE.db and KE.db.profile) then return end
+    local dungeons = KE.db.profile.Dungeons
+    if not dungeons then return end
+    if dungeons.DungeonTimers ~= nil then dungeons.DungeonTimers = nil end
+    if dungeons.BigWigsTimers ~= nil then dungeons.BigWigsTimers = nil end
+end
+KE._MigrateDungeonTimersDB = MigrateLegacyDungeonTimers
+
 function DT:UpdateDB()
     if not (KE.db and KE.db.profile) then return end
     -- AceDB defaults don't deep-fill nested sub-tables when their parent already exists in saved data —
-    -- backfill manually on first sight so Dungeons.DungeonTimers picks up its defaults.
-    if not (KE.db.profile.Dungeons and KE.db.profile.Dungeons.DungeonTimers) then
+    -- backfill manually on first sight so DungeonTimers picks up its defaults.
+    if not KE.db.profile.DungeonTimers then
         if KE.FillProfileDefaults then
             KE:FillProfileDefaults()
         end
     end
-    self.db = KE.db.profile.Dungeons and KE.db.profile.Dungeons.DungeonTimers
+    self.db = KE.db.profile.DungeonTimers
     if self.db then
         MigratePositionToFlat(self.db.BarGroup)
         MigratePositionToFlat(self.db.TextGroup)

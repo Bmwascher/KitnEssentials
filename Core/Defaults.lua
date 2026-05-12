@@ -1047,167 +1047,6 @@ local Defaults = {
                 Position = DefaultPosition(0, 215),
                 SnapToPixelGrid = false,
             },
-            BigWigsTimers = {
-                Enabled = false,
-
-                -- Bar display defaults
-                BarDisplay = {
-                    barWidth = 200,
-                    barHeight = 20,
-                    barTexture = "KitnUI",
-                    fontFace = "Expressway",
-                    fontSize = 12,
-                    fontOutline = "OUTLINE",
-                    iconEnabled = true,
-                },
-
-                -- Text display defaults
-                TextDisplay = {
-                    fontFace = "Expressway",
-                    fontSize = 14,
-                    fontOutline = "SOFTOUTLINE",
-                    textAlign = "CENTER",
-                },
-
-                -- Bar group positioning
-                BarGroup = {
-                    Position = {
-                        AnchorFrom = "CENTER",
-                        AnchorTo = "CENTER",
-                        XOffset = 0,
-                        YOffset = 100,
-                    },
-                    GrowthDirection = "DOWN",
-                    Spacing = 2,
-                    Strata = "HIGH",
-                    anchorFrameType = "UIPARENT",
-                    ParentFrame = "UIParent",
-                },
-
-                -- Text group positioning
-                TextGroup = {
-                    Position = {
-                        AnchorFrom = "CENTER",
-                        AnchorTo = "CENTER",
-                        XOffset = 0,
-                        YOffset = -100,
-                    },
-                    GrowthDirection = "DOWN",
-                    Spacing = 2,
-                    Strata = "HIGH",
-                    anchorFrameType = "UIPARENT",
-                    ParentFrame = "UIParent",
-                },
-
-                -- Per-dungeon triggers (instanceId maps to BigWigs/LittleWigs boss modules)
-                Dungeons = {
-                    MagistersTerrace   = { Enabled = true, instanceId = 2811, Triggers = {} },
-                    MaisaraCaverns     = { Enabled = true, instanceId = 2874, Triggers = {} },
-                    NexusPointXenas    = { Enabled = true, instanceId = 2915, Triggers = {} },
-                    WindrunnerSpire    = { Enabled = true, instanceId = 2805, Triggers = {} },
-                    AlgetharAcademy    = { Enabled = true, instanceId = 2526, Triggers = {} },
-                    PitOfSaron         = { Enabled = true, instanceId = 658, Triggers = {} },
-                    SeatOfTriumvirate  = { Enabled = true, instanceId = 1753, Triggers = {} },
-                    Skyreach           = { Enabled = true, instanceId = 1209, Triggers = {} },
-                },
-
-                -- Default values for new triggers
-                TriggerDefaults = {
-                    enabled = true,
-                    triggerType = "timer",
-                    spellId = "",
-                    message = "",
-                    messageOperator = "find",
-                    remainingEnabled = true,
-                    remainingOperator = "<=",
-                    remainingValue = 5,
-                    countEnabled = false,
-                    countOperator = "==",
-                    countValue = 1,
-                    extendTimer = 0,
-                    displayType = "bar",
-                    useBigWigsColors = true,
-                    barColor = { 0.772, 0.168, 0.168, 1 },
-                    backgroundColor = { 0.1, 0.1, 0.1, 0.8 },
-                    textColor = { 1, 1, 1, 1 },
-                    barText1Format = "Tank Hit",
-                    barText1Justify = "LEFT",
-                    barText1XOffset = 3,
-                    barText1YOffset = 0,
-                    barText2Format = "%p",
-                    barText2Justify = "RIGHT",
-                    barText2XOffset = -3,
-                    barText2YOffset = 0,
-                    textFormat = "%n \194\187 %p",
-                    textJustify = "LEFT",
-                    showDecimals = true,
-                    decimalThreshold = 1,
-                    customText = "",
-                    loadRoleEnabled = false,
-                    loadRoleTank = true,
-                    loadRoleHealer = true,
-                    loadRoleDPS = true,
-                    actionOnShowSound = "None",
-                    actionOnHideSound = "None",
-                },
-            },
-            DungeonTimers = {
-                Enabled = true,
-                RoleFilterEnabled = true,
-                SpellRoleOverrides = {},
-                SpellDisabled = {},
-                SpellShowAtOverrides = {},
-                SpellTimeOffsets = {},
-                SpellDisplayOverrides = {},
-                SpellDisplayTextOverrides = {},
-                SpellDecimalThresholds = {},
-                SpellColorOverrides = {},
-                SpellSoundsOnShow = {},
-                SpellSoundsOnHide = {},
-
-                BarDisplay = {
-                    barWidth = 279,
-                    barHeight = 27,
-                    fontFace = "Expressway",
-                    fontSize = 14,
-                    fontOutline = "OUTLINE",
-                    barTexture = "KitnUI",
-                    iconEnabled = true,
-                },
-
-                BarGroup = {
-                    AnchorFrom = "CENTER",
-                    AnchorTo = "CENTER",
-                    XOffset = 317,
-                    YOffset = 190,
-                    GrowthDirection = "DOWN",
-                    Spacing = 1,
-                    ShowAtSeconds = 10,
-                    Strata = "MEDIUM",
-                    anchorFrameType = "UIPARENT",
-                    ParentFrame = "UIParent",
-                },
-
-                TextDisplay = {
-                    fontFace = "Expressway",
-                    fontSize = 26,
-                    fontOutline = "SOFTOUTLINE",
-                    textAlign = "CENTER",
-                },
-
-                TextGroup = {
-                    AnchorFrom = "CENTER",
-                    AnchorTo = "CENTER",
-                    XOffset = 0,
-                    YOffset = 90,
-                    GrowthDirection = "DOWN",
-                    Spacing = 0,
-                    ShowAtSeconds = 5,
-                    Strata = "MEDIUM",
-                    anchorFrameType = "UIPARENT",
-                    ParentFrame = "UIParent",
-                },
-            },
             HealerMana = {
                 Enabled = false,
                 DisableOnHealer = false,
@@ -1326,6 +1165,68 @@ local Defaults = {
                     Position = "RIGHT",
                     Separator = "»",
                 },
+            },
+        },
+
+        -----------------------------------------------------------------
+        -- Dungeon Timers Module
+        -----------------------------------------------------------------
+
+        DungeonTimers = {
+            Enabled = true,
+            RoleFilterEnabled = true,
+            SpellRoleOverrides = {},
+            SpellDisabled = {},
+            SpellShowAtOverrides = {},
+            SpellTimeOffsets = {},
+            SpellDisplayOverrides = {},
+            SpellDisplayTextOverrides = {},
+            SpellDecimalThresholds = {},
+            SpellColorOverrides = {},
+            SpellSoundsOnShow = {},
+            SpellSoundsOnHide = {},
+
+            BarDisplay = {
+                barWidth = 279,
+                barHeight = 27,
+                fontFace = "Expressway",
+                fontSize = 14,
+                fontOutline = "OUTLINE",
+                barTexture = "KitnUI",
+                iconEnabled = true,
+            },
+
+            BarGroup = {
+                AnchorFrom = "CENTER",
+                AnchorTo = "CENTER",
+                XOffset = 317,
+                YOffset = 190,
+                GrowthDirection = "DOWN",
+                Spacing = 1,
+                ShowAtSeconds = 10,
+                Strata = "MEDIUM",
+                anchorFrameType = "UIPARENT",
+                ParentFrame = "UIParent",
+            },
+
+            TextDisplay = {
+                fontFace = "Expressway",
+                fontSize = 26,
+                fontOutline = "SOFTOUTLINE",
+                textAlign = "CENTER",
+            },
+
+            TextGroup = {
+                AnchorFrom = "CENTER",
+                AnchorTo = "CENTER",
+                XOffset = 0,
+                YOffset = 100,
+                GrowthDirection = "DOWN",
+                Spacing = 0,
+                ShowAtSeconds = 5,
+                Strata = "MEDIUM",
+                anchorFrameType = "UIPARENT",
+                ParentFrame = "UIParent",
             },
         },
 

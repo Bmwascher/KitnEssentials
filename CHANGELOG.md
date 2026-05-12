@@ -1,5 +1,34 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v2.0.0
+
+### Dungeon Timers
+- **REBUILT:** Module replaced from the ground up. The previous BigWigs-trigger-based editor (build-your-own filters per dungeon) is retired in favor of a curated, hand-tuned ability timer system. Bars and texts now spawn from a single `EncounterData` table keyed by encounter / spell ID with deliberate `castDuration` values rather than relying on whatever BigWigs's own timer happened to expose. Result: tighter, more consistent timer bars across every supported dungeon, no per-trigger upkeep, no import/export workflow
+- **NEW:** Phase tracker — countdown text for HP%-driven boss transitions (Gemellus 50%, Crawth 75% / 45%, Commander Kroluk 66% / 33%). Shows lead-in countdown ("80% → 75%") in the seconds before a phase swap, then flashes "Phase Transitioned" briefly when the threshold is crossed. Built fully 12.0-secret-value-safe — drives bar value, text, and alpha via AllowedWhenTainted APIs (StatusBar:SetValue, Region:SetAlpha, AbbreviateNumbers) without ever extracting the hostile-unit HP integer
+- **NEW:** Role-based filtering — every curated spell is tagged with which player role(s) should see it (tank / heal / mechanic / kick / move / other). Configurable via per-spell role overrides in the dungeon page. Driven by `LibSpecialization` for passive spec/role detection; degrades to always-DAMAGER if the library is absent
+- **NEW:** Boss absorb shield bars — for encounters with curated `shieldBar` entries (e.g. Vordaza Necrotic Convergence), spawns a dedicated bar that tracks the absorb's remaining percentage. Scales the max value by Mythic+ keystone level using the standard EXDB level multiplier table
+- **NEW:** Post-cast bars (`postCastBar`) — for abilities where the dangerous window is *after* the cast (e.g. ground effects, dispatched adds), the bar continues for a configurable duration after the cast finishes instead of vanishing on completion
+- **NEW:** Spawn-on-message bars — for abilities that BigWigs reports as a Message rather than a Timer (no native countdown), the curated entry can opt into spawning on the message fire instead, with a curator-supplied duration
+- **NEW:** Phantom follow-up bars (`phantomFollowupOf`) — for abilities where one cast triggers a delayed secondary effect, a second bar spawns automatically when the parent's cast resolves
+- **NEW:** Per-spell display overrides — switch any spell between bar and text mode, adjust show-at-seconds, time offset, decimal threshold, color, on-show / on-hide sound, custom display label, all independently from the module-wide defaults
+- **NEW:** Curated `displayText` preset chips — 15 hand-picked label/color combinations (ADD, AMP, AOE, CLEAR, DANCE, DODGE, FEET, FRONTAL, HIDE, MOVE, PULL, SOAK, SPREAD, STACK, TANK HIT) plus a hidden VULN preset, all selectable from a 3x5 chip grid in the spell detail pane. Color-only aliases (`ADDS`, `AIM BEAMS`, `BEAM`, etc.) inherit color from the canonical preset without overwriting the curator's text
+- **NEW:** Boss death "hold" behavior — when a boss is killed mid-cast, in-progress bars are held at their current value rather than abruptly snapped to zero. Uses BigWigs's `originalEnd` vs current time to distinguish natural expiry from premature death
+- DB schema relocation: module config now lives at `KitnEssentialsDB.profile.DungeonTimers` (was `KitnEssentialsDB.profile.Dungeons.DungeonTimers`) reflecting its standalone status. Existing 1.22.0 trigger-based config is silently cleaned up on first load — the new curated module replaces the workflow entirely, no migration path is meaningful
+
+### Soft Outline
+- **Fixed:** Bars / overlays using SOFTOUTLINE FontStrings could leave "ghost shadow" silhouettes visible on hidden elements. The `SetTextColor` hook now checks both the text-color alpha *and* the frame alpha when deciding whether to show or hide the 8 shadow FontStrings — previously a 3-argument `SetTextColor(r,g,b)` with no alpha would un-hide shadows even on alpha-zero frames
+
+### Ready Check Consumables
+- **Fixed:** Distinct food buff IDs for the recently-deduplicated Blooming Feast (1232087), Hearty Blooming Feast (1232078), and Champion's Bento (1284617). Blizzard finally split the buff IDs across these consumables so the food detection now correctly identifies which feast each player ate
+- Fixed a "Blooing" typo in the Blooming Feast comment block
+
+### Internals
+- Drag handlers on the main GUI frame and edit-mode handles now use the lambda-wrapped form (`function(d) d:StartMoving(true) end`) with the 12.0 `alwaysStartFromMouse=true` argument so drag-initiation tracks the mouse from the click point instead of snapping to the frame's anchor
+- Type annotations: `KE:ResolveColor` and `KE:GetAccentColor` now use separate `---@return number r / g / b / a` lines (multi-return was being parsed as a single value before)
+- `KE.LDS` (LibDualSpec) is now typed as nullable to reflect `LibStub(..., true)` behavior
+
+---
+
 ## v1.22.0
 
 ### Raid Notifications

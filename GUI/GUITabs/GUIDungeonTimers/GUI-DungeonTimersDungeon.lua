@@ -13,9 +13,7 @@
 -- ║    │ ...          │  Show for: T  H  D              │    ║
 -- ║    └──────────────┴─────────────────────────────────┘    ║
 -- ║                                                          ║
--- ║  Mirrors BigWigsTimers' editor UX so users have a        ║
--- ║  consistent mental model. Three tabs map to logical      ║
--- ║  groupings:                                              ║
+-- ║  Three tabs map to logical groupings:                    ║
 -- ║                                                          ║
 -- ║    Visibility — Enable, role allow-list, showAtSeconds   ║
 -- ║    Display    — bar/text mode, custom label, format,     ║
@@ -48,9 +46,9 @@ KE.GUI = KE.GUI or {}
 KE.GUI.DungeonTimers = KE.GUI.DungeonTimers or {}
 
 ---------------------------------------------------------------------------------
--- Static dungeon registry. Mirrors BigWigsTimers' DUNGEON_DISPLAY_NAMES — keep
--- in sync when EncounterData adds a new dungeon key. The order here is the
--- order the sidebar items appear in GUI-MainFrame.lua.
+-- Static dungeon registry. Keep in sync when EncounterData adds a new
+-- dungeon key. The order here is the order the sidebar items appear in
+-- GUI-MainFrame.lua.
 ---------------------------------------------------------------------------------
 local DUNGEONS = {
     { key = "AlgetharAcademy",    name = "Algeth'ar Academy" },
@@ -98,9 +96,8 @@ local ENC_HEADER_HEIGHT = 30
 local DETAIL_PADDING    = 12
 
 local CURATED_TAG_COLOR = { 0.65, 0.65, 0.65 }
--- Destructive-action color, matches GUI-Nicknames Remove buttons + Reset
--- All Triggers in BigWigsTimers. Used for the per-spell Reset button so
--- destructive UX is consistent across the addon.
+-- Destructive-action color, matches GUI-Nicknames Remove buttons. Used for
+-- the per-spell Reset button so destructive UX is consistent across the addon.
 local REMOVE_COLOR = { 0.9, 0.2, 0.2, 1 }
 
 -- Section header for the Visibility tab body. Small accent-colored label
@@ -127,7 +124,7 @@ end
 
 local function GetSettingsDB()
     if not KE.db or not KE.db.profile then return nil end
-    return KE.db.profile.Dungeons and KE.db.profile.Dungeons.DungeonTimers
+    return KE.db.profile.DungeonTimers
 end
 
 local function GetModule()
@@ -470,11 +467,10 @@ local function CreateListRowKit(holder)
     if KE.ApplyIconZoom then KE:ApplyIconZoom(kit.icon) end
     kit.icon:SetTexture(134400)
 
-    -- Right-cluster indicators (mirrors BigWigsTimers' typeIndicator +
-    -- soundIndicator chain). Created right-to-left so each anchors to
-    -- the LEFT edge of the widget to its right; empty FontStrings have
-    -- zero width, so the label.RIGHT anchor naturally absorbs the space
-    -- when soundLabel is empty.
+    -- Right-cluster indicators (type + sound). Created right-to-left so
+    -- each anchors to the LEFT edge of the widget to its right; empty
+    -- FontStrings have zero width, so the label.RIGHT anchor naturally
+    -- absorbs the space when soundLabel is empty.
     kit.tagLabel = row:CreateFontString(nil, "OVERLAY")
     KE:ApplyFontToText(kit.tagLabel, "Expressway", 12, "OUTLINE")
     kit.tagLabel:SetPoint("RIGHT", row, "RIGHT", -8, 0)
@@ -743,9 +739,8 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
     -- TextGroup's value, not the curator's BarGroup default.
     local effectiveDisplayForGroup = (DT and DT:GetSpellDisplay(spellId)) or spell.display or "text"
     local groupCfgKey = (effectiveDisplayForGroup == "bar") and "BarGroup" or "TextGroup"
-    local groupCfg = (KE.db and KE.db.profile and KE.db.profile.Dungeons
-                      and KE.db.profile.Dungeons.DungeonTimers
-                      and KE.db.profile.Dungeons.DungeonTimers[groupCfgKey])
+    local groupCfg = (KE.db and KE.db.profile and KE.db.profile.DungeonTimers
+                      and KE.db.profile.DungeonTimers[groupCfgKey])
     local groupDefault = (groupCfg and groupCfg.ShowAtSeconds) or 0
     local effectiveValue = (DT and DT:GetSpellShowAtSeconds(spellId)) or groupDefault
 

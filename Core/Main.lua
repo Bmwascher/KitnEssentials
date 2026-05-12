@@ -38,6 +38,12 @@ function KitnEssentials:OnInitialize()
         KE.db:SetProfile(profileName)
     end
 
+    -- One-time DungeonTimers DB migration runs BEFORE FillProfileDefaults
+    -- so it can detect "fresh saved data" vs "already-defaulted" states
+    -- (FillProfileDefaults would otherwise auto-populate the new top-level
+    -- DungeonTimers slot, defeating the promote-from-old-path branch).
+    if KE._MigrateDungeonTimersDB then KE._MigrateDungeonTimersDB() end
+
     -- Backfill missing nested defaults into the saved profile (AceDB's defaults
     -- system doesn't deep-fill sub-tables that already exist in saved data),
     -- then validate font keys against LSM. Order matters — fill first so the
@@ -47,6 +53,7 @@ function KitnEssentials:OnInitialize()
 
     -- Profile change callbacks
     KE.db.RegisterCallback(KE, "OnProfileChanged", function()
+        if KE._MigrateDungeonTimersDB then KE._MigrateDungeonTimersDB() end
         KE:FillProfileDefaults()
         KE:ValidateProfileFonts()
         if KE.ProfileManager then
@@ -54,6 +61,7 @@ function KitnEssentials:OnInitialize()
         end
     end)
     KE.db.RegisterCallback(KE, "OnProfileCopied", function()
+        if KE._MigrateDungeonTimersDB then KE._MigrateDungeonTimersDB() end
         KE:FillProfileDefaults()
         KE:ValidateProfileFonts()
         if KE.ProfileManager then
@@ -61,6 +69,7 @@ function KitnEssentials:OnInitialize()
         end
     end)
     KE.db.RegisterCallback(KE, "OnProfileReset", function()
+        if KE._MigrateDungeonTimersDB then KE._MigrateDungeonTimersDB() end
         KE:FillProfileDefaults()
         KE:ValidateProfileFonts()
         if KE.ProfileManager then

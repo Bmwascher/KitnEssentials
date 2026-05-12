@@ -128,38 +128,13 @@ GUIFrame.sidebarConfig = {
         },
     },
     {
-        id = "bigwigs_timers_section",
-        type = "header",
-        text = "\226\128\162 BigWigs Timers",
-        defaultExpanded = false,
-        disabledCheck = function()
-            return not (KE.db and KE.db.profile and KE.db.profile.Dungeons
-                and KE.db.profile.Dungeons.BigWigsTimers
-                and KE.db.profile.Dungeons.BigWigsTimers.Enabled)
-        end,
-        items = {
-            { id = "DT_General",                  text = "General",         alwaysEnabled = true },
-            { id = "DT_Bars",                     text = "Bar Settings" },
-            { id = "DT_Texts",                    text = "Text Settings" },
-            { id = "Dungeon_AlgetharAcademy",     text = "Algeth'ar Academy" },
-            { id = "Dungeon_MagistersTerrace",    text = "Magisters' Terrace" },
-            { id = "Dungeon_MaisaraCaverns",      text = "Maisara Caverns" },
-            { id = "Dungeon_NexusPointXenas",     text = "Nexus-Point Xenas" },
-            { id = "Dungeon_PitOfSaron",          text = "Pit of Saron" },
-            { id = "Dungeon_SeatOfTriumvirate",   text = "Seat of the Triumvirate" },
-            { id = "Dungeon_Skyreach",            text = "Skyreach" },
-            { id = "Dungeon_WindrunnerSpire",      text = "Windrunner Spire" },
-        },
-    },
-    {
         id = "dungeon_timers_section",
         type = "header",
         text = "\226\128\162 Dungeon Timers",
         defaultExpanded = false,
         disabledCheck = function()
-            return not (KE.db and KE.db.profile and KE.db.profile.Dungeons
-                and KE.db.profile.Dungeons.DungeonTimers
-                and KE.db.profile.Dungeons.DungeonTimers.Enabled)
+            return not (KE.db and KE.db.profile and KE.db.profile.DungeonTimers
+                and KE.db.profile.DungeonTimers.Enabled)
         end,
         items = {
             { id = "DTimers_General",                  text = "General",         alwaysEnabled = true },
