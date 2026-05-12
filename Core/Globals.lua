@@ -33,6 +33,25 @@ if KE.LSM then
     KE.LSM:Register("font", "Expressway", KE.FONT)
     KE.LSM:Register("statusbar", "KitnUI", KE.PATH .. [[Statusbars\KitnEssentials.blp]])
     KE.LSM:Register("border", "WHITE8X8", [[Interface\Buttons\WHITE8X8]])
+
+    -- KitnEssentials sound presets — surfaced in every LSM-aware sound
+    -- dropdown (Sound settings cards, DungeonTimers per-spell sound picker,
+    -- etc.) alongside Blizzard's built-ins and the user's other LSM addons.
+    -- Names match the .ogg filename so the dropdown label is the source of
+    -- truth — keep the table in sync if files are added/renamed/removed.
+    local SOUND_DIR = KE.PATH .. [[Sounds\]]
+    local sounds = {
+        "Add", "Adds", "AoE", "Aoe And Dance",
+        "Boss Buffed", "CC", "Clear", "Dance", "Defensive",
+        "Dispell", "Dmg Amp", "Dodge", "Drop", "Feet",
+        "Fixate Incoming", "Frontal", "Hide",
+        "Intermission", "Interrupt", "Kick", "Knockback", "Leap",
+        "Move", "Phasing", "Pools", "Pull", "Soak", "Soaks", "Split",
+        "Spread", "Stack", "Stop Casting", "Totem",
+    }
+    for _, name in ipairs(sounds) do
+        KE.LSM:Register("sound", name, SOUND_DIR .. name .. ".ogg")
+    end
 end
 
 ---------------------------------------------------------------------------------

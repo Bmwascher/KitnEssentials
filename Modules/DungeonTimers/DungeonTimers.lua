@@ -263,18 +263,20 @@ end
 local function PlayBarSound(self, key)
     if self.isPreview then return end
     if not self.spellId then return end
+    if DT.db and DT.db.MutePresetSounds then return end
     local soundKey
     if key == "show" then
-        soundKey = DT:GetSpellSoundOnShow(self.spellId)
+        soundKey = DT:GetEffectiveSpellSoundOnShow(self.spellId)
     elseif key == "hide" then
-        soundKey = DT:GetSpellSoundOnHide(self.spellId)
+        soundKey = DT:GetEffectiveSpellSoundOnHide(self.spellId)
     end
-    if not soundKey or soundKey == "" or soundKey == "None" then return end
+    if not soundKey then return end
     local LSM = KE.LSM
     if not LSM then return end
     local file = LSM:Fetch("sound", soundKey)
     if file then
-        PlaySoundFile(file, "Master")
+        local channel = (DT.db and DT.db.SoundChannel) or "Master"
+        PlaySoundFile(file, channel)
     end
 end
 
@@ -463,9 +465,13 @@ function DT:SetSpellDisplayTextOverride(spellId, str)
     self.db.SpellDisplayTextOverrides[spellId] = str
 end
 
--- Per-spell sound on bar show. Returns LSM sound key or nil. "None"
--- and empty string also mean "no sound" — the setter prunes them so
--- only meaningful values are stored.
+-- Per-spell sound storage. Three distinguishable states:
+--   nil      — user has never touched this; defer to EncounterData spell.sound.
+--   "None"   — user explicitly muted (overrides any curated default).
+--   "X"      — user picked LSM sound "X".
+-- Raw getter returns the stored value as-is (Get*SpellSoundOn{Show,Hide}).
+-- Effective getter resolves the three-state into "what should play" (Get
+-- EffectiveSpellSoundOn{Show,Hide}) and is what audio playback consults.
 function DT:GetSpellSoundOnShow(spellId)
     if not (self.db and self.db.SpellSoundsOnShow and spellId) then return nil end
     return self.db.SpellSoundsOnShow[spellId]
@@ -474,7 +480,7 @@ end
 function DT:SetSpellSoundOnShow(spellId, soundKey)
     if not (self.db and spellId) then return end
     self.db.SpellSoundsOnShow = self.db.SpellSoundsOnShow or {}
-    if not soundKey or soundKey == "" or soundKey == "None" then
+    if soundKey == nil or soundKey == "" then
         self.db.SpellSoundsOnShow[spellId] = nil
     else
         self.db.SpellSoundsOnShow[spellId] = soundKey
@@ -489,16 +495,41 @@ end
 function DT:SetSpellSoundOnHide(spellId, soundKey)
     if not (self.db and spellId) then return end
     self.db.SpellSoundsOnHide = self.db.SpellSoundsOnHide or {}
-    if not soundKey or soundKey == "" or soundKey == "None" then
+    if soundKey == nil or soundKey == "" then
         self.db.SpellSoundsOnHide[spellId] = nil
     else
         self.db.SpellSoundsOnHide[spellId] = soundKey
     end
 end
 
+-- Resolves the three-state storage into the LSM key audio playback should
+-- consult. Returns nil for "play nothing" (either explicit "None" override
+-- or no override + no curated default).
+function DT:GetEffectiveSpellSoundOnShow(spellId)
+    if not spellId then return nil end
+    local override = self:GetSpellSoundOnShow(spellId)
+    if override == "None" then return nil end
+    if override then return override end
+    local spellData = self:GetSpellInfo(spellId)
+    return spellData and spellData.sound or nil
+end
+
+function DT:GetEffectiveSpellSoundOnHide(spellId)
+    if not spellId then return nil end
+    local override = self:GetSpellSoundOnHide(spellId)
+    if override == "None" then return nil end
+    if override then return override end
+    local spellData = self:GetSpellInfo(spellId)
+    return spellData and spellData.soundOnHide or nil
+end
+
+-- "S" label visibility on the spell list. Checks the effective sound so a
+-- curated default counts as "has sound" — the indicator means "will play",
+-- not "user has stored an override". Override-only state lives in
+-- HasSpellOverrides which reads raw db slots.
 function DT:HasSpellSound(spellId)
-    return self:GetSpellSoundOnShow(spellId) ~= nil
-        or self:GetSpellSoundOnHide(spellId) ~= nil
+    return self:GetEffectiveSpellSoundOnShow(spellId) ~= nil
+        or self:GetEffectiveSpellSoundOnHide(spellId) ~= nil
 end
 
 function DT:GetSpellColorOverride(spellId)
@@ -921,6 +952,9 @@ function DT:SetPhaseColorOverride(key, color)
     self.db.PhaseColor[key] = { color[1], color[2], color[3] }
 end
 
+-- Phase rule sound storage mirrors spell-sound semantics — nil = untouched
+-- (defer to phaseData.sound/soundOnHide), "None" = explicit mute, anything
+-- else = user pick. See DT:GetEffectivePhaseSoundOnShow below.
 function DT:GetPhaseSoundOnShow(key)
     if not (key and self.db and self.db.PhaseSoundsOnShow) then return nil end
     return self.db.PhaseSoundsOnShow[key]
@@ -929,7 +963,7 @@ end
 function DT:SetPhaseSoundOnShow(key, soundKey)
     if not (self.db and key) then return end
     self.db.PhaseSoundsOnShow = self.db.PhaseSoundsOnShow or {}
-    if not soundKey or soundKey == "" or soundKey == "None" then
+    if soundKey == nil or soundKey == "" then
         self.db.PhaseSoundsOnShow[key] = nil
     else
         self.db.PhaseSoundsOnShow[key] = soundKey
@@ -944,16 +978,44 @@ end
 function DT:SetPhaseSoundOnHide(key, soundKey)
     if not (self.db and key) then return end
     self.db.PhaseSoundsOnHide = self.db.PhaseSoundsOnHide or {}
-    if not soundKey or soundKey == "" or soundKey == "None" then
+    if soundKey == nil or soundKey == "" then
         self.db.PhaseSoundsOnHide[key] = nil
     else
         self.db.PhaseSoundsOnHide[key] = soundKey
     end
 end
 
+-- Resolves the three-state storage for phase rule sounds, falling back to
+-- EncounterData[encounterID].phases[ruleIndex].sound (or .soundOnHide) when
+-- the user hasn't stored an override. Returns nil for "play nothing".
+local function ResolvePhaseRuleData(key)
+    local encounterID, ruleIndex = DT:ParsePhaseRuleKey(key)
+    if not encounterID or not ruleIndex then return nil end
+    if not KE.EncounterData then return nil end
+    local enc = KE.EncounterData[encounterID]
+    if not enc or not enc.phases then return nil end
+    return enc.phases[ruleIndex]
+end
+
+function DT:GetEffectivePhaseSoundOnShow(key)
+    local override = self:GetPhaseSoundOnShow(key)
+    if override == "None" then return nil end
+    if override then return override end
+    local rule = ResolvePhaseRuleData(key)
+    return rule and rule.sound or nil
+end
+
+function DT:GetEffectivePhaseSoundOnHide(key)
+    local override = self:GetPhaseSoundOnHide(key)
+    if override == "None" then return nil end
+    if override then return override end
+    local rule = ResolvePhaseRuleData(key)
+    return rule and rule.soundOnHide or nil
+end
+
 function DT:HasPhaseSound(key)
-    return self:GetPhaseSoundOnShow(key) ~= nil
-        or self:GetPhaseSoundOnHide(key) ~= nil
+    return self:GetEffectivePhaseSoundOnShow(key) ~= nil
+        or self:GetEffectivePhaseSoundOnHide(key) ~= nil
 end
 
 function DT:GetPhaseLeadOffset(key)
@@ -1898,18 +1960,20 @@ local PHASE_TRANSITIONED_BAND = 1
 
 local function PlayPhaseSound(key, hookKey)
     if not (key and hookKey) then return end
+    if DT.db and DT.db.MutePresetSounds then return end
     local soundKey
     if hookKey == "show" then
-        soundKey = DT:GetPhaseSoundOnShow(key)
+        soundKey = DT:GetEffectivePhaseSoundOnShow(key)
     elseif hookKey == "hide" then
-        soundKey = DT:GetPhaseSoundOnHide(key)
+        soundKey = DT:GetEffectivePhaseSoundOnHide(key)
     end
-    if not soundKey or soundKey == "" or soundKey == "None" then return end
+    if not soundKey then return end
     local LSM = KE.LSM
     if not LSM then return end
     local file = LSM:Fetch("sound", soundKey)
     if file then
-        PlaySoundFile(file, "Master")
+        local channel = (DT.db and DT.db.SoundChannel) or "Master"
+        PlaySoundFile(file, channel)
     end
 end
 

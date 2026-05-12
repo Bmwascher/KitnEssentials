@@ -916,11 +916,18 @@ local function BuildActionsTabBody(parent, spellId)
         for name in pairs(LSM:HashTable("sound")) do soundList[name] = name end
     end
 
+    -- Test buttons always play even when the master mute is on — muting is
+    -- about live encounters, not the editor's preview. Channel still tracks
+    -- the user's SoundChannel choice so Test reflects in-encounter playback.
     local function PreviewSound(soundKey)
         if not soundKey or soundKey == "None" or soundKey == "" then return end
         if not LSM then return end
         local file = LSM:Fetch("sound", soundKey)
-        if file then PlaySoundFile(file, "Master") end
+        if file then
+            local DT_mod = KitnEssentials and KitnEssentials:GetModule("DungeonTimers", true)
+            local channel = (DT_mod and DT_mod.db and DT_mod.db.SoundChannel) or "Master"
+            PlaySoundFile(file, channel)
+        end
     end
 
     local secondaryWidgets = {}
@@ -947,7 +954,10 @@ local function BuildActionsTabBody(parent, spellId)
     showRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
     local showDropdown = GUIFrame:CreateDropdown(showRow, "Sound when bar appears", {
         options = soundList,
-        value = (DT and DT:GetSpellSoundOnShow(spellId)) or "None",
+        -- Show the effective sound (override > curated default > None) so the
+        -- dropdown reflects what will actually play, not just whether the user
+        -- has stored an override.
+        value = (DT and DT:GetEffectiveSpellSoundOnShow(spellId)) or "None",
         callback = function(key)
             if not (DT and DT.SetSpellSoundOnShow) then return end
             DT:SetSpellSoundOnShow(spellId, key)
@@ -960,17 +970,17 @@ local function BuildActionsTabBody(parent, spellId)
     showRow:AddWidget(showDropdown, 0.7)
     secondaryWidgets[#secondaryWidgets + 1] = showDropdown
 
-    -- Test button — replays whatever sound is currently saved (or no-op
-    -- when set to "None"). Reads from DB so it always reflects the
-    -- current selection without needing a dropdown:GetValue() call.
-    -- yOffset=-12 vertically centers the 28px button on the dropdown
-    -- bar (which sits at row + (0, -14) and is 24px tall, center y=-26;
-    -- button top at -12 puts its center at -26).
+    -- Test button — replays whatever sound the bar would actually play right
+    -- now (override > curated default). Always reads through the effective
+    -- resolver so it stays in sync with whatever's about to fire on the next
+    -- in-game pull. yOffset=-12 vertically centers the 28px button on the
+    -- dropdown bar (row + (0, -14), 24px tall, center y=-26; button top -12
+    -- puts its center at -26).
     local showTestBtn = GUIFrame:CreateButton(showRow, "Test", {
         height = 28,
         callback = function()
-            if not (DT and DT.GetSpellSoundOnShow) then return end
-            PreviewSound(DT:GetSpellSoundOnShow(spellId))
+            if not (DT and DT.GetEffectiveSpellSoundOnShow) then return end
+            PreviewSound(DT:GetEffectiveSpellSoundOnShow(spellId))
         end,
     })
     showRow:AddWidget(showTestBtn, 0.3, 0, 0, -12)
@@ -996,7 +1006,7 @@ local function BuildActionsTabBody(parent, spellId)
     hideRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
     local hideDropdown = GUIFrame:CreateDropdown(hideRow, "Sound when bar disappears", {
         options = soundList,
-        value = (DT and DT:GetSpellSoundOnHide(spellId)) or "None",
+        value = (DT and DT:GetEffectiveSpellSoundOnHide(spellId)) or "None",
         callback = function(key)
             if not (DT and DT.SetSpellSoundOnHide) then return end
             DT:SetSpellSoundOnHide(spellId, key)
@@ -1012,8 +1022,8 @@ local function BuildActionsTabBody(parent, spellId)
     local hideTestBtn = GUIFrame:CreateButton(hideRow, "Test", {
         height = 28,
         callback = function()
-            if not (DT and DT.GetSpellSoundOnHide) then return end
-            PreviewSound(DT:GetSpellSoundOnHide(spellId))
+            if not (DT and DT.GetEffectiveSpellSoundOnHide) then return end
+            PreviewSound(DT:GetEffectiveSpellSoundOnHide(spellId))
         end,
     })
     hideRow:AddWidget(hideTestBtn, 0.3, 0, 0, -12)
@@ -1940,11 +1950,18 @@ local function BuildPhaseActionsTabBody(parent, phaseKey)
         for name in pairs(LSM:HashTable("sound")) do soundList[name] = name end
     end
 
+    -- Test buttons always play even when the master mute is on — muting is
+    -- about live encounters, not the editor's preview. Channel still tracks
+    -- the user's SoundChannel choice so Test reflects in-encounter playback.
     local function PreviewSound(soundKey)
         if not soundKey or soundKey == "None" or soundKey == "" then return end
         if not LSM then return end
         local file = LSM:Fetch("sound", soundKey)
-        if file then PlaySoundFile(file, "Master") end
+        if file then
+            local DT_mod = KitnEssentials and KitnEssentials:GetModule("DungeonTimers", true)
+            local channel = (DT_mod and DT_mod.db and DT_mod.db.SoundChannel) or "Master"
+            PlaySoundFile(file, channel)
+        end
     end
 
     local secondaryWidgets = {}
@@ -1969,7 +1986,7 @@ local function BuildPhaseActionsTabBody(parent, phaseKey)
     showRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
     local showDropdown = GUIFrame:CreateDropdown(showRow, "Sound when alert appears", {
         options = soundList,
-        value = (DT and DT:GetPhaseSoundOnShow(phaseKey)) or "None",
+        value = (DT and DT:GetEffectivePhaseSoundOnShow(phaseKey)) or "None",
         callback = function(key)
             if not (DT and DT.SetPhaseSoundOnShow) then return end
             DT:SetPhaseSoundOnShow(phaseKey, key)
@@ -1991,8 +2008,8 @@ local function BuildPhaseActionsTabBody(parent, phaseKey)
     local showTestBtn = GUIFrame:CreateButton(showRow, "Test", {
         height = 28,
         callback = function()
-            if not (DT and DT.GetPhaseSoundOnShow) then return end
-            PreviewSound(DT:GetPhaseSoundOnShow(phaseKey))
+            if not (DT and DT.GetEffectivePhaseSoundOnShow) then return end
+            PreviewSound(DT:GetEffectivePhaseSoundOnShow(phaseKey))
         end,
     })
     showRow:AddWidget(showTestBtn, 0.3, 0, 0, -12)
@@ -2014,7 +2031,7 @@ local function BuildPhaseActionsTabBody(parent, phaseKey)
     hideRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
     local hideDropdown = GUIFrame:CreateDropdown(hideRow, "Sound when phase fires", {
         options = soundList,
-        value = (DT and DT:GetPhaseSoundOnHide(phaseKey)) or "None",
+        value = (DT and DT:GetEffectivePhaseSoundOnHide(phaseKey)) or "None",
         callback = function(key)
             if not (DT and DT.SetPhaseSoundOnHide) then return end
             DT:SetPhaseSoundOnHide(phaseKey, key)
@@ -2036,8 +2053,8 @@ local function BuildPhaseActionsTabBody(parent, phaseKey)
     local hideTestBtn = GUIFrame:CreateButton(hideRow, "Test", {
         height = 28,
         callback = function()
-            if not (DT and DT.GetPhaseSoundOnHide) then return end
-            PreviewSound(DT:GetPhaseSoundOnHide(phaseKey))
+            if not (DT and DT.GetEffectivePhaseSoundOnHide) then return end
+            PreviewSound(DT:GetEffectivePhaseSoundOnHide(phaseKey))
         end,
     })
     hideRow:AddWidget(hideTestBtn, 0.3, 0, 0, -12)
