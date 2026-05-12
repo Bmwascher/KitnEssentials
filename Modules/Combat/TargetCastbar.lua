@@ -4,7 +4,7 @@
 -- ║  Purpose: Repositionable target cast bar with kick       ║
 -- ║           indicators, target name, color settings.       ║
 -- ║                                                          ║
--- ║  Shared logic lives in Combat/CastbarHelpers.lua (KE.H). ║
+-- ║  Shared logic lives in CastbarHelpers.lua (KE.H).        ║
 -- ║  This file owns target-specific events and config-       ║
 -- ║  bearing opts tables. No cast sound (by design).         ║
 -- ╚══════════════════════════════════════════════════════════╝
