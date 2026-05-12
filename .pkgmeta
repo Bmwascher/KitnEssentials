@@ -24,7 +24,6 @@ ignore:
   - References
   - SKILLS.md
   - SKILLS-Discord.md
-  - diff_output.txt
 
 
 externals:
