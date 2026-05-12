@@ -276,6 +276,27 @@
 -- ║                                  -- (e.g. Orebreaker:    ║
 -- ║                                  -- "TANK HIT" bar +     ║
 -- ║                                  -- "FEET" text).        ║
+-- ║                sound          = "<LSM sound key>",       ║
+-- ║                                  -- curator-default      ║
+-- ║                                  -- on-show audio cue.   ║
+-- ║                                  -- LSM key for any      ║
+-- ║                                  -- registered sound —   ║
+-- ║                                  -- KitnEssentials's     ║
+-- ║                                  -- bundled presets live ║
+-- ║                                  -- in Media\Sounds\ and ║
+-- ║                                  -- are registered in    ║
+-- ║                                  -- Core\Globals.lua.    ║
+-- ║                                  -- User override wins:  ║
+-- ║                                  -- nil in db = play     ║
+-- ║                                  -- this curated         ║
+-- ║                                  -- default; "None" in   ║
+-- ║                                  -- db = explicit mute;  ║
+-- ║                                  -- other LSM key = user ║
+-- ║                                  -- pick. soundOnHide is ║
+-- ║                                  -- the analogous on-    ║
+-- ║                                  -- hide field (rarely   ║
+-- ║                                  -- used; on-show is the ║
+-- ║                                  -- primary cue).        ║
 -- ║            },                                            ║
 -- ║            ...                                           ║
 -- ║        },                                                ║
@@ -288,6 +309,11 @@
 -- ║                                       --   threshold and ║
 -- ║                                       --   threshold+lead║
 -- ║                                       --   shows alert)  ║
+-- ║                sound       = "...",  -- curator on-show  ║
+-- ║                soundOnHide = "...",  -- curator on-hide  ║
+-- ║                                       --   LSM keys; same ║
+-- ║                                       --   override rules ║
+-- ║                                       --   as spell.sound ║
 -- ║            },                                            ║
 -- ║            ...                                           ║
 -- ║        },                                                ║
@@ -333,10 +359,10 @@ KE.EncounterData[2562] = {
     spells = {
         -- Orbs take ~4s to start spawning after the cast ends — castDuration=4 extends the bar
         -- into a 4s "cast phase" tail so the SOAK cue stays visible until the soak moment.
-        [386544] = { name = "Arcane Orbs",       castType = "cast",      castDuration = 4,                   role = "other",                     displayText = "SOAK"     },
+        [386544] = { name = "Arcane Orbs",       castType = "cast",      castDuration = 4,                   role = "other",                     displayText = "SOAK",     sound = "Soaks" },
         [385958] = { name = "Arcane Expulsion",  castType = "begincast", castDuration = 4,                   role = "tank",     display = "bar", displayText = "TANK HIT" },
-        [386173] = { name = "Mana Bombs",        castType = "begincast", castDuration = 2.5,                 role = "other",                     displayText = "DROPS"    },
-        [388537] = { name = "Arcane Fissure",    castType = "begincast", castDuration = 3,                   role = "mechanic",                  displayText = "AOE + FEET" },
+        [386173] = { name = "Mana Bombs",        castType = "begincast", castDuration = 2.5,                 role = "other",                     displayText = "DROPS",    sound = "Drop" },
+        [388537] = { name = "Arcane Fissure",    castType = "begincast", castDuration = 3,                   role = "mechanic",                  displayText = "AOE + FEET", sound = "Aoe And Dance" },
     },
 }
 
@@ -345,9 +371,9 @@ KE.EncounterData[2563] = {
     dungeon = "AlgetharAcademy",
     spells = {
         [388544] = { name = "Barkbreaker",  castType = "begincast", castDuration = 1,                      role = "tank",     display = "bar", displayText = "TANK HIT" },
-        [388796] = { name = "Germinate",    castType = "cast",                       channelDuration = 4,  role = "other",                     displayText = "STACK"    },
-        [388623] = { name = "Branch Out",   castType = "begincast", castDuration = 2.5,                    role = "other",                     displayText = "ADD"      },
-        [388923] = { name = "Burst Forth",  castType = "begincast", castDuration = 3,                      role = "other",                     displayText = "AOE"      },
+        [388796] = { name = "Germinate",    castType = "cast",                       channelDuration = 4,  role = "other",                     displayText = "STACK",    sound = "Stack" },
+        [388623] = { name = "Branch Out",   castType = "begincast", castDuration = 2.5,                    role = "other",                     displayText = "ADD",      sound = "Add" },
+        [388923] = { name = "Burst Forth",  castType = "begincast", castDuration = 3,                      role = "other",                     displayText = "AOE",      sound = "AoE" },
     },
 }
 
@@ -356,17 +382,17 @@ KE.EncounterData[2564] = {
     dungeon = "AlgetharAcademy",
     spells = {
         [376997] = { name = "Savage Peck",       castType = "begincast", castDuration = 3,                   role = "tank",     display = "bar", displayText = "TANK HIT" },
-        [377004] = { name = "Deafening Screech", castType = "begincast", castDuration = 2.5,                 role = "other",                     displayText = "AOE"      },
+        [377004] = { name = "Deafening Screech", castType = "begincast", castDuration = 2.5,                 role = "other",                     displayText = "AOE",      sound = "Stop Casting" },
         [377034] = { name = "Overpowering Gust", castType = "begincast", castDuration = 3,                   role = "other",                     displayText = "FRONTAL"  },
         -- LittleWigs's SPELL_AURA_APPLIED handler for aura 376781 doesn't fire in 12.0 (same root cause
         -- as L'ura's Backlash). Instead we spawn off LittleWigs's reliable widget-driven Message(376448),
         -- which fires from the UPDATE_UI_WIDGET handler when goal-tracker widget 4183 reaches barValue=3.
         -- ExBoss uses the same widget signal and a 2s lead-in before the 12s active phase begins.
-        [376448] = { name = "Vulnerability Phase", spawnOnMessage = true, duration = 12, leadDelay = 2,      role = "other",    display = "bar",  displayText = "VULNERABILITY", iconOverride = 135821, showAtSeconds = 0, sortAtEnd = true },
+        [376448] = { name = "Vulnerability Phase", spawnOnMessage = true, duration = 12, leadDelay = 2,      role = "other",    display = "bar",  displayText = "VULNERABILITY", iconOverride = 135821, showAtSeconds = 0, sortAtEnd = true, sound = "Dmg Amp" },
     },
     phases = {
-        { unit = "boss1", threshold = 75, lead = 5 },
-        { unit = "boss1", threshold = 45, lead = 5 },
+        { unit = "boss1", threshold = 75, lead = 5, sound = "Intermission" },
+        { unit = "boss1", threshold = 45, lead = 5, sound = "Intermission" },
     },
 }
 
@@ -378,13 +404,13 @@ KE.EncounterData[2565] = {
         [373326]  = { name = "Arcane Missiles", castType = "cast",                                           role = "other",                                       disabled = true },
         [1282251] = { name = "Astral Blast",    castType = "begincast", castDuration = 3,                    role = "tank",     display = "bar", displayText = "TANK HIT" },
         -- castDuration=1.5 assumed from EXBoss 374350 — live verification still pending (role=heal so filtered for DAMAGER logs, can't see in this run).
-        [374343]  = { name = "Energy Bomb",     castType = "begincast", castDuration = 1.5,                  role = "heal",                      displayText = "DISPEL" },
+        [374343]  = { name = "Energy Bomb",     castType = "begincast", castDuration = 1.5,                  role = "heal",                      displayText = "DISPEL",   sound = "Dispell" },
         -- The pull effect fires AT the end of BigWigs's predictive countdown (= start of the boss
         -- cast). No castDuration extension because the pull is instantaneous from the player's POV
         -- — we don't want the bar lingering past the moment of effect. No showAtSeconds either:
         -- visibility is left to the user's group "Reveal at" slider, since there's no mechanical
         -- reason this specific bar should override the user's global preference.
-        [388822]  = { name = "Power Vacuum",    castType = "begincast",                                      role = "other",                     displayText = "PULL" },
+        [388822]  = { name = "Power Vacuum",    castType = "begincast",                                      role = "other",                     displayText = "PULL",     sound = "Pull" },
     },
 }
 
@@ -397,9 +423,9 @@ KE.EncounterData[3071] = {
     dungeon = "MagistersTerrace",
     spells = {
         [474496]  = { name = "Repulsing Slam",     castType = "begincast", castDuration = 2.5,                     role = "tank",     display = "bar", displayText = "TANK HIT" },
-        [1214081] = { name = "Arcane Expulsion",   castType = "begincast", castDuration = 3,                       role = "other",                displayText = "AOE"      },
-        [1214032] = { name = "Ethereal Shackles",  castType = "cast",                                              role = "heal",                 displayText = "DISPEL"   },
-        [474345]  = { name = "Refueling Protocol", castType = "begincast", castDuration = 3,   channelDuration = 20, role = "other",                displayText = "AMP"      },
+        [1214081] = { name = "Arcane Expulsion",   castType = "begincast", castDuration = 3,                       role = "other",                displayText = "AOE",      sound = "Knockback" },
+        [1214032] = { name = "Ethereal Shackles",  castType = "cast",                                              role = "heal",                 displayText = "DISPEL",   sound = "Dispell" },
+        [474345]  = { name = "Refueling Protocol", castType = "begincast", castDuration = 3,   channelDuration = 20, role = "other",                displayText = "AMP",      sound = "Dmg Amp" },
     },
 }
 
@@ -407,10 +433,10 @@ KE.EncounterData[3072] = {
     name = "Seranel Sunlash",
     dungeon = "MagistersTerrace",
     spells = {
-        [1225787] = { name = "Runic Mark",         castType = "begincast", castDuration = 3,                       role = "other",                     displayText = "MARKS"     },
-        [1224903] = { name = "Suppression Zone",   castType = "begincast", castDuration = 3,                       role = "mechanic",                  displayText = "CLEAR"     },
+        [1225787] = { name = "Runic Mark",         castType = "begincast", castDuration = 3,                       role = "other",                     displayText = "MARKS",    sound = "Spread" },
+        [1224903] = { name = "Suppression Zone",   castType = "begincast", castDuration = 3,                       role = "mechanic",                  displayText = "CLEAR",    sound = "Clear" },
         [1248689] = { name = "Hastening Ward",     castType = "cast",                                              role = "tank",     display = "bar", displayText = "BOSS BUFFED" },
-        [1225193] = { name = "Wave of Silence",    castType = "begincast", castDuration = 5,                       role = "other",                     displayText = "HIDE"      },
+        [1225193] = { name = "Wave of Silence",    castType = "begincast", castDuration = 5,                       role = "other",                     displayText = "HIDE",     sound = "Hide" },
     },
 }
 
@@ -419,12 +445,12 @@ KE.EncounterData[3073] = {
     dungeon = "MagistersTerrace",
     spells = {
         [1223847] = { name = "Triplicate",         castType = "begincast", castDuration = 2.5,                     role = "other",    displayText = "SPLIT" },
-        [1284954] = { name = "Cosmic Sting",       castType = "begincast", castDuration = 4,                       role = "other",    displayText = "DROPS" },
-        [1253709] = { name = "Neural Link",        castType = "begincast", castDuration = 2,                       role = "other",    displayText = "CLEAR" },
-        [1224299] = { name = "Astral Grasp",       castType = "begincast", castDuration = 4,   channelDuration = 8, role = "other",    displayText = "PULL"  },
+        [1284954] = { name = "Cosmic Sting",       castType = "begincast", castDuration = 4,                       role = "other",    displayText = "DROPS", sound = "Drop" },
+        [1253709] = { name = "Neural Link",        castType = "begincast", castDuration = 2,                       role = "other",    displayText = "CLEAR", sound = "Clear" },
+        [1224299] = { name = "Astral Grasp",       castType = "begincast", castDuration = 4,   channelDuration = 8, role = "other",    displayText = "PULL",  sound = "Pull" },
     },
     phases = {
-        { unit = "boss1", threshold = 50, lead = 5 },
+        { unit = "boss1", threshold = 50, lead = 5, sound = "Split" },
     },
 }
 
@@ -433,8 +459,8 @@ KE.EncounterData[3074] = {
     dungeon = "MagistersTerrace",
     spells = {
         [1280113] = { name = "Hulking Fragment",      castType = "begincast", castDuration = 3,                    role = "tank",     display = "bar", displayText = "TANK HIT" },
-        [1215897] = { name = "Devouring Entropy",     castType = "cast",                                           role = "other",                     displayText = "SPREAD"   },
-        [1215087] = { name = "Unstable Void Essence", castType = "begincast", castDuration = 2.5,                  role = "other",                     displayText = "SOAK"     },
+        [1215897] = { name = "Devouring Entropy",     castType = "cast",                                           role = "other",                     displayText = "SPREAD",   sound = "Spread" },
+        [1215087] = { name = "Unstable Void Essence", castType = "begincast", castDuration = 2.5,                  role = "other",                     displayText = "SOAK",     sound = "Soak" },
     },
 }
 
@@ -447,11 +473,11 @@ KE.EncounterData[3212] = {
     dungeon = "MaisaraCaverns",
     spells = {
         [1266480] = { name = "Flanking Spear",   castType = "begincast", castDuration = 2.5, role = "tank",     display = "bar", displayText = "TANK HIT" },
-        [1243900] = { name = "Fetid Quillstorm", castType = "begincast", castDuration = 3,   role = "other",                     displayText = "FEET" },
-        [1260731] = { name = "Freezing Trap",    castType = "begincast", castDuration = 2,   role = "mechanic",                  displayText = "FEET" },
-        [1260643] = { name = "Barrage",          castType = "cast",      channelDuration = 5, role = "move",                  displayText = "FRONTAL" },
+        [1243900] = { name = "Fetid Quillstorm", castType = "begincast", castDuration = 3,   role = "other",                     displayText = "FEET",    sound = "Feet" },
+        [1260731] = { name = "Freezing Trap",    castType = "begincast", castDuration = 2,   role = "mechanic",                  displayText = "FEET",    sound = "Feet" },
+        [1260643] = { name = "Barrage",          castType = "cast",      channelDuration = 5, role = "move",                  displayText = "FRONTAL", sound = "Frontal" },
         [1246666] = { name = "Infected Pinions", castType = "begincast", castDuration = 1.5,  role = "other",                 displayText = "AOE"     },
-        [1249479] = { name = "Carrion Swoop",    castType = "begincast", castDuration = 4.5,  role = "mechanic",              displayText = "DODGE"   },
+        [1249479] = { name = "Carrion Swoop",    castType = "begincast", castDuration = 4.5,  role = "mechanic",              displayText = "DODGE",   sound = "Dodge" },
     },
 }
 
@@ -460,15 +486,15 @@ KE.EncounterData[3213] = {
     dungeon = "MaisaraCaverns",
     spells = {
         [1251554] = { name = "Drain Soul",           castType = "begincast", castDuration = 1,   channelDuration = 4,   role = "tank",     display = "bar", displayText = "TANK HIT"     },
-        [1252054] = { name = "Unmake",               castType = "begincast", castDuration = 2.5, channelDuration = 4.5, role = "other",                     displayText = "FRONTAL"      },
-        [1251204] = { name = "Wrest Phantoms",       castType = "cast",                          channelDuration = 4,   role = "mechanic", extendByChannel = true, displayText = "ADDS" },
+        [1252054] = { name = "Unmake",               castType = "begincast", castDuration = 2.5, channelDuration = 4.5, role = "other",                     displayText = "FRONTAL",      sound = "Frontal" },
+        [1251204] = { name = "Wrest Phantoms",       castType = "cast",                          channelDuration = 4,   role = "mechanic", extendByChannel = true, displayText = "ADDS",  sound = "Adds" },
         -- Necrotic Convergence is a 60s intermission channel where the boss
         -- casts an absorb shield (UnitGetTotalAbsorbs, secret on hostile units).
         -- Two bars surface for one mechanic: the BigWigs-driven INTERMISSION
         -- countdown (channelDuration=60) and an opt-in absorb-tracking shieldBar
         -- that drains as the team breaks the shield. baseAmount sourced from
         -- ExBoss/EXDB; M+ scaling applied automatically by DungeonTimers.
-        [1250708] = { name = "Necrotic Convergence", castType = "channel",                       channelDuration = 60,  role = "other",                     displayText = "INTERMISSION",
+        [1250708] = { name = "Necrotic Convergence", castType = "channel",                       channelDuration = 60,  role = "other",                     displayText = "INTERMISSION", sound = "Intermission",
                       shieldBar = { baseAmount = 1160814, displayText = "SHIELD" } },
     },
 }
@@ -478,8 +504,8 @@ KE.EncounterData[3214] = {
     dungeon = "MaisaraCaverns",
     spells = {
         [1251023] = { name = "Spiritbreaker",      castType = "channel",                       channelDuration = 4.5, role = "tank",     display = "bar", displayText = "TANK HIT"     },
-        [1252676] = { name = "Crush Souls",        castType = "begincast", castDuration = 4.5,                        role = "mechanic", displayText = "TOTEMS"       },
-        [1253788] = { name = "Soulrending Roar",   castType = "begincast", castDuration = 3,                          role = "mechanic", displayText = "INTERMISSION" },
+        [1252676] = { name = "Crush Souls",        castType = "begincast", castDuration = 4.5,                        role = "mechanic", displayText = "TOTEMS",       sound = "Totem" },
+        [1253788] = { name = "Soulrending Roar",   castType = "begincast", castDuration = 3,                          role = "mechanic", displayText = "INTERMISSION", sound = "Intermission" },
     },
 }
 
@@ -493,7 +519,7 @@ KE.EncounterData[3328] = {
     spells = {
         [1251579] = { name = "Leyline Array",          castType = "cast",      castDuration = 6,                   role = "other",  display = "bar",   displayText = "Lines Spawning", color = { 0.302, 0.800, 1.0 } }, -- #4dccff
         [1251772] = { name = "Reflux Charge",          castType = "begincast", castDuration = 2.1,                 role = "other",  display = "bar",   displayText = "Clear Lines",   color = { 1.0, 0.302, 0.800 } }, -- #ff4dcc
-        [1264048] = { name = "Flux Collapse",          castType = "cast",      castDuration = 3,                   role = "other",                     displayText = "FEET"          },
+        [1264048] = { name = "Flux Collapse",          castType = "cast",      castDuration = 3,                   role = "other",                     displayText = "FEET",          sound = "Feet" },
         -- Disabled by default: opt-in heal-only AOE warning
         [1257509] = { name = "Corespark Detonation",   castType = "begincast", castDuration = 5,                   role = "heal",                      displayText = "AOE",            disabled = true },
     },
@@ -504,8 +530,8 @@ KE.EncounterData[3332] = {
     dungeon = "NexusPointXenas",
     spells = {
         [1247937] = { name = "Umbral Lash",           castType = "begincast", castDuration = 0.8,                       role = "tank",     display = "bar", displayText = "TANK HIT" },
-        [1249014] = { name = "Eclipsing Step",        castType = "begincast", castDuration = 2.5, channelDuration = 2,  role = "move",                      displayText = "SPREAD"   },
-        [1252703] = { name = "Null Vanguard",         castType = "cast",      castDuration = 6,                         role = "other",                     displayText = "ADDS"     },
+        [1249014] = { name = "Eclipsing Step",        castType = "begincast", castDuration = 2.5, channelDuration = 2,  role = "move",                      displayText = "SPREAD",   sound = "Spread" },
+        [1252703] = { name = "Null Vanguard",         castType = "cast",      castDuration = 6,                         role = "other",                     displayText = "ADDS",     sound = "Adds" },
         -- castDuration=10 is rough — Lightscar Flare timing varies in-game; adjust per future logs.
         -- postCastBar: 17s damage-amp window after the cast finishes — boss channels a beam that buffs
         -- player damage for everyone standing in it. Synthesized bar (no separate BigWigs Timer fires
@@ -513,7 +539,7 @@ KE.EncounterData[3332] = {
         -- Flare's entry rather than split as a `phantomFollowupOf` row because the beam channel has
         -- no clean spellID — both LittleWigs and ExBoss detect it by watching for a level-92 mob's
         -- UNIT_SPELLCAST_CHANNEL_START, not a curated ID we could surface in the GUI list.
-        [1264439] = { name = "Lightscar Flare",       castType = "cast",      castDuration = 10,                        role = "other",                     displayText = "AMP",
+        [1264439] = { name = "Lightscar Flare",       castType = "cast",      castDuration = 10,                        role = "other",                     displayText = "AMP",      sound = "Dmg Amp",
             postCastBar = { duration = 17, display = "bar", displayText = "BEAM" } },
         -- Disabled by default: BigWigs fires Timer but the spell may not actually exist in-game.
         [1271684] = { name = "Devour the Unworthy",   castType = "begincast", castDuration = 3.4, channelDuration = 5,  role = "other",                     displayText = "AOE",     disabled = true },
@@ -525,9 +551,9 @@ KE.EncounterData[3333] = {
     dungeon = "NexusPointXenas",
     spells = {
         [1253950] = { name = "Searing Rend",         castType = "begincast", castDuration = 3,                     role = "tank",     display = "bar", displayText = "TANK HIT" },
-        [1253855] = { name = "Brilliant Dispersion", castType = "begincast", castDuration = 4,                     role = "other",                     displayText = "DROPS"    },
-        [1255531] = { name = "Flicker",              castType = "cast",                                            role = "other",                     displayText = "DODGE"    },
-        [1257595] = { name = "Divine Guile",         castType = "begincast", castDuration = 7,                     role = "other",                     displayText = "Minigame" },
+        [1253855] = { name = "Brilliant Dispersion", castType = "begincast", castDuration = 4,                     role = "other",                     displayText = "DROPS",    sound = "Drop" },
+        [1255531] = { name = "Flicker",              castType = "cast",                                            role = "other",                     displayText = "DODGE",    sound = "Dodge" },
+        [1257595] = { name = "Divine Guile",         castType = "begincast", castDuration = 7,                     role = "other",                     displayText = "Minigame", sound = "Intermission" },
     },
 }
 
@@ -540,13 +566,13 @@ KE.EncounterData[1999] = {
     dungeon = "PitOfSaron",
     bossOrder = 1,
     spells = {
-        [1261299] = { name = "Throw Saronite",   castType = "begincast", castDuration = 2,   channelDuration = 6,   role = "other",  display = "bar", displayText = "Drop Ore",   color = { 0.7725, 0.4980, 0.1176 } }, -- #c57f1e
+        [1261299] = { name = "Throw Saronite",   castType = "begincast", castDuration = 2,   channelDuration = 6,   role = "other",  display = "bar", displayText = "Drop Ore",   sound = "Drop", color = { 0.7725, 0.4980, 0.1176 } }, -- #c57f1e
         -- Primary "FEET" (everyone, text) so the GUI preview shows the broadly-relevant cue.
         -- Secondary "TANK HIT" (tank-only, bar) renders alongside in-game for the tank.
-        [1261546] = { name = "Orebreaker",       castType = "begincast", castDuration = 4.5,                        role = "other",                   displayText = "FEET",
+        [1261546] = { name = "Orebreaker",       castType = "begincast", castDuration = 4.5,                        role = "other",                   displayText = "FEET",       sound = "Feet",
                                                   secondary = { role = "tank", display = "bar", displayText = "TANK HIT" } },
-        [1262029] = { name = "Glacial Overload", castType = "begincast", castDuration = 5,   channelDuration = 3.5, role = "other",                   displayText = "HIDE"     },
-        [1261847] = { name = "Cryostomp",        castType = "begincast", castDuration = 2.5,                        role = "other",                   displayText = "AOE + FEET" },
+        [1262029] = { name = "Glacial Overload", castType = "begincast", castDuration = 5,   channelDuration = 3.5, role = "other",                   displayText = "HIDE",       sound = "Hide" },
+        [1261847] = { name = "Cryostomp",        castType = "begincast", castDuration = 2.5,                        role = "other",                   displayText = "AOE + FEET", sound = "Aoe And Dance" },
     },
 }
 
@@ -556,9 +582,9 @@ KE.EncounterData[2001] = {
     bossOrder = 2,
     spells = {
         [1264287] = { name = "Blight Smash",     castType = "begincast", castDuration = 4,                          role = "tank",     display = "bar", displayText = "TANK HIT" },
-        [1264336] = { name = "Plague Expulsion", castType = "begincast", castDuration = 2.5,                        role = "move",                      displayText = "AOE + FEET" },
-        [1264027] = { name = "Shade Shift",      castType = "begincast", castDuration = 4,                          role = "other",                     displayText = "ADDS"     },
-        [1264363] = { name = "Get 'Em, Ick!",    castType = "begincast", castDuration = 4,                          role = "move",                      displayText = "FIXATES"  },
+        [1264336] = { name = "Plague Expulsion", castType = "begincast", castDuration = 2.5,                        role = "move",                      displayText = "AOE + FEET", sound = "Aoe And Dance" },
+        [1264027] = { name = "Shade Shift",      castType = "begincast", castDuration = 4,                          role = "other",                     displayText = "ADDS",       sound = "Adds" },
+        [1264363] = { name = "Get 'Em, Ick!",    castType = "begincast", castDuration = 4,                          role = "move",                      displayText = "FIXATES",    sound = "Fixate Incoming" },
     },
 }
 
@@ -567,12 +593,12 @@ KE.EncounterData[2000] = {
     dungeon = "PitOfSaron",
     bossOrder = 3,
     spells = {
-        [1262745] = { name = "Rime Blast",          castType = "begincast", castDuration = 6,                         role = "move",                      displayText = "CLEAR"    },
+        [1262745] = { name = "Rime Blast",          castType = "begincast", castDuration = 6,                         role = "move",                      displayText = "CLEAR",   sound = "Clear" },
         [1262582] = { name = "Scourgelord's Brand", castType = "begincast", castDuration = 2.5,                       role = "tank",     display = "bar", displayText = "TANK HIT" },
-        [1263756] = { name = "Death's Grasp",       castType = "cast",                          channelDuration = 6,  role = "other",                     displayText = "FEET"     },
-        [1263406] = { name = "Army of the Dead",    castType = "begincast", castDuration = 5,                         role = "other",                     displayText = "ADDS"     },
-        [1276948] = { name = "Ice Barrage",         castType = "cast",                          channelDuration = 4.5, role = "other",                     displayText = "FEET"     },
-        [1276648] = { name = "Bone Infusion",       castType = "begincast", castDuration = 3,                         role = "other",                     displayText = "AOE"      },
+        [1263756] = { name = "Death's Grasp",       castType = "cast",                          channelDuration = 6,  role = "other",                     displayText = "FEET",    sound = "Feet" },
+        [1263406] = { name = "Army of the Dead",    castType = "begincast", castDuration = 5,                         role = "other",                     displayText = "ADDS",    sound = "Adds" },
+        [1276948] = { name = "Ice Barrage",         castType = "cast",                          channelDuration = 4.5, role = "other",                     displayText = "FEET",    sound = "Feet" },
+        [1276648] = { name = "Bone Infusion",       castType = "begincast", castDuration = 3,                         role = "other",                     displayText = "AOE",     sound = "AoE" },
     },
 }
 
@@ -585,10 +611,10 @@ KE.EncounterData[2065] = {
     dungeon = "SeatOfTriumvirate",
     spells = {
         [1263440] = { name = "Void Slash",     castType = "cast",                        channelDuration = 1.5, role = "tank",     display = "bar", displayText = "TANK HIT"  },
-        [1263282] = { name = "Decimate",       castType = "begincast", castDuration = 5,                        role = "other",    display = "bar", displayText = "DROP POOL", color = { 0.365, 0.082, 0.773 } }, -- #5d15c5
-        [1268916] = { name = "Null Palm",      castType = "begincast", castDuration = 2.5,                      role = "other",                     displayText = "FRONTAL"   },
-        [1263399] = { name = "Oozing Slam",    castType = "begincast", castDuration = 3,                        role = "other",                     displayText = "AOE"       },
-        [1263297] = { name = "Crashing Void",  castType = "begincast", castDuration = 4,                        role = "other",                     displayText = "CC ADDS",  castDisplayText = "AOE" },
+        [1263282] = { name = "Decimate",       castType = "begincast", castDuration = 5,                        role = "other",    display = "bar", displayText = "DROP POOL", sound = "Drop", color = { 0.365, 0.082, 0.773 } }, -- #5d15c5
+        [1268916] = { name = "Null Palm",      castType = "begincast", castDuration = 2.5,                      role = "other",                     displayText = "FRONTAL",   sound = "Frontal" },
+        [1263399] = { name = "Oozing Slam",    castType = "begincast", castDuration = 3,                        role = "other",                     displayText = "AOE",       sound = "AoE" },
+        [1263297] = { name = "Crashing Void",  castType = "begincast", castDuration = 4,                        role = "other",                     displayText = "CC ADDS",   sound = "CC", castDisplayText = "AOE" },
     },
 }
 
@@ -597,9 +623,9 @@ KE.EncounterData[2066] = {
     dungeon = "SeatOfTriumvirate",
     spells = {
         [245742]  = { name = "Shadow Pounce",  castType = "cast",                                          role = "other",    display = "bar", displayText = "Cat Jumping", color = { 0.769, 0.169, 0.169 } }, -- #c42b2b
-        [1248219] = { name = "Void Bomb",      castType = "cast",                                          role = "other",                     displayText = "FEET"        },
-        [1280065] = { name = "Phase Dash",     castType = "cast",                                          role = "mechanic",                  displayText = "CLEAR"       },
-        [1263523] = { name = "Overload",       castType = "begincast", castDuration = 4,                   role = "other",                     displayText = "AOE"         },
+        [1248219] = { name = "Void Bomb",      castType = "cast",                                          role = "other",                     displayText = "FEET",        sound = "Feet" },
+        [1280065] = { name = "Phase Dash",     castType = "cast",                                          role = "mechanic",                  displayText = "CLEAR",       sound = "Clear" },
+        [1263523] = { name = "Overload",       castType = "begincast", castDuration = 4,                   role = "other",                     displayText = "AOE",         sound = "AoE" },
     },
 }
 
@@ -608,11 +634,11 @@ KE.EncounterData[2067] = {
     dungeon = "SeatOfTriumvirate",
     spells = {
         -- Disabled by default: spammable kick target (24 fires per ~3 min). Opt-in via GUI.
-        [244750]  = { name = "Mind Blast",          castType = "begincast", castDuration = 2,                   role = "kick",                      displayText = "KICK",         disabled = true },
+        [244750]  = { name = "Mind Blast",          castType = "begincast", castDuration = 2,                   role = "kick",                      displayText = "KICK",         sound = "Kick", disabled = true },
         [1277358] = { name = "Gates of the Abyss",  castType = "cast",                                          role = "other",  display = "bar",   displayText = "ORB SPAWNING",  color = { 1.0, 0.302, 0.800 } }, -- #ff4dcc
-        [1263542] = { name = "Mass Void Infusion",  castType = "begincast", castDuration = 2, channelDuration = 5, role = "other",                  displayText = "SUCC"          },
-        [1263538] = { name = "Umbral Tentacles",    castType = "begincast", castDuration = 3,                   role = "other",                     displayText = "ADDS"          },
-        [1263528] = { name = "Repulse",             castType = "begincast", castDuration = 2,                   role = "other",                     displayText = "KNOCK"         },
+        [1263542] = { name = "Mass Void Infusion",  castType = "begincast", castDuration = 2, channelDuration = 5, role = "other",                  displayText = "SUCC",         sound = "Defensive" },
+        [1263538] = { name = "Umbral Tentacles",    castType = "begincast", castDuration = 3,                   role = "other",                     displayText = "ADDS",         sound = "Adds" },
+        [1263528] = { name = "Repulse",             castType = "begincast", castDuration = 2,                   role = "other",                     displayText = "KNOCK",        sound = "Knockback" },
     },
 }
 
@@ -620,20 +646,20 @@ KE.EncounterData[2068] = {
     name = "L'ura",
     dungeon = "SeatOfTriumvirate",
     spells = {
-        [1265421] = { name = "Dirge of Despair",            castType = "begincast", castDuration = 4,                   role = "other",                  displayText = "AOE"       },
-        [1264196] = { name = "Disintegrate",                castType = "begincast", castDuration = 3, channelDuration = 5, role = "other",               displayText = "DANCE"     },
-        [1265463] = { name = "Discordant Beam",             castType = "begincast", castDuration = 7,                   role = "other",                  displayText = "AIM BEAMS" },
-        [1265689] = { name = "Grim Chorus",                 castType = "begincast", castDuration = 5.5,                 role = "other",                  displayText = "FEET"      },
+        [1265421] = { name = "Dirge of Despair",            castType = "begincast", castDuration = 4,                   role = "other",                  displayText = "AOE",       sound = "AoE" },
+        [1264196] = { name = "Disintegrate",                castType = "begincast", castDuration = 3, channelDuration = 5, role = "other",               displayText = "DANCE",     sound = "Dance" },
+        [1265463] = { name = "Discordant Beam",             castType = "begincast", castDuration = 7,                   role = "other",                  displayText = "AIM BEAMS", sound = "Clear" },
+        [1265689] = { name = "Grim Chorus",                 castType = "begincast", castDuration = 5.5,                 role = "other",                  displayText = "FEET",      sound = "Feet" },
         -- Symphony of the Eternal Night is the intermission/phase-transition.
-        [1266003] = { name = "Symphony of the Eternal Night", castType = "begincast", castDuration = 10,                role = "other",                  displayText = "AMP"       },
-        [1266001] = { name = "Backlash", castType = "cast", role = "other", displayText = "KNOCK" },
+        [1266003] = { name = "Symphony of the Eternal Night", castType = "begincast", castDuration = 10,                role = "other",                  displayText = "AMP",       sound = "Intermission" },
+        [1266001] = { name = "Backlash", castType = "cast", role = "other", displayText = "KNOCK", sound = "Knockback" },
         -- LittleWigs's SPELL_AURA_APPLIED handler for aura 247816 doesn't fire in 12.0
         -- (confirmed via in-game log — Bar message never arrived). Instead this entry
         -- spawns when 1266001's BigWigs_StopBar fires naturally (cast finished = buff
         -- applied). LittleWigs drives that StopBar via ENCOUNTER_TIMELINE_EVENT_*,
         -- the same reliable Blizzard API ExBoss uses; ExBoss measures the active
         -- phase at 19.5s.
-        [247816]  = { name = "Vulnerability Phase", phantomFollowupOf = 1266001, duration = 20, role = "other", display = "bar", displayText = "VULNERABILITY", iconOverride = 4914666, showAtSeconds = 0, sortAtEnd = true },
+        [247816]  = { name = "Vulnerability Phase", phantomFollowupOf = 1266001, duration = 20, role = "other", display = "bar", displayText = "VULNERABILITY", iconOverride = 4914666, showAtSeconds = 0, sortAtEnd = true, sound = "Dmg Amp" },
     },
 }
 
@@ -645,10 +671,10 @@ KE.EncounterData[1698] = {
     name = "Ranjit",
     dungeon = "Skyreach",
     spells = {
-        [1252690] = { name = "Gale Surge",     castType = "begincast", castDuration = 3,                       role = "other",    displayText = "DROPS"   },
-        [153757]  = { name = "Fan of Blades",  castType = "begincast", castDuration = 2,                       role = "mechanic", displayText = "AOE"     },
-        [1258152] = { name = "Wind Chakram",   castType = "begincast", castDuration = 3,                       role = "other",    displayText = "FRONTAL" },
-        [156793]  = { name = "Chakram Vortex", castType = "begincast", castDuration = 3,                       role = "mechanic", displayText = "DODGE"   },
+        [1252690] = { name = "Gale Surge",     castType = "begincast", castDuration = 3,                       role = "other",    displayText = "DROPS",   sound = "Drop" },
+        [153757]  = { name = "Fan of Blades",  castType = "begincast", castDuration = 2,                       role = "mechanic", displayText = "AOE",     sound = "AoE" },
+        [1258152] = { name = "Wind Chakram",   castType = "begincast", castDuration = 3,                       role = "other",    displayText = "FRONTAL", sound = "Frontal" },
+        [156793]  = { name = "Chakram Vortex", castType = "begincast", castDuration = 3,                       role = "mechanic", displayText = "DODGE",   sound = "Dodge" },
     },
 }
 
@@ -659,8 +685,8 @@ KE.EncounterData[1699] = {
         [154110] = { name = "Fiery Smash", castType = "begincast", castDuration = 3,                   role = "tank",     display = "bar", displayText = "TANK HIT" },
         -- Energize cast finishes ~7s before the soakable line actually spawns; extend the bar
         -- so it hits zero at line-spawn moment (the actionable cue), not at cast-end.
-        [154162] = { name = "Energize",    castType = "cast",      castDuration = 7,                   role = "mechanic",                  displayText = "SOAK"     },
-        [154135] = { name = "Supernova",   castType = "begincast", castDuration = 4,                   role = "other",                     displayText = "AOE"      },
+        [154162] = { name = "Energize",    castType = "cast",      castDuration = 7,                   role = "mechanic",                  displayText = "SOAK",    sound = "Soaks" },
+        [154135] = { name = "Supernova",   castType = "begincast", castDuration = 4,                   role = "other",                     displayText = "AOE",     sound = "AoE" },
     },
 }
 
@@ -669,8 +695,8 @@ KE.EncounterData[1700] = {
     dungeon = "Skyreach",
     spells = {
         [1253519] = { name = "Burning Claws",   castType = "begincast", castDuration = 3,                       role = "tank",     display = "bar", displayText = "TANK HIT" },
-        [1253510] = { name = "Sunbreak",        castType = "begincast", castDuration = 3,                       role = "mechanic",                  displayText = "ADD"      },
-        [159382]  = { name = "Searing Quills",  castType = "begincast", castDuration = 5,   channelDuration = 3, role = "mechanic",                  displayText = "HIDE"     },
+        [1253510] = { name = "Sunbreak",        castType = "begincast", castDuration = 3,                       role = "mechanic",                  displayText = "ADD",     sound = "Add" },
+        [159382]  = { name = "Searing Quills",  castType = "begincast", castDuration = 5,   channelDuration = 3, role = "mechanic",                  displayText = "HIDE",    sound = "Hide" },
     },
 }
 
@@ -678,11 +704,11 @@ KE.EncounterData[1701] = {
     name = "High Sage Viryx",
     dungeon = "Skyreach",
     spells = {
-        [1253538] = { name = "Scorching Ray",  castType = "cast",                                              role = "heal",                     displayText = "AOE"  },
+        [1253538] = { name = "Scorching Ray",  castType = "cast",                                              role = "heal",                     displayText = "AOE",  sound = "AoE" },
         -- Disabled by default: spammable interrupt, opt-in via GUI.
-        [154396]  = { name = "Solar Blast",    castType = "begincast", castDuration = 3,                       role = "other",    disabled = true, displayText = "KICK" },
-        [153954]  = { name = "Cast Down",      castType = "cast",                                              role = "mechanic",                  displayText = "ADD"  },
-        [1253840] = { name = "Lens Flare",     castType = "begincast", castDuration = 3,                       role = "mechanic",                  displayText = "FEET" },
+        [154396]  = { name = "Solar Blast",    castType = "begincast", castDuration = 3,                       role = "other",    disabled = true, displayText = "KICK", sound = "Kick" },
+        [153954]  = { name = "Cast Down",      castType = "cast",                                              role = "mechanic",                  displayText = "ADD",  sound = "Add" },
+        [1253840] = { name = "Lens Flare",     castType = "begincast", castDuration = 3,                       role = "mechanic",                  displayText = "FEET", sound = "Feet" },
     },
 }
 
@@ -694,9 +720,9 @@ KE.EncounterData[3056] = {
     name = "Emberdawn",
     dungeon = "WindrunnerSpire",
     spells = {
-        [466556] = { name = "Flaming Updraft", castType = "begincast", castDuration = 1.5,                       role = "mechanic",               displayText = "DROPS" },
+        [466556] = { name = "Flaming Updraft", castType = "begincast", castDuration = 1.5,                       role = "mechanic",               displayText = "DROPS",   sound = "Drop" },
         [466064] = { name = "Searing Beak",    castType = "begincast", castDuration = 3,                         role = "tank",  display = "bar", displayText = "TANK HIT" },
-        [465904] = { name = "Burning Gale",    castType = "begincast", castDuration = 3,   channelDuration = 18, role = "other",                  displayText = "DANCE" },
+        [465904] = { name = "Burning Gale",    castType = "begincast", castDuration = 3,   channelDuration = 18, role = "other",                  displayText = "DANCE",   sound = "Dance" },
     },
 }
 
@@ -704,9 +730,9 @@ KE.EncounterData[3057] = {
     name = "Derelict Duo",
     dungeon = "WindrunnerSpire",
     spells = {
-        [472745] = { name = "Splattering Spew",    castType = "begincast", castDuration = 4,                      role = "other",                  displayText = "SPREAD"  },
+        [472745] = { name = "Splattering Spew",    castType = "begincast", castDuration = 4,                      role = "other",                  displayText = "SPREAD",  sound = "Spread" },
         [472888] = { name = "Bone Hack",           castType = "begincast", castDuration = 2,  channelDuration = 3, role = "tank",  display = "bar", displayText = "TANK HIT" },
-        [474105] = { name = "Curse of Darkness",   castType = "begincast", castDuration = 4,                      role = "other",                  displayText = "ADDS"    },
+        [474105] = { name = "Curse of Darkness",   castType = "begincast", castDuration = 4,                      role = "other",                  displayText = "ADDS",    sound = "Dispell" },
         -- castDuration=7 covers the follow-on Heaving Yank (BigWigs only fires Timer for Shriek).
         [472736] = { name = "Debilitating Shriek", castType = "begincast", castDuration = 7,                      role = "other",                  displayText = "HOOK",    showAtSeconds = 10 },
     },
@@ -718,14 +744,14 @@ KE.EncounterData[3058] = {
     spells = {
         [467620]  = { name = "Rampage",            castType = "begincast", castDuration = 2,   channelDuration = 5, role = "tank",     display = "bar", displayText = "TANK HIT" },
         -- 472081 vs EXBoss 472053 — LittleWigs ID wins (BigWigs Timer key); cast data assumed same as 472053
-        [472081]  = { name = "Reckless Leap",      castType = "begincast", castDuration = 3,                        role = "other",                    displayText = "FEET"     },
-        [1253272] = { name = "Intimidating Shout", castType = "begincast", castDuration = 5,                        role = "mechanic",                 displayText = "STACK"    },
+        [472081]  = { name = "Reckless Leap",      castType = "begincast", castDuration = 3,                        role = "other",                    displayText = "FEET",     sound = "Feet" },
+        [1253272] = { name = "Intimidating Shout", castType = "begincast", castDuration = 5,                        role = "mechanic",                 displayText = "STACK",    sound = "Stack" },
         -- 470963 vs EXBoss 1271676 — LittleWigs ID wins (BigWigs Timer key); cast data adjusted to 2s based on live log late values
         [470963]  = { name = "Bladestorm",         castType = "begincast", castDuration = 2,                        role = "other",                    displayText = "DODGE"    },
     },
     phases = {
-        { unit = "boss1", threshold = 66, lead = 5 },
-        { unit = "boss1", threshold = 33, lead = 5 },
+        { unit = "boss1", threshold = 66, lead = 5, sound = "Intermission" },
+        { unit = "boss1", threshold = 33, lead = 5, sound = "Intermission" },
     },
 }
 
@@ -733,10 +759,10 @@ KE.EncounterData[3059] = {
     name = "Restless Heart",
     dungeon = "WindrunnerSpire",
     spells = {
-        [472556]  = { name = "Arrow Rain",         castType = "channel",                          channelDuration = 2.5, role = "other",    extendByChannel = true, displayText = "FEET"     },
+        [472556]  = { name = "Arrow Rain",         castType = "channel",                          channelDuration = 2.5, role = "other",    extendByChannel = true, displayText = "FEET",    sound = "Feet" },
         [472662]  = { name = "Tempest Slash",      castType = "begincast", castDuration = 2.5,                           role = "tank",     display = "bar",        displayText = "TANK HIT" },
-        [1253986] = { name = "Gust Shot",          castType = "cast",                                                    role = "mechanic",                         displayText = "CLEARS"   },
-        [468429]  = { name = "Bullseye Windblast", castType = "cast",                                                    role = "mechanic",                         displayText = "LEAP"     },
-        [474528]  = { name = "Bolt Gale",          castType = "begincast", castDuration = 4,      channelDuration = 5,   role = "mechanic",                         displayText = "FRONTAL"  },
+        [1253986] = { name = "Gust Shot",          castType = "cast",                                                    role = "mechanic",                         displayText = "CLEARS",  sound = "Clear" },
+        [468429]  = { name = "Bullseye Windblast", castType = "cast",                                                    role = "mechanic",                         displayText = "LEAP",    sound = "Leap" },
+        [474528]  = { name = "Bolt Gale",          castType = "begincast", castDuration = 4,      channelDuration = 5,   role = "mechanic",                         displayText = "FRONTAL", sound = "Frontal" },
     },
 }
