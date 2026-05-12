@@ -5,7 +5,7 @@
 -- ║           indicators, target name, color settings,       ║
 -- ║           and cast sound alert.                          ║
 -- ║                                                          ║
--- ║  Shared logic lives in Combat/CastbarHelpers.lua (KE.H). ║
+-- ║  Shared logic lives in CastbarHelpers.lua (KE.H).        ║
 -- ║  This file owns focus-specific events, FC-only sound     ║
 -- ║  hook, and config-bearing opts tables.                   ║
 -- ╚══════════════════════════════════════════════════════════╝

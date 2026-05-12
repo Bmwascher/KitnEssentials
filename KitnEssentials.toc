@@ -14,12 +14,12 @@
 Libs\Init.xml
 
 Core\Core.xml
-Utilities\Utilities.xml
+Modules\Utilities\Utilities.xml
 
-Combat\Combat.xml
-Dungeons\Dungeons.xml
+Modules\Combat\Combat.xml
+Modules\Dungeons\Dungeons.xml
 Modules\DungeonTimers\DungeonTimers.xml
-QoL\QoL.xml
-Skinning\Skinning.xml
+Modules\QoL\QoL.xml
+Modules\Skinning\Skinning.xml
 
 GUI\GUI.xml
