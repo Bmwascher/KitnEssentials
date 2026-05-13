@@ -188,8 +188,17 @@ GUIFrame:RegisterContent("Automation", function(scrollChild, yOffset)
     autoManager:Register(autoTurnInCheck, "all")
     card5:AddRow(row5a, Theme.rowHeight)
 
-    local row5b = GUIFrame:CreateRow(card5.content, Theme.rowHeightLast)
-    local modDropdown = GUIFrame:CreateDropdown(row5b, "Hold to Pause Auto-Quest", {
+    local row5b = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
+    local autoVoidcoresCheck = GUIFrame:CreateCheckbox(row5b, "Auto Voidcores: Gold (Decimus)", {
+        value = db.AutoVoidcoresGold == true,
+        callback = function(checked) db.AutoVoidcoresGold = checked; ApplySettings() end,
+    })
+    row5b:AddWidget(autoVoidcoresCheck, 1)
+    autoManager:Register(autoVoidcoresCheck, "all")
+    card5:AddRow(row5b, Theme.rowHeight)
+
+    local row5c = GUIFrame:CreateRow(card5.content, Theme.rowHeightLast)
+    local modDropdown = GUIFrame:CreateDropdown(row5c, "Hold to Pause Auto-Quest", {
         options = {
             { key = "SHIFT", text = "Shift" },
             { key = "CTRL",  text = "Ctrl" },
@@ -199,11 +208,11 @@ GUIFrame:RegisterContent("Automation", function(scrollChild, yOffset)
         value = db.QuestModifier or "SHIFT",
         callback = function(val) db.QuestModifier = val end,
     })
-    row5b:AddWidget(modDropdown, 1)
+    row5c:AddWidget(modDropdown, 1)
     autoManager:Register(modDropdown, "all")
-    card5:AddRow(row5b, Theme.rowHeightLast, 0)
+    card5:AddRow(row5c, Theme.rowHeightLast, 0)
 
-    card5:AddLabel("|cff888888Hold the selected modifier key when talking to an NPC to pause auto-quest. Multiple rewards will always prompt.|r")
+    card5:AddLabel("|cff888888Hold the selected modifier key when talking to an NPC to pause auto-quest. Multiple rewards will always prompt.\nAuto Voidcores: Automatically accepts and completes the weekly quest from Decimus for gold, even when general auto-accept/turn-in is off (Hold to Pause modifier is respected still).|r")
 
     yOffset = card5:GetNextOffset()
 

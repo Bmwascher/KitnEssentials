@@ -513,6 +513,7 @@ local Defaults = {
             ConfirmBonusRoll = true,
             AutoAcceptQuests = false,
             AutoTurnInQuests = false,
+            AutoVoidcoresGold = true,
             QuestModifier = "SHIFT",
             AutoDeclineDuels = false,
             AutoDeclinePetBattles = false,

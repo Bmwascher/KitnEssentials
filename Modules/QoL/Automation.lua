@@ -675,6 +675,22 @@ local function IsQuestModifierHeld()
     return false
 end
 
+-- Targeted weekly quests handled by their own per-quest auto-handler. The
+-- generic SetupAutoQuests path yields to these on GOSSIP_SHOW (via
+-- ShouldSkipForVoidcores) so its "select first available quest" branch
+-- doesn't grab the wrong one and skip the priority quest's dedicated logic.
+local VOIDCORES_GOLD_QUEST_ID = 95279  -- Nebulous Voidcores: Gold (Decimus weekly)
+
+local function ShouldSkipForVoidcores(quests)
+    if not AU.db.AutoVoidcoresGold then return false end
+    if C_QuestLog.IsQuestFlaggedCompleted(VOIDCORES_GOLD_QUEST_ID) then return false end
+    if not quests then return false end
+    for _, quest in ipairs(quests) do
+        if quest.questID == VOIDCORES_GOLD_QUEST_ID then return true end
+    end
+    return false
+end
+
 local questFrame
 local function SetupAutoQuests()
     if not AU.db.AutoAcceptQuests and not AU.db.AutoTurnInQuests then return end
@@ -731,9 +747,64 @@ local function SetupAutoQuests()
             end
             if AU.db.AutoAcceptQuests then
                 local availableQuests = C_GossipInfo.GetAvailableQuests()
+                -- Yield to the voidcores handler so its priority pick isn't
+                -- overridden by the generic "select first available" path.
+                if ShouldSkipForVoidcores(availableQuests) then return end
                 if #availableQuests > 0 then
                     C_GossipInfo.SelectAvailableQuest(availableQuests[1].questID)
                 end
+            end
+        end
+    end)
+end
+
+-- Auto Voidcores: Gold (Decimus Weekly) --
+-- Dedicated end-to-end handler for the single weekly quest "Nebulous
+-- Voidcores: Gold." Walks the gossip → accept → complete chain without
+-- requiring the generic auto-accept/turn-in toggles to be on. Respects
+-- the same QuestModifier as the generic handler.
+local voidcoresFrame
+local function SetupAutoVoidcoresGold()
+    if not AU.db.AutoVoidcoresGold then return end
+    if voidcoresFrame then return end
+    voidcoresFrame = CreateFrame("Frame")
+    voidcoresFrame:RegisterEvent("GOSSIP_SHOW")
+    voidcoresFrame:RegisterEvent("QUEST_DETAIL")
+    voidcoresFrame:RegisterEvent("QUEST_PROGRESS")
+    voidcoresFrame:SetScript("OnEvent", function(_, event)
+        if not AU.db or not AU.db.Enabled then return end
+        if not AU.db.AutoVoidcoresGold then return end
+        if IsQuestModifierHeld() then return end
+        if C_QuestLog.IsQuestFlaggedCompleted(VOIDCORES_GOLD_QUEST_ID) then return end
+
+        if event == "GOSSIP_SHOW" then
+            -- Active turn-in path: quest already accepted, now ready to hand in
+            local activeQuests = C_GossipInfo.GetActiveQuests()
+            if activeQuests then
+                for _, quest in ipairs(activeQuests) do
+                    if quest.questID == VOIDCORES_GOLD_QUEST_ID and quest.isComplete then
+                        C_GossipInfo.SelectActiveQuest(VOIDCORES_GOLD_QUEST_ID)
+                        return
+                    end
+                end
+            end
+            -- Available accept path: quest offered, not yet picked up
+            local availableQuests = C_GossipInfo.GetAvailableQuests()
+            if availableQuests then
+                for _, quest in ipairs(availableQuests) do
+                    if quest.questID == VOIDCORES_GOLD_QUEST_ID then
+                        C_GossipInfo.SelectAvailableQuest(VOIDCORES_GOLD_QUEST_ID)
+                        return
+                    end
+                end
+            end
+        elseif event == "QUEST_DETAIL" then
+            if GetQuestID() == VOIDCORES_GOLD_QUEST_ID then
+                AcceptQuest()
+            end
+        elseif event == "QUEST_PROGRESS" then
+            if GetQuestID() == VOIDCORES_GOLD_QUEST_ID and IsQuestCompletable() then
+                CompleteQuest()
             end
         end
     end)
@@ -808,6 +879,7 @@ function AU:ApplySettings()
     SetupAutoPassHousing()
     SetupConfirmBonusRoll()
     SetupAutoQuests()
+    SetupAutoVoidcoresGold()
     SetupAutoDeclineDuels()
     SetupAutoDeclinePetBattles()
     self:ApplyCVars()

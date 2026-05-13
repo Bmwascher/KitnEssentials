@@ -11,7 +11,6 @@ local Theme = KE.Theme
 
 local UnitName = UnitName
 local UnitClass = UnitClass
-local GetRealmName = GetRealmName
 local ipairs = ipairs
 local string_format = string.format
 local ReloadUI = ReloadUI
@@ -37,13 +36,18 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
 
     -- Player greeting with class color
     local colorHex = string_format("%02x%02x%02x", classColor.r * 255, classColor.g * 255, classColor.b * 255)
-    local greetingLabel = card1:AddLabel("Hello, |cff" .. colorHex .. playerName .. "|r!")
+    card1:AddLabel("Hello, |cff" .. colorHex .. playerName .. "|r!")
     card1:AddSpacing(4)
 
     -- Version and author
     local version = KE.Version or "@project-version@"
     local infoLabel = card1:AddLabel("Version: |cffffffff" .. version .. "|r  -  Author: |cffffffffBitebtw|r")
     infoLabel:SetTextColor(T.textMuted[1], T.textMuted[2], T.textMuted[3], 1)
+    card1:AddSpacing(2)
+
+    -- Active profile
+    local profileName = KE.db and KE.db.GetCurrentProfile and KE.db:GetCurrentProfile() or "Default"
+    card1:AddLabel("Active Profile: |cff4dff4d" .. profileName .. "|r")
     card1:AddSpacing(2)
 
     -- Credit
@@ -148,22 +152,7 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
     yOffset = card3:GetNextOffset()
 
     ---------------------------------------------------------------------------------
-    -- Card 5: Profile
-    ---------------------------------------------------------------------------------
-    local card4 = GUIFrame:CreateCard(scrollChild, "Profile", yOffset)
-
-    local profileName = KE.db and KE.db.GetCurrentProfile and KE.db:GetCurrentProfile() or "Default"
-    card4:AddLabel("Active Profile: |cff4dff4d" .. profileName .. "|r")
-    card4:AddSpacing(4)
-
-    local realmName = GetRealmName() or "Unknown"
-    local charLabel = card4:AddLabel("Character: |cff" .. colorHex .. playerName .. "|r - " .. realmName)
-    charLabel:SetTextColor(T.textMuted[1], T.textMuted[2], T.textMuted[3], 1)
-
-    yOffset = card4:GetNextOffset()
-
-    ---------------------------------------------------------------------------------
-    -- Card 6: ElvUI Integration (only when ElvUI is loaded)
+    -- Card 5: ElvUI Integration (only when ElvUI is loaded)
     ---------------------------------------------------------------------------------
     if C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("ElvUI") then
         local elvCard = GUIFrame:CreateCard(scrollChild, "ElvUI Integration", yOffset)
@@ -180,7 +169,7 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
     end
 
     ---------------------------------------------------------------------------------
-    -- Card 7: Support
+    -- Card 6: Support
     ---------------------------------------------------------------------------------
     local card6 = GUIFrame:CreateCard(scrollChild, "Support", yOffset)
 

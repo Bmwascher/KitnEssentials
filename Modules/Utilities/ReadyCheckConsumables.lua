@@ -108,6 +108,7 @@ local FOOD_BUFFS = {
     -- Regular Food
     [1284616] = 65,   -- Flora Frenzy (highest secondary)
     [1284617] = 65,   -- Champion's Bento (highest secondary)
+    [1294727] = 50,   -- Impossible Royal Roast / Royal Roast (primary)
     -- Hearty Food (persists through death)
     [1233724] = 50,   -- Hearty Impossible Royal Roast / Hearty Royal Roast (primary)
     [1233703] = 65,   -- Hearty Flora Frenzy / Hearty Champion's Bento (highest secondary)

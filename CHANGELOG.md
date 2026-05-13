@@ -1,5 +1,18 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v2.0.1
+
+### Automation
+- **NEW:** Auto Voidcores: Gold — automatically accepts and completes the weekly *Nebulous Voidcores: Gold* quest from Decimus end-to-end, even when general auto-accept/turn-in is off. Honors the same Pause-modifier (Shift/Ctrl/Alt/None) as the other quest automation toggles
+
+### Ready Check Consumables
+- Added Impossible Royal Roast / Royal Roast (`1294727`) to the food buff detection table — the non-Hearty variants were missing, so eating them registered as no-food on the ready-check icons
+
+### Home Page
+- Active Profile row moved into the top greeting card alongside Version/Author/Credit; the standalone Profile card and its redundant Character/Realm line have been removed. Slimmer top-of-page layout without losing the profile-name display
+
+---
+
 ## v2.0.0
 
 ### Dungeon Timers
