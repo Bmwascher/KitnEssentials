@@ -1,8 +1,8 @@
 ## Title: |cffFF008CKitn|r|cffffffffEssentials|r
-## Notes: Standalone combat, QoL, and skinning modules for KitnUI.
+## Notes: Standalone combat, utilities, quality of life, dungeons, and skinning modules for KitnUI.
 ## Author: Bitebtw
 ## Version: @project-version@
-## X-Manual-Version: 2.0.0
+## X-Manual-Version: 2.0.1
 ## SavedVariables: KitnEssentialsDB, KitnEssentialsOptimizeDB
 ## Interface: 120001, 120005
 ## OptionalDeps: Ace3, LibSharedMedia-3.0, ElvUI
