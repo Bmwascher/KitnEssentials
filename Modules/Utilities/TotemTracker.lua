@@ -233,9 +233,14 @@ function TT:UpdateButton(btn, totem)
     if not totem.slot then return end
 
     local slot = totem.slot
-    local haveTotem, _, _, _, icon = GetTotemInfo(slot)
+    -- 12.0: GetTotemInfo is SecretWhenTotemSlotSecret — in tainted execution all
+    -- returns are secret. Gate on startTime (return 3, a secret NUMBER) not
+    -- haveTotem (return 1, a secret BOOLEAN): boolean tests on secret booleans
+    -- throw, but secret numbers are truthy and test cleanly. icon (return 5) is a
+    -- secret fileID; SetTexture accepts it (display-only). Matches NUI reference.
+    local _, _, startTime, _, icon = GetTotemInfo(slot)
 
-    if haveTotem then
+    if startTime then
         btn.icon:SetTexture(icon)
         btn.cooldown:SetCooldownFromDurationObject(GetTotemDuration(slot))
         btn:Show()
