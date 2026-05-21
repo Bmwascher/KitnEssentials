@@ -880,6 +880,7 @@ local Defaults = {
 
             -- Item track indicators (no ElvUI conflict)
             TrackIndicatorsEnabled   = false,
+            TrackLetterSize          = 12,
 
             -- Gem socket helper (no ElvUI conflict)
             SocketHelperEnabled      = false,

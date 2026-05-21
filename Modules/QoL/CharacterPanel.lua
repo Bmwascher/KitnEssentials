@@ -6,7 +6,7 @@
 -- ║           indicators, gem socket helper.                 ║
 -- ║  Credit: Warnings based on BetterCharacterPanel by       ║
 -- ║          Grimonja. Feature set ported from NUI v3.13     ║
--- ║          CharacterPanel.                                  ║
+-- ║          CharacterPanel.                                 ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -385,6 +385,10 @@ local function HookCharacterPanel()
                 CP:UpdateSlotTrackIndicator(slotID)
             end
         elseif event == "BAG_UPDATE_DELAYED" then
+            -- Socketing a gem / applying an enchant consumes the item from bags
+            -- and fires this rather than PLAYER_EQUIPMENT_CHANGED, so refresh the
+            -- missing-enchant/gem warnings here too (debounced + panel-gated).
+            QueueUpdate()
             if CP.socketContainer and CP.socketContainer:IsShown() then
                 CP:RefreshSocketButtons()
             end
@@ -447,7 +451,12 @@ function CP:ApplyFont(fontString, size)
     local db = self.db
     local fontFace    = db.FontFace    or "Expressway"
     local fontOutline = db.FontOutline or "OUTLINE"
-    KE:ApplyFontToText(fontString, fontFace, size, fontOutline)
+    -- These style Blizzard's own FontStrings (level/name/stat/category texts).
+    -- SOFTOUTLINE is KE's custom 8-shadow system; on Blizzard's recycled
+    -- FontStrings it renders as solid black, so use the low-level ApplyFont
+    -- (no shadow objects) and never pass SOFTOUTLINE through here.
+    if fontOutline == "SOFTOUTLINE" then fontOutline = "OUTLINE" end
+    KE:ApplyFont(fontString, fontFace, size, fontOutline)
 end
 
 function CP:UpdateItemLevelText()
@@ -512,6 +521,13 @@ function CP:StyleStatsPaneTexts()
         if category and category.Title then
             self:ApplyFont(category.Title, categorySize)
         end
+    end
+
+    -- Per-stat rows (Label/Value) are restyled by our PaperDollFrame_SetLabelAndText
+    -- hook, which only fires when Blizzard re-renders the stats pane. Force a
+    -- re-render so a StatsFontSize change applies live instead of on next reopen.
+    if PaperDollFrame and PaperDollFrame:IsShown() and PaperDollFrame_UpdateStats then
+        PaperDollFrame_UpdateStats()
     end
 end
 
@@ -667,7 +683,7 @@ function CP:CreateTrackOverlay(slotFrame, slotID)
     end
 
     overlay.text = overlay:CreateFontString(nil, "OVERLAY")
-    KE:ApplyFontToText(overlay.text, self.db.FontFace or "Expressway", 12, "OUTLINE")
+    KE:ApplyFontToText(overlay.text, self.db.FontFace or "Expressway", self.db.TrackLetterSize or 12, "OUTLINE")
     overlay.text:SetShadowColor(0, 0, 0, 0)
 
     if isRight then
@@ -694,6 +710,8 @@ function CP:UpdateSlotTrackIndicator(slotID)
     local track = self:GetItemTrack(slotID)
 
     if track then
+        -- Re-apply font each update so a TrackLetterSize change is live.
+        KE:ApplyFontToText(overlay.text, self.db.FontFace or "Expressway", self.db.TrackLetterSize or 12, "OUTLINE")
         overlay.text:SetText(track.letter)
         overlay.text:SetTextColor(track.color[1], track.color[2], track.color[3])
         overlay:Show()
@@ -1154,7 +1172,7 @@ function CP:RefreshSocketButtons()
                     SetQualityAtlas(btn.quality, atlas)
                 else
                     btn.icon:SetTexture(socket.icon or 458977)
-                    btn:SetAlpha(0.6)
+                    btn:SetAlpha(0.85)
                     btn.quality:Hide()
                 end
 
@@ -1179,6 +1197,9 @@ function CP:ShowGemPopup(socketBtn)
 
     local popup = self:CreateGemPopup()
     local gems = self:ScanBagsForGems()
+    -- Re-pull theme colors each show so a theme change applies without a reload
+    -- (the popup + its buttons are created once and cached).
+    local Theme = KE.Theme
 
     local gemList = {}
     local currentGemID = socketBtn.socket.gemID
@@ -1187,6 +1208,7 @@ function CP:ShowGemPopup(socketBtn)
     end
 
     popup.title:SetText(socketBtn.socket.filled and "Replace Gem" or "Socket Gem")
+    popup.title:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3])
 
     local minWidth = popup.title:GetStringWidth() + 26
     local minRowHeight = POPUP_ICON_SIZE + ITEM_ROW_PADDING
@@ -1196,6 +1218,7 @@ function CP:ShowGemPopup(socketBtn)
         popup.noGems:Show()
         popup.separator:Hide()
         popup.noGems:SetText(socketBtn.socket.filled and "No replacement gems" or "No compatible gems")
+        popup.noGems:SetTextColor(Theme.textMuted[1], Theme.textMuted[2], Theme.textMuted[3])
         for _, btn in pairs(popup.buttons) do btn:Hide() end
         popup:SetWidth(math.max(200, minWidth))
         targetHeight = 50
@@ -1211,10 +1234,12 @@ function CP:ShowGemPopup(socketBtn)
             btn.targetSocketIndex = socketBtn.socket.index
             btn.icon:SetTexture(gemData.icon)
             btn.count:SetText(gemData.count .. "x")
+            btn.count:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3])
             btn._hoverBg:SetAlpha(0); btn._hoverTarget = 0
 
             local stats = GetGemStatsFromLink(gemData.link)
             btn.stats:SetText(stats or "")
+            btn.stats:SetTextColor(Theme.textPrimary[1], Theme.textPrimary[2], Theme.textPrimary[3])
 
             local textHeight = btn.stats:GetStringHeight()
             local rowHeight = math.max(minRowHeight, textHeight + ITEM_ROW_PADDING)

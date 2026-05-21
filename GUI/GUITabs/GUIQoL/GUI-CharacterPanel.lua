@@ -29,6 +29,7 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
         return not (C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("ElvUI"))
     end)
     manager:SetCondition("socketHelperOn", function() return db.SocketHelperEnabled end)
+    manager:SetCondition("trackOn", function() return db.TrackIndicatorsEnabled end)
 
     local function ApplySettings()
         if CP then CP:Refresh() end
@@ -85,30 +86,28 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     local card2 = GUIFrame:CreateCard(scrollChild, "Warning Display", yOffset)
     manager:Register(card2, "all")
 
-    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local enchantCheck = GUIFrame:CreateCheckbox(row2a, "Show Missing Enchants", {
+    local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local enchantCheck = GUIFrame:CreateCheckbox(row2, "Show Missing Enchants", {
         value = db.ShowEnchants ~= false,
         callback = function(checked) db.ShowEnchants = checked; ApplySettings() end,
     })
-    row2a:AddWidget(enchantCheck, 0.5)
+    row2:AddWidget(enchantCheck, 1 / 3)
     manager:Register(enchantCheck, "all")
 
-    local gemCheck = GUIFrame:CreateCheckbox(row2a, "Show Missing Gems", {
+    local gemCheck = GUIFrame:CreateCheckbox(row2, "Show Missing Gems", {
         value = db.ShowMissingGems ~= false,
         callback = function(checked) db.ShowMissingGems = checked; ApplySettings() end,
     })
-    row2a:AddWidget(gemCheck, 0.5)
+    row2:AddWidget(gemCheck, 1 / 3)
     manager:Register(gemCheck, "all")
-    card2:AddRow(row2a, Theme.rowHeight)
 
-    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
-    local hideBGCheck = GUIFrame:CreateCheckbox(row2b, "Hide Character Panel Background", {
+    local hideBGCheck = GUIFrame:CreateCheckbox(row2, "Hide Panel Background", {
         value = db.HideCharacterBackground == true,
         callback = function(checked) db.HideCharacterBackground = checked; ApplySettings() end,
     })
-    row2b:AddWidget(hideBGCheck, 1)
+    row2:AddWidget(hideBGCheck, 1 / 3)
     manager:Register(hideBGCheck, "all")
-    card2:AddRow(row2b, Theme.rowHeightLast, 0)
+    card2:AddRow(row2, Theme.rowHeightLast, 0)
 
     yOffset = card2:GetNextOffset()
 
@@ -128,8 +127,8 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
         card3:AddRow(elvuiNoteRow, 24)
     end
 
-    local row3a = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
-    local decimalCheck = GUIFrame:CreateCheckbox(row3a, "Decimal Item Level", {
+    local row3 = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
+    local decimalCheck = GUIFrame:CreateCheckbox(row3, "Decimal Item Level", {
         value = db.DecimalItemLevel,
         callback = function(checked)
             db.DecimalItemLevel = checked
@@ -138,10 +137,10 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
         end,
         tooltip = "Shows item level with 2 decimal places instead of rounded.",
     })
-    row3a:AddWidget(decimalCheck, 0.5)
+    row3:AddWidget(decimalCheck, 1 / 3)
     manager:Register(decimalCheck, "elvuiOk")
 
-    local raceCheck = GUIFrame:CreateCheckbox(row3a, "Show Race Text", {
+    local raceCheck = GUIFrame:CreateCheckbox(row3, "Show Race Text", {
         value = db.ShowRaceText,
         callback = function(checked)
             db.ShowRaceText = checked
@@ -152,12 +151,10 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
         end,
         tooltip = "Shows your character's race below the level text.",
     })
-    row3a:AddWidget(raceCheck, 0.5)
+    row3:AddWidget(raceCheck, 1 / 3)
     manager:Register(raceCheck, "elvuiOk")
-    card3:AddRow(row3a, Theme.rowHeight)
 
-    local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
-    local factionCheck = GUIFrame:CreateCheckbox(row3b, "Show Faction on Level", {
+    local factionCheck = GUIFrame:CreateCheckbox(row3, "Show Faction on Level", {
         value = db.ShowFactionOnLevel,
         callback = function(checked)
             db.ShowFactionOnLevel = checked
@@ -166,9 +163,9 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
         end,
         tooltip = "Appends (A)/(H) in faction color after the level text.",
     })
-    row3b:AddWidget(factionCheck, 1)
+    row3:AddWidget(factionCheck, 1 / 3)
     manager:Register(factionCheck, "elvuiOk")
-    card3:AddRow(row3b, Theme.rowHeightLast, 0)
+    card3:AddRow(row3, Theme.rowHeightLast, 0)
 
     yOffset = card3:GetNextOffset()
 
@@ -192,12 +189,27 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
                     CP:HideAllTrackIndicators()
                 end
             end
+            RefreshStates()
         end,
         tooltip = "Shows M/H/C/V/A letters on gear slots indicating Myth/Hero/Champion/Veteran/Adventurer tracks. Crafted gear auto-detects tier from item level.",
     })
     row4:AddWidget(trackCheck, 1)
     manager:Register(trackCheck, "all")
     card4:AddRow(row4, Theme.rowHeight)
+
+    local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local trackSizeSlider = GUIFrame:CreateSlider(row4b, "Letter Size", {
+        min = 8, max = 24, step = 1,
+        value = db.TrackLetterSize,
+        callback = function(val)
+            db.TrackLetterSize = val
+            local CP = GetModule()
+            if CP then CP:UpdateAllTrackIndicators() end
+        end,
+    })
+    row4b:AddWidget(trackSizeSlider, 1)
+    manager:Register(trackSizeSlider, "trackOn")
+    card4:AddRow(row4b, Theme.rowHeight)
 
     local noteRow4 = GUIFrame:CreateRow(card4.content, 30)
     local note4 = GUIFrame:CreateText(noteRow4, "",
@@ -300,7 +312,9 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
             { label = "Item Level Value",  dbKey = "IlvlValueSize",    elvuiGated = true },
         },
         fontSizeRange = { 8, 24 },
-        includeSoftOutline = true,
+        -- SOFTOUTLINE renders as solid black on Blizzard's character-panel
+        -- FontStrings, so it's not offered for this module.
+        includeSoftOutline = false,
         manager = manager,
         onChangeCallback = function()
             local CP = GetModule()
