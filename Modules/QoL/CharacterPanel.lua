@@ -555,6 +555,118 @@ function CP:HideRaceText()
 end
 
 ---------------------------------------------------------------------------------
+-- Item Track Indicators
+---------------------------------------------------------------------------------
+function CP:GetItemTrack(slotID)
+    local data = C_TooltipInfo.GetInventoryItem("player", slotID)
+    if not data or not data.lines then return nil end
+
+    local isCrafted = false
+    for _, line in ipairs(data.lines) do
+        local text = line.leftText
+        if text then
+            if text:find("Upgrade Level:") or text:find("Ascendant Voidforged:") then
+                for _, track in ipairs(ITEM_TRACKS) do
+                    if text:find(track.keyword) then return track end
+                end
+            end
+            if text:find("Crafted") then isCrafted = true end
+        end
+    end
+
+    if isCrafted then
+        local itemLink = GetInventoryItemLink("player", slotID)
+        if itemLink then
+            local ilvl = GetDetailedItemLevelInfo(itemLink)
+            if ilvl then
+                local isWeapon = slotID == 16 or slotID == 17
+                for _, track in ipairs(CRAFTED_TRACKS) do
+                    if ilvl >= track.minIlvl and (not track.weaponOnly or isWeapon) then
+                        return track
+                    end
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+function CP:CreateTrackOverlay(slotFrame, slotID)
+    if slotFrame._trackOverlay then return slotFrame._trackOverlay end
+
+    local isRight = RIGHT_SLOTS[slotID]
+    local overlay = CreateFrame("Frame", nil, slotFrame)
+    overlay:SetSize(14, 14)
+    overlay:SetFrameLevel(slotFrame:GetFrameLevel() + 10)
+
+    if isRight then
+        overlay:SetPoint("BOTTOMRIGHT", slotFrame, "BOTTOMRIGHT", 1, 0)
+    else
+        overlay:SetPoint("BOTTOMLEFT", slotFrame, "BOTTOMLEFT", 0, 0)
+    end
+
+    overlay.text = overlay:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(overlay.text, self.db.FontFace or "Expressway", 12, "OUTLINE")
+    overlay.text:SetShadowColor(0, 0, 0, 0)
+
+    if isRight then
+        overlay.text:SetPoint("BOTTOMRIGHT", overlay, "BOTTOMRIGHT", 0, 0)
+        overlay.text:SetJustifyH("RIGHT")
+    else
+        overlay.text:SetPoint("BOTTOMLEFT", overlay, "BOTTOMLEFT", 0, 0)
+        overlay.text:SetJustifyH("LEFT")
+    end
+
+    overlay:Hide()
+    slotFrame._trackOverlay = overlay
+    return overlay
+end
+
+function CP:UpdateSlotTrackIndicator(slotID)
+    local frameName = SLOT_FRAMES[slotID]
+    if not frameName then return end
+
+    local slotFrame = _G[frameName]
+    if not slotFrame then return end
+
+    local overlay = self:CreateTrackOverlay(slotFrame, slotID)
+    local track = self:GetItemTrack(slotID)
+
+    if track then
+        overlay.text:SetText(track.letter)
+        overlay.text:SetTextColor(track.color[1], track.color[2], track.color[3])
+        overlay:Show()
+    else
+        overlay:Hide()
+    end
+end
+
+function CP:UpdateAllTrackIndicators()
+    if not self.db.TrackIndicatorsEnabled then return end
+    for slotID in pairs(SLOT_FRAMES) do
+        self:UpdateSlotTrackIndicator(slotID)
+    end
+end
+
+function CP:HideAllTrackIndicators()
+    for _, frameName in pairs(SLOT_FRAMES) do
+        local slotFrame = _G[frameName]
+        if slotFrame and slotFrame._trackOverlay then
+            slotFrame._trackOverlay:Hide()
+        end
+    end
+end
+
+function CP:SetupTrackIndicators()
+    if not self.db.TrackIndicatorsEnabled then return end
+    if self._trackIndicatorsHooked then return end
+    self._trackIndicatorsHooked = true
+    -- Track indicators register on PaperDollFrame OnShow via the combined
+    -- HookCharacterPanel handler (added in Task 12). No separate hook here.
+end
+
+---------------------------------------------------------------------------------
 -- Lifecycle
 ---------------------------------------------------------------------------------
 function CP:OnInitialize()
