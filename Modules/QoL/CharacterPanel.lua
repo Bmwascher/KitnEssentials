@@ -603,6 +603,15 @@ function CP:HideRaceText()
     if CharacterLevelText then
         CharacterLevelText:SetPointsOffset(0, 0)
     end
+    -- SetPointsOffset(0,0) is a transient offset and doesn't always snap the
+    -- level text back to Blizzard's baseline on its own (it stays displaced
+    -- until the panel is reopened). Re-running Blizzard's level layout — what a
+    -- reopen does — restores it immediately. Our PaperDollFrame_SetLevel hook is
+    -- safe here: UpdateRaceTextPosition early-returns now that ShowRaceText is
+    -- off, it only re-applies the faction suffix.
+    if PaperDollFrame and PaperDollFrame:IsShown() and PaperDollFrame_SetLevel then
+        PaperDollFrame_SetLevel()
+    end
 end
 
 ---------------------------------------------------------------------------------
