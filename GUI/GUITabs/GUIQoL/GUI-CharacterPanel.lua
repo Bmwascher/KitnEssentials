@@ -25,6 +25,11 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     local CP = GetModule()
     local manager = GUIFrame:CreateWidgetStateManager()
 
+    manager:SetCondition("elvuiOk", function()
+        return not (C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("ElvUI"))
+    end)
+    manager:SetCondition("socketHelperOn", function() return db.SocketHelperEnabled end)
+
     local function ApplySettings()
         if CP then CP:Refresh() end
     end
@@ -67,8 +72,7 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     local noteRow = GUIFrame:CreateRow(card1.content, 50)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Displays red warnings for missing enchants and empty gem sockets.\n" ..
-        KE:ColorTextByTheme("-") .. " Only shows at max level on the character panel.",
+        KE:ColorTextByTheme("-") .. " Adds optional decimal item level, race text, faction indicator, item track letters, missing enchant/gem warnings, and a gem socket helper.",
         50, "hide")
     noteRow:AddWidget(noteText, 1)
     card1:AddRow(noteRow, 50, 0)
@@ -76,9 +80,9 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 2: General Settings
+    -- Card 2: Warning Display
     ----------------------------------------------------------------
-    local card2 = GUIFrame:CreateCard(scrollChild, "General Settings", yOffset)
+    local card2 = GUIFrame:CreateCard(scrollChild, "Warning Display", yOffset)
     manager:Register(card2, "all")
 
     local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
