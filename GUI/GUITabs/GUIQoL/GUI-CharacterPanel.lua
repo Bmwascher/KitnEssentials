@@ -221,7 +221,93 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     yOffset = card4:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 5: Gem Socket Helper
+    -- Card 5: Slot Details
+    ----------------------------------------------------------------
+    local cardSD = GUIFrame:CreateCard(scrollChild, "Slot Details", yOffset)
+    manager:Register(cardSD, "all")
+
+    local rowSD1 = GUIFrame:CreateRow(cardSD.content, Theme.rowHeight)
+    local ilvlCheck = GUIFrame:CreateCheckbox(rowSD1, "Show Item Level", {
+        value = db.ShowSlotItemLevel,
+        callback = function(checked)
+            db.ShowSlotItemLevel = checked
+            local CP = GetModule()
+            if CP then CP:UpdateAllSlotDetails() end
+        end,
+        tooltip = "Shows the item level on each equipped gear slot.",
+    })
+    rowSD1:AddWidget(ilvlCheck, 1 / 3)
+    manager:Register(ilvlCheck, "all")
+
+    local enchantNameCheck = GUIFrame:CreateCheckbox(rowSD1, "Show Enchant Names", {
+        value = db.ShowEnchantNames,
+        callback = function(checked)
+            db.ShowEnchantNames = checked
+            local CP = GetModule()
+            if CP then CP:UpdateAllSlotDetails() end
+        end,
+        tooltip = "Shows the enchant name on enchantable gear slots.",
+    })
+    rowSD1:AddWidget(enchantNameCheck, 1 / 3)
+    manager:Register(enchantNameCheck, "all")
+
+    local slotGemsCheck = GUIFrame:CreateCheckbox(rowSD1, "Show Gems", {
+        value = db.ShowSlotGems,
+        callback = function(checked)
+            db.ShowSlotGems = checked
+            local CP = GetModule()
+            if CP then CP:UpdateAllSlotDetails() end
+        end,
+        tooltip = "Shows equipped gem icons on each gear slot.",
+    })
+    rowSD1:AddWidget(slotGemsCheck, 1 / 3)
+    manager:Register(slotGemsCheck, "all")
+    cardSD:AddRow(rowSD1, Theme.rowHeight)
+
+    local rowSD2 = GUIFrame:CreateRow(cardSD.content, Theme.rowHeight)
+    local infoSizeSlider = GUIFrame:CreateSlider(rowSD2, "Info Text Size", {
+        min = 8, max = 18, step = 1,
+        value = db.SlotInfoFontSize,
+        callback = function(val)
+            db.SlotInfoFontSize = val
+            local CP = GetModule()
+            if CP then CP:UpdateAllSlotDetails() end
+        end,
+    })
+    rowSD2:AddWidget(infoSizeSlider, 0.5)
+    manager:Register(infoSizeSlider, "all")
+
+    local gemIconSlider = GUIFrame:CreateSlider(rowSD2, "Gem Icon Size", {
+        min = 8, max = 24, step = 1,
+        value = db.SlotGemIconSize,
+        callback = function(val)
+            db.SlotGemIconSize = val
+            local CP = GetModule()
+            if CP then CP:UpdateAllSlotDetails() end
+        end,
+    })
+    rowSD2:AddWidget(gemIconSlider, 0.5)
+    manager:Register(gemIconSlider, "all")
+    cardSD:AddRow(rowSD2, Theme.rowHeight)
+
+    local rowSD3 = GUIFrame:CreateRow(cardSD.content, Theme.rowHeightLast)
+    local enchantLenSlider = GUIFrame:CreateSlider(rowSD3, "Enchant Name Length", {
+        min = 8, max = 30, step = 1,
+        value = db.EnchantNameMaxLength,
+        callback = function(val)
+            db.EnchantNameMaxLength = val
+            local CP = GetModule()
+            if CP then CP:UpdateAllSlotDetails() end
+        end,
+    })
+    rowSD3:AddWidget(enchantLenSlider, 1)
+    manager:Register(enchantLenSlider, "all")
+    cardSD:AddRow(rowSD3, Theme.rowHeightLast, 0)
+
+    yOffset = cardSD:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 6: Gem Socket Helper
     ----------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Gem Socket Helper", yOffset)
     manager:Register(card5, "all")
@@ -294,7 +380,7 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     yOffset = card5:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 6: Font Settings
+    -- Card 7: Font Settings
     ----------------------------------------------------------------
     local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
         title = "Font Settings",
