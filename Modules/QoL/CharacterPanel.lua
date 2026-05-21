@@ -479,6 +479,82 @@ function CP:SetupStatTextHook()
 end
 
 ---------------------------------------------------------------------------------
+-- Level Text Faction Indicator + Race Text
+---------------------------------------------------------------------------------
+function CP:UpdateLevelTextWithFaction()
+    if ElvUILoaded() then return end
+
+    local levelText = CharacterLevelText
+    if not levelText then return end
+
+    local text = levelText:GetText()
+    if not text then return end
+
+    -- Strip any prior suffix we added.
+    text = text:gsub(" |c%x%x%x%x%x%x%x%x%([AH]%)|r$", "")
+
+    if self.db.ShowFactionOnLevel then
+        local faction = UnitFactionGroup("player")
+        if faction == "Alliance" then
+            text = text .. " |cff3399ff(A)|r"
+        elseif faction == "Horde" then
+            text = text .. " |cffe63333(H)|r"
+        end
+    end
+
+    levelText:SetText(text)
+end
+
+function CP:SetupLevelTextHook()
+    if ElvUILoaded() then return end
+    if self._levelTextHooked then return end
+    self._levelTextHooked = true
+
+    hooksecurefunc("PaperDollFrame_SetLevel", function()
+        if not CP.db.Enabled then return end
+        CP:UpdateLevelTextWithFaction()
+        CP:UpdateRaceTextPosition()
+    end)
+end
+
+function CP:CreateRaceText()
+    if self._raceText then return self._raceText end
+
+    local text = PaperDollFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall2")
+    text:SetPoint("TOP", CharacterLevelText, "BOTTOM", 0, 5)
+    text:SetText(UnitRace("player"))
+    text:Hide()
+
+    self._raceText = text
+    return text
+end
+
+function CP:UpdateRaceTextPosition()
+    if not self._raceText then return end
+    if not self.db.ShowRaceText then return end
+    if not CharacterLevelText then return end
+    CharacterLevelText:SetPointsOffset(0, -37)
+end
+
+function CP:ShowRaceText()
+    if ElvUILoaded() then return end
+    if not self.db.ShowRaceText then return end
+
+    local text = self:CreateRaceText()
+    self:ApplyFont(text, self.db.LevelTextSize or 12)
+    text:SetText(UnitRace("player"))
+    text:Show()
+    self:UpdateRaceTextPosition()
+end
+
+function CP:HideRaceText()
+    if self._raceText then self._raceText:Hide() end
+    if CharacterLevelText then
+        CharacterLevelText:SetPointsOffset(0, 0)
+    end
+end
+
+---------------------------------------------------------------------------------
 -- Lifecycle
 ---------------------------------------------------------------------------------
 function CP:OnInitialize()
