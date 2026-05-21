@@ -113,6 +113,102 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     yOffset = card2:GetNextOffset()
 
     ----------------------------------------------------------------
+    -- Card 3: Character Panel Display (ElvUI-gated)
+    ----------------------------------------------------------------
+    local card3 = GUIFrame:CreateCard(scrollChild, "Character Panel Display", yOffset)
+    manager:Register(card3, "elvuiOk")
+
+    local elvuiLoaded = C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("ElvUI")
+    if elvuiLoaded then
+        local elvuiNoteRow = GUIFrame:CreateRow(card3.content, 24)
+        local elvuiNote = GUIFrame:CreateText(elvuiNoteRow,
+            "", "|cffff5555Disabled while ElvUI is loaded — ElvUI handles this.|r",
+            24, "hide")
+        elvuiNoteRow:AddWidget(elvuiNote, 1)
+        card3:AddRow(elvuiNoteRow, 24)
+    end
+
+    local row3a = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local decimalCheck = GUIFrame:CreateCheckbox(row3a, "Decimal Item Level", {
+        value = db.DecimalItemLevel,
+        callback = function(checked)
+            db.DecimalItemLevel = checked
+            local CP = GetModule()
+            if CP then CP:UpdateItemLevelText() end
+        end,
+        tooltip = "Shows item level with 2 decimal places instead of rounded.",
+    })
+    row3a:AddWidget(decimalCheck, 0.5)
+    manager:Register(decimalCheck, "elvuiOk")
+
+    local raceCheck = GUIFrame:CreateCheckbox(row3a, "Show Race Text", {
+        value = db.ShowRaceText,
+        callback = function(checked)
+            db.ShowRaceText = checked
+            local CP = GetModule()
+            if CP then
+                if checked then CP:ShowRaceText() else CP:HideRaceText() end
+            end
+        end,
+        tooltip = "Shows your character's race below the level text.",
+    })
+    row3a:AddWidget(raceCheck, 0.5)
+    manager:Register(raceCheck, "elvuiOk")
+    card3:AddRow(row3a, Theme.rowHeight)
+
+    local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
+    local factionCheck = GUIFrame:CreateCheckbox(row3b, "Show Faction on Level", {
+        value = db.ShowFactionOnLevel,
+        callback = function(checked)
+            db.ShowFactionOnLevel = checked
+            local CP = GetModule()
+            if CP then CP:UpdateLevelTextWithFaction() end
+        end,
+        tooltip = "Appends (A)/(H) in faction color after the level text.",
+    })
+    row3b:AddWidget(factionCheck, 1)
+    manager:Register(factionCheck, "elvuiOk")
+    card3:AddRow(row3b, Theme.rowHeightLast, 0)
+
+    yOffset = card3:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 4: Item Track Indicators
+    ----------------------------------------------------------------
+    local card4 = GUIFrame:CreateCard(scrollChild, "Item Track Indicators", yOffset)
+    manager:Register(card4, "all")
+
+    local row4 = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local trackCheck = GUIFrame:CreateCheckbox(row4, "Show Track Letters", {
+        value = db.TrackIndicatorsEnabled,
+        callback = function(checked)
+            db.TrackIndicatorsEnabled = checked
+            local CP = GetModule()
+            if CP then
+                if checked then
+                    CP:SetupTrackIndicators()
+                    CP:UpdateAllTrackIndicators()
+                else
+                    CP:HideAllTrackIndicators()
+                end
+            end
+        end,
+        tooltip = "Shows M/H/C/V/A letters on gear slots indicating Myth/Hero/Champion/Veteran/Adventurer tracks. Crafted gear auto-detects tier from item level.",
+    })
+    row4:AddWidget(trackCheck, 1)
+    manager:Register(trackCheck, "all")
+    card4:AddRow(row4, Theme.rowHeight)
+
+    local noteRow4 = GUIFrame:CreateRow(card4.content, 30)
+    local note4 = GUIFrame:CreateText(noteRow4, "",
+        "Colors: |cffff8000M|r Myth · |cffc74dc7H|r Hero · |cff00b3ffC|r Champion · |cff00cc00V|r Veteran · |cffb3b3b3A|r Adventurer",
+        30, "hide")
+    noteRow4:AddWidget(note4, 1)
+    card4:AddRow(noteRow4, 30, 0)
+
+    yOffset = card4:GetNextOffset()
+
+    ----------------------------------------------------------------
     -- Card 2: Font Settings
     ----------------------------------------------------------------
     local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
