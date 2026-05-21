@@ -347,7 +347,7 @@ local PREVIEW_MODULES = {
     "StanceText", "CombatCross", "CombatTexts", "CombatRes",
     "CombatTimer", "PetStatusText", "DragonRiding",
     "FocusCastbar", "TargetCastbar", "RaidNotifications", "HuntersMark", "RangeChecker",
-    "TimeSpiral", "DisintegrateTicks", "StasisTracker", "Recuperate", "BloodlustTracker", "KickTracker",
+    "TimeSpiral", "TotemTracker", "DisintegrateTicks", "StasisTracker", "Recuperate", "BloodlustTracker", "KickTracker",
     "NoMovementAlert", "PrescienceTracker", "GreatVaultAlert", "PotionReady", "BossDebuffs",
     "EnemyCounter", "EbonMightTracker", "DungeonCasts", "HealerMana",
     "ReadyCheckConsumables", "DeathNotifications",
