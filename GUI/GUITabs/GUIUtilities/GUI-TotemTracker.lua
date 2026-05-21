@@ -15,6 +15,10 @@ local GetMacroIndexByName = GetMacroIndexByName
 local GetNumMacros        = GetNumMacros
 local CreateMacro         = CreateMacro
 
+local function GetModule()
+    return KitnEssentials and KitnEssentials:GetModule("TotemTracker", true)
+end
+
 GUIFrame:RegisterContent("TotemTracker", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.TotemTracker
     if not db then
@@ -23,14 +27,15 @@ GUIFrame:RegisterContent("TotemTracker", function(scrollChild, yOffset)
         return errorCard:GetNextOffset()
     end
 
-    ---@type TotemTracker?
-    local TT = KitnEssentials and KitnEssentials:GetModule("TotemTracker", true)
     local manager = GUIFrame:CreateWidgetStateManager()
 
     manager:SetCondition("swipeOn", function() return db.Swipe end)
 
-    local function ApplySettings() if TT then TT:ApplySettings() end end
-    local function UpdateAllWidgetStates() manager:UpdateAll(db.Enabled) end
+    local function ApplySettings()
+        local TT = GetModule()
+        if TT and TT.ApplySettings then TT:ApplySettings() end
+    end
+    local function UpdateAllWidgetStates() manager:UpdateAll(db.Enabled ~= false) end
 
     ----------------------------------------------------------------
     -- Card 1: Enable
@@ -39,9 +44,10 @@ GUIFrame:RegisterContent("TotemTracker", function(scrollChild, yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
     local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Totem Tracker", {
-        value = db.Enabled,
+        value = db.Enabled ~= false,
         callback = function(checked)
             db.Enabled = checked
+            local TT = GetModule()
             if TT then
                 if checked then KitnEssentials:EnableModule("TotemTracker")
                 else KitnEssentials:DisableModule("TotemTracker") end
@@ -57,6 +63,7 @@ GUIFrame:RegisterContent("TotemTracker", function(scrollChild, yOffset)
     previewBtn = GUIFrame:CreateButton(row1, "Show Preview", {
         height = 30,
         callback = function()
+            local TT = GetModule()
             if TT and TT.TogglePreview then
                 local isActive = TT:TogglePreview()
                 previewBtn:SetLabel(isActive and "Hide Preview" or "Show Preview")
@@ -64,6 +71,7 @@ GUIFrame:RegisterContent("TotemTracker", function(scrollChild, yOffset)
         end,
     })
     row1:AddWidget(previewBtn, (1 / 3), nil, 0, -6)
+    local TT = GetModule()
     if TT and TT.IsPreviewActive and TT:IsPreviewActive() then
         previewBtn:SetLabel("Hide Preview")
     end
@@ -135,10 +143,10 @@ GUIFrame:RegisterContent("TotemTracker", function(scrollChild, yOffset)
         showPixelSnap = true,
         onChangeCallback = ApplySettings,
     })
-    manager:Register(posCard, "all")
     if posCard.positionWidgets then
         manager:RegisterGroup(posCard.positionWidgets, "all")
     end
+    manager:Register(posCard, "all")
     yOffset = posOffset
 
     ----------------------------------------------------------------
