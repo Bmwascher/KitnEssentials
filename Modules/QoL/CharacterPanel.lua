@@ -328,11 +328,20 @@ local function GetSlotEnchantName(slot)
     for _, line in ipairs(data.lines) do
         local text = line.leftText
         if text and text:find(prefix, 1, true) == 1 then
-            return strtrim(text:sub(#prefix + 1))
+            local body = text:sub(#prefix + 1)
+            -- Strip the trailing quality-atlas markup ("|A:Professions-...|a") that
+            -- crafted enchants append, so it can't leak into the label.
+            body = body:gsub("%s*|A:.-|a", "")
+            return strtrim(body)
         end
     end
     return nil
 end
+
+-- Fixed (non-configurable): the nickname table keeps labels short, so the
+-- truncation cap and gem icon size are constants rather than user sliders.
+local SLOT_ENCHANT_MAX_LEN = 18
+local SLOT_GEM_ICON_SIZE   = 14
 
 function CP:ResolveEnchantLabel(slot)
     -- Enchant-ID check is the locale-robust "is it enchanted?" gate; the readable
@@ -341,8 +350,7 @@ function CP:ResolveEnchantLabel(slot)
     local name = GetSlotEnchantName(slot)
     if not name then return "Enchanted" end
     name = ProcessEnchantText(name)
-    local maxLen = self.db.EnchantNameMaxLength or 18
-    if #name > maxLen then name = name:sub(1, maxLen) end
+    if #name > SLOT_ENCHANT_MAX_LEN then name = name:sub(1, SLOT_ENCHANT_MAX_LEN) end
     return name
 end
 
@@ -397,16 +405,18 @@ local function CreateSlotText(button, slot)
     KE:ApplyFontToText(text, fontFace, fontSize, fontOutline)
     text:SetTextColor(1, 0, 0, 1)
 
+    -- Inset 10px inward (toward the model) to align with the slot-detail enchant
+    -- name, which uses the same inset.
     local side = slotLayout[slot]
     if side == "left" then
-        text:SetPoint("TOPLEFT", button, "TOPRIGHT", 4, -5)
+        text:SetPoint("TOPLEFT", button, "TOPRIGHT", 10, -5)
     elseif side == "right" then
-        text:SetPoint("TOPRIGHT", button, "TOPLEFT", -4, -5)
+        text:SetPoint("TOPRIGHT", button, "TOPLEFT", -10, -5)
     elseif side == "center" then
         if slot == INVSLOT_MAINHAND then
-            text:SetPoint("TOPRIGHT", button, "TOPLEFT", -4, -2)
+            text:SetPoint("TOPRIGHT", button, "TOPLEFT", -10, -2)
         else
-            text:SetPoint("TOPLEFT", button, "TOPRIGHT", 4, -2)
+            text:SetPoint("TOPLEFT", button, "TOPRIGHT", 10, -2)
         end
     end
     return text
@@ -993,7 +1003,7 @@ function CP:CreateSlotDetail(slotFrame, slotID)
     KE:ApplyFont(detail.ilvlText, fontFace, fontSize, fontOutline)
     detail.ilvlText:SetShadowColor(0, 0, 0, 0)
 
-    local iconSize = self.db.SlotGemIconSize or 12
+    local iconSize = SLOT_GEM_ICON_SIZE
     detail.gemIcons = {}
     for i = 1, SLOT_DETAIL_MAX_GEMS do
         local iconFrame = CreateFrame("Frame", nil, detail)
@@ -1100,7 +1110,7 @@ function CP:UpdateSlotDetail(slotID)
     if self.db.ShowSlotGems and socketableSlotSet[slotID] then
         local result = self:ScanItemSockets(slotID)
         if result and result.sockets then
-            local iconSize = self.db.SlotGemIconSize or 12
+            local iconSize = SLOT_GEM_ICON_SIZE
             for _, socket in ipairs(result.sockets) do
                 if gemCount >= SLOT_DETAIL_MAX_GEMS then break end
                 gemCount = gemCount + 1

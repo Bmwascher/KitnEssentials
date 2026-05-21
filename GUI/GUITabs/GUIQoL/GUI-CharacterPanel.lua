@@ -264,7 +264,7 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     manager:Register(slotGemsCheck, "all")
     cardSD:AddRow(rowSD1, Theme.rowHeight)
 
-    local rowSD2 = GUIFrame:CreateRow(cardSD.content, Theme.rowHeight)
+    local rowSD2 = GUIFrame:CreateRow(cardSD.content, Theme.rowHeightLast)
     local infoSizeSlider = GUIFrame:CreateSlider(rowSD2, "Info Text Size", {
         min = 8, max = 18, step = 1,
         value = db.SlotInfoFontSize,
@@ -274,35 +274,9 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
             if CP then CP:UpdateAllSlotDetails() end
         end,
     })
-    rowSD2:AddWidget(infoSizeSlider, 0.5)
+    rowSD2:AddWidget(infoSizeSlider, 1)
     manager:Register(infoSizeSlider, "all")
-
-    local gemIconSlider = GUIFrame:CreateSlider(rowSD2, "Gem Icon Size", {
-        min = 8, max = 24, step = 1,
-        value = db.SlotGemIconSize,
-        callback = function(val)
-            db.SlotGemIconSize = val
-            local CP = GetModule()
-            if CP then CP:UpdateAllSlotDetails() end
-        end,
-    })
-    rowSD2:AddWidget(gemIconSlider, 0.5)
-    manager:Register(gemIconSlider, "all")
-    cardSD:AddRow(rowSD2, Theme.rowHeight)
-
-    local rowSD3 = GUIFrame:CreateRow(cardSD.content, Theme.rowHeightLast)
-    local enchantLenSlider = GUIFrame:CreateSlider(rowSD3, "Enchant Name Length", {
-        min = 8, max = 30, step = 1,
-        value = db.EnchantNameMaxLength,
-        callback = function(val)
-            db.EnchantNameMaxLength = val
-            local CP = GetModule()
-            if CP then CP:UpdateAllSlotDetails() end
-        end,
-    })
-    rowSD3:AddWidget(enchantLenSlider, 1)
-    manager:Register(enchantLenSlider, "all")
-    cardSD:AddRow(rowSD3, Theme.rowHeightLast, 0)
+    cardSD:AddRow(rowSD2, Theme.rowHeightLast, 0)
 
     yOffset = cardSD:GetNextOffset()
 
