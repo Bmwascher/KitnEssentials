@@ -8,6 +8,7 @@
     <Script file="NoMovementAlert.lua" />
     <Script file="BloodlustTracker.lua" />
     <Script file="TimeSpiral.lua" />
+    <Script file="TotemTracker.lua" />
     <Script file="Recuperate.lua" />
     <Script file="DisintegrateTicks.lua" />
     <Script file="StasisTracker.lua" />
