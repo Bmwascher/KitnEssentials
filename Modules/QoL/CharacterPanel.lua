@@ -235,7 +235,10 @@ end
 function CP:GetSlotItemLevel(slot)
     local link = GetInventoryItemLink("player", slot)
     if not link then return nil end
-    return GetDetailedItemLevelInfo(link)
+    -- GetDetailedItemLevelInfo returns (effective, isPreview, base); only the
+    -- effective level is wanted, so collapse to a single return.
+    local effective = GetDetailedItemLevelInfo(link)
+    return effective
 end
 
 local function CanEnchantSlot(slot)
