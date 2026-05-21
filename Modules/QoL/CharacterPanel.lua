@@ -360,20 +360,34 @@ local function HookCharacterPanel()
 
     if PaperDollFrame then
         PaperDollFrame:HookScript("OnShow", function()
-            QueueUpdate()
-            local db = CP.db
-            if db and db.HideCharacterBackground then
-                HideCharacterBackground()
-            end
+            if not CP.db.Enabled then return end
+            QueueUpdate()                                 -- warnings
+            if CP.db.HideCharacterBackground then HideCharacterBackground() end
+            if CP.db.SocketHelperEnabled then CP:RefreshSocketButtons() end
+            if CP.db.TrackIndicatorsEnabled then CP:UpdateAllTrackIndicators() end
+        end)
+        PaperDollFrame:HookScript("OnHide", function()
+            if CP.socketContainer then CP.socketContainer:Hide() end
+            CP:HideGemPopup()
+            CP:HideSlotHighlight()
         end)
     end
 
-    -- PEC alone is the direct signal; UIC was duplicative.
     CP.eventFrame = CreateFrame("Frame")
     CP.eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
-    CP.eventFrame:SetScript("OnEvent", function(_, event)
+    CP.eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
+    CP.eventFrame:SetScript("OnEvent", function(_, event, slotID)
+        if not CP.db.Enabled then return end
         if event == "PLAYER_EQUIPMENT_CHANGED" then
-            QueueUpdate()
+            QueueUpdate()                                 -- warnings
+            if CP.db.SocketHelperEnabled then CP:RefreshSocketButtons() end
+            if CP.db.TrackIndicatorsEnabled and slotID then
+                CP:UpdateSlotTrackIndicator(slotID)
+            end
+        elseif event == "BAG_UPDATE_DELAYED" then
+            if CP.socketContainer and CP.socketContainer:IsShown() then
+                CP:RefreshSocketButtons()
+            end
         end
     end)
 
@@ -381,10 +395,47 @@ local function HookCharacterPanel()
 end
 
 function CP:Refresh()
+    self.db = KE.db.profile.CharacterPanel
     HookCharacterPanel()
-    ApplyFontToAll()
-    if CharacterFrame and CharacterFrame:IsShown() then
-        UpdateDisplay()
+    ApplyFontToAll()                                      -- warning fonts
+    if self.db.Enabled then
+        self:ApplySettings()
+        if CharacterFrame and CharacterFrame:IsShown() then UpdateDisplay() end
+    end
+end
+
+function CP:ApplySettings()
+    if not self.db.Enabled then return end
+
+    -- Live apply/restore of the character-panel background hide. Idempotent;
+    -- lets the GUI toggle take effect immediately instead of only on the next
+    -- PaperDollFrame OnShow.
+    if self.db.HideCharacterBackground then
+        HideCharacterBackground()
+    else
+        RestoreCharacterBackground()
+    end
+
+    self:SetupDecimalItemLevel()
+    self:UpdateItemLevelText()
+    self:StyleCharacterTexts()
+    self:SetupStatTextHook()
+    self:SetupLevelTextHook()
+    self:UpdateLevelTextWithFaction()
+    self:SetupGemSocketHelper()
+    self:SetupTrackIndicators()
+
+    if self.db.ShowRaceText then
+        self:ShowRaceText()
+    else
+        self:HideRaceText()
+    end
+
+    if self.db.SocketHelperEnabled and PaperDollFrame and PaperDollFrame:IsShown() then
+        self:RefreshSocketButtons()
+    end
+    if self.db.TrackIndicatorsEnabled and PaperDollFrame and PaperDollFrame:IsShown() then
+        self:UpdateAllTrackIndicators()
     end
 end
 
@@ -1239,27 +1290,27 @@ end
 
 function CP:OnEnable()
     if not self.db.Enabled then return end
+
     HookCharacterPanel()
 
-    -- HookCharacterPanel short-circuits via the file-local `hooked` flag, so
-    -- the eventFrame is created exactly once. After a disable cycle,
-    -- OnDisable's UnregisterAllEvents stripped PLAYER_EQUIPMENT_CHANGED but
-    -- HookCharacterPanel won't re-register it (hooked == true). Explicitly
-    -- re-register here so equipment-change updates resume on re-enable.
     if self.eventFrame then
         self.eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+        self.eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
     end
 
+    self:ApplySettings()
+
     if CharacterFrame and CharacterFrame:IsShown() then
-        UpdateDisplay()
+        UpdateDisplay()                                   -- warnings
     end
 end
 
 function CP:OnDisable()
-    self:ClearAll()
-    if self.eventFrame then
-        self.eventFrame:UnregisterAllEvents()
-    end
+    self:ClearAll()                                       -- warnings clear
+    if self.eventFrame then self.eventFrame:UnregisterAllEvents() end
+    self:DisableGemSocketHelper()
+    self:HideAllTrackIndicators()
+    self:HideRaceText()
     RestoreCharacterBackground()
     updatePending = false
 end
