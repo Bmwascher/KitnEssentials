@@ -43,6 +43,10 @@ local INVSLOT_FINGER2   = INVSLOT_FINGER2
 local INVSLOT_MAINHAND  = INVSLOT_MAINHAND
 local INVSLOT_OFFHAND   = INVSLOT_OFFHAND
 
+local function ElvUILoaded()
+    return C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("ElvUI")
+end
+
 ---------------------------------------------------------------------------------
 -- Constants
 ---------------------------------------------------------------------------------
@@ -159,22 +163,16 @@ local function HasEmptySocket(slot)
     return false
 end
 
-local function GetFontSettings()
-    local db = CP.db
-    local fontFace = db and db.FontFace or "Expressway"
-    local fontSize = db and db.FontSize or 13
-    local fontOutline = db and db.FontOutline or "OUTLINE"
-    local fontPath = KE:GetFontPath(fontFace) or KE.FONT or "Fonts\\FRIZQT__.TTF"
-    return fontPath, fontSize, fontOutline
-end
-
 ---------------------------------------------------------------------------------
 -- Frame Creation
 ---------------------------------------------------------------------------------
 local function CreateSlotText(button, slot)
-    local fontPath, fontSize, fontOutline = GetFontSettings()
+    local db = CP.db
+    local fontFace    = (db and db.FontFace)    or "Expressway"
+    local fontSize    = (db and db.FontSize)    or 13
+    local fontOutline = (db and db.FontOutline) or "OUTLINE"
     local text = button:CreateFontString(nil, "OVERLAY")
-    text:SetFont(fontPath, fontSize, fontOutline)
+    KE:ApplyFontToText(text, fontFace, fontSize, fontOutline)
     text:SetTextColor(1, 0, 0, 1)
 
     local side = slotLayout[slot]
@@ -193,9 +191,12 @@ local function CreateSlotText(button, slot)
 end
 
 local function ApplyFontToAll()
-    local fontPath, fontSize, fontOutline = GetFontSettings()
+    local db = CP.db
+    local fontFace    = (db and db.FontFace)    or "Expressway"
+    local fontSize    = (db and db.FontSize)    or 13
+    local fontOutline = (db and db.FontOutline) or "OUTLINE"
     for _, text in pairs(slotTexts) do
-        text:SetFont(fontPath, fontSize, fontOutline)
+        KE:ApplyFontToText(text, fontFace, fontSize, fontOutline)
     end
 end
 
@@ -328,7 +329,6 @@ local function HookCharacterPanel()
 end
 
 function CP:Refresh()
-    if C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("BetterCharacterPanel") then return end
     HookCharacterPanel()
     ApplyFontToAll()
     if CharacterFrame and CharacterFrame:IsShown() then
@@ -349,8 +349,6 @@ function CP:OnInitialize()
 end
 
 function CP:OnEnable()
-    -- Skip if BetterCharacterPanel is loaded (provides same functionality)
-    if C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("BetterCharacterPanel") then return end
     if not self.db.Enabled then return end
     HookCharacterPanel()
 
