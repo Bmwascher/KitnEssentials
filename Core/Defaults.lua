@@ -862,14 +862,44 @@ local Defaults = {
             ConfirmationTimeout = 15,
         },
 
-        MissingEnchants = {
-            Enabled = true,
-            ShowEnchants = true,
-            GemEnabled = true,
-            FontFace = "Expressway",
-            FontSize = 13,
-            FontOutline = "SOFTOUTLINE",
-            HideCharacterBackground = false,
+        CharacterPanel = {
+            -- Master
+            Enabled                  = true,
+
+            -- Warning text (KE-original, preserved)
+            ShowEnchants             = true,
+            ShowMissingGems          = true,
+            HideCharacterBackground  = false,
+
+            -- Decimal item level (ElvUI-gated)
+            DecimalItemLevel         = false,
+
+            -- Character text features (ElvUI-gated)
+            ShowRaceText             = false,
+            ShowFactionOnLevel       = true,
+
+            -- Item track indicators (no ElvUI conflict)
+            TrackIndicatorsEnabled   = false,
+
+            -- Gem socket helper (no ElvUI conflict)
+            SocketHelperEnabled      = false,
+            SocketButtonSize         = 24,
+            SocketButtonSpacing      = 2,
+            ShowOnlyEmptySockets     = false,
+
+            -- Shared font face/outline (warnings + character panel text)
+            FontFace                 = "Expressway",
+            FontOutline              = "OUTLINE",
+
+            -- Warning text size (independent)
+            FontSize                 = 13,
+
+            -- Character panel text sizes (ElvUI-gated)
+            LevelTextSize            = 12,
+            NameTextSize             = 12,
+            StatsFontSize            = 12,
+            CategoryFontSize         = 12,
+            IlvlValueSize            = 16,
         },
 
         WorldMap = {

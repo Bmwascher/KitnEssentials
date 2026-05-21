@@ -205,7 +205,7 @@ end
 local function UpdateDisplay()
     local db = CP.db
     local enchantEnabled = db and db.ShowEnchants ~= false
-    local gemEnabled = db and db.GemEnabled ~= false
+    local gemEnabled = db and db.ShowMissingGems ~= false
     local isMaxLevel = IsLevelAtEffectiveMaxLevel(UnitLevel("player"))
 
     for slot, buttonName in pairs(allCheckSlots) do
@@ -351,7 +351,7 @@ end
 function CP:OnEnable()
     -- Skip if BetterCharacterPanel is loaded (provides same functionality)
     if C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("BetterCharacterPanel") then return end
-    if not self.db.ShowEnchants and not self.db.GemEnabled and not self.db.HideCharacterBackground then return end
+    if not self.db.Enabled then return end
     HookCharacterPanel()
 
     -- HookCharacterPanel short-circuits via the file-local `hooked` flag, so
