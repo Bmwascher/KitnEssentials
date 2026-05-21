@@ -114,6 +114,12 @@ local GEM_SOCKET_TYPES = {
 -- Slot IDs the gem socket helper scans.
 local socketableSlots = { 1, 2, 5, 6, 9, 10, 11, 12, 13, 14, 15 }
 
+-- Curated short labels for common enchants, keyed by enchant ID (from the item
+-- link). Falls back to the truncated tooltip effect name when an ID isn't here.
+local ENCHANT_NICKNAMES = {
+    -- [7352] = "Alacrity",   -- Enchant Ring - Silvermoon's Alacrity
+}
+
 -- Item track tier metadata. Letter shown on slot, color RGB.
 local ITEM_TRACKS = {
     { keyword = "Myth",       letter = "M", color = { 1.00, 0.50, 0.00 } },

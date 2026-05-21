@@ -888,6 +888,14 @@ local Defaults = {
             SocketButtonSpacing      = 2,
             ShowOnlyEmptySockets     = false,
 
+            -- Per-slot detail overlays (no ElvUI conflict)
+            ShowSlotItemLevel    = false,
+            ShowEnchantNames     = false,
+            ShowSlotGems         = false,
+            SlotInfoFontSize     = 11,
+            EnchantNameMaxLength = 18,
+            SlotGemIconSize      = 12,
+
             -- Shared font face/outline (warnings + character panel text)
             FontFace                 = "Expressway",
             FontOutline              = "OUTLINE",
