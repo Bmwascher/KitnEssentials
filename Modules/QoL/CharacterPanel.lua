@@ -191,6 +191,53 @@ local function HasEnchant(itemLink)
     return enchantId and enchantId ~= "" and enchantId ~= "0"
 end
 
+-- Enchant ID from the item link (locale-independent; same field HasEnchant reads).
+local function GetSlotEnchantID(slot)
+    local link = GetInventoryItemLink("player", slot)
+    if not link then return nil end
+    local itemString = link:match("item[%-?%d:]+")
+    if not itemString then return nil end
+    local enchantId = select(3, strsplit(":", itemString))
+    if enchantId and enchantId ~= "" and enchantId ~= "0" then
+        return tonumber(enchantId)
+    end
+    return nil
+end
+
+-- Effect name from the tooltip's "Enchanted: Enchant <Slot> - <Effect>" line.
+local function GetSlotEnchantName(slot)
+    local data = C_TooltipInfo.GetInventoryItem("player", slot)
+    if not data or not data.lines then return nil end
+    local prefix = ENCHANTED_TOOLTIP_LINE:gsub("%%s.*$", "")  -- "Enchanted: "
+    for _, line in ipairs(data.lines) do
+        local text = line.leftText
+        if text and text:find(prefix, 1, true) == 1 then
+            local body = text:sub(#prefix + 1)
+            -- Strip leading "Enchant <Slot> - " (enUS-shaped; verbatim fallback otherwise).
+            local effect = body:match("^Enchant .- %- (.+)$") or body
+            return strtrim(effect)
+        end
+    end
+    return nil
+end
+
+function CP:ResolveEnchantLabel(slot)
+    local id = GetSlotEnchantID(slot)
+    if not id then return nil end
+    local nick = ENCHANT_NICKNAMES[id]
+    if nick then return nick end
+    local name = GetSlotEnchantName(slot) or "Enchanted"
+    local maxLen = self.db.EnchantNameMaxLength or 18
+    if #name > maxLen then name = name:sub(1, maxLen - 1) .. "…" end
+    return name
+end
+
+function CP:GetSlotItemLevel(slot)
+    local link = GetInventoryItemLink("player", slot)
+    if not link then return nil end
+    return GetDetailedItemLevelInfo(link)
+end
+
 local function CanEnchantSlot(slot)
     local expansion = GetExpansionForLevel(UnitLevel("player"))
     local slots = expansion and expansionEnchantableSlots[expansion]
