@@ -603,7 +603,7 @@ local function HookCharacterPanel()
             QueueUpdate()                                 -- warnings
             if CP.db.SocketHelperEnabled then CP:RefreshSocketButtons() end
             if CP.db.TrackIndicatorsEnabled and slotID then
-                CP:UpdateSlotTrackIndicator(slotID)
+                CP:UpdateSlotTrackIndicator(_G[SLOT_FRAMES[slotID]], slotID, "player")
             end
             if CP.db.ShowSlotItemLevel or CP.db.ShowEnchantNames or CP.db.ShowSlotGems then
                 CP:UpdateAllSlotDetails()
@@ -934,15 +934,12 @@ function CP:CreateTrackOverlay(slotFrame, slotID)
     return overlay
 end
 
-function CP:UpdateSlotTrackIndicator(slotID)
-    local frameName = SLOT_FRAMES[slotID]
-    if not frameName then return end
-
-    local slotFrame = _G[frameName]
+function CP:UpdateSlotTrackIndicator(slotFrame, slotID, unit)
+    unit = unit or "player"
     if not slotFrame then return end
 
     local overlay = self:CreateTrackOverlay(slotFrame, slotID)
-    local track = self:GetItemTrack("player", slotID)
+    local track = self:GetItemTrack(unit, slotID)
 
     if track then
         -- Re-apply font each update so a TrackLetterSize change is live.
@@ -957,8 +954,8 @@ end
 
 function CP:UpdateAllTrackIndicators()
     if not self.db.TrackIndicatorsEnabled then return end
-    for slotID in pairs(SLOT_FRAMES) do
-        self:UpdateSlotTrackIndicator(slotID)
+    for slotID, frameName in pairs(SLOT_FRAMES) do
+        self:UpdateSlotTrackIndicator(_G[frameName], slotID, "player")
     end
 end
 
@@ -1102,11 +1099,8 @@ function CP:CreateSlotDetail(slotFrame, slotID)
     return detail
 end
 
-function CP:UpdateSlotDetail(slotID)
-    local frameName = SLOT_FRAMES[slotID]
-    if not frameName then return end
-
-    local slotFrame = _G[frameName]
+function CP:UpdateSlotDetail(slotFrame, slotID, unit)
+    unit = unit or "player"
     if not slotFrame then return end
 
     local detail = self:CreateSlotDetail(slotFrame, slotID)
@@ -1120,7 +1114,7 @@ function CP:UpdateSlotDetail(slotID)
 
     -- Enchant label (green). "No Enchant" stays with the warning feature.
     if self.db.ShowEnchantNames then
-        local label = self:ResolveEnchantLabel("player", slotID)
+        local label = self:ResolveEnchantLabel(unit, slotID)
         detail.enchantText:SetText(label or "")
         detail.enchantText:SetShown(label ~= nil)
     else
@@ -1130,9 +1124,9 @@ function CP:UpdateSlotDetail(slotID)
 
     -- Item level, colored by the equipped item's quality.
     if self.db.ShowSlotItemLevel then
-        local lvl = self:GetSlotItemLevel("player", slotID)
+        local lvl = self:GetSlotItemLevel(unit, slotID)
         if lvl then
-            local quality = GetInventoryItemQuality("player", slotID)
+            local quality = GetInventoryItemQuality(unit, slotID)
             if quality then
                 local hex = select(4, C_Item.GetItemQualityColor(quality))
                 detail.ilvlText:SetText("|c" .. hex .. lvl .. "|r")
@@ -1152,7 +1146,7 @@ function CP:UpdateSlotDetail(slotID)
     -- Gem icons inline beside the ilvl text (only scan socketable slots).
     local gemCount = 0
     if self.db.ShowSlotGems and socketableSlotSet[slotID] then
-        local result = self:ScanItemSockets("player", slotID)
+        local result = self:ScanItemSockets(unit, slotID)
         if result and result.sockets then
             local iconSize = SLOT_GEM_ICON_SIZE
             for _, socket in ipairs(result.sockets) do
@@ -1179,8 +1173,8 @@ function CP:UpdateAllSlotDetails()
         self:HideAllSlotDetails()
         return
     end
-    for slotID in pairs(SLOT_FRAMES) do
-        self:UpdateSlotDetail(slotID)
+    for slotID, frameName in pairs(SLOT_FRAMES) do
+        self:UpdateSlotDetail(_G[frameName], slotID, "player")
     end
 end
 
