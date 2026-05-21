@@ -667,6 +667,569 @@ function CP:SetupTrackIndicators()
 end
 
 ---------------------------------------------------------------------------------
+-- Gem Socket Helper
+---------------------------------------------------------------------------------
+
+-- File-locals: scan tooltip + caches
+local scanTooltip
+local gemCache = {}
+local socketCache = {}
+
+-- Helper constants
+local TITLE_HEIGHT      = 24
+local HOVER_DURATION    = 0.12
+local ITEM_ROW_PADDING  = 4
+local POPUP_PADDING     = 2
+local POPUP_ICON_SIZE   = 24
+local STANDARD_BACKDROP = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 }
+
+local function GetScanTooltip()
+    if not scanTooltip then
+        scanTooltip = CreateFrame("GameTooltip", "KE_CharacterPanelScanTooltip", nil, "GameTooltipTemplate")
+        scanTooltip:SetOwner(WorldFrame, "ANCHOR_NONE")
+    end
+    return scanTooltip
+end
+
+local function GetQualityAtlasFromLink(link)
+    if not link then return nil end
+    return link:match(qualityAtlasPattern)
+end
+
+local function SetQualityAtlas(texture, atlas)
+    if not atlas then texture:Hide(); return end
+    texture:SetAtlas(atlas, false)
+    texture:Show()
+end
+
+local function GetGemStatsFromLink(link)
+    if not link then return nil end
+    local data = C_TooltipInfo.GetHyperlink(link)
+    if not data or not data.lines then return nil end
+    for _, line in ipairs(data.lines) do
+        local text = line.leftText
+        if text and text:match("^%+%d+") then
+            return text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+        end
+    end
+    return nil
+end
+
+local function IsMouseOverGemUI()
+    if CP.gemPopup and CP.gemPopup:IsMouseOver() then return true end
+    if CP.gemPopup then
+        for _, btn in pairs(CP.gemPopup.buttons) do
+            if btn:IsShown() and btn:IsMouseOver() then return true end
+        end
+    end
+    if CP.currentSocketBtn and CP.currentSocketBtn:IsMouseOver() then return true end
+    if CP.socketContainer then
+        for _, socketBtn in pairs(CP.socketContainer.buttons) do
+            if socketBtn:IsShown() and socketBtn:IsMouseOver() then return true end
+        end
+    end
+    return false
+end
+
+local function CreateQualityOverlay(parent, anchor)
+    local frame = CreateFrame("Frame", nil, parent)
+    frame:SetFrameLevel(parent:GetFrameLevel() + 10)
+    frame:SetSize(16, 16)
+    frame:SetPoint("TOPLEFT", anchor or parent, "TOPLEFT", -5, 5)
+    local texture = frame:CreateTexture(nil, "OVERLAY")
+    texture:SetAllPoints()
+    texture:Hide()
+    return frame, texture
+end
+
+function CP:ScanItemSockets(slotID)
+    local itemLink = GetInventoryItemLink("player", slotID)
+    if not itemLink then return nil end
+
+    local result = {
+        slotID = slotID,
+        itemLink = itemLink,
+        sockets = {},
+        totalCount = 0, filledCount = 0, emptyCount = 0,
+    }
+
+    for socketIndex = 1, 3 do
+        local gemName, gemLink = C_Item.GetItemGem(itemLink, socketIndex)
+        if gemLink then
+            result.filledCount = result.filledCount + 1
+            result.totalCount  = result.totalCount + 1
+            local gemID = C_Item.GetItemInfoInstant(gemLink)
+            local gemIcon = gemID and C_Item.GetItemIconByID(gemID)
+            table.insert(result.sockets, {
+                index = socketIndex, filled = true,
+                gemLink = gemLink, gemName = gemName, gemID = gemID, icon = gemIcon,
+            })
+        end
+    end
+
+    local tt = GetScanTooltip()
+    tt:ClearLines()
+    tt:SetInventoryItem("player", slotID)
+
+    for i = 1, tt:NumLines() do
+        local line = _G["KE_CharacterPanelScanTooltipTextLeft" .. i]
+        if line then
+            local text = line:GetText()
+            if text then
+                for _, socketType in ipairs(GEM_SOCKET_TYPES) do
+                    local localeString = _G[socketType.locale]
+                    if localeString and text:find(localeString, 1, true) then
+                        result.emptyCount = result.emptyCount + 1
+                        result.totalCount = result.totalCount + 1
+                        table.insert(result.sockets, {
+                            index = result.totalCount, filled = false,
+                            socketType = socketType.name, icon = socketType.icon,
+                        })
+                    end
+                end
+            end
+        end
+    end
+
+    return result.totalCount > 0 and result or nil
+end
+
+function CP:ScanAllEquippedSockets()
+    wipe(socketCache)
+    for _, slotID in ipairs(socketableSlots) do
+        local socketInfo = self:ScanItemSockets(slotID)
+        if socketInfo then table.insert(socketCache, socketInfo) end
+    end
+    return socketCache
+end
+
+function CP:ScanBagsForGems()
+    wipe(gemCache)
+    local NUM_BAG_SLOTS = NUM_BAG_SLOTS or 4
+    local LE_ITEM_CLASS_GEM = Enum.ItemClass.Gem or 3
+    for bag = 0, NUM_BAG_SLOTS do
+        local numSlots = C_Container.GetContainerNumSlots(bag)
+        for slot = 1, numSlots do
+            local info = C_Container.GetContainerItemInfo(bag, slot)
+            if info and info.itemID then
+                local _, _, _, _, _, classID = C_Item.GetItemInfoInstant(info.itemID)
+                if classID == LE_ITEM_CLASS_GEM then
+                    local existing = gemCache[info.itemID]
+                    if existing then
+                        existing.count = existing.count + info.stackCount
+                    else
+                        gemCache[info.itemID] = {
+                            itemID = info.itemID, icon = info.iconFileID,
+                            count = info.stackCount, link = info.hyperlink,
+                            bagID = bag, slotID = slot,
+                        }
+                    end
+                end
+            end
+        end
+    end
+    return gemCache
+end
+
+function CP:CreateSocketContainer()
+    if self.socketContainer then return self.socketContainer end
+
+    local db = self.db
+    local anchor = CharacterFrameTab3 or CharacterFrameTab2 or CharacterFrameTab1 or CharacterFrame
+
+    local container = CreateFrame("Frame", "KE_SocketContainer", PaperDollFrame)
+    container:SetPoint("TOPLEFT", anchor, "TOPRIGHT", 4, -6)
+    container:SetSize(200, db.SocketButtonSize)
+    container:Hide()
+
+    container.buttons = {}
+    self.socketContainer = container
+    return container
+end
+
+function CP:CreateSocketButton(index)
+    local db = self.db
+    local container = self.socketContainer
+    if container.buttons[index] then return container.buttons[index] end
+
+    local Theme = KE.Theme
+
+    local btn = CreateFrame("Button", nil, container)
+    btn:SetSize(db.SocketButtonSize, db.SocketButtonSize)
+    if index == 1 then
+        btn:SetPoint("LEFT", container, "LEFT", 0, 0)
+    else
+        btn:SetPoint("LEFT", container.buttons[index - 1], "RIGHT", db.SocketButtonSpacing, 0)
+    end
+
+    btn.icon = btn:CreateTexture(nil, "ARTWORK")
+    btn.icon:SetAllPoints()
+    KE:ApplyIconZoom(btn.icon, 0.3)
+    KE:AddIconBorders(btn, Theme.border)
+
+    btn.highlight = btn:CreateTexture(nil, "HIGHLIGHT")
+    btn.highlight:SetPoint("TOPLEFT", btn, "TOPLEFT", 1, -1)
+    btn.highlight:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
+    btn.highlight:SetColorTexture(1, 1, 1, 0.2)
+    btn.highlight:SetBlendMode("ADD")
+
+    btn.qualityFrame, btn.quality = CreateQualityOverlay(btn)
+
+    btn:SetScript("OnEnter", function(self)
+        CP.currentSocketBtn = self
+        CP:ShowGemPopup(self)
+        if self.socketInfo then CP:ShowSlotHighlight(self.socketInfo.slotID) end
+        if self.socket and self.socket.filled and self.socket.gemLink then
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT", 40, 0)
+            GameTooltip:SetHyperlink(self.socket.gemLink)
+            GameTooltip:Show()
+        end
+    end)
+
+    btn:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+        C_Timer.After(0.05, function()
+            if IsMouseOverGemUI() then return end
+            CP:HideGemPopup()
+            CP:HideSlotHighlight()
+        end)
+    end)
+
+    btn:SetScript("OnClick", function(self)
+        if InCombatLockdown() then
+            KE:Print("Cannot socket during combat")
+            return
+        end
+        if self.socketInfo then SocketInventoryItem(self.socketInfo.slotID) end
+    end)
+
+    container.buttons[index] = btn
+    return btn
+end
+
+function CP:CreateGemPopup()
+    if self.gemPopup then return self.gemPopup end
+
+    local Theme = KE.Theme
+
+    local popup = CreateFrame("Frame", "KE_GemPopup", UIParent, "BackdropTemplate")
+    popup:SetBackdrop(STANDARD_BACKDROP)
+    popup:SetBackdropColor(Theme.bgMedium[1], Theme.bgMedium[2], Theme.bgMedium[3], Theme.bgMedium[4])
+    popup:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+    popup:SetSize(280, 50)
+    popup:SetFrameStrata("TOOLTIP")
+    popup:SetClipsChildren(true)
+    popup:Hide()
+
+    popup.title = popup:CreateFontString(nil, "OVERLAY")
+    popup.title:SetPoint("TOPLEFT", 6, -6)
+    KE:ApplyFontToText(popup.title, "Expressway", 14, "OUTLINE")
+    popup.title:SetText("Gems")
+    popup.title:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3])
+
+    popup.separator = popup:CreateTexture(nil, "ARTWORK")
+    popup.separator:SetHeight(1)
+    popup.separator:SetPoint("TOPLEFT", popup, "TOPLEFT", 0, -TITLE_HEIGHT)
+    popup.separator:SetPoint("TOPRIGHT", popup, "TOPRIGHT", 0, -TITLE_HEIGHT)
+    popup.separator:SetColorTexture(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+
+    popup.noGems = popup:CreateFontString(nil, "OVERLAY")
+    popup.noGems:SetPoint("CENTER", 0, -8)
+    KE:ApplyFontToText(popup.noGems, "Expressway", 14, "OUTLINE")
+    popup.noGems:SetText("No compatible gems")
+    popup.noGems:SetTextColor(Theme.textMuted[1], Theme.textMuted[2], Theme.textMuted[3])
+    popup.noGems:Hide()
+
+    popup:EnableMouse(true)
+    popup:SetScript("OnEnter", function()
+        if CP.currentSocketBtn and CP.currentSocketBtn.socketInfo then
+            CP:ShowSlotHighlight(CP.currentSocketBtn.socketInfo.slotID)
+        end
+    end)
+    popup:SetScript("OnLeave", function()
+        C_Timer.After(0.05, function()
+            if IsMouseOverGemUI() then return end
+            CP:HideGemPopup()
+            CP:HideSlotHighlight()
+        end)
+    end)
+
+    popup.buttons = {}
+    self.gemPopup = popup
+    return popup
+end
+
+function CP:CreateGemButton(index)
+    local popup = self.gemPopup
+    local Theme = KE.Theme
+    local iconSize = POPUP_ICON_SIZE
+    local rowHeight = POPUP_ICON_SIZE + ITEM_ROW_PADDING
+
+    if popup.buttons[index] then return popup.buttons[index] end
+
+    local btn = CreateFrame("Button", "KE_GemBtn" .. index, popup)
+    btn:SetHeight(rowHeight)
+    btn:SetPoint("TOPLEFT",  popup, "TOPLEFT",  POPUP_PADDING, -TITLE_HEIGHT - (index - 1) * rowHeight)
+    btn:SetPoint("TOPRIGHT", popup, "TOPRIGHT", -POPUP_PADDING, -TITLE_HEIGHT - (index - 1) * rowHeight)
+
+    btn.iconFrame = CreateFrame("Frame", nil, btn)
+    btn.iconFrame:SetSize(iconSize, iconSize)
+    btn.iconFrame:SetPoint("LEFT", 0, 0)
+    KE:AddIconBorders(btn.iconFrame, Theme.border)
+
+    btn.icon = btn.iconFrame:CreateTexture(nil, "ARTWORK")
+    btn.icon:SetAllPoints()
+    KE:ApplyIconZoom(btn.icon, 0.3)
+
+    btn.qualityFrame, btn.quality = CreateQualityOverlay(btn, btn.iconFrame)
+
+    btn.stats = btn:CreateFontString(nil, "OVERLAY")
+    btn.stats:SetPoint("LEFT", btn.iconFrame, "RIGHT", 6, 0)
+    btn.stats:SetWidth(220)
+    btn.stats:SetJustifyH("LEFT")
+    btn.stats:SetWordWrap(true)
+    KE:ApplyFontToText(btn.stats, "Expressway", 12, "OUTLINE")
+    btn.stats:SetTextColor(Theme.textPrimary[1], Theme.textPrimary[2], Theme.textPrimary[3])
+    btn.stats:SetShadowColor(0, 0, 0, 0)
+
+    btn.count = btn:CreateFontString(nil, "OVERLAY")
+    btn.count:SetPoint("RIGHT", btn, "RIGHT", -4, 0)
+    KE:ApplyFontToText(btn.count, "Expressway", 12, "OUTLINE")
+    btn.count:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3])
+    btn.count:SetShadowColor(0, 0, 0, 0)
+
+    local hoverBg = btn:CreateTexture(nil, "BACKGROUND")
+    hoverBg:SetAllPoints()
+    hoverBg:SetColorTexture(1, 1, 1, 0.05)
+    hoverBg:SetAlpha(0)
+    btn._hoverBg = hoverBg
+    btn._hoverTarget = 0
+
+    btn:SetScript("OnUpdate", function(self, elapsed)
+        local current = self._hoverBg:GetAlpha()
+        if math.abs(current - self._hoverTarget) > 0.01 then
+            local speed = elapsed / HOVER_DURATION
+            if self._hoverTarget > current then
+                self._hoverBg:SetAlpha(math.min(current + speed, self._hoverTarget))
+            else
+                self._hoverBg:SetAlpha(math.max(current - speed, self._hoverTarget))
+            end
+        end
+    end)
+
+    btn:SetScript("OnEnter", function(self)
+        self._hoverTarget = 1
+        if self.targetSlotID then CP:ShowSlotHighlight(self.targetSlotID) end
+        if self.gemData and self.gemData.link then
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT", 40, 0)
+            GameTooltip:SetHyperlink(self.gemData.link)
+            GameTooltip:Show()
+        end
+    end)
+
+    btn:SetScript("OnLeave", function(self)
+        self._hoverTarget = 0
+        GameTooltip:Hide()
+        C_Timer.After(0.05, function()
+            if IsMouseOverGemUI() then return end
+            CP:HideGemPopup()
+            CP:HideSlotHighlight()
+        end)
+    end)
+
+    btn:SetScript("OnClick", function(self)
+        if InCombatLockdown() then
+            KE:Print("Cannot socket during combat")
+            return
+        end
+        if self.gemData and self.targetSlotID and self.targetSocketIndex then
+            SocketInventoryItem(self.targetSlotID)
+            C_Container.PickupContainerItem(self.gemData.bagID, self.gemData.slotID)
+            C_ItemSocketInfo.ClickSocketButton(self.targetSocketIndex)
+            ClearCursor()
+            AcceptSockets()
+            CloseSocketInfo()
+            if ItemSocketingFrame then HideUIPanel(ItemSocketingFrame) end
+            CP:HideGemPopup()
+            CP:HideSlotHighlight()
+            C_Timer.After(0.1, function()
+                if InCombatLockdown() then return end
+                CP:RefreshSocketButtons()
+            end)
+        end
+    end)
+
+    popup.buttons[index] = btn
+    return btn
+end
+
+function CP:RefreshSocketButtons()
+    if not self.socketContainer then return end
+    if not self.db.SocketHelperEnabled then return end
+
+    local allSockets = self:ScanAllEquippedSockets()
+    local db = self.db
+    local buttonIndex = 1
+
+    self.socketContainer:SetHeight(db.SocketButtonSize)
+
+    for _, itemSocketInfo in ipairs(allSockets) do
+        for _, socket in ipairs(itemSocketInfo.sockets) do
+            if not db.ShowOnlyEmptySockets or not socket.filled then
+                local btn = self:CreateSocketButton(buttonIndex)
+                btn.socketInfo = itemSocketInfo
+                btn.socket = socket
+                btn:SetSize(db.SocketButtonSize, db.SocketButtonSize)
+                btn:ClearAllPoints()
+                if buttonIndex == 1 then
+                    btn:SetPoint("LEFT", self.socketContainer, "LEFT", 0, 0)
+                else
+                    btn:SetPoint("LEFT", self.socketContainer.buttons[buttonIndex - 1], "RIGHT", db.SocketButtonSpacing, 0)
+                end
+
+                if socket.filled and socket.icon then
+                    btn.icon:SetTexture(socket.icon)
+                    btn:SetAlpha(1)
+                    local atlas = GetQualityAtlasFromLink(socket.gemLink)
+                    SetQualityAtlas(btn.quality, atlas)
+                else
+                    btn.icon:SetTexture(socket.icon or 458977)
+                    btn:SetAlpha(0.6)
+                    btn.quality:Hide()
+                end
+
+                btn:Show()
+                buttonIndex = buttonIndex + 1
+            end
+        end
+    end
+
+    for i = buttonIndex, #self.socketContainer.buttons do
+        self.socketContainer.buttons[i]:Hide()
+    end
+
+    local totalWidth = (buttonIndex - 1) * (db.SocketButtonSize + db.SocketButtonSpacing)
+    self.socketContainer:SetWidth(totalWidth > 0 and totalWidth or 1)
+
+    if buttonIndex > 1 then self.socketContainer:Show() else self.socketContainer:Hide() end
+end
+
+function CP:ShowGemPopup(socketBtn)
+    if not socketBtn.socket then self:HideGemPopup(); return end
+
+    local popup = self:CreateGemPopup()
+    local gems = self:ScanBagsForGems()
+
+    local gemList = {}
+    local currentGemID = socketBtn.socket.gemID
+    for _, gemData in pairs(gems) do
+        if gemData.itemID ~= currentGemID then table.insert(gemList, gemData) end
+    end
+
+    popup.title:SetText(socketBtn.socket.filled and "Replace Gem" or "Socket Gem")
+
+    local minWidth = popup.title:GetStringWidth() + 26
+    local minRowHeight = POPUP_ICON_SIZE + ITEM_ROW_PADDING
+    local targetHeight
+
+    if #gemList == 0 then
+        popup.noGems:Show()
+        popup.separator:Hide()
+        popup.noGems:SetText(socketBtn.socket.filled and "No replacement gems" or "No compatible gems")
+        for _, btn in pairs(popup.buttons) do btn:Hide() end
+        popup:SetWidth(math.max(200, minWidth))
+        targetHeight = 50
+    else
+        popup.noGems:Hide()
+        popup.separator:Show()
+
+        local yOffset = TITLE_HEIGHT
+        for i, gemData in ipairs(gemList) do
+            local btn = self:CreateGemButton(i)
+            btn.gemData = gemData
+            btn.targetSlotID = socketBtn.socketInfo.slotID
+            btn.targetSocketIndex = socketBtn.socket.index
+            btn.icon:SetTexture(gemData.icon)
+            btn.count:SetText(gemData.count .. "x")
+            btn._hoverBg:SetAlpha(0); btn._hoverTarget = 0
+
+            local stats = GetGemStatsFromLink(gemData.link)
+            btn.stats:SetText(stats or "")
+
+            local textHeight = btn.stats:GetStringHeight()
+            local rowHeight = math.max(minRowHeight, textHeight + ITEM_ROW_PADDING)
+            btn:SetHeight(rowHeight)
+            btn:ClearAllPoints()
+            btn:SetPoint("TOPLEFT", popup, "TOPLEFT", POPUP_PADDING, -yOffset)
+            btn:SetPoint("TOPRIGHT", popup, "TOPRIGHT", -POPUP_PADDING, -yOffset)
+            btn.iconFrame:SetSize(POPUP_ICON_SIZE, POPUP_ICON_SIZE)
+
+            local atlas = GetQualityAtlasFromLink(gemData.link)
+            SetQualityAtlas(btn.quality, atlas)
+
+            btn:Show()
+            yOffset = yOffset + rowHeight
+        end
+        for i = #gemList + 1, #popup.buttons do popup.buttons[i]:Hide() end
+
+        popup:SetWidth(280)
+        targetHeight = yOffset
+    end
+
+    popup:ClearAllPoints()
+    popup:SetPoint("TOPLEFT", socketBtn, "BOTTOMLEFT", 0, -1)
+    popup:SetHeight(targetHeight)
+    popup:Show()
+end
+
+function CP:HideGemPopup()
+    if self.gemPopup then self.gemPopup:Hide() end
+end
+
+function CP:ShowSlotHighlight(slotID)
+    self:HideSlotHighlight()
+
+    local frameName = SLOT_FRAMES[slotID]
+    if not frameName then return end
+    local slotFrame = _G[frameName]
+    if not slotFrame then return end
+
+    if not self.slotHighlight then
+        local Theme = KE.Theme
+        self.slotHighlight = CreateFrame("Frame", nil, UIParent)
+        self.slotHighlight:SetFrameStrata("DIALOG")
+        self.slotHighlight.texture = self.slotHighlight:CreateTexture(nil, "OVERLAY")
+        self.slotHighlight.texture:SetAllPoints()
+        self.slotHighlight.texture:SetColorTexture(Theme.accent[1], Theme.accent[2], Theme.accent[3], 0.4)
+        self.slotHighlight.texture:SetBlendMode("ADD")
+        KE:AddIconBorders(self.slotHighlight, { Theme.accent[1], Theme.accent[2], Theme.accent[3], 1 })
+    end
+    self.slotHighlight:SetAllPoints(slotFrame)
+    self.slotHighlight:Show()
+end
+
+function CP:HideSlotHighlight()
+    if self.slotHighlight then self.slotHighlight:Hide() end
+end
+
+function CP:SetupGemSocketHelper()
+    if not self.db.SocketHelperEnabled then return end
+    if self._gemSocketHooked then return end
+    self._gemSocketHooked = true
+
+    self:CreateSocketContainer()
+    self:CreateGemPopup()
+    -- PaperDollFrame OnShow/OnHide + PLAYER_EQUIPMENT_CHANGED + BAG_UPDATE_DELAYED
+    -- handlers are installed by the combined HookCharacterPanel in Task 12.
+end
+
+function CP:DisableGemSocketHelper()
+    if self.socketContainer then self.socketContainer:Hide() end
+    self:HideGemPopup()
+    self:HideSlotHighlight()
+end
+
+---------------------------------------------------------------------------------
 -- Lifecycle
 ---------------------------------------------------------------------------------
 function CP:OnInitialize()
