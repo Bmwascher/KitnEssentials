@@ -677,9 +677,9 @@ function CP:CreateTrackOverlay(slotFrame, slotID)
     overlay:SetFrameLevel(slotFrame:GetFrameLevel() + 10)
 
     if isRight then
-        overlay:SetPoint("BOTTOMRIGHT", slotFrame, "BOTTOMRIGHT", 1, 0)
+        overlay:SetPoint("BOTTOMRIGHT", slotFrame, "BOTTOMRIGHT", 0, 1)
     else
-        overlay:SetPoint("BOTTOMLEFT", slotFrame, "BOTTOMLEFT", 0, 0)
+        overlay:SetPoint("BOTTOMLEFT", slotFrame, "BOTTOMLEFT", 1, 1)
     end
 
     overlay.text = overlay:CreateFontString(nil, "OVERLAY")
