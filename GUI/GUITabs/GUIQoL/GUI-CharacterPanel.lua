@@ -282,23 +282,36 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     yOffset = card5:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 2: Font Settings
+    -- Card 6: Font Settings
     ----------------------------------------------------------------
     local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        title = "Font Settings",
         db = db,
         dbKeys = {
-            fontFace = "FontFace",
-            fontSize = "FontSize",
+            fontFace    = "FontFace",
             fontOutline = "FontOutline",
+        },
+        fontSizes = {
+            { label = "Warning Text",      dbKey = "FontSize"          },
+            { label = "Level Text",        dbKey = "LevelTextSize",    elvuiGated = true },
+            { label = "Name Text",         dbKey = "NameTextSize",     elvuiGated = true },
+            { label = "Stats",             dbKey = "StatsFontSize",    elvuiGated = true },
+            { label = "Stat Categories",   dbKey = "CategoryFontSize", elvuiGated = true },
+            { label = "Item Level Value",  dbKey = "IlvlValueSize",    elvuiGated = true },
         },
         fontSizeRange = { 8, 24 },
         includeSoftOutline = true,
-        onChangeCallback = ApplySettings,
+        manager = manager,
+        onChangeCallback = function()
+            local CP = GetModule()
+            if CP then
+                CP:Refresh()
+                CP:ApplySettings()
+            end
+        end,
     })
     manager:Register(fontCard, "all")
-    if fontWidgets then
-        manager:RegisterGroup(fontWidgets, "all")
-    end
+    if fontWidgets then manager:RegisterGroup(fontWidgets, "all") end
     yOffset = fontOffset
 
     RefreshStates()
