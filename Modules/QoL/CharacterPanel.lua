@@ -298,7 +298,6 @@ for slot, btn in pairs(gemSlotButtons) do allCheckSlots[slot] = btn end
 ---------------------------------------------------------------------------------
 -- Module State
 ---------------------------------------------------------------------------------
-local slotTexts = {}
 local hooked = false
 local updatePending = false
 local backgroundsHidden = false
@@ -456,45 +455,55 @@ local function ApplyFontToAll()
     local fontFace    = (db and db.FontFace)    or "Expressway"
     local fontSize    = (db and db.FontSize)    or 13
     local fontOutline = (db and db.FontOutline) or "OUTLINE"
-    for _, text in pairs(slotTexts) do
-        KE:ApplyFontToText(text, fontFace, fontSize, fontOutline)
+    for _, buttonName in pairs(allCheckSlots) do
+        local button = _G[buttonName]
+        if button and button._slotWarning then
+            KE:ApplyFontToText(button._slotWarning, fontFace, fontSize, fontOutline)
+        end
     end
 end
 
 ---------------------------------------------------------------------------------
 -- Settings
 ---------------------------------------------------------------------------------
-local function UpdateDisplay()
+-- Per-slot missing-enchant/gem warning. Lazily creates a button-attached
+-- FontString so the same helper drives both the player and inspect frames.
+local function UpdateSlotWarning(button, unit, slot)
+    if not button then return end
+    unit = unit or "player"
     local db = CP.db
     local enchantEnabled = db and db.ShowEnchants ~= false
     local gemEnabled = db and db.ShowMissingGems ~= false
-    local isMaxLevel = IsLevelAtEffectiveMaxLevel(UnitLevel("player"))
 
+    if not button._slotWarning then
+        button._slotWarning = CreateSlotText(button, slot)
+    end
+
+    local parts = {}
+    if IsLevelAtEffectiveMaxLevel(UnitLevel(unit)) then
+        local itemLink = GetInventoryItemLink(unit, slot)
+        if itemLink then
+            if enchantEnabled and CanEnchantSlot(unit, slot) and not HasEnchant(itemLink) then
+                parts[#parts + 1] = "No Enchant"
+            end
+            if gemEnabled and HasEmptySocket(unit, slot) then
+                parts[#parts + 1] = "No Gem"
+            end
+        end
+    end
+
+    if #parts > 0 then
+        button._slotWarning:SetText("|cFFFF0000" .. table_concat(parts, " / ") .. "|r")
+    else
+        button._slotWarning:SetText("")
+    end
+end
+
+local function UpdateDisplay()
     for slot, buttonName in pairs(allCheckSlots) do
         local button = _G[buttonName]
         if button then
-            if not slotTexts[slot] then
-                slotTexts[slot] = CreateSlotText(button, slot)
-            end
-
-            local parts = {}
-            if isMaxLevel then
-                local itemLink = GetInventoryItemLink("player", slot)
-                if itemLink then
-                    if enchantEnabled and CanEnchantSlot("player", slot) and not HasEnchant(itemLink) then
-                        parts[#parts + 1] = "No Enchant"
-                    end
-                    if gemEnabled and HasEmptySocket("player", slot) then
-                        parts[#parts + 1] = "No Gem"
-                    end
-                end
-            end
-
-            if #parts > 0 then
-                slotTexts[slot]:SetText("|cFFFF0000" .. table_concat(parts, " / ") .. "|r")
-            else
-                slotTexts[slot]:SetText("")
-            end
+            UpdateSlotWarning(button, "player", slot)
         end
     end
 end
@@ -666,7 +675,10 @@ function CP:ApplySettings()
 end
 
 function CP:ClearAll()
-    for _, text in pairs(slotTexts) do text:SetText("") end
+    for _, buttonName in pairs(allCheckSlots) do
+        local button = _G[buttonName]
+        if button and button._slotWarning then button._slotWarning:SetText("") end
+    end
 end
 
 function CP:ApplyFont(fontString, size)
