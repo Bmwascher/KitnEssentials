@@ -209,6 +209,79 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     yOffset = card4:GetNextOffset()
 
     ----------------------------------------------------------------
+    -- Card 5: Gem Socket Helper
+    ----------------------------------------------------------------
+    local card5 = GUIFrame:CreateCard(scrollChild, "Gem Socket Helper", yOffset)
+    manager:Register(card5, "all")
+
+    local row5a = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
+    local socketEnableCheck = GUIFrame:CreateCheckbox(row5a, "Enable Socket Helper", {
+        value = db.SocketHelperEnabled,
+        callback = function(checked)
+            db.SocketHelperEnabled = checked
+            local CP = GetModule()
+            if CP then
+                if checked then
+                    CP:SetupGemSocketHelper()
+                    CP:RefreshSocketButtons()
+                else
+                    CP:DisableGemSocketHelper()
+                end
+            end
+            RefreshStates()
+        end,
+        tooltip = "Shows equipped gem sockets beside the character panel tabs with quick gem replacement on hover.",
+    })
+    row5a:AddWidget(socketEnableCheck, 1)
+    manager:Register(socketEnableCheck, "all")
+    card5:AddRow(row5a, Theme.rowHeight)
+
+    local sep5 = GUIFrame:CreateSeparator(card5.content)
+    card5:AddRow(sep5, Theme.rowHeightSeparator)
+
+    local row5b = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
+    local sizeSlider = GUIFrame:CreateSlider(row5b, "Socket Button Size", {
+        min = 16, max = 48, step = 1,
+        value = db.SocketButtonSize,
+        callback = function(val)
+            db.SocketButtonSize = val
+            local CP = GetModule()
+            if CP then CP:RefreshSocketButtons() end
+        end,
+    })
+    row5b:AddWidget(sizeSlider, 0.5)
+    manager:Register(sizeSlider, "socketHelperOn")
+
+    local spacingSlider = GUIFrame:CreateSlider(row5b, "Button Spacing", {
+        min = 0, max = 10, step = 1,
+        value = db.SocketButtonSpacing,
+        callback = function(val)
+            db.SocketButtonSpacing = val
+            local CP = GetModule()
+            if CP then CP:RefreshSocketButtons() end
+        end,
+    })
+    row5b:AddWidget(spacingSlider, 0.5)
+    manager:Register(spacingSlider, "socketHelperOn")
+    card5:AddRow(row5b, Theme.rowHeight)
+
+    local row5c = GUIFrame:CreateRow(card5.content, Theme.rowHeightLast)
+    local emptyOnlyCheck = GUIFrame:CreateCheckbox(row5c, "Show Only Empty Sockets", {
+        value = db.ShowOnlyEmptySockets,
+        callback = function(checked)
+            db.ShowOnlyEmptySockets = checked
+            local CP = GetModule()
+            if CP then CP:RefreshSocketButtons() end
+        end,
+        tooltip = "Only show sockets that don't have a gem equipped.",
+    })
+    row5c:AddWidget(emptyOnlyCheck, 1)
+    manager:Register(emptyOnlyCheck, "socketHelperOn")
+    card5:AddRow(row5c, Theme.rowHeightLast, 0)
+
+    yOffset = card5:GetNextOffset()
+
+    ----------------------------------------------------------------
     -- Card 2: Font Settings
     ----------------------------------------------------------------
     local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
