@@ -425,6 +425,9 @@ local function HookCharacterPanel()
             if CP.db.HideCharacterBackground then HideCharacterBackground() end
             if CP.db.SocketHelperEnabled then CP:RefreshSocketButtons() end
             if CP.db.TrackIndicatorsEnabled then CP:UpdateAllTrackIndicators() end
+            if CP.db.ShowSlotItemLevel or CP.db.ShowEnchantNames or CP.db.ShowSlotGems then
+                CP:UpdateAllSlotDetails()
+            end
         end)
         PaperDollFrame:HookScript("OnHide", function()
             if CP.socketContainer then CP.socketContainer:Hide() end
@@ -444,6 +447,9 @@ local function HookCharacterPanel()
             if CP.db.TrackIndicatorsEnabled and slotID then
                 CP:UpdateSlotTrackIndicator(slotID)
             end
+            if CP.db.ShowSlotItemLevel or CP.db.ShowEnchantNames or CP.db.ShowSlotGems then
+                CP:UpdateAllSlotDetails()
+            end
         elseif event == "BAG_UPDATE_DELAYED" then
             -- Socketing a gem / applying an enchant consumes the item from bags
             -- and fires this rather than PLAYER_EQUIPMENT_CHANGED, so refresh the
@@ -451,6 +457,9 @@ local function HookCharacterPanel()
             QueueUpdate()
             if CP.socketContainer and CP.socketContainer:IsShown() then
                 CP:RefreshSocketButtons()
+            end
+            if CP.db.ShowSlotItemLevel or CP.db.ShowEnchantNames or CP.db.ShowSlotGems then
+                CP:UpdateAllSlotDetails()
             end
         end
     end)
@@ -500,6 +509,10 @@ function CP:ApplySettings()
     end
     if self.db.TrackIndicatorsEnabled and PaperDollFrame and PaperDollFrame:IsShown() then
         self:UpdateAllTrackIndicators()
+    end
+    if (self.db.ShowSlotItemLevel or self.db.ShowEnchantNames or self.db.ShowSlotGems)
+        and PaperDollFrame and PaperDollFrame:IsShown() then
+        self:UpdateAllSlotDetails()
     end
 end
 
@@ -1610,6 +1623,7 @@ function CP:OnDisable()
     if self.eventFrame then self.eventFrame:UnregisterAllEvents() end
     self:DisableGemSocketHelper()
     self:HideAllTrackIndicators()
+    self:HideAllSlotDetails()
     self:HideRaceText()
     RestoreCharacterBackground()
     updatePending = false
