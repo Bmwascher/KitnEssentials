@@ -121,7 +121,7 @@ function TT:CreateTotemButton(slot)
     btn.cooldown:SetDrawSwipe(db.Swipe)
     btn.cooldown:SetReverse(db.Reverse)
     btn.cooldown:SetDrawBling(false)
-    btn.cooldown:SetHideCountdownNumbers(false)
+    btn.cooldown:SetHideCountdownNumbers(not db.ShowTimer)
 
     btn:Hide()
 
