@@ -118,11 +118,120 @@ local socketableSlots = { 1, 2, 5, 6, 9, 10, 11, 12, 13, 14, 15 }
 local socketableSlotSet = {}
 for _, slotID in ipairs(socketableSlots) do socketableSlotSet[slotID] = true end
 
--- Curated short labels for common enchants, keyed by enchant ID (from the item
--- link). Falls back to the truncated tooltip effect name when an ID isn't here.
-local ENCHANT_NICKNAMES = {
-    -- [7352] = "Alacrity",   -- Enchant Ring - Silvermoon's Alacrity
+-- Enchant label processing: map full effect names to short stat-based labels,
+-- strip the "Enchant <Slot> - " prefixes, then abbreviate stat words. Anything
+-- not in the tables falls through to a length-truncated raw name.
+local enchantStripPrefixes = {
+    ["Enchant "]      = "",
+    ["Weapon %- "]    = "",
+    ["Shoulders %- "] = "",
+    ["Chest %- "]     = "",
+    ["Ring %- "]      = "",
+    ["Boots %- "]     = "",
+    ["Helm %- "]      = "",
+    ["%+"]            = "",
 }
+
+local enchantStatAbbrev = {
+    ["Stamina"]         = "Stam",
+    ["Intellect"]       = "Int",
+    ["Agility"]         = "Agi",
+    ["Strength"]        = "Str",
+    ["Mastery"]         = "Mast",
+    ["Versatility"]     = "Vers",
+    ["Critical Strike"] = "Crit",
+    ["Haste"]           = "Haste",
+    ["Avoidance"]       = "Avoid",
+}
+
+local enchantNicknames = {
+    ["Minor Speed Increase"] = "Speed",
+    ["Homebound Speed"]      = "Speed & HS Red.",
+    ["Plainsrunner's Breeze"] = "Speed",
+    ["Graceful Avoidance"]   = "Avoid",
+    ["Regenerative Leech"]   = "Leech",
+    ["Watcher's Loam"]       = "Stam",
+    ["Rider's Reassurance"]  = "Mount Speed",
+    ["Accelerated Agility"]  = "Speed & Agi",
+    ["Reserve of Int"]       = "Mana & Int",
+    ["Sustained Str"]        = "Stam & Str",
+    ["Waking Stats"]         = "Primary Stat",
+    ["Cavalry's March"]      = "Mount Speed",
+    ["Scout's March"]        = "Speed",
+    ["Defender's March"]     = "Stam",
+    ["Stormrider's Agi"]     = "Agi & Speed",
+    ["Council's Intellect"]  = "Int & Mana",
+    ["Crystalline Radiance"] = "Primary Stat",
+    ["Oathsworn's Strength"] = "Str & Stam",
+    ["Chant of Armored Avoidance"] = "Avoid",
+    ["Chant of Armored Leech"]     = "Leech",
+    ["Chant of Armored Speed"]     = "Speed",
+    ["Chant of Winged Grace"]      = "Avoid & FallDmg",
+    ["Chant of Leeching Fangs"]    = "Leech & Recup",
+    ["Chant of Burrowing Rapidity"] = "Speed & HScd",
+    ["Cursed Haste"]       = "Haste & |cffcc0000-Vers|r",
+    ["Cursed Crit"]        = "Crit & |cffcc0000-Haste|r",
+    ["Cursed Mastery"]     = "Mast & |cffcc0000-Crit|r",
+    ["Cursed Versatility"] = "Vers & |cffcc0000-Mast|r",
+    ["Shadowed Belt Clasp"] = "Stamina",
+    ["Incandescent Essence"] = "Essence",
+    ["Acuity of the Ren'dorei"] = "Proc Prim",
+    ["Arcane Mastery"]          = "Proc Mast",
+    ["Berserker's Rage"]        = "Proc Haste",
+    ["Flames of the Sin'dorei"] = "Dot->AoE",
+    ["Jan'alai's Precision"]    = "Proc Crit",
+    ["Strength of Halazzi"]     = "Bleed",
+    ["Worldsoul Aegis"]         = "Shield->AoE",
+    ["Worldsoul Tenacity"]      = "Proc Vers",
+    ["Empowered Blessing of Speed"] = "Speed+Vigor",
+    ["Blessing of Speed"]           = "Speed",
+    ["Empowered Rune of Avoidance"] = "Avoid+MS",
+    ["Rune of Avoidance"]           = "Avoid",
+    ["Empowered Hex of Leeching"]   = "Leech",
+    ["Hex of Leeching"]             = "Leech",
+    ["Akil'zon's Swiftness"] = "Speed",
+    ["Flight of the Eagle"]  = "Speed",
+    ["Amirdrassil's Grace"]  = "Avoid",
+    ["Nature's Grace"]       = "Avoid",
+    ["Thalassian Recovery"]  = "Leech",
+    ["Mark of Nalorakk"]       = "Str & Stam",
+    ["Mark of the Magister"]   = "Int & Mana",
+    ["Mark of the Rootwarden"] = "Agi & Speed",
+    ["Mark of the Worldsoul"]  = "Primary Stat",
+    ["Arcanoweave Spellthread"]    = "Int & Mana",
+    ["Blood Knight's Armor Kit"]   = "Agi/Str & Armor",
+    ["Forest Hunter's Armor Kit"]  = "Ag/Str & Stam",
+    ["Thalassian Scout Armor Kit"] = "Agi/Str",
+    ["Bright Linen Spellthread"]   = "Int",
+    ["Shaladrassil's Roots"] = "Leech & Stam",
+    ["Silvermoon's Mending"] = "Leech",
+    ["Farstrider's Hunt"]    = "Speed & Stam",
+    ["Lynx's Dexterity"]     = "Avoid & Stam",
+    ["Eyes of the Eagle"]    = "Crit%+",
+    ["Nature's Fury"]        = "Crit",
+    ["Nature's Wrath"]       = "Crit",
+    ["Silvermoon's Alacrity"] = "Haste%",
+    ["Thalassian Haste"]     = "Haste",
+    ["Zul'jin's Mastery"]    = "Mast",
+    ["Amani Mastery"]        = "Mast",
+    ["Silvermoon's Tenacity"] = "Vers",
+    ["Thalassian Versatility"] = "Vers",
+}
+
+-- Full enchant name -> short label. Order matters: nickname map (matches the
+-- full effect substring) first, then strip enchant prefixes, then stat abbrevs.
+local function ProcessEnchantText(text)
+    for seek, replacement in pairs(enchantNicknames) do
+        text = text:gsub(seek, replacement)
+    end
+    for prefix, replacement in pairs(enchantStripPrefixes) do
+        text = text:gsub(prefix, replacement)
+    end
+    for word, abbrev in pairs(enchantStatAbbrev) do
+        text = text:gsub(word, abbrev)
+    end
+    return text
+end
 
 -- Item track tier metadata. Letter shown on slot, color RGB.
 local ITEM_TRACKS = {
@@ -209,6 +318,9 @@ local function GetSlotEnchantID(slot)
 end
 
 -- Effect name from the tooltip's "Enchanted: Enchant <Slot> - <Effect>" line.
+-- Returns the full "Enchant <Slot> - <Effect>" text after the "Enchanted: "
+-- prefix. ProcessEnchantText does the nickname-map / strip / abbreviate (in that
+-- order), so we deliberately do NOT pre-strip here.
 local function GetSlotEnchantName(slot)
     local data = C_TooltipInfo.GetInventoryItem("player", slot)
     if not data or not data.lines then return nil end
@@ -216,23 +328,21 @@ local function GetSlotEnchantName(slot)
     for _, line in ipairs(data.lines) do
         local text = line.leftText
         if text and text:find(prefix, 1, true) == 1 then
-            local body = text:sub(#prefix + 1)
-            -- Strip leading "Enchant <Slot> - " (enUS-shaped; verbatim fallback otherwise).
-            local effect = body:match("^Enchant .- %- (.+)$") or body
-            return strtrim(effect)
+            return strtrim(text:sub(#prefix + 1))
         end
     end
     return nil
 end
 
 function CP:ResolveEnchantLabel(slot)
-    local id = GetSlotEnchantID(slot)
-    if not id then return nil end
-    local nick = ENCHANT_NICKNAMES[id]
-    if nick then return nick end
-    local name = GetSlotEnchantName(slot) or "Enchanted"
+    -- Enchant-ID check is the locale-robust "is it enchanted?" gate; the readable
+    -- label comes from the tooltip + ProcessEnchantText.
+    if not GetSlotEnchantID(slot) then return nil end
+    local name = GetSlotEnchantName(slot)
+    if not name then return "Enchanted" end
+    name = ProcessEnchantText(name)
     local maxLen = self.db.EnchantNameMaxLength or 18
-    if #name > maxLen then name = name:sub(1, maxLen - 1) .. "…" end
+    if #name > maxLen then name = name:sub(1, maxLen) end
     return name
 end
 
@@ -832,43 +942,57 @@ local function SanitizeDetailOutline(outline)
     return outline or "OUTLINE"
 end
 
+local CENTER_SLOTS = { [16] = true, [17] = true }
+
+-- Anchor the gem-icon row inline beside the ilvl text (reference model).
+local function AnchorGemsRightOf(detail, parent)
+    for i = 1, SLOT_DETAIL_MAX_GEMS do
+        local icon = detail.gemIcons[i]
+        icon:ClearAllPoints()
+        if i == 1 then
+            icon:SetPoint("LEFT", parent, "RIGHT", 3, 1)
+        else
+            icon:SetPoint("LEFT", detail.gemIcons[i - 1], "RIGHT", 2, 0)
+        end
+    end
+end
+
+local function AnchorGemsLeftOf(detail, parent)
+    for i = 1, SLOT_DETAIL_MAX_GEMS do
+        local icon = detail.gemIcons[i]
+        icon:ClearAllPoints()
+        if i == 1 then
+            icon:SetPoint("RIGHT", parent, "LEFT", -3, 1)
+        else
+            icon:SetPoint("RIGHT", detail.gemIcons[i - 1], "LEFT", -2, 0)
+        end
+    end
+end
+
 function CP:CreateSlotDetail(slotFrame, slotID)
     if slotFrame._slotDetail then return slotFrame._slotDetail end
 
-    local isRight = RIGHT_SLOTS[slotID]
+    local isRight  = RIGHT_SLOTS[slotID]
+    local isCenter = CENTER_SLOTS[slotID]
     local fontFace    = self.db.FontFace or "Expressway"
     local fontSize    = self.db.SlotInfoFontSize or 11
     local fontOutline = SanitizeDetailOutline(self.db.FontOutline)
 
-    local detail = CreateFrame("Frame", nil, slotFrame)
-    detail:SetSize(80, 48)
+    -- Parent to the slot's parent so the strip can extend beyond the slot bounds
+    -- without clipping; render above the slot.
+    local detail = CreateFrame("Frame", nil, slotFrame:GetParent())
+    detail:SetWidth(100)
     detail:SetFrameLevel(slotFrame:GetFrameLevel() + 10)
-
-    -- Inner side = toward the character model. Right-column slots grow LEFT;
-    -- left-column slots grow RIGHT. Small ±4 horizontal offset off the slot edge.
-    if isRight then
-        detail:SetPoint("TOPRIGHT", slotFrame, "TOPLEFT", -4, 0)
-    else
-        detail:SetPoint("TOPLEFT", slotFrame, "TOPRIGHT", 4, 0)
-    end
-
-    local justify = isRight and "RIGHT" or "LEFT"
 
     detail.enchantText = detail:CreateFontString(nil, "OVERLAY")
     KE:ApplyFont(detail.enchantText, fontFace, fontSize, fontOutline)
-    detail.enchantText:SetJustifyH(justify)
+    detail.enchantText:SetTextColor(0, 1, 0, 1)
     detail.enchantText:SetShadowColor(0, 0, 0, 0)
-    detail.enchantText:Hide()
 
     detail.ilvlText = detail:CreateFontString(nil, "OVERLAY")
     KE:ApplyFont(detail.ilvlText, fontFace, fontSize, fontOutline)
-    detail.ilvlText:SetJustifyH(justify)
     detail.ilvlText:SetShadowColor(0, 0, 0, 0)
-    detail.ilvlText:Hide()
 
-    -- Up to 3 gem icons, each on its own 1px-bordered mini-frame (mirrors the
-    -- gem-helper socket button construction: Frame + ARTWORK texture + zoom +
-    -- borders).
     local iconSize = self.db.SlotGemIconSize or 12
     detail.gemIcons = {}
     for i = 1, SLOT_DETAIL_MAX_GEMS do
@@ -883,18 +1007,46 @@ function CP:CreateSlotDetail(slotFrame, slotID)
         detail.gemIcons[i] = iconFrame
     end
 
-    detail:Hide()
+    -- Static anchors per slot side (reference model): enchant at the slot's
+    -- inner-TOP, item level at the inner-BOTTOM, gem icons inline beside the ilvl.
+    detail.enchantText:ClearAllPoints()
+    detail.ilvlText:ClearAllPoints()
+    if isCenter then
+        -- Weapons at the bottom-center: ilvl above the slot; enchant + gems to the
+        -- outer side (mainhand -> left, offhand -> right).
+        detail:SetPoint("BOTTOMLEFT", slotFrame, "BOTTOMLEFT", -100, 0)
+        detail:SetPoint("TOPRIGHT", slotFrame, "TOPRIGHT", 0, -100)
+        detail.ilvlText:SetPoint("BOTTOM", slotFrame, "TOP", 0, 7)
+        if slotID == 16 then
+            detail.enchantText:SetJustifyH("RIGHT")
+            detail.enchantText:SetPoint("BOTTOMRIGHT", slotFrame, "BOTTOMLEFT", -5, 0)
+            AnchorGemsLeftOf(detail, detail.ilvlText)
+        else
+            detail.enchantText:SetJustifyH("LEFT")
+            detail.enchantText:SetPoint("BOTTOMLEFT", slotFrame, "BOTTOMRIGHT", 5, 0)
+            AnchorGemsRightOf(detail, detail.ilvlText)
+        end
+    elseif isRight then
+        detail:SetPoint("TOPRIGHT", slotFrame, "TOPLEFT", 0, 0)
+        detail:SetPoint("BOTTOMRIGHT", slotFrame, "BOTTOMLEFT", 0, 0)
+        detail.ilvlText:SetJustifyH("RIGHT")
+        detail.ilvlText:SetPoint("BOTTOMRIGHT", detail, "BOTTOMRIGHT", -10, 2)
+        detail.enchantText:SetJustifyH("RIGHT")
+        detail.enchantText:SetPoint("TOPRIGHT", detail, "TOPRIGHT", -10, -7)
+        AnchorGemsLeftOf(detail, detail.ilvlText)
+    else
+        detail:SetPoint("TOPLEFT", slotFrame, "TOPRIGHT", 0, 0)
+        detail:SetPoint("BOTTOMLEFT", slotFrame, "BOTTOMRIGHT", 0, 0)
+        detail.ilvlText:SetJustifyH("LEFT")
+        detail.ilvlText:SetPoint("BOTTOMLEFT", detail, "BOTTOMLEFT", 10, 2)
+        detail.enchantText:SetJustifyH("LEFT")
+        detail.enchantText:SetPoint("TOPLEFT", detail, "TOPLEFT", 10, -7)
+        AnchorGemsRightOf(detail, detail.ilvlText)
+    end
+
     slotFrame._slotDetail = detail
     return detail
 end
-
--- Starting vertical offset for the detail stack below the slot's inner-top
--- corner. The warning text (slotTexts) anchors at the slot inner-top with a -5
--- y, so begin the detail block lower to avoid stacking on it.
--- NOTE: final positioning is tuned in-game at the USER checkpoint.
-local SLOT_DETAIL_TOP_OFFSET = -18
-local SLOT_DETAIL_ROW_GAP    = 1
-local SLOT_DETAIL_GEM_GAP    = 1
 
 function CP:UpdateSlotDetail(slotID)
     local frameName = SLOT_FRAMES[slotID]
@@ -904,7 +1056,6 @@ function CP:UpdateSlotDetail(slotID)
     if not slotFrame then return end
 
     local detail = self:CreateSlotDetail(slotFrame, slotID)
-    local isRight = RIGHT_SLOTS[slotID]
     local fontFace    = self.db.FontFace or "Expressway"
     local fontSize    = self.db.SlotInfoFontSize or 11
     local fontOutline = SanitizeDetailOutline(self.db.FontOutline)
@@ -913,39 +1064,38 @@ function CP:UpdateSlotDetail(slotID)
     KE:ApplyFont(detail.enchantText, fontFace, fontSize, fontOutline)
     KE:ApplyFont(detail.ilvlText, fontFace, fontSize, fontOutline)
 
-    -- Enchant label (green).
-    local enchantShown = false
+    -- Enchant label (green). "No Enchant" stays with the warning feature.
     if self.db.ShowEnchantNames then
         local label = self:ResolveEnchantLabel(slotID)
-        if label then
-            detail.enchantText:SetText(label)
-            detail.enchantText:SetTextColor(0.3, 1, 0.3, 1)
-            detail.enchantText:Show()
-            enchantShown = true
-        end
-    end
-    if not enchantShown then
+        detail.enchantText:SetText(label or "")
+        detail.enchantText:SetShown(label ~= nil)
+    else
         detail.enchantText:SetText("")
         detail.enchantText:Hide()
     end
 
-    -- Item level.
-    local ilvlShown = false
+    -- Item level, colored by the equipped item's quality.
     if self.db.ShowSlotItemLevel then
         local lvl = self:GetSlotItemLevel(slotID)
         if lvl then
-            detail.ilvlText:SetText(string.format("%d", lvl))
-            detail.ilvlText:SetTextColor(1, 1, 1, 1)
+            local quality = GetInventoryItemQuality("player", slotID)
+            if quality then
+                local hex = select(4, GetItemQualityColor(quality))
+                detail.ilvlText:SetText("|c" .. hex .. lvl .. "|r")
+            else
+                detail.ilvlText:SetText(tostring(lvl))
+            end
             detail.ilvlText:Show()
-            ilvlShown = true
+        else
+            detail.ilvlText:SetText("")
+            detail.ilvlText:Hide()
         end
-    end
-    if not ilvlShown then
+    else
         detail.ilvlText:SetText("")
         detail.ilvlText:Hide()
     end
 
-    -- Gems (only scan socketable slots).
+    -- Gem icons inline beside the ilvl text (only scan socketable slots).
     local gemCount = 0
     if self.db.ShowSlotGems and socketableSlotSet[slotID] then
         local result = self:ScanItemSockets(slotID)
@@ -966,44 +1116,8 @@ function CP:UpdateSlotDetail(slotID)
         detail.gemIcons[i]:Hide()
     end
 
-    -- Layout: stack only visible elements top -> bottom (enchant, ilvl, gem row),
-    -- collapsing gaps. Inner-justify; anchor first visible element to the detail
-    -- inner-top corner. NOTE: starting offsets only — tuned in-game.
-    local innerPoint = isRight and "TOPRIGHT" or "TOPLEFT"
-    local yOffset = SLOT_DETAIL_TOP_OFFSET
-
-    if enchantShown then
-        detail.enchantText:ClearAllPoints()
-        detail.enchantText:SetPoint(innerPoint, detail, innerPoint, 0, yOffset)
-        yOffset = yOffset - detail.enchantText:GetStringHeight() - SLOT_DETAIL_ROW_GAP
-    end
-
-    if ilvlShown then
-        detail.ilvlText:ClearAllPoints()
-        detail.ilvlText:SetPoint(innerPoint, detail, innerPoint, 0, yOffset)
-        yOffset = yOffset - detail.ilvlText:GetStringHeight() - SLOT_DETAIL_ROW_GAP
-    end
-
-    if gemCount > 0 then
-        local iconSize = self.db.SlotGemIconSize or 12
-        for i = 1, gemCount do
-            local iconFrame = detail.gemIcons[i]
-            iconFrame:ClearAllPoints()
-            -- Lay icons left-to-right for left slots, right-to-left for right slots.
-            local step = (i - 1) * (iconSize + SLOT_DETAIL_GEM_GAP)
-            if isRight then
-                iconFrame:SetPoint("TOPRIGHT", detail, "TOPRIGHT", -step, yOffset)
-            else
-                iconFrame:SetPoint("TOPLEFT", detail, "TOPLEFT", step, yOffset)
-            end
-        end
-    end
-
-    if enchantShown or ilvlShown or gemCount > 0 then
-        detail:Show()
-    else
-        detail:Hide()
-    end
+    -- Transparent container — element visibility controls what's drawn.
+    detail:Show()
 end
 
 function CP:UpdateAllSlotDetails()
