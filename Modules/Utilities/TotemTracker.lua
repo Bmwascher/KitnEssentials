@@ -229,11 +229,12 @@ end
 ---@param totem table
 function TT:UpdateButton(btn, totem)
     if not (btn and totem) then return end
+    if not totem.slot then return end
 
     local slot = totem.slot
-    local _, _, startTime, _, icon = GetTotemInfo(slot)
+    local haveTotem, _, _, _, icon = GetTotemInfo(slot)
 
-    if startTime then
+    if haveTotem then
         btn.icon:SetTexture(icon)
         btn.cooldown:SetCooldownFromDurationObject(GetTotemDuration(slot))
         btn:Show()
@@ -291,7 +292,6 @@ end
 function TT:ApplySettings()
     self:UpdateDB()
     self:UpdateContainerPosition()
-    self:LayoutButtons()
 
     for slot = 1, MAX_TOTEMS do
         if totemButtons[slot] then self:UpdateButtonSettings(totemButtons[slot]) end
