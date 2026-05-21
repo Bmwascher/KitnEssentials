@@ -97,7 +97,7 @@
     <Script file="GUITabs\GUIQoL\GUI-CombatLogger.lua" />
     <Script file="GUITabs\GUIQoL\GUI-AuctionHouseFilter.lua" />
     <Script file="GUITabs\GUIQoL\GUI-GreatVaultAlert.lua" />
-    <Script file="GUITabs\GUIQoL\GUI-MissingEnchants.lua" />
+    <Script file="GUITabs\GUIQoL\GUI-CharacterPanel.lua" />
     <Script file="GUITabs\GUIQoL\GUI-Nicknames.lua" />
     <Script file="GUITabs\GUIQoL\GUI-WorldMap.lua" />
     <Script file="GUITabs\GUIQoL\GUI-PositionController.lua" />

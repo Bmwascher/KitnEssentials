@@ -1,8 +1,9 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  GUI-MissingEnchants.lua                                 ║
--- ║  GUI: Missing Enchants/Gems                              ║
--- ║  Purpose: Configuration panel for the                    ║
--- ║           MissingEnchants module.                        ║
+-- ║  GUI-CharacterPanel.lua                                  ║
+-- ║  GUI: Character Panel                                    ║
+-- ║  Purpose: Configuration panel for the CharacterPanel     ║
+-- ║           module (warnings, character text styling,      ║
+-- ║           track indicators, gem socket helper).          ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -12,29 +13,29 @@ local Theme = KE.Theme
 
 local function GetModule()
     if KitnEssentials then
-        return KitnEssentials:GetModule("MissingEnchants", true)
+        return KitnEssentials:GetModule("CharacterPanel", true)
     end
     return nil
 end
 
-GUIFrame:RegisterContent("MissingEnchants", function(scrollChild, yOffset)
-    local db = KE.db and KE.db.profile.MissingEnchants
+GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
+    local db = KE.db and KE.db.profile.CharacterPanel
     if not db then return yOffset end
 
-    local ME = GetModule()
+    local CP = GetModule()
     local manager = GUIFrame:CreateWidgetStateManager()
 
     local function ApplySettings()
-        if ME then ME:Refresh() end
+        if CP then CP:Refresh() end
     end
 
     local function ApplyModuleState(enabled)
-        if not ME then return end
+        if not CP then return end
         db.Enabled = enabled
         if enabled then
-            KitnEssentials:EnableModule("MissingEnchants")
+            KitnEssentials:EnableModule("CharacterPanel")
         else
-            KitnEssentials:DisableModule("MissingEnchants")
+            KitnEssentials:DisableModule("CharacterPanel")
         end
     end
 
@@ -45,10 +46,10 @@ GUIFrame:RegisterContent("MissingEnchants", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 1: Enable
     ----------------------------------------------------------------
-    local card1 = GUIFrame:CreateCard(scrollChild, "Missing Enchants/Gems", yOffset)
+    local card1 = GUIFrame:CreateCard(scrollChild, "Character Panel", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Missing Enchants/Gems", {
+    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Character Panel", {
         value = db.Enabled ~= false,
         callback = function(checked)
             db.Enabled = checked
@@ -56,7 +57,7 @@ GUIFrame:RegisterContent("MissingEnchants", function(scrollChild, yOffset)
             RefreshStates()
         end,
         msgPopup = true,
-        msgText = "Missing Enchants/Gems",
+        msgText = "Character Panel",
         msgOn = "On",
         msgOff = "Off",
     })
@@ -89,8 +90,8 @@ GUIFrame:RegisterContent("MissingEnchants", function(scrollChild, yOffset)
     manager:Register(enchantCheck, "all")
 
     local gemCheck = GUIFrame:CreateCheckbox(row2a, "Show Missing Gems", {
-        value = db.GemEnabled ~= false,
-        callback = function(checked) db.GemEnabled = checked; ApplySettings() end,
+        value = db.ShowMissingGems ~= false,
+        callback = function(checked) db.ShowMissingGems = checked; ApplySettings() end,
     })
     row2a:AddWidget(gemCheck, 0.5)
     manager:Register(gemCheck, "all")
