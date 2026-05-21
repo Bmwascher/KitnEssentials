@@ -28,7 +28,6 @@ local strsplit = strsplit
 local pairs, ipairs = pairs, ipairs
 local table_concat = table.concat
 local C_Timer = C_Timer
-local LCG = LibStub("LibCustomGlow-1.0", true)
 
 local INVSLOT_HEAD      = INVSLOT_HEAD
 local INVSLOT_NECK      = INVSLOT_NECK
@@ -1280,30 +1279,18 @@ function CP:ShowSlotHighlight(slotID)
     local slotFrame = _G[frameName]
     if not slotFrame then return end
 
-    if not self.slotHighlight then
-        local Theme = KE.Theme
-        self.slotHighlight = CreateFrame("Frame", nil, UIParent)
-        self.slotHighlight:SetFrameStrata("DIALOG")
-        self.slotHighlight.texture = self.slotHighlight:CreateTexture(nil, "OVERLAY")
-        self.slotHighlight.texture:SetAllPoints()
-        self.slotHighlight.texture:SetColorTexture(Theme.accent[1], Theme.accent[2], Theme.accent[3], 0.4)
-        self.slotHighlight.texture:SetBlendMode("ADD")
-        KE:AddIconBorders(self.slotHighlight, { Theme.accent[1], Theme.accent[2], Theme.accent[3], 1 })
-    end
-    self.slotHighlight:SetAllPoints(slotFrame)
-    self.slotHighlight:Show()
-
-    -- Default-yellow autocast sparkle glow on the gear slot, on top of the accent overlay.
-    if LCG then
-        LCG.AutoCastGlow_Start(slotFrame, nil, 8, 0.25, 1, 1, 1, nil)
+    -- Native Blizzard spell-activation overlay glow on the gear slot — the same
+    -- code path DominationSocketHelper uses (pixel-identical to the in-game
+    -- "ability ready" glow). No accent overlay underneath.
+    if ActionButtonSpellAlertManager then
+        ActionButtonSpellAlertManager:ShowAlert(slotFrame)
         self._glowingSlotFrame = slotFrame
     end
 end
 
 function CP:HideSlotHighlight()
-    if self.slotHighlight then self.slotHighlight:Hide() end
-    if LCG and self._glowingSlotFrame then
-        LCG.AutoCastGlow_Stop(self._glowingSlotFrame)
+    if ActionButtonSpellAlertManager and self._glowingSlotFrame then
+        ActionButtonSpellAlertManager:HideAlert(self._glowingSlotFrame)
         self._glowingSlotFrame = nil
     end
 end
