@@ -1,17 +1,20 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  MissingEnchants.lua                                     ║
--- ║  Module: Missing Enchants/Gems                           ║
--- ║  Purpose: Red warnings on character panel for missing    ║
--- ║           enchants and empty gem sockets. Max level only.║
--- ║  Credit: Based on BetterCharacterPanel by Grimonja.      ║
+-- ║  CharacterPanel.lua                                      ║
+-- ║  Module: Character Panel                                 ║
+-- ║  Purpose: Missing enchant/gem warnings, decimal ilvl,    ║
+-- ║           character text styling, race text, item track  ║
+-- ║           indicators, gem socket helper.                 ║
+-- ║  Credit: Warnings based on BetterCharacterPanel by       ║
+-- ║          Grimonja. Feature set ported from NUI v3.13     ║
+-- ║          CharacterPanel.                                  ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
----@class MissingEnchants: AceModule, AceEvent-3.0
-local ME = KitnEssentials:NewModule("MissingEnchants", "AceEvent-3.0")
+---@class CharacterPanel: AceModule, AceEvent-3.0, AceHook-3.0
+local CP = KitnEssentials:NewModule("CharacterPanel", "AceEvent-3.0", "AceHook-3.0")
 
 local _G = _G
 local CreateFrame = CreateFrame
@@ -157,7 +160,7 @@ local function HasEmptySocket(slot)
 end
 
 local function GetFontSettings()
-    local db = ME.db
+    local db = CP.db
     local fontFace = db and db.FontFace or "Expressway"
     local fontSize = db and db.FontSize or 13
     local fontOutline = db and db.FontOutline or "OUTLINE"
@@ -200,7 +203,7 @@ end
 -- Settings
 ---------------------------------------------------------------------------------
 local function UpdateDisplay()
-    local db = ME.db
+    local db = CP.db
     local enchantEnabled = db and db.ShowEnchants ~= false
     local gemEnabled = db and db.GemEnabled ~= false
     local isMaxLevel = IsLevelAtEffectiveMaxLevel(UnitLevel("player"))
@@ -305,7 +308,7 @@ local function HookCharacterPanel()
     if PaperDollFrame then
         PaperDollFrame:HookScript("OnShow", function()
             QueueUpdate()
-            local db = ME.db
+            local db = CP.db
             if db and db.HideCharacterBackground then
                 HideCharacterBackground()
             end
@@ -313,9 +316,9 @@ local function HookCharacterPanel()
     end
 
     -- PEC alone is the direct signal; UIC was duplicative.
-    ME.eventFrame = CreateFrame("Frame")
-    ME.eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
-    ME.eventFrame:SetScript("OnEvent", function(_, event)
+    CP.eventFrame = CreateFrame("Frame")
+    CP.eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+    CP.eventFrame:SetScript("OnEvent", function(_, event)
         if event == "PLAYER_EQUIPMENT_CHANGED" then
             QueueUpdate()
         end
@@ -324,7 +327,7 @@ local function HookCharacterPanel()
     hooked = true
 end
 
-function ME:Refresh()
+function CP:Refresh()
     if C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("BetterCharacterPanel") then return end
     HookCharacterPanel()
     ApplyFontToAll()
@@ -333,19 +336,19 @@ function ME:Refresh()
     end
 end
 
-function ME:ClearAll()
+function CP:ClearAll()
     for _, text in pairs(slotTexts) do text:SetText("") end
 end
 
 ---------------------------------------------------------------------------------
 -- Lifecycle
 ---------------------------------------------------------------------------------
-function ME:OnInitialize()
-    self.db = KE.db.profile.MissingEnchants
+function CP:OnInitialize()
+    self.db = KE.db.profile.CharacterPanel
     self:SetEnabledState(false)
 end
 
-function ME:OnEnable()
+function CP:OnEnable()
     -- Skip if BetterCharacterPanel is loaded (provides same functionality)
     if C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("BetterCharacterPanel") then return end
     if not self.db.ShowEnchants and not self.db.GemEnabled and not self.db.HideCharacterBackground then return end
@@ -365,7 +368,7 @@ function ME:OnEnable()
     end
 end
 
-function ME:OnDisable()
+function CP:OnDisable()
     self:ClearAll()
     if self.eventFrame then
         self.eventFrame:UnregisterAllEvents()

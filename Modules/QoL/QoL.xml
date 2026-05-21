@@ -11,7 +11,7 @@
     <Script file="AuctionHouseFilter.lua" />
     <Script file="GreatVaultAlert.lua" />
     <Script file="VantusRune.lua" />
-    <Script file="MissingEnchants.lua" />
+    <Script file="CharacterPanel.lua" />
     <Script file="WorldMap.lua" />
     <Script file="PositionController.lua" />
     <Script file="SpellAlerts.lua" />
