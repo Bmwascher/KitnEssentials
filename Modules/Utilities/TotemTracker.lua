@@ -225,4 +225,79 @@ function TT:LayoutButtons(visibleButtons)
     end
 end
 
+---@param btn table
+---@param totem table
+function TT:UpdateButton(btn, totem)
+    if not (btn and totem) then return end
+
+    local slot = totem.slot
+    local _, _, startTime, _, icon = GetTotemInfo(slot)
+
+    if startTime then
+        btn.icon:SetTexture(icon)
+        btn.cooldown:SetCooldownFromDurationObject(GetTotemDuration(slot))
+        btn:Show()
+    else
+        btn.cooldown:Clear()
+        btn:Hide()
+    end
+end
+
+function TT:UpdateTotems()
+    if not self.db or not self.db.Enabled then return end
+
+    if isPreviewActive then
+        local currentTime = GetTime()
+        local visibleButtons = {}
+        for slot = 1, MAX_TOTEMS do
+            local btn = totemButtons[slot]
+            if btn then
+                btn.icon:SetTexture(PREVIEW_ICONS[slot] or PREVIEW_ICONS[1])
+                btn.cooldown:SetCooldown(currentTime - (slot * 10), 120)
+                btn:Show()
+                visibleButtons[#visibleButtons + 1] = btn
+            end
+        end
+        self:LayoutButtons(visibleButtons)
+        return
+    end
+
+    for i = 1, MAX_TOTEMS do
+        local btn = totemButtons[i]
+        if btn then btn:Hide() end
+    end
+
+    local visibleButtons = {}
+    if TotemFrame and TotemFrame.totemPool then
+        for totem in TotemFrame.totemPool:EnumerateActive() do
+            local priorityIndex = TOTEM_PRIORITIES[totem.layoutIndex]
+            if priorityIndex then
+                local btn = totemButtons[priorityIndex]
+                self:UpdateButton(btn, totem)
+                if btn and btn:IsShown() then
+                    visibleButtons[#visibleButtons + 1] = btn
+                end
+            end
+        end
+    end
+
+    self:LayoutButtons(visibleButtons)
+end
+
+function TT:OnTotemUpdate()
+    if self.db and self.db.Enabled then self:UpdateTotems() end
+end
+
+function TT:ApplySettings()
+    self:UpdateDB()
+    self:UpdateContainerPosition()
+    self:LayoutButtons()
+
+    for slot = 1, MAX_TOTEMS do
+        if totemButtons[slot] then self:UpdateButtonSettings(totemButtons[slot]) end
+    end
+
+    self:UpdateTotems()
+end
+
 -- Remaining functions populated in subsequent tasks.
