@@ -451,6 +451,12 @@ local function ApplyFontToAll()
             KE:ApplyFontToText(button._slotWarning, fontFace, fontSize, fontOutline)
         end
     end
+    for _, frameName in pairs(INSPECT_SLOT_FRAMES) do
+        local button = _G[frameName]
+        if button and button._slotWarning then
+            KE:ApplyFontToText(button._slotWarning, fontFace, fontSize, fontOutline)
+        end
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -764,6 +770,10 @@ function CP:ClearAll()
         local button = _G[buttonName]
         if button and button._slotWarning then button._slotWarning:SetText("") end
     end
+    for _, frameName in pairs(INSPECT_SLOT_FRAMES) do
+        local button = _G[frameName]
+        if button and button._slotWarning then button._slotWarning:SetText("") end
+    end
 end
 
 function CP:ApplyFont(fontString, size)
@@ -1051,6 +1061,12 @@ function CP:HideAllTrackIndicators()
             slotFrame._trackOverlay:Hide()
         end
     end
+    for _, frameName in pairs(INSPECT_SLOT_FRAMES) do
+        local slotFrame = _G[frameName]
+        if slotFrame and slotFrame._trackOverlay then
+            slotFrame._trackOverlay:Hide()
+        end
+    end
 end
 
 function CP:SetupTrackIndicators()
@@ -1278,6 +1294,12 @@ end
 
 function CP:HideAllSlotDetails()
     for _, frameName in pairs(SLOT_FRAMES) do
+        local slotFrame = _G[frameName]
+        if slotFrame and slotFrame._slotDetail then
+            slotFrame._slotDetail:Hide()
+        end
+    end
+    for _, frameName in pairs(INSPECT_SLOT_FRAMES) do
         local slotFrame = _G[frameName]
         if slotFrame and slotFrame._slotDetail then
             slotFrame._slotDetail:Hide()
@@ -1889,4 +1911,5 @@ function CP:OnDisable()
     self:HideRaceText()
     RestoreCharacterBackground()
     updatePending = false
+    inspectUpdatePending = false
 end
