@@ -258,6 +258,12 @@ local function CreateFontSettingsCardLegacy(scrollChild, yOffset, config)
     local fontSizes = config.fontSizes
     local searchable = config.searchable ~= false
     local includeSoftOutline = config.includeSoftOutline == true
+    -- Optional WidgetStateManager. When passed, size-slider entries flagged
+    -- elvuiGated register into the "elvuiOk" group ONLY (never also "all" — a
+    -- widget in two groups gets last-group-wins non-determinism). Gated sliders
+    -- are kept out of the returned `widgets` list so the caller's RegisterGroup
+    -- (and card:SetEnabled, which walks fontWidgets) leave them to "elvuiOk".
+    local manager = config.manager
 
     local keys = {
         fontFace = dbKeys.fontFace or "FontFace",
@@ -317,7 +323,11 @@ local function CreateFontSettingsCardLegacy(scrollChild, yOffset, config)
                     callback = function(val) setValue(sizeConfig.dbKey, val) end,
                 })
                 row:AddWidget(sizeSlider, widthPct)
-                table_insert(widgets, sizeSlider)
+                if manager and sizeConfig.elvuiGated then
+                    manager:Register(sizeSlider, "elvuiOk")
+                else
+                    table_insert(widgets, sizeSlider)
+                end
             end
             if isLast then
                 card:AddRow(row, rowHeight, 0)
