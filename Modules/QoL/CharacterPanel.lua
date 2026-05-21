@@ -1293,9 +1293,9 @@ function CP:ShowSlotHighlight(slotID)
     self.slotHighlight:SetAllPoints(slotFrame)
     self.slotHighlight:Show()
 
-    -- Gold proc glow on the gear slot, on top of the accent overlay.
+    -- Default-yellow proc glow on the gear slot, on top of the accent overlay.
     if LCG then
-        LCG.ButtonGlow_Start(slotFrame, nil, 0)
+        LCG.ProcGlow_Start(slotFrame, { startAnim = false })
         self._glowingSlotFrame = slotFrame
     end
 end
@@ -1303,7 +1303,7 @@ end
 function CP:HideSlotHighlight()
     if self.slotHighlight then self.slotHighlight:Hide() end
     if LCG and self._glowingSlotFrame then
-        LCG.ButtonGlow_Stop(self._glowingSlotFrame)
+        LCG.ProcGlow_Stop(self._glowingSlotFrame)
         self._glowingSlotFrame = nil
     end
 end
