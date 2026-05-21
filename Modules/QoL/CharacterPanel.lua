@@ -399,6 +399,85 @@ function CP:ApplyFont(fontString, size)
     KE:ApplyFontToText(fontString, fontFace, size, fontOutline)
 end
 
+function CP:UpdateItemLevelText()
+    local itemLevelFrame = CharacterStatsPane and CharacterStatsPane.ItemLevelFrame
+    if not itemLevelFrame or not itemLevelFrame.Value then return end
+
+    local _, avgItemLevelEquipped = GetAverageItemLevel()
+    if self.db.Enabled and self.db.DecimalItemLevel and not ElvUILoaded() then
+        itemLevelFrame.Value:SetText(string.format("%.2f", avgItemLevelEquipped))
+    else
+        itemLevelFrame.Value:SetText(string.format("%d", math.floor(avgItemLevelEquipped)))
+    end
+end
+
+function CP:SetupDecimalItemLevel()
+    if ElvUILoaded() then return end
+    if self._decimalIlvlHooked then return end
+    self._decimalIlvlHooked = true
+
+    self:SecureHook("PaperDollFrame_SetItemLevel", function(_, unit)
+        if not self.db.DecimalItemLevel then return end
+        if unit ~= "player" then return end
+        self:UpdateItemLevelText()
+    end)
+end
+
+function CP:StyleCharacterTexts()
+    if ElvUILoaded() then return end
+
+    local levelText = CharacterLevelText
+    if levelText then
+        self:ApplyFont(levelText, self.db.LevelTextSize or 12)
+        levelText:SetWidth(0)
+        levelText:SetWordWrap(true)
+    end
+
+    local nameText = CharacterFrameTitleText
+    if nameText then
+        self:ApplyFont(nameText, self.db.NameTextSize or 12)
+    end
+
+    self:StyleStatsPaneTexts()
+end
+
+function CP:StyleStatsPaneTexts()
+    if ElvUILoaded() then return end
+
+    local statsPane = CharacterStatsPane
+    if not statsPane then return end
+
+    local categorySize = self.db.CategoryFontSize or 12
+
+    if statsPane.ItemLevelCategory and statsPane.ItemLevelCategory.Title then
+        self:ApplyFont(statsPane.ItemLevelCategory.Title, categorySize)
+    end
+
+    if statsPane.ItemLevelFrame and statsPane.ItemLevelFrame.Value then
+        self:ApplyFont(statsPane.ItemLevelFrame.Value, self.db.IlvlValueSize or 16)
+    end
+
+    for _, category in ipairs({ statsPane.AttributesCategory, statsPane.EnhancementsCategory }) do
+        if category and category.Title then
+            self:ApplyFont(category.Title, categorySize)
+        end
+    end
+end
+
+function CP:SetupStatTextHook()
+    if ElvUILoaded() then return end
+    if self._statTextHooked then return end
+    self._statTextHooked = true
+
+    hooksecurefunc("PaperDollFrame_SetLabelAndText", function(statFrame)
+        if not CP.db.Enabled then return end
+        if CharacterStatsPane and statFrame == CharacterStatsPane.ItemLevelFrame then return end
+        local statsSize = CP.db.StatsFontSize or 12
+        if statFrame.Label then CP:ApplyFont(statFrame.Label, statsSize) end
+        if statFrame.Value then CP:ApplyFont(statFrame.Value, statsSize) end
+    end)
+end
+
 ---------------------------------------------------------------------------------
 -- Lifecycle
 ---------------------------------------------------------------------------------
