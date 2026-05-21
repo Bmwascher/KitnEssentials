@@ -320,7 +320,7 @@ end
 function TT:HidePreview()
     isPreviewActive = false
 
-    if not self.db.Enabled then
+    if not self.db or not self.db.Enabled then
         if containerFrame then containerFrame:Hide() end
     else
         self:UpdateTotems()

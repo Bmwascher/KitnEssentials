@@ -363,7 +363,7 @@ local SECTION_PREVIEW_MODULES = {
     utilities_section = {
         "BloodlustTracker", "StanceText", "PetStatusText", "PotionReady",
         "DisintegrateTicks", "StasisTracker", "EbonMightTracker", "PrescienceTracker",
-        "RaidNotifications", "Recuperate", "TimeSpiral", "NoMovementAlert",
+        "RaidNotifications", "Recuperate", "TimeSpiral", "TotemTracker", "NoMovementAlert",
         "ReadyCheckConsumables",
     },
     qol_section = {
