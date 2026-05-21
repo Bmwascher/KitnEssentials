@@ -101,6 +101,58 @@ local gemSlotButtons = {
     [INVSLOT_FINGER2] = "CharacterFinger1Slot",
 }
 
+-- Gem socket types for socket helper scanning.
+local GEM_SOCKET_TYPES = {
+    { name = "Prismatic",  locale = "EMPTY_SOCKET_PRISMATIC",  icon = 458977 },
+    { name = "Meta",       locale = "EMPTY_SOCKET_META",       icon = 136257 },
+    { name = "Tinker",     locale = "EMPTY_SOCKET_TINKER",     icon = 2958630 },
+    { name = "Cogwheel",   locale = "EMPTY_SOCKET_COGWHEEL",   icon = 407324 },
+    { name = "Primordial", locale = "EMPTY_SOCKET_PRIMORDIAL", icon = 4095404 },
+    { name = "Fiber",      locale = "EMPTY_SOCKET_FIBER",      icon = 136260 },
+}
+
+-- Slot IDs the gem socket helper scans.
+local socketableSlots = { 1, 2, 5, 6, 9, 10, 11, 12, 13, 14, 15 }
+
+-- Item track tier metadata. Letter shown on slot, color RGB.
+local ITEM_TRACKS = {
+    { keyword = "Myth",       letter = "M", color = { 1.00, 0.50, 0.00 } },
+    { keyword = "Hero",       letter = "H", color = { 0.78, 0.30, 0.78 } },
+    { keyword = "Champion",   letter = "C", color = { 0.00, 0.70, 1.00 } },
+    { keyword = "Veteran",    letter = "V", color = { 0.00, 0.80, 0.00 } },
+    { keyword = "Adventurer", letter = "A", color = { 0.70, 0.70, 0.70 } },
+}
+
+-- Crafted gear track auto-detection from item level.
+local CRAFTED_TRACKS = {
+    { minIlvl = 295, letter = "C", color = { 1.00, 0.50, 0.00 }, weaponOnly = true },
+    { minIlvl = 285, letter = "C", color = { 1.00, 0.50, 0.00 } },
+    { minIlvl = 282, letter = "C", color = { 0.78, 0.30, 0.78 } },
+    { minIlvl = 269, letter = "C", color = { 0.00, 0.70, 1.00 } },
+}
+
+-- All equipped slots — for track indicators and gem helper anchor frames.
+local SLOT_FRAMES = {
+    [1]  = "CharacterHeadSlot",      [2]  = "CharacterNeckSlot",
+    [3]  = "CharacterShoulderSlot",
+    [5]  = "CharacterChestSlot",     [6]  = "CharacterWaistSlot",
+    [7]  = "CharacterLegsSlot",      [8]  = "CharacterFeetSlot",
+    [9]  = "CharacterWristSlot",     [10] = "CharacterHandsSlot",
+    [11] = "CharacterFinger0Slot",   [12] = "CharacterFinger1Slot",
+    [13] = "CharacterTrinket0Slot",  [14] = "CharacterTrinket1Slot",
+    [15] = "CharacterBackSlot",
+    [16] = "CharacterMainHandSlot",  [17] = "CharacterSecondaryHandSlot",
+}
+
+-- Slot IDs anchored on the right side of CharacterFrame.
+local RIGHT_SLOTS = {
+    [6] = true, [7] = true, [8] = true, [10] = true,
+    [11] = true, [12] = true, [13] = true, [14] = true, [17] = true,
+}
+
+-- Track indicator quality atlas regex (extracted from item link).
+local qualityAtlasPattern = "|A:(Professions%-ChatIcon%-Quality%-[^:]+):%d+:%d+"
+
 -- Combined set of all slots that need checking
 local allCheckSlots = {}
 for slot, btn in pairs(enchantSlotButtons) do allCheckSlots[slot] = btn end
@@ -338,6 +390,13 @@ end
 
 function CP:ClearAll()
     for _, text in pairs(slotTexts) do text:SetText("") end
+end
+
+function CP:ApplyFont(fontString, size)
+    local db = self.db
+    local fontFace    = db.FontFace    or "Expressway"
+    local fontOutline = db.FontOutline or "OUTLINE"
+    KE:ApplyFontToText(fontString, fontFace, size, fontOutline)
 end
 
 ---------------------------------------------------------------------------------
