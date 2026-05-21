@@ -187,7 +187,7 @@ local enchantNicknames = {
     ["Blessing of Speed"]           = "Speed",
     ["Empowered Rune of Avoidance"] = "Avoid+MS",
     ["Rune of Avoidance"]           = "Avoid",
-    ["Empowered Hex of Leeching"]   = "Leech",
+    ["Empowered Hex of Leeching"]   = "Empowered Leech",
     ["Hex of Leeching"]             = "Leech",
     ["Akil'zon's Swiftness"] = "Speed",
     ["Flight of the Eagle"]  = "Speed",
@@ -218,14 +218,32 @@ local enchantNicknames = {
     ["Thalassian Versatility"] = "Vers",
 }
 
--- Full enchant name -> short label. Order matters: nickname map (matches the
--- full effect substring) first, then strip enchant prefixes, then stat abbrevs.
+-- Nickname keys sorted longest-first. Matching the most specific entry before its
+-- base (e.g. "Empowered Hex of Leeching" before "Hex of Leeching") makes the label
+-- deterministic regardless of pairs() order, so the empowered variants keep their
+-- distinct labels instead of accidentally falling back to the base.
+local enchantNicknameOrder = {}
+for seek in pairs(enchantNicknames) do
+    enchantNicknameOrder[#enchantNicknameOrder + 1] = seek
+end
+table.sort(enchantNicknameOrder, function(a, b) return #a > #b end)
+
+-- Pipeline (in order): strip the "Enchant <Slot> - " prefix from the raw effect
+-- text, map the bare name through the nickname table, then abbreviate stat words.
 local function ProcessEnchantText(text)
-    for seek, replacement in pairs(enchantNicknames) do
-        text = text:gsub(seek, replacement)
-    end
+    -- Strip the "Enchant <Slot> - " prefix (and any stray "+") from the raw effect
+    -- text FIRST, so nickname lookups match the bare effect name and the "+"-strip
+    -- can't later eat a "+" a nickname value intentionally adds (e.g. "Crit%+").
     for prefix, replacement in pairs(enchantStripPrefixes) do
         text = text:gsub(prefix, replacement)
+    end
+    -- Nickname values are literal display labels. Iterate longest-key-first (see
+    -- enchantNicknameOrder) and use a FUNCTION replacement so a "%" in the value
+    -- (e.g. "Crit%+", "Haste%") is emitted verbatim instead of being treated as a
+    -- gsub replacement escape (Lua 5.1 silently drops a lone %).
+    for _, seek in ipairs(enchantNicknameOrder) do
+        local replacement = enchantNicknames[seek]
+        text = text:gsub(seek, function() return replacement end)
     end
     for word, abbrev in pairs(enchantStatAbbrev) do
         text = text:gsub(word, abbrev)
@@ -305,8 +323,9 @@ local function HasEnchant(itemLink)
 end
 
 -- Enchant ID from the item link (locale-independent; same field HasEnchant reads).
-local function GetSlotEnchantID(slot)
-    local link = GetInventoryItemLink("player", slot)
+local function GetSlotEnchantID(unit, slot)
+    unit = unit or "player"
+    local link = GetInventoryItemLink(unit, slot)
     if not link then return nil end
     local itemString = link:match("item[%-?%d:]+")
     if not itemString then return nil end
@@ -321,8 +340,9 @@ end
 -- Returns the full "Enchant <Slot> - <Effect>" text after the "Enchanted: "
 -- prefix. ProcessEnchantText does the nickname-map / strip / abbreviate (in that
 -- order), so we deliberately do NOT pre-strip here.
-local function GetSlotEnchantName(slot)
-    local data = C_TooltipInfo.GetInventoryItem("player", slot)
+local function GetSlotEnchantName(unit, slot)
+    unit = unit or "player"
+    local data = C_TooltipInfo.GetInventoryItem(unit, slot)
     if not data or not data.lines then return nil end
     local prefix = ENCHANTED_TOOLTIP_LINE:gsub("%%s.*$", "")  -- "Enchanted: "
     for _, line in ipairs(data.lines) do
@@ -343,34 +363,37 @@ end
 local SLOT_ENCHANT_MAX_LEN = 18
 local SLOT_GEM_ICON_SIZE   = 14
 
-function CP:ResolveEnchantLabel(slot)
+function CP:ResolveEnchantLabel(unit, slot)
+    unit = unit or "player"
     -- Enchant-ID check is the locale-robust "is it enchanted?" gate; the readable
     -- label comes from the tooltip + ProcessEnchantText.
-    if not GetSlotEnchantID(slot) then return nil end
-    local name = GetSlotEnchantName(slot)
+    if not GetSlotEnchantID(unit, slot) then return nil end
+    local name = GetSlotEnchantName(unit, slot)
     if not name then return "Enchanted" end
     name = ProcessEnchantText(name)
     if #name > SLOT_ENCHANT_MAX_LEN then name = name:sub(1, SLOT_ENCHANT_MAX_LEN) end
     return name
 end
 
-function CP:GetSlotItemLevel(slot)
-    local link = GetInventoryItemLink("player", slot)
+function CP:GetSlotItemLevel(unit, slot)
+    unit = unit or "player"
+    local link = GetInventoryItemLink(unit, slot)
     if not link then return nil end
-    -- GetDetailedItemLevelInfo returns (effective, isPreview, base); only the
-    -- effective level is wanted, so collapse to a single return.
-    local effective = GetDetailedItemLevelInfo(link)
+    -- C_Item.GetDetailedItemLevelInfo returns (effective, isPreview, base); only
+    -- the effective level is wanted, so collapse to a single return.
+    local effective = C_Item.GetDetailedItemLevelInfo(link)
     return effective
 end
 
-local function CanEnchantSlot(slot)
-    local expansion = GetExpansionForLevel(UnitLevel("player"))
+local function CanEnchantSlot(unit, slot)
+    unit = unit or "player"
+    local expansion = GetExpansionForLevel(UnitLevel(unit))
     local slots = expansion and expansionEnchantableSlots[expansion]
     if not slots then return false end
     if slots[slot] then return true end
 
     if slot == INVSLOT_OFFHAND then
-        local itemLink = GetInventoryItemLink("player", slot)
+        local itemLink = GetInventoryItemLink(unit, slot)
         if itemLink then
             local itemEquipLoc = select(4, GetItemInfoInstant(itemLink))
             return itemEquipLoc ~= "INVTYPE_HOLDABLE" and itemEquipLoc ~= "INVTYPE_SHIELD"
@@ -380,9 +403,10 @@ local function CanEnchantSlot(slot)
     return false
 end
 
-local function HasEmptySocket(slot)
+local function HasEmptySocket(unit, slot)
+    unit = unit or "player"
     if not gemSlotButtons[slot] then return false end
-    local tooltipData = C_TooltipInfo.GetInventoryItem("player", slot)
+    local tooltipData = C_TooltipInfo.GetInventoryItem(unit, slot)
     if not tooltipData or not tooltipData.lines then return false end
 
     for _, line in ipairs(tooltipData.lines) do
@@ -409,14 +433,19 @@ local function CreateSlotText(button, slot)
     -- name, which uses the same inset.
     local side = slotLayout[slot]
     if side == "left" then
-        text:SetPoint("TOPLEFT", button, "TOPRIGHT", 10, -5)
+        text:SetPoint("TOPLEFT", button, "TOPRIGHT", 3, -4)
     elseif side == "right" then
-        text:SetPoint("TOPRIGHT", button, "TOPLEFT", -10, -5)
+        text:SetPoint("TOPRIGHT", button, "TOPLEFT", -3, -4)
     elseif side == "center" then
+        -- Weapons: match the slot-detail enchant-name anchor (bottom-side of the
+        -- slot) so the warning sits where a real enchant name would, clear of the
+        -- ilvl number above the slot.
         if slot == INVSLOT_MAINHAND then
-            text:SetPoint("TOPRIGHT", button, "TOPLEFT", -10, -2)
+            text:SetJustifyH("RIGHT")
+            text:SetPoint("BOTTOMRIGHT", button, "BOTTOMLEFT", -3, 0)
         else
-            text:SetPoint("TOPLEFT", button, "TOPRIGHT", 10, -2)
+            text:SetJustifyH("LEFT")
+            text:SetPoint("BOTTOMLEFT", button, "BOTTOMRIGHT", 3, 0)
         end
     end
     return text
@@ -452,10 +481,10 @@ local function UpdateDisplay()
             if isMaxLevel then
                 local itemLink = GetInventoryItemLink("player", slot)
                 if itemLink then
-                    if enchantEnabled and CanEnchantSlot(slot) and not HasEnchant(itemLink) then
+                    if enchantEnabled and CanEnchantSlot("player", slot) and not HasEnchant(itemLink) then
                         parts[#parts + 1] = "No Enchant"
                     end
-                    if gemEnabled and HasEmptySocket(slot) then
+                    if gemEnabled and HasEmptySocket("player", slot) then
                         parts[#parts + 1] = "No Gem"
                     end
                 end
@@ -826,8 +855,9 @@ end
 ---------------------------------------------------------------------------------
 -- Item Track Indicators
 ---------------------------------------------------------------------------------
-function CP:GetItemTrack(slotID)
-    local data = C_TooltipInfo.GetInventoryItem("player", slotID)
+function CP:GetItemTrack(unit, slotID)
+    unit = unit or "player"
+    local data = C_TooltipInfo.GetInventoryItem(unit, slotID)
     if not data or not data.lines then return nil end
 
     local isCrafted = false
@@ -844,9 +874,9 @@ function CP:GetItemTrack(slotID)
     end
 
     if isCrafted then
-        local itemLink = GetInventoryItemLink("player", slotID)
+        local itemLink = GetInventoryItemLink(unit, slotID)
         if itemLink then
-            local ilvl = GetDetailedItemLevelInfo(itemLink)
+            local ilvl = C_Item.GetDetailedItemLevelInfo(itemLink)
             if ilvl then
                 local isWeapon = slotID == 16 or slotID == 17
                 for _, track in ipairs(CRAFTED_TRACKS) do
@@ -870,7 +900,7 @@ function CP:CreateTrackOverlay(slotFrame, slotID)
     overlay:SetFrameLevel(slotFrame:GetFrameLevel() + 10)
 
     if isRight then
-        overlay:SetPoint("BOTTOMRIGHT", slotFrame, "BOTTOMRIGHT", 0, 1)
+        overlay:SetPoint("BOTTOMRIGHT", slotFrame, "BOTTOMRIGHT", 1, 1)
     else
         overlay:SetPoint("BOTTOMLEFT", slotFrame, "BOTTOMLEFT", 1, 1)
     end
@@ -900,7 +930,7 @@ function CP:UpdateSlotTrackIndicator(slotID)
     if not slotFrame then return end
 
     local overlay = self:CreateTrackOverlay(slotFrame, slotID)
-    local track = self:GetItemTrack(slotID)
+    local track = self:GetItemTrack("player", slotID)
 
     if track then
         -- Re-apply font each update so a TrackLetterSize change is live.
@@ -960,7 +990,9 @@ local function AnchorGemsRightOf(detail, parent)
         local icon = detail.gemIcons[i]
         icon:ClearAllPoints()
         if i == 1 then
-            icon:SetPoint("LEFT", parent, "RIGHT", 3, 1)
+            -- 0 (vs the right side's 1) intentionally compensates for sub-pixel
+            -- rounding that made the left gems read 1px looser than the right.
+            icon:SetPoint("LEFT", parent, "RIGHT", 0, 0)
         else
             icon:SetPoint("LEFT", detail.gemIcons[i - 1], "RIGHT", 2, 0)
         end
@@ -972,7 +1004,7 @@ local function AnchorGemsLeftOf(detail, parent)
         local icon = detail.gemIcons[i]
         icon:ClearAllPoints()
         if i == 1 then
-            icon:SetPoint("RIGHT", parent, "LEFT", -3, 1)
+            icon:SetPoint("RIGHT", parent, "LEFT", -1, 0)
         else
             icon:SetPoint("RIGHT", detail.gemIcons[i - 1], "LEFT", -2, 0)
         end
@@ -1026,31 +1058,31 @@ function CP:CreateSlotDetail(slotFrame, slotID)
         -- outer side (mainhand -> left, offhand -> right).
         detail:SetPoint("BOTTOMLEFT", slotFrame, "BOTTOMLEFT", -100, 0)
         detail:SetPoint("TOPRIGHT", slotFrame, "TOPRIGHT", 0, -100)
-        detail.ilvlText:SetPoint("BOTTOM", slotFrame, "TOP", 0, 7)
+        detail.ilvlText:SetPoint("BOTTOM", slotFrame, "TOP", 0, 3)
         if slotID == 16 then
             detail.enchantText:SetJustifyH("RIGHT")
-            detail.enchantText:SetPoint("BOTTOMRIGHT", slotFrame, "BOTTOMLEFT", -5, 0)
+            detail.enchantText:SetPoint("BOTTOMRIGHT", slotFrame, "BOTTOMLEFT", -3, 0)
             AnchorGemsLeftOf(detail, detail.ilvlText)
         else
             detail.enchantText:SetJustifyH("LEFT")
-            detail.enchantText:SetPoint("BOTTOMLEFT", slotFrame, "BOTTOMRIGHT", 5, 0)
+            detail.enchantText:SetPoint("BOTTOMLEFT", slotFrame, "BOTTOMRIGHT", 3, 0)
             AnchorGemsRightOf(detail, detail.ilvlText)
         end
     elseif isRight then
         detail:SetPoint("TOPRIGHT", slotFrame, "TOPLEFT", 0, 0)
         detail:SetPoint("BOTTOMRIGHT", slotFrame, "BOTTOMLEFT", 0, 0)
         detail.ilvlText:SetJustifyH("RIGHT")
-        detail.ilvlText:SetPoint("BOTTOMRIGHT", detail, "BOTTOMRIGHT", -10, 2)
+        detail.ilvlText:SetPoint("BOTTOMRIGHT", detail, "BOTTOMRIGHT", -3, 2)
         detail.enchantText:SetJustifyH("RIGHT")
-        detail.enchantText:SetPoint("TOPRIGHT", detail, "TOPRIGHT", -10, -7)
+        detail.enchantText:SetPoint("TOPRIGHT", detail, "TOPRIGHT", -3, -6)
         AnchorGemsLeftOf(detail, detail.ilvlText)
     else
         detail:SetPoint("TOPLEFT", slotFrame, "TOPRIGHT", 0, 0)
         detail:SetPoint("BOTTOMLEFT", slotFrame, "BOTTOMRIGHT", 0, 0)
         detail.ilvlText:SetJustifyH("LEFT")
-        detail.ilvlText:SetPoint("BOTTOMLEFT", detail, "BOTTOMLEFT", 10, 2)
+        detail.ilvlText:SetPoint("BOTTOMLEFT", detail, "BOTTOMLEFT", 3, 2)
         detail.enchantText:SetJustifyH("LEFT")
-        detail.enchantText:SetPoint("TOPLEFT", detail, "TOPLEFT", 10, -7)
+        detail.enchantText:SetPoint("TOPLEFT", detail, "TOPLEFT", 3, -6)
         AnchorGemsRightOf(detail, detail.ilvlText)
     end
 
@@ -1076,7 +1108,7 @@ function CP:UpdateSlotDetail(slotID)
 
     -- Enchant label (green). "No Enchant" stays with the warning feature.
     if self.db.ShowEnchantNames then
-        local label = self:ResolveEnchantLabel(slotID)
+        local label = self:ResolveEnchantLabel("player", slotID)
         detail.enchantText:SetText(label or "")
         detail.enchantText:SetShown(label ~= nil)
     else
@@ -1086,11 +1118,11 @@ function CP:UpdateSlotDetail(slotID)
 
     -- Item level, colored by the equipped item's quality.
     if self.db.ShowSlotItemLevel then
-        local lvl = self:GetSlotItemLevel(slotID)
+        local lvl = self:GetSlotItemLevel("player", slotID)
         if lvl then
             local quality = GetInventoryItemQuality("player", slotID)
             if quality then
-                local hex = select(4, GetItemQualityColor(quality))
+                local hex = select(4, C_Item.GetItemQualityColor(quality))
                 detail.ilvlText:SetText("|c" .. hex .. lvl .. "|r")
             else
                 detail.ilvlText:SetText(tostring(lvl))
@@ -1108,7 +1140,7 @@ function CP:UpdateSlotDetail(slotID)
     -- Gem icons inline beside the ilvl text (only scan socketable slots).
     local gemCount = 0
     if self.db.ShowSlotGems and socketableSlotSet[slotID] then
-        local result = self:ScanItemSockets(slotID)
+        local result = self:ScanItemSockets("player", slotID)
         if result and result.sockets then
             local iconSize = SLOT_GEM_ICON_SIZE
             for _, socket in ipairs(result.sockets) do
@@ -1225,8 +1257,9 @@ local function CreateQualityOverlay(parent, anchor)
     return frame, texture
 end
 
-function CP:ScanItemSockets(slotID)
-    local itemLink = GetInventoryItemLink("player", slotID)
+function CP:ScanItemSockets(unit, slotID)
+    unit = unit or "player"
+    local itemLink = GetInventoryItemLink(unit, slotID)
     if not itemLink then return nil end
 
     local result = {
@@ -1252,7 +1285,7 @@ function CP:ScanItemSockets(slotID)
 
     local tt = GetScanTooltip()
     tt:ClearLines()
-    tt:SetInventoryItem("player", slotID)
+    tt:SetInventoryItem(unit, slotID, false, false)
 
     for i = 1, tt:NumLines() do
         local line = _G["KE_CharacterPanelScanTooltipTextLeft" .. i]
@@ -1280,7 +1313,7 @@ end
 function CP:ScanAllEquippedSockets()
     wipe(socketCache)
     for _, slotID in ipairs(socketableSlots) do
-        local socketInfo = self:ScanItemSockets(slotID)
+        local socketInfo = self:ScanItemSockets("player", slotID)
         if socketInfo then table.insert(socketCache, socketInfo) end
     end
     return socketCache
@@ -1321,7 +1354,7 @@ function CP:CreateSocketContainer()
     local anchor = CharacterFrameTab3 or CharacterFrameTab2 or CharacterFrameTab1 or CharacterFrame
 
     local container = CreateFrame("Frame", "KE_SocketContainer", PaperDollFrame)
-    container:SetPoint("TOPLEFT", anchor, "TOPRIGHT", 4, -6)
+    container:SetPoint("TOPLEFT", anchor, "TOPRIGHT", 3, -5)
     container:SetSize(200, db.SocketButtonSize)
     container:Hide()
 
