@@ -801,6 +801,77 @@ function CP:SetupTrackIndicators()
 end
 
 ---------------------------------------------------------------------------------
+-- Slot Details (per-slot item level / enchant label / inline gem icons)
+---------------------------------------------------------------------------------
+
+-- Number of gem icons a slot can show inline (matches the 3-socket max).
+local SLOT_DETAIL_MAX_GEMS = 3
+
+-- Sanitize the configured outline for Blizzard-adjacent FontStrings — SOFTOUTLINE
+-- is KE's custom 8-shadow system and renders as solid black on these, so collapse
+-- it to a plain OUTLINE (same rule the warning/level texts follow via ApplyFont).
+local function SanitizeDetailOutline(outline)
+    if outline == "SOFTOUTLINE" then return "OUTLINE" end
+    return outline or "OUTLINE"
+end
+
+function CP:CreateSlotDetail(slotFrame, slotID)
+    if slotFrame._slotDetail then return slotFrame._slotDetail end
+
+    local isRight = RIGHT_SLOTS[slotID]
+    local fontFace    = self.db.FontFace or "Expressway"
+    local fontSize    = self.db.SlotInfoFontSize or 11
+    local fontOutline = SanitizeDetailOutline(self.db.FontOutline)
+
+    local detail = CreateFrame("Frame", nil, slotFrame)
+    detail:SetSize(80, 48)
+    detail:SetFrameLevel(slotFrame:GetFrameLevel() + 10)
+
+    -- Inner side = toward the character model. Right-column slots grow LEFT;
+    -- left-column slots grow RIGHT. Small ±4 horizontal offset off the slot edge.
+    if isRight then
+        detail:SetPoint("TOPRIGHT", slotFrame, "TOPLEFT", -4, 0)
+    else
+        detail:SetPoint("TOPLEFT", slotFrame, "TOPRIGHT", 4, 0)
+    end
+
+    local justify = isRight and "RIGHT" or "LEFT"
+
+    detail.enchantText = detail:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFont(detail.enchantText, fontFace, fontSize, fontOutline)
+    detail.enchantText:SetJustifyH(justify)
+    detail.enchantText:SetShadowColor(0, 0, 0, 0)
+    detail.enchantText:Hide()
+
+    detail.ilvlText = detail:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFont(detail.ilvlText, fontFace, fontSize, fontOutline)
+    detail.ilvlText:SetJustifyH(justify)
+    detail.ilvlText:SetShadowColor(0, 0, 0, 0)
+    detail.ilvlText:Hide()
+
+    -- Up to 3 gem icons, each on its own 1px-bordered mini-frame (mirrors the
+    -- gem-helper socket button construction: Frame + ARTWORK texture + zoom +
+    -- borders).
+    local iconSize = self.db.SlotGemIconSize or 12
+    detail.gemIcons = {}
+    for i = 1, SLOT_DETAIL_MAX_GEMS do
+        local iconFrame = CreateFrame("Frame", nil, detail)
+        iconFrame:SetSize(iconSize, iconSize)
+        local tex = iconFrame:CreateTexture(nil, "ARTWORK")
+        tex:SetAllPoints()
+        KE:ApplyIconZoom(tex, 0.3)
+        KE:AddIconBorders(iconFrame, { 0, 0, 0, 1 })
+        iconFrame.tex = tex
+        iconFrame:Hide()
+        detail.gemIcons[i] = iconFrame
+    end
+
+    detail:Hide()
+    slotFrame._slotDetail = detail
+    return detail
+end
+
+---------------------------------------------------------------------------------
 -- Gem Socket Helper
 ---------------------------------------------------------------------------------
 
