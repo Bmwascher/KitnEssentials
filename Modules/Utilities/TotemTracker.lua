@@ -47,4 +47,25 @@ function TT:OnInitialize()
     self:SetEnabledState(false)
 end
 
+function TT:CreateDestroyButtons()
+    if destroyButtons[1] then return end
+    if InCombatLockdown() then
+        self:RegisterEvent("PLAYER_REGEN_ENABLED", function(selfRef)
+            selfRef:UnregisterEvent("PLAYER_REGEN_ENABLED")
+            selfRef:CreateDestroyButtons()
+        end)
+        return
+    end
+
+    for slot = 1, MAX_TOTEMS do
+        local btn = CreateFrame("Button", "KE_DestroyTotem" .. slot, UIParent, "SecureActionButtonTemplate")
+        btn:SetAttribute("type",                "destroytotem")
+        btn:SetAttribute("typerelease",         "destroytotem")
+        btn:SetAttribute("totem-slot",          slot)
+        btn:SetAttribute("pressAndHoldAction",  1)
+        btn:RegisterForClicks("AnyUp", "AnyDown")
+        destroyButtons[slot] = btn
+    end
+end
+
 -- Remaining functions populated in subsequent tasks.
