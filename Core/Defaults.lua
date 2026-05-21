@@ -417,6 +417,31 @@ local Defaults = {
             Position = DefaultPosition(0, -160),
         },
 
+        TotemTracker = {
+            Enabled        = true,
+            IconSize       = 44,
+            IconSpacing    = 1,
+            GrowDirection  = "RIGHT",       -- RIGHT | LEFT | UP | DOWN
+            ShowTimer      = true,
+            Swipe          = false,
+            Reverse        = false,
+
+            FontFace       = "Expressway",
+            FontOutline    = "OUTLINE",
+            TimerFontSize  = 18,
+
+            Strata          = "HIGH",
+            anchorFrameType = "UIPARENT",
+            ParentFrame     = "UIParent",
+            Position = {
+                AnchorFrom      = "CENTER",
+                AnchorTo        = "CENTER",
+                XOffset         = -500,
+                YOffset         = -450,
+                SnapToPixelGrid = false,
+            },
+        },
+
         DisintegrateTicks = {
             Enabled = false,
             TickColor = { 1, 1, 1, 0.8 },
