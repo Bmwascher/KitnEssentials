@@ -129,7 +129,7 @@ GUIFrame:RegisterContent("TotemTracker", function(scrollChild, yOffset)
         end,
     })
     btnRow:AddWidget(createBtn, 1)
-    macroCard:AddRow(btnRow, Theme.rowHeightLast - 8, 0)
+    macroCard:AddRow(btnRow, Theme.rowHeightLast, 0)
 
     yOffset = macroCard:GetNextOffset()
 
@@ -237,7 +237,7 @@ GUIFrame:RegisterContent("TotemTracker", function(scrollChild, yOffset)
         callback = function(checked) db.Reverse = checked; ApplySettings() end,
     })
     rowSwipe:AddWidget(reverseCheck, 0.5)
-    manager:Register(reverseCheck, "all", "swipeOn")
+    manager:Register(reverseCheck, "swipeOn")
     card5:AddRow(rowSwipe, Theme.rowHeightLast, 0)
 
     yOffset = card5:GetNextOffset()

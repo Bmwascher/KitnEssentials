@@ -12,6 +12,7 @@ if not KitnEssentials then return end
 
 ---@class TotemTracker: AceModule, AceEvent-3.0
 local TT = KitnEssentials:NewModule("TotemTracker", "AceEvent-3.0")
+TT.classRestriction = "SHAMAN"
 
 local CreateFrame = CreateFrame
 local ipairs = ipairs
