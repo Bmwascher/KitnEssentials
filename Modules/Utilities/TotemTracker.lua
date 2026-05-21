@@ -300,4 +300,98 @@ function TT:ApplySettings()
     self:UpdateTotems()
 end
 
--- Remaining functions populated in subsequent tasks.
+function TT:ShowPreview()
+    if not containerFrame then self:CreateContainer() end
+    if not containerFrame then return end
+    isPreviewActive = true
+
+    for slot = 1, MAX_TOTEMS do
+        local btn = totemButtons[slot]
+        if btn then
+            btn:Show()
+            btn:SetAlpha(1)
+        end
+    end
+
+    containerFrame:Show()
+    self:ApplySettings()
+end
+
+function TT:HidePreview()
+    isPreviewActive = false
+
+    if not self.db.Enabled then
+        if containerFrame then containerFrame:Hide() end
+    else
+        self:UpdateTotems()
+    end
+end
+
+function TT:TogglePreview()
+    if isPreviewActive then
+        self:HidePreview()
+    else
+        self:ShowPreview()
+    end
+    return isPreviewActive
+end
+
+function TT:IsPreviewActive()
+    return isPreviewActive
+end
+
+function TT:OnEnable()
+    if not self.db or not self.db.Enabled then return end
+
+    self:CreateContainer()
+    self:UpdateContainerPosition()
+    self:LayoutButtons()
+
+    for slot = 1, MAX_TOTEMS do
+        if totemButtons[slot] then self:UpdateButtonSettings(totemButtons[slot]) end
+    end
+
+    if containerFrame then containerFrame:Show() end
+
+    self:RegisterEvent("PLAYER_TOTEM_UPDATE",          "OnTotemUpdate")
+    self:RegisterEvent("PLAYER_ENTERING_WORLD",        "OnTotemUpdate")
+    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnTotemUpdate")
+    C_Timer.After(0.1, function() self:UpdateTotems() end)
+
+    if KE.EditMode then
+        KE.EditMode:RegisterElement({
+            key         = "TotemTracker",
+            displayName = "Totem Tracker",
+            frame       = containerFrame,
+            getPosition = function() return self.db.Position end,
+            setPosition = function(pos)
+                self.db.Position.AnchorFrom = pos.AnchorFrom
+                self.db.Position.AnchorTo   = pos.AnchorTo
+                self.db.Position.XOffset    = pos.XOffset
+                self.db.Position.YOffset    = pos.YOffset
+                self:ApplySettings()
+            end,
+            getParentFrame = function()
+                return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
+            end,
+            guiPath = "TotemTracker",
+        })
+    end
+end
+
+function TT:OnDisable()
+    isPreviewActive = false
+
+    self:UnregisterAllEvents()
+
+    for slot = 1, MAX_TOTEMS do
+        local btn = totemButtons[slot]
+        if btn then
+            btn:SetAlpha(0)
+            btn:Hide()
+        end
+    end
+
+    if containerFrame then containerFrame:Hide() end
+    if KE.EditMode then KE.EditMode:UnregisterElement("TotemTracker") end
+end
