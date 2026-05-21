@@ -50,9 +50,12 @@ end
 function TT:CreateDestroyButtons()
     if destroyButtons[1] then return end
     if InCombatLockdown() then
-        self:RegisterEvent("PLAYER_REGEN_ENABLED", function(selfRef)
-            selfRef:UnregisterEvent("PLAYER_REGEN_ENABLED")
-            selfRef:CreateDestroyButtons()
+        -- AceEvent-3.0 closure callbacks receive (event, ...args), NOT (self, ...).
+        -- Capture the module table via an upvalue.
+        local module = self
+        self:RegisterEvent("PLAYER_REGEN_ENABLED", function()
+            module:UnregisterEvent("PLAYER_REGEN_ENABLED")
+            module:CreateDestroyButtons()
         end)
         return
     end
@@ -64,6 +67,7 @@ function TT:CreateDestroyButtons()
         btn:SetAttribute("totem-slot",          slot)
         btn:SetAttribute("pressAndHoldAction",  1)
         btn:RegisterForClicks("AnyUp", "AnyDown")
+        btn:Hide()
         destroyButtons[slot] = btn
     end
 end
