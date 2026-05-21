@@ -72,6 +72,7 @@
     <Script file="GUITabs\GUIUtilities\GUI-MacroBuilders.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-PotionReady.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-ReadyCheckConsumables.lua" />
+    <Script file="GUITabs\GUIUtilities\GUI-TotemTracker.lua" />
 
     <!-- Dungeons tabs -->
     <Script file="GUITabs\GUIDungeons\GUI-DungeonCasts.lua" />
