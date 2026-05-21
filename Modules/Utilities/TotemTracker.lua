@@ -155,7 +155,9 @@ function TT:UpdateContainerPosition()
     local db = self.db
     local position = db.Position
     local parent = KE:ResolveAnchorFrame(db.anchorFrameType, db.ParentFrame)
+    if not parent then return end
 
+    containerFrame:SetParent(parent)
     containerFrame:ClearAllPoints()
 
     local direction = db.GrowDirection
@@ -172,7 +174,6 @@ function TT:UpdateContainerPosition()
     end
 
     containerFrame:SetFrameStrata(db.Strata)
-    containerFrame:SetParent(parent)
 
     -- Honor opt-in pixel-snap toggle. We can't use KE:ApplyFramePositionWithSnap
     -- here because it does its own SetPoint (CENTER/CENTER) which would override
@@ -191,7 +192,8 @@ function TT:LayoutButtons(visibleButtons)
     local spacing = db.IconSpacing
     local size = db.IconSize
 
-    local numVisible = visibleButtons and #visibleButtons or MAX_TOTEMS
+    local buttonsToLayout = visibleButtons or totemButtons
+    local numVisible = #buttonsToLayout
     if numVisible == 0 then numVisible = 1 end
 
     local totalWidth, totalHeight
@@ -204,7 +206,6 @@ function TT:LayoutButtons(visibleButtons)
     end
     containerFrame:SetSize(totalWidth, totalHeight)
 
-    local buttonsToLayout = visibleButtons or totemButtons
     for i, btn in ipairs(buttonsToLayout) do
         btn:ClearAllPoints()
 
