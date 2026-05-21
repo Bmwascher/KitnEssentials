@@ -72,4 +72,81 @@ function TT:CreateDestroyButtons()
     end
 end
 
+local function ApplyCooldownTextStyle(cooldown, db)
+    if not cooldown then return end
+
+    for _, region in ipairs({ cooldown:GetRegions() }) do
+        if region:GetObjectType() == "FontString" then
+            KE:ApplyFontToText(region, db.FontFace, db.TimerFontSize, db.FontOutline)
+            region:SetShadowOffset(0, 0)
+            region:ClearAllPoints()
+            region:SetPoint("CENTER", cooldown, "CENTER", 0, 0)
+        end
+    end
+end
+
+function TT:CreateTotemButton(slot)
+    local db = self.db
+
+    local btn = CreateFrame("Button", "KE_TotemButton" .. slot, containerFrame)
+    btn:SetSize(db.IconSize, db.IconSize)
+    btn:SetID(slot)
+
+    btn:SetScript("OnEnter", function(frame)
+        if GameTooltip:IsForbidden() or not frame:IsVisible() then return end
+        GameTooltip:SetOwner(frame, "ANCHOR_RIGHT")
+        GameTooltip:SetTotem(frame:GetID())
+        GameTooltip:Show()
+    end)
+    btn:SetScript("OnLeave", function()
+        if GameTooltip:IsForbidden() then return end
+        GameTooltip:Hide()
+    end)
+
+    btn.icon = btn:CreateTexture(nil, "ARTWORK")
+    btn.icon:SetAllPoints(btn)
+    KE:ApplyIconZoom(btn.icon, 0.08)
+
+    KE:AddIconBorders(btn, { 0, 0, 0, 1 })
+
+    btn.highlight = btn:CreateTexture(nil, "HIGHLIGHT")
+    btn.highlight:SetPoint("TOPLEFT", btn, "TOPLEFT", 1, -1)
+    btn.highlight:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
+    btn.highlight:SetColorTexture(1, 1, 1, 0.2)
+    btn.highlight:SetBlendMode("ADD")
+
+    btn.cooldown = CreateFrame("Cooldown", nil, btn, "CooldownFrameTemplate")
+    btn.cooldown:SetAllPoints(btn)
+    btn.cooldown:SetDrawEdge(false)
+    btn.cooldown:SetDrawSwipe(db.Swipe)
+    btn.cooldown:SetReverse(db.Reverse)
+    btn.cooldown:SetDrawBling(false)
+    btn.cooldown:SetHideCountdownNumbers(false)
+
+    btn:Hide()
+
+    return btn
+end
+
+function TT:CreateContainer()
+    if containerFrame then return end
+
+    containerFrame = CreateFrame("Frame", "KE_TotemTracker", UIParent)
+    containerFrame:SetSize(200, 50)
+    containerFrame:SetClampedToScreen(true)
+
+    for slot = 1, MAX_TOTEMS do
+        totemButtons[slot] = self:CreateTotemButton(slot)
+    end
+end
+
+function TT:UpdateButtonSettings(btn)
+    local db = self.db
+    btn:SetSize(db.IconSize, db.IconSize)
+    btn.cooldown:SetDrawSwipe(db.Swipe)
+    btn.cooldown:SetReverse(db.Reverse)
+    btn.cooldown:SetHideCountdownNumbers(not db.ShowTimer)
+    ApplyCooldownTextStyle(btn.cooldown, db)
+end
+
 -- Remaining functions populated in subsequent tasks.
