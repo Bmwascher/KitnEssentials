@@ -1395,9 +1395,15 @@ function CP:ScanItemSockets(unit, slotID)
         totalCount = 0, filledCount = 0, emptyCount = 0,
     }
 
+    -- Track which socket positions are filled so empty sockets can be assigned
+    -- their TRUE position (1-3) rather than a running count. Without this, an
+    -- empty socket that precedes a filled one gets the wrong index and the socket
+    -- helper's ClickSocketButton targets the wrong (filled) socket.
+    local filledIndices = {}
     for socketIndex = 1, 3 do
         local gemName, gemLink = C_Item.GetItemGem(itemLink, socketIndex)
         if gemLink then
+            filledIndices[socketIndex] = true
             result.filledCount = result.filledCount + 1
             result.totalCount  = result.totalCount + 1
             local gemID = C_Item.GetItemInfoInstant(gemLink)
@@ -1408,6 +1414,7 @@ function CP:ScanItemSockets(unit, slotID)
             })
         end
     end
+    local nextEmptyIndex = 1
 
     local tt = GetScanTooltip()
     tt:ClearLines()
@@ -1421,12 +1428,16 @@ function CP:ScanItemSockets(unit, slotID)
                 for _, socketType in ipairs(GEM_SOCKET_TYPES) do
                     local localeString = _G[socketType.locale]
                     if localeString and text:find(localeString, 1, true) then
+                        while filledIndices[nextEmptyIndex] do
+                            nextEmptyIndex = nextEmptyIndex + 1
+                        end
                         result.emptyCount = result.emptyCount + 1
                         result.totalCount = result.totalCount + 1
                         table.insert(result.sockets, {
-                            index = result.totalCount, filled = false,
+                            index = nextEmptyIndex, filled = false,
                             socketType = socketType.name, icon = socketType.icon,
                         })
+                        nextEmptyIndex = nextEmptyIndex + 1
                     end
                 end
             end
