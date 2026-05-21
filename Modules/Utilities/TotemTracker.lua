@@ -149,4 +149,79 @@ function TT:UpdateButtonSettings(btn)
     ApplyCooldownTextStyle(btn.cooldown, db)
 end
 
+function TT:UpdateContainerPosition()
+    if not containerFrame then return end
+
+    local db = self.db
+    local position = db.Position
+    local parent = KE:ResolveAnchorFrame(db.anchorFrameType, db.ParentFrame)
+
+    containerFrame:ClearAllPoints()
+
+    local direction = db.GrowDirection
+    if direction == "RIGHT" then
+        containerFrame:SetPoint("LEFT", parent, position.AnchorTo, position.XOffset, position.YOffset)
+    elseif direction == "LEFT" then
+        containerFrame:SetPoint("RIGHT", parent, position.AnchorTo, position.XOffset, position.YOffset)
+    elseif direction == "UP" then
+        containerFrame:SetPoint("BOTTOM", parent, position.AnchorTo, position.XOffset, position.YOffset)
+    elseif direction == "DOWN" then
+        containerFrame:SetPoint("TOP", parent, position.AnchorTo, position.XOffset, position.YOffset)
+    else
+        containerFrame:SetPoint(position.AnchorFrom, parent, position.AnchorTo, position.XOffset, position.YOffset)
+    end
+
+    containerFrame:SetFrameStrata(db.Strata)
+    containerFrame:SetParent(parent)
+
+    -- Honor opt-in pixel-snap toggle. We can't use KE:ApplyFramePositionWithSnap
+    -- here because it does its own SetPoint (CENTER/CENTER) which would override
+    -- our growth-direction-aware anchoring. Instead, call SnapFrameToPixels
+    -- directly after the directional SetPoint has been applied.
+    if db.SnapToPixelGrid and KE.SnapFrameToPixels then
+        KE:SnapFrameToPixels(containerFrame)
+    end
+end
+
+function TT:LayoutButtons(visibleButtons)
+    if not containerFrame then return end
+
+    local db = self.db
+    local direction = db.GrowDirection
+    local spacing = db.IconSpacing
+    local size = db.IconSize
+
+    local numVisible = visibleButtons and #visibleButtons or MAX_TOTEMS
+    if numVisible == 0 then numVisible = 1 end
+
+    local totalWidth, totalHeight
+    if direction == "RIGHT" or direction == "LEFT" then
+        totalWidth  = (size * numVisible) + (spacing * (numVisible - 1))
+        totalHeight = size
+    else
+        totalWidth  = size
+        totalHeight = (size * numVisible) + (spacing * (numVisible - 1))
+    end
+    containerFrame:SetSize(totalWidth, totalHeight)
+
+    local buttonsToLayout = visibleButtons or totemButtons
+    for i, btn in ipairs(buttonsToLayout) do
+        btn:ClearAllPoints()
+
+        if direction == "RIGHT" then
+            local xOffset = (i - 1) * (size + spacing)
+            btn:SetPoint("LEFT", containerFrame, "LEFT", xOffset, 0)
+        elseif direction == "LEFT" then
+            local xOffset = -((i - 1) * (size + spacing))
+            btn:SetPoint("RIGHT", containerFrame, "RIGHT", xOffset, 0)
+        elseif direction == "UP" then
+            local yOffset = (i - 1) * (size + spacing)
+            btn:SetPoint("BOTTOM", containerFrame, "BOTTOM", 0, yOffset)
+        elseif direction == "DOWN" then
+            local yOffset = -((i - 1) * (size + spacing))
+            btn:SetPoint("TOP", containerFrame, "TOP", 0, yOffset)
+        end
+    end
+end
+
 -- Remaining functions populated in subsequent tasks.
