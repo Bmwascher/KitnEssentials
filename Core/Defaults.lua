@@ -872,41 +872,41 @@ local Defaults = {
             HideCharacterBackground  = false,
 
             -- Decimal item level (ElvUI-gated)
-            DecimalItemLevel         = false,
+            DecimalItemLevel         = true,
 
             -- Character text features (ElvUI-gated)
-            ShowRaceText             = false,
+            ShowRaceText             = true,
             ShowFactionOnLevel       = true,
 
             -- Item track indicators (no ElvUI conflict)
-            TrackIndicatorsEnabled   = false,
-            TrackLetterSize          = 12,
+            TrackIndicatorsEnabled   = true,
+            TrackLetterSize          = 14,
 
             -- Gem socket helper (no ElvUI conflict)
-            SocketHelperEnabled      = false,
+            SocketHelperEnabled      = true,
             SocketButtonSize         = 24,
-            SocketButtonSpacing      = 2,
+            SocketButtonSpacing      = 1,
             ShowOnlyEmptySockets     = false,
 
             -- Per-slot detail overlays (no ElvUI conflict)
-            ShowSlotItemLevel    = false,
-            ShowEnchantNames     = false,
-            ShowSlotGems         = false,
-            SlotInfoFontSize     = 11,
+            ShowSlotItemLevel    = true,
+            ShowEnchantNames     = true,
+            ShowSlotGems         = true,
+            SlotInfoFontSize     = 15,
 
             -- Shared font face/outline (warnings + character panel text)
             FontFace                 = "Expressway",
             FontOutline              = "OUTLINE",
 
             -- Warning text size (independent)
-            FontSize                 = 13,
+            FontSize                 = 14,
 
             -- Character panel text sizes (ElvUI-gated)
-            LevelTextSize            = 12,
-            NameTextSize             = 12,
-            StatsFontSize            = 12,
-            CategoryFontSize         = 12,
-            IlvlValueSize            = 16,
+            LevelTextSize            = 13,
+            NameTextSize             = 14,
+            StatsFontSize            = 13,
+            CategoryFontSize         = 13,
+            IlvlValueSize            = 18,
         },
 
         WorldMap = {
