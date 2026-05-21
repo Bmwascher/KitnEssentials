@@ -28,6 +28,7 @@ local strsplit = strsplit
 local pairs, ipairs = pairs, ipairs
 local table_concat = table.concat
 local C_Timer = C_Timer
+local LCG = LibStub("LibCustomGlow-1.0", true)
 
 local INVSLOT_HEAD      = INVSLOT_HEAD
 local INVSLOT_NECK      = INVSLOT_NECK
@@ -1291,10 +1292,20 @@ function CP:ShowSlotHighlight(slotID)
     end
     self.slotHighlight:SetAllPoints(slotFrame)
     self.slotHighlight:Show()
+
+    -- Gold proc glow on the gear slot, on top of the accent overlay.
+    if LCG then
+        LCG.ButtonGlow_Start(slotFrame, nil, 0)
+        self._glowingSlotFrame = slotFrame
+    end
 end
 
 function CP:HideSlotHighlight()
     if self.slotHighlight then self.slotHighlight:Hide() end
+    if LCG and self._glowingSlotFrame then
+        LCG.ButtonGlow_Stop(self._glowingSlotFrame)
+        self._glowingSlotFrame = nil
+    end
 end
 
 function CP:SetupGemSocketHelper()
