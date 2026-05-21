@@ -69,6 +69,7 @@ GUIFrame.sidebarConfig = {
             { id = "ReadyCheckConsumables", text = "Ready Check Consumables" },
             { id = "Recuperate",    text = "Recuperate Button" },
             { id = "TimeSpiral",    text = "Time Spiral Tracker" },
+            { id = "TotemTracker",  text = "Totem Tracker" },
             { id = "WorldMarkerCycler", text = "World Marker Cycler" },
         },
     },
