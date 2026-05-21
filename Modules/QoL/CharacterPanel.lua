@@ -26,7 +26,6 @@ local IsLevelAtEffectiveMaxLevel = IsLevelAtEffectiveMaxLevel
 local C_TooltipInfo = C_TooltipInfo
 local strsplit = strsplit
 local pairs, ipairs = pairs, ipairs
-local table_concat = table.concat
 local C_Timer = C_Timer
 
 local INVSLOT_HEAD      = INVSLOT_HEAD
@@ -408,20 +407,6 @@ local function CanEnchantSlot(unit, slot)
     return false
 end
 
-local function HasEmptySocket(unit, slot)
-    unit = unit or "player"
-    if not gemSlotButtons[slot] then return false end
-    local tooltipData = C_TooltipInfo.GetInventoryItem(unit, slot)
-    if not tooltipData or not tooltipData.lines then return false end
-
-    for _, line in ipairs(tooltipData.lines) do
-        if line.leftText and line.leftText:find("Prismatic Socket") then
-            return true
-        end
-    end
-    return false
-end
-
 ---------------------------------------------------------------------------------
 -- Frame Creation
 ---------------------------------------------------------------------------------
@@ -434,8 +419,7 @@ local function CreateSlotText(button, slot)
     KE:ApplyFontToText(text, fontFace, fontSize, fontOutline)
     text:SetTextColor(1, 0, 0, 1)
 
-    -- Inset 10px inward (toward the model) to align with the slot-detail enchant
-    -- name, which uses the same inset.
+    -- Inset toward the model to align with the slot-detail enchant name.
     local side = slotLayout[slot]
     if side == "left" then
         text:SetPoint("TOPLEFT", button, "TOPRIGHT", 3, -4)
@@ -479,30 +463,23 @@ local function UpdateSlotWarning(button, unit, slot)
     unit = unit or "player"
     local db = CP.db
     local enchantEnabled = db and db.ShowEnchants ~= false
-    local gemEnabled = db and db.ShowMissingGems ~= false
 
     if not button._slotWarning then
         button._slotWarning = CreateSlotText(button, slot)
     end
 
-    local parts = {}
+    -- Enchant warning only. A missing GEM is shown as a red empty-socket icon in
+    -- the gem row (see UpdateSlotDetail), reference-style, to avoid a third text
+    -- line the short slots can't fit.
+    local noEnchant = false
     if IsLevelAtEffectiveMaxLevel(UnitLevel(unit)) then
         local itemLink = GetInventoryItemLink(unit, slot)
-        if itemLink then
-            if enchantEnabled and CanEnchantSlot(unit, slot) and not HasEnchant(itemLink) then
-                parts[#parts + 1] = "No Enchant"
-            end
-            if gemEnabled and HasEmptySocket(unit, slot) then
-                parts[#parts + 1] = "No Gem"
-            end
+        if itemLink and enchantEnabled and CanEnchantSlot(unit, slot) and not HasEnchant(itemLink) then
+            noEnchant = true
         end
     end
 
-    if #parts > 0 then
-        button._slotWarning:SetText("|cFFFF0000" .. table_concat(parts, " / ") .. "|r")
-    else
-        button._slotWarning:SetText("")
-    end
+    button._slotWarning:SetText(noEnchant and "|cFFFF0000No Enchant|r" or "")
 end
 
 local function UpdateDisplay()
@@ -589,7 +566,7 @@ local function HookCharacterPanel()
             if CP.db.HideCharacterBackground then HideCharacterBackground() end
             if CP.db.SocketHelperEnabled then CP:RefreshSocketButtons() end
             if CP.db.TrackIndicatorsEnabled then CP:UpdateAllTrackIndicators() end
-            if CP.db.ShowSlotItemLevel or CP.db.ShowEnchantNames or CP.db.ShowSlotGems then
+            if CP.db.ShowSlotItemLevel or CP.db.ShowEnchantNames or CP.db.ShowSlotGems or CP.db.ShowMissingGems then
                 CP:UpdateAllSlotDetails()
             end
         end)
@@ -611,7 +588,7 @@ local function HookCharacterPanel()
             if CP.db.TrackIndicatorsEnabled and slotID then
                 CP:UpdateSlotTrackIndicator(_G[SLOT_FRAMES[slotID]], slotID, "player")
             end
-            if CP.db.ShowSlotItemLevel or CP.db.ShowEnchantNames or CP.db.ShowSlotGems then
+            if CP.db.ShowSlotItemLevel or CP.db.ShowEnchantNames or CP.db.ShowSlotGems or CP.db.ShowMissingGems then
                 CP:UpdateAllSlotDetails()
             end
         elseif event == "BAG_UPDATE_DELAYED" then
@@ -622,7 +599,7 @@ local function HookCharacterPanel()
             if CP.socketContainer and CP.socketContainer:IsShown() then
                 CP:RefreshSocketButtons()
             end
-            if CP.db.ShowSlotItemLevel or CP.db.ShowEnchantNames or CP.db.ShowSlotGems then
+            if CP.db.ShowSlotItemLevel or CP.db.ShowEnchantNames or CP.db.ShowSlotGems or CP.db.ShowMissingGems then
                 CP:UpdateAllSlotDetails()
             end
         end
@@ -641,15 +618,18 @@ function CP:UpdateInspectSlot(button)
     if not button then return end
     local unit = InspectFrame and InspectFrame.unit
     if not unit then return end
-    -- Long-range inspect returns incomplete gear; Blizzard's own data is
-    -- unreliable across maps, so only render when same-map (BCP pattern).
-    if C_Map.GetBestMapForUnit(unit) ~= C_Map.GetBestMapForUnit("player") then return end
+    -- Long-range inspect returns incomplete gear; skip only on a CONFIRMED
+    -- cross-map mismatch (both maps known and different). An unknown (nil) map
+    -- is not treated as a mismatch, so normal same-zone inspects still render.
+    local pm = C_Map.GetBestMapForUnit("player")
+    local um = C_Map.GetBestMapForUnit(unit)
+    if pm and um and pm ~= um then return end
 
     local slotID = button:GetID()
     if not slotID or slotID == 0 then return end
 
     UpdateSlotWarning(button, unit, slotID)
-    if self.db.ShowSlotItemLevel or self.db.ShowEnchantNames or self.db.ShowSlotGems then
+    if self.db.ShowSlotItemLevel or self.db.ShowEnchantNames or self.db.ShowSlotGems or self.db.ShowMissingGems then
         self:UpdateSlotDetail(button, slotID, unit)
     end
     if self.db.TrackIndicatorsEnabled then
@@ -664,48 +644,69 @@ function CP:UpdateAllInspectSlots()
     end
 end
 
-function CP:SetupInspectSupport()
-    if self._inspectHooked then return end
+-- Debounced, next-frame batch of the full inspect refresh. A first inspect fires
+-- a burst (per-slot button updates + INSPECT_READY + UNIT_INVENTORY_CHANGED) on the
+-- same frame Blizzard loads + renders the inspect UI; collapsing it into ONE
+-- deferred pass keeps that heavy tooltip-scan work off the busy load frame.
+local inspectUpdatePending = false
+local function QueueInspectUpdate()
+    if inspectUpdatePending then return end
+    if not (CP.db and CP.db.Enabled) then return end
+    if not (InspectFrame and InspectFrame:IsShown()) then return end
+    inspectUpdatePending = true
+    C_Timer.After(0.05, function()
+        inspectUpdatePending = false
+        if CP.db and CP.db.Enabled and InspectFrame and InspectFrame:IsShown() then
+            CP:UpdateAllInspectSlots()
+        end
+    end)
+end
 
-    local function install()
+function CP:SetupInspectSupport()
+    if self._inspectSetup then return end
+    self._inspectSetup = true
+
+    -- Best-effort per-slot hooks. These only exist once Blizzard_InspectUI is
+    -- loaded, and may not fire on every code path, so they are NOT the primary
+    -- render trigger — INSPECT_READY (below) is. Idempotent: safe to call again.
+    local function installHooks()
         if self._inspectHooked then return end
         if not InspectPaperDollItemSlotButton_Update then return end
         self._inspectHooked = true
-
-        hooksecurefunc("InspectPaperDollItemSlotButton_Update", function(button)
-            CP:UpdateInspectSlot(button)
+        hooksecurefunc("InspectPaperDollItemSlotButton_Update", function()
+            QueueInspectUpdate()
         end)
         if InspectPaperDollFrame_SetLevel then
             hooksecurefunc("InspectPaperDollFrame_SetLevel", function()
-                CP:UpdateAllInspectSlots()
+                QueueInspectUpdate()
             end)
         end
-
-        -- Late-loading gear: re-scan inspect slots when the inspected unit's
-        -- inventory data arrives while the inspect frame is open.
-        local invFrame = CreateFrame("Frame")
-        invFrame:RegisterEvent("UNIT_INVENTORY_CHANGED")
-        invFrame:SetScript("OnEvent", function(_, _, unit)
-            if not CP.db.Enabled then return end
-            if not (InspectFrame and InspectFrame:IsShown()) then return end
-            if unit and unit == InspectFrame.unit then
-                CP:UpdateAllInspectSlots()
-            end
-        end)
     end
 
-    if C_AddOns.IsAddOnLoaded("Blizzard_InspectUI") then
-        install()
-    else
-        local loadFrame = CreateFrame("Frame")
-        loadFrame:RegisterEvent("ADDON_LOADED")
-        loadFrame:SetScript("OnEvent", function(_, _, addonName)
-            if addonName == "Blizzard_InspectUI" then
-                install()
-                loadFrame:UnregisterEvent("ADDON_LOADED")
+    -- Persistent frame: always alive so it catches the events regardless of when
+    -- Blizzard_InspectUI loads relative to this module's init.
+    local f = CreateFrame("Frame")
+    f:RegisterEvent("ADDON_LOADED")
+    f:RegisterEvent("INSPECT_READY")
+    f:RegisterEvent("UNIT_INVENTORY_CHANGED")
+    f:SetScript("OnEvent", function(_, event, arg1)
+        if event == "ADDON_LOADED" then
+            if arg1 == "Blizzard_InspectUI" then installHooks() end
+        elseif event == "INSPECT_READY" then
+            -- Inspect data is ready: ensure the per-slot hooks exist now that the
+            -- UI is loaded, then queue one batched render of the inspect paperdoll.
+            installHooks()
+            QueueInspectUpdate()
+        elseif event == "UNIT_INVENTORY_CHANGED" then
+            -- Late-loading gear on the inspected unit.
+            if arg1 and InspectFrame and arg1 == InspectFrame.unit then
+                QueueInspectUpdate()
             end
-        end)
-    end
+        end
+    end)
+
+    -- If the inspect UI is already loaded at setup, hook immediately.
+    if C_AddOns.IsAddOnLoaded("Blizzard_InspectUI") then installHooks() end
 end
 
 function CP:Refresh()
@@ -752,7 +753,7 @@ function CP:ApplySettings()
     if self.db.TrackIndicatorsEnabled and PaperDollFrame and PaperDollFrame:IsShown() then
         self:UpdateAllTrackIndicators()
     end
-    if (self.db.ShowSlotItemLevel or self.db.ShowEnchantNames or self.db.ShowSlotGems)
+    if (self.db.ShowSlotItemLevel or self.db.ShowEnchantNames or self.db.ShowSlotGems or self.db.ShowMissingGems)
         and PaperDollFrame and PaperDollFrame:IsShown() then
         self:UpdateAllSlotDetails()
     end
@@ -1228,19 +1229,32 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit)
     end
 
     -- Gem icons inline beside the ilvl text (only scan socketable slots).
+    -- Filled sockets show their gem (ShowSlotGems); empty sockets show a RED
+    -- empty-socket icon (ShowMissingGems) — the reference-style missing-gem cue
+    -- that replaces the old "No Gem" text (no room to stack a third text line).
     local gemCount = 0
-    if self.db.ShowSlotGems and socketableSlotSet[slotID] then
+    local showFilled = self.db.ShowSlotGems
+    local showEmpty  = self.db.ShowMissingGems ~= false
+    if (showFilled or showEmpty) and socketableSlotSet[slotID] then
         local result = self:ScanItemSockets(unit, slotID)
         if result and result.sockets then
             local iconSize = SLOT_GEM_ICON_SIZE
             for _, socket in ipairs(result.sockets) do
                 if gemCount >= SLOT_DETAIL_MAX_GEMS then break end
-                gemCount = gemCount + 1
-                local iconFrame = detail.gemIcons[gemCount]
-                iconFrame:SetSize(iconSize, iconSize)
-                iconFrame.tex:SetTexture(socket.icon or 458977)
-                iconFrame:SetAlpha(socket.filled and 1 or 0.85)
-                iconFrame:Show()
+                if (socket.filled and showFilled) or (not socket.filled and showEmpty) then
+                    gemCount = gemCount + 1
+                    local iconFrame = detail.gemIcons[gemCount]
+                    iconFrame:SetSize(iconSize, iconSize)
+                    iconFrame.tex:SetTexture(socket.icon or 458977)
+                    if socket.filled then
+                        iconFrame.tex:SetVertexColor(1, 1, 1)
+                        iconFrame:SetAlpha(1)
+                    else
+                        iconFrame.tex:SetVertexColor(1, 0, 0)  -- missing gem
+                        iconFrame:SetAlpha(1)
+                    end
+                    iconFrame:Show()
+                end
             end
         end
     end
@@ -1253,7 +1267,7 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit)
 end
 
 function CP:UpdateAllSlotDetails()
-    if not (self.db.ShowSlotItemLevel or self.db.ShowEnchantNames or self.db.ShowSlotGems) then
+    if not (self.db.ShowSlotItemLevel or self.db.ShowEnchantNames or self.db.ShowSlotGems or self.db.ShowMissingGems) then
         self:HideAllSlotDetails()
         return
     end
@@ -1852,6 +1866,7 @@ function CP:OnEnable()
     if not self.db.Enabled then return end
 
     HookCharacterPanel()
+    self:SetupInspectSupport()
 
     if self.eventFrame then
         self.eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
