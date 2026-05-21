@@ -281,6 +281,12 @@ local SLOT_FRAMES = {
     [16] = "CharacterMainHandSlot",  [17] = "CharacterSecondaryHandSlot",
 }
 
+-- Inspect paperdoll mirrors the same slot layout; names swap Character->Inspect.
+local INSPECT_SLOT_FRAMES = {}
+for slotID, frameName in pairs(SLOT_FRAMES) do
+    INSPECT_SLOT_FRAMES[slotID] = frameName:gsub("^Character", "Inspect")
+end
+
 -- Slot IDs anchored on the right side of CharacterFrame.
 local RIGHT_SLOTS = {
     [6] = true, [7] = true, [8] = true, [10] = true,
@@ -625,9 +631,87 @@ local function HookCharacterPanel()
     hooked = true
 end
 
+---------------------------------------------------------------------------------
+-- Inspect Frame Support
+---------------------------------------------------------------------------------
+
+-- Run all slot overlays (warning / detail / track) for one inspect button.
+function CP:UpdateInspectSlot(button)
+    if not self.db.Enabled then return end
+    if not button then return end
+    local unit = InspectFrame and InspectFrame.unit
+    if not unit then return end
+    -- Long-range inspect returns incomplete gear; Blizzard's own data is
+    -- unreliable across maps, so only render when same-map (BCP pattern).
+    if C_Map.GetBestMapForUnit(unit) ~= C_Map.GetBestMapForUnit("player") then return end
+
+    local slotID = button:GetID()
+    if not slotID or slotID == 0 then return end
+
+    UpdateSlotWarning(button, unit, slotID)
+    if self.db.ShowSlotItemLevel or self.db.ShowEnchantNames or self.db.ShowSlotGems then
+        self:UpdateSlotDetail(button, slotID, unit)
+    end
+    if self.db.TrackIndicatorsEnabled then
+        self:UpdateSlotTrackIndicator(button, slotID, unit)
+    end
+end
+
+-- Re-run every inspect slot (used by the level hook and late-data refresh).
+function CP:UpdateAllInspectSlots()
+    for _, frameName in pairs(INSPECT_SLOT_FRAMES) do
+        self:UpdateInspectSlot(_G[frameName])
+    end
+end
+
+function CP:SetupInspectSupport()
+    if self._inspectHooked then return end
+
+    local function install()
+        if self._inspectHooked then return end
+        if not InspectPaperDollItemSlotButton_Update then return end
+        self._inspectHooked = true
+
+        hooksecurefunc("InspectPaperDollItemSlotButton_Update", function(button)
+            CP:UpdateInspectSlot(button)
+        end)
+        if InspectPaperDollFrame_SetLevel then
+            hooksecurefunc("InspectPaperDollFrame_SetLevel", function()
+                CP:UpdateAllInspectSlots()
+            end)
+        end
+
+        -- Late-loading gear: re-scan inspect slots when the inspected unit's
+        -- inventory data arrives while the inspect frame is open.
+        local invFrame = CreateFrame("Frame")
+        invFrame:RegisterEvent("UNIT_INVENTORY_CHANGED")
+        invFrame:SetScript("OnEvent", function(_, _, unit)
+            if not CP.db.Enabled then return end
+            if not (InspectFrame and InspectFrame:IsShown()) then return end
+            if unit and unit == InspectFrame.unit then
+                CP:UpdateAllInspectSlots()
+            end
+        end)
+    end
+
+    if C_AddOns.IsAddOnLoaded("Blizzard_InspectUI") then
+        install()
+    else
+        local loadFrame = CreateFrame("Frame")
+        loadFrame:RegisterEvent("ADDON_LOADED")
+        loadFrame:SetScript("OnEvent", function(_, _, addonName)
+            if addonName == "Blizzard_InspectUI" then
+                install()
+                loadFrame:UnregisterEvent("ADDON_LOADED")
+            end
+        end)
+    end
+end
+
 function CP:Refresh()
     self.db = KE.db.profile.CharacterPanel
     HookCharacterPanel()
+    self:SetupInspectSupport()
     ApplyFontToAll()                                      -- warning fonts
     if self.db.Enabled then
         self:ApplySettings()
