@@ -114,6 +114,10 @@ local GEM_SOCKET_TYPES = {
 -- Slot IDs the gem socket helper scans.
 local socketableSlots = { 1, 2, 5, 6, 9, 10, 11, 12, 13, 14, 15 }
 
+-- Set form of socketableSlots for O(1) membership (used by per-slot detail gems).
+local socketableSlotSet = {}
+for _, slotID in ipairs(socketableSlots) do socketableSlotSet[slotID] = true end
+
 -- Curated short labels for common enchants, keyed by enchant ID (from the item
 -- link). Falls back to the truncated tooltip effect name when an ID isn't here.
 local ENCHANT_NICKNAMES = {
@@ -869,6 +873,143 @@ function CP:CreateSlotDetail(slotFrame, slotID)
     detail:Hide()
     slotFrame._slotDetail = detail
     return detail
+end
+
+-- Starting vertical offset for the detail stack below the slot's inner-top
+-- corner. The warning text (slotTexts) anchors at the slot inner-top with a -5
+-- y, so begin the detail block lower to avoid stacking on it.
+-- NOTE: final positioning is tuned in-game at the USER checkpoint.
+local SLOT_DETAIL_TOP_OFFSET = -18
+local SLOT_DETAIL_ROW_GAP    = 1
+local SLOT_DETAIL_GEM_GAP    = 1
+
+function CP:UpdateSlotDetail(slotID)
+    local frameName = SLOT_FRAMES[slotID]
+    if not frameName then return end
+
+    local slotFrame = _G[frameName]
+    if not slotFrame then return end
+
+    local detail = self:CreateSlotDetail(slotFrame, slotID)
+    local isRight = RIGHT_SLOTS[slotID]
+    local fontFace    = self.db.FontFace or "Expressway"
+    local fontSize    = self.db.SlotInfoFontSize or 11
+    local fontOutline = SanitizeDetailOutline(self.db.FontOutline)
+
+    -- Re-apply font each call so the size slider is live.
+    KE:ApplyFont(detail.enchantText, fontFace, fontSize, fontOutline)
+    KE:ApplyFont(detail.ilvlText, fontFace, fontSize, fontOutline)
+
+    -- Enchant label (green).
+    local enchantShown = false
+    if self.db.ShowEnchantNames then
+        local label = self:ResolveEnchantLabel(slotID)
+        if label then
+            detail.enchantText:SetText(label)
+            detail.enchantText:SetTextColor(0.3, 1, 0.3, 1)
+            detail.enchantText:Show()
+            enchantShown = true
+        end
+    end
+    if not enchantShown then
+        detail.enchantText:SetText("")
+        detail.enchantText:Hide()
+    end
+
+    -- Item level.
+    local ilvlShown = false
+    if self.db.ShowSlotItemLevel then
+        local lvl = self:GetSlotItemLevel(slotID)
+        if lvl then
+            detail.ilvlText:SetText(string.format("%d", lvl))
+            detail.ilvlText:SetTextColor(1, 1, 1, 1)
+            detail.ilvlText:Show()
+            ilvlShown = true
+        end
+    end
+    if not ilvlShown then
+        detail.ilvlText:SetText("")
+        detail.ilvlText:Hide()
+    end
+
+    -- Gems (only scan socketable slots).
+    local gemCount = 0
+    if self.db.ShowSlotGems and socketableSlotSet[slotID] then
+        local result = self:ScanItemSockets(slotID)
+        if result and result.sockets then
+            local iconSize = self.db.SlotGemIconSize or 12
+            for _, socket in ipairs(result.sockets) do
+                if gemCount >= SLOT_DETAIL_MAX_GEMS then break end
+                gemCount = gemCount + 1
+                local iconFrame = detail.gemIcons[gemCount]
+                iconFrame:SetSize(iconSize, iconSize)
+                iconFrame.tex:SetTexture(socket.icon or 458977)
+                iconFrame:SetAlpha(socket.filled and 1 or 0.85)
+                iconFrame:Show()
+            end
+        end
+    end
+    for i = gemCount + 1, SLOT_DETAIL_MAX_GEMS do
+        detail.gemIcons[i]:Hide()
+    end
+
+    -- Layout: stack only visible elements top -> bottom (enchant, ilvl, gem row),
+    -- collapsing gaps. Inner-justify; anchor first visible element to the detail
+    -- inner-top corner. NOTE: starting offsets only — tuned in-game.
+    local innerPoint = isRight and "TOPRIGHT" or "TOPLEFT"
+    local yOffset = SLOT_DETAIL_TOP_OFFSET
+
+    if enchantShown then
+        detail.enchantText:ClearAllPoints()
+        detail.enchantText:SetPoint(innerPoint, detail, innerPoint, 0, yOffset)
+        yOffset = yOffset - detail.enchantText:GetStringHeight() - SLOT_DETAIL_ROW_GAP
+    end
+
+    if ilvlShown then
+        detail.ilvlText:ClearAllPoints()
+        detail.ilvlText:SetPoint(innerPoint, detail, innerPoint, 0, yOffset)
+        yOffset = yOffset - detail.ilvlText:GetStringHeight() - SLOT_DETAIL_ROW_GAP
+    end
+
+    if gemCount > 0 then
+        local iconSize = self.db.SlotGemIconSize or 12
+        for i = 1, gemCount do
+            local iconFrame = detail.gemIcons[i]
+            iconFrame:ClearAllPoints()
+            -- Lay icons left-to-right for left slots, right-to-left for right slots.
+            local step = (i - 1) * (iconSize + SLOT_DETAIL_GEM_GAP)
+            if isRight then
+                iconFrame:SetPoint("TOPRIGHT", detail, "TOPRIGHT", -step, yOffset)
+            else
+                iconFrame:SetPoint("TOPLEFT", detail, "TOPLEFT", step, yOffset)
+            end
+        end
+    end
+
+    if enchantShown or ilvlShown or gemCount > 0 then
+        detail:Show()
+    else
+        detail:Hide()
+    end
+end
+
+function CP:UpdateAllSlotDetails()
+    if not (self.db.ShowSlotItemLevel or self.db.ShowEnchantNames or self.db.ShowSlotGems) then
+        self:HideAllSlotDetails()
+        return
+    end
+    for slotID in pairs(SLOT_FRAMES) do
+        self:UpdateSlotDetail(slotID)
+    end
+end
+
+function CP:HideAllSlotDetails()
+    for _, frameName in pairs(SLOT_FRAMES) do
+        local slotFrame = _G[frameName]
+        if slotFrame and slotFrame._slotDetail then
+            slotFrame._slotDetail:Hide()
+        end
+    end
 end
 
 ---------------------------------------------------------------------------------
