@@ -110,6 +110,19 @@ local GEM_SOCKET_TYPES = {
     { name = "Fiber",      locale = "EMPTY_SOCKET_FIBER",      icon = 136260 },
 }
 
+-- Empty-socket fallback icon keyed by C_TooltipInfo's line.socketType string.
+local EMPTY_SOCKET_ICON = {}
+for _, t in ipairs(GEM_SOCKET_TYPES) do EMPTY_SOCKET_ICON[t.name] = t.icon end
+
+-- C_TooltipInfo gem-socket line type (3); resolved from Enum with a literal fallback.
+local SOCKET_LINE_TYPE = (Enum and Enum.TooltipDataLineType and Enum.TooltipDataLineType.GemSocket) or 3
+
+-- Inspect socket-scan tracing. Flip true, /reload, inspect a target with gemmed
+-- gear, paste the chat log. Dumps (once per unit+slot) every C_TooltipInfo line that
+-- looks gem-related plus what C_Item.GetItemGem returns, so we can see exactly where
+-- the inspect gem data lives. Leave false in shipped code.
+local DEBUG_CP = false
+
 -- Slot IDs the gem socket helper scans.
 local socketableSlots = { 1, 2, 5, 6, 9, 10, 11, 12, 13, 14, 15 }
 
@@ -634,6 +647,26 @@ function CP:UpdateInspectSlot(button)
     local slotID = button:GetID()
     if not slotID or slotID == 0 then return end
 
+    -- Actively pull this item's full data (incl. socketed gems). Inspected gear
+    -- loads lazily: a socketed gem that isn't cached yet renders as an empty
+    -- "Prismatic Socket" placeholder, so without requesting it we'd show a false
+    -- red until the user hovers. ITEM_DATA_LOAD_RESULT / SOCKET_INFO_UPDATE then
+    -- re-scan once it lands. (Reference: BetterCharacterPanel.)
+    --
+    -- Request each item only ONCE per inspect target (reset on INSPECT_READY). The
+    -- request fires ITEM_DATA_LOAD_RESULT even for already-cached items, so requesting
+    -- on every render would loop: request -> event -> re-scan -> request -> ... at the
+    -- debounce rate, churning C_TooltipInfo tables and spiking memory.
+    local link = GetInventoryItemLink(unit, slotID)
+    if link then
+        local itemID = C_Item.GetItemInfoInstant(link)
+        self._inspectRequested = self._inspectRequested or {}
+        if itemID and not self._inspectRequested[itemID] then
+            self._inspectRequested[itemID] = true
+            C_Item.RequestLoadItemDataByID(itemID)
+        end
+    end
+
     UpdateSlotWarning(button, unit, slotID)
     if self.db.ShowSlotItemLevel or self.db.ShowEnchantNames or self.db.ShowSlotGems or self.db.ShowMissingGems then
         self:UpdateSlotDetail(button, slotID, unit)
@@ -648,6 +681,108 @@ function CP:UpdateAllInspectSlots()
     for _, frameName in pairs(INSPECT_SLOT_FRAMES) do
         self:UpdateInspectSlot(_G[frameName])
     end
+    self:UpdateInspectItemLevel()
+end
+
+-- Average-item-level computation, ported from ElvUI (Game/Shared/General/
+-- ItemLevel.lua CalculateAverageItemLevel). C_PaperDollInfo.GetInspectItemLevel
+-- only returns a rounded integer, so to show real decimals we sum the equipped
+-- slots and divide by 16 ourselves — the same arithmetic ElvUI displays.
+local AVG_ARMOR_SLOTS = { 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 }
+local AVG_X2_INVTYPES = {
+    INVTYPE_2HWEAPON = true,
+    INVTYPE_RANGEDRIGHT = true,
+    INVTYPE_RANGED = true,
+}
+local AVG_X2_EXCEPTIONS = { [2] = 19 }  -- wands report RANGEDRIGHT but are 1H
+
+-- Returns the equipped average item level to 2 decimals, or nil if the inspect
+-- data isn't ready yet (caller retries on the next INSPECT_READY / late-data event).
+function CP:GetInspectAverageItemLevel(unit)
+    local spec = GetInspectSpecialization(unit)
+    if not spec or spec == 0 then return nil end  -- inspect data not resolved yet
+
+    local total = 0
+    for _, id in ipairs(AVG_ARMOR_SLOTS) do
+        if GetInventoryItemLink(unit, id) then
+            local cur = self:GetSlotItemLevel(unit, id)
+            if not cur then return nil end            -- item data still loading
+            if cur > 0 then total = total + cur end
+        elseif GetInventoryItemTexture(unit, id) then
+            return nil                                -- slot filled but link not ready
+        end
+    end
+
+    local _
+    local mainLevel, mainQuality, mainEquipLoc, mainClass, mainSubClass = 0
+    local mainLink = GetInventoryItemLink(unit, 16)
+    if mainLink then
+        mainLevel = self:GetSlotItemLevel(unit, 16)
+        if not mainLevel then return nil end
+        _, _, mainQuality, _, _, _, _, _, mainEquipLoc, _, _, mainClass, mainSubClass = GetItemInfo(mainLink)
+    elseif GetInventoryItemTexture(unit, 16) then
+        return nil
+    end
+
+    local offLevel, offEquipLoc = 0
+    local offLink = GetInventoryItemLink(unit, 17)
+    if offLink then
+        offLevel = self:GetSlotItemLevel(unit, 17)
+        if not offLevel then return nil end
+        _, _, _, _, _, _, _, _, offEquipLoc = GetItemInfo(offLink)
+    elseif GetInventoryItemTexture(unit, 17) then
+        return nil
+    end
+
+    -- 2H / Titan's Grip handling: count the main hand twice when there's no off
+    -- hand and the weapon occupies both slots (excluding wands and Fury warriors).
+    if mainQuality == 6 or (not offEquipLoc and AVG_X2_INVTYPES[mainEquipLoc]
+        and AVG_X2_EXCEPTIONS[mainClass] ~= mainSubClass and spec ~= 72) then
+        mainLevel = math.max(mainLevel, offLevel)
+        total = total + mainLevel * 2
+    else
+        total = total + mainLevel + offLevel
+    end
+
+    if total == 0 then return nil end
+    return math.floor((total / 16) * 100 + 0.5) / 100
+end
+
+-- Blizzard's inspect frame shows no average item level, so render our own.
+-- (Mirrors BetterCharacterPanel: a custom FontString on the inspect items frame;
+-- there is no native element to restyle the way the player panel reuses
+-- CharacterStatsPane.ItemLevelFrame.)
+function CP:UpdateInspectItemLevel()
+    if not self.db.Enabled then return end
+    local unit = InspectFrame and InspectFrame.unit
+    if not unit then return end
+    -- Same cross-map guard as the slot overlays: long-range inspect returns
+    -- incomplete gear, so only render on a confirmed same-map (or unknown) target.
+    local pm = C_Map.GetBestMapForUnit("player")
+    local um = C_Map.GetBestMapForUnit(unit)
+    if pm and um and pm ~= um then return end
+
+    local parent = _G.InspectPaperDollItemsFrame or InspectFrame
+    if not parent then return end
+
+    if not self._inspectIlvl then
+        local fs = parent:CreateFontString(nil, "OVERLAY")
+        fs:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -4, 4)
+        fs:SetJustifyH("RIGHT")
+        self._inspectIlvl = fs
+    end
+
+    local ilvl = self:GetInspectAverageItemLevel(unit)
+    if not ilvl or ilvl <= 0 then
+        self._inspectIlvl:Hide()
+        return
+    end
+
+    self:ApplyFont(self._inspectIlvl, self.db.IlvlValueSize or 16)
+    local accent = KE.Theme.accent
+    self._inspectIlvl:SetTextColor(accent[1], accent[2], accent[3])
+    self._inspectIlvl:SetText(string.format("%.2f", ilvl))
+    self._inspectIlvl:Show()
 end
 
 -- Debounced, next-frame batch of the full inspect refresh. A first inspect fires
@@ -660,7 +795,10 @@ local function QueueInspectUpdate()
     if not (CP.db and CP.db.Enabled) then return end
     if not (InspectFrame and InspectFrame:IsShown()) then return end
     inspectUpdatePending = true
-    C_Timer.After(0.05, function()
+    -- 0.2s (not 0.05) collapses bursty late-data events into far fewer full re-scans.
+    -- Each re-scan allocates a C_TooltipInfo table per socketable slot, so a higher
+    -- debounce directly cuts the transient garbage generated while inspecting.
+    C_Timer.After(0.2, function()
         inspectUpdatePending = false
         if CP.db and CP.db.Enabled and InspectFrame and InspectFrame:IsShown() then
             CP:UpdateAllInspectSlots()
@@ -671,6 +809,11 @@ end
 function CP:SetupInspectSupport()
     if self._inspectSetup then return end
     self._inspectSetup = true
+
+    -- Forward-declared so installHooks can toggle the data events on it.
+    local f
+    -- Late gem/item-data events, registered only while the inspect frame is open.
+    local INSPECT_DATA_EVENTS = { "ITEM_DATA_LOAD_RESULT", "SOCKET_INFO_UPDATE", "GET_ITEM_INFO_RECEIVED" }
 
     -- Best-effort per-slot hooks. These only exist once Blizzard_InspectUI is
     -- loaded, and may not fire on every code path, so they are NOT the primary
@@ -687,11 +830,24 @@ function CP:SetupInspectSupport()
                 QueueInspectUpdate()
             end)
         end
+        -- Late-data events fire game-wide and burst hard during zoning, so only
+        -- listen while the inspect frame is actually open. ITEM_DATA_LOAD_RESULT /
+        -- SOCKET_INFO_UPDATE land the requested gem data (see UpdateInspectSlot);
+        -- GET_ITEM_INFO_RECEIVED is a generic backstop. Now that the UI is loaded we
+        -- can gate registration on its visibility.
+        if InspectFrame then
+            local function regData()   for _, e in ipairs(INSPECT_DATA_EVENTS) do f:RegisterEvent(e) end end
+            local function unregData() for _, e in ipairs(INSPECT_DATA_EVENTS) do f:UnregisterEvent(e) end end
+            InspectFrame:HookScript("OnShow", regData)
+            InspectFrame:HookScript("OnHide", unregData)
+            if InspectFrame:IsShown() then regData() end
+        end
     end
 
     -- Persistent frame: always alive so it catches the events regardless of when
-    -- Blizzard_InspectUI loads relative to this module's init.
-    local f = CreateFrame("Frame")
+    -- Blizzard_InspectUI loads relative to this module's init. The late-data events
+    -- are registered on demand (only while the inspect frame is shown) by installHooks.
+    f = CreateFrame("Frame")
     f:RegisterEvent("ADDON_LOADED")
     f:RegisterEvent("INSPECT_READY")
     f:RegisterEvent("UNIT_INVENTORY_CHANGED")
@@ -699,13 +855,30 @@ function CP:SetupInspectSupport()
         if event == "ADDON_LOADED" then
             if arg1 == "Blizzard_InspectUI" then installHooks() end
         elseif event == "INSPECT_READY" then
-            -- Inspect data is ready: ensure the per-slot hooks exist now that the
-            -- UI is loaded, then queue one batched render of the inspect paperdoll.
+            -- New inspect target: clear the per-item request cache so the new unit's
+            -- gear gets pulled once, then ensure the hooks exist and queue a render.
+            if CP._inspectRequested then wipe(CP._inspectRequested) end
+            -- Gear loads within the first few seconds; after that, stop letting the
+            -- noisy game-wide GET_ITEM_INFO_RECEIVED drive re-scans (see below).
+            CP._inspectGioDeadline = GetTime() + 8
             installHooks()
             QueueInspectUpdate()
         elseif event == "UNIT_INVENTORY_CHANGED" then
             -- Late-loading gear on the inspected unit.
             if arg1 and InspectFrame and arg1 == InspectFrame.unit then
+                QueueInspectUpdate()
+            end
+        elseif event == "ITEM_DATA_LOAD_RESULT" or event == "SOCKET_INFO_UPDATE" then
+            -- Late gem/item data for the inspected unit actually landing. These are
+            -- bounded (tied to real loads and to the items we requested once), and
+            -- stop firing once gear is cached, so they always drive a re-scan.
+            QueueInspectUpdate()
+        elseif event == "GET_ITEM_INFO_RECEIVED" then
+            -- Generic backstop, but fires game-wide and unbounded. Only let it drive
+            -- re-scans during the brief post-INSPECT_READY load window; afterwards the
+            -- two events above cover real late data, so we ignore the world noise to
+            -- avoid churning C_TooltipInfo tables while an inspect frame sits open.
+            if GetTime() < (CP._inspectGioDeadline or 0) then
                 QueueInspectUpdate()
             end
         end
@@ -1305,6 +1478,7 @@ function CP:HideAllSlotDetails()
             slotFrame._slotDetail:Hide()
         end
     end
+    if self._inspectIlvl then self._inspectIlvl:Hide() end
 end
 
 ---------------------------------------------------------------------------------
@@ -1312,7 +1486,6 @@ end
 ---------------------------------------------------------------------------------
 
 -- File-locals: scan tooltip + caches
-local scanTooltip
 local gemCache = {}
 local socketCache = {}
 
@@ -1323,14 +1496,6 @@ local ITEM_ROW_PADDING  = 4
 local POPUP_PADDING     = 2
 local POPUP_ICON_SIZE   = 24
 local STANDARD_BACKDROP = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 }
-
-local function GetScanTooltip()
-    if not scanTooltip then
-        scanTooltip = CreateFrame("GameTooltip", "KE_CharacterPanelScanTooltip", nil, "GameTooltipTemplate")
-        scanTooltip:SetOwner(WorldFrame, "ANCHOR_NONE")
-    end
-    return scanTooltip
-end
 
 local function GetQualityAtlasFromLink(link)
     if not link then return nil end
@@ -1388,6 +1553,36 @@ function CP:ScanItemSockets(unit, slotID)
     local itemLink = GetInventoryItemLink(unit, slotID)
     if not itemLink then return nil end
 
+    -- Read the structured tooltip rather than C_Item.GetItemGem. GetItemGem fails to
+    -- resolve gems across the inspect boundary (returns nil even for socketed gear,
+    -- showing false "missing" reds), whereas C_TooltipInfo reflects what's actually
+    -- rendered. Socket lines come back in physical order, so the running counter IS
+    -- each socket's true index for both filled and empty — no position reconciliation
+    -- needed. (Reference: BetterCharacterPanel.)
+    local data = C_TooltipInfo.GetInventoryItem(unit, slotID)
+    if not data or not data.lines then return nil end
+
+    if DEBUG_CP and unit ~= "player" and socketableSlotSet[slotID] then
+        self._cpDbg = self._cpDbg or {}
+        local key = unit .. ":" .. slotID
+        if not self._cpDbg[key] then
+            self._cpDbg[key] = true
+            local itemID = itemLink:match("|Hitem:(%d+)") or "?"
+            KE:Print(string.format("[CP] inspect slot %d item %s, %d lines", slotID, itemID, #data.lines))
+            for i = 1, 3 do
+                local n, l = C_Item.GetItemGem(itemLink, i)
+                KE:Print(string.format("[CP]   GetItemGem(%d)=%s / %s", i, tostring(n), tostring(l)))
+            end
+            for i, line in ipairs(data.lines) do
+                if line.type == SOCKET_LINE_TYPE or line.gemIcon ~= nil or line.socketType ~= nil then
+                    KE:Print(string.format("[CP]   L%d type=%s gemIcon=%s socketType=%s txt=%s",
+                        i, tostring(line.type), tostring(line.gemIcon), tostring(line.socketType),
+                        tostring(line.leftText)))
+                end
+            end
+        end
+    end
+
     local result = {
         slotID = slotID,
         itemLink = itemLink,
@@ -1395,51 +1590,32 @@ function CP:ScanItemSockets(unit, slotID)
         totalCount = 0, filledCount = 0, emptyCount = 0,
     }
 
-    -- Track which socket positions are filled so empty sockets can be assigned
-    -- their TRUE position (1-3) rather than a running count. Without this, an
-    -- empty socket that precedes a filled one gets the wrong index and the socket
-    -- helper's ClickSocketButton targets the wrong (filled) socket.
-    local filledIndices = {}
-    for socketIndex = 1, 3 do
-        local gemName, gemLink = C_Item.GetItemGem(itemLink, socketIndex)
-        if gemLink then
-            filledIndices[socketIndex] = true
-            result.filledCount = result.filledCount + 1
-            result.totalCount  = result.totalCount + 1
-            local gemID = C_Item.GetItemInfoInstant(gemLink)
-            local gemIcon = gemID and C_Item.GetItemIconByID(gemID)
-            table.insert(result.sockets, {
-                index = socketIndex, filled = true,
-                gemLink = gemLink, gemName = gemName, gemID = gemID, icon = gemIcon,
-            })
-        end
-    end
-    local nextEmptyIndex = 1
-
-    local tt = GetScanTooltip()
-    tt:ClearLines()
-    tt:SetInventoryItem(unit, slotID, false, false)
-
-    for i = 1, tt:NumLines() do
-        local line = _G["KE_CharacterPanelScanTooltipTextLeft" .. i]
-        if line then
-            local text = line:GetText()
-            if text then
-                for _, socketType in ipairs(GEM_SOCKET_TYPES) do
-                    local localeString = _G[socketType.locale]
-                    if localeString and text:find(localeString, 1, true) then
-                        while filledIndices[nextEmptyIndex] do
-                            nextEmptyIndex = nextEmptyIndex + 1
-                        end
-                        result.emptyCount = result.emptyCount + 1
-                        result.totalCount = result.totalCount + 1
-                        table.insert(result.sockets, {
-                            index = nextEmptyIndex, filled = false,
-                            socketType = socketType.name, icon = socketType.icon,
-                        })
-                        nextEmptyIndex = nextEmptyIndex + 1
-                    end
-                end
+    local socketIndex = 0
+    for _, line in ipairs(data.lines) do
+        if line.type == SOCKET_LINE_TYPE then
+            socketIndex = socketIndex + 1
+            result.totalCount = result.totalCount + 1
+            if line.gemIcon then
+                -- Filled. line.gemIcon is the gem's icon (works on inspect). Enrich
+                -- with GetItemGem for the link/id the player-only socket helper needs;
+                -- nil on inspect is harmless since inspect only displays the icon.
+                result.filledCount = result.filledCount + 1
+                local gemName, gemLink = C_Item.GetItemGem(itemLink, socketIndex)
+                local gemID = gemLink and C_Item.GetItemInfoInstant(gemLink)
+                table.insert(result.sockets, {
+                    index = socketIndex, filled = true,
+                    gemLink = gemLink, gemName = gemName, gemID = gemID,
+                    icon = line.gemIcon,
+                })
+            else
+                -- Empty. line.socketType is the type string (e.g. "Prismatic").
+                result.emptyCount = result.emptyCount + 1
+                local socketType = line.socketType
+                table.insert(result.sockets, {
+                    index = socketIndex, filled = false,
+                    socketType = socketType,
+                    icon = (socketType and EMPTY_SOCKET_ICON[socketType]) or 458977,
+                })
             end
         end
     end
