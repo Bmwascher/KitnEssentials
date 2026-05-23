@@ -28,52 +28,6 @@ local strsplit = strsplit
 local pairs, ipairs = pairs, ipairs
 local C_Timer = C_Timer
 
----------------------------------------------------------------------------------
--- FFD: weak-keyed per-frame state.
--- Stores overlay frames + caches that previously lived as direct fields on
--- Blizzard slot buttons (._slotWarning, ._slotDetail, ._trackOverlay). Weak
--- keys auto-GC when the Blizz frame is destroyed; using an external table
--- reduces 12.0 taint surface for the future inspect module port.
----------------------------------------------------------------------------------
-local FFD = setmetatable({}, { __mode = "k" })
-local function GetFFD(frame)
-    local d = FFD[frame]
-    if not d then d = {}; FFD[frame] = d end
-    return d
-end
-
--- O(1) slotID -> slot frame lookup. PLAYER_EQUIPMENT_CHANGED carries the
--- slotID as arg1, so routing a single-slot refresh avoids the full 17-slot
--- iteration that UpdateAllSlotDetails / UpdateAllTrackIndicators do.
--- Populated lazily on first use (slot frames may not exist at file-parse time
--- if another addon has reparented them).
-local SLOT_FRAMES_BY_ID = {}
-local _slotFramesMapBuilt = false
-local function BuildSlotFramesByID()
-    if _slotFramesMapBuilt then return end
-    _slotFramesMapBuilt = true
-    for slotID, frameName in pairs(SLOT_FRAMES) do
-        local frame = _G[frameName]
-        if frame then SLOT_FRAMES_BY_ID[slotID] = frame end
-    end
-end
-
--- Per-slot dirty cache. Each render function gates on its own subset of
--- fields:
---   warning   -> warnLink, warnEnchant
---   detail    -> detailLink, detailEnchant, detailIlvl
---   track     -> trackLink, trackKey
--- Only fields derived from non-secret APIs (GetInventoryItemLink, parsed
--- enchant/track IDs, ItemLocation-derived ilvl on the player) are cached.
--- See feedback_dirty_check_secret_durations memory note for why we don't
--- extend this to stat/duration values.
-local _lastSlotState = {}
-local function _slotState(slotID)
-    local s = _lastSlotState[slotID]
-    if not s then s = {}; _lastSlotState[slotID] = s end
-    return s
-end
-
 local INVSLOT_HEAD      = INVSLOT_HEAD
 local INVSLOT_NECK      = INVSLOT_NECK
 local INVSLOT_SHOULDER  = INVSLOT_SHOULDER
@@ -365,6 +319,58 @@ local qualityAtlasPattern = "|A:(Professions%-ChatIcon%-Quality%-[^:]+):%d+:%d+"
 local allCheckSlots = {}
 for slot, btn in pairs(enchantSlotButtons) do allCheckSlots[slot] = btn end
 for slot, btn in pairs(gemSlotButtons) do allCheckSlots[slot] = btn end
+
+---------------------------------------------------------------------------------
+-- FFD: weak-keyed per-frame state.
+-- Stores overlay frames + caches that previously lived as direct fields on
+-- Blizzard slot buttons (._slotWarning, ._slotDetail, ._trackOverlay). Weak
+-- keys auto-GC when the Blizz frame is destroyed; using an external table
+-- reduces 12.0 taint surface for the future inspect module port.
+--
+-- Declared AFTER SLOT_FRAMES / allCheckSlots so BuildSlotFramesByID's
+-- reference to SLOT_FRAMES binds to the upvalue (not the nil global). Lua
+-- parses functions lazily but resolves locals at definition time — placing
+-- these helpers before the SLOT_FRAMES declaration would make SLOT_FRAMES a
+-- free global reference and BuildSlotFramesByID would fault on first call.
+---------------------------------------------------------------------------------
+local FFD = setmetatable({}, { __mode = "k" })
+local function GetFFD(frame)
+    local d = FFD[frame]
+    if not d then d = {}; FFD[frame] = d end
+    return d
+end
+
+-- O(1) slotID -> slot frame lookup. PLAYER_EQUIPMENT_CHANGED carries the
+-- slotID as arg1, so routing a single-slot refresh avoids the full 17-slot
+-- iteration that UpdateAllSlotDetails / UpdateAllTrackIndicators do.
+-- Populated lazily on first use (slot frames may not exist at file-parse time
+-- if another addon has reparented them).
+local SLOT_FRAMES_BY_ID = {}
+local _slotFramesMapBuilt = false
+local function BuildSlotFramesByID()
+    if _slotFramesMapBuilt then return end
+    _slotFramesMapBuilt = true
+    for slotID, frameName in pairs(SLOT_FRAMES) do
+        local frame = _G[frameName]
+        if frame then SLOT_FRAMES_BY_ID[slotID] = frame end
+    end
+end
+
+-- Per-slot dirty cache. Each render function gates on its own subset of
+-- fields:
+--   warning   -> warnLink, warnEnchant
+--   detail    -> detailLink, detailEnchant, detailIlvl
+--   track     -> trackLink, trackKey
+-- Only fields derived from non-secret APIs (GetInventoryItemLink, parsed
+-- enchant/track IDs, ItemLocation-derived ilvl on the player) are cached.
+-- See feedback_dirty_check_secret_durations memory note for why we don't
+-- extend this to stat/duration values.
+local _lastSlotState = {}
+local function _slotState(slotID)
+    local s = _lastSlotState[slotID]
+    if not s then s = {}; _lastSlotState[slotID] = s end
+    return s
+end
 
 ---------------------------------------------------------------------------------
 -- Module State
