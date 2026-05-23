@@ -1585,6 +1585,38 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit)
     detail:Show()
 end
 
+-- Event-driven single-slot refresh. Resolves the slot frame from the slotID,
+-- builds the slot lookup map on first use, and runs each enabled update for
+-- the affected slot only — avoids the 17-slot iteration that
+-- UpdateAllSlotDetails / UpdateAllTrackIndicators do on a full refresh.
+-- Each downstream Update* function performs its own dirty-check guard
+-- (added in Tasks 8-10), so calling RefreshSlot for an unchanged slot is
+-- effectively free.
+function CP:RefreshSlot(slotID, unit)
+    if not slotID then return end
+    BuildSlotFramesByID()
+    local slotFrame = SLOT_FRAMES_BY_ID[slotID]
+    if not slotFrame then return end
+    unit = unit or "player"
+
+    -- Warning text lives on the slot BUTTON, not on the SLOT frame; resolve
+    -- via allCheckSlots which maps slotID -> button name.
+    local buttonName = allCheckSlots[slotID]
+    local button = buttonName and _G[buttonName]
+    if button then
+        UpdateSlotWarning(button, unit, slotID)
+    end
+
+    if self.db.TrackIndicatorsEnabled then
+        self:UpdateSlotTrackIndicator(slotFrame, slotID, unit)
+    end
+
+    if self.db.ShowSlotItemLevel or self.db.ShowEnchantNames
+       or self.db.ShowSlotGems or self.db.ShowMissingGems then
+        self:UpdateSlotDetail(slotFrame, slotID, unit)
+    end
+end
+
 function CP:UpdateAllSlotDetails()
     if not (self.db.ShowSlotItemLevel or self.db.ShowEnchantNames or self.db.ShowSlotGems or self.db.ShowMissingGems) then
         self:HideAllSlotDetails()
