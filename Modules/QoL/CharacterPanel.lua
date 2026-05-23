@@ -580,8 +580,13 @@ function CP:UpdateSlotWarning(button, unit, slot)
     -- Enchant warning only. A missing GEM is shown as a red empty-socket icon in
     -- the gem row (see UpdateSlotDetail), reference-style, to avoid a third text
     -- line the short slots can't fit.
+    -- UnitLevel on inspect targets (hostile/encounter units) can be secret in 12.0;
+    -- treat secret as "not max level" so we don't accuse an inspect target of
+    -- missing enchants when the level is unreadable.
     local noEnchant = false
-    if IsLevelAtEffectiveMaxLevel(UnitLevel(unit)) then
+    local level = UnitLevel(unit)
+    if level and not (issecretvalue and issecretvalue(level))
+        and IsLevelAtEffectiveMaxLevel(level) then
         local itemLink = GetInventoryItemLink(unit, slot)
         if itemLink and enchantEnabled and CanEnchantSlot(unit, slot) and not HasEnchant(itemLink) then
             noEnchant = true
