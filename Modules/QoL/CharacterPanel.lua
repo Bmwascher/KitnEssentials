@@ -334,7 +334,7 @@ for slot, btn in pairs(gemSlotButtons) do allCheckSlots[slot] = btn end
 -- free global reference and BuildSlotFramesByID would fault on first call.
 ---------------------------------------------------------------------------------
 local FFD = setmetatable({}, { __mode = "k" })
-local function GetFFD(frame)
+function CP:GetFFD(frame)
     local d = FFD[frame]
     if not d then d = {}; FFD[frame] = d end
     return d
@@ -572,7 +572,7 @@ function CP:UpdateSlotWarning(button, unit, slot)
     local db = CP.db
     local enchantEnabled = db and db.ShowEnchants ~= false
 
-    local ffd = GetFFD(button)
+    local ffd = self:GetFFD(button)
     if not ffd.warning then
         ffd.warning = CreateSlotText(button, slot)
     end
@@ -1346,7 +1346,7 @@ function CP:GetItemTrack(unit, slotID)
 end
 
 function CP:CreateTrackOverlay(slotFrame, slotID)
-    local ffd = GetFFD(slotFrame)
+    local ffd = self:GetFFD(slotFrame)
     if ffd.track then return ffd.track end
 
     local isRight = RIGHT_SLOTS[slotID]
@@ -1479,7 +1479,7 @@ local function AnchorGemsLeftOf(detail, parent)
 end
 
 function CP:CreateSlotDetail(slotFrame, slotID)
-    local ffd = GetFFD(slotFrame)
+    local ffd = self:GetFFD(slotFrame)
     if ffd.detail then return ffd.detail end
 
     local isRight  = RIGHT_SLOTS[slotID]
