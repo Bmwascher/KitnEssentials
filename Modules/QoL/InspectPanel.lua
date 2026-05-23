@@ -135,6 +135,23 @@ end
 function InspectPanel:OnEnable()
     if not self.CP or not self.CP.db or not self.CP.db.Enabled then return end
     self:SetupInspectSupport()
+
+    -- Re-arm events that OnDisable stripped via UnregisterAllEvents. The OnEvent
+    -- script + InspectFrame OnShow/OnHide hooks remain installed from the original
+    -- SetupInspectSupport call (which short-circuits on re-enable via _inspectSetup),
+    -- so this is just re-registration on the existing frame.
+    if self.eventFrame then
+        self.eventFrame:RegisterEvent("ADDON_LOADED")
+        -- If InspectFrame is already shown at re-enable time, the OnShow hook
+        -- won't fire, so re-register the data events manually and refresh the
+        -- currently-visible overlays.
+        if InspectFrame and InspectFrame:IsShown() then
+            self.eventFrame:RegisterEvent("INSPECT_READY")
+            self.eventFrame:RegisterEvent("UNIT_INVENTORY_CHANGED")
+            self.eventFrame:RegisterEvent("ITEM_DATA_LOAD_RESULT")
+            self:UpdateAllInspectSlots()
+        end
+    end
 end
 
 function InspectPanel:OnDisable()
