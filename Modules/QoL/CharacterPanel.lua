@@ -1535,6 +1535,21 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit)
     unit = unit or "player"
     if not slotFrame then return end
 
+    -- Dirty-check (player path only): itemLink + enchantID + ilvl determine
+    -- the rendered output. If all three match the previous render, skip the
+    -- font re-apply + SetText + gem-icon work entirely. Inspect path goes
+    -- unguarded here — its own invalidation lives in INSPECT_READY.
+    if unit == "player" then
+        local s = _slotState(slotID)
+        local link = GetInventoryItemLink(unit, slotID)
+        local enchantID = GetSlotEnchantID(unit, slotID)
+        local ilvl = self:GetSlotItemLevel(unit, slotID)
+        if s.detailLink == link and s.detailEnchant == enchantID and s.detailIlvl == ilvl then
+            return
+        end
+        s.detailLink, s.detailEnchant, s.detailIlvl = link, enchantID, ilvl
+    end
+
     local detail = self:CreateSlotDetail(slotFrame, slotID)
     local fontFace    = self.db.FontFace or "Expressway"
     local fontSize    = self.db.SlotInfoFontSize or 11
