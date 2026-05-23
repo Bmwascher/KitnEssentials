@@ -19,6 +19,7 @@ local CreateFrame = CreateFrame
 local GetInventoryItemLink = GetInventoryItemLink
 local GetInventoryItemTexture = GetInventoryItemTexture
 local GetInspectSpecialization = GetInspectSpecialization
+local UnitGUID = UnitGUID
 local C_Timer = C_Timer
 local C_Item = C_Item
 local C_Map = C_Map
@@ -29,6 +30,7 @@ local hooksecurefunc = hooksecurefunc
 local wipe = wipe
 local string = string
 local math = math
+local table = table
 local tostring = tostring
 local GetTime = GetTime
 
@@ -74,6 +76,36 @@ local AVG_X2_EXCEPTIONS = { [2] = 19 }  -- wands report RANGEDRIGHT but are 1H
 -- File-locals
 ---------------------------------------------------------------------------------
 local inspectUpdatePending = false
+
+---------------------------------------------------------------------------------
+-- Dirty cache (GUID-keyed)
+---------------------------------------------------------------------------------
+-- Per-target per-slot cache. Frame-attributed state lives in CP's shared FFD
+-- (accessed via self.CP:GetFFD); this _inspectCache is dirty-cache state only.
+-- Wipes on InspectFrame:OnHide and on InspectPanel:OnDisable (bounded memory).
+local _inspectCache = {}  -- [guid] = { [slotID] = { itemLink, enchantID, ilvl, gemHash, paintPasses } }
+local _currentInspectGUID = nil
+
+local function _inspectSlotState(guid, slotID)
+    local g = _inspectCache[guid]
+    if not g then g = {}; _inspectCache[guid] = g end
+    local s = g[slotID]
+    if not s then s = {}; g[slotID] = s end
+    return s
+end
+
+-- Compact deterministic hash of socket state for the dirty cache. Changes when
+-- gems are filled/unfilled OR when a gem's itemID changes. Cheap (string concat
+-- over ≤3 sockets). Reads gemID (the field ScanItemSockets actually populates).
+local function ComputeGemHash(CP, unit, slotID)
+    local result = CP:ScanItemSockets(unit, slotID)
+    if not result or not result.sockets then return "" end
+    local parts = {}
+    for i, socket in ipairs(result.sockets) do
+        parts[i] = (socket.filled and ("F1G" .. (socket.gemID or "0"))) or "F0"
+    end
+    return table.concat(parts, "_")
+end
 
 -- Resolve the unit + slotID for an inspect button, applying the shared guards
 -- (db enabled, frame unit available, same-map). Returns (unit, slotID) or nil.
@@ -156,6 +188,8 @@ end
 
 function InspectPanel:OnDisable()
     if self._inspectQueue then wipe(self._inspectQueue) end
+    wipe(_inspectCache)
+    _currentInspectGUID = nil
     inspectUpdatePending = false
     if self.eventFrame then self.eventFrame:UnregisterAllEvents() end
     self:HideAllInspectOverlays()
@@ -172,13 +206,32 @@ end
 function InspectPanel:RenderInspectSlot(button)
     local unit, slotID = ResolveInspectSlot(button)
     if not unit then return end
-    self.CP:UpdateSlotWarning(button, unit, slotID)
-    if self.CP.db.ShowSlotItemLevel or self.CP.db.ShowEnchantNames
-        or self.CP.db.ShowSlotGems or self.CP.db.ShowMissingGems then
-        self.CP:UpdateSlotDetail(button, slotID, unit)
+    local guid = UnitGUID(unit)
+    if not guid then return end
+
+    local CP = self.CP
+    local link = GetInventoryItemLink(unit, slotID)
+    local enchantID = link and CP:GetSlotEnchantID(unit, slotID) or nil
+    local ilvl = link and CP:GetSlotItemLevel(unit, slotID) or nil
+    local gemHash = ComputeGemHash(CP, unit, slotID)
+
+    local s = _inspectSlotState(guid, slotID)
+    if s.itemLink == link
+        and s.enchantID == enchantID
+        and s.ilvl == ilvl
+        and s.gemHash == gemHash
+    then
+        return  -- dirty-cache short-circuit
     end
-    if self.CP.db.TrackIndicatorsEnabled then
-        self.CP:UpdateSlotTrackIndicator(button, slotID, unit)
+    s.itemLink, s.enchantID, s.ilvl, s.gemHash = link, enchantID, ilvl, gemHash
+
+    CP:UpdateSlotWarning(button, unit, slotID)
+    if CP.db.ShowSlotItemLevel or CP.db.ShowEnchantNames
+        or CP.db.ShowSlotGems or CP.db.ShowMissingGems then
+        CP:UpdateSlotDetail(button, slotID, unit)
+    end
+    if CP.db.TrackIndicatorsEnabled then
+        CP:UpdateSlotTrackIndicator(button, slotID, unit)
     end
 end
 
@@ -376,6 +429,8 @@ function InspectPanel:SetupInspectSupport()
             local function unregData()
                 for _, e in ipairs(INSPECT_DATA_EVENTS) do f:UnregisterEvent(e) end
                 if _self._inspectQueue then wipe(_self._inspectQueue) end
+                wipe(_inspectCache)
+                _currentInspectGUID = nil
             end
             InspectFrame:HookScript("OnShow", regData)
             InspectFrame:HookScript("OnHide", unregData)
@@ -400,6 +455,9 @@ function InspectPanel:SetupInspectSupport()
         if event == "ADDON_LOADED" then
             if arg1 == "Blizzard_InspectUI" then installHooks() end
         elseif event == "INSPECT_READY" then
+            -- Track the inspected unit's GUID for dirty-cache scoping + retry guards.
+            -- INSPECT_READY's arg1 is the GUID of the inspected unit.
+            _currentInspectGUID = arg1
             -- New inspect target: clear the per-slot pending queue so the new unit's
             -- gear gets requested fresh, then ensure the hooks exist and queue a pass.
             if _self._inspectQueue then wipe(_self._inspectQueue) end
