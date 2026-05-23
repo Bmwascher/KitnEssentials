@@ -403,8 +403,20 @@ function CP:GetSlotItemLevel(unit, slot)
     unit = unit or "player"
     local link = GetInventoryItemLink(unit, slot)
     if not link then return nil end
-    -- C_Item.GetDetailedItemLevelInfo returns (effective, isPreview, base); only
-    -- the effective level is wanted, so collapse to a single return.
+    -- For the player's own gear, prefer C_Item.GetCurrentItemLevel via ItemLocation:
+    -- it has character-scale context, so heirloom and level-scaled items report what
+    -- the tooltip displays. The link-only GetDetailedItemLevelInfo lacks that context
+    -- and returns a template ilvl (e.g. an heirloom showing 71 instead of the actual
+    -- 69 on a low-level character; non-heirloom scaled blues can be far worse).
+    if unit == "player" then
+        local loc = ItemLocation and ItemLocation:CreateFromEquipmentSlot(slot)
+        if loc and loc:IsValid() then
+            local lvl = C_Item.GetCurrentItemLevel(loc)
+            if lvl and lvl > 0 then return lvl end
+        end
+    end
+    -- Inspect / fallback: no ItemLocation for other units; the link API is the
+    -- best we can do, so low-level inspected targets may still show templated ilvls.
     local effective = C_Item.GetDetailedItemLevelInfo(link)
     return effective
 end
