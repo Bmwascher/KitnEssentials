@@ -228,6 +228,13 @@ local enchantNicknames = {
     ["Amani Mastery"]        = "Mast",
     ["Silvermoon's Tenacity"] = "Vers",
     ["Thalassian Versatility"] = "Vers",
+    ["Rune of the Fallen Crusader"] = "Crusader",
+    ["Rune of the Apocalypse"] = "Apocalypse",
+    ["Rune of Razorice"] = "Razorice",
+    ["Rune of Sanguination"] = "Sanguination",
+    ["Rune of the Stoneskin Gargoyle"] = "Gargoyle",
+    ["Rune of Unending Thirst"] = "Unend Thirst",
+    ["Rune of Spellwarding"] = "Spellwarding",
 }
 
 -- Nickname keys sorted longest-first. Matching the most specific entry before its
@@ -632,8 +639,10 @@ end
 ---------------------------------------------------------------------------------
 
 -- Run all slot overlays (warning / detail / track) for one inspect button.
-function CP:UpdateInspectSlot(button)
-    if not self.db.Enabled then return end
+-- Resolve the unit + slotID for an inspect button, applying the shared guards
+-- (db enabled, frame unit available, same-map). Returns (unit, slotID) or nil.
+local function ResolveInspectSlot(button)
+    if not CP.db or not CP.db.Enabled then return end
     if not button then return end
     local unit = InspectFrame and InspectFrame.unit
     if not unit then return end
@@ -646,27 +655,16 @@ function CP:UpdateInspectSlot(button)
 
     local slotID = button:GetID()
     if not slotID or slotID == 0 then return end
+    return unit, slotID
+end
 
-    -- Actively pull this item's full data (incl. socketed gems). Inspected gear
-    -- loads lazily: a socketed gem that isn't cached yet renders as an empty
-    -- "Prismatic Socket" placeholder, so without requesting it we'd show a false
-    -- red until the user hovers. ITEM_DATA_LOAD_RESULT / SOCKET_INFO_UPDATE then
-    -- re-scan once it lands. (Reference: BetterCharacterPanel.)
-    --
-    -- Request each item only ONCE per inspect target (reset on INSPECT_READY). The
-    -- request fires ITEM_DATA_LOAD_RESULT even for already-cached items, so requesting
-    -- on every render would loop: request -> event -> re-scan -> request -> ... at the
-    -- debounce rate, churning C_TooltipInfo tables and spiking memory.
-    local link = GetInventoryItemLink(unit, slotID)
-    if link then
-        local itemID = C_Item.GetItemInfoInstant(link)
-        self._inspectRequested = self._inspectRequested or {}
-        if itemID and not self._inspectRequested[itemID] then
-            self._inspectRequested[itemID] = true
-            C_Item.RequestLoadItemDataByID(itemID)
-        end
-    end
-
+-- Render the overlays (warning + per-slot detail + track letter) for one inspect
+-- slot. Pure render: assumes the item's data is already cached. Driven by
+-- RequestInspectSlot synchronously (cached items) or by ITEM_DATA_LOAD_RESULT
+-- (items that had to load).
+function CP:RenderInspectSlot(button)
+    local unit, slotID = ResolveInspectSlot(button)
+    if not unit then return end
     UpdateSlotWarning(button, unit, slotID)
     if self.db.ShowSlotItemLevel or self.db.ShowEnchantNames or self.db.ShowSlotGems or self.db.ShowMissingGems then
         self:UpdateSlotDetail(button, slotID, unit)
@@ -676,12 +674,58 @@ function CP:UpdateInspectSlot(button)
     end
 end
 
--- Re-run every inspect slot (used by the level hook and late-data refresh).
-function CP:UpdateAllInspectSlots()
-    for _, frameName in pairs(INSPECT_SLOT_FRAMES) do
-        self:UpdateInspectSlot(_G[frameName])
+-- Request side of the keyed-queue model: resolve the inspect slot's equipped
+-- item, queue {slotID -> itemID}, and ask Blizzard to load its full data.
+-- ITEM_DATA_LOAD_RESULT then renders just that slot and drains the queue entry
+-- — no blanket re-scan, no self-sustaining loop. Keyed by slotID (not itemID)
+-- so two slots sharing an itemID (duplicate rings) both resolve. Reference:
+-- BetterCharacterPanel's itemLoadQueue model.
+--
+-- Always queue + request, never short-circuit on a cache check: C_Item's cache
+-- predicates report BASE item data (name, icon, base stats), NOT inspect-specific
+-- socket/gem data, which arrives in the inspect packet for THIS player. Items
+-- whose base was cached from prior contexts would otherwise render synchronously
+-- before the inspect packet's gems loaded, leaving red sockets on filled slots.
+-- ITEM_DATA_LOAD_RESULT for the equipped itemID is what signals the inspect
+-- packet is ready; for already-base-cached items it fires within ~1 frame, so the
+-- deferral is imperceptible. Total C_TooltipInfo allocations per inspect are
+-- unchanged — only the timing shifts from "now" to "next event."
+function CP:RequestInspectSlot(button)
+    local unit, slotID = ResolveInspectSlot(button)
+    if not unit then return end
+
+    self._inspectQueue = self._inspectQueue or {}
+    local link = GetInventoryItemLink(unit, slotID)
+    if not link then
+        -- Empty slot: nothing to wait on; clear any pending entry and render.
+        self._inspectQueue[slotID] = nil
+        self:RenderInspectSlot(button)
+        return
     end
-    self:UpdateInspectItemLevel()
+
+    local itemID = C_Item.GetItemInfoInstant(link)
+    if not itemID then return end
+
+    -- Skip re-issuing if this slot is already waiting on the same itemID — avoids
+    -- piling duplicate requests during a re-pass while the slot's still loading.
+    if self._inspectQueue[slotID] ~= itemID then
+        self._inspectQueue[slotID] = itemID
+        C_Item.RequestLoadItemDataByID(itemID)
+    end
+end
+
+-- Re-run every inspect slot through the keyed queue (the level hook, INSPECT_READY,
+-- UNIT_INVENTORY_CHANGED, etc. all funnel here via QueueInspectUpdate). Cached items
+-- render synchronously; uncached items render later via ITEM_DATA_LOAD_RESULT. The
+-- average ilvl is full-paperdoll so it only computes when the queue is fully drained.
+function CP:UpdateAllInspectSlots()
+    self._inspectQueue = self._inspectQueue or {}
+    for _, frameName in pairs(INSPECT_SLOT_FRAMES) do
+        self:RequestInspectSlot(_G[frameName])
+    end
+    if next(self._inspectQueue) == nil then
+        self:UpdateInspectItemLevel()
+    end
 end
 
 -- Average-item-level computation, ported from ElvUI (Game/Shared/General/
@@ -812,8 +856,12 @@ function CP:SetupInspectSupport()
 
     -- Forward-declared so installHooks can toggle the data events on it.
     local f
-    -- Late gem/item-data events, registered only while the inspect frame is open.
-    local INSPECT_DATA_EVENTS = { "ITEM_DATA_LOAD_RESULT", "SOCKET_INFO_UPDATE", "GET_ITEM_INFO_RECEIVED" }
+    -- Sole late-data event we need: ITEM_DATA_LOAD_RESULT fires with the equipped
+    -- itemID once Blizzard has fully loaded an item we requested (incl. its socketed
+    -- gems). The Task 0 trace confirmed SOCKET_INFO_UPDATE and GET_ITEM_INFO_RECEIVED
+    -- never fired in the inspect path with active requests in place. Registered only
+    -- while the inspect frame is open.
+    local INSPECT_DATA_EVENTS = { "ITEM_DATA_LOAD_RESULT" }
 
     -- Best-effort per-slot hooks. These only exist once Blizzard_InspectUI is
     -- loaded, and may not fire on every code path, so they are NOT the primary
@@ -830,14 +878,15 @@ function CP:SetupInspectSupport()
                 QueueInspectUpdate()
             end)
         end
-        -- Late-data events fire game-wide and burst hard during zoning, so only
-        -- listen while the inspect frame is actually open. ITEM_DATA_LOAD_RESULT /
-        -- SOCKET_INFO_UPDATE land the requested gem data (see UpdateInspectSlot);
-        -- GET_ITEM_INFO_RECEIVED is a generic backstop. Now that the UI is loaded we
-        -- can gate registration on its visibility.
+        -- ITEM_DATA_LOAD_RESULT fires per item we requested via RequestInspectSlot;
+        -- it lands gem data with the equipped item's itemID. Registered only while
+        -- the inspect frame is shown so we don't react to player-side item loads.
         if InspectFrame then
             local function regData()   for _, e in ipairs(INSPECT_DATA_EVENTS) do f:RegisterEvent(e) end end
-            local function unregData() for _, e in ipairs(INSPECT_DATA_EVENTS) do f:UnregisterEvent(e) end end
+            local function unregData()
+                for _, e in ipairs(INSPECT_DATA_EVENTS) do f:UnregisterEvent(e) end
+                if CP._inspectQueue then wipe(CP._inspectQueue) end
+            end
             InspectFrame:HookScript("OnShow", regData)
             InspectFrame:HookScript("OnHide", unregData)
             if InspectFrame:IsShown() then regData() end
@@ -851,35 +900,47 @@ function CP:SetupInspectSupport()
     f:RegisterEvent("ADDON_LOADED")
     f:RegisterEvent("INSPECT_READY")
     f:RegisterEvent("UNIT_INVENTORY_CHANGED")
-    f:SetScript("OnEvent", function(_, event, arg1)
+    f:SetScript("OnEvent", function(_, event, arg1, arg2)
+        -- Task 0 trace: log every inspect-related event with its args + timestamp so
+        -- it can be correlated against the "FLIP" lines from ScanItemSockets to learn
+        -- which event drives a late gem's resolution.
+        if DEBUG_CP then
+            KE:Print(string.format("[CP] EVT %s a1=%s a2=%s t=%.2f",
+                event, tostring(arg1), tostring(arg2), GetTime()))
+        end
         if event == "ADDON_LOADED" then
             if arg1 == "Blizzard_InspectUI" then installHooks() end
         elseif event == "INSPECT_READY" then
-            -- New inspect target: clear the per-item request cache so the new unit's
-            -- gear gets pulled once, then ensure the hooks exist and queue a render.
-            if CP._inspectRequested then wipe(CP._inspectRequested) end
-            -- Gear loads within the first few seconds; after that, stop letting the
-            -- noisy game-wide GET_ITEM_INFO_RECEIVED drive re-scans (see below).
-            CP._inspectGioDeadline = GetTime() + 8
+            -- New inspect target: clear the per-slot pending queue so the new unit's
+            -- gear gets requested fresh, then ensure the hooks exist and queue a pass.
+            if CP._inspectQueue then wipe(CP._inspectQueue) end
+            if CP._cpDbg then wipe(CP._cpDbg) end          -- debug: re-allow dumps
+            if CP._cpDbgFilled then wipe(CP._cpDbgFilled) end
             installHooks()
             QueueInspectUpdate()
         elseif event == "UNIT_INVENTORY_CHANGED" then
-            -- Late-loading gear on the inspected unit.
+            -- Inspected unit's gear changed mid-inspect — re-pass to pick up the new
+            -- item(s). RequestInspectSlot handles changed-itemID per slot correctly.
             if arg1 and InspectFrame and arg1 == InspectFrame.unit then
                 QueueInspectUpdate()
             end
-        elseif event == "ITEM_DATA_LOAD_RESULT" or event == "SOCKET_INFO_UPDATE" then
-            -- Late gem/item data for the inspected unit actually landing. These are
-            -- bounded (tied to real loads and to the items we requested once), and
-            -- stop firing once gear is cached, so they always drive a re-scan.
-            QueueInspectUpdate()
-        elseif event == "GET_ITEM_INFO_RECEIVED" then
-            -- Generic backstop, but fires game-wide and unbounded. Only let it drive
-            -- re-scans during the brief post-INSPECT_READY load window; afterwards the
-            -- two events above cover real late data, so we ignore the world noise to
-            -- avoid churning C_TooltipInfo tables while an inspect frame sits open.
-            if GetTime() < (CP._inspectGioDeadline or 0) then
-                QueueInspectUpdate()
+        elseif event == "ITEM_DATA_LOAD_RESULT" then
+            -- A requested item finished loading. Render only the slot(s) that were
+            -- waiting on this exact itemID (targeted, not blanket), and recompute the
+            -- average once the last pending slot drains.
+            local itemID = arg1
+            if itemID and CP._inspectQueue and InspectFrame and InspectFrame:IsShown() then
+                for slotID, queuedID in pairs(CP._inspectQueue) do
+                    if queuedID == itemID then
+                        CP._inspectQueue[slotID] = nil
+                        local slotFrameName = INSPECT_SLOT_FRAMES[slotID]
+                        local b = slotFrameName and _G[slotFrameName]
+                        if b then CP:RenderInspectSlot(b) end
+                    end
+                end
+                if next(CP._inspectQueue) == nil then
+                    CP:UpdateInspectItemLevel()
+                end
             end
         end
     end)
@@ -1620,6 +1681,19 @@ function CP:ScanItemSockets(unit, slotID)
         end
     end
 
+    -- Task 0 trace: log when an inspected socketable slot's filled count CHANGES
+    -- (the red->gem flip), with a timestamp, so it can be correlated against the
+    -- event log in SetupInspectSupport to learn which event drove the resolution.
+    if DEBUG_CP and unit ~= "player" and socketableSlotSet[slotID] then
+        CP._cpDbgFilled = CP._cpDbgFilled or {}
+        local prev = CP._cpDbgFilled[slotID]
+        if prev ~= result.filledCount then
+            KE:Print(string.format("[CP] FLIP slot %d filled %s->%d empty %d t=%.2f",
+                slotID, tostring(prev), result.filledCount, result.emptyCount, GetTime()))
+            CP._cpDbgFilled[slotID] = result.filledCount
+        end
+    end
+
     return result.totalCount > 0 and result or nil
 end
 
@@ -2099,4 +2173,5 @@ function CP:OnDisable()
     RestoreCharacterBackground()
     updatePending = false
     inspectUpdatePending = false
+    if self._inspectQueue then wipe(self._inspectQueue) end
 end
