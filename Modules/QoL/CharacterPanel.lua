@@ -1362,6 +1362,17 @@ function CP:UpdateSlotTrackIndicator(slotFrame, slotID, unit)
     unit = unit or "player"
     if not slotFrame then return end
 
+    -- Dirty-check (player path only): itemLink + track letter determine the
+    -- rendered output. Skip the font re-apply + SetText when unchanged.
+    if unit == "player" then
+        local s = _slotState(slotID)
+        local link = GetInventoryItemLink(unit, slotID)
+        local track = self:GetItemTrack(unit, slotID)
+        local key = track and track.letter or nil
+        if s.trackLink == link and s.trackKey == key then return end
+        s.trackLink, s.trackKey = link, key
+    end
+
     local overlay = self:CreateTrackOverlay(slotFrame, slotID)
     local track = self:GetItemTrack(unit, slotID)
 
