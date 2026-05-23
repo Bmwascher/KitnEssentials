@@ -10,7 +10,16 @@
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
+---@class HealerSnapshot
+---@field unit string
+---@field name string
+---@field specID number?
+---@field class string
+---@field classColor any
+---@field connected boolean
+
 ---@class HealerMana: AceModule, AceEvent-3.0, AceTimer-3.0
+---@field currentHealer HealerSnapshot?
 local HM = KitnEssentials:NewModule("HealerMana", "AceEvent-3.0", "AceTimer-3.0")
 
 local DEBUG_HM = false
@@ -501,6 +510,7 @@ function HM:ShowPreview()
         specID = 257, -- Holy Priest
         class = "PRIEST",
         classColor = KE:GetClassColor("PRIEST"),
+        connected = true,
     }
     self:UpdateHealerFrame()
 end

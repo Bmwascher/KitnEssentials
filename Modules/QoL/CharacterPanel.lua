@@ -771,22 +771,24 @@ function CP:GetInspectAverageItemLevel(unit)
     end
 
     local _
-    local mainLevel, mainQuality, mainEquipLoc, mainClass, mainSubClass = 0
+    local mainLevel = 0
+    local mainQuality, mainEquipLoc, mainClass, mainSubClass
     local mainLink = GetInventoryItemLink(unit, 16)
     if mainLink then
         mainLevel = self:GetSlotItemLevel(unit, 16)
         if not mainLevel then return nil end
-        _, _, mainQuality, _, _, _, _, _, mainEquipLoc, _, _, mainClass, mainSubClass = GetItemInfo(mainLink)
+        _, _, mainQuality, _, _, _, _, _, mainEquipLoc, _, _, mainClass, mainSubClass = C_Item.GetItemInfo(mainLink)
     elseif GetInventoryItemTexture(unit, 16) then
         return nil
     end
 
-    local offLevel, offEquipLoc = 0
+    local offLevel = 0
+    local offEquipLoc
     local offLink = GetInventoryItemLink(unit, 17)
     if offLink then
         offLevel = self:GetSlotItemLevel(unit, 17)
         if not offLevel then return nil end
-        _, _, _, _, _, _, _, _, offEquipLoc = GetItemInfo(offLink)
+        _, _, _, _, _, _, _, _, offEquipLoc = C_Item.GetItemInfo(offLink)
     elseif GetInventoryItemTexture(unit, 17) then
         return nil
     end

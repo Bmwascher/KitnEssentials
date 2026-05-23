@@ -82,8 +82,9 @@ local function SortedKeys(tbl, filter)
     local keys = {}
     local lowerFilter = filter and filter ~= "" and filter:lower() or nil
     for k, v in pairs(tbl) do
-        if not lowerFilter
-            or k:lower():find(lowerFilter, 1, true)
+        if not lowerFilter then
+            keys[#keys + 1] = k
+        elseif k:lower():find(lowerFilter, 1, true)
             or (v or ""):lower():find(lowerFilter, 1, true) then
             keys[#keys + 1] = k
         end

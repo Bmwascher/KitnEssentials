@@ -1067,6 +1067,7 @@ local SEG_BTN_WIDTH    = 100
 local SEG_BTN_HEIGHT   = 30
 local SEG_BTN_SPACING  = 4
 
+---@param options { id: string, label: string }[]
 local function CreateSegmentedToggle(parent, options, currentId, onChange)
     local row = CreateFrame("Frame", nil, parent)
     row:SetHeight(SEG_BTN_HEIGHT)
