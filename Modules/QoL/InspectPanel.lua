@@ -108,24 +108,32 @@ local function ComputeGemHash(CP, unit, slotID)
 end
 
 ---------------------------------------------------------------------------------
--- Gem-race fix (hybrid: re-request + single-timer fallback)
+-- Gem-race fix (grace-period gated + hybrid retry)
 ---------------------------------------------------------------------------------
 -- When ITEM_DATA_LOAD_RESULT fires but the inspect packet's per-player gem
 -- data hasn't fully resolved yet, ScanItemSockets returns totalCount > 0 with
--- filledCount == 0 even on items that DO have filled gems. Defer the red
--- empty-socket cue for up to MAX_PAINT_PASSES retries:
+-- filledCount == 0 even on items that DO have filled gems. But that exact
+-- observation also describes a GENUINELY EMPTY socket (player chose not to
+-- gem their neck/rings — common). We can't tell them apart from a single read.
 --
---   1. Primary path (event-driven): each suspect render re-issues
---      C_Item.RequestLoadItemDataByID(itemID). Mirrors the validated EUI
---      CharacterSheet pattern. When the data finally lands, ITEM_DATA_LOAD_RESULT
---      re-fires and the existing dispatcher calls RenderInspectSlot again.
---   2. Fallback path (timer): a single dedup'd C_Timer per (guid, slotID)
---      catches the rare case where the event chain stalls. RETRY_DELAY = 0.5s.
+-- Discriminator: time since INSPECT_READY for this GUID. Inspect packets
+-- finish hydrating within ~1.5s of INSPECT_READY in normal conditions; if
+-- sockets are still empty after the grace period, treat as genuinely empty
+-- and render the red cue. Within the grace period, treat as suspect:
 --
--- Per-slot paintPasses counter prevents infinite suppression on genuinely-empty
--- sockets; after MAX_PAINT_PASSES, accept as empty and render normally.
+--   1. Primary path (event-driven): re-issue C_Item.RequestLoadItemDataByID
+--      so ITEM_DATA_LOAD_RESULT re-fires when gem bytes hydrate. Mirrors the
+--      EUI CharacterSheet player-path pattern.
+--   2. Fallback path (timer): single dedup'd C_Timer per (guid, slotID) in
+--      case the event chain stalls. RETRY_DELAY = 0.5s.
+--
+-- Per-slot paintPasses still caps the suppression within the grace window so
+-- a pathological re-request loop can't suppress past MAX_PAINT_PASSES tries.
 local MAX_PAINT_PASSES = 5
 local RETRY_DELAY = 0.5
+local INSPECT_PACKET_GRACE = 1.5  -- seconds; suspect-empty triggers retry within this window
+
+local _inspectReadyTime = {}  -- [guid] = GetTime() at last INSPECT_READY
 
 local function ScheduleSocketRetry(self, button, slotID, guid)
     local s = _inspectSlotState(guid, slotID)
@@ -233,6 +241,7 @@ end
 function InspectPanel:OnDisable()
     if self._inspectQueue then wipe(self._inspectQueue) end
     wipe(_inspectCache)
+    wipe(_inspectReadyTime)
     _currentInspectGUID = nil
     inspectUpdatePending = false
     if self.eventFrame then self.eventFrame:UnregisterAllEvents() end
@@ -268,13 +277,15 @@ function InspectPanel:RenderInspectSlot(button)
         return  -- dirty-cache short-circuit
     end
 
-    -- Gem-race detection: sockets exist but ALL read empty → suspect the inspect
-    -- packet's gem data hasn't fully resolved. Re-request the item data (event-
-    -- driven primary path) and schedule a timer fallback. After MAX_PAINT_PASSES,
-    -- accept as genuinely empty and render normally.
+    -- Gem-race detection: sockets exist but ALL read empty AND it's within the
+    -- inspect-packet grace window → suspect the gem bytes haven't hydrated yet.
+    -- Outside the grace window, an empty socket is treated as genuinely empty
+    -- (player chose not to gem — common on necks/rings).
     local result = link and CP:ScanItemSockets(unit, slotID)
+    local readyAge = _inspectReadyTime[guid] and (GetTime() - _inspectReadyTime[guid])
     local suspect = result and result.totalCount and result.totalCount > 0
                     and result.filledCount == 0
+                    and readyAge and readyAge < INSPECT_PACKET_GRACE
 
     if suspect then
         s.paintPasses = (s.paintPasses or 0) + 1
@@ -511,6 +522,7 @@ function InspectPanel:SetupInspectSupport()
                 for _, e in ipairs(INSPECT_DATA_EVENTS) do f:UnregisterEvent(e) end
                 if _self._inspectQueue then wipe(_self._inspectQueue) end
                 wipe(_inspectCache)
+                wipe(_inspectReadyTime)
                 _currentInspectGUID = nil
             end
             InspectFrame:HookScript("OnShow", regData)
@@ -539,6 +551,9 @@ function InspectPanel:SetupInspectSupport()
             -- Track the inspected unit's GUID for dirty-cache scoping + retry guards.
             -- INSPECT_READY's arg1 is the GUID of the inspected unit.
             _currentInspectGUID = arg1
+            -- Stamp the time so the gem-race suspect window can gate on
+            -- "within INSPECT_PACKET_GRACE seconds of this event."
+            if arg1 then _inspectReadyTime[arg1] = GetTime() end
             -- New inspect target: clear the per-slot pending queue so the new unit's
             -- gear gets requested fresh, then ensure the hooks exist and queue a pass.
             if _self._inspectQueue then wipe(_self._inspectQueue) end
