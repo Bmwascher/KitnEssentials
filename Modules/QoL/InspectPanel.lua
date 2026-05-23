@@ -562,7 +562,13 @@ function InspectPanel:SetupInspectSupport()
             if _self.CP and _self.CP._cpDbg then wipe(_self.CP._cpDbg) end          -- debug: re-allow dumps
             if _self.CP and _self.CP._cpDbgFilled then wipe(_self.CP._cpDbgFilled) end
             installHooks()
-            QueueInspectUpdate()
+            -- Render SYNCHRONOUSLY on INSPECT_READY (not via QueueInspectUpdate's
+            -- 0.2s debounce). On target switch, A's stale overlay FontStrings/icons
+            -- stay visible on the reused frames until a render overwrites them; the
+            -- debounce adds 0.2s of perceived "old gear" lag. Data is ready now.
+            -- Follow-up burst events (UNIT_INVENTORY_CHANGED, per-slot hooks) still
+            -- go through the debounced path; dirty cache makes those near-free.
+            _self:UpdateAllInspectSlots()
         elseif event == "UNIT_INVENTORY_CHANGED" then
             -- Inspected unit's gear changed mid-inspect — re-pass to pick up the new
             -- item(s). RequestInspectSlot handles changed-itemID per slot correctly.
