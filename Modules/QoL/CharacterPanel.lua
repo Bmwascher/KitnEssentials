@@ -954,12 +954,20 @@ function CP:SetupInspectSupport()
 
     -- Forward-declared so installHooks can toggle the data events on it.
     local f
-    -- Sole late-data event we need: ITEM_DATA_LOAD_RESULT fires with the equipped
-    -- itemID once Blizzard has fully loaded an item we requested (incl. its socketed
-    -- gems). The Task 0 trace confirmed SOCKET_INFO_UPDATE and GET_ITEM_INFO_RECEIVED
-    -- never fired in the inspect path with active requests in place. Registered only
-    -- while the inspect frame is open.
-    local INSPECT_DATA_EVENTS = { "ITEM_DATA_LOAD_RESULT" }
+    -- Events gated on InspectFrame Show/Hide. All three handlers below
+    -- already early-out when the inspect frame isn't visible, so listening
+    -- while hidden was idle-time waste. ADDON_LOADED stays on the persistent
+    -- frame (the inspect frame doesn't exist yet at addon-load time).
+    --
+    -- ITEM_DATA_LOAD_RESULT fires with the equipped itemID once Blizzard has
+    -- fully loaded an item we requested (incl. its socketed gems). The Task 0
+    -- trace confirmed SOCKET_INFO_UPDATE and GET_ITEM_INFO_RECEIVED never fired
+    -- in the inspect path with active requests in place.
+    local INSPECT_DATA_EVENTS = {
+        "ITEM_DATA_LOAD_RESULT",
+        "INSPECT_READY",
+        "UNIT_INVENTORY_CHANGED",
+    }
 
     -- Best-effort per-slot hooks. These only exist once Blizzard_InspectUI is
     -- loaded, and may not fire on every code path, so they are NOT the primary
@@ -993,11 +1001,10 @@ function CP:SetupInspectSupport()
 
     -- Persistent frame: always alive so it catches the events regardless of when
     -- Blizzard_InspectUI loads relative to this module's init. The late-data events
-    -- are registered on demand (only while the inspect frame is shown) by installHooks.
+    -- (INSPECT_READY, UNIT_INVENTORY_CHANGED, ITEM_DATA_LOAD_RESULT) are registered
+    -- on demand via INSPECT_DATA_EVENTS only while the inspect frame is shown.
     f = CreateFrame("Frame")
     f:RegisterEvent("ADDON_LOADED")
-    f:RegisterEvent("INSPECT_READY")
-    f:RegisterEvent("UNIT_INVENTORY_CHANGED")
     f:SetScript("OnEvent", function(_, event, arg1, arg2)
         -- Task 0 trace: log every inspect-related event with its args + timestamp so
         -- it can be correlated against the "FLIP" lines from ScanItemSockets to learn
