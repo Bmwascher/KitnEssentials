@@ -683,13 +683,14 @@ local function HookCharacterPanel()
     CP.eventFrame:SetScript("OnEvent", function(_, event, slotID)
         if not CP.db.Enabled then return end
         if event == "PLAYER_EQUIPMENT_CHANGED" then
-            QueueUpdate()                                 -- warnings
+            -- Route by slotID so we update one slot's overlays, not all 17.
+            -- The keyed-queue / debounce paths (QueueUpdate, socket helper)
+            -- still operate panel-wide because they aggregate cross-slot
+            -- state (warning visibility, socket-button row).
+            QueueUpdate()                                 -- warnings (debounced, panel-wide)
             if CP.db.SocketHelperEnabled then CP:RefreshSocketButtons() end
-            if CP.db.TrackIndicatorsEnabled and slotID then
-                CP:UpdateSlotTrackIndicator(_G[SLOT_FRAMES[slotID]], slotID, "player")
-            end
-            if CP.db.ShowSlotItemLevel or CP.db.ShowEnchantNames or CP.db.ShowSlotGems or CP.db.ShowMissingGems then
-                CP:UpdateAllSlotDetails()
+            if slotID then
+                CP:RefreshSlot(slotID, "player")          -- detail + track for the affected slot only
             end
         elseif event == "BAG_UPDATE_DELAYED" then
             -- Socketing a gem / applying an enchant consumes the item from bags
