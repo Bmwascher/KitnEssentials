@@ -334,7 +334,7 @@ for slot, btn in pairs(gemSlotButtons) do allCheckSlots[slot] = btn end
 -- free global reference and BuildSlotFramesByID would fault on first call.
 ---------------------------------------------------------------------------------
 local FFD = setmetatable({}, { __mode = "k" })
-local function GetFFD(frame)
+function CP:GetFFD(frame)
     local d = FFD[frame]
     if not d then d = {}; FFD[frame] = d end
     return d
@@ -399,7 +399,7 @@ local function HasEnchant(itemLink)
 end
 
 -- Enchant ID from the item link (locale-independent; same field HasEnchant reads).
-local function GetSlotEnchantID(unit, slot)
+function CP:GetSlotEnchantID(unit, slot)
     unit = unit or "player"
     local link = GetInventoryItemLink(unit, slot)
     if not link then return nil end
@@ -443,7 +443,7 @@ function CP:ResolveEnchantLabel(unit, slot)
     unit = unit or "player"
     -- Enchant-ID check is the locale-robust "is it enchanted?" gate; the readable
     -- label comes from the tooltip + ProcessEnchantText.
-    if not GetSlotEnchantID(unit, slot) then return nil end
+    if not self:GetSlotEnchantID(unit, slot) then return nil end
     local name = GetSlotEnchantName(unit, slot)
     if not name then return "Enchanted" end
     name = ProcessEnchantText(name)
@@ -551,7 +551,7 @@ end
 ---------------------------------------------------------------------------------
 -- Per-slot missing-enchant/gem warning. Lazily creates a button-attached
 -- FontString so the same helper drives both the player and inspect frames.
-local function UpdateSlotWarning(button, unit, slot)
+function CP:UpdateSlotWarning(button, unit, slot)
     if not button then return end
     unit = unit or "player"
 
@@ -562,7 +562,7 @@ local function UpdateSlotWarning(button, unit, slot)
     if unit == "player" then
         local s = _slotState(slot)
         local link = GetInventoryItemLink(unit, slot)
-        local enchantID = GetSlotEnchantID(unit, slot)
+        local enchantID = self:GetSlotEnchantID(unit, slot)
         if s.warnLink == link and s.warnEnchant == enchantID then
             return
         end
@@ -572,7 +572,7 @@ local function UpdateSlotWarning(button, unit, slot)
     local db = CP.db
     local enchantEnabled = db and db.ShowEnchants ~= false
 
-    local ffd = GetFFD(button)
+    local ffd = self:GetFFD(button)
     if not ffd.warning then
         ffd.warning = CreateSlotText(button, slot)
     end
@@ -580,8 +580,13 @@ local function UpdateSlotWarning(button, unit, slot)
     -- Enchant warning only. A missing GEM is shown as a red empty-socket icon in
     -- the gem row (see UpdateSlotDetail), reference-style, to avoid a third text
     -- line the short slots can't fit.
+    -- UnitLevel on inspect targets (hostile/encounter units) can be secret in 12.0;
+    -- treat secret as "not max level" so we don't accuse an inspect target of
+    -- missing enchants when the level is unreadable.
     local noEnchant = false
-    if IsLevelAtEffectiveMaxLevel(UnitLevel(unit)) then
+    local level = UnitLevel(unit)
+    if level and not (issecretvalue and issecretvalue(level))
+        and IsLevelAtEffectiveMaxLevel(level) then
         local itemLink = GetInventoryItemLink(unit, slot)
         if itemLink and enchantEnabled and CanEnchantSlot(unit, slot) and not HasEnchant(itemLink) then
             noEnchant = true
@@ -595,7 +600,7 @@ local function UpdateDisplay()
     for slot, buttonName in pairs(allCheckSlots) do
         local button = _G[buttonName]
         if button then
-            UpdateSlotWarning(button, "player", slot)
+            CP:UpdateSlotWarning(button, "player", slot)
         end
     end
 end
@@ -730,330 +735,6 @@ local function HookCharacterPanel()
     hooked = true
 end
 
----------------------------------------------------------------------------------
--- Inspect Frame Support
----------------------------------------------------------------------------------
-
--- Run all slot overlays (warning / detail / track) for one inspect button.
--- Resolve the unit + slotID for an inspect button, applying the shared guards
--- (db enabled, frame unit available, same-map). Returns (unit, slotID) or nil.
-local function ResolveInspectSlot(button)
-    if not CP.db or not CP.db.Enabled then return end
-    if not button then return end
-    local unit = InspectFrame and InspectFrame.unit
-    if not unit then return end
-    -- Long-range inspect returns incomplete gear; skip only on a CONFIRMED
-    -- cross-map mismatch (both maps known and different). An unknown (nil) map
-    -- is not treated as a mismatch, so normal same-zone inspects still render.
-    local pm = C_Map.GetBestMapForUnit("player")
-    local um = C_Map.GetBestMapForUnit(unit)
-    if pm and um and pm ~= um then return end
-
-    local slotID = button:GetID()
-    if not slotID or slotID == 0 then return end
-    return unit, slotID
-end
-
--- Render the overlays (warning + per-slot detail + track letter) for one inspect
--- slot. Pure render: assumes the item's data is already cached. Driven by
--- RequestInspectSlot synchronously (cached items) or by ITEM_DATA_LOAD_RESULT
--- (items that had to load).
-function CP:RenderInspectSlot(button)
-    local unit, slotID = ResolveInspectSlot(button)
-    if not unit then return end
-    UpdateSlotWarning(button, unit, slotID)
-    if self.db.ShowSlotItemLevel or self.db.ShowEnchantNames or self.db.ShowSlotGems or self.db.ShowMissingGems then
-        self:UpdateSlotDetail(button, slotID, unit)
-    end
-    if self.db.TrackIndicatorsEnabled then
-        self:UpdateSlotTrackIndicator(button, slotID, unit)
-    end
-end
-
--- Request side of the keyed-queue model: resolve the inspect slot's equipped
--- item, queue {slotID -> itemID}, and ask Blizzard to load its full data.
--- ITEM_DATA_LOAD_RESULT then renders just that slot and drains the queue entry
--- — no blanket re-scan, no self-sustaining loop. Keyed by slotID (not itemID)
--- so two slots sharing an itemID (duplicate rings) both resolve. Reference:
--- BetterCharacterPanel's itemLoadQueue model.
---
--- Always queue + request, never short-circuit on a cache check: C_Item's cache
--- predicates report BASE item data (name, icon, base stats), NOT inspect-specific
--- socket/gem data, which arrives in the inspect packet for THIS player. Items
--- whose base was cached from prior contexts would otherwise render synchronously
--- before the inspect packet's gems loaded, leaving red sockets on filled slots.
--- ITEM_DATA_LOAD_RESULT for the equipped itemID is what signals the inspect
--- packet is ready; for already-base-cached items it fires within ~1 frame, so the
--- deferral is imperceptible. Total C_TooltipInfo allocations per inspect are
--- unchanged — only the timing shifts from "now" to "next event."
-function CP:RequestInspectSlot(button)
-    local unit, slotID = ResolveInspectSlot(button)
-    if not unit then return end
-
-    self._inspectQueue = self._inspectQueue or {}
-    local link = GetInventoryItemLink(unit, slotID)
-    if not link then
-        -- Empty slot: nothing to wait on; clear any pending entry and render.
-        self._inspectQueue[slotID] = nil
-        self:RenderInspectSlot(button)
-        return
-    end
-
-    local itemID = C_Item.GetItemInfoInstant(link)
-    if not itemID then return end
-
-    -- Skip re-issuing if this slot is already waiting on the same itemID — avoids
-    -- piling duplicate requests during a re-pass while the slot's still loading.
-    if self._inspectQueue[slotID] ~= itemID then
-        self._inspectQueue[slotID] = itemID
-        C_Item.RequestLoadItemDataByID(itemID)
-    end
-end
-
--- Re-run every inspect slot through the keyed queue (the level hook, INSPECT_READY,
--- UNIT_INVENTORY_CHANGED, etc. all funnel here via QueueInspectUpdate). Cached items
--- render synchronously; uncached items render later via ITEM_DATA_LOAD_RESULT. The
--- average ilvl is full-paperdoll so it only computes when the queue is fully drained.
-function CP:UpdateAllInspectSlots()
-    self._inspectQueue = self._inspectQueue or {}
-    for _, frameName in pairs(INSPECT_SLOT_FRAMES) do
-        self:RequestInspectSlot(_G[frameName])
-    end
-    if next(self._inspectQueue) == nil then
-        self:UpdateInspectItemLevel()
-    end
-end
-
--- Average-item-level computation, ported from ElvUI (Game/Shared/General/
--- ItemLevel.lua CalculateAverageItemLevel). C_PaperDollInfo.GetInspectItemLevel
--- only returns a rounded integer, so to show real decimals we sum the equipped
--- slots and divide by 16 ourselves — the same arithmetic ElvUI displays.
-local AVG_ARMOR_SLOTS = { 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 }
-local AVG_X2_INVTYPES = {
-    INVTYPE_2HWEAPON = true,
-    INVTYPE_RANGEDRIGHT = true,
-    INVTYPE_RANGED = true,
-}
-local AVG_X2_EXCEPTIONS = { [2] = 19 }  -- wands report RANGEDRIGHT but are 1H
-
--- Returns the equipped average item level to 2 decimals, or nil if the inspect
--- data isn't ready yet (caller retries on the next INSPECT_READY / late-data event).
-function CP:GetInspectAverageItemLevel(unit)
-    local spec = GetInspectSpecialization(unit)
-    if not spec or spec == 0 then return nil end  -- inspect data not resolved yet
-
-    local total = 0
-    for _, id in ipairs(AVG_ARMOR_SLOTS) do
-        if GetInventoryItemLink(unit, id) then
-            local cur = self:GetSlotItemLevel(unit, id)
-            if not cur then return nil end            -- item data still loading
-            if cur > 0 then total = total + cur end
-        elseif GetInventoryItemTexture(unit, id) then
-            return nil                                -- slot filled but link not ready
-        end
-    end
-
-    local _
-    local mainLevel = 0
-    local mainQuality, mainEquipLoc, mainClass, mainSubClass
-    local mainLink = GetInventoryItemLink(unit, 16)
-    if mainLink then
-        mainLevel = self:GetSlotItemLevel(unit, 16)
-        if not mainLevel then return nil end
-        _, _, mainQuality, _, _, _, _, _, mainEquipLoc, _, _, mainClass, mainSubClass = C_Item.GetItemInfo(mainLink)
-    elseif GetInventoryItemTexture(unit, 16) then
-        return nil
-    end
-
-    local offLevel = 0
-    local offEquipLoc
-    local offLink = GetInventoryItemLink(unit, 17)
-    if offLink then
-        offLevel = self:GetSlotItemLevel(unit, 17)
-        if not offLevel then return nil end
-        _, _, _, _, _, _, _, _, offEquipLoc = C_Item.GetItemInfo(offLink)
-    elseif GetInventoryItemTexture(unit, 17) then
-        return nil
-    end
-
-    -- 2H / Titan's Grip handling: count the main hand twice when there's no off
-    -- hand and the weapon occupies both slots (excluding wands and Fury warriors).
-    if mainQuality == 6 or (not offEquipLoc and AVG_X2_INVTYPES[mainEquipLoc]
-        and AVG_X2_EXCEPTIONS[mainClass] ~= mainSubClass and spec ~= 72) then
-        mainLevel = math.max(mainLevel, offLevel)
-        total = total + mainLevel * 2
-    else
-        total = total + mainLevel + offLevel
-    end
-
-    if total == 0 then return nil end
-    return math.floor((total / 16) * 100 + 0.5) / 100
-end
-
--- Blizzard's inspect frame shows no average item level, so render our own.
--- (Mirrors BetterCharacterPanel: a custom FontString on the inspect items frame;
--- there is no native element to restyle the way the player panel reuses
--- CharacterStatsPane.ItemLevelFrame.)
-function CP:UpdateInspectItemLevel()
-    if not self.db.Enabled then return end
-    local unit = InspectFrame and InspectFrame.unit
-    if not unit then return end
-    -- Same cross-map guard as the slot overlays: long-range inspect returns
-    -- incomplete gear, so only render on a confirmed same-map (or unknown) target.
-    local pm = C_Map.GetBestMapForUnit("player")
-    local um = C_Map.GetBestMapForUnit(unit)
-    if pm and um and pm ~= um then return end
-
-    local parent = _G.InspectPaperDollItemsFrame or InspectFrame
-    if not parent then return end
-
-    if not self._inspectIlvl then
-        local fs = parent:CreateFontString(nil, "OVERLAY")
-        fs:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -4, 4)
-        fs:SetJustifyH("RIGHT")
-        self._inspectIlvl = fs
-    end
-
-    local ilvl = self:GetInspectAverageItemLevel(unit)
-    if not ilvl or ilvl <= 0 then
-        self._inspectIlvl:Hide()
-        return
-    end
-
-    self:ApplyFont(self._inspectIlvl, self.db.IlvlValueSize or 16)
-    local accent = KE.Theme.accent
-    self._inspectIlvl:SetTextColor(accent[1], accent[2], accent[3])
-    self._inspectIlvl:SetText(string.format("%.2f", ilvl))
-    self._inspectIlvl:Show()
-end
-
--- Debounced, next-frame batch of the full inspect refresh. A first inspect fires
--- a burst (per-slot button updates + INSPECT_READY + UNIT_INVENTORY_CHANGED) on the
--- same frame Blizzard loads + renders the inspect UI; collapsing it into ONE
--- deferred pass keeps that heavy tooltip-scan work off the busy load frame.
-local inspectUpdatePending = false
-local function QueueInspectUpdate()
-    if inspectUpdatePending then return end
-    if not (CP.db and CP.db.Enabled) then return end
-    if not (InspectFrame and InspectFrame:IsShown()) then return end
-    inspectUpdatePending = true
-    -- 0.2s (not 0.05) collapses bursty late-data events into far fewer full re-scans.
-    -- Each re-scan allocates a C_TooltipInfo table per socketable slot, so a higher
-    -- debounce directly cuts the transient garbage generated while inspecting.
-    C_Timer.After(0.2, function()
-        inspectUpdatePending = false
-        if CP.db and CP.db.Enabled and InspectFrame and InspectFrame:IsShown() then
-            CP:UpdateAllInspectSlots()
-        end
-    end)
-end
-
-function CP:SetupInspectSupport()
-    if self._inspectSetup then return end
-    self._inspectSetup = true
-
-    -- Forward-declared so installHooks can toggle the data events on it.
-    local f
-    -- Events gated on InspectFrame Show/Hide. All three handlers below
-    -- already early-out when the inspect frame isn't visible, so listening
-    -- while hidden was idle-time waste. ADDON_LOADED stays on the persistent
-    -- frame (the inspect frame doesn't exist yet at addon-load time).
-    --
-    -- ITEM_DATA_LOAD_RESULT fires with the equipped itemID once Blizzard has
-    -- fully loaded an item we requested (incl. its socketed gems). The Task 0
-    -- trace confirmed SOCKET_INFO_UPDATE and GET_ITEM_INFO_RECEIVED never fired
-    -- in the inspect path with active requests in place.
-    local INSPECT_DATA_EVENTS = {
-        "ITEM_DATA_LOAD_RESULT",
-        "INSPECT_READY",
-        "UNIT_INVENTORY_CHANGED",
-    }
-
-    -- Best-effort per-slot hooks. These only exist once Blizzard_InspectUI is
-    -- loaded, and may not fire on every code path, so they are NOT the primary
-    -- render trigger — INSPECT_READY (below) is. Idempotent: safe to call again.
-    local function installHooks()
-        if self._inspectHooked then return end
-        if not InspectPaperDollItemSlotButton_Update then return end
-        self._inspectHooked = true
-        hooksecurefunc("InspectPaperDollItemSlotButton_Update", function()
-            QueueInspectUpdate()
-        end)
-        if InspectPaperDollFrame_SetLevel then
-            hooksecurefunc("InspectPaperDollFrame_SetLevel", function()
-                QueueInspectUpdate()
-            end)
-        end
-        -- ITEM_DATA_LOAD_RESULT fires per item we requested via RequestInspectSlot;
-        -- it lands gem data with the equipped item's itemID. Registered only while
-        -- the inspect frame is shown so we don't react to player-side item loads.
-        if InspectFrame then
-            local function regData()   for _, e in ipairs(INSPECT_DATA_EVENTS) do f:RegisterEvent(e) end end
-            local function unregData()
-                for _, e in ipairs(INSPECT_DATA_EVENTS) do f:UnregisterEvent(e) end
-                if CP._inspectQueue then wipe(CP._inspectQueue) end
-            end
-            InspectFrame:HookScript("OnShow", regData)
-            InspectFrame:HookScript("OnHide", unregData)
-            if InspectFrame:IsShown() then regData() end
-        end
-    end
-
-    -- Persistent frame: always alive so it catches the events regardless of when
-    -- Blizzard_InspectUI loads relative to this module's init. The late-data events
-    -- (INSPECT_READY, UNIT_INVENTORY_CHANGED, ITEM_DATA_LOAD_RESULT) are registered
-    -- on demand via INSPECT_DATA_EVENTS only while the inspect frame is shown.
-    f = CreateFrame("Frame")
-    f:RegisterEvent("ADDON_LOADED")
-    f:SetScript("OnEvent", function(_, event, arg1, arg2)
-        -- Task 0 trace: log every inspect-related event with its args + timestamp so
-        -- it can be correlated against the "FLIP" lines from ScanItemSockets to learn
-        -- which event drives a late gem's resolution.
-        if DEBUG_CP then
-            KE:Print(string.format("[CP] EVT %s a1=%s a2=%s t=%.2f",
-                event, tostring(arg1), tostring(arg2), GetTime()))
-        end
-        if event == "ADDON_LOADED" then
-            if arg1 == "Blizzard_InspectUI" then installHooks() end
-        elseif event == "INSPECT_READY" then
-            -- New inspect target: clear the per-slot pending queue so the new unit's
-            -- gear gets requested fresh, then ensure the hooks exist and queue a pass.
-            if CP._inspectQueue then wipe(CP._inspectQueue) end
-            if CP._cpDbg then wipe(CP._cpDbg) end          -- debug: re-allow dumps
-            if CP._cpDbgFilled then wipe(CP._cpDbgFilled) end
-            installHooks()
-            QueueInspectUpdate()
-        elseif event == "UNIT_INVENTORY_CHANGED" then
-            -- Inspected unit's gear changed mid-inspect — re-pass to pick up the new
-            -- item(s). RequestInspectSlot handles changed-itemID per slot correctly.
-            if arg1 and InspectFrame and arg1 == InspectFrame.unit then
-                QueueInspectUpdate()
-            end
-        elseif event == "ITEM_DATA_LOAD_RESULT" then
-            -- A requested item finished loading. Render only the slot(s) that were
-            -- waiting on this exact itemID (targeted, not blanket), and recompute the
-            -- average once the last pending slot drains.
-            local itemID = arg1
-            if itemID and CP._inspectQueue and InspectFrame and InspectFrame:IsShown() then
-                for slotID, queuedID in pairs(CP._inspectQueue) do
-                    if queuedID == itemID then
-                        CP._inspectQueue[slotID] = nil
-                        local slotFrameName = INSPECT_SLOT_FRAMES[slotID]
-                        local b = slotFrameName and _G[slotFrameName]
-                        if b then CP:RenderInspectSlot(b) end
-                    end
-                end
-                if next(CP._inspectQueue) == nil then
-                    CP:UpdateInspectItemLevel()
-                end
-            end
-        end
-    end)
-
-    -- If the inspect UI is already loaded at setup, hook immediately.
-    if C_AddOns.IsAddOnLoaded("Blizzard_InspectUI") then installHooks() end
-end
-
 function CP:Refresh()
     -- Cached slot state may be stale relative to new settings (font size,
     -- track letter size, etc.). Force a re-render by clearing the dirty cache.
@@ -1061,7 +742,8 @@ function CP:Refresh()
 
     self.db = KE.db.profile.CharacterPanel
     HookCharacterPanel()
-    self:SetupInspectSupport()
+    -- Inspect setup is owned by InspectPanel module (cascaded from CP:OnEnable);
+    -- SetupInspectSupport is idempotent so any prior call still holds.
     ApplyFontToAll()                                      -- warning fonts
     if self.db.Enabled then
         self:ApplySettings()
@@ -1346,7 +1028,7 @@ function CP:GetItemTrack(unit, slotID)
 end
 
 function CP:CreateTrackOverlay(slotFrame, slotID)
-    local ffd = GetFFD(slotFrame)
+    local ffd = self:GetFFD(slotFrame)
     if ffd.track then return ffd.track end
 
     local isRight = RIGHT_SLOTS[slotID]
@@ -1479,7 +1161,7 @@ local function AnchorGemsLeftOf(detail, parent)
 end
 
 function CP:CreateSlotDetail(slotFrame, slotID)
-    local ffd = GetFFD(slotFrame)
+    local ffd = self:GetFFD(slotFrame)
     if ffd.detail then return ffd.detail end
 
     local isRight  = RIGHT_SLOTS[slotID]
@@ -1561,7 +1243,10 @@ function CP:CreateSlotDetail(slotFrame, slotID)
     return detail
 end
 
-function CP:UpdateSlotDetail(slotFrame, slotID, unit)
+-- suppressGems (optional): when true, skip the gem-icon scan + render and hide
+-- all icon slots. Used by InspectPanel's paint-pass retry to avoid flashing red
+-- "empty socket" cues while the inspect packet's gem data is still resolving.
+function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems)
     unit = unit or "player"
     if not slotFrame then return end
 
@@ -1572,7 +1257,7 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit)
     if unit == "player" then
         local s = _slotState(slotID)
         local link = GetInventoryItemLink(unit, slotID)
-        local enchantID = GetSlotEnchantID(unit, slotID)
+        local enchantID = self:GetSlotEnchantID(unit, slotID)
         local ilvl = self:GetSlotItemLevel(unit, slotID)
         if s.detailLink == link and s.detailEnchant == enchantID and s.detailIlvl == ilvl then
             return
@@ -1625,31 +1310,35 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit)
     -- empty-socket icon (ShowMissingGems) — the reference-style missing-gem cue
     -- that replaces the old "No Gem" text (no room to stack a third text line).
     local gemCount = 0
-    local showFilled = self.db.ShowSlotGems
-    local showEmpty  = self.db.ShowMissingGems ~= false
-    if (showFilled or showEmpty) and socketableSlotSet[slotID] then
-        local result = self:ScanItemSockets(unit, slotID)
-        if result and result.sockets then
-            local iconSize = SLOT_GEM_ICON_SIZE
-            for _, socket in ipairs(result.sockets) do
-                if gemCount >= SLOT_DETAIL_MAX_GEMS then break end
-                if (socket.filled and showFilled) or (not socket.filled and showEmpty) then
-                    gemCount = gemCount + 1
-                    local iconFrame = detail.gemIcons[gemCount]
-                    iconFrame:SetSize(iconSize, iconSize)
-                    iconFrame.tex:SetTexture(socket.icon or 458977)
-                    if socket.filled then
-                        iconFrame.tex:SetVertexColor(1, 1, 1)
-                        iconFrame:SetAlpha(1)
-                    else
-                        iconFrame.tex:SetVertexColor(1, 0, 0)  -- missing gem
-                        iconFrame:SetAlpha(1)
+    if not suppressGems then
+        local showFilled = self.db.ShowSlotGems
+        local showEmpty  = self.db.ShowMissingGems ~= false
+        if (showFilled or showEmpty) and socketableSlotSet[slotID] then
+            local result = self:ScanItemSockets(unit, slotID)
+            if result and result.sockets then
+                local iconSize = SLOT_GEM_ICON_SIZE
+                for _, socket in ipairs(result.sockets) do
+                    if gemCount >= SLOT_DETAIL_MAX_GEMS then break end
+                    if (socket.filled and showFilled) or (not socket.filled and showEmpty) then
+                        gemCount = gemCount + 1
+                        local iconFrame = detail.gemIcons[gemCount]
+                        iconFrame:SetSize(iconSize, iconSize)
+                        iconFrame.tex:SetTexture(socket.icon or 458977)
+                        if socket.filled then
+                            iconFrame.tex:SetVertexColor(1, 1, 1)
+                            iconFrame:SetAlpha(1)
+                        else
+                            iconFrame.tex:SetVertexColor(1, 0, 0)  -- missing gem
+                            iconFrame:SetAlpha(1)
+                        end
+                        iconFrame:Show()
                     end
-                    iconFrame:Show()
                 end
             end
         end
     end
+    -- When suppressGems is true, gemCount is 0 so ALL icon slots get hidden
+    -- (clean transparent state until the retry resolves the inspect packet).
     for i = gemCount + 1, SLOT_DETAIL_MAX_GEMS do
         detail.gemIcons[i]:Hide()
     end
@@ -1677,7 +1366,7 @@ function CP:RefreshSlot(slotID, unit)
     local buttonName = allCheckSlots[slotID]
     local button = buttonName and _G[buttonName]
     if button then
-        UpdateSlotWarning(button, unit, slotID)
+        self:UpdateSlotWarning(button, unit, slotID)
     end
 
     if self.db.TrackIndicatorsEnabled then
@@ -1711,7 +1400,9 @@ function CP:HideAllSlotDetails()
         local detail = slotFrame and FFD[slotFrame] and FFD[slotFrame].detail
         if detail then detail:Hide() end
     end
-    if self._inspectIlvl then self._inspectIlvl:Hide() end
+    -- Inspect ilvl FontString lives on InspectPanel; cleanup happens via
+    -- InspectPanel:HideAllInspectOverlays (called from InspectPanel:OnDisable
+    -- cascaded by CP:OnDisable).
 end
 
 ---------------------------------------------------------------------------------
@@ -2330,7 +2021,10 @@ function CP:OnEnable()
     end
 
     HookCharacterPanel()
-    self:SetupInspectSupport()
+
+    -- Wake InspectPanel; it owns the inspect orchestration.
+    local insp = KitnEssentials:GetModule("InspectPanel", true)
+    if insp then insp:Enable() end
 
     -- Race: if the character pane is already shown when the module enables
     -- (e.g. user toggled the module on with the pane open), the PaperDollFrame
@@ -2361,6 +2055,9 @@ function CP:OnDisable()
     self:HideRaceText()
     RestoreCharacterBackground()
     updatePending = false
-    inspectUpdatePending = false
-    if self._inspectQueue then wipe(self._inspectQueue) end
+
+    -- Cascade to InspectPanel; it owns its own state (queue, inspectUpdatePending,
+    -- event frame, ilvl FontString) and teardown.
+    local insp = KitnEssentials:GetModule("InspectPanel", true)
+    if insp then insp:Disable() end
 end

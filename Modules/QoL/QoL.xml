@@ -12,6 +12,7 @@
     <Script file="GreatVaultAlert.lua" />
     <Script file="VantusRune.lua" />
     <Script file="CharacterPanel.lua" />
+    <Script file="InspectPanel.lua" />
     <Script file="WorldMap.lua" />
     <Script file="PositionController.lua" />
     <Script file="SpellAlerts.lua" />
