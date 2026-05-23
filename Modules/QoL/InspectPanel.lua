@@ -131,7 +131,7 @@ end
 -- a pathological re-request loop can't suppress past MAX_PAINT_PASSES tries.
 local MAX_PAINT_PASSES = 5
 local RETRY_DELAY = 0.5
-local INSPECT_PACKET_GRACE = 1.5  -- seconds; suspect-empty triggers retry within this window
+local INSPECT_PACKET_GRACE = 1.0  -- seconds; suspect-empty triggers retry within this window
 
 local _inspectReadyTime = {}  -- [guid] = GetTime() at last INSPECT_READY
 
