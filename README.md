@@ -31,6 +31,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 |---|---|
 | Raid Notifications | Gateway usability, reset boss reminder, loot boss reminder, Mythic raid bench alert, and seasonal bonus rolls reminder with per-alert toggles |
 | Class Status Texts | Pet status, class stance, movement alert, and dispel CD — 4 class-specific text alerts in one tabbed GUI |
+| Totem Tracker | Shaman-only bar tracker for active totems with destroy buttons, configurable layout, and EditMode integration |
 | Bloodlust Tracker | Animated Pedro overlay + sound or static icon with countdown on Bloodlust/Heroism/Time Warp |
 | Time Spiral Tracker | Movement spell proc tracker with glow effects, cooldown spiral, and countdown timer (all classes) |
 | Recuperate Button | One-click self-heal with configurable raid/party visibility and health-based alpha |
@@ -56,7 +57,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Custom Nicknames | Map characters to personal nicknames on ElvUI and Unhalted Unit Frames via the `[kes:nickname]` tag family (plus class-color variants `[kes:nickname:color]` for UUF); includes a management GUI with search, import/export, and replace/merge modes |
 | Hide ActionBars | Hide specific action bar rows in/out of combat |
 | Great Vault Alert | Shows your loot spec when opening the Great Vault with class color and sound |
-| Missing Enchants/Gems | Red warnings on character panel for missing enchants and empty gem sockets |
+| Character Panel | Per-slot item level, enchant labels, gem icons, missing-gem cue, and item-track letters (M/H/C/V/A) on the player and inspect frames; decimal stat-pane and inspect item level; interactive Gem Socket Helper; auto-disables BetterCharacterPanel if loaded |
 | World Map | Adjustable minimized map scale, coordinate waypoint search bar, and city map icons for Silvermoon / Stormwind / Orgrimmar |
 | Vantus Rune | One-click Vantus Rune withdrawal from Guild Bank with priority and confirmation |
 

@@ -1,5 +1,28 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v2.1.0
+
+### Character Panel
+- **NEW:** Character Panel module — replaces and expands the older Missing Enchants/Gems module. Adds per-slot item level, enchant labels, gem icons, item-track letters (M/H/C/V/A), an interactive Gem Socket Helper, a decimal character-pane item level, race text + faction icon on the name line, and an inspect-frame overlay that mirrors all of it onto other players. Module renamed from `MissingEnchants` to `CharacterPanel`; the saved DB section was renamed too — settings you previously customized under the old key will fall back to defaults
+- **NEW:** Per-slot item level on every equipped slot (player and inspect). On the player's own panel the value reads via `ItemLocation`, so heirlooms and level-scaled gear match the tooltip exactly (no more templated readings like 371 on an item that's actually 71)
+- **NEW:** Decimal item level — the character-stats item level shows two decimals (e.g. `642.38`). Optional, lives on the Display card
+- **NEW:** Per-slot enchant labels — short stat nicknames (e.g. `Crit%+`, `Mast`, `Speed`). Crafted enchants strip their trailing quality-atlas markup. Missing enchants render as a single red "No Enchant" line on the same slot anchor
+- **NEW:** Missing-gem cue — empty gem sockets render as a red socket icon inline with the gem strip, replacing the older "No Gem" text line so the cue sits naturally beside any filled gems
+- **NEW:** Item-track indicators — single-letter overlays on each slot for the gear track (`M` Myth / `H` Hero / `C` Champion / `V` Veteran / `A` Adventurer)
+- **NEW:** Gem Socket Helper (player only) — hovering an empty socket pops a list of compatible gems from your bags; clicking a gem sockets it directly. Multi-socketed items now target the correct socket position (the prior implementation could send the click to the wrong socket on items with mixed filled/empty rows)
+- **NEW:** Inspect frame support — same-zone inspects render the same overlays on Blizzard's Inspect frame, including a 2-decimal **inspect** average item level (Blizzard's Inspect frame shows none natively). The render is bound to inspect-open and driven by a per-item async load queue, so gemmed sockets resolve without you having to hover the slot, and idle inspect frames don't accumulate background work
+- **NEW:** Auto-disable for `BetterCharacterPanel` — if BCP is loaded on enable, KitnEssentials disables it for the current character and chat-prompts a `/reload`. The two would double-render every overlay otherwise; BCP's feature set is now covered here and then some
+- All overlays are on by default on a fresh install with tuned font sizes, so the panel works without opening the GUI first
+
+### Totem Tracker
+- **NEW:** Totem Tracker (Shaman-only) — bar-based active-totem display with per-totem name, remaining-time text, and a per-button destroy button. Configurable row height, button spacing, and timer-text visibility; EditMode-integrated for repositioning; preview hooks into the standard `PREVIEW_MODULES` flow so the GUI preview button works like the other tracker modules. Silent no-op for non-Shaman characters; combat-safe — destroy buttons hide in lockdown rather than erroring
+
+### Healer Mana
+- **Fixed:** Delve companion NPCs (Valeera Sanguinar and similar) were being tracked as healers — they report role `HEALER` but have a max=1 sentinel mana pool, so the bar rendered at a meaningless percent. Non-player units now must have a real mana pool (max ≥ 100) to be picked up; player healers pass through across disconnects, and legitimate mana-using NPC followers (e.g. Cylestia in follower dungeons) still track normally
+- **Fixed:** Mana percentage failed to render inside delves. Blizzard restricts party-member power queries there, so `UnitPowerPercent` comes back as a secret token; the percent text is now forwarded straight to `SetFormattedText` (a display call, not arithmetic — no taint propagates back into addon Lua) so the underlying value renders correctly
+
+---
+
 ## v2.0.1
 
 ### Automation

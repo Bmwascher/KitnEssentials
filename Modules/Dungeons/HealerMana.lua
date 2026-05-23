@@ -18,9 +18,11 @@ local DEBUG_HM = false
 local CreateFrame = CreateFrame
 local UnitExists = UnitExists
 local UnitIsConnected = UnitIsConnected
+local UnitIsPlayer = UnitIsPlayer
 local UnitClass = UnitClass
 local UnitName = UnitName
 local UnitPowerPercent = UnitPowerPercent
+local UnitPowerMax = UnitPowerMax
 local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 local GetSpecializationInfoByID = GetSpecializationInfoByID
 local IsInRaid = IsInRaid
@@ -67,10 +69,30 @@ local function GetSpecIcon(specID)
 end
 
 local function IsHealer(unit)
-    return UnitGroupRolesAssigned(unit) == "HEALER"
+    if UnitGroupRolesAssigned(unit) ~= "HEALER" then return false end
+    -- Filter delve companion NPCs that don't have a real mana pool. Valeera
+    -- Sanguinar in Midnight delves returns max=1 (sentinel placeholder)
+    -- rather than true 0. Threshold 100 is well below any real healer
+    -- class's max mana (tens of thousands minimum). Real player healers
+    -- (including disconnected ones — UnitIsPlayer stays true across
+    -- disconnect) and any mana-using NPC follower (Cylestia in follower
+    -- dungeons) still pass through.
+    if not UnitIsPlayer(unit) then
+        local maxMana = UnitPowerMax(unit, Enum.PowerType.Mana)
+        if not maxMana or maxMana < 100 then return false end
+    end
+    return true
 end
 
 local function DisplayManaPercent(fontString, unit)
+    -- In delves Blizzard restricts party-member power queries — pct comes
+    -- back as a secret token. Do NOT branch on it (issecretvalue → "—"
+    -- fallback is a regression: addon code can't read the value, but the
+    -- display layer is server-trusted and will render the underlying
+    -- number when the secret is passed to SetFormattedText. Forward it
+    -- directly; same pattern SinStats uses to display Intellect in
+    -- raid encounters. SetFormattedText is a display call, not arithmetic,
+    -- so no taint propagates back into addon Lua.
     local pct = UnitPowerPercent(unit, Enum.PowerType.Mana, true, CurveConstants.ScaleTo100)
     fontString:SetFormattedText("%.0f%%", pct)
 end
