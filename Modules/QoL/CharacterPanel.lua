@@ -2347,6 +2347,7 @@ end
 function CP:OnDisable()
     self:ClearAll()                                       -- warnings clear
     if self.eventFrame then self.eventFrame:UnregisterAllEvents() end
+    wipe(_lastSlotState)
     self:DisableGemSocketHelper()
     self:HideAllTrackIndicators()
     self:HideAllSlotDetails()
