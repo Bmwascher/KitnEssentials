@@ -107,6 +107,50 @@ local function ComputeGemHash(CP, unit, slotID)
     return table.concat(parts, "_")
 end
 
+---------------------------------------------------------------------------------
+-- Gem-race fix (hybrid: re-request + single-timer fallback)
+---------------------------------------------------------------------------------
+-- When ITEM_DATA_LOAD_RESULT fires but the inspect packet's per-player gem
+-- data hasn't fully resolved yet, ScanItemSockets returns totalCount > 0 with
+-- filledCount == 0 even on items that DO have filled gems. Defer the red
+-- empty-socket cue for up to MAX_PAINT_PASSES retries:
+--
+--   1. Primary path (event-driven): each suspect render re-issues
+--      C_Item.RequestLoadItemDataByID(itemID). Mirrors the validated EUI
+--      CharacterSheet pattern. When the data finally lands, ITEM_DATA_LOAD_RESULT
+--      re-fires and the existing dispatcher calls RenderInspectSlot again.
+--   2. Fallback path (timer): a single dedup'd C_Timer per (guid, slotID)
+--      catches the rare case where the event chain stalls. RETRY_DELAY = 0.5s.
+--
+-- Per-slot paintPasses counter prevents infinite suppression on genuinely-empty
+-- sockets; after MAX_PAINT_PASSES, accept as empty and render normally.
+local MAX_PAINT_PASSES = 5
+local RETRY_DELAY = 0.5
+
+local function ScheduleSocketRetry(self, button, slotID, guid)
+    local s = _inspectSlotState(guid, slotID)
+    if s.retryPending then return end  -- dedup: one timer per (guid, slot) at a time
+    s.retryPending = true
+    C_Timer.After(RETRY_DELAY, function()
+        -- Read state fresh; the cache table is the same one OnHide may have
+        -- wiped, so a re-fetch yields a new sub-table after wipe + we'll
+        -- bail anyway on the guid mismatch below.
+        if not InspectFrame or not InspectFrame:IsShown() then
+            local st = _inspectCache[guid] and _inspectCache[guid][slotID]
+            if st then st.retryPending = false end
+            return
+        end
+        if _currentInspectGUID ~= guid then
+            local st = _inspectCache[guid] and _inspectCache[guid][slotID]
+            if st then st.retryPending = false end
+            return
+        end
+        local st = _inspectSlotState(guid, slotID)
+        st.retryPending = false
+        self:RenderInspectSlot(button)
+    end)
+end
+
 -- Resolve the unit + slotID for an inspect button, applying the shared guards
 -- (db enabled, frame unit available, same-map). Returns (unit, slotID) or nil.
 local function ResolveInspectSlot(button)
@@ -223,6 +267,43 @@ function InspectPanel:RenderInspectSlot(button)
     then
         return  -- dirty-cache short-circuit
     end
+
+    -- Gem-race detection: sockets exist but ALL read empty → suspect the inspect
+    -- packet's gem data hasn't fully resolved. Re-request the item data (event-
+    -- driven primary path) and schedule a timer fallback. After MAX_PAINT_PASSES,
+    -- accept as genuinely empty and render normally.
+    local result = link and CP:ScanItemSockets(unit, slotID)
+    local suspect = result and result.totalCount and result.totalCount > 0
+                    and result.filledCount == 0
+
+    if suspect then
+        s.paintPasses = (s.paintPasses or 0) + 1
+        if s.paintPasses < MAX_PAINT_PASSES then
+            -- Re-request item data so ITEM_DATA_LOAD_RESULT re-fires with the
+            -- now-hydrated gem bytes (EUI player-path pattern).
+            local itemID = C_Item.GetItemInfoInstant(link)
+            if itemID then C_Item.RequestLoadItemDataByID(itemID) end
+            -- Timer fallback in case the event chain stalls.
+            ScheduleSocketRetry(self, button, slotID, guid)
+            -- Render everything EXCEPT gems; suppressGems hides the icon row
+            -- instead of flashing red empty-socket cues. Skip the cache write so
+            -- the next retry re-evaluates fresh.
+            CP:UpdateSlotWarning(button, unit, slotID)
+            if CP.db.ShowSlotItemLevel or CP.db.ShowEnchantNames
+                or CP.db.ShowSlotGems or CP.db.ShowMissingGems then
+                CP:UpdateSlotDetail(button, slotID, unit, true)
+            end
+            if CP.db.TrackIndicatorsEnabled then
+                CP:UpdateSlotTrackIndicator(button, slotID, unit)
+            end
+            return
+        end
+        -- Exhausted retry budget; treat as genuinely empty. Reset so a future
+        -- re-inspect of the same slot starts fresh.
+        s.paintPasses = 0
+    end
+
+    -- Normal render path: write the cache then render everything (gems included).
     s.itemLink, s.enchantID, s.ilvl, s.gemHash = link, enchantID, ilvl, gemHash
 
     CP:UpdateSlotWarning(button, unit, slotID)

@@ -1243,7 +1243,10 @@ function CP:CreateSlotDetail(slotFrame, slotID)
     return detail
 end
 
-function CP:UpdateSlotDetail(slotFrame, slotID, unit)
+-- suppressGems (optional): when true, skip the gem-icon scan + render and hide
+-- all icon slots. Used by InspectPanel's paint-pass retry to avoid flashing red
+-- "empty socket" cues while the inspect packet's gem data is still resolving.
+function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems)
     unit = unit or "player"
     if not slotFrame then return end
 
@@ -1307,31 +1310,35 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit)
     -- empty-socket icon (ShowMissingGems) — the reference-style missing-gem cue
     -- that replaces the old "No Gem" text (no room to stack a third text line).
     local gemCount = 0
-    local showFilled = self.db.ShowSlotGems
-    local showEmpty  = self.db.ShowMissingGems ~= false
-    if (showFilled or showEmpty) and socketableSlotSet[slotID] then
-        local result = self:ScanItemSockets(unit, slotID)
-        if result and result.sockets then
-            local iconSize = SLOT_GEM_ICON_SIZE
-            for _, socket in ipairs(result.sockets) do
-                if gemCount >= SLOT_DETAIL_MAX_GEMS then break end
-                if (socket.filled and showFilled) or (not socket.filled and showEmpty) then
-                    gemCount = gemCount + 1
-                    local iconFrame = detail.gemIcons[gemCount]
-                    iconFrame:SetSize(iconSize, iconSize)
-                    iconFrame.tex:SetTexture(socket.icon or 458977)
-                    if socket.filled then
-                        iconFrame.tex:SetVertexColor(1, 1, 1)
-                        iconFrame:SetAlpha(1)
-                    else
-                        iconFrame.tex:SetVertexColor(1, 0, 0)  -- missing gem
-                        iconFrame:SetAlpha(1)
+    if not suppressGems then
+        local showFilled = self.db.ShowSlotGems
+        local showEmpty  = self.db.ShowMissingGems ~= false
+        if (showFilled or showEmpty) and socketableSlotSet[slotID] then
+            local result = self:ScanItemSockets(unit, slotID)
+            if result and result.sockets then
+                local iconSize = SLOT_GEM_ICON_SIZE
+                for _, socket in ipairs(result.sockets) do
+                    if gemCount >= SLOT_DETAIL_MAX_GEMS then break end
+                    if (socket.filled and showFilled) or (not socket.filled and showEmpty) then
+                        gemCount = gemCount + 1
+                        local iconFrame = detail.gemIcons[gemCount]
+                        iconFrame:SetSize(iconSize, iconSize)
+                        iconFrame.tex:SetTexture(socket.icon or 458977)
+                        if socket.filled then
+                            iconFrame.tex:SetVertexColor(1, 1, 1)
+                            iconFrame:SetAlpha(1)
+                        else
+                            iconFrame.tex:SetVertexColor(1, 0, 0)  -- missing gem
+                            iconFrame:SetAlpha(1)
+                        end
+                        iconFrame:Show()
                     end
-                    iconFrame:Show()
                 end
             end
         end
     end
+    -- When suppressGems is true, gemCount is 0 so ALL icon slots get hidden
+    -- (clean transparent state until the retry resolves the inspect packet).
     for i = gemCount + 1, SLOT_DETAIL_MAX_GEMS do
         detail.gemIcons[i]:Hide()
     end
