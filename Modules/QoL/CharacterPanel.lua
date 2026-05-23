@@ -526,14 +526,16 @@ local function ApplyFontToAll()
     local fontOutline = (db and db.FontOutline) or "OUTLINE"
     for _, buttonName in pairs(allCheckSlots) do
         local button = _G[buttonName]
-        if button and button._slotWarning then
-            KE:ApplyFontToText(button._slotWarning, fontFace, fontSize, fontOutline)
+        local warning = button and FFD[button] and FFD[button].warning
+        if warning then
+            KE:ApplyFontToText(warning, fontFace, fontSize, fontOutline)
         end
     end
     for _, frameName in pairs(INSPECT_SLOT_FRAMES) do
         local button = _G[frameName]
-        if button and button._slotWarning then
-            KE:ApplyFontToText(button._slotWarning, fontFace, fontSize, fontOutline)
+        local warning = button and FFD[button] and FFD[button].warning
+        if warning then
+            KE:ApplyFontToText(warning, fontFace, fontSize, fontOutline)
         end
     end
 end
@@ -549,8 +551,9 @@ local function UpdateSlotWarning(button, unit, slot)
     local db = CP.db
     local enchantEnabled = db and db.ShowEnchants ~= false
 
-    if not button._slotWarning then
-        button._slotWarning = CreateSlotText(button, slot)
+    local ffd = GetFFD(button)
+    if not ffd.warning then
+        ffd.warning = CreateSlotText(button, slot)
     end
 
     -- Enchant warning only. A missing GEM is shown as a red empty-socket icon in
@@ -564,7 +567,7 @@ local function UpdateSlotWarning(button, unit, slot)
         end
     end
 
-    button._slotWarning:SetText(noEnchant and "|cFFFF0000No Enchant|r" or "")
+    ffd.warning:SetText(noEnchant and "|cFFFF0000No Enchant|r" or "")
 end
 
 local function UpdateDisplay()
@@ -1063,11 +1066,13 @@ end
 function CP:ClearAll()
     for _, buttonName in pairs(allCheckSlots) do
         local button = _G[buttonName]
-        if button and button._slotWarning then button._slotWarning:SetText("") end
+        local warning = button and FFD[button] and FFD[button].warning
+        if warning then warning:SetText("") end
     end
     for _, frameName in pairs(INSPECT_SLOT_FRAMES) do
         local button = _G[frameName]
-        if button and button._slotWarning then button._slotWarning:SetText("") end
+        local warning = button and FFD[button] and FFD[button].warning
+        if warning then warning:SetText("") end
     end
 end
 
