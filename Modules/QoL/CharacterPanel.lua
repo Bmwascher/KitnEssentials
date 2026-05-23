@@ -448,13 +448,14 @@ local function CreateSlotText(button, slot)
     elseif side == "center" then
         -- Weapons: match the slot-detail enchant-name anchor (bottom-side of the
         -- slot) so the warning sits where a real enchant name would, clear of the
-        -- ilvl number above the slot.
+        -- ilvl number above the slot. y=4 lifts the baseline so the offhand enchant
+        -- doesn't clip the ilvl row beneath the weapon strip.
         if slot == INVSLOT_MAINHAND then
             text:SetJustifyH("RIGHT")
-            text:SetPoint("BOTTOMRIGHT", button, "BOTTOMLEFT", -3, 0)
+            text:SetPoint("BOTTOMRIGHT", button, "BOTTOMLEFT", -3, 4)
         else
             text:SetJustifyH("LEFT")
-            text:SetPoint("BOTTOMLEFT", button, "BOTTOMRIGHT", 3, 0)
+            text:SetPoint("BOTTOMLEFT", button, "BOTTOMRIGHT", 3, 4)
         end
     end
     return text
@@ -1399,17 +1400,20 @@ function CP:CreateSlotDetail(slotFrame, slotID)
     detail.ilvlText:ClearAllPoints()
     if isCenter then
         -- Weapons at the bottom-center: ilvl above the slot; enchant + gems to the
-        -- outer side (mainhand -> left, offhand -> right).
+        -- outer side (mainhand -> left, offhand -> right). y=4 on the enchant lifts
+        -- the baseline so the offhand enchant doesn't clip the ilvl row below the
+        -- weapon strip. Must stay in lockstep with the warning anchor in
+        -- CreateSlotText so the missing-enchant red text occupies the same line.
         detail:SetPoint("BOTTOMLEFT", slotFrame, "BOTTOMLEFT", -100, 0)
         detail:SetPoint("TOPRIGHT", slotFrame, "TOPRIGHT", 0, -100)
         detail.ilvlText:SetPoint("BOTTOM", slotFrame, "TOP", 0, 3)
         if slotID == 16 then
             detail.enchantText:SetJustifyH("RIGHT")
-            detail.enchantText:SetPoint("BOTTOMRIGHT", slotFrame, "BOTTOMLEFT", -3, 0)
+            detail.enchantText:SetPoint("BOTTOMRIGHT", slotFrame, "BOTTOMLEFT", -3, 4)
             AnchorGemsLeftOf(detail, detail.ilvlText)
         else
             detail.enchantText:SetJustifyH("LEFT")
-            detail.enchantText:SetPoint("BOTTOMLEFT", slotFrame, "BOTTOMRIGHT", 3, 0)
+            detail.enchantText:SetPoint("BOTTOMLEFT", slotFrame, "BOTTOMRIGHT", 3, 4)
             AnchorGemsRightOf(detail, detail.ilvlText)
         end
     elseif isRight then
