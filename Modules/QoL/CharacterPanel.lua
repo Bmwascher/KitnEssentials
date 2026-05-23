@@ -650,6 +650,13 @@ local function HookCharacterPanel()
     if PaperDollFrame then
         PaperDollFrame:HookScript("OnShow", function()
             if not CP.db.Enabled then return end
+            -- Register gear-tracking events ONLY while the pane is open. These
+            -- fire heavily in combat (every consumable, every gear proc); idle
+            -- dispatch was wasted work when the pane was closed.
+            if CP.eventFrame then
+                CP.eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+                CP.eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
+            end
             QueueUpdate()                                 -- warnings
             if CP.db.HideCharacterBackground then HideCharacterBackground() end
             if CP.db.SocketHelperEnabled then CP:RefreshSocketButtons() end
@@ -659,15 +666,20 @@ local function HookCharacterPanel()
             end
         end)
         PaperDollFrame:HookScript("OnHide", function()
+            if CP.eventFrame then
+                CP.eventFrame:UnregisterEvent("PLAYER_EQUIPMENT_CHANGED")
+                CP.eventFrame:UnregisterEvent("BAG_UPDATE_DELAYED")
+            end
             if CP.socketContainer then CP.socketContainer:Hide() end
             CP:HideGemPopup()
             CP:HideSlotHighlight()
         end)
     end
 
+    -- Persistent event frame, but events are now registered conditionally
+    -- (above) on PaperDollFrame Show/Hide. The frame itself is cheap; what
+    -- mattered was the dispatch overhead from always-listening.
     CP.eventFrame = CreateFrame("Frame")
-    CP.eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
-    CP.eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
     CP.eventFrame:SetScript("OnEvent", function(_, event, slotID)
         if not CP.db.Enabled then return end
         if event == "PLAYER_EQUIPMENT_CHANGED" then
@@ -2259,16 +2271,23 @@ function CP:OnEnable()
     HookCharacterPanel()
     self:SetupInspectSupport()
 
-    if self.eventFrame then
-        self.eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
-        self.eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
+    -- Race: if the character pane is already shown when the module enables
+    -- (e.g. user toggled the module on with the pane open), the PaperDollFrame
+    -- OnShow hook installed above won't fire on this path. Register events +
+    -- force one refresh inline.
+    if PaperDollFrame and PaperDollFrame:IsShown() then
+        if self.eventFrame then
+            self.eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+            self.eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
+        end
+        UpdateDisplay()                                   -- warnings
+        if self.db.TrackIndicatorsEnabled then self:UpdateAllTrackIndicators() end
+        if self.db.ShowSlotItemLevel or self.db.ShowEnchantNames or self.db.ShowSlotGems or self.db.ShowMissingGems then
+            self:UpdateAllSlotDetails()
+        end
     end
 
     self:ApplySettings()
-
-    if CharacterFrame and CharacterFrame:IsShown() then
-        UpdateDisplay()                                   -- warnings
-    end
 end
 
 function CP:OnDisable()
