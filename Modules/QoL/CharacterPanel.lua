@@ -1421,7 +1421,8 @@ local function AnchorGemsLeftOf(detail, parent)
 end
 
 function CP:CreateSlotDetail(slotFrame, slotID)
-    if slotFrame._slotDetail then return slotFrame._slotDetail end
+    local ffd = GetFFD(slotFrame)
+    if ffd.detail then return ffd.detail end
 
     local isRight  = RIGHT_SLOTS[slotID]
     local isCenter = CENTER_SLOTS[slotID]
@@ -1498,7 +1499,7 @@ function CP:CreateSlotDetail(slotFrame, slotID)
         AnchorGemsRightOf(detail, detail.ilvlText)
     end
 
-    slotFrame._slotDetail = detail
+    ffd.detail = detail
     return detail
 end
 
@@ -1597,15 +1598,13 @@ end
 function CP:HideAllSlotDetails()
     for _, frameName in pairs(SLOT_FRAMES) do
         local slotFrame = _G[frameName]
-        if slotFrame and slotFrame._slotDetail then
-            slotFrame._slotDetail:Hide()
-        end
+        local detail = slotFrame and FFD[slotFrame] and FFD[slotFrame].detail
+        if detail then detail:Hide() end
     end
     for _, frameName in pairs(INSPECT_SLOT_FRAMES) do
         local slotFrame = _G[frameName]
-        if slotFrame and slotFrame._slotDetail then
-            slotFrame._slotDetail:Hide()
-        end
+        local detail = slotFrame and FFD[slotFrame] and FFD[slotFrame].detail
+        if detail then detail:Hide() end
     end
     if self._inspectIlvl then self._inspectIlvl:Hide() end
 end
