@@ -1299,7 +1299,8 @@ function CP:GetItemTrack(unit, slotID)
 end
 
 function CP:CreateTrackOverlay(slotFrame, slotID)
-    if slotFrame._trackOverlay then return slotFrame._trackOverlay end
+    local ffd = GetFFD(slotFrame)
+    if ffd.track then return ffd.track end
 
     local isRight = RIGHT_SLOTS[slotID]
     local overlay = CreateFrame("Frame", nil, slotFrame)
@@ -1325,7 +1326,7 @@ function CP:CreateTrackOverlay(slotFrame, slotID)
     end
 
     overlay:Hide()
-    slotFrame._trackOverlay = overlay
+    ffd.track = overlay
     return overlay
 end
 
@@ -1357,15 +1358,13 @@ end
 function CP:HideAllTrackIndicators()
     for _, frameName in pairs(SLOT_FRAMES) do
         local slotFrame = _G[frameName]
-        if slotFrame and slotFrame._trackOverlay then
-            slotFrame._trackOverlay:Hide()
-        end
+        local overlay = slotFrame and FFD[slotFrame] and FFD[slotFrame].track
+        if overlay then overlay:Hide() end
     end
     for _, frameName in pairs(INSPECT_SLOT_FRAMES) do
         local slotFrame = _G[frameName]
-        if slotFrame and slotFrame._trackOverlay then
-            slotFrame._trackOverlay:Hide()
-        end
+        local overlay = slotFrame and FFD[slotFrame] and FFD[slotFrame].track
+        if overlay then overlay:Hide() end
     end
 end
 
