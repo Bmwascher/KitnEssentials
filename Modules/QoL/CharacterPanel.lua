@@ -548,6 +548,21 @@ end
 local function UpdateSlotWarning(button, unit, slot)
     if not button then return end
     unit = unit or "player"
+
+    -- Dirty-check: itemLink + enchantID determine the warning. If neither
+    -- changed since last render, skip the work. Cached only for the player
+    -- slot path (inspect path goes through different functions); inspect's
+    -- own dirty caching is part of the future inspect module spec.
+    if unit == "player" then
+        local s = _slotState(slot)
+        local link = GetInventoryItemLink(unit, slot)
+        local enchantID = GetSlotEnchantID(unit, slot)
+        if s.warnLink == link and s.warnEnchant == enchantID then
+            return
+        end
+        s.warnLink, s.warnEnchant = link, enchantID
+    end
+
     local db = CP.db
     local enchantEnabled = db and db.ShowEnchants ~= false
 
