@@ -2164,13 +2164,13 @@ end
 function CP:OnEnable()
     if not self.db.Enabled then return end
 
-    -- KitnEssentials now provides the same inspect overlays BetterCharacterPanel
-    -- adds (enchant labels, gem icons, per-slot ilvl, item-track letters), so the
-    -- two would double-render. Disable BCP per-character; the disable persists so
-    -- after the user /reloads, IsAddOnLoaded stays false and this is silent.
+    -- KitnEssentials now covers BetterCharacterPanel's feature set across the
+    -- player and inspect frames, so leaving both enabled double-renders. Disable
+    -- BCP per-character; the disable persists, so after the user /reloads,
+    -- IsAddOnLoaded stays false and this path is silent on later logins.
     if C_AddOns.IsAddOnLoaded("BetterCharacterPanel") then
         C_AddOns.DisableAddOn("BetterCharacterPanel")
-        KE:Print("BetterCharacterPanel disabled — its inspect overlays are now in KitnEssentials. |cffffff00/reload|r to apply.")
+        KE:Print("BetterCharacterPanel disabled — all of its features and then some are now in KitnEssentials. |cffffff00/reload|r to apply.")
     end
 
     HookCharacterPanel()
