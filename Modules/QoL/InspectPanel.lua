@@ -96,9 +96,10 @@ end
 
 -- Compact deterministic hash of socket state for the dirty cache. Changes when
 -- gems are filled/unfilled OR when a gem's itemID changes. Cheap (string concat
--- over ≤3 sockets). Reads gemID (the field ScanItemSockets actually populates).
-local function ComputeGemHash(CP, unit, slotID)
-    local result = CP:ScanItemSockets(unit, slotID)
+-- over ≤3 sockets). Takes a pre-computed ScanItemSockets result so the caller
+-- can reuse the same scan for suspect detection — ScanItemSockets internally
+-- allocates a C_TooltipInfo table, so each call has real cost.
+local function ComputeGemHash(result)
     if not result or not result.sockets then return "" end
     local parts = {}
     for i, socket in ipairs(result.sockets) do
@@ -266,7 +267,11 @@ function InspectPanel:RenderInspectSlot(button)
     local link = GetInventoryItemLink(unit, slotID)
     local enchantID = link and CP:GetSlotEnchantID(unit, slotID) or nil
     local ilvl = link and CP:GetSlotItemLevel(unit, slotID) or nil
-    local gemHash = ComputeGemHash(CP, unit, slotID)
+    -- Single ScanItemSockets call; reused for both dirty-check (via ComputeGemHash)
+    -- and suspect detection. Each call allocates a C_TooltipInfo tooltip table,
+    -- so deduping cuts inspect-render allocations notably.
+    local result = link and CP:ScanItemSockets(unit, slotID)
+    local gemHash = ComputeGemHash(result)
 
     local s = _inspectSlotState(guid, slotID)
     if s.itemLink == link
@@ -281,7 +286,6 @@ function InspectPanel:RenderInspectSlot(button)
     -- inspect-packet grace window → suspect the gem bytes haven't hydrated yet.
     -- Outside the grace window, an empty socket is treated as genuinely empty
     -- (player chose not to gem — common on necks/rings).
-    local result = link and CP:ScanItemSockets(unit, slotID)
     local readyAge = _inspectReadyTime[guid] and (GetTime() - _inspectReadyTime[guid])
     local suspect = result and result.totalCount and result.totalCount > 0
                     and result.filledCount == 0
