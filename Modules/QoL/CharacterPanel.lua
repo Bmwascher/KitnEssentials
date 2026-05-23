@@ -1048,6 +1048,10 @@ function CP:SetupInspectSupport()
 end
 
 function CP:Refresh()
+    -- Cached slot state may be stale relative to new settings (font size,
+    -- track letter size, etc.). Force a re-render by clearing the dirty cache.
+    wipe(_lastSlotState)
+
     self.db = KE.db.profile.CharacterPanel
     HookCharacterPanel()
     self:SetupInspectSupport()
@@ -1059,6 +1063,8 @@ function CP:Refresh()
 end
 
 function CP:ApplySettings()
+    wipe(_lastSlotState)
+
     if not self.db.Enabled then return end
 
     -- Live apply/restore of the character-panel background hide. Idempotent;
