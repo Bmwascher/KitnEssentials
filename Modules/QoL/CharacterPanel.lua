@@ -551,7 +551,7 @@ end
 ---------------------------------------------------------------------------------
 -- Per-slot missing-enchant/gem warning. Lazily creates a button-attached
 -- FontString so the same helper drives both the player and inspect frames.
-local function UpdateSlotWarning(button, unit, slot)
+function CP:UpdateSlotWarning(button, unit, slot)
     if not button then return end
     unit = unit or "player"
 
@@ -595,7 +595,7 @@ local function UpdateDisplay()
     for slot, buttonName in pairs(allCheckSlots) do
         local button = _G[buttonName]
         if button then
-            UpdateSlotWarning(button, "player", slot)
+            CP:UpdateSlotWarning(button, "player", slot)
         end
     end
 end
@@ -761,7 +761,7 @@ end
 function CP:RenderInspectSlot(button)
     local unit, slotID = ResolveInspectSlot(button)
     if not unit then return end
-    UpdateSlotWarning(button, unit, slotID)
+    self:UpdateSlotWarning(button, unit, slotID)
     if self.db.ShowSlotItemLevel or self.db.ShowEnchantNames or self.db.ShowSlotGems or self.db.ShowMissingGems then
         self:UpdateSlotDetail(button, slotID, unit)
     end
@@ -1677,7 +1677,7 @@ function CP:RefreshSlot(slotID, unit)
     local buttonName = allCheckSlots[slotID]
     local button = buttonName and _G[buttonName]
     if button then
-        UpdateSlotWarning(button, unit, slotID)
+        self:UpdateSlotWarning(button, unit, slotID)
     end
 
     if self.db.TrackIndicatorsEnabled then
