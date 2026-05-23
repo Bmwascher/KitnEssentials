@@ -399,7 +399,7 @@ local function HasEnchant(itemLink)
 end
 
 -- Enchant ID from the item link (locale-independent; same field HasEnchant reads).
-local function GetSlotEnchantID(unit, slot)
+function CP:GetSlotEnchantID(unit, slot)
     unit = unit or "player"
     local link = GetInventoryItemLink(unit, slot)
     if not link then return nil end
@@ -443,7 +443,7 @@ function CP:ResolveEnchantLabel(unit, slot)
     unit = unit or "player"
     -- Enchant-ID check is the locale-robust "is it enchanted?" gate; the readable
     -- label comes from the tooltip + ProcessEnchantText.
-    if not GetSlotEnchantID(unit, slot) then return nil end
+    if not self:GetSlotEnchantID(unit, slot) then return nil end
     local name = GetSlotEnchantName(unit, slot)
     if not name then return "Enchanted" end
     name = ProcessEnchantText(name)
@@ -562,7 +562,7 @@ function CP:UpdateSlotWarning(button, unit, slot)
     if unit == "player" then
         local s = _slotState(slot)
         local link = GetInventoryItemLink(unit, slot)
-        local enchantID = GetSlotEnchantID(unit, slot)
+        local enchantID = self:GetSlotEnchantID(unit, slot)
         if s.warnLink == link and s.warnEnchant == enchantID then
             return
         end
@@ -1572,7 +1572,7 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit)
     if unit == "player" then
         local s = _slotState(slotID)
         local link = GetInventoryItemLink(unit, slotID)
-        local enchantID = GetSlotEnchantID(unit, slotID)
+        local enchantID = self:GetSlotEnchantID(unit, slotID)
         local ilvl = self:GetSlotItemLevel(unit, slotID)
         if s.detailLink == link and s.detailEnchant == enchantID and s.detailIlvl == ilvl then
             return
