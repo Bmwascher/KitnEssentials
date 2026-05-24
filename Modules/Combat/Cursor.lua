@@ -103,6 +103,38 @@ function C:UpdateDB()
     self.db = KE.db.profile.Cursor
 end
 
+---------------------------------------------------------------------------------
+-- Cursor frame
+---------------------------------------------------------------------------------
+local _lastX, _lastY = -1, -1
+
+local function _cursorOnUpdate(f)
+    local s = UIParent:GetEffectiveScale()
+    local x, y = GetCursorPosition()
+    x, y = floor(x / s + 0.5), floor(y / s + 0.5)
+    if x == _lastX and y == _lastY then return end
+    _lastX, _lastY = x, y
+    f:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x, y)
+end
+
+function C:CreateCursorFrame()
+    if self.cursorFrame then return end
+    local f = CreateFrame("Frame", "KE_CursorFrame", UIParent)
+    f:SetFrameStrata("TOOLTIP")
+    f:SetFrameLevel(9999)
+    f:EnableMouse(false)
+    f:SetSize(self.db.Size or 50, self.db.Size or 50)
+    f:SetPoint("CENTER")
+
+    f.texture = f:CreateTexture(nil, "OVERLAY")
+    f.texture:SetAllPoints(f)
+    f.texture:SetTexture(RING_TEXTURES[self.db.Texture] or RING_TEXTURES.ring_normal)
+
+    f:SetScript("OnUpdate", _cursorOnUpdate)
+    f:Hide()  -- shown by UpdateVisibility
+    self.cursorFrame = f
+end
+
 function C:OnInitialize()
     self:UpdateDB()
     -- SchemaVersion cleanup wired up in Task 12
@@ -110,9 +142,17 @@ function C:OnInitialize()
 end
 
 function C:OnEnable()
-    -- Wired up in Task 2+
+    if not self.db.Enabled then return end
+    self:CreateCursorFrame()
+    self.cursorFrame:Show()
+    self._cursorShown = true
 end
 
 function C:OnDisable()
-    -- Wired up in Task 2+
+    if self.cursorFrame then
+        self.cursorFrame:SetScript("OnUpdate", nil)
+        self.cursorFrame:Hide()
+    end
+    self._cursorShown = false
+    self:UnregisterAllEvents()
 end

@@ -204,7 +204,7 @@ local Defaults = {
 
         Cursor = {
             SchemaVersion = 1,
-            Enabled    = false,
+            Enabled    = true,
             Size       = 50,
             Texture    = "ring_normal",
             ColorMode  = "class",
