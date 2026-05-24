@@ -117,6 +117,38 @@ local function _cursorOnUpdate(f)
     f:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x, y)
 end
 
+-- Color cache: avoid re-applying SetVertexColor on every Apply call when
+-- nothing changed. Invalidated on theme change.
+local _lastColorMode, _lastHex, _lastClassFlag
+local _lastR, _lastG, _lastB, _lastA = -1, -1, -1, -1
+
+local function _invalidateColorCache()
+    _lastColorMode, _lastHex, _lastClassFlag = nil, nil, nil
+    _lastR, _lastG, _lastB, _lastA = -1, -1, -1, -1
+end
+
+function C:ApplyCursorColor()
+    if not self.cursorFrame or not self.cursorFrame.texture then return end
+    local db = self.db
+    local mode = db.ColorMode or "class"
+    local color = db.Color or { 1, 1, 1, 1 }
+    local r, g, b, a = KE:GetAccentColor(mode, color)
+    if r ~= _lastR or g ~= _lastG or b ~= _lastB or a ~= _lastA
+            or mode ~= _lastColorMode then
+        _lastColorMode = mode
+        _lastR, _lastG, _lastB, _lastA = r, g, b, a
+        self.cursorFrame.texture:SetVertexColor(r, g, b, a)
+    end
+end
+
+function C:ApplyCursorSettings()
+    if not self.cursorFrame then return end
+    local db = self.db
+    self.cursorFrame:SetSize(db.Size or 50, db.Size or 50)
+    self.cursorFrame.texture:SetTexture(RING_TEXTURES[db.Texture] or RING_TEXTURES.ring_normal)
+    self:ApplyCursorColor()
+end
+
 function C:CreateCursorFrame()
     if self.cursorFrame then return end
     local f = CreateFrame("Frame", "KE_CursorFrame", UIParent)
@@ -144,6 +176,7 @@ end
 function C:OnEnable()
     if not self.db.Enabled then return end
     self:CreateCursorFrame()
+    self:ApplyCursorSettings()
     self.cursorFrame:Show()
     self._cursorShown = true
 end
@@ -155,4 +188,13 @@ function C:OnDisable()
     end
     self._cursorShown = false
     self:UnregisterAllEvents()
+end
+
+function C:OnThemeChanged()
+    if not self.db or not self.db.Enabled then return end
+    _invalidateColorCache()
+    if self.db.ColorMode == "theme" then
+        self:ApplyCursorColor()
+    end
+    -- Satellite color re-apply added in later tasks
 end
