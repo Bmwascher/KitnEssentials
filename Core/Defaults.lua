@@ -202,6 +202,67 @@ local Defaults = {
             },
         },
 
+        Cursor = {
+            SchemaVersion = 1,
+            Enabled    = false,
+            Size       = 50,
+            Texture    = "ring_normal",
+            ColorMode  = "class",
+            Color      = { 1, 1, 1, 1 },
+            Visibility = "always",
+
+            GCD = {
+                Enabled            = true,
+                Mode               = "integrated",
+                Attached           = true,
+                Size               = 50,
+                Texture            = "ring_light",
+                RingColorMode      = "theme",  RingColor  = { 1, 1, 1, 1 },
+                SwipeColorMode     = "custom", SwipeColor = { 1, 1, 1, 0.8 },
+                Reverse            = false,
+                VisibilityOverride = nil,
+                InstanceOnly       = false,
+            },
+
+            Cast = {
+                Enabled            = false,
+                Attached           = true,
+                Size               = 72,
+                Texture            = "ring_normal",
+                RingColorMode      = "class",  RingColor  = { 1, 1, 1, 1 },
+                SwipeColorMode     = "theme",  SwipeColor = { 1, 1, 1, 0.7 },
+                SparkEnabled       = true,
+                SparkColorMode     = "ring",
+                SparkColor         = { 1, 1, 1, 1 },
+                VisibilityOverride = nil,
+                InstanceOnly       = false,
+            },
+
+            Trail = {
+                Enabled            = false,
+                DotDuration        = 0.5,
+                DotBaseSize        = 32,
+                Density            = 0.004,
+                ColorInherit       = true,
+                Color              = { 1, 1, 1, 1 },
+                VisibilityOverride = nil,
+                InstanceOnly       = false,
+            },
+
+            Dispel = {
+                Enabled            = false,
+                Attached           = true,
+                AnchorPoint        = "BOTTOMLEFT",
+                XOffset            = 10,
+                YOffset            = 10,
+                FontFace           = "Expressway",
+                FontSize           = 18,
+                TextColor          = { 1, 1, 1, 1 },
+                VisibilityOverride = nil,
+                InstanceOnly       = false,
+            },
+        },
+
         PetStatusText = {
             Enabled = true,
             Strata = "MEDIUM",
