@@ -104,6 +104,19 @@ function C:UpdateDB()
 end
 
 ---------------------------------------------------------------------------------
+-- Instance / context helpers
+---------------------------------------------------------------------------------
+function C:InRealInstancedContent()
+    local _, instanceType, difficultyID = GetInstanceInfo()
+    difficultyID = tonumber(difficultyID) or 0
+    if difficultyID == 0 then return false end
+    if C_Garrison and C_Garrison.IsOnGarrisonMap and C_Garrison.IsOnGarrisonMap() then
+        return false
+    end
+    return instanceType == "party" or instanceType == "raid"
+end
+
+---------------------------------------------------------------------------------
 -- Cursor frame
 ---------------------------------------------------------------------------------
 local _lastX, _lastY = -1, -1
@@ -115,6 +128,20 @@ local function _cursorOnUpdate(f)
     if x == _lastX and y == _lastY then return end
     _lastX, _lastY = x, y
     f:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x, y)
+end
+
+-- Shared follow-cursor OnUpdate factory for detached satellites.
+-- Each satellite gets its own closure so it has independent _lastX/_lastY.
+local function _makeFollowCursorOnUpdate()
+    local lastX, lastY = -1, -1
+    return function(self)
+        local s = UIParent:GetEffectiveScale()
+        local x, y = GetCursorPosition()
+        x, y = floor(x / s + 0.5), floor(y / s + 0.5)
+        if x == lastX and y == lastY then return end
+        lastX, lastY = x, y
+        self:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x, y)
+    end
 end
 
 -- Color cache: avoid re-applying SetVertexColor on every Apply call when
@@ -149,6 +176,189 @@ function C:ApplyCursorSettings()
     self:ApplyCursorColor()
 end
 
+---------------------------------------------------------------------------------
+-- GCD satellite
+---------------------------------------------------------------------------------
+local _gcdFollowCursor = nil  -- assigned on first detached use
+
+local function _getActiveGCDCooldown()
+    local db = C.db.GCD
+    if db.Mode == "integrated" then
+        return C.cursorFrame and C.cursorFrame.gcdCooldown
+    end
+    return C.gcdFrame and C.gcdFrame.cooldown
+end
+
+local function _gcdOnEvent(self, event, unit, _, _)
+    if unit ~= "player" then return end
+    local db = C.db.GCD
+    if not db.Enabled then return end
+    if db.InstanceOnly and not C:InRealInstancedContent() then return end
+
+    if event == "UNIT_SPELLCAST_FAILED"
+       or event == "UNIT_SPELLCAST_INTERRUPTED"
+       or event == "UNIT_SPELLCAST_STOP" then
+        -- Check if GCD got reset (cancelled cast might not have triggered GCD)
+        local cdData = GetSpellCooldown(GCD_SPELL_ID)
+        if not cdData or not cdData.duration or cdData.duration <= 0
+                or not cdData.startTime or cdData.startTime <= 0 then
+            local cd = _getActiveGCDCooldown()
+            if cd then cd:Clear() end
+        end
+        return
+    end
+
+    -- SUCCESS or START: GCD may have started. Wrap in pcall — duration MAY be
+    -- a secret number in 12.0 (defensive, matches EUI pattern).
+    local cdData = GetSpellCooldown(GCD_SPELL_ID)
+    if not cdData or not cdData.startTime then return end
+    local ok, dur, start = pcall(function()
+        local d = cdData.duration
+        local s = cdData.startTime
+        if d and d > 0 and d <= 1.6 and s and s > 0 then
+            return d, s
+        end
+    end)
+    if ok and dur and start then
+        local cd = _getActiveGCDCooldown()
+        if cd then
+            cd:SetCooldown(start, dur)
+            if db.Reverse then cd:SetReverse(true) end
+            cd:Show()
+        end
+    end
+end
+
+function C:CreateGCDSatellite()
+    if self.gcdFrame then return end
+    local db = self.db.GCD
+    local size = db.Size or 50
+
+    local gf = CreateFrame("Frame", "KE_CursorGCDRing", UIParent)
+    gf:SetSize(size, size)
+    gf:SetFrameStrata("TOOLTIP")
+    gf:SetFrameLevel(9998)
+    gf:EnableMouse(false)
+
+    -- Ring texture
+    gf.texture = gf:CreateTexture(nil, "BACKGROUND")
+    gf.texture:SetAllPoints(gf)
+    gf.texture:SetTexture(RING_TEXTURES[db.Texture] or RING_TEXTURES.ring_light)
+
+    -- Cooldown swipe overlay
+    gf.cooldown = CreateFrame("Cooldown", nil, gf, "CooldownFrameTemplate")
+    gf.cooldown:SetAllPoints(gf)
+    gf.cooldown:EnableMouse(false)
+    gf.cooldown:SetDrawSwipe(true)
+    gf.cooldown:SetDrawEdge(false)
+    gf.cooldown:SetHideCountdownNumbers(true)
+    if gf.cooldown.SetDrawBling then gf.cooldown:SetDrawBling(false) end
+    if gf.cooldown.SetUseCircularEdge then gf.cooldown:SetUseCircularEdge(true) end
+    if gf.cooldown.SetSwipeTexture then
+        gf.cooldown:SetSwipeTexture(RING_TEXTURES[db.Texture] or RING_TEXTURES.ring_light, 1, 1, 1, 1)
+    end
+    gf.cooldown:SetFrameLevel(gf:GetFrameLevel() + 2)
+
+    gf:SetScript("OnEvent", _gcdOnEvent)
+    gf:Hide()
+    self.gcdFrame = gf
+end
+
+function C:_AttachGCDScripts()
+    local gf = self.gcdFrame
+    if not gf then return end
+    gf:UnregisterAllEvents()  -- idempotent
+    gf:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED",   "player")
+    gf:RegisterUnitEvent("UNIT_SPELLCAST_START",       "player")
+    gf:RegisterUnitEvent("UNIT_SPELLCAST_FAILED",      "player")
+    gf:RegisterUnitEvent("UNIT_SPELLCAST_INTERRUPTED", "player")
+    gf:RegisterUnitEvent("UNIT_SPELLCAST_STOP",        "player")
+end
+
+function C:_DetachGCDScripts()
+    local gf = self.gcdFrame
+    if not gf then return end
+    gf:UnregisterAllEvents()
+    gf:SetScript("OnUpdate", nil)
+end
+
+function C:ApplyGCDColor()
+    local gf = self.gcdFrame
+    if not gf then return end
+    local db = self.db.GCD
+    local rr, rg, rb, ra = KE:GetAccentColor(db.RingColorMode or "theme", db.RingColor)
+    local sr, sg, sb, sa = KE:GetAccentColor(db.SwipeColorMode or "custom", db.SwipeColor)
+    if gf.texture then gf.texture:SetVertexColor(rr, rg, rb, ra) end
+    if gf.cooldown then
+        gf.cooldown:SetSwipeColor(sr, sg, sb, sa)
+        if gf.cooldown.SetSwipeTexture then
+            local tex = RING_TEXTURES[db.Texture] or RING_TEXTURES.ring_light
+            gf.cooldown:SetSwipeTexture(tex, sr, sg, sb, sa)
+        end
+        if gf.cooldown.SetReverse then gf.cooldown:SetReverse(db.Reverse or false) end
+    end
+end
+
+function C:ApplyGCDSatellite()
+    local db = self.db.GCD
+    if not db.Enabled then
+        if self.gcdFrame then
+            self:_DetachGCDScripts()
+            self.gcdFrame:Hide()
+        end
+        return
+    end
+
+    if db.Mode == "integrated" then
+        -- Integrated: separate frame stays hidden, but we still need events to fire.
+        -- _gcdOnEvent dispatches to cursorFrame.gcdCooldown when Mode == "integrated".
+        if not self.gcdFrame then self:CreateGCDSatellite() end
+        self:_AttachGCDScripts()
+        self.gcdFrame:Hide()
+        if self.cursorFrame and self.cursorFrame.gcdCooldown then
+            local sr, sg, sb, sa = KE:GetAccentColor(db.SwipeColorMode or "custom", db.SwipeColor)
+            self.cursorFrame.gcdCooldown:SetSwipeColor(sr, sg, sb, sa)
+            if self.cursorFrame.gcdCooldown.SetSwipeTexture then
+                self.cursorFrame.gcdCooldown:SetSwipeTexture(
+                    RING_TEXTURES[self.db.Texture] or RING_TEXTURES.ring_normal,
+                    sr, sg, sb, sa)
+            end
+            if self.cursorFrame.gcdCooldown.SetReverse then
+                self.cursorFrame.gcdCooldown:SetReverse(db.Reverse or false)
+            end
+        end
+        return
+    end
+
+    if not self.gcdFrame then self:CreateGCDSatellite() end
+    self:_AttachGCDScripts()
+
+    -- Style
+    local size = db.Size or 50
+    self.gcdFrame:SetSize(size, size)
+    if self.gcdFrame.texture then
+        self.gcdFrame.texture:SetTexture(RING_TEXTURES[db.Texture] or RING_TEXTURES.ring_light)
+    end
+    self:ApplyGCDColor()
+
+    -- Position: attached anchors to cursor frame; detached gets own OnUpdate
+    if db.Attached and self.cursorFrame and self.cursorFrame:IsShown() then
+        self.gcdFrame:SetScript("OnUpdate", nil)
+        self.gcdFrame:ClearAllPoints()
+        self.gcdFrame:SetPoint("CENTER", self.cursorFrame, "CENTER", 0, 0)
+    else
+        if not _gcdFollowCursor then _gcdFollowCursor = _makeFollowCursorOnUpdate() end
+        self.gcdFrame:SetScript("OnUpdate", _gcdFollowCursor)
+        -- Initial position so it doesn't snap-from-origin
+        local s = UIParent:GetEffectiveScale()
+        local x, y = GetCursorPosition()
+        self.gcdFrame:ClearAllPoints()
+        self.gcdFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT",
+            floor(x / s + 0.5), floor(y / s + 0.5))
+    end
+    self.gcdFrame:Show()
+end
+
 function C:CreateCursorFrame()
     if self.cursorFrame then return end
     local f = CreateFrame("Frame", "KE_CursorFrame", UIParent)
@@ -161,6 +371,18 @@ function C:CreateCursorFrame()
     f.texture = f:CreateTexture(nil, "OVERLAY")
     f.texture:SetAllPoints(f)
     f.texture:SetTexture(RING_TEXTURES[self.db.Texture] or RING_TEXTURES.ring_normal)
+
+    -- Integrated GCD swipe overlay (only used when db.GCD.Mode == "integrated")
+    f.gcdCooldown = CreateFrame("Cooldown", nil, f, "CooldownFrameTemplate")
+    f.gcdCooldown:SetAllPoints(f)
+    f.gcdCooldown:EnableMouse(false)
+    f.gcdCooldown:SetDrawSwipe(true)
+    f.gcdCooldown:SetDrawEdge(false)
+    f.gcdCooldown:SetHideCountdownNumbers(true)
+    if f.gcdCooldown.SetDrawBling then f.gcdCooldown:SetDrawBling(false) end
+    if f.gcdCooldown.SetUseCircularEdge then f.gcdCooldown:SetUseCircularEdge(true) end
+    f.gcdCooldown:SetFrameLevel(f:GetFrameLevel() + 2)
+    f.gcdCooldown:Hide()
 
     f:SetScript("OnUpdate", _cursorOnUpdate)
     f:Hide()  -- shown by UpdateVisibility
@@ -179,12 +401,23 @@ function C:OnEnable()
     self:ApplyCursorSettings()
     self.cursorFrame:Show()
     self._cursorShown = true
+
+    -- Defer satellite creation 0.5s (matches EUI; lets other addons finish init)
+    C_Timer.After(0.5, function()
+        if not self.db or not self.db.Enabled then return end
+        self:ApplyGCDSatellite()
+        -- Other satellites added in later tasks
+    end)
 end
 
 function C:OnDisable()
     if self.cursorFrame then
         self.cursorFrame:SetScript("OnUpdate", nil)
         self.cursorFrame:Hide()
+    end
+    if self.gcdFrame then
+        self:_DetachGCDScripts()
+        self.gcdFrame:Hide()
     end
     self._cursorShown = false
     self:UnregisterAllEvents()
@@ -196,5 +429,8 @@ function C:OnThemeChanged()
     if self.db.ColorMode == "theme" then
         self:ApplyCursorColor()
     end
-    -- Satellite color re-apply added in later tasks
+    local gcd = self.db.GCD or {}
+    if gcd.RingColorMode == "theme" or gcd.SwipeColorMode == "theme" then
+        self:ApplyGCDColor()
+    end
 end
