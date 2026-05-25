@@ -4,7 +4,6 @@
     <Script file="RaidNotifications.lua" />
     <Script file="PetStatusText.lua" />
     <Script file="StanceText.lua" />
-    <Script file="DispelCursor.lua" />
     <Script file="NoMovementAlert.lua" />
     <Script file="BloodlustTracker.lua" />
     <Script file="TimeSpiral.lua" />

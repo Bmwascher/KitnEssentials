@@ -776,7 +776,7 @@ function C:ApplyTrailSatellite()
 end
 
 ---------------------------------------------------------------------------------
--- Dispel text satellite (absorbed from old DispelCursor)
+-- Dispel text satellite
 ---------------------------------------------------------------------------------
 local _dispelFollowCursor = nil
 local _dispelTrackedSpellID = nil

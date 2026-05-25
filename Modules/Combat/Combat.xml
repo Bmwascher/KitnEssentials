@@ -5,7 +5,6 @@
     <Script file="CombatCross.lua" />
     <Script file="CombatRes.lua" />
     <Script file="CombatTexts.lua" />
-    <Script file="CursorCircle.lua" />
     <Script file="Cursor.lua" />
     <Script file="CastbarHelpers.lua" />
     <Script file="TargetCastbar.lua" />

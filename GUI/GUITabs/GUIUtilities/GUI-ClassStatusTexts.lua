@@ -17,7 +17,6 @@ GUIFrame:RegisterContent("ClassStatusTexts", function(scrollChild, yOffset)
             { id = "PetStatusText",   label = "Pet Status" },
             { id = "StanceText",      label = "Stance" },
             { id = "NoMovementAlert", label = "Movement" },
-            { id = "DispelCursor",    label = "Dispel" },
         },
         activeId = activeTab,
         onSwitch = function(newId) activeTab = newId end,

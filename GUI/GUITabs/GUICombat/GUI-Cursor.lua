@@ -11,8 +11,8 @@ local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 
 -- Visual texture selector: grid of clickable texture-preview buttons.
--- Ported from the legacy CursorCircle GUI; the texture name string isn't intuitive,
--- so users pick from the actual ring TGA preview instead.
+-- The texture name string isn't intuitive, so users pick from the actual ring
+-- TGA preview instead.
 local function CreateTextureSelector(parent, textures, textureOrder, currentTexture, getColorFunc, onSelect, labelText)
     local container = CreateFrame("Frame", nil, parent)
 
