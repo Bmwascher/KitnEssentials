@@ -1064,7 +1064,15 @@ end
 
 function C:OnInitialize()
     self:UpdateDB()
-    -- SchemaVersion cleanup wired up in Task 12
+    -- One-time cleanup of legacy SV keys from the pre-refit modules.
+    -- Default SchemaVersion is 0, so this fires on first load post-upgrade,
+    -- then persists 1 to skip on every subsequent reload.
+    local profile = KitnEssentialsDB and KitnEssentialsDB.profile
+    if profile and (self.db.SchemaVersion or 0) < 1 then
+        profile.CursorCircle = nil
+        profile.DispelCursor = nil
+        self.db.SchemaVersion = 1
+    end
     self:SetEnabledState(self.db.Enabled)
 end
 

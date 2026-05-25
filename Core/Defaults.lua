@@ -180,30 +180,8 @@ local Defaults = {
             Backdrop = DefaultBackdrop(),
         },
 
-        CursorCircle = {
-            Enabled = false,
-            Size = 40,
-            Texture = "Circle 3",
-            Color = { 1, 1, 1, 1 },
-            ColorMode = "theme",
-            VisibilityMode = "always",
-            UseUpdateInterval = false,
-            UpdateInterval = 0.016,
-            GCD = {
-                Mode = "integrated",
-                Size = 25,
-                Texture = "Circle 5",
-                SwipeColorMode = "custom",
-                SwipeColor = { 1, 1, 1, 1 },
-                Reverse = true,
-                HideOutOfCombat = false,
-                RingColorMode = "theme",
-                RingColor = { 1, 1, 1, 1 },
-            },
-        },
-
         Cursor = {
-            SchemaVersion = 1,
+            SchemaVersion = 0,
             Enabled    = true,
             Size       = 67,
             Texture    = "ring_normal",
@@ -426,14 +404,6 @@ local Defaults = {
                 YOffset = 0,
                 Anchor = "LEFT",
             },
-        },
-
-        DispelCursor = {
-            Enabled = true,
-            FontSize = 18,
-            TextColor = { 0.235, 0.929, 1, 1 },  -- #3BECFF
-            XOffset = 3,
-            YOffset = 3,
         },
 
         RangeChecker = {
