@@ -56,6 +56,11 @@ local RING_INNER = {
     circle      = 0.50,  -- non-ring fallback
 }
 
+local DISPEL_SPELL_IDS = {
+    115450, 4987, 527, 360823, 88423, 77130,            -- Healer dispels
+    119905, 213634, 218164, 213644, 2782, 475, 365585, 51886,  -- DPS/Tank dispels
+}
+
 C.RING_TEXTURES   = RING_TEXTURES
 C.TEXTURE_ORDER   = { "ring_thin", "ring_light", "ring_normal", "ring_heavy", "ring_thick", "circle" }
 C.TEXTURE_LABELS  = {
@@ -731,6 +736,130 @@ function C:ApplyTrailSatellite()
     self.trailFrame:SetScript("OnUpdate", _trailOnUpdate)
 end
 
+---------------------------------------------------------------------------------
+-- Dispel text satellite (absorbed from old DispelCursor)
+---------------------------------------------------------------------------------
+local _dispelFollowCursor = nil
+local _dispelTrackedSpellID = nil
+
+local function _dispelFindSpell()
+    _dispelTrackedSpellID = nil
+    if not C_SpellBook or not C_SpellBook.IsSpellInSpellBook then return end
+    for _, spellID in ipairs(DISPEL_SPELL_IDS) do
+        if C_SpellBook.IsSpellInSpellBook(spellID) then
+            _dispelTrackedSpellID = spellID
+            return
+        end
+    end
+end
+
+local function _dispelOnEvent(self, event)
+    if event == "PLAYER_ENTERING_WORLD" or event == "PLAYER_SPECIALIZATION_CHANGED" then
+        _dispelFindSpell()
+    end
+    if not _dispelTrackedSpellID then
+        self.cooldown:Clear()
+        return
+    end
+    local duration = C_Spell.GetSpellCooldownDuration(_dispelTrackedSpellID)
+    if duration then
+        self.cooldown:SetCooldownFromDurationObject(duration, false)
+    else
+        self.cooldown:Clear()
+    end
+end
+
+function C:CreateDispelSatellite()
+    if self.dispelFrame then return end
+    local db = self.db.Dispel
+
+    local df = CreateFrame("Frame", "KE_CursorDispelText", UIParent)
+    df:SetFrameStrata("TOOLTIP")
+    df:SetSize(1, 1)
+
+    -- Hidden CooldownFrameTemplate to drive countdown text
+    df.cooldown = CreateFrame("Cooldown", nil, df, "CooldownFrameTemplate")
+    df.cooldown:SetSize(1, 1)
+    df.cooldown:SetDrawSwipe(false)
+    df.cooldown:SetDrawEdge(false)
+    if df.cooldown.SetDrawBling then df.cooldown:SetDrawBling(false) end
+    df.cooldown:SetHideCountdownNumbers(false)
+
+    -- Find the countdown FontString region inside the Cooldown
+    local cooldownText = nil
+    for _, region in ipairs({ df.cooldown:GetRegions() }) do
+        if region:GetObjectType() == "FontString" then
+            cooldownText = region
+            break
+        end
+    end
+    if not cooldownText then
+        cooldownText = df:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+    end
+    df.text = cooldownText
+    local fontPath = KE:GetFontPath(db.FontFace) or KE.FONT
+    df.text:SetFont(fontPath, db.FontSize or 18, "OUTLINE")
+    df.text:SetTextColor(unpack(db.TextColor or { 1, 1, 1, 1 }))
+
+    df:SetScript("OnEvent", _dispelOnEvent)
+    df:Hide()
+    self.dispelFrame = df
+end
+
+function C:_AttachDispelScripts()
+    local df = self.dispelFrame
+    if not df then return end
+    df:UnregisterAllEvents()
+    df:RegisterEvent("SPELL_UPDATE_COOLDOWN")
+    df:RegisterEvent("PLAYER_ENTERING_WORLD")
+    df:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+end
+
+function C:_DetachDispelScripts()
+    local df = self.dispelFrame
+    if not df then return end
+    df:UnregisterAllEvents()
+    df:SetScript("OnUpdate", nil)
+end
+
+function C:ApplyDispelSatellite()
+    local db = self.db.Dispel
+    if not db.Enabled then
+        if self.dispelFrame then
+            self:_DetachDispelScripts()
+            self.dispelFrame:Hide()
+        end
+        return
+    end
+    if not self.dispelFrame then self:CreateDispelSatellite() end
+    self:_AttachDispelScripts()
+
+    local fontPath = KE:GetFontPath(db.FontFace) or KE.FONT
+    self.dispelFrame.text:SetFont(fontPath, db.FontSize or 18, "OUTLINE")
+    self.dispelFrame.text:SetTextColor(unpack(db.TextColor or { 1, 1, 1, 1 }))
+
+    -- Position: attached anchors text to cursor frame at AnchorPoint+offset
+    if db.Attached and self.cursorFrame and self.cursorFrame:IsShown() then
+        self.dispelFrame:SetScript("OnUpdate", nil)
+        self.dispelFrame.text:ClearAllPoints()
+        self.dispelFrame.text:SetPoint(db.AnchorPoint or "BOTTOMLEFT",
+            self.cursorFrame, db.AnchorPoint or "BOTTOMLEFT",
+            db.XOffset or 10, db.YOffset or 10)
+    else
+        -- Detached: anchor text to dispelFrame, which the OnUpdate moves with the cursor.
+        -- (Anchoring to UIParent with static coords would freeze the text.)
+        if not _dispelFollowCursor then _dispelFollowCursor = _makeFollowCursorOnUpdate() end
+        self.dispelFrame:SetScript("OnUpdate", _dispelFollowCursor)
+        self.dispelFrame.text:ClearAllPoints()
+        self.dispelFrame.text:SetPoint(db.AnchorPoint or "BOTTOMLEFT",
+            self.dispelFrame, "CENTER",
+            db.XOffset or 10, db.YOffset or 10)
+    end
+
+    _dispelFindSpell()
+    self.dispelFrame:Show()
+end
+
 function C:CreateCursorFrame()
     if self.cursorFrame then return end
     local f = CreateFrame("Frame", "KE_CursorFrame", UIParent)
@@ -780,7 +909,7 @@ function C:OnEnable()
         self:ApplyGCDSatellite()
         self:ApplyCastSatellite()
         self:ApplyTrailSatellite()
-        -- Other satellites added in later tasks
+        self:ApplyDispelSatellite()
     end)
 end
 
@@ -800,6 +929,10 @@ function C:OnDisable()
     if self.trailFrame then
         self.trailFrame:SetScript("OnUpdate", nil)
         _hideAllTrailDots()
+    end
+    if self.dispelFrame then
+        self:_DetachDispelScripts()
+        self.dispelFrame:Hide()
     end
     self._cursorShown = false
     self:UnregisterAllEvents()
