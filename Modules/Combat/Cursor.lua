@@ -1068,42 +1068,15 @@ end
 
 function C:OnInitialize()
     self:UpdateDB()
+    -- One-time cleanup of legacy SV keys from the pre-refit modules.
+    -- Default SchemaVersion is 0, so this fires on first load post-upgrade,
+    -- then persists 1 to skip on every subsequent reload.
     local profile = KitnEssentialsDB and KitnEssentialsDB.profile
-    local sv = self.db.SchemaVersion or 0
-
-    -- v0 → v1: wipe legacy SV sections from the pre-refit CursorCircle /
-    -- DispelCursor modules.
-    if profile and sv < 1 then
+    if profile and (self.db.SchemaVersion or 0) < 1 then
         profile.CursorCircle = nil
         profile.DispelCursor = nil
         self.db.SchemaVersion = 1
     end
-
-    -- v1 → v2: rename stored Texture values after the ring_* → circle_*
-    -- texture rename. Existing users keep their selection instead of falling
-    -- back to the default and losing the selector highlight.
-    if profile and (self.db.SchemaVersion or 0) < 2 then
-        local renames = {
-            ring_thin   = "circle_thin",
-            ring_light  = "circle_light",
-            ring_normal = "circle_normal",
-            ring_heavy  = "circle_heavy",
-            ring_thick  = "circle_thick",
-            circle      = "circle_backup",
-        }
-        local c = profile.Cursor
-        if c then
-            if c.Texture and renames[c.Texture] then c.Texture = renames[c.Texture] end
-            if c.GCD and c.GCD.Texture and renames[c.GCD.Texture] then
-                c.GCD.Texture = renames[c.GCD.Texture]
-            end
-            if c.Cast and c.Cast.Texture and renames[c.Cast.Texture] then
-                c.Cast.Texture = renames[c.Cast.Texture]
-            end
-        end
-        self.db.SchemaVersion = 2
-    end
-
     self:SetEnabledState(self.db.Enabled)
 end
 
