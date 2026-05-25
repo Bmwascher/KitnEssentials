@@ -126,7 +126,46 @@ end
 ---------------------------------------------------------------------------------
 local _lastX, _lastY = -1, -1
 
-local function _cursorOnUpdate(f)
+local _mouseHoldTime = 0  -- mouseDown mode hold timer
+
+local function _cursorOnUpdate(f, elapsed)
+    local db = C.db
+    if not db then return end
+
+    -- mouseDown mode: gate alpha on hold time (≥0.15s feathered show).
+    -- Apply alpha to cursorFrame (cascades to texture + integrated GCD swipe child)
+    -- AND to each separate satellite frame (GCD/Cast/Dispel are UIParent-parented
+    -- siblings, so cursor frame alpha doesn't reach them — set explicitly).
+    -- Don't early-return — keep position updates running so satellite anchors track.
+    if db.Visibility == "mouseDown" then
+        local isDown = IsMouseButtonDown("LeftButton") or IsMouseButtonDown("RightButton")
+        if isDown then
+            _mouseHoldTime = _mouseHoldTime + (elapsed or 0)
+        else
+            _mouseHoldTime = 0
+        end
+        local shown = isDown and _mouseHoldTime >= 0.15
+        local targetAlpha = shown and 1 or 0
+        if f:GetAlpha() ~= targetAlpha then
+            f:SetAlpha(targetAlpha)
+        end
+        if C.gcdFrame and C.gcdFrame:GetAlpha() ~= targetAlpha then
+            C.gcdFrame:SetAlpha(targetAlpha)
+        end
+        if C.castFrame and C.castFrame:GetAlpha() ~= targetAlpha then
+            C.castFrame:SetAlpha(targetAlpha)
+        end
+        if C.dispelFrame and C.dispelFrame:GetAlpha() ~= targetAlpha then
+            C.dispelFrame:SetAlpha(targetAlpha)
+        end
+        -- Trail spawn gate follows hold state too (else dots spawn while cursor invisible).
+        -- UpdateVisibility resets this from masterShown when mode changes off mouseDown.
+        -- NOTE: trail + mouseDown is largely ineffective in practice — WoW locks the
+        -- cursor position while L/R mouse is held, so the cursor doesn't move and
+        -- new dots can't spawn beyond the first frame's spawn at the click location.
+        C._trail_cursorShown = shown
+    end
+
     local s = UIParent:GetEffectiveScale()
     local x, y = GetCursorPosition()
     x, y = floor(x / s + 0.5), floor(y / s + 0.5)
@@ -860,6 +899,113 @@ function C:ApplyDispelSatellite()
     self.dispelFrame:Show()
 end
 
+---------------------------------------------------------------------------------
+-- Visibility system
+---------------------------------------------------------------------------------
+-- Internal combat flag driven by PLAYER_REGEN_DISABLED/ENABLED events.
+-- InCombatLockdown() timing during the regen events is unreliable; tracking the
+-- transition explicitly from the events themselves is the canonical addon pattern.
+local _inCombat = false
+
+local function _shouldShowByMode(mode)
+    if mode == "always" then return true end
+    if mode == "never"  then return false end
+    if mode == "in_combat"     then return _inCombat end
+    if mode == "out_of_combat" then return not _inCombat end
+    if mode == "in_instance"   then return C:InRealInstancedContent() end
+    if mode == "in_raid"       then return IsInRaid() end
+    if mode == "in_party"      then return IsInGroup() and not IsInRaid() end
+    if mode == "solo"          then return not IsInGroup() end
+    if mode == "mouseDown"     then
+        -- mouseDown handled separately in cursor OnUpdate (alpha-gated)
+        return true  -- frame shown, alpha animates with hold
+    end
+    return true
+end
+
+function C:UpdateVisibility(event)
+    -- Track combat state directly from the events that drive it
+    if event == "PLAYER_REGEN_DISABLED" then
+        _inCombat = true
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        _inCombat = false
+    elseif event == nil or event == "PLAYER_ENTERING_WORLD" then
+        -- Initial call (or world entry): fall back to API; accurate outside regen handlers
+        _inCombat = InCombatLockdown() and true or false
+    end
+
+    if not self.db or not self.db.Enabled then
+        self._cursorShown = false
+        self._trail_cursorShown = false
+        if self.cursorFrame then self.cursorFrame:Hide() end
+        return
+    end
+
+    local masterShown = _shouldShowByMode(self.db.Visibility or "always")
+    self._cursorShown = masterShown
+    self._trail_cursorShown = masterShown
+    self._trail_instanceOK = (not (self.db.Trail and self.db.Trail.InstanceOnly))
+        or self:InRealInstancedContent()
+
+    if self.cursorFrame then
+        if masterShown then
+            self.cursorFrame:Show()
+        else
+            self.cursorFrame:Hide()
+        end
+        -- Reset frame alphas when leaving mouseDown mode (else stay at 0 from hold-gate)
+        if (self.db.Visibility or "always") ~= "mouseDown" then
+            self.cursorFrame:SetAlpha(1)
+            if self.gcdFrame    then self.gcdFrame:SetAlpha(1)    end
+            if self.castFrame   then self.castFrame:SetAlpha(1)   end
+            if self.dispelFrame then self.dispelFrame:SetAlpha(1) end
+        end
+    end
+
+    -- For each satellite: respect VisibilityOverride if set, else inherit master
+    local function satShouldShow(satDB)
+        if not satDB or not satDB.Enabled then return false end
+        local mode = satDB.VisibilityOverride
+        local ok = (mode and _shouldShowByMode(mode)) or (not mode and masterShown)
+        if satDB.InstanceOnly and not self:InRealInstancedContent() then ok = false end
+        return ok
+    end
+
+    if self.gcdFrame then
+        if satShouldShow(self.db.GCD) then
+            self:ApplyGCDSatellite()
+        else
+            self:_DetachGCDScripts()
+            self.gcdFrame:Hide()
+            -- Integrated mode draws the swipe on cursorFrame.gcdCooldown (not gcdFrame),
+            -- so the hide above doesn't suppress it — clear/hide the integrated child too.
+            if self.cursorFrame and self.cursorFrame.gcdCooldown then
+                self.cursorFrame.gcdCooldown:Clear()
+                self.cursorFrame.gcdCooldown:Hide()
+            end
+        end
+    end
+    if self.castFrame then
+        if satShouldShow(self.db.Cast) then
+            self:ApplyCastSatellite()
+        else
+            self:_DetachCastScripts()
+            self.castFrame:Hide()
+        end
+    end
+    if self.dispelFrame then
+        if satShouldShow(self.db.Dispel) then
+            self:ApplyDispelSatellite()
+        else
+            self:_DetachDispelScripts()
+            self.dispelFrame:Hide()
+        end
+    end
+    if self.trailFrame and self.db.Trail.Enabled and not masterShown then
+        _hideAllTrailDots()  -- suppress dot fade-in when cursor hidden
+    end
+end
+
 function C:CreateCursorFrame()
     if self.cursorFrame then return end
     local f = CreateFrame("Frame", "KE_CursorFrame", UIParent)
@@ -900,8 +1046,16 @@ function C:OnEnable()
     if not self.db.Enabled then return end
     self:CreateCursorFrame()
     self:ApplyCursorSettings()
-    self.cursorFrame:Show()
-    self._cursorShown = true
+
+    -- Module-level visibility events (all global state changes)
+    self:RegisterEvent("PLAYER_ENTERING_WORLD",  "UpdateVisibility")
+    self:RegisterEvent("ZONE_CHANGED_NEW_AREA",  "UpdateVisibility")
+    self:RegisterEvent("PLAYER_REGEN_DISABLED",  "UpdateVisibility")
+    self:RegisterEvent("PLAYER_REGEN_ENABLED",   "UpdateVisibility")
+    self:RegisterEvent("GROUP_ROSTER_UPDATE",    "UpdateVisibility")
+
+    -- Initial visibility decision for cursor (before satellites exist)
+    self:UpdateVisibility()
 
     -- Defer satellite creation 0.5s (matches EUI; lets other addons finish init)
     C_Timer.After(0.5, function()
@@ -910,6 +1064,7 @@ function C:OnEnable()
         self:ApplyCastSatellite()
         self:ApplyTrailSatellite()
         self:ApplyDispelSatellite()
+        self:UpdateVisibility()  -- re-decide now that satellites exist
     end)
 end
 
