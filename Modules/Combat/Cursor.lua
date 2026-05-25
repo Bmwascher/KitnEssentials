@@ -190,11 +190,11 @@ end
 
 -- Color cache: avoid re-applying SetVertexColor on every Apply call when
 -- nothing changed. Invalidated on theme change.
-local _lastColorMode, _lastHex, _lastClassFlag
+local _lastColorMode
 local _lastR, _lastG, _lastB, _lastA = -1, -1, -1, -1
 
 local function _invalidateColorCache()
-    _lastColorMode, _lastHex, _lastClassFlag = nil, nil, nil
+    _lastColorMode = nil
     _lastR, _lastG, _lastB, _lastA = -1, -1, -1, -1
 end
 
@@ -267,7 +267,6 @@ local function _gcdOnEvent(self, event, unit, _, _)
         local cd = _getActiveGCDCooldown()
         if cd then
             cd:SetCooldown(start, dur)
-            if db.Reverse then cd:SetReverse(true) end
             cd:Show()
         end
     end
@@ -339,7 +338,6 @@ function C:ApplyGCDColor()
             local tex = RING_TEXTURES[db.Texture] or RING_TEXTURES.ring_light
             gf.cooldown:SetSwipeTexture(tex, sr, sg, sb, sa)
         end
-        if gf.cooldown.SetReverse then gf.cooldown:SetReverse(db.Reverse or false) end
     end
 end
 
@@ -367,9 +365,6 @@ function C:ApplyGCDSatellite()
                     RING_TEXTURES[self.db.Texture] or RING_TEXTURES.ring_normal,
                     sr, sg, sb, sa)
             end
-            if self.cursorFrame.gcdCooldown.SetReverse then
-                self.cursorFrame.gcdCooldown:SetReverse(db.Reverse or false)
-            end
         end
         return
     end
@@ -385,8 +380,10 @@ function C:ApplyGCDSatellite()
     end
     self:ApplyGCDColor()
 
-    -- Position: attached anchors to cursor frame; detached gets own OnUpdate
-    if db.Attached and self.cursorFrame and self.cursorFrame:IsShown() then
+    -- Always attach to cursor frame when shown (anchor inheritance, free).
+    -- Fall back to own follow-cursor OnUpdate only when cursor is hidden
+    -- (e.g. master Visibility="never" but GCD VisibilityOverride="always").
+    if self.cursorFrame and self.cursorFrame:IsShown() then
         self.gcdFrame:SetScript("OnUpdate", nil)
         self.gcdFrame:ClearAllPoints()
         self.gcdFrame:SetPoint("CENTER", self.cursorFrame, "CENTER", 0, 0)
@@ -636,7 +633,10 @@ function C:ApplyCastSatellite()
     end
     self:ApplyCastColor()
 
-    if db.Attached and self.cursorFrame and self.cursorFrame:IsShown() then
+    -- Always attach to cursor frame when it's shown (anchor inheritance, free).
+    -- Fall back to own follow-cursor OnUpdate only when cursor is hidden (e.g.
+    -- master Visibility="never" but cast satellite has VisibilityOverride="always").
+    if self.cursorFrame and self.cursorFrame:IsShown() then
         self.castFrame:SetScript("OnUpdate", nil)
         self.castFrame:ClearAllPoints()
         self.castFrame:SetPoint("CENTER", self.cursorFrame, "CENTER", 0, 0)
@@ -796,6 +796,10 @@ local function _dispelOnEvent(self, event)
     if event == "PLAYER_ENTERING_WORLD" or event == "PLAYER_SPECIALIZATION_CHANGED" then
         _dispelFindSpell()
     end
+    -- Don't clobber an active test preview. SPELL_UPDATE_COOLDOWN fires from
+    -- background sources (potion/hearthstone ticks, other addons) and would
+    -- otherwise wipe the 7-second test cooldown set by DispelPreview.
+    if C._dispelPreviewActive then return end
     if not _dispelTrackedSpellID then
         self.cooldown:Clear()
         return
@@ -864,6 +868,24 @@ end
 function C:ApplyDispelSatellite()
     local db = self.db.Dispel
     if not db.Enabled then
+        -- During an active test preview, keep the frame visible and refresh
+        -- visuals so slider tweaks (offsets/font/color) take effect live.
+        if self._dispelPreviewActive and self.dispelFrame then
+            local fontPath = KE:GetFontPath(db.FontFace) or KE.FONT
+            self.dispelFrame.text:SetFont(fontPath, db.FontSize or 18, "OUTLINE")
+            self.dispelFrame.text:SetTextColor(unpack(db.TextColor or { 1, 1, 1, 1 }))
+            self.dispelFrame.text:ClearAllPoints()
+            if self.cursorFrame and self.cursorFrame:IsShown() then
+                self.dispelFrame.text:SetPoint(db.AnchorPoint or "BOTTOM",
+                    self.cursorFrame, db.AnchorPoint or "BOTTOM",
+                    db.XOffset or 0, db.YOffset or 0)
+            else
+                self.dispelFrame.text:SetPoint(db.AnchorPoint or "BOTTOM",
+                    self.dispelFrame, "CENTER",
+                    db.XOffset or 0, db.YOffset or 0)
+            end
+            return
+        end
         if self.dispelFrame then
             self:_DetachDispelScripts()
             self.dispelFrame:Hide()
@@ -877,8 +899,9 @@ function C:ApplyDispelSatellite()
     self.dispelFrame.text:SetFont(fontPath, db.FontSize or 18, "OUTLINE")
     self.dispelFrame.text:SetTextColor(unpack(db.TextColor or { 1, 1, 1, 1 }))
 
-    -- Position: attached anchors text to cursor frame at AnchorPoint+offset
-    if db.Attached and self.cursorFrame and self.cursorFrame:IsShown() then
+    -- Always attach text to cursor frame when shown (anchor inheritance, free).
+    -- Fall back to own OnUpdate only when cursor hidden (per-satellite override case).
+    if self.cursorFrame and self.cursorFrame:IsShown() then
         self.dispelFrame:SetScript("OnUpdate", nil)
         self.dispelFrame.text:ClearAllPoints()
         self.dispelFrame.text:SetPoint(db.AnchorPoint or "BOTTOMLEFT",
@@ -996,7 +1019,10 @@ function C:UpdateVisibility(event)
     if self.dispelFrame then
         if satShouldShow(self.db.Dispel) then
             self:ApplyDispelSatellite()
-        else
+        elseif not self._dispelPreviewActive then
+            -- Don't hide during an active test preview — random events
+            -- (GROUP_ROSTER_UPDATE, etc.) call UpdateVisibility and would
+            -- otherwise wipe the 7-second preview the user just started.
             self:_DetachDispelScripts()
             self.dispelFrame:Hide()
         end
@@ -1045,6 +1071,10 @@ end
 function C:OnEnable()
     if not self.db.Enabled then return end
     self:CreateCursorFrame()
+    -- Always (re-)attach OnUpdate — CreateCursorFrame early-returns when the frame
+    -- already exists (e.g. on disable/re-enable cycle), so SetScript needs to run
+    -- here to restore the follow-cursor behavior after OnDisable detached it.
+    self.cursorFrame:SetScript("OnUpdate", _cursorOnUpdate)
     self:ApplyCursorSettings()
 
     -- Module-level visibility events (all global state changes)
@@ -1157,9 +1187,54 @@ end
 
 function C:Refresh()
     self:ApplyCursorSettings()
-    if self.gcdFrame    then self:ApplyGCDSatellite()    end
-    if self.castFrame   then self:ApplyCastSatellite()   end
-    if self.trailFrame  then self:ApplyTrailSatellite()  end
-    if self.dispelFrame then self:ApplyDispelSatellite() end
+    -- Always call each Apply*Satellite — the function handles both create
+    -- (when feature just got enabled) and teardown (when disabled). Gating on
+    -- frame existence here would skip first-time enable from the GUI.
+    self:ApplyGCDSatellite()
+    self:ApplyCastSatellite()
+    self:ApplyTrailSatellite()
+    self:ApplyDispelSatellite()
     self:UpdateVisibility()
+end
+
+-- Test mode: force-show the dispel countdown for 7 seconds so users can
+-- visually verify anchor/offset/font settings without waiting for a real CD.
+-- Sets _dispelPreviewActive so ApplyDispelSatellite re-applies visuals (instead
+-- of hiding) when the user tweaks sliders/pickers during the preview window.
+function C:DispelPreview()
+    if not self.dispelFrame then self:CreateDispelSatellite() end
+    if not self.dispelFrame or not self.dispelFrame.cooldown then return end
+
+    self._dispelPreviewActive = true
+
+    local db = self.db.Dispel
+    local fontPath = KE:GetFontPath(db.FontFace) or KE.FONT
+    self.dispelFrame.text:SetFont(fontPath, db.FontSize or 18, "OUTLINE")
+    self.dispelFrame.text:SetTextColor(unpack(db.TextColor or { 1, 1, 1, 1 }))
+
+    self.dispelFrame.text:ClearAllPoints()
+    if self.cursorFrame and self.cursorFrame:IsShown() then
+        self.dispelFrame.text:SetPoint(db.AnchorPoint or "BOTTOM",
+            self.cursorFrame, db.AnchorPoint or "BOTTOM",
+            db.XOffset or 0, db.YOffset or 0)
+    else
+        if not _dispelFollowCursor then _dispelFollowCursor = _makeFollowCursorOnUpdate() end
+        self.dispelFrame:SetScript("OnUpdate", _dispelFollowCursor)
+        self.dispelFrame.text:SetPoint(db.AnchorPoint or "BOTTOM",
+            self.dispelFrame, "CENTER",
+            db.XOffset or 0, db.YOffset or 0)
+    end
+
+    self.dispelFrame:Show()
+    self.dispelFrame.cooldown:SetCooldown(GetTime(), 7)
+
+    -- Auto-hide after the countdown completes UNLESS the user enabled Dispel
+    -- in the meantime (in which case the normal Apply path handles visibility).
+    C_Timer.After(7.5, function()
+        self._dispelPreviewActive = false
+        if not self.db.Dispel.Enabled and self.dispelFrame then
+            self.dispelFrame.cooldown:Clear()
+            self.dispelFrame:Hide()
+        end
+    end)
 end

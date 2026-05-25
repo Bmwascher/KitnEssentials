@@ -205,9 +205,9 @@ local Defaults = {
         Cursor = {
             SchemaVersion = 1,
             Enabled    = true,
-            Size       = 50,
+            Size       = 67,
             Texture    = "ring_normal",
-            ColorMode  = "class",
+            ColorMode  = "theme",
             Color      = { 1, 1, 1, 1 },
             Visibility = "always",
 
@@ -239,7 +239,7 @@ local Defaults = {
             },
 
             Trail = {
-                Enabled            = false,
+                Enabled            = true,
                 DotDuration        = 0.5,
                 DotBaseSize        = 40,
                 Density            = 0.016,
@@ -250,10 +250,10 @@ local Defaults = {
             },
 
             Dispel = {
-                Enabled            = false,
+                Enabled            = true,
                 Attached           = true,
-                AnchorPoint        = "BOTTOMLEFT",
-                XOffset            = 10,
+                AnchorPoint        = "CENTER",
+                XOffset            = 0,
                 YOffset            = 10,
                 FontFace           = "Expressway",
                 FontSize           = 18,
