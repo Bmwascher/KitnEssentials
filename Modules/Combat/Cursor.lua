@@ -36,24 +36,24 @@ local pcall            = pcall
 local GCD_SPELL_ID = 61304
 
 local TEX_BASE = "Interface\\AddOns\\KitnEssentials\\Media\\Cursor\\"
-local RING_TEXTURES = {
-    ring_thin   = TEX_BASE .. "ring_thin.tga",
-    ring_light  = TEX_BASE .. "ring_light.tga",
-    ring_normal = TEX_BASE .. "ring_normal.tga",
-    ring_heavy  = TEX_BASE .. "ring_heavy.tga",
-    ring_thick  = TEX_BASE .. "ring_thick.tga",
-    circle      = "Interface\\AddOns\\KitnEssentials\\Media\\Cursor\\Circle.tga",
+local CIRCLE_TEXTURES = {
+    circle_thin   = TEX_BASE .. "circle_thin.tga",
+    circle_light  = TEX_BASE .. "circle_light.tga",
+    circle_normal = TEX_BASE .. "circle_normal.tga",
+    circle_heavy  = TEX_BASE .. "circle_heavy.tga",
+    circle_thick  = TEX_BASE .. "circle_thick.tga",
+    circle_backup = TEX_BASE .. "circle_backup.tga",
 }
 
--- Spark orbit centerline ratio per ring texture (from EUI measurements;
--- re-measure when commissioned KE art replaces borrowed EUI rings).
-local RING_INNER = {
-    ring_thin   = 0.92,
-    ring_light  = 0.85,
-    ring_normal = 0.78,
-    ring_heavy  = 0.68,
-    ring_thick  = 0.58,
-    circle      = 0.50,  -- non-ring fallback
+-- Spark orbit centerline ratio per texture (from EUI measurements;
+-- re-measure when commissioned KE art replaces borrowed art).
+local CIRCLE_INNER = {
+    circle_thin   = 0.92,
+    circle_light  = 0.85,
+    circle_normal = 0.78,
+    circle_heavy  = 0.68,
+    circle_thick  = 0.58,
+    circle_backup = 0.50,  -- solid soft-glow fallback
 }
 
 local DISPEL_SPELL_IDS = {
@@ -61,15 +61,15 @@ local DISPEL_SPELL_IDS = {
     119905, 213634, 218164, 213644, 2782, 475, 365585, 51886,  -- DPS/Tank dispels
 }
 
-C.RING_TEXTURES   = RING_TEXTURES
-C.TEXTURE_ORDER   = { "ring_thin", "ring_light", "ring_normal", "ring_heavy", "ring_thick", "circle" }
+C.CIRCLE_TEXTURES = CIRCLE_TEXTURES
+C.TEXTURE_ORDER   = { "circle_thin", "circle_light", "circle_normal", "circle_heavy", "circle_thick", "circle_backup" }
 C.TEXTURE_LABELS  = {
-    ring_thin   = "Ring (thin)",
-    ring_light  = "Ring (light)",
-    ring_normal = "Ring (normal)",
-    ring_heavy  = "Ring (heavy)",
-    ring_thick  = "Ring (thick)",
-    circle      = "Soft Glow",
+    circle_thin   = "Circle (thin)",
+    circle_light  = "Circle (light)",
+    circle_normal = "Circle (normal)",
+    circle_heavy  = "Circle (heavy)",
+    circle_thick  = "Circle (thick)",
+    circle_backup = "Soft Glow",
 }
 
 C.VISIBILITY_MODES = {
@@ -216,7 +216,7 @@ function C:ApplyCursorSettings()
     if not self.cursorFrame then return end
     local db = self.db
     self.cursorFrame:SetSize(db.Size or 50, db.Size or 50)
-    self.cursorFrame.texture:SetTexture(RING_TEXTURES[db.Texture] or RING_TEXTURES.ring_normal)
+    self.cursorFrame.texture:SetTexture(CIRCLE_TEXTURES[db.Texture] or CIRCLE_TEXTURES.circle_normal)
     self:ApplyCursorColor()
 end
 
@@ -290,7 +290,7 @@ function C:CreateGCDSatellite()
     -- Ring texture
     gf.texture = gf:CreateTexture(nil, "BACKGROUND")
     gf.texture:SetAllPoints(gf)
-    gf.texture:SetTexture(RING_TEXTURES[db.Texture] or RING_TEXTURES.ring_light)
+    gf.texture:SetTexture(CIRCLE_TEXTURES[db.Texture] or CIRCLE_TEXTURES.circle_light)
 
     -- Cooldown swipe overlay
     gf.cooldown = CreateFrame("Cooldown", nil, gf, "CooldownFrameTemplate")
@@ -302,7 +302,7 @@ function C:CreateGCDSatellite()
     if gf.cooldown.SetDrawBling then gf.cooldown:SetDrawBling(false) end
     if gf.cooldown.SetUseCircularEdge then gf.cooldown:SetUseCircularEdge(true) end
     if gf.cooldown.SetSwipeTexture then
-        gf.cooldown:SetSwipeTexture(RING_TEXTURES[db.Texture] or RING_TEXTURES.ring_light, 1, 1, 1, 1)
+        gf.cooldown:SetSwipeTexture(CIRCLE_TEXTURES[db.Texture] or CIRCLE_TEXTURES.circle_light, 1, 1, 1, 1)
     end
     gf.cooldown:SetFrameLevel(gf:GetFrameLevel() + 2)
 
@@ -339,7 +339,7 @@ function C:ApplyGCDColor()
     if gf.cooldown then
         gf.cooldown:SetSwipeColor(sr, sg, sb, sa)
         if gf.cooldown.SetSwipeTexture then
-            local tex = RING_TEXTURES[db.Texture] or RING_TEXTURES.ring_light
+            local tex = CIRCLE_TEXTURES[db.Texture] or CIRCLE_TEXTURES.circle_light
             gf.cooldown:SetSwipeTexture(tex, sr, sg, sb, sa)
         end
     end
@@ -366,7 +366,7 @@ function C:ApplyGCDSatellite()
             self.cursorFrame.gcdCooldown:SetSwipeColor(sr, sg, sb, sa)
             if self.cursorFrame.gcdCooldown.SetSwipeTexture then
                 self.cursorFrame.gcdCooldown:SetSwipeTexture(
-                    RING_TEXTURES[self.db.Texture] or RING_TEXTURES.ring_normal,
+                    CIRCLE_TEXTURES[self.db.Texture] or CIRCLE_TEXTURES.circle_normal,
                     sr, sg, sb, sa)
             end
         end
@@ -380,7 +380,7 @@ function C:ApplyGCDSatellite()
     local size = db.Size or 50
     self.gcdFrame:SetSize(size, size)
     if self.gcdFrame.texture then
-        self.gcdFrame.texture:SetTexture(RING_TEXTURES[db.Texture] or RING_TEXTURES.ring_light)
+        self.gcdFrame.texture:SetTexture(CIRCLE_TEXTURES[db.Texture] or CIRCLE_TEXTURES.circle_light)
     end
     self:ApplyGCDColor()
 
@@ -425,7 +425,7 @@ local function _sparkOnUpdate(overlay)
     local db = C.db.Cast
     local pct = elapsed / maxDur
     local ringRadius = (db.Size or 72) / 2
-    local innerRatio = RING_INNER[db.Texture or "ring_normal"] or 0.78
+    local innerRatio = CIRCLE_INNER[db.Texture or "circle_normal"] or 0.78
     local orbitR = ringRadius * (1 + innerRatio) * 0.5
     local angleDeg = 90 - (pct * 360)
     local sx = cos(rad(angleDeg)) * orbitR
@@ -519,7 +519,7 @@ function C:CreateCastSatellite()
     -- Ring texture
     cf.texture = cf:CreateTexture(nil, "BACKGROUND")
     cf.texture:SetAllPoints(cf)
-    cf.texture:SetTexture(RING_TEXTURES[db.Texture] or RING_TEXTURES.ring_normal)
+    cf.texture:SetTexture(CIRCLE_TEXTURES[db.Texture] or CIRCLE_TEXTURES.circle_normal)
 
     -- Cooldown swipe
     cf.cooldown = CreateFrame("Cooldown", nil, cf, "CooldownFrameTemplate")
@@ -531,7 +531,7 @@ function C:CreateCastSatellite()
     if cf.cooldown.SetDrawBling then cf.cooldown:SetDrawBling(false) end
     if cf.cooldown.SetUseCircularEdge then cf.cooldown:SetUseCircularEdge(true) end
     if cf.cooldown.SetSwipeTexture then
-        cf.cooldown:SetSwipeTexture(RING_TEXTURES[db.Texture] or RING_TEXTURES.ring_normal, 1, 1, 1, 1)
+        cf.cooldown:SetSwipeTexture(CIRCLE_TEXTURES[db.Texture] or CIRCLE_TEXTURES.circle_normal, 1, 1, 1, 1)
     end
     cf.cooldown:SetFrameLevel(cf:GetFrameLevel() + 2)
     cf.cooldown:Hide()
@@ -596,7 +596,7 @@ function C:ApplyCastColor()
     if cf.cooldown then
         cf.cooldown:SetSwipeColor(sr, sg, sb, sa)
         if cf.cooldown.SetSwipeTexture then
-            cf.cooldown:SetSwipeTexture(RING_TEXTURES[db.Texture] or RING_TEXTURES.ring_normal, sr, sg, sb, sa)
+            cf.cooldown:SetSwipeTexture(CIRCLE_TEXTURES[db.Texture] or CIRCLE_TEXTURES.circle_normal, sr, sg, sb, sa)
         end
     end
     if cf._spark and db.SparkEnabled then
@@ -629,7 +629,7 @@ function C:ApplyCastSatellite()
     local size = db.Size or 72
     self.castFrame:SetSize(size, size)
     if self.castFrame.texture then
-        self.castFrame.texture:SetTexture(RING_TEXTURES[db.Texture] or RING_TEXTURES.ring_normal)
+        self.castFrame.texture:SetTexture(CIRCLE_TEXTURES[db.Texture] or CIRCLE_TEXTURES.circle_normal)
     end
     if self.castFrame._spark then
         self.castFrame._spark:SetSize(size * 0.6, size * 0.6)
@@ -669,7 +669,7 @@ local _trailLastCX, _trailLastCY = 0, 0
 local function _initTrailDotPool(container)
     for i = 1, TRAIL_POOL_SIZE do
         local dot = container:CreateTexture(nil, "ARTWORK")
-        dot:SetTexture(RING_TEXTURES.ring_normal)
+        dot:SetTexture(CIRCLE_TEXTURES.circle_normal)
         dot:SetBlendMode("ADD")
         dot:Hide()
         _trailDots[i] = dot
@@ -1047,7 +1047,7 @@ function C:CreateCursorFrame()
 
     f.texture = f:CreateTexture(nil, "OVERLAY")
     f.texture:SetAllPoints(f)
-    f.texture:SetTexture(RING_TEXTURES[self.db.Texture] or RING_TEXTURES.ring_normal)
+    f.texture:SetTexture(CIRCLE_TEXTURES[self.db.Texture] or CIRCLE_TEXTURES.circle_normal)
 
     -- Integrated GCD swipe overlay (only used when db.GCD.Mode == "integrated")
     f.gcdCooldown = CreateFrame("Cooldown", nil, f, "CooldownFrameTemplate")
@@ -1068,15 +1068,42 @@ end
 
 function C:OnInitialize()
     self:UpdateDB()
-    -- One-time cleanup of legacy SV keys from the pre-refit modules.
-    -- Default SchemaVersion is 0, so this fires on first load post-upgrade,
-    -- then persists 1 to skip on every subsequent reload.
     local profile = KitnEssentialsDB and KitnEssentialsDB.profile
-    if profile and (self.db.SchemaVersion or 0) < 1 then
+    local sv = self.db.SchemaVersion or 0
+
+    -- v0 → v1: wipe legacy SV sections from the pre-refit CursorCircle /
+    -- DispelCursor modules.
+    if profile and sv < 1 then
         profile.CursorCircle = nil
         profile.DispelCursor = nil
         self.db.SchemaVersion = 1
     end
+
+    -- v1 → v2: rename stored Texture values after the ring_* → circle_*
+    -- texture rename. Existing users keep their selection instead of falling
+    -- back to the default and losing the selector highlight.
+    if profile and (self.db.SchemaVersion or 0) < 2 then
+        local renames = {
+            ring_thin   = "circle_thin",
+            ring_light  = "circle_light",
+            ring_normal = "circle_normal",
+            ring_heavy  = "circle_heavy",
+            ring_thick  = "circle_thick",
+            circle      = "circle_backup",
+        }
+        local c = profile.Cursor
+        if c then
+            if c.Texture and renames[c.Texture] then c.Texture = renames[c.Texture] end
+            if c.GCD and c.GCD.Texture and renames[c.GCD.Texture] then
+                c.GCD.Texture = renames[c.GCD.Texture]
+            end
+            if c.Cast and c.Cast.Texture and renames[c.Cast.Texture] then
+                c.Cast.Texture = renames[c.Cast.Texture]
+            end
+        end
+        self.db.SchemaVersion = 2
+    end
+
     self:SetEnabledState(self.db.Enabled)
 end
 

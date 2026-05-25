@@ -288,9 +288,9 @@ GUIFrame:RegisterContent("Cursor", function(scrollChild, yOffset)
     local row2a = GUIFrame:CreateRow(card2.content, 82)  -- 58px buttons + 16px label + padding
     textureSelector = CreateTextureSelector(
         row2a,
-        (C and C.RING_TEXTURES) or {},
+        (C and C.CIRCLE_TEXTURES) or {},
         (C and C.TEXTURE_ORDER) or {},
-        db.Texture or "ring_normal",
+        db.Texture or "circle_normal",
         GetCursorColor,
         function(textureName)
             db.Texture = textureName
@@ -390,9 +390,9 @@ GUIFrame:RegisterContent("Cursor", function(scrollChild, yOffset)
     local row3cTex = GUIFrame:CreateRow(card3.content, 82)
     gcdTextureSelector = CreateTextureSelector(
         row3cTex,
-        (C and C.RING_TEXTURES) or {},
+        (C and C.CIRCLE_TEXTURES) or {},
         (C and C.TEXTURE_ORDER) or {},
-        db.GCD.Texture or "ring_light",
+        db.GCD.Texture or "circle_light",
         GetGCDColor,
         function(textureName)
             db.GCD.Texture = textureName
@@ -535,9 +535,9 @@ GUIFrame:RegisterContent("Cursor", function(scrollChild, yOffset)
     local row4bTex = GUIFrame:CreateRow(card4.content, 82)
     castTextureSelector = CreateTextureSelector(
         row4bTex,
-        (C and C.RING_TEXTURES) or {},
+        (C and C.CIRCLE_TEXTURES) or {},
         (C and C.TEXTURE_ORDER) or {},
-        db.Cast.Texture or "ring_normal",
+        db.Cast.Texture or "circle_normal",
         GetCastColor,
         function(textureName)
             db.Cast.Texture = textureName
