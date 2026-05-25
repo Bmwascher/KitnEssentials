@@ -42,7 +42,7 @@ local RING_TEXTURES = {
     ring_normal = TEX_BASE .. "ring_normal.tga",
     ring_heavy  = TEX_BASE .. "ring_heavy.tga",
     ring_thick  = TEX_BASE .. "ring_thick.tga",
-    circle      = "Interface\\AddOns\\KitnEssentials\\Media\\CursorCircles\\Circle.tga",
+    circle      = "Interface\\AddOns\\KitnEssentials\\Media\\Cursor\\Circle.tga",
 }
 
 -- Spark orbit centerline ratio per ring texture (from EUI measurements;
