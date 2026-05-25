@@ -1108,3 +1108,58 @@ function C:OnThemeChanged()
         self:ApplyCastColor()
     end
 end
+
+---------------------------------------------------------------------------------
+-- Preview support (called by PreviewManager when GUI Combat section is active)
+---------------------------------------------------------------------------------
+function C:ShowPreview()
+    if not self.cursorFrame then self:CreateCursorFrame() end
+    self:ApplyCursorSettings()
+    self.cursorFrame:SetAlpha(1)  -- override any leftover mouseDown alpha
+    self.cursorFrame:Show()
+    self._cursorShown = true
+    self._trail_cursorShown = true
+    self._trail_instanceOK = true
+
+    if self.db.GCD.Enabled then
+        if not self.gcdFrame then self:CreateGCDSatellite() end
+        self:ApplyGCDSatellite()
+        self.gcdFrame:SetAlpha(1)
+    end
+    if self.db.Cast.Enabled then
+        if not self.castFrame then self:CreateCastSatellite() end
+        self:ApplyCastSatellite()
+        self.castFrame:SetAlpha(1)
+    end
+    if self.db.Trail.Enabled then
+        if not self.trailFrame then self:CreateTrailSatellite() end
+        self:ApplyTrailSatellite()
+    end
+    if self.db.Dispel.Enabled then
+        if not self.dispelFrame then self:CreateDispelSatellite() end
+        self:ApplyDispelSatellite()
+        self.dispelFrame:SetAlpha(1)
+    end
+end
+
+function C:HidePreview()
+    -- Restore actual visibility decision (or hide everything if module disabled)
+    if not self.db or not self.db.Enabled then
+        if self.cursorFrame then self.cursorFrame:Hide() end
+        if self.gcdFrame    then self.gcdFrame:Hide() end
+        if self.castFrame   then self.castFrame:Hide() end
+        if self.trailFrame  then _hideAllTrailDots(); self.trailFrame:SetScript("OnUpdate", nil) end
+        if self.dispelFrame then self.dispelFrame:Hide() end
+        return
+    end
+    self:UpdateVisibility()
+end
+
+function C:Refresh()
+    self:ApplyCursorSettings()
+    if self.gcdFrame    then self:ApplyGCDSatellite()    end
+    if self.castFrame   then self:ApplyCastSatellite()   end
+    if self.trailFrame  then self:ApplyTrailSatellite()  end
+    if self.dispelFrame then self:ApplyDispelSatellite() end
+    self:UpdateVisibility()
+end
