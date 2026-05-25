@@ -608,6 +608,129 @@ function C:ApplyCastSatellite()
     self.castFrame:Show()
 end
 
+---------------------------------------------------------------------------------
+-- Trail satellite
+---------------------------------------------------------------------------------
+local TRAIL_POOL_SIZE = 150
+local _trailDots = {}        -- texture pool (inactive)
+local _trailActive = {}      -- active entries: { tex, life, maxLife }
+local _trailEntryPool = {}   -- recycled entry tables
+local _trailTimer = 0
+local _trailLastCX, _trailLastCY = 0, 0
+
+local function _initTrailDotPool(container)
+    for i = 1, TRAIL_POOL_SIZE do
+        local dot = container:CreateTexture(nil, "ARTWORK")
+        dot:SetTexture(RING_TEXTURES.ring_normal)
+        dot:SetBlendMode("ADD")
+        dot:Hide()
+        _trailDots[i] = dot
+    end
+end
+
+local function _spawnTrailDot(cx, cy)
+    if #_trailDots == 0 then return end
+    local db = C.db.Trail
+    local dot = _trailDots[#_trailDots]
+    _trailDots[#_trailDots] = nil
+
+    local s = UIParent:GetEffectiveScale()
+    local r, g, b, a
+    if db.ColorInherit then
+        r, g, b, a = KE:GetAccentColor(C.db.ColorMode or "class", C.db.Color)
+    else
+        r, g, b, a = KE:GetAccentColor("custom", db.Color)
+    end
+    local baseSize = (db.DotBaseSize or 40) * 0.8
+    dot:SetVertexColor(r, g, b, a)
+    dot:SetSize(baseSize, baseSize)
+    dot:ClearAllPoints()
+    dot:SetPoint("CENTER", C.trailFrame, "BOTTOMLEFT", cx / s, cy / s)
+    dot:SetAlpha(1)
+    dot:Show()
+
+    local entry = table.remove(_trailEntryPool) or {}
+    entry.tex = dot
+    entry.life = db.DotDuration or 0.5
+    entry.maxLife = db.DotDuration or 0.5
+    _trailActive[#_trailActive + 1] = entry
+end
+
+local function _updateTrailDots(elapsed)
+    for i = #_trailActive, 1, -1 do
+        local e = _trailActive[i]
+        e.life = e.life - elapsed
+        if e.life <= 0 then
+            e.tex:Hide()
+            _trailDots[#_trailDots + 1] = e.tex
+            e.tex = nil
+            _trailEntryPool[#_trailEntryPool + 1] = e
+            _trailActive[i] = _trailActive[#_trailActive]
+            _trailActive[#_trailActive] = nil
+        else
+            local pct = e.life / e.maxLife
+            local sz = max(2, (C.db.Trail.DotBaseSize or 40) * 0.8 * pct)
+            e.tex:SetSize(sz, sz)
+            e.tex:SetAlpha(pct)
+        end
+    end
+end
+
+local function _hideAllTrailDots()
+    for i = #_trailActive, 1, -1 do
+        local e = _trailActive[i]
+        e.tex:Hide()
+        _trailDots[#_trailDots + 1] = e.tex
+        e.tex = nil
+        _trailEntryPool[#_trailEntryPool + 1] = e
+        _trailActive[i] = nil
+    end
+end
+
+local function _trailOnUpdate(_, elapsed)
+    if not C._trail_instanceOK or not C._trail_cursorShown then
+        _updateTrailDots(elapsed)  -- still fade existing dots
+        return
+    end
+    local db = C.db.Trail
+    local cx, cy = GetCursorPosition()
+    _trailTimer = _trailTimer + elapsed
+    local dx = cx - _trailLastCX
+    local dy = cy - _trailLastCY
+    local movedSq = dx * dx + dy * dy
+    if _trailTimer >= (db.Density or 0.016) and movedSq >= 0.25 then
+        _trailTimer = 0
+        _spawnTrailDot(cx, cy)
+        _trailLastCX, _trailLastCY = cx, cy
+    end
+    _updateTrailDots(elapsed)
+end
+
+function C:CreateTrailSatellite()
+    if self.trailFrame then return end
+    local tc = CreateFrame("Frame", "KE_CursorTrailContainer", UIParent)
+    tc:SetAllPoints(UIParent)
+    tc:SetFrameStrata("TOOLTIP")
+    tc:SetFrameLevel(9990)
+    tc:EnableMouse(false)
+    _initTrailDotPool(tc)
+    self.trailFrame = tc
+end
+
+function C:ApplyTrailSatellite()
+    local db = self.db.Trail
+    if not db.Enabled then
+        if self.trailFrame then
+            self.trailFrame:SetScript("OnUpdate", nil)
+            _hideAllTrailDots()
+        end
+        return
+    end
+    if not self.trailFrame then self:CreateTrailSatellite() end
+    -- Trail OnUpdate must always run when enabled (to fade existing dots)
+    self.trailFrame:SetScript("OnUpdate", _trailOnUpdate)
+end
+
 function C:CreateCursorFrame()
     if self.cursorFrame then return end
     local f = CreateFrame("Frame", "KE_CursorFrame", UIParent)
@@ -656,6 +779,7 @@ function C:OnEnable()
         if not self.db or not self.db.Enabled then return end
         self:ApplyGCDSatellite()
         self:ApplyCastSatellite()
+        self:ApplyTrailSatellite()
         -- Other satellites added in later tasks
     end)
 end
@@ -672,6 +796,10 @@ function C:OnDisable()
     if self.castFrame then
         self:_DetachCastScripts()
         self.castFrame:Hide()
+    end
+    if self.trailFrame then
+        self.trailFrame:SetScript("OnUpdate", nil)
+        _hideAllTrailDots()
     end
     self._cursorShown = false
     self:UnregisterAllEvents()
