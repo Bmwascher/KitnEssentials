@@ -242,13 +242,17 @@ local function _gcdOnEvent(self, event, unit, _, _)
     if event == "UNIT_SPELLCAST_FAILED"
        or event == "UNIT_SPELLCAST_INTERRUPTED"
        or event == "UNIT_SPELLCAST_STOP" then
-        -- Check if GCD got reset (cancelled cast might not have triggered GCD)
-        local cdData = GetSpellCooldown(GCD_SPELL_ID)
-        if not cdData or not cdData.duration or cdData.duration <= 0
-                or not cdData.startTime or cdData.startTime <= 0 then
-            local cd = _getActiveGCDCooldown()
-            if cd then cd:Clear() end
-        end
+        -- A cancelled cast may not have triggered the GCD, so clear if no active GCD.
+        -- Wrap in pcall: C_Spell.GetSpellCooldown.duration is SecretWhenSpellCooldownRestricted
+        -- in 12.0; truthiness / comparison on a secret number throws.
+        local cd = _getActiveGCDCooldown()
+        if not cd then return end
+        local ok, hasActive = pcall(function()
+            local cdData = GetSpellCooldown(GCD_SPELL_ID)
+            return cdData and cdData.duration and cdData.startTime
+                   and cdData.duration > 0 and cdData.startTime > 0
+        end)
+        if not ok or not hasActive then cd:Clear() end
         return
     end
 
