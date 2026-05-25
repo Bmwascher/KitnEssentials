@@ -359,6 +359,255 @@ function C:ApplyGCDSatellite()
     self.gcdFrame:Show()
 end
 
+---------------------------------------------------------------------------------
+-- Cast circle satellite
+---------------------------------------------------------------------------------
+local _castFollowCursor = nil
+local _activeCastID = nil  -- track current cast for STOP/FAILED dispatch
+
+local function _sparkOnUpdate(overlay)
+    -- overlay is _sparkOverlay; its parent is castRoot (cf)
+    local castRoot = overlay:GetParent()
+    if not castRoot or not castRoot.cooldown then return end
+    local maxDur = castRoot._castMaxDur
+    if not maxDur or maxDur <= 0 then return end
+    local now = GetTime()
+    local elapsed = now - (castRoot._castStart or now)
+    if elapsed >= maxDur then
+        overlay:SetScript("OnUpdate", nil)  -- self-detach when done
+        return
+    end
+    local db = C.db.Cast
+    local pct = elapsed / maxDur
+    local ringRadius = (db.Size or 72) / 2
+    local innerRatio = RING_INNER[db.Texture or "ring_normal"] or 0.78
+    local orbitR = ringRadius * (1 + innerRatio) * 0.5
+    local angleDeg = 90 - (pct * 360)
+    local sx = cos(rad(angleDeg)) * orbitR
+    local sy = sin(rad(angleDeg)) * orbitR
+    local rot = rad(angleDeg - 90)
+
+    local spark = castRoot._spark
+    if spark then
+        spark:ClearAllPoints()
+        spark:SetPoint("CENTER", castRoot, "CENTER", sx, sy)
+        spark:SetRotation(rot)
+    end
+    local glow = castRoot._sparkGlow
+    if glow then
+        glow:ClearAllPoints()
+        glow:SetPoint("CENTER", castRoot, "CENTER", sx, sy)
+        glow:SetRotation(rot)
+    end
+end
+
+local function _castStartSweep(cf, startMS, endMS)
+    local elapsed = GetTime() - startMS * 0.001
+    local total = (endMS - startMS) * 0.001
+    cf._castStart = GetTime() - elapsed
+    cf._castDur = elapsed
+    cf._castMaxDur = total
+    cf.cooldown:SetCooldown(GetTime() - elapsed, total)
+    cf.cooldown:Show()
+    if C.db.Cast.SparkEnabled and cf._spark then
+        cf._spark:Show()
+        if cf._sparkGlow then cf._sparkGlow:Show() end
+        cf._sparkOverlay:SetScript("OnUpdate", _sparkOnUpdate)  -- attach only during cast
+    end
+end
+
+local function _castStopSweep(cf)
+    cf.cooldown:Hide()
+    cf._castStart, cf._castDur, cf._castMaxDur = nil, nil, nil
+    if cf._spark then cf._spark:Hide() end
+    if cf._sparkGlow then cf._sparkGlow:Hide() end
+    if cf._sparkOverlay then cf._sparkOverlay:SetScript("OnUpdate", nil) end  -- detach!
+    _activeCastID = nil
+end
+
+local function _castOnEvent(self, event, unit, castID)
+    if unit ~= "player" then return end
+    local db = C.db.Cast
+    if not db.Enabled then return end
+    if db.InstanceOnly and not C:InRealInstancedContent() then return end
+
+    if event == "UNIT_SPELLCAST_START" or event == "UNIT_SPELLCAST_DELAYED" then
+        local name, _, _, startMS, endMS, _, cID = UnitCastingInfo("player")
+        if name then
+            _activeCastID = cID
+            _castStartSweep(self, startMS, endMS)
+        end
+    elseif event == "UNIT_SPELLCAST_CHANNEL_START"
+            or event == "UNIT_SPELLCAST_CHANNEL_UPDATE"
+            or event == "UNIT_SPELLCAST_EMPOWER_START"
+            or event == "UNIT_SPELLCAST_EMPOWER_UPDATE" then
+        local name, _, _, startMS, endMS, _, _, _, _, numStages = UnitChannelInfo("player")
+        if name then
+            _activeCastID = nil
+            if numStages and numStages > 0 and GetUnitEmpowerHoldAtMaxTime then
+                endMS = endMS + GetUnitEmpowerHoldAtMaxTime("player")
+            end
+            _castStartSweep(self, startMS, endMS)
+        end
+    elseif event == "UNIT_SPELLCAST_STOP" then
+        if castID == _activeCastID then
+            _castStopSweep(self)
+        end
+    else  -- FAILED, INTERRUPTED, CHANNEL_STOP, EMPOWER_STOP
+        if not castID or castID == _activeCastID then
+            _castStopSweep(self)
+        end
+    end
+end
+
+function C:CreateCastSatellite()
+    if self.castFrame then return end
+    local db = self.db.Cast
+    local size = db.Size or 72
+
+    local cf = CreateFrame("Frame", "KE_CursorCastRing", UIParent)
+    cf:SetSize(size, size)
+    cf:SetFrameStrata("TOOLTIP")
+    cf:SetFrameLevel(9988)
+    cf:EnableMouse(false)
+
+    -- Ring texture
+    cf.texture = cf:CreateTexture(nil, "BACKGROUND")
+    cf.texture:SetAllPoints(cf)
+    cf.texture:SetTexture(RING_TEXTURES[db.Texture] or RING_TEXTURES.ring_normal)
+
+    -- Cooldown swipe
+    cf.cooldown = CreateFrame("Cooldown", nil, cf, "CooldownFrameTemplate")
+    cf.cooldown:SetAllPoints(cf)
+    cf.cooldown:EnableMouse(false)
+    cf.cooldown:SetDrawSwipe(true)
+    cf.cooldown:SetDrawEdge(false)
+    cf.cooldown:SetHideCountdownNumbers(true)
+    if cf.cooldown.SetDrawBling then cf.cooldown:SetDrawBling(false) end
+    if cf.cooldown.SetUseCircularEdge then cf.cooldown:SetUseCircularEdge(true) end
+    if cf.cooldown.SetSwipeTexture then
+        cf.cooldown:SetSwipeTexture(RING_TEXTURES[db.Texture] or RING_TEXTURES.ring_normal, 1, 1, 1, 1)
+    end
+    cf.cooldown:SetFrameLevel(cf:GetFrameLevel() + 2)
+    cf.cooldown:Hide()
+
+    -- Spark overlay child (its OnUpdate attaches only during active cast)
+    cf._sparkOverlay = CreateFrame("Frame", nil, cf)
+    cf._sparkOverlay:SetAllPoints(cf)
+    cf._sparkOverlay:SetFrameLevel(cf:GetFrameLevel() + 3)
+
+    cf._spark = cf._sparkOverlay:CreateTexture(nil, "OVERLAY")
+    cf._spark:SetTexture("Interface\\CastingBar\\UI-CastingBar-Spark")
+    cf._spark:SetBlendMode("ADD")
+    cf._spark:SetSize(size * 0.6, size * 0.6)
+    cf._spark:Hide()
+
+    cf._sparkGlow = cf._sparkOverlay:CreateTexture(nil, "OVERLAY", nil, -1)
+    cf._sparkGlow:SetTexture("Interface\\CastingBar\\UI-CastingBar-Spark")
+    cf._sparkGlow:SetBlendMode("ADD")
+    cf._sparkGlow:SetSize(size * 0.9, size * 0.9)
+    cf._sparkGlow:SetAlpha(0.5)
+    cf._sparkGlow:Hide()
+
+    cf:SetScript("OnEvent", _castOnEvent)
+    cf:Hide()
+    self.castFrame = cf
+end
+
+function C:_AttachCastScripts()
+    local cf = self.castFrame
+    if not cf then return end
+    cf:UnregisterAllEvents()
+    cf:RegisterUnitEvent("UNIT_SPELLCAST_START",          "player")
+    cf:RegisterUnitEvent("UNIT_SPELLCAST_DELAYED",        "player")
+    cf:RegisterUnitEvent("UNIT_SPELLCAST_STOP",           "player")
+    cf:RegisterUnitEvent("UNIT_SPELLCAST_FAILED",         "player")
+    cf:RegisterUnitEvent("UNIT_SPELLCAST_INTERRUPTED",    "player")
+    cf:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_START",  "player")
+    cf:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_UPDATE", "player")
+    cf:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_STOP",   "player")
+    if GetUnitEmpowerHoldAtMaxTime then
+        cf:RegisterUnitEvent("UNIT_SPELLCAST_EMPOWER_START",  "player")
+        cf:RegisterUnitEvent("UNIT_SPELLCAST_EMPOWER_UPDATE", "player")
+        cf:RegisterUnitEvent("UNIT_SPELLCAST_EMPOWER_STOP",   "player")
+    end
+end
+
+function C:_DetachCastScripts()
+    local cf = self.castFrame
+    if not cf then return end
+    cf:UnregisterAllEvents()
+    cf:SetScript("OnUpdate", nil)
+    if cf._sparkOverlay then cf._sparkOverlay:SetScript("OnUpdate", nil) end
+end
+
+function C:ApplyCastColor()
+    local cf = self.castFrame
+    if not cf then return end
+    local db = self.db.Cast
+    local rr, rg, rb, ra = KE:GetAccentColor(db.RingColorMode or "class", db.RingColor)
+    local sr, sg, sb, sa = KE:GetAccentColor(db.SwipeColorMode or "theme", db.SwipeColor)
+    if cf.texture then cf.texture:SetVertexColor(rr, rg, rb, ra) end
+    if cf.cooldown then
+        cf.cooldown:SetSwipeColor(sr, sg, sb, sa)
+        if cf.cooldown.SetSwipeTexture then
+            cf.cooldown:SetSwipeTexture(RING_TEXTURES[db.Texture] or RING_TEXTURES.ring_normal, sr, sg, sb, sa)
+        end
+    end
+    if cf._spark and db.SparkEnabled then
+        local sxr, sxg, sxb
+        if db.SparkColorMode == "ring" then
+            sxr, sxg, sxb = rr, rg, rb
+        else
+            sxr, sxg, sxb = KE:GetAccentColor("custom", db.SparkColor)
+        end
+        cf._spark:SetVertexColor(sxr, sxg, sxb, 1)
+        if cf._sparkGlow then
+            cf._sparkGlow:SetVertexColor(sxr, sxg, sxb, 1)
+            cf._sparkGlow:SetAlpha(0.5)
+        end
+    end
+end
+
+function C:ApplyCastSatellite()
+    local db = self.db.Cast
+    if not db.Enabled then
+        if self.castFrame then
+            self:_DetachCastScripts()
+            self.castFrame:Hide()
+        end
+        return
+    end
+    if not self.castFrame then self:CreateCastSatellite() end
+    self:_AttachCastScripts()
+
+    local size = db.Size or 72
+    self.castFrame:SetSize(size, size)
+    if self.castFrame.texture then
+        self.castFrame.texture:SetTexture(RING_TEXTURES[db.Texture] or RING_TEXTURES.ring_normal)
+    end
+    if self.castFrame._spark then
+        self.castFrame._spark:SetSize(size * 0.6, size * 0.6)
+        self.castFrame._sparkGlow:SetSize(size * 0.9, size * 0.9)
+    end
+    self:ApplyCastColor()
+
+    if db.Attached and self.cursorFrame and self.cursorFrame:IsShown() then
+        self.castFrame:SetScript("OnUpdate", nil)
+        self.castFrame:ClearAllPoints()
+        self.castFrame:SetPoint("CENTER", self.cursorFrame, "CENTER", 0, 0)
+    else
+        if not _castFollowCursor then _castFollowCursor = _makeFollowCursorOnUpdate() end
+        self.castFrame:SetScript("OnUpdate", _castFollowCursor)
+        local s = UIParent:GetEffectiveScale()
+        local x, y = GetCursorPosition()
+        self.castFrame:ClearAllPoints()
+        self.castFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT",
+            floor(x / s + 0.5), floor(y / s + 0.5))
+    end
+    self.castFrame:Show()
+end
+
 function C:CreateCursorFrame()
     if self.cursorFrame then return end
     local f = CreateFrame("Frame", "KE_CursorFrame", UIParent)
@@ -406,6 +655,7 @@ function C:OnEnable()
     C_Timer.After(0.5, function()
         if not self.db or not self.db.Enabled then return end
         self:ApplyGCDSatellite()
+        self:ApplyCastSatellite()
         -- Other satellites added in later tasks
     end)
 end
@@ -418,6 +668,10 @@ function C:OnDisable()
     if self.gcdFrame then
         self:_DetachGCDScripts()
         self.gcdFrame:Hide()
+    end
+    if self.castFrame then
+        self:_DetachCastScripts()
+        self.castFrame:Hide()
     end
     self._cursorShown = false
     self:UnregisterAllEvents()
@@ -432,5 +686,9 @@ function C:OnThemeChanged()
     local gcd = self.db.GCD or {}
     if gcd.RingColorMode == "theme" or gcd.SwipeColorMode == "theme" then
         self:ApplyGCDColor()
+    end
+    local cast = self.db.Cast or {}
+    if cast.RingColorMode == "theme" or cast.SwipeColorMode == "theme" then
+        self:ApplyCastColor()
     end
 end
