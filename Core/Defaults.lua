@@ -1124,6 +1124,53 @@ local Defaults = {
             TimerPosition     = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = 0 },
         },
 
+        AuraDebuffs = {
+            Enabled            = false,
+            VisibilityMode     = "boss",
+            EncounterBlacklist = "",
+            Strata             = "MEDIUM",
+            anchorFrameType    = "UIPARENT",
+            ParentFrame        = "UIParent",
+            Position           = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = -120 },
+            SnapToPixelGrid    = false,
+            IconSize           = 32,
+            IconSpacing        = 1,
+            IconsPerRow        = 8,
+            MaxRows            = 1,
+            IconZoom           = 0.30,
+            Swipe              = true,
+            Reverse            = true,
+            GrowHorizontal     = "RIGHT",
+            GrowVertical       = "DOWN",
+            BorderColor        = { 0.8, 0, 0, 1 },
+            BorderColorMode    = "dispel",
+            DispelColors = {
+                Magic = nil, Curse = nil, Disease = nil, Poison = nil, Bleed = nil, Enrage = nil,
+            },
+            -- Per-type visibility toggles. nil = show (default), false = hide.
+            DispelTypes = {},
+            Filters = {
+                PLAYER                  = true,
+                RAID                    = false,
+                CANCELABLE              = false,
+                NOT_CANCELABLE          = false,
+                INCLUDE_NAME_PLATE_ONLY = false,
+                EXTERNAL_DEFENSIVE      = false,
+                CROWD_CONTROL           = false,
+                RAID_IN_COMBAT          = false,
+                RAID_PLAYER_DISPELLABLE = false,
+                BIG_DEFENSIVE           = false,
+                IMPORTANT               = false,
+            },
+            Blocklist     = {},
+            FontFace      = "Expressway",
+            FontSize      = 14,
+            FontOutline   = "OUTLINE",
+            TimerFontSize = 16,
+            TimerPosition = { AnchorFrom = "CENTER",      AnchorTo = "CENTER",      XOffset = 0, YOffset = 0 },
+            StackPosition = { AnchorFrom = "BOTTOMRIGHT", AnchorTo = "BOTTOMRIGHT", XOffset = 0, YOffset = 2 },
+        },
+
         -----------------------------------------------------------------
         -- Dungeons Modules
         -----------------------------------------------------------------

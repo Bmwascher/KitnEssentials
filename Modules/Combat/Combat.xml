@@ -12,4 +12,5 @@
     <Script file="RangeChecker.lua" />
     <Script file="BossDebuffs.lua" />
     <Script file="AuraExternals.lua" />
+    <Script file="AuraDebuffs.lua" />
 </Ui>
