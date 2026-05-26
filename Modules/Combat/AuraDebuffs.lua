@@ -128,6 +128,17 @@ function AD:ApplyDefaultBlocklist()
     end
 end
 
+-- Re-seed the persistent blocklist with all DEFAULT_BLOCKLIST entries,
+-- overwriting any user changes to default entries (user-added entries are
+-- kept intact). Called by the GUI "Restore Default Entries" button.
+function AD:RestoreBlocklistDefaults()
+    local bl = self.db.Blocklist
+    if not bl then self.db.Blocklist = {}; bl = self.db.Blocklist end
+    for sid, entry in pairs(DEFAULT_BLOCKLIST) do
+        bl[sid] = { label = entry.label, enabled = entry.enabled, default = entry.default }
+    end
+end
+
 -- Parse a comma-separated string of encounter IDs into a set table.
 local function ParseEncounterBlacklist(str)
     local result = {}
