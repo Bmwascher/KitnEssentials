@@ -22,6 +22,7 @@ local IsInInstance       = IsInInstance
 local UnitAffectingCombat = UnitAffectingCombat
 local GetTime            = GetTime
 local C_Timer            = C_Timer
+local DebuffTypeColor    = DebuffTypeColor
 local pairs, ipairs      = pairs, ipairs
 local tinsert            = table.insert
 local tsort              = table.sort
@@ -391,6 +392,34 @@ function AD:GetOrCreateButton(index)
     return b
 end
 
+-- Resolve the border color for a button based on BorderColorMode and dispelType.
+-- Falls back to db.BorderColor if mode is "custom" or no dispel color is found.
+local function ResolveBorderColor(db, dispelType)
+    if db.BorderColorMode == "dispel" and dispelType then
+        local typeColor = db.DispelColors and db.DispelColors[dispelType]
+        if typeColor then
+            return typeColor
+        end
+        -- Fall back to Blizzard's debuff-type color table if present.
+        if DebuffTypeColor and DebuffTypeColor[dispelType] then
+            local c = DebuffTypeColor[dispelType]
+            return { c.r or 1, c.g or 1, c.b or 1, 1 }
+        end
+    end
+    return db.BorderColor or { 0.8, 0, 0, 1 }
+end
+
+-- Update the color of an existing icon border (created by KE:AddIconBorders).
+-- Avoids calling AddIconBorders again which would leak new texture objects.
+local function SetBorderColor(b, color)
+    if not b.borders then return end
+    local r, g, bc, a = KE:ResolveColor(color, { 0.8, 0, 0, 1 })
+    if b.borders.top    then b.borders.top:SetColorTexture(r, g, bc, a) end
+    if b.borders.bottom then b.borders.bottom:SetColorTexture(r, g, bc, a) end
+    if b.borders.left   then b.borders.left:SetColorTexture(r, g, bc, a) end
+    if b.borders.right  then b.borders.right:SetColorTexture(r, g, bc, a) end
+end
+
 -- Re-apply font + anchor for timer/stack on every visible button, and
 -- reapply icon zoom + dispel overlay size. Called after aura data is set,
 -- before LayoutButtons, so anchors are stable before positions are computed.
@@ -428,6 +457,14 @@ function AD:UpdateButtonAppearance(count)
                 b.dispelTex:ClearAllPoints()
                 b.dispelTex:SetPoint("TOPRIGHT", b, "TOPRIGHT", 0, 0)
             end
+
+            -- Swipe visibility
+            if b.cooldown then
+                b.cooldown:SetDrawSwipe(db.Swipe ~= false)
+            end
+
+            -- Border color (dispel-aware or custom)
+            SetBorderColor(b, ResolveBorderColor(db, b._dispelType))
         end
     end
 end
@@ -503,6 +540,7 @@ function AD:Refresh()
         local aura = auras[i]
         local b    = self:GetOrCreateButton(i)
         b.auraInstanceID = aura.auraInstanceID
+        b._dispelType = aura.dispelType
         b.icon:SetTexture(aura.icon)
 
         if aura.duration and aura.duration > 0 and aura.expirationTime then
