@@ -69,6 +69,23 @@ local function GetPetFrame()
 end
 
 ---------------------------------------------------------------------------------
+-- Cooldown manager provider detection
+---------------------------------------------------------------------------------
+local PROVIDER_SCM   = "scm"
+local PROVIDER_AYIJE = "ayije"
+
+local PROVIDER_PARENT_FRAME = {
+    [PROVIDER_SCM]   = "SCM_GroupAnchor_1",
+    [PROVIDER_AYIJE] = "EssentialCooldownViewer_CDM_Container",
+}
+
+local function DetectProvider()
+    if _G.SCM_GroupAnchor_1 then return PROVIDER_SCM end
+    if _G.Ayije_CDM then return PROVIDER_AYIJE end
+    return nil
+end
+
+---------------------------------------------------------------------------------
 -- Frame reference cache (Unit Frame Anchoring)
 ---------------------------------------------------------------------------------
 local cache = {
@@ -111,16 +128,16 @@ end
 local ESSENTIAL_PARENTS = {
     ["EssentialCooldownViewer"]               = true,
     ["EssentialCooldownViewer_CDM_Container"] = true,
+    ["SCM_GroupAnchor_1"]                     = true,
 }
 
-local function GetCollisionXOffset(featureKey, baseX, parentName)
-    if not ESSENTIAL_PARENTS[parentName] then return baseX end
+local function ComputeAyijeCollision(featureKey, baseX)
     local essential = cache.essential
     local utility   = cache.utility
     if not (essential and utility) then return baseX end
 
-    local eWidth = essential:GetWidth()
-    local uWidth = utility:GetWidth()
+    local eWidth = essential:GetWidth() or 0
+    local uWidth = utility:GetWidth() or 0
     if uWidth <= eWidth then return baseX end
 
     local extra = (uWidth - eWidth) / 2
@@ -130,6 +147,38 @@ local function GetCollisionXOffset(featureKey, baseX, parentName)
         return baseX + extra
     end
     return baseX
+end
+
+local function ComputeSCMCollision(featureKey, baseX)
+    local a1 = _G.SCM_GroupAnchor_1
+    local a2 = _G.SCM_GroupAnchor_2
+    if not (a1 and a1.GetWidth) then return baseX end
+
+    local w1 = a1:GetWidth() or 0
+    local w2 = (a2 and a2.GetWidth and a2:IsShown() and a2:GetWidth()) or 0
+    local widest = math.max(w1, w2)
+    if widest <= 0 then return baseX end
+
+    -- A1's own edges are half of w1 from center each side. To clear the
+    -- widest bar instead, push out by (widest - w1)/2 extra per side.
+    local extra = (widest - w1) / 2
+    local gap = math.abs(baseX)
+
+    if featureKey == "PlayerFrame" or featureKey == "FocusFrame" then
+        return -(gap + extra)
+    elseif featureKey == "TargetFrame" then
+        return (gap + extra)
+    end
+    return baseX
+end
+
+local function GetCollisionXOffset(featureKey, baseX, parentName)
+    if not ESSENTIAL_PARENTS[parentName] then return baseX end
+    if parentName == "SCM_GroupAnchor_1" then
+        return ComputeSCMCollision(featureKey, baseX)
+    else
+        return ComputeAyijeCollision(featureKey, baseX)
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -171,6 +220,20 @@ local function RestoreAllAnchors()
 end
 
 ---------------------------------------------------------------------------------
+-- Resolve parent frame per feature
+--
+-- Player/Target are provider-resolved (auto-detect SCM or Ayije, ignore saved
+-- ParentFrame). Focus/Pet keep their user-configured ParentFrame.
+---------------------------------------------------------------------------------
+local function ResolveParentFrameName(featureKey, subDB)
+    if featureKey == "PlayerFrame" or featureKey == "TargetFrame" then
+        local provider = DetectProvider()
+        return provider and PROVIDER_PARENT_FRAME[provider] or nil
+    end
+    return subDB.ParentFrame
+end
+
+---------------------------------------------------------------------------------
 -- Apply a single feature's position to its unit frame + mover
 ---------------------------------------------------------------------------------
 local function ApplyFeature(featureKey, subDB)
@@ -182,18 +245,24 @@ local function ApplyFeature(featureKey, subDB)
         return
     end
 
-    local parent
-    if subDB.anchorFrameType == "SELECTFRAME" then
-        local parentName = subDB.ParentFrame
+    local parent, parentName
+    if featureKey == "PlayerFrame" or featureKey == "TargetFrame" then
+        parentName = ResolveParentFrameName(featureKey, subDB)
         parent = parentName and _G[parentName]
         if not parent then
-            if parentName then
-                WarnMissingParent(featureKey, parentName)
-            end
+            if parentName then WarnMissingParent(featureKey, parentName) end
+            return
+        end
+    elseif subDB.anchorFrameType == "SELECTFRAME" then
+        parentName = subDB.ParentFrame
+        parent = parentName and _G[parentName]
+        if not parent then
+            if parentName then WarnMissingParent(featureKey, parentName) end
             return
         end
     else
         parent = _G.UIParent
+        parentName = "UIParent"
     end
 
     local pos = subDB.Position
@@ -204,7 +273,7 @@ local function ApplyFeature(featureKey, subDB)
     local x         = pos.XOffset    or 0
     local y         = pos.YOffset    or 0
 
-    x = GetCollisionXOffset(featureKey, x, subDB.ParentFrame)
+    x = GetCollisionXOffset(featureKey, x, parentName)
 
     refs.uf:ClearAllPoints()
     refs.uf:SetPoint(fromPoint, parent, toPoint, x, y)
@@ -219,6 +288,8 @@ end
 ---------------------------------------------------------------------------------
 -- Main layout pass + debounce
 ---------------------------------------------------------------------------------
+local providerWarned = false
+
 function PC:ApplyLayout()
     if InCombatLockdown() then return end
     if not HasElvUI() then return end
@@ -227,10 +298,22 @@ function PC:ApplyLayout()
     if not db or not db.Enabled then return end
     if IsHealerGated(db) then return end
 
-    ApplyFeature("PlayerFrame", db.PlayerFrame)
-    ApplyFeature("TargetFrame", db.TargetFrame)
-    ApplyFeature("FocusFrame",  db.FocusFrame)
-    ApplyFeature("PetFrame",    db.PetFrame)
+    local provider = DetectProvider()
+    local pAny = (db.PlayerFrame and db.PlayerFrame.Enabled) or
+                 (db.TargetFrame and db.TargetFrame.Enabled)
+    if not provider and pAny and not providerWarned then
+        providerWarned = true
+        KE:Print("Position Controller: Player/Target anchoring requires SkironCooldownManager or Ayije_CDM.")
+    elseif provider then
+        providerWarned = false
+    end
+
+    if provider then
+        ApplyFeature("PlayerFrame", db.PlayerFrame)
+        ApplyFeature("TargetFrame", db.TargetFrame)
+    end
+    ApplyFeature("FocusFrame", db.FocusFrame)
+    ApplyFeature("PetFrame",   db.PetFrame)
 end
 
 local pending = false
@@ -252,17 +335,44 @@ local function OnViewerResized()
 end
 
 function PC:HookViewerSizes()
-    local essential = cache.essential
-    local utility   = cache.utility
+    -- SCM provider frames
+    local a1 = _G.SCM_GroupAnchor_1
+    local a2 = _G.SCM_GroupAnchor_2
 
-    if essential and not essential._kePositionHooked then
-        essential:HookScript("OnSizeChanged", OnViewerResized)
-        essential._kePositionHooked = true
+    if a1 and not a1._kePositionHooked then
+        a1:HookScript("OnSizeChanged", OnViewerResized)
+        a1:HookScript("OnShow",        OnViewerResized)
+        a1:HookScript("OnHide",        OnViewerResized)
+        a1._kePositionHooked = true
+    end
+    if a2 and not a2._kePositionHooked then
+        a2:HookScript("OnSizeChanged", OnViewerResized)
+        a2:HookScript("OnShow",        OnViewerResized)
+        a2:HookScript("OnHide",        OnViewerResized)
+        a2._kePositionHooked = true
     end
 
-    if utility and not utility._kePositionHooked then
-        utility:HookScript("OnSizeChanged", OnViewerResized)
-        utility._kePositionHooked = true
+    -- Ayije provider frames (Blizzard cooldown viewers).
+    if _G.Ayije_CDM then
+        local essential = cache.essential
+        local utility   = cache.utility
+        if essential and not essential._kePositionHooked then
+            essential:HookScript("OnSizeChanged", OnViewerResized)
+            essential._kePositionHooked = true
+        end
+        if utility and not utility._kePositionHooked then
+            utility:HookScript("OnSizeChanged", OnViewerResized)
+            utility._kePositionHooked = true
+        end
+    end
+end
+
+function PC:ScheduleSettleReapply()
+    for _, delay in ipairs({ 0.1, 0.5, 1.0, 2.0 }) do
+        C_Timer.After(delay, function()
+            PC:HookViewerSizes()
+            PC:QueueApply()
+        end)
     end
 end
 
@@ -385,6 +495,7 @@ function PC:OnPlayerEnteringWorld()
     self:TryInstallCDMHook()
     self:AttachPetWatcher()
     self:QueueApply()
+    self:ScheduleSettleReapply()
 end
 
 -- Registers events that drive unit-frame anchoring re-applies. Only meaningful
