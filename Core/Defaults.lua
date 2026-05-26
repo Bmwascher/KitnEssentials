@@ -1092,6 +1092,38 @@ local Defaults = {
             Position = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = -360, YOffset = -55 },
         },
 
+        AuraExternals = {
+            Enabled           = false,
+            IncludeSelfCast   = false,
+            ShowBigDefensives = false,
+            Strata            = "MEDIUM",
+            anchorFrameType   = "UIPARENT",
+            ParentFrame       = "UIParent",
+            Position          = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = -180 },
+            SnapToPixelGrid   = false,
+            IconSize          = 36,
+            IconSpacing       = 1,
+            IconsPerRow       = 6,
+            MaxRows           = 1,
+            IconZoom          = 0.30,
+            Swipe             = false,
+            Reverse           = false,
+            GrowHorizontal    = "RIGHT",
+            GrowVertical      = "DOWN",
+            BorderColor       = { 0, 0, 0, 1 },
+            BackgroundColor   = { 0, 0, 0, 0.3 },
+            GlowEnabled       = true,
+            GlowType          = "pixel",
+            GlowColor         = { 0, 1, 0, 1 },
+            SoundEnabled      = false,
+            SoundName         = "None",
+            FontFace          = "Expressway",
+            FontSize          = 14,
+            FontOutline       = "OUTLINE",
+            TimerFontSize     = 18,
+            TimerPosition     = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = 0 },
+        },
+
         -----------------------------------------------------------------
         -- Dungeons Modules
         -----------------------------------------------------------------

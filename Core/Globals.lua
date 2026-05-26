@@ -348,7 +348,7 @@ local PREVIEW_MODULES = {
     "CombatTimer", "PetStatusText", "DragonRiding",
     "FocusCastbar", "TargetCastbar", "RaidNotifications", "HuntersMark", "RangeChecker",
     "TimeSpiral", "TotemTracker", "DisintegrateTicks", "StasisTracker", "Recuperate", "BloodlustTracker", "KickTracker",
-    "NoMovementAlert", "PrescienceTracker", "GreatVaultAlert", "PotionReady", "BossDebuffs",
+    "NoMovementAlert", "PrescienceTracker", "GreatVaultAlert", "PotionReady", "BossDebuffs", "AuraExternals",
     "EnemyCounter", "EbonMightTracker", "DungeonCasts", "HealerMana",
     "ReadyCheckConsumables", "DeathNotifications",
     "Cursor",
@@ -358,7 +358,7 @@ local PREVIEW_MODULES = {
 -- Sections not listed here (Settings, Optimize, Skinning) have no previews
 local SECTION_PREVIEW_MODULES = {
     combat_section = {
-        "CombatRes", "BossDebuffs", "CombatTexts", "CombatTimer",
+        "CombatRes", "BossDebuffs", "AuraExternals", "CombatTexts", "CombatTimer",
         "FocusCastbar", "TargetCastbar", "CombatCross", "RangeChecker",
         "Cursor",
     },
