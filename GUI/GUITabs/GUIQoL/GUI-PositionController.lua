@@ -2,23 +2,16 @@
 -- ║  GUI-PositionController.lua                              ║
 -- ║  GUI: Position Controller                                ║
 -- ║  Purpose: Configuration panel for the PositionController ║
--- ║  module. Two halves: ElvUI unit frame anchoring          ║
--- ║  (top, requires ElvUI) and CDM Racials Anchor (bottom,   ║
--- ║  works with ElvUI or UUF, fully independent of the       ║
--- ║  master Position Controller toggle).                     ║
+-- ║  module. Player/Target use simplified cards (X/Y only,   ║
+-- ║  auto-anchored to the active CDM). Focus/Pet keep the    ║
+-- ║  full anchor picker. CDM Racials sits below, independent ║
+-- ║  of the master Position Controller toggle.               ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
-
-local FEATURE_ORDER = {
-    { key = "PlayerFrame", title = "Player Frame" },
-    { key = "TargetFrame", title = "Target Frame" },
-    { key = "FocusFrame",  title = "Focus Frame"  },
-    { key = "PetFrame",    title = "Pet Frame"    },
-}
 
 local function GetModule()
     if KitnEssentials then
@@ -53,12 +46,12 @@ GUIFrame:RegisterContent("PositionController", function(scrollChild, yOffset)
         if PC and PC.ApplySettings then PC:ApplySettings() end
     end
 
-    -- Master gates the whole top half. Per-feature sub-conditions gate each
-    -- frame's position card on its own enable toggle. CDM Racials uses its
-    -- own independent manager.
+    -- Master gates the entire top half. Per-feature sub-conditions gate each
+    -- frame's position widgets on its own enable toggle. CDM Racials uses its
+    -- own independent cascade further down.
     local manager = GUIFrame:CreateWidgetStateManager()
-    for _, f in ipairs(FEATURE_ORDER) do
-        local key = f.key
+    local FEATURE_KEYS = { "PlayerFrame", "TargetFrame", "FocusFrame", "PetFrame" }
+    for _, key in ipairs(FEATURE_KEYS) do
         manager:SetCondition("feature_" .. key, function()
             return db[key] and db[key].Enabled == true
         end)
@@ -69,14 +62,13 @@ GUIFrame:RegisterContent("PositionController", function(scrollChild, yOffset)
     local function RefreshStates()
         local masterOn = db.Enabled == true and anchoringAvailable
         manager:UpdateAll(masterOn)
-        -- Master toggle itself is editable whenever anchoring is available.
         if masterCheck and masterCheck.SetEnabled then
             masterCheck:SetEnabled(anchoringAvailable)
         end
     end
 
     ----------------------------------------------------------------
-    -- Card 1: Position Controller — master enable + intro note
+    -- Card 1: Position Controller — master enable + behavior + note
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Position Controller", yOffset)
 
@@ -104,55 +96,9 @@ GUIFrame:RegisterContent("PositionController", function(scrollChild, yOffset)
     masterRow:AddWidget(masterCheck, 1)
     card1:AddRow(masterRow, Theme.rowHeight)
 
-    -- Intro + ElvUI requirement + live status indicator (3 states).
-    local introLine = KE:ColorTextByTheme("-") ..
-        " Anchors unit frames and adjusts CDM Racials placement."
-    local requirementLine = KE:ColorTextByTheme("-") ..
-        " Unit frame anchoring requires ElvUI; CDM Racials supports UUF too."
-    local statusLine
-    if not elvUIPresent then
-        statusLine = "|cffff4444- ElvUI not detected. Unit frame anchoring is unavailable. |r"
-    elseif anchorAddonPresent then
-        statusLine = "|cffffcc33- ElvUI_Anchor detected. Unit frame anchoring delegated to that addon. |r"
-    else
-        statusLine = "|cff00ff00- ElvUI detected. Unit frame anchoring is available. |r"
-    end
-    local noteRow = GUIFrame:CreateRow(card1.content, 86)
-    local noteText = GUIFrame:CreateText(noteRow,
-        KE:ColorTextByTheme("Note"),
-        introLine .. "\n" .. requirementLine .. "\n" .. statusLine,
-        86, "hide")
-    noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, 86, 0)
-
-    yOffset = card1:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Card 2: Behavior — per-frame toggles + healer-spec gate
-    ----------------------------------------------------------------
-    local card2 = GUIFrame:CreateCard(scrollChild, "Behavior", yOffset)
-    manager:Register(card2, "all")
-
-    local togglesRow = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    for _, f in ipairs(FEATURE_ORDER) do
-        local key = f.key
-        local subDB = db[key]
-        local cb = GUIFrame:CreateCheckbox(togglesRow, f.title, {
-            value = subDB and subDB.Enabled == true,
-            callback = function(checked)
-                if subDB then subDB.Enabled = checked end
-                ApplySettings()
-                RefreshStates()
-            end,
-        })
-        togglesRow:AddWidget(cb, 1 / #FEATURE_ORDER)
-        manager:Register(cb, "all")
-    end
-    card2:AddRow(togglesRow, Theme.rowHeight)
-
-    -- Ignore Healer Specs toggle on its own row, with a gray descriptor
-    -- alongside the knob.
-    local healerRow = GUIFrame:CreateRow(card2.content, 50)
+    -- Ignore Healer Specs lives alongside the master enable since the Behavior
+    -- card was collapsed away (per-frame toggles now live in each frame card).
+    local healerRow = GUIFrame:CreateRow(card1.content, 50)
     local healerToggle = GUIFrame:CreateCheckbox(healerRow, "Ignore Healer Specs", {
         value = db.IgnoreHealerSpec ~= false,
         callback = function(checked)
@@ -177,43 +123,165 @@ GUIFrame:RegisterContent("PositionController", function(scrollChild, yOffset)
     healerDesc:SetTextColor(0x88/0xFF, 0x88/0xFF, 0x88/0xFF, 1)
     healerDesc:SetText("Leaves your unit frames where ElvUI placed them while you're on a healer spec.")
 
-    card2:AddRow(healerRow, 50, 0)
+    card1:AddRow(healerRow, 50)
 
-    yOffset = card2:GetNextOffset()
+    -- Intro + ElvUI requirement + live status indicator (3 states).
+    local introLine = KE:ColorTextByTheme("-") ..
+        " Auto-anchors Player and Target frames beside SkironCooldownManager or Ayije_CDM, clearing the widest cooldown row."
+    local requirementLine = KE:ColorTextByTheme("-") ..
+        " Focus and Pet frames anchor freely; CDM Racials is independent and supports UUF too."
+    local statusLine
+    if not elvUIPresent then
+        statusLine = "|cffff4444- ElvUI not detected. Unit frame anchoring is unavailable. |r"
+    elseif anchorAddonPresent then
+        statusLine = "|cffffcc33- ElvUI_Anchor detected. Unit frame anchoring delegated to that addon. |r"
+    else
+        statusLine = "|cff00ff00- ElvUI detected. Unit frame anchoring is available. |r"
+    end
+    local noteRow = GUIFrame:CreateRow(card1.content, 86)
+    local noteText = GUIFrame:CreateText(noteRow,
+        KE:ColorTextByTheme("Note"),
+        introLine .. "\n" .. requirementLine .. "\n" .. statusLine,
+        86, "hide")
+    noteRow:AddWidget(noteText, 1)
+    card1:AddRow(noteRow, 86, 0)
+
+    yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Cards 3-6: Position cards for each unit frame feature
+    -- Helper: simplified frame card (Player/Target).
+    --
+    -- Enable toggle + X Offset + Y Offset only. Anchor points stay at their
+    -- default RIGHT/LEFT (Player) or LEFT/RIGHT (Target) — the backend reads
+    -- them from db.PositionController.<Frame>.Position, and the user's saved
+    -- value (if any) is preserved untouched. The active cooldown manager is
+    -- the resolved parent; XOffset signs already encode the side.
     ----------------------------------------------------------------
-    for _, f in ipairs(FEATURE_ORDER) do
-        local key = f.key
+    local function CreateSimpleFrameCard(title, key)
         local subDB = db[key]
-        if subDB then
-            local card, newOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-                title = f.title,
-                db = subDB,
-                dbKeys = {
-                    anchorFrameType  = "anchorFrameType",
-                    anchorFrameFrame = "ParentFrame",
-                    selfPoint        = "AnchorFrom",
-                    anchorPoint      = "AnchorTo",
-                    xOffset          = "XOffset",
-                    yOffset          = "YOffset",
-                },
-                showAnchorFrameType = true,
-                showStrata = false,
-                onChangeCallback = ApplySettings,
-            })
+        if not subDB then return end
+        subDB.Position = subDB.Position or {}
 
-            if card.positionWidgets then
-                manager:RegisterGroup(card.positionWidgets, "feature_" .. key)
-            end
-            manager:Register(card, "feature_" .. key)
-            yOffset = newOffset
-        end
+        local card = GUIFrame:CreateCard(scrollChild, title, yOffset)
+
+        local enableRow = GUIFrame:CreateRow(card.content, Theme.rowHeight)
+        local enableToggle = GUIFrame:CreateCheckbox(enableRow, "Enable", {
+            value = subDB.Enabled == true,
+            callback = function(checked)
+                subDB.Enabled = checked
+                ApplySettings()
+                RefreshStates()
+            end,
+            msgPopup = true,
+            msgText = title,
+            msgOn = "On",
+            msgOff = "Off",
+        })
+        enableRow:AddWidget(enableToggle, 1)
+        manager:Register(enableToggle, "all")
+        card:AddRow(enableRow, Theme.rowHeight)
+
+        local offsetRow = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
+        local xSlider = GUIFrame:CreateSlider(offsetRow, "X Offset", {
+            min = -200, max = 200, step = 1,
+            value = subDB.Position.XOffset or 0,
+            callback = function(val)
+                subDB.Position.XOffset = val
+                ApplySettings()
+            end,
+        })
+        offsetRow:AddWidget(xSlider, 0.5)
+        local ySlider = GUIFrame:CreateSlider(offsetRow, "Y Offset", {
+            min = -200, max = 200, step = 1,
+            value = subDB.Position.YOffset or 0,
+            callback = function(val)
+                subDB.Position.YOffset = val
+                ApplySettings()
+            end,
+        })
+        offsetRow:AddWidget(ySlider, 0.5)
+        manager:Register(xSlider, "feature_" .. key)
+        manager:Register(ySlider, "feature_" .. key)
+        card:AddRow(offsetRow, Theme.rowHeightLast, 0)
+
+        yOffset = card:GetNextOffset()
     end
 
     ----------------------------------------------------------------
-    -- Card 7: CDM Racials Anchor (independent module — own cascade)
+    -- Card 2: Player Frame (simplified)
+    ----------------------------------------------------------------
+    CreateSimpleFrameCard("Player Frame", "PlayerFrame")
+
+    ----------------------------------------------------------------
+    -- Card 3: Target Frame (simplified)
+    ----------------------------------------------------------------
+    CreateSimpleFrameCard("Target Frame", "TargetFrame")
+
+    ----------------------------------------------------------------
+    -- Helper: full-anchor frame (Focus/Pet) — Enable card on top, full
+    -- position card directly underneath. Matches AE v4's pattern verbatim:
+    -- two stacked cards keep the master enable visually distinct from the
+    -- anchor widget set without bloating CreatePositionCard with an extra
+    -- toggle slot.
+    ----------------------------------------------------------------
+    local function CreateFullAnchorFrame(title, key)
+        local subDB = db[key]
+        if not subDB then return end
+
+        local enableCard = GUIFrame:CreateCard(scrollChild, title, yOffset)
+        local enableRow = GUIFrame:CreateRow(enableCard.content, Theme.rowHeight)
+        local enableToggle = GUIFrame:CreateCheckbox(enableRow, "Enable", {
+            value = subDB.Enabled == true,
+            callback = function(checked)
+                subDB.Enabled = checked
+                ApplySettings()
+                RefreshStates()
+            end,
+            msgPopup = true,
+            msgText = title,
+            msgOn = "On",
+            msgOff = "Off",
+        })
+        enableRow:AddWidget(enableToggle, 1)
+        manager:Register(enableToggle, "all")
+        enableCard:AddRow(enableRow, Theme.rowHeight, 0)
+        yOffset = enableCard:GetNextOffset()
+
+        local card, newOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+            title = title .. " Position",
+            db = subDB,
+            dbKeys = {
+                anchorFrameType  = "anchorFrameType",
+                anchorFrameFrame = "ParentFrame",
+                selfPoint        = "AnchorFrom",
+                anchorPoint      = "AnchorTo",
+                xOffset          = "XOffset",
+                yOffset          = "YOffset",
+            },
+            showAnchorFrameType = true,
+            showStrata = false,
+            onChangeCallback = ApplySettings,
+        })
+
+        if card.positionWidgets then
+            manager:RegisterGroup(card.positionWidgets, "feature_" .. key)
+        end
+        manager:Register(card, "feature_" .. key)
+        yOffset = newOffset
+    end
+
+    ----------------------------------------------------------------
+    -- Card 4 + 5: Focus Frame (Enable + Position)
+    ----------------------------------------------------------------
+    CreateFullAnchorFrame("Focus Frame", "FocusFrame")
+
+    ----------------------------------------------------------------
+    -- Card 6 + 7: Pet Frame (Enable + Position)
+    ----------------------------------------------------------------
+    CreateFullAnchorFrame("Pet Frame", "PetFrame")
+
+    ----------------------------------------------------------------
+    -- Card 8: CDM Racials Anchor (independent module — own cascade)
     ----------------------------------------------------------------
     local cdmDB = db.CDMRacials
     if cdmDB then

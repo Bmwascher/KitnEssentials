@@ -1,5 +1,39 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v2.2.0
+
+### Advanced Debuffs
+- **NEW:** Advanced Debuffs module — bar-based dispellable-debuff display with built-in cooldown swipe, native countdown text, per-dispel-type border color, and a per-type atlas overlay (Magic / Curse / Poison / Disease / Enrage / Bleed). Subsumes the older Boss Debuffs module; existing settings migrate automatically on first load
+- **NEW:** Encounter-aura support — works on boss debuffs that ship as Secret Values in 12.0+. Built taint-safely via `C_UnitAuras.GetAuraDispelTypeColor` curves + `LuaDurationObject`, so dispel type and countdown render correctly even when raw aura fields are masked
+- **NEW:** Border Color Mode toggle — pick between dispel-type-driven border (Magic = blue, Curse = purple, Poison = green, Disease = orange, etc.) or a fixed user color
+- **NEW:** Filtering — Show My Debuffs Only (PLAYER filter) and per-type include/exclude. Blocklist by spell ID for unhelpful one-offs (e.g. Curse-of-Tongues spam)
+- **NEW:** Element Positions card — adjust timer text and stack count placement independently of the icon
+
+### External and Defensive Buffs
+- **NEW:** External and Defensive Buffs module — displays external defensive cooldowns cast onto you (Pain Suppression, Ironbark, Blessing of Sacrifice, etc.) with built-in cooldown swipe, native countdown text, configurable glow per cast, and an optional Test sound when an external lands. Curated list of common externals + an Include Defensives toggle for your own ones
+- **NEW:** BigWigs glow integration — when BigWigs flags an incoming raid hit, the matching defensive aura on your bar lights up
+- **NEW:** Sound Test button — auditions the currently-selected Test sound from the GUI without waiting for a real cast
+
+### Position Controller
+- **NEW:** SkironCooldownManager support — Player and Target frames auto-anchor beside whichever cooldown manager is loaded (SkironCooldownManager or Ayije_CDM), no manual configuration needed
+- **NEW:** ElvUI mover write-through — positions are written through ElvUI's mover system instead of via raw `SetPoint`, so placements survive `/reload` and zone changes without ElvUI reverting them
+- Position Controller GUI rebuilt: Player/Target cards collapsed to Enable + X/Y offset (active CDM resolves the parent), Focus/Pet keep the full anchor picker, Ignore Healer Specs lifted into the master card
+
+### Spell Alerts
+- **NEW:** Per-spec toggles for every class — opt individual specs in or out of the proc-flash overlay via a 4-column class/spec grid. Keyed by global spec ID so selections survive talent/class swaps
+- Opacity slider moved above the spec grid for quicker access
+
+### Automation
+- **NEW:** Auto-accept resurrection — automatically accepts incoming resurrection requests when you're out of combat. Sender guard hardened to ignore requests with no resurrector identity
+
+### Tags
+- **NEW:** `kes:mana:percent` tag — shows the unit's mana % below 100, hidden at full mana
+
+### Sidebar
+- Section labels relabelled for clarity: "Combat Utilities", "General Utilities", "Dungeon & Party Utilities". Module entries renamed too: Aura Debuffs → "Advanced Debuffs", Aura Externals → "External and Defensive Buffs"
+
+---
+
 ## v2.1.0
 
 ### Character Panel

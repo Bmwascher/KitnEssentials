@@ -261,7 +261,12 @@ function GUIFrame:CreateCheckbox(parent, labelText, config)
             Theme.accent[3] * hoverBrightness,
             baseA
         if tooltip then
-            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            -- ANCHOR_CURSOR_RIGHT positions the tooltip top-right of the
+            -- cursor, matching AE's tooltip style — keeps the description
+            -- next to the pointer instead of obscuring the widget below.
+            -- The 10/10 offset pushes the tooltip slightly out from the
+            -- cursor so the pointer doesn't sit on the tooltip edge.
+            GameTooltip:SetOwner(self, "ANCHOR_CURSOR_RIGHT", 10, 10)
             GameTooltip:SetText(tooltip, 1, 1, 1, 1, true)
             GameTooltip:Show()
         end

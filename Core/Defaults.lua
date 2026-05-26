@@ -568,6 +568,7 @@ local Defaults = {
             QuestModifier = "SHIFT",
             AutoDeclineDuels = false,
             AutoDeclinePetBattles = false,
+            AutoAcceptRes = false,
             -- CVars (merged) - boolean
             CVarsEnabled = true,
             enableFloatingCombatText = nil,
@@ -965,8 +966,8 @@ local Defaults = {
         PositionController = {
             Enabled = false,
             -- When true, unit frame anchoring goes no-op on healer specs so
-            -- ElvUI's profile positions take back over (matches AE behavior).
-            -- Set false to apply anchoring on every spec including healer.
+            -- ElvUI's profile positions take back over. Set false to apply
+            -- anchoring on every spec including healer.
             IgnoreHealerSpec = true,
             PlayerFrame = {
                 Enabled = true,
@@ -1074,21 +1075,94 @@ local Defaults = {
             DurationColor  = { 1.0, 1.0, 1.0, 1.0 },
         },
 
-        BossDebuffs = {
-            Enabled = false,
-            VisibilityMode = "boss",
-            EncounterBlacklist = "",
-            MaxDebuffs = 2,
-            IconSize = 96,
-            Spacing = 1,
-            GrowthDirection = "LEFT",
-            ShowDuration = true,
-            ShowDurationText = true,
-            ShowTooltip = true,
-            Strata = "MEDIUM",
-            anchorFrameType = "UIPARENT",
-            ParentFrame = "UIParent",
-            Position = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = -360, YOffset = -55 },
+        AuraExternals = {
+            Enabled           = false,
+            ShowBigDefensives = false,
+            Strata            = "MEDIUM",
+            anchorFrameType   = "UIPARENT",
+            ParentFrame       = "UIParent",
+            Position          = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = -180 },
+            SnapToPixelGrid   = false,
+            IconSize          = 36,
+            IconSpacing       = 1,
+            IconsPerRow       = 6,
+            MaxRows           = 1,
+            Swipe             = false,
+            Reverse           = false,
+            GrowHorizontal    = "RIGHT",
+            GrowVertical      = "DOWN",
+            GlowEnabled       = true,
+            GlowType          = "pixel",
+            GlowColor         = { 0, 1, 0, 1 },
+            -- PixelGlow extended params (passed to LCG.PixelGlow_Start)
+            GlowLines         = 8,
+            GlowFrequency     = 0.25,
+            GlowLength        = 10,
+            GlowThickness     = 1,
+            GlowBorder        = false,
+            GlowScale         = 1.0,
+            GlowStartAnim     = true,
+            GlowDuration      = 1.0,
+            SoundEnabled      = false,
+            SoundName         = "None",
+            FontFace          = "Expressway",
+            FontSize          = 14,
+            FontOutline       = "OUTLINE",
+            TimerFontSize     = 18,
+            TimerPosition     = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = 0 },
+            StackPosition     = { AnchorFrom = "BOTTOMRIGHT", AnchorTo = "BOTTOMRIGHT", XOffset = -1, YOffset = 1 },
+        },
+
+        AuraDebuffs = {
+            Enabled            = false,
+            Strata             = "MEDIUM",
+            anchorFrameType    = "UIPARENT",
+            ParentFrame        = "UIParent",
+            Position           = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = -120 },
+            SnapToPixelGrid    = false,
+            IconSize           = 32,
+            IconSpacing        = 1,
+            IconsPerRow        = 8,
+            MaxRows            = 1,
+            Swipe              = true,
+            Reverse            = true,
+            GrowHorizontal     = "RIGHT",
+            GrowVertical       = "DOWN",
+            BorderColor        = { 0.8, 0, 0, 1 },
+            BorderColorMode    = "dispel",
+            -- DispelColors are user overrides; the GUI's DISPEL_DEFAULTS
+            -- table provides the AE-matched fallback colors when nil.
+            -- All 7 types Blizzard surfaces (incl. None/Enrage) are valid keys.
+            DispelColors = {
+                None    = nil,
+                Magic   = nil,
+                Curse   = nil,
+                Disease = nil,
+                Poison  = nil,
+                Bleed   = nil,
+                Enrage  = nil,
+            },
+            -- "Filtering Options" — each enabled filter REMOVES matching auras
+            -- from tracking. Default PLAYER=true because the player's own
+            -- debuffs are usually not what you want on a boss-debuff tracker.
+            -- RAID_IN_COMBAT is HELPFUL-only per AuraUtil.AuraFilters, so it
+            -- isn't surfaced here.
+            Filters = {
+                PLAYER                  = true,
+                RAID                    = false,
+                CROWD_CONTROL           = false,
+                IMPORTANT               = false,
+                RAID_PLAYER_DISPELLABLE = false,
+                INCLUDE_NAME_PLATE_ONLY = false,
+            },
+            Blocklist     = {},
+            FontFace      = "Expressway",
+            FontSize      = 14,
+            FontOutline   = "OUTLINE",
+            TimerFontSize = 16,
+            TimerPosition  = { AnchorFrom = "CENTER",      AnchorTo = "CENTER",      XOffset = 0, YOffset = 0 },
+            StackPosition  = { AnchorFrom = "BOTTOMRIGHT", AnchorTo = "BOTTOMRIGHT", XOffset = 0, YOffset = 2 },
+            DispelPosition = { AnchorFrom = "TOPRIGHT",    AnchorTo = "TOPRIGHT",    XOffset = 0, YOffset = 0 },
         },
 
         -----------------------------------------------------------------

@@ -49,7 +49,7 @@ function GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, config)
         autocast = {},
         proc = {},
     }
-    local frequencyRow
+    local freqSlider
 
     local function setValue(key, val)
         db[key] = val
@@ -84,6 +84,9 @@ function GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, config)
     local separator = GUIFrame:CreateSeparator(card.content)
     card:AddRow(separator, Theme.rowHeightSeparator)
 
+    -- Color + Speed share row 2 (half-width each) to compact the card.
+    -- For glow types that don't use frequency (proc), Speed is hidden in
+    -- updateTypeVisibility while Color stays anchored on the left.
     local row2 = GUIFrame:CreateRow(card.content, Theme.rowHeight)
     local colorPicker = GUIFrame:CreateColorPicker(row2, "Color", {
         color = db[keys.color],
@@ -92,22 +95,19 @@ function GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, config)
             if onChange then onChange() end
         end
     })
-    row2:AddWidget(colorPicker, 1)
+    row2:AddWidget(colorPicker, 0.5)
     table_insert(widgets, colorPicker)
-    card:AddRow(row2, Theme.rowHeight)
 
-    local rowFreq = GUIFrame:CreateRow(card.content, Theme.rowHeight)
-    local freqSlider = GUIFrame:CreateSlider(rowFreq, "Speed", {
+    freqSlider = GUIFrame:CreateSlider(row2, "Speed", {
         min = 0.05,
         max = 1,
         step = 0.05,
         value = db[keys.frequency],
         callback = function(val) setValue(keys.frequency, val) end
     })
-    rowFreq:AddWidget(freqSlider, 1)
+    row2:AddWidget(freqSlider, 0.5)
     table_insert(widgets, freqSlider)
-    card:AddRow(rowFreq, Theme.rowHeight)
-    frequencyRow = rowFreq
+    card:AddRow(row2, Theme.rowHeight)
 
     local rowPixel1 = GUIFrame:CreateRow(card.content, Theme.rowHeight)
     local linesSlider = GUIFrame:CreateSlider(rowPixel1, "Lines", {
@@ -197,7 +197,6 @@ function GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, config)
 
     card.glowWidgets = widgets
     card.typeOnlyRows = typeOnlyRows
-    card.frequencyRow = frequencyRow
     card._initialized = false
 
     function card.updateTypeVisibility()
@@ -207,14 +206,10 @@ function GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, config)
         local baseHeight = card.headerHeight + Theme.paddingSmall * 2
         local currentY = (Theme.rowHeight + Theme.paddingSmall) * 2 + Theme.rowHeightSeparator + Theme.paddingSmall
 
+        -- Color + Speed share one row; only the Speed widget hides for glow
+        -- types that don't honor frequency (proc).
         local showFrequency = (glowType == "pixel" or glowType == "autocast" or glowType == "button")
-        frequencyRow:SetShown(showFrequency)
-        if showFrequency then
-            frequencyRow:ClearAllPoints()
-            frequencyRow:SetPoint("TOPLEFT", card.content, "TOPLEFT", 0, -currentY)
-            frequencyRow:SetPoint("TOPRIGHT", card.content, "TOPRIGHT", 0, -currentY)
-            currentY = currentY + Theme.rowHeight + Theme.paddingSmall
-        end
+        if freqSlider and freqSlider.SetShown then freqSlider:SetShown(showFrequency) end
 
         for typeName, rows in pairs(typeOnlyRows) do
             local show = (typeName == glowType)

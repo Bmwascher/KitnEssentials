@@ -46,6 +46,10 @@ local GetLootSpecialization = GetLootSpecialization
 local GetSpecialization = GetSpecialization
 local GetSpecializationInfo = GetSpecializationInfo
 local GetSpecializationInfoByID = GetSpecializationInfoByID
+local AcceptResurrect = AcceptResurrect
+local UnitAffectingCombat = UnitAffectingCombat
+local UnitExists = UnitExists
+local IsEncounterInProgress = IsEncounterInProgress
 
 ---------------------------------------------------------------------------------
 -- Hide Helptips (runs at load time)
@@ -840,6 +844,66 @@ local function SetupAutoDeclinePetBattles()
 end
 
 ---------------------------------------------------------------------------------
+-- Auto Accept Resurrection (out-of-combat only)
+--
+-- Mirrors the ElvUI_WindTools/Misc/Automation.lua pattern: explicit
+-- battle-res detection via boss1-in-combat + inviter-in-combat, rather than
+-- relying solely on IsEncounterInProgress (which has corner cases on
+-- multi-phase encounters). Auto-accept fires ONLY for peaceful, fully
+-- out-of-combat resurrections.
+--
+-- Refuses to auto-accept if ANY of:
+--   * Player is in combat (UnitAffectingCombat)
+--   * Combat lockdown is active (InCombatLockdown)
+--   * Encounter API reports an active encounter (IsEncounterInProgress)
+--   * boss1 unit exists AND is in combat (raid-encounter active even if
+--     encounter API is silent, e.g. M+ pulls without ENCOUNTER_START)
+--   * The inviter (sender) is themselves in combat — the caster is
+--     mid-fight, this is almost certainly a battle-res
+---------------------------------------------------------------------------------
+local resFrame = nil
+
+local function HandleResurrectRequest(_, _, inviterName)
+    if not AU.db or not AU.db.Enabled then return end
+    if not AU.db.AutoAcceptRes then return end
+    if UnitAffectingCombat("player") then return end
+    if InCombatLockdown() then return end
+    if IsEncounterInProgress() then return end
+
+    -- boss1 visible + in combat = encounter is live regardless of API state.
+    if UnitExists("boss1") and UnitAffectingCombat("boss1") then return end
+
+    -- Inviter-in-combat = mid-fight battle-res. inviterName is a name string
+    -- (e.g. "Bobthepriest" or "Bobthepriest-Realm"), not a unit token, so
+    -- pcall-guard the lookup — if the name doesn't resolve to a unit, fall
+    -- through and let the other guards decide.
+    if inviterName and inviterName ~= "" then
+        local ok, inCombat = pcall(UnitAffectingCombat, inviterName)
+        if ok and inCombat then return end
+    end
+
+    AcceptResurrect()
+    -- Hide both popup variants: RESURRECT_NO_TIMER (Soulstone-style) and
+    -- RESURRECT (priest/druid Resurrection with countdown). AcceptResurrect
+    -- usually dismisses the active one, but Blizzard sometimes leaves the
+    -- other queued popup visible.
+    StaticPopup_Hide("RESURRECT_NO_TIMER")
+    StaticPopup_Hide("RESURRECT")
+end
+
+local function SetupAutoAcceptRes()
+    if not resFrame then
+        resFrame = CreateFrame("Frame")
+        resFrame:SetScript("OnEvent", HandleResurrectRequest)
+    end
+    if AU.db.AutoAcceptRes then
+        resFrame:RegisterEvent("RESURRECT_REQUEST")
+    else
+        resFrame:UnregisterAllEvents()
+    end
+end
+
+---------------------------------------------------------------------------------
 -- Event Handlers
 ---------------------------------------------------------------------------------
 function AU:CVAR_UPDATE(_, cvarName)
@@ -882,6 +946,7 @@ function AU:ApplySettings()
     SetupAutoVoidcoresGold()
     SetupAutoDeclineDuels()
     SetupAutoDeclinePetBattles()
+    SetupAutoAcceptRes()
     self:ApplyCVars()
 end
 
