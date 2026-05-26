@@ -104,6 +104,10 @@ E:AddTag('kes:mana:percent', 'UNIT_POWER_FREQUENT UNIT_MAXPOWER UNIT_DISPLAYPOWE
     local max = UnitPowerMax(unit, Enum.PowerType.Mana)
     if max == 0 then return end
     local cur = UnitPower(unit, Enum.PowerType.Mana)
+    -- UnitPower/UnitPowerMax can return secret values on hostile/encounter
+    -- targets in 12.0.5. Fail-closed visibly rather than propagating the
+    -- secret into ElvUF's tag pipeline via SetText.
+    if issecretvalue and (issecretvalue(max) or issecretvalue(cur)) then return end
     local pct = math_floor((cur / max) * 100)
     if pct >= 100 then return end
     return pct

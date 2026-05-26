@@ -397,12 +397,19 @@ function PC:HookViewerSizes()
 end
 
 function PC:ScheduleSettleReapply()
+    -- Re-entry guard: rapid PLAYER_ENTERING_WORLD fires (instance hops,
+    -- loading screens) would otherwise stack four C_Timer.After callbacks
+    -- per fire. One in-flight settle window at a time is enough.
+    if self._settleScheduled then return end
+    self._settleScheduled = true
     for _, delay in ipairs({ 0.1, 0.5, 1.0, 2.0 }) do
         C_Timer.After(delay, function()
             PC:HookViewerSizes()
             PC:QueueApply()
         end)
     end
+    -- Clear the gate after the longest scheduled callback would have fired.
+    C_Timer.After(2.1, function() PC._settleScheduled = false end)
 end
 
 ---------------------------------------------------------------------------------

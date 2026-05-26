@@ -41,12 +41,12 @@ GUIFrame.sidebarConfig = {
     {
         id = "combat_section",
         type = "header",
-        text = "\226\128\162 Combat",
+        text = "\226\128\162 Combat Utilities",
         defaultExpanded = false,
         items = {
             { id = "CombatRes",     text = "Battle Res" },
-            { id = "AuraDebuffs",   text = "Aura Debuffs" },
-            { id = "AuraExternals", text = "Aura Externals" },
+            { id = "AuraDebuffs",   text = "Advanced Debuffs" },
+            { id = "AuraExternals", text = "External and Defensive Buffs" },
             { id = "CombatTexts",   text = "Combat Texts" },
             { id = "CombatTimer",   text = "Combat Timer" },
             { id = "Cursor",        text = "Cursor Effects" },
@@ -58,7 +58,7 @@ GUIFrame.sidebarConfig = {
     {
         id = "utilities_section",
         type = "header",
-        text = "\226\128\162 Utilities",
+        text = "\226\128\162 General Utilities",
         defaultExpanded = false,
         items = {
             { id = "BloodlustTracker", text = "Bloodlust Tracker" },
@@ -118,7 +118,7 @@ GUIFrame.sidebarConfig = {
     {
         id = "dungeons_section",
         type = "header",
-        text = "\226\128\162 Dungeons",
+        text = "\226\128\162 Dungeon & Party Utilities",
         defaultExpanded = false,
         items = {
             { id = "DeathNotifications",          text = "Death Notifications" },

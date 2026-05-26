@@ -9,7 +9,6 @@ local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 
-local pcall = pcall
 local tonumber = tonumber
 local tostring = tostring
 local math_floor = math.floor
@@ -18,6 +17,9 @@ local GetNumClasses = GetNumClasses
 local GetSpecializationInfoForClassID = GetSpecializationInfoForClassID
 local C_CreatureInfo = C_CreatureInfo
 local RAID_CLASS_COLORS = RAID_CLASS_COLORS
+
+-- Prefer C_CVar.SetCVar (12.0 forward path), fall back to global SetCVar.
+local SetCVar = (C_CVar and C_CVar.SetCVar) or SetCVar
 
 local function GetModule()
     if KitnEssentials then
@@ -50,17 +52,17 @@ GUIFrame:RegisterContent("SpellAlerts", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 1: Enable
     ----------------------------------------------------------------
-    local card1 = GUIFrame:CreateCard(scrollChild, "Spell Alert Opacity", yOffset)
+    local card1 = GUIFrame:CreateCard(scrollChild, "Spell Alerts", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Spell Alert Opacity", {
+    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Spell Alerts", {
         value = db.Enabled ~= false,
         callback = function(checked)
             ApplyModuleState(checked)
             RefreshStates()
         end,
         msgPopup = true,
-        msgText = "Spell Alert Opacity",
+        msgText = "Spell Alerts",
         msgOn = "On",
         msgOff = "Off",
     })
@@ -78,12 +80,35 @@ GUIFrame:RegisterContent("SpellAlerts", function(scrollChild, yOffset)
     yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 2: Enable Alerts per Spec (all classes, 4-column grid)
+    -- Card 2: Opacity (CVar slider)
+    ----------------------------------------------------------------
+    local card2 = GUIFrame:CreateCard(scrollChild, "Opacity", yOffset)
+    manager:Register(card2, "all")
+
+    local currentOpacity = tonumber(C_CVar.GetCVar("spellActivationOverlayOpacity")) or 0.65
+    local opacityRow = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local opacitySlider = GUIFrame:CreateSlider(opacityRow, "Opacity", {
+        min = 0, max = 100, step = 5,
+        value = math_floor(currentOpacity * 100),
+        callback = function(val)
+            if SetCVar then
+                SetCVar("spellActivationOverlayOpacity", tostring(val / 100))
+            end
+        end,
+    })
+    opacityRow:AddWidget(opacitySlider, 1)
+    manager:Register(opacitySlider, "all")
+    card2:AddRow(opacityRow, Theme.rowHeightLast, 0)
+
+    yOffset = card2:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 3: Enable Alerts per Spec (all classes, 4-column grid)
     ----------------------------------------------------------------
     if not db.EnabledSpecs then db.EnabledSpecs = {} end
 
-    local card2 = GUIFrame:CreateCard(scrollChild, "Enable Alerts per Spec", yOffset)
-    manager:Register(card2, "all")
+    local card3 = GUIFrame:CreateCard(scrollChild, "Enable Alerts per Spec", yOffset)
+    manager:Register(card3, "all")
 
     local COLUMNS = 4
     local numClasses = GetNumClasses and GetNumClasses() or 0
@@ -96,7 +121,7 @@ GUIFrame:RegisterContent("SpellAlerts", function(scrollChild, yOffset)
         if className then
             local color = classFile and RAID_CLASS_COLORS and RAID_CLASS_COLORS[classFile]
             local classHex = (color and color.colorStr) and ("|c" .. color.colorStr) or "|cffffffff"
-            card2:AddLabel(classHex .. className .. "|r")
+            card3:AddLabel(classHex .. className .. "|r")
 
             -- Collect this class's specs
             local specs = {}
@@ -115,7 +140,7 @@ GUIFrame:RegisterContent("SpellAlerts", function(scrollChild, yOffset)
             -- Lay specs out in rows of COLUMNS
             local idx = 1
             while idx <= #specs do
-                local specRow = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+                local specRow = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
                 for _ = 1, COLUMNS do
                     local spec = specs[idx]
                     if spec then
@@ -140,31 +165,10 @@ GUIFrame:RegisterContent("SpellAlerts", function(scrollChild, yOffset)
                     end
                     idx = idx + 1
                 end
-                card2:AddRow(specRow, Theme.rowHeight)
+                card3:AddRow(specRow, Theme.rowHeight)
             end
         end
     end
-
-    yOffset = card2:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Card 3: Opacity (CVar slider)
-    ----------------------------------------------------------------
-    local card3 = GUIFrame:CreateCard(scrollChild, "Opacity", yOffset)
-    manager:Register(card3, "all")
-
-    local currentOpacity = tonumber(C_CVar.GetCVar("spellActivationOverlayOpacity")) or 0.65
-    local row3 = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
-    local opacitySlider = GUIFrame:CreateSlider(row3, "Opacity", {
-        min = 0, max = 100, step = 5,
-        value = math_floor(currentOpacity * 100),
-        callback = function(val)
-            pcall(C_CVar.SetCVar, "spellActivationOverlayOpacity", tostring(val / 100))
-        end,
-    })
-    row3:AddWidget(opacitySlider, 1)
-    manager:Register(opacitySlider, "all")
-    card3:AddRow(row3, Theme.rowHeightLast, 0)
 
     yOffset = card3:GetNextOffset()
 

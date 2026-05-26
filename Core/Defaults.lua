@@ -966,8 +966,8 @@ local Defaults = {
         PositionController = {
             Enabled = false,
             -- When true, unit frame anchoring goes no-op on healer specs so
-            -- ElvUI's profile positions take back over (matches AE behavior).
-            -- Set false to apply anchoring on every spec including healer.
+            -- ElvUI's profile positions take back over. Set false to apply
+            -- anchoring on every spec including healer.
             IgnoreHealerSpec = true,
             PlayerFrame = {
                 Enabled = true,
@@ -1077,7 +1077,6 @@ local Defaults = {
 
         AuraExternals = {
             Enabled           = false,
-            IncludeSelfCast   = false,
             ShowBigDefensives = false,
             Strata            = "MEDIUM",
             anchorFrameType   = "UIPARENT",
@@ -1088,14 +1087,10 @@ local Defaults = {
             IconSpacing       = 1,
             IconsPerRow       = 6,
             MaxRows           = 1,
-            IconZoom          = 0.30,
             Swipe             = false,
             Reverse           = false,
             GrowHorizontal    = "RIGHT",
             GrowVertical      = "DOWN",
-            BorderColor       = { 0, 0, 0, 1 },
-            -- BackgroundColor removed: container is 1x1 with buttons at CENTER;
-            -- a texture would never be visible. Deferred until layout supports it.
             GlowEnabled       = true,
             GlowType          = "pixel",
             GlowColor         = { 0, 1, 0, 1 },
@@ -1115,12 +1110,11 @@ local Defaults = {
             FontOutline       = "OUTLINE",
             TimerFontSize     = 18,
             TimerPosition     = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = 0 },
+            StackPosition     = { AnchorFrom = "BOTTOMRIGHT", AnchorTo = "BOTTOMRIGHT", XOffset = -1, YOffset = 1 },
         },
 
         AuraDebuffs = {
             Enabled            = false,
-            VisibilityMode     = "boss",
-            EncounterBlacklist = "",
             Strata             = "MEDIUM",
             anchorFrameType    = "UIPARENT",
             ParentFrame        = "UIParent",
@@ -1130,38 +1124,45 @@ local Defaults = {
             IconSpacing        = 1,
             IconsPerRow        = 8,
             MaxRows            = 1,
-            IconZoom           = 0.30,
             Swipe              = true,
             Reverse            = true,
             GrowHorizontal     = "RIGHT",
             GrowVertical       = "DOWN",
             BorderColor        = { 0.8, 0, 0, 1 },
             BorderColorMode    = "dispel",
+            -- DispelColors are user overrides; the GUI's DISPEL_DEFAULTS
+            -- table provides the AE-matched fallback colors when nil.
+            -- All 7 types Blizzard surfaces (incl. None/Enrage) are valid keys.
             DispelColors = {
-                Magic = nil, Curse = nil, Disease = nil, Poison = nil, Bleed = nil, Enrage = nil,
+                None    = nil,
+                Magic   = nil,
+                Curse   = nil,
+                Disease = nil,
+                Poison  = nil,
+                Bleed   = nil,
+                Enrage  = nil,
             },
-            -- Per-type visibility toggles. nil = show (default), false = hide.
-            DispelTypes = {},
+            -- "Filtering Options" — each enabled filter REMOVES matching auras
+            -- from tracking. Default PLAYER=true because the player's own
+            -- debuffs are usually not what you want on a boss-debuff tracker.
+            -- RAID_IN_COMBAT is HELPFUL-only per AuraUtil.AuraFilters, so it
+            -- isn't surfaced here.
             Filters = {
                 PLAYER                  = true,
                 RAID                    = false,
-                CANCELABLE              = false,
-                NOT_CANCELABLE          = false,
-                INCLUDE_NAME_PLATE_ONLY = false,
-                EXTERNAL_DEFENSIVE      = false,
                 CROWD_CONTROL           = false,
-                RAID_IN_COMBAT          = false,
-                RAID_PLAYER_DISPELLABLE = false,
-                BIG_DEFENSIVE           = false,
                 IMPORTANT               = false,
+                RAID_PLAYER_DISPELLABLE = false,
+                INCLUDE_NAME_PLATE_ONLY = false,
             },
             Blocklist     = {},
             FontFace      = "Expressway",
             FontSize      = 14,
             FontOutline   = "OUTLINE",
             TimerFontSize = 16,
-            TimerPosition = { AnchorFrom = "CENTER",      AnchorTo = "CENTER",      XOffset = 0, YOffset = 0 },
-            StackPosition = { AnchorFrom = "BOTTOMRIGHT", AnchorTo = "BOTTOMRIGHT", XOffset = 0, YOffset = 2 },
+            TimerPosition  = { AnchorFrom = "CENTER",      AnchorTo = "CENTER",      XOffset = 0, YOffset = 0 },
+            StackPosition  = { AnchorFrom = "BOTTOMRIGHT", AnchorTo = "BOTTOMRIGHT", XOffset = 0, YOffset = 2 },
+            DispelPosition = { AnchorFrom = "TOPRIGHT",    AnchorTo = "TOPRIGHT",    XOffset = 0, YOffset = 0 },
         },
 
         -----------------------------------------------------------------

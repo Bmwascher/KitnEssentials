@@ -13,7 +13,9 @@ if not KitnEssentials then return end
 ---@class SpellAlerts: AceModule, AceEvent-3.0
 local SA = KitnEssentials:NewModule("SpellAlerts", "AceEvent-3.0")
 
-local SetCVar = SetCVar or (C_CVar and C_CVar.SetCVar)
+-- Prefer C_CVar.SetCVar (12.0 forward path); fall back to the global only
+-- if the namespaced version is missing.
+local SetCVar = (C_CVar and C_CVar.SetCVar) or SetCVar
 local GetSpecialization = GetSpecialization
 local GetSpecializationInfo = GetSpecializationInfo
 
