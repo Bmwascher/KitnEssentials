@@ -15,7 +15,11 @@ local function GetModule() return KitnEssentials and KitnEssentials:GetModule("A
 
 GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.AuraExternals
-    if not db then return yOffset end
+    if not db then
+        local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
+        errorCard:AddLabel("Database not available")
+        return errorCard:GetNextOffset()
+    end
 
     local AX = GetModule()
 
@@ -29,7 +33,7 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
         if not KitnEssentials then return end
         local mod = KitnEssentials:GetModule("AuraExternals", true)
         if not mod then return end
-        db.Enabled = enabled
+        mod.db.Enabled = enabled
         if enabled then
             KitnEssentials:EnableModule("AuraExternals")
         else
@@ -50,7 +54,6 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     local enableCheck = GUIFrame:CreateCheckbox(row1a, "Enable Aura Externals", {
         value = db.Enabled ~= false,
         callback = function(checked)
-            db.Enabled = checked
             ApplyModuleState(checked)
             RefreshStates()
         end,
