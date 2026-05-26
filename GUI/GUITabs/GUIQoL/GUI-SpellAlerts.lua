@@ -14,7 +14,10 @@ local tonumber = tonumber
 local tostring = tostring
 local math_floor = math.floor
 
-local GetSpecializationInfo = GetSpecializationInfo
+local GetNumClasses = GetNumClasses
+local GetSpecializationInfoForClassID = GetSpecializationInfoForClassID
+local C_CreatureInfo = C_CreatureInfo
+local RAID_CLASS_COLORS = RAID_CLASS_COLORS
 
 local function GetModule()
     if KitnEssentials then
@@ -75,57 +78,74 @@ GUIFrame:RegisterContent("SpellAlerts", function(scrollChild, yOffset)
     yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 2: Per-spec toggles
+    -- Card 2: Enable Alerts per Spec (all classes, 4-column grid)
     ----------------------------------------------------------------
-    local numSpecs = _G.GetNumSpecializations and _G.GetNumSpecializations() or 0
-    if numSpecs > 0 then
-        local card2 = GUIFrame:CreateCard(scrollChild, "Enable Alerts per Spec", yOffset)
-        manager:Register(card2, "all")
+    if not db.EnabledSpecs then db.EnabledSpecs = {} end
 
-        if not db.EnabledSpecs then db.EnabledSpecs = {} end
+    local card2 = GUIFrame:CreateCard(scrollChild, "Enable Alerts per Spec", yOffset)
+    manager:Register(card2, "all")
 
-        -- Single horizontal row: spec icon + name on top, toggle below.
-        -- Manual re-anchoring of checkbox internals for breathing room.
-        local LABEL_INDENT = 8
-        local TOGGLE_GAP = 18
-        local specRow = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
-        for i = 1, numSpecs do
-            local _, specName, _, specIcon = GetSpecializationInfo(i)
-            if specName then
-                local label = specName
-                if specIcon then
-                    label = "|T" .. specIcon .. ":16:16:0:0:64:64:5:59:5:59|t " .. specName
+    local COLUMNS = 4
+    local numClasses = GetNumClasses and GetNumClasses() or 0
+
+    for classID = 1, numClasses do
+        local classInfo = C_CreatureInfo and C_CreatureInfo.GetClassInfo(classID)
+        local className = classInfo and classInfo.className
+        local classFile = classInfo and classInfo.classFile
+
+        if className then
+            local color = classFile and RAID_CLASS_COLORS and RAID_CLASS_COLORS[classFile]
+            local classHex = (color and color.colorStr) and ("|c" .. color.colorStr) or "|cffffffff"
+            card2:AddLabel(classHex .. className .. "|r")
+
+            -- Collect this class's specs
+            local specs = {}
+            for specNum = 1, 4 do
+                local specID, specName, _, specIcon = GetSpecializationInfoForClassID(classID, specNum)
+                if specID and specName then
+                    local iconStr = specIcon and ("|T" .. specIcon .. ":16:16:0:0:64:64:5:59:5:59|t ") or ""
+                    specs[#specs + 1] = {
+                        id    = specID,
+                        name  = specName,
+                        label = iconStr .. classHex .. specName .. "|r",
+                    }
                 end
-                local current = db.EnabledSpecs[i] ~= false  -- default ON
-                local specCheck = GUIFrame:CreateCheckbox(specRow, label, {
-                    value = current,
-                    callback = function(checked)
-                        db.EnabledSpecs[i] = checked
-                        if SA and SA.ApplyForCurrentSpec then
-                            SA:ApplyForCurrentSpec()
-                        end
-                    end,
-                    msgPopup = true,
-                    msgText = specName,
-                    msgOn = "Show",
-                    msgOff = "Hide",
-                })
-                if specCheck.label then
-                    specCheck.label:ClearAllPoints()
-                    specCheck.label:SetPoint("TOPLEFT", specCheck, "TOPLEFT", LABEL_INDENT, 1)
+            end
+
+            -- Lay specs out in rows of COLUMNS
+            local idx = 1
+            while idx <= #specs do
+                local specRow = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+                for _ = 1, COLUMNS do
+                    local spec = specs[idx]
+                    if spec then
+                        local sID = spec.id
+                        local current = db.EnabledSpecs[sID] ~= false  -- default ON
+                        local specCheck = GUIFrame:CreateCheckbox(specRow, spec.label, {
+                            value = current,
+                            callback = function(checked)
+                                -- Store explicit false for opt-out; nil for default-on
+                                db.EnabledSpecs[sID] = checked and nil or false
+                                if SA and SA.ApplyForCurrentSpec then
+                                    SA:ApplyForCurrentSpec()
+                                end
+                            end,
+                            msgPopup = true,
+                            msgText  = spec.name,
+                            msgOn    = "Show",
+                            msgOff   = "Hide",
+                        })
+                        specRow:AddWidget(specCheck, 1 / COLUMNS)
+                        manager:Register(specCheck, "all")
+                    end
+                    idx = idx + 1
                 end
-                if specCheck.toggle then
-                    specCheck.toggle:ClearAllPoints()
-                    specCheck.toggle:SetPoint("TOPLEFT", specCheck, "TOPLEFT", LABEL_INDENT, -TOGGLE_GAP)
-                end
-                specRow:AddWidget(specCheck, 1 / numSpecs)
-                manager:Register(specCheck, "all")
+                card2:AddRow(specRow, Theme.rowHeight)
             end
         end
-        card2:AddRow(specRow, Theme.rowHeightLast, 0)
-
-        yOffset = card2:GetNextOffset()
     end
+
+    yOffset = card2:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 3: Opacity (CVar slider)
