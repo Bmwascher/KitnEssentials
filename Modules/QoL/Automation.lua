@@ -46,6 +46,10 @@ local GetLootSpecialization = GetLootSpecialization
 local GetSpecialization = GetSpecialization
 local GetSpecializationInfo = GetSpecializationInfo
 local GetSpecializationInfoByID = GetSpecializationInfoByID
+local AcceptResurrect = AcceptResurrect
+local UnitAffectingCombat = UnitAffectingCombat
+local UnitIsDead = UnitIsDead
+local IsEncounterInProgress = IsEncounterInProgress
 
 ---------------------------------------------------------------------------------
 -- Hide Helptips (runs at load time)
@@ -840,6 +844,41 @@ local function SetupAutoDeclinePetBattles()
 end
 
 ---------------------------------------------------------------------------------
+-- Auto Accept Resurrection (out-of-combat only)
+--
+-- Refuses to auto-accept under ANY of these conditions:
+--   * Player is in combat (UnitAffectingCombat)
+--   * Combat lockdown is active (InCombatLockdown)
+--   * A boss encounter is in progress (IsEncounterInProgress)
+--     ^ Critical battle-res guard — corpses aren't "in combat" but the
+--       encounter is still active. Without this, Rebirth/Soulstone would
+--       silently auto-accept and pull you back into the fight.
+--   * The sender is dead (can't trust a rez from a corpse)
+---------------------------------------------------------------------------------
+local resFrame = nil
+local function SetupAutoAcceptRes()
+    if not resFrame then
+        resFrame = CreateFrame("Frame")
+        resFrame:SetScript("OnEvent", function(_, event, sender)
+            if event ~= "RESURRECT_REQUEST" then return end
+            if not AU.db or not AU.db.Enabled then return end
+            if not AU.db.AutoAcceptRes then return end
+            if UnitAffectingCombat("player") then return end
+            if InCombatLockdown() then return end
+            if IsEncounterInProgress() then return end
+            if sender and UnitIsDead(sender) then return end
+            AcceptResurrect()
+            StaticPopup_Hide("RESURRECT_NO_TIMER")
+        end)
+    end
+    if AU.db.AutoAcceptRes then
+        resFrame:RegisterEvent("RESURRECT_REQUEST")
+    else
+        resFrame:UnregisterAllEvents()
+    end
+end
+
+---------------------------------------------------------------------------------
 -- Event Handlers
 ---------------------------------------------------------------------------------
 function AU:CVAR_UPDATE(_, cvarName)
@@ -882,6 +921,7 @@ function AU:ApplySettings()
     SetupAutoVoidcoresGold()
     SetupAutoDeclineDuels()
     SetupAutoDeclinePetBattles()
+    SetupAutoAcceptRes()
     self:ApplyCVars()
 end
 

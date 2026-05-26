@@ -222,21 +222,39 @@ GUIFrame:RegisterContent("Automation", function(scrollChild, yOffset)
     local card6 = GUIFrame:CreateCard(scrollChild, "Social", yOffset)
     autoManager:Register(card6, "all")
 
-    local row6 = GUIFrame:CreateRow(card6.content, Theme.rowHeightLast)
-    local autoDeclineDuelsCheck = GUIFrame:CreateCheckbox(row6, "Auto Decline Duels", {
+    local row6a = GUIFrame:CreateRow(card6.content, Theme.rowHeight)
+    local autoDeclineDuelsCheck = GUIFrame:CreateCheckbox(row6a, "Auto Decline Duels", {
         value = db.AutoDeclineDuels == true,
         callback = function(checked) db.AutoDeclineDuels = checked; ApplySettings() end,
     })
-    row6:AddWidget(autoDeclineDuelsCheck, 0.5)
+    row6a:AddWidget(autoDeclineDuelsCheck, 0.5)
     autoManager:Register(autoDeclineDuelsCheck, "all")
 
-    local autoDeclinePetCheck = GUIFrame:CreateCheckbox(row6, "Auto Decline Pet Battle Duels", {
+    local autoDeclinePetCheck = GUIFrame:CreateCheckbox(row6a, "Auto Decline Pet Battle Duels", {
         value = db.AutoDeclinePetBattles == true,
         callback = function(checked) db.AutoDeclinePetBattles = checked; ApplySettings() end,
     })
-    row6:AddWidget(autoDeclinePetCheck, 0.5)
+    row6a:AddWidget(autoDeclinePetCheck, 0.5)
     autoManager:Register(autoDeclinePetCheck, "all")
-    card6:AddRow(row6, Theme.rowHeightLast, 0)
+    card6:AddRow(row6a, Theme.rowHeight)
+
+    local row6b = GUIFrame:CreateRow(card6.content, Theme.rowHeightLast)
+    local autoAcceptResCheck = GUIFrame:CreateCheckbox(row6b, "Auto Accept Resurrection (out of combat)", {
+        value = db.AutoAcceptRes == true,
+        callback = function(checked)
+            db.AutoAcceptRes = checked
+            if AU then AU:ApplySettings() end
+        end,
+        msgPopup = true,
+        msgText = "Auto Accept Resurrection",
+        msgOn = "Enabled",
+        msgOff = "Disabled",
+    })
+    row6b:AddWidget(autoAcceptResCheck, 1)
+    autoManager:Register(autoAcceptResCheck, "all")
+    card6:AddRow(row6b, Theme.rowHeightLast, 0)
+
+    card6:AddLabel("|cff888888Battle res / Combat res / Soulstone are never auto-accepted; you stay in control during encounters.|r")
 
     yOffset = card6:GetNextOffset()
 

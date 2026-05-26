@@ -568,6 +568,7 @@ local Defaults = {
             QuestModifier = "SHIFT",
             AutoDeclineDuels = false,
             AutoDeclinePetBattles = false,
+            AutoAcceptRes = false,
             -- CVars (merged) - boolean
             CVarsEnabled = true,
             enableFloatingCombatText = nil,
