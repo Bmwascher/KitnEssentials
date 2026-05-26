@@ -184,6 +184,12 @@ GUIFrame:RegisterContent("PositionController", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Cards 3-6: Position cards for each unit frame feature
     ----------------------------------------------------------------
+    local function ShouldShowAnchorChooser(featureKey)
+        -- Player/Target are auto-resolved by PositionController based on the
+        -- detected CDM provider. The chooser is hidden for those features.
+        return featureKey ~= "PlayerFrame" and featureKey ~= "TargetFrame"
+    end
+
     for _, f in ipairs(FEATURE_ORDER) do
         local key = f.key
         local subDB = db[key]
@@ -199,10 +205,24 @@ GUIFrame:RegisterContent("PositionController", function(scrollChild, yOffset)
                     xOffset          = "XOffset",
                     yOffset          = "YOffset",
                 },
-                showAnchorFrameType = true,
+                showAnchorFrameType = ShouldShowAnchorChooser(key),
                 showStrata = false,
                 onChangeCallback = ApplySettings,
             })
+
+            if not ShouldShowAnchorChooser(key) then
+                local descRow = GUIFrame:CreateRow(card.content, 50)
+                local descText = descRow:CreateFontString(nil, "OVERLAY")
+                descText:SetPoint("TOPLEFT", descRow, "TOPLEFT", 8, -4)
+                descText:SetPoint("RIGHT", descRow, "RIGHT", -8, 0)
+                descText:SetJustifyH("LEFT")
+                descText:SetJustifyV("TOP")
+                descText:SetWordWrap(true)
+                KE:ApplyThemeFont(descText, "small")
+                descText:SetTextColor(0x88/0xFF, 0x88/0xFF, 0x88/0xFF, 1)
+                descText:SetText("Auto-anchored to the active cooldown manager (SkironCooldownManager or Ayije_CDM).")
+                card:AddRow(descRow, 50, 0)
+            end
 
             if card.positionWidgets then
                 manager:RegisterGroup(card.positionWidgets, "feature_" .. key)
