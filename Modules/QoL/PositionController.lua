@@ -234,6 +234,29 @@ local function ResolveParentFrameName(featureKey, subDB)
 end
 
 ---------------------------------------------------------------------------------
+-- ElvUI mover-system write helper
+--
+-- Direct :SetPoint calls on a unit frame whose mover has a saved position can
+-- be reverted by ElvUI on /reload or zone change. The correct path is to write
+-- the position string into E.db.movers[name] and call E:SetMoverPoints(name) so
+-- ElvUI persists it as the user's saved position.
+---------------------------------------------------------------------------------
+local function GetE()
+    local elvui = _G.ElvUI
+    if not elvui then return nil end
+    local E = elvui[1]
+    if not E or not E.SetMoverPoints then return nil end
+    return E
+end
+
+local function SetMoverPosition(E, moverName, point, relativeTo, relPoint, x, y)
+    if not (E and moverName and E.db and E.db.movers) then return end
+    E.db.movers[moverName] = string.format("%s,%s,%s,%d,%d",
+        point, relativeTo, relPoint, math.floor(x + 0.5), math.floor(y + 0.5))
+    E:SetMoverPoints(moverName)
+end
+
+---------------------------------------------------------------------------------
 -- Apply a single feature's position to its unit frame + mover
 ---------------------------------------------------------------------------------
 local function ApplyFeature(featureKey, subDB)
@@ -275,13 +298,19 @@ local function ApplyFeature(featureKey, subDB)
 
     x = GetCollisionXOffset(featureKey, x, parentName)
 
-    refs.uf:ClearAllPoints()
-    refs.uf:SetPoint(fromPoint, parent, toPoint, x, y)
-
+    local E = GetE()
     local mover = refs.mover
-    if mover then
-        mover:ClearAllPoints()
-        mover:SetPoint(fromPoint, parent, toPoint, x, y)
+    local moverName = mover and mover:GetName()
+
+    if E and moverName then
+        SetMoverPosition(E, moverName, fromPoint, parentName, toPoint, x, y)
+    else
+        refs.uf:ClearAllPoints()
+        refs.uf:SetPoint(fromPoint, parent, toPoint, x, y)
+        if mover then
+            mover:ClearAllPoints()
+            mover:SetPoint(fromPoint, parent, toPoint, x, y)
+        end
     end
 end
 
