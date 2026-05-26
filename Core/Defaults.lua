@@ -180,25 +180,64 @@ local Defaults = {
             Backdrop = DefaultBackdrop(),
         },
 
-        CursorCircle = {
-            Enabled = false,
-            Size = 40,
-            Texture = "Circle 3",
-            Color = { 1, 1, 1, 1 },
-            ColorMode = "theme",
-            VisibilityMode = "always",
-            UseUpdateInterval = false,
-            UpdateInterval = 0.016,
+        Cursor = {
+            SchemaVersion = 0,
+            Enabled    = true,
+            Size       = 67,
+            Texture    = "circle_normal",
+            ColorMode  = "theme",
+            Color      = { 1, 1, 1, 1 },
+            Visibility = "always",
+
             GCD = {
-                Mode = "integrated",
-                Size = 25,
-                Texture = "Circle 5",
-                SwipeColorMode = "custom",
-                SwipeColor = { 1, 1, 1, 1 },
-                Reverse = true,
-                HideOutOfCombat = false,
-                RingColorMode = "theme",
-                RingColor = { 1, 1, 1, 1 },
+                Enabled            = true,
+                Mode               = "integrated",
+                Attached           = true,
+                Size               = 50,
+                Texture            = "circle_light",
+                RingColorMode      = "theme",  RingColor  = { 1, 1, 1, 1 },
+                SwipeColorMode     = "custom", SwipeColor = { 1, 1, 1, 0.8 },
+                Reverse            = false,
+                VisibilityOverride = nil,
+                InstanceOnly       = false,
+            },
+
+            Cast = {
+                Enabled            = false,
+                Attached           = true,
+                Size               = 72,
+                Texture            = "circle_normal",
+                RingColorMode      = "class",  RingColor  = { 1, 1, 1, 1 },
+                SwipeColorMode     = "theme",  SwipeColor = { 1, 1, 1, 0.7 },
+                SparkEnabled       = true,
+                SparkColorMode     = "ring",
+                SparkColor         = { 1, 1, 1, 1 },
+                VisibilityOverride = nil,
+                InstanceOnly       = false,
+            },
+
+            Trail = {
+                Enabled            = true,
+                DotDuration        = 0.5,
+                DotBaseSize        = 40,
+                Density            = 0.016,
+                ColorInherit       = true,
+                Color              = { 1, 1, 1, 1 },
+                VisibilityOverride = nil,
+                InstanceOnly       = false,
+            },
+
+            Dispel = {
+                Enabled            = true,
+                Attached           = true,
+                AnchorPoint        = "CENTER",
+                XOffset            = 0,
+                YOffset            = 10,
+                FontFace           = "Expressway",
+                FontSize           = 18,
+                TextColor          = { 1, 1, 1, 1 },
+                VisibilityOverride = nil,
+                InstanceOnly       = false,
             },
         },
 
@@ -365,14 +404,6 @@ local Defaults = {
                 YOffset = 0,
                 Anchor = "LEFT",
             },
-        },
-
-        DispelCursor = {
-            Enabled = true,
-            FontSize = 18,
-            TextColor = { 0.235, 0.929, 1, 1 },  -- #3BECFF
-            XOffset = 3,
-            YOffset = 3,
         },
 
         RangeChecker = {

@@ -351,6 +351,7 @@ local PREVIEW_MODULES = {
     "NoMovementAlert", "PrescienceTracker", "GreatVaultAlert", "PotionReady", "BossDebuffs",
     "EnemyCounter", "EbonMightTracker", "DungeonCasts", "HealerMana",
     "ReadyCheckConsumables", "DeathNotifications",
+    "Cursor",
 }
 
 -- Section → preview module mapping for section-based previews
@@ -359,6 +360,7 @@ local SECTION_PREVIEW_MODULES = {
     combat_section = {
         "CombatRes", "BossDebuffs", "CombatTexts", "CombatTimer",
         "FocusCastbar", "TargetCastbar", "CombatCross", "RangeChecker",
+        "Cursor",
     },
     utilities_section = {
         "BloodlustTracker", "StanceText", "PetStatusText", "PotionReady",

@@ -48,7 +48,7 @@ GUIFrame.sidebarConfig = {
             { id = "BossDebuffs",   text = "Boss Debuffs" },
             { id = "CombatTexts",   text = "Combat Texts" },
             { id = "CombatTimer",   text = "Combat Timer" },
-            { id = "CursorCircle",  text = "Cursor Circle" },
+            { id = "Cursor",        text = "Cursor Effects" },
             { id = "Castbars",      text = "Focus & Target Castbars" },
             { id = "CombatCross",   text = "Player Crosshair" },
             { id = "RangeChecker",  text = "Range Display" },

@@ -42,7 +42,7 @@
     <Script file="GUITabs\GUICombat\GUI-CombatCross.lua" />
     <Script file="GUITabs\GUICombat\GUI-CombatRes.lua" />
     <Script file="GUITabs\GUICombat\GUI-CombatTexts.lua" />
-    <Script file="GUITabs\GUICombat\GUI-CursorCircle.lua" />
+    <Script file="GUITabs\GUICombat\GUI-Cursor.lua" />
     <Script file="GUITabs\GUICombat\GUI-TargetCastbar.lua" />
     <Script file="GUITabs\GUICombat\GUI-FocusCastbar.lua" />
     <Script file="GUITabs\GUICombat\GUI-Castbars.lua" />
@@ -54,7 +54,6 @@
     <Script file="GUITabs\GUIUtilities\GUI-RaidNotifications.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-PetStatusText.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-StanceText.lua" />
-    <Script file="GUITabs\GUIUtilities\GUI-DispelCursor.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-NoMovementAlert.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-ClassStatusTexts.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-BloodlustTracker.lua" />
