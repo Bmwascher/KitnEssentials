@@ -48,6 +48,7 @@
     <Script file="GUITabs\GUICombat\GUI-Castbars.lua" />
     <Script file="GUITabs\GUICombat\GUI-RangeChecker.lua" />
     <Script file="GUITabs\GUICombat\GUI-BossDebuffs.lua" />
+    <Script file="GUITabs\GUICombat\GUI-AuraExternals.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-KickTracker.lua" />
 
     <!-- Utilities tabs -->
