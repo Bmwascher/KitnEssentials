@@ -61,6 +61,11 @@ end
 
 function AX:OnDisable()
     self:UnregisterAllEvents()
+    if LCG then
+        for _, b in pairs(self.buttons) do
+            LCG.PixelGlow_Stop(b)
+        end
+    end
     if self.frame then self.frame:Hide() end
 end
 
@@ -138,9 +143,6 @@ local function CreateButton(parent, db)
     b.cooldown = cd
 
     local timer = b:CreateFontString(nil, "OVERLAY")
-    KE:ApplyFontToText(timer, db.FontFace, db.TimerFontSize, db.FontOutline)
-    local tp = db.TimerPosition
-    timer:SetPoint(tp.AnchorFrom, b, tp.AnchorTo, tp.XOffset, tp.YOffset)
     b.timer = timer
 
     return b
@@ -154,31 +156,36 @@ function AX:GetOrCreateButton(index)
     return b
 end
 
-local function ScanFilter(filterStr, into, isBig)
+local function ScanFilter(filterStr, into, seen, isBig)
     local i = 1
     while true do
         local data = C_UnitAuras.GetAuraDataByIndex(UNIT, i, filterStr)
         if not data then break end
-        tinsert(into, {
-            auraInstanceID = data.auraInstanceID,
-            spellId        = data.spellId,
-            icon           = data.icon,
-            duration       = data.duration,
-            expirationTime = data.expirationTime,
-            isBig          = isBig,
-        })
+        local aid = data.auraInstanceID
+        if aid and not seen[aid] then
+            seen[aid] = true
+            tinsert(into, {
+                auraInstanceID = aid,
+                spellId        = data.spellId,
+                icon           = data.icon,
+                duration       = data.duration,
+                expirationTime = data.expirationTime,
+                isBig          = isBig,
+            })
+        end
         i = i + 1
     end
 end
 
 function AX:CollectAuras()
     local list = {}
+    local seen = {}
     local db = self.db
     for _, f in ipairs(FILTERS) do
         if not (f.isBig and not db.ShowBigDefensives) then
-            ScanFilter(f.filter, list, f.isBig)
+            ScanFilter(f.filter, list, seen, f.isBig)
             if db.IncludeSelfCast then
-                ScanFilter(f.filterPlayer, list, f.isBig)
+                ScanFilter(f.filterPlayer, list, seen, f.isBig)
             end
         end
     end
@@ -190,9 +197,14 @@ function AX:Refresh()
     if not self.frame then return end
     local db = self.db
     if not db.Enabled and not self.isPreview then
-        for _, b in pairs(self.buttons) do b:Hide() end
+        for _, b in pairs(self.buttons) do
+            if LCG then LCG.PixelGlow_Stop(b) end
+            b:Hide()
+        end
+        self.frame:Hide()
         return
     end
+    self.frame:Show()
 
     local auras = self.isPreview and PREVIEW_AURAS or self:CollectAuras()
     local cap = math_min(#auras, (db.IconsPerRow or 6) * (db.MaxRows or 1))
@@ -218,10 +230,28 @@ function AX:Refresh()
     end
 
     for i = cap + 1, #self.buttons do
+        if LCG then LCG.PixelGlow_Stop(self.buttons[i]) end
         self.buttons[i]:Hide()
     end
 
+    self:UpdateButtonAppearance(cap)
     self:LayoutButtons(cap)
+end
+
+function AX:UpdateButtonAppearance(count)
+    local db = self.db
+    local tp = db.TimerPosition
+    for i = 1, count do
+        local b = self.buttons[i]
+        if b and b.timer then
+            KE:ApplyFontToText(b.timer, db.FontFace, db.TimerFontSize, db.FontOutline)
+            b.timer:ClearAllPoints()
+            b.timer:SetPoint(tp.AnchorFrom, b, tp.AnchorTo, tp.XOffset, tp.YOffset)
+        end
+        if b and b.icon then
+            KE:ApplyIconZoom(b.icon, db.IconZoom)
+        end
+    end
 end
 
 function AX:LayoutButtons(count)
@@ -254,4 +284,7 @@ end
 function AX:HidePreview()
     self.isPreview = false
     self:Refresh()
+    if not self.db.Enabled and self.frame then
+        self.frame:Hide()
+    end
 end
