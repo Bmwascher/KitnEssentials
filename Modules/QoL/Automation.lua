@@ -866,7 +866,10 @@ local function SetupAutoAcceptRes()
             if UnitAffectingCombat("player") then return end
             if InCombatLockdown() then return end
             if IsEncounterInProgress() then return end
-            if sender and UnitIsDead(sender) then return end
+            if sender then
+                local ok, dead = pcall(UnitIsDead, sender)
+                if ok and dead then return end
+            end
             AcceptResurrect()
             StaticPopup_Hide("RESURRECT_NO_TIMER")
         end)

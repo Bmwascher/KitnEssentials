@@ -25,6 +25,8 @@ local tsort         = table.sort
 local math_min      = math.min
 local math_floor    = math.floor
 local LCG           = LibStub("LibCustomGlow-1.0", true)
+local LSM           = LibStub("LibSharedMedia-3.0", true)
+local PlaySoundFile = PlaySoundFile
 
 local UNIT = "player"
 
@@ -33,6 +35,8 @@ AX.frame = nil
 AX.editModeRegistered = false
 AX.isPreview = false
 AX.durationTicker = nil
+AX.seenSounded = {}
+AX._soundPrimed = false
 
 local FILTERS = {
     { filter = "HELPFUL|EXTERNAL_DEFENSIVE", filterPlayer = "HELPFUL|EXTERNAL_DEFENSIVE|PLAYER", isBig = false },
@@ -57,6 +61,8 @@ end
 function AX:OnEnable()
     self:UpdateDB()
     if not self.frame then self:CreateContainer() end
+    self.seenSounded = {}
+    self._soundPrimed = false  -- first Refresh silently seeds seenSounded, no sound
     self:RegisterEvent("UNIT_AURA", "OnUnitAura")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "Refresh")
     self:Refresh()
@@ -78,6 +84,8 @@ function AX:OnDisable()
         b.timer:SetText("")
         b:Hide()
     end
+    self.seenSounded = {}
+    self._soundPrimed = false
 end
 
 function AX:ApplySettings()
@@ -220,6 +228,48 @@ function AX:Refresh()
     local auras = self.isPreview and PREVIEW_AURAS or self:CollectAuras()
     local cap = math_min(#auras, (db.IconsPerRow or 6) * (db.MaxRows or 1))
 
+    -- Sound on new auras. First Refresh after enable/disable only seeds seenSounded
+    -- (no sound) so existing auras don't re-trigger when the module is toggled.
+    if not self.isPreview then
+        if not self._soundPrimed then
+            -- Seed phase: silently populate seenSounded with current aura IDs.
+            for _, aura in ipairs(auras) do
+                if aura.auraInstanceID then
+                    self.seenSounded[aura.auraInstanceID] = true
+                end
+            end
+            self._soundPrimed = true
+        else
+            -- Normal phase: sound on truly new auras.
+            if db.SoundEnabled and LSM and db.SoundName and db.SoundName ~= "None" then
+                local soundPath = LSM:Fetch("sound", db.SoundName)
+                if soundPath then
+                    local currentIDs = {}
+                    for _, aura in ipairs(auras) do
+                        if aura.auraInstanceID then
+                            currentIDs[aura.auraInstanceID] = true
+                        end
+                    end
+                    -- Play once for the first new aura found this refresh.
+                    for _, aura in ipairs(auras) do
+                        local aid = aura.auraInstanceID
+                        if aid and not self.seenSounded[aid] then
+                            PlaySoundFile(soundPath)
+                            self.seenSounded[aid] = true
+                            break
+                        end
+                    end
+                    -- Clean up IDs for auras that are no longer present.
+                    for aid in pairs(self.seenSounded) do
+                        if not currentIDs[aid] then
+                            self.seenSounded[aid] = nil
+                        end
+                    end
+                end
+            end
+        end
+    end
+
     for i = 1, cap do
         local aura = auras[i]
         local b = self:GetOrCreateButton(i)
@@ -236,7 +286,9 @@ function AX:Refresh()
         end
 
         if db.GlowEnabled and aura.isBig and LCG then
-            LCG.PixelGlow_Start(b, db.GlowColor, nil, nil, nil, nil, nil, nil, nil, nil)
+            LCG.PixelGlow_Start(b, db.GlowColor,
+                db.GlowLines, db.GlowFrequency, db.GlowLength, db.GlowThickness,
+                nil, nil, db.GlowBorder, nil)
         elseif LCG then
             LCG.PixelGlow_Stop(b)
         end
@@ -266,6 +318,9 @@ function AX:UpdateButtonAppearance(count)
         end
         if b and b.icon then
             KE:ApplyIconZoom(b.icon, db.IconZoom)
+        end
+        if b and b.cooldown and b.cooldown.SetDrawSwipe then
+            b.cooldown:SetDrawSwipe(db.Swipe ~= false)
         end
     end
 end

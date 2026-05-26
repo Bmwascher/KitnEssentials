@@ -204,12 +204,12 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     yOffset = card3:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 4: Border + Background
+    -- Card 4: Border
     ----------------------------------------------------------------
-    local card4 = GUIFrame:CreateCard(scrollChild, "Border & Background", yOffset)
+    local card4 = GUIFrame:CreateCard(scrollChild, "Border", yOffset)
     manager:Register(card4, "all")
 
-    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
     local borderColorPicker = GUIFrame:CreateColorPicker(row4a, "Border Color", {
         color = db.BorderColor or { 0, 0, 0, 1 },
         callback = function(r, g, b, a)
@@ -217,18 +217,8 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
             ApplySettings()
         end,
     })
-    row4a:AddWidget(borderColorPicker, 0.5)
+    row4a:AddWidget(borderColorPicker, 1)
     manager:Register(borderColorPicker, "all")
-
-    local bgColorPicker = GUIFrame:CreateColorPicker(row4a, "Background Color", {
-        color = db.BackgroundColor or { 0, 0, 0, 0.3 },
-        callback = function(r, g, b, a)
-            db.BackgroundColor = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row4a:AddWidget(bgColorPicker, 0.5)
-    manager:Register(bgColorPicker, "all")
     card4:AddRow(row4a, Theme.rowHeightLast, 0)
 
     yOffset = card4:GetNextOffset()

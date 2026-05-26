@@ -1094,10 +1094,20 @@ local Defaults = {
             GrowHorizontal    = "RIGHT",
             GrowVertical      = "DOWN",
             BorderColor       = { 0, 0, 0, 1 },
-            BackgroundColor   = { 0, 0, 0, 0.3 },
+            -- BackgroundColor removed: container is 1x1 with buttons at CENTER;
+            -- a texture would never be visible. Deferred until layout supports it.
             GlowEnabled       = true,
             GlowType          = "pixel",
             GlowColor         = { 0, 1, 0, 1 },
+            -- PixelGlow extended params (passed to LCG.PixelGlow_Start)
+            GlowLines         = 8,
+            GlowFrequency     = 0.25,
+            GlowLength        = 10,
+            GlowThickness     = 1,
+            GlowBorder        = false,
+            GlowScale         = 1.0,
+            GlowStartAnim     = true,
+            GlowDuration      = 1.0,
             SoundEnabled      = false,
             SoundName         = "None",
             FontFace          = "Expressway",
