@@ -14,18 +14,21 @@ if not KitnEssentials then return end
 ---@class AuraDebuffs: AceModule, AceEvent-3.0
 local AD = KitnEssentials:NewModule("AuraDebuffs", "AceEvent-3.0")
 
-local C_UnitAuras   = C_UnitAuras
-local CreateFrame   = CreateFrame
-local UIParent      = UIParent
-local GameTooltip   = GameTooltip
-local IsInInstance  = IsInInstance
-local pairs, ipairs = pairs, ipairs
-local tinsert       = table.insert
-local tsort         = table.sort
-local tconcat       = table.concat
-local math_min      = math.min
-local math_floor    = math.floor
-local string_gmatch = string.gmatch
+local C_UnitAuras        = C_UnitAuras
+local CreateFrame        = CreateFrame
+local UIParent           = UIParent
+local GameTooltip        = GameTooltip
+local IsInInstance       = IsInInstance
+local UnitAffectingCombat = UnitAffectingCombat
+local GetTime            = GetTime
+local C_Timer            = C_Timer
+local pairs, ipairs      = pairs, ipairs
+local tinsert            = table.insert
+local tsort              = table.sort
+local tconcat            = table.concat
+local math_min           = math.min
+local math_floor         = math.floor
+local string_gmatch      = string.gmatch
 
 local UNIT = "player"
 
@@ -84,6 +87,7 @@ AD.encounterID      = nil
 AD.encounterBlacklist = {}
 AD.isPreview        = false
 AD.editModeRegistered = false
+AD.durationTicker   = nil
 
 ---------------------------------------------------------------------------------
 -- One-shot Migration: BossDebuffs → AuraDebuffs
@@ -204,13 +208,25 @@ function AD:OnEnable()
     self:RegisterEvent("PLAYER_REGEN_DISABLED",   "OnRegenDisabled")
     self:RegisterEvent("PLAYER_ENTERING_WORLD",   "OnEnteringWorld")
 
+    -- Seed combat/instance state so the first Refresh has correct visibility.
+    self.inCombat = UnitAffectingCombat("player") and true or false
+    local _, instanceType = IsInInstance()
+    self.inInstance = (instanceType == "raid" or instanceType == "party")
+
     self:Refresh()
+    self:StartDurationTicker()
 end
 
 function AD:OnDisable()
     self:UnregisterAllEvents()
+    self:StopDurationTicker()
     if self.frame then self.frame:Hide() end
-    for _, b in pairs(self.buttons) do b:Hide() end
+    for _, b in pairs(self.buttons) do
+        b._expirationTime = nil
+        b._duration = nil
+        b.timer:SetText("")
+        b:Hide()
+    end
 end
 
 function AD:ApplySettings()
@@ -480,8 +496,12 @@ function AD:Refresh()
 
         if aura.duration and aura.duration > 0 and aura.expirationTime then
             b.cooldown:SetCooldown(aura.expirationTime - aura.duration, aura.duration)
+            b._expirationTime = aura.expirationTime
+            b._duration = aura.duration
         else
             b.cooldown:Clear()
+            b._expirationTime = nil
+            b._duration = nil
         end
 
         b.stack:SetText((aura.count and aura.count > 1) and tostring(aura.count) or "")
@@ -502,6 +522,7 @@ function AD:Refresh()
     end
 
     self:UpdateButtonAppearance(cap)
+    self:UpdateTimerText()  -- immediate update so first paint isn't blank
     self:LayoutButtons(cap)
 end
 
@@ -517,6 +538,54 @@ function AD:LayoutButtons(count)
         local col = (i - 1) % perRow
         b:ClearAllPoints()
         b:SetPoint("CENTER", self.frame, "CENTER", col * dx, row * dy)
+    end
+end
+
+---------------------------------------------------------------------------------
+-- Duration text ticker
+---------------------------------------------------------------------------------
+
+-- Format a time-remaining number to a short human-readable string.
+local function FormatDuration(remaining)
+    if remaining <= 0 then return "" end
+    if remaining < 10 then
+        return ("%.1f"):format(remaining)
+    elseif remaining < 60 then
+        return ("%d"):format(remaining)
+    elseif remaining < 3600 then
+        return ("%dm"):format(remaining / 60)
+    else
+        return ("%dh"):format(remaining / 3600)
+    end
+end
+
+function AD:UpdateTimerText()
+    local now = GetTime()
+    for _, b in pairs(self.buttons) do
+        if b:IsShown() then
+            if b.auraInstanceID and b._expirationTime and b._duration and b._duration > 0 then
+                local remaining = b._expirationTime - now
+                if remaining > 0 then
+                    b.timer:SetText(FormatDuration(remaining))
+                else
+                    b.timer:SetText("")
+                end
+            else
+                b.timer:SetText("")
+            end
+        end
+    end
+end
+
+function AD:StartDurationTicker()
+    if self.durationTicker then return end
+    self.durationTicker = C_Timer.NewTicker(0.1, function() AD:UpdateTimerText() end)
+end
+
+function AD:StopDurationTicker()
+    if self.durationTicker then
+        self.durationTicker:Cancel()
+        self.durationTicker = nil
     end
 end
 
