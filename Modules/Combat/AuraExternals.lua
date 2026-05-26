@@ -17,6 +17,8 @@ local C_UnitAuras   = C_UnitAuras
 local CreateFrame   = CreateFrame
 local UIParent      = UIParent
 local GameTooltip   = GameTooltip
+local GetTime       = GetTime
+local C_Timer       = C_Timer
 local pairs, ipairs = pairs, ipairs
 local tinsert       = table.insert
 local tsort         = table.sort
@@ -30,6 +32,7 @@ AX.buttons = {}
 AX.frame = nil
 AX.editModeRegistered = false
 AX.isPreview = false
+AX.durationTicker = nil
 
 local FILTERS = {
     { filter = "HELPFUL|EXTERNAL_DEFENSIVE", filterPlayer = "HELPFUL|EXTERNAL_DEFENSIVE|PLAYER", isBig = false },
@@ -57,16 +60,24 @@ function AX:OnEnable()
     self:RegisterEvent("UNIT_AURA", "OnUnitAura")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "Refresh")
     self:Refresh()
+    self:StartDurationTicker()
 end
 
 function AX:OnDisable()
     self:UnregisterAllEvents()
+    self:StopDurationTicker()
     if LCG then
         for _, b in pairs(self.buttons) do
             LCG.PixelGlow_Stop(b)
         end
     end
     if self.frame then self.frame:Hide() end
+    for _, b in pairs(self.buttons) do
+        b._expirationTime = nil
+        b._duration = nil
+        b.timer:SetText("")
+        b:Hide()
+    end
 end
 
 function AX:ApplySettings()
@@ -216,8 +227,12 @@ function AX:Refresh()
         b.icon:SetTexture(aura.icon)
         if aura.duration and aura.duration > 0 and aura.expirationTime then
             b.cooldown:SetCooldown(aura.expirationTime - aura.duration, aura.duration)
+            b._expirationTime = aura.expirationTime
+            b._duration = aura.duration
         else
             b.cooldown:Clear()
+            b._expirationTime = nil
+            b._duration = nil
         end
 
         if db.GlowEnabled and aura.isBig and LCG then
@@ -235,6 +250,7 @@ function AX:Refresh()
     end
 
     self:UpdateButtonAppearance(cap)
+    self:UpdateTimerText()  -- immediate update so first paint isn't blank
     self:LayoutButtons(cap)
 end
 
@@ -272,6 +288,54 @@ end
 function AX:OnUnitAura(_, unit)
     if unit ~= UNIT then return end
     self:Refresh()
+end
+
+---------------------------------------------------------------------------------
+-- Duration text ticker
+---------------------------------------------------------------------------------
+
+-- Format a time-remaining number to a short human-readable string.
+local function FormatDuration(remaining)
+    if remaining <= 0 then return "" end
+    if remaining < 10 then
+        return ("%.1f"):format(remaining)
+    elseif remaining < 60 then
+        return ("%d"):format(remaining)
+    elseif remaining < 3600 then
+        return ("%dm"):format(remaining / 60)
+    else
+        return ("%dh"):format(remaining / 3600)
+    end
+end
+
+function AX:UpdateTimerText()
+    local now = GetTime()
+    for _, b in pairs(self.buttons) do
+        if b:IsShown() then
+            if b.auraInstanceID and b._expirationTime and b._duration and b._duration > 0 then
+                local remaining = b._expirationTime - now
+                if remaining > 0 then
+                    b.timer:SetText(FormatDuration(remaining))
+                else
+                    b.timer:SetText("")
+                end
+            else
+                b.timer:SetText("")
+            end
+        end
+    end
+end
+
+function AX:StartDurationTicker()
+    if self.durationTicker then return end
+    self.durationTicker = C_Timer.NewTicker(0.1, function() AX:UpdateTimerText() end)
+end
+
+function AX:StopDurationTicker()
+    if self.durationTicker then
+        self.durationTicker:Cancel()
+        self.durationTicker = nil
+    end
 end
 
 function AX:ShowPreview()
