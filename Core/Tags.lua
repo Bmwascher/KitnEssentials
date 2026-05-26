@@ -26,6 +26,9 @@ local GetRaidRosterInfo = GetRaidRosterInfo
 local GetNormalizedRealmName = GetNormalizedRealmName
 local format = string.format
 local strsub = string.sub
+local UnitPower = UnitPower
+local UnitPowerMax = UnitPowerMax
+local math_floor = math.floor
 
 local ElvUF_colors_class = ElvUF.colors.class
 local ElvUF_colors_reaction = ElvUF.colors.reaction
@@ -96,6 +99,16 @@ E:AddTag('kes:group', 'GROUP_ROSTER_UPDATE', function()
     end
 end)
 E:AddTagInfo('kes:group', 'KitnEssentials', "Shows 'Group: X' only while in a raid")
+
+E:AddTag('kes:mana:percent', 'UNIT_POWER_FREQUENT UNIT_MAXPOWER UNIT_DISPLAYPOWER', function(unit)
+    local max = UnitPowerMax(unit, Enum.PowerType.Mana)
+    if max == 0 then return end
+    local cur = UnitPower(unit, Enum.PowerType.Mana)
+    local pct = math_floor((cur / max) * 100)
+    if pct >= 100 then return end
+    return pct
+end)
+E:AddTagInfo('kes:mana:percent', 'KitnEssentials', "Mana percentage. Hidden at 100%.")
 
 ---------------------------------------------------------------------------------
 -- Nickname Tags
