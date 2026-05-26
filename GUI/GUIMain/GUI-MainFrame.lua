@@ -46,7 +46,6 @@ GUIFrame.sidebarConfig = {
         items = {
             { id = "CombatRes",     text = "Battle Res" },
             { id = "AuraDebuffs",   text = "Aura Debuffs" },
-            { id = "BossDebuffs",   text = "Boss Debuffs" },
             { id = "AuraExternals", text = "Aura Externals" },
             { id = "CombatTexts",   text = "Combat Texts" },
             { id = "CombatTimer",   text = "Combat Timer" },

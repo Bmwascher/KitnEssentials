@@ -1075,23 +1075,6 @@ local Defaults = {
             DurationColor  = { 1.0, 1.0, 1.0, 1.0 },
         },
 
-        BossDebuffs = {
-            Enabled = false,
-            VisibilityMode = "boss",
-            EncounterBlacklist = "",
-            MaxDebuffs = 2,
-            IconSize = 96,
-            Spacing = 1,
-            GrowthDirection = "LEFT",
-            ShowDuration = true,
-            ShowDurationText = true,
-            ShowTooltip = true,
-            Strata = "MEDIUM",
-            anchorFrameType = "UIPARENT",
-            ParentFrame = "UIParent",
-            Position = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = -360, YOffset = -55 },
-        },
-
         AuraExternals = {
             Enabled           = false,
             IncludeSelfCast   = false,
