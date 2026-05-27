@@ -195,18 +195,9 @@ function KE:PixelBestSize()
     return scale
 end
 
--- Placeholder; full implementation in Core/TextureSnap.lua (Task 12).
--- Disables Blizzard's per-texture pixel-grid snapping on `obj`. Callers
--- want full control over texture placement (e.g. 1px borders) and don't
--- want Blizzard's grid snapping re-enabling itself on state changes.
-function KE:DisablePixelSnap(obj)
-    if not obj then return end
-    if obj.SetSnapToPixelGrid then obj:SetSnapToPixelGrid(false) end
-    if obj.SetTexelSnappingBias then obj:SetTexelSnappingBias(0) end
-end
-
--- Back-compat alias for the older method name. Prefer DisablePixelSnap
--- in new code.
+-- Back-compat alias for the older method name. The full DisablePixelSnap
+-- implementation lives in Core/TextureSnap.lua, which is loaded after
+-- this file (see Core.xml). Prefer DisablePixelSnap in new code.
 function KE:DisableTextureSnap(tex)
     self:DisablePixelSnap(tex)
 end
