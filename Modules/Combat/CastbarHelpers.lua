@@ -471,10 +471,6 @@ function H.UpdateKickIndicator(self, cooldown)
     H.UpdateBarColor(self, cooldown)
 end
 
-function H.UpdateTickPosition(self, duration)
-    -- positioner removed; stub kept until OnUpdate caller is purged in next commit
-end
-
 function H.SetupKickCooldownBar(self)
     local kick = self.db.KickIndicator
     if not kick or not kick.Enabled or not self.interruptId then
@@ -855,16 +851,6 @@ local TARGET_NAMES_THROTTLE = 0.5  -- belt-and-suspenders fallback; primary driv
 function H.OnUpdate(self, elapsed)
     self._updateElapsed = (self._updateElapsed or 0) + elapsed
     self._targetNamesElapsed = (self._targetNamesElapsed or 0) + elapsed
-    local hasActiveCast = self.casting or self.channeling or self.empowering
-    local duration = self.cachedDuration
-
-    if hasActiveCast and duration then
-        local cooldown = self.interruptId and C_Spell.GetSpellCooldownDuration(self.interruptId) or nil
-        H.UpdateTickPosition(self, duration)
-        H.UpdateKickIndicator(self, cooldown)
-    else
-        self.kickTick:SetAlpha(0)
-    end
 
     if self._updateElapsed < UPDATE_THROTTLE then return end
 
@@ -873,6 +859,7 @@ function H.OnUpdate(self, elapsed)
         return
     end
 
+    local duration = self.cachedDuration
     if not duration then
         self._updateElapsed = 0
         return
@@ -887,6 +874,7 @@ function H.OnUpdate(self, elapsed)
     local decimals = duration:EvaluateRemainingDuration(KE.curves.DurationDecimals)
     self.time:SetFormattedText('%.' .. decimals .. 'f', remaining)
 
+    local hasActiveCast = self.casting or self.channeling or self.empowering
     if hasActiveCast and self._targetNamesElapsed >= TARGET_NAMES_THROTTLE then
         H.UpdateTargetNames(self)
         self._targetNamesElapsed = 0
