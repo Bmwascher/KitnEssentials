@@ -226,14 +226,6 @@ function H.CreateFrame(self, opts)
     spark:SetPoint("CENTER", castBar:GetStatusBarTexture(), "RIGHT", 0, 0)
     spark:Hide()
 
-    local positioner = CreateFrame("StatusBar", nil, castBar)
-    positioner:SetAllPoints(castBar)
-    positioner:SetStatusBarTexture(KE:GetStatusbarPath(db.StatusBarTexture))
-    positioner:SetStatusBarColor(0, 0, 0, 0)
-    positioner:SetMinMaxValues(0, 1)
-    positioner:SetValue(0)
-    positioner:SetFrameLevel(castBar:GetFrameLevel() + 1)
-
     local kickCooldownBar = CreateFrame("StatusBar", nil, castBar)
     kickCooldownBar:SetAllPoints(castBar)
     kickCooldownBar:SetStatusBarTexture(KE:GetStatusbarPath(db.StatusBarTexture))
@@ -285,7 +277,6 @@ function H.CreateFrame(self, opts)
         targetMarker:Hide()
     end
 
-    self.positioner = positioner
     self.frame, self.iconFrame, self.icon = frame, iconFrame, icon
     self.castBar, self.spark = castBar, spark
     self.kickCooldownBar, self.kickTick = kickCooldownBar, kickTick
@@ -315,7 +306,6 @@ function H.ApplySettings(self, opts)
 
     local texturePath = KE:GetStatusbarPath(db.StatusBarTexture)
     self.castBar:SetStatusBarTexture(texturePath)
-    self.positioner:SetStatusBarTexture(texturePath)
     self.kickCooldownBar:SetStatusBarTexture(texturePath)
     self.spark:SetSize(12, db.Height)
 
@@ -422,14 +412,7 @@ function H.UpdateKickIndicator(self, cooldown)
 end
 
 function H.UpdateTickPosition(self, duration)
-    local kick = self.db.KickIndicator
-    if not kick or not kick.Enabled or not self.interruptId then return end
-
-    -- kickCooldownBar's value is set once in SetupKickCooldownBar (ExwindTools
-    -- pattern); the tick's pixel position is locked for the life of the cast.
-    -- Only the invisible positioner still tracks cast elapsed here — kept in
-    -- case other code reads it, but no longer anchors anything.
-    self.positioner:SetValue(duration:GetElapsedDuration())
+    -- positioner removed; stub kept until OnUpdate caller is purged in next commit
 end
 
 function H.SetupKickCooldownBar(self)
@@ -447,9 +430,6 @@ function H.SetupKickCooldownBar(self)
 
     local _, height = self.castBar:GetSize()
     local isChannel = self.channeling or false
-
-    self.positioner:SetMinMaxValues(0, duration:GetTotalDuration())
-    self.positioner:SetReverseFill(isChannel)
 
     -- ExwindTools-style: kickCooldownBar is a full-width overlay on castBar
     -- (not chain-anchored to positioner). Value is set ONCE here to the
@@ -602,12 +582,6 @@ function H.StartCast(self)
     self.cachedDuration = duration
 
     local isChannel = self.channeling == true
-    self.positioner:SetReverseFill(isChannel)
-
-    if duration then
-        self.positioner:SetMinMaxValues(0, duration:GetTotalDuration())
-    end
-    self.positioner:SetValue(0)
 
     self.icon:SetTexture(texture or FALLBACK_ICON)
     self.spark:Show()
@@ -644,8 +618,6 @@ function H.EndCast(self, showHold, wasInterrupted, interruptedBy)
 
     self.castBar:SetMinMaxValues(0, 1)
     self.castBar:SetValue(1)
-    self.positioner:SetMinMaxValues(0, 1)
-    self.positioner:SetValue(1)
     self.time:SetText("")
 
     local texture = self.castBar:GetStatusBarTexture()
@@ -808,9 +780,6 @@ function H.StartPreviewTimer(self)
         Enum.StatusBarTimerDirection.ElapsedTime)
 
     self.cachedDuration = duration
-    self.positioner:SetMinMaxValues(0, PREVIEW_DURATION)
-    self.positioner:SetReverseFill(false)
-    self.positioner:SetValue(0)
 end
 
 -- 30 FPS sampling — smoother decimal sweep in the 0.9 -> 0.1 window than
