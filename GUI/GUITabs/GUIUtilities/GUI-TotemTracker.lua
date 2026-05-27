@@ -140,7 +140,6 @@ GUIFrame:RegisterContent("TotemTracker", function(scrollChild, yOffset)
         db = db,
         showAnchorFrameType = true,
         showStrata = true,
-        showPixelSnap = true,
         onChangeCallback = ApplySettings,
     })
     if posCard.positionWidgets then

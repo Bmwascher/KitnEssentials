@@ -98,7 +98,6 @@ GUIFrame:RegisterContent("CombatTexts", function(scrollChild, yOffset)
         },
         showAnchorFrameType = true,
         showStrata = true,
-        showPixelSnap = true,
         onChangeCallback = ApplySettings,
     })
     if posCard.positionWidgets then

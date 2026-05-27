@@ -116,7 +116,6 @@ GUIFrame:RegisterContent("DeathNotifications", function(scrollChild, yOffset)
         positionTable = db.Position,
         showAnchorFrameType = false,
         showStrata = true,
-        showPixelSnap = true,
         onChangeCallback = ApplySettings,
     })
 

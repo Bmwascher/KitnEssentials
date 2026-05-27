@@ -150,7 +150,6 @@ GUIFrame:RegisterContent("RaidNotifications", function(scrollChild, yOffset)
         },
         showAnchorFrameType = true,
         showStrata = true,
-        showPixelSnap = true,
         onChangeCallback = ApplySettings,
     })
 
