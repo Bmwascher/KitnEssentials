@@ -136,6 +136,50 @@ function KE:PixelSnapCenter(value, dim)
     return result
 end
 
+-- Pre-snap helpers — wrappers that snap numeric arguments before passing
+-- to SetPoint/SetSize. Opt-in. Use when sizing borders, overlay textures,
+-- or any layout where pixel-perfection matters.
+function KE:PixelPoint(obj, anchor, p1, p2, p3, p4)
+    if not p1 then p1 = obj:GetParent() end
+    if type(p1) == "number" then p1 = self:PixelSnap(p1) end
+    if type(p2) == "number" then p2 = self:PixelSnap(p2) end
+    if type(p3) == "number" then p3 = self:PixelSnap(p3) end
+    if type(p4) == "number" then p4 = self:PixelSnap(p4) end
+    obj:SetPoint(anchor, p1, p2, p3, p4)
+end
+
+function KE:PixelSize(frame, w, h)
+    frame:SetSize(self:PixelSnap(w), h and self:PixelSnap(h) or self:PixelSnap(w))
+end
+
+function KE:PixelWidth(frame, w)
+    frame:SetWidth(self:PixelSnap(w))
+end
+
+function KE:PixelHeight(frame, h)
+    frame:SetHeight(self:PixelSnap(h))
+end
+
+function KE:PixelInside(obj, anchor, xOff, yOff)
+    anchor = anchor or obj:GetParent()
+    local inset = self:PixelSnap(xOff or 1)
+    local insetY = self:PixelSnap(yOff or 1)
+    obj:ClearAllPoints()
+    self:DisablePixelSnap(obj)
+    obj:SetPoint("TOPLEFT", anchor, "TOPLEFT", inset, -insetY)
+    obj:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", -inset, insetY)
+end
+
+function KE:PixelOutside(obj, anchor, xOff, yOff)
+    anchor = anchor or obj:GetParent()
+    local outset = self:PixelSnap(xOff or 1)
+    local outsetY = self:PixelSnap(yOff or 1)
+    obj:ClearAllPoints()
+    self:DisablePixelSnap(obj)
+    obj:SetPoint("TOPLEFT", anchor, "TOPLEFT", -outset, outsetY)
+    obj:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", outset, -outsetY)
+end
+
 -- Backwards-compat alias. Old name; same behavior as PixelSnap.
 function KE:PixelRound(value)
     return self:PixelSnap(value)
@@ -151,13 +195,20 @@ function KE:PixelBestSize()
     return scale
 end
 
--- Disables Blizzard's per-texture pixel-grid snapping for `tex`. Some
--- callers want full control over the texture's exact placement (e.g.
--- 1px borders) and don't want Blizzard's grid snapping kicking in.
+-- Placeholder; full implementation in Core/TextureSnap.lua (Task 12).
+-- Disables Blizzard's per-texture pixel-grid snapping on `obj`. Callers
+-- want full control over texture placement (e.g. 1px borders) and don't
+-- want Blizzard's grid snapping re-enabling itself on state changes.
+function KE:DisablePixelSnap(obj)
+    if not obj then return end
+    if obj.SetSnapToPixelGrid then obj:SetSnapToPixelGrid(false) end
+    if obj.SetTexelSnappingBias then obj:SetTexelSnappingBias(0) end
+end
+
+-- Back-compat alias for the older method name. Prefer DisablePixelSnap
+-- in new code.
 function KE:DisableTextureSnap(tex)
-    if not tex then return end
-    if tex.SetSnapToPixelGrid then tex:SetSnapToPixelGrid(false) end
-    if tex.SetTexelSnappingBias then tex:SetTexelSnappingBias(0) end
+    self:DisablePixelSnap(tex)
 end
 
 -- Snaps `frame` to the integer screen-pixel grid using KE's cached pixel
