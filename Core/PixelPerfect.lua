@@ -128,27 +128,26 @@ function KE:DisableTextureSnap(tex)
     if tex.SetTexelSnappingBias then tex:SetTexelSnappingBias(0) end
 end
 
--- Snaps `frame` to the integer screen-pixel grid using its actual
--- effective scale. Reads the frame's resulting screen position, computes
--- the rounding delta, and applies it to the anchor offset.
+-- Snaps `frame` to the integer screen-pixel grid using KE's cached pixel
+-- size (correctly accounts for both UIParent's effective scale and the
+-- physical screen height). At perfect UI scale (768/physH), this is a
+-- no-op for integer-aligned frames and a sub-1-unit nudge for frames
+-- whose anchor is at a sub-pixel position (e.g. some ElvUI panels).
 --
--- This is the screen-position-rounding flavor — different from PixelSnap
--- which rounds an offset value before it's set. Use this when a frame
--- has already been positioned and you want to nudge it onto the pixel
--- grid (e.g. a one-off polish pass after layout).
---
--- NOT auto-called from ApplyFramePosition — user offsets pass through
--- unchanged. See feedback memory for why.
+-- Called by ApplyFramePosition (in Globals.lua) after every position
+-- update. Also exposed for explicit per-frame use when the framework
+-- path isn't being used.
 function KE:SnapFrameToPixels(frame)
     if not frame then return end
+    if cachedPhysH == 0 then recompute() end
 
-    local scale = frame:GetEffectiveScale()
     local left = frame:GetLeft()
     local bottom = frame:GetBottom()
-    if not (scale and left and bottom) then return end
+    if not (left and bottom) then return end
 
-    local snappedLeft = math_floor(left * scale + 0.5) / scale
-    local snappedBottom = math_floor(bottom * scale + 0.5) / scale
+    local pixelSize = cachedPixelSize
+    local snappedLeft = math_floor(left / pixelSize + 0.5) * pixelSize
+    local snappedBottom = math_floor(bottom / pixelSize + 0.5) * pixelSize
 
     local offsetX = snappedLeft - left
     local offsetY = snappedBottom - bottom
