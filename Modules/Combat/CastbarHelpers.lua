@@ -83,6 +83,8 @@ function H.ResetCastState(self)
     self.castID, self.spellID, self.spellName = nil, nil, nil
     self.notInterruptible = nil
     self.cachedDuration = nil
+    H.CancelKickReadyTimer(self, "ResetCastState")
+    H.HideKickTick(self)
 end
 
 -- UnitNameFromGUID + UnitClassFromGUID resolve for ALL unit GUIDs (player,
@@ -167,15 +169,24 @@ function H.CacheInterruptId(self)
     -- cast. Priority-picked interruptId/CD still drive the visible bar.
     self.interruptSpellSet = KE:GetInterruptSpellSet(specID)
     local candidates = KE:GetInterruptCandidatesForSpec(specID)
-    if not candidates then return end
-    for i = 1, #candidates do
-        local data = candidates[i]
-        if C_SpellBook.IsSpellKnownOrInSpellBook(data.id)
-            or C_SpellBook.IsSpellKnownOrInSpellBook(data.id, Enum.SpellBookSpellBank.Pet) then
-            self.interruptId = data.id
-            self.interruptCD = data.cd
-            return
+    if candidates then
+        for i = 1, #candidates do
+            local data = candidates[i]
+            if C_SpellBook.IsSpellKnownOrInSpellBook(data.id)
+                or C_SpellBook.IsSpellKnownOrInSpellBook(data.id, Enum.SpellBookSpellBank.Pet) then
+                self.interruptId = data.id
+                self.interruptCD = data.cd
+                break
+            end
         end
+    end
+
+    -- Mid-cast interrupt-source change: restart kick state with the new
+    -- interruptId so tick alpha and bar color reflect the new CD source.
+    -- Tick position stays at the original anchor — SetupKickCooldownBar is
+    -- not re-run mid-cast (matches pre-refit behavior).
+    if self.frame and self.frame:IsShown() and (self.casting or self.channeling or self.empowering) then
+        H.StartKickReadyTimer(self)
     end
 end
 
@@ -225,14 +236,6 @@ function H.CreateFrame(self, opts)
     spark:SetTexture([[Interface\CastingBar\UI-CastingBar-Spark]])
     spark:SetPoint("CENTER", castBar:GetStatusBarTexture(), "RIGHT", 0, 0)
     spark:Hide()
-
-    local positioner = CreateFrame("StatusBar", nil, castBar)
-    positioner:SetAllPoints(castBar)
-    positioner:SetStatusBarTexture(KE:GetStatusbarPath(db.StatusBarTexture))
-    positioner:SetStatusBarColor(0, 0, 0, 0)
-    positioner:SetMinMaxValues(0, 1)
-    positioner:SetValue(0)
-    positioner:SetFrameLevel(castBar:GetFrameLevel() + 1)
 
     local kickCooldownBar = CreateFrame("StatusBar", nil, castBar)
     kickCooldownBar:SetAllPoints(castBar)
@@ -285,7 +288,6 @@ function H.CreateFrame(self, opts)
         targetMarker:Hide()
     end
 
-    self.positioner = positioner
     self.frame, self.iconFrame, self.icon = frame, iconFrame, icon
     self.castBar, self.spark = castBar, spark
     self.kickCooldownBar, self.kickTick = kickCooldownBar, kickTick
@@ -315,7 +317,6 @@ function H.ApplySettings(self, opts)
 
     local texturePath = KE:GetStatusbarPath(db.StatusBarTexture)
     self.castBar:SetStatusBarTexture(texturePath)
-    self.positioner:SetStatusBarTexture(texturePath)
     self.kickCooldownBar:SetStatusBarTexture(texturePath)
     self.spark:SetSize(12, db.Height)
 
@@ -351,11 +352,75 @@ function H.ApplySettings(self, opts)
     end
 
     self:ApplyPosition()
+    H.UpdateBarColor(self)
 end
 
 ---------------------------------------------------------------------------------
 -- Bar color / kick indicator / tick positioning
 ---------------------------------------------------------------------------------
+
+function H.HideKickTick(self)
+    if self.kickTick then self.kickTick:SetAlpha(0) end
+end
+
+function H.CancelKickReadyTimer(self, siteForDebug)
+    if self.kickReadyTimer then
+        if DEBUG_CB then KE:Print(("[CB] kickReadyTimer canceled (site=%s)"):format(siteForDebug or "?")) end
+        self.kickReadyTimer:Cancel()
+        self.kickReadyTimer = nil
+    end
+    -- Defensive: clean up SPELL_UPDATE_COOLDOWN registration from a possible
+    -- earlier build of this branch (kept for safe upgrade across reloads).
+    if self._kickReadyListening then
+        self:UnregisterEvent("SPELL_UPDATE_COOLDOWN")
+        self._kickReadyListening = false
+    end
+end
+
+function H.StartKickReadyTimer(self)
+    H.CancelKickReadyTimer(self, "StartKickReadyTimer prior")
+
+    -- Hide tick if kick tracking is disabled or no interruptId is resolved.
+    -- Reachable when called from CacheInterruptId mid-cast (Task 7) after a
+    -- spell-set change leaves no candidate interrupt for the new spec/state.
+    if not (self.interruptId and self.db.KickIndicator and self.db.KickIndicator.Enabled) then
+        H.UpdateKickIndicator(self, nil)
+        return
+    end
+
+    local cd = C_Spell.GetSpellCooldownDuration(self.interruptId)
+    if not cd then
+        H.UpdateKickIndicator(self, nil)
+        return
+    end
+
+    -- Synchronous initial visual state via secret-safe SetAlphaFromBoolean
+    -- inside UpdateKickIndicator. Correct whether or not kick is ready.
+    H.UpdateKickIndicator(self, cd)
+
+    -- Poll at 10Hz for the duration of the cast to catch natural CD-zero
+    -- transitions. We CANNOT use a one-shot C_Timer.NewTimer with the
+    -- remaining duration because:
+    --   * cd:IsZero() returns a secret boolean in 12.0 restricted contexts
+    --     (instanced PvE/PvP/M+/raid); Lua-level branches taint.
+    --   * cd:GetRemainingDuration() returns a secret number; passing it to
+    --     C_Timer.NewTimer would taint the timer's internal countdown.
+    -- We CANNOT use SPELL_UPDATE_COOLDOWN: that event fires on explicit
+    -- cooldown changes (cast start, trinket reset, modifications) but NOT
+    -- on natural CD tick-to-zero — so the kick-ready transition would be
+    -- missed.
+    -- A fixed-interval ticker (0.1s = plain non-secret literal) avoids both
+    -- problems. UpdateKickIndicator uses SetAlphaFromBoolean and
+    -- SetVertexColorFromBoolean (both secret-safe) to refresh tick and bar
+    -- color on each fire. 10Hz is still 6x fewer probes than the original
+    -- 60Hz per-frame poll. 100ms worst-case latency is imperceptible.
+    if DEBUG_CB then KE:Print("[CB] StartKickReadyTimer: 10Hz ticker started") end
+    self.kickReadyTimer = C_Timer.NewTicker(0.1, function()
+        if not self.frame or not self.frame:IsShown() then return end
+        if not (self.casting or self.channeling or self.empowering) then return end
+        H.UpdateKickIndicator(self, nil)
+    end)
+end
 
 function H.UpdateBarColor(self, interruptDuration)
     if not self.castBar then return end
@@ -373,9 +438,25 @@ function H.UpdateBarColor(self, interruptDuration)
         local cooldown = interruptDuration or C_Spell.GetSpellCooldownDuration(self.interruptId)
         if not cooldown then return end
 
+        -- "Kick ready" color is the current cast type's color (Casting /
+        -- Channeling / Empowering) so user-set EmpoweringColor etc. is visible
+        -- during interruptible casts. Mirrors atrocityEssentials v4
+        -- CastbarBase.lua:401-415. Without this, every interruptible cast for
+        -- a player with a known interrupt (i.e. every player) renders as
+        -- kick.ReadyColor regardless of the per-cast-type color setting.
+        local cr, cg, cb, ca
+        if self.channeling then
+            cr, cg, cb, ca = KE:ResolveColor(self.db.ChannelingColor, { 0, 0.7, 1, 1 })
+        elseif self.empowering then
+            cr, cg, cb, ca = KE:ResolveColor(self.db.EmpoweringColor, { 0.8, 0.4, 1, 1 })
+        else
+            cr, cg, cb, ca = KE:ResolveColor(self.db.CastingColor, { 1, 0.7, 0, 1 })
+        end
+        local readyColor = CreateColor(cr, cg, cb, ca)
+
         local interruptibleColor = C_CurveUtil.EvaluateColorFromBoolean(
             cooldown:IsZero(),
-            self.colors.Ready,
+            readyColor,
             self.colors.NotReady
         )
         texture:SetVertexColorFromBoolean(self.notInterruptible, self.colors.Uninterruptible, interruptibleColor)
@@ -421,17 +502,6 @@ function H.UpdateKickIndicator(self, cooldown)
     H.UpdateBarColor(self, cooldown)
 end
 
-function H.UpdateTickPosition(self, duration)
-    local kick = self.db.KickIndicator
-    if not kick or not kick.Enabled or not self.interruptId then return end
-
-    -- kickCooldownBar's value is set once in SetupKickCooldownBar (ExwindTools
-    -- pattern); the tick's pixel position is locked for the life of the cast.
-    -- Only the invisible positioner still tracks cast elapsed here — kept in
-    -- case other code reads it, but no longer anchors anything.
-    self.positioner:SetValue(duration:GetElapsedDuration())
-end
-
 function H.SetupKickCooldownBar(self)
     local kick = self.db.KickIndicator
     if not kick or not kick.Enabled or not self.interruptId then
@@ -447,9 +517,6 @@ function H.SetupKickCooldownBar(self)
 
     local _, height = self.castBar:GetSize()
     local isChannel = self.channeling or false
-
-    self.positioner:SetMinMaxValues(0, duration:GetTotalDuration())
-    self.positioner:SetReverseFill(isChannel)
 
     -- ExwindTools-style: kickCooldownBar is a full-width overlay on castBar
     -- (not chain-anchored to positioner). Value is set ONCE here to the
@@ -474,6 +541,8 @@ function H.SetupKickCooldownBar(self)
     else
         self.kickTick:SetPoint("LEFT", self.kickCooldownBar:GetStatusBarTexture(), "RIGHT")
     end
+
+    H.StartKickReadyTimer(self)
 end
 
 ---------------------------------------------------------------------------------
@@ -601,14 +670,6 @@ function H.StartCast(self)
     self.castBar:SetTimerDuration(duration, Enum.StatusBarInterpolation.Immediate, direction)
     self.cachedDuration = duration
 
-    local isChannel = self.channeling == true
-    self.positioner:SetReverseFill(isChannel)
-
-    if duration then
-        self.positioner:SetMinMaxValues(0, duration:GetTotalDuration())
-    end
-    self.positioner:SetValue(0)
-
     self.icon:SetTexture(texture or FALLBACK_ICON)
     self.spark:Show()
     self.text:SetText(text or name or "")
@@ -627,6 +688,8 @@ function H.EndCast(self, showHold, wasInterrupted, interruptedBy)
     if not self.frame or not self.frame:IsShown() then return end
     if self.holdTimer then return end
 
+    H.CancelKickReadyTimer(self, "EndCast")
+
     local holdSettings = self.db.HoldTimer
     if not holdSettings or not holdSettings.Enabled then
         self.spark:Hide()
@@ -644,8 +707,6 @@ function H.EndCast(self, showHold, wasInterrupted, interruptedBy)
 
     self.castBar:SetMinMaxValues(0, 1)
     self.castBar:SetValue(1)
-    self.positioner:SetMinMaxValues(0, 1)
-    self.positioner:SetValue(1)
     self.time:SetText("")
 
     local texture = self.castBar:GetStatusBarTexture()
@@ -699,7 +760,7 @@ function H.UpdateInterruptible(self)
         self.frame:SetAlphaFromBoolean(notInterruptible, 0, 1)
     end
 
-    H.UpdateBarColor(self)
+    H.UpdateKickIndicator(self, nil)
 end
 
 function H.OnCastEvent(self, event, unit, ...)
@@ -808,9 +869,6 @@ function H.StartPreviewTimer(self)
         Enum.StatusBarTimerDirection.ElapsedTime)
 
     self.cachedDuration = duration
-    self.positioner:SetMinMaxValues(0, PREVIEW_DURATION)
-    self.positioner:SetReverseFill(false)
-    self.positioner:SetValue(0)
 end
 
 -- 30 FPS sampling — smoother decimal sweep in the 0.9 -> 0.1 window than
@@ -824,16 +882,6 @@ local TARGET_NAMES_THROTTLE = 0.5  -- belt-and-suspenders fallback; primary driv
 function H.OnUpdate(self, elapsed)
     self._updateElapsed = (self._updateElapsed or 0) + elapsed
     self._targetNamesElapsed = (self._targetNamesElapsed or 0) + elapsed
-    local hasActiveCast = self.casting or self.channeling or self.empowering
-    local duration = self.cachedDuration
-
-    if hasActiveCast and duration then
-        local cooldown = self.interruptId and C_Spell.GetSpellCooldownDuration(self.interruptId) or nil
-        H.UpdateTickPosition(self, duration)
-        H.UpdateKickIndicator(self, cooldown)
-    else
-        self.kickTick:SetAlpha(0)
-    end
 
     if self._updateElapsed < UPDATE_THROTTLE then return end
 
@@ -842,6 +890,7 @@ function H.OnUpdate(self, elapsed)
         return
     end
 
+    local duration = self.cachedDuration
     if not duration then
         self._updateElapsed = 0
         return
@@ -856,6 +905,7 @@ function H.OnUpdate(self, elapsed)
     local decimals = duration:EvaluateRemainingDuration(KE.curves.DurationDecimals)
     self.time:SetFormattedText('%.' .. decimals .. 'f', remaining)
 
+    local hasActiveCast = self.casting or self.channeling or self.empowering
     if hasActiveCast and self._targetNamesElapsed >= TARGET_NAMES_THROTTLE then
         H.UpdateTargetNames(self)
         self._targetNamesElapsed = 0
@@ -898,6 +948,7 @@ end
 function H.ShowPreview(self, opts)
     if not self.frame then self:CreateFrame() end
     self:RegWithEditMode()
+    H.CancelKickReadyTimer(self, "ShowPreview")
     self.isPreview, self.casting = true, true
     self.icon:SetTexture(FALLBACK_ICON)
     self.text:SetText(opts.previewText)
@@ -956,6 +1007,7 @@ function H.HidePreview(self)
         self.previewTicker:Cancel()
         self.previewTicker = nil
     end
+    H.CancelKickReadyTimer(self, "HidePreview")
     H.HideTargetNames(self)
     H.HideTargetMarker(self)
     if self.frame and not (self.casting or self.channeling or self.empowering) then
