@@ -136,8 +136,8 @@ function CT:UpdateFrameSize()
     -- Frame width = digits + brackets, snapped to an even pixel multiple.
     -- digitsW comes from GetStringWidth() and is a float; rounding to even
     -- pixels keeps text-CENTER on integer pixels and the right edge on the
-    -- pixel grid (so the right bracket renders crisply when SnapToPixelGrid
-    -- is ON — the toggle only snaps LEFT/BOTTOM, not width).
+    -- pixel grid. ApplyFramePosition's auto-snap aligns LEFT/BOTTOM but
+    -- not width, so this PixelSnapEven keeps the right bracket crisp.
     local total = KE:PixelSnapEven(digitsW + bracketW)
     if KE:IsSafeValue(total) then
         self.frame:SetSize(total, (self.db.FontSize or 28) + 8)
