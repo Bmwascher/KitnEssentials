@@ -239,7 +239,7 @@ end
 function NMA:ApplySettings()
     if not self.frame then return end
 
-    KE:ApplyFramePositionWithSnap(self.frame, self.db.Position, self.db)
+    KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
     KE:ApplyFontToText(self.text, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
 
     local r, g, b, a = KE:GetAccentColor(self.db.ColorMode, self.db.Color)
@@ -263,7 +263,7 @@ function NMA:RegWithEditMode()
         KE.EditMode:RegisterElement({
             key = "NoMovementAlert", displayName = "No Movement Alert", frame = self.frame,
             getPosition = function() return self.db.Position end,
-            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePositionWithSnap(self.frame, self.db.Position, self.db) end,
+            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePosition(self.frame, self.db.Position, self.db) end,
             getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
             guiPath = "NoMovementAlert",
         })

@@ -51,7 +51,7 @@ local function CreateStanceTextFrame()
     stanceTextFrame.text:SetFont(KE.FONT, 12, "")
     stanceTextFrame.text:SetPoint("CENTER", stanceTextFrame, "CENTER", 0, 0)
 
-    KE:ApplyFramePositionWithSnap(stanceTextFrame, db.Position, db)
+    KE:ApplyFramePosition(stanceTextFrame, db.Position, db)
     KE:ApplyFontToText(stanceTextFrame.text, db.FontFace, db.FontSize, db.FontOutline)
 
     local textPoint = KE:GetTextPointFromAnchor(db.Position.AnchorFrom)
@@ -137,7 +137,7 @@ local function UpdateStanceTextDisplay()
     stanceTextFrame.text:SetTextColor(cr, cg, cb, ca)
 
     KE:ApplyFontToText(stanceTextFrame.text, db.FontFace, db.FontSize, db.FontOutline)
-    KE:ApplyFramePositionWithSnap(stanceTextFrame, db.Position, db)
+    KE:ApplyFramePosition(stanceTextFrame, db.Position, db)
 
     local textPoint = KE:GetTextPointFromAnchor(db.Position.AnchorFrom)
     local textJustify = KE:GetTextJustifyFromAnchor(db.Position.AnchorFrom)
@@ -211,7 +211,7 @@ function ST:ApplySettings()
 
     if stanceTextFrame then
         KE:ApplyFontToText(stanceTextFrame.text, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
-        KE:ApplyFramePositionWithSnap(stanceTextFrame, self.db.Position, self.db)
+        KE:ApplyFramePosition(stanceTextFrame, self.db.Position, self.db)
 
         local textPoint = KE:GetTextPointFromAnchor(self.db.Position.AnchorFrom)
         local textJustify = KE:GetTextJustifyFromAnchor(self.db.Position.AnchorFrom)
@@ -263,7 +263,7 @@ function ST:ShowPreview()
     local pr, pg, pb, pa = KE:ResolveColor(previewColor, { 1, 1, 1, 1 })
     stanceTextFrame.text:SetTextColor(pr, pg, pb, pa)
 
-    KE:ApplyFramePositionWithSnap(stanceTextFrame, db.Position, db)
+    KE:ApplyFramePosition(stanceTextFrame, db.Position, db)
 
     local textPoint = KE:GetTextPointFromAnchor(db.Position.AnchorFrom)
     local textJustify = KE:GetTextJustifyFromAnchor(db.Position.AnchorFrom)
@@ -292,7 +292,7 @@ function ST:RegWithEditMode()
             displayName = "Stance Text",
             frame = self.container,
             getPosition = function() return self.db.Position end,
-            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePositionWithSnap(self.container, self.db.Position, self.db) end,
+            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePosition(self.container, self.db.Position, self.db) end,
             getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
             guiPath = "StanceText",
         })

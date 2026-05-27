@@ -130,7 +130,7 @@ function AX:ApplySettings()
     self:UpdateDB()
     if self.frame then
         self.frame:SetSize(GetFrameSize(self.db))
-        KE:ApplyFramePositionWithSnap(self.frame, self.db.Position, self.db)
+        KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
         self.frame:SetFrameStrata(self.db.Strata or "MEDIUM")
     end
     -- If preview is currently active, force-rebuild it so GUI edits (icon
@@ -149,7 +149,7 @@ function AX:CreateContainer()
     frame:SetSize(GetFrameSize(self.db))
     frame:SetFrameStrata(self.db.Strata or "MEDIUM")
     self.frame = frame
-    KE:ApplyFramePositionWithSnap(frame, self.db.Position, self.db)
+    KE:ApplyFramePosition(frame, self.db.Position, self.db)
     self:RegWithEditMode()
 end
 
@@ -164,7 +164,7 @@ function AX:RegWithEditMode()
             end,
             setPosition = function(pos)
                 self.db.Position = pos
-                KE:ApplyFramePositionWithSnap(self.frame, self.db.Position, self.db)
+                KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
             end,
             getParentFrame = function()
                 return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
