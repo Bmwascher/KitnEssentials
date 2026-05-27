@@ -22,6 +22,7 @@ local string_format         = string.format
 local math_ceil             = math.ceil
 local pairs                 = pairs
 local ipairs                = ipairs
+local table_sort            = table.sort
 local GetTime               = GetTime
 local InCombatLockdown      = InCombatLockdown
 local UnitClass             = UnitClass
@@ -37,6 +38,8 @@ local GetItemInfo           = C_Item.GetItemInfo
 local GetInventoryItemID    = GetInventoryItemID
 local GetItemInfoInstant    = C_Item.GetItemInfoInstant
 local GetWeaponEnchantInfo  = GetWeaponEnchantInfo
+local GetSpecialization     = GetSpecialization
+local GetSpecializationInfo = GetSpecializationInfo
 local C_Spell               = C_Spell
 local C_UnitAuras           = C_UnitAuras
 local C_Item                = C_Item
@@ -189,6 +192,91 @@ local FLASK_BUFFS = {
     [1235111] = "crit",     -- Flask of the Shattered Sun
     [1235057] = "vers",     -- Flask of Thalassian Resistance
 }
+
+-- Per-spec flask stat priority (best-guess meta defaults, edit per tier).
+-- Format: [specID] = { primaryStat, secondaryStat? }
+-- Stats: "mastery" / "haste" / "crit" / "vers". Secondary is optional —
+-- single-entry tables are valid (some specs have a clear single best stat).
+--
+-- Used as a fallback chain inside UpdateFlask when db.LastFlaskStat is nil
+-- or out of stock. The user's actual usage (LastFlaskStat, updated every
+-- time a flask buff is detected) always wins over these defaults; this
+-- table only seeds the very first ready check of a brand-new session.
+--
+-- Specs not listed here fall through to the deterministic sorted fallback
+-- (rank desc, stat alphabetical, itemID asc).
+local SPEC_FLASK_PRIORITY = {
+    -- Death Knight
+    [250]  = { "vers",    "crit"    },  -- Blood
+    [251]  = { "mastery", "crit"    },  -- Frost
+    [252]  = { "crit",    "mastery" },  -- Unholy
+    -- Demon Hunter
+    [577]  = { "crit",    "mastery" },  -- Havoc
+    [581]  = { "haste",   "vers"    },  -- Vengeance
+    [1480] = { "haste",   "mastery" },  -- Devourer
+    -- Druid
+    [102]  = { "mastery", "crit"    },  -- Balance
+    [103]  = { "mastery", "haste"   },  -- Feral
+    [104]  = { "haste",   "vers"    },  -- Guardian
+    [105]  = { "haste",   "mastery" },  -- Restoration
+    -- Evoker
+    [1467] = { "crit",    "haste"   },  -- Devastation
+    [1468] = { "haste",   "mastery" },  -- Preservation
+    [1473] = { "crit",    "haste"   },  -- Augmentation
+    -- Hunter
+    [253]  = { "mastery", "crit"    },  -- Beast Mastery
+    [254]  = { "crit",    "mastery" },  -- Marksmanship
+    [255]  = { "mastery", "crit"    },  -- Survival
+    -- Mage
+    [62]   = { "mastery", "vers"    },  -- Arcane
+    [63]   = { "mastery", "haste"   },  -- Fire
+    [64]   = { "crit",    "mastery" },  -- Frost
+    -- Monk
+    [268]  = { "vers",    "crit"    },  -- Brewmaster
+    [270]  = { "haste",   "crit"    },  -- Mistweaver
+    [269]  = { "crit",    "mastery" },  -- Windwalker
+    -- Paladin
+    [65]   = { "mastery", "haste"   },  -- Holy
+    [66]   = { "haste",   "crit"    },  -- Protection
+    [70]   = { "mastery", "crit"    },  -- Retribution
+    -- Priest
+    [256]  = { "crit",    "haste"   },  -- Discipline
+    [257]  = { "crit",    "vers"    },  -- Holy
+    [258]  = { "mastery", "haste"   },  -- Shadow
+    -- Rogue
+    [259]  = { "crit",    "haste"   },  -- Assassination
+    [260]  = { "haste",   "crit"    },  -- Outlaw
+    [261]  = { "mastery", "haste"   },  -- Subtlety
+    -- Shaman
+    [262]  = { "mastery", "crit"    },  -- Elemental
+    [263]  = { "haste",   "mastery" },  -- Enhancement
+    [264]  = { "crit",    "vers"    },  -- Restoration
+    -- Warlock
+    [265]  = { "crit",    "mastery" },  -- Affliction
+    [266]  = { "crit",    "haste"   },  -- Demonology
+    [267]  = { "crit",    "mastery" },  -- Destruction
+    -- Warrior
+    [71]   = { "crit",    "haste"   },  -- Arms
+    [72]   = { "mastery", "haste"   },  -- Fury
+    [73]   = { "haste",   "mastery" },  -- Protection
+}
+
+-- Sorted itemID list of all FLASKS for deterministic final-fallback iteration.
+-- Order: rank desc (rank 2 first), stat alphabetical, itemID asc.
+-- Computed once at file load — FLASKS is static data.
+local FLASKS_SORTED = {}
+do
+    for itemID in pairs(FLASKS) do
+        FLASKS_SORTED[#FLASKS_SORTED + 1] = itemID
+    end
+    table_sort(FLASKS_SORTED, function(a, b)
+        local da, db = FLASKS[a], FLASKS[b]
+        local ra, rb = da.rank or 1, db.rank or 1
+        if ra ~= rb then return ra > rb end
+        if da.stat ~= db.stat then return da.stat < db.stat end
+        return a < b
+    end)
+end
 
 -- Healthstones — keyed by item ID.
 -- 5512: standard healthstone, craftable/droppable for any class to carry.
@@ -786,19 +874,56 @@ function RCC:UpdateFood(auras)
     btn.countText:SetText("")
 end
 
+--- _GetSpecFlaskPriority
+--- Returns the SPEC_FLASK_PRIORITY entry for the player's current spec, or
+--- nil if no spec / not in the table. Safe APIs in 12.0 — GetSpecialization
+--- and GetSpecializationInfo are not combat-restricted and don't return
+--- secret values.
+function RCC:_GetSpecFlaskPriority()
+    local specIndex = GetSpecialization and GetSpecialization()
+    if not specIndex then return nil end
+    local specId = GetSpecializationInfo and GetSpecializationInfo(specIndex)
+    if not specId then return nil end
+    return SPEC_FLASK_PRIORITY[specId]
+end
+
 --- UpdateFlask
---- Aura scan against FLASK_BUFFS. When out of combat, also wires click button
---- to the first flask found in bags (any stat — Midnight has 4 stat lines + 2
---- forms each; first-match is sufficient since all use the same click pattern).
+--- Aura scan against FLASK_BUFFS. When out of combat, wires the click button
+--- to the player's preferred flask in bags.
+---
+--- Selection priority chain for the click target (first hit wins, each step
+--- returns the highest-rank item in bags matching its stat):
+---   1. db.LastFlaskStat — refreshed every time a flask buff is detected, so
+---      the click keeps offering the stat line the player actually uses.
+---      Mirrors BuffReminders' ConsumableMemory aura-path Remember pattern
+---      (Core/ConsumableMemory.lua), simplified to one global preference.
+---   2. SPEC_FLASK_PRIORITY[spec][1] — meta-default primary stat for the
+---      player's current spec. Only used on a fresh session before any
+---      flask aura has populated LastFlaskStat.
+---   3. SPEC_FLASK_PRIORITY[spec][2] — meta-default secondary stat (optional).
+---   4. FLASKS_SORTED iteration — deterministic final fallback ordered by
+---      (rank desc, stat alphabetical, itemID asc). Hit when LastFlaskStat
+---      is nil, the spec isn't in SPEC_FLASK_PRIORITY (new spec from a
+---      future patch), or none of the preferred stats are in bag.
+---
+--- Within any chosen stat, rank 2 is preferred over rank 1 (handled by
+--- _BestForStat). Once the player applies any flask, LastFlaskStat locks
+--- in for all future sessions across /reload.
+---
+--- Why this matters: 4 stat lines × 2 ranks × 2 forms = up to 16 flask
+--- itemIDs, all mapped to 4 buffIDs. The previous "first match in pairs()"
+--- scan was non-deterministic and would nominate a random flask whenever
+--- the bag held multiple stat options.
 function RCC:UpdateFlask(auras)
     local btn = self.buttons.flask
     if not btn then return end
     local click = btn.click
 
-    local activeAura
+    local activeAura, activeBuffId
     for buffId in pairs(FLASK_BUFFS) do
         if auras[buffId] then
             activeAura = auras[buffId]
+            activeBuffId = buffId
             break
         end
     end
@@ -808,6 +933,16 @@ function RCC:UpdateFlask(auras)
         btn.statusTexture:Show()
         btn.texture:SetDesaturated(false)
         btn.timeLeft:SetText(formatDurationText(self:GetAuraRemaining(activeAura)))
+
+        -- Remember the stat line currently buffed so the click button keeps
+        -- nominating it even after the bag scan finds multiple stat options.
+        -- Tracked as the stat string (not buffId) so the preference survives
+        -- if Blizzard re-IDs the buff next season — as long as FLASKS data
+        -- keeps its `stat` field, the match still works.
+        if self.db then
+            local stat = FLASK_BUFFS[activeBuffId]
+            if stat then self.db.LastFlaskStat = stat end
+        end
     else
         btn.statusTexture:SetTexture(NOT_READY_TEXTURE)
         btn.statusTexture:Show()
@@ -815,21 +950,64 @@ function RCC:UpdateFlask(auras)
         btn.timeLeft:SetText("")
     end
 
-    -- Bag count + click wiring
-    local totalCount = 0
-    local clickName
     local cauldronOnly = self.db.CauldronFlasksOnly
+
+    -- Bag scan (one pass): build a lookup of available eligible flasks
+    -- {[itemID] = { count, data }} so the priority chain below can do
+    -- O(1) lookups instead of re-scanning bags per priority step.
+    local available = {}
+    local totalCount = 0
     for itemID, data in pairs(FLASKS) do
-        -- CauldronFlasksOnly: skip non-Fleeting items (regular-craft flasks)
         if (not cauldronOnly) or data.fleeting then
             local count = GetItemCount(itemID, false, true)
             if count and count > 0 then
+                available[itemID] = { count = count, data = data }
                 totalCount = totalCount + count
-                if not clickName then clickName = self:SafeItemName(itemID) end
             end
         end
     end
     btn.countText:SetText(totalCount > 0 and tostring(totalCount) or "")
+
+    -- Helper: highest-rank available item matching a stat (rank 2 wins over rank 1).
+    local function bestForStat(stat)
+        local best, bestRank
+        for itemID, entry in pairs(available) do
+            if entry.data.stat == stat then
+                local rank = entry.data.rank or 1
+                if not bestRank or rank > bestRank then
+                    best, bestRank = itemID, rank
+                end
+            end
+        end
+        return best
+    end
+
+    -- Priority chain
+    local pickItem
+    local lastStat = self.db.LastFlaskStat
+    if lastStat then pickItem = bestForStat(lastStat) end
+
+    if not pickItem then
+        local prio = self:_GetSpecFlaskPriority()
+        if prio then
+            for _, stat in ipairs(prio) do
+                pickItem = bestForStat(stat)
+                if pickItem then break end
+            end
+        end
+    end
+
+    if not pickItem then
+        -- Deterministic final fallback (rank desc, stat alpha, itemID asc).
+        for _, itemID in ipairs(FLASKS_SORTED) do
+            if available[itemID] then
+                pickItem = itemID
+                break
+            end
+        end
+    end
+
+    local clickName = pickItem and self:SafeItemName(pickItem) or nil
 
     if click and not InCombatLockdown() then
         if clickName then

@@ -80,7 +80,6 @@ GUIFrame.sidebarConfig = {
         text = "\226\128\162 Quality of Life",
         defaultExpanded = false,
         items = {
-            { id = "AuctionHouseFilter", text = "Auction House Filter" },
             { id = "Automation",        text = "Automation" },
             { id = "CharacterPanel",    text = "Character Panel" },
             { id = "CombatLogger",      text = "Combat Logger" },

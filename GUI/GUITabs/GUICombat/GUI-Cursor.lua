@@ -2,7 +2,7 @@
 -- ║  GUI-Cursor.lua                                          ║
 -- ║  GUI: Cursor (unified)                                   ║
 -- ║  Purpose: Configuration panel for the Cursor module      ║
--- ║  (cursor circle + GCD ring + cast circle + trail + dispel)║
+-- ║ (cursor circle + GCD ring + cast circle + trail + dispel)║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE

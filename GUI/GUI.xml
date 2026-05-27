@@ -95,7 +95,6 @@
     <Script file="GUITabs\GUIQoL\GUI-HuntersMark.lua" />
     <Script file="GUITabs\GUIQoL\GUI-HideBars.lua" />
     <Script file="GUITabs\GUIQoL\GUI-CombatLogger.lua" />
-    <Script file="GUITabs\GUIQoL\GUI-AuctionHouseFilter.lua" />
     <Script file="GUITabs\GUIQoL\GUI-GreatVaultAlert.lua" />
     <Script file="GUITabs\GUIQoL\GUI-CharacterPanel.lua" />
     <Script file="GUITabs\GUIQoL\GUI-Nicknames.lua" />

@@ -299,20 +299,92 @@ GUIFrame:RegisterContent("Automation", function(scrollChild, yOffset)
     yOffset = card7:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 8: Housing Auto-Roll
+    -- Card 8: Auction House Filter (independent module — own cascade)
     ----------------------------------------------------------------
-    local card8 = GUIFrame:CreateCard(scrollChild, "Housing Item Auto-Roll", yOffset)
-    autoManager:Register(card8, "all")
+    local ahfDB = KE.db and KE.db.profile.AuctionHouseFilter
+    if ahfDB then
+        local ahfManager = GUIFrame:CreateWidgetStateManager()
 
-    local row8 = GUIFrame:CreateRow(card8.content, Theme.rowHeightLast)
-    local autoPassHousingCheck = GUIFrame:CreateCheckbox(row8, "Auto-Roll on Housing Items", {
+        local function ApplyAHFState(enabled)
+            ahfDB.Enabled = enabled
+            if enabled then KitnEssentials:EnableModule("AuctionHouseFilter")
+            else KitnEssentials:DisableModule("AuctionHouseFilter") end
+        end
+
+        local function RefreshAHFStates()
+            ahfManager:UpdateAll(ahfDB.Enabled ~= false)
+        end
+
+        local card8 = GUIFrame:CreateCard(scrollChild, "Auction House Filter", yOffset)
+        ahfManager:Register(card8, "all")
+
+        local row8a = GUIFrame:CreateRow(card8.content, Theme.rowHeight)
+        local ahfEnableCheck = GUIFrame:CreateCheckbox(row8a, "Enable Auction House Filter", {
+            value = ahfDB.Enabled ~= false,
+            callback = function(checked)
+                ApplyAHFState(checked)
+                RefreshAHFStates()
+            end,
+            msgPopup = true,
+            msgText = "Auction House Filter",
+            msgOn = "On",
+            msgOff = "Off",
+        })
+        row8a:AddWidget(ahfEnableCheck, 1)
+        card8:AddRow(row8a, Theme.rowHeight)
+
+        local row8b = GUIFrame:CreateRow(card8.content, Theme.rowHeight)
+        local ahCurExpCheck = GUIFrame:CreateCheckbox(row8b, "Blizzard AH: Current Expansion Only", {
+            value = ahfDB.AuctionHouse.CurrentExpansion ~= false,
+            callback = function(checked) ahfDB.AuctionHouse.CurrentExpansion = checked end,
+        })
+        row8b:AddWidget(ahCurExpCheck, 0.5)
+        ahfManager:Register(ahCurExpCheck, "all")
+
+        local ahFocusCheck = GUIFrame:CreateCheckbox(row8b, "Blizzard AH: Focus Search Bar", {
+            value = ahfDB.AuctionHouse.FocusSearchBar == true,
+            callback = function(checked) ahfDB.AuctionHouse.FocusSearchBar = checked end,
+        })
+        row8b:AddWidget(ahFocusCheck, 0.5)
+        ahfManager:Register(ahFocusCheck, "all")
+        card8:AddRow(row8b, Theme.rowHeight)
+
+        local row8c = GUIFrame:CreateRow(card8.content, Theme.rowHeightLast)
+        local coCurExpCheck = GUIFrame:CreateCheckbox(row8c, "Craft Orders: Current Expansion Only", {
+            value = ahfDB.CraftOrders.CurrentExpansion ~= false,
+            callback = function(checked) ahfDB.CraftOrders.CurrentExpansion = checked end,
+        })
+        row8c:AddWidget(coCurExpCheck, 0.5)
+        ahfManager:Register(coCurExpCheck, "all")
+
+        local coFocusCheck = GUIFrame:CreateCheckbox(row8c, "Craft Orders: Focus Search Bar", {
+            value = ahfDB.CraftOrders.FocusSearchBar == true,
+            callback = function(checked) ahfDB.CraftOrders.FocusSearchBar = checked end,
+        })
+        row8c:AddWidget(coFocusCheck, 0.5)
+        ahfManager:Register(coFocusCheck, "all")
+        card8:AddRow(row8c, Theme.rowHeightLast, 0)
+
+        yOffset = card8:GetNextOffset()
+
+        RefreshAHFStates()
+    end
+
+    ----------------------------------------------------------------
+    -- Card 9: Housing Auto-Roll
+    ----------------------------------------------------------------
+    local card9 = GUIFrame:CreateCard(scrollChild, "Housing Item Auto-Roll", yOffset)
+    autoManager:Register(card9, "all")
+
+    local row9 = GUIFrame:CreateRow(card9.content, Theme.rowHeightLast)
+    local autoPassHousingCheck = GUIFrame:CreateCheckbox(row9, "Auto-Roll on Housing Items", {
         value = db.AutoPassHousing == true,
         callback = function(checked) db.AutoPassHousing = checked; ApplySettings() end,
     })
-    row8:AddWidget(autoPassHousingCheck, 0.5)
+    row9:AddWidget(autoPassHousingCheck, 0.5)
     autoManager:Register(autoPassHousingCheck, "all")
 
-    local rollModeDropdown = GUIFrame:CreateDropdown(row8, "Roll Type", {
+    local rollModeDropdown = GUIFrame:CreateDropdown(row9, "Roll Type", {
         options = {
             { key = "PASS", text = "Pass" },
             { key = "NEED", text = "Need" },
@@ -320,16 +392,16 @@ GUIFrame:RegisterContent("Automation", function(scrollChild, yOffset)
         value = db.AutoPassHousingMode or "PASS",
         callback = function(val) db.AutoPassHousingMode = val end,
     })
-    row8:AddWidget(rollModeDropdown, 0.5)
+    row9:AddWidget(rollModeDropdown, 0.5)
     autoManager:Register(rollModeDropdown, "all")
-    card8:AddRow(row8, Theme.rowHeightLast, 0)
+    card9:AddRow(row9, Theme.rowHeightLast, 0)
 
-    card8:AddLabel("|cff888888Auto-rolls on Housing items based on your roll type selection. Useful in raids/dungeons where housing decor drops aren't gear upgrades.|r")
+    card9:AddLabel("|cff888888Auto-rolls on Housing items based on your roll type selection. Useful in raids/dungeons where housing decor drops aren't gear upgrades.|r")
 
-    yOffset = card8:GetNextOffset()
+    yOffset = card9:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 9: Vantus Rune Withdrawer (independent module — own cascade)
+    -- Card 10: Vantus Rune Withdrawer (independent module — own cascade)
     ----------------------------------------------------------------
     local vrDB = KE.db and KE.db.profile.VantusRune
     if vrDB then
@@ -345,11 +417,11 @@ GUIFrame:RegisterContent("Automation", function(scrollChild, yOffset)
             vrManager:UpdateAll(vrDB.Enabled ~= false)
         end
 
-        local card9 = GUIFrame:CreateCard(scrollChild, "Vantus Rune Withdrawer", yOffset)
-        vrManager:Register(card9, "all")
+        local card10 = GUIFrame:CreateCard(scrollChild, "Vantus Rune Withdrawer", yOffset)
+        vrManager:Register(card10, "all")
 
-        local row9a = GUIFrame:CreateRow(card9.content, Theme.rowHeight)
-        local vrEnableCheck = GUIFrame:CreateCheckbox(row9a, "Enable Vantus Rune", {
+        local row10a = GUIFrame:CreateRow(card10.content, Theme.rowHeight)
+        local vrEnableCheck = GUIFrame:CreateCheckbox(row10a, "Enable Vantus Rune", {
             value = vrDB.Enabled ~= false,
             callback = function(checked)
                 ApplyVRState(checked)
@@ -360,29 +432,29 @@ GUIFrame:RegisterContent("Automation", function(scrollChild, yOffset)
             msgOn = "On",
             msgOff = "Off",
         })
-        row9a:AddWidget(vrEnableCheck, 0.5)
+        row10a:AddWidget(vrEnableCheck, 0.5)
 
-        local vrChatCheck = GUIFrame:CreateCheckbox(row9a, "Show Chat Messages", {
+        local vrChatCheck = GUIFrame:CreateCheckbox(row10a, "Show Chat Messages", {
             value = vrDB.ShowChatMessages ~= false,
             callback = function(checked) vrDB.ShowChatMessages = checked end,
         })
-        row9a:AddWidget(vrChatCheck, 0.5)
+        row10a:AddWidget(vrChatCheck, 0.5)
         vrManager:Register(vrChatCheck, "all")
-        card9:AddRow(row9a, Theme.rowHeight)
+        card10:AddRow(row10a, Theme.rowHeight)
 
-        local row9b = GUIFrame:CreateRow(card9.content, Theme.rowHeightLast)
-        local vrTimeoutSlider = GUIFrame:CreateSlider(row9b, "Confirm Timeout", {
+        local row10b = GUIFrame:CreateRow(card10.content, Theme.rowHeightLast)
+        local vrTimeoutSlider = GUIFrame:CreateSlider(row10b, "Confirm Timeout", {
             min = 5, max = 30, step = 1,
             value = vrDB.ConfirmationTimeout or 15,
             callback = function(val) vrDB.ConfirmationTimeout = val end,
         })
-        row9b:AddWidget(vrTimeoutSlider, 0.5)
+        row10b:AddWidget(vrTimeoutSlider, 0.5)
         vrManager:Register(vrTimeoutSlider, "all")
-        card9:AddRow(row9b, Theme.rowHeightLast, 0)
+        card10:AddRow(row10b, Theme.rowHeightLast, 0)
 
-        card9:AddLabel("|cff888888Adds a button to the Guild Bank to withdraw one Vantus Rune.\nPriority: Radiant Gold (245880) > Radiant Silver (245879).\nYou must be on the same realm as your guild to withdraw.|r")
+        card10:AddLabel("|cff888888Adds a button to the Guild Bank to withdraw one Vantus Rune.\nPriority: Radiant Gold (245880) > Radiant Silver (245879).\nYou must be on the same realm as your guild to withdraw.|r")
 
-        yOffset = card9:GetNextOffset()
+        yOffset = card10:GetNextOffset()
 
         RefreshVRStates()
     end
