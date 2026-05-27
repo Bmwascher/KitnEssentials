@@ -202,6 +202,25 @@ function KE:DisableTextureSnap(tex)
     self:DisablePixelSnap(tex)
 end
 
+-- Re-runs the pixel-size calculation on every registered border. Called by
+-- the cache-invalidation watcher below when UI_SCALE_CHANGED or
+-- DISPLAY_SIZE_CHANGED fires. Borders register themselves in
+-- KE._borderRegistry via Core/Widgets.lua's _KE_RegisterBorder helper.
+function KE:ResnapAllBorders()
+    local registry = KE._borderRegistry
+    if not registry then return end
+    local px = self:GetPixelSize()
+    for frame in pairs(registry) do
+        if frame and frame.borders then
+            local b = frame.borders
+            if b.top and b.top.SetHeight then b.top:SetHeight(px) end
+            if b.bottom and b.bottom.SetHeight then b.bottom:SetHeight(px) end
+            if b.left and b.left.SetWidth then b.left:SetWidth(px) end
+            if b.right and b.right.SetWidth then b.right:SetWidth(px) end
+        end
+    end
+end
+
 -- Snaps `frame` to the integer screen-pixel grid using KE's cached pixel
 -- size (correctly accounts for both UIParent's effective scale and the
 -- physical screen height). At perfect UI scale (768/physH), this is a
@@ -243,6 +262,9 @@ local watcher = CreateFrame("Frame")
 watcher:RegisterEvent("UI_SCALE_CHANGED")
 watcher:RegisterEvent("DISPLAY_SIZE_CHANGED")
 watcher:RegisterEvent("PLAYER_LOGIN")
-watcher:SetScript("OnEvent", function() recompute() end)
+watcher:SetScript("OnEvent", function()
+    recompute()
+    KE:ResnapAllBorders()
+end)
 
 if UIParent then recompute() end
