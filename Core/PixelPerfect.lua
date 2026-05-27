@@ -27,6 +27,7 @@ local KE = select(2, ...)
 
 local math_floor = math.floor
 local math_ceil = math.ceil
+local math_abs = math.abs
 
 ---------------------------------------------------------------------------------
 -- Cached state
@@ -78,10 +79,15 @@ function KE:PixelSnap(value)
     if not value or value == 0 then return 0 end
     if cachedPhysH == 0 then recompute() end
     local px = value / cachedPixelSize
+    local snapped
     if px >= 0 then
-        return math_floor(px + 0.5) * cachedPixelSize
+        snapped = math_floor(px + 0.5) * cachedPixelSize
+    else
+        snapped = math_ceil(px - 0.5) * cachedPixelSize
     end
-    return math_ceil(px - 0.5) * cachedPixelSize
+    local rounded = math_floor(snapped + 0.5)
+    if math_abs(snapped - rounded) < 0.001 then snapped = rounded end
+    return snapped
 end
 
 -- Snaps to the nearest even pixel multiple (use for borders that need
