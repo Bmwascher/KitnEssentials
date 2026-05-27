@@ -438,9 +438,25 @@ function H.UpdateBarColor(self, interruptDuration)
         local cooldown = interruptDuration or C_Spell.GetSpellCooldownDuration(self.interruptId)
         if not cooldown then return end
 
+        -- "Kick ready" color is the current cast type's color (Casting /
+        -- Channeling / Empowering) so user-set EmpoweringColor etc. is visible
+        -- during interruptible casts. Mirrors atrocityEssentials v4
+        -- CastbarBase.lua:401-415. Without this, every interruptible cast for
+        -- a player with a known interrupt (i.e. every player) renders as
+        -- kick.ReadyColor regardless of the per-cast-type color setting.
+        local cr, cg, cb, ca
+        if self.channeling then
+            cr, cg, cb, ca = KE:ResolveColor(self.db.ChannelingColor, { 0, 0.7, 1, 1 })
+        elseif self.empowering then
+            cr, cg, cb, ca = KE:ResolveColor(self.db.EmpoweringColor, { 0.8, 0.4, 1, 1 })
+        else
+            cr, cg, cb, ca = KE:ResolveColor(self.db.CastingColor, { 1, 0.7, 0, 1 })
+        end
+        local readyColor = CreateColor(cr, cg, cb, ca)
+
         local interruptibleColor = C_CurveUtil.EvaluateColorFromBoolean(
             cooldown:IsZero(),
-            self.colors.Ready,
+            readyColor,
             self.colors.NotReady
         )
         texture:SetVertexColorFromBoolean(self.notInterruptible, self.colors.Uninterruptible, interruptibleColor)
