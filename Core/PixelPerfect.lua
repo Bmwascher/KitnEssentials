@@ -113,6 +113,29 @@ function KE:PixelHalfFloor(value)
     return math_floor(px / 2) * cachedPixelSize
 end
 
+-- Snap a CENTER coord so both frame edges land on physical pixel boundaries.
+-- Even pixel-width frames snap center to whole pixel; odd-width frames snap
+-- center to half-pixel (integer + 0.5). Prevents 1px drift on save/restore
+-- of CENTER-anchored odd-width frames.
+function KE:PixelSnapCenter(value, dim)
+    if value == nil then return value end
+    if cachedPhysH == 0 then recompute() end
+    local pixelSize = cachedPixelSize
+    if dim and dim > 0 then
+        local dimPx = math_floor(dim / pixelSize + 0.5)
+        if dimPx % 2 == 1 then
+            local result = (math_floor(value / pixelSize) + 0.5) * pixelSize
+            local rounded = math_floor(result) + 0.5
+            if math_abs(result - rounded) < 0.001 then result = rounded end
+            return result
+        end
+    end
+    local result = math_floor(value / pixelSize + 0.5) * pixelSize
+    local rounded = math_floor(result + 0.5)
+    if math_abs(result - rounded) < 0.001 then result = rounded end
+    return result
+end
+
 -- Backwards-compat alias. Old name; same behavior as PixelSnap.
 function KE:PixelRound(value)
     return self:PixelSnap(value)
