@@ -364,16 +364,16 @@ function H.HideKickTick(self)
 end
 
 function H.CancelKickReadyTimer(self, siteForDebug)
-    if self._kickReadyListening then
-        if DEBUG_CB then KE:Print(("[CB] kickReadyListening unregistered (site=%s)"):format(siteForDebug or "?")) end
-        self:UnregisterEvent("SPELL_UPDATE_COOLDOWN")
-        self._kickReadyListening = false
-    end
-    -- Defensive: clean up any stale C_Timer.NewTimer handle from a possible
-    -- earlier build of this branch (kept for safe upgrade).
     if self.kickReadyTimer then
+        if DEBUG_CB then KE:Print(("[CB] kickReadyTimer canceled (site=%s)"):format(siteForDebug or "?")) end
         self.kickReadyTimer:Cancel()
         self.kickReadyTimer = nil
+    end
+    -- Defensive: clean up SPELL_UPDATE_COOLDOWN registration from a possible
+    -- earlier build of this branch (kept for safe upgrade across reloads).
+    if self._kickReadyListening then
+        self:UnregisterEvent("SPELL_UPDATE_COOLDOWN")
+        self._kickReadyListening = false
     end
 end
 
@@ -398,32 +398,28 @@ function H.StartKickReadyTimer(self)
     -- inside UpdateKickIndicator. Correct whether or not kick is ready.
     H.UpdateKickIndicator(self, cd)
 
-    -- Listen for player cooldown changes for the duration of this cast.
-    -- We CANNOT use C_Timer.NewTimer here:
+    -- Poll at 10Hz for the duration of the cast to catch natural CD-zero
+    -- transitions. We CANNOT use a one-shot C_Timer.NewTimer with the
+    -- remaining duration because:
     --   * cd:IsZero() returns a secret boolean in 12.0 restricted contexts
-    --     (instanced PvE/PvP/M+/raid); Lua-level `if cd:IsZero() then` taints.
-    --   * cd:GetRemainingDuration() returns a secret number; passing that to
+    --     (instanced PvE/PvP/M+/raid); Lua-level branches taint.
+    --   * cd:GetRemainingDuration() returns a secret number; passing it to
     --     C_Timer.NewTimer would taint the timer's internal countdown.
-    -- SPELL_UPDATE_COOLDOWN fires whenever any player cooldown changes.
-    -- UpdateKickIndicator uses SetAlphaFromBoolean (secret-safe) to refresh
-    -- the tick alpha + bar color on each fire. Net behavior: kick-ready
-    -- transition is visible immediately on the cooldown-change event tick,
-    -- no Lua-side secret-value tests anywhere.
-    if not self._kickReadyListening then
-        if DEBUG_CB then KE:Print("[CB] StartKickReadyTimer: listening for SPELL_UPDATE_COOLDOWN") end
-        self:RegisterEvent("SPELL_UPDATE_COOLDOWN", function() H.OnSpellUpdateCooldown(self) end)
-        self._kickReadyListening = true
-    end
-end
-
-function H.OnSpellUpdateCooldown(self)
-    -- Refresh kick tick alpha + bar color on player cooldown change. Filtered
-    -- to only fire when an active cast is being tracked with kick enabled.
-    -- UpdateKickIndicator uses SetAlphaFromBoolean (secret-safe).
-    if not self.frame or not self.frame:IsShown() then return end
-    if not (self.casting or self.channeling or self.empowering) then return end
-    if not (self.interruptId and self.db.KickIndicator and self.db.KickIndicator.Enabled) then return end
-    H.UpdateKickIndicator(self, nil)
+    -- We CANNOT use SPELL_UPDATE_COOLDOWN: that event fires on explicit
+    -- cooldown changes (cast start, trinket reset, modifications) but NOT
+    -- on natural CD tick-to-zero — so the kick-ready transition would be
+    -- missed.
+    -- A fixed-interval ticker (0.1s = plain non-secret literal) avoids both
+    -- problems. UpdateKickIndicator uses SetAlphaFromBoolean and
+    -- SetVertexColorFromBoolean (both secret-safe) to refresh tick and bar
+    -- color on each fire. 10Hz is still 6x fewer probes than the original
+    -- 60Hz per-frame poll. 100ms worst-case latency is imperceptible.
+    if DEBUG_CB then KE:Print("[CB] StartKickReadyTimer: 10Hz ticker started") end
+    self.kickReadyTimer = C_Timer.NewTicker(0.1, function()
+        if not self.frame or not self.frame:IsShown() then return end
+        if not (self.casting or self.channeling or self.empowering) then return end
+        H.UpdateKickIndicator(self, nil)
+    end)
 end
 
 function H.UpdateBarColor(self, interruptDuration)
