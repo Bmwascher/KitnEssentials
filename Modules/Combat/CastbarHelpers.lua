@@ -343,6 +343,7 @@ function H.ApplySettings(self, opts)
     end
 
     self:ApplyPosition()
+    H.UpdateBarColor(self)
 end
 
 ---------------------------------------------------------------------------------
