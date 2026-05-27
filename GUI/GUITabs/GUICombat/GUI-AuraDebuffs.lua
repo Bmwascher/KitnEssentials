@@ -112,7 +112,7 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
 
     local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
     local iconSizeSlider = GUIFrame:CreateSlider(row4a, "Icon Size", {
-        min = 16, max = 64, step = 1,
+        min = 16, max = 128, step = 1,
         value = db.IconSize or 32,
         callback = function(val) db.IconSize = val; ApplySettings() end,
     })
