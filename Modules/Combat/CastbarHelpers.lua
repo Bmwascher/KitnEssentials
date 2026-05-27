@@ -83,6 +83,8 @@ function H.ResetCastState(self)
     self.castID, self.spellID, self.spellName = nil, nil, nil
     self.notInterruptible = nil
     self.cachedDuration = nil
+    H.CancelKickReadyTimer(self, "ResetCastState")
+    H.HideKickTick(self)
 end
 
 -- UnitNameFromGUID + UnitClassFromGUID resolve for ALL unit GUIDs (player,
@@ -347,6 +349,54 @@ end
 -- Bar color / kick indicator / tick positioning
 ---------------------------------------------------------------------------------
 
+function H.HideKickTick(self)
+    if self.kickTick then self.kickTick:SetAlpha(0) end
+end
+
+function H.CancelKickReadyTimer(self, siteForDebug)
+    if self.kickReadyTimer then
+        if DEBUG_CB then KE:Print(("[CB] kickReadyTimer canceled (site=%s)"):format(siteForDebug or "?")) end
+        self.kickReadyTimer:Cancel()
+        self.kickReadyTimer = nil
+    end
+end
+
+function H.StartKickReadyTimer(self)
+    H.CancelKickReadyTimer(self, "StartKickReadyTimer prior")
+
+    -- Hide tick if kick tracking is disabled or no interruptId is resolved.
+    -- Reachable when called from CacheInterruptId mid-cast (Task 7) after a
+    -- spell-set change leaves no candidate interrupt for the new spec/state.
+    if not (self.interruptId and self.db.KickIndicator and self.db.KickIndicator.Enabled) then
+        H.UpdateKickIndicator(self, nil)
+        return
+    end
+
+    local cd = C_Spell.GetSpellCooldownDuration(self.interruptId)
+    if not cd then
+        H.UpdateKickIndicator(self, nil)
+        return
+    end
+
+    -- Synchronous initial visual state — no frame-1 flicker.
+    H.UpdateKickIndicator(self, cd)
+
+    if cd:IsZero() then return end  -- already ready, no timer needed
+
+    local remaining = cd:GetRemainingDuration()
+    if not remaining or remaining <= 0 then return end
+
+    if DEBUG_CB then KE:Print(("[CB] StartKickReadyTimer: remaining=%.2fs"):format(remaining)) end
+
+    self.kickReadyTimer = C_Timer.NewTimer(remaining, function()
+        self.kickReadyTimer = nil
+        if DEBUG_CB then KE:Print("[CB] kickReadyTimer fired") end
+        if self.frame and self.frame:IsShown() and (self.casting or self.channeling or self.empowering) then
+            H.UpdateKickIndicator(self, nil)  -- re-probes; cd is now zero
+        end
+    end)
+end
+
 function H.UpdateBarColor(self, interruptDuration)
     if not self.castBar then return end
     local kick = self.db.KickIndicator
@@ -454,6 +504,8 @@ function H.SetupKickCooldownBar(self)
     else
         self.kickTick:SetPoint("LEFT", self.kickCooldownBar:GetStatusBarTexture(), "RIGHT")
     end
+
+    H.StartKickReadyTimer(self)
 end
 
 ---------------------------------------------------------------------------------
@@ -581,8 +633,6 @@ function H.StartCast(self)
     self.castBar:SetTimerDuration(duration, Enum.StatusBarInterpolation.Immediate, direction)
     self.cachedDuration = duration
 
-    local isChannel = self.channeling == true
-
     self.icon:SetTexture(texture or FALLBACK_ICON)
     self.spark:Show()
     self.text:SetText(text or name or "")
@@ -600,6 +650,8 @@ end
 function H.EndCast(self, showHold, wasInterrupted, interruptedBy)
     if not self.frame or not self.frame:IsShown() then return end
     if self.holdTimer then return end
+
+    H.CancelKickReadyTimer(self, "EndCast")
 
     local holdSettings = self.db.HoldTimer
     if not holdSettings or not holdSettings.Enabled then
@@ -867,6 +919,7 @@ end
 function H.ShowPreview(self, opts)
     if not self.frame then self:CreateFrame() end
     self:RegWithEditMode()
+    H.CancelKickReadyTimer(self, "ShowPreview")
     self.isPreview, self.casting = true, true
     self.icon:SetTexture(FALLBACK_ICON)
     self.text:SetText(opts.previewText)
@@ -925,6 +978,7 @@ function H.HidePreview(self)
         self.previewTicker:Cancel()
         self.previewTicker = nil
     end
+    H.CancelKickReadyTimer(self, "HidePreview")
     H.HideTargetNames(self)
     H.HideTargetMarker(self)
     if self.frame and not (self.casting or self.channeling or self.empowering) then
