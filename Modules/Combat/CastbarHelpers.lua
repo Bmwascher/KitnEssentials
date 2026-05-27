@@ -169,15 +169,24 @@ function H.CacheInterruptId(self)
     -- cast. Priority-picked interruptId/CD still drive the visible bar.
     self.interruptSpellSet = KE:GetInterruptSpellSet(specID)
     local candidates = KE:GetInterruptCandidatesForSpec(specID)
-    if not candidates then return end
-    for i = 1, #candidates do
-        local data = candidates[i]
-        if C_SpellBook.IsSpellKnownOrInSpellBook(data.id)
-            or C_SpellBook.IsSpellKnownOrInSpellBook(data.id, Enum.SpellBookSpellBank.Pet) then
-            self.interruptId = data.id
-            self.interruptCD = data.cd
-            return
+    if candidates then
+        for i = 1, #candidates do
+            local data = candidates[i]
+            if C_SpellBook.IsSpellKnownOrInSpellBook(data.id)
+                or C_SpellBook.IsSpellKnownOrInSpellBook(data.id, Enum.SpellBookSpellBank.Pet) then
+                self.interruptId = data.id
+                self.interruptCD = data.cd
+                break
+            end
         end
+    end
+
+    -- Mid-cast interrupt-source change: restart kick state with the new
+    -- interruptId so tick alpha and bar color reflect the new CD source.
+    -- Tick position stays at the original anchor — SetupKickCooldownBar is
+    -- not re-run mid-cast (matches pre-refit behavior).
+    if self.frame and self.frame:IsShown() and (self.casting or self.channeling or self.empowering) then
+        H.StartKickReadyTimer(self)
     end
 end
 
