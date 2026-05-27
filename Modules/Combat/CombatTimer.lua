@@ -77,7 +77,7 @@ function CT:CreateFrame()
     if self.frame then return end
     local frame = CreateFrame("Frame", "KE_CombatTimerFrame", UIParent, BackdropTemplateMixin and "BackdropTemplate")
     frame:SetSize(100, 25)
-    KE:ApplyFramePositionWithSnap(frame, self.db.Position, self.db)
+    KE:ApplyFramePosition(frame, self.db.Position, self.db)
     frame:SetFrameLevel(100)
     frame:EnableMouse(false)
     frame:SetMouseClickEnabled(false)
@@ -136,8 +136,8 @@ function CT:UpdateFrameSize()
     -- Frame width = digits + brackets, snapped to an even pixel multiple.
     -- digitsW comes from GetStringWidth() and is a float; rounding to even
     -- pixels keeps text-CENTER on integer pixels and the right edge on the
-    -- pixel grid (so the right bracket renders crisply when SnapToPixelGrid
-    -- is ON — the toggle only snaps LEFT/BOTTOM, not width).
+    -- pixel grid. ApplyFramePosition's auto-snap aligns LEFT/BOTTOM but
+    -- not width, so this PixelSnapEven keeps the right bracket crisp.
     local total = KE:PixelSnapEven(digitsW + bracketW)
     if KE:IsSafeValue(total) then
         self.frame:SetSize(total, (self.db.FontSize or 28) + 8)
@@ -295,7 +295,7 @@ function CT:RegWithEditMode()
         KE.EditMode:RegisterElement({
             key = "CombatTimer", displayName = "Combat Timer", frame = self.frame,
             getPosition = function() return self.db.Position end,
-            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePositionWithSnap(self.frame, self.db.Position, self.db) end,
+            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePosition(self.frame, self.db.Position, self.db) end,
             getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
             guiPath = "CombatTimer",
         })
@@ -326,7 +326,7 @@ end
 function CT:ApplyPosition()
     if not self.db.Enabled then return end
     if not self.frame then return end
-    KE:ApplyFramePositionWithSnap(self.frame, self.db.Position, self.db)
+    KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
 end
 
 ---------------------------------------------------------------------------------

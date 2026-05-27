@@ -214,7 +214,7 @@ function HM:CreateContainer()
     frame:SetSize(self.db.FrameWidth, self.db.IconSize)
     frame:SetFrameStrata(self.db.Strata or "HIGH")
 
-    KE:ApplyFramePositionWithSnap(frame, self.db.Position, self.db)
+    KE:ApplyFramePosition(frame, self.db.Position, self.db)
 
     self.containerFrame = frame
     return frame
@@ -403,7 +403,7 @@ function HM:ApplySettings()
     end
 
     self:CreateContainer()
-    KE:ApplyFramePositionWithSnap(self.containerFrame, self.db.Position, self.db)
+    KE:ApplyFramePosition(self.containerFrame, self.db.Position, self.db)
     self.containerFrame:SetFrameStrata(self.db.Strata or "HIGH")
 
     -- Apply font/size/offset changes to already-created frames so live edits
@@ -458,7 +458,7 @@ function HM:RegWithEditMode()
             getPosition = function() return self.db.Position end,
             setPosition = function(pos)
                 self.db.Position = pos
-                KE:ApplyFramePositionWithSnap(self.containerFrame, self.db.Position, self.db)
+                KE:ApplyFramePosition(self.containerFrame, self.db.Position, self.db)
             end,
             getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
             guiPath = "HealerMana",
@@ -476,7 +476,7 @@ function HM:ShowPreview()
     if not self.db then return end
 
     self:CreateContainer()
-    KE:ApplyFramePositionWithSnap(self.containerFrame, self.db.Position, self.db)
+    KE:ApplyFramePosition(self.containerFrame, self.db.Position, self.db)
     self.containerFrame:SetFrameStrata(self.db.Strata or "HIGH")
     self:RegWithEditMode()
 

@@ -306,7 +306,7 @@ end
 function TSP:ApplyPosition()
     if not self.db.Enabled then return end
     if not self.frame then return end
-    KE:ApplyFramePositionWithSnap(self.frame, self.db.Position, self.db)
+    KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
 end
 
 ---------------------------------------------------------------------------------
@@ -438,7 +438,7 @@ function TSP:RegWithEditMode()
         KE.EditMode:RegisterElement({
             key = "TimeSpiral", displayName = "Time Spiral", frame = self.frame,
             getPosition = function() return self.db.Position end,
-            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePositionWithSnap(self.frame, self.db.Position, self.db) end,
+            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePosition(self.frame, self.db.Position, self.db) end,
             getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
             guiPath = "TimeSpiral",
         })

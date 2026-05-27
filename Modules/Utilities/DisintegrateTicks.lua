@@ -300,7 +300,7 @@ end
 
 function DT:UpdateWarningPosition()
     if not self.warningFrame then return end
-    KE:ApplyFramePositionWithSnap(self.warningFrame, self.db.Position, self.db)
+    KE:ApplyFramePosition(self.warningFrame, self.db.Position, self.db)
 end
 
 function DT:ShowWarning()

@@ -64,9 +64,6 @@ local STRATA_LIST = {
     { key = "BACKGROUND",        text = "Background" },
 }
 
-local SNAP_TOOLTIP = "Snap to Pixel Grid\n\nON: text outlines render crisper at sub-pixel anchors.\nOFF: position sliders apply every tick of movement (recommended while placing the frame).\n\nWorkflow: position with OFF, flip ON when done."
-local SNAP_DESC = "ON for crisper text\nOFF for precise positioning"
-
 ---------------------------------------------------------------------------------
 -- Anchor Buttons widget — kit-bound callback variant
 --
@@ -342,79 +339,7 @@ local function CreatePositionCardKit(holder)
     kit.xSlider = xSlider
     kit.ySlider = ySlider
 
-    -- Bottom row: three mutually-exclusive layouts (combined / strata-only /
-    -- snap-only). Build all three; Configure shows the right one based on
-    -- showStrata + showPixelSnap. Storing all variants in the kit keeps the
-    -- factory simple at the cost of a few extra widgets per kit; only one is
-    -- ever visible at a time.
-
-    -- Combined: strata (left) + snap toggle (right with inline desc)
-    local combinedRow = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
-    local comboStrataDropdown = GUIFrame:CreateDropdown(combinedRow, "Strata", {
-        options = STRATA_LIST,
-        value = "HIGH",
-        labelWidth = 39,
-        callback = function(key)
-            if not kit._db or not kit._keys then return end
-            kitSetValue(kit, kit._keys.strata, key)
-        end,
-    })
-    combinedRow:AddWidget(comboStrataDropdown, 0.5, 20)
-    local comboSnapToggle = GUIFrame:CreateCheckbox(combinedRow, "Snap to Pixel Grid", {
-        value = false,
-        tooltip = SNAP_TOOLTIP,
-        callback = function(value)
-            if not kit._db then return end
-            kit._db.SnapToPixelGrid = value
-            if kit._onChange then kit._onChange() end
-        end,
-    })
-    combinedRow:AddWidget(comboSnapToggle, 0.5)
-    -- Inline 2-line muted descriptor on the snap toggle
-    do
-        local snapDesc = comboSnapToggle:CreateFontString(nil, "OVERLAY")
-        snapDesc:SetPoint("TOPLEFT", comboSnapToggle, "TOPLEFT", 60, -10)
-        snapDesc:SetPoint("BOTTOMRIGHT", comboSnapToggle, "BOTTOMRIGHT", 0, 0)
-        KE:ApplyThemeFont(snapDesc, "small")
-        snapDesc:SetTextColor(0x88 / 0xFF, 0x88 / 0xFF, 0x88 / 0xFF, 1)
-        snapDesc:SetJustifyH("LEFT")
-        snapDesc:SetJustifyV("MIDDLE")
-        snapDesc:SetWordWrap(true)
-        snapDesc:SetText(SNAP_DESC)
-    end
-    card:AddRow(combinedRow, Theme.rowHeightLast, 0)
-    kit.combinedRow = combinedRow
-    kit.comboStrataDropdown = comboStrataDropdown
-    kit.comboSnapToggle = comboSnapToggle
-
-    -- Snap-only: full-width snap toggle with inline descriptor
-    local snapOnlyRow = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
-    local snapOnlyToggle = GUIFrame:CreateCheckbox(snapOnlyRow, "Snap to Pixel Grid", {
-        value = false,
-        tooltip = SNAP_TOOLTIP,
-        callback = function(value)
-            if not kit._db then return end
-            kit._db.SnapToPixelGrid = value
-            if kit._onChange then kit._onChange() end
-        end,
-    })
-    snapOnlyRow:AddWidget(snapOnlyToggle, 1)
-    do
-        local snapDesc = snapOnlyToggle:CreateFontString(nil, "OVERLAY")
-        snapDesc:SetPoint("TOPLEFT", snapOnlyToggle, "TOPLEFT", 60, -10)
-        snapDesc:SetPoint("BOTTOMRIGHT", snapOnlyToggle, "BOTTOMRIGHT", 0, 0)
-        KE:ApplyThemeFont(snapDesc, "small")
-        snapDesc:SetTextColor(0x88 / 0xFF, 0x88 / 0xFF, 0x88 / 0xFF, 1)
-        snapDesc:SetJustifyH("LEFT")
-        snapDesc:SetJustifyV("MIDDLE")
-        snapDesc:SetWordWrap(true)
-        snapDesc:SetText(SNAP_DESC)
-    end
-    card:AddRow(snapOnlyRow, Theme.rowHeightLast, 0)
-    kit.snapOnlyRow = snapOnlyRow
-    kit.snapOnlyToggle = snapOnlyToggle
-
-    -- Strata-only: full-width strata dropdown
+    -- Bottom row: strata dropdown (shown when showStrata = true).
     local strataOnlyRow = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
     local strataOnlyDropdown = GUIFrame:CreateDropdown(strataOnlyRow, "Strata", {
         options = STRATA_LIST,
@@ -442,8 +367,7 @@ local function CreatePositionCardKit(holder)
         anchorTypeDropdown, frameInput, selectFrameBtn,
         selfPointWidget, anchorPointWidget,
         xSlider, ySlider,
-        comboStrataDropdown, comboSnapToggle,
-        snapOnlyToggle, strataOnlyDropdown,
+        strataOnlyDropdown,
     }
     kit.anchorButtonWidgets = { selfPointWidget, anchorPointWidget }
 
@@ -505,7 +429,6 @@ local function ConfigurePositionCardKit(kit, scrollChild, yOffset, config)
     local onChange = config.onChangeCallback
     local showAnchorFrameType = config.showAnchorFrameType ~= false
     local showStrata = config.showStrata == true
-    local showPixelSnap = config.showPixelSnap == true
 
     -- Resolve keys map. Keep the same defaults as the original implementation
     -- so consumers that only override a subset still hit the right db slots.
@@ -584,21 +507,12 @@ local function ConfigurePositionCardKit(kit, scrollChild, yOffset, config)
     kit.ySlider:SetValue(kitGetValue(kit, keys.yOffset, defaults.yOffset or 0), true)
 
     local currentStrata = kitGetValue(kit, keys.strata, defaults.strata or "HIGH")
-    kit.comboStrataDropdown:SetValue(currentStrata, true)
     kit.strataOnlyDropdown:SetValue(currentStrata, true)
-    if kit.comboSnapToggle.toggle and kit.comboSnapToggle.toggle.SetValue then
-        kit.comboSnapToggle.toggle:SetValue(db and db.SnapToPixelGrid == true, true)
-    end
-    if kit.snapOnlyToggle.toggle and kit.snapOnlyToggle.toggle.SetValue then
-        kit.snapOnlyToggle.toggle:SetValue(db and db.SnapToPixelGrid == true, true)
-    end
 
     -- Decide which rows are visible for this configuration.
     local showAnchorTypeRow = showAnchorFrameType
     local showSelectFrameRow = showAnchorFrameType and currentType == "SELECTFRAME"
-    local showCombined = showStrata and showPixelSnap
-    local showSnapOnly = showPixelSnap and not showStrata
-    local showStrataOnly = showStrata and not showPixelSnap
+    local showStrataRow = showStrata
 
     -- Re-anchor visible rows in order, accumulating currentY. Hide invisible
     -- rows. Skip card:Reset (it would orphan persistent rows to UIParent).
@@ -627,21 +541,9 @@ local function ConfigurePositionCardKit(kit, scrollChild, yOffset, config)
     end
     showRow(kit.anchorButtonRow, 80)
     showRow(kit.offsetRow, 36)
-    if showCombined then
-        showRow(kit.combinedRow, T.rowHeightLast)
-        kit.snapOnlyRow:Hide()
-        kit.strataOnlyRow:Hide()
-    elseif showSnapOnly then
-        showRow(kit.snapOnlyRow, T.rowHeightLast)
-        kit.combinedRow:Hide()
-        kit.strataOnlyRow:Hide()
-    elseif showStrataOnly then
+    if showStrataRow then
         showRow(kit.strataOnlyRow, T.rowHeightLast)
-        kit.combinedRow:Hide()
-        kit.snapOnlyRow:Hide()
     else
-        kit.combinedRow:Hide()
-        kit.snapOnlyRow:Hide()
         kit.strataOnlyRow:Hide()
     end
 

@@ -5,6 +5,7 @@
     <Script file="Interrupts.lua" />
     <Script file="AddonTheme.lua" />
     <Script file="PixelPerfect.lua" />
+    <Script file="TextureSnap.lua" />
     <Script file="CustomOutline.lua" />
     <Script file="Widgets.lua" />
     <Script file="FramePool.lua" />

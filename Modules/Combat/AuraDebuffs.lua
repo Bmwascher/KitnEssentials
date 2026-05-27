@@ -451,7 +451,7 @@ function AD:ApplySettings()
     RebuildDispelColorCurve(self.db)
     if self.frame then
         self.frame:SetSize(GetFrameSize(self.db))
-        KE:ApplyFramePositionWithSnap(self.frame, self.db.Position, self.db)
+        KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
         self.frame:SetFrameStrata(self.db.Strata or "MEDIUM")
     end
     self:RefreshAllAuras()
@@ -504,7 +504,7 @@ function AD:CreateContainer()
     frame:SetSize(GetFrameSize(self.db))
     frame:SetFrameStrata(self.db.Strata or "MEDIUM")
     self.frame = frame
-    KE:ApplyFramePositionWithSnap(frame, self.db.Position, self.db)
+    KE:ApplyFramePosition(frame, self.db.Position, self.db)
     self:RegWithEditMode()
 end
 
@@ -519,7 +519,7 @@ function AD:RegWithEditMode()
             end,
             setPosition = function(pos)
                 self.db.Position = pos
-                KE:ApplyFramePositionWithSnap(self.frame, self.db.Position, self.db)
+                KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
             end,
             getParentFrame = function()
                 return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)

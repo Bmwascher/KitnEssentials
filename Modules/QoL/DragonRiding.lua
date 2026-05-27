@@ -306,7 +306,7 @@ function DR:CreateFrames()
     self.container = CreateFrame("Frame", "KE_DragonRidingContainer", self.parent)
     self.container:SetSize(barWidth, (barHeight * 2) + spacing + 20)
 
-    KE:ApplyFramePositionWithSnap(self.container, db.Position, db)
+    KE:ApplyFramePosition(self.container, db.Position, db)
 
     -- Both rows are created up-front; ApplyBarLayout decides which one is on
     -- top, which is on bottom, whether secondWind is hidden, etc.
@@ -538,7 +538,7 @@ end
 
 function DR:ApplyPosition()
     if not self.container then return end
-    KE:ApplyFramePositionWithSnap(self.container, self.db.Position, self.db)
+    KE:ApplyFramePosition(self.container, self.db.Position, self.db)
 end
 
 function DR:ApplySettings()
@@ -561,7 +561,7 @@ function DR:RegWithEditMode()
         KE.EditMode:RegisterElement({
             key = "DragonRiding", displayName = "Dragon Riding", frame = self.container,
             getPosition = function() return self.db.Position end,
-            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePositionWithSnap(self.container, self.db.Position, self.db) end,
+            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePosition(self.container, self.db.Position, self.db) end,
             getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
             guiPath = "DragonRiding",
         })

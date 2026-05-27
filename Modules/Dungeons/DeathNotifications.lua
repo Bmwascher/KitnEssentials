@@ -190,10 +190,8 @@ function DN:ApplyContainerPosition()
     )
     self.container:SetFrameStrata(self.db.Strata or "HIGH")
     -- Custom anchor logic (grow-direction-driven container point) prevents
-    -- using ApplyFramePositionWithSnap directly, so apply the snap inline.
-    if self.db.SnapToPixelGrid and KE.SnapFrameToPixels then
-        KE:SnapFrameToPixels(self.container)
-    end
+    -- using ApplyFramePosition directly, so apply the snap inline.
+    KE:SnapFrameToPixels(self.container)
 end
 
 function DN:GetMessageFrame(msgType)

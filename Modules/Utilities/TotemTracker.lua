@@ -176,13 +176,10 @@ function TT:UpdateContainerPosition()
 
     containerFrame:SetFrameStrata(db.Strata)
 
-    -- Honor opt-in pixel-snap toggle. We can't use KE:ApplyFramePositionWithSnap
-    -- here because it does its own SetPoint (CENTER/CENTER) which would override
-    -- our growth-direction-aware anchoring. Instead, call SnapFrameToPixels
-    -- directly after the directional SetPoint has been applied.
-    if db.SnapToPixelGrid and KE.SnapFrameToPixels then
-        KE:SnapFrameToPixels(containerFrame)
-    end
+    -- ApplyFramePosition's SetPoint would override our growth-direction
+    -- anchor, so we call SnapFrameToPixels directly after the directional
+    -- SetPoint has been applied.
+    KE:SnapFrameToPixels(containerFrame)
 end
 
 function TT:LayoutButtons(visibleButtons)

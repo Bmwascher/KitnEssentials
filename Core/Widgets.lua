@@ -623,6 +623,38 @@ end
 -- Icon Helpers
 ---------------------------------------------------------------------------------
 
+-- Weak-keyed registry of borders created by AddIconBorders/AddBorders.
+-- Used by KE:ResnapAllBorders (in PixelPerfect.lua) to re-apply pixel
+-- size on UI_SCALE_CHANGED / DISPLAY_SIZE_CHANGED.
+KE._borderRegistry = KE._borderRegistry or setmetatable({}, { __mode = "k" })
+
+local function _KE_RegisterBorder(frame)
+    if frame and frame.borders then
+        KE._borderRegistry[frame] = true
+    end
+end
+
+-- After border creation, re-snap for 2 frames in case parent scale hasn't
+-- settled. Avoids a race where borders are created at the wrong pixel
+-- thickness when a parent's effective scale is set immediately after.
+local function _KE_DelayedBorderResnap(frame)
+    if not frame then return end
+    local ticker = CreateFrame("Frame")
+    local ticks = 0
+    ticker:SetScript("OnUpdate", function(self)
+        ticks = ticks + 1
+        if frame and frame.borders then
+            local px = KE:GetPixelSize()
+            local b = frame.borders
+            if b.top and b.top.SetHeight then b.top:SetHeight(px) end
+            if b.bottom and b.bottom.SetHeight then b.bottom:SetHeight(px) end
+            if b.left and b.left.SetWidth then b.left:SetWidth(px) end
+            if b.right and b.right.SetWidth then b.right:SetWidth(px) end
+        end
+        if ticks >= 2 then self:SetScript("OnUpdate", nil) end
+    end)
+end
+
 -- zoom: 0.3 = standard (7.5% crop), 0 = no crop, 1 = max crop
 function KE:ApplyIconZoom(tex, zoom)
     zoom = zoom or 0.3
@@ -634,6 +666,8 @@ end
 function KE:AddIconBorders(frame, color)
     local r, g, b, a = self:ResolveColor(color, { 0, 0, 0, 1 })
     frame.borders = {}
+    frame._borderColor = { r, g, b, a }
+    frame._borderParent = frame
 
     local function MakeBorder(point1, rel1, point2, rel2, w, h)
         local tex = frame:CreateTexture(nil, "OVERLAY", nil, 7)
@@ -652,6 +686,8 @@ function KE:AddIconBorders(frame, color)
     frame.borders.bottom = MakeBorder("BOTTOMLEFT", "BOTTOMLEFT", "BOTTOMRIGHT", "BOTTOMRIGHT", nil, px)
     frame.borders.left   = MakeBorder("TOPLEFT", "TOPLEFT", "BOTTOMLEFT", "BOTTOMLEFT", px, nil)
     frame.borders.right  = MakeBorder("TOPRIGHT", "TOPRIGHT", "BOTTOMRIGHT", "BOTTOMRIGHT", px, nil)
+    _KE_RegisterBorder(frame)
+    _KE_DelayedBorderResnap(frame)
 end
 
 ---------------------------------------------------------------------------------
@@ -664,6 +700,8 @@ function KE:AddBorders(frame, color, borderParent)
     borderParent = borderParent or frame
 
     frame.borders = frame.borders or {}
+    frame._borderColor = { cr, cg, cb, ca }
+    frame._borderParent = borderParent
 
     local function CreateBorder(point1, point2, width, height)
         local tex = borderParent:CreateTexture(nil, "OVERLAY", nil, 7)
@@ -706,11 +744,14 @@ function KE:AddBorders(frame, color, borderParent)
 
     function frame:SetBorderColor(r, g, b, a)
         if not self.borders then return end
+        self._borderColor = { r, g, b, a or 1 }
         for _, tex in pairs(self.borders) do
             tex:SetColorTexture(r, g, b, a or 1)
         end
     end
 
+    _KE_RegisterBorder(frame)
+    _KE_DelayedBorderResnap(frame)
     return frame
 end
 

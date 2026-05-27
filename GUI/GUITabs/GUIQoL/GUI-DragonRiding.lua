@@ -88,7 +88,6 @@ GUIFrame:RegisterContent("DragonRiding", function(scrollChild, yOffset)
         },
         showAnchorFrameType = false,
         showStrata = true,
-        showPixelSnap = true,
         onChangeCallback = ApplySettings,
     })
 
