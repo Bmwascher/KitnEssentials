@@ -568,6 +568,7 @@ function KE:ApplyFramePosition(frame, posConfig, Config, SetParent)
         posConfig.YOffset or 0
     )
     frame:SetFrameStrata(Config.Strata or "MEDIUM")
+    self:SnapFrameToPixels(frame)
 end
 
 -- Like ApplyFramePosition but additionally snaps the frame's resulting screen

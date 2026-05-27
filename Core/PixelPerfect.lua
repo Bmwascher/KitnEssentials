@@ -14,9 +14,12 @@
 -- ║      this to snap sizes/borders/offsets so they land on  ║
 -- ║      the actual screen pixel grid.                       ║
 -- ║                                                          ║
--- ║  Helpers are opt-in. Module authors call them where      ║
--- ║  pixel snapping is desired — the framework path          ║
--- ║  (ApplyFramePosition) does NOT auto-snap.                ║
+-- ║  `KE:SnapFrameToPixels` is auto-called by                ║
+-- ║  `KE:ApplyFramePosition` (in Globals.lua) so every       ║
+-- ║  module positioned via the framework path is pixel-      ║
+-- ║  snapped automatically. Additional helpers (PixelSnap    ║
+-- ║  / PixelSnapEven / PixelHalfFloor) are opt-in for        ║
+-- ║  module authors snapping sizes/borders.                  ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
