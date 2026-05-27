@@ -442,7 +442,7 @@ local Defaults = {
             FontFace = "Expressway",
             FontSize = 14,
             FontOutline = "SOFTOUTLINE",
-            Strata = "HIGH",
+            Strata = "MEDIUM",
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, -160),
@@ -461,10 +461,10 @@ local Defaults = {
             FontOutline = "OUTLINE",
             TimerFontSize = 18,
 
-            Strata = "HIGH",
+            Strata = "MEDIUM",
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
-            Position = DefaultPosition(-500, -450),
+            Position = DefaultPosition(-475, -325),
             SnapToPixelGrid = false,
         },
 
@@ -1052,6 +1052,14 @@ local Defaults = {
             -- on future ready checks. Auto-updates when a different enchant is detected.
             LastWeaponEnchantItem = nil,
 
+            -- Runtime memory (persisted): last flask stat the player had buffed
+            -- ("mastery" / "haste" / "crit" / "vers"). Multiple flask items can map
+            -- to the same buff, and `pairs(FLASKS)` ordering is non-deterministic,
+            -- so without a preference the click button picks a random flask when the
+            -- bag holds more than one stat. UpdateFlask updates this whenever a
+            -- flask buff is detected — mirrors BR's ConsumableMemory aura path.
+            LastFlaskStat = nil,
+
             -- Behavior
             HideForStarter      = false,  -- suppress if you initiated the ready check
             HidePreviewMock     = true,  -- hide the fake Ready Check popup in the GUI preview
@@ -1379,6 +1387,15 @@ local Defaults = {
                 fontSize = 26,
                 fontOutline = "SOFTOUTLINE",
                 textAlign = "CENTER",
+                -- Spell-icon prefix on text-mode timers (KE-standard zoom +
+                -- border, anchored to the static label so timer width changes
+                -- don't shift icon/label). Matches ExBoss's "[icon] [name]
+                -- [timer]" layout.
+                ShowSpellIcon = true,
+                -- Multiplier on the text-line height to size the icon; lets
+                -- users tune the icon relative to the font without changing
+                -- the font itself. Clamped 0.25-2.0 at apply time.
+                IconScale = 0.7,
             },
 
             TextGroup = {

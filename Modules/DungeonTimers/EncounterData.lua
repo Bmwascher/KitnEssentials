@@ -390,9 +390,15 @@ KE.EncounterData[2564] = {
         -- ExBoss uses the same widget signal and a 2s lead-in before the 12s active phase begins.
         [376448] = { name = "Vulnerability Phase", spawnOnMessage = true, duration = 12, leadDelay = 2,      role = "other",    display = "bar",  displayText = "VULNERABILITY", iconOverride = 135821, showAtSeconds = 0, sortAtEnd = true, sound = "Dmg Amp" },
     },
+    -- HP-threshold phase bars are visual-only (matches the reference module
+    -- ExBoss/Modules/Boss/Mechanics/HealthThreshold.lua, which deliberately
+    -- has no audio cue here). 12.0's secret-value system prevents an
+    -- addon-observable HP crossing trigger, so the show sound on bar
+    -- creation fired at engage (HP=100%) rather than at the threshold —
+    -- text-only sidesteps that without per-encounter event proxies.
     phases = {
-        { unit = "boss1", threshold = 75, lead = 5, sound = "Intermission" },
-        { unit = "boss1", threshold = 45, lead = 5, sound = "Intermission" },
+        { unit = "boss1", threshold = 75, lead = 5 },
+        { unit = "boss1", threshold = 45, lead = 5 },
     },
 }
 
@@ -449,8 +455,9 @@ KE.EncounterData[3073] = {
         [1253709] = { name = "Neural Link",        castType = "begincast", castDuration = 2,                       role = "other",    displayText = "CLEAR", sound = "Clear" },
         [1224299] = { name = "Astral Grasp",       castType = "begincast", castDuration = 4,   channelDuration = 8, role = "other",    displayText = "PULL",  sound = "Pull" },
     },
+    -- HP-threshold phase bar is visual-only — see Crawth note above for why.
     phases = {
-        { unit = "boss1", threshold = 50, lead = 5, sound = "Split" },
+        { unit = "boss1", threshold = 50, lead = 5 },
     },
 }
 
@@ -540,7 +547,7 @@ KE.EncounterData[3332] = {
         -- no clean spellID — both LittleWigs and ExBoss detect it by watching for a level-92 mob's
         -- UNIT_SPELLCAST_CHANNEL_START, not a curated ID we could surface in the GUI list.
         [1264439] = { name = "Lightscar Flare",       castType = "cast",      castDuration = 10,                        role = "other",                     displayText = "AMP",      sound = "Dmg Amp",
-            postCastBar = { duration = 17, display = "bar", displayText = "BEAM" } },
+            postCastBar = { duration = 17, display = "bar", displayText = "BEAM", iconOverride = 612098 } },
         -- Disabled by default: BigWigs fires Timer but the spell may not actually exist in-game.
         [1271684] = { name = "Devour the Unworthy",   castType = "begincast", castDuration = 3.4, channelDuration = 5,  role = "other",                     displayText = "AOE",     disabled = true },
     },
@@ -749,9 +756,10 @@ KE.EncounterData[3058] = {
         -- 470963 vs EXBoss 1271676 — LittleWigs ID wins (BigWigs Timer key); cast data adjusted to 2s based on live log late values
         [470963]  = { name = "Bladestorm",         castType = "begincast", castDuration = 2,                        role = "other",                    displayText = "DODGE"    },
     },
+    -- HP-threshold phase bars are visual-only — see Crawth note above for why.
     phases = {
-        { unit = "boss1", threshold = 66, lead = 5, sound = "Intermission" },
-        { unit = "boss1", threshold = 33, lead = 5, sound = "Intermission" },
+        { unit = "boss1", threshold = 66, lead = 5 },
+        { unit = "boss1", threshold = 33, lead = 5 },
     },
 }
 

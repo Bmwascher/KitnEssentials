@@ -93,6 +93,11 @@ GUIFrame:RegisterContent("DTimers_Texts", function(scrollChild, yOffset)
 
     local isModuleDisabled = db.Enabled == false
     local manager = GUIFrame:CreateWidgetStateManager()
+    manager:SetCondition("iconOn", function()
+        local freshDb = GetSettingsDB()
+        if not freshDb or freshDb.Enabled == false then return false end
+        return freshDb.TextDisplay and freshDb.TextDisplay.ShowSpellIcon == true
+    end)
 
     local LSM = KE.LSM
     local fontList = {}
@@ -133,7 +138,7 @@ GUIFrame:RegisterContent("DTimers_Texts", function(scrollChild, yOffset)
     row1:AddWidget(fontSizeSlider, 0.5)
     displayCard:AddRow(row1, Theme.rowHeight)
 
-    local row2 = GUIFrame:CreateRow(displayCard.content, Theme.rowHeightLast)
+    local row2 = GUIFrame:CreateRow(displayCard.content, Theme.rowHeight)
     local outlineDropdown = GUIFrame:CreateDropdown(row2, "Font Outline", {
         options = SETTINGS_TEXT_OUTLINE_OPTIONS,
         value = db.TextDisplay.fontOutline or "SOFTOUTLINE",
@@ -153,7 +158,28 @@ GUIFrame:RegisterContent("DTimers_Texts", function(scrollChild, yOffset)
         end,
     })
     row2:AddWidget(alignDropdown, 0.5)
-    displayCard:AddRow(row2, Theme.rowHeightLast, 0)
+    displayCard:AddRow(row2, Theme.rowHeight)
+
+    local row3 = GUIFrame:CreateRow(displayCard.content, Theme.rowHeightLast)
+    local iconCheck = GUIFrame:CreateCheckbox(row3, "Show Spell Icon", {
+        value = db.TextDisplay.ShowSpellIcon == true,
+        callback = function(checked)
+            db.TextDisplay.ShowSpellIcon = checked
+            manager:UpdateAll(not isModuleDisabled)
+            ApplyAndUpdate()
+        end,
+    })
+    row3:AddWidget(iconCheck, 0.5)
+
+    local iconScaleSlider = GUIFrame:CreateSlider(row3, "Icon Scale", {
+        min = 0.25, max = 2.0, step = 0.05,
+        value = db.TextDisplay.IconScale or 0.8,
+        labelWidth = 80,
+        callback = function(val) db.TextDisplay.IconScale = val; ApplyAndUpdate() end,
+    })
+    row3:AddWidget(iconScaleSlider, 0.5)
+    manager:Register(iconScaleSlider, "iconOn")
+    displayCard:AddRow(row3, Theme.rowHeightLast, 0)
 
     yOffset = displayCard:GetNextOffset()
 

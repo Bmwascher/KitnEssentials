@@ -1294,6 +1294,7 @@ local function BarOnUpdate(self)
                     if self.label then self.label:SetTextColor(1, 1, 1) end
                 else
                     if self.label then self.label:SetTextColor(c[1], c[2], c[3]) end
+                    if self.timerText then self.timerText:SetTextColor(c[1], c[2], c[3]) end
                 end
                 self._lastValue = nil
                 self._lastTimerStr = nil
@@ -1430,6 +1431,26 @@ local function ApplyVisualsToBar(frame)
         frame._cachedBarWidth = (w - iconSize) - 2
     else
         frame._cachedBarWidth = w
+
+        -- Text-mode spell-icon (KE standard: zoom + border). Visibility from
+        -- db.TextDisplay.ShowSpellIcon. Size is square at text-line height (h)
+        -- so the icon's vertical extent matches the label. Texture is set
+        -- live (frame.iconTex is stable from CreateBar but re-applied here in
+        -- case ResolveSpellIcon's underlying data changed via the GUI).
+        if frame.iconFrame then
+            local showTextIcon = textDisplay and textDisplay.ShowSpellIcon and frame.iconTex
+            if showTextIcon then
+                local scale = tonumber(textDisplay.IconScale) or 0.8
+                if scale < 0.25 then scale = 0.25 elseif scale > 2.0 then scale = 2.0 end
+                local s = math.floor(h * scale + 0.5)
+                if s < 1 then s = 1 end
+                frame.iconFrame:SetSize(s, s)
+                if frame.icon then frame.icon:SetTexture(frame.iconTex) end
+                frame.iconFrame:Show()
+            else
+                frame.iconFrame:Hide()
+            end
+        end
     end
 
     -- Settings change always invalidates the gating caches so the next tick
@@ -1472,7 +1493,10 @@ local function ApplyVisualsToBar(frame)
             if frame.timerText then frame.timerText:SetTextColor(1, 1, 1) end
             if frame.transitionText then frame.transitionText:SetTextColor(1, 1, 1) end
         else
+            -- timerText now exists in text mode (split static-label / floating-timer
+            -- layout) and shares the label's color so the block reads as one unit.
             if frame.label then frame.label:SetTextColor(c[1], c[2], c[3]) end
+            if frame.timerText then frame.timerText:SetTextColor(c[1], c[2], c[3]) end
             if frame.transitionText then frame.transitionText:SetTextColor(c[1], c[2], c[3]) end
         end
     end
@@ -1499,12 +1523,73 @@ local function ApplyVisualsToBar(frame)
             end
         else
             local align = (textDisplay and textDisplay.textAlign) or "CENTER"
-            frame.label:SetPoint("LEFT", frame.bar, "LEFT", 0, 0)
-            frame.label:SetPoint("RIGHT", frame.bar, "RIGHT", 0, 0)
-            frame.label:SetJustifyH(align)
+            local showTextIcon = frame.iconFrame and frame.iconFrame:IsShown()
+
+            if frame.timerText then
+                -- Split-layout (ExBoss-style): label and (if shown) icon stay
+                -- put; only the timerText extends to the right as the timer
+                -- counts down. Per-alignment anchoring keeps the right element
+                -- nailed to a fixed edge so element widths can vary without
+                -- shifting their static siblings.
+                --
+                --   LEFT   → icon → label → timer, chained from frame:LEFT
+                --   CENTER → label is the static anchor at frame:CENTER,
+                --            icon hangs off label:LEFT, timer off label:RIGHT
+                --            (block expands asymmetrically as timer changes
+                --            but the LABEL+ICON stay put)
+                --   RIGHT  → timer pinned to frame:RIGHT, label and icon to
+                --            its left (timer width changes shift label/icon
+                --            — RIGHT align doesn't get full "static" behavior;
+                --            CENTER/LEFT are the canonical use cases)
+                frame.label:SetJustifyH("CENTER")  -- single-token, justify within auto-width
+                frame.timerText:SetJustifyH("LEFT")
+                -- Already cleared above for label; clear timer + icon too so
+                -- per-tick re-anchoring doesn't stack residual SetPoints.
+                frame.timerText:ClearAllPoints()
+                if frame.iconFrame then frame.iconFrame:ClearAllPoints() end
+
+                if align == "LEFT" then
+                    if showTextIcon then
+                        frame.iconFrame:SetPoint("LEFT", frame.bar, "LEFT", 0, 0)
+                        frame.label:SetPoint("LEFT", frame.iconFrame, "RIGHT", 2, 0)
+                    else
+                        frame.label:SetPoint("LEFT", frame.bar, "LEFT", 0, 0)
+                    end
+                    frame.timerText:SetPoint("LEFT", frame.label, "RIGHT", 5, 0)
+                elseif align == "RIGHT" then
+                    frame.timerText:SetPoint("RIGHT", frame.bar, "RIGHT", 0, 0)
+                    frame.label:SetPoint("RIGHT", frame.timerText, "LEFT", -5, 0)
+                    if showTextIcon then
+                        frame.iconFrame:SetPoint("RIGHT", frame.label, "LEFT", -2, 0)
+                    end
+                else  -- CENTER
+                    frame.label:SetPoint("CENTER", frame.bar, "CENTER", 0, 0)
+                    if showTextIcon then
+                        frame.iconFrame:SetPoint("RIGHT", frame.label, "LEFT", -2, 0)
+                    end
+                    frame.timerText:SetPoint("LEFT", frame.label, "RIGHT", 5, 0)
+                end
+            else
+                -- Legacy single-label path (no timerText). Used by phase bars
+                -- in text mode — they render via _ShowPhaseBar's direct SetText,
+                -- not UpdateTimeString, so the static/floating split doesn't
+                -- apply. Keep the span+justify layout.
+                if showTextIcon then
+                    frame.label:SetPoint("LEFT", frame.iconFrame, "RIGHT", 2, 0)
+                else
+                    frame.label:SetPoint("LEFT", frame.bar, "LEFT", 0, 0)
+                end
+                frame.label:SetPoint("RIGHT", frame.bar, "RIGHT", 0, 0)
+                frame.label:SetJustifyH(align)
+            end
+
             if frame.transitionText then
                 frame.transitionText:ClearAllPoints()
-                frame.transitionText:SetPoint("LEFT", frame.bar, "LEFT", 0, 0)
+                if showTextIcon then
+                    frame.transitionText:SetPoint("LEFT", frame.iconFrame, "RIGHT", 2, 0)
+                else
+                    frame.transitionText:SetPoint("LEFT", frame.bar, "LEFT", 0, 0)
+                end
                 frame.transitionText:SetPoint("RIGHT", frame.bar, "RIGHT", 0, 0)
                 frame.transitionText:SetJustifyH(align)
             end
@@ -1522,6 +1607,13 @@ function DT:CreateBar(text, baseDuration, extension, displayMode, displayText, s
 
     local frame = CreateFrame("Frame", nil, group)
     frame.displayMode = displayMode
+    -- Stash the spell's resolved icon for the text-mode `[icon] LABEL » time`
+    -- prefix (GetTextIconPrefix). Resolved here at frame-create so toggle
+    -- changes mid-fight pick up the icon without re-resolving every tick.
+    -- ResolveSpellIcon honors data.iconOverride → falls back to the spell's
+    -- default texture. Bar-mode icons are set separately via bar.icon below;
+    -- this field is consumed only by the text-mode prefix path.
+    frame.iconTex = spellId and self:ResolveSpellIcon(spellId) or nil
 
     if isBar then
         frame.iconFrame = CreateFrame("Frame", nil, frame, "BackdropTemplate")
@@ -1554,6 +1646,25 @@ function DT:CreateBar(text, baseDuration, extension, displayMode, displayText, s
         -- Text mode: bar is a transparent FontString anchor.
         frame.bar = CreateFrame("StatusBar", nil, frame)
         frame.bar:SetAllPoints()
+
+        -- Optional spell-icon prefix container, KE icon standard
+        -- (KE:ApplyIconZoom + KE:AddIconBorders). Created unconditionally so
+        -- toggling db.TextDisplay.ShowSpellIcon doesn't require bar rebuild —
+        -- ApplyVisualsToBar Show/Hide's it and re-anchors the label. Sizing
+        -- and texture are deferred to ApplyVisualsToBar since both depend on
+        -- the current text height (h) and live frame.iconTex value.
+        frame.iconFrame = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+        frame.iconFrame:SetPoint("LEFT", frame, "LEFT", 0, 0)
+        frame.iconFrame:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8" })
+        frame.iconFrame:SetBackdropColor(0, 0, 0, 0.8)
+        if KE.AddIconBorders then KE:AddIconBorders(frame.iconFrame) end
+
+        frame.icon = frame.iconFrame:CreateTexture(nil, "ARTWORK")
+        frame.icon:SetPoint("TOPLEFT", px, -px)
+        frame.icon:SetPoint("BOTTOMRIGHT", -px, px)
+        if KE.ApplyIconZoom then KE:ApplyIconZoom(frame.icon) end
+        if frame.iconTex then frame.icon:SetTexture(frame.iconTex) end
+        frame.iconFrame:Hide()
     end
 
     local total = baseDuration + (extension or 0)
@@ -1569,11 +1680,14 @@ function DT:CreateBar(text, baseDuration, extension, displayMode, displayText, s
     frame.spellId = spellId
     frame.isSecondary = isSecondary
 
-    -- Bar mode = separate label/timerText FontStrings; text mode = one combined "name » timer" label.
+    -- Both modes get separate label + timerText FontStrings. Bar mode uses
+    -- them as left/right pair inside the fill. Text mode uses them as a
+    -- "static label » floating timer" split so the label (and the spell
+    -- icon when shown) stays put while only the timer text width changes
+    -- as the countdown shrinks. Matches ExBoss's TimerBar layout, where
+    -- labelFS is the centered anchor and cdFS hangs off labelFS:RIGHT.
     frame.label = frame.bar:CreateFontString(nil, "OVERLAY")
-    if isBar then
-        frame.timerText = frame.bar:CreateFontString(nil, "OVERLAY")
-    end
+    frame.timerText = frame.bar:CreateFontString(nil, "OVERLAY")
 
     -- Stash raw displayText so ApplyVisualsToBar can re-resolve color on settings refresh.
     frame.displayTextRaw = displayText
@@ -1603,19 +1717,27 @@ function DT:CreateBar(text, baseDuration, extension, displayMode, displayText, s
     ApplyVisualsToBar(frame)
     -- frame.text keeps BigWigs's raw string for StopBar key matching; baseText is the rendered label.
     frame.baseText = resolvedLabel or StripBigWigsCounter(text)
+    -- Initial label: bar mode shows just the name; text mode shows "name »"
+    -- (with the separator baked into the static label) so the timer can
+    -- hang off label:RIGHT without shifting the label as it counts down.
     if isBar then
         frame.label:SetText(frame.baseText)
     else
-        -- Threshold-aware initial render so we don't flash "8.0" → "8" on the next tick.
-        local initialThreshold = frame.decimalThreshold or DECIMAL_THRESHOLD_DEFAULT
-        local initialStr
-        if total < initialThreshold then
-            initialStr = string_format("%.1f", total)
-        else
-            initialStr = string_format("%d", math.ceil(total))
-        end
-        frame.label:SetText(frame.baseText .. " \194\187 " .. initialStr)
+        frame.label:SetText(frame.baseText .. " \194\187")
     end
+    -- Initial timer string. Threshold-aware decimal rendering avoids the
+    -- "8.0" → "8" flash on the first tick. timerText is now populated in
+    -- BOTH bar and text mode — BarOnUpdate's UpdateTimeString writes only
+    -- to timerText (the `elseif self.label and self.baseText` fallback is
+    -- now dead code for spell bars, retained for safety).
+    local initialThreshold = frame.decimalThreshold or DECIMAL_THRESHOLD_DEFAULT
+    local initialStr
+    if total < initialThreshold then
+        initialStr = string_format("%.1f", total)
+    else
+        initialStr = string_format("%d", math.ceil(total))
+    end
+    if frame.timerText then frame.timerText:SetText(initialStr) end
 
     frame:SetScript("OnUpdate", BarOnUpdate)
     return frame
@@ -1918,8 +2040,14 @@ function DT:_StopBarKey(text)
                 if bar.bar then bar.bar:SetStatusBarColor(cc[1], cc[2], cc[3]) end
                 if bar.label then bar.label:SetText(bar.baseText) end
             else
+                -- Text mode now has a static label + floating timerText split.
+                -- Re-render the label directly with the new baseText (and the
+                -- baked-in " »" separator); timerText is unaffected (it carries
+                -- only the time number). Color update applies to both halves so
+                -- the cast-phase tint reads as one cue.
+                if bar.label then bar.label:SetText(bar.baseText .. " \194\187") end
                 if bar.label then bar.label:SetTextColor(cc[1], cc[2], cc[3]) end
-                bar._lastTimerStr = nil  -- force re-composition next OnUpdate tick
+                if bar.timerText then bar.timerText:SetTextColor(cc[1], cc[2], cc[3]) end
             end
         end
         dprint(string_format("StopBar %s → cast phase (fromValue=%.2f late=%.2fs)",
@@ -2700,10 +2828,10 @@ end
 -- Settings preview bars/texts: looping fake bars for live feedback while editing GUI panels.
 local PREVIEW_BAR_KEYS = { "__preview_bar_1", "__preview_bar_2", "__preview_bar_3" }
 local PREVIEW_TEXT_KEYS = { "__preview_text_1", "__preview_text_2", "__preview_text_3" }
-local PREVIEW_BAR_LABELS = { "Sample Timer A", "Sample Timer B", "Sample Timer C" }
+local PREVIEW_BAR_LABELS = { "Sample Bar A", "Sample Bar B", "Sample Bar C" }
 local PREVIEW_TEXT_LABELS = { "Sample Text A", "Sample Text B", "Sample Text C" }
-local PREVIEW_DURATIONS = { 8, 12, 16 }
-local PREVIEW_ICON_IDS = { 136116, 136048, 132288 }
+local PREVIEW_DURATIONS = { 3, 6, 10 }
+local PREVIEW_ICON_IDS = { 236273, 460952, 429383 }
 
 DT.previewBarShown = false
 DT.previewTextShown = false
@@ -2734,9 +2862,16 @@ local function CreatePreviewBar(self, key, label, duration, displayMode, iconID,
     -- CreateBar uses `text` as the dict key. Override so our preview keys
     -- don't collide with a real BigWigs bar literally named "Sample Timer A".
     bar.text = key
+    -- Stash iconTex so text-mode previews can render the KE-standard icon
+    -- block in ApplyVisualsToBar (bar mode also paints bar.icon directly).
+    -- iconTex must be set BEFORE re-running ApplyVisualsToBar — CreateBar
+    -- already ran it once with iconTex=nil (preview doesn't pass spellId),
+    -- so we re-apply here to surface the icon block on the preview frame.
+    bar.iconTex = iconID
     if iconID and bar.icon then
         bar.icon:SetTexture(iconID)
     end
+    ApplyVisualsToBar(bar)
     self.bars[key] = bar
 end
 
@@ -2786,7 +2921,7 @@ function DT:ShowSettingsTextPreviews()
     end
     self.previewTextShown = true
     for i, key in ipairs(PREVIEW_TEXT_KEYS) do
-        CreatePreviewBar(self, key, PREVIEW_TEXT_LABELS[i], PREVIEW_DURATIONS[i], "text", nil, i)
+        CreatePreviewBar(self, key, PREVIEW_TEXT_LABELS[i], PREVIEW_DURATIONS[i], "text", PREVIEW_ICON_IDS[i], i)
     end
     self:LayoutBars()
 end
