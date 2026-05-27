@@ -723,7 +723,7 @@ function H.UpdateInterruptible(self)
         self.frame:SetAlphaFromBoolean(notInterruptible, 0, 1)
     end
 
-    H.UpdateBarColor(self)
+    H.UpdateKickIndicator(self, nil)
 end
 
 function H.OnCastEvent(self, event, unit, ...)
