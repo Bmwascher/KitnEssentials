@@ -319,6 +319,7 @@ local CLASS_SLOT = {
 RCC.frame       = nil   -- KE_ReadyCheckConsumables container
 RCC.buttons     = {}    -- [1..NUM_SLOTS] button frames
 RCC.db          = nil
+RCC.stateDriverActive = false  -- true while the combat state driver is registered (see _EnableStateDriver)
 
 -- Sticky last-target for the Warlock CLASS slot (Soulstone). Holds the name
 -- of the most recently confirmed Soulstone recipient so the click macro keeps
@@ -336,8 +337,35 @@ function RCC:UpdateDB()
 end
 
 ---------------------------------------------------------------------------------
--- Frame Building
+-- Secure State Driver Lifecycle
 ---------------------------------------------------------------------------------
+-- The combat state driver is registered only while a ready check is displayed
+-- (ShowFrame -> _EnableStateDriver) and torn down when it ends (HideFrame ->
+-- _DisableStateDriver). Between ready checks it does not run, so the secure
+-- frame stops costing per-frame state-driver evaluation.
+
+--- Registers the secure combat state driver. Idempotent via stateDriverActive.
+--- Only called from ShowFrame, which is OOC-guaranteed by its InCombatLockdown
+--- guard, so RegisterStateDriver never runs in lockdown.
+function RCC:_EnableStateDriver()
+    if self.stateDriverActive then return end
+    if not self.frame or not self.frame.stateFrame then return end
+    RegisterStateDriver(self.frame.stateFrame, "combat", "[combat] hide; [nocombat] show")
+    self.stateDriverActive = true
+    if DEBUG_RCC then KE:Print("[RCC] state driver registered.") end
+end
+
+--- Unregisters the state driver. Only called from HideFrame's OOC teardown
+--- path (the in-combat path defers the whole hide to PLAYER_REGEN_ENABLED,
+--- which re-enters HideFrame out of combat).
+function RCC:_DisableStateDriver()
+    if not self.stateDriverActive then return end
+    if self.frame and self.frame.stateFrame then
+        UnregisterStateDriver(self.frame.stateFrame, "combat")
+    end
+    self.stateDriverActive = false
+    if DEBUG_RCC then KE:Print("[RCC] state driver unregistered.") end
+end
 
 --- BuildFrame
 --- Creates the KE_ReadyCheckConsumables container and 7 icon button stubs.
@@ -382,7 +410,9 @@ function RCC:BuildFrame()
             end
         end
     ]=])
-    RegisterStateDriver(stateFrame, "combat", "[combat] hide; [nocombat] show")
+    -- RegisterStateDriver is deferred to ShowFrame (registered only while a
+    -- ready check is displayed) and torn down in HideFrame. The snippet above
+    -- and the SetFrameRef wiring below are still set up here at build time.
 
     f.stateFrame = stateFrame
     self.buttons = {}
@@ -1519,7 +1549,7 @@ function RCC:ShowFrame(initiatorUnit)
     -- HideFrame would fire after combat and hide this new RC mid-interaction.
     self:UnregisterEvent("PLAYER_REGEN_ENABLED")
 
-    -- Build frame on first use (lazy fallback; normally built at OnEnable).
+    -- Build frame on first use (lazy; deferred until the first ready check).
     if not self.frame then
         self:BuildFrame()
         if not self.frame then
@@ -1580,6 +1610,10 @@ function RCC:ShowFrame(initiatorUnit)
     -- status textures or desaturation state. UpdateAllIcons ends with
     -- RefreshLayout so no separate call is needed.
     self.frame:Show()
+    -- Register the secure state driver now that the row is displayed. ShowFrame
+    -- is OOC-guaranteed (InCombatLockdown guard near the top returns first), so
+    -- this secure call never runs in lockdown.
+    self:_EnableStateDriver()
     self:UpdateAllIcons()
 
     if DEBUG_RCC then
@@ -1637,6 +1671,12 @@ function RCC:HideFrame()
     end
 
     self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    -- Tear down the state driver on the OOC path only. The in-combat branch
+    -- above defers the whole hide to PLAYER_REGEN_ENABLED, which re-enters
+    -- HideFrame out of combat and reaches this line — so UnregisterStateDriver
+    -- is always called out of combat. Driver stays live through any combat that
+    -- overlaps the ready check, which is exactly when it's doing its job.
+    self:_DisableStateDriver()
     self.frame:Hide()
 
     if DEBUG_RCC then KE:Print("[RCC] HideFrame: hidden (full cleanup).") end
@@ -1897,11 +1937,12 @@ end
 function RCC:OnEnable()
     if not self.db or not self.db.Enabled then return end
 
-    -- Build the frame up-front (out of combat) so SetFrameRef on the
-    -- SecureHandlerStateTemplate doesn't hit combat lockdown if a ready
-    -- check fires mid-pull. BuildFrame is idempotent (early-returns if
-    -- self.frame is already built).
-    self:BuildFrame()
+    -- Frame is built lazily on the first ready check (ShowFrame's combat-guarded
+    -- BuildFrame fallback). Deferring avoids creating 7 buttons + the secure
+    -- state frame for sessions that never run a ready check (solo, world
+    -- content). ShowFrame's InCombatLockdown guard runs before its BuildFrame
+    -- fallback, so the build is always out of combat — the old eager build
+    -- bought nothing the fallback doesn't already cover.
 
     -- Core events always registered while module is enabled
     self:RegisterEvent("READY_CHECK")
