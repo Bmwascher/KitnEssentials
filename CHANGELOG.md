@@ -1,6 +1,6 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
-## v2.2.0
+## v2.1.0
 
 ### Advanced Debuffs
 - **NEW:** Advanced Debuffs module — bar-based dispellable-debuff display with built-in cooldown swipe, native countdown text, per-dispel-type border color, and a per-type atlas overlay (Magic / Curse / Poison / Disease / Enrage / Bleed). Subsumes the older Boss Debuffs module; existing settings migrate automatically on first load
@@ -8,33 +8,12 @@
 - **NEW:** Border Color Mode toggle — pick between dispel-type-driven border (Magic = blue, Curse = purple, Poison = green, Disease = orange, etc.) or a fixed user color
 - **NEW:** Filtering — Show My Debuffs Only (PLAYER filter) and per-type include/exclude. Blocklist by spell ID for unhelpful one-offs (e.g. Curse-of-Tongues spam)
 - **NEW:** Element Positions card — adjust timer text and stack count placement independently of the icon
+- Icon size slider headroom raised so larger icon configurations behave correctly at the upper end of the range
 
 ### External and Defensive Buffs
 - **NEW:** External and Defensive Buffs module — displays external defensive cooldowns cast onto you (Pain Suppression, Ironbark, Blessing of Sacrifice, etc.) with built-in cooldown swipe, native countdown text, configurable glow per cast, and an optional Test sound when an external lands. Curated list of common externals + an Include Defensives toggle for your own ones
 - **NEW:** BigWigs glow integration — when BigWigs flags an incoming raid hit, the matching defensive aura on your bar lights up
 - **NEW:** Sound Test button — auditions the currently-selected Test sound from the GUI without waiting for a real cast
-
-### Position Controller
-- **NEW:** SkironCooldownManager support — Player and Target frames auto-anchor beside whichever cooldown manager is loaded (SkironCooldownManager or Ayije_CDM), no manual configuration needed
-- **NEW:** ElvUI mover write-through — positions are written through ElvUI's mover system instead of via raw `SetPoint`, so placements survive `/reload` and zone changes without ElvUI reverting them
-- Position Controller GUI rebuilt: Player/Target cards collapsed to Enable + X/Y offset (active CDM resolves the parent), Focus/Pet keep the full anchor picker, Ignore Healer Specs lifted into the master card
-
-### Spell Alerts
-- **NEW:** Per-spec toggles for every class — opt individual specs in or out of the proc-flash overlay via a 4-column class/spec grid. Keyed by global spec ID so selections survive talent/class swaps
-- Opacity slider moved above the spec grid for quicker access
-
-### Automation
-- **NEW:** Auto-accept resurrection — automatically accepts incoming resurrection requests when you're out of combat. Sender guard hardened to ignore requests with no resurrector identity
-
-### Tags
-- **NEW:** `kes:mana:percent` tag — shows the unit's mana % below 100, hidden at full mana
-
-### Sidebar
-- Section labels relabelled for clarity: "Combat Utilities", "General Utilities", "Dungeon & Party Utilities". Module entries renamed too: Aura Debuffs → "Advanced Debuffs", Aura Externals → "External and Defensive Buffs"
-
----
-
-## v2.1.0
 
 ### Character Panel
 - **NEW:** Character Panel module — replaces and expands the older Missing Enchants/Gems module. Adds per-slot item level, enchant labels, gem icons, item-track letters (M/H/C/V/A), an interactive Gem Socket Helper, a decimal character-pane item level, race text + faction icon on the name line, and an inspect-frame overlay that mirrors all of it onto other players. Module renamed from `MissingEnchants` to `CharacterPanel`; the saved DB section was renamed too — settings you previously customized under the old key will fall back to defaults
@@ -51,9 +30,50 @@
 ### Totem Tracker
 - **NEW:** Totem Tracker (Shaman-only) — bar-based active-totem display with per-totem name, remaining-time text, and a per-button destroy button. Configurable row height, button spacing, and timer-text visibility; EditMode-integrated for repositioning; preview hooks into the standard `PREVIEW_MODULES` flow so the GUI preview button works like the other tracker modules. Silent no-op for non-Shaman characters; combat-safe — destroy buttons hide in lockdown rather than erroring
 
+### WindTools Game Bar
+- **NEW:** WindTools Game Bar hider — opt-in toggle to hide WindTools' Game Bar without unloading WindTools
+
+### Focus & Target Castbar
+- **Fixed:** Kick-ready highlight uses the cast-type (interruptable) color instead of falling back to a generic state
+- **Fixed:** Mid-cast `notInterruptible` flips (boss / immunity windows) now correctly re-route through the kick indicator so the bar reflects the new state
+- Kick cooldown indicator now tracks the interrupt's actual cooldown via `SPELL_UPDATE_COOLDOWN` with a lightweight 10Hz finishing ticker — eliminates per-frame polling and stays accurate across spec/talent changes
+- Bar color refreshes at the end of `ApplySettings` so theme/colour edits in the GUI take effect immediately
+
+### Position Controller
+- **NEW:** SkironCooldownManager support — Player and Target frames auto-anchor beside whichever cooldown manager is loaded (SkironCooldownManager or Ayije_CDM), no manual configuration needed
+- **NEW:** ElvUI mover write-through — positions are written through ElvUI's mover system instead of via raw `SetPoint`, so placements survive `/reload` and zone changes without ElvUI reverting them
+- Position Controller GUI rebuilt: Player/Target cards collapsed to Enable + X/Y offset (active CDM resolves the parent), Focus/Pet keep the full anchor picker, Ignore Healer Specs lifted into the master card
+
+### Spell Alerts
+- **NEW:** Per-spec toggles for every class — opt individual specs in or out of the proc-flash overlay via a 4-column class/spec grid. Keyed by global spec ID so selections survive talent/class swaps
+- Opacity slider moved above the spec grid for quicker access
+
+### Pixel-Perfect Rendering
+- **Fixed:** X/Y offset sliders now move every positioned frame by exactly one physical pixel per click at perfect UI scale (1440p / 1080p / 720p). The prior snap math used the wrong divisor, producing a buggy grid where some integer slider clicks visibly didn't move the frame
+- Pixel snapping is now always-on for every frame positioned through the KE framework — the per-module "Snap to Pixel Grid" toggle has been removed from every position card. At perfect UI scale the snap is a no-op for integer offsets; off-grid frames (e.g. anchored to ElvUI panels at fractional positions) are corrected automatically
+- 1px icon and frame borders now stay crisp through UI-scale changes — the border textures resnap when the screen size or scale changes
+
 ### Healer Mana
 - **Fixed:** Delve companion NPCs (Valeera Sanguinar and similar) were being tracked as healers — they report role `HEALER` but have a max=1 sentinel mana pool, so the bar rendered at a meaningless percent. Non-player units now must have a real mana pool (max ≥ 100) to be picked up; player healers pass through across disconnects, and legitimate mana-using NPC followers (e.g. Cylestia in follower dungeons) still track normally
 - **Fixed:** Mana percentage failed to render inside delves. Blizzard restricts party-member power queries there, so `UnitPowerPercent` comes back as a secret token; the percent text is now forwarded straight to `SetFormattedText` (a display call, not arithmetic — no taint propagates back into addon Lua) so the underlying value renders correctly
+
+### Dungeon Timers
+- Text-mode entries now show the spell icon inline as a prefix on the label
+- Phase-bar audio: cleaned up sound-cue triggering on phase transitions so cues don't stack on rapid threshold crossings
+
+### Automation
+- **NEW:** Auto-accept resurrection — automatically accepts incoming resurrection requests when you're out of combat. Sender guard hardened to ignore requests with no resurrector identity
+- Auction House Filter folded into the Automation tab — its three toggles (expansion filter, search auto-focus, craft orders filter) now live alongside the other auto-accept / auto-turn-in / auto-resurrection options
+
+### Ready Check Consumables
+- Smarter flask picker — when you have multiple flask buffs active, ready-check icons now resolve to the highest-tier one rather than the first match
+
+### Tags
+- **NEW:** `kes:mana:percent` tag — shows the unit's mana % below 100, hidden at full mana
+
+### Sidebar
+- Section labels relabelled for clarity: "Combat Utilities", "General Utilities", "Dungeon & Party Utilities". Module entries renamed too: Aura Debuffs → "Advanced Debuffs", Aura Externals → "External and Defensive Buffs"
+- Auction House Filter sidebar entry removed (its toggles now live in the Automation tab)
 
 ---
 
