@@ -659,6 +659,14 @@ function H.StartCast(self)
     end
 
     self.castID, self.spellID, self.spellName = castID, spellID, text or name
+    -- Default nil → false at the read site (matches EllesmereUI
+    -- EllesmereUINameplates.lua:4723-4725 UpdateCast). UnitCastingInfo /
+    -- UnitChannelInfo can omit the notInterruptible field for some cast
+    -- types, and a nil value crashes SetAlphaFromBoolean (line 665) and
+    -- the downstream EvaluateColorValueFromBoolean / SetVertexColorFromBoolean
+    -- calls in UpdateKickIndicator + UpdateBarColor. type(x) == "nil" is
+    -- the taint-safe nil check for secret booleans.
+    if type(notInterruptible) == "nil" then notInterruptible = false end
     self.notInterruptible = notInterruptible
 
     if self.db.HideNotInterruptible then
@@ -740,6 +748,12 @@ end
 
 function H.UpdateInterruptible(self)
     if not self.frame or not self.frame:IsShown() then return end
+    -- The hold-timer "Interrupted by X" display keeps the frame visible after
+    -- H.EndCast cleared self.casting/channeling/empowering AND self.notInterruptible.
+    -- An UNINTERRUPTIBLE event firing in that window would pass the nil
+    -- self.notInterruptible to EvaluateColorValueFromBoolean (which rejects nil).
+    -- Mirrors the active-cast guard in the StartKickReadyTimer ticker (line 420).
+    if not (self.casting or self.channeling or self.empowering) then return end
     local unit = self.unit
     -- notInterruptible is a secret boolean in 12.0.5 — cannot use `or` operator
     local notInterruptible
