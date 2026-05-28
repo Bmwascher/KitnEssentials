@@ -191,6 +191,35 @@ function KE:GetFontOutline(outline)
     return outline
 end
 
+-- Single source of truth for the font-outline dropdown option list used by
+-- every GUI font card. The base set (None/Outline/Thick/Slug/Outline Slug) is
+-- always returned — Slug + Outline Slug engage Blizzard's vector glyph
+-- renderer and are safe on every FontString surface. Pass flags for the two
+-- optional modes that aren't universally appropriate:
+--   includeSoft  → SOFTOUTLINE   (KE's 8-shadow custom outline; pulls in
+--                                 extra FontStrings, can misbehave on
+--                                 recycled tiny-text Blizzard frames)
+--   includeMono  → MONOCHROME    (no anti-aliasing; specialized, e.g.
+--                                 nameplate text)
+-- Adding a new mode here picks it up everywhere automatically.
+function KE:GetFontOutlineOptions(flags)
+    flags = flags or {}
+    local opts = {
+        { key = "NONE",         text = "None" },
+        { key = "OUTLINE",      text = "Outline" },
+        { key = "THICKOUTLINE", text = "Thick" },
+        { key = "SLUG",         text = "Slug" },
+        { key = "SLUG,OUTLINE", text = "Outline Slug" },
+    }
+    if flags.includeSoft then
+        opts[#opts + 1] = { key = "SOFTOUTLINE", text = "Soft" }
+    end
+    if flags.includeMono then
+        opts[#opts + 1] = { key = "MONOCHROME",  text = "Monochrome" }
+    end
+    return opts
+end
+
 ---------------------------------------------------------------------------------
 -- Font Validation
 ---------------------------------------------------------------------------------

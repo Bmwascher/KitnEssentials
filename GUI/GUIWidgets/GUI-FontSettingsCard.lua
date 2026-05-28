@@ -39,19 +39,9 @@ local function BuildFontList()
     return list
 end
 
--- Outline option list — built per Configure since includeSoftOutline can vary
--- across call sites that share the same kit instance from the pool.
-local function BuildOutlineOptions(includeSoftOutline)
-    local opts = {
-        { key = "NONE", text = "None" },
-        { key = "OUTLINE", text = "Outline" },
-        { key = "THICKOUTLINE", text = "Thick" },
-    }
-    if includeSoftOutline then
-        table_insert(opts, { key = "SOFTOUTLINE", text = "Soft" })
-    end
-    return opts
-end
+-- Outline options are sourced from KE:GetFontOutlineOptions (Core/Globals.lua).
+-- includeSoftOutline gates the KE 8-shadow custom outline; Slug / Outline Slug
+-- ship by default since they're standard Blizzard vector flags.
 
 -- DB getter / setter helpers that support nested "a.b.c" keys. Match the
 -- legacy CreateFontSettingsCard behavior — a couple of call sites use this.
@@ -114,7 +104,7 @@ local function CreateFontSettingsCardKit(holder)
     row1:AddWidget(fontDropdown, 0.5)
 
     local outlineDropdown = GUIFrame:CreateDropdown(row1, "Outline", {
-        options = BuildOutlineOptions(false),
+        options = KE:GetFontOutlineOptions(),
         value = "OUTLINE",
         callback = function(key)
             if not kit._db or not kit._keys then return end
@@ -214,7 +204,7 @@ local function ConfigureFontSettingsCardKit(kit, scrollChild, yOffset, config)
     -- Outline options vary per call site (includeSoftOutline). Rebuild per
     -- Configure so a kit can switch between Soft-supporting and not across
     -- different module pages that reuse the same instance.
-    kit.outlineDropdown:SetOptions(BuildOutlineOptions(includeSoftOutline))
+    kit.outlineDropdown:SetOptions(KE:GetFontOutlineOptions{ includeSoft = includeSoftOutline })
 
     -- Note: searchable=false is handled at the public-API level by routing
     -- to the legacy build-fresh path. The pooled factory always builds with
@@ -296,7 +286,7 @@ local function CreateFontSettingsCardLegacy(scrollChild, yOffset, config)
     table_insert(widgets, fontDropdown)
 
     local outlineDropdown = GUIFrame:CreateDropdown(row1, "Outline", {
-        options = BuildOutlineOptions(includeSoftOutline),
+        options = KE:GetFontOutlineOptions{ includeSoft = includeSoftOutline },
         value = getValue(keys.fontOutline, "OUTLINE"),
         callback = function(key) setValue(keys.fontOutline, key) end,
     })

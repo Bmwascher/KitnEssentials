@@ -12,11 +12,7 @@ local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
 
 local pairs = pairs
 
-local SETTINGS_OUTLINE_OPTIONS = {
-    { key = "NONE",         text = "None" },
-    { key = "OUTLINE",      text = "Outline" },
-    { key = "THICKOUTLINE", text = "Thick" },
-}
+local SETTINGS_OUTLINE_OPTIONS = KE:GetFontOutlineOptions()
 
 local function GetAurasModule()
     if KitnEssentials then

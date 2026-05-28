@@ -265,14 +265,8 @@ GUIFrame:RegisterContent("WarpDepleteForces", function(scrollChild, yOffset)
     card4:AddRow(row4a, Theme.rowHeight)
 
     local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
-    local outlineList = {
-        { key = "NONE",         text = "None"  },
-        { key = "OUTLINE",      text = "Outline" },
-        { key = "THICKOUTLINE", text = "Thick" },
-        { key = "MONOCHROME",   text = "Monochrome" },
-    }
     local outlineDropdown = GUIFrame:CreateDropdown(row4b, "Outline", {
-        options = outlineList,
+        options = KE:GetFontOutlineOptions{ includeMono = true },
         value = db.NameplateFontOutline or "OUTLINE",
         callback = function(key)
             db.NameplateFontOutline = key

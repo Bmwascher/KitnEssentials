@@ -61,6 +61,11 @@
 - Text-mode entries now show the spell icon inline as a prefix on the label
 - Phase-bar audio: cleaned up sound-cue triggering on phase transitions so cues don't stack on rapid threshold crossings
 
+### Font Outlines
+- **NEW:** Slug and Outline Slug outline picks added to every module's Font Outline dropdown. Both engage Blizzard's vector glyph renderer (mathematically pixel-stable text), eliminating sub-pixel rasterization variance that bitmap rendering otherwise produces. Outline Slug is the recommended pick if you want crisp text at every screen position
+- Soft outline rendering improved — text rendered with the "Soft" pick now uses the vector glyph renderer internally on both the main FontString and all 8 shadow copies, reducing the halo-edge variance that was visible at certain frame X positions
+- Internal: outline options consolidated into a single `KE:GetFontOutlineOptions` factory so future outline modes only need one edit
+
 ### Automation
 - **NEW:** Auto-accept resurrection — automatically accepts incoming resurrection requests when you're out of combat. Sender guard hardened to ignore requests with no resurrector identity
 - Auction House Filter folded into the Automation tab — its three toggles (expansion filter, search auto-focus, craft orders filter) now live alongside the other auto-accept / auto-turn-in / auto-resurrection options
