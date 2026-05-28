@@ -18,12 +18,7 @@ local SETTINGS_GROWTH_OPTIONS = {
     { key = "UP",   text = "Up" },
 }
 
-local SETTINGS_TEXT_OUTLINE_OPTIONS = {
-    { key = "NONE",         text = "None" },
-    { key = "OUTLINE",      text = "Outline" },
-    { key = "THICKOUTLINE", text = "Thick" },
-    { key = "SOFTOUTLINE",  text = "Soft" },
-}
+local SETTINGS_TEXT_OUTLINE_OPTIONS = KE:GetFontOutlineOptions{ includeSoft = true }
 
 local SETTINGS_TEXT_ALIGN_OPTIONS = {
     { key = "LEFT",   text = "Left" },

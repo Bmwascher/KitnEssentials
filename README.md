@@ -50,13 +50,13 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Combat Logger | Automatic combat logging for raids, dungeons, M+, PvP, and arenas with per-content toggles |
 | CVars | One-click CVar optimization panel |
 | Slash Commands | Custom slash command utilities |
-| Auction House Filter | Auto-filter AH to current expansion, auto-focus search bar, craft orders filter |
 | Hunter's Mark Missing | Alert when Hunter's Mark is not applied |
 | Skyriding UI | Skyriding vigor bar with second wind tracker and whirling surge cooldown icon |
 | Position Controller | Auto-anchors ElvUI Player/Target frames beside SkironCooldownManager or Ayije_CDM (auto-detected, clears the widest cooldown row); Focus/Pet anchor freely; CDM racials bar offset with pet detection (works with ElvUI and UUF). Writes through ElvUI's mover system so placements survive `/reload`. Yields to the standalone ElvUI_Anchor addon if loaded; ignores healer specs by default |
 | Spell Alert Opacity | Per-spec opt-in/out grid for Blizzard's proc activation overlay flashes (every class, 4-column layout), plus an opacity slider for the overlay |
 | Custom Nicknames | Map characters to personal nicknames on ElvUI and Unhalted Unit Frames via the `[kes:nickname]` tag family (plus class-color variants `[kes:nickname:color]` for UUF); includes a management GUI with search, import/export, and replace/merge modes |
 | Hide ActionBars | Hide specific action bar rows in/out of combat |
+| WindTools Game Bar | Opt-in toggle to hide WindTools' Game Bar without unloading the module |
 | Great Vault Alert | Shows your loot spec when opening the Great Vault with class color and sound |
 | Character Panel | Per-slot item level, enchant labels, gem icons, missing-gem cue, and item-track letters (M/H/C/V/A) on the player and inspect frames; decimal stat-pane and inspect item level; interactive Gem Socket Helper; auto-disables BetterCharacterPanel if loaded |
 | World Map | Adjustable minimized map scale, coordinate waypoint search bar, and city map icons for Silvermoon / Stormwind / Orgrimmar |

@@ -18,11 +18,7 @@ local function AccentText(text)
     return string_format("|cff%02x%02x%02x%s|r", a[1] * 255, a[2] * 255, a[3] * 255, text)
 end
 
-local SETTINGS_OUTLINE_OPTIONS = {
-    { key = "NONE",         text = "None" },
-    { key = "OUTLINE",      text = "Outline" },
-    { key = "THICKOUTLINE", text = "Thick" },
-}
+local SETTINGS_OUTLINE_OPTIONS = KE:GetFontOutlineOptions()
 
 local function GetTooltipsModule()
     if KitnEssentials then

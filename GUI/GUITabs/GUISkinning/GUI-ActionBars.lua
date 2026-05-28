@@ -59,11 +59,7 @@ local ANCHOR_OPTIONS = {
     { key = "BOTTOMRIGHT", text = "Bottom Right" },
 }
 
-local OUTLINE_OPTIONS = {
-    { key = "NONE",         text = "None" },
-    { key = "OUTLINE",      text = "Outline" },
-    { key = "THICKOUTLINE", text = "Thick" },
-}
+local OUTLINE_OPTIONS = KE:GetFontOutlineOptions()
 
 local LAYOUT_OPTIONS = {
     { key = "HORIZONTAL", text = "Horizontal" },
