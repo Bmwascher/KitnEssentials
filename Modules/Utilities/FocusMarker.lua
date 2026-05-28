@@ -18,6 +18,8 @@ local CreateMacro = CreateMacro
 local IsInGroup = IsInGroup
 local IsInRaid = IsInRaid
 local C_ChatInfo = C_ChatInfo
+local C_Timer = C_Timer
+local CreateFrame = CreateFrame
 local GetSpecialization = GetSpecialization
 local GetSpecializationInfo = GetSpecializationInfo
 local table_concat = table.concat
@@ -146,24 +148,39 @@ end
 ---------------------------------------------------------------------------------
 -- Lifecycle
 ---------------------------------------------------------------------------------
+-- READY_CHECK announce uses a dedicated CreateFrame instead of AceEvent so the
+-- callback does not dispatch through LibStub's shared CallbackHandler-1.0.
+-- When other addons in the user's loadout (Augur, AdvancedInterfaceOptions,
+-- etc.) share the same handler namespace, the dispatch chain becomes tainted
+-- and SendChatMessage (HasRestrictions=true, RestrictedForMacroChatMessages=true)
+-- is blocked. The bare-frame OnEvent + C_Timer.After defer mirrors EllesmereUI's
+-- pattern in EllesmereUIQoL.lua:874-904 (instance reset announcer).
+function FM:_AnnounceFocusMarkerOnReadyCheck()
+    local db = self.db
+    if not db.AnnounceReadyCheck then return end
+    local specIndex = GetSpecialization()
+    if specIndex then
+        local specID = GetSpecializationInfo(specIndex)
+        if specID and NO_KICK_SPECS[specID] then return end
+    end
+    if not (IsInGroup() and not IsInRaid() and not InCombatLockdown()) then return end
+    local marker = db.SelectedMarker or "Star"
+    local msg = "My Focus Marker is {" .. marker .. "}"
+    C_Timer.After(0, function()
+        C_ChatInfo.SendChatMessage(msg, "PARTY")
+    end)
+end
+
 function FM:OnEnable()
     self:ApplyMacro()
 
-    self:RegisterEvent("READY_CHECK", function()
-        local db = self.db
-        if not db.AnnounceReadyCheck then return end
-        -- Skip announce if current spec has no interrupt
-        local specIndex = GetSpecialization()
-        if specIndex then
-            local specID = GetSpecializationInfo(specIndex)
-            if specID and NO_KICK_SPECS[specID] then return end
-        end
-        if IsInGroup() and not IsInRaid() and not InCombatLockdown() then
-            local marker = db.SelectedMarker or "Star"
-            local msg = "My Focus Marker is {" .. marker .. "}"
-            C_ChatInfo.SendChatMessage(msg, "PARTY")
-        end
-    end)
+    if not self.readyCheckFrame then
+        self.readyCheckFrame = CreateFrame("Frame")
+        self.readyCheckFrame:SetScript("OnEvent", function()
+            self:_AnnounceFocusMarkerOnReadyCheck()
+        end)
+    end
+    self.readyCheckFrame:RegisterEvent("READY_CHECK")
 
     self:RegisterEvent("PLAYER_REGEN_ENABLED", function()
         if self.pendingMacro then
@@ -174,5 +191,8 @@ end
 
 function FM:OnDisable()
     self:UnregisterAllEvents()
+    if self.readyCheckFrame then
+        self.readyCheckFrame:UnregisterAllEvents()
+    end
     self.lastMacroName = nil
 end
