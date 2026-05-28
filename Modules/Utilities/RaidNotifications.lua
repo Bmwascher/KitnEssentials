@@ -1,8 +1,9 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  RaidNotifications.lua                                   ║
 -- ║  Module: Raid Notifications                              ║
--- ║  Purpose: Gateway usability, reset boss reminder, and    ║
--- ║           loot boss reminder with per-alert toggles.     ║
+-- ║  Purpose: Multi-alert raid utility notifications —       ║
+-- ║           Gateway, ResetBoss, LootBoss, Bench, and       ║
+-- ║           Voidcore, with per-alert toggles.              ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -16,19 +17,14 @@ local C_Item = C_Item
 local C_Timer = C_Timer
 local C_UnitAuras = C_UnitAuras
 local IsUsableItem = C_Item.IsUsableItem
-local GetItemCount = C_Item.GetItemCount
 local CreateFrame = CreateFrame
 local InCombatLockdown = InCombatLockdown
 local GetInstanceInfo = GetInstanceInfo
 local C_CurrencyInfo = C_CurrencyInfo
 local C_Map = C_Map
-local UnitClass = UnitClass
 local UnitName = UnitName
 local IsInInstance = IsInInstance
-local IsInGroup = IsInGroup
 local IsInRaid = IsInRaid
-local GetNumGroupMembers = GetNumGroupMembers
-local GetRaidDifficultyID = GetRaidDifficultyID
 local GetRaidRosterInfo = GetRaidRosterInfo
 
 local function IsInRaidInstance()
@@ -119,6 +115,26 @@ for _, def in ipairs(ALERT_DEFS) do
 end
 
 ---------------------------------------------------------------------------------
+-- Subscription Orchestrator
+---------------------------------------------------------------------------------
+-- See docs/superpowers/specs/2026-05-28-raidnotifications-subsystem-refactor-design.md
+-- for the design. Two-layer model: module-level always-on events drive
+-- _UpdateSubscriptions() which registers/unregisters per-alert events based on
+-- each alert's shouldSubscribe() gate. Sub-gated events are refcount-managed
+-- so multiple alerts can share an event (PLAYER_REGEN_* shared by ResetBoss +
+-- Voidcore) without AceEvent handler conflicts.
+
+local MODULE_ALWAYS_ON_EVENTS = {
+    PLAYER_ENTERING_WORLD = true,
+    ZONE_CHANGED_NEW_AREA = true,
+    GROUP_ROSTER_UPDATE   = true,
+}
+
+-- Forward declaration; SUBSYSTEMS table is defined further down in the file
+-- after the new handler methods exist (Task 4).
+local SUBSYSTEMS
+
+---------------------------------------------------------------------------------
 -- Module State
 ---------------------------------------------------------------------------------
 RN.frame = nil
@@ -126,9 +142,6 @@ RN.rows = {}
 RN.activeAlerts = {}
 RN.isPreview = false
 RN.editModeRegistered = false
-RN.hasItem = false
-RN.hasWarlockInGroup = false
-RN.wasUsable = nil
 RN.resetBossGen = 0
 RN.lootBossGen = 0
 -- Voidcore: set true on CHALLENGE_MODE_START, cleared when leaving a
@@ -159,6 +172,100 @@ function RN:MigrateFromGatewayAlert()
         self.db.Position = oldGA.Position
     end
     KE.db.profile._RaidNotifMigrated = true
+end
+
+---------------------------------------------------------------------------------
+-- Orchestrator Implementation
+---------------------------------------------------------------------------------
+
+--- Runs a hook field that may be a function, a method name, or nil.
+function RN:_RunHook(hook)
+    if not hook then return end
+    if type(hook) == "string" then
+        self[hook](self)
+    else
+        hook(self)
+    end
+end
+
+--- Adjusts sub-gated event registration refcounts on subscription change.
+--- Events in MODULE_ALWAYS_ON_EVENTS are skipped (already permanently
+--- registered to _OnAlwaysOnEvent).
+function RN:_ApplySubscriptionDelta(sub, becomingActive)
+    for event in pairs(sub.handlers) do
+        if not MODULE_ALWAYS_ON_EVENTS[event] then
+            -- Floor at 0: the _subActive idempotency guard in _UpdateSubscriptions
+            -- prevents double-unsubscribes in normal flow, but a programming error
+            -- (or future re-entrancy) should not silently leak a permanently-
+            -- registered event by storing a negative refcount.
+            local count = math.max(0, (self._eventRefcount[event] or 0)
+                                    + (becomingActive and 1 or -1))
+            if count == 1 and becomingActive then
+                self:RegisterEvent(event, "_OnSubGatedEvent")
+            elseif count == 0 then
+                self:UnregisterEvent(event)
+            end
+            self._eventRefcount[event] = count
+        end
+    end
+end
+
+--- Re-evaluates every subsystem's shouldSubscribe; on transitions, updates
+--- event refcounts and runs onScopeEnter/onScopeExit hooks. Idempotent.
+function RN:_UpdateSubscriptions()
+    if not self:IsEnabled() then return end
+    -- Defensive: IsEnabled() can briefly disagree with our own state during
+    -- the Ace3 disable→state-flip window, and external callers (HidePreview,
+    -- ApplySettings) can hit that gap. _subActive is the authoritative signal
+    -- that OnEnable has completed and OnDisable hasn't started.
+    if not self._subActive then return end
+    for key, sub in pairs(SUBSYSTEMS) do
+        local shouldBe = sub.shouldSubscribe(self) and true or false
+        if shouldBe ~= self._subActive[key] then
+            self._subActive[key] = shouldBe
+            if shouldBe then
+                self:_ApplySubscriptionDelta(sub, true)
+                self:_RunHook(sub.onScopeEnter)
+            else
+                self:_RunHook(sub.onScopeExit)
+                self:_ApplySubscriptionDelta(sub, false)
+            end
+        end
+    end
+end
+
+--- Always-on event dispatcher. Defers 1 frame so APIs (GetInstanceInfo,
+--- C_Map.GetBestMapForUnit) return populated data after a zone transition.
+--- After subscription re-eval, dispatches the event to any active subsystem
+--- that declared it in handlers.
+function RN:_OnAlwaysOnEvent(event, ...)
+    local args = { ... }
+    C_Timer.After(0, function()
+        if not self:IsEnabled() then return end
+        self:_UpdateSubscriptions()
+        for key, sub in pairs(SUBSYSTEMS) do
+            if self._subActive[key] then
+                local method = sub.handlers[event]
+                if method then
+                    self[method](self, event, unpack(args))
+                end
+            end
+        end
+    end)
+end
+
+--- Sub-gated event dispatcher. Single handler for any refcount-managed event.
+--- Iterates active subsystems and routes to each one's declared handler.
+function RN:_OnSubGatedEvent(event, ...)
+    if not self._subActive then return end
+    for key, sub in pairs(SUBSYSTEMS) do
+        if self._subActive[key] then
+            local method = sub.handlers[event]
+            if method then
+                self[method](self, event, ...)
+            end
+        end
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -325,9 +432,9 @@ end
 -- Fires while the player is inside a seasonal instance (dungeon/raid) AND
 -- has earned less than the weekly cap of Nebulous Voidcore. Hides during
 -- combat to avoid mid-pull screen clutter. Subscription to the currency +
--- combat events is zone-conditional (managed by VoidcoreUpdateSubscriptions)
--- so we don't pay event-dispatch overhead while the player is outside the
--- relevant 11 instances.
+-- combat events is zone-conditional (managed by the subscription orchestrator
+-- via the Voidcore subsystem's shouldSubscribe gate) so we don't pay
+-- event-dispatch overhead while the player is outside the relevant 11 instances.
 function RN:OnChallengeModeStart()
     self._voidcoreKeyActive = true
     self:HideAlert("Voidcore")
@@ -337,7 +444,8 @@ function RN:EvaluateVoidcore()
     -- Preview mode drives visibility directly via ApplySettings's force-show
     -- loop. Bail out so the natural eval path doesn't hide the preview-shown
     -- alert based on out-of-game-zone state. Mirrors the isPreview gate in
-    -- CheckResetBoss / OnCombatStart / OnCombatEnd / OnEncounterEnd.
+    -- _SyncResetBossFromExistingSated / _OnResetBossCombatStart /
+    -- _OnResetBossCombatEnd / OnEncounterEnd.
     if self.isPreview then return end
     if not self.db.VoidcoreEnabled then self:HideAlert("Voidcore"); return end
     if self._voidcoreKeyActive then self:HideAlert("Voidcore"); return end
@@ -361,111 +469,26 @@ function RN:EvaluateVoidcore()
     end
 end
 
-function RN:VoidcoreUpdateSubscriptions()
-    -- Defer 0.5s so C_Map.GetBestMapForUnit returns fresh data after a zone
-    -- transition. Without this, the immediate eval after PEW/ZCNA can read
-    -- stale or nil map data and either fail to subscribe on entry or fail to
-    -- unsubscribe on exit. Mirrors the deferred pattern in GatewayFullUpdate
-    -- (line ~309).
-    C_Timer.After(0.5, function()
-        local inZone = IsInSeasonalZone()
-        if not inZone then
-            -- Left the seasonal zone — clear the M+ key suppression flag so
-            -- the alert is eligible to show again on the next entry.
-            self._voidcoreKeyActive = false
-        end
-        local shouldSubscribe = self.db and self.db.VoidcoreEnabled and inZone
-        if shouldSubscribe and not self._voidcoreSubscribed then
-            self:RegisterEvent("CURRENCY_DISPLAY_UPDATE", "EvaluateVoidcore")
-            self._voidcoreSubscribed = true
-        elseif not shouldSubscribe and self._voidcoreSubscribed then
-            self:UnregisterEvent("CURRENCY_DISPLAY_UPDATE")
-            self._voidcoreSubscribed = false
-        end
-        self:EvaluateVoidcore()
-    end)
-end
-
----------------------------------------------------------------------------------
--- Zone Change
----------------------------------------------------------------------------------
-function RN:OnZoneChange()
-    self:GatewayFullUpdate()
-    self:CheckBench()
-    self:VoidcoreUpdateSubscriptions()
+--- Direct hide rather than going through EvaluateVoidcore. PLAYER_REGEN_DISABLED
+--- fires fractionally before InCombatLockdown() returns true, so the eval's
+--- lockdown gate could fall through and re-show the alert.
+function RN:_OnVoidcoreCombatStart()
+    if self.isPreview then return end
+    self:HideAlert("Voidcore")
 end
 
 ---------------------------------------------------------------------------------
 -- Gateway Logic
 ---------------------------------------------------------------------------------
--- Gates can only be placed by Warlocks. If no Warlock is in the group (and the
--- player isn't one), the alert is meaningless — suppress it.
-function RN:CheckGroupForWarlock()
-    local _, _, playerClassID = UnitClass("player")
-    if playerClassID == 9 then
-        self.hasWarlockInGroup = true
-        return true
-    end
-
-    if not IsInGroup() then
-        self.hasWarlockInGroup = false
-        return false
-    end
-
-    local numMembers = GetNumGroupMembers() or 0
-    local prefix = IsInRaid() and "raid" or "party"
-    local maxCheck = IsInRaid() and numMembers or (numMembers - 1)
-
-    for i = 1, maxCheck do
-        local _, _, classID = UnitClass(prefix .. i)
-        if classID == 9 then
-            self.hasWarlockInGroup = true
-            return true
-        end
-    end
-
-    self.hasWarlockInGroup = false
-    return false
-end
-
-function RN:OnGroupChanged()
-    self:CheckGroupForWarlock()
-    self:GatewayCheckUsable()
-    self:CheckBench()
-end
-
-function RN:GatewayFullUpdate()
-    C_Timer.After(0.5, function()
-        if not self.db or not self.db.Enabled then return end
-        self:CheckGroupForWarlock()
-        local count = GetItemCount(GATEWAY_ITEM_ID)
-        self.hasItem = count and count > 0
-        if self.hasItem then
-            self:GatewayCheckUsable()
-        else
-            self:GatewayUpdateState(false)
-        end
-    end)
-end
-
-function RN:GatewayCheckUsable()
-    if not self.hasItem or not self.hasWarlockInGroup then
-        self:GatewayUpdateState(false)
-        return
-    end
-    self:GatewayUpdateState(IsUsableItem(GATEWAY_ITEM_ID) and true or false)
-end
-
-function RN:GatewayUpdateState(isUsable)
+--- AE-pattern Gateway evaluator. IsUsableItem(GATEWAY_ITEM_ID) already filters:
+---   (a) item present in bags
+---   (b) a warlock-in-range has deployed a gate
+--- So we just check it and Show/Hide accordingly. Idempotent — ShowAlert
+--- and HideAlert no-op when the alert is already in the desired state.
+function RN:_CheckGatewayUsable()
     if self.isPreview then return end
-    if self.db.GatewayEnabled == false then
-        self:HideAlert("Gateway")
-        return
-    end
-    if isUsable == self.wasUsable then return end
-    self.wasUsable = isUsable
-
-    if isUsable then
+    if not self.db.GatewayEnabled then return end
+    if IsUsableItem(GATEWAY_ITEM_ID) then
         self:ShowAlert("Gateway")
     else
         self:HideAlert("Gateway")
@@ -487,63 +510,70 @@ function RN:HasLustDebuff()
     return false
 end
 
-function RN:CheckResetBoss()
-    if self.isPreview then return end
-    if self.db.ResetBossEnabled == false then
-        self:HideAlert("ResetBoss")
-        return
-    end
-
-    -- Only show in raid groups
-    if not IsInRaidInstance() then
-        self:HideAlert("ResetBoss")
-        return
-    end
-
-    if InCombatLockdown() or UnitIsDeadOrGhost("player") then
-        self:HideAlert("ResetBoss")
-        return
-    end
-
-    if self:HasLustDebuff() then
-        self:ShowAlert("ResetBoss")
-
-        -- Start auto-hide timer with generation counter
-        self.resetBossGen = self.resetBossGen + 1
-        local gen = self.resetBossGen
-        C_Timer.After(self.db.AlertDuration or 40, function()
-            if self.resetBossGen == gen then
-                self:HideAlert("ResetBoss")
-            end
-        end)
-    else
-        self:HideAlert("ResetBoss")
-    end
-end
-
-function RN:OnUnitAura(_, unit)
+--- BLT-pattern edge-triggered aura handler. Acts only on freshly-added auras,
+--- not refreshes or removals. The shouldSubscribe gate already confirmed
+--- we're in a raid instance.
+function RN:_OnResetBossAura(_, unit, updateInfo)
     if unit ~= "player" then return end
-    if not self.db.Enabled or self.isPreview then return end
-    self:CheckResetBoss()
+    if not updateInfo or not updateInfo.addedAuras then return end
+    if self.isPreview then return end
+    for _, info in pairs(updateInfo.addedAuras) do
+        if info and info.auraInstanceID then
+            local data = C_UnitAuras.GetAuraDataByAuraInstanceID("player", info.auraInstanceID)
+            if data and data.spellId and not issecretvalue(data.spellId) then
+                for _, sated in ipairs(SATED_DEBUFFS) do
+                    if data.spellId == sated then
+                        self:_FireResetBoss()
+                        return
+                    end
+                end
+            end
+        end
+    end
 end
 
-function RN:OnCombatStart()
-    if not self.db.Enabled or self.isPreview then return end
-    self:HideAlert("ResetBoss")
-    -- Direct hide rather than going through EvaluateVoidcore. PLAYER_REGEN_DISABLED
-    -- fires fractionally before InCombatLockdown() returns true, so the eval's
-    -- lockdown gate could fall through and re-show the alert.
-    self:HideAlert("Voidcore")
+--- PEW sync: on entering a raid instance, check for an existing sated debuff
+--- and fire the alert if one is present (handles /reload mid-debuff).
+--- Mirrors BLT's SyncFromExistingAura pattern.
+function RN:_SyncResetBossFromExistingSated()
+    if self.isPreview then return end
+    if InCombatLockdown() or UnitIsDeadOrGhost("player") then return end
+    if self:HasLustDebuff() then
+        self:_FireResetBoss()
+    end
 end
 
-function RN:OnCombatEnd()
-    if not self.db.Enabled or self.isPreview then return end
-    -- Small delay to let aura events settle
-    C_Timer.After(0.2, function()
-        if not self.db or not self.db.Enabled then return end
-        self:CheckResetBoss()
+--- Shows the ResetBoss alert and starts the 40s auto-hide timer with
+--- generation counter (so a subsequent fire invalidates pending hides).
+function RN:_FireResetBoss()
+    self:ShowAlert("ResetBoss")
+    self.resetBossGen = self.resetBossGen + 1
+    local gen = self.resetBossGen
+    C_Timer.After(self.db.AlertDuration or 40, function()
+        if self.resetBossGen == gen then
+            self:HideAlert("ResetBoss")
+        end
     end)
-    self:EvaluateVoidcore()  -- re-show if still uncapped + in zone
+end
+
+--- Hide ResetBoss on combat start. The 40s post-lust window only stays
+--- visible out-of-combat; combat tag means the raid is no longer in
+--- "between pulls" state, so the prompt is no longer actionable.
+function RN:_OnResetBossCombatStart()
+    if self.isPreview then return end
+    self:HideAlert("ResetBoss")
+end
+
+function RN:_OnResetBossCombatEnd()
+    if self.isPreview then return end
+    -- 0.2s settle so aura events that fire alongside combat-end land first.
+    -- IsEnabled() guards against the module being disabled mid-defer (e.g.
+    -- profile switch); db.Enabled is the user-intent flag and doesn't flip
+    -- until OnDisable runs, so we check the live module state instead.
+    C_Timer.After(0.2, function()
+        if not self:IsEnabled() then return end
+        self:_SyncResetBossFromExistingSated()
+    end)
 end
 
 ---------------------------------------------------------------------------------
@@ -600,12 +630,8 @@ function RN:CheckBench()
         return
     end
 
-    -- Difficulty 16 = Mythic raid. Heroic/Normal raids cap at 30 players, no
-    -- bench mechanic. Only Mythic supports the 20-player active + bench split.
-    if GetRaidDifficultyID() ~= 16 then
-        self:HideAlert("BenchAlert")
-        return
-    end
+    -- Mythic-only gate is now in BenchAlert.shouldSubscribe via GetInstanceInfo;
+    -- CheckBench only runs when the subsystem is in scope (= mythic raid).
 
     local playerName = UnitName("player")
     if not playerName then
@@ -662,8 +688,14 @@ function RN:ApplySettings()
         end
     end
 
-    self:VoidcoreUpdateSubscriptions()
     self:LayoutRows()
+
+    -- Re-evaluate subscriptions so live-toggling alert-enable flags from the
+    -- GUI takes effect without /reload. Cheap when no toggles changed (the
+    -- orchestrator's idempotency guard short-circuits unchanged subsystems).
+    if self:IsEnabled() then
+        self:_UpdateSubscriptions()
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -712,8 +744,8 @@ end
 
 function RN:HidePreview()
     -- Idempotent guard: bail if preview was already off. Avoids redundant
-    -- HideAllAlerts + GatewayCheckUsable + CheckResetBoss on every
-    -- non-utilities section navigation.
+    -- HideAllAlerts + orchestrator re-eval on every non-utilities section
+    -- navigation.
     if not self.isPreview then return end
 
     self.isPreview = false
@@ -721,16 +753,114 @@ function RN:HidePreview()
 
     -- Only re-evaluate live state if the AceModule is actually enabled.
     -- During profile change, db.Enabled may flip true under the new profile
-    -- before OnEnable fires — driving Gateway/Reset checks before frames
+    -- before OnEnable fires — driving the orchestrator before frames
     -- exist would crash on nil indexing.
     if self.db.Enabled and self:IsEnabled() then
-        self.wasUsable = nil
-        self:GatewayCheckUsable()
-        self:CheckResetBoss()
-        self:CheckBench()
-        -- LootBoss is event-driven only, no re-check needed
+        self:_UpdateSubscriptions()
     end
 end
+
+---------------------------------------------------------------------------------
+-- Subsystem Definitions
+---------------------------------------------------------------------------------
+-- Resolves the forward declaration at the top of the file. See spec doc for
+-- contract: each entry has shouldSubscribe (pure boolean gate function),
+-- handlers (event-to-method-name map), and optional onScopeEnter/onScopeExit
+-- hooks (function or method-name string).
+
+SUBSYSTEMS = {
+
+    -------------------------------------------------------------------------
+    Gateway = {
+        shouldSubscribe = function(self)
+            if not self.db.GatewayEnabled then return false end
+            local _, instanceType = IsInInstance()
+            return instanceType == "raid" or instanceType == "party"
+        end,
+        handlers = {
+            ACTIONBAR_UPDATE_USABLE = "_CheckGatewayUsable",
+        },
+        onScopeEnter = "_CheckGatewayUsable",
+        onScopeExit  = function(self) self:HideAlert("Gateway") end,
+    },
+
+    -------------------------------------------------------------------------
+    ResetBoss = {
+        shouldSubscribe = function(self)
+            if not self.db.ResetBossEnabled then return false end
+            return select(2, IsInInstance()) == "raid"
+        end,
+        handlers = {
+            UNIT_AURA             = "_OnResetBossAura",
+            PLAYER_REGEN_DISABLED = "_OnResetBossCombatStart",
+            PLAYER_REGEN_ENABLED  = "_OnResetBossCombatEnd",
+        },
+        onScopeEnter = "_SyncResetBossFromExistingSated",
+        onScopeExit  = function(self)
+            self:HideAlert("ResetBoss")
+            self.resetBossGen = self.resetBossGen + 1
+        end,
+    },
+
+    -------------------------------------------------------------------------
+    LootBoss = {
+        shouldSubscribe = function(self)
+            if not self.db.LootBossEnabled then return false end
+            return select(2, IsInInstance()) == "raid"
+        end,
+        handlers = {
+            ENCOUNTER_END    = "OnEncounterEnd",
+            LOOT_OPENED      = "ClearLootBoss",
+            CHAT_MSG_MONEY   = "ClearLootBoss",
+            ENCOUNTER_START  = "ClearLootBoss",
+        },
+        onScopeEnter = nil,
+        onScopeExit  = function(self)
+            self:HideAlert("LootBoss")
+            self.lootBossGen = self.lootBossGen + 1
+        end,
+    },
+
+    -------------------------------------------------------------------------
+    BenchAlert = {
+        shouldSubscribe = function(self)
+            if not self.db.BenchEnabled then return false end
+            -- Single GetInstanceInfo call gives us both instanceType and
+            -- difficultyID — cheaper than IsInInstance() + GetInstanceInfo().
+            local _, instanceType, difficultyID = GetInstanceInfo()
+            if instanceType ~= "raid" then return false end
+            return difficultyID == 16  -- mythic raid only
+        end,
+        handlers = {
+            -- GROUP_ROSTER_UPDATE is in MODULE_ALWAYS_ON_EVENTS — orchestrator
+            -- routes here when BenchAlert is subscribed without re-registering.
+            GROUP_ROSTER_UPDATE = "CheckBench",
+        },
+        onScopeEnter = "CheckBench",
+        onScopeExit  = function(self) self:HideAlert("BenchAlert") end,
+    },
+
+    -------------------------------------------------------------------------
+    Voidcore = {
+        shouldSubscribe = function(self)
+            return self.db.VoidcoreEnabled and IsInSeasonalZone()
+        end,
+        handlers = {
+            CURRENCY_DISPLAY_UPDATE = "EvaluateVoidcore",
+            CHALLENGE_MODE_START    = "OnChallengeModeStart",
+            PLAYER_REGEN_DISABLED   = "_OnVoidcoreCombatStart",
+            PLAYER_REGEN_ENABLED    = "EvaluateVoidcore",
+        },
+        onScopeEnter = function(self)
+            self._voidcoreKeyActive = false
+            self:EvaluateVoidcore()
+        end,
+        onScopeExit = function(self)
+            self:HideAlert("Voidcore")
+            self._voidcoreKeyActive = false
+        end,
+    },
+}
 
 ---------------------------------------------------------------------------------
 -- Lifecycle
@@ -738,8 +868,6 @@ end
 function RN:OnInitialize()
     self:UpdateDB()
     self:MigrateFromGatewayAlert()
-    self.wasUsable = nil
-    self.hasItem = false
     self:SetEnabledState(false)
 end
 
@@ -753,35 +881,23 @@ function RN:OnEnable()
         self:ApplySettings()
     end)
 
-    -- Zone change: update gateway + cache saved encounters. ZONE_CHANGED_NEW_AREA
-    -- registered alongside PEW because PEW can fire before C_Map data is fully
-    -- populated on a fresh zone-in — ZCNA is the canonical "I've arrived"
-    -- signal and is required for Voidcore zone detection to work reliably.
-    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnZoneChange")
-    self:RegisterEvent("ZONE_CHANGED_NEW_AREA", "OnZoneChange")
-    self:RegisterEvent("CHALLENGE_MODE_START",  "OnChallengeModeStart")
-    self:RegisterEvent("BAG_UPDATE", "GatewayFullUpdate")
-    self:RegisterEvent("SPELL_UPDATE_USABLE", "GatewayCheckUsable")
-    self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnGroupChanged")
+    -- Initialize orchestrator state
+    self._subActive = {}
+    self._eventRefcount = {}
 
-    -- Reset Boss events
-    self:RegisterEvent("UNIT_AURA", "OnUnitAura")
-    self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnCombatStart")
-    self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnCombatEnd")
+    -- Register the 3 always-on lifecycle events to the orchestrator dispatcher.
+    -- Per-alert events get registered dynamically by _UpdateSubscriptions via
+    -- the refcount mechanism in _ApplySubscriptionDelta.
+    for event in pairs(MODULE_ALWAYS_ON_EVENTS) do
+        self:RegisterEvent(event, "_OnAlwaysOnEvent")
+    end
 
-    -- Loot Boss events
-    self:RegisterEvent("ENCOUNTER_END", "OnEncounterEnd")
-    self:RegisterEvent("LOOT_OPENED", "ClearLootBoss")
-    self:RegisterEvent("CHAT_MSG_MONEY", "ClearLootBoss")
-    self:RegisterEvent("ENCOUNTER_START", "ClearLootBoss")
-
-    -- Bench Alert: re-evaluate when raid leader switches difficulty mid-session
-    -- (PLAYER_ENTERING_WORLD + GROUP_ROSTER_UPDATE already routed via
-    -- OnZoneChange + OnGroupChanged above for the other lifecycle events).
-    self:RegisterEvent("PLAYER_DIFFICULTY_CHANGED", "CheckBench")
-
-    self:GatewayFullUpdate()
-    self:CheckBench()
+    -- Initial subscription eval. Deferred 1 frame so APIs return fresh data
+    -- after a /reload (same reason _OnAlwaysOnEvent defers).
+    C_Timer.After(0, function()
+        if not self:IsEnabled() then return end
+        self:_UpdateSubscriptions()
+    end)
 end
 
 function RN:OnThemeChanged()
@@ -799,17 +915,13 @@ end
 function RN:OnDisable()
     self:UnregisterAllEvents()
     self:HideAllAlerts()
-    self.wasUsable = nil
-    -- Clear isPreview so a future OnEnable starts from a known-good state.
-    -- Without this, a GUI-open disable→re-enable cycle could leave isPreview
-    -- stuck true, which would make CheckResetBoss + GatewayUpdateState +
-    -- OnEncounterEnd silently skip real-combat alerts (they all early-return
-    -- on `if self.isPreview then return end`).
+
+    -- Wipe orchestrator state so the next OnEnable rebuilds from zero
+    self._subActive = nil
+    self._eventRefcount = nil
+
+    -- Wipe legacy/alert state
     self.isPreview = false
-    self.hasItem = false
-    self.hasWarlockInGroup = false
-    self.isPreview = false
-    self._voidcoreSubscribed = false
     self._voidcoreKeyActive = false
     self.resetBossGen = self.resetBossGen + 1
     self.lootBossGen = self.lootBossGen + 1
