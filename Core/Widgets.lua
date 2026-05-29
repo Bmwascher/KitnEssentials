@@ -751,6 +751,10 @@ function KE:AddBorders(frame, color, borderParent)
         self._borderColor = { r, g, b, a or 1 }
         for _, tex in pairs(self.borders) do
             tex:SetColorTexture(r, g, b, a or 1)
+            -- SetColorTexture re-enables Blizzard's pixel-grid snap on the
+            -- texture; re-assert so recolored borders stay crisp. (Formerly
+            -- handled by the global TextureSnap hook — see Core/TextureSnap.lua.)
+            tex:SetSnapToPixelGrid(false)
         end
     end
 

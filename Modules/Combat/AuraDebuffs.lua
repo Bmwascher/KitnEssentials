@@ -673,12 +673,18 @@ end
 -- through here. SetColorTexture accepts secret-value arguments (the Color
 -- API surface explicitly supports "AllowedWhenTainted") so this works on
 -- encounter HARMFUL auras whose curve color is secret.
+-- SetColorTexture re-enables Blizzard's per-texture pixel-grid snap, so each
+-- recolor re-asserts SetSnapToPixelGrid(false) to keep the inner band crisp.
+-- (Formerly handled by the global TextureSnap metatable hook, removed because
+-- it billed the whole game's texture churn to KE — see Core/TextureSnap.lua.)
+-- SetSnapToPixelGrid is AllowedWhenUntainted and we pass a literal false (never
+-- a secret), so this stays taint-safe even when r,g,bc,a are secret curve values.
 local function ApplyBorderRGBA(b, r, g, bc, a)
     if not b.borders then return end
-    if b.borders.top    then b.borders.top:SetColorTexture(r, g, bc, a) end
-    if b.borders.bottom then b.borders.bottom:SetColorTexture(r, g, bc, a) end
-    if b.borders.left   then b.borders.left:SetColorTexture(r, g, bc, a) end
-    if b.borders.right  then b.borders.right:SetColorTexture(r, g, bc, a) end
+    if b.borders.top    then b.borders.top:SetColorTexture(r, g, bc, a);    b.borders.top:SetSnapToPixelGrid(false) end
+    if b.borders.bottom then b.borders.bottom:SetColorTexture(r, g, bc, a); b.borders.bottom:SetSnapToPixelGrid(false) end
+    if b.borders.left   then b.borders.left:SetColorTexture(r, g, bc, a);   b.borders.left:SetSnapToPixelGrid(false) end
+    if b.borders.right  then b.borders.right:SetColorTexture(r, g, bc, a);  b.borders.right:SetSnapToPixelGrid(false) end
 end
 
 -- Paint the border for a button. In "dispel" mode for a real aura we
