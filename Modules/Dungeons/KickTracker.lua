@@ -34,6 +34,7 @@ local string_find = string.find
 local string_format = string.format
 local math_floor = math.floor
 local math_abs = math.abs
+local math_max = math.max
 local pairs = pairs
 local ipairs = ipairs
 local wipe = wipe
@@ -490,7 +491,7 @@ function KT:CheckActivation()
         self.isActive = true
         self:RegisterCombatEvents()
         if self.containerFrame then
-            KE:ApplyActivePosition(self.containerFrame, self.db)
+            self:ApplyContainerPosition()
             self.containerFrame:Show()
         end
         self:RefreshPartyRoster()
@@ -803,6 +804,32 @@ function KT:UpdateBars()
     end
 end
 
+-- Self-point = growth-derived vertical edge + horizontal edge from the active
+-- position's AnchorFrom. Keeps the box/overlay aligned with the bars across a
+-- growth flip while honoring the user's left/center/right anchor choice.
+function KT:GetSelfPoint(pos)
+    local vertical = (self.db.GrowthDirection == "UP") and "BOTTOM" or "TOP"
+    local af = (pos and pos.AnchorFrom) or ""
+    local horizontal = af:find("LEFT") and "LEFT" or (af:find("RIGHT") and "RIGHT" or "")
+    return vertical .. horizontal
+end
+
+-- Position the container by its growth-derived self-point so the edit-mode
+-- overlay (which spans the full bar stack) stays aligned with the bars when
+-- growth flips. Resolves anchor manually (instead of KE:ApplyActivePosition)
+-- so the stored AnchorFrom — which holds the horizontal choice — is preserved.
+function KT:ApplyContainerPosition()
+    if not self.containerFrame then return end
+    local pos, aft, pf, strata = KE:GetActivePositionConfig(self.db)
+    local parent = KE:ResolveAnchorFrame(aft, pf)
+    self.containerFrame:SetParent(parent)
+    self.containerFrame:ClearAllPoints()
+    self.containerFrame:SetPoint(self:GetSelfPoint(pos), parent,
+        pos.AnchorTo or "CENTER", pos.XOffset or 0, pos.YOffset or 0)
+    self.containerFrame:SetFrameStrata(strata or "MEDIUM")
+    KE:SnapFrameToPixels(self.containerFrame)
+end
+
 function KT:LayoutBars()
     if not self.containerFrame then return end
     local db = self.db
@@ -858,26 +885,25 @@ function KT:LayoutBars()
     local spacing = db.BarSpacing or 2
     local barHeight = db.BarHeight or 20
 
-    -- 1x1 anchor point — bars stack outward using user's AnchorFrom
-    local anchorFrom = db.Position.AnchorFrom or "CENTER"
+    -- Bars pin to the container's self-point (growth vertical edge + user
+    -- horizontal edge) and stack inward, exactly filling the full-height container.
+    local selfPoint = self:GetSelfPoint(KE:GetActivePositionConfig(db))
     for i, entry in ipairs(self.sortedBars) do
         local bar = entry.bar
         if i <= maxBars then
             bar:ClearAllPoints()
             local offset = (i - 1) * (barHeight + spacing)
-            if growUp then
-                bar:SetPoint(anchorFrom, self.containerFrame, anchorFrom, 0, offset)
-            else
-                bar:SetPoint(anchorFrom, self.containerFrame, anchorFrom, 0, -offset)
-            end
+            bar:SetPoint(selfPoint, self.containerFrame, selfPoint, 0, growUp and offset or -offset)
             bar:Show()
         else
             bar:Hide()
         end
     end
 
-    -- Resize container to match first bar for EditMode overlay
-    self.containerFrame:SetSize(db.BarWidth, barHeight)
+    -- Size container to the full max-bar stack so the EditMode overlay spans the
+    -- whole group (not just one bar).
+    local n = db.MaxBars or 5
+    self.containerFrame:SetSize(db.BarWidth, barHeight * n + math_max(n - 1, 0) * spacing)
 end
 
 ---------------------------------------------------------------------------------
@@ -1014,7 +1040,7 @@ function KT:ShowPreview()
     self.isPreview = true
     self:HideAllBars()
 
-    KE:ApplyActivePosition(self.containerFrame, self.db)
+    self:ApplyContainerPosition()
 
     -- Create 5 mock bars: 3 ready + 2 cooling
     local previewData = {
@@ -1029,6 +1055,7 @@ function KT:ShowPreview()
     local growUp = db.GrowthDirection == "UP"
     local spacing = db.BarSpacing or 2
     local barHeight = db.BarHeight or 20
+    local previewSelfPoint = self:GetSelfPoint(KE:GetActivePositionConfig(db))
 
     for i, data in ipairs(previewData) do
         if i > (db.MaxBars or 5) then break end
@@ -1118,20 +1145,20 @@ function KT:ShowPreview()
         end
 
         bar:ClearAllPoints()
-        local anchorFrom = db.Position.AnchorFrom or "CENTER"
+        -- Pin to the container's self-point (matches LayoutBars) so preview bars
+        -- align with the full-height container and the edit-mode overlay.
         local offset = (i - 1) * (barHeight + spacing)
-        if growUp then
-            bar:SetPoint(anchorFrom, self.containerFrame, anchorFrom, 0, offset)
-        else
-            bar:SetPoint(anchorFrom, self.containerFrame, anchorFrom, 0, -offset)
-        end
+        bar:SetPoint(previewSelfPoint, self.containerFrame, previewSelfPoint, 0, growUp and offset or -offset)
         bar:Show()
 
         -- Store as preview bars (using guid-like keys)
         self.activeBars["preview_" .. i] = bar
     end
 
-    self.containerFrame:SetSize(db.BarWidth, db.BarHeight or 27)
+    -- Size container to the full max-bar stack so the EditMode overlay spans the
+    -- whole group (not just one bar).
+    local nPrev = db.MaxBars or 5
+    self.containerFrame:SetSize(db.BarWidth, barHeight * nPrev + math_max(nPrev - 1, 0) * spacing)
     self.containerFrame:Show()
     self:_RefreshOnUpdate()
 end
@@ -1170,7 +1197,12 @@ function KT:RegWithEditMode()
                 else
                     self.db.Position = pos
                 end
-                KE:ApplyActivePosition(self.containerFrame, self.db)
+                self:ApplyContainerPosition()
+            end,
+            -- Self-point = growth vertical edge + user horizontal edge, so drag +
+            -- overlay use the same fixed edge as the bars (aligned across a flip).
+            getAnchorFrom = function()
+                return self:GetSelfPoint(KE:GetActivePositionConfig(self.db))
             end,
             getParentFrame = function()
                 local _, aft, pf = KE:GetActivePositionConfig(self.db)
@@ -1243,7 +1275,7 @@ function KT:ApplySettings()
     self:UpdateDB()
     if not self.containerFrame then return end
 
-    KE:ApplyActivePosition(self.containerFrame, self.db)
+    self:ApplyContainerPosition()
 
     -- Re-apply visuals to all active bars
     for guid, bar in pairs(self.activeBars) do

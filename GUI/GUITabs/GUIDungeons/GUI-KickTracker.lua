@@ -115,6 +115,9 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
         title = "Position Settings",
         db = db,
         dbKeys = {
+            -- Anchor From sets horizontal alignment; its vertical component is
+            -- overridden by GrowthDirection so the bar stack and edit-mode
+            -- overlay stay aligned on a growth flip.
             selfPoint = "AnchorFrom",
             anchorPoint = "AnchorTo",
             xOffset = "XOffset",
@@ -182,6 +185,8 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
             title = "Healer Position",
             db = healerDb,
             dbKeys = {
+                -- Anchor From = horizontal alignment; vertical follows growth
+                -- (see main position card).
                 selfPoint = "AnchorFrom",
                 anchorPoint = "AnchorTo",
                 xOffset = "XOffset",

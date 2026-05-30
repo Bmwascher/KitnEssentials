@@ -36,6 +36,7 @@ local wipe = wipe
 local tinsert, tremove, tsort = table.insert, table.remove, table.sort
 local strmatch = string.match
 local mmin = math.min
+local mmax = math.max
 
 local FALLBACK_ICON = 136243
 local UPDATE_THROTTLE = 0.033
@@ -124,10 +125,31 @@ end
 -- Anchor Frame
 ---------------------------------------------------------------------------------
 
+-- The anchor frame spans the FULL max-bar stack so the edit-mode overlay covers
+-- the whole group. Its pinned VERTICAL edge follows growth (BOTTOM grow-up /
+-- TOP grow-down) so the box stays aligned with the bars when growth is flipped;
+-- the HORIZONTAL edge is preserved from the user's AnchorFrom so left/center/
+-- right alignment still works. Based on NUI's InterruptTracker model, extended
+-- to keep KES's horizontal anchor control.
+local function GetDCAnchorSize(frameDb)
+    local maxBars = frameDb.MaxBars or 5
+    local h = maxBars * frameDb.Height + mmax(maxBars - 1, 0) * frameDb.Spacing
+    return frameDb.Width, h
+end
+
+-- Self-point = growth-derived vertical edge + horizontal edge from AnchorFrom.
+-- e.g. grow-down + AnchorFrom "BOTTOMLEFT" -> "TOPLEFT"; grow-up + "TOP" -> "BOTTOM".
+local function GetDCSelfPoint(frameDb)
+    local vertical = (frameDb.GrowthDirection == "UP") and "BOTTOM" or "TOP"
+    local af = (frameDb.Position and frameDb.Position.AnchorFrom) or ""
+    local horizontal = af:find("LEFT") and "LEFT" or (af:find("RIGHT") and "RIGHT" or "")
+    return vertical .. horizontal
+end
+
 function DC:CreateAnchorFrame()
     if self.anchorFrame then return end
     local anchor = CreateFrame("Frame", "KE_DungeonCastsAnchor", UIParent)
-    anchor:SetSize(1, 1)
+    anchor:SetSize(GetDCAnchorSize(self.db.Frame))
     anchor:SetFrameStrata("HIGH")
     self.anchorFrame = anchor
     self:ApplyAnchorPosition()
@@ -141,7 +163,10 @@ function DC:ApplyAnchorPosition()
 
     self.anchorFrame:SetParent(parent)
     self.anchorFrame:ClearAllPoints()
-    self.anchorFrame:SetPoint(pos.AnchorFrom, parent, pos.AnchorTo, pos.XOffset, pos.YOffset)
+    self.anchorFrame:SetSize(GetDCAnchorSize(frameDb))
+    -- Pin the growth-derived vertical edge (+ user's horizontal edge) so the
+    -- box/overlay tracks growth flips while honoring left/center/right anchor.
+    self.anchorFrame:SetPoint(GetDCSelfPoint(frameDb), parent, pos.AnchorTo, pos.XOffset, pos.YOffset)
     self.anchorFrame:SetFrameStrata(frameDb.Strata)
 end
 
@@ -669,26 +694,24 @@ function DC:PositionAllBars()
     local spacing = frameDb.Spacing
     local growUp = frameDb.GrowthDirection == "UP"
     local maxBars = frameDb.MaxBars or 5
-    local anchorFrom = frameDb.Position.AnchorFrom or "CENTER"
+    local selfPoint = GetDCSelfPoint(frameDb)
 
-    -- 1x1 anchor point — bars stack outward from it using user's AnchorFrom
+    -- Bars pin to the anchor's self-point (growth vertical edge + user horizontal
+    -- edge) and stack inward, exactly filling the full-height anchor frame.
     for i, unit in ipairs(self.sortedUnits) do
         local bar = self.activeFrames[unit]
         if bar then
             if i <= maxBars then
                 bar:ClearAllPoints()
                 local offset = (i - 1) * (height + spacing)
-                if growUp then
-                    bar:SetPoint(anchorFrom, self.anchorFrame, anchorFrom, 0, offset)
-                else
-                    bar:SetPoint(anchorFrom, self.anchorFrame, anchorFrom, 0, -offset)
-                end
+                bar:SetPoint(selfPoint, self.anchorFrame, selfPoint, 0, growUp and offset or -offset)
             end
         end
     end
 
-    -- Resize anchor to match first bar for EditMode overlay
-    self.anchorFrame:SetSize(frameDb.Width, height)
+    -- Keep the anchor sized to the full max-bar stack so the EditMode overlay
+    -- spans the whole group (not just one bar).
+    self.anchorFrame:SetSize(GetDCAnchorSize(frameDb))
 end
 
 ---------------------------------------------------------------------------------
@@ -999,11 +1022,15 @@ function DC:OnEnable()
             getPosition = function() return self.db.Frame.Position end,
             setPosition = function(pos)
                 local p = self.db.Frame.Position
-                p.AnchorFrom = pos.AnchorFrom
                 p.AnchorTo = pos.AnchorTo
                 p.XOffset = pos.XOffset
                 p.YOffset = pos.YOffset
                 self:ApplyPosition()
+            end,
+            -- Self-point = growth vertical edge + user horizontal edge, so drag +
+            -- overlay use the same fixed edge as the bars (aligned across a flip).
+            getAnchorFrom = function()
+                return GetDCSelfPoint(self.db.Frame)
             end,
             getParentFrame = function()
                 return KE:ResolveAnchorFrame(self.db.Frame.anchorFrameType, self.db.Frame.ParentFrame)

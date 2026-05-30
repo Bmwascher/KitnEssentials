@@ -101,6 +101,9 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
         dbKeys = {
             anchorFrameType = "anchorFrameType",
             anchorFrameFrame = "ParentFrame",
+            -- Anchor From sets horizontal alignment (left/center/right); its
+            -- vertical component is overridden by GrowthDirection so the bar
+            -- stack and edit-mode overlay stay aligned on a growth flip.
             selfPoint = "AnchorFrom",
             anchorPoint = "AnchorTo",
             xOffset = "XOffset",
