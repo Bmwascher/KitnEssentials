@@ -2017,7 +2017,7 @@ function CP:OnEnable()
     -- IsAddOnLoaded stays false and this path is silent on later logins.
     if C_AddOns.IsAddOnLoaded("BetterCharacterPanel") then
         C_AddOns.DisableAddOn("BetterCharacterPanel")
-        KE:Print("BetterCharacterPanel disabled — all of its features and then some are now in KitnEssentials. |cffffff00/reload|r to apply.")
+        KE:Print("BetterCharacterPanel disabled - all of its features and then some are now in KitnEssentials. |cffffff00/reload|r to apply.")
     end
 
     HookCharacterPanel()

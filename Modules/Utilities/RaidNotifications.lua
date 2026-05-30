@@ -11,6 +11,8 @@ local KE = select(2, ...)
 if not KitnEssentials then return end
 
 ---@class RaidNotifications: AceModule, AceEvent-3.0
+---@field _subActive table? subscription-active map; nil between OnDisable and OnEnable
+---@field _eventRefcount table? per-event refcount map; nil between OnDisable and OnEnable
 local RN = KitnEssentials:NewModule("RaidNotifications", "AceEvent-3.0")
 
 local C_Item = C_Item
@@ -371,7 +373,7 @@ function RN:HideAlert(key)
 end
 
 function RN:HideAllAlerts()
-    for key, row in pairs(self.activeAlerts) do
+    for _, row in pairs(self.activeAlerts) do
         row:Hide()
         row.alertKey = nil
     end

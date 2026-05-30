@@ -16,8 +16,6 @@ local pairs = pairs
 local CreateFrame = CreateFrame
 
 local currentSubTab = "global"
-local cachedTabBar = nil
-local cachedTabButtons = nil
 local currentManager = nil
 
 local SUB_TABS = {
@@ -1134,8 +1132,6 @@ local function CreateActionBarsPanel(container)
     tabBarBorder:SetPoint("BOTTOMRIGHT", tabBar, "BOTTOMRIGHT", 0, 0)
     tabBarBorder:SetColorTexture(Theme.border[1], Theme.border[2], Theme.border[3], 1)
 
-    cachedTabBar = tabBar
-
     local scrollbarWidth = Theme.scrollbarWidth or 16
     local scrollFrame = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
     scrollFrame:SetPoint("TOPLEFT", tabBar, "BOTTOMLEFT", 0, -1)
@@ -1329,15 +1325,13 @@ local function CreateActionBarsPanel(container)
         btn:SetScript("OnClick", function(self)
             if currentSubTab ~= self.tabId then
                 currentSubTab = self.tabId
-                UpdateTabVisuals(cachedTabButtons, currentSubTab)
+                UpdateTabVisuals(tabButtons, currentSubTab)
                 RenderContentIntoScrollChild(currentSubTab)
             end
         end)
 
         table_insert(tabButtons, btn)
     end
-
-    cachedTabButtons = tabButtons
 
     local function LayoutTabs(barWidth)
         if barWidth <= 0 then return end

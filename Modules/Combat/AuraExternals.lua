@@ -262,7 +262,7 @@ local function CreateButton(parent, db)
     -- (CooldownFrameTemplate creates a single text region accessible via
     -- :GetRegions()). UpdateButtonAppearance re-applies font + position
     -- every Refresh.
-    local timer = cd:GetRegions()
+    local timer = cd:GetRegions() --[[@as FontString]]
     b.timer = timer
 
     local count = b:CreateFontString(nil, "OVERLAY")
