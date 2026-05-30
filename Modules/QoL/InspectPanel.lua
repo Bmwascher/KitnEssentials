@@ -22,7 +22,6 @@ local GetInspectSpecialization = GetInspectSpecialization
 local UnitGUID = UnitGUID
 local C_Timer = C_Timer
 local C_Item = C_Item
-local C_Map = C_Map
 local C_AddOns = C_AddOns
 local pairs, ipairs = pairs, ipairs
 local next = next
@@ -167,12 +166,14 @@ local function ResolveInspectSlot(button)
     if not button then return end
     local unit = InspectFrame and InspectFrame.unit
     if not unit then return end
-    -- Long-range inspect returns incomplete gear; skip only on a CONFIRMED
-    -- cross-map mismatch (both maps known and different). An unknown (nil) map
-    -- is not treated as a mismatch, so normal same-zone inspects still render.
-    local pm = C_Map.GetBestMapForUnit("player")
-    local um = C_Map.GetBestMapForUnit(unit)
-    if pm and um and pm ~= um then return end
+    -- No same-map guard: ElvUI and Blizzard render whatever the inspect packet
+    -- provides regardless of zone. A confirmed cross-map mismatch still happens
+    -- for legitimately-inspectable targets across sub-zone / micro-map
+    -- boundaries (buildings, caves), and blanking the whole overlay set there is
+    -- worse than an occasional incomplete slot. Partial data is handled
+    -- surgically downstream instead: the async keyed-queue (RequestInspectSlot ->
+    -- ITEM_DATA_LOAD_RESULT) retries unresolved items, and the gem-race grace
+    -- window suppresses false empty-socket cues until the packet hydrates.
 
     local slotID = button:GetID()
     if not slotID or slotID == 0 then return end
@@ -447,11 +448,10 @@ function InspectPanel:UpdateInspectItemLevel()
     if not self.CP.db.Enabled then return end
     local unit = InspectFrame and InspectFrame.unit
     if not unit then return end
-    -- Same cross-map guard as the slot overlays: long-range inspect returns
-    -- incomplete gear, so only render on a confirmed same-map (or unknown) target.
-    local pm = C_Map.GetBestMapForUnit("player")
-    local um = C_Map.GetBestMapForUnit(unit)
-    if pm and um and pm ~= um then return end
+    -- No same-map guard (see ResolveInspectSlot). GetInspectAverageItemLevel
+    -- self-gates on data readiness (returns nil until spec + all slot links
+    -- resolve), so incomplete cross-map data simply hides the average rather
+    -- than needing a blanket map check.
 
     local parent = _G.InspectPaperDollItemsFrame or InspectFrame
     if not parent then return end
