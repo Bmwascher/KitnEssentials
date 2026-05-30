@@ -379,13 +379,26 @@ function EditMode:Exit()
     if KE.PreviewManager then
         KE.PreviewManager:SetEditModeActive(false)
     end
-    -- Hide and destroy all overlays
+    -- Hide overlays but KEEP them pooled for reuse. Wiping the table here
+    -- would orphan one named frame per registered element on every open/close
+    -- cycle (WoW frames can't be destroyed); CreateOverlayForElement reuses
+    -- any overlay that already exists. Reset each to the unselected appearance
+    -- and cancel any in-flight shift-fade so a pooled overlay re-opens clean.
     for _, overlay in pairs(self.overlayFrames) do
         if overlay then
+            if overlay._fadeFrame then
+                overlay._fadeFrame:SetScript("OnUpdate", nil)
+            end
+            overlay:SetBackdropColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], FILL_ALPHA)
+            overlay:SetBackdropBorderColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+            if overlay.text then
+                overlay.text:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 0.2)
+                overlay.text:SetAlpha(1)
+            end
+            overlay:SetAlpha(1)
             overlay:Hide()
         end
     end
-    self.overlayFrames = {}
     self:RemoveEscapeHandler()
     self:RemoveShiftHandler()
     self:RemoveCombatHandler()
@@ -1168,28 +1181,7 @@ function EditMode:HideNudgeFrame()
     self.selectedElementKey = nil
 end
 
----------------------------------------------------------------------------------
--- Position Updates
----------------------------------------------------------------------------------
-
-function EditMode:StartPositionUpdates()
-    if self.updateFrame then return end
-
-    self.updateFrame = CreateFrame("Frame")
-    self.updateFrame:SetScript("OnUpdate", function()
-        if not self.isActive then return end
-
-        for _, overlay in pairs(self.overlayFrames) do
-            if overlay and not overlay.isDragging then
-                self:UpdateOverlayPosition(overlay)
-            end
-        end
-    end)
-end
-
-function EditMode:StopPositionUpdates()
-    if self.updateFrame then
-        self.updateFrame:SetScript("OnUpdate", nil)
-        self.updateFrame = nil
-    end
-end
+-- NOTE: A per-frame StartPositionUpdates/StopPositionUpdates driver used to
+-- live here but was dead code (never called) — overlays auto-track their target
+-- via SetAllPoints(targetFrame) in UpdateOverlayPosition, so no polling is
+-- needed. Removed to drop the unused OnUpdate path entirely.
