@@ -25,7 +25,9 @@ local math_floor = math.floor
 
 
 local SPELL_ID = 20484 -- Rebirth
-local UPDATE_INTERVAL = 0.1
+-- MM:SS display only changes ~1Hz; 0.5s polling is ample and matches the
+-- shared-brez reference (was 0.1 = 10Hz, 10x oversampled for a seconds clock).
+local UPDATE_INTERVAL = 0.5
 
 CR.frame = nil
 CR.lastUpdate = 0
@@ -33,6 +35,7 @@ CR.lastTimerText = ""
 CR.lastChargeText = ""
 CR.lastChargeColor = nil
 CR.isPreview = false
+CR._onUpdateActive = false
 
 local DEFAULT_CHARGE_AVAILABLE = { 0.3, 1, 0.3, 1 }
 local DEFAULT_CHARGE_UNAVAILABLE = { 1, 0.3, 0.3, 1 }
@@ -296,6 +299,8 @@ function CR:Update()
             self.lastChargeText = ""
             self.lastChargeColor = nil
         end
+        -- No live brez pool (or static preview): nothing to count down.
+        self:_SetOnUpdateActive(false)
         return
     end
 
@@ -352,6 +357,30 @@ function CR:Update()
         end
         self.frame.charge:SetTextColor(r, g, b, a)
     end
+
+    -- Detach-when-idle: keep the OnUpdate only while a cooldown is actively
+    -- counting down. Full charges / no active recharge = static display, so
+    -- detach; SPELL_UPDATE_CHARGES re-wakes us on the next brez consumption.
+    self:_SetOnUpdateActive(currentCd > 0)
+end
+
+-- Attach/detach the per-frame timer script. Mirrors CombatTimer's
+-- _SetOnUpdateActive / KickTracker's _RefreshOnUpdate: the OnUpdate exists
+-- only while there's a live countdown, instead of running all session.
+function CR:_SetOnUpdateActive(active)
+    if not self.frame then return end
+    if active then
+        if not self._onUpdateActive then
+            self._onUpdateActive = true
+            self.lastUpdate = 0
+            self.frame:SetScript("OnUpdate", function(_, elapsed)
+                self:OnUpdate(elapsed)
+            end)
+        end
+    elseif self._onUpdateActive then
+        self._onUpdateActive = false
+        self.frame:SetScript("OnUpdate", nil)
+    end
 end
 
 function CR:OnUpdate(elapsed)
@@ -373,6 +402,7 @@ function CR:ApplySettings()
     self:ApplyTextSettings()
 
     if not self.db.Enabled and not self.isPreview then
+        self:_SetOnUpdateActive(false)
         self.frame:Hide()
         return
     end
@@ -436,22 +466,9 @@ end
 function CR:OnCombatEvent()
     if not self.db.Enabled then return end
     if not self.frame then return end
-
-    -- Try to get charge data
-    local chargeTable = C_Spell.GetSpellCharges(SPELL_ID)
-
-    if chargeTable and chargeTable.currentCharges then
-        -- Charges available — show frame and ensure OnUpdate is running
-        if not self.frame:IsShown() then
-            self.frame:Show()
-        end
-        if not self.frame:GetScript("OnUpdate") then
-            self.frame:SetScript("OnUpdate", function(_, elapsed)
-                self:OnUpdate(elapsed)
-            end)
-        end
-        self:Update()
-    end
+    -- Update() self-manages show/hide and attaches the OnUpdate only when a
+    -- cooldown is actively counting down, so a single call covers every event.
+    self:Update()
 end
 
 ---------------------------------------------------------------------------------
@@ -469,10 +486,9 @@ function CR:OnEnable()
         self:ApplySettings()
     end)
 
-    -- Set up OnUpdate for timer tracking
-    self.frame:SetScript("OnUpdate", function(_, elapsed)
-        self:OnUpdate(elapsed)
-    end)
+    -- No unconditional OnUpdate: Update() attaches the timer script only while
+    -- a cooldown is counting down (see _SetOnUpdateActive). ApplySettings ->
+    -- Update does the first paint; the charge events below wake it thereafter.
 
     -- Register events to detect when battle res charges become available
     self:RegisterEvent("SPELL_UPDATE_CHARGES", "OnCombatEvent")
@@ -483,7 +499,7 @@ end
 
 function CR:OnDisable()
     if self.frame then
-        self.frame:SetScript("OnUpdate", nil)
+        self:_SetOnUpdateActive(false)
         self.frame:Hide()
     end
     self.isPreview = false
