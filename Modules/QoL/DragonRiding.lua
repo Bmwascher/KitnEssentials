@@ -259,8 +259,20 @@ local function UpdateSpeed(self)
 
     local isGliding, _, forwardSpeed = C_PlayerInfo.GetGlidingInfo()
     if isGliding then
-        pcall(speed.SetFormattedText, speed, "%d%%", forwardSpeed / BASE_MOVEMENT_SPEED * 100 + 0.5)
-    else
+        -- Dirty-check: the "%d%%" string only changes when the rounded
+        -- integer percent crosses a 1% boundary, so most 20Hz ticks would
+        -- re-render an identical string. Skip the FontString write when the
+        -- percent is unchanged. forwardSpeed is not a secret value while
+        -- skyriding (open-world, non-encounter), so the arithmetic +
+        -- comparison are taint-safe (same risk profile as the prior code,
+        -- which also evaluated this arithmetic outside the pcall).
+        local pct = math.floor(forwardSpeed / BASE_MOVEMENT_SPEED * 100 + 0.5)
+        if pct ~= self._lastSpeedPct then
+            self._lastSpeedPct = pct
+            pcall(speed.SetFormattedText, speed, "%d%%", pct)
+        end
+    elseif self._lastSpeedPct ~= nil then
+        self._lastSpeedPct = nil
         pcall(speed.SetText, speed, "")
     end
 
@@ -493,6 +505,9 @@ function DR:Refresh()
     self.speedText:SetFont(fontFile, fontSize, "OUTLINE")
     if self.isPreview then
         self.speedText:SetText("420%")
+        -- Preview writes the text directly (bypassing UpdateSpeed's cache);
+        -- invalidate so the first real-flight tick always re-renders.
+        self._lastSpeedPct = nil
     end
 end
 
