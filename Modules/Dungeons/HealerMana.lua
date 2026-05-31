@@ -1,10 +1,10 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  HealerMana.lua                                          ║
 -- ║  Module: Healer Mana Tracker                             ║
--- ║  Purpose: Displays healer mana. Dungeon Mode shows        ║
--- ║           the single party/M+ healer; Raid Mode shows   ║
--- ║           all raid healers, stacked.                    ║
--- ║  Note: Mode auto-switches on instance type.             ║
+-- ║  Purpose: Displays healer mana. Dungeon Mode shows       ║
+-- ║           the single party/M+ healer; Raid Mode          ║
+-- ║           shows all raid healers, stacked.               ║
+-- ║  Note: Mode auto-switches on instance type.              ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
