@@ -163,7 +163,7 @@ end
 -- Active position table. Split off = shared Position; split on + Raid Mode =
 -- RaidPosition. GUI preview overrides via previewContext.
 function HM:GetActivePosition()
-    if self.previewContext then
+    if self.isPreview and self.previewContext then
         return (self.previewContext == "RAID") and self.db.RaidPosition or self.db.Position
     end
     if self.db.SplitPositioning and self:GetMode() == "RAID" then
@@ -539,6 +539,9 @@ function HM:Refresh()
     wipe(self.healerFrames)
 
     if self.containerFrame then
+        if KE.EditMode and KE.EditMode.UnregisterElement then
+            KE.EditMode:UnregisterElement("HealerMana")
+        end
         self.containerFrame:Hide()
         self.containerFrame = nil
         self.editModeRegistered = false
@@ -569,11 +572,11 @@ function HM:RegWithEditMode()
             key = "HealerMana", displayName = "Healer Mana", frame = self.containerFrame,
             getPosition = function() return self:GetActivePosition() end,
             setPosition = function(pos)
-                local target = self:GetActivePosition()
-                target.AnchorFrom = pos.AnchorFrom
-                target.AnchorTo = pos.AnchorTo
-                target.XOffset = pos.XOffset
-                target.YOffset = pos.YOffset
+                if self.db.SplitPositioning and self:GetMode() == "RAID" then
+                    self.db.RaidPosition = pos
+                else
+                    self.db.Position = pos
+                end
                 self:ApplyContainerPosition()
             end,
             getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
