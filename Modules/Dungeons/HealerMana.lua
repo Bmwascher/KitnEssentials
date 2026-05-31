@@ -19,7 +19,7 @@ if not KitnEssentials then return end
 ---@field connected boolean
 
 ---@class HealerMana: AceModule, AceEvent-3.0, AceTimer-3.0
----@field currentHealer HealerSnapshot?
+---@field currentHealers HealerSnapshot[]
 local HM = KitnEssentials:NewModule("HealerMana", "AceEvent-3.0", "AceTimer-3.0")
 
 local DEBUG_HM = false
@@ -36,6 +36,10 @@ local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 local GetSpecializationInfoByID = GetSpecializationInfoByID
 local IsInRaid = IsInRaid
 local IsInGroup = IsInGroup
+local IsInInstance = IsInInstance
+local GetNumGroupMembers = GetNumGroupMembers
+local C_Timer = C_Timer
+local ipairs = ipairs
 local pairs = pairs
 local wipe = wipe
 
@@ -64,7 +68,9 @@ local HEALER_SPEC_ICONS = {
 HM.healerFrames = {}
 HM.containerFrame = nil
 HM.updateTimer = nil
-HM.currentHealer = nil
+HM.currentHealers = {}
+HM._lastMode = nil
+HM.previewContext = nil  -- "RAID" | "DUNGEON" | nil (set by GUI preview switch)
 HM.isPreview = false
 HM.libSpecCache = {}  -- [playerName] = specID, fed by LibSpec.RegisterGroup callback
 
@@ -139,6 +145,53 @@ end
 function HM:OnInitialize()
     self:UpdateDB()
     self:SetEnabledState(false)
+end
+
+---------------------------------------------------------------------------------
+-- Mode + Position resolution
+---------------------------------------------------------------------------------
+-- Instance-type driven: raid instance (+ EnableInRaid) = Raid Mode (all
+-- healers); everything else (party/M+ instance, open-world group, raid
+-- instance with EnableInRaid off) = Dungeon Mode (single healer).
+function HM:GetMode()
+    local _, instanceType = IsInInstance()
+    if instanceType == "raid" and self.db.EnableInRaid then
+        return "RAID"
+    end
+    return "DUNGEON"
+end
+
+-- Active position table. Split off = shared Position; split on + Raid Mode =
+-- RaidPosition. GUI preview overrides via previewContext.
+function HM:GetActivePosition()
+    if self.previewContext then
+        return (self.previewContext == "RAID") and self.db.RaidPosition or self.db.Position
+    end
+    if self.db.SplitPositioning and self:GetMode() == "RAID" then
+        return self.db.RaidPosition
+    end
+    return self.db.Position
+end
+
+-- Ported from NUI v4 (HealerMana.lua:123-139). Rewrites the container's
+-- vertical anchor edge so the stack grows away from a stable edge: DOWN pins
+-- the TOP, UP pins the BOTTOM. Horizontal component preserved.
+function HM:GetGrowAnchor(anchor)
+    anchor = anchor or "CENTER"
+    local growDown = self.db.GrowDirection == "DOWN"
+    local verticalTarget = growDown and "TOP" or "BOTTOM"
+    local verticalOpposite = growDown and "BOTTOM" or "TOP"
+    if anchor:find(verticalOpposite) then
+        return (anchor:gsub(verticalOpposite, verticalTarget))
+    elseif anchor:find(verticalTarget) then
+        return anchor
+    elseif anchor == "LEFT" then
+        return verticalTarget .. "LEFT"
+    elseif anchor == "RIGHT" then
+        return verticalTarget .. "RIGHT"
+    else
+        return verticalTarget
+    end
 end
 
 ---------------------------------------------------------------------------------
