@@ -690,21 +690,22 @@ function HM:ShowPreview()
     self.isPreview = true
     wipe(self.currentHealers)
     local previewCount = (self.previewContext == "RAID") and (self.db.MaxHealers or 6) or 1
+    -- Sample healer specs (drive only the icon/class color in the preview).
+    -- Names are generic "Healer N" per AE; only the spec/class is read here.
     local CANNED = {
-        { name = "Healer",   specID = 257,  class = "PRIEST" },  -- Holy Priest
-        { name = "Resto",    specID = 105,  class = "DRUID" },
-        { name = "Mistweav", specID = 270,  class = "MONK" },
-        { name = "HolyPal",  specID = 65,   class = "PALADIN" },
-        { name = "RShaman",  specID = 264,  class = "SHAMAN" },
-        { name = "Pres",     specID = 1468, class = "EVOKER" },
+        { specID = 257,  class = "PRIEST" },   -- Holy Priest
+        { specID = 105,  class = "DRUID" },    -- Restoration
+        { specID = 270,  class = "MONK" },     -- Mistweaver
+        { specID = 65,   class = "PALADIN" },  -- Holy
+        { specID = 264,  class = "SHAMAN" },   -- Restoration
+        { specID = 1468, class = "EVOKER" },   -- Preservation
     }
     for i = 1, previewCount do
         local c = CANNED[((i - 1) % #CANNED) + 1]
         -- Top row uses the real player name (mirrors AE HealerMana:466) so the
-        -- preview feels personal; keeps the canned spec/icon. GetNicknameOrName
-        -- honors a set nickname (own name is never secret), falling back to
-        -- UnitName. Remaining rows keep their canned sample names.
-        local name = (i == 1) and KE:GetNicknameOrName("player") or c.name
+        -- preview feels personal; the rest are generic "Healer N" sample rows.
+        -- GetNicknameOrName honors a nickname (own name is never secret).
+        local name = (i == 1) and KE:GetNicknameOrName("player") or ("Healer " .. i)
         self.currentHealers[i] = {
             unit = "player",
             name = name,
