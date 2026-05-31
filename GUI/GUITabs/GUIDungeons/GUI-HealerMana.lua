@@ -70,7 +70,14 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
         msgOn = "On",
         msgOff = "Off",
     })
-    row1:AddWidget(enableCheck, 1)
+    row1:AddWidget(enableCheck, 0.5)
+
+    local enableRaidCheck = GUIFrame:CreateCheckbox(row1, "Enable in Raid", {
+        value = db.EnableInRaid ~= false,
+        callback = function(checked) db.EnableInRaid = checked; ApplySettings() end,
+    })
+    row1:AddWidget(enableRaidCheck, 0.5)
+    manager:Register(enableRaidCheck, "all")
     card1:AddRow(row1, Theme.rowHeightLast, 0)
 
     yOffset = card1:GetNextOffset()
@@ -122,6 +129,45 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
     cardAppearance:AddRow(rowAppearance2, Theme.rowHeightLast, 0)
 
     yOffset = cardAppearance:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card: Raid Mode (stacking)
+    ----------------------------------------------------------------
+    local cardRaid = GUIFrame:CreateCard(scrollChild, "Raid Mode", yOffset)
+    manager:Register(cardRaid, "all")
+
+    local rowRaid1 = GUIFrame:CreateRow(cardRaid.content, Theme.rowHeight)
+    local maxHealersSlider = GUIFrame:CreateSlider(rowRaid1, "Max Healers", {
+        min = 1, max = 8, step = 1,
+        value = db.MaxHealers or 6,
+        callback = function(value) db.MaxHealers = value; Refresh() end,
+    })
+    rowRaid1:AddWidget(maxHealersSlider, 0.5)
+    manager:Register(maxHealersSlider, "all")
+
+    local growDropdown = GUIFrame:CreateDropdown(rowRaid1, "Grow Direction", {
+        options = {
+            { key = "DOWN", text = "Down" },
+            { key = "UP",   text = "Up" },
+        },
+        value = db.GrowDirection or "DOWN",
+        callback = function(key) db.GrowDirection = key; Refresh() end,
+    })
+    rowRaid1:AddWidget(growDropdown, 0.5)
+    manager:Register(growDropdown, "all")
+    cardRaid:AddRow(rowRaid1, Theme.rowHeight)
+
+    local rowRaid2 = GUIFrame:CreateRow(cardRaid.content, Theme.rowHeightLast)
+    local spacingSlider = GUIFrame:CreateSlider(rowRaid2, "Frame Spacing", {
+        min = 0, max = 20, step = 1,
+        value = db.FrameSpacing or 4,
+        callback = function(value) db.FrameSpacing = value; Refresh() end,
+    })
+    rowRaid2:AddWidget(spacingSlider, 1)
+    manager:Register(spacingSlider, "all")
+    cardRaid:AddRow(rowRaid2, Theme.rowHeightLast, 0)
+
+    yOffset = cardRaid:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 3: Position Settings
