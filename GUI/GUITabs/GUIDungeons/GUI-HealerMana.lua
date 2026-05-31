@@ -99,6 +99,7 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
                 if mod then
                     mod.previewContext = "DUNGEON"
                     if mod.isPreview then mod:ShowPreview() end
+                    if mod.RefreshEditMode then mod:RefreshEditMode() end
                 end
             end
             ApplySettings()
@@ -123,12 +124,24 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
             if mod then
                 mod.previewContext = key
                 if mod.isPreview then mod:ShowPreview() end
+                if mod.RefreshEditMode then mod:RefreshEditMode() end
             end
         end,
     })
     rowPosMode:AddWidget(configureForDropdown, 0.5)
     manager:Register(configureForDropdown, "splitConfig")  -- greyed when split off
-    cardPosMode:AddRow(rowPosMode, Theme.rowHeightLast, 0)
+    cardPosMode:AddRow(rowPosMode, Theme.rowHeight)
+
+    -- Clarify the scope of these controls: they only affect Position Settings,
+    -- not Appearance / Raid Mode / Font (those are shared across both modes).
+    local posModeNoteRow = GUIFrame:CreateRow(cardPosMode.content, 50)
+    local posModeNote = GUIFrame:CreateText(posModeNoteRow,
+        KE:ColorTextByTheme("Note"),
+        "These controls only affect the Position Settings below. Appearance, " ..
+        "Raid Mode, and Font settings are shared between Dungeon and Raid.",
+        50, "hide")
+    posModeNoteRow:AddWidget(posModeNote, 1)
+    cardPosMode:AddRow(posModeNoteRow, 50, 0)
     yOffset = cardPosMode:GetNextOffset()
 
     ----------------------------------------------------------------

@@ -162,16 +162,35 @@ function HM:GetMode()
     return "DUNGEON"
 end
 
--- Active position table. Split off = shared Position; split on + Raid Mode =
--- RaidPosition. GUI preview overrides via previewContext.
-function HM:GetActivePosition()
+-- Which DB position table is live right now. Single source of truth so the
+-- reader (GetActivePosition / EditMode getPosition) and the writer (EditMode
+-- setPosition) never disagree. Split off = shared "Position"; split on + Raid
+-- Mode (or a Raid GUI preview) = "RaidPosition".
+function HM:GetActivePositionKey()
+    if not self.db then return "Position" end
     if self.isPreview and self.previewContext and self.db.SplitPositioning then
-        return (self.previewContext == "RAID") and self.db.RaidPosition or self.db.Position
+        return (self.previewContext == "RAID") and "RaidPosition" or "Position"
     end
     if self.db.SplitPositioning and self:GetMode() == "RAID" then
-        return self.db.RaidPosition
+        return "RaidPosition"
     end
-    return self.db.Position
+    return "Position"
+end
+
+-- Active position table, resolved via GetActivePositionKey.
+function HM:GetActivePosition()
+    if not self.db then return nil end
+    return self.db[self:GetActivePositionKey()] or self.db.Position
+end
+
+-- EditMode overlay label. When split is on, name the mode being edited so the
+-- overlay makes it obvious which position table a drag will write to.
+function HM:GetEditModeLabel()
+    if self.db and self.db.SplitPositioning then
+        return (self:GetActivePositionKey() == "RaidPosition")
+            and "Healer Mana (Raid)" or "Healer Mana (Dungeon)"
+    end
+    return "Healer Mana"
 end
 
 -- Ported from NUI v4 (HealerMana.lua:123-139). Rewrites the container's
@@ -382,6 +401,7 @@ function HM:FindHealers()
     if mode ~= self._lastMode then
         self._lastMode = mode
         for _, frame in pairs(self.healerFrames) do frame:Hide() end
+        self:RefreshEditMode()  -- keep the overlay label in sync if mode flipped
     end
 
     -- DisableOnHealer only suppresses Dungeon Mode (Raid shows you as a healer).
@@ -576,14 +596,11 @@ end
 function HM:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered and self.containerFrame then
         KE.EditMode:RegisterElement({
-            key = "HealerMana", displayName = "Healer Mana", frame = self.containerFrame,
+            key = "HealerMana", displayName = self:GetEditModeLabel(), frame = self.containerFrame,
             getPosition = function() return self:GetActivePosition() end,
             setPosition = function(pos)
-                if self.db.SplitPositioning and self:GetMode() == "RAID" then
-                    self.db.RaidPosition = pos
-                else
-                    self.db.Position = pos
-                end
+                -- Write to the SAME table getPosition reads (no get/set drift).
+                self.db[self:GetActivePositionKey()] = pos
                 self:ApplyContainerPosition()
             end,
             getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
@@ -591,6 +608,17 @@ function HM:RegWithEditMode()
         })
         self.editModeRegistered = true
     end
+end
+
+-- Re-register so the overlay label reflects the current mode/context. Cheap and
+-- only meaningful when split is on (label is constant otherwise). Called when
+-- the GUI Configure For dropdown changes or the live mode crosses a boundary.
+function HM:RefreshEditMode()
+    if not (KE.EditMode and self.containerFrame) then return end
+    if not (self.db and self.db.SplitPositioning) then return end
+    if KE.EditMode.UnregisterElement then KE.EditMode:UnregisterElement("HealerMana") end
+    self.editModeRegistered = false
+    self:RegWithEditMode()
 end
 
 ---------------------------------------------------------------------------------
