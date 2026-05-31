@@ -9,8 +9,9 @@
 -- ║                                                          ║
 -- ║  Factory builds the maximal widget set ONCE. Configure   ║
 -- ║  shows/hides per-config (showAnchorFrameType / strata /  ║
--- ║  pixelSnap), swaps closure slots (_db, _keys, _onChange) ║
--- ║  read by factory-bound callbacks, and recomputes height. ║
+-- ║  pixelSnap), swaps closure slots (_db, _keys, _onChange, ║
+-- ║  _positionKey) read by factory-bound callbacks, and      ║
+-- ║  recomputes height.                                      ║
 -- ║  ReleaseAll fires from contentRebuildCallbacks on every  ║
 -- ║  GUIFrame:RefreshContent so the pool reclaims kits       ║
 -- ║  before ClearContent's SetParent(nil) loop orphans them. ║
@@ -227,6 +228,12 @@ local function kitGetValue(kit, key, default)
     return default
 end
 
+-- NOTE: when a consumer passes config.positionKey for a sub-table (e.g.
+-- "RaidPosition"), that sub-table MUST be seeded in the DB (via AceDB
+-- defaults) before the card renders. If db[posKey] is nil, position writes
+-- silently fall back to the db root, which can clobber unrelated root keys.
+-- Root keys (anchorFrameType/ParentFrame/Strata) are unaffected — they always
+-- live at the db root regardless of positionKey.
 local function kitSetValue(kit, key, val)
     local db = kit._db
     local rootKeys = kit._rootKeys
