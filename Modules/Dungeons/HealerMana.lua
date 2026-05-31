@@ -267,19 +267,56 @@ function HM:CreateContainer()
     frame:SetSize(self.db.FrameWidth, self.db.IconSize)
     frame:SetFrameStrata(self.db.Strata or "HIGH")
 
-    KE:ApplyFramePosition(frame, self.db.Position, self.db)
-
     self.containerFrame = frame
+    self:ApplyContainerPosition()
     return frame
 end
 
-function HM:PositionFrame()
-    local frame = self.healerFrames[1]
-    if frame then
-        frame:ClearAllPoints()
-        frame:SetPoint("TOPLEFT", self.containerFrame, "TOPLEFT", 0, 0)
+-- Container height = stacked icons + gaps. Single healer (Dungeon) = one icon.
+function HM:UpdateContainerSize()
+    if not self.containerFrame then return end
+    local count = #self.currentHealers
+    if count == 0 then
+        self.containerFrame:SetSize(self.db.FrameWidth, self.db.IconSize)
+        return
     end
-    self.containerFrame:SetSize(self.db.FrameWidth, self.db.IconSize)
+    local totalHeight = (self.db.IconSize * count) + (self.db.FrameSpacing * (count - 1))
+    self.containerFrame:SetSize(self.db.FrameWidth, totalHeight)
+end
+
+-- Stack each healer frame within the container per GrowDirection.
+function HM:PositionFrames()
+    local growDown = self.db.GrowDirection == "DOWN"
+    local spacing = self.db.FrameSpacing
+    local iconSize = self.db.IconSize
+    for i = 1, #self.currentHealers do
+        local frame = self.healerFrames[i]
+        if frame then
+            frame:ClearAllPoints()
+            local yOffset = (i - 1) * (iconSize + spacing)
+            if growDown then
+                frame:SetPoint("TOPLEFT", self.containerFrame, "TOPLEFT", 0, -yOffset)
+            else
+                frame:SetPoint("BOTTOMLEFT", self.containerFrame, "BOTTOMLEFT", 0, yOffset)
+            end
+        end
+    end
+end
+
+-- Position the container via the active position table, with the grow-adjusted
+-- anchor edge. Adjustment is display-only (not persisted). Uses KE's pixel-
+-- perfect ApplyFramePosition (snaps the container once; children use integer
+-- offsets so no per-child re-snap, avoiding the 2026-05-27 buggy-grid issue).
+function HM:ApplyContainerPosition()
+    if not self.containerFrame then return end
+    local pos = self:GetActivePosition()
+    local adjusted = {
+        AnchorFrom = self:GetGrowAnchor(pos.AnchorFrom),
+        AnchorTo = pos.AnchorTo,
+        XOffset = pos.XOffset,
+        YOffset = pos.YOffset,
+    }
+    KE:ApplyFramePosition(self.containerFrame, adjusted, self.db)
 end
 
 -- Centralized "no live healer" state. Used by FindHealer's early-return
