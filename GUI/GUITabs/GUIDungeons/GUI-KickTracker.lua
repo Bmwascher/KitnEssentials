@@ -107,6 +107,14 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     -- Default. guiConfigContext is a transient module field (not saved) so it
     -- survives the page rebuild a context switch triggers. (KT module ref from
     -- the top of this function.)
+    -- First open after /reload: default the edited context to the player's
+    -- live-active context so the card matches the spec-driven preview — a healer
+    -- main lands on Healer, not Default (the old two-card UI did this by greying
+    -- the default card for live healers).
+    if KT and KT.guiConfigContext == nil then
+        KT.guiConfigContext = (db.UseHealerPosition and KE.IsPlayerHealerSpec and KE:IsPlayerHealerSpec())
+            and "HEALER" or "DEFAULT"
+    end
     local isHealerCtx = db.UseHealerPosition and KT and KT.guiConfigContext == "HEALER" or false
     if KT then KT.previewContext = isHealerCtx and "HEALER" or "DEFAULT" end
 

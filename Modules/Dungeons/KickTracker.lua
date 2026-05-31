@@ -823,8 +823,14 @@ end
 function KT:GetActiveContext()
     local db = self.db
     if not db then return "DEFAULT" end
-    if self.isPreview and self.previewContext and db.UseHealerPosition then
-        return self.previewContext
+    -- GUI-driven preview honors the configured context. previewContext mirrors
+    -- the dropdown; guiConfigContext is the persistent fallback because the
+    -- PreviewManager can re-fire ShowPreview on section re-entry (after
+    -- HidePreview cleared previewContext) before the page rebuilds. Only
+    -- consulted while previewing — live play always uses live spec below.
+    if self.isPreview and db.UseHealerPosition then
+        local ctx = self.previewContext or self.guiConfigContext
+        if ctx then return ctx end
     end
     if db.UseHealerPosition and KE:IsPlayerHealerSpec() then
         return "HEALER"
@@ -851,7 +857,9 @@ end
 -- when healer override is on (label is constant otherwise).
 function KT:RefreshEditMode()
     if not (KE.EditMode and self.containerFrame) then return end
-    if not (self.db and self.db.UseHealerPosition) then return end
+    -- Re-register so the overlay label (GetEditModeLabel) reflects the current
+    -- context — including reverting to plain "Interrupt Tracker" when the
+    -- override is toggled off (don't early-out on UseHealerPosition here).
     if KE.EditMode.UnregisterElement then KE.EditMode:UnregisterElement("KickTracker") end
     self.editModeRegistered = false
     self:RegWithEditMode()
