@@ -1233,6 +1233,8 @@ local Defaults = {
                 FrameSpacing = 4,           -- px gap between stacked frames
                 SplitPositioning = false,   -- off = both modes share Position
                 RaidPosition = DefaultPosition(-400, 200),
+                RaidAnchorFrameType = "UIPARENT",  -- Raid's own Anchored To (Dungeon uses anchorFrameType)
+                RaidParentFrame = "UIParent",
                 FrameWidth = 120,
                 IconSize = 24,
                 IconType = "spec",

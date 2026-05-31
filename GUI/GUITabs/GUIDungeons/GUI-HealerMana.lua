@@ -78,10 +78,23 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 2: Position Mode (split toggle + configure-for context)
     ----------------------------------------------------------------
-    -- Forward declarations so the toggle/dropdown callbacks can reference
-    -- each other and the position card (all assigned before user interaction).
-    local posCard, posOffset
-    local configureForDropdown
+    -- Which context the Position Settings card edits this render. Only "RAID"
+    -- when split is on AND the module remembers Raid was selected; otherwise
+    -- Dungeon. guiConfigContext is a transient module field (not saved) so it
+    -- survives the page rebuild a context switch triggers.
+    local activeMod = GetModule()
+    local isRaidCtx = db.SplitPositioning and activeMod and activeMod.guiConfigContext == "RAID" or false
+    if activeMod then activeMod.previewContext = isRaidCtx and "RAID" or "DUNGEON" end
+
+    -- Per-context Anchored To lives in distinct root DB keys so Dungeon and
+    -- Raid can anchor to different frames. Strata stays a shared root key.
+    -- Switching context rebuilds the page (same path Anchored To changes use)
+    -- so row layout reflows correctly — no in-place resize needed.
+    local function RebuildPage()
+        if GUIFrame.RefreshContent then
+            C_Timer.After(0, function() GUIFrame:RefreshContent() end)
+        end
+    end
 
     local cardPosMode = GUIFrame:CreateCard(scrollChild, "Position Mode", yOffset)
     manager:Register(cardPosMode, "all")
@@ -91,41 +104,38 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
         value = db.SplitPositioning == true,
         callback = function(checked)
             db.SplitPositioning = checked
-            if not checked then
-                -- Collapse back to the single (Dungeon) context.
-                if configureForDropdown then configureForDropdown:SetValue("DUNGEON", true) end
-                if posCard and posCard.SetActiveContext then posCard:SetActiveContext("Position") end
-                local mod = GetModule()
-                if mod then
-                    mod.previewContext = "DUNGEON"
-                    if mod.isPreview then mod:ShowPreview() end
-                    if mod.RefreshEditMode then mod:RefreshEditMode() end
-                end
+            local mod = GetModule()
+            if mod then
+                if not checked then mod.guiConfigContext = "DUNGEON" end
+                mod.previewContext = (checked and mod.guiConfigContext == "RAID") and "RAID" or "DUNGEON"
+                if mod.isPreview then mod:ShowPreview() end
+                if mod.RefreshEditMode then mod:RefreshEditMode() end
             end
             ApplySettings()
-            RefreshStates()  -- grey/ungrey the Configure For dropdown
+            RebuildPage()  -- rebuild so Position Settings reflects split on/off
         end,
     })
     rowPosMode:AddWidget(splitToggle, 0.5)
     manager:Register(splitToggle, "all")
 
-    -- Configure For: switches which position table the card below edits, and
-    -- moves the preview to that mode so you see what you're editing.
-    configureForDropdown = GUIFrame:CreateDropdown(rowPosMode, "Configure For", {
+    -- Configure For: chooses which context (Dungeon/Raid) the card below edits.
+    -- Rebuilds the page so the card shows that context's anchor/offset values,
+    -- and moves the preview to that mode.
+    local configureForDropdown = GUIFrame:CreateDropdown(rowPosMode, "Configure For", {
         options = {
             { key = "DUNGEON", text = "Dungeon" },
             { key = "RAID",    text = "Raid" },
         },
-        value = "DUNGEON",
+        value = isRaidCtx and "RAID" or "DUNGEON",
         callback = function(key)
-            local positionKey = (key == "RAID") and "RaidPosition" or "Position"
-            if posCard and posCard.SetActiveContext then posCard:SetActiveContext(positionKey) end
             local mod = GetModule()
             if mod then
+                mod.guiConfigContext = key
                 mod.previewContext = key
                 if mod.isPreview then mod:ShowPreview() end
                 if mod.RefreshEditMode then mod:RefreshEditMode() end
             end
+            RebuildPage()
         end,
     })
     rowPosMode:AddWidget(configureForDropdown, 0.5)
@@ -145,15 +155,20 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
     yOffset = cardPosMode:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 3: Position Settings (single, full; context-driven by the dropdown)
+    -- Card 3: Position Settings (context-driven: Dungeon vs Raid keys)
     ----------------------------------------------------------------
-    posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        title = "Position Settings",
+    local posTitle = "Position Settings"
+    if db.SplitPositioning then
+        posTitle = isRaidCtx and "Position Settings — Raid" or "Position Settings — Dungeon"
+    end
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        title = posTitle,
         db = db,
-        positionKey = "Position",
+        positionKey = isRaidCtx and "RaidPosition" or "Position",
         dbKeys = {
-            anchorFrameType = "anchorFrameType",
-            anchorFrameFrame = "ParentFrame",
+            -- Anchored To: separate root keys per context. Strata: shared.
+            anchorFrameType = isRaidCtx and "RaidAnchorFrameType" or "anchorFrameType",
+            anchorFrameFrame = isRaidCtx and "RaidParentFrame" or "ParentFrame",
             selfPoint = "AnchorFrom",
             anchorPoint = "AnchorTo",
             xOffset = "XOffset",

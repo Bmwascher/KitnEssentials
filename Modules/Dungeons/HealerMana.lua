@@ -71,6 +71,7 @@ HM.updateTimer = nil
 HM.currentHealers = {}
 HM._lastMode = nil
 HM.previewContext = nil  -- "RAID" | "DUNGEON" | nil (set by GUI preview switch)
+HM.guiConfigContext = nil  -- "RAID" | "DUNGEON" | nil (which context the GUI edits)
 HM.isPreview = false
 HM.libSpecCache = {}  -- [playerName] = specID, fed by LibSpec.RegisterGroup callback
 
@@ -181,6 +182,22 @@ end
 function HM:GetActivePosition()
     if not self.db then return nil end
     return self.db[self:GetActivePositionKey()] or self.db.Position
+end
+
+-- Anchor config (anchorFrameType / ParentFrame) for the active context. Raid
+-- has its own root keys so it can anchor to a different frame than Dungeon;
+-- Strata is shared. Returns a table shaped for KE:ApplyFramePosition's Config
+-- arg. Dungeon returns self.db directly (its keys live at the root).
+function HM:GetActiveAnchorConfig()
+    if not self.db then return {} end
+    if self:GetActivePositionKey() == "RaidPosition" then
+        return {
+            anchorFrameType = self.db.RaidAnchorFrameType,
+            ParentFrame = self.db.RaidParentFrame,
+            Strata = self.db.Strata,
+        }
+    end
+    return self.db
 end
 
 -- EditMode overlay label. When split is on, name the mode being edited so the
@@ -347,7 +364,7 @@ function HM:ApplyContainerPosition()
         XOffset = pos.XOffset,
         YOffset = pos.YOffset,
     }
-    KE:ApplyFramePosition(self.containerFrame, adjusted, self.db)
+    KE:ApplyFramePosition(self.containerFrame, adjusted, self:GetActiveAnchorConfig())
 end
 
 -- Centralized "no live healers" state. Idempotent. Does NOT wipe healerFrames
@@ -609,7 +626,10 @@ function HM:RegWithEditMode()
                 self.db[self:GetActivePositionKey()] = pos
                 self:ApplyContainerPosition()
             end,
-            getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
+            getParentFrame = function()
+                local cfg = self:GetActiveAnchorConfig()
+                return KE:ResolveAnchorFrame(cfg.anchorFrameType, cfg.ParentFrame)
+            end,
             guiPath = "HealerMana",
         })
         self.editModeRegistered = true
