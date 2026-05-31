@@ -217,8 +217,12 @@ end
 ---------------------------------------------------------------------------------
 -- Frame Creation
 ---------------------------------------------------------------------------------
-function HM:CreateHealerFrame(index)
-    local frame = CreateFrame("Frame", "KE_HealerMana_" .. index, self.containerFrame)
+function HM:CreateHealerFrame()
+    -- Anonymous (nil name): Refresh() recreates these per font/outline rebuild;
+    -- a global name would silently clobber the prior frame's _G slot and orphan
+    -- it. Nothing references these by name (the container holds them as children
+    -- and EditMode anchors via frame reference, not name).
+    local frame = CreateFrame("Frame", nil, self.containerFrame)
     frame:SetSize(self.db.FrameWidth, self.db.IconSize)
 
     -- Icon (standard KE: AddIconBorders + ApplyIconZoom from Core/Widgets.lua)
@@ -258,7 +262,7 @@ end
 
 function HM:GetHealerFrame(index)
     if not self.healerFrames[index] then
-        self.healerFrames[index] = self:CreateHealerFrame(index)
+        self.healerFrames[index] = self:CreateHealerFrame()
     end
     return self.healerFrames[index]
 end
@@ -283,7 +287,9 @@ end
 function HM:CreateContainer()
     if self.containerFrame then return self.containerFrame end
 
-    local frame = CreateFrame("Frame", "KE_HealerMana_Container", UIParent)
+    -- Anonymous: Refresh() nils + recreates the container; a fixed global name
+    -- would clobber/orphan the prior one. EditMode tracks it by frame reference.
+    local frame = CreateFrame("Frame", nil, UIParent)
     frame:SetSize(self.db.FrameWidth, self.db.IconSize)
     frame:SetFrameStrata(self.db.Strata or "HIGH")
 
