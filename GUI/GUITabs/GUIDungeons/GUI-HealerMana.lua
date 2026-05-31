@@ -204,7 +204,7 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
         end,
     })
     rowPosMode:AddWidget(previewCtxDropdown, 0.5)
-    manager:Register(previewCtxDropdown, "all")
+    manager:Register(previewCtxDropdown, "splitRaid")
     cardPosMode:AddRow(rowPosMode, Theme.rowHeightLast, 0)
 
     yOffset = cardPosMode:GetNextOffset()

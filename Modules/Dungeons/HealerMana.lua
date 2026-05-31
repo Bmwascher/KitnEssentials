@@ -163,7 +163,7 @@ end
 -- Active position table. Split off = shared Position; split on + Raid Mode =
 -- RaidPosition. GUI preview overrides via previewContext.
 function HM:GetActivePosition()
-    if self.isPreview and self.previewContext then
+    if self.isPreview and self.previewContext and self.db.SplitPositioning then
         return (self.previewContext == "RAID") and self.db.RaidPosition or self.db.Position
     end
     if self.db.SplitPositioning and self:GetMode() == "RAID" then
