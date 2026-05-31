@@ -170,10 +170,52 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
     yOffset = cardRaid:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 3: Position Settings
+    -- Card: Position Mode (split toggle + preview context)
+    ----------------------------------------------------------------
+    local cardPosMode = GUIFrame:CreateCard(scrollChild, "Position Mode", yOffset)
+    manager:Register(cardPosMode, "all")
+
+    local rowPosMode = GUIFrame:CreateRow(cardPosMode.content, Theme.rowHeightLast)
+    local splitToggle = GUIFrame:CreateCheckbox(rowPosMode, "Split Dungeon/Raid Positions", {
+        value = db.SplitPositioning == true,
+        callback = function(checked)
+            db.SplitPositioning = checked
+            ApplySettings()
+            RefreshStates()  -- re-evaluate the Raid Position card condition
+        end,
+    })
+    rowPosMode:AddWidget(splitToggle, 0.5)
+    manager:Register(splitToggle, "all")
+
+    -- Preview context: lets the user position each mode without being in that
+    -- instance type. Not persisted; drives the module's preview only.
+    local previewCtxDropdown = GUIFrame:CreateDropdown(rowPosMode, "Preview Context", {
+        options = {
+            { key = "DUNGEON", text = "Dungeon" },
+            { key = "RAID",    text = "Raid" },
+        },
+        value = "DUNGEON",
+        callback = function(key)
+            local mod = GetModule()
+            if mod then
+                mod.previewContext = key
+                if mod.isPreview then mod:ShowPreview() end
+            end
+        end,
+    })
+    rowPosMode:AddWidget(previewCtxDropdown, 0.5)
+    manager:Register(previewCtxDropdown, "all")
+    cardPosMode:AddRow(rowPosMode, Theme.rowHeightLast, 0)
+
+    yOffset = cardPosMode:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 3: Position Settings (Dungeon Position)
     ----------------------------------------------------------------
     local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        title = "Dungeon Position",
         db = db,
+        positionKey = "Position",
         dbKeys = {
             anchorFrameType = "anchorFrameType",
             anchorFrameFrame = "ParentFrame",
@@ -193,6 +235,34 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
     end
     manager:Register(posCard, "all")
     yOffset = posOffset
+
+    ----------------------------------------------------------------
+    -- Card: Raid Position (greyed unless SplitPositioning is on)
+    ----------------------------------------------------------------
+    local raidPosCard, raidPosOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        title = "Raid Position",
+        db = db,
+        positionKey = "RaidPosition",
+        dbKeys = {
+            selfPoint = "AnchorFrom",
+            anchorPoint = "AnchorTo",
+            xOffset = "XOffset",
+            yOffset = "YOffset",
+        },
+        showAnchorFrameType = false,
+        showStrata = false,
+        onChangeCallback = ApplySettings,
+    })
+
+    -- One group per widget; condition attached on the group. UpdateAll greys
+    -- these when split is off (anchor-frame-type & strata stay shared via the
+    -- Dungeon card — they are root keys, not in RaidPosition).
+    if raidPosCard.positionWidgets then
+        manager:RegisterGroup(raidPosCard.positionWidgets, "splitRaid")
+    end
+    manager:Register(raidPosCard, "splitRaid")
+    manager:SetCondition("splitRaid", function() return db.SplitPositioning == true end)
+    yOffset = raidPosOffset
 
     ----------------------------------------------------------------
     -- Card 4: Font Settings (font face / outline + per-text sizes)
