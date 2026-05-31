@@ -599,9 +599,8 @@ function HM:ShowPreview()
     self.containerFrame:SetFrameStrata(self.db.Strata or "HIGH")
     self:RegWithEditMode()
 
-    -- Prefer live healer if one exists in the actual party.
-    -- Skip self as the live healer if DisableOnHealer is on.
-    if self.db.Enabled and IsInGroup() and not IsInRaid() then
+    -- Prefer a live healer when actually grouped and NOT previewing raid context.
+    if self.db.Enabled and IsInGroup() and self.previewContext ~= "RAID" and not IsInRaid() then
         local playerIsHealerSelf = IsHealer("player") and not (self.db.DisableOnHealer and KE:IsPlayerHealerSpec())
         local liveUnit = playerIsHealerSelf and "player" or nil
         if not liveUnit then
@@ -614,24 +613,35 @@ function HM:ShowPreview()
             end
         end
         if liveUnit then
-            if DEBUG_HM then KE:Print("[HM] ShowPreview deferring to live healer on " .. liveUnit) end
             self.isPreview = false
             self:FindHealers()
             return
         end
     end
 
-    -- No live healer — show canned preview (Holy Priest)
+    -- Canned preview. Raid context -> MaxHealers fake healers; else one.
     self.isPreview = true
     wipe(self.currentHealers)
-    self.currentHealers[1] = {
-        unit = "player",
-        name = "Healer",
-        specID = 257, -- Holy Priest
-        class = "PRIEST",
-        classColor = KE:GetClassColor("PRIEST"),
-        connected = true,
+    local previewCount = (self.previewContext == "RAID") and (self.db.MaxHealers or 6) or 1
+    local CANNED = {
+        { name = "Healer",   specID = 257,  class = "PRIEST" },  -- Holy Priest
+        { name = "Resto",    specID = 105,  class = "DRUID" },
+        { name = "Mistweav", specID = 270,  class = "MONK" },
+        { name = "HolyPal",  specID = 65,   class = "PALADIN" },
+        { name = "RShaman",  specID = 264,  class = "SHAMAN" },
+        { name = "Pres",     specID = 1468, class = "EVOKER" },
     }
+    for i = 1, previewCount do
+        local c = CANNED[((i - 1) % #CANNED) + 1]
+        self.currentHealers[i] = {
+            unit = "player",
+            name = c.name,
+            specID = c.specID,
+            class = c.class,
+            classColor = KE:GetClassColor(c.class),
+            connected = true,
+        }
+    end
     self:UpdateHealerFrames()
 end
 
