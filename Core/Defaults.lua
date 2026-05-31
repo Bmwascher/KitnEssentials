@@ -1226,6 +1226,13 @@ local Defaults = {
                 anchorFrameType = "UIPARENT",
                 ParentFrame = "UIParent",
                 Position = DefaultPosition(-400, 200),
+                -- Raid/Dungeon mode (added 2026-05-30)
+                EnableInRaid = true,        -- master toggle: Raid Mode active at all
+                MaxHealers = 6,             -- cap on raid healers shown
+                GrowDirection = "DOWN",     -- "DOWN" | "UP"
+                FrameSpacing = 4,           -- px gap between stacked frames
+                SplitPositioning = false,   -- off = both modes share Position
+                RaidPosition = DefaultPosition(-400, 200),
                 FrameWidth = 120,
                 IconSize = 24,
                 IconType = "spec",
