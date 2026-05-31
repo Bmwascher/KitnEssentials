@@ -259,6 +259,7 @@ local function SetupSkipCinematics()
     cinematicFrame:RegisterEvent("PLAY_MOVIE")
     cinematicFrame:SetScript("OnEvent", function(_, event)
         if not AU.db or not AU.db.Enabled then return end
+        if KE:IsFullyRestricted() then return end
         if not AU.db.SkipCinematics then return end
         if event == "CINEMATIC_START" then
             CinematicFrame_CancelCinematic()
@@ -338,6 +339,7 @@ local function SetupAutoSellRepair()
     merchantFrame:RegisterEvent("MERCHANT_SHOW")
     merchantFrame:SetScript("OnEvent", function()
         if not AU.db or not AU.db.Enabled then return end
+        if KE:IsFullyRestricted() then return end
         if AU.db.AutoSellJunk and not IsShiftKeyDown() and C_MerchantFrame.GetNumJunkItems() > 0 then
             C_MerchantFrame.SellAllJunkItems()
         end
@@ -368,6 +370,7 @@ local function SetupAutoRoleCheck()
     if LFDRoleCheckPopup then
         LFDRoleCheckPopup:HookScript("OnShow", function()
             if not AU.db or not AU.db.Enabled then return end
+            if KE:IsFullyRestricted() then return end
             if not AU.db.AutoRoleCheck then return end
             if LFDRoleCheckPopupAcceptButton then
                 LFDRoleCheckPopupAcceptButton:Click()
@@ -385,6 +388,7 @@ local function SetupAutoQueueConfirm()
     if not dialog then return end
     dialog:HookScript("OnShow", function(dlg)
         if not AU.db or not AU.db.Enabled then return end
+        if KE:IsFullyRestricted() then return end
         if not AU.db.AutoQueueConfirm then return end
         if IsControlKeyDown() then return end
         local confirmBtn = dlg.SignUpButton
@@ -707,6 +711,7 @@ local function SetupAutoQuests()
     questFrame:RegisterEvent("GOSSIP_SHOW")
     questFrame:SetScript("OnEvent", function(_, event)
         if not AU.db or not AU.db.Enabled then return end
+        if KE:IsFullyRestricted() then return end
         if IsQuestModifierHeld() then return end
 
         if event == "QUEST_DETAIL" then
@@ -777,6 +782,7 @@ local function SetupAutoVoidcoresGold()
     voidcoresFrame:RegisterEvent("QUEST_PROGRESS")
     voidcoresFrame:SetScript("OnEvent", function(_, event)
         if not AU.db or not AU.db.Enabled then return end
+        if KE:IsFullyRestricted() then return end
         if not AU.db.AutoVoidcoresGold then return end
         if IsQuestModifierHeld() then return end
         if C_QuestLog.IsQuestFlaggedCompleted(VOIDCORES_GOLD_QUEST_ID) then return end
