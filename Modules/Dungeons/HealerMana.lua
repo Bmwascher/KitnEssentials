@@ -700,9 +700,14 @@ function HM:ShowPreview()
     }
     for i = 1, previewCount do
         local c = CANNED[((i - 1) % #CANNED) + 1]
+        -- Top row uses the real player name (mirrors AE HealerMana:466) so the
+        -- preview feels personal; keeps the canned spec/icon. GetNicknameOrName
+        -- honors a set nickname (own name is never secret), falling back to
+        -- UnitName. Remaining rows keep their canned sample names.
+        local name = (i == 1) and KE:GetNicknameOrName("player") or c.name
         self.currentHealers[i] = {
             unit = "player",
-            name = c.name,
+            name = name,
             specID = c.specID,
             class = c.class,
             classColor = KE:GetClassColor(c.class),
