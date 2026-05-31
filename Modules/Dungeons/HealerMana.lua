@@ -39,7 +39,6 @@ local IsInGroup = IsInGroup
 local IsInInstance = IsInInstance
 local GetNumGroupMembers = GetNumGroupMembers
 local C_Timer = C_Timer
-local ipairs = ipairs
 local pairs = pairs
 local wipe = wipe
 
@@ -319,14 +318,11 @@ function HM:ApplyContainerPosition()
     KE:ApplyFramePosition(self.containerFrame, adjusted, self.db)
 end
 
--- Centralized "no live healer" state. Used by FindHealer's early-return
--- branches and the HidePreview no-FindHealer fallback path. Idempotent.
--- Does NOT wipe healerFrames or containerFrame themselves (those persist
--- across hide/show cycles so we don't reallocate frames). Refresh/OnDisable
--- handle the full-lifecycle teardown.
-function HM:HideFrame()
-    self.currentHealer = nil
-    if self.healerFrames[1] then self.healerFrames[1]:Hide() end
+-- Centralized "no live healers" state. Idempotent. Does NOT wipe healerFrames
+-- or containerFrame themselves (persist across hide/show cycles).
+function HM:HideFrames()
+    wipe(self.currentHealers)
+    for _, frame in pairs(self.healerFrames) do frame:Hide() end
     if self.containerFrame then self.containerFrame:Hide() end
 end
 
@@ -339,7 +335,7 @@ function HM:OnLibSpecGroupUpdate(specID, role, _, playerName)
     if not specID or specID == 0 or not playerName then return end
     self.libSpecCache[playerName] = specID
     if self.db and self.db.Enabled and not self.isPreview then
-        self:FindHealer()
+        self:FindHealers()
     end
 end
 
@@ -441,13 +437,8 @@ function HM:FindHealers()
     self:UpdateHealerFrames()
 end
 
-function HM:UpdateHealerFrame()
-    local healer = self.currentHealer
-    if not healer then return end
-
-    local frame = self:GetHealerFrame(1)
-
-    -- Icon: spec or class, depending on IconType setting
+-- Render one frame's icon/name/mana for a healer snapshot (no positioning/show).
+function HM:UpdateOneHealerFrame(frame, healer)
     local iconType = self.db.IconType or "spec"
     if iconType == "class" and healer.class then
         frame.icon:SetAtlas("classicon-" .. healer.class)
@@ -459,44 +450,56 @@ function HM:UpdateHealerFrame()
         end
     end
 
-    -- Name with class color
     frame.name:SetText(healer.name)
     local cc = healer.classColor
     frame.name:SetTextColor(cc[1], cc[2], cc[3])
 
-    -- Mana value: preview uses canned text + restored colors; real healer
-    -- routes through UpdateManaDisplay which handles connected vs OFFLINE.
     if self.isPreview then
         local mc = self.db.HighManaColor
-        frame.mana:SetTextColor(
-            (mc and mc[1]) or 1,
-            (mc and mc[2]) or 1,
-            (mc and mc[3]) or 1
-        )
+        frame.mana:SetTextColor((mc and mc[1]) or 1, (mc and mc[2]) or 1, (mc and mc[3]) or 1)
         frame.icon:SetVertexColor(1, 1, 1)
         frame.mana:SetText("100%")
     else
         self:UpdateManaDisplay(frame, healer.unit, healer.connected)
     end
+end
 
-    self:PositionFrame()
-    frame:Show()
+-- Draw all current healers, hide surplus frames, size + position the stack.
+function HM:UpdateHealerFrames()
+    local count = #self.currentHealers
+    if count == 0 then return end
+
+    for i = 1, count do
+        local frame = self:GetHealerFrame(i)
+        self:UpdateOneHealerFrame(frame, self.currentHealers[i])
+        frame:Show()
+    end
+
+    for i = count + 1, #self.healerFrames do
+        if self.healerFrames[i] then self.healerFrames[i]:Hide() end
+    end
+
+    self:UpdateContainerSize()
+    self:PositionFrames()
+    self:ApplyContainerPosition()
     self.containerFrame:Show()
 end
 
 function HM:UpdateMana()
     if self.isPreview then return end
-    local healer = self.currentHealer
-    if not healer then return end
-
-    local frame = self.healerFrames[1]
-    if not frame or not frame:IsShown() then return end
-
-    -- Re-check connection each tick so reconnect/disconnect transitions are
-    -- caught without waiting for GROUP_ROSTER_UPDATE. UnitIsConnected is cheap.
-    local connected = UnitIsConnected(healer.unit)
-    healer.connected = connected
-    self:UpdateManaDisplay(frame, healer.unit, connected)
+    local count = #self.currentHealers
+    if count == 0 then return end
+    for i = 1, count do
+        local healer = self.currentHealers[i]
+        local frame = self.healerFrames[i]
+        if frame and frame:IsShown() then
+            -- Re-check connection each tick so reconnect/disconnect transitions
+            -- are caught without waiting for GROUP_ROSTER_UPDATE.
+            local connected = UnitIsConnected(healer.unit)
+            healer.connected = connected
+            self:UpdateManaDisplay(frame, healer.unit, connected)
+        end
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -511,7 +514,7 @@ function HM:ApplySettings()
     end
 
     self:CreateContainer()
-    KE:ApplyFramePosition(self.containerFrame, self.db.Position, self.db)
+    self:ApplyContainerPosition()
     self.containerFrame:SetFrameStrata(self.db.Strata or "HIGH")
 
     -- Apply font/size/offset changes to already-created frames so live edits
@@ -521,16 +524,17 @@ function HM:ApplySettings()
     end
 
     if self.isPreview then
-        self:UpdateHealerFrame()
+        self:UpdateHealerFrames()
     else
-        self:FindHealer()
+        self:FindHealers()
     end
 end
 
 function HM:Refresh()
     local wasPreview = self.isPreview
 
-    self.currentHealer = nil
+    wipe(self.currentHealers)
+    self._lastMode = nil
     for _, frame in pairs(self.healerFrames) do frame:Hide() end
     wipe(self.healerFrames)
 
@@ -563,10 +567,14 @@ function HM:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered and self.containerFrame then
         KE.EditMode:RegisterElement({
             key = "HealerMana", displayName = "Healer Mana", frame = self.containerFrame,
-            getPosition = function() return self.db.Position end,
+            getPosition = function() return self:GetActivePosition() end,
             setPosition = function(pos)
-                self.db.Position = pos
-                KE:ApplyFramePosition(self.containerFrame, self.db.Position, self.db)
+                local target = self:GetActivePosition()
+                target.AnchorFrom = pos.AnchorFrom
+                target.AnchorTo = pos.AnchorTo
+                target.XOffset = pos.XOffset
+                target.YOffset = pos.YOffset
+                self:ApplyContainerPosition()
             end,
             getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
             guiPath = "HealerMana",
@@ -584,7 +592,7 @@ function HM:ShowPreview()
     if not self.db then return end
 
     self:CreateContainer()
-    KE:ApplyFramePosition(self.containerFrame, self.db.Position, self.db)
+    self:ApplyContainerPosition()
     self.containerFrame:SetFrameStrata(self.db.Strata or "HIGH")
     self:RegWithEditMode()
 
@@ -605,14 +613,15 @@ function HM:ShowPreview()
         if liveUnit then
             if DEBUG_HM then KE:Print("[HM] ShowPreview deferring to live healer on " .. liveUnit) end
             self.isPreview = false
-            self:FindHealer()
+            self:FindHealers()
             return
         end
     end
 
     -- No live healer — show canned preview (Holy Priest)
     self.isPreview = true
-    self.currentHealer = {
+    wipe(self.currentHealers)
+    self.currentHealers[1] = {
         unit = "player",
         name = "Healer",
         specID = 257, -- Holy Priest
@@ -620,20 +629,20 @@ function HM:ShowPreview()
         classColor = KE:GetClassColor("PRIEST"),
         connected = true,
     }
-    self:UpdateHealerFrame()
+    self:UpdateHealerFrames()
 end
 
 function HM:HidePreview()
-    if DEBUG_HM then KE:Print("[HM] HidePreview entry, will FindHealer if enabled") end
+    if DEBUG_HM then KE:Print("[HM] HidePreview entry, will FindHealers if enabled") end
     self.isPreview = false
     -- Need both db.Enabled AND a live containerFrame. On profile change the
     -- AceModule may not yet have been enabled (so OnEnable→ApplySettings→
     -- CreateContainer hasn't run), but db.Enabled is already true under the
     -- new profile — driving FindHealer here would crash on a nil container.
     if self.db and self.db.Enabled and self.containerFrame then
-        self:FindHealer()
+        self:FindHealers()
     else
-        self:HideFrame()
+        self:HideFrames()
     end
 end
 
@@ -644,11 +653,14 @@ function HM:OnEnable()
     self:UpdateDB()
     if not self.db or not self.db.Enabled then return end
     self:ApplySettings()
+    C_Timer.After(0.5, function()
+        if HM.containerFrame then HM:ApplyContainerPosition() end
+    end)
     self:RegWithEditMode()
     self:StartUpdates()
-    self:RegisterEvent("GROUP_ROSTER_UPDATE", "FindHealer")
-    self:RegisterEvent("PLAYER_ENTERING_WORLD", "FindHealer")
-    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "FindHealer")
+    self:RegisterEvent("GROUP_ROSTER_UPDATE", "FindHealers")
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "FindHealers")
+    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "FindHealers")
     if LibSpec then
         LibSpec.RegisterGroup(self, function(specID, role, position, playerName)
             HM:OnLibSpecGroupUpdate(specID, role, position, playerName)
@@ -661,7 +673,7 @@ function HM:OnDisable()
     self:UnregisterAllEvents()
     if LibSpec then LibSpec.UnregisterGroup(self) end
     wipe(self.libSpecCache)
-    self.currentHealer = nil
+    wipe(self.currentHealers)
     self.isPreview = false
     if self.containerFrame then self.containerFrame:Hide() end
     for _, frame in pairs(self.healerFrames) do frame:Hide() end
