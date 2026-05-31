@@ -346,81 +346,99 @@ end
 ---------------------------------------------------------------------------------
 -- Core Logic
 ---------------------------------------------------------------------------------
-function HM:FindHealer()
-    if DEBUG_HM then KE:Print("[HM] FindHealer entry isPreview=" .. tostring(self.isPreview) .. " enabled=" .. tostring(self.db and self.db.Enabled)) end
-    if not self.db or not self.db.Enabled then return end
-
-    -- Hide entirely when the player is a healer themselves, if the toggle is on
-    if self.db.DisableOnHealer and KE:IsPlayerHealerSpec() then
-        if DEBUG_HM then KE:Print("[HM] FindHealer hide: DisableOnHealer + player is healer spec") end
-        if self.isPreview then return end
-        self:HideFrame()
-        return
-    end
-
-    local inGroup = IsInGroup()
-    local inRaid = IsInRaid()
-
-    -- Party only — keep canned preview alive when out of valid group
-    if not inGroup or inRaid then
-        if DEBUG_HM then KE:Print("[HM] FindHealer hide: inGroup=" .. tostring(inGroup) .. " inRaid=" .. tostring(inRaid)) end
-        if self.isPreview then return end
-        self:HideFrame()
-        return
-    end
-
-    local healerUnit
-    if IsHealer("player") then
-        healerUnit = "player"
-    else
-        -- Drop UnitIsConnected filter so disconnected healers are
-        -- still tracked. Connection state is captured separately below
-        -- and routed to UpdateManaDisplay for the OFFLINE label path.
-        for i = 1, 4 do
-            local unit = "party" .. i
-            if UnitExists(unit) and IsHealer(unit) then
-                healerUnit = unit
-                break
-            end
-        end
-    end
-
-    if not healerUnit then
-        if DEBUG_HM then KE:Print("[HM] FindHealer no healer in party") end
-        if self.isPreview then return end
-        self:HideFrame()
-        return
-    end
-
-    local _, class = UnitClass(healerUnit)
-    local displayName = KE:GetNicknameOrName(healerUnit)
-    -- UnitIsConnected("player") always returns true, so this is safe across
-    -- both the player-self and party-member paths.
-    local healerConnected = UnitIsConnected(healerUnit)
-
-    -- Spec lookup via LibSpec name cache. UnitName CAN return secret in
-    -- restricted contexts; only use as cache key when safe. If no spec is
-    -- known yet (lib not loaded, comms not arrived, secret name), specID
-    -- stays nil and UpdateHealerFrame falls back to HEALER_SPEC_ICONS[class].
-    local rawName = UnitName(healerUnit)
+-- Build one healer snapshot (class/name/connection/spec) using KE's LibSpec
+-- name-keyed cache. UnitName can be secret in restricted contexts; only use as
+-- cache key when safe. specID stays nil if unknown -> class-default icon.
+function HM:BuildHealerSnapshot(unit)
+    local _, class = UnitClass(unit)
+    local displayName = KE:GetNicknameOrName(unit)
+    local connected = UnitIsConnected(unit)
+    local rawName = UnitName(unit)
     local cachedSpecID
     if KE:IsSafeValue(rawName) then
         cachedSpecID = self.libSpecCache[rawName]
     end
-
-    if DEBUG_HM then KE:Print("[HM] FindHealer found unit=" .. healerUnit .. " name=" .. tostring(displayName) .. " class=" .. tostring(class) .. " connected=" .. tostring(healerConnected) .. " specID=" .. tostring(cachedSpecID)) end
-    -- Live healer found — switch out of canned preview mode
-    self.isPreview = false
-    self.currentHealer = {
-        unit = healerUnit,
+    return {
+        unit = unit,
         name = displayName,
         specID = cachedSpecID,
         class = class,
         classColor = KE:GetClassColor(class),
-        connected = healerConnected,
+        connected = connected,
     }
+end
 
-    self:UpdateHealerFrame()
+function HM:FindHealers()
+    if DEBUG_HM then KE:Print("[HM] FindHealers entry isPreview=" .. tostring(self.isPreview) .. " enabled=" .. tostring(self.db and self.db.Enabled)) end
+    if not self.db or not self.db.Enabled then return end
+
+    local mode = self:GetMode()
+
+    -- Clear stale frames when crossing the dungeon<->raid boundary so a smaller
+    -- new set doesn't leave orphaned frames visible (mirrors NUI/AE groupTypeChanged).
+    if mode ~= self._lastMode then
+        self._lastMode = mode
+        for _, frame in pairs(self.healerFrames) do frame:Hide() end
+    end
+
+    -- DisableOnHealer only suppresses Dungeon Mode (Raid shows you as a healer).
+    if mode == "DUNGEON" and self.db.DisableOnHealer and KE:IsPlayerHealerSpec() then
+        if DEBUG_HM then KE:Print("[HM] FindHealers hide: DisableOnHealer + player healer (Dungeon)") end
+        if self.isPreview then return end
+        self:HideFrames()
+        return
+    end
+
+    if not IsInGroup() then
+        if DEBUG_HM then KE:Print("[HM] FindHealers hide: not in group") end
+        if self.isPreview then return end
+        self:HideFrames()
+        return
+    end
+
+    wipe(self.currentHealers)
+
+    if mode == "RAID" then
+        local maxHealers = self.db.MaxHealers or 6
+        local count = 0
+        local n = GetNumGroupMembers()
+        for i = 1, n do
+            if count >= maxHealers then break end
+            local unit = "raid" .. i  -- includes the player naturally
+            if UnitExists(unit) and IsHealer(unit) then
+                count = count + 1
+                self.currentHealers[count] = self:BuildHealerSnapshot(unit)
+            end
+        end
+    else
+        -- Dungeon Mode: single healer, self-case first then party1..4.
+        local healerUnit
+        if IsHealer("player") then
+            healerUnit = "player"
+        else
+            for i = 1, 4 do
+                local unit = "party" .. i
+                if UnitExists(unit) and IsHealer(unit) then
+                    healerUnit = unit
+                    break
+                end
+            end
+        end
+        if healerUnit then
+            self.currentHealers[1] = self:BuildHealerSnapshot(healerUnit)
+        end
+    end
+
+    if #self.currentHealers == 0 then
+        if DEBUG_HM then KE:Print("[HM] FindHealers no healer found mode=" .. mode) end
+        if self.isPreview then return end
+        self:HideFrames()
+        return
+    end
+
+    if DEBUG_HM then KE:Print("[HM] FindHealers mode=" .. mode .. " count=" .. #self.currentHealers) end
+    self.isPreview = false
+    self:UpdateHealerFrames()
 end
 
 function HM:UpdateHealerFrame()
