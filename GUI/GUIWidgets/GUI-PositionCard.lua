@@ -412,6 +412,21 @@ local function CreatePositionCardKit(holder)
         end
     end
 
+    -- Live-swap which DB sub-table the position fields edit (e.g. a
+    -- "Configure For" dropdown switching Dungeon<->Raid). Re-reads the four
+    -- anchor/offset widgets from the new sub-table silently. Root keys
+    -- (anchorFrameType/strata) are shared across contexts and not touched.
+    function card:SetActiveContext(positionKey)
+        kit._positionKey = positionKey or "Position"
+        local keys = kit._keys
+        local defaults = (kit._config and kit._config.defaults) or {}
+        if not keys then return end
+        kit.selfPointWidget:SetValue(kitGetValue(kit, keys.selfPoint, defaults.selfPoint or "CENTER"))
+        kit.anchorPointWidget:SetValue(kitGetValue(kit, keys.anchorPoint, defaults.anchorPoint or "CENTER"))
+        kit.xSlider:SetValue(kitGetValue(kit, keys.xOffset, defaults.xOffset or 0), true)
+        kit.ySlider:SetValue(kitGetValue(kit, keys.yOffset, defaults.yOffset or 0), true)
+    end
+
     return kit
 end
 
@@ -520,18 +535,6 @@ local function ConfigurePositionCardKit(kit, scrollChild, yOffset, config)
 
     local currentStrata = kitGetValue(kit, keys.strata, defaults.strata or "HIGH")
     kit.strataOnlyDropdown:SetValue(currentStrata, true)
-
-    -- Live-swap which DB sub-table the position fields edit (e.g. a
-    -- "Configure For" dropdown switching Dungeon<->Raid). Re-reads the four
-    -- anchor/offset widgets from the new sub-table silently. Anchor-frame-type
-    -- and strata are root keys (shared across contexts) and are not touched.
-    function card:SetActiveContext(positionKey)
-        kit._positionKey = positionKey or "Position"
-        kit.selfPointWidget:SetValue(kitGetValue(kit, keys.selfPoint, defaults.selfPoint or "CENTER"))
-        kit.anchorPointWidget:SetValue(kitGetValue(kit, keys.anchorPoint, defaults.anchorPoint or "CENTER"))
-        kit.xSlider:SetValue(kitGetValue(kit, keys.xOffset, defaults.xOffset or 0), true)
-        kit.ySlider:SetValue(kitGetValue(kit, keys.yOffset, defaults.yOffset or 0), true)
-    end
 
     -- Decide which rows are visible for this configuration.
     local showAnchorTypeRow = showAnchorFrameType
