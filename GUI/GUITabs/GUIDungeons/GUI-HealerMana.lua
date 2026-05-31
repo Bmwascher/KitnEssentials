@@ -116,7 +116,9 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
         end,
     })
     rowPosMode:AddWidget(splitToggle, 0.5)
-    manager:Register(splitToggle, "all")
+    -- Split positioning only matters when Raid Mode exists, so it shares the
+    -- raidConfig group (greyed unless Enable in Raid is on).
+    manager:Register(splitToggle, "raidConfig")
 
     -- Configure For: chooses which context (Dungeon/Raid) the card below edits.
     -- Rebuilds the page so the card shows that context's anchor/offset values,
@@ -185,11 +187,77 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
     manager:Register(posCard, "all")
     yOffset = posOffset
 
-    -- Configure For dropdown is only meaningful when split positioning is on.
-    manager:SetCondition("splitConfig", function() return db.SplitPositioning == true end)
+    -- Configure For needs Raid Mode enabled AND split on to be meaningful.
+    manager:SetCondition("splitConfig", function()
+        return db.EnableInRaid ~= false and db.SplitPositioning == true
+    end)
 
     ----------------------------------------------------------------
-    -- Card 4: Appearance (icon size, icon type, mana color, hide on healer)
+    -- Card 4: Raid Mode (enable + stacking)
+    ----------------------------------------------------------------
+    local cardRaid = GUIFrame:CreateCard(scrollChild, "Raid Mode", yOffset)
+    manager:Register(cardRaid, "all")
+
+    local rowRaid1 = GUIFrame:CreateRow(cardRaid.content, Theme.rowHeight)
+    local enableRaidCheck = GUIFrame:CreateCheckbox(rowRaid1, "Enable in Raid", {
+        value = db.EnableInRaid ~= false,
+        callback = function(checked)
+            db.EnableInRaid = checked
+            local mod = GetModule()
+            local wasRaidCtx = mod and mod.guiConfigContext == "RAID"
+            if not checked and mod then
+                -- Raid Mode off -> no Raid context to edit; fall back to Dungeon.
+                mod.guiConfigContext = "DUNGEON"
+                mod.previewContext = "DUNGEON"
+                if mod.isPreview then mod:ShowPreview() end
+                if mod.RefreshEditMode then mod:RefreshEditMode() end
+            end
+            ApplySettings()
+            RefreshStates()  -- grey/ungrey Split Positioning + raid-only settings
+            if not checked and wasRaidCtx then RebuildPage() end  -- collapse to Dungeon
+        end,
+    })
+    rowRaid1:AddWidget(enableRaidCheck, 0.5)
+    manager:Register(enableRaidCheck, "all")
+
+    local maxHealersSlider = GUIFrame:CreateSlider(rowRaid1, "Max Healers", {
+        min = 1, max = 8, step = 1,
+        value = db.MaxHealers or 6,
+        callback = function(value) db.MaxHealers = value; Refresh() end,
+    })
+    rowRaid1:AddWidget(maxHealersSlider, 0.5)
+    manager:Register(maxHealersSlider, "raidConfig")
+    cardRaid:AddRow(rowRaid1, Theme.rowHeight)
+
+    local rowRaid2 = GUIFrame:CreateRow(cardRaid.content, Theme.rowHeightLast)
+    local spacingSlider = GUIFrame:CreateSlider(rowRaid2, "Frame Spacing", {
+        min = 0, max = 20, step = 1,
+        value = db.FrameSpacing or 4,
+        callback = function(value) db.FrameSpacing = value; Refresh() end,
+    })
+    rowRaid2:AddWidget(spacingSlider, 0.5)
+    manager:Register(spacingSlider, "raidConfig")
+
+    local growDropdown = GUIFrame:CreateDropdown(rowRaid2, "Grow Direction", {
+        options = {
+            { key = "DOWN", text = "Down" },
+            { key = "UP",   text = "Up" },
+        },
+        value = db.GrowDirection or "DOWN",
+        callback = function(key) db.GrowDirection = key; Refresh() end,
+    })
+    rowRaid2:AddWidget(growDropdown, 0.5)
+    manager:Register(growDropdown, "raidConfig")
+    cardRaid:AddRow(rowRaid2, Theme.rowHeightLast, 0)
+
+    -- raidConfig gates Split Positioning + the stacking settings on Enable in
+    -- Raid (UpdateAll also gates on the module's master Enabled toggle).
+    manager:SetCondition("raidConfig", function() return db.EnableInRaid ~= false end)
+
+    yOffset = cardRaid:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 5: Appearance (icon size, icon type, mana color, hide on healer)
     ----------------------------------------------------------------
     local cardAppearance = GUIFrame:CreateCard(scrollChild, "Appearance", yOffset)
     manager:Register(cardAppearance, "all")
@@ -274,61 +342,6 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
     cardAppearance:AddRow(rowManaOffset, Theme.rowHeightLast, 0)
 
     yOffset = cardAppearance:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Card 5: Raid Mode (stacking)
-    ----------------------------------------------------------------
-    local cardRaid = GUIFrame:CreateCard(scrollChild, "Raid Mode", yOffset)
-    manager:Register(cardRaid, "all")
-
-    local rowRaid1 = GUIFrame:CreateRow(cardRaid.content, Theme.rowHeight)
-    local enableRaidCheck = GUIFrame:CreateCheckbox(rowRaid1, "Enable in Raid", {
-        value = db.EnableInRaid ~= false,
-        callback = function(checked)
-            db.EnableInRaid = checked
-            ApplySettings()
-            RefreshStates()  -- grey/ungrey the raid-only settings below
-        end,
-    })
-    rowRaid1:AddWidget(enableRaidCheck, 0.5)
-    manager:Register(enableRaidCheck, "all")
-
-    local maxHealersSlider = GUIFrame:CreateSlider(rowRaid1, "Max Healers", {
-        min = 1, max = 8, step = 1,
-        value = db.MaxHealers or 6,
-        callback = function(value) db.MaxHealers = value; Refresh() end,
-    })
-    rowRaid1:AddWidget(maxHealersSlider, 0.5)
-    manager:Register(maxHealersSlider, "raidConfig")
-    cardRaid:AddRow(rowRaid1, Theme.rowHeight)
-
-    local rowRaid2 = GUIFrame:CreateRow(cardRaid.content, Theme.rowHeightLast)
-    local spacingSlider = GUIFrame:CreateSlider(rowRaid2, "Frame Spacing", {
-        min = 0, max = 20, step = 1,
-        value = db.FrameSpacing or 4,
-        callback = function(value) db.FrameSpacing = value; Refresh() end,
-    })
-    rowRaid2:AddWidget(spacingSlider, 0.5)
-    manager:Register(spacingSlider, "raidConfig")
-
-    local growDropdown = GUIFrame:CreateDropdown(rowRaid2, "Grow Direction", {
-        options = {
-            { key = "DOWN", text = "Down" },
-            { key = "UP",   text = "Up" },
-        },
-        value = db.GrowDirection or "DOWN",
-        callback = function(key) db.GrowDirection = key; Refresh() end,
-    })
-    rowRaid2:AddWidget(growDropdown, 0.5)
-    manager:Register(growDropdown, "raidConfig")
-    cardRaid:AddRow(rowRaid2, Theme.rowHeightLast, 0)
-
-    -- Raid-only settings (Max Healers / Frame Spacing / Grow Direction) do
-    -- nothing in Dungeon Mode, so grey them unless Enable in Raid is on.
-    -- (UpdateAll also gates this on the module's master Enabled toggle.)
-    manager:SetCondition("raidConfig", function() return db.EnableInRaid ~= false end)
-
-    yOffset = cardRaid:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 6: Font Settings (font face / outline + per-text sizes)
