@@ -132,6 +132,8 @@ local KT_COOLING_LOG_EVERY = 60  -- cooling per-bar at ~60fps -> ~once/sec
 KT.containerFrame = nil
 KT.isPreview = false
 KT.editModeRegistered = false
+KT.previewContext = nil    -- "HEALER" | "DEFAULT" | nil (GUI editing/preview override)
+KT.guiConfigContext = nil  -- "HEALER" | "DEFAULT" | nil (which context the GUI edits)
 
 KT.partyMembers = {}     -- [guid] = { unit, name, classToken, specID, interruptData, kickStart, kickDuration }
 KT.nameSpecCache = {}    -- [playerName] = specID, fed by LibSpec.RegisterGroup callback
@@ -279,6 +281,7 @@ function KT:OnPlayerSpecChanged()
     -- Re-apply position in case healer override is active
     if self.db and self.db.UseHealerPosition then
         self:ApplySettings()
+        self:RefreshEditMode()  -- relabel overlay if spec crossed the healer boundary
     end
 end
 
@@ -778,7 +781,6 @@ end
 
 function KT:UpdateBars()
     if self.isPreview then return end
-    local db = self.db
 
     -- Collect eligible members (those with interrupt abilities)
     local needsBars = {}
@@ -814,13 +816,54 @@ function KT:GetSelfPoint(pos)
     return vertical .. horizontal
 end
 
+-- Active position context: "HEALER" or "DEFAULT". A GUI preview override
+-- (previewContext, set while editing) wins; otherwise it's the live spec-driven
+-- resolution (UseHealerPosition + healer spec). Single source of truth so the
+-- live path, preview, and EditMode all agree on which position is active.
+function KT:GetActiveContext()
+    local db = self.db
+    if not db then return "DEFAULT" end
+    if self.isPreview and self.previewContext and db.UseHealerPosition then
+        return self.previewContext
+    end
+    if db.UseHealerPosition and KE:IsPlayerHealerSpec() then
+        return "HEALER"
+    end
+    return "DEFAULT"
+end
+
+-- (pos, anchorFrameType, parentFrame, strata) for the active context.
+function KT:ResolvePositionConfig()
+    return KE:GetActivePositionConfig(self.db, self:GetActiveContext())
+end
+
+-- EditMode overlay label — name the context when healer override is on so a
+-- drag obviously writes to the right table.
+function KT:GetEditModeLabel()
+    if self.db and self.db.UseHealerPosition then
+        return (self:GetActiveContext() == "HEALER")
+            and "Interrupt Tracker (Healer)" or "Interrupt Tracker (Default)"
+    end
+    return "Interrupt Tracker"
+end
+
+-- Re-register so the overlay label tracks the current context. Only meaningful
+-- when healer override is on (label is constant otherwise).
+function KT:RefreshEditMode()
+    if not (KE.EditMode and self.containerFrame) then return end
+    if not (self.db and self.db.UseHealerPosition) then return end
+    if KE.EditMode.UnregisterElement then KE.EditMode:UnregisterElement("KickTracker") end
+    self.editModeRegistered = false
+    self:RegWithEditMode()
+end
+
 -- Position the container by its growth-derived self-point so the edit-mode
 -- overlay (which spans the full bar stack) stays aligned with the bars when
 -- growth flips. Resolves anchor manually (instead of KE:ApplyActivePosition)
 -- so the stored AnchorFrom — which holds the horizontal choice — is preserved.
 function KT:ApplyContainerPosition()
     if not self.containerFrame then return end
-    local pos, aft, pf, strata = KE:GetActivePositionConfig(self.db)
+    local pos, aft, pf, strata = self:ResolvePositionConfig()
     local parent = KE:ResolveAnchorFrame(aft, pf)
     self.containerFrame:SetParent(parent)
     self.containerFrame:ClearAllPoints()
@@ -887,7 +930,7 @@ function KT:LayoutBars()
 
     -- Bars pin to the container's self-point (growth vertical edge + user
     -- horizontal edge) and stack inward, exactly filling the full-height container.
-    local selfPoint = self:GetSelfPoint(KE:GetActivePositionConfig(db))
+    local selfPoint = self:GetSelfPoint(self:ResolvePositionConfig())
     for i, entry in ipairs(self.sortedBars) do
         local bar = entry.bar
         if i <= maxBars then
@@ -1055,7 +1098,7 @@ function KT:ShowPreview()
     local growUp = db.GrowthDirection == "UP"
     local spacing = db.BarSpacing or 2
     local barHeight = db.BarHeight or 20
-    local previewSelfPoint = self:GetSelfPoint(KE:GetActivePositionConfig(db))
+    local previewSelfPoint = self:GetSelfPoint(self:ResolvePositionConfig())
 
     for i, data in ipairs(previewData) do
         if i > (db.MaxBars or 5) then break end
@@ -1170,6 +1213,7 @@ function KT:HidePreview()
         KE:Print(string.format("[KT] HidePreview enter, activeBars=%d", activeCount))
     end
     self.isPreview = false
+    self.previewContext = nil  -- resume live spec-driven resolution
     if not self.containerFrame then return end
 
     self:HideAllBars()
@@ -1185,14 +1229,15 @@ function KT:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
             key = "KickTracker",
-            displayName = "Interrupt Tracker",
+            displayName = self:GetEditModeLabel(),
             frame = self.containerFrame,
             getPosition = function()
-                local pos = KE:GetActivePositionConfig(self.db)
+                local pos = self:ResolvePositionConfig()
                 return pos
             end,
             setPosition = function(pos)
-                if self.db.UseHealerPosition and KE:IsPlayerHealerSpec() then
+                -- Write to the SAME context getPosition reads (no get/set drift).
+                if self:GetActiveContext() == "HEALER" then
                     self.db.HealerPosition = pos
                 else
                     self.db.Position = pos
@@ -1202,10 +1247,10 @@ function KT:RegWithEditMode()
             -- Self-point = growth vertical edge + user horizontal edge, so drag +
             -- overlay use the same fixed edge as the bars (aligned across a flip).
             getAnchorFrom = function()
-                return self:GetSelfPoint(KE:GetActivePositionConfig(self.db))
+                return self:GetSelfPoint((self:ResolvePositionConfig()))
             end,
             getParentFrame = function()
-                local _, aft, pf = KE:GetActivePositionConfig(self.db)
+                local _, aft, pf = self:ResolvePositionConfig()
                 return KE:ResolveAnchorFrame(aft, pf)
             end,
             guiPath = "KickTracker",

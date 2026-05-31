@@ -566,8 +566,17 @@ function KE:IsPlayerHealerSpec()
     return role == "HEALER"
 end
 
-function KE:GetActivePositionConfig(db)
-    if db.UseHealerPosition and self:IsPlayerHealerSpec() and db.HealerPosition then
+-- forceContext (optional): "HEALER" / "DEFAULT" overrides the live spec-driven
+-- resolution — used by the GUI to edit/preview a context regardless of the
+-- player's current spec. When nil, resolves live (UseHealerPosition + healer).
+function KE:GetActivePositionConfig(db, forceContext)
+    local useHealer
+    if forceContext ~= nil then
+        useHealer = (forceContext == "HEALER")
+    else
+        useHealer = db.UseHealerPosition and self:IsPlayerHealerSpec()
+    end
+    if useHealer and db.HealerPosition then
         return db.HealerPosition,
                db.HealerAnchorFrameType or db.anchorFrameType,
                db.HealerParentFrame or db.ParentFrame,

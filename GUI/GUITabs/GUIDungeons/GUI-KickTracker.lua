@@ -23,14 +23,6 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     local KT = KitnEssentials and KitnEssentials:GetModule("KickTracker", true)
 
     local manager = GUIFrame:CreateWidgetStateManager()
-    -- "position" group is enabled when main is on AND healer override isn't
-    -- currently overriding the standard position (i.e. user is not playing
-    -- healer or hasn't enabled healer override).
-    manager:SetCondition("position", function()
-        local healerActive = db.UseHealerPosition
-            and KE.IsPlayerHealerSpec and KE:IsPlayerHealerSpec()
-        return not healerActive
-    end)
     -- "classOnly": widgets only meaningful when ColorMode is "class"
     manager:SetCondition("classOnly", function()
         return db.ColorMode ~= "dark"
@@ -108,100 +100,113 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 2: Position Settings (gated by "position" condition so the
-    -- healer override can hide/disable it when active for a healer spec)
+    -- Card 2: Position Mode (healer override toggle + configure-for context)
     ----------------------------------------------------------------
+    -- Which context the Position Settings card edits this render. "HEALER" only
+    -- when override is on AND the module remembers Healer was selected; else
+    -- Default. guiConfigContext is a transient module field (not saved) so it
+    -- survives the page rebuild a context switch triggers. (KT module ref from
+    -- the top of this function.)
+    local isHealerCtx = db.UseHealerPosition and KT and KT.guiConfigContext == "HEALER" or false
+    if KT then KT.previewContext = isHealerCtx and "HEALER" or "DEFAULT" end
+
+    local function RebuildPage()
+        if GUIFrame.RefreshContent then
+            C_Timer.After(0, function() GUIFrame:RefreshContent() end)
+        end
+    end
+
+    local cardPosMode = GUIFrame:CreateCard(scrollChild, "Position Mode", yOffset)
+    manager:Register(cardPosMode, "all")
+    local rowPosMode = GUIFrame:CreateRow(cardPosMode.content, Theme.rowHeightLast)
+
+    local healerToggle = GUIFrame:CreateCheckbox(rowPosMode, "Use Healer Position", {
+        value = db.UseHealerPosition == true,
+        callback = function(checked)
+            db.UseHealerPosition = checked
+            if not checked and KT then
+                -- Override off -> no Healer context to edit; fall back to Default.
+                KT.guiConfigContext = "DEFAULT"
+                KT.previewContext = "DEFAULT"
+                if KT.isPreview then KT:ShowPreview() end
+                if KT.RefreshEditMode then KT:RefreshEditMode() end
+            end
+            ApplySettings()
+            RebuildPage()  -- rebuild so Position Settings reflects override on/off
+        end,
+    })
+    rowPosMode:AddWidget(healerToggle, 0.5)
+    manager:Register(healerToggle, "all")
+
+    -- Configure For: chooses which context (Default/Healer) the card below edits.
+    -- Rebuilds the page so the card shows that context's values, and moves the
+    -- preview to that mode.
+    local configureForDropdown = GUIFrame:CreateDropdown(rowPosMode, "Configure For", {
+        options = {
+            { key = "DEFAULT", text = "Default" },
+            { key = "HEALER",  text = "Healer" },
+        },
+        value = isHealerCtx and "HEALER" or "DEFAULT",
+        callback = function(key)
+            if KT then
+                KT.guiConfigContext = key
+                KT.previewContext = key
+                if KT.isPreview then KT:ShowPreview() end
+                if KT.RefreshEditMode then KT:RefreshEditMode() end
+            end
+            RebuildPage()
+        end,
+    })
+    rowPosMode:AddWidget(configureForDropdown, 0.5)
+    manager:Register(configureForDropdown, "healerConfig")  -- greyed when override off
+    cardPosMode:AddRow(rowPosMode, Theme.rowHeight)
+
+    local posModeNoteRow = GUIFrame:CreateRow(cardPosMode.content, 50)
+    local posModeNote = GUIFrame:CreateText(posModeNoteRow,
+        KE:ColorTextByTheme("Note"),
+        "Auto-swaps to a separate position when you're playing a healer spec. " ..
+        "Configure For picks which one to edit below; all other settings are shared.",
+        50, "hide")
+    posModeNoteRow:AddWidget(posModeNote, 1)
+    cardPosMode:AddRow(posModeNoteRow, 50, 0)
+    yOffset = cardPosMode:GetNextOffset()
+
+    -- Configure For only matters when healer override is on.
+    manager:SetCondition("healerConfig", function() return db.UseHealerPosition == true end)
+
+    ----------------------------------------------------------------
+    -- Card 3: Position Settings (context-driven: Default vs Healer keys)
+    ----------------------------------------------------------------
+    local posTitle = "Position Settings"
+    if db.UseHealerPosition then
+        posTitle = isHealerCtx and "Position Settings — Healer" or "Position Settings — Default"
+    end
     local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        title = "Position Settings",
+        title = posTitle,
         db = db,
+        positionKey = isHealerCtx and "HealerPosition" or "Position",
         dbKeys = {
-            -- Anchor From sets horizontal alignment; its vertical component is
-            -- overridden by GrowthDirection so the bar stack and edit-mode
-            -- overlay stay aligned on a growth flip.
+            -- Anchored To + Strata split per context (KickTracker has Healer*
+            -- root keys). Anchor From sets horizontal alignment; its vertical
+            -- component is overridden by GrowthDirection so the bar stack and
+            -- edit-mode overlay stay aligned on a growth flip.
+            anchorFrameType = isHealerCtx and "HealerAnchorFrameType" or "anchorFrameType",
+            anchorFrameFrame = isHealerCtx and "HealerParentFrame" or "ParentFrame",
             selfPoint = "AnchorFrom",
             anchorPoint = "AnchorTo",
             xOffset = "XOffset",
             yOffset = "YOffset",
+            strata = isHealerCtx and "HealerStrata" or "Strata",
         },
         showAnchorFrameType = true,
         showStrata = true,
         onChangeCallback = ApplySettings,
     })
     if posCard.positionWidgets then
-        manager:RegisterGroup(posCard.positionWidgets, "position")
+        manager:RegisterGroup(posCard.positionWidgets, "all")
     end
-    manager:Register(posCard, "position")
+    manager:Register(posCard, "all")
     yOffset = posOffset
-
-    ----------------------------------------------------------------
-    -- Card 2b: Healer Position Override
-    ----------------------------------------------------------------
-    local healerCard = GUIFrame:CreateCard(scrollChild, "Healer Position Override", yOffset)
-
-    local healerRow1 = GUIFrame:CreateRow(healerCard.content, Theme.rowHeightLast)
-    local healerEnableCheck = GUIFrame:CreateCheckbox(healerRow1, "Use Healer Position", {
-        value = db.UseHealerPosition == true,
-        callback = function(checked)
-            db.UseHealerPosition = checked
-            ApplySettings()
-            -- Re-render so healer position card appears/disappears
-            C_Timer.After(0.05, function() GUIFrame:RefreshContent() end)
-        end,
-    })
-    healerRow1:AddWidget(healerEnableCheck, 1)
-    healerCard:AddRow(healerRow1, Theme.rowHeightLast)
-
-    local healerNoteRow = GUIFrame:CreateRow(healerCard.content, Theme.rowHeight)
-    local healerNote = GUIFrame:CreateText(healerNoteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Auto-swap to a separate position when playing a healer spec.",
-        Theme.rowHeight, "hide")
-    healerNoteRow:AddWidget(healerNote, 1)
-    healerCard:AddRow(healerNoteRow, Theme.rowHeight, 0)
-
-    yOffset = healerCard:GetNextOffset()
-
-    if db.UseHealerPosition then
-        -- Metatable wrapper so CreatePositionCard reads/writes healer keys
-        -- via the same dbKeys mapping as the standard position card.
-        local healerDb = setmetatable({
-            Position = db.HealerPosition,
-        }, {
-            __index = function(_, k)
-                if k == "anchorFrameType" then return db.HealerAnchorFrameType
-                elseif k == "ParentFrame" then return db.HealerParentFrame
-                elseif k == "Strata" then return db.HealerStrata
-                else return db[k] end
-            end,
-            __newindex = function(t, k, v)
-                if k == "anchorFrameType" then db.HealerAnchorFrameType = v
-                elseif k == "ParentFrame" then db.HealerParentFrame = v
-                elseif k == "Strata" then db.HealerStrata = v
-                else rawset(t, k, v) end
-            end,
-        })
-
-        local healerPosCard, healerPosOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-            title = "Healer Position",
-            db = healerDb,
-            dbKeys = {
-                -- Anchor From = horizontal alignment; vertical follows growth
-                -- (see main position card).
-                selfPoint = "AnchorFrom",
-                anchorPoint = "AnchorTo",
-                xOffset = "XOffset",
-                yOffset = "YOffset",
-            },
-            showAnchorFrameType = true,
-            showStrata = true,
-            onChangeCallback = ApplySettings,
-        })
-        if healerPosCard.positionWidgets then
-            manager:RegisterGroup(healerPosCard.positionWidgets, "all")
-        end
-        manager:Register(healerPosCard, "all")
-        yOffset = healerPosOffset
-    end
 
     ----------------------------------------------------------------
     -- Card 3: Frame Settings
