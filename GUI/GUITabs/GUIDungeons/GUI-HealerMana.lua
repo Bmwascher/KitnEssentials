@@ -126,7 +126,46 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
     })
     rowAppearance2:AddWidget(disableOnHealerCheck, 0.5)
     manager:Register(disableOnHealerCheck, "all")
-    cardAppearance:AddRow(rowAppearance2, Theme.rowHeightLast, 0)
+    cardAppearance:AddRow(rowAppearance2, Theme.rowHeight)
+
+    -- Separator before text-offset settings
+    local rowAppSep = GUIFrame:CreateRow(cardAppearance.content, Theme.rowHeightSeparator)
+    GUIFrame:CreateSeparator(rowAppSep)
+    cardAppearance:AddRow(rowAppSep, Theme.rowHeightSeparator)
+
+    local rowNameOffset = GUIFrame:CreateRow(cardAppearance.content, Theme.rowHeight)
+    local nameXSlider = GUIFrame:CreateSlider(rowNameOffset, "Name X Offset", {
+        min = -40, max = 40, step = 1,
+        value = db.NameXOffset or 0,
+        callback = function(value) db.NameXOffset = value; Refresh() end,
+    })
+    rowNameOffset:AddWidget(nameXSlider, 0.5)
+    manager:Register(nameXSlider, "all")
+    local nameYSlider = GUIFrame:CreateSlider(rowNameOffset, "Name Y Offset", {
+        min = -40, max = 40, step = 1,
+        value = db.NameYOffset or 0,
+        callback = function(value) db.NameYOffset = value; Refresh() end,
+    })
+    rowNameOffset:AddWidget(nameYSlider, 0.5)
+    manager:Register(nameYSlider, "all")
+    cardAppearance:AddRow(rowNameOffset, Theme.rowHeight)
+
+    local rowManaOffset = GUIFrame:CreateRow(cardAppearance.content, Theme.rowHeightLast)
+    local manaXSlider = GUIFrame:CreateSlider(rowManaOffset, "Mana X Offset", {
+        min = -40, max = 40, step = 1,
+        value = db.ManaXOffset or 0,
+        callback = function(value) db.ManaXOffset = value; Refresh() end,
+    })
+    rowManaOffset:AddWidget(manaXSlider, 0.5)
+    manager:Register(manaXSlider, "all")
+    local manaYSlider = GUIFrame:CreateSlider(rowManaOffset, "Mana Y Offset", {
+        min = -40, max = 40, step = 1,
+        value = db.ManaYOffset or 0,
+        callback = function(value) db.ManaYOffset = value; Refresh() end,
+    })
+    rowManaOffset:AddWidget(manaYSlider, 0.5)
+    manager:Register(manaYSlider, "all")
+    cardAppearance:AddRow(rowManaOffset, Theme.rowHeightLast, 0)
 
     yOffset = cardAppearance:GetNextOffset()
 
@@ -286,58 +325,6 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
         manager:RegisterGroup(fontWidgets, "all")
     end
     yOffset = fontOffset
-
-    ----------------------------------------------------------------
-    -- Card 5: Name Text Position
-    ----------------------------------------------------------------
-    local cardName = GUIFrame:CreateCard(scrollChild, "Name Text Position", yOffset)
-    manager:Register(cardName, "all")
-
-    local rowName = GUIFrame:CreateRow(cardName.content, Theme.rowHeightLast)
-    local nameXSlider = GUIFrame:CreateSlider(rowName, "X Offset", {
-        min = -40, max = 40, step = 1,
-        value = db.NameXOffset or 0,
-        callback = function(value) db.NameXOffset = value; Refresh() end,
-    })
-    rowName:AddWidget(nameXSlider, 0.5)
-    manager:Register(nameXSlider, "all")
-
-    local nameYSlider = GUIFrame:CreateSlider(rowName, "Y Offset", {
-        min = -40, max = 40, step = 1,
-        value = db.NameYOffset or 0,
-        callback = function(value) db.NameYOffset = value; Refresh() end,
-    })
-    rowName:AddWidget(nameYSlider, 0.5)
-    manager:Register(nameYSlider, "all")
-    cardName:AddRow(rowName, Theme.rowHeightLast, 0)
-
-    yOffset = cardName:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Card 6: Mana Text Position
-    ----------------------------------------------------------------
-    local cardMana = GUIFrame:CreateCard(scrollChild, "Mana Text Position", yOffset)
-    manager:Register(cardMana, "all")
-
-    local rowMana = GUIFrame:CreateRow(cardMana.content, Theme.rowHeightLast)
-    local manaXSlider = GUIFrame:CreateSlider(rowMana, "X Offset", {
-        min = -40, max = 40, step = 1,
-        value = db.ManaXOffset or 0,
-        callback = function(value) db.ManaXOffset = value; Refresh() end,
-    })
-    rowMana:AddWidget(manaXSlider, 0.5)
-    manager:Register(manaXSlider, "all")
-
-    local manaYSlider = GUIFrame:CreateSlider(rowMana, "Y Offset", {
-        min = -40, max = 40, step = 1,
-        value = db.ManaYOffset or 0,
-        callback = function(value) db.ManaYOffset = value; Refresh() end,
-    })
-    rowMana:AddWidget(manaYSlider, 0.5)
-    manager:Register(manaYSlider, "all")
-    cardMana:AddRow(rowMana, Theme.rowHeightLast, 0)
-
-    yOffset = cardMana:GetNextOffset()
 
     RefreshStates()
     return yOffset
