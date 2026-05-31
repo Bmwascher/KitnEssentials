@@ -154,6 +154,7 @@ end
 -- healers); everything else (party/M+ instance, open-world group, raid
 -- instance with EnableInRaid off) = Dungeon Mode (single healer).
 function HM:GetMode()
+    if not self.db then return "DUNGEON" end
     local _, instanceType = IsInInstance()
     if instanceType == "raid" and self.db.EnableInRaid then
         return "RAID"
@@ -310,8 +311,13 @@ end
 function HM:ApplyContainerPosition()
     if not self.containerFrame then return end
     local pos = self:GetActivePosition()
+    -- Only rewrite the anchor edge when actually stacking (>1 healer). A single
+    -- healer keeps the user's configured anchor so existing positions don't
+    -- shift on upgrade (default AnchorFrom is "CENTER").
+    local count = #self.currentHealers
+    local anchorFrom = (count > 1) and self:GetGrowAnchor(pos.AnchorFrom) or pos.AnchorFrom
     local adjusted = {
-        AnchorFrom = self:GetGrowAnchor(pos.AnchorFrom),
+        AnchorFrom = anchorFrom,
         AnchorTo = pos.AnchorTo,
         XOffset = pos.XOffset,
         YOffset = pos.YOffset,
@@ -668,7 +674,7 @@ function HM:OnEnable()
     if not self.db or not self.db.Enabled then return end
     self:ApplySettings()
     C_Timer.After(0.5, function()
-        if HM.containerFrame then HM:ApplyContainerPosition() end
+        if HM.containerFrame and HM.db then HM:ApplyContainerPosition() end
     end)
     self:RegWithEditMode()
     self:StartUpdates()
