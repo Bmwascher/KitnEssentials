@@ -269,7 +269,11 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
     local rowRaid1 = GUIFrame:CreateRow(cardRaid.content, Theme.rowHeight)
     local enableRaidCheck = GUIFrame:CreateCheckbox(rowRaid1, "Enable in Raid", {
         value = db.EnableInRaid ~= false,
-        callback = function(checked) db.EnableInRaid = checked; ApplySettings() end,
+        callback = function(checked)
+            db.EnableInRaid = checked
+            ApplySettings()
+            RefreshStates()  -- grey/ungrey the raid-only settings below
+        end,
     })
     rowRaid1:AddWidget(enableRaidCheck, 0.5)
     manager:Register(enableRaidCheck, "all")
@@ -280,7 +284,7 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
         callback = function(value) db.MaxHealers = value; Refresh() end,
     })
     rowRaid1:AddWidget(maxHealersSlider, 0.5)
-    manager:Register(maxHealersSlider, "all")
+    manager:Register(maxHealersSlider, "raidConfig")
     cardRaid:AddRow(rowRaid1, Theme.rowHeight)
 
     local rowRaid2 = GUIFrame:CreateRow(cardRaid.content, Theme.rowHeightLast)
@@ -290,7 +294,7 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
         callback = function(value) db.FrameSpacing = value; Refresh() end,
     })
     rowRaid2:AddWidget(spacingSlider, 0.5)
-    manager:Register(spacingSlider, "all")
+    manager:Register(spacingSlider, "raidConfig")
 
     local growDropdown = GUIFrame:CreateDropdown(rowRaid2, "Grow Direction", {
         options = {
@@ -301,8 +305,13 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
         callback = function(key) db.GrowDirection = key; Refresh() end,
     })
     rowRaid2:AddWidget(growDropdown, 0.5)
-    manager:Register(growDropdown, "all")
+    manager:Register(growDropdown, "raidConfig")
     cardRaid:AddRow(rowRaid2, Theme.rowHeightLast, 0)
+
+    -- Raid-only settings (Max Healers / Frame Spacing / Grow Direction) do
+    -- nothing in Dungeon Mode, so grey them unless Enable in Raid is on.
+    -- (UpdateAll also gates this on the module's master Enabled toggle.)
+    manager:SetCondition("raidConfig", function() return db.EnableInRaid ~= false end)
 
     yOffset = cardRaid:GetNextOffset()
 
