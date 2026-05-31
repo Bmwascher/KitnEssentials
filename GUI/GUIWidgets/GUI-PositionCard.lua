@@ -221,7 +221,8 @@ local function kitGetValue(kit, key, default)
         if db[key] ~= nil then return db[key] end
         return default
     end
-    if db.Position and db.Position[key] ~= nil then return db.Position[key] end
+    local posKey = kit._positionKey or "Position"
+    if db[posKey] and db[posKey][key] ~= nil then return db[posKey][key] end
     if db[key] ~= nil then return db[key] end
     return default
 end
@@ -232,10 +233,13 @@ local function kitSetValue(kit, key, val)
     if not db then return end
     if rootKeys and rootKeys[key] then
         db[key] = val
-    elseif db.Position then
-        db.Position[key] = val
     else
-        db[key] = val
+        local posKey = kit._positionKey or "Position"
+        if db[posKey] then
+            db[posKey][key] = val
+        else
+            db[key] = val
+        end
     end
     if kit._onChange then kit._onChange() end
 end
@@ -456,6 +460,7 @@ local function ConfigurePositionCardKit(kit, scrollChild, yOffset, config)
     kit._rootKeys = rootKeys
     kit._onChange = onChange
     kit._config = config
+    kit._positionKey = config.positionKey or "Position"
 
     -- Anchor button callbacks read kit._selfPointCallback / _anchorPointCallback
     -- on click. Closures here are minimal — they just call kitSetValue with
