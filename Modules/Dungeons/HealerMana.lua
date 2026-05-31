@@ -95,7 +95,13 @@ local function IsHealer(unit)
     -- dungeons) still pass through.
     if not UnitIsPlayer(unit) then
         local maxMana = UnitPowerMax(unit, Enum.PowerType.Mana)
-        if not maxMana or maxMana < 100 then return false end
+        -- UnitPowerMax is SECRET in restricted party-power contexts (delves /
+        -- follower dungeons) — the very places this NPC branch runs. A `< 100`
+        -- relational compare on a secret number throws (truthiness is fine, but
+        -- comparison is not). Only apply the delve-companion sentinel filter
+        -- when maxMana is a safe number; when it's secret, let the unit through
+        -- (UnitGroupRolesAssigned already confirmed HEALER role above).
+        if KE:IsSafeValue(maxMana) and maxMana < 100 then return false end
     end
     return true
 end
