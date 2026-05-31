@@ -70,20 +70,98 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
         msgOn = "On",
         msgOff = "Off",
     })
-    row1:AddWidget(enableCheck, 0.5)
-
-    local enableRaidCheck = GUIFrame:CreateCheckbox(row1, "Enable in Raid", {
-        value = db.EnableInRaid ~= false,
-        callback = function(checked) db.EnableInRaid = checked; ApplySettings() end,
-    })
-    row1:AddWidget(enableRaidCheck, 0.5)
-    manager:Register(enableRaidCheck, "all")
+    row1:AddWidget(enableCheck, 1)
     card1:AddRow(row1, Theme.rowHeightLast, 0)
 
     yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 2: Appearance (icon size, icon type, mana color, hide on healer)
+    -- Card 2: Position Mode (split toggle + configure-for context)
+    ----------------------------------------------------------------
+    -- Forward declarations so the toggle/dropdown callbacks can reference
+    -- each other and the position card (all assigned before user interaction).
+    local posCard, posOffset
+    local configureForDropdown
+
+    local cardPosMode = GUIFrame:CreateCard(scrollChild, "Position Mode", yOffset)
+    manager:Register(cardPosMode, "all")
+    local rowPosMode = GUIFrame:CreateRow(cardPosMode.content, Theme.rowHeightLast)
+
+    local splitToggle = GUIFrame:CreateCheckbox(rowPosMode, "Split Positioning", {
+        value = db.SplitPositioning == true,
+        callback = function(checked)
+            db.SplitPositioning = checked
+            if not checked then
+                -- Collapse back to the single (Dungeon) context.
+                if configureForDropdown then configureForDropdown:SetValue("DUNGEON", true) end
+                if posCard and posCard.SetActiveContext then posCard:SetActiveContext("Position") end
+                local mod = GetModule()
+                if mod then
+                    mod.previewContext = "DUNGEON"
+                    if mod.isPreview then mod:ShowPreview() end
+                end
+            end
+            ApplySettings()
+            RefreshStates()  -- grey/ungrey the Configure For dropdown
+        end,
+    })
+    rowPosMode:AddWidget(splitToggle, 0.5)
+    manager:Register(splitToggle, "all")
+
+    -- Configure For: switches which position table the card below edits, and
+    -- moves the preview to that mode so you see what you're editing.
+    configureForDropdown = GUIFrame:CreateDropdown(rowPosMode, "Configure For", {
+        options = {
+            { key = "DUNGEON", text = "Dungeon" },
+            { key = "RAID",    text = "Raid" },
+        },
+        value = "DUNGEON",
+        callback = function(key)
+            local positionKey = (key == "RAID") and "RaidPosition" or "Position"
+            if posCard and posCard.SetActiveContext then posCard:SetActiveContext(positionKey) end
+            local mod = GetModule()
+            if mod then
+                mod.previewContext = key
+                if mod.isPreview then mod:ShowPreview() end
+            end
+        end,
+    })
+    rowPosMode:AddWidget(configureForDropdown, 0.5)
+    manager:Register(configureForDropdown, "splitConfig")  -- greyed when split off
+    cardPosMode:AddRow(rowPosMode, Theme.rowHeightLast, 0)
+    yOffset = cardPosMode:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 3: Position Settings (single, full; context-driven by the dropdown)
+    ----------------------------------------------------------------
+    posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        title = "Position Settings",
+        db = db,
+        positionKey = "Position",
+        dbKeys = {
+            anchorFrameType = "anchorFrameType",
+            anchorFrameFrame = "ParentFrame",
+            selfPoint = "AnchorFrom",
+            anchorPoint = "AnchorTo",
+            xOffset = "XOffset",
+            yOffset = "YOffset",
+            strata = "Strata",
+        },
+        showAnchorFrameType = true,
+        showStrata = true,
+        onChangeCallback = ApplySettings,
+    })
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
+    end
+    manager:Register(posCard, "all")
+    yOffset = posOffset
+
+    -- Configure For dropdown is only meaningful when split positioning is on.
+    manager:SetCondition("splitConfig", function() return db.SplitPositioning == true end)
+
+    ----------------------------------------------------------------
+    -- Card 4: Appearance (icon size, icon type, mana color, hide on healer)
     ----------------------------------------------------------------
     local cardAppearance = GUIFrame:CreateCard(scrollChild, "Appearance", yOffset)
     manager:Register(cardAppearance, "all")
@@ -170,12 +248,19 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
     yOffset = cardAppearance:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card: Raid Mode (stacking)
+    -- Card 5: Raid Mode (stacking)
     ----------------------------------------------------------------
     local cardRaid = GUIFrame:CreateCard(scrollChild, "Raid Mode", yOffset)
     manager:Register(cardRaid, "all")
 
     local rowRaid1 = GUIFrame:CreateRow(cardRaid.content, Theme.rowHeight)
+    local enableRaidCheck = GUIFrame:CreateCheckbox(rowRaid1, "Enable in Raid", {
+        value = db.EnableInRaid ~= false,
+        callback = function(checked) db.EnableInRaid = checked; ApplySettings() end,
+    })
+    rowRaid1:AddWidget(enableRaidCheck, 0.5)
+    manager:Register(enableRaidCheck, "all")
+
     local maxHealersSlider = GUIFrame:CreateSlider(rowRaid1, "Max Healers", {
         min = 1, max = 8, step = 1,
         value = db.MaxHealers or 6,
@@ -183,17 +268,6 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
     })
     rowRaid1:AddWidget(maxHealersSlider, 0.5)
     manager:Register(maxHealersSlider, "all")
-
-    local growDropdown = GUIFrame:CreateDropdown(rowRaid1, "Grow Direction", {
-        options = {
-            { key = "DOWN", text = "Down" },
-            { key = "UP",   text = "Up" },
-        },
-        value = db.GrowDirection or "DOWN",
-        callback = function(key) db.GrowDirection = key; Refresh() end,
-    })
-    rowRaid1:AddWidget(growDropdown, 0.5)
-    manager:Register(growDropdown, "all")
     cardRaid:AddRow(rowRaid1, Theme.rowHeight)
 
     local rowRaid2 = GUIFrame:CreateRow(cardRaid.content, Theme.rowHeightLast)
@@ -202,99 +276,25 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
         value = db.FrameSpacing or 4,
         callback = function(value) db.FrameSpacing = value; Refresh() end,
     })
-    rowRaid2:AddWidget(spacingSlider, 1)
+    rowRaid2:AddWidget(spacingSlider, 0.5)
     manager:Register(spacingSlider, "all")
+
+    local growDropdown = GUIFrame:CreateDropdown(rowRaid2, "Grow Direction", {
+        options = {
+            { key = "DOWN", text = "Down" },
+            { key = "UP",   text = "Up" },
+        },
+        value = db.GrowDirection or "DOWN",
+        callback = function(key) db.GrowDirection = key; Refresh() end,
+    })
+    rowRaid2:AddWidget(growDropdown, 0.5)
+    manager:Register(growDropdown, "all")
     cardRaid:AddRow(rowRaid2, Theme.rowHeightLast, 0)
 
     yOffset = cardRaid:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card: Position Mode (split toggle + configure-for context)
-    ----------------------------------------------------------------
-    -- Forward declarations so the toggle/dropdown callbacks can reference
-    -- each other and the position card (all assigned before user interaction).
-    local posCard, posOffset
-    local configureForDropdown
-
-    local cardPosMode = GUIFrame:CreateCard(scrollChild, "Position Mode", yOffset)
-    manager:Register(cardPosMode, "all")
-    local rowPosMode = GUIFrame:CreateRow(cardPosMode.content, Theme.rowHeightLast)
-
-    local splitToggle = GUIFrame:CreateCheckbox(rowPosMode, "Split Positioning", {
-        value = db.SplitPositioning == true,
-        callback = function(checked)
-            db.SplitPositioning = checked
-            if not checked then
-                -- Collapse back to the single (Dungeon) context.
-                if configureForDropdown then configureForDropdown:SetValue("DUNGEON", true) end
-                if posCard and posCard.SetActiveContext then posCard:SetActiveContext("Position") end
-                local mod = GetModule()
-                if mod then
-                    mod.previewContext = "DUNGEON"
-                    if mod.isPreview then mod:ShowPreview() end
-                end
-            end
-            ApplySettings()
-            RefreshStates()  -- grey/ungrey the Configure For dropdown
-        end,
-    })
-    rowPosMode:AddWidget(splitToggle, 0.5)
-    manager:Register(splitToggle, "all")
-
-    -- Configure For: switches which position table the card below edits, and
-    -- moves the preview to that mode so you see what you're editing.
-    configureForDropdown = GUIFrame:CreateDropdown(rowPosMode, "Configure For", {
-        options = {
-            { key = "DUNGEON", text = "Dungeon" },
-            { key = "RAID",    text = "Raid" },
-        },
-        value = "DUNGEON",
-        callback = function(key)
-            local positionKey = (key == "RAID") and "RaidPosition" or "Position"
-            if posCard and posCard.SetActiveContext then posCard:SetActiveContext(positionKey) end
-            local mod = GetModule()
-            if mod then
-                mod.previewContext = key
-                if mod.isPreview then mod:ShowPreview() end
-            end
-        end,
-    })
-    rowPosMode:AddWidget(configureForDropdown, 0.5)
-    manager:Register(configureForDropdown, "splitConfig")  -- greyed when split off
-    cardPosMode:AddRow(rowPosMode, Theme.rowHeightLast, 0)
-    yOffset = cardPosMode:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Card: Position Settings (single, full; context-driven by the dropdown)
-    ----------------------------------------------------------------
-    posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        title = "Position Settings",
-        db = db,
-        positionKey = "Position",
-        dbKeys = {
-            anchorFrameType = "anchorFrameType",
-            anchorFrameFrame = "ParentFrame",
-            selfPoint = "AnchorFrom",
-            anchorPoint = "AnchorTo",
-            xOffset = "XOffset",
-            yOffset = "YOffset",
-            strata = "Strata",
-        },
-        showAnchorFrameType = true,
-        showStrata = true,
-        onChangeCallback = ApplySettings,
-    })
-    if posCard.positionWidgets then
-        manager:RegisterGroup(posCard.positionWidgets, "all")
-    end
-    manager:Register(posCard, "all")
-    yOffset = posOffset
-
-    -- Configure For dropdown is only meaningful when split positioning is on.
-    manager:SetCondition("splitConfig", function() return db.SplitPositioning == true end)
-
-    ----------------------------------------------------------------
-    -- Card 4: Font Settings (font face / outline + per-text sizes)
+    -- Card 6: Font Settings (font face / outline + per-text sizes)
     ----------------------------------------------------------------
     local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
         db = db,
