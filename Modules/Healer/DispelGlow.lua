@@ -127,8 +127,34 @@ end
 -- plus a 14px-tall vertical fade band at the top fading from alpha 0.7 at
 -- the top to alpha 0 at the bottom.
 ------------------------------------------------------------------------
+-- Configured border thickness in pixels (DB-driven; BORDER_THICKNESS is the
+-- fallback floor used before the DB is resolved).
+local function CurrentBorderSize()
+    return (DG.db and DG.db.BorderSize) or BORDER_THICKNESS
+end
+
+-- Apply a border thickness to an existing visual: resize the four bars and
+-- re-offset the top fade band (its inset rides on the thickness). The anchor
+-- points are thickness-independent, so this runs any time without a rebuild.
+local function ApplyBorderSize(visual, thickness)
+    if not visual then return end
+    thickness = thickness or BORDER_THICKNESS
+    if visual.borderTop    then visual.borderTop:SetHeight(thickness) end
+    if visual.borderBottom then visual.borderBottom:SetHeight(thickness) end
+    if visual.borderLeft   then visual.borderLeft:SetWidth(thickness) end
+    if visual.borderRight  then visual.borderRight:SetWidth(thickness) end
+    if visual.topGlow and visual._host then
+        local edge = BORDER_INSET + thickness
+        visual.topGlow:ClearAllPoints()
+        visual.topGlow:SetPoint("TOPLEFT",  visual._host, "TOPLEFT",   edge, -edge)
+        visual.topGlow:SetPoint("TOPRIGHT", visual._host, "TOPRIGHT", -edge, -edge)
+        visual.topGlow:SetHeight(TOPGLOW_HEIGHT)
+    end
+end
+
 local function BuildVisual(frame)
     local visual = CreateFrame("Frame", nil, frame)
+    visual._host = frame
     visual:SetAllPoints(frame)
     visual:SetFrameLevel(frame:GetFrameLevel() + 10)
     visual:EnableMouse(false)
@@ -140,29 +166,25 @@ local function BuildVisual(frame)
     visual.borderTop = edge()
     visual.borderTop:SetPoint("TOPLEFT",  frame, "TOPLEFT",   BORDER_INSET, -BORDER_INSET)
     visual.borderTop:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -BORDER_INSET, -BORDER_INSET)
-    visual.borderTop:SetHeight(BORDER_THICKNESS)
 
     visual.borderBottom = edge()
     visual.borderBottom:SetPoint("BOTTOMLEFT",  frame, "BOTTOMLEFT",   BORDER_INSET, BORDER_INSET)
     visual.borderBottom:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -BORDER_INSET, BORDER_INSET)
-    visual.borderBottom:SetHeight(BORDER_THICKNESS)
 
     visual.borderLeft = edge()
     visual.borderLeft:SetPoint("TOPLEFT",    frame, "TOPLEFT",     BORDER_INSET, -BORDER_INSET)
     visual.borderLeft:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT",  BORDER_INSET,  BORDER_INSET)
-    visual.borderLeft:SetWidth(BORDER_THICKNESS)
 
     visual.borderRight = edge()
     visual.borderRight:SetPoint("TOPRIGHT",    frame, "TOPRIGHT",    -BORDER_INSET, -BORDER_INSET)
     visual.borderRight:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -BORDER_INSET,  BORDER_INSET)
-    visual.borderRight:SetWidth(BORDER_THICKNESS)
 
     visual.topGlow = visual:CreateTexture(nil, "OVERLAY")
     visual.topGlow:SetTexture(GRADIENT_TEX)
     visual.topGlow:SetVertexColor(1, 1, 1, 0)
-    visual.topGlow:SetPoint("TOPLEFT",  frame, "TOPLEFT",   BORDER_INSET + BORDER_THICKNESS, -(BORDER_INSET + BORDER_THICKNESS))
-    visual.topGlow:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -(BORDER_INSET + BORDER_THICKNESS), -(BORDER_INSET + BORDER_THICKNESS))
-    visual.topGlow:SetHeight(TOPGLOW_HEIGHT)
+
+    -- Size the bars + position the fade band from the configured thickness.
+    ApplyBorderSize(visual, CurrentBorderSize())
 
     return visual
 end
@@ -534,8 +556,11 @@ function DG:ApplySettings()
         return
     end
 
-    -- Force oUF to re-evaluate AuraHighlight on all managed frames
-    for frame in pairs(containerByFrame) do
+    -- Re-apply border thickness, then force oUF to re-evaluate AuraHighlight
+    -- on every managed frame (which re-tints the border with the live palette).
+    local thickness = self.db.BorderSize or BORDER_THICKNESS
+    for frame, entry in pairs(containerByFrame) do
+        if entry.visual then ApplyBorderSize(entry.visual, thickness) end
         ForceAuraHighlightUpdate(frame)
     end
 end

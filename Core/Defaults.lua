@@ -518,6 +518,7 @@ local Defaults = {
 
         DispelGlow = {
             Enabled = false,
+            BorderSize = 2,   -- border thickness in px (1-4)
         },
 
         DisintegrateTicks = {

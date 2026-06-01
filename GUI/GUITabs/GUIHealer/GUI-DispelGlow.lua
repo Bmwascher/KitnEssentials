@@ -1,6 +1,8 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-DispelGlow.lua                                      ║
--- ║  GUI: Dispel Glow (Enable + Note; ElvUI-gated)           ║
+-- ║  GUI: Dispel Glow (ElvUI-gated)                          ║
+-- ║  Enable + Note, Border thickness, and a cross-linked      ║
+-- ║  Dispel Type Colors card (shared with Aura Debuffs).      ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -22,9 +24,18 @@ GUIFrame:RegisterContent("DispelGlow", function(scrollChild, yOffset)
 
     local hasElv = _G.ElvUI ~= nil
 
+    local manager = GUIFrame:CreateWidgetStateManager()
+    -- The shared palette card edits AuraDebuffs.DispelColors, which is useful
+    -- even when the glow is off (it also drives the Aura Debuffs highlight),
+    -- so register it under an always-true group rather than the master enable.
+    manager:SetCondition("paletteAlways", function() return true end)
+
+    local function RefreshStates()
+        manager:UpdateAll(db.Enabled == true)
+    end
+
     ----------------------------------------------------------------
     -- Card 1: Enable + Note
-    -- (Pure frame overlay — no position/EditMode/preview.)
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Dispel Glow", yOffset)
 
@@ -38,6 +49,7 @@ GUIFrame:RegisterContent("DispelGlow", function(scrollChild, yOffset)
                 if checked then KitnEssentials:EnableModule("DispelGlow")
                 else KitnEssentials:DisableModule("DispelGlow") end
             end
+            RefreshStates()
         end,
         msgPopup = true,
         msgText  = "Dispel Glow",
@@ -56,7 +68,7 @@ GUIFrame:RegisterContent("DispelGlow", function(scrollChild, yOffset)
              "debuff is present, including private auras (dungeon-mechanic debuffs the normal aura " ..
              "API can't see).\n" ..
              KE:ColorTextByTheme("-") .. " Uses Blizzard's native dispel overlay anchored to each frame.\n" ..
-             KE:ColorTextByTheme("-") .. " Border color follows your Aura Debuffs dispel-type palette.")
+             KE:ColorTextByTheme("-") .. " Border color uses the Dispel Type Colors below (shared with Aura Debuffs).")
         or  (KE:ColorTextByTheme("-") .. " Dispel Glow requires ElvUI. Install/enable ElvUI to use this feature.")
 
     local noteRow = GUIFrame:CreateRow(card1.content, noteHeight)
@@ -69,5 +81,49 @@ GUIFrame:RegisterContent("DispelGlow", function(scrollChild, yOffset)
 
     yOffset = card1:GetNextOffset()
 
+    -- ElvUI absent: nothing else to configure (the border + palette only
+    -- affect the glow). The palette stays editable from the Aura Debuffs page.
+    if not hasElv then
+        RefreshStates()
+        return yOffset
+    end
+
+    ----------------------------------------------------------------
+    -- Card 2: Border (greys out with the module enable)
+    ----------------------------------------------------------------
+    local card2 = GUIFrame:CreateCard(scrollChild, "Border", yOffset)
+    manager:Register(card2, "all")
+
+    local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local borderSlider = GUIFrame:CreateSlider(row2, "Border Thickness (px)", {
+        min = 1, max = 4, step = 1,
+        value = db.BorderSize or 2,
+        callback = function(val)
+            db.BorderSize = val
+            local mod = GetModule()
+            if mod and mod.ApplySettings then mod:ApplySettings() end
+        end,
+    })
+    row2:AddWidget(borderSlider, 1)
+    manager:Register(borderSlider, "all")
+    card2:AddRow(row2, Theme.rowHeightLast, 0)
+
+    yOffset = card2:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 3: Dispel Type Colors (shared with Aura Debuffs)
+    -- Bound to the AuraDebuffs profile so both consumers stay in sync;
+    -- always editable (paletteAlways group) regardless of the glow toggle.
+    ----------------------------------------------------------------
+    local adb = KE.db.profile.AuraDebuffs
+    if adb then
+        yOffset = GUIFrame:CreateDispelTypeColorsCard(scrollChild, yOffset, {
+            db         = adb,
+            manager    = manager,
+            stateGroup = "paletteAlways",
+        })
+    end
+
+    RefreshStates()
     return yOffset
 end)
