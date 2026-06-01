@@ -378,7 +378,7 @@ local PREVIEW_MODULES = {
     "FocusCastbar", "TargetCastbar", "RaidNotifications", "HuntersMark", "RangeChecker",
     "TimeSpiral", "TotemTracker", "DisintegrateTicks", "StasisTracker", "Recuperate", "BloodlustTracker", "KickTracker",
     "NoMovementAlert", "PrescienceTracker", "GreatVaultAlert", "PotionReady", "AuraExternals", "AuraDebuffs",
-    "EnemyCounter", "EbonMightTracker", "DungeonCasts", "HealerMana",
+    "EnemyCounter", "EbonMightTracker", "DungeonCasts", "HealerMana", "InnervateTracker",
     "ReadyCheckConsumables", "DeathNotifications",
     "Cursor",
 }
@@ -404,7 +404,7 @@ local SECTION_PREVIEW_MODULES = {
         "EnemyCounter", "KickTracker", "DungeonCasts", "DeathNotifications",
     },
     healer_section = {
-        "HealerMana",
+        "HealerMana", "InnervateTracker",
     },
 }
 
