@@ -26,6 +26,10 @@ GUIFrame:RegisterContent("DispelOnCursor", function(scrollChild, yOffset)
 
     local manager = GUIFrame:CreateWidgetStateManager()
 
+    -- Scoped refresh: this page only owns the dispel satellite, so re-apply
+    -- just that (not the Cursor module's full Refresh, which also kicks the
+    -- GCD ring / cast circle this page doesn't configure). ApplyDispelSatellite
+    -- itself re-applies correctly during an active dispel preview.
     local function RefreshModule()
         local M = GetModule()
         if M and M.ApplyDispelSatellite then M:ApplyDispelSatellite() end
