@@ -80,9 +80,10 @@ GUIFrame.sidebarConfig = {
         text = "\226\128\162 Healer Utilities",
         defaultExpanded = false,
         items = {
-            { id = "DispelOnCursor",    text = "Dispel on Cursor" },
-            { id = "InnervateTracker",  text = "Innervate Tracker" },
-            { id = "HealerMana",        text = "Healer Mana" },
+            { id = "DispelOnCursor",        text = "Dispel on Cursor" },
+            { id = "InnervateTracker",      text = "Innervate Tracker" },
+            { id = "MaintenanceTracker",    text = "Maintenance Tracker" },
+            { id = "HealerMana",            text = "Healer Mana" },
         },
     },
     {
