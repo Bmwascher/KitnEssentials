@@ -462,11 +462,11 @@ local Defaults = {
         },
 
         InnervateTracker = {
-            Enabled = false,
+            Enabled = true,
             IconSize = 40,
             ShowLabel = true,
-            LabelText = "INNERVATE",
-            LabelColor = { 1, 1, 1, 1 },
+            LabelText = "FREE",
+            LabelColor = { 0, 1, 0, 1 }, -- #00ff00
             LabelFontSize = 14,
             ShowTimer = true,
             TimerColor = { 1, 1, 1, 1 },

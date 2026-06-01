@@ -50,11 +50,12 @@ GUIFrame:RegisterContent("InnervateTracker", function(scrollChild, yOffset)
 
     ----------------------------------------------------------------
     -- Card 1: Enable
+    -- (Preview is automatic via the section PreviewManager + /kes edit;
+    --  no manual preview button — matches the reference behavior.)
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Innervate Tracker", yOffset)
 
-    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
     local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Innervate Tracker", {
         value = db.Enabled == true,
         callback = function(checked)
@@ -71,30 +72,31 @@ GUIFrame:RegisterContent("InnervateTracker", function(scrollChild, yOffset)
         msgOn = "On",
         msgOff = "Off",
     })
-    row1:AddWidget(enableCheck, (2 / 3))
-
-    local previewBtn
-    previewBtn = GUIFrame:CreateButton(row1, "Show Preview", {
-        height = 30,
-        callback = function()
-            local IT = GetModule()
-            if IT and IT.TogglePreview then
-                local isActive = IT:TogglePreview()
-                previewBtn:SetLabel(isActive and "Hide Preview" or "Show Preview")
-            end
-        end,
-    })
-    row1:AddWidget(previewBtn, (1 / 3), nil, 0, -6)
-    local _IT = GetModule()
-    if _IT and _IT.IsPreviewActive and _IT:IsPreviewActive() then
-        previewBtn:SetLabel("Hide Preview")
-    end
-    card1:AddRow(row1, Theme.rowHeight)
+    row1:AddWidget(enableCheck, 1)
+    card1:AddRow(row1, Theme.rowHeightLast, 0)
 
     yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 2: Display Settings
+    -- Card 2: Position (top of the page, per standard card order)
+    ----------------------------------------------------------------
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        db = db,
+        showAnchorFrameType = true,
+        showStrata = true,
+        onChangeCallback = function()
+            local IT = GetModule()
+            if IT then IT:ApplyPosition() end
+        end,
+    })
+    manager:Register(posCard, "all")
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
+    end
+    yOffset = posOffset
+
+    ----------------------------------------------------------------
+    -- Card 3: Display Settings
     ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
     manager:Register(card2, "all")
@@ -125,7 +127,7 @@ GUIFrame:RegisterContent("InnervateTracker", function(scrollChild, yOffset)
     manager:Register(showLabelCheck, "all")
 
     local labelColorPicker = GUIFrame:CreateColorPicker(row2b, "Label Color", {
-        color = db.LabelColor or { 1, 1, 1, 1 },
+        color = db.LabelColor or { 0, 1, 0, 1 },
         callback = function(r, g, b, a)
             db.LabelColor = { r, g, b, a }
             ApplySettings()
@@ -158,9 +160,9 @@ GUIFrame:RegisterContent("InnervateTracker", function(scrollChild, yOffset)
     -- Label Text editbox
     local row2d = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
     local labelEdit = GUIFrame:CreateEditBox(row2d, "Label Text", {
-        value = db.LabelText or "INNERVATE",
+        value = db.LabelText or "FREE",
         callback = function(val)
-            db.LabelText = (val ~= "" and val) or "INNERVATE"
+            db.LabelText = (val ~= "" and val) or "FREE"
             ApplySettings()
         end,
     })
@@ -171,7 +173,7 @@ GUIFrame:RegisterContent("InnervateTracker", function(scrollChild, yOffset)
     yOffset = card2:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 3: Font Settings (face + outline + label font size)
+    -- Card 4: Font Settings (face + outline + label font size)
     ----------------------------------------------------------------
     local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
         title = "Font",
@@ -189,8 +191,8 @@ GUIFrame:RegisterContent("InnervateTracker", function(scrollChild, yOffset)
     if fontWidgets then manager:RegisterGroup(fontWidgets, "all") end
 
     ----------------------------------------------------------------
-    -- Card 3b: Timer Font Size (separate — label and timer sized
-    -- independently; face/outline shared via Card 3 above)
+    -- Card 5: Timer Font Size (separate — label and timer sized
+    -- independently; face/outline shared via Card 4 above)
     ----------------------------------------------------------------
     local timerSizeCard = GUIFrame:CreateCard(scrollChild, "Timer Font Size", fontOffset)
     manager:Register(timerSizeCard, "all")
@@ -208,18 +210,25 @@ GUIFrame:RegisterContent("InnervateTracker", function(scrollChild, yOffset)
     yOffset = timerSizeCard:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 4: Glow Settings
+    -- Card 6: Glow Settings
     ----------------------------------------------------------------
     local glowCard, glowOffset, glowWidgets = GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, {
         db = db,
         onChangeCallback = ApplySettings,
+        onHeightChange = function()
+            -- Switching glow type (pixel/autocast/proc) adds or removes option
+            -- rows, so the card resizes at runtime. Reflow the page to reposition
+            -- the cards below it. Deferred so the dropdown finishes its click
+            -- first; a same-item RefreshContent is in-place (preview not flashed).
+            C_Timer.After(0, function() GUIFrame:RefreshContent() end)
+        end,
     })
     manager:Register(glowCard, "all")
     if glowWidgets then manager:RegisterGroup(glowWidgets, "all") end
     yOffset = glowOffset
 
     ----------------------------------------------------------------
-    -- Card 5: Sound Settings
+    -- Card 7: Sound Settings
     ----------------------------------------------------------------
     local soundCard, soundOffset = GUIFrame:CreateSoundSettingsCard(scrollChild, yOffset, {
         db = db,
@@ -227,24 +236,6 @@ GUIFrame:RegisterContent("InnervateTracker", function(scrollChild, yOffset)
     })
     manager:Register(soundCard, "all")
     yOffset = soundOffset
-
-    ----------------------------------------------------------------
-    -- Card 6: Position
-    ----------------------------------------------------------------
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        db = db,
-        showAnchorFrameType = true,
-        showStrata = true,
-        onChangeCallback = function()
-            local IT = GetModule()
-            if IT then IT:ApplyPosition() end
-        end,
-    })
-    manager:Register(posCard, "all")
-    if posCard.positionWidgets then
-        manager:RegisterGroup(posCard.positionWidgets, "all")
-    end
-    yOffset = posOffset
 
     UpdateAllWidgetStates()
 
