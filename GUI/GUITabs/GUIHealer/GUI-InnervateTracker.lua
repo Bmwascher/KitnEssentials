@@ -68,6 +68,8 @@ GUIFrame:RegisterContent("InnervateTracker", function(scrollChild, yOffset)
         end,
         msgPopup = true,
         msgText = "Innervate Tracker",
+        msgOn = "On",
+        msgOff = "Off",
     })
     row1:AddWidget(enableCheck, (2 / 3))
 
