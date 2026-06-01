@@ -209,13 +209,15 @@ GUIFrame:RegisterContent("MaintenanceTracker", function(scrollChild, yOffset)
     rowSep4:AddWidget(sep4, 1)
     card4:AddRow(rowSep4, Theme.rowHeightSeparator)
 
-    local row4Label = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
-    local layoutLabel = GUIFrame:CreateLabel(row4Label,
+    local row4Label = GUIFrame:CreateRow(card4.content, 70)
+    local layoutLabel = GUIFrame:CreateText(row4Label,
+        KE:ColorTextByTheme("Note"),
         "Only relevant for specs with multiple tracked spells " ..
         "(e.g., Mistweaver tracks both Renewing Mist and Enveloping Mist). " ..
-        "Settings are saved regardless of current spec.")
+        "Settings are saved regardless of current spec.",
+        70, "hide")
     row4Label:AddWidget(layoutLabel, 1)
-    card4:AddRow(row4Label, Theme.rowHeightLast, 0)
+    card4:AddRow(row4Label, 70, 0)
 
     yOffset = card4:GetNextOffset()
 
