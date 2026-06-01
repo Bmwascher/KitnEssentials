@@ -239,8 +239,10 @@ function IT:ApplySettings()
 
     self:ApplyPosition()
 
-    -- Restart glow with new settings if it was running
-    if self.glowActive then
+    -- Re-apply glow to reflect current settings. During preview (or while a
+    -- live glow is running) stop+restart so enable/disable/type/color changes
+    -- show immediately; StartGlow self-gates on GlowEnabled.
+    if self.isPreview or self.glowActive then
         self:StopGlow()
         self:StartGlow()
     end
@@ -441,6 +443,9 @@ end
 ---------------------------------------------------------------------------------
 function IT:UpdateTimer()
     if not self.frame or not self.frame:IsShown() then return end
+    -- Preview shows a static "8.0" set by ShowPreview; skip the live countdown
+    -- (which would tick to 0 and then freeze) while previewing.
+    if self.isPreview then return end
     if self.db.ShowTimer == false then
         if self.frame.timer:GetText() ~= "" then
             self.frame.timer:SetText("")
@@ -493,6 +498,7 @@ function IT:ShowPreview()
     end
     self.frame:SetAlpha(1)
     self.frame:Show()
+    self:StartGlow()  -- glow reflects the user's settings during preview too
 end
 
 function IT:HidePreview()
