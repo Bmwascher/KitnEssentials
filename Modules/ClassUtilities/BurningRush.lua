@@ -17,7 +17,8 @@ local LCG = LibStub("LibCustomGlow-1.0", true)
 
 local CreateFrame = CreateFrame
 local UnitClass = UnitClass
-local IsSpellKnown = IsSpellKnown
+local C_SpellBook = C_SpellBook
+local SpellBookBank_Player = Enum.SpellBookSpellBank.Player
 local C_Timer = C_Timer
 local UIParent = UIParent
 
@@ -72,7 +73,6 @@ function BURN:ApplySettings()
     local db = self.db
 
     self.frame:SetSize(db.IconSize, db.IconSize)
-    self.icon:SetAllPoints(self.frame)
 
     self:ApplyPosition()
 
@@ -205,7 +205,7 @@ function BURN:OnEnable()
     -- Warlock-only + spell known. (Corrects NUI's dead `not className == "WARLOCK"`
     -- precedence bug.) Silent no-op for everyone else.
     local _, class = UnitClass("player")
-    if class ~= "WARLOCK" or not IsSpellKnown(BURNING_RUSH_SPELL) then return end
+    if class ~= "WARLOCK" or not C_SpellBook.IsSpellKnown(BURNING_RUSH_SPELL, SpellBookBank_Player) then return end
     if not self.db or not self.db.Enabled then return end
 
     self:CreateFrame()
@@ -239,5 +239,8 @@ function BURN:OnDisable()
     self.isPreview = false
     self.glowActive = false
     self:UnregisterAllEvents()
-    if KE.EditMode then KE.EditMode:UnregisterElement("BurningRush") end
+    if KE.EditMode then
+        KE.EditMode:UnregisterElement("BurningRush")
+        self.editModeRegistered = false
+    end
 end
