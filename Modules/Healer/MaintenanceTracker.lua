@@ -89,6 +89,13 @@ local _, playerClass = UnitClass("player")
 
 local UPDATE_TICK = 0.1  -- 10Hz display refresh
 
+-- Diagnostic flag. When true, ScanUnit prints which scan path ran and how
+-- many buffs it registered: the player FAST path (GetPlayerAuraBySpellID)
+-- vs the group single-pass. Flip to true, /reload, apply a tracked buff to
+-- yourself + a party member, read the log, then flip back to false. Gated
+-- so the false path compiles to nothing hot. Leave false in ship builds.
+local DEBUG_MT = false
+
 ------------------------------------------------------------------------
 -- Tracking state
 ------------------------------------------------------------------------
@@ -224,6 +231,7 @@ function MT:ScanUnit(unit)
     -- below if the accessor is unavailable.
     local playerLookup = (unit == "player") and C_UnitAuras.GetPlayerAuraBySpellID
     if playerLookup then
+        local found = 0
         for ti = 1, #trackers do
             local t = trackers[ti]
             local spellIDs = t.spellIDs
@@ -233,10 +241,15 @@ function MT:ScanUnit(unit)
                 -- TryRegisterAura re-filters on sourceUnit == player and a
                 -- non-secret expiry, so an ally-cast aura of the same id is
                 -- rejected here and cleared.
-                if not (aura and TryRegisterAura(t, guid, spellID, aura)) then
+                if aura and TryRegisterAura(t, guid, spellID, aura) then
+                    found = found + 1
+                else
                     ClearSpellForGuid(t, guid, spellID)
                 end
             end
+        end
+        if DEBUG_MT then
+            KE:Print(("|cff39ff14[MT]|r player FAST path (GetPlayerAuraBySpellID): %d self-buff(s) tracked"):format(found))
         end
         return
     end
@@ -247,6 +260,7 @@ function MT:ScanUnit(unit)
     for ti = 1, #trackers do
         trackers[ti].activeBuffs[guid] = nil
     end
+    local registered = 0
     local i = 1
     while true do
         local a = C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL")
@@ -257,13 +271,16 @@ function MT:ScanUnit(unit)
                 local t = trackers[ti]
                 local spellIDs = t.spellIDs
                 for si = 1, #spellIDs do
-                    if spellIDs[si] == sid then
-                        TryRegisterAura(t, guid, sid, a)
+                    if spellIDs[si] == sid and TryRegisterAura(t, guid, sid, a) then
+                        registered = registered + 1
                     end
                 end
             end
         end
         i = i + 1
+    end
+    if DEBUG_MT and registered > 0 then
+        KE:Print(("|cff39ff14[MT]|r group single-pass %s: %d buff(s) registered"):format(unit, registered))
     end
 end
 
