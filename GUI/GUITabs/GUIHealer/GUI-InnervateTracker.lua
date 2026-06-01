@@ -10,17 +10,6 @@ local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 
-local UnitClass = UnitClass
-
-local SUPPORTED = {
-    DRUID   = true,
-    PALADIN = true,
-    PRIEST  = true,
-    SHAMAN  = true,
-    MONK    = true,
-    EVOKER  = true,
-}
-
 local function GetModule()
     return KitnEssentials and KitnEssentials:GetModule("InnervateTracker", true)
 end
@@ -35,12 +24,12 @@ GUIFrame:RegisterContent("InnervateTracker", function(scrollChild, yOffset)
 
     -- Class-gate notice: the module silently does nothing on unsupported classes.
     -- Warn the user upfront rather than leaving them puzzled.
-    local _, playerClass = UnitClass("player")
-    if not SUPPORTED[playerClass] then
+    local itGate = GetModule()
+    if itGate and itGate.isSupported == false then
         local noticeCard = GUIFrame:CreateCard(scrollChild, "Innervate Tracker", yOffset)
         noticeCard:AddLabel(
             "Innervate Tracker only applies to healer-capable classes.\n\n" ..
-            "Your current class (" .. (playerClass or "Unknown") .. ") cannot receive " ..
+            "Your current class cannot receive " ..
             "|cffffd100Innervate|r, so the tracker is inactive on this character. " ..
             "Settings are saved to your profile and will apply if you switch to a " ..
             "|cffffd100Druid, Paladin, Priest, Shaman, Monk, or Evoker|r."

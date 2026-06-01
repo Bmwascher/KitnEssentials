@@ -65,6 +65,8 @@ local SPEC_SPELLS = {
     [1468] = { 361469,355936, 360995 }, -- Preservation Evoker: Living Flame, Dream Breath, Verdant Embrace
 }
 
+-- Hardcoded because Innervate's duration cannot be read from the aura API in
+-- this expansion. Update this value if Blizzard changes the buff duration.
 local BUFF_DUR           = 8      -- Innervate duration (seconds)
 local POLL_RATE_ACTIVE   = 0.05   -- 50ms poll while in combat / confirming
 local POLL_RATE_IDLE     = 0.50   -- 500ms poll otherwise
@@ -112,13 +114,6 @@ function IT:OnEnable()
     self._zeroStreak  = 0
     self._wasZero     = false
     self._activePollRate = POLL_RATE_IDLE
-
-    -- Start the detection ticker (always-running hidden frame)
-    if self.ticker then
-        self.ticker:SetScript("OnUpdate", function(_, dt)
-            IT:OnPollTick(dt)
-        end)
-    end
 
     -- EditMode
     self:RegWithEditMode()
@@ -351,7 +346,10 @@ function IT:OnPollTick(dt)
 end
 
 function IT:OnInnervateDetected()
-    if not self.frame then self:CreateFrame() end
+    if not self.frame then
+        self:CreateFrame()
+        self:ApplySettings()
+    end
     self.frame.icon:SetTexture(INNERVATE_ICON)
     self.endTime = GetTime() + BUFF_DUR
     self.duration = BUFF_DUR
@@ -369,6 +367,7 @@ function IT:HideFrame()
     local wasShown = self.frame and self.frame:IsShown()
     self.endTime = 0
     self.duration = 0
+    self._lastTimerStr = nil
     if self.frame then
         self.frame.timer:SetText("")
         if self.frame.timer._keSoftOutline then self.frame.timer._keSoftOutline:SetShown(false) end
