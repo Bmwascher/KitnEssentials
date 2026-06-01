@@ -10,8 +10,8 @@
 -- ║  Scanning logic adapted from PowerWordToolbox v1.1.3     ║
 -- ║  with multi-spell tracking added. Original credit for    ║
 -- ║  the secret-value-safe scanning pattern (issecretvalue   ║
--- ║  checks before comparisons, fast path via                ║
--- ║  C_UnitAuras.GetAuraDataBySpellID, slow path fallback).  ║
+-- ║  checks before comparisons). The player's auras use a     ║
+-- ║  direct by-id lookup; group members take a single sweep. ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -206,9 +206,11 @@ end
 ------------------------------------------------------------------------
 -- Scanning
 ------------------------------------------------------------------------
--- Per UNIT_AURA we scan each tracked spell. With the fast-path API
--- this is O(#spellIDs across all trackers) direct lookups, not
--- O(auras), so it stays cheap even with multi-spell trackers.
+-- Per UNIT_AURA we reconcile one unit's tracked buffs. The player's own
+-- auras are addressable directly by spellID (O(1) per tracked spell) via
+-- GetPlayerAuraBySpellID. There is no per-unit by-id accessor for group
+-- members in 12.0, so they take a single pass over their helpful auras —
+-- one iteration regardless of how many spells are tracked.
 function MT:ScanUnit(unit)
     if #trackers == 0 then return end
     if not UnitExists(unit) then return end
@@ -217,44 +219,51 @@ function MT:ScanUnit(unit)
     local guid = UnitGUID(unit)
     if not guid or issecretvalue(guid) then return end
 
-    local fastPath = C_UnitAuras.GetAuraDataBySpellID
-
-    for ti = 1, #trackers do
-        local t = trackers[ti]
-        local spellIDs = t.spellIDs
-
-        for si = 1, #spellIDs do
-            local spellID = spellIDs[si]
-
-            if fastPath then
-                -- Fast path: direct spellID lookup, O(1).
-                local aura = fastPath(unit, spellID, "HELPFUL")
-                if aura then
-                    if not TryRegisterAura(t, guid, spellID, aura) then
-                        ClearSpellForGuid(t, guid, spellID)
-                    end
-                else
+    -- Fast path: the player's own auras fetch directly by spellID, no
+    -- iteration. Only valid for "player"; falls through to the group scan
+    -- below if the accessor is unavailable.
+    local playerLookup = (unit == "player") and C_UnitAuras.GetPlayerAuraBySpellID
+    if playerLookup then
+        for ti = 1, #trackers do
+            local t = trackers[ti]
+            local spellIDs = t.spellIDs
+            for si = 1, #spellIDs do
+                local spellID = spellIDs[si]
+                local aura = playerLookup(spellID)
+                -- TryRegisterAura re-filters on sourceUnit == player and a
+                -- non-secret expiry, so an ally-cast aura of the same id is
+                -- rejected here and cleared.
+                if not (aura and TryRegisterAura(t, guid, spellID, aura)) then
                     ClearSpellForGuid(t, guid, spellID)
                 end
-            else
-                -- Slow path fallback: iterate helpful auras for this spell.
-                local found = false
-                local i = 1
-                while true do
-                    local a = C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL")
-                    if not a then break end
-                    if not issecretvalue(a.spellId) and a.spellId == spellID then
-                        if not TryRegisterAura(t, guid, spellID, a) then
-                            ClearSpellForGuid(t, guid, spellID)
-                        end
-                        found = true
-                        break
-                    end
-                    i = i + 1
-                end
-                if not found then ClearSpellForGuid(t, guid, spellID) end
             end
         end
+        return
+    end
+
+    -- Group member: drop this unit's tracked entries, then re-register
+    -- whatever is currently present in a single sweep of its helpful auras.
+    -- Ally-cast instances are rejected by TryRegisterAura's sourceUnit guard.
+    for ti = 1, #trackers do
+        trackers[ti].activeBuffs[guid] = nil
+    end
+    local i = 1
+    while true do
+        local a = C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL")
+        if not a then break end
+        local sid = a.spellId
+        if not issecretvalue(sid) then
+            for ti = 1, #trackers do
+                local t = trackers[ti]
+                local spellIDs = t.spellIDs
+                for si = 1, #spellIDs do
+                    if spellIDs[si] == sid then
+                        TryRegisterAura(t, guid, sid, a)
+                    end
+                end
+            end
+        end
+        i = i + 1
     end
 end
 
