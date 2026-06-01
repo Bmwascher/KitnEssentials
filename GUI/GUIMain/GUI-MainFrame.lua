@@ -75,6 +75,15 @@ GUIFrame.sidebarConfig = {
         },
     },
     {
+        id = "healer_section",
+        type = "header",
+        text = "\226\128\162 Healer Utilities",
+        defaultExpanded = false,
+        items = {
+            { id = "HealerMana", text = "Healer Mana" },
+        },
+    },
+    {
         id = "qol_section",
         type = "header",
         text = "\226\128\162 Quality of Life",
@@ -123,7 +132,6 @@ GUIFrame.sidebarConfig = {
             { id = "DeathNotifications",          text = "Death Notifications" },
             { id = "DungeonCasts",                text = "Dungeon Casts" },
             { id = "EnemyCounter",                text = "Enemy Counter" },
-            { id = "HealerMana",                  text = "Healer Mana" },
             { id = "KickTracker",                 text = "Interrupt Tracker" },
             { id = "WarpDepleteForces",           text = "WarpDeplete+" },
         },

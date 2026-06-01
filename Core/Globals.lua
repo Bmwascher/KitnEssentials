@@ -401,7 +401,10 @@ local SECTION_PREVIEW_MODULES = {
         "DragonRiding", "HuntersMark", "GreatVaultAlert",
     },
     dungeons_section = {
-        "EnemyCounter", "KickTracker", "DungeonCasts", "HealerMana", "DeathNotifications",
+        "EnemyCounter", "KickTracker", "DungeonCasts", "DeathNotifications",
+    },
+    healer_section = {
+        "HealerMana",
     },
 }
 
