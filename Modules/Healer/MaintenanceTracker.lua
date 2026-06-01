@@ -114,6 +114,7 @@ local UPDATE_TICK = 0.1  -- 10Hz display refresh
 local trackers = {}
 local currentSpec = nil
 local isPreviewActive = false
+local _onUpdateElapsed = 0  -- accumulator for the shared 10Hz OnUpdate
 
 ------------------------------------------------------------------------
 -- Helpers
@@ -362,19 +363,6 @@ function MT:RebuildFrames()
             frame.lowest:SetPoint("TOP", frame, "BOTTOM", 0, -2)
             frame.lowest:SetShadowOffset(0, 0)
 
-            -- Per-frame OnUpdate attached to frame 1 only. Calls UpdateDisplay
-            -- once per tick which iterates all trackers; cheaper than one
-            -- OnUpdate per frame doing per-tracker work.
-            if i == 1 then
-                local elapsed = 0
-                frame:SetScript("OnUpdate", function(_, dt)
-                    elapsed = elapsed + dt
-                    if elapsed < UPDATE_TICK then return end
-                    elapsed = 0
-                    MT:UpdateDisplay()
-                end)
-            end
-
             self.frames[i] = frame
         end
 
@@ -399,6 +387,23 @@ function MT:RebuildFrames()
     -- Hide any leftover frames from a prior larger spec.
     for i = #trackers + 1, #self.frames do
         self.frames[i]:Hide()
+    end
+
+    -- (Re)attach or detach the shared 10Hz OnUpdate on frames[1].
+    -- Done unconditionally here so that disable→enable cycles (which nil
+    -- the script in OnDisable) always restore it when trackers are present.
+    if self.frames[1] then
+        if #trackers > 0 then
+            _onUpdateElapsed = 0
+            self.frames[1]:SetScript("OnUpdate", function(_, dt)
+                _onUpdateElapsed = _onUpdateElapsed + dt
+                if _onUpdateElapsed < UPDATE_TICK then return end
+                _onUpdateElapsed = 0
+                MT:UpdateDisplay()
+            end)
+        else
+            self.frames[1]:SetScript("OnUpdate", nil)
+        end
     end
 
     self:ApplyPosition()
@@ -514,7 +519,7 @@ function MT:ApplyPosition()
         point, relPoint, dx, dy = "LEFT", "RIGHT", spacing, 0
     end
 
-    for i = 2, #self.frames do
+    for i = 2, #trackers do
         local f = self.frames[i]
         if f then
             f:ClearAllPoints()
@@ -555,34 +560,10 @@ function MT:ShowPreview()
     if isPreviewActive then return end
 
     -- Ensure spec detection has run so trackers/frames exist.
-    -- If no tracked spec is active, fall back to Disc Priest (specID 256)
-    -- so the preview has something to show regardless of current spec.
     if #trackers == 0 then
-        local specIndex = GetSpecialization()
-        local specID    = specIndex and GetSpecializationInfo(specIndex) or nil
-        if not (specID and SPEC_CONFIG[specID]) then
-            -- Build a temporary single-icon preview using spec 256 (Disc Priest)
-            local fallbackConfigs = SPEC_CONFIG[256]
-            wipe(trackers)
-            for i, config in ipairs(fallbackConfigs) do
-                local spellIDs = config.spellIDs or { config.spellID }
-                trackers[i] = {
-                    spellIDs      = spellIDs,
-                    iconSpellID   = config.iconSpellID or spellIDs[1],
-                    spellName     = config.spellName,
-                    previewCount  = config.previewCount or 4,
-                    activeBuffs   = {},
-                    expiredBuffer = {},
-                    display = {
-                        lastCount      = -1,
-                        lastLowestStr  = "",
-                        lastColorBand  = -1,
-                        lastShowLowest = nil,
-                    },
-                }
-            end
-        end
-        self:RebuildFrames()
+        -- No tracked buff for the current spec — show nothing (silent no-op
+        -- for supported class on an untracked spec, e.g. Holy Priest).
+        return
     end
 
     if not self.frames then return end
@@ -598,20 +579,20 @@ function MT:ShowPreview()
         if frame then
             local countStr = tostring(t.previewCount or 4)
             frame.count:SetText(countStr)
-            t.display.lastCount = -1  -- allow live path to overwrite cleanly on hide
 
             if self.db.ShowLowest then
                 local lowestStr = string_format("%d", math_floor(dummyDuration + 0.5))
                 frame.lowest:SetText(lowestStr)
-                t.display.lastLowestStr = ""  -- cleared so live path can overwrite
 
                 local highCol = self.db.HighDurationColor or { 1, 0.85, 0.4, 1 }
                 frame.lowest:SetTextColor(highCol[1], highCol[2], highCol[3], highCol[4] or 1)
-                t.display.lastColorBand = -1
                 frame.lowest:Show()
             else
                 frame.lowest:Hide()
             end
+
+            -- Reset all cache fields so the live path can overwrite cleanly on hide.
+            ResetDisplayCache(t)
 
             frame:Show()
         end
@@ -730,6 +711,7 @@ function MT:OnDisable()
 
     self:UnregisterAllEvents()
     if self.frames then
+        if self.frames[1] then self.frames[1]:SetScript("OnUpdate", nil) end
         for _, f in ipairs(self.frames) do f:Hide() end
     end
     for ti = 1, #trackers do
