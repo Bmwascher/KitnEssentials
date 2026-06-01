@@ -202,6 +202,20 @@ local function GetDispelColor(auraInstanceID)
     return C_UnitAuras.GetAuraDispelTypeColor(UNIT, auraInstanceID, _dispelColorCurve)
 end
 
+-- Public accessor so sibling modules (e.g. DispelGlow) reuse the same dispel
+-- palette the user configures here, instead of duplicating the curve. Lazily
+-- builds from this module's DB so it resolves even when AuraDebuffs itself is
+-- disabled (the palette still lives in the profile). Returns a LuaCurveObject
+-- (or nil if the curve API is unavailable); callers pass it straight to
+-- C_UnitAuras.GetAuraDispelTypeColor.
+function AD:GetDispelColorCurve()
+    if not _dispelColorCurve then
+        local db = self.db or (KE.db and KE.db.profile and KE.db.profile.AuraDebuffs)
+        if db then RebuildDispelColorCurve(db) end
+    end
+    return _dispelColorCurve
+end
+
 -- Valid Blizzard AuraFilters tokens for HARMFUL aura filtering, per
 -- AuraUtil.AuraFilters in Blizzard_FrameXMLUtil/AuraUtil.lua. The remaining
 -- tokens in that table (CANCELABLE, NOT_CANCELABLE, EXTERNAL_DEFENSIVE,
