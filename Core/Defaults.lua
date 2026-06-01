@@ -442,6 +442,30 @@ local Defaults = {
             Position = DefaultPosition(0, -160),
         },
 
+        BurningRush = {
+            Enabled = false,
+            IconSize = 40,
+            -- Glow (consumed by GUI-GlowSettingsCard — these are its default key names)
+            GlowEnabled = true,
+            GlowType = "pixel",
+            GlowColor = { 1, 0.5, 0, 1 },
+            GlowXOffset = 0,
+            GlowYOffset = 0,
+            GlowLines = 5,
+            GlowFrequency = 0.25,
+            GlowLength = 10,
+            GlowThickness = 2,
+            GlowBorder = true,
+            GlowScale = 1,
+            GlowDuration = 1,
+            GlowStartAnim = false,
+            -- Position (anchorFrameType/ParentFrame/Strata are ROOT keys; AnchorFrom/To + offsets live in Position)
+            Strata = "HIGH",
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            Position = DefaultPosition(0, -50),
+        },
+
         TotemTracker = {
             Enabled = true,
             IconSize = 44,
