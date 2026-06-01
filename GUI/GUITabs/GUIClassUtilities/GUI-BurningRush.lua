@@ -31,9 +31,9 @@ GUIFrame:RegisterContent("BurningRush", function(scrollChild, yOffset)
     local function RefreshStates() manager:UpdateAll(db.Enabled ~= false) end
 
     ----------------------------------------------------------------
-    -- Card 1: Enable & Preview
+    -- Card 1: Enable
     ----------------------------------------------------------------
-    local card1 = GUIFrame:CreateCard(scrollChild, "Burning Rush", yOffset)
+    local card1 = GUIFrame:CreateCard(scrollChild, "Warlock: Burning Rush", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
     local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Burning Rush", {
@@ -52,31 +52,17 @@ GUIFrame:RegisterContent("BurningRush", function(scrollChild, yOffset)
         msgOn = "On",
         msgOff = "Off",
     })
-    row1:AddWidget(enableCheck, (2 / 3))
-
-    local previewBtn
-    previewBtn = GUIFrame:CreateButton(row1, "Show Preview", {
-        height = 30,
-        callback = function()
-            if BURN and BURN.TogglePreview then
-                local active = BURN:TogglePreview()
-                previewBtn:SetLabel(active and "Hide Preview" or "Show Preview")
-            end
-        end,
-    })
-    row1:AddWidget(previewBtn, (1 / 3), nil, 0, -6)
-    if BURN and BURN.IsPreviewActive and BURN:IsPreviewActive() then
-        previewBtn:SetLabel("Hide Preview")
-    end
+    row1:AddWidget(enableCheck, 1)
     card1:AddRow(row1, Theme.rowHeight)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, 36)
+    local noteRow = GUIFrame:CreateRow(card1.content, 40)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Warlock only. Shows a glowing icon while Burning Rush is active.",
-        36, "hide")
+        KE:ColorTextByTheme("-") .. " Warlock only. Shows a glowing icon while Burning Rush is active.\n" ..
+        KE:ColorTextByTheme("-") .. " Position with the Position card or " .. KE:ColorTextByTheme("/kes edit") .. ".",
+        40, "hide")
     noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, 36)
+    card1:AddRow(noteRow, 40)
 
     local sepRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightSeparator)
     local sep1 = GUIFrame:CreateSeparator(sepRow)
@@ -96,18 +82,7 @@ GUIFrame:RegisterContent("BurningRush", function(scrollChild, yOffset)
     yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 2: Glow Settings
-    ----------------------------------------------------------------
-    local glowCard, glowOffset = GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, {
-        title = "Glow Settings",
-        db = db,
-        onChangeCallback = ApplySettings,
-    })
-    manager:Register(glowCard, "all")
-    yOffset = glowOffset
-
-    ----------------------------------------------------------------
-    -- Card 3: Position Settings
+    -- Card 2: Position Settings
     ----------------------------------------------------------------
     local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = db,
@@ -129,6 +104,17 @@ GUIFrame:RegisterContent("BurningRush", function(scrollChild, yOffset)
     end
     manager:Register(posCard, "all")
     yOffset = posOffset
+
+    ----------------------------------------------------------------
+    -- Card 3: Glow Settings
+    ----------------------------------------------------------------
+    local glowCard, glowOffset = GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, {
+        title = "Glow Settings",
+        db = db,
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(glowCard, "all")
+    yOffset = glowOffset
 
     RefreshStates()
     return yOffset

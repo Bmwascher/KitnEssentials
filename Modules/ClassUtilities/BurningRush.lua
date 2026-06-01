@@ -2,7 +2,7 @@
 -- ║  BurningRush.lua                                         ║
 -- ║  Module: Burning Rush (Warlock)                          ║
 -- ║  Purpose: Glowing icon while Burning Rush (111400) is     ║
--- ║           active. Warlock-only, spell-known gated.        ║
+-- ║           active. Warlock-only; driven by aura presence.  ║
 -- ║  Credit: Ported from NorskenUI ClassUtil/BurningRush.     ║
 -- ╚══════════════════════════════════════════════════════════╝
 
@@ -12,13 +12,13 @@ if not KitnEssentials then return end
 
 ---@class BurningRush: AceModule, AceEvent-3.0
 local BURN = KitnEssentials:NewModule("BurningRush", "AceEvent-3.0")
+BURN.classRestriction = "WARLOCK"
 
 local LCG = LibStub("LibCustomGlow-1.0", true)
 
 local CreateFrame = CreateFrame
 local UnitClass = UnitClass
-local C_SpellBook = C_SpellBook
-local SpellBookBank_Player = Enum.SpellBookSpellBank.Player
+local C_UnitAuras = C_UnitAuras
 local C_Timer = C_Timer
 local UIParent = UIParent
 
@@ -154,6 +154,18 @@ function BURN:SetActive(active)
     if active then self:ShowDisplay() else self:HideDisplay() end
 end
 
+-- Aura-presence detection. Burning Rush (111400) is a toggled self-buff, so the
+-- reliable signal is "does the player currently have the aura" rather than a
+-- cast/overlay-glow event (the overlay-glow-hide event does not fire when the
+-- buff is toggled off manually). Player's own auras are not secret in 12.0, so
+-- GetPlayerAuraBySpellID is safe. Same pattern as BloodlustTracker.
+function BURN:UpdateActive()
+    if self.isPreview then return end
+    local hasBuff = (C_UnitAuras.GetPlayerAuraBySpellID(BURNING_RUSH_SPELL) ~= nil)
+    if hasBuff == self.active then return end
+    self:SetActive(hasBuff)
+end
+
 ---------------------------------------------------------------------------------
 -- Edit Mode
 ---------------------------------------------------------------------------------
@@ -202,28 +214,28 @@ end
 -- Lifecycle
 ---------------------------------------------------------------------------------
 function BURN:OnEnable()
-    -- Warlock-only + spell known. (Corrects NUI's dead `not className == "WARLOCK"`
-    -- precedence bug.) Silent no-op for everyone else.
+    -- Warlock-only. Without the talent the aura can never appear, so detection is
+    -- a harmless no-op for talentless Warlocks — no spell-known gate needed.
+    -- Silent no-op for every other class.
     local _, class = UnitClass("player")
-    if class ~= "WARLOCK" or not C_SpellBook.IsSpellKnown(BURNING_RUSH_SPELL, SpellBookBank_Player) then return end
+    if class ~= "WARLOCK" then return end
     if not self.db or not self.db.Enabled then return end
 
+    self.active = false
     self:CreateFrame()
     self:RegWithEditMode()
-    C_Timer.After(0.5, function() self:ApplyPosition() end)
+    C_Timer.After(0.5, function()
+        self:ApplyPosition()
+        self:UpdateActive()
+    end)
 
     -- AceEvent RegisterEvent + manual unit filter (KE convention — no RegisterUnitEvent).
-    -- UNIT_SPELLCAST_SUCCEEDED payload: (unitTarget, castGUID, spellID).
-    self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", function(_, unit, _, spellID)
+    -- UNIT_AURA(player) is the toggle-safe signal for the Burning Rush buff.
+    self:RegisterEvent("UNIT_AURA", function(_, unit)
         if unit ~= "player" then return end
-        if spellID ~= BURNING_RUSH_SPELL then return end
-        self:SetActive(true)
+        self:UpdateActive()
     end)
-    -- SPELL_ACTIVATION_OVERLAY_GLOW_HIDE payload: (spellID).
-    self:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE", function(_, spellID)
-        if spellID ~= BURNING_RUSH_SPELL then return end
-        self:SetActive(false)
-    end)
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", function() self:UpdateActive() end)
     self:RegisterEvent("PLAYER_DEAD", function()
         self.active = false
         self:HideDisplay()

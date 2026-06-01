@@ -61,13 +61,13 @@ GUIFrame.sidebarConfig = {
         text = "\226\128\162 Class Utilities",
         defaultExpanded = false,
         items = {
-            { id = "BurningRush",   text = "Burning Rush" },
             { id = "EvokerSuite",   text = "Evoker Suite" },
             { id = "HuntersMark",   text = "Hunter: Mark Missing" },
             { id = "PetStatusText", text = "Pet Status Texts" },
             { id = "SpellAlerts",   text = "Spell Alert Opacity" },
             { id = "StanceText",    text = "Stance Text" },
             { id = "TotemTracker",  text = "Totem Tracker" },
+            { id = "BurningRush",   text = "Warlock: Burning Rush" },
         },
     },
     {
