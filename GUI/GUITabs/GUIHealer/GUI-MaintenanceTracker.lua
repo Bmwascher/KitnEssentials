@@ -9,6 +9,8 @@
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
+local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
+local pairs = pairs
 
 local function GetModule()
     return KitnEssentials and KitnEssentials:GetModule("MaintenanceTracker", true)
@@ -53,7 +55,7 @@ GUIFrame:RegisterContent("MaintenanceTracker", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Maintenance Tracker", yOffset)
 
-    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
     local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Maintenance Tracker", {
         value = db.Enabled == true,
         callback = function(checked)
@@ -71,7 +73,18 @@ GUIFrame:RegisterContent("MaintenanceTracker", function(scrollChild, yOffset)
         msgOff   = "Off",
     })
     row1:AddWidget(enableCheck, 1)
-    card1:AddRow(row1, Theme.rowHeightLast, 0)
+    card1:AddRow(row1, Theme.rowHeight)
+
+    card1:AddLabel(
+        "Shows an icon per tracked maintenance buff with the " ..
+        KE:ColorTextByTheme("count") .. " of affected group members and the " ..
+        KE:ColorTextByTheme("lowest remaining duration") .. " across all targets. Tracks " ..
+        "|cff99e6ffAtonement|r for Discipline Priest, " ..
+        "|cff80ff80Renewing Mist|r + |cff80ff80Enveloping Mist|r for Mistweaver Monk, " ..
+        "|cffff7d0aRejuvenation|r (incl. Germination) for Restoration Druid, " ..
+        "|cff0070deRiptide|r for Restoration Shaman, and " ..
+        "|cff33937fEcho|r for Preservation Evoker. " ..
+        "Multi-spell specs render icons side-by-side using the layout settings below.")
 
     yOffset = card1:GetNextOffset()
 
@@ -115,8 +128,16 @@ GUIFrame:RegisterContent("MaintenanceTracker", function(scrollChild, yOffset)
     rowSep3:AddWidget(sep3, 1)
     card3:AddRow(rowSep3, Theme.rowHeightSeparator)
 
-    -- Count Color
+    -- Count Font Size + Count Color (paired)
     local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local countSizeSlider = GUIFrame:CreateSlider(row3b, "Count Font Size", {
+        min = 8, max = 48, step = 1,
+        value = db.CountFontSize or 24,
+        callback = function(val) db.CountFontSize = val; ApplySettings() end,
+    })
+    row3b:AddWidget(countSizeSlider, 0.5)
+    manager:Register(countSizeSlider, "all")
+
     local countColorPicker = GUIFrame:CreateColorPicker(row3b, "Count Color", {
         color = db.CountColor or { 1, 1, 1, 1 },
         callback = function(r, g, b, a)
@@ -124,7 +145,7 @@ GUIFrame:RegisterContent("MaintenanceTracker", function(scrollChild, yOffset)
             ApplySettings()
         end,
     })
-    row3b:AddWidget(countColorPicker, 1)
+    row3b:AddWidget(countColorPicker, 0.5)
     manager:Register(countColorPicker, "all")
     card3:AddRow(row3b, Theme.rowHeight)
 
@@ -149,26 +170,40 @@ GUIFrame:RegisterContent("MaintenanceTracker", function(scrollChild, yOffset)
     yOffset = card3:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 4: Font Settings
-    -- FontFace + CountFontSize + FontOutline, all applied via
-    -- KE:ApplyFontToText. CountFontSize is the shared "count" size;
-    -- LowestFontSize stays in the Display card above.
+    -- Card 4: Font (face + outline only; count/duration sizes live
+    -- in the Display card)
     ----------------------------------------------------------------
-    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-        title = "Font",
-        db = db,
-        dbKeys = {
-            fontFace    = "FontFace",
-            fontSize    = "CountFontSize",
-            fontOutline = "FontOutline",
-        },
-        fontSizeRange = { 8, 48 },
-        includeSoftOutline = true,
-        onChangeCallback = ApplySettings,
-    })
+    local fontCard = GUIFrame:CreateCard(scrollChild, "Font", yOffset)
     manager:Register(fontCard, "all")
-    if fontWidgets then manager:RegisterGroup(fontWidgets, "all") end
-    yOffset = fontOffset
+
+    local fontList = {}
+    if LSM then
+        for name in pairs(LSM:HashTable("font")) do fontList[name] = name end
+    else
+        fontList["Expressway"] = "Expressway"
+    end
+
+    local rowFont = GUIFrame:CreateRow(fontCard.content, Theme.rowHeightLast)
+    local fontFaceDropdown = GUIFrame:CreateDropdown(rowFont, "Font", {
+        options = fontList,
+        value = db.FontFace or "Expressway",
+        searchable = true,
+        isFontPreview = true,
+        callback = function(key) db.FontFace = key; ApplySettings() end,
+    })
+    rowFont:AddWidget(fontFaceDropdown, 0.5)
+    manager:Register(fontFaceDropdown, "all")
+
+    local outlineDropdown = GUIFrame:CreateDropdown(rowFont, "Outline", {
+        options = KE:GetFontOutlineOptions{ includeSoft = true },
+        value = db.FontOutline or "OUTLINE",
+        callback = function(key) db.FontOutline = key; ApplySettings() end,
+    })
+    rowFont:AddWidget(outlineDropdown, 0.5)
+    manager:Register(outlineDropdown, "all")
+    fontCard:AddRow(rowFont, Theme.rowHeightLast, 0)
+
+    yOffset = fontCard:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 5: Multi-Spell Layout
@@ -202,22 +237,7 @@ GUIFrame:RegisterContent("MaintenanceTracker", function(scrollChild, yOffset)
     })
     row4a:AddWidget(spacingSlider, 0.5)
     manager:Register(spacingSlider, "all")
-    card4:AddRow(row4a, Theme.rowHeight)
-
-    local rowSep4 = GUIFrame:CreateRow(card4.content, Theme.rowHeightSeparator)
-    local sep4 = GUIFrame:CreateSeparator(rowSep4)
-    rowSep4:AddWidget(sep4, 1)
-    card4:AddRow(rowSep4, Theme.rowHeightSeparator)
-
-    local row4Label = GUIFrame:CreateRow(card4.content, 70)
-    local layoutLabel = GUIFrame:CreateText(row4Label,
-        KE:ColorTextByTheme("Note"),
-        "Only relevant for specs with multiple tracked spells " ..
-        "(e.g., Mistweaver tracks both Renewing Mist and Enveloping Mist). " ..
-        "Settings are saved regardless of current spec.",
-        70, "hide")
-    row4Label:AddWidget(layoutLabel, 1)
-    card4:AddRow(row4Label, 70, 0)
+    card4:AddRow(row4a, Theme.rowHeight, 0)
 
     yOffset = card4:GetNextOffset()
 

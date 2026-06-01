@@ -495,19 +495,19 @@ local Defaults = {
         },
 
         MaintenanceTracker = {
-            Enabled = false,
-            IconSize = 40,
-            CountFontSize = 24,
+            Enabled = true,
+            IconSize = 34,
+            CountFontSize = 14,
             CountColor = { 1, 1, 1, 1 },
             ShowLowest = true,
             LowestFontSize = 14,
-            GrowthDirection = "RIGHT",   -- RIGHT | LEFT | UP | DOWN
+            GrowthDirection = "LEFT",   -- RIGHT | LEFT | UP | DOWN
             Spacing = 4,
             LowThreshold = 3,
             MidThreshold = 6,
-            LowDurationColor = { 1, 0.3, 0.3, 1 },
-            MidDurationColor = { 1, 0.75, 0.2, 1 },
-            HighDurationColor = { 1, 0.85, 0.4, 1 },
+            LowDurationColor = { 1, 0.302, 0.302, 1 },  -- #ff4d4d
+            MidDurationColor = { 1, 0.749, 0.2, 1 },     -- #ffbf33
+            HighDurationColor = { 0, 1, 0.059, 1 },      -- #00ff0f
             FontFace = "Expressway",
             FontOutline = "OUTLINE",
             Strata = "HIGH",
