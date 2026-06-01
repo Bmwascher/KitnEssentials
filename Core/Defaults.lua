@@ -460,7 +460,7 @@ local Defaults = {
             GlowDuration = 1,
             GlowStartAnim = false,
             -- Position (anchorFrameType/ParentFrame/Strata are ROOT keys; AnchorFrom/To + offsets live in Position)
-            Strata = "HIGH",
+            Strata = "MEDIUM",
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, -50),
@@ -512,7 +512,7 @@ local Defaults = {
             -- Sound (CreateSoundSettingsCard default key names)
             actionOnShowSound = "None",
             actionOnHideSound = "None",
-            Strata = "HIGH",
+            Strata = "MEDIUM",
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, -120),
@@ -534,7 +534,7 @@ local Defaults = {
             HighDurationColor = { 0, 1, 0.059, 1 },      -- #00ff0f
             FontFace = "Expressway",
             FontOutline = "OUTLINE",
-            Strata = "HIGH",
+            Strata = "MEDIUM",
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, -160),
@@ -565,7 +565,7 @@ local Defaults = {
 
         StasisTracker = {
             Enabled = false,
-            Strata = "HIGH",
+            Strata = "MEDIUM",
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, -60),
@@ -855,7 +855,7 @@ local Defaults = {
 
         HuntersMark = {
             Enabled = false,
-            Strata = "HIGH",
+            Strata = "MEDIUM",
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, 120),
