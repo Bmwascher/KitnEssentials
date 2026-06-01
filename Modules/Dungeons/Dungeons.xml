@@ -3,6 +3,5 @@
     <Script file="EnemyCounter.lua" />
     <Script file="KickTracker.lua" />
     <Script file="DungeonCasts.lua" />
-    <Script file="HealerMana.lua" />
     <Script file="DeathNotifications.lua" />
 </Ui>

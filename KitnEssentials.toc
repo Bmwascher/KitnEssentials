@@ -18,6 +18,7 @@ Modules\Utilities\Utilities.xml
 
 Modules\Combat\Combat.xml
 Modules\Dungeons\Dungeons.xml
+Modules\Healer\Healer.xml
 Modules\DungeonTimers\DungeonTimers.xml
 Modules\QoL\QoL.xml
 Modules\Skinning\Skinning.xml
