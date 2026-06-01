@@ -11,4 +11,5 @@
     <Script file="PrescienceTracker.lua" />
     <Script file="HuntersMark.lua" />
     <Script file="SpellAlerts.lua" />
+    <Script file="BurningRush.lua" />
 </Ui>
