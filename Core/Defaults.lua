@@ -475,13 +475,13 @@ local Defaults = {
             FontOutline = "OUTLINE",
             -- Glow (CreateGlowSettingsCard default key names)
             GlowEnabled   = false,
-            GlowType      = "proc",
-            GlowColor     = { 0.2, 0.8, 0.2, 1 },
-            GlowLines     = 8,
+            GlowType      = "pixel",
+            GlowColor     = { 0, 1, 0, 1 }, -- #00ff00
+            GlowLines     = 5,
             GlowFrequency = 0.25,
             GlowLength    = 10,
-            GlowThickness = 1,
-            GlowBorder    = false,
+            GlowThickness = 2,
+            GlowBorder    = true,
             GlowScale     = 1.0,
             GlowStartAnim = true,
             GlowDuration  = 1.0,
@@ -492,6 +492,28 @@ local Defaults = {
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, -120),
+        },
+
+        MaintenanceTracker = {
+            Enabled = false,
+            IconSize = 40,
+            CountFontSize = 24,
+            CountColor = { 1, 1, 1, 1 },
+            ShowLowest = true,
+            LowestFontSize = 14,
+            GrowthDirection = "RIGHT",   -- RIGHT | LEFT | UP | DOWN
+            Spacing = 4,
+            LowThreshold = 3,
+            MidThreshold = 6,
+            LowDurationColor = { 1, 0.3, 0.3, 1 },
+            MidDurationColor = { 1, 0.75, 0.2, 1 },
+            HighDurationColor = { 1, 0.85, 0.4, 1 },
+            FontFace = "Expressway",
+            FontOutline = "OUTLINE",
+            Strata = "HIGH",
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            Position = DefaultPosition(0, -160),
         },
 
         DisintegrateTicks = {
