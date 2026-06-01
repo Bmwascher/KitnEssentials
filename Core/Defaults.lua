@@ -516,6 +516,10 @@ local Defaults = {
             Position = DefaultPosition(0, -160),
         },
 
+        DispelGlow = {
+            Enabled = false,
+        },
+
         DisintegrateTicks = {
             Enabled = false,
             TickColor = { 1, 1, 1, 0.8 },

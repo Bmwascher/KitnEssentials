@@ -81,6 +81,7 @@ GUIFrame.sidebarConfig = {
         defaultExpanded = false,
         items = {
             { id = "DispelOnCursor",        text = "Dispel on Cursor" },
+            { id = "DispelGlow",            text = "Dispel Glow" },
             { id = "InnervateTracker",      text = "Innervate Tracker" },
             { id = "MaintenanceTracker",    text = "Maintenance Tracker" },
             { id = "HealerMana",            text = "Healer Mana" },
