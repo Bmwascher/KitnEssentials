@@ -1,3 +1,4 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
     <Script file="HealerMana.lua" />
+    <Script file="InnervateTracker.lua" />
 </Ui>
