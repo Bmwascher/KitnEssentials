@@ -380,6 +380,7 @@ local PREVIEW_MODULES = {
     "NoMovementAlert", "PrescienceTracker", "GreatVaultAlert", "PotionReady", "AuraExternals", "AuraDebuffs",
     "EnemyCounter", "EbonMightTracker", "DungeonCasts", "HealerMana", "InnervateTracker", "MaintenanceTracker",
     "ReadyCheckConsumables", "DeathNotifications",
+    "BurningRush",
     "Cursor",
 }
 
@@ -396,6 +397,7 @@ local SECTION_PREVIEW_MODULES = {
         "TimeSpiral", "NoMovementAlert", "ReadyCheckConsumables",
     },
     class_section = {
+        "BurningRush",
         "PetStatusText", "StanceText", "TotemTracker",
         "DisintegrateTicks", "StasisTracker", "EbonMightTracker", "PrescienceTracker",
         "HuntersMark",

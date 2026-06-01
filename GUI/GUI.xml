@@ -65,6 +65,7 @@
     <Script file="GUITabs\GUIClassUtilities\GUI-StanceText.lua" />
     <Script file="GUITabs\GUIClassUtilities\GUI-HuntersMark.lua" />
     <Script file="GUITabs\GUIClassUtilities\GUI-SpellAlerts.lua" />
+    <Script file="GUITabs\GUIClassUtilities\GUI-BurningRush.lua" />
 
     <!-- Utilities tabs -->
     <Script file="GUITabs\GUIUtilities\GUI-RaidNotifications.lua" />
