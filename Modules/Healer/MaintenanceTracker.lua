@@ -379,8 +379,12 @@ function MT:RebuildFrames()
         frame.count:SetText("0")
         frame.lowest:SetText("--")
         frame.lowest:SetShown(self.db.ShowLowest)
-        if frame.count._keSoftOutline then frame.count._keSoftOutline:SetShown(false) end
-        if frame.lowest._keSoftOutline then frame.lowest._keSoftOutline:SetShown(false) end
+        -- Soft-outline shadows track each element's own visibility: count is
+        -- always shown, lowest follows ShowLowest. A hidden parent frame keeps
+        -- them from rendering regardless, so showing them here is safe even
+        -- before the tracker frame is displayed.
+        if frame.count._keSoftOutline then frame.count._keSoftOutline:SetShown(true) end
+        if frame.lowest._keSoftOutline then frame.lowest._keSoftOutline:SetShown(self.db.ShowLowest) end
         ResetDisplayCache(t)
     end
 
@@ -438,6 +442,7 @@ function MT:UpdateDisplay()
 
         if showLowest ~= d.lastShowLowest then
             frame.lowest:SetShown(showLowest)
+            if frame.lowest._keSoftOutline then frame.lowest._keSoftOutline:SetShown(showLowest) end
             d.lastShowLowest = showLowest
         end
 
@@ -544,8 +549,8 @@ function MT:ApplySettings()
         frame.lowest:SetShown(self.db.ShowLowest)
         local tex = C_Spell.GetSpellTexture(trackers[i].iconSpellID)
         if tex then frame.icon:SetTexture(tex) end
-        if frame.count._keSoftOutline then frame.count._keSoftOutline:SetShown(false) end
-        if frame.lowest._keSoftOutline then frame.lowest._keSoftOutline:SetShown(false) end
+        if frame.count._keSoftOutline then frame.count._keSoftOutline:SetShown(true) end
+        if frame.lowest._keSoftOutline then frame.lowest._keSoftOutline:SetShown(self.db.ShowLowest) end
         ResetDisplayCache(trackers[i])
     end
 
@@ -579,6 +584,7 @@ function MT:ShowPreview()
         if frame then
             local countStr = tostring(t.previewCount or 4)
             frame.count:SetText(countStr)
+            if frame.count._keSoftOutline then frame.count._keSoftOutline:SetShown(true) end
 
             if self.db.ShowLowest then
                 local lowestStr = string_format("%d", math_floor(dummyDuration + 0.5))
@@ -587,8 +593,10 @@ function MT:ShowPreview()
                 local highCol = self.db.HighDurationColor or { 1, 0.85, 0.4, 1 }
                 frame.lowest:SetTextColor(highCol[1], highCol[2], highCol[3], highCol[4] or 1)
                 frame.lowest:Show()
+                if frame.lowest._keSoftOutline then frame.lowest._keSoftOutline:SetShown(true) end
             else
                 frame.lowest:Hide()
+                if frame.lowest._keSoftOutline then frame.lowest._keSoftOutline:SetShown(false) end
             end
 
             -- Reset all cache fields so the live path can overwrite cleanly on hide.
@@ -718,5 +726,11 @@ function MT:OnDisable()
         wipe(trackers[ti].activeBuffs)
         ResetDisplayCache(trackers[ti])
     end
+
+    -- Force a full rebuild (and OnUpdate re-wire) on the next enable. We nil
+    -- frames[1]'s OnUpdate above; without clearing currentSpec, a same-spec
+    -- disable->enable cycle would hit DetectSpec with changed == false, skip
+    -- RebuildFrames, and leave the display frozen (frames shown, never ticked).
+    currentSpec = nil
     if KE.EditMode then KE.EditMode:UnregisterElement("MaintenanceTracker") end
 end
