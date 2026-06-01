@@ -2,7 +2,7 @@
 -- ║  BurningRush.lua                                         ║
 -- ║  Module: Burning Rush (Warlock)                          ║
 -- ║  Purpose: Glowing icon while Burning Rush (111400) is     ║
--- ║           active. Warlock-only; driven by aura presence.  ║
+-- ║           active. Warlock-only; cast + glow events.       ║
 -- ║  Credit: Ported from NorskenUI ClassUtil/BurningRush.     ║
 -- ╚══════════════════════════════════════════════════════════╝
 
@@ -154,12 +154,27 @@ function BURN:SetActive(active)
     if active then self:ShowDisplay() else self:HideDisplay() end
 end
 
--- Aura-presence detection. Burning Rush (111400) is a toggled self-buff, so the
--- reliable signal is "does the player currently have the aura" rather than a
--- cast/overlay-glow event (the overlay-glow-hide event does not fire when the
--- buff is toggled off manually). Player's own auras are not secret in 12.0, so
--- GetPlayerAuraBySpellID is safe. Same pattern as BloodlustTracker.
-function BURN:UpdateActive()
+-- Detection is event-driven (mirrors the reference). Burning Rush (111400) is a
+-- toggled self-buff whose action-button spell-activation overlay glow tracks its
+-- active state, so the reliable, low-overhead signals are:
+--   * UNIT_SPELLCAST_SUCCEEDED (player)    -> shown
+--   * SPELL_ACTIVATION_OVERLAY_GLOW_HIDE   -> hidden
+-- This is far cheaper than UNIT_AURA, which wakes on every aura change on every
+-- unit. A one-shot aura check on login covers the reload-while-active case the
+-- events alone would miss (player auras aren't secret in 12.0, so the check is safe).
+function BURN:OnSpellCast(spellID)
+    if self.isPreview then return end
+    if spellID ~= BURNING_RUSH_SPELL then return end
+    self:SetActive(true)
+end
+
+function BURN:OnGlowHide(spellID)
+    if self.isPreview then return end
+    if spellID ~= BURNING_RUSH_SPELL then return end
+    self:SetActive(false)
+end
+
+function BURN:RefreshFromAura()
     if self.isPreview then return end
     local hasBuff = (C_UnitAuras.GetPlayerAuraBySpellID(BURNING_RUSH_SPELL) ~= nil)
     if hasBuff == self.active then return end
@@ -214,9 +229,10 @@ end
 -- Lifecycle
 ---------------------------------------------------------------------------------
 function BURN:OnEnable()
-    -- Warlock-only. Without the talent the aura can never appear, so detection is
-    -- a harmless no-op for talentless Warlocks — no spell-known gate needed.
-    -- Silent no-op for every other class.
+    -- Warlock-only; silent no-op for every other class. A Warlock without the
+    -- Burning Rush talent simply never casts 111400, so the events never fire for
+    -- it — no spell-known gate needed (and that avoids the C_SpellBook talent-bank
+    -- quirk that was suppressing this module before).
     local _, class = UnitClass("player")
     if class ~= "WARLOCK" then return end
     if not self.db or not self.db.Enabled then return end
@@ -226,16 +242,24 @@ function BURN:OnEnable()
     self:RegWithEditMode()
     C_Timer.After(0.5, function()
         self:ApplyPosition()
-        self:UpdateActive()
+        self:RefreshFromAura()
     end)
 
-    -- AceEvent RegisterEvent + manual unit filter (KE convention — no RegisterUnitEvent).
-    -- UNIT_AURA(player) is the toggle-safe signal for the Burning Rush buff.
-    self:RegisterEvent("UNIT_AURA", function(_, unit)
-        if unit ~= "player" then return end
-        self:UpdateActive()
+    -- Raw event frame so the cast event can be unit-filtered to "player" via
+    -- RegisterUnitEvent (AceEvent has no RegisterUnitEvent; an unfiltered
+    -- RegisterEvent would wake on every unit's cast). Mirrors the reference.
+    if not self.eventFrame then self.eventFrame = CreateFrame("Frame") end
+    self.eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
+    self.eventFrame:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE")
+    self.eventFrame:SetScript("OnEvent", function(_, event, arg1, _, spellID)
+        if event == "UNIT_SPELLCAST_SUCCEEDED" then
+            self:OnSpellCast(spellID)
+        elseif event == "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE" then
+            self:OnGlowHide(arg1)
+        end
     end)
-    self:RegisterEvent("PLAYER_ENTERING_WORLD", function() self:UpdateActive() end)
+
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", function() self:RefreshFromAura() end)
     self:RegisterEvent("PLAYER_DEAD", function()
         self.active = false
         self:HideDisplay()
@@ -251,6 +275,10 @@ function BURN:OnDisable()
     self.isPreview = false
     self.glowActive = false
     self:UnregisterAllEvents()
+    if self.eventFrame then
+        self.eventFrame:UnregisterAllEvents()
+        self.eventFrame:SetScript("OnEvent", nil)
+    end
     if KE.EditMode then
         KE.EditMode:UnregisterElement("BurningRush")
         self.editModeRegistered = false
