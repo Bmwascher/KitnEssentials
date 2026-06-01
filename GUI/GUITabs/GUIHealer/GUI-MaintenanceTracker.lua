@@ -115,16 +115,8 @@ GUIFrame:RegisterContent("MaintenanceTracker", function(scrollChild, yOffset)
     rowSep3:AddWidget(sep3, 1)
     card3:AddRow(rowSep3, Theme.rowHeightSeparator)
 
-    -- Count Font Size + Count Color
+    -- Count Color
     local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
-    local countSizeSlider = GUIFrame:CreateSlider(row3b, "Count Font Size", {
-        min = 8, max = 48, step = 1,
-        value = db.CountFontSize or 24,
-        callback = function(val) db.CountFontSize = val; ApplySettings() end,
-    })
-    row3b:AddWidget(countSizeSlider, 0.5)
-    manager:Register(countSizeSlider, "all")
-
     local countColorPicker = GUIFrame:CreateColorPicker(row3b, "Count Color", {
         color = db.CountColor or { 1, 1, 1, 1 },
         callback = function(r, g, b, a)
@@ -132,7 +124,7 @@ GUIFrame:RegisterContent("MaintenanceTracker", function(scrollChild, yOffset)
             ApplySettings()
         end,
     })
-    row3b:AddWidget(countColorPicker, 0.5)
+    row3b:AddWidget(countColorPicker, 1)
     manager:Register(countColorPicker, "all")
     card3:AddRow(row3b, Theme.rowHeight)
 
@@ -157,7 +149,29 @@ GUIFrame:RegisterContent("MaintenanceTracker", function(scrollChild, yOffset)
     yOffset = card3:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 4: Multi-Spell Layout
+    -- Card 4: Font Settings
+    -- FontFace + CountFontSize + FontOutline, all applied via
+    -- KE:ApplyFontToText. CountFontSize is the shared "count" size;
+    -- LowestFontSize stays in the Display card above.
+    ----------------------------------------------------------------
+    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        title = "Font",
+        db = db,
+        dbKeys = {
+            fontFace    = "FontFace",
+            fontSize    = "CountFontSize",
+            fontOutline = "FontOutline",
+        },
+        fontSizeRange = { 8, 48 },
+        includeSoftOutline = true,
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(fontCard, "all")
+    if fontWidgets then manager:RegisterGroup(fontWidgets, "all") end
+    yOffset = fontOffset
+
+    ----------------------------------------------------------------
+    -- Card 5: Multi-Spell Layout
     -- Only visually meaningful for specs with more than one tracked
     -- spell (currently just Mistweaver). Settings are saved regardless
     -- and apply automatically when on a multi-spell spec.
@@ -206,7 +220,7 @@ GUIFrame:RegisterContent("MaintenanceTracker", function(scrollChild, yOffset)
     yOffset = card4:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 5: Duration Colors
+    -- Card 6: Duration Colors
     -- The lowest-remaining-duration text changes color as it counts
     -- down. Three bands keyed off two thresholds: <= Low, <= Mid, > Mid.
     ----------------------------------------------------------------
