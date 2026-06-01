@@ -69,7 +69,6 @@
     <!-- Utilities tabs -->
     <Script file="GUITabs\GUIUtilities\GUI-RaidNotifications.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-NoMovementAlert.lua" />
-    <Script file="GUITabs\GUIUtilities\GUI-ClassStatusTexts.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-BloodlustTracker.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-TimeSpiral.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-Recuperate.lua" />

@@ -392,13 +392,16 @@ local SECTION_PREVIEW_MODULES = {
         "Cursor",
     },
     utilities_section = {
-        "BloodlustTracker", "StanceText", "PetStatusText", "PotionReady",
+        "BloodlustTracker", "PotionReady", "RaidNotifications", "Recuperate",
+        "TimeSpiral", "NoMovementAlert", "ReadyCheckConsumables",
+    },
+    class_section = {
+        "PetStatusText", "StanceText", "TotemTracker",
         "DisintegrateTicks", "StasisTracker", "EbonMightTracker", "PrescienceTracker",
-        "RaidNotifications", "Recuperate", "TimeSpiral", "TotemTracker", "NoMovementAlert",
-        "ReadyCheckConsumables",
+        "HuntersMark",
     },
     qol_section = {
-        "DragonRiding", "HuntersMark", "GreatVaultAlert",
+        "DragonRiding", "GreatVaultAlert",
     },
     dungeons_section = {
         "EnemyCounter", "KickTracker", "DungeonCasts", "DeathNotifications",
