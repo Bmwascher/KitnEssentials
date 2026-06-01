@@ -250,107 +250,19 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
     yOffset = card5:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 6: Dispel Type Colors
+    -- Card 6: Dispel Type Colors (shared builder)
     --
-    -- 4x2 grid (last cell empty), per-type ColorPicker + Reset button with
-    -- a separator between rows. Card is
-    -- always enabled regardless of BorderColorMode (user can set colors
-    -- without first flipping the mode — they take effect when "dispel" is
-    -- active).
+    -- The per-type palette (db.DispelColors) is also consumed by the Dispel
+    -- Glow border, so the card lives in a shared builder and is cross-linked
+    -- onto the Healer Utilities > Dispel Glow page. Edits from either page
+    -- refresh both consumers. Registered to "all" here, so it greys out with
+    -- the Aura Debuffs master enable (unchanged behaviour).
     ----------------------------------------------------------------
-    local card6 = GUIFrame:CreateCard(scrollChild, "Dispel Type Colors", yOffset)
-    manager:Register(card6, "all")
-
-    -- Default colors. Also used by the Reset button to wipe a user override
-    -- back to default.
-    --   None    #CC0000   Magic   #0081FF   Curse   #9F06E4
-    --   Disease #F16A09   Poison  #7BC700   Bleed   #B8000F
-    --   Enrage  #F35FF5
-    local DISPEL_DEFAULTS = {
-        None    = { 0.800, 0.000, 0.000, 1 },  -- #CC0000
-        Magic   = { 0.000, 0.506, 1.000, 1 },  -- #0081FF
-        Curse   = { 0.624, 0.024, 0.894, 1 },  -- #9F06E4
-        Disease = { 0.945, 0.416, 0.035, 1 },  -- #F16A09
-        Poison  = { 0.482, 0.780, 0.000, 1 },  -- #7BC700
-        Bleed   = { 0.722, 0.000, 0.059, 1 },  -- #B8000F
-        Enrage  = { 0.953, 0.373, 0.961, 1 },  -- #F35FF5
-    }
-    -- 4x2 grid order: None | Magic | Curse | Disease | Poison | Bleed | Enrage
-    local DISPEL_TYPES = { "None", "Magic", "Curse", "Disease", "Poison", "Bleed", "Enrage" }
-
-    if not db.DispelColors then db.DispelColors = {} end
-    local dispelColors = db.DispelColors
-
-    -- Local table of per-type ColorPicker widget refs so Reset callbacks can
-    -- find and update the right picker by type name.
-    local dispelPickers = {}
-
-    local function CreateDispelCell(row, dtype, isRight)
-        local picker = GUIFrame:CreateColorPicker(row, dtype, {
-            color    = dispelColors[dtype] or DISPEL_DEFAULTS[dtype] or { 1, 1, 1, 1 },
-            callback = function(r, g, b, a)
-                dispelColors[dtype] = { r, g, b, a }
-                ApplySettings()
-            end,
-        })
-        row:AddWidget(picker, 0.35)
-        manager:Register(picker, "all")
-        dispelPickers[dtype] = picker
-
-        local resetBtn = GUIFrame:CreateButton(row, "Reset", {
-            height   = 24,
-            tooltip  = "Reset " .. dtype .. " to default (" ..
-                       string.format("#%02X%02X%02X",
-                           DISPEL_DEFAULTS[dtype][1] * 255 + 0.5,
-                           DISPEL_DEFAULTS[dtype][2] * 255 + 0.5,
-                           DISPEL_DEFAULTS[dtype][3] * 255 + 0.5) .. ").",
-            callback = function()
-                local d = DISPEL_DEFAULTS[dtype]
-                dispelColors[dtype] = nil  -- drop user override
-                if dispelPickers[dtype] and dispelPickers[dtype].SetColor then
-                    dispelPickers[dtype]:SetColor(d[1], d[2], d[3], d[4] or 1)
-                end
-                ApplySettings()
-            end,
-        })
-        -- Match the 48x24 ColorPicker swatch dimensions: button height = 24
-        -- and top anchored at y=-14 so it lines up edge-to-edge with the
-        -- swatch (top y=-14, bottom y=-38, center y=-26). Right-cell button
-        -- gets a small leftward nudge so its right edge lines up with the
-        -- separator-bar's right edge.
-        local btnXOffset = isRight and -3 or 0
-        row:AddWidget(resetBtn, 0.15, nil, btnXOffset, -14)
-        manager:Register(resetBtn, "all")
-    end
-
-    -- Lay out in 4 rows of 2 cells each. Separator between rows.
-    local numTypes = #DISPEL_TYPES
-    local pairIdx = 1
-    while pairIdx <= numTypes do
-        local typeA   = DISPEL_TYPES[pairIdx]
-        local typeB   = DISPEL_TYPES[pairIdx + 1]
-        local isLast  = (pairIdx + 2 > numTypes)
-        local rowH    = isLast and Theme.rowHeightLast or Theme.rowHeight
-
-        local dtRow = GUIFrame:CreateRow(card6.content, rowH)
-        CreateDispelCell(dtRow, typeA, false)
-        if typeB then
-            CreateDispelCell(dtRow, typeB, true)
-        end
-        card6:AddRow(dtRow, rowH, isLast and 0 or nil)
-
-        if not isLast then
-            local sepRow = GUIFrame:CreateRow(card6.content, Theme.rowHeightSeparator)
-            local sep = GUIFrame:CreateSeparator(sepRow)
-            sepRow:AddWidget(sep, 1)
-            manager:Register(sep, "all")
-            card6:AddRow(sepRow, Theme.rowHeightSeparator)
-        end
-
-        pairIdx = pairIdx + 2
-    end
-
-    yOffset = card6:GetNextOffset()
+    yOffset = GUIFrame:CreateDispelTypeColorsCard(scrollChild, yOffset, {
+        db         = db,
+        manager    = manager,
+        stateGroup = "all",
+    })
 
     ----------------------------------------------------------------
     -- Card 7: Filtering Options
