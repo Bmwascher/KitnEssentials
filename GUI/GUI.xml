@@ -27,6 +27,7 @@
     <Script file="GUIWidgets\GUI-SoundSettingsCard.lua" />
     <Script file="GUIWidgets\GUI-SpellBrowserCard.lua" />
     <Script file="GUIWidgets\GUI-TextFormatCard.lua" />
+    <Script file="GUIWidgets\GUI-DispelCursorCard.lua" />
     <Script file="GUIWidgets\GUI-Sidebar.lua" />
     <Script file="GUIWidgets\GUI-KESubTabs.lua" />
 

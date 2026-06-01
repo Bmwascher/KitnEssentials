@@ -202,9 +202,6 @@ GUIFrame:RegisterContent("Cursor", function(scrollChild, yOffset)
     manager:SetCondition("trailEnabled", function()
         return db.Trail.Enabled == true
     end)
-    manager:SetCondition("dispelEnabled", function()
-        return db.Dispel.Enabled == true
-    end)
     manager:SetCondition("cursorCustomColor", function()
         return db.Enabled ~= false and (db.ColorMode or "class") == "custom"
     end)
@@ -713,97 +710,15 @@ GUIFrame:RegisterContent("Cursor", function(scrollChild, yOffset)
     yOffset = card5:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 6: Dispel Countdown
+    -- Card 6: Dispel Countdown (shared builder)
     ----------------------------------------------------------------
-    local card6 = GUIFrame:CreateCard(scrollChild, "Dispel Countdown", yOffset)
-    manager:Register(card6, "all")
-
-    local row6a = GUIFrame:CreateRow(card6.content, Theme.rowHeight)
-    local dispelEnable = GUIFrame:CreateCheckbox(row6a, "Enable Dispel Countdown", {
-        value = db.Dispel.Enabled == true,
-        callback = function(checked)
-            db.Dispel.Enabled = checked
-            RefreshModule()
-            RefreshStates()
-        end,
+    yOffset = GUIFrame:CreateDispelCursorCard(scrollChild, yOffset, {
+        db            = db,
+        manager       = manager,
+        refresh       = RefreshModule,
+        refreshStates = RefreshStates,
+        getModule     = GetModule,
     })
-    row6a:AddWidget(dispelEnable, 0.6)
-    manager:Register(dispelEnable, "all")
-
-    -- Test button: 7-second preview so users can verify placement without
-    -- waiting for a real dispel cooldown. Always enabled (works with feature off too).
-    local dispelTest = GUIFrame:CreateButton(row6a, "Test (7s countdown)", {
-        height = 30,
-        callback = function()
-            local mod = GetModule()
-            if mod and mod.DispelPreview then mod:DispelPreview() end
-        end,
-    })
-    row6a:AddWidget(dispelTest, 0.4)
-    manager:Register(dispelTest, "all")
-    card6:AddRow(row6a, Theme.rowHeight)
-
-    local row6sep = GUIFrame:CreateRow(card6.content, Theme.rowHeightSeparator)
-    local sep6 = GUIFrame:CreateSeparator(row6sep)
-    row6sep:AddWidget(sep6, 1)
-    manager:Register(sep6, "all")
-    card6:AddRow(row6sep, Theme.rowHeightSeparator)
-
-    local row6b = GUIFrame:CreateRow(card6.content, Theme.rowHeight)
-    local dispelAnchor = GUIFrame:CreateDropdown(row6b, "Anchor Point", {
-        options = {
-            { key = "TOP",    text = "Top" },
-            { key = "BOTTOM", text = "Bottom" },
-            { key = "LEFT",   text = "Left" },
-            { key = "RIGHT",  text = "Right" },
-            { key = "CENTER", text = "Center" },
-        },
-        value = db.Dispel.AnchorPoint or "BOTTOM",
-        callback = function(key) db.Dispel.AnchorPoint = key; RefreshModule() end,
-    })
-    row6b:AddWidget(dispelAnchor, 1)
-    manager:Register(dispelAnchor, "dispelEnabled")
-    card6:AddRow(row6b, Theme.rowHeight)
-
-    local row6c = GUIFrame:CreateRow(card6.content, Theme.rowHeight)
-    local dispelX = GUIFrame:CreateSlider(row6c, "X Offset", {
-        min = -50, max = 50, step = 1,
-        value = db.Dispel.XOffset or 10,
-        callback = function(val) db.Dispel.XOffset = val; RefreshModule() end,
-    })
-    row6c:AddWidget(dispelX, 0.5)
-    manager:Register(dispelX, "dispelEnabled")
-
-    local dispelY = GUIFrame:CreateSlider(row6c, "Y Offset", {
-        min = -50, max = 50, step = 1,
-        value = db.Dispel.YOffset or 10,
-        callback = function(val) db.Dispel.YOffset = val; RefreshModule() end,
-    })
-    row6c:AddWidget(dispelY, 0.5)
-    manager:Register(dispelY, "dispelEnabled")
-    card6:AddRow(row6c, Theme.rowHeight)
-
-    local row6d = GUIFrame:CreateRow(card6.content, Theme.rowHeightLast)
-    local dispelFontSize = GUIFrame:CreateSlider(row6d, "Font Size", {
-        min = 8, max = 48, step = 1,
-        value = db.Dispel.FontSize or 18,
-        callback = function(val) db.Dispel.FontSize = val; RefreshModule() end,
-    })
-    row6d:AddWidget(dispelFontSize, 0.5)
-    manager:Register(dispelFontSize, "dispelEnabled")
-
-    local dispelTextColor = GUIFrame:CreateColorPicker(row6d, "Text Color", {
-        color = db.Dispel.TextColor or { 1, 1, 1, 1 },
-        callback = function(r, g, b, a)
-            db.Dispel.TextColor = { r, g, b, a }
-            RefreshModule()
-        end,
-    })
-    row6d:AddWidget(dispelTextColor, 0.5)
-    manager:Register(dispelTextColor, "dispelEnabled")
-    card6:AddRow(row6d, Theme.rowHeightLast, 0)
-
-    yOffset = card6:GetNextOffset()
 
     RefreshStates()
     return yOffset
