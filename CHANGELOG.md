@@ -53,6 +53,19 @@
 - Pixel snapping is now always-on for every frame positioned through the KE framework — the per-module "Snap to Pixel Grid" toggle has been removed from every position card. At perfect UI scale the snap is a no-op for integer offsets; off-grid frames (e.g. anchored to ElvUI panels at fractional positions) are corrected automatically
 - 1px icon and frame borders now stay crisp through UI-scale changes — the border textures resnap when the screen size or scale changes
 
+### Healer Utilities
+- **NEW:** Healer Utilities — a dedicated sidebar section gathering healer-specific tools. Healer Mana moved here, and Dispel on Cursor is now reachable from this section too (same settings as the Cursor Effects page)
+
+### Innervate Tracker
+- **NEW:** Innervate Tracker — shows an icon + countdown while Innervate is active on you, with a configurable label ("FREE" by default), glow, and alert sound. Because Innervate is hidden from the aura API in 12.0, it's detected by watching your spec's heal spells drop to zero mana cost. Healer-capable classes only (Druid, Paladin, Priest, Shaman, Monk, Evoker); position via Edit Mode
+
+### Maintenance Tracker
+- **NEW:** Maintenance Tracker — one icon per key maintenance buff showing how many group members currently have it and the lowest remaining duration across them, color-coded by urgency (green → amber → red as it runs low). Spec-aware: Atonement (Discipline Priest), Renewing + Enveloping Mist (Mistweaver Monk), Rejuvenation incl. Germination (Restoration Druid), Riptide (Restoration Shaman), Echo (Preservation Evoker). Multi-spell specs render side-by-side with a configurable growth direction. Adjustable urgency thresholds/colors, font, and count size; editable position with a GUI preview
+
+### Dispel Glow
+- **NEW:** Dispel Glow — highlights ElvUI party/raid/tank frames with a colored border + top fade whenever a dispellable debuff is present, including private auras (dungeon-mechanic debuffs the normal aura API can't see). Border color follows your dispel-type palette; border thickness is adjustable. Requires ElvUI
+- The Dispel Type Colors palette is now shared between Advanced Debuffs and Dispel Glow — edit it from either page and both update
+
 ### Healer Mana
 - **Fixed:** Delve companion NPCs (Valeera Sanguinar and similar) were being tracked as healers — they report role `HEALER` but have a max=1 sentinel mana pool, so the bar rendered at a meaningless percent. Non-player units now must have a real mana pool (max ≥ 100) to be picked up; player healers pass through across disconnects, and legitimate mana-using NPC followers (e.g. Cylestia in follower dungeons) still track normally
 - **Fixed:** Mana percentage failed to render inside delves. Blizzard restricts party-member power queries there, so `UnitPowerPercent` comes back as a secret token; the percent text is now forwarded straight to `SetFormattedText` (a display call, not arithmetic — no taint propagates back into addon Lua) so the underlying value renders correctly

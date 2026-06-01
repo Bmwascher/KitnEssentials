@@ -42,6 +42,15 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Combat Potion Ready | "Potion Ready" text when a combat potion is in bags and off cooldown, with instance/combat/healer visibility toggles |
 | Ready Check Consumables | On ready check, attaches a row of clickable consumable icons (food, flask, weapon enhancement MH/OH, augment rune, healthstone, and Warlock Soulstone with auto-target healer) for one-click application |
 
+## Healer
+
+| Module | Description |
+|---|---|
+| Innervate Tracker | Icon + countdown while Innervate is on you, with configurable label, glow, and alert sound; detected via mana-cost polling (Innervate is hidden from the aura API in 12.0); healer-capable classes only |
+| Maintenance Tracker | One icon per key maintenance buff with group-member count and lowest remaining duration, color-coded by urgency; spec-aware (Atonement, Renewing/Enveloping Mist, Rejuvenation, Riptide, Echo) with side-by-side multi-spell layout and GUI preview |
+| Dispel Glow | Colored border + top fade on ElvUI party/raid/tank frames with a dispellable debuff (including private auras), tinted by your dispel-type palette with adjustable thickness; requires ElvUI |
+| Healer Mana Tracker | Displays the current party healer's name, spec icon, and mana % (party-only; hidden in raid); shows OFFLINE when the healer disconnects |
+
 ## Quality of Life
 
 | Module | Description |
@@ -85,7 +94,6 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Dungeon Casts | Enemy cast bars for M+ nameplates with icon, target text, raid icons, bar stacking, and interruptible/shielded status colors |
 | Dungeon Timers | Curated dungeon ability timers driven by BigWigs events with hand-tuned cast durations, phase tracker for HP-based encounter transitions, role-based filtering, and per-spell display overrides |
 | Enemy Counter | Displays the number of enemies currently in combat via nameplate scanning with editable prefix and combat-only visibility |
-| Healer Mana Tracker | Displays the current party healer's name, spec icon, and mana % (party-only; hidden in raid); shows OFFLINE when the healer disconnects |
 | Interrupt Tracker | Party interrupt cooldown bars with class colors, dark mode, channel kick detection, and healer position override (currently non-functional in 12.0.5 due to API changes — under investigation) |
 | WarpDeplete+ | Restores live pull forces tracking, fixes death tooltip and class-colored names in M+, per-mob forces on tooltip mouseover, and announces instance resets to party/raid chat |
 
