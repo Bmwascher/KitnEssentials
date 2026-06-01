@@ -53,28 +53,32 @@
     <Script file="GUITabs\GUICombat\GUI-AuraExternals.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-KickTracker.lua" />
 
+    <!-- Class Utilities tabs -->
+    <Script file="GUITabs\GUIClassUtilities\GUI-EvokerSuite.lua" />
+    <Script file="GUITabs\GUIClassUtilities\GUI-DisintegrateTicks.lua" />
+    <Script file="GUITabs\GUIClassUtilities\GUI-StasisTracker.lua" />
+    <Script file="GUITabs\GUIClassUtilities\GUI-EbonMightHelper.lua" />
+    <Script file="GUITabs\GUIClassUtilities\GUI-EbonMightTracker.lua" />
+    <Script file="GUITabs\GUIClassUtilities\GUI-PrescienceTracker.lua" />
+    <Script file="GUITabs\GUIClassUtilities\GUI-TotemTracker.lua" />
+    <Script file="GUITabs\GUIClassUtilities\GUI-PetStatusText.lua" />
+    <Script file="GUITabs\GUIClassUtilities\GUI-StanceText.lua" />
+    <Script file="GUITabs\GUIClassUtilities\GUI-HuntersMark.lua" />
+    <Script file="GUITabs\GUIClassUtilities\GUI-SpellAlerts.lua" />
+
     <!-- Utilities tabs -->
     <Script file="GUITabs\GUIUtilities\GUI-RaidNotifications.lua" />
-    <Script file="GUITabs\GUIUtilities\GUI-PetStatusText.lua" />
-    <Script file="GUITabs\GUIUtilities\GUI-StanceText.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-NoMovementAlert.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-ClassStatusTexts.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-BloodlustTracker.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-TimeSpiral.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-Recuperate.lua" />
-    <Script file="GUITabs\GUIUtilities\GUI-DisintegrateTicks.lua" />
-    <Script file="GUITabs\GUIUtilities\GUI-StasisTracker.lua" />
-    <Script file="GUITabs\GUIUtilities\GUI-EbonMightTracker.lua" />
-    <Script file="GUITabs\GUIUtilities\GUI-EbonMightHelper.lua" />
-    <Script file="GUITabs\GUIUtilities\GUI-PrescienceTracker.lua" />
-    <Script file="GUITabs\GUIUtilities\GUI-EvokerSuite.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-WorldMarkerCycler.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-FocusMarker.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-PIMacroBuilder.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-MacroBuilders.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-PotionReady.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-ReadyCheckConsumables.lua" />
-    <Script file="GUITabs\GUIUtilities\GUI-TotemTracker.lua" />
 
     <!-- Dungeons tabs -->
     <Script file="GUITabs\GUIDungeons\GUI-DungeonCasts.lua" />
@@ -100,7 +104,6 @@
     <Script file="GUITabs\GUIQoL\GUI-CVars.lua" />
     <Script file="GUITabs\GUIQoL\GUI-SlashCommands.lua" />
     <Script file="GUITabs\GUIQoL\GUI-DragonRiding.lua" />
-    <Script file="GUITabs\GUIQoL\GUI-HuntersMark.lua" />
     <Script file="GUITabs\GUIQoL\GUI-HideBars.lua" />
     <Script file="GUITabs\GUIQoL\GUI-CombatLogger.lua" />
     <Script file="GUITabs\GUIQoL\GUI-GreatVaultAlert.lua" />
@@ -108,7 +111,6 @@
     <Script file="GUITabs\GUIQoL\GUI-Nicknames.lua" />
     <Script file="GUITabs\GUIQoL\GUI-WorldMap.lua" />
     <Script file="GUITabs\GUIQoL\GUI-PositionController.lua" />
-    <Script file="GUITabs\GUIQoL\GUI-SpellAlerts.lua" />
 
     <!-- Skinning tabs -->
     <Script file="GUITabs\GUISkinning\GUI-Tooltips.lua" />
