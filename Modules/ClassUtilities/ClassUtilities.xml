@@ -1,0 +1,14 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/ ..\FrameXML\UI.xsd">
+
+    <Script file="PetStatusText.lua" />
+    <Script file="StanceText.lua" />
+    <Script file="TotemTracker.lua" />
+    <Script file="DisintegrateTicks.lua" />
+    <Script file="StasisTracker.lua" />
+    <Script file="EbonMightHelper.lua" />
+    <Script file="EbonMightTracker.lua" />
+    <Script file="PrescienceTracker.lua" />
+    <Script file="HuntersMark.lua" />
+    <Script file="SpellAlerts.lua" />
+</Ui>

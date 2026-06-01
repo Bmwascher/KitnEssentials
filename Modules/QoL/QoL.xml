@@ -3,7 +3,6 @@
 
     <Script file="Automation.lua" />
     <Script file="DragonRiding.lua" />
-    <Script file="HuntersMark.lua" />
     <Script file="HideBars.lua" />
     <Script file="Optimize.lua" />
     <Script file="SlashCommands.lua" />
@@ -15,6 +14,5 @@
     <Script file="InspectPanel.lua" />
     <Script file="WorldMap.lua" />
     <Script file="PositionController.lua" />
-    <Script file="SpellAlerts.lua" />
     <Script file="WindToolsGameBar.lua" />
 </Ui>

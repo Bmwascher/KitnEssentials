@@ -15,6 +15,7 @@ Libs\Init.xml
 
 Core\Core.xml
 Modules\Utilities\Utilities.xml
+Modules\ClassUtilities\ClassUtilities.xml
 
 Modules\Combat\Combat.xml
 Modules\Dungeons\Dungeons.xml
