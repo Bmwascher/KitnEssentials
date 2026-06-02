@@ -16,6 +16,7 @@ local UnitCastingInfo, UnitChannelInfo = UnitCastingInfo, UnitChannelInfo
 local UnitCastingDuration, UnitChannelDuration = UnitCastingDuration, UnitChannelDuration
 local UnitEmpoweredChannelDuration = UnitEmpoweredChannelDuration
 local UnitExists = UnitExists
+local UnitCanAttack = UnitCanAttack
 local UnitName = UnitName
 local UnitClass = UnitClass
 local UnitSpellTargetName = UnitSpellTargetName
@@ -83,8 +84,20 @@ function H.ResetCastState(self)
     self.castID, self.spellID, self.spellName = nil, nil, nil
     self.notInterruptible = nil
     self.cachedDuration = nil
+    self.isImportant = nil
     H.CancelKickReadyTimer(self, "ResetCastState")
     H.HideKickTick(self)
+    H.HideGlow(self)
+end
+
+-- Opt-in (FocusCastbar sets db.IgnoreFriendlies; TargetCastbar's db lacks it).
+-- Returns false when the tracked unit is one we should NOT show a castbar for.
+-- UnitCanAttack returns a plain boolean (not secret).
+function H.UnitIsRelevant(self)
+    if self.db.IgnoreFriendlies and not UnitCanAttack("player", self.unit) then
+        return false
+    end
+    return true
 end
 
 -- UnitNameFromGUID + UnitClassFromGUID resolve for ALL unit GUIDs (player,
@@ -623,6 +636,11 @@ end
 function H.StartCast(self)
     local unit = self.unit
     if not self.frame or not UnitExists(unit) then return end
+    if not H.UnitIsRelevant(self) then
+        H.ResetCastState(self)
+        self.frame:Hide()
+        return
+    end
     local name, text, texture, castID, notInterruptible, spellID, isEmpowered
     local duration, direction = nil, Enum.StatusBarTimerDirection.ElapsedTime
 
@@ -816,7 +834,7 @@ end
 
 function H.OnUnitChanged(self)
     local unit = self.unit
-    if UnitExists(unit) then
+    if UnitExists(unit) and H.UnitIsRelevant(self) then
         H.StartCast(self)
         H.UpdateTargetMarker(self)
     else
