@@ -239,7 +239,7 @@ local VALUE_LABELS = {
         return t[tonumber(v) or -1] or v
     end,
     raidGraphicsParticleDensity = function(v)
-        local t = { [0] = "Disabled", [1] = "Low", [2] = "Fair", [3] = "Good", [4] = "High" }
+        local t = { [0] = "Disabled", [1] = "Low", [2] = "Fair", [3] = "Good", [4] = "High", [5] = "Ultra" }
         return t[tonumber(v) or -1] or v
     end,
     raidGraphicsSSAO = function(v) return tonumber(v) == 0 and "Disabled" or "Level " .. v end,
@@ -254,7 +254,7 @@ local VALUE_LABELS = {
         return t[tonumber(v) or -1] or v
     end,
     raidGraphicsSpellDensity = function(v)
-        local t = { [0] = "Essential", [1] = "Low", [2] = "Fair", [3] = "Good", [4] = "High" }
+        local t = { [0] = "Essential", [1] = "Low", [2] = "Fair", [3] = "Good", [4] = "High", [5] = "Ultra" }
         return t[tonumber(v) or -1] or v
     end,
     raidGraphicsProjectedTextures = function(v) return v == "1" and "Enabled" or "Disabled" end,
