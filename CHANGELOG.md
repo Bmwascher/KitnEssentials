@@ -38,6 +38,18 @@
 - **Fixed:** Mid-cast `notInterruptible` flips (boss / immunity windows) now correctly re-route through the kick indicator so the bar reflects the new state
 - Kick cooldown indicator now tracks the interrupt's actual cooldown via `SPELL_UPDATE_COOLDOWN` with a lightweight 10Hz finishing ticker — eliminates per-frame polling and stays accurate across spec/talent changes
 - Bar color refreshes at the end of `ApplySettings` so theme/colour edits in the GUI take effect immediately
+- **NEW:** Important-spell glow (Focus) — the focus castbar can glow on casts Blizzard flags as important (lethal-if-not-interrupted). Pick the glow style (Pixel or Autocast) and tune color, line/particle count, frequency, length, thickness, scale, and border. Off by default
+- **NEW:** Out-of-range dimming (Focus) — optionally fade the focus castbar when your interrupt is out of range of the focus, so a glance tells you whether you can kick. Range is measured against your spec's real interrupt spell. Off by default
+- **NEW:** Ignore Friendly Focus — optionally hide the focus castbar entirely for a focus you can't attack
+
+### Death Notifications
+- **NEW:** Focus-death voice reminder — when your focus dies while you're in combat, an optional Text-to-Speech line plays (default "Pick a new focus target") so you know to retarget without watching the frame. Off by default; toggle and edit the spoken text on the Death Notifications page
+
+### WarpDeplete+
+- **Fixed:** A Hunter's Feign Death is no longer counted as a death by the death tracker (your own or a party member's)
+
+### Raid Notifications
+- **Fixed:** "BONUS ROLLS MISSING" no longer reappears after a mid-key `/reload` inside an active keystone, and the Reset Boss reminder no longer briefly fires during combat
 
 ### Position Controller
 - **NEW:** SkironCooldownManager support — Player and Target frames auto-anchor beside whichever cooldown manager is loaded (SkironCooldownManager or Ayije_CDM), no manual configuration needed

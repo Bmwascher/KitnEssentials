@@ -24,7 +24,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Range Display | Target range text with out-of-range color warning |
 | Advanced Debuffs | Bar-based dispellable-debuff display with cooldown swipe, native countdown text, dispel-type border color and atlas overlay, PLAYER filter, per-type include/exclude, and spell-ID blocklist (subsumes the older Boss Debuffs module) |
 | External and Defensive Buffs | External defensive cooldowns cast onto you (Pain Suppression, Ironbark, etc.) with cooldown swipe, native countdown text, configurable glow per cast, BigWigs glow integration on incoming raid hits, and a Sound Test button |
-| Focus & Target Castbar | Repositionable cast bars with kick indicators, target names, focus raid marker, color settings, and cast sound alert (tabbed GUI) |
+| Focus & Target Castbar | Repositionable cast bars with kick indicators, target names, focus raid marker, important-spell glow, out-of-range dimming, color settings, and cast sound alert (tabbed GUI) |
 
 ## Utilities
 
@@ -90,7 +90,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 
 | Module | Description |
 |---|---|
-| Death Notifications | On-screen alert when party/raid members or your focus target dies, with class portrait + color and configurable text format. Active in dungeons by default; raid activation is opt-in |
+| Death Notifications | On-screen alert when party/raid members or your focus target dies, with class portrait + color, configurable text format, and an optional voice (TTS) reminder when your focus dies in combat. Active in dungeons by default; raid activation is opt-in |
 | Dungeon Casts | Enemy cast bars for M+ nameplates with icon, target text, raid icons, bar stacking, and interruptible/shielded status colors |
 | Dungeon Timers | Curated dungeon ability timers driven by BigWigs events with hand-tuned cast durations, phase tracker for HP-based encounter transitions, role-based filtering, and per-spell display overrides |
 | Enemy Counter | Displays the number of enemies currently in combat via nameplate scanning with editable prefix and combat-only visibility |
