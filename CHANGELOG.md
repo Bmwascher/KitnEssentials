@@ -1,6 +1,6 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
-## v2.1.0
+## v3.0.0
 
 ### Advanced Debuffs
 - **NEW:** Advanced Debuffs module — bar-based dispellable-debuff display with built-in cooldown swipe, native countdown text, per-dispel-type border color, and a per-type atlas overlay (Magic / Curse / Poison / Disease / Enrage / Bleed). Subsumes the older Boss Debuffs module; existing settings migrate automatically on first load
@@ -104,6 +104,14 @@
 ### Sidebar
 - Section labels relabelled for clarity: "Combat Utilities", "General Utilities", "Dungeon & Party Utilities". Module entries renamed too: Aura Debuffs → "Advanced Debuffs", Aura Externals → "External and Defensive Buffs"
 - Auction House Filter sidebar entry removed (its toggles now live in the Automation tab)
+
+### System Optimization
+- Recommended graphics preset reworked to a "high world, low raid" profile — the open world now stays at high quality and only **raids & battlegrounds** drop to performance settings, instead of lowering quality everywhere
+- **NEW:** Raid & BG Graphics card — a separate recommended profile (shadows, SSAO, particles, depth/compute effects, view distance, etc.) that applies only inside raids and battlegrounds via Blizzard's separate-raid-settings toggle
+- **NEW:** CVars card — extra recommended tweaks: camera FOV (90°), max camera zoom, nameplate stacking & overlap, minimum world-text size, and disabling auto-push-spells-to-actionbar
+- **NEW:** Expanded FPS limits (max FPS, loading-screen FPS cap, higher background FPS) and cosmetic toggles (screen-flash override, camera & UI shake)
+- View Distance & Detail rows merged into the Base Graphics Quality card; Spell Queue Window (180 ms) retained
+- If you'd optimized previously, the panel will flag the new recommendations — click *Optimize All* again to adopt them (your original values stay restorable via Revert)
 
 ---
 
