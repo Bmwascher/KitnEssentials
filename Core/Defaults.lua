@@ -373,6 +373,13 @@ local Defaults = {
             TextColor = { 1, 1, 1, 1 },
             BackdropColor = { 0, 0, 0, 0.8 },
             BorderColor = { 0, 0, 0, 1 },
+            -- Focus-castbar-only features (opt-in; TargetCastbar lacks these keys):
+            OutOfRangeOpacity = 1,        -- 1 = disabled; < 1 dims bar when interrupt out of range
+            IgnoreFriendlies = false,     -- hide bar when focus is not attackable
+            ImportantGlow = {
+                Enabled = false,
+                Color = { 1, 0.85, 0.1, 1 },  -- glow color when C_Spell.IsSpellImportant is true
+            },
             HoldTimer = {
                 Enabled = true,
                 Duration = 0.5,
@@ -1357,6 +1364,9 @@ local Defaults = {
                     Enabled = true,
                     Text = "FOCUS DIED",
                     Color = { 1, 0.3, 0.3, 1 },
+                    -- TTS reminder: spoken when focus dies while you're in combat.
+                    TTSReminder = false,
+                    TTSText = "Pick a new focus target",
                 },
 
                 anchorFrameType = "UIPARENT",
