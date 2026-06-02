@@ -198,7 +198,7 @@ GUIFrame:RegisterContent("DeathNotifications", function(scrollChild, yOffset)
     manager:Register(fdEnableCheck, "all")
     cardFD:AddRow(fdRow1, Theme.rowHeight)
 
-    local fdRow2 = GUIFrame:CreateRow(cardFD.content, Theme.rowHeightLast)
+    local fdRow2 = GUIFrame:CreateRow(cardFD.content, Theme.rowHeight)
     local fdTextBox = GUIFrame:CreateEditBox(fdRow2, "Text", {
         value = db.FocusDeath.Text or "FOCUS DIED",
         callback = function(value)
