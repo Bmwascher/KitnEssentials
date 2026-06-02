@@ -23,6 +23,7 @@ local CreateFrame = CreateFrame
 local InCombatLockdown = InCombatLockdown
 local GetInstanceInfo = GetInstanceInfo
 local C_CurrencyInfo = C_CurrencyInfo
+local C_ChallengeMode = C_ChallengeMode
 local C_Map = C_Map
 local UnitName = UnitName
 local IsInInstance = IsInInstance
@@ -450,7 +451,14 @@ function RN:EvaluateVoidcore()
     -- _OnResetBossCombatEnd / OnEncounterEnd.
     if self.isPreview then return end
     if not self.db.VoidcoreEnabled then self:HideAlert("Voidcore"); return end
-    if self._voidcoreKeyActive then self:HideAlert("Voidcore"); return end
+    -- _voidcoreKeyActive is set on CHALLENGE_MODE_START, but that event does
+    -- NOT re-fire on /reload into an already-active key, and onScopeEnter
+    -- resets the flag to false. Query the live challenge-mode state too, so a
+    -- mid-key /reload doesn't re-show "BONUS ROLLS MISSING" inside the dungeon.
+    if self._voidcoreKeyActive
+        or (C_ChallengeMode and C_ChallengeMode.IsChallengeModeActive()) then
+        self:HideAlert("Voidcore"); return
+    end
     if InCombatLockdown() then self:HideAlert("Voidcore"); return end
     if not IsInSeasonalZone() then self:HideAlert("Voidcore"); return end
     local info = C_CurrencyInfo.GetCurrencyInfo(VOIDCORE_CURRENCY_ID)
@@ -548,6 +556,13 @@ end
 --- Shows the ResetBoss alert and starts the 40s auto-hide timer with
 --- generation counter (so a subsequent fire invalidates pending hides).
 function RN:_FireResetBoss()
+    -- Only ever show out of combat (and while alive). Lust/Heroism is cast
+    -- during the pull, so the sated aura is added mid-combat and the
+    -- _OnResetBossAura edge-trigger would otherwise show "RESET BOSS" in
+    -- combat. The combat-end path (_OnResetBossCombatEnd ->
+    -- _SyncResetBossFromExistingSated) re-fires once the pull ends. This
+    -- restores the gate the pre-refactor CheckResetBoss had inline.
+    if InCombatLockdown() or UnitIsDeadOrGhost("player") then return end
     self:ShowAlert("ResetBoss")
     self.resetBossGen = self.resetBossGen + 1
     local gen = self.resetBossGen
