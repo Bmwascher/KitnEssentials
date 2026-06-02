@@ -23,6 +23,9 @@ local UnitTokenFromGUID, UnitGUID = UnitTokenFromGUID, UnitGUID
 local UIFrameFadeRemoveFrame = UIFrameFadeRemoveFrame
 local C_ClassColor = C_ClassColor
 local C_Timer = C_Timer
+local C_VoiceChat = C_VoiceChat
+local C_TTSSettings = C_TTSSettings
+local UnitAffectingCombat = UnitAffectingCombat
 local GetTime = GetTime
 local ipairs, pairs = ipairs, pairs
 local max = math.max
@@ -365,6 +368,41 @@ end
 ---------------------------------------------------------------------------------
 -- Event handlers
 ---------------------------------------------------------------------------------
+-- Resolve a usable TTS voice (ported from AdvancedFocusCastBar): honor the
+-- player's standard/alternate preference, fall back to the other, then to the
+-- default standard voice option.
+local function FindTTSVoiceID()
+    if not C_TTSSettings then return nil end
+    local alt = C_TTSSettings.GetSetting and C_TTSSettings.GetSetting(Enum.TtsBoolSetting.AlternateSystemVoice)
+    local voice = TextToSpeech_GetSelectedVoice and
+        TextToSpeech_GetSelectedVoice(alt and Enum.TtsVoiceType.Alternate or Enum.TtsVoiceType.Standard)
+    if not voice and TextToSpeech_GetSelectedVoice then
+        voice = TextToSpeech_GetSelectedVoice(alt and Enum.TtsVoiceType.Standard or Enum.TtsVoiceType.Alternate)
+    end
+    if voice and voice.voiceID then return voice.voiceID end
+    if C_TTSSettings.GetVoiceOptionID then
+        return C_TTSSettings.GetVoiceOptionID(Enum.TtsVoiceType.Standard)
+    end
+    return nil
+end
+
+-- Speak the focus-death reminder when in combat. Guarded so a missing TTS API
+-- or absent voice is a silent no-op.
+function DN:SpeakFocusReminder()
+    local cfg = self.db.FocusDeath
+    if not cfg or not cfg.TTSReminder then return end
+    if not UnitAffectingCombat("player") then return end
+    if not C_VoiceChat or not C_VoiceChat.SpeakText then return end
+    local voiceID = FindTTSVoiceID()
+    if not voiceID then return end
+    local text = cfg.TTSText
+    if not text or text == "" then text = "Pick a new focus target" end
+    local volume = (C_TTSSettings and C_TTSSettings.GetSpeechVolume and C_TTSSettings.GetSpeechVolume()) or 100
+    -- SpeakText signature is (voiceID, text, rate, volume[, overlap]). Arg 3 is the
+    -- speech rate (-10..10); 3 = slightly faster than default for a snappy reminder.
+    C_VoiceChat.SpeakText(voiceID, text, 3, volume)
+end
+
 function DN:CheckFocusDeath(deadGUID)
     local fdCfg = self.db.FocusDeath
     if not fdCfg or not fdCfg.Enabled then
@@ -393,6 +431,7 @@ function DN:CheckFocusDeath(deadGUID)
             self.lastFocusDeadState = true
             local cfg = self.db.FocusDeath
             self:ShowFlashMessage("focusDeath", cfg.Text or "FOCUS DIED", cfg.Color or { 1, 0.3, 0.3, 1 })
+            self:SpeakFocusReminder()
         elseif DEBUG_DN then
             KE:Print("[DN] focus check returned — GUIDs do not match")
         end
@@ -411,6 +450,7 @@ function DN:CheckFocusDeath(deadGUID)
         self.lastFocusDeadState = true
         local cfg = self.db.FocusDeath
         self:ShowFlashMessage("focusDeath", cfg.Text or "FOCUS DIED", cfg.Color or { 1, 0.3, 0.3, 1 })
+        self:SpeakFocusReminder()
     elseif not dead then
         self.lastFocusDeadState = false
     end

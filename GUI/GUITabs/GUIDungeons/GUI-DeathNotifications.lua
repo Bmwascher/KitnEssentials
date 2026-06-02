@@ -198,7 +198,7 @@ GUIFrame:RegisterContent("DeathNotifications", function(scrollChild, yOffset)
     manager:Register(fdEnableCheck, "all")
     cardFD:AddRow(fdRow1, Theme.rowHeight)
 
-    local fdRow2 = GUIFrame:CreateRow(cardFD.content, Theme.rowHeightLast)
+    local fdRow2 = GUIFrame:CreateRow(cardFD.content, Theme.rowHeight)
     local fdTextBox = GUIFrame:CreateEditBox(fdRow2, "Text", {
         value = db.FocusDeath.Text or "FOCUS DIED",
         callback = function(value)
@@ -218,7 +218,29 @@ GUIFrame:RegisterContent("DeathNotifications", function(scrollChild, yOffset)
     })
     fdRow2:AddWidget(fdColorPicker, 0.3)
     manager:Register(fdColorPicker, "all")
-    cardFD:AddRow(fdRow2, Theme.rowHeightLast, 0)
+    cardFD:AddRow(fdRow2, Theme.rowHeight)
+
+    local fdRow3 = GUIFrame:CreateRow(cardFD.content, Theme.rowHeight)
+    local fdTTSCheck = GUIFrame:CreateCheckbox(fdRow3, "Speak Reminder (TTS) in Combat", {
+        value = db.FocusDeath.TTSReminder == true,
+        callback = function(checked) db.FocusDeath.TTSReminder = checked end,
+        msgPopup = true,
+        msgText = "Focus TTS",
+        msgOn = "On",
+        msgOff = "Off",
+    })
+    fdRow3:AddWidget(fdTTSCheck, 1)
+    manager:Register(fdTTSCheck, "all")
+    cardFD:AddRow(fdRow3, Theme.rowHeight)
+
+    local fdRow4 = GUIFrame:CreateRow(cardFD.content, Theme.rowHeightLast)
+    local fdTTSBox = GUIFrame:CreateEditBox(fdRow4, "TTS Text", {
+        value = db.FocusDeath.TTSText or "Pick a new focus target",
+        callback = function(value) db.FocusDeath.TTSText = value end,
+    })
+    fdRow4:AddWidget(fdTTSBox, 1)
+    manager:Register(fdTTSBox, "all")
+    cardFD:AddRow(fdRow4, Theme.rowHeightLast, 0)
 
     yOffset = cardFD:GetNextOffset()
 

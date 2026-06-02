@@ -12,10 +12,12 @@ if not KitnEssentials then return end
 
 local CreateFrame = CreateFrame
 local CreateColor = CreateColor
+local C_Spell = C_Spell
 local UnitCastingInfo, UnitChannelInfo = UnitCastingInfo, UnitChannelInfo
 local UnitCastingDuration, UnitChannelDuration = UnitCastingDuration, UnitChannelDuration
 local UnitEmpoweredChannelDuration = UnitEmpoweredChannelDuration
 local UnitExists = UnitExists
+local UnitCanAttack = UnitCanAttack
 local UnitName = UnitName
 local UnitClass = UnitClass
 local UnitSpellTargetName = UnitSpellTargetName
@@ -29,6 +31,8 @@ local GetTime = GetTime
 local select = select
 local type = type
 local random = math.random
+
+local LCG = LibStub and LibStub("LibCustomGlow-1.0", true)
 
 local FALLBACK_ICON = 136243
 local PREVIEW_DURATION = 20
@@ -83,8 +87,102 @@ function H.ResetCastState(self)
     self.castID, self.spellID, self.spellName = nil, nil, nil
     self.notInterruptible = nil
     self.cachedDuration = nil
+    self.isImportant = nil
     H.CancelKickReadyTimer(self, "ResetCastState")
     H.HideKickTick(self)
+    H.HideGlow(self)
+end
+
+-- Opt-in (FocusCastbar sets db.IgnoreFriendlies; TargetCastbar's db lacks it).
+-- Returns false when the tracked unit is one we should NOT show a castbar for.
+-- UnitCanAttack returns a plain boolean (not secret).
+function H.UnitIsRelevant(self)
+    if self.db.IgnoreFriendlies and not UnitCanAttack("player", self.unit) then
+        return false
+    end
+    return true
+end
+
+-- Opt-in (FocusCastbar sets db.OutOfRangeOpacity). Returns `base` when in range or
+-- when range can't be determined; returns the dimmed opacity when the player's
+-- interrupt is out of range of the tracked unit. Uses the cached interruptId as the
+-- range proxy (matches AdvancedFocusCastBar). C_Spell.IsSpellInRange returns a plain
+-- boolean/nil, so direct comparison is safe.
+function H.GetRangeOpacity(self, base)
+    local opacity = self.db.OutOfRangeOpacity
+    if not opacity or opacity >= 1 then return base end
+    if not self.interruptId then return base end
+    if not C_Spell or not C_Spell.IsSpellInRange then return base end
+    local inRange = C_Spell.IsSpellInRange(self.interruptId, self.unit)
+    if inRange == nil then return base end
+    if inRange == true then return base end
+    return opacity
+end
+
+-- Important-spell glow. isImportant (C_Spell.IsSpellImportant) may be a SECRET
+-- boolean, so we never branch on it: the glow animation runs continuously on
+-- glowFrame while the castbar is shown, and visibility is toggled with the
+-- secret-safe SetAlphaFromBoolean. The glow type (pixel / autocast) and color are
+-- applied by (re)starting the LibCustomGlow animation only when they change since
+-- the last start, so GUI edits take effect on the next cast without a /reload.
+-- Only pixel + autocast are offered: ButtonGlow/ProcGlow are square-button shaped
+-- and look wrong on a wide bar.
+function H.UpdateGlow(self)
+    local cfg = self.db.ImportantGlow
+    if not cfg or not cfg.Enabled or not self.glowFrame then
+        H.HideGlow(self)
+        return
+    end
+    if self.isPreview then
+        H.HideGlow(self)
+        return
+    end
+    if not LCG then return end
+
+    local glowType = cfg.GlowType or "pixel"
+    local c = cfg.Color or { 1, 0.85, 0.1, 1 }
+    local color = { c[1], c[2], c[3], c[4] or 1 }
+    local lines = cfg.GlowLines or 8
+    local frequency = cfg.GlowFrequency or 0.25
+    local length = cfg.GlowLength or 8
+    local thickness = cfg.GlowThickness or 2
+    local scale = cfg.GlowScale or 1
+    local border = cfg.GlowBorder ~= false
+    -- Full signature: any glow setting change restarts the animation on the next
+    -- cast. %.3f on every number avoids the %d "no integer representation" trap.
+    local sig = string.format("%s|%.3f|%.3f|%.3f|%.3f|%.3f|%.3f|%.3f|%.3f|%.3f|%s",
+        glowType, color[1], color[2], color[3], color[4],
+        lines, frequency, length, thickness, scale, tostring(border))
+    if self._glowSig ~= sig then
+        -- Stop both flavors first (no-op for whichever isn't running), then start
+        -- the requested one on the container. Container alpha (set below) gates
+        -- visibility regardless of type, since the LCG sub-frame is its child.
+        LCG.PixelGlow_Stop(self.glowFrame)
+        LCG.AutoCastGlow_Stop(self.glowFrame)
+        if glowType == "autocast" then
+            -- AutoCastGlow_Start(frame, color, N, frequency, scale, xOffset, yOffset, key)
+            LCG.AutoCastGlow_Start(self.glowFrame, color, lines, frequency, scale, 1, 1, nil)
+        else
+            -- PixelGlow_Start(frame, color, N, frequency, length, th, xOffset, yOffset, border, key)
+            LCG.PixelGlow_Start(self.glowFrame, color, lines, frequency, length, thickness, 0, 0, border, nil)
+        end
+        self._glowSig = sig
+    end
+
+    -- isImportant may be nil (older API / non-cast) or a secret boolean.
+    -- SetAlphaFromBoolean tolerates secret; guard the nil case to 0.
+    -- Signature is (value, alphaIfTrue, alphaIfFalse): important -> 1 (shown),
+    -- not important -> 0 (hidden). (Args were previously swapped, which lit the
+    -- glow on every NON-important cast.)
+    if self.isImportant == nil then
+        self.glowFrame:SetAlpha(0)
+    else
+        self.glowFrame:SetAlphaFromBoolean(self.isImportant, 1, 0)
+    end
+end
+
+function H.HideGlow(self)
+    if self.glowFrame then self.glowFrame:SetAlpha(0) end
 end
 
 -- UnitNameFromGUID + UnitClassFromGUID resolve for ALL unit GUIDs (player,
@@ -287,6 +385,20 @@ function H.CreateFrame(self, opts)
         targetMarker:SetParent(castBar)
         targetMarker:Hide()
     end
+
+    -- Glow container for the important-spell highlight. The LibCustomGlow animation
+    -- runs on this child frame; we show/hide it via SetAlphaFromBoolean so we never
+    -- branch on the (possibly secret) IsSpellImportant return. Anchored to the whole
+    -- bar; sits above the bar visuals so the glow frames the castbar edge.
+    local glowFrame = CreateFrame("Frame", nil, frame)
+    glowFrame:SetAllPoints(frame)
+    glowFrame:SetFrameLevel(castBar:GetFrameLevel() + 6)
+    glowFrame:SetAlpha(0)
+    self.glowFrame = glowFrame
+    -- Signature of the currently-started glow (type + color + all shape params).
+    -- UpdateGlow restarts the LibCustomGlow animation only when it changes
+    -- (nil = not started yet).
+    self._glowSig = nil
 
     self.frame, self.iconFrame, self.icon = frame, iconFrame, icon
     self.castBar, self.spark = castBar, spark
@@ -623,6 +735,11 @@ end
 function H.StartCast(self)
     local unit = self.unit
     if not self.frame or not UnitExists(unit) then return end
+    if not H.UnitIsRelevant(self) then
+        H.ResetCastState(self)
+        self.frame:Hide()
+        return
+    end
     local name, text, texture, castID, notInterruptible, spellID, isEmpowered
     local duration, direction = nil, Enum.StatusBarTimerDirection.ElapsedTime
 
@@ -659,6 +776,13 @@ function H.StartCast(self)
     end
 
     self.castID, self.spellID, self.spellName = castID, spellID, text or name
+    -- IsSpellImportant may return a secret boolean; store as-is and let
+    -- SetAlphaFromBoolean handle it in H.UpdateGlow. nil when API/spellID absent.
+    if spellID and C_Spell and C_Spell.IsSpellImportant then
+        self.isImportant = C_Spell.IsSpellImportant(spellID)
+    else
+        self.isImportant = nil
+    end
     -- Default nil → false at the read site (matches EllesmereUI
     -- EllesmereUINameplates.lua:4723-4725 UpdateCast). UnitCastingInfo /
     -- UnitChannelInfo can omit the notInterruptible field for some cast
@@ -669,10 +793,11 @@ function H.StartCast(self)
     if type(notInterruptible) == "nil" then notInterruptible = false end
     self.notInterruptible = notInterruptible
 
+    local shownAlpha = H.GetRangeOpacity(self, 1)
     if self.db.HideNotInterruptible then
-        self.frame:SetAlphaFromBoolean(notInterruptible, 0, 1)
+        self.frame:SetAlphaFromBoolean(notInterruptible, 0, shownAlpha)
     else
-        self.frame:SetAlpha(1)
+        self.frame:SetAlpha(shownAlpha)
     end
 
     self.castBar:SetTimerDuration(duration, Enum.StatusBarInterpolation.Immediate, direction)
@@ -687,6 +812,7 @@ function H.StartCast(self)
     H.SetupKickCooldownBar(self)
     H.UpdateTargetNames(self)
     H.UpdateTargetMarker(self)
+    H.UpdateGlow(self)
     if self.PlayCastSound then self:PlayCastSound() end
     H.EnsureOnUpdate(self)
     self.frame:Show()
@@ -710,6 +836,7 @@ function H.EndCast(self, showHold, wasInterrupted, interruptedBy)
 
     self.spark:Hide()
     self.kickTick:SetAlpha(0)
+    H.HideGlow(self)
     H.HideTargetNames(self)
     H.HideTargetMarker(self)
 
@@ -771,7 +898,12 @@ function H.UpdateInterruptible(self)
     end
 
     if self.db.HideNotInterruptible and notInterruptible ~= nil then
-        self.frame:SetAlphaFromBoolean(notInterruptible, 0, 1)
+        -- Honor out-of-range dimming: an INTERRUPTIBLE state-change firing mid-cast
+        -- must not snap the bar back to full alpha while the unit is out of range
+        -- (OnUpdate would re-dim within ~33ms, but that one-frame flash is visible).
+        -- GetRangeOpacity returns a plain number (1 when the feature is off / on
+        -- TargetCastbar), so this is a no-op there and secret-safe via SetAlphaFromBoolean.
+        self.frame:SetAlphaFromBoolean(notInterruptible, 0, H.GetRangeOpacity(self, 1))
     end
 
     H.UpdateKickIndicator(self, nil)
@@ -816,7 +948,7 @@ end
 
 function H.OnUnitChanged(self)
     local unit = self.unit
-    if UnitExists(unit) then
+    if UnitExists(unit) and H.UnitIsRelevant(self) then
         H.StartCast(self)
         H.UpdateTargetMarker(self)
     else
@@ -920,6 +1052,19 @@ function H.OnUpdate(self, elapsed)
     self.time:SetFormattedText('%.' .. decimals .. 'f', remaining)
 
     local hasActiveCast = self.casting or self.channeling or self.empowering
+
+    -- Live out-of-range dimming: range can change mid-cast. Re-apply the shown
+    -- alpha, preserving the HideNotInterruptible behavior (notInterruptible may be
+    -- a secret boolean -> SetAlphaFromBoolean is secret-safe).
+    if hasActiveCast and self.db.OutOfRangeOpacity and self.db.OutOfRangeOpacity < 1 then
+        local shownAlpha = H.GetRangeOpacity(self, 1)
+        if self.db.HideNotInterruptible and self.notInterruptible ~= nil then
+            self.frame:SetAlphaFromBoolean(self.notInterruptible, 0, shownAlpha)
+        else
+            self.frame:SetAlpha(shownAlpha)
+        end
+    end
+
     if hasActiveCast and self._targetNamesElapsed >= TARGET_NAMES_THROTTLE then
         H.UpdateTargetNames(self)
         self._targetNamesElapsed = 0
@@ -968,6 +1113,10 @@ function H.ShowPreview(self, opts)
     self.text:SetText(opts.previewText)
     self.spark:Show()
     self.kickTick:SetAlpha(0)
+    -- Clear any leftover important-spell glow from a real cast that was showing
+    -- when the preview opened; the preview bar deliberately never glows
+    -- (UpdateGlow gates on isPreview), so it must start hidden.
+    H.HideGlow(self)
     H.UpdateBarColor(self)
     self:ApplySettings()
     H.StartPreviewTimer(self)
@@ -1024,6 +1173,7 @@ function H.HidePreview(self)
     H.CancelKickReadyTimer(self, "HidePreview")
     H.HideTargetNames(self)
     H.HideTargetMarker(self)
+    H.HideGlow(self)
     if self.frame and not (self.casting or self.channeling or self.empowering) then
         self.frame:Hide()
     end
