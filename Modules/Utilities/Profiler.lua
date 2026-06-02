@@ -2,7 +2,7 @@
 -- ║  Profiler.lua                                            ║
 -- ║  Module: KE In-Game Profiler                             ║
 -- ║  Purpose: Push-button CPU + memory sampling for KE work, ║
--- ║           accessed via /kes profiler <subcommand>.        ║
+-- ║           accessed via /kes profiler <subcommand>.       ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
