@@ -32,6 +32,8 @@ local select = select
 local type = type
 local random = math.random
 
+local LCG = LibStub and LibStub("LibCustomGlow-1.0", true)
+
 local FALLBACK_ICON = 136243
 local PREVIEW_DURATION = 20
 local MAX_TARGET_NAMES = 5
@@ -115,6 +117,40 @@ function H.GetRangeOpacity(self, base)
     if inRange == nil then return base end
     if inRange == true then return base end
     return opacity
+end
+
+-- Important-spell glow. isImportant (C_Spell.IsSpellImportant) may be a SECRET
+-- boolean, so we never branch on it: the glow animation runs continuously on
+-- glowFrame while the castbar is shown, and visibility is toggled with the
+-- secret-safe SetAlphaFromBoolean. Lazily starts the LibCustomGlow animation once.
+function H.UpdateGlow(self)
+    local cfg = self.db.ImportantGlow
+    if not cfg or not cfg.Enabled or not self.glowFrame then
+        H.HideGlow(self)
+        return
+    end
+    if self.isPreview then
+        H.HideGlow(self)
+        return
+    end
+    if not LCG then return end
+
+    if not self._glowStarted then
+        local c = cfg.Color or { 1, 0.85, 0.1, 1 }
+        LCG.PixelGlow_Start(self.glowFrame, { c[1], c[2], c[3], c[4] or 1 }, 8, 0.25, 8, 2, 1, 1, false, nil)
+        self._glowStarted = true
+    end
+    -- isImportant may be nil (older API / non-cast) or a secret boolean.
+    -- SetAlphaFromBoolean tolerates secret; guard the nil case to 0.
+    if self.isImportant == nil then
+        self.glowFrame:SetAlpha(0)
+    else
+        self.glowFrame:SetAlphaFromBoolean(self.isImportant, 0, 1)
+    end
+end
+
+function H.HideGlow(self)
+    if self.glowFrame then self.glowFrame:SetAlpha(0) end
 end
 
 -- UnitNameFromGUID + UnitClassFromGUID resolve for ALL unit GUIDs (player,
@@ -317,6 +353,17 @@ function H.CreateFrame(self, opts)
         targetMarker:SetParent(castBar)
         targetMarker:Hide()
     end
+
+    -- Glow container for the important-spell highlight. The LibCustomGlow animation
+    -- runs on this child frame; we show/hide it via SetAlphaFromBoolean so we never
+    -- branch on the (possibly secret) IsSpellImportant return. Anchored to the whole
+    -- bar; sits above the bar visuals so the glow frames the castbar edge.
+    local glowFrame = CreateFrame("Frame", nil, frame)
+    glowFrame:SetAllPoints(frame)
+    glowFrame:SetFrameLevel(castBar:GetFrameLevel() + 6)
+    glowFrame:SetAlpha(0)
+    self.glowFrame = glowFrame
+    self._glowStarted = false
 
     self.frame, self.iconFrame, self.icon = frame, iconFrame, icon
     self.castBar, self.spark = castBar, spark
@@ -694,6 +741,13 @@ function H.StartCast(self)
     end
 
     self.castID, self.spellID, self.spellName = castID, spellID, text or name
+    -- IsSpellImportant may return a secret boolean; store as-is and let
+    -- SetAlphaFromBoolean handle it in H.UpdateGlow. nil when API/spellID absent.
+    if spellID and C_Spell and C_Spell.IsSpellImportant then
+        self.isImportant = C_Spell.IsSpellImportant(spellID)
+    else
+        self.isImportant = nil
+    end
     -- Default nil → false at the read site (matches EllesmereUI
     -- EllesmereUINameplates.lua:4723-4725 UpdateCast). UnitCastingInfo /
     -- UnitChannelInfo can omit the notInterruptible field for some cast
@@ -723,6 +777,7 @@ function H.StartCast(self)
     H.SetupKickCooldownBar(self)
     H.UpdateTargetNames(self)
     H.UpdateTargetMarker(self)
+    H.UpdateGlow(self)
     if self.PlayCastSound then self:PlayCastSound() end
     H.EnsureOnUpdate(self)
     self.frame:Show()
@@ -746,6 +801,7 @@ function H.EndCast(self, showHold, wasInterrupted, interruptedBy)
 
     self.spark:Hide()
     self.kickTick:SetAlpha(0)
+    H.HideGlow(self)
     H.HideTargetNames(self)
     H.HideTargetMarker(self)
 
