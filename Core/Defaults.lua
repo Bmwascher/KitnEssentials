@@ -378,6 +378,7 @@ local Defaults = {
             IgnoreFriendlies = false,     -- hide bar when focus is not attackable
             ImportantGlow = {
                 Enabled = false,
+                GlowType = "pixel",           -- "pixel" or "autocast" (LibCustomGlow)
                 Color = { 1, 0.85, 0.1, 1 },  -- glow color when C_Spell.IsSpellImportant is true
             },
             HoldTimer = {

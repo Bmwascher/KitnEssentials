@@ -52,7 +52,8 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
         }
     end
     db.KickIndicator = db.KickIndicator or {}
-    db.ImportantGlow = db.ImportantGlow or { Enabled = false, Color = { 1, 0.85, 0.1, 1 } }
+    db.ImportantGlow = db.ImportantGlow or { Enabled = false, GlowType = "pixel", Color = { 1, 0.85, 0.1, 1 } }
+    db.ImportantGlow.GlowType = db.ImportantGlow.GlowType or "pixel"
 
     local mod = GetModule()
     local manager = GUIFrame:CreateWidgetStateManager()
@@ -487,11 +488,24 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     manager:Register(glowColorPicker, "all")
     cardHL:AddRow(hlRow2, Theme.rowHeight)
 
+    local hlRow3 = GUIFrame:CreateRow(cardHL.content, Theme.rowHeight)
+    local glowTypeDropdown = GUIFrame:CreateDropdown(hlRow3, "Glow Type", {
+        options = {
+            { key = "pixel",    text = "Pixel" },
+            { key = "autocast", text = "Autocast" },
+        },
+        value = db.ImportantGlow.GlowType or "pixel",
+        callback = function(key) db.ImportantGlow.GlowType = key; ApplySettings() end,
+    })
+    hlRow3:AddWidget(glowTypeDropdown, 1)
+    manager:Register(glowTypeDropdown, "all")
+    cardHL:AddRow(hlRow3, Theme.rowHeight)
+
     local hlNoteRow = GUIFrame:CreateRow(cardHL.content, 50)
     local hlNote = GUIFrame:CreateText(hlNoteRow,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " Out-of-Range dims the bar when your interrupt can't reach the focus (1 = off).\n" ..
-        KE:ColorTextByTheme("-") .. " Glow fires on spells Blizzard flags as important (changing glow color takes effect after a /reload).",
+        KE:ColorTextByTheme("-") .. " Glow fires only on spells Blizzard flags as important; type/color changes apply on the next cast.",
         50, "hide")
     hlNoteRow:AddWidget(hlNote, 1)
     manager:Register(hlNote, "all")

@@ -122,7 +122,11 @@ end
 -- Important-spell glow. isImportant (C_Spell.IsSpellImportant) may be a SECRET
 -- boolean, so we never branch on it: the glow animation runs continuously on
 -- glowFrame while the castbar is shown, and visibility is toggled with the
--- secret-safe SetAlphaFromBoolean. Lazily starts the LibCustomGlow animation once.
+-- secret-safe SetAlphaFromBoolean. The glow type (pixel / autocast) and color are
+-- applied by (re)starting the LibCustomGlow animation only when they change since
+-- the last start, so GUI edits take effect on the next cast without a /reload.
+-- Only pixel + autocast are offered: ButtonGlow/ProcGlow are square-button shaped
+-- and look wrong on a wide bar.
 function H.UpdateGlow(self)
     local cfg = self.db.ImportantGlow
     if not cfg or not cfg.Enabled or not self.glowFrame then
@@ -135,11 +139,27 @@ function H.UpdateGlow(self)
     end
     if not LCG then return end
 
-    if not self._glowStarted then
-        local c = cfg.Color or { 1, 0.85, 0.1, 1 }
-        LCG.PixelGlow_Start(self.glowFrame, { c[1], c[2], c[3], c[4] or 1 }, 8, 0.25, 8, 2, 1, 1, false, nil)
-        self._glowStarted = true
+    local glowType = cfg.GlowType or "pixel"
+    local c = cfg.Color or { 1, 0.85, 0.1, 1 }
+    local color = { c[1], c[2], c[3], c[4] or 1 }
+    local colorKey = string.format("%.3f,%.3f,%.3f,%.3f", color[1], color[2], color[3], color[4])
+    if self._glowType ~= glowType or self._glowColorKey ~= colorKey then
+        -- Stop both flavors first (no-op for whichever isn't running), then start
+        -- the requested one on the container. Container alpha (set below) gates
+        -- visibility regardless of type, since the LCG sub-frame is its child.
+        LCG.PixelGlow_Stop(self.glowFrame)
+        LCG.AutoCastGlow_Stop(self.glowFrame)
+        if glowType == "autocast" then
+            -- AutoCastGlow_Start(frame, color, N, frequency, scale, xOffset, yOffset, key)
+            LCG.AutoCastGlow_Start(self.glowFrame, color, 4, 0.125, 1, 0, 0, nil)
+        else
+            -- PixelGlow_Start(frame, color, N, frequency, length, th, xOffset, yOffset, border, key)
+            LCG.PixelGlow_Start(self.glowFrame, color, 8, 0.25, 8, 2, 1, 1, false, nil)
+        end
+        self._glowType = glowType
+        self._glowColorKey = colorKey
     end
+
     -- isImportant may be nil (older API / non-cast) or a secret boolean.
     -- SetAlphaFromBoolean tolerates secret; guard the nil case to 0.
     -- Signature is (value, alphaIfTrue, alphaIfFalse): important -> 1 (shown),
@@ -366,7 +386,10 @@ function H.CreateFrame(self, opts)
     glowFrame:SetFrameLevel(castBar:GetFrameLevel() + 6)
     glowFrame:SetAlpha(0)
     self.glowFrame = glowFrame
-    self._glowStarted = false
+    -- Tracks the currently-started glow type + color so UpdateGlow restarts the
+    -- LibCustomGlow animation only when one of them changes (nil = not started).
+    self._glowType = nil
+    self._glowColorKey = nil
 
     self.frame, self.iconFrame, self.icon = frame, iconFrame, icon
     self.castBar, self.spark = castBar, spark
