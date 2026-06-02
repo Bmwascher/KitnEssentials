@@ -142,8 +142,18 @@ function H.UpdateGlow(self)
     local glowType = cfg.GlowType or "pixel"
     local c = cfg.Color or { 1, 0.85, 0.1, 1 }
     local color = { c[1], c[2], c[3], c[4] or 1 }
-    local colorKey = string.format("%.3f,%.3f,%.3f,%.3f", color[1], color[2], color[3], color[4])
-    if self._glowType ~= glowType or self._glowColorKey ~= colorKey then
+    local lines = cfg.GlowLines or 8
+    local frequency = cfg.GlowFrequency or 0.25
+    local length = cfg.GlowLength or 8
+    local thickness = cfg.GlowThickness or 2
+    local scale = cfg.GlowScale or 1
+    local border = cfg.GlowBorder ~= false
+    -- Full signature: any glow setting change restarts the animation on the next
+    -- cast. %.3f on every number avoids the %d "no integer representation" trap.
+    local sig = string.format("%s|%.3f|%.3f|%.3f|%.3f|%.3f|%.3f|%.3f|%.3f|%.3f|%s",
+        glowType, color[1], color[2], color[3], color[4],
+        lines, frequency, length, thickness, scale, tostring(border))
+    if self._glowSig ~= sig then
         -- Stop both flavors first (no-op for whichever isn't running), then start
         -- the requested one on the container. Container alpha (set below) gates
         -- visibility regardless of type, since the LCG sub-frame is its child.
@@ -151,13 +161,12 @@ function H.UpdateGlow(self)
         LCG.AutoCastGlow_Stop(self.glowFrame)
         if glowType == "autocast" then
             -- AutoCastGlow_Start(frame, color, N, frequency, scale, xOffset, yOffset, key)
-            LCG.AutoCastGlow_Start(self.glowFrame, color, 4, 0.125, 1, 0, 0, nil)
+            LCG.AutoCastGlow_Start(self.glowFrame, color, lines, frequency, scale, 1, 1, nil)
         else
             -- PixelGlow_Start(frame, color, N, frequency, length, th, xOffset, yOffset, border, key)
-            LCG.PixelGlow_Start(self.glowFrame, color, 8, 0.25, 8, 2, 1, 1, false, nil)
+            LCG.PixelGlow_Start(self.glowFrame, color, lines, frequency, length, thickness, 0, 0, border, nil)
         end
-        self._glowType = glowType
-        self._glowColorKey = colorKey
+        self._glowSig = sig
     end
 
     -- isImportant may be nil (older API / non-cast) or a secret boolean.
@@ -386,10 +395,10 @@ function H.CreateFrame(self, opts)
     glowFrame:SetFrameLevel(castBar:GetFrameLevel() + 6)
     glowFrame:SetAlpha(0)
     self.glowFrame = glowFrame
-    -- Tracks the currently-started glow type + color so UpdateGlow restarts the
-    -- LibCustomGlow animation only when one of them changes (nil = not started).
-    self._glowType = nil
-    self._glowColorKey = nil
+    -- Signature of the currently-started glow (type + color + all shape params).
+    -- UpdateGlow restarts the LibCustomGlow animation only when it changes
+    -- (nil = not started yet).
+    self._glowSig = nil
 
     self.frame, self.iconFrame, self.icon = frame, iconFrame, icon
     self.castBar, self.spark = castBar, spark

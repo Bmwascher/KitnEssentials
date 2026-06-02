@@ -380,6 +380,12 @@ local Defaults = {
                 Enabled = false,
                 GlowType = "pixel",           -- "pixel" or "autocast" (LibCustomGlow)
                 Color = { 1, 0.85, 0.1, 1 },  -- glow color when C_Spell.IsSpellImportant is true
+                GlowLines = 8,                -- pixel: line count / autocast: particle count
+                GlowFrequency = 0.25,         -- animation speed (lower = faster)
+                GlowLength = 8,               -- pixel only: line length
+                GlowThickness = 2,            -- pixel only: line thickness
+                GlowScale = 1,                -- autocast only: particle scale
+                GlowBorder = true,            -- pixel only: draw the connecting border
             },
             HoldTimer = {
                 Enabled = true,
