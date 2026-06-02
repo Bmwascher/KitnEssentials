@@ -12,6 +12,7 @@ if not KitnEssentials then return end
 
 local CreateFrame = CreateFrame
 local CreateColor = CreateColor
+local C_Spell = C_Spell
 local UnitCastingInfo, UnitChannelInfo = UnitCastingInfo, UnitChannelInfo
 local UnitCastingDuration, UnitChannelDuration = UnitCastingDuration, UnitChannelDuration
 local UnitEmpoweredChannelDuration = UnitEmpoweredChannelDuration
@@ -98,6 +99,22 @@ function H.UnitIsRelevant(self)
         return false
     end
     return true
+end
+
+-- Opt-in (FocusCastbar sets db.OutOfRangeOpacity). Returns `base` when in range or
+-- when range can't be determined; returns the dimmed opacity when the player's
+-- interrupt is out of range of the tracked unit. Uses the cached interruptId as the
+-- range proxy (matches AdvancedFocusCastBar). C_Spell.IsSpellInRange returns a plain
+-- boolean/nil, so direct comparison is safe.
+function H.GetRangeOpacity(self, base)
+    local opacity = self.db.OutOfRangeOpacity
+    if not opacity or opacity >= 1 then return base end
+    if not self.interruptId then return base end
+    if not C_Spell or not C_Spell.IsSpellInRange then return base end
+    local inRange = C_Spell.IsSpellInRange(self.interruptId, self.unit)
+    if inRange == nil then return base end
+    if inRange == true then return base end
+    return opacity
 end
 
 -- UnitNameFromGUID + UnitClassFromGUID resolve for ALL unit GUIDs (player,
@@ -687,10 +704,11 @@ function H.StartCast(self)
     if type(notInterruptible) == "nil" then notInterruptible = false end
     self.notInterruptible = notInterruptible
 
+    local shownAlpha = H.GetRangeOpacity(self, 1)
     if self.db.HideNotInterruptible then
-        self.frame:SetAlphaFromBoolean(notInterruptible, 0, 1)
+        self.frame:SetAlphaFromBoolean(notInterruptible, 0, shownAlpha)
     else
-        self.frame:SetAlpha(1)
+        self.frame:SetAlpha(shownAlpha)
     end
 
     self.castBar:SetTimerDuration(duration, Enum.StatusBarInterpolation.Immediate, direction)
@@ -938,6 +956,19 @@ function H.OnUpdate(self, elapsed)
     self.time:SetFormattedText('%.' .. decimals .. 'f', remaining)
 
     local hasActiveCast = self.casting or self.channeling or self.empowering
+
+    -- Live out-of-range dimming: range can change mid-cast. Re-apply the shown
+    -- alpha, preserving the HideNotInterruptible behavior (notInterruptible may be
+    -- a secret boolean -> SetAlphaFromBoolean is secret-safe).
+    if hasActiveCast and self.db.OutOfRangeOpacity and self.db.OutOfRangeOpacity < 1 then
+        local shownAlpha = H.GetRangeOpacity(self, 1)
+        if self.db.HideNotInterruptible and self.notInterruptible ~= nil then
+            self.frame:SetAlphaFromBoolean(self.notInterruptible, 0, shownAlpha)
+        else
+            self.frame:SetAlpha(shownAlpha)
+        end
+    end
+
     if hasActiveCast and self._targetNamesElapsed >= TARGET_NAMES_THROTTLE then
         H.UpdateTargetNames(self)
         self._targetNamesElapsed = 0
