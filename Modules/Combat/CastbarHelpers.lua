@@ -1078,6 +1078,10 @@ function H.ShowPreview(self, opts)
     self.text:SetText(opts.previewText)
     self.spark:Show()
     self.kickTick:SetAlpha(0)
+    -- Clear any leftover important-spell glow from a real cast that was showing
+    -- when the preview opened; the preview bar deliberately never glows
+    -- (UpdateGlow gates on isPreview), so it must start hidden.
+    H.HideGlow(self)
     H.UpdateBarColor(self)
     self:ApplySettings()
     H.StartPreviewTimer(self)
@@ -1134,6 +1138,7 @@ function H.HidePreview(self)
     H.CancelKickReadyTimer(self, "HidePreview")
     H.HideTargetNames(self)
     H.HideTargetMarker(self)
+    H.HideGlow(self)
     if self.frame and not (self.casting or self.channeling or self.empowering) then
         self.frame:Hide()
     end
