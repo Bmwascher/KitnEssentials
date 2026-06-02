@@ -142,10 +142,13 @@ function H.UpdateGlow(self)
     end
     -- isImportant may be nil (older API / non-cast) or a secret boolean.
     -- SetAlphaFromBoolean tolerates secret; guard the nil case to 0.
+    -- Signature is (value, alphaIfTrue, alphaIfFalse): important -> 1 (shown),
+    -- not important -> 0 (hidden). (Args were previously swapped, which lit the
+    -- glow on every NON-important cast.)
     if self.isImportant == nil then
         self.glowFrame:SetAlpha(0)
     else
-        self.glowFrame:SetAlphaFromBoolean(self.isImportant, 0, 1)
+        self.glowFrame:SetAlphaFromBoolean(self.isImportant, 1, 0)
     end
 end
 
