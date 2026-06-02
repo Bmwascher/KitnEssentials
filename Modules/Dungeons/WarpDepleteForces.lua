@@ -24,6 +24,7 @@ local CreateFrame = CreateFrame
 local UnitExists = UnitExists
 local UnitIsDead = UnitIsDead
 local UnitIsDeadOrGhost = UnitIsDeadOrGhost
+local UnitIsFeignDeath = UnitIsFeignDeath
 local UnitCanAttack = UnitCanAttack
 local UnitAffectingCombat = UnitAffectingCombat
 local UnitClass = UnitClass
@@ -384,7 +385,9 @@ local function ProcessDeaths()
     end
 
     -- Player — catch dead + ghost so fast releasers still get recorded.
-    if UnitIsDeadOrGhost("player") then
+    -- Exclude Feign Death: UnitIsDeadOrGhost reports a feigning hunter as
+    -- dead, which would log a phantom death for a player who never died.
+    if UnitIsDeadOrGhost("player") and not UnitIsFeignDeath("player") then
         local name = UnitName("player")
         if name and not recordedDeaths[name] then
             local _, classToken = UnitClass("player")
@@ -404,7 +407,9 @@ local function ProcessDeaths()
         local token = IsInRaid() and "raid" or "party"
         for i = 1, size do
             local unit = token .. i
-            if UnitExists(unit) and UnitIsDeadOrGhost(unit) then
+            -- Skip feigning hunters: UnitIsDeadOrGhost is true while feigning,
+            -- so without this guard a Feign Death logs as a party-member death.
+            if UnitExists(unit) and UnitIsDeadOrGhost(unit) and not UnitIsFeignDeath(unit) then
                 local name = UnitName(unit)
                 if name and not recordedDeaths[name] then
                     local _, classToken = UnitClass(unit)
