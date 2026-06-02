@@ -228,6 +228,58 @@ local VALUE_LABELS = {
     ffxNether = function(v) return v == "1" and "Enabled" or "Disabled" end,
     ffxVenari = function(v) return v == "1" and "Enabled" or "Disabled" end,
     ffxLingeringVenari = function(v) return v == "1" and "Enabled" or "Disabled" end,
+    -- Raid & BG graphics
+    RAIDsettingsEnabled = function(v) return v == "1" and "Enabled" or "Disabled" end,
+    raidGraphicsShadowQuality = function(v)
+        local t = { [0] = "Low", [1] = "Fair", [2] = "Good", [3] = "High", [4] = "Ultra" }
+        return t[tonumber(v) or -1] or v
+    end,
+    raidGraphicsLiquidDetail = function(v)
+        local t = { [0] = "Low", [1] = "Fair", [2] = "Good", [3] = "High" }
+        return t[tonumber(v) or -1] or v
+    end,
+    raidGraphicsParticleDensity = function(v)
+        local t = { [0] = "Disabled", [1] = "Low", [2] = "Fair", [3] = "Good", [4] = "High" }
+        return t[tonumber(v) or -1] or v
+    end,
+    raidGraphicsSSAO = function(v) return tonumber(v) == 0 and "Disabled" or "Level " .. v end,
+    raidGraphicsDepthEffects = function(v) return tonumber(v) == 0 and "Disabled" or "Level " .. v end,
+    raidGraphicsComputeEffects = function(v) return tonumber(v) == 0 and "Disabled" or "Level " .. v end,
+    raidGraphicsOutlineMode = function(v)
+        local t = { [1] = "Low", [2] = "High", [3] = "Ultra High" }
+        return t[tonumber(v) or -1] or v
+    end,
+    raidGraphicsTextureResolution = function(v)
+        local t = { [1] = "Low", [2] = "High", [3] = "Ultra" }
+        return t[tonumber(v) or -1] or v
+    end,
+    raidGraphicsSpellDensity = function(v)
+        local t = { [0] = "Essential", [1] = "Low", [2] = "Fair", [3] = "Good", [4] = "High" }
+        return t[tonumber(v) or -1] or v
+    end,
+    raidGraphicsProjectedTextures = function(v) return v == "1" and "Enabled" or "Disabled" end,
+    raidGraphicsViewDistance = function(v) return "Level " .. ((tonumber(v) or 0) + 1) end,
+    raidGraphicsEnvironmentDetail = function(v) return "Level " .. ((tonumber(v) or 0) + 1) end,
+    raidGraphicsGroundClutter = function(v) return "Level " .. ((tonumber(v) or 0) + 1) end,
+    -- FPS additions
+    useMaxFPS = function(v) return v == "1" and "Enabled" or "Disabled" end,
+    maxFPS = function(v) return v .. " FPS" end,
+    maxFPSLoading = function(v) return v .. " FPS" end,
+    -- CVars category
+    AutoPushSpellToActionBar = function(v) return v == "1" and "Enabled" or "Disabled" end,
+    cameraFov = function(v) return v .. "\194\176" end,
+    cameraDistanceMaxZoomFactor = function(v) return v .. "x" end,
+    nameplateStackingTypes = function(v)
+        local t = { [""] = "None", ["AA"] = "Enemy Units", ["BB"] = "Friendly Units", ["CC"] = "Both" }
+        return t[v] or v
+    end,
+    nameplateOverlapH = function(v) return tostring(v) end,
+    nameplateOverlapV = function(v) return tostring(v) end,
+    WorldTextMinSize = function(v) return tostring(v) end,
+    -- Cosmetic additions
+    overrideScreenFlash = function(v) return v == "1" and "Enabled" or "Disabled" end,
+    ShakeStrengthCamera = function(v) return tonumber(v) == 0 and "Disabled" or tostring(v) end,
+    ShakeStrengthUI = function(v) return tonumber(v) == 0 and "Disabled" or tostring(v) end,
 }
 
 ---------------------------------------------------------------------------------
