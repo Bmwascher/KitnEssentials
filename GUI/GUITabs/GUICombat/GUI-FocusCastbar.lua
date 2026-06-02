@@ -52,6 +52,7 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
         }
     end
     db.KickIndicator = db.KickIndicator or {}
+    db.ImportantGlow = db.ImportantGlow or { Enabled = false, Color = { 1, 0.85, 0.1, 1 } }
 
     local mod = GetModule()
     local manager = GUIFrame:CreateWidgetStateManager()
@@ -435,6 +436,68 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     cardColors:AddRow(row6e, Theme.rowHeightLast, 0)
 
     yOffset = cardColors:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 7.5: Highlights & Range
+    ----------------------------------------------------------------
+    local cardHL = GUIFrame:CreateCard(scrollChild, "Highlights & Range", yOffset)
+    manager:Register(cardHL, "all")
+
+    local hlRow1 = GUIFrame:CreateRow(cardHL.content, Theme.rowHeight)
+    local ignoreFriendlyCheck = GUIFrame:CreateCheckbox(hlRow1, "Ignore Friendly Focus", {
+        value = db.IgnoreFriendlies == true,
+        callback = function(checked) db.IgnoreFriendlies = checked; ApplySettings() end,
+        msgPopup = true,
+        msgText = "Ignore Friendly",
+        msgOn = "On",
+        msgOff = "Off",
+    })
+    hlRow1:AddWidget(ignoreFriendlyCheck, 0.5)
+    manager:Register(ignoreFriendlyCheck, "all")
+
+    local opacitySlider = GUIFrame:CreateSlider(hlRow1, "Out-of-Range Opacity", {
+        min = 0.1, max = 1, step = 0.05,
+        value = db.OutOfRangeOpacity or 1,
+        callback = function(val) db.OutOfRangeOpacity = val; ApplySettings() end,
+    })
+    hlRow1:AddWidget(opacitySlider, 0.5)
+    manager:Register(opacitySlider, "all")
+    cardHL:AddRow(hlRow1, Theme.rowHeight)
+
+    local hlRow2 = GUIFrame:CreateRow(cardHL.content, Theme.rowHeight)
+    local glowCheck = GUIFrame:CreateCheckbox(hlRow2, "Important Spell Glow", {
+        value = db.ImportantGlow.Enabled == true,
+        callback = function(checked) db.ImportantGlow.Enabled = checked; ApplySettings() end,
+        msgPopup = true,
+        msgText = "Important Glow",
+        msgOn = "On",
+        msgOff = "Off",
+    })
+    hlRow2:AddWidget(glowCheck, 0.5)
+    manager:Register(glowCheck, "all")
+
+    local glowColorPicker = GUIFrame:CreateColorPicker(hlRow2, "Glow Color", {
+        color = db.ImportantGlow.Color or { 1, 0.85, 0.1, 1 },
+        callback = function(r, g, b, a)
+            db.ImportantGlow.Color = { r, g, b, a }
+            ApplySettings()
+        end,
+    })
+    hlRow2:AddWidget(glowColorPicker, 0.5)
+    manager:Register(glowColorPicker, "all")
+    cardHL:AddRow(hlRow2, Theme.rowHeight)
+
+    local hlNoteRow = GUIFrame:CreateRow(cardHL.content, 50)
+    local hlNote = GUIFrame:CreateText(hlNoteRow,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " Out-of-Range dims the bar when your interrupt can't reach the focus (1 = off).\n" ..
+        KE:ColorTextByTheme("-") .. " Glow fires on spells Blizzard flags as important (changing glow color takes effect after a /reload).",
+        50, "hide")
+    hlNoteRow:AddWidget(hlNote, 1)
+    manager:Register(hlNote, "all")
+    cardHL:AddRow(hlNoteRow, 50, 0)
+
+    yOffset = cardHL:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 8: Sound Settings
