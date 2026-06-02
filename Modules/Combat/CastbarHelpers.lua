@@ -863,7 +863,12 @@ function H.UpdateInterruptible(self)
     end
 
     if self.db.HideNotInterruptible and notInterruptible ~= nil then
-        self.frame:SetAlphaFromBoolean(notInterruptible, 0, 1)
+        -- Honor out-of-range dimming: an INTERRUPTIBLE state-change firing mid-cast
+        -- must not snap the bar back to full alpha while the unit is out of range
+        -- (OnUpdate would re-dim within ~33ms, but that one-frame flash is visible).
+        -- GetRangeOpacity returns a plain number (1 when the feature is off / on
+        -- TargetCastbar), so this is a no-op there and secret-safe via SetAlphaFromBoolean.
+        self.frame:SetAlphaFromBoolean(notInterruptible, 0, H.GetRangeOpacity(self, 1))
     end
 
     H.UpdateKickIndicator(self, nil)
