@@ -398,8 +398,9 @@ function DN:SpeakFocusReminder()
     local text = cfg.TTSText
     if not text or text == "" then text = "Pick a new focus target" end
     local volume = (C_TTSSettings and C_TTSSettings.GetSpeechVolume and C_TTSSettings.GetSpeechVolume()) or 100
-    local dest = (Enum.VoiceTtsDestination and Enum.VoiceTtsDestination.QueuedLocalPlayback) or 3
-    C_VoiceChat.SpeakText(voiceID, text, dest, volume)
+    -- SpeakText signature is (voiceID, text, rate, volume[, overlap]). Arg 3 is the
+    -- speech rate (-10..10); 3 = slightly faster than default for a snappy reminder.
+    C_VoiceChat.SpeakText(voiceID, text, 3, volume)
 end
 
 function DN:CheckFocusDeath(deadGUID)
