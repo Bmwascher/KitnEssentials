@@ -439,13 +439,13 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     yOffset = cardColors:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 7.5: Highlights & Range
+    -- Card 7.5: Range & Visibility
     ----------------------------------------------------------------
-    local cardHL = GUIFrame:CreateCard(scrollChild, "Highlights & Range", yOffset)
-    manager:Register(cardHL, "all")
+    local cardRange = GUIFrame:CreateCard(scrollChild, "Range & Visibility", yOffset)
+    manager:Register(cardRange, "all")
 
-    local hlRow1 = GUIFrame:CreateRow(cardHL.content, Theme.rowHeight)
-    local ignoreFriendlyCheck = GUIFrame:CreateCheckbox(hlRow1, "Ignore Friendly Focus", {
+    local rangeRow1 = GUIFrame:CreateRow(cardRange.content, Theme.rowHeight)
+    local ignoreFriendlyCheck = GUIFrame:CreateCheckbox(rangeRow1, "Ignore Friendly Focus", {
         value = db.IgnoreFriendlies == true,
         callback = function(checked) db.IgnoreFriendlies = checked; ApplySettings() end,
         msgPopup = true,
@@ -453,21 +453,39 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
         msgOn = "On",
         msgOff = "Off",
     })
-    hlRow1:AddWidget(ignoreFriendlyCheck, 0.5)
+    rangeRow1:AddWidget(ignoreFriendlyCheck, 0.5)
     manager:Register(ignoreFriendlyCheck, "all")
 
-    local opacitySlider = GUIFrame:CreateSlider(hlRow1, "Out-of-Range Opacity", {
+    local opacitySlider = GUIFrame:CreateSlider(rangeRow1, "Out-of-Range Opacity", {
         min = 0.1, max = 1, step = 0.05,
         value = db.OutOfRangeOpacity or 1,
         callback = function(val) db.OutOfRangeOpacity = val; ApplySettings() end,
     })
-    hlRow1:AddWidget(opacitySlider, 0.5)
+    rangeRow1:AddWidget(opacitySlider, 0.5)
     manager:Register(opacitySlider, "all")
-    cardHL:AddRow(hlRow1, Theme.rowHeight)
+    cardRange:AddRow(rangeRow1, Theme.rowHeight)
 
-    -- Row 2: Enable Glow + Glow Type
-    local hlRow2 = GUIFrame:CreateRow(cardHL.content, Theme.rowHeight)
-    local glowCheck = GUIFrame:CreateCheckbox(hlRow2, "Important Spell Glow", {
+    local rangeNoteRow = GUIFrame:CreateRow(cardRange.content, 50)
+    local rangeNote = GUIFrame:CreateText(rangeNoteRow,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " Out-of-Range dims the bar when your interrupt can't reach the focus (1 = off).\n" ..
+        KE:ColorTextByTheme("-") .. " Ignore Friendly hides the bar for a focus you can't attack.",
+        50, "hide")
+    rangeNoteRow:AddWidget(rangeNote, 1)
+    manager:Register(rangeNote, "all")
+    cardRange:AddRow(rangeNoteRow, 50, 0)
+
+    yOffset = cardRange:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 7.6: Important Cast Glow
+    ----------------------------------------------------------------
+    local cardGlow = GUIFrame:CreateCard(scrollChild, "Important Cast Glow", yOffset)
+    manager:Register(cardGlow, "all")
+
+    -- Row 1: Enable + Glow Type
+    local glowRow1 = GUIFrame:CreateRow(cardGlow.content, Theme.rowHeight)
+    local glowCheck = GUIFrame:CreateCheckbox(glowRow1, "Important Spell Glow", {
         value = db.ImportantGlow.Enabled == true,
         callback = function(checked) db.ImportantGlow.Enabled = checked; ApplySettings() end,
         msgPopup = true,
@@ -475,10 +493,10 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
         msgOn = "On",
         msgOff = "Off",
     })
-    hlRow2:AddWidget(glowCheck, 0.5)
+    glowRow1:AddWidget(glowCheck, 0.5)
     manager:Register(glowCheck, "all")
 
-    local glowTypeDropdown = GUIFrame:CreateDropdown(hlRow2, "Glow Type", {
+    local glowTypeDropdown = GUIFrame:CreateDropdown(glowRow1, "Glow Type", {
         options = {
             { key = "pixel",    text = "Pixel" },
             { key = "autocast", text = "Autocast" },
@@ -486,72 +504,72 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
         value = db.ImportantGlow.GlowType or "pixel",
         callback = function(key) db.ImportantGlow.GlowType = key; ApplySettings() end,
     })
-    hlRow2:AddWidget(glowTypeDropdown, 0.5)
+    glowRow1:AddWidget(glowTypeDropdown, 0.5)
     manager:Register(glowTypeDropdown, "all")
-    cardHL:AddRow(hlRow2, Theme.rowHeight)
+    cardGlow:AddRow(glowRow1, Theme.rowHeight)
 
-    -- Row 3: Glow Color + Glow Lines (pixel: line count / autocast: particle count)
-    local hlRow3 = GUIFrame:CreateRow(cardHL.content, Theme.rowHeight)
-    local glowColorPicker = GUIFrame:CreateColorPicker(hlRow3, "Glow Color", {
+    -- Row 2: Color + Lines (pixel: line count / autocast: particle count)
+    local glowRow2 = GUIFrame:CreateRow(cardGlow.content, Theme.rowHeight)
+    local glowColorPicker = GUIFrame:CreateColorPicker(glowRow2, "Glow Color", {
         color = db.ImportantGlow.Color or { 1, 0.85, 0.1, 1 },
         callback = function(r, g, b, a)
             db.ImportantGlow.Color = { r, g, b, a }
             ApplySettings()
         end,
     })
-    hlRow3:AddWidget(glowColorPicker, 0.5)
+    glowRow2:AddWidget(glowColorPicker, 0.5)
     manager:Register(glowColorPicker, "all")
 
-    local glowLinesSlider = GUIFrame:CreateSlider(hlRow3, "Glow Lines", {
+    local glowLinesSlider = GUIFrame:CreateSlider(glowRow2, "Glow Lines", {
         min = 1, max = 16, step = 1,
         value = db.ImportantGlow.GlowLines or 8,
         callback = function(val) db.ImportantGlow.GlowLines = val; ApplySettings() end,
     })
-    hlRow3:AddWidget(glowLinesSlider, 0.5)
+    glowRow2:AddWidget(glowLinesSlider, 0.5)
     manager:Register(glowLinesSlider, "all")
-    cardHL:AddRow(hlRow3, Theme.rowHeight)
+    cardGlow:AddRow(glowRow2, Theme.rowHeight)
 
-    -- Row 4: Glow Frequency + Glow Thickness
-    local hlRow4 = GUIFrame:CreateRow(cardHL.content, Theme.rowHeight)
-    local glowFreqSlider = GUIFrame:CreateSlider(hlRow4, "Glow Frequency", {
+    -- Row 3: Frequency + Thickness
+    local glowRow3 = GUIFrame:CreateRow(cardGlow.content, Theme.rowHeight)
+    local glowFreqSlider = GUIFrame:CreateSlider(glowRow3, "Glow Frequency", {
         min = 0.05, max = 1, step = 0.05,
         value = db.ImportantGlow.GlowFrequency or 0.25,
         callback = function(val) db.ImportantGlow.GlowFrequency = val; ApplySettings() end,
     })
-    hlRow4:AddWidget(glowFreqSlider, 0.5)
+    glowRow3:AddWidget(glowFreqSlider, 0.5)
     manager:Register(glowFreqSlider, "all")
 
-    local glowThicknessSlider = GUIFrame:CreateSlider(hlRow4, "Glow Thickness", {
+    local glowThicknessSlider = GUIFrame:CreateSlider(glowRow3, "Glow Thickness", {
         min = 1, max = 8, step = 1,
         value = db.ImportantGlow.GlowThickness or 2,
         callback = function(val) db.ImportantGlow.GlowThickness = val; ApplySettings() end,
     })
-    hlRow4:AddWidget(glowThicknessSlider, 0.5)
+    glowRow3:AddWidget(glowThicknessSlider, 0.5)
     manager:Register(glowThicknessSlider, "all")
-    cardHL:AddRow(hlRow4, Theme.rowHeight)
+    cardGlow:AddRow(glowRow3, Theme.rowHeight)
 
-    -- Row 5: Glow Length (pixel only) + Glow Scale (autocast only)
-    local hlRow5 = GUIFrame:CreateRow(cardHL.content, Theme.rowHeight)
-    local glowLengthSlider = GUIFrame:CreateSlider(hlRow5, "Glow Length", {
+    -- Row 4: Length (pixel) + Scale (autocast)
+    local glowRow4 = GUIFrame:CreateRow(cardGlow.content, Theme.rowHeight)
+    local glowLengthSlider = GUIFrame:CreateSlider(glowRow4, "Glow Length", {
         min = 1, max = 20, step = 1,
         value = db.ImportantGlow.GlowLength or 8,
         callback = function(val) db.ImportantGlow.GlowLength = val; ApplySettings() end,
     })
-    hlRow5:AddWidget(glowLengthSlider, 0.5)
+    glowRow4:AddWidget(glowLengthSlider, 0.5)
     manager:Register(glowLengthSlider, "all")
 
-    local glowScaleSlider = GUIFrame:CreateSlider(hlRow5, "Glow Scale", {
+    local glowScaleSlider = GUIFrame:CreateSlider(glowRow4, "Glow Scale", {
         min = 0.5, max = 3, step = 0.1,
         value = db.ImportantGlow.GlowScale or 1,
         callback = function(val) db.ImportantGlow.GlowScale = val; ApplySettings() end,
     })
-    hlRow5:AddWidget(glowScaleSlider, 0.5)
+    glowRow4:AddWidget(glowScaleSlider, 0.5)
     manager:Register(glowScaleSlider, "all")
-    cardHL:AddRow(hlRow5, Theme.rowHeight)
+    cardGlow:AddRow(glowRow4, Theme.rowHeight)
 
-    -- Row 6: Glow Border (pixel only)
-    local hlRow6 = GUIFrame:CreateRow(cardHL.content, Theme.rowHeight)
-    local glowBorderCheck = GUIFrame:CreateCheckbox(hlRow6, "Glow Border", {
+    -- Row 5: Border (pixel)
+    local glowRow5 = GUIFrame:CreateRow(cardGlow.content, Theme.rowHeight)
+    local glowBorderCheck = GUIFrame:CreateCheckbox(glowRow5, "Glow Border", {
         value = db.ImportantGlow.GlowBorder ~= false,
         callback = function(checked) db.ImportantGlow.GlowBorder = checked; ApplySettings() end,
         msgPopup = true,
@@ -559,21 +577,21 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
         msgOn = "On",
         msgOff = "Off",
     })
-    hlRow6:AddWidget(glowBorderCheck, 0.5)
+    glowRow5:AddWidget(glowBorderCheck, 0.5)
     manager:Register(glowBorderCheck, "all")
-    cardHL:AddRow(hlRow6, Theme.rowHeight)
+    cardGlow:AddRow(glowRow5, Theme.rowHeight)
 
-    local hlNoteRow = GUIFrame:CreateRow(cardHL.content, 50)
-    local hlNote = GUIFrame:CreateText(hlNoteRow,
+    local glowNoteRow = GUIFrame:CreateRow(cardGlow.content, 50)
+    local glowNote = GUIFrame:CreateText(glowNoteRow,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Out-of-Range dims the bar when your interrupt can't reach the focus (1 = off).\n" ..
-        KE:ColorTextByTheme("-") .. " Glow fires only on important enemy casts. Pixel uses Lines/Length/Thickness/Border; Autocast uses Lines/Scale. Changes apply on the next cast.",
+        KE:ColorTextByTheme("-") .. " Fires only on casts Blizzard flags important; changes apply on the next cast.\n" ..
+        KE:ColorTextByTheme("-") .. " Pixel uses Lines/Length/Thickness/Border. Autocast uses Lines/Scale.",
         50, "hide")
-    hlNoteRow:AddWidget(hlNote, 1)
-    manager:Register(hlNote, "all")
-    cardHL:AddRow(hlNoteRow, 50, 0)
+    glowNoteRow:AddWidget(glowNote, 1)
+    manager:Register(glowNote, "all")
+    cardGlow:AddRow(glowNoteRow, 50, 0)
 
-    yOffset = cardHL:GetNextOffset()
+    yOffset = cardGlow:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 8: Sound Settings
