@@ -193,8 +193,15 @@ GUIFrame:RegisterContent("Automation", function(scrollChild, yOffset)
         value = db.AutoVoidcoresGold == true,
         callback = function(checked) db.AutoVoidcoresGold = checked; ApplySettings() end,
     })
-    row5b:AddWidget(autoVoidcoresCheck, 1)
+    row5b:AddWidget(autoVoidcoresCheck, 0.5)
     autoManager:Register(autoVoidcoresCheck, "all")
+
+    local unwatchHiddenCheck = GUIFrame:CreateCheckbox(row5b, "Unwatch Hidden Quests on Login", {
+        value = db.AutoUnwatchHidden ~= false,
+        callback = function(checked) db.AutoUnwatchHidden = checked; ApplySettings() end,
+    })
+    row5b:AddWidget(unwatchHiddenCheck, 0.5)
+    autoManager:Register(unwatchHiddenCheck, "all")
     card5:AddRow(row5b, Theme.rowHeight)
 
     local row5c = GUIFrame:CreateRow(card5.content, Theme.rowHeightLast)

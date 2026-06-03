@@ -656,6 +656,7 @@ local Defaults = {
             AutoAcceptQuests = false,
             AutoTurnInQuests = false,
             AutoVoidcoresGold = true,
+            AutoUnwatchHidden = true,
             QuestModifier = "SHIFT",
             AutoDeclineDuels = false,
             AutoDeclinePetBattles = false,
