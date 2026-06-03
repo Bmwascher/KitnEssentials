@@ -248,7 +248,18 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
     })
     rowRaid2:AddWidget(growDropdown, 0.5)
     manager:Register(growDropdown, "raidConfig")
-    cardRaid:AddRow(rowRaid2, Theme.rowHeightLast, 0)
+    cardRaid:AddRow(rowRaid2, Theme.rowHeight)
+
+    -- Bench filter: hide healers parked in subgroups 7-8 (the conventional
+    -- bench in a 20-player mythic roster). Mirrors the Bench Alert convention.
+    local rowRaid3 = GUIFrame:CreateRow(cardRaid.content, Theme.rowHeightLast)
+    local excludeBenchCheck = GUIFrame:CreateCheckbox(rowRaid3, "Ignore Bench Healers (Groups 7-8)", {
+        value = db.ExcludeBenchGroups ~= false,
+        callback = function(checked) db.ExcludeBenchGroups = checked; Refresh() end,
+    })
+    rowRaid3:AddWidget(excludeBenchCheck, 1)
+    manager:Register(excludeBenchCheck, "raidConfig")
+    cardRaid:AddRow(rowRaid3, Theme.rowHeightLast, 0)
 
     -- raidConfig gates Split Positioning + the stacking settings on Enable in
     -- Raid (UpdateAll also gates on the module's master Enabled toggle).

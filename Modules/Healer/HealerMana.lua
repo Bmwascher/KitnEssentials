@@ -39,6 +39,7 @@ local IsInRaid = IsInRaid
 local IsInGroup = IsInGroup
 local IsInInstance = IsInInstance
 local GetNumGroupMembers = GetNumGroupMembers
+local GetRaidRosterInfo = GetRaidRosterInfo
 local C_Timer = C_Timer
 local pairs = pairs
 local wipe = wipe
@@ -452,14 +453,28 @@ function HM:FindHealers()
 
     if mode == "RAID" then
         local maxHealers = self.db.MaxHealers or 6
+        local excludeBench = self.db.ExcludeBenchGroups
         local count = 0
         local n = GetNumGroupMembers()
         for i = 1, n do
             if count >= maxHealers then break end
             local unit = "raid" .. i  -- includes the player naturally
             if UnitExists(unit) and IsHealer(unit) then
-                count = count + 1
-                self.currentHealers[count] = self:BuildHealerSnapshot(unit)
+                -- Skip bench-group healers when enabled. The raid index i maps
+                -- 1:1 to GetRaidRosterInfo(i); its subgroup return is a plain
+                -- number (NOT secret — RaidNotifications:CheckBench compares it
+                -- directly with no issecretvalue guard), so == is safe.
+                -- Convention: subgroups 1-4 active, 5-6 buffer, 7-8 bench
+                -- (mirrors the Bench Alert in RaidNotifications.lua).
+                local benched = false
+                if excludeBench then
+                    local _, _, subgroup = GetRaidRosterInfo(i)
+                    benched = (subgroup == 7 or subgroup == 8)
+                end
+                if not benched then
+                    count = count + 1
+                    self.currentHealers[count] = self:BuildHealerSnapshot(unit)
+                end
             end
         end
     else

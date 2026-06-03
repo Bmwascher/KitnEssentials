@@ -1328,6 +1328,7 @@ local Defaults = {
                 -- Raid/Dungeon mode (added 2026-05-30)
                 EnableInRaid = true,        -- master toggle: Raid Mode active at all
                 MaxHealers = 6,             -- cap on raid healers shown
+                ExcludeBenchGroups = true,  -- hide healers in raid subgroups 7-8 (bench convention)
                 GrowDirection = "DOWN",     -- "DOWN" | "UP"
                 FrameSpacing = 4,           -- px gap between stacked frames
                 SplitPositioning = false,   -- off = both modes share Position
