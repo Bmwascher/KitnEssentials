@@ -593,6 +593,25 @@ function GUIFrame:CreateSidebar(parent)
 end
 
 ---------------------------------------------------------------------------------
+-- Search match helper
+---------------------------------------------------------------------------------
+-- Returns true if an item matches the (already-lowercased) search term by its
+-- title text or any of its optional lowercase `keywords`. Used by RefreshSidebar.
+local function ItemMatches(itemConfig, term)
+    if itemConfig.text and itemConfig.text:lower():find(term, 1, true) then
+        return true
+    end
+    if type(itemConfig.keywords) == "table" then
+        for _, kw in ipairs(itemConfig.keywords) do
+            if kw:find(term, 1, true) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+---------------------------------------------------------------------------------
 -- Refresh Sidebar
 ---------------------------------------------------------------------------------
 function GUIFrame:RefreshSidebar()
@@ -624,14 +643,24 @@ function GUIFrame:RefreshSidebar()
             local skipSection = false
 
             if isFiltering and sectionConfig.items then
-                visibleItems = {}
-                for _, itemConfig in ipairs(sectionConfig.items) do
-                    if itemConfig.text and itemConfig.text:lower():find(filter, 1, true) then
-                        visibleItems[#visibleItems + 1] = itemConfig
+                -- A section-name match (>=2 chars) reveals the whole section;
+                -- otherwise filter to items matching their title or keywords.
+                local sectionTextLower = sectionConfig.text and sectionConfig.text:lower()
+                local sectionMatch = #filter >= 2
+                    and sectionTextLower
+                    and sectionTextLower:find(filter, 1, true)
+                if sectionMatch then
+                    visibleItems = sectionConfig.items -- shared reference, read-only below
+                else
+                    visibleItems = {}
+                    for _, itemConfig in ipairs(sectionConfig.items) do
+                        if ItemMatches(itemConfig, filter) then
+                            visibleItems[#visibleItems + 1] = itemConfig
+                        end
                     end
-                end
-                if #visibleItems == 0 then
-                    skipSection = true
+                    if #visibleItems == 0 then
+                        skipSection = true
+                    end
                 end
             end
 
