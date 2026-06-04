@@ -19,8 +19,15 @@ local DM = KitnEssentials:GetModule("DamageMeter")
 local CreateFrame = CreateFrame
 local UIParent = UIParent
 local C_Timer = C_Timer
+local GetCursorPosition = GetCursorPosition
 local math_min = math.min
 local wipe = wipe
+
+-- Symmetric clamp helper for the splitter drag math (plain numbers only --
+-- cursor coords, pixel sizes, ratios; never a secret value).
+local function clamp(v, lo, hi)
+    if v < lo then return lo elseif v > hi then return hi else return v end
+end
 
 ---------------------------------------------------------------------------------
 -- In-game test scaffold
@@ -202,6 +209,19 @@ function DM:LayoutDock()
     local pad = db.BackdropPadding or 6
     local context = self:GetActiveContext()
 
+    -- Stash the header band + per-row stride so the splitter drag tick can
+    -- compute the per-pane minimum (header + 1 bar) without recomputing from db.
+    self._dockHeaderH = headerH
+    self._dockStride  = stride
+
+    -- Splitter boundary descriptors, rebuilt every layout pass. A reused scratch
+    -- list (wiped at the top of each LayoutDock) so the structural path allocates
+    -- no per-call garbage. Each entry describes ONE invisible drag hit-zone
+    -- between two adjacent placed panes; _LayoutSplitters consumes it below.
+    self._splitterSpecs = self._splitterSpecs or {}
+    local specs = self._splitterSpecs
+    wipe(specs)
+
     local columns = db.Dock and db.Dock.Columns
     if not columns then columns = {} end
 
@@ -210,6 +230,13 @@ function DM:LayoutDock()
     self._dockPlaced = self._dockPlaced or {}
     local placed = self._dockPlaced
     wipe(placed)
+
+    -- Per-column geometry record (reused scratch, wiped here). Each entry holds
+    -- the column's content-space x/width and whether it placed any window this
+    -- pass; the COL-boundary emit below walks adjacent entries.
+    self._dockColInfo = self._dockColInfo or {}
+    local colInfo = self._dockColInfo
+    for i = #colInfo, 1, -1 do colInfo[i] = nil end
 
     -- ----- Column x positions (left -> right) -----
     -- colX_c = sum(colW_1..colW_{c-1}) + (c-1)*GAP. Walk columns once, building
@@ -225,6 +252,13 @@ function DM:LayoutDock()
         local rows = (col and col.Windows) or {}
         local ratios = (col and col.RowRatios) or {}
         local nRows = #rows
+
+        -- Track the previous placed row in THIS column so a ROW boundary can be
+        -- emitted between two adjacent placed rows. prevRowIdx is the RowRatios
+        -- index (r) of the last placed row; prevBottom is its content-space
+        -- bottom edge (rowY + rowH). prevWinIdx is the window index there.
+        local prevRowIdx, prevBottom, prevWinIdx
+        local colHadPlaced = false
 
         -- Normalize the row ratios to sum = 1 (guard sum <= 0 -> equal split).
         local ratioSum = 0
@@ -282,14 +316,71 @@ function DM:LayoutDock()
                         W.content:SetWidth(colW)
                     end
 
+                    -- Stash the computed rect (content coords, px) for the
+                    -- splitter drag tick to snapshot the pair's pixel sizes.
+                    W._dockRect = W._dockRect or {}
+                    local rc = W._dockRect
+                    rc.x, rc.y, rc.w, rc.h = colX, rowY, colW, rowH
+
                     placed[idx] = true
+                    colHadPlaced = true
+
+                    -- ROW boundary: emit between this placed row and the previous
+                    -- placed row in the same column when they are CONSECUTIVE
+                    -- RowRatios entries (both panes present). The consecutive
+                    -- guard keeps the drag math's RowRatios[rowIdx] /
+                    -- RowRatios[rowIdx+1] pairing exact -- a skipped (disabled)
+                    -- row between two placed rows would break that pairing, so no
+                    -- splitter is emitted across a gap. The gap top is the
+                    -- previous row's bottom (content y, measured down); the strip
+                    -- spans the column width.
+                    if prevRowIdx and r == prevRowIdx + 1 then
+                        specs[#specs + 1] = {
+                            kind   = "row",
+                            colIdx = c,
+                            rowIdx = prevRowIdx,
+                            x      = colX,
+                            y      = prevBottom,
+                            w      = colW,
+                            idxA   = prevWinIdx,
+                            idxB   = idx,
+                        }
+                    end
+
+                    prevRowIdx  = r
+                    prevBottom  = rowY + rowH
+                    prevWinIdx  = idx
                 end
 
                 runY = runY + rowH + GAP
             end
         end
 
+        -- Record this column's content-space geometry + whether it placed any
+        -- window, for the COL-boundary emit after the loop.
+        colInfo[c] = colInfo[c] or {}
+        local ci = colInfo[c]
+        ci.x, ci.w, ci.placed = colX, colW, colHadPlaced
+
         runX = runX + colW + GAP
+    end
+
+    -- ----- COL boundaries -----
+    -- Emit one COL hit-zone between every pair of ADJACENT columns that BOTH
+    -- placed at least one window. The gap left edge is the left column's right
+    -- edge (content x); the strip spans the full dock content height.
+    for c = 1, nCols - 1 do
+        local ciA = colInfo[c]
+        local ciB = colInfo[c + 1]
+        if ciA and ciB and ciA.placed and ciB.placed then
+            specs[#specs + 1] = {
+                kind   = "col",
+                colIdx = c,
+                x      = ciA.x + ciA.w,
+                y      = 0,
+                h      = Hdock,
+            }
+        end
     end
 
     -- ----- Total dock content extents -----
@@ -311,6 +402,10 @@ function DM:LayoutDock()
             end
         end
     end
+
+    -- Position the drag splitters over the boundaries emitted above (also hides
+    -- any pooled splitter the new layout no longer needs).
+    self:_LayoutSplitters()
 end
 
 ---------------------------------------------------------------------------------
@@ -407,6 +502,270 @@ function DM:RefreshDock()
         DM:LayoutDock()
         DM:UpdateBackdrop()
     end)
+end
+
+---------------------------------------------------------------------------------
+-- Drag splitters (invisible pane-resize hit-zones)
+--
+-- Between two stacked windows (a ROW splitter) and between two columns (a COL
+-- splitter) sits an INVISIBLE drag hit-zone. There is NO line at rest -- only a
+-- faint highlight on hover/drag. Dragging mutates the adjacent panes' ratios
+-- (RowRatios / WidthRatio), clamped to a minimum pane size with the pair's
+-- combined size conserved, live + persisted (the ratios live in the saved AceDB
+-- db.Dock.Columns tables, so mutating in place persists automatically).
+--
+-- Splitters only deal with NON-secret values (cursor coords, frame sizes,
+-- ratios). The render layer's secret-value contract is untouched: splitters
+-- never run per Tick -- they only re-layout via the debounced RefreshDock during
+-- an active drag, and are positioned on the structural LayoutDock pass.
+---------------------------------------------------------------------------------
+
+-- Hit-zone thickness (centered on each gap), snapped to the pixel grid once.
+local HITW = KE:PixelSnap(8)
+
+-- ROW drag tick: cursor DOWN (screen y decreases) grows the TOP pane. The pair's
+-- combined height (and ratio sum) is conserved; each pane is clamped to a header
+-- band + one bar minimum. COL drag tick: cursor RIGHT grows the LEFT column.
+local function SplitterOnUpdate(s)
+    if not s._dragging then return end
+    local self = DM
+
+    local db = self.db
+    if not db or not db.Dock or not db.Dock.Columns then
+        s._dragging = false
+        s:SetScript("OnUpdate", nil)
+        return
+    end
+
+    -- Degenerate pair size (a zero/negative _pairPx from a collapsed layout)
+    -- would NaN the ratio math (newAPx / s._pairPx) and corrupt the saved
+    -- profile. Stop the drag cleanly -- detach the OnUpdate, don't divide.
+    if not s._pairPx or s._pairPx <= 0 then
+        s._dragging = false
+        s:SetScript("OnUpdate", nil)
+        return
+    end
+
+    local mx, my = GetCursorPosition()
+    local scale = s._scale or 1
+    if scale <= 0 then scale = 1 end
+
+    if s.kind == "row" then
+        local col = db.Dock.Columns[s.colIdx]
+        if not (col and col.RowRatios) then
+            s._dragging = false
+            s:SetScript("OnUpdate", nil)
+            return
+        end
+
+        -- cursor DOWN -> my DECREASES -> dPx POSITIVE -> top pane grows.
+        local dPx = (s._startMY - my) / scale
+        local minPx = s._minPx or 1
+        local newAPx = clamp(s._aPx + dPx, minPx, s._pairPx - minPx)
+        local newRatioA = s._pairRatio * (newAPx / s._pairPx)
+
+        col.RowRatios[s.rowIdx]     = newRatioA
+        col.RowRatios[s.rowIdx + 1] = s._pairRatio - newRatioA
+    else -- "col"
+        local colA = db.Dock.Columns[s.colIdx]
+        local colB = db.Dock.Columns[s.colIdx + 1]
+        if not (colA and colB) then
+            s._dragging = false
+            s:SetScript("OnUpdate", nil)
+            return
+        end
+
+        -- cursor RIGHT -> mx INCREASES -> dPx POSITIVE -> left column grows.
+        local dPx = (mx - s._startMX) / scale
+        local minPx = 80
+        local baseW = db.Width or 240
+        if baseW <= 0 then baseW = 240 end
+        local newAPx = clamp(s._aPx + dPx, minPx, s._pairPx - minPx)
+
+        colA.WidthRatio = newAPx / baseW
+        colB.WidthRatio = (s._pairPx - newAPx) / baseW
+    end
+
+    -- Debounced: coalesces to one LayoutDock + UpdateBackdrop per frame, and
+    -- re-runs _LayoutSplitters so this splitter tracks the moving boundary.
+    self:RefreshDock()
+end
+
+local function SplitterStopDrag(s)
+    if not s._dragging then return end
+    s._dragging = false
+    s:SetScript("OnUpdate", nil)
+    if not s._hovered then
+        s.hi:Hide()
+    end
+    -- One final settle (the ratios are already mutated in place + persisted).
+    DM:RefreshDock()
+end
+
+local function SplitterStartDrag(s)
+    local self = DM
+    local db = self.db
+
+    -- Defensive: splitters only exist for a multi-window config, whose db.Dock is
+    -- always profile-owned. Bail if the structure isn't present (never deep-copy
+    -- or rebuild db.Dock -- the ratios ARE the saved profile).
+    if not (db and db.Dock and db.Dock.Columns and db.Dock.Columns[s.colIdx]) then
+        s._dragging = false
+        return
+    end
+
+    local scale = self.dock and self.dock:GetEffectiveScale() or 1
+    if scale <= 0 then scale = 1 end
+    local mx, my = GetCursorPosition()
+
+    s._dragging = true
+    s._scale    = scale
+    s._startMX  = mx
+    s._startMY  = my
+
+    if s.kind == "row" then
+        local col = db.Dock.Columns[s.colIdx]
+        if not (col and col.RowRatios) then s._dragging = false return end
+
+        local WA = self.windows_rt and self.windows_rt[s.idxA]
+        local WB = self.windows_rt and self.windows_rt[s.idxB]
+        local rcA = WA and WA._dockRect
+        local rcB = WB and WB._dockRect
+        if not (rcA and rcB) then s._dragging = false return end
+
+        s._aPx = rcA.h
+        s._bPx = rcB.h
+        s._pairPx = s._aPx + s._bPx
+
+        local ra = col.RowRatios[s.rowIdx]
+        local rb = col.RowRatios[s.rowIdx + 1]
+        s._pairRatio = ((type(ra) == "number" and ra) or 0)
+            + ((type(rb) == "number" and rb) or 0)
+
+        -- Minimum pane = header band + one bar (stashed by LayoutDock).
+        local headerH = self._dockHeaderH or 0
+        local stride  = self._dockStride or 1
+        s._minPx = headerH + stride
+        -- Degenerate guard: a pair smaller than 2*min can't honor the clamp.
+        if s._pairPx < 2 * s._minPx then s._minPx = s._pairPx / 2 end
+    else -- "col"
+        local colA = db.Dock.Columns[s.colIdx]
+        local colB = db.Dock.Columns[s.colIdx + 1]
+        if not (colA and colB) then s._dragging = false return end
+
+        -- Read the live column widths from the per-column geometry recorded by
+        -- LayoutDock (content-space px). Falls back to baseW * WidthRatio.
+        local baseW = db.Width or 240
+        if baseW <= 0 then baseW = 240 end
+        local ciA = self._dockColInfo and self._dockColInfo[s.colIdx]
+        local ciB = self._dockColInfo and self._dockColInfo[s.colIdx + 1]
+        s._aPx = (ciA and ciA.w) or (baseW * ((colA.WidthRatio) or 1))
+        s._bPx = (ciB and ciB.w) or (baseW * ((colB.WidthRatio) or 1))
+        s._pairPx = s._aPx + s._bPx
+    end
+
+    s.hi:Show()
+    s:SetScript("OnUpdate", SplitterOnUpdate)
+end
+
+-- Returns a pooled splitter (building one on first need, scripts wired ONCE).
+-- Each splitter is a Button parented to the dock, sitting ABOVE the windows so
+-- it is grabbable, with a faint white highlight texture hidden at rest.
+function DM:_AcquireSplitter()
+    self._splitters = self._splitters or {}
+    self._splitterActive = self._splitterActive or 0
+
+    local n = self._splitterActive + 1
+    self._splitterActive = n
+
+    local s = self._splitters[n]
+    if s then return s end
+
+    s = CreateFrame("Button", nil, self.dock)
+    s:EnableMouse(true)
+
+    -- Faint highlight only; NO texture visible unless hovered/dragging.
+    s.hi = s:CreateTexture(nil, "OVERLAY")
+    s.hi:SetAllPoints()
+    s.hi:SetColorTexture(1, 1, 1, 0.12)
+    s.hi:Hide()
+
+    s:SetScript("OnEnter", function(self2)
+        self2._hovered = true
+        self2.hi:Show()
+    end)
+    s:SetScript("OnLeave", function(self2)
+        self2._hovered = false
+        if not self2._dragging then
+            self2.hi:Hide()
+        end
+    end)
+    s:SetScript("OnMouseDown", SplitterStartDrag)
+    s:SetScript("OnMouseUp", SplitterStopDrag)
+    -- If the splitter is hidden mid-drag (e.g. a structural relayout removed it),
+    -- end the drag cleanly so no orphaned OnUpdate keeps mutating ratios.
+    s:SetScript("OnHide", SplitterStopDrag)
+
+    self._splitters[n] = s
+    return s
+end
+
+-- Positions one splitter per boundary spec emitted by LayoutDock, then hides any
+-- pooled splitter beyond the active count. Splitters sit 10 frame levels above
+-- the dock so they overlay the windows and remain grabbable.
+function DM:_LayoutSplitters()
+    local db = self.db
+    if not db then return end
+
+    local dock = self.dock
+    if not dock then return end
+
+    local specs = self._splitterSpecs
+    self._splitterActive = 0
+    if not specs then return end
+
+    local pad = db.BackdropPadding or 6
+    local level = dock:GetFrameLevel() + 10
+
+    for i = 1, #specs do
+        local spec = specs[i]
+        local s = self:_AcquireSplitter()
+
+        -- Carry the boundary identity onto the splitter for the drag handlers.
+        s.kind   = spec.kind
+        s.colIdx = spec.colIdx
+        s.rowIdx = spec.rowIdx
+        s.idxA   = spec.idxA
+        s.idxB   = spec.idxB
+
+        s:SetFrameLevel(level)
+        s:ClearAllPoints()
+
+        if spec.kind == "row" then
+            -- Strip straddles the gap midline (content-y = spec.y + GAP/2),
+            -- HITW thick. Top content-y = mid - HITW/2. Content -> dock offset:
+            -- offsetX = pad + contentX ; offsetY = -(contentY) - pad.
+            local topY = spec.y + GAP / 2 - HITW / 2
+            s:SetSize(spec.w, HITW)
+            s:SetPoint("TOPLEFT", dock, "TOPLEFT", pad + spec.x, -topY - pad)
+        else -- "col"
+            -- Strip straddles the gap midline (content-x = spec.x + GAP/2),
+            -- HITW thick, spanning the full dock content height.
+            local leftX = spec.x + GAP / 2 - HITW / 2
+            s:SetSize(HITW, spec.h)
+            s:SetPoint("TOPLEFT", dock, "TOPLEFT", pad + leftX, -(spec.y) - pad)
+        end
+
+        s:Show()
+    end
+
+    -- Hide every pooled splitter past the active count (stale boundaries).
+    if self._splitters then
+        for i = self._splitterActive + 1, #self._splitters do
+            local s = self._splitters[i]
+            if s then s:Hide() end
+        end
+    end
 end
 
 ---------------------------------------------------------------------------------
