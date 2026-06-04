@@ -227,6 +227,11 @@ function DM:OnEnable()
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnCombatForceStop")
     self:RegisterEvent("UNIT_FLAGS", "OnUnitFlags")
     self:RegisterEvent("DAMAGE_METER_COMBAT_SESSION_UPDATED", "OnSessionUpdated")
+    -- CURRENT_SESSION_UPDATED fires for the live segment during the post-combat
+    -- finalization burst; route it through the same combat-gated, debounced
+    -- handler so out-of-combat Current-window totals settle (in combat the ticker
+    -- owns repaints and OnSessionUpdated early-returns, so this adds no hot work).
+    self:RegisterEvent("DAMAGE_METER_CURRENT_SESSION_UPDATED", "OnSessionUpdated")
     self:RegisterEvent("DAMAGE_METER_RESET", "OnMeterReset")
 
     -- Test-scaffold seed / self-heal (Dock.lua). When DEBUG_DOCK_TEST is true this

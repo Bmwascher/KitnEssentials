@@ -361,9 +361,17 @@ function DM:LayoutDock()
                     prevRowIdx  = r
                     prevBottom  = rowY + rowH
                     prevWinIdx  = idx
-                end
 
-                runY = runY + rowH + GAP
+                    -- Advance the cursor ONLY for a placed row, so a disabled or
+                    -- not-yet-built row consumes zero vertical space and the next
+                    -- placed row packs flush to the top instead of leaving a blank
+                    -- band (and shifting later windows down). Survivors keep their
+                    -- ratio-derived size -- they do not expand to reclaim the freed
+                    -- space; that renormalization is deferred because it would have
+                    -- to re-key the splitter pair-ratio math off placed-order rather
+                    -- than structural RowRatios indices.
+                    runY = runY + rowH + GAP
+                end
             end
         end
 
@@ -516,16 +524,20 @@ end
 -- mirrors the OnSessionUpdated debounce style in Core.lua (boolean pending flag).
 ---------------------------------------------------------------------------------
 
+-- Hoisted once (captures only the DM file upvalue) so the per-frame splitter-drag
+-- path -- SplitterOnUpdate -> RefreshDock every frame while dragging -- reuses one
+-- function reference instead of allocating a fresh closure per frame.
+local function _DoDockRefresh()
+    DM._dockRefreshPending = false
+    if not DM.enabled then return end
+    DM:LayoutDock()
+    DM:UpdateBackdrop()
+end
+
 function DM:RefreshDock()
     if self._dockRefreshPending then return end
     self._dockRefreshPending = true
-
-    C_Timer.After(0, function()
-        DM._dockRefreshPending = false
-        if not DM.enabled then return end
-        DM:LayoutDock()
-        DM:UpdateBackdrop()
-    end)
+    C_Timer.After(0, _DoDockRefresh)
 end
 
 ---------------------------------------------------------------------------------

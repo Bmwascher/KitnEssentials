@@ -133,7 +133,33 @@ local function BuildGeneralTab(scrollChild, yOffset, db, manager)
     yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 2: Behavior toggles (Replace Blizzard, Lock dock)
+    -- Card 2: Position Settings (the dock is the positioned frame)
+    -- Position immediately follows Enable per the canonical card order
+    -- (Enable > Position > ...); the Behavior toggles card follows it.
+    ----------------------------------------------------------------
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        title = "Position Settings",
+        db = db,
+        positionKey = "Position",
+        dbKeys = {
+            selfPoint = "AnchorFrom",
+            anchorPoint = "AnchorTo",
+            xOffset = "XOffset",
+            yOffset = "YOffset",
+            strata = "Strata",
+        },
+        showAnchorFrameType = false,
+        showStrata = true,
+        onChangeCallback = ApplySettings,
+    })
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
+    end
+    manager:Register(posCard, "all")
+    yOffset = posOffset
+
+    ----------------------------------------------------------------
+    -- Card 3: Behavior toggles (Replace Blizzard, Lock dock)
     ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Behavior", yOffset)
     manager:Register(card2, "all")
@@ -161,30 +187,6 @@ local function BuildGeneralTab(scrollChild, yOffset, db, manager)
     card2:AddRow(row2a, Theme.rowHeightLast, 0)
 
     yOffset = card2:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Card 3: Position Settings (the dock is the positioned frame)
-    ----------------------------------------------------------------
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        title = "Position Settings",
-        db = db,
-        positionKey = "Position",
-        dbKeys = {
-            selfPoint = "AnchorFrom",
-            anchorPoint = "AnchorTo",
-            xOffset = "XOffset",
-            yOffset = "YOffset",
-            strata = "Strata",
-        },
-        showAnchorFrameType = false,
-        showStrata = true,
-        onChangeCallback = ApplySettings,
-    })
-    if posCard.positionWidgets then
-        manager:RegisterGroup(posCard.positionWidgets, "all")
-    end
-    manager:Register(posCard, "all")
-    yOffset = posOffset
 
     local dragNoteCard = GUIFrame:CreateCard(scrollChild, "Tip", yOffset)
     manager:Register(dragNoteCard, "all")
@@ -273,6 +275,11 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
     })
     row1:AddWidget(removeBtn, 0.25)
     manager:Register(removeBtn, "all")
+    -- Reflect the floor/cap in the buttons so they visibly disable instead of
+    -- silently no-opping (Add is a no-op at MaxWindows, Remove at the last window).
+    -- Re-evaluated on every rebuild since BuildWindowsTab reruns on RebuildPage.
+    addBtn:SetEnabled(#winList < maxWin)
+    removeBtn:SetEnabled(#winList > 1)
     card1:AddRow(row1, Theme.rowHeight)
 
     local arrNoteRow = GUIFrame:CreateRow(card1.content, 50)

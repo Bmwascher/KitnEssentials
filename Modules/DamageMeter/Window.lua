@@ -133,19 +133,30 @@ local function MakeBar(parent, db)
     -- (RenderBar) reads/writes; declared here so the factory documents the live
     -- bar state and the fields exist on a fresh row before first paint.
     --   _cachedColorClass -- class driving the fill SetStatusBarColor (NEVER secret)
-    --   _cachedIconClass  -- class driving the spec-icon SetTexture (NEVER secret)
+    --   _cachedIconID     -- specIconID driving the icon SetTexture (NEVER secret);
+    --                        keyed on the SPEC icon, not class, so two same-class
+    --                        different-spec sources don't share a stale icon
+    --   _cachedNameColorClass / _cachedNameColorOn -- name-tint dirty key
+    --                        (classFilename + ClassColorName flag; both non-secret)
     --   _cachedName       -- last plain (non-secret) name string set; nil while secret
     --   _cachedVal        -- last plain (non-secret) value string set; nil while secret
     --   _cachedSlot       -- last displayed rank whose "N." label was set (may be
     --                        a pinned player's real rank, not the pool slot index)
-    --   _iconShown        -- cached icon visibility (starts false: icon is hidden
-    --                        below) so a stable ShowIcon does no per-tick Show/Hide
+    --   _layoutKey        -- (ShowIcon, ShowRank) combo driving the rank-gutter /
+    --                        icon / name LEFT anchors; re-anchored only on change
+    --   _iconShown / _nameShown / _rankShown -- cached element visibility so a
+    --                        stable toggle does no per-tick Show/Hide widget call
     bar._cachedColorClass = nil
-    bar._cachedIconClass = nil
+    bar._cachedIconID = nil
+    bar._cachedNameColorClass = nil
+    bar._cachedNameColorOn = nil
     bar._cachedName = nil
     bar._cachedVal = nil
     bar._cachedSlot = nil
+    bar._layoutKey = nil
     bar._iconShown = false
+    bar._nameShown = nil
+    bar._rankShown = nil
 
     -- Wire OnClick ONCE. Forward-compatible: calls DM.OpenDetail only if a
     -- later chunk defines it. No detail window exists yet.
@@ -302,15 +313,26 @@ end
 function DM:LayoutWindow(W)
     local db = self.db
     local fontSize = (db and db.FontSize) or 12
+    local visibleDB = (db and db.VisibleBars) or 10
+    local stride = W._snapStride or 1
+
+    -- Input-identity short-circuit. The header band and content height derive ONLY
+    -- from FontSize, VisibleBars, and the snapped stride -- all plain numbers, never
+    -- secret. RenderWindow calls this every tick; when none of those changed the
+    -- PixelSnap / min / multiply below reproduce the identical result, so skip them.
+    -- ApplyWindowGeometry updates _snapStride before calling here, so keying on it
+    -- keeps a bar-size change from being short-circuited away.
+    if W._lwFontSize == fontSize and W._lwVisibleBars == visibleDB and W._lwStride == stride then
+        return
+    end
+    W._lwFontSize, W._lwVisibleBars, W._lwStride = fontSize, visibleDB, stride
 
     -- Fixed header band (font-size driven, snapped). The header FontString is
     -- anchored TOPLEFT inside this band; the body starts immediately below it.
     local headerH = KE:PixelSnap(fontSize + 6)
 
-    -- Body height fits VisibleBars rows (clamped to the pool). stride is the
-    -- snapped per-row advance from CreateWindow; guard against a 0 stride.
-    local visible = math_min((db and db.VisibleBars) or 10, BAR_POOL_SIZE)
-    local stride = W._snapStride or 1
+    -- Body height fits VisibleBars rows (clamped to the pool). Guard a 0 stride.
+    local visible = math_min(visibleDB, BAR_POOL_SIZE)
     if stride <= 0 then stride = 1 end
     local barsH = visible * stride
 
@@ -513,21 +535,18 @@ function DM:RenderWindow(W)
         end
     end
 
-    -- Visible scroll range (mirrors EllesmereUI ~2767-2770). stride is the
-    -- snapped per-row advance computed in CreateWindow. Scrolling isn't wired in
-    -- Phase 1, so scrollOff is normally 0 and this resolves to 1..count, but the
-    -- viewport math is in place for when the scrollbar lands.
+    -- Visible range. Scrolling isn't wired yet (GetVerticalScroll is always 0), so
+    -- we skip that getter and keep only the viewport-height clamp -- visLast is the
+    -- last row whose top fits in the body (suppressing rows taller than the body).
+    -- When the body isn't sized yet, render the whole set so bars aren't left blank.
     local stride = W._snapStride or 1
     if stride <= 0 then stride = 1 end
-    local scrollOff = (W.body and W.body:GetVerticalScroll()) or 0
     local viewH = (W.body and W.body:GetHeight()) or 0
     local visFirst, visLast
     if viewH > 0 then
-        visFirst = math.floor(scrollOff / stride) + 1
-        visLast = math_min(count, math.ceil((scrollOff + viewH) / stride))
+        visFirst = 1
+        visLast = math_min(count, math.ceil(viewH / stride))
     else
-        -- Viewport not sized yet (first paint before layout): render the whole
-        -- visible set so bars aren't left blank.
         visFirst, visLast = 1, count
     end
 
@@ -540,11 +559,15 @@ function DM:RenderWindow(W)
         local row = bar.row
         if i <= count then
             if i >= visFirst and i <= visLast then
-                -- The last visible slot shows the pinned player (with the player's
-                -- real rank R) when AlwaysShowSelf pinned one; otherwise the slot's
-                -- own source. RenderBar's `i` arg is the displayed rank.
+                -- The last VISIBLE slot (visLast, not count) shows the pinned player
+                -- at their real rank when AlwaysShowSelf pinned one; otherwise the
+                -- slot's own source. Keying on visLast keeps the pinned row inside
+                -- the ScrollFrame viewport -- in a multi-row column or a splitter-
+                -- shrunk pane visLast < count, and pinning at count would land the
+                -- player on a clipped (off-screen) row. RenderBar's `i` arg is the
+                -- displayed rank.
                 local src, rank = sources[i], i
-                if pinSource and i == count then
+                if pinSource and i == visLast then
                     src, rank = pinSource, pinRank
                 end
                 self:RenderBar(W, bar, rank, src, maxAmount)
@@ -607,33 +630,38 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         row.fill:SetStatusBarColor(c and c.r or 0.6, c and c.g or 0.6, c and c.b or 0.6)
     end
 
-    -- Name color: read ClassColorName EVERY tick and set the tint outside the
-    -- fill-color dirty cache (mirrors EllesmereUI ~2838-2847, which sets the
-    -- label color unconditionally when class-color is on and resets it when off).
-    -- Gating this on the class dirty cache would leave the name tinted after the
-    -- user toggles ClassColorName off (until the class happened to change), so it
-    -- must be independent of _cachedColorClass.
-    if db.ClassColorName then
-        local nc = classFile and RAID_CLASS_COLORS[classFile]
-        if nc then
-            row.name:SetTextColor(nc.r, nc.g, nc.b)
+    -- Name color, dirty-cached on (classFilename, ClassColorName) -- both non-secret.
+    -- Keying on the flag as well as the class means toggling ClassColorName off
+    -- still repaints on the next tick even when the class is unchanged, while the
+    -- steady state does no per-tick SetTextColor. Kept as its own cache (separate
+    -- from the fill-color _cachedColorClass) so the two can't mask each other.
+    local nameColorOn = db.ClassColorName
+    if bar._cachedNameColorClass ~= classFile or bar._cachedNameColorOn ~= nameColorOn then
+        bar._cachedNameColorClass = classFile
+        bar._cachedNameColorOn = nameColorOn
+        if nameColorOn then
+            local nc = classFile and RAID_CLASS_COLORS[classFile]
+            if nc then
+                row.name:SetTextColor(nc.r, nc.g, nc.b)
+            else
+                row.name:SetTextColor(1, 1, 1)
+            end
         else
             row.name:SetTextColor(1, 1, 1)
         end
-    else
-        row.name:SetTextColor(1, 1, 1)
     end
 
-    -- Spec icon (dirty-cached on classFilename; specIconID is NEVER secret).
-    -- Re-applies the standard KE icon zoom on change. Visibility is cached in
-    -- bar._iconShown so a stable ShowIcon setting does NO per-tick Show/Hide
-    -- widget call -- the toggle still takes effect on the next paint because the
-    -- cached flag flips when the setting changes.
+    -- Spec icon, dirty-cached on specIconID (NEVER secret). Keying on the SPEC
+    -- icon -- not the class -- means two same-class different-spec sources (or the
+    -- player pinned into a slot a same-class teammate held) get the correct spec
+    -- icon rather than a stale one. Visibility is cached in bar._iconShown so a
+    -- stable ShowIcon does NO per-tick Show/Hide.
     local showIcon = db.ShowIcon
     if showIcon then
-        if bar._cachedIconClass ~= classFile then
-            bar._cachedIconClass = classFile
-            row.icon:SetTexture(src.specIconID)
+        local iconID = src.specIconID
+        if bar._cachedIconID ~= iconID then
+            bar._cachedIconID = iconID
+            row.icon:SetTexture(iconID)
             KE:ApplyIconZoom(row.icon)
         end
         if bar._iconShown ~= true then
@@ -645,15 +673,38 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         row.iconFrame:Hide()
     end
 
-    -- Name's LEFT anchor depends on icon visibility, cached in bar._nameIconAnchored
-    -- so a stable ShowIcon does NO per-tick re-anchor: after the icon frame when
-    -- shown, at the fill's left edge when hidden (so disabling the icon doesn't
-    -- leave a blank icon-width column on the left of every name).
-    if bar._nameIconAnchored ~= showIcon then
-        bar._nameIconAnchored = showIcon
+    -- Layout (rank-gutter / icon / name LEFT anchors), dirty-gated on the
+    -- (ShowIcon, ShowRank) combination so a stable config does NO per-tick
+    -- re-anchor. When ShowRank is on, the rank occupies a fixed left gutter and
+    -- the icon/name start to its right -- fixing the rank-label-over-icon overlap;
+    -- when off, the icon (or name) sits flush at the left edge as before.
+    local showRank = db.ShowRank
+    local layoutKey = (showIcon and 1 or 0) + (showRank and 2 or 0)
+    if bar._layoutKey ~= layoutKey then
+        bar._layoutKey = layoutKey
+
+        -- Rank gutter: left-justified within a fixed slot (width scales with the
+        -- font) so the icon/name to its right start at a deterministic x.
+        local gutter = KE:PixelSnap((db.FontSize or 12) + 8)
+        row.rank:ClearAllPoints()
+        row.rank:SetPoint("LEFT", row.fill, "LEFT", 3, 0)
+        row.rank:SetWidth(showRank and gutter or 1)
+
+        -- Icon frame: right of the rank gutter when rank is shown, else flush left.
+        row.iconFrame:ClearAllPoints()
+        if showRank then
+            row.iconFrame:SetPoint("LEFT", row.rank, "RIGHT", 2, 0)
+        else
+            row.iconFrame:SetPoint("LEFT", row, "LEFT", 0, 0)
+        end
+
+        -- Name: after the icon when shown, else after the rank gutter when rank is
+        -- shown, else flush at the fill's left edge.
         row.name:ClearAllPoints()
         if showIcon then
             row.name:SetPoint("LEFT", row.iconFrame, "RIGHT", 3, 0)
+        elseif showRank then
+            row.name:SetPoint("LEFT", row.rank, "RIGHT", 3, 0)
         else
             row.name:SetPoint("LEFT", row.fill, "LEFT", 3, 0)
         end
@@ -687,9 +738,12 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
             row.name:SetText(nm)
         end
     end
+    -- Visibility, transition-gated (Show/Hide only on a real flip) so a stable
+    -- ShowName does no per-tick widget call -- mirrors the bar._iconShown idiom.
     if db.ShowName then
-        row.name:Show()
-    else
+        if bar._nameShown ~= true then bar._nameShown = true; row.name:Show() end
+    elseif bar._nameShown ~= false then
+        bar._nameShown = false
         row.name:Hide()
     end
 
@@ -736,8 +790,10 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
             -- to building the label; tostring on a plain int is taint-safe.
             row.rank:SetText(self.RANK_STRINGS[i] or (i .. "."))
         end
-        row.rank:Show()
-    else
+        -- Visibility transition-gated (see ShowName above).
+        if bar._rankShown ~= true then bar._rankShown = true; row.rank:Show() end
+    elseif bar._rankShown ~= false then
+        bar._rankShown = false
         row.rank:Hide()
     end
 
