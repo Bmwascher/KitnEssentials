@@ -21,6 +21,12 @@ local DM = KitnEssentials:GetModule("DamageMeter")
 local CreateFrame = CreateFrame
 local UIParent = UIParent
 
+-- File-level upvalues for globals used in the per-tick render path.
+local issecretvalue = issecretvalue
+local RAID_CLASS_COLORS = RAID_CLASS_COLORS
+local Enum = Enum
+local math_min = math.min
+
 ---------------------------------------------------------------------------------
 -- Constants
 --
@@ -246,4 +252,187 @@ function DM:CreateWindow(winIdx)
     self.windows_rt[winIdx] = W
 
     return W
+end
+
+---------------------------------------------------------------------------------
+-- Render path
+--
+-- RenderWindow repaints one window from its current session; RenderBar fills a
+-- single row. Both run on every Tick (combat-gated), so they are written to the
+-- secret-value contract:
+--   * width is driven by native StatusBar interpolation (SetValue accepts secret
+--     values) -- NEVER any Lua arithmetic / lerp on an amount.
+--   * sources are PRE-SORTED descending by the API; the loop index IS the rank.
+--     Never table.sort or compare amounts.
+--   * secret-aware text: SetText(secret) is fine, but == / ~= on a secret string
+--     throws. So a secret string is set unconditionally and its dirty cache set
+--     nil; a plain string is dirty-checked (skip SetText when unchanged).
+-- Per-attribute dirty caches mirror EllesmereUI (~lines 2779-2887).
+---------------------------------------------------------------------------------
+
+-- Repaints one window. Resolves the live per-context config, sets the header to
+-- a readable "<Session> <Type>" label, pulls the cached session (memoized per
+-- Tick by Core), and renders up to VisibleBars (hard-clamped to the pool size)
+-- bars. Bars outside the visible scroll range are shown but not re-filled
+-- (virtualization); bars beyond the source count are hidden.
+function DM:RenderWindow(W)
+    local cfg = self:ResolveWindowConfig(W.idx)
+    if not cfg or not cfg.Enabled then
+        W.frame:Hide()
+        return
+    end
+    W.frame:Show()
+
+    -- Header label from the enum config (nil-guarded -> sane defaults; never
+    -- concatenate a nil from a missing enum key). SessionType prefixes the type
+    -- name, e.g. "Overall Damage Done"; Current is the unprefixed default.
+    local typeName = self.METER_TYPE_NAMES[cfg.MeterType] or "Damage Done"
+    local sessName = self.SESSION_TYPE_NAMES[cfg.SessionType]
+    local label
+    if sessName and cfg.SessionType ~= Enum.DamageMeterSessionType.Current then
+        label = sessName .. " " .. typeName
+    else
+        label = typeName
+    end
+    -- Header text is a plain literal (never secret); dirty-check is safe.
+    if label ~= W._headerLabel then
+        W._headerLabel = label
+        W.header:SetText(label)
+    end
+
+    local session = self:CachedSession(cfg.SessionType, cfg.MeterType)
+    local sources = session and session.combatSources
+    if not sources then
+        -- No session/data this segment: hide every pooled row so stale bars from
+        -- a prior segment don't linger.
+        for i = 1, self.BAR_POOL_SIZE do
+            W.bars[i].row:Hide()
+        end
+        return
+    end
+
+    -- Clamp the bar count to VisibleBars and the pool size (40). #sources is a
+    -- plain length (combatSources is a normal array; only the amount FIELDS are
+    -- secret), so math.min on it is safe.
+    local count = math_min(#sources, (self.db and self.db.VisibleBars) or 10, self.BAR_POOL_SIZE)
+
+    -- Visible scroll range (mirrors EllesmereUI ~2767-2770). stride is the
+    -- snapped per-row advance computed in CreateWindow. Scrolling isn't wired in
+    -- Phase 1, so scrollOff is normally 0 and this resolves to 1..count, but the
+    -- viewport math is in place for when the scrollbar lands.
+    local stride = W._snapStride or 1
+    if stride <= 0 then stride = 1 end
+    local scrollOff = (W.body and W.body:GetVerticalScroll()) or 0
+    local viewH = (W.body and W.body:GetHeight()) or 0
+    local visFirst, visLast
+    if viewH > 0 then
+        visFirst = math.floor(scrollOff / stride) + 1
+        visLast = math_min(count, math.ceil((scrollOff + viewH) / stride))
+    else
+        -- Viewport not sized yet (first paint before layout): render the whole
+        -- visible set so bars aren't left blank.
+        visFirst, visLast = 1, count
+    end
+
+    local maxAmount = session.maxAmount
+    for i = 1, self.BAR_POOL_SIZE do
+        local bar = W.bars[i]
+        if i <= count then
+            if i >= visFirst and i <= visLast then
+                self:RenderBar(W, bar, i, sources[i], maxAmount)
+            end
+            bar.row:Show()
+        else
+            bar.row:Hide()
+        end
+    end
+end
+
+-- Fills one bar row from a single (pre-sorted) source. `i` is the source's rank
+-- (the API already sorted descending by amount -- never re-sort). Every field
+-- that can be secret in combat (totalAmount, amountPerSecond, maxAmount, the
+-- formatted value string, the name) is handled on the secret contract; the
+-- non-secret fields (classFilename, specIconID) drive the dirty caches.
+-- W is part of the documented signature (callers pass the owning window and a
+-- later phase -- detail breakdown / sticky-player row -- reads it); unused here.
+function DM:RenderBar(W, bar, i, src, maxAmount) -- luacheck: ignore 212/W
+    if not src then return end
+    local row = bar.row
+
+    -- Width: native StatusBar interpolation. SetMinMaxValues + SetValue both
+    -- accept secret values; ExponentialEaseOut animates the fill on the widget
+    -- side so NO Lua arithmetic ever touches the secret amount.
+    row.fill:SetMinMaxValues(0, maxAmount)
+    row.fill:SetValue(src.totalAmount, Enum.StatusBarInterpolation.ExponentialEaseOut)
+
+    -- Class color (dirty-cached on classFilename, which is NEVER secret). Falls
+    -- back to neutral grey for an unknown/absent class. The name FontString is
+    -- tinted to the class color only when ClassColorName is on.
+    local classFile = src.classFilename
+    if bar._cachedColorClass ~= classFile then
+        bar._cachedColorClass = classFile
+        local c = classFile and RAID_CLASS_COLORS[classFile]
+        row.fill:SetStatusBarColor(c and c.r or 0.6, c and c.g or 0.6, c and c.b or 0.6)
+        if self.db and self.db.ClassColorName and c then
+            row.name:SetTextColor(c.r, c.g, c.b)
+        end
+    end
+
+    -- Spec icon (dirty-cached on classFilename; specIconID is NEVER secret).
+    -- Re-applies the standard KE icon zoom on change. Visibility tracks ShowIcon
+    -- every tick so toggling the setting takes effect on the next paint.
+    if self.db and self.db.ShowIcon then
+        if bar._cachedIconClass ~= classFile then
+            bar._cachedIconClass = classFile
+            row.icon:SetTexture(src.specIconID)
+            KE:ApplyIconZoom(row.icon)
+        end
+        row.icon:Show()
+    else
+        row.icon:Hide()
+    end
+
+    -- Name (secret-aware). In combat src.name may be secret: SetText accepts it,
+    -- but == / ~= on a secret string throws, so set it unconditionally and null
+    -- the cache. Out of combat it's a plain string and dirty-checked.
+    local nm = src.name
+    if issecretvalue(nm) then
+        row.name:SetText(nm)
+        bar._cachedName = nil
+    elseif nm ~= bar._cachedName then
+        bar._cachedName = nm
+        row.name:SetText(nm)
+    end
+
+    -- Value (secret-aware). FormatBarValue returns (string, isSecret); the string
+    -- is secret in combat (built from secret amounts). Same set-unconditionally /
+    -- null-cache contract as the name. ShowPerSec gates the per-second half.
+    local v = self.FormatBarValue(
+        src.totalAmount,
+        self.db and self.db.ShowPerSec and src.amountPerSecond or nil,
+        self.db and self.db.ShowPerSec
+    )
+    if issecretvalue(v) then
+        row.value:SetText(v)
+        bar._cachedVal = nil
+    elseif v ~= bar._cachedVal then
+        bar._cachedVal = v
+        row.value:SetText(v)
+    end
+
+    -- Rank: "N." label, dirty-cached on the slot (the loop index, which equals
+    -- the API rank). Visibility tracks ShowRank every tick.
+    if self.db and self.db.ShowRank then
+        if bar._cachedSlot ~= i then
+            bar._cachedSlot = i
+            row.rank:SetText(self.RANK_STRINGS[i])
+        end
+        row.rank:Show()
+    else
+        row.rank:Hide()
+    end
+
+    -- Percent: secret in combat; left hidden for Phase 1 (ShowPercent defaults
+    -- false). An out-of-combat percent is a later phase -- do NOT compute one
+    -- here (would require arithmetic on amounts that are secret in combat).
 end

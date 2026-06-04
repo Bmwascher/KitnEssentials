@@ -22,6 +22,8 @@ local IsInInstance = IsInInstance
 local C_ChallengeMode = C_ChallengeMode
 local AbbreviateNumbers = AbbreviateNumbers
 local issecretvalue = issecretvalue
+local debugprofilestop = debugprofilestop
+local wipe = wipe
 
 -- Pre-built group unit tokens (mirrors EllesmereUI lines 298-300). UNIT_FLAGS
 -- can fire dozens of times per second during a pull, and GroupInCombat is hit
@@ -68,6 +70,36 @@ function DM:OnEnable()
     self:RegisterEvent("DAMAGE_METER_COMBAT_SESSION_UPDATED", "OnSessionUpdated")
     self:RegisterEvent("DAMAGE_METER_RESET", "OnMeterReset")
 
+    -- Seed window 1 with a Default context if the user has never configured one.
+    -- Phase 1 is single-window only (multi-window/dock is a later phase), so just
+    -- the [1] slot is ensured here. Stored under Contexts.Default; the live
+    -- content context resolves to this when no per-context override exists.
+    self.db.Windows = self.db.Windows or {}
+    if not self.db.Windows[1] then
+        self.db.Windows[1] = {
+            Contexts = {
+                Default = {
+                    Enabled = true,
+                    MeterType = Enum.DamageMeterType.DamageDone,
+                    SessionType = Enum.DamageMeterSessionType.Current,
+                },
+            },
+        }
+    end
+
+    -- Build window 1's frame tree once (CreateWindow is idempotent-friendly: it
+    -- overwrites windows_rt[1], but on enable the tree won't exist yet). Position
+    -- it via the shared helper so the pixel-perfect snap runs.
+    local W = self.windows_rt and self.windows_rt[1]
+    if not W then
+        W = self:CreateWindow(1)
+    end
+    KE:ApplyFramePosition(W.frame, self.db.Position, self.db)
+
+    -- Paint once immediately so the window reflects the current (out-of-combat)
+    -- session on enable, then rely on the combat-gated ticker for live updates.
+    self:Tick()
+
     if DEBUG_DM then
         KE:Print("[DM] OnEnable: module active")
     end
@@ -83,6 +115,14 @@ function DM:OnDisable()
 
     if self.dock then
         self.dock:Hide()
+    end
+
+    -- Hide every built runtime window (Phase 1: just window 1). The frame trees
+    -- are kept for re-enable; only their visibility is cleared.
+    if self.windows_rt then
+        for _, W in pairs(self.windows_rt) do
+            if W.frame then W.frame:Hide() end
+        end
     end
 
     if DEBUG_DM then
@@ -452,4 +492,120 @@ function DM:ResolveWindowConfig(winIdx, context)
     if not window or not window.Contexts then return nil end
     context = context or self:GetActiveContext()
     return window.Contexts[context] or window.Contexts.Default
+end
+
+---------------------------------------------------------------------------------
+-- Readable header labels
+--
+-- The render layer builds a window's header text from cfg.MeterType /
+-- cfg.SessionType, both Enum values. These tables map the enum to a display
+-- string once at file load; the render path reads them by key and never builds
+-- a label string per tick. Mirrors EllesmereUI's DM_TYPE_NAMES /
+-- SESSION_TYPE_NAMES. DamageMeter enums are guaranteed present in 12.0, but each
+-- lookup is nil-guarded at the call site (RenderWindow) so a missing key falls
+-- back to a sane default rather than concatenating nil.
+---------------------------------------------------------------------------------
+
+DM.METER_TYPE_NAMES = {
+    [Enum.DamageMeterType.DamageDone]           = "Damage Done",
+    [Enum.DamageMeterType.HealingDone]          = "Healing Done",
+    [Enum.DamageMeterType.DamageTaken]          = "Damage Taken",
+    [Enum.DamageMeterType.AvoidableDamageTaken] = "Avoidable Damage Taken",
+    [Enum.DamageMeterType.EnemyDamageTaken]     = "Enemy Damage Taken",
+    [Enum.DamageMeterType.Interrupts]           = "Interrupts",
+    [Enum.DamageMeterType.Dispels]              = "Dispels",
+    [Enum.DamageMeterType.Deaths]               = "Deaths",
+}
+
+DM.SESSION_TYPE_NAMES = {
+    [Enum.DamageMeterSessionType.Current] = "Current",
+    [Enum.DamageMeterSessionType.Overall] = "Overall",
+}
+
+---------------------------------------------------------------------------------
+-- Render dispatch
+--
+-- Tick repaints every visible window from the current sessions, under a per-frame
+-- UI budget. If a window's render would push the frame over budget it is deferred
+-- whole (never split mid-window) to a single next-frame C_Timer.After. The
+-- session cache is wiped at the head of every Tick so each frame reads fresh
+-- secret-safe session tables, but identical (sessionType, dmType, sessionID)
+-- lookups within one Tick hit the cache instead of re-calling the API.
+---------------------------------------------------------------------------------
+
+-- Memoizes GetSession for the duration of a single Tick. The cache key uses ONLY
+-- the non-secret inputs (sessionID / sessionType / dmType are plain values, never
+-- secret); the returned session table itself may carry secret fields, but those
+-- are never touched here. A nil result is stored as `false` so a genuine "no
+-- session" answer is cached too (avoids re-calling the API every window for an
+-- empty segment); the caller treats `false` as "no session".
+function DM:CachedSession(sessionType, dmType, sessionID)
+    self._sessionCache = self._sessionCache or {}
+
+    local key = (sessionID and ("id:" .. sessionID) or ("t:" .. sessionType)) .. ":" .. dmType
+
+    local cached = self._sessionCache[key]
+    if cached ~= nil then
+        if cached == false then return nil end
+        return cached
+    end
+
+    local session = self:GetSession(sessionType, dmType, sessionID)
+    self._sessionCache[key] = session or false
+    return session
+end
+
+-- Returns the array of currently-enabled runtime windows. Phase 1: only window 1,
+-- and only when its resolved context config is enabled. Builds window 1's frame
+-- tree on demand if it doesn't exist yet (e.g. Tick reached before OnEnable's
+-- explicit create, or after a future DB-driven rebuild). Multi-window/dock is a
+-- later phase; this returns at most one window.
+function DM:VisibleWindows()
+    self._visibleWindows = self._visibleWindows or {}
+    local out = self._visibleWindows
+    for i = #out, 1, -1 do out[i] = nil end
+
+    local cfg = self:ResolveWindowConfig(1)
+    if not cfg or not cfg.Enabled then
+        return out
+    end
+
+    self.windows_rt = self.windows_rt or {}
+    local W = self.windows_rt[1]
+    if not W then
+        W = self:CreateWindow(1)
+    end
+
+    out[#out + 1] = W
+    return out
+end
+
+-- Repaints every visible window under a per-frame UI budget. Whole-window spill
+-- only: if rendering a window would push the elapsed frame time over the budget,
+-- that window (and every window after it) is deferred to the next frame rather
+-- than splitting a single window's bar loop across frames. The session cache is
+-- wiped here so each Tick starts from fresh API reads.
+function DM:Tick()
+    self._sessionCache = self._sessionCache or {}
+    wipe(self._sessionCache)
+
+    local frameStart = debugprofilestop()
+    local budget = (self.db and self.db.UIBudgetMs) or 1.2
+    local deferred = {}
+
+    for _, W in ipairs(self:VisibleWindows()) do
+        if (debugprofilestop() - frameStart) > budget then
+            deferred[#deferred + 1] = W
+        else
+            self:RenderWindow(W)
+        end
+    end
+
+    if #deferred > 0 then
+        C_Timer.After(0, function()
+            for _, W in ipairs(deferred) do
+                DM:RenderWindow(W)
+            end
+        end)
+    end
 end
