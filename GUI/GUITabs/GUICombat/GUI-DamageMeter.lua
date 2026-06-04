@@ -626,6 +626,58 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
 end
 
 ---------------------------------------------------------------------------------
+-- Behavior tab
+---------------------------------------------------------------------------------
+local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
+    local DM = GetDM()
+
+    ----------------------------------------------------------------
+    -- Card 1: Performance
+    ----------------------------------------------------------------
+    local card1 = GUIFrame:CreateCard(scrollChild, "Performance", yOffset)
+    manager:Register(card1, "all")
+
+    local row1a = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local refreshSlider = GUIFrame:CreateSlider(row1a, "Combat Refresh", {
+        min = 0.1, max = 1.0, step = 0.05,
+        value = db.RefreshRate or 0.5,
+        callback = function(val)
+            db.RefreshRate = val
+            -- Apply live: restart the ticker only if it's currently running.
+            if DM and DM._ticker and DM.StartTicker then DM:StartTicker() end
+        end,
+    })
+    row1a:AddWidget(refreshSlider, 0.5)
+    manager:Register(refreshSlider, "all")
+
+    local budgetSlider = GUIFrame:CreateSlider(row1a, "UI Budget (ms)", {
+        min = 0.5, max = 5.0, step = 0.1,
+        value = db.UIBudgetMs or 1.2,
+        callback = function(val) db.UIBudgetMs = val end,
+    })
+    row1a:AddWidget(budgetSlider, 0.5)
+    manager:Register(budgetSlider, "all")
+    card1:AddRow(row1a, Theme.rowHeight)
+
+    local noteRow = GUIFrame:CreateRow(card1.content, 65)
+    local note = GUIFrame:CreateText(noteRow,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " " .. KE:ColorTextByTheme("Combat Refresh") ..
+        " — how often bars repaint in combat (lower = smoother, more CPU).\n" ..
+        KE:ColorTextByTheme("-") .. " " .. KE:ColorTextByTheme("UI Budget") ..
+        " — max ms/frame spent painting; windows over budget defer to the next frame.\n" ..
+        KE:ColorTextByTheme("-") .. " Segments are automatic: " .. KE:ColorTextByTheme("Current") ..
+        " is the live fight, " .. KE:ColorTextByTheme("Overall") .. " is cumulative (set per window in Windows).",
+        65, "hide")
+    noteRow:AddWidget(note, 1)
+    manager:Register(note, "all")
+    card1:AddRow(noteRow, 65, 0)
+
+    yOffset = card1:GetNextOffset()
+    return yOffset
+end
+
+---------------------------------------------------------------------------------
 -- Page registration
 ---------------------------------------------------------------------------------
 GUIFrame:RegisterContent("DamageMeter", function(scrollChild, yOffset)
@@ -641,6 +693,7 @@ GUIFrame:RegisterContent("DamageMeter", function(scrollChild, yOffset)
             { id = "General", label = "General" },
             { id = "Windows", label = "Windows" },
             { id = "Appearance", label = "Appearance" },
+            { id = "Behavior", label = "Behavior" },
         },
         activeId = activeTab,
         onSwitch = function(newId) activeTab = newId end,
@@ -656,6 +709,8 @@ GUIFrame:RegisterContent("DamageMeter", function(scrollChild, yOffset)
         yOffset = BuildWindowsTab(scrollChild, yOffset, db, manager)
     elseif activeTab == "Appearance" then
         yOffset = BuildAppearanceTab(scrollChild, yOffset, db, manager)
+    elseif activeTab == "Behavior" then
+        yOffset = BuildBehaviorTab(scrollChild, yOffset, db, manager)
     end
 
     manager:UpdateAll(db.Enabled ~= false)
