@@ -8,6 +8,8 @@
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
+local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
+local pairs = pairs
 
 local activeTab = "General"
 
@@ -53,6 +55,12 @@ local function ApplySettings()
     if DM and DM.ApplySettings then DM:ApplySettings() end
 end
 
+-- Applies backdrop-only changes (color/style/border) without a full re-layout.
+local function ApplyBackdropOnly()
+    local DM = GetDM()
+    if DM and DM.UpdateBackdrop then DM:UpdateBackdrop() end
+end
+
 -- Schedules a full page rebuild on the next frame (used by the Windows tab's
 -- Configure-For context switches and arrangement changes that change which
 -- widgets appear). Defined here; first consumed when the Windows tab lands.
@@ -60,6 +68,18 @@ local function RebuildPage()
     if GUIFrame.RefreshContent then
         C_Timer.After(0, function() GUIFrame:RefreshContent() end)
     end
+end
+
+-- Builds an LSM media hash {name = name} for searchable dropdowns, with a safe
+-- fallback when LSM is unavailable.
+local function MediaList(kind, fallback)
+    local out = {}
+    if LSM then
+        for name in pairs(LSM:HashTable(kind)) do out[name] = name end
+    else
+        out[fallback] = fallback
+    end
+    return out
 end
 
 ---------------------------------------------------------------------------------
@@ -384,6 +404,228 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
 end
 
 ---------------------------------------------------------------------------------
+-- Appearance tab (global; applies to all windows uniformly)
+---------------------------------------------------------------------------------
+local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
+    local statusbarList = MediaList("statusbar", "Blizzard")
+    local fontList = MediaList("font", "Friz Quadrata TT")
+
+    -- Backdrop sub-widgets greyed when BackdropEnabled is off.
+    manager:SetCondition("backdrop", function() return db.BackdropEnabled ~= false end)
+
+    ----------------------------------------------------------------
+    -- Card 1: Bars
+    ----------------------------------------------------------------
+    local card1 = GUIFrame:CreateCard(scrollChild, "Bars", yOffset)
+    manager:Register(card1, "all")
+
+    local row1a = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local texDropdown = GUIFrame:CreateDropdown(row1a, "Bar Texture", {
+        options = statusbarList,
+        value = db.StatusBarTexture or "KitnUI",
+        callback = function(key) db.StatusBarTexture = key; ApplySettings() end,
+        searchable = true,
+    })
+    row1a:AddWidget(texDropdown, 1)
+    manager:Register(texDropdown, "all")
+    card1:AddRow(row1a, Theme.rowHeight)
+
+    local row1b = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local widthSlider = GUIFrame:CreateSlider(row1b, "Window Width", {
+        min = 120, max = 600, step = 1,
+        value = db.Width or 240,
+        callback = function(val) db.Width = val; ApplySettings() end,
+    })
+    row1b:AddWidget(widthSlider, 0.5)
+    manager:Register(widthSlider, "all")
+
+    local visSlider = GUIFrame:CreateSlider(row1b, "Visible Bars", {
+        min = 1, max = 40, step = 1,
+        value = db.VisibleBars or 10,
+        callback = function(val) db.VisibleBars = val; ApplySettings() end,
+    })
+    row1b:AddWidget(visSlider, 0.5)
+    manager:Register(visSlider, "all")
+    card1:AddRow(row1b, Theme.rowHeight)
+
+    local row1c = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local heightSlider = GUIFrame:CreateSlider(row1c, "Bar Height", {
+        min = 8, max = 40, step = 1,
+        value = db.BarHeight or 16,
+        callback = function(val) db.BarHeight = val; ApplySettings() end,
+    })
+    row1c:AddWidget(heightSlider, 0.5)
+    manager:Register(heightSlider, "all")
+
+    local spacingSlider = GUIFrame:CreateSlider(row1c, "Bar Spacing", {
+        min = 0, max = 10, step = 1,
+        value = db.BarSpacing or 2,
+        callback = function(val) db.BarSpacing = val; ApplySettings() end,
+    })
+    row1c:AddWidget(spacingSlider, 0.5)
+    manager:Register(spacingSlider, "all")
+    card1:AddRow(row1c, Theme.rowHeightLast, 0)
+
+    yOffset = card1:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 2: Bar Content
+    ----------------------------------------------------------------
+    local card2 = GUIFrame:CreateCard(scrollChild, "Bar Content", yOffset)
+    manager:Register(card2, "all")
+
+    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local iconChk = GUIFrame:CreateCheckbox(row2a, "Show Icon", {
+        value = db.ShowIcon ~= false,
+        callback = function(checked) db.ShowIcon = checked; ApplySettings() end,
+    })
+    row2a:AddWidget(iconChk, 0.5)
+    manager:Register(iconChk, "all")
+
+    local nameChk = GUIFrame:CreateCheckbox(row2a, "Show Name", {
+        value = db.ShowName ~= false,
+        callback = function(checked) db.ShowName = checked; ApplySettings() end,
+    })
+    row2a:AddWidget(nameChk, 0.5)
+    manager:Register(nameChk, "all")
+    card2:AddRow(row2a, Theme.rowHeight)
+
+    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local rankChk = GUIFrame:CreateCheckbox(row2b, "Show Rank", {
+        value = db.ShowRank == true,
+        callback = function(checked) db.ShowRank = checked; ApplySettings() end,
+    })
+    row2b:AddWidget(rankChk, 0.5)
+    manager:Register(rankChk, "all")
+
+    local perSecChk = GUIFrame:CreateCheckbox(row2b, "Show Per-Second", {
+        value = db.ShowPerSec ~= false,
+        callback = function(checked) db.ShowPerSec = checked; ApplySettings() end,
+    })
+    row2b:AddWidget(perSecChk, 0.5)
+    manager:Register(perSecChk, "all")
+    card2:AddRow(row2b, Theme.rowHeight)
+
+    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local classNameChk = GUIFrame:CreateCheckbox(row2c, "Class-Color Name", {
+        value = db.ClassColorName == true,
+        callback = function(checked) db.ClassColorName = checked; ApplySettings() end,
+    })
+    row2c:AddWidget(classNameChk, 0.5)
+    manager:Register(classNameChk, "all")
+
+    local selfChk = GUIFrame:CreateCheckbox(row2c, "Always Show Self", {
+        value = db.AlwaysShowSelf ~= false,
+        callback = function(checked) db.AlwaysShowSelf = checked; ApplySettings() end,
+    })
+    row2c:AddWidget(selfChk, 0.5)
+    manager:Register(selfChk, "all")
+    card2:AddRow(row2c, Theme.rowHeightLast, 0)
+
+    yOffset = card2:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 3: Font
+    -- Outline list excludes SOFTOUTLINE: bar text is small and soft-outline
+    -- haloes on tiny text (matches the KickTracker bar-text rationale).
+    ----------------------------------------------------------------
+    local card3 = GUIFrame:CreateCard(scrollChild, "Font", yOffset)
+    manager:Register(card3, "all")
+
+    local row3a = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local fontDropdown = GUIFrame:CreateDropdown(row3a, "Font", {
+        options = fontList,
+        value = db.FontFace or "Expressway",
+        callback = function(key) db.FontFace = key; ApplySettings() end,
+        searchable = true,
+        isFontPreview = true,
+    })
+    row3a:AddWidget(fontDropdown, 0.5)
+    manager:Register(fontDropdown, "all")
+
+    local fontSizeSlider = GUIFrame:CreateSlider(row3a, "Font Size", {
+        min = 8, max = 24, step = 1,
+        value = db.FontSize or 12,
+        callback = function(val) db.FontSize = val; ApplySettings() end,
+    })
+    row3a:AddWidget(fontSizeSlider, 0.5)
+    manager:Register(fontSizeSlider, "all")
+    card3:AddRow(row3a, Theme.rowHeight)
+
+    local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
+    local outlineDropdown = GUIFrame:CreateDropdown(row3b, "Font Outline", {
+        options = KE:GetFontOutlineOptions(),
+        value = db.FontOutline or "OUTLINE",
+        callback = function(key) db.FontOutline = key; ApplySettings() end,
+    })
+    row3b:AddWidget(outlineDropdown, 1)
+    manager:Register(outlineDropdown, "all")
+    card3:AddRow(row3b, Theme.rowHeightLast, 0)
+
+    yOffset = card3:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 4: Backdrop
+    ----------------------------------------------------------------
+    local card4 = GUIFrame:CreateCard(scrollChild, "Backdrop", yOffset)
+    manager:Register(card4, "all")
+
+    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local bgEnableChk = GUIFrame:CreateCheckbox(row4a, "Enable Backdrop", {
+        value = db.BackdropEnabled ~= false,
+        callback = function(checked)
+            db.BackdropEnabled = checked
+            ApplySettings()              -- re-pad windows + re-skin
+            manager:UpdateAll(db.Enabled ~= false)
+        end,
+    })
+    row4a:AddWidget(bgEnableChk, 0.5)
+    manager:Register(bgEnableChk, "all")
+
+    local styleDropdown = GUIFrame:CreateDropdown(row4a, "Border Style", {
+        options = {
+            { key = "neutral", text = "Neutral" },
+            { key = "accent",  text = "Accent" },
+            { key = "theme",   text = "Theme" },
+        },
+        value = db.BackdropBorderStyle or "neutral",
+        callback = function(key) db.BackdropBorderStyle = key; ApplyBackdropOnly() end,
+    })
+    row4a:AddWidget(styleDropdown, 0.5)
+    manager:Register(styleDropdown, "backdrop")
+    card4:AddRow(row4a, Theme.rowHeight)
+
+    local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local bgColorPicker = GUIFrame:CreateColorPicker(row4b, "Background", {
+        color = db.BackdropColor or { 0.031, 0.031, 0.031, 0.8 },
+        callback = function(r, g, b, a) db.BackdropColor = { r, g, b, a }; ApplyBackdropOnly() end,
+    })
+    row4b:AddWidget(bgColorPicker, 0.5)
+    manager:Register(bgColorPicker, "backdrop")
+
+    local borderColorPicker = GUIFrame:CreateColorPicker(row4b, "Border", {
+        color = db.BackdropBorderColor or { 0, 0, 0, 1 },
+        callback = function(r, g, b, a) db.BackdropBorderColor = { r, g, b, a }; ApplyBackdropOnly() end,
+    })
+    row4b:AddWidget(borderColorPicker, 0.5)
+    manager:Register(borderColorPicker, "backdrop")
+    card4:AddRow(row4b, Theme.rowHeight)
+
+    local row4c = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
+    local padSlider = GUIFrame:CreateSlider(row4c, "Padding", {
+        min = 0, max = 20, step = 1,
+        value = db.BackdropPadding or 1,
+        callback = function(val) db.BackdropPadding = val; ApplySettings() end,
+    })
+    row4c:AddWidget(padSlider, 1)
+    manager:Register(padSlider, "backdrop")
+    card4:AddRow(row4c, Theme.rowHeightLast, 0)
+
+    yOffset = card4:GetNextOffset()
+    return yOffset
+end
+
+---------------------------------------------------------------------------------
 -- Page registration
 ---------------------------------------------------------------------------------
 GUIFrame:RegisterContent("DamageMeter", function(scrollChild, yOffset)
@@ -398,6 +640,7 @@ GUIFrame:RegisterContent("DamageMeter", function(scrollChild, yOffset)
         tabs = {
             { id = "General", label = "General" },
             { id = "Windows", label = "Windows" },
+            { id = "Appearance", label = "Appearance" },
         },
         activeId = activeTab,
         onSwitch = function(newId) activeTab = newId end,
@@ -411,6 +654,8 @@ GUIFrame:RegisterContent("DamageMeter", function(scrollChild, yOffset)
         yOffset = BuildGeneralTab(scrollChild, yOffset, db, manager)
     elseif activeTab == "Windows" then
         yOffset = BuildWindowsTab(scrollChild, yOffset, db, manager)
+    elseif activeTab == "Appearance" then
+        yOffset = BuildAppearanceTab(scrollChild, yOffset, db, manager)
     end
 
     manager:UpdateAll(db.Enabled ~= false)
