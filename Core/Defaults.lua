@@ -1529,9 +1529,12 @@ local Defaults = {
 
         DamageMeter = {
             Enabled = true,
+            ReplaceBlizzard = true,     -- set CVar damageMeterEnabled "0" while KE meter is on
+            Locked = false,             -- when true, disables EditMode drag of the dock
             RefreshRate = 0.5,
             UIBudgetMs = 1.2,
             MaxWindows = 5,
+            AlwaysShowSelf = true,      -- pin the player to the last visible slot when off-list
 
             -- Bar appearance (flat, KE convention)
             BarHeight = 16,
@@ -1550,6 +1553,7 @@ local Defaults = {
             VisibleBars = 10,
 
             -- Shared backdrop (flat); arrangement is owned by Dock below
+            BackdropEnabled = true,                     -- off: windows render with no wrapping bg/border
             BackdropBorderStyle = "neutral",            -- neutral | accent | theme
             BackdropBorderColor = { 0, 0, 0, 1 },        -- solid black (configurable later via GUI)
             BackdropColor = { 0.031, 0.031, 0.031, 0.8 }, -- #080808 @ 80% opacity (configurable later via GUI)

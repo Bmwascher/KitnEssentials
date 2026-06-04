@@ -41,12 +41,6 @@ end
 
 local DEBUG_DOCK_TEST = false
 
--- Testing convenience: flip true to HIDE the whole dock (the shared backdrop AND
--- every window, since windows are children of the dock) without disabling the
--- module or its combat events. A stand-in until the GUI Enable toggle / a
--- "/kedm toggle" land. Gated in DM:UpdateBackdrop (the only place the dock shows).
-local DEBUG_HIDE = false
-
 -- Inter-window / inter-column gap, snapped to the pixel grid once at file load.
 -- A local const (not a DB key) per the Phase 2 geometry model.
 local GAP = KE:PixelSnap(4)
@@ -61,6 +55,17 @@ local GAP = KE:PixelSnap(4)
 -- calls. The dock is a BackdropTemplate frame (required by KE:ApplyBackdrop) and
 -- a plain UIParent child (non-secure) -- SetSize/SetPoint/Show/Hide on it are all
 -- combat-safe with no InCombatLockdown guard.
+-- Effective backdrop padding: the configured pad when the backdrop is enabled,
+-- 0 when it is off (so windows sit flush with the dock edge instead of being
+-- inset by phantom padding). Read by LayoutDock / UpdateBackdrop / _LayoutSplitters
+-- so window placement, backdrop sizing, and splitter hit-zones agree.
+function DM:_BackdropPad()
+    local db = self.db
+    if not db then return 0 end
+    if db.BackdropEnabled == false then return 0 end
+    return db.BackdropPadding or 1
+end
+
 function DM:EnsureDock()
     if self.dock then return self.dock end
 
@@ -212,7 +217,7 @@ function DM:LayoutDock()
     local Hdock   = Hnat                                -- dock content height
     local baseW   = db.Width or 240                     -- per-column natural width (ratio 1)
 
-    local pad = db.BackdropPadding or 6
+    local pad = self:_BackdropPad()
     local context = self:GetActiveContext()
 
     -- Stash the header band + per-row stride so the splitter drag tick can
@@ -460,11 +465,11 @@ function DM:UpdateBackdrop()
     self:EnsureDock()
     local dock = self.dock
 
-    -- Testing hide (DEBUG_HIDE): UpdateBackdrop is the only place the dock is
-    -- shown, so gating here keeps it hidden across every refresh; hiding the
-    -- parent dock also hides all child windows even though RenderWindow still
-    -- calls Show() on them. Flip DEBUG_HIDE at the top of the file to toggle.
-    if DEBUG_HIDE then dock:Hide() return end
+    -- Runtime hide (/kedm toggle sets self._hidden). UpdateBackdrop is the only
+    -- place the dock is shown, so gating here keeps it hidden across every
+    -- refresh; hiding the parent dock also hides all child windows even though
+    -- RenderWindow still calls Show() on them.
+    if self._hidden then dock:Hide() return end
 
     -- Zero placed windows: nothing to wrap, hide the dock and bail. `next` on the
     -- placed-set returns nil only when LayoutDock placed no window this pass.
@@ -474,18 +479,25 @@ function DM:UpdateBackdrop()
         return
     end
 
-    local pad = db.BackdropPadding or 6
+    local pad = self:_BackdropPad()
     local dockW = self._dockContentW or 0
     local dockH = self._dockContentH or 0
 
     dock:SetSize(dockW + 2 * pad, dockH + 2 * pad)
 
+    -- BackdropEnabled off: clear the wrapping bg/border (KE:ApplyBackdrop with
+    -- Enabled=false calls SetBackdrop(nil)) but still size/show the dock so its
+    -- child windows remain visible — they simply "float" with no frame around them.
     self._dockBackdropCfg = self._dockBackdropCfg or {}
     local cfg = self._dockBackdropCfg
-    cfg.Enabled = true
-    cfg.BorderSize = 1
-    cfg.Color = db.BackdropColor
-    cfg.BorderColor = self:_ResolveDockBorderColor()
+    if db.BackdropEnabled == false then
+        cfg.Enabled = false
+    else
+        cfg.Enabled = true
+        cfg.BorderSize = 1
+        cfg.Color = db.BackdropColor
+        cfg.BorderColor = self:_ResolveDockBorderColor()
+    end
     KE:ApplyBackdrop(dock, cfg)
 
     -- Reposition (the dock's own anchor is unchanged, but re-running re-snaps to
@@ -736,7 +748,7 @@ function DM:_LayoutSplitters()
     self._splitterActive = 0
     if not specs then return end
 
-    local pad = db.BackdropPadding or 6
+    local pad = self:_BackdropPad()
     local level = dock:GetFrameLevel() + 10
 
     for i = 1, #specs do
