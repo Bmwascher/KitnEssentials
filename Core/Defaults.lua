@@ -1528,57 +1528,52 @@ local Defaults = {
         -----------------------------------------------------------------
 
         DamageMeter = {
-            enabled = true,
-            refreshRate = 0.5,
-            uiBudgetMs = 1.2,
-            maxWindows = 5,
+            Enabled = true,
+            RefreshRate = 0.5,
+            UIBudgetMs = 1.2,
+            MaxWindows = 5,
 
-            bars = {
-                height = 16,
-                spacing = 2,
-                texture = "WHITE8X8",
-                font = "Expressway",
-                outline = "OUTLINE",
-                showRank = false,
-                showIcon = true,
-                showName = true,
-                classColorName = true,
-                showPerSec = true,
-                showPercent = false,
-                visibleBars = 10,
+            -- Bar appearance (flat, KE convention)
+            BarHeight = 16,
+            BarSpacing = 2,
+            StatusBarTexture = "WHITE8X8",
+            FontFace = "Expressway",
+            FontSize = 12,
+            FontOutline = "OUTLINE",
+            ShowRank = false,
+            ShowIcon = true,
+            ShowName = true,
+            ClassColorName = true,
+            ShowPerSec = true,
+            ShowPercent = false,
+            VisibleBars = 10,
+
+            -- Shared backdrop (flat); arrangement is owned by Dock below
+            BackdropBorderStyle = "neutral",            -- neutral | accent | theme
+            BackdropBorderColor = { 0.47, 0.47, 0.51, 1 },
+            BackdropColor = { 0.03, 0.03, 0.04, 0.88 }, -- RGBA combined (KE style)
+            BackdropPadding = 6,
+            Strata = "MEDIUM",
+            Position = {
+                AnchorFrom = "CENTER",
+                AnchorTo = "CENTER",
+                XOffset = 0,
+                YOffset = 0,
             },
 
-            backdrop = {
-                borderStyle = "neutral",
-                borderColor = { 0.47, 0.47, 0.51, 1 },
-                bg = {
-                    color = { 0.03, 0.03, 0.04 },
-                    alpha = 0.88,
-                },
-                padding = 6,
-                position = {
-                    AnchorFrom = "CENTER",
-                    AnchorTo = "CENTER",
-                    XOffset = 0,
-                    YOffset = 0,
-                },
-                strata = "MEDIUM",
-            },
-
-            dock = {
-                columns = {
-                    {
-                        widthRatio = 1,
-                        windows = { 1 },
-                        rowRatios = { 1 },
-                    },
+            -- Dock layout (structured: no flat equivalent)
+            Dock = {
+                Columns = {
+                    { WidthRatio = 1, Windows = { 1 }, RowRatios = { 1 } },
                 },
             },
 
-            windows = {},
+            -- Per-window per-context configs (structured); inherit Default unless present.
+            -- [i] = { Contexts = { Default = { Enabled, MeterType, SessionType }, ... } }
+            Windows = {},
 
-            history = { retain = 20 },
-            deaths  = { cap = 50 },
+            HistoryRetain = 20,
+            DeathCap = 50,
         },
 
         -----------------------------------------------------------------

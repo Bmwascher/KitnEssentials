@@ -35,7 +35,7 @@ function DM:OnInitialize()
 end
 
 function DM:OnEnable()
-    if not self.db or not self.db.enabled then return end
+    if not self.db or not self.db.Enabled then return end
 
     self.enabled = true
 
