@@ -23,5 +23,6 @@ Modules\Healer\Healer.xml
 Modules\DungeonTimers\DungeonTimers.xml
 Modules\QoL\QoL.xml
 Modules\Skinning\Skinning.xml
+Modules\DamageMeter\DamageMeter.xml
 
 GUI\GUI.xml

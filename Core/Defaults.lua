@@ -1524,6 +1524,64 @@ local Defaults = {
         },
 
         -----------------------------------------------------------------
+        -- Damage Meter Module
+        -----------------------------------------------------------------
+
+        DamageMeter = {
+            enabled = true,
+            refreshRate = 0.5,
+            uiBudgetMs = 1.2,
+            maxWindows = 5,
+
+            bars = {
+                height = 16,
+                spacing = 2,
+                texture = "WHITE8X8",
+                font = "Expressway",
+                outline = "OUTLINE",
+                showRank = false,
+                showIcon = true,
+                showName = true,
+                classColorName = true,
+                showPerSec = true,
+                showPercent = false,
+                visibleBars = 10,
+            },
+
+            backdrop = {
+                borderStyle = "neutral",
+                borderColor = { 0.47, 0.47, 0.51, 1 },
+                bg = {
+                    color = { 0.03, 0.03, 0.04 },
+                    alpha = 0.88,
+                },
+                padding = 6,
+                position = {
+                    AnchorFrom = "CENTER",
+                    AnchorTo = "CENTER",
+                    XOffset = 0,
+                    YOffset = 0,
+                },
+                strata = "MEDIUM",
+            },
+
+            dock = {
+                columns = {
+                    {
+                        widthRatio = 1,
+                        windows = { 1 },
+                        rowRatios = { 1 },
+                    },
+                },
+            },
+
+            windows = {},
+
+            history = { retain = 20 },
+            deaths  = { cap = 50 },
+        },
+
+        -----------------------------------------------------------------
         -- Skinning Modules
         -----------------------------------------------------------------
 
