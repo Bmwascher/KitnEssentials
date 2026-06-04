@@ -1536,6 +1536,7 @@ local Defaults = {
             -- Bar appearance (flat, KE convention)
             BarHeight = 16,
             BarSpacing = 2,
+            Width = 240,
             StatusBarTexture = "KitnUI",
             FontFace = "Expressway",
             FontSize = 12,
@@ -1543,7 +1544,7 @@ local Defaults = {
             ShowRank = false,
             ShowIcon = true,
             ShowName = true,
-            ClassColorName = true,
+            ClassColorName = false,
             ShowPerSec = true,
             ShowPercent = false,
             VisibleBars = 10,

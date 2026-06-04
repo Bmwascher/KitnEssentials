@@ -189,17 +189,15 @@ function DM:CreateWindow(winIdx)
 
     -- Scroll viewport + content child. The content child holds the bar rows;
     -- the render layer scrolls the viewport for virtualization. Sized to 1,1
-    -- here (the render/layout pass and OnSizeChanged drive real dimensions).
+    -- here; DM:LayoutWindow (below) owns the body's anchors and the real
+    -- frame/content dimensions.
     --
-    -- The body anchors to the header's BOTTOMLEFT with a -4 X offset to cancel
-    -- the header's +4 left padding (the header is inset 4px from the frame's
-    -- TOPLEFT above), so the scroll viewport's left edge lines up with the
-    -- frame's left edge. The header's height is font-driven and zero until the
-    -- render layer calls SetText, so the body's TOPLEFT briefly collapses at
-    -- construction time; the layout pass resolves it once the title is set.
+    -- The body is anchored to the frame top with a FIXED header-band inset (not
+    -- to the header FontString's BOTTOMLEFT) so layout is deterministic and does
+    -- not depend on when the render layer first calls SetText -- the header's
+    -- font-driven height is zero until then, which previously collapsed the
+    -- body's TOPLEFT at construction time. LayoutWindow sets the inset.
     W.body = CreateFrame("ScrollFrame", nil, W.frame)
-    W.body:SetPoint("TOPLEFT", W.header, "BOTTOMLEFT", -4, -2)
-    W.body:SetPoint("BOTTOMRIGHT", W.frame, "BOTTOMRIGHT", 0, 0)
 
     W.content = CreateFrame("Frame", nil, W.body)
     W.content:SetSize(1, 1)
@@ -261,10 +259,65 @@ function DM:CreateWindow(winIdx)
     W._snapSpacing = snapSpacing
     W._snapStride = snapStride
 
+    -- Size the frame and viewport NOW. CreateFrame defaults to 0x0; without this
+    -- the body (anchored to the frame) collapses and every bar renders ~1px wide.
+    self:LayoutWindow(W)
+
     self.windows_rt = self.windows_rt or {}
     self.windows_rt[winIdx] = W
 
     return W
+end
+
+---------------------------------------------------------------------------------
+-- Window layout
+--
+-- Sizes the window frame, scroll viewport, and content child from the live
+-- appearance DB. A CreateFrame frame has no intrinsic size (0x0), so without
+-- this pass the body -- whose BOTTOMRIGHT is anchored to the frame -- collapses
+-- to ~0 width and every bar (anchored to the content child) renders ~1px wide
+-- and invisible. The layout is deterministic: a fixed header band sits at the
+-- top, VisibleBars rows fill the body below it, and width is the configured
+-- meter width. Idempotent + dirty-gated, so RenderWindow can call it every tick
+-- to absorb future GUI changes (width / bar count / font size) at near-zero
+-- steady-state cost. Phase 2's dock + shared-backdrop pass will drive width and
+-- height from the column ratios instead; this is the standalone Phase 1 sizing.
+---------------------------------------------------------------------------------
+function DM:LayoutWindow(W)
+    local db = self.db
+    local width = (db and db.Width) or 240
+    local fontSize = (db and db.FontSize) or 12
+
+    -- Fixed header band (font-size driven, snapped). The header FontString is
+    -- anchored TOPLEFT inside this band; the body starts immediately below it.
+    local headerH = KE:PixelSnap(fontSize + 6)
+
+    -- Body height fits VisibleBars rows (clamped to the pool). stride is the
+    -- snapped per-row advance from CreateWindow; guard against a 0 stride.
+    local visible = math_min((db and db.VisibleBars) or 10, BAR_POOL_SIZE)
+    local stride = W._snapStride or 1
+    if stride <= 0 then stride = 1 end
+    local barsH = visible * stride
+    local height = headerH + barsH
+
+    -- Re-anchor the body only when the header band changes (first call always
+    -- runs; SetPoint is idempotent so re-running is harmless either way).
+    if W._headerH ~= headerH then
+        W._headerH = headerH
+        W.body:ClearAllPoints()
+        W.body:SetPoint("TOPLEFT", W.frame, "TOPLEFT", 0, -headerH)
+        W.body:SetPoint("BOTTOMRIGHT", W.frame, "BOTTOMRIGHT", 0, 0)
+    end
+
+    -- Resize only on actual change so the steady state does no per-tick SetSize.
+    -- content width is also maintained by the body's OnSizeChanged handler; set
+    -- it here too so the first paint (before any size change fires) is correct.
+    if W._layoutW ~= width or W._layoutH ~= height then
+        W._layoutW = width
+        W._layoutH = height
+        W.frame:SetSize(width, height)
+        W.content:SetSize(width, barsH)
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -295,6 +348,10 @@ function DM:RenderWindow(W)
         return
     end
     W.frame:Show()
+
+    -- Keep the frame/viewport sized to the live appearance DB (dirty-gated, so a
+    -- steady config is free). Without a size the body collapses and bars vanish.
+    self:LayoutWindow(W)
 
     -- Header label from the enum config (nil-guarded -> sane defaults; never
     -- concatenate a nil from a missing enum key). SessionType prefixes the type
