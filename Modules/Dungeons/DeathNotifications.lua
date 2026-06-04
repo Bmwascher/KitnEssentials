@@ -396,11 +396,13 @@ function DN:SpeakFocusReminder()
     local voiceID = FindTTSVoiceID()
     if not voiceID then return end
     local text = cfg.TTSText
-    if not text or text == "" then text = "Pick a new focus target" end
+    if not text or text == "" then text = "Focus Dead" end
+    local rate = (C_TTSSettings and C_TTSSettings.GetSpeechRate and C_TTSSettings.GetSpeechRate()) or 0
     local volume = (C_TTSSettings and C_TTSSettings.GetSpeechVolume and C_TTSSettings.GetSpeechVolume()) or 100
-    -- SpeakText signature is (voiceID, text, rate, volume[, overlap]). Arg 3 is the
-    -- speech rate (-10..10); 3 = slightly faster than default for a snappy reminder.
-    C_VoiceChat.SpeakText(voiceID, text, 3, volume)
+    -- SpeakText signature is (voiceID, text, rate, volume[, overlap]). Honor the
+    -- player's configured TTS rate (-10..10, 0 = normal) so the reminder plays at
+    -- normal speed instead of a hardcoded fast value.
+    C_VoiceChat.SpeakText(voiceID, text, rate, volume)
 end
 
 function DN:CheckFocusDeath(deadGUID)

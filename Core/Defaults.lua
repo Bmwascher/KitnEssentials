@@ -1375,7 +1375,7 @@ local Defaults = {
                     Color = { 1, 0.3, 0.3, 1 },
                     -- TTS reminder: spoken when focus dies while you're in combat.
                     TTSReminder = false,
-                    TTSText = "Pick a new focus target",
+                    TTSText = "Focus Dead",
                 },
 
                 anchorFrameType = "UIPARENT",

@@ -43,7 +43,7 @@
 - **NEW:** Ignore Friendly Focus — optionally hide the focus castbar entirely for a focus you can't attack
 
 ### Death Notifications
-- **NEW:** Focus-death voice reminder — when your focus dies while you're in combat, an optional Text-to-Speech line plays (default "Pick a new focus target") so you know to retarget without watching the frame. Off by default; toggle and edit the spoken text on the Death Notifications page
+- **NEW:** Focus-death voice reminder — when your focus dies while you're in combat, an optional Text-to-Speech line plays (default "Focus Dead") so you know to retarget without watching the frame. Off by default; toggle and edit the spoken text on the Death Notifications page
 
 ### WarpDeplete+
 - **Fixed:** A Hunter's Feign Death is no longer counted as a death by the death tracker (your own or a party member's)

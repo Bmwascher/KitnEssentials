@@ -235,7 +235,7 @@ GUIFrame:RegisterContent("DeathNotifications", function(scrollChild, yOffset)
 
     local fdRow4 = GUIFrame:CreateRow(cardFD.content, Theme.rowHeightLast)
     local fdTTSBox = GUIFrame:CreateEditBox(fdRow4, "TTS Text", {
-        value = db.FocusDeath.TTSText or "Pick a new focus target",
+        value = db.FocusDeath.TTSText or "Focus Dead",
         callback = function(value) db.FocusDeath.TTSText = value end,
     })
     fdRow4:AddWidget(fdTTSBox, 1)
