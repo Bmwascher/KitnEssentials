@@ -382,6 +382,7 @@ local PREVIEW_MODULES = {
     "ReadyCheckConsumables", "DeathNotifications",
     "BurningRush",
     "Cursor",
+    "DamageMeter",
 }
 
 -- Section → preview module mapping for section-based previews
@@ -390,7 +391,7 @@ local SECTION_PREVIEW_MODULES = {
     combat_section = {
         "CombatRes", "AuraExternals", "AuraDebuffs", "CombatTexts", "CombatTimer",
         "FocusCastbar", "TargetCastbar", "CombatCross", "RangeChecker",
-        "Cursor",
+        "Cursor", "DamageMeter",
     },
     utilities_section = {
         "BloodlustTracker", "PotionReady", "RaidNotifications", "Recuperate",

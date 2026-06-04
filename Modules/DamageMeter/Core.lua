@@ -17,6 +17,12 @@ KE.DamageMeter = DM
 
 local DEBUG_DM = false
 
+-- Module state. editModeRegistered tracks whether the dock mover is currently
+-- registered with KE.EditMode; initialized here (mirrors NoMovementAlert,
+-- RaidNotifications, EnemyCounter, etc.) so the guard in RegWithEditMode reads a
+-- concrete false rather than nil on first access.
+DM.editModeRegistered = false
+
 -- File-level upvalues for globals used in per-tick / per-bar render paths.
 local IsInInstance = IsInInstance
 local C_ChallengeMode = C_ChallengeMode
@@ -24,6 +30,7 @@ local AbbreviateNumbers = AbbreviateNumbers
 local issecretvalue = issecretvalue
 local debugprofilestop = debugprofilestop
 local wipe = wipe
+local C_CVar = C_CVar
 
 -- Pre-built group unit tokens (mirrors EllesmereUI lines 298-300). UNIT_FLAGS
 -- can fire dozens of times per second during a pull, and GroupInCombat is hit
@@ -42,12 +49,135 @@ function DM:UpdateDB()
 end
 
 ---------------------------------------------------------------------------------
+-- Blizzard meter replacement
+--
+-- When ReplaceBlizzard is on, suppress Blizzard's built-in damage meter via the
+-- damageMeterEnabled CVar ("0" = off). When off, restore it ("1"). Guarded +
+-- pcall'd: the CVar is settable in combat, but a future Blizzard rename must not
+-- throw. Confirmed in the Phase 0 dry-run as the disable CVar.
+---------------------------------------------------------------------------------
+
+function DM:ApplyReplaceBlizzard()
+    if not (C_CVar and C_CVar.SetCVar) then return end
+    local on = self.db and self.db.ReplaceBlizzard ~= false
+    pcall(C_CVar.SetCVar, "damageMeterEnabled", on and "0" or "1")
+end
+
+-- Called on OnDisable: always restore Blizzard's meter so disabling KE's meter
+-- never leaves the player with no meter at all.
+function DM:RestoreBlizzardMeter()
+    if not (C_CVar and C_CVar.SetCVar) then return end
+    pcall(C_CVar.SetCVar, "damageMeterEnabled", "1")
+end
+
+---------------------------------------------------------------------------------
+-- EditMode registration
+--
+-- The dock is the positioned frame. Registered only when not Locked; the GUI Lock
+-- toggle calls RegWithEditMode / UnregisterEditMode to add/remove the mover.
+-- getPosition / setPosition read+write the SAME db.Position table (no drift).
+---------------------------------------------------------------------------------
+
+function DM:RegWithEditMode()
+    if not KE.EditMode then return end
+    if self.db and self.db.Locked then return end
+    if self.editModeRegistered then return end
+    self:EnsureDock()
+    KE.EditMode:RegisterElement({
+        key = "DamageMeter",
+        displayName = "Damage Meter",
+        frame = self.dock,
+        getPosition = function()
+            return self.db and self.db.Position
+        end,
+        setPosition = function(pos)
+            if not self.db then return end
+            self.db.Position = pos
+            KE:ApplyFramePosition(self.dock, self.db.Position, self.db)
+            self:RefreshDock()
+        end,
+        guiPath = "DamageMeter",
+    })
+    self.editModeRegistered = true
+end
+
+function DM:UnregisterEditMode()
+    if KE.EditMode and KE.EditMode.UnregisterElement then
+        KE.EditMode:UnregisterElement("DamageMeter")
+    end
+    self.editModeRegistered = false
+end
+
+-- GUI Lock toggle entry point: register or unregister the dock mover and refresh
+-- any live overlay so the change is visible immediately in /kes edit.
+function DM:ApplyLockState()
+    if self.db and self.db.Locked then
+        self:UnregisterEditMode()
+    else
+        self:RegWithEditMode()
+    end
+    if KE.EditMode and KE.EditMode.isActive and KE.EditMode.RefreshOverlays then
+        KE.EditMode:RefreshOverlays()
+    end
+end
+
+---------------------------------------------------------------------------------
+-- Preview Manager hooks
+--
+-- The dock is a persistent always-on frame (the shared backdrop shows whenever a
+-- window is placed), so ShowPreview just guarantees a fresh layout + paint while
+-- the GUI is open, and HidePreview is a no-op (it must NOT hide the user's real
+-- dock). ShowPreview/HidePreview are idempotent per the PreviewManager cache.
+---------------------------------------------------------------------------------
+
+function DM:ShowPreview()
+    if not self.enabled then return end
+    self._hidden = false
+    self:EnsureDock()
+    self:RefreshDock()
+    if self.Tick then self:Tick() end
+end
+
+function DM:HidePreview()
+    -- No-op: the dock is persistent. Nothing to tear down.
+end
+
+---------------------------------------------------------------------------------
+-- Slash command: /kedm
+--
+-- Registered via AceConsole (the module mixes in AceConsole-3.0), so no SLASH_*
+-- global is declared. Subcommands: toggle (show/hide dock), reset (clear all
+-- combat sessions). Bare /kedm toggles the dock.
+---------------------------------------------------------------------------------
+
+function DM:ToggleDock()
+    self._hidden = not self._hidden
+    self:RefreshDock()
+end
+
+function DM:HandleSlash(input)
+    local arg = (input or ""):match("^%s*(%S*)"):lower()
+    if arg == "reset" then
+        if C_DamageMeter and C_DamageMeter.ResetAllCombatSessions then
+            pcall(C_DamageMeter.ResetAllCombatSessions)
+        end
+        if self.Tick then self:Tick() end
+        KE:Print("Damage Meter: sessions reset.")
+    else
+        -- "" or "toggle" (or anything else) -> toggle dock visibility.
+        self:ToggleDock()
+    end
+end
+
+---------------------------------------------------------------------------------
 -- Lifecycle
 ---------------------------------------------------------------------------------
 
 function DM:OnInitialize()
     self:UpdateDB()
     self:SetEnabledState(false)
+    -- AceConsole (mixed in at NewModule) — available in OnInitialize, runs once.
+    self:RegisterChatCommand("kedm", "HandleSlash")
 end
 
 function DM:OnEnable()
@@ -102,6 +232,11 @@ function DM:OnEnable()
     self:EnsureDock()
     self:CreateAllWindows()
 
+    -- Suppress Blizzard's built-in meter when configured, and register the dock
+    -- with EditMode (unless Locked). Both are idempotent / guarded.
+    self:ApplyReplaceBlizzard()
+    self:RegWithEditMode()
+
     if DEBUG_DM then
         KE:Print("[DM] OnEnable: module active")
     end
@@ -114,6 +249,10 @@ function DM:OnDisable()
     self:StopTicker()
     self._sessionPending = false
     self._inEncounter = false
+
+    -- Hand the meter back to Blizzard and drop the EditMode mover.
+    self:RestoreBlizzardMeter()
+    self:UnregisterEditMode()
 
     if self.dock then
         self.dock:Hide()
