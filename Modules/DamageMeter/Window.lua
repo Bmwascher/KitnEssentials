@@ -99,7 +99,10 @@ local function MakeBar(parent, db)
     row.icon:SetAllPoints(row.iconFrame)
     KE:ApplyIconZoom(row.icon)
     KE:AddIconBorders(row.iconFrame)
-    row.icon:Hide()
+    -- Hide the whole icon FRAME (not just the texture) so the 1px borders don't
+    -- linger as a black box in the top-left when ShowIcon is off. The icon texture
+    -- stays shown within the frame; the render layer toggles the frame's visibility.
+    row.iconFrame:Hide()
 
     -- Text overlays sit above the icon/borders (icon borders are OVERLAY
     -- sublevel 7; FontStrings on the fill render on top by frame order).
@@ -440,13 +443,28 @@ function DM:RenderBar(W, bar, i, src, maxAmount) -- luacheck: ignore 212/W
             row.icon:SetTexture(src.specIconID)
             KE:ApplyIconZoom(row.icon)
         end
-        if not bar._iconShown then
+        if bar._iconShown ~= true then
             bar._iconShown = true
-            row.icon:Show()
+            row.iconFrame:Show()
         end
     elseif bar._iconShown ~= false then
         bar._iconShown = false
-        row.icon:Hide()
+        row.iconFrame:Hide()
+    end
+
+    -- Name's LEFT anchor depends on icon visibility, cached in bar._nameIconAnchored
+    -- so a stable ShowIcon does NO per-tick re-anchor: after the icon frame when
+    -- shown, at the fill's left edge when hidden (so disabling the icon doesn't
+    -- leave a blank icon-width column on the left of every name).
+    if bar._nameIconAnchored ~= showIcon then
+        bar._nameIconAnchored = showIcon
+        row.name:ClearAllPoints()
+        if showIcon then
+            row.name:SetPoint("LEFT", row.iconFrame, "RIGHT", 3, 0)
+        else
+            row.name:SetPoint("LEFT", row.fill, "LEFT", 3, 0)
+        end
+        row.name:SetPoint("RIGHT", row.value, "LEFT", -3, 0)
     end
 
     -- Name (secret-aware). In combat src.name may be secret: SetText accepts it,

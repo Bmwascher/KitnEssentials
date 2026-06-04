@@ -187,7 +187,7 @@ function DM:StartTicker()
     end)
 
     if DEBUG_DM then
-        KE:Print("[DM] StartTicker: rate", rate)
+        KE:Print("[DM] StartTicker: rate " .. tostring(rate))
     end
 end
 
@@ -368,34 +368,34 @@ function DM:GetSession(sessionType, dmType, sessionID)
         if not C_DamageMeter.GetCombatSessionFromID then return nil end
         local ok, session = pcall(C_DamageMeter.GetCombatSessionFromID, sessionID, dmType)
         if ok then return session end
-        if DEBUG_DM then KE:Print("[DM] GetSession FromID failed:", session) end
+        if DEBUG_DM then KE:Print("[DM] GetSession FromID failed: " .. tostring(session)) end
         return nil
     end
 
     if not C_DamageMeter.GetCombatSessionFromType then return nil end
     local ok, session = pcall(C_DamageMeter.GetCombatSessionFromType, sessionType, dmType)
     if ok then return session end
-    if DEBUG_DM then KE:Print("[DM] GetSession FromType failed:", session) end
+    if DEBUG_DM then KE:Print("[DM] GetSession FromType failed: " .. tostring(session)) end
     return nil
 end
 
 -- Returns the per-source detail table for a single combat source (keyed by
 -- sourceGUID), or nil on failure. Mirrors GetSession's FromID/FromType branch.
-function DM:GetSource(sessionType, dmType, sourceGUID, sessionID)
+function DM:GetSource(sessionType, dmType, sourceGUID, sourceCreatureID, sessionID)
     if not C_DamageMeter then return nil end
 
     if sessionID ~= nil then
         if not C_DamageMeter.GetCombatSessionSourceFromID then return nil end
-        local ok, source = pcall(C_DamageMeter.GetCombatSessionSourceFromID, sessionID, dmType, sourceGUID)
+        local ok, source = pcall(C_DamageMeter.GetCombatSessionSourceFromID, sessionID, dmType, sourceGUID, sourceCreatureID)
         if ok then return source end
-        if DEBUG_DM then KE:Print("[DM] GetSource FromID failed:", source) end
+        if DEBUG_DM then KE:Print("[DM] GetSource FromID failed: " .. tostring(source)) end
         return nil
     end
 
     if not C_DamageMeter.GetCombatSessionSourceFromType then return nil end
-    local ok, source = pcall(C_DamageMeter.GetCombatSessionSourceFromType, sessionType, dmType, sourceGUID)
+    local ok, source = pcall(C_DamageMeter.GetCombatSessionSourceFromType, sessionType, dmType, sourceGUID, sourceCreatureID)
     if ok then return source end
-    if DEBUG_DM then KE:Print("[DM] GetSource FromType failed:", source) end
+    if DEBUG_DM then KE:Print("[DM] GetSource FromType failed: " .. tostring(source)) end
     return nil
 end
 
