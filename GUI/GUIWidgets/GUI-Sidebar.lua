@@ -16,6 +16,7 @@ local CreateColor = CreateColor
 local wipe = wipe
 local C_Timer = C_Timer
 local table_insert = table.insert
+local strtrim = strtrim
 
 ---------------------------------------------------------------------------------
 -- Constants
@@ -478,7 +479,7 @@ function GUIFrame:CreateSidebar(parent)
     -- Real-time filtering
     searchEditBox:SetScript("OnTextChanged", function(self, userInput)
         UpdateSearchVisuals()
-        GUIFrame.searchFilter = self:GetText():lower()
+        GUIFrame.searchFilter = strtrim(self:GetText()):lower()
         GUIFrame:RefreshSidebar()
     end)
 
