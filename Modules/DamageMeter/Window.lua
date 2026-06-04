@@ -37,8 +37,13 @@ local RANK_STRINGS = {}
 for i = 1, BAR_POOL_SIZE do
     RANK_STRINGS[i] = i .. "."
 end
-DM._RANK_STRINGS = RANK_STRINGS
-DM._BAR_POOL_SIZE = BAR_POOL_SIZE
+
+-- Cross-file constants for the render chunk. Non-underscore names because
+-- they are intentional public API on DM (underscore-prefix fields are private
+-- by KE convention); the render layer reads these to clamp VisibleBars and
+-- label ranks without rebuilding the strings per tick.
+DM.RANK_STRINGS = RANK_STRINGS
+DM.BAR_POOL_SIZE = BAR_POOL_SIZE
 
 ---------------------------------------------------------------------------------
 -- Bar row factory
@@ -68,17 +73,21 @@ local function MakeBar(parent)
 
     -- StatusBar fill covers the whole row; native widget interpolation drives
     -- the value in combat (SetValue accepts secret values; we never do Lua
-    -- arithmetic on them).
+    -- arithmetic on them). Set the KE bar texture here so the fill is visible on
+    -- first show; the render layer re-applies it when StatusBarTexture changes.
     row.fill = CreateFrame("StatusBar", nil, row)
     row.fill:SetAllPoints(row)
     row.fill:SetMinMaxValues(0, 1)
     row.fill:SetValue(0)
+    row.fill:SetStatusBarTexture(KE:GetStatusbarPath(db and db.StatusBarTexture or "KitnUI"))
 
     -- Icon: square frame anchored left, holding the class/spec texture. The
     -- frame (not the texture) carries the pixel borders, per the KE icon
-    -- standard (matches HealerMana / MaintenanceTracker).
-    row.iconFrame = CreateFrame("Frame", nil, row.fill)
-    row.iconFrame:SetPoint("LEFT", row.fill, "LEFT", 0, 0)
+    -- standard (matches HealerMana / MaintenanceTracker). Parented to the row
+    -- (not the fill) so it tracks the row's frame level, matching the reference
+    -- and other KE bar modules.
+    row.iconFrame = CreateFrame("Frame", nil, row)
+    row.iconFrame:SetPoint("LEFT", row, "LEFT", 0, 0)
     row.icon = row.iconFrame:CreateTexture(nil, "OVERLAY")
     row.icon:SetAllPoints(row.iconFrame)
     KE:ApplyIconZoom(row.icon)
@@ -161,6 +170,13 @@ function DM:CreateWindow(winIdx)
     -- Scroll viewport + content child. The content child holds the bar rows;
     -- the render layer scrolls the viewport for virtualization. Sized to 1,1
     -- here (the render/layout pass and OnSizeChanged drive real dimensions).
+    --
+    -- The body anchors to the header's BOTTOMLEFT with a -4 X offset to cancel
+    -- the header's +4 left padding (the header is inset 4px from the frame's
+    -- TOPLEFT above), so the scroll viewport's left edge lines up with the
+    -- frame's left edge. The header's height is font-driven and zero until the
+    -- render layer calls SetText, so the body's TOPLEFT briefly collapses at
+    -- construction time; the layout pass resolves it once the title is set.
     W.body = CreateFrame("ScrollFrame", nil, W.frame)
     W.body:SetPoint("TOPLEFT", W.header, "BOTTOMLEFT", -4, -2)
     W.body:SetPoint("BOTTOMRIGHT", W.frame, "BOTTOMRIGHT", 0, 0)
@@ -169,26 +185,31 @@ function DM:CreateWindow(winIdx)
     W.content:SetSize(1, 1)
     W.body:SetScrollChild(W.content)
     W.body:SetScript("OnSizeChanged", function(_, width)
-        W.content:SetWidth(width)
+        -- Guard against a zero/nil width during initial layout (before the
+        -- window is given a real size). SetWidth(0) would collapse the content
+        -- child and pull every TOPRIGHT row anchor to the left edge.
+        if width and width > 0 then
+            W.content:SetWidth(width)
+        end
     end)
 
-    -- Create-once bar pool. The factory closes over W.content so every kit is
-    -- parented to this window's content child; Acquire reparents back to it.
-    W.pool = KE.FramePool:New(function() return MakeBar(W.content) end)
-
     -- Pixel-snapped row geometry so bars sit on the physical pixel grid.
-    -- stride is the per-row advance (height + spacing); snapping all three
-    -- keeps cumulative offsets aligned rather than drifting by sub-pixels.
+    -- stride is the per-row advance (height + spacing). snapHeight and
+    -- snapSpacing are already on the grid, so their sum is too -- adding them
+    -- avoids re-snapping (KE:PixelSnap(barHeight + barSpacing) could round to a
+    -- different grid value and drift yOff by a pixel after row 1).
     local barHeight = (self.db and self.db.BarHeight) or 16
     local barSpacing = (self.db and self.db.BarSpacing) or 0
     local snapHeight = KE:PixelSnap(barHeight)
     local snapSpacing = KE:PixelSnap(barSpacing)
-    local snapStride = KE:PixelSnap(barHeight + barSpacing)
+    local snapStride = snapHeight + snapSpacing
 
-    -- Pre-acquire the full pool once and lay rows out top-to-bottom. Each row
-    -- starts hidden; the render layer shows up to VisibleBars of them.
+    -- Create-once bar rows. KE.FramePool is a render-time pool (ReleaseAll +
+    -- Acquire each tick); these rows are permanent and owned by the window, so
+    -- a plain build-once loop is used instead. The render layer indexes W.bars
+    -- directly and toggles row visibility -- there is no pool to ReleaseAll.
     for i = 1, BAR_POOL_SIZE do
-        local bar = W.pool:Acquire(W.content)
+        local bar = MakeBar(W.content)
         local row = bar.row
 
         row:SetHeight(snapHeight)
