@@ -136,7 +136,8 @@ local function MakeBar(parent, db)
     --   _cachedIconClass  -- class driving the spec-icon SetTexture (NEVER secret)
     --   _cachedName       -- last plain (non-secret) name string set; nil while secret
     --   _cachedVal        -- last plain (non-secret) value string set; nil while secret
-    --   _cachedSlot       -- last rank slot index whose "N." label was set
+    --   _cachedSlot       -- last displayed rank whose "N." label was set (may be
+    --                        a pinned player's real rank, not the pool slot index)
     --   _iconShown        -- cached icon visibility (starts false: icon is hidden
     --                        below) so a stable ShowIcon does no per-tick Show/Hide
     bar._cachedColorClass = nil
@@ -462,6 +463,30 @@ function DM:RenderWindow(W)
     -- secret), so math.min on it is safe.
     local count = math_min(#sources, (self.db and self.db.VisibleBars) or 10, self.BAR_POOL_SIZE)
 
+    -- Always-show-self: when enabled and the player is NOT within the visible top
+    -- `count`, pin the player's source into the last visible slot. isLocalPlayer
+    -- is NeverSecret; a source's index in the pre-sorted combatSources IS its rank
+    -- (a plain integer). No arithmetic/compare on any secret amount anywhere — the
+    -- only reads are isLocalPlayer (boolean, NeverSecret) and the loop index.
+    local pinSource, pinRank
+    if self.db and self.db.AlwaysShowSelf and count >= 1 then
+        local inVisible = false
+        for i = 1, count do
+            local s = sources[i]
+            if s and s.isLocalPlayer then inVisible = true; break end
+        end
+        if not inVisible then
+            for i = count + 1, #sources do
+                local s = sources[i]
+                if s and s.isLocalPlayer then
+                    pinSource = s
+                    pinRank = i
+                    break
+                end
+            end
+        end
+    end
+
     -- Visible scroll range (mirrors EllesmereUI ~2767-2770). stride is the
     -- snapped per-row advance computed in CreateWindow. Scrolling isn't wired in
     -- Phase 1, so scrollOff is normally 0 and this resolves to 1..count, but the
@@ -489,7 +514,14 @@ function DM:RenderWindow(W)
         local row = bar.row
         if i <= count then
             if i >= visFirst and i <= visLast then
-                self:RenderBar(W, bar, i, sources[i], maxAmount)
+                -- The last visible slot shows the pinned player (with the player's
+                -- real rank R) when AlwaysShowSelf pinned one; otherwise the slot's
+                -- own source. RenderBar's `i` arg is the displayed rank.
+                local src, rank = sources[i], i
+                if pinSource and i == count then
+                    src, rank = pinSource, pinRank
+                end
+                self:RenderBar(W, bar, rank, src, maxAmount)
             end
             -- Show only if not already shown (mirrors EllesmereUI ~2776); skips
             -- the redundant widget call on rows that are already visible.
@@ -630,12 +662,15 @@ function DM:RenderBar(W, bar, i, src, maxAmount) -- luacheck: ignore 212/W
         row.value:SetText(v)
     end
 
-    -- Rank: "N." label, dirty-cached on the slot (the loop index, which equals
-    -- the API rank). Visibility tracks ShowRank every tick.
+    -- Rank: "N." label, dirty-cached on the displayed rank (i, passed from the
+    -- render loop). Visibility tracks ShowRank every tick.
     if db.ShowRank then
         if bar._cachedSlot ~= i then
             bar._cachedSlot = i
-            row.rank:SetText(self.RANK_STRINGS[i])
+            -- i is the displayed rank (a plain integer — never secret). A pinned
+            -- player can rank beyond the 40-entry RANK_STRINGS cache, so fall back
+            -- to building the label; tostring on a plain int is taint-safe.
+            row.rank:SetText(self.RANK_STRINGS[i] or (i .. "."))
         end
         row.rank:Show()
     else
