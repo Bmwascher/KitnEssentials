@@ -520,25 +520,41 @@ function RN:HasLustDebuff()
     return false
 end
 
---- BLT-pattern edge-triggered aura handler. Acts only on freshly-added auras,
---- not refreshes or removals. The shouldSubscribe gate already confirmed
---- we're in a raid instance.
+--- BLT-pattern edge-triggered aura handler. Fires on a freshly-added sated
+--- debuff, and clears on removal (a sated debuff falling off means the alert's
+--- reason to exist is gone). The shouldSubscribe gate already confirmed we're
+--- in a raid instance.
 function RN:_OnResetBossAura(_, unit, updateInfo)
     if unit ~= "player" then return end
-    if not updateInfo or not updateInfo.addedAuras then return end
+    if not updateInfo then return end
     if self.isPreview then return end
-    for _, info in pairs(updateInfo.addedAuras) do
-        if info and info.auraInstanceID then
-            local data = C_UnitAuras.GetAuraDataByAuraInstanceID("player", info.auraInstanceID)
-            if data and data.spellId and not issecretvalue(data.spellId) then
-                for _, sated in ipairs(SATED_DEBUFFS) do
-                    if data.spellId == sated then
-                        self:_FireResetBoss()
-                        return
+
+    if updateInfo.addedAuras then
+        for _, info in pairs(updateInfo.addedAuras) do
+            if info and info.auraInstanceID then
+                local data = C_UnitAuras.GetAuraDataByAuraInstanceID("player", info.auraInstanceID)
+                if data and data.spellId and not issecretvalue(data.spellId) then
+                    for _, sated in ipairs(SATED_DEBUFFS) do
+                        if data.spellId == sated then
+                            self:_FireResetBoss()
+                            return
+                        end
                     end
                 end
             end
         end
+    end
+
+    -- A sated/exhaustion debuff falling off (e.g. the boss reset that clears
+    -- Bloodlust fatigue between pulls) should hide "RESET BOSS" immediately
+    -- instead of leaving it up for the rest of the 40s auto-hide window.
+    -- Removals arrive as removedAuraInstanceIDs with no spellId to match, so
+    -- re-poll the live debuff state and clear if none remain. The resetBossGen
+    -- bump cancels the pending auto-hide timer from _FireResetBoss.
+    if (updateInfo.removedAuraInstanceIDs or updateInfo.isFullUpdate)
+        and self.activeAlerts.ResetBoss and not self:HasLustDebuff() then
+        self.resetBossGen = self.resetBossGen + 1
+        self:HideAlert("ResetBoss")
     end
 end
 
