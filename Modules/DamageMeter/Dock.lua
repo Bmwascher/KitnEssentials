@@ -865,3 +865,175 @@ function DM:MaybeSeedDockTest()
         db._dockTestSeeded = nil
     end
 end
+
+---------------------------------------------------------------------------------
+-- Structural editing (GUI-driven)
+--
+-- The dock STRUCTURE is db.Dock.Columns (a flat list of columns, each holding a
+-- Windows index array + WidthRatio + RowRatios). These helpers are the only
+-- writers the GUI uses to add/remove windows and switch the arrangement; each
+-- finishes with RefreshDock (debounced LayoutDock + UpdateBackdrop). Split ratios
+-- are owned by the in-world drag splitters, never here.
+---------------------------------------------------------------------------------
+
+-- Derives the arrangement mode from the column structure (NOT stored):
+--   one window per column          -> "Horizontal"
+--   all windows in a single column  -> "Vertical"
+--   anything else                   -> "Custom"
+function DM:GetArrangement()
+    local cols = self.db and self.db.Dock and self.db.Dock.Columns
+    if not cols or #cols == 0 then return "Custom" end
+    local nCols = #cols
+    local total, multi = 0, false
+    for c = 1, nCols do
+        local w = cols[c] and cols[c].Windows
+        local n = (w and #w) or 0
+        total = total + n
+        if n > 1 then multi = true end
+    end
+    if nCols == total and not multi then return "Horizontal" end
+    if nCols == 1 then return "Vertical" end
+    return "Custom"
+end
+
+-- Rewrites db.Dock.Columns for the "Horizontal" or "Vertical" mode, preserving the
+-- current set of window indices (stable dock order). "Custom" is a no-op (column
+-- membership is edited by SetWindowColumn). Equal ratios are seeded; the splitters
+-- adjust from there.
+function DM:SetArrangement(mode)
+    local db = self.db
+    if not db then return end
+    db.Dock = db.Dock or {}
+
+    self._arrScratch = self._arrScratch or {}
+    local found = self:DockWindowIndices(self._arrScratch)
+    local list = {}
+    for i = 1, #found do list[i] = found[i] end
+    if #list == 0 then list = { 1 } end
+
+    if mode == "Horizontal" then
+        local cols = {}
+        for i = 1, #list do
+            cols[i] = { WidthRatio = 1, Windows = { list[i] }, RowRatios = { 1 } }
+        end
+        db.Dock.Columns = cols
+    elseif mode == "Vertical" then
+        local wins, ratios = {}, {}
+        for i = 1, #list do
+            wins[i] = list[i]
+            ratios[i] = 1
+        end
+        db.Dock.Columns = { { WidthRatio = 1, Windows = wins, RowRatios = ratios } }
+    end
+    -- "Custom": leave the structure as-is.
+
+    self:RefreshDock()
+end
+
+-- Adds a new window: claims the lowest free index 1..MaxWindows, seeds a Default
+-- context, appends it as a new column, builds the runtime frame, and refreshes.
+-- No-op at the MaxWindows cap.
+function DM:AddWindow()
+    local db = self.db
+    if not db then return end
+    db.Windows = db.Windows or {}
+
+    local maxWin = db.MaxWindows or 5
+    local newIdx
+    for i = 1, maxWin do
+        if not db.Windows[i] then newIdx = i; break end
+    end
+    if not newIdx then return end
+
+    db.Windows[newIdx] = {
+        Contexts = {
+            Default = {
+                Enabled = true,
+                MeterType = Enum.DamageMeterType.DamageDone,
+                SessionType = Enum.DamageMeterSessionType.Current,
+            },
+        },
+    }
+
+    db.Dock = db.Dock or {}
+    db.Dock.Columns = db.Dock.Columns or {}
+    db.Dock.Columns[#db.Dock.Columns + 1] =
+        { WidthRatio = 1, Windows = { newIdx }, RowRatios = { 1 } }
+
+    if self.CreateWindow then self:CreateWindow(newIdx) end
+    self:RefreshDock()
+end
+
+-- Removes the given window index from the structure and config. Refuses to remove
+-- the last remaining referenced window (a meter with zero windows has nothing to
+-- show). The runtime frame is left built but unreferenced; LayoutDock hides it, so
+-- re-adding the index later reuses the frame (no leak).
+function DM:RemoveWindow(idx)
+    local db = self.db
+    if not db or not db.Dock or not db.Dock.Columns then return end
+
+    self._arrScratch = self._arrScratch or {}
+    if #self:DockWindowIndices(self._arrScratch) <= 1 then return end
+
+    local cols = db.Dock.Columns
+    for c = #cols, 1, -1 do
+        local col = cols[c]
+        local wins = col and col.Windows
+        if wins then
+            for r = #wins, 1, -1 do
+                if wins[r] == idx then
+                    table.remove(wins, r)
+                    if col.RowRatios then table.remove(col.RowRatios, r) end
+                end
+            end
+            if #wins == 0 then table.remove(cols, c) end
+        end
+    end
+
+    if db.Windows then db.Windows[idx] = nil end
+    self:RefreshDock()
+end
+
+-- Moves a window index into the target column (1-based). Used by the Custom-mode
+-- column pickers. Removes the index from its current column (dropping the column
+-- if it empties) and appends it to the target; clamps target to the column count.
+function DM:SetWindowColumn(idx, targetCol)
+    local db = self.db
+    if not db or not db.Dock or not db.Dock.Columns then return end
+    local cols = db.Dock.Columns
+
+    -- Remove from current column(s).
+    for c = #cols, 1, -1 do
+        local col = cols[c]
+        local wins = col and col.Windows
+        if wins then
+            for r = #wins, 1, -1 do
+                if wins[r] == idx then
+                    table.remove(wins, r)
+                    if col.RowRatios then table.remove(col.RowRatios, r) end
+                end
+            end
+        end
+    end
+
+    -- Drop any column that emptied out from the removal above. This must happen
+    -- BEFORE clamping so targetCol is clamped against the post-drop column count;
+    -- otherwise a dropped lower-index column would shift the insert to targetCol-N.
+    for c = #cols, 1, -1 do
+        if cols[c] and cols[c].Windows and #cols[c].Windows == 0 then
+            table.remove(cols, c)
+        end
+    end
+
+    -- Clamp target (against the post-drop count) and ensure it exists.
+    if targetCol < 1 then targetCol = 1 end
+    if targetCol > #cols + 1 then targetCol = #cols + 1 end
+    cols[targetCol] = cols[targetCol] or { WidthRatio = 1, Windows = {}, RowRatios = {} }
+    local tcol = cols[targetCol]
+    tcol.Windows = tcol.Windows or {}
+    tcol.RowRatios = tcol.RowRatios or {}
+    tcol.Windows[#tcol.Windows + 1] = idx
+    tcol.RowRatios[#tcol.RowRatios + 1] = 1
+
+    self:RefreshDock()
+end
