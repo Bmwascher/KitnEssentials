@@ -170,8 +170,17 @@ end
 function DM:CreateWindow(winIdx)
     local W = { idx = winIdx, bars = {} }
 
+    -- Parent every window to the shared dock (Phase 2). EnsureDock is idempotent
+    -- and creates the dock on first call; resolved at runtime since Dock.lua
+    -- loads after Window.lua. Fall back to UIParent only if the dock helper is
+    -- somehow unavailable (defensive; should never happen at enable time).
+    local parent = UIParent
+    if self.EnsureDock then
+        parent = self:EnsureDock() or UIParent
+    end
+
     -- Root window frame.
-    W.frame = CreateFrame("Frame", "KE_DamageMeter_Window" .. winIdx, UIParent)
+    W.frame = CreateFrame("Frame", "KE_DamageMeter_Window" .. winIdx, parent)
     if self.db and self.db.Strata then
         W.frame:SetFrameStrata(self.db.Strata)
     end
@@ -217,7 +226,11 @@ function DM:CreateWindow(winIdx)
     -- avoids re-snapping (KE:PixelSnap(barHeight + barSpacing) could round to a
     -- different grid value and drift yOff by a pixel after row 1).
     local barHeight = (self.db and self.db.BarHeight) or 16
-    local barSpacing = (self.db and self.db.BarSpacing) or 0
+    -- 2 matches the Defaults.lua DB default and Dock.lua's stride math (`or 2`).
+    -- A 0 fallback here would make the bars build with no inter-row gap while
+    -- LayoutDock computed a 2px gap, drifting the physical row stride out of sync
+    -- with the virtualization math by 2px per row.
+    local barSpacing = (self.db and self.db.BarSpacing) or 2
     local snapHeight = KE:PixelSnap(barHeight)
     local snapSpacing = KE:PixelSnap(barSpacing)
     local snapStride = snapHeight + snapSpacing
@@ -259,8 +272,10 @@ function DM:CreateWindow(winIdx)
     W._snapSpacing = snapSpacing
     W._snapStride = snapStride
 
-    -- Size the frame and viewport NOW. CreateFrame defaults to 0x0; without this
-    -- the body (anchored to the frame) collapses and every bar renders ~1px wide.
+    -- Establish the window's internal vertical layout (header band, body anchor,
+    -- content height) NOW. The dock owns the FRAME size + content WIDTH and assigns
+    -- them in DM:LayoutDock (called by CreateAllWindows after every window is
+    -- built), so the frame is briefly 0-wide here until that structural pass runs.
     self:LayoutWindow(W)
 
     self.windows_rt = self.windows_rt or {}
@@ -272,20 +287,19 @@ end
 ---------------------------------------------------------------------------------
 -- Window layout
 --
--- Sizes the window frame, scroll viewport, and content child from the live
--- appearance DB. A CreateFrame frame has no intrinsic size (0x0), so without
--- this pass the body -- whose BOTTOMRIGHT is anchored to the frame -- collapses
--- to ~0 width and every bar (anchored to the content child) renders ~1px wide
--- and invisible. The layout is deterministic: a fixed header band sits at the
--- top, VisibleBars rows fill the body below it, and width is the configured
--- meter width. Idempotent + dirty-gated, so RenderWindow can call it every tick
--- to absorb future GUI changes (width / bar count / font size) at near-zero
--- steady-state cost. Phase 2's dock + shared-backdrop pass will drive width and
--- height from the column ratios instead; this is the standalone Phase 1 sizing.
+-- Phase 2: the dock owns the window FRAME size and the content WIDTH (driven by
+-- the column geometry in DM:LayoutDock). This pass owns only the window's
+-- INTERNAL vertical layout: the fixed header band at the top, the body anchored
+-- immediately below it, and the content child's HEIGHT (VisibleBars rows). The
+-- body's BOTTOMRIGHT is anchored to the frame, so it always fills whatever frame
+-- size the dock assigns -- LayoutWindow never needs the width. Idempotent +
+-- dirty-gated, so RenderWindow can call it every tick to absorb GUI changes
+-- (bar count / font size) at near-zero steady-state cost. The body's
+-- OnSizeChanged handler remains the safety net that re-syncs content width when
+-- the dock resizes the frame.
 ---------------------------------------------------------------------------------
 function DM:LayoutWindow(W)
     local db = self.db
-    local width = (db and db.Width) or 240
     local fontSize = (db and db.FontSize) or 12
 
     -- Fixed header band (font-size driven, snapped). The header FontString is
@@ -298,7 +312,6 @@ function DM:LayoutWindow(W)
     local stride = W._snapStride or 1
     if stride <= 0 then stride = 1 end
     local barsH = visible * stride
-    local height = headerH + barsH
 
     -- Re-anchor the body only when the header band changes (first call always
     -- runs; SetPoint is idempotent so re-running is harmless either way).
@@ -309,14 +322,12 @@ function DM:LayoutWindow(W)
         W.body:SetPoint("BOTTOMRIGHT", W.frame, "BOTTOMRIGHT", 0, 0)
     end
 
-    -- Resize only on actual change so the steady state does no per-tick SetSize.
-    -- content width is also maintained by the body's OnSizeChanged handler; set
-    -- it here too so the first paint (before any size change fires) is correct.
-    if W._layoutW ~= width or W._layoutH ~= height then
-        W._layoutW = width
-        W._layoutH = height
-        W.frame:SetSize(width, height)
-        W.content:SetSize(width, barsH)
+    -- Content HEIGHT only (the dock owns the width; the body's OnSizeChanged
+    -- handler keeps the width synced). Set on actual change so the steady state
+    -- does no per-tick SetHeight.
+    if W._contentH ~= barsH then
+        W._contentH = barsH
+        W.content:SetHeight(barsH)
     end
 end
 

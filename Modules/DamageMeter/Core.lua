@@ -70,10 +70,17 @@ function DM:OnEnable()
     self:RegisterEvent("DAMAGE_METER_COMBAT_SESSION_UPDATED", "OnSessionUpdated")
     self:RegisterEvent("DAMAGE_METER_RESET", "OnMeterReset")
 
+    -- Test-scaffold seed / self-heal (Dock.lua). When DEBUG_DOCK_TEST is true this
+    -- seeds the demo 3-window/2-column dock; when false-but-previously-seeded it
+    -- restores the single-window default and clears the marker. Runs BEFORE the
+    -- window seed below so the seed sees the restored Dock.Columns. The
+    -- non-underscore method is resolved at runtime (Dock.lua loads after Core.lua).
+    if self.MaybeSeedDockTest then self:MaybeSeedDockTest() end
+
     -- Seed window 1 with a Default context if the user has never configured one.
-    -- Phase 1 is single-window only (multi-window/dock is a later phase), so just
-    -- the [1] slot is ensured here. Stored under Contexts.Default; the live
-    -- content context resolves to this when no per-context override exists.
+    -- The dock references its window set from db.Dock.Columns; window 1 is the
+    -- single-window default's only referenced index. Stored under Contexts.Default;
+    -- the live content context resolves to this when no per-context override exists.
     self.db.Windows = self.db.Windows or {}
     if not self.db.Windows[1] then
         self.db.Windows[1] = {
@@ -87,18 +94,13 @@ function DM:OnEnable()
         }
     end
 
-    -- Build window 1's frame tree once (CreateWindow is idempotent-friendly: it
-    -- overwrites windows_rt[1], but on enable the tree won't exist yet). Position
-    -- it via the shared helper so the pixel-perfect snap runs.
-    local W = self.windows_rt and self.windows_rt[1]
-    if not W then
-        W = self:CreateWindow(1)
-    end
-    KE:ApplyFramePosition(W.frame, self.db.Position, self.db)
-
-    -- Paint once immediately so the window reflects the current (out-of-combat)
-    -- session on enable, then rely on the combat-gated ticker for live updates.
-    self:Tick()
+    -- Build the shared dock + every referenced window. EnsureDock creates the
+    -- backdrop frame and positions it (ApplyFramePosition is now the dock's job,
+    -- not a per-window call); CreateAllWindows spreads window creation one-per-
+    -- frame (login hitch avoidance) and finishes with LayoutDock -> UpdateBackdrop
+    -- -> Tick, so no explicit paint is needed here.
+    self:EnsureDock()
+    self:CreateAllWindows()
 
     if DEBUG_DM then
         KE:Print("[DM] OnEnable: module active")
@@ -555,28 +557,40 @@ function DM:CachedSession(sessionType, dmType, sessionID)
     return session
 end
 
--- Returns the array of currently-enabled runtime windows. Phase 1: only window 1,
--- and only when its resolved context config is enabled. Builds window 1's frame
--- tree on demand if it doesn't exist yet (e.g. Tick reached before OnEnable's
--- explicit create, or after a future DB-driven rebuild). Multi-window/dock is a
--- later phase; this returns at most one window.
+-- Returns the array of currently-enabled runtime windows, in the dock's stable
+-- column-then-row order (so Tick paints deterministically). A window is included
+-- when it is referenced by the dock AND its resolved context config is Enabled.
+-- Any referenced window whose frame tree doesn't exist yet is built on demand
+-- (e.g. Tick reached before CreateAllWindows finishes, or after a structural
+-- rebuild). Reuses the pre-allocated self._visibleWindows scratch table
+-- (wipe + refill) so no per-tick garbage is produced.
 function DM:VisibleWindows()
     self._visibleWindows = self._visibleWindows or {}
     local out = self._visibleWindows
     for i = #out, 1, -1 do out[i] = nil end
 
-    local cfg = self:ResolveWindowConfig(1)
-    if not cfg or not cfg.Enabled then
-        return out
-    end
+    -- Referenced window indices in stable dock order. DockWindowIndices reuses
+    -- its own scratch table (self._dockVisibleList), so this allocates nothing.
+    self._dockVisibleList = self._dockVisibleList or {}
+    local indices = self:DockWindowIndices(self._dockVisibleList)
+
+    -- Active context resolved once for the whole tick; passed to each window's
+    -- ResolveWindowConfig to avoid recomputing it N times.
+    local context = self:GetActiveContext()
 
     self.windows_rt = self.windows_rt or {}
-    local W = self.windows_rt[1]
-    if not W then
-        W = self:CreateWindow(1)
+    for n = 1, #indices do
+        local idx = indices[n]
+        local cfg = self:ResolveWindowConfig(idx, context)
+        if cfg and cfg.Enabled then
+            local W = self.windows_rt[idx]
+            if not W then
+                W = self:CreateWindow(idx)
+            end
+            out[#out + 1] = W
+        end
     end
 
-    out[#out + 1] = W
     return out
 end
 
@@ -589,25 +603,29 @@ function DM:Tick()
     self._sessionCache = self._sessionCache or {}
     wipe(self._sessionCache)
 
-    -- Pre-allocated, wiped per Tick (matches _sessionCache / _visibleWindows):
-    -- in the common Phase 1 case (one window, always within budget) this table
-    -- is never populated, so reusing it allocates zero garbage on the hot path.
-    self._deferred = self._deferred or {}
-    local deferred = self._deferred
-    wipe(deferred)
-
     local frameStart = debugprofilestop()
     local budget = (self.db and self.db.UIBudgetMs) or 1.2
 
+    -- The deferred list is allocated ONLY when spillover actually occurs and is a
+    -- FRESH table each time, never a reused scratch. A reused scratch is unsafe
+    -- here: the C_Timer.After(0) closure below captures the list by reference, and
+    -- a subsequent Tick (e.g. StopTicker -> Tick called synchronously while a
+    -- prior tick's deferred closure is still pending) would wipe it out from under
+    -- the pending closure, silently dropping those deferred renders. In the common
+    -- Phase 1 case (one window, always within budget) `deferred` stays nil and the
+    -- hot path allocates zero tables -- matching the prior guarantee.
+    local deferred = nil
+
     for _, W in ipairs(self:VisibleWindows()) do
         if (debugprofilestop() - frameStart) > budget then
+            if not deferred then deferred = {} end
             deferred[#deferred + 1] = W
         else
             self:RenderWindow(W)
         end
     end
 
-    if #deferred > 0 then
+    if deferred then
         C_Timer.After(0, function()
             for _, W in ipairs(deferred) do
                 DM:RenderWindow(W)
