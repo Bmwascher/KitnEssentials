@@ -419,6 +419,14 @@ function DM:RenderWindow(W)
     end
     W.frame:Show()
 
+    -- Deaths renders differently: the value shows the death time (M:SS) and the
+    -- bar carries no damage-proportional fill. Overall deaths show no time.
+    -- Both are plain enum comparisons (cfg.* are config values, never secret),
+    -- stashed on W for RenderBar to read without re-resolving the config per bar.
+    local isDeaths = (cfg.MeterType == Enum.DamageMeterType.Deaths)
+    W._isDeaths = isDeaths
+    W._isOverall = (cfg.SessionType == Enum.DamageMeterSessionType.Overall)
+
     -- Keep the frame/viewport sized to the live appearance DB (dirty-gated, so a
     -- steady config is free). Without a size the body collapses and bars vanish.
     self:LayoutWindow(W)
@@ -456,6 +464,24 @@ function DM:RenderWindow(W)
             if row:IsShown() then row:Hide() end
         end
         return
+    end
+
+    -- Deaths: the API returns death sources most-recent-first and may include
+    -- feign deaths (deathRecapID <= 0 = no real recap). Reverse to chronological
+    -- and drop feigns into a reused per-window scratch table (no per-tick garbage).
+    -- deathRecapID is NeverSecret; the issecretvalue guard mirrors EllesmereUI.
+    if isDeaths then
+        W._deathScratch = W._deathScratch or {}
+        local rev = W._deathScratch
+        for k = #rev, 1, -1 do rev[k] = nil end
+        for ri = #sources, 1, -1 do
+            local s = sources[ri]
+            local rid = s and s.deathRecapID
+            if rid and not issecretvalue(rid) and rid > 0 then
+                rev[#rev + 1] = s
+            end
+        end
+        sources = rev
     end
 
     -- Clamp the bar count to VisibleBars and the pool size (40). #sources is a
@@ -540,9 +566,10 @@ end
 -- that can be secret in combat (totalAmount, amountPerSecond, maxAmount, the
 -- formatted value string, the name) is handled on the secret contract; the
 -- non-secret fields (classFilename, specIconID) drive the dirty caches.
--- W is part of the documented signature (callers pass the owning window and a
--- later phase -- detail breakdown / sticky-player row -- reads it); unused here.
-function DM:RenderBar(W, bar, i, src, maxAmount) -- luacheck: ignore 212/W
+-- W carries the per-window render state RenderWindow stashed this tick
+-- (W._isDeaths / W._isOverall), read below to switch the bar fill + value to the
+-- deaths treatment; a later phase (detail breakdown / sticky-player row) reads it too.
+function DM:RenderBar(W, bar, i, src, maxAmount)
     if not src then return end
     local row = bar.row
 
@@ -559,8 +586,16 @@ function DM:RenderBar(W, bar, i, src, maxAmount) -- luacheck: ignore 212/W
     -- triggers for a genuinely absent field (a malformed source) -- SetValue(0) /
     -- SetMinMaxValues(0, 1) is a far better failure mode than passing nil to a
     -- plain-Lua arithmetic widget call. Mirrors the reference's defensive nil-or.
-    row.fill:SetMinMaxValues(0, maxAmount or 1)
-    row.fill:SetValue(src.totalAmount or 0, Enum.StatusBarInterpolation.ExponentialEaseOut)
+    if W._isDeaths then
+        -- Deaths: no damage-proportional fill. SetValue(0) leaves the bar empty
+        -- (no colored bar) while the row text -- children of the fill -- stays
+        -- visible. (EllesmereUI fills it via SetValue(1); we keep it empty.)
+        row.fill:SetMinMaxValues(0, 1)
+        row.fill:SetValue(0)
+    else
+        row.fill:SetMinMaxValues(0, maxAmount or 1)
+        row.fill:SetValue(src.totalAmount or 0, Enum.StatusBarInterpolation.ExponentialEaseOut)
+    end
 
     -- Fill color (dirty-cached on classFilename, which is NEVER secret). Falls
     -- back to neutral grey for an unknown/absent class. The bar fill color only
@@ -663,12 +698,26 @@ function DM:RenderBar(W, bar, i, src, maxAmount) -- luacheck: ignore 212/W
     -- null-cache contract as the name. ShowPerSec (read once) gates the per-second
     -- half: when false the perSec arg short-circuits without touching the secret
     -- amountPerSecond.
-    local showPerSec = db.ShowPerSec
-    local v, vIsSecret = self.FormatBarValue(
-        src.totalAmount,
-        showPerSec and src.amountPerSecond or nil,
-        showPerSec
-    )
+    -- Deaths show the death time (M:SS) instead of amount|perSec, and Overall
+    -- deaths show nothing (cumulative time across segments isn't meaningful --
+    -- mirrors EllesmereUI). FormatDeathTime / FormatBarValue both return
+    -- (string, isSecret): a secret string is set unconditionally with the cache
+    -- nulled; a plain one is dirty-checked.
+    local v, vIsSecret
+    if W._isDeaths then
+        if W._isOverall then
+            v, vIsSecret = "", false
+        else
+            v, vIsSecret = self.FormatDeathTime(src.deathTimeSeconds)
+        end
+    else
+        local showPerSec = db.ShowPerSec
+        v, vIsSecret = self.FormatBarValue(
+            src.totalAmount,
+            showPerSec and src.amountPerSecond or nil,
+            showPerSec
+        )
+    end
     if vIsSecret then
         row.value:SetText(v)
         bar._cachedVal = nil

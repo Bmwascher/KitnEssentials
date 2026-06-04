@@ -27,10 +27,13 @@ DM.editModeRegistered = false
 local IsInInstance = IsInInstance
 local C_ChallengeMode = C_ChallengeMode
 local AbbreviateNumbers = AbbreviateNumbers
+local CreateAbbreviateConfig = CreateAbbreviateConfig
 local issecretvalue = issecretvalue
 local debugprofilestop = debugprofilestop
 local wipe = wipe
 local C_CVar = C_CVar
+local format = string.format
+local floor = math.floor
 
 -- Pre-built group unit tokens (mirrors EllesmereUI lines 298-300). UNIT_FLAGS
 -- can fire dozens of times per second during a pull, and GroupInCombat is hit
@@ -585,30 +588,68 @@ end
 -- method wrapper.
 ---------------------------------------------------------------------------------
 
+-- Precision config for AbbreviateNumbers (verbatim port of EllesmereUI's
+-- _abbreviateCfg). AbbreviateNumbers is the ONLY secret-safe abbreviator; the
+-- bare call rounds to whole units ("43M"), but passing this config makes it emit
+-- decimals ("43.81M" / "273.8K") even on a SECRET in-combat amount -- the
+-- function consumes the secret internally, so we never run string.format /
+-- arithmetic on a secret (which would taint). Guarded on CreateAbbreviateConfig;
+-- if absent, _abbreviateCfg stays nil and AbbreviateNumbers(n, nil) degrades to
+-- the plain (no-decimal) but still secret-safe path. Matches Details' precision:
+-- 2 decimals at M/B, 1 at K.
+local _abbreviateCfg
+do
+    local opts = {
+        { breakpoint = 1000000000, abbreviation = "B", significandDivisor = 10000000, fractionDivisor = 100, abbreviationIsGlobal = false },
+        { breakpoint = 1000000,    abbreviation = "M", significandDivisor = 10000,    fractionDivisor = 100, abbreviationIsGlobal = false },
+        { breakpoint = 1000,       abbreviation = "K", significandDivisor = 100,      fractionDivisor = 10,  abbreviationIsGlobal = false },
+        { breakpoint = 1,          abbreviation = "",  significandDivisor = 1,         fractionDivisor = 1,   abbreviationIsGlobal = false },
+    }
+    if CreateAbbreviateConfig then
+        _abbreviateCfg = { config = CreateAbbreviateConfig(opts) }
+    end
+end
+
+-- Secret-safe single-amount formatter. `n` is nil-guarded with a truthiness gate
+-- (NOT `== nil`, which taints on a secret number). AbbreviateNumbers(n, cfg) is
+-- secret-safe and decimal-capable; the returned string is secret iff `n` is.
+local function FormatAmount(n)
+    if not n then return "0" end
+    return AbbreviateNumbers(n, _abbreviateCfg) or "0"
+end
+
 -- Returns (string, isSecret): the abbreviated total, or "total | perSec" when
--- showPerSec is true and perSec is available. Never touches the numeric amounts
--- directly (no tostring, no comparisons). `total` is nil-guarded with a
--- truthiness gate (NOT `== nil`, which is a taint-throwing equality on a secret
--- number in combat); a secret number is truthy, so `not total` is only true for
--- a genuinely nil/empty source, which yields an empty, non-secret string.
+-- showPerSec is true and perSec is available. Concatenating two AbbreviateNumbers
+-- results is documented-safe even when secret; issecretvalue on the result tells
+-- the render layer whether it may dirty-check the string.
 local function FormatBarValue(total, perSec, showPerSec)
     if not total then return "", false end
 
     local str
     if showPerSec and perSec then
-        str = AbbreviateNumbers(total) .. " | " .. AbbreviateNumbers(perSec)
+        str = FormatAmount(total) .. " | " .. FormatAmount(perSec)
     else
-        str = AbbreviateNumbers(total)
+        str = FormatAmount(total)
     end
 
     return str, issecretvalue(str)
 end
 
--- Cross-chunk API: the render layer calls this directly. Non-underscore name
--- because it is intentional public API on DM (underscore-prefix fields are
+-- Death-time formatter for the Deaths meter type (mirrors EllesmereUI FormatTimer).
+-- deathTimeSeconds is secret in combat, so the M:SS arithmetic only runs on a
+-- plain value -- a secret/nil time yields "0:00". Returns (string, false): the
+-- result is never itself a secret, so the render layer dirty-checks it normally.
+local function FormatDeathTime(sec)
+    if not sec or issecretvalue(sec) then return "0:00", false end
+    return format("%d:%02d", floor(sec / 60), floor(sec % 60)), false
+end
+
+-- Cross-chunk API: the render layer calls these directly. Non-underscore names
+-- because they are intentional public API on DM (underscore-prefix fields are
 -- private-to-file by KE convention); matches DM.RANK_STRINGS / DM.BAR_POOL_SIZE
 -- in Window.lua.
 DM.FormatBarValue = FormatBarValue
+DM.FormatDeathTime = FormatDeathTime
 
 ---------------------------------------------------------------------------------
 -- Content-context resolver
