@@ -47,6 +47,18 @@ function DM:OnEnable()
 
     self.enabled = true
 
+    -- Combat-state events drive the shared ticker (see Combat-only ticker
+    -- section). NEVER use RegisterUnitEvent (Ace3 doesn't expose it and 12.0
+    -- discourages it for KE); UNIT_FLAGS is registered broad and filtered by
+    -- the group-combat check inside the handler.
+    self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnRegenDisabled")
+    self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRegenEnabled")
+    self:RegisterEvent("ENCOUNTER_END", "OnCombatForceStop")
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnCombatForceStop")
+    self:RegisterEvent("UNIT_FLAGS", "OnUnitFlags")
+    self:RegisterEvent("DAMAGE_METER_COMBAT_SESSION_UPDATED", "OnSessionUpdated")
+    self:RegisterEvent("DAMAGE_METER_RESET", "OnMeterReset")
+
     if DEBUG_DM then
         KE:Print("[DM] OnEnable: module active")
     end
@@ -55,6 +67,10 @@ end
 function DM:OnDisable()
     self.enabled = false
 
+    self:UnregisterAllEvents()
+    self:StopTicker()
+    self._sessionPending = false
+
     if self.dock then
         self.dock:Hide()
     end
@@ -62,6 +78,141 @@ function DM:OnDisable()
     if DEBUG_DM then
         KE:Print("[DM] OnDisable: module inactive")
     end
+end
+
+---------------------------------------------------------------------------------
+-- Combat-only ticker (shared across all windows)
+--
+-- Mirrors EllesmereUI's StartSharedTicker/StopSharedTicker (single ticker for
+-- every window). The ticker only runs while the player or group is in combat,
+-- so idle CPU is zero. DM:Tick (implemented in the render chunk) repaints every
+-- window from the current sessions; it is resolved at runtime here (called as a
+-- method) so this lifecycle layer doesn't depend on the render layer load order.
+---------------------------------------------------------------------------------
+
+-- Starts (or restarts) the shared refresh ticker. Cancel-before-start so a
+-- stale ticker is never left orphaned if combat is re-entered without a clean
+-- stop. RefreshRate defaults to 0.5s when the DB value is missing.
+function DM:StartTicker()
+    if self._ticker then
+        self._ticker:Cancel()
+        self._ticker = nil
+    end
+
+    local rate = (self.db and self.db.RefreshRate) or 0.5
+    self._ticker = C_Timer.NewTicker(rate, function()
+        DM:Tick()
+    end)
+
+    if DEBUG_DM then
+        KE:Print("[DM] StartTicker: rate", rate)
+    end
+end
+
+-- Cancels the shared ticker and paints one final frame so the bars settle on
+-- the post-combat totals (out of combat the amounts declassify to plain numbers).
+function DM:StopTicker()
+    if self._ticker then
+        self._ticker:Cancel()
+        self._ticker = nil
+    end
+
+    self:Tick()
+
+    if DEBUG_DM then
+        KE:Print("[DM] StopTicker: final paint")
+    end
+end
+
+-- True when the player is in combat, or any group member is. UnitAffectingCombat
+-- is safe to read here (not a secret return). InCombatLockdown short-circuits the
+-- common case so the group scan only runs when the player has already left
+-- combat (e.g. died mid-pull while the group keeps fighting).
+function DM:GroupInCombat()
+    if InCombatLockdown() then return true end
+
+    if IsInRaid() then
+        local n = GetNumGroupMembers()
+        for i = 1, n do
+            if UnitAffectingCombat("raid" .. i) then return true end
+        end
+    elseif IsInGroup() then
+        -- Party units exclude the player, so iterate one fewer than the count.
+        local n = GetNumGroupMembers() - 1
+        for i = 1, n do
+            if UnitAffectingCombat("party" .. i) then return true end
+        end
+    end
+
+    return false
+end
+
+---------------------------------------------------------------------------------
+-- Combat-state event handlers
+--
+-- The ticker is combat-gated: started on entering combat, stopped once the whole
+-- group has left combat. ENCOUNTER_END and PLAYER_ENTERING_WORLD force it down
+-- unconditionally (boss kill/wipe and zoning are hard segment boundaries).
+---------------------------------------------------------------------------------
+
+-- Player entered combat: spin up the shared ticker.
+function DM:OnRegenDisabled()
+    if DEBUG_DM then KE:Print("[DM] PLAYER_REGEN_DISABLED -> StartTicker") end
+    self:StartTicker()
+end
+
+-- Player left combat. If the group is still fighting (player died mid-pull),
+-- keep ticking and re-check shortly; only stop once everyone is out of combat.
+function DM:OnRegenEnabled()
+    if not self:GroupInCombat() then
+        if DEBUG_DM then KE:Print("[DM] PLAYER_REGEN_ENABLED -> StopTicker") end
+        self:StopTicker()
+    else
+        if DEBUG_DM then KE:Print("[DM] PLAYER_REGEN_ENABLED -> group still in combat, re-check") end
+        local rate = (self.db and self.db.RefreshRate) or 0.5
+        C_Timer.After(rate, function()
+            if not DM:GroupInCombat() then
+                DM:StopTicker()
+            end
+        end)
+    end
+end
+
+-- Boss kill/wipe or zoning: hard segment boundary, force the ticker down.
+function DM:OnCombatForceStop()
+    if DEBUG_DM then KE:Print("[DM] ENCOUNTER_END/PLAYER_ENTERING_WORLD -> force StopTicker") end
+    self:StopTicker()
+end
+
+-- A group member's flags changed (often: they entered combat before us). Start
+-- the ticker if the group is fighting and we're not already ticking, so bars
+-- populate before the player is tagged.
+function DM:OnUnitFlags()
+    if self:GroupInCombat() and not self._ticker then
+        if DEBUG_DM then KE:Print("[DM] UNIT_FLAGS -> group in combat, StartTicker") end
+        self:StartTicker()
+    end
+end
+
+-- The damage-meter session changed. In combat the ticker already covers
+-- repaints, so only react out of combat. Debounce to one paint per 0.1s burst
+-- (the event can fire rapidly as the API finalizes a segment).
+function DM:OnSessionUpdated()
+    if InCombatLockdown() then return end
+    if self._sessionPending then return end
+
+    self._sessionPending = true
+    C_Timer.After(0.1, function()
+        DM._sessionPending = false
+        if DEBUG_DM then KE:Print("[DM] DAMAGE_METER_COMBAT_SESSION_UPDATED (debounced) -> Tick") end
+        DM:Tick()
+    end)
+end
+
+-- Meter data was reset: repaint immediately so cleared bars show.
+function DM:OnMeterReset()
+    if DEBUG_DM then KE:Print("[DM] DAMAGE_METER_RESET -> Tick") end
+    self:Tick()
 end
 
 ---------------------------------------------------------------------------------
