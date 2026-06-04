@@ -41,6 +41,12 @@ end
 
 local DEBUG_DOCK_TEST = false
 
+-- Testing convenience: flip true to HIDE the whole dock (the shared backdrop AND
+-- every window, since windows are children of the dock) without disabling the
+-- module or its combat events. A stand-in until the GUI Enable toggle / a
+-- "/kedm toggle" land. Gated in DM:UpdateBackdrop (the only place the dock shows).
+local DEBUG_HIDE = false
+
 -- Inter-window / inter-column gap, snapped to the pixel grid once at file load.
 -- A local const (not a DB key) per the Phase 2 geometry model.
 local GAP = KE:PixelSnap(4)
@@ -453,6 +459,12 @@ function DM:UpdateBackdrop()
 
     self:EnsureDock()
     local dock = self.dock
+
+    -- Testing hide (DEBUG_HIDE): UpdateBackdrop is the only place the dock is
+    -- shown, so gating here keeps it hidden across every refresh; hiding the
+    -- parent dock also hides all child windows even though RenderWindow still
+    -- calls Show() on them. Flip DEBUG_HIDE at the top of the file to toggle.
+    if DEBUG_HIDE then dock:Hide() return end
 
     -- Zero placed windows: nothing to wrap, hide the dock and bail. `next` on the
     -- placed-set returns nil only when LayoutDock placed no window this pass.
