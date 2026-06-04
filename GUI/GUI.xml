@@ -51,6 +51,7 @@
     <Script file="GUITabs\GUICombat\GUI-RangeChecker.lua" />
     <Script file="GUITabs\GUICombat\GUI-AuraDebuffs.lua" />
     <Script file="GUITabs\GUICombat\GUI-AuraExternals.lua" />
+    <Script file="GUITabs\GUICombat\GUI-DamageMeter.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-KickTracker.lua" />
 
     <!-- Class Utilities tabs -->

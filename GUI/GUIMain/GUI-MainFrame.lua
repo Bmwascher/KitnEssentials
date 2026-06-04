@@ -53,6 +53,7 @@ GUIFrame.sidebarConfig = {
             { id = "Castbars",      text = "Focus & Target Castbars", keywords = { "castbar", "cast", "focus", "target", "casting", "interrupt" } },
             { id = "CombatCross",   text = "Player Crosshair", keywords = { "crosshair", "cross", "aim", "reticle", "player" } },
             { id = "RangeChecker",  text = "Range Display", keywords = { "range", "distance", "yards", "melee", "ranged" } },
+            { id = "DamageMeter",   text = "Damage Meter", keywords = { "damage meter", "dps", "damage", "healing", "threat", "meter", "recount", "details" } },
         },
     },
     {
