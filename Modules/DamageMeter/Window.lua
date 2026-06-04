@@ -631,11 +631,26 @@ function DM:RenderBar(W, bar, i, src, maxAmount) -- luacheck: ignore 212/W
     -- tracks ShowName every tick so the GUI toggle takes effect on the next paint.
     local nm = src.name
     if issecretvalue(nm) then
+        -- Secret name: string ops (the realm strip below) would taint-crash, so set
+        -- it unconditionally and null the cache. The realm strip is confined to the
+        -- plain branch; a secret name keeps its full form (graceful, no taint). In
+        -- practice the names that carry a realm are friendly group members, which
+        -- are the non-secret case, so the toggle takes effect where it matters.
         row.name:SetText(nm)
         bar._cachedName = nil
-    elseif nm ~= bar._cachedName then
-        bar._cachedName = nm
-        row.name:SetText(nm)
+    else
+        -- Plain string. When ShowRealm is off (default), drop the "-Realm" suffix.
+        -- A character name never contains a hyphen -- the only hyphen is the realm
+        -- separator -- so matching up to the first hyphen is exact and UTF-8 safe
+        -- (no multibyte sequence contains the 0x2D byte). The stripped string is
+        -- what gets dirty-cached, so toggling ShowRealm repaints on the next tick.
+        if nm and not db.ShowRealm then
+            nm = nm:match("^[^-]+") or nm
+        end
+        if nm ~= bar._cachedName then
+            bar._cachedName = nm
+            row.name:SetText(nm)
+        end
     end
     if db.ShowName then
         row.name:Show()

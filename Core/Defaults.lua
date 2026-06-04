@@ -1547,6 +1547,7 @@ local Defaults = {
             ShowRank = false,
             ShowIcon = true,
             ShowName = true,
+            ShowRealm = false,          -- false: strip the "-Realm" suffix from cross-realm names
             ClassColorName = false,
             ShowPerSec = true,
             ShowPercent = false,

@@ -217,7 +217,16 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
         for i = 1, #found do winList[i] = found[i] end
     end
 
-    local arrangement = (DM and DM.GetArrangement and DM:GetArrangement()) or "Custom"
+    -- "Custom" has no distinct structural form until columns are actually mixed,
+    -- so GetArrangement() (which derives the mode from the column shape) can never
+    -- report "Custom" for a plain horizontal/vertical structure. A transient,
+    -- GUI-only override (mirrors DM.guiConfigContext) makes "Custom" sticky so the
+    -- per-window column pickers below stay visible while the user assigns columns.
+    -- Cleared the moment the user picks Horizontal/Vertical (those rewrite the
+    -- structure, so the derived value is authoritative again).
+    local arrangement = (DM and DM.guiArrangementMode)
+        or (DM and DM.GetArrangement and DM:GetArrangement())
+        or "Custom"
     local numCols = (db.Dock and db.Dock.Columns and #db.Dock.Columns) or 1
 
     ----------------------------------------------------------------
@@ -231,8 +240,11 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
         options = ARRANGEMENT_OPTIONS,
         value = arrangement,
         callback = function(key)
-            if DM and DM.SetArrangement then
-                DM:SetArrangement(key)
+            if DM then
+                -- "Custom" only sets the sticky GUI override (no structural rewrite);
+                -- Horizontal/Vertical clear it and let the module rewrite the columns.
+                DM.guiArrangementMode = (key == "Custom") and "Custom" or nil
+                if DM.SetArrangement then DM:SetArrangement(key) end
             end
             RebuildPage()
         end,
@@ -293,6 +305,10 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
             end
             local colOpts = {}
             for c = 1, numCols do colOpts[c] = { key = c, text = "Column " .. c } end
+            -- A "New Column" target (= numCols + 1) lets Custom mode SPLIT a window
+            -- out into its own column, not only merge into an existing one.
+            -- DM:SetWindowColumn already accepts (and clamps to) #cols + 1.
+            colOpts[numCols + 1] = { key = numCols + 1, text = "New Column" }
             local rowC = GUIFrame:CreateRow(card1.content,
                 (n == #winList) and Theme.rowHeightLast or Theme.rowHeight)
             local colDropdown = GUIFrame:CreateDropdown(rowC, "Window " .. idx .. " Column", {
@@ -506,7 +522,7 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     manager:Register(perSecChk, "all")
     card2:AddRow(row2b, Theme.rowHeight)
 
-    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local classNameChk = GUIFrame:CreateCheckbox(row2c, "Class-Color Name", {
         value = db.ClassColorName == true,
         callback = function(checked) db.ClassColorName = checked; ApplySettings() end,
@@ -520,7 +536,16 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     })
     row2c:AddWidget(selfChk, 0.5)
     manager:Register(selfChk, "all")
-    card2:AddRow(row2c, Theme.rowHeightLast, 0)
+    card2:AddRow(row2c, Theme.rowHeight)
+
+    local row2d = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local realmChk = GUIFrame:CreateCheckbox(row2d, "Show Realm Names", {
+        value = db.ShowRealm == true,
+        callback = function(checked) db.ShowRealm = checked; ApplySettings() end,
+    })
+    row2d:AddWidget(realmChk, 0.5)
+    manager:Register(realmChk, "all")
+    card2:AddRow(row2d, Theme.rowHeightLast, 0)
 
     yOffset = card2:GetNextOffset()
 
