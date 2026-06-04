@@ -126,12 +126,22 @@ local function MakeBar(parent, db)
     row.value:SetJustifyH("RIGHT")
     KE:ApplyFontToText(row.value, fontFace, fontSize, fontOutline)
 
-    -- Per-attribute dirty caches (mirrors the reference). Render layer fills
-    -- these; declared here so the fields exist on a fresh row.
+    -- Per-attribute dirty caches. These are the exact fields the render path
+    -- (RenderBar) reads/writes; declared here so the factory documents the live
+    -- bar state and the fields exist on a fresh row before first paint.
+    --   _cachedColorClass -- class driving the fill SetStatusBarColor (NEVER secret)
+    --   _cachedIconClass  -- class driving the spec-icon SetTexture (NEVER secret)
+    --   _cachedName       -- last plain (non-secret) name string set; nil while secret
+    --   _cachedVal        -- last plain (non-secret) value string set; nil while secret
+    --   _cachedSlot       -- last rank slot index whose "N." label was set
+    --   _iconShown        -- cached icon visibility (starts false: icon is hidden
+    --                        below) so a stable ShowIcon does no per-tick Show/Hide
     bar._cachedColorClass = nil
-    bar._cachedClass = nil
-    bar._cachedSrcName = nil
-    bar._cachedAmtText = nil
+    bar._cachedIconClass = nil
+    bar._cachedName = nil
+    bar._cachedVal = nil
+    bar._cachedSlot = nil
+    bar._iconShown = false
 
     -- Wire OnClick ONCE. Forward-compatible: calls DM.OpenDetail only if a
     -- later chunk defines it. No detail window exists yet.
@@ -286,17 +296,22 @@ function DM:RenderWindow(W)
     -- Header label from the enum config (nil-guarded -> sane defaults; never
     -- concatenate a nil from a missing enum key). SessionType prefixes the type
     -- name, e.g. "Overall Damage Done"; Current is the unprefixed default.
-    local typeName = self.METER_TYPE_NAMES[cfg.MeterType] or "Damage Done"
-    local sessName = self.SESSION_TYPE_NAMES[cfg.SessionType]
-    local label
-    if sessName and cfg.SessionType ~= Enum.DamageMeterSessionType.Current then
-        label = sessName .. " " .. typeName
-    else
-        label = typeName
-    end
-    -- Header text is a plain literal (never secret); dirty-check is safe.
-    if label ~= W._headerLabel then
-        W._headerLabel = label
+    --
+    -- The label depends only on (MeterType, SessionType); both are plain enum
+    -- values. Short-circuit on that identity BEFORE the concatenation so the
+    -- steady state (config unchanged) allocates zero header strings per tick --
+    -- only rebuild + SetText when the resolved config actually changes.
+    if cfg.MeterType ~= W._headerType or cfg.SessionType ~= W._headerSession then
+        W._headerType = cfg.MeterType
+        W._headerSession = cfg.SessionType
+        local typeName = self.METER_TYPE_NAMES[cfg.MeterType] or "Damage Done"
+        local sessName = self.SESSION_TYPE_NAMES[cfg.SessionType]
+        local label
+        if sessName and cfg.SessionType ~= Enum.DamageMeterSessionType.Current then
+            label = sessName .. " " .. typeName
+        else
+            label = typeName
+        end
         W.header:SetText(label)
     end
 
@@ -304,9 +319,11 @@ function DM:RenderWindow(W)
     local sources = session and session.combatSources
     if not sources then
         -- No session/data this segment: hide every pooled row so stale bars from
-        -- a prior segment don't linger.
+        -- a prior segment don't linger. Gate on IsShown so already-hidden rows
+        -- skip the redundant widget call (mirrors EllesmereUI ~2887).
         for i = 1, self.BAR_POOL_SIZE do
-            W.bars[i].row:Hide()
+            local row = W.bars[i].row
+            if row:IsShown() then row:Hide() end
         end
         return
     end
@@ -334,16 +351,25 @@ function DM:RenderWindow(W)
         visFirst, visLast = 1, count
     end
 
+    -- maxAmount may be secret in combat; SetMinMaxValues accepts it, and the
+    -- per-bar `or 1` fallback in RenderBar hardens against a malformed session
+    -- that omits it. Read once here and pass down.
     local maxAmount = session.maxAmount
     for i = 1, self.BAR_POOL_SIZE do
         local bar = W.bars[i]
+        local row = bar.row
         if i <= count then
             if i >= visFirst and i <= visLast then
                 self:RenderBar(W, bar, i, sources[i], maxAmount)
             end
-            bar.row:Show()
+            -- Show only if not already shown (mirrors EllesmereUI ~2776); skips
+            -- the redundant widget call on rows that are already visible.
+            if not row:IsShown() then row:Show() end
         else
-            bar.row:Hide()
+            -- Hide only if currently shown (mirrors EllesmereUI ~2887); with
+            -- VisibleBars defaulting to 10 this avoids ~30 redundant Hide() calls
+            -- per window per tick once the pool tail has settled hidden.
+            if row:IsShown() then row:Hide() end
         end
     end
 end
@@ -359,42 +385,74 @@ function DM:RenderBar(W, bar, i, src, maxAmount) -- luacheck: ignore 212/W
     if not src then return end
     local row = bar.row
 
+    -- self.db is stable for the lifetime of a Tick (it is the AceDB profile
+    -- table, never swapped mid-Tick), so read it once and reuse the local rather
+    -- than re-guarding `self.db and self.db.X` for every appearance setting.
+    local db = self.db
+    if not db then return end
+
     -- Width: native StatusBar interpolation. SetMinMaxValues + SetValue both
     -- accept secret values; ExponentialEaseOut animates the fill on the widget
-    -- side so NO Lua arithmetic ever touches the secret amount.
-    row.fill:SetMinMaxValues(0, maxAmount)
-    row.fill:SetValue(src.totalAmount, Enum.StatusBarInterpolation.ExponentialEaseOut)
+    -- side so NO Lua arithmetic ever touches the secret amount. The `or` fallback
+    -- is taint-safe: a secret number is truthy (never nil), so the fallback only
+    -- triggers for a genuinely absent field (a malformed source) -- SetValue(0) /
+    -- SetMinMaxValues(0, 1) is a far better failure mode than passing nil to a
+    -- plain-Lua arithmetic widget call. Mirrors the reference's defensive nil-or.
+    row.fill:SetMinMaxValues(0, maxAmount or 1)
+    row.fill:SetValue(src.totalAmount or 0, Enum.StatusBarInterpolation.ExponentialEaseOut)
 
-    -- Class color (dirty-cached on classFilename, which is NEVER secret). Falls
-    -- back to neutral grey for an unknown/absent class. The name FontString is
-    -- tinted to the class color only when ClassColorName is on.
+    -- Fill color (dirty-cached on classFilename, which is NEVER secret). Falls
+    -- back to neutral grey for an unknown/absent class. The bar fill color only
+    -- changes when the source's class changes, so it stays inside the dirty cache.
     local classFile = src.classFilename
     if bar._cachedColorClass ~= classFile then
         bar._cachedColorClass = classFile
         local c = classFile and RAID_CLASS_COLORS[classFile]
         row.fill:SetStatusBarColor(c and c.r or 0.6, c and c.g or 0.6, c and c.b or 0.6)
-        if self.db and self.db.ClassColorName and c then
-            row.name:SetTextColor(c.r, c.g, c.b)
+    end
+
+    -- Name color: read ClassColorName EVERY tick and set the tint outside the
+    -- fill-color dirty cache (mirrors EllesmereUI ~2838-2847, which sets the
+    -- label color unconditionally when class-color is on and resets it when off).
+    -- Gating this on the class dirty cache would leave the name tinted after the
+    -- user toggles ClassColorName off (until the class happened to change), so it
+    -- must be independent of _cachedColorClass.
+    if db.ClassColorName then
+        local nc = classFile and RAID_CLASS_COLORS[classFile]
+        if nc then
+            row.name:SetTextColor(nc.r, nc.g, nc.b)
+        else
+            row.name:SetTextColor(1, 1, 1)
         end
+    else
+        row.name:SetTextColor(1, 1, 1)
     end
 
     -- Spec icon (dirty-cached on classFilename; specIconID is NEVER secret).
-    -- Re-applies the standard KE icon zoom on change. Visibility tracks ShowIcon
-    -- every tick so toggling the setting takes effect on the next paint.
-    if self.db and self.db.ShowIcon then
+    -- Re-applies the standard KE icon zoom on change. Visibility is cached in
+    -- bar._iconShown so a stable ShowIcon setting does NO per-tick Show/Hide
+    -- widget call -- the toggle still takes effect on the next paint because the
+    -- cached flag flips when the setting changes.
+    local showIcon = db.ShowIcon
+    if showIcon then
         if bar._cachedIconClass ~= classFile then
             bar._cachedIconClass = classFile
             row.icon:SetTexture(src.specIconID)
             KE:ApplyIconZoom(row.icon)
         end
-        row.icon:Show()
-    else
+        if not bar._iconShown then
+            bar._iconShown = true
+            row.icon:Show()
+        end
+    elseif bar._iconShown ~= false then
+        bar._iconShown = false
         row.icon:Hide()
     end
 
     -- Name (secret-aware). In combat src.name may be secret: SetText accepts it,
     -- but == / ~= on a secret string throws, so set it unconditionally and null
-    -- the cache. Out of combat it's a plain string and dirty-checked.
+    -- the cache. Out of combat it's a plain string and dirty-checked. Visibility
+    -- tracks ShowName every tick so the GUI toggle takes effect on the next paint.
     local nm = src.name
     if issecretvalue(nm) then
         row.name:SetText(nm)
@@ -403,14 +461,22 @@ function DM:RenderBar(W, bar, i, src, maxAmount) -- luacheck: ignore 212/W
         bar._cachedName = nm
         row.name:SetText(nm)
     end
+    if db.ShowName then
+        row.name:Show()
+    else
+        row.name:Hide()
+    end
 
     -- Value (secret-aware). FormatBarValue returns (string, isSecret); the string
     -- is secret in combat (built from secret amounts). Same set-unconditionally /
-    -- null-cache contract as the name. ShowPerSec gates the per-second half.
+    -- null-cache contract as the name. ShowPerSec (read once) gates the per-second
+    -- half: when false the perSec arg short-circuits without touching the secret
+    -- amountPerSecond.
+    local showPerSec = db.ShowPerSec
     local v = self.FormatBarValue(
         src.totalAmount,
-        self.db and self.db.ShowPerSec and src.amountPerSecond or nil,
-        self.db and self.db.ShowPerSec
+        showPerSec and src.amountPerSecond or nil,
+        showPerSec
     )
     if issecretvalue(v) then
         row.value:SetText(v)
@@ -422,7 +488,7 @@ function DM:RenderBar(W, bar, i, src, maxAmount) -- luacheck: ignore 212/W
 
     -- Rank: "N." label, dirty-cached on the slot (the loop index, which equals
     -- the API rank). Visibility tracks ShowRank every tick.
-    if self.db and self.db.ShowRank then
+    if db.ShowRank then
         if bar._cachedSlot ~= i then
             bar._cachedSlot = i
             row.rank:SetText(self.RANK_STRINGS[i])

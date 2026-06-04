@@ -589,9 +589,15 @@ function DM:Tick()
     self._sessionCache = self._sessionCache or {}
     wipe(self._sessionCache)
 
+    -- Pre-allocated, wiped per Tick (matches _sessionCache / _visibleWindows):
+    -- in the common Phase 1 case (one window, always within budget) this table
+    -- is never populated, so reusing it allocates zero garbage on the hot path.
+    self._deferred = self._deferred or {}
+    local deferred = self._deferred
+    wipe(deferred)
+
     local frameStart = debugprofilestop()
     local budget = (self.db and self.db.UIBudgetMs) or 1.2
-    local deferred = {}
 
     for _, W in ipairs(self:VisibleWindows()) do
         if (debugprofilestop() - frameStart) > budget then
