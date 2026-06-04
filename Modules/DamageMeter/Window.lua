@@ -332,6 +332,64 @@ function DM:LayoutWindow(W)
 end
 
 ---------------------------------------------------------------------------------
+-- Live geometry re-apply
+--
+-- Recomputes the snapped per-row geometry from the current appearance DB and, if
+-- it changed, re-applies it to every pooled row (height, top-anchored stride,
+-- icon square). The create-once pool is reused — NO frames are rebuilt (rebuilding
+-- would leak the old frame trees). Called by DM:ApplySettings when the user drags
+-- BarHeight / BarSpacing / VisibleBars / Width in the GUI.
+---------------------------------------------------------------------------------
+function DM:ApplyWindowGeometry(W)
+    local db = self.db
+    local barHeight = (db and db.BarHeight) or 16
+    local barSpacing = (db and db.BarSpacing) or 2
+    local snapHeight = KE:PixelSnap(barHeight)
+    local snapSpacing = KE:PixelSnap(barSpacing)
+    local snapStride = snapHeight + snapSpacing
+
+    if W._snapHeight ~= snapHeight or W._snapStride ~= snapStride then
+        W._snapHeight = snapHeight
+        W._snapSpacing = snapSpacing
+        W._snapStride = snapStride
+        for i = 1, BAR_POOL_SIZE do
+            local row = W.bars[i].row
+            row:SetHeight(snapHeight)
+            row:ClearAllPoints()
+            local yOff = -(i - 1) * snapStride
+            row:SetPoint("TOPLEFT", W.content, "TOPLEFT", 0, yOff)
+            row:SetPoint("TOPRIGHT", W.content, "TOPRIGHT", 0, yOff)
+            row.iconFrame:SetSize(snapHeight, snapHeight)
+        end
+    end
+
+    -- Header band + content height (VisibleBars) absorb font-size / bar-count
+    -- changes; LayoutWindow is idempotent + dirty-gated.
+    self:LayoutWindow(W)
+end
+
+-- Re-applies font (header + every bar's rank/name/value) and the status-bar
+-- texture to every pooled row. The cached value/name strings are NOT secret out
+-- of combat; a font swap doesn't change the string, so the next Tick repaints
+-- naturally. Called by DM:ApplySettings.
+function DM:ReapplyBarVisuals(W)
+    local db = self.db
+    local face = db and db.FontFace
+    local size = db and db.FontSize
+    local outline = db and db.FontOutline
+    local texPath = KE:GetStatusbarPath(db and db.StatusBarTexture or "KitnUI")
+
+    KE:ApplyFontToText(W.header, face, size, outline)
+    for i = 1, BAR_POOL_SIZE do
+        local row = W.bars[i].row
+        row.fill:SetStatusBarTexture(texPath)
+        KE:ApplyFontToText(row.rank, face, size, outline)
+        KE:ApplyFontToText(row.name, face, size, outline)
+        KE:ApplyFontToText(row.value, face, size, outline)
+    end
+end
+
+---------------------------------------------------------------------------------
 -- Render path
 --
 -- RenderWindow repaints one window from its current session; RenderBar fills a
@@ -559,12 +617,12 @@ function DM:RenderBar(W, bar, i, src, maxAmount) -- luacheck: ignore 212/W
     -- half: when false the perSec arg short-circuits without touching the secret
     -- amountPerSecond.
     local showPerSec = db.ShowPerSec
-    local v = self.FormatBarValue(
+    local v, vIsSecret = self.FormatBarValue(
         src.totalAmount,
         showPerSec and src.amountPerSecond or nil,
         showPerSec
     )
-    if issecretvalue(v) then
+    if vIsSecret then
         row.value:SetText(v)
         bar._cachedVal = nil
     elseif v ~= bar._cachedVal then

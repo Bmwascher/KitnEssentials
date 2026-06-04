@@ -49,6 +49,32 @@ function DM:UpdateDB()
 end
 
 ---------------------------------------------------------------------------------
+-- Live settings apply
+--
+-- The single entry point the GUI calls after any appearance/structure change.
+-- Re-applies per-window geometry + visuals to the create-once pools, re-tiles the
+-- dock, re-skins/re-sizes the backdrop, and paints one frame. User-driven (never
+-- per combat tick), so iterating every built window's pool is acceptable cost.
+---------------------------------------------------------------------------------
+
+function DM:ApplySettings()
+    if not self.db then self:UpdateDB() end
+    if not self.enabled then return end
+
+    self.windows_rt = self.windows_rt or {}
+    for _, W in pairs(self.windows_rt) do
+        if W.frame then
+            self:ApplyWindowGeometry(W)
+            self:ReapplyBarVisuals(W)
+        end
+    end
+
+    self:LayoutDock()
+    self:UpdateBackdrop()
+    if self.Tick then self:Tick() end
+end
+
+---------------------------------------------------------------------------------
 -- Blizzard meter replacement
 --
 -- When ReplaceBlizzard is on, suppress Blizzard's built-in damage meter via the
