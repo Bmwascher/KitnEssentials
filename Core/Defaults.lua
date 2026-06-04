@@ -1551,9 +1551,9 @@ local Defaults = {
 
             -- Shared backdrop (flat); arrangement is owned by Dock below
             BackdropBorderStyle = "neutral",            -- neutral | accent | theme
-            BackdropBorderColor = { 0.47, 0.47, 0.51, 1 },
-            BackdropColor = { 0.03, 0.03, 0.04, 0.88 }, -- RGBA combined (KE style)
-            BackdropPadding = 6,
+            BackdropBorderColor = { 0, 0, 0, 1 },        -- solid black (configurable later via GUI)
+            BackdropColor = { 0.031, 0.031, 0.031, 0.8 }, -- #080808 @ 80% opacity (configurable later via GUI)
+            BackdropPadding = 1,
             Strata = "MEDIUM",
             Position = {
                 AnchorFrom = "CENTER",
