@@ -22,7 +22,7 @@ local DEBUG_DM = false
 ---------------------------------------------------------------------------------
 
 function DM:UpdateDB()
-    self.db = KE.db and KE.db.profile and KE.db.profile.DamageMeter
+    self.db = KE.db.profile.DamageMeter
 end
 
 ---------------------------------------------------------------------------------
