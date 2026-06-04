@@ -2,4 +2,5 @@
     <!-- Each task appends its <Script> line when it creates the file, so every
          phase stays independently loadable in-game (no missing-file load errors). -->
     <Script file="Core.lua"/>
+    <Script file="Window.lua"/>
 </Ui>
