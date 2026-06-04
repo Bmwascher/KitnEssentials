@@ -60,9 +60,10 @@ DM.BAR_POOL_SIZE = BAR_POOL_SIZE
 -- standard KE 1px borders tightly bound the icon, not the whole row.
 ---------------------------------------------------------------------------------
 
-local function MakeBar(parent)
-    local db = DM.db
-
+-- db is passed in from CreateWindow (which already nil-guards self.db) rather
+-- than read as a bare DM.db here; every downstream read still uses the `db and`
+-- guard, matching the nil-safety used elsewhere in this file.
+local function MakeBar(parent, db)
     local bar = {}
 
     -- Root clickable row. Pool convention: kit.row is the root frame.
@@ -209,7 +210,7 @@ function DM:CreateWindow(winIdx)
     -- a plain build-once loop is used instead. The render layer indexes W.bars
     -- directly and toggles row visibility -- there is no pool to ReleaseAll.
     for i = 1, BAR_POOL_SIZE do
-        local bar = MakeBar(W.content)
+        local bar = MakeBar(W.content, self.db)
         local row = bar.row
 
         row:SetHeight(snapHeight)

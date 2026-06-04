@@ -23,6 +23,14 @@ local C_ChallengeMode = C_ChallengeMode
 local AbbreviateNumbers = AbbreviateNumbers
 local issecretvalue = issecretvalue
 
+-- Pre-built group unit tokens (mirrors EllesmereUI lines 298-300). UNIT_FLAGS
+-- can fire dozens of times per second during a pull, and GroupInCombat is hit
+-- on every one; building "raid"..i / "party"..i inline on each call would churn
+-- garbage. Filled once at file load and read by index inside GroupInCombat.
+local _raidUnits, _partyUnits = {}, {}
+for i = 1, 40 do _raidUnits[i] = "raid" .. i end
+for i = 1, 4 do _partyUnits[i] = "party" .. i end
+
 ---------------------------------------------------------------------------------
 -- DB Helper
 ---------------------------------------------------------------------------------
@@ -53,7 +61,8 @@ function DM:OnEnable()
     -- the group-combat check inside the handler.
     self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnRegenDisabled")
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRegenEnabled")
-    self:RegisterEvent("ENCOUNTER_END", "OnCombatForceStop")
+    self:RegisterEvent("ENCOUNTER_START", "OnEncounterStart")
+    self:RegisterEvent("ENCOUNTER_END", "OnEncounterEnd")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnCombatForceStop")
     self:RegisterEvent("UNIT_FLAGS", "OnUnitFlags")
     self:RegisterEvent("DAMAGE_METER_COMBAT_SESSION_UPDATED", "OnSessionUpdated")
@@ -70,6 +79,7 @@ function DM:OnDisable()
     self:UnregisterAllEvents()
     self:StopTicker()
     self._sessionPending = false
+    self._inEncounter = false
 
     if self.dock then
         self.dock:Hide()
@@ -90,6 +100,38 @@ end
 -- method) so this lifecycle layer doesn't depend on the render layer load order.
 ---------------------------------------------------------------------------------
 
+-- Single shared-ticker body (mirrors EllesmereUI's SharedRefreshTick,
+-- ~lines 3937-3956). Runs on every tick and is responsible for self-cancelling
+-- when the group leaves combat, so the lifecycle never depends on a one-shot
+-- C_Timer.After firing at exactly the right moment.
+--
+-- _needsFinalRefresh is set by OnRegenEnabled when the player left combat but
+-- the group is still fighting (e.g. died mid-pull): the ticker keeps polling
+-- GroupInCombat each tick and only stops once everyone is out of combat,
+-- painting one final frame at that point. This is the continuous re-check the
+-- reference guarantees, not a single deferred re-check.
+--
+-- DM:Tick is implemented in the render chunk and resolved at runtime; it is
+-- guarded so this lifecycle layer never throws "attempt to call a nil value"
+-- if combat starts before that chunk loads (mirrors the DM.OpenDetail guard in
+-- Window.lua:MakeBar).
+function DM:_RunTick()
+    if self._needsFinalRefresh and not self:GroupInCombat() then
+        -- Group combat ended: final paint, drop the flag, stop the ticker.
+        self._needsFinalRefresh = false
+        if DM.Tick then DM:Tick() end
+        if self._ticker then
+            self._ticker:Cancel()
+            self._ticker = nil
+        end
+        if DEBUG_DM then KE:Print("[DM] _RunTick: group left combat -> final paint + self-cancel") end
+        return
+    end
+
+    -- Normal tick (player in combat, or group still fighting after player left).
+    if DM.Tick then DM:Tick() end
+end
+
 -- Starts (or restarts) the shared refresh ticker. Cancel-before-start so a
 -- stale ticker is never left orphaned if combat is re-entered without a clean
 -- stop. RefreshRate defaults to 0.5s when the DB value is missing.
@@ -101,7 +143,7 @@ function DM:StartTicker()
 
     local rate = (self.db and self.db.RefreshRate) or 0.5
     self._ticker = C_Timer.NewTicker(rate, function()
-        DM:Tick()
+        DM:_RunTick()
     end)
 
     if DEBUG_DM then
@@ -111,13 +153,19 @@ end
 
 -- Cancels the shared ticker and paints one final frame so the bars settle on
 -- the post-combat totals (out of combat the amounts declassify to plain numbers).
+-- Tick is guarded: it is defined in the render chunk and resolved at runtime, so
+-- a StopTicker reachable before that chunk loads (direct OnDisable call, future
+-- load-order change) must not throw "attempt to call a nil value". Mirrors the
+-- DM.OpenDetail forward-reference guard in Window.lua:MakeBar.
 function DM:StopTicker()
     if self._ticker then
         self._ticker:Cancel()
         self._ticker = nil
     end
 
-    self:Tick()
+    self._needsFinalRefresh = false
+
+    if DM.Tick then DM:Tick() end
 
     if DEBUG_DM then
         KE:Print("[DM] StopTicker: final paint")
@@ -125,22 +173,25 @@ function DM:StopTicker()
 end
 
 -- True when the player is in combat, or any group member is. UnitAffectingCombat
--- is safe to read here (not a secret return). InCombatLockdown short-circuits the
--- common case so the group scan only runs when the player has already left
--- combat (e.g. died mid-pull while the group keeps fighting).
+-- is safe to read here (not a secret return). The player fast-path uses
+-- UnitAffectingCombat("player") rather than InCombatLockdown() (mirrors
+-- EllesmereUI line 303): InCombatLockdown() returns false the moment the player
+-- dies or feign-deaths mid-pull, but UnitAffectingCombat stays true while the
+-- player is still tagged into the fight, so the ticker keeps painting. Group
+-- units are read from the pre-built _raidUnits / _partyUnits tables.
 function DM:GroupInCombat()
-    if InCombatLockdown() then return true end
+    if UnitAffectingCombat("player") then return true end
 
     if IsInRaid() then
         local n = GetNumGroupMembers()
         for i = 1, n do
-            if UnitAffectingCombat("raid" .. i) then return true end
+            if UnitAffectingCombat(_raidUnits[i]) then return true end
         end
     elseif IsInGroup() then
         -- Party units exclude the player, so iterate one fewer than the count.
         local n = GetNumGroupMembers() - 1
         for i = 1, n do
-            if UnitAffectingCombat("party" .. i) then return true end
+            if UnitAffectingCombat(_partyUnits[i]) then return true end
         end
     end
 
@@ -151,8 +202,11 @@ end
 -- Combat-state event handlers
 --
 -- The ticker is combat-gated: started on entering combat, stopped once the whole
--- group has left combat. ENCOUNTER_END and PLAYER_ENTERING_WORLD force it down
--- unconditionally (boss kill/wipe and zoning are hard segment boundaries).
+-- group has left combat. PLAYER_ENTERING_WORLD forces it down unconditionally
+-- (zoning is a hard segment boundary). ENCOUNTER_END stops it too, but only
+-- after a 0.5s delay so Blizzard can finalize the session totals first, and only
+-- when an encounter is actually active (a mid-encounter REGEN_ENABLED from a boss
+-- transition must not be treated as a real stop -- _inEncounter guards that).
 ---------------------------------------------------------------------------------
 
 -- Player entered combat: spin up the shared ticker.
@@ -162,25 +216,57 @@ function DM:OnRegenDisabled()
 end
 
 -- Player left combat. If the group is still fighting (player died mid-pull),
--- keep ticking and re-check shortly; only stop once everyone is out of combat.
+-- raise _needsFinalRefresh and make sure the shared ticker is running: the
+-- ticker polls GroupInCombat every tick and self-cancels once everyone is out
+-- of combat (continuous re-check, mirroring EllesmereUI). Only stop outright
+-- when the whole group is already out of combat. While an encounter is active
+-- (between ENCOUNTER_START and ENCOUNTER_END) a transient REGEN_ENABLED from a
+-- boss transition is ignored -- the ENCOUNTER_END path owns the encounter stop.
 function DM:OnRegenEnabled()
+    if self._inEncounter then
+        if DEBUG_DM then KE:Print("[DM] PLAYER_REGEN_ENABLED -> ignored (encounter active)") end
+        return
+    end
+
     if not self:GroupInCombat() then
         if DEBUG_DM then KE:Print("[DM] PLAYER_REGEN_ENABLED -> StopTicker") end
         self:StopTicker()
     else
-        if DEBUG_DM then KE:Print("[DM] PLAYER_REGEN_ENABLED -> group still in combat, re-check") end
-        local rate = (self.db and self.db.RefreshRate) or 0.5
-        C_Timer.After(rate, function()
-            if not DM:GroupInCombat() then
-                DM:StopTicker()
-            end
-        end)
+        if DEBUG_DM then KE:Print("[DM] PLAYER_REGEN_ENABLED -> group still in combat, poll until clear") end
+        self._needsFinalRefresh = true
+        -- Ensure the ticker is alive so its self-poll can fire the final stop;
+        -- StartTicker is cancel-before-start so this never doubles the ticker.
+        if not self._ticker then
+            self:StartTicker()
+        end
     end
 end
 
--- Boss kill/wipe or zoning: hard segment boundary, force the ticker down.
+-- Encounter started: mark the encounter active so a mid-encounter
+-- PLAYER_REGEN_ENABLED (boss transition that briefly drops the combat lock)
+-- doesn't get mistaken for a real combat-end. Mirrors EllesmereUI's _inEncounter.
+function DM:OnEncounterStart()
+    if DEBUG_DM then KE:Print("[DM] ENCOUNTER_START -> encounter active") end
+    self._inEncounter = true
+end
+
+-- Boss kill/wipe: a hard segment boundary, but the session totals are not yet
+-- finalized at the instant ENCOUNTER_END fires. Delay the stop by 0.5s so the
+-- final paint reads settled totals rather than a stale/empty segment (mirrors
+-- EllesmereUI line ~4008). Clears the encounter-active flag immediately.
+function DM:OnEncounterEnd()
+    if DEBUG_DM then KE:Print("[DM] ENCOUNTER_END -> delayed StopTicker (0.5s)") end
+    self._inEncounter = false
+    C_Timer.After(0.5, function()
+        DM:StopTicker()
+    end)
+end
+
+-- Zoning: hard segment boundary, force the ticker down immediately. Also clears
+-- the encounter-active flag (zoning ends any encounter).
 function DM:OnCombatForceStop()
-    if DEBUG_DM then KE:Print("[DM] ENCOUNTER_END/PLAYER_ENTERING_WORLD -> force StopTicker") end
+    if DEBUG_DM then KE:Print("[DM] PLAYER_ENTERING_WORLD -> force StopTicker") end
+    self._inEncounter = false
     self:StopTicker()
 end
 
@@ -204,15 +290,20 @@ function DM:OnSessionUpdated()
     self._sessionPending = true
     C_Timer.After(0.1, function()
         DM._sessionPending = false
+        -- Re-check combat: if a fight started inside the 0.1s debounce window the
+        -- secret-safe ticker path owns the repaint, so skip this out-of-combat
+        -- one. Keeps in-combat painting exclusively on the ticker.
+        if InCombatLockdown() then return end
         if DEBUG_DM then KE:Print("[DM] DAMAGE_METER_COMBAT_SESSION_UPDATED (debounced) -> Tick") end
-        DM:Tick()
+        if DM.Tick then DM:Tick() end
     end)
 end
 
--- Meter data was reset: repaint immediately so cleared bars show.
+-- Meter data was reset: repaint immediately so cleared bars show. Tick is
+-- guarded (resolved at runtime from the render chunk).
 function DM:OnMeterReset()
     if DEBUG_DM then KE:Print("[DM] DAMAGE_METER_RESET -> Tick") end
-    self:Tick()
+    if DM.Tick then self:Tick() end
 end
 
 ---------------------------------------------------------------------------------
@@ -306,7 +397,11 @@ local function FormatBarValue(total, perSec, showPerSec)
     return str, issecretvalue(str)
 end
 
-KE.DamageMeter._FormatBarValue = FormatBarValue
+-- Cross-chunk API: the render layer calls this directly. Non-underscore name
+-- because it is intentional public API on DM (underscore-prefix fields are
+-- private-to-file by KE convention); matches DM.RANK_STRINGS / DM.BAR_POOL_SIZE
+-- in Window.lua.
+DM.FormatBarValue = FormatBarValue
 
 ---------------------------------------------------------------------------------
 -- Content-context resolver
