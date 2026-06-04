@@ -784,6 +784,11 @@ function DM:MaybeSeedDockTest()
     if not db then return end
 
     if DEBUG_DOCK_TEST then
+        -- Seed ONCE (guard on the marker) so dragged splitter ratios persist across
+        -- /reload. For a fresh demo, flip the flag off + /reload (the self-heal below
+        -- clears the marker), then back on.
+        if db._dockTestSeeded then return end
+
         db.Dock = db.Dock or {}
         db.Dock.Columns = {
             { WidthRatio = 1, Windows = { 1 },    RowRatios = { 1 } },
