@@ -276,9 +276,9 @@ function DM:CreateWindow(winIdx)
     end
 
     W.headerBtns = {}
-    W.headerBtns.settings = MakeHeaderBtn("Interface\\GossipFrame\\BinderGossipIcon",
+    W.headerBtns.settings = MakeHeaderBtn("Interface\\AddOns\\KitnEssentials\\Media\\Icon\\dm_settings.tga",
         "Settings", function() DM:HeaderSettings(W) end, 0)
-    W.headerBtns.reset = MakeHeaderBtn("Interface\\Buttons\\UI-RefreshButton",
+    W.headerBtns.reset = MakeHeaderBtn("Interface\\AddOns\\KitnEssentials\\Media\\Icon\\dm_reset.tga",
         "Reset", function() DM:HeaderReset(W) end, 18)
     W.headerBtns.segment = MakeHeaderBtn("Interface\\Buttons\\UI-GuildButton-PublicNote-Up",
         "Segment", function() DM:ToggleSegmentMenu(W) end, 36)

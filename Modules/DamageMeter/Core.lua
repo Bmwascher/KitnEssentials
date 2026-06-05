@@ -773,6 +773,14 @@ function DM:HeaderReset(_)
     if C_DamageMeter and C_DamageMeter.ResetAllCombatSessions then
         pcall(C_DamageMeter.ResetAllCombatSessions)
     end
+    -- Close any open detail panel: its breakdown/recap was keyed to the data we just
+    -- wiped, so drop back to the freshly-emptied bars (mirrors the combat-start close
+    -- in OnRegenDisabled). All windows, since ResetAllCombatSessions is global.
+    if self.windows_rt then
+        for _, w in pairs(self.windows_rt) do
+            if w._detailOpen and self.CloseDetail then self:CloseDetail(w) end
+        end
+    end
     if self.Tick then self:Tick() end
 end
 
