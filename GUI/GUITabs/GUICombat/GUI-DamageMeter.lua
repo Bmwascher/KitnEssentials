@@ -910,7 +910,7 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     manager:SetCondition("backdrop", function() return db.BackdropEnabled ~= false end)
 
     ----------------------------------------------------------------
-    -- Card 1: Bars
+    -- Bars -- texture + geometry.
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Bars", yOffset)
     manager:Register(card1, "all")
@@ -965,7 +965,7 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 2: Bar Content
+    -- Bar Content -- only what is DRAWN on each bar row.
     ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Bar Content", yOffset)
     manager:Register(card2, "all")
@@ -1002,6 +1002,7 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     manager:Register(perSecChk, "all")
     card2:AddRow(row2b, Theme.rowHeight)
 
+    -- The two name-related toggles share a row.
     local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local classNameChk = GUIFrame:CreateCheckbox(row2c, "Class-Color Name", {
         value = db.ClassColorName == true,
@@ -1010,31 +1011,36 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     row2c:AddWidget(classNameChk, 0.5)
     manager:Register(classNameChk, "all")
 
-    local selfChk = GUIFrame:CreateCheckbox(row2c, "Always Show Self", {
-        value = db.AlwaysShowSelf ~= false,
-        callback = function(checked) db.AlwaysShowSelf = checked; ApplySettings() end,
-    })
-    row2c:AddWidget(selfChk, 0.5)
-    manager:Register(selfChk, "all")
-    card2:AddRow(row2c, Theme.rowHeight)
-
-    local row2d = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local realmChk = GUIFrame:CreateCheckbox(row2d, "Show Realm Names", {
+    local realmChk = GUIFrame:CreateCheckbox(row2c, "Show Realm Names", {
         value = db.ShowRealm == true,
         callback = function(checked) db.ShowRealm = checked; ApplySettings() end,
     })
-    row2d:AddWidget(realmChk, 0.5)
+    row2c:AddWidget(realmChk, 0.5)
     manager:Register(realmChk, "all")
-    card2:AddRow(row2d, Theme.rowHeight)
+    card2:AddRow(row2c, Theme.rowHeight)
 
-    -- Header icons (segment / reset / settings) on each window header band.
-    -- "Only on mouseover" is greyed when the icons are hidden entirely.
+    local row2d = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local selfChk = GUIFrame:CreateCheckbox(row2d, "Always Show Self", {
+        value = db.AlwaysShowSelf ~= false,
+        callback = function(checked) db.AlwaysShowSelf = checked; ApplySettings() end,
+    })
+    row2d:AddWidget(selfChk, 0.5)
+    manager:Register(selfChk, "all")
+    card2:AddRow(row2d, Theme.rowHeightLast, 0)
+
+    yOffset = card2:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Header Icons -- the settings / reset / segment chrome on each
+    -- window header band. "Only on Mouseover" greys when icons are off.
+    ----------------------------------------------------------------
     manager:SetCondition("headericons", function() return db.ShowHeaderIcons ~= false end)
-    -- Hover quick-peek tooltip: the position dropdown is greyed when the tip is off.
-    manager:SetCondition("hovertip", function() return db.HoverTooltip ~= false end)
 
-    local row2e = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local headerIconsChk = GUIFrame:CreateCheckbox(row2e, "Show Header Icons", {
+    local cardHeaderIcons = GUIFrame:CreateCard(scrollChild, "Header Icons", yOffset)
+    manager:Register(cardHeaderIcons, "all")
+
+    local rowHdr = GUIFrame:CreateRow(cardHeaderIcons.content, Theme.rowHeightLast)
+    local headerIconsChk = GUIFrame:CreateCheckbox(rowHdr, "Show Header Icons", {
         value = db.ShowHeaderIcons ~= false,
         callback = function(checked)
             db.ShowHeaderIcons = checked
@@ -1042,20 +1048,30 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
             manager:UpdateAll(db.Enabled ~= false)
         end,
     })
-    row2e:AddWidget(headerIconsChk, 0.5)
+    rowHdr:AddWidget(headerIconsChk, 0.5)
     manager:Register(headerIconsChk, "all")
 
-    local headerMouseoverChk = GUIFrame:CreateCheckbox(row2e, "Only on Mouseover", {
+    local headerMouseoverChk = GUIFrame:CreateCheckbox(rowHdr, "Only on Mouseover", {
         value = db.HeaderIconsMouseover == true,
         callback = function(checked) db.HeaderIconsMouseover = checked; ApplySettings() end,
     })
-    row2e:AddWidget(headerMouseoverChk, 0.5)
+    rowHdr:AddWidget(headerMouseoverChk, 0.5)
     manager:Register(headerMouseoverChk, "headericons")
-    card2:AddRow(row2e, Theme.rowHeight)
+    cardHeaderIcons:AddRow(rowHdr, Theme.rowHeightLast, 0)
 
-    -- Hover quick-peek tooltip: hovering a bar floats a top-N breakdown / recap.
-    local row2f = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
-    local hoverTipChk = GUIFrame:CreateCheckbox(row2f, "Show Hover Tooltip", {
+    yOffset = cardHeaderIcons:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Hover Tooltip -- hovering a bar floats a top-N breakdown / death
+    -- recap. The position dropdown greys when the tip is off.
+    ----------------------------------------------------------------
+    manager:SetCondition("hovertip", function() return db.HoverTooltip ~= false end)
+
+    local cardHoverTip = GUIFrame:CreateCard(scrollChild, "Hover Tooltip", yOffset)
+    manager:Register(cardHoverTip, "all")
+
+    local rowTip1 = GUIFrame:CreateRow(cardHoverTip.content, Theme.rowHeight)
+    local hoverTipChk = GUIFrame:CreateCheckbox(rowTip1, "Show Hover Tooltip", {
         value = db.HoverTooltip ~= false,
         callback = function(checked)
             db.HoverTooltip = checked
@@ -1063,10 +1079,12 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
             manager:UpdateAll(db.Enabled ~= false)
         end,
     })
-    row2f:AddWidget(hoverTipChk, 0.5)
+    rowTip1:AddWidget(hoverTipChk, 1)
     manager:Register(hoverTipChk, "all")
+    cardHoverTip:AddRow(rowTip1, Theme.rowHeight)
 
-    local hoverAnchorDd = GUIFrame:CreateDropdown(row2f, "Tooltip Position", {
+    local rowTip2 = GUIFrame:CreateRow(cardHoverTip.content, Theme.rowHeightLast)
+    local hoverAnchorDd = GUIFrame:CreateDropdown(rowTip2, "Tooltip Position", {
         options = {
             { key = "smart",  text = "Smart (auto side)" },
             { key = "bar",    text = "Above Bar" },
@@ -1077,14 +1095,14 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
         value = db.HoverTooltipAnchor or "smart",
         callback = function(key) db.HoverTooltipAnchor = key; ApplySettings() end,
     })
-    row2f:AddWidget(hoverAnchorDd, 0.5)
+    rowTip2:AddWidget(hoverAnchorDd, 1)
     manager:Register(hoverAnchorDd, "hovertip")
-    card2:AddRow(row2f, Theme.rowHeightLast, 0)
+    cardHoverTip:AddRow(rowTip2, Theme.rowHeightLast, 0)
 
-    yOffset = card2:GetNextOffset()
+    yOffset = cardHoverTip:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 3: Font
+    -- Font
     -- Outline list excludes SOFTOUTLINE: bar text is small and soft-outline
     -- haloes on tiny text (matches the KickTracker bar-text rationale).
     ----------------------------------------------------------------
@@ -1124,7 +1142,7 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     yOffset = card3:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 4: Backdrop
+    -- Backdrop
     ----------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Backdrop", yOffset)
     manager:Register(card4, "all")
