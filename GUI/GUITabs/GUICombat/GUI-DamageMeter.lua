@@ -249,10 +249,13 @@ local function BuildSchematic(card, height, cols, posOf, fullLabel)
     local boxAt = {}    -- boxAt[c][r] = box frame
     local allBoxes = {} -- flat list for drag hit-testing + highlight
 
-    -- Insertion line: a bright white bar shown at the edge where the dragged
-    -- window will land (top of the hovered box = drop before it; bottom = after).
+    -- Insertion line: a bright theme-accent bar shown where the dragged window will
+    -- land -- horizontal in a row gap (stack: top of the hovered box = before, bottom
+    -- = after) or vertical at a column boundary (new column). Accent (not white) so it
+    -- pops against the dark gaps; the hovered box's WHITE border stays the distinct
+    -- "this is the target column" cue during a stack drag.
     local dropLine = container:CreateTexture(nil, "OVERLAY")
-    dropLine:SetColorTexture(1, 1, 1, 1)
+    dropLine:SetColorTexture(T.accent[1], T.accent[2], T.accent[3], 1)
     dropLine:SetHeight(3)
     dropLine:Hide()
 
