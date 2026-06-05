@@ -584,7 +584,7 @@ end
 -- ╚══════════════════════════════════════════════════════════╝
 
 local HOVER_TIP_ROWS = 15       -- top spells/events (matches EUI's TT_MAX=15); the click-inline panel still shows the full list
-local TIP_WIDTH = 300           -- Phase 4c: widened for the 3 content-sized numeric columns (Amount / DPS / %) + spell-name room
+local TIP_WIDTH = 340           -- Phase 4c: holds the 3 numeric columns (Amount / DPS / %); the extra width over 300 is all name room (the columns anchor to the right edge, so the spell/enemy-name area grows) -- request 2026-06-05
 local TIP_PAD = 4               -- inner inset for header / rows
 
 -- Phase 4c column geometry: each numeric column is right-aligned at a fixed x-offset
