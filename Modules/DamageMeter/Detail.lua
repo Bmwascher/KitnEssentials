@@ -364,14 +364,18 @@ function DM:RenderDeathRecap(W)
             local isFatal = (i == count and not isHeal)
 
             -- Fill = HP% remaining at the event (currentHP / maxHP), heal green / damage red.
-            local curHP = ev.currentHP or 0
+            -- GetRecapEvents is AllowedWhenUntainted, so ev.currentHP can be a secret number
+            -- in a tainted post-combat window -- sanitize before the division (matches ev.amount).
+            local curHP = ev.currentHP
+            if issecretvalue(curHP) or type(curHP) ~= "number" then curHP = 0 end
             local hpPct = math_min(1, math_max(0, maxHP > 0 and (curHP / maxHP) or 0))
             row.fill:SetMinMaxValues(0, 1)
             row.fill:SetValue(hpPct)
             if isHeal then row.fill:SetStatusBarColor(0.10, 0.50, 0.10)
             else row.fill:SetStatusBarColor(0.60, 0.08, 0.08) end
 
-            -- Label: "-X.Xs SpellName" (+ " from Source" when a non-secret sourceName exists).
+            -- Label: "-X.Xs SpellName" (+ " (Source)" when a non-secret sourceName exists).
+            -- Parens form matches Details and the hover-tip recap surface (Phase 4c).
             local spellName = ev.spellName
             if not spellName or issecretvalue(spellName) or spellName == "" then
                 if isHeal then spellName = "Heal"
@@ -381,7 +385,7 @@ function DM:RenderDeathRecap(W)
             local label = self.FormatRecapDelta(deathTime, ev.timestamp) .. " " .. spellName
             local srcName = ev.sourceName
             if srcName and not issecretvalue(srcName) and srcName ~= "" and not isHeal then
-                label = label .. " |cff999999from " .. srcName .. "|r"
+                label = label .. "  |cff999999(" .. srcName .. ")|r"
             end
             row.label:SetText(label)
 
@@ -561,16 +565,16 @@ end
 -- ╚══════════════════════════════════════════════════════════╝
 
 local HOVER_TIP_ROWS = 8        -- quick-peek shows the top few; the click-inline panel shows the full list
-local TIP_WIDTH = 267           -- Phase 4c: widened for the 3 numeric columns (Amount / DPS / %); +3 absorbs the PCT/DPS gap
+local TIP_WIDTH = 300           -- Phase 4c: widened for the 3 content-sized numeric columns (Amount / DPS / %) + spell-name room
 local TIP_PAD = 4               -- inner inset for header / rows
 
 -- Phase 4c column geometry: each numeric column is right-aligned at a fixed x-offset
--- from the tip's right edge, fixed width, JustifyH RIGHT. The label's RIGHT anchor stops
--- at the amount column's LEFT so the three columns line up across every row + the header.
-local TIP_COL_W   = 44          -- per-column width
-local TIP_PCT_X   = -6          -- % column right edge (3-4px gap to DPS, matching DPS/Amount spacing)
-local TIP_DPS_X   = -48         -- DPS column right edge
-local TIP_AMT_X   = -96         -- Amount column right edge
+-- from the tip's right edge. Content-sized (no SetWidth) + SetWordWrap(false) so the
+-- text never truncates with an ellipsis at the user's font size; the label's RIGHT anchor
+-- stops at the amount column's LEFT so the three columns line up across every row + header.
+local TIP_PCT_X   = -6          -- % column right edge
+local TIP_DPS_X   = -62         -- DPS column right edge (widened from -48 so content-sized columns don't collide)
+local TIP_AMT_X   = -124        -- Amount column right edge (widened from -96)
 local TIP_COL_HDR_H = 14        -- vertical space the column-header row occupies (breakdown path only)
 local TIP_TGT_ROWS = 3          -- Phase 4c: top enemies the source hit (DamageDone-only sub-section)
 local TIP_TGT_GAP = 4           -- vertical gap above the Targets divider
@@ -619,21 +623,23 @@ local function MakeTipRow(parent, rowH)
     -- Phase 4c: three right-aligned numeric columns (Amount / DPS / %). row.value is the
     -- Amount column (renamed-in-role from the old single value). For the Deaths recap path
     -- only row.value is used (dps/pct stay empty + hidden); the breakdown path fills all three.
+    -- Content-sized (no SetWidth) + SetWordWrap(false): right-anchored, so each column
+    -- sizes to its text and never truncates with an ellipsis at the user's font size.
     row.value = row.fill:CreateFontString(nil, "OVERLAY")   -- Amount column
     row.value:SetPoint("RIGHT", row.fill, "RIGHT", TIP_AMT_X, 0)
-    row.value:SetWidth(TIP_COL_W)
+    row.value:SetWordWrap(false)
     row.value:SetJustifyH("RIGHT")
     KE:ApplyFontToText(row.value, face, size, outline)
 
     row.dps = row.fill:CreateFontString(nil, "OVERLAY")     -- DPS column
     row.dps:SetPoint("RIGHT", row.fill, "RIGHT", TIP_DPS_X, 0)
-    row.dps:SetWidth(TIP_COL_W)
+    row.dps:SetWordWrap(false)
     row.dps:SetJustifyH("RIGHT")
     KE:ApplyFontToText(row.dps, face, size, outline)
 
     row.pct = row.fill:CreateFontString(nil, "OVERLAY")     -- % column
     row.pct:SetPoint("RIGHT", row.fill, "RIGHT", TIP_PCT_X, 0)
-    row.pct:SetWidth(TIP_COL_W)
+    row.pct:SetWordWrap(false)
     row.pct:SetJustifyH("RIGHT")
     KE:ApplyFontToText(row.pct, face, size, outline)
 
@@ -725,7 +731,7 @@ function DM:EnsureHoverTip()
 
     f.colHdr.amount = f:CreateFontString(nil, "OVERLAY")
     f.colHdr.amount:SetJustifyH("RIGHT")
-    f.colHdr.amount:SetWidth(TIP_COL_W)
+    f.colHdr.amount:SetWordWrap(false)
     f.colHdr.amount:SetPoint("TOPRIGHT", f, "TOPRIGHT", TIP_AMT_X, 0)
     KE:ApplyFontToText(f.colHdr.amount, face, colSize, outline)
     f.colHdr.amount:SetTextColor(0.6, 0.6, 0.6)
@@ -736,7 +742,7 @@ function DM:EnsureHoverTip()
 
     f.colHdr.dps = f:CreateFontString(nil, "OVERLAY")
     f.colHdr.dps:SetJustifyH("RIGHT")
-    f.colHdr.dps:SetWidth(TIP_COL_W)
+    f.colHdr.dps:SetWordWrap(false)
     f.colHdr.dps:SetPoint("TOPRIGHT", f, "TOPRIGHT", TIP_DPS_X, 0)
     KE:ApplyFontToText(f.colHdr.dps, face, colSize, outline)
     f.colHdr.dps:SetTextColor(0.6, 0.6, 0.6)
@@ -744,7 +750,7 @@ function DM:EnsureHoverTip()
 
     f.colHdr.pct = f:CreateFontString(nil, "OVERLAY")
     f.colHdr.pct:SetJustifyH("RIGHT")
-    f.colHdr.pct:SetWidth(TIP_COL_W)
+    f.colHdr.pct:SetWordWrap(false)
     f.colHdr.pct:SetPoint("TOPRIGHT", f, "TOPRIGHT", TIP_PCT_X, 0)
     KE:ApplyFontToText(f.colHdr.pct, face, colSize, outline)
     f.colHdr.pct:SetTextColor(0.6, 0.6, 0.6)
@@ -847,7 +853,7 @@ local function RenderTipTargets(self, bar, cfg, sessionID, topY, stride, barH)
             row.fill:SetStatusBarTexture(KE:GetStatusbarPath(self.db and self.db.StatusBarTexture or "KitnUI"))
             row.fill:SetMinMaxValues(0, tMax)
             row.fill:SetValue(t.total)
-            row.fill:SetStatusBarColor(0xDD / 255, 0x31 / 255, 0x31 / 255)
+            row.fill:SetStatusBarColor(0.55, 0.20, 0.20)
             row.label:SetTextColor(1, 1, 1)
             row.value:SetTextColor(1, 1, 1)
             row.label:SetText(t.name)
@@ -949,42 +955,64 @@ function DM:PopulateHoverTip(W, bar)
                 row.iconFrame:Show()
                 row.label:ClearAllPoints()
                 row.label:SetPoint("LEFT", row.iconFrame, "RIGHT", 3, 0)
-                -- Recap path uses only the single Amount column (dps/pct stay empty + hidden),
-                -- so anchor the label's RIGHT to the fill's right edge less just the Amount
-                -- column's footprint. Anchoring to row.value:LEFT (as the breakdown path does)
-                -- would cede the 93px the empty dps/pct columns occupy and truncate the label.
-                row.label:SetPoint("RIGHT", row.fill, "RIGHT", -(TIP_COL_W + 6), 0)
+                -- Recap value is verbose ("-75.0K (overkill) (53%)") and uses the FULL right
+                -- edge (no Amount/DPS/% columns); per-path anchor below pins row.value to
+                -- -TIP_PAD. The label's RIGHT stops at row.value:LEFT so a long
+                -- "(Source)" suffix ellipsizes exactly like Details rather than overlapping.
+                row.value:ClearAllPoints()
+                row.value:SetPoint("RIGHT", row.fill, "RIGHT", -TIP_PAD, 0)
+                row.label:SetPoint("RIGHT", row.value, "LEFT", -3, 0)
 
                 local evType = ev.event or ""
                 local isHeal = (evType == "SPELL_HEAL" or evType == "SPELL_PERIODIC_HEAL")
+                local isFatal = (i == count and not isHeal)
 
                 -- Fill = HP% remaining at the event; heal green / damage red.
-                local curHP = ev.currentHP or 0
+                -- ev.currentHP is AllowedWhenUntainted like ev.amount -> sanitize to a plain
+                -- number before the division (could be secret in a tainted post-combat window).
+                local curHP = ev.currentHP
+                if issecretvalue(curHP) or type(curHP) ~= "number" then curHP = 0 end
                 local hpPct = math_min(1, math_max(0, maxHP > 0 and (curHP / maxHP) or 0))
                 row.fill:SetMinMaxValues(0, 1)
                 row.fill:SetValue(hpPct)
                 if isHeal then row.fill:SetStatusBarColor(0.10, 0.50, 0.10)
                 else row.fill:SetStatusBarColor(0.60, 0.08, 0.08) end
 
-                -- Label: "-X.Xs SpellName" (secret-guard the spellName return).
+                -- Label: "-X.Xs SpellName (Source)" to match Details. Secret-guard the
+                -- spellName return; append the event's source in parens when a plain
+                -- (non-secret) sourceName exists and it isn't a heal (gray, ellipsizes).
                 local spellName = ev.spellName
                 if not spellName or issecretvalue(spellName) or spellName == "" then
                     if isHeal then spellName = "Heal"
                     elseif evType == "SWING_DAMAGE" then spellName = "Melee"
                     else spellName = "Unknown" end
                 end
-                row.label:SetText(self.FormatRecapDelta(deathTime, ev.timestamp) .. " " .. spellName)
+                local label = self.FormatRecapDelta(deathTime, ev.timestamp) .. " " .. spellName
+                local sn = ev.sourceName
+                if sn and not issecretvalue(sn) and sn ~= "" and not isHeal then
+                    label = label .. "  |cff999999(" .. sn .. ")|r"
+                end
+                row.label:SetText(label)
 
-                -- Value: +heal / -damage. Sanitize amount to a plain number before any
-                -- math/tostring (GetRecapEvents is AllowedWhenUntainted -> could be
-                -- secret in a tainted post-combat window); crit guarded as RenderDeathRecap.
+                -- Value: +heal / -damage (AbbreviateNumbers via FormatBarValue), crit marker,
+                -- killing-blow overkill, HP% suffix -- the exact secret-safe pattern as the
+                -- click-inline RenderDeathRecap. Sanitize amount to a plain number before any
+                -- math/tostring (GetRecapEvents is AllowedWhenUntainted -> could be secret in a
+                -- tainted post-combat window); crit/overkill guarded as RenderDeathRecap.
                 local amt = ev.amount or 0
                 local amtPlain = amt
                 if issecretvalue(amt) or type(amt) ~= "number" then amtPlain = 0 end
                 local body = (self.FormatBarValue and select(1, self.FormatBarValue(math_max(0, amtPlain), nil, false))) or tostring(amtPlain)
+                local sign = isHeal and "+" or "-"
                 local critFlag = (not issecretvalue(ev.critical)) and ev.critical or false
                 local crit = critFlag and " |cffffd100*|r" or ""
-                row.value:SetText((isHeal and "+" or "-") .. body .. crit)
+                local pctSuffix = format(" (%.0f%%)", hpPct * 100)
+                if isFatal and not issecretvalue(ev.overkill) and type(ev.overkill) == "number" and ev.overkill > 0 then
+                    local okStr = (self.FormatBarValue and select(1, self.FormatBarValue(ev.overkill, nil, false))) or tostring(ev.overkill)
+                    row.value:SetText(sign .. body .. crit .. " |cffff3333(" .. okStr .. " overkill)|r" .. pctSuffix)
+                else
+                    row.value:SetText(sign .. body .. crit .. pctSuffix)
+                end
                 -- Recap keeps a single value column: the breakdown's DPS/% columns are empty.
                 if row.dps then row.dps:SetText("") end
                 if row.pct then row.pct:SetText("") end
@@ -1051,6 +1079,17 @@ function DM:PopulateHoverTip(W, bar)
                     end
                 end
                 if not iconShown then row.iconFrame:Hide() end
+
+                -- Per-path column anchors. The row pool is shared with the recap branch,
+                -- which re-anchors row.value to the full right edge (-TIP_PAD); re-pin the
+                -- three numeric columns to their fixed offsets here so a breakdown render
+                -- after a recap render restores the aligned-column layout.
+                row.value:ClearAllPoints()
+                row.value:SetPoint("RIGHT", row.fill, "RIGHT", TIP_AMT_X, 0)
+                row.dps:ClearAllPoints()
+                row.dps:SetPoint("RIGHT", row.fill, "RIGHT", TIP_DPS_X, 0)
+                row.pct:ClearAllPoints()
+                row.pct:SetPoint("RIGHT", row.fill, "RIGHT", TIP_PCT_X, 0)
 
                 row.label:ClearAllPoints()
                 if iconShown then
