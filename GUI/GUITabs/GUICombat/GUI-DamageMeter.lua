@@ -196,21 +196,6 @@ end
 -- Windows tab helpers
 ---------------------------------------------------------------------------------
 
--- Locates a window's (column, row) and its column's window count. Returns
--- (colIdx, rowIdx, colLen) or nil. Plain table walk; never a secret.
-local function FindWindowPos(cols, idx)
-    if not cols then return nil end
-    for c = 1, #cols do
-        local wins = cols[c] and cols[c].Windows
-        if wins then
-            for r = 1, #wins do
-                if wins[r] == idx then return c, r, #wins end
-            end
-        end
-    end
-    return nil
-end
-
 -- Reusable drag "ghost" that follows the cursor while dragging a schematic box,
 -- so you can see what you grabbed. A SINGLETON (created once, parented to UIParent
 -- at TOOLTIP strata so it floats above the panel and isn't clipped by the scroll
@@ -251,9 +236,11 @@ end
 -- (fullLabel(idx), matching the in-world header exactly -- e.g. "Overall Damage
 -- Done"). Returns a container frame the caller AddRow's into the card. Boxes are
 -- positioned in the container's OnSizeChanged (its width isn't known until AddRow
--- anchors it). Drag a box onto another to rearrange: a cursor-following ghost
--- shows what you grabbed and a white insertion line shows exactly where it will
--- drop (above the hovered box, or below it when the cursor is in its lower half).
+-- anchors it). The map is the ONLY arranging surface: drag a box onto another box's
+-- CENTER to stack/reorder (a horizontal line shows the row gap it lands in), or drag
+-- to a column's SIDE / off the map edge to peel it into its own new column (a
+-- vertical line shows the column boundary it lands at). A cursor-following ghost
+-- shows what you grabbed throughout.
 local function BuildSchematic(card, height, cols, posOf, fullLabel)
     local T = Theme
     local container = CreateFrame("Frame", nil, card.content)
@@ -276,12 +263,42 @@ local function BuildSchematic(card, height, cols, posOf, fullLabel)
         end
     end
 
-    -- Per-frame drag feedback (attached as the container OnUpdate only while a box
-    -- is being dragged): moves the ghost to the cursor, finds the box under the
-    -- cursor + which half (top = insert before, bottom = insert after), highlights
-    -- it, and parks the insertion line at that edge. The chosen target is stashed
-    -- on the container for OnDragStop to act on. When the cursor isn't over a valid
-    -- target box, the line + target clear (a drop there is a no-op).
+    -- Representative SURVIVING window of column c (the first window that isn't the
+    -- one being dragged) -- nil if c is out of range or holds ONLY the dragged window
+    -- (that column is dropped on release, so it can't anchor a new-column insert).
+    -- Lets a new-column drop be identified in a way that survives the dragged
+    -- window's own removal (the backend re-finds the anchor post-removal).
+    local function repOf(c, dragWin)
+        if c < 1 or c > #cols then return nil end
+        local wins = cols[c] and cols[c].Windows
+        if not wins then return nil end
+        for r = 1, #wins do
+            if wins[r] ~= dragWin then return wins[r] end
+        end
+        return nil
+    end
+
+    -- Parks the insertion line VERTICAL at content-x lineX (a column boundary),
+    -- spanning the map's full height. Defined once (captures dropLine/container/
+    -- height) so the per-frame DragUpdate allocates no closure while dragging.
+    local function showColLine(lineX)
+        dropLine:ClearAllPoints()
+        dropLine:SetSize(3, height)
+        dropLine:SetPoint("TOPLEFT", container, "TOPLEFT", lineX - 1.5, 0)
+        dropLine:Show()
+    end
+
+    -- Per-frame drag feedback (attached as the container OnUpdate only while a box is
+    -- being dragged). Moves the ghost to the cursor, then resolves ONE drop from the
+    -- cursor's x-zone over the map:
+    --   * CENTER of a column      -> STACK: a horizontal line shows the row gap it
+    --                                lands in (above the hovered box, or below when
+    --                                the cursor is in its lower half).
+    --   * SIDE of a column / off  -> NEW COLUMN: a vertical line shows the column
+    --     the map edge               boundary; the left/right anchor windows are
+    --                                stashed so the insert survives idx's removal.
+    -- The chosen drop (_dropMode + anchors) is stashed on the container for
+    -- OnDragStop. No valid target -> everything clears (a drop there is a no-op).
     local function DragUpdate()
         local dragWin = container._dragWin
         if not dragWin then return end
@@ -293,41 +310,105 @@ local function BuildSchematic(card, height, cols, posOf, fullLabel)
         ghost:ClearAllPoints()
         ghost:SetPoint("CENTER", UIParent, "BOTTOMLEFT", (mx / us) + 16, (my / us) - 14)
 
-        -- Hit-test the boxes (each box's own effective scale, the standard idiom).
-        local hit, after
-        for _, b in ipairs(allBoxes) do
-            if b.winIdx ~= dragWin then
-                local bs = b:GetEffectiveScale()
-                local cx, cy = mx / bs, my / bs
-                local L, R, Tp, B = b:GetLeft(), b:GetRight(), b:GetTop(), b:GetBottom()
-                if L and R and Tp and B and cx >= L and cx <= R and cy >= B and cy <= Tp then
-                    hit = b
-                    after = cy < (Tp + B) / 2   -- lower half -> drop AFTER this box
+        ResetBorders()
+        container._dropMode = nil
+        container._dropAnchor = nil
+        container._dropAfter = nil
+        container._dropLeftRep = nil
+        container._dropRightRep = nil
+
+        -- Boxes share the container's effective scale; one division covers all.
+        local cs = container:GetEffectiveScale()
+        if cs <= 0 then cs = 1 end
+        local cx, cy = mx / cs, my / cs
+        local cLeft = container:GetLeft()
+        if not cLeft then dropLine:Hide() return end
+
+        -- Which column is the cursor over (by x)? Boxes in a column share its x-span,
+        -- so the first box of each column gives the column's left/right edges.
+        local hoverCol, colL, colR
+        for c = 1, #cols do
+            local b = boxAt[c] and boxAt[c][1]
+            if b then
+                local L, R = b:GetLeft(), b:GetRight()
+                if L and R and cx >= L and cx <= R then
+                    hoverCol, colL, colR = c, L, R
                     break
                 end
             end
         end
 
-        ResetBorders()
-        if hit then
-            hit:SetBackdropBorderColor(1, 1, 1, 1)
-            dropLine:ClearAllPoints()
-            if after then
-                -- Drop AFTER: line in the gap just below the box.
-                dropLine:SetPoint("TOPLEFT", hit, "BOTTOMLEFT", 0, -1)
-                dropLine:SetPoint("TOPRIGHT", hit, "BOTTOMRIGHT", 0, -1)
+        if not hoverCol then
+            -- Off the left/right edge of the map -> new column at that end.
+            local cRight = container:GetRight()
+            if cRight and cx > cRight then
+                container._dropMode = "newcol"
+                -- `or repOf(#cols - 1)` covers the dragged window being SOLO in the
+                -- outermost column (that column drops on release): the next-innermost
+                -- column anchors the insert so the new column still lands at this end
+                -- instead of defaulting to the opposite side.
+                container._dropLeftRep = repOf(#cols, dragWin) or repOf(#cols - 1, dragWin)
+                showColLine(container:GetWidth())
+            elseif cx < cLeft then
+                container._dropMode = "newcol"
+                container._dropRightRep = repOf(1, dragWin) or repOf(2, dragWin)
+                showColLine(0)
             else
-                -- Drop BEFORE: line in the gap just above the box.
-                dropLine:SetPoint("BOTTOMLEFT", hit, "TOPLEFT", 0, 1)
-                dropLine:SetPoint("BOTTOMRIGHT", hit, "TOPRIGHT", 0, 1)
+                dropLine:Hide()
             end
-            dropLine:Show()
-            container._dropAnchor = hit.winIdx
-            container._dropAfter = after
+            return
+        end
+
+        -- Zone within the hovered column: outer quarters -> new column on that side;
+        -- middle half -> stack into the column.
+        local frac = (cx - colL) / math_max(1, colR - colL)
+        if frac <= 0.25 then
+            container._dropMode = "newcol"
+            -- `or repOf(hoverCol + 1)` covers the dragged window being SOLO in hoverCol
+            -- (hoverCol drops on release): the column to its right anchors the insert,
+            -- so a left-edge drop on column 1 still lands leftmost rather than defaulting
+            -- to the far right.
+            container._dropLeftRep = repOf(hoverCol - 1, dragWin)
+            container._dropRightRep = repOf(hoverCol, dragWin) or repOf(hoverCol + 1, dragWin)
+            showColLine(colL - cLeft)
+        elseif frac >= 0.75 then
+            container._dropMode = "newcol"
+            container._dropLeftRep = repOf(hoverCol, dragWin) or repOf(hoverCol - 1, dragWin)
+            container._dropRightRep = repOf(hoverCol + 1, dragWin)
+            showColLine(colR - cLeft)
         else
-            dropLine:Hide()
-            container._dropAnchor = nil
-            container._dropAfter = nil
+            -- Center zone: stack into the hovered column. Find the box under cy.
+            local wins = cols[hoverCol].Windows or {}
+            local hit, after
+            for r = 1, #wins do
+                local b = boxAt[hoverCol][r]
+                if b and b.winIdx ~= dragWin then
+                    local Tp, B = b:GetTop(), b:GetBottom()
+                    if Tp and B and cy >= B and cy <= Tp then
+                        hit = b
+                        after = cy < (Tp + B) / 2   -- lower half -> drop AFTER this box
+                        break
+                    end
+                end
+            end
+            if hit then
+                hit:SetBackdropBorderColor(1, 1, 1, 1)
+                container._dropMode = "stack"
+                container._dropAnchor = hit.winIdx
+                container._dropAfter = after
+                dropLine:ClearAllPoints()
+                dropLine:SetHeight(3)
+                if after then
+                    dropLine:SetPoint("TOPLEFT", hit, "BOTTOMLEFT", 0, -1)
+                    dropLine:SetPoint("TOPRIGHT", hit, "BOTTOMRIGHT", 0, -1)
+                else
+                    dropLine:SetPoint("BOTTOMLEFT", hit, "TOPLEFT", 0, 1)
+                    dropLine:SetPoint("BOTTOMRIGHT", hit, "TOPRIGHT", 0, 1)
+                end
+                dropLine:Show()
+            else
+                dropLine:Hide()
+            end
         end
     end
 
@@ -357,8 +438,8 @@ local function BuildSchematic(card, height, cols, posOf, fullLabel)
             -- clipped); the number sits slightly above center to leave it room.
             local tlabel = box:CreateFontString(nil, "OVERLAY")
             KE:ApplyThemeFont(tlabel, "small")
-            tlabel:SetPoint("BOTTOMLEFT", box, "BOTTOMLEFT", 2, 2)
-            tlabel:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", -2, 2)
+            tlabel:SetPoint("BOTTOMLEFT", box, "BOTTOMLEFT", 2, 4)
+            tlabel:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", -2, 4)
             tlabel:SetJustifyH("CENTER")
             tlabel:SetWordWrap(true)
             tlabel:SetTextColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
@@ -366,17 +447,20 @@ local function BuildSchematic(card, height, cols, posOf, fullLabel)
             box.tlabel = tlabel
 
             -- Drag-to-rearrange: a cursor-following ghost shows what you grabbed and
-            -- the white insertion line shows where it lands; on release the dragged
-            -- window drops at that spot (DM:MoveWindowToSlot, before/after the
-            -- hovered box). The per-window "New Column" button handles the one thing
-            -- drag can't: splitting a window out into its own column.
+            -- the insertion line shows where it lands; on release the dragged window
+            -- drops at that spot -- either STACKED next to the hovered box
+            -- (DM:MoveWindowToSlot) or peeled into a NEW COLUMN at the previewed
+            -- boundary (DM:MoveWindowToNewColumn). DragUpdate decides which.
             box.winIdx = idx
             box:EnableMouse(true)
             box:RegisterForDrag("LeftButton")
             box:SetScript("OnDragStart", function(self2)
                 container._dragWin = self2.winIdx
+                container._dropMode = nil
                 container._dropAnchor = nil
                 container._dropAfter = nil
+                container._dropLeftRep = nil
+                container._dropRightRep = nil
                 self2:SetAlpha(0.4)
                 local ghost = GetSchematicGhost()
                 local label = tostring(posOf[self2.winIdx] or "?")
@@ -395,15 +479,26 @@ local function BuildSchematic(card, height, cols, posOf, fullLabel)
                 dropLine:Hide()
                 ResetBorders()
                 local dragWin = container._dragWin
+                local mode = container._dropMode
                 local anchor = container._dropAnchor
                 local after = container._dropAfter
+                local leftRep = container._dropLeftRep
+                local rightRep = container._dropRightRep
                 container._dragWin = nil
+                container._dropMode = nil
                 container._dropAnchor = nil
                 container._dropAfter = nil
-                if dragWin and anchor and anchor ~= dragWin then
-                    local dm = GetDM()
-                    if dm and dm.MoveWindowToSlot then dm:MoveWindowToSlot(dragWin, anchor, after) end
-                    RebuildPage()
+                container._dropLeftRep = nil
+                container._dropRightRep = nil
+                local dm = GetDM()
+                if dm and dragWin then
+                    if mode == "stack" and anchor and anchor ~= dragWin then
+                        if dm.MoveWindowToSlot then dm:MoveWindowToSlot(dragWin, anchor, after) end
+                        RebuildPage()
+                    elseif mode == "newcol" then
+                        if dm.MoveWindowToNewColumn then dm:MoveWindowToNewColumn(dragWin, leftRep, rightRep) end
+                        RebuildPage()
+                    end
                 end
             end)
 
@@ -549,50 +644,20 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
         card1:AddRow(schemRow, 84)
     end
 
-    -- One row per window: "Window n" + a "New Column" button that splits the window
-    -- out into its own column -- the one rearrange drag can't do. (Drag in the map
-    -- above handles reorder + stacking.) The button is NOT registered with the
-    -- manager (its gating below would be clobbered by manager:UpdateAll); the card's
-    -- blocker + alpha cascade still disable it when the module is off.
-    for n = 1, #order do
-        local idx = order[n]
-        local _, _, colLen = FindWindowPos(cols, idx)
-        local rowM = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-
-        local lbl = GUIFrame:CreateText(rowM, "Window " .. n, "", Theme.rowHeight, "hide")
-        rowM:AddWidget(lbl, 0.6)
-        manager:Register(lbl, "all")
-
-        local newColBtn = GUIFrame:CreateButton(rowM, "New Column", {
-            callback = function()
-                -- A high target index makes SetWindowColumn create a fresh rightmost
-                -- column (it removes idx, drops emptied columns, then clamps the
-                -- target to #cols + 1). No-op when the window is already alone.
-                if DM and DM.SetWindowColumn then
-                    DM:SetWindowColumn(idx, ((cols and #cols) or 0) + 1)
-                end
-                RebuildPage()
-            end,
-        })
-        rowM:AddWidget(newColBtn, 0.4)
-        -- Meaningful only when the window shares its column with others; a window
-        -- already alone in its column would just land back where it is.
-        newColBtn:SetEnabled((colLen or 1) > 1)
-
-        card1:AddRow(rowM, Theme.rowHeight)
-    end
-
-    local arrNoteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    -- The map is the ONLY place you arrange windows: drag onto a window's center to
+    -- stack/reorder, or drag toward a column's edge (or off the map) to peel a window
+    -- into its own new column. The live line preview shows the result before release
+    -- (horizontal = stack, vertical = new column), so no separate buttons are needed.
+    local arrNoteRow = GUIFrame:CreateRow(card1.content, 50)
     local arrNote = GUIFrame:CreateText(arrNoteRow,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " " .. KE:ColorTextByTheme("Drag") .. " a window in the map onto another to reorder or stack it; " ..
-        KE:ColorTextByTheme("New Column") .. " splits one out on its own.\n" ..
-        KE:ColorTextByTheme("-") .. " Numbers match the meter on screen. Resize by dragging the gaps in the world (up to " ..
-        maxWin .. " windows).",
-        Theme.rowHeightLast, "hide")
+        KE:ColorTextByTheme("-") .. " Drag onto a window's center to stack it; drag to a side or off the edge for a new column.\n" ..
+        KE:ColorTextByTheme("-") .. " Numbers match the meter on screen (up to " .. maxWin ..
+        "). Resize by dragging the gaps in the world.",
+        50, "hide")
     arrNoteRow:AddWidget(arrNote, 1)
     manager:Register(arrNote, "all")
-    card1:AddRow(arrNoteRow, Theme.rowHeightLast, 0)
+    card1:AddRow(arrNoteRow, 50, 0)
 
     yOffset = card1:GetNextOffset()
 
@@ -673,15 +738,15 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
                 end
             end
 
-            local szNoteRow = GUIFrame:CreateRow(sizeCard.content, Theme.rowHeightLast)
+            local szNoteRow = GUIFrame:CreateRow(sizeCard.content, 50)
             local szNote = GUIFrame:CreateText(szNoteRow,
                 KE:ColorTextByTheme("Note"),
                 KE:ColorTextByTheme("-") .. " Each slider splits just its two neighbours; the rest stay put.\n" ..
                 KE:ColorTextByTheme("-") .. " Same effect as dragging that gap between windows in the world.",
-                Theme.rowHeightLast, "hide")
+                50, "hide")
             szNoteRow:AddWidget(szNote, 1)
             manager:Register(szNote, "all")
-            sizeCard:AddRow(szNoteRow, Theme.rowHeightLast, 0)
+            sizeCard:AddRow(szNoteRow, 50, 0)
 
             yOffset = sizeCard:GetNextOffset()
         end

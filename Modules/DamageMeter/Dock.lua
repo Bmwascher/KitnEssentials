@@ -29,6 +29,21 @@ local function clamp(v, lo, hi)
     if v < lo then return lo elseif v > hi then return hi else return v end
 end
 
+-- 1-based index of the column holding window `w` in a Columns array (nil if absent
+-- or `w` is nil). Plain table walk over window storage indices -- never a secret.
+local function _ColumnOf(cols, w)
+    if not w then return nil end
+    for c = 1, #cols do
+        local wins = cols[c].Windows
+        if wins then
+            for r = 1, #wins do
+                if wins[r] == w then return c end
+            end
+        end
+    end
+    return nil
+end
+
 ---------------------------------------------------------------------------------
 -- In-game test scaffold
 --
@@ -931,8 +946,8 @@ end
 
 -- Rewrites db.Dock.Columns for the "Horizontal" or "Vertical" mode, preserving the
 -- current set of window indices (stable dock order). "Custom" is a no-op (column
--- membership is edited by SetWindowColumn). Equal ratios are seeded; the splitters
--- adjust from there.
+-- membership is edited by dragging in the GUI map -> MoveWindowToSlot /
+-- MoveWindowToNewColumn). Equal ratios are seeded; the splitters adjust from there.
 function DM:SetArrangement(mode)
     local db = self.db
     if not db then return end
@@ -1027,50 +1042,6 @@ function DM:RemoveWindow(idx)
     self:RefreshDock()
 end
 
--- Moves a window index into the target column (1-based). Used by the Custom-mode
--- column pickers. Removes the index from its current column (dropping the column
--- if it empties) and appends it to the target; clamps target to the column count.
-function DM:SetWindowColumn(idx, targetCol)
-    local db = self.db
-    if not db or not db.Dock or not db.Dock.Columns then return end
-    local cols = db.Dock.Columns
-
-    -- Remove from current column(s).
-    for c = #cols, 1, -1 do
-        local col = cols[c]
-        local wins = col and col.Windows
-        if wins then
-            for r = #wins, 1, -1 do
-                if wins[r] == idx then
-                    table.remove(wins, r)
-                    if col.RowRatios then table.remove(col.RowRatios, r) end
-                end
-            end
-        end
-    end
-
-    -- Drop any column that emptied out from the removal above. This must happen
-    -- BEFORE clamping so targetCol is clamped against the post-drop column count;
-    -- otherwise a dropped lower-index column would shift the insert to targetCol-N.
-    for c = #cols, 1, -1 do
-        if cols[c] and cols[c].Windows and #cols[c].Windows == 0 then
-            table.remove(cols, c)
-        end
-    end
-
-    -- Clamp target (against the post-drop count) and ensure it exists.
-    if targetCol < 1 then targetCol = 1 end
-    if targetCol > #cols + 1 then targetCol = #cols + 1 end
-    cols[targetCol] = cols[targetCol] or { WidthRatio = 1, Windows = {}, RowRatios = {} }
-    local tcol = cols[targetCol]
-    tcol.Windows = tcol.Windows or {}
-    tcol.RowRatios = tcol.RowRatios or {}
-    tcol.Windows[#tcol.Windows + 1] = idx
-    tcol.RowRatios[#tcol.RowRatios + 1] = 1
-
-    self:RefreshDock()
-end
-
 -- Drag-and-drop reorder: move `idx` to land next to `targetIdx` -- BEFORE it
 -- (default) or AFTER it (after=true, i.e. the cursor was in the target's lower
 -- half). idx is pulled from wherever it is (emptied columns dropped), then
@@ -1097,8 +1068,8 @@ function DM:MoveWindowToSlot(idx, targetIdx, after)
         end
     end
 
-    -- Drop any column emptied by the removal (so the re-find below indexes the
-    -- post-removal structure -- mirrors SetWindowColumn's ordering).
+    -- Drop any column emptied by the removal, so the re-find below indexes the
+    -- post-removal structure (same remove-then-drop ordering as MoveWindowToNewColumn).
     for c = #cols, 1, -1 do
         if cols[c] and cols[c].Windows and #cols[c].Windows == 0 then
             table.remove(cols, c)
@@ -1144,6 +1115,57 @@ function DM:MoveWindowToSlot(idx, targetIdx, after)
         cols[1].RowRatios[#cols[1].RowRatios + 1] = 1
         self:RefreshDock()
     end
+end
+
+-- Drag-to-edge: peel `idx` into a BRAND-NEW column. The new column lands between
+-- the columns identified by `leftRep` (a representative window of the column that
+-- should sit immediately LEFT of the new one) and `rightRep` (immediately RIGHT) --
+-- whichever survives idx's removal decides the insert position, so a gap whose
+-- neighbour column WAS idx's own (and thus drops out) still lands the new column in
+-- the right place. Pass nil for an outer edge (leftRep nil = new leftmost column;
+-- rightRep nil = new rightmost). All plain table edits on db.Dock.Columns -- never
+-- a secret. WidthRatio seeds at 1 (the splitters adjust from there).
+function DM:MoveWindowToNewColumn(idx, leftRep, rightRep)
+    local db = self.db
+    local cols = db and db.Dock and db.Dock.Columns
+    if not cols then return end
+
+    -- Remove idx from its current column.
+    for c = #cols, 1, -1 do
+        local wins = cols[c] and cols[c].Windows
+        if wins then
+            for r = #wins, 1, -1 do
+                if wins[r] == idx then
+                    table.remove(wins, r)
+                    if cols[c].RowRatios then table.remove(cols[c].RowRatios, r) end
+                end
+            end
+        end
+    end
+
+    -- Drop any column emptied by the removal, so the re-find below indexes the
+    -- post-removal structure (mirrors MoveWindowToSlot's ordering).
+    for c = #cols, 1, -1 do
+        if cols[c] and cols[c].Windows and #cols[c].Windows == 0 then
+            table.remove(cols, c)
+        end
+    end
+
+    -- Land immediately LEFT of rightRep's column; else immediately RIGHT of
+    -- leftRep's column; else append to the far right.
+    local at
+    local rc = _ColumnOf(cols, rightRep)
+    if rc then
+        at = rc
+    else
+        local lc = _ColumnOf(cols, leftRep)
+        at = lc and (lc + 1) or (#cols + 1)
+    end
+    if at < 1 then at = 1 end
+    if at > #cols + 1 then at = #cols + 1 end
+
+    table.insert(cols, at, { WidthRatio = 1, Windows = { idx }, RowRatios = { 1 } })
+    self:RefreshDock()
 end
 
 ---------------------------------------------------------------------------------
