@@ -254,6 +254,24 @@ function DM:OnEnable()
     self:RegisterEvent("DAMAGE_METER_CURRENT_SESSION_UPDATED", "OnSessionUpdated")
     self:RegisterEvent("DAMAGE_METER_RESET", "OnMeterReset")
 
+    -- Content-context auto-swap (Phase 3): re-resolve each window's per-context config
+    -- when the player changes content. PLAYER_ENTERING_WORLD (registered above for the
+    -- ticker) + ZONE_CHANGED_NEW_AREA go through the DEBOUNCED settle path (IsInInstance
+    -- isn't reliable until the world loads). The CHALLENGE_MODE_* events catch the
+    -- Dungeon<->Mythic+ keystone transitions -- IsInInstance stays "party" across a
+    -- keystone start (only the challenge flag flips), so PEW alone wouldn't see it --
+    -- and apply IMMEDIATELY: IsChallengeModeActive is reliable the instant they fire, so
+    -- debouncing them would only lag the swap (and a pending zone check could swallow it).
+    self:RegisterEvent("ZONE_CHANGED_NEW_AREA", "OnContextEvent")
+    self:RegisterEvent("CHALLENGE_MODE_START", "OnChallengeEvent")
+    self:RegisterEvent("CHALLENGE_MODE_COMPLETED", "OnChallengeEvent")
+    self:RegisterEvent("CHALLENGE_MODE_RESET", "OnChallengeEvent")
+
+    -- Reset the cached context so the first scheduled check always applies the live
+    -- context once (a stale cache would make it think nothing changed).
+    self._activeContext = nil
+    self._ctxCheckPending = false
+
     -- Test-scaffold seed / self-heal (Dock.lua). When DEBUG_DOCK_TEST is true this
     -- seeds the demo 3-window/2-column dock; when false-but-previously-seeded it
     -- restores the single-window default and clears the marker. Runs BEFORE the
@@ -286,6 +304,11 @@ function DM:OnEnable()
     self:EnsureDock()
     self:CreateAllWindows()
 
+    -- Settle the initial content context shortly after enable. Covers /reload inside
+    -- an instance (IsInInstance can be unreliable at OnEnable time, and the login
+    -- PLAYER_ENTERING_WORLD may have fired before this handler registered).
+    self:_ScheduleContextCheck()
+
     -- Suppress Blizzard's built-in meter when configured, and register the dock
     -- with EditMode (unless Locked). Both are idempotent / guarded.
     self:ApplyReplaceBlizzard()
@@ -303,6 +326,8 @@ function DM:OnDisable()
     self:StopTicker()
     self._sessionPending = false
     self._inEncounter = false
+    self._activeContext = nil
+    self._ctxCheckPending = false
 
     -- Hand the meter back to Blizzard and drop the EditMode mover.
     self:RestoreBlizzardMeter()
@@ -503,6 +528,9 @@ function DM:OnCombatForceStop()
     if DEBUG_DM then KE:Print("[DM] PLAYER_ENTERING_WORLD -> force StopTicker") end
     self._inEncounter = false
     self:StopTicker()
+    -- Zoning may change the content context (entered/left an instance) -- schedule a
+    -- settled re-check (debounced; IsInInstance isn't reliable until the world loads).
+    self:_ScheduleContextCheck()
 end
 
 -- A group member's flags changed (often: they entered combat before us). Start
@@ -725,6 +753,55 @@ function DM:ResolveWindowConfig(winIdx, context)
     if not window or not window.Contexts then return nil end
     context = context or self:GetActiveContext()
     return window.Contexts[context] or window.Contexts.Default
+end
+
+-- Auto-swap runtime: re-apply the live content context. If it changed since the last
+-- apply, re-layout (LayoutDock re-resolves each window's per-context Enabled, and the
+-- render re-reads the active Type/Segment) and repaint. The resolver above is the
+-- single source of truth; this only drives WHEN it is re-read. Synchronous
+-- layout->backdrop->tick (NOT the debounced RefreshDock) so the paint lands after the
+-- new layout settles -- mirrors CreateAllWindows; context swaps are rare (zone /
+-- keystone) so a direct layout is cheap. The enabled guard makes a late timer fired
+-- after OnDisable a no-op. Plain instance/keystone reads only -- never a secret.
+function DM:ApplyActiveContext()
+    if not self.enabled then return end
+    local ctx = self:GetActiveContext()
+    if ctx == self._activeContext then return end
+    if DEBUG_DM then
+        KE:Print("[DM] context " .. tostring(self._activeContext) .. " -> " .. tostring(ctx))
+    end
+    self._activeContext = ctx
+    self:LayoutDock()
+    self:UpdateBackdrop()
+    if self.Tick then self:Tick() end
+end
+
+-- Debounced trigger for the "context may have changed" events. PLAYER_ENTERING_WORLD /
+-- ZONE_CHANGED_NEW_AREA can fire several times during one loading screen and
+-- IsInInstance isn't reliable until the world settles, so coalesce to ONE delayed
+-- check (1s, matching KickTracker:OnZoneChange). Challenge-mode events flip the
+-- keystone flag synchronously but route through the same path for uniformity.
+function DM:_ScheduleContextCheck()
+    if self._ctxCheckPending then return end
+    self._ctxCheckPending = true
+    C_Timer.After(1, function()
+        DM._ctxCheckPending = false
+        DM:ApplyActiveContext()
+    end)
+end
+
+-- ZONE_CHANGED_NEW_AREA handler -> debounced settle check (PLAYER_ENTERING_WORLD
+-- schedules the same way via OnCombatForceStop).
+function DM:OnContextEvent()
+    self:_ScheduleContextCheck()
+end
+
+-- CHALLENGE_MODE_START / COMPLETED / RESET handler. The keystone flag is reliable the
+-- instant these fire, so apply immediately (no debounce) -- a delay would only lag the
+-- Dungeon<->Mythic+ swap, and routing through the debounce could let a pending zone
+-- check swallow it. Fires at most once per keystone, so no coalescing is needed.
+function DM:OnChallengeEvent()
+    self:ApplyActiveContext()
 end
 
 ---------------------------------------------------------------------------------
