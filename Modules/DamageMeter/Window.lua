@@ -208,19 +208,35 @@ function DM:CreateWindow(winIdx)
         self.db and self.db.FontOutline
     )
 
-    -- Large window-index badge (top-right, semi-transparent). Shown ONLY during
-    -- GUI preview / edit so the "Window N" rows in the config map to the numbered
-    -- window on screen; hidden during normal play so it never obscures bar data.
-    -- The badge shows the window's on-screen DISPLAY POSITION (left->right,
-    -- top->bottom), NOT its storage index -- LayoutDock authoritatively sets the
-    -- text from self._winDisplayPos on every structural pass. The text set here is
-    -- only a placeholder before the first layout (the badge is hidden until then).
-    W.indexBadge = W.frame:CreateFontString(nil, "OVERLAY")
-    W.indexBadge:SetPoint("TOPRIGHT", W.frame, "TOPRIGHT", -3, -2)
-    W.indexBadge:SetJustifyH("RIGHT")
-    KE:ApplyFontToText(W.indexBadge, self.db and self.db.FontFace, 22, "OUTLINE")
-    W.indexBadge:SetText(tostring((self._winDisplayPos and self._winDisplayPos[winIdx]) or winIdx))
-    W.indexBadge:SetTextColor(1, 1, 1, 0.45)
+    -- Window-index badge: a solid accent-colored chip (top-right) with a bright
+    -- white number, shown ONLY during GUI preview / edit so the "Window N" rows in
+    -- the config map unambiguously to the numbered window on screen; hidden during
+    -- normal play so it never obscures bar data. The badge shows the window's
+    -- on-screen DISPLAY POSITION (left->right, top->bottom), NOT its storage index
+    -- -- LayoutDock authoritatively sets W.indexBadge.text from self._winDisplayPos
+    -- on every structural pass. The text set here is only a placeholder before the
+    -- first layout (the chip is hidden until then). A frame+backdrop (not a bare
+    -- FontString) so the number reads clearly against any bar color behind it; the
+    -- chip sits a few frame levels above the body so it isn't covered by bars.
+    W.indexBadge = CreateFrame("Frame", nil, W.frame, "BackdropTemplate")
+    W.indexBadge:SetSize(22, 22)
+    W.indexBadge:SetPoint("TOPRIGHT", W.frame, "TOPRIGHT", -2, -2)
+    W.indexBadge:SetFrameLevel(W.frame:GetFrameLevel() + 6)
+    W.indexBadge:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = 1,
+    })
+    do
+        local ar, ag, ab = KE:GetAccentColor()
+        W.indexBadge:SetBackdropColor(ar or 1, ag or 0, ab or 0.55, 0.92)
+    end
+    W.indexBadge:SetBackdropBorderColor(0, 0, 0, 1)
+    W.indexBadge.text = W.indexBadge:CreateFontString(nil, "OVERLAY")
+    W.indexBadge.text:SetPoint("CENTER", W.indexBadge, "CENTER", 0, 0)
+    KE:ApplyFontToText(W.indexBadge.text, self.db and self.db.FontFace, 15, "OUTLINE")
+    W.indexBadge.text:SetTextColor(1, 1, 1, 1)
+    W.indexBadge.text:SetText(tostring((self._winDisplayPos and self._winDisplayPos[winIdx]) or winIdx))
     if self._badgesShown then W.indexBadge:Show() else W.indexBadge:Hide() end
 
     -- Scroll viewport + content child. The content child holds the bar rows;
@@ -526,20 +542,37 @@ function DM:RenderWindow(W)
     -- secret), so math.min on it is safe.
     local count = math_min(#sources, (self.db and self.db.VisibleBars) or 10, self.BAR_POOL_SIZE)
 
-    -- Always-show-self: when enabled and the player is NOT within the visible top
-    -- `count`, pin the player's source into the last visible slot. isLocalPlayer
+    -- Visible range. Scrolling isn't wired yet (GetVerticalScroll is always 0), so
+    -- visLast is the number of rows that FULLY fit in the body -- math.floor, NOT
+    -- ceil. A ceil'd partial last row would be clipped at the body edge and bleed
+    -- toward the next stacked window / the gap, which reads as the two windows
+    -- OVERLAPPING (the Damage/Overall-Damage report). Rows past visLast are HIDDEN,
+    -- not shown-but-stale, so a pane only ever shows whole, current bars. When the
+    -- body isn't sized yet (first paint) render the whole set so it isn't blank.
+    local stride = W._snapStride or 1
+    if stride <= 0 then stride = 1 end
+    local viewH = (W.body and W.body:GetHeight()) or 0
+    local visLast = count
+    if viewH > 0 then
+        visLast = math_min(count, math.floor(viewH / stride))
+    end
+
+    -- Always-show-self: when enabled and the player is NOT within the VISIBLE rows
+    -- (1..visLast), pin the player's source into the last visible slot. isLocalPlayer
     -- is NeverSecret; a source's index in the pre-sorted combatSources IS its rank
-    -- (a plain integer). No arithmetic/compare on any secret amount anywhere — the
-    -- only reads are isLocalPlayer (boolean, NeverSecret) and the loop index.
+    -- (a plain integer). No arithmetic/compare on any secret amount anywhere -- the
+    -- only reads are isLocalPlayer (boolean, NeverSecret) and the loop index. Keyed
+    -- on visLast (the genuinely on-screen count) not the unclamped `count`, so the
+    -- pin search and the slot it lands in match what's actually shown.
     local pinSource, pinRank
-    if self.db and self.db.AlwaysShowSelf and count >= 1 then
+    if self.db and self.db.AlwaysShowSelf and visLast >= 1 then
         local inVisible = false
-        for i = 1, count do
+        for i = 1, visLast do
             local s = sources[i]
             if s and s.isLocalPlayer then inVisible = true; break end
         end
         if not inVisible then
-            for i = count + 1, #sources do
+            for i = visLast + 1, #sources do
                 local s = sources[i]
                 if s and s.isLocalPlayer then
                     pinSource = s
@@ -550,50 +583,27 @@ function DM:RenderWindow(W)
         end
     end
 
-    -- Visible range. Scrolling isn't wired yet (GetVerticalScroll is always 0), so
-    -- we skip that getter and keep only the viewport-height clamp -- visLast is the
-    -- last row whose top fits in the body (suppressing rows taller than the body).
-    -- When the body isn't sized yet, render the whole set so bars aren't left blank.
-    local stride = W._snapStride or 1
-    if stride <= 0 then stride = 1 end
-    local viewH = (W.body and W.body:GetHeight()) or 0
-    local visFirst, visLast
-    if viewH > 0 then
-        visFirst = 1
-        visLast = math_min(count, math.ceil(viewH / stride))
-    else
-        visFirst, visLast = 1, count
-    end
-
     -- maxAmount may be secret in combat; SetMinMaxValues accepts it, and the
     -- per-bar `or 1` fallback in RenderBar hardens against a malformed session
-    -- that omits it. Read once here and pass down.
+    -- that omits it. Read once here and pass down. Rows 1..visLast are filled +
+    -- shown; everything past visLast is hidden (no stale or partial bar lingers).
     local maxAmount = session.maxAmount
     for i = 1, self.BAR_POOL_SIZE do
         local bar = W.bars[i]
         local row = bar.row
-        if i <= count then
-            if i >= visFirst and i <= visLast then
-                -- The last VISIBLE slot (visLast, not count) shows the pinned player
-                -- at their real rank when AlwaysShowSelf pinned one; otherwise the
-                -- slot's own source. Keying on visLast keeps the pinned row inside
-                -- the ScrollFrame viewport -- in a multi-row column or a splitter-
-                -- shrunk pane visLast < count, and pinning at count would land the
-                -- player on a clipped (off-screen) row. RenderBar's `i` arg is the
-                -- displayed rank.
-                local src, rank = sources[i], i
-                if pinSource and i == visLast then
-                    src, rank = pinSource, pinRank
-                end
-                self:RenderBar(W, bar, rank, src, maxAmount)
+        if i <= visLast then
+            -- The last visible slot shows the pinned player at their real rank when
+            -- AlwaysShowSelf pinned one; otherwise the slot's own source. RenderBar's
+            -- `rank` arg is the displayed rank.
+            local src, rank = sources[i], i
+            if pinSource and i == visLast then
+                src, rank = pinSource, pinRank
             end
-            -- Show only if not already shown (mirrors EllesmereUI ~2776); skips
-            -- the redundant widget call on rows that are already visible.
+            self:RenderBar(W, bar, rank, src, maxAmount)
+            -- Show only if not already shown (mirrors EllesmereUI ~2776).
             if not row:IsShown() then row:Show() end
         else
-            -- Hide only if currently shown (mirrors EllesmereUI ~2887); with
-            -- VisibleBars defaulting to 10 this avoids ~30 redundant Hide() calls
-            -- per window per tick once the pool tail has settled hidden.
+            -- Hide only if currently shown (mirrors EllesmereUI ~2887).
             if row:IsShown() then row:Hide() end
         end
     end

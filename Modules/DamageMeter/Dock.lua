@@ -337,8 +337,8 @@ function DM:LayoutDock()
                     -- (preview/edit aid). posMap is column-then-row order, so the
                     -- badge reads 1,2,3... left->right / top->bottom regardless of
                     -- the window's storage index.
-                    if W.indexBadge then
-                        W.indexBadge:SetText(tostring(posMap[idx] or idx))
+                    if W.indexBadge and W.indexBadge.text then
+                        W.indexBadge.text:SetText(tostring(posMap[idx] or idx))
                     end
 
                     -- Drive the body width immediately so bars are full width on
@@ -1117,6 +1117,76 @@ function DM:MoveWindow(idx, dir)
             end
             self:RefreshDock()
         end
+    end
+end
+
+-- Drag-and-drop reorder: move `idx` so it takes the on-screen slot currently held
+-- by `targetIdx` (drop "here"). idx is pulled from wherever it is (emptied columns
+-- dropped), then inserted directly BEFORE targetIdx in targetIdx's column -- so a
+-- drop reorders within a column AND moves across columns with one gesture. The
+-- inserted RowRatios entry seeds at 1 (the column re-normalizes). All plain table
+-- edits on db.Dock.Columns -- never a secret. No-op when idx == targetIdx.
+function DM:MoveWindowToSlot(idx, targetIdx)
+    local db = self.db
+    local cols = db and db.Dock and db.Dock.Columns
+    if not cols or idx == targetIdx then return end
+
+    -- Remove idx from its current column.
+    for c = #cols, 1, -1 do
+        local wins = cols[c] and cols[c].Windows
+        if wins then
+            for r = #wins, 1, -1 do
+                if wins[r] == idx then
+                    table.remove(wins, r)
+                    if cols[c].RowRatios then table.remove(cols[c].RowRatios, r) end
+                end
+            end
+        end
+    end
+
+    -- Drop any column emptied by the removal (so the re-find below indexes the
+    -- post-removal structure -- mirrors SetWindowColumn's ordering).
+    for c = #cols, 1, -1 do
+        if cols[c] and cols[c].Windows and #cols[c].Windows == 0 then
+            table.remove(cols, c)
+        end
+    end
+
+    -- Re-find the target (still present -- it isn't idx) and insert idx before it.
+    for c = 1, #cols do
+        local wins = cols[c].Windows
+        if wins then
+            for r = 1, #wins do
+                if wins[r] == targetIdx then
+                    cols[c].RowRatios = cols[c].RowRatios or {}
+                    local rr = cols[c].RowRatios
+                    -- Seed the new row at the column's AVERAGE ratio so the dropped
+                    -- window takes a fair ~1/(n+1) share and the others keep their
+                    -- relative proportions -- a flat 1 against {0.4,0.6} would have
+                    -- the dropped window grab ~50% of the column on landing.
+                    local sum, n = 0, 0
+                    for k = 1, #rr do
+                        local v = rr[k]
+                        if type(v) == "number" and v > 0 then sum = sum + v; n = n + 1 end
+                    end
+                    local seed = (n > 0) and (sum / n) or 1
+                    table.insert(wins, r, idx)
+                    table.insert(rr, r, seed)
+                    self:RefreshDock()
+                    return
+                end
+            end
+        end
+    end
+
+    -- Target vanished (shouldn't happen): fall back to appending to column 1 so the
+    -- window is never lost.
+    if cols[1] then
+        cols[1].Windows = cols[1].Windows or {}
+        cols[1].RowRatios = cols[1].RowRatios or {}
+        cols[1].Windows[#cols[1].Windows + 1] = idx
+        cols[1].RowRatios[#cols[1].RowRatios + 1] = 1
+        self:RefreshDock()
     end
 end
 

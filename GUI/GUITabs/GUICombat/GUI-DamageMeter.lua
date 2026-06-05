@@ -272,7 +272,30 @@ local function BuildSchematic(card, height, cols, posOf, shortType)
     local container = CreateFrame("Frame", nil, card.content)
     container:SetHeight(height)
 
-    local boxAt = {}  -- boxAt[c][r] = box frame
+    local boxAt = {}    -- boxAt[c][r] = box frame
+    local allBoxes = {} -- flat list for drag hit-testing + highlight
+
+    -- Restore every box's resting accent border (clears any drag highlight).
+    local function ResetBorders()
+        for _, b in ipairs(allBoxes) do
+            b:SetBackdropBorderColor(T.accent[1], T.accent[2], T.accent[3], 0.9)
+        end
+    end
+
+    -- While a drag is active, brighten the box under the cursor (the drop target)
+    -- to white and leave the rest at the resting accent. Runs only during a drag.
+    local function HighlightUpdate()
+        local dragWin = container._dragWin
+        if not dragWin then return end
+        for _, b in ipairs(allBoxes) do
+            if b.winIdx ~= dragWin and b:IsMouseOver() then
+                b:SetBackdropBorderColor(1, 1, 1, 1)
+            else
+                b:SetBackdropBorderColor(T.accent[1], T.accent[2], T.accent[3], 0.9)
+            end
+        end
+    end
+
     for c = 1, #cols do
         local wins = cols[c].Windows or {}
         boxAt[c] = {}
@@ -301,7 +324,37 @@ local function BuildSchematic(card, height, cols, posOf, shortType)
             tlabel:SetText((shortType and shortType(idx)) or "")
             box.tlabel = tlabel
 
+            -- Drag-to-rearrange: drag a box onto another and the dragged window
+            -- drops into that slot (DM:MoveWindowToSlot inserts it before the
+            -- target). The dim + white-border highlight give live feedback; the
+            -- OnUpdate is attached only for the duration of a drag.
+            box.winIdx = idx
+            box:EnableMouse(true)
+            box:RegisterForDrag("LeftButton")
+            box:SetScript("OnDragStart", function(self2)
+                container._dragWin = self2.winIdx
+                self2:SetAlpha(0.55)
+                container:SetScript("OnUpdate", HighlightUpdate)
+            end)
+            box:SetScript("OnDragStop", function(self2)
+                container:SetScript("OnUpdate", nil)
+                self2:SetAlpha(1)
+                local dragWin = container._dragWin
+                container._dragWin = nil
+                ResetBorders()
+                if not dragWin then return end
+                local dm = GetDM()
+                for _, b in ipairs(allBoxes) do
+                    if b.winIdx ~= dragWin and b:IsMouseOver() then
+                        if dm and dm.MoveWindowToSlot then dm:MoveWindowToSlot(dragWin, b.winIdx) end
+                        RebuildPage()
+                        return
+                    end
+                end
+            end)
+
             boxAt[c][r] = box
+            allBoxes[#allBoxes + 1] = box
         end
     end
 
@@ -463,9 +516,9 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
     local arrNoteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
     local arrNote = GUIFrame:CreateText(arrNoteRow,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " " .. KE:ColorTextByTheme("Left/Right") .. " move between columns · " ..
-        KE:ColorTextByTheme("Up/Down") .. " reorder within a column. Numbers match the meter on screen.\n" ..
-        KE:ColorTextByTheme("-") .. " Or drag the gaps between windows in the world (up to " ..
+        KE:ColorTextByTheme("-") .. " " .. KE:ColorTextByTheme("Drag") .. " a window in the map above onto another to rearrange it, or use " ..
+        KE:ColorTextByTheme("Left/Right") .. " (columns) / " .. KE:ColorTextByTheme("Up/Down") .. " (within a column).\n" ..
+        KE:ColorTextByTheme("-") .. " Numbers match the meter on screen. Resize by dragging the gaps in the world (up to " ..
         maxWin .. " windows).",
         Theme.rowHeightLast, "hide")
     arrNoteRow:AddWidget(arrNote, 1)
