@@ -755,6 +755,21 @@ DM.SESSION_TYPE_NAMES = {
     [Enum.DamageMeterSessionType.Overall] = "Overall",
 }
 
+-- Single source of truth for a window's human label -- the EXACT string the
+-- in-world header shows ("Overall Damage Done", "Damage Done", "Deaths", ...), so
+-- the GUI layout map / drag ghost / move rows all match it and can't drift. The
+-- "Overall" prefix is added only for the Overall session; Current is unprefixed.
+-- nil-guarded: a missing meter-type key falls back to "Damage Done". Plain enum
+-- table lookups + string concat -- the enum config values are never secret.
+function DM:FormatWindowLabel(meterType, sessionType)
+    local typeName = self.METER_TYPE_NAMES[meterType] or "Damage Done"
+    local sessName = self.SESSION_TYPE_NAMES[sessionType]
+    if sessName and sessionType ~= Enum.DamageMeterSessionType.Current then
+        return sessName .. " " .. typeName
+    end
+    return typeName
+end
+
 ---------------------------------------------------------------------------------
 -- Render dispatch
 --

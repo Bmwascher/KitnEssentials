@@ -495,15 +495,7 @@ function DM:RenderWindow(W)
     if cfg.MeterType ~= W._headerType or cfg.SessionType ~= W._headerSession then
         W._headerType = cfg.MeterType
         W._headerSession = cfg.SessionType
-        local typeName = self.METER_TYPE_NAMES[cfg.MeterType] or "Damage Done"
-        local sessName = self.SESSION_TYPE_NAMES[cfg.SessionType]
-        local label
-        if sessName and cfg.SessionType ~= Enum.DamageMeterSessionType.Current then
-            label = sessName .. " " .. typeName
-        else
-            label = typeName
-        end
-        W.header:SetText(label)
+        W.header:SetText(self:FormatWindowLabel(cfg.MeterType, cfg.SessionType))
     end
 
     local session = self:CachedSession(cfg.SessionType, cfg.MeterType)

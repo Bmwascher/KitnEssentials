@@ -12,32 +12,8 @@ local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
 local pairs = pairs
 local CreateFrame = CreateFrame
 local math_max = math.max
-local math_rad = math.rad
 
 local activeTab = "General"
-
--- Arrow glyph for the Windows-tab move buttons. WoW FontStrings don't render
--- the ◄►▲▼ unicode glyphs in KE's fonts, so (like the slider steppers) we use a
--- rotated chevron TEXTURE instead. collapse.tga points down at 0 rad; the slider
--- widget establishes -90 = left, +90 = right for this same texture.
-local ARROW_TEXTURE = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.tga"
-local ARROW_ROT = { left = math_rad(-90), right = math_rad(90), up = math_rad(180), down = 0 }
-local MOVE_TOOLTIP = {
-    left  = "Move to the previous column",
-    right = "Move to the next column (splits into a new column at the right edge)",
-    up    = "Move up within this column",
-    down  = "Move down within this column",
-}
-
--- Short type names for the layout-map boxes (full names overflow a narrow box).
-local SHORT_TYPE = {
-    [Enum.DamageMeterType.DamageDone]  = "Damage",
-    [Enum.DamageMeterType.HealingDone] = "Healing",
-    [Enum.DamageMeterType.DamageTaken] = "Taken",
-    [Enum.DamageMeterType.Interrupts]  = "Interrupts",
-    [Enum.DamageMeterType.Dispels]     = "Dispels",
-    [Enum.DamageMeterType.Deaths]      = "Deaths",
-}
 
 -- Ordered option lists for the per-context default-display rows.
 local METER_TYPE_OPTIONS = {
@@ -235,33 +211,6 @@ local function FindWindowPos(cols, idx)
     return nil
 end
 
--- Builds one move button (◄ ► ▲ ▼) as a chevron-texture button rotated for the
--- given direction. NOT registered with the WidgetStateManager: it is gated by
--- POSITION here (SetEnabled below), and manager:UpdateAll would clobber that by
--- re-enabling it on module-enable. The owning card IS registered, so its alpha
--- cascade + mouse blocker still disable these visually + functionally when the
--- module is off.
-local function MakeMoveButton(parent, dir, idx, enabled)
-    local DM = GetDM()
-    local btn = GUIFrame:CreateButton(parent, "", {
-        image = ARROW_TEXTURE,
-        imageSize = 12,
-        tooltip = MOVE_TOOLTIP[dir],
-        callback = function()
-            if DM and DM.MoveWindow then DM:MoveWindow(idx, dir) end
-            RebuildPage()
-        end,
-    })
-    if btn.icon then
-        btn.icon:ClearAllPoints()
-        btn.icon:SetPoint("CENTER")
-        btn.icon:SetRotation(ARROW_ROT[dir] or 0)
-        btn.icon:SetVertexColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
-    end
-    btn:SetEnabled(enabled)
-    return btn
-end
-
 -- Reusable drag "ghost" that follows the cursor while dragging a schematic box,
 -- so you can see what you grabbed. A SINGLETON (created once, parented to UIParent
 -- at TOOLTIP strata so it floats above the panel and isn't clipped by the scroll
@@ -298,13 +247,14 @@ end
 
 -- Builds the layout-map schematic: one box per window, positioned proportionally
 -- to mirror the in-world dock (columns left->right, stacked rows top->bottom),
--- each stamped with its on-screen display number (posOf) + short type. Returns a
--- container frame the caller AddRow's into the card. Boxes are positioned in the
--- container's OnSizeChanged (its width isn't known until AddRow anchors it).
--- Drag a box onto another to rearrange: a cursor-following ghost shows what you
--- grabbed and a white insertion line shows exactly where it will drop (above the
--- hovered box, or below it when the cursor is in its lower half).
-local function BuildSchematic(card, height, cols, posOf, shortType)
+-- each stamped with its on-screen display number (posOf) + the FULL panel label
+-- (fullLabel(idx), matching the in-world header exactly -- e.g. "Overall Damage
+-- Done"). Returns a container frame the caller AddRow's into the card. Boxes are
+-- positioned in the container's OnSizeChanged (its width isn't known until AddRow
+-- anchors it). Drag a box onto another to rearrange: a cursor-following ghost
+-- shows what you grabbed and a white insertion line shows exactly where it will
+-- drop (above the hovered box, or below it when the cursor is in its lower half).
+local function BuildSchematic(card, height, cols, posOf, fullLabel)
     local T = Theme
     local container = CreateFrame("Frame", nil, card.content)
     container:SetHeight(height)
@@ -397,22 +347,29 @@ local function BuildSchematic(card, height, cols, posOf, shortType)
 
             local num = box:CreateFontString(nil, "OVERLAY")
             KE:ApplyThemeFont(num, "large")
-            num:SetPoint("CENTER", box, "CENTER", 0, 0)
+            num:SetPoint("CENTER", box, "CENTER", 0, 5)
             num:SetText(tostring(posOf[idx] or "?"))
             num:SetTextColor(1, 1, 1, 1)
             box.num = num
 
+            -- Full panel label across the bottom, wrapped (so long names like
+            -- "Overall Damage Done" stay readable in a narrow box instead of being
+            -- clipped); the number sits slightly above center to leave it room.
             local tlabel = box:CreateFontString(nil, "OVERLAY")
             KE:ApplyThemeFont(tlabel, "small")
-            tlabel:SetPoint("BOTTOM", box, "BOTTOM", 0, 3)
+            tlabel:SetPoint("BOTTOMLEFT", box, "BOTTOMLEFT", 2, 2)
+            tlabel:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", -2, 2)
+            tlabel:SetJustifyH("CENTER")
+            tlabel:SetWordWrap(true)
             tlabel:SetTextColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
-            tlabel:SetText((shortType and shortType(idx)) or "")
+            tlabel:SetText((fullLabel and fullLabel(idx)) or "")
             box.tlabel = tlabel
 
             -- Drag-to-rearrange: a cursor-following ghost shows what you grabbed and
             -- the white insertion line shows where it lands; on release the dragged
             -- window drops at that spot (DM:MoveWindowToSlot, before/after the
-            -- hovered box). Move buttons remain for precise control + new columns.
+            -- hovered box). The per-window "New Column" button handles the one thing
+            -- drag can't: splitting a window out into its own column.
             box.winIdx = idx
             box:EnableMouse(true)
             box:RegisterForDrag("LeftButton")
@@ -423,9 +380,10 @@ local function BuildSchematic(card, height, cols, posOf, shortType)
                 self2:SetAlpha(0.4)
                 local ghost = GetSchematicGhost()
                 local label = tostring(posOf[self2.winIdx] or "?")
-                local st = shortType and shortType(self2.winIdx)
-                if st and st ~= "" then label = label .. "  " .. st end
+                local nm = fullLabel and fullLabel(self2.winIdx)
+                if nm and nm ~= "" then label = label .. "  " .. nm end
                 ghost.text:SetText(label)
+                ghost:SetWidth(math_max(60, ghost.text:GetStringWidth() + 18))
                 ghost:Show()
                 container:SetScript("OnUpdate", DragUpdate)
                 DragUpdate()  -- position immediately, before the first frame tick
@@ -517,21 +475,26 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
 
     local cols = db.Dock and db.Dock.Columns
     -- Arrangement is DERIVED from the column shape (Horizontal/Vertical/Custom);
-    -- the move buttons below let the user reach any Custom layout directly, so the
-    -- old sticky "Custom" GUI override is no longer needed.
+    -- dragging boxes in the map + the per-window New Column button reach any Custom
+    -- layout directly, so the old sticky "Custom" GUI override is no longer needed.
     local arrangement = (DM and DM.GetArrangement and DM:GetArrangement()) or "Custom"
     local maxWin = db.MaxWindows or 5
 
-    -- The selected "Configure For" context (also used for the schematic's type
-    -- labels so the map reflects what the Default Display card is editing).
+    -- The selected "Configure For" context (also used for the schematic's labels so
+    -- the map reflects what the Default Display card is editing).
     if DM and DM.guiConfigContext == nil then DM.guiConfigContext = "Default" end
     local ctx = (DM and DM.guiConfigContext) or "Default"
     db.Windows = db.Windows or {}
-    local function ShortTypeFor(idx)
+    -- The FULL panel label for a window in the selected context -- identical to the
+    -- in-world header (via DM:FormatWindowLabel), so the map / ghost match it.
+    local function FullLabelFor(idx)
         local w = db.Windows[idx]
         if not (w and w.Contexts) then return "" end
         local cfg = w.Contexts[ctx] or w.Contexts.Default or {}
-        return SHORT_TYPE[cfg.MeterType] or ""
+        if DM and DM.FormatWindowLabel then
+            return DM:FormatWindowLabel(cfg.MeterType, cfg.SessionType)
+        end
+        return ""
     end
 
     ----------------------------------------------------------------
@@ -582,29 +545,39 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
 
     -- Visual layout map (numbered boxes mirroring the in-world dock).
     if cols and #order > 0 then
-        local schemRow = BuildSchematic(card1, 84, cols, posOf, ShortTypeFor)
+        local schemRow = BuildSchematic(card1, 84, cols, posOf, FullLabelFor)
         card1:AddRow(schemRow, 84)
     end
 
-    -- One move row per window: "Window n" + ◄ ► ▲ ▼ (gated at the edges).
+    -- One row per window: "Window n" + a "New Column" button that splits the window
+    -- out into its own column -- the one rearrange drag can't do. (Drag in the map
+    -- above handles reorder + stacking.) The button is NOT registered with the
+    -- manager (its gating below would be clobbered by manager:UpdateAll); the card's
+    -- blocker + alpha cascade still disable it when the module is off.
     for n = 1, #order do
         local idx = order[n]
-        local fc, fr, colLen = FindWindowPos(cols, idx)
+        local _, _, colLen = FindWindowPos(cols, idx)
         local rowM = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
 
         local lbl = GUIFrame:CreateText(rowM, "Window " .. n, "", Theme.rowHeight, "hide")
-        rowM:AddWidget(lbl, 0.4)
+        rowM:AddWidget(lbl, 0.6)
         manager:Register(lbl, "all")
 
-        -- left: enabled when not in the first column.
-        rowM:AddWidget(MakeMoveButton(rowM, "left", idx, (fc or 1) > 1 and #order > 1), 0.13)
-        -- right: enabled unless this is the lone window of the lone column.
-        local canRight = #order > 1 and not (colLen == 1 and (cols and #cols or 1) == 1)
-        rowM:AddWidget(MakeMoveButton(rowM, "right", idx, canRight), 0.13)
-        -- up: enabled when not the top of its column.
-        rowM:AddWidget(MakeMoveButton(rowM, "up", idx, (fr or 1) > 1), 0.13)
-        -- down: enabled when not the bottom of its column.
-        rowM:AddWidget(MakeMoveButton(rowM, "down", idx, (fr or 1) < (colLen or 1)), 0.13)
+        local newColBtn = GUIFrame:CreateButton(rowM, "New Column", {
+            callback = function()
+                -- A high target index makes SetWindowColumn create a fresh rightmost
+                -- column (it removes idx, drops emptied columns, then clamps the
+                -- target to #cols + 1). No-op when the window is already alone.
+                if DM and DM.SetWindowColumn then
+                    DM:SetWindowColumn(idx, ((cols and #cols) or 0) + 1)
+                end
+                RebuildPage()
+            end,
+        })
+        rowM:AddWidget(newColBtn, 0.4)
+        -- Meaningful only when the window shares its column with others; a window
+        -- already alone in its column would just land back where it is.
+        newColBtn:SetEnabled((colLen or 1) > 1)
 
         card1:AddRow(rowM, Theme.rowHeight)
     end
@@ -612,8 +585,8 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
     local arrNoteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
     local arrNote = GUIFrame:CreateText(arrNoteRow,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " " .. KE:ColorTextByTheme("Drag") .. " a window in the map above onto another to rearrange it, or use " ..
-        KE:ColorTextByTheme("Left/Right") .. " (columns) / " .. KE:ColorTextByTheme("Up/Down") .. " (within a column).\n" ..
+        KE:ColorTextByTheme("-") .. " " .. KE:ColorTextByTheme("Drag") .. " a window in the map onto another to reorder or stack it; " ..
+        KE:ColorTextByTheme("New Column") .. " splits one out on its own.\n" ..
         KE:ColorTextByTheme("-") .. " Numbers match the meter on screen. Resize by dragging the gaps in the world (up to " ..
         maxWin .. " windows).",
         Theme.rowHeightLast, "hide")
