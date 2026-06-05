@@ -355,9 +355,13 @@ function DM:RenderDeathRecap(W)
             if issecretvalue(amt) or type(amt) ~= "number" then amtPlain = 0 end
             local body = (self.FormatBarValue and select(1, self.FormatBarValue(math_max(0, amtPlain), nil, false))) or tostring(amtPlain)
             local sign = isHeal and "+" or "-"
-            local crit = ev.critical and " |cffffd100*|r" or ""
+            -- ev.critical is AllowedWhenUntainted (same window as ev.amount, line 349).
+            -- A boolean-truthiness test on a secret BOOLEAN throws -- sanitize to a plain
+            -- bool first (issecretvalue gate) so the marker test never touches a secret.
+            local critFlag = (not issecretvalue(ev.critical)) and ev.critical or false
+            local crit = critFlag and " |cffffd100*|r" or ""
             local pctSuffix = format(" (%.0f%%)", hpPct * 100)
-            if isFatal and ev.overkill and type(ev.overkill) == "number" and ev.overkill > 0 then
+            if isFatal and not issecretvalue(ev.overkill) and type(ev.overkill) == "number" and ev.overkill > 0 then
                 local okStr = (self.FormatBarValue and select(1, self.FormatBarValue(ev.overkill, nil, false))) or tostring(ev.overkill)
                 row.value:SetText(sign .. body .. crit .. " |cffff3333(" .. okStr .. " overkill)|r" .. pctSuffix)
             else

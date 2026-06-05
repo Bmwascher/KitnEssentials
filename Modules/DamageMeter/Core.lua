@@ -714,7 +714,10 @@ function DM:GetDeathRecap(recapID)
     if not recapID or issecretvalue(recapID) or recapID <= 0 then return nil end
     if C_DeathRecap.HasRecapEvents then
         local okh, has = pcall(C_DeathRecap.HasRecapEvents, recapID)
-        if not okh or not has then return nil end
+        -- HasRecapEvents is AllowedWhenUntainted -> `has` can be a secret BOOLEAN in a
+        -- tainted call path. A truthiness test on a secret boolean throws, so bail out
+        -- (treat secret as "no recap") rather than crash on the `not has` test.
+        if not okh or issecretvalue(has) or not has then return nil end
     end
     local ok, raw = pcall(C_DeathRecap.GetRecapEvents, recapID)
     if not ok or not raw or #raw == 0 then return nil end
@@ -739,6 +742,33 @@ local function FormatRecapDelta(deathTime, ts)
     return format("-%.1fs", deathTime - ts)
 end
 DM.FormatRecapDelta = FormatRecapDelta
+
+---------------------------------------------------------------------------------
+-- Header-icon callbacks (Phase 4)
+--
+-- Wired by the three header buttons built in Window.lua CreateWindow. The window
+-- handle is passed through (unused by Settings/Reset today, but kept so a future
+-- per-window action has it). ToggleSegmentMenu is a stub filled by Task 6.
+---------------------------------------------------------------------------------
+
+-- Settings: open the GUI straight to the Damage Meter page (combat section).
+function DM:HeaderSettings(_)
+    if KE.GUIFrame and KE.GUIFrame.OpenPage then
+        KE.GUIFrame:OpenPage("DamageMeter", "combat_section")
+    end
+end
+
+-- Reset: clear all combat sessions, then repaint so the bars empty immediately.
+-- ResetAllCombatSessions is nil-guarded + pcall'd (12.0 API surface may shift).
+function DM:HeaderReset(_)
+    if C_DamageMeter and C_DamageMeter.ResetAllCombatSessions then
+        pcall(C_DamageMeter.ResetAllCombatSessions)
+    end
+    if self.Tick then self:Tick() end
+end
+
+-- Segment menu (⌚): lazily-built session/history picker. Filled in Task 6.
+function DM:ToggleSegmentMenu(_) end
 
 ---------------------------------------------------------------------------------
 -- Content-context resolver

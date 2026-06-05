@@ -246,6 +246,43 @@ function DM:CreateWindow(winIdx)
     W.indexBadge.text:SetText(tostring((self._winDisplayPos and self._winDisplayPos[winIdx]) or winIdx))
     if self._badgesShown then W.indexBadge:Show() else W.indexBadge:Hide() end
 
+    -- Phase 4 header icons: settings / reset / segment, right-aligned, stepping
+    -- left from the frame's TOPRIGHT. Built once here (the pool-build below never
+    -- re-runs); visibility is driven by db.ShowHeaderIcons (Task 7). The frame level
+    -- is bumped above the bars so the icons stay clickable over the body rows. The
+    -- callbacks resolve DM methods at click time (Core.lua defines them), matching
+    -- the runtime-resolve pattern used by the OnClick -> DM:OpenDetail hook above.
+    local function MakeHeaderBtn(tex, tooltip, onClick, xStep)
+        local b = CreateFrame("Button", nil, W.frame)
+        b:SetSize(14, 14)
+        b:SetPoint("TOPRIGHT", W.frame, "TOPRIGHT", -2 - xStep, -3)
+        b:SetFrameLevel(W.frame:GetFrameLevel() + 5)
+        b.icon = b:CreateTexture(nil, "OVERLAY")
+        b.icon:SetAllPoints(b)
+        b.icon:SetTexture(tex)
+        b.icon:SetVertexColor(0.8, 0.8, 0.8)
+        b:SetScript("OnEnter", function(btn)
+            btn.icon:SetVertexColor(1, 1, 1)
+            GameTooltip:SetOwner(btn, "ANCHOR_TOP")
+            GameTooltip:SetText(tooltip)
+            GameTooltip:Show()
+        end)
+        b:SetScript("OnLeave", function(btn)
+            btn.icon:SetVertexColor(0.8, 0.8, 0.8)
+            GameTooltip:Hide()
+        end)
+        b:SetScript("OnClick", onClick)
+        return b
+    end
+
+    W.headerBtns = {}
+    W.headerBtns.settings = MakeHeaderBtn("Interface\\GossipFrame\\BinderGossipIcon",
+        "Settings", function() DM:HeaderSettings(W) end, 0)
+    W.headerBtns.reset = MakeHeaderBtn("Interface\\Buttons\\UI-RefreshButton",
+        "Reset", function() DM:HeaderReset(W) end, 18)
+    W.headerBtns.segment = MakeHeaderBtn("Interface\\Buttons\\UI-GuildButton-PublicNote-Up",
+        "Segment", function() DM:ToggleSegmentMenu(W) end, 36)
+
     -- Scroll viewport + content child. The content child holds the bar rows;
     -- the render layer scrolls the viewport for virtualization. Sized to 1,1
     -- here; DM:LayoutWindow (below) owns the body's anchors and the real
