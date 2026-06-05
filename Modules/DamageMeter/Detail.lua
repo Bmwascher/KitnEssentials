@@ -603,6 +603,11 @@ local _tipActiveBar             -- the bar currently hovered (nil = none); drive
 local _tipPoll                  -- detach-when-idle OnUpdate frame
 local _tipPollAccum = 0
 
+-- Tooltip text renders one point below the configured bar font so the quick-peek packs
+-- densely (request 2026-06-05). Clamped to a readable floor. Every tip text element derives
+-- its size from this; the column/section headers sit one notch below it (TipFontSize - 1).
+local function TipFontSize(s) return math_max(8, (s or 12) - 1) end
+
 -- One tip row: [icon] name .......... value. Same anatomy as MakeDetailRow but
 -- parented to the tip and laid out by index (the tip is fixed-width, no scroll).
 -- Scripts are NOT wired here -- the tip is passive (EnableMouse(false)), so a row
@@ -632,7 +637,7 @@ local function MakeTipRow(parent, rowH)
     row.iconFrame:Hide()
 
     local face = db and db.FontFace
-    local size = db and db.FontSize
+    local size = TipFontSize(db and db.FontSize)
     local outline = db and db.FontOutline
     row.label = row.fill:CreateFontString(nil, "OVERLAY")
     row.label:SetJustifyH("LEFT")
@@ -690,7 +695,7 @@ local function MakeTargetRow(parent, rowH)
     row.icon:SetSize(rowH, rowH)
 
     local face = db and db.FontFace
-    local size = db and db.FontSize
+    local size = TipFontSize(db and db.FontSize)
     local outline = db and db.FontOutline
     row.label = row.fill:CreateFontString(nil, "OVERLAY")
     row.label:SetPoint("LEFT", row.icon, "RIGHT", 3, 0)
@@ -747,7 +752,7 @@ function DM:EnsureHoverTip()
     KE:ApplyBackdrop(f, f._backdropCfg)
 
     local face = db and db.FontFace
-    local size = db and db.FontSize
+    local size = TipFontSize(db and db.FontSize)
     local outline = db and db.FontOutline
 
     -- Source-name title: CENTERED + class-colored (request 2026-06-05). The class tint
@@ -767,7 +772,7 @@ function DM:EnsureHoverTip()
     -- path, hidden for the Deaths recap (which keeps a single value column). Anchored just
     -- below the source header; PopulateHoverTip toggles it and offsets the data rows by
     -- COL_HDR_H when visible.
-    local colSize = math.max(9, (size or 12) - 1)   -- white header, slightly larger than the old size-2 gray
+    local colSize = math.max(8, size - 1)   -- white header, one notch below the (reduced) tip text
     f.colHdr = {}
     f.colHdr.spell = f:CreateFontString(nil, "OVERLAY")
     f.colHdr.spell:SetJustifyH("LEFT")
@@ -859,8 +864,9 @@ local function RenderTipTargets(self, bar, cfg, sessionID, topY, stride, barH)
         _tip.tgtDivider:SetColorTexture(1, 1, 1, 0.15)
 
         local db = DM.db
-        local face, size, outline = db and db.FontFace, db and db.FontSize, db and db.FontOutline
-        local lblSize = math_max(9, (size or 12) - 1)   -- match the top column headers (white, size-1)
+        local face, outline = db and db.FontFace, db and db.FontOutline
+        local size = TipFontSize(db and db.FontSize)
+        local lblSize = math_max(8, size - 1)   -- one notch below the (already-reduced) tip text
 
         _tip.tgtLabel = _tip:CreateFontString(nil, "OVERLAY")
         _tip.tgtLabel:SetJustifyH("LEFT")
@@ -960,7 +966,7 @@ end
 function DM:PopulateHoverTip(W, bar)
     self:EnsureHoverTip()
     local face = self.db and self.db.FontFace
-    local size = self.db and self.db.FontSize
+    local size = TipFontSize(self.db and self.db.FontSize)
     local outline = self.db and self.db.FontOutline
     local headerH = TIP_PAD * 2 + (size or 12)
 
@@ -1325,7 +1331,7 @@ function DM:ReapplyHoverTipVisuals()
     if not _tip then return end
     local db = self.db
     local face = db and db.FontFace
-    local size = db and db.FontSize
+    local size = TipFontSize(db and db.FontSize)
     local outline = db and db.FontOutline
     local texPath = KE:GetStatusbarPath(db and db.StatusBarTexture or "KitnUI")
 
@@ -1333,7 +1339,7 @@ function DM:ReapplyHoverTipVisuals()
     if _tip.msg then KE:ApplyFontToText(_tip.msg, face, size, outline) end
     -- Phase 4c: the column-header labels track the data font (white, one notch below data).
     if _tip.colHdr then
-        local colSize = math.max(9, (size or 12) - 1)
+        local colSize = math.max(8, size - 1)
         KE:ApplyFontToText(_tip.colHdr.spell, face, colSize, outline)
         KE:ApplyFontToText(_tip.colHdr.amount, face, colSize, outline)
         KE:ApplyFontToText(_tip.colHdr.dps, face, colSize, outline)
@@ -1355,7 +1361,7 @@ function DM:ReapplyHoverTipVisuals()
     -- Phase 4c Targets sub-section: label tracks the data font at the small size; rows
     -- track the data font + statusbar texture. Lazy-built, so guard on existence.
     if _tip.tgtLabel then
-        local lblSize = math.max(9, (size or 12) - 1)   -- match the white column headers
+        local lblSize = math.max(8, size - 1)   -- match the white column headers
         KE:ApplyFontToText(_tip.tgtLabel, face, lblSize, outline)
         if _tip.tgtHdrAmount then
             KE:ApplyFontToText(_tip.tgtHdrAmount, face, lblSize, outline)
