@@ -283,6 +283,11 @@ function DM:CreateWindow(winIdx)
     W.headerBtns.segment = MakeHeaderBtn("Interface\\Buttons\\UI-GuildButton-PublicNote-Up",
         "Segment", function() DM:ToggleSegmentMenu(W) end, 36)
 
+    -- Apply the initial header-icon visibility / mouseover state from the DB
+    -- (Task 7). ApplyHeaderIcons is idempotent and is also re-run from
+    -- ReapplyBarVisuals so a live GUI toggle takes effect without a /reload.
+    self:ApplyHeaderIcons(W)
+
     -- Scroll viewport + content child. The content child holds the bar rows;
     -- the render layer scrolls the viewport for virtualization. Sized to 1,1
     -- here; DM:LayoutWindow (below) owns the body's anchors and the real
@@ -504,6 +509,83 @@ function DM:ReapplyBarVisuals(W)
         if W.detail.msg then
             KE:ApplyFontToText(W.detail.msg, face, size, outline)
         end
+    end
+
+    -- Header icons (segment / reset / settings) follow ShowHeaderIcons /
+    -- HeaderIconsMouseover. Re-applied here so a live GUI toggle takes effect
+    -- without a /reload (CreateWindow does the first apply).
+    self:ApplyHeaderIcons(W)
+end
+
+---------------------------------------------------------------------------------
+-- Header-icon visibility (Phase 4 / Task 7)
+--
+-- ShowHeaderIcons=false hides all three header buttons outright. When shown,
+-- HeaderIconsMouseover=true keeps them at alpha 0 until the window frame is
+-- hovered (revealed on OnEnter, hidden again on OnLeave); false leaves them
+-- fully visible. Built once in CreateWindow, so this only flips alpha/Show and
+-- (re)wires the frame's hover scripts -- safe to call every ApplySettings.
+---------------------------------------------------------------------------------
+function DM:ApplyHeaderIcons(W)
+    if not W or not W.headerBtns then return end
+    local db = self.db
+    local show = not db or db.ShowHeaderIcons ~= false
+    local mouseover = db and db.HeaderIconsMouseover
+
+    if not show then
+        -- Hidden entirely; drop any hover scripts so a stale mouseover handler
+        -- can't re-reveal them after the toggle is turned off.
+        for _, b in pairs(W.headerBtns) do
+            b:Hide()
+        end
+        if W._headerIconHover then
+            W.frame:SetScript("OnEnter", nil)
+            W.frame:SetScript("OnLeave", nil)
+            -- Release the mouse capture the mouseover branch turned on; the same leak
+            -- the non-mouseover branch guards against, on the hide-entirely path.
+            W.frame:EnableMouse(false)
+            W._headerIconHover = false
+        end
+        return
+    end
+
+    -- Shown. Make sure each button frame is visible; the mouseover branch uses
+    -- alpha (not Show/Hide) so the frames keep receiving the window's OnEnter.
+    for _, b in pairs(W.headerBtns) do
+        b:Show()
+    end
+
+    if mouseover then
+        for _, b in pairs(W.headerBtns) do
+            b:SetAlpha(0)
+        end
+        if not W._headerIconHover then
+            W.frame:EnableMouse(true)
+            W.frame:SetScript("OnEnter", function() DM:SetHeaderIconAlpha(W, 1) end)
+            W.frame:SetScript("OnLeave", function() DM:SetHeaderIconAlpha(W, 0) end)
+            W._headerIconHover = true
+        end
+    else
+        for _, b in pairs(W.headerBtns) do
+            b:SetAlpha(1)
+        end
+        if W._headerIconHover then
+            W.frame:SetScript("OnEnter", nil)
+            W.frame:SetScript("OnLeave", nil)
+            -- Release the mouse capture turned on for the mouseover branch; without
+            -- this the window frame keeps intercepting clicks over the header band
+            -- until /reload after mouseover mode is toggled off.
+            W.frame:EnableMouse(false)
+            W._headerIconHover = false
+        end
+    end
+end
+
+-- Hover helper for the mouseover-reveal mode; pulls the icon set to alpha a.
+function DM:SetHeaderIconAlpha(W, a)
+    if not W or not W.headerBtns then return end
+    for _, b in pairs(W.headerBtns) do
+        b:SetAlpha(a)
     end
 end
 

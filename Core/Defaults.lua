@@ -1553,6 +1553,11 @@ local Defaults = {
             ShowPercent = false,
             VisibleBars = 10,
 
+            -- Header icons (segment / reset / settings) — Phase 4 detail surface
+            ShowHeaderIcons = true,
+            HeaderIconsMouseover = false,
+            DetailMaxRows = 40,
+
             -- Shared backdrop (flat); arrangement is owned by Dock below
             BackdropEnabled = true,                     -- off: windows render with no wrapping bg/border
             BackdropBorderStyle = "neutral",            -- neutral | accent | theme

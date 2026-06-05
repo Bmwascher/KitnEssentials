@@ -791,12 +791,21 @@ local SEGMENT_SESSION_TYPES = {
 -- Last `cap` available combat sessions (newest last), or nil. The API call is
 -- pcall'd (it may reject while execution is tainted); name/durationSeconds on each
 -- entry are display-only and secret-guarded by SafeSessionName / FormatDeathTime at
--- render time, never compared or math'd raw.
+-- render time, never compared or math'd raw. The full API list is trimmed here to
+-- the last `cap` entries so the caller gets exactly the contract the name promises.
 function DM:GetAvailableSessions(cap)
     if not (C_DamageMeter and C_DamageMeter.GetAvailableCombatSessions) then return nil end
     local ok, list = pcall(C_DamageMeter.GetAvailableCombatSessions)
     if not ok or not list then return nil end
-    return list, cap or 20
+    cap = cap or 20
+    if #list <= cap then return list end
+    -- Keep only the newest `cap` entries (sessions are a plain array, no secrets in
+    -- the indices), preserving order so the newest fights stay nearest the button.
+    local trimmed = {}
+    for i = #list - cap + 1, #list do
+        trimmed[#trimmed + 1] = list[i]
+    end
+    return trimmed
 end
 
 -- "Combat" fallback when a session name is secret/empty (mirrors EllesmereUI:1881).
@@ -835,12 +844,12 @@ function DM:ToggleSegmentMenu(W)
     local anchor = (W.headerBtns and W.headerBtns.segment) or W.frame
 
     MenuUtil.CreateContextMenu(anchor, function(_, root)
-        -- Stored sessions first (top of the menu). Iterate the LAST `cap` entries so
-        -- the newest fights are nearest the button; index is plain (a normal array).
-        local list, cap = self:GetAvailableSessions(20)
+        -- Stored sessions first (top of the menu). GetAvailableSessions already trims
+        -- to the last 20 (newest last), so the newest fights are nearest the button;
+        -- index is plain (a normal array).
+        local list = self:GetAvailableSessions(20)
         if list and #list > 0 then
-            local startIdx = math.max(1, #list - (cap - 1))
-            for i = startIdx, #list do
+            for i = 1, #list do
                 local s = list[i]
                 if s then
                     local sid = s.sessionID

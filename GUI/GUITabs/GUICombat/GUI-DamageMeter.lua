@@ -1018,14 +1018,38 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     manager:Register(selfChk, "all")
     card2:AddRow(row2c, Theme.rowHeight)
 
-    local row2d = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local row2d = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local realmChk = GUIFrame:CreateCheckbox(row2d, "Show Realm Names", {
         value = db.ShowRealm == true,
         callback = function(checked) db.ShowRealm = checked; ApplySettings() end,
     })
     row2d:AddWidget(realmChk, 0.5)
     manager:Register(realmChk, "all")
-    card2:AddRow(row2d, Theme.rowHeightLast, 0)
+    card2:AddRow(row2d, Theme.rowHeight)
+
+    -- Header icons (segment / reset / settings) on each window header band.
+    -- "Only on mouseover" is greyed when the icons are hidden entirely.
+    manager:SetCondition("headericons", function() return db.ShowHeaderIcons ~= false end)
+
+    local row2e = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local headerIconsChk = GUIFrame:CreateCheckbox(row2e, "Show Header Icons", {
+        value = db.ShowHeaderIcons ~= false,
+        callback = function(checked)
+            db.ShowHeaderIcons = checked
+            ApplySettings()
+            manager:UpdateAll(db.Enabled ~= false)
+        end,
+    })
+    row2e:AddWidget(headerIconsChk, 0.5)
+    manager:Register(headerIconsChk, "all")
+
+    local headerMouseoverChk = GUIFrame:CreateCheckbox(row2e, "Only on Mouseover", {
+        value = db.HeaderIconsMouseover == true,
+        callback = function(checked) db.HeaderIconsMouseover = checked; ApplySettings() end,
+    })
+    row2e:AddWidget(headerMouseoverChk, 0.5)
+    manager:Register(headerMouseoverChk, "headericons")
+    card2:AddRow(row2e, Theme.rowHeightLast, 0)
 
     yOffset = card2:GetNextOffset()
 
