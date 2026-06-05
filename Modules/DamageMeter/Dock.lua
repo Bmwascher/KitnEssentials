@@ -1120,13 +1120,15 @@ function DM:MoveWindow(idx, dir)
     end
 end
 
--- Drag-and-drop reorder: move `idx` so it takes the on-screen slot currently held
--- by `targetIdx` (drop "here"). idx is pulled from wherever it is (emptied columns
--- dropped), then inserted directly BEFORE targetIdx in targetIdx's column -- so a
+-- Drag-and-drop reorder: move `idx` to land next to `targetIdx` -- BEFORE it
+-- (default) or AFTER it (after=true, i.e. the cursor was in the target's lower
+-- half). idx is pulled from wherever it is (emptied columns dropped), then
+-- inserted into targetIdx's column at the target's row (+1 when after) -- so a
 -- drop reorders within a column AND moves across columns with one gesture. The
--- inserted RowRatios entry seeds at 1 (the column re-normalizes). All plain table
--- edits on db.Dock.Columns -- never a secret. No-op when idx == targetIdx.
-function DM:MoveWindowToSlot(idx, targetIdx)
+-- inserted RowRatios entry seeds at the column average (a fair ~1/(n+1) share).
+-- All plain table edits on db.Dock.Columns -- never a secret. No-op when
+-- idx == targetIdx.
+function DM:MoveWindowToSlot(idx, targetIdx, after)
     local db = self.db
     local cols = db and db.Dock and db.Dock.Columns
     if not cols or idx == targetIdx then return end
@@ -1170,8 +1172,11 @@ function DM:MoveWindowToSlot(idx, targetIdx)
                         if type(v) == "number" and v > 0 then sum = sum + v; n = n + 1 end
                     end
                     local seed = (n > 0) and (sum / n) or 1
-                    table.insert(wins, r, idx)
-                    table.insert(rr, r, seed)
+                    -- Insert before the target, or after it (one row lower) when the
+                    -- drop landed in the target's lower half.
+                    local at = after and (r + 1) or r
+                    table.insert(wins, at, idx)
+                    table.insert(rr, at, seed)
                     self:RefreshDock()
                     return
                 end

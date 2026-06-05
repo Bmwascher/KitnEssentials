@@ -262,11 +262,48 @@ local function MakeMoveButton(parent, dir, idx, enabled)
     return btn
 end
 
+-- Reusable drag "ghost" that follows the cursor while dragging a schematic box,
+-- so you can see what you grabbed. A SINGLETON (created once, parented to UIParent
+-- at TOOLTIP strata so it floats above the panel and isn't clipped by the scroll
+-- frame) -- created per-rebuild it would leak a frame every RefreshContent.
+local schematicGhost
+local function GetSchematicGhost()
+    if schematicGhost then return schematicGhost end
+    local g = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+    g:SetSize(78, 26)
+    g:SetFrameStrata("TOOLTIP")
+    g:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = 1,
+    })
+    g:SetBackdropColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 0.9)
+    g:SetBackdropBorderColor(1, 1, 1, 1)
+    g.text = g:CreateFontString(nil, "OVERLAY")
+    g.text:SetPoint("CENTER")
+    KE:ApplyThemeFont(g.text, "large")
+    g.text:SetTextColor(1, 1, 1, 1)
+    -- Self-heal: if the ghost is ever left shown after the mouse button is
+    -- released (e.g. a RefreshContent tore down the dragging box before its
+    -- OnDragStop could fire), hide it on the next frame. Runs ONLY while the ghost
+    -- is shown (a hidden frame's OnUpdate doesn't tick), so no idle cost; the
+    -- normal OnDragStop path still hides it explicitly.
+    g:SetScript("OnUpdate", function(self)
+        if not IsMouseButtonDown("LeftButton") then self:Hide() end
+    end)
+    g:Hide()
+    schematicGhost = g
+    return g
+end
+
 -- Builds the layout-map schematic: one box per window, positioned proportionally
 -- to mirror the in-world dock (columns left->right, stacked rows top->bottom),
 -- each stamped with its on-screen display number (posOf) + short type. Returns a
 -- container frame the caller AddRow's into the card. Boxes are positioned in the
 -- container's OnSizeChanged (its width isn't known until AddRow anchors it).
+-- Drag a box onto another to rearrange: a cursor-following ghost shows what you
+-- grabbed and a white insertion line shows exactly where it will drop (above the
+-- hovered box, or below it when the cursor is in its lower half).
 local function BuildSchematic(card, height, cols, posOf, shortType)
     local T = Theme
     local container = CreateFrame("Frame", nil, card.content)
@@ -275,6 +312,13 @@ local function BuildSchematic(card, height, cols, posOf, shortType)
     local boxAt = {}    -- boxAt[c][r] = box frame
     local allBoxes = {} -- flat list for drag hit-testing + highlight
 
+    -- Insertion line: a bright white bar shown at the edge where the dragged
+    -- window will land (top of the hovered box = drop before it; bottom = after).
+    local dropLine = container:CreateTexture(nil, "OVERLAY")
+    dropLine:SetColorTexture(1, 1, 1, 1)
+    dropLine:SetHeight(3)
+    dropLine:Hide()
+
     -- Restore every box's resting accent border (clears any drag highlight).
     local function ResetBorders()
         for _, b in ipairs(allBoxes) do
@@ -282,17 +326,58 @@ local function BuildSchematic(card, height, cols, posOf, shortType)
         end
     end
 
-    -- While a drag is active, brighten the box under the cursor (the drop target)
-    -- to white and leave the rest at the resting accent. Runs only during a drag.
-    local function HighlightUpdate()
+    -- Per-frame drag feedback (attached as the container OnUpdate only while a box
+    -- is being dragged): moves the ghost to the cursor, finds the box under the
+    -- cursor + which half (top = insert before, bottom = insert after), highlights
+    -- it, and parks the insertion line at that edge. The chosen target is stashed
+    -- on the container for OnDragStop to act on. When the cursor isn't over a valid
+    -- target box, the line + target clear (a drop there is a no-op).
+    local function DragUpdate()
         local dragWin = container._dragWin
         if not dragWin then return end
+
+        -- Ghost follows the cursor (UIParent space).
+        local ghost = GetSchematicGhost()
+        local us = UIParent:GetEffectiveScale()
+        local mx, my = GetCursorPosition()
+        ghost:ClearAllPoints()
+        ghost:SetPoint("CENTER", UIParent, "BOTTOMLEFT", (mx / us) + 16, (my / us) - 14)
+
+        -- Hit-test the boxes (each box's own effective scale, the standard idiom).
+        local hit, after
         for _, b in ipairs(allBoxes) do
-            if b.winIdx ~= dragWin and b:IsMouseOver() then
-                b:SetBackdropBorderColor(1, 1, 1, 1)
-            else
-                b:SetBackdropBorderColor(T.accent[1], T.accent[2], T.accent[3], 0.9)
+            if b.winIdx ~= dragWin then
+                local bs = b:GetEffectiveScale()
+                local cx, cy = mx / bs, my / bs
+                local L, R, Tp, B = b:GetLeft(), b:GetRight(), b:GetTop(), b:GetBottom()
+                if L and R and Tp and B and cx >= L and cx <= R and cy >= B and cy <= Tp then
+                    hit = b
+                    after = cy < (Tp + B) / 2   -- lower half -> drop AFTER this box
+                    break
+                end
             end
+        end
+
+        ResetBorders()
+        if hit then
+            hit:SetBackdropBorderColor(1, 1, 1, 1)
+            dropLine:ClearAllPoints()
+            if after then
+                -- Drop AFTER: line in the gap just below the box.
+                dropLine:SetPoint("TOPLEFT", hit, "BOTTOMLEFT", 0, -1)
+                dropLine:SetPoint("TOPRIGHT", hit, "BOTTOMRIGHT", 0, -1)
+            else
+                -- Drop BEFORE: line in the gap just above the box.
+                dropLine:SetPoint("BOTTOMLEFT", hit, "TOPLEFT", 0, 1)
+                dropLine:SetPoint("BOTTOMRIGHT", hit, "TOPRIGHT", 0, 1)
+            end
+            dropLine:Show()
+            container._dropAnchor = hit.winIdx
+            container._dropAfter = after
+        else
+            dropLine:Hide()
+            container._dropAnchor = nil
+            container._dropAfter = nil
         end
     end
 
@@ -324,32 +409,43 @@ local function BuildSchematic(card, height, cols, posOf, shortType)
             tlabel:SetText((shortType and shortType(idx)) or "")
             box.tlabel = tlabel
 
-            -- Drag-to-rearrange: drag a box onto another and the dragged window
-            -- drops into that slot (DM:MoveWindowToSlot inserts it before the
-            -- target). The dim + white-border highlight give live feedback; the
-            -- OnUpdate is attached only for the duration of a drag.
+            -- Drag-to-rearrange: a cursor-following ghost shows what you grabbed and
+            -- the white insertion line shows where it lands; on release the dragged
+            -- window drops at that spot (DM:MoveWindowToSlot, before/after the
+            -- hovered box). Move buttons remain for precise control + new columns.
             box.winIdx = idx
             box:EnableMouse(true)
             box:RegisterForDrag("LeftButton")
             box:SetScript("OnDragStart", function(self2)
                 container._dragWin = self2.winIdx
-                self2:SetAlpha(0.55)
-                container:SetScript("OnUpdate", HighlightUpdate)
+                container._dropAnchor = nil
+                container._dropAfter = nil
+                self2:SetAlpha(0.4)
+                local ghost = GetSchematicGhost()
+                local label = tostring(posOf[self2.winIdx] or "?")
+                local st = shortType and shortType(self2.winIdx)
+                if st and st ~= "" then label = label .. "  " .. st end
+                ghost.text:SetText(label)
+                ghost:Show()
+                container:SetScript("OnUpdate", DragUpdate)
+                DragUpdate()  -- position immediately, before the first frame tick
             end)
             box:SetScript("OnDragStop", function(self2)
                 container:SetScript("OnUpdate", nil)
                 self2:SetAlpha(1)
-                local dragWin = container._dragWin
-                container._dragWin = nil
+                GetSchematicGhost():Hide()
+                dropLine:Hide()
                 ResetBorders()
-                if not dragWin then return end
-                local dm = GetDM()
-                for _, b in ipairs(allBoxes) do
-                    if b.winIdx ~= dragWin and b:IsMouseOver() then
-                        if dm and dm.MoveWindowToSlot then dm:MoveWindowToSlot(dragWin, b.winIdx) end
-                        RebuildPage()
-                        return
-                    end
+                local dragWin = container._dragWin
+                local anchor = container._dropAnchor
+                local after = container._dropAfter
+                container._dragWin = nil
+                container._dropAnchor = nil
+                container._dropAfter = nil
+                if dragWin and anchor and anchor ~= dragWin then
+                    local dm = GetDM()
+                    if dm and dm.MoveWindowToSlot then dm:MoveWindowToSlot(dragWin, anchor, after) end
+                    RebuildPage()
                 end
             end)
 
