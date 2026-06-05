@@ -477,8 +477,9 @@ local function BuildAllPlayerTargets(session, sessionID)
         return nil
     end
 
-    local enemyNames = {}  -- enemyKey -> display name (ConditionalSecret; SetText only)
-    local byPlayer = {}    -- playerName -> { [enemyKey] = accumulated amount }
+    local enemyNames = {}   -- enemyKey -> display name (ConditionalSecret; SetText only)
+    local enemyTotals = {}  -- enemyKey -> total damage that enemy took from EVERYONE (enemy-share % denominator)
+    local byPlayer = {}     -- playerName -> { [enemyKey] = { total = amount, dps = amountPerSecond } }
     for ei = 1, #enemySession.combatSources do
         local enemy = enemySession.combatSources[ei]
         local rawCID = enemy.sourceCreatureID
@@ -486,6 +487,11 @@ local function BuildAllPlayerTargets(session, sessionID)
         -- a secret value must never be used as a table key (taint).
         local eKey = (rawCID and not issecretvalue(rawCID)) and rawCID or ei
         enemyNames[eKey] = enemy.name
+        -- enemy.totalAmount is the enemy's whole damage-taken; sanitize before storing as the
+        -- %-denominator (OOC path, but guard defensively against a stale secret read).
+        local etot = enemy.totalAmount
+        if issecretvalue(etot) or type(etot) ~= "number" then etot = 0 end
+        enemyTotals[eKey] = etot
 
         local srcData
         if sessionID ~= nil and C_DamageMeter.GetCombatSessionSourceFromID then
@@ -505,22 +511,35 @@ local function BuildAllPlayerTargets(session, sessionID)
                     local pName = det.unitName
                     local amt = spell.totalAmount
                     if issecretvalue(amt) or type(amt) ~= "number" then amt = 0 end
+                    -- amountPerSecond accumulates into the per-target DPS column. Summing each
+                    -- spell's per-second over a target == that player's aggregate DPS to it
+                    -- (every spell shares the same combat-duration denominator). Sanitized like amt.
+                    local ps = spell.amountPerSecond
+                    if issecretvalue(ps) or type(ps) ~= "number" then ps = 0 end
                     if amt > 0 then
                         local pt = byPlayer[pName]
                         if not pt then pt = {}; byPlayer[pName] = pt end
-                        pt[eKey] = (pt[eKey] or 0) + amt
+                        local e = pt[eKey]
+                        if not e then e = { total = 0, dps = 0 }; pt[eKey] = e end
+                        e.total = e.total + amt
+                        e.dps = e.dps + ps
                     end
                 end
             end
         end
     end
 
-    -- Flatten each player's enemy map into a descending-sorted array.
+    -- Flatten each player's enemy map into a descending-sorted array. Each entry carries the
+    -- raw amount + accumulated DPS (both plain numbers by construction) and an enemy-share
+    -- percent: this player's damage / the enemy's whole damage-taken (nil when the denominator
+    -- is unavailable). Mirrors the Details-style "% of this target you accounted for".
     local map = {}
     for pName, enemies in pairs(byPlayer) do
         local list = {}
-        for eKey, total in pairs(enemies) do
-            list[#list + 1] = { name = enemyNames[eKey], total = total }
+        for eKey, e in pairs(enemies) do
+            local etot = enemyTotals[eKey] or 0
+            local pct = (etot > 0) and (e.total / etot * 100) or nil
+            list[#list + 1] = { name = enemyNames[eKey], total = e.total, dps = e.dps, pct = pct }
         end
         table_sort(list, function(a, b) return a.total > b.total end)
         map[pName] = list
@@ -564,7 +583,7 @@ end
 -- ║  read (spellID is secret in combat -> touching it taints).║
 -- ╚══════════════════════════════════════════════════════════╝
 
-local HOVER_TIP_ROWS = 8        -- quick-peek shows the top few; the click-inline panel shows the full list
+local HOVER_TIP_ROWS = 15       -- top spells/events (matches EUI's TT_MAX=15); the click-inline panel still shows the full list
 local TIP_WIDTH = 300           -- Phase 4c: widened for the 3 content-sized numeric columns (Amount / DPS / %) + spell-name room
 local TIP_PAD = 4               -- inner inset for header / rows
 
@@ -647,9 +666,10 @@ local function MakeTipRow(parent, rowH)
     return { row = row }
 end
 
--- One Targets-sub-section row: [fill] enemyName ........ amount. Simpler than a spell
--- row (no icon, single value column). Passive like the rest of the tip. Mirrors EUI's
--- _ttFrame._tgtBars rows (1221-1231).
+-- One Targets-sub-section row: [fill] enemyName .... Amount  DPS  %. No icon, but the three
+-- numeric columns line up under the SAME fixed offsets as the spell rows (TIP_AMT_X / DPS / PCT)
+-- so the breakdown and Targets share one column grid (request 2026-06-05). Passive like the rest
+-- of the tip. Content-sized columns (no SetWidth) + SetWordWrap(false) so nothing truncates.
 local function MakeTargetRow(parent, rowH)
     local db = DM.db
     local row = CreateFrame("Frame", nil, parent)
@@ -669,10 +689,25 @@ local function MakeTargetRow(parent, rowH)
     row.label:SetJustifyH("LEFT")
     row.label:SetWordWrap(false)
     KE:ApplyFontToText(row.label, face, size, outline)
-    row.value = row.fill:CreateFontString(nil, "OVERLAY")
-    row.value:SetPoint("RIGHT", row.fill, "RIGHT", -3, 0)
+
+    row.value = row.fill:CreateFontString(nil, "OVERLAY")   -- Amount column
+    row.value:SetPoint("RIGHT", row.fill, "RIGHT", TIP_AMT_X, 0)
+    row.value:SetWordWrap(false)
     row.value:SetJustifyH("RIGHT")
     KE:ApplyFontToText(row.value, face, size, outline)
+
+    row.dps = row.fill:CreateFontString(nil, "OVERLAY")     -- DPS column
+    row.dps:SetPoint("RIGHT", row.fill, "RIGHT", TIP_DPS_X, 0)
+    row.dps:SetWordWrap(false)
+    row.dps:SetJustifyH("RIGHT")
+    KE:ApplyFontToText(row.dps, face, size, outline)
+
+    row.pct = row.fill:CreateFontString(nil, "OVERLAY")     -- % column
+    row.pct:SetPoint("RIGHT", row.fill, "RIGHT", TIP_PCT_X, 0)
+    row.pct:SetWordWrap(false)
+    row.pct:SetJustifyH("RIGHT")
+    KE:ApplyFontToText(row.pct, face, size, outline)
+
     row.label:SetPoint("RIGHT", row.value, "LEFT", -3, 0)
 
     row:Hide()
@@ -707,26 +742,31 @@ function DM:EnsureHoverTip()
     local size = db and db.FontSize
     local outline = db and db.FontOutline
 
+    -- Source-name title: CENTERED + class-colored (request 2026-06-05). The class tint
+    -- is applied per-populate from bar._classFilename (PopulateHoverTip); centering makes
+    -- the name read as a title so the column-category labels below can be the white headers.
     f.header = f:CreateFontString(nil, "OVERLAY")
     f.header:SetPoint("TOPLEFT", f, "TOPLEFT", TIP_PAD, -TIP_PAD)
     f.header:SetPoint("TOPRIGHT", f, "TOPRIGHT", -TIP_PAD, -TIP_PAD)
-    f.header:SetJustifyH("LEFT")
+    f.header:SetJustifyH("CENTER")
     f.header:SetWordWrap(false)
     KE:ApplyFontToText(f.header, face, size, outline)
 
     -- Phase 4c: one-time column-header row (Spell · Amount · DPS · %) under the source
-    -- name. Small + gray, right-aligned over the same fixed columns as the data rows.
-    -- Shown for the breakdown path, hidden for the Deaths recap (which keeps a single
-    -- value column). Anchored just below the source header; PopulateHoverTip toggles it
-    -- and offsets the data rows by COL_HDR_H when visible.
-    local colSize = math.max(8, (size or 12) - 2)   -- small gray label, EUI SetDMFont(...,9) style
+    -- name. The category labels are now WHITE and one notch larger than before (request
+    -- 2026-06-05: the centered class-colored title frees them to be the prominent headers),
+    -- right-aligned over the same fixed columns as the data rows. Shown for the breakdown
+    -- path, hidden for the Deaths recap (which keeps a single value column). Anchored just
+    -- below the source header; PopulateHoverTip toggles it and offsets the data rows by
+    -- COL_HDR_H when visible.
+    local colSize = math.max(9, (size or 12) - 1)   -- white header, slightly larger than the old size-2 gray
     f.colHdr = {}
     f.colHdr.spell = f:CreateFontString(nil, "OVERLAY")
     f.colHdr.spell:SetJustifyH("LEFT")
     f.colHdr.spell:SetWordWrap(false)
     f.colHdr.spell:SetPoint("TOPLEFT", f, "TOPLEFT", TIP_PAD, 0)   -- y set in PopulateHoverTip
     KE:ApplyFontToText(f.colHdr.spell, face, colSize, outline)
-    f.colHdr.spell:SetTextColor(0.6, 0.6, 0.6)
+    f.colHdr.spell:SetTextColor(1, 1, 1)
     f.colHdr.spell:SetText("Spell")
 
     f.colHdr.amount = f:CreateFontString(nil, "OVERLAY")
@@ -734,7 +774,7 @@ function DM:EnsureHoverTip()
     f.colHdr.amount:SetWordWrap(false)
     f.colHdr.amount:SetPoint("TOPRIGHT", f, "TOPRIGHT", TIP_AMT_X, 0)
     KE:ApplyFontToText(f.colHdr.amount, face, colSize, outline)
-    f.colHdr.amount:SetTextColor(0.6, 0.6, 0.6)
+    f.colHdr.amount:SetTextColor(1, 1, 1)
     f.colHdr.amount:SetText("Amount")
     -- Cap the Spell label at the Amount column's left edge so it can't run into the
     -- numeric headers at large colSize / wide fonts (mirrors the row-label RIGHT stop).
@@ -745,7 +785,7 @@ function DM:EnsureHoverTip()
     f.colHdr.dps:SetWordWrap(false)
     f.colHdr.dps:SetPoint("TOPRIGHT", f, "TOPRIGHT", TIP_DPS_X, 0)
     KE:ApplyFontToText(f.colHdr.dps, face, colSize, outline)
-    f.colHdr.dps:SetTextColor(0.6, 0.6, 0.6)
+    f.colHdr.dps:SetTextColor(1, 1, 1)
     f.colHdr.dps:SetText("DPS")
 
     f.colHdr.pct = f:CreateFontString(nil, "OVERLAY")
@@ -753,7 +793,7 @@ function DM:EnsureHoverTip()
     f.colHdr.pct:SetWordWrap(false)
     f.colHdr.pct:SetPoint("TOPRIGHT", f, "TOPRIGHT", TIP_PCT_X, 0)
     KE:ApplyFontToText(f.colHdr.pct, face, colSize, outline)
-    f.colHdr.pct:SetTextColor(0.6, 0.6, 0.6)
+    f.colHdr.pct:SetTextColor(1, 1, 1)
     f.colHdr.pct:SetText("%")
 
     -- Centered gray message line (the in-combat "secret" state).
@@ -780,6 +820,8 @@ local function HideTipTargets()
     if not (_tip and _tip.tgtDivider) then return end
     _tip.tgtDivider:Hide()
     _tip.tgtLabel:Hide()
+    if _tip.tgtIcon then _tip.tgtIcon:Hide() end
+    if _tip.tgtHdrAmount then _tip.tgtHdrAmount:Hide(); _tip.tgtHdrDps:Hide(); _tip.tgtHdrPct:Hide() end
     for ti = 1, TIP_TGT_ROWS do _tip.tgtRows[ti].row:Hide() end
 end
 
@@ -800,7 +842,9 @@ local function RenderTipTargets(self, bar, cfg, sessionID, topY, stride, barH)
         return 0
     end
 
-    -- Lazy-create the divider + label + up to TIP_TGT_ROWS bars once.
+    -- Lazy-create the divider + section-header (icon + "Targets" + repeated Amount/DPS/%
+    -- column headers) + up to TIP_TGT_ROWS bars once. The repeated numeric headers + dm_deaths
+    -- icon make the Targets section mirror the spell section, matching Details (request 2026-06-05).
     if not _tip.tgtDivider then
         _tip.tgtDivider = _tip:CreateTexture(nil, "ARTWORK")
         _tip.tgtDivider:SetHeight(1)
@@ -808,13 +852,34 @@ local function RenderTipTargets(self, bar, cfg, sessionID, topY, stride, barH)
 
         local db = DM.db
         local face, size, outline = db and db.FontFace, db and db.FontSize, db and db.FontOutline
-        local lblSize = math_max(8, (size or 12) - 2)
+        local lblSize = math_max(9, (size or 12) - 1)   -- match the top column headers (white, size-1)
+
+        -- dm_deaths icon to the LEFT of the "Targets" label (Details places a section icon there).
+        _tip.tgtIcon = _tip:CreateTexture(nil, "OVERLAY")
+        _tip.tgtIcon:SetTexture("Interface\\AddOns\\KitnEssentials\\Media\\Icon\\dm_deaths.tga")
+        _tip.tgtIcon:SetSize(lblSize + 3, lblSize + 3)
+
         _tip.tgtLabel = _tip:CreateFontString(nil, "OVERLAY")
         _tip.tgtLabel:SetJustifyH("LEFT")
         _tip.tgtLabel:SetWordWrap(false)
         KE:ApplyFontToText(_tip.tgtLabel, face, lblSize, outline)
-        _tip.tgtLabel:SetTextColor(0.6, 0.6, 0.6)
+        _tip.tgtLabel:SetTextColor(1, 1, 1)
         _tip.tgtLabel:SetText("Targets")
+
+        -- Repeated numeric column headers over the same fixed columns as the spell headers.
+        local function MakeTgtHdr(text, xOff)
+            local fs = _tip:CreateFontString(nil, "OVERLAY")
+            fs:SetJustifyH("RIGHT")
+            fs:SetWordWrap(false)
+            KE:ApplyFontToText(fs, face, lblSize, outline)
+            fs:SetTextColor(1, 1, 1)
+            fs:SetText(text)
+            fs._xOff = xOff
+            return fs
+        end
+        _tip.tgtHdrAmount = MakeTgtHdr("Amount", TIP_AMT_X)
+        _tip.tgtHdrDps = MakeTgtHdr("DPS", TIP_DPS_X)
+        _tip.tgtHdrPct = MakeTgtHdr("%", TIP_PCT_X)
 
         _tip.tgtRows = {}
         for ti = 1, TIP_TGT_ROWS do
@@ -830,9 +895,18 @@ local function RenderTipTargets(self, bar, cfg, sessionID, topY, stride, barH)
     _tip.tgtDivider:Show()
 
     local lblY = divY - 2
+    local iconSz = _tip.tgtIcon:GetWidth() or 12
+    -- "Targets" label sits right of the icon; the icon is vertically centered on it.
     _tip.tgtLabel:ClearAllPoints()
-    _tip.tgtLabel:SetPoint("TOPLEFT", _tip, "TOPLEFT", TIP_PAD, lblY)
+    _tip.tgtLabel:SetPoint("TOPLEFT", _tip, "TOPLEFT", TIP_PAD + iconSz + 3, lblY)
     _tip.tgtLabel:Show()
+    _tip.tgtIcon:ClearAllPoints()
+    _tip.tgtIcon:SetPoint("RIGHT", _tip.tgtLabel, "LEFT", -3, 0)
+    _tip.tgtIcon:Show()
+    -- Repeated Amount/DPS/% headers over the shared columns (same offsets as the spell headers).
+    _tip.tgtHdrAmount:ClearAllPoints(); _tip.tgtHdrAmount:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", _tip.tgtHdrAmount._xOff, lblY); _tip.tgtHdrAmount:Show()
+    _tip.tgtHdrDps:ClearAllPoints();    _tip.tgtHdrDps:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", _tip.tgtHdrDps._xOff, lblY); _tip.tgtHdrDps:Show()
+    _tip.tgtHdrPct:ClearAllPoints();    _tip.tgtHdrPct:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", _tip.tgtHdrPct._xOff, lblY); _tip.tgtHdrPct:Show()
 
     -- targets[1].total is a plain number (sanitized accumulation in BuildAllPlayerTargets),
     -- safe to feed SetMinMaxValues. enemy name is ConditionalSecret -> SetText only.
@@ -856,8 +930,14 @@ local function RenderTipTargets(self, bar, cfg, sessionID, topY, stride, barH)
             row.fill:SetStatusBarColor(0.55, 0.20, 0.20)
             row.label:SetTextColor(1, 1, 1)
             row.value:SetTextColor(1, 1, 1)
+            row.dps:SetTextColor(1, 1, 1)
+            row.pct:SetTextColor(1, 1, 1)
             row.label:SetText(t.name)
+            -- Amount + DPS via FormatBarValue (AbbreviateNumbers, secret-safe); both are plain
+            -- accumulations from BuildAllPlayerTargets. % is the enemy-share (nil when unknown).
             row.value:SetText((self.FormatBarValue and select(1, self.FormatBarValue(t.total, nil, false))) or "")
+            row.dps:SetText((self.FormatBarValue and select(1, self.FormatBarValue(t.dps or 0, nil, false))) or "")
+            row.pct:SetText(t.pct and format("%.1f%%", t.pct) or "")
             row:Show()
             shownTargets = shownTargets + 1
         else
@@ -894,6 +974,10 @@ function DM:PopulateHoverTip(W, bar)
         end
         HideTipTargets()
         _tip.header:SetText(bar._cachedName or "Details")
+        -- Class-tint the title (bar._classFilename is NeverSecret). White fallback for
+        -- an unknown/enemy class so the centered title is always legible.
+        local chc = bar._classFilename and RAID_CLASS_COLORS[bar._classFilename]
+        if chc then _tip.header:SetTextColor(chc.r, chc.g, chc.b) else _tip.header:SetTextColor(1, 1, 1) end
         _tip.msg:SetText("Detailed information is\nsecret while in combat")
         _tip.msg:Show()
         -- header + the two-line gray message; generous fixed height (no row math).
@@ -906,8 +990,11 @@ function DM:PopulateHoverTip(W, bar)
     if not cfg then return false end
     local isDeaths = (cfg.MeterType == Enum.DamageMeterType.Deaths)
 
-    local stride = (W._snapStride or 18)
-    local barH = (W._snapHeight or 16)
+    -- Tip rows run ~2px shorter than the configured bar height so the quick-peek packs
+    -- the now-15 rows (+ Targets) densely, closer to a full Details panel (request 2026-06-05).
+    -- Clamped to a sane floor; stride keeps the configured inter-row spacing.
+    local barH = math_max(8, (W._snapHeight or 16) - 2)
+    local stride = barH + (W._snapSpacing or 2)
     local shown = 0
     local headerText = bar._cachedName or "Details"
 
@@ -1030,7 +1117,8 @@ function DM:PopulateHoverTip(W, bar)
         if not spells then return false end
 
         -- Breakdown path: show the column-header row and push the data rows down past it.
-        bodyTop = TIP_COL_HDR_H
+        -- Reserve scales with the now-larger (size-1) white headers so big fonts can't overlap row 1.
+        bodyTop = math_max(TIP_COL_HDR_H, (size or 12) + 2)
         if _tip.colHdr then
             local hdrY = -(headerH)
             _tip.colHdr.spell:ClearAllPoints()
@@ -1163,6 +1251,9 @@ function DM:PopulateHoverTip(W, bar)
 
     if shown == 0 then HideTipTargets(); return false end
     _tip.header:SetText(headerText)
+    -- Class-tint the centered title from the NeverSecret class filename (white fallback).
+    local hdrClass = bar._classFilename and RAID_CLASS_COLORS[bar._classFilename]
+    if hdrClass then _tip.header:SetTextColor(hdrClass.r, hdrClass.g, hdrClass.b) else _tip.header:SetTextColor(1, 1, 1) end
     -- Re-apply the live font in case a GUI change happened (ReapplyBarVisuals also
     -- handles this, but a hover before the first reapply still wants current fonts).
     KE:ApplyFontToText(_tip.header, face, size, outline)
@@ -1240,9 +1331,9 @@ function DM:ReapplyHoverTipVisuals()
 
     KE:ApplyFontToText(_tip.header, face, size, outline)
     if _tip.msg then KE:ApplyFontToText(_tip.msg, face, size, outline) end
-    -- Phase 4c: the column-header labels track the data font at a smaller size.
+    -- Phase 4c: the column-header labels track the data font (white, one notch below data).
     if _tip.colHdr then
-        local colSize = math.max(8, (size or 12) - 2)
+        local colSize = math.max(9, (size or 12) - 1)
         KE:ApplyFontToText(_tip.colHdr.spell, face, colSize, outline)
         KE:ApplyFontToText(_tip.colHdr.amount, face, colSize, outline)
         KE:ApplyFontToText(_tip.colHdr.dps, face, colSize, outline)
@@ -1264,7 +1355,13 @@ function DM:ReapplyHoverTipVisuals()
     -- Phase 4c Targets sub-section: label tracks the data font at the small size; rows
     -- track the data font + statusbar texture. Lazy-built, so guard on existence.
     if _tip.tgtLabel then
-        KE:ApplyFontToText(_tip.tgtLabel, face, math.max(8, (size or 12) - 2), outline)
+        local lblSize = math.max(9, (size or 12) - 1)   -- match the white column headers
+        KE:ApplyFontToText(_tip.tgtLabel, face, lblSize, outline)
+        if _tip.tgtHdrAmount then
+            KE:ApplyFontToText(_tip.tgtHdrAmount, face, lblSize, outline)
+            KE:ApplyFontToText(_tip.tgtHdrDps, face, lblSize, outline)
+            KE:ApplyFontToText(_tip.tgtHdrPct, face, lblSize, outline)
+        end
     end
     if _tip.tgtRows then
         for ti = 1, TIP_TGT_ROWS do
@@ -1273,6 +1370,8 @@ function DM:ReapplyHoverTipVisuals()
                 tr.row.fill:SetStatusBarTexture(texPath)
                 KE:ApplyFontToText(tr.row.label, face, size, outline)
                 KE:ApplyFontToText(tr.row.value, face, size, outline)
+                if tr.row.dps then KE:ApplyFontToText(tr.row.dps, face, size, outline) end
+                if tr.row.pct then KE:ApplyFontToText(tr.row.pct, face, size, outline) end
             end
         end
     end
