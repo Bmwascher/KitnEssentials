@@ -146,6 +146,9 @@ local function MakeBar(parent, db)
     --                        icon / name LEFT anchors; re-anchored only on change
     --   _iconShown / _nameShown / _rankShown -- cached element visibility so a
     --                        stable toggle does no per-tick Show/Hide widget call
+    --   _sourceGUID / _sourceCreatureID / _deathRecapID / _classFilename -- source
+    --                        identity stashed by RenderBar for DM:OpenDetail (Detail.lua);
+    --                        all NeverSecret so the writes are taint-safe
     bar._cachedColorClass = nil
     bar._cachedIconID = nil
     bar._cachedNameColorClass = nil
@@ -157,6 +160,10 @@ local function MakeBar(parent, db)
     bar._iconShown = false
     bar._nameShown = nil
     bar._rankShown = nil
+    bar._sourceGUID = nil
+    bar._sourceCreatureID = nil
+    bar._deathRecapID = nil
+    bar._classFilename = nil
 
     -- Wire OnClick ONCE. Forward-compatible: calls DM.OpenDetail only if a
     -- later chunk defines it. No detail window exists yet.
@@ -441,6 +448,26 @@ function DM:ReapplyBarVisuals(W)
         KE:ApplyFontToText(row.name, face, size, outline)
         KE:ApplyFontToText(row.value, face, size, outline)
     end
+
+    -- The detail panel (Detail.lua) is lazily built once on first bar click, so it
+    -- only exists after EnsureDetail has run. When present, its rows + message line
+    -- must absorb the same live font/texture change as the main bars -- same
+    -- pattern as the W.bars loop above (detail rows store the bar table, so the
+    -- widget tree is on entry.row). Otherwise the detail panel is the lone widget
+    -- set that keeps the old appearance after a GUI font/texture change.
+    if W.detail then
+        if W.detail.rows then
+            for _, entry in ipairs(W.detail.rows) do
+                local row = entry.row
+                row.fill:SetStatusBarTexture(texPath)
+                KE:ApplyFontToText(row.label, face, size, outline)
+                KE:ApplyFontToText(row.value, face, size, outline)
+            end
+        end
+        if W.detail.msg then
+            KE:ApplyFontToText(W.detail.msg, face, size, outline)
+        end
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -612,6 +639,16 @@ end
 function DM:RenderBar(W, bar, i, src, maxAmount)
     if not src then return end
     local row = bar.row
+
+    -- Stash the source identity onto the bar for DM:OpenDetail (Detail.lua). All
+    -- four are NeverSecret fields, so the assignments are taint-safe. deathRecapID
+    -- is only meaningful in the Deaths window (nil/<=0 elsewhere); the detail
+    -- renderers pick the right one off W._isDeaths. This is the "Task 2" write
+    -- that Detail.lua's OpenDetail comment anticipates.
+    bar._sourceGUID = src.sourceGUID
+    bar._sourceCreatureID = src.sourceCreatureID
+    bar._deathRecapID = src.deathRecapID
+    bar._classFilename = src.classFilename
 
     -- self.db is stable for the lifetime of a Tick (it is the AceDB profile
     -- table, never swapped mid-Tick), so read it once and reuse the local rather
