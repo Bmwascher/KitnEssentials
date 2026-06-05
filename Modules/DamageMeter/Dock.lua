@@ -357,6 +357,11 @@ function DM:LayoutDock()
                         W.indexBadge.text:SetText(tostring(posMap[idx] or idx))
                     end
 
+                    -- Re-apply header-icon visibility now that the display position is
+                    -- known: secondary windows (pos > 1) force reveal-on-hover, #1 keeps
+                    -- the configured behavior. ApplyHeaderIcons reads self._winDisplayPos.
+                    self:ApplyHeaderIcons(W)
+
                     -- Drive the body width immediately so bars are full width on
                     -- the first paint (don't wait for OnSizeChanged). The window's
                     -- own LayoutWindow owns the body height + content height.
