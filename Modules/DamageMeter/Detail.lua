@@ -165,8 +165,8 @@ function DM:RenderBreakdown(W)
     local cfg = self:ResolveWindowConfig(W.idx)
     if not cfg then return end
 
-    -- Pull this source out of the window's active session (honor a pinned historical
-    -- session via curSessionID — Task 6). GetSource pcall-wraps the API.
+    -- Pull this source out of the window's active session. GetSource pcall-wraps the API.
+    -- W._curSessionID: nil = live session; set by Task 6 history nav to a specific stored sessionID.
     local sessionID = W._curSessionID
     local src = self:GetSource(cfg.SessionType, cfg.MeterType, W._detailSourceGUID, W._detailSourceCID, sessionID)
     local spells = src and src.combatSpells
@@ -270,4 +270,104 @@ function DM:RenderBreakdown(W)
     d.content:SetHeight(math_max(10, count * stride))
 end
 
-function DM:RenderDeathRecap(_) end  -- Task 4
+-- Death-recap timeline (out-of-combat only — OpenDetail is OOC-gated). Renders the
+-- source's C_DeathRecap events oldest-first: each row is one combat-log event leading
+-- to the death, with the HP-remaining fill, "-Xs SpellName from Source" label, and a
+-- +heal / -damage value (crit marker, killing-blow overkill, HP% suffix). Recap fields
+-- use spellId (lowercase d) — distinct from combatSpells' spellID. Three-tier gate is
+-- in DM:GetDeathRecap (no/secret/<=0 recapID, no events) which returns nil -> message.
+function DM:RenderDeathRecap(W)
+    if W.detail and W.detail.msg then W.detail.msg:Hide() end
+    local d = W.detail
+    local events, maxHP = self:GetDeathRecap(W._detailRecapID)
+    if not events then
+        self:ShowDetailMessage(W, "No death recap available")
+        return
+    end
+
+    local stride = W._snapStride or 18
+    local barH = W._snapHeight or 16
+    local deathTime = events[#events] and events[#events].timestamp
+    local count = math_min(#events, DETAIL_POOL_SIZE)
+
+    for i = 1, DETAIL_POOL_SIZE do
+        local bar = d.rows[i]
+        local row = bar.row
+        if i <= count then
+            local ev = events[i]
+            row:ClearAllPoints()
+            local yOff = -(i - 1) * stride
+            row:SetPoint("TOPLEFT", d.content, "TOPLEFT", 0, yOff)
+            row:SetPoint("TOPRIGHT", d.content, "TOPRIGHT", 0, yOff)
+            row:SetHeight(barH)
+
+            -- Icon: spellId (lowercase d on recap events); pcall the lookup (parity with
+            -- RenderBreakdown's GetSpellName) so a throw can't abort the loop mid-render and
+            -- leave the row pool half-shown. Any failure (nil OR error) -> melee fallback 135274.
+            local spID = ev.spellId
+            local tex = 135274
+            if spID and spID > 0 and C_Spell and C_Spell.GetSpellTexture then
+                local okT, t = pcall(C_Spell.GetSpellTexture, spID)
+                if okT and t then tex = t end
+            end
+            row.icon:SetTexture(tex)
+            KE:ApplyIconZoom(row.icon)
+            row.iconFrame:SetSize(barH, barH)
+            row.iconFrame:Show()
+            row.label:ClearAllPoints()
+            row.label:SetPoint("LEFT", row.iconFrame, "RIGHT", 3, 0)
+            row.label:SetPoint("RIGHT", row.value, "LEFT", -3, 0)
+
+            local evType = ev.event or ""
+            local isHeal = (evType == "SPELL_HEAL" or evType == "SPELL_PERIODIC_HEAL")
+            local isFatal = (i == count and not isHeal)
+
+            -- Fill = HP% remaining at the event (currentHP / maxHP), heal green / damage red.
+            local curHP = ev.currentHP or 0
+            local hpPct = math_min(1, math_max(0, maxHP > 0 and (curHP / maxHP) or 0))
+            row.fill:SetMinMaxValues(0, 1)
+            row.fill:SetValue(hpPct)
+            if isHeal then row.fill:SetStatusBarColor(0.10, 0.50, 0.10)
+            else row.fill:SetStatusBarColor(0.60, 0.08, 0.08) end
+
+            -- Label: "-X.Xs SpellName" (+ " from Source" when a non-secret sourceName exists).
+            local spellName = ev.spellName
+            if not spellName or issecretvalue(spellName) or spellName == "" then
+                if isHeal then spellName = "Heal"
+                elseif evType == "SWING_DAMAGE" then spellName = "Melee"
+                else spellName = "Unknown" end
+            end
+            local label = self.FormatRecapDelta(deathTime, ev.timestamp) .. " " .. spellName
+            local srcName = ev.sourceName
+            if srcName and not issecretvalue(srcName) and srcName ~= "" and not isHeal then
+                label = label .. " |cff999999from " .. srcName .. "|r"
+            end
+            row.label:SetText(label)
+
+            -- Value: +heal / -damage (AbbreviateNumbers is AllowedWhenTainted), crit marker,
+            -- overkill on the killing blow, HP% suffix.
+            -- C_DeathRecap.GetRecapEvents is AllowedWhenUntainted, so ev.amount can be a
+            -- secret number if a tainted execution slips into the brief post-combat window.
+            -- Arithmetic (math_max) must run on a sanitized plain number; the raw amt is
+            -- never math'd here (FormatBarValue's plain branch and tostring also use amtPlain).
+            local amt = ev.amount or 0
+            local amtPlain = amt
+            if issecretvalue(amt) or type(amt) ~= "number" then amtPlain = 0 end
+            local body = (self.FormatBarValue and select(1, self.FormatBarValue(math_max(0, amtPlain), nil, false))) or tostring(amtPlain)
+            local sign = isHeal and "+" or "-"
+            local crit = ev.critical and " |cffffd100*|r" or ""
+            local pctSuffix = format(" (%.0f%%)", hpPct * 100)
+            if isFatal and ev.overkill and type(ev.overkill) == "number" and ev.overkill > 0 then
+                local okStr = (self.FormatBarValue and select(1, self.FormatBarValue(ev.overkill, nil, false))) or tostring(ev.overkill)
+                row.value:SetText(sign .. body .. crit .. " |cffff3333(" .. okStr .. " overkill)|r" .. pctSuffix)
+            else
+                row.value:SetText(sign .. body .. crit .. pctSuffix)
+            end
+
+            if not row:IsShown() then row:Show() end
+        else
+            if row:IsShown() then row:Hide() end
+        end
+    end
+    d.content:SetHeight(math_max(10, count * stride))
+end

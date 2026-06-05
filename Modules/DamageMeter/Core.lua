@@ -32,6 +32,7 @@ local issecretvalue = issecretvalue
 local debugprofilestop = debugprofilestop
 local wipe = wipe
 local C_CVar = C_CVar
+local C_DeathRecap = C_DeathRecap
 local format = string.format
 local floor = math.floor
 
@@ -703,6 +704,41 @@ end
 -- in Window.lua.
 DM.FormatBarValue = FormatBarValue
 DM.FormatDeathTime = FormatDeathTime
+
+-- Returns the reversed (oldest-first) recap event list + maxHealth for a deathRecapID, or
+-- nil. C_DeathRecap is a separate namespace (NOT C_DamageMeter); none of its getters is
+-- SecretWhenInCombat, and recap data is post-death, so these are read out of combat only
+-- (OpenDetail is OOC-gated). All calls pcall'd; deathRecapID is NeverSecret on the source.
+function DM:GetDeathRecap(recapID)
+    if not C_DeathRecap then return nil end
+    if not recapID or issecretvalue(recapID) or recapID <= 0 then return nil end
+    if C_DeathRecap.HasRecapEvents then
+        local okh, has = pcall(C_DeathRecap.HasRecapEvents, recapID)
+        if not okh or not has then return nil end
+    end
+    local ok, raw = pcall(C_DeathRecap.GetRecapEvents, recapID)
+    if not ok or not raw or #raw == 0 then return nil end
+    local maxHP = 1
+    if C_DeathRecap.GetRecapMaxHealth then
+        local okm, hp = pcall(C_DeathRecap.GetRecapMaxHealth, recapID)
+        if okm and hp and type(hp) == "number" and hp > 0 then maxHP = hp end
+    end
+    -- API returns newest-first; reverse to oldest-first into a per-call table (recap is a
+    -- rare user action, so a fresh table is fine — not a hot path).
+    local rev = {}
+    for i = #raw, 1, -1 do rev[#rev + 1] = raw[i] end
+    return rev, maxHP
+end
+
+-- "-3.4s" style time-before-death. deathTime = the last (most recent) event's timestamp.
+local function FormatRecapDelta(deathTime, ts)
+    if not ts or not deathTime then return "" end
+    -- Operands come from C_DeathRecap (AllowedWhenUntainted): either timestamp can be a
+    -- secret number in a tainted context. Subtraction on a secret throws — bail to "".
+    if issecretvalue(ts) or issecretvalue(deathTime) then return "" end
+    return format("-%.1fs", deathTime - ts)
+end
+DM.FormatRecapDelta = FormatRecapDelta
 
 ---------------------------------------------------------------------------------
 -- Content-context resolver
