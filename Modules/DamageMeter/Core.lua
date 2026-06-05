@@ -575,6 +575,10 @@ end
 -- guarded (resolved at runtime from the render chunk).
 function DM:OnMeterReset()
     if DEBUG_DM then KE:Print("[DM] DAMAGE_METER_RESET -> Tick") end
+    -- Drop the hover-tip Targets cache (Phase 4c / Detail.lua) -- the EnemyDamageTaken
+    -- cross-reference it was built from is now stale. Resolved at runtime (Detail.lua
+    -- loads after Core.lua); guarded so a load-order or version skew can't throw.
+    if self.InvalidateTargetsCache then self:InvalidateTargetsCache() end
     if DM.Tick then self:Tick() end
 end
 
@@ -773,6 +777,10 @@ function DM:HeaderReset(_)
     if C_DamageMeter and C_DamageMeter.ResetAllCombatSessions then
         pcall(C_DamageMeter.ResetAllCombatSessions)
     end
+    -- Drop the hover-tip Targets cache too: the EnemyDamageTaken cross-reference it
+    -- was built from is wiped (DAMAGE_METER_RESET would also catch this, but the
+    -- explicit call mirrors the plan and covers a reset that doesn't fire the event).
+    if self.InvalidateTargetsCache then self:InvalidateTargetsCache() end
     -- Close any open detail panel: its breakdown/recap was keyed to the data we just
     -- wiped, so drop back to the freshly-emptied bars (mirrors the combat-start close
     -- in OnRegenDisabled). All windows, since ResetAllCombatSessions is global.

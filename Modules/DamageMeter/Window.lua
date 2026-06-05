@@ -139,6 +139,12 @@ local function MakeBar(parent, db)
     --   _cachedNameColorClass / _cachedNameColorOn -- name-tint dirty key
     --                        (classFilename + ClassColorName flag; both non-secret)
     --   _cachedName       -- last plain (non-secret) name string set; nil while secret
+    --   _rawName          -- last plain (non-secret) name BEFORE the realm strip; nil
+    --                        while secret. The Detail Targets sub-section keys its
+    --                        per-player lookup on this unstripped name (the targets
+    --                        map is keyed on the raw det.unitName, which carries the
+    --                        "-Realm" suffix for cross-realm members) -- _cachedName
+    --                        loses the suffix when ShowRealm is off and would miss.
     --   _cachedVal        -- last plain (non-secret) value string set; nil while secret
     --   _cachedSlot       -- last displayed rank whose "N." label was set (may be
     --                        a pinned player's real rank, not the pool slot index)
@@ -154,6 +160,7 @@ local function MakeBar(parent, db)
     bar._cachedNameColorClass = nil
     bar._cachedNameColorOn = nil
     bar._cachedName = nil
+    bar._rawName = nil
     bar._cachedVal = nil
     bar._cachedSlot = nil
     bar._layoutKey = nil
@@ -930,8 +937,14 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         -- are the non-secret case, so the toggle takes effect where it matters.
         row.name:SetText(nm)
         bar._cachedName = nil
+        bar._rawName = nil
     else
-        -- Plain string. When ShowRealm is off (default), drop the "-Realm" suffix.
+        -- Plain string. Stash the UNSTRIPPED name first: the Detail Targets sub-section
+        -- keys its per-player lookup on the raw det.unitName (which carries the
+        -- "-Realm" suffix for cross-realm members), so it must match against the raw
+        -- name, never the realm-stripped display name. Mirrors EUI's bar._src.name.
+        bar._rawName = nm
+        -- When ShowRealm is off (default), drop the "-Realm" suffix for DISPLAY only.
         -- A character name never contains a hyphen -- the only hyphen is the realm
         -- separator -- so matching up to the first hyphen is exact and UTF-8 safe
         -- (no multibyte sequence contains the 0x2D byte). The stripped string is

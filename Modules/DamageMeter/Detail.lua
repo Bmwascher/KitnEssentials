@@ -17,10 +17,15 @@ local DM = KitnEssentials:GetModule("DamageMeter")
 
 local CreateFrame = CreateFrame
 local C_Spell = C_Spell
+local C_DamageMeter = C_DamageMeter
+local Enum = Enum
 local issecretvalue = issecretvalue
 local RAID_CLASS_COLORS = RAID_CLASS_COLORS
 local math_min, math_max = math.min, math.max
 local format = string.format
+local tostring = tostring
+local pairs, ipairs = pairs, ipairs
+local table_sort = table.sort
 
 -- Same fixed pool ceiling as the main bars; the detail list never exceeds it.
 local DETAIL_POOL_SIZE = DM.BAR_POOL_SIZE or 40
@@ -413,6 +418,136 @@ function DM:RenderDeathRecap(W)
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
+-- ║  Damage-Done targets (Phase 4c / Task 12)               ║
+-- ║  Cross-references the EnemyDamageTaken session to build  ║
+-- ║  a map of ALL players' damage per enemy in ONE pass --   ║
+-- ║  the first hover triggers the build, every subsequent    ║
+-- ║  hover (any player) is an instant cache lookup. Out-of-  ║
+-- ║  combat only (PopulateHoverTip is OOC-gated before this  ║
+-- ║  is reached); enemy.name is ConditionalSecret -> only    ║
+-- ║  ever SetText, never compared; det.unitName guarded.     ║
+-- ║  Cache keyed by session|sessionID, self-invalidating on  ║
+-- ║  a session change + explicitly cleared on reset.         ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+-- { key = "session|sessionID", map = { [playerName] = sorted {name,total} } }
+local _targetsCache = {}
+
+-- Drop the cached targets map so the next hover rebuilds it. Called from the
+-- session-reset paths in Core.lua (DM:OnMeterReset / DM:HeaderReset) -- a stored
+-- session that gets wiped would otherwise serve stale enemy totals until the
+-- session|sessionID cache key happens to change. Public on DM (Core resolves it
+-- at runtime, same as the render-chunk methods).
+function DM:InvalidateTargetsCache()
+    _targetsCache.key = nil
+    _targetsCache.map = nil
+end
+
+-- One full pass over the EnemyDamageTaken session: for every enemy combatSource
+-- walk its combatSpells and accumulate spell.totalAmount per (player, enemy),
+-- keyed by the enemy's sourceCreatureID (NeverSecret numeric; falls back to the
+-- loop index if it is somehow secret) so a secret value never becomes a table key.
+-- Builds, per player, a sorted descending {name=enemyName, total=amount} list.
+-- Cached by session|sessionID -- the cache key self-invalidates whenever the
+-- pinned/live session changes. Port of EllesmereUI BuildAllPlayerTargets:795-864.
+local function BuildAllPlayerTargets(session, sessionID)
+    local cacheKey = tostring(session) .. "|" .. tostring(sessionID)
+    if _targetsCache.key == cacheKey then return _targetsCache.map end
+
+    if not C_DamageMeter then return nil end
+    local enemyType = Enum.DamageMeterType.EnemyDamageTaken
+
+    -- Pull the EnemyDamageTaken session (FromID for a pinned session, else FromType
+    -- for the live one); both pcall'd -- the API can reject while execution is tainted.
+    local enemySession
+    if sessionID ~= nil and C_DamageMeter.GetCombatSessionFromID then
+        local ok, s = pcall(C_DamageMeter.GetCombatSessionFromID, sessionID, enemyType)
+        if ok then enemySession = s end
+    elseif C_DamageMeter.GetCombatSessionFromType then
+        local ok, s = pcall(C_DamageMeter.GetCombatSessionFromType, session, enemyType)
+        if ok then enemySession = s end
+    end
+    if not enemySession or not enemySession.combatSources or #enemySession.combatSources == 0 then
+        _targetsCache.key = cacheKey
+        _targetsCache.map = nil
+        return nil
+    end
+
+    local enemyNames = {}  -- enemyKey -> display name (ConditionalSecret; SetText only)
+    local byPlayer = {}    -- playerName -> { [enemyKey] = accumulated amount }
+    for ei = 1, #enemySession.combatSources do
+        local enemy = enemySession.combatSources[ei]
+        local rawCID = enemy.sourceCreatureID
+        -- Enemy key: the NeverSecret creatureID, or the loop index if it is secret --
+        -- a secret value must never be used as a table key (taint).
+        local eKey = (rawCID and not issecretvalue(rawCID)) and rawCID or ei
+        enemyNames[eKey] = enemy.name
+
+        local srcData
+        if sessionID ~= nil and C_DamageMeter.GetCombatSessionSourceFromID then
+            local ok, sd = pcall(C_DamageMeter.GetCombatSessionSourceFromID, sessionID, enemyType, enemy.sourceGUID, enemy.sourceCreatureID)
+            if ok then srcData = sd end
+        elseif C_DamageMeter.GetCombatSessionSourceFromType then
+            local ok, sd = pcall(C_DamageMeter.GetCombatSessionSourceFromType, session, enemyType, enemy.sourceGUID, enemy.sourceCreatureID)
+            if ok then srcData = sd end
+        end
+
+        if srcData and srcData.combatSpells then
+            for _, spell in ipairs(srcData.combatSpells) do
+                local det = spell.combatSpellDetails
+                -- det.unitName (the attacking player) is the per-player key. Guard the
+                -- secret read before using it as a key; sanitize the amount before > 0.
+                if det and det.unitName and not issecretvalue(det.unitName) then
+                    local pName = det.unitName
+                    local amt = spell.totalAmount
+                    if issecretvalue(amt) or type(amt) ~= "number" then amt = 0 end
+                    if amt > 0 then
+                        local pt = byPlayer[pName]
+                        if not pt then pt = {}; byPlayer[pName] = pt end
+                        pt[eKey] = (pt[eKey] or 0) + amt
+                    end
+                end
+            end
+        end
+    end
+
+    -- Flatten each player's enemy map into a descending-sorted array.
+    local map = {}
+    for pName, enemies in pairs(byPlayer) do
+        local list = {}
+        for eKey, total in pairs(enemies) do
+            list[#list + 1] = { name = enemyNames[eKey], total = total }
+        end
+        table_sort(list, function(a, b) return a.total > b.total end)
+        map[pName] = list
+    end
+
+    _targetsCache.key = cacheKey
+    _targetsCache.map = map
+    return map
+end
+
+-- Top `maxTargets` enemies a single player hit, sorted descending, or nil. The
+-- player name is the breakdown source's plain (non-secret) name; guard it before
+-- the table lookup (a secret string can't be a key). Port of EUI BuildPlayerTargets:866-886.
+local function BuildPlayerTargets(playerName, session, sessionID, maxTargets)
+    if not playerName or issecretvalue(playerName) or playerName == "" then return nil end
+
+    local map = BuildAllPlayerTargets(session, sessionID)
+    if not map then return nil end
+
+    local list = map[playerName]
+    if not list or #list == 0 then return nil end
+
+    if #list > maxTargets then
+        local trimmed = {}
+        for i = 1, maxTargets do trimmed[i] = list[i] end
+        return trimmed
+    end
+    return list
+end
+
+-- ╔══════════════════════════════════════════════════════════╗
 -- ║  Hover quick-peek tooltip (Phase 4b / Task 9)            ║
 -- ║  A single module-level tip (shared by every window, like ║
 -- ║  EUI) shown on bar OnEnter: the top few breakdown spells  ║
@@ -426,17 +561,20 @@ end
 -- ╚══════════════════════════════════════════════════════════╝
 
 local HOVER_TIP_ROWS = 8        -- quick-peek shows the top few; the click-inline panel shows the full list
-local TIP_WIDTH = 264           -- Phase 4c: widened for the 3 numeric columns (Amount / DPS / %)
+local TIP_WIDTH = 267           -- Phase 4c: widened for the 3 numeric columns (Amount / DPS / %); +3 absorbs the PCT/DPS gap
 local TIP_PAD = 4               -- inner inset for header / rows
 
 -- Phase 4c column geometry: each numeric column is right-aligned at a fixed x-offset
 -- from the tip's right edge, fixed width, JustifyH RIGHT. The label's RIGHT anchor stops
 -- at the amount column's LEFT so the three columns line up across every row + the header.
 local TIP_COL_W   = 44          -- per-column width
-local TIP_PCT_X   = -3          -- % column right edge
+local TIP_PCT_X   = -6          -- % column right edge (3-4px gap to DPS, matching DPS/Amount spacing)
 local TIP_DPS_X   = -48         -- DPS column right edge
 local TIP_AMT_X   = -96         -- Amount column right edge
 local TIP_COL_HDR_H = 14        -- vertical space the column-header row occupies (breakdown path only)
+local TIP_TGT_ROWS = 3          -- Phase 4c: top enemies the source hit (DamageDone-only sub-section)
+local TIP_TGT_GAP = 4           -- vertical gap above the Targets divider
+local TIP_TGT_LABEL_H = 12      -- height the "Targets" label occupies before the target rows
 local _tip                      -- module-level singleton (shared by all windows)
 local _tipActiveBar             -- the bar currently hovered (nil = none); drives the poll
 local _tipPoll                  -- detach-when-idle OnUpdate frame
@@ -503,6 +641,38 @@ local function MakeTipRow(parent, rowH)
     return { row = row }
 end
 
+-- One Targets-sub-section row: [fill] enemyName ........ amount. Simpler than a spell
+-- row (no icon, single value column). Passive like the rest of the tip. Mirrors EUI's
+-- _ttFrame._tgtBars rows (1221-1231).
+local function MakeTargetRow(parent, rowH)
+    local db = DM.db
+    local row = CreateFrame("Frame", nil, parent)
+    row:SetHeight(rowH)
+
+    row.fill = CreateFrame("StatusBar", nil, row)
+    row.fill:SetAllPoints(row)
+    row.fill:SetMinMaxValues(0, 1)
+    row.fill:SetValue(0)
+    row.fill:SetStatusBarTexture(KE:GetStatusbarPath(db and db.StatusBarTexture or "KitnUI"))
+
+    local face = db and db.FontFace
+    local size = db and db.FontSize
+    local outline = db and db.FontOutline
+    row.label = row.fill:CreateFontString(nil, "OVERLAY")
+    row.label:SetPoint("LEFT", row.fill, "LEFT", 3, 0)
+    row.label:SetJustifyH("LEFT")
+    row.label:SetWordWrap(false)
+    KE:ApplyFontToText(row.label, face, size, outline)
+    row.value = row.fill:CreateFontString(nil, "OVERLAY")
+    row.value:SetPoint("RIGHT", row.fill, "RIGHT", -3, 0)
+    row.value:SetJustifyH("RIGHT")
+    KE:ApplyFontToText(row.value, face, size, outline)
+    row.label:SetPoint("RIGHT", row.value, "LEFT", -3, 0)
+
+    row:Hide()
+    return { row = row }
+end
+
 -- Lazily build the shared tip frame. Matches the window/detail backdrop styling so
 -- the peek reads as part of the meter. EnableMouse(false): it is a passive overlay
 -- and must never steal the hover from the bar underneath (which is what keeps it open).
@@ -560,6 +730,9 @@ function DM:EnsureHoverTip()
     KE:ApplyFontToText(f.colHdr.amount, face, colSize, outline)
     f.colHdr.amount:SetTextColor(0.6, 0.6, 0.6)
     f.colHdr.amount:SetText("Amount")
+    -- Cap the Spell label at the Amount column's left edge so it can't run into the
+    -- numeric headers at large colSize / wide fonts (mirrors the row-label RIGHT stop).
+    f.colHdr.spell:SetPoint("TOPRIGHT", f.colHdr.amount, "TOPLEFT", -3, 0)
 
     f.colHdr.dps = f:CreateFontString(nil, "OVERLAY")
     f.colHdr.dps:SetJustifyH("RIGHT")
@@ -595,6 +768,105 @@ function DM:EnsureHoverTip()
     return f
 end
 
+-- Hide every Targets-sub-section element. Cheap; called whenever the section is
+-- not applicable (recap path, non-DamageDone meter, no targets, in combat).
+local function HideTipTargets()
+    if not (_tip and _tip.tgtDivider) then return end
+    _tip.tgtDivider:Hide()
+    _tip.tgtLabel:Hide()
+    for ti = 1, TIP_TGT_ROWS do _tip.tgtRows[ti].row:Hide() end
+end
+
+-- Render the "Targets" sub-section (top enemies this source hit) below the spell
+-- rows. `topY` is the y-offset (negative, from the tip TOPLEFT) of the first free
+-- slot below the breakdown. Returns the extra height the section consumed (0 when
+-- nothing is shown). Lazy-creates the divider/label/rows once. DamageDone-only +
+-- breakdown-path-only; the caller gates that. Port of EUI render 1207-1265.
+local function RenderTipTargets(self, bar, cfg, sessionID, topY, stride, barH)
+    -- Key the per-player lookup on the RAW (unstripped) source name: BuildAllPlayerTargets
+    -- keys byPlayer on the raw det.unitName, which carries the "-Realm" suffix for
+    -- cross-realm members. bar._cachedName loses that suffix when ShowRealm is off
+    -- (the default), so it would miss; bar._rawName preserves it. Mirrors EUI's raw-name
+    -- lookup (realm stripped for display only, never for the targets key).
+    local targets = BuildPlayerTargets(bar._rawName, cfg.SessionType, sessionID, TIP_TGT_ROWS)
+    if not targets then
+        HideTipTargets()
+        return 0
+    end
+
+    -- Lazy-create the divider + label + up to TIP_TGT_ROWS bars once.
+    if not _tip.tgtDivider then
+        _tip.tgtDivider = _tip:CreateTexture(nil, "ARTWORK")
+        _tip.tgtDivider:SetHeight(1)
+        _tip.tgtDivider:SetColorTexture(1, 1, 1, 0.15)
+
+        local db = DM.db
+        local face, size, outline = db and db.FontFace, db and db.FontSize, db and db.FontOutline
+        local lblSize = math_max(8, (size or 12) - 2)
+        _tip.tgtLabel = _tip:CreateFontString(nil, "OVERLAY")
+        _tip.tgtLabel:SetJustifyH("LEFT")
+        _tip.tgtLabel:SetWordWrap(false)
+        KE:ApplyFontToText(_tip.tgtLabel, face, lblSize, outline)
+        _tip.tgtLabel:SetTextColor(0.6, 0.6, 0.6)
+        _tip.tgtLabel:SetText("Targets")
+
+        _tip.tgtRows = {}
+        for ti = 1, TIP_TGT_ROWS do
+            _tip.tgtRows[ti] = MakeTargetRow(_tip, barH)
+        end
+    end
+
+    -- Divider just below the spell rows, then the label, then the target bars.
+    local divY = topY - TIP_TGT_GAP
+    _tip.tgtDivider:ClearAllPoints()
+    _tip.tgtDivider:SetPoint("TOPLEFT", _tip, "TOPLEFT", TIP_PAD, divY)
+    _tip.tgtDivider:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", -TIP_PAD, divY)
+    _tip.tgtDivider:Show()
+
+    local lblY = divY - 2
+    _tip.tgtLabel:ClearAllPoints()
+    _tip.tgtLabel:SetPoint("TOPLEFT", _tip, "TOPLEFT", TIP_PAD, lblY)
+    _tip.tgtLabel:Show()
+
+    -- targets[1].total is a plain number (sanitized accumulation in BuildAllPlayerTargets),
+    -- safe to feed SetMinMaxValues. enemy name is ConditionalSecret -> SetText only.
+    local rowsTop = lblY - TIP_TGT_LABEL_H
+    local tMax = targets[1].total
+    if tMax <= 0 then tMax = 1 end
+    local shownTargets = 0
+    for ti = 1, TIP_TGT_ROWS do
+        local tr = _tip.tgtRows[ti]
+        local row = tr.row
+        if ti <= #targets then
+            local t = targets[ti]
+            local yOff = rowsTop - (ti - 1) * stride
+            row:ClearAllPoints()
+            row:SetPoint("TOPLEFT", _tip, "TOPLEFT", TIP_PAD, yOff)
+            row:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", -TIP_PAD, yOff)
+            row:SetHeight(barH)
+            row.fill:SetStatusBarTexture(KE:GetStatusbarPath(self.db and self.db.StatusBarTexture or "KitnUI"))
+            row.fill:SetMinMaxValues(0, tMax)
+            row.fill:SetValue(t.total)
+            row.fill:SetStatusBarColor(0xDD / 255, 0x31 / 255, 0x31 / 255)
+            row.label:SetTextColor(1, 1, 1)
+            row.value:SetTextColor(1, 1, 1)
+            row.label:SetText(t.name)
+            row.value:SetText((self.FormatBarValue and select(1, self.FormatBarValue(t.total, nil, false))) or "")
+            row:Show()
+            shownTargets = shownTargets + 1
+        else
+            row:Hide()
+        end
+    end
+
+    if shownTargets == 0 then
+        HideTipTargets()
+        return 0
+    end
+    -- Gap + divider(1) + label band + the target rows.
+    return TIP_TGT_GAP + 1 + TIP_TGT_LABEL_H + shownTargets * stride
+end
+
 -- Fill the tip from a bar's stashed source identity (set by RenderBar, Task 2).
 -- Returns true if it has content to show, false if it should stay hidden. Mirrors
 -- the secret contract of RenderBreakdown / RenderDeathRecap exactly. OOC ONLY for
@@ -614,6 +886,7 @@ function DM:PopulateHoverTip(W, bar)
         if _tip.colHdr then
             _tip.colHdr.spell:Hide(); _tip.colHdr.amount:Hide(); _tip.colHdr.dps:Hide(); _tip.colHdr.pct:Hide()
         end
+        HideTipTargets()
         _tip.header:SetText(bar._cachedName or "Details")
         _tip.msg:SetText("Detailed information is\nsecret while in combat")
         _tip.msg:Show()
@@ -636,12 +909,16 @@ function DM:PopulateHoverTip(W, bar)
     -- breakdown path; the Deaths recap keeps its single value column. bodyTop pushes the
     -- data rows down past the column header in the breakdown path (0 for recap).
     local bodyTop = 0
+    -- Phase 4c Targets sub-section extra height (0 unless a DamageDone breakdown renders it).
+    local tgtExtraH = 0
 
     if isDeaths then
-        -- Recap path: no column header; data rows start right under the source header.
+        -- Recap path: no column header, no Targets sub-section; data rows start right
+        -- under the source header.
         if _tip.colHdr then
             _tip.colHdr.spell:Hide(); _tip.colHdr.amount:Hide(); _tip.colHdr.dps:Hide(); _tip.colHdr.pct:Hide()
         end
+        HideTipTargets()
         -- Top recap events (oldest-first) for this death; nil -> nothing to show.
         local events, maxHP = self:GetDeathRecap(bar._deathRecapID)
         if not events then return false end
@@ -732,6 +1009,9 @@ function DM:PopulateHoverTip(W, bar)
             _tip.colHdr.spell:SetPoint("TOPLEFT", _tip, "TOPLEFT", TIP_PAD, hdrY)
             _tip.colHdr.amount:ClearAllPoints()
             _tip.colHdr.amount:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", TIP_AMT_X, hdrY)
+            -- Re-apply the Spell label's right-stop (ClearAllPoints above dropped the
+            -- build-time TOPRIGHT) so it stays bounded by the Amount column's left edge.
+            _tip.colHdr.spell:SetPoint("TOPRIGHT", _tip.colHdr.amount, "TOPLEFT", -3, 0)
             _tip.colHdr.dps:ClearAllPoints()
             _tip.colHdr.dps:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", TIP_DPS_X, hdrY)
             _tip.colHdr.pct:ClearAllPoints()
@@ -830,15 +1110,26 @@ function DM:PopulateHoverTip(W, bar)
                 if row:IsShown() then row:Hide() end
             end
         end
+
+        -- Targets sub-section: DamageDone only. Renders below the spell rows; returns the
+        -- extra height it consumed (0 / hides itself when there are no targets). For any
+        -- other breakdown meter type (HealingDone, etc.) the section stays hidden.
+        if shown > 0 and cfg.MeterType == Enum.DamageMeterType.DamageDone then
+            local topY = -(headerH + bodyTop + shown * stride)
+            tgtExtraH = RenderTipTargets(self, bar, cfg, W._curSessionID, topY, stride, barH)
+        else
+            HideTipTargets()
+        end
     end
 
-    if shown == 0 then return false end
+    if shown == 0 then HideTipTargets(); return false end
     _tip.header:SetText(headerText)
     -- Re-apply the live font in case a GUI change happened (ReapplyBarVisuals also
     -- handles this, but a hover before the first reapply still wants current fonts).
     KE:ApplyFontToText(_tip.header, face, size, outline)
-    -- bodyTop reserves the column-header band (breakdown path; 0 for the recap path).
-    _tip:SetHeight(headerH + bodyTop + TIP_PAD + shown * stride)
+    -- bodyTop reserves the column-header band (breakdown path; 0 for the recap path);
+    -- tgtExtraH reserves the Targets sub-section (DamageDone breakdown only, else 0).
+    _tip:SetHeight(headerH + bodyTop + TIP_PAD + shown * stride + tgtExtraH)
     return true
 end
 
@@ -928,6 +1219,21 @@ function DM:ReapplyHoverTipVisuals()
                 -- Phase 4c numeric columns (DPS / %).
                 if tr.row.dps then KE:ApplyFontToText(tr.row.dps, face, size, outline) end
                 if tr.row.pct then KE:ApplyFontToText(tr.row.pct, face, size, outline) end
+            end
+        end
+    end
+    -- Phase 4c Targets sub-section: label tracks the data font at the small size; rows
+    -- track the data font + statusbar texture. Lazy-built, so guard on existence.
+    if _tip.tgtLabel then
+        KE:ApplyFontToText(_tip.tgtLabel, face, math.max(8, (size or 12) - 2), outline)
+    end
+    if _tip.tgtRows then
+        for ti = 1, TIP_TGT_ROWS do
+            local tr = _tip.tgtRows[ti]
+            if tr and tr.row then
+                tr.row.fill:SetStatusBarTexture(texPath)
+                KE:ApplyFontToText(tr.row.label, face, size, outline)
+                KE:ApplyFontToText(tr.row.value, face, size, outline)
             end
         end
     end
