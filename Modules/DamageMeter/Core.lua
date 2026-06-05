@@ -88,8 +88,10 @@ end
 
 function DM:ApplyReplaceBlizzard()
     if not (C_CVar and C_CVar.SetCVar) then return end
-    local on = self.db and self.db.ReplaceBlizzard ~= false
-    pcall(C_CVar.SetCVar, "damageMeterEnabled", on and "0" or "1")
+    -- Always suppress Blizzard's built-in meter while KE's is enabled -- nobody
+    -- wants two meters, so this is unconditional (no DB toggle). Only ever called
+    -- from OnEnable; RestoreBlizzardMeter brings the built-in meter back on disable.
+    pcall(C_CVar.SetCVar, "damageMeterEnabled", "0")
 end
 
 -- Called on OnDisable: always restore Blizzard's meter so disabling KE's meter
@@ -159,16 +161,34 @@ end
 -- dock). ShowPreview/HidePreview are idempotent per the PreviewManager cache.
 ---------------------------------------------------------------------------------
 
+-- Toggles the large per-window index badges (a GUI preview / edit aid so the
+-- "Window N" config rows map to the numbered window on screen). Sets _badgesShown
+-- so a window built later (AddWindow during preview) shows its badge immediately.
+-- A badge is a child of its window frame, so a hidden (disabled-context) window's
+-- badge stays hidden regardless.
+function DM:SetWindowBadges(show)
+    self._badgesShown = show
+    if not self.windows_rt then return end
+    for _, W in pairs(self.windows_rt) do
+        if W.indexBadge then
+            if show then W.indexBadge:Show() else W.indexBadge:Hide() end
+        end
+    end
+end
+
 function DM:ShowPreview()
     if not self.enabled then return end
     self._hidden = false
     self:EnsureDock()
+    self:SetWindowBadges(true)
     self:RefreshDock()
     if self.Tick then self:Tick() end
 end
 
 function DM:HidePreview()
-    -- No-op: the dock is persistent. Nothing to tear down.
+    -- The dock is persistent (must NOT hide the user's real dock); only the
+    -- preview-only window badges are turned off here.
+    self:SetWindowBadges(false)
 end
 
 ---------------------------------------------------------------------------------

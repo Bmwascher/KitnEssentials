@@ -118,13 +118,25 @@ local function BuildGeneralTab(scrollChild, yOffset, db, manager)
         msgOn = "On",
         msgOff = "Off",
     })
-    row1a:AddWidget(enableCheck, 1)
+    row1a:AddWidget(enableCheck, 0.5)
+
+    -- Lock Dock lives on the Enable row (far right) -- it's a tightly-coupled
+    -- behavior toggle, not worth its own card. Greyed with the module (group "all").
+    local lockCheck = GUIFrame:CreateCheckbox(row1a, "Lock Dock", {
+        value = db.Locked == true,
+        callback = function(checked)
+            db.Locked = checked
+            if DM and DM.ApplyLockState then DM:ApplyLockState() end
+        end,
+    })
+    row1a:AddWidget(lockCheck, 0.5)
+    manager:Register(lockCheck, "all")
     card1:AddRow(row1a, Theme.rowHeight)
 
     local noteRow = GUIFrame:CreateRow(card1.content, 50)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " In-client meter built on Blizzard's 12.0 damage-meter data.\n" ..
+        KE:ColorTextByTheme("-") .. " In-client meter on Blizzard's 12.0 data; replaces the built-in meter automatically while enabled.\n" ..
         KE:ColorTextByTheme("-") .. " Switch type/segment on the meter itself; the GUI sets defaults & look.",
         50, "hide")
     noteRow:AddWidget(noteText, 1)
@@ -134,8 +146,7 @@ local function BuildGeneralTab(scrollChild, yOffset, db, manager)
 
     ----------------------------------------------------------------
     -- Card 2: Position Settings (the dock is the positioned frame)
-    -- Position immediately follows Enable per the canonical card order
-    -- (Enable > Position > ...); the Behavior toggles card follows it.
+    -- Position immediately follows Enable per the canonical card order.
     ----------------------------------------------------------------
     local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         title = "Position Settings",
@@ -159,35 +170,8 @@ local function BuildGeneralTab(scrollChild, yOffset, db, manager)
     yOffset = posOffset
 
     ----------------------------------------------------------------
-    -- Card 3: Behavior toggles (Replace Blizzard, Lock dock)
+    -- Card 3: Tip
     ----------------------------------------------------------------
-    local card2 = GUIFrame:CreateCard(scrollChild, "Behavior", yOffset)
-    manager:Register(card2, "all")
-
-    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
-    local replaceCheck = GUIFrame:CreateCheckbox(row2a, "Replace Blizzard Meter", {
-        value = db.ReplaceBlizzard ~= false,
-        callback = function(checked)
-            db.ReplaceBlizzard = checked
-            if DM and DM.ApplyReplaceBlizzard then DM:ApplyReplaceBlizzard() end
-        end,
-    })
-    row2a:AddWidget(replaceCheck, 0.5)
-    manager:Register(replaceCheck, "all")
-
-    local lockCheck = GUIFrame:CreateCheckbox(row2a, "Lock Dock", {
-        value = db.Locked == true,
-        callback = function(checked)
-            db.Locked = checked
-            if DM and DM.ApplyLockState then DM:ApplyLockState() end
-        end,
-    })
-    row2a:AddWidget(lockCheck, 0.5)
-    manager:Register(lockCheck, "all")
-    card2:AddRow(row2a, Theme.rowHeightLast, 0)
-
-    yOffset = card2:GetNextOffset()
-
     local dragNoteCard = GUIFrame:CreateCard(scrollChild, "Tip", yOffset)
     manager:Register(dragNoteCard, "all")
     local dnRow = GUIFrame:CreateRow(dragNoteCard.content, Theme.rowHeightLast)
@@ -212,12 +196,17 @@ end
 local function BuildWindowsTab(scrollChild, yOffset, db, manager)
     local DM = GetDM()
 
-    -- Stable list of referenced window indices, in dock order.
+    -- Referenced window indices, sorted by INDEX (1,2,3...) for the GUI rows below.
+    -- DockWindowIndices returns dock order (column-then-row), which lists windows
+    -- out of numeric order (e.g. 2,3,1) and makes the per-window rows/pickers
+    -- unintuitive to scan; the on-screen window badges (preview/edit) carry the
+    -- same index so "Window N" here maps to the numbered window in the world.
     local winList = {}
     if DM and DM.DockWindowIndices then
         local found = DM:DockWindowIndices({})
         for i = 1, #found do winList[i] = found[i] end
     end
+    table.sort(winList)
 
     -- "Custom" has no distinct structural form until columns are actually mixed,
     -- so GetArrangement() (which derives the mode from the column shape) can never
@@ -336,7 +325,80 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
     yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 2: Default Display (Configure For: <context>)
+    -- Card 2: Sizing (numeric fine-tune of the same WidthRatio / RowRatios the
+    -- in-world drag-splitters set). Only shown when there's something to size:
+    -- column widths for a multi-column layout, row heights for a stacked column.
+    ----------------------------------------------------------------
+    do
+        local cols = db.Dock and db.Dock.Columns
+        local hasMultiCol = cols and #cols >= 2
+        local hasStacked = false
+        if cols then
+            for c = 1, #cols do
+                if cols[c].Windows and #cols[c].Windows >= 2 then hasStacked = true; break end
+            end
+        end
+
+        if hasMultiCol or hasStacked then
+            -- Build the slider specs first (column widths, then per-column row heights).
+            local specs = {}
+            if hasMultiCol then
+                for c = 1, #cols do
+                    specs[#specs + 1] = { kind = "col", c = c, label = "Column " .. c .. " Width %" }
+                end
+            end
+            for c = 1, #cols do
+                local wins = cols[c].Windows
+                if wins and #wins >= 2 then
+                    for r = 1, #wins do
+                        specs[#specs + 1] = { kind = "row", c = c, r = r,
+                            label = "Window " .. wins[r] .. " Height %" }
+                    end
+                end
+            end
+
+            local sizeCard = GUIFrame:CreateCard(scrollChild, "Sizing", yOffset)
+            manager:Register(sizeCard, "all")
+
+            for n = 1, #specs do
+                local spec = specs[n]
+                local value, cb
+                if spec.kind == "col" then
+                    value = (DM and DM.GetColumnWidthShare and DM:GetColumnWidthShare(spec.c)) or 50
+                    cb = function(val)
+                        if DM and DM.SetColumnWidthShare then DM:SetColumnWidthShare(spec.c, val) end
+                    end
+                else
+                    value = (DM and DM.GetRowHeightShare and DM:GetRowHeightShare(spec.c, spec.r)) or 50
+                    cb = function(val)
+                        if DM and DM.SetRowHeightShare then DM:SetRowHeightShare(spec.c, spec.r, val) end
+                    end
+                end
+                local rowS = GUIFrame:CreateRow(sizeCard.content, Theme.rowHeight)
+                local slider = GUIFrame:CreateSlider(rowS, spec.label, {
+                    min = 5, max = 95, step = 1, value = value, callback = cb,
+                })
+                rowS:AddWidget(slider, 1)
+                manager:Register(slider, "all")
+                sizeCard:AddRow(rowS, Theme.rowHeight)
+            end
+
+            local szNoteRow = GUIFrame:CreateRow(sizeCard.content, Theme.rowHeightLast)
+            local szNote = GUIFrame:CreateText(szNoteRow,
+                KE:ColorTextByTheme("Note"),
+                KE:ColorTextByTheme("-") .. " Relative %; the others rescale to fit. Reopen the tab to refresh the figures.\n" ..
+                KE:ColorTextByTheme("-") .. " Same effect as dragging the gaps between windows in the world.",
+                Theme.rowHeightLast, "hide")
+            szNoteRow:AddWidget(szNote, 1)
+            manager:Register(szNote, "all")
+            sizeCard:AddRow(szNoteRow, Theme.rowHeightLast, 0)
+
+            yOffset = sizeCard:GetNextOffset()
+        end
+    end
+
+    ----------------------------------------------------------------
+    -- Card 3: Default Display (Configure For: <context>)
     ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Default Display", yOffset)
     manager:Register(card2, "all")

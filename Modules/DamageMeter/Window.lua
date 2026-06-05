@@ -208,6 +208,18 @@ function DM:CreateWindow(winIdx)
         self.db and self.db.FontOutline
     )
 
+    -- Large window-index badge (top-right, semi-transparent). Shown ONLY during
+    -- GUI preview / edit so the "Window N" rows in the config map to the numbered
+    -- window on screen; hidden during normal play so it never obscures bar data.
+    -- The index is fixed for a window, so SetText is set once here.
+    W.indexBadge = W.frame:CreateFontString(nil, "OVERLAY")
+    W.indexBadge:SetPoint("TOPRIGHT", W.frame, "TOPRIGHT", -3, -2)
+    W.indexBadge:SetJustifyH("RIGHT")
+    KE:ApplyFontToText(W.indexBadge, self.db and self.db.FontFace, 22, "OUTLINE")
+    W.indexBadge:SetText(tostring(winIdx))
+    W.indexBadge:SetTextColor(1, 1, 1, 0.45)
+    if self._badgesShown then W.indexBadge:Show() else W.indexBadge:Hide() end
+
     -- Scroll viewport + content child. The content child holds the bar rows;
     -- the render layer scrolls the viewport for virtualization. Sized to 1,1
     -- here; DM:LayoutWindow (below) owns the body's anchors and the real

@@ -1049,3 +1049,103 @@ function DM:SetWindowColumn(idx, targetCol)
 
     self:RefreshDock()
 end
+
+---------------------------------------------------------------------------------
+-- Numeric sizing (GUI counterpart to the drag-splitters)
+--
+-- Set a column's width or a stacked row's height as a percentage; the other
+-- columns/rows rescale PROPORTIONALLY to fill the remainder, conserving the
+-- overall dock geometry. These write the SAME db.Dock.Columns[*].WidthRatio /
+-- .RowRatios tables the splitters mutate, then RefreshDock. Plain numbers only
+-- (ratios / percentages) -- never a secret value. clamp() is the file-local
+-- min/max helper used by the splitter math.
+---------------------------------------------------------------------------------
+
+-- Column WidthRatio is a baseW multiplier (colW = baseW * WidthRatio), so the SUM
+-- of WidthRatios is conserved to keep the total dock width stable while the share
+-- is redistributed. pct clamped to [5, 95].
+function DM:SetColumnWidthShare(colIdx, pct)
+    local db = self.db
+    local cols = db and db.Dock and db.Dock.Columns
+    if not cols or #cols < 2 or not cols[colIdx] then return end
+    pct = clamp(pct, 5, 95) / 100
+
+    local total = 0
+    for c = 1, #cols do total = total + ((cols[c] and cols[c].WidthRatio) or 1) end
+    if total <= 0 then total = #cols end
+
+    local target = pct * total
+    local rest = total - target
+    local othersOld = total - ((cols[colIdx].WidthRatio) or 1)
+    if othersOld <= 0 then
+        local each = rest / (#cols - 1)
+        for c = 1, #cols do cols[c].WidthRatio = (c == colIdx) and target or each end
+    else
+        for c = 1, #cols do
+            if c == colIdx then
+                cols[c].WidthRatio = target
+            else
+                cols[c].WidthRatio = rest * (((cols[c].WidthRatio) or 1) / othersOld)
+            end
+        end
+    end
+    self:RefreshDock()
+end
+
+-- RowRatios are normalized by LayoutDock (norm = ratio / ratioSum). We operate in
+-- ratio-SUM space (preserve the current sum) rather than assuming a percent scale,
+-- so this is correct regardless of the ratios' current magnitude -- e.g. after a
+-- drag-splitter has left them summing to ~1.0 instead of ~100. Mirrors
+-- SetColumnWidthShare. pct clamped to [5, 95].
+function DM:SetRowHeightShare(colIdx, rowIdx, pct)
+    local db = self.db
+    local cols = db and db.Dock and db.Dock.Columns
+    local col = cols and cols[colIdx]
+    local ratios = col and col.RowRatios
+    if not ratios or #ratios < 2 or not ratios[rowIdx] then return end
+    pct = clamp(pct, 5, 95) / 100
+
+    local total = 0
+    for r = 1, #ratios do total = total + ((ratios[r]) or 0) end
+    if total <= 0 then total = #ratios end
+
+    local target = pct * total
+    local rest = total - target
+    local othersOld = total - ((ratios[rowIdx]) or 0)
+    if othersOld <= 0 then
+        local each = rest / (#ratios - 1)
+        for r = 1, #ratios do ratios[r] = (r == rowIdx) and target or each end
+    else
+        for r = 1, #ratios do
+            if r == rowIdx then
+                ratios[r] = target
+            else
+                ratios[r] = rest * (((ratios[r]) or 0) / othersOld)
+            end
+        end
+    end
+    self:RefreshDock()
+end
+
+-- Current width share of a column as a percent of the column-width-ratio sum
+-- (for the GUI slider's displayed value). Plain math; never secret.
+function DM:GetColumnWidthShare(colIdx)
+    local cols = self.db and self.db.Dock and self.db.Dock.Columns
+    if not cols or not cols[colIdx] then return 50 end
+    local total = 0
+    for c = 1, #cols do total = total + ((cols[c] and cols[c].WidthRatio) or 1) end
+    if total <= 0 then return 100 / math.max(1, #cols) end
+    return (((cols[colIdx].WidthRatio) or 1) / total) * 100
+end
+
+-- Current height share of a stacked row as a percent of its column's row-ratio sum.
+function DM:GetRowHeightShare(colIdx, rowIdx)
+    local cols = self.db and self.db.Dock and self.db.Dock.Columns
+    local col = cols and cols[colIdx]
+    local ratios = col and col.RowRatios
+    if not ratios or not ratios[rowIdx] then return 50 end
+    local total = 0
+    for r = 1, #ratios do total = total + ((ratios[r]) or 0) end
+    if total <= 0 then return 100 / math.max(1, #ratios) end
+    return (((ratios[rowIdx]) or 0) / total) * 100
+end
