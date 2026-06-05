@@ -426,8 +426,15 @@ function GUIFrame:CreateSlider(parent, labelText, config)
         if not isUpdating then
             isUpdating = true
             if isPercent then
-                -- Display as percentage
-                valueEdit:SetText(math_floor(val * 1000 + 0.5) / 10 .. "%")
+                -- Display as percentage: whole numbers as "65%", fractional as
+                -- "65.5%" (one decimal). Avoids a trailing ".0" on integer percents
+                -- while preserving sub-1% precision for callers that need it.
+                local pctVal = math_floor(val * 1000 + 0.5) / 10
+                if pctVal == math_floor(pctVal) then
+                    valueEdit:SetText(math_floor(pctVal) .. "%")
+                else
+                    valueEdit:SetText(pctVal .. "%")
+                end
             else
                 valueEdit:SetText(tostring(math_floor(val * 100 + 0.5) / 100))
             end

@@ -21,6 +21,7 @@ local UIParent = UIParent
 local C_Timer = C_Timer
 local GetCursorPosition = GetCursorPosition
 local math_min = math.min
+local math_ceil = math.ceil
 local wipe = wipe
 
 -- Symmetric clamp helper for the splitter drag math (plain numbers only --
@@ -1227,4 +1228,78 @@ function DM:GetRowBoundaryShare(colIdx, rowIdx)
     local pair = a + b
     if pair <= 0 then return 50 end
     return (a / pair) * 100
+end
+
+---------------------------------------------------------------------------------
+-- Boundary share RANGE (GUI slider min/max == the in-world drag-splitter floor)
+--
+-- The boundary sliders edit the FIRST pane's share of a conserved pair. Left
+-- unbounded (5-95) a slider can shrink a pane below the same floor the drag-
+-- splitter enforces (80px per column; header + one bar per row), squashing a
+-- window to unusable. These return the (minPct, maxPct) for a gap's slider so the
+-- pane can't be dragged below that floor. minPct is the floor expressed as a % of
+-- the pair's combined px (the pair size is fixed -- a boundary move conserves it),
+-- clamped to [5, 45] so the slider always keeps a usable span even when the pair
+-- is too small to honor the full floor (the drag-splitter still enforces the hard
+-- floor in the world). Plain numbers only -- never a secret.
+---------------------------------------------------------------------------------
+
+-- Column gap colIdx|colIdx+1: floor = 80px per column (matches SplitterOnUpdate col).
+function DM:GetColumnBoundaryRange(colIdx)
+    local cols = self.db and self.db.Dock and self.db.Dock.Columns
+    local a = cols and cols[colIdx]
+    local b = cols and cols[colIdx + 1]
+    if not (a and b) then return 5, 95 end
+    local baseW = (self.db and self.db.Width) or 240
+    if baseW <= 0 then baseW = 240 end
+    -- Prefer the pixel-snapped column widths LayoutDock recorded (exact match to the
+    -- drag-splitter's pairPx in SplitterStartDrag); fall back to baseW * ratio before
+    -- the first layout pass.
+    local ciA = self._dockColInfo and self._dockColInfo[colIdx]
+    local ciB = self._dockColInfo and self._dockColInfo[colIdx + 1]
+    local pairPx = ((ciA and ciA.w) or (baseW * ((a.WidthRatio) or 1)))
+                 + ((ciB and ciB.w) or (baseW * ((b.WidthRatio) or 1)))
+    if pairPx <= 0 then return 5, 95 end
+    local minPct = clamp(math_ceil(80 / pairPx * 100), 5, 45)
+    return minPct, 100 - minPct
+end
+
+-- Row gap rowIdx|rowIdx+1 in column colIdx: floor = header + one bar (matches the
+-- row SplitterStartDrag min). The column's content height is Hdock (the single
+-- natural height = header + visible*stride); the pair occupies its normalized
+-- share of that.
+function DM:GetRowBoundaryRange(colIdx, rowIdx)
+    local db = self.db
+    local cols = db and db.Dock and db.Dock.Columns
+    local col = cols and cols[colIdx]
+    local ratios = col and col.RowRatios
+    if not (ratios and ratios[rowIdx] and ratios[rowIdx + 1]) then return 5, 95 end
+
+    -- Header band + per-bar stride: prefer the values LayoutDock stashed (exact
+    -- pixel-snapped match to the splitter); recompute from db if not laid out yet.
+    local headerH = self._dockHeaderH or KE:PixelSnap((db.FontSize or 12) + 6)
+    local stride = self._dockStride or (KE:PixelSnap(db.BarHeight or 16) + KE:PixelSnap(db.BarSpacing or 2))
+    if stride <= 0 then stride = 1 end
+    local visible = math_min((db.VisibleBars or 10), self.BAR_POOL_SIZE or 40)
+    local Hdock = headerH + visible * stride
+
+    -- The rows split the column's content height MINUS the inter-row gaps (matches
+    -- LayoutDock's availH), so subtract them before apportioning the pair's share.
+    local nRows = #ratios
+    local availH = Hdock - (nRows - 1) * GAP
+    if availH < 0 then availH = 0 end
+
+    local sumR = 0
+    for r = 1, #ratios do
+        local rr = ratios[r]
+        if type(rr) == "number" and rr > 0 then sumR = sumR + rr end
+    end
+    if sumR <= 0 then return 5, 95 end
+
+    local pairRatio = ((ratios[rowIdx]) or 0) + ((ratios[rowIdx + 1]) or 0)
+    local pairPx = availH * (pairRatio / sumR)
+    if pairPx <= 0 then return 5, 95 end
+
+    local minPct = clamp(math_ceil((headerH + stride) / pairPx * 100), 5, 45)
+    return minPct, 100 - minPct
 end

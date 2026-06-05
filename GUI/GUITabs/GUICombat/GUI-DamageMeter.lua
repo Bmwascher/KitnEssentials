@@ -686,20 +686,25 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
             local colSliders = {}
             local rowSliders = {}
 
-            -- Column-gap sliders: between column c and c+1, value = left share.
+            -- Column-gap sliders: between column c and c+1, value = left share. Stored
+            -- as a 0-1 fraction with isPercent so the readout shows "%". Range clamped
+            -- per gap to the in-world drag-splitter floor (DM:GetColumnBoundaryRange)
+            -- so a column can't be sliddered below usable size.
             for c = 1, nCols - 1 do
+                local cMin, cMax = 5, 95
+                if DM and DM.GetColumnBoundaryRange then cMin, cMax = DM:GetColumnBoundaryRange(c) end
                 local rowS = GUIFrame:CreateRow(sizeCard.content, Theme.rowHeight)
                 local slider = GUIFrame:CreateSlider(rowS, "Col " .. c .. " / Col " .. (c + 1) .. " width", {
-                    min = 5, max = 95, step = 1,
-                    value = (DM and DM.GetColumnBoundaryShare and DM:GetColumnBoundaryShare(c)) or 50,
+                    min = cMin / 100, max = cMax / 100, step = 0.01, isPercent = true,
+                    value = ((DM and DM.GetColumnBoundaryShare and DM:GetColumnBoundaryShare(c)) or 50) / 100,
                     callback = function(val)
-                        if DM and DM.SetColumnBoundaryShare then DM:SetColumnBoundaryShare(c, val) end
+                        if DM and DM.SetColumnBoundaryShare then DM:SetColumnBoundaryShare(c, val * 100) end
                         -- Refresh the two neighbours that share a touched column.
                         if colSliders[c - 1] and DM then
-                            colSliders[c - 1]:SetValue(DM:GetColumnBoundaryShare(c - 1), true)
+                            colSliders[c - 1]:SetValue(DM:GetColumnBoundaryShare(c - 1) / 100, true)
                         end
                         if colSliders[c + 1] and DM then
-                            colSliders[c + 1]:SetValue(DM:GetColumnBoundaryShare(c + 1), true)
+                            colSliders[c + 1]:SetValue(DM:GetColumnBoundaryShare(c + 1) / 100, true)
                         end
                     end,
                 })
@@ -718,17 +723,19 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
                         for r = 1, #wins - 1 do
                             local topNum = posOf[wins[r]] or wins[r]
                             local botNum = posOf[wins[r + 1]] or wins[r + 1]
+                            local rMin, rMax = 5, 95
+                            if DM and DM.GetRowBoundaryRange then rMin, rMax = DM:GetRowBoundaryRange(c, r) end
                             local rowS = GUIFrame:CreateRow(sizeCard.content, Theme.rowHeight)
                             local slider = GUIFrame:CreateSlider(rowS,
                                 "Win " .. topNum .. " / Win " .. botNum .. " height", {
-                                min = 5, max = 95, step = 1,
-                                value = (DM and DM.GetRowBoundaryShare and DM:GetRowBoundaryShare(c, r)) or 50,
+                                min = rMin / 100, max = rMax / 100, step = 0.01, isPercent = true,
+                                value = ((DM and DM.GetRowBoundaryShare and DM:GetRowBoundaryShare(c, r)) or 50) / 100,
                                 callback = function(val)
-                                    if DM and DM.SetRowBoundaryShare then DM:SetRowBoundaryShare(c, r, val) end
+                                    if DM and DM.SetRowBoundaryShare then DM:SetRowBoundaryShare(c, r, val * 100) end
                                     local rs = rowSliders[c]
                                     if rs and DM then
-                                        if rs[r - 1] then rs[r - 1]:SetValue(DM:GetRowBoundaryShare(c, r - 1), true) end
-                                        if rs[r + 1] then rs[r + 1]:SetValue(DM:GetRowBoundaryShare(c, r + 1), true) end
+                                        if rs[r - 1] then rs[r - 1]:SetValue(DM:GetRowBoundaryShare(c, r - 1) / 100, true) end
+                                        if rs[r + 1] then rs[r + 1]:SetValue(DM:GetRowBoundaryShare(c, r + 1) / 100, true) end
                                     end
                                 end,
                             })
@@ -784,7 +791,59 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
     manager:Register(ctxNote, "all")
     card2:AddRow(ctxNoteRow, 50, 0)
 
-    -- One row per window (numbered by on-screen position): Enabled · Type · Segment.
+    -- Column layout shared by the header + every window row (so they align):
+    --   badge 0.08 | enable 0.16 | Type 0.38 | Segment 0.38.
+    local COL_BADGE, COL_ENABLE, COL_TYPE, COL_SEG = 0.08, 0.16, 0.38, 0.38
+
+    -- Small accent number chip matching the map boxes + in-world index badges, so a
+    -- row visually maps to its numbered window. A plain Frame (AddWidget stretches it
+    -- to its column); the chip inside is fixed-size, anchored at the control band so
+    -- it lines up with the toggle/dropdowns (which sit 14px below the row top).
+    local function MakeNumberBadge(parent, n)
+        local f = CreateFrame("Frame", nil, parent)
+        local chip = CreateFrame("Frame", nil, f, "BackdropTemplate")
+        chip:SetSize(24, 24)
+        chip:SetPoint("TOPLEFT", f, "TOPLEFT", 0, -14)
+        chip:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Buttons\\WHITE8X8",
+            edgeSize = 1,
+        })
+        local a = Theme.accent
+        chip:SetBackdropColor(a[1], a[2], a[3], 0.9)
+        chip:SetBackdropBorderColor(0, 0, 0, 1)
+        local t = chip:CreateFontString(nil, "OVERLAY")
+        t:SetPoint("CENTER")
+        KE:ApplyThemeFont(t, "normal")
+        t:SetTextColor(1, 1, 1, 1)
+        t:SetText(tostring(n))
+        return f
+    end
+
+    -- Single header row -- carries the column labels ONCE (the per-widget labels are
+    -- dropped below) so "Type"/"Segment" don't repeat on every window. FontStrings sit
+    -- at the same cumulative column fractions AddWidget uses, so each lands directly
+    -- above its control column. (Card alpha greys it with the module; not registered.)
+    local hdrRow = CreateFrame("Frame", nil, card2.content)
+    hdrRow:SetHeight(14)
+    local function makeHdr(text)
+        local fs = hdrRow:CreateFontString(nil, "OVERLAY")
+        KE:ApplyThemeFont(fs, "small")
+        fs:SetJustifyH("LEFT")
+        fs:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
+        fs:SetText(text)
+        return fs
+    end
+    local hShow, hType, hSeg = makeHdr("Show"), makeHdr("Type"), makeHdr("Segment")
+    hdrRow:SetScript("OnSizeChanged", function(self, w)
+        hShow:ClearAllPoints(); hShow:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", w * COL_BADGE, 0)
+        hType:ClearAllPoints(); hType:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", w * (COL_BADGE + COL_ENABLE), 0)
+        hSeg:ClearAllPoints();  hSeg:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", w * (COL_BADGE + COL_ENABLE + COL_TYPE), 0)
+    end)
+    card2:AddRow(hdrRow, 14)
+
+    -- One row per window (numbered left->right / top->bottom by on-screen position):
+    -- [number chip] [enable] [Type] [Segment]. Labels live in the header above.
     for n = 1, #order do
         local idx = order[n]
         local window = db.Windows[idx]
@@ -807,27 +866,29 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
             local isLast = (n == #order)
             local rowW = GUIFrame:CreateRow(card2.content, isLast and Theme.rowHeightLast or Theme.rowHeight)
 
-            local enChk = GUIFrame:CreateCheckbox(rowW, "Window " .. n, {
+            rowW:AddWidget(MakeNumberBadge(rowW, n), COL_BADGE)
+
+            local enChk = GUIFrame:CreateCheckbox(rowW, "", {
                 value = cfg.Enabled ~= false,
                 callback = function(checked) writeField("Enabled", checked) end,
             })
-            rowW:AddWidget(enChk, 0.34)
+            rowW:AddWidget(enChk, COL_ENABLE)
             manager:Register(enChk, "all")
 
-            local typeDd = GUIFrame:CreateDropdown(rowW, "Type", {
+            local typeDd = GUIFrame:CreateDropdown(rowW, "", {
                 options = METER_TYPE_OPTIONS,
                 value = cfg.MeterType or Enum.DamageMeterType.DamageDone,
                 callback = function(key) writeField("MeterType", key) end,
             })
-            rowW:AddWidget(typeDd, 0.33)
+            rowW:AddWidget(typeDd, COL_TYPE)
             manager:Register(typeDd, "all")
 
-            local segDd = GUIFrame:CreateDropdown(rowW, "Segment", {
+            local segDd = GUIFrame:CreateDropdown(rowW, "", {
                 options = SEGMENT_OPTIONS,
                 value = cfg.SessionType or Enum.DamageMeterSessionType.Current,
                 callback = function(key) writeField("SessionType", key) end,
             })
-            rowW:AddWidget(segDd, 0.33)
+            rowW:AddWidget(segDd, COL_SEG)
             manager:Register(segDd, "all")
 
             card2:AddRow(rowW, isLast and Theme.rowHeightLast or Theme.rowHeight, isLast and 0 or nil)
