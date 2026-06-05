@@ -266,7 +266,7 @@ function DM:CreateWindow(winIdx)
     -- the runtime-resolve pattern used by the OnClick -> DM:OpenDetail hook above.
     local function MakeHeaderBtn(tex, tooltip, onClick, xStep)
         local b = CreateFrame("Button", nil, W.frame)
-        b:SetSize(14, 14)
+        b:SetSize(12, 12)
         b:SetPoint("TOPRIGHT", W.frame, "TOPRIGHT", -2 - xStep, -3)
         b:SetFrameLevel(W.frame:GetFrameLevel() + 5)
         b.icon = b:CreateTexture(nil, "OVERLAY")
