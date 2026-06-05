@@ -16,6 +16,11 @@ if not KitnEssentials then return end
 local DM = KitnEssentials:GetModule("DamageMeter")
 
 local CreateFrame = CreateFrame
+local C_Spell = C_Spell
+local issecretvalue = issecretvalue
+local RAID_CLASS_COLORS = RAID_CLASS_COLORS
+local math_min, math_max = math.min, math.max
+local format = string.format
 
 -- Same fixed pool ceiling as the main bars; the detail list never exceeds it.
 local DETAIL_POOL_SIZE = DM.BAR_POOL_SIZE or 40
@@ -31,6 +36,7 @@ local function MakeDetailRow(parent)
     bar.row = row
 
     row.fill = CreateFrame("StatusBar", nil, row)
+    row.fill:SetAllPoints(row)
     row.fill:SetMinMaxValues(0, 1)
     row.fill:SetValue(0)
     row.fill:SetStatusBarTexture(KE:GetStatusbarPath(db and db.StatusBarTexture or "KitnUI"))
@@ -148,6 +154,120 @@ function DM:ShowDetailMessage(W, msg)
     W.detail.msg:Show()
 end
 
--- Renderer stubs — filled in by Tasks 3 (breakdown) and 4 (death recap).
-function DM:RenderBreakdown(_) end   -- Task 3
+-- Per-source spell breakdown (out-of-combat only — OpenDetail is OOC-gated, so
+-- spellID is plain here and C_Spell.* lookups don't taint). Port of EUI's standard
+-- breakdown to KE helpers + the confirmed secret contract: amounts are plain OOC,
+-- but percent math is still guarded with issecretvalue defensively (a stale combat
+-- read could linger one frame). API pre-sorts combatSpells descending, so the index
+-- IS the rank; maxAmount drives the proportional fill.
+function DM:RenderBreakdown(W)
+    if W.detail and W.detail.msg then W.detail.msg:Hide() end
+    local cfg = self:ResolveWindowConfig(W.idx)
+    if not cfg then return end
+
+    -- Pull this source out of the window's active session (honor a pinned historical
+    -- session via curSessionID — Task 6). GetSource pcall-wraps the API.
+    local sessionID = W._curSessionID
+    local src = self:GetSource(cfg.SessionType, cfg.MeterType, W._detailSourceGUID, W._detailSourceCID, sessionID)
+    local spells = src and src.combatSpells
+    local d = W.detail
+    if not spells then
+        for i = 1, DETAIL_POOL_SIZE do d.rows[i].row:Hide() end
+        return
+    end
+
+    local stride = W._snapStride or 18
+    local barH = W._snapHeight or 16
+    local classColor = W._detailClass and RAID_CLASS_COLORS[W._detailClass]
+
+    -- maxAmount drives the fill width. Out of combat amounts are plain numbers; gate
+    -- percent on issecretvalue + type defensively before any arithmetic.
+    local maxAmount = src.maxAmount
+    local canPercent = maxAmount and (not issecretvalue(maxAmount)) and type(maxAmount) == "number"
+        and src.totalAmount and not issecretvalue(src.totalAmount)
+    local total = canPercent and src.totalAmount or 0
+
+    local count = math_min(#spells, DETAIL_POOL_SIZE)
+    for i = 1, DETAIL_POOL_SIZE do
+        local bar = d.rows[i]
+        local row = bar.row
+        if i <= count then
+            local spell = spells[i]
+            row:ClearAllPoints()
+            local yOff = -(i - 1) * stride
+            row:SetPoint("TOPLEFT", d.content, "TOPLEFT", 0, yOff)
+            row:SetPoint("TOPRIGHT", d.content, "TOPRIGHT", 0, yOff)
+            row:SetHeight(barH)
+
+            -- Icon from spellID (safe OUT of combat — spellID is secret IN combat).
+            -- Falls back to a hidden icon frame if the lookup fails.
+            local iconShown = false
+            local spID = spell.spellID
+            if spID then
+                local tex = C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(spID)
+                if tex then
+                    row.icon:SetTexture(tex)
+                    KE:ApplyIconZoom(row.icon)
+                    row.iconFrame:SetSize(barH, barH)
+                    row.iconFrame:Show()
+                    iconShown = true
+                end
+            end
+            if not iconShown then row.iconFrame:Hide() end
+
+            row.label:ClearAllPoints()
+            if iconShown then
+                row.label:SetPoint("LEFT", row.iconFrame, "RIGHT", 3, 0)
+            else
+                row.label:SetPoint("LEFT", row.fill, "LEFT", 3, 0)
+            end
+            row.label:SetPoint("RIGHT", row.value, "LEFT", -3, 0)
+
+            -- Sanitize the per-spell amount before any Lua math/format. SetValue
+            -- accepts secrets (raw amount feeds the fill), but the percent path and
+            -- FormatBarValue's plain-string branch must run on a non-secret number.
+            -- Mirrors EllesmereUI's per-spell issecretvalue sanitize into a plain local.
+            local amt = spell.totalAmount
+            local amtPlain = amt
+            if issecretvalue(amt) or type(amt) ~= "number" then amtPlain = 0 end
+
+            -- Fill: class-colored (source's class), width by amount.
+            row.fill:SetMinMaxValues(0, maxAmount or 1)
+            row.fill:SetValue(amt or 0)
+            if classColor then
+                row.fill:SetStatusBarColor(classColor.r, classColor.g, classColor.b)
+            else
+                local ar, ag, ab = KE:GetAccentColor()
+                row.fill:SetStatusBarColor(ar or 0.6, ag or 0.6, ab or 0.6)
+            end
+
+            -- Name: GetSpellName (secret-guard the RETURN), fall back to creatureName/Unknown.
+            local nm
+            if spID then
+                local ok, sn = pcall(C_Spell.GetSpellName, spID)
+                if ok and sn and not issecretvalue(sn) then nm = sn end
+            end
+            row.label:SetText(nm or spell.creatureName or "Unknown")
+
+            -- Value: abbreviated amount + percent (when computable). FormatBarValue
+            -- uses AbbreviateNumbers (AllowedWhenTainted) for parity with the main bars.
+            -- Percent arithmetic runs on amtPlain (sanitized) so a stray secret amount
+            -- cannot taint via division/format; the source aggregates are also guarded.
+            local amtStr = (self.FormatBarValue and select(1, self.FormatBarValue(amtPlain, nil, false))) or ""
+            if canPercent and total > 0 then
+                row.value:SetText(format("%s  %.1f%%", amtStr, (amtPlain / total) * 100))
+            else
+                row.value:SetText(amtStr)
+            end
+
+            if not row:IsShown() then row:Show() end
+        else
+            if row:IsShown() then row:Hide() end
+        end
+    end
+
+    -- Size the scroll child so the wheel can scroll long lists (Task 6 wires the wheel).
+    d.content:SetHeight(math_max(10, count * stride))
+end
+
 function DM:RenderDeathRecap(_) end  -- Task 4
