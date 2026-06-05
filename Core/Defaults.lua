@@ -1558,6 +1558,10 @@ local Defaults = {
             HeaderIconsMouseover = false,
             DetailMaxRows = 40,
 
+            -- Hover quick-peek tooltip (Phase 4b) — hover a bar -> floating breakdown/recap
+            HoverTooltip = true,            -- hover a bar -> floating quick-peek breakdown/recap tooltip
+            HoverTooltipAnchor = "bar",     -- "bar" (above the hovered bar) | "center" (screen center)
+
             -- Shared backdrop (flat); arrangement is owned by Dock below
             BackdropEnabled = true,                     -- off: windows render with no wrapping bg/border
             BackdropBorderStyle = "neutral",            -- neutral | accent | theme

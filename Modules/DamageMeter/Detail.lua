@@ -730,18 +730,24 @@ end
 -- Show the tip for a hovered bar. Suppressed when the click-inline panel is open,
 -- when disabled via DB, or for an empty/placeholder row. On success it pins the
 -- active bar + starts the live poll; otherwise it hides.
-function DM:ShowHoverTip(W, bar)
+-- isInitial: true only from the OnEnter handler. The anchor (ClearAllPoints/SetPoint)
+-- is set ONCE on initial hover -- bar.row is stationary and HoverTooltipAnchor only
+-- changes via the GUI, so the 4 Hz poll (isInitial nil/false) skips the anchor block
+-- to avoid spurious layout invalidation for the whole hover duration.
+function DM:ShowHoverTip(W, bar, isInitial)
     if not W or not bar then return end
     if self.db and self.db.HoverTooltip == false then return end       -- DB toggle (Task 10)
     if W._detailOpen then return end                                    -- click-inline open: suppress
     if not (bar._sourceGUID or bar._sourceCreatureID or bar._deathRecapID) then return end  -- empty/placeholder row
 
     if self:PopulateHoverTip(W, bar) then
-        _tip:ClearAllPoints()
-        if self.db and self.db.HoverTooltipAnchor == "center" then
-            _tip:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-        else
-            _tip:SetPoint("BOTTOMLEFT", bar.row, "TOPLEFT", 0, 2)
+        if isInitial then
+            _tip:ClearAllPoints()
+            if self.db and self.db.HoverTooltipAnchor == "center" then
+                _tip:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+            else
+                _tip:SetPoint("BOTTOMLEFT", bar.row, "TOPLEFT", 0, 2)
+            end
         end
         _tip:Show()
         _tipActiveBar = bar
@@ -805,5 +811,5 @@ _tipPoll:SetScript("OnUpdate", function(self, elapsed)
     _tipPollAccum = 0
     local bar = _tipActiveBar
     if not bar or not bar.win then self:Hide(); return end
-    DM:ShowHoverTip(bar.win, bar)             -- re-populate live (OOC) / keep the combat message
+    DM:ShowHoverTip(bar.win, bar, false)      -- re-populate live (OOC) / keep the combat message; skip re-anchor
 end)

@@ -1030,8 +1030,10 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     -- Header icons (segment / reset / settings) on each window header band.
     -- "Only on mouseover" is greyed when the icons are hidden entirely.
     manager:SetCondition("headericons", function() return db.ShowHeaderIcons ~= false end)
+    -- Hover quick-peek tooltip: the position dropdown is greyed when the tip is off.
+    manager:SetCondition("hovertip", function() return db.HoverTooltip ~= false end)
 
-    local row2e = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local row2e = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local headerIconsChk = GUIFrame:CreateCheckbox(row2e, "Show Header Icons", {
         value = db.ShowHeaderIcons ~= false,
         callback = function(checked)
@@ -1049,7 +1051,32 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     })
     row2e:AddWidget(headerMouseoverChk, 0.5)
     manager:Register(headerMouseoverChk, "headericons")
-    card2:AddRow(row2e, Theme.rowHeightLast, 0)
+    card2:AddRow(row2e, Theme.rowHeight)
+
+    -- Hover quick-peek tooltip: hovering a bar floats a top-N breakdown / recap.
+    local row2f = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local hoverTipChk = GUIFrame:CreateCheckbox(row2f, "Show Hover Tooltip", {
+        value = db.HoverTooltip ~= false,
+        callback = function(checked)
+            db.HoverTooltip = checked
+            ApplySettings()
+            manager:UpdateAll(db.Enabled ~= false)
+        end,
+    })
+    row2f:AddWidget(hoverTipChk, 0.5)
+    manager:Register(hoverTipChk, "all")
+
+    local hoverAnchorDd = GUIFrame:CreateDropdown(row2f, "Tooltip Position", {
+        options = {
+            { key = "bar",    text = "Above Bar" },
+            { key = "center", text = "Screen Center" },
+        },
+        value = db.HoverTooltipAnchor or "bar",
+        callback = function(key) db.HoverTooltipAnchor = key; ApplySettings() end,
+    })
+    row2f:AddWidget(hoverAnchorDd, 0.5)
+    manager:Register(hoverAnchorDd, "hovertip")
+    card2:AddRow(row2f, Theme.rowHeightLast, 0)
 
     yOffset = card2:GetNextOffset()
 

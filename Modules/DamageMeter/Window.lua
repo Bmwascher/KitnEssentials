@@ -179,7 +179,7 @@ local function MakeBar(parent, db)
     -- guard against a missing window themselves. The populate path is OOC-gated
     -- for secret reads and shows a "secret while in combat" message in combat.
     row:SetScript("OnEnter", function()
-        if DM.ShowHoverTip then DM:ShowHoverTip(bar.win, bar) end
+        if DM.ShowHoverTip then DM:ShowHoverTip(bar.win, bar, true) end  -- isInitial: anchor the tip once on hover
     end)
     row:SetScript("OnLeave", function()
         if DM.HideHoverTip then DM:HideHoverTip() end
