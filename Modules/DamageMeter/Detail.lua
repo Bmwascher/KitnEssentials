@@ -90,6 +90,27 @@ function DM:EnsureDetail(W)
     d.view:SetScrollChild(d.content)
     d.view:SetScript("OnSizeChanged", function(_, w) if w and w > 0 then d.content:SetWidth(w) end end)
 
+    -- Mouse-wheel scroll for long breakdowns / recaps (Task 6). Step two rows per
+    -- notch, clamped to [0, contentH - viewportH] so the wheel can't overscroll past
+    -- the last row or above the top. All plain numbers (heights/stride are never
+    -- secret); no-op when the list fits (maxScroll <= 0). Mirrors EUI 2289-2293.
+    d.view:EnableMouseWheel(true)
+    d.view:SetScript("OnMouseWheel", function(self, delta)
+        local stride = W._snapStride or 18
+        local viewH = self:GetHeight() or 0
+        local contentH = d.content:GetHeight() or 0
+        local maxScroll = contentH - viewH
+        if maxScroll <= 0 then
+            self:SetVerticalScroll(0)
+            return
+        end
+        local cur = self:GetVerticalScroll() or 0
+        local newScroll = cur - delta * (2 * stride)
+        if newScroll < 0 then newScroll = 0
+        elseif newScroll > maxScroll then newScroll = maxScroll end
+        self:SetVerticalScroll(newScroll)
+    end)
+
     d.rows = {}
     for i = 1, DETAIL_POOL_SIZE do
         local bar = MakeDetailRow(d.content)

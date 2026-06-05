@@ -562,7 +562,10 @@ function DM:RenderWindow(W)
         W.header:SetText(self:FormatWindowLabel(cfg.MeterType, cfg.SessionType))
     end
 
-    local session = self:CachedSession(cfg.SessionType, cfg.MeterType)
+    -- Phase 4 segment/history: W._curSessionID pins a specific stored session
+    -- (set by the ⌚ menu, ToggleSegmentMenu). nil = live cfg.SessionType, so the
+    -- steady state is unchanged. CachedSession keys its per-Tick cache on the id.
+    local session = self:CachedSession(cfg.SessionType, cfg.MeterType, W._curSessionID)
     local sources = session and session.combatSources
     if not sources then
         -- No session/data this segment: hide every pooled row so stale bars from

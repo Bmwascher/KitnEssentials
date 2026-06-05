@@ -748,7 +748,8 @@ DM.FormatRecapDelta = FormatRecapDelta
 --
 -- Wired by the three header buttons built in Window.lua CreateWindow. The window
 -- handle is passed through (unused by Settings/Reset today, but kept so a future
--- per-window action has it). ToggleSegmentMenu is a stub filled by Task 6.
+-- per-window action has it). ToggleSegmentMenu (the ⌚ button) is implemented in the
+-- Segment / history browser section below.
 ---------------------------------------------------------------------------------
 
 -- Settings: open the GUI straight to the Damage Meter page (combat section).
@@ -767,8 +768,116 @@ function DM:HeaderReset(_)
     if self.Tick then self:Tick() end
 end
 
--- Segment menu (⌚): lazily-built session/history picker. Filled in Task 6.
-function DM:ToggleSegmentMenu(_) end
+---------------------------------------------------------------------------------
+-- Segment / history browser (Phase 4)
+--
+-- W._curSessionID is the single per-window pinned-session field (NOT persisted --
+-- stored sessions are gone after a reload): nil = the live cfg.SessionType
+-- (Current/Overall), non-nil = a specific stored session read via the FromID API
+-- branch in CachedSession/GetSession. The ⌚ menu lists the last ~20 available
+-- combat sessions plus a Current/Overall pair, built lazily on click with
+-- Blizzard's taint-safe MenuUtil context-menu primitive (the canonical 12.0 menu
+-- API -- KE has no in-world menu widget of its own, and the GUI dropdown is a
+-- heavyweight config widget tied to the settings panel, unfit for a header anchor).
+---------------------------------------------------------------------------------
+
+-- The Current/Overall pair the ⌚ menu offers under the divider. Plain enum order
+-- (Current first), built once at file load -- never per click.
+local SEGMENT_SESSION_TYPES = {
+    Enum.DamageMeterSessionType.Current,
+    Enum.DamageMeterSessionType.Overall,
+}
+
+-- Last `cap` available combat sessions (newest last), or nil. The API call is
+-- pcall'd (it may reject while execution is tainted); name/durationSeconds on each
+-- entry are display-only and secret-guarded by SafeSessionName / FormatDeathTime at
+-- render time, never compared or math'd raw.
+function DM:GetAvailableSessions(cap)
+    if not (C_DamageMeter and C_DamageMeter.GetAvailableCombatSessions) then return nil end
+    local ok, list = pcall(C_DamageMeter.GetAvailableCombatSessions)
+    if not ok or not list then return nil end
+    return list, cap or 20
+end
+
+-- "Combat" fallback when a session name is secret/empty (mirrors EllesmereUI:1881).
+-- A secret string is fine to SetText but must never be == compared, so the empty
+-- check is gated behind issecretvalue first.
+function DM:SafeSessionName(name)
+    if not name or issecretvalue(name) or name == "" then return "Combat" end
+    return name
+end
+
+-- Sets the window's pinned session and repaints. sessionID nil = back to the live
+-- session; for the Current/Overall picks the chosen SessionType is also persisted
+-- into the window's active per-context config so it survives the next layout pass
+-- (stored-session pins are runtime-only and intentionally NOT persisted). Closes any
+-- open detail panel (its breakdown was keyed to the old session) and ticks once.
+function DM:SelectSegment(W, sessionID, sessionType)
+    W._curSessionID = sessionID
+    if sessionID == nil and sessionType ~= nil then
+        local cfg = self:ResolveWindowConfig(W.idx)
+        if cfg then cfg.SessionType = sessionType end
+    end
+    if self.CloseDetail then self:CloseDetail(W) end
+    if self.Tick then self:Tick() end
+end
+
+-- Segment menu (⌚): lazily-built session/history picker anchored under the button.
+-- Rows: up to the last 20 available sessions (name + M:SS duration, checkmarked when
+-- pinned), a divider, then Current / Overall (checkmarked when live + matching the
+-- active config). MenuUtil.CreateContextMenu is the taint-safe 12.0 primitive; the
+-- generator runs each open, so the list is always fresh. Guarded so a future API
+-- rename can't throw.
+function DM:ToggleSegmentMenu(W)
+    if not W then return end
+    if not (MenuUtil and MenuUtil.CreateContextMenu) then return end
+
+    local anchor = (W.headerBtns and W.headerBtns.segment) or W.frame
+
+    MenuUtil.CreateContextMenu(anchor, function(_, root)
+        -- Stored sessions first (top of the menu). Iterate the LAST `cap` entries so
+        -- the newest fights are nearest the button; index is plain (a normal array).
+        local list, cap = self:GetAvailableSessions(20)
+        if list and #list > 0 then
+            local startIdx = math.max(1, #list - (cap - 1))
+            for i = startIdx, #list do
+                local s = list[i]
+                if s then
+                    local sid = s.sessionID
+                    local label = self:SafeSessionName(s.name)
+                    -- FormatDeathTime is the shared M:SS formatter (secret-guards the
+                    -- duration); returns (string, isSecret) -- take the string only.
+                    local dur = select(1, self.FormatDeathTime(s.durationSeconds))
+                    local text = label .. "  |cff999999(" .. dur .. ")|r"
+                    local btn = root:CreateButton(text, function()
+                        self:SelectSegment(W, sid, nil)
+                    end)
+                    -- Checkmark the pinned session. sessionID is a plain id (NeverSecret),
+                    -- safe to == compare.
+                    if btn and btn.SetIsSelected then
+                        btn:SetIsSelected(function() return W._curSessionID == sid end)
+                    end
+                end
+            end
+            root:CreateDivider()
+        end
+
+        -- Live Current / Overall at the bottom. Active when no stored session is
+        -- pinned AND the type matches the window's resolved config.
+        local cfg = self:ResolveWindowConfig(W.idx)
+        for _, sType in ipairs(SEGMENT_SESSION_TYPES) do
+            local label = self.SESSION_TYPE_NAMES[sType] or "Unknown"
+            local btn = root:CreateButton(label, function()
+                self:SelectSegment(W, nil, sType)
+            end)
+            if btn and btn.SetIsSelected then
+                btn:SetIsSelected(function()
+                    return W._curSessionID == nil and cfg ~= nil and cfg.SessionType == sType
+                end)
+            end
+        end
+    end)
+end
 
 ---------------------------------------------------------------------------------
 -- Content-context resolver
