@@ -371,7 +371,12 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
     -- Close dropdown function
     local function CloseDropdown(instant)
         if scrollHold then return end
-        if not isOpen then return end
+        -- `instant` forces cleanup even when isOpen is already false. An animated close
+        -- sets isOpen=false but defers Hide()+reparent to the 0.12s OnFinished, so a
+        -- button Hide() in that window (e.g. a callback that rebuilds the page) must still
+        -- force the overlay-parented list down -- otherwise it lingers as a ghost copy at
+        -- the bottom of the panel.
+        if not isOpen and not instant then return end
 
         isOpen = false
 
@@ -530,7 +535,11 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
                     end
                 end
 
-                CloseDropdown()
+                -- Close INSTANTLY (not animated) BEFORE firing the callback. A callback
+                -- that rebuilds the page would otherwise orphan the still-animating list
+                -- (reparented to KE.GUIOverlay during the 0.12s close) -> a ghost copy of
+                -- the menu lingers at the bottom of the panel after a selection.
+                CloseDropdown(true)
 
                 if row._callback then
                     row._callback(btn._itemValue)
