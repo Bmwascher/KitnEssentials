@@ -1301,10 +1301,12 @@ function DM:ShowHoverTip(W, bar, isInitial)
                     local cx = (W.frame:GetLeft() or 0) + (W.frame:GetWidth() or 0) / 2
                     side = (cx > (UIParent:GetWidth() or 0) / 2) and "left" or "right"
                 end
+                -- +1 y nudges the tip's top edge up 1px to line up flush with the
+                -- window's top border (request 2026-06-05).
                 if side == "left" then
-                    _tip:SetPoint("TOPRIGHT", W.frame, "TOPLEFT", -4, 0)
+                    _tip:SetPoint("TOPRIGHT", W.frame, "TOPLEFT", -4, 1)
                 else
-                    _tip:SetPoint("TOPLEFT", W.frame, "TOPRIGHT", 4, 0)
+                    _tip:SetPoint("TOPLEFT", W.frame, "TOPRIGHT", 4, 1)
                 end
             end
         end
