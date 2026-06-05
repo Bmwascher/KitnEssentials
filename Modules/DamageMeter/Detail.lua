@@ -208,7 +208,11 @@ function DM:RenderBreakdown(W)
         and src.totalAmount and not issecretvalue(src.totalAmount)
     local total = canPercent and src.totalAmount or 0
 
-    local count = math_min(#spells, DETAIL_POOL_SIZE)
+    -- DetailMaxRows (DB) caps the breakdown length; default 40 == pool size, so it is
+    -- a no-op until a user lowers it. The recap timeline is deliberately NOT capped --
+    -- a death recap should show every event leading to the death.
+    local maxRows = (self.db and self.db.DetailMaxRows) or DETAIL_POOL_SIZE
+    local count = math_min(#spells, DETAIL_POOL_SIZE, maxRows)
     for i = 1, DETAIL_POOL_SIZE do
         local bar = d.rows[i]
         local row = bar.row
@@ -224,9 +228,11 @@ function DM:RenderBreakdown(W)
             -- Falls back to a hidden icon frame if the lookup fails.
             local iconShown = false
             local spID = spell.spellID
-            if spID then
-                local tex = C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(spID)
-                if tex then
+            if spID and C_Spell and C_Spell.GetSpellTexture then
+                -- pcall the lookup (parity with RenderDeathRecap) so a throw on an
+                -- unknown/crafted spellID can't abort the row loop mid-render.
+                local okT, tex = pcall(C_Spell.GetSpellTexture, spID)
+                if okT and tex then
                     row.icon:SetTexture(tex)
                     KE:ApplyIconZoom(row.icon)
                     row.iconFrame:SetSize(barH, barH)

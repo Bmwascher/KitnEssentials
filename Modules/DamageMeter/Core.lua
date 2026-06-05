@@ -472,6 +472,14 @@ end
 
 -- Player entered combat: spin up the shared ticker.
 function DM:OnRegenDisabled()
+    -- Close any open (out-of-combat-only) detail panel so combat shows the live bars
+    -- instead of a frozen pre-combat breakdown over a now-hidden body. CloseDetail is
+    -- nil-safe and a no-op when nothing is open.
+    if self.windows_rt then
+        for _, W in pairs(self.windows_rt) do
+            if W._detailOpen and self.CloseDetail then self:CloseDetail(W) end
+        end
+    end
     if DEBUG_DM then KE:Print("[DM] PLAYER_REGEN_DISABLED -> StartTicker") end
     self:StartTicker()
 end

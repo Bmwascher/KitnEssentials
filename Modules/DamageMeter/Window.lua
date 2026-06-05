@@ -423,6 +423,14 @@ function DM:LayoutWindow(W)
         W.body:ClearAllPoints()
         W.body:SetPoint("TOPLEFT", W.frame, "TOPLEFT", 0, -headerH)
         W.body:SetPoint("BOTTOMRIGHT", W.frame, "BOTTOMRIGHT", 0, 0)
+        -- The detail panel covers the same area as the body; keep its top edge in
+        -- sync with the header band. Its anchor was baked at EnsureDetail time, so a
+        -- later font-size change would otherwise leave a gap/overlap on the next open.
+        if W.detail then
+            W.detail:ClearAllPoints()
+            W.detail:SetPoint("TOPLEFT", W.frame, "TOPLEFT", 0, -headerH)
+            W.detail:SetPoint("BOTTOMRIGHT", W.frame, "BOTTOMRIGHT", 0, 0)
+        end
     end
 
     -- Content HEIGHT only (the dock owns the width; the body's OnSizeChanged
