@@ -666,10 +666,11 @@ local function MakeTipRow(parent, rowH)
     return { row = row }
 end
 
--- One Targets-sub-section row: [fill] enemyName .... Amount  DPS  %. No icon, but the three
+-- One Targets-sub-section row: [icon] enemyName .... Amount  DPS  %. A dm_deaths glyph
+-- leads each enemy name (like Details' per-target icon, request 2026-06-05); the three
 -- numeric columns line up under the SAME fixed offsets as the spell rows (TIP_AMT_X / DPS / PCT)
--- so the breakdown and Targets share one column grid (request 2026-06-05). Passive like the rest
--- of the tip. Content-sized columns (no SetWidth) + SetWordWrap(false) so nothing truncates.
+-- so the breakdown and Targets share one column grid. Passive like the rest of the tip.
+-- Content-sized columns (no SetWidth) + SetWordWrap(false) so nothing truncates.
 local function MakeTargetRow(parent, rowH)
     local db = DM.db
     local row = CreateFrame("Frame", nil, parent)
@@ -681,11 +682,18 @@ local function MakeTargetRow(parent, rowH)
     row.fill:SetValue(0)
     row.fill:SetStatusBarTexture(KE:GetStatusbarPath(db and db.StatusBarTexture or "KitnUI"))
 
+    -- Leading dm_deaths glyph, rendered as-is (no zoom/border, matching the header dm_* icons).
+    -- Sized to the row height; the label anchors to its RIGHT so a resize keeps them aligned.
+    row.icon = row.fill:CreateTexture(nil, "OVERLAY")
+    row.icon:SetTexture("Interface\\AddOns\\KitnEssentials\\Media\\Icon\\dm_deaths.tga")
+    row.icon:SetPoint("LEFT", row.fill, "LEFT", 1, 0)
+    row.icon:SetSize(rowH, rowH)
+
     local face = db and db.FontFace
     local size = db and db.FontSize
     local outline = db and db.FontOutline
     row.label = row.fill:CreateFontString(nil, "OVERLAY")
-    row.label:SetPoint("LEFT", row.fill, "LEFT", 3, 0)
+    row.label:SetPoint("LEFT", row.icon, "RIGHT", 3, 0)
     row.label:SetJustifyH("LEFT")
     row.label:SetWordWrap(false)
     KE:ApplyFontToText(row.label, face, size, outline)
@@ -820,7 +828,6 @@ local function HideTipTargets()
     if not (_tip and _tip.tgtDivider) then return end
     _tip.tgtDivider:Hide()
     _tip.tgtLabel:Hide()
-    if _tip.tgtIcon then _tip.tgtIcon:Hide() end
     if _tip.tgtHdrAmount then _tip.tgtHdrAmount:Hide(); _tip.tgtHdrDps:Hide(); _tip.tgtHdrPct:Hide() end
     for ti = 1, TIP_TGT_ROWS do _tip.tgtRows[ti].row:Hide() end
 end
@@ -842,9 +849,10 @@ local function RenderTipTargets(self, bar, cfg, sessionID, topY, stride, barH)
         return 0
     end
 
-    -- Lazy-create the divider + section-header (icon + "Targets" + repeated Amount/DPS/%
-    -- column headers) + up to TIP_TGT_ROWS bars once. The repeated numeric headers + dm_deaths
-    -- icon make the Targets section mirror the spell section, matching Details (request 2026-06-05).
+    -- Lazy-create the divider + section-header ("Targets" + repeated Amount/DPS/% column
+    -- headers) + up to TIP_TGT_ROWS bars once. The repeated numeric headers make the Targets
+    -- section mirror the spell section; the dm_deaths glyph leads each enemy row (matching
+    -- Details' per-target icon, request 2026-06-05), built into MakeTargetRow.
     if not _tip.tgtDivider then
         _tip.tgtDivider = _tip:CreateTexture(nil, "ARTWORK")
         _tip.tgtDivider:SetHeight(1)
@@ -853,11 +861,6 @@ local function RenderTipTargets(self, bar, cfg, sessionID, topY, stride, barH)
         local db = DM.db
         local face, size, outline = db and db.FontFace, db and db.FontSize, db and db.FontOutline
         local lblSize = math_max(9, (size or 12) - 1)   -- match the top column headers (white, size-1)
-
-        -- dm_deaths icon to the LEFT of the "Targets" label (Details places a section icon there).
-        _tip.tgtIcon = _tip:CreateTexture(nil, "OVERLAY")
-        _tip.tgtIcon:SetTexture("Interface\\AddOns\\KitnEssentials\\Media\\Icon\\dm_deaths.tga")
-        _tip.tgtIcon:SetSize(lblSize + 3, lblSize + 3)
 
         _tip.tgtLabel = _tip:CreateFontString(nil, "OVERLAY")
         _tip.tgtLabel:SetJustifyH("LEFT")
@@ -895,14 +898,10 @@ local function RenderTipTargets(self, bar, cfg, sessionID, topY, stride, barH)
     _tip.tgtDivider:Show()
 
     local lblY = divY - 2
-    local iconSz = _tip.tgtIcon:GetWidth() or 12
-    -- "Targets" label sits right of the icon; the icon is vertically centered on it.
+    -- "Targets" section label, flush left (the per-enemy dm_deaths icons live on the rows below).
     _tip.tgtLabel:ClearAllPoints()
-    _tip.tgtLabel:SetPoint("TOPLEFT", _tip, "TOPLEFT", TIP_PAD + iconSz + 3, lblY)
+    _tip.tgtLabel:SetPoint("TOPLEFT", _tip, "TOPLEFT", TIP_PAD, lblY)
     _tip.tgtLabel:Show()
-    _tip.tgtIcon:ClearAllPoints()
-    _tip.tgtIcon:SetPoint("RIGHT", _tip.tgtLabel, "LEFT", -3, 0)
-    _tip.tgtIcon:Show()
     -- Repeated Amount/DPS/% headers over the shared columns (same offsets as the spell headers).
     _tip.tgtHdrAmount:ClearAllPoints(); _tip.tgtHdrAmount:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", _tip.tgtHdrAmount._xOff, lblY); _tip.tgtHdrAmount:Show()
     _tip.tgtHdrDps:ClearAllPoints();    _tip.tgtHdrDps:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", _tip.tgtHdrDps._xOff, lblY); _tip.tgtHdrDps:Show()
@@ -924,6 +923,7 @@ local function RenderTipTargets(self, bar, cfg, sessionID, topY, stride, barH)
             row:SetPoint("TOPLEFT", _tip, "TOPLEFT", TIP_PAD, yOff)
             row:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", -TIP_PAD, yOff)
             row:SetHeight(barH)
+            row.icon:SetSize(barH, barH)   -- per-enemy dm_deaths glyph tracks the row height
             row.fill:SetStatusBarTexture(KE:GetStatusbarPath(self.db and self.db.StatusBarTexture or "KitnUI"))
             row.fill:SetMinMaxValues(0, tMax)
             row.fill:SetValue(t.total)
