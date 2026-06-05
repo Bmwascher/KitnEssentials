@@ -426,8 +426,17 @@ end
 -- ╚══════════════════════════════════════════════════════════╝
 
 local HOVER_TIP_ROWS = 8        -- quick-peek shows the top few; the click-inline panel shows the full list
-local TIP_WIDTH = 220
+local TIP_WIDTH = 264           -- Phase 4c: widened for the 3 numeric columns (Amount / DPS / %)
 local TIP_PAD = 4               -- inner inset for header / rows
+
+-- Phase 4c column geometry: each numeric column is right-aligned at a fixed x-offset
+-- from the tip's right edge, fixed width, JustifyH RIGHT. The label's RIGHT anchor stops
+-- at the amount column's LEFT so the three columns line up across every row + the header.
+local TIP_COL_W   = 44          -- per-column width
+local TIP_PCT_X   = -3          -- % column right edge
+local TIP_DPS_X   = -48         -- DPS column right edge
+local TIP_AMT_X   = -96         -- Amount column right edge
+local TIP_COL_HDR_H = 14        -- vertical space the column-header row occupies (breakdown path only)
 local _tip                      -- module-level singleton (shared by all windows)
 local _tipActiveBar             -- the bar currently hovered (nil = none); drives the poll
 local _tipPoll                  -- detach-when-idle OnUpdate frame
@@ -468,10 +477,27 @@ local function MakeTipRow(parent, rowH)
     row.label:SetJustifyH("LEFT")
     row.label:SetWordWrap(false)
     KE:ApplyFontToText(row.label, face, size, outline)
-    row.value = row.fill:CreateFontString(nil, "OVERLAY")
-    row.value:SetPoint("RIGHT", row.fill, "RIGHT", -3, 0)
+
+    -- Phase 4c: three right-aligned numeric columns (Amount / DPS / %). row.value is the
+    -- Amount column (renamed-in-role from the old single value). For the Deaths recap path
+    -- only row.value is used (dps/pct stay empty + hidden); the breakdown path fills all three.
+    row.value = row.fill:CreateFontString(nil, "OVERLAY")   -- Amount column
+    row.value:SetPoint("RIGHT", row.fill, "RIGHT", TIP_AMT_X, 0)
+    row.value:SetWidth(TIP_COL_W)
     row.value:SetJustifyH("RIGHT")
     KE:ApplyFontToText(row.value, face, size, outline)
+
+    row.dps = row.fill:CreateFontString(nil, "OVERLAY")     -- DPS column
+    row.dps:SetPoint("RIGHT", row.fill, "RIGHT", TIP_DPS_X, 0)
+    row.dps:SetWidth(TIP_COL_W)
+    row.dps:SetJustifyH("RIGHT")
+    KE:ApplyFontToText(row.dps, face, size, outline)
+
+    row.pct = row.fill:CreateFontString(nil, "OVERLAY")     -- % column
+    row.pct:SetPoint("RIGHT", row.fill, "RIGHT", TIP_PCT_X, 0)
+    row.pct:SetWidth(TIP_COL_W)
+    row.pct:SetJustifyH("RIGHT")
+    KE:ApplyFontToText(row.pct, face, size, outline)
 
     row:Hide()
     return { row = row }
@@ -512,6 +538,45 @@ function DM:EnsureHoverTip()
     f.header:SetWordWrap(false)
     KE:ApplyFontToText(f.header, face, size, outline)
 
+    -- Phase 4c: one-time column-header row (Spell · Amount · DPS · %) under the source
+    -- name. Small + gray, right-aligned over the same fixed columns as the data rows.
+    -- Shown for the breakdown path, hidden for the Deaths recap (which keeps a single
+    -- value column). Anchored just below the source header; PopulateHoverTip toggles it
+    -- and offsets the data rows by COL_HDR_H when visible.
+    local colSize = math.max(8, (size or 12) - 2)   -- small gray label, EUI SetDMFont(...,9) style
+    f.colHdr = {}
+    f.colHdr.spell = f:CreateFontString(nil, "OVERLAY")
+    f.colHdr.spell:SetJustifyH("LEFT")
+    f.colHdr.spell:SetWordWrap(false)
+    f.colHdr.spell:SetPoint("TOPLEFT", f, "TOPLEFT", TIP_PAD, 0)   -- y set in PopulateHoverTip
+    KE:ApplyFontToText(f.colHdr.spell, face, colSize, outline)
+    f.colHdr.spell:SetTextColor(0.6, 0.6, 0.6)
+    f.colHdr.spell:SetText("Spell")
+
+    f.colHdr.amount = f:CreateFontString(nil, "OVERLAY")
+    f.colHdr.amount:SetJustifyH("RIGHT")
+    f.colHdr.amount:SetWidth(TIP_COL_W)
+    f.colHdr.amount:SetPoint("TOPRIGHT", f, "TOPRIGHT", TIP_AMT_X, 0)
+    KE:ApplyFontToText(f.colHdr.amount, face, colSize, outline)
+    f.colHdr.amount:SetTextColor(0.6, 0.6, 0.6)
+    f.colHdr.amount:SetText("Amount")
+
+    f.colHdr.dps = f:CreateFontString(nil, "OVERLAY")
+    f.colHdr.dps:SetJustifyH("RIGHT")
+    f.colHdr.dps:SetWidth(TIP_COL_W)
+    f.colHdr.dps:SetPoint("TOPRIGHT", f, "TOPRIGHT", TIP_DPS_X, 0)
+    KE:ApplyFontToText(f.colHdr.dps, face, colSize, outline)
+    f.colHdr.dps:SetTextColor(0.6, 0.6, 0.6)
+    f.colHdr.dps:SetText("DPS")
+
+    f.colHdr.pct = f:CreateFontString(nil, "OVERLAY")
+    f.colHdr.pct:SetJustifyH("RIGHT")
+    f.colHdr.pct:SetWidth(TIP_COL_W)
+    f.colHdr.pct:SetPoint("TOPRIGHT", f, "TOPRIGHT", TIP_PCT_X, 0)
+    KE:ApplyFontToText(f.colHdr.pct, face, colSize, outline)
+    f.colHdr.pct:SetTextColor(0.6, 0.6, 0.6)
+    f.colHdr.pct:SetText("%")
+
     -- Centered gray message line (the in-combat "secret" state).
     f.msg = f:CreateFontString(nil, "OVERLAY")
     f.msg:SetPoint("TOP", f, "TOP", 0, -(TIP_PAD * 2 + (size or 12)))
@@ -546,6 +611,9 @@ function DM:PopulateHoverTip(W, bar)
     -- set (nil while the name was secret) -- safe to display, never a secret string.
     if InCombatLockdown() then
         for i = 1, HOVER_TIP_ROWS do _tip.rows[i].row:Hide() end
+        if _tip.colHdr then
+            _tip.colHdr.spell:Hide(); _tip.colHdr.amount:Hide(); _tip.colHdr.dps:Hide(); _tip.colHdr.pct:Hide()
+        end
         _tip.header:SetText(bar._cachedName or "Details")
         _tip.msg:SetText("Detailed information is\nsecret while in combat")
         _tip.msg:Show()
@@ -564,7 +632,16 @@ function DM:PopulateHoverTip(W, bar)
     local shown = 0
     local headerText = bar._cachedName or "Details"
 
+    -- Phase 4c: the column-header row (Spell · Amount · DPS · %) is shown only for the
+    -- breakdown path; the Deaths recap keeps its single value column. bodyTop pushes the
+    -- data rows down past the column header in the breakdown path (0 for recap).
+    local bodyTop = 0
+
     if isDeaths then
+        -- Recap path: no column header; data rows start right under the source header.
+        if _tip.colHdr then
+            _tip.colHdr.spell:Hide(); _tip.colHdr.amount:Hide(); _tip.colHdr.dps:Hide(); _tip.colHdr.pct:Hide()
+        end
         -- Top recap events (oldest-first) for this death; nil -> nothing to show.
         local events, maxHP = self:GetDeathRecap(bar._deathRecapID)
         if not events then return false end
@@ -576,7 +653,7 @@ function DM:PopulateHoverTip(W, bar)
             if i <= count then
                 local ev = events[i]
                 row:ClearAllPoints()
-                local yOff = -(headerH + (i - 1) * stride)
+                local yOff = -(headerH + bodyTop + (i - 1) * stride)
                 row:SetPoint("TOPLEFT", _tip, "TOPLEFT", TIP_PAD, yOff)
                 row:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", -TIP_PAD, yOff)
                 row:SetHeight(barH)
@@ -595,7 +672,11 @@ function DM:PopulateHoverTip(W, bar)
                 row.iconFrame:Show()
                 row.label:ClearAllPoints()
                 row.label:SetPoint("LEFT", row.iconFrame, "RIGHT", 3, 0)
-                row.label:SetPoint("RIGHT", row.value, "LEFT", -3, 0)
+                -- Recap path uses only the single Amount column (dps/pct stay empty + hidden),
+                -- so anchor the label's RIGHT to the fill's right edge less just the Amount
+                -- column's footprint. Anchoring to row.value:LEFT (as the breakdown path does)
+                -- would cede the 93px the empty dps/pct columns occupy and truncate the label.
+                row.label:SetPoint("RIGHT", row.fill, "RIGHT", -(TIP_COL_W + 6), 0)
 
                 local evType = ev.event or ""
                 local isHeal = (evType == "SPELL_HEAL" or evType == "SPELL_PERIODIC_HEAL")
@@ -627,6 +708,9 @@ function DM:PopulateHoverTip(W, bar)
                 local critFlag = (not issecretvalue(ev.critical)) and ev.critical or false
                 local crit = critFlag and " |cffffd100*|r" or ""
                 row.value:SetText((isHeal and "+" or "-") .. body .. crit)
+                -- Recap keeps a single value column: the breakdown's DPS/% columns are empty.
+                if row.dps then row.dps:SetText("") end
+                if row.pct then row.pct:SetText("") end
 
                 if not row:IsShown() then row:Show() end
                 shown = shown + 1
@@ -639,6 +723,21 @@ function DM:PopulateHoverTip(W, bar)
         local src = self:GetSource(cfg.SessionType, cfg.MeterType, bar._sourceGUID, bar._sourceCreatureID, W._curSessionID)
         local spells = src and src.combatSpells
         if not spells then return false end
+
+        -- Breakdown path: show the column-header row and push the data rows down past it.
+        bodyTop = TIP_COL_HDR_H
+        if _tip.colHdr then
+            local hdrY = -(headerH)
+            _tip.colHdr.spell:ClearAllPoints()
+            _tip.colHdr.spell:SetPoint("TOPLEFT", _tip, "TOPLEFT", TIP_PAD, hdrY)
+            _tip.colHdr.amount:ClearAllPoints()
+            _tip.colHdr.amount:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", TIP_AMT_X, hdrY)
+            _tip.colHdr.dps:ClearAllPoints()
+            _tip.colHdr.dps:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", TIP_DPS_X, hdrY)
+            _tip.colHdr.pct:ClearAllPoints()
+            _tip.colHdr.pct:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", TIP_PCT_X, hdrY)
+            _tip.colHdr.spell:Show(); _tip.colHdr.amount:Show(); _tip.colHdr.dps:Show(); _tip.colHdr.pct:Show()
+        end
 
         local classColor = bar._classFilename and RAID_CLASS_COLORS[bar._classFilename]
         local maxAmount = src.maxAmount
@@ -653,7 +752,7 @@ function DM:PopulateHoverTip(W, bar)
             if i <= count then
                 local spell = spells[i]
                 row:ClearAllPoints()
-                local yOff = -(headerH + (i - 1) * stride)
+                local yOff = -(headerH + bodyTop + (i - 1) * stride)
                 row:SetPoint("TOPLEFT", _tip, "TOPLEFT", TIP_PAD, yOff)
                 row:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", -TIP_PAD, yOff)
                 row:SetHeight(barH)
@@ -703,11 +802,26 @@ function DM:PopulateHoverTip(W, bar)
                 end
                 row.label:SetText(nm or spell.creatureName or "Unknown")
 
+                -- Phase 4c columns: Amount, DPS, %. Each fed only by FormatBarValue
+                -- (AbbreviateNumbers, secret-safe) or %.1f on a sanitized plain number.
+                -- Amount column.
                 local amtStr = (self.FormatBarValue and select(1, self.FormatBarValue(amtPlain, nil, false))) or ""
+                row.value:SetText(amtStr)
+
+                -- DPS column: per-second value from spell.amountPerSecond, sanitized to a
+                -- plain number exactly like amtPlain before FormatBarValue (which itself is
+                -- AllowedWhenTainted / secret-safe). No bare math on the raw value.
+                local ps = spell.amountPerSecond
+                if issecretvalue(ps) or type(ps) ~= "number" then ps = 0 end
+                local dpsStr = (self.FormatBarValue and select(1, self.FormatBarValue(ps, nil, false))) or ""
+                row.dps:SetText(dpsStr)
+
+                -- % column: share of this source's total (gated on canPercent; arithmetic
+                -- runs on the sanitized amtPlain / guarded total only).
                 if canPercent and total > 0 then
-                    row.value:SetText(format("%s  %.1f%%", amtStr, (amtPlain / total) * 100))
+                    row.pct:SetText(format("%.1f%%", (amtPlain / total) * 100))
                 else
-                    row.value:SetText(amtStr)
+                    row.pct:SetText("")
                 end
 
                 if not row:IsShown() then row:Show() end
@@ -723,7 +837,8 @@ function DM:PopulateHoverTip(W, bar)
     -- Re-apply the live font in case a GUI change happened (ReapplyBarVisuals also
     -- handles this, but a hover before the first reapply still wants current fonts).
     KE:ApplyFontToText(_tip.header, face, size, outline)
-    _tip:SetHeight(headerH + TIP_PAD + shown * stride)
+    -- bodyTop reserves the column-header band (breakdown path; 0 for the recap path).
+    _tip:SetHeight(headerH + bodyTop + TIP_PAD + shown * stride)
     return true
 end
 
@@ -742,11 +857,28 @@ function DM:ShowHoverTip(W, bar, isInitial)
 
     if self:PopulateHoverTip(W, bar) then
         if isInitial then
+            -- Phase 4c smart positioning. Modes: smart | bar | left | right | center.
+            -- "smart" places the tip on the meter's OPEN side (away from the nearer screen
+            -- edge), re-evaluated each initial hover so a moved/redocked meter picks the
+            -- right side next time. SetClampedToScreen (set in EnsureHoverTip) is the
+            -- backstop. left/right anchor to W.frame; bar anchors above the hovered bar.
+            local mode = (self.db and self.db.HoverTooltipAnchor) or "smart"
             _tip:ClearAllPoints()
-            if self.db and self.db.HoverTooltipAnchor == "center" then
+            if mode == "center" then
                 _tip:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-            else
+            elseif mode == "bar" then
                 _tip:SetPoint("BOTTOMLEFT", bar.row, "TOPLEFT", 0, 2)
+            else
+                local side = mode
+                if mode == "smart" then
+                    local cx = (W.frame:GetLeft() or 0) + (W.frame:GetWidth() or 0) / 2
+                    side = (cx > (UIParent:GetWidth() or 0) / 2) and "left" or "right"
+                end
+                if side == "left" then
+                    _tip:SetPoint("TOPRIGHT", W.frame, "TOPLEFT", -4, 0)
+                else
+                    _tip:SetPoint("TOPLEFT", W.frame, "TOPRIGHT", 4, 0)
+                end
             end
         end
         _tip:Show()
@@ -778,6 +910,14 @@ function DM:ReapplyHoverTipVisuals()
 
     KE:ApplyFontToText(_tip.header, face, size, outline)
     if _tip.msg then KE:ApplyFontToText(_tip.msg, face, size, outline) end
+    -- Phase 4c: the column-header labels track the data font at a smaller size.
+    if _tip.colHdr then
+        local colSize = math.max(8, (size or 12) - 2)
+        KE:ApplyFontToText(_tip.colHdr.spell, face, colSize, outline)
+        KE:ApplyFontToText(_tip.colHdr.amount, face, colSize, outline)
+        KE:ApplyFontToText(_tip.colHdr.dps, face, colSize, outline)
+        KE:ApplyFontToText(_tip.colHdr.pct, face, colSize, outline)
+    end
     if _tip.rows then
         for i = 1, HOVER_TIP_ROWS do
             local tr = _tip.rows[i]
@@ -785,6 +925,9 @@ function DM:ReapplyHoverTipVisuals()
                 tr.row.fill:SetStatusBarTexture(texPath)
                 KE:ApplyFontToText(tr.row.label, face, size, outline)
                 KE:ApplyFontToText(tr.row.value, face, size, outline)
+                -- Phase 4c numeric columns (DPS / %).
+                if tr.row.dps then KE:ApplyFontToText(tr.row.dps, face, size, outline) end
+                if tr.row.pct then KE:ApplyFontToText(tr.row.pct, face, size, outline) end
             end
         end
     end

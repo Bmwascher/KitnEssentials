@@ -1560,7 +1560,9 @@ local Defaults = {
 
             -- Hover quick-peek tooltip (Phase 4b) — hover a bar -> floating breakdown/recap
             HoverTooltip = true,            -- hover a bar -> floating quick-peek breakdown/recap tooltip
-            HoverTooltipAnchor = "bar",     -- "bar" (above the hovered bar) | "center" (screen center)
+            -- Phase 4c: "smart" (auto side, away from the nearer screen edge) | "bar"
+            -- (above the hovered bar) | "left" / "right" (beside the meter) | "center".
+            HoverTooltipAnchor = "smart",
 
             -- Shared backdrop (flat); arrangement is owned by Dock below
             BackdropEnabled = true,                     -- off: windows render with no wrapping bg/border

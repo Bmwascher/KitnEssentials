@@ -1068,10 +1068,13 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
 
     local hoverAnchorDd = GUIFrame:CreateDropdown(row2f, "Tooltip Position", {
         options = {
+            { key = "smart",  text = "Smart (auto side)" },
             { key = "bar",    text = "Above Bar" },
+            { key = "left",   text = "Left of Meter" },
+            { key = "right",  text = "Right of Meter" },
             { key = "center", text = "Screen Center" },
         },
-        value = db.HoverTooltipAnchor or "bar",
+        value = db.HoverTooltipAnchor or "smart",
         callback = function(key) db.HoverTooltipAnchor = key; ApplySettings() end,
     })
     row2f:AddWidget(hoverAnchorDd, 0.5)
