@@ -208,6 +208,19 @@ function DM:LayoutDock()
 
     self:EnsureDock()
 
+    -- ----- Display-position map (column-then-row = on-screen reading order) -----
+    -- Maps storage index -> its 1-based position walking columns left->right, then
+    -- rows top->bottom. Both the in-world index badges (set below) and the GUI
+    -- "Window N" rows read this so the number a window shows always matches its
+    -- on-screen position. Built from DockWindowIndices so the GUI (which calls the
+    -- same fn) and the badges agree exactly. Reused scratch -> no per-pass garbage.
+    self._posScratch = self._posScratch or {}
+    local order = self:DockWindowIndices(self._posScratch)
+    self._winDisplayPos = self._winDisplayPos or {}
+    local posMap = self._winDisplayPos
+    wipe(posMap)
+    for i = 1, #order do posMap[order[i]] = i end
+
     -- ----- Shared per-layout geometry (computed ONCE) -----
     local headerH = KE:PixelSnap((db.FontSize or 12) + 6)
     local stride  = KE:PixelSnap(db.BarHeight or 16) + KE:PixelSnap(db.BarSpacing or 2)
@@ -319,6 +332,14 @@ function DM:LayoutDock()
                     W.frame:SetSize(colW, rowH)
                     W.frame:SetPoint("TOPLEFT", self.dock, "TOPLEFT", pad + colX, -rowY - pad)
                     W.frame:Show()
+
+                    -- Stamp the on-screen display position onto the index badge
+                    -- (preview/edit aid). posMap is column-then-row order, so the
+                    -- badge reads 1,2,3... left->right / top->bottom regardless of
+                    -- the window's storage index.
+                    if W.indexBadge then
+                        W.indexBadge:SetText(tostring(posMap[idx] or idx))
+                    end
 
                     -- Drive the body width immediately so bars are full width on
                     -- the first paint (don't wait for OnSizeChanged). The window's
@@ -1051,101 +1072,111 @@ function DM:SetWindowColumn(idx, targetCol)
 end
 
 ---------------------------------------------------------------------------------
--- Numeric sizing (GUI counterpart to the drag-splitters)
+-- Window moves (GUI ◄ ► ▲ ▼ controls)
 --
--- Set a column's width or a stacked row's height as a percentage; the other
--- columns/rows rescale PROPORTIONALLY to fill the remainder, conserving the
--- overall dock geometry. These write the SAME db.Dock.Columns[*].WidthRatio /
--- .RowRatios tables the splitters mutate, then RefreshDock. Plain numbers only
--- (ratios / percentages) -- never a secret value. clamp() is the file-local
--- min/max helper used by the splitter math.
+-- The GUI move buttons rearrange a window without abstract "Column N" pickers.
+-- left/right change which column holds the window (via SetWindowColumn, which
+-- appends to the target column and drops emptied ones); up/down reorder it within
+-- its current column's stack (swapping the Windows + RowRatios entries in place so
+-- the saved profile stays consistent). All plain table edits -- never a secret.
+---------------------------------------------------------------------------------
+function DM:MoveWindow(idx, dir)
+    local db = self.db
+    local cols = db and db.Dock and db.Dock.Columns
+    if not cols then return end
+
+    -- Locate the window's current (column, row).
+    local fc, fr
+    for c = 1, #cols do
+        local wins = cols[c] and cols[c].Windows
+        if wins then
+            for r = 1, #wins do
+                if wins[r] == idx then fc, fr = c, r; break end
+            end
+        end
+        if fc then break end
+    end
+    if not fc then return end
+
+    if dir == "left" then
+        -- Merge into the previous column (no-op at the first column).
+        if fc > 1 then self:SetWindowColumn(idx, fc - 1) end
+    elseif dir == "right" then
+        -- Merge into the next column, or split into a brand-new column when at
+        -- the last column (SetWindowColumn clamps the target to #cols + 1).
+        self:SetWindowColumn(idx, fc + 1)
+    elseif dir == "up" or dir == "down" then
+        local col = cols[fc]
+        local wins = col.Windows
+        local target = fr + ((dir == "up") and -1 or 1)
+        if target >= 1 and target <= #wins then
+            wins[fr], wins[target] = wins[target], wins[fr]
+            local rr = col.RowRatios
+            if rr and rr[fr] and rr[target] then
+                rr[fr], rr[target] = rr[target], rr[fr]
+            end
+            self:RefreshDock()
+        end
+    end
+end
+
+---------------------------------------------------------------------------------
+-- Boundary split sizing (GUI counterpart to the drag-splitters)
+--
+-- One split per GAP between two adjacent panes -- the exact pair the in-world
+-- drag-splitter for that gap adjusts. pct is the FIRST pane's share of just that
+-- PAIR (left column of a column gap, top window of a row gap); the pair's combined
+-- ratio is conserved and every OTHER pane is left untouched -- so the sliders never
+-- "fight" each other the way a redistribute-across-all model did. Plain numbers
+-- only (ratios / percentages); never a secret. clamp() is the file-local helper.
 ---------------------------------------------------------------------------------
 
--- Column WidthRatio is a baseW multiplier (colW = baseW * WidthRatio), so the SUM
--- of WidthRatios is conserved to keep the total dock width stable while the share
--- is redistributed. pct clamped to [5, 95].
-function DM:SetColumnWidthShare(colIdx, pct)
-    local db = self.db
-    local cols = db and db.Dock and db.Dock.Columns
-    if not cols or #cols < 2 or not cols[colIdx] then return end
+-- Column gap between colIdx and colIdx+1. pct = left column's share of the pair.
+function DM:SetColumnBoundaryShare(colIdx, pct)
+    local cols = self.db and self.db.Dock and self.db.Dock.Columns
+    local a = cols and cols[colIdx]
+    local b = cols and cols[colIdx + 1]
+    if not (a and b) then return end
     pct = clamp(pct, 5, 95) / 100
-
-    local total = 0
-    for c = 1, #cols do total = total + ((cols[c] and cols[c].WidthRatio) or 1) end
-    if total <= 0 then total = #cols end
-
-    local target = pct * total
-    local rest = total - target
-    local othersOld = total - ((cols[colIdx].WidthRatio) or 1)
-    if othersOld <= 0 then
-        local each = rest / (#cols - 1)
-        for c = 1, #cols do cols[c].WidthRatio = (c == colIdx) and target or each end
-    else
-        for c = 1, #cols do
-            if c == colIdx then
-                cols[c].WidthRatio = target
-            else
-                cols[c].WidthRatio = rest * (((cols[c].WidthRatio) or 1) / othersOld)
-            end
-        end
-    end
+    local pair = ((a.WidthRatio) or 1) + ((b.WidthRatio) or 1)
+    if pair <= 0 then pair = 2 end
+    a.WidthRatio = pct * pair
+    b.WidthRatio = pair - a.WidthRatio
     self:RefreshDock()
 end
 
--- RowRatios are normalized by LayoutDock (norm = ratio / ratioSum). We operate in
--- ratio-SUM space (preserve the current sum) rather than assuming a percent scale,
--- so this is correct regardless of the ratios' current magnitude -- e.g. after a
--- drag-splitter has left them summing to ~1.0 instead of ~100. Mirrors
--- SetColumnWidthShare. pct clamped to [5, 95].
-function DM:SetRowHeightShare(colIdx, rowIdx, pct)
-    local db = self.db
-    local cols = db and db.Dock and db.Dock.Columns
+function DM:GetColumnBoundaryShare(colIdx)
+    local cols = self.db and self.db.Dock and self.db.Dock.Columns
+    local a = cols and cols[colIdx]
+    local b = cols and cols[colIdx + 1]
+    if not (a and b) then return 50 end
+    local av, bv = (a.WidthRatio) or 1, (b.WidthRatio) or 1
+    local pair = av + bv
+    if pair <= 0 then return 50 end
+    return (av / pair) * 100
+end
+
+-- Row gap between rowIdx and rowIdx+1 in column colIdx. pct = top window's share.
+function DM:SetRowBoundaryShare(colIdx, rowIdx, pct)
+    local cols = self.db and self.db.Dock and self.db.Dock.Columns
     local col = cols and cols[colIdx]
     local ratios = col and col.RowRatios
-    if not ratios or #ratios < 2 or not ratios[rowIdx] then return end
+    if not ratios or not ratios[rowIdx] or not ratios[rowIdx + 1] then return end
     pct = clamp(pct, 5, 95) / 100
-
-    local total = 0
-    for r = 1, #ratios do total = total + ((ratios[r]) or 0) end
-    if total <= 0 then total = #ratios end
-
-    local target = pct * total
-    local rest = total - target
-    local othersOld = total - ((ratios[rowIdx]) or 0)
-    if othersOld <= 0 then
-        local each = rest / (#ratios - 1)
-        for r = 1, #ratios do ratios[r] = (r == rowIdx) and target or each end
-    else
-        for r = 1, #ratios do
-            if r == rowIdx then
-                ratios[r] = target
-            else
-                ratios[r] = rest * (((ratios[r]) or 0) / othersOld)
-            end
-        end
-    end
+    local pair = ((ratios[rowIdx]) or 0) + ((ratios[rowIdx + 1]) or 0)
+    if pair <= 0 then pair = 2 end
+    ratios[rowIdx] = pct * pair
+    ratios[rowIdx + 1] = pair - ratios[rowIdx]
     self:RefreshDock()
 end
 
--- Current width share of a column as a percent of the column-width-ratio sum
--- (for the GUI slider's displayed value). Plain math; never secret.
-function DM:GetColumnWidthShare(colIdx)
-    local cols = self.db and self.db.Dock and self.db.Dock.Columns
-    if not cols or not cols[colIdx] then return 50 end
-    local total = 0
-    for c = 1, #cols do total = total + ((cols[c] and cols[c].WidthRatio) or 1) end
-    if total <= 0 then return 100 / math.max(1, #cols) end
-    return (((cols[colIdx].WidthRatio) or 1) / total) * 100
-end
-
--- Current height share of a stacked row as a percent of its column's row-ratio sum.
-function DM:GetRowHeightShare(colIdx, rowIdx)
+function DM:GetRowBoundaryShare(colIdx, rowIdx)
     local cols = self.db and self.db.Dock and self.db.Dock.Columns
     local col = cols and cols[colIdx]
     local ratios = col and col.RowRatios
-    if not ratios or not ratios[rowIdx] then return 50 end
-    local total = 0
-    for r = 1, #ratios do total = total + ((ratios[r]) or 0) end
-    if total <= 0 then return 100 / math.max(1, #ratios) end
-    return (((ratios[rowIdx]) or 0) / total) * 100
+    if not ratios or not ratios[rowIdx] or not ratios[rowIdx + 1] then return 50 end
+    local a, b = (ratios[rowIdx]) or 0, (ratios[rowIdx + 1]) or 0
+    local pair = a + b
+    if pair <= 0 then return 50 end
+    return (a / pair) * 100
 end

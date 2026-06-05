@@ -10,8 +10,34 @@ local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
 local pairs = pairs
+local CreateFrame = CreateFrame
+local math_max = math.max
+local math_rad = math.rad
 
 local activeTab = "General"
+
+-- Arrow glyph for the Windows-tab move buttons. WoW FontStrings don't render
+-- the ◄►▲▼ unicode glyphs in KE's fonts, so (like the slider steppers) we use a
+-- rotated chevron TEXTURE instead. collapse.tga points down at 0 rad; the slider
+-- widget establishes -90 = left, +90 = right for this same texture.
+local ARROW_TEXTURE = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.tga"
+local ARROW_ROT = { left = math_rad(-90), right = math_rad(90), up = math_rad(180), down = 0 }
+local MOVE_TOOLTIP = {
+    left  = "Move to the previous column",
+    right = "Move to the next column (splits into a new column at the right edge)",
+    up    = "Move up within this column",
+    down  = "Move down within this column",
+}
+
+-- Short type names for the layout-map boxes (full names overflow a narrow box).
+local SHORT_TYPE = {
+    [Enum.DamageMeterType.DamageDone]  = "Damage",
+    [Enum.DamageMeterType.HealingDone] = "Healing",
+    [Enum.DamageMeterType.DamageTaken] = "Taken",
+    [Enum.DamageMeterType.Interrupts]  = "Interrupts",
+    [Enum.DamageMeterType.Dispels]     = "Dispels",
+    [Enum.DamageMeterType.Deaths]      = "Deaths",
+}
 
 -- Ordered option lists for the per-context default-display rows.
 local METER_TYPE_OPTIONS = {
@@ -191,59 +217,198 @@ local function BuildGeneralTab(scrollChild, yOffset, db, manager)
 end
 
 ---------------------------------------------------------------------------------
+-- Windows tab helpers
+---------------------------------------------------------------------------------
+
+-- Locates a window's (column, row) and its column's window count. Returns
+-- (colIdx, rowIdx, colLen) or nil. Plain table walk; never a secret.
+local function FindWindowPos(cols, idx)
+    if not cols then return nil end
+    for c = 1, #cols do
+        local wins = cols[c] and cols[c].Windows
+        if wins then
+            for r = 1, #wins do
+                if wins[r] == idx then return c, r, #wins end
+            end
+        end
+    end
+    return nil
+end
+
+-- Builds one move button (◄ ► ▲ ▼) as a chevron-texture button rotated for the
+-- given direction. NOT registered with the WidgetStateManager: it is gated by
+-- POSITION here (SetEnabled below), and manager:UpdateAll would clobber that by
+-- re-enabling it on module-enable. The owning card IS registered, so its alpha
+-- cascade + mouse blocker still disable these visually + functionally when the
+-- module is off.
+local function MakeMoveButton(parent, dir, idx, enabled)
+    local DM = GetDM()
+    local btn = GUIFrame:CreateButton(parent, "", {
+        image = ARROW_TEXTURE,
+        imageSize = 12,
+        tooltip = MOVE_TOOLTIP[dir],
+        callback = function()
+            if DM and DM.MoveWindow then DM:MoveWindow(idx, dir) end
+            RebuildPage()
+        end,
+    })
+    if btn.icon then
+        btn.icon:ClearAllPoints()
+        btn.icon:SetPoint("CENTER")
+        btn.icon:SetRotation(ARROW_ROT[dir] or 0)
+        btn.icon:SetVertexColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+    end
+    btn:SetEnabled(enabled)
+    return btn
+end
+
+-- Builds the layout-map schematic: one box per window, positioned proportionally
+-- to mirror the in-world dock (columns left->right, stacked rows top->bottom),
+-- each stamped with its on-screen display number (posOf) + short type. Returns a
+-- container frame the caller AddRow's into the card. Boxes are positioned in the
+-- container's OnSizeChanged (its width isn't known until AddRow anchors it).
+local function BuildSchematic(card, height, cols, posOf, shortType)
+    local T = Theme
+    local container = CreateFrame("Frame", nil, card.content)
+    container:SetHeight(height)
+
+    local boxAt = {}  -- boxAt[c][r] = box frame
+    for c = 1, #cols do
+        local wins = cols[c].Windows or {}
+        boxAt[c] = {}
+        for r = 1, #wins do
+            local idx = wins[r]
+            local box = CreateFrame("Frame", nil, container, "BackdropTemplate")
+            box:SetBackdrop({
+                bgFile = "Interface\\Buttons\\WHITE8X8",
+                edgeFile = "Interface\\Buttons\\WHITE8X8",
+                edgeSize = 1,
+            })
+            box:SetBackdropColor(T.bgMedium[1], T.bgMedium[2], T.bgMedium[3], 1)
+            box:SetBackdropBorderColor(T.accent[1], T.accent[2], T.accent[3], 0.9)
+
+            local num = box:CreateFontString(nil, "OVERLAY")
+            KE:ApplyThemeFont(num, "large")
+            num:SetPoint("CENTER", box, "CENTER", 0, 0)
+            num:SetText(tostring(posOf[idx] or "?"))
+            num:SetTextColor(1, 1, 1, 1)
+            box.num = num
+
+            local tlabel = box:CreateFontString(nil, "OVERLAY")
+            KE:ApplyThemeFont(tlabel, "small")
+            tlabel:SetPoint("BOTTOM", box, "BOTTOM", 0, 3)
+            tlabel:SetTextColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
+            tlabel:SetText((shortType and shortType(idx)) or "")
+            box.tlabel = tlabel
+
+            boxAt[c][r] = box
+        end
+    end
+
+    local function layout(width)
+        if not width or width <= 0 then return end
+        local GAP = 4
+        local sumW = 0
+        for c = 1, #cols do sumW = sumW + ((cols[c].WidthRatio) or 1) end
+        if sumW <= 0 then sumW = math_max(1, #cols) end
+        local availW = width - GAP * math_max(0, #cols - 1)
+        if availW <= 0 then availW = width end
+        local runX = 0
+        for c = 1, #cols do
+            local colW = availW * (((cols[c].WidthRatio) or 1) / sumW)
+            local wins = cols[c].Windows or {}
+            local ratios = cols[c].RowRatios or {}
+            local sumR = 0
+            for r = 1, #wins do sumR = sumR + ((ratios[r]) or 1) end
+            if sumR <= 0 then sumR = math_max(1, #wins) end
+            local availH = height - GAP * math_max(0, #wins - 1)
+            if availH <= 0 then availH = height end
+            local runY = 0
+            for r = 1, #wins do
+                local rowH = availH * (((ratios[r]) or 1) / sumR)
+                local box = boxAt[c][r]
+                if box then
+                    box:ClearAllPoints()
+                    box:SetPoint("TOPLEFT", container, "TOPLEFT", runX, -runY)
+                    box:SetSize(math_max(1, colW), math_max(1, rowH))
+                    if box.tlabel then
+                        if rowH < 34 then box.tlabel:Hide() else box.tlabel:Show() end
+                    end
+                end
+                runY = runY + rowH + GAP
+            end
+            runX = runX + colW + GAP
+        end
+    end
+
+    container:SetScript("OnSizeChanged", function(_, w) layout(w) end)
+    layout(container:GetWidth())
+    return container
+end
+
+---------------------------------------------------------------------------------
 -- Windows tab (structure + per-context defaults)
 ---------------------------------------------------------------------------------
 local function BuildWindowsTab(scrollChild, yOffset, db, manager)
     local DM = GetDM()
 
-    -- Referenced window indices, sorted by INDEX (1,2,3...) for the GUI rows below.
-    -- DockWindowIndices returns dock order (column-then-row), which lists windows
-    -- out of numeric order (e.g. 2,3,1) and makes the per-window rows/pickers
-    -- unintuitive to scan; the on-screen window badges (preview/edit) carry the
-    -- same index so "Window N" here maps to the numbered window in the world.
-    local winList = {}
+    -- Referenced window indices in DOCK ORDER (column-then-row = on-screen reading
+    -- order). The array position IS the display number: order[n] is the storage
+    -- index of the n-th window left->right / top->bottom, and the in-world badge
+    -- shows the same n (LayoutDock stamps it from the same DockWindowIndices order).
+    -- So "Window n" in the GUI always maps to the numbered window on screen.
+    local order = {}
     if DM and DM.DockWindowIndices then
         local found = DM:DockWindowIndices({})
-        for i = 1, #found do winList[i] = found[i] end
+        for i = 1, #found do order[i] = found[i] end
     end
-    table.sort(winList)
+    -- Reverse map (storage index -> display number) for the schematic boxes.
+    local posOf = {}
+    for n = 1, #order do posOf[order[n]] = n end
 
-    -- "Custom" has no distinct structural form until columns are actually mixed,
-    -- so GetArrangement() (which derives the mode from the column shape) can never
-    -- report "Custom" for a plain horizontal/vertical structure. A transient,
-    -- GUI-only override (mirrors DM.guiConfigContext) makes "Custom" sticky so the
-    -- per-window column pickers below stay visible while the user assigns columns.
-    -- Cleared the moment the user picks Horizontal/Vertical (those rewrite the
-    -- structure, so the derived value is authoritative again).
-    local arrangement = (DM and DM.guiArrangementMode)
-        or (DM and DM.GetArrangement and DM:GetArrangement())
-        or "Custom"
-    local numCols = (db.Dock and db.Dock.Columns and #db.Dock.Columns) or 1
+    local cols = db.Dock and db.Dock.Columns
+    -- Arrangement is DERIVED from the column shape (Horizontal/Vertical/Custom);
+    -- the move buttons below let the user reach any Custom layout directly, so the
+    -- old sticky "Custom" GUI override is no longer needed.
+    local arrangement = (DM and DM.GetArrangement and DM:GetArrangement()) or "Custom"
+    local maxWin = db.MaxWindows or 5
+
+    -- The selected "Configure For" context (also used for the schematic's type
+    -- labels so the map reflects what the Default Display card is editing).
+    if DM and DM.guiConfigContext == nil then DM.guiConfigContext = "Default" end
+    local ctx = (DM and DM.guiConfigContext) or "Default"
+    db.Windows = db.Windows or {}
+    local function ShortTypeFor(idx)
+        local w = db.Windows[idx]
+        if not (w and w.Contexts) then return "" end
+        local cfg = w.Contexts[ctx] or w.Contexts.Default or {}
+        return SHORT_TYPE[cfg.MeterType] or ""
+    end
 
     ----------------------------------------------------------------
-    -- Card 1: Arrangement
+    -- Card 1: Layout (quick preset + visual map + move controls)
     ----------------------------------------------------------------
-    local card1 = GUIFrame:CreateCard(scrollChild, "Arrangement", yOffset)
+    local card1 = GUIFrame:CreateCard(scrollChild, "Layout", yOffset)
     manager:Register(card1, "all")
 
+    -- Quick preset dropdown + Add/Remove.
     local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
     local arrDropdown = GUIFrame:CreateDropdown(row1, "Layout", {
         options = ARRANGEMENT_OPTIONS,
         value = arrangement,
         callback = function(key)
-            if DM then
-                -- "Custom" only sets the sticky GUI override (no structural rewrite);
-                -- Horizontal/Vertical clear it and let the module rewrite the columns.
-                DM.guiArrangementMode = (key == "Custom") and "Custom" or nil
-                if DM.SetArrangement then DM:SetArrangement(key) end
-            end
+            -- Horizontal/Vertical rewrite the columns; Custom is a no-op (the
+            -- structure already is whatever the moves made it).
+            if DM and DM.SetArrangement then DM:SetArrangement(key) end
             RebuildPage()
         end,
     })
     row1:AddWidget(arrDropdown, 0.5)
     manager:Register(arrDropdown, "all")
 
-    local maxWin = db.MaxWindows or 5
+    -- Add/Remove are gated by the floor/cap (NOT registered -- manager:UpdateAll
+    -- would re-enable them on module-enable and defeat the cap gating). The card's
+    -- mouse blocker + alpha cascade still disable them when the module is off.
     local addBtn = GUIFrame:CreateButton(row1, "Add Window", {
         callback = function()
             if DM and DM.AddWindow then DM:AddWindow() end
@@ -251,143 +416,146 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
         end,
     })
     row1:AddWidget(addBtn, 0.25)
-    manager:Register(addBtn, "all")
 
     local removeBtn = GUIFrame:CreateButton(row1, "Remove Window", {
         callback = function()
-            -- Remove the highest referenced index (the most recently added).
-            if DM and DM.RemoveWindow and #winList > 1 then
-                DM:RemoveWindow(winList[#winList])
+            -- Remove the LAST on-screen window (highest display position).
+            if DM and DM.RemoveWindow and #order > 1 then
+                DM:RemoveWindow(order[#order])
             end
             RebuildPage()
         end,
     })
     row1:AddWidget(removeBtn, 0.25)
-    manager:Register(removeBtn, "all")
-    -- Reflect the floor/cap in the buttons so they visibly disable instead of
-    -- silently no-opping (Add is a no-op at MaxWindows, Remove at the last window).
-    -- Re-evaluated on every rebuild since BuildWindowsTab reruns on RebuildPage.
-    addBtn:SetEnabled(#winList < maxWin)
-    removeBtn:SetEnabled(#winList > 1)
+    addBtn:SetEnabled(#order < maxWin)
+    removeBtn:SetEnabled(#order > 1)
     card1:AddRow(row1, Theme.rowHeight)
 
-    local arrNoteRow = GUIFrame:CreateRow(card1.content, 50)
+    -- Visual layout map (numbered boxes mirroring the in-world dock).
+    if cols and #order > 0 then
+        local schemRow = BuildSchematic(card1, 84, cols, posOf, ShortTypeFor)
+        card1:AddRow(schemRow, 84)
+    end
+
+    -- One move row per window: "Window n" + ◄ ► ▲ ▼ (gated at the edges).
+    for n = 1, #order do
+        local idx = order[n]
+        local fc, fr, colLen = FindWindowPos(cols, idx)
+        local rowM = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+
+        local lbl = GUIFrame:CreateText(rowM, "Window " .. n, "", Theme.rowHeight, "hide")
+        rowM:AddWidget(lbl, 0.4)
+        manager:Register(lbl, "all")
+
+        -- left: enabled when not in the first column.
+        rowM:AddWidget(MakeMoveButton(rowM, "left", idx, (fc or 1) > 1 and #order > 1), 0.13)
+        -- right: enabled unless this is the lone window of the lone column.
+        local canRight = #order > 1 and not (colLen == 1 and (cols and #cols or 1) == 1)
+        rowM:AddWidget(MakeMoveButton(rowM, "right", idx, canRight), 0.13)
+        -- up: enabled when not the top of its column.
+        rowM:AddWidget(MakeMoveButton(rowM, "up", idx, (fr or 1) > 1), 0.13)
+        -- down: enabled when not the bottom of its column.
+        rowM:AddWidget(MakeMoveButton(rowM, "down", idx, (fr or 1) < (colLen or 1)), 0.13)
+
+        card1:AddRow(rowM, Theme.rowHeight)
+    end
+
+    local arrNoteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
     local arrNote = GUIFrame:CreateText(arrNoteRow,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " " .. KE:ColorTextByTheme("Horizontal") .. ": one window per column · " ..
-        KE:ColorTextByTheme("Vertical") .. ": all stacked · " .. KE:ColorTextByTheme("Custom") .. ": assign columns below.\n" ..
-        KE:ColorTextByTheme("-") .. " Resize the split between windows by dragging the gap in the world (up to " ..
+        KE:ColorTextByTheme("-") .. " " .. KE:ColorTextByTheme("Left/Right") .. " move between columns · " ..
+        KE:ColorTextByTheme("Up/Down") .. " reorder within a column. Numbers match the meter on screen.\n" ..
+        KE:ColorTextByTheme("-") .. " Or drag the gaps between windows in the world (up to " ..
         maxWin .. " windows).",
-        50, "hide")
+        Theme.rowHeightLast, "hide")
     arrNoteRow:AddWidget(arrNote, 1)
     manager:Register(arrNote, "all")
-    card1:AddRow(arrNoteRow, 50, 0)
-
-    -- Custom mode: per-window column pickers.
-    if arrangement == "Custom" and #winList > 0 then
-        for n = 1, #winList do
-            local idx = winList[n]
-            -- Which column currently holds this window?
-            local curCol = 1
-            if db.Dock and db.Dock.Columns then
-                for c = 1, #db.Dock.Columns do
-                    local wins = db.Dock.Columns[c].Windows
-                    if wins then
-                        for r = 1, #wins do
-                            if wins[r] == idx then curCol = c; break end
-                        end
-                    end
-                end
-            end
-            local colOpts = {}
-            for c = 1, numCols do colOpts[c] = { key = c, text = "Column " .. c } end
-            -- A "New Column" target (= numCols + 1) lets Custom mode SPLIT a window
-            -- out into its own column, not only merge into an existing one.
-            -- DM:SetWindowColumn already accepts (and clamps to) #cols + 1.
-            colOpts[numCols + 1] = { key = numCols + 1, text = "New Column" }
-            local rowC = GUIFrame:CreateRow(card1.content,
-                (n == #winList) and Theme.rowHeightLast or Theme.rowHeight)
-            local colDropdown = GUIFrame:CreateDropdown(rowC, "Window " .. idx .. " Column", {
-                options = colOpts,
-                value = curCol,
-                callback = function(key)
-                    if DM and DM.SetWindowColumn then DM:SetWindowColumn(idx, key) end
-                    RebuildPage()
-                end,
-            })
-            rowC:AddWidget(colDropdown, 1)
-            manager:Register(colDropdown, "all")
-            card1:AddRow(rowC, (n == #winList) and Theme.rowHeightLast or Theme.rowHeight,
-                (n == #winList) and 0 or nil)
-        end
-    end
+    card1:AddRow(arrNoteRow, Theme.rowHeightLast, 0)
 
     yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 2: Sizing (numeric fine-tune of the same WidthRatio / RowRatios the
-    -- in-world drag-splitters set). Only shown when there's something to size:
-    -- column widths for a multi-column layout, row heights for a stacked column.
+    -- Card 2: Sizing (one split slider per gap -- the exact pair the in-world
+    -- drag-splitter for that gap adjusts). Shown only when a gap exists.
     ----------------------------------------------------------------
     do
-        local cols = db.Dock and db.Dock.Columns
-        local hasMultiCol = cols and #cols >= 2
-        local hasStacked = false
+        local nCols = (cols and #cols) or 0
+        local hasColBoundary = nCols >= 2
+        local hasRowBoundary = false
         if cols then
             for c = 1, #cols do
-                if cols[c].Windows and #cols[c].Windows >= 2 then hasStacked = true; break end
+                if cols[c].Windows and #cols[c].Windows >= 2 then hasRowBoundary = true; break end
             end
         end
 
-        if hasMultiCol or hasStacked then
-            -- Build the slider specs first (column widths, then per-column row heights).
-            local specs = {}
-            if hasMultiCol then
-                for c = 1, #cols do
-                    specs[#specs + 1] = { kind = "col", c = c, label = "Column " .. c .. " Width %" }
-                end
-            end
-            for c = 1, #cols do
-                local wins = cols[c].Windows
-                if wins and #wins >= 2 then
-                    for r = 1, #wins do
-                        specs[#specs + 1] = { kind = "row", c = c, r = r,
-                            label = "Window " .. wins[r] .. " Height %" }
-                    end
-                end
-            end
-
+        if hasColBoundary or hasRowBoundary then
             local sizeCard = GUIFrame:CreateCard(scrollChild, "Sizing", yOffset)
             manager:Register(sizeCard, "all")
 
-            for n = 1, #specs do
-                local spec = specs[n]
-                local value, cb
-                if spec.kind == "col" then
-                    value = (DM and DM.GetColumnWidthShare and DM:GetColumnWidthShare(spec.c)) or 50
-                    cb = function(val)
-                        if DM and DM.SetColumnWidthShare then DM:SetColumnWidthShare(spec.c, val) end
-                    end
-                else
-                    value = (DM and DM.GetRowHeightShare and DM:GetRowHeightShare(spec.c, spec.r)) or 50
-                    cb = function(val)
-                        if DM and DM.SetRowHeightShare then DM:SetRowHeightShare(spec.c, spec.r, val) end
-                    end
-                end
+            -- Slider references for live cross-update (neighbors share a pane).
+            local colSliders = {}
+            local rowSliders = {}
+
+            -- Column-gap sliders: between column c and c+1, value = left share.
+            for c = 1, nCols - 1 do
                 local rowS = GUIFrame:CreateRow(sizeCard.content, Theme.rowHeight)
-                local slider = GUIFrame:CreateSlider(rowS, spec.label, {
-                    min = 5, max = 95, step = 1, value = value, callback = cb,
+                local slider = GUIFrame:CreateSlider(rowS, "Col " .. c .. " / Col " .. (c + 1) .. " width", {
+                    min = 5, max = 95, step = 1,
+                    value = (DM and DM.GetColumnBoundaryShare and DM:GetColumnBoundaryShare(c)) or 50,
+                    callback = function(val)
+                        if DM and DM.SetColumnBoundaryShare then DM:SetColumnBoundaryShare(c, val) end
+                        -- Refresh the two neighbours that share a touched column.
+                        if colSliders[c - 1] and DM then
+                            colSliders[c - 1]:SetValue(DM:GetColumnBoundaryShare(c - 1), true)
+                        end
+                        if colSliders[c + 1] and DM then
+                            colSliders[c + 1]:SetValue(DM:GetColumnBoundaryShare(c + 1), true)
+                        end
+                    end,
                 })
                 rowS:AddWidget(slider, 1)
                 manager:Register(slider, "all")
                 sizeCard:AddRow(rowS, Theme.rowHeight)
+                colSliders[c] = slider
+            end
+
+            -- Row-gap sliders: within each stacked column, between row r and r+1.
+            if cols then
+                for c = 1, #cols do
+                    local wins = cols[c].Windows
+                    if wins and #wins >= 2 then
+                        rowSliders[c] = rowSliders[c] or {}
+                        for r = 1, #wins - 1 do
+                            local topNum = posOf[wins[r]] or wins[r]
+                            local botNum = posOf[wins[r + 1]] or wins[r + 1]
+                            local rowS = GUIFrame:CreateRow(sizeCard.content, Theme.rowHeight)
+                            local slider = GUIFrame:CreateSlider(rowS,
+                                "Win " .. topNum .. " / Win " .. botNum .. " height", {
+                                min = 5, max = 95, step = 1,
+                                value = (DM and DM.GetRowBoundaryShare and DM:GetRowBoundaryShare(c, r)) or 50,
+                                callback = function(val)
+                                    if DM and DM.SetRowBoundaryShare then DM:SetRowBoundaryShare(c, r, val) end
+                                    local rs = rowSliders[c]
+                                    if rs and DM then
+                                        if rs[r - 1] then rs[r - 1]:SetValue(DM:GetRowBoundaryShare(c, r - 1), true) end
+                                        if rs[r + 1] then rs[r + 1]:SetValue(DM:GetRowBoundaryShare(c, r + 1), true) end
+                                    end
+                                end,
+                            })
+                            rowS:AddWidget(slider, 1)
+                            manager:Register(slider, "all")
+                            sizeCard:AddRow(rowS, Theme.rowHeight)
+                            rowSliders[c][r] = slider
+                        end
+                    end
+                end
             end
 
             local szNoteRow = GUIFrame:CreateRow(sizeCard.content, Theme.rowHeightLast)
             local szNote = GUIFrame:CreateText(szNoteRow,
                 KE:ColorTextByTheme("Note"),
-                KE:ColorTextByTheme("-") .. " Relative %; the others rescale to fit. Reopen the tab to refresh the figures.\n" ..
-                KE:ColorTextByTheme("-") .. " Same effect as dragging the gaps between windows in the world.",
+                KE:ColorTextByTheme("-") .. " Each slider splits just its two neighbours; the rest stay put.\n" ..
+                KE:ColorTextByTheme("-") .. " Same effect as dragging that gap between windows in the world.",
                 Theme.rowHeightLast, "hide")
             szNoteRow:AddWidget(szNote, 1)
             manager:Register(szNote, "all")
@@ -402,10 +570,6 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
     ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Default Display", yOffset)
     manager:Register(card2, "all")
-
-    -- Transient (not saved) context the rows below edit; survives the rebuild.
-    if DM and DM.guiConfigContext == nil then DM.guiConfigContext = "Default" end
-    local ctx = (DM and DM.guiConfigContext) or "Default"
 
     local rowCtx = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local ctxDropdown = GUIFrame:CreateDropdown(rowCtx, "Configure For", {
@@ -430,17 +594,13 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
     manager:Register(ctxNote, "all")
     card2:AddRow(ctxNoteRow, 50, 0)
 
-    -- One row per window: Enabled · Type · Segment for the selected context.
-    db.Windows = db.Windows or {}
-    for n = 1, #winList do
-        local idx = winList[n]
+    -- One row per window (numbered by on-screen position): Enabled · Type · Segment.
+    for n = 1, #order do
+        local idx = order[n]
         local window = db.Windows[idx]
         if window and window.Contexts then
-            -- Effective config: this context's entry, else Default.
             local cfg = window.Contexts[ctx] or window.Contexts.Default or {}
 
-            -- Writer: ensures a Contexts[ctx] entry exists (seeded from Default),
-            -- then sets one field. First edit of an inheriting context forks it.
             local function writeField(field, value)
                 window.Contexts[ctx] = window.Contexts[ctx] or {
                     Enabled = (window.Contexts.Default and window.Contexts.Default.Enabled) ~= false,
@@ -454,10 +614,10 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
                 if DM and DM.Tick then DM:Tick() end
             end
 
-            local isLast = (n == #winList)
+            local isLast = (n == #order)
             local rowW = GUIFrame:CreateRow(card2.content, isLast and Theme.rowHeightLast or Theme.rowHeight)
 
-            local enChk = GUIFrame:CreateCheckbox(rowW, "Window " .. idx, {
+            local enChk = GUIFrame:CreateCheckbox(rowW, "Window " .. n, {
                 value = cfg.Enabled ~= false,
                 callback = function(checked) writeField("Enabled", checked) end,
             })

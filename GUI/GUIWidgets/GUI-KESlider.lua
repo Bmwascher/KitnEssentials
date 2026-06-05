@@ -439,12 +439,18 @@ function GUIFrame:CreateSlider(parent, labelText, config)
     local lastUpdate = 0
     slider:SetScript("OnValueChanged", function(self, val)
         UpdateFill()
+        -- Silent SetValue (row:SetValue(v, true) — e.g. a neighbour-slider
+        -- cross-update) nils row._callback: refresh the fill/editbox but do NOT
+        -- touch the throttle clock. Otherwise the silent call would reset
+        -- lastUpdate and the slider's next REAL drag would swallow its first
+        -- callback for up to throttleDelay.
+        if not row._callback then return end
         local currentTime = GetTime()
         if currentTime - lastUpdate < throttleDelay then
             return
         end
         lastUpdate = currentTime
-        if row._callback then row._callback(val) end
+        row._callback(val)
     end)
 
     slider:SetScript("OnSizeChanged", UpdateFill)

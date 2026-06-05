@@ -211,12 +211,15 @@ function DM:CreateWindow(winIdx)
     -- Large window-index badge (top-right, semi-transparent). Shown ONLY during
     -- GUI preview / edit so the "Window N" rows in the config map to the numbered
     -- window on screen; hidden during normal play so it never obscures bar data.
-    -- The index is fixed for a window, so SetText is set once here.
+    -- The badge shows the window's on-screen DISPLAY POSITION (left->right,
+    -- top->bottom), NOT its storage index -- LayoutDock authoritatively sets the
+    -- text from self._winDisplayPos on every structural pass. The text set here is
+    -- only a placeholder before the first layout (the badge is hidden until then).
     W.indexBadge = W.frame:CreateFontString(nil, "OVERLAY")
     W.indexBadge:SetPoint("TOPRIGHT", W.frame, "TOPRIGHT", -3, -2)
     W.indexBadge:SetJustifyH("RIGHT")
     KE:ApplyFontToText(W.indexBadge, self.db and self.db.FontFace, 22, "OUTLINE")
-    W.indexBadge:SetText(tostring(winIdx))
+    W.indexBadge:SetText(tostring((self._winDisplayPos and self._winDisplayPos[winIdx]) or winIdx))
     W.indexBadge:SetTextColor(1, 1, 1, 0.45)
     if self._badgesShown then W.indexBadge:Show() else W.indexBadge:Hide() end
 
@@ -622,11 +625,13 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
     -- SetMinMaxValues(0, 1) is a far better failure mode than passing nil to a
     -- plain-Lua arithmetic widget call. Mirrors the reference's defensive nil-or.
     if W._isDeaths then
-        -- Deaths: no damage-proportional fill. SetValue(0) leaves the bar empty
-        -- (no colored bar) while the row text -- children of the fill -- stays
-        -- visible. (EllesmereUI fills it via SetValue(1); we keep it empty.)
+        -- Deaths: no damage-proportional fill, but the bar is FULL (SetValue 1)
+        -- so the class color set below paints the whole row behind the name +
+        -- M:SS time (mirrors EllesmereUI). A 0-width fill would hide the color
+        -- entirely -- the bar would be invisible. No interpolation arg: deaths
+        -- bars are static, so the fill snaps full immediately.
         row.fill:SetMinMaxValues(0, 1)
-        row.fill:SetValue(0)
+        row.fill:SetValue(1)
     else
         row.fill:SetMinMaxValues(0, maxAmount or 1)
         row.fill:SetValue(src.totalAmount or 0, Enum.StatusBarInterpolation.ExponentialEaseOut)
