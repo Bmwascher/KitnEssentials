@@ -126,6 +126,11 @@ end
 function DM:OpenDetail(bar, button)
     local W = bar and bar.win
     if not W then return end
+    -- The detail panel takes over the viewport; unconditionally clear the hover tip
+    -- (and stop its poll) regardless of how we got here. ShowHoverTip early-returns
+    -- on W._detailOpen, so without this the poll could spin idle if _detailOpen is
+    -- set while a tip is still active via a non-OnLeave route.
+    self:HideHoverTip()
     if button == "RightButton" then self:CloseDetail(W); return end
 
     if InCombatLockdown() then
@@ -159,6 +164,10 @@ end
 
 -- Reuses detail-row 1 as a centered message line (in-combat / no-recap states).
 function DM:ShowDetailMessage(W, msg)
+    -- Clear the hover tip before the detail message takes over (see OpenDetail):
+    -- this sets W._detailOpen = true with no preceding OnLeave, so HideHoverTip
+    -- here is what stops a still-active tip's poll.
+    self:HideHoverTip()
     self:EnsureDetail(W)
     W._detailOpen = true
     if W.body then W.body:Hide() end
@@ -402,3 +411,399 @@ function DM:RenderDeathRecap(W)
     end
     d.content:SetHeight(math_max(10, count * stride))
 end
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  Hover quick-peek tooltip (Phase 4b / Task 9)            ║
+-- ║  A single module-level tip (shared by every window, like ║
+-- ║  EUI) shown on bar OnEnter: the top few breakdown spells  ║
+-- ║  (or recap events for a Deaths window). Built lazily,     ║
+-- ║  TOOLTIP strata, parented to UIParent, passive (never     ║
+-- ║  intercepts the mouse). A detach-when-idle poll keeps the ║
+-- ║  numbers live while a bar is hovered. UNLIKE the click-   ║
+-- ║  inline panel a hover fires IN COMBAT, so the populate    ║
+-- ║  path hard-gates on InCombatLockdown BEFORE any secret    ║
+-- ║  read (spellID is secret in combat -> touching it taints).║
+-- ╚══════════════════════════════════════════════════════════╝
+
+local HOVER_TIP_ROWS = 8        -- quick-peek shows the top few; the click-inline panel shows the full list
+local TIP_WIDTH = 220
+local TIP_PAD = 4               -- inner inset for header / rows
+local _tip                      -- module-level singleton (shared by all windows)
+local _tipActiveBar             -- the bar currently hovered (nil = none); drives the poll
+local _tipPoll                  -- detach-when-idle OnUpdate frame
+local _tipPollAccum = 0
+
+-- One tip row: [icon] name .......... value. Same anatomy as MakeDetailRow but
+-- parented to the tip and laid out by index (the tip is fixed-width, no scroll).
+-- Scripts are NOT wired here -- the tip is passive (EnableMouse(false)), so a row
+-- never receives clicks; it is a pure display element.
+local function MakeTipRow(parent, rowH)
+    local db = DM.db
+    local row = CreateFrame("Frame", nil, parent)
+    row:SetHeight(rowH)
+    row:SetPoint("TOPLEFT", parent, "TOPLEFT", TIP_PAD, 0)   -- y set by PopulateHoverTip
+    row:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -TIP_PAD, 0)
+
+    row.fill = CreateFrame("StatusBar", nil, row)
+    row.fill:SetAllPoints(row)
+    row.fill:SetMinMaxValues(0, 1)
+    row.fill:SetValue(0)
+    row.fill:SetStatusBarTexture(KE:GetStatusbarPath(db and db.StatusBarTexture or "KitnUI"))
+
+    -- Icon frame parented to the row (not row.fill) so it tracks the row bounds
+    -- regardless of the fill's proportional width -- same reasoning as MakeDetailRow.
+    row.iconFrame = CreateFrame("Frame", nil, row)
+    row.iconFrame:SetPoint("LEFT", row, "LEFT", 0, 0)
+    row.iconFrame:SetSize(rowH, rowH)
+    row.icon = row.iconFrame:CreateTexture(nil, "OVERLAY")
+    row.icon:SetAllPoints(row.iconFrame)
+    KE:ApplyIconZoom(row.icon)
+    KE:AddIconBorders(row.iconFrame)
+    row.iconFrame:Hide()
+
+    local face = db and db.FontFace
+    local size = db and db.FontSize
+    local outline = db and db.FontOutline
+    row.label = row.fill:CreateFontString(nil, "OVERLAY")
+    row.label:SetJustifyH("LEFT")
+    row.label:SetWordWrap(false)
+    KE:ApplyFontToText(row.label, face, size, outline)
+    row.value = row.fill:CreateFontString(nil, "OVERLAY")
+    row.value:SetPoint("RIGHT", row.fill, "RIGHT", -3, 0)
+    row.value:SetJustifyH("RIGHT")
+    KE:ApplyFontToText(row.value, face, size, outline)
+
+    row:Hide()
+    return { row = row }
+end
+
+-- Lazily build the shared tip frame. Matches the window/detail backdrop styling so
+-- the peek reads as part of the meter. EnableMouse(false): it is a passive overlay
+-- and must never steal the hover from the bar underneath (which is what keeps it open).
+function DM:EnsureHoverTip()
+    if _tip then return _tip end
+    local f = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+    f:SetFrameStrata("TOOLTIP")
+    f:SetClampedToScreen(true)
+    f:SetWidth(TIP_WIDTH)
+    f:SetHeight(20)
+    f:EnableMouse(false)
+    f:Hide()
+
+    -- Backdrop: reuse the meter's flat bg/border so the tip matches the window
+    -- chrome. A fresh cfg table (cached on _tip) fed to KE:ApplyBackdrop.
+    local db = self.db
+    f._backdropCfg = {
+        Enabled = true,
+        BorderSize = 1,
+        Color = (db and db.BackdropColor) or { 0.031, 0.031, 0.031, 0.95 },
+        BorderColor = (db and db.BackdropBorderColor) or { 0, 0, 0, 1 },
+    }
+    KE:ApplyBackdrop(f, f._backdropCfg)
+
+    local face = db and db.FontFace
+    local size = db and db.FontSize
+    local outline = db and db.FontOutline
+
+    f.header = f:CreateFontString(nil, "OVERLAY")
+    f.header:SetPoint("TOPLEFT", f, "TOPLEFT", TIP_PAD, -TIP_PAD)
+    f.header:SetPoint("TOPRIGHT", f, "TOPRIGHT", -TIP_PAD, -TIP_PAD)
+    f.header:SetJustifyH("LEFT")
+    f.header:SetWordWrap(false)
+    KE:ApplyFontToText(f.header, face, size, outline)
+
+    -- Centered gray message line (the in-combat "secret" state).
+    f.msg = f:CreateFontString(nil, "OVERLAY")
+    f.msg:SetPoint("TOP", f, "TOP", 0, -(TIP_PAD * 2 + (size or 12)))
+    f.msg:SetJustifyH("CENTER")
+    KE:ApplyFontToText(f.msg, face, size, outline)
+    f.msg:SetTextColor(0.7, 0.7, 0.7)
+    f.msg:Hide()
+
+    f.rows = {}
+    local rowH = (self.windows_rt and self.windows_rt[1] and self.windows_rt[1]._snapHeight) or 16
+    for i = 1, HOVER_TIP_ROWS do
+        f.rows[i] = MakeTipRow(f, rowH)
+    end
+
+    _tip = f
+    return f
+end
+
+-- Fill the tip from a bar's stashed source identity (set by RenderBar, Task 2).
+-- Returns true if it has content to show, false if it should stay hidden. Mirrors
+-- the secret contract of RenderBreakdown / RenderDeathRecap exactly. OOC ONLY for
+-- real data: in combat it shows the secret message and reads NOTHING secret.
+function DM:PopulateHoverTip(W, bar)
+    self:EnsureHoverTip()
+    local face = self.db and self.db.FontFace
+    local size = self.db and self.db.FontSize
+    local outline = self.db and self.db.FontOutline
+    local headerH = TIP_PAD * 2 + (size or 12)
+
+    -- IN COMBAT: hover fires mid-fight, so this gate is mandatory and runs BEFORE
+    -- any secret read. bar._cachedName is the last PLAIN (non-secret) name RenderBar
+    -- set (nil while the name was secret) -- safe to display, never a secret string.
+    if InCombatLockdown() then
+        for i = 1, HOVER_TIP_ROWS do _tip.rows[i].row:Hide() end
+        _tip.header:SetText(bar._cachedName or "Details")
+        _tip.msg:SetText("Detailed information is\nsecret while in combat")
+        _tip.msg:Show()
+        -- header + the two-line gray message; generous fixed height (no row math).
+        _tip:SetHeight(headerH + TIP_PAD + (size or 12) * 3)
+        return true
+    end
+    _tip.msg:Hide()
+
+    local cfg = self:ResolveWindowConfig(W.idx)
+    if not cfg then return false end
+    local isDeaths = (cfg.MeterType == Enum.DamageMeterType.Deaths)
+
+    local stride = (W._snapStride or 18)
+    local barH = (W._snapHeight or 16)
+    local shown = 0
+    local headerText = bar._cachedName or "Details"
+
+    if isDeaths then
+        -- Top recap events (oldest-first) for this death; nil -> nothing to show.
+        local events, maxHP = self:GetDeathRecap(bar._deathRecapID)
+        if not events then return false end
+        local deathTime = events[#events] and events[#events].timestamp
+        local count = math_min(#events, HOVER_TIP_ROWS)
+        for i = 1, HOVER_TIP_ROWS do
+            local tr = _tip.rows[i]
+            local row = tr.row
+            if i <= count then
+                local ev = events[i]
+                row:ClearAllPoints()
+                local yOff = -(headerH + (i - 1) * stride)
+                row:SetPoint("TOPLEFT", _tip, "TOPLEFT", TIP_PAD, yOff)
+                row:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", -TIP_PAD, yOff)
+                row:SetHeight(barH)
+
+                -- Icon: spellId (lowercase d on recap events); pcall the lookup so a
+                -- throw can't abort the loop. nil/0/error -> melee fallback 135274.
+                local spID = ev.spellId
+                local tex = 135274
+                if spID and spID > 0 and C_Spell and C_Spell.GetSpellTexture then
+                    local okT, t = pcall(C_Spell.GetSpellTexture, spID)
+                    if okT and t then tex = t end
+                end
+                row.icon:SetTexture(tex)
+                KE:ApplyIconZoom(row.icon)
+                row.iconFrame:SetSize(barH, barH)
+                row.iconFrame:Show()
+                row.label:ClearAllPoints()
+                row.label:SetPoint("LEFT", row.iconFrame, "RIGHT", 3, 0)
+                row.label:SetPoint("RIGHT", row.value, "LEFT", -3, 0)
+
+                local evType = ev.event or ""
+                local isHeal = (evType == "SPELL_HEAL" or evType == "SPELL_PERIODIC_HEAL")
+
+                -- Fill = HP% remaining at the event; heal green / damage red.
+                local curHP = ev.currentHP or 0
+                local hpPct = math_min(1, math_max(0, maxHP > 0 and (curHP / maxHP) or 0))
+                row.fill:SetMinMaxValues(0, 1)
+                row.fill:SetValue(hpPct)
+                if isHeal then row.fill:SetStatusBarColor(0.10, 0.50, 0.10)
+                else row.fill:SetStatusBarColor(0.60, 0.08, 0.08) end
+
+                -- Label: "-X.Xs SpellName" (secret-guard the spellName return).
+                local spellName = ev.spellName
+                if not spellName or issecretvalue(spellName) or spellName == "" then
+                    if isHeal then spellName = "Heal"
+                    elseif evType == "SWING_DAMAGE" then spellName = "Melee"
+                    else spellName = "Unknown" end
+                end
+                row.label:SetText(self.FormatRecapDelta(deathTime, ev.timestamp) .. " " .. spellName)
+
+                -- Value: +heal / -damage. Sanitize amount to a plain number before any
+                -- math/tostring (GetRecapEvents is AllowedWhenUntainted -> could be
+                -- secret in a tainted post-combat window); crit guarded as RenderDeathRecap.
+                local amt = ev.amount or 0
+                local amtPlain = amt
+                if issecretvalue(amt) or type(amt) ~= "number" then amtPlain = 0 end
+                local body = (self.FormatBarValue and select(1, self.FormatBarValue(math_max(0, amtPlain), nil, false))) or tostring(amtPlain)
+                local critFlag = (not issecretvalue(ev.critical)) and ev.critical or false
+                local crit = critFlag and " |cffffd100*|r" or ""
+                row.value:SetText((isHeal and "+" or "-") .. body .. crit)
+
+                if not row:IsShown() then row:Show() end
+                shown = shown + 1
+            else
+                if row:IsShown() then row:Hide() end
+            end
+        end
+    else
+        -- Top breakdown spells for this source (honor a pinned historical session).
+        local src = self:GetSource(cfg.SessionType, cfg.MeterType, bar._sourceGUID, bar._sourceCreatureID, W._curSessionID)
+        local spells = src and src.combatSpells
+        if not spells then return false end
+
+        local classColor = bar._classFilename and RAID_CLASS_COLORS[bar._classFilename]
+        local maxAmount = src.maxAmount
+        local canPercent = maxAmount and (not issecretvalue(maxAmount)) and type(maxAmount) == "number"
+            and src.totalAmount and not issecretvalue(src.totalAmount)
+        local total = canPercent and src.totalAmount or 0
+        local count = math_min(#spells, HOVER_TIP_ROWS)
+
+        for i = 1, HOVER_TIP_ROWS do
+            local tr = _tip.rows[i]
+            local row = tr.row
+            if i <= count then
+                local spell = spells[i]
+                row:ClearAllPoints()
+                local yOff = -(headerH + (i - 1) * stride)
+                row:SetPoint("TOPLEFT", _tip, "TOPLEFT", TIP_PAD, yOff)
+                row:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", -TIP_PAD, yOff)
+                row:SetHeight(barH)
+
+                -- Icon from spellID (safe OOC). pcall the lookup; failure -> hidden icon.
+                local iconShown = false
+                local spID = spell.spellID
+                if spID and C_Spell and C_Spell.GetSpellTexture then
+                    local okT, tex = pcall(C_Spell.GetSpellTexture, spID)
+                    if okT and tex then
+                        row.icon:SetTexture(tex)
+                        KE:ApplyIconZoom(row.icon)
+                        row.iconFrame:SetSize(barH, barH)
+                        row.iconFrame:Show()
+                        iconShown = true
+                    end
+                end
+                if not iconShown then row.iconFrame:Hide() end
+
+                row.label:ClearAllPoints()
+                if iconShown then
+                    row.label:SetPoint("LEFT", row.iconFrame, "RIGHT", 3, 0)
+                else
+                    row.label:SetPoint("LEFT", row.fill, "LEFT", 3, 0)
+                end
+                row.label:SetPoint("RIGHT", row.value, "LEFT", -3, 0)
+
+                -- Sanitize the per-spell amount before any Lua math/format (parity
+                -- with RenderBreakdown); raw amount still feeds SetValue.
+                local amt = spell.totalAmount
+                local amtPlain = amt
+                if issecretvalue(amt) or type(amt) ~= "number" then amtPlain = 0 end
+
+                row.fill:SetMinMaxValues(0, maxAmount or 1)
+                row.fill:SetValue(amt or 0)
+                if classColor then
+                    row.fill:SetStatusBarColor(classColor.r, classColor.g, classColor.b)
+                else
+                    local ar, ag, ab = KE:GetAccentColor()
+                    row.fill:SetStatusBarColor(ar or 0.6, ag or 0.6, ab or 0.6)
+                end
+
+                local nm
+                if spID then
+                    local ok, sn = pcall(C_Spell.GetSpellName, spID)
+                    if ok and sn and not issecretvalue(sn) then nm = sn end
+                end
+                row.label:SetText(nm or spell.creatureName or "Unknown")
+
+                local amtStr = (self.FormatBarValue and select(1, self.FormatBarValue(amtPlain, nil, false))) or ""
+                if canPercent and total > 0 then
+                    row.value:SetText(format("%s  %.1f%%", amtStr, (amtPlain / total) * 100))
+                else
+                    row.value:SetText(amtStr)
+                end
+
+                if not row:IsShown() then row:Show() end
+                shown = shown + 1
+            else
+                if row:IsShown() then row:Hide() end
+            end
+        end
+    end
+
+    if shown == 0 then return false end
+    _tip.header:SetText(headerText)
+    -- Re-apply the live font in case a GUI change happened (ReapplyBarVisuals also
+    -- handles this, but a hover before the first reapply still wants current fonts).
+    KE:ApplyFontToText(_tip.header, face, size, outline)
+    _tip:SetHeight(headerH + TIP_PAD + shown * stride)
+    return true
+end
+
+-- Show the tip for a hovered bar. Suppressed when the click-inline panel is open,
+-- when disabled via DB, or for an empty/placeholder row. On success it pins the
+-- active bar + starts the live poll; otherwise it hides.
+function DM:ShowHoverTip(W, bar)
+    if not W or not bar then return end
+    if self.db and self.db.HoverTooltip == false then return end       -- DB toggle (Task 10)
+    if W._detailOpen then return end                                    -- click-inline open: suppress
+    if not (bar._sourceGUID or bar._sourceCreatureID or bar._deathRecapID) then return end  -- empty/placeholder row
+
+    if self:PopulateHoverTip(W, bar) then
+        _tip:ClearAllPoints()
+        if self.db and self.db.HoverTooltipAnchor == "center" then
+            _tip:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+        else
+            _tip:SetPoint("BOTTOMLEFT", bar.row, "TOPLEFT", 0, 2)
+        end
+        _tip:Show()
+        _tipActiveBar = bar
+        if _tipPoll then _tipPollAccum = 0; _tipPoll:Show() end
+    else
+        self:HideHoverTip()
+    end
+end
+
+-- Hide the tip + stop the poll. Cheap; safe to call when nothing is shown.
+function DM:HideHoverTip()
+    _tipActiveBar = nil
+    if _tipPoll then _tipPoll:Hide() end
+    if _tip then _tip:Hide() end
+end
+
+-- Re-apply font + statusbar texture to the shared tip after a live GUI font/texture
+-- change (called from ReapplyBarVisuals). No-op until the tip has been built. The tip
+-- is a module-level singleton, so this is window-agnostic -- ReapplyBarVisuals runs
+-- per window, but the tip only needs one pass; the redundant calls are cheap setters.
+function DM:ReapplyHoverTipVisuals()
+    if not _tip then return end
+    local db = self.db
+    local face = db and db.FontFace
+    local size = db and db.FontSize
+    local outline = db and db.FontOutline
+    local texPath = KE:GetStatusbarPath(db and db.StatusBarTexture or "KitnUI")
+
+    KE:ApplyFontToText(_tip.header, face, size, outline)
+    if _tip.msg then KE:ApplyFontToText(_tip.msg, face, size, outline) end
+    if _tip.rows then
+        for i = 1, HOVER_TIP_ROWS do
+            local tr = _tip.rows[i]
+            if tr and tr.row then
+                tr.row.fill:SetStatusBarTexture(texPath)
+                KE:ApplyFontToText(tr.row.label, face, size, outline)
+                KE:ApplyFontToText(tr.row.value, face, size, outline)
+            end
+        end
+    end
+
+    -- Re-sync the backdrop to the live DB color. The GUI backdrop callback replaces
+    -- db.BackdropColor / db.BackdropBorderColor with fresh tables, so _backdropCfg's
+    -- by-reference copies go stale; re-point them and re-apply so the tip chrome
+    -- tracks GUI color changes without a /reload.
+    if _tip._backdropCfg then
+        _tip._backdropCfg.Color = (db and db.BackdropColor) or { 0.031, 0.031, 0.031, 0.95 }
+        _tip._backdropCfg.BorderColor = (db and db.BackdropBorderColor) or { 0, 0, 0, 1 }
+        KE:ApplyBackdrop(_tip, _tip._backdropCfg)
+    end
+end
+
+-- Detach-when-idle live poll (KE OnUpdate detach-when-idle pattern). Only runs while
+-- a bar is actively hovered; re-populates ~4 Hz so settling numbers stay live (OOC)
+-- or the combat message stays put. Hides itself the instant the active bar is gone.
+_tipPoll = CreateFrame("Frame")
+_tipPoll:Hide()
+_tipPoll:SetScript("OnUpdate", function(self, elapsed)
+    _tipPollAccum = _tipPollAccum + elapsed
+    if _tipPollAccum < 0.25 then return end   -- ~4 Hz refresh is plenty for a hover peek
+    _tipPollAccum = 0
+    local bar = _tipActiveBar
+    if not bar or not bar.win then self:Hide(); return end
+    DM:ShowHoverTip(bar.win, bar)             -- re-populate live (OOC) / keep the combat message
+end)

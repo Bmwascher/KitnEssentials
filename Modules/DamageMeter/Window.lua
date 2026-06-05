@@ -6,7 +6,7 @@
 -- ║           path (secret-safe SetValue + text gating) is   ║
 -- ║           built in the next chunk. Each window is a      ║
 -- ║           header + scroll viewport + content child, with ║
--- ║           BAR_POOL_SIZE bars pre-acquired once and laid   ║
+-- ║           BAR_POOL_SIZE bars pre-acquired once and laid  ║
 -- ║           out top-to-bottom on the pixel grid.           ║
 -- ╚══════════════════════════════════════════════════════════╝
 
@@ -173,6 +173,18 @@ local function MakeBar(parent, db)
         end
     end)
 
+    -- Hover quick-peek (Phase 4b / Task 9). Forward-resolved like OnClick above
+    -- (Detail.lua defines ShowHoverTip / HideHoverTip and loads after Window.lua).
+    -- bar.win is assigned where the pool is built in CreateWindow; the methods
+    -- guard against a missing window themselves. The populate path is OOC-gated
+    -- for secret reads and shows a "secret while in combat" message in combat.
+    row:SetScript("OnEnter", function()
+        if DM.ShowHoverTip then DM:ShowHoverTip(bar.win, bar) end
+    end)
+    row:SetScript("OnLeave", function()
+        if DM.HideHoverTip then DM:HideHoverTip() end
+    end)
+
     row:Hide()
     return bar
 end
@@ -280,7 +292,7 @@ function DM:CreateWindow(winIdx)
         "Settings", function() DM:HeaderSettings(W) end, 0)
     W.headerBtns.reset = MakeHeaderBtn("Interface\\AddOns\\KitnEssentials\\Media\\Icon\\dm_reset.tga",
         "Reset", function() DM:HeaderReset(W) end, 18)
-    W.headerBtns.segment = MakeHeaderBtn("Interface\\Buttons\\UI-GuildButton-PublicNote-Up",
+    W.headerBtns.segment = MakeHeaderBtn("Interface\\AddOns\\KitnEssentials\\Media\\Icon\\dm_segment.tga",
         "Segment", function() DM:ToggleSegmentMenu(W) end, 36)
 
     -- Apply the initial header-icon visibility / mouseover state from the DB
@@ -517,6 +529,14 @@ function DM:ReapplyBarVisuals(W)
         if W.detail.msg then
             KE:ApplyFontToText(W.detail.msg, face, size, outline)
         end
+    end
+
+    -- The hover quick-peek tip (Detail.lua) is a module-level singleton shared by
+    -- every window and lives in Detail.lua's file scope, so it can't be reached
+    -- through W here. Route the same font/texture reapply through a DM method;
+    -- it is a no-op until the tip is first built and is window-agnostic.
+    if self.ReapplyHoverTipVisuals then
+        self:ReapplyHoverTipVisuals()
     end
 
     -- Header icons (segment / reset / settings) follow ShowHeaderIcons /
