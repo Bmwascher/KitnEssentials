@@ -779,8 +779,8 @@ end
 -- Debounced trigger for the "context may have changed" events. PLAYER_ENTERING_WORLD /
 -- ZONE_CHANGED_NEW_AREA can fire several times during one loading screen and
 -- IsInInstance isn't reliable until the world settles, so coalesce to ONE delayed
--- check (1s, matching KickTracker:OnZoneChange). Challenge-mode events flip the
--- keystone flag synchronously but route through the same path for uniformity.
+-- check (1s, matching KickTracker:OnZoneChange). Challenge-mode events apply the
+-- context immediately via OnChallengeEvent (no debounce) and do NOT call this function.
 function DM:_ScheduleContextCheck()
     if self._ctxCheckPending then return end
     self._ctxCheckPending = true
