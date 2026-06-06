@@ -1589,6 +1589,15 @@ local Defaults = {
             -- [i] = { Contexts = { Default = { Enabled, MeterType, SessionType }, ... } }
             Windows = {},
 
+            -- Internal segment-token bookkeeping for the in-world view selector
+            -- (Selector.lua). _SegSerial is a persisted monotonic counter bumped at
+            -- each combat-segment boundary (boss pull / new instance / keystone); a
+            -- window's ViewOverride is tagged with it and clears when it changes.
+            -- _SegContext (written at runtime, also persisted) is the last segment's
+            -- content context, compared to tell a real context change from a
+            -- /reload-in-place. Not user settings.
+            _SegSerial = 0,
+
             HistoryRetain = 20,
             DeathCap = 50,
         },

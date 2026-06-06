@@ -517,6 +517,9 @@ end
 function DM:OnEncounterStart()
     if DEBUG_DM then KE:Print("[DM] ENCOUNTER_START -> encounter active") end
     self._inEncounter = true
+    -- Segment boundary: a boss pull starts a new segment, so a view override from the
+    -- previous boss/trash clears ("until another raid boss starts").
+    self:BumpSegment()
 end
 
 -- Boss kill/wipe: a hard segment boundary, but the session totals are not yet
@@ -963,6 +966,69 @@ function DM:ResolveWindowConfig(winIdx, context)
     return window.Contexts[context] or window.Contexts.Default
 end
 
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  Segment token + view override (Selector.lua)            ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+-- Bump the persisted segment serial. Called at each combat-segment boundary so a
+-- view override tagged with the previous serial stops matching (and clears on next
+-- read). Plain integer -- never secret. Persisted, so it survives /reload.
+function DM:BumpSegment()
+    if not self.db then return end
+    self.db._SegSerial = (self.db._SegSerial or 0) + 1
+    if DEBUG_DM then KE:Print("[DM] segment -> " .. self.db._SegSerial) end
+end
+
+-- The current segment token (plain integer). A window ViewOverride whose stored
+-- token equals this is still "this segment"; any other value means a boundary passed.
+function DM:CurrentSegmentToken()
+    return (self.db and self.db._SegSerial) or 0
+end
+
+-- The meter type a window should actually display, honoring a live in-world view
+-- override (right-click selector, Selector.lua). `cfg` is the resolved per-context
+-- config (ResolveWindowConfig); cfg.MeterType is the configured/auto-swap value.
+-- When the window has a ViewOverride whose token still matches the current segment,
+-- the override wins WITHOUT mutating cfg (a live db reference SelectSegment writes
+-- to). A stale override (token from a passed segment) is cleared lazily here and the
+-- configured type is used. All plain enums/integers -- never secret -- so the
+-- equality tests are taint-safe.
+function DM:EffectiveMeterType(winIdx, cfg)
+    local windows = self.db and self.db.Windows
+    local window = windows and windows[winIdx]
+    local ov = window and window.ViewOverride
+    if ov == nil then
+        return cfg and cfg.MeterType
+    end
+    if window.ViewOverrideToken == self:CurrentSegmentToken() then
+        return ov
+    end
+    window.ViewOverride = nil
+    window.ViewOverrideToken = nil
+    return cfg and cfg.MeterType
+end
+
+-- In-world view pick (right-click selector, Selector.lua). Writes a per-window view
+-- override tagged with the current segment token (so it persists -- including across
+-- /reload -- until the user re-picks or a segment boundary passes), drops any pinned
+-- history session so the new view shows live data (a pin from the old meter type
+-- wouldn't map to the new type's sessions; CachedSession keys on
+-- (sessionType, meterType, sessionID)), closes the detail panel (its breakdown/recap
+-- was keyed to the old view), closes the selector, and repaints. meterType is a plain
+-- Enum.DamageMeterType value -- never secret.
+function DM:SetWindowView(W, meterType)
+    if not W then return end
+    local windows = self.db and self.db.Windows
+    local window = windows and windows[W.idx]
+    if not window then return end
+    window.ViewOverride = meterType
+    window.ViewOverrideToken = self:CurrentSegmentToken()
+    W._curSessionID = nil
+    if self.CloseDetail then self:CloseDetail(W) end
+    if self.CloseSelector then self:CloseSelector(W) end
+    if self.Tick then self:Tick() end
+end
+
 -- Auto-swap runtime: re-apply the live content context. If it changed since the last
 -- apply, re-layout (LayoutDock re-resolves each window's per-context Enabled, and the
 -- render re-reads the active Type/Segment) and repaint. The resolver above is the
@@ -974,6 +1040,18 @@ end
 function DM:ApplyActiveContext()
     if not self.enabled then return end
     local ctx = self:GetActiveContext()
+
+    -- Segment boundary on a content-context change. Compared against the PERSISTED
+    -- last-segment context (db._SegContext), NOT the runtime self._activeContext --
+    -- the runtime field resets to nil on /reload, so comparing it would spuriously
+    -- bump every reload and clear live overrides. The persisted copy is unchanged
+    -- across a reload-in-place (serial holds, override survives); a real instance /
+    -- keystone change differs and bumps.
+    if self.db and ctx ~= self.db._SegContext then
+        self.db._SegContext = ctx
+        self:BumpSegment()
+    end
+
     if ctx == self._activeContext then return end
     if DEBUG_DM then
         KE:Print("[DM] context " .. tostring(self._activeContext) .. " -> " .. tostring(ctx))
@@ -1009,6 +1087,11 @@ end
 -- Dungeon<->Mythic+ swap, and routing through the debounce could let a pending zone
 -- check swallow it. Fires at most once per keystone, so no coalescing is needed.
 function DM:OnChallengeEvent()
+    -- A keystone start/complete/reset is a hard segment boundary (covers re-running a
+    -- key, where the content context stays "Mythic+" so the context compare alone
+    -- wouldn't catch it). A first key start may double-bump with the context change
+    -- in ApplyActiveContext -- harmless (the override clears either way).
+    self:BumpSegment()
     self:ApplyActiveContext()
 end
 
