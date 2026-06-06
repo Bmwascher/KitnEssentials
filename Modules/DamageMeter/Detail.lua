@@ -203,7 +203,10 @@ function DM:RenderBreakdown(W)
     -- Pull this source out of the window's active session. GetSource pcall-wraps the API.
     -- W._curSessionID: nil = live session; set by Task 6 history nav to a specific stored sessionID.
     local sessionID = W._curSessionID
-    local src = self:GetSource(cfg.SessionType, cfg.MeterType, W._detailSourceGUID, W._detailSourceCID, sessionID)
+    -- Honor a live in-world view override (Selector.lua) so the breakdown matches the
+    -- bars; EffectiveMeterType falls back to cfg.MeterType when no override is active.
+    local meterType = self:EffectiveMeterType(W.idx, cfg)
+    local src = self:GetSource(cfg.SessionType, meterType, W._detailSourceGUID, W._detailSourceCID, sessionID)
     local spells = src and src.combatSpells
     local d = W.detail
     if not spells then
@@ -994,7 +997,10 @@ function DM:PopulateHoverTip(W, bar)
 
     local cfg = self:ResolveWindowConfig(W.idx)
     if not cfg then return false end
-    local isDeaths = (cfg.MeterType == Enum.DamageMeterType.Deaths)
+    -- Honor a live in-world view override (Selector.lua) so the hover quick-peek
+    -- matches the bars + click-inline breakdown; falls back to cfg.MeterType when none.
+    local meterType = self:EffectiveMeterType(W.idx, cfg)
+    local isDeaths = (meterType == Enum.DamageMeterType.Deaths)
 
     -- Tip rows run ~2px shorter than the configured bar height so the quick-peek packs
     -- the now-15 rows (+ Targets) densely, closer to a full Details panel (request 2026-06-05).
@@ -1118,7 +1124,7 @@ function DM:PopulateHoverTip(W, bar)
         end
     else
         -- Top breakdown spells for this source (honor a pinned historical session).
-        local src = self:GetSource(cfg.SessionType, cfg.MeterType, bar._sourceGUID, bar._sourceCreatureID, W._curSessionID)
+        local src = self:GetSource(cfg.SessionType, meterType, bar._sourceGUID, bar._sourceCreatureID, W._curSessionID)
         local spells = src and src.combatSpells
         if not spells then return false end
 
@@ -1247,7 +1253,7 @@ function DM:PopulateHoverTip(W, bar)
         -- Targets sub-section: DamageDone only. Renders below the spell rows; returns the
         -- extra height it consumed (0 / hides itself when there are no targets). For any
         -- other breakdown meter type (HealingDone, etc.) the section stays hidden.
-        if shown > 0 and cfg.MeterType == Enum.DamageMeterType.DamageDone then
+        if shown > 0 and meterType == Enum.DamageMeterType.DamageDone then
             local topY = -(headerH + bodyTop + shown * stride)
             tgtExtraH = RenderTipTargets(self, bar, cfg, W._curSessionID, topY, stride, barH)
         else

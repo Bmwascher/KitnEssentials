@@ -664,11 +664,17 @@ function DM:RenderWindow(W)
     end
     W.frame:Show()
 
+    -- Effective meter type: the configured per-context type, or a live in-world view
+    -- override (right-click selector, Selector.lua) when one is active for this
+    -- segment. Resolved via EffectiveMeterType so the override never mutates the
+    -- persisted cfg table (cfg is a live db reference SelectSegment writes to).
+    local meterType = self:EffectiveMeterType(W.idx, cfg)
+
     -- Deaths renders differently: the value shows the death time (M:SS) and the
     -- bar carries no damage-proportional fill. Overall deaths show no time.
     -- Both are plain enum comparisons (cfg.* are config values, never secret),
     -- stashed on W for RenderBar to read without re-resolving the config per bar.
-    local isDeaths = (cfg.MeterType == Enum.DamageMeterType.Deaths)
+    local isDeaths = (meterType == Enum.DamageMeterType.Deaths)
     W._isDeaths = isDeaths
     W._isOverall = (cfg.SessionType == Enum.DamageMeterSessionType.Overall)
 
@@ -684,16 +690,16 @@ function DM:RenderWindow(W)
     -- values. Short-circuit on that identity BEFORE the concatenation so the
     -- steady state (config unchanged) allocates zero header strings per tick --
     -- only rebuild + SetText when the resolved config actually changes.
-    if cfg.MeterType ~= W._headerType or cfg.SessionType ~= W._headerSession then
-        W._headerType = cfg.MeterType
+    if meterType ~= W._headerType or cfg.SessionType ~= W._headerSession then
+        W._headerType = meterType
         W._headerSession = cfg.SessionType
-        W.header:SetText(self:FormatWindowLabel(cfg.MeterType, cfg.SessionType))
+        W.header:SetText(self:FormatWindowLabel(meterType, cfg.SessionType))
     end
 
     -- Phase 4 segment/history: W._curSessionID pins a specific stored session
     -- (set by the ⌚ menu, ToggleSegmentMenu). nil = live cfg.SessionType, so the
     -- steady state is unchanged. CachedSession keys its per-Tick cache on the id.
-    local session = self:CachedSession(cfg.SessionType, cfg.MeterType, W._curSessionID)
+    local session = self:CachedSession(cfg.SessionType, meterType, W._curSessionID)
     local sources = session and session.combatSources
     if not sources then
         -- No session/data this segment: hide every pooled row so stale bars from
