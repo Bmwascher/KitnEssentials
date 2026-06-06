@@ -482,6 +482,10 @@ function DM:OnRegenDisabled()
     if self.windows_rt then
         for _, W in pairs(self.windows_rt) do
             if W._detailOpen and self.CloseDetail then self:CloseDetail(W) end
+            -- New fight = fresh list: scroll each pane back to the top so rank 1 shows.
+            -- Otherwise a scroll offset left over from the last fight would open the new
+            -- one mid-list. RenderWindow recomputes _scrollMax against the new count.
+            if W.body then W.body:SetVerticalScroll(0) end
         end
     end
     -- Same for the view-selector overlay: a selector left open before the pull would

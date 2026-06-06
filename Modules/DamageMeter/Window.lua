@@ -28,6 +28,19 @@ local Enum = Enum
 local math_min = math.min
 local math_max = math.max
 
+-- Sticky GUID -> display-name memo for the ShowRealm path. The C_DamageMeter source
+-- name resolves to "Name-Realm" while the unit is fully known but intermittently
+-- falls back to bare "Name" (observed across phase transitions), so rendering it
+-- verbatim makes the realm suffix flicker. Keyed on the per-character-immutable
+-- sourceGUID (issecretvalue-guarded at use, so a secret guid is simply skipped --
+-- never indexed), this remembers the realm-bearing form and refuses to DOWNGRADE: once a
+-- cross-realm member has shown its realm we keep it on the ticks the API drops it.
+-- A same-realm name has no hyphen so it's never stored. Grows by at most one tiny
+-- entry per distinct cross-realm player seen (bounded by group size; wiped on
+-- /reload), so it needs no eviction. EUI sidesteps all this by always stripping the
+-- realm (Ambiguate "short"); ShowRealm is a KE-only feature, hence a KE-only memo.
+local realmNames = {}
+
 ---------------------------------------------------------------------------------
 -- Constants
 --
@@ -390,6 +403,25 @@ function DM:CreateWindow(winIdx)
         if button == "RightButton" and DM.OnWindowRightClick then
             DM:OnWindowRightClick(W)
         end
+    end)
+
+    -- Mouse-wheel scroll. A short pane (e.g. a 35%-height stacked window) shows fewer
+    -- rows than the meter holds, so the wheel scrolls the bar list to reach the
+    -- overflow. The native ScrollFrame clips the content child to the body rect, so a
+    -- partially-visible bottom row is cut cleanly at the body edge (no bleed into the
+    -- next stacked window). One bar (stride) per notch. The max is stashed on W by
+    -- RenderWindow each tick (W._scrollMax = rendered height - viewport height) so it
+    -- tracks the live bar count: 0 when everything fits, making the wheel a no-op.
+    -- Same convention as the Selector overlay's wheel handler.
+    W.body:EnableMouseWheel(true)
+    W.body:SetScript("OnMouseWheel", function(self2, delta)
+        local maxS = W._scrollMax or 0
+        if maxS <= 0 then self2:SetVerticalScroll(0); return end
+        local stride = W._snapStride or 1
+        if stride <= 0 then stride = 1 end
+        local new = (self2:GetVerticalScroll() or 0) - delta * stride
+        if new < 0 then new = 0 elseif new > maxS then new = maxS end
+        self2:SetVerticalScroll(new)
     end)
 
     -- Pixel-snapped row geometry so bars sit on the physical pixel grid.
@@ -798,8 +830,9 @@ end
 -- Repaints one window. Resolves the live per-context config, sets the header to
 -- a readable "<Session> <Type>" label, pulls the cached session (memoized per
 -- Tick by Core), and renders up to VisibleBars (hard-clamped to the pool size)
--- bars. Bars outside the visible scroll range are shown but not re-filled
--- (virtualization); bars beyond the source count are hidden.
+-- bars onto the scrollable content child. The body ScrollFrame clips to the
+-- viewport, so a short pane shows the rows that fit and the mouse wheel reaches
+-- any overflow; bars beyond the source count are hidden.
 function DM:RenderWindow(W)
     local cfg = self:ResolveWindowConfig(W.idx)
     if not cfg or not cfg.Enabled then
@@ -879,37 +912,39 @@ function DM:RenderWindow(W)
     -- secret), so math.min on it is safe.
     local count = math_min(#sources, (self.db and self.db.VisibleBars) or 10, self.BAR_POOL_SIZE)
 
-    -- Visible range. Scrolling isn't wired yet (GetVerticalScroll is always 0), so
-    -- visLast is the number of rows that FULLY fit in the body -- math.floor, NOT
-    -- ceil. A ceil'd partial last row would be clipped at the body edge and bleed
-    -- toward the next stacked window / the gap, which reads as the two windows
-    -- OVERLAPPING (the Damage/Overall-Damage report). Rows past visLast are HIDDEN,
-    -- not shown-but-stale, so a pane only ever shows whole, current bars. When the
-    -- body isn't sized yet (first paint) render the whole set so it isn't blank.
+    -- Scroll model. All `count` rows are rendered onto the content child at their
+    -- fixed slots; the body ScrollFrame clips to the viewport and the wheel scrolls
+    -- through them, so a short pane (e.g. a 35%-height stacked window) shows the rows
+    -- that fit and the user wheels to the rest -- no bar is unreachable. _scrollMax
+    -- (rendered height minus viewport) drives the wheel clamp wired in CreateWindow;
+    -- re-clamp the live scroll here so shrinking the bar count snaps a now-out-of-range
+    -- offset back into view. ScrollFrame clipping cuts a partial bottom row cleanly at
+    -- the body edge (no bleed into the next stacked window).
     local stride = W._snapStride or 1
     if stride <= 0 then stride = 1 end
     local viewH = (W.body and W.body:GetHeight()) or 0
-    local visLast = count
-    if viewH > 0 then
-        visLast = math_min(count, math.floor(viewH / stride))
+    W._scrollMax = math_max(0, count * stride - viewH)
+    if W.body then
+        local cur = W.body:GetVerticalScroll() or 0
+        if cur > W._scrollMax then W.body:SetVerticalScroll(W._scrollMax) end
     end
 
-    -- Always-show-self: when enabled and the player is NOT within the VISIBLE rows
-    -- (1..visLast), pin the player's source into the last visible slot. isLocalPlayer
-    -- is NeverSecret; a source's index in the pre-sorted combatSources IS its rank
-    -- (a plain integer). No arithmetic/compare on any secret amount anywhere -- the
-    -- only reads are isLocalPlayer (boolean, NeverSecret) and the loop index. Keyed
-    -- on visLast (the genuinely on-screen count) not the unclamped `count`, so the
-    -- pin search and the slot it lands in match what's actually shown.
+    -- Always-show-self: when enabled and the player is NOT within the rendered rows
+    -- (1..count), pin the player's source into the LAST rendered slot at their real
+    -- rank, so self is always present in the scrollable list -- reachable at the bottom
+    -- even in a raid where their rank exceeds VisibleBars. isLocalPlayer is NeverSecret;
+    -- a source's index in the pre-sorted combatSources IS its rank (a plain integer).
+    -- No arithmetic/compare on any secret amount anywhere -- the only reads are
+    -- isLocalPlayer (boolean, NeverSecret) and the loop index.
     local pinSource, pinRank
-    if self.db and self.db.AlwaysShowSelf and visLast >= 1 then
+    if self.db and self.db.AlwaysShowSelf and count >= 1 then
         local inVisible = false
-        for i = 1, visLast do
+        for i = 1, count do
             local s = sources[i]
             if s and s.isLocalPlayer then inVisible = true; break end
         end
         if not inVisible then
-            for i = visLast + 1, #sources do
+            for i = count + 1, #sources do
                 local s = sources[i]
                 if s and s.isLocalPlayer then
                     pinSource = s
@@ -922,18 +957,18 @@ function DM:RenderWindow(W)
 
     -- maxAmount may be secret in combat; SetMinMaxValues accepts it, and the
     -- per-bar `or 1` fallback in RenderBar hardens against a malformed session
-    -- that omits it. Read once here and pass down. Rows 1..visLast are filled +
-    -- shown; everything past visLast is hidden (no stale or partial bar lingers).
+    -- that omits it. Read once here and pass down. Rows 1..count are filled +
+    -- shown; everything past count is hidden (no stale bar lingers).
     local maxAmount = session.maxAmount
     for i = 1, self.BAR_POOL_SIZE do
         local bar = W.bars[i]
         local row = bar.row
-        if i <= visLast then
-            -- The last visible slot shows the pinned player at their real rank when
+        if i <= count then
+            -- The last slot shows the pinned player at their real rank when
             -- AlwaysShowSelf pinned one; otherwise the slot's own source. RenderBar's
             -- `rank` arg is the displayed rank.
             local src, rank = sources[i], i
-            if pinSource and i == visLast then
+            if pinSource and i == count then
                 src, rank = pinSource, pinRank
             end
             self:RenderBar(W, bar, rank, src, maxAmount)
@@ -1105,13 +1140,32 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         -- "-Realm" suffix for cross-realm members), so it must match against the raw
         -- name, never the realm-stripped display name. Mirrors EUI's bar._src.name.
         bar._rawName = nm
-        -- When ShowRealm is off (default), drop the "-Realm" suffix for DISPLAY only.
-        -- A character name never contains a hyphen -- the only hyphen is the realm
-        -- separator -- so matching up to the first hyphen is exact and UTF-8 safe
-        -- (no multibyte sequence contains the 0x2D byte). The stripped string is
-        -- what gets dirty-cached, so toggling ShowRealm repaints on the next tick.
-        if nm and not db.ShowRealm then
-            nm = nm:match("^[^-]+") or nm
+        if nm then
+            if db.ShowRealm then
+                -- Stabilize the realm suffix. The source name resolves to "Name-Realm"
+                -- while the unit is fully known but intermittently drops to bare "Name"
+                -- (e.g. across a phase transition), so rendering it verbatim flickers.
+                -- sourceGUID is immutable per character and issecretvalue-guarded below
+                -- (a secret guid is skipped): memoize the realm-bearing form keyed on it
+                -- and never DOWNGRADE -- once a cross-realm member has
+                -- shown its realm, keep it on the ticks the API drops it. A same-realm name
+                -- has no hyphen so it's never stored and just passes through.
+                local guid = bar._sourceGUID
+                if guid and not issecretvalue(guid) then
+                    if nm:find("-", 1, true) then
+                        realmNames[guid] = nm
+                    elseif realmNames[guid] then
+                        nm = realmNames[guid]
+                    end
+                end
+            else
+                -- ShowRealm off (default): drop the "-Realm" suffix for DISPLAY only. A
+                -- character name never contains a hyphen -- the only hyphen is the realm
+                -- separator -- so matching up to the first hyphen is exact and UTF-8 safe
+                -- (no multibyte sequence contains the 0x2D byte). The stripped string is
+                -- what gets dirty-cached, so toggling ShowRealm repaints on the next tick.
+                nm = nm:match("^[^-]+") or nm
+            end
         end
         if nm ~= bar._cachedName then
             bar._cachedName = nm
