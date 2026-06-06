@@ -143,6 +143,9 @@ end
 -- GUI Lock toggle entry point: register or unregister the dock mover and refresh
 -- any live overlay so the change is visible immediately in /kes edit.
 function DM:ApplyLockState()
+    -- Dismiss any open view-selector before (un)registering the mover so the picker
+    -- doesn't sit over the bars while the dock is repositioned in EditMode.
+    if self.CloseAllSelectors then self:CloseAllSelectors() end
     if self.db and self.db.Locked then
         self:UnregisterEditMode()
     else
@@ -480,6 +483,10 @@ function DM:OnRegenDisabled()
             if W._detailOpen and self.CloseDetail then self:CloseDetail(W) end
         end
     end
+    -- Same for the view-selector overlay: a selector left open before the pull would
+    -- keep W.body hidden for the whole fight (RenderWindow only Show()s W.frame, never
+    -- W.body) -- close it so the live bars render. Mirrors the detail-close above.
+    if self.CloseAllSelectors then self:CloseAllSelectors() end
     if DEBUG_DM then KE:Print("[DM] PLAYER_REGEN_DISABLED -> StartTicker") end
     self:StartTicker()
 end
@@ -582,6 +589,9 @@ function DM:OnMeterReset()
     -- cross-reference it was built from is now stale. Resolved at runtime (Detail.lua
     -- loads after Core.lua); guarded so a load-order or version skew can't throw.
     if self.InvalidateTargetsCache then self:InvalidateTargetsCache() end
+    -- A reset empties the bars; close any open selector so the cleared bars show
+    -- (DAMAGE_METER_RESET can fire from an external reset with a selector still open).
+    if self.CloseAllSelectors then self:CloseAllSelectors() end
     if DM.Tick then self:Tick() end
 end
 
@@ -792,6 +802,9 @@ function DM:HeaderReset(_)
             if w._detailOpen and self.CloseDetail then self:CloseDetail(w) end
         end
     end
+    -- Close any open view-selector too so the freshly-emptied bars are visible (the
+    -- selector overlays the body with the same anchors, so it would block them).
+    if self.CloseAllSelectors then self:CloseAllSelectors() end
     if self.Tick then self:Tick() end
 end
 
@@ -976,6 +989,10 @@ end
 function DM:BumpSegment()
     if not self.db then return end
     self.db._SegSerial = (self.db._SegSerial or 0) + 1
+    -- A segment boundary invalidates any view override (its token no longer matches),
+    -- so dismiss any open view-selector too: its highlight is now stale and the live
+    -- bars should show. Resolved at runtime (Selector.lua loads after Core.lua).
+    if self.CloseAllSelectors then self:CloseAllSelectors() end
     if DEBUG_DM then KE:Print("[DM] segment -> " .. self.db._SegSerial) end
 end
 

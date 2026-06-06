@@ -126,8 +126,10 @@ function DM:EnsureDetail(W)
     return d
 end
 
--- Right-click closes; left-click opens (out of combat only). bar carries the source
--- identity stashed by Window.lua RenderBar (Task 2).
+-- Left-click opens (out of combat only). Right-click on a bar is normally handled by
+-- the window dispatcher (Selector.lua OnWindowRightClick) and doesn't reach here; the
+-- RightButton guard below remains as a safe fallback. bar carries the source identity
+-- stashed by Window.lua RenderBar (Task 2).
 function DM:OpenDetail(bar, button)
     local W = bar and bar.win
     if not W then return end

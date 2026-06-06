@@ -26,6 +26,7 @@ local issecretvalue = issecretvalue
 local RAID_CLASS_COLORS = RAID_CLASS_COLORS
 local Enum = Enum
 local math_min = math.min
+local math_max = math.max
 
 ---------------------------------------------------------------------------------
 -- Constants
@@ -172,10 +173,14 @@ local function MakeBar(parent, db)
     bar._deathRecapID = nil
     bar._classFilename = nil
 
-    -- Wire OnClick ONCE. Forward-compatible: calls DM.OpenDetail only if a
-    -- later chunk defines it. No detail window exists yet.
+    -- Wire OnClick ONCE. Left-click opens the per-source detail panel; right-click
+    -- routes to the window dispatcher (close detail / toggle the view selector,
+    -- Selector.lua). Both DM methods resolve at runtime (Detail.lua / Selector.lua
+    -- load after this file), so each call is guarded.
     row:SetScript("OnClick", function(_, button)
-        if DM.OpenDetail then
+        if button == "RightButton" then
+            if DM.OnWindowRightClick then DM:OnWindowRightClick(bar.win) end
+        elseif DM.OpenDetail then
             DM:OpenDetail(bar, button)
         end
     end)
@@ -331,6 +336,23 @@ function DM:CreateWindow(winIdx)
         end
     end)
 
+    -- Right-click the bar box (the body) to open the view selector (Selector.lua).
+    -- W.body IS the box where bars load; it is hidden whenever the detail/selector
+    -- overlay is open, so it never conflicts with their own click handling. Bars sit
+    -- above it and keep their own clicks; an empty-space right-click falls to here.
+    -- SetPropagateMouseMotion lets hover (header-icon reveal) pass through to the
+    -- window frame while this still captures the right-click. DM:OnWindowRightClick
+    -- is resolved at runtime (Selector.lua loads after this file).
+    W.body:EnableMouse(true)
+    if W.body.SetPropagateMouseMotion then
+        W.body:SetPropagateMouseMotion(true)
+    end
+    W.body:SetScript("OnMouseUp", function(_, button)
+        if button == "RightButton" and DM.OnWindowRightClick then
+            DM:OnWindowRightClick(W)
+        end
+    end)
+
     -- Pixel-snapped row geometry so bars sit on the physical pixel grid.
     -- stride is the per-row advance (height + spacing). snapHeight and
     -- snapSpacing are already on the grid, so their sum is too -- adding them
@@ -450,6 +472,13 @@ function DM:LayoutWindow(W)
             W.detail:SetPoint("TOPLEFT", W.frame, "TOPLEFT", 0, -headerH)
             W.detail:SetPoint("BOTTOMRIGHT", W.frame, "BOTTOMRIGHT", 0, 0)
         end
+        -- The view-selector overlay (Selector.lua) covers the same body area; keep it
+        -- in sync with the header band too (its anchor was baked at EnsureSelector time).
+        if W.selector then
+            W.selector:ClearAllPoints()
+            W.selector:SetPoint("TOPLEFT", W.frame, "TOPLEFT", 0, -headerH)
+            W.selector:SetPoint("BOTTOMRIGHT", W.frame, "BOTTOMRIGHT", 0, 0)
+        end
     end
 
     -- Content HEIGHT only (the dock owns the width; the body's OnSizeChanged
@@ -535,6 +564,15 @@ function DM:ReapplyBarVisuals(W)
         end
         if W.detail.msg then
             KE:ApplyFontToText(W.detail.msg, face, size, outline)
+        end
+    end
+
+    -- Selector cards (Selector.lua) absorb the same live font change. Lazy-built, so
+    -- this is a no-op until the user first opens the selector for this window.
+    if W.selector and W.selector.cards then
+        local cardSize = math_max(8, (size or 12) - 2)
+        for _, card in ipairs(W.selector.cards) do
+            KE:ApplyFontToText(card.label, face, cardSize, outline)
         end
     end
 
