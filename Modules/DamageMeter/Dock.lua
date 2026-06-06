@@ -574,6 +574,15 @@ local function _DoDockRefresh()
     if not DM.enabled then return end
     DM:LayoutDock()
     DM:UpdateBackdrop()
+    -- A structural change (AddWindow) can introduce a window that has never been
+    -- rendered -- its header FontString is still empty and, out of combat, no ticker is
+    -- running to paint it. Render once here, right after the layout/position pass, so the
+    -- new window's header + bars populate in the same frame (no blank-header flash). Gated
+    -- on a flag so ordinary RefreshDock calls (e.g. per-frame splitter drags) don't render.
+    if DM._needsRenderAfterLayout then
+        DM._needsRenderAfterLayout = false
+        if DM.Tick then DM:Tick() end
+    end
 end
 
 function DM:RefreshDock()
@@ -1015,6 +1024,9 @@ function DM:AddWindow()
         { WidthRatio = 1, Windows = { newIdx }, RowRatios = { 1 } }
 
     if self.CreateWindow then self:CreateWindow(newIdx) end
+    -- Paint the new window after the deferred layout pass (see _DoDockRefresh) so its
+    -- header doesn't stay blank until the next combat tick.
+    self._needsRenderAfterLayout = true
     self:RefreshDock()
 end
 
