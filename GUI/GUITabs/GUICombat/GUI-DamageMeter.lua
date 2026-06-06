@@ -12,6 +12,7 @@ local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
 local pairs = pairs
 local CreateFrame = CreateFrame
 local math_max = math.max
+local math_floor = math.floor
 
 local activeTab = "General"
 
@@ -135,14 +136,14 @@ local function BuildGeneralTab(scrollChild, yOffset, db, manager)
     manager:Register(lockCheck, "all")
     card1:AddRow(row1a, Theme.rowHeight)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, 50)
+    local noteRow = GUIFrame:CreateRow(card1.content, 68)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " In-client meter on Blizzard's 12.0 data; replaces the built-in meter automatically while enabled.\n" ..
         KE:ColorTextByTheme("-") .. " Switch type/segment on the meter itself; the GUI sets defaults & look.",
-        50, "hide")
+        68, "hide")
     noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, 50, 0)
+    card1:AddRow(noteRow, 68, 0)
 
     yOffset = card1:GetNextOffset()
 
@@ -174,19 +175,22 @@ local function BuildGeneralTab(scrollChild, yOffset, db, manager)
     ----------------------------------------------------------------
     -- Card 3: Tip
     ----------------------------------------------------------------
+    -- Two bullets, the first one wraps -> ~3 body lines. The CreateText body is
+    -- anchored title->bottom, so it gets (rowH - title - spacer); rowHeightLast (44)
+    -- left it ~24px (1.5 lines) and clipped. 76 gives ~3.5 body lines of headroom.
     local dragNoteCard = GUIFrame:CreateCard(scrollChild, "Tip", yOffset)
     manager:Register(dragNoteCard, "all")
-    local dnRow = GUIFrame:CreateRow(dragNoteCard.content, Theme.rowHeightLast)
+    local dnRow = GUIFrame:CreateRow(dragNoteCard.content, 76)
     local dnText = GUIFrame:CreateText(dnRow,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " Drag the dock in " .. KE:ColorTextByTheme("/kes edit") ..
         " (disabled while locked). Resize panes by dragging the gaps between windows.\n" ..
         KE:ColorTextByTheme("-") .. " " .. KE:ColorTextByTheme("/kedm") ..
         " toggles the dock; " .. KE:ColorTextByTheme("/kedm reset") .. " clears all segments.",
-        Theme.rowHeightLast, "hide")
+        76, "hide")
     dnRow:AddWidget(dnText, 1)
     manager:Register(dnText, "all")
-    dragNoteCard:AddRow(dnRow, Theme.rowHeightLast, 0)
+    dragNoteCard:AddRow(dnRow, 76, 0)
     yOffset = dragNoteCard:GetNextOffset()
 
     return yOffset
@@ -436,13 +440,14 @@ local function BuildSchematic(card, height, cols, posOf, fullLabel)
             num:SetTextColor(1, 1, 1, 1)
             box.num = num
 
-            -- Full panel label across the bottom, wrapped (so long names like
-            -- "Overall Damage Done" stay readable in a narrow box instead of being
-            -- clipped); the number sits slightly above center to leave it room.
+            -- Full panel label tucked directly UNDER the number (not pinned to the box
+            -- bottom) so it stays close to the number and still shows in a short box;
+            -- wrapped so long names like "Overall Damage Done" stay readable in tall boxes.
             local tlabel = box:CreateFontString(nil, "OVERLAY")
             KE:ApplyThemeFont(tlabel, "small")
-            tlabel:SetPoint("BOTTOMLEFT", box, "BOTTOMLEFT", 2, 4)
-            tlabel:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", -2, 4)
+            tlabel:SetPoint("TOP", num, "BOTTOM", 0, -1)
+            tlabel:SetPoint("LEFT", box, "LEFT", 2, 0)
+            tlabel:SetPoint("RIGHT", box, "RIGHT", -2, 0)
             tlabel:SetJustifyH("CENTER")
             tlabel:SetWordWrap(true)
             tlabel:SetTextColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
@@ -537,7 +542,10 @@ local function BuildSchematic(card, height, cols, posOf, fullLabel)
                     box:SetPoint("TOPLEFT", container, "TOPLEFT", runX, -runY)
                     box:SetSize(math_max(1, colW), math_max(1, rowH))
                     if box.tlabel then
-                        if rowH < 34 then box.tlabel:Hide() else box.tlabel:Show() end
+                        -- Show the label whenever the box is tall enough for the number
+                        -- + one label line (it now sits right under the number, so this
+                        -- threshold is lower than when it was pinned to the box bottom).
+                        if rowH < 26 then box.tlabel:Hide() else box.tlabel:Show() end
                     end
                 end
                 runY = runY + rowH + GAP
@@ -548,7 +556,34 @@ local function BuildSchematic(card, height, cols, posOf, fullLabel)
 
     container:SetScript("OnSizeChanged", function(_, w) layout(w) end)
     layout(container:GetWidth())
+
+    -- Exposed so the Sizing sliders can re-tile the boxes LIVE as ratios change: `cols`
+    -- is the live db.Dock.Columns reference, so layout() re-reads the new WidthRatio /
+    -- RowRatios. Cheaper + smoother than a full page rebuild on every slider tick.
+    container.Relayout = function() layout(container:GetWidth()) end
     return container
+end
+
+-- Rewrites a sizing slider's label into a LIVE, directional dual-share readout:
+-- "Col 1  60% <|> 40%  Col 2" -- leftName/rightName flank the split, the `<|>`
+-- glyph reads as the draggable divider (slides either way), and both panes' shares
+-- show at once so "which way grows which" is unambiguous as the thumb moves. The
+-- slider value is the left/top pane's 0-1 share of the pair, so the right share is
+-- its complement (they always sum to 100). Hooked on OnValueChanged (UNthrottled,
+-- unlike the db callback) so the label tracks the thumb every frame -- including the
+-- silent neighbour cross-updates a shared-pane drag triggers. ASCII only: WoW's
+-- embedded fonts lack the geometric arrow glyphs (feedback_wow_fontstring_limits).
+local function WireSplitLabel(sliderRow, leftName, rightName)
+    if not (sliderRow and sliderRow.label and sliderRow.slider) then return end
+    local lbl = sliderRow.label
+    local function refresh(val)
+        val = val or sliderRow:GetValue() or 0.5
+        local L = math_floor(val * 100 + 0.5)
+        if L < 0 then L = 0 elseif L > 100 then L = 100 end
+        lbl:SetText(leftName .. "  " .. L .. "% <|> " .. (100 - L) .. "%  " .. rightName)
+    end
+    sliderRow.slider:HookScript("OnValueChanged", function(_, val) refresh(val) end)
+    refresh()
 end
 
 ---------------------------------------------------------------------------------
@@ -594,6 +629,10 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
         end
         return ""
     end
+
+    -- The layout map, declared at tab scope so the Sizing sliders (a later card) can
+    -- call schematic.Relayout() to live-update the boxes as the ratios change.
+    local schematic
 
     ----------------------------------------------------------------
     -- Card 1: Layout (quick preset + visual map + move controls)
@@ -643,8 +682,8 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
 
     -- Visual layout map (numbered boxes mirroring the in-world dock).
     if cols and #order > 0 then
-        local schemRow = BuildSchematic(card1, 84, cols, posOf, FullLabelFor)
-        card1:AddRow(schemRow, 84)
+        schematic = BuildSchematic(card1, 96, cols, posOf, FullLabelFor)
+        card1:AddRow(schematic, 96)
     end
 
     -- The map is the ONLY place you arrange windows: drag onto a window's center to
@@ -694,11 +733,12 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
                 local cMin, cMax = 5, 95
                 if DM and DM.GetColumnBoundaryRange then cMin, cMax = DM:GetColumnBoundaryRange(c) end
                 local rowS = GUIFrame:CreateRow(sizeCard.content, Theme.rowHeight)
-                local slider = GUIFrame:CreateSlider(rowS, "Col " .. c .. " / Col " .. (c + 1) .. " width", {
+                local slider = GUIFrame:CreateSlider(rowS, "", {
                     min = cMin / 100, max = cMax / 100, step = 0.01, isPercent = true,
                     value = ((DM and DM.GetColumnBoundaryShare and DM:GetColumnBoundaryShare(c)) or 50) / 100,
                     callback = function(val)
                         if DM and DM.SetColumnBoundaryShare then DM:SetColumnBoundaryShare(c, val * 100) end
+                        if schematic and schematic.Relayout then schematic.Relayout() end
                         -- Refresh the two neighbours that share a touched column.
                         if colSliders[c - 1] and DM then
                             colSliders[c - 1]:SetValue(DM:GetColumnBoundaryShare(c - 1) / 100, true)
@@ -708,6 +748,7 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
                         end
                     end,
                 })
+                WireSplitLabel(slider, "Col " .. c, "Col " .. (c + 1))
                 rowS:AddWidget(slider, 1)
                 manager:Register(slider, "all")
                 sizeCard:AddRow(rowS, Theme.rowHeight)
@@ -726,12 +767,12 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
                             local rMin, rMax = 5, 95
                             if DM and DM.GetRowBoundaryRange then rMin, rMax = DM:GetRowBoundaryRange(c, r) end
                             local rowS = GUIFrame:CreateRow(sizeCard.content, Theme.rowHeight)
-                            local slider = GUIFrame:CreateSlider(rowS,
-                                "Win " .. topNum .. " / Win " .. botNum .. " height", {
+                            local slider = GUIFrame:CreateSlider(rowS, "", {
                                 min = rMin / 100, max = rMax / 100, step = 0.01, isPercent = true,
                                 value = ((DM and DM.GetRowBoundaryShare and DM:GetRowBoundaryShare(c, r)) or 50) / 100,
                                 callback = function(val)
                                     if DM and DM.SetRowBoundaryShare then DM:SetRowBoundaryShare(c, r, val * 100) end
+                                    if schematic and schematic.Relayout then schematic.Relayout() end
                                     local rs = rowSliders[c]
                                     if rs and DM then
                                         if rs[r - 1] then rs[r - 1]:SetValue(DM:GetRowBoundaryShare(c, r - 1) / 100, true) end
@@ -739,6 +780,7 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
                                     end
                                 end,
                             })
+                            WireSplitLabel(slider, "Win " .. topNum, "Win " .. botNum)
                             rowS:AddWidget(slider, 1)
                             manager:Register(slider, "all")
                             sizeCard:AddRow(rowS, Theme.rowHeight)
@@ -971,14 +1013,14 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     manager:Register(card2, "all")
 
     local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local iconChk = GUIFrame:CreateCheckbox(row2a, "Show Icon", {
+    local iconChk = GUIFrame:CreateCheckbox(row2a, "Show Spec Icon", {
         value = db.ShowIcon ~= false,
         callback = function(checked) db.ShowIcon = checked; ApplySettings() end,
     })
     row2a:AddWidget(iconChk, 0.5)
     manager:Register(iconChk, "all")
 
-    local nameChk = GUIFrame:CreateCheckbox(row2a, "Show Name", {
+    local nameChk = GUIFrame:CreateCheckbox(row2a, "Show Player Name", {
         value = db.ShowName ~= false,
         callback = function(checked) db.ShowName = checked; ApplySettings() end,
     })
@@ -1004,7 +1046,7 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
 
     -- The two name-related toggles share a row.
     local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local classNameChk = GUIFrame:CreateCheckbox(row2c, "Class-Color Name", {
+    local classNameChk = GUIFrame:CreateCheckbox(row2c, "Class Color Names", {
         value = db.ClassColorName == true,
         callback = function(checked) db.ClassColorName = checked; ApplySettings() end,
     })
