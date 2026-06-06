@@ -3,5 +3,6 @@
     <Script file="Window.lua"/>
     <Script file="Detail.lua"/>
     <Script file="Selector.lua"/>
+    <Script file="SegmentMenu.lua"/>
     <Script file="Dock.lua"/>
 </Ui>

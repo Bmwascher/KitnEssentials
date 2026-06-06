@@ -151,6 +151,7 @@ function DM:OpenDetail(bar, button)
     W._detailRecapID    = bar._deathRecapID
     W._detailClass      = bar._classFilename
     W._detailOpen = true
+    if self.SyncHeaderIconsToOverlayState then self:SyncHeaderIconsToOverlayState(W) end
 
     if W.body then W.body:Hide() end
     W.detail:Show()
@@ -163,10 +164,17 @@ function DM:OpenDetail(bar, button)
 end
 
 function DM:CloseDetail(W)
-    if not W or not W.detail then return end
+    -- Idempotent: act only when the panel is actually OPEN, not merely built. This is
+    -- load-bearing -- SelectSegment calls CloseDetail on every segment pick, and once
+    -- detail has been opened once W.detail exists forever. An existence-only guard would
+    -- run the W.body:Show() below on a pick made while the view-selector grid is open,
+    -- re-revealing the bars THROUGH the transparent grid (the grid coexists with the
+    -- segment menu). Gating on _detailOpen keeps the body owned by whatever overlay is up.
+    if not W or not W.detail or not W._detailOpen then return end
     W._detailOpen = false
     W.detail:Hide()
     if W.body then W.body:Show() end
+    if self.SyncHeaderIconsToOverlayState then self:SyncHeaderIconsToOverlayState(W) end
 end
 
 -- Reuses detail-row 1 as a centered message line (in-combat / no-recap states).
@@ -177,6 +185,7 @@ function DM:ShowDetailMessage(W, msg)
     self:HideHoverTip()
     self:EnsureDetail(W)
     W._detailOpen = true
+    if self.SyncHeaderIconsToOverlayState then self:SyncHeaderIconsToOverlayState(W) end
     if W.body then W.body:Hide() end
     W.detail:Show()
     for i = 1, DETAIL_POOL_SIZE do W.detail.rows[i].row:Hide() end

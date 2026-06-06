@@ -146,6 +146,7 @@ function DM:ApplyLockState()
     -- Dismiss any open view-selector before (un)registering the mover so the picker
     -- doesn't sit over the bars while the dock is repositioned in EditMode.
     if self.CloseAllSelectors then self:CloseAllSelectors() end
+    if self.CloseAllSegmentMenus then self:CloseAllSegmentMenus() end
     if self.db and self.db.Locked then
         self:UnregisterEditMode()
     else
@@ -487,6 +488,7 @@ function DM:OnRegenDisabled()
     -- keep W.body hidden for the whole fight (RenderWindow only Show()s W.frame, never
     -- W.body) -- close it so the live bars render. Mirrors the detail-close above.
     if self.CloseAllSelectors then self:CloseAllSelectors() end
+    if self.CloseAllSegmentMenus then self:CloseAllSegmentMenus() end
     if DEBUG_DM then KE:Print("[DM] PLAYER_REGEN_DISABLED -> StartTicker") end
     self:StartTicker()
 end
@@ -592,6 +594,7 @@ function DM:OnMeterReset()
     -- A reset empties the bars; close any open selector so the cleared bars show
     -- (DAMAGE_METER_RESET can fire from an external reset with a selector still open).
     if self.CloseAllSelectors then self:CloseAllSelectors() end
+    if self.CloseAllSegmentMenus then self:CloseAllSegmentMenus() end
     if DM.Tick then self:Tick() end
 end
 
@@ -805,6 +808,7 @@ function DM:HeaderReset(_)
     -- Close any open view-selector too so the freshly-emptied bars are visible (the
     -- selector overlays the body with the same anchors, so it would block them).
     if self.CloseAllSelectors then self:CloseAllSelectors() end
+    if self.CloseAllSegmentMenus then self:CloseAllSegmentMenus() end
     if self.Tick then self:Tick() end
 end
 
@@ -815,18 +819,11 @@ end
 -- stored sessions are gone after a reload): nil = the live cfg.SessionType
 -- (Current/Overall), non-nil = a specific stored session read via the FromID API
 -- branch in CachedSession/GetSession. The ⌚ menu lists the last ~20 available
--- combat sessions plus a Current/Overall pair, built lazily on click with
--- Blizzard's taint-safe MenuUtil context-menu primitive (the canonical 12.0 menu
--- API -- KE has no in-world menu widget of its own, and the GUI dropdown is a
--- heavyweight config widget tied to the settings panel, unfit for a header anchor).
+-- combat sessions plus a Current/Overall pair, rendered by a custom hover dropdown
+-- (SegmentMenu.lua) that opens upward from the icon -- replacing the Blizzard MenuUtil
+-- context menu, which can't open on hover, grow upward, or carry KE's contrast styling.
+-- The data helpers below stay here (backend); the presentation lives in SegmentMenu.lua.
 ---------------------------------------------------------------------------------
-
--- The Current/Overall pair the ⌚ menu offers under the divider. Plain enum order
--- (Current first), built once at file load -- never per click.
-local SEGMENT_SESSION_TYPES = {
-    Enum.DamageMeterSessionType.Current,
-    Enum.DamageMeterSessionType.Overall,
-}
 
 -- Last `cap` available combat sessions (newest last), or nil. The API call is
 -- pcall'd (it may reject while execution is tainted); name/durationSeconds on each
@@ -871,62 +868,9 @@ function DM:SelectSegment(W, sessionID, sessionType)
     if self.Tick then self:Tick() end
 end
 
--- Segment menu (⌚): lazily-built session/history picker anchored under the button.
--- Rows: up to the last 20 available sessions (name + M:SS duration, checkmarked when
--- pinned), a divider, then Current / Overall (checkmarked when live + matching the
--- active config). MenuUtil.CreateContextMenu is the taint-safe 12.0 primitive; the
--- generator runs each open, so the list is always fresh. Guarded so a future API
--- rename can't throw.
-function DM:ToggleSegmentMenu(W)
-    if not W then return end
-    if not (MenuUtil and MenuUtil.CreateContextMenu) then return end
-
-    local anchor = (W.headerBtns and W.headerBtns.segment) or W.frame
-
-    MenuUtil.CreateContextMenu(anchor, function(_, root)
-        -- Stored sessions first (top of the menu). GetAvailableSessions already trims
-        -- to the last 20 (newest last), so the newest fights are nearest the button;
-        -- index is plain (a normal array).
-        local list = self:GetAvailableSessions(20)
-        if list and #list > 0 then
-            for i = 1, #list do
-                local s = list[i]
-                if s then
-                    local sid = s.sessionID
-                    local label = self:SafeSessionName(s.name)
-                    -- FormatDeathTime is the shared M:SS formatter (secret-guards the
-                    -- duration); returns (string, isSecret) -- take the string only.
-                    local dur = select(1, self.FormatDeathTime(s.durationSeconds))
-                    local text = label .. "  |cff999999(" .. dur .. ")|r"
-                    local btn = root:CreateButton(text, function()
-                        self:SelectSegment(W, sid, nil)
-                    end)
-                    -- Checkmark the pinned session. sessionID is a plain id (NeverSecret),
-                    -- safe to == compare.
-                    if btn and btn.SetIsSelected then
-                        btn:SetIsSelected(function() return W._curSessionID == sid end)
-                    end
-                end
-            end
-            root:CreateDivider()
-        end
-
-        -- Live Current / Overall at the bottom. Active when no stored session is
-        -- pinned AND the type matches the window's resolved config.
-        local cfg = self:ResolveWindowConfig(W.idx)
-        for _, sType in ipairs(SEGMENT_SESSION_TYPES) do
-            local label = self.SESSION_TYPE_NAMES[sType] or "Unknown"
-            local btn = root:CreateButton(label, function()
-                self:SelectSegment(W, nil, sType)
-            end)
-            if btn and btn.SetIsSelected then
-                btn:SetIsSelected(function()
-                    return W._curSessionID == nil and cfg ~= nil and cfg.SessionType == sType
-                end)
-            end
-        end
-    end)
-end
+-- The ⌚ segment/history picker is rendered by SegmentMenu.lua as a custom hover
+-- dropdown (DM:OpenSegmentMenu / ToggleSegmentMenu / CloseAllSegmentMenus). The data
+-- helpers above (GetAvailableSessions / SafeSessionName / SelectSegment) feed it.
 
 ---------------------------------------------------------------------------------
 -- Content-context resolver
@@ -993,6 +937,7 @@ function DM:BumpSegment()
     -- so dismiss any open view-selector too: its highlight is now stale and the live
     -- bars should show. Resolved at runtime (Selector.lua loads after Core.lua).
     if self.CloseAllSelectors then self:CloseAllSelectors() end
+    if self.CloseAllSegmentMenus then self:CloseAllSegmentMenus() end
     if DEBUG_DM then KE:Print("[DM] segment -> " .. self.db._SegSerial) end
 end
 

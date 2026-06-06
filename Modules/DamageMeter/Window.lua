@@ -239,6 +239,24 @@ function DM:CreateWindow(winIdx)
         self.db and self.db.FontOutline
     )
 
+    -- Header hover region: a full-width strip over the whole header band (title -> icons).
+    -- ApplyHeaderIcons wires its OnEnter/OnLeave to drive the mouseover-reveal, so hovering
+    -- ANYWHERE on the header reveals/holds the icons as one consistent zone (the icons,
+    -- being children, would otherwise each steal focus and flicker the reveal). It only
+    -- needs motion, so clicks propagate through and it never blocks the EditMode mover or
+    -- anything below. Height is kept in sync with the header band in LayoutWindow. Also the
+    -- clean seam for a future header-bar coloring/backdrop. Mouse is enabled on demand by
+    -- ApplyHeaderIcons (mouseover mode only) and released otherwise -- no capture leak.
+    W.headerBar = CreateFrame("Frame", nil, W.frame)
+    W.headerBar:SetPoint("TOPLEFT", W.frame, "TOPLEFT", 0, 0)
+    W.headerBar:SetPoint("TOPRIGHT", W.frame, "TOPRIGHT", 0, 0)
+    W.headerBar:SetHeight(18)
+    W.headerBar:SetFrameLevel(W.frame:GetFrameLevel() + 1)
+    W.headerBar:EnableMouse(false)
+    if W.headerBar.SetPropagateMouseClicks then
+        W.headerBar:SetPropagateMouseClicks(true)
+    end
+
     -- Window-index badge: a solid accent-colored chip (top-right) with a bright
     -- white number, shown ONLY during GUI preview / edit so the "Window N" rows in
     -- the config map unambiguously to the numbered window on screen; hidden during
@@ -290,10 +308,12 @@ function DM:CreateWindow(winIdx)
             GameTooltip:SetOwner(btn, "ANCHOR_TOP")
             GameTooltip:SetText(tooltip)
             GameTooltip:Show()
+            DM:RevealHeaderIcons(W)
         end)
         b:SetScript("OnLeave", function(btn)
             btn.icon:SetVertexColor(0.8, 0.8, 0.8)
             GameTooltip:Hide()
+            DM:HeaderIconLeave(W)
         end)
         b:SetScript("OnClick", onClick)
         return b
@@ -306,6 +326,25 @@ function DM:CreateWindow(winIdx)
         "Reset", function() DM:HeaderReset(W) end, 18)
     W.headerBtns.segment = MakeHeaderBtn("Interface\\AddOns\\KitnEssentials\\Media\\Icon\\dm_segment.tga",
         "Segment", function() DM:ToggleSegmentMenu(W) end, 36)
+
+    -- The ⌚ segment button opens its picker on HOVER (quick adjust) rather than only on
+    -- click -- the custom dropdown (SegmentMenu.lua) IS the content, so it replaces the
+    -- generic "Segment" tooltip while keeping the icon brighten. Leaving the icon
+    -- schedules a grace close so the cursor can travel up onto the panel. The OnClick
+    -- toggle (set by MakeHeaderBtn) still works as a deliberate open/close affordance.
+    do
+        local seg = W.headerBtns.segment
+        seg:SetScript("OnEnter", function(btn)
+            btn.icon:SetVertexColor(1, 1, 1)
+            DM:RevealHeaderIcons(W)
+            if DM.OpenSegmentMenu then DM:OpenSegmentMenu(W) end
+        end)
+        seg:SetScript("OnLeave", function(btn)
+            btn.icon:SetVertexColor(0.8, 0.8, 0.8)
+            DM:HeaderIconLeave(W)
+            if DM.ScheduleSegmentClose then DM:ScheduleSegmentClose(W) end
+        end)
+    end
 
     -- Apply the initial header-icon visibility / mouseover state from the DB
     -- (Task 7). ApplyHeaderIcons is idempotent and is also re-run from
@@ -340,9 +379,9 @@ function DM:CreateWindow(winIdx)
     -- W.body IS the box where bars load; it is hidden whenever the detail/selector
     -- overlay is open, so it never conflicts with their own click handling. Bars sit
     -- above it and keep their own clicks; an empty-space right-click falls to here.
-    -- SetPropagateMouseMotion lets hover (header-icon reveal) pass through to the
-    -- window frame while this still captures the right-click. DM:OnWindowRightClick
-    -- is resolved at runtime (Selector.lua loads after this file).
+    -- SetPropagateMouseMotion is retained (harmless) but no longer drives the header
+    -- reveal -- that moved to the dedicated W.headerBar region, scoped to the header
+    -- strip. DM:OnWindowRightClick is resolved at runtime (Selector.lua loads later).
     W.body:EnableMouse(true)
     if W.body.SetPropagateMouseMotion then
         W.body:SetPropagateMouseMotion(true)
@@ -464,6 +503,8 @@ function DM:LayoutWindow(W)
         W.body:ClearAllPoints()
         W.body:SetPoint("TOPLEFT", W.frame, "TOPLEFT", 0, -headerH)
         W.body:SetPoint("BOTTOMRIGHT", W.frame, "BOTTOMRIGHT", 0, 0)
+        -- Keep the header hover region spanning exactly the header band.
+        if W.headerBar then W.headerBar:SetHeight(headerH) end
         -- The detail panel covers the same area as the body; keep its top edge in
         -- sync with the header band. Its anchor was baked at EnsureDetail time, so a
         -- later font-size change would otherwise leave a gap/overlap on the next open.
@@ -576,6 +617,15 @@ function DM:ReapplyBarVisuals(W)
         end
     end
 
+    -- Segment-menu rows (SegmentMenu.lua) likewise. Pooled + lazy-built, so this is a
+    -- no-op until the ⌚ picker has been opened once for this window.
+    if W.segMenu and W.segMenu.rows then
+        local rowSize = math_max(8, (size or 12) - 1)
+        for _, row in ipairs(W.segMenu.rows) do
+            KE:ApplyFontToText(row.text, face, rowSize, outline)
+        end
+    end
+
     -- The hover quick-peek tip (Detail.lua) is a module-level singleton shared by
     -- every window and lives in Detail.lua's file scope, so it can't be reached
     -- through W here. Route the same font/texture reapply through a DM method;
@@ -606,6 +656,17 @@ end
 -- each structural pass; before the first layout the map is empty and every window
 -- uses the configured behavior (windows aren't shown until LayoutDock places them).
 ---------------------------------------------------------------------------------
+-- True when any body-covering overlay (view-selector grid / detail breakdown /
+-- segment-menu popup) is open for W. The header icons are children of W.frame, so
+-- when one of these mouse-enabled overlays steals W.frame's mouse focus the normal
+-- OnLeave path collapses them to alpha 0 and (since the cursor never re-enters
+-- W.frame) leaves the controls unreachable -- this predicate keeps them visible while
+-- an overlay is up. Single source of truth for the flag set (extend here if a 4th
+-- body overlay is ever added).
+local function _AnyOverlayOpen(W)
+    return W._selectorOpen or W._detailOpen or W._segMenuOpen
+end
+
 function DM:ApplyHeaderIcons(W)
     if not W or not W.headerBtns then return end
     local db = self.db
@@ -623,12 +684,7 @@ function DM:ApplyHeaderIcons(W)
             b:Hide()
         end
         if W._headerIconHover then
-            W.frame:SetScript("OnEnter", nil)
-            W.frame:SetScript("OnLeave", nil)
-            -- Release the mouse capture the mouseover branch turned on; the same leak
-            -- the non-mouseover branch guards against, on the hide-entirely path.
-            W.frame:EnableMouse(false)
-            W._headerIconHover = false
+            self:_UnwireHeaderHover(W)
         end
         return
     end
@@ -643,10 +699,17 @@ function DM:ApplyHeaderIcons(W)
         for _, b in pairs(W.headerBtns) do
             b:SetAlpha(0)
         end
-        if not W._headerIconHover then
-            W.frame:EnableMouse(true)
-            W.frame:SetScript("OnEnter", function() DM:SetHeaderIconAlpha(W, 1) end)
-            W.frame:SetScript("OnLeave", function() DM:SetHeaderIconAlpha(W, 0) end)
+        if not W._headerIconHover and W.headerBar then
+            -- Drive the reveal off the dedicated header-bar region (the whole strip,
+            -- title -> icons) rather than the window frame, so hovering ANYWHERE on the
+            -- header reveals/holds the icons. RevealHeaderIcons shows them; HeaderIconLeave
+            -- hides them only on a genuine exit from the strip (it re-checks
+            -- headerBar:IsMouseOver, which is geometric over the icons too -- no flicker)
+            -- and keeps them up while an overlay is open. The icons' own OnEnter/OnLeave
+            -- call the same pair, so entering/leaving directly on an icon is covered too.
+            W.headerBar:EnableMouse(true)
+            W.headerBar:SetScript("OnEnter", function() DM:RevealHeaderIcons(W) end)
+            W.headerBar:SetScript("OnLeave", function() DM:HeaderIconLeave(W) end)
             W._headerIconHover = true
         end
     else
@@ -654,13 +717,7 @@ function DM:ApplyHeaderIcons(W)
             b:SetAlpha(1)
         end
         if W._headerIconHover then
-            W.frame:SetScript("OnEnter", nil)
-            W.frame:SetScript("OnLeave", nil)
-            -- Release the mouse capture turned on for the mouseover branch; without
-            -- this the window frame keeps intercepting clicks over the header band
-            -- until /reload after mouseover mode is toggled off.
-            W.frame:EnableMouse(false)
-            W._headerIconHover = false
+            self:_UnwireHeaderHover(W)
         end
     end
 end
@@ -671,6 +728,55 @@ function DM:SetHeaderIconAlpha(W, a)
     for _, b in pairs(W.headerBtns) do
         b:SetAlpha(a)
     end
+end
+
+-- Force the header icons visible while any overlay is open, restore the at-rest alpha
+-- (0) once they all close. Called from every overlay open/close (Selector / Detail /
+-- SegmentMenu) so the icons snap to the right state immediately rather than waiting for
+-- a W.frame:OnEnter that never comes while a child overlay owns the mouse. No-op unless
+-- mouseover-reveal is active for this window (_headerIconHover is false in the
+-- always-visible and hide-entirely modes, where the alpha is owned elsewhere).
+function DM:SyncHeaderIconsToOverlayState(W)
+    if not W or not W.headerBtns or not W._headerIconHover then return end
+    self:SetHeaderIconAlpha(W, _AnyOverlayOpen(W) and 1 or 0)
+end
+
+-- Reveal the header icons (mouseover-reveal mode only -- no-op otherwise). Called from
+-- W.headerBar:OnEnter (the whole header strip is the hover zone) and from each icon's
+-- own OnEnter. The latter covers entering the strip directly onto an icon (icons sit at
+-- frame level +5, above the headerBar region, so headerBar:OnEnter wouldn't fire there).
+-- Paired with HeaderIconLeave, which owns the hide side.
+function DM:RevealHeaderIcons(W)
+    if not W or not W._headerIconHover then return end
+    self:SetHeaderIconAlpha(W, 1)
+end
+
+-- The OnLeave counterpart: hide only on a genuine exit. IsMouseOver(W.frame) is
+-- geometric -- true while the cursor is anywhere over the window (header band, an icon,
+-- the body) -- so icon->icon and icon->header keep the icons up; only leaving the window
+-- (or, while an overlay holds them open, never) hides them. W.frame:OnLeave doesn't
+-- re-fire after a child stole focus, so this icon-level handler is what catches the
+-- icon->outside case. No-op outside mouseover-reveal mode.
+function DM:HeaderIconLeave(W)
+    if not W or not W._headerIconHover then return end
+    if _AnyOverlayOpen(W) then return end
+    -- headerBar:IsMouseOver() is geometric and spans the whole header strip (title ->
+    -- icons), so it's true while the cursor is on any icon or any bare header area --
+    -- only a true exit from the strip hides the icons.
+    if W.headerBar and W.headerBar:IsMouseOver() then return end
+    self:SetHeaderIconAlpha(W, 0)
+end
+
+-- Tear down the header-bar hover wiring and release its mouse capture (so it stops
+-- intercepting clicks once mouseover-reveal is off / the icons are hidden entirely).
+-- Mirrors the old W.frame teardown the reveal used before it moved to W.headerBar.
+function DM:_UnwireHeaderHover(W)
+    if W.headerBar then
+        W.headerBar:SetScript("OnEnter", nil)
+        W.headerBar:SetScript("OnLeave", nil)
+        W.headerBar:EnableMouse(false)
+    end
+    W._headerIconHover = false
 end
 
 ---------------------------------------------------------------------------------

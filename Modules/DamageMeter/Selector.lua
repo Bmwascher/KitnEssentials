@@ -4,9 +4,9 @@
 -- ║  Purpose: In-window view-selector overlay. Right-click   ║
 -- ║           the bar box -> the body is replaced by a 2x4   ║
 -- ║           card grid of the 8 view types; clicking a card ║
--- ║           sets a per-window view override (Core:          ║
--- ║           SetWindowView) and reverts to live data. Mirror ║
--- ║           of Detail.lua's in-window overlay machinery.    ║
+-- ║           sets a per-window view override (Core:         ║
+-- ║           SetWindowView) and reverts to live data. Mirror║
+-- ║           of Detail.lua's in-window overlay machinery.   ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -200,9 +200,11 @@ end
 function DM:OpenSelector(W)
     if not W then return end
     if W._detailOpen and self.CloseDetail then self:CloseDetail(W) end
+    if W._segMenuOpen and self.CloseSegmentMenu then self:CloseSegmentMenu(W) end
     if self.HideHoverTip then self:HideHoverTip() end
     self:EnsureSelector(W)
     W._selectorOpen = true
+    if self.SyncHeaderIconsToOverlayState then self:SyncHeaderIconsToOverlayState(W) end
     if W.body then W.body:Hide() end
     W.selector:Show()
     self:LayoutSelector(W)
@@ -216,6 +218,7 @@ function DM:CloseSelector(W)
     W._selectorOpen = false
     W.selector:Hide()
     if W.body then W.body:Show() end
+    if self.SyncHeaderIconsToOverlayState then self:SyncHeaderIconsToOverlayState(W) end
 end
 
 -- Close any open selector across every window. Called from the module's teardown /
