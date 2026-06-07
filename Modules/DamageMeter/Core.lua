@@ -184,6 +184,10 @@ end
 function DM:ShowPreview()
     if not self.enabled then return end
     self._hidden = false
+    -- GUI open: bypass the HideOutOfCombat / OnlyInInstances conditions (ShouldShow
+    -- honors _guiPreview) so a user with a hide condition enabled can still see + position
+    -- the meter while configuring it. Cleared in HidePreview when the GUI closes.
+    self._guiPreview = true
     self:EnsureDock()
     self:SetWindowBadges(true)
     self:RefreshDock()
@@ -194,6 +198,11 @@ function DM:HidePreview()
     -- The dock is persistent (must NOT hide the user's real dock); only the
     -- preview-only window badges are turned off here.
     self:SetWindowBadges(false)
+    -- GUI closed: drop the preview override and re-evaluate the hide conditions so the
+    -- meter re-hides if HideOutOfCombat / OnlyInInstances now say it should. UpdateBackdrop
+    -- (Dock.lua) is resolved at runtime; guard for load order.
+    self._guiPreview = false
+    if self.UpdateBackdrop then self:UpdateBackdrop() end
 end
 
 ---------------------------------------------------------------------------------
@@ -251,6 +260,12 @@ function DM:OnEnable()
     self:RegisterEvent("ENCOUNTER_END", "OnEncounterEnd")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnCombatForceStop")
     self:RegisterEvent("UNIT_FLAGS", "OnUnitFlags")
+    -- PvP match end: arenas / battlegrounds can leave the player combat-tagged inside the
+    -- closed instance with no live fighting, so UnitAffectingCombat stays true and the
+    -- shared ticker would poll C_DamageMeter forever. Force it down on match completion and
+    -- suppress the UNIT_FLAGS auto-restart until the player zones out (mirrors EUI's PvP
+    -- match-end stop). See OnPvPMatchComplete + the _pvpMatchOver guard in OnUnitFlags.
+    self:RegisterEvent("PVP_MATCH_COMPLETE", "OnPvPMatchComplete")
     self:RegisterEvent("DAMAGE_METER_COMBAT_SESSION_UPDATED", "OnSessionUpdated")
     -- CURRENT_SESSION_UPDATED fires for the live segment during the post-combat
     -- finalization burst; route it through the same combat-gated, debounced
@@ -331,6 +346,7 @@ function DM:OnDisable()
     self:StopTicker()
     self._sessionPending = false
     self._inEncounter = false
+    self._pvpMatchOver = false
     self._activeContext = nil
     self._ctxCheckPending = false
 
@@ -382,14 +398,14 @@ end
 -- Window.lua:MakeBar).
 function DM:_RunTick()
     if self._needsFinalRefresh and not self:GroupInCombat() then
-        -- Group combat ended: final paint, drop the flag, stop the ticker.
-        self._needsFinalRefresh = false
-        if DM.Tick then DM:Tick() end
-        if self._ticker then
-            self._ticker:Cancel()
-            self._ticker = nil
-        end
-        if DEBUG_DM then KE:Print("[DM] _RunTick: group left combat -> final paint + self-cancel") end
+        -- Group combat ended: route through StopTicker (idempotent -- null-checks the
+        -- ticker, clears _needsFinalRefresh, paints) so this self-cancel path runs the SAME
+        -- combat-end funnel as the normal path, including RefreshVisibility. Without that,
+        -- a HideOutOfCombat dock would stay visible after a died-mid-pull fight ended until
+        -- the next unrelated transition happened to refresh it. Cancelling from inside the
+        -- ticker's own callback is safe (the prior inline Cancel did the same).
+        if DEBUG_DM then KE:Print("[DM] _RunTick: group left combat -> StopTicker (final paint + visibility)") end
+        self:StopTicker()
         return
     end
 
@@ -411,6 +427,12 @@ function DM:StartTicker()
         DM:_RunTick()
     end)
 
+    -- The ticker only runs in combat, so its start/stop are the canonical combat
+    -- on/off funnel for the HideOutOfCombat visibility condition: reveal the dock here
+    -- (RefreshVisibility is a no-op unless a hide condition is enabled). Resolved at
+    -- runtime (Dock.lua loads after Core.lua).
+    if self.RefreshVisibility then self:RefreshVisibility() end
+
     if DEBUG_DM then
         KE:Print("[DM] StartTicker: rate " .. tostring(rate))
     end
@@ -431,6 +453,11 @@ function DM:StopTicker()
     self._needsFinalRefresh = false
 
     if DM.Tick then DM:Tick() end
+
+    -- Combat fully ended (every stop path funnels through here): hide the dock if the
+    -- HideOutOfCombat condition is on. No-op unless a hide condition is enabled, and
+    -- self.enabled-guarded inside so an OnDisable-time stop doesn't re-show it.
+    if self.RefreshVisibility then self:RefreshVisibility() end
 
     if DEBUG_DM then
         KE:Print("[DM] StopTicker: final paint")
@@ -476,6 +503,13 @@ end
 
 -- Player entered combat: spin up the shared ticker.
 function DM:OnRegenDisabled()
+    -- Genuine new combat overrides a prior PvP match-end suppression (lets the ticker
+    -- re-arm if real fighting somehow resumes in the same instance).
+    self._pvpMatchOver = false
+    -- A hover tip that persists into combat must flip to the "secret while in combat"
+    -- message on the next poll: mark it dirty (the throttled poll only re-populates on
+    -- a dirty signal). Resolved-at-runtime field on DM read by the Detail.lua poll.
+    self._hoverTipDirty = true
     -- Close any open (out-of-combat-only) detail panel so combat shows the live bars
     -- instead of a frozen pre-combat breakdown over a now-hidden body. CloseDetail is
     -- nil-safe and a no-op when nothing is open.
@@ -505,6 +539,10 @@ end
 -- (between ENCOUNTER_START and ENCOUNTER_END) a transient REGEN_ENABLED from a
 -- boss transition is ignored -- the ENCOUNTER_END path owns the encounter stop.
 function DM:OnRegenEnabled()
+    -- Combat ended for the player: a hover tip showing the in-combat "secret" message
+    -- should re-populate with real (now-readable) data on the next poll -- mark dirty.
+    self._hoverTipDirty = true
+
     if self._inEncounter then
         if DEBUG_DM then KE:Print("[DM] PLAYER_REGEN_ENABLED -> ignored (encounter active)") end
         return
@@ -552,6 +590,9 @@ end
 function DM:OnCombatForceStop()
     if DEBUG_DM then KE:Print("[DM] PLAYER_ENTERING_WORLD -> force StopTicker") end
     self._inEncounter = false
+    -- Zoning clears any PvP match-end suppression: a new instance/world is a clean slate
+    -- for the UNIT_FLAGS auto-restart (the just-left arena no longer applies).
+    self._pvpMatchOver = false
     self:StopTicker()
     -- Zoning may change the content context (entered/left an instance) -- schedule a
     -- settled re-check (debounced; IsInInstance isn't reliable until the world loads).
@@ -562,10 +603,28 @@ end
 -- the ticker if the group is fighting and we're not already ticking, so bars
 -- populate before the player is tagged.
 function DM:OnUnitFlags()
+    -- After a PvP match completes the player stays combat-tagged in the closed instance,
+    -- so UNIT_FLAGS would keep re-arming the ticker against GroupInCombat. Suppress the
+    -- auto-restart until a genuine new combat (OnRegenDisabled) or a zone-out
+    -- (OnCombatForceStop) clears the flag -- otherwise OnPvPMatchComplete's stop is undone.
+    if self._pvpMatchOver then return end
     if self:GroupInCombat() and not self._ticker then
         if DEBUG_DM then KE:Print("[DM] UNIT_FLAGS -> group in combat, StartTicker") end
         self:StartTicker()
     end
+end
+
+-- A PvP match (arena / battleground) completed. The player can stay combat-tagged in the
+-- closed instance with no live fighting, so UnitAffectingCombat stays true and the shared
+-- ticker would poll C_DamageMeter every RefreshRate forever. Force the ticker down (the
+-- final paint settles the post-match totals) and raise _pvpMatchOver so the UNIT_FLAGS
+-- auto-restart stays suppressed until a real new combat or a zone-out clears it. Plain
+-- event with no payload read -- never a secret. Mirrors EUI's PvP match-end stop.
+function DM:OnPvPMatchComplete()
+    if DEBUG_DM then KE:Print("[DM] PVP_MATCH_COMPLETE -> force StopTicker + suppress restart") end
+    self._inEncounter = false
+    self._pvpMatchOver = true
+    self:StopTicker()
 end
 
 -- The damage-meter session changed. In combat the ticker already covers
@@ -582,6 +641,9 @@ function DM:OnSessionUpdated()
         -- secret-safe ticker path owns the repaint, so skip this out-of-combat
         -- one. Keeps in-combat painting exclusively on the ticker.
         if InCombatLockdown() then return end
+        -- A settling session means a hovered tip's numbers may have changed: mark dirty so
+        -- the throttled hover poll re-populates once (post-combat finalize window).
+        DM._hoverTipDirty = true
         if DEBUG_DM then KE:Print("[DM] DAMAGE_METER_COMBAT_SESSION_UPDATED (debounced) -> Tick") end
         if DM.Tick then DM:Tick() end
     end)
@@ -595,6 +657,8 @@ function DM:OnMeterReset()
     -- cross-reference it was built from is now stale. Resolved at runtime (Detail.lua
     -- loads after Core.lua); guarded so a load-order or version skew can't throw.
     if self.InvalidateTargetsCache then self:InvalidateTargetsCache() end
+    -- The data is wiped: a hovered tip must re-populate (or clear) on the next poll.
+    self._hoverTipDirty = true
     -- A reset empties the bars; close any open selector so the cleared bars show
     -- (DAMAGE_METER_RESET can fire from an external reset with a selector still open).
     if self.CloseAllSelectors then self:CloseAllSelectors() end
@@ -669,7 +733,7 @@ end
 -- plain numbers and the string is a normal string the caller can cache and
 -- compare. issecretvalue on the result tells the caller which path applies.
 --
--- The render layer reads self.db.ShowPerSec once before the bar loop and calls
+-- The render layer reads self.db.NumberFormat once before the bar loop and calls
 -- this file-local directly, rather than re-reading the DB per bar through a
 -- method wrapper.
 ---------------------------------------------------------------------------------
@@ -704,15 +768,27 @@ local function FormatAmount(n)
     return AbbreviateNumbers(n, _abbreviateCfg) or "0"
 end
 
--- Returns (string, isSecret): the abbreviated total, or "total | perSec" when
--- showPerSec is true and perSec is available. Concatenating two AbbreviateNumbers
--- results is documented-safe even when secret; issecretvalue on the result tells
--- the render layer whether it may dirty-check the string.
-local function FormatBarValue(total, perSec, showPerSec)
+-- Returns (string, isSecret). `mode` selects the layout (Number Format setting):
+--   "Both"   -> "total | perSec"  (both; perSec half omitted if perSec is nil)
+--   "PerSec" -> "perSec"          (rate only; falls back to total if no rate)
+--   else     -> "total"           (amount only; also the Detail breakdown's mode=false)
+-- Concatenating two AbbreviateNumbers results is documented-safe even when secret;
+-- issecretvalue on the result tells the render layer whether it may dirty-check it.
+-- The Detail breakdown/recap surfaces pass `false` as the mode (amount-only path).
+local function FormatBarValue(total, perSec, mode)
+    if mode == "PerSec" then
+        -- Rate-only. A meter type without a per-second (or a nil rate) falls back to the
+        -- total so the bar value is never blank.
+        local n = perSec or total
+        if not n then return "", false end
+        local s = FormatAmount(n)
+        return s, issecretvalue(s)
+    end
+
     if not total then return "", false end
 
     local str
-    if showPerSec and perSec then
+    if mode == "Both" and perSec then
         str = FormatAmount(total) .. " | " .. FormatAmount(perSec)
     else
         str = FormatAmount(total)

@@ -950,6 +950,10 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
 
     -- Backdrop sub-widgets greyed when BackdropEnabled is off.
     manager:SetCondition("backdrop", function() return db.BackdropEnabled ~= false end)
+    -- Line Thickness greyed unless Thin Line is on; the Custom fill-color picker greyed
+    -- unless the Bar Color mode is Custom.
+    manager:SetCondition("thinline", function() return db.BarThinLine == true end)
+    manager:SetCondition("barcustomcolor", function() return db.BarColorMode == "Custom" end)
 
     ----------------------------------------------------------------
     -- Bars -- texture + geometry.
@@ -986,7 +990,7 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     manager:Register(visSlider, "all")
     card1:AddRow(row1b, Theme.rowHeight)
 
-    local row1c = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local row1c = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
     local heightSlider = GUIFrame:CreateSlider(row1c, "Bar Height", {
         min = 8, max = 40, step = 1,
         value = db.BarHeight or 16,
@@ -1002,7 +1006,32 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     })
     row1c:AddWidget(spacingSlider, 0.5)
     manager:Register(spacingSlider, "all")
-    card1:AddRow(row1c, Theme.rowHeightLast, 0)
+    card1:AddRow(row1c, Theme.rowHeight)
+
+    -- Thin-line style: the colored fill becomes a thin strip pinned to the bottom edge
+    -- (a clean minimalist look). Line Thickness greys out when the toggle is off.
+    local row1d = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local thinChk = GUIFrame:CreateCheckbox(row1d, "Thin Line Bars", {
+        value = db.BarThinLine == true,
+        callback = function(checked)
+            db.BarThinLine = checked
+            ApplySettings()
+            manager:UpdateAll(db.Enabled ~= false)
+        end,
+    })
+    row1d:AddWidget(thinChk, 1)
+    manager:Register(thinChk, "all")
+    card1:AddRow(row1d, Theme.rowHeight)
+
+    local row1e = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local thinHSlider = GUIFrame:CreateSlider(row1e, "Line Thickness", {
+        min = 1, max = 12, step = 1,
+        value = db.BarThinLineHeight or 2,
+        callback = function(val) db.BarThinLineHeight = val; ApplySettings() end,
+    })
+    row1e:AddWidget(thinHSlider, 1)
+    manager:Register(thinHSlider, "thinline")
+    card1:AddRow(row1e, Theme.rowHeightLast, 0)
 
     yOffset = card1:GetNextOffset()
 
@@ -1012,6 +1041,7 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     local card2 = GUIFrame:CreateCard(scrollChild, "Bar Content", yOffset)
     manager:Register(card2, "all")
 
+    -- Row 1: spec icon + class-coloured names (the two "how a row reads at a glance" toggles).
     local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local iconChk = GUIFrame:CreateCheckbox(row2a, "Show Spec Icon", {
         value = db.ShowIcon ~= false,
@@ -1020,47 +1050,54 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     row2a:AddWidget(iconChk, 0.5)
     manager:Register(iconChk, "all")
 
-    local nameChk = GUIFrame:CreateCheckbox(row2a, "Show Player Name", {
-        value = db.ShowName ~= false,
-        callback = function(checked) db.ShowName = checked; ApplySettings() end,
-    })
-    row2a:AddWidget(nameChk, 0.5)
-    manager:Register(nameChk, "all")
-    card2:AddRow(row2a, Theme.rowHeight)
-
-    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local rankChk = GUIFrame:CreateCheckbox(row2b, "Show Rank", {
-        value = db.ShowRank == true,
-        callback = function(checked) db.ShowRank = checked; ApplySettings() end,
-    })
-    row2b:AddWidget(rankChk, 0.5)
-    manager:Register(rankChk, "all")
-
-    local perSecChk = GUIFrame:CreateCheckbox(row2b, "Show Per-Second", {
-        value = db.ShowPerSec ~= false,
-        callback = function(checked) db.ShowPerSec = checked; ApplySettings() end,
-    })
-    row2b:AddWidget(perSecChk, 0.5)
-    manager:Register(perSecChk, "all")
-    card2:AddRow(row2b, Theme.rowHeight)
-
-    -- The two name-related toggles share a row.
-    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local classNameChk = GUIFrame:CreateCheckbox(row2c, "Class Color Names", {
+    local classNameChk = GUIFrame:CreateCheckbox(row2a, "Class Color Names", {
         value = db.ClassColorName == true,
         callback = function(checked) db.ClassColorName = checked; ApplySettings() end,
     })
-    row2c:AddWidget(classNameChk, 0.5)
+    row2a:AddWidget(classNameChk, 0.5)
     manager:Register(classNameChk, "all")
+    card2:AddRow(row2a, Theme.rowHeight)
 
-    local realmChk = GUIFrame:CreateCheckbox(row2c, "Show Realm Names", {
+    -- Row 2: the two name toggles (player name + realm suffix).
+    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local nameChk = GUIFrame:CreateCheckbox(row2b, "Show Player Names", {
+        value = db.ShowName ~= false,
+        callback = function(checked) db.ShowName = checked; ApplySettings() end,
+    })
+    row2b:AddWidget(nameChk, 0.5)
+    manager:Register(nameChk, "all")
+
+    local realmChk = GUIFrame:CreateCheckbox(row2b, "Show Realm Names", {
         value = db.ShowRealm == true,
         callback = function(checked) db.ShowRealm = checked; ApplySettings() end,
     })
-    row2c:AddWidget(realmChk, 0.5)
+    row2b:AddWidget(realmChk, 0.5)
     manager:Register(realmChk, "all")
+    card2:AddRow(row2b, Theme.rowHeight)
+
+    -- Separator: splits the name/icon element toggles above from the number/value row below.
+    local row2sep = GUIFrame:CreateRow(card2.content, Theme.rowHeightSeparator)
+    local sep2 = GUIFrame:CreateSeparator(row2sep)
+    row2sep:AddWidget(sep2, 1)
+    manager:Register(sep2, "all")
+    card2:AddRow(row2sep, Theme.rowHeightSeparator)
+
+    -- Row 3: number format (full width -- it's the headline content control).
+    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local fmtDd = GUIFrame:CreateDropdown(row2c, "Numbers", {
+        options = {
+            { key = "Both",   text = "Amount + DPS" },
+            { key = "Amount", text = "Amount Only" },
+            { key = "PerSec", text = "DPS Only" },
+        },
+        value = db.NumberFormat or "Both",
+        callback = function(key) db.NumberFormat = key; ApplySettings() end,
+    })
+    row2c:AddWidget(fmtDd, 1)
+    manager:Register(fmtDd, "all")
     card2:AddRow(row2c, Theme.rowHeight)
 
+    -- Row 4: self pin + rank numbering.
     local row2d = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
     local selfChk = GUIFrame:CreateCheckbox(row2d, "Always Show Self", {
         value = db.AlwaysShowSelf ~= false,
@@ -1068,9 +1105,83 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     })
     row2d:AddWidget(selfChk, 0.5)
     manager:Register(selfChk, "all")
+
+    local rankChk = GUIFrame:CreateCheckbox(row2d, "Show Rank Number", {
+        value = db.ShowRank == true,
+        callback = function(checked) db.ShowRank = checked; ApplySettings() end,
+    })
+    row2d:AddWidget(rankChk, 0.5)
+    manager:Register(rankChk, "all")
     card2:AddRow(row2d, Theme.rowHeightLast, 0)
 
     yOffset = card2:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Bar Colors -- fill color mode + opacity + bar text color.
+    -- The Custom color picker greys out unless the fill mode is Custom.
+    ----------------------------------------------------------------
+    local cardColors = GUIFrame:CreateCard(scrollChild, "Bar Colors", yOffset)
+    manager:Register(cardColors, "all")
+
+    local rowCol1 = GUIFrame:CreateRow(cardColors.content, Theme.rowHeight)
+    local fillModeDd = GUIFrame:CreateDropdown(rowCol1, "Fill Color", {
+        options = {
+            { key = "Class",  text = "Class Color" },
+            { key = "Custom", text = "Custom" },
+            { key = "Theme",  text = "Theme" },
+        },
+        value = db.BarColorMode or "Class",
+        callback = function(key)
+            db.BarColorMode = key
+            ApplySettings()
+            manager:UpdateAll(db.Enabled ~= false)   -- re-evaluate the Custom-color grey
+        end,
+    })
+    rowCol1:AddWidget(fillModeDd, 0.5)
+    manager:Register(fillModeDd, "all")
+
+    -- Custom fill color. The picker exposes opacity (hasOpacity); its alpha doubles as the
+    -- fill opacity (kept in db.BarColorAlpha, in sync with the Fill Opacity slider below so
+    -- both edit the same value). RGB is stored in db.BarColor.
+    local fillColorPicker = GUIFrame:CreateColorPicker(rowCol1, "Custom Color", {
+        color = {
+            (db.BarColor and db.BarColor[1]) or 0.30,
+            (db.BarColor and db.BarColor[2]) or 0.55,
+            (db.BarColor and db.BarColor[3]) or 0.85,
+            db.BarColorAlpha or 1,
+        },
+        callback = function(r, g, b, a)
+            db.BarColor = { r, g, b }
+            db.BarColorAlpha = a
+            ApplySettings()
+        end,
+    })
+    rowCol1:AddWidget(fillColorPicker, 0.5)
+    manager:Register(fillColorPicker, "barcustomcolor")
+    cardColors:AddRow(rowCol1, Theme.rowHeight)
+
+    local rowCol2 = GUIFrame:CreateRow(cardColors.content, Theme.rowHeightLast)
+    -- Fill opacity applies to ALL modes (Class / Custom / Accent), so it stays enabled even
+    -- when the Custom picker is greyed.
+    local opacitySlider = GUIFrame:CreateSlider(rowCol2, "Fill Opacity", {
+        min = 0, max = 1, step = 0.05, isPercent = true,
+        value = db.BarColorAlpha or 1,
+        callback = function(val) db.BarColorAlpha = val; ApplySettings() end,
+    })
+    rowCol2:AddWidget(opacitySlider, 0.5)
+    manager:Register(opacitySlider, "all")
+
+    -- Bar text color (value column always; name column when NOT class-colored). Alpha is
+    -- ignored -- bar text is always opaque -- so only RGB is stored.
+    local textColorPicker = GUIFrame:CreateColorPicker(rowCol2, "Text Color", {
+        color = db.BarTextColor or { 1, 1, 1, 1 },
+        callback = function(r, g, b) db.BarTextColor = { r, g, b }; ApplySettings() end,
+    })
+    rowCol2:AddWidget(textColorPicker, 0.5)
+    manager:Register(textColorPicker, "all")
+    cardColors:AddRow(rowCol2, Theme.rowHeightLast, 0)
+
+    yOffset = cardColors:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Header Icons -- the settings / reset / segment chrome on each
@@ -1109,11 +1220,11 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     ----------------------------------------------------------------
     manager:SetCondition("hovertip", function() return db.HoverTooltip ~= false end)
 
-    local cardHoverTip = GUIFrame:CreateCard(scrollChild, "Hover Tooltip", yOffset)
+    local cardHoverTip = GUIFrame:CreateCard(scrollChild, "Tooltip on Mouseover", yOffset)
     manager:Register(cardHoverTip, "all")
 
     local rowTip1 = GUIFrame:CreateRow(cardHoverTip.content, Theme.rowHeight)
-    local hoverTipChk = GUIFrame:CreateCheckbox(rowTip1, "Show Hover Tooltip", {
+    local hoverTipChk = GUIFrame:CreateCheckbox(rowTip1, "Show Tooltip on Mouseover", {
         value = db.HoverTooltip ~= false,
         callback = function(checked)
             db.HoverTooltip = checked
@@ -1293,6 +1404,48 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
     card1:AddRow(noteRow, 65, 0)
 
     yOffset = card1:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 2: Visibility (conditional show / hide)
+    ----------------------------------------------------------------
+    local cardVis = GUIFrame:CreateCard(scrollChild, "Visibility", yOffset)
+    manager:Register(cardVis, "all")
+
+    local rowVis = GUIFrame:CreateRow(cardVis.content, Theme.rowHeight)
+    local oocChk = GUIFrame:CreateCheckbox(rowVis, "Hide Out of Combat", {
+        value = db.HideOutOfCombat == true,
+        callback = function(checked)
+            db.HideOutOfCombat = checked
+            -- Re-evaluate now; while this panel is open the preview override keeps the
+            -- meter visible, so the hide takes visible effect when the GUI closes.
+            if DM and DM.UpdateBackdrop then DM:UpdateBackdrop() end
+        end,
+    })
+    rowVis:AddWidget(oocChk, 0.5)
+    manager:Register(oocChk, "all")
+
+    local instChk = GUIFrame:CreateCheckbox(rowVis, "Only in Instances", {
+        value = db.OnlyInInstances == true,
+        callback = function(checked)
+            db.OnlyInInstances = checked
+            if DM and DM.UpdateBackdrop then DM:UpdateBackdrop() end
+        end,
+    })
+    rowVis:AddWidget(instChk, 0.5)
+    manager:Register(instChk, "all")
+    cardVis:AddRow(rowVis, Theme.rowHeight)
+
+    local visNoteRow = GUIFrame:CreateRow(cardVis.content, 50)
+    local visNote = GUIFrame:CreateText(visNoteRow,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " Both combine: the meter shows only when every enabled condition is met.\n" ..
+        KE:ColorTextByTheme("-") .. " Always visible while this panel is open or in " .. KE:ColorTextByTheme("/kes edit") .. ".",
+        50, "hide")
+    visNoteRow:AddWidget(visNote, 1)
+    manager:Register(visNote, "all")
+    cardVis:AddRow(visNoteRow, 50, 0)
+
+    yOffset = cardVis:GetNextOffset()
     return yOffset
 end
 

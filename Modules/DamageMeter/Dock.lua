@@ -20,6 +20,7 @@ local CreateFrame = CreateFrame
 local UIParent = UIParent
 local C_Timer = C_Timer
 local GetCursorPosition = GetCursorPosition
+local IsInInstance = IsInInstance
 local math_min = math.min
 local math_ceil = math.ceil
 local wipe = wipe
@@ -505,12 +506,64 @@ function DM:_ResolveDockBorderColor()
     return out
 end
 
+---------------------------------------------------------------------------------
+-- Visibility conditions
+--
+-- Optional "hide unless ..." gates layered on top of the /kedm toggle. ShouldShow is
+-- the single predicate UpdateBackdrop consults; RefreshVisibility re-runs UpdateBackdrop
+-- but ONLY when a condition is enabled (so the default pays nothing on transitions) and
+-- is called from the combat on/off funnel (StartTicker / StopTicker, Core.lua) + the GUI
+-- preview hooks. Instance changes already flow through ApplyActiveContext -> UpdateBackdrop
+-- (a context change), which re-consults ShouldShow, so OnlyInInstances needs no extra hook.
+---------------------------------------------------------------------------------
+
+-- True when the dock should be on screen given the visibility conditions. The GUI
+-- preview (_guiPreview) and the EditMode overlay always force-show, so a user with a hide
+-- condition enabled can still see + position the meter while configuring it. Combat is
+-- read via GroupInCombat (UnitAffectingCombat -- never secret); instance via IsInInstance.
+function DM:ShouldShow()
+    local db = self.db
+    if not db then return true end
+    if self._guiPreview then return true end
+    if KE.EditMode and KE.EditMode.isActive then return true end
+    if db.HideOutOfCombat and not self:GroupInCombat() then return false end
+    if db.OnlyInInstances and not IsInInstance() then return false end
+    return true
+end
+
+-- Re-evaluate the visibility conditions by re-running UpdateBackdrop -- but ONLY when a
+-- hide condition is actually enabled, so the default (no conditions) path does zero extra
+-- work on every combat/zone transition. enabled-guarded so an OnDisable-time StopTicker
+-- can't re-show the dock mid-teardown.
+function DM:RefreshVisibility()
+    if not self.enabled then return end
+    local db = self.db
+    if not db then return end
+    if db.HideOutOfCombat or db.OnlyInInstances then
+        self:UpdateBackdrop()
+    end
+end
+
 -- Sizes + skins the dock. If LayoutDock placed zero windows, the dock is hidden.
 -- Reuses self._dockBackdropCfg so the per-call backdrop config allocates no
 -- garbage on the structural path.
 function DM:UpdateBackdrop()
     local db = self.db
     if not db then return end
+
+    -- Module disabled: keep the dock hidden regardless of which caller reached here.
+    -- UpdateBackdrop is the ONLY place the dock is shown, so gating disabled here makes
+    -- every path respect OnDisable. The debounced RefreshDock already guards on enabled,
+    -- but the direct callers do not -- HidePreview (fired when the GUI closes / the page
+    -- is left) and ApplySettings both call UpdateBackdrop straight through. Without this
+    -- guard, disabling the module hides the dock via OnDisable, then closing the GUI
+    -- re-shows the dock + backdrop via HidePreview -> UpdateBackdrop (the reported
+    -- "backdrop persists after disable" bug). Bail before EnsureDock so a disabled
+    -- module never lazily builds the dock just to hide it.
+    if not self.enabled then
+        if self.dock then self.dock:Hide() end
+        return
+    end
 
     self:EnsureDock()
     local dock = self.dock
@@ -520,6 +573,11 @@ function DM:UpdateBackdrop()
     -- refresh; hiding the parent dock also hides all child windows even though
     -- RenderWindow still calls Show() on them.
     if self._hidden then dock:Hide() return end
+
+    -- Visibility conditions (HideOutOfCombat / OnlyInInstances). Single consult point;
+    -- ShouldShow force-shows during GUI preview / EditMode. When a condition fails, hide
+    -- the dock (and thus all child windows) without touching size/skin.
+    if not self:ShouldShow() then dock:Hide() return end
 
     -- Zero placed windows: nothing to wrap, hide the dock and bail. `next` on the
     -- placed-set returns nil only when LayoutDock placed no window this pass.

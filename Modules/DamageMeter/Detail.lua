@@ -145,6 +145,15 @@ function DM:OpenDetail(bar, button)
         return
     end
 
+    -- Deaths row with no usable recap: no-op rather than opening an empty
+    -- "No death recap available" panel (a feign / no-recap death simply isn't clickable,
+    -- matching the reference). OOC only -- the in-combat branch above already returned, so
+    -- GetDeathRecap (which reads C_DeathRecap, OOC-safe) runs on a plain recapID here.
+    -- W._isDeaths is stashed by RenderWindow; bar._deathRecapID by RenderBar.
+    if W._isDeaths and not self:GetDeathRecap(bar._deathRecapID) then
+        return
+    end
+
     self:EnsureDetail(W)
     W._detailSourceGUID = bar._sourceGUID
     W._detailSourceCID  = bar._sourceCreatureID
@@ -459,6 +468,7 @@ local _targetsCache = {}
 function DM:InvalidateTargetsCache()
     _targetsCache.key = nil
     _targetsCache.map = nil
+    _targetsCache.trimmed = nil
 end
 
 -- One full pass over the EnemyDamageTaken session: for every enemy combatSource
@@ -488,6 +498,7 @@ local function BuildAllPlayerTargets(session, sessionID)
     if not enemySession or not enemySession.combatSources or #enemySession.combatSources == 0 then
         _targetsCache.key = cacheKey
         _targetsCache.map = nil
+        _targetsCache.trimmed = nil
         return nil
     end
 
@@ -561,6 +572,7 @@ local function BuildAllPlayerTargets(session, sessionID)
 
     _targetsCache.key = cacheKey
     _targetsCache.map = map
+    _targetsCache.trimmed = nil   -- new generation: drop per-player trims (rebuilt lazily)
     return map
 end
 
@@ -575,13 +587,21 @@ local function BuildPlayerTargets(playerName, session, sessionID, maxTargets)
 
     local list = map[playerName]
     if not list or #list == 0 then return nil end
+    if #list <= maxTargets then return list end
 
-    if #list > maxTargets then
-        local trimmed = {}
-        for i = 1, maxTargets do trimmed[i] = list[i] end
-        return trimmed
-    end
-    return list
+    -- Cache the trimmed copy per player within the current cache generation
+    -- (_targetsCache.trimmed is dropped whenever BuildAllPlayerTargets rebuilds the map, so
+    -- it stays in sync with the session). maxTargets is the constant TIP_TGT_ROWS, so the
+    -- cache needn't key on it. Avoids re-allocating the trim on repeated hovers of the same
+    -- player; the 4 Hz hover poll is itself throttled to re-populate only on a dirty signal.
+    local tcache = _targetsCache.trimmed
+    if not tcache then tcache = {}; _targetsCache.trimmed = tcache end
+    local t = tcache[playerName]
+    if t then return t end
+    t = {}
+    for i = 1, maxTargets do t[i] = list[i] end
+    tcache[playerName] = t
+    return t
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
@@ -1419,9 +1439,18 @@ _tipPoll = CreateFrame("Frame")
 _tipPoll:Hide()
 _tipPoll:SetScript("OnUpdate", function(self, elapsed)
     _tipPollAccum = _tipPollAccum + elapsed
-    if _tipPollAccum < 0.25 then return end   -- ~4 Hz refresh is plenty for a hover peek
+    if _tipPollAccum < 0.25 then return end   -- ~4 Hz check is plenty for a hover peek
     _tipPollAccum = 0
     local bar = _tipActiveBar
     if not bar or not bar.win then self:Hide(); return end
-    DM:ShowHoverTip(bar.win, bar, false)      -- re-populate live (OOC) / keep the combat message; skip re-anchor
+    -- Throttle the EXPENSIVE re-populate (full GetSource rebuild + row fill) to genuine
+    -- data-change signals: combat-state flips, post-combat session settles, and resets all
+    -- set DM._hoverTipDirty (Core.lua). A static out-of-combat hover -- the common case --
+    -- keeps the already-correct tip shown and skips the rebuild entirely (EUI populates
+    -- once per hover; the dirty flag adds back exactly the live refreshes that matter, e.g.
+    -- numbers settling in the post-combat finalize window, or flipping to/from the in-combat
+    -- "secret" message). The cheap hide-on-stale-bar check above still runs every tick.
+    if not DM._hoverTipDirty then return end
+    DM._hoverTipDirty = false
+    DM:ShowHoverTip(bar.win, bar, false)      -- re-populate live / flip to/from the combat message; skip re-anchor
 end)

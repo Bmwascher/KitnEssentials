@@ -27,6 +27,8 @@ local RAID_CLASS_COLORS = RAID_CLASS_COLORS
 local Enum = Enum
 local math_min = math.min
 local math_max = math.max
+local math_floor = math.floor
+local math_ceil = math.ceil
 
 -- Sticky GUID -> display-name memo for the ShowRealm path. The C_DamageMeter source
 -- name resolves to "Name-Realm" while the unit is fully known but intermittently
@@ -64,6 +66,27 @@ end
 -- label ranks without rebuilding the strings per tick.
 DM.RANK_STRINGS = RANK_STRINGS
 DM.BAR_POOL_SIZE = BAR_POOL_SIZE
+
+-- Anchor a bar's StatusBar fill: the full row (normal) or a thin strip pinned to the
+-- row's bottom edge (BarThinLine mode). Thin-line keeps the row's icon + text at full
+-- size -- they anchor to the row, NOT the fill (see MakeBar / the RenderBar layout
+-- block), so a thin fill leaves them untouched -- and shrinks only the colored fill into
+-- a clean underline. snapHeight is the pixel-snapped row height; the strip is clamped to
+-- [1, snapHeight]. Plain numbers / SetPoint only -- never a secret. Called from
+-- CreateWindow's build loop and ApplyWindowGeometry (both user/structural, not per tick).
+local function ApplyFillGeometry(row, db, snapHeight)
+    row.fill:ClearAllPoints()
+    if db and db.BarThinLine then
+        local thinH = KE:PixelSnap((db and db.BarThinLineHeight) or 2)
+        if thinH < 1 then thinH = 1 end
+        if snapHeight and thinH > snapHeight then thinH = snapHeight end
+        row.fill:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
+        row.fill:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
+        row.fill:SetHeight(thinH)
+    else
+        row.fill:SetAllPoints(row)
+    end
+end
 
 ---------------------------------------------------------------------------------
 -- Bar row factory
@@ -137,9 +160,12 @@ local function MakeBar(parent, db)
     KE:ApplyFontToText(row.name, fontFace, fontSize, fontOutline)
 
     -- Value: right-justified ("total | perSec" string built by the render
-    -- layer; safe to concatenate even when secret).
+    -- layer; safe to concatenate even when secret). Anchored to the ROW (not row.fill)
+    -- for vertical centering so it stays full-height-centered in BarThinLine mode (where
+    -- the fill is only a bottom strip); identical to row.fill in normal mode (fill ==
+    -- row), so this is a no-op for the default look.
     row.value = row.fill:CreateFontString(nil, "OVERLAY")
-    row.value:SetPoint("RIGHT", row.fill, "RIGHT", -3, 0)
+    row.value:SetPoint("RIGHT", row, "RIGHT", -3, 0)
     row.value:SetJustifyH("RIGHT")
     KE:ApplyFontToText(row.value, fontFace, fontSize, fontOutline)
 
@@ -176,6 +202,7 @@ local function MakeBar(parent, db)
     bar._cachedName = nil
     bar._rawName = nil
     bar._cachedVal = nil
+    bar._cachedValColorTbl = nil   -- last db.BarTextColor table ref applied to row.value (value-color dirty key)
     bar._cachedSlot = nil
     bar._layoutKey = nil
     bar._iconShown = false
@@ -422,6 +449,12 @@ function DM:CreateWindow(winIdx)
         local new = (self2:GetVerticalScroll() or 0) - delta * stride
         if new < 0 then new = 0 elseif new > maxS then new = maxS end
         self2:SetVerticalScroll(new)
+        -- Re-render this window so rows revealed by the scroll get filled. With viewport
+        -- culling (RenderWindow) only the in-view rows are rendered each tick, so a row
+        -- scrolled into view would be blank/stale without this. RenderWindow re-reads the
+        -- new scroll offset to recompute which slots are visible; the session read it does
+        -- is pcall'd + secret-safe, so calling it outside the ticker is fine.
+        if DM.RenderWindow then DM:RenderWindow(W) end
     end)
 
     -- Pixel-snapped row geometry so bars sit on the physical pixel grid.
@@ -456,11 +489,16 @@ function DM:CreateWindow(winIdx)
         -- Square icon sized to the (snapped) row height.
         row.iconFrame:SetSize(snapHeight, snapHeight)
 
+        -- Fill anchor: full row, or a thin bottom strip in BarThinLine mode.
+        ApplyFillGeometry(row, self.db, snapHeight)
+
         -- rank/name anchor left after the icon; resolved fully in the render
         -- chunk (which knows ShowIcon/ShowRank). Provide a sane default anchor
-        -- so the row is laid out even before first render.
+        -- so the row is laid out even before first render. Anchored to the ROW (not
+        -- row.fill) so vertical centering holds in BarThinLine mode; identical in
+        -- normal mode (fill == row).
         row.rank:ClearAllPoints()
-        row.rank:SetPoint("LEFT", row.fill, "LEFT", 3, 0)
+        row.rank:SetPoint("LEFT", row, "LEFT", 3, 0)
         row.name:ClearAllPoints()
         row.name:SetPoint("LEFT", row.iconFrame, "RIGHT", 3, 0)
         row.name:SetPoint("RIGHT", row.value, "LEFT", -3, 0)
@@ -595,6 +633,14 @@ function DM:ApplyWindowGeometry(W)
         end
     end
 
+    -- Re-apply each bar's fill geometry (full row vs thin-line bottom strip) on every
+    -- settings apply: BarThinLine / BarThinLineHeight can toggle without snapHeight
+    -- changing, so this isn't covered by the dirty-gate above. Cheap (user-driven, not
+    -- per tick); snapHeight is the live snapped row height clamp for the strip.
+    for i = 1, BAR_POOL_SIZE do
+        ApplyFillGeometry(W.bars[i].row, db, snapHeight)
+    end
+
     -- Header band + content height (VisibleBars) absorb font-size / bar-count
     -- changes; LayoutWindow is idempotent + dirty-gated.
     self:LayoutWindow(W)
@@ -613,11 +659,21 @@ function DM:ReapplyBarVisuals(W)
 
     KE:ApplyFontToText(W.header, face, size, outline)
     for i = 1, BAR_POOL_SIZE do
-        local row = W.bars[i].row
+        local bar = W.bars[i]
+        local row = bar.row
         row.fill:SetStatusBarTexture(texPath)
         KE:ApplyFontToText(row.rank, face, size, outline)
         KE:ApplyFontToText(row.name, face, size, outline)
         KE:ApplyFontToText(row.value, face, size, outline)
+        -- Drop the per-bar color dirty caches so the next Tick repaints fill / name / value
+        -- color with the live BarColorMode / BarColor / BarColorAlpha / BarTextColor (all
+        -- GUI-only -- the per-attribute caches in RenderBar wouldn't otherwise notice). The
+        -- value-color nil also matters because ApplyFontToText above resets the FontString
+        -- color, so RenderBar must re-apply BarTextColor on the next tick.
+        bar._cachedColorClass = nil
+        bar._cachedNameColorClass = nil
+        bar._cachedNameColorOn = nil
+        bar._cachedValColorTbl = nil
     end
 
     -- The detail panel (Detail.lua) is lazily built once on first bar click, so it
@@ -955,18 +1011,38 @@ function DM:RenderWindow(W)
         end
     end
 
+    -- Viewport culling. Only rows whose slot intersects the visible scroll window are
+    -- RENDERED (RenderBar = SetValue interpolation re-arm + secret-aware SetText); rows
+    -- scrolled out of view are just hidden, skipping their per-tick render work. This is
+    -- the steady-state win in a dock pane SHORTER than the bar list (a raid with many
+    -- sources, stacked into a short pane). When every row fits -- a standalone window or a
+    -- tall pane self-sizes so count*stride <= viewH -- the range is the full 1..count, so
+    -- this is identical to rendering all (no behavior change for the common case). A 1-row
+    -- margin each side keeps a partially scrolled row painted. The mouse-wheel handler
+    -- (CreateWindow) re-renders this window on scroll so a row revealed by scrolling is
+    -- filled before it shows. stride/viewH/scroll/count are all plain numbers -- never a
+    -- secret (only the amount FIELDS are secret, and those go through RenderBar's setters).
+    local firstVis, lastVis = 1, count
+    if viewH > 0 and count * stride > viewH + 0.5 then
+        local scroll = (W.body and W.body:GetVerticalScroll()) or 0
+        firstVis = math_max(1, math_floor(scroll / stride))
+        lastVis = math_min(count, math_ceil((scroll + viewH) / stride) + 1)
+    end
+
     -- maxAmount may be secret in combat; SetMinMaxValues accepts it, and the
     -- per-bar `or 1` fallback in RenderBar hardens against a malformed session
-    -- that omits it. Read once here and pass down. Rows 1..count are filled +
-    -- shown; everything past count is hidden (no stale bar lingers).
+    -- that omits it. Read once here and pass down. Rows in [firstVis, lastVis] are
+    -- filled + shown; everything else (above the fold, below count, or past count) is
+    -- hidden (no stale bar lingers).
     local maxAmount = session.maxAmount
     for i = 1, self.BAR_POOL_SIZE do
         local bar = W.bars[i]
         local row = bar.row
-        if i <= count then
+        if i >= firstVis and i <= lastVis then
             -- The last slot shows the pinned player at their real rank when
             -- AlwaysShowSelf pinned one; otherwise the slot's own source. RenderBar's
-            -- `rank` arg is the displayed rank.
+            -- `rank` arg is the displayed rank. (The pin lives in slot `count`, so it
+            -- renders when the user scrolls the bottom of the list into view.)
             local src, rank = sources[i], i
             if pinSource and i == count then
                 src, rank = pinSource, pinRank
@@ -1029,14 +1105,32 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         row.fill:SetValue(src.totalAmount or 0, Enum.StatusBarInterpolation.ExponentialEaseOut)
     end
 
-    -- Fill color (dirty-cached on classFilename, which is NEVER secret). Falls
-    -- back to neutral grey for an unknown/absent class. The bar fill color only
-    -- changes when the source's class changes, so it stays inside the dirty cache.
+    -- Fill color. BarColorMode: Class (per-source class color), Custom (db.BarColor),
+    -- Theme (the theme accent color). Dirty-keyed so a steady config does NO per-tick
+    -- SetStatusBarColor: for Custom/Theme the color is class-independent, so the key is a
+    -- mode sentinel ("\1"/"\2", which can't collide with a class filename); for Class it's
+    -- the (NEVER-secret) class filename. The Custom color, Theme accent, and BarColorAlpha
+    -- all change only via the GUI, where ReapplyBarVisuals nils _cachedColorClass so the next
+    -- tick repaints. Falls back to neutral grey for an unknown/absent class. classFilename
+    -- is never secret -> taint-safe key + lookup. NOTE: the theme accent MUST be fetched via
+    -- KE:GetAccentColor("theme") -- the no-arg call defaults to "custom" mode and returns
+    -- white (Core/Colors.lua), which is the bug that made Theme mode paint white bars.
     local classFile = src.classFilename
-    if bar._cachedColorClass ~= classFile then
-        bar._cachedColorClass = classFile
-        local c = classFile and RAID_CLASS_COLORS[classFile]
-        row.fill:SetStatusBarColor(c and c.r or 0.6, c and c.g or 0.6, c and c.b or 0.6)
+    local colorMode = db.BarColorMode or "Class"
+    local colorKey = (colorMode == "Custom" and "\1") or (colorMode == "Theme" and "\2") or classFile or "?"
+    if bar._cachedColorClass ~= colorKey then
+        bar._cachedColorClass = colorKey
+        local r, g, b
+        if colorMode == "Custom" then
+            local bc = db.BarColor
+            r, g, b = (bc and bc[1]) or 0.6, (bc and bc[2]) or 0.6, (bc and bc[3]) or 0.6
+        elseif colorMode == "Theme" then
+            r, g, b = KE:GetAccentColor("theme")
+        else
+            local c = classFile and RAID_CLASS_COLORS[classFile]
+            r, g, b = c and c.r or 0.6, c and c.g or 0.6, c and c.b or 0.6
+        end
+        row.fill:SetStatusBarColor(r, g, b, db.BarColorAlpha or 1)
     end
 
     -- Name color, dirty-cached on (classFilename, ClassColorName) -- both non-secret.
@@ -1048,15 +1142,15 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
     if bar._cachedNameColorClass ~= classFile or bar._cachedNameColorOn ~= nameColorOn then
         bar._cachedNameColorClass = classFile
         bar._cachedNameColorOn = nameColorOn
-        if nameColorOn then
-            local nc = classFile and RAID_CLASS_COLORS[classFile]
-            if nc then
-                row.name:SetTextColor(nc.r, nc.g, nc.b)
-            else
-                row.name:SetTextColor(1, 1, 1)
-            end
+        local nc = nameColorOn and classFile and RAID_CLASS_COLORS[classFile]
+        if nc then
+            row.name:SetTextColor(nc.r, nc.g, nc.b)
         else
-            row.name:SetTextColor(1, 1, 1)
+            -- Not class-tinted (toggle off, or an unknown/enemy class with no entry):
+            -- use the configured bar text color (db.BarTextColor; white default). Changing
+            -- BarTextColor in the GUI nils this cache via ReapplyBarVisuals so it repaints.
+            local t = db.BarTextColor
+            row.name:SetTextColor((t and t[1]) or 1, (t and t[2]) or 1, (t and t[3]) or 1)
         end
     end
 
@@ -1096,7 +1190,9 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         -- font) so the icon/name to its right start at a deterministic x.
         local gutter = KE:PixelSnap((db.FontSize or 12) + 8)
         row.rank:ClearAllPoints()
-        row.rank:SetPoint("LEFT", row.fill, "LEFT", 3, 0)
+        -- Anchor to the ROW (not row.fill) so vertical centering survives BarThinLine mode
+        -- (thin fill = bottom strip); identical to row.fill in normal mode (fill == row).
+        row.rank:SetPoint("LEFT", row, "LEFT", 3, 0)
         row.rank:SetWidth(showRank and gutter or 1)
 
         -- Icon frame: right of the rank gutter when rank is shown, else flush left.
@@ -1115,7 +1211,9 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         elseif showRank then
             row.name:SetPoint("LEFT", row.rank, "RIGHT", 3, 0)
         else
-            row.name:SetPoint("LEFT", row.fill, "LEFT", 3, 0)
+            -- Flush at the row's left edge (anchored to the ROW, not row.fill, so it stays
+            -- centered in BarThinLine mode; equal to row.fill in normal mode).
+            row.name:SetPoint("LEFT", row, "LEFT", 3, 0)
         end
         row.name:SetPoint("RIGHT", row.value, "LEFT", -3, 0)
     end
@@ -1183,9 +1281,9 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
 
     -- Value (secret-aware). FormatBarValue returns (string, isSecret); the string
     -- is secret in combat (built from secret amounts). Same set-unconditionally /
-    -- null-cache contract as the name. ShowPerSec (read once) gates the per-second
-    -- half: when false the perSec arg short-circuits without touching the secret
-    -- amountPerSecond.
+    -- null-cache contract as the name. NumberFormat (read once) gates the per-second
+    -- half: only the Both / PerSec modes pass the perSec arg, so an Amount-only config
+    -- never touches the secret amountPerSecond.
     -- Deaths show the death time (M:SS) instead of amount|perSec, and Overall
     -- deaths show nothing (cumulative time across segments isn't meaningful --
     -- mirrors EllesmereUI). FormatDeathTime / FormatBarValue both return
@@ -1199,11 +1297,15 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
             v, vIsSecret = self.FormatDeathTime(src.deathTimeSeconds)
         end
     else
-        local showPerSec = db.ShowPerSec
+        -- Number Format: "Both" -> amount | dps, "PerSec" -> dps only, else amount only.
+        -- Only read the (secret-in-combat) amountPerSecond when the mode actually shows it,
+        -- so an Amount-only config never touches it. FormatBarValue is secret-safe.
+        local mode = db.NumberFormat or "Both"
+        local needPerSec = (mode == "Both" or mode == "PerSec")
         v, vIsSecret = self.FormatBarValue(
             src.totalAmount,
-            showPerSec and src.amountPerSecond or nil,
-            showPerSec
+            needPerSec and src.amountPerSecond or nil,
+            mode
         )
     end
     if vIsSecret then
@@ -1212,6 +1314,18 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
     elseif v ~= bar._cachedVal then
         bar._cachedVal = v
         row.value:SetText(v)
+    end
+
+    -- Value text color (db.BarTextColor; the value column is never class-tinted). Set HERE
+    -- per tick -- not only in ReapplyBarVisuals -- so a saved non-white color is correct on
+    -- the FIRST paint (ReapplyBarVisuals isn't called at enable; CreateAllWindows -> Tick is).
+    -- Dirty-cached on the table reference: the GUI replaces db.BarTextColor with a fresh
+    -- table on edit, and ReapplyBarVisuals nils this cache after re-applying the font (which
+    -- resets the FontString color), so both a color change and a font change repaint next tick.
+    local tcol = db.BarTextColor
+    if bar._cachedValColorTbl ~= tcol then
+        bar._cachedValColorTbl = tcol
+        row.value:SetTextColor((tcol and tcol[1]) or 1, (tcol and tcol[2]) or 1, (tcol and tcol[3]) or 1)
     end
 
     -- Rank: "N." label, dirty-cached on the displayed rank (i, passed from the

@@ -1536,6 +1536,11 @@ local Defaults = {
             MaxWindows = 5,
             AlwaysShowSelf = true,      -- pin the player to the last visible slot when off-list
 
+            -- Visibility conditions (independent; ALL enabled conditions must pass for the
+            -- meter to show). GUI preview / EditMode always force-show regardless.
+            HideOutOfCombat = false,    -- show only while the player/group is in combat
+            OnlyInInstances = false,    -- show only inside a dungeon / raid / arena / BG / scenario
+
             -- Bar appearance (flat, KE convention)
             BarHeight = 16,
             BarSpacing = 2,
@@ -1549,9 +1554,24 @@ local Defaults = {
             ShowName = true,
             ShowRealm = false,          -- false: strip the "-Realm" suffix from cross-realm names
             ClassColorName = false,
-            ShowPerSec = true,
+            -- Number Format (replaces the old ShowPerSec boolean): "Both" = amount | dps,
+            -- "Amount" = amount only, "PerSec" = rate only.
+            NumberFormat = "Both",
             ShowPercent = false,
             VisibleBars = 10,
+
+            -- Bar fill color: "Class" (per-source class color), "Custom" (BarColor),
+            -- "Theme" (the theme accent color). BarColorAlpha is the fill opacity (0..1).
+            BarColorMode = "Class",
+            BarColor = { 0.30, 0.55, 0.85 },
+            BarColorAlpha = 1,
+            -- Bar text color: the value column always; the name column when NOT class-tinted.
+            BarTextColor = { 1, 1, 1 },
+            -- Thin-line bar style: the colored fill is a thin strip (BarThinLineHeight px)
+            -- pinned to the row's bottom edge instead of the full row; the icon + text
+            -- stay full size.
+            BarThinLine = false,
+            BarThinLineHeight = 2,
 
             -- Header icons (segment / reset / settings) — Phase 4 detail surface
             ShowHeaderIcons = true,
