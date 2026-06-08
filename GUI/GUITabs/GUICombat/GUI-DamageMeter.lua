@@ -185,8 +185,8 @@ local function BuildGeneralTab(scrollChild, yOffset, db, manager)
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " Drag the dock in " .. KE:ColorTextByTheme("/kes edit") ..
         " (disabled while locked). Resize panes by dragging the gaps between windows.\n" ..
-        KE:ColorTextByTheme("-") .. " " .. KE:ColorTextByTheme("/kedm") ..
-        " toggles the dock; " .. KE:ColorTextByTheme("/kedm reset") .. " clears all segments.",
+        KE:ColorTextByTheme("-") .. " " .. KE:ColorTextByTheme("/kes dm") ..
+        " toggles the dock; " .. KE:ColorTextByTheme("/kes dm reset") .. " clears all segments.",
         76, "hide")
     dnRow:AddWidget(dnText, 1)
     manager:Register(dnText, "all")

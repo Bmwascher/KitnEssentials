@@ -509,7 +509,7 @@ end
 ---------------------------------------------------------------------------------
 -- Visibility conditions
 --
--- Optional "hide unless ..." gates layered on top of the /kedm toggle. ShouldShow is
+-- Optional "hide unless ..." gates layered on top of the /kes dm toggle. ShouldShow is
 -- the single predicate UpdateBackdrop consults; RefreshVisibility re-runs UpdateBackdrop
 -- but ONLY when a condition is enabled (so the default pays nothing on transitions) and
 -- is called from the combat on/off funnel (StartTicker / StopTicker, Core.lua) + the GUI
@@ -568,7 +568,7 @@ function DM:UpdateBackdrop()
     self:EnsureDock()
     local dock = self.dock
 
-    -- Runtime hide (/kedm toggle sets self._hidden). UpdateBackdrop is the only
+    -- Runtime hide (/kes dm toggle sets self._hidden). UpdateBackdrop is the only
     -- place the dock is shown, so gating here keeps it hidden across every
     -- refresh; hiding the parent dock also hides all child windows even though
     -- RenderWindow still calls Show() on them.

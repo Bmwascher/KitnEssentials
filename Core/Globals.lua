@@ -132,6 +132,18 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
         return
     end
 
+    -- /kes dm <...> routes the rest to the Damage Meter module's slash handler
+    -- ("reset" clears sessions; anything else toggles the dock). The module mixes
+    -- HandleSlash on DM; nil-guarded so a disabled/unbuilt module is a no-op.
+    local dmRest = msg:match("^[Dd][Mm]%s*(.*)$")
+    if dmRest then
+        local dm = KitnEssentials and KitnEssentials:GetModule("DamageMeter", true)
+        if dm and dm.HandleSlash then
+            dm:HandleSlash(dmRest)
+        end
+        return
+    end
+
     msg = msg:lower()
     if msg == "" or msg == "gui" then
         if KE.GUIFrame then

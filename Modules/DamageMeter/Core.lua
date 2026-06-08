@@ -206,11 +206,11 @@ function DM:HidePreview()
 end
 
 ---------------------------------------------------------------------------------
--- Slash command: /kedm
+-- Slash command: /kes dm <...>
 --
--- Registered via AceConsole (the module mixes in AceConsole-3.0), so no SLASH_*
--- global is declared. Subcommands: toggle (show/hide dock), reset (clear all
--- combat sessions). Bare /kedm toggles the dock.
+-- Routed from Core/Globals.lua's /kes dispatcher to DM:HandleSlash (no standalone
+-- chat command is registered). Subcommands: reset (clear all combat sessions);
+-- anything else -- including bare "/kes dm" or "/kes dm toggle" -- toggles the dock.
 ---------------------------------------------------------------------------------
 
 function DM:ToggleDock()
@@ -239,8 +239,8 @@ end
 function DM:OnInitialize()
     self:UpdateDB()
     self:SetEnabledState(false)
-    -- AceConsole (mixed in at NewModule) — available in OnInitialize, runs once.
-    self:RegisterChatCommand("kedm", "HandleSlash")
+    -- Slash handling lives under "/kes dm <...>" -- Core/Globals.lua's /kes dispatcher
+    -- routes the "dm" subcommand to DM:HandleSlash. No standalone chat command here.
 end
 
 function DM:OnEnable()
