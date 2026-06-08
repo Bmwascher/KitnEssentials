@@ -510,6 +510,12 @@ function DM:OnRegenDisabled()
     -- message on the next poll: mark it dirty (the throttled poll only re-populates on
     -- a dirty signal). Resolved-at-runtime field on DM read by the Detail.lua poll.
     self._hoverTipDirty = true
+    -- New fight = new enemy set: drop the hover-tip Targets cache. It is keyed on the
+    -- live session, a CONSTANT for the unpinned Current view, so the dirty flag alone
+    -- can't force a rebuild -- without this wipe the Targets sub-section serves the PRIOR
+    -- fight's enemies on the next out-of-combat hover (or stays hidden if the prior fight
+    -- had none). Mirrors EllesmereUI's per-combat wipe; guarded for load order.
+    if self.InvalidateTargetsCache then self:InvalidateTargetsCache() end
     -- Close any open (out-of-combat-only) detail panel so combat shows the live bars
     -- instead of a frozen pre-combat breakdown over a now-hidden body. CloseDetail is
     -- nil-safe and a no-op when nothing is open.
@@ -542,6 +548,10 @@ function DM:OnRegenEnabled()
     -- Combat ended for the player: a hover tip showing the in-combat "secret" message
     -- should re-populate with real (now-readable) data on the next poll -- mark dirty.
     self._hoverTipDirty = true
+    -- Combat end is a Targets-cache boundary too (the sub-section is out-of-combat-only):
+    -- drop it so the post-fight hover rebuilds against THIS fight's enemies, not the stale
+    -- constant-keyed map. Mirrors EllesmereUI (wipes on both REGEN_DISABLED + ENABLED).
+    if self.InvalidateTargetsCache then self:InvalidateTargetsCache() end
 
     if self._inEncounter then
         if DEBUG_DM then KE:Print("[DM] PLAYER_REGEN_ENABLED -> ignored (encounter active)") end
@@ -941,8 +951,30 @@ end
 function DM:SelectSegment(W, sessionID, sessionType)
     W._curSessionID = sessionID
     if sessionID == nil and sessionType ~= nil then
-        local cfg = self:ResolveWindowConfig(W.idx)
-        if cfg then cfg.SessionType = sessionType end
+        -- Persist the chosen SessionType into the LIVE context's OWN entry, copy-on-write.
+        -- ResolveWindowConfig falls back to the shared Contexts.Default table for any
+        -- context the user hasn't configured, so writing cfg.SessionType through it would
+        -- bleed this pick into every other unconfigured context (and persist in SV). So
+        -- materialize the per-context entry from Default first (mirrors the GUI's
+        -- writeField in GUI-DamageMeter.lua), then write only this context's SessionType.
+        -- When the live context IS Default, the entry already exists and this is a plain
+        -- write to Default -- unchanged behavior.
+        local windows = self.db and self.db.Windows
+        local window = windows and windows[W.idx]
+        if window and window.Contexts then
+            local ctx = self:GetActiveContext()
+            local def = window.Contexts.Default
+            local entry = window.Contexts[ctx]
+            if not entry then
+                entry = {
+                    Enabled = (def and def.Enabled) ~= false,
+                    MeterType = (def and def.MeterType) or Enum.DamageMeterType.DamageDone,
+                    SessionType = (def and def.SessionType) or Enum.DamageMeterSessionType.Current,
+                }
+                window.Contexts[ctx] = entry
+            end
+            entry.SessionType = sessionType
+        end
     end
     if self.CloseDetail then self:CloseDetail(W) end
     if self.Tick then self:Tick() end
@@ -1128,12 +1160,45 @@ end
 -- instant these fire, so apply immediately (no debounce) -- a delay would only lag the
 -- Dungeon<->Mythic+ swap, and routing through the debounce could let a pending zone
 -- check swallow it. Fires at most once per keystone, so no coalescing is needed.
-function DM:OnChallengeEvent()
+function DM:OnChallengeEvent(event)
     -- A keystone start/complete/reset is a hard segment boundary (covers re-running a
     -- key, where the content context stays "Mythic+" so the context compare alone
     -- wouldn't catch it). A first key start may double-bump with the context change
     -- in ApplyActiveContext -- harmless (the override clears either way).
     self:BumpSegment()
+
+    -- Keystone START begins a fresh dungeon run. The "Overall" session
+    -- (Enum.DamageMeterSessionType.Overall) is a CUMULATIVE bucket the game keeps
+    -- until something calls ResetAllCombatSessions -- there is no per-key auto-reset
+    -- in the C_DamageMeter contract. Without this, "Overall" (and a window pinned to a
+    -- prior session) carries the PREVIOUS key's data, incl. its deaths, into the new
+    -- run. Reset on START only: resetting on COMPLETED/RESET would wipe a just-finished
+    -- run the user is still reviewing. Standalone meters reset at this same boundary so
+    -- "Overall" means "this run".
+    if event == "CHALLENGE_MODE_START" then
+        if self.windows_rt then
+            for _, W in pairs(self.windows_rt) do
+                -- ResetAllCombatSessions invalidates every sessionID, so a window still
+                -- pinned (W._curSessionID) to a prior-key session would read a dead id.
+                -- Drop the pin so it falls back to the live Current/Overall session.
+                -- Runtime-only field (not persisted), safe to clear unconditionally.
+                W._curSessionID = nil
+                -- Close a detail panel keyed to the about-to-be-wiped session (mirrors
+                -- HeaderReset's teardown). Resolved at runtime; guarded for load order.
+                if W._detailOpen and self.CloseDetail then self:CloseDetail(W) end
+            end
+        end
+        if C_DamageMeter and C_DamageMeter.ResetAllCombatSessions then
+            pcall(C_DamageMeter.ResetAllCombatSessions)
+        end
+        -- The hover-tip Targets cache cross-references the now-wiped data.
+        if self.InvalidateTargetsCache then self:InvalidateTargetsCache() end
+        -- Repaint the emptied bars now: ApplyActiveContext below early-returns when the
+        -- content context is unchanged (a key RE-RUN stays "Mythic+"), so it can't be
+        -- relied on to paint after the reset. BumpSegment already closed selectors/menus.
+        if self.Tick then self:Tick() end
+    end
+
     self:ApplyActiveContext()
 end
 
