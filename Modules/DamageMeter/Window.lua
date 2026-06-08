@@ -269,14 +269,26 @@ function DM:CreateWindow(winIdx)
         W.frame:SetFrameStrata(self.db.Strata)
     end
 
-    -- Header title FontString. The render layer sets the live text.
+    -- Header meter-type glyph (left of the title). The render layer assigns its texture
+    -- from the live MeterType (self.METER_TYPE_ICONS); its size tracks the header font in
+    -- LayoutWindow. The title FontString anchors to its right so they read as one
+    -- "[icon] Label" unit. Hidden until the first RenderWindow assigns a type.
+    W.headerIcon = W.frame:CreateTexture(nil, "OVERLAY")
+    W.headerIcon:SetPoint("TOPLEFT", W.frame, "TOPLEFT", 4, -2)
+    W.headerIcon:Hide()
+
+    -- Header title FontString. The render layer sets the live text. Sized by the
+    -- HeaderFontSize override, which falls back to the shared FontSize when unset -- so an
+    -- existing config keeps its current header size until the new Header Text Size slider
+    -- is touched (the bar text stays on FontSize). The anchor is re-set authoritatively by
+    -- RenderWindow (to the icon's right, or flush-left when the type has no glyph).
     W.header = W.frame:CreateFontString(nil, "OVERLAY")
-    W.header:SetPoint("TOPLEFT", W.frame, "TOPLEFT", 4, -2)
+    W.header:SetPoint("LEFT", W.headerIcon, "RIGHT", 3, 0)
     W.header:SetJustifyH("LEFT")
     KE:ApplyFontToText(
         W.header,
         self.db and self.db.FontFace,
-        self.db and self.db.FontSize,
+        self.db and ((self.db.HeaderFontSize or self.db.FontSize) or 12),
         self.db and self.db.FontOutline
     )
 
@@ -543,24 +555,27 @@ end
 ---------------------------------------------------------------------------------
 function DM:LayoutWindow(W)
     local db = self.db
-    local fontSize = (db and db.FontSize) or 12
+    -- The header band + meter-type glyph track the HEADER font size (the per-header
+    -- override, falling back to the shared FontSize when unset). Bar TEXT size (FontSize)
+    -- drives row layout via the snapped stride, not this band.
+    local headerFontSize = (db and (db.HeaderFontSize or db.FontSize)) or 12
     local visibleDB = (db and db.VisibleBars) or 10
     local stride = W._snapStride or 1
 
-    -- Input-identity short-circuit. The header band and content height derive ONLY
-    -- from FontSize, VisibleBars, and the snapped stride -- all plain numbers, never
+    -- Input-identity short-circuit. The header band derives ONLY from HeaderFontSize, and
+    -- the content height from VisibleBars + the snapped stride -- all plain numbers, never
     -- secret. RenderWindow calls this every tick; when none of those changed the
     -- PixelSnap / min / multiply below reproduce the identical result, so skip them.
     -- ApplyWindowGeometry updates _snapStride before calling here, so keying on it
     -- keeps a bar-size change from being short-circuited away.
-    if W._lwFontSize == fontSize and W._lwVisibleBars == visibleDB and W._lwStride == stride then
+    if W._lwHeaderFontSize == headerFontSize and W._lwVisibleBars == visibleDB and W._lwStride == stride then
         return
     end
-    W._lwFontSize, W._lwVisibleBars, W._lwStride = fontSize, visibleDB, stride
+    W._lwHeaderFontSize, W._lwVisibleBars, W._lwStride = headerFontSize, visibleDB, stride
 
-    -- Fixed header band (font-size driven, snapped). The header FontString is
+    -- Fixed header band (header-font-size driven, snapped). The header FontString is
     -- anchored TOPLEFT inside this band; the body starts immediately below it.
-    local headerH = KE:PixelSnap(fontSize + 6)
+    local headerH = KE:PixelSnap(headerFontSize + 6)
 
     -- Body height fits VisibleBars rows (clamped to the pool). Guard a 0 stride.
     local visible = math_min(visibleDB, BAR_POOL_SIZE)
@@ -576,6 +591,15 @@ function DM:LayoutWindow(W)
         W.body:SetPoint("BOTTOMRIGHT", W.frame, "BOTTOMRIGHT", 0, 0)
         -- Keep the header hover region spanning exactly the header band.
         if W.headerBar then W.headerBar:SetHeight(headerH) end
+        -- The meter-type glyph sits a bit larger than the header text and is vertically
+        -- centered in the band -- anchored to the header strip (W.headerBar spans exactly
+        -- the band), so it tracks the band height without any manual offset math.
+        if W.headerIcon and W.headerBar then
+            local iconSize = headerFontSize + 4
+            W.headerIcon:SetSize(iconSize, iconSize)
+            W.headerIcon:ClearAllPoints()
+            W.headerIcon:SetPoint("LEFT", W.headerBar, "LEFT", 4, 0)
+        end
         -- The detail panel covers the same area as the body; keep its top edge in
         -- sync with the header band. Its anchor was baked at EnsureDetail time, so a
         -- later font-size change would otherwise leave a gap/overlap on the next open.
@@ -655,10 +679,17 @@ function DM:ReapplyBarVisuals(W)
     local db = self.db
     local face = db and db.FontFace
     local size = db and db.FontSize
+    -- Header text has its own size (falls back to the bar FontSize when the override is
+    -- unset); bars/detail/selector keep `size`. LayoutWindow re-sizes the header glyph.
+    local headerSize = db and ((db.HeaderFontSize or db.FontSize) or 12)
     local outline = db and db.FontOutline
     local texPath = KE:GetStatusbarPath(db and db.StatusBarTexture or "KitnUI")
 
-    KE:ApplyFontToText(W.header, face, size, outline)
+    KE:ApplyFontToText(W.header, face, headerSize, outline)
+    -- Force RenderWindow's header block to rebuild next tick so a live GUI change to
+    -- ShowTypeIcon (or the header font) re-evaluates the meter-type glyph + title anchor --
+    -- that block is otherwise dirty-gated on meter/session type, which a toggle doesn't move.
+    W._headerType = nil
     for i = 1, BAR_POOL_SIZE do
         local bar = W.bars[i]
         local row = bar.row
@@ -928,6 +959,25 @@ function DM:RenderWindow(W)
         W._headerType = meterType
         W._headerSession = cfg.SessionType
         W.header:SetText(self:FormatWindowLabel(meterType, cfg.SessionType))
+        -- Meter-type glyph leads the title. Show + anchor the title to its right when the
+        -- type maps to an icon (every selectable type does); otherwise hide it and pull the
+        -- title flush-left so no gap is left. Size is owned by LayoutWindow (header font).
+        local iconPath = self.METER_TYPE_ICONS and self.METER_TYPE_ICONS[meterType]
+        -- Honor the GUI toggle: ShowTypeIcon=false suppresses the glyph and the title
+        -- falls flush-left (the no-icon branch below). Default-on when the key is unset.
+        if self.db and self.db.ShowTypeIcon == false then iconPath = nil end
+        if W.headerIcon then
+            W.header:ClearAllPoints()
+            if iconPath then
+                W.headerIcon:SetTexture(iconPath)
+                W.headerIcon:Show()
+                -- LEFT->RIGHT so the title centers vertically on the (larger) glyph.
+                W.header:SetPoint("LEFT", W.headerIcon, "RIGHT", 3, 0)
+            else
+                W.headerIcon:Hide()
+                W.header:SetPoint("LEFT", W.headerBar, "LEFT", 4, 0)
+            end
+        end
     end
 
     -- Phase 4 segment/history: W._curSessionID pins a specific stored session

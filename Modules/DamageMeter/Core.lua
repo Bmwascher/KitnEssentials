@@ -1230,6 +1230,24 @@ DM.SESSION_TYPE_NAMES = {
     [Enum.DamageMeterSessionType.Overall] = "Overall",
 }
 
+-- Meter-type glyph shown at the LEFT of each window's header (the same dm_* set the
+-- view-selector uses, Selector.lua). Keyed by Enum.DamageMeterType; the render layer
+-- nil-guards the lookup so an unmapped type (Dps/Hps/Absorbs are not selectable) just
+-- hides the header icon rather than concatenating nil. Plain file paths -- never secret.
+do
+    local I = "Interface\\AddOns\\KitnEssentials\\Media\\Icon\\"
+    DM.METER_TYPE_ICONS = {
+        [Enum.DamageMeterType.DamageDone]           = I .. "dm_damage.tga",
+        [Enum.DamageMeterType.HealingDone]          = I .. "dm_healing.tga",
+        [Enum.DamageMeterType.DamageTaken]          = I .. "dm_dmgtaken.tga",
+        [Enum.DamageMeterType.AvoidableDamageTaken] = I .. "dm_avoidable.tga",
+        [Enum.DamageMeterType.EnemyDamageTaken]     = I .. "dm_enemytaken.tga",
+        [Enum.DamageMeterType.Interrupts]           = I .. "dm_interrupt.tga",
+        [Enum.DamageMeterType.Dispels]              = I .. "dm_dispel.tga",
+        [Enum.DamageMeterType.Deaths]               = I .. "dm_deaths.tga",
+    }
+end
+
 -- Single source of truth for a window's human label -- the EXACT string the
 -- in-world header shows ("Overall Damage Done", "Damage Done", "Deaths", ...), so
 -- the GUI layout map / drag ghost / move rows all match it and can't drift. The

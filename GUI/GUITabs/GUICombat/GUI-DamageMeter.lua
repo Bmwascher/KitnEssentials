@@ -1184,16 +1184,20 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     yOffset = cardColors:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Header Icons -- the settings / reset / segment chrome on each
-    -- window header band. "Only on Mouseover" greys when icons are off.
+    -- Header Icons -- two independent elements on each window header band: the
+    -- meter-type glyph beside the title ("Show Type Icon") and the settings /
+    -- reset / segment action buttons ("Show Action Buttons"). "Only on Mouseover"
+    -- governs the action buttons and greys when they're off.
     ----------------------------------------------------------------
     manager:SetCondition("headericons", function() return db.ShowHeaderIcons ~= false end)
 
     local cardHeaderIcons = GUIFrame:CreateCard(scrollChild, "Header Icons", yOffset)
     manager:Register(cardHeaderIcons, "all")
 
-    local rowHdr = GUIFrame:CreateRow(cardHeaderIcons.content, Theme.rowHeightLast)
-    local headerIconsChk = GUIFrame:CreateCheckbox(rowHdr, "Show Header Icons", {
+    -- Action Buttons lead the row so "Only on Mouseover" (which governs them) sits in the
+    -- left column directly beneath it; Type Icon is the independent right-column toggle.
+    local rowHdr = GUIFrame:CreateRow(cardHeaderIcons.content, Theme.rowHeight)
+    local headerIconsChk = GUIFrame:CreateCheckbox(rowHdr, "Show Action Buttons", {
         value = db.ShowHeaderIcons ~= false,
         callback = function(checked)
             db.ShowHeaderIcons = checked
@@ -1204,13 +1208,33 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     rowHdr:AddWidget(headerIconsChk, 0.5)
     manager:Register(headerIconsChk, "all")
 
-    local headerMouseoverChk = GUIFrame:CreateCheckbox(rowHdr, "Only on Mouseover", {
+    local typeIconChk = GUIFrame:CreateCheckbox(rowHdr, "Show Type Icon", {
+        value = db.ShowTypeIcon ~= false,
+        callback = function(checked) db.ShowTypeIcon = checked; ApplySettings() end,
+    })
+    rowHdr:AddWidget(typeIconChk, 0.5)
+    manager:Register(typeIconChk, "all")
+    cardHeaderIcons:AddRow(rowHdr, Theme.rowHeight)
+
+    local rowHdr2 = GUIFrame:CreateRow(cardHeaderIcons.content, Theme.rowHeight)
+    local headerMouseoverChk = GUIFrame:CreateCheckbox(rowHdr2, "Only on Mouseover", {
         value = db.HeaderIconsMouseover == true,
         callback = function(checked) db.HeaderIconsMouseover = checked; ApplySettings() end,
     })
-    rowHdr:AddWidget(headerMouseoverChk, 0.5)
+    rowHdr2:AddWidget(headerMouseoverChk, 0.5)
     manager:Register(headerMouseoverChk, "headericons")
-    cardHeaderIcons:AddRow(rowHdr, Theme.rowHeightLast, 0)
+    cardHeaderIcons:AddRow(rowHdr2, Theme.rowHeight)
+
+    -- What each toggle controls.
+    local rowHdrNote = GUIFrame:CreateRow(cardHeaderIcons.content, 54)
+    local hdrNote = GUIFrame:CreateText(rowHdrNote,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " Action Buttons: the settings / reset / segment icons (top-right).\n" ..
+        KE:ColorTextByTheme("-") .. " Type Icon: the meter-type glyph beside the window title.",
+        54, "hide")
+    rowHdrNote:AddWidget(hdrNote, 1)
+    manager:Register(hdrNote, "all")
+    cardHeaderIcons:AddRow(rowHdrNote, 54, 0)
 
     yOffset = cardHeaderIcons:GetNextOffset()
 
@@ -1273,23 +1297,34 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     row3a:AddWidget(fontDropdown, 0.5)
     manager:Register(fontDropdown, "all")
 
-    local fontSizeSlider = GUIFrame:CreateSlider(row3a, "Font Size", {
-        min = 8, max = 24, step = 1,
-        value = db.FontSize or 12,
-        callback = function(val) db.FontSize = val; ApplySettings() end,
-    })
-    row3a:AddWidget(fontSizeSlider, 0.5)
-    manager:Register(fontSizeSlider, "all")
-    card3:AddRow(row3a, Theme.rowHeight)
-
-    local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
-    local outlineDropdown = GUIFrame:CreateDropdown(row3b, "Font Outline", {
+    local outlineDropdown = GUIFrame:CreateDropdown(row3a, "Font Outline", {
         options = KE:GetFontOutlineOptions(),
         value = db.FontOutline or "OUTLINE",
         callback = function(key) db.FontOutline = key; ApplySettings() end,
     })
-    row3b:AddWidget(outlineDropdown, 1)
+    row3a:AddWidget(outlineDropdown, 0.5)
     manager:Register(outlineDropdown, "all")
+    card3:AddRow(row3a, Theme.rowHeight)
+
+    -- Header text and bar text size are independent sliders. HeaderFontSize falls back
+    -- to FontSize when unset, so an existing config's header keeps its current size until
+    -- this slider is moved; the bar rows always read FontSize.
+    local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
+    local headerSizeSlider = GUIFrame:CreateSlider(row3b, "Header Text Size", {
+        min = 8, max = 24, step = 1,
+        value = db.HeaderFontSize or db.FontSize or 12,
+        callback = function(val) db.HeaderFontSize = val; ApplySettings() end,
+    })
+    row3b:AddWidget(headerSizeSlider, 0.5)
+    manager:Register(headerSizeSlider, "all")
+
+    local barSizeSlider = GUIFrame:CreateSlider(row3b, "Bar Text Size", {
+        min = 8, max = 24, step = 1,
+        value = db.FontSize or 12,
+        callback = function(val) db.FontSize = val; ApplySettings() end,
+    })
+    row3b:AddWidget(barSizeSlider, 0.5)
+    manager:Register(barSizeSlider, "all")
     card3:AddRow(row3b, Theme.rowHeightLast, 0)
 
     yOffset = card3:GetNextOffset()
