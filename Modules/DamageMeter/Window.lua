@@ -769,12 +769,10 @@ end
 -- fully visible. Built once in CreateWindow, so this only flips alpha/Show and
 -- (re)wires the frame's hover scripts -- safe to call every ApplySettings.
 --
--- Secondary windows (on-screen display position > 1) ALWAYS reveal-on-hover
--- regardless of the global HeaderIconsMouseover toggle, so stacked windows stay
--- uncluttered -- only the primary window (#1) shows the icons at rest (request
--- 2026-06-05). Display position is set by LayoutDock, which re-calls this after
--- each structural pass; before the first layout the map is empty and every window
--- uses the configured behavior (windows aren't shown until LayoutDock places them).
+-- ALL windows follow the single global HeaderIconsMouseover toggle. (The earlier
+-- per-window rule that force-revealed-on-hover every non-#1 window was reverted: the
+-- "Only on mouseover" toggle now covers that intent for the whole dock, so a stacked
+-- secondary window shows its icons at rest exactly like #1 when the toggle is off.)
 ---------------------------------------------------------------------------------
 -- True when any body-covering overlay (view-selector grid / detail breakdown /
 -- segment-menu popup) is open for W. The header icons are children of W.frame, so
@@ -792,10 +790,6 @@ function DM:ApplyHeaderIcons(W)
     local db = self.db
     local show = not db or db.ShowHeaderIcons ~= false
     local mouseover = db and db.HeaderIconsMouseover
-    -- Force mouseover-reveal on every non-#1 window. _winDisplayPos[W.idx] is the
-    -- 1-based on-screen position (LayoutDock); nil before the first layout -> no force.
-    local pos = self._winDisplayPos and self._winDisplayPos[W.idx]
-    if pos and pos ~= 1 then mouseover = true end
 
     if not show then
         -- Hidden entirely; drop any hover scripts so a stale mouseover handler
