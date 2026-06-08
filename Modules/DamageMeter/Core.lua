@@ -299,20 +299,25 @@ function DM:OnEnable()
     -- non-underscore method is resolved at runtime (Dock.lua loads after Core.lua).
     if self.MaybeSeedDockTest then self:MaybeSeedDockTest() end
 
-    -- Seed window 1 with a Default context if the user has never configured one.
-    -- The dock references its window set from db.Dock.Columns; window 1 is the
-    -- single-window default's only referenced index. Stored under Contexts.Default;
-    -- the live content context resolves to this when no per-context override exists.
+    -- Seed the shipped default layout when the user has never configured one (fresh
+    -- profile -- Windows[1] absent). Three windows: [1] Damage Done (Current) in its own
+    -- column, [2] Overall Damage Done + [3] Deaths stacked in a second column. Dock.Columns
+    -- is set to match (50/50 columns; the right column splits 61/39) so every seeded window
+    -- is actually referenced and rendered. Enum values are read at runtime here -- Defaults.lua
+    -- can't reference Enum at file-load time. Existing profiles skip this block entirely and
+    -- keep their own windows + dock (so an update never rearranges a configured layout).
     self.db.Windows = self.db.Windows or {}
     if not self.db.Windows[1] then
-        self.db.Windows[1] = {
-            Contexts = {
-                Default = {
-                    Enabled = true,
-                    MeterType = Enum.DamageMeterType.DamageDone,
-                    SessionType = Enum.DamageMeterSessionType.Current,
-                },
-            },
+        local function ctx(meterType, sessionType)
+            return { Contexts = { Default = { Enabled = true, MeterType = meterType, SessionType = sessionType } } }
+        end
+        self.db.Windows[1] = ctx(Enum.DamageMeterType.DamageDone, Enum.DamageMeterSessionType.Current)
+        self.db.Windows[2] = ctx(Enum.DamageMeterType.DamageDone, Enum.DamageMeterSessionType.Overall)
+        self.db.Windows[3] = ctx(Enum.DamageMeterType.Deaths,     Enum.DamageMeterSessionType.Current)
+        self.db.Dock = self.db.Dock or {}
+        self.db.Dock.Columns = {
+            { WidthRatio = 0.5, Windows = { 1 },    RowRatios = { 1 } },
+            { WidthRatio = 0.5, Windows = { 2, 3 }, RowRatios = { 0.61, 0.39 } },
         }
     end
 

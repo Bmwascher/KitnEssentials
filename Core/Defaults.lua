@@ -1530,11 +1530,11 @@ local Defaults = {
         DamageMeter = {
             Enabled = true,
             ReplaceBlizzard = true,     -- set CVar damageMeterEnabled "0" while KE meter is on
-            Locked = false,             -- when true, disables EditMode drag of the dock
+            Locked = true,              -- when true, disables EditMode drag of the dock
             RefreshRate = 0.5,
             UIBudgetMs = 1.2,
             MaxWindows = 5,
-            AlwaysShowSelf = true,      -- pin the player to the last visible slot when off-list
+            AlwaysShowSelf = false,     -- pin the player to the last visible slot when off-list
 
             -- Visibility conditions (independent; ALL enabled conditions must pass for the
             -- meter to show). GUI preview / EditMode always force-show regardless.
@@ -1542,13 +1542,14 @@ local Defaults = {
             OnlyInInstances = false,    -- show only inside a dungeon / raid / arena / BG / scenario
 
             -- Bar appearance (flat, KE convention)
-            BarHeight = 16,
-            BarSpacing = 2,
-            Width = 240,
+            BarHeight = 23,
+            BarSpacing = 1,
+            Width = 212,
             StatusBarTexture = "KitnUI",
             FontFace = "Expressway",
-            FontSize = 12,
-            FontOutline = "OUTLINE",
+            FontSize = 13,              -- bar row text size
+            HeaderFontSize = 14,        -- window header text size (independent of the bar text)
+            FontOutline = "SLUG,OUTLINE",
             ShowRank = false,
             ShowIcon = true,
             ShowName = true,
@@ -1558,12 +1559,12 @@ local Defaults = {
             -- "Amount" = amount only, "PerSec" = rate only.
             NumberFormat = "Both",
             ShowPercent = false,
-            VisibleBars = 10,
+            VisibleBars = 9,
 
             -- Bar fill color: "Class" (per-source class color), "Custom" (BarColor),
             -- "Theme" (the theme accent color). BarColorAlpha is the fill opacity (0..1).
             BarColorMode = "Class",
-            BarColor = { 0.30, 0.55, 0.85 },
+            BarColor = { 0.302, 0.549, 0.851 },   -- #4D8CD9 (used when BarColorMode = "Custom")
             BarColorAlpha = 1,
             -- Bar text color: the value column always; the name column when NOT class-tinted.
             BarTextColor = { 1, 1, 1 },
@@ -1573,9 +1574,13 @@ local Defaults = {
             BarThinLine = false,
             BarThinLineHeight = 2,
 
-            -- Header icons (segment / reset / settings) — Phase 4 detail surface
+            -- Header bar: the meter-type glyph beside the title (ShowTypeIcon) and the
+            -- settings / reset / segment action buttons (ShowHeaderIcons + its mouseover-
+            -- reveal). Independent toggles -- the glyph is informational, the buttons are
+            -- the Phase 4 detail-surface controls.
+            ShowTypeIcon = false,
             ShowHeaderIcons = true,
-            HeaderIconsMouseover = false,
+            HeaderIconsMouseover = true,
             DetailMaxRows = 40,
 
             -- Hover quick-peek tooltip (Phase 4b) — hover a bar -> floating breakdown/recap
@@ -1592,10 +1597,10 @@ local Defaults = {
             BackdropPadding = 1,
             Strata = "MEDIUM",
             Position = {
-                AnchorFrom = "CENTER",
-                AnchorTo = "CENTER",
-                XOffset = 0,
-                YOffset = 0,
+                AnchorFrom = "BOTTOMRIGHT",
+                AnchorTo = "BOTTOMRIGHT",
+                XOffset = -3,
+                YOffset = 3,
             },
 
             -- Dock layout (structured: no flat equivalent)
