@@ -894,7 +894,7 @@ local Defaults = {
             Strata = "MEDIUM",
             anchorFrameType = "SELECTFRAME",
             ParentFrame = "UtilityCooldownViewer",
-            Position = { AnchorFrom = "TOP", AnchorTo = "BOTTOMRIGHT", XOffset = 0, YOffset = 5 },
+            Position = { AnchorFrom = "TOP", AnchorTo = "BOTTOM", XOffset = 0, YOffset = 5 },
         },
 
 
