@@ -28,6 +28,22 @@ local GetUnitEmpowerMinHoldTime = GetUnitEmpowerMinHoldTime
 local LibStub = LibStub
 
 ---------------------------------------------------------------------------------
+-- Debug
+---------------------------------------------------------------------------------
+-- Flip to true, /reload, then cast an extender (Eruption / Upheaval / Fire Breath)
+-- with and without Ebon Might active. Traces the full path: extender detection ->
+-- branch decision -> PlayWarningSound -> LSM fetch -> PlaySoundFile result. Tells us
+-- whether the warning is failing on detection, media resolution, or playback.
+local DEBUG_EM = false
+local function dbg(...)
+    if not DEBUG_EM then return end
+    local n = select("#", ...)
+    local parts = {}
+    for i = 1, n do parts[i] = tostring((select(i, ...))) end
+    KE:Print("|cff33ff99[EM]|r " .. table.concat(parts, " "))
+end
+
+---------------------------------------------------------------------------------
 -- Constants
 ---------------------------------------------------------------------------------
 local ERUPTION = 395160
@@ -93,21 +109,33 @@ end
 -- Sound
 ---------------------------------------------------------------------------------
 function EM:PlayWarningSound()
+    dbg("PlayWarningSound: file=", tostring(self.db.SoundFile), "channel=", tostring(self.db.SoundChannel))
+
     if self.soundHandle then
         StopSound(self.soundHandle)
         self.soundHandle = nil
     end
 
     local soundFile = self.db.SoundFile
-    if not soundFile or soundFile == "None" then return end
+    if not soundFile or soundFile == "None" then
+        dbg("  -> abort: SoundFile is nil/None")
+        return
+    end
 
     local LSM = LibStub("LibSharedMedia-3.0", true)
-    if not LSM then return end
+    if not LSM then
+        dbg("  -> abort: LibSharedMedia not loaded")
+        return
+    end
 
     local path = LSM:Fetch("sound", soundFile)
-    if not path then return end
+    if not path then
+        dbg("  -> abort: LSM:Fetch returned nil (sound '", tostring(soundFile), "' not registered)")
+        return
+    end
 
     local ok, willPlay, handle = pcall(PlaySoundFile, path, self.db.SoundChannel or "Master")
+    dbg("  PlaySoundFile path=", tostring(path), "ok=", tostring(ok), "willPlay=", tostring(willPlay), "handle=", tostring(handle))
     if ok and willPlay and handle then
         self.soundHandle = handle
     end
@@ -131,9 +159,11 @@ function EM:OnTimingCheck(expectedCastEnd, previousExpiration, count)
     if not IsExtender(spellId) then return end
 
     self.expirationTime = GetEbonMightExpiration()
+    dbg("timing recheck #", count, "spellId=", spellId, "EMexp=", self.expirationTime, "expectedCastEnd=", expectedCastEnd)
 
     -- Buff faded since the original cast
     if self.expirationTime == 0 then
+        dbg("  EMexp=0 (faded) -> WARN")
         self:PlayWarningSound()
         return
     end
@@ -143,7 +173,10 @@ function EM:OnTimingCheck(expectedCastEnd, previousExpiration, count)
     -- After max attempts or timing is now safe — resolve
     if count >= MAX_POLL_ATTEMPTS or not tooLate then
         if tooLate then
+            dbg("  resolved: too late -> WARN")
             self:PlayWarningSound()
+        else
+            dbg("  resolved: timing safe -> no warn")
         end
         return
     end
@@ -176,11 +209,16 @@ function EM:OnEvent(event, unit, ...)
         if not spellId or not IsExtender(spellId) then return end
 
         local now = GetTime()
+        dbg("extender cast:", event, "spellId=", spellId, "EMexp=", self.expirationTime)
 
         -- No Ebon Might active
         if self.expirationTime == 0 then
             -- Casting extender immediately after EM cast — buff not yet visible
-            if now == self.lastEbonMightCast then return end
+            if now == self.lastEbonMightCast then
+                dbg("  EMexp=0 but cast is right after EM cast -> skip warn")
+                return
+            end
+            dbg("  EMexp=0 (no Ebon Might active) -> WARN")
             self:PlayWarningSound()
             return
         end
@@ -190,9 +228,11 @@ function EM:OnEvent(event, unit, ...)
 
         local castEnd = now + castTime
         local tooLate = castEnd > self.expirationTime
+        dbg("  castEnd=", castEnd, "EMexp=", self.expirationTime, "tooLate=", tooLate)
 
         -- If it looks too late and expiration is within 2s, poll to confirm
         if tooLate and self.expirationTime - now < 2 then
+            dbg("  too late & EM within 2s -> queue timing recheck")
             self:QueueTimingCheck(castEnd, self.expirationTime, 1)
             return
         end
@@ -243,10 +283,14 @@ end
 -- Lifecycle
 ---------------------------------------------------------------------------------
 function EM:OnEnable()
-    if not self.db.Enabled then return end
+    if not self.db.Enabled then
+        dbg("OnEnable: db.Enabled is false -> module idle")
+        return
+    end
 
     -- Evoker only
     if select(3, UnitClass("player")) ~= Constants.UICharacterClasses.Evoker then
+        dbg("OnEnable: not an Evoker -> module idle")
         return
     end
 
@@ -254,8 +298,11 @@ function EM:OnEnable()
     self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnEvent")
 
     if self:IsValidSpec() then
+        dbg("OnEnable: Augmentation spec -> spell events registered")
         self:RegisterSpellEvents()
         self.expirationTime = GetEbonMightExpiration()
+    else
+        dbg("OnEnable: not Augmentation spec -> spell events NOT registered")
     end
 end
 
