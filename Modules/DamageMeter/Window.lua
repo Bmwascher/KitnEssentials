@@ -25,6 +25,7 @@ local UIParent = UIParent
 local issecretvalue = issecretvalue
 local RAID_CLASS_COLORS = RAID_CLASS_COLORS
 local Enum = Enum
+local UnitName = UnitName
 local math_min = math.min
 local math_max = math.max
 local math_floor = math.floor
@@ -1224,12 +1225,24 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
     -- tracks ShowName every tick so the GUI toggle takes effect on the next paint.
     local nm = src.name
     if issecretvalue(nm) then
-        -- Secret name: string ops (the realm strip below) would taint-crash, so set
-        -- it unconditionally and null the cache. The realm strip is confined to the
-        -- plain branch; a secret name keeps its full form (graceful, no taint). In
-        -- practice the names that carry a realm are friendly group members, which
-        -- are the non-secret case, so the toggle takes effect where it matters.
-        row.name:SetText(nm)
+        -- Secret name (identity-restricted unit -- e.g. group members inside an active
+        -- keystone). String ops (:match) and Ambiguate (SecretArguments=AllowedWhenUntainted
+        -- -> throws when tainted) can't strip it. But UnitName is AllowedWhenTainted -- it
+        -- accepts a secret arg WITHOUT throwing -- and returns (name, realm) SEPARATELY, so
+        -- its FIRST return is the realm-stripped name even for a secret unit. This is the
+        -- path Details! uses to resolve the secret source name (parser_nocleu1.lua:1911
+        -- `UnitName(source.name)`, bare in the dungeon branch -> provably never throws there).
+        -- Honor ShowRealm: only strip when off; when on, keep the full secret "Name-Realm".
+        -- Defensive pcall + `== nil` gate (the gate primitive Details! relies on) so the worst
+        -- case is no change (the full name). The resolved name may itself be secret -- SetText
+        -- accepts that. Cache nulled (can't dirty-check a maybe-secret string), so it re-
+        -- resolves each tick like Details!.
+        local shown = nm
+        if not db.ShowRealm then
+            local ok, resolved = pcall(UnitName, nm)
+            if ok and resolved ~= nil then shown = resolved end
+        end
+        row.name:SetText(shown)
         bar._cachedName = nil
         bar._rawName = nil
     else
