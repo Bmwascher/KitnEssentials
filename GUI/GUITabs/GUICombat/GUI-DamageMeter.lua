@@ -1008,9 +1008,17 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     manager:Register(spacingSlider, "all")
     card1:AddRow(row1c, Theme.rowHeight)
 
+    -- Separator: splits the size sliders above from the thin-line style block below.
+    local row1sep = GUIFrame:CreateRow(card1.content, Theme.rowHeightSeparator)
+    local sep1 = GUIFrame:CreateSeparator(row1sep)
+    row1sep:AddWidget(sep1, 1)
+    manager:Register(sep1, "all")
+    card1:AddRow(row1sep, Theme.rowHeightSeparator)
+
     -- Thin-line style: the colored fill becomes a thin strip pinned to the bottom edge
-    -- (a clean minimalist look). Line Thickness greys out when the toggle is off.
-    local row1d = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    -- (a clean minimalist look). Line Thickness shares the toggle's row and greys out when
+    -- the toggle is off.
+    local row1d = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
     local thinChk = GUIFrame:CreateCheckbox(row1d, "Thin Line Bars", {
         value = db.BarThinLine == true,
         callback = function(checked)
@@ -1019,19 +1027,17 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
             manager:UpdateAll(db.Enabled ~= false)
         end,
     })
-    row1d:AddWidget(thinChk, 1)
+    row1d:AddWidget(thinChk, 0.5)
     manager:Register(thinChk, "all")
-    card1:AddRow(row1d, Theme.rowHeight)
 
-    local row1e = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
-    local thinHSlider = GUIFrame:CreateSlider(row1e, "Line Thickness", {
+    local thinHSlider = GUIFrame:CreateSlider(row1d, "Line Thickness", {
         min = 1, max = 12, step = 1,
         value = db.BarThinLineHeight or 2,
         callback = function(val) db.BarThinLineHeight = val; ApplySettings() end,
     })
-    row1e:AddWidget(thinHSlider, 1)
+    row1d:AddWidget(thinHSlider, 0.5)
     manager:Register(thinHSlider, "thinline")
-    card1:AddRow(row1e, Theme.rowHeightLast, 0)
+    card1:AddRow(row1d, Theme.rowHeightLast, 0)
 
     yOffset = card1:GetNextOffset()
 
