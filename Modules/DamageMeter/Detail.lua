@@ -30,15 +30,15 @@ local table_sort = table.sort
 -- Same fixed pool ceiling as the main bars; the detail list never exceeds it.
 local DETAIL_POOL_SIZE = DM.BAR_POOL_SIZE or 40
 
--- Spell-breakdown bar fill = neutral gray (EUI/Details convention). In a single-source
+-- Spell-breakdown bar fill = neutral gray (standard meter convention). In a single-source
 -- breakdown every row is the SAME player, so a class-colored fill carries no information;
 -- a neutral fill defers to the text and keeps the spells(gray) / targets(red) two-tone
 -- reading as "your damage vs the enemies you hit". The player's class color still tints the
--- TITLE (header name), matching EUI/Details -- only the bars go neutral. Tunable RGB.
+-- TITLE (header name), matching standard meters -- only the bars go neutral. Tunable RGB.
 local DETAIL_BAR_COLOR = { 0.40, 0.40, 0.44 }
 
 -- One detail row: [icon] name .......... value. Scripts wired ONCE (pool reuse).
--- Clicking any row closes the panel (the back gesture); mirrors EUI MakeSpellRow:1712.
+-- Clicking any row closes the panel (the back gesture).
 local function MakeDetailRow(parent)
     local db = DM.db
     local bar = {}
@@ -105,7 +105,7 @@ function DM:EnsureDetail(W)
     -- Mouse-wheel scroll for long breakdowns / recaps (Task 6). Step two rows per
     -- notch, clamped to [0, contentH - viewportH] so the wheel can't overscroll past
     -- the last row or above the top. All plain numbers (heights/stride are never
-    -- secret); no-op when the list fits (maxScroll <= 0). Mirrors EUI 2289-2293.
+    -- secret); no-op when the list fits (maxScroll <= 0).
     d.view:EnableMouseWheel(true)
     d.view:SetScript("OnMouseWheel", function(self, delta)
         local stride = W._snapStride or 18
@@ -217,8 +217,8 @@ function DM:ShowDetailMessage(W, msg)
 end
 
 -- Per-source spell breakdown (out-of-combat only — OpenDetail is OOC-gated, so
--- spellID is plain here and C_Spell.* lookups don't taint). Port of EUI's standard
--- breakdown to KE helpers + the confirmed secret contract: amounts are plain OOC,
+-- spellID is plain here and C_Spell.* lookups don't taint). Renders the breakdown
+-- via KE helpers + the confirmed secret contract: amounts are plain OOC,
 -- but percent math is still guarded with issecretvalue defensively (a stale combat
 -- read could linger one frame). API pre-sorts combatSpells descending, so the index
 -- IS the rank; maxAmount drives the proportional fill.
@@ -296,7 +296,7 @@ function DM:RenderBreakdown(W)
             -- Sanitize the per-spell amount before any Lua math/format. SetValue
             -- accepts secrets (raw amount feeds the fill), but the percent path and
             -- FormatBarValue's plain-string branch must run on a non-secret number.
-            -- Mirrors EllesmereUI's per-spell issecretvalue sanitize into a plain local.
+            -- Sanitize each per-spell amount via issecretvalue into a plain local.
             local amt = spell.totalAmount
             local amtPlain = amt
             if issecretvalue(amt) or type(amt) ~= "number" then amtPlain = 0 end
@@ -399,7 +399,7 @@ function DM:RenderDeathRecap(W)
             else row.fill:SetStatusBarColor(0.60, 0.08, 0.08) end
 
             -- Label: "-X.Xs SpellName" (+ " (Source)" when a non-secret sourceName exists).
-            -- Parens form matches Details and the hover-tip recap surface (Phase 4c).
+            -- Parens form matches the hover-tip recap surface (Phase 4c).
             local spellName = ev.spellName
             if not spellName or issecretvalue(spellName) or spellName == "" then
                 if isHeal then spellName = "Heal"
@@ -478,7 +478,7 @@ end
 -- loop index if it is somehow secret) so a secret value never becomes a table key.
 -- Builds, per player, a sorted descending {name=enemyName, total=amount} list.
 -- Cached by session|sessionID -- the cache key self-invalidates whenever the
--- pinned/live session changes. Port of EllesmereUI BuildAllPlayerTargets:795-864.
+-- pinned/live session changes.
 local function BuildAllPlayerTargets(session, sessionID)
     local cacheKey = tostring(session) .. "|" .. tostring(sessionID)
     if _targetsCache.key == cacheKey then return _targetsCache.map end
@@ -558,7 +558,7 @@ local function BuildAllPlayerTargets(session, sessionID)
     -- Flatten each player's enemy map into a descending-sorted array. Each entry carries the
     -- raw amount + accumulated DPS (both plain numbers by construction) and an enemy-share
     -- percent: this player's damage / the enemy's whole damage-taken (nil when the denominator
-    -- is unavailable). Mirrors the Details-style "% of this target you accounted for".
+    -- is unavailable). This is the "% of this target you accounted for".
     local map = {}
     for pName, enemies in pairs(byPlayer) do
         local list = {}
@@ -579,7 +579,7 @@ end
 
 -- Top `maxTargets` enemies a single player hit, sorted descending, or nil. The
 -- player name is the breakdown source's plain (non-secret) name; guard it before
--- the table lookup (a secret string can't be a key). Port of EUI BuildPlayerTargets:866-886.
+-- the table lookup (a secret string can't be a key).
 local function BuildPlayerTargets(playerName, session, sessionID, maxTargets)
     if not playerName or issecretvalue(playerName) or playerName == "" then return nil end
 
@@ -607,8 +607,8 @@ end
 
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  Hover quick-peek tooltip (Phase 4b / Task 9)            ║
--- ║  A single module-level tip (shared by every window, like ║
--- ║  EUI) shown on bar OnEnter: the top few breakdown spells  ║
+-- ║  A single module-level tip (shared by every window)       ║
+-- ║  shown on bar OnEnter: the top few breakdown spells       ║
 -- ║  (or recap events for a Deaths window). Built lazily,     ║
 -- ║  TOOLTIP strata, parented to UIParent, passive (never     ║
 -- ║  intercepts the mouse). A detach-when-idle poll keeps the ║
@@ -618,7 +618,7 @@ end
 -- ║  read (spellID is secret in combat -> touching it taints).║
 -- ╚══════════════════════════════════════════════════════════╝
 
-local HOVER_TIP_ROWS = 15       -- top spells/events (matches EUI's TT_MAX=15); the click-inline panel still shows the full list
+local HOVER_TIP_ROWS = 15       -- top spells/events; the click-inline panel still shows the full list
 local TIP_WIDTH = 340           -- Phase 4c: holds the 3 numeric columns (Amount / DPS / %); the extra width over 300 is all name room (the columns anchor to the right edge, so the spell/enemy-name area grows) -- request 2026-06-05
 local TIP_PAD = 4               -- inner inset for header / rows
 
@@ -707,7 +707,7 @@ local function MakeTipRow(parent, rowH)
 end
 
 -- One Targets-sub-section row: [icon] enemyName .... Amount  DPS  %. A dm_deaths glyph
--- leads each enemy name (like Details' per-target icon, request 2026-06-05); the three
+-- leads each enemy name (a per-target icon, request 2026-06-05); the three
 -- numeric columns line up under the SAME fixed offsets as the spell rows (TIP_AMT_X / DPS / PCT)
 -- so the breakdown and Targets share one column grid. Passive like the rest of the tip.
 -- Content-sized columns (no SetWidth) + SetWordWrap(false) so nothing truncates.
@@ -876,13 +876,13 @@ end
 -- rows. `topY` is the y-offset (negative, from the tip TOPLEFT) of the first free
 -- slot below the breakdown. Returns the extra height the section consumed (0 when
 -- nothing is shown). Lazy-creates the divider/label/rows once. DamageDone-only +
--- breakdown-path-only; the caller gates that. Port of EUI render 1207-1265.
+-- breakdown-path-only; the caller gates that.
 local function RenderTipTargets(self, bar, cfg, sessionID, topY, stride, barH)
     -- Key the per-player lookup on the RAW (unstripped) source name: BuildAllPlayerTargets
     -- keys byPlayer on the raw det.unitName, which carries the "-Realm" suffix for
     -- cross-realm members. bar._cachedName loses that suffix when ShowRealm is off
-    -- (the default), so it would miss; bar._rawName preserves it. Mirrors EUI's raw-name
-    -- lookup (realm stripped for display only, never for the targets key).
+    -- (the default), so it would miss; bar._rawName preserves it. The lookup keys on
+    -- the raw name (realm stripped for display only, never for the targets key).
     local targets = BuildPlayerTargets(bar._rawName, cfg.SessionType, sessionID, TIP_TGT_ROWS)
     if not targets then
         HideTipTargets()
@@ -891,8 +891,8 @@ local function RenderTipTargets(self, bar, cfg, sessionID, topY, stride, barH)
 
     -- Lazy-create the divider + section-header ("Targets" + repeated Amount/DPS/% column
     -- headers) + up to TIP_TGT_ROWS bars once. The repeated numeric headers make the Targets
-    -- section mirror the spell section; the dm_deaths glyph leads each enemy row (matching
-    -- Details' per-target icon, request 2026-06-05), built into MakeTargetRow.
+    -- section mirror the spell section; the dm_deaths glyph leads each enemy row (a
+    -- per-target icon, request 2026-06-05), built into MakeTargetRow.
     if not _tip.tgtDivider then
         _tip.tgtDivider = _tip:CreateTexture(nil, "ARTWORK")
         _tip.tgtDivider:SetHeight(1)
@@ -1016,7 +1016,7 @@ function DM:PopulateHoverTip(W, bar)
             _tip.colHdr.spell:Hide(); _tip.colHdr.amount:Hide(); _tip.colHdr.dps:Hide(); _tip.colHdr.pct:Hide()
         end
         HideTipTargets()
-        _tip.header:SetText(bar._cachedName or "Details")
+        _tip.header:SetText(bar._cachedName or "Breakdown")
         -- Class-tint the title (bar._classFilename is NeverSecret). White fallback for
         -- an unknown/enemy class so the centered title is always legible.
         local chc = bar._classFilename and RAID_CLASS_COLORS[bar._classFilename]
@@ -1037,12 +1037,12 @@ function DM:PopulateHoverTip(W, bar)
     local isDeaths = (meterType == Enum.DamageMeterType.Deaths)
 
     -- Tip rows run ~2px shorter than the configured bar height so the quick-peek packs
-    -- the now-15 rows (+ Targets) densely, closer to a full Details panel (request 2026-06-05).
+    -- the now-15 rows (+ Targets) densely (request 2026-06-05).
     -- Clamped to a sane floor; stride keeps the configured inter-row spacing.
     local barH = math_max(8, (W._snapHeight or 16) - 2)
     local stride = barH + (W._snapSpacing or 2)
     local shown = 0
-    local headerText = bar._cachedName or "Details"
+    local headerText = bar._cachedName or "Breakdown"
 
     -- Phase 4c: the column-header row (Spell · Amount · DPS · %) is shown only for the
     -- breakdown path; the Deaths recap keeps its single value column. bodyTop pushes the
@@ -1091,7 +1091,7 @@ function DM:PopulateHoverTip(W, bar)
                 -- Recap value is verbose ("-75.0K (overkill) (53%)") and uses the FULL right
                 -- edge (no Amount/DPS/% columns); per-path anchor below pins row.value to
                 -- -TIP_PAD. The label's RIGHT stops at row.value:LEFT so a long
-                -- "(Source)" suffix ellipsizes exactly like Details rather than overlapping.
+                -- "(Source)" suffix ellipsizes cleanly rather than overlapping.
                 row.value:ClearAllPoints()
                 row.value:SetPoint("RIGHT", row.fill, "RIGHT", -TIP_PAD, 0)
                 row.label:SetPoint("RIGHT", row.value, "LEFT", -3, 0)
@@ -1111,7 +1111,7 @@ function DM:PopulateHoverTip(W, bar)
                 if isHeal then row.fill:SetStatusBarColor(0.10, 0.50, 0.10)
                 else row.fill:SetStatusBarColor(0.60, 0.08, 0.08) end
 
-                -- Label: "-X.Xs SpellName (Source)" to match Details. Secret-guard the
+                -- Label: "-X.Xs SpellName (Source)". Secret-guard the
                 -- spellName return; append the event's source in parens when a plain
                 -- (non-secret) sourceName exists and it isn't a heal (gray, ellipsizes).
                 local spellName = ev.spellName
@@ -1444,7 +1444,7 @@ _tipPoll:SetScript("OnUpdate", function(self, elapsed)
     -- Throttle the EXPENSIVE re-populate (full GetSource rebuild + row fill) to genuine
     -- data-change signals: combat-state flips, post-combat session settles, and resets all
     -- set DM._hoverTipDirty (Core.lua). A static out-of-combat hover -- the common case --
-    -- keeps the already-correct tip shown and skips the rebuild entirely (EUI populates
+    -- keeps the already-correct tip shown and skips the rebuild entirely (populate runs
     -- once per hover; the dirty flag adds back exactly the live refreshes that matter, e.g.
     -- numbers settling in the post-combat finalize window, or flipping to/from the in-combat
     -- "secret" message). The cheap hide-on-stale-bar check above still runs every tick.

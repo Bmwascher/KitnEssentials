@@ -40,8 +40,8 @@ local math_ceil = math.ceil
 -- cross-realm member has shown its realm we keep it on the ticks the API drops it.
 -- A same-realm name has no hyphen so it's never stored. Grows by at most one tiny
 -- entry per distinct cross-realm player seen (bounded by group size; wiped on
--- /reload), so it needs no eviction. EUI sidesteps all this by always stripping the
--- realm (Ambiguate "short"); ShowRealm is a KE-only feature, hence a KE-only memo.
+-- /reload), so it needs no eviction. Some meters sidestep all this by always stripping
+-- the realm (Ambiguate "short"); ShowRealm is a KE-only feature, hence a KE-only memo.
 local realmNames = {}
 
 ---------------------------------------------------------------------------------
@@ -916,7 +916,7 @@ end
 --   * secret-aware text: SetText(secret) is fine, but == / ~= on a secret string
 --     throws. So a secret string is set unconditionally and its dirty cache set
 --     nil; a plain string is dirty-checked (skip SetText when unchanged).
--- Per-attribute dirty caches mirror EllesmereUI (~lines 2779-2887).
+-- Per-attribute dirty caches: only touch a widget when its value actually changed.
 ---------------------------------------------------------------------------------
 
 -- Repaints one window. Resolves the live per-context config, sets the header to
@@ -992,7 +992,7 @@ function DM:RenderWindow(W)
     if not sources then
         -- No session/data this segment: hide every pooled row so stale bars from
         -- a prior segment don't linger. Gate on IsShown so already-hidden rows
-        -- skip the redundant widget call (mirrors EllesmereUI ~2887).
+        -- skip the redundant widget call.
         for i = 1, self.BAR_POOL_SIZE do
             local row = W.bars[i].row
             if row:IsShown() then row:Hide() end
@@ -1003,7 +1003,7 @@ function DM:RenderWindow(W)
     -- Deaths: the API returns death sources most-recent-first and may include
     -- feign deaths (deathRecapID <= 0 = no real recap). Reverse to chronological
     -- and drop feigns into a reused per-window scratch table (no per-tick garbage).
-    -- deathRecapID is NeverSecret; the issecretvalue guard mirrors EllesmereUI.
+    -- deathRecapID is NeverSecret; still issecretvalue-guarded defensively.
     if isDeaths then
         W._deathScratch = W._deathScratch or {}
         local rev = W._deathScratch
@@ -1103,10 +1103,10 @@ function DM:RenderWindow(W)
                 src, rank = pinSource, pinRank
             end
             self:RenderBar(W, bar, rank, src, maxAmount)
-            -- Show only if not already shown (mirrors EllesmereUI ~2776).
+            -- Show only if not already shown.
             if not row:IsShown() then row:Show() end
         else
-            -- Hide only if currently shown (mirrors EllesmereUI ~2887).
+            -- Hide only if currently shown.
             if row:IsShown() then row:Hide() end
         end
     end
@@ -1150,7 +1150,7 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
     if W._isDeaths then
         -- Deaths: no damage-proportional fill, but the bar is FULL (SetValue 1)
         -- so the class color set below paints the whole row behind the name +
-        -- M:SS time (mirrors EllesmereUI). A 0-width fill would hide the color
+        -- M:SS time. A 0-width fill would hide the color
         -- entirely -- the bar would be invisible. No interpolation arg: deaths
         -- bars are static, so the fill snaps full immediately.
         row.fill:SetMinMaxValues(0, 1)
@@ -1284,13 +1284,13 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         -- -> throws when tainted) can't strip it. But UnitName is AllowedWhenTainted -- it
         -- accepts a secret arg WITHOUT throwing -- and returns (name, realm) SEPARATELY, so
         -- its FIRST return is the realm-stripped name even for a secret unit. This is the
-        -- path Details! uses to resolve the secret source name (parser_nocleu1.lua:1911
-        -- `UnitName(source.name)`, bare in the dungeon branch -> provably never throws there).
+        -- standard way to resolve a secret source name: a bare `UnitName(source.name)`
+        -- provably never throws on a secret unit-name argument.
         -- Honor ShowRealm: only strip when off; when on, keep the full secret "Name-Realm".
-        -- Defensive pcall + `== nil` gate (the gate primitive Details! relies on) so the worst
+        -- Defensive pcall + `== nil` gate (a secret-safe gate primitive) so the worst
         -- case is no change (the full name). The resolved name may itself be secret -- SetText
         -- accepts that. Cache nulled (can't dirty-check a maybe-secret string), so it re-
-        -- resolves each tick like Details!.
+        -- resolves each tick.
         local shown = nm
         if not db.ShowRealm then
             local ok, resolved = pcall(UnitName, nm)
@@ -1303,7 +1303,7 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         -- Plain string. Stash the UNSTRIPPED name first: the Detail Targets sub-section
         -- keys its per-player lookup on the raw det.unitName (which carries the
         -- "-Realm" suffix for cross-realm members), so it must match against the raw
-        -- name, never the realm-stripped display name. Mirrors EUI's bar._src.name.
+        -- name, never the realm-stripped display name.
         bar._rawName = nm
         if nm then
             if db.ShowRealm then
@@ -1352,8 +1352,8 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
     -- half: only the Both / PerSec modes pass the perSec arg, so an Amount-only config
     -- never touches the secret amountPerSecond.
     -- Deaths show the death time (M:SS) instead of amount|perSec, and Overall
-    -- deaths show nothing (cumulative time across segments isn't meaningful --
-    -- mirrors EllesmereUI). FormatDeathTime / FormatBarValue both return
+    -- deaths show nothing (cumulative time across segments isn't meaningful).
+    -- FormatDeathTime / FormatBarValue both return
     -- (string, isSecret): a secret string is set unconditionally with the cache
     -- nulled; a plain one is dirty-checked.
     local v, vIsSecret

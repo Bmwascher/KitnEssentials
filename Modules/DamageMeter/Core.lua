@@ -45,7 +45,7 @@ local IsInGuild = IsInGuild
 -- C_ChatInfo is a core namespace present before module files run.
 local SendChat = C_ChatInfo and C_ChatInfo.SendChatMessage
 
--- Pre-built group unit tokens (mirrors EllesmereUI lines 298-300). UNIT_FLAGS
+-- Pre-built group unit tokens. UNIT_FLAGS
 -- can fire dozens of times per second during a pull, and GroupInCombat is hit
 -- on every one; building "raid"..i / "party"..i inline on each call would churn
 -- garbage. Filled once at file load and read by index inside GroupInCombat.
@@ -276,8 +276,8 @@ function DM:OnEnable()
     -- PvP match end: arenas / battlegrounds can leave the player combat-tagged inside the
     -- closed instance with no live fighting, so UnitAffectingCombat stays true and the
     -- shared ticker would poll C_DamageMeter forever. Force it down on match completion and
-    -- suppress the UNIT_FLAGS auto-restart until the player zones out (mirrors EUI's PvP
-    -- match-end stop). See OnPvPMatchComplete + the _pvpMatchOver guard in OnUnitFlags.
+    -- suppress the UNIT_FLAGS auto-restart until the player zones out. See
+    -- OnPvPMatchComplete + the _pvpMatchOver guard in OnUnitFlags.
     self:RegisterEvent("PVP_MATCH_COMPLETE", "OnPvPMatchComplete")
     self:RegisterEvent("DAMAGE_METER_COMBAT_SESSION_UPDATED", "OnSessionUpdated")
     -- CURRENT_SESSION_UPDATED fires for the live segment during the post-combat
@@ -392,15 +392,14 @@ end
 ---------------------------------------------------------------------------------
 -- Combat-only ticker (shared across all windows)
 --
--- Mirrors EllesmereUI's StartSharedTicker/StopSharedTicker (single ticker for
--- every window). The ticker only runs while the player or group is in combat,
+-- A single shared ticker drives every window. The ticker only runs while the
+-- player or group is in combat,
 -- so idle CPU is zero. DM:Tick (implemented in the render chunk) repaints every
 -- window from the current sessions; it is resolved at runtime here (called as a
 -- method) so this lifecycle layer doesn't depend on the render layer load order.
 ---------------------------------------------------------------------------------
 
--- Single shared-ticker body (mirrors EllesmereUI's SharedRefreshTick,
--- ~lines 3937-3956). Runs on every tick and is responsible for self-cancelling
+-- Single shared-ticker body. Runs on every tick and is responsible for self-cancelling
 -- when the group leaves combat, so the lifecycle never depends on a one-shot
 -- C_Timer.After firing at exactly the right moment.
 --
@@ -484,8 +483,8 @@ end
 
 -- True when the player is in combat, or any group member is. UnitAffectingCombat
 -- is safe to read here (not a secret return). The player fast-path uses
--- UnitAffectingCombat("player") rather than InCombatLockdown() (mirrors
--- EllesmereUI line 303): InCombatLockdown() returns false the moment the player
+-- UnitAffectingCombat("player") rather than InCombatLockdown():
+-- InCombatLockdown() returns false the moment the player
 -- dies or feign-deaths mid-pull, but UnitAffectingCombat stays true while the
 -- player is still tagged into the fight, so the ticker keeps painting. Group
 -- units are read from the pre-built _raidUnits / _partyUnits tables.
@@ -532,7 +531,7 @@ function DM:OnRegenDisabled()
     -- live session, a CONSTANT for the unpinned Current view, so the dirty flag alone
     -- can't force a rebuild -- without this wipe the Targets sub-section serves the PRIOR
     -- fight's enemies on the next out-of-combat hover (or stays hidden if the prior fight
-    -- had none). Mirrors EllesmereUI's per-combat wipe; guarded for load order.
+    -- had none). Wiped on every combat start; guarded for load order.
     if self.InvalidateTargetsCache then self:InvalidateTargetsCache() end
     -- Close any open (out-of-combat-only) detail panel so combat shows the live bars
     -- instead of a frozen pre-combat breakdown over a now-hidden body. CloseDetail is
@@ -558,7 +557,7 @@ end
 -- Player left combat. If the group is still fighting (player died mid-pull),
 -- raise _needsFinalRefresh and make sure the shared ticker is running: the
 -- ticker polls GroupInCombat every tick and self-cancels once everyone is out
--- of combat (continuous re-check, mirroring EllesmereUI). Only stop outright
+-- of combat (continuous re-check). Only stop outright
 -- when the whole group is already out of combat. While an encounter is active
 -- (between ENCOUNTER_START and ENCOUNTER_END) a transient REGEN_ENABLED from a
 -- boss transition is ignored -- the ENCOUNTER_END path owns the encounter stop.
@@ -568,7 +567,7 @@ function DM:OnRegenEnabled()
     self._hoverTipDirty = true
     -- Combat end is a Targets-cache boundary too (the sub-section is out-of-combat-only):
     -- drop it so the post-fight hover rebuilds against THIS fight's enemies, not the stale
-    -- constant-keyed map. Mirrors EllesmereUI (wipes on both REGEN_DISABLED + ENABLED).
+    -- constant-keyed map (wiped on both REGEN_DISABLED + ENABLED).
     if self.InvalidateTargetsCache then self:InvalidateTargetsCache() end
 
     if self._inEncounter then
@@ -592,7 +591,7 @@ end
 
 -- Encounter started: mark the encounter active so a mid-encounter
 -- PLAYER_REGEN_ENABLED (boss transition that briefly drops the combat lock)
--- doesn't get mistaken for a real combat-end. Mirrors EllesmereUI's _inEncounter.
+-- doesn't get mistaken for a real combat-end.
 function DM:OnEncounterStart()
     if DEBUG_DM then KE:Print("[DM] ENCOUNTER_START -> encounter active") end
     self._inEncounter = true
@@ -603,8 +602,8 @@ end
 
 -- Boss kill/wipe: a hard segment boundary, but the session totals are not yet
 -- finalized at the instant ENCOUNTER_END fires. Delay the stop by 0.5s so the
--- final paint reads settled totals rather than a stale/empty segment (mirrors
--- EllesmereUI line ~4008). Clears the encounter-active flag immediately.
+-- final paint reads settled totals rather than a stale/empty segment. Clears
+-- the encounter-active flag immediately.
 function DM:OnEncounterEnd()
     if DEBUG_DM then KE:Print("[DM] ENCOUNTER_END -> delayed StopTicker (0.5s)") end
     self._inEncounter = false
@@ -647,7 +646,7 @@ end
 -- ticker would poll C_DamageMeter every RefreshRate forever. Force the ticker down (the
 -- final paint settles the post-match totals) and raise _pvpMatchOver so the UNIT_FLAGS
 -- auto-restart stays suppressed until a real new combat or a zone-out clears it. Plain
--- event with no payload read -- never a secret. Mirrors EUI's PvP match-end stop.
+-- event with no payload read -- never a secret.
 function DM:OnPvPMatchComplete()
     if DEBUG_DM then KE:Print("[DM] PVP_MATCH_COMPLETE -> force StopTicker + suppress restart") end
     self._inEncounter = false
@@ -776,15 +775,14 @@ end
 -- method wrapper.
 ---------------------------------------------------------------------------------
 
--- Precision config for AbbreviateNumbers (verbatim port of EllesmereUI's
--- _abbreviateCfg). AbbreviateNumbers is the ONLY secret-safe abbreviator; the
+-- Precision config for AbbreviateNumbers. AbbreviateNumbers is the ONLY
+-- secret-safe abbreviator; the
 -- bare call rounds to whole units ("43M"), but passing this config makes it emit
 -- decimals ("43.81M" / "273.8K") even on a SECRET in-combat amount -- the
 -- function consumes the secret internally, so we never run string.format /
 -- arithmetic on a secret (which would taint). Guarded on CreateAbbreviateConfig;
 -- if absent, _abbreviateCfg stays nil and AbbreviateNumbers(n, nil) degrades to
--- the plain (no-decimal) but still secret-safe path. Matches Details' precision:
--- 2 decimals at M/B, 1 at K.
+-- the plain (no-decimal) but still secret-safe path (2 decimals at M/B, 1 at K).
 local _abbreviateCfg
 do
     local opts = {
@@ -835,7 +833,7 @@ local function FormatBarValue(total, perSec, mode)
     return str, issecretvalue(str)
 end
 
--- Death-time formatter for the Deaths meter type (mirrors EllesmereUI FormatTimer).
+-- Death-time formatter for the Deaths meter type.
 -- deathTimeSeconds is secret in combat, so the M:SS arithmetic only runs on a
 -- plain value -- a secret/nil time yields "0:00". Returns (string, false): the
 -- result is never itself a secret, so the render layer dirty-checks it normally.
@@ -1096,7 +1094,7 @@ function DM:HeaderReset(_)
     if self.Tick then self:Tick() end
 end
 
--- Report channel picker for the header Report button (Details-style). Opens a MenuUtil
+-- Report channel picker for the header Report button. Opens a MenuUtil
 -- context menu of the chat channels available right now; choosing one reports THIS window's
 -- view there via ReportView (the secret-safe build + send). MenuUtil item callbacks fire on
 -- the user's click (a hardware event), so the SendChatMessage inside ReportView is allowed.
@@ -1162,7 +1160,7 @@ function DM:GetAvailableSessions(cap)
     return trimmed
 end
 
--- "Combat" fallback when a session name is secret/empty (mirrors EllesmereUI:1881).
+-- "Combat" fallback when a session name is secret/empty.
 -- A secret string is fine to SetText but must never be == compared, so the empty
 -- check is gated behind issecretvalue first.
 function DM:SafeSessionName(name)
@@ -1435,8 +1433,7 @@ end
 -- The render layer builds a window's header text from cfg.MeterType /
 -- cfg.SessionType, both Enum values. These tables map the enum to a display
 -- string once at file load; the render path reads them by key and never builds
--- a label string per tick. Mirrors EllesmereUI's DM_TYPE_NAMES /
--- SESSION_TYPE_NAMES. DamageMeter enums are guaranteed present in 12.0, but each
+-- a label string per tick. DamageMeter enums are guaranteed present in 12.0, but each
 -- lookup is nil-guarded at the call site (RenderWindow) so a missing key falls
 -- back to a sane default rather than concatenating nil.
 ---------------------------------------------------------------------------------
