@@ -26,8 +26,8 @@ GUIFrame:RegisterContent("MythicPlusTimer", function(scrollChild, yOffset)
     local MPT = GetMPTModule()
 
     local function ApplyModuleState(enabled)
-        if not MPT then return end
         db.Enabled = enabled
+        if not MPT then return end
         if enabled then
             KitnEssentials:EnableModule("MythicPlusTimer")
         else
