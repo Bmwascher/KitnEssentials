@@ -69,6 +69,12 @@ end
 ---------------------------------------------------------------------------------
 -- Visibility State Driver
 ---------------------------------------------------------------------------------
+-- NOTE: deliberately NO [dead] conditional in any of these strings. Dead/ghost
+-- state derives from health, so a [dead] clause makes Blizzard's SecureStateDriver
+-- manager re-evaluate the whole driver on every player health-change event (heaviest
+-- during post-combat health regen) -- a large amount of secure-environment churn for
+-- a button that's already hidden when dead: REC:UpdateAlpha sets alpha 0 on
+-- UnitIsDeadOrGhost (wired to PLAYER_DEAD / PLAYER_UNGHOST). Don't re-add [dead].
 function REC:GetVisibilityString()
     local loadInRaid = self.db.LoadInRaid
     local loadInParty = self.db.LoadInParty
@@ -80,16 +86,16 @@ function REC:GetVisibilityString()
 
     -- Both enabled - show in any group
     if loadInRaid and loadInParty then
-        return "[combat] hide; [nogroup] hide; [dead] hide; show"
+        return "[combat] hide; [nogroup] hide; show"
     end
 
     -- Only raid - hide if not in raid
     if loadInRaid then
-        return "[combat] hide; [nogroup:raid] hide; [dead] hide; show"
+        return "[combat] hide; [nogroup:raid] hide; show"
     end
 
     -- Only party - hide in raid, hide if no group
-    return "[combat] hide; [group:raid] hide; [nogroup] hide; [dead] hide; show"
+    return "[combat] hide; [group:raid] hide; [nogroup] hide; show"
 end
 
 function REC:UpdateStateDriver()
