@@ -17,13 +17,17 @@ local math_floor = math.floor
 local activeTab = "General"
 
 -- Ordered option lists for the per-context default-display rows.
+-- Order mirrors the in-world view-selector grid (Selector.lua VIEW_GRID) so the GUI
+-- default-type picker offers the same eight types the right-click selector does.
 local METER_TYPE_OPTIONS = {
-    { key = Enum.DamageMeterType.DamageDone,  text = "Damage Done" },
-    { key = Enum.DamageMeterType.HealingDone, text = "Healing Done" },
-    { key = Enum.DamageMeterType.DamageTaken, text = "Damage Taken" },
-    { key = Enum.DamageMeterType.Interrupts,  text = "Interrupts" },
-    { key = Enum.DamageMeterType.Dispels,     text = "Dispels" },
-    { key = Enum.DamageMeterType.Deaths,      text = "Deaths" },
+    { key = Enum.DamageMeterType.DamageDone,           text = "Damage Done" },
+    { key = Enum.DamageMeterType.HealingDone,          text = "Healing Done" },
+    { key = Enum.DamageMeterType.DamageTaken,          text = "Damage Taken" },
+    { key = Enum.DamageMeterType.EnemyDamageTaken,     text = "Enemy Damage Taken" },
+    { key = Enum.DamageMeterType.AvoidableDamageTaken, text = "Avoidable Damage Taken" },
+    { key = Enum.DamageMeterType.Deaths,               text = "Deaths" },
+    { key = Enum.DamageMeterType.Interrupts,           text = "Interrupts" },
+    { key = Enum.DamageMeterType.Dispels,              text = "Dispels" },
 }
 
 local SEGMENT_OPTIONS = {
@@ -175,22 +179,24 @@ local function BuildGeneralTab(scrollChild, yOffset, db, manager)
     ----------------------------------------------------------------
     -- Card 3: Tip
     ----------------------------------------------------------------
-    -- Two bullets, the first one wraps -> ~3 body lines. The CreateText body is
-    -- anchored title->bottom, so it gets (rowH - title - spacer); rowHeightLast (44)
-    -- left it ~24px (1.5 lines) and clipped. 76 gives ~3.5 body lines of headroom.
+    -- Three bullets, the first wraps -> ~4 body lines. The CreateText body is
+    -- anchored title->bottom, so it gets (rowH - title - spacer); 92 gives ~4.5 body
+    -- lines of headroom (was 76 for two bullets before the report line was added).
     local dragNoteCard = GUIFrame:CreateCard(scrollChild, "Tip", yOffset)
     manager:Register(dragNoteCard, "all")
-    local dnRow = GUIFrame:CreateRow(dragNoteCard.content, 76)
+    local dnRow = GUIFrame:CreateRow(dragNoteCard.content, 92)
     local dnText = GUIFrame:CreateText(dnRow,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " Drag the dock in " .. KE:ColorTextByTheme("/kes edit") ..
         " (disabled while locked). Resize panes by dragging the gaps between windows.\n" ..
         KE:ColorTextByTheme("-") .. " " .. KE:ColorTextByTheme("/kes dm") ..
-        " toggles the dock; " .. KE:ColorTextByTheme("/kes dm reset") .. " clears all segments.",
-        76, "hide")
+        " toggles the dock; " .. KE:ColorTextByTheme("/kes dm reset") .. " clears all segments.\n" ..
+        KE:ColorTextByTheme("-") .. " " .. KE:ColorTextByTheme("/kes dm report") ..
+        " posts the primary window to chat (out of combat).",
+        92, "hide")
     dnRow:AddWidget(dnText, 1)
     manager:Register(dnText, "all")
-    dragNoteCard:AddRow(dnRow, 76, 0)
+    dragNoteCard:AddRow(dnRow, 92, 0)
     yOffset = dragNoteCard:GetNextOffset()
 
     return yOffset
