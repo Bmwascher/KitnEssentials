@@ -21,7 +21,7 @@ MPT.run = MPT.run or {}
 -- Frame handles (created once in MPT:BuildHUD, lives in _HUD file).
 MPT.frames = MPT.frames or {}
 
--- Canonical flat defaults (seeded into KitnEssentials.db.profile.MythicPlusTimer
+-- Canonical flat defaults (seeded into KE.db.profile.MythicPlusTimer
 -- by MPT:UpdateDB). Flat keys only — no nesting (KE convention). Colors are
 -- {r,g,b} arrays resolved via KE:ResolveColor at render time.
 local MPT_DEFAULTS = {
@@ -29,6 +29,7 @@ local MPT_DEFAULTS = {
 
     -- Position (consumed by KE:ApplyFramePosition / CreatePositionCard).
     -- ParentFrame deliberately unseeded (position card writes it on demand).
+    -- anchorFrameType is intentionally camelCase — the position card reads that literal key.
     SelfPoint = "RIGHT", AnchorPoint = "RIGHT", anchorFrameType = "SCREEN",
     XOffset = -20, YOffset = 0, Strata = "MEDIUM", Scale = 1.0,
 
@@ -144,7 +145,7 @@ local function DeepCopy(src)
     return dst
 end
 
--- Seed KitnEssentials.db.profile.MythicPlusTimer from MPT_DEFAULTS for any key
+-- Seed KE.db.profile.MythicPlusTimer from MPT_DEFAULTS for any key
 -- the saved profile is missing (mirrors KE:FillProfileDefaults' deep-fill
 -- intent, scoped to this module), then bind MPT.db. Also guarantee the global
 -- splits store. Splits keyed "mapID:level" -> { total=sec, objectives={...} }.
@@ -186,14 +187,12 @@ end
 
 function MPT:OnInitialize()
     self:UpdateDB()
-    -- Enable/disable is driven by db.Enabled via the addon-level OnEnable loop
-    -- (Core/Main.lua). Default-disable so a fresh profile with Enabled=true is
-    -- turned on there, and an Enabled=false profile stays off.
-    self:SetEnabledState(self.db.Enabled ~= false)
+    -- Default-disable: the addon-level OnEnable loop (Core/Main.lua:154-163)
+    -- owns the enable decision via db.Enabled (sibling pattern, WDF:745-758).
+    self:SetEnabledState(false)
 end
 
 function MPT:OnEnable()
-    if not self.db then self:UpdateDB() end
     if not self.db.Enabled then return end
     -- Always-on event registration, HUD build, and active-run restore are wired
     -- in later phases (RegisterRunEvents / BuildHUD / CheckForActiveRun).
