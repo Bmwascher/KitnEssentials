@@ -751,26 +751,6 @@ local Defaults = {
             },
         },
 
-        BloodlustTracker = {
-            Enabled = false,
-            Mode = "pedro",
-            Scale = 0.5,
-            BasicIconSize = 48,
-            FontSize = 22,
-            FontFace = "Expressway",
-            FontOutline = "SOFTOUTLINE",
-            CountdownColor = { 1, 1, 1, 1 },
-            SoundEnabled = true,
-            SoundChannel = "Master",
-            LoopSound = false,
-            InstanceOnly = false,
-            CombatOnly = false,
-            Strata = "MEDIUM",
-            anchorFrameType = "UIPARENT",
-            ParentFrame = "UIParent",
-            Position = DefaultPosition(0, 500),
-        },
-
         PrescienceTracker = {
             Enabled = false,
             Strata = "MEDIUM",
@@ -895,16 +875,6 @@ local Defaults = {
             anchorFrameType = "SELECTFRAME",
             ParentFrame = "UtilityCooldownViewer",
             Position = { AnchorFrom = "TOP", AnchorTo = "BOTTOM", XOffset = 0, YOffset = 5 },
-        },
-
-
-        HideBars = {
-            Enabled = false,
-            Keybind = "",
-            Bars = {
-                [1] = true, [2] = false, [3] = false,
-                [4] = true, [5] = true, [6] = true,
-            },
         },
 
         WorldMarkerCycler = {

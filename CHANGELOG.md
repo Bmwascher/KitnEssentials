@@ -130,6 +130,10 @@
 ### Shared Media
 - Added the "Details! Slash" status bar texture and a "Gun1" alert sound to the shared media options (selectable anywhere KitnEssentials offers a bar texture or sound dropdown)
 
+### Removed
+- Removed the Bloodlust Tracker module
+- Removed the Hide ActionBars module
+
 ---
 
 ## v2.0.1

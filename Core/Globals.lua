@@ -392,7 +392,7 @@ local PREVIEW_MODULES = {
     "StanceText", "CombatCross", "CombatTexts", "CombatRes",
     "CombatTimer", "PetStatusText", "DragonRiding",
     "FocusCastbar", "TargetCastbar", "RaidNotifications", "HuntersMark", "RangeChecker",
-    "TimeSpiral", "TotemTracker", "DisintegrateTicks", "StasisTracker", "Recuperate", "BloodlustTracker", "KickTracker",
+    "TimeSpiral", "TotemTracker", "DisintegrateTicks", "StasisTracker", "Recuperate", "KickTracker",
     "NoMovementAlert", "PrescienceTracker", "GreatVaultAlert", "PotionReady", "AuraExternals", "AuraDebuffs",
     "EnemyCounter", "EbonMightTracker", "DungeonCasts", "HealerMana", "InnervateTracker", "MaintenanceTracker",
     "ReadyCheckConsumables", "DeathNotifications",
@@ -410,7 +410,7 @@ local SECTION_PREVIEW_MODULES = {
         "Cursor", "DamageMeter",
     },
     utilities_section = {
-        "BloodlustTracker", "PotionReady", "RaidNotifications", "Recuperate",
+        "PotionReady", "RaidNotifications", "Recuperate",
         "TimeSpiral", "NoMovementAlert", "ReadyCheckConsumables",
     },
     class_section = {

@@ -3,7 +3,6 @@
 
     <Script file="RaidNotifications.lua" />
     <Script file="NoMovementAlert.lua" />
-    <Script file="BloodlustTracker.lua" />
     <Script file="TimeSpiral.lua" />
     <Script file="Recuperate.lua" />
     <Script file="WorldMarkerCycler.lua" />

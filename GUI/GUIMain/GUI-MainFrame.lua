@@ -77,7 +77,6 @@ GUIFrame.sidebarConfig = {
         text = "\226\128\162 General Utilities",
         defaultExpanded = false,
         items = {
-            { id = "BloodlustTracker", text = "Bloodlust Tracker", keywords = { "bloodlust", "heroism", "lust", "hero", "time warp", "primal rage", "exhaustion", "sated" } },
             { id = "PotionReady",   text = "Combat Potion Ready", keywords = { "potion", "pot", "combat", "consumable" } },
             { id = "MacroBuilders", text = "Macro Builders", keywords = { "macro", "macros", "builder", "focus", "pi", "power infusion", "command" } },
             { id = "NoMovementAlert", text = "No Movement Alert", keywords = { "movement", "alert", "cooldown" } },
@@ -113,7 +112,6 @@ GUIFrame.sidebarConfig = {
             { id = "Nicknames",         text = "Custom Nicknames", keywords = { "nickname", "nicknames", "name", "custom", "rename" } },
             { id = "CVars",             text = "CVars", keywords = { "cvar", "cvars", "console", "variable", "setting" } },
             { id = "GreatVaultAlert",   text = "Great Vault Alert", keywords = { "great vault", "vault", "weekly", "reward", "chest" } },
-            { id = "HideBars",          text = "Hide ActionBars", keywords = { "hide", "action bar", "actionbars", "bars", "mouseover", "fade" } },
             { id = "PositionController", text = "Position Controller", keywords = { "position", "move", "anchor", "frame", "controller", "edit" } },
             { id = "DragonRiding",      text = "Skyriding UI", keywords = { "skyriding", "dragonriding", "dragon riding", "vigor", "speed", "fly" } },
             { id = "SlashCommands",     text = "Slash Commands", keywords = { "slash", "command", "commands", "slash command" } },

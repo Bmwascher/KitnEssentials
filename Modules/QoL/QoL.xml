@@ -3,7 +3,6 @@
 
     <Script file="Automation.lua" />
     <Script file="DragonRiding.lua" />
-    <Script file="HideBars.lua" />
     <Script file="Optimize.lua" />
     <Script file="SlashCommands.lua" />
     <Script file="CombatLogger.lua" />
