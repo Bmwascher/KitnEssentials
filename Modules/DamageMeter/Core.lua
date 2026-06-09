@@ -35,6 +35,15 @@ local C_CVar = C_CVar
 local C_DeathRecap = C_DeathRecap
 local format = string.format
 local floor = math.floor
+local math_min = math.min
+local IsInRaid = IsInRaid
+local IsInGroup = IsInGroup
+local IsInGuild = IsInGuild
+-- Current chat API. The bare global SendChatMessage is deprecated in 12.0, so capture the
+-- namespaced C_ChatInfo.SendChatMessage once at load and call it under a non-colliding
+-- local name (a local literally named SendChatMessage still trips the deprecation lint).
+-- C_ChatInfo is a core namespace present before module files run.
+local SendChat = C_ChatInfo and C_ChatInfo.SendChatMessage
 
 -- Pre-built group unit tokens (mirrors EllesmereUI lines 298-300). UNIT_FLAGS
 -- can fire dozens of times per second during a pull, and GroupInCombat is hit
@@ -210,6 +219,7 @@ end
 --
 -- Routed from Core/Globals.lua's /kes dispatcher to DM:HandleSlash (no standalone
 -- chat command is registered). Subcommands: reset (clear all combat sessions);
+-- report [count] [channel] (post the primary window's view to chat, out of combat);
 -- anything else -- including bare "/kes dm" or "/kes dm toggle" -- toggles the dock.
 ---------------------------------------------------------------------------------
 
@@ -226,6 +236,9 @@ function DM:HandleSlash(input)
         end
         if self.Tick then self:Tick() end
         KE:Print("Damage Meter: sessions reset.")
+    elseif arg == "report" then
+        -- Everything after the "report" token is the optional "[count] [channel]" tail.
+        self:ReportView((input or ""):match("^%s*%S*%s*(.-)%s*$"))
     else
         -- "" or "toggle" (or anything else) -> toggle dock visibility.
         self:ToggleDock()
@@ -877,6 +890,168 @@ end
 DM.FormatRecapDelta = FormatRecapDelta
 
 ---------------------------------------------------------------------------------
+-- Report to chat (/kes dm report [count] [channel])
+--
+-- Posts the PRIMARY window (idx 1)'s current view -- the same resolved meter type /
+-- session / pinned segment the user sees -- as ranked chat lines. OUT OF COMBAT ONLY:
+-- source names and amounts are secret in combat (and in identity-restricted instances),
+-- and unlike FontString:SetText, SendChatMessage has no AllowedWhenTainted contract, so
+-- feeding it a secret string would taint. Every field that would be sent is issecretvalue-
+-- gated; if ANY is secret the report aborts BEFORE sending a single line (never a partial).
+-- SendChatMessage is normal player chat (NOT the instance-blocked SendAddonMessage), so it
+-- is allowed in dungeons/raids. Channel auto-picks RAID > PARTY > SAY; an explicit channel
+-- arg overrides. Count defaults to 5, clamped 1..25.
+---------------------------------------------------------------------------------
+
+local REPORT_CHANNELS = {
+    say = "SAY", party = "PARTY", raid = "RAID",
+    guild = "GUILD", officer = "OFFICER", instance = "INSTANCE_CHAT",
+}
+
+-- Meter types with a meaningful per-second (amount-over-time). Interrupts / Dispels are
+-- counts and Deaths are events, so a rate is noise -- omitted from the report for those.
+local REPORT_RATE_TYPES = {
+    [Enum.DamageMeterType.DamageDone] = true,
+    [Enum.DamageMeterType.HealingDone] = true,
+    [Enum.DamageMeterType.DamageTaken] = true,
+    [Enum.DamageMeterType.EnemyDamageTaken] = true,
+    [Enum.DamageMeterType.AvoidableDamageTaken] = true,
+}
+
+function DM:ReportView(rest, winIdx)
+    -- winIdx selects which window to report: the header Report button passes the clicked
+    -- window's index; the slash command omits it -> the primary window (1).
+    winIdx = winIdx or 1
+    -- Guard the captured chat API: a missing namespace is a clean no-op, not a nil call.
+    if not SendChat then return end
+    -- Parse "[count] [channel]" -- either/both optional, order-independent.
+    local count, channel
+    for tok in (rest or ""):gmatch("%S+") do
+        local num = tonumber(tok)
+        if num then
+            count = num
+        else
+            local c = REPORT_CHANNELS[tok:lower()]
+            if c then channel = c end
+        end
+    end
+    count = count or 5
+    if count < 1 then count = 1 elseif count > 25 then count = 25 end
+
+    -- Resolve the primary window's effective view (configured type + any live override),
+    -- its session type, and any pinned stored session -- exactly what RenderWindow shows.
+    local cfg = self:ResolveWindowConfig(winIdx)
+    if not cfg then
+        KE:Print("Damage Meter: no window to report.")
+        return
+    end
+    local meterType = self:EffectiveMeterType(winIdx, cfg) or Enum.DamageMeterType.DamageDone
+    local sessionType = cfg.SessionType or Enum.DamageMeterSessionType.Current
+    local W = self.windows_rt and self.windows_rt[winIdx]
+    local session = self:GetSession(sessionType, meterType, W and W._curSessionID)
+    local sources = session and session.combatSources
+    if not sources or not sources[1] then
+        KE:Print("Damage Meter: nothing to report yet.")
+        return
+    end
+
+    -- Total (for the share %) is secret in combat; when secret we just omit the percent.
+    -- Gate truthiness (NOT `~= nil`): an explicit equality compare on a secret value
+    -- taints, but truthiness of a secret NUMBER is allowed -- and issecretvalue runs
+    -- BEFORE the type/`> 0` checks so those only touch a proven-plain number.
+    local total = session.totalAmount
+    local totalUsable = total and not issecretvalue(total) and type(total) == "number" and total > 0
+
+    -- The report value is "total (dps/s, share%)" -- a chat-safe layout that does NOT use
+    -- the bar's "total | dps" pipe: a bare "|" is the chat escape-code char, so the chat
+    -- API rejects "| " as an invalid escape (a FontString tolerates it; chat does not).
+    -- The per-second is shown only for amount-over-time types (REPORT_RATE_TYPES);
+    -- Interrupts / Dispels are counts where a rate is noise, and Deaths report the death
+    -- time (M:SS). Each field is secret-gated before it reaches a line.
+    local isDeaths = (meterType == Enum.DamageMeterType.Deaths)
+    local isOverall = (sessionType == Enum.DamageMeterSessionType.Overall)
+    local wantRate = REPORT_RATE_TYPES[meterType] == true
+
+    -- Build the lines first; abort cleanly if any field we would send is secret (do NOT
+    -- send a partial report). Everything that reaches a line is therefore plain.
+    local n = math_min(count, #sources)
+    local lines = {}
+    for i = 1, n do
+        local src = sources[i]
+        local nm = src and src.name
+        if not nm or issecretvalue(nm) then
+            KE:Print("Damage Meter: report unavailable -- data is combat-restricted. Try again out of combat.")
+            return
+        end
+        -- nm is plain here, so string ops are taint-safe. Honor ShowRealm: strip the
+        -- realm suffix (player names never contain a hyphen, so the split is exact).
+        local shown = nm
+        if not (self.db and self.db.ShowRealm) then
+            shown = nm:match("^([^-]+)") or nm
+        end
+
+        if isDeaths then
+            -- Mirror the Deaths bar: death time (M:SS), nothing for Overall. FormatDeathTime
+            -- returns a plain "0:00" on a secret/nil time, so the line is always send-safe.
+            local t = isOverall and "" or (self.FormatDeathTime(src.deathTimeSeconds))
+            if t == "" then
+                lines[i] = format("%d. %s", i, shown)
+            else
+                lines[i] = format("%d. %s  %s", i, shown, t)
+            end
+        else
+            local amt = src.totalAmount
+            if not amt or issecretvalue(amt) then
+                KE:Print("Damage Meter: report unavailable -- data is combat-restricted. Try again out of combat.")
+                return
+            end
+            -- Per-second only for rate types; gate it secret like the total.
+            local ps
+            if wantRate then
+                ps = src.amountPerSecond
+                if ps and issecretvalue(ps) then
+                    KE:Print("Damage Meter: report unavailable -- data is combat-restricted. Try again out of combat.")
+                    return
+                end
+            end
+            -- amt and ps are proven plain. Compose "total (dps/s, share%)" with whichever
+            -- extras apply -- no "|" anywhere, so the line is chat-escape-safe.
+            local totalStr = FormatAmount(amt)
+            local psStr = ps and (FormatAmount(ps) .. "/s") or nil
+            local pctStr = totalUsable and format("%.1f%%", (amt / total) * 100) or nil
+            local extra
+            if psStr and pctStr then
+                extra = psStr .. ", " .. pctStr
+            else
+                extra = psStr or pctStr
+            end
+            if extra then
+                lines[i] = format("%d. %s  %s (%s)", i, shown, totalStr, extra)
+            else
+                lines[i] = format("%d. %s  %s", i, shown, totalStr)
+            end
+        end
+    end
+
+    -- Channel: explicit arg wins; else RAID in a raid, PARTY in a party, SAY solo.
+    if not channel then
+        if IsInRaid() then
+            channel = "RAID"
+        elseif IsInGroup() then
+            channel = "PARTY"
+        else
+            channel = "SAY"
+        end
+    end
+
+    -- Header line + ranked rows. FormatWindowLabel is built from plain enum names.
+    SendChat("KitnEssentials - " .. self:FormatWindowLabel(meterType, sessionType) .. ":", channel)
+    for i = 1, #lines do
+        SendChat(lines[i], channel)
+    end
+end
+
+---------------------------------------------------------------------------------
 -- Header-icon callbacks (Phase 4)
 --
 -- Wired by the three header buttons built in Window.lua CreateWindow. The window
@@ -919,6 +1094,39 @@ function DM:HeaderReset(_)
     if self.CloseAllSelectors then self:CloseAllSelectors() end
     if self.CloseAllSegmentMenus then self:CloseAllSegmentMenus() end
     if self.Tick then self:Tick() end
+end
+
+-- Report channel picker for the header Report button (Details-style). Opens a MenuUtil
+-- context menu of the chat channels available right now; choosing one reports THIS window's
+-- view there via ReportView (the secret-safe build + send). MenuUtil item callbacks fire on
+-- the user's click (a hardware event), so the SendChatMessage inside ReportView is allowed.
+-- Channels are gated by current membership -- Party/Instance need a group, Raid a raid,
+-- Guild/Officer a guild; Say is always offered. Falls back to a direct auto-channel report
+-- if the menu API is somehow unavailable.
+function DM:OpenReportMenu(W)
+    local winIdx = W and W.idx
+    if not (MenuUtil and MenuUtil.CreateContextMenu) then
+        self:ReportView(nil, winIdx)
+        return
+    end
+    local owner = (W and W.headerBtns and W.headerBtns.report) or UIParent
+    MenuUtil.CreateContextMenu(owner, function(_, root)
+        root:CreateTitle("Report to")
+        root:CreateButton("Say", function() self:ReportView("say", winIdx) end)
+        if IsInGroup() then
+            root:CreateButton("Party", function() self:ReportView("party", winIdx) end)
+        end
+        if IsInInstance() and IsInGroup() then
+            root:CreateButton("Instance", function() self:ReportView("instance", winIdx) end)
+        end
+        if IsInRaid() then
+            root:CreateButton("Raid", function() self:ReportView("raid", winIdx) end)
+        end
+        if IsInGuild() then
+            root:CreateButton("Guild", function() self:ReportView("guild", winIdx) end)
+            root:CreateButton("Officer", function() self:ReportView("officer", winIdx) end)
+        end
+    end)
 end
 
 ---------------------------------------------------------------------------------

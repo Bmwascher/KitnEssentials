@@ -341,16 +341,21 @@ function DM:CreateWindow(winIdx)
     W.indexBadge.text:SetText(tostring((self._winDisplayPos and self._winDisplayPos[winIdx]) or winIdx))
     if self._badgesShown then W.indexBadge:Show() else W.indexBadge:Hide() end
 
-    -- Phase 4 header icons: settings / reset / segment, right-aligned, stepping
-    -- left from the frame's TOPRIGHT. Built once here (the pool-build below never
-    -- re-runs); visibility is driven by db.ShowHeaderIcons (Task 7). The frame level
+    -- Phase 4 header icons: settings / reset / segment / report, right-aligned,
+    -- stepping left from the frame's TOPRIGHT (report furthest left). Built once here
+    -- (the pool-build below never re-runs); visibility is driven by db.ShowHeaderIcons
+    -- (Task 7). The frame level
     -- is bumped above the bars so the icons stay clickable over the body rows. The
     -- callbacks resolve DM methods at click time (Core.lua defines them), matching
     -- the runtime-resolve pattern used by the OnClick -> DM:OpenDetail hook above.
-    local function MakeHeaderBtn(tex, tooltip, onClick, xStep)
+    local function MakeHeaderBtn(tex, tooltip, onClick, xStep, size)
+        size = size or 12
         local b = CreateFrame("Button", nil, W.frame)
-        b:SetSize(12, 12)
-        b:SetPoint("TOPRIGHT", W.frame, "TOPRIGHT", -2 - xStep, -3)
+        b:SetSize(size, size)
+        -- Right edges stay on the 18px step grid; a larger icon (report) grows LEFT into
+        -- its own empty slot and rises by half the size delta from the 12px baseline
+        -- (top -4) so every icon shares one vertical center line.
+        b:SetPoint("TOPRIGHT", W.frame, "TOPRIGHT", -2 - xStep, -4 - ((12 - size) / 2))
         b:SetFrameLevel(W.frame:GetFrameLevel() + 5)
         b.icon = b:CreateTexture(nil, "OVERLAY")
         b.icon:SetAllPoints(b)
@@ -379,6 +384,11 @@ function DM:CreateWindow(winIdx)
         "Reset", function() DM:HeaderReset(W) end, 18)
     W.headerBtns.segment = MakeHeaderBtn("Interface\\AddOns\\KitnEssentials\\Media\\Icon\\dm_segment.tga",
         "Segment", function() DM:ToggleSegmentMenu(W) end, 36)
+    -- Report sits just left of segment (xStep 50, ~2px gap) and is larger (18px) than the
+    -- 12px action icons. Clicking it opens a channel picker (DM:OpenReportMenu) that reports
+    -- THIS window's view to the chosen chat channel.
+    W.headerBtns.report = MakeHeaderBtn("Interface\\AddOns\\KitnEssentials\\Media\\Icon\\dm_report.blp",
+        "Report", function() DM:OpenReportMenu(W) end, 50, 18)
 
     -- The ⌚ segment button opens its picker on HOVER (quick adjust) rather than only on
     -- click -- the custom dropdown (SegmentMenu.lua) IS the content, so it replaces the
