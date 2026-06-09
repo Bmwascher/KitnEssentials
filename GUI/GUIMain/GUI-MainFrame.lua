@@ -147,6 +147,7 @@ GUIFrame.sidebarConfig = {
             { id = "DungeonCasts",                text = "Dungeon Casts", keywords = { "dungeon cast", "cast", "interrupt", "mob", "enemy", "castbar", "m+" } },
             { id = "EnemyCounter",                text = "Enemy Counter", keywords = { "enemy", "counter", "count", "mobs", "pull", "nameplate", "m+" } },
             { id = "KickTracker",                 text = "Interrupt Tracker", keywords = { "interrupt", "kick", "tracker", "cc", "stop", "party", "m+" } },
+            { id = "MythicPlusTimer",             text = "Mythic+ Timer", keywords = { "mythic plus", "m+", "keystone", "timer", "forces", "deaths", "splits", "personal best", "affix", "warpdeplete" } },
             { id = "WarpDepleteForces",           text = "WarpDeplete+", keywords = { "warpdeplete", "mythic plus", "m+", "keystone", "forces", "percent", "timer", "progress" } },
         },
     },

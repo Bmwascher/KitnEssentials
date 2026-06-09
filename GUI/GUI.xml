@@ -85,6 +85,7 @@
     <Script file="GUITabs\GUIDungeons\GUI-WarpDepleteForces.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-EnemyCounter.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-DeathNotifications.lua" />
+    <Script file="GUITabs\GUIDungeons\GUI-MythicPlusTimer.lua" />
 
     <!-- Healer tabs -->
     <Script file="GUITabs\GUIHealer\GUI-HealerMana.lua" />
