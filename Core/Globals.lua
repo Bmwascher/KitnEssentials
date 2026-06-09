@@ -148,6 +148,22 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
         return
     end
 
+    -- /kes mt opens the Mythic+ Timer GUI page (matches /kes dm's module route).
+    -- HandleSlash-first dispatch: the module gains a HandleSlash in a later
+    -- phase for demo/preview subcommands; until then the GUI fallback runs.
+    local mtRest = msg:match("^[Mm][Tt]%s*(.*)$")
+    if mtRest ~= nil then
+        local mt = KitnEssentials and KitnEssentials:GetModule("MythicPlusTimer", true)
+        if mt and mt.HandleSlash then
+            mt:HandleSlash(mtRest)
+        elseif KE.GUIFrame and KE.GUIFrame.OpenPage then
+            -- OpenPage(itemId, sectionId, context) — GUI/GUIWidgets/GUI-Sidebar.lua:755.
+            -- Self-shows the GUI, expands the section, selects the page.
+            KE.GUIFrame:OpenPage("MythicPlusTimer", "dungeons_section")
+        end
+        return
+    end
+
     msg = msg:lower()
     if msg == "" or msg == "gui" then
         if KE.GUIFrame then
