@@ -30,6 +30,13 @@ local table_sort = table.sort
 -- Same fixed pool ceiling as the main bars; the detail list never exceeds it.
 local DETAIL_POOL_SIZE = DM.BAR_POOL_SIZE or 40
 
+-- Spell-breakdown bar fill = neutral gray (EUI/Details convention). In a single-source
+-- breakdown every row is the SAME player, so a class-colored fill carries no information;
+-- a neutral fill defers to the text and keeps the spells(gray) / targets(red) two-tone
+-- reading as "your damage vs the enemies you hit". The player's class color still tints the
+-- TITLE (header name), matching EUI/Details -- only the bars go neutral. Tunable RGB.
+local DETAIL_BAR_COLOR = { 0.40, 0.40, 0.44 }
+
 -- One detail row: [icon] name .......... value. Scripts wired ONCE (pool reuse).
 -- Clicking any row closes the panel (the back gesture); mirrors EUI MakeSpellRow:1712.
 local function MakeDetailRow(parent)
@@ -236,7 +243,6 @@ function DM:RenderBreakdown(W)
 
     local stride = W._snapStride or 18
     local barH = W._snapHeight or 16
-    local classColor = W._detailClass and RAID_CLASS_COLORS[W._detailClass]
 
     -- maxAmount drives the fill width. Out of combat amounts are plain numbers; gate
     -- percent on issecretvalue + type defensively before any arithmetic.
@@ -295,15 +301,10 @@ function DM:RenderBreakdown(W)
             local amtPlain = amt
             if issecretvalue(amt) or type(amt) ~= "number" then amtPlain = 0 end
 
-            -- Fill: class-colored (source's class), width by amount.
+            -- Fill: neutral gray (DETAIL_BAR_COLOR), width by amount. See the constant note.
             row.fill:SetMinMaxValues(0, maxAmount or 1)
             row.fill:SetValue(amt or 0)
-            if classColor then
-                row.fill:SetStatusBarColor(classColor.r, classColor.g, classColor.b)
-            else
-                local ar, ag, ab = KE:GetAccentColor()
-                row.fill:SetStatusBarColor(ar or 0.6, ag or 0.6, ab or 0.6)
-            end
+            row.fill:SetStatusBarColor(DETAIL_BAR_COLOR[1], DETAIL_BAR_COLOR[2], DETAIL_BAR_COLOR[3])
 
             -- Name: GetSpellName (secret-guard the RETURN), fall back to creatureName/Unknown.
             local nm
@@ -1180,7 +1181,6 @@ function DM:PopulateHoverTip(W, bar)
             _tip.colHdr.spell:Show(); _tip.colHdr.amount:Show(); _tip.colHdr.dps:Show(); _tip.colHdr.pct:Show()
         end
 
-        local classColor = bar._classFilename and RAID_CLASS_COLORS[bar._classFilename]
         local maxAmount = src.maxAmount
         local canPercent = maxAmount and (not issecretvalue(maxAmount)) and type(maxAmount) == "number"
             and src.totalAmount and not issecretvalue(src.totalAmount)
@@ -1240,12 +1240,8 @@ function DM:PopulateHoverTip(W, bar)
 
                 row.fill:SetMinMaxValues(0, maxAmount or 1)
                 row.fill:SetValue(amt or 0)
-                if classColor then
-                    row.fill:SetStatusBarColor(classColor.r, classColor.g, classColor.b)
-                else
-                    local ar, ag, ab = KE:GetAccentColor()
-                    row.fill:SetStatusBarColor(ar or 0.6, ag or 0.6, ab or 0.6)
-                end
+                -- Fill: neutral gray (DETAIL_BAR_COLOR) -- see constant note.
+                row.fill:SetStatusBarColor(DETAIL_BAR_COLOR[1], DETAIL_BAR_COLOR[2], DETAIL_BAR_COLOR[3])
 
                 local nm
                 if spID then
