@@ -4,4 +4,8 @@
     <Script file="KickTracker.lua" />
     <Script file="DungeonCasts.lua" />
     <Script file="DeathNotifications.lua" />
+    <Script file="MythicPlusTimer\MythicPlusTimer.lua" />
+    <Script file="MythicPlusTimer\MythicPlusTimer_HUD.lua" />
+    <Script file="MythicPlusTimer\MythicPlusTimer_Splits.lua" />
+    <Script file="MythicPlusTimer\MythicPlusTimer_Overlay.lua" />
 </Ui>
