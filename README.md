@@ -6,7 +6,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 
 ## Features
 
-- **45+ modules** — combat HUD, buff tracking, automation, dungeon tools, and UI skinning
+- **50+ modules** — combat HUD, buff tracking, automation, dungeon tools, and UI skinning
 - **Dark themed GUI** — custom settings panel with sidebar navigation and 8 color themes
 - **Edit mode** — drag any element to reposition, with anchor and strata controls
 - **Profile system** — save, copy, and reset per-character or shared profiles
@@ -25,6 +25,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Advanced Debuffs | Bar-based dispellable-debuff display with cooldown swipe, native countdown text, dispel-type border color and atlas overlay, PLAYER filter, per-type include/exclude, and spell-ID blocklist (subsumes the older Boss Debuffs module) |
 | External and Defensive Buffs | External defensive cooldowns cast onto you (Pain Suppression, Ironbark, etc.) with cooldown swipe, native countdown text, configurable glow per cast, BigWigs glow integration on incoming raid hits, and a Sound Test button |
 | Focus & Target Castbar | Repositionable cast bars with kick indicators, target names, focus raid marker, important-spell glow, out-of-range dimming, color settings, and cast sound alert (tabbed GUI) |
+| Damage Meter | Standalone multi-window damage/healing meter built on the 12.0 C_DamageMeter API — proportional dock with shared backdrop, per-content auto-swapping layouts, eight meter types, class-colored bars, out-of-combat spell breakdown / death recap / target details, segment history, report-to-chat, and a replace-Blizzard option |
 
 ## Utilities
 

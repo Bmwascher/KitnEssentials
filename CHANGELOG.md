@@ -2,6 +2,17 @@
 
 ## v3.0.0
 
+### Damage Meter
+- **NEW:** Damage Meter module — a standalone damage/healing meter built entirely on the 12.0 `C_DamageMeter` API (no external meter addon required). Replaces Blizzard's built-in meter and renders into a multi-window dock wrapped by one shared, auto-sizing backdrop
+- **NEW:** Proportional multi-window dock — arrange windows into columns and stacked rows, resize panes by dragging the gaps, and rearrange them by dragging boxes on a live layout map in the GUI
+- **NEW:** Per-content auto-swap — each window stores a separate layout per context (Default / Dungeon / Mythic+ / Raid / Arena / Battleground / Scenario) and switches automatically as you change content, inheriting from Default until overridden
+- **NEW:** Meter types — Damage Done, Healing Done, Damage Taken, Enemy Damage Taken, Avoidable Damage Taken, Deaths, Interrupts, and Dispels, switchable per window via a right-click view selector or the GUI
+- **NEW:** Out-of-combat detail views — click a bar for a per-spell breakdown, a death-recap timeline (`C_DeathRecap`), and a Targets list of the top enemies a player hit; plus a hover quick-peek tooltip
+- **NEW:** Segment history — pick Current, Overall, or a recent fight from a per-window picker; the Deaths view shows a M:SS death time
+- **NEW:** Report to chat — a header button (and `/kes dm report`) posts a window's totals, DPS, and share % to a chosen channel (Say / Party / Raid / Instance / Guild / Officer)
+- **NEW:** Class-colored bars with icon, name, and total | per-second; configurable visible-bar count, Always-Show-Self, realm-name display, decimals, and rank numbers
+- Built secret-value-safe for 12.0 — combat amounts feed native status-bar interpolation and `AbbreviateNumbers` with no tainting arithmetic, and the meter ticks only in combat (fully detaches when idle)
+
 ### Advanced Debuffs
 - **NEW:** Advanced Debuffs module — bar-based dispellable-debuff display with built-in cooldown swipe, native countdown text, per-dispel-type border color, and a per-type atlas overlay (Magic / Curse / Poison / Disease / Enrage / Bleed). Subsumes the older Boss Debuffs module; existing settings migrate automatically on first load
 - **NEW:** Encounter-aura support — works on boss debuffs that ship as Secret Values in 12.0+. Built taint-safely via `C_UnitAuras.GetAuraDispelTypeColor` curves + `LuaDurationObject`, so dispel type and countdown render correctly even when raw aura fields are masked
@@ -112,6 +123,12 @@
 - **NEW:** Expanded FPS limits (max FPS, loading-screen FPS cap, higher background FPS) and cosmetic toggles (screen-flash override, camera & UI shake)
 - View Distance & Detail rows merged into the Base Graphics Quality card; Spell Queue Window (180 ms) retained
 - If you'd optimized previously, the panel will flag the new recommendations — click *Optimize All* again to adopt them (your original values stay restorable via Revert)
+
+### Recuperate
+- Reduced idle CPU — dropped a redundant `[dead]` clause from the button's secure visibility driver, which was being re-evaluated on every player health change; the button still hides while you're dead via its existing health-based alpha
+
+### Shared Media
+- Added the "Details! Slash" status bar texture and a "Gun1" alert sound to the shared media options (selectable anywhere KitnEssentials offers a bar texture or sound dropdown)
 
 ---
 
