@@ -964,7 +964,9 @@ local function RenderTipTargets(self, bar, cfg, sessionID, topY, stride, barH)
             row:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", -TIP_PAD, yOff)
             row:SetHeight(barH)
             row.icon:SetSize(barH, barH)   -- per-enemy dm_deaths glyph tracks the row height
-            row.fill:SetStatusBarTexture(KE:GetStatusbarPath(self.db and self.db.StatusBarTexture or "KitnUI"))
+            -- Texture is owned by the build-time set (MakeTargetRow) + ReapplyHoverTipVisuals
+            -- (re-applied on any GUI texture change), exactly like the spell-row path -- so it is
+            -- NOT re-set per populate here (avoids a redundant LSM Fetch per target row).
             row.fill:SetMinMaxValues(0, tMax)
             row.fill:SetValue(t.total)
             row.fill:SetStatusBarColor(0.55, 0.20, 0.20)
