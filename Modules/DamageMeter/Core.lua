@@ -674,6 +674,16 @@ function DM:OnMeterReset()
     if self.InvalidateTargetsCache then self:InvalidateTargetsCache() end
     -- The data is wiped: a hovered tip must re-populate (or clear) on the next poll.
     self._hoverTipDirty = true
+    -- A reset invalidates every stored sessionID, so a window still pinned to one
+    -- (W._curSessionID, set via the segment menu) would read a dead id and render
+    -- blank until the user re-picks. Drop the pin on every window so it falls back to
+    -- the live Current/Overall view. Mirrors the CHALLENGE_MODE_START teardown; the
+    -- field is runtime-only, so a plain nil is safe to set unconditionally.
+    if self.windows_rt then
+        for _, W in pairs(self.windows_rt) do
+            W._curSessionID = nil
+        end
+    end
     -- A reset empties the bars; close any open selector so the cleared bars show
     -- (DAMAGE_METER_RESET can fire from an external reset with a selector still open).
     if self.CloseAllSelectors then self:CloseAllSelectors() end
@@ -897,6 +907,10 @@ function DM:HeaderReset(_)
     -- in OnRegenDisabled). All windows, since ResetAllCombatSessions is global.
     if self.windows_rt then
         for _, w in pairs(self.windows_rt) do
+            -- ResetAllCombatSessions invalidates every sessionID: drop any pin so the
+            -- window stops reading a now-dead stored session and falls back to live
+            -- (mirrors the CHALLENGE_MODE_START / DAMAGE_METER_RESET teardown).
+            w._curSessionID = nil
             if w._detailOpen and self.CloseDetail then self:CloseDetail(w) end
         end
     end
