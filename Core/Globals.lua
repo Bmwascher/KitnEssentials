@@ -32,6 +32,10 @@ KE.FONT = KE.PATH .. [[Fonts\]] .. "Expressway.TTF"
 if KE.LSM then
     KE.LSM:Register("font", "Expressway", KE.FONT)
     KE.LSM:Register("statusbar", "KitnUI", KE.PATH .. [[Statusbars\KitnEssentials.blp]])
+    -- "Details! Slash": Details' bar_of_bars.png, shipped here as DetailsSlash.png under the
+    -- SAME LSM name Details uses, so a profile referencing it keeps the texture even with
+    -- Details disabled/uninstalled (LSM keeps the first registration of a name). .png loads in 12.0.
+    KE.LSM:Register("statusbar", "Details! Slash", KE.PATH .. [[Statusbars\DetailsSlash.png]])
     KE.LSM:Register("border", "WHITE8X8", [[Interface\Buttons\WHITE8X8]])
 
     -- KitnEssentials sound presets — surfaced in every LSM-aware sound
@@ -44,7 +48,7 @@ if KE.LSM then
         "Add", "Adds", "AoE", "Aoe And Dance",
         "Boss Buffed", "CC", "Clear", "Dance", "Defensive",
         "Dispell", "Dmg Amp", "Dodge", "Drop", "Feet",
-        "Fixate Incoming", "Frontal", "Hide",
+        "Fixate Incoming", "Frontal", "Gun1", "Hide",
         "Intermission", "Interrupt", "Kick", "Knockback", "Leap",
         "Move", "Phasing", "Pools", "Pull", "Soak", "Soaks", "Split",
         "Spread", "Stack", "Stop Casting", "Totem",
