@@ -31,7 +31,8 @@ local PLUS_TWO_RATIO   = 0.8   -- +2 cutoff (80% of timer)
 local PLUS_THREE_RATIO = 0.6   -- +3 cutoff (60% of timer)
 local CHALLENGERS_PERIL_AFFIX_ID = 152  -- adds +90s; thresholds computed on (maxTime-90)
 
--- Single shared run state (the contract's MPT.run). Reset by MPT:ResetRun().
+-- Single shared run state (the contract's MPT.run). Reset by MPT:ResetRun()
+-- (Task 1.7) — which must wipe() the nested tables in place, not re-assign them.
 MPT.run = {
     active = false, completed = false, countdown = false,
     mapID = nil, level = 0, affixIDs = {}, affixNames = {},
@@ -228,8 +229,25 @@ function MPT:UpdateForces()
     for i = 1, numCriteria do
         local info = C_ScenarioInfo.GetCriteriaInfo(i)
         if info and info.isWeightedProgress then
-            -- quantityString carries the absolute count with a stray '%'; strip to a number.
-            local current = info.quantityString and tonumber(info.quantityString:match("%d+")) or 0
+            -- quantityString carries the absolute count with a stray '%'. Locale-safe
+            -- parse (EUI pattern): strip '%', treat a comma with no dot as a decimal
+            -- separator (DE/FR clients), then tonumber. Cached on the raw string —
+            -- criteria events fire far more often than the count actually changes.
+            local qs = info.quantityString
+            local current
+            if qs == f._lastQS then
+                current = f._lastQSParsed or 0
+            else
+                current = 0
+                if qs and qs ~= "" then
+                    local normalized = qs:gsub("%%", "")
+                    if normalized:find(",") and not normalized:find("%.") then
+                        normalized = normalized:gsub(",", ".")
+                    end
+                    current = tonumber(normalized) or 0
+                end
+                f._lastQS, f._lastQSParsed = qs, current
+            end
             local total = info.totalQuantity or 0
             f.current = current
             f.total = total
