@@ -263,9 +263,6 @@ function MPT:RenderBar()
     end
 
     -- Gate the recolor: SetStatusBarColor is a draw call; skip when unchanged.
-    -- NOTE: ApplySettings (Task 2.5) must nil bars._keThreshSig to bust
-    -- the threshold-geometry cache when TickColor or BarHeight changes via GUI.
-    -- For symmetry, the fill-color cache is inline on bar itself.
     if bar._keFillR ~= r or bar._keFillG ~= g or bar._keFillB ~= b then
         bar._keFillR, bar._keFillG, bar._keFillB = r, g, b
         bar:SetStatusBarColor(r, g, b)
@@ -335,7 +332,7 @@ function MPT:RenderThresholds()
 
     -- Geometry cache: all SetPoint/SetSize/SetColorTexture calls are pure
     -- functions of this signature. Skip when nothing structural changed.
-    local sig = barW .. ":" .. maxTime .. ":" .. t3 .. ":" .. t2 .. ":"
+    local sig = barW .. ":" .. maxTime .. ":" .. t3 .. ":" .. t2 .. ":" .. t1 .. ":"
                 .. (db.BarHeight or 14) .. ":" .. tr .. ":" .. tg .. ":" .. tb
     if bars._keThreshSig ~= sig then
         bars._keThreshSig = sig
