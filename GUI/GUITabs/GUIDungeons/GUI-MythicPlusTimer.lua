@@ -34,6 +34,39 @@ local function MediaList(kind, fallback)
     return out
 end
 
+-- Shared color-picker row helper (used by Timer, Forces, and future tabs).
+-- Signature: AddColor(card, db, manager, applyFn, label, key, default, isLast)
+local function AddColor(card, db, manager, applyFn, label, key, default, isLast)
+    local row = GUIFrame:CreateRow(card.content, isLast and Theme.rowHeightLast or Theme.rowHeight)
+    local picker = GUIFrame:CreateColorPicker(row, label, {
+        color = db[key] or default,
+        callback = function(r, g, b) db[key] = { r, g, b }; applyFn() end,
+    })
+    row:AddWidget(picker, 1)
+    manager:Register(picker, "all")
+    card:AddRow(row, isLast and Theme.rowHeightLast or Theme.rowHeight, isLast and 0 or nil)
+end
+
+local FORCES_FORMAT_OPTIONS = {
+    { key = "PERCENT",       text = "Percent  (82.52%)" },
+    { key = "COUNT",         text = "Count  (198/240)" },
+    { key = "COUNT_PERCENT", text = "Count + Percent  (198/240 - 82.52%)" },
+    { key = "REMAINING",     text = "Remaining  (42 left)" },
+    { key = "CUSTOM",        text = "Custom (token string)" },
+}
+
+local FORCES_PLACEMENT_OPTIONS = {
+    { key = "CORNER", text = "Corner" },
+    { key = "CENTER", text = "Centered" },
+    { key = "BESIDE", text = "Beside Bar" },
+}
+
+local FORCES_BRACKET_OPTIONS = {
+    { key = "NONE",   text = "None  (198/240)" },
+    { key = "SQUARE", text = "Square  ([198/240])" },
+    { key = "ROUND",  text = "Round  ((198/240))" },
+}
+
 -- Forward declarations — assigned in Tasks 5.5–5.10.
 local BuildTimerTab, BuildForcesTab, BuildObjectivesTab, BuildDeathsTab, BuildOverlayTab, BuildGeneralTab -- luacheck: ignore 221
 
@@ -199,21 +232,11 @@ BuildTimerTab = function(scrollChild, yOffset, db, manager)
     -- Card 6: Colors
     local colorsCard = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
     manager:Register(colorsCard, "all")
-    local function AddColor(card, label, key, default, isLast)
-        local row = GUIFrame:CreateRow(card.content, isLast and Theme.rowHeightLast or Theme.rowHeight)
-        local picker = GUIFrame:CreateColorPicker(row, label, {
-            color = db[key] or default,
-            callback = function(r, g, b) db[key] = { r, g, b }; ApplySettings() end,
-        })
-        row:AddWidget(picker, 1)
-        manager:Register(picker, "all")
-        card:AddRow(row, isLast and Theme.rowHeightLast or Theme.rowHeight, isLast and 0 or nil)
-    end
-    AddColor(colorsCard, "Timer (running)",  "TimerColor",        { 1, 1, 1 })
-    AddColor(colorsCard, "Timer (timed)",    "TimerSuccessColor", { 1, 0.83, 0.22 })
-    AddColor(colorsCard, "Timer (depleted)", "TimerExpiredColor", { 1, 0.16, 0.18 })
-    AddColor(colorsCard, "Bar Fill",         "BarColor",          { 0.56, 0.56, 0.56 })
-    AddColor(colorsCard, "Threshold Ticks",  "TickColor",         { 1, 1, 1 }, true)
+    AddColor(colorsCard, db, manager, ApplySettings, "Timer (running)",  "TimerColor",        { 1, 1, 1 })
+    AddColor(colorsCard, db, manager, ApplySettings, "Timer (timed)",    "TimerSuccessColor", { 1, 0.83, 0.22 })
+    AddColor(colorsCard, db, manager, ApplySettings, "Timer (depleted)", "TimerExpiredColor", { 1, 0.16, 0.18 })
+    AddColor(colorsCard, db, manager, ApplySettings, "Bar Fill",         "BarColor",          { 0.56, 0.56, 0.56 })
+    AddColor(colorsCard, db, manager, ApplySettings, "Threshold Ticks",  "TickColor",         { 1, 1, 1 }, true)
     yOffset = colorsCard:GetNextOffset()
 
     -- Card 7: Backdrop
@@ -248,6 +271,132 @@ BuildTimerTab = function(scrollChild, yOffset, db, manager)
     bgCard:AddRow(rowB2, Theme.rowHeightLast, 0)
     yOffset = bgCard:GetNextOffset()
 
+    return yOffset
+end
+
+BuildForcesTab = function(scrollChild, yOffset, db, manager)
+    manager:SetCondition("forcesCustom", function()
+        return db.Enabled ~= false and db.ShowForces ~= false and (db.ForcesFormat == "CUSTOM")
+    end)
+    manager:SetCondition("forcesBanded", function()
+        return db.Enabled ~= false and db.ShowForces ~= false and db.ForcesBandedColors == true
+    end)
+
+    -- Card 1: Enable
+    local card1 = GUIFrame:CreateCard(scrollChild, "Forces", yOffset)
+    manager:Register(card1, "all")
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local showCheck = GUIFrame:CreateCheckbox(row1, "Show Forces", {
+        value = db.ShowForces ~= false,
+        callback = function(checked)
+            db.ShowForces = checked; ApplySettings()
+            manager:UpdateAll(db.Enabled ~= false)
+        end,
+    })
+    row1:AddWidget(showCheck, 1)
+    manager:Register(showCheck, "all")
+    card1:AddRow(row1, Theme.rowHeightLast, 0)
+    yOffset = card1:GetNextOffset()
+
+    -- Card 2: Format
+    local fmtCard = GUIFrame:CreateCard(scrollChild, "Format", yOffset)
+    manager:Register(fmtCard, "all")
+    local row2 = GUIFrame:CreateRow(fmtCard.content, Theme.rowHeight)
+    local fmtDrop = GUIFrame:CreateDropdown(row2, "Text Format", {
+        options = FORCES_FORMAT_OPTIONS,
+        value = db.ForcesFormat or "PERCENT",
+        callback = function(key)
+            db.ForcesFormat = key; ApplySettings()
+            manager:UpdateAll(db.Enabled ~= false)
+        end,
+    })
+    row2:AddWidget(fmtDrop, 0.5)
+    manager:Register(fmtDrop, "all")
+    local placeDrop = GUIFrame:CreateDropdown(row2, "Placement", {
+        options = FORCES_PLACEMENT_OPTIONS,
+        value = db.ForcesPlacement or "CORNER",
+        callback = function(key) db.ForcesPlacement = key; ApplySettings() end,
+    })
+    row2:AddWidget(placeDrop, 0.5)
+    manager:Register(placeDrop, "all")
+    fmtCard:AddRow(row2, Theme.rowHeight)
+
+    local rowBr = GUIFrame:CreateRow(fmtCard.content, Theme.rowHeight)
+    local bracketDrop = GUIFrame:CreateDropdown(rowBr, "Bracket Style", {
+        options = FORCES_BRACKET_OPTIONS,
+        value = db.ForcesBracketStyle or "NONE",
+        callback = function(key) db.ForcesBracketStyle = key; ApplySettings() end,
+    })
+    rowBr:AddWidget(bracketDrop, 1)
+    manager:Register(bracketDrop, "all")
+    fmtCard:AddRow(rowBr, Theme.rowHeight)
+
+    local row3 = GUIFrame:CreateRow(fmtCard.content, Theme.rowHeight)
+    local customBox = GUIFrame:CreateEditBox(row3, "Custom Format", {
+        value = db.ForcesCustomFormat or ":count:/:totalcount: :percent:",
+        callback = function(text) db.ForcesCustomFormat = text; ApplySettings() end,
+    })
+    row3:AddWidget(customBox, 1)
+    manager:Register(customBox, "forcesCustom")
+    fmtCard:AddRow(row3, Theme.rowHeight)
+
+    local noteRow = GUIFrame:CreateRow(fmtCard.content, 78)
+    local noteText = GUIFrame:CreateText(noteRow,
+        KE:ColorTextByTheme("Tokens"),
+        KE:ColorTextByTheme(":percent:") .. " current %  " ..
+        KE:ColorTextByTheme(":count:") .. " current count\n" ..
+        KE:ColorTextByTheme(":totalcount:") .. " total  " ..
+        KE:ColorTextByTheme(":remainingcount:") .. " count remaining\n" ..
+        KE:ColorTextByTheme(":remainingpercent:") .. " % remaining",
+        78, "hide")
+    noteRow:AddWidget(noteText, 1)
+    manager:Register(noteText, "all")
+    fmtCard:AddRow(noteRow, 78, 0)
+    yOffset = fmtCard:GetNextOffset()
+
+    -- Card 3: Colors
+    local colorsCard = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
+    manager:Register(colorsCard, "all")
+    AddColor(colorsCard, db, manager, ApplySettings, "Forces Bar",       "ForcesColor",         { 0.73, 0.62, 0.13 })
+    AddColor(colorsCard, db, manager, ApplySettings, "Forces Complete",  "ForcesCompleteColor", { 0.2, 0.82, 0.31 })
+
+    local bandedRow = GUIFrame:CreateRow(colorsCard.content, Theme.rowHeight)
+    local bandedCheck = GUIFrame:CreateCheckbox(bandedRow, "Banded Colors (by % bracket)", {
+        value = db.ForcesBandedColors == true,
+        callback = function(checked)
+            db.ForcesBandedColors = checked; ApplySettings()
+            manager:UpdateAll(db.Enabled ~= false)
+        end,
+    })
+    bandedRow:AddWidget(bandedCheck, 1)
+    manager:Register(bandedCheck, "all")
+    colorsCard:AddRow(bandedRow, Theme.rowHeight)
+
+    local BAND_LABELS = { "0-20%", "20-40%", "40-60%", "60-80%", "80-100%" }
+    local function AddBandPicker(row, i, frac)
+        local picker = GUIFrame:CreateColorPicker(row, "Band " .. BAND_LABELS[i], {
+            color = (db.ForcesBandPalette and db.ForcesBandPalette[i]) or { 1, 1, 1 },
+            callback = function(r, g, b)
+                db.ForcesBandPalette = db.ForcesBandPalette or {}
+                db.ForcesBandPalette[i] = { r, g, b }
+                ApplySettings()
+            end,
+        })
+        row:AddWidget(picker, frac)
+        manager:Register(picker, "forcesBanded")
+    end
+
+    local bandRowA = GUIFrame:CreateRow(colorsCard.content, Theme.rowHeight)
+    AddBandPicker(bandRowA, 1, 1 / 3)
+    AddBandPicker(bandRowA, 2, 1 / 3)
+    AddBandPicker(bandRowA, 3, 1 / 3)
+    colorsCard:AddRow(bandRowA, Theme.rowHeight)
+
+    local bandRowB = GUIFrame:CreateRow(colorsCard.content, Theme.rowHeightLast)
+    AddBandPicker(bandRowB, 4, 0.5)
+    AddBandPicker(bandRowB, 5, 0.5)
+    colorsCard:AddRow(bandRowB, Theme.rowHeightLast, 0)
+    yOffset = colorsCard:GetNextOffset()
     return yOffset
 end
 
