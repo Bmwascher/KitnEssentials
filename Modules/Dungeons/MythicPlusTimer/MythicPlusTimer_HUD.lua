@@ -186,6 +186,112 @@ function MPT:BuildHUD()
     bars.forcesPullOverlay:SetColorTexture(1, 1, 1, 0.35)
     bars.forcesPullOverlay:Hide()
 
+    -- Deaths hover hit-frame (built once). The headline FontString is
+    -- MPT.frames.root.deathsText (created above).
+    MPT.frames.deathsHit = CreateFrame("Frame", nil, MPT.frames.root)
+    MPT.frames.deathsHit:SetFrameLevel(MPT.frames.root:GetFrameLevel() + 5)
+    MPT.frames.deathsHit:EnableMouse(true)
+
+    -- Custom two-column death tooltip (class-colored name LEFT, death-time RIGHT).
+    -- Ported from EllesmereUIMythicTimer.lua:906-931 with KE transformations:
+    --   * BackdropTemplate so SetBackdrop is available (KE:ApplyBackdrop requires it)
+    --   * KE:ApplyBackdrop replaces EllesmereUI.MakeBorder (Enabled=true is load-bearing)
+    --   * KE.FONT replaces EllesmereUI.EXPRESSWAY
+    --   * "time" column replaces "count" column (timestamped per-death, not aggregated count)
+    -- Grow-only EnsureRows cache retained deliberately: row count is bounded by
+    -- party size × deaths; the tooltip is transient; verbatim EUI port is lower-risk
+    -- than adopting KE.FramePool (acknowledged deviation from spec §11).
+    local deathTT = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+    deathTT:SetFrameStrata("TOOLTIP")
+    deathTT:SetFrameLevel(200)
+    deathTT:Hide()
+    KE:ApplyBackdrop(deathTT, { Enabled = true, Color = {0, 0, 0, 0.9}, BorderColor = {0, 0, 0, 1}, BorderSize = 1 })
+    deathTT._rows = {}
+    MPT.frames.deathsTooltip = deathTT
+
+    local TT_PAD   = 8
+    local TT_ROW_H = 14
+    local TT_GAP   = 3
+    local TT_FONT  = KE.FONT or "Fonts\\FRIZQT__.TTF"
+
+    local function EnsureRows(n)
+        for i = #deathTT._rows + 1, n do
+            local nameFS = deathTT:CreateFontString(nil, "OVERLAY")
+            nameFS:SetFont(TT_FONT, 10, "")
+            nameFS:SetJustifyH("LEFT")
+            local timeFS = deathTT:CreateFontString(nil, "OVERLAY")
+            timeFS:SetFont(TT_FONT, 10, "")
+            timeFS:SetJustifyH("RIGHT")
+            deathTT._rows[i] = { name = nameFS, time = timeFS }
+        end
+    end
+
+    MPT.frames.deathsHit:SetScript("OnEnter", function()
+        if not MPT.db or not MPT.db.ShowDeathTooltip then return end
+        local log = MPT.run and MPT.run.deathLog
+        if not log or #log == 0 then return end
+
+        -- Build sorted list (chronological by time-of-death).
+        local list = {}
+        for i = 1, #log do
+            list[i] = log[i]
+        end
+        table.sort(list, function(a, b) return a.t < b.t end)
+
+        EnsureRows(#list)
+
+        -- Hide all rows first.
+        for i = 1, #deathTT._rows do
+            deathTT._rows[i].name:Hide()
+            deathTT._rows[i].time:Hide()
+        end
+
+        -- Measure max name and time widths for tooltip sizing.
+        local maxNameW = 0
+        local maxTimeW = 0
+        for i, entry in ipairs(list) do
+            local row = deathTT._rows[i]
+            local class = entry.class
+            local color = class and RAID_CLASS_COLORS[class]
+            local short = Ambiguate(entry.name or "", "short")
+            local colored = color and color:WrapTextInColorCode(short) or short
+            row.name:SetText(colored)
+            row.name:SetTextColor(1, 1, 1, 0.80)
+            local timeStr = MPT.FormatTime(entry.t, false)
+            row.time:SetText(timeStr)
+            row.time:SetTextColor(1, 1, 1, 0.80)
+            local nw = row.name:GetStringWidth() or 0
+            local tw = row.time:GetStringWidth() or 0
+            if nw > maxNameW then maxNameW = nw end
+            if tw > maxTimeW then maxTimeW = tw end
+        end
+
+        local ttW = TT_PAD + maxNameW + 12 + maxTimeW + TT_PAD
+        local ttH = TT_PAD + #list * TT_ROW_H + (#list - 1) * TT_GAP + TT_PAD
+        deathTT:SetSize(ttW, ttH)
+
+        -- Position rows.
+        for i, _ in ipairs(list) do
+            local row = deathTT._rows[i]
+            local yOff = -TT_PAD - (i - 1) * (TT_ROW_H + TT_GAP)
+            row.name:ClearAllPoints()
+            row.name:SetPoint("TOPLEFT", deathTT, "TOPLEFT", TT_PAD, yOff)
+            row.time:ClearAllPoints()
+            row.time:SetPoint("TOPRIGHT", deathTT, "TOPRIGHT", -TT_PAD, yOff)
+            row.name:Show()
+            row.time:Show()
+        end
+
+        -- Anchor tooltip above the death text (KE HUD is right-anchored: BOTTOMRIGHT→TOPRIGHT).
+        deathTT:ClearAllPoints()
+        deathTT:SetPoint("BOTTOMRIGHT", MPT.frames.root.deathsText, "TOPRIGHT", 0, 4)
+        deathTT:Show()
+    end)
+
+    MPT.frames.deathsHit:SetScript("OnLeave", function()
+        deathTT:Hide()
+    end)
+
     root:Hide()
 end
 
@@ -510,35 +616,40 @@ function MPT:RenderKey()
 end
 
 ---------------------------------------------------------------------------------
--- RenderDeaths — headline "N Deaths (+m:ss)" line.
--- Step 4 of Task 2.4. Phase-2 headline only — Task 3.5 replaces this
--- function wholesale with the full hover-log version. The boundary is
--- intentional: do not add tooltip or log logic here.
+-- RenderDeaths — headline "N Deaths (+m:ss)" + hover tooltip (Task 3.5).
+-- Replaces the Phase-2 headline-only stub wholesale.
 --
--- Blank at 0 deaths (spec §7.1). Format is "N Deaths (+m:ss)" — penalty
--- ADDS to elapsed time (deliberate deviation from EUI's leading "-" sign).
--- Color: db.DeathsColor when set, fallback red (0.93, 0.33, 0.33).
+-- Blank at 0 deaths (spec §7.1). Format: "N Deaths (+m:ss)" — penalty ADDS
+-- to elapsed time (deliberate deviation from EUI's leading "-" sign).
+-- Hit-frame is sized to the actual text so the hover region matches exactly.
+-- Font/anchor owned by ApplyLayout (applyFont(f.deathsText, "Deaths") +
+-- row(f.deathsText)); this render must not duplicate them.
 -- SetTextGated: safe — deathTimeLost is plain math (spec §8 "GetDeathCount").
 ---------------------------------------------------------------------------------
 
 function MPT:RenderDeaths()
-    local run, db = self.run, self.db
-    local f = self.frames and self.frames.root
-    if not f or not db then return end
+    local db, run = MPT.db, MPT.run
+    local fs, hit = MPT.frames.root.deathsText, MPT.frames.deathsHit
     if not db.ShowDeaths or (run.deaths or 0) <= 0 then
-        f.deathsText:Hide()
+        fs:Hide(); hit:Hide()
+        if MPT.frames.deathsTooltip then MPT.frames.deathsTooltip:Hide() end
         return
     end
-    local n = run.deaths
-    local str = format("%d Death%s (+%s)", n, n ~= 1 and "s" or "",
-        MPT.FormatTime(run.deathTimeLost or 0, false))
-    self.SetTextGated(f.deathsText, str)
-    if db.DeathsColor then
-        self.SetColorGated(f.deathsText, db.DeathsColor[1], db.DeathsColor[2], db.DeathsColor[3])
-    else
-        self.SetColorGated(f.deathsText, 0.93, 0.33, 0.33)
-    end
-    f.deathsText:Show()
+    local dHex = Hex(db.DeathsColor or {1, 0.42, 0.42})
+    local pHex = Hex(db.DeathPenaltyColor or {1, 0.42, 0.42})
+    local str = format("%s%d Death%s|r  %s(+%s)|r",
+        dHex, run.deaths, run.deaths ~= 1 and "s" or "",
+        pHex, MPT.FormatTime(run.deathTimeLost or 0, false))
+    MPT.SetTextGated(fs, str)
+    fs:Show()
+    -- Hit frame sized to the actual text so the hover region matches.
+    -- (fs's anchor + font are owned by ApplyLayout, Task 2.5.)
+    local tw = fs:GetStringWidth() or 0
+    local th = fs:GetStringHeight() or (db.DeathsFontSize or db.FontSize or 13)
+    hit:ClearAllPoints()
+    hit:SetSize(tw, th)
+    hit:SetPoint("TOPRIGHT", fs, "TOPRIGHT", 0, 0)
+    hit:Show()
 end
 
 ---------------------------------------------------------------------------------
