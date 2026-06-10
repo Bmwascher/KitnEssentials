@@ -447,26 +447,35 @@ BuildObjectivesTab = function(scrollChild, yOffset, db, manager)
     -- Card 1: Enable + display toggles
     local card1 = GUIFrame:CreateCard(scrollChild, "Objectives", yOffset)
     manager:Register(card1, "all")
-    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
     local showCheck = GUIFrame:CreateCheckbox(row1, "Show Boss List", {
         value = db.ShowObjectives ~= false,
         callback = function(checked) db.ShowObjectives = checked; ApplySettings() end,
     })
-    row1:AddWidget(showCheck, 1 / 3)
+    row1:AddWidget(showCheck, 0.5)
     manager:Register(showCheck, "all")
     local timesCheck = GUIFrame:CreateCheckbox(row1, "Show Clear Times", {
         value = db.ShowObjectiveTimes ~= false,
         callback = function(checked) db.ShowObjectiveTimes = checked; ApplySettings() end,
     })
-    row1:AddWidget(timesCheck, 1 / 3)
+    row1:AddWidget(timesCheck, 0.5)
     manager:Register(timesCheck, "all")
-    local pbCheck = GUIFrame:CreateCheckbox(row1, "Show PB Delta", {
+    card1:AddRow(row1, Theme.rowHeight)
+
+    local row1b = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local pbCheck = GUIFrame:CreateCheckbox(row1b, "Show PB Delta", {
         value = db.ShowPBDelta ~= false,
         callback = function(checked) db.ShowPBDelta = checked; ApplySettings() end,
     })
-    row1:AddWidget(pbCheck, 1 / 3)
+    row1b:AddWidget(pbCheck, 0.5)
     manager:Register(pbCheck, "all")
-    card1:AddRow(row1, Theme.rowHeightLast, 0)
+    local upcomingCheck = GUIFrame:CreateCheckbox(row1b, "Show PB Targets", {
+        value = db.ShowUpcomingPB ~= false,
+        callback = function(checked) db.ShowUpcomingPB = checked; ApplySettings() end,
+    })
+    row1b:AddWidget(upcomingCheck, 0.5)
+    manager:Register(upcomingCheck, "all")
+    card1:AddRow(row1b, Theme.rowHeightLast, 0)
     yOffset = card1:GetNextOffset()
 
     -- Card 2: Font Settings (boss-list rows — ObjectiveFont* keys)

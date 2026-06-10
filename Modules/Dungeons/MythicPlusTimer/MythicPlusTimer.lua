@@ -216,8 +216,9 @@ local MPT_DEFAULTS = {
 
     -- Objectives / boss list
     ShowObjectives = true,
-    ShowObjectiveTimes = true,
-    ShowPBDelta = true,
+    ShowObjectiveTimes = true,  -- the [clear] bracket on completed rows
+    ShowPBDelta = true,         -- the (+/-) delta beside a clear time
+    ShowUpcomingPB = true,      -- the gold "PB m:ss" target on pending rows
     ObjectiveColor = {0.85, 0.85, 0.85},
     ObjectiveDoneColor = {0.2, 0.82, 0.31},
     SplitAheadColor = {0.25, 0.88, 0.82},

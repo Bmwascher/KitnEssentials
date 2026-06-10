@@ -859,17 +859,25 @@ function MPT:RenderObjectives()
         local rightText = ""
         if obj.completed and obj.clearTime and obj.clearTime > 0 then
             timeFS:SetAlpha(1)  -- clear a possible pending-row PBOpacity dim on this pooled slot
-            local doneHex = Hex(db.ObjectiveDoneColor or { 0.2, 0.82, 0.31 })
-            rightText = format("%s[%s]|r", doneHex, MPT.FormatTime(obj.clearTime, false))
+            -- "Show Clear Times" gates the [clear] bracket itself (EUI:1684);
+            -- the PB delta is self-contained and independently gated below.
+            if db.ShowObjectiveTimes ~= false then
+                local doneHex = Hex(db.ObjectiveDoneColor or { 0.2, 0.82, 0.31 })
+                rightText = format("%s[%s]|r", doneHex, MPT.FormatTime(obj.clearTime, false))
+            end
             if db.ShowPBDelta and obj.pbTime then
                 local diff = obj.clearTime - obj.pbTime
                 local col  = diff <= 0 and (db.SplitAheadColor or { 0.25, 0.88, 0.82 })
                                        or  (db.SplitBehindColor or { 1, 0.42, 0.42 })
                 local sign = diff < 0 and "-" or "+"
                 local dStr = (diff == 0) and "0:00" or MPT.FormatTime(abs(diff), false)
-                rightText  = rightText .. format("  %s(%s%s)|r", Hex(col), sign, dStr)
+                local sep  = (rightText ~= "") and "  " or ""
+                rightText  = rightText .. sep .. format("%s(%s%s)|r", Hex(col), sign, dStr)
             end
-        elseif (not obj.completed) and db.ShowObjectiveTimes ~= false and obj.pbTime then
+        elseif (not obj.completed) and db.ShowUpcomingPB ~= false and obj.pbTime then
+            -- Pending gold targets have their own toggle ("Show PB Targets") —
+            -- ShowObjectiveTimes previously gated this branch by mistake,
+            -- leaving the clear-time bracket itself ungated.
             local pbHex = Hex(db.PBColor or { 0.85, 0.79, 0.54 })
             local a = max(0, min(1, db.PBOpacity or 1))
             rightText = format("%sPB %s|r", pbHex, MPT.FormatTime(obj.pbTime, false))
