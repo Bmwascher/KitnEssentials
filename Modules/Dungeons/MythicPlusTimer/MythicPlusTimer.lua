@@ -1242,6 +1242,53 @@ function MPT:OnTrackerRegenEnabled()
 end
 
 ---------------------------------------------------------------------------------
+-- Slash command: /kes mt <...>
+--
+-- Routed from Core/Globals.lua's /kes dispatcher (HandleSlash-first; its
+-- GUI-open fallback is superseded by the default arm below). Subcommands:
+-- clearsplits (two-step wipe of the global PB store — the recovery path for
+-- a bad improve-only record); anything else — including bare "/kes mt" —
+-- opens the Mythic+ Timer GUI page (the dispatcher's previous behavior).
+-- Mirrors DM:HandleSlash (Modules/DamageMeter/Core.lua:231).
+---------------------------------------------------------------------------------
+
+function MPT:HandleSlash(input)
+    local arg, rest = (input or ""):match("^%s*(%S*)%s*(.-)%s*$")
+    arg = (arg or ""):lower()
+    if arg == "clearsplits" then
+        local store = KE.db and KE.db.global and KE.db.global.MythicPlusTimerSplits
+        local n = 0
+        if store then
+            for _ in pairs(store) do n = n + 1 end
+        end
+        if (rest or ""):lower() == "confirm" then
+            if store then wipe(store) end
+            -- Drop the live run's cached resolution so a key in progress
+            -- stops rendering targets from the wiped store (false = resolved,
+            -- nothing found — UpdateSplits' re-resolve sentinel is nil).
+            self.run.pbRec = false
+            self.run.bestOverall = nil
+            for i = 1, #self.run.objectives do
+                self.run.objectives[i].pbTime = nil
+            end
+            self:NotifyRefresh()
+            KE:Print(format("Mythic+ Timer: cleared %d stored PB record(s).", n))
+        elseif n == 0 then
+            KE:Print("Mythic+ Timer: no stored PB records.")
+        else
+            KE:Print(format(
+                "Mythic+ Timer: %d stored PB record(s). Type '/kes mt clearsplits confirm' to permanently delete them.",
+                n))
+        end
+        return
+    end
+    -- Default: open the GUI page (matches the dispatcher's old fallback).
+    if KE.GUIFrame and KE.GUIFrame.OpenPage then
+        KE.GUIFrame:OpenPage("MythicPlusTimer", "dungeons_section")
+    end
+end
+
+---------------------------------------------------------------------------------
 -- EditMode registration (Task 5.11)
 -- Registers frames.root with KE's standalone overlay system so /kes edit
 -- shows a draggable overlay over the HUD and persists position writes to
