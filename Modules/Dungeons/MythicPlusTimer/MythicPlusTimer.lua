@@ -991,6 +991,11 @@ local _trackerHookInstalled = false
 -- tracker pops back up for the last seconds before zone-out
 -- (References/M+ Timer/EllesmereUI/EllesmereUIMythicTimer/EllesmereUIMythicTimer.lua:548-559).
 function MPT:ShouldHideTracker()
+    -- GUI preview: always suppress, independent of the HideBlizzardTracker
+    -- toggle — the fake-run HUD occupies the tracker's screen area. Hide/Show
+    -- routes through ApplyTrackerVisibility from ShowPreview/HidePreview, so
+    -- the combat defer and _keHidTracker show-ownership both apply as usual.
+    if self.isPreview then return true end
     if not (self.db and self.db.HideBlizzardTracker) then return false end
     if self.run and self.run.active then return true end
     if self.run and self.run.completed then
