@@ -94,7 +94,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Dungeon Timers | Curated dungeon ability timers driven by BigWigs events with hand-tuned cast durations, phase tracker for HP-based encounter transitions, role-based filtering, and per-spell display overrides |
 | Enemy Counter | Displays the number of enemies currently in combat via nameplate scanning with editable prefix and combat-only visibility |
 | Interrupt Tracker | Party interrupt cooldown bars with class colors, dark mode, channel kick detection, and healer position override (currently non-functional in 12.0.5 due to API changes — under investigation) |
-| WarpDeplete+ | Restores live pull forces tracking, fixes death tooltip and class-colored names in M+, per-mob forces on tooltip mouseover, and announces instance resets to party/raid chat |
+| Mythic+ Timer | Self-contained keystone timer HUD — count-up timer with +3/+2/+1 threshold marks, aggregate forces bar, per-boss objective list with clear times and personal-best deltas, deaths line with class-colored hover log, personal-best splits, Challenger's Peril aware cutoffs, enemy tooltip + nameplate forces overlay (replaces the standalone WarpDeplete+ overlay), keystone auto-insert, Blizzard objective-tracker hider, boss-split party chat posts, and a Rookery +12 live preview. Six-tab config page (`/kes mt`) |
 
 ## ElvUI Tags
 

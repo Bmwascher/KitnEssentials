@@ -13,6 +13,15 @@
 - **NEW:** Class-colored bars with icon, name, and total | per-second; configurable visible-bar count, Always-Show-Self, realm-name display, decimals, and rank numbers
 - Built secret-value-safe for 12.0 — combat amounts feed native status-bar interpolation and `AbbreviateNumbers` with no tainting arithmetic, and the meter ticks only in combat (fully detaches when idle)
 
+### Mythic+ Timer
+- **NEW:** Mythic+ Timer module — a self-contained keystone timer HUD (no external WarpDeplete needed). Count-up timer with +3/+2/+1 threshold marks and remaining-time labels, aggregate forces bar, per-boss objective list with clear times and personal-best deltas, and an authoritative deaths line with a class-colored, timestamped hover log
+- **NEW:** Personal bests — stores your best time per dungeon and key level, shows live per-boss and overall splits during the run, and previews PB targets during the starting countdown
+- **NEW:** Challenger's Peril aware — recomputes the +3/+2/+1 cutoffs when the affix is active
+- **NEW:** Enemy overlay — optional per-mob forces count on enemy tooltips and a per-pull % on nameplates (folds in and replaces the standalone WarpDeplete+ overlay; decoupled from the external addon)
+- **NEW:** Quality of life — auto-inserts your keystone at the font of power, hides Blizzard's objective tracker during a key (combat-safe), and can post each boss split time to party chat
+- **NEW:** Fully themable — LSM font and bar texture, configurable colors with accent/custom toggles, six-tab config page (`/kes mt`), `/kes edit` repositioning, and a Rookery +12 live preview
+- Built secret-value-safe for 12.0 — aggregate forces and death count read non-secret APIs with plain math; enemy GUIDs and per-unit tooltip forces are guarded; the timer ticks only during a run and fully detaches when idle
+
 ### Advanced Debuffs
 - **NEW:** Advanced Debuffs module — bar-based dispellable-debuff display with built-in cooldown swipe, native countdown text, per-dispel-type border color, and a per-type atlas overlay (Magic / Curse / Poison / Disease / Enrage / Bleed). Subsumes the older Boss Debuffs module; existing settings migrate automatically on first load
 - **NEW:** Encounter-aura support — works on boss debuffs that ship as Secret Values in 12.0+. Built taint-safely via `C_UnitAuras.GetAuraDispelTypeColor` curves + `LuaDurationObject`, so dispel type and countdown render correctly even when raw aura fields are masked
@@ -58,6 +67,7 @@
 
 ### WarpDeplete+
 - **Fixed:** A Hunter's Feign Death is no longer counted as a death by the death tracker (your own or a party member's)
+- The standalone WarpDeplete+ overlay module has been retired; its forces tracking and enemy-overlay features are now built into the Mythic+ Timer module above
 
 ### Raid Notifications
 - **Fixed:** "BONUS ROLLS MISSING" no longer reappears after a mid-key `/reload` inside an active keystone, and the Reset Boss reminder no longer briefly fires during combat
