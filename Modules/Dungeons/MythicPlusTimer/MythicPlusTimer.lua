@@ -493,9 +493,6 @@ function MPT:NotifyRefresh()
     C_Timer.After(0.05, _NotifyRefreshFire)
 end
 
--- Temporary stub; replaced by Task 2.5 (MythicPlusTimer_HUD.lua).
-function MPT:Render() end
-
 ---------------------------------------------------------------------------------
 -- Two-tier event registration (Task 1.8)
 ---------------------------------------------------------------------------------

@@ -117,7 +117,7 @@ function MPT:BuildHUD()
     timerBg:SetAllPoints()
     timerBg:SetTexture(barTex)
     timerBg:SetVertexColor(0.12, 0.12, 0.12, 0.9)
-    bars.timerWrap, bars.timerBar = timerWrap, timerBar
+    bars.timerWrap, bars.timerBar, bars.timerBg = timerWrap, timerBar, timerBg
 
     -- Two pixel-snapped tick marks on the timer bar (at +3 / +2 cutoffs).
     -- Parented to the timer StatusBar so they ride its anchor (EUI _seg3/_seg2).
@@ -138,7 +138,7 @@ function MPT:BuildHUD()
     forcesBg:SetAllPoints()
     forcesBg:SetTexture(barTex)
     forcesBg:SetVertexColor(0.12, 0.12, 0.12, 0.9)
-    bars.forcesWrap, bars.forcesBar = forcesWrap, forcesBar
+    bars.forcesWrap, bars.forcesBar, bars.forcesBg = forcesWrap, forcesBar, forcesBg
 
     -- Pull-preview hook: DEAD on 12.0 — per-unit forces progress is secret
     -- (memory: project_warpdeplete_forces_preview_blocked; aggregate criteria
@@ -589,4 +589,224 @@ function MPT:RenderForces()
     self.SetTextGated(f.forcesText, str)
     self.SetColorGated(f.forcesText, r, g, b)
     f.forcesText:Show()
+end
+
+---------------------------------------------------------------------------------
+-- RequestLayout — deferred 1/frame batching (spec §11 "Deferred layout batching")
+-- Collapses repeated layout requests into one C_Timer.After(0) pass; mirrors
+-- KE's _RequestPositionUpdate pattern. A pending flag prevents stacking.
+---------------------------------------------------------------------------------
+
+function MPT:RequestLayout()
+    if self._layoutPending then return end
+    self._layoutPending = true
+    C_Timer.After(0, function()
+        self._layoutPending = nil
+        self:ApplyLayout()
+    end)
+end
+
+---------------------------------------------------------------------------------
+-- ApplyLayout — owns ALL positioning (Layout-cursor contract §46-47).
+-- Step 1: apply fonts to every FontString (per-element + global default).
+-- Step 2: bar sizes, HUD anchor, scale, backdrop, straggler anchors.
+-- Step 3: length-gated vertical relayout (Fabys trick) + objectives handoff.
+-- Publishes: MPT._PAD, MPT._ROW_GAP, MPT._OBJ_GAP, MPT._objRowStartY.
+-- Reads back: MPT._objRowEndY (written by RenderObjectives, Task 3.2).
+---------------------------------------------------------------------------------
+
+function MPT:ApplyLayout()
+    if not self.frames or not self.frames.root then return end
+    local db = self.db
+    local f = self.frames.root
+
+    -- Apply fonts (per-element fallback chain: <Element>FontFace/Size/Outline
+    -- or global FontFace/Size/FontOutline). Pass LSM NAME — KE:ApplyFontToText
+    -- resolves the path internally; never pre-resolve with GetFontPath here.
+    local function applyFont(fs, prefix)
+        local face    = db[prefix .. "FontFace"]    or db.FontFace
+        local size    = db[prefix .. "FontSize"]    or db.FontSize    or 13
+        local outline = db[prefix .. "FontOutline"] or db.FontOutline or "OUTLINE"
+        KE:ApplyFontToText(fs, face, size, outline)
+    end
+
+    applyFont(f.deathsText,  "Deaths")
+    applyFont(f.timerText,   "Timer")
+    applyFont(f.timerPBText, "PB")
+    applyFont(f.keyText,     "Key")
+    applyFont(f.affixText,   "Affix")
+    applyFont(f.thresh3Text, "Threshold")
+    applyFont(f.thresh2Text, "Threshold")
+    applyFont(f.thresh1Text, "Threshold")
+    applyFont(f.forcesText,  "Forces")
+
+    -- Bar sizes, HUD anchor, scale, backdrop recolor.
+    local PAD  = 12
+    local barW = db.BarWidth  or 300
+    local barH = db.BarHeight or 14
+    f:SetWidth(barW + PAD * 2)
+    self.frames.bars.timerWrap:SetSize(barW, barH)
+    self.frames.bars.forcesWrap:SetSize(barW, barH)
+    self.frames.bars:SetWidth(barW)
+
+    f:SetScale(db.Scale or 1.0)
+
+    -- Re-apply root Strata from db (GUI can change it; BuildHUD's default is
+    -- build-time only). Must happen before KE:ApplyFramePosition so that the
+    -- frame is on the correct strata when it snaps to the grid.
+    f:SetFrameStrata(db.Strata or "MEDIUM")
+
+    KE:ApplyFramePosition(f, {
+        AnchorFrom = db.SelfPoint, AnchorTo = db.AnchorPoint,
+        XOffset    = db.XOffset,   YOffset   = db.YOffset,
+    }, { anchorFrameType = db.anchorFrameType, ParentFrame = db.ParentFrame, Strata = db.Strata })
+
+    if db.BackdropEnabled then
+        local c = db.BackdropColor or { 0, 0, 0 }
+        f.bgTex:SetColorTexture(c[1], c[2], c[3], db.BackdropOpacity or 0.6)
+    else
+        f.bgTex:SetColorTexture(0, 0, 0, 0)
+    end
+
+    -- Straggler anchors: relative positions that only change on config change.
+    -- Never re-anchored inside Render* hot paths (perf: skip-SetPoint-when-stationary).
+    local bars = self.frames.bars
+    f.affixText:ClearAllPoints()
+    f.affixText:SetPoint("RIGHT", f.keyText, "LEFT", -6, 0)  -- grows leftward from keyText
+
+    f.forcesText:ClearAllPoints()
+    local place = db.ForcesPlacement or "CORNER"
+    if place == "CENTER" then
+        f.forcesText:SetPoint("CENTER", bars.forcesBar)
+    elseif place == "BESIDE" then
+        f.forcesText:SetPoint("RIGHT", bars.forcesWrap, "LEFT", -4, 0)  -- overhangs backdrop left (WarpDeplete idiom)
+    else  -- CORNER (default)
+        f.forcesText:SetPoint("BOTTOMRIGHT", bars.forcesWrap, "TOPRIGHT", 0, 1)
+    end
+
+    -- Length-gated vertical relayout (Fabys trick — port of timer.lua:252-258).
+    -- Gate the per-element SetPoint/height accumulation on a string-length
+    -- signature so MM:SS->MM:SS ticks skip relayout entirely. The signature
+    -- includes objectives/deaths visibility terms so those changes still re-run.
+    local run = self.run
+    local objCount, objDone, objSum = 0, 0, 0
+    if run and run.objectives then
+        objCount = #run.objectives
+        for i = 1, objCount do
+            local o = run.objectives[i]
+            if o.completed then objDone = objDone + 1 end
+            objSum = objSum + #(o.name or "") + floor(o.clearTime or 0) + floor(o.pbTime or 0)
+        end
+    end
+    local sig = table.concat({
+        #(f.deathsText:GetText() or ""), #(f.timerText:GetText() or ""),
+        #(f.keyText:GetText() or ""),    #(f.affixText:GetText() or ""),
+        #(f.forcesText:GetText() or ""), db.ShowThresholdLabels and 1 or 0,
+        db.ShowForces and 1 or 0,        db.ShowDeaths and 1 or 0,
+        db.ShowObjectives and 1 or 0,
+        ((run and (run.deaths or 0) > 0) and db.ShowDeaths) and 1 or 0,
+        objCount, objDone, objSum,
+    }, ":")
+    if f._keLayoutSig == sig then return end
+    f._keLayoutSig = sig
+
+    local ROW = 6
+    -- Publish the layout-cursor constants consumed by RenderObjectives (Task 3.2).
+    MPT._PAD, MPT._ROW_GAP, MPT._OBJ_GAP = PAD, ROW, 4
+    local y = -PAD
+    local function row(fs, gap)
+        if fs:IsShown() then
+            fs:ClearAllPoints()
+            fs:SetPoint("TOPRIGHT", f, "TOPRIGHT", -PAD, y)
+            y = y - (fs:GetStringHeight() or (db.FontSize or 13)) - (gap or ROW)
+        end
+    end
+    row(f.deathsText)
+    row(f.timerText)
+    row(f.keyText)  -- affixText anchored left of keyText in Step 2; ICON-mode icons anchored in RenderKey (grow leftward)
+    if db.ShowThresholdLabels then
+        y = y - (db.ThresholdFontSize or db.FontSize or 13) - ROW
+    end
+    bars:ClearAllPoints()
+    bars:SetPoint("TOPRIGHT", f, "TOPRIGHT", -PAD, y)
+    bars.timerWrap:ClearAllPoints()
+    bars.timerWrap:SetPoint("TOPRIGHT", bars, "TOPRIGHT", 0, 0)
+    bars.forcesWrap:ClearAllPoints()
+    bars.forcesWrap:SetPoint("TOPRIGHT", bars.timerWrap, "BOTTOMRIGHT", 0, -ROW)
+    y = y - (barH * 2) - ROW * 2
+    -- Hand the cursor to the objectives pass: Task 3.2's RenderObjectives
+    -- reads _objRowStartY/_PAD/_OBJ_GAP and writes _objRowEndY (its only
+    -- return channel). Guarded until Task 3.2 defines it.
+    MPT._objRowStartY = y
+    MPT._objRowEndY   = nil
+    if self.RenderObjectives then self:RenderObjectives() end
+    f:SetHeight(-(MPT._objRowEndY or y) + PAD)
+end
+
+---------------------------------------------------------------------------------
+-- Render — orchestrator (CONTRACT §54 HUD function list).
+-- Called by NotifyRefresh's debounced callback (_NotifyRefreshFire). Hides the
+-- HUD when there is no run or preview, else calls each Render* in order and
+-- requests a deferred (length-gated) layout pass.
+-- RenderObjectives (Task 3.2) is called from INSIDE ApplyLayout — it consumes
+-- the layout cursor published here. Do NOT call it here: the first render
+-- after a text-length change is one deferred-layout pass stale and converges
+-- on the next tick (accepted behavior per spec §11).
+-- Mirrors EllesmereUI RenderStandalone lines 1045-1062.
+---------------------------------------------------------------------------------
+
+function MPT:Render()
+    if not self.db or not self.db.Enabled then
+        if self.frames and self.frames.root then self.frames.root:Hide() end
+        return
+    end
+    local run = self.run
+    if not (run and (run.active or run.completed)) and not self.isPreview then
+        if self.frames and self.frames.root then self.frames.root:Hide() end
+        return
+    end
+    self:BuildHUD()
+    self.frames.root:Show()
+
+    self:RenderDeaths()
+    self:RenderTimer()
+    self:RenderKey()
+    self:RenderThresholds()
+    self:RenderBar()
+    self:RenderForces()
+    -- RenderObjectives (Task 3.2) is called from INSIDE ApplyLayout — see note above.
+    self:RequestLayout()
+end
+
+---------------------------------------------------------------------------------
+-- ApplySettings — single entry for GUI callbacks (Tasks 5.4+) and KE's
+-- duck-typed refresh walk (Core/Main.lua:136-142, ProfileManager:419).
+-- Busts the length gate, re-applies bar textures + background textures,
+-- re-applies root Strata, calls ApplyLayout (fonts/sizes/pos/scale/backdrop),
+-- then requests a debounced repaint via NotifyRefresh.
+-- NOTE: ApplySettings (not BuildHUD) is the long-term owner of bar-texture
+-- application; BuildHUD only seeds the initial texture at frame creation time.
+---------------------------------------------------------------------------------
+
+function MPT:ApplySettings()
+    if not self.db then return end
+    local f = self.frames and self.frames.root
+    if not f then return end  -- nothing built yet; OnEnable/Render builds lazily
+    local bars   = self.frames.bars
+    local barTex = KE:GetStatusbarPath(self.db.BarTexture or "KitnUI")
+
+    -- Re-apply the StatusBar textures (user can change BarTexture in GUI).
+    bars.timerBar:SetStatusBarTexture(barTex)
+    bars.forcesBar:SetStatusBarTexture(barTex)
+    -- Re-apply the background textures (same texture; dark-recolored in RenderBar).
+    bars.timerBg:SetTexture(barTex)
+    bars.forcesBg:SetTexture(barTex)
+
+    -- Bust both the length-gate (so font/size changes restack) and the threshold
+    -- geometry cache (so BarHeight/TickColor changes re-run _PlaceTick/_PlaceLabel).
+    f._keLayoutSig    = nil
+    bars._keThreshSig = nil
+
+    self:ApplyLayout()    -- fonts, bar sizes, position, scale, backdrop, Strata
+    self:NotifyRefresh()  -- debounced Render repaints texts/colors (works in preview)
 end
