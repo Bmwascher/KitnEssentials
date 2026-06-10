@@ -405,6 +405,56 @@ BuildForcesTab = function(scrollChild, yOffset, db, manager)
     return yOffset
 end
 
+BuildObjectivesTab = function(scrollChild, yOffset, db, manager)
+    -- Card 1: Enable + display toggles
+    local card1 = GUIFrame:CreateCard(scrollChild, "Objectives", yOffset)
+    manager:Register(card1, "all")
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local showCheck = GUIFrame:CreateCheckbox(row1, "Show Boss List", {
+        value = db.ShowObjectives ~= false,
+        callback = function(checked) db.ShowObjectives = checked; ApplySettings() end,
+    })
+    row1:AddWidget(showCheck, 1)
+    manager:Register(showCheck, "all")
+    card1:AddRow(row1, Theme.rowHeight)
+
+    local row2 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local timesCheck = GUIFrame:CreateCheckbox(row2, "Show Clear Times", {
+        value = db.ShowObjectiveTimes ~= false,
+        callback = function(checked) db.ShowObjectiveTimes = checked; ApplySettings() end,
+    })
+    row2:AddWidget(timesCheck, 0.5)
+    manager:Register(timesCheck, "all")
+    local pbCheck = GUIFrame:CreateCheckbox(row2, "Show PB Delta", {
+        value = db.ShowPBDelta ~= false,
+        callback = function(checked) db.ShowPBDelta = checked; ApplySettings() end,
+    })
+    row2:AddWidget(pbCheck, 0.5)
+    manager:Register(pbCheck, "all")
+    card1:AddRow(row2, Theme.rowHeightLast, 0)
+    yOffset = card1:GetNextOffset()
+
+    -- Card 2: Colors (objective + split deltas + PB)
+    local colorsCard = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
+    manager:Register(colorsCard, "all")
+    AddColor(colorsCard, db, manager, ApplySettings, "Objective (pending)", "ObjectiveColor",     { 0.85, 0.85, 0.85 })
+    AddColor(colorsCard, db, manager, ApplySettings, "Objective (done)",    "ObjectiveDoneColor", { 0.2, 0.82, 0.31 })
+    AddColor(colorsCard, db, manager, ApplySettings, "Split Ahead",         "SplitAheadColor",    { 0.25, 0.88, 0.82 })
+    AddColor(colorsCard, db, manager, ApplySettings, "Split Behind",        "SplitBehindColor",   { 1, 0.42, 0.42 })
+    AddColor(colorsCard, db, manager, ApplySettings, "PB Target",           "PBColor",            { 0.85, 0.79, 0.54 })
+
+    local rowOp = GUIFrame:CreateRow(colorsCard.content, Theme.rowHeightLast)
+    local opSlider = GUIFrame:CreateSlider(rowOp, "PB Opacity", {
+        min = 0.1, max = 1.0, step = 0.05, value = db.PBOpacity or 1.0,
+        callback = function(val) db.PBOpacity = val; ApplySettings() end,
+    })
+    rowOp:AddWidget(opSlider, 1)
+    manager:Register(opSlider, "all")
+    colorsCard:AddRow(rowOp, Theme.rowHeightLast, 0)
+    yOffset = colorsCard:GetNextOffset()
+    return yOffset
+end
+
 GUIFrame:RegisterContent("MythicPlusTimer", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.MythicPlusTimer
     if not db then
