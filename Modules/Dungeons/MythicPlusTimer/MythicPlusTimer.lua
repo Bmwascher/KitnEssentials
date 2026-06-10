@@ -884,6 +884,11 @@ function MPT:CheckForActiveRun()
     else
         self:ResetRun()
     end
+    -- Re-apply tracker visibility after any reload recovery: StartRun/ResetRun
+    -- each call ApplyTrackerVisibility, but their early-return guards can skip it
+    -- when run state is already consistent. This direct call guarantees a
+    -- /reload mid-key re-hides the tracker (Task 5.2 wiring).
+    self:ApplyTrackerVisibility()
 end
 
 ---------------------------------------------------------------------------------
