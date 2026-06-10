@@ -368,3 +368,87 @@ function MPT:OnDisable()
     self:UnregisterAllEvents()
     self:UnhookAll()
 end
+
+---------------------------------------------------------------------------------
+-- Tick driver: debounced refresh (Task 1.6)
+---------------------------------------------------------------------------------
+
+-- Hidden frame that hosts the 1 Hz fallback OnUpdate (attached only during a run).
+local tickerFrame = CreateFrame("Frame")
+tickerFrame:Hide()
+
+-- Temporary stub; replaced by Task 3.3 with real count-diff attribution.
+function MPT:OnDeathCountUpdated()
+    local count, timeLost = C_ChallengeMode.GetDeathCount()
+    self.run.deaths = count or 0
+    self.run.deathTimeLost = timeLost or 0
+end
+
+-- Both drivers (Blizzard hook + fallback) funnel here. Early-returns unless the
+-- whole-second floor advanced -> the whole pipeline runs <=1 Hz.
+function MPT:OnTimerTick()
+    local run = self.run
+    if not run.active then return end
+    local _, elapsed = GetWorldElapsedTime(1)
+    if not (elapsed and elapsed >= 0) then return end
+    local sec = floor(elapsed)
+    if sec == run.lastTickedSec then return end
+    run.lastTickedSec = sec
+    run.elapsed = elapsed
+    self:OnDeathCountUpdated()
+    self:UpdateForces()
+    self:UpdateObjectives()
+    self:NotifyRefresh()
+end
+
+-- 1 Hz OnUpdate fallback (fires even when the Blizzard hook is silenced by
+-- QuestTracker reparenting the ObjectiveTrackerFrame to a hidden container).
+local onUpdateAccum = 0
+local function OnUpdateFallback(_, dt)
+    onUpdateAccum = onUpdateAccum + dt
+    if onUpdateAccum < 1 then return end
+    onUpdateAccum = 0
+    MPT:OnTimerTick()
+end
+
+function MPT:StartTimerLoop()
+    onUpdateAccum = 0
+    tickerFrame:SetScript("OnUpdate", OnUpdateFallback)
+    tickerFrame:Show()
+end
+
+function MPT:StopTimerLoop()
+    tickerFrame:SetScript("OnUpdate", nil)
+    tickerFrame:Hide()
+end
+
+-- Primary driver: Blizzard pushes UpdateTime ~1/sec during M+ (free outside it).
+-- Idempotent: guard prevents double-hooking if OnEnable is called more than once.
+local primaryHookInstalled = false
+function MPT:InstallTickHook()
+    if primaryHookInstalled then return end
+    local block = (ScenarioObjectiveTracker and ScenarioObjectiveTracker.ChallengeModeBlock)
+        or (ScenarioBlocksFrame and ScenarioBlocksFrame.ChallengeModeBlock)
+    if block and block.UpdateTime then
+        primaryHookInstalled = true
+        hooksecurefunc(block, "UpdateTime", function() MPT:OnTimerTick() end)
+    end
+end
+
+-- Coalesces burst calls (SCENARIO_CRITERIA_UPDATE fires per-criterion) into a
+-- single Render at most every 50 ms. Flag cleared BEFORE calling Render so a
+-- Render-triggered NotifyRefresh can re-arm without being swallowed.
+-- NOTE: EUI's handle-based guard is inert (C_Timer.After returns nil, not a
+-- cancellable handle); KE uses the boolean-pending pattern instead.
+-- Do NOT restore the upstream form on a future reference sync.
+function MPT:NotifyRefresh()
+    if self._refreshQueued then return end
+    self._refreshQueued = true
+    C_Timer.After(0.05, function()
+        self._refreshQueued = nil
+        self:Render()
+    end)
+end
+
+-- Temporary stub; replaced by Task 2.5 (MythicPlusTimer_HUD.lua).
+function MPT:Render() end
