@@ -285,6 +285,14 @@ end
 -- Inline into the cache-miss block; label text still updates every tick below.
 ---------------------------------------------------------------------------------
 
+-- Bracket wrapper for forces count/remaining text (NONE/SQUARE/ROUND).
+-- Hoisted out of RenderForces so the closure is not re-created each tick.
+local function _Brk(s, style)
+    if style == "SQUARE" then return "[" .. s .. "]"
+    elseif style == "ROUND" then return "(" .. s .. ")" end
+    return s
+end
+
 local function _PlaceTick(tex, timerBar, barW, barH, tickW, cutoff, maxTime, tr, tg, tb)
     tex:ClearAllPoints()
     tex:SetSize(tickW, barH)
@@ -402,7 +410,7 @@ function MPT:RenderKey()
         f.keyText:Hide()
     else
         self.SetTextGated(f.keyText, format("[%d]", run.level or 0))
-        f.keyText:SetTextColor(db.KeyColor[1], db.KeyColor[2], db.KeyColor[3])
+        self.SetColorGated(f.keyText, db.KeyColor[1], db.KeyColor[2], db.KeyColor[3])
         f.keyText:Show()
     end
 
@@ -413,9 +421,9 @@ function MPT:RenderKey()
         local names = run.affixNames or {}
         self.SetTextGated(f.affixText, table.concat(names, " - "))
         if db.AffixColor then
-            f.affixText:SetTextColor(db.AffixColor[1], db.AffixColor[2], db.AffixColor[3])
+            self.SetColorGated(f.affixText, db.AffixColor[1], db.AffixColor[2], db.AffixColor[3])
         else
-            f.affixText:SetTextColor(0.69, 0.69, 0.69)
+            self.SetColorGated(f.affixText, 0.69, 0.69, 0.69)
         end
         f.affixText:Show()
     end
@@ -483,9 +491,9 @@ function MPT:RenderDeaths()
         MPT.FormatTime(run.deathTimeLost or 0, false))
     self.SetTextGated(f.deathsText, str)
     if db.DeathsColor then
-        f.deathsText:SetTextColor(db.DeathsColor[1], db.DeathsColor[2], db.DeathsColor[3])
+        self.SetColorGated(f.deathsText, db.DeathsColor[1], db.DeathsColor[2], db.DeathsColor[3])
     else
-        f.deathsText:SetTextColor(0.93, 0.33, 0.33)
+        self.SetColorGated(f.deathsText, 0.93, 0.33, 0.33)
     end
     f.deathsText:Show()
 end
@@ -542,25 +550,23 @@ function MPT:RenderForces()
     if fo.completed and db.ForcesCompleteColor then
         r, g, b = db.ForcesCompleteColor[1], db.ForcesCompleteColor[2], db.ForcesCompleteColor[3]
     end
-    bars.forcesBar:SetStatusBarColor(r, g, b)
-
-    -- Bracket wrapper for the count segment (NONE/SQUARE/ROUND).
-    -- CUSTOM is exempt — the user controls the token string directly.
-    local function Brk(s)
-        local bs = db.ForcesBracketStyle
-        if bs == "SQUARE" then return "[" .. s .. "]"
-        elseif bs == "ROUND" then return "(" .. s .. ")" end
-        return s
+    -- Gate the recolor: SetStatusBarColor is a draw call; skip when unchanged.
+    local fb = bars.forcesBar
+    if fb._keFillR ~= r or fb._keFillG ~= g or fb._keFillB ~= b then
+        fb._keFillR, fb._keFillG, fb._keFillB = r, g, b
+        fb:SetStatusBarColor(r, g, b)
     end
 
     local fmt = db.ForcesFormat or "PERCENT"
+    local bs  = db.ForcesBracketStyle
+    -- CUSTOM is exempt from _Brk — the user controls the token string directly.
     local str
     if fmt == "COUNT" then
-        str = Brk(format("%d/%d", floor(cur + 0.5), floor(total + 0.5)))
+        str = _Brk(format("%d/%d", floor(cur + 0.5), floor(total + 0.5)), bs)
     elseif fmt == "COUNT_PERCENT" then
-        str = Brk(format("%d/%d", floor(cur + 0.5), floor(total + 0.5))) .. format(" - %.2f%%", pct)
+        str = _Brk(format("%d/%d", floor(cur + 0.5), floor(total + 0.5)), bs) .. format(" - %.2f%%", pct)
     elseif fmt == "REMAINING" then
-        str = Brk(format("%d left", floor(max(0, total - cur) + 0.5)))
+        str = _Brk(format("%d left", floor(max(0, total - cur) + 0.5)), bs)
     elseif fmt == "CUSTOM" then
         str = (db.ForcesCustomFormat or ":count:/:totalcount: :percent:")
         str = str:gsub(":count:", format("%d", floor(cur + 0.5)))
@@ -574,6 +580,6 @@ function MPT:RenderForces()
         str = format("%.2f%%", pct)
     end
     self.SetTextGated(f.forcesText, str)
-    f.forcesText:SetTextColor(r, g, b)
+    self.SetColorGated(f.forcesText, r, g, b)
     f.forcesText:Show()
 end
