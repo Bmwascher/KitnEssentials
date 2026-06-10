@@ -63,12 +63,15 @@ local TIMER_SEP_GAP = 3
 
 -- Skip SetText when the string is identical to the prior tick (safe here:
 -- all strings derive from non-secret values per spec §8).
+-- _keLast is stamped AFTER SetText: if SetText throws (e.g. "Font not set"
+-- on a not-yet-fonted FontString), a pre-stamped cache would make every
+-- later render skip the retry and the text would stay blank for the session.
 function MPT.SetTextGated(fs, str)
     if not fs then return end
     str = str or ""
     if fs._keLast == str then return end
-    fs._keLast = str
     fs:SetText(str)
+    fs._keLast = str
 end
 
 -- Skip SetTextColor when the color is unchanged. Renders recolor on every
@@ -137,6 +140,13 @@ function MPT:BuildHUD()
         local fs = (parent or root):CreateFontString(nil, layer or "ARTWORK")
         fs:SetWordWrap(false)
         fs:SetNonSpaceWrap(false)
+        -- Seed a real font at creation (EnsureRows pattern): ApplyLayout's
+        -- per-element fonts land on the DEFERRED first layout pass, but
+        -- Render's SetText calls run synchronously before it — a template-
+        -- less FontString with no font errors "Font not set" on SetText
+        -- (hit via ShowPreview's first Render of a fresh session).
+        KE:ApplyFont(fs, (self.db and self.db.FontFace) or "Expressway",
+            (self.db and self.db.FontSize) or 13, "OUTLINE")
         return fs
     end
 
