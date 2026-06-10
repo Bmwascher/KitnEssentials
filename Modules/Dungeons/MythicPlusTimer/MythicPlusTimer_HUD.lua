@@ -1389,7 +1389,7 @@ local function BuildPreviewRun()
             { name = "Final Boss",  completed = false, clearTime = nil,  pbTime = 1100, criteriaIndex = 4 },
             -- Count-based objective demo (Pit of Saron "Quarry Camps" pattern):
             -- totalQuantity > 1 renders the "2/6" name prefix.
-            { name = "Quarry Camps", completed = false, clearTime = nil, pbTime = nil,
+            { name = "Prisoners Freed", completed = false, clearTime = nil, pbTime = nil,
               quantity = 2, totalQuantity = 6, criteriaIndex = 5 },
         },
         bestOverall = 1750,

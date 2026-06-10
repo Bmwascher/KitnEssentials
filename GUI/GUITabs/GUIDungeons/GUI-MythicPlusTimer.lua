@@ -399,7 +399,7 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
     local forcesCard = GUIFrame:CreateCard(scrollChild, "Forces", yOffset)
     manager:Register(forcesCard, "all")
     local rowFo1 = GUIFrame:CreateRow(forcesCard.content, Theme.rowHeight)
-    local showForcesCheck = GUIFrame:CreateCheckbox(rowFo1, "Show Forces", {
+    local showForcesCheck = GUIFrame:CreateCheckbox(rowFo1, "Show Forces Bar", {
         value = db.ShowForces ~= false,
         callback = function(checked)
             db.ShowForces = checked; ApplySettings()
@@ -765,8 +765,7 @@ BuildOverlayTab = function(scrollChild, yOffset, db, manager)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " Per-mob forces count on enemy tooltips (12.0.5 API).\n" ..
-        KE:ColorTextByTheme("-") .. " Optional per-pull % overlay on nameplates (Mythic+ only).\n" ..
-        KE:ColorTextByTheme("-") .. " Replaces the standalone WarpDeplete+ overlay; no external addon needed.",
+        KE:ColorTextByTheme("-") .. " Optional per-pull % overlay on nameplates (Mythic+ only).\n",
         64, "hide")
     noteRow:AddWidget(noteText, 1)
     manager:Register(noteText, "all")
