@@ -15,11 +15,72 @@ if not KitnEssentials then return end
 
 local MPT = KitnEssentials:NewModule("MythicPlusTimer", "AceEvent-3.0", "AceHook-3.0")
 
+-- Upvalues
+local floor, max = math.floor, math.max
+local format = string.format
+local wipe = wipe
+local C_ChallengeMode = C_ChallengeMode
+local C_ScenarioInfo = C_ScenarioInfo
+local C_Scenario = C_Scenario
+local GetWorldElapsedTime = GetWorldElapsedTime
+local hooksecurefunc = hooksecurefunc
+local issecretvalue = issecretvalue or function() return false end
+
+-- Constants
+local PLUS_TWO_RATIO   = 0.8   -- +2 cutoff (80% of timer)
+local PLUS_THREE_RATIO = 0.6   -- +3 cutoff (60% of timer)
+local CHALLENGERS_PERIL_AFFIX_ID = 152  -- adds +90s; thresholds computed on (maxTime-90)
+
 -- Shared run state (the currentRun table; reset by MPT:ResetRun).
 MPT.run = MPT.run or {}
 
 -- Frame handles (created once in MPT:BuildHUD, lives in _HUD file).
 MPT.frames = MPT.frames or {}
+
+---------------------------------------------------------------------------------
+-- Pure helpers (busted-testable — no frame or WoW API access)
+---------------------------------------------------------------------------------
+
+-- Pure: seconds -> "MM:SS" or "MM:SS.mmm". Busted-testable.
+function MPT.FormatTime(sec, withMs)
+    if not sec or sec < 0 then sec = 0 end
+    local whole = floor(sec)
+    local m = floor(whole / 60)
+    local s = floor(whole % 60)
+    if withMs then
+        local ms = floor(((sec - whole) * 1000) + 0.5)
+        if ms >= 1000 then
+            whole = whole + 1
+            m = floor(whole / 60); s = floor(whole % 60); ms = 0
+        end
+        return format("%02d:%02d.%03d", m, s, ms)
+    end
+    return format("%02d:%02d", m, s)
+end
+
+-- Pure: peril-aware +3/+2/+1 cutoff seconds. hasPeril => recompute on (maxTime-90).
+-- plus1 = full limit, plus2 = 80%, plus3 = 60%. Busted-testable.
+function MPT.ComputeThresholds(maxTime, hasPeril)
+    maxTime = maxTime or 0
+    if maxTime <= 0 then
+        return { plus1 = 0, plus2 = 0, plus3 = 0 }
+    end
+    local plus2 = maxTime * PLUS_TWO_RATIO
+    local plus3 = maxTime * PLUS_THREE_RATIO
+    if hasPeril then
+        local base = maxTime - 90
+        if base > 0 then
+            plus2 = base * PLUS_TWO_RATIO + 90
+            plus3 = base * PLUS_THREE_RATIO + 90
+        end
+    end
+    return { plus1 = maxTime, plus2 = plus2, plus3 = plus3 }
+end
+
+-- Pure: remaining seconds until a cutoff (never negative). Busted-testable.
+function MPT.ThresholdRemaining(elapsed, cutoff)
+    return max(0, (cutoff or 0) - (elapsed or 0))
+end
 
 -- Canonical flat defaults (seeded into KE.db.profile.MythicPlusTimer
 -- by MPT:UpdateDB). Flat keys only — no nesting (KE convention). Colors are
