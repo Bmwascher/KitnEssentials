@@ -264,6 +264,47 @@ function MPT:UpdateForces()
     f.current, f.total, f.percent, f.completed = 0, 0, 0, false
 end
 
+-- Boss/objective rows from non-weighted criteria. Names stored raw; the HUD
+-- truncates via SetWidth+SetWordWrap(false) (engine-side, no Lua string read).
+-- pbTime is left nil here — MPT:ResolvePB (Splits phase) fills it per run.
+-- Plain reads: GetCriteriaInfo description/completed/elapsed and
+-- GetWorldElapsedTime are non-secret (contract "DO NOT GUARD" set).
+function MPT:UpdateObjectives()
+    local run = self.run
+    local numCriteria = select(3, C_Scenario.GetStepInfo()) or 0
+    local elapsed = run.elapsed or 0
+    local idx = 0
+    for i = 1, numCriteria do
+        local info = C_ScenarioInfo.GetCriteriaInfo(i)
+        if info and not info.isWeightedProgress then
+            idx = idx + 1
+            local obj = run.objectives[idx]
+            if not obj then
+                obj = { name = "", completed = false, clearTime = nil, pbTime = nil, criteriaIndex = i }
+                run.objectives[idx] = obj
+            end
+            obj.criteriaIndex = i
+            -- Strip Blizzard's leading checkmark (U+2713 = 0xE2 0x9C 0x93) + dash.
+            local rawName = info.description or ("Objective " .. i)
+            rawName = rawName:gsub("^\226\156\147%s*", ""):gsub("^%-%s*", "")
+            obj.name = rawName
+            local wasCompleted = obj.completed
+            obj.completed = info.completed and true or false
+            if obj.completed and not wasCompleted and not obj.clearTime then
+                -- Authoritative per-objective clear time: WarpDeplete State.lua:327 pattern.
+                local _, worldElapsed = GetWorldElapsedTime(1)
+                obj.clearTime = (worldElapsed or elapsed) - (info.elapsed or 0)
+            elseif not obj.completed then
+                obj.clearTime = nil
+            end
+        end
+    end
+    -- Trim stale rows from a previous step/run (EllesmereUI :451-453 pattern).
+    for j = #run.objectives, idx + 1, -1 do
+        run.objectives[j] = nil
+    end
+end
+
 -- Seed KE.db.profile.MythicPlusTimer from MPT_DEFAULTS for any key
 -- the saved profile is missing (mirrors KE:FillProfileDefaults' deep-fill
 -- intent, scoped to this module), then bind MPT.db. Also guarantee the global
