@@ -16,6 +16,10 @@ local floor = math.floor
 local min, max, abs = math.min, math.max, math.abs  -- max/abs used here; min used by RenderBar
 local format = string.format
 
+-- Reusable buffer for ApplyLayout's length-gate signature (avoids a transient
+-- table allocation each time the gate is checked).
+local _sigBuf = {}
+
 ---------------------------------------------------------------------------------
 -- Gating helpers (module functions — not methods; take widget explicitly)
 ---------------------------------------------------------------------------------
@@ -597,13 +601,16 @@ end
 -- KE's _RequestPositionUpdate pattern. A pending flag prevents stacking.
 ---------------------------------------------------------------------------------
 
+-- Pre-declared: no closure allocation per RequestLayout call.
+local function _ApplyLayoutFire()
+    MPT._layoutPending = nil
+    MPT:ApplyLayout()
+end
+
 function MPT:RequestLayout()
     if self._layoutPending then return end
     self._layoutPending = true
-    C_Timer.After(0, function()
-        self._layoutPending = nil
-        self:ApplyLayout()
-    end)
+    C_Timer.After(0, _ApplyLayoutFire)
 end
 
 ---------------------------------------------------------------------------------
@@ -620,68 +627,75 @@ function MPT:ApplyLayout()
     local db = self.db
     local f = self.frames.root
 
-    -- Apply fonts (per-element fallback chain: <Element>FontFace/Size/Outline
-    -- or global FontFace/Size/FontOutline). Pass LSM NAME — KE:ApplyFontToText
-    -- resolves the path internally; never pre-resolve with GetFontPath here.
-    local function applyFont(fs, prefix)
-        local face    = db[prefix .. "FontFace"]    or db.FontFace
-        local size    = db[prefix .. "FontSize"]    or db.FontSize    or 13
-        local outline = db[prefix .. "FontOutline"] or db.FontOutline or "OUTLINE"
-        KE:ApplyFontToText(fs, face, size, outline)
-    end
-
-    applyFont(f.deathsText,  "Deaths")
-    applyFont(f.timerText,   "Timer")
-    applyFont(f.timerPBText, "PB")
-    applyFont(f.keyText,     "Key")
-    applyFont(f.affixText,   "Affix")
-    applyFont(f.thresh3Text, "Threshold")
-    applyFont(f.thresh2Text, "Threshold")
-    applyFont(f.thresh1Text, "Threshold")
-    applyFont(f.forcesText,  "Forces")
-
-    -- Bar sizes, HUD anchor, scale, backdrop recolor.
+    -- Locals shared by both the config section and the stacking pass below.
     local PAD  = 12
     local barW = db.BarWidth  or 300
     local barH = db.BarHeight or 14
-    f:SetWidth(barW + PAD * 2)
-    self.frames.bars.timerWrap:SetSize(barW, barH)
-    self.frames.bars.forcesWrap:SetSize(barW, barH)
-    self.frames.bars:SetWidth(barW)
-
-    f:SetScale(db.Scale or 1.0)
-
-    -- Re-apply root Strata from db (GUI can change it; BuildHUD's default is
-    -- build-time only). Must happen before KE:ApplyFramePosition so that the
-    -- frame is on the correct strata when it snaps to the grid.
-    f:SetFrameStrata(db.Strata or "MEDIUM")
-
-    KE:ApplyFramePosition(f, {
-        AnchorFrom = db.SelfPoint, AnchorTo = db.AnchorPoint,
-        XOffset    = db.XOffset,   YOffset   = db.YOffset,
-    }, { anchorFrameType = db.anchorFrameType, ParentFrame = db.ParentFrame, Strata = db.Strata })
-
-    if db.BackdropEnabled then
-        local c = db.BackdropColor or { 0, 0, 0 }
-        f.bgTex:SetColorTexture(c[1], c[2], c[3], db.BackdropOpacity or 0.6)
-    else
-        f.bgTex:SetColorTexture(0, 0, 0, 0)
-    end
-
-    -- Straggler anchors: relative positions that only change on config change.
-    -- Never re-anchored inside Render* hot paths (perf: skip-SetPoint-when-stationary).
     local bars = self.frames.bars
-    f.affixText:ClearAllPoints()
-    f.affixText:SetPoint("RIGHT", f.keyText, "LEFT", -6, 0)  -- grows leftward from keyText
 
-    f.forcesText:ClearAllPoints()
-    local place = db.ForcesPlacement or "CORNER"
-    if place == "CENTER" then
-        f.forcesText:SetPoint("CENTER", bars.forcesBar)
-    elseif place == "BESIDE" then
-        f.forcesText:SetPoint("RIGHT", bars.forcesWrap, "LEFT", -4, 0)  -- overhangs backdrop left (WarpDeplete idiom)
-    else  -- CORNER (default)
-        f.forcesText:SetPoint("BOTTOMRIGHT", bars.forcesWrap, "TOPRIGHT", 0, 1)
+    -- Config section: fonts, bar sizes, HUD anchor, scale, backdrop, straggler
+    -- anchors.  Gated on f._keConfigDone so the nine ApplyFontToText calls and
+    -- all SetSize/SetPoint/SetScale/SetColorTexture operations only fire when
+    -- settings have actually changed (ApplySettings busts the flag).
+    if not f._keConfigDone then
+        f._keConfigDone = true
+
+        -- Apply fonts (per-element fallback chain: <Element>FontFace/Size/Outline
+        -- or global FontFace/Size/FontOutline). Pass LSM NAME — KE:ApplyFontToText
+        -- resolves the path internally; never pre-resolve with GetFontPath here.
+        local function applyFont(fs, prefix)
+            local face    = db[prefix .. "FontFace"]    or db.FontFace
+            local size    = db[prefix .. "FontSize"]    or db.FontSize    or 13
+            local outline = db[prefix .. "FontOutline"] or db.FontOutline or "OUTLINE"
+            KE:ApplyFontToText(fs, face, size, outline)
+        end
+
+        applyFont(f.deathsText,  "Deaths")
+        applyFont(f.timerText,   "Timer")
+        applyFont(f.timerPBText, "PB")
+        applyFont(f.keyText,     "Key")
+        applyFont(f.affixText,   "Affix")
+        applyFont(f.thresh3Text, "Threshold")
+        applyFont(f.thresh2Text, "Threshold")
+        applyFont(f.thresh1Text, "Threshold")
+        applyFont(f.forcesText,  "Forces")
+
+        -- Bar sizes, HUD anchor, scale, backdrop recolor.
+        f:SetWidth(barW + PAD * 2)
+        bars.timerWrap:SetSize(barW, barH)
+        bars.forcesWrap:SetSize(barW, barH)
+        bars:SetWidth(barW)
+
+        f:SetScale(db.Scale or 1.0)
+
+        -- KE:ApplyFramePosition sets frame strata internally from Config.Strata
+        -- (Core/Globals.lua:651) — no separate SetFrameStrata call needed here.
+        KE:ApplyFramePosition(f, {
+            AnchorFrom = db.SelfPoint, AnchorTo = db.AnchorPoint,
+            XOffset    = db.XOffset,   YOffset   = db.YOffset,
+        }, { anchorFrameType = db.anchorFrameType, ParentFrame = db.ParentFrame, Strata = db.Strata })
+
+        if db.BackdropEnabled then
+            local c = db.BackdropColor or { 0, 0, 0 }
+            f.bgTex:SetColorTexture(c[1], c[2], c[3], db.BackdropOpacity or 0.6)
+        else
+            f.bgTex:SetColorTexture(0, 0, 0, 0)
+        end
+
+        -- Straggler anchors: relative positions that only change on config change.
+        -- Never re-anchored inside Render* hot paths (perf: skip-SetPoint-when-stationary).
+        f.affixText:ClearAllPoints()
+        f.affixText:SetPoint("RIGHT", f.keyText, "LEFT", -6, 0)  -- grows leftward from keyText
+
+        f.forcesText:ClearAllPoints()
+        local place = db.ForcesPlacement or "CORNER"
+        if place == "CENTER" then
+            f.forcesText:SetPoint("CENTER", bars.forcesBar)
+        elseif place == "BESIDE" then
+            f.forcesText:SetPoint("RIGHT", bars.forcesWrap, "LEFT", -4, 0)  -- overhangs backdrop left (WarpDeplete idiom)
+        else  -- CORNER (default)
+            f.forcesText:SetPoint("BOTTOMRIGHT", bars.forcesWrap, "TOPRIGHT", 0, 1)
+        end
     end
 
     -- Length-gated vertical relayout (Fabys trick — port of timer.lua:252-258).
@@ -698,15 +712,20 @@ function MPT:ApplyLayout()
             objSum = objSum + #(o.name or "") + floor(o.clearTime or 0) + floor(o.pbTime or 0)
         end
     end
-    local sig = table.concat({
-        #(f.deathsText:GetText() or ""), #(f.timerText:GetText() or ""),
-        #(f.keyText:GetText() or ""),    #(f.affixText:GetText() or ""),
-        #(f.forcesText:GetText() or ""), db.ShowThresholdLabels and 1 or 0,
-        db.ShowForces and 1 or 0,        db.ShowDeaths and 1 or 0,
-        db.ShowObjectives and 1 or 0,
-        ((run and (run.deaths or 0) > 0) and db.ShowDeaths) and 1 or 0,
-        objCount, objDone, objSum,
-    }, ":")
+    _sigBuf[1]  = #(f.deathsText:GetText() or "")
+    _sigBuf[2]  = #(f.timerText:GetText() or "")
+    _sigBuf[3]  = #(f.keyText:GetText() or "")
+    _sigBuf[4]  = #(f.affixText:GetText() or "")
+    _sigBuf[5]  = #(f.forcesText:GetText() or "")
+    _sigBuf[6]  = db.ShowThresholdLabels and 1 or 0
+    _sigBuf[7]  = db.ShowForces and 1 or 0
+    _sigBuf[8]  = db.ShowDeaths and 1 or 0
+    _sigBuf[9]  = db.ShowObjectives and 1 or 0
+    _sigBuf[10] = ((run and (run.deaths or 0) > 0) and db.ShowDeaths) and 1 or 0
+    _sigBuf[11] = objCount
+    _sigBuf[12] = objDone
+    _sigBuf[13] = objSum
+    local sig = table.concat(_sigBuf, ":")
     if f._keLayoutSig == sig then return end
     f._keLayoutSig = sig
 
@@ -781,9 +800,10 @@ end
 ---------------------------------------------------------------------------------
 -- ApplySettings — single entry for GUI callbacks (Tasks 5.4+) and KE's
 -- duck-typed refresh walk (Core/Main.lua:136-142, ProfileManager:419).
--- Busts the length gate, re-applies bar textures + background textures,
--- re-applies root Strata, calls ApplyLayout (fonts/sizes/pos/scale/backdrop),
--- then requests a debounced repaint via NotifyRefresh.
+-- Busts the length gate, config-skip gate, and threshold geometry cache;
+-- re-applies bar textures + background textures; calls ApplyLayout
+-- (fonts/sizes/pos/scale/strata/backdrop); then requests a debounced
+-- repaint via NotifyRefresh.
 -- NOTE: ApplySettings (not BuildHUD) is the long-term owner of bar-texture
 -- application; BuildHUD only seeds the initial texture at frame creation time.
 ---------------------------------------------------------------------------------
@@ -798,14 +818,16 @@ function MPT:ApplySettings()
     -- Re-apply the StatusBar textures (user can change BarTexture in GUI).
     bars.timerBar:SetStatusBarTexture(barTex)
     bars.forcesBar:SetStatusBarTexture(barTex)
-    -- Re-apply the background textures (same texture; dark-recolored in RenderBar).
+    -- Re-apply the background textures (same texture; vertex-colored dark in BuildHUD).
     bars.timerBg:SetTexture(barTex)
     bars.forcesBg:SetTexture(barTex)
 
-    -- Bust both the length-gate (so font/size changes restack) and the threshold
-    -- geometry cache (so BarHeight/TickColor changes re-run _PlaceTick/_PlaceLabel).
+    -- Bust the length-gate (font/size changes restack), the threshold geometry
+    -- cache (BarHeight/TickColor changes re-run _PlaceTick/_PlaceLabel), and the
+    -- config-skip gate (fonts/sizes/pos/scale/backdrop re-apply).
     f._keLayoutSig    = nil
     bars._keThreshSig = nil
+    f._keConfigDone   = nil  -- bust the config-skip gate
 
     self:ApplyLayout()    -- fonts, bar sizes, position, scale, backdrop, Strata
     self:NotifyRefresh()  -- debounced Render repaints texts/colors (works in preview)
