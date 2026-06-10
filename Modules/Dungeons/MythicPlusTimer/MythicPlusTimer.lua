@@ -35,8 +35,9 @@ local CHALLENGERS_PERIL_AFFIX_ID = 152  -- adds +90s; thresholds computed on (ma
 -- Task 1.8 will add further instrumentation gates here. Leave false in shipping builds.
 local DEBUG_MPT = false
 
--- Single shared run state (the contract's MPT.run). Reset by MPT:ResetRun()
--- (Task 1.7) — which must wipe() the nested tables in place, not re-assign them.
+-- Single shared run state (the contract's MPT.run). Reset by MPT:ResetRun(),
+-- which wipes the array tables in place (affixIDs/affixNames/objectives/deathLog);
+-- thresholds is re-assigned (tiny flat table, once per run).
 MPT.run = {
     active = false, completed = false, countdown = false,
     mapID = nil, level = 0, affixIDs = {}, affixNames = {},
