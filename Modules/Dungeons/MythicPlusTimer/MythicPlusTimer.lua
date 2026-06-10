@@ -26,6 +26,7 @@ local C_Scenario = C_Scenario
 local C_Container = C_Container
 local C_Item = C_Item
 local GetWorldElapsedTime = GetWorldElapsedTime
+local GetTimePreciseSec = GetTimePreciseSec
 local hooksecurefunc = hooksecurefunc
 local issecretvalue = issecretvalue or function() return false end
 -- Current chat API. The bare global SendChatMessage is deprecated in 12.0, so capture
@@ -690,6 +691,13 @@ function MPT:OnTimerTick()
     -- Late keystone-info repair: two number compares per tick, fires at most
     -- once per run (see RepairRunInfo).
     if run.level == 0 or run.maxTime == 0 then self:RepairRunInfo() end
+    -- API-independent clock anchor (EUI preciseStart, EUI:619/649-651): world
+    -- elapsed is authoritative here (it includes death penalties), so anchor
+    -- once on the first good tick; CompleteRun uses it as the last-resort
+    -- completion fallback when the world clock goes stale post-depletion.
+    if not run.preciseBase and GetTimePreciseSec then
+        run.preciseBase = GetTimePreciseSec() - elapsed
+    end
     self:OnDeathCountUpdated()
     self:UpdateForces()
     self:UpdateObjectives()
@@ -1015,6 +1023,7 @@ function MPT:StartRun()
     run.maxTime = timeLimit or 0
     run.elapsed = 0
     run.lastTickedSec = -1
+    run.preciseBase = nil  -- re-anchored by OnTimerTick's first good tick
     self:CacheKeystoneInfo(level, affixIDs)
     wipe(run.objectives)
     run.forces.current, run.forces.total, run.forces.percent, run.forces.completed = 0, 0, 0, false
@@ -1053,8 +1062,20 @@ function MPT:CompleteRun()
         run.elapsed = info.time / 1000
     else
         local _, e = GetWorldElapsedTime(1)
-        if DEBUG_MPT then KE:Print(format("[MPT] CompleteRun: elapsed source=world-elapsed fallback time=%.1f", e or 0)) end
-        run.elapsed = e or run.elapsed
+        -- GetWorldElapsedTime can go stale after depletion (the "99:99" class
+        -- of values). Sanity-gate before freezing it into the final display
+        -- and the improve-only overall-PB commit; fall back to the precise-
+        -- clock anchor, else keep the last good ticked value.
+        local cap = (run.maxTime > 0) and (run.maxTime + 3600) or math.huge
+        if e and e > 0 and e < cap then
+            if DEBUG_MPT then KE:Print(format("[MPT] CompleteRun: elapsed source=world-elapsed fallback time=%.1f", e)) end
+            run.elapsed = e
+        elseif run.preciseBase and GetTimePreciseSec then
+            -- Slightly under-counts penalties accrued after a mid-run /reload
+            -- (the anchor restarts); far better than freezing a stale clock.
+            run.elapsed = max(0, GetTimePreciseSec() - run.preciseBase)
+            if DEBUG_MPT then KE:Print(format("[MPT] CompleteRun: elapsed source=precise-clock fallback time=%.1f", run.elapsed)) end
+        end
     end
     self:UpdateObjectives()  -- backfill any final clear times
     MPT.db._activeRunSplits = nil  -- run over; in-progress split cache no longer needed
@@ -1090,6 +1111,7 @@ function MPT:ResetRun()
     run.maxTime = 0
     run.elapsed = 0
     run.lastTickedSec = -1
+    run.preciseBase = nil
     run.deaths = 0
     run.deathTimeLost = 0
     wipe(run.deathLog); _prevDeathCount = 0; wipe(_partyAlive)
