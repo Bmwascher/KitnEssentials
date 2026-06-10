@@ -12,9 +12,9 @@ if not KitnEssentials then return end
 local MPT = KitnEssentials:GetModule("MythicPlusTimer")
 
 local CreateFrame = CreateFrame
-local floor = math.floor   -- luacheck: ignore 211 -- used by Tasks 2.2+
-local min, max, abs = math.min, math.max, math.abs  -- luacheck: ignore 211 -- used by Tasks 2.2+/SetValueGated
-local format = string.format  -- luacheck: ignore 211 -- used by Tasks 2.2+
+local floor = math.floor   -- luacheck: ignore 211 -- used by Tasks 2.3+
+local min, max, abs = math.min, math.max, math.abs  -- luacheck: ignore 211 -- min used by Tasks 2.3+; max/abs used here
+local format = string.format  -- luacheck: ignore 211 -- used by Tasks 2.3+
 
 ---------------------------------------------------------------------------------
 -- Gating helpers (module functions — not methods; take widget explicitly)
@@ -132,4 +132,66 @@ function MPT:BuildHUD()
     bars.forcesWrap, bars.forcesBar = forcesWrap, forcesBar
 
     root:Hide()
+end
+
+---------------------------------------------------------------------------------
+-- RenderTimer — format elapsed/limit into one of five display strings and
+-- recolor the FontString: white while running, gold on timed completion,
+-- red when depleted (elapsed > limit or run completed past limit).
+-- Design: uniform white (no separate gray "/ limit") per user direction.
+-- FormatTime resolved lazily to be load-order-safe (Phase 1 assigns it after
+-- this file parses).
+---------------------------------------------------------------------------------
+
+function MPT:RenderTimer()
+    local FormatTime = MPT.FormatTime
+    local run, db = self.run, self.db
+    local f = self.frames.root
+    local elapsed = run.elapsed or 0
+    local maxTime = run.maxTime or 0
+    local timeLeft = max(0, maxTime - elapsed)
+
+    local elaStr = FormatTime(elapsed, false)
+    local maxStr = FormatTime(maxTime, false)
+    local remStr = FormatTime(timeLeft, false)
+    local mode = db.TimerFormat or "ELAPSED_TOTAL"
+
+    -- On completion, freeze elapsed from the authoritative completion time
+    -- and optionally render milliseconds (spec §6.1 / §8).
+    if run.completed then
+        if db.ShowMilliseconds then
+            elaStr = FormatTime(elapsed, true)   -- run.elapsed already = completionInfo.time/1000 (Phase 1)
+        end
+    end
+
+    local str
+    if mode == "REMAINING" then
+        str = remStr
+    elseif mode == "REMAINING_TOTAL" then
+        str = remStr .. " / " .. maxStr
+    elseif mode == "ELAPSED" then
+        str = elaStr
+    elseif mode == "ELAPSED_DETAIL" then
+        -- e.g. "21:23 (11:37 / 33:00)" — elapsed (remaining / total)
+        str = elaStr .. " (" .. remStr .. " / " .. maxStr .. ")"
+    else -- ELAPSED_TOTAL (default)
+        str = elaStr .. " / " .. maxStr
+    end
+
+    -- Default: white from db.TimerColor.
+    -- Completion: gold if timed, red if depleted.
+    -- Running past limit (elapsed > maxTime): red immediately.
+    local r, g, b = db.TimerColor[1], db.TimerColor[2], db.TimerColor[3]
+    if run.completed then
+        local timed = (run.maxTime > 0) and (elapsed <= run.maxTime)
+        local c = timed and db.TimerSuccessColor or db.TimerExpiredColor
+        r, g, b = c[1], c[2], c[3]
+    elseif maxTime > 0 and timeLeft <= 0 then
+        local c = db.TimerExpiredColor
+        r, g, b = c[1], c[2], c[3]
+    end
+
+    self.SetTextGated(f.timerText, str)
+    f.timerText:SetTextColor(r, g, b)
+    f.timerText:Show()
 end
