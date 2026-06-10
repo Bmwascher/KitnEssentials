@@ -360,6 +360,30 @@ function MPT:RenderTimer()
     self.SetTextGated(f.timerText, str)
     self.SetColorGated(f.timerText, r, g, b)
     f.timerText:Show()
+
+    -- Overall PB / delta beside the timer (f.timerPBText: created + anchored
+    -- in Task 2.1; fonted by ApplyLayout's applyFont(f.timerPBText, "PB")).
+    if MPT.run.completed and MPT.run.bestOverall then
+        -- Completion: signed overall delta vs the pre-run PB.
+        local diff = (MPT.run.elapsed or 0) - MPT.run.bestOverall
+        local col = diff <= 0 and (MPT.db.SplitAheadColor or {0.25, 0.88, 0.82})
+                              or (MPT.db.SplitBehindColor or {1, 0.42, 0.42})
+        local sign = diff < 0 and "-" or "+"
+        local dStr = (diff == 0) and "0:00" or MPT.FormatTime(abs(diff), false)
+        MPT.SetTextGated(f.timerPBText, format("%s%s%s|r", Hex(col), sign, dStr))
+        f.timerPBText:SetAlpha(1)
+        f.timerPBText:Show()
+    elseif MPT.run.bestOverall then
+        -- Countdown AND live run: keep the gold overall PB visible.
+        local pbHex = Hex(MPT.db.PBColor or {0.85, 0.79, 0.54})
+        local a = max(0, min(1, MPT.db.PBOpacity or 1))
+        local pbStr = format("%sPB %s|r", pbHex, MPT.FormatTime(MPT.run.bestOverall, false))
+        MPT.SetTextGated(f.timerPBText, pbStr)
+        f.timerPBText:SetAlpha(a)
+        f.timerPBText:Show()
+    else
+        f.timerPBText:Hide()
+    end
 end
 
 ---------------------------------------------------------------------------------
