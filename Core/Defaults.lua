@@ -1249,30 +1249,6 @@ local Defaults = {
         -----------------------------------------------------------------
 
         Dungeons = {
-            WarpDepleteForces = {
-                Enabled = true,
-                Tooltip = true,
-                -- Nameplate % overlay (per-mob contribution shown on nameplate)
-                NameplatePercent = false,
-                NameplateCombatOnly = true,
-                NameplateFontFace = "Expressway",
-                NameplateFontSize = 12,
-                NameplateFontOutline = "OUTLINE",
-                NameplateColorMode = "theme",
-                NameplateColor = { 1, 1, 1, 1 },
-                NameplateAnchor = "TOPRIGHT",
-                NameplateXOffset = -20,
-                NameplateYOffset = 2,
-                -- Instance Reset Announcer (merged from former InstanceReset module)
-                InstanceResetEnabled = true,
-                InstanceResetMessage = "Instance reset!",
-                -- Death log persistence (survives /reload within same M+ run)
-                DeathLog = {
-                    mapID = nil,
-                    keyLevel = nil,
-                    details = {},
-                },
-            },
             EnemyCounter = {
                 Enabled = false,
                 CombatOnly = false,
