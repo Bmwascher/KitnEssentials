@@ -270,11 +270,11 @@ function MPT:BuildHUD()
         if not log or #log == 0 then return end
 
         -- Scale the tooltip rows with the Deaths font settings (round-4
-        -- feedback: the hardcoded 10px rows read far too small). Rows ride
-        -- 2px ABOVE the headline size — the tooltip is the detail view, so
-        -- it should read at least as comfortably as the headline.
+        -- feedback: the hardcoded 10px rows read far too small). Rows match
+        -- the headline size exactly — the earlier +2 read too large once the
+        -- rest of the tooltip was fixed (round-6 feedback).
         local ttFace = MPT.db.DeathsFontFace or MPT.db.FontFace
-        local ttSize = (MPT.db.DeathsFontSize or MPT.db.FontSize or 13) + 2
+        local ttSize = MPT.db.DeathsFontSize or MPT.db.FontSize or 13
         local rowH   = ttSize + 4
 
         -- Build sorted list (chronological by time-of-death).
