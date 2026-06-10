@@ -418,8 +418,7 @@ function MPT:RenderKey()
     if not db.ShowAffixes or db.AffixMode ~= "TEXT" then
         f.affixText:Hide()
     else
-        local names = run.affixNames or {}
-        self.SetTextGated(f.affixText, table.concat(names, " - "))
+        self.SetTextGated(f.affixText, run.affixNamesStr or "")
         if db.AffixColor then
             self.SetColorGated(f.affixText, db.AffixColor[1], db.AffixColor[2], db.AffixColor[3])
         else
@@ -432,10 +431,18 @@ function MPT:RenderKey()
     -- Icons are built lazily, sized to AffixFontSize+4, and grown leftward
     -- from keyText so they don't overflow the right edge of the backdrop.
     if db.AffixMode == "ICON" and db.ShowAffixes then
-        local ids = run.affixIDs or {}
-        local size = db.AffixFontSize or db.FontSize or 13
+        local ids     = run.affixIDs     or {}
+        local fileIDs = run.affixFileIDs or {}
+        local size = db.FontSize or 13
         local prev
         for i = 1, #ids do
+            local fileID = fileIDs[i]
+            if not fileID then
+                -- Defensive: cached fileID missing (API returned nil at run start);
+                -- hide this slot and skip so the rest of the icons still render.
+                if f.affixIcons[i] then f.affixIcons[i]:Hide() end
+                goto continue
+            end
             local tex = f.affixIcons[i]
             if not tex then
                 local holder = CreateFrame("Frame", nil, f)
@@ -447,7 +454,6 @@ function MPT:RenderKey()
                 tex = holder
             end
             tex:SetSize(size + 4, size + 4)
-            local _, _, fileID = C_ChallengeMode.GetAffixInfo(ids[i])
             tex.tex:SetTexture(fileID)
             tex:ClearAllPoints()
             -- Grow leftward (keyText sits at the frame's right edge).
@@ -458,6 +464,7 @@ function MPT:RenderKey()
             end
             tex:Show()
             prev = tex
+            ::continue::
         end
         -- Hide any stale icons from a previous run with more affixes.
         for i = #ids + 1, #f.affixIcons do f.affixIcons[i]:Hide() end

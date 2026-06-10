@@ -5,8 +5,8 @@
 -- ║           look, EllesmereUI event/tick architecture).    ║
 -- ║           Bootstrap, DB defaults, run lifecycle/state,   ║
 -- ║           event wiring, tick driver, deaths.             ║
--- ║  Backend split: _HUD (render), _Splits (PB), _Overlay   ║
--- ║           (folded ex-WarpDepleteForces nameplate/tip).  ║
+-- ║  Backend split: _HUD (render), _Splits (PB), _Overlay    ║
+-- ║           (folded ex-WarpDepleteForces nameplate/tip).   ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -40,7 +40,8 @@ local DEBUG_MPT = false
 -- thresholds is re-assigned (tiny flat table, once per run).
 MPT.run = {
     active = false, completed = false, countdown = false,
-    mapID = nil, level = 0, affixIDs = {}, affixNames = {},
+    mapID = nil, level = 0, affixIDs = {}, affixNames = {}, affixFileIDs = {},
+    affixNamesStr = nil,
     maxTime = 0, thresholds = { plus1 = 0, plus2 = 0, plus3 = 0 },
     elapsed = 0, lastTickedSec = -1,
     deaths = 0, deathTimeLost = 0, deathLog = {},
@@ -609,13 +610,18 @@ function MPT:StartRun()
     if affixIDs then
         for i = 1, #affixIDs do run.affixIDs[i] = affixIDs[i] end
     end
-    -- Cache affix names ONCE (never change mid-run; avoids per-render GetAffixInfo).
+    -- Cache affix names and file IDs ONCE (never change mid-run; avoids per-render
+    -- GetAffixInfo calls). GetAffixInfo returns (name, description, filedataid).
     wipe(run.affixNames)
+    wipe(run.affixFileIDs)
     if affixIDs then
         for i, id in ipairs(affixIDs) do
-            run.affixNames[i] = C_ChallengeMode.GetAffixInfo(id) or ""
+            local name, _, fileID = C_ChallengeMode.GetAffixInfo(id)
+            run.affixNames[i]   = name or ""
+            run.affixFileIDs[i] = fileID
         end
     end
+    run.affixNamesStr = table.concat(run.affixNames, " - ")
     run.thresholds = MPT.ComputeThresholds(run.maxTime, HasPerilAffix(run.affixIDs))
     wipe(run.objectives)
     run.forces.current, run.forces.total, run.forces.percent, run.forces.completed = 0, 0, 0, false
@@ -685,6 +691,8 @@ function MPT:ResetRun()
     wipe(run.deathLog)
     wipe(run.affixIDs)
     wipe(run.affixNames)
+    wipe(run.affixFileIDs)
+    run.affixNamesStr = nil
     wipe(run.objectives)
     run.thresholds = { plus1 = 0, plus2 = 0, plus3 = 0 }
     run.forces.current, run.forces.total, run.forces.percent, run.forces.completed = 0, 0, 0, false
