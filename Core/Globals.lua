@@ -415,6 +415,7 @@ local PREVIEW_MODULES = {
     "BurningRush",
     "Cursor",
     "DamageMeter",
+    "MythicPlusTimer",
 }
 
 -- Section → preview module mapping for section-based previews
@@ -440,6 +441,7 @@ local SECTION_PREVIEW_MODULES = {
     },
     dungeons_section = {
         "EnemyCounter", "KickTracker", "DungeonCasts", "DeathNotifications",
+        "MythicPlusTimer",
     },
     healer_section = {
         "HealerMana", "InnervateTracker", "MaintenanceTracker",
