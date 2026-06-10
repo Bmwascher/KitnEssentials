@@ -15,10 +15,10 @@ if not KitnEssentials then return end
 
 local MPT = KitnEssentials:NewModule("MythicPlusTimer", "AceEvent-3.0", "AceHook-3.0")
 
--- Upvalues
+-- Local references
 local floor, max = math.floor, math.max
 local format = string.format
-local wipe = wipe
+local wipe = wipe  -- WoW global
 local C_ChallengeMode = C_ChallengeMode
 local C_ScenarioInfo = C_ScenarioInfo
 local C_Scenario = C_Scenario
@@ -51,7 +51,9 @@ function MPT.FormatTime(sec, withMs)
         local ms = floor(((sec - whole) * 1000) + 0.5)
         if ms >= 1000 then
             whole = whole + 1
-            m = floor(whole / 60); s = floor(whole % 60); ms = 0
+            m = floor(whole / 60)
+            s = floor(whole % 60)
+            ms = 0
         end
         return format("%02d:%02d.%03d", m, s, ms)
     end
@@ -60,6 +62,7 @@ end
 
 -- Pure: peril-aware +3/+2/+1 cutoff seconds. hasPeril => recompute on (maxTime-90).
 -- plus1 = full limit, plus2 = 80%, plus3 = 60%. Busted-testable.
+-- Allocates a new table per call — callers cache the result (compute once per run).
 function MPT.ComputeThresholds(maxTime, hasPeril)
     maxTime = maxTime or 0
     if maxTime <= 0 then
