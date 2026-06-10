@@ -340,7 +340,7 @@ function MPT:UpdateObjectives()
     end
 
     -- Resolve PB targets/deltas for each objective (Splits, Task 3.6).
-    if MPT.UpdateSplits then MPT:UpdateSplits() end  -- guard removed by Task 3.6
+    MPT:UpdateSplits()
 end
 
 -- Seed KE.db.profile.MythicPlusTimer from MPT_DEFAULTS for any key
@@ -411,7 +411,7 @@ function MPT:OnEnable()
     -- Season-based purge of stale split records (deferred; API not ready at login).
     C_Timer.After(2, function()
         if not self:IsEnabled() then return end  -- module disabled inside the window
-        if self.PurgeStaleSplits then self:PurgeStaleSplits() end
+        self:PurgeStaleSplits()
     end)
 end
 
@@ -749,7 +749,7 @@ function MPT:StartRun()
     wipe(run.deathLog); _prevDeathCount = 0; wipe(_partyAlive); ScanPartyAlive()
     self:OnDeathCountUpdated()
 
-    if self.LoadSplits then self:LoadSplits() end  -- defined in Task 3.6 (guard removed there)
+    self:LoadSplits()
     self:RegisterRunEvents()
     self:StartTimerLoop()
     self:OnTimerTick()                    -- prime the display immediately
@@ -784,7 +784,8 @@ function MPT:CompleteRun()
     end
     self:UpdateObjectives()  -- backfill any final clear times
     MPT.db._activeRunSplits = nil  -- run over; in-progress split cache no longer needed
-    if self.UpdateSplits then self:UpdateSplits() end  -- Task 3.6: commit best per-boss + overall (guard removed there)
+    self:UpdateSplits()   -- refresh pbTime targets one final time (pre-run record still in run.bestOverall)
+    self:CommitSplits()   -- persist improved per-boss + overall times to the global store
     -- Clear any stale combat-defer; ApplyTrackerVisibility re-arms it if still locked.
     self._trackerPending = nil
     self:UnregisterEvent("PLAYER_REGEN_ENABLED")

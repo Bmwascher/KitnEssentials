@@ -1,12 +1,157 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  MythicPlusTimer_Splits.lua                              ║
--- ║  Module: Mythic+ Timer — splits / personal bests        ║
--- ║  Purpose: PB storage, fallback resolver, countdown PB    ║
--- ║           preview. Reads DB + completion data only.      ║
+-- ║  PB storage, fallback resolver, live deltas, purge.      ║
 -- ╚══════════════════════════════════════════════════════════╝
-
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
-
 local MPT = KitnEssentials:GetModule("MythicPlusTimer")
+
+local abs = math.abs
+local format = string.format
+
+---------------------------------------------------------------------------------
+-- Store accessors (file-local)
+---------------------------------------------------------------------------------
+
+-- Ensure the global splits table exists and return it.
+local function GetStore()
+    local g = KE.db.global
+    g.MythicPlusTimerSplits = g.MythicPlusTimerSplits or {}
+    return g.MythicPlusTimerSplits
+end
+
+-- Canonical key format: "mapID:level" (e.g. "375:15").
+local function KeyFor(mapID, level)
+    return format("%s:%d", tostring(mapID), level or 0)
+end
+
+---------------------------------------------------------------------------------
+-- LoadSplits — store-ensure + seed run.bestOverall (called from StartRun)
+---------------------------------------------------------------------------------
+
+-- Ensures the store exists and seeds run.bestOverall for the countdown preview.
+-- Per-objective pbTime seeding is NOT done here — it is owned by UpdateSplits,
+-- which the priming OnTimerTick triggers via UpdateObjectives.
+function MPT:LoadSplits()
+    local run = MPT.run
+    if not run.mapID then return end
+    local rec = MPT:ResolvePB(run.mapID, run.level, run.affixIDs)
+    run.bestOverall = rec and rec.overall or nil
+end
+
+---------------------------------------------------------------------------------
+-- ResolvePBFrom / ResolvePB — pure fallback resolver (busted-testable)
+---------------------------------------------------------------------------------
+
+-- Pure resolver: given the whole store table, return the best PB record for
+-- (mapID, level, affixIDs) using the fallback chain:
+--   1. Exact key "mapID:level"
+--   2. +affix scope (documented passthrough — level-keyed store has no affix data)
+--   3. Dungeon scope: nearest level among all records for this map
+-- Returns a record table { [criteriaIndex]=sec, overall=sec } or nil.
+-- This function is pure (no WoW API, no upvalue access) so it is busted-testable.
+function MPT.ResolvePBFrom(store, mapID, level, _affixIDs)
+    if not store or not mapID then return nil end
+
+    -- 1. Exact "mapID:level".
+    local exact = store[format("%s:%d", tostring(mapID), level or 0)]
+    if exact and exact.best then return exact.best end
+
+    -- 2. +affix scope: prefer a same-level record carrying matching affixes.
+    --    Reserved for a future affix-keyed store; with level-keyed storage,
+    --    exact already covers level. _affixIDs is threaded through so the
+    --    signature requires no change when affix-keyed storage lands.
+    --    Fall through to dungeon scope.
+
+    -- 3. Dungeon scope: nearest level among all records for this map.
+    local prefix = tostring(mapID) .. ":"
+    local bestRec, bestDelta
+    for key, rec in pairs(store) do
+        if rec.best and key:sub(1, #prefix) == prefix then
+            local lvl = tonumber(key:match(":(%d+)$")) or 0
+            local delta = abs(lvl - (level or 0))
+            if not bestDelta or delta < bestDelta then
+                bestDelta, bestRec = delta, rec
+            end
+        end
+    end
+    return bestRec and bestRec.best or nil
+end
+
+-- Public wrapper: reads the live store and delegates to the pure core.
+function MPT:ResolvePB(mapID, level, affixIDs)
+    return MPT.ResolvePBFrom(GetStore(), mapID, level, affixIDs)
+end
+
+---------------------------------------------------------------------------------
+-- UpdateSplits — refresh per-objective pbTime + run.bestOverall (live deltas)
+---------------------------------------------------------------------------------
+
+-- Called from the tail of UpdateObjectives (via SCENARIO_CRITERIA_UPDATE) and
+-- from CompleteRun. Keeps pbTime targets live for all pending objective rows.
+function MPT:UpdateSplits()
+    local run = MPT.run
+    if not run.mapID then return end
+    local rec = MPT:ResolvePB(run.mapID, run.level, run.affixIDs)
+    run.bestOverall = rec and rec.overall or run.bestOverall
+    for i = 1, #run.objectives do
+        local obj = run.objectives[i]
+        -- pbTime drives both the cyan/red delta (completed rows) and the gold
+        -- target time (pending rows). Resolve once per objective from the record.
+        obj.pbTime = rec and rec[obj.criteriaIndex] or obj.pbTime
+    end
+end
+
+---------------------------------------------------------------------------------
+-- CommitSplits — persist best splits at run end (called from CompleteRun)
+---------------------------------------------------------------------------------
+
+-- Writes per-boss clear times and the overall run time, but only when they
+-- improve the stored record. Called after the final UpdateObjectives + UpdateSplits
+-- so run.bestOverall still holds the PRE-run record for completion-screen deltas.
+function MPT:CommitSplits()
+    local run = MPT.run
+    if not run.mapID then return end
+    local store = GetStore()
+    local key = KeyFor(run.mapID, run.level)
+    local entry = store[key]
+    if not entry then entry = { best = {} }; store[key] = entry end
+    entry.best = entry.best or {}
+    entry.lastSeenSeason = C_MythicPlus and C_MythicPlus.GetCurrentSeason
+        and C_MythicPlus.GetCurrentSeason() or entry.lastSeenSeason
+    -- Per-boss: only write when this clear time beats the stored record.
+    for i = 1, #run.objectives do
+        local obj = run.objectives[i]
+        if obj.completed and obj.clearTime and obj.clearTime > 0 then
+            local prev = entry.best[obj.criteriaIndex]
+            if not prev or obj.clearTime < prev then
+                entry.best[obj.criteriaIndex] = obj.clearTime
+            end
+        end
+    end
+    -- Overall: only write when this run beats the stored record.
+    if run.elapsed and run.elapsed > 0 then
+        if not entry.best.overall or run.elapsed < entry.best.overall then
+            entry.best.overall = run.elapsed
+        end
+    end
+end
+
+---------------------------------------------------------------------------------
+-- PurgeStaleSplits — season-based purge (called from OnEnable, deferred 2s)
+---------------------------------------------------------------------------------
+
+-- Drops any stored record whose lastSeenSeason is set and older than the
+-- current season. If the season cannot be determined, keep everything.
+function MPT:PurgeStaleSplits()
+    local season = C_MythicPlus and C_MythicPlus.GetCurrentSeason
+        and C_MythicPlus.GetCurrentSeason()
+    if not season or season <= 0 then return end  -- season unknown -> keep everything
+    local store = GetStore()
+    for key, rec in pairs(store) do
+        if rec.lastSeenSeason and rec.lastSeenSeason > 0 and rec.lastSeenSeason < season then
+            store[key] = nil
+        end
+    end
+end
