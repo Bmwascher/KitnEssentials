@@ -23,6 +23,11 @@ local function ApplySettings()
     if M and M.ApplySettings then M:ApplySettings() end
 end
 
+local function ApplyOverlaySettings()
+    local M = GetMPT()
+    if M and M.ApplyOverlaySettings then M:ApplyOverlaySettings() end
+end
+
 -- Builds an LSM media hash {name = name} for searchable dropdowns.
 local function MediaList(kind, fallback)
     local out = {}
@@ -491,6 +496,162 @@ BuildDeathsTab = function(scrollChild, yOffset, db, manager)
     AddColor(colorsCard, db, manager, ApplySettings, "Deaths Text", "DeathsColor", { 0.85, 0.85, 0.85 })
     AddColor(colorsCard, db, manager, ApplySettings, "Time Penalty", "DeathPenaltyColor", { 1, 0.42, 0.42 }, true)
     yOffset = colorsCard:GetNextOffset()
+    return yOffset
+end
+
+BuildOverlayTab = function(scrollChild, yOffset, db, manager)
+    manager:SetCondition("overlayNP", function()
+        return db.Enabled ~= false and db.OverlayNameplateEnabled == true
+    end)
+    manager:SetCondition("overlayCustomColor", function()
+        return db.Enabled ~= false and db.OverlayNameplateEnabled == true
+            and (db.OverlayColorMode or "theme") == "custom"
+    end)
+
+    -- Card 1: Enable (nameplate % + tooltip count + combat-only)
+    local card1 = GUIFrame:CreateCard(scrollChild, "Enemy Overlay", yOffset)
+    manager:Register(card1, "all")
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local npCheck = GUIFrame:CreateCheckbox(row1, "Show % on Nameplates", {
+        value = db.OverlayNameplateEnabled == true,
+        callback = function(checked)
+            db.OverlayNameplateEnabled = checked
+            local M = GetMPT()
+            if M and M.SetOverlayActive then M:SetOverlayActive(checked) end
+            ApplyOverlaySettings()
+            manager:UpdateAll(db.Enabled ~= false)
+        end,
+    })
+    row1:AddWidget(npCheck, 0.5)
+    manager:Register(npCheck, "all")
+    local tipCheck = GUIFrame:CreateCheckbox(row1, "Enemy Count on Tooltip", {
+        value = db.OverlayTooltipEnabled ~= false,
+        callback = function(checked) db.OverlayTooltipEnabled = checked; ApplyOverlaySettings() end,
+    })
+    row1:AddWidget(tipCheck, 0.5)
+    manager:Register(tipCheck, "all")
+    card1:AddRow(row1, Theme.rowHeight)
+
+    local row2 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local combatOnlyCheck = GUIFrame:CreateCheckbox(row2, "Only in Combat", {
+        value = db.OverlayCombatOnly ~= false,
+        callback = function(checked) db.OverlayCombatOnly = checked; ApplyOverlaySettings() end,
+    })
+    row2:AddWidget(combatOnlyCheck, 0.5)
+    manager:Register(combatOnlyCheck, "overlayNP")
+    card1:AddRow(row2, Theme.rowHeight)
+
+    local noteRow = GUIFrame:CreateRow(card1.content, 64)
+    local noteText = GUIFrame:CreateText(noteRow,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " Per-mob forces count on enemy tooltips (12.0.5 API).\n" ..
+        KE:ColorTextByTheme("-") .. " Optional per-pull % overlay on nameplates (Mythic+ only).\n" ..
+        KE:ColorTextByTheme("-") .. " Replaces the standalone WarpDeplete+ overlay; no external addon needed.",
+        64, "hide")
+    noteRow:AddWidget(noteText, 1)
+    manager:Register(noteText, "all")
+    card1:AddRow(noteRow, 64, 0)
+    yOffset = card1:GetNextOffset()
+
+    -- Card 2: Nameplate % — Position
+    local card2 = GUIFrame:CreateCard(scrollChild, "Nameplate % — Position", yOffset)
+    manager:Register(card2, "overlayNP")
+
+    local anchorOptions = {
+        { key = "CENTER",      text = "Center"       },
+        { key = "TOP",         text = "Top"          },
+        { key = "BOTTOM",      text = "Bottom"       },
+        { key = "LEFT",        text = "Left"         },
+        { key = "RIGHT",       text = "Right"        },
+        { key = "TOPLEFT",     text = "Top Left"     },
+        { key = "TOPRIGHT",    text = "Top Right"    },
+        { key = "BOTTOMLEFT",  text = "Bottom Left"  },
+        { key = "BOTTOMRIGHT", text = "Bottom Right" },
+    }
+
+    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local anchorDropdown = GUIFrame:CreateDropdown(row2a, "Anchor", {
+        options = anchorOptions,
+        value = db.OverlayAnchor or "TOPRIGHT",
+        callback = function(key) db.OverlayAnchor = key; ApplyOverlaySettings() end,
+    })
+    row2a:AddWidget(anchorDropdown, 1)
+    manager:Register(anchorDropdown, "overlayNP")
+    card2:AddRow(row2a, Theme.rowHeight)
+
+    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local xSlider = GUIFrame:CreateSlider(row2b, "X Offset", {
+        min = -100, max = 100, step = 1,
+        value = db.OverlayXOffset or -20,
+        callback = function(val) db.OverlayXOffset = val; ApplyOverlaySettings() end,
+    })
+    row2b:AddWidget(xSlider, 0.5)
+    manager:Register(xSlider, "overlayNP")
+    local ySlider = GUIFrame:CreateSlider(row2b, "Y Offset", {
+        min = -100, max = 100, step = 1,
+        value = db.OverlayYOffset or 2,
+        callback = function(val) db.OverlayYOffset = val; ApplyOverlaySettings() end,
+    })
+    row2b:AddWidget(ySlider, 0.5)
+    manager:Register(ySlider, "overlayNP")
+    card2:AddRow(row2b, Theme.rowHeightLast, 0)
+    yOffset = card2:GetNextOffset()
+
+    -- Card 3: Nameplate % — Font Settings
+    local card3 = GUIFrame:CreateCard(scrollChild, "Nameplate % — Font Settings", yOffset)
+    manager:Register(card3, "overlayNP")
+    local row3a = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local fontDropdown = GUIFrame:CreateDropdown(row3a, "Font", {
+        options = MediaList("font", "Expressway"),
+        value = db.OverlayFontFace or "Expressway",
+        callback = function(key) db.OverlayFontFace = key; ApplyOverlaySettings() end,
+        searchable = true, isFontPreview = true,
+    })
+    row3a:AddWidget(fontDropdown, 0.5)
+    manager:Register(fontDropdown, "overlayNP")
+    local sizeSlider = GUIFrame:CreateSlider(row3a, "Size", {
+        min = 8, max = 20, step = 1,
+        value = db.OverlayFontSize or 12,
+        callback = function(val) db.OverlayFontSize = val; ApplyOverlaySettings() end,
+    })
+    row3a:AddWidget(sizeSlider, 0.5)
+    manager:Register(sizeSlider, "overlayNP")
+    card3:AddRow(row3a, Theme.rowHeight)
+
+    local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
+    local outlineDropdown = GUIFrame:CreateDropdown(row3b, "Outline", {
+        options = KE:GetFontOutlineOptions{ includeMono = true },
+        value = db.OverlayFontOutline or "OUTLINE",
+        callback = function(key) db.OverlayFontOutline = key; ApplyOverlaySettings() end,
+    })
+    row3b:AddWidget(outlineDropdown, 1)
+    manager:Register(outlineDropdown, "overlayNP")
+    card3:AddRow(row3b, Theme.rowHeightLast, 0)
+    yOffset = card3:GetNextOffset()
+
+    -- Card 4: Nameplate % — Colors
+    local card4 = GUIFrame:CreateCard(scrollChild, "Nameplate % — Colors", yOffset)
+    manager:Register(card4, "overlayNP")
+    local row4 = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
+    local colorModeDropdown = GUIFrame:CreateDropdown(row4, "Color Mode", {
+        options = KE.ColorModeOptions,
+        value = db.OverlayColorMode or "theme",
+        callback = function(key)
+            db.OverlayColorMode = key
+            ApplyOverlaySettings()
+            manager:UpdateAll(db.Enabled ~= false)
+        end,
+    })
+    row4:AddWidget(colorModeDropdown, 0.5)
+    manager:Register(colorModeDropdown, "overlayNP")
+    local colorPicker = GUIFrame:CreateColorPicker(row4, "Custom Color", {
+        color = db.OverlayColor or { 1, 1, 1 },
+        callback = function(r, g, b) db.OverlayColor = { r, g, b }; ApplyOverlaySettings() end,
+    })
+    row4:AddWidget(colorPicker, 0.5)
+    manager:Register(colorPicker, "overlayCustomColor")
+    card4:AddRow(row4, Theme.rowHeightLast, 0)
+    yOffset = card4:GetNextOffset()
     return yOffset
 end
 
