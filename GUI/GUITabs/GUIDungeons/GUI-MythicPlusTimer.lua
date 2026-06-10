@@ -38,6 +38,10 @@ end
 local BuildTimerTab, BuildForcesTab, BuildObjectivesTab, BuildDeathsTab, BuildOverlayTab, BuildGeneralTab -- luacheck: ignore 221
 
 BuildTimerTab = function(scrollChild, yOffset, db, manager)
+    manager:SetCondition("backdrop", function()
+        return db.Enabled ~= false and db.BackdropEnabled == true
+    end)
+
     local function ApplyModuleState(enabled)
         if not KitnEssentials then return end
         local mod = KitnEssentials:GetModule("MythicPlusTimer", true)
@@ -215,9 +219,6 @@ BuildTimerTab = function(scrollChild, yOffset, db, manager)
     -- Card 7: Backdrop
     local bgCard = GUIFrame:CreateCard(scrollChild, "Backdrop", yOffset)
     manager:Register(bgCard, "all")
-    manager:SetCondition("backdrop", function()
-        return db.Enabled ~= false and db.BackdropEnabled == true
-    end)
     local rowB = GUIFrame:CreateRow(bgCard.content, Theme.rowHeight)
     local bgCheck = GUIFrame:CreateCheckbox(rowB, "Enable Backdrop", {
         value = db.BackdropEnabled == true,
