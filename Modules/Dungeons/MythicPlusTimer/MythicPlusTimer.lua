@@ -687,6 +687,9 @@ function MPT:OnTimerTick()
     if sec == run.lastTickedSec then return end
     run.lastTickedSec = sec
     run.elapsed = elapsed
+    -- Late keystone-info repair: two number compares per tick, fires at most
+    -- once per run (see RepairRunInfo).
+    if run.level == 0 or run.maxTime == 0 then self:RepairRunInfo() end
     self:OnDeathCountUpdated()
     self:UpdateForces()
     self:UpdateObjectives()
@@ -810,9 +813,19 @@ function MPT:UnregisterRunEvents()
     for _, ev in ipairs(RUN_EVENTS) do self:UnregisterEvent(ev) end
 end
 
+-- One-shot deferred re-check (pre-declared: no closure per PEW): challenge-mode
+-- APIs aren't reliably populated at PLAYER_ENTERING_WORLD, so a /reload-mid-key
+-- recovery can miss. EUI retries at 10s for exactly this (EUI:1914-1916).
+local function _DelayedRunCheck()
+    if not MPT:IsEnabled() then return end
+    if MPT.run.active or MPT.run.completed then return end
+    MPT:CheckForActiveRun()
+end
+
 -- Always-on event handlers (registered in OnEnable; low-frequency).
 function MPT:PLAYER_ENTERING_WORLD()
     self:CheckForActiveRun()
+    C_Timer.After(10, _DelayedRunCheck)
 end
 
 function MPT:CHALLENGE_MODE_START()
@@ -927,6 +940,56 @@ local function HasPerilAffix(affixIDs)
     return false
 end
 
+-- Caches keystone level + affix names/fileIDs + peril-aware thresholds onto
+-- the run. Split out of StartRun so RepairRunInfo can re-run it when
+-- GetActiveKeystoneInfo wasn't populated at StartRun time (reload-recovery
+-- race — a level-0 run otherwise locks wrong, un-peril'd +3/+2 cutoffs in
+-- for the whole restored run). GetAffixInfo returns (name, description,
+-- filedataid); all cached ONCE — never change mid-run.
+function MPT:CacheKeystoneInfo(level, affixIDs)
+    local run = self.run
+    run.level = level or 0
+    wipe(run.affixIDs)
+    if affixIDs then
+        for i = 1, #affixIDs do run.affixIDs[i] = affixIDs[i] end
+    end
+    wipe(run.affixNames)
+    wipe(run.affixFileIDs)
+    if affixIDs then
+        for i, id in ipairs(affixIDs) do
+            local name, _, fileID = C_ChallengeMode.GetAffixInfo(id)
+            run.affixNames[i]   = name or ""
+            run.affixFileIDs[i] = fileID
+        end
+    end
+    run.affixNamesStr = table.concat(run.affixNames, " - ")
+    run.thresholds = MPT.ComputeThresholds(run.maxTime, HasPerilAffix(run.affixIDs))
+end
+
+-- Late run-info repair, called from OnTimerTick while level/maxTime are still
+-- 0 (cheap number gates). A reload-recovery StartRun can race API population;
+-- each branch repairs at most once per run.
+function MPT:RepairRunInfo()
+    local run = self.run
+    if run.maxTime == 0 and run.mapID then
+        local _, _, timeLimit = C_ChallengeMode.GetMapUIInfo(run.mapID)
+        if timeLimit and timeLimit > 0 then
+            run.maxTime = timeLimit
+            run.thresholds = MPT.ComputeThresholds(run.maxTime, HasPerilAffix(run.affixIDs))
+            if DEBUG_MPT then KE:Print(format("[MPT] RepairRunInfo: maxTime=%d", timeLimit)) end
+        end
+    end
+    if run.level == 0 then
+        local level, affixIDs = C_ChallengeMode.GetActiveKeystoneInfo()
+        if level and level > 0 then
+            self:CacheKeystoneInfo(level, affixIDs)
+            -- PB store is level-keyed: re-resolve pbRec + reseed bestOverall.
+            self:LoadSplits()
+            if DEBUG_MPT then KE:Print(format("[MPT] RepairRunInfo: level=%d", level)) end
+        end
+    end
+end
+
 function MPT:StartRun()
     -- preview teardown (ShowPreview/HidePreview: Task 2.6); isPreview is nil until then, so this is inert in Phase 1
     if self.isPreview then self:HidePreview() end
@@ -949,27 +1012,10 @@ function MPT:StartRun()
     run.completed = false
     run.countdown = true  -- cleared once the clock leaves 0:00 (HUD phase)
     run.mapID = mapID
-    run.level = level or 0
     run.maxTime = timeLimit or 0
     run.elapsed = 0
     run.lastTickedSec = -1
-    wipe(run.affixIDs)
-    if affixIDs then
-        for i = 1, #affixIDs do run.affixIDs[i] = affixIDs[i] end
-    end
-    -- Cache affix names and file IDs ONCE (never change mid-run; avoids per-render
-    -- GetAffixInfo calls). GetAffixInfo returns (name, description, filedataid).
-    wipe(run.affixNames)
-    wipe(run.affixFileIDs)
-    if affixIDs then
-        for i, id in ipairs(affixIDs) do
-            local name, _, fileID = C_ChallengeMode.GetAffixInfo(id)
-            run.affixNames[i]   = name or ""
-            run.affixFileIDs[i] = fileID
-        end
-    end
-    run.affixNamesStr = table.concat(run.affixNames, " - ")
-    run.thresholds = MPT.ComputeThresholds(run.maxTime, HasPerilAffix(run.affixIDs))
+    self:CacheKeystoneInfo(level, affixIDs)
     wipe(run.objectives)
     run.forces.current, run.forces.total, run.forces.percent, run.forces.completed = 0, 0, 0, false
     run.forces._lastQS, run.forces._lastQSParsed = nil, nil
