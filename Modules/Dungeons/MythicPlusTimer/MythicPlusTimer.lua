@@ -511,6 +511,7 @@ function MPT:OnDisable()
     -- Pending refresh timer must not render on a disabled module; ticker must detach.
     self:StopTimerLoop()
     self._refreshQueued = nil
+    self._salvagePending = nil  -- pending salvage timer fires inert (run cleared below)
     -- Overlay teardown: UnregisterAllEvents below kills the plate events, but the
     -- 0.5s nameplate ticker and any attached plate texts survive without this.
     self:SetOverlayActive(false)
@@ -595,6 +596,10 @@ function MPT:RecordDeath(guid, knownName, knownUnit)
         -- entry (log corrupts from death #2 on). Record only while the member
         -- is still marked alive, and prune the snapshot so the later scan
         -- can't append a duplicate (mirrors CheckForNewDeaths' prune).
+        -- Cross-realm caveat: UnitNameFromGUID can return "Name-Realm" while
+        -- the snapshot is keyed by UnitName's short form — the guid path is
+        -- then muted for that member and the count-scan records the death
+        -- instead (single entry either way; the scan is authoritative).
         if not name or not _partyAlive[name] then return end
         _partyAlive[name] = nil
     else
@@ -1100,6 +1105,11 @@ function MPT:ResetRun()
     -- returns), and the next run would back-stamp the old key's clear times
     -- into the improve-only PB store — permanently.
     MPT.db._activeRunSplits = nil
+    -- Same hoist rationale for the salvage flag: a pending 2s salvage timer
+    -- must not leave the flag armed into a chained new run (the
+    -- not-_salvagePending guard would suppress that run's salvage net). The
+    -- fire callback's run-state guards make any stale timer inert.
+    self._salvagePending = nil
     local run = self.run
     if not run.active and not run.completed and run.mapID == nil then
         if DEBUG_MPT then KE:Print("[MPT] ResetRun: nothing to reset, ignoring") end
@@ -1189,8 +1199,11 @@ function MPT:ShouldHideTracker()
     if not (self.db and self.db.HideBlizzardTracker) then return false end
     if self.run and self.run.active then return true end
     if self.run and self.run.completed then
-        local _, instanceType = GetInstanceInfo()
-        return instanceType == "party"
+        -- Same predicate as CheckForActiveRun's fanfare window: require the
+        -- keystone difficulty too, or a lingering completed flag could keep
+        -- the tracker suppressed in a non-keystone 5-man entered without a
+        -- reset in between.
+        return InChallengeInstance()
     end
     return false
 end
