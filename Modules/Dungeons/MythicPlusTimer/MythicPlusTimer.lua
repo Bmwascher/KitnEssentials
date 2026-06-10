@@ -69,7 +69,7 @@ local _partyAlive = {}  -- [name] = true while alive
 -- which wipes the array tables in place (affixIDs/affixNames/objectives/deathLog);
 -- thresholds is re-assigned (tiny flat table, once per run).
 MPT.run = {
-    active = false, completed = false, countdown = false,
+    active = false, completed = false,
     mapID = nil, level = 0, affixIDs = {}, affixNames = {}, affixFileIDs = {},
     affixNamesStr = nil,
     maxTime = 0, thresholds = { plus1 = 0, plus2 = 0, plus3 = 0 },
@@ -1019,7 +1019,6 @@ function MPT:StartRun()
 
     run.active = true
     run.completed = false
-    run.countdown = true  -- cleared once the clock leaves 0:00 (HUD phase)
     run.mapID = mapID
     run.maxTime = timeLimit or 0
     run.elapsed = 0
@@ -1052,7 +1051,6 @@ function MPT:CompleteRun()
     if DEBUG_MPT then KE:Print("[MPT] CompleteRun: completing run") end
     run.completed = true
     run.active = false
-    run.countdown = false
     self:StopTimerLoop()
     self:UnregisterRunEvents()
     -- Authoritative final time (ms). GetWorldElapsedTime can go secret/stale ("99:99")
@@ -1078,9 +1076,8 @@ function MPT:CompleteRun()
             if DEBUG_MPT then KE:Print(format("[MPT] CompleteRun: elapsed source=precise-clock fallback time=%.1f", run.elapsed)) end
         end
     end
-    self:UpdateObjectives()  -- backfill any final clear times
+    self:UpdateObjectives()  -- backfill final clear times (tail-calls UpdateSplits; pre-run record still in run.bestOverall)
     MPT.db._activeRunSplits = nil  -- run over; in-progress split cache no longer needed
-    self:UpdateSplits()   -- refresh pbTime targets one final time (pre-run record still in run.bestOverall)
     self:CommitSplits()   -- persist improved per-boss + overall times to the global store
     -- Clear any stale combat-defer; ApplyTrackerVisibility re-arms it if still locked.
     self._trackerPending = nil
@@ -1106,7 +1103,6 @@ function MPT:ResetRun()
     if DEBUG_MPT then KE:Print("[MPT] ResetRun: resetting run state") end
     run.active = false
     run.completed = false
-    run.countdown = false
     run.mapID = nil
     run.level = 0
     run.maxTime = 0

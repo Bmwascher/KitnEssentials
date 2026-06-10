@@ -42,9 +42,15 @@ describe("MPT.ResolvePBFrom", function()
     end)
 
     it("falls back to nearest level in the same dungeon", function()
-        local rec = MPT.ResolvePBFrom(store, 2648, 11, nil)  -- no 2648:11
-        assert.is_truthy(rec)                                 -- nearest is :10 or :12
-        assert.is_truthy(rec.overall == 1500 or rec.overall == 1400)
+        local rec = MPT.ResolvePBFrom(store, 2648, 13, nil)  -- no 2648:13; nearest is :12
+        assert.is_truthy(rec)
+        assert.are.equal(1400, rec.overall)
+    end)
+
+    it("breaks an equidistant tie toward the lower level deterministically", function()
+        local rec = MPT.ResolvePBFrom(store, 2648, 11, nil)  -- :10 and :12 both delta 1
+        assert.is_truthy(rec)
+        assert.are.equal(1500, rec.overall)                  -- lower level (:10) wins
     end)
 
     it("returns nil for an unknown dungeon", function()

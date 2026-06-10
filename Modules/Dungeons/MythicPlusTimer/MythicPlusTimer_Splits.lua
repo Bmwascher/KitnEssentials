@@ -79,14 +79,18 @@ function MPT.ResolvePBFrom(store, mapID, level, _affixIDs)
     --    Fall through to dungeon scope.
 
     -- 3. Dungeon scope: nearest level among all records for this map.
+    -- Equidistant tie (e.g. records at 10 and 12 for an 11 key) breaks
+    -- deterministically toward the LOWER level — pairs() iteration order
+    -- would otherwise pick a different record run-to-run.
     local prefix = tostring(mapID) .. ":"
-    local bestRec, bestDelta
+    local bestRec, bestDelta, bestLvl
     for key, rec in pairs(store) do
         if rec.best and key:sub(1, #prefix) == prefix then
             local lvl = tonumber(key:match(":(%d+)$")) or 0
             local delta = abs(lvl - (level or 0))
-            if not bestDelta or delta < bestDelta then
-                bestDelta, bestRec = delta, rec
+            if not bestDelta or delta < bestDelta
+               or (delta == bestDelta and lvl < bestLvl) then
+                bestDelta, bestLvl, bestRec = delta, lvl, rec
             end
         end
     end
@@ -133,11 +137,12 @@ end
 ---------------------------------------------------------------------------------
 
 -- Writes per-boss clear times and the overall run time, but only when they
--- improve the stored record. Called after the final UpdateObjectives + UpdateSplits
--- so run.bestOverall still holds the PRE-run record for completion-screen deltas.
--- ORDERING CONTRACT: must be called AFTER UpdateSplits (which reads the pre-run
--- record). CompleteRun: UpdateObjectives -> UpdateSplits -> CommitSplits.
--- Reversing CommitSplits/UpdateSplits would zero the completion-screen delta.
+-- improve the stored record. Called after the final UpdateObjectives (whose
+-- tail runs UpdateSplits) so run.bestOverall still holds the PRE-run record
+-- for completion-screen deltas.
+-- ORDERING CONTRACT: must be called AFTER UpdateSplits (which reads the
+-- pre-run record). CompleteRun: UpdateObjectives (tail-calls UpdateSplits)
+-- -> CommitSplits. Committing first would zero the completion-screen delta.
 function MPT:CommitSplits()
     local run = self.run
     if not run.mapID then return end
@@ -148,7 +153,12 @@ function MPT:CommitSplits()
     entry.best = entry.best or {}
     local seasonFn = C_MythicPlus and C_MythicPlus.GetCurrentSeason
     local season = seasonFn and seasonFn()
-    entry.lastSeenSeason = season or entry.lastSeenSeason
+    -- GetCurrentSeason returns -1 while the API isn't ready; stamping that
+    -- would clobber a valid season and permanently exempt the record from
+    -- PurgeStaleSplits (which ignores entries with lastSeenSeason <= 0).
+    if season and season > 0 then
+        entry.lastSeenSeason = season
+    end
     -- Per-boss: only write when this clear time beats the stored record.
     for i = 1, #run.objectives do
         local obj = run.objectives[i]

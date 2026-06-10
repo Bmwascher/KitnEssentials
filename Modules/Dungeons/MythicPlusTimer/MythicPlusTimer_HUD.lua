@@ -1208,7 +1208,7 @@ local function BuildPreviewRun()
               quantity = 2, totalQuantity = 6, criteriaIndex = 5 },
         },
         bestOverall = 1750,
-        active = true, completed = false, countdown = false,
+        active = true, completed = false,
     }
 end
 
