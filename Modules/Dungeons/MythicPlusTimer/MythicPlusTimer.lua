@@ -16,7 +16,7 @@ if not KitnEssentials then return end
 local MPT = KitnEssentials:NewModule("MythicPlusTimer", "AceEvent-3.0", "AceHook-3.0")
 
 -- Local references
-local floor, max = math.floor, math.max
+local floor, max, abs = math.floor, math.max, math.abs
 local format = string.format
 local pairs = pairs
 local wipe = wipe  -- WoW global
@@ -138,6 +138,7 @@ end
 -- (solo runs are silently dropped). Appends a "+/- vs PB" delta when pbTime is
 -- available. Uses MPT.FormatTime (pure helper) for time formatting.
 function MPT:ChatOutputBossSplit(objective)
+    if not SendChat then return end
     if not self.db.ChatOutputSplits then return end
     if not objective or not objective.completed then return end
     if InCombatLockdown() then return end  -- skip mid-pull spam noise
@@ -152,7 +153,7 @@ function MPT:ChatOutputBossSplit(objective)
     if objective.pbTime then
         local delta = (objective.clearTime or 0) - objective.pbTime
         local sign = delta <= 0 and "-" or "+"
-        msg = msg .. format(" (%s%s vs PB)", sign, MPT.FormatTime(math.abs(delta), false))
+        msg = msg .. format(" (%s%s vs PB)", sign, MPT.FormatTime(abs(delta), false))
     end
 
     SendChat(msg, channel)
