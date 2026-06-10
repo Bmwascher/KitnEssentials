@@ -49,8 +49,8 @@ function MPT:MigrateLegacyOverlayDB()
     end
 
     -- Old table is fully retired (Instance Reset Announcer + DeathLog drop with it).
-    -- NOTE: this nil is housekeeping, not the sentinel — AceDB/FillProfileDefaults
-    -- recreate the table (all defaults) on every reload until Task 4.8; the
-    -- OverlayMigrated flag above is what prevents a re-copy. Stays gone after 4.8.
-    profile.Dungeons.WarpDepleteForces = nil
+    -- Deliberately NOT nil-ing profile.Dungeons.WarpDepleteForces here: the live
+    -- WDF module re-binds self.db to that slot on every profile switch
+    -- (ProfileManager duck-types UpdateDB) and would crash on a nil section.
+    -- Task 4.8 removes the WDF module + its Defaults.lua block; the slot dies there.
 end
