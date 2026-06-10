@@ -266,30 +266,55 @@ local function StopNameplateTicker()
 end
 
 ---------------------------------------------------------------------------------
--- Overlay API (public — InitOverlay / SetOverlayActive added in Task 4.5)
+-- Overlay API (public)
 ---------------------------------------------------------------------------------
 
--- Internal: install the tooltip post-call if overlay is being activated.
--- Called from SetOverlayActive (Task 4.5).
-function MPT:_SetupOverlayTooltip()
+-- One-time overlay setup: register the tooltip post-call and (if the nameplate
+-- overlay is enabled in DB) the nameplate add/remove events. Safe to call again;
+-- SetupTooltip self-guards and RegisterEvent is idempotent in AceEvent.
+function MPT:InitOverlay()
     SetupTooltip()
+    if self.db and self.db.OverlayNameplateEnabled then
+        self:RegisterEvent("NAME_PLATE_UNIT_ADDED")
+        self:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
+    end
 end
 
--- Called from Task 4.5's SetOverlayActive (nameplate arm on/off).
-function MPT:_StartNameplateTicker()
-    StartNameplateTicker()
+-- Activate or deactivate the nameplate overlay. `active` reflects this
+-- module's run-state (StartRun true / Complete|Reset false). The tooltip
+-- post-call self-gates on IsInChallengeMode each call, so it needs no toggle.
+function MPT:SetOverlayActive(active)
+    if active and self.db and self.db.OverlayNameplateEnabled then
+        self:RegisterEvent("NAME_PLATE_UNIT_ADDED")
+        self:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
+        StartNameplateTicker()
+        UpdateAllNameplateTexts()
+    else
+        self:UnregisterEvent("NAME_PLATE_UNIT_ADDED")
+        self:UnregisterEvent("NAME_PLATE_UNIT_REMOVED")
+        StopNameplateTicker()
+        ReleaseAllNameplateTexts()
+    end
 end
 
-function MPT:_StopNameplateTicker()
-    StopNameplateTicker()
-end
-
-function MPT:_ReleaseAllNameplateTexts()
-    ReleaseAllNameplateTexts()
-end
-
-function MPT:_UpdateAllNameplateTexts()
-    UpdateAllNameplateTexts()
+-- Called from the GUI (Task 5.9) when overlay toggles/style change. Re-wires
+-- the nameplate subsystem to match the current DB + live-refreshes style/position.
+function MPT:ApplyOverlaySettings()
+    if self.db and self.db.OverlayNameplateEnabled then
+        self:RegisterEvent("NAME_PLATE_UNIT_ADDED")
+        self:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
+        if IsInChallengeMode() then
+            StartNameplateTicker()
+            UpdateAllNameplateTexts()
+        end
+    else
+        self:UnregisterEvent("NAME_PLATE_UNIT_ADDED")
+        self:UnregisterEvent("NAME_PLATE_UNIT_REMOVED")
+        StopNameplateTicker()
+        ReleaseAllNameplateTexts()
+    end
+    RefreshAllNameplateStyle()
+    RefreshAllNameplatePositions()
 end
 
 -- Event handlers wired by Task 4.6.
