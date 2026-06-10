@@ -16,6 +16,38 @@ local floor = math.floor
 local min, max, abs = math.min, math.max, math.abs  -- max/abs used here; min used by RenderBar
 local format = string.format
 
+-- Color array → "|cffRRGGBB" prefix (used by RenderObjectives per-row).
+-- floor already declared above; do NOT re-declare it.
+local function Hex(c)
+    return string.format("|cff%02x%02x%02x", floor((c[1] or 1) * 255), floor((c[2] or 1) * 255), floor((c[3] or 1) * 255))
+end
+
+-- Objective-row frame pool (Step 1 of Task 3.2).
+-- Each kit = { row, name, time } where row is the root Frame and
+-- name/time are the left/right FontStrings. Scripts and font structure
+-- are wired once inside the factory; per-render state is set in
+-- RenderObjectives. The resetter hides both FontStrings and clears any
+-- PBOpacity alpha dim so the kit is safe for reuse.
+MPT._objRowPool = MPT._objRowPool or KE.FramePool:New(
+    function(holder)
+        local row = CreateFrame("Frame", nil, holder)
+        local nameFS = row:CreateFontString(nil, "OVERLAY")
+        nameFS:SetWordWrap(false)
+        nameFS:SetNonSpaceWrap(false)
+        nameFS:SetJustifyH("LEFT")
+        local timeFS = row:CreateFontString(nil, "OVERLAY")
+        timeFS:SetWordWrap(false)
+        timeFS:SetNonSpaceWrap(false)
+        timeFS:SetJustifyH("RIGHT")
+        return { row = row, name = nameFS, time = timeFS }
+    end,
+    function(kit)
+        kit.name:Hide()
+        kit.time:Hide()
+        kit.time:SetAlpha(1)  -- clear any PBOpacity dim before reuse (FontString alpha persists across Hide/Show)
+    end
+)
+
 -- Reusable buffer for ApplyLayout's length-gate signature (avoids a transient
 -- table allocation each time the gate is checked).
 local _sigBuf = {}
@@ -593,6 +625,109 @@ function MPT:RenderForces()
     self.SetTextGated(f.forcesText, str)
     self.SetColorGated(f.forcesText, r, g, b)
     f.forcesText:Show()
+end
+
+---------------------------------------------------------------------------------
+-- RenderObjectives — pools one row per objective, positioned from
+-- _objRowStartY downward (published by ApplyLayout). Writes _objRowEndY
+-- (the only return channel to ApplyLayout for root-frame height).
+--
+-- Called FROM INSIDE ApplyLayout's stacking pass (not from Render).
+-- ReleaseAll is at the top so surplus rows from a previous run vanish
+-- immediately; the pool's hidden holder reparents them safely (no orphans).
+--
+-- Row format: name (left, engine-truncated) | [clearTime] ±delta OR PB target (right).
+-- Completed rows:  ObjectiveDoneColor name + bracketed clear time + SplitAhead/BehindColor delta.
+-- Pending rows:    ObjectiveColor name + PBColor "PB m:ss" at PBOpacity.
+-- Zero objectives or ShowObjectives=false: _objRowEndY = _objRowStartY (no height consumed).
+--
+-- Secret-value note: clearTime/pbTime come from UpdateObjectives which reads
+-- GetStepInfo (plain math per contract §62); no issecretvalue guard applied.
+---------------------------------------------------------------------------------
+
+function MPT:RenderObjectives()
+    local db = MPT.db
+    local run = MPT.run
+    MPT._objRowPool:ReleaseAll()
+    if not db.ShowObjectives then
+        MPT._objRowEndY = MPT._objRowStartY  -- nothing consumed
+        return
+    end
+
+    local root = MPT.frames.root
+    local PAD = MPT._PAD or 12
+    local frameW = root:GetWidth()
+    local innerW = frameW - PAD * 2
+    local oGap = MPT._OBJ_GAP or 4
+    local y = MPT._objRowStartY or -PAD  -- set by ApplyLayout's vertical cursor
+
+    local face    = db.ObjectiveFontFace    or db.FontFace
+    local size    = db.ObjectiveFontSize    or db.FontSize    or 13
+    local outline = db.ObjectiveFontOutline or db.FontOutline or "OUTLINE"
+
+    local objectives = (run and run.objectives) or {}
+    for i = 1, #objectives do
+        local obj = objectives[i]
+        local kit = MPT._objRowPool:Acquire(root)
+        local nameFS, timeFS = kit.name, kit.time
+        KE:ApplyFontToText(nameFS, face, size, outline)
+        KE:ApplyFontToText(timeFS, face, size, outline)
+
+        -- Name color: done = ObjectiveDoneColor, pending = ObjectiveColor.
+        if obj.completed then
+            local c = db.ObjectiveDoneColor or { 0.2, 0.82, 0.31 }
+            nameFS:SetTextColor(c[1], c[2], c[3])
+        else
+            local c = db.ObjectiveColor or { 0.9, 0.9, 0.9 }
+            nameFS:SetTextColor(c[1], c[2], c[3])
+        end
+
+        -- Right text: completed → [clear] + optional delta; pending → gold PB target.
+        local rightText = ""
+        if obj.completed and obj.clearTime and obj.clearTime > 0 then
+            timeFS:SetAlpha(1)  -- clear a possible pending-row PBOpacity dim on this pooled slot
+            local doneHex = Hex(db.ObjectiveDoneColor or { 0.2, 0.82, 0.31 })
+            rightText = string.format("%s[%s]|r", doneHex, MPT.FormatTime(obj.clearTime, false))
+            if db.ShowPBDelta and obj.pbTime then
+                local diff = obj.clearTime - obj.pbTime
+                local col  = diff <= 0 and (db.SplitAheadColor or { 0.25, 0.88, 0.82 })
+                                       or  (db.SplitBehindColor or { 1, 0.42, 0.42 })
+                local sign = diff < 0 and "-" or "+"
+                local dStr = (diff == 0) and "0:00" or MPT.FormatTime(abs(diff), false)
+                rightText  = rightText .. string.format("  %s(%s%s)|r", Hex(col), sign, dStr)
+            end
+        elseif (not obj.completed) and db.ShowObjectiveTimes ~= false and obj.pbTime then
+            local pbHex = Hex(db.PBColor or { 0.85, 0.79, 0.54 })
+            local a = max(0, min(1, db.PBOpacity or 1))
+            rightText = string.format("%sPB %s|r", pbHex, MPT.FormatTime(obj.pbTime, false))
+            if a < 1 then timeFS:SetAlpha(a) else timeFS:SetAlpha(1) end
+        end
+
+        nameFS:ClearAllPoints()
+        timeFS:ClearAllPoints()
+        if rightText ~= "" then
+            MPT.SetTextGated(timeFS, rightText)
+            timeFS:SetTextColor(1, 1, 1, 1)
+            timeFS:SetWidth(0)
+            local timeW = timeFS:GetStringWidth() or 0
+            timeFS:SetPoint("TOPRIGHT", root, "TOPRIGHT", -PAD, y)
+            nameFS:SetPoint("TOPRIGHT", timeFS, "TOPLEFT", -4, 0)
+            local nameMaxW = innerW - timeW - 4
+            if nameMaxW < 20 then nameMaxW = 20 end
+            nameFS:SetWidth(nameMaxW)
+            timeFS:Show()
+        else
+            timeFS:Hide()
+            nameFS:SetPoint("TOPRIGHT", root, "TOPRIGHT", -PAD, y)
+            nameFS:SetWidth(innerW)
+        end
+        MPT.SetTextGated(nameFS, obj.name)
+        nameFS:SetJustifyH("RIGHT")
+        nameFS:Show()
+        y = y - (nameFS:GetStringHeight() or size) - oGap
+    end
+
+    MPT._objRowEndY = y  -- ApplyLayout reads this to finalize the HUD height
 end
 
 ---------------------------------------------------------------------------------
