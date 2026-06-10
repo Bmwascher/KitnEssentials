@@ -522,6 +522,16 @@ function MPT:OnEnable()
 end
 
 function MPT:OnDisable()
+    -- Preview teardown FIRST (GUI Enable-off while the page preview shows).
+    -- HidePreview clears isPreview BEFORE the tracker restore below — the
+    -- permanent Show-hook's ShouldHideTracker would otherwise see isPreview,
+    -- synchronously re-hide the tracker on otf:Show(), and steal _keHidTracker
+    -- ownership (tracker stuck hidden until /reload) — the same hook trap
+    -- documented for run.active below. It also hides the preview HUD and
+    -- restores self.run from _savedRun so the run-state clears below act on
+    -- the REAL run table. (PreviewManager won't re-show: ShowSectionPreviews
+    -- gates on db.Enabled; sibling Enable-toggle-kills-preview pattern.)
+    if self.isPreview then self:HidePreview() end
     -- Pending refresh timer must not render on a disabled module; ticker must detach.
     self:StopTimerLoop()
     self._refreshQueued = nil
