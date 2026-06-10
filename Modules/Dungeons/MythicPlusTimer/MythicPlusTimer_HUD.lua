@@ -297,6 +297,11 @@ function MPT:BuildHUD()
     end)
 
     root:Hide()
+
+    -- Defensive: if BuildHUD was called lazily (e.g. from Render after OnEnable),
+    -- register with EditMode now. Idempotent via self.editModeRegistered guard.
+    -- Mirrors KickTracker's pattern (KickTracker.lua:1282).
+    if self.RegWithEditMode then self:RegWithEditMode() end
 end
 
 ---------------------------------------------------------------------------------

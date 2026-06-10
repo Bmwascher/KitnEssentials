@@ -467,6 +467,7 @@ function MPT:OnEnable()
     -- MANDATORY in Phase 1 — the HUD file does not exist yet; mirrors the
     -- PurgeStaleSplits guard idiom below.
     if self.BuildHUD then self:BuildHUD() end
+    self:RegWithEditMode()
     -- Restore HUD if we /reload'd mid-key.
     self:CheckForActiveRun()
     -- Season-based purge of stale split records (deferred; API not ready at login).
@@ -1045,4 +1046,43 @@ function MPT:OnTrackerRegenEnabled()
     self._trackerPending = nil
     self:UnregisterEvent("PLAYER_REGEN_ENABLED")
     self:ApplyTrackerVisibility()
+end
+
+---------------------------------------------------------------------------------
+-- EditMode registration (Task 5.11)
+-- Registers frames.root with KE's standalone overlay system so /kes edit
+-- shows a draggable overlay over the HUD and persists position writes to
+-- SelfPoint/AnchorPoint/XOffset/YOffset (flat DB keys, Task 0.2 canonical).
+-- Idempotent: self.editModeRegistered guard prevents double-registration.
+-- Mirrors KickTracker:RegWithEditMode() (KickTracker.lua:1236-1268).
+---------------------------------------------------------------------------------
+
+function MPT:RegWithEditMode()
+    if not (KE.EditMode and self.frames and self.frames.root) then return end
+    if self.editModeRegistered then return end
+    KE.EditMode:RegisterElement({
+        key = "MythicPlusTimer",
+        displayName = "Mythic+ Timer",
+        frame = self.frames.root,
+        getPosition = function()
+            return {
+                AnchorFrom = self.db.SelfPoint or "RIGHT",
+                AnchorTo   = self.db.AnchorPoint or "RIGHT",
+                XOffset    = self.db.XOffset or -20,
+                YOffset    = self.db.YOffset or 0,
+            }
+        end,
+        setPosition = function(pos)
+            self.db.SelfPoint  = pos.AnchorFrom
+            self.db.AnchorPoint = pos.AnchorTo
+            self.db.XOffset    = pos.XOffset
+            self.db.YOffset    = pos.YOffset
+            self:ApplyLayout()  -- re-applies KE:ApplyFramePosition on frames.root
+        end,
+        getParentFrame = function()
+            return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
+        end,
+        guiPath = "MythicPlusTimer",
+    })
+    self.editModeRegistered = true
 end
