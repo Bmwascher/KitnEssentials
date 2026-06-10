@@ -510,10 +510,20 @@ function MPT:OnDisable()
     -- Stale combat-defer from an earlier in-combat hide attempt; the AceEvent
     -- registration it pairs with dies in UnregisterAllEvents below anyway.
     self._trackerPending = nil
+    -- Close the permanent tick hook's gate: run.active is the documented
+    -- disable safeguard (the hooksecurefunc is never removed), so a disabled
+    -- module would otherwise keep running the full per-second pipeline —
+    -- including chat boss splits. It also lets ShouldHideTracker fall through
+    -- for the restore below: otf:Show() synchronously fires the permanent
+    -- Show-hook, which would re-hide the tracker and steal _keHidTracker
+    -- ownership while run.active still read true (tracker stuck hidden until
+    -- /reload). Re-enable mid-key rebuilds via CheckForActiveRun -> StartRun,
+    -- the same path a /reload uses (clear times restore from _activeRunSplits).
+    self.run.active = false
+    self.run.completed = false
     -- Restore a tracker WE hid (mid-key disable would otherwise leave it hidden
-    -- until /reload). Cannot route through ApplyTrackerVisibility: run.active is
-    -- still true so ShouldHideTracker() would re-hide, and its in-combat defer
-    -- uses AceEvent, which AceAddon auto-unregisters on module disable.
+    -- until /reload). Not routed through ApplyTrackerVisibility: its in-combat
+    -- defer uses AceEvent, which AceAddon auto-unregisters on module disable.
     if self._keHidTracker then
         local otf = _G.ObjectiveTrackerFrame
         if otf and InCombatLockdown() then
