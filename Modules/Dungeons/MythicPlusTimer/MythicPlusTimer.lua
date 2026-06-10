@@ -406,6 +406,7 @@ function MPT:OnEnable()
     self:RegisterEvent("WORLD_STATE_TIMER_STOP")
     self:RegisterEvent("CHALLENGE_MODE_DEATH_COUNT_UPDATED")
     self:RegisterEvent("UPDATE_INSTANCE_INFO")
+    self:RegisterEvent("CHALLENGE_MODE_KEYSTONE_RECEPTABLE_OPEN")
     -- Wire the enemy overlay (tooltip post-call + optional nameplate events).
     -- InitOverlay is defined in MythicPlusTimer_Overlay.lua, loaded after this
     -- file in Dungeons.xml — guaranteed to exist at runtime (same guarantee as
@@ -694,9 +695,36 @@ function MPT:UPDATE_INSTANCE_INFO() if not self.run.active then self:CheckForAct
 -- NOTE: PLAYER_REGEN_ENABLED is registered/unregistered on demand by
 -- MPT:ApplyTrackerVisibility via OnTrackerRegenEnabled — do NOT add a static
 -- default handler here (it would shadow the on-demand registration).
--- NOTE: UNIT_DIED and CHALLENGE_MODE_KEYSTONE_RECEPTABLE_OPEN registrations +
--- handlers live in Tasks 3.4 and 5.1 respectively — AceEvent/CallbackHandler
--- hard-errors at RegisterEvent time when the handler method does not exist.
+
+-- Auto-insert keystone when the font of power receptacle opens (Task 5.1).
+-- Scans bags for the first keystone item and uses it automatically.
+-- Gated on difficulty 8 (Mythic) or 23 (Mythic 5-man) so it never fires in
+-- non-keystone instances. C_Item.IsItemKeystoneByID is the modern check;
+-- hardcoded item IDs are stale.
+function MPT:CHALLENGE_MODE_KEYSTONE_RECEPTABLE_OPEN()
+    if not self.db.AutoInsertKeystone then return end
+
+    -- Only auto-insert in a Mythic Keystone instance (8 = Mythic, 23 = Mythic 5-man).
+    local difficulty = select(3, GetInstanceInfo())
+    if difficulty ~= 8 and difficulty ~= 23 then return end
+
+    local found
+    for bagIndex = 0, NUM_BAG_SLOTS do
+        local numSlots = C_Container.GetContainerNumSlots(bagIndex)
+        for invIndex = 1, numSlots do
+            local itemID = C_Container.GetContainerItemID(bagIndex, invIndex)
+            if itemID and C_Item.IsItemKeystoneByID(itemID) then
+                found = { bagIndex = bagIndex, invIndex = invIndex }
+                break
+            end
+        end
+        if found then break end
+    end
+
+    if found then
+        C_Container.UseContainerItem(found.bagIndex, found.invIndex)
+    end
+end
 
 ---------------------------------------------------------------------------------
 -- Run lifecycle (Task 1.7)
