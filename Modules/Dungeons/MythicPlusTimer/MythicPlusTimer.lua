@@ -382,7 +382,10 @@ function MPT:OnEnable()
     -- Restore HUD if we /reload'd mid-key.
     self:CheckForActiveRun()
     -- Season-based purge of stale split records (deferred; API not ready at login).
-    C_Timer.After(2, function() if self.PurgeStaleSplits then self:PurgeStaleSplits() end end)
+    C_Timer.After(2, function()
+        if not self:IsEnabled() then return end  -- module disabled inside the window
+        if self.PurgeStaleSplits then self:PurgeStaleSplits() end
+    end)
 end
 
 function MPT:OnDisable()
@@ -404,9 +407,12 @@ tickerFrame:Hide()
 -- Temporary stub; replaced by Task 3.3 with real count-diff attribution.
 function MPT:OnDeathCountUpdated()
     local count, timeLost = C_ChallengeMode.GetDeathCount()
+    -- Dirty-gate the trace: this runs once per tick second; only log real changes.
+    if DEBUG_MPT and (count or 0) ~= self.run.deaths then
+        KE:Print(format("[MPT] OnDeathCountUpdated: count=%d timeLost=%d", count or 0, timeLost or 0))
+    end
     self.run.deaths = count or 0
     self.run.deathTimeLost = timeLost or 0
-    if DEBUG_MPT then KE:Print(format("[MPT] OnDeathCountUpdated: count=%d timeLost=%d", self.run.deaths, self.run.deathTimeLost)) end
 end
 
 -- Both drivers (Blizzard hook + fallback) funnel here. Early-returns unless the
@@ -536,7 +542,10 @@ end
 -- SCENARIO_POI_UPDATE shares the same handler as SCENARIO_CRITERIA_UPDATE.
 MPT.SCENARIO_POI_UPDATE = MPT.SCENARIO_CRITERIA_UPDATE
 
-function MPT:ZONE_CHANGED_NEW_AREA() self:NotifyRefresh() end
+function MPT:ZONE_CHANGED_NEW_AREA()
+    if not self.run.active then return end  -- run-only event; belt-and-suspenders
+    self:NotifyRefresh()
+end
 
 -- Authoritative death count changed (always-on tier).
 function MPT:CHALLENGE_MODE_DEATH_COUNT_UPDATED()
