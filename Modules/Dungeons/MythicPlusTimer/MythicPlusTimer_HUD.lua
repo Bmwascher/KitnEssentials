@@ -22,6 +22,14 @@ local function Hex(c)
     return format("|cff%02x%02x%02x", floor((c[1] or 1) * 255), floor((c[2] or 1) * 255), floor((c[3] or 1) * 255))
 end
 
+-- "MM:SS" with the leading zero stripped ("04:14" -> "4:14"). Used by the
+-- threshold labels and both deaths parts (headline penalty + tooltip rows);
+-- the big timer keeps the padded form. Declared above BuildHUD so the
+-- tooltip's OnEnter closure can see it.
+local function _FmtShort(sec)
+    return (MPT.FormatTime(sec, false):gsub("^0", "", 1))
+end
+
 -- Objective-row frame pool (Step 1 of Task 3.2).
 -- Each kit = { row, name, time } where row is the root Frame and
 -- name/time are the left/right FontStrings. Scripts and font structure
@@ -232,8 +240,11 @@ function MPT:BuildHUD()
     local deathTT = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
     deathTT:SetFrameStrata("TOOLTIP")
     deathTT:SetFrameLevel(200)
+    deathTT:SetClampedToScreen(true)  -- cursor-left anchor near the screen edge
     deathTT:Hide()
-    KE:ApplyBackdrop(deathTT, { Enabled = true, Color = {0, 0, 0, 0.9}, BorderColor = {0, 0, 0, 1}, BorderSize = 1 })
+    -- Near-black @ 0.8 — matches the bars' empty-track tint (#080808; the
+    -- solid 0.9 black read too harsh against the HUD, round-6 feedback).
+    KE:ApplyBackdrop(deathTT, { Enabled = true, Color = {0.031, 0.031, 0.031, 0.8}, BorderColor = {0, 0, 0, 1}, BorderSize = 1 })
     deathTT._rows = {}
     MPT.frames.deathsTooltip = deathTT
 
@@ -300,7 +311,7 @@ function MPT:BuildHUD()
             local colored = color and color:WrapTextInColorCode(short) or short
             row.name:SetText(colored)
             row.name:SetTextColor(1, 1, 1, 0.80)
-            local timeStr = MPT.FormatTime(entry.t, false)
+            local timeStr = _FmtShort(entry.t)  -- "3:44", not "03:44" (round-6 feedback)
             row.time:SetText(timeStr)
             row.time:SetTextColor(1, 1, 1, 0.80)
             local nw = row.name:GetStringWidth() or 0
@@ -325,9 +336,14 @@ function MPT:BuildHUD()
             row.time:Show()
         end
 
-        -- Anchor tooltip above the death text (KE HUD is right-anchored: BOTTOMRIGHT→TOPRIGHT).
+        -- Anchor LEFT of the cursor (round-6 feedback — anchored above the
+        -- deaths line it sat on top of the HUD). Placed once per OnEnter;
+        -- GetCursorPosition returns physical px, so divide by the UIParent
+        -- scale to land in frame coordinates.
+        local cx, cy = GetCursorPosition()
+        local s = UIParent:GetEffectiveScale()
         deathTT:ClearAllPoints()
-        deathTT:SetPoint("BOTTOMRIGHT", MPT.frames.root.deathsText, "TOPRIGHT", 0, 4)
+        deathTT:SetPoint("RIGHT", UIParent, "BOTTOMLEFT", cx / s - 10, cy / s)
         deathTT:Show()
     end)
 
@@ -563,11 +579,8 @@ local function _PlaceLabel(fs, timerBar, barW, cutoff, maxTime, place)
     fs:Show()
 end
 
--- "MM:SS" with the leading zero stripped ("04:14" -> "4:14") — threshold
--- labels only; the big timer keeps the padded form.
-local function _FmtShort(sec)
-    return (MPT.FormatTime(sec, false):gsub("^0", "", 1))
-end
+-- (_FmtShort — the leading-zero-stripped formatter these labels use — is
+-- declared at the top of the file, above BuildHUD.)
 
 -- Threshold label text: a live cutoff shows the remaining countdown; a missed
 -- cutoff returns nil so the label hides (round-3 feedback — replaces the grey
@@ -803,7 +816,7 @@ function MPT:RenderDeaths()
     local pHex = Hex(db.DeathPenaltyColor or {1, 0.42, 0.42})
     local str = format("%s%d Death%s|r  %s(+%s)|r",
         dHex, run.deaths, run.deaths ~= 1 and "s" or "",
-        pHex, MPT.FormatTime(run.deathTimeLost or 0, false))
+        pHex, _FmtShort(run.deathTimeLost or 0))
     MPT.SetTextGated(fs, str)
     fs:Show()
     -- Hit frame sized to the actual text so the hover region matches.
