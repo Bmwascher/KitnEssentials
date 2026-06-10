@@ -12,9 +12,9 @@ if not KitnEssentials then return end
 local MPT = KitnEssentials:GetModule("MythicPlusTimer")
 
 local CreateFrame = CreateFrame
-local floor = math.floor   -- luacheck: ignore 211 -- used by Tasks 2.3+
-local min, max, abs = math.min, math.max, math.abs  -- luacheck: ignore 211 -- min used by Tasks 2.3+; max/abs used here
-local format = string.format  -- luacheck: ignore 211 -- used by Tasks 2.3+
+local floor = math.floor   -- luacheck: ignore 211 -- used by Tasks 2.4+
+local min, max, abs = math.min, math.max, math.abs  -- max/abs used here; min used by RenderBar
+local format = string.format  -- luacheck: ignore 211 -- used by Tasks 2.4+
 
 ---------------------------------------------------------------------------------
 -- Gating helpers (module functions — not methods; take widget explicitly)
@@ -204,4 +204,120 @@ function MPT:RenderTimer()
     self.SetTextGated(f.timerText, str)
     self.SetColorGated(f.timerText, r, g, b)
     f.timerText:Show()
+end
+
+---------------------------------------------------------------------------------
+-- StateFillColor — file-local; maps elapsed bands to EUI's state palette.
+-- Ported from EllesmereUI GetTimerBarFillColor (lines 213-223); uses
+-- precomputed run.thresholds instead of recomputing inside the render path.
+---------------------------------------------------------------------------------
+
+local function StateFillColor(elapsed, thresholds)
+    local t2, t3 = thresholds.plus2, thresholds.plus3
+    if elapsed > t2 then
+        return 0xB0/255, 0x59/255, 0xCC/255   -- +2 lost: purple
+    elseif elapsed > t3 then
+        return 0.30, 0.80, 1.00               -- +3 lost, +2 on: blue
+    end
+    return 0.40, 1.00, 0.40                   -- on for +3: green
+end
+
+---------------------------------------------------------------------------------
+-- RenderBar — single timer-bar fill. Default: neutral db.BarColor. Optional
+-- db.StateColorFill: EUI state palette (green/blue/purple) that persists at
+-- completion. Neutral default recolors gold (timed) / red (depleted) on
+-- completion (spec §6.2). SetValueGated used for pixel-aware skipping.
+---------------------------------------------------------------------------------
+
+function MPT:RenderBar()
+    local run, db = self.run, self.db
+    local bars = self.frames and self.frames.bars
+    if not bars or not db then return end
+    local bar = bars.timerBar
+    local maxTime = run.maxTime or 0
+    if maxTime <= 0 then return end
+
+    local elapsed = run.elapsed or 0
+    local fillPct = min(1, elapsed / maxTime)
+
+    local widthPx = bars.timerWrap:GetWidth() or (db.BarWidth or 300)
+    self.SetValueGated(bar, fillPct, widthPx)
+
+    local r, g, b
+    if db.StateColorFill then
+        -- EUI behavior: state color persists at completion (run.elapsed is
+        -- already frozen to the authoritative completion time by CompleteRun).
+        r, g, b = StateFillColor(elapsed, run.thresholds)
+    elseif run.completed then
+        -- Spec §6.2: neutral default fill recolors at completion
+        -- (gold = timed, red = depleted).
+        local timed = (maxTime > 0) and (elapsed <= maxTime)
+        local c = timed and db.TimerSuccessColor or db.TimerExpiredColor
+        r, g, b = c[1], c[2], c[3]
+    else
+        r, g, b = db.BarColor[1], db.BarColor[2], db.BarColor[3]
+    end
+    bar:SetStatusBarColor(r, g, b)
+end
+
+---------------------------------------------------------------------------------
+-- RenderThresholds — pixel-snapped tick marks at +3/+2 cutoffs, and
+-- remaining-time labels ABOVE the bar at +3/+2/+1 (WarpDeplete look).
+-- Ticks: 2 physical pixels wide, db.TickColor, parented to timerBar.
+-- Labels: gated on db.ShowThresholdLabels; use MPT.ThresholdRemaining.
+---------------------------------------------------------------------------------
+
+function MPT:RenderThresholds()
+    local run, db = self.run, self.db
+    local bars = self.frames and self.frames.bars
+    if not bars or not db then return end
+    local maxTime = run.maxTime or 0
+    if maxTime <= 0 then
+        bars.tick3:Hide(); bars.tick2:Hide()
+        local f = self.frames.root
+        if f then
+            self.SetTextGated(f.thresh3Text, ""); f.thresh3Text:Hide()
+            self.SetTextGated(f.thresh2Text, ""); f.thresh2Text:Hide()
+            self.SetTextGated(f.thresh1Text, ""); f.thresh1Text:Hide()
+        end
+        return
+    end
+
+    local barW  = bars.timerWrap:GetWidth() or (db.BarWidth or 300)
+    local barH  = (db.BarHeight or 14) - 2
+    local tickW = KE:PixelSnap(2)
+    local tr, tg, tb = db.TickColor[1], db.TickColor[2], db.TickColor[3]
+
+    local function placeTick(tex, cutoff)
+        tex:ClearAllPoints()
+        tex:SetSize(tickW, barH)
+        local x = KE:PixelSnap(barW * (cutoff / maxTime)) - tickW / 2
+        tex:SetPoint("TOPLEFT", bars.timerBar, "TOPLEFT", x, 0)
+        tex:SetColorTexture(tr, tg, tb, 1)
+        tex:Show()
+    end
+    placeTick(bars.tick3, run.thresholds.plus3)
+    placeTick(bars.tick2, run.thresholds.plus2)
+
+    -- Remaining-time labels above the bar (WarpDeplete look)
+    local f = self.frames.root
+    if not db.ShowThresholdLabels then
+        self.SetTextGated(f.thresh3Text, ""); f.thresh3Text:Hide()
+        self.SetTextGated(f.thresh2Text, ""); f.thresh2Text:Hide()
+        self.SetTextGated(f.thresh1Text, ""); f.thresh1Text:Hide()
+        return
+    end
+    local FormatTime = MPT.FormatTime
+    local elapsed = run.elapsed or 0
+    local function placeLabel(fs, cutoff)
+        local remain = MPT.ThresholdRemaining(elapsed, cutoff)
+        self.SetTextGated(fs, FormatTime(remain, false))
+        fs:ClearAllPoints()
+        local x = KE:PixelSnap(barW * (cutoff / maxTime))
+        fs:SetPoint("BOTTOM", bars.timerBar, "TOPLEFT", x, 2)
+        fs:Show()
+    end
+    placeLabel(f.thresh3Text, run.thresholds.plus3)
+    placeLabel(f.thresh2Text, run.thresholds.plus2)
+    placeLabel(f.thresh1Text, run.thresholds.plus1)  -- plus1 == maxTime (bar end)
 end
