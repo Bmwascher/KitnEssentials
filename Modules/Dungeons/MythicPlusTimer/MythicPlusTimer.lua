@@ -406,6 +406,11 @@ function MPT:OnEnable()
     self:RegisterEvent("WORLD_STATE_TIMER_STOP")
     self:RegisterEvent("CHALLENGE_MODE_DEATH_COUNT_UPDATED")
     self:RegisterEvent("UPDATE_INSTANCE_INFO")
+    -- Wire the enemy overlay (tooltip post-call + optional nameplate events).
+    -- InitOverlay is defined in MythicPlusTimer_Overlay.lua, loaded after this
+    -- file in Dungeons.xml — guaranteed to exist at runtime (same guarantee as
+    -- MigrateLegacyOverlayDB which is called from UpdateDB without a guard).
+    self:InitOverlay()
     -- Build the HUD if its file is loaded (Task 2.1 defines BuildHUD). Guard is
     -- MANDATORY in Phase 1 — the HUD file does not exist yet; mirrors the
     -- PurgeStaleSplits guard idiom below.
@@ -758,6 +763,7 @@ function MPT:StartRun()
     self:StartTimerLoop()
     self:OnTimerTick()                    -- prime the display immediately
     self:ApplyTrackerVisibility()         -- QoL hide (combat-guarded, Step 5)
+    self:SetOverlayActive(true)           -- activate nameplate % overlay for this run
     self:NotifyRefresh()
 end
 
@@ -793,6 +799,7 @@ function MPT:CompleteRun()
     -- Clear any stale combat-defer; ApplyTrackerVisibility re-arms it if still locked.
     self._trackerPending = nil
     self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    self:SetOverlayActive(false)          -- release nameplate texts; run is over
     self:NotifyRefresh()
 end
 
@@ -833,6 +840,7 @@ function MPT:ResetRun()
     self._trackerPending = nil
     self:UnregisterEvent("PLAYER_REGEN_ENABLED")
     self:ApplyTrackerVisibility()
+    self:SetOverlayActive(false)          -- release nameplate texts; run cancelled/reset
     self:NotifyRefresh()
 end
 
