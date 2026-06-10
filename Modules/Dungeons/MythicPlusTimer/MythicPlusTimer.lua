@@ -18,6 +18,7 @@ local MPT = KitnEssentials:NewModule("MythicPlusTimer", "AceEvent-3.0", "AceHook
 -- Local references
 local floor, max = math.floor, math.max
 local format = string.format
+local pairs = pairs
 local wipe = wipe  -- WoW global
 local C_ChallengeMode = C_ChallengeMode
 local C_ScenarioInfo = C_ScenarioInfo
@@ -343,6 +344,47 @@ function MPT:UpdateObjectives()
     MPT:UpdateSplits()
 end
 
+-- One-time migration: carry retired WarpDepleteForces overlay settings into
+-- this module's flat Overlay* keys. Guarded by a persistent OverlayMigrated
+-- flag — NOT by the old table being nil, because AceDB/FillProfileDefaults
+-- resurrect profile.Dungeons.WarpDepleteForces (with default values) on
+-- every login until Task 4.8 removes the Core/Defaults.lua block.
+-- Maps old WDF key -> new MPT Overlay* key. Death-log persistence is dropped
+-- (the new module keeps deaths transient in MPT.run.deathLog).
+function MPT:MigrateLegacyOverlayDB()
+    if self.db.OverlayMigrated then return end
+    self.db.OverlayMigrated = true   -- unconditional set: fresh installs are marked done too
+
+    local profile = KitnEssentials.db and KitnEssentials.db.profile
+    local old = profile and profile.Dungeons and profile.Dungeons.WarpDepleteForces
+    if not old then return end
+
+    local map = {
+        Tooltip              = "OverlayTooltipEnabled",
+        NameplatePercent     = "OverlayNameplateEnabled",
+        NameplateCombatOnly  = "OverlayCombatOnly",
+        NameplateFontFace    = "OverlayFontFace",
+        NameplateFontSize    = "OverlayFontSize",
+        NameplateFontOutline = "OverlayFontOutline",
+        NameplateColorMode   = "OverlayColorMode",
+        NameplateColor       = "OverlayColor",
+        NameplateAnchor      = "OverlayAnchor",
+        NameplateXOffset     = "OverlayXOffset",
+        NameplateYOffset     = "OverlayYOffset",
+    }
+    for oldKey, newKey in pairs(map) do
+        if old[oldKey] ~= nil then
+            self.db[newKey] = old[oldKey]
+        end
+    end
+
+    -- Old table is fully retired (Instance Reset Announcer + DeathLog drop with it).
+    -- NOTE: this nil is housekeeping, not the sentinel — AceDB/FillProfileDefaults
+    -- recreate the table (all defaults) on every reload until Task 4.8; the
+    -- OverlayMigrated flag above is what prevents a re-copy. Stays gone after 4.8.
+    profile.Dungeons.WarpDepleteForces = nil
+end
+
 -- Seed KE.db.profile.MythicPlusTimer from MPT_DEFAULTS for any key
 -- the saved profile is missing (mirrors KE:FillProfileDefaults' deep-fill
 -- intent, scoped to this module), then bind MPT.db. Also guarantee the global
@@ -370,9 +412,7 @@ function MPT:UpdateDB()
         self.db.OverlayFormat = "%.2f%%"
     end
 
-    -- Task 4.2 appends `self:MigrateLegacyOverlayDB()` here (one-time
-    -- WarpDepleteForces -> Overlay* key migration). Do not add it now — the
-    -- method does not exist until Phase 4.
+    self:MigrateLegacyOverlayDB()
 
     if type(KE.db.global.MythicPlusTimerSplits) ~= "table" then
         KE.db.global.MythicPlusTimerSplits = {}
