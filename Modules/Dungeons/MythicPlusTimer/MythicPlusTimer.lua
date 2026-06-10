@@ -401,9 +401,14 @@ function MPT:UpdateObjectives()
                         MPT.db._activeRunSplits = cache
                     end
                     cache[objIdx] = obj.clearTime
-                    -- Fresh-stamp arm ONLY (never the restoration arm above), so a
-                    -- /reload mid-run cannot re-post a boss split to chat (Task 5.3).
-                    self:ChatOutputBossSplit(obj)
+                    -- Fresh-stamp arm ONLY (never the restoration arm above), AND
+                    -- only near-real-time completions: a reload-recovery pass can
+                    -- re-walk old kills through this arm when the persisted cache
+                    -- was discarded (identity mismatch on a level-0 API race) —
+                    -- their back-dated clearTime keeps chat silent (Task 5.3).
+                    if (elapsed - obj.clearTime) <= 5 then
+                        self:ChatOutputBossSplit(obj)
+                    end
                 end
             elseif not obj.completed and obj.clearTime then
                 obj.clearTime = nil  -- criterion reverted; guard skips the per-tick dead write
