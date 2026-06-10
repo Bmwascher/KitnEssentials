@@ -831,6 +831,15 @@ function MPT:RenderObjectives()
             nameFS:SetTextColor(c[1], c[2], c[3])
         end
 
+        -- Count-based objectives (Pit of Saron "Quarry Camps" 0/6): prefix the
+        -- name with the running count. Boss criteria are normalized to
+        -- totalQuantity 1 in UpdateObjectives, so this gate skips them
+        -- (EllesmereUIMythicTimer.lua:1675-1677 verbatim).
+        local displayName = obj.name
+        if obj.totalQuantity and obj.totalQuantity > 1 then
+            displayName = format("%d/%d %s", obj.quantity or 0, obj.totalQuantity, displayName)
+        end
+
         -- Right text: completed → [clear] + optional delta; pending → gold PB target.
         local rightText = ""
         if obj.completed and obj.clearTime and obj.clearTime > 0 then
@@ -872,7 +881,7 @@ function MPT:RenderObjectives()
             nameFS:SetPoint("TOPRIGHT", root, "TOPRIGHT", -PAD, y)
             nameFS:SetWidth(innerW)
         end
-        MPT.SetTextGated(nameFS, obj.name)
+        MPT.SetTextGated(nameFS, displayName)
         nameFS:Show()
         y = y - (nameFS:GetStringHeight() or size) - oGap
     end
@@ -998,7 +1007,11 @@ function MPT:ApplyLayout()
         for i = 1, objCount do
             local o = run.objectives[i]
             if o.completed then objDone = objDone + 1 end
+            -- quantity term is load-bearing: a count tick like "2/6" -> "3/6"
+            -- keeps the same string LENGTH, so without it the length-gated
+            -- relayout would never repaint a count-based objective row.
             objSum = objSum + #(o.name or "") + floor(o.clearTime or 0) + floor(o.pbTime or 0)
+                            + floor(o.quantity or 0)
         end
     end
     _sigBuf[1]  = #(f.deathsText:GetText() or "")
@@ -1166,6 +1179,10 @@ local function BuildPreviewRun()
             { name = "Second Boss", completed = true,  clearTime = 410,  pbTime = 430,  criteriaIndex = 2 },
             { name = "Third Boss",  completed = false, clearTime = nil,  pbTime = 700,  criteriaIndex = 3 },
             { name = "Final Boss",  completed = false, clearTime = nil,  pbTime = 1100, criteriaIndex = 4 },
+            -- Count-based objective demo (Pit of Saron "Quarry Camps" pattern):
+            -- totalQuantity > 1 renders the "2/6" name prefix.
+            { name = "Quarry Camps", completed = false, clearTime = nil, pbTime = nil,
+              quantity = 2, totalQuantity = 6, criteriaIndex = 5 },
         },
         bestOverall = 1750,
         active = true, completed = false, countdown = false,

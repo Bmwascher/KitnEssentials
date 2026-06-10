@@ -348,10 +348,24 @@ function MPT:UpdateObjectives()
             objIdx = objIdx + 1
             local obj = run.objectives[objIdx]
             if not obj then
-                obj = { name = "", completed = false, clearTime = nil, pbTime = nil, criteriaIndex = i }
+                obj = { name = "", completed = false, clearTime = nil, pbTime = nil,
+                        quantity = 0, totalQuantity = 1, criteriaIndex = i }
                 run.objectives[objIdx] = obj
             end
             obj.criteriaIndex = i
+
+            -- Count-based objectives (e.g. Pit of Saron "Quarry Camps" 0/6) —
+            -- the WarpDeplete gap. quantity/totalQuantity are aggregate
+            -- GetCriteriaInfo fields (contract DO-NOT-GUARD set; EUI reads them
+            -- raw). Plain boss criteria report totalQuantity 0/1 — normalize to
+            -- 0-or-1 / 1 so the HUD's `totalQuantity > 1` prefix gate skips them
+            -- (EllesmereUIMythicTimer.lua:443-446 verbatim).
+            obj.quantity = info.quantity or 0
+            obj.totalQuantity = info.totalQuantity or 0
+            if obj.totalQuantity == 0 then
+                obj.quantity = (info.completed and 1) or 0
+                obj.totalQuantity = 1
+            end
 
             -- Strip Blizzard's leading checkmark (U+2713 = 0xE2 0x9C 0x93) + dash.
             -- Gated on the raw string — this fires per SCENARIO_CRITERIA_UPDATE,
