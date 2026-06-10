@@ -444,7 +444,9 @@ function MPT:RecordDeath(guid, knownName, knownUnit)
     elseif guid then
         if issecretvalue(guid) then return end          -- enemy GUID -> bail
         name = knownName or UnitNameFromGUID(guid)
-        class = UnitClassFromGUID(guid)
+        -- select(2): class FILE token ("WARRIOR") for RAID_CLASS_COLORS keys —
+        -- first return is the localized name (and ConditionalSecret).
+        class = select(2, UnitClassFromGUID(guid))
         if name and not UnitInParty(name) and name ~= UnitName("player") then
             return                                       -- non-party death, ignore
         end
