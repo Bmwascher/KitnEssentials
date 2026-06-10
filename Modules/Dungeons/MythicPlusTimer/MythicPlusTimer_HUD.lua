@@ -887,7 +887,9 @@ function MPT:HidePreview()
     self.isPreview = false
     self.run = self._savedRun
     self._savedRun = nil
-    if not (self.run and self.run.active) then
+    -- Re-render for active AND completed runs (the post-run summary stays up
+    -- through the fanfare; hiding it here would lose it permanently).
+    if not (self.run and (self.run.active or self.run.completed)) then
         if self.frames and self.frames.root then self.frames.root:Hide() end
     else
         self:Render()
