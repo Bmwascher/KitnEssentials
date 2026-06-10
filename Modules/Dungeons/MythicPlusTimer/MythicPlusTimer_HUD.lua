@@ -542,9 +542,9 @@ local function _FmtShort(sec)
 end
 
 -- Threshold label text: a live cutoff shows the remaining countdown; a missed
--- cutoff returns nil so the label (and its tick, via the p3/p2 geometry terms)
--- hides entirely. 2026-06-10 round-3 feedback — replaces the grey
--- absolute-time passed state from the EUI buildLabel port.
+-- cutoff returns nil so the label hides (round-3 feedback — replaces the grey
+-- absolute-time passed state from the EUI buildLabel port). The tick itself
+-- stays visible permanently as a bar divider (round-3c feedback).
 local function _ThreshLabel(elapsed, cutoff)
     if elapsed > cutoff then return nil end
     return _FmtShort(cutoff - elapsed)
@@ -600,11 +600,6 @@ function MPT:RenderThresholds()
     local t2 = run.thresholds.plus2
     local t1 = run.thresholds.plus1
     local elapsed = run.elapsed or 0
-    -- Passed-state terms: a missed cutoff's tick (and label, below) hides
-    -- entirely (2026-06-10 round-3 feedback — was a 35% alpha dim). Each
-    -- flips at most once per run — two extra cache busts.
-    local p3 = (elapsed > t3) and 1 or 0
-    local p2 = (elapsed > t2) and 1 or 0
 
     local place = db.ThresholdPlacement or "EDGE"
 
@@ -612,13 +607,13 @@ function MPT:RenderThresholds()
     -- functions of this signature. Skip when nothing structural changed.
     local sig = barW .. ":" .. maxTime .. ":" .. t3 .. ":" .. t2 .. ":" .. t1 .. ":"
                 .. (db.BarHeight or 14) .. ":" .. tr .. ":" .. tg .. ":" .. tb
-                .. ":" .. p3 .. ":" .. p2 .. ":" .. place
+                .. ":" .. place
     if bars._keThreshSig ~= sig then
         bars._keThreshSig = sig
-        if p3 == 1 then bars.tick3:Hide()
-        else _PlaceTick(bars.tick3, bars.timerBar, barW, barH, tickW, t3, maxTime, tr, tg, tb) end
-        if p2 == 1 then bars.tick2:Hide()
-        else _PlaceTick(bars.tick2, bars.timerBar, barW, barH, tickW, t2, maxTime, tr, tg, tb) end
+        -- Ticks are PERMANENT dividers (round-3c feedback: a solid bar near
+        -- the end looked off) — only the labels hide once a cutoff is missed.
+        _PlaceTick(bars.tick3, bars.timerBar, barW, barH, tickW, t3, maxTime, tr, tg, tb)
+        _PlaceTick(bars.tick2, bars.timerBar, barW, barH, tickW, t2, maxTime, tr, tg, tb)
         if db.ShowThresholdLabels then
             local f = self.frames.root
             _PlaceLabel(f.thresh3Text, bars.timerBar, barW, t3, maxTime, place)
@@ -749,7 +744,7 @@ function MPT:RenderKey()
         -- so ICON mode owns this anchor here (TEXT mode: ApplyLayout).
         if db.ShowKeyLevel then
             f.keyText:ClearAllPoints()
-            f.keyText:SetPoint("RIGHT", prev or f.affixText, "LEFT", prev and -6 or 0, 0)
+            f.keyText:SetPoint("RIGHT", prev or f.affixText, "LEFT", prev and -4 or 0, 0)
         end
     elseif f.affixIcons then
         for i = 1, #f.affixIcons do f.affixIcons[i]:Hide() end
@@ -1109,7 +1104,7 @@ function MPT:ApplyLayout()
         -- the stacking pass row()-anchors it alone at the right edge.
         if db.ShowAffixes and (db.AffixMode or "TEXT") == "TEXT" then
             f.keyText:ClearAllPoints()
-            f.keyText:SetPoint("RIGHT", f.affixText, "LEFT", -6, 0)
+            f.keyText:SetPoint("RIGHT", f.affixText, "LEFT", -4, 0)
         end
 
         f.forcesText:ClearAllPoints()
