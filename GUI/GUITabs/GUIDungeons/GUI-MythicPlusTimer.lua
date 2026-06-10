@@ -514,10 +514,10 @@ BuildOverlayTab = function(scrollChild, yOffset, db, manager)
     local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
     local npCheck = GUIFrame:CreateCheckbox(row1, "Show % on Nameplates", {
         value = db.OverlayNameplateEnabled == true,
+        -- ApplyOverlaySettings re-wires the whole nameplate subsystem from DB
+        -- (superset of SetOverlayActive, which is the run-state entry point).
         callback = function(checked)
             db.OverlayNameplateEnabled = checked
-            local M = GetMPT()
-            if M and M.SetOverlayActive then M:SetOverlayActive(checked) end
             ApplyOverlaySettings()
             manager:UpdateAll(db.Enabled ~= false)
         end,
