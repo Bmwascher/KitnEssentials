@@ -12,9 +12,9 @@ if not KitnEssentials then return end
 local MPT = KitnEssentials:GetModule("MythicPlusTimer")
 
 local CreateFrame = CreateFrame
-local floor = math.floor   -- luacheck: ignore 211 -- used by Tasks 2.4+
+local floor = math.floor
 local min, max, abs = math.min, math.max, math.abs  -- max/abs used here; min used by RenderBar
-local format = string.format  -- luacheck: ignore 211 -- used by Tasks 2.4+
+local format = string.format
 
 ---------------------------------------------------------------------------------
 -- Gating helpers (module functions — not methods; take widget explicitly)
@@ -139,6 +139,16 @@ function MPT:BuildHUD()
     forcesBg:SetTexture(barTex)
     forcesBg:SetVertexColor(0.12, 0.12, 0.12, 0.9)
     bars.forcesWrap, bars.forcesBar = forcesWrap, forcesBar
+
+    -- Pull-preview hook: DEAD on 12.0 — per-unit forces progress is secret
+    -- (memory: project_warpdeplete_forces_preview_blocked; aggregate criteria
+    -- are kill-credited only). Created hidden, never fed data, gated by
+    -- db.ShowPullOverlay (defaults false, Task 0.2); GUI exposes nothing in
+    -- Phase 1. If a future 12.x de-secrets per-unit forces, implement the
+    -- engaged-but-unkilled feed here.
+    bars.forcesPullOverlay = forcesBar:CreateTexture(nil, "ARTWORK")
+    bars.forcesPullOverlay:SetColorTexture(1, 1, 1, 0.35)
+    bars.forcesPullOverlay:Hide()
 
     root:Hide()
 end
@@ -361,4 +371,209 @@ function MPT:RenderThresholds()
     self.SetTextGated(f.thresh2Text, FormatTime(MPT.ThresholdRemaining(elapsed, t2), false))
     self.SetTextGated(f.thresh1Text, FormatTime(MPT.ThresholdRemaining(elapsed, t1), false))
     f.thresh3Text:Show(); f.thresh2Text:Show(); f.thresh1Text:Show()
+end
+
+---------------------------------------------------------------------------------
+-- RenderKey — key level bracket + affix line (TEXT or ICON mode).
+-- Steps 1-3 of Task 2.4.
+--
+-- keyText anchor: owned by ApplyLayout (Task 2.5) — placed right-aligned at
+-- the frame's right edge. affixText anchor: ApplyLayout Step 3 anchors it
+-- left of keyText, growing leftward. affixIcons grow leftward from keyText.
+-- This function only sets text / color / visibility.
+--
+-- ICON mode lazily builds holder frames into f.affixIcons[]. Each holder
+-- wraps one texture; KE icon standard (ApplyIconZoom + AddIconBorders)
+-- applied at construction time. Icons are sized to AffixFontSize + 4 px
+-- and re-anchored each tick so a run-change (different affix count) stays
+-- correct without a full rebuild.
+--
+-- Affix IDs are non-secret (spec §8 "key/affix/map metadata APIs") — no
+-- issecretvalue guard applied.
+---------------------------------------------------------------------------------
+
+function MPT:RenderKey()
+    local run, db = self.run, self.db
+    local f = self.frames and self.frames.root
+    if not f or not db then return end
+
+    -- Key level bracket -------------------------------------------------------
+    if not db.ShowKeyLevel then
+        f.keyText:Hide()
+    else
+        self.SetTextGated(f.keyText, format("[%d]", run.level or 0))
+        f.keyText:SetTextColor(db.KeyColor[1], db.KeyColor[2], db.KeyColor[3])
+        f.keyText:Show()
+    end
+
+    -- Affixes — TEXT mode (default) -------------------------------------------
+    if not db.ShowAffixes or db.AffixMode ~= "TEXT" then
+        f.affixText:Hide()
+    else
+        local names = run.affixNames or {}
+        self.SetTextGated(f.affixText, table.concat(names, " - "))
+        if db.AffixColor then
+            f.affixText:SetTextColor(db.AffixColor[1], db.AffixColor[2], db.AffixColor[3])
+        else
+            f.affixText:SetTextColor(0.69, 0.69, 0.69)
+        end
+        f.affixText:Show()
+    end
+
+    -- Affixes — ICON mode (optional) ------------------------------------------
+    -- Icons are built lazily, sized to AffixFontSize+4, and grown leftward
+    -- from keyText so they don't overflow the right edge of the backdrop.
+    if db.AffixMode == "ICON" and db.ShowAffixes then
+        local ids = run.affixIDs or {}
+        local size = db.AffixFontSize or db.FontSize or 13
+        local prev
+        for i = 1, #ids do
+            local tex = f.affixIcons[i]
+            if not tex then
+                local holder = CreateFrame("Frame", nil, f)
+                holder.tex = holder:CreateTexture(nil, "ARTWORK")
+                holder.tex:SetAllPoints(holder)
+                KE:ApplyIconZoom(holder.tex, 0.3)
+                KE:AddIconBorders(holder)
+                f.affixIcons[i] = holder
+                tex = holder
+            end
+            tex:SetSize(size + 4, size + 4)
+            local _, _, fileID = C_ChallengeMode.GetAffixInfo(ids[i])
+            tex.tex:SetTexture(fileID)
+            tex:ClearAllPoints()
+            -- Grow leftward (keyText sits at the frame's right edge).
+            if prev then
+                tex:SetPoint("RIGHT", prev, "LEFT", -4, 0)
+            else
+                tex:SetPoint("RIGHT", f.keyText, "LEFT", -6, 0)
+            end
+            tex:Show()
+            prev = tex
+        end
+        -- Hide any stale icons from a previous run with more affixes.
+        for i = #ids + 1, #f.affixIcons do f.affixIcons[i]:Hide() end
+    elseif f.affixIcons then
+        for i = 1, #f.affixIcons do f.affixIcons[i]:Hide() end
+    end
+end
+
+---------------------------------------------------------------------------------
+-- RenderDeaths — headline "N Deaths (+m:ss)" line.
+-- Step 4 of Task 2.4. Phase-2 headline only — Task 3.5 replaces this
+-- function wholesale with the full hover-log version. The boundary is
+-- intentional: do not add tooltip or log logic here.
+--
+-- Blank at 0 deaths (spec §7.1). Format is "N Deaths (+m:ss)" — penalty
+-- ADDS to elapsed time (deliberate deviation from EUI's leading "-" sign).
+-- Color: db.DeathsColor when set, fallback red (0.93, 0.33, 0.33).
+-- SetTextGated: safe — deathTimeLost is plain math (spec §8 "GetDeathCount").
+---------------------------------------------------------------------------------
+
+function MPT:RenderDeaths()
+    local run, db = self.run, self.db
+    local f = self.frames and self.frames.root
+    if not f or not db then return end
+    if not db.ShowDeaths or (run.deaths or 0) <= 0 then
+        f.deathsText:Hide()
+        return
+    end
+    local n = run.deaths
+    local str = format("%d Death%s (+%s)", n, n ~= 1 and "s" or "",
+        MPT.FormatTime(run.deathTimeLost or 0, false))
+    self.SetTextGated(f.deathsText, str)
+    if db.DeathsColor then
+        f.deathsText:SetTextColor(db.DeathsColor[1], db.DeathsColor[2], db.DeathsColor[3])
+    else
+        f.deathsText:SetTextColor(0.93, 0.33, 0.33)
+    end
+    f.deathsText:Show()
+end
+
+---------------------------------------------------------------------------------
+-- RenderForces — forces StatusBar fill + percent/count/custom text.
+-- Step 5 of Task 2.4.
+--
+-- run.forces = { total, current, percent, completed } (plain math — no
+-- issecretvalue guard per spec §8 "aggregate GetCriteriaInfo").
+-- Fill = percent/100 via SetValueGated.
+--
+-- Color resolution order (highest wins last):
+--   1. db.ForcesColor (base)
+--   2. db.ForcesBandedColors (quintile palette; skipped at completion)
+--   3. db.ForcesCompleteColor (wins unconditionally at completion)
+--
+-- ForcesBandPalette bands: [1]=0-20%, [2]=20-40%, [3]=40-60%,
+-- [4]=60-80%, [5]=80-100%, Full=exactly 100%.
+--
+-- Brk() wraps the count segment in brackets (NONE/SQUARE/ROUND).
+-- CUSTOM format is exempt from Brk — the user owns the token string.
+-- Lua 5.1 gsub replacement caveat: bare "%" is invalid; build the
+-- formatted number then append "%%" (mirrors WarpDeplete Render.lua:732/735).
+--
+-- forcesText anchor: owned by ApplyLayout (Task 2.5, db.ForcesPlacement).
+-- This function only sets text / color / visibility.
+---------------------------------------------------------------------------------
+
+function MPT:RenderForces()
+    local run, db = self.run, self.db
+    local bars = self.frames and self.frames.bars
+    local f    = self.frames and self.frames.root
+    if not bars or not f or not db then return end
+
+    if not db.ShowForces then
+        bars.forcesWrap:Hide(); f.forcesText:Hide(); return
+    end
+    bars.forcesWrap:Show()
+
+    local fo = run.forces or {}
+    local cur, total = fo.current or 0, fo.total or 0
+    local pct = fo.percent or 0
+    local widthPx = bars.forcesWrap:GetWidth() or (db.BarWidth or 300)
+    self.SetValueGated(bars.forcesBar, min(1, pct / 100), widthPx)
+
+    -- Color: banded quintile palette (opt-in) -> completion color wins last.
+    local r, g, b = db.ForcesColor[1], db.ForcesColor[2], db.ForcesColor[3]
+    if db.ForcesBandedColors and not fo.completed then
+        local band = min(5, floor(pct / 20) + 1)
+        local c = (pct >= 100 and db.ForcesBandPalette.Full) or db.ForcesBandPalette[band]
+        if c then r, g, b = c[1], c[2], c[3] end
+    end
+    if fo.completed and db.ForcesCompleteColor then
+        r, g, b = db.ForcesCompleteColor[1], db.ForcesCompleteColor[2], db.ForcesCompleteColor[3]
+    end
+    bars.forcesBar:SetStatusBarColor(r, g, b)
+
+    -- Bracket wrapper for the count segment (NONE/SQUARE/ROUND).
+    -- CUSTOM is exempt — the user controls the token string directly.
+    local function Brk(s)
+        local bs = db.ForcesBracketStyle
+        if bs == "SQUARE" then return "[" .. s .. "]"
+        elseif bs == "ROUND" then return "(" .. s .. ")" end
+        return s
+    end
+
+    local fmt = db.ForcesFormat or "PERCENT"
+    local str
+    if fmt == "COUNT" then
+        str = Brk(format("%d/%d", floor(cur + 0.5), floor(total + 0.5)))
+    elseif fmt == "COUNT_PERCENT" then
+        str = Brk(format("%d/%d", floor(cur + 0.5), floor(total + 0.5))) .. format(" - %.2f%%", pct)
+    elseif fmt == "REMAINING" then
+        str = Brk(format("%d left", floor(max(0, total - cur) + 0.5)))
+    elseif fmt == "CUSTOM" then
+        str = (db.ForcesCustomFormat or ":count:/:totalcount: :percent:")
+        str = str:gsub(":count:", format("%d", floor(cur + 0.5)))
+        str = str:gsub(":totalcount:", format("%d", floor(total + 0.5)))
+        str = str:gsub(":remainingcount:", format("%d", floor(max(0, total - cur) + 0.5)))
+        -- Bare "%" in a gsub replacement is invalid in Lua 5.1; build the
+        -- formatted number first then append the literal "%" via "%%".
+        str = str:gsub(":percent:", format("%.2f", pct) .. "%%")
+        str = str:gsub(":remainingpercent:", format("%.2f", max(0, 100 - pct)) .. "%%")
+    else -- PERCENT (default)
+        str = format("%.2f%%", pct)
+    end
+    self.SetTextGated(f.forcesText, str)
+    f.forcesText:SetTextColor(r, g, b)
+    f.forcesText:Show()
 end
