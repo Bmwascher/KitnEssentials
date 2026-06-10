@@ -814,7 +814,7 @@ function MPT:RenderDeaths()
     end
     local dHex = Hex(db.DeathsColor or {0.85, 0.85, 0.85})
     local pHex = Hex(db.DeathPenaltyColor or {1, 0.42, 0.42})
-    local str = format("%s%d Death%s|r  %s(+%s)|r",
+    local str = format("%s%d Death%s|r %s(+%s)|r",
         dHex, run.deaths, run.deaths ~= 1 and "s" or "",
         pHex, _FmtShort(run.deathTimeLost or 0))
     MPT.SetTextGated(fs, str)
