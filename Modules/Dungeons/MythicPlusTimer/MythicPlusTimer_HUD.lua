@@ -832,3 +832,64 @@ function MPT:ApplySettings()
     self:ApplyLayout()    -- fonts, bar sizes, position, scale, backdrop, Strata
     self:NotifyRefresh()  -- debounced Render repaints texts/colors (works in preview)
 end
+
+---------------------------------------------------------------------------------
+-- Preview fake-run (Task 2.6) — Rookery +12 demo visible when the GUI opens.
+-- BuildPreviewRun() returns a FRESH table per call (never a shared static) so
+-- stray mutations from render/lifecycle code cannot poison a subsequent preview.
+-- Thresholds are peril-correct: affix 152 (Challenger's Peril) is in the list,
+-- so ComputeThresholds reduces the base timer by 90 s before scaling ratios.
+-- ShowPreview/HidePreview are idempotent — the PreviewManager may call them
+-- repeatedly; the isPreview guards prevent double-show and double-hide.
+---------------------------------------------------------------------------------
+
+local function BuildPreviewRun()
+    local maxTime = 1980                        -- ~33:00 limit
+    return {
+        mapID = 1387,       -- placeholder map; HUD reads cached affixNames so any id is fine for preview
+        level = 12,
+        affixIDs   = { 10, 152, 9 },            -- Fortified, Challenger's Peril, Tyrannical (illustrative)
+        affixNames = { "Fortified", "Challenger's Peril", "Tyrannical" },
+        affixNamesStr = "Fortified - Challenger's Peril - Tyrannical",
+        maxTime = maxTime,
+        thresholds = MPT.ComputeThresholds(maxTime, true),  -- peril-correct (affix 152 above); never hardcode
+        elapsed = 600,                          -- 10:00 in
+        deaths = 2, deathTimeLost = 10,
+        deathLog = {
+            { t = 142, name = "Healer", class = "PRIEST" },
+            { t = 488, name = "Tank",   class = "WARRIOR" },
+        },
+        forces = { total = 240, current = 156, percent = 65.0, completed = false },
+        objectives = {
+            { name = "First Boss",  completed = true,  clearTime = 180,  pbTime = 165,  criteriaIndex = 1 },
+            { name = "Second Boss", completed = true,  clearTime = 410,  pbTime = 430,  criteriaIndex = 2 },
+            { name = "Third Boss",  completed = false, clearTime = nil,  pbTime = 700,  criteriaIndex = 3 },
+            { name = "Final Boss",  completed = false, clearTime = nil,  pbTime = 1100, criteriaIndex = 4 },
+        },
+        bestOverall = 1750,
+        active = true, completed = false, countdown = false,
+    }
+end
+
+function MPT:ShowPreview()
+    if self.isPreview then return end                                          -- idempotent
+    if self.run and self.run.active and not self.isPreview then return end     -- never clobber a live key
+    if not (self.frames and self.frames.root) then self:BuildHUD() end
+    self._savedRun = self.run                   -- stash any leftover (non-active) run state
+    self.run = BuildPreviewRun()                -- fresh table per show — never a shared static
+    self.isPreview = true
+    self.frames.root:Show()
+    self:Render()
+end
+
+function MPT:HidePreview()
+    if not self.isPreview then return end        -- idempotent
+    self.isPreview = false
+    self.run = self._savedRun
+    self._savedRun = nil
+    if not (self.run and self.run.active) then
+        if self.frames and self.frames.root then self.frames.root:Hide() end
+    else
+        self:Render()
+    end
+end
