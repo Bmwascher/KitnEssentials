@@ -31,6 +31,10 @@ local PLUS_TWO_RATIO   = 0.8   -- +2 cutoff (80% of timer)
 local PLUS_THREE_RATIO = 0.6   -- +3 cutoff (60% of timer)
 local CHALLENGERS_PERIL_AFFIX_ID = 152  -- adds +90s; thresholds computed on (maxTime-90)
 
+-- Module debug flag. Flip to true to enable tick-driver + state-transition tracing.
+-- Task 1.8 will add further instrumentation gates here. Leave false in shipping builds.
+local DEBUG_MPT = false
+
 -- Single shared run state (the contract's MPT.run). Reset by MPT:ResetRun()
 -- (Task 1.7) — which must wipe() the nested tables in place, not re-assign them.
 MPT.run = {
@@ -365,6 +369,9 @@ function MPT:OnEnable()
 end
 
 function MPT:OnDisable()
+    -- Pending refresh timer must not render on a disabled module; ticker must detach.
+    self:StopTimerLoop()
+    self._refreshQueued = nil
     self:UnregisterAllEvents()
     self:UnhookAll()
 end
@@ -392,6 +399,7 @@ function MPT:OnTimerTick()
     local _, elapsed = GetWorldElapsedTime(1)
     if not (elapsed and elapsed >= 0) then return end
     local sec = floor(elapsed)
+    -- The hook and the 1 Hz fallback run on independent clocks; lastTickedSec floor-dedup is the only coordination.
     if sec == run.lastTickedSec then return end
     run.lastTickedSec = sec
     run.elapsed = elapsed
@@ -420,6 +428,7 @@ end
 function MPT:StopTimerLoop()
     tickerFrame:SetScript("OnUpdate", nil)
     tickerFrame:Hide()
+    onUpdateAccum = 0  -- defensive: discard any partial accumulation from the detached ticker
 end
 
 -- Primary driver: Blizzard pushes UpdateTime ~1/sec during M+ (free outside it).
@@ -431,8 +440,20 @@ function MPT:InstallTickHook()
         or (ScenarioBlocksFrame and ScenarioBlocksFrame.ChallengeModeBlock)
     if block and block.UpdateTime then
         primaryHookInstalled = true
+        -- INTENTIONALLY PERMANENT for the session: raw hooksecurefunc is NOT managed
+        -- by AceHook's UnhookAll. The run.active gate in OnTimerTick is the disable
+        -- safeguard — the hook itself is never removed.
         hooksecurefunc(block, "UpdateTime", function() MPT:OnTimerTick() end)
+    else
+        if DEBUG_MPT then KE:Print("[MPT] tick hook target missing - fallback ticker only") end
     end
+end
+
+-- Pre-declared callback eliminates per-call closure allocation in NotifyRefresh.
+-- Flag cleared BEFORE Render so a Render-triggered NotifyRefresh can re-arm.
+local function _NotifyRefreshFire()
+    MPT._refreshQueued = nil
+    MPT:Render()
 end
 
 -- Coalesces burst calls (SCENARIO_CRITERIA_UPDATE fires per-criterion) into a
@@ -444,10 +465,7 @@ end
 function MPT:NotifyRefresh()
     if self._refreshQueued then return end
     self._refreshQueued = true
-    C_Timer.After(0.05, function()
-        self._refreshQueued = nil
-        self:Render()
-    end)
+    C_Timer.After(0.05, _NotifyRefreshFire)
 end
 
 -- Temporary stub; replaced by Task 2.5 (MythicPlusTimer_HUD.lua).
