@@ -492,12 +492,16 @@ local function _PlaceLabel(fs, timerBar, barW, cutoff, maxTime, place)
     fs:ClearAllPoints()
     local x = KE:PixelSnap(barW * (cutoff / maxTime))
     if place == "INSIDE" then
-        -- On the bar, right-aligned just left of the tick (reference look);
-        -- the +1 label lands inside the bar's right end. Renders above the
-        -- bar texture via the textOverlay parent.
+        -- Fully on the bar, right-aligned just left of the tick; the +1
+        -- label lands inside the bar's right end. Renders above the bar
+        -- texture via the textOverlay parent.
         fs:SetPoint("RIGHT", timerBar, "LEFT", x - 3, 0)
-    else  -- ABOVE (default): centered on the tick, above the bar
+    elseif place == "ABOVE" then
+        -- Centered on the tick, fully above the bar.
         fs:SetPoint("BOTTOM", timerBar, "TOPLEFT", x, 2)
+    else  -- EDGE (default): straddles the bar's TOP edge (WarpDeplete look) —
+          -- label center ON the edge, half in / half out, left of its tick.
+        fs:SetPoint("RIGHT", timerBar, "TOPLEFT", x - 3, 0)
     end
     fs:Show()
 end
@@ -557,7 +561,7 @@ function MPT:RenderThresholds()
     local p3 = (elapsed > t3) and 1 or 0
     local p2 = (elapsed > t2) and 1 or 0
 
-    local place = db.ThresholdPlacement or "ABOVE"
+    local place = db.ThresholdPlacement or "EDGE"
 
     -- Geometry cache: all SetPoint/SetSize/SetColorTexture calls are pure
     -- functions of this signature. Skip when nothing structural changed.
@@ -1029,14 +1033,19 @@ function MPT:ApplyLayout()
         f.affixText:SetPoint("RIGHT", f.keyText, "LEFT", -6, 0)  -- grows leftward from keyText
 
         f.forcesText:ClearAllPoints()
-        local place = db.ForcesPlacement or "CORNER"
+        local place = db.ForcesPlacement or "EDGE"
         if place == "CENTER" then
             f.forcesText:SetPoint("CENTER", bars.forcesBar)
         elseif place == "BESIDE" then
             f.forcesText:SetPoint("RIGHT", bars.forcesWrap, "LEFT", -4, 0)  -- overhangs backdrop left (WarpDeplete idiom)
-        else  -- CORNER (default): below the bar's right corner (reference look);
-              -- the stacking pass reserves a line for it before the objectives.
+        elseif place == "CORNER" then
+            -- Fully below the bar's right corner; the stacking pass reserves
+            -- a full line for it before the objectives.
             f.forcesText:SetPoint("TOPRIGHT", bars.forcesWrap, "BOTTOMRIGHT", 0, -1)
+        else  -- EDGE (default): straddles the bar's BOTTOM edge at the right
+              -- corner (WarpDeplete look) — half in / half out; the stacking
+              -- pass reserves the protruding half-line.
+            f.forcesText:SetPoint("RIGHT", bars.forcesWrap, "BOTTOMRIGHT", -2, 0)
         end
     end
 
@@ -1088,9 +1097,17 @@ function MPT:ApplyLayout()
     row(f.deathsText)
     row(f.timerText)
     row(f.keyText)  -- affixText anchored left of keyText in Step 2; ICON-mode icons anchored in RenderKey (grow leftward)
-    -- INSIDE labels sit ON the bar — only the ABOVE placement consumes a row.
-    if db.ShowThresholdLabels and (db.ThresholdPlacement or "ABOVE") == "ABOVE" then
-        y = y - (db.ThresholdFontSize or db.FontSize or 13) - ROW
+    -- Reserve room for the threshold labels: a full row for ABOVE, the
+    -- protruding half-line for EDGE (half-in/half-out on the bar's top
+    -- edge); INSIDE sits fully on the bar and consumes nothing.
+    if db.ShowThresholdLabels then
+        local tPlace = db.ThresholdPlacement or "EDGE"
+        local tSize = db.ThresholdFontSize or db.FontSize or 13
+        if tPlace == "ABOVE" then
+            y = y - tSize - ROW
+        elseif tPlace == "EDGE" then
+            y = y - floor(tSize / 2) - 2
+        end
     end
     bars:ClearAllPoints()
     bars:SetPoint("TOPRIGHT", f, "TOPRIGHT", -PAD, y)
@@ -1101,10 +1118,14 @@ function MPT:ApplyLayout()
     y = y - barH - ROW             -- timer bar
     if db.ShowForces then          -- forces bar consumes height only when shown
         y = y - barH - ROW         -- (sig term 7 re-runs this pass on toggle)
-        -- CORNER forces label sits BELOW the bar (reference look) — reserve
-        -- its line so the objective rows don't overlap it.
-        if (db.ForcesPlacement or "CORNER") == "CORNER" then
-            y = y - (db.ForcesFontSize or db.FontSize or 13) - 2
+        -- Reserve room for the forces label below the bar: a full line for
+        -- CORNER, the protruding half-line for EDGE (half-in/half-out).
+        local fPlace = db.ForcesPlacement or "EDGE"
+        local fSize = db.ForcesFontSize or db.FontSize or 13
+        if fPlace == "CORNER" then
+            y = y - fSize - 2
+        elseif fPlace == "EDGE" then
+            y = y - floor(fSize / 2) - 2
         end
     end
     -- Hand the cursor to the objectives pass: Task 3.2's RenderObjectives

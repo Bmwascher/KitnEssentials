@@ -120,7 +120,8 @@ local FORCES_FORMAT_OPTIONS = {
 }
 
 local FORCES_PLACEMENT_OPTIONS = {
-    { key = "CORNER", text = "Corner" },
+    { key = "EDGE",   text = "On Bar Edge (half-in)" },
+    { key = "CORNER", text = "Below Bar" },
     { key = "CENTER", text = "Centered" },
     { key = "BESIDE", text = "Beside Bar" },
 }
@@ -260,10 +261,11 @@ BuildTimerTab = function(scrollChild, yOffset, db, manager)
     manager:Register(threshCheck, "all")
     local threshPlaceDrop = GUIFrame:CreateDropdown(rowL3, "Label Position", {
         options = {
+            { key = "EDGE",   text = "On Bar Edge (half-in)" },
             { key = "ABOVE",  text = "Above Bar" },
             { key = "INSIDE", text = "In Bar" },
         },
-        value = db.ThresholdPlacement or "ABOVE",
+        value = db.ThresholdPlacement or "EDGE",
         callback = function(key) db.ThresholdPlacement = key; ApplySettings() end,
     })
     rowL3:AddWidget(threshPlaceDrop, 1 / 3)
@@ -366,7 +368,7 @@ BuildForcesTab = function(scrollChild, yOffset, db, manager)
     manager:Register(fmtDrop, "all")
     local placeDrop = GUIFrame:CreateDropdown(row2, "Placement", {
         options = FORCES_PLACEMENT_OPTIONS,
-        value = db.ForcesPlacement or "CORNER",
+        value = db.ForcesPlacement or "EDGE",
         callback = function(key) db.ForcesPlacement = key; ApplySettings() end,
     })
     row2:AddWidget(placeDrop, 1 / 3)

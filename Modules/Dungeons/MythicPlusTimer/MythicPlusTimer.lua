@@ -186,12 +186,16 @@ local MPT_DEFAULTS = {
     StateColorFill = false,
     TickColor = {1, 1, 1},
     ShowThresholdLabels = true,
-    ThresholdPlacement = "ABOVE",  -- ABOVE (centered over tick) | INSIDE (on the bar, left of tick)
+    -- EDGE (default): half-in/half-out on the bar's top edge (WarpDeplete look)
+    -- ABOVE: centered over the tick, fully above | INSIDE: fully on the bar
+    ThresholdPlacement = "EDGE",
 
     -- Forces
     ShowForces = true,
     ForcesFormat = "PERCENT",   -- PERCENT|COUNT|COUNT_PERCENT|REMAINING|CUSTOM
-    ForcesPlacement = "CORNER", -- CORNER|CENTER|BESIDE
+    -- EDGE (default): half-in/half-out on the bar's bottom-right corner
+    -- (WarpDeplete look) | CORNER: fully below | CENTER | BESIDE
+    ForcesPlacement = "EDGE",
     ForcesColor = {0.73, 0.62, 0.13},
     ForcesCompleteColor = {0.2, 0.82, 0.31},
     ForcesCustomFormat = ":count:/:totalcount: :percent:",
