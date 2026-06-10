@@ -138,6 +138,9 @@ BuildTimerTab = function(scrollChild, yOffset, db, manager)
     manager:SetCondition("backdrop", function()
         return db.Enabled ~= false and db.BackdropEnabled == true
     end)
+    manager:SetCondition("threshLabels", function()
+        return db.Enabled ~= false and db.ShowThresholdLabels ~= false
+    end)
 
     local function ApplyModuleState(enabled)
         if not KitnEssentials then return end
@@ -248,15 +251,28 @@ BuildTimerTab = function(scrollChild, yOffset, db, manager)
     local rowL3 = GUIFrame:CreateRow(layoutCard.content, Theme.rowHeightLast)
     local threshCheck = GUIFrame:CreateCheckbox(rowL3, "Show Threshold Labels", {
         value = db.ShowThresholdLabels ~= false,
-        callback = function(checked) db.ShowThresholdLabels = checked; ApplySettings() end,
+        callback = function(checked)
+            db.ShowThresholdLabels = checked; ApplySettings()
+            manager:UpdateAll(db.Enabled ~= false)
+        end,
     })
-    rowL3:AddWidget(threshCheck, 0.5)
+    rowL3:AddWidget(threshCheck, 1 / 3)
     manager:Register(threshCheck, "all")
+    local threshPlaceDrop = GUIFrame:CreateDropdown(rowL3, "Label Position", {
+        options = {
+            { key = "ABOVE",  text = "Above Bar" },
+            { key = "INSIDE", text = "In Bar" },
+        },
+        value = db.ThresholdPlacement or "ABOVE",
+        callback = function(key) db.ThresholdPlacement = key; ApplySettings() end,
+    })
+    rowL3:AddWidget(threshPlaceDrop, 1 / 3)
+    manager:Register(threshPlaceDrop, "threshLabels")
     local stateFillCheck = GUIFrame:CreateCheckbox(rowL3, "State-Colored Fill", {
         value = db.StateColorFill == true,
         callback = function(checked) db.StateColorFill = checked; ApplySettings() end,
     })
-    rowL3:AddWidget(stateFillCheck, 0.5)
+    rowL3:AddWidget(stateFillCheck, 1 / 3)
     manager:Register(stateFillCheck, "all")
     layoutCard:AddRow(rowL3, Theme.rowHeightLast, 0)
     yOffset = layoutCard:GetNextOffset()

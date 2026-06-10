@@ -488,10 +488,17 @@ local function _PlaceTick(tex, timerBar, barW, barH, tickW, cutoff, maxTime, tr,
     tex:Show()
 end
 
-local function _PlaceLabel(fs, timerBar, barW, cutoff, maxTime)
+local function _PlaceLabel(fs, timerBar, barW, cutoff, maxTime, place)
     fs:ClearAllPoints()
     local x = KE:PixelSnap(barW * (cutoff / maxTime))
-    fs:SetPoint("BOTTOM", timerBar, "TOPLEFT", x, 2)
+    if place == "INSIDE" then
+        -- On the bar, right-aligned just left of the tick (reference look);
+        -- the +1 label lands inside the bar's right end. Renders above the
+        -- bar texture via the textOverlay parent.
+        fs:SetPoint("RIGHT", timerBar, "LEFT", x - 3, 0)
+    else  -- ABOVE (default): centered on the tick, above the bar
+        fs:SetPoint("BOTTOM", timerBar, "TOPLEFT", x, 2)
+    end
     fs:Show()
 end
 
@@ -550,20 +557,22 @@ function MPT:RenderThresholds()
     local p3 = (elapsed > t3) and 1 or 0
     local p2 = (elapsed > t2) and 1 or 0
 
+    local place = db.ThresholdPlacement or "ABOVE"
+
     -- Geometry cache: all SetPoint/SetSize/SetColorTexture calls are pure
     -- functions of this signature. Skip when nothing structural changed.
     local sig = barW .. ":" .. maxTime .. ":" .. t3 .. ":" .. t2 .. ":" .. t1 .. ":"
                 .. (db.BarHeight or 14) .. ":" .. tr .. ":" .. tg .. ":" .. tb
-                .. ":" .. p3 .. ":" .. p2
+                .. ":" .. p3 .. ":" .. p2 .. ":" .. place
     if bars._keThreshSig ~= sig then
         bars._keThreshSig = sig
         _PlaceTick(bars.tick3, bars.timerBar, barW, barH, tickW, t3, maxTime, tr, tg, tb, p3 == 1 and 0.35 or 1)
         _PlaceTick(bars.tick2, bars.timerBar, barW, barH, tickW, t2, maxTime, tr, tg, tb, p2 == 1 and 0.35 or 1)
         if db.ShowThresholdLabels then
             local f = self.frames.root
-            _PlaceLabel(f.thresh3Text, bars.timerBar, barW, t3, maxTime)
-            _PlaceLabel(f.thresh2Text, bars.timerBar, barW, t2, maxTime)
-            _PlaceLabel(f.thresh1Text, bars.timerBar, barW, t1, maxTime)
+            _PlaceLabel(f.thresh3Text, bars.timerBar, barW, t3, maxTime, place)
+            _PlaceLabel(f.thresh2Text, bars.timerBar, barW, t2, maxTime, place)
+            _PlaceLabel(f.thresh1Text, bars.timerBar, barW, t1, maxTime, place)
         end
     end
 
@@ -1079,7 +1088,8 @@ function MPT:ApplyLayout()
     row(f.deathsText)
     row(f.timerText)
     row(f.keyText)  -- affixText anchored left of keyText in Step 2; ICON-mode icons anchored in RenderKey (grow leftward)
-    if db.ShowThresholdLabels then
+    -- INSIDE labels sit ON the bar — only the ABOVE placement consumes a row.
+    if db.ShowThresholdLabels and (db.ThresholdPlacement or "ABOVE") == "ABOVE" then
         y = y - (db.ThresholdFontSize or db.FontSize or 13) - ROW
     end
     bars:ClearAllPoints()

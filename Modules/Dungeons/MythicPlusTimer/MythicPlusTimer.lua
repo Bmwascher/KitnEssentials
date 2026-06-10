@@ -186,6 +186,7 @@ local MPT_DEFAULTS = {
     StateColorFill = false,
     TickColor = {1, 1, 1},
     ShowThresholdLabels = true,
+    ThresholdPlacement = "ABOVE",  -- ABOVE (centered over tick) | INSIDE (on the bar, left of tick)
 
     -- Forces
     ShowForces = true,
