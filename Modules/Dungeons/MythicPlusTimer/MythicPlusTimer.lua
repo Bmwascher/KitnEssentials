@@ -505,7 +505,10 @@ function MPT:StartRun()
     run.maxTime = timeLimit or 0
     run.elapsed = 0
     run.lastTickedSec = -1
-    run.affixIDs = affixIDs or {}
+    wipe(run.affixIDs)
+    if affixIDs then
+        for i = 1, #affixIDs do run.affixIDs[i] = affixIDs[i] end
+    end
     -- Cache affix names ONCE (never change mid-run; avoids per-render GetAffixInfo).
     wipe(run.affixNames)
     if affixIDs then
@@ -516,6 +519,7 @@ function MPT:StartRun()
     run.thresholds = MPT.ComputeThresholds(run.maxTime, HasPerilAffix(run.affixIDs))
     wipe(run.objectives)
     run.forces.current, run.forces.total, run.forces.percent, run.forces.completed = 0, 0, 0, false
+    run.forces._lastQS, run.forces._lastQSParsed = nil, nil
     self:OnDeathCountUpdated()
 
     if self.LoadSplits then self:LoadSplits() end  -- defined in Task 3.6 (guard removed there)
@@ -546,6 +550,9 @@ function MPT:CompleteRun()
     end
     self:UpdateObjectives()  -- backfill any final clear times
     if self.UpdateSplits then self:UpdateSplits() end  -- Task 3.6: commit best per-boss + overall (guard removed there)
+    -- Clear any stale combat-defer; ApplyTrackerVisibility re-arms it if still locked.
+    self._trackerPending = nil
+    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
     self:NotifyRefresh()
 end
 
@@ -570,8 +577,12 @@ function MPT:ResetRun()
     wipe(run.objectives)
     run.thresholds = { plus1 = 0, plus2 = 0, plus3 = 0 }
     run.forces.current, run.forces.total, run.forces.percent, run.forces.completed = 0, 0, 0, false
+    run.forces._lastQS, run.forces._lastQSParsed = nil, nil
     run.bestOverall = nil
     self:StopTimerLoop()
+    -- Clear any stale combat-defer; ApplyTrackerVisibility re-arms it if still locked.
+    self._trackerPending = nil
+    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
     self:ApplyTrackerVisibility()
     self:NotifyRefresh()
 end
