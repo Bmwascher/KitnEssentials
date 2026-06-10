@@ -116,9 +116,20 @@ function MPT:BuildHUD()
     local bars = CreateFrame("Frame", "KE_MythicPlusTimerBars", root)
     self.frames.bars = bars
 
-    -- FontString factory: all text lives on root (contract §Frames rule).
-    local function FS(layer)
-        local fs = root:CreateFontString(nil, layer or "ARTWORK")
+    -- Text overlay: bar-adjacent text (forces %, threshold labels) lives on a
+    -- child frame leveled ABOVE the bar frames. FontStrings on root's own
+    -- draw layers render beneath child frames regardless of layer, so text
+    -- that overlaps a bar (CENTER forces placement, INSIDE threshold labels)
+    -- would otherwise vanish behind the bar textures.
+    local textOverlay = CreateFrame("Frame", nil, root)
+    textOverlay:SetAllPoints(root)
+    textOverlay:SetFrameLevel(root:GetFrameLevel() + 10)
+    root.textOverlay = textOverlay
+
+    -- FontString factory: text lives on root (contract §Frames rule) except
+    -- the bar-adjacent strings, which take the overlay as an explicit parent.
+    local function FS(layer, parent)
+        local fs = (parent or root):CreateFontString(nil, layer or "ARTWORK")
         fs:SetWordWrap(false)
         fs:SetNonSpaceWrap(false)
         return fs
@@ -130,10 +141,10 @@ function MPT:BuildHUD()
     root.keyText       = FS()              -- "[30]" key bracket
     root.affixText     = FS()              -- affix names (TEXT mode)
     root.affixIcons    = {}                -- ICON-mode textures (lazy, Task 2.4)
-    root.thresh3Text   = FS()              -- remaining label above +3 tick
-    root.thresh2Text   = FS()              -- remaining label above +2 tick
-    root.thresh1Text   = FS()              -- remaining label at +1 (bar end)
-    root.forcesText    = FS()              -- forces percent/count text
+    root.thresh3Text   = FS(nil, textOverlay)  -- remaining label at +3 tick
+    root.thresh2Text   = FS(nil, textOverlay)  -- remaining label at +2 tick
+    root.thresh1Text   = FS(nil, textOverlay)  -- remaining label at +1 (bar end)
+    root.forcesText    = FS(nil, textOverlay)  -- forces percent/count text
 
     root.timerPBText:SetPoint("RIGHT", root.timerText, "LEFT", -4, 0)  -- rendered in Task 3.7 (gold PB)
 
@@ -1014,8 +1025,9 @@ function MPT:ApplyLayout()
             f.forcesText:SetPoint("CENTER", bars.forcesBar)
         elseif place == "BESIDE" then
             f.forcesText:SetPoint("RIGHT", bars.forcesWrap, "LEFT", -4, 0)  -- overhangs backdrop left (WarpDeplete idiom)
-        else  -- CORNER (default)
-            f.forcesText:SetPoint("BOTTOMRIGHT", bars.forcesWrap, "TOPRIGHT", 0, 1)
+        else  -- CORNER (default): below the bar's right corner (reference look);
+              -- the stacking pass reserves a line for it before the objectives.
+            f.forcesText:SetPoint("TOPRIGHT", bars.forcesWrap, "BOTTOMRIGHT", 0, -1)
         end
     end
 
@@ -1079,6 +1091,11 @@ function MPT:ApplyLayout()
     y = y - barH - ROW             -- timer bar
     if db.ShowForces then          -- forces bar consumes height only when shown
         y = y - barH - ROW         -- (sig term 7 re-runs this pass on toggle)
+        -- CORNER forces label sits BELOW the bar (reference look) — reserve
+        -- its line so the objective rows don't overlap it.
+        if (db.ForcesPlacement or "CORNER") == "CORNER" then
+            y = y - (db.ForcesFontSize or db.FontSize or 13) - 2
+        end
     end
     -- Hand the cursor to the objectives pass: Task 3.2's RenderObjectives
     -- reads _objRowStartY/_PAD/_OBJ_GAP and writes _objRowEndY (its only
