@@ -455,6 +455,45 @@ BuildObjectivesTab = function(scrollChild, yOffset, db, manager)
     return yOffset
 end
 
+BuildDeathsTab = function(scrollChild, yOffset, db, manager)
+    -- Card 1: Enable + tooltip toggle
+    local card1 = GUIFrame:CreateCard(scrollChild, "Deaths", yOffset)
+    manager:Register(card1, "all")
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local showCheck = GUIFrame:CreateCheckbox(row1, "Show Deaths Line", {
+        value = db.ShowDeaths ~= false,
+        callback = function(checked) db.ShowDeaths = checked; ApplySettings() end,
+    })
+    row1:AddWidget(showCheck, 0.5)
+    manager:Register(showCheck, "all")
+    local tipCheck = GUIFrame:CreateCheckbox(row1, "Hover Death Log", {
+        value = db.ShowDeathTooltip ~= false,
+        callback = function(checked) db.ShowDeathTooltip = checked; ApplySettings() end,
+    })
+    row1:AddWidget(tipCheck, 0.5)
+    manager:Register(tipCheck, "all")
+    card1:AddRow(row1, Theme.rowHeight)
+
+    local noteRow = GUIFrame:CreateRow(card1.content, 50)
+    local noteText = GUIFrame:CreateText(noteRow,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " Count and time-penalty read from Blizzard's authoritative death tracker.\n" ..
+        KE:ColorTextByTheme("-") .. " Hover the deaths line for a class-colored, timestamped log.",
+        50, "hide")
+    noteRow:AddWidget(noteText, 1)
+    manager:Register(noteText, "all")
+    card1:AddRow(noteRow, 50, 0)
+    yOffset = card1:GetNextOffset()
+
+    -- Card 2: Colors
+    local colorsCard = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
+    manager:Register(colorsCard, "all")
+    AddColor(colorsCard, db, manager, ApplySettings, "Deaths Text", "DeathsColor", { 0.85, 0.85, 0.85 })
+    AddColor(colorsCard, db, manager, ApplySettings, "Time Penalty", "DeathPenaltyColor", { 1, 0.42, 0.42 }, true)
+    yOffset = colorsCard:GetNextOffset()
+    return yOffset
+end
+
 GUIFrame:RegisterContent("MythicPlusTimer", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.MythicPlusTimer
     if not db then
