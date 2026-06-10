@@ -30,6 +30,15 @@ function MPT.SetTextGated(fs, str)
     fs:SetText(str)
 end
 
+-- Skip SetTextColor when the color is unchanged. Renders recolor on every
+-- tick; the color only actually changes at run start / overtime / completion.
+function MPT.SetColorGated(fs, r, g, b)
+    if not fs then return end
+    if fs._keLastR == r and fs._keLastG == g and fs._keLastB == b then return end
+    fs._keLastR, fs._keLastG, fs._keLastB = r, g, b
+    fs:SetTextColor(r, g, b)
+end
+
 -- Skip SetValue when the new fill differs from the last by < 1 physical
 -- pixel of the bar's pixel width. widthPx = bar width in addon coords;
 -- falls back to bar:GetWidth() so the gate never silently disappears
@@ -144,9 +153,10 @@ end
 ---------------------------------------------------------------------------------
 
 function MPT:RenderTimer()
-    local FormatTime = MPT.FormatTime
     local run, db = self.run, self.db
-    local f = self.frames.root
+    local f = self.frames and self.frames.root
+    if not f or not db then return end
+    local FormatTime = MPT.FormatTime
     local elapsed = run.elapsed or 0
     local maxTime = run.maxTime or 0
     local timeLeft = max(0, maxTime - elapsed)
@@ -192,6 +202,6 @@ function MPT:RenderTimer()
     end
 
     self.SetTextGated(f.timerText, str)
-    f.timerText:SetTextColor(r, g, b)
+    self.SetColorGated(f.timerText, r, g, b)
     f.timerText:Show()
 end
