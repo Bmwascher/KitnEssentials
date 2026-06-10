@@ -28,6 +28,26 @@ local C_Item = C_Item
 local GetWorldElapsedTime = GetWorldElapsedTime
 local hooksecurefunc = hooksecurefunc
 local issecretvalue = issecretvalue or function() return false end
+-- Current chat API. The bare global SendChatMessage is deprecated in 12.0, so capture
+-- the namespaced form once at load under a non-colliding local name (a local literally
+-- named SendChatMessage still trips the deprecation lint). C_ChatInfo is a core
+-- namespace present before module files run. Mirror: Modules/DamageMeter/Core.lua:46.
+local SendChat = C_ChatInfo and C_ChatInfo.SendChatMessage
+
+-- Returns the appropriate group chat channel for boss-split output, or nil when
+-- the player is alone (solo run — no channel to post to). INSTANCE_CHAT preferred
+-- (cross-realm instance groups), then RAID, then PARTY. Mirror:
+-- References/M+ Timer/MythicPlusTimer/timer.lua:29-32 (extended fallback chain).
+local function ResolveGroupChannel()
+    if GetNumGroupMembers(LE_PARTY_CATEGORY_INSTANCE) > 0 then
+        return "INSTANCE_CHAT"
+    elseif IsInRaid() then
+        return "RAID"
+    elseif IsInGroup() then
+        return "PARTY"
+    end
+    return nil
+end
 
 -- Constants
 local PLUS_TWO_RATIO   = 0.8   -- +2 cutoff (80% of timer)
@@ -108,6 +128,34 @@ end
 -- Pure: remaining seconds until a cutoff (never negative). Busted-testable.
 function MPT.ThresholdRemaining(elapsed, cutoff)
     return max(0, (cutoff or 0) - (elapsed or 0))
+end
+
+-- Posts a one-line boss-kill split to the group channel (INSTANCE_CHAT / RAID /
+-- PARTY). Called from the fresh-stamp arm of UpdateObjectives ONLY — the
+-- restoration arm (reload mid-run) must never re-post. Guard: ChatOutputSplits
+-- DB toggle, objective must be completed, not InCombatLockdown (avoids mid-pull
+-- spam noise; SendChatMessage itself is fine in combat), and a channel must exist
+-- (solo runs are silently dropped). Appends a "+/- vs PB" delta when pbTime is
+-- available. Uses MPT.FormatTime (pure helper) for time formatting.
+function MPT:ChatOutputBossSplit(objective)
+    if not self.db.ChatOutputSplits then return end
+    if not objective or not objective.completed then return end
+    if InCombatLockdown() then return end  -- skip mid-pull spam noise
+
+    local channel = ResolveGroupChannel()
+    if not channel then return end
+
+    local clearStr = MPT.FormatTime(objective.clearTime or 0, false)
+    local msg = format("%s: %s", objective.name or "Boss", clearStr)
+
+    -- Append PB delta when we have a per-boss PB to compare against.
+    if objective.pbTime then
+        local delta = (objective.clearTime or 0) - objective.pbTime
+        local sign = delta <= 0 and "-" or "+"
+        msg = msg .. format(" (%s%s vs PB)", sign, MPT.FormatTime(math.abs(delta), false))
+    end
+
+    SendChat(msg, channel)
 end
 
 -- Canonical flat defaults (seeded into KE.db.profile.MythicPlusTimer
@@ -327,9 +375,9 @@ function MPT:UpdateObjectives()
                     obj.clearTime = elapsed - (info.elapsed or 0)
                     if not MPT.db._activeRunSplits then MPT.db._activeRunSplits = {} end
                     MPT.db._activeRunSplits[objIdx] = obj.clearTime
-                    -- Task 5.3 inserts the ChatOutputBossSplit call HERE — in this
-                    -- fresh-stamp arm ONLY (never the restoration arm above), so a
-                    -- /reload mid-run cannot re-post a boss split to chat.
+                    -- Fresh-stamp arm ONLY (never the restoration arm above), so a
+                    -- /reload mid-run cannot re-post a boss split to chat (Task 5.3).
+                    self:ChatOutputBossSplit(obj)
                 end
             elseif not obj.completed and obj.clearTime then
                 obj.clearTime = nil  -- criterion reverted; guard skips the per-tick dead write
