@@ -61,6 +61,58 @@ describe("MPT.ResolvePBFrom", function()
         assert.is_nil(MPT.ResolvePBFrom(nil, 2648, 10, nil))
         assert.is_nil(MPT.ResolvePBFrom(store, nil, 10, nil))
     end)
+
+    it("returns the source level alongside the record", function()
+        local rec, src = MPT.ResolvePBFrom(store, 2648, 12, nil)
+        assert.are.equal(1400, rec.overall)
+        assert.are.equal(12, src)                            -- exact hit: source == requested
+        local rec2, src2 = MPT.ResolvePBFrom(store, 2648, 13, nil)
+        assert.are.equal(1400, rec2.overall)
+        assert.are.equal(12, src2)                           -- fallback: source is the record's level
+    end)
+
+    describe("PBFallbackMode", function()
+        it("CLOSEST_LOWER prefers the level below even when a higher one is nearer", function()
+            local s = { ["2648:8"]  = { best = { overall = 1000 } },
+                        ["2648:13"] = { best = { overall = 1300 } } }
+            local rec, src = MPT.ResolvePBFrom(s, 2648, 12, nil, "CLOSEST_LOWER")
+            assert.are.equal(1000, rec.overall)              -- 8, not the nearer 13
+            assert.are.equal(8, src)
+        end)
+
+        it("CLOSEST_LOWER falls back to the nearest higher when nothing is below", function()
+            local rec, src = MPT.ResolvePBFrom(store, 2648, 9, nil, "CLOSEST_LOWER")
+            assert.are.equal(1500, rec.overall)
+            assert.are.equal(10, src)
+        end)
+
+        it("CLOSEST_HIGHER prefers the level above", function()
+            local rec, src = MPT.ResolvePBFrom(store, 2648, 11, nil, "CLOSEST_HIGHER")
+            assert.are.equal(1400, rec.overall)
+            assert.are.equal(12, src)
+        end)
+
+        it("CLOSEST_HIGHER falls back to the nearest lower when nothing is above", function()
+            local rec, src = MPT.ResolvePBFrom(store, 2648, 13, nil, "CLOSEST_HIGHER")
+            assert.are.equal(1400, rec.overall)
+            assert.are.equal(12, src)
+        end)
+
+        it("HIGHEST and LOWEST pick the extremes", function()
+            local rec, src = MPT.ResolvePBFrom(store, 2648, 5, nil, "HIGHEST")
+            assert.are.equal(1400, rec.overall)
+            assert.are.equal(12, src)
+            local rec2, src2 = MPT.ResolvePBFrom(store, 2648, 20, nil, "LOWEST")
+            assert.are.equal(1500, rec2.overall)
+            assert.are.equal(10, src2)
+        end)
+
+        it("OFF never falls back but still resolves an exact record", function()
+            assert.is_nil(MPT.ResolvePBFrom(store, 2648, 11, nil, "OFF"))
+            local rec = MPT.ResolvePBFrom(store, 2648, 12, nil, "OFF")
+            assert.are.equal(1400, rec.overall)
+        end)
+    end)
 end)
 
 -- In-game self-check macro (fallback if busted is unavailable):

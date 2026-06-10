@@ -132,6 +132,17 @@ local FORCES_BRACKET_OPTIONS = {
     { key = "ROUND",  text = "Round  ((198/240))" },
 }
 
+-- PB target source when the current key level has no stored record
+-- (db.PBFallbackMode, resolved in MPT.ResolvePBFrom step 3).
+local PB_FALLBACK_OPTIONS = {
+    { key = "CLOSEST",        text = "Closest Level" },
+    { key = "CLOSEST_LOWER",  text = "Closest Lower First" },
+    { key = "CLOSEST_HIGHER", text = "Closest Higher First" },
+    { key = "HIGHEST",        text = "Highest Recorded" },
+    { key = "LOWEST",         text = "Lowest Recorded" },
+    { key = "OFF",            text = "Off (Exact Level Only)" },
+}
+
 -- Forward declarations — assigned in Tasks 5.5–5.10.
 local BuildTimerTab, BuildForcesTab, BuildObjectivesTab, BuildDeathsTab, BuildOverlayTab, BuildGeneralTab
 
@@ -482,7 +493,7 @@ BuildObjectivesTab = function(scrollChild, yOffset, db, manager)
     manager:Register(timesCheck, "all")
     card1:AddRow(row1, Theme.rowHeight)
 
-    local row1b = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local row1b = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
     local pbCheck = GUIFrame:CreateCheckbox(row1b, "Show PB Delta", {
         value = db.ShowPBDelta ~= false,
         callback = function(checked) db.ShowPBDelta = checked; ApplySettings() end,
@@ -495,7 +506,32 @@ BuildObjectivesTab = function(scrollChild, yOffset, db, manager)
     })
     row1b:AddWidget(upcomingCheck, 0.5)
     manager:Register(upcomingCheck, "all")
-    card1:AddRow(row1b, Theme.rowHeightLast, 0)
+    card1:AddRow(row1b, Theme.rowHeight)
+
+    -- PB fallback: which stored level the targets come from when the current
+    -- key level has no record (the overall PB line tags a fallback source
+    -- with its level, e.g. "PB 25:30 [11]").
+    local row1c = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local fbDrop = GUIFrame:CreateDropdown(row1c, "PB Fallback (no record at this level)", {
+        options = PB_FALLBACK_OPTIONS,
+        value = db.PBFallbackMode or "CLOSEST",
+        callback = function(key)
+            db.PBFallbackMode = key
+            -- Re-resolve a live run against the new mode (LoadSplits re-reads
+            -- pbRec/pbSourceLevel/bestOverall; no-op outside a run).
+            local mod = KitnEssentials:GetModule("MythicPlusTimer")
+            if mod then
+                mod.run.pbRec = nil
+                mod.run.pbSourceLevel = nil
+                if mod.LoadSplits then mod:LoadSplits() end
+                if mod.UpdateSplits then mod:UpdateSplits() end
+            end
+            ApplySettings()
+        end,
+    })
+    row1c:AddWidget(fbDrop, 0.5)
+    manager:Register(fbDrop, "all")
+    card1:AddRow(row1c, Theme.rowHeightLast, 0)
     yOffset = card1:GetNextOffset()
 
     -- Card 2: Font Settings (boss-list rows — ObjectiveFont* keys)

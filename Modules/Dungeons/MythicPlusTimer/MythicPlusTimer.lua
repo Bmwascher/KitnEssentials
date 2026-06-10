@@ -226,6 +226,9 @@ local MPT_DEFAULTS = {
     ShowObjectiveTimes = true,  -- the [clear] bracket on completed rows
     ShowPBDelta = true,         -- the (+/-) delta beside a clear time
     ShowUpcomingPB = true,      -- the gold "PB m:ss" target on pending rows
+    -- No-exact-record PB fallback (WD fallbackSplitBehavior parity + CLOSEST):
+    -- CLOSEST|CLOSEST_LOWER|CLOSEST_HIGHER|HIGHEST|LOWEST|OFF
+    PBFallbackMode = "CLOSEST",
     ObjectiveColor = {0.85, 0.85, 0.85},
     ObjectiveDoneColor = {0.2, 0.82, 0.31},
     SplitAheadColor = {0.25, 0.88, 0.82},
@@ -1181,6 +1184,7 @@ function MPT:ResetRun()
     run.forces._lastQS, run.forces._lastQSParsed = nil, nil
     run.bestOverall = nil
     run.pbRec = nil
+    run.pbSourceLevel = nil
     self:UnregisterRunEvents()
     self:StopTimerLoop()
     -- Clear any stale combat-defer; ApplyTrackerVisibility re-arms it if still locked.
@@ -1329,6 +1333,7 @@ function MPT:HandleSlash(input)
             -- stops rendering targets from the wiped store (false = resolved,
             -- nothing found — UpdateSplits' re-resolve sentinel is nil).
             self.run.pbRec = false
+            self.run.pbSourceLevel = nil
             self.run.bestOverall = nil
             for i = 1, #self.run.objectives do
                 self.run.objectives[i].pbTime = nil

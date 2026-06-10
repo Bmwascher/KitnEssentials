@@ -433,7 +433,14 @@ function MPT:RenderTimer()
         -- Countdown AND live run: keep the gold overall PB visible.
         local pbHex = Hex(MPT.db.PBColor or {0.85, 0.79, 0.54})
         local a = max(0, min(1, MPT.db.PBOpacity or 1))
-        local pbStr = format("%sPB %s|r", pbHex, MPT.FormatTime(MPT.run.bestOverall, false))
+        -- Fallback source tag (WD GetBestSplit sourceLevel parity): when the
+        -- record came from a DIFFERENT key level, show which one you're
+        -- racing — "PB 25:30 [11]" on a 12. Exact-level records stay clean.
+        -- One tag on the overall line only; the per-boss gold targets come
+        -- from the same whole-record resolve, so it speaks for all of them.
+        local src = MPT.run.pbSourceLevel
+        local tag = (src and src ~= (MPT.run.level or 0)) and format(" [%d]", src) or ""
+        local pbStr = format("%sPB %s%s|r", pbHex, MPT.FormatTime(MPT.run.bestOverall, false), tag)
         MPT.SetTextGated(f.timerPBText, pbStr)
         f.timerPBText:SetAlpha(a)
         f.timerPBText:Show()
