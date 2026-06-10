@@ -468,12 +468,12 @@ local function _Brk(s, style)
     return s
 end
 
-local function _PlaceTick(tex, timerBar, barW, barH, tickW, cutoff, maxTime, tr, tg, tb)
+local function _PlaceTick(tex, timerBar, barW, barH, tickW, cutoff, maxTime, tr, tg, tb, ta)
     tex:ClearAllPoints()
     tex:SetSize(tickW, barH)
     local x = KE:PixelSnap(barW * (cutoff / maxTime)) - tickW / 2
     tex:SetPoint("TOPLEFT", timerBar, "TOPLEFT", x, 0)
-    tex:SetColorTexture(tr, tg, tb, 1)
+    tex:SetColorTexture(tr, tg, tb, ta or 1)
     tex:Show()
 end
 
@@ -482,6 +482,16 @@ local function _PlaceLabel(fs, timerBar, barW, cutoff, maxTime)
     local x = KE:PixelSnap(barW * (cutoff / maxTime))
     fs:SetPoint("BOTTOM", timerBar, "TOPLEFT", x, 2)
     fs:Show()
+end
+
+-- Passed-state threshold label (EUI buildLabel port, EUI:1268-1276): a live
+-- cutoff shows the remaining countdown; a missed cutoff greys out and freezes
+-- at the ABSOLUTE cutoff time (replaces the dead "00:00" the clamp produced).
+local function _ThreshLabel(elapsed, cutoff)
+    if elapsed <= cutoff then
+        return MPT.FormatTime(cutoff - elapsed, false)
+    end
+    return "|cff999999" .. MPT.FormatTime(cutoff, false) .. "|r"
 end
 
 ---------------------------------------------------------------------------------
@@ -522,15 +532,22 @@ function MPT:RenderThresholds()
     local t3 = run.thresholds.plus3
     local t2 = run.thresholds.plus2
     local t1 = run.thresholds.plus1
+    local elapsed = run.elapsed or 0
+    -- Passed-state terms: dim a missed cutoff's tick to 35% (EUI recolors
+    -- passed ticks, EUI:1601-1615; KE has a single TickColor so alpha carries
+    -- the state). Each flips at most once per run — two extra cache busts.
+    local p3 = (elapsed > t3) and 1 or 0
+    local p2 = (elapsed > t2) and 1 or 0
 
     -- Geometry cache: all SetPoint/SetSize/SetColorTexture calls are pure
     -- functions of this signature. Skip when nothing structural changed.
     local sig = barW .. ":" .. maxTime .. ":" .. t3 .. ":" .. t2 .. ":" .. t1 .. ":"
                 .. (db.BarHeight or 14) .. ":" .. tr .. ":" .. tg .. ":" .. tb
+                .. ":" .. p3 .. ":" .. p2
     if bars._keThreshSig ~= sig then
         bars._keThreshSig = sig
-        _PlaceTick(bars.tick3, bars.timerBar, barW, barH, tickW, t3, maxTime, tr, tg, tb)
-        _PlaceTick(bars.tick2, bars.timerBar, barW, barH, tickW, t2, maxTime, tr, tg, tb)
+        _PlaceTick(bars.tick3, bars.timerBar, barW, barH, tickW, t3, maxTime, tr, tg, tb, p3 == 1 and 0.35 or 1)
+        _PlaceTick(bars.tick2, bars.timerBar, barW, barH, tickW, t2, maxTime, tr, tg, tb, p2 == 1 and 0.35 or 1)
         if db.ShowThresholdLabels then
             local f = self.frames.root
             _PlaceLabel(f.thresh3Text, bars.timerBar, barW, t3, maxTime)
@@ -548,11 +565,9 @@ function MPT:RenderThresholds()
         self.SetTextGated(f.thresh1Text, ""); f.thresh1Text:Hide()
         return
     end
-    local FormatTime = MPT.FormatTime
-    local elapsed = run.elapsed or 0
-    self.SetTextGated(f.thresh3Text, FormatTime(MPT.ThresholdRemaining(elapsed, t3), false))
-    self.SetTextGated(f.thresh2Text, FormatTime(MPT.ThresholdRemaining(elapsed, t2), false))
-    self.SetTextGated(f.thresh1Text, FormatTime(MPT.ThresholdRemaining(elapsed, t1), false))
+    self.SetTextGated(f.thresh3Text, _ThreshLabel(elapsed, t3))
+    self.SetTextGated(f.thresh2Text, _ThreshLabel(elapsed, t2))
+    self.SetTextGated(f.thresh1Text, _ThreshLabel(elapsed, t1))
     f.thresh3Text:Show(); f.thresh2Text:Show(); f.thresh1Text:Show()
 end
 
