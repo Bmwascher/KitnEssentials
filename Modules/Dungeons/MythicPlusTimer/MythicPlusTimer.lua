@@ -199,6 +199,7 @@ local MPT_DEFAULTS = {
     ForcesPlacement = "EDGE",
     ForcesColor = {0.73, 0.62, 0.13},
     ForcesCompleteColor = {0.2, 0.82, 0.31},
+    ForcesTextColor = {1, 1, 1},  -- percent/count text — independent of the bar fill
     ForcesCustomFormat = ":count:/:totalcount: :percent:",
     ForcesBracketStyle = "NONE",  -- NONE|SQUARE|ROUND (wraps the count portion)
     ForcesBandedColors = false,

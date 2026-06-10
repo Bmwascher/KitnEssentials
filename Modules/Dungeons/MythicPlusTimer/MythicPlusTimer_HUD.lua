@@ -52,6 +52,11 @@ MPT._objRowPool = MPT._objRowPool or KE.FramePool:New(
 -- table allocation each time the gate is checked).
 local _sigBuf = {}
 
+-- Gap (px) on each side of the big timer's "/" separator — roughly half a
+-- space glyph at the default 28px timer font. 2026-06-10 round-3 feedback:
+-- pull both the elapsed and total sides inward toward the separator.
+local TIMER_SEP_GAP = 3
+
 ---------------------------------------------------------------------------------
 -- Gating helpers (module functions — not methods; take widget explicitly)
 ---------------------------------------------------------------------------------
@@ -137,7 +142,8 @@ function MPT:BuildHUD()
 
     root.deathsText    = FS()              -- "N Deaths (+penalty)"
     root.timerText     = FS()              -- changing timer part ("15:00")
-    root.timerSuffixText = FS()            -- static " / 28:00" tail, pinned at the right edge
+    root.timerSepText  = FS()              -- static "/" separator (own FS so both side-gaps are anchor-tunable)
+    root.timerSuffixText = FS()            -- static total ("28:00"), pinned at the right edge
     root.timerPBText   = FS()              -- gold PB beside timer (countdown)
     root.keyText       = FS()              -- "[30]" key bracket
     root.affixText     = FS()              -- affix names (TEXT mode)
@@ -347,24 +353,26 @@ function MPT:RenderTimer()
         end
     end
 
-    -- Split into a changing part and a STATIC " / total" suffix rendered by
-    -- its own right-pinned FontString: re-measuring the combined string every
+    -- Split into a changing part and a STATIC "/" + total rendered by their
+    -- own right-pinned FontStrings: re-measuring the combined string every
     -- second made the whole line shimmer (proportional digit widths + width
-    -- rounding). The suffix never re-renders, so it is pixel-stable; only the
-    -- changing part's left edge moves. DETAIL's tail changes per tick, so it
-    -- stays whole-string (suffix empty).
+    -- rounding). The static side never re-renders, so it is pixel-stable;
+    -- only the changing part's left edge moves. The separator is its own FS
+    -- so both side-gaps come from anchor offsets (TIMER_SEP_GAP) instead of
+    -- full space glyphs — tighter against the "/" per round-3 feedback.
+    -- DETAIL's tail changes per tick, so it stays whole-string (suffix empty).
     local str, suffix
     if mode == "REMAINING" then
         str, suffix = remStr, ""
     elseif mode == "REMAINING_TOTAL" then
-        str, suffix = remStr, " / " .. maxStr
+        str, suffix = remStr, maxStr
     elseif mode == "ELAPSED" then
         str, suffix = elaStr, ""
     elseif mode == "ELAPSED_DETAIL" then
         -- e.g. "21:23 (11:37 / 33:00)" — elapsed (remaining / total)
         str, suffix = elaStr .. " (" .. remStr .. " / " .. maxStr .. ")", ""
     else -- ELAPSED_TOTAL (default)
-        str, suffix = elaStr, " / " .. maxStr
+        str, suffix = elaStr, maxStr
     end
 
     -- Default: white from db.TimerColor.
@@ -385,10 +393,17 @@ function MPT:RenderTimer()
     f.timerText:Show()
     self.SetTextGated(f.timerSuffixText, suffix)
     if suffix ~= "" then
+        self.SetTextGated(f.timerSepText, "/")
         self.SetColorGated(f.timerSuffixText, r, g, b)
+        self.SetColorGated(f.timerSepText, r, g, b)
         f.timerSuffixText:Show()
+        f.timerSepText:Show()
     else
-        f.timerSuffixText:Hide()  -- zero-width: timerText lands at the right edge
+        -- Single-value modes: ApplyLayout anchors timerText straight to the
+        -- frame edge when the suffix is hidden (no separator-gap drift).
+        self.SetTextGated(f.timerSepText, "")
+        f.timerSuffixText:Hide()
+        f.timerSepText:Hide()
     end
 
     -- Overall PB / delta beside the timer (f.timerPBText: created + anchored
@@ -493,12 +508,12 @@ local function _Brk(s, style)
     return s
 end
 
-local function _PlaceTick(tex, timerBar, barW, barH, tickW, cutoff, maxTime, tr, tg, tb, ta)
+local function _PlaceTick(tex, timerBar, barW, barH, tickW, cutoff, maxTime, tr, tg, tb)
     tex:ClearAllPoints()
     tex:SetSize(tickW, barH)
     local x = KE:PixelSnap(barW * (cutoff / maxTime)) - tickW / 2
     tex:SetPoint("TOPLEFT", timerBar, "TOPLEFT", x, 0)
-    tex:SetColorTexture(tr, tg, tb, ta or 1)
+    tex:SetColorTexture(tr, tg, tb, 1)
     tex:Show()
 end
 
@@ -520,14 +535,25 @@ local function _PlaceLabel(fs, timerBar, barW, cutoff, maxTime, place)
     fs:Show()
 end
 
--- Passed-state threshold label (EUI buildLabel port, EUI:1268-1276): a live
--- cutoff shows the remaining countdown; a missed cutoff greys out and freezes
--- at the ABSOLUTE cutoff time (replaces the dead "00:00" the clamp produced).
+-- Threshold label text: a live cutoff shows the remaining countdown with the
+-- leading zero stripped ("04:14" -> "4:14"); a missed cutoff returns nil so
+-- the label (and its tick, via the p3/p2 geometry terms) hides entirely.
+-- 2026-06-10 round-3 feedback — replaces the grey absolute-time passed state
+-- from the EUI buildLabel port.
 local function _ThreshLabel(elapsed, cutoff)
-    if elapsed <= cutoff then
-        return MPT.FormatTime(cutoff - elapsed, false)
+    if elapsed > cutoff then return nil end
+    return (MPT.FormatTime(cutoff - elapsed, false):gsub("^0", "", 1))
+end
+
+-- Apply a threshold label: nil hides (passed cutoff), a string shows.
+local function _SetThreshText(fs, label)
+    if label then
+        MPT.SetTextGated(fs, label)
+        fs:Show()
+    else
+        MPT.SetTextGated(fs, "")
+        fs:Hide()
     end
-    return "|cff999999" .. MPT.FormatTime(cutoff, false) .. "|r"
 end
 
 ---------------------------------------------------------------------------------
@@ -569,9 +595,9 @@ function MPT:RenderThresholds()
     local t2 = run.thresholds.plus2
     local t1 = run.thresholds.plus1
     local elapsed = run.elapsed or 0
-    -- Passed-state terms: dim a missed cutoff's tick to 35% (EUI recolors
-    -- passed ticks, EUI:1601-1615; KE has a single TickColor so alpha carries
-    -- the state). Each flips at most once per run — two extra cache busts.
+    -- Passed-state terms: a missed cutoff's tick (and label, below) hides
+    -- entirely (2026-06-10 round-3 feedback — was a 35% alpha dim). Each
+    -- flips at most once per run — two extra cache busts.
     local p3 = (elapsed > t3) and 1 or 0
     local p2 = (elapsed > t2) and 1 or 0
 
@@ -584,8 +610,10 @@ function MPT:RenderThresholds()
                 .. ":" .. p3 .. ":" .. p2 .. ":" .. place
     if bars._keThreshSig ~= sig then
         bars._keThreshSig = sig
-        _PlaceTick(bars.tick3, bars.timerBar, barW, barH, tickW, t3, maxTime, tr, tg, tb, p3 == 1 and 0.35 or 1)
-        _PlaceTick(bars.tick2, bars.timerBar, barW, barH, tickW, t2, maxTime, tr, tg, tb, p2 == 1 and 0.35 or 1)
+        if p3 == 1 then bars.tick3:Hide()
+        else _PlaceTick(bars.tick3, bars.timerBar, barW, barH, tickW, t3, maxTime, tr, tg, tb) end
+        if p2 == 1 then bars.tick2:Hide()
+        else _PlaceTick(bars.tick2, bars.timerBar, barW, barH, tickW, t2, maxTime, tr, tg, tb) end
         if db.ShowThresholdLabels then
             local f = self.frames.root
             _PlaceLabel(f.thresh3Text, bars.timerBar, barW, t3, maxTime, place)
@@ -603,10 +631,9 @@ function MPT:RenderThresholds()
         self.SetTextGated(f.thresh1Text, ""); f.thresh1Text:Hide()
         return
     end
-    self.SetTextGated(f.thresh3Text, _ThreshLabel(elapsed, t3))
-    self.SetTextGated(f.thresh2Text, _ThreshLabel(elapsed, t2))
-    self.SetTextGated(f.thresh1Text, _ThreshLabel(elapsed, t1))
-    f.thresh3Text:Show(); f.thresh2Text:Show(); f.thresh1Text:Show()
+    _SetThreshText(f.thresh3Text, _ThreshLabel(elapsed, t3))
+    _SetThreshText(f.thresh2Text, _ThreshLabel(elapsed, t2))
+    _SetThreshText(f.thresh1Text, _ThreshLabel(elapsed, t1))
 end
 
 ---------------------------------------------------------------------------------
@@ -751,10 +778,13 @@ end
 -- issecretvalue guard per spec §8 "aggregate GetCriteriaInfo").
 -- Fill = percent/100 via SetValueGated.
 --
--- Color resolution order (highest wins last):
+-- BAR color resolution order (highest wins last):
 --   1. db.ForcesColor (base)
 --   2. db.ForcesBandedColors (quintile palette; skipped at completion)
 --   3. db.ForcesCompleteColor (wins unconditionally at completion)
+-- The percent/count TEXT uses its own db.ForcesTextColor — independent of the
+-- bar fill (2026-06-10 round-3 feedback: recoloring the bar dragged the text
+-- along with it).
 --
 -- ForcesBandPalette bands: [1]=0-20%, [2]=20-40%, [3]=40-60%,
 -- [4]=60-80%, [5]=80-100%, Full=exactly 100%.
@@ -824,8 +854,9 @@ function MPT:RenderForces()
     else -- PERCENT (default)
         str = format("%.2f%%", pct)
     end
+    local tc = db.ForcesTextColor or { 1, 1, 1 }
     self.SetTextGated(f.forcesText, str)
-    self.SetColorGated(f.forcesText, r, g, b)
+    self.SetColorGated(f.forcesText, tc[1], tc[2], tc[3])
     f.forcesText:Show()
 end
 
@@ -1008,6 +1039,7 @@ function MPT:ApplyLayout()
 
         applyFont(f.deathsText,  "Deaths")
         applyFont(f.timerText,   "Timer")
+        applyFont(f.timerSepText, "Timer")
         applyFont(f.timerSuffixText, "Timer")
         applyFont(f.timerPBText, "PB")
         applyFont(f.keyText,     "Key")
@@ -1111,15 +1143,22 @@ function MPT:ApplyLayout()
         end
     end
     row(f.deathsText)
-    -- Timer row: the static " / total" suffix is pinned at the right edge and
-    -- the changing part hangs off its LEFT, so the suffix never shifts while
-    -- the elapsed string is re-measured each second. With an empty (hidden)
-    -- suffix the changing part lands at the right edge itself (zero width).
+    -- Timer row: the static total is pinned at the right edge; the "/" and
+    -- the changing part chain off its LEFT with TIMER_SEP_GAP per side, so
+    -- the static side never shifts while the elapsed string is re-measured
+    -- each second. Single-value modes hide the sep+total pair, and the
+    -- changing part anchors straight to the frame edge (no gap drift).
     if f.timerText:IsShown() then
         f.timerSuffixText:ClearAllPoints()
         f.timerSuffixText:SetPoint("TOPRIGHT", f, "TOPRIGHT", -PAD, y)
+        f.timerSepText:ClearAllPoints()
+        f.timerSepText:SetPoint("TOPRIGHT", f.timerSuffixText, "TOPLEFT", -TIMER_SEP_GAP, 0)
         f.timerText:ClearAllPoints()
-        f.timerText:SetPoint("TOPRIGHT", f.timerSuffixText, "TOPLEFT", 0, 0)
+        if f.timerSuffixText:IsShown() then
+            f.timerText:SetPoint("TOPRIGHT", f.timerSepText, "TOPLEFT", -TIMER_SEP_GAP, 0)
+        else
+            f.timerText:SetPoint("TOPRIGHT", f, "TOPRIGHT", -PAD, y)
+        end
         y = y - (f.timerText:GetStringHeight() or (db.FontSize or 13)) - ROW
     end
     row(f.keyText)  -- affixText anchored left of keyText in Step 2; ICON-mode icons anchored in RenderKey (grow leftward)

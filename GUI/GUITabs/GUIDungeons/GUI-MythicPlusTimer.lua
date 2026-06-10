@@ -420,6 +420,7 @@ BuildForcesTab = function(scrollChild, yOffset, db, manager)
     AddColorRow(colorsCard, db, manager, ApplySettings, {
         { "Forces Bar",      "ForcesColor",         { 0.73, 0.62, 0.13 } },
         { "Forces Complete", "ForcesCompleteColor", { 0.2, 0.82, 0.31 } },
+        { "Forces Text",     "ForcesTextColor",     { 1, 1, 1 } },
     })
 
     local bandedRow = GUIFrame:CreateRow(colorsCard.content, Theme.rowHeight)
