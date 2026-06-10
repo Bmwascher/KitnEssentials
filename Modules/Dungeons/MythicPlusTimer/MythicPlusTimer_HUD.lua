@@ -663,7 +663,7 @@ function MPT:RenderDeaths()
         if MPT.frames.deathsTooltip then MPT.frames.deathsTooltip:Hide() end
         return
     end
-    local dHex = Hex(db.DeathsColor or {1, 0.42, 0.42})
+    local dHex = Hex(db.DeathsColor or {0.85, 0.85, 0.85})
     local pHex = Hex(db.DeathPenaltyColor or {1, 0.42, 0.42})
     local str = format("%s%d Death%s|r  %s(+%s)|r",
         dHex, run.deaths, run.deaths ~= 1 and "s" or "",
@@ -821,7 +821,7 @@ function MPT:RenderObjectives()
             local c = db.ObjectiveDoneColor or { 0.2, 0.82, 0.31 }
             nameFS:SetTextColor(c[1], c[2], c[3])
         else
-            local c = db.ObjectiveColor or { 0.9, 0.9, 0.9 }
+            local c = db.ObjectiveColor or { 0.85, 0.85, 0.85 }
             nameFS:SetTextColor(c[1], c[2], c[3])
         end
 
