@@ -35,6 +35,12 @@ local CHALLENGERS_PERIL_AFFIX_ID = 152  -- adds +90s; thresholds computed on (ma
 -- Leave false in shipping builds.
 local DEBUG_MPT = false
 
+-- CLEU-free death attribution. Midnight removed COMBAT_LOG_EVENT_UNFILTERED,
+-- so new deaths are detected by diffing GetDeathCount and scanning the party
+-- for who newly went dead/ghost. Party GUIDs are non-secret (contract).
+local _prevDeathCount = 0
+local _partyAlive = {}  -- [name] = true while alive
+
 -- Single shared run state (the contract's MPT.run). Reset by MPT:ResetRun(),
 -- which wipes the array tables in place (affixIDs/affixNames/objectives/deathLog);
 -- thresholds is re-assigned (tiny flat table, once per run).
@@ -425,15 +431,73 @@ end
 local tickerFrame = CreateFrame("Frame")
 tickerFrame:Hide()
 
--- Temporary stub; replaced by Task 3.3 with real count-diff attribution.
+-- Temporary stub; replaced by Task 3.4 with the real guarded capture.
+function MPT:RecordDeath(...) end  --luacheck: ignore 212
+
+-- Rebuilds the alive snapshot from the current party state. Called after
+-- CheckForNewDeaths so the next diff starts from an up-to-date baseline.
+local function ScanPartyAlive()
+    wipe(_partyAlive)
+    local prefix = IsInRaid() and "raid" or "party"
+    local count = GetNumGroupMembers()
+    for i = 1, count do
+        local unit = (prefix == "party" and i == count) and "player" or (prefix .. i)
+        local name = UnitName(unit)
+        if name and not UnitIsDeadOrGhost(unit) then
+            _partyAlive[name] = true
+        end
+    end
+    if prefix == "party" then
+        local name = UnitName("player")
+        if name and not UnitIsDeadOrGhost("player") then
+            _partyAlive[name] = true
+        end
+    end
+end
+
+-- Diffs the new death count against the prior snapshot to find who newly died.
+-- Calls MPT:RecordDeath (Task 3.4 stub for now) for each newly-dead member.
+local function CheckForNewDeaths(newDeathCount)
+    if newDeathCount <= _prevDeathCount then
+        _prevDeathCount = newDeathCount
+        return
+    end
+    -- Death count went up — find who is now dead that was alive last tick.
+    local prefix = IsInRaid() and "raid" or "party"
+    local count = GetNumGroupMembers()
+    for i = 1, count do
+        local unit = (prefix == "party" and i == count) and "player" or (prefix .. i)
+        local name = UnitName(unit)
+        if name and _partyAlive[name] and UnitIsDeadOrGhost(unit) then
+            MPT:RecordDeath(nil, name, unit)
+            _partyAlive[name] = nil
+        end
+    end
+    -- Trailing solo-player block: only reached when GetNumGroupMembers()==0.
+    -- The loop's (i == count) branch already maps to "player" inside any party,
+    -- so this fires only for a solo run with no group members iterated above.
+    if prefix == "party" then
+        local name = UnitName("player")
+        if name and _partyAlive[name] and UnitIsDeadOrGhost("player") then
+            MPT:RecordDeath(nil, name, "player")
+            _partyAlive[name] = nil
+        end
+    end
+    _prevDeathCount = newDeathCount
+end
+
 function MPT:OnDeathCountUpdated()
+    local run = MPT.run
     local count, timeLost = C_ChallengeMode.GetDeathCount()
-    -- Dirty-gate the trace: this runs once per tick second; only log real changes.
-    if DEBUG_MPT and (count or 0) ~= self.run.deaths then
+    -- Dirty-gate the trace: only log when count actually changes.
+    if DEBUG_MPT and (count or 0) ~= run.deaths then
         KE:Print(format("[MPT] OnDeathCountUpdated: count=%d timeLost=%d", count or 0, timeLost or 0))
     end
-    self.run.deaths = count or 0
-    self.run.deathTimeLost = timeLost or 0
+    run.deaths = count or 0
+    run.deathTimeLost = timeLost or 0
+    CheckForNewDeaths(run.deaths)   -- attribute the delta to party members
+    ScanPartyAlive()                -- refresh snapshot for the next diff
+    MPT:NotifyRefresh()
 end
 
 -- Both drivers (Blizzard hook + fallback) funnel here. Early-returns unless the
@@ -566,9 +630,9 @@ function MPT:ZONE_CHANGED_NEW_AREA()
 end
 
 -- Authoritative death count changed (always-on tier).
+-- NotifyRefresh is called inside OnDeathCountUpdated — no separate call needed.
 function MPT:CHALLENGE_MODE_DEATH_COUNT_UPDATED()
     self:OnDeathCountUpdated()
-    self:NotifyRefresh()
 end
 
 -- WORLD_STATE_TIMER_START/STOP and instance-info events resolve to a re-check.
@@ -643,6 +707,7 @@ function MPT:StartRun()
     wipe(run.objectives)
     run.forces.current, run.forces.total, run.forces.percent, run.forces.completed = 0, 0, 0, false
     run.forces._lastQS, run.forces._lastQSParsed = nil, nil
+    wipe(run.deathLog); _prevDeathCount = 0; wipe(_partyAlive); ScanPartyAlive()
     self:OnDeathCountUpdated()
 
     if self.LoadSplits then self:LoadSplits() end  -- defined in Task 3.6 (guard removed there)
@@ -706,7 +771,7 @@ function MPT:ResetRun()
     run.lastTickedSec = -1
     run.deaths = 0
     run.deathTimeLost = 0
-    wipe(run.deathLog)
+    wipe(run.deathLog); _prevDeathCount = 0; wipe(_partyAlive)
     wipe(run.affixIDs)
     wipe(run.affixNames)
     wipe(run.affixFileIDs)
