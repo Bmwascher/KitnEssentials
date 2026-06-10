@@ -334,7 +334,12 @@ BuildForcesTab = function(scrollChild, yOffset, db, manager)
     local row3 = GUIFrame:CreateRow(fmtCard.content, Theme.rowHeight)
     local customBox = GUIFrame:CreateEditBox(row3, "Custom Format", {
         value = db.ForcesCustomFormat or ":count:/:totalcount: :percent:",
-        callback = function(text) db.ForcesCustomFormat = text; ApplySettings() end,
+        -- Empty string would render a blank forces label (the backend's `or`
+        -- fallback only fires on nil) — store nil so the default token string wins.
+        callback = function(text)
+            db.ForcesCustomFormat = (text ~= "" and text) or nil
+            ApplySettings()
+        end,
     })
     row3:AddWidget(customBox, 1)
     manager:Register(customBox, "forcesCustom")
