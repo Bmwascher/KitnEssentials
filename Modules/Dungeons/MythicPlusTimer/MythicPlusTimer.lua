@@ -470,3 +470,186 @@ end
 
 -- Temporary stub; replaced by Task 2.5 (MythicPlusTimer_HUD.lua).
 function MPT:Render() end
+
+---------------------------------------------------------------------------------
+-- Run lifecycle (Task 1.7)
+---------------------------------------------------------------------------------
+
+-- Returns true if the affixIDs list contains Challenger's Peril (ID 152).
+-- Called once per run start to determine peril-aware threshold calculation.
+local function HasPerilAffix(affixIDs)
+    if not affixIDs then return false end
+    for _, id in ipairs(affixIDs) do
+        if id == CHALLENGERS_PERIL_AFFIX_ID then return true end
+    end
+    return false
+end
+
+function MPT:StartRun()
+    -- preview teardown (ShowPreview/HidePreview: Task 2.6); isPreview is nil until then, so this is inert in Phase 1
+    if self.isPreview then self:HidePreview() end
+    local run = self.run
+    if run.active then return end  -- idempotent guard
+    local mapID = C_ChallengeMode.GetActiveChallengeMapID()
+    if not mapID then return end
+
+    local _, _, timeLimit = C_ChallengeMode.GetMapUIInfo(mapID)
+    local level, affixIDs = C_ChallengeMode.GetActiveKeystoneInfo()
+
+    run.active = true
+    run.completed = false
+    run.countdown = true  -- cleared once the clock leaves 0:00 (HUD phase)
+    run.mapID = mapID
+    run.level = level or 0
+    run.maxTime = timeLimit or 0
+    run.elapsed = 0
+    run.lastTickedSec = -1
+    run.affixIDs = affixIDs or {}
+    -- Cache affix names ONCE (never change mid-run; avoids per-render GetAffixInfo).
+    wipe(run.affixNames)
+    if affixIDs then
+        for i, id in ipairs(affixIDs) do
+            run.affixNames[i] = C_ChallengeMode.GetAffixInfo(id) or ""
+        end
+    end
+    run.thresholds = MPT.ComputeThresholds(run.maxTime, HasPerilAffix(run.affixIDs))
+    wipe(run.objectives)
+    run.forces.current, run.forces.total, run.forces.percent, run.forces.completed = 0, 0, 0, false
+    self:OnDeathCountUpdated()
+
+    if self.LoadSplits then self:LoadSplits() end  -- defined in Task 3.6 (guard removed there)
+    if self.RegisterRunEvents then self:RegisterRunEvents() end  -- Task 1.8 removes this guard
+    self:StartTimerLoop()
+    self:OnTimerTick()                    -- prime the display immediately
+    self:ApplyTrackerVisibility()         -- QoL hide (combat-guarded, Step 5)
+    self:NotifyRefresh()
+end
+
+function MPT:CompleteRun()
+    -- preview teardown (ShowPreview/HidePreview: Task 2.6); isPreview is nil until then, so this is inert in Phase 1
+    if self.isPreview then self:HidePreview() end
+    local run = self.run
+    if run.completed then return end  -- idempotent guard
+    run.completed = true
+    run.active = false
+    run.countdown = false
+    self:StopTimerLoop()
+    -- Authoritative final time (ms). GetWorldElapsedTime can go secret/stale ("99:99")
+    -- after depletion, so always prefer GetChallengeCompletionInfo here.
+    local info = C_ChallengeMode.GetChallengeCompletionInfo and C_ChallengeMode.GetChallengeCompletionInfo()
+    if info and info.time and info.time > 0 then
+        run.elapsed = info.time / 1000
+    else
+        local _, e = GetWorldElapsedTime(1)
+        run.elapsed = e or run.elapsed
+    end
+    self:UpdateObjectives()  -- backfill any final clear times
+    if self.UpdateSplits then self:UpdateSplits() end  -- Task 3.6: commit best per-boss + overall (guard removed there)
+    self:NotifyRefresh()
+end
+
+function MPT:ResetRun()
+    -- preview teardown (ShowPreview/HidePreview: Task 2.6); isPreview is nil until then, so this is inert in Phase 1
+    if self.isPreview then self:HidePreview() end
+    local run = self.run
+    if not run.active and not run.completed and run.mapID == nil then return end  -- idempotent
+    run.active = false
+    run.completed = false
+    run.countdown = false
+    run.mapID = nil
+    run.level = 0
+    run.maxTime = 0
+    run.elapsed = 0
+    run.lastTickedSec = -1
+    run.deaths = 0
+    run.deathTimeLost = 0
+    wipe(run.deathLog)
+    wipe(run.affixIDs)
+    wipe(run.affixNames)
+    wipe(run.objectives)
+    run.thresholds = { plus1 = 0, plus2 = 0, plus3 = 0 }
+    run.forces.current, run.forces.total, run.forces.percent, run.forces.completed = 0, 0, 0, false
+    run.bestOverall = nil
+    self:StopTimerLoop()
+    self:ApplyTrackerVisibility()
+    self:NotifyRefresh()
+end
+
+function MPT:CheckForActiveRun()
+    local mapID = C_ChallengeMode.GetActiveChallengeMapID()
+    if mapID then
+        self:StartRun()
+    else
+        self:ResetRun()
+    end
+end
+
+---------------------------------------------------------------------------------
+-- Tracker suppression system (Task 1.7 Step 5 / Task 5.2 Steps 1-2 early)
+---------------------------------------------------------------------------------
+
+local _trackerHookInstalled = false
+
+-- True while the tracker should stay hidden: during the active challenge AND
+-- after it completes but before the player leaves the dungeon instance.
+-- Blizzard's end-of-run fanfare flips IsChallengeModeActive() back to false
+-- while the user is still inside -- without the completed + party gate the
+-- tracker pops back up for the last seconds before zone-out
+-- (References/M+ Timer/EllesmereUI/EllesmereUIMythicTimer/EllesmereUIMythicTimer.lua:548-559).
+function MPT:ShouldHideTracker()
+    if not (self.db and self.db.HideBlizzardTracker) then return false end
+    if self.run and self.run.active then return true end
+    if self.run and self.run.completed then
+        local _, instanceType = GetInstanceInfo()
+        return instanceType == "party"
+    end
+    return false
+end
+
+function MPT:InstallTrackerHook()
+    if _trackerHookInstalled then return end
+    local otf = _G.ObjectiveTrackerFrame
+    if not otf then return end
+    _trackerHookInstalled = true
+    -- Re-hide on every Blizzard Show attempt while ShouldHideTracker holds. No
+    -- SetParent (avoids tainting the secure scenario tree); combat-guarded via
+    -- ApplyTrackerVisibility per spec section 8.
+    hooksecurefunc(otf, "Show", function()
+        if not MPT:ShouldHideTracker() then return end
+        MPT:ApplyTrackerVisibility()
+    end)
+end
+
+function MPT:ApplyTrackerVisibility()
+    self:InstallTrackerHook()
+    local otf = _G.ObjectiveTrackerFrame
+    if not otf then return end
+
+    local wantHide = self:ShouldHideTracker()
+
+    -- ObjectiveTrackerFrame is protected: never Hide/Show during combat lockdown;
+    -- defer to PLAYER_REGEN_ENABLED (spec section 8 tracker rule).
+    if InCombatLockdown() then
+        self._trackerPending = true
+        self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnTrackerRegenEnabled")
+        return
+    end
+
+    -- Show-ownership gate: only re-Show a tracker WE hid (_keHidTracker),
+    -- never one another addon hid (e.g. KalielsTracker) — Show() unconditionally
+    -- would fight other tracker addons on every lifecycle pass.
+    if wantHide then
+        if otf:IsShown() then otf:Hide() end
+        self._keHidTracker = true
+    elseif self._keHidTracker then
+        if not otf:IsShown() then otf:Show() end
+        self._keHidTracker = nil
+    end
+end
+
+function MPT:OnTrackerRegenEnabled()
+    if not self._trackerPending then return end
+    self._trackerPending = nil
+    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    self:ApplyTrackerVisibility()
+end
