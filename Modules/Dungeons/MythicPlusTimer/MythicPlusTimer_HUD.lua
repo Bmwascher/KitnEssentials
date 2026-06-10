@@ -236,7 +236,11 @@ function MPT:BuildHUD()
         for i = 1, #log do
             list[i] = log[i]
         end
-        table.sort(list, function(a, b) return a.t < b.t end)
+        -- Tiebreak on name so equal-second deaths keep a stable row order.
+        table.sort(list, function(a, b)
+            if a.t ~= b.t then return a.t < b.t end
+            return (a.name or "") < (b.name or "")
+        end)
 
         EnsureRows(#list)
 
@@ -644,11 +648,15 @@ function MPT:RenderDeaths()
     fs:Show()
     -- Hit frame sized to the actual text so the hover region matches.
     -- (fs's anchor + font are owned by ApplyLayout, Task 2.5.)
-    local tw = fs:GetStringWidth() or 0
-    local th = fs:GetStringHeight() or (db.DeathsFontSize or db.FontSize or 13)
-    hit:ClearAllPoints()
-    hit:SetSize(tw, th)
-    hit:SetPoint("TOPRIGHT", fs, "TOPRIGHT", 0, 0)
+    -- Geometry gated on the headline string — only re-measure when it changed.
+    if hit._keForString ~= str then
+        hit._keForString = str
+        local tw = fs:GetStringWidth() or 0
+        local th = fs:GetStringHeight() or (db.DeathsFontSize or db.FontSize or 13)
+        hit:ClearAllPoints()
+        hit:SetSize(tw, th)
+        hit:SetPoint("TOPRIGHT", fs, "TOPRIGHT", 0, 0)
+    end
     hit:Show()
 end
 
