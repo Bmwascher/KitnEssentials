@@ -285,9 +285,13 @@ function MPT:UpdateObjectives()
             end
             obj.criteriaIndex = i
             -- Strip Blizzard's leading checkmark (U+2713 = 0xE2 0x9C 0x93) + dash.
+            -- Gated on the raw string — this fires per SCENARIO_CRITERIA_UPDATE,
+            -- and names are stable after CHALLENGE_MODE_START; skip the gsub churn.
             local rawName = info.description or ("Objective " .. i)
-            rawName = rawName:gsub("^\226\156\147%s*", ""):gsub("^%-%s*", "")
-            obj.name = rawName
+            if rawName ~= obj._rawName then
+                obj._rawName = rawName
+                obj.name = rawName:gsub("^\226\156\147%s*", ""):gsub("^%-%s*", "")
+            end
             local wasCompleted = obj.completed
             obj.completed = info.completed and true or false
             if obj.completed and not wasCompleted and not obj.clearTime then
@@ -300,6 +304,8 @@ function MPT:UpdateObjectives()
         end
     end
     -- Trim stale rows from a previous step/run (EllesmereUI :451-453 pattern).
+    -- Intentional data-loss on step transition: trimmed rows drop their clearTime.
+    -- Criterion order is stable within a step (EUI + WarpDeplete both rely on it).
     for j = #run.objectives, idx + 1, -1 do
         run.objectives[j] = nil
     end
