@@ -434,6 +434,40 @@ function MPT:OnDisable()
     -- Overlay teardown: UnregisterAllEvents below kills the plate events, but the
     -- 0.5s nameplate ticker and any attached plate texts survive without this.
     self:SetOverlayActive(false)
+    -- Stale combat-defer from an earlier in-combat hide attempt; the AceEvent
+    -- registration it pairs with dies in UnregisterAllEvents below anyway.
+    self._trackerPending = nil
+    -- Restore a tracker WE hid (mid-key disable would otherwise leave it hidden
+    -- until /reload). Cannot route through ApplyTrackerVisibility: run.active is
+    -- still true so ShouldHideTracker() would re-hide, and its in-combat defer
+    -- uses AceEvent, which AceAddon auto-unregisters on module disable.
+    if self._keHidTracker then
+        local otf = _G.ObjectiveTrackerFrame
+        if otf and InCombatLockdown() then
+            -- Protected frame: defer the Show via a dedicated event frame that
+            -- survives AceEvent teardown. Created lazily once, reused after.
+            if not self._trackerRestoreFrame then
+                self._trackerRestoreFrame = CreateFrame("Frame")
+                self._trackerRestoreFrame:SetScript("OnEvent", function(frame)
+                    frame:UnregisterAllEvents()
+                    -- Re-enable race guard: if the module was re-enabled before
+                    -- combat ended, ApplyTrackerVisibility owns the tracker again
+                    -- (it may have legitimately re-hidden it) — do nothing.
+                    if MPT:IsEnabled() then return end
+                    local tracker = _G.ObjectiveTrackerFrame
+                    if tracker and not tracker:IsShown() then tracker:Show() end
+                    MPT._keHidTracker = nil
+                    if DEBUG_MPT then KE:Print("[MPT] OnDisable: deferred tracker restore fired") end
+                end)
+            end
+            self._trackerRestoreFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+            if DEBUG_MPT then KE:Print("[MPT] OnDisable: tracker restore deferred (in combat)") end
+        else
+            if otf and not otf:IsShown() then otf:Show() end
+            self._keHidTracker = nil
+            if DEBUG_MPT then KE:Print("[MPT] OnDisable: tracker restored") end
+        end
+    end
     self:UnregisterAllEvents()
     self:UnhookAll()
 end
