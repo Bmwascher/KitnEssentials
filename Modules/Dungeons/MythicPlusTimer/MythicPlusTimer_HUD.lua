@@ -19,7 +19,7 @@ local format = string.format
 -- Color array → "|cffRRGGBB" prefix (used by RenderObjectives per-row).
 -- floor already declared above; do NOT re-declare it.
 local function Hex(c)
-    return string.format("|cff%02x%02x%02x", floor((c[1] or 1) * 255), floor((c[2] or 1) * 255), floor((c[3] or 1) * 255))
+    return format("|cff%02x%02x%02x", floor((c[1] or 1) * 255), floor((c[2] or 1) * 255), floor((c[3] or 1) * 255))
 end
 
 -- Objective-row frame pool (Step 1 of Task 3.2).
@@ -34,7 +34,7 @@ MPT._objRowPool = MPT._objRowPool or KE.FramePool:New(
         local nameFS = row:CreateFontString(nil, "OVERLAY")
         nameFS:SetWordWrap(false)
         nameFS:SetNonSpaceWrap(false)
-        nameFS:SetJustifyH("LEFT")
+        nameFS:SetJustifyH("RIGHT")  -- whole HUD is right-aligned (user design)
         local timeFS = row:CreateFontString(nil, "OVERLAY")
         timeFS:SetWordWrap(false)
         timeFS:SetNonSpaceWrap(false)
@@ -687,19 +687,19 @@ function MPT:RenderObjectives()
         if obj.completed and obj.clearTime and obj.clearTime > 0 then
             timeFS:SetAlpha(1)  -- clear a possible pending-row PBOpacity dim on this pooled slot
             local doneHex = Hex(db.ObjectiveDoneColor or { 0.2, 0.82, 0.31 })
-            rightText = string.format("%s[%s]|r", doneHex, MPT.FormatTime(obj.clearTime, false))
+            rightText = format("%s[%s]|r", doneHex, MPT.FormatTime(obj.clearTime, false))
             if db.ShowPBDelta and obj.pbTime then
                 local diff = obj.clearTime - obj.pbTime
                 local col  = diff <= 0 and (db.SplitAheadColor or { 0.25, 0.88, 0.82 })
                                        or  (db.SplitBehindColor or { 1, 0.42, 0.42 })
                 local sign = diff < 0 and "-" or "+"
                 local dStr = (diff == 0) and "0:00" or MPT.FormatTime(abs(diff), false)
-                rightText  = rightText .. string.format("  %s(%s%s)|r", Hex(col), sign, dStr)
+                rightText  = rightText .. format("  %s(%s%s)|r", Hex(col), sign, dStr)
             end
         elseif (not obj.completed) and db.ShowObjectiveTimes ~= false and obj.pbTime then
             local pbHex = Hex(db.PBColor or { 0.85, 0.79, 0.54 })
             local a = max(0, min(1, db.PBOpacity or 1))
-            rightText = string.format("%sPB %s|r", pbHex, MPT.FormatTime(obj.pbTime, false))
+            rightText = format("%sPB %s|r", pbHex, MPT.FormatTime(obj.pbTime, false))
             if a < 1 then timeFS:SetAlpha(a) else timeFS:SetAlpha(1) end
         end
 
@@ -707,8 +707,10 @@ function MPT:RenderObjectives()
         timeFS:ClearAllPoints()
         if rightText ~= "" then
             MPT.SetTextGated(timeFS, rightText)
-            timeFS:SetTextColor(1, 1, 1, 1)
+            timeFS:SetTextColor(1, 1, 1)  -- 3-arg form (SOFTOUTLINE hook convention)
             timeFS:SetWidth(0)
+            -- GetStringWidth is safe here: RenderObjectives runs only from the
+            -- C_Timer.After(0) deferred layout path, never a tainted event handler.
             local timeW = timeFS:GetStringWidth() or 0
             timeFS:SetPoint("TOPRIGHT", root, "TOPRIGHT", -PAD, y)
             nameFS:SetPoint("TOPRIGHT", timeFS, "TOPLEFT", -4, 0)
@@ -722,7 +724,6 @@ function MPT:RenderObjectives()
             nameFS:SetWidth(innerW)
         end
         MPT.SetTextGated(nameFS, obj.name)
-        nameFS:SetJustifyH("RIGHT")
         nameFS:Show()
         y = y - (nameFS:GetStringHeight() or size) - oGap
     end
