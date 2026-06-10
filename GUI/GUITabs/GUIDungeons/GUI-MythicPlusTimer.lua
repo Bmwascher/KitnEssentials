@@ -73,7 +73,7 @@ local FORCES_BRACKET_OPTIONS = {
 }
 
 -- Forward declarations — assigned in Tasks 5.5–5.10.
-local BuildTimerTab, BuildForcesTab, BuildObjectivesTab, BuildDeathsTab, BuildOverlayTab, BuildGeneralTab -- luacheck: ignore 221
+local BuildTimerTab, BuildForcesTab, BuildObjectivesTab, BuildDeathsTab, BuildOverlayTab, BuildGeneralTab
 
 BuildTimerTab = function(scrollChild, yOffset, db, manager)
     manager:SetCondition("backdrop", function()
@@ -652,6 +652,73 @@ BuildOverlayTab = function(scrollChild, yOffset, db, manager)
     manager:Register(colorPicker, "overlayCustomColor")
     card4:AddRow(row4, Theme.rowHeightLast, 0)
     yOffset = card4:GetNextOffset()
+    return yOffset
+end
+
+BuildGeneralTab = function(scrollChild, yOffset, db, manager)
+    -- Card 1: Quality of Life toggles
+    local card1 = GUIFrame:CreateCard(scrollChild, "Quality of Life", yOffset)
+    manager:Register(card1, "all")
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local keyCheck = GUIFrame:CreateCheckbox(row1, "Auto-Insert Keystone", {
+        value = db.AutoInsertKeystone ~= false,
+        callback = function(checked) db.AutoInsertKeystone = checked end,
+    })
+    row1:AddWidget(keyCheck, 0.5)
+    manager:Register(keyCheck, "all")
+    local trackerCheck = GUIFrame:CreateCheckbox(row1, "Hide Blizzard Tracker", {
+        value = db.HideBlizzardTracker ~= false,
+        callback = function(checked)
+            db.HideBlizzardTracker = checked
+            local M = GetMPT()
+            if M and M.ApplyTrackerVisibility then M:ApplyTrackerVisibility() end
+        end,
+    })
+    row1:AddWidget(trackerCheck, 0.5)
+    manager:Register(trackerCheck, "all")
+    card1:AddRow(row1, Theme.rowHeight)
+
+    local row2 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local chatCheck = GUIFrame:CreateCheckbox(row2, "Post Boss Splits to Chat", {
+        value = db.ChatOutputSplits == true,
+        callback = function(checked) db.ChatOutputSplits = checked end,
+    })
+    row2:AddWidget(chatCheck, 1)
+    manager:Register(chatCheck, "all")
+    card1:AddRow(row2, Theme.rowHeightLast, 0)
+    yOffset = card1:GetNextOffset()
+
+    -- Card 2: Affixes & Key display + colors
+    local card2 = GUIFrame:CreateCard(scrollChild, "Affixes & Key", yOffset)
+    manager:Register(card2, "all")
+    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local affixCheck = GUIFrame:CreateCheckbox(row2a, "Show Affixes", {
+        value = db.ShowAffixes ~= false,
+        callback = function(checked) db.ShowAffixes = checked; ApplySettings() end,
+    })
+    row2a:AddWidget(affixCheck, 0.5)
+    manager:Register(affixCheck, "all")
+    local keyLvlCheck = GUIFrame:CreateCheckbox(row2a, "Show Key Level", {
+        value = db.ShowKeyLevel ~= false,
+        callback = function(checked) db.ShowKeyLevel = checked; ApplySettings() end,
+    })
+    row2a:AddWidget(keyLvlCheck, 0.5)
+    manager:Register(keyLvlCheck, "all")
+    card2:AddRow(row2a, Theme.rowHeight)
+
+    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local affixModeDrop = GUIFrame:CreateDropdown(row2b, "Affix Display", {
+        options = { { key = "TEXT", text = "Text" }, { key = "ICON", text = "Icons" } },
+        value = db.AffixMode or "TEXT",
+        callback = function(key) db.AffixMode = key; ApplySettings() end,
+    })
+    row2b:AddWidget(affixModeDrop, 1)
+    manager:Register(affixModeDrop, "all")
+    card2:AddRow(row2b, Theme.rowHeight)
+
+    AddColor(card2, db, manager, ApplySettings, "Affix Text", "AffixColor", { 0.69, 0.69, 0.69 })
+    AddColor(card2, db, manager, ApplySettings, "Key Level", "KeyColor", { 0.69, 0.69, 0.69 }, true)
+    yOffset = card2:GetNextOffset()
     return yOffset
 end
 
