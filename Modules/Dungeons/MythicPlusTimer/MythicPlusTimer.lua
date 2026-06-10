@@ -275,6 +275,7 @@ end
 -- pbTime is left nil here — MPT:ResolvePB (Splits phase) fills it per run.
 -- Plain reads: GetCriteriaInfo description/completed/elapsed and
 -- GetStepInfo are non-secret (contract "DO NOT GUARD" set).
+-- (GetWorldElapsedTime removed from this path; info.elapsed back-dates instead.)
 -- Reload-safe: clearTime is back-stamped via _activeRunSplits so a /reload
 -- mid-run restores prior kill times without re-triggering chat output (Task 5.3).
 function MPT:UpdateObjectives()
@@ -321,8 +322,8 @@ function MPT:UpdateObjectives()
                     -- fresh-stamp arm ONLY (never the restoration arm above), so a
                     -- /reload mid-run cannot re-post a boss split to chat.
                 end
-            elseif not obj.completed then
-                obj.clearTime = nil
+            elseif not obj.completed and obj.clearTime then
+                obj.clearTime = nil  -- criterion reverted; guard skips the per-tick dead write
             end
         end
     end
