@@ -1077,6 +1077,13 @@ function MPT:RegWithEditMode()
             self.db.AnchorPoint = pos.AnchorTo
             self.db.XOffset    = pos.XOffset
             self.db.YOffset    = pos.YOffset
+            -- Bust the config-skip gate: KE:ApplyFramePosition lives in
+            -- ApplyLayout's `not _keConfigDone` block, which has already run
+            -- by drag time. Without this the drag persists to DB but the
+            -- anchor-relative position is never re-applied (frame would jump
+            -- on next /reload).
+            local f = self.frames and self.frames.root
+            if f then f._keConfigDone = nil end
             self:ApplyLayout()  -- re-applies KE:ApplyFramePosition on frames.root
         end,
         getParentFrame = function()
