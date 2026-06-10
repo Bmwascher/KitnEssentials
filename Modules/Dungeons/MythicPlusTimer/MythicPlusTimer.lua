@@ -431,8 +431,33 @@ end
 local tickerFrame = CreateFrame("Frame")
 tickerFrame:Hide()
 
--- Temporary stub; replaced by Task 3.4 with the real guarded capture.
-function MPT:RecordDeath(...) end  --luacheck: ignore 212
+-- Append one death to the log. Reconciled against GetDeathCount so the log
+-- never drifts (the headline is authoritative; this is the hover detail).
+-- guid path: guarded (enemy GUIDs are secret). unit/name path: party-scan,
+-- non-secret. Either way we only ever resolve party members.
+function MPT:RecordDeath(guid, knownName, knownUnit)
+    local run = MPT.run
+    local name, class
+    if knownUnit then
+        name = knownName or UnitName(knownUnit)
+        class = select(2, UnitClass(knownUnit))
+    elseif guid then
+        if issecretvalue(guid) then return end          -- enemy GUID -> bail
+        name = knownName or UnitNameFromGUID(guid)
+        class = UnitClassFromGUID(guid)
+        if name and not UnitInParty(name) and name ~= UnitName("player") then
+            return                                       -- non-party death, ignore
+        end
+    else
+        return
+    end
+    if not name then return end
+    run.deathLog[#run.deathLog + 1] = {
+        t = run.elapsed or 0,
+        name = name,
+        class = class,
+    }
+end
 
 -- Rebuilds the alive snapshot from the current party state. Called after
 -- CheckForNewDeaths so the next diff starts from an up-to-date baseline.
@@ -497,6 +522,11 @@ function MPT:OnDeathCountUpdated()
     run.deathTimeLost = timeLost or 0
     CheckForNewDeaths(run.deaths)   -- attribute the delta to party members
     ScanPartyAlive()                -- refresh snapshot for the next diff
+    -- Reconcile log: authoritative count caps the log; if UNIT_DIED and the
+    -- party-scan both recorded the same death, drop oldest surplus entries.
+    while #MPT.run.deathLog > MPT.run.deaths do
+        table.remove(MPT.run.deathLog, 1)
+    end
     MPT:NotifyRefresh()
 end
 
@@ -583,8 +613,7 @@ end
 
 -- Registered only during an active run (high-frequency; would wake on every
 -- quest/scenario update outside a key). Per the contract's run-only tier.
--- UNIT_DIED registration arrives in Task 3.4 (handler must exist first).
-local RUN_EVENTS = { "SCENARIO_CRITERIA_UPDATE", "SCENARIO_POI_UPDATE", "ZONE_CHANGED_NEW_AREA" }
+local RUN_EVENTS = { "SCENARIO_CRITERIA_UPDATE", "SCENARIO_POI_UPDATE", "ZONE_CHANGED_NEW_AREA", "UNIT_DIED" }
 
 function MPT:RegisterRunEvents()
     if DEBUG_MPT then KE:Print("[MPT] run events registered") end
@@ -627,6 +656,14 @@ MPT.SCENARIO_POI_UPDATE = MPT.SCENARIO_CRITERIA_UPDATE
 function MPT:ZONE_CHANGED_NEW_AREA()
     if not self.run.active then return end  -- run-only event; belt-and-suspenders
     self:NotifyRefresh()
+end
+
+-- Alternate death capture path: catches deaths the party-scan diff may miss
+-- (e.g. rapid multi-death bursts between GetDeathCount ticks). Enemy mob deaths
+-- also fire this event — guard against their GUIDs being secret.
+function MPT:UNIT_DIED(_, guid)
+    if not guid or issecretvalue(guid) then return end
+    MPT:RecordDeath(guid)
 end
 
 -- Authoritative death count changed (always-on tier).
