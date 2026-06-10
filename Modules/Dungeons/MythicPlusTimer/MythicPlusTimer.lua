@@ -821,6 +821,7 @@ function MPT:ResetRun()
     run.forces.current, run.forces.total, run.forces.percent, run.forces.completed = 0, 0, 0, false
     run.forces._lastQS, run.forces._lastQSParsed = nil, nil
     run.bestOverall = nil
+    run.pbRec = nil
     MPT.db._activeRunSplits = nil
     self:UnregisterRunEvents()
     self:StopTimerLoop()

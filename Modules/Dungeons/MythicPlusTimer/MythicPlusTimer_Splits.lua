@@ -22,8 +22,13 @@ local function GetStore()
 end
 
 -- Canonical key format: "mapID:level" (e.g. "375:15").
-local function KeyFor(mapID, level)
+-- Single definition used by KeyFor, ResolvePBFrom, and any future store accessor.
+local function BuildKey(mapID, level)
     return format("%s:%d", tostring(mapID), level or 0)
+end
+
+local function KeyFor(mapID, level)
+    return BuildKey(mapID, level)
 end
 
 ---------------------------------------------------------------------------------
@@ -33,10 +38,14 @@ end
 -- Ensures the store exists and seeds run.bestOverall for the countdown preview.
 -- Per-objective pbTime seeding is NOT done here — it is owned by UpdateSplits,
 -- which the priming OnTimerTick triggers via UpdateObjectives.
+-- Also caches run.pbRec (false = resolved but no record found) so UpdateSplits
+-- does not re-scan the store on every tick.
 function MPT:LoadSplits()
-    local run = MPT.run
+    local run = self.run
     if not run.mapID then return end
     local rec = MPT:ResolvePB(run.mapID, run.level, run.affixIDs)
+    -- Cache once per run. false = "resolved, nothing found" (nil = not yet resolved).
+    run.pbRec = rec or false
     run.bestOverall = rec and rec.overall or nil
 end
 
@@ -55,7 +64,7 @@ function MPT.ResolvePBFrom(store, mapID, level, _affixIDs)
     if not store or not mapID then return nil end
 
     -- 1. Exact "mapID:level".
-    local exact = store[format("%s:%d", tostring(mapID), level or 0)]
+    local exact = store[BuildKey(mapID, level)]
     if exact and exact.best then return exact.best end
 
     -- 2. +affix scope: prefer a same-level record carrying matching affixes.
@@ -90,16 +99,27 @@ end
 
 -- Called from the tail of UpdateObjectives (via SCENARIO_CRITERIA_UPDATE) and
 -- from CompleteRun. Keeps pbTime targets live for all pending objective rows.
+-- Uses run.pbRec cached by LoadSplits (false = no record; nil = LoadSplits
+-- never ran, resolve once defensively and cache).
 function MPT:UpdateSplits()
-    local run = MPT.run
+    local run = self.run
     if not run.mapID then return end
-    local rec = MPT:ResolvePB(run.mapID, run.level, run.affixIDs)
-    run.bestOverall = rec and rec.overall or run.bestOverall
+    -- Use the cached record. If nil (defensive: LoadSplits not yet called),
+    -- resolve once and cache so subsequent ticks are free.
+    local rec = run.pbRec
+    if rec == nil then
+        local resolved = MPT:ResolvePB(run.mapID, run.level, run.affixIDs)
+        rec = resolved or false
+        run.pbRec = rec
+    end
+    -- Normalise: false means no record; treat as nil for downstream logic.
+    local r = rec or nil
+    run.bestOverall = r and r.overall or run.bestOverall
     for i = 1, #run.objectives do
         local obj = run.objectives[i]
         -- pbTime drives both the cyan/red delta (completed rows) and the gold
         -- target time (pending rows). Resolve once per objective from the record.
-        obj.pbTime = rec and rec[obj.criteriaIndex] or obj.pbTime
+        obj.pbTime = r and r[obj.criteriaIndex] or obj.pbTime
     end
 end
 
@@ -110,16 +130,20 @@ end
 -- Writes per-boss clear times and the overall run time, but only when they
 -- improve the stored record. Called after the final UpdateObjectives + UpdateSplits
 -- so run.bestOverall still holds the PRE-run record for completion-screen deltas.
+-- ORDERING CONTRACT: must be called AFTER UpdateSplits (which reads the pre-run
+-- record). CompleteRun: UpdateObjectives -> UpdateSplits -> CommitSplits.
+-- Reversing CommitSplits/UpdateSplits would zero the completion-screen delta.
 function MPT:CommitSplits()
-    local run = MPT.run
+    local run = self.run
     if not run.mapID then return end
     local store = GetStore()
     local key = KeyFor(run.mapID, run.level)
     local entry = store[key]
     if not entry then entry = { best = {} }; store[key] = entry end
     entry.best = entry.best or {}
-    entry.lastSeenSeason = C_MythicPlus and C_MythicPlus.GetCurrentSeason
-        and C_MythicPlus.GetCurrentSeason() or entry.lastSeenSeason
+    local seasonFn = C_MythicPlus and C_MythicPlus.GetCurrentSeason
+    local season = seasonFn and seasonFn()
+    entry.lastSeenSeason = season or entry.lastSeenSeason
     -- Per-boss: only write when this clear time beats the stored record.
     for i = 1, #run.objectives do
         local obj = run.objectives[i]
@@ -145,8 +169,8 @@ end
 -- Drops any stored record whose lastSeenSeason is set and older than the
 -- current season. If the season cannot be determined, keep everything.
 function MPT:PurgeStaleSplits()
-    local season = C_MythicPlus and C_MythicPlus.GetCurrentSeason
-        and C_MythicPlus.GetCurrentSeason()
+    local seasonFn = C_MythicPlus and C_MythicPlus.GetCurrentSeason
+    local season = seasonFn and seasonFn()
     if not season or season <= 0 then return end  -- season unknown -> keep everything
     local store = GetStore()
     for key, rec in pairs(store) do
