@@ -608,7 +608,8 @@ function MPT:RenderKey()
     if db.AffixMode == "ICON" and db.ShowAffixes then
         local ids     = run.affixIDs     or {}
         local fileIDs = run.affixFileIDs or {}
-        local size = db.FontSize or 13
+        -- Same fallback chain as ApplyLayout's applyFont "Affix" prefix.
+        local size = db.AffixFontSize or db.FontSize or 13
         local prev
         for i = 1, #ids do
             local fileID = fileIDs[i]
@@ -913,6 +914,7 @@ function MPT:ApplyLayout()
 
     -- Locals shared by both the config section and the stacking pass below.
     local PAD  = 12
+    local ROW  = 6
     local barW = db.BarWidth  or 300
     local barH = db.BarHeight or 14
     local bars = self.frames.bars
@@ -948,7 +950,10 @@ function MPT:ApplyLayout()
         f:SetWidth(barW + PAD * 2)
         bars.timerWrap:SetSize(barW, barH)
         bars.forcesWrap:SetSize(barW, barH)
-        bars:SetWidth(barW)
+        -- Height is load-bearing: a one-point + width-only frame has no
+        -- resolvable rect, so WoW refuses to render every child anchored
+        -- inside it (both bars, ticks, and the bar-relative threshold labels).
+        bars:SetSize(barW, barH * 2 + ROW)
 
         f:SetScale(db.Scale or 1.0)
 
@@ -1013,7 +1018,6 @@ function MPT:ApplyLayout()
     if f._keLayoutSig == sig then return end
     f._keLayoutSig = sig
 
-    local ROW = 6
     -- Publish the layout-cursor constants consumed by RenderObjectives (Task 3.2).
     MPT._PAD, MPT._ROW_GAP, MPT._OBJ_GAP = PAD, ROW, 4
     local y = -PAD
@@ -1036,7 +1040,10 @@ function MPT:ApplyLayout()
     bars.timerWrap:SetPoint("TOPRIGHT", bars, "TOPRIGHT", 0, 0)
     bars.forcesWrap:ClearAllPoints()
     bars.forcesWrap:SetPoint("TOPRIGHT", bars.timerWrap, "BOTTOMRIGHT", 0, -ROW)
-    y = y - (barH * 2) - ROW * 2
+    y = y - barH - ROW             -- timer bar
+    if db.ShowForces then          -- forces bar consumes height only when shown
+        y = y - barH - ROW         -- (sig term 7 re-runs this pass on toggle)
+    end
     -- Hand the cursor to the objectives pass: Task 3.2's RenderObjectives
     -- reads _objRowStartY/_PAD/_OBJ_GAP and writes _objRowEndY (its only
     -- return channel). Guarded until Task 3.2 defines it.
@@ -1129,10 +1136,20 @@ end
 
 local function BuildPreviewRun()
     local maxTime = 1980                        -- ~33:00 limit
+    local affixIDs = { 10, 152, 9 }             -- Fortified, Challenger's Peril, Tyrannical (illustrative)
+    -- Resolve icon fileIDs the same way StartRun caches them (GetAffixInfo is
+    -- non-secret key metadata). RenderKey's ICON mode hides any nil slot, so a
+    -- retired/unknown id degrades to a missing icon, never an error.
+    local affixFileIDs = {}
+    for i, id in ipairs(affixIDs) do
+        local _, _, fileID = C_ChallengeMode.GetAffixInfo(id)
+        affixFileIDs[i] = fileID
+    end
     return {
         mapID = 1387,       -- placeholder map; HUD reads cached affixNames so any id is fine for preview
         level = 12,
-        affixIDs   = { 10, 152, 9 },            -- Fortified, Challenger's Peril, Tyrannical (illustrative)
+        affixIDs   = affixIDs,
+        affixFileIDs = affixFileIDs,
         affixNames = { "Fortified", "Challenger's Peril", "Tyrannical" },
         affixNamesStr = "Fortified - Challenger's Peril - Tyrannical",
         maxTime = maxTime,
@@ -1162,6 +1179,7 @@ function MPT:ShowPreview()
     self._savedRun = self.run                   -- stash any leftover (non-active) run state
     self.run = BuildPreviewRun()                -- fresh table per show — never a shared static
     self.isPreview = true
+    self:ApplyTrackerVisibility()               -- preview always hides the Blizzard tracker
     self.frames.root:Show()
     self:Render()
 end
@@ -1171,6 +1189,9 @@ function MPT:HidePreview()
     self.isPreview = false
     self.run = self._savedRun
     self._savedRun = nil
+    -- Restore the tracker we hid for the preview. ApplyTrackerVisibility keeps
+    -- it hidden when a live run still wants it (mid-key GUI close, toggle on).
+    self:ApplyTrackerVisibility()
     -- Re-render for active AND completed runs (the post-run summary stays up
     -- through the fanfare; hiding it here would lose it permanently).
     if not (self.run and (self.run.active or self.run.completed)) then
