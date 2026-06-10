@@ -39,17 +39,76 @@ local function MediaList(kind, fallback)
     return out
 end
 
--- Shared color-picker row helper (used by Timer, Forces, and future tabs).
--- Signature: AddColor(card, db, manager, applyFn, label, key, default, isLast)
-local function AddColor(card, db, manager, applyFn, label, key, default, isLast)
-    local row = GUIFrame:CreateRow(card.content, isLast and Theme.rowHeightLast or Theme.rowHeight)
-    local picker = GUIFrame:CreateColorPicker(row, label, {
-        color = db[key] or default,
-        callback = function(r, g, b) db[key] = { r, g, b }; applyFn() end,
+-- Multi-up color-picker row: items = { {label, key, default}, ... } placed
+-- 1/n each. Used by every Colors card on this page.
+local function AddColorRow(card, db, manager, applyFn, items, isLast)
+    local h = isLast and Theme.rowHeightLast or Theme.rowHeight
+    local row = GUIFrame:CreateRow(card.content, h)
+    local frac = 1 / #items
+    for _, it in ipairs(items) do
+        local label, key, default = it[1], it[2], it[3]
+        local picker = GUIFrame:CreateColorPicker(row, label, {
+            color = db[key] or default,
+            callback = function(r, g, b) db[key] = { r, g, b }; applyFn() end,
+        })
+        row:AddWidget(picker, frac)
+        manager:Register(picker, "all")
+    end
+    card:AddRow(row, h, isLast and 0 or nil)
+end
+
+-- Shared per-section font card: one 3-up row (Font | Size | Outline) writing
+-- <prefix>FontFace/<prefix>FontSize/<prefix>FontOutline. prefix "" edits the
+-- global default keys (the fallback for affix/key/PB/threshold text).
+-- opts: title, maxSize, group, includeMono, note/noteHeight, applyFn.
+local function AddFontCard(scrollChild, yOffset, db, manager, prefix, opts)
+    opts = opts or {}
+    local applyFn  = opts.applyFn or ApplySettings
+    local group    = opts.group or "all"
+    local faceKey, sizeKey, outlineKey =
+        prefix .. "FontFace", prefix .. "FontSize", prefix .. "FontOutline"
+
+    local card = GUIFrame:CreateCard(scrollChild, opts.title or "Font Settings", yOffset)
+    manager:Register(card, group)
+
+    local rowH = opts.note and Theme.rowHeight or Theme.rowHeightLast
+    local row = GUIFrame:CreateRow(card.content, rowH)
+    local fontDrop = GUIFrame:CreateDropdown(row, "Font", {
+        options = MediaList("font", "Expressway"),
+        value = db[faceKey] or db.FontFace or "Expressway",
+        callback = function(key) db[faceKey] = key; applyFn() end,
+        searchable = true, isFontPreview = true,
     })
-    row:AddWidget(picker, 1)
-    manager:Register(picker, "all")
-    card:AddRow(row, isLast and Theme.rowHeightLast or Theme.rowHeight, isLast and 0 or nil)
+    row:AddWidget(fontDrop, 1 / 3)
+    manager:Register(fontDrop, group)
+    local sizeSlider = GUIFrame:CreateSlider(row, "Size", {
+        min = 8, max = opts.maxSize or 36, step = 1,
+        value = db[sizeKey] or db.FontSize or 13,
+        callback = function(val) db[sizeKey] = val; applyFn() end,
+    })
+    row:AddWidget(sizeSlider, 1 / 3)
+    manager:Register(sizeSlider, group)
+    local outlineDrop = GUIFrame:CreateDropdown(row, "Outline", {
+        options = opts.includeMono and KE:GetFontOutlineOptions{ includeMono = true }
+                                    or KE:GetFontOutlineOptions(),
+        value = db[outlineKey] or db.FontOutline or "OUTLINE",
+        callback = function(key) db[outlineKey] = key; applyFn() end,
+    })
+    row:AddWidget(outlineDrop, 1 / 3)
+    manager:Register(outlineDrop, group)
+    card:AddRow(row, rowH, (not opts.note) and 0 or nil)
+
+    if opts.note then
+        local noteH = opts.noteHeight or 30
+        local noteRow = GUIFrame:CreateRow(card.content, noteH)
+        local noteText = GUIFrame:CreateText(noteRow,
+            KE:ColorTextByTheme("Note"), opts.note, noteH, "hide")
+        noteRow:AddWidget(noteText, 1)
+        manager:Register(noteText, group)
+        card:AddRow(noteRow, noteH, 0)
+    end
+
+    return card:GetNextOffset()
 end
 
 local FORCES_FORMAT_OPTIONS = {
@@ -124,7 +183,7 @@ BuildTimerTab = function(scrollChild, yOffset, db, manager)
     -- Card 3: Format
     local fmtCard = GUIFrame:CreateCard(scrollChild, "Format", yOffset)
     manager:Register(fmtCard, "all")
-    local rowF = GUIFrame:CreateRow(fmtCard.content, Theme.rowHeight)
+    local rowF = GUIFrame:CreateRow(fmtCard.content, Theme.rowHeightLast)
     local fmtDrop = GUIFrame:CreateDropdown(rowF, "Timer Format", {
         options = {
             { key = "ELAPSED_TOTAL",   text = "Elapsed / Total  (15:00 / 35:00)" },
@@ -144,50 +203,11 @@ BuildTimerTab = function(scrollChild, yOffset, db, manager)
     })
     rowF:AddWidget(msCheck, 0.5)
     manager:Register(msCheck, "all")
-    fmtCard:AddRow(rowF, Theme.rowHeight)
-
-    local rowF2 = GUIFrame:CreateRow(fmtCard.content, Theme.rowHeightLast)
-    local scaleSlider = GUIFrame:CreateSlider(rowF2, "HUD Scale", {
-        min = 0.5, max = 2.0, step = 0.05,
-        value = db.Scale or 1.0,
-        callback = function(val) db.Scale = val; ApplySettings() end,
-    })
-    rowF2:AddWidget(scaleSlider, 1)
-    manager:Register(scaleSlider, "all")
-    fmtCard:AddRow(rowF2, Theme.rowHeightLast, 0)
+    fmtCard:AddRow(rowF, Theme.rowHeightLast, 0)
     yOffset = fmtCard:GetNextOffset()
 
-    -- Card 4: Font Settings
-    local fontCard = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
-    manager:Register(fontCard, "all")
-    local rowFn = GUIFrame:CreateRow(fontCard.content, Theme.rowHeight)
-    local fontDrop = GUIFrame:CreateDropdown(rowFn, "Font", {
-        options = MediaList("font", "Expressway"),
-        value = db.FontFace or "Expressway",
-        callback = function(key) db.FontFace = key; ApplySettings() end,
-        searchable = true, isFontPreview = true,
-    })
-    rowFn:AddWidget(fontDrop, 0.5)
-    manager:Register(fontDrop, "all")
-    local sizeSlider = GUIFrame:CreateSlider(rowFn, "Size", {
-        min = 8, max = 36, step = 1,
-        value = db.FontSize or 13,
-        callback = function(val) db.FontSize = val; ApplySettings() end,
-    })
-    rowFn:AddWidget(sizeSlider, 0.5)
-    manager:Register(sizeSlider, "all")
-    fontCard:AddRow(rowFn, Theme.rowHeight)
-
-    local rowFn2 = GUIFrame:CreateRow(fontCard.content, Theme.rowHeightLast)
-    local outlineDrop = GUIFrame:CreateDropdown(rowFn2, "Outline", {
-        options = KE:GetFontOutlineOptions(),
-        value = db.FontOutline or "OUTLINE",
-        callback = function(key) db.FontOutline = key; ApplySettings() end,
-    })
-    rowFn2:AddWidget(outlineDrop, 1)
-    manager:Register(outlineDrop, "all")
-    fontCard:AddRow(rowFn2, Theme.rowHeightLast, 0)
-    yOffset = fontCard:GetNextOffset()
+    -- Card 4: Font Settings (the big timer text — TimerFont* keys)
+    yOffset = AddFontCard(scrollChild, yOffset, db, manager, "Timer", { maxSize = 48 })
 
     -- Card 5: Layout
     local layoutCard = GUIFrame:CreateCard(scrollChild, "Layout", yOffset)
@@ -199,8 +219,15 @@ BuildTimerTab = function(scrollChild, yOffset, db, manager)
         callback = function(key) db.BarTexture = key; ApplySettings() end,
         searchable = true,
     })
-    rowL:AddWidget(texDrop, 1)
+    rowL:AddWidget(texDrop, 0.5)
     manager:Register(texDrop, "all")
+    local scaleSlider = GUIFrame:CreateSlider(rowL, "HUD Scale", {
+        min = 0.5, max = 2.0, step = 0.05,
+        value = db.Scale or 1.0,
+        callback = function(val) db.Scale = val; ApplySettings() end,
+    })
+    rowL:AddWidget(scaleSlider, 0.5)
+    manager:Register(scaleSlider, "all")
     layoutCard:AddRow(rowL, Theme.rowHeight)
 
     local rowL2 = GUIFrame:CreateRow(layoutCard.content, Theme.rowHeight)
@@ -237,11 +264,15 @@ BuildTimerTab = function(scrollChild, yOffset, db, manager)
     -- Card 6: Colors
     local colorsCard = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
     manager:Register(colorsCard, "all")
-    AddColor(colorsCard, db, manager, ApplySettings, "Timer (running)",  "TimerColor",        { 1, 1, 1 })
-    AddColor(colorsCard, db, manager, ApplySettings, "Timer (timed)",    "TimerSuccessColor", { 1, 0.83, 0.22 })
-    AddColor(colorsCard, db, manager, ApplySettings, "Timer (depleted)", "TimerExpiredColor", { 1, 0.16, 0.18 })
-    AddColor(colorsCard, db, manager, ApplySettings, "Bar Fill",         "BarColor",          { 0.56, 0.56, 0.56 })
-    AddColor(colorsCard, db, manager, ApplySettings, "Threshold Ticks",  "TickColor",         { 1, 1, 1 }, true)
+    AddColorRow(colorsCard, db, manager, ApplySettings, {
+        { "Timer (running)",  "TimerColor",        { 1, 1, 1 } },
+        { "Timer (timed)",    "TimerSuccessColor", { 1, 0.83, 0.22 } },
+        { "Timer (depleted)", "TimerExpiredColor", { 1, 0.16, 0.18 } },
+    })
+    AddColorRow(colorsCard, db, manager, ApplySettings, {
+        { "Bar Fill",        "BarColor",  { 0.56, 0.56, 0.56 } },
+        { "Threshold Ticks", "TickColor", { 1, 1, 1 } },
+    }, true)
     yOffset = colorsCard:GetNextOffset()
 
     -- Card 7: Backdrop
@@ -315,26 +346,23 @@ BuildForcesTab = function(scrollChild, yOffset, db, manager)
             manager:UpdateAll(db.Enabled ~= false)
         end,
     })
-    row2:AddWidget(fmtDrop, 0.5)
+    row2:AddWidget(fmtDrop, 1 / 3)
     manager:Register(fmtDrop, "all")
     local placeDrop = GUIFrame:CreateDropdown(row2, "Placement", {
         options = FORCES_PLACEMENT_OPTIONS,
         value = db.ForcesPlacement or "CORNER",
         callback = function(key) db.ForcesPlacement = key; ApplySettings() end,
     })
-    row2:AddWidget(placeDrop, 0.5)
+    row2:AddWidget(placeDrop, 1 / 3)
     manager:Register(placeDrop, "all")
-    fmtCard:AddRow(row2, Theme.rowHeight)
-
-    local rowBr = GUIFrame:CreateRow(fmtCard.content, Theme.rowHeight)
-    local bracketDrop = GUIFrame:CreateDropdown(rowBr, "Bracket Style", {
+    local bracketDrop = GUIFrame:CreateDropdown(row2, "Bracket Style", {
         options = FORCES_BRACKET_OPTIONS,
         value = db.ForcesBracketStyle or "NONE",
         callback = function(key) db.ForcesBracketStyle = key; ApplySettings() end,
     })
-    rowBr:AddWidget(bracketDrop, 1)
+    row2:AddWidget(bracketDrop, 1 / 3)
     manager:Register(bracketDrop, "all")
-    fmtCard:AddRow(rowBr, Theme.rowHeight)
+    fmtCard:AddRow(row2, Theme.rowHeight)
 
     local row3 = GUIFrame:CreateRow(fmtCard.content, Theme.rowHeight)
     local customBox = GUIFrame:CreateEditBox(row3, "Custom Format", {
@@ -364,11 +392,16 @@ BuildForcesTab = function(scrollChild, yOffset, db, manager)
     fmtCard:AddRow(noteRow, 78, 0)
     yOffset = fmtCard:GetNextOffset()
 
-    -- Card 3: Colors
+    -- Card 3: Font Settings (forces text — ForcesFont* keys)
+    yOffset = AddFontCard(scrollChild, yOffset, db, manager, "Forces")
+
+    -- Card 4: Colors
     local colorsCard = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
     manager:Register(colorsCard, "all")
-    AddColor(colorsCard, db, manager, ApplySettings, "Forces Bar",       "ForcesColor",         { 0.73, 0.62, 0.13 })
-    AddColor(colorsCard, db, manager, ApplySettings, "Forces Complete",  "ForcesCompleteColor", { 0.2, 0.82, 0.31 })
+    AddColorRow(colorsCard, db, manager, ApplySettings, {
+        { "Forces Bar",      "ForcesColor",         { 0.73, 0.62, 0.13 } },
+        { "Forces Complete", "ForcesCompleteColor", { 0.2, 0.82, 0.31 } },
+    })
 
     local bandedRow = GUIFrame:CreateRow(colorsCard.content, Theme.rowHeight)
     local bandedCheck = GUIFrame:CreateCheckbox(bandedRow, "Banded Colors (by % bracket)", {
@@ -414,39 +447,43 @@ BuildObjectivesTab = function(scrollChild, yOffset, db, manager)
     -- Card 1: Enable + display toggles
     local card1 = GUIFrame:CreateCard(scrollChild, "Objectives", yOffset)
     manager:Register(card1, "all")
-    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
     local showCheck = GUIFrame:CreateCheckbox(row1, "Show Boss List", {
         value = db.ShowObjectives ~= false,
         callback = function(checked) db.ShowObjectives = checked; ApplySettings() end,
     })
-    row1:AddWidget(showCheck, 1)
+    row1:AddWidget(showCheck, 1 / 3)
     manager:Register(showCheck, "all")
-    card1:AddRow(row1, Theme.rowHeight)
-
-    local row2 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
-    local timesCheck = GUIFrame:CreateCheckbox(row2, "Show Clear Times", {
+    local timesCheck = GUIFrame:CreateCheckbox(row1, "Show Clear Times", {
         value = db.ShowObjectiveTimes ~= false,
         callback = function(checked) db.ShowObjectiveTimes = checked; ApplySettings() end,
     })
-    row2:AddWidget(timesCheck, 0.5)
+    row1:AddWidget(timesCheck, 1 / 3)
     manager:Register(timesCheck, "all")
-    local pbCheck = GUIFrame:CreateCheckbox(row2, "Show PB Delta", {
+    local pbCheck = GUIFrame:CreateCheckbox(row1, "Show PB Delta", {
         value = db.ShowPBDelta ~= false,
         callback = function(checked) db.ShowPBDelta = checked; ApplySettings() end,
     })
-    row2:AddWidget(pbCheck, 0.5)
+    row1:AddWidget(pbCheck, 1 / 3)
     manager:Register(pbCheck, "all")
-    card1:AddRow(row2, Theme.rowHeightLast, 0)
+    card1:AddRow(row1, Theme.rowHeightLast, 0)
     yOffset = card1:GetNextOffset()
 
-    -- Card 2: Colors (objective + split deltas + PB)
+    -- Card 2: Font Settings (boss-list rows — ObjectiveFont* keys)
+    yOffset = AddFontCard(scrollChild, yOffset, db, manager, "Objective")
+
+    -- Card 3: Colors (objective + split deltas + PB)
     local colorsCard = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
     manager:Register(colorsCard, "all")
-    AddColor(colorsCard, db, manager, ApplySettings, "Objective (pending)", "ObjectiveColor",     { 0.85, 0.85, 0.85 })
-    AddColor(colorsCard, db, manager, ApplySettings, "Objective (done)",    "ObjectiveDoneColor", { 0.2, 0.82, 0.31 })
-    AddColor(colorsCard, db, manager, ApplySettings, "Split Ahead",         "SplitAheadColor",    { 0.25, 0.88, 0.82 })
-    AddColor(colorsCard, db, manager, ApplySettings, "Split Behind",        "SplitBehindColor",   { 1, 0.42, 0.42 })
-    AddColor(colorsCard, db, manager, ApplySettings, "PB Target",           "PBColor",            { 0.85, 0.79, 0.54 })
+    AddColorRow(colorsCard, db, manager, ApplySettings, {
+        { "Objective (pending)", "ObjectiveColor",     { 0.85, 0.85, 0.85 } },
+        { "Objective (done)",    "ObjectiveDoneColor", { 0.2, 0.82, 0.31 } },
+    })
+    AddColorRow(colorsCard, db, manager, ApplySettings, {
+        { "Split Ahead",  "SplitAheadColor",  { 0.25, 0.88, 0.82 } },
+        { "Split Behind", "SplitBehindColor", { 1, 0.42, 0.42 } },
+        { "PB Target",    "PBColor",          { 0.85, 0.79, 0.54 } },
+    })
 
     local rowOp = GUIFrame:CreateRow(colorsCard.content, Theme.rowHeightLast)
     local opSlider = GUIFrame:CreateSlider(rowOp, "PB Opacity", {
@@ -490,11 +527,16 @@ BuildDeathsTab = function(scrollChild, yOffset, db, manager)
     card1:AddRow(noteRow, 50, 0)
     yOffset = card1:GetNextOffset()
 
-    -- Card 2: Colors
+    -- Card 2: Font Settings (deaths line — DeathsFont* keys)
+    yOffset = AddFontCard(scrollChild, yOffset, db, manager, "Deaths")
+
+    -- Card 3: Colors
     local colorsCard = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
     manager:Register(colorsCard, "all")
-    AddColor(colorsCard, db, manager, ApplySettings, "Deaths Text", "DeathsColor", { 0.85, 0.85, 0.85 })
-    AddColor(colorsCard, db, manager, ApplySettings, "Time Penalty", "DeathPenaltyColor", { 1, 0.42, 0.42 }, true)
+    AddColorRow(colorsCard, db, manager, ApplySettings, {
+        { "Deaths Text",  "DeathsColor",       { 0.85, 0.85, 0.85 } },
+        { "Time Penalty", "DeathPenaltyColor", { 1, 0.42, 0.42 } },
+    }, true)
     yOffset = colorsCard:GetNextOffset()
     return yOffset
 end
@@ -522,24 +564,21 @@ BuildOverlayTab = function(scrollChild, yOffset, db, manager)
             manager:UpdateAll(db.Enabled ~= false)
         end,
     })
-    row1:AddWidget(npCheck, 0.5)
+    row1:AddWidget(npCheck, 1 / 3)
     manager:Register(npCheck, "all")
     local tipCheck = GUIFrame:CreateCheckbox(row1, "Enemy Count on Tooltip", {
         value = db.OverlayTooltipEnabled ~= false,
         callback = function(checked) db.OverlayTooltipEnabled = checked; ApplyOverlaySettings() end,
     })
-    row1:AddWidget(tipCheck, 0.5)
+    row1:AddWidget(tipCheck, 1 / 3)
     manager:Register(tipCheck, "all")
-    card1:AddRow(row1, Theme.rowHeight)
-
-    local row2 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local combatOnlyCheck = GUIFrame:CreateCheckbox(row2, "Only in Combat", {
+    local combatOnlyCheck = GUIFrame:CreateCheckbox(row1, "Only in Combat", {
         value = db.OverlayCombatOnly ~= false,
         callback = function(checked) db.OverlayCombatOnly = checked; ApplyOverlaySettings() end,
     })
-    row2:AddWidget(combatOnlyCheck, 0.5)
+    row1:AddWidget(combatOnlyCheck, 1 / 3)
     manager:Register(combatOnlyCheck, "overlayNP")
-    card1:AddRow(row2, Theme.rowHeight)
+    card1:AddRow(row1, Theme.rowHeight)
 
     local noteRow = GUIFrame:CreateRow(card1.content, 64)
     local noteText = GUIFrame:CreateText(noteRow,
@@ -569,65 +608,39 @@ BuildOverlayTab = function(scrollChild, yOffset, db, manager)
         { key = "BOTTOMRIGHT", text = "Bottom Right" },
     }
 
-    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
     local anchorDropdown = GUIFrame:CreateDropdown(row2a, "Anchor", {
         options = anchorOptions,
         value = db.OverlayAnchor or "TOPRIGHT",
         callback = function(key) db.OverlayAnchor = key; ApplyOverlaySettings() end,
     })
-    row2a:AddWidget(anchorDropdown, 1)
+    row2a:AddWidget(anchorDropdown, 1 / 3)
     manager:Register(anchorDropdown, "overlayNP")
-    card2:AddRow(row2a, Theme.rowHeight)
-
-    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
-    local xSlider = GUIFrame:CreateSlider(row2b, "X Offset", {
+    local xSlider = GUIFrame:CreateSlider(row2a, "X Offset", {
         min = -100, max = 100, step = 1,
         value = db.OverlayXOffset or -20,
         callback = function(val) db.OverlayXOffset = val; ApplyOverlaySettings() end,
     })
-    row2b:AddWidget(xSlider, 0.5)
+    row2a:AddWidget(xSlider, 1 / 3)
     manager:Register(xSlider, "overlayNP")
-    local ySlider = GUIFrame:CreateSlider(row2b, "Y Offset", {
+    local ySlider = GUIFrame:CreateSlider(row2a, "Y Offset", {
         min = -100, max = 100, step = 1,
         value = db.OverlayYOffset or 2,
         callback = function(val) db.OverlayYOffset = val; ApplyOverlaySettings() end,
     })
-    row2b:AddWidget(ySlider, 0.5)
+    row2a:AddWidget(ySlider, 1 / 3)
     manager:Register(ySlider, "overlayNP")
-    card2:AddRow(row2b, Theme.rowHeightLast, 0)
+    card2:AddRow(row2a, Theme.rowHeightLast, 0)
     yOffset = card2:GetNextOffset()
 
-    -- Card 3: Nameplate % — Font Settings
-    local card3 = GUIFrame:CreateCard(scrollChild, "Nameplate % — Font Settings", yOffset)
-    manager:Register(card3, "overlayNP")
-    local row3a = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
-    local fontDropdown = GUIFrame:CreateDropdown(row3a, "Font", {
-        options = MediaList("font", "Expressway"),
-        value = db.OverlayFontFace or "Expressway",
-        callback = function(key) db.OverlayFontFace = key; ApplyOverlaySettings() end,
-        searchable = true, isFontPreview = true,
+    -- Card 3: Nameplate % — Font Settings (OverlayFont* keys)
+    yOffset = AddFontCard(scrollChild, yOffset, db, manager, "Overlay", {
+        title = "Nameplate % — Font Settings",
+        group = "overlayNP",
+        maxSize = 20,
+        includeMono = true,
+        applyFn = ApplyOverlaySettings,
     })
-    row3a:AddWidget(fontDropdown, 0.5)
-    manager:Register(fontDropdown, "overlayNP")
-    local sizeSlider = GUIFrame:CreateSlider(row3a, "Size", {
-        min = 8, max = 20, step = 1,
-        value = db.OverlayFontSize or 12,
-        callback = function(val) db.OverlayFontSize = val; ApplyOverlaySettings() end,
-    })
-    row3a:AddWidget(sizeSlider, 0.5)
-    manager:Register(sizeSlider, "overlayNP")
-    card3:AddRow(row3a, Theme.rowHeight)
-
-    local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
-    local outlineDropdown = GUIFrame:CreateDropdown(row3b, "Outline", {
-        options = KE:GetFontOutlineOptions{ includeMono = true },
-        value = db.OverlayFontOutline or "OUTLINE",
-        callback = function(key) db.OverlayFontOutline = key; ApplyOverlaySettings() end,
-    })
-    row3b:AddWidget(outlineDropdown, 1)
-    manager:Register(outlineDropdown, "overlayNP")
-    card3:AddRow(row3b, Theme.rowHeightLast, 0)
-    yOffset = card3:GetNextOffset()
 
     -- Card 4: Nameplate % — Colors
     local card4 = GUIFrame:CreateCard(scrollChild, "Nameplate % — Colors", yOffset)
@@ -659,12 +672,12 @@ BuildGeneralTab = function(scrollChild, yOffset, db, manager)
     -- Card 1: Quality of Life toggles
     local card1 = GUIFrame:CreateCard(scrollChild, "Quality of Life", yOffset)
     manager:Register(card1, "all")
-    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
     local keyCheck = GUIFrame:CreateCheckbox(row1, "Auto-Insert Keystone", {
         value = db.AutoInsertKeystone ~= false,
         callback = function(checked) db.AutoInsertKeystone = checked end,
     })
-    row1:AddWidget(keyCheck, 0.5)
+    row1:AddWidget(keyCheck, 1 / 3)
     manager:Register(keyCheck, "all")
     local trackerCheck = GUIFrame:CreateCheckbox(row1, "Hide Blizzard Tracker", {
         value = db.HideBlizzardTracker ~= false,
@@ -674,18 +687,15 @@ BuildGeneralTab = function(scrollChild, yOffset, db, manager)
             if M and M.ApplyTrackerVisibility then M:ApplyTrackerVisibility() end
         end,
     })
-    row1:AddWidget(trackerCheck, 0.5)
+    row1:AddWidget(trackerCheck, 1 / 3)
     manager:Register(trackerCheck, "all")
-    card1:AddRow(row1, Theme.rowHeight)
-
-    local row2 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
-    local chatCheck = GUIFrame:CreateCheckbox(row2, "Post Boss Splits to Chat", {
+    local chatCheck = GUIFrame:CreateCheckbox(row1, "Post Boss Splits to Chat", {
         value = db.ChatOutputSplits == true,
         callback = function(checked) db.ChatOutputSplits = checked end,
     })
-    row2:AddWidget(chatCheck, 1)
+    row1:AddWidget(chatCheck, 1 / 3)
     manager:Register(chatCheck, "all")
-    card1:AddRow(row2, Theme.rowHeightLast, 0)
+    card1:AddRow(row1, Theme.rowHeightLast, 0)
     yOffset = card1:GetNextOffset()
 
     -- Card 2: Affixes & Key display + colors
@@ -696,29 +706,36 @@ BuildGeneralTab = function(scrollChild, yOffset, db, manager)
         value = db.ShowAffixes ~= false,
         callback = function(checked) db.ShowAffixes = checked; ApplySettings() end,
     })
-    row2a:AddWidget(affixCheck, 0.5)
+    row2a:AddWidget(affixCheck, 1 / 3)
     manager:Register(affixCheck, "all")
     local keyLvlCheck = GUIFrame:CreateCheckbox(row2a, "Show Key Level", {
         value = db.ShowKeyLevel ~= false,
         callback = function(checked) db.ShowKeyLevel = checked; ApplySettings() end,
     })
-    row2a:AddWidget(keyLvlCheck, 0.5)
+    row2a:AddWidget(keyLvlCheck, 1 / 3)
     manager:Register(keyLvlCheck, "all")
-    card2:AddRow(row2a, Theme.rowHeight)
-
-    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local affixModeDrop = GUIFrame:CreateDropdown(row2b, "Affix Display", {
+    local affixModeDrop = GUIFrame:CreateDropdown(row2a, "Affix Display", {
         options = { { key = "TEXT", text = "Text" }, { key = "ICON", text = "Icons" } },
         value = db.AffixMode or "TEXT",
         callback = function(key) db.AffixMode = key; ApplySettings() end,
     })
-    row2b:AddWidget(affixModeDrop, 1)
+    row2a:AddWidget(affixModeDrop, 1 / 3)
     manager:Register(affixModeDrop, "all")
-    card2:AddRow(row2b, Theme.rowHeight)
+    card2:AddRow(row2a, Theme.rowHeight)
 
-    AddColor(card2, db, manager, ApplySettings, "Affix Text", "AffixColor", { 0.69, 0.69, 0.69 })
-    AddColor(card2, db, manager, ApplySettings, "Key Level", "KeyColor", { 0.69, 0.69, 0.69 }, true)
+    AddColorRow(card2, db, manager, ApplySettings, {
+        { "Affix Text", "AffixColor", { 0.69, 0.69, 0.69 } },
+        { "Key Level",  "KeyColor",   { 0.69, 0.69, 0.69 } },
+    }, true)
     yOffset = card2:GetNextOffset()
+
+    -- Card 3: Default Font (global FontFace/FontSize/FontOutline — the
+    -- fallback for every HUD element without its own font card).
+    yOffset = AddFontCard(scrollChild, yOffset, db, manager, "", {
+        title = "Default Font",
+        note = "Applies to the affix line, key level, PB text, and threshold labels.",
+    })
+
     return yOffset
 end
 
