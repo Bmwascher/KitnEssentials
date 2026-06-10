@@ -228,9 +228,8 @@ function MPT:BuildHUD()
     MPT.frames.deathsTooltip = deathTT
 
     local TT_PAD   = 8
-    local TT_ROW_H = 14
     local TT_GAP   = 3
-    local TT_FONT  = KE.FONT or "Fonts\\FRIZQT__.TTF"
+    local TT_FONT  = KE.FONT or "Fonts\\FRIZQT__.TTF"  -- EnsureRows seed; OnEnter re-applies the Deaths font
 
     local function EnsureRows(n)
         for i = #deathTT._rows + 1, n do
@@ -248,6 +247,13 @@ function MPT:BuildHUD()
         if not MPT.db or not MPT.db.ShowDeathTooltip then return end
         local log = MPT.run and MPT.run.deathLog
         if not log or #log == 0 then return end
+
+        -- Scale the tooltip rows with the Deaths font settings (round-4
+        -- feedback: the hardcoded 10px rows read far too small once the
+        -- headline grew). Rows ride 4px under the headline size, floor 10.
+        local ttFace = MPT.db.DeathsFontFace or MPT.db.FontFace
+        local ttSize = max(10, (MPT.db.DeathsFontSize or MPT.db.FontSize or 13) - 4)
+        local rowH   = ttSize + 4
 
         -- Build sorted list (chronological by time-of-death).
         local list = {}
@@ -273,6 +279,10 @@ function MPT:BuildHUD()
         local maxTimeW = 0
         for i, entry in ipairs(list) do
             local row = deathTT._rows[i]
+            -- Re-apply per show: EnsureRows seeds 10px; the user can change
+            -- the Deaths font card while the tooltip rows already exist.
+            KE:ApplyFont(row.name, ttFace, ttSize, "")
+            KE:ApplyFont(row.time, ttFace, ttSize, "")
             local class = entry.class
             local color = class and RAID_CLASS_COLORS[class]
             local short = Ambiguate(entry.name or "", "short")
@@ -289,13 +299,13 @@ function MPT:BuildHUD()
         end
 
         local ttW = TT_PAD + maxNameW + 12 + maxTimeW + TT_PAD
-        local ttH = TT_PAD + #list * TT_ROW_H + (#list - 1) * TT_GAP + TT_PAD
+        local ttH = TT_PAD + #list * rowH + (#list - 1) * TT_GAP + TT_PAD
         deathTT:SetSize(ttW, ttH)
 
         -- Position rows.
         for i, _ in ipairs(list) do
             local row = deathTT._rows[i]
-            local yOff = -TT_PAD - (i - 1) * (TT_ROW_H + TT_GAP)
+            local yOff = -TT_PAD - (i - 1) * (rowH + TT_GAP)
             row.name:ClearAllPoints()
             row.name:SetPoint("TOPLEFT", deathTT, "TOPLEFT", TT_PAD, yOff)
             row.time:ClearAllPoints()

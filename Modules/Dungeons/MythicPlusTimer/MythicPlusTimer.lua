@@ -280,7 +280,7 @@ local MPT_DEFAULTS = {
     TimerFontFace = "Expressway", TimerFontSize = 28, TimerFontOutline = "OUTLINE",
     ForcesFontFace = "Expressway", ForcesFontSize = 13, ForcesFontOutline = "OUTLINE",
     ObjectiveFontFace = "Expressway", ObjectiveFontSize = 12, ObjectiveFontOutline = "OUTLINE",
-    DeathsFontFace = "Expressway", DeathsFontSize = 13, DeathsFontOutline = "OUTLINE",
+    DeathsFontFace = "Expressway", DeathsFontSize = 16, DeathsFontOutline = "OUTLINE",
 }
 
 -- Recursive deep-copy so the profile section never shares table identity with
@@ -463,14 +463,6 @@ function MPT:UpdateDB()
         self.db.OverlayFormat = "%.2f%%"
     end
 
-    -- Persisted-value repair: the first BarBackgroundColor seed was 0.12-grey;
-    -- round-3 feedback settled on #080808. Only the untouched old default is
-    -- swapped — a user-picked color passes through.
-    local bg = self.db.BarBackgroundColor
-    if bg and bg[1] == 0.12 and bg[2] == 0.12 and bg[3] == 0.12 then
-        self.db.BarBackgroundColor = { 0.031, 0.031, 0.031 }
-    end
-
     -- MigrateLegacyOverlayDB lives in MythicPlusTimer_Overlay.lua, which is
     -- loaded later in the XML manifest — but all files are parsed before any
     -- AceAddon OnInitialize fires (ADDON_LOADED triggers after the parse phase),
@@ -630,6 +622,20 @@ function MPT:RecordDeath(guid, knownName, knownUnit)
         name = name,
         class = class,
     }
+    -- Reload/DC survival: persist the log write-through (same lifecycle as
+    -- _activeRunSplits — cleared by ResetRun's hoisted block + CompleteRun).
+    -- mapID-only identity is sufficient: any same-dungeon RE-run passes
+    -- through a clear first; only a reload-recovery StartRun sees the cache
+    -- alive. (No composite level key — unlike splits there is no level-keyed
+    -- store to poison, and the level-0 API race would drop the restore.)
+    -- cache.log shares table identity with run.deathLog, so later appends and
+    -- the OnDeathCountUpdated reconcile-trim persist for free.
+    local cache = MPT.db._activeRunDeaths
+    if not cache or cache.mapID ~= run.mapID then
+        cache = { mapID = run.mapID }
+        MPT.db._activeRunDeaths = cache
+    end
+    cache.log = run.deathLog
 end
 
 -- Rebuilds the alive snapshot from the current party state. Called after
@@ -1058,6 +1064,21 @@ function MPT:StartRun()
     run.forces.current, run.forces.total, run.forces.percent, run.forces.completed = 0, 0, 0, false
     run.forces._lastQS, run.forces._lastQSParsed = nil, nil
     wipe(run.deathLog); _prevDeathCount = 0; wipe(_partyAlive); ScanPartyAlive()
+    -- Reload/DC survival for the hover death log: restore the persisted log
+    -- when it belongs to THIS dungeon. A genuinely new run never sees a live
+    -- cache (ResetRun's hoisted clear ran on every non-recovery path);
+    -- defensive shape checks because the table round-trips SavedVariables.
+    local dCache = self.db._activeRunDeaths
+    if dCache and dCache.mapID == mapID and type(dCache.log) == "table" then
+        for i = 1, #dCache.log do
+            local e = dCache.log[i]
+            if type(e) == "table" and e.name then
+                run.deathLog[#run.deathLog + 1] = { t = e.t or 0, name = e.name, class = e.class }
+            end
+        end
+        dCache.log = run.deathLog  -- re-bind shared identity for future writes
+        if DEBUG_MPT then KE:Print(format("[MPT] StartRun: restored %d death-log entries", #run.deathLog)) end
+    end
     self:OnDeathCountUpdated()
 
     self:LoadSplits()
@@ -1107,6 +1128,7 @@ function MPT:CompleteRun()
     end
     self:UpdateObjectives()  -- backfill final clear times (tail-calls UpdateSplits; pre-run record still in run.bestOverall)
     MPT.db._activeRunSplits = nil  -- run over; in-progress split cache no longer needed
+    MPT.db._activeRunDeaths = nil  -- ditto for the reload-survival death log
     self:CommitSplits()   -- persist improved per-boss + overall times to the global store
     -- Clear any stale combat-defer; ApplyTrackerVisibility re-arms it if still locked.
     self._trackerPending = nil
@@ -1124,6 +1146,9 @@ function MPT:ResetRun()
     -- returns), and the next run would back-stamp the old key's clear times
     -- into the improve-only PB store — permanently.
     MPT.db._activeRunSplits = nil
+    -- Same hoist for the reload-survival death log: a stale cache would
+    -- restore another session's deaths into the next run of that dungeon.
+    MPT.db._activeRunDeaths = nil
     -- Same hoist rationale for the salvage flag: a pending 2s salvage timer
     -- must not leave the flag armed into a chained new run (the
     -- not-_salvagePending guard would suppress that run's salvage net). The
