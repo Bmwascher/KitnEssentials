@@ -726,6 +726,46 @@ function MPT:NotifyRefresh()
 end
 
 ---------------------------------------------------------------------------------
+-- Post-completion lifecycle helpers (EUI runtime-event parity)
+---------------------------------------------------------------------------------
+
+-- True while still physically inside a Mythic Keystone instance. Needed for
+-- the post-completion fanfare window: GetActiveChallengeMapID() and
+-- IsChallengeModeActive() both flip false at completion while the player is
+-- still standing in the dungeon (EUI _isInChallengeMode fallback,
+-- EllesmereUIMythicTimer.lua:1853-1863).
+local function InChallengeInstance()
+    local _, instanceType, difficulty = GetInstanceInfo()
+    return instanceType == "party" and difficulty == 8
+end
+
+-- True when every tracked criterion is done (forces + all objectives), read
+-- from the module's own cached state — the API-free equivalent of EUI's
+-- IsDungeonComplete (EllesmereUIMythicTimer.lua:1828-1844). Used to salvage a
+-- completion when CHALLENGE_MODE_COMPLETED itself was never processed.
+local function RunLooksComplete(run)
+    if not (run.forces and run.forces.completed) then return false end
+    local objs = run.objectives
+    if #objs == 0 then return false end
+    for i = 1, #objs do
+        if not objs[i].completed then return false end
+    end
+    return true
+end
+
+-- Deferred salvage callback (pre-declared: no closure per arm). The
+-- authoritative CHALLENGE_MODE_COMPLETED wins the 2s race — CompleteRun's
+-- run.completed guard makes the late salvage a no-op.
+local function _CompleteSalvageFire()
+    MPT._salvagePending = nil
+    local run = MPT.run
+    if run.active and not run.completed and RunLooksComplete(run) then
+        if DEBUG_MPT then KE:Print("[MPT] salvage: completing run (CHALLENGE_MODE_COMPLETED never arrived)") end
+        MPT:CompleteRun()
+    end
+end
+
+---------------------------------------------------------------------------------
 -- Two-tier event registration (Task 1.8)
 ---------------------------------------------------------------------------------
 
@@ -749,6 +789,9 @@ function MPT:PLAYER_ENTERING_WORLD()
 end
 
 function MPT:CHALLENGE_MODE_START()
+    -- A genuinely new key replaces any lingering completed summary (completed
+    -- state otherwise survives until the player leaves the instance).
+    if self.run.completed then self:ResetRun() end
     self:StartRun()
 end
 
@@ -765,6 +808,14 @@ function MPT:SCENARIO_CRITERIA_UPDATE()
     if not self.run.active then return end
     self:UpdateForces()
     self:UpdateObjectives()
+    -- Completion salvage net (EUI:1878-1879, deferred): if everything just
+    -- finished but CHALLENGE_MODE_COMPLETED never arrives, complete from
+    -- cached state 2s later. The real event wins the race and carries the
+    -- authoritative ms completion time.
+    if not self._salvagePending and not self.run.completed and RunLooksComplete(self.run) then
+        self._salvagePending = true
+        C_Timer.After(2, _CompleteSalvageFire)
+    end
     self:NotifyRefresh()
 end
 
@@ -792,8 +843,14 @@ end
 
 -- WORLD_STATE_TIMER_START/STOP and instance-info events resolve to a re-check.
 function MPT:WORLD_STATE_TIMER_START() self:CheckForActiveRun() end
-function MPT:WORLD_STATE_TIMER_STOP() if not self.run.active then self:ResetRun() end end
 function MPT:UPDATE_INSTANCE_INFO() if not self.run.active then self:CheckForActiveRun() end end
+
+function MPT:WORLD_STATE_TIMER_STOP()
+    -- Completed gate: the M+ world timer stops AT completion — without it
+    -- this wipes the frozen summary + fanfare tracker suppression seconds
+    -- after every finish (ResetRun's guard deliberately admits completed runs).
+    if not self.run.active and not self.run.completed then self:ResetRun() end
+end
 
 -- NOTE: PLAYER_REGEN_ENABLED is registered/unregistered on demand by
 -- MPT:ApplyTrackerVisibility via OnTrackerRegenEnabled — do NOT add a static
@@ -981,9 +1038,26 @@ end
 function MPT:CheckForActiveRun()
     local mapID = C_ChallengeMode.GetActiveChallengeMapID()
     if mapID then
-        self:StartRun()
+        -- Completed gate (EUI:1873): GetActiveChallengeMapID can stay non-nil
+        -- on the completion screen — without this, UPDATE_INSTANCE_INFO
+        -- restarts a zombie run that re-posts every chat split and resolves
+        -- PB against the record the real run just committed. The completed
+        -- state is cleared by ResetRun once the player actually leaves (or by
+        -- CHALLENGE_MODE_START when a genuinely new key begins).
+        if not self.run.completed then
+            self:StartRun()
+        end
     else
-        self:ResetRun()
+        if self.run.active and RunLooksComplete(self.run) then
+            -- Salvage (EUI:1884): everything finished but the completion
+            -- event was never processed — commit the run instead of wiping it.
+            self:CompleteRun()
+        elseif not (self.run.completed and InChallengeInstance()) then
+            -- Fanfare window (EUI:1881): the map ID flips nil at completion
+            -- while still inside — keep the frozen summary + tracker
+            -- suppression alive until the player actually leaves.
+            self:ResetRun()
+        end
     end
     -- Re-apply tracker visibility after any reload recovery: StartRun/ResetRun
     -- each call ApplyTrackerVisibility, but their early-return guards can skip it
