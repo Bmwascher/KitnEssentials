@@ -31,8 +31,17 @@ local PLUS_TWO_RATIO   = 0.8   -- +2 cutoff (80% of timer)
 local PLUS_THREE_RATIO = 0.6   -- +3 cutoff (60% of timer)
 local CHALLENGERS_PERIL_AFFIX_ID = 152  -- adds +90s; thresholds computed on (maxTime-90)
 
--- Shared run state (the currentRun table; reset by MPT:ResetRun).
-MPT.run = MPT.run or {}
+-- Single shared run state (the contract's MPT.run). Reset by MPT:ResetRun().
+MPT.run = {
+    active = false, completed = false, countdown = false,
+    mapID = nil, level = 0, affixIDs = {}, affixNames = {},
+    maxTime = 0, thresholds = { plus1 = 0, plus2 = 0, plus3 = 0 },
+    elapsed = 0, lastTickedSec = -1,
+    deaths = 0, deathTimeLost = 0, deathLog = {},
+    forces = { total = 0, current = 0, percent = 0, completed = false },
+    objectives = {},
+    bestOverall = nil,
+}
 
 -- Frame handles (created once in MPT:BuildHUD, lives in _HUD file).
 MPT.frames = MPT.frames or {}
@@ -207,6 +216,34 @@ local function DeepCopy(src)
     local dst = {}
     for k, v in pairs(src) do dst[k] = DeepCopy(v) end
     return dst
+end
+
+-- Aggregate enemy forces from the weighted criterion. Plain math: GetCriteriaInfo
+-- quantity/quantityString/totalQuantity are proven non-secret (Task 1.1 dry-run);
+-- per the contract's "DO NOT GUARD" set, no issecretvalue here.
+function MPT:UpdateForces()
+    local run = self.run
+    local f = run.forces
+    local numCriteria = select(3, C_Scenario.GetStepInfo()) or 0
+    for i = 1, numCriteria do
+        local info = C_ScenarioInfo.GetCriteriaInfo(i)
+        if info and info.isWeightedProgress then
+            -- quantityString carries the absolute count with a stray '%'; strip to a number.
+            local current = info.quantityString and tonumber(info.quantityString:match("%d+")) or 0
+            local total = info.totalQuantity or 0
+            f.current = current
+            f.total = total
+            if total > 0 then
+                f.percent = (current / total) * 100
+            else
+                f.percent = 0
+            end
+            f.completed = info.completed or (total > 0 and current >= total) or false
+            return
+        end
+    end
+    -- No weighted criterion this step (e.g. countdown before the scenario populates).
+    f.current, f.total, f.percent, f.completed = 0, 0, 0, false
 end
 
 -- Seed KE.db.profile.MythicPlusTimer from MPT_DEFAULTS for any key
