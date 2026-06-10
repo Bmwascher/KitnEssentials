@@ -440,31 +440,31 @@ function MPT:RenderKey()
             if not fileID then
                 -- Defensive: cached fileID missing (API returned nil at run start);
                 -- hide this slot and skip so the rest of the icons still render.
+                -- (No goto — WoW's runtime is Lua 5.1.)
                 if f.affixIcons[i] then f.affixIcons[i]:Hide() end
-                goto continue
-            end
-            local tex = f.affixIcons[i]
-            if not tex then
-                local holder = CreateFrame("Frame", nil, f)
-                holder.tex = holder:CreateTexture(nil, "ARTWORK")
-                holder.tex:SetAllPoints(holder)
-                KE:ApplyIconZoom(holder.tex, 0.3)
-                KE:AddIconBorders(holder)
-                f.affixIcons[i] = holder
-                tex = holder
-            end
-            tex:SetSize(size + 4, size + 4)
-            tex.tex:SetTexture(fileID)
-            tex:ClearAllPoints()
-            -- Grow leftward (keyText sits at the frame's right edge).
-            if prev then
-                tex:SetPoint("RIGHT", prev, "LEFT", -4, 0)
             else
-                tex:SetPoint("RIGHT", f.keyText, "LEFT", -6, 0)
+                local tex = f.affixIcons[i]
+                if not tex then
+                    local holder = CreateFrame("Frame", nil, f)
+                    holder.tex = holder:CreateTexture(nil, "ARTWORK")
+                    holder.tex:SetAllPoints(holder)
+                    KE:ApplyIconZoom(holder.tex, 0.3)
+                    KE:AddIconBorders(holder)
+                    f.affixIcons[i] = holder
+                    tex = holder
+                end
+                tex:SetSize(size + 4, size + 4)
+                tex.tex:SetTexture(fileID)
+                tex:ClearAllPoints()
+                -- Grow leftward (keyText sits at the frame's right edge).
+                if prev then
+                    tex:SetPoint("RIGHT", prev, "LEFT", -4, 0)
+                else
+                    tex:SetPoint("RIGHT", f.keyText, "LEFT", -6, 0)
+                end
+                tex:Show()
+                prev = tex
             end
-            tex:Show()
-            prev = tex
-            ::continue::
         end
         -- Hide any stale icons from a previous run with more affixes.
         for i = #ids + 1, #f.affixIcons do f.affixIcons[i]:Hide() end
