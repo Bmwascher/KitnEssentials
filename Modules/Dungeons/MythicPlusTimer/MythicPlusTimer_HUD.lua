@@ -235,7 +235,11 @@ function MPT:RenderBar()
     if not bars or not db then return end
     local bar = bars.timerBar
     local maxTime = run.maxTime or 0
-    if maxTime <= 0 then return end
+    if maxTime <= 0 then
+        -- Reset fill so a stale bar never lingers when a new run has no data yet.
+        MPT.SetValueGated(bar, 0)
+        return
+    end
 
     local elapsed = run.elapsed or 0
     local fillPct = min(1, elapsed / maxTime)
@@ -257,7 +261,37 @@ function MPT:RenderBar()
     else
         r, g, b = db.BarColor[1], db.BarColor[2], db.BarColor[3]
     end
-    bar:SetStatusBarColor(r, g, b)
+
+    -- Gate the recolor: SetStatusBarColor is a draw call; skip when unchanged.
+    -- NOTE: ApplySettings (Task 2.5) must nil bars._keThreshSig to bust
+    -- the threshold-geometry cache when TickColor or BarHeight changes via GUI.
+    -- For symmetry, the fill-color cache is inline on bar itself.
+    if bar._keFillR ~= r or bar._keFillG ~= g or bar._keFillB ~= b then
+        bar._keFillR, bar._keFillG, bar._keFillB = r, g, b
+        bar:SetStatusBarColor(r, g, b)
+    end
+end
+
+---------------------------------------------------------------------------------
+-- _PlaceTick / _PlaceLabel — file-local helpers lifted out of RenderThresholds
+-- so the geometry block (which now runs rarely) doesn't allocate closures.
+-- Inline into the cache-miss block; label text still updates every tick below.
+---------------------------------------------------------------------------------
+
+local function _PlaceTick(tex, timerBar, barW, barH, tickW, cutoff, maxTime, tr, tg, tb)
+    tex:ClearAllPoints()
+    tex:SetSize(tickW, barH)
+    local x = KE:PixelSnap(barW * (cutoff / maxTime)) - tickW / 2
+    tex:SetPoint("TOPLEFT", timerBar, "TOPLEFT", x, 0)
+    tex:SetColorTexture(tr, tg, tb, 1)
+    tex:Show()
+end
+
+local function _PlaceLabel(fs, timerBar, barW, cutoff, maxTime)
+    fs:ClearAllPoints()
+    local x = KE:PixelSnap(barW * (cutoff / maxTime))
+    fs:SetPoint("BOTTOM", timerBar, "TOPLEFT", x, 2)
+    fs:Show()
 end
 
 ---------------------------------------------------------------------------------
@@ -265,6 +299,14 @@ end
 -- remaining-time labels ABOVE the bar at +3/+2/+1 (WarpDeplete look).
 -- Ticks: 2 physical pixels wide, db.TickColor, parented to timerBar.
 -- Labels: gated on db.ShowThresholdLabels; use MPT.ThresholdRemaining.
+--
+-- Geometry (tick positions/sizes and label X-positions) is a pure function of
+-- (barW, maxTime, thresholds, BarHeight, TickColor) — static for the duration
+-- of a run. A signature cache on bars skips all ClearAllPoints/SetPoint/SetSize/
+-- SetColorTexture calls when geometry is unchanged. Label TEXT (countdown
+-- strings) still updates every tick outside the cache block.
+-- NOTE: ApplySettings (Task 2.5) must set bars._keThreshSig = nil to bust this
+-- cache when BarHeight or TickColor changes via the GUI.
 ---------------------------------------------------------------------------------
 
 function MPT:RenderThresholds()
@@ -287,19 +329,28 @@ function MPT:RenderThresholds()
     local barH  = (db.BarHeight or 14) - 2
     local tickW = KE:PixelSnap(2)
     local tr, tg, tb = db.TickColor[1], db.TickColor[2], db.TickColor[3]
+    local t3 = run.thresholds.plus3
+    local t2 = run.thresholds.plus2
+    local t1 = run.thresholds.plus1
 
-    local function placeTick(tex, cutoff)
-        tex:ClearAllPoints()
-        tex:SetSize(tickW, barH)
-        local x = KE:PixelSnap(barW * (cutoff / maxTime)) - tickW / 2
-        tex:SetPoint("TOPLEFT", bars.timerBar, "TOPLEFT", x, 0)
-        tex:SetColorTexture(tr, tg, tb, 1)
-        tex:Show()
+    -- Geometry cache: all SetPoint/SetSize/SetColorTexture calls are pure
+    -- functions of this signature. Skip when nothing structural changed.
+    local sig = barW .. ":" .. maxTime .. ":" .. t3 .. ":" .. t2 .. ":"
+                .. (db.BarHeight or 14) .. ":" .. tr .. ":" .. tg .. ":" .. tb
+    if bars._keThreshSig ~= sig then
+        bars._keThreshSig = sig
+        _PlaceTick(bars.tick3, bars.timerBar, barW, barH, tickW, t3, maxTime, tr, tg, tb)
+        _PlaceTick(bars.tick2, bars.timerBar, barW, barH, tickW, t2, maxTime, tr, tg, tb)
+        if db.ShowThresholdLabels then
+            local f = self.frames.root
+            _PlaceLabel(f.thresh3Text, bars.timerBar, barW, t3, maxTime)
+            _PlaceLabel(f.thresh2Text, bars.timerBar, barW, t2, maxTime)
+            _PlaceLabel(f.thresh1Text, bars.timerBar, barW, t1, maxTime)
+        end
     end
-    placeTick(bars.tick3, run.thresholds.plus3)
-    placeTick(bars.tick2, run.thresholds.plus2)
 
-    -- Remaining-time labels above the bar (WarpDeplete look)
+    -- Remaining-time labels above the bar (WarpDeplete look).
+    -- Text updates every tick regardless of geometry cache.
     local f = self.frames.root
     if not db.ShowThresholdLabels then
         self.SetTextGated(f.thresh3Text, ""); f.thresh3Text:Hide()
@@ -309,15 +360,8 @@ function MPT:RenderThresholds()
     end
     local FormatTime = MPT.FormatTime
     local elapsed = run.elapsed or 0
-    local function placeLabel(fs, cutoff)
-        local remain = MPT.ThresholdRemaining(elapsed, cutoff)
-        self.SetTextGated(fs, FormatTime(remain, false))
-        fs:ClearAllPoints()
-        local x = KE:PixelSnap(barW * (cutoff / maxTime))
-        fs:SetPoint("BOTTOM", bars.timerBar, "TOPLEFT", x, 2)
-        fs:Show()
-    end
-    placeLabel(f.thresh3Text, run.thresholds.plus3)
-    placeLabel(f.thresh2Text, run.thresholds.plus2)
-    placeLabel(f.thresh1Text, run.thresholds.plus1)  -- plus1 == maxTime (bar end)
+    self.SetTextGated(f.thresh3Text, FormatTime(MPT.ThresholdRemaining(elapsed, t3), false))
+    self.SetTextGated(f.thresh2Text, FormatTime(MPT.ThresholdRemaining(elapsed, t2), false))
+    self.SetTextGated(f.thresh1Text, FormatTime(MPT.ThresholdRemaining(elapsed, t1), false))
+    f.thresh3Text:Show(); f.thresh2Text:Show(); f.thresh1Text:Show()
 end
