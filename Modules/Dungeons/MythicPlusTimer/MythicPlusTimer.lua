@@ -31,8 +31,8 @@ local PLUS_TWO_RATIO   = 0.8   -- +2 cutoff (80% of timer)
 local PLUS_THREE_RATIO = 0.6   -- +3 cutoff (60% of timer)
 local CHALLENGERS_PERIL_AFFIX_ID = 152  -- adds +90s; thresholds computed on (maxTime-90)
 
--- Module debug flag. Flip to true to enable tick-driver + state-transition tracing.
--- Task 1.8 will add further instrumentation gates here. Leave false in shipping builds.
+-- Module debug flag. Flip to true + /reload for lifecycle/event tracing.
+-- Leave false in shipping builds.
 local DEBUG_MPT = false
 
 -- Single shared run state (the contract's MPT.run). Reset by MPT:ResetRun(),
@@ -365,8 +365,24 @@ end
 
 function MPT:OnEnable()
     if not self.db.Enabled then return end
-    -- Always-on event registration, HUD build, and active-run restore are wired
-    -- in later phases (RegisterRunEvents / BuildHUD / CheckForActiveRun).
+    self:InstallTickHook()
+    -- Always-on (low-frequency) tier — enough to detect a key starting.
+    self:RegisterEvent("PLAYER_ENTERING_WORLD")
+    self:RegisterEvent("CHALLENGE_MODE_START")
+    self:RegisterEvent("CHALLENGE_MODE_COMPLETED")
+    self:RegisterEvent("CHALLENGE_MODE_RESET")
+    self:RegisterEvent("WORLD_STATE_TIMER_START")
+    self:RegisterEvent("WORLD_STATE_TIMER_STOP")
+    self:RegisterEvent("CHALLENGE_MODE_DEATH_COUNT_UPDATED")
+    self:RegisterEvent("UPDATE_INSTANCE_INFO")
+    -- Build the HUD if its file is loaded (Task 2.1 defines BuildHUD). Guard is
+    -- MANDATORY in Phase 1 — the HUD file does not exist yet; mirrors the
+    -- PurgeStaleSplits guard idiom below.
+    if self.BuildHUD then self:BuildHUD() end
+    -- Restore HUD if we /reload'd mid-key.
+    self:CheckForActiveRun()
+    -- Season-based purge of stale split records (deferred; API not ready at login).
+    C_Timer.After(2, function() if self.PurgeStaleSplits then self:PurgeStaleSplits() end end)
 end
 
 function MPT:OnDisable()
@@ -390,6 +406,7 @@ function MPT:OnDeathCountUpdated()
     local count, timeLost = C_ChallengeMode.GetDeathCount()
     self.run.deaths = count or 0
     self.run.deathTimeLost = timeLost or 0
+    if DEBUG_MPT then KE:Print(format("[MPT] OnDeathCountUpdated: count=%d timeLost=%d", self.run.deaths, self.run.deathTimeLost)) end
 end
 
 -- Both drivers (Blizzard hook + fallback) funnel here. Early-returns unless the
@@ -473,6 +490,73 @@ end
 function MPT:Render() end
 
 ---------------------------------------------------------------------------------
+-- Two-tier event registration (Task 1.8)
+---------------------------------------------------------------------------------
+
+-- Registered only during an active run (high-frequency; would wake on every
+-- quest/scenario update outside a key). Per the contract's run-only tier.
+-- UNIT_DIED registration arrives in Task 3.4 (handler must exist first).
+local RUN_EVENTS = { "SCENARIO_CRITERIA_UPDATE", "SCENARIO_POI_UPDATE", "ZONE_CHANGED_NEW_AREA" }
+
+function MPT:RegisterRunEvents()
+    if DEBUG_MPT then KE:Print("[MPT] run events registered") end
+    for _, ev in ipairs(RUN_EVENTS) do self:RegisterEvent(ev) end
+end
+
+function MPT:UnregisterRunEvents()
+    if DEBUG_MPT then KE:Print("[MPT] run events unregistered") end
+    for _, ev in ipairs(RUN_EVENTS) do self:UnregisterEvent(ev) end
+end
+
+-- Always-on event handlers (registered in OnEnable; low-frequency).
+function MPT:PLAYER_ENTERING_WORLD()
+    self:CheckForActiveRun()
+end
+
+function MPT:CHALLENGE_MODE_START()
+    self:StartRun()
+end
+
+function MPT:CHALLENGE_MODE_COMPLETED()
+    self:CompleteRun()
+end
+
+function MPT:CHALLENGE_MODE_RESET()
+    self:ResetRun()
+end
+
+-- Run-only criteria/POI updates: re-read forces+objectives, then debounce render.
+function MPT:SCENARIO_CRITERIA_UPDATE()
+    if not self.run.active then return end
+    self:UpdateForces()
+    self:UpdateObjectives()
+    self:NotifyRefresh()
+end
+
+-- SCENARIO_POI_UPDATE shares the same handler as SCENARIO_CRITERIA_UPDATE.
+MPT.SCENARIO_POI_UPDATE = MPT.SCENARIO_CRITERIA_UPDATE
+
+function MPT:ZONE_CHANGED_NEW_AREA() self:NotifyRefresh() end
+
+-- Authoritative death count changed (always-on tier).
+function MPT:CHALLENGE_MODE_DEATH_COUNT_UPDATED()
+    self:OnDeathCountUpdated()
+    self:NotifyRefresh()
+end
+
+-- WORLD_STATE_TIMER_START/STOP and instance-info events resolve to a re-check.
+function MPT:WORLD_STATE_TIMER_START() self:CheckForActiveRun() end
+function MPT:WORLD_STATE_TIMER_STOP() if not self.run.active then self:ResetRun() end end
+function MPT:UPDATE_INSTANCE_INFO() if not self.run.active then self:CheckForActiveRun() end end
+
+-- NOTE: PLAYER_REGEN_ENABLED is registered/unregistered on demand by
+-- MPT:ApplyTrackerVisibility via OnTrackerRegenEnabled — do NOT add a static
+-- default handler here (it would shadow the on-demand registration).
+-- NOTE: UNIT_DIED and CHALLENGE_MODE_KEYSTONE_RECEPTABLE_OPEN registrations +
+-- handlers live in Tasks 3.4 and 5.1 respectively — AceEvent/CallbackHandler
+-- hard-errors at RegisterEvent time when the handler method does not exist.
+
+---------------------------------------------------------------------------------
 -- Run lifecycle (Task 1.7)
 ---------------------------------------------------------------------------------
 
@@ -490,12 +574,19 @@ function MPT:StartRun()
     -- preview teardown (ShowPreview/HidePreview: Task 2.6); isPreview is nil until then, so this is inert in Phase 1
     if self.isPreview then self:HidePreview() end
     local run = self.run
-    if run.active then return end  -- idempotent guard
+    if run.active then
+        if DEBUG_MPT then KE:Print("[MPT] StartRun: already active, ignoring") end
+        return
+    end
     local mapID = C_ChallengeMode.GetActiveChallengeMapID()
-    if not mapID then return end
+    if not mapID then
+        if DEBUG_MPT then KE:Print("[MPT] StartRun: no active map ID, ignoring") end
+        return
+    end
 
     local _, _, timeLimit = C_ChallengeMode.GetMapUIInfo(mapID)
     local level, affixIDs = C_ChallengeMode.GetActiveKeystoneInfo()
+    if DEBUG_MPT then KE:Print(format("[MPT] StartRun: mapID=%d level=%d maxTime=%d", mapID, level or 0, timeLimit or 0)) end
 
     run.active = true
     run.completed = false
@@ -523,7 +614,7 @@ function MPT:StartRun()
     self:OnDeathCountUpdated()
 
     if self.LoadSplits then self:LoadSplits() end  -- defined in Task 3.6 (guard removed there)
-    if self.RegisterRunEvents then self:RegisterRunEvents() end  -- Task 1.8 removes this guard
+    self:RegisterRunEvents()
     self:StartTimerLoop()
     self:OnTimerTick()                    -- prime the display immediately
     self:ApplyTrackerVisibility()         -- QoL hide (combat-guarded, Step 5)
@@ -534,18 +625,25 @@ function MPT:CompleteRun()
     -- preview teardown (ShowPreview/HidePreview: Task 2.6); isPreview is nil until then, so this is inert in Phase 1
     if self.isPreview then self:HidePreview() end
     local run = self.run
-    if run.completed then return end  -- idempotent guard
+    if run.completed then
+        if DEBUG_MPT then KE:Print("[MPT] CompleteRun: already completed, ignoring") end
+        return
+    end
+    if DEBUG_MPT then KE:Print("[MPT] CompleteRun: completing run") end
     run.completed = true
     run.active = false
     run.countdown = false
     self:StopTimerLoop()
+    self:UnregisterRunEvents()
     -- Authoritative final time (ms). GetWorldElapsedTime can go secret/stale ("99:99")
     -- after depletion, so always prefer GetChallengeCompletionInfo here.
     local info = C_ChallengeMode.GetChallengeCompletionInfo and C_ChallengeMode.GetChallengeCompletionInfo()
     if info and info.time and info.time > 0 then
+        if DEBUG_MPT then KE:Print(format("[MPT] CompleteRun: elapsed source=completion-info time=%.1f", info.time / 1000)) end
         run.elapsed = info.time / 1000
     else
         local _, e = GetWorldElapsedTime(1)
+        if DEBUG_MPT then KE:Print(format("[MPT] CompleteRun: elapsed source=world-elapsed fallback time=%.1f", e or 0)) end
         run.elapsed = e or run.elapsed
     end
     self:UpdateObjectives()  -- backfill any final clear times
@@ -560,7 +658,11 @@ function MPT:ResetRun()
     -- preview teardown (ShowPreview/HidePreview: Task 2.6); isPreview is nil until then, so this is inert in Phase 1
     if self.isPreview then self:HidePreview() end
     local run = self.run
-    if not run.active and not run.completed and run.mapID == nil then return end  -- idempotent
+    if not run.active and not run.completed and run.mapID == nil then
+        if DEBUG_MPT then KE:Print("[MPT] ResetRun: nothing to reset, ignoring") end
+        return
+    end
+    if DEBUG_MPT then KE:Print("[MPT] ResetRun: resetting run state") end
     run.active = false
     run.completed = false
     run.countdown = false
@@ -579,6 +681,7 @@ function MPT:ResetRun()
     run.forces.current, run.forces.total, run.forces.percent, run.forces.completed = 0, 0, 0, false
     run.forces._lastQS, run.forces._lastQSParsed = nil, nil
     run.bestOverall = nil
+    self:UnregisterRunEvents()
     self:StopTimerLoop()
     -- Clear any stale combat-defer; ApplyTrackerVisibility re-arms it if still locked.
     self._trackerPending = nil
@@ -642,6 +745,7 @@ function MPT:ApplyTrackerVisibility()
     -- ObjectiveTrackerFrame is protected: never Hide/Show during combat lockdown;
     -- defer to PLAYER_REGEN_ENABLED (spec section 8 tracker rule).
     if InCombatLockdown() then
+        if DEBUG_MPT then KE:Print("[MPT] ApplyTrackerVisibility: tracker defer: in combat") end
         self._trackerPending = true
         self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnTrackerRegenEnabled")
         return
@@ -651,9 +755,11 @@ function MPT:ApplyTrackerVisibility()
     -- never one another addon hid (e.g. KalielsTracker) — Show() unconditionally
     -- would fight other tracker addons on every lifecycle pass.
     if wantHide then
+        if DEBUG_MPT then KE:Print("[MPT] ApplyTrackerVisibility: hiding tracker") end
         if otf:IsShown() then otf:Hide() end
         self._keHidTracker = true
     elseif self._keHidTracker then
+        if DEBUG_MPT then KE:Print("[MPT] ApplyTrackerVisibility: showing tracker") end
         if not otf:IsShown() then otf:Show() end
         self._keHidTracker = nil
     end
