@@ -428,6 +428,9 @@ function MPT:OnDisable()
     -- Pending refresh timer must not render on a disabled module; ticker must detach.
     self:StopTimerLoop()
     self._refreshQueued = nil
+    -- Overlay teardown: UnregisterAllEvents below kills the plate events, but the
+    -- 0.5s nameplate ticker and any attached plate texts survive without this.
+    self:SetOverlayActive(false)
     self:UnregisterAllEvents()
     self:UnhookAll()
 end
