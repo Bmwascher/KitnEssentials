@@ -183,6 +183,7 @@ local MPT_DEFAULTS = {
     BarTexture = "KitnUI",
     BarWidth = 300, BarHeight = 14,
     BarColor = {0.56, 0.56, 0.56},
+    BarBackgroundColor = {0.12, 0.12, 0.12},  -- empty-track tint, both bars (fixed 0.9 alpha)
     StateColorFill = false,
     TickColor = {1, 1, 1},
     ShowThresholdLabels = true,
@@ -380,7 +381,11 @@ function MPT:UpdateObjectives()
             local rawName = info.description or ("Objective " .. i)
             if rawName ~= obj._rawName then
                 obj._rawName = rawName
-                obj.name = rawName:gsub("^\226\156\147%s*", ""):gsub("^%-%s*", "")
+                local name = rawName:gsub("^\226\156\147%s*", ""):gsub("^%-%s*", "")
+                -- Drop Blizzard's "defeated" suffix from boss criteria, then
+                -- trim (EUI StripDefeated port, EUI:827-831).
+                name = name:gsub("[Dd]efeated", "")
+                obj.name = name:match("^%s*(.-)%s*$") or name
             end
 
             local wasCompleted = obj.completed

@@ -136,7 +136,8 @@ function MPT:BuildHUD()
     end
 
     root.deathsText    = FS()              -- "N Deaths (+penalty)"
-    root.timerText     = FS()              -- "15:00 / 28:00"
+    root.timerText     = FS()              -- changing timer part ("15:00")
+    root.timerSuffixText = FS()            -- static " / 28:00" tail, pinned at the right edge
     root.timerPBText   = FS()              -- gold PB beside timer (countdown)
     root.keyText       = FS()              -- "[30]" key bracket
     root.affixText     = FS()              -- affix names (TEXT mode)
@@ -346,18 +347,24 @@ function MPT:RenderTimer()
         end
     end
 
-    local str
+    -- Split into a changing part and a STATIC " / total" suffix rendered by
+    -- its own right-pinned FontString: re-measuring the combined string every
+    -- second made the whole line shimmer (proportional digit widths + width
+    -- rounding). The suffix never re-renders, so it is pixel-stable; only the
+    -- changing part's left edge moves. DETAIL's tail changes per tick, so it
+    -- stays whole-string (suffix empty).
+    local str, suffix
     if mode == "REMAINING" then
-        str = remStr
+        str, suffix = remStr, ""
     elseif mode == "REMAINING_TOTAL" then
-        str = remStr .. " / " .. maxStr
+        str, suffix = remStr, " / " .. maxStr
     elseif mode == "ELAPSED" then
-        str = elaStr
+        str, suffix = elaStr, ""
     elseif mode == "ELAPSED_DETAIL" then
         -- e.g. "21:23 (11:37 / 33:00)" — elapsed (remaining / total)
-        str = elaStr .. " (" .. remStr .. " / " .. maxStr .. ")"
+        str, suffix = elaStr .. " (" .. remStr .. " / " .. maxStr .. ")", ""
     else -- ELAPSED_TOTAL (default)
-        str = elaStr .. " / " .. maxStr
+        str, suffix = elaStr, " / " .. maxStr
     end
 
     -- Default: white from db.TimerColor.
@@ -376,6 +383,13 @@ function MPT:RenderTimer()
     self.SetTextGated(f.timerText, str)
     self.SetColorGated(f.timerText, r, g, b)
     f.timerText:Show()
+    self.SetTextGated(f.timerSuffixText, suffix)
+    if suffix ~= "" then
+        self.SetColorGated(f.timerSuffixText, r, g, b)
+        f.timerSuffixText:Show()
+    else
+        f.timerSuffixText:Hide()  -- zero-width: timerText lands at the right edge
+    end
 
     -- Overall PB / delta beside the timer (f.timerPBText: created + anchored
     -- in Task 2.1; fonted by ApplyLayout's applyFont(f.timerPBText, "PB")).
@@ -970,7 +984,7 @@ function MPT:ApplyLayout()
 
     -- Locals shared by both the config section and the stacking pass below.
     local PAD  = 12
-    local ROW  = 6
+    local ROW  = 2   -- tightened from 6 (2026-06-10 feedback: match WD's density)
     local barW = db.BarWidth  or 300
     local barH = db.BarHeight or 14
     local bars = self.frames.bars
@@ -994,6 +1008,7 @@ function MPT:ApplyLayout()
 
         applyFont(f.deathsText,  "Deaths")
         applyFont(f.timerText,   "Timer")
+        applyFont(f.timerSuffixText, "Timer")
         applyFont(f.timerPBText, "PB")
         applyFont(f.keyText,     "Key")
         applyFont(f.affixText,   "Affix")
@@ -1044,8 +1059,9 @@ function MPT:ApplyLayout()
             f.forcesText:SetPoint("TOPRIGHT", bars.forcesWrap, "BOTTOMRIGHT", 0, -1)
         else  -- EDGE (default): straddles the bar's BOTTOM edge at the right
               -- corner (WarpDeplete look) — half in / half out; the stacking
-              -- pass reserves the protruding half-line.
-            f.forcesText:SetPoint("RIGHT", bars.forcesWrap, "BOTTOMRIGHT", -2, 0)
+              -- pass reserves the protruding half-line. +2 y-bias rides the
+              -- text slightly higher into the bar (2026-06-10 feedback).
+            f.forcesText:SetPoint("RIGHT", bars.forcesWrap, "BOTTOMRIGHT", -2, 2)
         end
     end
 
@@ -1068,7 +1084,7 @@ function MPT:ApplyLayout()
         end
     end
     _sigBuf[1]  = #(f.deathsText:GetText() or "")
-    _sigBuf[2]  = #(f.timerText:GetText() or "")
+    _sigBuf[2]  = #(f.timerText:GetText() or "") + #(f.timerSuffixText:GetText() or "")
     _sigBuf[3]  = #(f.keyText:GetText() or "")
     _sigBuf[4]  = #(f.affixText:GetText() or "")
     _sigBuf[5]  = #(f.forcesText:GetText() or "")
@@ -1085,7 +1101,7 @@ function MPT:ApplyLayout()
     f._keLayoutSig = sig
 
     -- Publish the layout-cursor constants consumed by RenderObjectives (Task 3.2).
-    MPT._PAD, MPT._ROW_GAP, MPT._OBJ_GAP = PAD, ROW, 4
+    MPT._PAD, MPT._ROW_GAP, MPT._OBJ_GAP = PAD, ROW, 2
     local y = -PAD
     local function row(fs, gap)
         if fs:IsShown() then
@@ -1095,7 +1111,17 @@ function MPT:ApplyLayout()
         end
     end
     row(f.deathsText)
-    row(f.timerText)
+    -- Timer row: the static " / total" suffix is pinned at the right edge and
+    -- the changing part hangs off its LEFT, so the suffix never shifts while
+    -- the elapsed string is re-measured each second. With an empty (hidden)
+    -- suffix the changing part lands at the right edge itself (zero width).
+    if f.timerText:IsShown() then
+        f.timerSuffixText:ClearAllPoints()
+        f.timerSuffixText:SetPoint("TOPRIGHT", f, "TOPRIGHT", -PAD, y)
+        f.timerText:ClearAllPoints()
+        f.timerText:SetPoint("TOPRIGHT", f.timerSuffixText, "TOPLEFT", 0, 0)
+        y = y - (f.timerText:GetStringHeight() or (db.FontSize or 13)) - ROW
+    end
     row(f.keyText)  -- affixText anchored left of keyText in Step 2; ICON-mode icons anchored in RenderKey (grow leftward)
     -- Reserve room for the threshold labels: a full row for ABOVE, the
     -- protruding half-line for EDGE (half-in/half-out on the bar's top
@@ -1193,9 +1219,13 @@ function MPT:ApplySettings()
     -- Re-apply the StatusBar textures (user can change BarTexture in GUI).
     bars.timerBar:SetStatusBarTexture(barTex)
     bars.forcesBar:SetStatusBarTexture(barTex)
-    -- Re-apply the background textures (same texture; vertex-colored dark in BuildHUD).
+    -- Re-apply the background textures + empty-track tint (BarBackgroundColor;
+    -- BuildHUD only seeds the initial 0.12 dark).
+    local bgc = self.db.BarBackgroundColor or { 0.12, 0.12, 0.12 }
     bars.timerBg:SetTexture(barTex)
     bars.forcesBg:SetTexture(barTex)
+    bars.timerBg:SetVertexColor(bgc[1], bgc[2], bgc[3], 0.9)
+    bars.forcesBg:SetVertexColor(bgc[1], bgc[2], bgc[3], 0.9)
 
     -- Bust the length-gate (font/size changes restack), the threshold geometry
     -- cache (BarHeight/TickColor changes re-run _PlaceTick/_PlaceLabel), and the
