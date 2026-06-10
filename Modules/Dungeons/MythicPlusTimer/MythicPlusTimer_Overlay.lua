@@ -107,10 +107,10 @@ function MPT:MigrateLegacyOverlayDB()
     end
 
     -- Old table is fully retired (Instance Reset Announcer + DeathLog drop with it).
-    -- Deliberately NOT nil-ing profile.Dungeons.WarpDepleteForces here: the live
-    -- WDF module re-binds self.db to that slot on every profile switch
-    -- (ProfileManager duck-types UpdateDB) and would crash on a nil section.
-    -- Task 4.8 removes the WDF module + its Defaults.lua block; the slot dies there.
+    -- Deliberately NOT nil-ing profile.Dungeons.WarpDepleteForces: the WDF module
+    -- and its Defaults.lua block are deleted, so AceDB no longer reseeds the slot —
+    -- old SavedVariables may still carry it, but leaving the orphan untouched is
+    -- harmless and avoids mutating the profile table structure here.
 end
 
 ---------------------------------------------------------------------------------

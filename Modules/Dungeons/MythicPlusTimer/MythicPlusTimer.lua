@@ -573,6 +573,9 @@ local function ScanPartyAlive()
             _partyAlive[name] = true
         end
     end
+    -- Solo safety net: with GetNumGroupMembers() == 0 the loop never runs, so
+    -- snapshot the player directly. In a real party the loop's i == count arm
+    -- already covered "player" and this is an idempotent duplicate write.
     if prefix == "party" then
         local name = UnitName("player")
         if name and not UnitIsDeadOrGhost("player") then
