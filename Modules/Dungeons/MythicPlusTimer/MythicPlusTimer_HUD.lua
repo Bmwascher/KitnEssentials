@@ -31,12 +31,15 @@ function MPT.SetTextGated(fs, str)
 end
 
 -- Skip SetValue when the new fill differs from the last by < 1 physical
--- pixel of the bar's pixel width. widthPx = bar width in addon coords.
+-- pixel of the bar's pixel width. widthPx = bar width in addon coords;
+-- falls back to bar:GetWidth() so the gate never silently disappears
+-- when a caller omits it (DT `_cachedBarWidth or GetWidth()` pattern).
 function MPT.SetValueGated(bar, v, widthPx)
     if not bar then return end
     if v < 0 then v = 0 elseif v > 1 then v = 1 end
+    local w = widthPx or bar:GetWidth()
     local last = bar._keLastValue
-    if last and widthPx and abs(v - last) * widthPx < 1 then return end
+    if last and w and w > 0 and abs(v - last) * w < 1 then return end
     bar._keLastValue = v
     bar:SetValue(v)
 end
@@ -51,6 +54,8 @@ function MPT:BuildHUD()
 
     local root = CreateFrame("Frame", "KE_MythicPlusTimer", UIParent, "BackdropTemplate")
     root:SetSize(300, 200)
+    -- Build-time default only — ApplySettings (Task 2.5) must re-apply Strata
+    -- (and bar textures) so GUI changes take effect without a /reload.
     root:SetFrameStrata(self.db and self.db.Strata or "MEDIUM")
     root:SetClampedToScreen(true)
     root:EnableMouse(false)
