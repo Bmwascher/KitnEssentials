@@ -572,6 +572,14 @@ function MPT:RecordDeath(guid, knownName, knownUnit)
         if name and not UnitInParty(name) and name ~= UnitName("player") then
             return                                       -- non-party death, ignore
         end
+        -- Mutual exclusion with the GetDeathCount party-scan: both paths fire
+        -- for the same death (UNIT_DIED + count diff), and the front-trim
+        -- reconcile in OnDeathCountUpdated would then delete an older VALID
+        -- entry (log corrupts from death #2 on). Record only while the member
+        -- is still marked alive, and prune the snapshot so the later scan
+        -- can't append a duplicate (mirrors CheckForNewDeaths' prune).
+        if not name or not _partyAlive[name] then return end
+        _partyAlive[name] = nil
     else
         return
     end
