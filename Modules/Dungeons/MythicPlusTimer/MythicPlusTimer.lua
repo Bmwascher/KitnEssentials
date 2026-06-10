@@ -274,22 +274,26 @@ end
 -- truncates via SetWidth+SetWordWrap(false) (engine-side, no Lua string read).
 -- pbTime is left nil here — MPT:ResolvePB (Splits phase) fills it per run.
 -- Plain reads: GetCriteriaInfo description/completed/elapsed and
--- GetWorldElapsedTime are non-secret (contract "DO NOT GUARD" set).
+-- GetStepInfo are non-secret (contract "DO NOT GUARD" set).
+-- Reload-safe: clearTime is back-stamped via _activeRunSplits so a /reload
+-- mid-run restores prior kill times without re-triggering chat output (Task 5.3).
 function MPT:UpdateObjectives()
-    local run = self.run
-    local numCriteria = select(3, C_Scenario.GetStepInfo()) or 0
+    local run = MPT.run
+    local numCriteria = select(3, C_Scenario.GetStepInfo()) or 0  -- non-secret loop bound
     local elapsed = run.elapsed or 0
-    local idx = 0
+    local objIdx = 0
+
     for i = 1, numCriteria do
         local info = C_ScenarioInfo.GetCriteriaInfo(i)
         if info and not info.isWeightedProgress then
-            idx = idx + 1
-            local obj = run.objectives[idx]
+            objIdx = objIdx + 1
+            local obj = run.objectives[objIdx]
             if not obj then
                 obj = { name = "", completed = false, clearTime = nil, pbTime = nil, criteriaIndex = i }
-                run.objectives[idx] = obj
+                run.objectives[objIdx] = obj
             end
             obj.criteriaIndex = i
+
             -- Strip Blizzard's leading checkmark (U+2713 = 0xE2 0x9C 0x93) + dash.
             -- Gated on the raw string — this fires per SCENARIO_CRITERIA_UPDATE,
             -- and names are stable after CHALLENGE_MODE_START; skip the gsub churn.
@@ -298,23 +302,38 @@ function MPT:UpdateObjectives()
                 obj._rawName = rawName
                 obj.name = rawName:gsub("^\226\156\147%s*", ""):gsub("^%-%s*", "")
             end
+
             local wasCompleted = obj.completed
             obj.completed = info.completed and true or false
-            if obj.completed and not wasCompleted and not obj.clearTime then
-                -- Authoritative per-objective clear time: WarpDeplete State.lua:327 pattern.
-                local _, worldElapsed = GetWorldElapsedTime(1)
-                obj.clearTime = (worldElapsed or elapsed) - (info.elapsed or 0)
+
+            if obj.completed and not wasCompleted then
+                -- Reload survival: reuse persisted split if present, else stamp now.
+                local saved = MPT.db._activeRunSplits and MPT.db._activeRunSplits[objIdx]
+                if saved and saved > 0 then
+                    obj.clearTime = saved
+                else
+                    -- Back-dated to the actual kill moment (WarpDeplete semantic):
+                    -- info.elapsed is the time since this criterion completed.
+                    obj.clearTime = elapsed - (info.elapsed or 0)
+                    if not MPT.db._activeRunSplits then MPT.db._activeRunSplits = {} end
+                    MPT.db._activeRunSplits[objIdx] = obj.clearTime
+                    -- Task 5.3 inserts the ChatOutputBossSplit call HERE — in this
+                    -- fresh-stamp arm ONLY (never the restoration arm above), so a
+                    -- /reload mid-run cannot re-post a boss split to chat.
+                end
             elseif not obj.completed then
                 obj.clearTime = nil
             end
         end
     end
-    -- Trim stale rows from a previous step/run (EllesmereUI :451-453 pattern).
-    -- Intentional data-loss on step transition: trimmed rows drop their clearTime.
-    -- Criterion order is stable within a step (EUI + WarpDeplete both rely on it).
-    for j = #run.objectives, idx + 1, -1 do
-        run.objectives[j] = nil
+
+    -- Trim stale rows beyond the live criteria count.
+    for i = objIdx + 1, #run.objectives do
+        run.objectives[i] = nil
     end
+
+    -- Resolve PB targets/deltas for each objective (Splits, Task 3.6).
+    if MPT.UpdateSplits then MPT:UpdateSplits() end  -- guard removed by Task 3.6
 end
 
 -- Seed KE.db.profile.MythicPlusTimer from MPT_DEFAULTS for any key
@@ -659,6 +678,7 @@ function MPT:CompleteRun()
         run.elapsed = e or run.elapsed
     end
     self:UpdateObjectives()  -- backfill any final clear times
+    MPT.db._activeRunSplits = nil  -- run over; in-progress split cache no longer needed
     if self.UpdateSplits then self:UpdateSplits() end  -- Task 3.6: commit best per-boss + overall (guard removed there)
     -- Clear any stale combat-defer; ApplyTrackerVisibility re-arms it if still locked.
     self._trackerPending = nil
@@ -695,6 +715,7 @@ function MPT:ResetRun()
     run.forces.current, run.forces.total, run.forces.percent, run.forces.completed = 0, 0, 0, false
     run.forces._lastQS, run.forces._lastQSParsed = nil, nil
     run.bestOverall = nil
+    MPT.db._activeRunSplits = nil
     self:UnregisterRunEvents()
     self:StopTimerLoop()
     -- Clear any stale combat-defer; ApplyTrackerVisibility re-arms it if still locked.
