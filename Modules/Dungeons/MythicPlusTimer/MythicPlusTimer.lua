@@ -380,16 +380,25 @@ function MPT:UpdateObjectives()
             obj.completed = info.completed and true or false
 
             if obj.completed and not wasCompleted then
-                -- Reload survival: reuse persisted split if present, else stamp now.
-                local saved = MPT.db._activeRunSplits and MPT.db._activeRunSplits[objIdx]
+                -- Reload survival: reuse the persisted split only when it
+                -- belongs to THIS run (identity-stamped "mapID:level"). A
+                -- stale cache from another key must never back-stamp — see
+                -- ResetRun's hoisted clear for the cross-session leak path.
+                local cache = MPT.db._activeRunSplits
+                local runKey = MPT.BuildSplitKey(run.mapID, run.level)
+                local saved = cache and cache.key == runKey and cache[objIdx]
                 if saved and saved > 0 then
                     obj.clearTime = saved
                 else
                     -- Back-dated to the actual kill moment (WarpDeplete semantic):
                     -- info.elapsed is the time since this criterion completed.
                     obj.clearTime = elapsed - (info.elapsed or 0)
-                    if not MPT.db._activeRunSplits then MPT.db._activeRunSplits = {} end
-                    MPT.db._activeRunSplits[objIdx] = obj.clearTime
+                    -- Create-or-rekey: also displaces a legacy keyless table.
+                    if not cache or cache.key ~= runKey then
+                        cache = { key = runKey }
+                        MPT.db._activeRunSplits = cache
+                    end
+                    cache[objIdx] = obj.clearTime
                     -- Fresh-stamp arm ONLY (never the restoration arm above), so a
                     -- /reload mid-run cannot re-post a boss split to chat (Task 5.3).
                     self:ChatOutputBossSplit(obj)
@@ -997,6 +1006,12 @@ end
 function MPT:ResetRun()
     -- preview teardown (ShowPreview/HidePreview: Task 2.6); isPreview is nil until then, so this is inert in Phase 1
     if self.isPreview then self:HidePreview() end
+    -- The persisted in-flight split cache is independent of in-memory run
+    -- state: clear it BEFORE the early-return below. A logout mid-key leaves
+    -- it alive across sessions (fresh session = pristine memory = the guard
+    -- returns), and the next run would back-stamp the old key's clear times
+    -- into the improve-only PB store — permanently.
+    MPT.db._activeRunSplits = nil
     local run = self.run
     if not run.active and not run.completed and run.mapID == nil then
         if DEBUG_MPT then KE:Print("[MPT] ResetRun: nothing to reset, ignoring") end
@@ -1024,7 +1039,6 @@ function MPT:ResetRun()
     run.forces._lastQS, run.forces._lastQSParsed = nil, nil
     run.bestOverall = nil
     run.pbRec = nil
-    MPT.db._activeRunSplits = nil
     self:UnregisterRunEvents()
     self:StopTimerLoop()
     -- Clear any stale combat-defer; ApplyTrackerVisibility re-arms it if still locked.

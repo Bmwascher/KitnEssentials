@@ -31,6 +31,11 @@ local function KeyFor(mapID, level)
     return BuildKey(mapID, level)
 end
 
+-- Exported for the run-identity stamp on MPT.db._activeRunSplits (core file's
+-- UpdateObjectives): a persisted in-flight cache must only restore into the
+-- exact run ("mapID:level") that wrote it.
+MPT.BuildSplitKey = BuildKey
+
 ---------------------------------------------------------------------------------
 -- LoadSplits — store-ensure + seed run.bestOverall (called from StartRun)
 ---------------------------------------------------------------------------------
