@@ -170,7 +170,7 @@ function MPT:BuildHUD()
     local timerBg = timerBar:CreateTexture(nil, "BACKGROUND")
     timerBg:SetAllPoints()
     timerBg:SetTexture(barTex)
-    timerBg:SetVertexColor(0.12, 0.12, 0.12, 0.9)
+    timerBg:SetVertexColor(0.031, 0.031, 0.031, 0.8)
     bars.timerWrap, bars.timerBar, bars.timerBg = timerWrap, timerBar, timerBg
 
     -- Two pixel-snapped tick marks on the timer bar (at +3 / +2 cutoffs).
@@ -191,7 +191,7 @@ function MPT:BuildHUD()
     local forcesBg = forcesBar:CreateTexture(nil, "BACKGROUND")
     forcesBg:SetAllPoints()
     forcesBg:SetTexture(barTex)
-    forcesBg:SetVertexColor(0.12, 0.12, 0.12, 0.9)
+    forcesBg:SetVertexColor(0.031, 0.031, 0.031, 0.8)
     bars.forcesWrap, bars.forcesBar, bars.forcesBg = forcesWrap, forcesBar, forcesBg
 
     -- Pull-preview hook: DEAD on 12.0 — per-unit forces progress is secret
@@ -535,14 +535,19 @@ local function _PlaceLabel(fs, timerBar, barW, cutoff, maxTime, place)
     fs:Show()
 end
 
--- Threshold label text: a live cutoff shows the remaining countdown with the
--- leading zero stripped ("04:14" -> "4:14"); a missed cutoff returns nil so
--- the label (and its tick, via the p3/p2 geometry terms) hides entirely.
--- 2026-06-10 round-3 feedback — replaces the grey absolute-time passed state
--- from the EUI buildLabel port.
+-- "MM:SS" with the leading zero stripped ("04:14" -> "4:14") — threshold
+-- labels only; the big timer keeps the padded form.
+local function _FmtShort(sec)
+    return (MPT.FormatTime(sec, false):gsub("^0", "", 1))
+end
+
+-- Threshold label text: a live cutoff shows the remaining countdown; a missed
+-- cutoff returns nil so the label (and its tick, via the p3/p2 geometry terms)
+-- hides entirely. 2026-06-10 round-3 feedback — replaces the grey
+-- absolute-time passed state from the EUI buildLabel port.
 local function _ThreshLabel(elapsed, cutoff)
     if elapsed > cutoff then return nil end
-    return (MPT.FormatTime(cutoff - elapsed, false):gsub("^0", "", 1))
+    return _FmtShort(cutoff - elapsed)
 end
 
 -- Apply a threshold label: nil hides (passed cutoff), a string shows.
@@ -633,17 +638,28 @@ function MPT:RenderThresholds()
     end
     _SetThreshText(f.thresh3Text, _ThreshLabel(elapsed, t3))
     _SetThreshText(f.thresh2Text, _ThreshLabel(elapsed, t2))
-    _SetThreshText(f.thresh1Text, _ThreshLabel(elapsed, t1))
+    -- The +1 (bar end) label keeps counting INTO the negative after the timer
+    -- depletes ("-0:46" in the depleted color, round-3 feedback) instead of
+    -- hiding like the passed +3/+2 cutoffs.
+    local l1 = _ThreshLabel(elapsed, t1)
+    if not l1 then
+        local c = db.TimerExpiredColor or { 1, 0.16, 0.18 }
+        l1 = Hex(c) .. "-" .. _FmtShort(elapsed - t1) .. "|r"
+    end
+    _SetThreshText(f.thresh1Text, l1)
 end
 
 ---------------------------------------------------------------------------------
 -- RenderKey — key level bracket + affix line (TEXT or ICON mode).
 -- Steps 1-3 of Task 2.4.
 --
--- keyText anchor: owned by ApplyLayout (Task 2.5) — placed right-aligned at
--- the frame's right edge. affixText anchor: ApplyLayout Step 3 anchors it
--- left of keyText, growing leftward. affixIcons grow leftward from keyText.
--- This function only sets text / color / visibility.
+-- Row layout (round-3 feedback: "[3] Lindormi's Guidance" — key LEFT of the
+-- affixes): affixText is the row anchor at the frame's right edge, owned by
+-- ApplyLayout's stacking pass even when hidden (ICON mode zeroes its text so
+-- the rect collapses to the edge). keyText anchors LEFT of the affixes —
+-- TEXT mode in ApplyLayout's config section; ICON mode re-anchored HERE after
+-- the icon loop (icon count varies per run); affixes-off in the stacking
+-- pass (row-anchored alone at the right edge).
 --
 -- ICON mode lazily builds holder frames into f.affixIcons[]. Each holder
 -- wraps one texture; KE icon standard (ApplyIconZoom + AddIconBorders)
@@ -671,6 +687,10 @@ function MPT:RenderKey()
 
     -- Affixes — TEXT mode (default) -------------------------------------------
     if not db.ShowAffixes or db.AffixMode ~= "TEXT" then
+        -- Zero the text, not just Hide: the hidden FontString is still the
+        -- row's right-edge anchor (icons + key hang off its rect), so a stale
+        -- string would offset them by its leftover width.
+        self.SetTextGated(f.affixText, "")
         f.affixText:Hide()
     else
         self.SetTextGated(f.affixText, run.affixNamesStr or "")
@@ -712,11 +732,12 @@ function MPT:RenderKey()
                 tex:SetSize(size + 4, size + 4)
                 tex.tex:SetTexture(fileID)
                 tex:ClearAllPoints()
-                -- Grow leftward (keyText sits at the frame's right edge).
+                -- Grow leftward from the row's right-edge anchor (affixText,
+                -- zero-width while hidden in ICON mode).
                 if prev then
                     tex:SetPoint("RIGHT", prev, "LEFT", -4, 0)
                 else
-                    tex:SetPoint("RIGHT", f.keyText, "LEFT", -6, 0)
+                    tex:SetPoint("TOPRIGHT", f.affixText, "TOPRIGHT", 0, 0)
                 end
                 tex:Show()
                 prev = tex
@@ -724,6 +745,12 @@ function MPT:RenderKey()
         end
         -- Hide any stale icons from a previous run with more affixes.
         for i = #ids + 1, #f.affixIcons do f.affixIcons[i]:Hide() end
+        -- Key bracket rides LEFT of the icon row; icon count varies per run,
+        -- so ICON mode owns this anchor here (TEXT mode: ApplyLayout).
+        if db.ShowKeyLevel then
+            f.keyText:ClearAllPoints()
+            f.keyText:SetPoint("RIGHT", prev or f.affixText, "LEFT", prev and -6 or 0, 0)
+        end
     elseif f.affixIcons then
         for i = 1, #f.affixIcons do f.affixIcons[i]:Hide() end
     end
@@ -1076,8 +1103,14 @@ function MPT:ApplyLayout()
 
         -- Straggler anchors: relative positions that only change on config change.
         -- Never re-anchored inside Render* hot paths (perf: skip-SetPoint-when-stationary).
-        f.affixText:ClearAllPoints()
-        f.affixText:SetPoint("RIGHT", f.keyText, "LEFT", -6, 0)  -- grows leftward from keyText
+        -- Key bracket rides LEFT of the affixes ("[12] Fortified - ...",
+        -- round-3 feedback). TEXT mode anchors it here; ICON mode re-anchors
+        -- it in RenderKey (icon count varies per run); with affixes hidden
+        -- the stacking pass row()-anchors it alone at the right edge.
+        if db.ShowAffixes and (db.AffixMode or "TEXT") == "TEXT" then
+            f.keyText:ClearAllPoints()
+            f.keyText:SetPoint("RIGHT", f.affixText, "LEFT", -6, 0)
+        end
 
         f.forcesText:ClearAllPoints()
         local place = db.ForcesPlacement or "EDGE"
@@ -1161,7 +1194,19 @@ function MPT:ApplyLayout()
         end
         y = y - (f.timerText:GetStringHeight() or (db.FontSize or 13)) - ROW
     end
-    row(f.keyText)  -- affixText anchored left of keyText in Step 2; ICON-mode icons anchored in RenderKey (grow leftward)
+    -- Key + affix row: the affixes own the right edge with the key bracket to
+    -- their LEFT (round-3 feedback). affixText is the row anchor even when
+    -- hidden (ICON mode zeroes its text; icons + key hang off its rect).
+    -- With affixes off entirely the key bracket row-anchors alone.
+    if db.ShowAffixes then
+        f.affixText:ClearAllPoints()
+        f.affixText:SetPoint("TOPRIGHT", f, "TOPRIGHT", -PAD, y)
+        local rowH = max(f.affixText:GetStringHeight() or 0, f.keyText:GetStringHeight() or 0)
+        if rowH == 0 then rowH = db.FontSize or 13 end
+        y = y - rowH - ROW
+    else
+        row(f.keyText)
+    end
     -- Reserve room for the threshold labels: a full row for ABOVE, the
     -- protruding half-line for EDGE (half-in/half-out on the bar's top
     -- edge); INSIDE sits fully on the bar and consumes nothing.
@@ -1259,12 +1304,12 @@ function MPT:ApplySettings()
     bars.timerBar:SetStatusBarTexture(barTex)
     bars.forcesBar:SetStatusBarTexture(barTex)
     -- Re-apply the background textures + empty-track tint (BarBackgroundColor;
-    -- BuildHUD only seeds the initial 0.12 dark).
-    local bgc = self.db.BarBackgroundColor or { 0.12, 0.12, 0.12 }
+    -- BuildHUD only seeds the initial #080808 dark).
+    local bgc = self.db.BarBackgroundColor or { 0.031, 0.031, 0.031 }
     bars.timerBg:SetTexture(barTex)
     bars.forcesBg:SetTexture(barTex)
-    bars.timerBg:SetVertexColor(bgc[1], bgc[2], bgc[3], 0.9)
-    bars.forcesBg:SetVertexColor(bgc[1], bgc[2], bgc[3], 0.9)
+    bars.timerBg:SetVertexColor(bgc[1], bgc[2], bgc[3], 0.8)
+    bars.forcesBg:SetVertexColor(bgc[1], bgc[2], bgc[3], 0.8)
 
     -- Bust the length-gate (font/size changes restack), the threshold geometry
     -- cache (BarHeight/TickColor changes re-run _PlaceTick/_PlaceLabel), and the

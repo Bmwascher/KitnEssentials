@@ -183,7 +183,7 @@ local MPT_DEFAULTS = {
     BarTexture = "KitnUI",
     BarWidth = 300, BarHeight = 14,
     BarColor = {0.56, 0.56, 0.56},
-    BarBackgroundColor = {0.12, 0.12, 0.12},  -- empty-track tint, both bars (fixed 0.9 alpha)
+    BarBackgroundColor = {0.031, 0.031, 0.031},  -- empty-track tint, both bars (#080808; fixed 0.8 alpha)
     StateColorFill = false,
     TickColor = {1, 1, 1},
     ShowThresholdLabels = true,
@@ -461,6 +461,14 @@ function MPT:UpdateDB()
     -- the retired enum value "PERCENT" — OverlayFormat is a string.format spec.
     if self.db.OverlayFormat == "PERCENT" then
         self.db.OverlayFormat = "%.2f%%"
+    end
+
+    -- Persisted-value repair: the first BarBackgroundColor seed was 0.12-grey;
+    -- round-3 feedback settled on #080808. Only the untouched old default is
+    -- swapped — a user-picked color passes through.
+    local bg = self.db.BarBackgroundColor
+    if bg and bg[1] == 0.12 and bg[2] == 0.12 and bg[3] == 0.12 then
+        self.db.BarBackgroundColor = { 0.031, 0.031, 0.031 }
     end
 
     -- MigrateLegacyOverlayDB lives in MythicPlusTimer_Overlay.lua, which is

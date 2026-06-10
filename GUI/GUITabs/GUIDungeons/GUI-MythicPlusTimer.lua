@@ -289,7 +289,7 @@ BuildTimerTab = function(scrollChild, yOffset, db, manager)
     })
     AddColorRow(colorsCard, db, manager, ApplySettings, {
         { "Bar Fill",        "BarColor",           { 0.56, 0.56, 0.56 } },
-        { "Bar Background",  "BarBackgroundColor", { 0.12, 0.12, 0.12 } },
+        { "Bar Background",  "BarBackgroundColor", { 0.031, 0.031, 0.031 } },
         { "Threshold Ticks", "TickColor",          { 1, 1, 1 } },
     }, true)
     yOffset = colorsCard:GetNextOffset()
