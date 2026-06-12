@@ -1111,7 +1111,10 @@ function KT:ShowPreview()
     for i, data in ipairs(previewData) do
         if i > (db.MaxBars or 5) then break end
 
-        local bar = self:CreateBar()
+        -- Reuse via the pool (keyed like live bars) — direct CreateBar here
+        -- stranded 5 frames per preview cycle since HideAllBars had just
+        -- pooled the previous set.
+        local bar = self:GetOrCreateBar("preview_" .. i)
         local fakeMember = {
             name = data.name,
             classToken = data.classToken,
@@ -1201,9 +1204,6 @@ function KT:ShowPreview()
         local offset = (i - 1) * (barHeight + spacing)
         bar:SetPoint(previewSelfPoint, self.containerFrame, previewSelfPoint, 0, growUp and offset or -offset)
         bar:Show()
-
-        -- Store as preview bars (using guid-like keys)
-        self.activeBars["preview_" .. i] = bar
     end
 
     -- Size container to the full max-bar stack so the EditMode overlay spans the
