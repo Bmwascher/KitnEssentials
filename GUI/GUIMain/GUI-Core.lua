@@ -159,6 +159,10 @@ function GUIFrame:Show()
         self:InitializeSidebarExpansion()
         self:RefreshSidebar()
         self:SelectSidebarItem("HomePage")
+    elseif self._contentDirtyWhileHidden then
+        -- A refresh was requested while hidden (RefreshContent's hidden gate
+        -- swallowed it) — replay it once so the reopened page isn't stale.
+        self:RefreshContent()
     end
 end
 
@@ -477,7 +481,29 @@ end
 -- RefreshContent
 ---------------------------------------------------------------------------------
 function GUIFrame:RefreshContent()
+    -- DEBUG_LEAK tracer (2026-06-12 frame-leak hunt): every call increments a
+    -- /run-readable global so a runaway rebuild loop can be detected and its
+    -- page named live, without a debug build:
+    --   /run print(KE_GUI_REFRESH_COUNT, KE_GUI_REFRESH_ITEM, KE_GUI_ORPHAN_COUNT)
+    -- Counts ABOVE the contentArea guard on purpose: a pre-first-open call is
+    -- still a caller worth catching. Cost is one add + two writes per call.
+    KE_GUI_REFRESH_COUNT = (KE_GUI_REFRESH_COUNT or 0) + 1
+    KE_GUI_REFRESH_ITEM = self.selectedSidebarItem or "HomePage"
+
     if not self.contentArea then return end
+
+    -- 2026-06-12 leak fix: NEVER rebuild while the GUI is hidden. The clear
+    -- pass below orphans a full page of cards via SetParent(nil), and frames
+    -- are never garbage-collected — an event-driven caller firing with the
+    -- GUI closed (shipped example: Automation's CVAR_UPDATE handler) leaked
+    -- hundreds of permanent frames per event, unbounded (2026-06-11 episode:
+    -- ~660k frames / 233 MB in one evening). Mark dirty and bail; Show()
+    -- replays one refresh so a reopened page is never stale.
+    if not (self.mainFrame and self.mainFrame:IsShown()) then
+        self._contentDirtyWhileHidden = true
+        return
+    end
+    self._contentDirtyWhileHidden = nil
 
     -- Fire rebuild callbacks FIRST so widget pools can ReleaseAll their
     -- kits back to their hidden holders before the SetParent(nil) loop
@@ -534,6 +560,9 @@ function GUIFrame:RefreshContent()
         end
     end
     for _, child in ipairs({ scrollChild:GetChildren() }) do
+        -- DEBUG_LEAK tracer: orphaned widget trees are permanent (frames never
+        -- GC); this count is the leak's ground-truth denominator.
+        KE_GUI_ORPHAN_COUNT = (KE_GUI_ORPHAN_COUNT or 0) + 1
         child:Hide()
         child:SetParent(nil)
     end
