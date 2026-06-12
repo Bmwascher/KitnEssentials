@@ -228,7 +228,7 @@ function PS:CreateFrame()
 end
 
 function PS:UpdatePetText()
-    local status, message, color = CheckPetStatus()
+    local _, message, color = CheckPetStatus()
 
     if message and color then
         self.text:SetText(message)

@@ -236,7 +236,7 @@ function GUIFrame:CreateCheckbox(parent, labelText, config)
             end)
         end
         if msgPopup then
-            local toggleOnOrOff = ""
+            local toggleOnOrOff
             if newState then
                 toggleOnOrOff = "|cff4DCC66" .. msgOn .. "|r"
             else

@@ -36,7 +36,8 @@ local TooltipDataType = Enum.TooltipDataType
 
 -- Small fix for ToolTipMoney frame errors
 -- Credit to MoneyFrameFix by FootTapper for this snippet
-function SetTooltipMoney(frame, money, type, prefixText, suffixText)
+-- Replaces the Blizzard global; original signature (frame, money, type, prefixText, suffixText)
+function SetTooltipMoney(frame, money, _, prefixText, suffixText)
     frame:AddLine((prefixText or "") .. "  " .. GetCoinTextureString(money) .. " " .. (suffixText or ""), 0, 1, 1)
 end
 

@@ -30,7 +30,6 @@ function GUIFrame:CreateButton(parent, labelText, config)
     local imageSize = config.imageSize or 16
     local explicitWidth = config.width
     local height = config.height or 24
-    local cWidth = config.cWidth or true
 
     -- CREATE ROW CONTAINER
     local rowHeight = customHeight or 34

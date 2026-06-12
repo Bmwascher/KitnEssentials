@@ -487,7 +487,6 @@ function KitnEssentialsAPI:DecodeProfileString(profileString)
     if profileString:sub(1, #EXPORT_PREFIX) ~= EXPORT_PREFIX then return {} end
 
     local encoded = profileString:sub(#EXPORT_PREFIX + 1)
-    local profileData
 
     -- Try internal format first (LibDeflate + AceSerializer)
     local compressed = LibDeflate:DecodeForPrint(encoded)

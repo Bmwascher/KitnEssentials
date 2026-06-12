@@ -575,8 +575,7 @@ function PT:UpdateTimers()
 
     -- If no tracked buffs, try to re-detect via additive scan (doesn't wipe first).
     -- Matching reference: FullRaidCheck runs regardless of combat state.
-    local hasAny = false
-    for _ in pairs(self.trackedBuffs) do hasAny = true; break end
+    local hasAny = next(self.trackedBuffs) ~= nil
     if not hasAny then
         self:RescanRoster()
     end
