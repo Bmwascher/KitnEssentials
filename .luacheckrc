@@ -58,6 +58,10 @@ globals = {
     "KE_GUI_REFRESH_ITEM",
     "KE_GUI_ORPHAN_COUNT",
 
+    -- Dev/debug handle to the private addon namespace (Core/Main.lua) —
+    -- /run macro chunks can't reach select(2, ...) locals
+    "KITNESSENTIALS_NS",
+
     -- Slash command registration (WoW convention: SlashCmdList[] + SLASH_*N)
     "SlashCmdList",
     "SLASH_KITNESSENTIALS1", "SLASH_KITNESSENTIALS2", "SLASH_KITNESSENTIALS3",

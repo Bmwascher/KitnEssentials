@@ -17,6 +17,10 @@ local DEFAULT_PROFILE = "Default"
 ---@class KitnEssentials : AceAddon-3.0, AceEvent-3.0, AceHook-3.0
 local KitnEssentials = aceAddon:NewAddon("KitnEssentials", "AceEvent-3.0", "AceHook-3.0")
 _G.KitnEssentials = KitnEssentials
+-- Dev/debug handle to the private addon namespace. /run macro chunks can't
+-- reach `select(2, ...)` locals, and leak-hunt probes repeatedly need
+-- KE-level state (singletons, helpers). Not a public API.
+_G.KITNESSENTIALS_NS = KE
 
 KE.encounterActive = false
 
