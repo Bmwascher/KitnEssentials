@@ -847,12 +847,26 @@ local function FormatBarValue(total, perSec, mode)
     return str, issecretvalue(str)
 end
 
--- Death-time formatter for the Deaths meter type.
--- deathTimeSeconds is secret in combat, so the M:SS arithmetic only runs on a
--- plain value -- a secret/nil time yields "0:00". Returns (string, false): the
--- result is never itself a secret, so the render layer dirty-checks it normally.
+-- Death-time formatter for the Deaths meter type. Returns (string, isSecret).
+-- deathTimeSeconds is SECRET in combat, and 12.0.5 ships no tainted-callable clock
+-- formatter (SecondsFormatter / C_StringUtil.CreateSecondsFormatter / duration
+-- objects are all AllowedWhenUntainted -> they throw on a secret arg from addon
+-- code; Details hits the same wall -- "waiting a solution from blizzard"). So the
+-- M:SS arithmetic only runs on a plain value; a secret time renders as whole
+-- seconds ("143s") via AbbreviateNumbers (AllowedWhenTainted) -- live data in
+-- combat instead of the old "0:00" placeholder -- and flips to M:SS on the first
+-- out-of-combat paint. A secret result must never be == compared; the isSecret
+-- return routes the caller to the no-dirty-check path (RenderBar's vIsSecret).
 local function FormatDeathTime(sec)
-    if not sec or issecretvalue(sec) then return "0:00", false end
+    if not sec then return "0:00", false end
+    if issecretvalue(sec) then
+        local s = AbbreviateNumbers(sec, _abbreviateCfg)
+        if s then
+            local str = s .. "s"
+            return str, issecretvalue(str)
+        end
+        return "0:00", false
+    end
     return format("%d:%02d", floor(sec / 60), floor(sec % 60)), false
 end
 
@@ -1008,9 +1022,15 @@ function DM:ReportView(rest, winIdx)
         end
 
         if isDeaths then
-            -- Mirror the Deaths bar: death time (M:SS), nothing for Overall. FormatDeathTime
-            -- returns a plain "0:00" on a secret/nil time, so the line is always send-safe.
+            -- Mirror the Deaths bar: death time (M:SS), nothing for Overall. In combat
+            -- FormatDeathTime returns a SECRET seconds string ("143s"); chat lines must
+            -- be plain, so abort like every other secret field -- and BEFORE the == ""
+            -- compare below, which would itself throw on a secret string.
             local t = isOverall and "" or (self.FormatDeathTime(src.deathTimeSeconds))
+            if issecretvalue(t) then
+                KE:Print("Damage Meter: report unavailable -- data is combat-restricted. Try again out of combat.")
+                return
+            end
             if t == "" then
                 lines[i] = format("%d. %s", i, shown)
             else
