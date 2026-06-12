@@ -30,6 +30,9 @@ local function ValidateThemeColor(color, default)
     return color
 end
 
+-- Build-once singleton: a fresh container per call leaked the frame, the
+-- FontString, AND its 8-shadow soft outline permanently (frames are never
+-- GC'd; softOutline caches per FontString, so reuse stops that too).
 function KE:CreateMessagePopup(timer, text, fontSize, parentFrame, xOffset, yOffset)
     if KE.msgContainer then
         KE.msgContainer:Hide()
@@ -42,15 +45,26 @@ function KE:CreateMessagePopup(timer, text, fontSize, parentFrame, xOffset, yOff
 
     if not Theme then return end
 
-    local msgContainer = CreateFrame("Frame", nil, parent)
-    msgContainer:SetToplevel(true)
+    local msgContainer = KE.msgContainer
+    if not msgContainer then
+        msgContainer = CreateFrame("Frame", nil, parent)
+        msgContainer:SetToplevel(true)
+        msgContainer:SetSize(MESSAGE_POPUP_SIZE, MESSAGE_POPUP_SIZE)
+        msgContainer.msgText = msgContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        msgContainer.msgText:SetPoint("CENTER")
+        KE.msgContainer = msgContainer
+    end
+    local msgText = msgContainer.msgText
+
+    msgContainer:SetParent(parent)
+    -- Re-assert strata/level AFTER SetParent — reparenting rebases them.
     msgContainer:SetFrameStrata("TOOLTIP")
     msgContainer:SetFrameLevel(150)
-    msgContainer:SetSize(MESSAGE_POPUP_SIZE, MESSAGE_POPUP_SIZE)
+    msgContainer:ClearAllPoints()
     msgContainer:SetPoint("CENTER", parent, "CENTER", x, y)
 
-    local msgText = msgContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    msgText:SetPoint("CENTER")
+    -- SetText BEFORE ApplyFontToText — the soft-outline reuse path copies
+    -- GetText() into the shadow layer.
     msgText:SetText(text)
     msgText:SetFont(KE.FONT, fontSize, "")
 
@@ -63,14 +77,19 @@ function KE:CreateMessagePopup(timer, text, fontSize, parentFrame, xOffset, yOff
     msgText:SetAlpha(1)
     msgContainer:Show()
 
+    -- Generation token: both timer levels bail if a newer call re-showed the
+    -- popup (EditMode's 20s enter timer vs 1s exit timer is a live overlap).
+    local token = (msgContainer._hideToken or 0) + 1
+    msgContainer._hideToken = token
     C_Timer.After(timer, function()
+        if msgContainer._hideToken ~= token then return end
         msgText:SetAlpha(0)
         C_Timer.After(0.1, function()
+            if msgContainer._hideToken ~= token then return end
             msgContainer:Hide()
         end)
     end)
 
-    KE.msgContainer = msgContainer
     return msgContainer
 end
 
@@ -83,48 +102,150 @@ local POPUP_HEIGHT = 120
 local BUTTON_WIDTH = 100
 local BUTTON_HEIGHT = 26
 
-local function CreateThemedButton(parent, Theme, labelText, isPrimary)
-    local btn = CreateFrame("Button", nil, parent, "BackdropTemplate")
-    btn:SetSize(BUTTON_WIDTH, BUTTON_HEIGHT)
+-- Re-applies theme colors, edge size, and label to a themed button. Split
+-- from CreateThemedButton so the singleton prompt can re-theme its
+-- persistent buttons per call; hover scripts read the stored _bg*/_accent
+-- fields so a theme change never leaves stale colors baked into closures.
+local function ThemeButton(btn, Theme, labelText, isPrimary)
     btn:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = KE:GetPixelSize(),
     })
     local textColor = isPrimary and Theme.accent or Theme.textPrimary
-    local bgMedium = ValidateThemeColor(Theme.bgMedium, { 0.1, 0.1, 0.1, 1 })
-    local bgLight = ValidateThemeColor(Theme.bgLight, { 0.15, 0.15, 0.15, 1 })
-    local border = ValidateThemeColor(Theme.border, { 0.3, 0.3, 0.3, 1 })
-    local accent = ValidateThemeColor(Theme.accent, { 1, 0.82, 0, 1 })
+    btn._bgMedium = ValidateThemeColor(Theme.bgMedium, { 0.1, 0.1, 0.1, 1 })
+    btn._bgLight = ValidateThemeColor(Theme.bgLight, { 0.15, 0.15, 0.15, 1 })
+    btn._border = ValidateThemeColor(Theme.border, { 0.3, 0.3, 0.3, 1 })
+    btn._accent = ValidateThemeColor(Theme.accent, { 1, 0.82, 0, 1 })
 
-    btn:SetBackdropColor(bgMedium[1], bgMedium[2], bgMedium[3], 1)
-    btn:SetBackdropBorderColor(border[1], border[2], border[3], 1)
+    btn:SetBackdropColor(btn._bgMedium[1], btn._bgMedium[2], btn._bgMedium[3], 1)
+    btn:SetBackdropBorderColor(btn._border[1], btn._border[2], btn._border[3], 1)
+
+    if KE.ApplyThemeFont then
+        KE:ApplyThemeFont(btn.label, "normal")
+    else
+        btn.label:SetFontObject("GameFontNormal")
+    end
+    btn.label:SetText(labelText)
+    btn.label:SetTextColor(textColor[1], textColor[2], textColor[3], 1)
+    btn.label:SetShadowColor(0, 0, 0, 0)
+end
+
+local function CreateThemedButton(parent, Theme, labelText, isPrimary)
+    local btn = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    btn:SetSize(BUTTON_WIDTH, BUTTON_HEIGHT)
 
     local label = btn:CreateFontString(nil, "OVERLAY")
     label:SetPoint("CENTER")
-    if KE.ApplyThemeFont then
-        KE:ApplyThemeFont(label, "normal")
-    else
-        label:SetFontObject("GameFontNormal")
-    end
-    label:SetText(labelText)
-    label:SetTextColor(textColor[1], textColor[2], textColor[3], 1)
-    label:SetShadowColor(0, 0, 0, 0)
     btn.label = label
 
     btn:SetScript("OnEnter", function(self)
-        self:SetBackdropColor(bgLight[1], bgLight[2], bgLight[3], 1)
-        self:SetBackdropBorderColor(accent[1], accent[2], accent[3], 1)
+        self:SetBackdropColor(self._bgLight[1], self._bgLight[2], self._bgLight[3], 1)
+        self:SetBackdropBorderColor(self._accent[1], self._accent[2], self._accent[3], 1)
     end)
 
     btn:SetScript("OnLeave", function(self)
-        self:SetBackdropColor(bgMedium[1], bgMedium[2], bgMedium[3], 1)
-        self:SetBackdropBorderColor(border[1], border[2], border[3], 1)
+        self:SetBackdropColor(self._bgMedium[1], self._bgMedium[2], self._bgMedium[3], 1)
+        self:SetBackdropBorderColor(self._border[1], self._border[2], self._border[3], 1)
     end)
 
+    ThemeButton(btn, Theme, labelText, isPrimary)
     return btn
 end
 
+-- Closes the singleton prompt. Snapshots and NILS the callback fields
+-- before invoking — the immortal dialog would otherwise pin multi-KB
+-- export-string closures, and the close-then-invoke order lets a chained
+-- prompt opened inside the callback (profile change → reload prompt)
+-- survive the outer close. Returns the snapshotted onAccept.
+local function ClosePrompt(dialog, runCancel)
+    local onAccept = dialog._onAccept
+    local onCancel = dialog._onCancel
+    dialog._onAccept = nil
+    dialog._onCancel = nil
+    dialog:Hide()
+    KE.activePrompt = nil
+    if runCancel and onCancel then onCancel() end
+    return onAccept
+end
+
+-- Build-once skeleton for the prompt singleton: dialog chrome + header +
+-- close button, scripts wired once reading per-call state off the dialog.
+-- Mode-specific widgets (message label, editboxes, buttons) are ensured
+-- lazily by CreatePrompt's create pass. KE.promptDialog is the persistent
+-- cache; KE.activePrompt keeps its nil-on-close "a prompt is open" meaning.
+local function EnsurePromptDialog()
+    if KE.promptDialog then return KE.promptDialog end
+
+    local dialog = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+    dialog:SetSize(POPUP_WIDTH, POPUP_HEIGHT)
+    dialog:SetFrameStrata("TOOLTIP")
+    dialog:SetFrameLevel(100)
+    dialog:EnableMouse(true)
+    dialog:SetMovable(true)
+    dialog:RegisterForDrag("LeftButton")
+    dialog:SetScript("OnDragStart", function(d) d:StartMoving(true) end)
+    dialog:SetScript("OnDragStop", function(d) d:StopMovingOrSizing() end)
+    dialog:EnableKeyboard(true)
+    dialog:SetScript("OnKeyDown", function(self, key)
+        if key == "ESCAPE" then
+            self:SetPropagateKeyboardInput(false)
+            ClosePrompt(self, true)
+        else
+            self:SetPropagateKeyboardInput(true)
+        end
+    end)
+    dialog:Hide()
+
+    local header = CreateFrame("Frame", nil, dialog, "BackdropTemplate")
+    header:SetHeight(28)
+    header:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
+    dialog.header = header
+
+    local headerBottomBorder = header:CreateTexture(nil, "BORDER")
+    headerBottomBorder:SetPoint("BOTTOMLEFT", header, "BOTTOMLEFT", 0, 0)
+    headerBottomBorder:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", 0, 0)
+    dialog.headerBottomBorder = headerBottomBorder
+
+    local titleLabel = header:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    titleLabel:SetPoint("CENTER", header, "CENTER", 0, 0)
+    dialog.titleLabel = titleLabel
+
+    local closeBtn = CreateFrame("Button", nil, header)
+    closeBtn:SetSize(22, 22)
+    closeBtn:SetPoint("RIGHT", header, "RIGHT", -6, 0)
+
+    local closeTex = closeBtn:CreateTexture(nil, "ARTWORK")
+    closeTex:SetAllPoints()
+    closeTex:SetTexture("Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\KitnCustomCrossv3.png")
+    closeTex:SetRotation(math.rad(45))
+    closeTex:SetTexelSnappingBias(0)
+    closeTex:SetSnapToPixelGrid(false)
+    dialog.closeTex = closeTex
+
+    closeBtn:SetScript("OnEnter", function()
+        local a = dialog._accent
+        if a then closeTex:SetVertexColor(a[1], a[2], a[3], a[4] or 1) end
+    end)
+    closeBtn:SetScript("OnLeave", function()
+        local t = dialog._textPrimary
+        if t then closeTex:SetVertexColor(t[1], t[2], t[3], t[4] or 1) end
+    end)
+    closeBtn:SetScript("OnClick", function()
+        ClosePrompt(dialog, true)
+    end)
+
+    KE.promptDialog = dialog
+    return dialog
+end
+
+-- Singleton prompt dialog. The previous implementation rebuilt the whole
+-- 6-frame tree per call and leaked it permanently (frames are never GC'd).
+-- Three strictly ordered passes: ENSURE-CREATE everything the current mode
+-- needs → CONFIGURE/anchor/theme → VISIBILITY (SetShown on every optional
+-- widget, shown or not — a widget left visible from the last mode is a bug).
+-- NOTE: single-field-accept mode (showEditBox + onAccept, no second box)
+-- currently has no live caller — untested API surface.
 function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture, texturePath, textureSizeX,
                               textureSizeY, textureColor, onAccept, onCancel, acceptText, cancelText,
                               showSecondEditBox, secondEditBoxLabel)
@@ -156,16 +277,186 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     local textPrimary = ValidateThemeColor(Theme.textPrimary, { 1, 1, 1, 1 })
     local textSecondary = ValidateThemeColor(Theme.textSecondary, { 0.7, 0.7, 0.7, 1 })
 
-    local dialog = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
-    dialog:SetSize(POPUP_WIDTH, POPUP_HEIGHT)
-    dialog:SetPoint("CENTER", UIParent, "CENTER", 0, 100)
-    dialog:SetFrameStrata("TOOLTIP")
-    dialog:SetFrameLevel(100)
-    dialog:EnableMouse(true)
-    dialog:SetMovable(true)
-    dialog:RegisterForDrag("LeftButton")
-    dialog:SetScript("OnDragStart", function(d) d:StartMoving(true) end)
-    dialog:SetScript("OnDragStop", function(d) d:StopMovingOrSizing() end)
+    local dialog = EnsurePromptDialog()
+    local twoField = (showEditBox and showSecondEditBox) and true or false
+    -- Hard-codes the original's effective evaluation (its `and not
+    -- dialog.messageLabel` guard could never fire on a fresh frame).
+    local showMessage = (not showEditBox) or (onAccept ~= nil)
+    local showButtons = (not showEditBox) or (onAccept ~= nil)
+
+    ------------------------------------------------------------------
+    -- PASS 1: ensure-create every widget the current mode needs.
+    ------------------------------------------------------------------
+    if showMessage and not dialog.messageLabel then
+        local messageLabel = dialog:CreateFontString(nil, "OVERLAY")
+        messageLabel:SetPoint("TOPLEFT", dialog.header, "BOTTOMLEFT", 12, -12)
+        messageLabel:SetPoint("TOPRIGHT", dialog.header, "BOTTOMRIGHT", -12, -12)
+        messageLabel:SetJustifyH("CENTER")
+        messageLabel:SetJustifyV("TOP")
+        dialog.messageLabel = messageLabel
+    end
+
+    if useTexture and texturePath and not dialog.logoBtn then
+        local logoBtn = CreateFrame("Button", nil, dialog.header)
+        logoBtn:SetPoint("LEFT", dialog.header, "LEFT", 6, 0)
+        local logoTexture = logoBtn:CreateTexture(nil, "ARTWORK")
+        logoTexture:SetAllPoints()
+        logoTexture:SetTexelSnappingBias(0)
+        logoTexture:SetSnapToPixelGrid(false)
+        dialog.logoBtn = logoBtn
+        dialog.logoTexture = logoTexture
+    end
+
+    if twoField and not dialog.editBoxTopLabel then
+        -- Two-field mode: label ABOVE the first editbox.
+        local editBoxTopLabel = dialog:CreateFontString(nil, "OVERLAY")
+        editBoxTopLabel:SetPoint("TOPLEFT", dialog.header, "BOTTOMLEFT", 24, -10)
+        editBoxTopLabel:SetPoint("TOPRIGHT", dialog.header, "BOTTOMRIGHT", -24, -10)
+        editBoxTopLabel:SetJustifyH("CENTER")
+        dialog.editBoxTopLabel = editBoxTopLabel
+    end
+
+    if showEditBox and not dialog.editBox then
+        local editBox = CreateFrame("EditBox", nil, dialog, "BackdropTemplate")
+        editBox:SetJustifyH("CENTER")
+
+        -- Copy-mode Ctrl+C (no accept callback = export/copy prompt).
+        editBox:SetScript("OnKeyDown", function(_, key)
+            local d = KE.promptDialog
+            if d._onAccept then return end
+            if key == "C" and (IsControlKeyDown() or IsMetaKeyDown()) then
+                KE:CreateMessagePopup(2, "Copied to clipboard", 18, UIParent, 0, 350)
+                ClosePrompt(d, true)
+            end
+        end)
+        editBox:SetScript("OnEnterPressed", function(self)
+            local d = KE.promptDialog
+            if not d._onAccept then return end
+            local text1 = self:GetText()
+            local accept = ClosePrompt(d, false)
+            if accept then accept(text1) end
+        end)
+        -- Gated on the per-call flag: a persistent editBox2 would otherwise
+        -- steal Tab focus in copy-mode prompts and eat the Ctrl+C the label
+        -- tells the user to press.
+        editBox:SetScript("OnTabPressed", function()
+            local d = KE.promptDialog
+            if d._showSecondEditBox and d.editBox2 then
+                d.editBox2:SetFocus()
+            end
+        end)
+        editBox:SetScript("OnEnter", function(self)
+            local a = KE.promptDialog._accent
+            if a then self:SetBackdropBorderColor(a[1], a[2], a[3], 1) end
+        end)
+        editBox:SetScript("OnLeave", function(self)
+            local b = KE.promptDialog._border
+            if b then self:SetBackdropBorderColor(b[1], b[2], b[3], 1) end
+        end)
+        dialog.editBox = editBox
+    end
+
+    if showEditBox and not twoField and not dialog.editBoxBottomLabel then
+        -- Single-field mode: label BELOW the editbox.
+        local editBoxBottomLabel = dialog:CreateFontString(nil, "OVERLAY")
+        editBoxBottomLabel:SetPoint("TOPLEFT", dialog.editBox, "BOTTOMLEFT", 12, -6)
+        editBoxBottomLabel:SetPoint("TOPRIGHT", dialog.editBox, "BOTTOMRIGHT", -12, -6)
+        editBoxBottomLabel:SetJustifyH("CENTER")
+        editBoxBottomLabel:SetJustifyV("TOP")
+        dialog.editBoxBottomLabel = editBoxBottomLabel
+    end
+
+    if twoField and not dialog.editBox2 then
+        -- Second editbox (for two-field prompts like import: name + string)
+        local editBox2Label = dialog:CreateFontString(nil, "OVERLAY")
+        editBox2Label:SetPoint("TOPLEFT", dialog.editBox, "BOTTOMLEFT", 12, -10)
+        editBox2Label:SetPoint("TOPRIGHT", dialog.editBox, "BOTTOMRIGHT", -12, -10)
+        editBox2Label:SetJustifyH("CENTER")
+        dialog.editBox2Label = editBox2Label
+
+        local editBox2 = CreateFrame("EditBox", nil, dialog, "BackdropTemplate")
+        editBox2:SetHeight(24)
+        editBox2:SetPoint("TOPLEFT", editBox2Label, "BOTTOMLEFT", -12, -4)
+        editBox2:SetPoint("TOPRIGHT", editBox2Label, "BOTTOMRIGHT", 12, -4)
+        editBox2:SetAutoFocus(false)
+        editBox2:SetJustifyH("CENTER")
+
+        editBox2:SetScript("OnEnterPressed", function(self)
+            local d = KE.promptDialog
+            if not d._onAccept then return end
+            local text1 = d.editBox and d.editBox:GetText()
+            local text2 = self:GetText()
+            local accept = ClosePrompt(d, false)
+            if accept then accept(text1, text2) end
+        end)
+        editBox2:SetScript("OnTabPressed", function()
+            local d = KE.promptDialog
+            if d._showSecondEditBox and d.editBox then
+                d.editBox:SetFocus()
+            end
+        end)
+        editBox2:SetScript("OnEnter", function(self)
+            local a = KE.promptDialog._accent
+            if a then self:SetBackdropBorderColor(a[1], a[2], a[3], 1) end
+        end)
+        editBox2:SetScript("OnLeave", function(self)
+            local b = KE.promptDialog._border
+            if b then self:SetBackdropBorderColor(b[1], b[2], b[3], 1) end
+        end)
+        dialog.editBox2 = editBox2
+    end
+
+    if showButtons and not dialog.buttonContainer then
+        local buttonContainer = CreateFrame("Frame", nil, dialog)
+        buttonContainer:SetHeight(30)
+        buttonContainer:SetPoint("BOTTOMLEFT", dialog, "BOTTOMLEFT", 12, 12)
+        buttonContainer:SetPoint("BOTTOMRIGHT", dialog, "BOTTOMRIGHT", -12, 12)
+        dialog.buttonContainer = buttonContainer
+
+        local acceptBtn = CreateThemedButton(buttonContainer, Theme, acceptText or "Accept", true)
+        acceptBtn:SetPoint("RIGHT", buttonContainer, "CENTER", -4, 0)
+        acceptBtn:SetScript("OnClick", function()
+            local d = KE.promptDialog
+            -- Branch on the per-call FLAGS, never on widget existence — the
+            -- singleton keeps editBox/editBox2 around across modes. Confirm
+            -- mode must invoke with ZERO args.
+            local wasEdit = d._showEditBox
+            local wasSecond = d._showSecondEditBox
+            local text1 = d.editBox and d.editBox:GetText()
+            local text2 = d.editBox2 and d.editBox2:GetText()
+            local accept = ClosePrompt(d, false)
+            if not accept then return end
+            if wasEdit then
+                if wasSecond then
+                    accept(text1, text2)
+                else
+                    accept(text1)
+                end
+            else
+                accept()
+            end
+        end)
+        dialog.acceptBtn = acceptBtn
+
+        local cancelBtn = CreateThemedButton(buttonContainer, Theme, cancelText or "Cancel", false)
+        cancelBtn:SetPoint("LEFT", buttonContainer, "CENTER", 4, 0)
+        cancelBtn:SetScript("OnClick", function()
+            ClosePrompt(KE.promptDialog, true)
+        end)
+        dialog.cancelBtn = cancelBtn
+    end
+
+    ------------------------------------------------------------------
+    -- PASS 2: configure — per-call state, theme, anchors, heights.
+    ------------------------------------------------------------------
+    dialog._onAccept = onAccept
+    dialog._onCancel = onCancel
+    dialog._showEditBox = showEditBox and true or false
+    dialog._showSecondEditBox = twoField
+    -- Hover scripts read these (theme can change between prompts).
+    dialog._accent = accent
+    dialog._border = border
+    dialog._textPrimary = textPrimary
 
     local dialogPx = KE:GetPixelSize()
     dialog:SetBackdrop({
@@ -175,70 +466,28 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     })
     dialog:SetBackdropColor(bgLight[1], bgLight[2], bgLight[3], bgLight[4] or 1)
     dialog:SetBackdropBorderColor(border[1], border[2], border[3], 1)
+    -- Reset size/position BEFORE the adaptive-height branches: the singleton
+    -- remembers the last mode's height and any user drag.
+    dialog:SetHeight(POPUP_HEIGHT)
+    dialog:ClearAllPoints()
+    dialog:SetPoint("CENTER", UIParent, "CENTER", 0, 100)
 
-    local header = CreateFrame("Frame", nil, dialog, "BackdropTemplate")
-    header:SetHeight(28)
+    local header = dialog.header
+    header:ClearAllPoints()
     header:SetPoint("TOPLEFT", dialog, "TOPLEFT", dialogPx, -dialogPx)
     header:SetPoint("TOPRIGHT", dialog, "TOPRIGHT", -dialogPx, -dialogPx)
-    header:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
     header:SetBackdropColor(bgMedium[1], bgMedium[2], bgMedium[3], 1)
 
-    local headerbottomBorder = header:CreateTexture(nil, "BORDER")
-    headerbottomBorder:SetHeight(Theme.borderSize or 1)
-    headerbottomBorder:SetPoint("BOTTOMLEFT", header, "BOTTOMLEFT", 0, 0)
-    headerbottomBorder:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", 0, 0)
-    headerbottomBorder:SetColorTexture(border[1], border[2], border[3], border[4] or 1)
+    dialog.headerBottomBorder:SetHeight(Theme.borderSize or 1)
+    dialog.headerBottomBorder:SetColorTexture(border[1], border[2], border[3], border[4] or 1)
 
-    local titleLabel = header:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    titleLabel:SetPoint("CENTER", header, "CENTER", 0, 0)
-    titleLabel:SetText(title or "Confirm")
-    titleLabel:SetTextColor(accent[1], accent[2], accent[3], accent[4] or 1)
-    titleLabel:SetShadowColor(0, 0, 0, 0)
+    dialog.titleLabel:SetText(title or "Confirm")
+    dialog.titleLabel:SetTextColor(accent[1], accent[2], accent[3], accent[4] or 1)
+    dialog.titleLabel:SetShadowColor(0, 0, 0, 0)
+    dialog.closeTex:SetVertexColor(textPrimary[1], textPrimary[2], textPrimary[3], textPrimary[4] or 1)
 
-    local closeBtn = CreateFrame("Button", nil, header)
-    closeBtn:SetSize(22, 22)
-    closeBtn:SetPoint("RIGHT", header, "RIGHT", -6, 0)
-
-    local closeTex = closeBtn:CreateTexture(nil, "ARTWORK")
-    closeTex:SetAllPoints()
-    closeTex:SetTexture("Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\KitnCustomCrossv3.png")
-    closeTex:SetRotation(math.rad(45))
-    closeTex:SetVertexColor(textPrimary[1], textPrimary[2], textPrimary[3], textPrimary[4] or 1)
-    closeTex:SetTexelSnappingBias(0)
-    closeTex:SetSnapToPixelGrid(false)
-
-    closeBtn:SetScript("OnEnter", function()
-        closeTex:SetVertexColor(accent[1], accent[2], accent[3], accent[4] or 1)
-    end)
-    closeBtn:SetScript("OnLeave", function()
-        closeTex:SetVertexColor(textPrimary[1], textPrimary[2], textPrimary[3], textPrimary[4] or 1)
-    end)
-    closeBtn:SetScript("OnClick", function()
-        if onCancel then onCancel() end
-        dialog:Hide()
-        KE.activePrompt = nil
-    end)
-
-    if useTexture and texturePath then
-        local logoN = CreateFrame("Button", nil, header)
-        logoN:SetSize(textureSizeX, textureSizeY)
-        logoN:SetPoint("LEFT", header, "LEFT", 6, 0)
-        local logoTexture = logoN:CreateTexture(nil, "ARTWORK")
-        logoTexture:SetAllPoints()
-        logoTexture:SetTexture(texturePath)
-        if textureColor then
-            logoTexture:SetVertexColor(textureColor.r, textureColor.g, textureColor.b, 1)
-        end
-        logoTexture:SetTexelSnappingBias(0)
-        logoTexture:SetSnapToPixelGrid(false)
-    end
-
-    if not showEditBox or onAccept and not dialog.messageLabel then
-        local messageLabel = dialog:CreateFontString(nil, "OVERLAY")
-        messageLabel:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 12, -12)
-        messageLabel:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", -12, -12)
-        messageLabel:SetJustifyH("CENTER")
-        messageLabel:SetJustifyV("TOP")
+    if dialog.messageLabel and showMessage then
+        local messageLabel = dialog.messageLabel
         if KE.ApplyThemeFont then
             KE:ApplyThemeFont(messageLabel, "normal")
         else
@@ -247,13 +496,11 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
         messageLabel:SetText(text or "")
         messageLabel:SetTextColor(textPrimary[1], textPrimary[2], textPrimary[3], 1)
         messageLabel:SetShadowColor(0, 0, 0, 0)
-        dialog.messageLabel = messageLabel
 
-        -- Adaptive height for confirmation-style prompts. Default POPUP_HEIGHT (120)
-        -- leaves only ~26px of message space between header and buttons — enough for
-        -- one line, but text with "\n\nAre you sure?" wraps past the button row and
-        -- renders under it. Measure the rendered text and expand the dialog if
-        -- needed. Editbox-mode prompts use their own SetHeight path (line ~409).
+        -- Adaptive height for confirmation-style prompts. Default POPUP_HEIGHT
+        -- (120) leaves only ~26px of message space between header and buttons —
+        -- enough for one line, but text with "\n\nAre you sure?" wraps past the
+        -- button row. Editbox modes have their own SetHeight paths below.
         if not showEditBox then
             local textHeight = messageLabel:GetStringHeight() or 0
             -- header(28) + topMargin(12) + text + bottomMargin(12) + buttons(30) + bottomMargin(12)
@@ -264,39 +511,41 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
         end
     end
 
-    if showEditBox and not dialog.editBox then
-        -- When two editboxes: put label above first editbox
-        local editBox1Label
-        if showSecondEditBox then
-            editBox1Label = dialog:CreateFontString(nil, "OVERLAY")
-            editBox1Label:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 24, -10)
-            editBox1Label:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", -24, -10)
-            editBox1Label:SetJustifyH("CENTER")
-            if KE.ApplyThemeFont then
-                KE:ApplyThemeFont(editBox1Label, "normal")
-            else
-                editBox1Label:SetFontObject("GameFontNormal")
-            end
-            editBox1Label:SetText(editBoxLabelText or "")
-            editBox1Label:SetTextColor(textSecondary[1], textSecondary[2], textSecondary[3], 1)
-            editBox1Label:SetShadowColor(0, 0, 0, 0)
+    if dialog.logoBtn and useTexture and texturePath then
+        dialog.logoBtn:SetSize(textureSizeX, textureSizeY)
+        dialog.logoTexture:SetTexture(texturePath)
+        if textureColor then
+            dialog.logoTexture:SetVertexColor(textureColor.r, textureColor.g, textureColor.b, 1)
+        else
+            dialog.logoTexture:SetVertexColor(1, 1, 1, 1)
         end
+    end
 
-        local editBox = CreateFrame("EditBox", nil, dialog, "BackdropTemplate")
+    if dialog.editBoxTopLabel and twoField then
+        local label = dialog.editBoxTopLabel
+        if KE.ApplyThemeFont then
+            KE:ApplyThemeFont(label, "normal")
+        else
+            label:SetFontObject("GameFontNormal")
+        end
+        label:SetText(editBoxLabelText or "")
+        label:SetTextColor(textSecondary[1], textSecondary[2], textSecondary[3], 1)
+        label:SetShadowColor(0, 0, 0, 0)
+    end
+
+    if dialog.editBox and showEditBox then
+        local editBox = dialog.editBox
         editBox:SetSize(dialog:GetWidth() - 24, 24)
-        if editBox1Label then
-            editBox:SetPoint("TOPLEFT", editBox1Label, "BOTTOMLEFT", -12, -4)
+        editBox:ClearAllPoints()
+        if twoField then
+            editBox:SetPoint("TOPLEFT", dialog.editBoxTopLabel, "BOTTOMLEFT", -12, -4)
         else
             editBox:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 12, -12)
         end
-        editBox:SetAutoFocus(true)
-        editBox:SetText("")
-        editBox:SetJustifyH("CENTER")
-
         editBox:SetBackdrop({
             bgFile = "Interface\\Buttons\\WHITE8X8",
             edgeFile = "Interface\\Buttons\\WHITE8X8",
-            edgeSize = KE:GetPixelSize(),
+            edgeSize = dialogPx,
         })
         editBox:SetBackdropColor(bgMedium[1], bgMedium[2], bgMedium[3], 1)
         editBox:SetBackdropBorderColor(border[1], border[2], border[3], 1)
@@ -307,94 +556,49 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
         end
         editBox:SetTextColor(textPrimary[1], textPrimary[2], textPrimary[3], 1)
         editBox:SetShadowColor(0, 0, 0, 0)
+        editBox:SetText(text or "")
+        editBox:HighlightText()
+        -- SetAutoFocus(true) re-grabs focus on Show; no pre-Show SetFocus.
+        editBox:SetAutoFocus(true)
+    end
 
-        if not onAccept then
-            editBox:SetScript("OnKeyDown", function(self, key)
-                if key == "C" and (IsControlKeyDown() or IsMetaKeyDown()) then
-                    KE:CreateMessagePopup(2, "Copied to clipboard", 18, UIParent, 0, 350)
-                    if onCancel then onCancel() end
-                    dialog:Hide()
-                    KE.activePrompt = nil
-                end
-            end)
+    if dialog.editBoxBottomLabel and showEditBox and not twoField then
+        local label = dialog.editBoxBottomLabel
+        if KE.ApplyThemeFont then
+            KE:ApplyThemeFont(label, "normal")
         else
-            editBox:SetScript("OnEnterPressed", function(self)
-                if onAccept then
-                    onAccept(self:GetText())
-                    dialog:Hide()
-                    KE.activePrompt = nil
-                end
-            end)
+            label:SetFontObject("GameFontNormal")
         end
-
-        editBox:SetScript("OnEnter", function(self)
-            self:SetBackdropBorderColor(accent[1], accent[2], accent[3], 1)
-        end)
-        editBox:SetScript("OnLeave", function(self)
-            self:SetBackdropBorderColor(border[1], border[2], border[3], 1)
-        end)
-
-        -- Below-editbox label (only for single editbox mode)
-        local editBoxLabel
-        if not showSecondEditBox then
-            editBoxLabel = dialog:CreateFontString(nil, "OVERLAY")
-            editBoxLabel:SetPoint("TOPLEFT", editBox, "BOTTOMLEFT", 12, -6)
-            editBoxLabel:SetPoint("TOPRIGHT", editBox, "BOTTOMRIGHT", -12, -6)
-            editBoxLabel:SetJustifyH("CENTER")
-            editBoxLabel:SetJustifyV("TOP")
-            if KE.ApplyThemeFont then
-                KE:ApplyThemeFont(editBoxLabel, "normal")
-            else
-                editBoxLabel:SetFontObject("GameFontNormal")
-            end
-            editBoxLabel:SetText(editBoxLabelText or "")
-            editBoxLabel:SetTextColor(textSecondary[1], textSecondary[2], textSecondary[3], 1)
-            editBoxLabel:SetShadowColor(0, 0, 0, 0)
-        end
-
-        dialog.editBox = editBox
-        dialog.editBoxLabel = editBoxLabel or editBox1Label
+        label:SetText(editBoxLabelText or "")
+        label:SetTextColor(textSecondary[1], textSecondary[2], textSecondary[3], 1)
+        label:SetShadowColor(0, 0, 0, 0)
 
         -- Adaptive height for single-field prompts so the below-editbox label
         -- doesn't clip. header(28) + topMargin(12) + editBox(24) + gap(6) +
         -- labelHeight + bottomMargin(12) + buttons(30) + bottomMargin(12).
-        -- Two-field mode has its own SetHeight below.
-        if not showSecondEditBox and editBoxLabel then
-            local labelHeight = editBoxLabel:GetStringHeight() or 0
-            local needed = 28 + 12 + 24 + 6 + labelHeight + 12 + 30 + 12
-            if needed > POPUP_HEIGHT then
-                dialog:SetHeight(needed)
-            end
+        local labelHeight = label:GetStringHeight() or 0
+        local needed = 28 + 12 + 24 + 6 + labelHeight + 12 + 30 + 12
+        if needed > POPUP_HEIGHT then
+            dialog:SetHeight(needed)
         end
     end
 
-    -- Second editbox (for two-field prompts like import: name + string)
-    if showSecondEditBox and showEditBox and dialog.editBox then
-        local editBox2Label = dialog:CreateFontString(nil, "OVERLAY")
-        editBox2Label:SetPoint("TOPLEFT", dialog.editBox, "BOTTOMLEFT", 12, -10)
-        editBox2Label:SetPoint("TOPRIGHT", dialog.editBox, "BOTTOMRIGHT", -12, -10)
-        editBox2Label:SetJustifyH("CENTER")
+    if dialog.editBox2 and twoField then
+        local label = dialog.editBox2Label
         if KE.ApplyThemeFont then
-            KE:ApplyThemeFont(editBox2Label, "normal")
+            KE:ApplyThemeFont(label, "normal")
         else
-            editBox2Label:SetFontObject("GameFontNormal")
+            label:SetFontObject("GameFontNormal")
         end
-        editBox2Label:SetText(secondEditBoxLabel or "")
-        editBox2Label:SetTextColor(textSecondary[1], textSecondary[2], textSecondary[3], 1)
-        editBox2Label:SetShadowColor(0, 0, 0, 0)
+        label:SetText(secondEditBoxLabel or "")
+        label:SetTextColor(textSecondary[1], textSecondary[2], textSecondary[3], 1)
+        label:SetShadowColor(0, 0, 0, 0)
 
-        local editBox2 = CreateFrame("EditBox", nil, dialog, "BackdropTemplate")
-        editBox2:SetHeight(24)
-        editBox2:SetPoint("TOPLEFT", editBox2Label, "BOTTOMLEFT", -12, -4)
-        editBox2:SetPoint("TOPRIGHT", editBox2Label, "BOTTOMRIGHT", 12, -4)
-        editBox2:SetAutoFocus(false)
-        editBox2:SetText("")
-        editBox2:SetJustifyH("CENTER")
-
+        local editBox2 = dialog.editBox2
         editBox2:SetBackdrop({
             bgFile = "Interface\\Buttons\\WHITE8X8",
             edgeFile = "Interface\\Buttons\\WHITE8X8",
-            edgeSize = KE:GetPixelSize(),
+            edgeSize = dialogPx,
         })
         editBox2:SetBackdropColor(bgMedium[1], bgMedium[2], bgMedium[3], 1)
         editBox2:SetBackdropBorderColor(border[1], border[2], border[3], 1)
@@ -405,86 +609,31 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
         end
         editBox2:SetTextColor(textPrimary[1], textPrimary[2], textPrimary[3], 1)
         editBox2:SetShadowColor(0, 0, 0, 0)
-
-        editBox2:SetScript("OnEnterPressed", function(self)
-            if onAccept and dialog.editBox then
-                onAccept(dialog.editBox:GetText(), self:GetText())
-                dialog:Hide()
-                KE.activePrompt = nil
-            end
-        end)
-
-        editBox2:SetScript("OnEnter", function(self)
-            self:SetBackdropBorderColor(accent[1], accent[2], accent[3], 1)
-        end)
-        editBox2:SetScript("OnLeave", function(self)
-            self:SetBackdropBorderColor(border[1], border[2], border[3], 1)
-        end)
-
-        dialog.editBox2 = editBox2
-
-        -- Tab between editboxes
-        dialog.editBox:SetScript("OnTabPressed", function()
-            editBox2:SetFocus()
-        end)
-        editBox2:SetScript("OnTabPressed", function()
-            dialog.editBox:SetFocus()
-        end)
+        editBox2:SetText("")
 
         -- Expand dialog height to fit both fields
         dialog:SetHeight(POPUP_HEIGHT + 70)
     end
 
-    if dialog.editBox then
-        dialog.editBox:SetText(text or "")
-        dialog.editBox:HighlightText()
-        dialog.editBox:SetAutoFocus(true)
+    if dialog.buttonContainer and showButtons then
+        ThemeButton(dialog.acceptBtn, Theme, acceptText or "Accept", true)
+        ThemeButton(dialog.cancelBtn, Theme, cancelText or "Cancel", false)
     end
 
-    if not showEditBox or onAccept then
-        local buttonContainer = CreateFrame("Frame", nil, dialog)
-        buttonContainer:SetHeight(30)
-        buttonContainer:SetPoint("BOTTOMLEFT", dialog, "BOTTOMLEFT", 12, 12)
-        buttonContainer:SetPoint("BOTTOMRIGHT", dialog, "BOTTOMRIGHT", -12, 12)
-
-        local acceptBtn = CreateThemedButton(buttonContainer, Theme, acceptText or "Accept", true)
-        acceptBtn:SetPoint("RIGHT", buttonContainer, "CENTER", -4, 0)
-        acceptBtn:SetScript("OnClick", function()
-            if onAccept then
-                if showEditBox and dialog.editBox then
-                    if dialog.editBox2 then
-                        onAccept(dialog.editBox:GetText(), dialog.editBox2:GetText())
-                    else
-                        onAccept(dialog.editBox:GetText())
-                    end
-                else
-                    onAccept()
-                end
-            end
-            dialog:Hide()
-            KE.activePrompt = nil
-        end)
-
-        local cancelBtn = CreateThemedButton(buttonContainer, Theme, cancelText or "Cancel", false)
-        cancelBtn:SetPoint("LEFT", buttonContainer, "CENTER", 4, 0)
-        cancelBtn:SetScript("OnClick", function()
-            if onCancel then onCancel() end
-            dialog:Hide()
-            KE.activePrompt = nil
-        end)
+    ------------------------------------------------------------------
+    -- PASS 3: visibility — SetShown on EVERY optional widget so nothing
+    -- from the previous mode survives into this one.
+    ------------------------------------------------------------------
+    if dialog.messageLabel then dialog.messageLabel:SetShown(showMessage) end
+    if dialog.logoBtn then dialog.logoBtn:SetShown((useTexture and texturePath) and true or false) end
+    if dialog.editBox then dialog.editBox:SetShown(showEditBox and true or false) end
+    if dialog.editBoxTopLabel then dialog.editBoxTopLabel:SetShown(twoField) end
+    if dialog.editBoxBottomLabel then
+        dialog.editBoxBottomLabel:SetShown((showEditBox and not twoField) and true or false)
     end
-
-    dialog:SetScript("OnKeyDown", function(self, key)
-        if key == "ESCAPE" then
-            self:SetPropagateKeyboardInput(false)
-            if onCancel then onCancel() end
-            self:Hide()
-            KE.activePrompt = nil
-        else
-            self:SetPropagateKeyboardInput(true)
-        end
-    end)
-    dialog:EnableKeyboard(true)
+    if dialog.editBox2Label then dialog.editBox2Label:SetShown(twoField) end
+    if dialog.editBox2 then dialog.editBox2:SetShown(twoField) end
+    if dialog.buttonContainer then dialog.buttonContainer:SetShown(showButtons) end
 
     dialog:Show()
     KE.activePrompt = dialog
@@ -638,24 +787,28 @@ local function _KE_RegisterBorder(frame)
     end
 end
 
+local function _KE_ApplyBorderPixel(frame)
+    if not (frame and frame.borders) then return end
+    local px = KE:GetPixelSize()
+    local b = frame.borders
+    if b.top and b.top.SetHeight then b.top:SetHeight(px) end
+    if b.bottom and b.bottom.SetHeight then b.bottom:SetHeight(px) end
+    if b.left and b.left.SetWidth then b.left:SetWidth(px) end
+    if b.right and b.right.SetWidth then b.right:SetWidth(px) end
+end
+
 -- After border creation, re-snap for 2 frames in case parent scale hasn't
 -- settled. Avoids a race where borders are created at the wrong pixel
 -- thickness when a parent's effective scale is set immediately after.
+-- Uses chained C_Timer.After(0) (GC'd closures) instead of a throwaway
+-- ticker frame — frames are never garbage-collected.
 local function _KE_DelayedBorderResnap(frame)
     if not frame then return end
-    local ticker = CreateFrame("Frame")
-    local ticks = 0
-    ticker:SetScript("OnUpdate", function(self)
-        ticks = ticks + 1
-        if frame and frame.borders then
-            local px = KE:GetPixelSize()
-            local b = frame.borders
-            if b.top and b.top.SetHeight then b.top:SetHeight(px) end
-            if b.bottom and b.bottom.SetHeight then b.bottom:SetHeight(px) end
-            if b.left and b.left.SetWidth then b.left:SetWidth(px) end
-            if b.right and b.right.SetWidth then b.right:SetWidth(px) end
-        end
-        if ticks >= 2 then self:SetScript("OnUpdate", nil) end
+    C_Timer.After(0, function()
+        _KE_ApplyBorderPixel(frame)
+        C_Timer.After(0, function()
+            _KE_ApplyBorderPixel(frame)
+        end)
     end)
 end
 

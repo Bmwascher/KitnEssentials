@@ -74,6 +74,9 @@ function KE_FramePool:ReleaseAll() end
 ---@field FramePool KE.FramePool
 ---@field curves KE.Curves
 ---@field defaults table
+---@field msgContainer Frame? # message-popup singleton (Core/Widgets.lua)
+---@field promptDialog Frame? # prompt-dialog singleton (Core/Widgets.lua)
+---@field activePrompt Frame? # currently-open prompt; nil when closed
 local KE = {}
 
 -- ─── Print / chat ─────────────────────────────────────────

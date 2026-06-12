@@ -425,28 +425,34 @@ end
 -- Keyboard and Input Handlers
 ---------------------------------------------------------------------------------
 
+-- Wires-once singleton: nil-ing the frame in Remove leaked one frame per
+-- edit-mode cycle (frames are never GC'd). The frame and its OnKeyDown
+-- persist; every Enter re-arms keyboard, propagate (the handler leaves it
+-- false after consuming ESC), and Show (hidden frames get no key events).
 function EditMode:SetupEscapeHandler()
-    if self.escapeFrame then return end
-
-    self.escapeFrame = CreateFrame("Frame", "KE_EditModeEscape", UIParent)
+    if not self.escapeFrame then
+        self.escapeFrame = CreateFrame("Frame", "KE_EditModeEscape", UIParent)
+        self.escapeFrame:SetScript("OnKeyDown", function(frame, key)
+            if key == "ESCAPE" then
+                frame:SetPropagateKeyboardInput(false)
+                EditMode:Exit()
+            end
+        end)
+    end
     self.escapeFrame:EnableKeyboard(true)
     self.escapeFrame:SetPropagateKeyboardInput(true)
-
-    self.escapeFrame:SetScript("OnKeyDown", function(_, key)
-        if key == "ESCAPE" then
-            self.escapeFrame:SetPropagateKeyboardInput(false)
-            EditMode:Exit()
-        end
-    end)
+    self.escapeFrame:Show()
 end
 
 function EditMode:RemoveEscapeHandler()
-    if self.escapeFrame then
-        self.escapeFrame:SetScript("OnKeyDown", nil)
+    if not self.escapeFrame then return end
+    -- EnableKeyboard is protected in combat and the combat auto-exit path
+    -- reaches here in lockdown; Hide() alone keeps the frame inert, and the
+    -- next Enter (gated out of combat) re-arms everything.
+    if not InCombatLockdown() then
         self.escapeFrame:EnableKeyboard(false)
-        self.escapeFrame:Hide()
-        self.escapeFrame = nil
     end
+    self.escapeFrame:Hide()
 end
 
 ---------------------------------------------------------------------------------
@@ -454,8 +460,11 @@ end
 ---------------------------------------------------------------------------------
 
 function EditMode:SetupShiftHandler()
-    if self.shiftFrame then return end
-    self.shiftFrame = CreateFrame("Frame", "KE_EditModeShift", UIParent)
+    -- Frame is a create-once singleton (same leak shape as escapeFrame);
+    -- the OnUpdate is re-wired per Enter so wasShiftDown starts fresh.
+    if not self.shiftFrame then
+        self.shiftFrame = CreateFrame("Frame", "KE_EditModeShift", UIParent)
+    end
     local wasShiftDown = false
     self.shiftFrame:SetScript("OnUpdate", function()
         if not EditMode.isActive then return end
@@ -470,13 +479,13 @@ function EditMode:SetupShiftHandler()
 
         wasShiftDown = isShiftDown
     end)
+    self.shiftFrame:Show()
 end
 
 function EditMode:RemoveShiftHandler()
     if self.shiftFrame then
         self.shiftFrame:SetScript("OnUpdate", nil)
         self.shiftFrame:Hide()
-        self.shiftFrame = nil
     end
     -- Ensure we restore alpha if edit mode is closed while Shift is held
     if self.isShiftFaded then
@@ -586,23 +595,23 @@ end
 ---------------------------------------------------------------------------------
 
 function EditMode:SetupCombatHandler()
-    if self.combatFrame then return end
-
-    self.combatFrame = CreateFrame("Frame")
+    -- Create-once singleton (same leak shape as escapeFrame); the OnEvent
+    -- stays wired, Remove just unregisters the event.
+    if not self.combatFrame then
+        self.combatFrame = CreateFrame("Frame")
+        self.combatFrame:SetScript("OnEvent", function()
+            if EditMode.isActive then
+                KE:Print("Edit Mode closed due to entering combat.")
+                EditMode:Exit()
+            end
+        end)
+    end
     self.combatFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
-    self.combatFrame:SetScript("OnEvent", function()
-        if EditMode.isActive then
-            KE:Print("Edit Mode closed due to entering combat.")
-            EditMode:Exit()
-        end
-    end)
 end
 
 function EditMode:RemoveCombatHandler()
     if self.combatFrame then
         self.combatFrame:UnregisterAllEvents()
-        self.combatFrame:SetScript("OnEvent", nil)
-        self.combatFrame = nil
     end
 end
 
