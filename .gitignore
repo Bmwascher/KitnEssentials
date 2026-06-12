@@ -6,6 +6,7 @@
 # Claude Code workspace (config, skills, project instructions)
 .claude/
 CLAUDE.md
+AGENTS.md
 
 # Personal dev notes, audits, Superpowers artifacts (local-only by choice)
 dev/docs/

@@ -15,6 +15,30 @@ set -uo pipefail
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root" || exit 1
 
+# AGENTS.md drift check (non-blocking): warn when Modules/ on disk and the
+# AGENTS.md Structure block disagree, in either direction. AGENTS.md is
+# gitignored, so read it from the working tree. Runs before the busted
+# early-exit so the note always prints.
+if [ -f AGENTS.md ] && [ -d Modules ]; then
+    drift=0
+    for d in Modules/*/; do
+        name="$(basename "$d")"
+        if ! grep -q "Modules/$name/" AGENTS.md; then
+            echo "[pre-push] note: Modules/$name/ exists but is missing from the AGENTS.md structure block" >&2
+            drift=1
+        fi
+    done
+    for name in $(grep -o 'Modules/[A-Za-z0-9_]*/' AGENTS.md | sed 's|^Modules/||; s|/$||' | sort -u); do
+        if [ ! -d "Modules/$name" ]; then
+            echo "[pre-push] note: AGENTS.md lists Modules/$name/ but it no longer exists" >&2
+            drift=1
+        fi
+    done
+    if [ "$drift" -eq 1 ]; then
+        echo "[pre-push] (non-blocking) AGENTS.md Structure block is out of date — update it." >&2
+    fi
+fi
+
 # Windows: luarocks generates only busted.bat, which bash's plain
 # `command -v busted` cannot resolve — check both forms. (.exe tools like
 # luacheck.exe resolve automatically under git's msys bash.)
