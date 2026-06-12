@@ -1,0 +1,28 @@
+name: Test
+
+# Headless unit/smoke tests on every push and PR. This is the durable safety
+# net: it runs on GitHub's runners regardless of any local or cloud container
+# state. Does NOT replace in-game /reload testing (frame layout, secure
+# frames, taint, EditMode are in-game-only — see spec/README.md).
+#
+# Static analysis lives in lint.yml (BigWigsMods/luacheck, strict — the
+# warning baseline was cleared 2026-06-11, so the old "advisory" mode from
+# the original harness branch is no longer needed).
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  busted:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Lua toolchain
+        run: bash dev/scripts/setup-lua-toolchain.sh
+
+      # Hard gate: unit specs + the loadfile smoke (which fails on any syntax
+      # error in any shipped source file).
+      - name: Busted
+        run: busted

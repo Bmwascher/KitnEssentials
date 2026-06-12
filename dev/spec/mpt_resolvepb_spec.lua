@@ -1,7 +1,7 @@
 -- Pure unit test for MPT.ResolvePBFrom (the busted-testable core of ResolvePB).
--- Requires the busted harness on branch feature/test-harness (per memory
--- project_test_harness). If busted is unavailable, run the equivalent
--- /run self-check macro noted at the bottom of this file in-game.
+-- Runs under the repo's busted harness (see dev/README.md for setup). If
+-- busted is unavailable, run the equivalent /run self-check macro noted at
+-- the bottom of this file in-game.
 --
 -- STALE-MIRROR WARNING: This spec loads the real MythicPlusTimer_Splits.lua via
 -- loadfile so it tests the live implementation, not a copy. If the file path or
@@ -20,10 +20,10 @@ local MPT = _G.__MPT_STUB
 -- Re-declare the pure resolver exactly as in MythicPlusTimer_Splits.lua by
 -- loading that file's ResolvePBFrom. We dofile the source so the test tracks
 -- the real implementation (no copy).
-arg = { [1] = "MythicPlusTimer", [2] = setmetatable({}, { __index = function() return function() end end }) }
+local addonVararg = { [1] = "MythicPlusTimer", [2] = setmetatable({}, { __index = function() return function() end end }) }
 -- NOTE: loadfile path is relative to repo root where busted runs.
 local chunk = loadfile("Modules/Dungeons/MythicPlusTimer/MythicPlusTimer_Splits.lua")
-if chunk then pcall(chunk, "MythicPlusTimer", arg[2]) end
+if chunk then pcall(chunk, "MythicPlusTimer", addonVararg[2]) end
 
 describe("MPT.ResolvePBFrom", function()
     local store

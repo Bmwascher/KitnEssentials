@@ -1,13 +1,23 @@
-Annotations/
+# KitnEssentials — local-only files. Everything else is tracked; the player
+# zip is shaped by .pkgmeta (its `- dev` entry strips all dev tooling), not
+# this file. Convention: dev tooling goes in dev/ (tracked), personal notes
+# in dev/docs/ (ignored), third-party addon sources in References/ (ignored).
+
+# Claude Code workspace (config, skills, project instructions)
 .claude/
 CLAUDE.md
-CURSEFORGE_README.md
-docs/
-.luacheckrc
-.markdownlint.json
-References/
-REFERENCES.md
-SKILLS.md
-SKILLS-Discord.md
-.wow-api-reference/
+
+# Personal dev notes, audits, Superpowers artifacts (local-only by choice)
+dev/docs/
+
+# Editor settings & language-server config (machine-local)
+.vscode/
 .wowluarc.json
+
+# Upstream reference material (third-party addon sources — not ours to publish)
+References/
+
+# Symlink to the Blizzard UI source clone. NO trailing slash: git sees
+# symlinks as files, and a trailing-slash pattern only matches directories
+# (this exact bug bit us on 2026-06-11).
+.wow-api-reference

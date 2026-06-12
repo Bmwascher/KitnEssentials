@@ -6,25 +6,19 @@ manual-changelog:
   filename: CHANGELOG.md
   markup-type: markdown
 
+# Only tracked files need listing here — gitignored paths (References/,
+# dev/docs/, dev/Annotations/, editor configs, …) never reach the packager's
+# clone in the first place.
 ignore:
   - .pkgmeta
-  - .claude
   - .github
   - .gitattributes
   - .gitignore
   - .luacheckrc
-  - .markdownlint.json
-  - .wowluarc.json
-  - .wow-api-reference
-  - docs
-  - Annotations
-  - CLAUDE.md
+  - .busted
+  - dev
   - CHANGELOG.md
   - README.md
-  - References
-  - SKILLS.md
-  - SKILLS-Discord.md
-  - tests
 
 
 externals:

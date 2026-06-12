@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# ╔══════════════════════════════════════════════════════════╗
+# ║  dev/githooks/pre-push                                    ║
+# ║  Local gate so bad code never reaches a pushed branch.   ║
+# ╚══════════════════════════════════════════════════════════╝
+#
+# Opt in once (per clone / per worktree):
+#     git config core.hooksPath dev/githooks
+#
+# Requires lua + busted + luacheck on PATH. On Windows, ensure the luarocks
+# bin dir (e.g. %APPDATA%\luarocks\bin) is on PATH — see dev/README.md.
+# Override a single push with:  git push --no-verify
+set -uo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root" || exit 1
+
+if ! command -v busted >/dev/null 2>&1; then
+    echo "[pre-push] busted not on PATH — skipping tests. See dev/README.md to set up." >&2
+    echo "[pre-push] (push allowed; CI will still run the suite.)" >&2
+    exit 0
+fi
+
+# Blocking since 2026-06-11: the luacheck warning baseline is zero.
+echo "[pre-push] luacheck…"
+if command -v luacheck >/dev/null 2>&1; then
+    if ! luacheck . -q; then
+        echo "[pre-push] BLOCKED: luacheck warnings. Fix them, or override with: git push --no-verify" >&2
+        exit 1
+    fi
+else
+    echo "[pre-push] luacheck not on PATH — skipping lint. (CI will still lint.)" >&2
+fi
+
+echo "[pre-push] busted…"
+if ! busted; then
+    echo "[pre-push] BLOCKED: tests failed. Fix them, or override with: git push --no-verify" >&2
+    exit 1
+fi
+
+echo "[pre-push] OK"

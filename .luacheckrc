@@ -1,0 +1,436 @@
+-- Luacheck configuration for KitnEssentials
+std = "lua51"
+max_line_length = false
+exclude_files = {
+    "Libs/**",
+    ".wow-api-reference/**",
+    "References/**",
+    "dev/Annotations/**",   -- wowlua-ls ---@meta stubs (local-only, not real code)
+}
+
+-- Headless test harness (busted, not in-game). These files run under a desktop
+-- Lua + busted, so allow busted's test globals and the luafilesystem module the
+-- smoke spec walks the tree with. Never shipped (pkgmeta-ignored).
+files["dev/spec"] = {
+    std = "lua51+busted",
+    read_globals = { "lfs" },
+}
+
+-- Suppress legitimate patterns:
+--  111-113/_  — discard variable convention
+--  212/_      — unused argument with _ name (discard)
+--  212/self   — unused self in methods
+--  212/event  — unused event arg in OnEvent callbacks (common WoW pattern)
+--  212/msg    — unused msg arg in chat/popup callbacks
+--  212/editbox — unused editbox arg in OnEnterPressed/OnTextChanged
+--  212/width  — unused width/height in OnSizeChanged callbacks
+--  212/height
+--  432/self   — inner closure shadowing outer self (widget callback pattern)
+--  431/CP     — widget callback re-fetches module fresh, shadowing outer CP
+ignore = {
+    "111/_", "112/_", "113/_",
+    "212/_", "212/self", "212/event", "212/msg", "212/editbox", "212/width", "212/height",
+    "212/timeToFade", "212/endAlpha", "212/loopCallback",     -- UIFrameFade callback signature
+    "212/elapsed",                                            -- OnUpdate callback signature
+    "212/userInput",                                          -- OnTextChanged callback signature
+    "212/r", "212/g", "212/b", "212/a",                       -- Color picker callback signature
+    "212/encounterID", "212/encounterName",                   -- ENCOUNTER_START/END signature
+    "212/difficultyID", "212/groupSize",
+    "212/scrollChild",                                        -- RegisterContent callback signature
+    "212/KE",                                                  -- bootstrap guard arg (GetModule files)
+    "212/triggerId", "212/addon",                             -- DungeonTimers/Ace addon hooks
+    "212/wrapOn",                                             -- KEText format helper
+    "432/self",
+    "431/CP",                                                 -- widget callback re-fetches module fresh
+}
+
+-- Globals this addon sets
+globals = {
+    "KitnEssentialsDB",
+    "KitnEssentialsOptimizeDB",
+    "KitnCommands",
+    "KitnEssentialsAPI",
+    "KitnSlashLines",
+
+    -- Slash command registration (WoW convention: SlashCmdList[] + SLASH_*N)
+    "SlashCmdList",
+    "SLASH_KITNESSENTIALS1", "SLASH_KITNESSENTIALS2", "SLASH_KITNESSENTIALS3",
+    "SLASH_KE_CDM1", "SLASH_KE_CDM2",
+    "SLASH_KE_FS1",
+    "SLASH_KE_LEAVE1", "SLASH_KE_LEAVE2",
+    "SLASH_KE_MUSIC1",
+    "SLASH_KE_MUTE1",
+    "SLASH_KE_RESET1",
+    "SLASH_KE_RL1",
+
+    -- Blizzard tables/frames this addon WRITES fields on (dialog
+    -- registration, skinning fade-state, EditMode shims). Listed here
+    -- instead of read_globals because luacheck flags field writes on
+    -- read-only globals.
+    "StaticPopupDialogs",
+    "SetTooltipMoney",                  -- replaced global fn (Tooltips skin)
+    "AuctionHouseFrame", "ProfessionsCustomerOrdersFrame",
+    "ActionStatus", "ZoneTextFrame", "SubZoneTextFrame",
+    "PVPArenaTextString", "PVPInfoTextString",
+    "CompactRaidFrameManager",
+    "GameTooltipDefaultContainer",
+}
+
+-- WoW API globals this addon reads
+read_globals = {
+    -- Lua standard extensions in WoW
+    "strsplit", "strjoin", "strtrim", "format", "tinsert", "tremove",
+    "wipe", "CopyTable", "tContains", "strsub", "strlen", "strupper",
+    "strlower", "nop", "time", "date",
+
+    -- Core math (WoW re-exports)
+    "ceil", "floor", "min", "max", "abs", "sort",
+
+    -- Frame and UI
+    "CreateFrame", "CreateFont", "CreateColor", "UIParent", "Settings",
+    "CreateAbbreviateConfig",
+    "EnumerateFrames",
+    "BackdropTemplateMixin", "Mixin", "CreateFromMixins", "CreateAndInitFromMixin",
+    "ImportDataStreamMixin",
+    "MapCanvasPinMixin", "MapCanvasDataProviderMixin",
+    "hooksecurefunc",
+    "ShowUIPanel", "HideUIPanel", "UIParentLoadAddOn",
+    "WorldFrame",
+    "MouseIsOver", "GetMouseFoci", "GetMouseFocus",
+    "GetPhysicalScreenSize", "GetCursorPosition",
+    "RunNextFrame",
+
+    -- Enums and constants
+    "Enum", "Constants", "CurveConstants",
+    "ACCEPT", "CANCEL", "CLOSE",
+    "ENCHANTED_TOOLTIP_LINE",
+    "FACTION_ALLIANCE", "FACTION_HORDE",
+    "BASE_MOVEMENT_SPEED",
+    "NUM_BAG_FRAMES", "NUM_CHAT_WINDOWS", "NUM_LE_FRAME_TUTORIALS",
+    "RAID_CLASS_COLORS", "GetClassColor", "CLASS_ICON_TCOORDS",
+    "STANDARD_TEXT_FONT",
+    "NORMAL_FONT_COLOR", "NORMAL_FONT_COLOR_CODE",
+    "DebuffTypeColor",
+
+    -- Unit functions
+    "UnitHealth", "UnitHealthMax", "UnitHealthPercent",
+    "UnitPower", "UnitPowerMax", "UnitPowerPercent",
+    "UnitName", "UnitFullName", "UnitLevel", "UnitClass", "UnitRace", "GetUnitName",
+    "UnitGUID", "UnitExists", "UnitIsDead", "UnitIsUnit", "UnitTokenFromGUID",
+    "UnitGroupRolesAssigned", "UnitBuff", "UnitDebuff",
+    "UnitGetTotalAbsorbs",
+    "AbbreviateNumbers", "AbbreviateLargeNumbers", "BreakUpLargeNumbers",
+    "UnitNameFromGUID", "UnitNameUnmodified", "UnitClassFromGUID",
+    "UnitIsPlayer", "UnitIsConnected", "UnitIsDeadOrGhost", "UnitIsFeignDeath",
+    "UnitReaction", "UnitInPartyIsAI",
+    "UnitIsBossMob", "UnitIsTapDenied", "UnitIsGroupLeader",
+    "UnitHasVehicleUI", "UnitInVehicle", "UnitOnTaxi",
+    "UnitAffectingCombat", "UnitCanAssist", "UnitCanAttack",
+    "UnitInParty", "UnitInRaid", "UnitIsVisible",
+    "UnitFactionGroup", "UnitSpellHaste", "UnitStat",
+    "UnitClassification", "UnitSex", "UnitPowerType",
+    "UnitPosition",
+    "InCombatLockdown",
+
+    -- Totem functions
+    "GetTotemInfo", "GetTotemDuration", "MAX_TOTEMS", "STANDARD_TOTEM_PRIORITIES",
+
+    -- Casting (12.0 Duration-based)
+    "UnitCastingInfo", "UnitChannelInfo",
+    "UnitCastingDuration", "UnitChannelDuration",
+    "UnitEmpoweredChannelDuration",
+    "UnitIsSpellTarget", "UnitSpellTargetName", "UnitSpellTargetClass",
+    "UnitShouldDisplaySpellTargetName",
+    "C_CastingInfo",
+
+    -- Inspect
+    "CanInspect", "NotifyInspect", "GetInspectSpecialization",
+
+    -- Specialization
+    "GetSpecialization", "GetSpecializationInfo", "GetSpecializationRole",
+    "GetSpecializationInfoByID", "GetNumClasses", "GetSpecializationInfoForClassID",
+    "C_CreatureInfo",
+
+    -- Instance / Group
+    "IsInInstance", "GetInstanceInfo",
+    "IsInRaid", "IsInGroup", "IsInGuild", "GetNumGroupMembers", "GetRaidRosterInfo", "GetRaidDifficultyID",
+    "IsWargame", "SendChatMessage", "LE_PARTY_CATEGORY_INSTANCE", "LE_PARTY_CATEGORY_HOME",
+
+    -- Auras
+    "C_UnitAuras", "AuraUtil",
+
+    -- Spell
+    "C_Spell", "C_SpellBook",
+    "IsPlayerSpell", "IsSpellKnown",
+
+    -- Secret Values (12.0)
+    "issecretvalue", "issecrettable", "canaccesstable", "canaccessvalue",
+    "GetRestrictedActionStatus",
+    "C_CurveUtil", "C_DurationUtil",
+    "C_Secrets", "C_RestrictedActions",
+
+    -- Timer
+    "C_Timer",
+
+    -- Sound
+    "PlaySoundFile", "StopSound", "PlaySound",
+    "C_Sound",
+
+    -- Text-to-Speech
+    "C_VoiceChat", "C_TTSSettings",
+    "TextToSpeech_GetSelectedVoice",
+
+    -- Addon management
+    "GetAddOnMemoryUsage", "UpdateAddOnMemoryUsage",
+    "GetAddOnCPUUsage", "UpdateAddOnCPUUsage",
+    "GetFrameCPUUsage", "ResetCPUUsage",
+    "GetAddOnMetadata",
+    "C_AddOns", "C_AddOnProfiler",
+
+    -- CVar
+    "GetCVar", "SetCVar", "C_CVar",
+
+    -- Map / Waypoint
+    "C_Map",
+    "C_SuperTrack",
+    "C_Texture",
+    "UiMapPoint",
+    "EventRegistry",
+    "WorldMapFrame",
+
+    -- Professions
+    "GetProfessions", "GetProfessionInfo",
+
+    -- Item / Container
+    "C_Item", "C_Container", "Item", "ItemLocation",
+    "GetItemInfo", "GetItemInfoInstant", "GetItemSpell", "GetItemCount",
+    "GetInventoryItemID", "GetInventoryItemDurability", "GetInventoryItemTexture", "GetInventoryItemLink",
+    "GetDetailedItemLevelInfo",
+    "GetInventoryItemQuality", "GetItemQualityColor",
+    "GetWeaponEnchantInfo",
+    "ClearCursor", "ResetCursor", "SetCursor",
+    "NUM_BAG_SLOTS",
+
+    -- Gem Socketing
+    "C_ItemSocketInfo", "SocketInventoryItem", "AcceptSockets", "CloseSocketInfo",
+
+    -- PaperDoll layout
+    "PaperDollFrame_SetLevel", "PaperDollFrame_UpdateStats",
+    "InspectPaperDollItemSlotButton_Update", "InspectPaperDollFrame_SetLevel",
+    "InspectPaperDollItemsFrame", "C_PaperDollInfo",
+    "ActionButtonSpellAlertManager",
+
+    -- Loot
+    "GetLootRollItemLink", "RollOnLoot", "ConfirmLootRoll",
+    "BonusRollFrame", "BonusRollFrame_StartBonusRoll",
+
+    -- Resurrection
+    "AcceptResurrect", "IsEncounterInProgress",
+
+    -- Equipment Slots
+    "INVSLOT_HEAD", "INVSLOT_NECK", "INVSLOT_SHOULDER", "INVSLOT_BACK", "INVSLOT_CHEST",
+    "INVSLOT_WRIST", "INVSLOT_WAIST", "INVSLOT_LEGS", "INVSLOT_FEET",
+    "INVSLOT_FINGER1", "INVSLOT_FINGER2", "INVSLOT_MAINHAND", "INVSLOT_OFFHAND",
+
+    -- Level / Expansion
+    "GetExpansionForLevel", "IsLevelAtEffectiveMaxLevel",
+
+    -- Currency / Money
+    "C_CurrencyInfo",
+    "GetMoney", "GetCoinTextureString",
+
+    -- Tooltip
+    "GameTooltip", "GameTooltip_Hide",
+    "TooltipDataProcessor",
+    "C_TooltipInfo",
+
+    -- Static Popups
+    "StaticPopup_Show", "StaticPopup_Hide", "StaticPopup_FindVisible",
+
+    -- Context menus (Blizzard_Menu, 11.0+ taint-safe menu API)
+    "MenuUtil",
+
+    -- Fading
+    "UIFrameFade", "UIFrameFadeIn", "UIFrameFadeOut", "UIFrameFadeRemoveFrame",
+
+    -- Chat
+    "C_ChatInfo",
+
+    -- Color
+    "C_ClassColor",
+
+    -- Player Info
+    "C_PlayerInfo", "GetPlayerInfoByGUID",
+    "PlayerUtil",
+    "GetRealmName", "GetNormalizedRealmName", "Ambiguate",
+
+    -- Talent / Class
+    "C_ClassTalents", "C_SpecializationInfo", "C_Traits",
+
+    -- Mythic+ / Challenges
+    "C_ChallengeMode", "C_MythicPlus", "C_ScenarioInfo", "C_Scenario",
+
+    -- PvP
+    "C_PvP",
+
+    -- Blizzard UI frames (read-only from addons)
+    "TotemFrame",
+
+    -- Pet
+    "GetPetActionInfo", "PetHasActionBar", "HasPetSpells",
+    "C_PetBattles",
+
+    -- Macro
+    "CreateMacro", "EditMacro", "GetMacroIndexByName",
+    "GetMacroItem", "GetMacroSpell", "GetNumMacros", "MAX_ACCOUNT_MACROS",
+
+    -- Keybinding
+    "GetBindingKey", "SetBinding", "SaveBindings", "GetCurrentBindingSet",
+
+    -- Secure handling
+    "RegisterStateDriver", "UnregisterStateDriver",
+    "SetOverrideBindingClick", "ClearOverrideBindings",
+    "SecureCmdOptionParse",
+    "SecureHandlerExecute", "SecureHandlerWrapScript",
+    "issecurevariable",
+
+    -- Shapeshifting / Stance
+    "GetNumShapeshiftForms", "GetShapeshiftForm", "GetShapeshiftFormInfo",
+
+    -- Loot / Spec
+    "GetLootSpecialization", "GetAverageItemLevel",
+
+    -- Quest
+    "AcceptQuest", "CompleteQuest", "IsQuestCompletable",
+    "GetQuestReward", "GetNumQuestChoices", "GetQuestID",
+    "GetActiveTitle", "GetNumActiveQuests",
+    "GetNumAvailableQuests", "SelectActiveQuest", "SelectAvailableQuest",
+    "C_QuestLog",
+
+    -- Guild Bank
+    "GetGuildBankItemLink", "GetGuildBankTabInfo",
+    "GetGuildBankWithdrawMoney", "GetNumGuildBankTabs",
+    "CanGuildBankRepair", "SplitGuildBankItem",
+    "GetGuildInfo",
+
+    -- Merchant
+    "CanMerchantRepair", "RepairAllItems", "GetRepairAllCost",
+    "C_MerchantFrame",
+
+    -- Combat logging
+    "LoggingCombat",
+
+    -- Damage meter (12.0 in-client meter API)
+    "C_DamageMeter",
+    "C_DeathRecap",
+
+    -- Gossip
+    "C_GossipInfo",
+
+    -- Cursor
+    "C_Cursor",
+
+    -- Garrison / Order Hall
+    "C_Garrison",
+
+    -- Encoding
+    "C_EncodingUtil",
+
+    -- Party
+    "C_PartyInfo",
+    "CancelDuel",
+
+    -- Action bar
+    "HasAction", "GetActionText", "C_ActionBar",
+
+    -- Raid Markers
+    "SetRaidTarget", "IsRaidMarkerActive",
+    "GetRaidTargetIndex", "SetRaidTargetIconTexture",
+
+    -- Misc API
+    "IsAltKeyDown", "IsControlKeyDown", "IsShiftKeyDown", "IsMetaKeyDown",
+    "IsMouseButtonDown", "IsMounted",
+    "ResetInstances",
+    "GetServerTime", "GetTimePreciseSec",
+    "ReloadUI", "print",
+    "GameMovieFinished", "CinematicFrame_CancelCinematic",
+    "Evoker", -- Evoker-specific
+    "GetUnitEmpowerMinHoldTime", "GetUnitEmpowerHoldAtMaxTime",
+    "FrameStackTooltip_Toggle",
+    "debugprofilestop", "debugstack", "geterrorhandler",
+
+    -- C_UI / C_NamePlate
+    "C_NamePlate",
+    "C_SeasonInfo",
+    "C_DateAndTime",
+
+    -- Libraries
+    "LibStub",
+
+    -- BigWigs (optional dependency)
+    "BigWigs", "BigWigsLoader",
+
+    -- ElvUI (optional dependency)
+    "ElvUI",
+
+    -- WeakAuras (third-party, nil-checked for detection)
+    "WeakAuras",
+
+    -- Addon object
+    "KitnEssentials",
+
+    -- Time
+    "GetTime", "GetWorldElapsedTime",
+
+    -- -------------------------------------------------------
+    -- Blizzard UI Frames (read for skinning / anchoring)
+    -- -------------------------------------------------------
+    "AchievementObjectiveTracker",
+    "ActionButtonSpellAlertManager",
+    "BagsBar",
+    "BonusObjectiveTracker",
+    "BuffFrame", "DebuffFrame",
+    "CampaignQuestObjectiveTracker",
+    "CharacterFrame", "CharacterModelScene", "CharacterModelFrameBackgroundOverlay",
+    "CharacterStatsPane", "CharacterLevelText", "CharacterFrameTitleText",
+    "CharacterFrameTab1", "CharacterFrameTab2", "CharacterFrameTab3",
+    "ChallengesKeystoneFrame",
+    "ChatBubbleFont",
+    "ColorPickerFrame",
+    "InspectFrame",
+    "EditModeManagerFrame",
+    "EventToastManagerFrame",
+    "ExternalDefensivesFrame",
+    "LFDRoleCheckPopup", "LFDRoleCheckPopupAcceptButton",
+    "LFDRoleCheckPopupRoleButtonTank", "LFDRoleCheckPopupRoleButtonHealer", "LFDRoleCheckPopupRoleButtonDPS",
+    "LFGListApplicationDialog",
+    "ItemSocketingFrame",
+    "MainMenuMicroButton",
+    "MonthlyActivitiesObjectiveTracker",
+    "ObjectiveTrackerFrame", "ObjectiveTrackerHeaderFont", "ObjectiveTrackerLineFont",
+    "PaperDollFrame",
+    "PetActionBar",
+    "PlayerCastingBarFrame",
+    "ProfessionsRecipeTracker",
+    "QuestObjectiveTracker",
+    "QueueStatusFrame",
+    "ScenarioObjectiveTracker",
+    "SettingsPanel",
+    "StanceBar",
+    "SubZoneTextString",
+    "UIErrorsFrame",
+    "WorldQuestObjectiveTracker",
+    "ZoneTextString",
+
+    -- -------------------------------------------------------
+    -- Third-party addon frames (nil-checked for detection)
+    -- -------------------------------------------------------
+    "Ayije_CastBar",
+    "BCDM_CastBar",
+    "ElvUI_SpellBookTooltip",
+    "UUF_Player_CastBar",
+
+    -- Ready Check frames
+    "ReadyCheckListenerFrame",
+    "ReadyCheckFrame",
+}

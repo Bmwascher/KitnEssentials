@@ -1,0 +1,11 @@
+-- busted configuration for KitnEssentials headless tests.
+-- Run from the repo root with `busted` (see dev/README.md for setup).
+return {
+    default = {
+        verbose = true,
+        ROOT = { "dev/spec" },
+        pattern = "_spec",          -- only files ending in _spec.lua
+        -- Resolve require("dev.spec.<helper>") and require("dev.spec.<mock>") from root.
+        lpath = "./?.lua;./?/init.lua",
+    },
+}
