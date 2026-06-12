@@ -183,12 +183,27 @@ function DM:PopulateSegmentMenu(W)
     -- so the active == compare is taint-safe; name/duration are secret-guarded.
     local list = self:GetAvailableSessions(20)
     local hadSessions = false
+    -- Kill/wipe tint map: tagged on ENCOUNTER_END's authoritative success flag
+    -- (Core.lua) -- NOT parsed from the session name, which stays verbatim
+    -- (including Blizzard's own markers). Runtime-only, like stored sessions.
+    local outcomes = self._sessionOutcomes
     if list and #list > 0 then
         for i = 1, #list do
             local sdata = list[i]
             if sdata then
                 local sid = sdata.sessionID
                 local label = self:SafeSessionName(sdata.name)
+                -- Green kill / red wipe; untagged rows (trash, pre-tag) keep plain
+                -- text. The escape-code wrap overrides the row's SetTextColor tints
+                -- for the name span, which is fine: active/hover feedback still
+                -- comes from the bg fill + highlight texture. Plain concat -- safe
+                -- even when the duration half below is a secret string.
+                local outcome = outcomes and outcomes[sid]
+                if outcome == true then
+                    label = "|cff33ff33" .. label .. "|r"
+                elseif outcome == false then
+                    label = "|cffff3333" .. label .. "|r"
+                end
                 local dur = select(1, self.FormatDeathTime(sdata.durationSeconds))
                 place(label .. "  |cff999999(" .. dur .. ")|r", W._curSessionID == sid, sid, nil)
                 hadSessions = true

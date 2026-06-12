@@ -604,11 +604,31 @@ end
 -- finalized at the instant ENCOUNTER_END fires. Delay the stop by 0.5s so the
 -- final paint reads settled totals rather than a stale/empty segment. Clears
 -- the encounter-active flag immediately.
-function DM:OnEncounterEnd()
+--
+-- The payload's `success` (1 = kill, 0 = wipe; plain event payload, never secret)
+-- feeds the segment-menu kill/wipe tint: shortly AFTER the finalize delay, the
+-- newest entry in GetAvailableCombatSessions is this attempt's stored session --
+-- tag its id in the runtime outcome map. Runtime-only on purpose: stored sessions
+-- don't survive a /reload, so neither must the map (wiped on every session reset).
+function DM:OnEncounterEnd(_, _, _, _, _, success)
     if DEBUG_DM then KE:Print("[DM] ENCOUNTER_END -> delayed StopTicker (0.5s)") end
     self._inEncounter = false
     C_Timer.After(0.5, function()
         DM:StopTicker()
+    end)
+    local won = (success == 1)
+    C_Timer.After(0.75, function()
+        if not DM.enabled then return end
+        local list = DM:GetAvailableSessions(1)
+        local newest = list and list[#list]
+        local nid = newest and newest.sessionID
+        if nid and not issecretvalue(nid) then
+            DM._sessionOutcomes = DM._sessionOutcomes or {}
+            DM._sessionOutcomes[nid] = won
+            if DEBUG_DM then
+                KE:Print("[DM] outcome tagged: session " .. tostring(nid) .. " -> " .. (won and "kill" or "wipe"))
+            end
+        end
     end)
 end
 
@@ -703,6 +723,9 @@ function DM:OnMeterReset()
             W._curSessionID = nil
         end
     end
+    -- Stored sessions are gone; their kill/wipe outcome tags go with them (a future
+    -- session could reuse a wiped id and inherit a stale tint otherwise).
+    if self._sessionOutcomes then wipe(self._sessionOutcomes) end
     -- A reset empties the bars; close any open selector so the cleared bars show
     -- (DAMAGE_METER_RESET can fire from an external reset with a selector still open).
     if self.CloseAllSelectors then self:CloseAllSelectors() end
@@ -1128,6 +1151,9 @@ function DM:HeaderReset(_)
             if w._detailOpen and self.CloseDetail then self:CloseDetail(w) end
         end
     end
+    -- Outcome tags reference the wiped session ids -- drop them with the data
+    -- (mirrors OnMeterReset; covers a reset that doesn't fire the event).
+    if self._sessionOutcomes then wipe(self._sessionOutcomes) end
     -- Close any open view-selector too so the freshly-emptied bars are visible (the
     -- selector overlays the body with the same anchors, so it would block them).
     if self.CloseAllSelectors then self:CloseAllSelectors() end
@@ -1459,6 +1485,8 @@ function DM:OnChallengeEvent(event)
         end
         -- The hover-tip Targets cache cross-references the now-wiped data.
         if self.InvalidateTargetsCache then self:InvalidateTargetsCache() end
+        -- Outcome tags reference the wiped session ids (mirrors OnMeterReset).
+        if self._sessionOutcomes then wipe(self._sessionOutcomes) end
         -- Repaint the emptied bars now: ApplyActiveContext below early-returns when the
         -- content context is unchanged (a key RE-RUN stays "Mythic+"), so it can't be
         -- relied on to paint after the reset. BumpSegment already closed selectors/menus.
