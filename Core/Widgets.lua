@@ -638,24 +638,28 @@ local function _KE_RegisterBorder(frame)
     end
 end
 
+local function _KE_ApplyBorderPixel(frame)
+    if not (frame and frame.borders) then return end
+    local px = KE:GetPixelSize()
+    local b = frame.borders
+    if b.top and b.top.SetHeight then b.top:SetHeight(px) end
+    if b.bottom and b.bottom.SetHeight then b.bottom:SetHeight(px) end
+    if b.left and b.left.SetWidth then b.left:SetWidth(px) end
+    if b.right and b.right.SetWidth then b.right:SetWidth(px) end
+end
+
 -- After border creation, re-snap for 2 frames in case parent scale hasn't
 -- settled. Avoids a race where borders are created at the wrong pixel
 -- thickness when a parent's effective scale is set immediately after.
+-- Uses chained C_Timer.After(0) (GC'd closures) instead of a throwaway
+-- ticker frame — frames are never garbage-collected.
 local function _KE_DelayedBorderResnap(frame)
     if not frame then return end
-    local ticker = CreateFrame("Frame")
-    local ticks = 0
-    ticker:SetScript("OnUpdate", function(self)
-        ticks = ticks + 1
-        if frame and frame.borders then
-            local px = KE:GetPixelSize()
-            local b = frame.borders
-            if b.top and b.top.SetHeight then b.top:SetHeight(px) end
-            if b.bottom and b.bottom.SetHeight then b.bottom:SetHeight(px) end
-            if b.left and b.left.SetWidth then b.left:SetWidth(px) end
-            if b.right and b.right.SetWidth then b.right:SetWidth(px) end
-        end
-        if ticks >= 2 then self:SetScript("OnUpdate", nil) end
+    C_Timer.After(0, function()
+        _KE_ApplyBorderPixel(frame)
+        C_Timer.After(0, function()
+            _KE_ApplyBorderPixel(frame)
+        end)
     end)
 end
 
