@@ -629,10 +629,14 @@ function DM:LayoutWindow(W)
 
     -- Content HEIGHT only (the dock owns the width; the body's OnSizeChanged
     -- handler keeps the width synced). Set on actual change so the steady state
-    -- does no per-tick SetHeight.
+    -- does no per-tick SetHeight. This is the BASE height (VisibleBars rows);
+    -- RenderWindow grows the scroll child over it when the rendered list
+    -- overflows the viewport -- nil its cache so the next render re-applies
+    -- against the new base instead of skipping on a stale match.
     if W._contentH ~= barsH then
         W._contentH = barsH
         W.content:SetHeight(barsH)
+        W._renderContentH = nil
     end
 end
 
@@ -1023,10 +1027,13 @@ function DM:RenderWindow(W)
         sources = rev
     end
 
-    -- Clamp the bar count to VisibleBars and the pool size (40). #sources is a
-    -- plain length (combatSources is a normal array; only the amount FIELDS are
-    -- secret), so math.min on it is safe.
-    local count = math_min(#sources, (self.db and self.db.VisibleBars) or 10, self.BAR_POOL_SIZE)
+    -- Render the FULL source list, clamped only by the pool size (40). VisibleBars
+    -- sizes the window (LayoutWindow); rows beyond the viewport land in the scroll
+    -- overflow so a raid's whole roster is reachable by wheel -- previously the count
+    -- was also clamped to VisibleBars, which left a standalone window with zero
+    -- scroll range and the rest of the raid unreachable. #sources is a plain length
+    -- (combatSources is a normal array; only the amount FIELDS are secret).
+    local count = math_min(#sources, self.BAR_POOL_SIZE)
 
     -- Scroll model. All `count` rows are rendered onto the content child at their
     -- fixed slots; the body ScrollFrame clips to the viewport and the wheel scrolls
@@ -1045,30 +1052,17 @@ function DM:RenderWindow(W)
         if cur > W._scrollMax then W.body:SetVerticalScroll(W._scrollMax) end
     end
 
-    -- Always-show-self: when enabled and the player is NOT within the rendered rows
-    -- (1..count), pin the player's source into the LAST rendered slot at their real
-    -- rank, so self is always present in the scrollable list -- reachable at the bottom
-    -- even in a raid where their rank exceeds VisibleBars. isLocalPlayer is NeverSecret;
-    -- a source's index in the pre-sorted combatSources IS its rank (a plain integer).
-    -- No arithmetic/compare on any secret amount anywhere -- the only reads are
-    -- isLocalPlayer (boolean, NeverSecret) and the loop index.
-    local pinSource, pinRank
-    if self.db and self.db.AlwaysShowSelf and count >= 1 then
-        local inVisible = false
-        for i = 1, count do
-            local s = sources[i]
-            if s and s.isLocalPlayer then inVisible = true; break end
-        end
-        if not inVisible then
-            for i = count + 1, #sources do
-                local s = sources[i]
-                if s and s.isLocalPlayer then
-                    pinSource = s
-                    pinRank = i
-                    break
-                end
-            end
-        end
+    -- Grow the scroll child to span every rendered row: the native ScrollFrame
+    -- clamps SetVerticalScroll to (content - viewport), so leaving it at the
+    -- LayoutWindow base height (VisibleBars rows) would pin the scroll range at 0
+    -- and make the overflow unreachable. Never shrink below the base height (a
+    -- short list keeps the body's full hit area for the right-click catcher).
+    -- Dirty-gated; LayoutWindow nils the cache when it re-sets the base height.
+    local contentH = count * stride
+    if contentH < (W._contentH or 0) then contentH = W._contentH or 0 end
+    if W._renderContentH ~= contentH then
+        W._renderContentH = contentH
+        W.content:SetHeight(contentH)
     end
 
     -- Viewport culling. Only rows whose slot intersects the visible scroll window are
@@ -1082,11 +1076,43 @@ function DM:RenderWindow(W)
     -- (CreateWindow) re-renders this window on scroll so a row revealed by scrolling is
     -- filled before it shows. stride/viewH/scroll/count are all plain numbers -- never a
     -- secret (only the amount FIELDS are secret, and those go through RenderBar's setters).
+    local scroll = 0
     local firstVis, lastVis = 1, count
     if viewH > 0 and count * stride > viewH + 0.5 then
-        local scroll = (W.body and W.body:GetVerticalScroll()) or 0
+        scroll = (W.body and W.body:GetVerticalScroll()) or 0
         firstVis = math_max(1, math_floor(scroll / stride))
         lastVis = math_min(count, math_ceil((scroll + viewH) / stride) + 1)
+    end
+
+    -- Always-show-self: when enabled and the player is NOT within the rows the
+    -- viewport currently shows, pin their source into the last fully-visible slot
+    -- at their REAL rank -- so self stays on screen at any scroll offset (and in a
+    -- raid whose roster overflows the viewport). isLocalPlayer is NeverSecret; a
+    -- source's index in the pre-sorted combatSources IS its rank (a plain integer).
+    -- No arithmetic/compare on any secret amount anywhere -- the only reads are
+    -- isLocalPlayer (boolean, NeverSecret) and plain layout numbers.
+    local pinSource, pinRank, pinSlot
+    if self.db and self.db.AlwaysShowSelf and count >= 1 then
+        local inView = false
+        for i = firstVis, lastVis do
+            local s = sources[i]
+            if s and s.isLocalPlayer then inView = true; break end
+        end
+        if not inView then
+            for i = 1, #sources do
+                local s = sources[i]
+                if s and s.isLocalPlayer then
+                    pinSource = s
+                    pinRank = i
+                    break
+                end
+            end
+            if pinSource then
+                -- Last slot whose row bottom still fits inside the viewport (slot i
+                -- spans [(i-1)*stride, i*stride], so bottom <= scroll + viewH).
+                pinSlot = math_min(count, math_max(firstVis, math_floor((scroll + viewH) / stride)))
+            end
+        end
     end
 
     -- maxAmount may be secret in combat; SetMinMaxValues accepts it, and the
@@ -1099,12 +1125,12 @@ function DM:RenderWindow(W)
         local bar = W.bars[i]
         local row = bar.row
         if i >= firstVis and i <= lastVis then
-            -- The last slot shows the pinned player at their real rank when
-            -- AlwaysShowSelf pinned one; otherwise the slot's own source. RenderBar's
-            -- `rank` arg is the displayed rank. (The pin lives in slot `count`, so it
-            -- renders when the user scrolls the bottom of the list into view.)
+            -- The pin slot (last fully-visible row) shows the pinned player at their
+            -- real rank when AlwaysShowSelf pinned one; otherwise the slot's own
+            -- source. RenderBar's `rank` arg is the displayed rank; the wheel handler
+            -- re-renders on scroll, so the pin tracks the moving viewport.
             local src, rank = sources[i], i
-            if pinSource and i == count then
+            if pinSource and i == pinSlot then
                 src, rank = pinSource, pinRank
             end
             self:RenderBar(W, bar, rank, src, maxAmount)
