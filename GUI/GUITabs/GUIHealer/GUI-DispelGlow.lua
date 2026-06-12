@@ -1,8 +1,8 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-DispelGlow.lua                                      ║
 -- ║  GUI: Dispel Glow (ElvUI-gated)                          ║
--- ║  Enable + Note, Border thickness, and a cross-linked      ║
--- ║  Dispel Type Colors card (shared with Aura Debuffs).      ║
+-- ║  Enable + Note, Border thickness, and a cross-linked     ║
+-- ║  Dispel Type Colors card (shared with Aura Debuffs).     ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE

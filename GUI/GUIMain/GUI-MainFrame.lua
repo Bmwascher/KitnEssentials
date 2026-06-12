@@ -94,7 +94,7 @@ GUIFrame.sidebarConfig = {
         defaultExpanded = false,
         items = {
             { id = "DispelOnCursor",        text = "Dispel on Cursor", keywords = { "dispel", "cursor", "cleanse", "purge", "magic", "curse", "poison", "disease", "debuff" } },
-            { id = "DispelGlow",            text = "Dispel Glow", keywords = { "dispel", "glow", "cleanse", "debuff", "highlight", "frame" } },
+            { id = "DispelGlow",            text = "Dispel Frame Glow", keywords = { "dispel", "glow", "cleanse", "debuff", "highlight", "frame" } },
             { id = "InnervateTracker",      text = "Innervate Tracker", keywords = { "innervate", "mana", "druid", "cooldown" } },
             { id = "MaintenanceTracker",    text = "Maintenance Tracker", keywords = { "maintenance", "buff", "uptime", "hot", "refresh", "tracker", "count", "duration" } },
             { id = "HealerMana",            text = "Healer Mana", keywords = { "mana", "healer", "oom", "raid", "dungeon", "party" } },
