@@ -2188,6 +2188,42 @@ local function PlayPhaseSound(key, hookKey)
     end
 end
 
+-- Per-key configuration, shared by fresh kits (CreatePhaseBar tail) and the
+-- reused preview kits (ShowPhasePreview cache): identity fields, visual
+-- resolution (ApplyVisualsToBar reads frame.phaseKey for the user color
+-- override), and the white no-override default.
+local function ConfigurePhaseBar(self, frame, key, sortIndex)
+    frame.text = key
+    frame.phaseKey = key
+    frame.isPhaseBar = true
+    frame.phase = "phase"  -- distinguishes from "countdown"/"cast"
+    frame.sortIndex = sortIndex
+
+    if frame.displayMode == "bar" and frame.bar then
+        frame.bar:SetMinMaxValues(0, 1)
+        frame.bar:SetValue(1)
+    end
+    if frame.transitionText then frame.transitionText:SetAlpha(0) end
+
+    -- Color resolution: ApplyVisualsToBar reads frame.phaseKey for the user
+    -- override. Phase bars without an override default to plain white (not
+    -- the addon's blue DEFAULT_BAR_COLOR) — phase alerts read better neutral
+    -- and let the user paint them via the GUI color picker if desired.
+    frame.baseText = ""
+    ApplyVisualsToBar(frame)
+    -- Now the font is set; safe to assign the static overlay text.
+    frame.transitionText:SetText(PHASE_TRANSITIONED_LABEL)
+    if not self:GetPhaseColorOverride(key) then
+        frame.barColor = { 1, 1, 1 }
+        if frame.displayMode == "bar" then
+            if frame.bar then frame.bar:SetStatusBarColor(1, 1, 1) end
+        else
+            if frame.label then frame.label:SetTextColor(1, 1, 1) end
+            if frame.transitionText then frame.transitionText:SetTextColor(1, 1, 1) end
+        end
+    end
+end
+
 local function CreatePhaseBar(self, key, sortIndex)
     local mode = self:GetPhaseDisplay(key)
     local isBar = (mode == "bar")
@@ -2197,11 +2233,6 @@ local function CreatePhaseBar(self, key, sortIndex)
 
     local frame = CreateFrame("Frame", nil, group)
     frame.displayMode = mode
-    frame.text = key
-    frame.phaseKey = key
-    frame.isPhaseBar = true
-    frame.phase = "phase"  -- distinguishes from "countdown"/"cast"
-    frame.sortIndex = sortIndex
 
     if isBar then
         frame.iconFrame = CreateFrame("Frame", nil, frame, "BackdropTemplate")
@@ -2228,8 +2259,6 @@ local function CreatePhaseBar(self, key, sortIndex)
         frame.bar = CreateFrame("StatusBar", nil, frame.barContainer)
         frame.bar:SetPoint("TOPLEFT", px, -px)
         frame.bar:SetPoint("BOTTOMRIGHT", -px, px)
-        frame.bar:SetMinMaxValues(0, 1)
-        frame.bar:SetValue(1)
 
         frame.label = frame.bar:CreateFontString(nil, "OVERLAY")
         frame.timerText = frame.bar:CreateFontString(nil, "OVERLAY")
@@ -2248,23 +2277,7 @@ local function CreatePhaseBar(self, key, sortIndex)
     frame.transitionText = frame:CreateFontString(nil, "OVERLAY")
     frame.transitionText:SetAlpha(0)
 
-    -- Color resolution: ApplyVisualsToBar reads frame.phaseKey for the user
-    -- override. Phase bars without an override default to plain white (not
-    -- the addon's blue DEFAULT_BAR_COLOR) — phase alerts read better neutral
-    -- and let the user paint them via the GUI color picker if desired.
-    frame.baseText = ""
-    ApplyVisualsToBar(frame)
-    -- Now the font is set; safe to assign the static overlay text.
-    frame.transitionText:SetText(PHASE_TRANSITIONED_LABEL)
-    if not self:GetPhaseColorOverride(key) then
-        frame.barColor = { 1, 1, 1 }
-        if frame.displayMode == "bar" then
-            if frame.bar then frame.bar:SetStatusBarColor(1, 1, 1) end
-        else
-            if frame.label then frame.label:SetTextColor(1, 1, 1) end
-            if frame.transitionText then frame.transitionText:SetTextColor(1, 1, 1) end
-        end
-    end
+    ConfigurePhaseBar(self, frame, key, sortIndex)
 
     return frame
 end
@@ -3089,6 +3102,12 @@ end
 local PHASE_PREVIEW_KEY = "__phase_preview"
 DT.phasePreviewKey = nil
 
+-- Preview-private kit cache, one per display mode (bar/text kits differ).
+-- Clicking phase-rule rows used to build a fresh CreatePhaseBar kit per
+-- click and strand the old one (frames are never GC'd). In-fight phase
+-- bars are NOT cached here — they still build fresh kits per pull.
+local phasePreviewKits = {}
+
 function DT:ShowPhasePreview(key)
     if not (key and self:IsPhaseRuleKey(key)) then
         self:HidePhasePreview()
@@ -3104,11 +3123,20 @@ function DT:ShowPhasePreview(key)
     self:HideSettingsTextPreviews()
 
     -- Build a phase-style bar wired to the rule's effective overrides.
-    -- We pass the real key to CreatePhaseBar so color/display-mode helpers
-    -- resolve correctly, but we re-key it under PHASE_PREVIEW_KEY in
-    -- self.bars so a real in-fight phase bar can coexist (e.g. testing
-    -- on a target dummy with active encounter).
-    local bar = CreatePhaseBar(self, key, 1)  -- sortIndex 1 → top of layout
+    -- We pass the real key so color/display-mode helpers resolve correctly,
+    -- but we re-key it under PHASE_PREVIEW_KEY in self.bars so a real
+    -- in-fight phase bar can coexist (e.g. testing on a target dummy with
+    -- active encounter). Reuse the cached kit for this display mode when
+    -- one exists; sortIndex 1 → top of layout.
+    local mode = self:GetPhaseDisplay(key)
+    local bar = phasePreviewKits[mode]
+    if bar then
+        ConfigurePhaseBar(self, bar, key, 1)
+        bar:Show()
+    else
+        bar = CreatePhaseBar(self, key, 1)
+        phasePreviewKits[mode] = bar
+    end
     bar.isPreview = true
     bar.text = PHASE_PREVIEW_KEY
 
