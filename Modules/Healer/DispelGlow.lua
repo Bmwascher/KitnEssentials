@@ -94,6 +94,15 @@ end
 local containerByFrame = {}
 -- observedFrames:   [hostFrame] = true (OnAttributeChanged hooked once)
 local observedFrames   = {}
+-- Park-don't-orphan caches: visuals and private-aura wrappers are keyed by
+-- host frame and reused across roster reshuffles. Teardown hides instead of
+-- SetParent(nil) — frames are never GC'd, so orphaning leaked one visual
+-- (1 frame + 5 textures) and one wrapper per affected button per reshuffle.
+-- Bounded by discoverable hosts (~62: player + party5 + raid40 + tank8 +
+-- assist8). Border textures anchor to the HOST frame, so cross-host pooling
+-- (KE.FramePool) would force full re-anchoring — per-host caching doesn't.
+local visualByFrame  = {}
+local wrapperByFrame = {}
 
 ------------------------------------------------------------------------
 -- Visual aesthetic constants
@@ -210,34 +219,42 @@ local function BuildPrivateAnchor(frame, unit)
         groupType = IsInRaid() and 5 or 4
     else return nil, nil end
 
-    -- Expand the wrapper slightly BEYOND the frame edges. Combined with a
-    -- frame level BELOW the unit frame, the health bar masks Blizzard's
-    -- chunky gradient/border — only 1-2px of border peeks out around the
-    -- edges, creating a clean thin border effect.
-    local wrapper = CreateFrame("Frame", nil, frame)
-    wrapper:SetParent(frame)
-    wrapper:ClearAllPoints()
-    local PRIVATE_EXPAND = 1
-    wrapper:SetPoint("TOPLEFT", -PRIVATE_EXPAND, PRIVATE_EXPAND)
-    wrapper:SetPoint("BOTTOMRIGHT", PRIVATE_EXPAND, -PRIVATE_EXPAND)
-    wrapper:SetFrameLevel(math_max(frame:GetFrameLevel() - 1, 0))
-    wrapper:EnableMouse(false)
-    if wrapper.SetMouseClickEnabled then wrapper:SetMouseClickEnabled(false) end
+    -- Static construction is create-once per host frame; per-attach state
+    -- (group-type, update-settings, frame level, alpha, Show) re-applies on
+    -- every attempt. A failed AddPrivateAuraAnchor parks the wrapper for the
+    -- next retry instead of orphaning it — GROUP_ROSTER_UPDATE retries made
+    -- the old create-then-orphan the burstiest leak path in the module.
+    local wrapper = wrapperByFrame[frame]
+    if not wrapper then
+        -- Expand the wrapper slightly BEYOND the frame edges. Combined with a
+        -- frame level BELOW the unit frame, the health bar masks Blizzard's
+        -- chunky gradient/border — only 1-2px of border peeks out around the
+        -- edges, creating a clean thin border effect.
+        wrapper = CreateFrame("Frame", nil, frame)
+        wrapper:ClearAllPoints()
+        local PRIVATE_EXPAND = 1
+        wrapper:SetPoint("TOPLEFT", -PRIVATE_EXPAND, PRIVATE_EXPAND)
+        wrapper:SetPoint("BOTTOMRIGHT", PRIVATE_EXPAND, -PRIVATE_EXPAND)
+        wrapper:EnableMouse(false)
+        if wrapper.SetMouseClickEnabled then wrapper:SetMouseClickEnabled(false) end
 
-    wrapper:SetAttribute("max-buffs", 0)
-    wrapper:SetAttribute("max-debuffs", 0)
-    wrapper:SetAttribute("max-dispel-debuffs", 1)
-    wrapper:SetAttribute("ignore-buffs", true)
-    wrapper:SetAttribute("ignore-debuffs", true)
-    wrapper:SetAttribute("ignore-dispel-debuffs", true)
-    wrapper:SetAttribute("dispel-indicator-option", 1)
-    wrapper:SetAttribute("show-dispel-indicator-overlay", true)
-    wrapper:SetAttribute("suppress-dispel-border-icons", true)
-    wrapper:SetAttribute("always-hide-duration", true)
-    wrapper:SetAttribute("set-aura-size-to-icon-size", true)
-    wrapper:SetAttribute("icon-size", 12)
-    wrapper:SetAttribute("power-bar-used-height", 0)
-    wrapper:SetAttribute("aura-organization-type", 0)
+        wrapper:SetAttribute("max-buffs", 0)
+        wrapper:SetAttribute("max-debuffs", 0)
+        wrapper:SetAttribute("max-dispel-debuffs", 1)
+        wrapper:SetAttribute("ignore-buffs", true)
+        wrapper:SetAttribute("ignore-debuffs", true)
+        wrapper:SetAttribute("ignore-dispel-debuffs", true)
+        wrapper:SetAttribute("dispel-indicator-option", 1)
+        wrapper:SetAttribute("show-dispel-indicator-overlay", true)
+        wrapper:SetAttribute("suppress-dispel-border-icons", true)
+        wrapper:SetAttribute("always-hide-duration", true)
+        wrapper:SetAttribute("set-aura-size-to-icon-size", true)
+        wrapper:SetAttribute("icon-size", 12)
+        wrapper:SetAttribute("power-bar-used-height", 0)
+        wrapper:SetAttribute("aura-organization-type", 0)
+        wrapperByFrame[frame] = wrapper
+    end
+    wrapper:SetFrameLevel(math_max(frame:GetFrameLevel() - 1, 0))
     wrapper:SetAttribute("group-type", groupType)
     wrapper:SetAttribute("update-settings", true)
     wrapper:SetAlpha(1.0)
@@ -255,8 +272,7 @@ local function BuildPrivateAnchor(frame, unit)
     end)
 
     if not ok or not anchorID then
-        wrapper:Hide()
-        wrapper:SetParent(nil)
+        wrapper:Hide()  -- parked for the next attach attempt
         return nil, nil
     end
 
@@ -357,11 +373,25 @@ end
 ------------------------------------------------------------------------
 local function SetupContainer(frame, unit)
     if containerByFrame[frame] then return end
-    local visual = BuildVisual(frame)
+    local visual = visualByFrame[frame]
+    if visual then
+        -- Parked visual from a previous attach: re-assert the frame level
+        -- (ElvUI can rebuild levels between attaches) and the thickness
+        -- (ApplySettings' loop only reaches live containers, so a BorderSize
+        -- change while this visual was parked never touched it).
+        visual:SetFrameLevel(frame:GetFrameLevel() + 10)
+        ApplyBorderSize(visual, CurrentBorderSize())
+    else
+        visual = BuildVisual(frame)
+        visualByFrame[frame] = visual
+    end
     if DEBUG_DG then
-        local tex = visual:CreateTexture(nil, "OVERLAY")
-        tex:SetAllPoints(visual)
-        tex:SetColorTexture(1, 0, 0, 0.4)
+        if not visual._keDbgTint then
+            local tex = visual:CreateTexture(nil, "OVERLAY")
+            tex:SetAllPoints(visual)
+            tex:SetColorTexture(1, 0, 0, 0.4)
+            visual._keDbgTint = tex
+        end
         visual:Show()
     end
     containerByFrame[frame] = {
@@ -382,16 +412,18 @@ end
 local function TeardownContainer(frame)
     local entry = containerByFrame[frame]
     if not entry then return end
+    -- anchorID is unitToken-bound — always unregister so the next attach
+    -- re-registers against the frame's new unit.
     if entry.privateAnchorID and C_UnitAuras and C_UnitAuras.RemovePrivateAuraAnchor then
         pcall(C_UnitAuras.RemovePrivateAuraAnchor, entry.privateAnchorID)
     end
+    -- Park, don't orphan: the visual and wrapper stay cached on the host
+    -- frame (visualByFrame/wrapperByFrame) for the next attach.
     if entry.privateWrapper then
         entry.privateWrapper:Hide()
-        entry.privateWrapper:SetParent(nil)
     end
     if entry.visual then
         entry.visual:Hide()
-        entry.visual:SetParent(nil)
     end
     containerByFrame[frame] = nil
 end
@@ -407,6 +439,9 @@ end
 ------------------------------------------------------------------------
 local function UpdateFrameAnchor(frame)
     if not frame then return end
+    -- The 0.1s zero-size retry below can fire after a disable — don't
+    -- rebuild a container for a disabled module.
+    if not (DG.db and DG.db.Enabled) then return end
     local newUnit = GetFrameUnit(frame)
     local entry   = containerByFrame[frame]
     local oldUnit = entry and entry.unit
