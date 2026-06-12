@@ -271,6 +271,7 @@ local MPT_DEFAULTS = {
     -- QoL
     AutoInsertKeystone = true,
     HideBlizzardTracker = true,
+    KeepSummaryAfterRun = true,
     ChatOutputSplits = false,
 
     -- Backdrop
@@ -539,9 +540,6 @@ function MPT:OnDisable()
     -- Overlay teardown: UnregisterAllEvents below kills the plate events, but the
     -- 0.5s nameplate ticker and any attached plate texts survive without this.
     self:SetOverlayActive(false)
-    -- Stale combat-defer from an earlier in-combat hide attempt; the AceEvent
-    -- registration it pairs with dies in UnregisterAllEvents below anyway.
-    self._trackerPending = nil
     -- Close the permanent tick hook's gate: run.active is the documented
     -- disable safeguard (the hooksecurefunc is never removed), so a disabled
     -- module would otherwise keep running the full per-second pipeline —
@@ -554,34 +552,13 @@ function MPT:OnDisable()
     self.run.active = false
     self.run.completed = false
     -- Restore a tracker WE hid (mid-key disable would otherwise leave it hidden
-    -- until /reload). Not routed through ApplyTrackerVisibility: its in-combat
-    -- defer uses AceEvent, which AceAddon auto-unregisters on module disable.
+    -- until /reload). Direct Show — the frame is not protected (see the
+    -- ApplyTrackerVisibility comment), so no combat defer is needed.
     if self._keHidTracker then
         local otf = _G.ObjectiveTrackerFrame
-        if otf and InCombatLockdown() then
-            -- Protected frame: defer the Show via a dedicated event frame that
-            -- survives AceEvent teardown. Created lazily once, reused after.
-            if not self._trackerRestoreFrame then
-                self._trackerRestoreFrame = CreateFrame("Frame")
-                self._trackerRestoreFrame:SetScript("OnEvent", function(frame)
-                    frame:UnregisterAllEvents()
-                    -- Re-enable race guard: if the module was re-enabled before
-                    -- combat ended, ApplyTrackerVisibility owns the tracker again
-                    -- (it may have legitimately re-hidden it) — do nothing.
-                    if MPT:IsEnabled() then return end
-                    local tracker = _G.ObjectiveTrackerFrame
-                    if tracker and not tracker:IsShown() then tracker:Show() end
-                    MPT._keHidTracker = nil
-                    if DEBUG_MPT then KE:Print("[MPT] OnDisable: deferred tracker restore fired") end
-                end)
-            end
-            self._trackerRestoreFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
-            if DEBUG_MPT then KE:Print("[MPT] OnDisable: tracker restore deferred (in combat)") end
-        else
-            if otf and not otf:IsShown() then otf:Show() end
-            self._keHidTracker = nil
-            if DEBUG_MPT then KE:Print("[MPT] OnDisable: tracker restored") end
-        end
+        if otf and not otf:IsShown() then otf:Show() end
+        self._keHidTracker = nil
+        if DEBUG_MPT then KE:Print("[MPT] OnDisable: tracker restored") end
     end
     self:UnregisterAllEvents()
     self:UnhookAll()
@@ -780,8 +757,10 @@ end
 local primaryHookInstalled = false
 function MPT:InstallTickHook()
     if primaryHookInstalled then return end
-    local block = (ScenarioObjectiveTracker and ScenarioObjectiveTracker.ChallengeModeBlock)
-        or (ScenarioBlocksFrame and ScenarioBlocksFrame.ChallengeModeBlock)
+    -- ScenarioObjectiveTracker.ChallengeModeBlock is the 12.0 home of the M+
+    -- timer block. (The legacy ScenarioBlocksFrame global no longer exists in
+    -- 12.0.5 — verified against wow-ui-source; the old fallback was dead code.)
+    local block = ScenarioObjectiveTracker and ScenarioObjectiveTracker.ChallengeModeBlock
     if block and block.UpdateTime then
         primaryHookInstalled = true
         -- INTENTIONALLY PERMANENT for the session: raw hooksecurefunc is NOT managed
@@ -948,10 +927,6 @@ function MPT:WORLD_STATE_TIMER_STOP()
     -- after every finish (ResetRun's guard deliberately admits completed runs).
     if not self.run.active and not self.run.completed then self:ResetRun() end
 end
-
--- NOTE: PLAYER_REGEN_ENABLED is registered/unregistered on demand by
--- MPT:ApplyTrackerVisibility via OnTrackerRegenEnabled — do NOT add a static
--- default handler here (it would shadow the on-demand registration).
 
 -- Auto-insert keystone when the font of power receptacle opens (Task 5.1).
 -- Scans bags for the first keystone item and uses it automatically.
@@ -1143,9 +1118,6 @@ function MPT:CompleteRun()
     MPT.db._activeRunSplits = nil  -- run over; in-progress split cache no longer needed
     MPT.db._activeRunDeaths = nil  -- ditto for the reload-survival death log
     self:CommitSplits()   -- persist improved per-boss + overall times to the global store
-    -- Clear any stale combat-defer; ApplyTrackerVisibility re-arms it if still locked.
-    self._trackerPending = nil
-    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
     self:SetOverlayActive(false)          -- release nameplate texts; run is over
     self:NotifyRefresh()
 end
@@ -1197,9 +1169,6 @@ function MPT:ResetRun()
     run.pbSourceLevel = nil
     self:UnregisterRunEvents()
     self:StopTimerLoop()
-    -- Clear any stale combat-defer; ApplyTrackerVisibility re-arms it if still locked.
-    self._trackerPending = nil
-    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
     self:ApplyTrackerVisibility()
     self:SetOverlayActive(false)          -- release nameplate texts; run cancelled/reset
     self:NotifyRefresh()
@@ -1222,10 +1191,16 @@ function MPT:CheckForActiveRun()
             -- Salvage (EUI:1884): everything finished but the completion
             -- event was never processed — commit the run instead of wiping it.
             self:CompleteRun()
-        elseif not (self.run.completed and InChallengeInstance()) then
+        elseif not (self.run.completed
+            and (InChallengeInstance() or self.db.KeepSummaryAfterRun ~= false)) then
             -- Fanfare window (EUI:1881): the map ID flips nil at completion
             -- while still inside — keep the frozen summary + tracker
-            -- suppression alive until the player actually leaves.
+            -- suppression alive until the player actually leaves. With
+            -- KeepSummaryAfterRun the summary also survives zone-out, until
+            -- the next key begins (CHALLENGE_MODE_START/RESET both ResetRun)
+            -- or /reload (completed state is memory-only). Tracker
+            -- suppression still ends at the door either way —
+            -- ShouldHideTracker's completed arm requires InChallengeInstance.
             self:ResetRun()
         end
     end
@@ -1252,7 +1227,7 @@ function MPT:ShouldHideTracker()
     -- GUI preview: always suppress, independent of the HideBlizzardTracker
     -- toggle — the fake-run HUD occupies the tracker's screen area. Hide/Show
     -- routes through ApplyTrackerVisibility from ShowPreview/HidePreview, so
-    -- the combat defer and _keHidTracker show-ownership both apply as usual.
+    -- the _keHidTracker show-ownership gate applies as usual.
     if self.isPreview then return true end
     if not (self.db and self.db.HideBlizzardTracker) then return false end
     if self.run and self.run.active then return true end
@@ -1272,8 +1247,8 @@ function MPT:InstallTrackerHook()
     if not otf then return end
     _trackerHookInstalled = true
     -- Re-hide on every Blizzard Show attempt while ShouldHideTracker holds. No
-    -- SetParent (avoids tainting the secure scenario tree); combat-guarded via
-    -- ApplyTrackerVisibility per spec section 8.
+    -- SetParent (avoids tainting the secure scenario tree). The re-hide is
+    -- immediate even in combat — see the ApplyTrackerVisibility comment.
     hooksecurefunc(otf, "Show", function()
         if not MPT:ShouldHideTracker() then return end
         MPT:ApplyTrackerVisibility()
@@ -1287,14 +1262,18 @@ function MPT:ApplyTrackerVisibility()
 
     local wantHide = self:ShouldHideTracker()
 
-    -- ObjectiveTrackerFrame is protected: never Hide/Show during combat lockdown;
-    -- defer to PLAYER_REGEN_ENABLED (spec section 8 tracker rule).
-    if InCombatLockdown() then
-        if DEBUG_MPT then KE:Print("[MPT] ApplyTrackerVisibility: tracker defer: in combat") end
-        self._trackerPending = true
-        self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnTrackerRegenEnabled")
-        return
-    end
+    -- No combat defer. ObjectiveTrackerFrame is NOT protected (verified against
+    -- 12.0.5 wow-ui-source: no protected flag anywhere in its template chain —
+    -- ObjectiveTrackerContainerTemplate, UIParentRightManagedFrameTemplate,
+    -- EditModeObjectiveTrackerSystemTemplate), so Hide/Show in combat is legal
+    -- and carries the same taint exposure as the out-of-combat path. A regen
+    -- defer here is exactly how the Blizzard tracker "randomly came back"
+    -- mid-key: ObjectiveTrackerContainerMixin:Update() ends in self:Show()
+    -- whenever any module has content, and its MarkDirty schedules via
+    -- RunNextFrame even while hidden — so the first enemy-forces/quest update
+    -- of a pull re-showed it and the deferred hide left it up for the rest of
+    -- that fight. EUI hides unconditionally for the same reason
+    -- (EllesmereUIMythicTimer.lua:546-563).
 
     -- Show-ownership gate: only re-Show a tracker WE hid (_keHidTracker),
     -- never one another addon hid (e.g. KalielsTracker) — Show() unconditionally
@@ -1308,13 +1287,6 @@ function MPT:ApplyTrackerVisibility()
         if not otf:IsShown() then otf:Show() end
         self._keHidTracker = nil
     end
-end
-
-function MPT:OnTrackerRegenEnabled()
-    if not self._trackerPending then return end
-    self._trackerPending = nil
-    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
-    self:ApplyTrackerVisibility()
 end
 
 ---------------------------------------------------------------------------------
