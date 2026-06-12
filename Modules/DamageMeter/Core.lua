@@ -812,6 +812,13 @@ end
 -- issecretvalue on the result tells the render layer whether it may dirty-check it.
 -- The Detail breakdown/recap surfaces pass `false` as the mode (amount-only path).
 local function FormatBarValue(total, perSec, mode)
+    -- Per-second can drop below 1 on long Overall windows (total / huge elapsed
+    -- time), and AbbreviateNumbers returns sub-1 values as the raw float
+    -- ("0.6100439606729"). Clamp plain rates to 1; never compare a secret (while
+    -- the amounts are secret the session is in-combat-short, so a sub-1 rate
+    -- can't occur). Truthiness gate first -- allowed on a secret number.
+    if perSec and not issecretvalue(perSec) and perSec < 1 then perSec = 1 end
+
     if mode == "PerSec" then
         -- Rate-only. A meter type without a per-second (or a nil rate) falls back to the
         -- total so the bar value is never blank.
