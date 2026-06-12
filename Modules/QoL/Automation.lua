@@ -977,21 +977,38 @@ end
 -- Event Handlers
 ---------------------------------------------------------------------------------
 function AU:CVAR_UPDATE(_, cvarName)
+    local matched = false
     for _, def in ipairs(self.CVAR_DEFS) do
         if def.key == cvarName then
             local current = C_CVar.GetCVar(cvarName)
             self.db[cvarName] = FromCVarValue(current, def.type)
+            matched = true
         end
     end
     for _, def in ipairs(self.CVAR_SLIDER_DEFS) do
         if def.key == cvarName then
             local current = C_CVar.GetCVar(cvarName)
             self.db[cvarName] = tonumber(current) or 0
+            matched = true
         end
     end
-    if KE.GUIFrame and not self._suppressCVarUpdate then
-        KE.GUIFrame:RefreshContent()
-    end
+    -- 2026-06-12 leak fix: this refresh used to be UNCONDITIONAL — every
+    -- CVAR_UPDATE delivery (any addon touching any event-named CVar, GUI
+    -- open or closed) forced a full page rebuild, orphaning a page of cards
+    -- each time. RefreshContent now refuses to run hidden as well, but keep
+    -- this caller honest: only refresh for CVars this module displays, only
+    -- when the GUI is shown, and collapse bursts (ApplyCVars writes every
+    -- managed CVar back-to-back) into a single deferred rebuild.
+    if not matched or self._suppressCVarUpdate then return end
+    if not (KE.GUIFrame and KE.GUIFrame:IsShown()) then return end
+    if self._cvarRefreshQueued then return end
+    self._cvarRefreshQueued = true
+    C_Timer.After(0.1, function()
+        self._cvarRefreshQueued = false
+        if KE.GUIFrame and KE.GUIFrame:IsShown() then
+            KE.GUIFrame:RefreshContent()
+        end
+    end)
 end
 
 ---------------------------------------------------------------------------------
