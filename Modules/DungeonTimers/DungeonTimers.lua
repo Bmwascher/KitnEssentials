@@ -22,6 +22,7 @@ local tostring = tostring
 local tonumber = tonumber
 local string_format = string.format
 local table_insert = table.insert
+local table_remove = table.remove
 local table_sort = table.sort
 local CreateFrame = CreateFrame
 local GetTime = GetTime
@@ -1277,6 +1278,65 @@ local function SpawnFollowups(self)
     if self.postCastBar then DT:_SpawnPostCastBar(self) end
 end
 
+-- Free-lists of retired CreateBar kits, keyed by displayMode ("bar" and
+-- "text" kits have different child trees and never cross). WoW frames are
+-- never garbage-collected — before this pool every bar teardown stranded a
+-- 5-7-object kit permanently (~5-25 per boss pull). Mirrors the
+-- DC:AcquireBar/DC:ReleaseBar free-list in DungeonCasts.lua.
+local barFramePool = { bar = {}, text = {} }
+
+-- Soft-outline shadows are siblings of the main FontString (not its children), so
+-- bar:Hide() doesn't take them down via inheritance the way you'd expect — they
+-- linger as ghosts on screen until SetShown(false) is called explicitly. Touch
+-- every FontString slot a phase / cast / regular bar can carry so this helper is
+-- a safe drop-in for any bar lifecycle path.
+local function HideBarSoftOutlines(bar)
+    if not bar then return end
+    if bar.label and bar.label.softOutline then bar.label.softOutline:SetShown(false) end
+    if bar.timerText and bar.timerText.softOutline then bar.timerText.softOutline:SetShown(false) end
+    if bar.transitionText and bar.transitionText.softOutline then bar.transitionText.softOutline:SetShown(false) end
+end
+
+-- Single teardown funnel for every bar lifecycle path. Callers stay
+-- responsible for clearing their self.bars entry and re-running LayoutBars.
+-- Frames without a _dtPoolKey tag (CreatePhaseBar kits — structurally
+-- different children) get hide-only teardown and are not pooled.
+local function ReleaseBar(bar)
+    if not bar then return end
+    if bar._dtPooled then return end
+    if bar.revealTimer then
+        DT:CancelTimer(bar.revealTimer)
+        bar.revealTimer = nil
+    end
+    bar:SetScript("OnUpdate", nil)
+    HideBarSoftOutlines(bar)
+    bar:Hide()
+    if not bar._dtPoolKey then return end
+    bar:ClearAllPoints()
+    -- Scrub every conditionally-set field so a reused kit can't inherit a
+    -- previous life's state (CreateBar only assigns these when its inputs
+    -- call for them). Boolean flags use false, not nil, so their inferred
+    -- type stays boolean for the language server.
+    bar.loop = false
+    bar.isPreview = false
+    bar.isShieldBar = false
+    bar.shieldSpellId = nil
+    bar.shieldUnit = nil
+    bar.shieldMax = nil
+    bar.showWindow = nil
+    bar.sortIndex = nil
+    bar.postCastBar = nil
+    bar.castBaseText = nil
+    bar.castColor = nil
+    bar.castStartTime = nil
+    bar.castFromValue = nil
+    bar.castDuration = nil
+    bar._lastValue = nil
+    bar._lastTimerStr = nil
+    bar._dtPooled = true
+    table_insert(barFramePool[bar._dtPoolKey], bar)
+end
+
 local function BarOnUpdate(self)
     if self.phase == "cast" then
         local castElapsed = GetTime() - self.castStartTime
@@ -1306,8 +1366,7 @@ local function BarOnUpdate(self)
             -- and skip this block.
             SpawnFollowups(self)
             PlayBarSound(self, "hide")
-            self:SetScript("OnUpdate", nil)
-            self:Hide()
+            ReleaseBar(self)
             DT.bars[self.text] = nil
             DT:LayoutBars()
             return
@@ -1332,8 +1391,7 @@ local function BarOnUpdate(self)
                 -- path for extension=0 entries like L'ura's Backlash (1266001).
                 SpawnFollowups(self)
                 PlayBarSound(self, "hide")
-                self:SetScript("OnUpdate", nil)
-                self:Hide()
+                ReleaseBar(self)
                 DT.bars[self.text] = nil
                 DT:LayoutBars()
                 return
@@ -1342,8 +1400,7 @@ local function BarOnUpdate(self)
                 dprint(string_format("BarOnUpdate %s → killed (stale grace, overdue=%.2f total=%.2f)",
                     self.text or "?", -remaining, self.totalDuration))
                 PlayBarSound(self, "hide")
-                self:SetScript("OnUpdate", nil)
-                self:Hide()
+                ReleaseBar(self)
                 DT.bars[self.text] = nil
                 DT:LayoutBars()
                 return
@@ -1605,7 +1662,17 @@ function DT:CreateBar(text, baseDuration, extension, displayMode, displayText, s
     -- 1 logical-unit = 1 physical pixel at any UI scale (literal 1 fuzzes at non-1x).
     local px = (KE.GetPixelSize and KE:GetPixelSize()) or 1
 
-    local frame = CreateFrame("Frame", nil, group)
+    -- Reuse a retired kit when one is available — frames are never GC'd, so
+    -- building fresh per spawn permanently strands the old kit. The group
+    -- parent is a create-once singleton, so pooled frames keep it.
+    local frame = table_remove(barFramePool[displayMode])
+    if frame then
+        frame._dtPooled = false
+        frame:Show()  -- ReleaseBar hides; new frames are shown by default
+    else
+        frame = CreateFrame("Frame", nil, group)
+        frame._dtPoolKey = displayMode
+    end
     frame.displayMode = displayMode
     -- Stash the spell's resolved icon for the text-mode `[icon] LABEL » time`
     -- prefix (GetTextIconPrefix). Resolved here at frame-create so toggle
@@ -1615,54 +1682,63 @@ function DT:CreateBar(text, baseDuration, extension, displayMode, displayText, s
     -- this field is consumed only by the text-mode prefix path.
     frame.iconTex = spellId and self:ResolveSpellIcon(spellId) or nil
 
+    -- Child kits are create-once per pooled frame. The px insets baked here
+    -- go stale on a mid-session UI-scale change until /reload — accepted,
+    -- same class as KE's other create-once kits.
     if isBar then
-        frame.iconFrame = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-        frame.iconFrame:SetPoint("LEFT", frame, "LEFT", 0, 0)
-        frame.iconFrame:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8" })
-        frame.iconFrame:SetBackdropColor(0, 0, 0, 0.8)
-        if KE.AddIconBorders then
-            KE:AddIconBorders(frame.iconFrame)
+        if not frame.bar then
+            frame.iconFrame = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+            frame.iconFrame:SetPoint("LEFT", frame, "LEFT", 0, 0)
+            frame.iconFrame:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8" })
+            frame.iconFrame:SetBackdropColor(0, 0, 0, 0.8)
+            if KE.AddIconBorders then
+                KE:AddIconBorders(frame.iconFrame)
+            end
+
+            frame.icon = frame.iconFrame:CreateTexture(nil, "ARTWORK")
+            frame.icon:SetPoint("TOPLEFT", px, -px)
+            frame.icon:SetPoint("BOTTOMRIGHT", -px, px)
+            if KE.ApplyIconZoom then KE:ApplyIconZoom(frame.icon) end
+
+            frame.barContainer = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+            frame.barContainer:SetBackdrop({
+                bgFile = "Interface\\Buttons\\WHITE8x8",
+                edgeFile = "Interface\\Buttons\\WHITE8x8",
+                edgeSize = px,
+            })
+            frame.barContainer:SetBackdropColor(0, 0, 0, 0.8)
+            frame.barContainer:SetBackdropBorderColor(0, 0, 0, 1)
+
+            frame.bar = CreateFrame("StatusBar", nil, frame.barContainer)
+            frame.bar:SetPoint("TOPLEFT", px, -px)
+            frame.bar:SetPoint("BOTTOMRIGHT", -px, px)
         end
-
-        frame.icon = frame.iconFrame:CreateTexture(nil, "ARTWORK")
-        frame.icon:SetPoint("TOPLEFT", px, -px)
-        frame.icon:SetPoint("BOTTOMRIGHT", -px, px)
-        if KE.ApplyIconZoom then KE:ApplyIconZoom(frame.icon) end
+        -- Per-spawn: reset to the placeholder so a reused kit doesn't keep
+        -- its previous spell's icon (RenderBar overwrites with iconID).
         frame.icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
-
-        frame.barContainer = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-        frame.barContainer:SetBackdrop({
-            bgFile = "Interface\\Buttons\\WHITE8x8",
-            edgeFile = "Interface\\Buttons\\WHITE8x8",
-            edgeSize = px,
-        })
-        frame.barContainer:SetBackdropColor(0, 0, 0, 0.8)
-        frame.barContainer:SetBackdropBorderColor(0, 0, 0, 1)
-
-        frame.bar = CreateFrame("StatusBar", nil, frame.barContainer)
-        frame.bar:SetPoint("TOPLEFT", px, -px)
-        frame.bar:SetPoint("BOTTOMRIGHT", -px, px)
     else
-        -- Text mode: bar is a transparent FontString anchor.
-        frame.bar = CreateFrame("StatusBar", nil, frame)
-        frame.bar:SetAllPoints()
+        if not frame.bar then
+            -- Text mode: bar is a transparent FontString anchor.
+            frame.bar = CreateFrame("StatusBar", nil, frame)
+            frame.bar:SetAllPoints()
 
-        -- Optional spell-icon prefix container, KE icon standard
-        -- (KE:ApplyIconZoom + KE:AddIconBorders). Created unconditionally so
-        -- toggling db.TextDisplay.ShowSpellIcon doesn't require bar rebuild —
-        -- ApplyVisualsToBar Show/Hide's it and re-anchors the label. Sizing
-        -- and texture are deferred to ApplyVisualsToBar since both depend on
-        -- the current text height (h) and live frame.iconTex value.
-        frame.iconFrame = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-        frame.iconFrame:SetPoint("LEFT", frame, "LEFT", 0, 0)
-        frame.iconFrame:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8" })
-        frame.iconFrame:SetBackdropColor(0, 0, 0, 0.8)
-        if KE.AddIconBorders then KE:AddIconBorders(frame.iconFrame) end
+            -- Optional spell-icon prefix container, KE icon standard
+            -- (KE:ApplyIconZoom + KE:AddIconBorders). Created unconditionally so
+            -- toggling db.TextDisplay.ShowSpellIcon doesn't require bar rebuild —
+            -- ApplyVisualsToBar Show/Hide's it and re-anchors the label. Sizing
+            -- and texture are deferred to ApplyVisualsToBar since both depend on
+            -- the current text height (h) and live frame.iconTex value.
+            frame.iconFrame = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+            frame.iconFrame:SetPoint("LEFT", frame, "LEFT", 0, 0)
+            frame.iconFrame:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8" })
+            frame.iconFrame:SetBackdropColor(0, 0, 0, 0.8)
+            if KE.AddIconBorders then KE:AddIconBorders(frame.iconFrame) end
 
-        frame.icon = frame.iconFrame:CreateTexture(nil, "ARTWORK")
-        frame.icon:SetPoint("TOPLEFT", px, -px)
-        frame.icon:SetPoint("BOTTOMRIGHT", -px, px)
-        if KE.ApplyIconZoom then KE:ApplyIconZoom(frame.icon) end
+            frame.icon = frame.iconFrame:CreateTexture(nil, "ARTWORK")
+            frame.icon:SetPoint("TOPLEFT", px, -px)
+            frame.icon:SetPoint("BOTTOMRIGHT", -px, px)
+            if KE.ApplyIconZoom then KE:ApplyIconZoom(frame.icon) end
+        end
         if frame.iconTex then frame.icon:SetTexture(frame.iconTex) end
         frame.iconFrame:Hide()
     end
@@ -1686,8 +1762,8 @@ function DT:CreateBar(text, baseDuration, extension, displayMode, displayText, s
     -- icon when shown) stays put while only the timer text width changes
     -- as the countdown shrinks. Matches ExBoss's TimerBar layout, where
     -- labelFS is the centered anchor and cdFS hangs off labelFS:RIGHT.
-    frame.label = frame.bar:CreateFontString(nil, "OVERLAY")
-    frame.timerText = frame.bar:CreateFontString(nil, "OVERLAY")
+    frame.label = frame.label or frame.bar:CreateFontString(nil, "OVERLAY")
+    frame.timerText = frame.timerText or frame.bar:CreateFontString(nil, "OVERLAY")
 
     -- Stash raw displayText so ApplyVisualsToBar can re-resolve color on settings refresh.
     frame.displayTextRaw = displayText
@@ -1806,13 +1882,6 @@ end
 -- Real bars start at 1000 so they always lay out after the 1/2/3 previews.
 DT._barSortCounter = 1000
 
-local function CancelRevealTimer(self, bar)
-    if bar.revealTimer then
-        self:CancelTimer(bar.revealTimer)
-        bar.revealTimer = nil
-    end
-end
-
 function DT:RevealBar(key)
     local bar = self.bars[key]
     if not bar then return end
@@ -1835,9 +1904,9 @@ function DT:RenderBar(text, baseDur, extension, displayMode, iconID, displayText
     if not text or not baseDur or baseDur <= 0 then return end
     local existing = self.bars[text]
     if existing then
-        CancelRevealTimer(self, existing)
-        existing:SetScript("OnUpdate", nil)
-        existing:Hide()
+        -- Pool the replaced bar — CreateBar typically pops it right back
+        -- out, making the hot repeating-BigWigs-bar path allocation-free.
+        ReleaseBar(existing)
     end
     local bar = self:CreateBar(text, baseDur, extension, displayMode, displayText, spellId, castDisplayText, isSecondary)
     self._barSortCounter = self._barSortCounter + 1
@@ -1883,13 +1952,11 @@ end
 local function KillBar(self, text)
     local bar = self.bars[text]
     if not bar then return end
-    CancelRevealTimer(self, bar)
-    bar:SetScript("OnUpdate", nil)
     -- Skip hide-sound if the bar never reached visibility (still in showAt delay).
     if bar:IsShown() then
         PlayBarSound(bar, "hide")
     end
-    bar:Hide()
+    ReleaseBar(bar)
     self.bars[text] = nil
     self:LayoutBars()
 end
@@ -2074,9 +2141,7 @@ function DT:StopAllBars()
     for text, bar in pairs(self.bars) do
         -- Preview bars are GUI-lifecycle owned, not encounter-lifecycle.
         if not bar.isPreview then
-            CancelRevealTimer(self, bar)
-            bar:SetScript("OnUpdate", nil)
-            bar:Hide()
+            ReleaseBar(bar)
             self.bars[text] = nil
         end
     end
@@ -2614,8 +2679,7 @@ function DT:_HideShieldBar(spellId)
     if not bar then return end
     -- No PlayBarSound here — see _ShowShieldBar for rationale. Primary text/bar
     -- already plays the curated sound on its own hide/StopBar path.
-    bar:SetScript("OnUpdate", nil)
-    bar:Hide()
+    ReleaseBar(bar)
     self.bars[key] = nil
     self:LayoutBars()
 end
@@ -2673,8 +2737,7 @@ function DT:_HideAllShieldBars()
     local changed = false
     for k, bar in pairs(self.bars) do
         if bar.isShieldBar then
-            bar:SetScript("OnUpdate", nil)
-            bar:Hide()
+            ReleaseBar(bar)
             self.bars[k] = nil
             changed = true
         end
@@ -2836,24 +2899,12 @@ local PREVIEW_ICON_IDS = { 236273, 460952, 429383 }
 DT.previewBarShown = false
 DT.previewTextShown = false
 
--- Soft-outline shadows are siblings of the main FontString (not its children), so
--- bar:Hide() doesn't take them down via inheritance the way you'd expect — they
--- linger as ghosts on screen until SetShown(false) is called explicitly. Touch
--- every FontString slot a phase / cast / regular bar can carry so this helper is
--- a safe drop-in for any bar lifecycle path.
-local function HideBarSoftOutlines(bar)
-    if not bar then return end
-    if bar.label and bar.label.softOutline then bar.label.softOutline:SetShown(false) end
-    if bar.timerText and bar.timerText.softOutline then bar.timerText.softOutline:SetShown(false) end
-    if bar.transitionText and bar.transitionText.softOutline then bar.transitionText.softOutline:SetShown(false) end
-end
+-- HideBarSoftOutlines lives above ReleaseBar (the teardown funnel) now.
 
 local function CreatePreviewBar(self, key, label, duration, displayMode, iconID, sortIndex)
     local existing = self.bars[key]
     if existing then
-        existing:SetScript("OnUpdate", nil)
-        HideBarSoftOutlines(existing)
-        existing:Hide()
+        ReleaseBar(existing)
     end
     local bar = self:CreateBar(label, duration, 0, displayMode)
     bar.isPreview = true
@@ -2895,9 +2946,7 @@ function DT:HideSettingsBarPreviews()
     for _, key in ipairs(PREVIEW_BAR_KEYS) do
         local bar = self.bars[key]
         if bar then
-            bar:SetScript("OnUpdate", nil)
-            HideBarSoftOutlines(bar)
-            bar:Hide()
+            ReleaseBar(bar)
             self.bars[key] = nil
         end
     end
@@ -2932,9 +2981,7 @@ function DT:HideSettingsTextPreviews()
     for _, key in ipairs(PREVIEW_TEXT_KEYS) do
         local bar = self.bars[key]
         if bar then
-            bar:SetScript("OnUpdate", nil)
-            HideBarSoftOutlines(bar)
-            bar:Hide()
+            ReleaseBar(bar)
             self.bars[key] = nil
         end
     end
@@ -3021,13 +3068,7 @@ end
 function DT:HideSpellPreview()
     local bar = self.bars[SPELL_PREVIEW_KEY]
     if bar then
-        if bar.revealTimer then
-            self:CancelTimer(bar.revealTimer)
-            bar.revealTimer = nil
-        end
-        bar:SetScript("OnUpdate", nil)
-        HideBarSoftOutlines(bar)
-        bar:Hide()
+        ReleaseBar(bar)
         self.bars[SPELL_PREVIEW_KEY] = nil
     end
     self.spellPreviewSpellId = nil
@@ -3092,8 +3133,8 @@ end
 function DT:HidePhasePreview()
     local bar = self.bars[PHASE_PREVIEW_KEY]
     if bar then
-        HideBarSoftOutlines(bar)
-        bar:Hide()
+        -- Phase kits aren't pool-tagged — ReleaseBar hides without pooling.
+        ReleaseBar(bar)
         self.bars[PHASE_PREVIEW_KEY] = nil
     end
     self.phasePreviewKey = nil
