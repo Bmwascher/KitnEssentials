@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ╔══════════════════════════════════════════════════════════╗
-# ║  dev/githooks/pre-push                                    ║
+# ║  dev/githooks/pre-push                                   ║
 # ║  Local gate so bad code never reaches a pushed branch.   ║
 # ╚══════════════════════════════════════════════════════════╝
 #
@@ -15,7 +15,12 @@ set -uo pipefail
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root" || exit 1
 
-if ! command -v busted >/dev/null 2>&1; then
+# Windows: luarocks generates only busted.bat, which bash's plain
+# `command -v busted` cannot resolve — check both forms. (.exe tools like
+# luacheck.exe resolve automatically under git's msys bash.)
+busted_bin="$(command -v busted || command -v busted.bat || true)"
+
+if [ -z "$busted_bin" ]; then
     echo "[pre-push] busted not on PATH — skipping tests. See dev/README.md to set up." >&2
     echo "[pre-push] (push allowed; CI will still run the suite.)" >&2
     exit 0
@@ -33,7 +38,7 @@ else
 fi
 
 echo "[pre-push] busted…"
-if ! busted; then
+if ! "$busted_bin"; then
     echo "[pre-push] BLOCKED: tests failed. Fix them, or override with: git push --no-verify" >&2
     exit 1
 fi
