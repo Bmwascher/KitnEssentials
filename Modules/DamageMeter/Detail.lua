@@ -228,8 +228,9 @@ function DM:RenderBreakdown(W)
     if not cfg then return end
 
     -- Pull this source out of the window's active session. GetSource pcall-wraps the API.
-    -- W._curSessionID: nil = live session; set by Task 6 history nav to a specific stored sessionID.
-    local sessionID = W._curSessionID
+    -- EffectiveSessionID: the user's pin, else the Current-empty fallback the bars are
+    -- showing (post-encounter finalize), else nil = live session.
+    local sessionID = self:EffectiveSessionID(W)
     -- Honor a live in-world view override (Selector.lua) so the breakdown matches the
     -- bars; EffectiveMeterType falls back to cfg.MeterType when no override is active.
     local meterType = self:EffectiveMeterType(W.idx, cfg)
@@ -1157,8 +1158,10 @@ function DM:PopulateHoverTip(W, bar)
             end
         end
     else
-        -- Top breakdown spells for this source (honor a pinned historical session).
-        local src = self:GetSource(cfg.SessionType, meterType, bar._sourceGUID, bar._sourceCreatureID, W._curSessionID)
+        -- Top breakdown spells for this source (honor a pinned historical session and
+        -- the Current-empty fallback -- the same segment the bars are rendering).
+        local tipSessionID = self:EffectiveSessionID(W)
+        local src = self:GetSource(cfg.SessionType, meterType, bar._sourceGUID, bar._sourceCreatureID, tipSessionID)
         local spells = src and src.combatSpells
         if not spells then return false end
 
@@ -1284,7 +1287,7 @@ function DM:PopulateHoverTip(W, bar)
         -- other breakdown meter type (HealingDone, etc.) the section stays hidden.
         if shown > 0 and meterType == Enum.DamageMeterType.DamageDone then
             local topY = -(headerH + bodyTop + shown * stride)
-            tgtExtraH = RenderTipTargets(self, bar, cfg, W._curSessionID, topY, stride, barH)
+            tgtExtraH = RenderTipTargets(self, bar, cfg, tipSessionID, topY, stride, barH)
         else
             HideTipTargets()
         end

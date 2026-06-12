@@ -994,9 +994,12 @@ function DM:RenderWindow(W)
     end
 
     -- Phase 4 segment/history: W._curSessionID pins a specific stored session
-    -- (set by the ⌚ menu, ToggleSegmentMenu). nil = live cfg.SessionType, so the
-    -- steady state is unchanged. CachedSession keys its per-Tick cache on the id.
-    local session = self:CachedSession(cfg.SessionType, meterType, W._curSessionID)
+    -- (set by the ⌚ menu, ToggleSegmentMenu). nil = live cfg.SessionType.
+    -- ResolveRenderSession wraps CachedSession (per-Tick memo) and adds the
+    -- "Current = last fight" fallback: out of combat, an unpinned Current window
+    -- whose live session emptied (post-encounter finalize) shows the newest
+    -- stored session instead of blanking out.
+    local session = self:ResolveRenderSession(W, cfg, meterType)
     local sources = session and session.combatSources
     if not sources then
         -- No session/data this segment: hide every pooled row so stale bars from

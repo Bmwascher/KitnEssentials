@@ -979,7 +979,9 @@ function DM:ReportView(rest, winIdx)
     local meterType = self:EffectiveMeterType(winIdx, cfg) or Enum.DamageMeterType.DamageDone
     local sessionType = cfg.SessionType or Enum.DamageMeterSessionType.Current
     local W = self.windows_rt and self.windows_rt[winIdx]
-    local session = self:GetSession(sessionType, meterType, W and W._curSessionID)
+    -- EffectiveSessionID: the pin, else the Current-empty fallback the bars show
+    -- (post-encounter finalize) -- so the report always posts what's on screen.
+    local session = self:GetSession(sessionType, meterType, self:EffectiveSessionID(W))
     local sources = session and session.combatSources
     if not sources or not sources[1] then
         KE:Print("Damage Meter: nothing to report yet.")
@@ -1557,6 +1559,46 @@ function DM:CachedSession(sessionType, dmType, sessionID)
     local session = self:GetSession(sessionType, dmType, sessionID)
     self._sessionCache[key] = session or false
     return session
+end
+
+-- The render-path session for a window: the pinned stored session when one is set,
+-- else the live cfg.SessionType -- PLUS the "Current = last fight" fallback.
+-- Blizzard finalizes the live Current session into storage when an encounter ends,
+-- leaving Current EMPTY until the next pull, so an unpinned Current window would
+-- blank out the just-killed boss the moment combat drops. Out of combat, when live
+-- Current has no sources, fall back to the NEWEST stored session and remember it in
+-- W._fallbackSessionID so every per-source consumer (detail panel, hover tip, chat
+-- report -- via EffectiveSessionID) reads the same segment the bars show. In combat
+-- the live session owns the view (no fallback -- the last fight must not bleed into
+-- a fresh pull's empty first ticks). Runtime-only field, re-resolved every render,
+-- so a reset/wipe of stored sessions self-heals on the next paint.
+function DM:ResolveRenderSession(W, cfg, meterType)
+    local session = self:CachedSession(cfg.SessionType, meterType, W._curSessionID)
+    W._fallbackSessionID = nil
+    if not W._curSessionID
+        and cfg.SessionType == Enum.DamageMeterSessionType.Current
+        and not InCombatLockdown()
+        and not (session and session.combatSources and #session.combatSources > 0) then
+        local list = self:GetAvailableSessions(1)
+        local newest = list and list[#list]
+        local nid = newest and newest.sessionID
+        if nid and not issecretvalue(nid) then
+            local fb = self:CachedSession(cfg.SessionType, meterType, nid)
+            if fb and fb.combatSources and #fb.combatSources > 0 then
+                W._fallbackSessionID = nid
+                session = fb
+            end
+        end
+    end
+    return session
+end
+
+-- The session id the window is EFFECTIVELY showing: the user's explicit pin, else
+-- the Current-empty fallback ResolveRenderSession last applied, else nil (live).
+-- Single source of truth for the detail panel / hover tip / report session reads.
+function DM:EffectiveSessionID(W)
+    if not W then return nil end
+    return W._curSessionID or W._fallbackSessionID
 end
 
 -- Returns the array of currently-enabled runtime windows, in the dock's stable
