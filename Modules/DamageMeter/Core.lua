@@ -265,8 +265,8 @@ function DM:OnEnable()
 
     -- Combat-state events drive the shared ticker (see Combat-only ticker
     -- section). NEVER use RegisterUnitEvent (Ace3 doesn't expose it and 12.0
-    -- discourages it for KE); UNIT_FLAGS is registered broad and filtered by
-    -- the group-combat check inside the handler.
+    -- discourages it for KE); UNIT_FLAGS is registered broad and filtered
+    -- inside the handler (ticker state, party/raid unit token, group-combat).
     self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnRegenDisabled")
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRegenEnabled")
     self:RegisterEvent("ENCOUNTER_START", "OnEncounterStart")
@@ -629,13 +629,20 @@ end
 -- A group member's flags changed (often: they entered combat before us). Start
 -- the ticker if the group is fighting and we're not already ticking, so bars
 -- populate before the player is tagged.
-function DM:OnUnitFlags()
+function DM:OnUnitFlags(_, unit)
     -- After a PvP match completes the player stays combat-tagged in the closed instance,
     -- so UNIT_FLAGS would keep re-arming the ticker against GroupInCombat. Suppress the
     -- auto-restart until a genuine new combat (OnRegenDisabled) or a zone-out
     -- (OnCombatForceStop) clears the flag -- otherwise OnPvPMatchComplete's stop is undone.
     if self._pvpMatchOver then return end
-    if self:GroupInCombat() and not self._ticker then
+    -- Cheap bails before the <=40-unit GroupInCombat scan: UNIT_FLAGS fires dozens of
+    -- times per second during a pull, and once the ticker is up this handler has nothing
+    -- left to do. Only a party/raid member's flag change can mean "group entered combat
+    -- before us" -- the player's own combat entry is owned by PLAYER_REGEN_DISABLED, so
+    -- player/target/nameplate tokens are skipped too.
+    if self._ticker then return end
+    if not unit or not (unit:match("^raid%d") or unit:match("^party%d")) then return end
+    if self:GroupInCombat() then
         if DEBUG_DM then KE:Print("[DM] UNIT_FLAGS -> group in combat, StartTicker") end
         self:StartTicker()
     end
