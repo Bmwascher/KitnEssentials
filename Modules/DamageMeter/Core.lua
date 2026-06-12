@@ -921,14 +921,19 @@ local REPORT_CHANNELS = {
 }
 
 -- Meter types with a meaningful per-second (amount-over-time). Interrupts / Dispels are
--- counts and Deaths are events, so a rate is noise -- omitted from the report for those.
-local REPORT_RATE_TYPES = {
+-- counts and Deaths are events, so a rate is noise -- omitted from the report AND from
+-- the bar value (RenderWindow stashes the lookup per tick so RenderBar drops the
+-- "count | rate" half for count types; the reference whitelists the same five).
+local RATE_METER_TYPES = {
     [Enum.DamageMeterType.DamageDone] = true,
     [Enum.DamageMeterType.HealingDone] = true,
     [Enum.DamageMeterType.DamageTaken] = true,
     [Enum.DamageMeterType.EnemyDamageTaken] = true,
     [Enum.DamageMeterType.AvoidableDamageTaken] = true,
 }
+-- Cross-chunk API: the render layer (Window.lua) reads this to gate the per-second
+-- half of the bar value. Non-underscore name per the DM.RANK_STRINGS convention.
+DM.RATE_METER_TYPES = RATE_METER_TYPES
 
 function DM:ReportView(rest, winIdx)
     -- winIdx selects which window to report: the header Report button passes the clicked
@@ -977,12 +982,12 @@ function DM:ReportView(rest, winIdx)
     -- The report value is "total (dps/s, share%)" -- a chat-safe layout that does NOT use
     -- the bar's "total | dps" pipe: a bare "|" is the chat escape-code char, so the chat
     -- API rejects "| " as an invalid escape (a FontString tolerates it; chat does not).
-    -- The per-second is shown only for amount-over-time types (REPORT_RATE_TYPES);
+    -- The per-second is shown only for amount-over-time types (RATE_METER_TYPES);
     -- Interrupts / Dispels are counts where a rate is noise, and Deaths report the death
     -- time (M:SS). Each field is secret-gated before it reaches a line.
     local isDeaths = (meterType == Enum.DamageMeterType.Deaths)
     local isOverall = (sessionType == Enum.DamageMeterSessionType.Overall)
-    local wantRate = REPORT_RATE_TYPES[meterType] == true
+    local wantRate = RATE_METER_TYPES[meterType] == true
 
     -- Build the lines first; abort cleanly if any field we would send is secret (do NOT
     -- send a partial report). Everything that reaches a line is therefore plain.

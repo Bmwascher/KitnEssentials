@@ -946,6 +946,11 @@ function DM:RenderWindow(W)
     local isDeaths = (meterType == Enum.DamageMeterType.Deaths)
     W._isDeaths = isDeaths
     W._isOverall = (cfg.SessionType == Enum.DamageMeterSessionType.Overall)
+    -- Count-based types (Interrupts / Dispels) have no meaningful per-second:
+    -- RenderBar reads this to drop the rate half of the value string, so those
+    -- windows show just the count ("3", not "3 | 0"). Plain enum lookup into the
+    -- Core.lua whitelist (DM.RATE_METER_TYPES) -- never secret.
+    W._isRateType = (self.RATE_METER_TYPES and self.RATE_METER_TYPES[meterType]) == true
 
     -- Keep the frame/viewport sized to the live appearance DB (dirty-gated, so a
     -- steady config is free). Without a size the body collapses and bars vanish.
@@ -1367,8 +1372,11 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         -- Number Format: "Both" -> amount | dps, "PerSec" -> dps only, else amount only.
         -- Only read the (secret-in-combat) amountPerSecond when the mode actually shows it,
         -- so an Amount-only config never touches it. FormatBarValue is secret-safe.
+        -- Count types (W._isRateType false: Interrupts / Dispels) never pass a rate --
+        -- the count alone renders, and the "PerSec" mode falls back to it inside
+        -- FormatBarValue (the value is never blank).
         local mode = db.NumberFormat or "Both"
-        local needPerSec = (mode == "Both" or mode == "PerSec")
+        local needPerSec = (mode == "Both" or mode == "PerSec") and W._isRateType
         v, vIsSecret = self.FormatBarValue(
             src.totalAmount,
             needPerSec and src.amountPerSecond or nil,
