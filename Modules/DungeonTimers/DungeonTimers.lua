@@ -1317,6 +1317,7 @@ local function ReleaseBar(bar)
     -- previous life's state (CreateBar only assigns these when its inputs
     -- call for them). Boolean flags use false, not nil, so their inferred
     -- type stays boolean for the language server.
+    bar.phase = "countdown"  -- mirrors CreateBar's init; don't rely on assignment order there
     bar.loop = false
     bar.isPreview = false
     bar.isShieldBar = false

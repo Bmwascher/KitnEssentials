@@ -1005,6 +1005,11 @@ function AU:CVAR_UPDATE(_, cvarName)
     self._cvarRefreshQueued = true
     C_Timer.After(0.1, function()
         self._cvarRefreshQueued = false
+        -- Deliberate: if the GUI closed during the 0.1s window, the refresh
+        -- is dropped (not deferred) — the page can show a stale CVar value
+        -- until the user re-navigates. Accepted over marking dirty: a CVar
+        -- flip while closing the GUI is rare, and this caller never touches
+        -- a hidden GUI.
         if KE.GUIFrame and KE.GUIFrame:IsShown() then
             KE.GUIFrame:RefreshContent()
         end
