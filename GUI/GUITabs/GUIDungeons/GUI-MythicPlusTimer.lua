@@ -639,7 +639,7 @@ BuildDisplayTab = function(scrollChild, yOffset, db, manager)
     manager:Register(forcesColors, "all")
     AddColorRow(forcesColors, db, manager, ApplySettings, {
         { "Forces Bar",      "ForcesColor",         { 0.73, 0.62, 0.13 } },
-        { "Forces Complete", "ForcesCompleteColor", { 0.2, 0.82, 0.31 } },
+        { "Forces Complete", "ForcesCompleteColor", { 0, 1, 0.14 } },
         { "Forces Text",     "ForcesTextColor",     { 1, 1, 1 } },
     })
 
@@ -686,11 +686,11 @@ BuildDisplayTab = function(scrollChild, yOffset, db, manager)
     manager:Register(objColors, "all")
     AddColorRow(objColors, db, manager, ApplySettings, {
         { "Objective (pending)", "ObjectiveColor",     { 0.85, 0.85, 0.85 } },
-        { "Objective (done)",    "ObjectiveDoneColor", { 0.2, 0.82, 0.31 } },
+        { "Objective (done)",    "ObjectiveDoneColor", { 0, 1, 0.14 } },
     })
     AddColorRow(objColors, db, manager, ApplySettings, {
         { "Split Ahead",  "SplitAheadColor",  { 0.25, 0.88, 0.82 } },
-        { "Split Behind", "SplitBehindColor", { 1, 0.42, 0.42 } },
+        { "Split Behind", "SplitBehindColor", { 1, 0.34, 0.34 } },
         { "PB Target",    "PBColor",          { 0.85, 0.79, 0.54 } },
     })
 

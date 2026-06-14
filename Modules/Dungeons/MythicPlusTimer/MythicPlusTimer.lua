@@ -198,7 +198,7 @@ local MPT_DEFAULTS = {
     -- (WarpDeplete look) | CORNER: fully below | CENTER | BESIDE
     ForcesPlacement = "EDGE",
     ForcesColor = {0.73, 0.62, 0.13},
-    ForcesCompleteColor = {0.2, 0.82, 0.31},
+    ForcesCompleteColor = {0, 1, 0.14},
     ForcesTextColor = {1, 1, 1},  -- percent/count text — independent of the bar fill
     ForcesCustomFormat = ":count:/:totalcount: :percent:",
     ForcesBracketStyle = "NONE",  -- NONE|SQUARE|ROUND (wraps the count portion)
@@ -230,9 +230,9 @@ local MPT_DEFAULTS = {
     -- CLOSEST|CLOSEST_LOWER|CLOSEST_HIGHER|HIGHEST|LOWEST|OFF
     PBFallbackMode = "CLOSEST",
     ObjectiveColor = {0.85, 0.85, 0.85},
-    ObjectiveDoneColor = {0.2, 0.82, 0.31},
+    ObjectiveDoneColor = {0, 1, 0.14},
     SplitAheadColor = {0.25, 0.88, 0.82},
-    SplitBehindColor = {1, 0.42, 0.42},
+    SplitBehindColor = {1, 0.34, 0.34},
     PBColor = {0.85, 0.79, 0.54},
     PBOpacity = 1.0,
 

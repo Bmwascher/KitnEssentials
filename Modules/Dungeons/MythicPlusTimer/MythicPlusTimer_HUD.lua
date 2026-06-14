@@ -449,7 +449,7 @@ function MPT:RenderTimer()
         -- Completion: signed overall delta vs the pre-run PB.
         local diff = (MPT.run.elapsed or 0) - MPT.run.bestOverall
         local col = diff <= 0 and (MPT.db.SplitAheadColor or {0.25, 0.88, 0.82})
-                              or (MPT.db.SplitBehindColor or {1, 0.42, 0.42})
+                              or (MPT.db.SplitBehindColor or {1, 0.34, 0.34})
         local sign = diff < 0 and "-" or "+"
         local dStr = (diff == 0) and "0:00" or MPT.FormatTime(abs(diff), false)
         MPT.SetTextGated(f.timerPBText, format("%s%s%s|r", Hex(col), sign, dStr))
@@ -928,7 +928,7 @@ function MPT:RenderForces()
             if db.ShowPBDelta and fo.clearTime and fo.clearTime > 0 then
                 local diff = fo.clearTime - fpbt
                 local col  = diff <= 0 and (db.SplitAheadColor or { 0.25, 0.88, 0.82 })
-                                       or  (db.SplitBehindColor or { 1, 0.42, 0.42 })
+                                       or  (db.SplitBehindColor or { 1, 0.34, 0.34 })
                 local sign = diff < 0 and "-" or "+"
                 local dStr = (diff == 0) and "0:00" or MPT.FormatTime(abs(diff), false)
                 str = str .. format("  %s(%s%s)|r", Hex(col), sign, dStr)
@@ -992,7 +992,7 @@ function MPT:RenderObjectives()
 
         -- Name color: done = ObjectiveDoneColor, pending = ObjectiveColor.
         if obj.completed then
-            local c = db.ObjectiveDoneColor or { 0.2, 0.82, 0.31 }
+            local c = db.ObjectiveDoneColor or { 0, 1, 0.14 }
             nameFS:SetTextColor(c[1], c[2], c[3])
         else
             local c = db.ObjectiveColor or { 0.85, 0.85, 0.85 }
@@ -1015,13 +1015,13 @@ function MPT:RenderObjectives()
             -- "Show Clear Times" gates the [clear] bracket itself (EUI:1684);
             -- the PB delta is self-contained and independently gated below.
             if db.ShowObjectiveTimes ~= false then
-                local doneHex = Hex(db.ObjectiveDoneColor or { 0.2, 0.82, 0.31 })
+                local doneHex = Hex(db.ObjectiveDoneColor or { 0, 1, 0.14 })
                 rightText = format("%s[%s]|r", doneHex, MPT.FormatTime(obj.clearTime, false))
             end
             if db.ShowPBDelta and obj.pbTime then
                 local diff = obj.clearTime - obj.pbTime
                 local col  = diff <= 0 and (db.SplitAheadColor or { 0.25, 0.88, 0.82 })
-                                       or  (db.SplitBehindColor or { 1, 0.42, 0.42 })
+                                       or  (db.SplitBehindColor or { 1, 0.34, 0.34 })
                 local sign = diff < 0 and "-" or "+"
                 local dStr = (diff == 0) and "0:00" or MPT.FormatTime(abs(diff), false)
                 local sep  = (rightText ~= "") and "  " or ""
