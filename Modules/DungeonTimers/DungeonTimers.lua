@@ -1226,6 +1226,18 @@ local function GatedSetValue(frame, value)
     if frame.displayMode ~= "bar" or not frame.bar then return end
     local sb = frame.bar
     local minV, maxV = sb:GetMinMaxValues()
+    -- 12.0: a pooled StatusBar that earlier served as a shield bar was fed a
+    -- secret UnitGetTotalAbsorbs token via SetValue (see _RefreshShieldBar).
+    -- That permanently secret-poisons the bar's getters, so GetMinMaxValues
+    -- keeps returning a secret number even after CreateBar's plain
+    -- SetMinMaxValues on reuse. Arithmetic on it (maxV - minV) would taint, so
+    -- skip the pixel-gating math and write directly — SetValue is
+    -- AllowedWhenTainted and `value` is a plain countdown/cast number here.
+    if issecretvalue and (issecretvalue(minV) or issecretvalue(maxV)) then
+        sb:SetValue(value)
+        frame._lastValue = value
+        return
+    end
     local span = maxV - minV
     if span <= 0 then return end
     local widthPx = frame._cachedBarWidth or sb:GetWidth()
@@ -2642,6 +2654,15 @@ function DT:_ShowShieldBar(spellId, unit)
         local label = cfg.displayText or "SHIELD"
         bar = self:CreateBar(key, 1, 0, "bar", label, spellId)
         bar:SetScript("OnUpdate", nil)
+        -- 12.0: _RefreshShieldBar feeds this StatusBar the secret
+        -- UnitGetTotalAbsorbs token via SetValue, which permanently
+        -- secret-poisons its getters. Drop it from the shared bar pool so a
+        -- later plain countdown bar can never recycle the poisoned kit and
+        -- taint on GetMinMaxValues. ReleaseBar then gives it hide-only
+        -- teardown, exactly like phase bars. Mirrors ExBoss's dedicated,
+        -- never-pooled ExtraShieldBar frame; the GatedSetValue guard above is
+        -- the backstop. Strands one kit per shield session (Vordaza-rare).
+        bar._dtPoolKey = nil
         bar.isShieldBar = true
         bar.shieldSpellId = spellId
         self._barSortCounter = self._barSortCounter + 1
