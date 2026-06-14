@@ -917,6 +917,27 @@ function MPT:RenderForces()
     else -- PERCENT (default)
         str = format("%.2f%%", pct)
     end
+
+    -- Forces PB (inline after the %/count): bare gold target while filling,
+    -- teal(-)/red(+) delta once capped. Reuses the boss-row PB toggles + split
+    -- colors. fo.pbTime is resolved by UpdateSplits from a stored `forces`
+    -- split, so it only appears after one completed seed run in this dungeon.
+    local fpbt = fo.pbTime
+    if fpbt and fpbt > 0 then
+        if fo.completed then
+            if db.ShowPBDelta and fo.clearTime and fo.clearTime > 0 then
+                local diff = fo.clearTime - fpbt
+                local col  = diff <= 0 and (db.SplitAheadColor or { 0.25, 0.88, 0.82 })
+                                       or  (db.SplitBehindColor or { 1, 0.42, 0.42 })
+                local sign = diff < 0 and "-" or "+"
+                local dStr = (diff == 0) and "0:00" or MPT.FormatTime(abs(diff), false)
+                str = str .. format("  %s(%s%s)|r", Hex(col), sign, dStr)
+            end
+        elseif db.ShowUpcomingPB ~= false then
+            str = str .. format("  %s%s|r", Hex(db.PBColor or { 0.85, 0.79, 0.54 }), MPT.FormatTime(fpbt, false))
+        end
+    end
+
     local tc = db.ForcesTextColor or { 1, 1, 1 }
     self.SetTextGated(f.forcesText, str)
     self.SetColorGated(f.forcesText, tc[1], tc[2], tc[3])
@@ -1012,7 +1033,9 @@ function MPT:RenderObjectives()
             -- leaving the clear-time bracket itself ungated.
             local pbHex = Hex(db.PBColor or { 0.85, 0.79, 0.54 })
             local a = max(0, min(1, db.PBOpacity or 1))
-            rightText = format("%sPB %s|r", pbHex, MPT.FormatTime(obj.pbTime, false))
+            -- Bare time, no "PB" prefix (round-4 cleanup): the gold color already
+            -- reads as the target, and the prefix crowded the row.
+            rightText = format("%s%s|r", pbHex, MPT.FormatTime(obj.pbTime, false))
             if a < 1 then timeFS:SetAlpha(a) else timeFS:SetAlpha(1) end
         end
 

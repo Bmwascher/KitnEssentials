@@ -167,6 +167,11 @@ function MPT:UpdateSplits()
     -- Normalise: false means no record; treat as nil for downstream logic.
     local r = rec or nil
     run.bestOverall = r and r.overall or run.bestOverall
+    -- Forces 100% PB target/delta source (gold while filling, +/- once capped).
+    -- Stored under the dedicated `forces` field by CommitSplits.
+    if run.forces then
+        run.forces.pbTime = (r and r.forces) or run.forces.pbTime
+    end
     for i = 1, #run.objectives do
         local obj = run.objectives[i]
         -- pbTime drives both the cyan/red delta (completed rows) and the gold
@@ -210,6 +215,15 @@ function MPT:CommitSplits()
             if not prev or obj.clearTime < prev then
                 entry.best[obj.criteriaIndex] = obj.clearTime
             end
+        end
+    end
+    -- Forces 100% split: persist the cap time under a dedicated `forces` field
+    -- (parallel to `overall`). The weighted forces criterion is excluded from
+    -- run.objectives, so it can't ride the per-boss loop above. Improve-only.
+    local fo = run.forces
+    if fo and fo.completed and fo.clearTime and fo.clearTime > 0 then
+        if not entry.best.forces or fo.clearTime < entry.best.forces then
+            entry.best.forces = fo.clearTime
         end
     end
     -- Overall: only write when this run beats the stored record.

@@ -271,7 +271,7 @@ local MPT_DEFAULTS = {
     -- QoL
     AutoInsertKeystone = true,
     HideBlizzardTracker = true,
-    KeepSummaryAfterRun = true,
+    KeepSummaryAfterRun = false,
     ChatOutputSplits = false,
 
     -- Backdrop
@@ -303,6 +303,12 @@ function MPT:UpdateForces()
     local run = self.run
     local f = run.forces
     local numCriteria = select(3, C_Scenario.GetStepInfo()) or 0
+    -- Scenario step absent (pre-pull countdown) or torn down (key just
+    -- completed): GetStepInfo reports 0 criteria. Preserve the last-known
+    -- forces instead of zeroing it — otherwise the frozen completion summary
+    -- loses its 100% forces bar. StartRun already seeds forces to 0 for the
+    -- countdown, so the empty-step case there is unchanged.
+    if numCriteria == 0 then return end
     for i = 1, numCriteria do
         local info = C_ScenarioInfo.GetCriteriaInfo(i)
         if info and info.isWeightedProgress then
@@ -333,7 +339,18 @@ function MPT:UpdateForces()
             else
                 f.percent = 0
             end
+            local wasCompleted = f.completed
             f.completed = info.completed or (total > 0 and current >= total) or false
+            -- Capture the cumulative time forces hit 100%, back-dated via
+            -- info.elapsed (same semantic as the per-boss clearTime in
+            -- UpdateObjectives). Reload-safe: on recovery the weighted criterion
+            -- still reports info.elapsed, so the false->true transition re-derives
+            -- the original cap moment without a persisted cache.
+            if f.completed and not wasCompleted then
+                f.clearTime = (run.elapsed or 0) - (info.elapsed or 0)
+            elseif not f.completed then
+                f.clearTime = nil
+            end
             return
         end
     end
@@ -431,9 +448,15 @@ function MPT:UpdateObjectives()
         end
     end
 
-    -- Trim stale rows beyond the live criteria count.
-    for i = objIdx + 1, #run.objectives do
-        run.objectives[i] = nil
+    -- Trim stale rows beyond the live criteria count — but ONLY while the
+    -- scenario still reports criteria. At key completion GetStepInfo flips to
+    -- 0; an unconditional trim would wipe the whole boss list out of the frozen
+    -- summary AND leave CommitSplits nothing to persist (the root cause of
+    -- per-boss PB splits never accumulating). Preserve the rows in that case.
+    if numCriteria > 0 then
+        for i = objIdx + 1, #run.objectives do
+            run.objectives[i] = nil
+        end
     end
 
     -- Resolve PB targets/deltas for each objective (Splits, Task 3.6).
@@ -1051,6 +1074,7 @@ function MPT:StartRun()
     wipe(run.objectives)
     run.forces.current, run.forces.total, run.forces.percent, run.forces.completed = 0, 0, 0, false
     run.forces._lastQS, run.forces._lastQSParsed = nil, nil
+    run.forces.clearTime, run.forces.pbTime = nil, nil
     wipe(run.deathLog); _prevDeathCount = 0; wipe(_partyAlive); ScanPartyAlive()
     -- Reload/DC survival for the hover death log: restore the persisted log
     -- when it belongs to THIS dungeon. A genuinely new run never sees a live
@@ -1164,6 +1188,7 @@ function MPT:ResetRun()
     run.thresholds = { plus1 = 0, plus2 = 0, plus3 = 0 }
     run.forces.current, run.forces.total, run.forces.percent, run.forces.completed = 0, 0, 0, false
     run.forces._lastQS, run.forces._lastQSParsed = nil, nil
+    run.forces.clearTime, run.forces.pbTime = nil, nil
     run.bestOverall = nil
     run.pbRec = nil
     run.pbSourceLevel = nil
