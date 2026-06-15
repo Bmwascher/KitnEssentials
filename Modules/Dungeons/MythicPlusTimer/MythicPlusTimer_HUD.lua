@@ -1250,6 +1250,13 @@ function MPT:ApplyLayout()
     _sigBuf[11] = objCount
     _sigBuf[12] = objDone
     _sigBuf[13] = objSum
+    -- ShouldShowRecords flips once per run (COUNTDOWN hides the gold PB targets
+    -- the moment the clock starts). RenderObjectives runs ONLY inside this gated
+    -- pass, so without a sig term the pending boss-row targets would linger after
+    -- the countdown ends until some unrelated change happened to bust the sig
+    -- (the timer/forces targets re-hide on their own — those Render* run every
+    -- tick). One bit; the boolean is stable except at that single transition.
+    _sigBuf[14] = self:ShouldShowRecords() and 1 or 0
     local sig = table.concat(_sigBuf, ":")
     if f._keLayoutSig == sig then return end
     f._keLayoutSig = sig
