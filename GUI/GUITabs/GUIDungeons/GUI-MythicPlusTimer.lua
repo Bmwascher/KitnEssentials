@@ -147,6 +147,21 @@ local PB_FALLBACK_OPTIONS = {
     { key = "OFF",            text = "Off (Exact Level Only)" },
 }
 
+-- When the gold PB target is visible (db.SplitsShowMode, gated by
+-- MPT:ShouldShowRecords — WarpDeplete showSplitRecords parity).
+local SPLITS_SHOW_OPTIONS = {
+    { key = "ALWAYS",    text = "Always" },
+    { key = "COUNTDOWN", text = "During Countdown" },
+    { key = "NEVER",     text = "Never" },
+}
+
+-- Which side of a boss row the clear time / PB target sits on
+-- (db.ObjectiveTimePosition, WarpDeplete alignBossClear parity).
+local BOSS_TIME_POSITION_OPTIONS = {
+    { key = "END",   text = "Right Edge" },
+    { key = "START", text = "Left Edge" },
+}
+
 -- Forward declarations — one builder per tab.
 local BuildGeneralTab, BuildFeaturesTab, BuildDisplayTab, BuildOverlayTab
 
@@ -517,18 +532,29 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
     })
     rowO2:AddWidget(pbCheck, 0.5)
     manager:Register(pbCheck, "all")
-    local upcomingCheck = GUIFrame:CreateCheckbox(rowO2, "Show PB Targets", {
-        value = db.ShowUpcomingPB ~= false,
-        callback = function(checked) db.ShowUpcomingPB = checked; ApplySettings() end,
+    -- Gold PB "target" visibility (timer + forces + pending boss rows). The
+    -- (+/-) deltas above are independent (Show PB Delta).
+    local splitsModeDrop = GUIFrame:CreateDropdown(rowO2, "Show PB Targets", {
+        options = SPLITS_SHOW_OPTIONS,
+        value = db.SplitsShowMode or "COUNTDOWN",
+        callback = function(key) db.SplitsShowMode = key; ApplySettings() end,
     })
-    rowO2:AddWidget(upcomingCheck, 0.5)
-    manager:Register(upcomingCheck, "all")
+    rowO2:AddWidget(splitsModeDrop, 0.5)
+    manager:Register(splitsModeDrop, "all")
     objCard:AddRow(rowO2, Theme.rowHeight)
 
+    local rowO3 = GUIFrame:CreateRow(objCard.content, Theme.rowHeightLast)
+    -- Which side of a boss row the clear time / PB target sits on.
+    local bossTimePosDrop = GUIFrame:CreateDropdown(rowO3, "Boss Time Position", {
+        options = BOSS_TIME_POSITION_OPTIONS,
+        value = db.ObjectiveTimePosition or "END",
+        callback = function(key) db.ObjectiveTimePosition = key; ApplySettings() end,
+    })
+    rowO3:AddWidget(bossTimePosDrop, 0.5)
+    manager:Register(bossTimePosDrop, "all")
     -- PB fallback: which stored level the targets come from when the current
     -- key level has no record (the overall PB line tags a fallback source
     -- with its level, e.g. "PB 25:30 [11]").
-    local rowO3 = GUIFrame:CreateRow(objCard.content, Theme.rowHeightLast)
     local fbDrop = GUIFrame:CreateDropdown(rowO3, "PB Fallback (no record at this level)", {
         options = PB_FALLBACK_OPTIONS,
         value = db.PBFallbackMode or "CLOSEST",

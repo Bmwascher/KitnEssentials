@@ -105,6 +105,27 @@ function MPT.SetValueGated(bar, v, widthPx)
     bar:SetValue(v)
 end
 
+-- True when the gold PB "target" displays (live timer PB, forces target, and
+-- pending boss-row targets) should be visible. Mirrors WarpDeplete's
+-- shouldShowSplits (Render.lua) for db.SplitsShowMode:
+--   ALWAYS    — visible for the whole run.
+--   COUNTDOWN — visible only before the timer starts ticking (the pre-pull
+--               countdown, run.elapsed <= 0), then hidden for the live run so
+--               the HUD stays clean. WarpDeplete default.
+--   NEVER     — never visible.
+-- The GUI preview is a mid-key snapshot (elapsed > 0); treat COUNTDOWN as
+-- visible there so the targets stay discoverable while configuring.
+-- Gates TARGETS only — the completed-row (+/-) deltas have their own
+-- ShowPBDelta toggle and are unaffected.
+function MPT:ShouldShowRecords()
+    local mode = (self.db and self.db.SplitsShowMode) or "COUNTDOWN"
+    if mode == "NEVER"  then return false end
+    if mode == "ALWAYS" then return true end
+    -- COUNTDOWN
+    if self.isPreview then return true end
+    return (self.run and (self.run.elapsed or 0) <= 0) or false
+end
+
 ---------------------------------------------------------------------------------
 -- BuildHUD — create all frames, fontstrings, bars, and tick textures (once)
 ---------------------------------------------------------------------------------
@@ -455,8 +476,9 @@ function MPT:RenderTimer()
         MPT.SetTextGated(f.timerPBText, format("%s%s%s|r", Hex(col), sign, dStr))
         f.timerPBText:SetAlpha(1)
         f.timerPBText:Show()
-    elseif MPT.run.bestOverall then
-        -- Countdown AND live run: keep the gold overall PB visible.
+    elseif MPT.run.bestOverall and self:ShouldShowRecords() then
+        -- The gold overall PB target — shown per SplitsShowMode (ALWAYS, or
+        -- COUNTDOWN before the timer starts; hidden mid-run / on NEVER).
         local pbHex = Hex(MPT.db.PBColor or {0.85, 0.79, 0.54})
         local a = max(0, min(1, MPT.db.PBOpacity or 1))
         -- Fallback source tag (WD GetBestSplit sourceLevel parity): when the
@@ -933,7 +955,7 @@ function MPT:RenderForces()
                 local dStr = (diff == 0) and "0:00" or MPT.FormatTime(abs(diff), false)
                 str = str .. format("  %s(%s%s)|r", Hex(col), sign, dStr)
             end
-        elseif db.ShowUpcomingPB ~= false then
+        elseif self:ShouldShowRecords() then
             str = str .. format("  %s%s|r", Hex(db.PBColor or { 0.85, 0.79, 0.54 }), MPT.FormatTime(fpbt, false))
         end
     end
@@ -1027,10 +1049,9 @@ function MPT:RenderObjectives()
                 local sep  = (rightText ~= "") and "  " or ""
                 rightText  = rightText .. sep .. format("%s(%s%s)|r", Hex(col), sign, dStr)
             end
-        elseif (not obj.completed) and db.ShowUpcomingPB ~= false and obj.pbTime then
-            -- Pending gold targets have their own toggle ("Show PB Targets") —
-            -- ShowObjectiveTimes previously gated this branch by mistake,
-            -- leaving the clear-time bracket itself ungated.
+        elseif (not obj.completed) and obj.pbTime and self:ShouldShowRecords() then
+            -- Pending gold targets are governed by SplitsShowMode (see
+            -- ShouldShowRecords) — ALWAYS, or COUNTDOWN before the timer starts.
             local pbHex = Hex(db.PBColor or { 0.85, 0.79, 0.54 })
             local a = max(0, min(1, db.PBOpacity or 1))
             -- Bare time, no "PB" prefix (round-4 cleanup): the gold color already
@@ -1048,11 +1069,20 @@ function MPT:RenderObjectives()
             -- GetStringWidth is safe here: RenderObjectives runs only from the
             -- C_Timer.After(0) deferred layout path, never a tainted event handler.
             local timeW = timeFS:GetStringWidth() or 0
-            timeFS:SetPoint("TOPRIGHT", root, "TOPRIGHT", -PAD, y)
-            nameFS:SetPoint("TOPRIGHT", timeFS, "TOPLEFT", -4, 0)
             local nameMaxW = innerW - timeW - 4
             if nameMaxW < 20 then nameMaxW = 20 end
             nameFS:SetWidth(nameMaxW)
+            -- Clear-time / target side (db.ObjectiveTimePosition, WD alignBossClear
+            -- mirrored for the right-aligned HUD): START pins the time at the row's
+            -- LEFT edge with the name right-justified at the right edge; END
+            -- (default) clusters the time at the right edge beside the name.
+            if (db.ObjectiveTimePosition or "END") == "START" then
+                timeFS:SetPoint("TOPLEFT", root, "TOPLEFT", PAD, y)
+                nameFS:SetPoint("TOPRIGHT", root, "TOPRIGHT", -PAD, y)
+            else
+                timeFS:SetPoint("TOPRIGHT", root, "TOPRIGHT", -PAD, y)
+                nameFS:SetPoint("TOPRIGHT", timeFS, "TOPLEFT", -4, 0)
+            end
             timeFS:Show()
         else
             timeFS:Hide()
@@ -1417,7 +1447,7 @@ local function BuildPreviewRun()
             { t = 142, name = "Healer", class = "PRIEST" },
             { t = 488, name = "Tank",   class = "WARRIOR" },
         },
-        forces = { total = 240, current = 156, percent = 65.0, completed = false },
+        forces = { total = 240, current = 156, percent = 65.0, completed = false, pbTime = 720 },  -- pbTime demos the gold forces target
         objectives = {
             { name = "First Boss",  completed = true,  clearTime = 180,  pbTime = 165,  criteriaIndex = 1 },
             { name = "Second Boss", completed = true,  clearTime = 410,  pbTime = 430,  criteriaIndex = 2 },

@@ -225,7 +225,18 @@ local MPT_DEFAULTS = {
     ShowObjectives = true,
     ShowObjectiveTimes = true,  -- the [clear] bracket on completed rows
     ShowPBDelta = true,         -- the (+/-) delta beside a clear time
-    ShowUpcomingPB = true,      -- the gold "PB m:ss" target on pending rows
+    -- Visibility of the gold "PB m:ss" TARGET (pending boss rows + the live
+    -- timer/forces PB). WarpDeplete showSplitRecords parity, gated by
+    -- MPT:ShouldShowRecords: ALWAYS keeps it up for the whole run; COUNTDOWN
+    -- (default) shows it only before the timer starts ticking and hides it for
+    -- the live run so the HUD stays clean; NEVER hides it entirely. The
+    -- completed-row (+/-) deltas are independent (ShowPBDelta).
+    SplitsShowMode = "COUNTDOWN",   -- ALWAYS|COUNTDOWN|NEVER
+    -- Which side of a boss row the clear time / PB target sits on (WarpDeplete
+    -- alignBossClear parity, mirrored for KE's right-aligned HUD): END (default)
+    -- clusters it at the right edge beside the name; START pins it at the row's
+    -- left edge with the name right-justified.
+    ObjectiveTimePosition = "END",  -- END|START
     -- No-exact-record PB fallback (WD fallbackSplitBehavior parity + CLOSEST):
     -- CLOSEST|CLOSEST_LOWER|CLOSEST_HIGHER|HIGHEST|LOWEST|OFF
     PBFallbackMode = "CLOSEST",
