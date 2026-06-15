@@ -282,7 +282,6 @@ local MPT_DEFAULTS = {
     -- QoL
     AutoInsertKeystone = true,
     HideBlizzardTracker = true,
-    KeepSummaryAfterRun = false,
     ChatOutputSplits = false,
 
     -- Backdrop
@@ -343,30 +342,39 @@ function MPT:UpdateForces()
                 f._lastQS, f._lastQSParsed = qs, current
             end
             local total = info.totalQuantity or 0
-            f.current = current
+            -- Monotonic count (WarpDeplete SetForcesCurrent, State.lua:69-88): the
+            -- weighted criterion reports a current of 0 in the scenario teardown
+            -- window right before CHALLENGE_MODE_COMPLETED. Accept only increases
+            -- so that transitional 0 can never empty a near-100% forces bar.
+            -- (Forces never legitimately decrease in M+ — you can't un-tag.)
+            if current > (f.current or 0) then f.current = current end
             f.total = total
             if total > 0 then
-                f.percent = (current / total) * 100
+                f.percent = (f.current / total) * 100
             else
                 f.percent = 0
             end
+            -- Sticky completion: once forces read 100% it stays complete — the
+            -- teardown read must not un-complete it. clearTime captured once,
+            -- back-dated via info.elapsed (reload-safe: the false->true transition
+            -- re-derives the cap moment without a persisted cache).
             local wasCompleted = f.completed
-            f.completed = info.completed or (total > 0 and current >= total) or false
-            -- Capture the cumulative time forces hit 100%, back-dated via
-            -- info.elapsed (same semantic as the per-boss clearTime in
-            -- UpdateObjectives). Reload-safe: on recovery the weighted criterion
-            -- still reports info.elapsed, so the false->true transition re-derives
-            -- the original cap moment without a persisted cache.
-            if f.completed and not wasCompleted then
-                f.clearTime = (run.elapsed or 0) - (info.elapsed or 0)
-            elseif not f.completed then
-                f.clearTime = nil
+            if info.completed or (total > 0 and f.current >= total) then
+                f.completed = true
+                if not wasCompleted then
+                    f.clearTime = (run.elapsed or 0) - (info.elapsed or 0)
+                end
             end
             return
         end
     end
-    -- No weighted criterion this step (e.g. countdown before the scenario populates).
-    f.current, f.total, f.percent, f.completed = 0, 0, 0, false
+    -- No weighted criterion this step (e.g. countdown before the scenario
+    -- populates, or the teardown window where it drops out of the step list).
+    -- Don't clobber an already-completed forces bar — only zero one that never
+    -- started (StartRun seeds 0 for the countdown, so that case is unaffected).
+    if not f.completed then
+        f.current, f.total, f.percent = 0, 0, 0
+    end
 end
 
 -- Boss/objective rows from non-weighted criteria. Names stored raw; the HUD
@@ -421,10 +429,16 @@ function MPT:UpdateObjectives()
                 obj.name = name:match("^%s*(.-)%s*$") or name
             end
 
+            -- Sticky completion (WarpDeplete write-once, State.lua:326-330): once a
+            -- boss criterion reads complete it STAYS complete with its captured
+            -- clear time. At key completion the scenario teardown momentarily
+            -- re-reports finished criteria as incomplete (elapsed 0); without this
+            -- a single transitional read grays the row and nils its clear time in
+            -- the frozen summary (the ported EUI reference's own latent bug).
+            -- Reversion is never legitimate for an M+ boss/count criterion.
             local wasCompleted = obj.completed
-            obj.completed = info.completed and true or false
-
-            if obj.completed and not wasCompleted then
+            if info.completed and not wasCompleted then
+                obj.completed = true
                 -- Reload survival: reuse the persisted split only when it
                 -- belongs to THIS run (identity-stamped "mapID:level"). A
                 -- stale cache from another key must never back-stamp — see
@@ -453,8 +467,6 @@ function MPT:UpdateObjectives()
                         self:ChatOutputBossSplit(obj)
                     end
                 end
-            elseif not obj.completed and obj.clearTime then
-                obj.clearTime = nil  -- criterion reverted; guard skips the per-tick dead write
             end
         end
     end
@@ -1150,6 +1162,32 @@ function MPT:CompleteRun()
         end
     end
     self:UpdateObjectives()  -- backfill final clear times (tail-calls UpdateSplits; pre-run record still in run.bestOverall)
+    -- Force-complete the frozen summary (WarpDeplete CompleteChallenge,
+    -- State.lua:435-446): a completed key has every boss dead and 100% forces by
+    -- definition, but the final criterion update can arrive AFTER this event or
+    -- be lost to the scenario teardown. Pin any objective still missing a clear
+    -- time to the final elapsed and force the forces bar to 100%, so the summary
+    -- can never freeze with a gray boss row or an empty forces bar. Runs BEFORE
+    -- CommitSplits so the pinned times persist; the sticky/monotonic capture in
+    -- UpdateObjectives/UpdateForces means real mid-run times are already in place
+    -- for everything but a last-instant kill.
+    local finalElapsed = run.elapsed or 0
+    for i = 1, #run.objectives do
+        local obj = run.objectives[i]
+        obj.completed = true
+        -- Count objectives (e.g. "2/6") read full at completion.
+        if obj.totalQuantity and obj.totalQuantity > 1 then obj.quantity = obj.totalQuantity end
+        if not (obj.clearTime and obj.clearTime > 0) then obj.clearTime = finalElapsed end
+    end
+    local fo = run.forces
+    if fo then
+        if fo.total and fo.total > 0 then fo.current = fo.total end
+        fo.percent = 100
+        if not fo.completed then
+            fo.completed = true
+            if not (fo.clearTime and fo.clearTime > 0) then fo.clearTime = finalElapsed end
+        end
+    end
     MPT.db._activeRunSplits = nil  -- run over; in-progress split cache no longer needed
     MPT.db._activeRunDeaths = nil  -- ditto for the reload-survival death log
     self:CommitSplits()   -- persist improved per-boss + overall times to the global store
@@ -1227,16 +1265,15 @@ function MPT:CheckForActiveRun()
             -- Salvage (EUI:1884): everything finished but the completion
             -- event was never processed — commit the run instead of wiping it.
             self:CompleteRun()
-        elseif not (self.run.completed
-            and (InChallengeInstance() or self.db.KeepSummaryAfterRun ~= false)) then
-            -- Fanfare window (EUI:1881): the map ID flips nil at completion
-            -- while still inside — keep the frozen summary + tracker
-            -- suppression alive until the player actually leaves. With
-            -- KeepSummaryAfterRun the summary also survives zone-out, until
-            -- the next key begins (CHALLENGE_MODE_START/RESET both ResetRun)
-            -- or /reload (completed state is memory-only). Tracker
-            -- suppression still ends at the door either way —
-            -- ShouldHideTracker's completed arm requires InChallengeInstance.
+        elseif not (self.run.completed and InChallengeInstance()) then
+            -- Fanfare window (EUI HandleRuntimeEvent :1881, WD CheckForChallengeMode
+            -- Core.lua:204-218): the map ID flips nil at completion while still
+            -- inside — keep the frozen summary + tracker suppression alive ONLY
+            -- until the player leaves the dungeon. Both references gate visibility
+            -- on GetInstanceInfo (party + difficulty 8, == InChallengeInstance) and
+            -- tear the summary down the instant you zone out to a city; neither
+            -- persists it into town. ShouldHideTracker's completed arm uses the
+            -- same predicate, so tracker suppression ends at the door too.
             self:ResetRun()
         end
     end

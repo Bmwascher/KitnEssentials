@@ -371,7 +371,7 @@ BuildGeneralTab = function(scrollChild, yOffset, db, manager)
     -- Card 7: Quality of Life
     local qolCard = GUIFrame:CreateCard(scrollChild, "Quality of Life", yOffset)
     manager:Register(qolCard, "all")
-    local rowQ = GUIFrame:CreateRow(qolCard.content, Theme.rowHeight)
+    local rowQ = GUIFrame:CreateRow(qolCard.content, Theme.rowHeightLast)
     local keyCheck = GUIFrame:CreateCheckbox(rowQ, "Auto-Insert Keystone", {
         value = db.AutoInsertKeystone ~= false,
         callback = function(checked) db.AutoInsertKeystone = checked end,
@@ -394,34 +394,7 @@ BuildGeneralTab = function(scrollChild, yOffset, db, manager)
     })
     rowQ:AddWidget(chatCheck, 1 / 3)
     manager:Register(chatCheck, "all")
-    qolCard:AddRow(rowQ, Theme.rowHeight)
-
-    local rowQ2 = GUIFrame:CreateRow(qolCard.content, Theme.rowHeight)
-    local keepCheck = GUIFrame:CreateCheckbox(rowQ2, "Keep Timer After Key Ends", {
-        value = db.KeepSummaryAfterRun ~= false,
-        callback = function(checked)
-            db.KeepSummaryAfterRun = checked
-            -- Unchecking while a persisted summary is up (outside the
-            -- dungeon) clears it immediately; the run-state guards make
-            -- this a no-op in every other situation.
-            local M = GetMPT()
-            if M and M.CheckForActiveRun then M:CheckForActiveRun() end
-        end,
-    })
-    rowQ2:AddWidget(keepCheck, 1 / 3)
-    manager:Register(keepCheck, "all")
-    qolCard:AddRow(rowQ2, Theme.rowHeight)
-
-    local qolNoteH = 48  -- "Note" header (~18px) + two wrapped text lines
-    local rowQn = GUIFrame:CreateRow(qolCard.content, qolNoteH)
-    local qolNote = GUIFrame:CreateText(rowQn,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("Keep Timer After Key Ends")
-            .. " holds the final summary on screen after you leave the dungeon, until the next key begins.",
-        qolNoteH, "hide")
-    rowQn:AddWidget(qolNote, 1)
-    manager:Register(qolNote, "all")
-    qolCard:AddRow(rowQn, qolNoteH, 0)
+    qolCard:AddRow(rowQ, Theme.rowHeightLast, 0)
     yOffset = qolCard:GetNextOffset()
 
     return yOffset
