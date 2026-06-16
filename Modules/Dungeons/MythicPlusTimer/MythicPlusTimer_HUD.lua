@@ -398,18 +398,14 @@ function MPT:RenderTimer()
     local maxTime = run.maxTime or 0
     local timeLeft = max(0, maxTime - elapsed)
 
-    local elaStr = FormatTime(elapsed, false)
+    -- Milliseconds: ALWAYS on the frozen completion time (WarpDeplete behavior —
+    -- run.elapsed is the authoritative GetChallengeCompletionInfo().time/1000, so
+    -- the precise .mmm is the headline result and shows even with the live toggle
+    -- off). On the live running timer they're opt-in via db.ShowMilliseconds.
+    local elaStr = FormatTime(elapsed, run.completed or db.ShowMilliseconds)
     local maxStr = FormatTime(maxTime, false)
     local remStr = FormatTime(timeLeft, false)
     local mode = db.TimerFormat or "ELAPSED_TOTAL"
-
-    -- On completion, freeze elapsed from the authoritative completion time
-    -- and optionally render milliseconds (spec §6.1 / §8).
-    if run.completed then
-        if db.ShowMilliseconds then
-            elaStr = FormatTime(elapsed, true)   -- run.elapsed already = completionInfo.time/1000 (Phase 1)
-        end
-    end
 
     -- Split into a changing part and a STATIC "/" + total rendered by their
     -- own right-pinned FontStrings: re-measuring the combined string every

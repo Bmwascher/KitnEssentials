@@ -327,7 +327,9 @@ BuildGeneralTab = function(scrollChild, yOffset, db, manager)
     })
     rowF:AddWidget(fmtDrop, 0.5)
     manager:Register(fmtDrop, "all")
-    local msCheck = GUIFrame:CreateCheckbox(rowF, "Show Milliseconds", {
+    -- The final completion time ALWAYS shows milliseconds; this toggle only adds
+    -- them to the live running timer (default off).
+    local msCheck = GUIFrame:CreateCheckbox(rowF, "Live Milliseconds", {
         value = db.ShowMilliseconds == true,
         callback = function(checked) db.ShowMilliseconds = checked; ApplySettings() end,
     })
