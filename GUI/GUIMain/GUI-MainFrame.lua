@@ -44,16 +44,16 @@ GUIFrame.sidebarConfig = {
         text = "\226\128\162 Combat Utilities",
         defaultExpanded = false,
         items = {
-            { id = "CombatRes",     text = "Battle Res", keywords = { "battle res", "brez", "combat res", "resurrect", "raid res", "cr" } },
             { id = "AuraDebuffs",   text = "Advanced Debuffs", keywords = { "debuff", "debuffs", "aura", "boss", "dot", "magic", "curse", "poison", "disease" } },
-            { id = "AuraExternals", text = "External and Defensive Buffs", keywords = { "external", "externals", "defensive", "buff", "cooldown", "mitigation" } },
+            { id = "CombatRes",     text = "Battle Res", keywords = { "battle res", "brez", "combat res", "resurrect", "raid res", "cr" } },
             { id = "CombatTexts",   text = "Combat Texts", keywords = { "combat text", "scrolling", "no target", "interrupt", "durability" } },
             { id = "CombatTimer",   text = "Combat Timer", keywords = { "combat timer", "encounter", "duration", "stopwatch", "fight length" } },
             { id = "Cursor",        text = "Cursor Effects", keywords = { "cursor", "mouse", "pointer", "trail", "circle" } },
+            { id = "DamageMeter",   text = "Damage Meter", keywords = { "damage meter", "dps", "damage", "healing", "threat", "meter", "recount", "details" } },
+            { id = "AuraExternals", text = "External and Defensive Buffs", keywords = { "external", "externals", "defensive", "buff", "cooldown", "mitigation" } },
             { id = "Castbars",      text = "Focus & Target Castbars", keywords = { "castbar", "cast", "focus", "target", "casting", "interrupt" } },
             { id = "CombatCross",   text = "Player Crosshair", keywords = { "crosshair", "cross", "aim", "reticle", "player" } },
             { id = "RangeChecker",  text = "Range Display", keywords = { "range", "distance", "yards", "melee", "ranged" } },
-            { id = "DamageMeter",   text = "Damage Meter", keywords = { "damage meter", "dps", "damage", "healing", "threat", "meter", "recount", "details" } },
         },
     },
     {
@@ -93,11 +93,11 @@ GUIFrame.sidebarConfig = {
         text = "\226\128\162 Healer Utilities",
         defaultExpanded = false,
         items = {
-            { id = "DispelOnCursor",        text = "Dispel on Cursor", keywords = { "dispel", "cursor", "cleanse", "purge", "magic", "curse", "poison", "disease", "debuff" } },
             { id = "DispelGlow",            text = "Dispel Frame Glow", keywords = { "dispel", "glow", "cleanse", "debuff", "highlight", "frame" } },
+            { id = "DispelOnCursor",        text = "Dispel on Cursor", keywords = { "dispel", "cursor", "cleanse", "purge", "magic", "curse", "poison", "disease", "debuff" } },
+            { id = "HealerMana",            text = "Healer Mana", keywords = { "mana", "healer", "oom", "raid", "dungeon", "party" } },
             { id = "InnervateTracker",      text = "Innervate Tracker", keywords = { "innervate", "mana", "druid", "cooldown" } },
             { id = "MaintenanceTracker",    text = "Maintenance Tracker", keywords = { "maintenance", "buff", "uptime", "hot", "refresh", "tracker", "count", "duration" } },
-            { id = "HealerMana",            text = "Healer Mana", keywords = { "mana", "healer", "oom", "raid", "dungeon", "party" } },
         },
     },
     {
