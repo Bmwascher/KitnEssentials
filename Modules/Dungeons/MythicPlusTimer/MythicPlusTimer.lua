@@ -170,7 +170,7 @@ local MPT_DEFAULTS = {
     -- ParentFrame deliberately unseeded (position card writes it on demand).
     -- anchorFrameType is intentionally camelCase — the position card reads that literal key.
     SelfPoint = "RIGHT", AnchorPoint = "RIGHT", anchorFrameType = "SCREEN",
-    XOffset = -20, YOffset = 0, Strata = "MEDIUM", Scale = 1.0,
+    XOffset = 0, YOffset = 198, Strata = "MEDIUM", Scale = 1.0,
 
     -- Timer
     TimerFormat = "ELAPSED_TOTAL",  -- ELAPSED_TOTAL|REMAINING|REMAINING_TOTAL|ELAPSED|ELAPSED_DETAIL
@@ -181,7 +181,7 @@ local MPT_DEFAULTS = {
 
     -- Timer bar + thresholds
     BarTexture = "KitnUI",
-    BarWidth = 300, BarHeight = 14,
+    BarWidth = 275, BarHeight = 14,
     BarColor = {0.56, 0.56, 0.56},
     BarBackgroundColor = {0.031, 0.031, 0.031},  -- empty-track tint, both bars (#080808; fixed 0.8 alpha)
     StateColorFill = false,
@@ -290,11 +290,11 @@ local MPT_DEFAULTS = {
     BackdropOpacity = 0.6,
 
     -- Fonts (global default + per-element overrides resolved at render)
-    FontFace = "Expressway", FontSize = 13, FontOutline = "OUTLINE",
-    TimerFontFace = "Expressway", TimerFontSize = 28, TimerFontOutline = "OUTLINE",
-    ForcesFontFace = "Expressway", ForcesFontSize = 13, ForcesFontOutline = "OUTLINE",
-    ObjectiveFontFace = "Expressway", ObjectiveFontSize = 12, ObjectiveFontOutline = "OUTLINE",
-    DeathsFontFace = "Expressway", DeathsFontSize = 16, DeathsFontOutline = "OUTLINE",
+    FontFace = "Expressway", FontSize = 15, FontOutline = "OUTLINE",
+    TimerFontFace = "Expressway", TimerFontSize = 32, TimerFontOutline = "OUTLINE",
+    ForcesFontFace = "Expressway", ForcesFontSize = 16, ForcesFontOutline = "OUTLINE",
+    ObjectiveFontFace = "Expressway", ObjectiveFontSize = 16, ObjectiveFontOutline = "OUTLINE",
+    DeathsFontFace = "Expressway", DeathsFontSize = 15, DeathsFontOutline = "OUTLINE",
 }
 
 -- Recursive deep-copy so the profile section never shares table identity with
