@@ -874,7 +874,7 @@ end
 -- deathTimeSeconds is SECRET in combat, and 12.0.5 ships no tainted-callable clock
 -- formatter (SecondsFormatter / C_StringUtil.CreateSecondsFormatter / duration
 -- objects are all AllowedWhenUntainted -> they throw on a secret arg from addon
--- code; Details hits the same wall -- "waiting a solution from blizzard"). So the
+-- code; no addon can work around this in 12.0.5). So the
 -- M:SS arithmetic only runs on a plain value; a secret time renders as whole
 -- seconds ("143s") via AbbreviateNumbers (AllowedWhenTainted) -- live data in
 -- combat instead of the old "0:00" placeholder -- and flips to M:SS on the first
@@ -1306,7 +1306,7 @@ end
 -- Live content context derived from the current instance type and keystone
 -- state. IsChallengeModeActive's return is passed through as raw truthiness
 -- (no `or false` coercion) to avoid undefined behavior should it ever return a
--- secret boolean; mirrors WarpDepleteForces' IsInChallengeMode helper.
+-- secret boolean.
 function DM:GetActiveContext()
     local instanceType = select(2, IsInInstance())
     local isChallenge = C_ChallengeMode and C_ChallengeMode.IsChallengeModeActive

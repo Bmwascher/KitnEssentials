@@ -955,6 +955,10 @@ function DM:RenderWindow(W)
     -- windows show just the count ("3", not "3 | 0"). Plain enum lookup into the
     -- Core.lua whitelist (DM.RATE_METER_TYPES) -- never secret.
     W._isRateType = (self.RATE_METER_TYPES and self.RATE_METER_TYPES[meterType]) == true
+    -- Enemy Damage Taken: the sources are enemy mobs (no class), so RenderBar tints their
+    -- bars red instead of the classless grey fallback -- it reads as the
+    -- "enemy" view at a glance. Plain enum compare; stashed for the per-bar color block.
+    W._isEnemyTaken = (meterType == Enum.DamageMeterType.EnemyDamageTaken)
 
     -- Keep the frame/viewport sized to the live appearance DB (dirty-gated, so a
     -- steady config is free). Without a size the body collapses and bars vanish.
@@ -1206,7 +1210,16 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
     -- white (Core/Colors.lua), which is the bug that made Theme mode paint white bars.
     local classFile = src.classFilename
     local colorMode = db.BarColorMode or "Class"
-    local colorKey = (colorMode == "Custom" and "\1") or (colorMode == "Theme" and "\2") or classFile or "?"
+    -- Resolved class color: nil in Custom/Theme modes, or for a class-less/unknown source.
+    -- Enemy mobs report classFilename == "" (NeverSecret, never nil), so test the actual
+    -- RAID_CLASS_COLORS lookup -- a bare `not classFile` is wrong (an empty string is truthy).
+    local classColor = (colorMode ~= "Custom" and colorMode ~= "Theme") and RAID_CLASS_COLORS[classFile] or nil
+    -- Enemy Damage Taken view tints class-less bars red -- Class color mode only;
+    -- Custom/Theme keep the user's chosen color. The "\3" sentinel folds this into the dirty
+    -- key so a bar reused across a view switch (or once a source resolves a class) repaints.
+    local enemyTint = W._isEnemyTaken and not classColor and colorMode ~= "Custom" and colorMode ~= "Theme"
+    local colorKey = (colorMode == "Custom" and "\1") or (colorMode == "Theme" and "\2")
+        or (enemyTint and "\3") or classFile or "?"
     if bar._cachedColorClass ~= colorKey then
         bar._cachedColorClass = colorKey
         local r, g, b
@@ -1215,9 +1228,11 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
             r, g, b = (bc and bc[1]) or 0.6, (bc and bc[2]) or 0.6, (bc and bc[3]) or 0.6
         elseif colorMode == "Theme" then
             r, g, b = KE:GetAccentColor("theme")
+        elseif enemyTint then
+            -- Class-less source in the Enemy Damage Taken view: red (0xDD/0x31/0x31).
+            r, g, b = 0xDD / 255, 0x31 / 255, 0x31 / 255
         else
-            local c = classFile and RAID_CLASS_COLORS[classFile]
-            r, g, b = c and c.r or 0.6, c and c.g or 0.6, c and c.b or 0.6
+            r, g, b = (classColor and classColor.r) or 0.6, (classColor and classColor.g) or 0.6, (classColor and classColor.b) or 0.6
         end
         row.fill:SetStatusBarColor(r, g, b, db.BarColorAlpha or 1)
     end
@@ -1248,9 +1263,17 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
     -- player pinned into a slot a same-class teammate held) get the correct spec
     -- icon rather than a stale one. Visibility is cached in bar._iconShown so a
     -- stable ShowIcon does NO per-tick Show/Hide.
+    -- Icon visibility. In the EnemyDamageTaken view ONLY, enemy mobs report specIconID 0 ->
+    -- show NO icon (no empty bordered box) and the layout below drops the icon
+    -- gutter so the name sits flush left. Every OTHER meter type keeps the prior behavior
+    -- (icon frame shown whenever ShowIcon is on, even for a 0/absent spec icon) so non-enemy
+    -- views are byte-for-byte unchanged -- the enemy scope is deliberate to avoid a regression
+    -- on sources (pets/guardians/spec-lag) that could momentarily report specIconID 0.
+    -- hasIcon drives both visibility and the layout key; both stay dirty-gated.
     local showIcon = db.ShowIcon
-    if showIcon then
-        local iconID = src.specIconID
+    local iconID = src.specIconID
+    local hasIcon = showIcon and (not W._isEnemyTaken or (type(iconID) == "number" and iconID ~= 0))
+    if hasIcon then
         if bar._cachedIconID ~= iconID then
             bar._cachedIconID = iconID
             row.icon:SetTexture(iconID)
@@ -1262,16 +1285,18 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         end
     elseif bar._iconShown ~= false then
         bar._iconShown = false
+        bar._cachedIconID = nil
         row.iconFrame:Hide()
     end
 
     -- Layout (rank-gutter / icon / name LEFT anchors), dirty-gated on the
-    -- (ShowIcon, ShowRank) combination so a stable config does NO per-tick
-    -- re-anchor. When ShowRank is on, the rank occupies a fixed left gutter and
-    -- the icon/name start to its right -- fixing the rank-label-over-icon overlap;
-    -- when off, the icon (or name) sits flush at the left edge as before.
+    -- (hasIcon, ShowRank) combination so a stable config does NO per-tick re-anchor.
+    -- hasIcon (not the raw ShowIcon) is the key so an icon-less enemy row drops the icon
+    -- gutter and the name goes flush left. When ShowRank is on, the rank occupies a fixed
+    -- left gutter and the icon/name start to its right -- fixing the rank-label-over-icon
+    -- overlap; when off, the icon (or name) sits flush at the left edge as before.
     local showRank = db.ShowRank
-    local layoutKey = (showIcon and 1 or 0) + (showRank and 2 or 0)
+    local layoutKey = (hasIcon and 1 or 0) + (showRank and 2 or 0)
     if bar._layoutKey ~= layoutKey then
         bar._layoutKey = layoutKey
 
@@ -1295,7 +1320,7 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         -- Name: after the icon when shown, else after the rank gutter when rank is
         -- shown, else flush at the fill's left edge.
         row.name:ClearAllPoints()
-        if showIcon then
+        if hasIcon then
             row.name:SetPoint("LEFT", row.iconFrame, "RIGHT", 3, 0)
         elseif showRank then
             row.name:SetPoint("LEFT", row.rank, "RIGHT", 3, 0)

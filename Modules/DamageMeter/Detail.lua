@@ -37,6 +37,119 @@ local DETAIL_POOL_SIZE = DM.BAR_POOL_SIZE or 40
 -- TITLE (header name), matching standard meters -- only the bars go neutral. Tunable RGB.
 local DETAIL_BAR_COLOR = { 0.40, 0.40, 0.44 }
 
+-- Enemy Damage Taken breakdown: an enemy source's combatSpells carry the ATTACKING
+-- player in spell.combatSpellDetails (unitName / unitClassFilename / specIconID) -- the
+-- per-spell spellIDs don't resolve to player-spell names (and creatureName comes back
+-- empty), so a generic per-spell render is blank. Aggregate by attacking player into a
+-- descending { name, class, specIcon, total, dps } list so the drill-down reads "who
+-- damaged this enemy" (mirrors BuildAllPlayerTargets' combatSpellDetails read).
+-- Returns nil when no non-secret attacker is present. unitName is ConditionalSecret -> guard
+-- before using it as a table key; sanitize the numeric reads (OOC plain here, but defend
+-- against a stale secret read lingering one frame post-combat).
+local function AggregateEnemyPlayers(src)
+    if not src or not src.combatSpells or #src.combatSpells == 0 then return nil end
+    local byName, list = {}, {}
+    for _, spell in ipairs(src.combatSpells) do
+        local det = spell.combatSpellDetails
+        if det and det.unitName and not issecretvalue(det.unitName) then
+            local amt = spell.totalAmount
+            if issecretvalue(amt) or type(amt) ~= "number" then amt = 0 end
+            -- Skip zero-damage attributions (parity with BuildAllPlayerTargets): a player who
+            -- dealt 0 to this enemy isn't a "damaged it" row and would render a spurious empty bar.
+            if amt > 0 then
+                local pName = det.unitName
+                local ps = spell.amountPerSecond
+                if issecretvalue(ps) or type(ps) ~= "number" then ps = 0 end
+                local p = byName[pName]
+                if not p then
+                    p = { name = pName, class = det.unitClassFilename, specIcon = det.specIconID, total = 0, dps = 0 }
+                    byName[pName] = p
+                    list[#list + 1] = p
+                end
+                p.total = p.total + amt
+                p.dps = p.dps + ps
+            end
+        end
+    end
+    if #list == 0 then return nil end
+    table_sort(list, function(a, b) return a.total > b.total end)
+    return list
+end
+
+-- Display name for a breakdown player row: drop the "-Realm" suffix unless ShowRealm is on
+-- (parity with the main bars). The names here are non-secret (AggregateEnemyPlayers guards
+-- them), so the plain :match strip is safe -- a character name never contains a hyphen.
+local function StripRealmName(db, name)
+    if not name then return name end
+    if db and db.ShowRealm then return name end
+    return name:match("^[^-]+") or name
+end
+
+-- Generic melee glyph for the merged auto-attack row. The API's per-spell icon for an
+-- auto-attack spellID is the player's EQUIPPED WEAPON, which reads as arbitrary art in the
+-- breakdown; substitute a fixed sword icon instead (135349 = inv_sword_39). Auto-attack is
+-- detected by NAME, resolved+cached once from spellID 6603 (the canonical Auto Attack) so the
+-- match is locale-safe and catches every weapon-swing spellID variant the API hands back.
+local MELEE_ICON = 135349
+local _autoAttackName   -- nil until resolved (retried while the spell DB is cold), then cached
+local function AutoAttackName()
+    if not _autoAttackName then
+        -- Cache only on SUCCESS -- a nil return (cold spell cache at session start) must retry
+        -- on the next call, not latch off the override for the whole session.
+        local ok, nm = pcall(C_Spell.GetSpellName, 6603)
+        if ok and nm and not issecretvalue(nm) then _autoAttackName = nm end
+    end
+    return _autoAttackName
+end
+
+-- Collapse combatSpells that resolve to the SAME display name into one row (summing amount
+-- + per-second), so the API's split melee entries -- many distinct spellIDs that all name to
+-- "Auto Attack", plus dual-wield/enchant procs that share a name -- read as a single line.
+-- The API returns one entry per spellID (no name-level merge); collapsing by name matches how mature
+-- meters collapse melee. OOC-only callers (spellID + amounts are plain), but every read is
+-- issecretvalue-guarded: an entry whose name can't be resolved (nil/secret) keys on its own
+-- spellID so it never merges and never feeds a secret into a table key. combatSpells arrive
+-- pre-sorted descending, so the first variant of each name supplies the merged row's spellID
+-- (icon/label) and creatureName fallback; the merged list is re-sorted by the summed total.
+local function MergeSpellsByName(spells)
+    if not spells then return nil end
+    local byKey, list = {}, {}
+    for _, spell in ipairs(spells) do
+        local spID = spell.spellID
+        local nm
+        if spID then
+            local ok, sn = pcall(C_Spell.GetSpellName, spID)
+            if ok and sn and not issecretvalue(sn) then nm = sn end
+        end
+        -- Key fallback stringifies the spellID -- guard it (OOC-plain by invariant, but defend
+        -- the same way the amount reads do) so a secret ID can never taint via tostring; an
+        -- unresolvable entry then keys on creatureName and simply stays on its own row.
+        local idSafe = (not issecretvalue(spID) and type(spID) == "number") and spID or nil
+        -- creatureName is the last-resort key; guard it like the other reads (latent -- under the
+        -- OOC-only callers idSafe is always set so this fallback never runs, but stay consistent).
+        local cnSafe = (spell.creatureName and not issecretvalue(spell.creatureName)) and spell.creatureName or nil
+        local key = nm or (idSafe and ("#" .. tostring(idSafe))) or cnSafe or "?"
+        local amt = spell.totalAmount
+        if issecretvalue(amt) or type(amt) ~= "number" then amt = 0 end
+        local ps = spell.amountPerSecond
+        if issecretvalue(ps) or type(ps) ~= "number" then ps = 0 end
+        local e = byKey[key]
+        if not e then
+            e = { spellID = spID, totalAmount = 0, amountPerSecond = 0, creatureName = spell.creatureName }
+            -- Auto Attack: render the fixed melee glyph instead of the equipped-weapon icon
+            -- the spellID would resolve to. Match by name (locale-safe via AutoAttackName).
+            local aaName = AutoAttackName()
+            if aaName and nm == aaName then e.iconOverride = MELEE_ICON end
+            byKey[key] = e
+            list[#list + 1] = e
+        end
+        e.totalAmount = e.totalAmount + amt
+        e.amountPerSecond = e.amountPerSecond + ps
+    end
+    table_sort(list, function(a, b) return a.totalAmount > b.totalAmount end)
+    return list
+end
+
 -- One detail row: [icon] name .......... value. Scripts wired ONCE (pool reuse).
 -- Clicking any row closes the panel (the back gesture).
 local function MakeDetailRow(parent)
@@ -235,7 +348,20 @@ function DM:RenderBreakdown(W)
     -- bars; EffectiveMeterType falls back to cfg.MeterType when no override is active.
     local meterType = self:EffectiveMeterType(W.idx, cfg)
     local src = self:GetSource(cfg.SessionType, meterType, W._detailSourceGUID, W._detailSourceCID, sessionID)
-    local spells = src and src.combatSpells
+
+    -- Enemy Damage Taken: the enemy's combatSpells don't resolve to player-spell names;
+    -- render a per-player "who damaged this enemy" breakdown instead. See
+    -- AggregateEnemyPlayers / DM:RenderEnemyBreakdown. Returns early -- the per-spell path
+    -- below serves every other meter type.
+    if meterType == Enum.DamageMeterType.EnemyDamageTaken then
+        self:RenderEnemyBreakdown(W, src)
+        return
+    end
+
+    -- Merge same-named spells (the API splits melee into many "Auto Attack" spellIDs). See
+    -- MergeSpellsByName. The merged list keeps the combatSpell shape, so the row loop below
+    -- is unchanged -- only the fill max (recomputed from the merged totals) differs.
+    local spells = src and MergeSpellsByName(src.combatSpells)
     local d = W.detail
     if not spells then
         for i = 1, DETAIL_POOL_SIZE do d.rows[i].row:Hide() end
@@ -245,11 +371,11 @@ function DM:RenderBreakdown(W)
     local stride = W._snapStride or 18
     local barH = W._snapHeight or 16
 
-    -- maxAmount drives the fill width. Out of combat amounts are plain numbers; gate
-    -- percent on issecretvalue + type defensively before any arithmetic.
-    local maxAmount = src.maxAmount
-    local canPercent = maxAmount and (not issecretvalue(maxAmount)) and type(maxAmount) == "number"
-        and src.totalAmount and not issecretvalue(src.totalAmount)
+    -- maxAmount drives the fill width -- the TOP MERGED row's total (a merged melee line can
+    -- exceed the API's per-spell src.maxAmount), taken from the re-sorted merged list. Percent
+    -- basis is the source's whole total (unchanged by merging); gate it on issecretvalue + type.
+    local maxAmount = (spells[1] and spells[1].totalAmount) or 0
+    local canPercent = src.totalAmount and not issecretvalue(src.totalAmount) and type(src.totalAmount) == "number"
     local total = canPercent and src.totalAmount or 0
 
     -- DetailMaxRows (DB) caps the breakdown length; default 40 == pool size, so it is
@@ -268,21 +394,23 @@ function DM:RenderBreakdown(W)
             row:SetPoint("TOPRIGHT", d.content, "TOPRIGHT", 0, yOff)
             row:SetHeight(barH)
 
-            -- Icon from spellID (safe OUT of combat — spellID is secret IN combat).
-            -- Falls back to a hidden icon frame if the lookup fails.
+            -- Icon: a merged-row override (auto-attack -> fixed melee glyph, not the equipped
+            -- weapon) wins; else from spellID (safe OUT of combat -- spellID is secret IN
+            -- combat). pcall the lookup (parity with RenderDeathRecap) so a throw on an
+            -- unknown spellID can't abort the row loop. Hidden icon frame if nothing resolves.
             local iconShown = false
             local spID = spell.spellID
-            if spID and C_Spell and C_Spell.GetSpellTexture then
-                -- pcall the lookup (parity with RenderDeathRecap) so a throw on an
-                -- unknown/crafted spellID can't abort the row loop mid-render.
-                local okT, tex = pcall(C_Spell.GetSpellTexture, spID)
-                if okT and tex then
-                    row.icon:SetTexture(tex)
-                    KE:ApplyIconZoom(row.icon)
-                    row.iconFrame:SetSize(barH, barH)
-                    row.iconFrame:Show()
-                    iconShown = true
-                end
+            local tex = spell.iconOverride
+            if not tex and spID and C_Spell and C_Spell.GetSpellTexture then
+                local okT, t = pcall(C_Spell.GetSpellTexture, spID)
+                if okT then tex = t end
+            end
+            if tex then
+                row.icon:SetTexture(tex)
+                KE:ApplyIconZoom(row.icon)
+                row.iconFrame:SetSize(barH, barH)
+                row.iconFrame:Show()
+                iconShown = true
             end
             if not iconShown then row.iconFrame:Hide() end
 
@@ -333,6 +461,88 @@ function DM:RenderBreakdown(W)
     end
 
     -- Size the scroll child so the wheel can scroll long lists (Task 6 wires the wheel).
+    d.content:SetHeight(math_max(10, count * stride))
+end
+
+-- Per-enemy player breakdown (Enemy Damage Taken drill-down; OOC-gated via OpenDetail like
+-- RenderBreakdown). Renders the attacking players (AggregateEnemyPlayers) as class-colored
+-- rows: [spec icon] name .......... amount + share-of-this-enemy %. Replaces the (blank)
+-- per-spell render for this meter type -- the enemy's combatSpells don't resolve to
+-- player-spell names. Mirrors RenderBreakdown's row layout / pool handling.
+function DM:RenderEnemyBreakdown(W, src)
+    local d = W.detail
+    local players = AggregateEnemyPlayers(src)
+    if not players then
+        for i = 1, DETAIL_POOL_SIZE do d.rows[i].row:Hide() end
+        return
+    end
+
+    local stride = W._snapStride or 18
+    local barH = W._snapHeight or 16
+
+    -- % denominator: the enemy's whole damage-taken (sanitize defensively). Fill max is the
+    -- top attacker's total so the leading bar reads full-width.
+    local total = src and src.totalAmount
+    if issecretvalue(total) or type(total) ~= "number" then total = 0 end
+    local maxAmount = players[1].total
+    if not (maxAmount and maxAmount > 0) then maxAmount = 1 end
+
+    local maxRows = (self.db and self.db.DetailMaxRows) or DETAIL_POOL_SIZE
+    local count = math_min(#players, DETAIL_POOL_SIZE, maxRows)
+    for i = 1, DETAIL_POOL_SIZE do
+        local bar = d.rows[i]
+        local row = bar.row
+        if i <= count then
+            local p = players[i]
+            row:ClearAllPoints()
+            local yOff = -(i - 1) * stride
+            row:SetPoint("TOPLEFT", d.content, "TOPLEFT", 0, yOff)
+            row:SetPoint("TOPRIGHT", d.content, "TOPRIGHT", 0, yOff)
+            row:SetHeight(barH)
+
+            -- Class/spec icon (specIconID is NeverSecret); hidden frame on absence.
+            local iconShown = false
+            local specIcon = p.specIcon
+            if specIcon and type(specIcon) == "number" and specIcon ~= 0 then
+                row.icon:SetTexture(specIcon)
+                KE:ApplyIconZoom(row.icon)
+                row.iconFrame:SetSize(barH, barH)
+                row.iconFrame:Show()
+                iconShown = true
+            end
+            if not iconShown then row.iconFrame:Hide() end
+
+            row.label:ClearAllPoints()
+            if iconShown then
+                row.label:SetPoint("LEFT", row.iconFrame, "RIGHT", 3, 0)
+            else
+                row.label:SetPoint("LEFT", row.fill, "LEFT", 3, 0)
+            end
+            row.label:SetPoint("RIGHT", row.value, "LEFT", -3, 0)
+
+            -- Fill width by attacker total; class color when known, else neutral gray.
+            row.fill:SetMinMaxValues(0, maxAmount)
+            row.fill:SetValue(p.total)
+            local cc = p.class and RAID_CLASS_COLORS[p.class]
+            if cc then row.fill:SetStatusBarColor(cc.r, cc.g, cc.b)
+            else row.fill:SetStatusBarColor(DETAIL_BAR_COLOR[1], DETAIL_BAR_COLOR[2], DETAIL_BAR_COLOR[3]) end
+
+            row.label:SetText(StripRealmName(self.db, p.name) or "Unknown")
+
+            -- Value: abbreviated amount + share-of-this-enemy %. p.total is a plain number by
+            -- construction (AggregateEnemyPlayers sanitizes each addend); total is guarded above.
+            local amtStr = (self.FormatBarValue and select(1, self.FormatBarValue(p.total, nil, false))) or ""
+            if total > 0 then
+                row.value:SetText(format("%s  %.1f%%", amtStr, (p.total / total) * 100))
+            else
+                row.value:SetText(amtStr)
+            end
+
+            if not row:IsShown() then row:Show() end
+        else
+            if row:IsShown() then row:Hide() end
+        end
+    end
     d.content:SetHeight(math_max(10, count * stride))
 end
 
@@ -1036,6 +1246,7 @@ function DM:PopulateHoverTip(W, bar)
     -- matches the bars + click-inline breakdown; falls back to cfg.MeterType when none.
     local meterType = self:EffectiveMeterType(W.idx, cfg)
     local isDeaths = (meterType == Enum.DamageMeterType.Deaths)
+    local isEnemyTaken = (meterType == Enum.DamageMeterType.EnemyDamageTaken)
 
     -- Tip rows run ~2px shorter than the configured bar height so the quick-peek packs
     -- the now-15 rows (+ Targets) densely (request 2026-06-05).
@@ -1157,12 +1368,115 @@ function DM:PopulateHoverTip(W, bar)
                 if row:IsShown() then row:Hide() end
             end
         end
+    elseif isEnemyTaken then
+        -- Enemy Damage Taken: per-player "who damaged this enemy" breakdown -- the enemy's
+        -- combatSpells don't resolve to player-spell names. Same column layout as the spell
+        -- breakdown, but the Spell header reads "Player" and there is no Targets sub-section.
+        -- See AggregateEnemyPlayers / DM:RenderEnemyBreakdown (the click-inline twin).
+        HideTipTargets()
+        local tipSessionID = self:EffectiveSessionID(W)
+        local src = self:GetSource(cfg.SessionType, meterType, bar._sourceGUID, bar._sourceCreatureID, tipSessionID)
+        local players = AggregateEnemyPlayers(src)
+        if not players then return false end
+
+        -- Column-header row (Player · Amount · DPS · %); same anchors as the spell breakdown.
+        bodyTop = math_max(TIP_COL_HDR_H, (size or 12) + 2)
+        if _tip.colHdr then
+            local hdrY = -(headerH)
+            _tip.colHdr.spell:ClearAllPoints()
+            _tip.colHdr.spell:SetPoint("TOPLEFT", _tip, "TOPLEFT", TIP_PAD, hdrY)
+            _tip.colHdr.amount:ClearAllPoints()
+            _tip.colHdr.amount:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", TIP_AMT_X, hdrY)
+            _tip.colHdr.spell:SetPoint("TOPRIGHT", _tip.colHdr.amount, "TOPLEFT", -3, 0)
+            _tip.colHdr.dps:ClearAllPoints()
+            _tip.colHdr.dps:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", TIP_DPS_X, hdrY)
+            _tip.colHdr.pct:ClearAllPoints()
+            _tip.colHdr.pct:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", TIP_PCT_X, hdrY)
+            _tip.colHdr.spell:SetText("Player")
+            _tip.colHdr.spell:Show(); _tip.colHdr.amount:Show(); _tip.colHdr.dps:Show(); _tip.colHdr.pct:Show()
+        end
+
+        -- % denominator: the enemy's whole damage-taken (guard defensively); fill max is the
+        -- top attacker's total so the leading bar reads full-width.
+        local total = src and src.totalAmount
+        if issecretvalue(total) or type(total) ~= "number" then total = 0 end
+        local maxAmount = players[1].total
+        if not (maxAmount and maxAmount > 0) then maxAmount = 1 end
+        local count = math_min(#players, HOVER_TIP_ROWS)
+
+        for i = 1, HOVER_TIP_ROWS do
+            local tr = _tip.rows[i]
+            local row = tr.row
+            if i <= count then
+                local p = players[i]
+                row:ClearAllPoints()
+                local yOff = -(headerH + bodyTop + (i - 1) * stride)
+                row:SetPoint("TOPLEFT", _tip, "TOPLEFT", TIP_PAD, yOff)
+                row:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", -TIP_PAD, yOff)
+                row:SetHeight(barH)
+
+                -- Class/spec icon (specIconID NeverSecret); hidden frame on absence.
+                local iconShown = false
+                local specIcon = p.specIcon
+                if specIcon and type(specIcon) == "number" and specIcon ~= 0 then
+                    row.icon:SetTexture(specIcon)
+                    KE:ApplyIconZoom(row.icon)
+                    row.iconFrame:SetSize(barH, barH)
+                    row.iconFrame:Show()
+                    iconShown = true
+                end
+                if not iconShown then row.iconFrame:Hide() end
+
+                -- Restore the aligned numeric columns (the recap branch re-anchors row.value
+                -- to the full right edge) so an enemy tip after a recap tip lays out correctly.
+                row.value:ClearAllPoints()
+                row.value:SetPoint("RIGHT", row.fill, "RIGHT", TIP_AMT_X, 0)
+                row.dps:ClearAllPoints()
+                row.dps:SetPoint("RIGHT", row.fill, "RIGHT", TIP_DPS_X, 0)
+                row.pct:ClearAllPoints()
+                row.pct:SetPoint("RIGHT", row.fill, "RIGHT", TIP_PCT_X, 0)
+
+                row.label:ClearAllPoints()
+                if iconShown then
+                    row.label:SetPoint("LEFT", row.iconFrame, "RIGHT", 3, 0)
+                else
+                    row.label:SetPoint("LEFT", row.fill, "LEFT", 3, 0)
+                end
+                row.label:SetPoint("RIGHT", row.value, "LEFT", -3, 0)
+
+                row.fill:SetMinMaxValues(0, maxAmount)
+                row.fill:SetValue(p.total)
+                local cc = p.class and RAID_CLASS_COLORS[p.class]
+                if cc then row.fill:SetStatusBarColor(cc.r, cc.g, cc.b)
+                else row.fill:SetStatusBarColor(DETAIL_BAR_COLOR[1], DETAIL_BAR_COLOR[2], DETAIL_BAR_COLOR[3]) end
+
+                row.label:SetText(StripRealmName(self.db, p.name) or "Unknown")
+
+                -- Amount / DPS / % columns. p.total and p.dps are plain numbers by
+                -- construction (AggregateEnemyPlayers sanitizes each addend); total guarded above.
+                local amtStr = (self.FormatBarValue and select(1, self.FormatBarValue(p.total, nil, false))) or ""
+                row.value:SetText(amtStr)
+                local dpsStr = (self.FormatBarValue and select(1, self.FormatBarValue(p.dps, nil, false))) or ""
+                row.dps:SetText(dpsStr)
+                if total > 0 then
+                    row.pct:SetText(format("%.1f%%", (p.total / total) * 100))
+                else
+                    row.pct:SetText("")
+                end
+
+                if not row:IsShown() then row:Show() end
+                shown = shown + 1
+            else
+                if row:IsShown() then row:Hide() end
+            end
+        end
     else
         -- Top breakdown spells for this source (honor a pinned historical session and
         -- the Current-empty fallback -- the same segment the bars are rendering).
         local tipSessionID = self:EffectiveSessionID(W)
         local src = self:GetSource(cfg.SessionType, meterType, bar._sourceGUID, bar._sourceCreatureID, tipSessionID)
-        local spells = src and src.combatSpells
+        -- Merge same-named spells (parity with the click-inline breakdown). See MergeSpellsByName.
+        local spells = src and MergeSpellsByName(src.combatSpells)
         if not spells then return false end
 
         -- Breakdown path: show the column-header row and push the data rows down past it.
@@ -1181,12 +1495,15 @@ function DM:PopulateHoverTip(W, bar)
             _tip.colHdr.dps:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", TIP_DPS_X, hdrY)
             _tip.colHdr.pct:ClearAllPoints()
             _tip.colHdr.pct:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", TIP_PCT_X, hdrY)
+            -- Reset the Spell label (the EnemyDamageTaken branch retitles it "Player").
+            _tip.colHdr.spell:SetText("Spell")
             _tip.colHdr.spell:Show(); _tip.colHdr.amount:Show(); _tip.colHdr.dps:Show(); _tip.colHdr.pct:Show()
         end
 
-        local maxAmount = src.maxAmount
-        local canPercent = maxAmount and (not issecretvalue(maxAmount)) and type(maxAmount) == "number"
-            and src.totalAmount and not issecretvalue(src.totalAmount)
+        -- Fill max = the top MERGED row's total (a merged melee line can exceed the API's
+        -- per-spell src.maxAmount); percent basis stays the source's whole total.
+        local maxAmount = (spells[1] and spells[1].totalAmount) or 0
+        local canPercent = src.totalAmount and not issecretvalue(src.totalAmount) and type(src.totalAmount) == "number"
         local total = canPercent and src.totalAmount or 0
         local count = math_min(#spells, HOVER_TIP_ROWS)
 
@@ -1201,18 +1518,21 @@ function DM:PopulateHoverTip(W, bar)
                 row:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", -TIP_PAD, yOff)
                 row:SetHeight(barH)
 
-                -- Icon from spellID (safe OOC). pcall the lookup; failure -> hidden icon.
+                -- Icon: merged-row override (auto-attack -> melee glyph, not the equipped
+                -- weapon) wins; else from spellID (safe OOC). pcall; nothing -> hidden icon.
                 local iconShown = false
                 local spID = spell.spellID
-                if spID and C_Spell and C_Spell.GetSpellTexture then
-                    local okT, tex = pcall(C_Spell.GetSpellTexture, spID)
-                    if okT and tex then
-                        row.icon:SetTexture(tex)
-                        KE:ApplyIconZoom(row.icon)
-                        row.iconFrame:SetSize(barH, barH)
-                        row.iconFrame:Show()
-                        iconShown = true
-                    end
+                local tex = spell.iconOverride
+                if not tex and spID and C_Spell and C_Spell.GetSpellTexture then
+                    local okT, t = pcall(C_Spell.GetSpellTexture, spID)
+                    if okT then tex = t end
+                end
+                if tex then
+                    row.icon:SetTexture(tex)
+                    KE:ApplyIconZoom(row.icon)
+                    row.iconFrame:SetSize(barH, barH)
+                    row.iconFrame:Show()
+                    iconShown = true
                 end
                 if not iconShown then row.iconFrame:Hide() end
 
