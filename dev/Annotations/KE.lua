@@ -83,6 +83,15 @@ local KE = {}
 ---@param ... any
 function KE:Print(...) end
 
+--- Recommend disabling a redundant external addon when a KE module runs alongside it.
+---@param addon string       addon folder name to detect via C_AddOns.IsAddOnLoaded
+---@param label string       display name shown to the user
+---@param moduleName string  the KE module's display name
+---@param slash string       slash hint to toggle the KE module off
+---@param state table        table holding the once-flag (caller's db)
+---@param key string         once-flag field on `state`
+function KE:WarnRedundantAddon(addon, label, moduleName, slash, state, key) end
+
 -- ─── Color resolution ─────────────────────────────────────
 --- Read a saved color table (which may be sparse) and fall back per-index.
 ---@param saved number[]?

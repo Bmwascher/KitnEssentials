@@ -111,6 +111,26 @@ function KE:Print(msg)
     print(self:ColorTextByTheme("Kitn") .. "Essentials:|r " .. msg)
 end
 
+-- Recommend disabling a redundant external addon when a KitnEssentials
+-- replacement module is enabled alongside it. Prints ONCE (the flag re-arms if
+-- the addon is later removed, so it warns again only if the addon returns). The
+-- once-flag lives on the caller-supplied table at `key` (pass the module's db).
+-- Deferred a few seconds so it lands after the login chat settles.
+function KE:WarnRedundantAddon(addon, label, moduleName, slash, state, key)
+    if not (state and C_AddOns and C_AddOns.IsAddOnLoaded) then return end
+    if not C_AddOns.IsAddOnLoaded(addon) then
+        state[key] = nil   -- re-arm: addon gone, warn again only if it returns
+        return
+    end
+    if state[key] then return end
+    state[key] = true
+    C_Timer.After(5, function()
+        KE:Print(label .. " is enabled alongside the KitnEssentials " .. moduleName
+            .. " - you only need one. Disable " .. label .. ", or turn off the "
+            .. moduleName .. " in |cffffff00" .. slash .. "|r.")
+    end)
+end
+
 ---------------------------------------------------------------------------------
 -- Slash Commands
 ---------------------------------------------------------------------------------

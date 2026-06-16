@@ -569,6 +569,8 @@ function MPT:OnEnable()
     self:RegWithEditMode()
     -- Restore HUD if we /reload'd mid-key.
     self:CheckForActiveRun()
+    -- WarpDeplete is a competing keystone timer — recommend running only one.
+    KE:WarnRedundantAddon("WarpDeplete", "WarpDeplete", "Mythic+ Timer", "/kes mt", self.db, "_warpDepleteWarned")
     -- Season-based purge of stale split records (deferred; API not ready at login).
     C_Timer.After(2, function()
         if not self:IsEnabled() then return end  -- module disabled inside the window
