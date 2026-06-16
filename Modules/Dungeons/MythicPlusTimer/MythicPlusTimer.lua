@@ -525,6 +525,23 @@ function MPT:UpdateDB()
     end
 end
 
+-- Wipe this module's persisted profile section and regenerate every key from
+-- MPT_DEFAULTS, then re-apply to the live HUD. Backs the GUI "Reset to Defaults"
+-- button. Everything in the section returns to default (position, colors, fonts,
+-- sizes, toggles); the on/off state is preserved (a settings reset shouldn't
+-- silently enable/disable the module), and the global PB-splits store
+-- (KE.db.global, not this section) is left intact — reset settings, keep records.
+function MPT:ResetToDefaults()
+    local profile = KE.db.profile
+    local wasEnabled = self.db and self.db.Enabled
+    if type(profile.MythicPlusTimer) == "table" then
+        wipe(profile.MythicPlusTimer)   -- in place: keep table identity for any held refs
+    end
+    self:UpdateDB()                     -- re-seed all defaults + re-bind self.db
+    if wasEnabled ~= nil then self.db.Enabled = wasEnabled end
+    self:ApplySettings()                -- busts caches, re-applies layout/colors to the live HUD
+end
+
 ---------------------------------------------------------------------------------
 -- Lifecycle
 ---------------------------------------------------------------------------------

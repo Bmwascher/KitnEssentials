@@ -397,6 +397,46 @@ BuildGeneralTab = function(scrollChild, yOffset, db, manager)
     qolCard:AddRow(rowQ, Theme.rowHeightLast, 0)
     yOffset = qolCard:GetNextOffset()
 
+    -- Card 8: Reset to Defaults (destructive — full module settings reset).
+    -- Mirrors the Nicknames "Clear All" pattern: red button + confirmation
+    -- prompt + RefreshContent to rebuild the page with the regenerated values.
+    local resetCard = GUIFrame:CreateCard(scrollChild, "Reset", yOffset)
+    manager:Register(resetCard, "all")
+    local resetNoteRow = GUIFrame:CreateRow(resetCard.content, 30)
+    local resetNote = GUIFrame:CreateText(resetNoteRow,
+        KE:ColorTextByTheme("Reset to Defaults"),
+        "Restore every Mythic+ Timer setting to its default. Saved PB splits are kept; this cannot be undone.",
+        30, "hide")
+    resetNoteRow:AddWidget(resetNote, 1)
+    manager:Register(resetNote, "all")
+    resetCard:AddRow(resetNoteRow, 30)
+
+    local resetRow = GUIFrame:CreateRow(resetCard.content, Theme.rowHeightLast)
+    local resetBtn = GUIFrame:CreateButton(resetRow, "Reset to Defaults", {
+        height = 26,
+        callback = function()
+            KE:CreatePrompt(
+                "Reset Mythic+ Timer",
+                "Reset every Mythic+ Timer setting (colors, fonts, position, layout, toggles) to default?\n\nSaved PB splits are kept. This cannot be undone.",
+                false, nil, false, nil, nil, nil, nil,
+                function()
+                    local M = GetMPT()
+                    if M and M.ResetToDefaults then M:ResetToDefaults() end
+                    KE:Print("Mythic+ Timer settings reset to defaults.")
+                    GUIFrame:RefreshContent()
+                end,
+                nil, "Reset", "Cancel")
+        end,
+    })
+    -- Destructive-action red, matching the Nicknames "Clear All" button.
+    if resetBtn.text then
+        resetBtn.text:SetTextColor(0.9, 0.2, 0.2, 1)
+    end
+    resetRow:AddWidget(resetBtn, 1)
+    manager:Register(resetBtn, "all")
+    resetCard:AddRow(resetRow, Theme.rowHeightLast, 0)
+    yOffset = resetCard:GetNextOffset()
+
     return yOffset
 end
 
