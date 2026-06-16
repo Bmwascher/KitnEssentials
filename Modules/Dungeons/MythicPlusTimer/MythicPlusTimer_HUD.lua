@@ -22,6 +22,14 @@ local function Hex(c)
     return format("|cff%02x%02x%02x", floor((c[1] or 1) * 255), floor((c[2] or 1) * 255), floor((c[3] or 1) * 255))
 end
 
+-- Capitalize the first letter of every word. Used only on count objectives
+-- (e.g. "Quarry camps liberated" -> "Quarry Camps Liberated") — Blizzard reports
+-- those criteria in sentence case while boss names already come proper-cased.
+-- The apostrophe is kept inside a word so possessives survive ("Geist's" stays).
+local function TitleCase(s)
+    return (s:gsub("(%a)([%w']*)", function(first, rest) return first:upper() .. rest end))
+end
+
 -- "MM:SS" with the leading zero stripped ("04:14" -> "4:14"). Used by the
 -- threshold labels and both deaths parts (headline penalty + tooltip rows);
 -- the big timer keeps the padded form. Declared above BuildHUD so the
@@ -1021,7 +1029,9 @@ function MPT:RenderObjectives()
         -- (EllesmereUIMythicTimer.lua:1675-1677 verbatim).
         local displayName = obj.name
         if obj.totalQuantity and obj.totalQuantity > 1 then
-            displayName = format("%d/%d %s", obj.quantity or 0, obj.totalQuantity, displayName)
+            -- Count objectives arrive in sentence case; title-case so they read
+            -- like the proper-cased boss rows ("Quarry Camps Liberated").
+            displayName = format("%d/%d %s", obj.quantity or 0, obj.totalQuantity, TitleCase(displayName))
         end
 
         -- Right text: completed → [clear] + optional delta; pending → gold PB target.
