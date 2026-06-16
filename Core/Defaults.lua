@@ -457,8 +457,8 @@ local Defaults = {
         },
 
         BurningRush = {
-            Enabled = false,
-            IconSize = 40,
+            Enabled = true,
+            IconSize = 45,
             -- Glow (consumed by GUI-GlowSettingsCard — these are its default key names)
             GlowEnabled = true,
             GlowType = "pixel",
@@ -477,7 +477,7 @@ local Defaults = {
             Strata = "MEDIUM",
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
-            Position = DefaultPosition(0, -50),
+            Position = DefaultPosition(0, 125),
         },
 
         TotemTracker = {
