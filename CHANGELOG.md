@@ -119,6 +119,9 @@
 ### Ready Check Consumables
 - Smarter flask picker — when you have multiple flask buffs active, ready-check icons now resolve to the highest-tier one rather than the first match
 
+### Focus Marker
+- **NEW:** No Overwrite option — uses the Patch 12.0.7 `~` marker syntax in the generated macro (`/tm ~8`) so your marker only lands on an unmarked target instead of overwriting another player's icon. On by default; the macro's anti-toggle clear line is skipped in this mode so it can't wipe an existing marker first
+
 ### Tags
 - **NEW:** `kes:mana:percent` tag — shows the unit's mana % below 100, hidden at full mana
 
