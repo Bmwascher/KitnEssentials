@@ -159,6 +159,9 @@ local function SetWaypoint(x, y)
         return false, "Can't set waypoint here"
     end
 
+    -- CreateFromCoordinates returns a UiMapPoint instance; the framexml stub
+    -- types the param as the mixin table, hence the false type-mismatch.
+    ---@diagnostic disable-next-line: type-mismatch
     C_Map.SetUserWaypoint(UiMapPoint.CreateFromCoordinates(mapID, x, y))
     C_SuperTrack.SetSuperTrackedUserWaypoint(true)
 
@@ -512,6 +515,7 @@ local function CreatePin(map, mp)
         if not C_Map.CanSetUserWaypointOnMap(mapID) then return end
 
         local wp = UiMapPoint.CreateFromCoordinates(mapID, mp.x, mp.y)
+        ---@diagnostic disable-next-line: type-mismatch
         C_Map.SetUserWaypoint(wp)
         C_SuperTrack.SetSuperTrackedUserWaypoint(true)
     end)

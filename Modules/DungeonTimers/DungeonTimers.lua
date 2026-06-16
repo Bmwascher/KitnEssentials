@@ -1295,6 +1295,7 @@ end
 -- never garbage-collected — before this pool every bar teardown stranded a
 -- 5-7-object kit permanently (~5-25 per boss pull). Mirrors the
 -- DC:AcquireBar/DC:ReleaseBar free-list in DungeonCasts.lua.
+---@type table<string, table[]>
 local barFramePool = { bar = {}, text = {} }
 
 -- Soft-outline shadows are siblings of the main FontString (not its children), so
