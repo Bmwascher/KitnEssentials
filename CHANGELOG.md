@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v3.0.2
+
+### Damage Meter
+- **NEW:** Detects when Details! is running alongside the KitnEssentials meter and posts a one-time chat reminder that you only need one. While the KitnEssentials meter is active it also turns off the now-redundant KitnEssentials "Details Backdrop" skin automatically
+
+### Mythic+ Timer
+- **NEW:** Detects when the external WarpDeplete addon is running alongside the Mythic+ Timer and posts a one-time chat reminder that you only need one
+
+---
+
 ## v3.0.1
 
 ### Damage Meter
