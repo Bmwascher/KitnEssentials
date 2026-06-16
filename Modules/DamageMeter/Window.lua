@@ -1098,8 +1098,11 @@ function DM:RenderWindow(W)
     -- source's index in the pre-sorted combatSources IS its rank (a plain integer).
     -- No arithmetic/compare on any secret amount anywhere -- the only reads are
     -- isLocalPlayer (boolean, NeverSecret) and plain layout numbers.
+    -- Skip Deaths: that view is a chronological event LOG, not a ranked list, so
+    -- there is no "self rank" to keep on screen -- pinning the player's death into
+    -- a fixed slot just displaces a real death and breaks the time order.
     local pinSource, pinRank, pinSlot
-    if self.db and self.db.AlwaysShowSelf and count >= 1 then
+    if self.db and self.db.AlwaysShowSelf and count >= 1 and not isDeaths then
         local inView = false
         for i = firstVis, lastVis do
             local s = sources[i]
