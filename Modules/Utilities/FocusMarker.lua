@@ -75,6 +75,11 @@ function FM:BuildMacroBody()
     local cond = self:GetConditionals()
     local idx = NAME_TO_INDEX[db.SelectedMarker] or 0
 
+    -- No Overwrite: prefix the marker index with ~ so the 12.0.7 /tm skips
+    -- targets that already carry a marker. Only meaningful when placing a
+    -- marker (idx > 0); a ~0 clear is nonsensical.
+    local noOverwrite = db.NoOverwrite and idx > 0
+
     -- /focus line (unless mark-only mode)
     if not db.MarkOnly then
         table_insert(lines, "/focus " .. cond)
@@ -87,13 +92,16 @@ function FM:BuildMacroBody()
         tmCond = "[nogroup:raid," .. inner .. "]"
     end
 
-    -- Anti-toggle line (force clear before re-apply)
-    if not db.NoToggle then
+    -- Anti-toggle line (force clear before re-apply). Suppressed under No
+    -- Overwrite: clearing the marker first would wipe an existing one and
+    -- defeat the ~ guard.
+    if not db.NoToggle and not noOverwrite then
         table_insert(lines, "/tm " .. tmCond .. " 0")
     end
 
-    -- Marker line
-    table_insert(lines, "/tm " .. tmCond .. " " .. tostring(idx))
+    -- Marker line (~idx under No Overwrite, plain idx otherwise)
+    local markerArg = noOverwrite and ("~" .. tostring(idx)) or tostring(idx)
+    table_insert(lines, "/tm " .. tmCond .. " " .. markerArg)
 
     return table_concat(lines, "\n")
 end

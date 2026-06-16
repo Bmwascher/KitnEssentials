@@ -895,6 +895,7 @@ local Defaults = {
             MarkOnly = false,
             NoRaid = false,
             NoToggle = true,
+            NoOverwrite = true,
             AnnounceReadyCheck = true,
         },
 

@@ -173,6 +173,7 @@ GUIFrame:RegisterContent("FocusMarker", function(scrollChild, yOffset)
         { key = "MarkOnly",   label = "Mark Only",   desc = "Only apply raid marker, do not set focus.", default = false },
         { key = "NoRaid",     label = "No Raid Marking", desc = "Don't apply marker while in raid group.", default = false },
         { key = "NoToggle",   label = "No Toggle",   desc = "Prevent marker from toggling off on repeated clicks.", default = true },
+        { key = "NoOverwrite", label = "No Overwrite", desc = "Skip targets that already carry a marker (Patch 12.0.7+).", default = true },
         { key = "AnnounceReadyCheck", label = "Ready Check Announce", desc = "Announce your marker in party chat on ready check.", default = true },
     }
 
