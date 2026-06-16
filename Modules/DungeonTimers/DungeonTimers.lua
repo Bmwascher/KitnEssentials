@@ -1913,6 +1913,7 @@ function DT:RevealBar(key)
     self:LayoutBars()
 end
 
+---@param text string
 function DT:RenderBar(text, baseDur, extension, displayMode, iconID, displayText, spellId, castDisplayText, isSecondary)
     if not text or not baseDur or baseDur <= 0 then return end
     local existing = self.bars[text]

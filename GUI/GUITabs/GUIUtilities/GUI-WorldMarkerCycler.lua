@@ -17,6 +17,8 @@ local function GetModule()
     return nil
 end
 
+---@param modifier string?
+---@param key string?
 local function FormatKeybind(modifier, key)
     if not key or key == "" then return "Not Set" end
     local display = ""

@@ -78,6 +78,8 @@ end
 -- "bite" in the same bucket.
 -- When `filter` is non-empty, only includes keys whose Name-Realm or nickname
 -- contains the filter as a case-insensitive substring.
+---@param tbl table
+---@param filter string?
 local function SortedKeys(tbl, filter)
     local keys = {}
     local lowerFilter = filter and filter ~= "" and filter:lower() or nil

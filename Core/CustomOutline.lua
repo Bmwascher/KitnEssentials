@@ -141,6 +141,7 @@ local function isSecret(val)
     return issecretvalue and issecretvalue(val)
 end
 
+---@param text string?
 local function StripEscapeCodes(text)
     if not text then return "" end
     if isSecret(text) then return "" end

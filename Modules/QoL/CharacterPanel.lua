@@ -390,6 +390,7 @@ local CHARACTER_BACKGROUND_TEXTURES = {
 ---------------------------------------------------------------------------------
 -- Core Logic
 ---------------------------------------------------------------------------------
+---@param itemLink string?
 local function HasEnchant(itemLink)
     if not itemLink then return false end
     local itemString = itemLink:match("item[%-?%d:]+")

@@ -1030,6 +1030,7 @@ end
 -- Matched on the first word's stem ("Xal"/"Challenger") so the apostrophe glyph
 -- (ASCII ' vs the Unicode right-quote WoW sometimes uses) never matters; every
 -- other affix passes through untouched, and a single-word name is a no-op.
+---@param name string?
 local function ShortenAffix(name)
     if not name then return name end
     if name:find("^Xal") or name:find("^Challenger") then
