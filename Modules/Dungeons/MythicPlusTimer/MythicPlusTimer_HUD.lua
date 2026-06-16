@@ -514,10 +514,11 @@ local function StateFillColor(elapsed, thresholds)
 end
 
 ---------------------------------------------------------------------------------
--- RenderBar — single timer-bar fill. Default: neutral db.BarColor. Optional
--- db.StateColorFill: EUI state palette (green/blue/purple) that persists at
--- completion. Neutral default recolors gold (timed) / red (depleted) on
--- completion (spec §6.2). SetValueGated used for pixel-aware skipping.
+-- RenderBar — single timer-bar fill. Default: neutral db.BarColor, kept at that
+-- color through completion (the timer NUMBER conveys timed/depleted via
+-- TimerSuccessColor/TimerExpiredColor; the bar itself no longer recolors — user
+-- direction). Optional db.StateColorFill: EUI state palette (green/blue/purple)
+-- that persists at completion. SetValueGated used for pixel-aware skipping.
 ---------------------------------------------------------------------------------
 
 function MPT:RenderBar()
@@ -543,13 +544,10 @@ function MPT:RenderBar()
         -- EUI behavior: state color persists at completion (run.elapsed is
         -- already frozen to the authoritative completion time by CompleteRun).
         r, g, b = StateFillColor(elapsed, run.thresholds)
-    elseif run.completed then
-        -- Spec §6.2: neutral default fill recolors at completion
-        -- (gold = timed, red = depleted).
-        local timed = (maxTime > 0) and (elapsed <= maxTime)
-        local c = timed and db.TimerSuccessColor or db.TimerExpiredColor
-        r, g, b = c[1], c[2], c[3]
     else
+        -- Neutral fill at all times, INCLUDING completion (user direction: the
+        -- bar keeps its configured BarColor; only the timer number recolors
+        -- gold/red on a timed/depleted finish).
         r, g, b = db.BarColor[1], db.BarColor[2], db.BarColor[3]
     end
 
@@ -1014,7 +1012,7 @@ function MPT:RenderObjectives()
 
         -- Name color: done = ObjectiveDoneColor, pending = ObjectiveColor.
         if obj.completed then
-            local c = db.ObjectiveDoneColor or { 0, 1, 0.14 }
+            local c = db.ObjectiveDoneColor or { 0.2, 0.82, 0.31 }
             nameFS:SetTextColor(c[1], c[2], c[3])
         else
             local c = db.ObjectiveColor or { 0.85, 0.85, 0.85 }
@@ -1037,7 +1035,7 @@ function MPT:RenderObjectives()
             -- "Show Clear Times" gates the [clear] bracket itself (EUI:1684);
             -- the PB delta is self-contained and independently gated below.
             if db.ShowObjectiveTimes ~= false then
-                local doneHex = Hex(db.ObjectiveDoneColor or { 0, 1, 0.14 })
+                local doneHex = Hex(db.ObjectiveDoneColor or { 0.2, 0.82, 0.31 })
                 rightText = format("%s[%s]|r", doneHex, MPT.FormatTime(obj.clearTime, false))
             end
             if db.ShowPBDelta and obj.pbTime then
@@ -1444,8 +1442,8 @@ local function BuildPreviewRun()
         level = 12,
         affixIDs   = affixIDs,
         affixFileIDs = affixFileIDs,
-        affixNames = { "Fortified", "Challenger's Peril", "Tyrannical" },
-        affixNamesStr = "Fortified - Challenger's Peril - Tyrannical",
+        affixNames = { "Fortified", "Peril", "Tyrannical" },  -- shortened (ShortenAffix)
+        affixNamesStr = "Fortified - Peril - Tyrannical",
         maxTime = maxTime,
         thresholds = MPT.ComputeThresholds(maxTime, true),  -- peril-correct (affix 152 above); never hardcode
         elapsed = 600,                          -- 10:00 in

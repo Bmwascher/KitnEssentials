@@ -198,7 +198,7 @@ local MPT_DEFAULTS = {
     -- (WarpDeplete look) | CORNER: fully below | CENTER | BESIDE
     ForcesPlacement = "EDGE",
     ForcesColor = {0.73, 0.62, 0.13},
-    ForcesCompleteColor = {0, 1, 0.14},
+    ForcesCompleteColor = {0.2, 0.82, 0.31},
     ForcesTextColor = {1, 1, 1},  -- percent/count text — independent of the bar fill
     ForcesCustomFormat = ":count:/:totalcount: :percent:",
     ForcesBracketStyle = "NONE",  -- NONE|SQUARE|ROUND (wraps the count portion)
@@ -241,7 +241,7 @@ local MPT_DEFAULTS = {
     -- CLOSEST|CLOSEST_LOWER|CLOSEST_HIGHER|HIGHEST|LOWEST|OFF
     PBFallbackMode = "CLOSEST",
     ObjectiveColor = {0.85, 0.85, 0.85},
-    ObjectiveDoneColor = {0, 1, 0.14},
+    ObjectiveDoneColor = {0.2, 0.82, 0.31},
     SplitAheadColor = {0.25, 0.88, 0.82},
     SplitBehindColor = {1, 0.34, 0.34},
     PBColor = {0.85, 0.79, 0.54},
@@ -1018,6 +1018,19 @@ local function HasPerilAffix(affixIDs)
     return false
 end
 
+-- Trims the possessive prefix off the wordy Midnight affixes so the key line
+-- stays compact: "Xal'atath's Guile" -> "Guile", "Challenger's Peril" -> "Peril".
+-- Matched on the first word's stem ("Xal"/"Challenger") so the apostrophe glyph
+-- (ASCII ' vs the Unicode right-quote WoW sometimes uses) never matters; every
+-- other affix passes through untouched, and a single-word name is a no-op.
+local function ShortenAffix(name)
+    if not name then return name end
+    if name:find("^Xal") or name:find("^Challenger") then
+        return name:match("(%S+)%s*$") or name
+    end
+    return name
+end
+
 -- Caches keystone level + affix names/fileIDs + peril-aware thresholds onto
 -- the run. Split out of StartRun so RepairRunInfo can re-run it when
 -- GetActiveKeystoneInfo wasn't populated at StartRun time (reload-recovery
@@ -1036,7 +1049,7 @@ function MPT:CacheKeystoneInfo(level, affixIDs)
     if affixIDs then
         for i, id in ipairs(affixIDs) do
             local name, _, fileID = C_ChallengeMode.GetAffixInfo(id)
-            run.affixNames[i]   = name or ""
+            run.affixNames[i]   = ShortenAffix(name) or ""
             run.affixFileIDs[i] = fileID
         end
     end
