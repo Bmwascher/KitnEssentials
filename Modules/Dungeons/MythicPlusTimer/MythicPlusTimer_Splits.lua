@@ -64,13 +64,13 @@ end
 --   1. Exact key "mapID:level"
 --   2. +affix scope (documented passthrough — level-keyed store has no affix data)
 --   3. Dungeon scope: another level for this map, picked by `mode`
---      (db.PBFallbackMode; WD fallbackSplitBehavior parity + symmetric CLOSEST):
+--      (db.PBFallbackMode; symmetric CLOSEST plus the modes below):
 --        CLOSEST (default)  nearest |delta| either direction; equidistant tie
 --                           breaks deterministically toward the LOWER level
 --        CLOSEST_LOWER      nearest level below; none below -> nearest above
 --        CLOSEST_HIGHER     nearest level above; none above -> nearest below
 --        HIGHEST / LOWEST   extreme recorded level for this map
---        OFF                exact level only (WD's "none")
+--        OFF                exact level only (no fallback)
 -- Returns (record, sourceLevel) — record is { [criteriaIndex]=sec, overall=sec }
 -- or nil; sourceLevel is the key level the record came from (== level on an
 -- exact hit) so the HUD can tag fallback targets ("PB 25:30 [11]").

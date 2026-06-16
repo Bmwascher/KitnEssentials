@@ -1,10 +1,10 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  MythicPlusTimer_Overlay.lua                             ║
--- ║  Folded enemy overlay (ex-WarpDepleteForces):           ║
--- ║  per-mob nameplate forces % + enemy-tooltip count via   ║
--- ║  C_ScenarioInfo.GetUnitCriteriaProgressValues (12.0.5). ║
--- ║  Decoupled from the external WarpDeplete addon — keys   ║
--- ║  off this module's run-state / IsChallengeModeActive.   ║
+-- ║  Folded enemy overlay:                                   ║
+-- ║  per-mob nameplate forces % + enemy-tooltip count via    ║
+-- ║  C_ScenarioInfo.GetUnitCriteriaProgressValues (12.0.5).  ║
+-- ║  Self-contained enemy-forces overlay — keys              ║
+-- ║  off this module's run-state / IsChallengeModeActive.    ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -57,7 +57,7 @@ local function SetupTooltip()
         -- Read progress off the mouseover token Blizzard's tooltip resolves
         -- against. Truthy check ONLY — no numeric comparison/arithmetic, which
         -- crash on secret values. format() tolerates secret numeric args
-        -- (proven in the retired WDF path / BigWigs Keystones).
+        -- (verified safe — string.format passes them through untouched).
         local value, percent = GetProgress("mouseover")
         if not value or not percent then return end
 
@@ -72,12 +72,12 @@ end
 -- Legacy DB Migration (Task 4.2 — carried forward from Phase-0 stub)
 ---------------------------------------------------------------------------------
 
--- One-time migration: carry retired WarpDepleteForces overlay settings into
+-- One-time migration: carry the retired forces-overlay settings into
 -- this module's flat Overlay* keys. Guarded by a persistent OverlayMigrated
 -- flag — NOT by the old table being nil, because AceDB/FillProfileDefaults
 -- resurrect profile.Dungeons.WarpDepleteForces (with default values) on
 -- every login until Task 4.8 removes the Core/Defaults.lua block.
--- Maps old WDF key -> new MPT Overlay* key. Death-log persistence is dropped
+-- Maps the old forces-overlay key -> new Overlay* key. Death-log persistence is dropped
 -- (the new module keeps deaths transient in MPT.run.deathLog).
 function MPT:MigrateLegacyOverlayDB()
     if self.db.OverlayMigrated then return end
@@ -107,7 +107,7 @@ function MPT:MigrateLegacyOverlayDB()
     end
 
     -- Old table is fully retired (Instance Reset Announcer + DeathLog drop with it).
-    -- Deliberately NOT nil-ing profile.Dungeons.WarpDepleteForces: the WDF module
+    -- Deliberately NOT nil-ing profile.Dungeons.WarpDepleteForces: the retired module
     -- and its Defaults.lua block are deleted, so AceDB no longer reseeds the slot —
     -- old SavedVariables may still carry it, but leaving the orphan untouched is
     -- harmless and avoids mutating the profile table structure here.
@@ -116,7 +116,7 @@ end
 ---------------------------------------------------------------------------------
 -- Nameplate % Overlay
 -- Shows each mob's forces contribution as a floating text on its nameplate.
--- Follows BigWigs' text-pool pattern — reusable Frame + FontString objects
+-- Uses a text-pool pattern — reusable Frame + FontString objects
 -- recycled when a nameplate leaves, so we don't churn frames on busy pulls.
 -- All style/position updates flow through RefreshOverlayStyle so the GUI
 -- can live-refresh without a reload.

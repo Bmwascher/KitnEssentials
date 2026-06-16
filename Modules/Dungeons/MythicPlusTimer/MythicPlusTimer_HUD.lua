@@ -1,9 +1,9 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  MythicPlusTimer_HUD.lua                                 ║
--- ║  Render + layout for the M+ Timer HUD. Pure function of  ║
+-- ║  Render + layout for the keystone HUD. Pure function of  ║
 -- ║  MPT.run -> frame visuals. No WoW API reads here.        ║
--- ║  Visual structure ported from WarpDeplete Render.lua;    ║
--- ║  timer/threshold/bar layout from EllesmereUIMythicTimer. ║
+-- ║  Visual structure: timer / threshold / bar layout for    ║
+-- ║  the keystone HUD.                                       ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -114,12 +114,11 @@ function MPT.SetValueGated(bar, v, widthPx)
 end
 
 -- True when the gold PB "target" displays (live timer PB, forces target, and
--- pending boss-row targets) should be visible. Mirrors WarpDeplete's
--- shouldShowSplits (Render.lua) for db.SplitsShowMode:
+-- pending boss-row targets) should be visible. Resolves db.SplitsShowMode:
 --   ALWAYS    — visible for the whole run.
 --   COUNTDOWN — visible only before the timer starts ticking (the pre-pull
 --               countdown, run.elapsed <= 0), then hidden for the live run so
---               the HUD stays clean. WarpDeplete default.
+--               the HUD stays clean. Default.
 --   NEVER     — never visible.
 -- The GUI preview is a mid-key snapshot (elapsed > 0); treat COUNTDOWN as
 -- visible there so the targets stay discoverable while configuring.
@@ -221,7 +220,7 @@ function MPT:BuildHUD()
     bars.timerWrap, bars.timerBar, bars.timerBg = timerWrap, timerBar, timerBg
 
     -- Two pixel-snapped tick marks on the timer bar (at +3 / +2 cutoffs).
-    -- Parented to the timer StatusBar so they ride its anchor (EUI _seg3/_seg2).
+    -- Parented to the timer StatusBar so they ride its anchor.
     bars.tick3 = timerBar:CreateTexture(nil, "OVERLAY")
     bars.tick2 = timerBar:CreateTexture(nil, "OVERLAY")
 
@@ -258,13 +257,13 @@ function MPT:BuildHUD()
     MPT.frames.deathsHit:EnableMouse(true)
 
     -- Custom two-column death tooltip (class-colored name LEFT, death-time RIGHT).
-    -- Ported from EllesmereUIMythicTimer.lua:906-931 with KE transformations:
+    -- Construction notes:
     --   * BackdropTemplate so SetBackdrop is available (KE:ApplyBackdrop requires it)
-    --   * KE:ApplyBackdrop replaces EllesmereUI.MakeBorder (Enabled=true is load-bearing)
-    --   * KE.FONT replaces EllesmereUI.EXPRESSWAY
-    --   * "time" column replaces "count" column (timestamped per-death, not aggregated count)
+    --   * KE:ApplyBackdrop draws the border (Enabled=true is load-bearing)
+    --   * KE.FONT is the row font
+    --   * "time" column is timestamped per-death (not an aggregated count)
     -- Grow-only EnsureRows cache retained deliberately: row count is bounded by
-    -- party size × deaths; the tooltip is transient; verbatim EUI port is lower-risk
+    -- party size × deaths and the tooltip is transient, so this is lower-risk
     -- than adopting KE.FramePool (acknowledged deviation from spec §11).
     local deathTT = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
     deathTT:SetFrameStrata("TOOLTIP")
@@ -406,8 +405,8 @@ function MPT:RenderTimer()
     local maxTime = run.maxTime or 0
     local timeLeft = max(0, maxTime - elapsed)
 
-    -- Milliseconds: ALWAYS on the frozen completion time (WarpDeplete behavior —
-    -- run.elapsed is the authoritative GetChallengeCompletionInfo().time/1000, so
+    -- Milliseconds: ALWAYS on the frozen completion time (run.elapsed is the
+    -- authoritative GetChallengeCompletionInfo().time/1000, so
     -- the precise .mmm is the headline result and shows even with the live toggle
     -- off). On the live running timer they're opt-in via db.ShowMilliseconds.
     local elaStr = FormatTime(elapsed, run.completed or db.ShowMilliseconds)
@@ -485,8 +484,8 @@ function MPT:RenderTimer()
         -- COUNTDOWN before the timer starts; hidden mid-run / on NEVER).
         local pbHex = Hex(MPT.db.PBColor or {0.85, 0.79, 0.54})
         local a = max(0, min(1, MPT.db.PBOpacity or 1))
-        -- Fallback source tag (WD GetBestSplit sourceLevel parity): when the
-        -- record came from a DIFFERENT key level, show which one you're
+        -- Fallback source tag: when the record came from a DIFFERENT key
+        -- level, show which one you're
         -- racing — "PB 25:30 [11]" on a 12. Exact-level records stay clean.
         -- One tag on the overall line only; the per-boss gold targets come
         -- from the same whole-record resolve, so it speaks for all of them.
@@ -502,9 +501,9 @@ function MPT:RenderTimer()
 end
 
 ---------------------------------------------------------------------------------
--- StateFillColor — file-local; maps elapsed bands to EUI's state palette.
--- Ported from EllesmereUI GetTimerBarFillColor (lines 213-223); uses
--- precomputed run.thresholds instead of recomputing inside the render path.
+-- StateFillColor — file-local; maps elapsed bands to the state palette
+-- (green/blue/purple); uses precomputed run.thresholds instead of
+-- recomputing inside the render path.
 ---------------------------------------------------------------------------------
 
 local function StateFillColor(elapsed, thresholds)
@@ -521,7 +520,7 @@ end
 -- RenderBar — single timer-bar fill. Default: neutral db.BarColor, kept at that
 -- color through completion (the timer NUMBER conveys timed/depleted via
 -- TimerSuccessColor/TimerExpiredColor; the bar itself no longer recolors — user
--- direction). Optional db.StateColorFill: EUI state palette (green/blue/purple)
+-- direction). Optional db.StateColorFill: the state palette (green/blue/purple)
 -- that persists at completion. SetValueGated used for pixel-aware skipping.
 ---------------------------------------------------------------------------------
 
@@ -545,7 +544,7 @@ function MPT:RenderBar()
 
     local r, g, b
     if db.StateColorFill then
-        -- EUI behavior: state color persists at completion (run.elapsed is
+        -- State color persists at completion (run.elapsed is
         -- already frozen to the authoritative completion time by CompleteRun).
         r, g, b = StateFillColor(elapsed, run.thresholds)
     else
@@ -596,8 +595,8 @@ local function _PlaceLabel(fs, timerBar, barW, cutoff, maxTime, place)
     elseif place == "ABOVE" then
         -- Centered on the tick, fully above the bar.
         fs:SetPoint("BOTTOM", timerBar, "TOPLEFT", x, 2)
-    else  -- EDGE (default): straddles the bar's TOP edge (WarpDeplete look) —
-          -- label center ON the edge, half in / half out, left of its tick.
+    else  -- EDGE (default): straddles the bar's TOP edge (the edge-straddling
+          -- look) — label center ON the edge, half in / half out, left of its tick.
         fs:SetPoint("RIGHT", timerBar, "TOPLEFT", x - 3, 0)
     end
     fs:Show()
@@ -608,7 +607,7 @@ end
 
 -- Threshold label text: a live cutoff shows the remaining countdown; a missed
 -- cutoff returns nil so the label hides (round-3 feedback — replaces the grey
--- absolute-time passed state from the EUI buildLabel port). The tick itself
+-- absolute-time passed state). The tick itself
 -- stays visible permanently as a bar divider (round-3c feedback).
 local function _ThreshLabel(elapsed, cutoff)
     if elapsed > cutoff then return nil end
@@ -628,7 +627,7 @@ end
 
 ---------------------------------------------------------------------------------
 -- RenderThresholds — pixel-snapped tick marks at +3/+2 cutoffs, and
--- remaining-time labels ABOVE the bar at +3/+2/+1 (WarpDeplete look).
+-- remaining-time labels ABOVE the bar at +3/+2/+1 (the keystone-timer look).
 -- Ticks: 2 physical pixels wide, db.TickColor, parented to timerBar.
 -- Labels: gated on db.ShowThresholdLabels; use MPT.ThresholdRemaining.
 --
@@ -687,7 +686,7 @@ function MPT:RenderThresholds()
         end
     end
 
-    -- Remaining-time labels above the bar (WarpDeplete look).
+    -- Remaining-time labels above the bar (the keystone-timer look).
     -- Text updates every tick regardless of geometry cache.
     local f = self.frames.root
     if not db.ShowThresholdLabels then
@@ -821,7 +820,7 @@ end
 -- Replaces the Phase-2 headline-only stub wholesale.
 --
 -- Blank at 0 deaths (spec §7.1). Format: "N Deaths (+m:ss)" — penalty ADDS
--- to elapsed time (deliberate deviation from EUI's leading "-" sign).
+-- to elapsed time (deliberately no leading "-" sign).
 -- Hit-frame is sized to the actual text so the hover region matches exactly.
 -- Font/anchor owned by ApplyLayout (applyFont(f.deathsText, "Deaths") +
 -- row(f.deathsText)); this render must not duplicate them.
@@ -879,7 +878,7 @@ end
 -- Brk() wraps the count segment in brackets (NONE/SQUARE/ROUND).
 -- CUSTOM format is exempt from Brk — the user owns the token string.
 -- Lua 5.1 gsub replacement caveat: bare "%" is invalid; build the
--- formatted number then append "%%" (mirrors WarpDeplete Render.lua:732/735).
+-- formatted number then append "%%".
 --
 -- forcesText anchor: owned by ApplyLayout (Task 2.5, db.ForcesPlacement).
 -- This function only sets text / color / visibility.
@@ -1025,8 +1024,7 @@ function MPT:RenderObjectives()
 
         -- Count-based objectives (Pit of Saron "Quarry Camps" 0/6): prefix the
         -- name with the running count. Boss criteria are normalized to
-        -- totalQuantity 1 in UpdateObjectives, so this gate skips them
-        -- (EllesmereUIMythicTimer.lua:1675-1677 verbatim).
+        -- totalQuantity 1 in UpdateObjectives, so this gate skips them.
         local displayName = obj.name
         if obj.totalQuantity and obj.totalQuantity > 1 then
             -- Count objectives arrive in sentence case; title-case so they read
@@ -1038,7 +1036,7 @@ function MPT:RenderObjectives()
         local rightText = ""
         if obj.completed and obj.clearTime and obj.clearTime > 0 then
             timeFS:SetAlpha(1)  -- clear a possible pending-row PBOpacity dim on this pooled slot
-            -- "Show Clear Times" gates the [clear] bracket itself (EUI:1684);
+            -- "Show Clear Times" gates the [clear] bracket itself;
             -- the PB delta is self-contained and independently gated below.
             if db.ShowObjectiveTimes ~= false then
                 local doneHex = Hex(db.ObjectiveDoneColor or { 0.2, 0.82, 0.31 })
@@ -1076,8 +1074,8 @@ function MPT:RenderObjectives()
             local nameMaxW = innerW - timeW - 4
             if nameMaxW < 20 then nameMaxW = 20 end
             nameFS:SetWidth(nameMaxW)
-            -- Clear-time / target side (db.ObjectiveTimePosition, WD alignBossClear
-            -- mirrored for the right-aligned HUD): START pins the time at the row's
+            -- Clear-time / target side (db.ObjectiveTimePosition, aligned for the
+            -- right-aligned HUD): START pins the time at the row's
             -- LEFT edge with the name right-justified at the right edge; END
             -- (default) clusters the time at the right edge beside the name.
             if (db.ObjectiveTimePosition or "END") == "START" then
@@ -1123,7 +1121,7 @@ end
 -- ApplyLayout — owns ALL positioning (Layout-cursor contract §46-47).
 -- Step 1: apply fonts to every FontString (per-element + global default).
 -- Step 2: bar sizes, HUD anchor, scale, backdrop, straggler anchors.
--- Step 3: length-gated vertical relayout (Fabys trick) + objectives handoff.
+-- Step 3: length-gated vertical relayout + objectives handoff.
 -- Publishes: MPT._PAD, MPT._ROW_GAP, MPT._OBJ_GAP, MPT._objRowStartY.
 -- Reads back: MPT._objRowEndY (written by RenderObjectives, Task 3.2).
 ---------------------------------------------------------------------------------
@@ -1135,7 +1133,7 @@ function MPT:ApplyLayout()
 
     -- Locals shared by both the config section and the stacking pass below.
     local PAD  = 12
-    local ROW  = 2   -- tightened from 6 (2026-06-10 feedback: match WD's density)
+    local ROW  = 2   -- tightened from 6 (2026-06-10 feedback: denser row spacing)
     local barW = db.BarWidth  or 300
     local barH = db.BarHeight or 14
     local bars = self.frames.bars
@@ -1210,20 +1208,20 @@ function MPT:ApplyLayout()
         if place == "CENTER" then
             f.forcesText:SetPoint("CENTER", bars.forcesBar)
         elseif place == "BESIDE" then
-            f.forcesText:SetPoint("RIGHT", bars.forcesWrap, "LEFT", -4, 0)  -- overhangs backdrop left (WarpDeplete idiom)
+            f.forcesText:SetPoint("RIGHT", bars.forcesWrap, "LEFT", -4, 0)  -- overhangs backdrop left
         elseif place == "CORNER" then
             -- Fully below the bar's right corner; the stacking pass reserves
             -- a full line for it before the objectives.
             f.forcesText:SetPoint("TOPRIGHT", bars.forcesWrap, "BOTTOMRIGHT", 0, -1)
         else  -- EDGE (default): straddles the bar's BOTTOM edge at the right
-              -- corner (WarpDeplete look) — half in / half out; the stacking
+              -- corner (the edge-straddling look) — half in / half out; the stacking
               -- pass reserves the protruding half-line. +2 y-bias rides the
               -- text slightly higher into the bar (2026-06-10 feedback).
             f.forcesText:SetPoint("RIGHT", bars.forcesWrap, "BOTTOMRIGHT", -2, 2)
         end
     end
 
-    -- Length-gated vertical relayout (Fabys trick — port of timer.lua:252-258).
+    -- Length-gated vertical relayout.
     -- Gate the per-element SetPoint/height accumulation on a string-length
     -- signature so MM:SS->MM:SS ticks skip relayout entirely. The signature
     -- includes objectives/deaths visibility terms so those changes still re-run.
@@ -1356,7 +1354,6 @@ end
 -- the layout cursor published here. Do NOT call it here: the first render
 -- after a text-length change is one deferred-layout pass stale and converges
 -- on the next tick (accepted behavior per spec §11).
--- Mirrors EllesmereUI RenderStandalone lines 1045-1062.
 ---------------------------------------------------------------------------------
 
 function MPT:Render()

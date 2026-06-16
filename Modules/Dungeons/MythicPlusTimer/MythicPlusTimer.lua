@@ -1,12 +1,12 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  MythicPlusTimer.lua                                     ║
 -- ║  Module: Mythic+ Timer                                   ║
--- ║  Purpose: Self-contained keystone timer HUD (WarpDeplete ║
--- ║           look, EllesmereUI event/tick architecture).    ║
--- ║           Bootstrap, DB defaults, run lifecycle/state,   ║
--- ║           event wiring, tick driver, deaths.             ║
+-- ║  Purpose: Self-contained keystone timer HUD with an      ║
+-- ║           edge-straddling bar layout and an event-driven ║
+-- ║           tick architecture. Bootstrap, DB defaults, run ║
+-- ║           lifecycle/state, event wiring, tick, deaths.   ║
 -- ║  Backend split: _HUD (render), _Splits (PB), _Overlay    ║
--- ║           (folded ex-WarpDepleteForces nameplate/tip).   ║
+-- ║           (folded nameplate/tooltip forces overlay).     ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -37,8 +37,7 @@ local SendChat = C_ChatInfo and C_ChatInfo.SendChatMessage
 
 -- Returns the appropriate group chat channel for boss-split output, or nil when
 -- the player is alone (solo run — no channel to post to). INSTANCE_CHAT preferred
--- (cross-realm instance groups), then RAID, then PARTY. Mirror:
--- References/M+ Timer/MythicPlusTimer/timer.lua:29-32 (extended fallback chain).
+-- (cross-realm instance groups), then RAID, then PARTY.
 local function ResolveGroupChannel()
     if GetNumGroupMembers(LE_PARTY_CATEGORY_INSTANCE) > 0 then
         return "INSTANCE_CHAT"
@@ -187,7 +186,7 @@ local MPT_DEFAULTS = {
     StateColorFill = false,
     TickColor = {1, 1, 1},
     ShowThresholdLabels = true,
-    -- EDGE (default): half-in/half-out on the bar's top edge (WarpDeplete look)
+    -- EDGE (default): half-in/half-out on the bar's top edge (the edge-straddling look)
     -- ABOVE: centered over the tick, fully above | INSIDE: fully on the bar
     ThresholdPlacement = "EDGE",
 
@@ -195,7 +194,7 @@ local MPT_DEFAULTS = {
     ShowForces = true,
     ForcesFormat = "PERCENT",   -- PERCENT|COUNT|COUNT_PERCENT|REMAINING|CUSTOM
     -- EDGE (default): half-in/half-out on the bar's bottom-right corner
-    -- (WarpDeplete look) | CORNER: fully below | CENTER | BESIDE
+    -- (the edge-straddling look) | CORNER: fully below | CENTER | BESIDE
     ForcesPlacement = "EDGE",
     ForcesColor = {0.73, 0.62, 0.13},
     ForcesCompleteColor = {0.2, 0.82, 0.31},
@@ -205,9 +204,7 @@ local MPT_DEFAULTS = {
     ForcesBandedColors = false,
     -- 5-band quintile palette (0-19 / 20-39 / 40-59 / 60-79 / 80-99 %) plus a
     -- distinct 100% color, used by RenderForces when ForcesBandedColors is on
-    -- (ForcesCompleteColor still wins at criterion completion). Values from the
-    -- Reloe MPlusTimer ForcesBar defaults ("References/M+ Timer/MPlusTimer
-    -- (Reloe)/Data.lua:463-470"; cf. References/M+ Timer/FEATURE-INVENTORY.md).
+    -- (ForcesCompleteColor still wins at criterion completion).
     ForcesBandPalette = {
         {1, 0.459, 0.502},        -- 0-19%
         {1, 0.510, 0.282},        -- 20-39%
@@ -218,7 +215,7 @@ local MPT_DEFAULTS = {
     },
     -- Hidden/disabled pull-preview overlay (dead on 12.0 — per-unit forces are
     -- secret; see memory project_warpdeplete_forces_preview_blocked). No data
-    -- feed; GUI exposes nothing in Phase 1.
+    -- feed; GUI exposes nothing.
     ShowPullOverlay = false,
 
     -- Objectives / boss list
@@ -226,18 +223,16 @@ local MPT_DEFAULTS = {
     ShowObjectiveTimes = true,  -- the [clear] bracket on completed rows
     ShowPBDelta = true,         -- the (+/-) delta beside a clear time
     -- Visibility of the gold "PB m:ss" TARGET (pending boss rows + the live
-    -- timer/forces PB). WarpDeplete showSplitRecords parity, gated by
-    -- MPT:ShouldShowRecords: ALWAYS keeps it up for the whole run; COUNTDOWN
-    -- (default) shows it only before the timer starts ticking and hides it for
-    -- the live run so the HUD stays clean; NEVER hides it entirely. The
-    -- completed-row (+/-) deltas are independent (ShowPBDelta).
+    -- timer/forces PB), gated by MPT:ShouldShowRecords: ALWAYS keeps it up for
+    -- the whole run; COUNTDOWN (default) shows it only before the timer starts
+    -- ticking and hides it for the live run so the HUD stays clean; NEVER hides
+    -- it entirely. The completed-row (+/-) deltas are independent (ShowPBDelta).
     SplitsShowMode = "COUNTDOWN",   -- ALWAYS|COUNTDOWN|NEVER
-    -- Which side of a boss row the clear time / PB target sits on (WarpDeplete
-    -- alignBossClear parity, mirrored for KE's right-aligned HUD): END (default)
-    -- clusters it at the right edge beside the name; START pins it at the row's
-    -- left edge with the name right-justified.
+    -- Which side of a boss row the clear time / PB target sits on, for KE's
+    -- right-aligned HUD: END (default) clusters it at the right edge beside the
+    -- name; START pins it at the row's left edge with the name right-justified.
     ObjectiveTimePosition = "END",  -- END|START
-    -- No-exact-record PB fallback (WD fallbackSplitBehavior parity + CLOSEST):
+    -- No-exact-record PB fallback when no record matches the exact key level:
     -- CLOSEST|CLOSEST_LOWER|CLOSEST_HIGHER|HIGHEST|LOWEST|OFF
     PBFallbackMode = "CLOSEST",
     ObjectiveColor = {0.85, 0.85, 0.85},
@@ -260,12 +255,11 @@ local MPT_DEFAULTS = {
     ShowKeyLevel = true,
     KeyColor = {0.69, 0.69, 0.69},
 
-    -- Enemy overlay (folded from the retired WarpDepleteForces module).
+    -- Enemy overlay (folded from the retired forces-overlay module).
     -- Nameplate per-mob forces % + enemy-tooltip count via
     -- C_ScenarioInfo.GetUnitCriteriaProgressValues (12.0.5 API). Full key set
-    -- lives here (canonical) — Task 4.1 only verifies these values.
-    -- OverlayNameplateEnabled honors the legacy WDF NameplatePercent = false
-    -- default (Core/Defaults.lua:1256).
+    -- lives here (canonical).
+    -- OverlayNameplateEnabled defaults the nameplate percent off.
     OverlayNameplateEnabled = false,
     OverlayTooltipEnabled = true,
     OverlayFormat = "%.2f%%",   -- a string.format spec (NOT an enum)
@@ -323,8 +317,8 @@ function MPT:UpdateForces()
         local info = C_ScenarioInfo.GetCriteriaInfo(i)
         if info and info.isWeightedProgress then
             -- quantityString carries the absolute count with a stray '%'. Locale-safe
-            -- parse (EUI pattern): strip '%', treat a comma with no dot as a decimal
-            -- separator (DE/FR clients), then tonumber. Cached on the raw string —
+            -- parse: strip '%', treat a comma with no dot as a decimal separator
+            -- (DE/FR clients), then tonumber. Cached on the raw string —
             -- criteria events fire far more often than the count actually changes.
             local qs = info.quantityString
             local current
@@ -342,10 +336,10 @@ function MPT:UpdateForces()
                 f._lastQS, f._lastQSParsed = qs, current
             end
             local total = info.totalQuantity or 0
-            -- Monotonic count (WarpDeplete SetForcesCurrent, State.lua:69-88): the
-            -- weighted criterion reports a current of 0 in the scenario teardown
-            -- window right before CHALLENGE_MODE_COMPLETED. Accept only increases
-            -- so that transitional 0 can never empty a near-100% forces bar.
+            -- Monotonic count (never decreases): the weighted criterion reports a
+            -- current of 0 in the scenario teardown window right before
+            -- CHALLENGE_MODE_COMPLETED. Accept only increases so that transitional
+            -- 0 can never empty a near-100% forces bar.
             -- (Forces never legitimately decrease in M+ — you can't un-tag.)
             if current > (f.current or 0) then f.current = current end
             f.total = total
@@ -403,12 +397,11 @@ function MPT:UpdateObjectives()
             end
             obj.criteriaIndex = i
 
-            -- Count-based objectives (e.g. Pit of Saron "Quarry Camps" 0/6) —
-            -- the WarpDeplete gap. quantity/totalQuantity are aggregate
-            -- GetCriteriaInfo fields (contract DO-NOT-GUARD set; EUI reads them
-            -- raw). Plain boss criteria report totalQuantity 0/1 — normalize to
-            -- 0-or-1 / 1 so the HUD's `totalQuantity > 1` prefix gate skips them
-            -- (EllesmereUIMythicTimer.lua:443-446 verbatim).
+            -- Count-based objectives (e.g. Pit of Saron "Quarry Camps" 0/6).
+            -- quantity/totalQuantity are aggregate GetCriteriaInfo fields
+            -- (contract DO-NOT-GUARD set, read raw). Plain boss criteria report
+            -- totalQuantity 0/1 — normalize to 0-or-1 / 1 so the HUD's
+            -- `totalQuantity > 1` prefix gate skips them.
             obj.quantity = info.quantity or 0
             obj.totalQuantity = info.totalQuantity or 0
             if obj.totalQuantity == 0 then
@@ -423,18 +416,16 @@ function MPT:UpdateObjectives()
             if rawName ~= obj._rawName then
                 obj._rawName = rawName
                 local name = rawName:gsub("^\226\156\147%s*", ""):gsub("^%-%s*", "")
-                -- Drop Blizzard's "defeated" suffix from boss criteria, then
-                -- trim (EUI StripDefeated port, EUI:827-831).
+                -- Drop Blizzard's "defeated" suffix from boss criteria, then trim.
                 name = name:gsub("[Dd]efeated", "")
                 obj.name = name:match("^%s*(.-)%s*$") or name
             end
 
-            -- Sticky completion (WarpDeplete write-once, State.lua:326-330): once a
-            -- boss criterion reads complete it STAYS complete with its captured
-            -- clear time. At key completion the scenario teardown momentarily
-            -- re-reports finished criteria as incomplete (elapsed 0); without this
-            -- a single transitional read grays the row and nils its clear time in
-            -- the frozen summary (the ported EUI reference's own latent bug).
+            -- Sticky completion (write-once): once a boss criterion reads complete
+            -- it STAYS complete with its captured clear time. At key completion the
+            -- scenario teardown momentarily re-reports finished criteria as
+            -- incomplete (elapsed 0); without this a single transitional read grays
+            -- the row and nils its clear time in the frozen summary.
             -- Reversion is never legitimate for an M+ boss/count criterion.
             local wasCompleted = obj.completed
             if info.completed and not wasCompleted then
@@ -449,7 +440,7 @@ function MPT:UpdateObjectives()
                 if saved and saved > 0 then
                     obj.clearTime = saved
                 else
-                    -- Back-dated to the actual kill moment (WarpDeplete semantic):
+                    -- Back-dated to the actual kill moment:
                     -- info.elapsed is the time since this criterion completed.
                     obj.clearTime = elapsed - (info.elapsed or 0)
                     -- Create-or-rekey: also displaces a legacy keyless table.
@@ -549,7 +540,7 @@ end
 function MPT:OnInitialize()
     self:UpdateDB()
     -- Default-disable: the addon-level OnEnable loop (Core/Main.lua:154-163)
-    -- owns the enable decision via db.Enabled (sibling pattern, WDF:745-758).
+    -- owns the enable decision via db.Enabled (sibling pattern).
     self:SetEnabledState(false)
 end
 
@@ -780,10 +771,10 @@ function MPT:OnTimerTick()
     -- Late keystone-info repair: two number compares per tick, fires at most
     -- once per run (see RepairRunInfo).
     if run.level == 0 or run.maxTime == 0 then self:RepairRunInfo() end
-    -- API-independent clock anchor (EUI preciseStart, EUI:619/649-651): world
-    -- elapsed is authoritative here (it includes death penalties), so anchor
-    -- once on the first good tick; CompleteRun uses it as the last-resort
-    -- completion fallback when the world clock goes stale post-depletion.
+    -- API-independent clock anchor: world elapsed is authoritative here (it
+    -- includes death penalties), so anchor once on the first good tick;
+    -- CompleteRun uses it as the last-resort completion fallback when the
+    -- world clock goes stale post-depletion.
     if not run.preciseBase and GetTimePreciseSec then
         run.preciseBase = GetTimePreciseSec() - elapsed
     end
@@ -845,9 +836,8 @@ end
 -- Coalesces burst calls (SCENARIO_CRITERIA_UPDATE fires per-criterion) into a
 -- single Render at most every 50 ms. Flag cleared BEFORE calling Render so a
 -- Render-triggered NotifyRefresh can re-arm without being swallowed.
--- NOTE: EUI's handle-based guard is inert (C_Timer.After returns nil, not a
--- cancellable handle); KE uses the boolean-pending pattern instead.
--- Do NOT restore the upstream form on a future reference sync.
+-- NOTE: a handle-based guard would be inert here (C_Timer.After returns nil,
+-- not a cancellable handle); KE uses the boolean-pending pattern instead.
 function MPT:NotifyRefresh()
     if self._refreshQueued then return end
     self._refreshQueued = true
@@ -855,23 +845,21 @@ function MPT:NotifyRefresh()
 end
 
 ---------------------------------------------------------------------------------
--- Post-completion lifecycle helpers (EUI runtime-event parity)
+-- Post-completion lifecycle helpers
 ---------------------------------------------------------------------------------
 
 -- True while still physically inside a Mythic Keystone instance. Needed for
 -- the post-completion fanfare window: GetActiveChallengeMapID() and
 -- IsChallengeModeActive() both flip false at completion while the player is
--- still standing in the dungeon (EUI _isInChallengeMode fallback,
--- EllesmereUIMythicTimer.lua:1853-1863).
+-- still standing in the dungeon, so fall back to the instance type/difficulty.
 local function InChallengeInstance()
     local _, instanceType, difficulty = GetInstanceInfo()
     return instanceType == "party" and difficulty == 8
 end
 
 -- True when every tracked criterion is done (forces + all objectives), read
--- from the module's own cached state — the API-free equivalent of EUI's
--- IsDungeonComplete (EllesmereUIMythicTimer.lua:1828-1844). Used to salvage a
--- completion when CHALLENGE_MODE_COMPLETED itself was never processed.
+-- from the module's own cached state (API-free). Used to salvage a completion
+-- when CHALLENGE_MODE_COMPLETED itself was never processed.
 local function RunLooksComplete(run)
     if not (run.forces and run.forces.completed) then return false end
     local objs = run.objectives
@@ -914,7 +902,7 @@ end
 
 -- One-shot deferred re-check (pre-declared: no closure per PEW): challenge-mode
 -- APIs aren't reliably populated at PLAYER_ENTERING_WORLD, so a /reload-mid-key
--- recovery can miss. EUI retries at 10s for exactly this (EUI:1914-1916).
+-- recovery can miss. The 10s retry exists for exactly this.
 local function _DelayedRunCheck()
     if not MPT:IsEnabled() then return end
     if MPT.run.active or MPT.run.completed then return end
@@ -947,10 +935,10 @@ function MPT:SCENARIO_CRITERIA_UPDATE()
     if not self.run.active then return end
     self:UpdateForces()
     self:UpdateObjectives()
-    -- Completion salvage net (EUI:1878-1879, deferred): if everything just
-    -- finished but CHALLENGE_MODE_COMPLETED never arrives, complete from
-    -- cached state 2s later. The real event wins the race and carries the
-    -- authoritative ms completion time.
+    -- Completion salvage net (deferred): if everything just finished but
+    -- CHALLENGE_MODE_COMPLETED never arrives, complete from cached state 2s
+    -- later. The real event wins the race and carries the authoritative ms
+    -- completion time.
     if not self._salvagePending and not self.run.completed and RunLooksComplete(self.run) then
         self._salvagePending = true
         C_Timer.After(2, _CompleteSalvageFire)
@@ -1192,15 +1180,14 @@ function MPT:CompleteRun()
         end
     end
     self:UpdateObjectives()  -- backfill final clear times (tail-calls UpdateSplits; pre-run record still in run.bestOverall)
-    -- Force-complete the frozen summary (WarpDeplete CompleteChallenge,
-    -- State.lua:435-446): a completed key has every boss dead and 100% forces by
-    -- definition, but the final criterion update can arrive AFTER this event or
-    -- be lost to the scenario teardown. Pin any objective still missing a clear
-    -- time to the final elapsed and force the forces bar to 100%, so the summary
-    -- can never freeze with a gray boss row or an empty forces bar. Runs BEFORE
-    -- CommitSplits so the pinned times persist; the sticky/monotonic capture in
-    -- UpdateObjectives/UpdateForces means real mid-run times are already in place
-    -- for everything but a last-instant kill.
+    -- Force-complete the frozen summary: a completed key has every boss dead
+    -- and 100% forces by definition, but the final criterion update can arrive
+    -- AFTER this event or be lost to the scenario teardown. Pin any objective
+    -- still missing a clear time to the final elapsed and force the forces bar
+    -- to 100%, so the summary can never freeze with a gray boss row or an empty
+    -- forces bar. Runs BEFORE CommitSplits so the pinned times persist; the
+    -- sticky/monotonic capture in UpdateObjectives/UpdateForces means real
+    -- mid-run times are already in place for everything but a last-instant kill.
     local finalElapsed = run.elapsed or 0
     for i = 1, #run.objectives do
         local obj = run.objectives[i]
@@ -1281,7 +1268,7 @@ end
 function MPT:CheckForActiveRun()
     local mapID = C_ChallengeMode.GetActiveChallengeMapID()
     if mapID then
-        -- Completed gate (EUI:1873): GetActiveChallengeMapID can stay non-nil
+        -- Completed gate: GetActiveChallengeMapID can stay non-nil
         -- on the completion screen — without this, UPDATE_INSTANCE_INFO
         -- restarts a zombie run that re-posts every chat split and resolves
         -- PB against the record the real run just committed. The completed
@@ -1292,17 +1279,16 @@ function MPT:CheckForActiveRun()
         end
     else
         if self.run.active and RunLooksComplete(self.run) then
-            -- Salvage (EUI:1884): everything finished but the completion
+            -- Salvage: everything finished but the completion
             -- event was never processed — commit the run instead of wiping it.
             self:CompleteRun()
         elseif not (self.run.completed and InChallengeInstance()) then
-            -- Fanfare window (EUI HandleRuntimeEvent :1881, WD CheckForChallengeMode
-            -- Core.lua:204-218): the map ID flips nil at completion while still
+            -- Fanfare window: the map ID flips nil at completion while still
             -- inside — keep the frozen summary + tracker suppression alive ONLY
-            -- until the player leaves the dungeon. Both references gate visibility
-            -- on GetInstanceInfo (party + difficulty 8, == InChallengeInstance) and
-            -- tear the summary down the instant you zone out to a city; neither
-            -- persists it into town. ShouldHideTracker's completed arm uses the
+            -- until the player leaves the dungeon. Visibility gates on
+            -- GetInstanceInfo (party + difficulty 8, == InChallengeInstance) and
+            -- the summary tears down the instant you zone out to a city; it never
+            -- persists into town. ShouldHideTracker's completed arm uses the
             -- same predicate, so tracker suppression ends at the door too.
             self:ResetRun()
         end
@@ -1324,8 +1310,7 @@ local _trackerHookInstalled = false
 -- after it completes but before the player leaves the dungeon instance.
 -- Blizzard's end-of-run fanfare flips IsChallengeModeActive() back to false
 -- while the user is still inside -- without the completed + party gate the
--- tracker pops back up for the last seconds before zone-out
--- (References/M+ Timer/EllesmereUI/EllesmereUIMythicTimer/EllesmereUIMythicTimer.lua:548-559).
+-- tracker pops back up for the last seconds before zone-out.
 function MPT:ShouldHideTracker()
     -- GUI preview: always suppress, independent of the HideBlizzardTracker
     -- toggle — the fake-run HUD occupies the tracker's screen area. Hide/Show
@@ -1375,8 +1360,7 @@ function MPT:ApplyTrackerVisibility()
     -- whenever any module has content, and its MarkDirty schedules via
     -- RunNextFrame even while hidden — so the first enemy-forces/quest update
     -- of a pull re-showed it and the deferred hide left it up for the rest of
-    -- that fight. EUI hides unconditionally for the same reason
-    -- (EllesmereUIMythicTimer.lua:546-563).
+    -- that fight. Hiding unconditionally avoids that for the same reason.
 
     -- Show-ownership gate: only re-Show a tracker WE hid (_keHidTracker),
     -- never one another addon hid (e.g. KalielsTracker) — Show() unconditionally
