@@ -988,6 +988,39 @@ function DM:MaybeSeedDockTest()
 end
 
 ---------------------------------------------------------------------------------
+-- One-time width repair for the v3.0.0 squished-dock seed
+--
+-- The v3.0.0 default seed wrote WidthRatio 0.5 on both columns. LayoutDock reads
+-- WidthRatio as an ABSOLUTE multiplier of db.Width (colW = baseW * ratio), not a
+-- normalized share like RowRatios -- so 0.5 rendered each column at half width
+-- and the dock looked squished. The seed now ships WidthRatio 1; this repairs
+-- profiles already created by the bad v3.0.0 build. Called from OnEnable after
+-- the seed block (so it also covers existing profiles, which skip that block).
+-- Stamped to run once, and gated on the EXACT untouched bad-seed signature
+-- (two columns, both 0.5, windows {1} and {2,3}) so a GUI-built or dragged dock
+-- never matches and is left alone.
+---------------------------------------------------------------------------------
+function DM:RepairSquishedDock()
+    local db = self.db
+    if not db or db._dockWidthRepaired then return end
+    db._dockWidthRepaired = true   -- run once (also marks fresh/correct profiles)
+
+    local cols = db.Dock and db.Dock.Columns
+    if not cols or #cols ~= 2 then return end
+    local c1, c2 = cols[1], cols[2]
+    if not (c1 and c2) then return end
+
+    local sig =
+        c1.WidthRatio == 0.5 and c2.WidthRatio == 0.5
+        and c1.Windows and c1.Windows[1] == 1 and c1.Windows[2] == nil
+        and c2.Windows and c2.Windows[1] == 2 and c2.Windows[2] == 3 and c2.Windows[3] == nil
+    if sig then
+        c1.WidthRatio = 1
+        c2.WidthRatio = 1
+    end
+end
+
+---------------------------------------------------------------------------------
 -- Structural editing (GUI-driven)
 --
 -- The dock STRUCTURE is db.Dock.Columns (a flat list of columns, each holding a

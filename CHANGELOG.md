@@ -1,5 +1,12 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v3.0.1
+
+### Damage Meter
+- **Fixed:** The default 3-window layout shipped squished into half its intended width on fresh installs. New installs now render at full width, and any profile already created on v3.0.0 is corrected automatically on update
+
+---
+
 ## v3.0.0
 
 ### Damage Meter
