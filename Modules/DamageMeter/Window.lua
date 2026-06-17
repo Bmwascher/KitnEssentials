@@ -1261,45 +1261,43 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         end
     end
 
-    -- Spec icon with a class-icon FALLBACK (EUI parity, ResolveIcon). A valid specIconID
-    -- (NEVER secret, non-zero) renders the spec art cropped via ApplyIconZoom. When the
-    -- client has not resolved a player's spec yet the API hands back specIconID 0 -- the old
-    -- code drew SetTexture(0) (a blank box that never self-corrected once the meter stopped
-    -- ticking). Instead fall back to the class sprite-sheet (classFilename + CLASS_ICON_TCOORDS)
+    -- Spec icon with a class-icon FALLBACK. A valid specIconID (NEVER secret, non-zero)
+    -- renders the spec art cropped via ApplyIconZoom. When the client has not resolved a
+    -- player's spec yet the API hands back specIconID 0 -- the old code drew SetTexture(0)
+    -- (a blank box that never self-corrected once the meter stopped ticking). Instead fall
+    -- back to the high-res square "classicon-<class>" atlas (KE's standard class-icon source)
     -- so a spec-lagged player shows their class icon and UPGRADES to the spec icon once it
-    -- resolves. A class-less source (enemy mob reports classFilename "") shows NO icon and the
-    -- layout drops the gutter -- this generalizes the old _isEnemyTaken special-case (enemy
-    -- mobs are exactly the classFilename-empty sources). Both fields are NeverSecret; the
-    -- secret guard mirrors the reference's defensive check. Dirty-cached on a signature so a
-    -- stable icon does NO per-tick SetTexture; bar._iconShown gates Show/Hide the same way.
+    -- resolves -- the atlas fills the frame edge-to-edge so the shared 1px iconFrame border
+    -- reads crisp. A class-less source (enemy mob reports classFilename "") shows NO icon and
+    -- the layout drops the gutter -- this generalizes the old _isEnemyTaken special-case (enemy
+    -- mobs are exactly the classFilename-empty sources). classFilename is NeverSecret, so no
+    -- issecretvalue guard (matching the bar-color block above). Dirty-cached on a signature so
+    -- a stable icon does NO per-tick texture call; bar._iconShown gates Show/Hide.
     local showIcon = db.ShowIcon
     local iconID = src.specIconID
     -- classFile (src.classFilename) is already resolved above in the bar-color block.
     local validSpec = type(iconID) == "number" and iconID ~= 0
-    local classOK = classFile and not issecretvalue(classFile) and classFile ~= ""
+    local classOK = classFile and classFile ~= ""
     local hasIcon = showIcon and (validSpec or classOK)
     if hasIcon then
-        -- Signature: the spec fileID when valid, else a "class:" sentinel keyed on the class.
-        -- Keying on the spec icon (not the class) keeps two same-class different-spec sources
-        -- correct; the sentinel repaints when a spec resolves from 0 or a slot is reused by a
-        -- different class. (validSpec guarantees iconID is a truthy number, so the and/or is safe.)
-        local sig = validSpec and iconID or ("class:" .. classFile)
+        -- Signature: the spec fileID (a number) when valid, else the class token (a string).
+        -- A number and a string never compare equal, so the two forms can't collide in the
+        -- cache; the signature repaints when a spec resolves from 0 or a slot is reused by a
+        -- different class. Keying spec on the fileID keeps two same-class different-spec sources
+        -- correct. (validSpec guarantees iconID is a truthy number, so the and/or is safe; the
+        -- class token avoids a per-tick string alloc on the fallback path.)
+        local sig = validSpec and iconID or classFile
         if bar._cachedIconID ~= sig then
             bar._cachedIconID = sig
             if validSpec then
                 row.icon:SetTexture(iconID)
                 KE:ApplyIconZoom(row.icon)
             else
-                -- Class sprite-sheet via SetTexture + CLASS_ICON_TCOORDS (NOT SetAtlas, so the
-                -- texcoords are fully owned here and never fight ApplyIconZoom's crop on the spec
-                -- path). Full-sheet fallback if a class somehow lacks coords.
-                row.icon:SetTexture("Interface\\GLUES\\CHARACTERCREATE\\UI-CHARACTERCREATE-CLASSES")
-                local co = CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[classFile]
-                if co then
-                    row.icon:SetTexCoord(co[1], co[2], co[3], co[4])
-                else
-                    row.icon:SetTexCoord(0, 1, 0, 1)
-                end
+                -- Class fallback: the "classicon-<class>" atlas. SetAtlas re-sets the texcoords
+                -- to the atlas region, cleanly overriding the spec path's ApplyIconZoom crop, and
+                -- the atlas is a full square (no transparent corners) so it fills the frame and the
+                -- iconFrame border stays crisp. classFile is a non-empty NeverSecret token here.
+                row.icon:SetAtlas("classicon-" .. classFile:lower())
             end
         end
         if bar._iconShown ~= true then
@@ -1365,8 +1363,8 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         -- keystone; source.name is ConditionalSecret in DamageMeterDocumentation). Ambiguate
         -- is SecretArguments=AllowedWhenTainted (PlayerScriptDocumentation) -- it accepts the
         -- secret name WITHOUT throwing and returns the realm-stripped form (itself secret;
-        -- SetText accepts that). This mirrors the EUI reference, which strips with
-        -- Ambiguate(name, "short") on both the secret and plain paths.
+        -- SetText accepts that). Ambiguate(name, "short") is the reference strip on both the
+        -- secret and plain paths.
         -- (The old strip was UnitName(source.name): UnitName wants a UNIT token, not a name
         -- string, so it returned nil and the "-Realm" suffix leaked through in raids.)
         -- Honor ShowRealm: only strip when off; when on, keep the full secret "Name-Realm".
