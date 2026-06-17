@@ -1261,26 +1261,46 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         end
     end
 
-    -- Spec icon, dirty-cached on specIconID (NEVER secret). Keying on the SPEC
-    -- icon -- not the class -- means two same-class different-spec sources (or the
-    -- player pinned into a slot a same-class teammate held) get the correct spec
-    -- icon rather than a stale one. Visibility is cached in bar._iconShown so a
-    -- stable ShowIcon does NO per-tick Show/Hide.
-    -- Icon visibility. In the EnemyDamageTaken view ONLY, enemy mobs report specIconID 0 ->
-    -- show NO icon (no empty bordered box) and the layout below drops the icon
-    -- gutter so the name sits flush left. Every OTHER meter type keeps the prior behavior
-    -- (icon frame shown whenever ShowIcon is on, even for a 0/absent spec icon) so non-enemy
-    -- views are byte-for-byte unchanged -- the enemy scope is deliberate to avoid a regression
-    -- on sources (pets/guardians/spec-lag) that could momentarily report specIconID 0.
-    -- hasIcon drives both visibility and the layout key; both stay dirty-gated.
+    -- Spec icon with a class-icon FALLBACK (EUI parity, ResolveIcon). A valid specIconID
+    -- (NEVER secret, non-zero) renders the spec art cropped via ApplyIconZoom. When the
+    -- client has not resolved a player's spec yet the API hands back specIconID 0 -- the old
+    -- code drew SetTexture(0) (a blank box that never self-corrected once the meter stopped
+    -- ticking). Instead fall back to the class sprite-sheet (classFilename + CLASS_ICON_TCOORDS)
+    -- so a spec-lagged player shows their class icon and UPGRADES to the spec icon once it
+    -- resolves. A class-less source (enemy mob reports classFilename "") shows NO icon and the
+    -- layout drops the gutter -- this generalizes the old _isEnemyTaken special-case (enemy
+    -- mobs are exactly the classFilename-empty sources). Both fields are NeverSecret; the
+    -- secret guard mirrors the reference's defensive check. Dirty-cached on a signature so a
+    -- stable icon does NO per-tick SetTexture; bar._iconShown gates Show/Hide the same way.
     local showIcon = db.ShowIcon
     local iconID = src.specIconID
-    local hasIcon = showIcon and (not W._isEnemyTaken or (type(iconID) == "number" and iconID ~= 0))
+    -- classFile (src.classFilename) is already resolved above in the bar-color block.
+    local validSpec = type(iconID) == "number" and iconID ~= 0
+    local classOK = classFile and not issecretvalue(classFile) and classFile ~= ""
+    local hasIcon = showIcon and (validSpec or classOK)
     if hasIcon then
-        if bar._cachedIconID ~= iconID then
-            bar._cachedIconID = iconID
-            row.icon:SetTexture(iconID)
-            KE:ApplyIconZoom(row.icon)
+        -- Signature: the spec fileID when valid, else a "class:" sentinel keyed on the class.
+        -- Keying on the spec icon (not the class) keeps two same-class different-spec sources
+        -- correct; the sentinel repaints when a spec resolves from 0 or a slot is reused by a
+        -- different class. (validSpec guarantees iconID is a truthy number, so the and/or is safe.)
+        local sig = validSpec and iconID or ("class:" .. classFile)
+        if bar._cachedIconID ~= sig then
+            bar._cachedIconID = sig
+            if validSpec then
+                row.icon:SetTexture(iconID)
+                KE:ApplyIconZoom(row.icon)
+            else
+                -- Class sprite-sheet via SetTexture + CLASS_ICON_TCOORDS (NOT SetAtlas, so the
+                -- texcoords are fully owned here and never fight ApplyIconZoom's crop on the spec
+                -- path). Full-sheet fallback if a class somehow lacks coords.
+                row.icon:SetTexture("Interface\\GLUES\\CHARACTERCREATE\\UI-CHARACTERCREATE-CLASSES")
+                local co = CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[classFile]
+                if co then
+                    row.icon:SetTexCoord(co[1], co[2], co[3], co[4])
+                else
+                    row.icon:SetTexCoord(0, 1, 0, 1)
+                end
+            end
         end
         if bar._iconShown ~= true then
             bar._iconShown = true
