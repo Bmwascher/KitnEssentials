@@ -25,7 +25,7 @@ local UIParent = UIParent
 local issecretvalue = issecretvalue
 local RAID_CLASS_COLORS = RAID_CLASS_COLORS
 local Enum = Enum
-local UnitName = UnitName
+local Ambiguate = Ambiguate
 local math_min = math.min
 local math_max = math.max
 local math_floor = math.floor
@@ -1341,22 +1341,19 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
     -- tracks ShowName every tick so the GUI toggle takes effect on the next paint.
     local nm = src.name
     if issecretvalue(nm) then
-        -- Secret name (identity-restricted unit -- e.g. group members inside an active
-        -- keystone). String ops (:match) and Ambiguate (SecretArguments=AllowedWhenUntainted
-        -- -> throws when tainted) can't strip it. But UnitName is AllowedWhenTainted -- it
-        -- accepts a secret arg WITHOUT throwing -- and returns (name, realm) SEPARATELY, so
-        -- its FIRST return is the realm-stripped name even for a secret unit. This is the
-        -- standard way to resolve a secret source name: a bare `UnitName(source.name)`
-        -- provably never throws on a secret unit-name argument.
+        -- Secret name (identity-restricted unit -- group members inside a raid or an active
+        -- keystone; source.name is ConditionalSecret in DamageMeterDocumentation). Ambiguate
+        -- is SecretArguments=AllowedWhenTainted (PlayerScriptDocumentation) -- it accepts the
+        -- secret name WITHOUT throwing and returns the realm-stripped form (itself secret;
+        -- SetText accepts that). This mirrors the EUI reference, which strips with
+        -- Ambiguate(name, "short") on both the secret and plain paths.
+        -- (The old strip was UnitName(source.name): UnitName wants a UNIT token, not a name
+        -- string, so it returned nil and the "-Realm" suffix leaked through in raids.)
         -- Honor ShowRealm: only strip when off; when on, keep the full secret "Name-Realm".
-        -- Defensive pcall + `== nil` gate (a secret-safe gate primitive) so the worst
-        -- case is no change (the full name). The resolved name may itself be secret -- SetText
-        -- accepts that. Cache nulled (can't dirty-check a maybe-secret string), so it re-
-        -- resolves each tick.
+        -- Cache nulled (can't dirty-check a maybe-secret string), so it re-resolves each tick.
         local shown = nm
         if not db.ShowRealm then
-            local ok, resolved = pcall(UnitName, nm)
-            if ok and resolved ~= nil then shown = resolved end
+            shown = Ambiguate(nm, "short") or nm
         end
         row.name:SetText(shown)
         bar._cachedName = nil
