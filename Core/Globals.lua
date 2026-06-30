@@ -440,6 +440,7 @@ local PREVIEW_MODULES = {
     "Cursor",
     "DamageMeter",
     "MythicPlusTimer",
+    "PlayerAbsorbs",
 }
 
 -- Section → preview module mapping for section-based previews
@@ -453,6 +454,7 @@ local SECTION_PREVIEW_MODULES = {
     utilities_section = {
         "PotionReady", "RaidNotifications", "Recuperate",
         "TimeSpiral", "NoMovementAlert", "ReadyCheckConsumables",
+        "PlayerAbsorbs",
     },
     class_section = {
         "BurningRush",

@@ -456,6 +456,25 @@ local Defaults = {
             Position = DefaultPosition(0, -160),
         },
 
+        PlayerAbsorbs = {
+            Enabled = false,
+            Strata = "MEDIUM",
+            anchorFrameType = "PLAYERFRAME",
+            ParentFrame = "UIParent",
+            Position = DefaultPosition(0, 40), -- above the player frame; tune in-game
+            Scale = 1.0,
+            IconSize = 18,
+            ShowIcon = true,
+            -- false => secret-safe zero-hide via TruncateWhenZero (see spec section 8.1).
+            AbbreviateNumber = false,
+            HideWhenZero = true,
+            FontFace = "Expressway",
+            FontSize = 18,
+            FontOutline = "OUTLINE",
+            ShieldColor = { 0.37, 0.82, 1, 1 },    -- cyan
+            HealAbsorbColor = { 1, 0.48, 0.48, 1 }, -- red
+        },
+
         BurningRush = {
             Enabled = true,
             IconSize = 45,
