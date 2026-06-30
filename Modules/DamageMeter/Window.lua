@@ -1261,28 +1261,46 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         end
     end
 
-    -- Spec icon with a class-icon FALLBACK. A valid specIconID (NEVER secret, non-zero)
-    -- renders the spec art cropped via ApplyIconZoom. When the client has not resolved a
-    -- player's spec yet the API hands back specIconID 0 -- the old code drew SetTexture(0)
-    -- (a blank box that never self-corrected once the meter stopped ticking). Instead fall
-    -- back to the high-res square "classicon-<class>" atlas (KE's standard class-icon source)
-    -- so a spec-lagged player shows their class icon and UPGRADES to the spec icon once it
-    -- resolves -- the atlas fills the frame edge-to-edge so the shared 1px iconFrame border
-    -- reads crisp. A class-less source (enemy mob reports classFilename "") shows NO icon and
-    -- the layout drops the gutter -- this generalizes the old _isEnemyTaken special-case (enemy
-    -- mobs are exactly the classFilename-empty sources). classFilename is NeverSecret, so no
-    -- issecretvalue guard (matching the bar-color block above). Dirty-cached on a signature so
-    -- a stable icon does NO per-tick texture call; bar._iconShown gates Show/Hide.
+    -- Spec icon, resolved in tiers with a class-icon FALLBACK:
+    --   1. src.specIconID -- the API's own spec icon (NEVER secret). The client leaves
+    --      it nil (the doc claims non-nilable, but it lies) for any player whose spec it
+    --      hasn't resolved -- usually EVERYONE in a pug / cross-realm raid.
+    --   2. DM.specIconByGUID[sourceGUID] -- a spec icon shared over addon comms by
+    --      LibSpecialization (Core.lua's Spec icon resolution section). A player's
+    --      sourceGUID is plain at runtime; the read is issecretvalue-guarded so a creature
+    --      row (secret GUID in instances) simply skips to the class fallback.
+    --   3. the high-res square "classicon-<class>" atlas (KE's standard class-icon source).
+    -- A resolved spec (tier 1 or 2) renders the art cropped via ApplyIconZoom; the class
+    -- atlas fills the frame edge-to-edge so the shared 1px iconFrame border reads crisp. A
+    -- class-less source (enemy mob reports classFilename "") shows NO icon and the layout
+    -- drops the gutter -- this generalizes the old _isEnemyTaken special-case (enemy mobs are
+    -- exactly the classFilename-empty sources). classFilename/specIconID are NeverSecret, so
+    -- no guard there (matching the bar-color block above). Dirty-cached on a signature so a
+    -- stable icon does NO per-tick texture call; bar._iconShown gates Show/Hide.
     local showIcon = db.ShowIcon
     local iconID = src.specIconID
     -- classFile (src.classFilename) is already resolved above in the bar-color block.
     local validSpec = type(iconID) == "number" and iconID ~= 0
+    -- Tier 2: when the API didn't resolve the spec, try the LibSpec GUID cache before the
+    -- class fallback. Only unresolved bars pay this lookup; a tier-1 spec skips it. When the
+    -- comms land mid-fight the signature below flips class-token -> spec fileID and repaints.
+    if not validSpec then
+        local g = src.sourceGUID
+        if g and not issecretvalue(g) then
+            local libIcon = self.specIconByGUID[g]
+            if libIcon then
+                iconID = libIcon
+                validSpec = true
+            end
+        end
+    end
     local classOK = classFile and classFile ~= ""
     local hasIcon = showIcon and (validSpec or classOK)
     if hasIcon then
         -- Signature: the spec fileID (a number) when valid, else the class token (a string).
         -- A number and a string never compare equal, so the two forms can't collide in the
-        -- cache; the signature repaints when a spec resolves from 0 or a slot is reused by a
+        -- cache; the signature repaints when a spec resolves (API fills specIconID, or the
+        -- LibSpec comms land and tier 2 upgrades class->spec) or a slot is reused by a
         -- different class. Keying spec on the fileID keeps two same-class different-spec sources
         -- correct. (validSpec guarantees iconID is a truthy number, so the and/or is safe; the
         -- class token avoids a per-tick string alloc on the fallback path.)

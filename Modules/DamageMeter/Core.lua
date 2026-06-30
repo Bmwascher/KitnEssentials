@@ -23,6 +23,14 @@ local DEBUG_DM = false
 -- concrete false rather than nil on first access.
 DM.editModeRegistered = false
 
+-- LibSpecialization spec-icon cache: [sourceGUID] = spec icon fileID. Populated by
+-- the LibSpec group callback (cold path) and read in Window.lua:RenderBar as the
+-- middle tier between the API specIconID and the class-icon fallback. A player's
+-- sourceGUID is a plain value at runtime, but the API doesn't mark it NeverSecret
+-- (and a creature source's GUID IS secret in instances -- the EnemyDamageTaken view),
+-- so the RenderBar read is issecretvalue-guarded before use as a key. Wiped on disable.
+DM.specIconByGUID = {}
+
 -- File-level upvalues for globals used in per-tick / per-bar render paths.
 local IsInInstance = IsInInstance
 local C_ChallengeMode = C_ChallengeMode
@@ -39,11 +47,25 @@ local math_min = math.min
 local IsInRaid = IsInRaid
 local IsInGroup = IsInGroup
 local IsInGuild = IsInGuild
+local GetNumGroupMembers = GetNumGroupMembers
+local GetUnitName = GetUnitName
+local UnitGUID = UnitGUID
+local Ambiguate = Ambiguate
+local GetSpecializationInfoByID = GetSpecializationInfoByID
 -- Current chat API. The bare global SendChatMessage is deprecated in 12.0, so capture the
 -- namespaced C_ChatInfo.SendChatMessage once at load and call it under a non-colliding
 -- local name (a local literally named SendChatMessage still trips the deprecation lint).
 -- C_ChatInfo is a core namespace present before module files run.
 local SendChat = C_ChatInfo and C_ChatInfo.SendChatMessage
+
+-- LibSpecialization: passive group spec sharing over addon comms (RAID/PARTY/
+-- INSTANCE_CHAT), the only group-spec channel that still works inside 12.0
+-- instances. Optional load. The meter uses it to resolve a spec icon for sources
+-- whose specIconID the client never filled in (common in a pug / cross-realm raid,
+-- where C_DamageMeter returns specIconID nil) -- see the Spec icon resolution
+-- section and the spec-icon block in Window.lua:RenderBar. Same lib HealerMana /
+-- KickTracker / DungeonTimers already rely on.
+local LibSpec = LibStub("LibSpecialization", true)
 
 -- Pre-built group unit tokens. UNIT_FLAGS
 -- can fire dozens of times per second during a pull, and GroupInCombat is hit
@@ -246,6 +268,83 @@ function DM:HandleSlash(input)
 end
 
 ---------------------------------------------------------------------------------
+-- Spec icon resolution (LibSpecialization)
+--
+-- C_DamageMeter sources expose specIconID, but the client leaves it nil for any
+-- player whose spec it has not resolved -- in a pug / cross-realm raid that is
+-- usually EVERYONE, so every bar would fall back to a class icon. LibSpecialization
+-- shares specs over addon comms (the only group-spec channel that works inside 12.0
+-- instances). The group callback hands us (specID, role, position, playerName); we
+-- turn specID into the spec icon fileID and cache it by the player's GUID, so the
+-- render path (Window.lua:RenderBar) can look it up against the (issecretvalue-
+-- guarded) src.sourceGUID. The class icon stays the final fallback for sources
+-- LibSpec can't resolve.
+---------------------------------------------------------------------------------
+
+-- specID -> spec icon fileID (4th return of GetSpecializationInfoByID). nil for an
+-- unknown / starter (0) spec so the caller keeps the class fallback. Mirrors
+-- HealerMana's GetSpecIcon.
+local function GetSpecIcon(specID)
+    if not specID or specID == 0 then return nil end
+    local _, _, _, icon = GetSpecializationInfoByID(specID)
+    return icon
+end
+
+-- Resolve a LibSpec playerName to a group member's GUID. The lib sends the name as
+-- Ambiguate(sender, "none") (realm-qualified only when cross-realm) and the player's
+-- own bare name in some paths; normalize both sides to the bare name (Ambiguate
+-- "short") and match against the live roster. Player names from group units are
+-- non-secret in 12.0 (only NON-player unit names are secret), but the roster read is
+-- issecretvalue-guarded so a secret name simply skips instead of tainting the ==.
+-- Cold path (fires only when comms land), so a <=40-unit scan is fine.
+local function ResolveGroupGUID(playerName)
+    if not playerName then return nil end
+    local target = Ambiguate(playerName, "short")
+    if not target or issecretvalue(target) then return nil end
+
+    local function matchUnit(unit)
+        local nm = GetUnitName(unit, false)
+        if nm and not issecretvalue(nm) and nm == target then
+            return UnitGUID(unit)
+        end
+    end
+
+    -- Self first: covers the lib's own-spec path (it reports the player's bare name).
+    local guid = matchUnit("player")
+    if guid then return guid end
+
+    if IsInRaid() then
+        local n = GetNumGroupMembers()
+        for i = 1, n do
+            guid = matchUnit(_raidUnits[i])
+            if guid then return guid end
+        end
+    elseif IsInGroup() then
+        -- Party units exclude the player (already checked above).
+        local n = GetNumGroupMembers() - 1
+        for i = 1, n do
+            guid = matchUnit(_partyUnits[i])
+            if guid then return guid end
+        end
+    end
+    return nil
+end
+
+-- LibSpec group callback: a member's spec/role was reported over comms. Cache the
+-- spec icon by GUID so a bar whose API specIconID is nil upgrades from the class
+-- fallback to the real spec icon on the next tick. Keyed by GUID (not name) because
+-- the render path only has the secret-in-combat src.name but a NeverSecret GUID.
+-- A respec re-fires the callback and overwrites the same GUID. role/position unused.
+function DM:OnLibSpecGroupUpdate(specID, _, _, playerName)
+    local icon = GetSpecIcon(specID)
+    if not icon then return end
+    local guid = ResolveGroupGUID(playerName)
+    if guid then
+        self.specIconByGUID[guid] = icon
+    end
+end
+
+---------------------------------------------------------------------------------
 -- Lifecycle
 ---------------------------------------------------------------------------------
 
@@ -363,6 +462,16 @@ function DM:OnEnable()
     self:ApplyReplaceBlizzard()
     self:RegWithEditMode()
 
+    -- Subscribe to LibSpecialization group spec comms so bars whose API specIconID is
+    -- nil can resolve a real spec icon (see the Spec icon resolution section + the
+    -- spec-icon block in Window.lua:RenderBar). Comms are automatic; the lib re-requests
+    -- group specs on join/login. UnregisterGroup + wipe in OnDisable.
+    if LibSpec then
+        LibSpec.RegisterGroup(self, function(specID, role, position, playerName)
+            DM:OnLibSpecGroupUpdate(specID, role, position, playerName)
+        end)
+    end
+
     -- Details! is a competing meter — recommend running only one.
     KE:WarnRedundantAddon("Details", "Details!", "Damage Meter", "/kes dm", self.db, "_detailsWarned")
 
@@ -389,6 +498,8 @@ function DM:OnDisable()
     self.enabled = false
 
     self:UnregisterAllEvents()
+    if LibSpec then LibSpec.UnregisterGroup(self) end
+    wipe(self.specIconByGUID)
     self:StopTicker()
     self._sessionPending = false
     self._inEncounter = false

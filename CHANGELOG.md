@@ -1,5 +1,12 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v3.0.3
+
+### Damage Meter
+- **Fixed:** "Always Show Self" no longer pins your row into the Deaths view — your death could be forced out of chronological order. The Deaths log now always reads in time order
+
+---
+
 ## v3.0.2
 
 ### Damage Meter
