@@ -84,6 +84,10 @@ function M.install(overrides)
     _G.UnitExists = overrides.UnitExists or function() return true end
     _G.UnitIsUnit = overrides.UnitIsUnit or function() return false end
 
+    -- Number formatters.
+    _G.AbbreviateNumbers = overrides.AbbreviateNumbers or function(v) return tostring(v) end
+    _G.BreakUpLargeNumbers = overrides.BreakUpLargeNumbers or function(v) return tostring(v) end
+
     return frames
 end
 
@@ -94,6 +98,7 @@ function M.reset()
         "InCombatLockdown", "GetTime", "C_Timer",
         "issecretvalue", "issecrettable", "canaccessvalue", "canaccesstable",
         "UnitName", "UnitGUID", "UnitExists", "UnitIsUnit",
+        "AbbreviateNumbers", "BreakUpLargeNumbers",
     }) do
         _G[k] = nil
     end

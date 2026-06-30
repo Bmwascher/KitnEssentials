@@ -77,6 +77,7 @@ function KE_FramePool:ReleaseAll() end
 ---@field msgContainer Frame? # message-popup singleton (Core/Widgets.lua)
 ---@field promptDialog Frame? # prompt-dialog singleton (Core/Widgets.lua)
 ---@field activePrompt Frame? # currently-open prompt; nil when closed
+---@field PlayerAbsorbsFormat { Format: fun(amount:any, abbreviate:boolean, hideWhenZero:boolean):string }
 local KE = {}
 
 -- ─── Print / chat ─────────────────────────────────────────
