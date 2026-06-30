@@ -51,6 +51,7 @@ local DIRECTION_NAMES = {
 local ANCHOR_FRAME_TYPES = {
     { key = "SCREEN",      text = "Screen Center" },
     { key = "UIPARENT",    text = "Screen (UIParent)" },
+    { key = "PLAYERFRAME", text = "Player Frame" },
     { key = "SELECTFRAME", text = "Select Frame" },
 }
 

@@ -224,6 +224,10 @@ end
 function KE:ResolveAnchorFrame(anchorFrameType, parentFrameName)
     if anchorFrameType == "SCREEN" or anchorFrameType == "UIPARENT" then
         return UIParent
+    elseif anchorFrameType == "PLAYERFRAME" then
+        -- Auto-detect the active unit-frame addon's player frame.
+        return _G.ElvUF_Player or _G.UUF_Player
+            or _G.EllesmereUIUnitFrames_Player or _G.PlayerFrame or UIParent
     elseif anchorFrameType == "SELECTFRAME" and parentFrameName then
         local frame = _G[parentFrameName]
         return frame or UIParent
