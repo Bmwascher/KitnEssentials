@@ -80,6 +80,7 @@ GUIFrame.sidebarConfig = {
             { id = "PotionReady",   text = "Combat Potion Ready", keywords = { "potion", "pot", "combat", "consumable" } },
             { id = "MacroBuilders", text = "Macro Builders", keywords = { "macro", "macros", "builder", "focus", "pi", "power infusion", "command" } },
             { id = "NoMovementAlert", text = "No Movement Alert", keywords = { "movement", "alert", "cooldown" } },
+            { id = "PlayerAbsorbs", text = "Player Absorbs", keywords = { "absorb", "shield", "heal absorb", "necrotic", "pw:s", "power word shield", "damage absorb", "overlay" } },
             { id = "RaidNotifications", text = "Raid Notifications", keywords = { "raid", "notification", "alert", "gateway", "soulwell", "feast", "repair", "portal" } },
             { id = "ReadyCheckConsumables", text = "Ready Check Consumables", keywords = { "ready check", "consumable", "flask", "food", "rune", "potion", "missing" } },
             { id = "Recuperate",    text = "Recuperate Button", keywords = { "recuperate", "heal", "button" } },

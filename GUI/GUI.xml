@@ -69,6 +69,7 @@
     <Script file="GUITabs\GUIClassUtilities\GUI-BurningRush.lua" />
 
     <!-- Utilities tabs -->
+    <Script file="GUITabs\GUIUtilities\GUI-PlayerAbsorbs.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-RaidNotifications.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-NoMovementAlert.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-TimeSpiral.lua" />
