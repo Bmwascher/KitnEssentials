@@ -72,24 +72,34 @@ function PA:CreateFrame()
     f.shieldText:SetPoint("CENTER", f, "CENTER", 0, (db.FontSize or 18) * 0.5 + ROW_GAP)
     f.shieldText:SetJustifyH("CENTER")
 
-    f.shieldIcon = f:CreateTexture(nil, "ARTWORK")
+    f.shieldIconFrame = CreateFrame("Frame", nil, f)
+    f.shieldIconFrame:SetSize(db.IconSize or 18, db.IconSize or 18)
+    KE:AddIconBorders(f.shieldIconFrame)
+    f.shieldIcon = f.shieldIconFrame:CreateTexture(nil, "ARTWORK")
+    f.shieldIcon:SetAllPoints(f.shieldIconFrame)
     KE:ApplyIconZoom(f.shieldIcon)
-    f.shieldIcon:SetPoint("RIGHT", f.shieldText, "LEFT", -ICON_TEXT_GAP, 0)
+    f.shieldIconFrame:SetPoint("RIGHT", f.shieldText, "LEFT", -ICON_TEXT_GAP, 0)
 
     -- Heal-absorb row: directly below the shield row.
     f.healText = f:CreateFontString(nil, "OVERLAY")
     f.healText:SetPoint("TOP", f.shieldText, "BOTTOM", 0, -ROW_GAP)
     f.healText:SetJustifyH("CENTER")
 
-    f.healIcon = f:CreateTexture(nil, "ARTWORK")
+    f.healIconFrame = CreateFrame("Frame", nil, f)
+    f.healIconFrame:SetSize(db.IconSize or 18, db.IconSize or 18)
+    KE:AddIconBorders(f.healIconFrame)
+    f.healIcon = f.healIconFrame:CreateTexture(nil, "ARTWORK")
+    f.healIcon:SetAllPoints(f.healIconFrame)
     KE:ApplyIconZoom(f.healIcon)
-    f.healIcon:SetPoint("RIGHT", f.healText, "LEFT", -ICON_TEXT_GAP, 0)
+    f.healIconFrame:SetPoint("RIGHT", f.healText, "LEFT", -ICON_TEXT_GAP, 0)
 
     self.frame = f
     self.shieldText = f.shieldText
     self.shieldIcon = f.shieldIcon
+    self.shieldIconFrame = f.shieldIconFrame
     self.healText = f.healText
     self.healIcon = f.healIcon
+    self.healIconFrame = f.healIconFrame
 
     self:ApplySettings()
 end
@@ -112,9 +122,9 @@ function PA:ApplySettings()
     self.healText:SetTextColor(hr, hg, hb, ha)
 
     local sz = db.IconSize or 18
-    self.shieldIcon:SetSize(sz, sz)
+    self.shieldIconFrame:SetSize(sz, sz)
     self.shieldIcon:SetTexture(GetSpellIcon(SHIELD_SPELL_ID))
-    self.healIcon:SetSize(sz, sz)
+    self.healIconFrame:SetSize(sz, sz)
     self.healIcon:SetTexture(GetSpellIcon(HEALABSORB_SPELL_ID))
 
     -- Reposition the shield row relative to font size so the two rows stay tidy.
@@ -143,8 +153,8 @@ function PA:RefreshDisplay()
         self.shieldText:SetText(Format(PREVIEW_SHIELD, db.AbbreviateNumber, db.HideWhenZero ~= false))
         self.healText:SetText(Format(PREVIEW_HEALABSORB, db.AbbreviateNumber, db.HideWhenZero ~= false))
         local showIcon = db.ShowIcon ~= false
-        self.shieldIcon:SetShown(showIcon and self.shieldIcon:GetTexture() ~= nil)
-        self.healIcon:SetShown(showIcon and self.healIcon:GetTexture() ~= nil)
+        self.shieldIconFrame:SetShown(showIcon and self.shieldIcon:GetTexture() ~= nil)
+        self.healIconFrame:SetShown(showIcon and self.healIcon:GetTexture() ~= nil)
         self.frame:Show()
         return
     end
@@ -158,8 +168,8 @@ function PA:RefreshDisplay()
         and (now - self.lastShieldEvent) < ICON_HIDE_DELAY
     local healActive = showIcon and self.lastHealAbsorbEvent
         and (now - self.lastHealAbsorbEvent) < ICON_HIDE_DELAY
-    self.shieldIcon:SetShown(shieldActive and self.shieldIcon:GetTexture() ~= nil)
-    self.healIcon:SetShown(healActive and self.healIcon:GetTexture() ~= nil)
+    self.shieldIconFrame:SetShown(shieldActive and self.shieldIcon:GetTexture() ~= nil)
+    self.healIconFrame:SetShown(healActive and self.healIcon:GetTexture() ~= nil)
 
     self.frame:Show()
 end
