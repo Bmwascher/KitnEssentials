@@ -131,8 +131,10 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
     card3:AddRow(row3a, Theme.rowHeight)
 
     -- Behavior note explaining the Abbreviate toggle, then a divider before the
-    -- layout settings below.
-    card3:AddLabel("Abbreviate off shows full numbers that persist while a shield is up and clear instantly at 0; on shows 1.2M numbers that fade the Fade Duration after the last change.")
+    -- layout settings below. The theme's text tiers are all white, so dim this note
+    -- explicitly to read as gray helper text distinct from the row labels.
+    local behaviorNote = card3:AddLabel("Abbreviate off shows full numbers that persist while a shield is up and clear instantly at 0; on shows 1.2M numbers that fade the Fade Duration after the last change.")
+    behaviorNote:SetTextColor(0.6, 0.6, 0.6, 1)
     card3:AddSeparator()
 
     local row3grow = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
