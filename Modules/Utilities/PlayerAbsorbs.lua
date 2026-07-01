@@ -114,8 +114,6 @@ function PA:ApplySettings()
     if not self.frame then return end
     local db = self.db
 
-    self.frame:SetScale(db.Scale or 1)
-
     KE:ApplyFontToText(self.shieldText, db.FontFace, db.FontSize, db.FontOutline)
     KE:ApplyFontToText(self.healText, db.FontFace, db.FontSize, db.FontOutline)
 

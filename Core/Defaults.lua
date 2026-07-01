@@ -462,7 +462,6 @@ local Defaults = {
             anchorFrameType = "PLAYERFRAME",
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, 40), -- above the player frame; tune in-game
-            Scale = 1.0,
             IconSize = 18,
             ShowIcon = true,
             -- true = abbreviated (1.2M): number+icon fade FadeTime sec after a change

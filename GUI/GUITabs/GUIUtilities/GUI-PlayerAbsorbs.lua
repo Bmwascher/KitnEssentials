@@ -120,7 +120,7 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
     manager:Register(iconCheck, "all")
     card3:AddRow(row3a, Theme.rowHeight)
 
-    local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
     local iconSizeSlider = GUIFrame:CreateSlider(row3b, "Icon Size", {
         min = 8, max = 48, step = 1,
         value = db.IconSize or 18,
@@ -128,24 +128,14 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
     })
     row3b:AddWidget(iconSizeSlider, 0.5)
     manager:Register(iconSizeSlider, "all")
-    local scaleSlider = GUIFrame:CreateSlider(row3b, "Scale", {
-        min = 50, max = 200, step = 1,
-        value = math.floor((db.Scale or 1.0) * 100),
-        callback = function(val) db.Scale = val / 100; ApplySettings() end,
-    })
-    row3b:AddWidget(scaleSlider, 0.5)
-    manager:Register(scaleSlider, "all")
-    card3:AddRow(row3b, Theme.rowHeight)
-
-    local row3c = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
-    local fadeSlider = GUIFrame:CreateSlider(row3c, "Fade Time (sec)", {
+    local fadeSlider = GUIFrame:CreateSlider(row3b, "Fade Time (sec)", {
         min = 2, max = 20, step = 1,
         value = db.FadeTime or 10,
         callback = function(val) db.FadeTime = val; ApplySettings() end,
     })
-    row3c:AddWidget(fadeSlider, 0.5)
+    row3b:AddWidget(fadeSlider, 0.5)
     manager:Register(fadeSlider, "all")
-    card3:AddRow(row3c, Theme.rowHeightLast, 0)
+    card3:AddRow(row3b, Theme.rowHeightLast, 0)
 
     card3:AddLabel("Abbreviate on: 1.2M-style numbers; the readout fades Fade Time seconds after the last change (a dropped shield flashes 0, then clears).")
     card3:AddLabel("Abbreviate off: full numbers that stay while a shield is up and vanish the instant it hits 0 - only the icon fades.")
