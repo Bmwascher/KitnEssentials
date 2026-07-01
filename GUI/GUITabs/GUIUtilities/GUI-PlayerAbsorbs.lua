@@ -54,6 +54,11 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
     -- directions, Separation only to Split L/R. Each greys out when it does nothing.
     manager:SetCondition("nonSplit", function() return (db.GrowthDirection or "DOWN") ~= "SPLIT" end)
     manager:SetCondition("splitOnly", function() return db.GrowthDirection == "SPLIT" end)
+    -- Icon Side only applies to the stacked Down/Up directions.
+    manager:SetCondition("stackedOnly", function()
+        local d = db.GrowthDirection or "DOWN"
+        return d == "DOWN" or d == "UP"
+    end)
 
     ----------------------------------------------------------------
     -- Card 1: Enable
@@ -140,6 +145,17 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
     })
     row3grow:AddWidget(growDropdown, 0.5)
     manager:Register(growDropdown, "all")
+    local iconSideDropdown = GUIFrame:CreateDropdown(row3grow, "Icon Side", {
+        options = {
+            { key = "LEFT",  text = "Left" },
+            { key = "RIGHT", text = "Right" },
+        },
+        value = db.IconSide or "LEFT",
+        callback = function(key) db.IconSide = key; ApplySettings() end,
+        tooltip = "Which side of the number the icon sits on. Applies to the Down/Up stacked directions; the side-by-side and Split directions set it automatically.",
+    })
+    row3grow:AddWidget(iconSideDropdown, 0.5)
+    manager:Register(iconSideDropdown, "stackedOnly")
     card3:AddRow(row3grow, Theme.rowHeight)
 
     -- Sizing

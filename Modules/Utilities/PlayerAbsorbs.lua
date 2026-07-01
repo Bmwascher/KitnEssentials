@@ -170,21 +170,25 @@ function PA:PositionRows(shieldShown, healShown)
     local sz = db.IconSize or 18
     local rowGap = db.RowSpacing or ROW_GAP
     local stepV = math.max(sz, db.FontSize or 18) + rowGap
+    -- Icon side (left/right of the number) is user-configurable only in the stacked
+    -- Down/Up modes; the side-by-side and lone-in-horizontal cases keep the
+    -- layout-chosen side so the numbers grow clear of each other.
+    local iconRight = (dir == "DOWN" or dir == "UP") and db.IconSide == "RIGHT"
     local healCenter = healShown and not shieldShown
 
-    -- Shield row: always at the anchor center, number grows right.
+    -- Shield row: at the anchor center; number sits on the side set by Icon Side.
     self.shieldIconFrame:ClearAllPoints()
     self.shieldIconFrame:SetPoint("LEFT", f, "CENTER", 0, 0)
-    self:AnchorText(self.shieldText, self.shieldIconFrame, showIcon, false)
+    self:AnchorText(self.shieldText, self.shieldIconFrame, showIcon, iconRight)
 
     -- Heal-absorb row: centered when lone, else grown off the shield row.
     self.healIconFrame:ClearAllPoints()
     if healCenter then
         self.healIconFrame:SetPoint("LEFT", f, "CENTER", 0, 0)
-        self:AnchorText(self.healText, self.healIconFrame, showIcon, false)
+        self:AnchorText(self.healText, self.healIconFrame, showIcon, iconRight)
     elseif dir == "UP" then
         self.healIconFrame:SetPoint("LEFT", f, "CENTER", 0, stepV)
-        self:AnchorText(self.healText, self.healIconFrame, showIcon, false)
+        self:AnchorText(self.healText, self.healIconFrame, showIcon, iconRight)
     elseif dir == "RIGHT" then
         self.healIconFrame:SetPoint("LEFT", self.shieldText, "RIGHT", rowGap, 0)
         self:AnchorText(self.healText, self.healIconFrame, showIcon, false)
@@ -193,7 +197,7 @@ function PA:PositionRows(shieldShown, healShown)
         self:AnchorText(self.healText, self.healIconFrame, showIcon, true)
     else -- DOWN (default)
         self.healIconFrame:SetPoint("LEFT", f, "CENTER", 0, -stepV)
-        self:AnchorText(self.healText, self.healIconFrame, showIcon, false)
+        self:AnchorText(self.healText, self.healIconFrame, showIcon, iconRight)
     end
 end
 
