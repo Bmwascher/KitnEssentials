@@ -130,6 +130,11 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
     manager:Register(iconCheck, "all")
     card3:AddRow(row3a, Theme.rowHeight)
 
+    -- Behavior note explaining the Abbreviate toggle, then a divider before the
+    -- layout settings below.
+    card3:AddLabel("Abbreviate off shows full numbers that persist while a shield is up and clear instantly at 0; on shows 1.2M numbers that fade the Fade Duration after the last change.")
+    card3:AddSeparator()
+
     local row3grow = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
     local growDropdown = GUIFrame:CreateDropdown(row3grow, "Growth Direction", {
         options = {
@@ -211,8 +216,6 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
     row3sep:AddWidget(splitLeadCheck, 0.5)
     manager:Register(splitLeadCheck, "splitOnly")
     card3:AddRow(row3sep, Theme.rowHeightLast, 0)
-
-    card3:AddLabel("Abbreviate off shows full numbers that persist while a shield is up and clear instantly at 0; on shows 1.2M numbers that fade the Fade Duration after the last change.")
 
     yOffset = card3:GetNextOffset()
 
