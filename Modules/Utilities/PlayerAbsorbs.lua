@@ -128,8 +128,24 @@ function PA:ApplySettings()
     self.healIconFrame:SetSize(sz, sz)
     self.healIcon:SetTexture(GetSpellIcon(HEALABSORB_SPELL_ID))
 
+    -- Any settings change may alter layout; force the next refresh to re-anchor.
+    self._lastShieldShown = nil
+    self._lastHealShown = nil
+
     self:ApplyPosition()
     self:RefreshDisplay()
+end
+
+-- Re-applies an icon texture if it came back nil at the first ApplySettings (spell data
+-- not yet cached that early). Cheap self-heal: GetSpellIcon runs only while a texture is
+-- still missing, then these become no-ops.
+function PA:EnsureIcons()
+    if self.shieldIcon and self.shieldIcon:GetTexture() == nil then
+        self.shieldIcon:SetTexture(GetSpellIcon(SHIELD_SPELL_ID))
+    end
+    if self.healIcon and self.healIcon:GetTexture() == nil then
+        self.healIcon:SetTexture(GetSpellIcon(HEALABSORB_SPELL_ID))
+    end
 end
 
 -- Anchors a row's number to its icon. growLeft mirrors the row so the number
@@ -309,9 +325,10 @@ function PA:RefreshDisplay()
     self.refreshScheduled = nil
     if not self.frame then return end
     local db = self.db
-    local Format = KE.PlayerAbsorbsFormat.Format
+    self:EnsureIcons()
 
     if self.isPreview then
+        local Format = KE.PlayerAbsorbsFormat.Format
         local showIcon = db.ShowIcon ~= false
         self.shieldText:SetText(Format(PREVIEW_SHIELD, db.AbbreviateNumber, db.HideWhenZero ~= false))
         self.shieldText:Show()
@@ -335,7 +352,17 @@ function PA:RefreshDisplay()
     local healShown = self:RenderRow(self.healText, self.healIconFrame, self.healIcon,
         self:GetHealAbsorbAmount(), self.lastHealAbsorbEvent, now, hold, abbreviate, hideWhenZero, showIcon)
 
-    self:PositionRows(shieldShown, healShown)
+    -- Re-anchor only when the shown-state changed. PositionRows sets purely RELATIVE
+    -- anchors (frame->frame / frame->FontString) and reads only db + shown-state, never
+    -- text width -- so a number's width change is tracked live by the layout engine
+    -- (this is the documented "icon shifts with number width" behavior) with no re-run
+    -- needed. Only which rows are shown (auto-center) or a settings change (which clears
+    -- this cache in ApplySettings/HidePreview) actually alters the anchor structure.
+    if shieldShown ~= self._lastShieldShown or healShown ~= self._lastHealShown then
+        self:PositionRows(shieldShown, healShown)
+        self._lastShieldShown = shieldShown
+        self._lastHealShown = healShown
+    end
 
     if shieldShown or healShown then
         self.frame:Show()
@@ -349,23 +376,40 @@ function PA:ScheduleRefresh()
     self.refreshScheduled = C_Timer.NewTimer(REFRESH_THROTTLE, function() self:RefreshDisplay() end)
 end
 
--- Records an absorb-change event time for one row and schedules a refresh after the
--- fade window (GetHold) so the row re-evaluates if nothing newer arrives. Per-type
--- timers so the shield row times out on its own schedule regardless of heal activity.
+-- Records an absorb-change event time for one row and ensures a SINGLE hide timer is
+-- armed, so the row re-evaluates (and hides) once the fade window (GetHold) elapses
+-- with no newer event. The timer is deliberately NOT cancelled/rearmed per event: a
+-- running timer re-checks the (moved-forward) event time when it fires and extends
+-- itself if needed. UNIT_ABSORB_AMOUNT_CHANGED fires dozens of times a second in
+-- sustained combat, so a cancel+NewTimer+closure per event is real GC churn; this
+-- caps it to ~one timer per fade window. Per-row so shield and heal time out
+-- independently.
 function PA:MarkActive(which)
-    local now = GetTime()
-    local timerKey
     if which == "shield" then
-        self.lastShieldEvent = now
-        timerKey = "shieldHideTimer"
+        self.lastShieldEvent = GetTime()
+        if not self.shieldHideTimer then self:ArmHideTimer("shield") end
     else
-        self.lastHealAbsorbEvent = now
-        timerKey = "healHideTimer"
+        self.lastHealAbsorbEvent = GetTime()
+        if not self.healHideTimer then self:ArmHideTimer("heal") end
     end
-    if self[timerKey] then self[timerKey]:Cancel() end
-    self[timerKey] = C_Timer.NewTimer(self:GetHold(), function()
+end
+
+-- Arms the hide timer for one row for whatever is left of its fade window. On fire, if
+-- a newer event pushed the deadline out, it rearms for the remainder instead of hiding
+-- early; otherwise the window has lapsed and it refreshes (which hides the idle row).
+function PA:ArmHideTimer(which)
+    local timerKey = which == "shield" and "shieldHideTimer" or "healHideTimer"
+    local lastKey = which == "shield" and "lastShieldEvent" or "lastHealAbsorbEvent"
+    local remaining = self:GetHold() - (GetTime() - (self[lastKey] or 0))
+    if remaining < 0.05 then remaining = 0.05 end
+    self[timerKey] = C_Timer.NewTimer(remaining, function()
         self[timerKey] = nil
-        self:RefreshDisplay()
+        local last = self[lastKey]
+        if last and (GetTime() - last) < self:GetHold() then
+            self:ArmHideTimer(which)
+        else
+            self:RefreshDisplay()
+        end
     end)
 end
 
@@ -430,6 +474,9 @@ end
 function PA:HidePreview()
     if not self.isPreview then return end
     self.isPreview = false
+    -- Live shown-state differs from preview's forced both-shown; re-anchor next refresh.
+    self._lastShieldShown = nil
+    self._lastHealShown = nil
     if self.frame and not (self.db.Enabled and self:IsEnabled()) then
         self.frame:Hide()
     else
@@ -452,7 +499,9 @@ function PA:OnEnable()
     self:RegisterEvent("UNIT_MAX_HEALTH_MODIFIERS_CHANGED", "OnGenericChanged")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnEnteringWorld")
 
-    C_Timer.After(0.5, function() self:ApplyPosition() end)
+    -- Small delay so the anchor frame (ElvUF_Player / PlayerFrame) exists before the
+    -- first position pass. Tracked so OnDisable can cancel it on a fast enable/disable.
+    self.posTimer = C_Timer.NewTimer(0.5, function() self.posTimer = nil; self:ApplyPosition() end)
     self:ScheduleRefresh()
 end
 
@@ -460,6 +509,7 @@ function PA:OnDisable()
     if self.refreshScheduled then self.refreshScheduled:Cancel(); self.refreshScheduled = nil end
     if self.shieldHideTimer then self.shieldHideTimer:Cancel(); self.shieldHideTimer = nil end
     if self.healHideTimer then self.healHideTimer:Cancel(); self.healHideTimer = nil end
+    if self.posTimer then self.posTimer:Cancel(); self.posTimer = nil end
     self.isPreview = false
     if self.frame then self.frame:Hide() end
     self:UnregisterAllEvents()
