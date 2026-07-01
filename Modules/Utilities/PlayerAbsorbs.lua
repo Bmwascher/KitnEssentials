@@ -72,10 +72,10 @@ function PA:CreateFrame()
     f:SetMouseClickEnabled(false)
     f:Hide()
 
-    -- Shield row + heal-absorb row. Icons anchor to a fixed point per row (see
-    -- PA:PositionRows) so they never shift as the number width changes; the number
-    -- grows away from its icon. Objects are created here; PA:PositionRows lays them
-    -- out each refresh (auto-centering a lone row) and PA:AnchorText sets intra-row.
+    -- Shield row + heal-absorb row. Created here; PA:PositionRows lays them out each
+    -- refresh per growth direction: PA:CenterRow centers a row on the anchor (stacked
+    -- and lone cases), PA:AnchorText sets the intra-row icon<->number for the
+    -- side-by-side and split flanks.
     f.shieldText = f:CreateFontString(nil, "OVERLAY")
     f.shieldText:SetJustifyH("LEFT")
 
@@ -165,12 +165,36 @@ function PA:AnchorText(textObj, iconFrame, showIcon, growLeft)
     end
 end
 
--- Positions the two rows. The shield row is the primary and holds the anchor
--- center; the heal-absorb row grows away from it in db.GrowthDirection (DOWN/UP =
--- stacked, RIGHT/LEFT = side-by-side). When only the heal row is shown it takes the
--- center instead -- reachable only in abbreviated mode, where shown-state is exact;
--- in full-numbers mode both rows count as shown, so this keeps fixed slots. Icons
--- stay put as their OWN number widens; a row only moves when the OTHER row toggles.
+-- Centers a row's [icon][gap][number] on the frame's CENTER. The NUMBER is the
+-- centered element: its own center is pinned to the anchor and nudged by half the
+-- icon+gap so the whole row straddles the anchor, and the icon tracks the number's
+-- edge. This is the one layout where the icon shifts slightly as the number width
+-- changes -- unavoidable, because centering the combined row means the icon can't be
+-- pinned while the (secret-width) number grows. Anchoring a frame to a FontString
+-- edge is resolved in C, so no secret width is ever read in Lua (same safe pattern as
+-- the LEFT / split icon-lead growth). yOff stacks a second row off the center line.
+function PA:CenterRow(textObj, iconFrame, showIcon, iconRight, yOff)
+    local sz = self.db.IconSize or 18
+    local gap = self.db.IconSpacing or ICON_TEXT_GAP
+    local shift = showIcon and (sz + gap) * 0.5 or 0
+    textObj:ClearAllPoints()
+    textObj:SetJustifyH("CENTER")
+    iconFrame:ClearAllPoints()
+    if iconRight then
+        textObj:SetPoint("CENTER", self.frame, "CENTER", -shift, yOff)
+        iconFrame:SetPoint("LEFT", textObj, "RIGHT", showIcon and gap or 0, 0)
+    else
+        textObj:SetPoint("CENTER", self.frame, "CENTER", shift, yOff)
+        iconFrame:SetPoint("RIGHT", textObj, "LEFT", showIcon and -gap or 0, 0)
+    end
+end
+
+-- Positions the two rows for the non-split growth directions. Stacked (DOWN/UP)
+-- centers each row on the anchor (see PA:CenterRow), offset vertically. Side-by-side
+-- (RIGHT/LEFT) keeps the shield on the anchor and grows the heal row away from it,
+-- since a two-number line can't be centered (both widths are secret). A row shown
+-- alone always centers -- reachable only in abbreviated mode, where shown-state is
+-- exact; in full-numbers mode both rows count as shown.
 function PA:PositionRows(shieldShown, healShown)
     if not self.frame then return end
     local db = self.db
@@ -187,41 +211,44 @@ function PA:PositionRows(shieldShown, healShown)
     local rowGap = db.RowSpacing or ROW_GAP
     local stepV = math.max(sz, db.FontSize or 18) + rowGap
     -- Icon side (left/right of the number) is user-configurable only in the stacked
-    -- Down/Up modes; the side-by-side and lone-in-horizontal cases keep the
-    -- layout-chosen side so the numbers grow clear of each other.
+    -- Down/Up modes; side-by-side keeps icon-left so the numbers grow clear.
     local iconRight = (dir == "DOWN" or dir == "UP") and db.IconSide == "RIGHT"
-    local healCenter = healShown and not shieldShown
 
-    -- Shield row: at the anchor center; number sits on the side set by Icon Side.
+    -- Stacked: both rows center on the anchor, the heal row offset vertically. A lone
+    -- heal row sits on the center line itself.
+    if dir == "DOWN" or dir == "UP" then
+        local healY = (dir == "UP") and stepV or -stepV
+        if healShown and not shieldShown then healY = 0 end
+        self:CenterRow(self.shieldText, self.shieldIconFrame, showIcon, iconRight, 0)
+        self:CenterRow(self.healText, self.healIconFrame, showIcon, iconRight, healY)
+        return
+    end
+
+    -- Side-by-side: a row shown alone centers on the anchor; when both show they grow
+    -- off each other (the pair can't be centered -- both number widths are secret).
+    if healShown and not shieldShown then
+        self:CenterRow(self.healText, self.healIconFrame, showIcon, false, 0)
+        return
+    end
+    if shieldShown and not healShown then
+        self:CenterRow(self.shieldText, self.shieldIconFrame, showIcon, false, 0)
+        return
+    end
+
+    -- Both shown: shield holds the anchor (icon left edge on center), heal grows away.
     self.shieldIconFrame:ClearAllPoints()
     self.shieldIconFrame:SetPoint("LEFT", f, "CENTER", 0, 0)
-    self:AnchorText(self.shieldText, self.shieldIconFrame, showIcon, iconRight)
-
-    -- Heal-absorb row: centered when lone, else grown off the shield row.
+    self:AnchorText(self.shieldText, self.shieldIconFrame, showIcon, false)
     self.healIconFrame:ClearAllPoints()
-    if healCenter then
-        self.healIconFrame:SetPoint("LEFT", f, "CENTER", 0, 0)
-        self:AnchorText(self.healText, self.healIconFrame, showIcon, iconRight)
-    elseif dir == "UP" then
-        self.healIconFrame:SetPoint("LEFT", f, "CENTER", 0, stepV)
-        self:AnchorText(self.healText, self.healIconFrame, showIcon, iconRight)
-    elseif dir == "RIGHT" then
+    if dir == "RIGHT" then
         self.healIconFrame:SetPoint("LEFT", self.shieldText, "RIGHT", rowGap, 0)
         self:AnchorText(self.healText, self.healIconFrame, showIcon, false)
-    elseif dir == "LEFT" then
-        -- Icon-leads to the LEFT of the shield (mirrors RIGHT's reading order): pin the
-        -- heal number's RIGHT edge just before the shield and let it grow leftward, with
-        -- the icon just left of the number. The icon tracks the number's left edge, so it
-        -- shifts a little as the number width changes -- unavoidable without measuring
-        -- secret-derived text width.
+    else -- LEFT: heal number pinned just left of the shield, grows left, icon tracking.
         local gap = db.IconSpacing or ICON_TEXT_GAP
         self.healText:ClearAllPoints()
         self.healText:SetJustifyH("RIGHT")
         self.healText:SetPoint("RIGHT", self.shieldIconFrame, "LEFT", -rowGap, 0)
         self.healIconFrame:SetPoint("RIGHT", self.healText, "LEFT", showIcon and -gap or 0, 0)
-    else -- DOWN (default)
-        self.healIconFrame:SetPoint("LEFT", f, "CENTER", 0, -stepV)
-        self:AnchorText(self.healText, self.healIconFrame, showIcon, iconRight)
     end
 end
 
@@ -260,11 +287,9 @@ function PA:PositionSplit(shieldShown, healShown, showIcon)
             self:AnchorText(self.healText, self.healIconFrame, showIcon, false)
         end
     else
-        -- Lone absorb: whichever is shown centers on the anchor, number grows right.
-        self.shieldIconFrame:SetPoint("LEFT", f, "CENTER", 0, 0)
-        self:AnchorText(self.shieldText, self.shieldIconFrame, showIcon, false)
-        self.healIconFrame:SetPoint("LEFT", f, "CENTER", 0, 0)
-        self:AnchorText(self.healText, self.healIconFrame, showIcon, false)
+        -- Lone absorb: whichever is shown centers on the anchor.
+        self:CenterRow(self.shieldText, self.shieldIconFrame, showIcon, false, 0)
+        self:CenterRow(self.healText, self.healIconFrame, showIcon, false, 0)
     end
 end
 
