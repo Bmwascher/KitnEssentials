@@ -415,27 +415,48 @@ end
 
 ---------------------------------------------------------------------------------
 -- Events
+--
+-- This module reads ONLY the player's own absorbs, so the unit events are registered
+-- with frame:RegisterUnitEvent(event, "player") -- a C-level filter, so the handler
+-- fires ONLY for the player and never receives another unit's token. That avoids waking
+-- on every group member's max-health / heal-prediction churn, and it sidesteps the
+-- secret unit token that UNIT_MAX_HEALTH_MODIFIERS_CHANGED (SecretPayloads=true) carries
+-- for non-player units: with no foreign token ever received, there is no unit comparison
+-- to taint. AceEvent-3.0 has no RegisterUnitEvent, so these run off the module's own
+-- frame; PLAYER_ENTERING_WORLD is not a unit event and uses plain RegisterEvent.
 ---------------------------------------------------------------------------------
-function PA:OnShieldChanged(_, unit)
-    if unit ~= "player" then return end
-    self:MarkActive("shield")
-    self:ScheduleRefresh()
+function PA:OnFrameEvent(event)
+    if event == "UNIT_ABSORB_AMOUNT_CHANGED" then
+        self:MarkActive("shield")
+        self:ScheduleRefresh()
+    elseif event == "UNIT_HEAL_ABSORB_AMOUNT_CHANGED" then
+        self:MarkActive("heal")
+        self:ScheduleRefresh()
+    elseif event == "PLAYER_ENTERING_WORLD" then
+        self:ApplyPosition()
+        self:ScheduleRefresh()
+    else -- UNIT_HEAL_PREDICTION / UNIT_MAXHEALTH / UNIT_MAX_HEALTH_MODIFIERS_CHANGED
+        self:ScheduleRefresh()
+    end
 end
 
-function PA:OnHealAbsorbChanged(_, unit)
-    if unit ~= "player" then return end
-    self:MarkActive("heal")
-    self:ScheduleRefresh()
+function PA:RegisterFrameEvents()
+    local f = self.frame
+    if not f then return end
+    f:SetScript("OnEvent", function(_, event) self:OnFrameEvent(event) end)
+    f:RegisterUnitEvent("UNIT_ABSORB_AMOUNT_CHANGED", "player")
+    f:RegisterUnitEvent("UNIT_HEAL_ABSORB_AMOUNT_CHANGED", "player")
+    f:RegisterUnitEvent("UNIT_HEAL_PREDICTION", "player")
+    f:RegisterUnitEvent("UNIT_MAXHEALTH", "player")
+    f:RegisterUnitEvent("UNIT_MAX_HEALTH_MODIFIERS_CHANGED", "player")
+    f:RegisterEvent("PLAYER_ENTERING_WORLD")
 end
 
-function PA:OnGenericChanged(_, unit)
-    if unit and unit ~= "player" then return end
-    self:ScheduleRefresh()
-end
-
-function PA:OnEnteringWorld()
-    self:ApplyPosition()
-    self:ScheduleRefresh()
+function PA:UnregisterFrameEvents()
+    local f = self.frame
+    if not f then return end
+    f:UnregisterAllEvents()
+    f:SetScript("OnEvent", nil)
 end
 
 ---------------------------------------------------------------------------------
@@ -492,12 +513,7 @@ function PA:OnEnable()
     self:CreateFrame()
     self:RegWithEditMode()
 
-    self:RegisterEvent("UNIT_ABSORB_AMOUNT_CHANGED", "OnShieldChanged")
-    self:RegisterEvent("UNIT_HEAL_ABSORB_AMOUNT_CHANGED", "OnHealAbsorbChanged")
-    self:RegisterEvent("UNIT_HEAL_PREDICTION", "OnGenericChanged")
-    self:RegisterEvent("UNIT_MAXHEALTH", "OnGenericChanged")
-    self:RegisterEvent("UNIT_MAX_HEALTH_MODIFIERS_CHANGED", "OnGenericChanged")
-    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnEnteringWorld")
+    self:RegisterFrameEvents()
 
     -- Small delay so the anchor frame (ElvUF_Player / PlayerFrame) exists before the
     -- first position pass. Tracked so OnDisable can cancel it on a fast enable/disable.
@@ -511,6 +527,6 @@ function PA:OnDisable()
     if self.healHideTimer then self.healHideTimer:Cancel(); self.healHideTimer = nil end
     if self.posTimer then self.posTimer:Cancel(); self.posTimer = nil end
     self.isPreview = false
+    self:UnregisterFrameEvents()
     if self.frame then self.frame:Hide() end
-    self:UnregisterAllEvents()
 end
