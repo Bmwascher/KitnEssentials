@@ -104,33 +104,24 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
     local card3 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
     manager:Register(card3, "all")
 
-    -- Visibility
     local row3a = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local abbrevCheck = GUIFrame:CreateCheckbox(row3a, "Abbreviate Numbers", {
+        value = db.AbbreviateNumber == true,
+        callback = function(checked) db.AbbreviateNumber = checked; ApplySettings() end,
+        tooltip = "On: 1.2M-style numbers that fade after the Fade Duration. Off: full numbers that stay while a shield is up and clear instantly at 0.",
+    })
+    row3a:AddWidget(abbrevCheck, 0.5)
+    manager:Register(abbrevCheck, "all")
     local iconCheck = GUIFrame:CreateCheckbox(row3a, "Show Icon", {
         value = db.ShowIcon ~= false,
         callback = function(checked) db.ShowIcon = checked; ApplySettings() end,
     })
     row3a:AddWidget(iconCheck, 0.5)
     manager:Register(iconCheck, "all")
-    local textCheck = GUIFrame:CreateCheckbox(row3a, "Show Text", {
-        value = db.ShowText ~= false,
-        callback = function(checked) db.ShowText = checked; ApplySettings() end,
-        tooltip = "Hide to show only the icon.",
-    })
-    row3a:AddWidget(textCheck, 0.5)
-    manager:Register(textCheck, "all")
     card3:AddRow(row3a, Theme.rowHeight)
 
-    -- Number format + growth
-    local row3fmt = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
-    local abbrevCheck = GUIFrame:CreateCheckbox(row3fmt, "Abbreviate Numbers", {
-        value = db.AbbreviateNumber == true,
-        callback = function(checked) db.AbbreviateNumber = checked; ApplySettings() end,
-        tooltip = "On: 1.2M-style numbers that fade after the Fade Duration. Off: full numbers that stay while a shield is up and clear instantly at 0.",
-    })
-    row3fmt:AddWidget(abbrevCheck, 0.5)
-    manager:Register(abbrevCheck, "all")
-    local growDropdown = GUIFrame:CreateDropdown(row3fmt, "Growth Direction", {
+    local row3grow = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local growDropdown = GUIFrame:CreateDropdown(row3grow, "Growth Direction", {
         options = {
             { key = "DOWN",  text = "Down" },
             { key = "UP",    text = "Up" },
@@ -141,9 +132,9 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
         callback = function(key) db.GrowthDirection = key; ApplySettings() end,
         tooltip = "Which way the heal-absorb row grows when both absorbs are active. A lone absorb centers on the anchor (exact while abbreviating; fixed slots with full numbers).",
     })
-    row3fmt:AddWidget(growDropdown, 0.5)
+    row3grow:AddWidget(growDropdown, 0.5)
     manager:Register(growDropdown, "all")
-    card3:AddRow(row3fmt, Theme.rowHeight)
+    card3:AddRow(row3grow, Theme.rowHeight)
 
     -- Sizing
     local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeight)

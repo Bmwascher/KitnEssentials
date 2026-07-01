@@ -221,31 +221,27 @@ end
 
 -- Renders one row and returns whether the frame must stay shown for it. See the
 -- Display header for the two regimes.
-function PA:RenderRow(textObj, iconFrame, iconTex, amount, lastEvent, now, hold, abbreviate, hideWhenZero, showIcon, showText)
+function PA:RenderRow(textObj, iconFrame, iconTex, amount, lastEvent, now, hold, abbreviate, hideWhenZero, showIcon)
     local Format = KE.PlayerAbsorbsFormat.Format
     local active = lastEvent ~= nil and (now - lastEvent) < hold
     local iconOK = showIcon and iconTex:GetTexture() ~= nil
     if abbreviate then
-        if active and showText then
+        if active then
             textObj:SetText(Format(amount, true, hideWhenZero))
             textObj:Show()
+            iconFrame:SetShown(iconOK)
         else
             textObj:SetText("")
             textObj:Hide()
+            iconFrame:Hide()
         end
-        iconFrame:SetShown(active and iconOK)
-        return active and (showText or iconOK)
+        return active
     end
     -- Persist regime: number self-blanks via TruncateWhenZero; icon stays transient.
-    if showText then
-        textObj:SetText(Format(amount, false, hideWhenZero))
-        textObj:Show()
-    else
-        textObj:SetText("")
-        textObj:Hide()
-    end
+    textObj:SetText(Format(amount, false, hideWhenZero))
+    textObj:Show()
     iconFrame:SetShown(active and iconOK)
-    return showText or (active and iconOK)
+    return true
 end
 
 function PA:RefreshDisplay()
@@ -256,16 +252,10 @@ function PA:RefreshDisplay()
 
     if self.isPreview then
         local showIcon = db.ShowIcon ~= false
-        local showText = db.ShowText ~= false
-        if showText then
-            self.shieldText:SetText(Format(PREVIEW_SHIELD, db.AbbreviateNumber, db.HideWhenZero ~= false))
-            self.shieldText:Show()
-            self.healText:SetText(Format(PREVIEW_HEALABSORB, db.AbbreviateNumber, db.HideWhenZero ~= false))
-            self.healText:Show()
-        else
-            self.shieldText:SetText(""); self.shieldText:Hide()
-            self.healText:SetText(""); self.healText:Hide()
-        end
+        self.shieldText:SetText(Format(PREVIEW_SHIELD, db.AbbreviateNumber, db.HideWhenZero ~= false))
+        self.shieldText:Show()
+        self.healText:SetText(Format(PREVIEW_HEALABSORB, db.AbbreviateNumber, db.HideWhenZero ~= false))
+        self.healText:Show()
         self.shieldIconFrame:SetShown(showIcon and self.shieldIcon:GetTexture() ~= nil)
         self.healIconFrame:SetShown(showIcon and self.healIcon:GetTexture() ~= nil)
         self:PositionRows(true, true)
@@ -278,12 +268,11 @@ function PA:RefreshDisplay()
     local abbreviate = db.AbbreviateNumber == true
     local hideWhenZero = db.HideWhenZero ~= false
     local showIcon = db.ShowIcon ~= false
-    local showText = db.ShowText ~= false
 
     local shieldShown = self:RenderRow(self.shieldText, self.shieldIconFrame, self.shieldIcon,
-        self:GetShieldAmount(), self.lastShieldEvent, now, hold, abbreviate, hideWhenZero, showIcon, showText)
+        self:GetShieldAmount(), self.lastShieldEvent, now, hold, abbreviate, hideWhenZero, showIcon)
     local healShown = self:RenderRow(self.healText, self.healIconFrame, self.healIcon,
-        self:GetHealAbsorbAmount(), self.lastHealAbsorbEvent, now, hold, abbreviate, hideWhenZero, showIcon, showText)
+        self:GetHealAbsorbAmount(), self.lastHealAbsorbEvent, now, hold, abbreviate, hideWhenZero, showIcon)
 
     self:PositionRows(shieldShown, healShown)
 
