@@ -464,6 +464,8 @@ local Defaults = {
             Position = DefaultPosition(0, 40), -- above the player frame; tune in-game
             IconSize = 18,
             ShowIcon = true,
+            GrowthDirection = "DOWN", -- DOWN/UP = stacked, RIGHT/LEFT = side-by-side; heal grows off the shield
+
             -- true = abbreviated (1.2M): number+icon fade FadeTime sec after a change
             -- (a secret 0 can't instant-hide while abbreviating). false = full numbers
             -- that persist while a shield is up and blank instantly at 0 (TruncateWhenZero);

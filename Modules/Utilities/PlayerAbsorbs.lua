@@ -72,10 +72,10 @@ function PA:CreateFrame()
     f:SetMouseClickEnabled(false)
     f:Hide()
 
-    -- Shield row (top) + heal-absorb row (below). Icons are pinned to a FIXED
-    -- anchor on the frame (see PA:LayoutRows) so they never shift as the number
-    -- width changes; each number is left-justified to the right of its icon and
-    -- grows outward. Objects are created here; PA:LayoutRows sets their points.
+    -- Shield row + heal-absorb row. Icons anchor to a fixed point per row (see
+    -- PA:PositionRows) so they never shift as the number width changes; the number
+    -- grows away from its icon. Objects are created here; PA:PositionRows lays them
+    -- out each refresh (auto-centering a lone row) and PA:AnchorText sets intra-row.
     f.shieldText = f:CreateFontString(nil, "OVERLAY")
     f.shieldText:SetJustifyH("LEFT")
 
@@ -128,35 +128,64 @@ function PA:ApplySettings()
     self.healIconFrame:SetSize(sz, sz)
     self.healIcon:SetTexture(GetSpellIcon(HEALABSORB_SPELL_ID))
 
-    self:LayoutRows()
     self:ApplyPosition()
     self:RefreshDisplay()
 end
 
--- Positions both rows. Icons are anchored to a FIXED point on the frame so they
--- never move as the number width changes; each number is left-justified to the
--- right of its icon. When icons are hidden the number takes the icon's slot so no
--- empty gap remains. Re-run on any font/icon-size change so the rows stay tidy.
-function PA:LayoutRows()
+-- Anchors a row's number to its icon. growLeft mirrors the row so the number
+-- extends LEFT of the icon (used by LEFT growth). With the icon hidden the number
+-- takes the icon's slot so no empty gap remains.
+function PA:AnchorText(textObj, iconFrame, showIcon, growLeft)
+    textObj:ClearAllPoints()
+    if growLeft then
+        textObj:SetJustifyH("RIGHT")
+        textObj:SetPoint("RIGHT", iconFrame, showIcon and "LEFT" or "RIGHT",
+            showIcon and -ICON_TEXT_GAP or 0, 0)
+    else
+        textObj:SetJustifyH("LEFT")
+        textObj:SetPoint("LEFT", iconFrame, showIcon and "RIGHT" or "LEFT",
+            showIcon and ICON_TEXT_GAP or 0, 0)
+    end
+end
+
+-- Positions the two rows. The shield row is the primary and holds the anchor
+-- center; the heal-absorb row grows away from it in db.GrowthDirection (DOWN/UP =
+-- stacked, RIGHT/LEFT = side-by-side). When only the heal row is shown it takes the
+-- center instead -- reachable only in abbreviated mode, where shown-state is exact;
+-- in full-numbers mode both rows count as shown, so this keeps fixed slots. Icons
+-- stay put as their OWN number widens; a row only moves when the OTHER row toggles.
+function PA:PositionRows(shieldShown, healShown)
     if not self.frame then return end
     local db = self.db
+    local f = self.frame
+    local dir = db.GrowthDirection or "DOWN"
     local sz = db.IconSize or 18
-    local rowH = math.max(sz, db.FontSize or 18)
-    local half = (rowH + ROW_GAP) * 0.5
+    local stepV = math.max(sz, db.FontSize or 18) + ROW_GAP
+    local showIcon = db.ShowIcon ~= false
+    local healCenter = healShown and not shieldShown
 
+    -- Shield row: always at the anchor center, number grows right.
     self.shieldIconFrame:ClearAllPoints()
-    self.shieldIconFrame:SetPoint("LEFT", self.frame, "LEFT", 0, half)
-    self.healIconFrame:ClearAllPoints()
-    self.healIconFrame:SetPoint("TOP", self.shieldIconFrame, "BOTTOM", 0, -ROW_GAP)
+    self.shieldIconFrame:SetPoint("LEFT", f, "CENTER", 0, 0)
+    self:AnchorText(self.shieldText, self.shieldIconFrame, showIcon, false)
 
-    self.shieldText:ClearAllPoints()
-    self.healText:ClearAllPoints()
-    if db.ShowIcon ~= false then
-        self.shieldText:SetPoint("LEFT", self.shieldIconFrame, "RIGHT", ICON_TEXT_GAP, 0)
-        self.healText:SetPoint("LEFT", self.healIconFrame, "RIGHT", ICON_TEXT_GAP, 0)
-    else
-        self.shieldText:SetPoint("LEFT", self.shieldIconFrame, "LEFT", 0, 0)
-        self.healText:SetPoint("LEFT", self.healIconFrame, "LEFT", 0, 0)
+    -- Heal-absorb row: centered when lone, else grown off the shield row.
+    self.healIconFrame:ClearAllPoints()
+    if healCenter then
+        self.healIconFrame:SetPoint("LEFT", f, "CENTER", 0, 0)
+        self:AnchorText(self.healText, self.healIconFrame, showIcon, false)
+    elseif dir == "UP" then
+        self.healIconFrame:SetPoint("LEFT", f, "CENTER", 0, stepV)
+        self:AnchorText(self.healText, self.healIconFrame, showIcon, false)
+    elseif dir == "RIGHT" then
+        self.healIconFrame:SetPoint("LEFT", self.shieldText, "RIGHT", ROW_GAP * 2, 0)
+        self:AnchorText(self.healText, self.healIconFrame, showIcon, false)
+    elseif dir == "LEFT" then
+        self.healIconFrame:SetPoint("RIGHT", self.shieldIconFrame, "LEFT", -ROW_GAP * 2, 0)
+        self:AnchorText(self.healText, self.healIconFrame, showIcon, true)
+    else -- DOWN (default)
+        self.healIconFrame:SetPoint("LEFT", f, "CENTER", 0, -stepV)
+        self:AnchorText(self.healText, self.healIconFrame, showIcon, false)
     end
 end
 
@@ -226,6 +255,7 @@ function PA:RefreshDisplay()
         self.healText:Show()
         self.shieldIconFrame:SetShown(showIcon and self.shieldIcon:GetTexture() ~= nil)
         self.healIconFrame:SetShown(showIcon and self.healIcon:GetTexture() ~= nil)
+        self:PositionRows(true, true)
         self.frame:Show()
         return
     end
@@ -240,6 +270,8 @@ function PA:RefreshDisplay()
         self:GetShieldAmount(), self.lastShieldEvent, now, hold, abbreviate, hideWhenZero, showIcon)
     local healShown = self:RenderRow(self.healText, self.healIconFrame, self.healIcon,
         self:GetHealAbsorbAmount(), self.lastHealAbsorbEvent, now, hold, abbreviate, hideWhenZero, showIcon)
+
+    self:PositionRows(shieldShown, healShown)
 
     if shieldShown or healShown then
         self.frame:Show()

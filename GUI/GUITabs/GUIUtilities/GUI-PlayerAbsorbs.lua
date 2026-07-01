@@ -120,6 +120,21 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
     manager:Register(iconCheck, "all")
     card3:AddRow(row3a, Theme.rowHeight)
 
+    local row3grow = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local growDropdown = GUIFrame:CreateDropdown(row3grow, "Growth Direction", {
+        options = {
+            { key = "DOWN",  text = "Down" },
+            { key = "UP",    text = "Up" },
+            { key = "RIGHT", text = "Right" },
+            { key = "LEFT",  text = "Left" },
+        },
+        value = db.GrowthDirection or "DOWN",
+        callback = function(key) db.GrowthDirection = key; ApplySettings() end,
+    })
+    row3grow:AddWidget(growDropdown, 0.5)
+    manager:Register(growDropdown, "all")
+    card3:AddRow(row3grow, Theme.rowHeight)
+
     local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
     local iconSizeSlider = GUIFrame:CreateSlider(row3b, "Icon Size", {
         min = 8, max = 48, step = 1,
@@ -139,6 +154,7 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
 
     card3:AddLabel("Abbreviate on: 1.2M-style numbers; the readout fades Fade Time seconds after the last change (a dropped shield flashes 0, then clears).")
     card3:AddLabel("Abbreviate off: full numbers that stay while a shield is up and vanish the instant it hits 0 - only the icon fades.")
+    card3:AddLabel("Growth Direction: where the heal-absorb row grows when both are active. A lone absorb sits centered (exact while abbreviating; fixed slots in full-numbers mode).")
 
     yOffset = card3:GetNextOffset()
 
