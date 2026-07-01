@@ -67,10 +67,12 @@ function PA:CreateFrame()
     f:SetMouseClickEnabled(false)
     f:Hide()
 
-    -- Shield row: number centered on the frame anchor, icon to its left.
+    -- Shield row (top) + heal-absorb row (below). Icons are pinned to a FIXED
+    -- anchor on the frame (see PA:LayoutRows) so they never shift as the number
+    -- width changes; each number is left-justified to the right of its icon and
+    -- grows outward. Objects are created here; PA:LayoutRows sets their points.
     f.shieldText = f:CreateFontString(nil, "OVERLAY")
-    f.shieldText:SetPoint("CENTER", f, "CENTER", 0, (db.FontSize or 18) * 0.5 + ROW_GAP)
-    f.shieldText:SetJustifyH("CENTER")
+    f.shieldText:SetJustifyH("LEFT")
 
     f.shieldIconFrame = CreateFrame("Frame", nil, f)
     f.shieldIconFrame:SetSize(db.IconSize or 18, db.IconSize or 18)
@@ -78,12 +80,9 @@ function PA:CreateFrame()
     f.shieldIcon = f.shieldIconFrame:CreateTexture(nil, "ARTWORK")
     f.shieldIcon:SetAllPoints(f.shieldIconFrame)
     KE:ApplyIconZoom(f.shieldIcon)
-    f.shieldIconFrame:SetPoint("RIGHT", f.shieldText, "LEFT", -ICON_TEXT_GAP, 0)
 
-    -- Heal-absorb row: directly below the shield row.
     f.healText = f:CreateFontString(nil, "OVERLAY")
-    f.healText:SetPoint("TOP", f.shieldText, "BOTTOM", 0, -ROW_GAP)
-    f.healText:SetJustifyH("CENTER")
+    f.healText:SetJustifyH("LEFT")
 
     f.healIconFrame = CreateFrame("Frame", nil, f)
     f.healIconFrame:SetSize(db.IconSize or 18, db.IconSize or 18)
@@ -91,7 +90,6 @@ function PA:CreateFrame()
     f.healIcon = f.healIconFrame:CreateTexture(nil, "ARTWORK")
     f.healIcon:SetAllPoints(f.healIconFrame)
     KE:ApplyIconZoom(f.healIcon)
-    f.healIconFrame:SetPoint("RIGHT", f.healText, "LEFT", -ICON_TEXT_GAP, 0)
 
     self.frame = f
     self.shieldText = f.shieldText
@@ -127,12 +125,36 @@ function PA:ApplySettings()
     self.healIconFrame:SetSize(sz, sz)
     self.healIcon:SetTexture(GetSpellIcon(HEALABSORB_SPELL_ID))
 
-    -- Reposition the shield row relative to font size so the two rows stay tidy.
-    self.shieldText:ClearAllPoints()
-    self.shieldText:SetPoint("CENTER", self.frame, "CENTER", 0, (db.FontSize or 18) * 0.5 + ROW_GAP)
-
+    self:LayoutRows()
     self:ApplyPosition()
     self:RefreshDisplay()
+end
+
+-- Positions both rows. Icons are anchored to a FIXED point on the frame so they
+-- never move as the number width changes; each number is left-justified to the
+-- right of its icon. When icons are hidden the number takes the icon's slot so no
+-- empty gap remains. Re-run on any font/icon-size change so the rows stay tidy.
+function PA:LayoutRows()
+    if not self.frame then return end
+    local db = self.db
+    local sz = db.IconSize or 18
+    local rowH = math.max(sz, db.FontSize or 18)
+    local half = (rowH + ROW_GAP) * 0.5
+
+    self.shieldIconFrame:ClearAllPoints()
+    self.shieldIconFrame:SetPoint("LEFT", self.frame, "LEFT", 0, half)
+    self.healIconFrame:ClearAllPoints()
+    self.healIconFrame:SetPoint("TOP", self.shieldIconFrame, "BOTTOM", 0, -ROW_GAP)
+
+    self.shieldText:ClearAllPoints()
+    self.healText:ClearAllPoints()
+    if db.ShowIcon ~= false then
+        self.shieldText:SetPoint("LEFT", self.shieldIconFrame, "RIGHT", ICON_TEXT_GAP, 0)
+        self.healText:SetPoint("LEFT", self.healIconFrame, "RIGHT", ICON_TEXT_GAP, 0)
+    else
+        self.shieldText:SetPoint("LEFT", self.shieldIconFrame, "LEFT", 0, 0)
+        self.healText:SetPoint("LEFT", self.healIconFrame, "LEFT", 0, 0)
+    end
 end
 
 function PA:ApplyPosition()
