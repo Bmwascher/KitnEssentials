@@ -50,6 +50,11 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
         manager:UpdateAll(db.Enabled ~= false)
     end
 
+    -- Contextual spacing sliders: Row Spacing applies to the stacked/adjacent
+    -- directions, Separation only to Split L/R. Each greys out when it does nothing.
+    manager:SetCondition("nonSplit", function() return (db.GrowthDirection or "DOWN") ~= "SPLIT" end)
+    manager:SetCondition("splitOnly", function() return db.GrowthDirection == "SPLIT" end)
+
     ----------------------------------------------------------------
     -- Card 1: Enable
     ----------------------------------------------------------------
@@ -130,7 +135,7 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
             { key = "SPLIT", text = "Split L/R" },
         },
         value = db.GrowthDirection or "DOWN",
-        callback = function(key) db.GrowthDirection = key; ApplySettings() end,
+        callback = function(key) db.GrowthDirection = key; ApplySettings(); RefreshStates() end,
         tooltip = "Which way the heal-absorb row grows when both absorbs are active. Split L/R flanks them on opposite sides of the anchor (gap = Separation). A lone absorb centers on the anchor (exact while abbreviating; fixed slots with full numbers).",
     })
     row3grow:AddWidget(growDropdown, 0.5)
@@ -170,7 +175,7 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
         callback = function(val) db.RowSpacing = val; ApplySettings() end,
     })
     row3space:AddWidget(rowSpaceSlider, 0.5)
-    manager:Register(rowSpaceSlider, "all")
+    manager:Register(rowSpaceSlider, "nonSplit")
     card3:AddRow(row3space, Theme.rowHeight)
 
     local row3sep = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
@@ -181,7 +186,7 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
         tooltip = "Gap between the two sides when Growth Direction is Split L/R. No effect in the other directions.",
     })
     row3sep:AddWidget(sepSlider, 0.5)
-    manager:Register(sepSlider, "all")
+    manager:Register(sepSlider, "splitOnly")
     card3:AddRow(row3sep, Theme.rowHeightLast, 0)
 
     card3:AddLabel("Abbreviate off shows full numbers that persist while a shield is up and clear instantly at 0; on shows 1.2M numbers that fade the Fade Duration after the last change.")
