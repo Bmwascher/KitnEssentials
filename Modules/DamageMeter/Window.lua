@@ -25,7 +25,7 @@ local UIParent = UIParent
 local issecretvalue = issecretvalue
 local RAID_CLASS_COLORS = RAID_CLASS_COLORS
 local Enum = Enum
-local UnitName = UnitName
+local Ambiguate = Ambiguate
 local math_min = math.min
 local math_max = math.max
 local math_floor = math.floor
@@ -1261,26 +1261,62 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         end
     end
 
-    -- Spec icon, dirty-cached on specIconID (NEVER secret). Keying on the SPEC
-    -- icon -- not the class -- means two same-class different-spec sources (or the
-    -- player pinned into a slot a same-class teammate held) get the correct spec
-    -- icon rather than a stale one. Visibility is cached in bar._iconShown so a
-    -- stable ShowIcon does NO per-tick Show/Hide.
-    -- Icon visibility. In the EnemyDamageTaken view ONLY, enemy mobs report specIconID 0 ->
-    -- show NO icon (no empty bordered box) and the layout below drops the icon
-    -- gutter so the name sits flush left. Every OTHER meter type keeps the prior behavior
-    -- (icon frame shown whenever ShowIcon is on, even for a 0/absent spec icon) so non-enemy
-    -- views are byte-for-byte unchanged -- the enemy scope is deliberate to avoid a regression
-    -- on sources (pets/guardians/spec-lag) that could momentarily report specIconID 0.
-    -- hasIcon drives both visibility and the layout key; both stay dirty-gated.
+    -- Spec icon, resolved in tiers with a class-icon FALLBACK:
+    --   1. src.specIconID -- the API's own spec icon (NEVER secret). The client leaves
+    --      it nil (the doc claims non-nilable, but it lies) for any player whose spec it
+    --      hasn't resolved -- usually EVERYONE in a pug / cross-realm raid.
+    --   2. DM.specIconByGUID[sourceGUID] -- a spec icon shared over addon comms by
+    --      LibSpecialization (Core.lua's Spec icon resolution section). A player's
+    --      sourceGUID is plain at runtime; the read is issecretvalue-guarded so a creature
+    --      row (secret GUID in instances) simply skips to the class fallback.
+    --   3. the high-res square "classicon-<class>" atlas (KE's standard class-icon source).
+    -- A resolved spec (tier 1 or 2) renders the art cropped via ApplyIconZoom; the class
+    -- atlas fills the frame edge-to-edge so the shared 1px iconFrame border reads crisp. A
+    -- class-less source (enemy mob reports classFilename "") shows NO icon and the layout
+    -- drops the gutter -- this generalizes the old _isEnemyTaken special-case (enemy mobs are
+    -- exactly the classFilename-empty sources). classFilename/specIconID are NeverSecret, so
+    -- no guard there (matching the bar-color block above). Dirty-cached on a signature so a
+    -- stable icon does NO per-tick texture call; bar._iconShown gates Show/Hide.
     local showIcon = db.ShowIcon
     local iconID = src.specIconID
-    local hasIcon = showIcon and (not W._isEnemyTaken or (type(iconID) == "number" and iconID ~= 0))
+    -- classFile (src.classFilename) is already resolved above in the bar-color block.
+    local validSpec = type(iconID) == "number" and iconID ~= 0
+    -- Tier 2: when the API didn't resolve the spec, try the LibSpec GUID cache before the
+    -- class fallback. Only unresolved bars pay this lookup; a tier-1 spec skips it. When the
+    -- comms land mid-fight the signature below flips class-token -> spec fileID and repaints.
+    if not validSpec then
+        local g = src.sourceGUID
+        if g and not issecretvalue(g) then
+            local libIcon = self.specIconByGUID[g]
+            if libIcon then
+                iconID = libIcon
+                validSpec = true
+            end
+        end
+    end
+    local classOK = classFile and classFile ~= ""
+    local hasIcon = showIcon and (validSpec or classOK)
     if hasIcon then
-        if bar._cachedIconID ~= iconID then
-            bar._cachedIconID = iconID
-            row.icon:SetTexture(iconID)
-            KE:ApplyIconZoom(row.icon)
+        -- Signature: the spec fileID (a number) when valid, else the class token (a string).
+        -- A number and a string never compare equal, so the two forms can't collide in the
+        -- cache; the signature repaints when a spec resolves (API fills specIconID, or the
+        -- LibSpec comms land and tier 2 upgrades class->spec) or a slot is reused by a
+        -- different class. Keying spec on the fileID keeps two same-class different-spec sources
+        -- correct. (validSpec guarantees iconID is a truthy number, so the and/or is safe; the
+        -- class token avoids a per-tick string alloc on the fallback path.)
+        local sig = validSpec and iconID or classFile
+        if bar._cachedIconID ~= sig then
+            bar._cachedIconID = sig
+            if validSpec then
+                row.icon:SetTexture(iconID)
+                KE:ApplyIconZoom(row.icon)
+            else
+                -- Class fallback: the "classicon-<class>" atlas. SetAtlas re-sets the texcoords
+                -- to the atlas region, cleanly overriding the spec path's ApplyIconZoom crop, and
+                -- the atlas is a full square (no transparent corners) so it fills the frame and the
+                -- iconFrame border stays crisp. classFile is a non-empty NeverSecret token here.
+                row.icon:SetAtlas("classicon-" .. classFile:lower())
+            end
         end
         if bar._iconShown ~= true then
             bar._iconShown = true
@@ -1341,22 +1377,19 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
     -- tracks ShowName every tick so the GUI toggle takes effect on the next paint.
     local nm = src.name
     if issecretvalue(nm) then
-        -- Secret name (identity-restricted unit -- e.g. group members inside an active
-        -- keystone). String ops (:match) and Ambiguate (SecretArguments=AllowedWhenUntainted
-        -- -> throws when tainted) can't strip it. But UnitName is AllowedWhenTainted -- it
-        -- accepts a secret arg WITHOUT throwing -- and returns (name, realm) SEPARATELY, so
-        -- its FIRST return is the realm-stripped name even for a secret unit. This is the
-        -- standard way to resolve a secret source name: a bare `UnitName(source.name)`
-        -- provably never throws on a secret unit-name argument.
+        -- Secret name (identity-restricted unit -- group members inside a raid or an active
+        -- keystone; source.name is ConditionalSecret in DamageMeterDocumentation). Ambiguate
+        -- is SecretArguments=AllowedWhenTainted (PlayerScriptDocumentation) -- it accepts the
+        -- secret name WITHOUT throwing and returns the realm-stripped form (itself secret;
+        -- SetText accepts that). Ambiguate(name, "short") is the reference strip on both the
+        -- secret and plain paths.
+        -- (The old strip was UnitName(source.name): UnitName wants a UNIT token, not a name
+        -- string, so it returned nil and the "-Realm" suffix leaked through in raids.)
         -- Honor ShowRealm: only strip when off; when on, keep the full secret "Name-Realm".
-        -- Defensive pcall + `== nil` gate (a secret-safe gate primitive) so the worst
-        -- case is no change (the full name). The resolved name may itself be secret -- SetText
-        -- accepts that. Cache nulled (can't dirty-check a maybe-secret string), so it re-
-        -- resolves each tick.
+        -- Cache nulled (can't dirty-check a maybe-secret string), so it re-resolves each tick.
         local shown = nm
         if not db.ShowRealm then
-            local ok, resolved = pcall(UnitName, nm)
-            if ok and resolved ~= nil then shown = resolved end
+            shown = Ambiguate(nm, "short") or nm
         end
         row.name:SetText(shown)
         bar._cachedName = nil
