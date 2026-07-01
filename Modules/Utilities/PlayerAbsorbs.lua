@@ -160,10 +160,16 @@ function PA:PositionRows(shieldShown, healShown)
     local db = self.db
     local f = self.frame
     local dir = db.GrowthDirection or "DOWN"
+    local showIcon = db.ShowIcon ~= false
+
+    if dir == "SPLIT" then
+        self:PositionSplit(shieldShown, healShown, showIcon)
+        return
+    end
+
     local sz = db.IconSize or 18
     local rowGap = db.RowSpacing or ROW_GAP
     local stepV = math.max(sz, db.FontSize or 18) + rowGap
-    local showIcon = db.ShowIcon ~= false
     local healCenter = healShown and not shieldShown
 
     -- Shield row: always at the anchor center, number grows right.
@@ -187,6 +193,32 @@ function PA:PositionRows(shieldShown, healShown)
         self:AnchorText(self.healText, self.healIconFrame, showIcon, true)
     else -- DOWN (default)
         self.healIconFrame:SetPoint("LEFT", f, "CENTER", 0, -stepV)
+        self:AnchorText(self.healText, self.healIconFrame, showIcon, false)
+    end
+end
+
+-- SPLIT (flank) layout: the two readouts sit on opposite sides of the anchor with a
+-- db.Separation gap between their inner (icon) edges, numbers growing OUTWARD so they
+-- never collide. A lone absorb centers on the anchor (abbreviated mode; in
+-- full-numbers mode both count as shown, so they stay flanked).
+function PA:PositionSplit(shieldShown, healShown, showIcon)
+    local f = self.frame
+    local half = (self.db.Separation or 40) * 0.5
+
+    self.shieldIconFrame:ClearAllPoints()
+    self.healIconFrame:ClearAllPoints()
+
+    if shieldShown and healShown then
+        -- Shield flanks left (icon inner-right, number grows left); heal flanks right.
+        self.shieldIconFrame:SetPoint("RIGHT", f, "CENTER", -half, 0)
+        self:AnchorText(self.shieldText, self.shieldIconFrame, showIcon, true)
+        self.healIconFrame:SetPoint("LEFT", f, "CENTER", half, 0)
+        self:AnchorText(self.healText, self.healIconFrame, showIcon, false)
+    else
+        -- Lone absorb: whichever is shown centers on the anchor, number grows right.
+        self.shieldIconFrame:SetPoint("LEFT", f, "CENTER", 0, 0)
+        self:AnchorText(self.shieldText, self.shieldIconFrame, showIcon, false)
+        self.healIconFrame:SetPoint("LEFT", f, "CENTER", 0, 0)
         self:AnchorText(self.healText, self.healIconFrame, showIcon, false)
     end
 end

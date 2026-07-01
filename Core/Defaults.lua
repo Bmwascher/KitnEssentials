@@ -465,8 +465,9 @@ local Defaults = {
             IconSize = 18,
             ShowIcon = true,
             IconSpacing = 4, -- px between an icon and its number
-            RowSpacing = 4,  -- px between the shield and heal-absorb readouts
-            GrowthDirection = "DOWN", -- DOWN/UP = stacked, RIGHT/LEFT = side-by-side; heal grows off the shield
+            RowSpacing = 4,  -- px between the shield and heal-absorb readouts (stacked/adjacent)
+            Separation = 40, -- px between the two sides in SPLIT (flank) growth
+            GrowthDirection = "DOWN", -- DOWN/UP = stacked, RIGHT/LEFT = side-by-side, SPLIT = flank; heal grows off the shield
 
             -- true = abbreviated (1.2M): number+icon fade FadeTime sec after a change
             -- (a secret 0 can't instant-hide while abbreviating). false = full numbers

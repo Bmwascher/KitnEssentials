@@ -127,10 +127,11 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
             { key = "UP",    text = "Up" },
             { key = "RIGHT", text = "Right" },
             { key = "LEFT",  text = "Left" },
+            { key = "SPLIT", text = "Split L/R" },
         },
         value = db.GrowthDirection or "DOWN",
         callback = function(key) db.GrowthDirection = key; ApplySettings() end,
-        tooltip = "Which way the heal-absorb row grows when both absorbs are active. A lone absorb centers on the anchor (exact while abbreviating; fixed slots with full numbers).",
+        tooltip = "Which way the heal-absorb row grows when both absorbs are active. Split L/R flanks them on opposite sides of the anchor (gap = Separation). A lone absorb centers on the anchor (exact while abbreviating; fixed slots with full numbers).",
     })
     row3grow:AddWidget(growDropdown, 0.5)
     manager:Register(growDropdown, "all")
@@ -155,7 +156,7 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
     card3:AddRow(row3b, Theme.rowHeight)
 
     -- Spacing
-    local row3space = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
+    local row3space = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
     local iconSpaceSlider = GUIFrame:CreateSlider(row3space, "Icon Spacing", {
         min = 0, max = 20, step = 1,
         value = db.IconSpacing or 4,
@@ -170,7 +171,18 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
     })
     row3space:AddWidget(rowSpaceSlider, 0.5)
     manager:Register(rowSpaceSlider, "all")
-    card3:AddRow(row3space, Theme.rowHeightLast, 0)
+    card3:AddRow(row3space, Theme.rowHeight)
+
+    local row3sep = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
+    local sepSlider = GUIFrame:CreateSlider(row3sep, "Separation", {
+        min = 0, max = 200, step = 1,
+        value = db.Separation or 40,
+        callback = function(val) db.Separation = val; ApplySettings() end,
+        tooltip = "Gap between the two sides when Growth Direction is Split L/R. No effect in the other directions.",
+    })
+    row3sep:AddWidget(sepSlider, 0.5)
+    manager:Register(sepSlider, "all")
+    card3:AddRow(row3sep, Theme.rowHeightLast, 0)
 
     card3:AddLabel("Abbreviate off shows full numbers that persist while a shield is up and clear instantly at 0; on shows 1.2M numbers that fade the Fade Duration after the last change.")
 
