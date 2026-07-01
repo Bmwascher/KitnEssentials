@@ -203,6 +203,13 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
     })
     row3sep:AddWidget(sepSlider, 0.5)
     manager:Register(sepSlider, "splitOnly")
+    local splitLeadCheck = GUIFrame:CreateCheckbox(row3sep, "Icon Leads Number", {
+        value = db.SplitIconLead == true,
+        callback = function(checked) db.SplitIconLead = checked; ApplySettings() end,
+        tooltip = "Split L/R only. On: both readouts lead with the icon ([S] 1.2M  [H] 340K). Off: the icons bracket the center gap and the numbers grow outward (1.2M [S]  [H] 340K).",
+    })
+    row3sep:AddWidget(splitLeadCheck, 0.5)
+    manager:Register(splitLeadCheck, "splitOnly")
     card3:AddRow(row3sep, Theme.rowHeightLast, 0)
 
     card3:AddLabel("Abbreviate off shows full numbers that persist while a shield is up and clear instantly at 0; on shows 1.2M numbers that fade the Fade Duration after the last change.")

@@ -468,6 +468,7 @@ local Defaults = {
             IconSpacing = 4, -- px between an icon and its number
             RowSpacing = 4,  -- px between the shield and heal-absorb readouts (stacked/adjacent)
             Separation = 40, -- px between the two sides in SPLIT (flank) growth
+            SplitIconLead = false, -- SPLIT only: false = flank mirror (icons bracket the gap); true = both lead with the icon
             GrowthDirection = "DOWN", -- DOWN/UP = stacked, RIGHT/LEFT = side-by-side, SPLIT = flank; heal grows off the shield
 
             -- true = abbreviated (1.2M): number+icon fade FadeTime sec after a change

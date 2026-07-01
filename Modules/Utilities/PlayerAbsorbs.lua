@@ -221,11 +221,28 @@ function PA:PositionSplit(shieldShown, healShown, showIcon)
     self.healIconFrame:ClearAllPoints()
 
     if shieldShown and healShown then
-        -- Shield flanks left (icon inner-right, number grows left); heal flanks right.
-        self.shieldIconFrame:SetPoint("RIGHT", f, "CENTER", -half, 0)
-        self:AnchorText(self.shieldText, self.shieldIconFrame, showIcon, true)
-        self.healIconFrame:SetPoint("LEFT", f, "CENTER", half, 0)
-        self:AnchorText(self.healText, self.healIconFrame, showIcon, false)
+        if self.db.SplitIconLead then
+            -- Icon-leads both sides ([S] 1.2M   [H] 340K): the heal keeps its inner-edge
+            -- icon and grows right; the shield pins its NUMBER's right edge at the inner
+            -- boundary and grows left, with the icon tracking the number's left edge. Both
+            -- numbers still grow OUTWARD, so the Separation gap stays collision-proof; the
+            -- shield icon shifts a little with its number width (same trade-off as LEFT
+            -- growth -- unavoidable without measuring secret-derived text).
+            local gap = self.db.IconSpacing or ICON_TEXT_GAP
+            self.shieldText:ClearAllPoints()
+            self.shieldText:SetJustifyH("RIGHT")
+            self.shieldText:SetPoint("RIGHT", f, "CENTER", -half, 0)
+            self.shieldIconFrame:SetPoint("RIGHT", self.shieldText, "LEFT", showIcon and -gap or 0, 0)
+            self.healIconFrame:SetPoint("LEFT", f, "CENTER", half, 0)
+            self:AnchorText(self.healText, self.healIconFrame, showIcon, false)
+        else
+            -- Flank mirror (1.2M [S]   [H] 340K): shield flanks left (icon inner-right,
+            -- number grows left); heal flanks right. Icons bracket the gap, numbers grow out.
+            self.shieldIconFrame:SetPoint("RIGHT", f, "CENTER", -half, 0)
+            self:AnchorText(self.shieldText, self.shieldIconFrame, showIcon, true)
+            self.healIconFrame:SetPoint("LEFT", f, "CENTER", half, 0)
+            self:AnchorText(self.healText, self.healIconFrame, showIcon, false)
+        end
     else
         -- Lone absorb: whichever is shown centers on the anchor, number grows right.
         self.shieldIconFrame:SetPoint("LEFT", f, "CENTER", 0, 0)
