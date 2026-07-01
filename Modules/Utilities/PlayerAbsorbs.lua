@@ -22,8 +22,8 @@ local REFRESH_THROTTLE = 0.2
 -- (a secret 0 can't be blanked while abbreviating). Absorb events fire constantly
 -- while actually taking damage, so this window only matters in no-incoming-damage lulls.
 local DISPLAY_HOLD = 10
-local ROW_GAP = 2
-local ICON_TEXT_GAP = 3
+local ROW_GAP = 4        -- fallback gap between rows; live value is db.RowSpacing
+local ICON_TEXT_GAP = 4  -- fallback icon<->number gap; live value is db.IconSpacing
 local PREVIEW_SHIELD = 1200000
 local PREVIEW_HEALABSORB = 340000
 
@@ -136,15 +136,16 @@ end
 -- extends LEFT of the icon (used by LEFT growth). With the icon hidden the number
 -- takes the icon's slot so no empty gap remains.
 function PA:AnchorText(textObj, iconFrame, showIcon, growLeft)
+    local gap = self.db.IconSpacing or ICON_TEXT_GAP
     textObj:ClearAllPoints()
     if growLeft then
         textObj:SetJustifyH("RIGHT")
         textObj:SetPoint("RIGHT", iconFrame, showIcon and "LEFT" or "RIGHT",
-            showIcon and -ICON_TEXT_GAP or 0, 0)
+            showIcon and -gap or 0, 0)
     else
         textObj:SetJustifyH("LEFT")
         textObj:SetPoint("LEFT", iconFrame, showIcon and "RIGHT" or "LEFT",
-            showIcon and ICON_TEXT_GAP or 0, 0)
+            showIcon and gap or 0, 0)
     end
 end
 
@@ -160,7 +161,8 @@ function PA:PositionRows(shieldShown, healShown)
     local f = self.frame
     local dir = db.GrowthDirection or "DOWN"
     local sz = db.IconSize or 18
-    local stepV = math.max(sz, db.FontSize or 18) + ROW_GAP
+    local rowGap = db.RowSpacing or ROW_GAP
+    local stepV = math.max(sz, db.FontSize or 18) + rowGap
     local showIcon = db.ShowIcon ~= false
     local healCenter = healShown and not shieldShown
 
@@ -178,10 +180,10 @@ function PA:PositionRows(shieldShown, healShown)
         self.healIconFrame:SetPoint("LEFT", f, "CENTER", 0, stepV)
         self:AnchorText(self.healText, self.healIconFrame, showIcon, false)
     elseif dir == "RIGHT" then
-        self.healIconFrame:SetPoint("LEFT", self.shieldText, "RIGHT", ROW_GAP * 2, 0)
+        self.healIconFrame:SetPoint("LEFT", self.shieldText, "RIGHT", rowGap, 0)
         self:AnchorText(self.healText, self.healIconFrame, showIcon, false)
     elseif dir == "LEFT" then
-        self.healIconFrame:SetPoint("RIGHT", self.shieldIconFrame, "LEFT", -ROW_GAP * 2, 0)
+        self.healIconFrame:SetPoint("RIGHT", self.shieldIconFrame, "LEFT", -rowGap, 0)
         self:AnchorText(self.healText, self.healIconFrame, showIcon, true)
     else -- DOWN (default)
         self.healIconFrame:SetPoint("LEFT", f, "CENTER", 0, -stepV)
@@ -219,26 +221,31 @@ end
 
 -- Renders one row and returns whether the frame must stay shown for it. See the
 -- Display header for the two regimes.
-function PA:RenderRow(textObj, iconFrame, iconTex, amount, lastEvent, now, hold, abbreviate, hideWhenZero, showIcon)
+function PA:RenderRow(textObj, iconFrame, iconTex, amount, lastEvent, now, hold, abbreviate, hideWhenZero, showIcon, showText)
     local Format = KE.PlayerAbsorbsFormat.Format
     local active = lastEvent ~= nil and (now - lastEvent) < hold
+    local iconOK = showIcon and iconTex:GetTexture() ~= nil
     if abbreviate then
-        if active then
+        if active and showText then
             textObj:SetText(Format(amount, true, hideWhenZero))
             textObj:Show()
-            iconFrame:SetShown(showIcon and iconTex:GetTexture() ~= nil)
         else
             textObj:SetText("")
             textObj:Hide()
-            iconFrame:Hide()
         end
-        return active
+        iconFrame:SetShown(active and iconOK)
+        return active and (showText or iconOK)
     end
     -- Persist regime: number self-blanks via TruncateWhenZero; icon stays transient.
-    textObj:SetText(Format(amount, false, hideWhenZero))
-    textObj:Show()
-    iconFrame:SetShown(showIcon and active and iconTex:GetTexture() ~= nil)
-    return true
+    if showText then
+        textObj:SetText(Format(amount, false, hideWhenZero))
+        textObj:Show()
+    else
+        textObj:SetText("")
+        textObj:Hide()
+    end
+    iconFrame:SetShown(active and iconOK)
+    return showText or (active and iconOK)
 end
 
 function PA:RefreshDisplay()
@@ -249,10 +256,16 @@ function PA:RefreshDisplay()
 
     if self.isPreview then
         local showIcon = db.ShowIcon ~= false
-        self.shieldText:SetText(Format(PREVIEW_SHIELD, db.AbbreviateNumber, db.HideWhenZero ~= false))
-        self.shieldText:Show()
-        self.healText:SetText(Format(PREVIEW_HEALABSORB, db.AbbreviateNumber, db.HideWhenZero ~= false))
-        self.healText:Show()
+        local showText = db.ShowText ~= false
+        if showText then
+            self.shieldText:SetText(Format(PREVIEW_SHIELD, db.AbbreviateNumber, db.HideWhenZero ~= false))
+            self.shieldText:Show()
+            self.healText:SetText(Format(PREVIEW_HEALABSORB, db.AbbreviateNumber, db.HideWhenZero ~= false))
+            self.healText:Show()
+        else
+            self.shieldText:SetText(""); self.shieldText:Hide()
+            self.healText:SetText(""); self.healText:Hide()
+        end
         self.shieldIconFrame:SetShown(showIcon and self.shieldIcon:GetTexture() ~= nil)
         self.healIconFrame:SetShown(showIcon and self.healIcon:GetTexture() ~= nil)
         self:PositionRows(true, true)
@@ -265,11 +278,12 @@ function PA:RefreshDisplay()
     local abbreviate = db.AbbreviateNumber == true
     local hideWhenZero = db.HideWhenZero ~= false
     local showIcon = db.ShowIcon ~= false
+    local showText = db.ShowText ~= false
 
     local shieldShown = self:RenderRow(self.shieldText, self.shieldIconFrame, self.shieldIcon,
-        self:GetShieldAmount(), self.lastShieldEvent, now, hold, abbreviate, hideWhenZero, showIcon)
+        self:GetShieldAmount(), self.lastShieldEvent, now, hold, abbreviate, hideWhenZero, showIcon, showText)
     local healShown = self:RenderRow(self.healText, self.healIconFrame, self.healIcon,
-        self:GetHealAbsorbAmount(), self.lastHealAbsorbEvent, now, hold, abbreviate, hideWhenZero, showIcon)
+        self:GetHealAbsorbAmount(), self.lastHealAbsorbEvent, now, hold, abbreviate, hideWhenZero, showIcon, showText)
 
     self:PositionRows(shieldShown, healShown)
 
