@@ -1,5 +1,21 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v3.0.3
+
+### Damage Meter
+- **Fixed:** "Always Show Self" no longer pins your row into the Deaths view — your death could be forced out of chronological order. The Deaths log now always reads in time order
+- **Fixed:** Player names now display without their realm suffix, so cross-realm and raid bars are no longer cluttered with "-Realm"
+- **Fixed:** Spec icons now resolve for pug and cross-realm players whose spec the game client doesn't report directly (looked up via LibSpecialization), and fall back to the class icon when the spec still can't be determined instead of showing nothing
+
+### Player Absorbs
+- **NEW:** Player Absorbs module — an on-screen readout of your own damage-absorb shield (`UnitGetTotalAbsorbs`) and heal-absorb (`UnitGetTotalHealAbsorbs`), shown as text with optional spell icons and anchored to your player frame by default (auto-detects ElvUI and other supported unit frames, falls back to the Blizzard frame) or repositioned anywhere via `/kes edit`
+- **NEW:** Two number modes — abbreviated (1.2M-style) that fades a configurable duration after the last change, or full numbers that stay while a shield is up and clear instantly at zero
+- **NEW:** Layout options — grow the shield and heal-absorb readouts down, up, side-by-side (left/right), or split to opposite flanks with an adjustable gap; plus icon side, icon/row spacing, and auto-centering when only one is active
+- **NEW:** Themable — LSM font with soft-outline support, separate shield and heal-absorb colors, icon size, and fade duration, all on a dedicated config page
+- Built secret-value-safe for 12.0 — absorb amounts are Secret Values in 12.0, so the readout formats them only through tainted-safe paths (`AbbreviateNumbers` / `C_StringUtil`) with no tainting arithmetic, and registers its unit events filtered to the player so no other unit's data is ever read
+
+---
+
 ## v3.0.2
 
 ### Damage Meter

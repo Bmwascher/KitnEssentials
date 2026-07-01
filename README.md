@@ -41,6 +41,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Macro Builders | Focus Marker and Power Infusion macro builders in one tabbed GUI |
 | Combat Potion Ready | "Potion Ready" text when a combat potion is in bags and off cooldown, with instance/combat/healer visibility toggles |
 | Ready Check Consumables | On ready check, attaches a row of clickable consumable icons (food, flask, weapon enhancement MH/OH, augment rune, healthstone, and Warlock Soulstone with auto-target healer) for one-click application |
+| Player Absorbs | On-screen text readout of your active damage-absorb shield and heal-absorb, with optional icons, flexible layout (stacked/side-by-side/split), and player-frame anchoring |
 
 ## Healer
 
