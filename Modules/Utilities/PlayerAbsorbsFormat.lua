@@ -7,8 +7,19 @@ local BreakUpLargeNumbers = _G.BreakUpLargeNumbers
 local C_StringUtil = _G.C_StringUtil
 local math_floor = math.floor
 
+-- Localize the secret-safe primitives once (both are AllowedWhenTainted):
+--   TruncateWhenZero    — blanks a secret 0 to "" without branching on it.
+--   FloorToNearestString — integer-to-string for a secret number. This is the
+--     taint-safe replacement for string.format("%.0f", <secret>), which is NOT
+--     safe: it forces a numeric conversion that throws on a secret value.
+local issecretvalue = type(_G.issecretvalue) == "function" and _G.issecretvalue or nil
+local TruncateWhenZero = C_StringUtil and type(C_StringUtil.TruncateWhenZero) == "function"
+    and C_StringUtil.TruncateWhenZero or nil
+local FloorToNearestString = C_StringUtil and type(C_StringUtil.FloorToNearestString) == "function"
+    and C_StringUtil.FloorToNearestString or nil
+
 local function IsSecretValue(value)
-    return type(_G.issecretvalue) == "function" and _G.issecretvalue(value)
+    return issecretvalue ~= nil and issecretvalue(value)
 end
 
 -- Format an absorb amount into a display string, secret-safe.
@@ -21,14 +32,17 @@ end
 -- on, a secret zero shows the abbreviated value (faithful to the reference).
 local function FormatAbsorb(amount, abbreviate, hideWhenZero)
     if IsSecretValue(amount) then
-        if hideWhenZero and not abbreviate
-            and C_StringUtil and type(C_StringUtil.TruncateWhenZero) == "function" then
-            return C_StringUtil.TruncateWhenZero(amount)
+        if hideWhenZero and not abbreviate and TruncateWhenZero then
+            return TruncateWhenZero(amount)
         end
         if abbreviate and AbbreviateNumbers then
             return AbbreviateNumbers(amount)
         end
-        return string.format("%.0f", amount) -- AllowedWhenTainted
+        -- Non-abbreviated secret with hideWhenZero off: floor-to-string (AllowedWhenTainted).
+        if FloorToNearestString then
+            return FloorToNearestString(amount)
+        end
+        return AbbreviateNumbers and AbbreviateNumbers(amount) or ""
     end
 
     amount = tonumber(amount) or 0
