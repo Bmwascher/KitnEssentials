@@ -99,16 +99,16 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
     yOffset = posOffset
 
     ----------------------------------------------------------------
-    -- Card 3: Format
+    -- Card 3: Display Settings
     ----------------------------------------------------------------
-    local card3 = GUIFrame:CreateCard(scrollChild, "Format", yOffset)
+    local card3 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
     manager:Register(card3, "all")
 
     local row3a = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
     local abbrevCheck = GUIFrame:CreateCheckbox(row3a, "Abbreviate Numbers", {
         value = db.AbbreviateNumber == true,
         callback = function(checked) db.AbbreviateNumber = checked; ApplySettings() end,
-        tooltip = "On: 1.2M-style numbers that fade after Fade Time. Off: full numbers that stay while a shield is up and clear instantly at 0.",
+        tooltip = "On: 1.2M-style numbers that fade after the Fade Duration. Off: full numbers that stay while a shield is up and clear instantly at 0.",
     })
     row3a:AddWidget(abbrevCheck, 0.5)
     manager:Register(abbrevCheck, "all")
@@ -130,6 +130,7 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
         },
         value = db.GrowthDirection or "DOWN",
         callback = function(key) db.GrowthDirection = key; ApplySettings() end,
+        tooltip = "Which way the heal-absorb row grows when both absorbs are active. A lone absorb centers on the anchor (exact while abbreviating; fixed slots with full numbers).",
     })
     row3grow:AddWidget(growDropdown, 0.5)
     manager:Register(growDropdown, "all")
@@ -143,7 +144,7 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
     })
     row3b:AddWidget(iconSizeSlider, 0.5)
     manager:Register(iconSizeSlider, "all")
-    local fadeSlider = GUIFrame:CreateSlider(row3b, "Fade Time (sec)", {
+    local fadeSlider = GUIFrame:CreateSlider(row3b, "Fade Duration (sec)", {
         min = 2, max = 20, step = 1,
         value = db.FadeTime or 10,
         callback = function(val) db.FadeTime = val; ApplySettings() end,
@@ -152,9 +153,7 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
     manager:Register(fadeSlider, "all")
     card3:AddRow(row3b, Theme.rowHeightLast, 0)
 
-    card3:AddLabel("Abbreviate on: 1.2M-style numbers; the readout fades Fade Time seconds after the last change (a dropped shield flashes 0, then clears).")
-    card3:AddLabel("Abbreviate off: full numbers that stay while a shield is up and vanish the instant it hits 0 - only the icon fades.")
-    card3:AddLabel("Growth Direction: where the heal-absorb row grows when both are active. A lone absorb sits centered (exact while abbreviating; fixed slots in full-numbers mode).")
+    card3:AddLabel("Abbreviate off shows full numbers that persist while a shield is up and clear instantly at 0; on shows 1.2M numbers that fade the Fade Duration after the last change.")
 
     yOffset = card3:GetNextOffset()
 
