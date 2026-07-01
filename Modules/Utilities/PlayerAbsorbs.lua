@@ -16,9 +16,9 @@ local C_Spell = _G.C_Spell
 local SHIELD_SPELL_ID = 17        -- Power Word: Shield (icon)
 local HEALABSORB_SPELL_ID = 6788  -- Weakened Soul (icon)
 local REFRESH_THROTTLE = 0.2
--- Seconds a row stays shown after its last absorb-change event, then icon+number
--- fade together. Tunable trade-off: LONGER = a static (un-hit) shield stays shown
--- more reliably, but a fully-dropped shield shows its "0" longer before fading
+-- Fallback fade-hold (seconds) used when db.FadeTime is unset. The live value is
+-- db.FadeTime (GUI slider). LONGER = a static (un-hit) shield's icon/number stays
+-- shown more reliably, but a fully-dropped shield shows its "0" longer before fading
 -- (a secret 0 can't be blanked while abbreviating). Absorb events fire constantly
 -- while actually taking damage, so this window only matters in no-incoming-damage lulls.
 local DISPLAY_HOLD = 10
@@ -170,13 +170,50 @@ end
 ---------------------------------------------------------------------------------
 -- Display
 --
--- Each row (number + icon) is gated on its OWN absorb-change activity: shown for
--- DISPLAY_HOLD seconds after that type's last event, then hidden. The secret rules
--- forbid testing amount == 0, so we can't hide the instant an absorb hits zero; a
--- dropped absorb shows its last value (or "0" when abbreviating) then fades after
--- DISPLAY_HOLD. Numbers and icons hide together so a stale "0" never persists and
--- the heal-absorb row isn't a permanent zero.
+-- Two regimes, chosen by db.AbbreviateNumber, because the secret rules forbid
+-- testing amount == 0 (so we can never hide the instant an absorb hits zero):
+--
+--  * Abbreviate ON  — an abbreviated secret 0 renders as "0" and can't self-blank,
+--    so BOTH number and icon are transient: shown within the fade window (GetHold),
+--    then hidden together. A dropped shield shows "0" until the window lapses.
+--  * Abbreviate OFF — TruncateWhenZero blanks a secret 0 to "" with no branch, so
+--    the NUMBER is always shown (empty at zero, no timer) and persists for as long
+--    as a shield is up. Only the ICON is transient (a texture can't self-blank),
+--    fading after the window.
+--
+-- The fade window is db.FadeTime (fallback DISPLAY_HOLD), tracked per row so the
+-- shield and heal-absorb rows time out independently.
 ---------------------------------------------------------------------------------
+function PA:GetHold()
+    local t = tonumber(self.db.FadeTime) or DISPLAY_HOLD
+    if t < 1 then t = 1 end
+    return t
+end
+
+-- Renders one row and returns whether the frame must stay shown for it. See the
+-- Display header for the two regimes.
+function PA:RenderRow(textObj, iconFrame, iconTex, amount, lastEvent, now, hold, abbreviate, hideWhenZero, showIcon)
+    local Format = KE.PlayerAbsorbsFormat.Format
+    local active = lastEvent ~= nil and (now - lastEvent) < hold
+    if abbreviate then
+        if active then
+            textObj:SetText(Format(amount, true, hideWhenZero))
+            textObj:Show()
+            iconFrame:SetShown(showIcon and iconTex:GetTexture() ~= nil)
+        else
+            textObj:SetText("")
+            textObj:Hide()
+            iconFrame:Hide()
+        end
+        return active
+    end
+    -- Persist regime: number self-blanks via TruncateWhenZero; icon stays transient.
+    textObj:SetText(Format(amount, false, hideWhenZero))
+    textObj:Show()
+    iconFrame:SetShown(showIcon and active and iconTex:GetTexture() ~= nil)
+    return true
+end
+
 function PA:RefreshDisplay()
     self.refreshScheduled = nil
     if not self.frame then return end
@@ -184,9 +221,11 @@ function PA:RefreshDisplay()
     local Format = KE.PlayerAbsorbsFormat.Format
 
     if self.isPreview then
-        self.shieldText:SetText(Format(PREVIEW_SHIELD, db.AbbreviateNumber, db.HideWhenZero ~= false))
-        self.healText:SetText(Format(PREVIEW_HEALABSORB, db.AbbreviateNumber, db.HideWhenZero ~= false))
         local showIcon = db.ShowIcon ~= false
+        self.shieldText:SetText(Format(PREVIEW_SHIELD, db.AbbreviateNumber, db.HideWhenZero ~= false))
+        self.shieldText:Show()
+        self.healText:SetText(Format(PREVIEW_HEALABSORB, db.AbbreviateNumber, db.HideWhenZero ~= false))
+        self.healText:Show()
         self.shieldIconFrame:SetShown(showIcon and self.shieldIcon:GetTexture() ~= nil)
         self.healIconFrame:SetShown(showIcon and self.healIcon:GetTexture() ~= nil)
         self.frame:Show()
@@ -194,32 +233,17 @@ function PA:RefreshDisplay()
     end
 
     local now = GetTime()
-    local showIcon = db.ShowIcon ~= false
+    local hold = self:GetHold()
+    local abbreviate = db.AbbreviateNumber == true
     local hideWhenZero = db.HideWhenZero ~= false
-    local shieldActive = self.lastShieldEvent and (now - self.lastShieldEvent) < DISPLAY_HOLD
-    local healActive = self.lastHealAbsorbEvent and (now - self.lastHealAbsorbEvent) < DISPLAY_HOLD
+    local showIcon = db.ShowIcon ~= false
 
-    if shieldActive then
-        self.shieldText:SetText(Format(self:GetShieldAmount(), db.AbbreviateNumber, hideWhenZero))
-        self.shieldText:Show()
-        self.shieldIconFrame:SetShown(showIcon and self.shieldIcon:GetTexture() ~= nil)
-    else
-        self.shieldText:SetText("")
-        self.shieldText:Hide()
-        self.shieldIconFrame:Hide()
-    end
+    local shieldShown = self:RenderRow(self.shieldText, self.shieldIconFrame, self.shieldIcon,
+        self:GetShieldAmount(), self.lastShieldEvent, now, hold, abbreviate, hideWhenZero, showIcon)
+    local healShown = self:RenderRow(self.healText, self.healIconFrame, self.healIcon,
+        self:GetHealAbsorbAmount(), self.lastHealAbsorbEvent, now, hold, abbreviate, hideWhenZero, showIcon)
 
-    if healActive then
-        self.healText:SetText(Format(self:GetHealAbsorbAmount(), db.AbbreviateNumber, hideWhenZero))
-        self.healText:Show()
-        self.healIconFrame:SetShown(showIcon and self.healIcon:GetTexture() ~= nil)
-    else
-        self.healText:SetText("")
-        self.healText:Hide()
-        self.healIconFrame:Hide()
-    end
-
-    if shieldActive or healActive then
+    if shieldShown or healShown then
         self.frame:Show()
     else
         self.frame:Hide()
@@ -231,9 +255,9 @@ function PA:ScheduleRefresh()
     self.refreshScheduled = C_Timer.NewTimer(REFRESH_THROTTLE, function() self:RefreshDisplay() end)
 end
 
--- Records an absorb-change event time for one row and schedules a refresh at
--- DISPLAY_HOLD so the row hides if nothing newer arrives. Per-type timers so the
--- shield row hides on its own schedule regardless of heal-absorb activity.
+-- Records an absorb-change event time for one row and schedules a refresh after the
+-- fade window (GetHold) so the row re-evaluates if nothing newer arrives. Per-type
+-- timers so the shield row times out on its own schedule regardless of heal activity.
 function PA:MarkActive(which)
     local now = GetTime()
     local timerKey
@@ -245,7 +269,7 @@ function PA:MarkActive(which)
         timerKey = "healHideTimer"
     end
     if self[timerKey] then self[timerKey]:Cancel() end
-    self[timerKey] = C_Timer.NewTimer(DISPLAY_HOLD, function()
+    self[timerKey] = C_Timer.NewTimer(self:GetHold(), function()
         self[timerKey] = nil
         self:RefreshDisplay()
     end)

@@ -465,11 +465,14 @@ local Defaults = {
             Scale = 1.0,
             IconSize = 18,
             ShowIcon = true,
-            -- true = abbreviated (1.2M); under secret rules a dropped absorb shows
-            -- briefly then fades (can't instant-hide while abbreviating). Off uses
-            -- TruncateWhenZero to blank the number instantly, but non-abbreviated.
+            -- true = abbreviated (1.2M): number+icon fade FadeTime sec after a change
+            -- (a secret 0 can't instant-hide while abbreviating). false = full numbers
+            -- that persist while a shield is up and blank instantly at 0 (TruncateWhenZero);
+            -- only the icon fades. See Modules/Utilities/PlayerAbsorbs.lua Display header.
             AbbreviateNumber = true,
             HideWhenZero = true,
+            FadeTime = 10, -- seconds the icon (and, when abbreviating, the number) lingers after a change
+
             FontFace = "Expressway",
             FontSize = 18,
             FontOutline = "OUTLINE",
