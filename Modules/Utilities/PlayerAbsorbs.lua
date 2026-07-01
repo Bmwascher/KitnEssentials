@@ -16,7 +16,7 @@ local C_Spell = _G.C_Spell
 local SHIELD_SPELL_ID = 17        -- Power Word: Shield (icon)
 local HEALABSORB_SPELL_ID = 6788  -- Weakened Soul (icon)
 local REFRESH_THROTTLE = 0.2
-local ICON_HIDE_DELAY = 10
+local DISPLAY_HOLD = 3   -- seconds a row stays shown after its last absorb-change event
 local ROW_GAP = 2
 local ICON_TEXT_GAP = 3
 local PREVIEW_SHIELD = 1200000
@@ -141,7 +141,14 @@ function PA:ApplyPosition()
 end
 
 ---------------------------------------------------------------------------------
--- Display (persistent numbers via formatter, transient icons via event timing)
+-- Display
+--
+-- Each row (number + icon) is gated on its OWN absorb-change activity: shown for
+-- DISPLAY_HOLD seconds after that type's last event, then hidden. The secret rules
+-- forbid testing amount == 0, so we can't hide the instant an absorb hits zero; a
+-- dropped absorb shows its last value (or "0" when abbreviating) then fades after
+-- DISPLAY_HOLD. Numbers and icons hide together so a stale "0" never persists and
+-- the heal-absorb row isn't a permanent zero.
 ---------------------------------------------------------------------------------
 function PA:RefreshDisplay()
     self.refreshScheduled = nil
@@ -159,19 +166,37 @@ function PA:RefreshDisplay()
         return
     end
 
-    self.shieldText:SetText(Format(self:GetShieldAmount(), db.AbbreviateNumber, db.HideWhenZero ~= false))
-    self.healText:SetText(Format(self:GetHealAbsorbAmount(), db.AbbreviateNumber, db.HideWhenZero ~= false))
-
     local now = GetTime()
     local showIcon = db.ShowIcon ~= false
-    local shieldActive = showIcon and self.lastShieldEvent
-        and (now - self.lastShieldEvent) < ICON_HIDE_DELAY
-    local healActive = showIcon and self.lastHealAbsorbEvent
-        and (now - self.lastHealAbsorbEvent) < ICON_HIDE_DELAY
-    self.shieldIconFrame:SetShown(shieldActive and self.shieldIcon:GetTexture() ~= nil)
-    self.healIconFrame:SetShown(healActive and self.healIcon:GetTexture() ~= nil)
+    local hideWhenZero = db.HideWhenZero ~= false
+    local shieldActive = self.lastShieldEvent and (now - self.lastShieldEvent) < DISPLAY_HOLD
+    local healActive = self.lastHealAbsorbEvent and (now - self.lastHealAbsorbEvent) < DISPLAY_HOLD
 
-    self.frame:Show()
+    if shieldActive then
+        self.shieldText:SetText(Format(self:GetShieldAmount(), db.AbbreviateNumber, hideWhenZero))
+        self.shieldText:Show()
+        self.shieldIconFrame:SetShown(showIcon and self.shieldIcon:GetTexture() ~= nil)
+    else
+        self.shieldText:SetText("")
+        self.shieldText:Hide()
+        self.shieldIconFrame:Hide()
+    end
+
+    if healActive then
+        self.healText:SetText(Format(self:GetHealAbsorbAmount(), db.AbbreviateNumber, hideWhenZero))
+        self.healText:Show()
+        self.healIconFrame:SetShown(showIcon and self.healIcon:GetTexture() ~= nil)
+    else
+        self.healText:SetText("")
+        self.healText:Hide()
+        self.healIconFrame:Hide()
+    end
+
+    if shieldActive or healActive then
+        self.frame:Show()
+    else
+        self.frame:Hide()
+    end
 end
 
 function PA:ScheduleRefresh()
@@ -179,18 +204,22 @@ function PA:ScheduleRefresh()
     self.refreshScheduled = C_Timer.NewTimer(REFRESH_THROTTLE, function() self:RefreshDisplay() end)
 end
 
--- Records an absorb-change event time and schedules the icon to hide after
--- ICON_HIDE_DELAY (the only secret-safe way to hide a texture at zero).
-function PA:MarkIconActive(which)
+-- Records an absorb-change event time for one row and schedules a refresh at
+-- DISPLAY_HOLD so the row hides if nothing newer arrives. Per-type timers so the
+-- shield row hides on its own schedule regardless of heal-absorb activity.
+function PA:MarkActive(which)
     local now = GetTime()
+    local timerKey
     if which == "shield" then
         self.lastShieldEvent = now
+        timerKey = "shieldHideTimer"
     else
         self.lastHealAbsorbEvent = now
+        timerKey = "healHideTimer"
     end
-    if self.iconHideTimer then self.iconHideTimer:Cancel() end
-    self.iconHideTimer = C_Timer.NewTimer(ICON_HIDE_DELAY, function()
-        self.iconHideTimer = nil
+    if self[timerKey] then self[timerKey]:Cancel() end
+    self[timerKey] = C_Timer.NewTimer(DISPLAY_HOLD, function()
+        self[timerKey] = nil
         self:RefreshDisplay()
     end)
 end
@@ -200,13 +229,13 @@ end
 ---------------------------------------------------------------------------------
 function PA:OnShieldChanged(_, unit)
     if unit ~= "player" then return end
-    self:MarkIconActive("shield")
+    self:MarkActive("shield")
     self:ScheduleRefresh()
 end
 
 function PA:OnHealAbsorbChanged(_, unit)
     if unit ~= "player" then return end
-    self:MarkIconActive("heal")
+    self:MarkActive("heal")
     self:ScheduleRefresh()
 end
 
@@ -284,7 +313,8 @@ end
 
 function PA:OnDisable()
     if self.refreshScheduled then self.refreshScheduled:Cancel(); self.refreshScheduled = nil end
-    if self.iconHideTimer then self.iconHideTimer:Cancel(); self.iconHideTimer = nil end
+    if self.shieldHideTimer then self.shieldHideTimer:Cancel(); self.shieldHideTimer = nil end
+    if self.healHideTimer then self.healHideTimer:Cancel(); self.healHideTimer = nil end
     self.isPreview = false
     if self.frame then self.frame:Hide() end
     self:UnregisterAllEvents()

@@ -465,8 +465,10 @@ local Defaults = {
             Scale = 1.0,
             IconSize = 18,
             ShowIcon = true,
-            -- false => secret-safe zero-hide via TruncateWhenZero (see spec section 8.1).
-            AbbreviateNumber = false,
+            -- true = abbreviated (1.2M); under secret rules a dropped absorb shows
+            -- briefly then fades (can't instant-hide while abbreviating). Off uses
+            -- TruncateWhenZero to blank the number instantly, but non-abbreviated.
+            AbbreviateNumber = true,
             HideWhenZero = true,
             FontFace = "Expressway",
             FontSize = 18,
