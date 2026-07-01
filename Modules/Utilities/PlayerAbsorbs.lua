@@ -16,7 +16,12 @@ local C_Spell = _G.C_Spell
 local SHIELD_SPELL_ID = 17        -- Power Word: Shield (icon)
 local HEALABSORB_SPELL_ID = 6788  -- Weakened Soul (icon)
 local REFRESH_THROTTLE = 0.2
-local DISPLAY_HOLD = 3   -- seconds a row stays shown after its last absorb-change event
+-- Seconds a row stays shown after its last absorb-change event, then icon+number
+-- fade together. Tunable trade-off: LONGER = a static (un-hit) shield stays shown
+-- more reliably, but a fully-dropped shield shows its "0" longer before fading
+-- (a secret 0 can't be blanked while abbreviating). Absorb events fire constantly
+-- while actually taking damage, so this window only matters in no-incoming-damage lulls.
+local DISPLAY_HOLD = 10
 local ROW_GAP = 2
 local ICON_TEXT_GAP = 3
 local PREVIEW_SHIELD = 1200000
