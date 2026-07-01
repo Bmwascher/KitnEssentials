@@ -193,8 +193,16 @@ function PA:PositionRows(shieldShown, healShown)
         self.healIconFrame:SetPoint("LEFT", self.shieldText, "RIGHT", rowGap, 0)
         self:AnchorText(self.healText, self.healIconFrame, showIcon, false)
     elseif dir == "LEFT" then
-        self.healIconFrame:SetPoint("RIGHT", self.shieldIconFrame, "LEFT", -rowGap, 0)
-        self:AnchorText(self.healText, self.healIconFrame, showIcon, true)
+        -- Icon-leads to the LEFT of the shield (mirrors RIGHT's reading order): pin the
+        -- heal number's RIGHT edge just before the shield and let it grow leftward, with
+        -- the icon just left of the number. The icon tracks the number's left edge, so it
+        -- shifts a little as the number width changes -- unavoidable without measuring
+        -- secret-derived text width.
+        local gap = db.IconSpacing or ICON_TEXT_GAP
+        self.healText:ClearAllPoints()
+        self.healText:SetJustifyH("RIGHT")
+        self.healText:SetPoint("RIGHT", self.shieldIconFrame, "LEFT", -rowGap, 0)
+        self.healIconFrame:SetPoint("RIGHT", self.healText, "LEFT", showIcon and -gap or 0, 0)
     else -- DOWN (default)
         self.healIconFrame:SetPoint("LEFT", f, "CENTER", 0, -stepV)
         self:AnchorText(self.healText, self.healIconFrame, showIcon, iconRight)
