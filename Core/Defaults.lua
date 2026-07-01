@@ -461,15 +461,15 @@ local Defaults = {
             Strata = "MEDIUM",
             anchorFrameType = "PLAYERFRAME",
             ParentFrame = "UIParent",
-            Position = DefaultPosition(0, 40), -- above the player frame; tune in-game
+            Position = DefaultPosition(0, -10), -- above the player frame; tune in-game
             IconSize = 18,
-            ShowIcon = true,
+            ShowIcon = false,
             IconSide = "LEFT", -- LEFT/RIGHT side of the number (stacked Down/Up modes only)
             IconSpacing = 4, -- px between an icon and its number
             RowSpacing = 4,  -- px between the shield and heal-absorb readouts (stacked/adjacent)
-            Separation = 40, -- px between the two sides in SPLIT (flank) growth
-            SplitIconLead = false, -- SPLIT only: false = flank mirror (icons bracket the gap); true = both lead with the icon
-            GrowthDirection = "DOWN", -- DOWN/UP = stacked, RIGHT/LEFT = side-by-side, SPLIT = flank; heal grows off the shield
+            Separation = 140, -- px between the two sides in SPLIT (flank) growth
+            SplitIconLead = true, -- SPLIT only: false = flank mirror (icons bracket the gap); true = both lead with the icon
+            GrowthDirection = "UP", -- DOWN/UP = stacked, RIGHT/LEFT = side-by-side, SPLIT = flank; heal grows off the shield
 
             -- true = abbreviated (1.2M): number+icon fade FadeTime sec after a change
             -- (a secret 0 can't instant-hide while abbreviating). false = full numbers
@@ -480,7 +480,7 @@ local Defaults = {
             FadeTime = 10, -- seconds the icon (and, when abbreviating, the number) lingers after a change
 
             FontFace = "Expressway",
-            FontSize = 18,
+            FontSize = 16,
             FontOutline = "OUTLINE",
             ShieldColor = { 0.37, 0.82, 1, 1 },    -- cyan
             HealAbsorbColor = { 1, 0.48, 0.48, 1 }, -- red
