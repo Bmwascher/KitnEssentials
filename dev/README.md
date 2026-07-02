@@ -76,9 +76,27 @@ this box" message stops.
 git config core.hooksPath dev/githooks
 ```
 
-Runs `luacheck` + `busted`, both blocking, before every push. Override a
-single push with `git push --no-verify`. If a tool isn't on PATH the hook
-skips it with a notice rather than blocking (CI still runs everything).
+Runs `luacheck` + `busted`, both blocking, before every push — each tool
+gates independently, so a machine missing one still runs the other. Also
+prints a non-blocking note when `.luacheckrc` drifts from the local WoW API
+reference (see `dev/scripts/check-luacheckrc-drift.lua`). Override a single
+push with `git push --no-verify`. If a tool isn't on PATH the hook skips it
+with a notice rather than blocking (CI still runs everything).
+
+## Claude Code hooks (restore after a re-clone or PC reset)
+
+Everything under `.claude/` is gitignored, so the edit-time lint hook and the
+main-branch guard die with the checkout. The tracked templates in
+`dev/claude-hooks/` are the durable copies — restore them (and the pre-push
+`core.hooksPath` config) with:
+
+```powershell
+pwsh dev/scripts/install-claude-hooks.ps1
+```
+
+Idempotent; never overwrites an existing hooks block or personal permissions
+in `.claude/settings.json`. When changing a live hook under `.claude/hooks/`,
+mirror the change into `dev/claude-hooks/` so the template stays current.
 
 ## Adding a spec
 
