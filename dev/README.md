@@ -108,9 +108,15 @@ mirror the change into `dev/claude-hooks/` so the template stays current.
 
 ## Adding a spec
 
+Simple files load directly via `helpers.loadModule`; the big modules
+(DungeonTimers, Core/Globals, DamageMeter core, PixelPerfect, Nicknames)
+have ready-made stub sets in `dev/spec/_ke_loader.lua` — use those instead
+of hand-rolling stubs.
+
 ```lua
 local helpers = require("dev.spec._helpers")
 local mock    = require("dev.spec._wow_mock")   -- only if the file touches WoW API
+local L       = require("dev.spec._ke_loader")  -- per-module loaders (stubs + real load)
 
 describe("MyThing (Modules/.../MyThing.lua)", function()
     it("does the thing", function()
@@ -119,7 +125,18 @@ describe("MyThing (Modules/.../MyThing.lua)", function()
         assert.equals(expected, KE:SomePureFunction(input))
     end)
 end)
+
+describe("Globals helpers", function()
+    it("resolves sparse colors", function()
+        local KE = L.loadGlobals()           -- stub set + real Core/Globals.lua
+        assert.same({ 1, 0, 0.549, 1 }, { KE:ResolveColor(nil, { 1, 0, 0.549, 1 }) })
+    end)
+end)
 ```
+
+Install mocks and stubs unconditionally in `setup`/`before_each` (no `or`
+guards latching stale globals), and give any spec that branches on
+declared-secret values the honesty-boundary comment (see above).
 
 Local and CI both run busted under Lua **5.1.5** — the same major version as
 WoW's embedded runtime — and `luacheck` enforces 5.1 semantics statically on
