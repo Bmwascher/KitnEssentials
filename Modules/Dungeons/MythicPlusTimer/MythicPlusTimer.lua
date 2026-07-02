@@ -262,7 +262,8 @@ local MPT_DEFAULTS = {
     -- OverlayNameplateEnabled defaults the nameplate percent off.
     OverlayNameplateEnabled = false,
     OverlayTooltipEnabled = true,
-    OverlayFormat = "%.2f%%",   -- a string.format spec (NOT an enum)
+    OverlayFormat = "%s",   -- a string.format spec (NOT an enum) applied to the
+                            -- pre-formatted percentValueString (API return #3)
     OverlayCombatOnly = true,
     OverlayFontFace = "Expressway",
     OverlayFontSize = 12,
@@ -498,10 +499,13 @@ function MPT:UpdateDB()
     end
     self.db = saved
 
-    -- Persisted-value repair: a profile saved by an early dev build may hold
-    -- the retired enum value "PERCENT" — OverlayFormat is a string.format spec.
-    if self.db.OverlayFormat == "PERCENT" then
-        self.db.OverlayFormat = "%.2f%%"
+    -- Persisted-value repairs: early dev builds saved the retired enum value
+    -- "PERCENT"; builds through 2026-07 saved the numeric spec "%.2f%%" for
+    -- what is now Blizzard's pre-formatted percent STRING (the overlay binds
+    -- GetUnitCriteriaProgressValues return #3 — %.2f on it would error).
+    -- Normalize both to the "%s" passthrough.
+    if self.db.OverlayFormat == "PERCENT" or self.db.OverlayFormat == "%.2f%%" then
+        self.db.OverlayFormat = "%s"
     end
 
     -- MigrateLegacyOverlayDB lives in MythicPlusTimer_Overlay.lua, which is
