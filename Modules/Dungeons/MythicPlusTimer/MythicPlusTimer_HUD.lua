@@ -116,7 +116,7 @@ function MPT.SetValueGated(bar, v, widthPx)
     bar:SetValue(v)
 end
 
--- True when the gold PB "target" displays (live timer PB, forces target, and
+-- True when the PB "target" displays (live timer PB, forces target, and
 -- pending boss-row targets) should be visible. Resolves db.SplitsShowMode:
 --   ALWAYS    — visible for the whole run.
 --   COUNTDOWN — visible only before the timer starts ticking (the pre-pull
@@ -193,8 +193,8 @@ function MPT:BuildHUD()
     root.timerText     = FS()              -- changing timer part ("15:00")
     root.timerSepText  = FS()              -- static "/" separator (own FS so both side-gaps are anchor-tunable)
     root.timerSuffixText = FS()            -- static total ("28:00"), pinned at the right edge
-    root.timerPBText   = FS()              -- gold PB beside timer (countdown)
-    root.keyText       = FS()              -- "[30]" key bracket
+    root.timerPBText   = FS()              -- PB beside timer (countdown)
+    root.keyText       = FS()              -- "+30" key bracket
     root.affixText     = FS()              -- affix names (TEXT mode)
     root.affixIcons    = {}                -- ICON-mode textures (lazy, Task 2.4)
     root.thresh3Text   = FS(nil, textOverlay)  -- remaining label at +3 tick
@@ -398,8 +398,8 @@ end
 
 ---------------------------------------------------------------------------------
 -- RenderTimer — format elapsed/limit into one of five display strings and
--- recolor the FontString: white while running, gold on timed completion,
--- red when depleted (elapsed > limit or run completed past limit).
+-- recolor the FontString: white while running, TimerSuccessColor on timed
+-- completion, red when depleted (elapsed > limit or run completed past limit).
 -- Design: uniform white (no separate gray "/ limit") per user direction.
 -- FormatTime resolved lazily to be load-order-safe (Phase 1 assigns it after
 -- this file parses).
@@ -446,7 +446,7 @@ function MPT:RenderTimer()
     end
 
     -- Default: white from db.TimerColor.
-    -- Completion: gold if timed, red if depleted.
+    -- Completion: TimerSuccessColor if timed, red if depleted.
     -- Running past limit (elapsed > maxTime): red immediately.
     local r, g, b = db.TimerColor[1], db.TimerColor[2], db.TimerColor[3]
     if run.completed then
@@ -489,14 +489,14 @@ function MPT:RenderTimer()
         f.timerPBText:SetAlpha(1)
         f.timerPBText:Show()
     elseif MPT.run.bestOverall and self:ShouldShowRecords() then
-        -- The gold overall PB target — shown per SplitsShowMode (ALWAYS, or
+        -- The overall PB target — shown per SplitsShowMode (ALWAYS, or
         -- COUNTDOWN before the timer starts; hidden mid-run / on NEVER).
         local pbHex = Hex(MPT.db.PBColor or {0.81, 0.81, 0.81})
         local a = max(0, min(1, MPT.db.PBOpacity or 1))
         -- Fallback source tag: when the record came from a DIFFERENT key
         -- level, show which one you're
         -- racing — "PB 25:30 [11]" on a 12. Exact-level records stay clean.
-        -- One tag on the overall line only; the per-boss gold targets come
+        -- One tag on the overall line only; the per-boss PB targets come
         -- from the same whole-record resolve, so it speaks for all of them.
         local src = MPT.run.pbSourceLevel
         local tag = (src and src ~= (MPT.run.level or 0)) and format(" [%d]", src) or ""
@@ -571,7 +571,7 @@ function MPT:RenderBar()
     else
         -- Neutral fill at all times, INCLUDING completion (user direction: the
         -- bar keeps its configured BarColor; only the timer number recolors
-        -- gold/red on a timed/depleted finish).
+        -- TimerSuccessColor/TimerExpiredColor on a timed/depleted finish).
         r, g, b = db.BarColor[1], db.BarColor[2], db.BarColor[3]
     end
 
@@ -783,7 +783,7 @@ end
 -- RenderKey — key level bracket + affix line (TEXT or ICON mode).
 -- Steps 1-3 of Task 2.4.
 --
--- Row layout (round-3 feedback: "[3] Lindormi's Guidance" — key LEFT of the
+-- Row layout (round-3 feedback: "+3 Lindormi's Guidance" — key LEFT of the
 -- affixes): affixText is the row anchor at the frame's right edge, owned by
 -- ApplyLayout's stacking pass even when hidden (ICON mode zeroes its text so
 -- the rect collapses to the edge). keyText anchors LEFT of the affixes —
@@ -1019,7 +1019,7 @@ function MPT:RenderForces()
         str = format("%.2f%%", pct)
     end
 
-    -- Forces PB (inline after the %/count): bare gold target while filling,
+    -- Forces PB (inline after the %/count): bare PB target while filling,
     -- teal(-)/red(+) delta once capped. Reuses the boss-row PB toggles + split
     -- colors. fo.pbTime is resolved by UpdateSplits from a stored `forces`
     -- split, so it only appears after one completed seed run in this dungeon.
@@ -1112,11 +1112,11 @@ function MPT:RenderObjectives()
             displayName = format("%d/%d %s", obj.quantity or 0, obj.totalQuantity, TitleCase(displayName))
         end
 
-        -- Right text: completed → [clear] + optional delta; pending → gold PB target.
+        -- Right text: completed → clear time + optional delta; pending → PB target.
         local rightText = ""
         if obj.completed and obj.clearTime and obj.clearTime > 0 then
             timeFS:SetAlpha(1)  -- clear a possible pending-row PBOpacity dim on this pooled slot
-            -- "Show Clear Times" gates the [clear] bracket itself;
+            -- "Show Clear Times" gates the clear-time text itself;
             -- the PB delta is self-contained and independently gated below.
             if db.ShowObjectiveTimes ~= false then
                 local doneHex = Hex(db.ObjectiveDoneColor or { 0, 1, 0.14 })
@@ -1132,11 +1132,11 @@ function MPT:RenderObjectives()
                 rightText  = rightText .. sep .. format("%s(%s%s)|r", Hex(col), sign, dStr)
             end
         elseif (not obj.completed) and obj.pbTime and self:ShouldShowRecords() then
-            -- Pending gold targets are governed by SplitsShowMode (see
+            -- Pending PB targets are governed by SplitsShowMode (see
             -- ShouldShowRecords) — ALWAYS, or COUNTDOWN before the timer starts.
             local pbHex = Hex(db.PBColor or { 0.81, 0.81, 0.81 })
             local a = max(0, min(1, db.PBOpacity or 1))
-            -- Bare time, no "PB" prefix (round-4 cleanup): the gold color already
+            -- Bare time, no "PB" prefix (round-4 cleanup): the PB color already
             -- reads as the target, and the prefix crowded the row.
             rightText = format("%s%s|r", pbHex, MPT.FormatTime(obj.pbTime, false))
             if a < 1 then timeFS:SetAlpha(a) else timeFS:SetAlpha(1) end
@@ -1298,7 +1298,7 @@ function MPT:ApplyLayout()
 
         -- Straggler anchors: relative positions that only change on config change.
         -- Never re-anchored inside Render* hot paths (perf: skip-SetPoint-when-stationary).
-        -- Key bracket rides LEFT of the affixes ("[12] Fortified - ...",
+        -- Key bracket rides LEFT of the affixes ("+12 Fortified · ...",
         -- round-3 feedback). TEXT mode anchors it here; ICON mode re-anchors
         -- it in RenderKey (icon count varies per run); with affixes hidden
         -- the stacking pass row()-anchors it alone at the right edge.
@@ -1361,7 +1361,7 @@ function MPT:ApplyLayout()
     _sigBuf[11] = objCount
     _sigBuf[12] = objDone
     _sigBuf[13] = objSum
-    -- ShouldShowRecords flips once per run (COUNTDOWN hides the gold PB targets
+    -- ShouldShowRecords flips once per run (COUNTDOWN hides the PB targets
     -- the moment the clock starts). RenderObjectives runs ONLY inside this gated
     -- pass, so without a sig term the pending boss-row targets would linger after
     -- the countdown ends until some unrelated change happened to bust the sig
@@ -1589,7 +1589,7 @@ local function BuildPreviewRun()
             { t = 142, name = "Healer", class = "PRIEST" },
             { t = 488, name = "Tank",   class = "WARRIOR" },
         },
-        forces = { total = 240, current = 156, percent = 65.0, completed = false, pbTime = 720 },  -- pbTime demos the gold forces target
+        forces = { total = 240, current = 156, percent = 65.0, completed = false, pbTime = 720 },  -- pbTime demos the forces PB target
         objectives = {
             { name = "First Boss",  completed = true,  clearTime = 180,  pbTime = 165,  criteriaIndex = 1 },
             { name = "Second Boss", completed = true,  clearTime = 410,  pbTime = 430,  criteriaIndex = 2 },

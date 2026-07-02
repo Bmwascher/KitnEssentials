@@ -148,7 +148,7 @@ local PB_FALLBACK_OPTIONS = {
     { key = "OFF",            text = "Off (Exact Level Only)" },
 }
 
--- When the gold PB target is visible (db.SplitsShowMode, gated by
+-- When the PB target is visible (db.SplitsShowMode, gated by
 -- MPT:ShouldShowRecords — WarpDeplete showSplitRecords parity).
 local SPLITS_SHOW_OPTIONS = {
     { key = "ALWAYS",    text = "Always" },
@@ -574,7 +574,7 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
     })
     rowO2:AddWidget(pbCheck, 0.5)
     manager:Register(pbCheck, "all")
-    -- Gold PB "target" visibility (timer + forces + pending boss rows). The
+    -- PB "target" visibility (timer + forces + pending boss rows). The
     -- (+/-) deltas above are independent (Show PB Delta).
     local splitsModeDrop = GUIFrame:CreateDropdown(rowO2, "Show PB Targets", {
         options = SPLITS_SHOW_OPTIONS,

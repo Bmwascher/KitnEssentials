@@ -159,6 +159,9 @@ end
 -- shows ms regardless of db.ShowMilliseconds, and the reservation must
 -- never be narrower than what completion renders (PB text sits just left
 -- of it). REMAINING modes never display ms.
+-- Minutes render via "%02d" (MPT.FormatTime) with no upper-digit cap, so a
+-- run past 99 minutes would exceed this 2-digit reservation — irrelevant
+-- for M+ (max ~44 min); left uncapped deliberately.
 -- Busted-testable (dev/spec/mpt_raceline_spec.lua).
 function MPT.BuildTimerTemplate(mode)
     if mode == "REMAINING" then return "88:88" end
