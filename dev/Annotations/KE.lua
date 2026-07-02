@@ -69,11 +69,9 @@ function KE_FramePool:ReleaseAll() end
 ---@field GUIFrame table
 ---@field EditMode table
 ---@field ProfileManager table
----@field DungeonTimerPresets table
 ---@field GUI table
 ---@field FramePool KE.FramePool
 ---@field curves KE.Curves
----@field defaults table
 ---@field msgContainer Frame? # message-popup singleton (Core/Widgets.lua)
 ---@field promptDialog Frame? # prompt-dialog singleton (Core/Widgets.lua)
 ---@field activePrompt Frame? # currently-open prompt; nil when closed
@@ -81,8 +79,11 @@ function KE_FramePool:ReleaseAll() end
 local KE = {}
 
 -- ─── Print / chat ─────────────────────────────────────────
----@param ... any
-function KE:Print(...) end
+--- Real def (Core/Globals.lua:110) takes ONE arg and concatenates it into
+--- the "Kitn|rEssentials:" prefix string — NOT varargs. Extra args at a
+--- call site are silently ignored (a real, documented KE:Print bug).
+---@param msg string|number
+function KE:Print(msg) end
 
 --- Recommend disabling a redundant external addon when a KE module runs alongside it.
 ---@param addon string       addon folder name to detect via C_AddOns.IsAddOnLoaded
@@ -92,6 +93,13 @@ function KE:Print(...) end
 ---@param state table        table holding the once-flag (caller's db)
 ---@param key string         once-flag field on `state`
 function KE:WarnRedundantAddon(addon, label, moduleName, slash, state, key) end
+
+-- ─── Module utilities ─────────────────────────────────────
+--- True when ElvUI is loaded AND the user has opted into ElvUI handling
+--- this area (db.profile.UseElvUI.Enabled) — module init checks this to
+--- skip loading its own skinning/handling in favor of ElvUI's.
+---@return boolean?
+function KE:ShouldNotLoadModule() end
 
 -- ─── Color resolution ─────────────────────────────────────
 --- Read a saved color table (which may be sparse) and fall back per-index.
@@ -120,9 +128,21 @@ function KE:ColorTextByTheme(text) end
 ---@return string
 function KE:GetFontPath(name) end
 
+---@param barName string?
+---@return string
+function KE:GetStatusbarPath(barName) end
+
 ---@param outline string?
 ---@return string
 function KE:GetFontOutline(outline) end
+
+--- Single source of truth for the font-outline dropdown option list used by
+--- every GUI font card (Core/Globals.lua:261). `flags.includeSoft` adds the
+--- SOFTOUTLINE option, `flags.includeMono` adds MONOCHROME — both omitted
+--- from the base set since they aren't universally appropriate.
+---@param flags { includeSoft: boolean?, includeMono: boolean? }?
+---@return { key: string, text: string }[]
+function KE:GetFontOutlineOptions(flags) end
 
 ---@param fontPath string
 ---@return boolean
@@ -151,15 +171,17 @@ function KE:ValidateProfileFonts() end
 function KE:FillProfileDefaults() end
 
 -- ─── Frame / position helpers ────────────────────────────
+--- Real signature (Core/Globals.lua:663). `Config` is REQUIRED — its
+--- anchorFrameType/ParentFrame fields are indexed unconditionally (via
+--- ResolveAnchorFrame) even though the fields themselves are optional.
+--- `SetParent` is an optional boolean; truthy reparents `frame` to the
+--- resolved anchor frame before positioning. Also snaps the frame to the
+--- pixel grid at the end (KE:SnapFrameToPixels).
 ---@param frame Frame
----@param pos table
----@param db table?
-function KE:ApplyFramePosition(frame, pos, db) end
-
----@param frame Frame
----@param pos table
----@param db table?
-function KE:ApplyFramePositionWithSnap(frame, pos, db) end
+---@param posConfig { AnchorFrom: string?, AnchorTo: string?, XOffset: number?, YOffset: number? }
+---@param Config { anchorFrameType: string?, ParentFrame: string?, Strata: string? }
+---@param SetParent boolean?
+function KE:ApplyFramePosition(frame, posConfig, Config, SetParent) end
 
 ---@param frame Frame
 ---@param config table?
@@ -175,7 +197,8 @@ function KE:AddIconBorders(frame, color) end
 
 ---@param frame Frame
 ---@param color number[]?
-function KE:AddBorders(frame, color) end
+---@param borderParent Frame? # frame level control; defaults to `frame` (Core/Widgets.lua:854)
+function KE:AddBorders(frame, color, borderParent) end
 
 ---@param anchorFrameType string?
 ---@param parentFrame string?
@@ -189,6 +212,24 @@ function KE:GetTextPointFromAnchor(anchorFrom) end
 ---@param anchorFrom string
 ---@return string
 function KE:GetTextJustifyFromAnchor(anchorFrom) end
+
+-- ─── Pixel-perfect helpers (Core/PixelPerfect.lua) ───────
+--- Live size of 1 screen pixel in addon coords: 768 / (physH * effScale).
+--- Use to snap sizes/offsets/borders onto the actual screen pixel grid.
+---@return number
+function KE:GetPixelSize() end
+
+--- Symmetric rounding around zero: snaps `value` to the nearest pixel
+--- multiple using the cached pixel size from KE:GetPixelSize.
+---@param value number?
+---@return number
+function KE:PixelSnap(value) end
+
+--- Snaps `frame`'s current position to the integer screen-pixel grid by
+--- nudging its stored SetPoint offset. Called automatically by
+--- KE:ApplyFramePosition; also exposed for direct per-frame use.
+---@param frame Frame?
+function KE:SnapFrameToPixels(frame) end
 
 -- ─── GUI helpers ─────────────────────────────────────────
 -- Accepts both FontStrings and EditBoxes — both expose SetFont. The
@@ -220,6 +261,12 @@ function KE:ApplyThemeFont(fontStr, size) end
 function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture, texturePath, textureSizeX,
                               textureSizeY, textureColor, onAccept, onCancel, acceptText, cancelText,
                               showSecondEditBox, secondEditBoxLabel) end
+
+--- Wraps KE:CreatePrompt with the standard reload-required chrome
+--- (Core/Widgets.lua:644). Returns the singleton prompt dialog frame.
+---@param reason string?
+---@return Frame
+function KE:CreateReloadPrompt(reason) end
 
 function KE:SkinningReloadPrompt() end
 
