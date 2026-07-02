@@ -16,11 +16,7 @@ dev/docs/
 .vscode/
 .wowluarc.json
 
-# Upstream reference material (third-party addon sources — not ours to publish)
-References/
-
-# Symlink to the Blizzard UI source clone. NO trailing slash: git sees
-# symlinks as files, and a trailing-slash pattern only matches directories
+# Symlink to the Blizzard UI source clone.
 .wow-api-reference
 
 # luacov output (busted --coverage && luacov) — throwaway, regenerated per run
