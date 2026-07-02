@@ -708,6 +708,15 @@ BuildDisplayTab = function(scrollChild, yOffset, db, manager)
         return db.Enabled ~= false and db.ShowForces ~= false
             and db.ShowForcesBar ~= false and db.ForcesBandedColors == true
     end)
+    -- Per-tab manager: these groups also exist in BuildGeneralTab /
+    -- BuildFeaturesTab; each tab defines every condition its own widgets use.
+    manager:SetCondition("timerBar", function()
+        return db.Enabled ~= false
+            and not (db.ShowThresholdLabels ~= false and (db.ThresholdPlacement or "EDGE") == "LINES")
+    end)
+    manager:SetCondition("forcesBar", function()
+        return db.Enabled ~= false and db.ShowForces ~= false and db.ShowForcesBar ~= false
+    end)
 
     -- Card 1: Timer — Colors
     local timerColors = GUIFrame:CreateCard(scrollChild, "Timer — Colors", yOffset)
