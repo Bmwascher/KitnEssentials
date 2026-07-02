@@ -91,6 +91,20 @@ reference (see `dev/scripts/check-luacheckrc-drift.lua`). Override a single
 push with `git push --no-verify`. If a tool isn't on PATH the hook skips it
 with a notice rather than blocking (CI still runs everything).
 
+## Updating the API reference
+
+```sh
+lua dev/scripts/update-api-reference.lua
+```
+
+One command: fast-forwards the `.wow-api-reference` clone (and the
+BlizzardInterfaceResources clone) to the live build, then reports every API
+change since the last update that intersects KE's used surface — removed or
+changed functions/events/enums you use, C-side global/CVar changes, and
+notable additions. Exit 1 means something you use changed — read the
+report before coding. `--report-only` re-prints without fetching;
+`--seed` re-baselines. Snapshots live in `WoW-Dev\api-drift-snapshots\`.
+
 ## Claude Code hooks (restore after a re-clone or PC reset)
 
 Everything under `.claude/` is gitignored, so the edit-time lint hook and the
