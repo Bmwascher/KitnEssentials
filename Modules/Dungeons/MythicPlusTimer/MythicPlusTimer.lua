@@ -130,6 +130,28 @@ function MPT.ThresholdRemaining(elapsed, cutoff)
     return max(0, (cutoff or 0) - (elapsed or 0))
 end
 
+-- Pure: the LINES-mode race line — which chest tier is being raced and how
+-- it's going. Returns (tier, cutoff, value, state):
+--   tier   3|2 (never 1 — the big timer owns the +1/depletion story)
+--   cutoff that tier's cutoff in seconds
+--   value  seconds remaining (RACING/LOCKED_MADE) or overshoot (OVER/LOCKED_MISSED)
+--   state  "RACING" | "OVER" | "LOCKED_MADE" | "LOCKED_MISSED"
+-- completed=true just picks the locked state — CompleteRun freezes
+-- run.elapsed, so the "lock" is the caller re-rendering the frozen value.
+-- nil while thresholds are unusable (maxTime-0 reload-repair window).
+-- Busted-testable (dev/spec/mpt_raceline_spec.lua).
+function MPT.ResolveRaceLine(elapsed, thresholds, completed)
+    if not thresholds or (thresholds.plus2 or 0) <= 0 then return nil end
+    elapsed = elapsed or 0
+    local t3, t2 = thresholds.plus3, thresholds.plus2
+    if elapsed <= t3 then
+        return 3, t3, t3 - elapsed, completed and "LOCKED_MADE" or "RACING"
+    elseif elapsed <= t2 then
+        return 2, t2, t2 - elapsed, completed and "LOCKED_MADE" or "RACING"
+    end
+    return 2, t2, elapsed - t2, completed and "LOCKED_MISSED" or "OVER"
+end
+
 -- Posts a one-line boss-kill split to the group channel (INSTANCE_CHAT / RAID /
 -- PARTY). Called from the fresh-stamp arm of UpdateObjectives ONLY — the
 -- restoration arm (reload mid-run) must never re-post. Guard: ChatOutputSplits
