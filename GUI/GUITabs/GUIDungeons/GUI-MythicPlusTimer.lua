@@ -724,6 +724,9 @@ BuildDisplayTab = function(scrollChild, yOffset, db, manager)
     manager:SetCondition("forcesBar", function()
         return db.Enabled ~= false and db.ShowForces ~= false and db.ShowForcesBar ~= false
     end)
+    manager:SetCondition("threshLabels", function()
+        return db.Enabled ~= false and db.ShowThresholdLabels ~= false
+    end)
 
     -- Card 1: Timer — Colors
     local timerColors = GUIFrame:CreateCard(scrollChild, "Timer — Colors", yOffset)
@@ -836,10 +839,15 @@ BuildDisplayTab = function(scrollChild, yOffset, db, manager)
     -- Font cards: global default first, then one per HUD section.
     yOffset = AddFontCard(scrollChild, yOffset, db, manager, "", {
         title = "Default Font",
-        note = "Applies to the affix line, key level, PB text, and threshold labels.",
+        note = "Applies to the affix line, key level, and PB text — and any per-section font left unset.",
     })
     yOffset = AddFontCard(scrollChild, yOffset, db, manager, "Timer", {
         title = "Timer — Font", maxSize = 48,
+    })
+    yOffset = AddFontCard(scrollChild, yOffset, db, manager, "Threshold", {
+        title = "Thresholds — Font",
+        group = "threshLabels",
+        note = "The +3/+2/+1 labels and the Text Line race readout.",
     })
     yOffset = AddFontCard(scrollChild, yOffset, db, manager, "Forces", {
         title = "Forces — Font",
