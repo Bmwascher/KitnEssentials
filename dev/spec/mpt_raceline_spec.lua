@@ -166,9 +166,11 @@ describe("MPT.BuildTimerTemplate", function()
 end)
 
 describe("MPT.LiveMsElapsed", function()
-    -- Glues GetTimePreciseSec to the authoritative whole-second clock:
-    -- smooth pass-through between corrections, forward snap on death
-    -- penalties, re-anchor when the precise clock runs away.
+    -- Glues GetTimePreciseSec to the authoritative whole-second clock.
+    -- OnTimerTick re-anchors the base at every whole-second flip, so the
+    -- pure function is pass-through plus a forward snap; it NEVER snaps
+    -- backward (a stalled authoritative feed lets the precise clock
+    -- free-run — yanking it back re-created the per-second sawtooth).
     it("initializes the anchor from the authoritative elapsed", function()
         local p, base = MPT.LiveMsElapsed(1000.25, nil, 926)
         assert.are.equal(926, p)
@@ -182,10 +184,7 @@ describe("MPT.LiveMsElapsed", function()
         assert.are.equal(base, nb)
     end)
 
-    it("tolerates a late authoritative tick without stuttering", function()
-        -- precise reaches elapsed+1.3 because the 1 Hz tick fired late:
-        -- NOT a correction — snapping here would reset the fraction every
-        -- second and the ms display would stutter.
+    it("tolerates the precise clock running ahead within the second", function()
         local base = 1000.25 - 926
         local p, nb = MPT.LiveMsElapsed(1001.55, base, 926)
         assert.are.equal(927.3, p)
@@ -200,10 +199,31 @@ describe("MPT.LiveMsElapsed", function()
         assert.are.equal(1000.75 - 941, nb)
     end)
 
-    it("re-anchors when the precise clock runs too far ahead (reload restore)", function()
+    it("free-runs ahead of a stalled authoritative clock (no backward snap)", function()
         local base = 1000.25 - 926
-        local p, nb = MPT.LiveMsElapsed(1002.00, base, 926)  -- precise 927.75 >= 926 + 1.6
-        assert.are.equal(926, p)
-        assert.are.equal(1002.00 - 926, nb)
+        local p, nb = MPT.LiveMsElapsed(1002.00, base, 926)  -- precise 927.75; the old code re-anchored here
+        assert.are.equal(927.75, p)
+        assert.are.equal(base, nb)
+    end)
+end)
+
+describe("MPT.FormatTimeDeci", function()
+    -- One truncated decisecond digit — the live ms driver's 10 Hz form.
+    it("formats zero, nil, and negatives as 00:00.0", function()
+        assert.are.equal("00:00.0", MPT.FormatTimeDeci(0))
+        assert.are.equal("00:00.0", MPT.FormatTimeDeci(nil))
+        assert.are.equal("00:00.0", MPT.FormatTimeDeci(-3))
+    end)
+
+    it("truncates the fraction instead of rounding", function()
+        assert.are.equal("01:01.2", MPT.FormatTimeDeci(61.29))
+    end)
+
+    it("never carries into the seconds field", function()
+        assert.are.equal("00:59.9", MPT.FormatTimeDeci(59.99))
+    end)
+
+    it("rolls minutes like FormatTime", function()
+        assert.are.equal("10:05.5", MPT.FormatTimeDeci(605.5))
     end)
 end)

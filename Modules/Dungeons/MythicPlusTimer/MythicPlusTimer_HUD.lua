@@ -399,13 +399,19 @@ function MPT:BuildHUD()
 end
 
 ---------------------------------------------------------------------------------
--- Live milliseconds driver — a per-frame OnUpdate that owns f.timerText's
--- string while active (RenderTimer skips that one write; color, "/", and
--- the static total stay on the 1 Hz path). GetWorldElapsedTime only carries
+-- Live milliseconds driver — an OnUpdate that owns f.timerText's string
+-- while active (RenderTimer skips that one write; color, "/", and the
+-- static total stay on the 1 Hz path). GetWorldElapsedTime only carries
 -- whole seconds, so the fraction comes from MPT.LiveMsElapsed's precise
--- clock. Detach-when-idle: the script exists only while MsDriverActive();
--- UpdateMsDriver (called from Render's tail) attaches/detaches, and the
--- handler self-detaches the moment the predicate flips.
+-- clock, re-glued at every whole-second flip by OnTimerTick. Display is
+-- throttled to 10 Hz (WarpDeplete's cadence) and shows ONE decisecond
+-- digit — a 60 Hz three-digit readout churned unreadably and its
+-- proportional-font width danced at frame rate (user feedback 2026-07-02);
+-- the frozen completion time keeps the full .mmm via RenderTimer. The
+-- width reservation stays the .mmm template, so completion never moves
+-- the PB text. Detach-when-idle: the script exists only while
+-- MsDriverActive(); UpdateMsDriver (called from Render's tail) attaches/
+-- detaches, and the handler self-detaches the moment the predicate flips.
 ---------------------------------------------------------------------------------
 
 function MPT:MsDriverActive()
@@ -418,7 +424,13 @@ function MPT:MsDriverActive()
     return GetTimePreciseSec ~= nil
 end
 
-local function MsDriverOnUpdate()
+local MS_DRIVER_INTERVAL = 0.1
+local msDriverAccum = MS_DRIVER_INTERVAL
+
+local function MsDriverOnUpdate(_, dt)
+    msDriverAccum = msDriverAccum + (dt or 0)
+    if msDriverAccum < MS_DRIVER_INTERVAL then return end
+    msDriverAccum = 0
     local f = MPT.frames and MPT.frames.root
     if not f then return end
     if not MPT:MsDriverActive() then
@@ -433,10 +445,10 @@ local function MsDriverOnUpdate()
         -- Same composition as RenderTimer's DETAIL branch, driven by the
         -- precise clock so the whole string stays self-consistent per frame.
         local maxTime = run.maxTime or 0
-        str = MPT.FormatTime(p, true) .. " (" .. MPT.FormatTime(max(0, maxTime - p), false)
+        str = MPT.FormatTimeDeci(p) .. " (" .. MPT.FormatTime(max(0, maxTime - p), false)
             .. " / " .. MPT.FormatTime(maxTime, false) .. ")"
     else
-        str = MPT.FormatTime(p, true)
+        str = MPT.FormatTimeDeci(p)
     end
     MPT.SetTextGated(f.timerText, str)
 end
@@ -446,6 +458,7 @@ function MPT:UpdateMsDriver()
     if not f then return end
     if self:MsDriverActive() then
         if not f:GetScript("OnUpdate") then
+            msDriverAccum = MS_DRIVER_INTERVAL   -- first tick renders immediately
             f:SetScript("OnUpdate", MsDriverOnUpdate)
         end
     else

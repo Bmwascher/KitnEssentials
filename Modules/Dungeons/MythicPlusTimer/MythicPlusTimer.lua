@@ -72,7 +72,7 @@ MPT.run = {
     mapID = nil, level = 0, affixIDs = {}, affixNames = {}, affixFileIDs = {},
     affixNamesStr = nil,
     mapName = nil,        -- localized dungeon name (ShowDungeonName key row)
-    msBase = nil,         -- live-ms driver's precise-clock anchor (HUD OnUpdate)
+    msBase = nil,         -- live-ms clock anchor: re-glued each flip by OnTimerTick (HUD driver nil-inits pre-first-flip)
     maxTime = 0, thresholds = { plus1 = 0, plus2 = 0, plus3 = 0 },
     elapsed = 0, lastTickedSec = -1,
     deaths = 0, deathTimeLost = 0, deathLog = {},
@@ -105,6 +105,17 @@ function MPT.FormatTime(sec, withMs)
         return format("%02d:%02d.%03d", m, s, ms)
     end
     return format("%02d:%02d", m, s)
+end
+
+-- Pure: seconds -> "MM:SS.d" — one truncated decisecond digit, the live ms
+-- driver's 10 Hz form (the frozen completion time keeps FormatTime's full
+-- .mmm). Truncation, not rounding: the digit must never carry into the
+-- seconds field. Busted-testable.
+function MPT.FormatTimeDeci(sec)
+    if not sec or sec < 0 then sec = 0 end
+    local whole = floor(sec)
+    local d = floor((sec - whole) * 10)
+    return format("%02d:%02d.%d", floor(whole / 60), floor(whole % 60), d)
 end
 
 -- Pure: peril-aware +3/+2/+1 cutoff seconds. hasPeril => recompute on (maxTime-90).
@@ -191,19 +202,23 @@ end
 
 -- Pure: live-milliseconds display clock. GetWorldElapsedTime only carries
 -- whole seconds (its fraction is always 0), so the HUD's ms driver runs a
--- GetTimePreciseSec-based clock glued to the authoritative one:
---   * pass the precise clock through untouched between corrections (smooth)
---   * snap FORWARD when the authoritative clock leaps past it (death
---     penalty: +5s/+15s applied to world elapsed)
---   * re-anchor when the precise clock runs >= 1.6s ahead (reload restore;
---     1.6 tolerates one late 1 Hz tick without per-second stutter)
+-- GetTimePreciseSec-based clock glued to the authoritative one. OnTimerTick
+-- re-anchors run.msBase at every whole-second flip (phase error = flip
+-- detection latency), so between corrections this is pure pass-through:
+--   * pass the precise clock through untouched (smooth)
+--   * snap FORWARD when the authoritative clock is ahead (stale first
+--     anchor before the first flip, or a death-penalty leap landing
+--     between driver frames)
+--   * never snap backward — when the authoritative feed stalls, the
+--     precise clock free-runs ahead; yanking it back to a stale tick
+--     re-created the per-second sawtooth this replaced (2026-07-02)
 -- Returns (displaySeconds, newMsBase). Busted-testable
 -- (dev/spec/mpt_raceline_spec.lua).
 function MPT.LiveMsElapsed(now, msBase, elapsed)
     elapsed = elapsed or 0
     if not msBase then msBase = now - elapsed end
     local p = now - msBase
-    if p < elapsed or p >= elapsed + 1.6 then
+    if p < elapsed then
         msBase = now - elapsed
         p = elapsed
     end
@@ -869,6 +884,13 @@ function MPT:OnTimerTick()
     if not run.preciseBase and GetTimePreciseSec then
         run.preciseBase = GetTimePreciseSec() - elapsed
     end
+    -- Re-glue the live-ms driver's clock at every whole-second flip: the
+    -- flip is the only moment the true fraction is known (~0, within flip
+    -- detection latency). A one-shot anchor bakes a stale fraction into
+    -- every later second — the 2026-07-02 "spazzing" sawtooth.
+    if GetTimePreciseSec then
+        run.msBase = GetTimePreciseSec() - elapsed
+    end
     self:OnDeathCountUpdated()
     self:UpdateForces()
     self:UpdateObjectives()
@@ -1211,7 +1233,7 @@ function MPT:StartRun()
     run.elapsed = 0
     run.lastTickedSec = -1
     run.preciseBase = nil  -- re-anchored by OnTimerTick's first good tick
-    run.msBase = nil       -- self-initialized by the HUD ms driver's first frame
+    run.msBase = nil       -- re-anchored by OnTimerTick at each whole-second flip
     self:CacheKeystoneInfo(level, affixIDs)
     wipe(run.objectives)
     run.forces.current, run.forces.total, run.forces.percent, run.forces.completed = 0, 0, 0, false
