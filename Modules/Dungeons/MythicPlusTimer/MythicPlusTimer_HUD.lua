@@ -713,7 +713,7 @@ function MPT:RenderThresholds()
                 else                               col = db.TimerExpiredColor or { 1, 0.16, 0.18 }
                 end
                 local sign = (state == "OVER" or state == "LOCKED_MISSED") and "+" or ""
-                self.SetTextGated(f0.raceLineText, format("+%d (%s): %s%s%s|r",
+                self.SetTextGated(f0.raceLineText, format("+%d Chest (%s): %s%s%s|r",
                     tier, _FmtShort(cutoff), Hex(col), sign, _FmtShort(value)))
                 self.SetColorGated(f0.raceLineText, 0.85, 0.85, 0.85)
                 f0.raceLineText:Show()
