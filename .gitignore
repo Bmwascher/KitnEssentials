@@ -7,6 +7,7 @@
 .claude/
 CLAUDE.md
 AGENTS.md
+References/
 
 # Personal dev notes, audits, Superpowers artifacts (local-only by choice)
 dev/docs/
@@ -20,7 +21,6 @@ References/
 
 # Symlink to the Blizzard UI source clone. NO trailing slash: git sees
 # symlinks as files, and a trailing-slash pattern only matches directories
-# (this exact bug bit us on 2026-06-11).
 .wow-api-reference
 
 # luacov output (busted --coverage && luacov) — throwaway, regenerated per run
