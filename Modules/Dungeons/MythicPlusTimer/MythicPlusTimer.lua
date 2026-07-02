@@ -264,9 +264,9 @@ local MPT_DEFAULTS = {
 
     -- Objectives / boss list
     ShowObjectives = true,
-    ShowObjectiveTimes = true,  -- the [clear] bracket on completed rows
+    ShowObjectiveTimes = true,  -- the clear time on completed rows
     ShowPBDelta = true,         -- the (+/-) delta beside a clear time
-    -- Visibility of the gold "PB m:ss" TARGET (pending boss rows + the live
+    -- Visibility of the "PB m:ss" TARGET (pending boss rows + the live
     -- timer/forces PB), gated by MPT:ShouldShowRecords: ALWAYS keeps it up for
     -- the whole run; COUNTDOWN (default) shows it only before the timer starts
     -- ticking and hides it for the live run so the HUD stays clean; NEVER hides
