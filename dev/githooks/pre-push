@@ -39,16 +39,8 @@ if [ -f AGENTS.md ] && [ -d Modules ]; then
     fi
 fi
 
-# Windows: luarocks generates only busted.bat, which bash's plain
-# `command -v busted` cannot resolve — check both forms. (.exe tools like
-# luacheck.exe resolve automatically under git's msys bash.)
-busted_bin="$(command -v busted || command -v busted.bat || true)"
-
-if [ -z "$busted_bin" ]; then
-    echo "[pre-push] busted not on PATH — skipping tests. See dev/README.md to set up." >&2
-    echo "[pre-push] (push allowed; CI will still run the suite.)" >&2
-    exit 0
-fi
+# Each tool gates independently: a machine missing one tool still runs the
+# others (a missing busted used to skip lint too — fixed 2026-07-01).
 
 # Blocking since 2026-06-11: the luacheck warning baseline is zero.
 echo "[pre-push] luacheck…"
@@ -61,10 +53,30 @@ else
     echo "[pre-push] luacheck not on PATH — skipping lint. (CI will still lint.)" >&2
 fi
 
-echo "[pre-push] busted…"
-if ! "$busted_bin"; then
-    echo "[pre-push] BLOCKED: tests failed. Fix them, or override with: git push --no-verify" >&2
-    exit 1
+# Windows: luarocks generates only busted.bat, which bash's plain
+# `command -v busted` cannot resolve — check both forms. (.exe tools like
+# luacheck.exe resolve automatically under git's msys bash.)
+busted_bin="$(command -v busted || command -v busted.bat || true)"
+
+if [ -n "$busted_bin" ]; then
+    echo "[pre-push] busted…"
+    if ! "$busted_bin"; then
+        echo "[pre-push] BLOCKED: tests failed. Fix them, or override with: git push --no-verify" >&2
+        exit 1
+    fi
+else
+    echo "[pre-push] busted not on PATH — skipping tests. See dev/README.md to set up." >&2
+    echo "[pre-push] (push allowed; CI will still run the suite.)" >&2
+fi
+
+# .luacheckrc drift vs the local WoW API reference (non-blocking, quiet when
+# clean). Local-only by construction: CI never has the gitignored symlink.
+if command -v lua >/dev/null 2>&1 \
+    && [ -f dev/scripts/check-luacheckrc-drift.lua ] \
+    && [ -e .wow-api-reference/Interface/AddOns/Blizzard_APIDocumentationGenerated ]; then
+    if ! lua dev/scripts/check-luacheckrc-drift.lua >/dev/null 2>&1; then
+        echo "[pre-push] note (non-blocking): .luacheckrc drifts from the API reference — run: lua dev/scripts/check-luacheckrc-drift.lua" >&2
+    fi
 fi
 
 echo "[pre-push] OK"

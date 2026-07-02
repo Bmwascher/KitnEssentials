@@ -23,4 +23,20 @@ function M.loadModule(relpath, KE, addonName)
     return KE
 end
 
+-- Minimal AceAddon shim: a global KitnEssentials whose NewModule/GetModule
+-- hand back one shared table per module name, so module files that call
+-- KitnEssentials:NewModule/GetModule at load resolve headlessly. Returns the
+-- registry: modules["MythicPlusTimer"] is the module table after loadModule.
+-- Unconditional install (no `or` guard) — deterministic regardless of what ran
+-- earlier in the file (busted insulates _G per spec file, not per describe).
+function M.installAddonShim()
+    local modules = {}
+    _G.KitnEssentials = {
+        db = { global = {}, profile = {} },
+        NewModule = function(_, name) modules[name] = modules[name] or {}; return modules[name] end,
+        GetModule = function(_, name) modules[name] = modules[name] or {}; return modules[name] end,
+    }
+    return modules
+end
+
 return M

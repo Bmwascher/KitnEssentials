@@ -42,22 +42,30 @@ luacheck .        # static analysis (strict — zero-warning baseline since 2026
 
 ## One-time local setup
 
-### Windows (scoop)
+### Windows (hererocks — Lua 5.1.5, matching WoW and CI)
+
+The suite runs under Lua **5.1.5** everywhere (WoW's embedded major version):
+a dedicated hererocks tree holds the interpreter plus busted/luacov, wired up
+by the scoop LuaRocks. Needs python and a C compiler (mingw gcc) on PATH.
 
 ```powershell
-scoop install lua luarocks luacheck
-luarocks install busted --lua-dir="$(scoop prefix lua)"
+scoop install luacheck luarocks
+python -m pip install hererocks
+python -m hererocks "$HOME\Documents\WoW-Dev\lua51" -l 5.1.5
+luarocks --lua-version=5.1 --lua-dir="$HOME\Documents\WoW-Dev\lua51" --tree="$HOME\Documents\WoW-Dev\lua51" install busted 2.3.0-1
+luarocks --lua-version=5.1 --lua-dir="$HOME\Documents\WoW-Dev\lua51" --tree="$HOME\Documents\WoW-Dev\lua51" install luacov 0.17.0-1
 ```
 
-`luarocks` installs `busted` to `%APPDATA%\luarocks\bin`. Add that dir to your
-**PATH** so `busted` (and the pre-push hook) resolve it:
+(Skip hererocks' own LuaRocks (`-r`) — its Windows installer is broken; the
+scoop LuaRocks manages the tree fine via `--lua-version/--lua-dir/--tree`.)
+
+Prepend the tree's `bin` to your **user PATH** so `lua`, `busted`, and
+`luacov` (and the pre-push hook) resolve from it:
 
 ```powershell
 [Environment]::SetEnvironmentVariable(
-  "Path", "$env:APPDATA\luarocks\bin;" + [Environment]::GetEnvironmentVariable("Path","User"), "User")
+  "Path", "$HOME\Documents\WoW-Dev\lua51\bin;" + [Environment]::GetEnvironmentVariable("Path","User"), "User")
 ```
-
-(busted needs a C compiler for two dependencies — TDM-GCC / mingw on PATH.)
 
 ### Linux / WSL / the cloud
 
@@ -76,15 +84,39 @@ this box" message stops.
 git config core.hooksPath dev/githooks
 ```
 
-Runs `luacheck` + `busted`, both blocking, before every push. Override a
-single push with `git push --no-verify`. If a tool isn't on PATH the hook
-skips it with a notice rather than blocking (CI still runs everything).
+Runs `luacheck` + `busted`, both blocking, before every push — each tool
+gates independently, so a machine missing one still runs the other. Also
+prints a non-blocking note when `.luacheckrc` drifts from the local WoW API
+reference (see `dev/scripts/check-luacheckrc-drift.lua`). Override a single
+push with `git push --no-verify`. If a tool isn't on PATH the hook skips it
+with a notice rather than blocking (CI still runs everything).
+
+## Claude Code hooks (restore after a re-clone or PC reset)
+
+Everything under `.claude/` is gitignored, so the edit-time lint hook and the
+main-branch guard die with the checkout. The tracked templates in
+`dev/claude-hooks/` are the durable copies — restore them (and the pre-push
+`core.hooksPath` config) with:
+
+```powershell
+pwsh dev/scripts/install-claude-hooks.ps1
+```
+
+Idempotent; never overwrites an existing hooks block or personal permissions
+in `.claude/settings.json`. When changing a live hook under `.claude/hooks/`,
+mirror the change into `dev/claude-hooks/` so the template stays current.
 
 ## Adding a spec
+
+Simple files load directly via `helpers.loadModule`; the big modules
+(DungeonTimers, Core/Globals, DamageMeter core, PixelPerfect, Nicknames)
+have ready-made stub sets in `dev/spec/_ke_loader.lua` — use those instead
+of hand-rolling stubs.
 
 ```lua
 local helpers = require("dev.spec._helpers")
 local mock    = require("dev.spec._wow_mock")   -- only if the file touches WoW API
+local L       = require("dev.spec._ke_loader")  -- per-module loaders (stubs + real load)
 
 describe("MyThing (Modules/.../MyThing.lua)", function()
     it("does the thing", function()
@@ -93,7 +125,19 @@ describe("MyThing (Modules/.../MyThing.lua)", function()
         assert.equals(expected, KE:SomePureFunction(input))
     end)
 end)
+
+describe("Globals helpers", function()
+    it("resolves sparse colors", function()
+        local KE = L.loadGlobals()           -- stub set + real Core/Globals.lua
+        assert.same({ 1, 0, 0.549, 1 }, { KE:ResolveColor(nil, { 1, 0, 0.549, 1 }) })
+    end)
+end)
 ```
 
-CI runs busted under Lua 5.4; `luacheck` enforces Lua 5.1 semantics (WoW's
-runtime) statically, so keep helpers 5.1-compatible.
+Install mocks and stubs unconditionally in `setup`/`before_each` (no `or`
+guards latching stale globals), and give any spec that branches on
+declared-secret values the honesty-boundary comment (see above).
+
+Local and CI both run busted under Lua **5.1.5** — the same major version as
+WoW's embedded runtime — and `luacheck` enforces 5.1 semantics statically on
+top. Keep all spec/harness code 5.1-compatible.

@@ -99,7 +99,6 @@ read_globals = {
     -- Frame and UI
     "CreateFrame", "CreateFont", "CreateColor", "UIParent", "Settings",
     "CreateAbbreviateConfig",
-    "EnumerateFrames",
     "BackdropTemplateMixin", "Mixin", "CreateFromMixins", "CreateAndInitFromMixin",
     "ImportDataStreamMixin",
     "MapCanvasPinMixin", "MapCanvasDataProviderMixin",
@@ -120,14 +119,13 @@ read_globals = {
     "RAID_CLASS_COLORS", "GetClassColor", "CLASS_ICON_TCOORDS",
     "STANDARD_TEXT_FONT",
     "NORMAL_FONT_COLOR", "NORMAL_FONT_COLOR_CODE",
-    "DebuffTypeColor",
 
     -- Unit functions
     "UnitHealth", "UnitHealthMax", "UnitHealthPercent",
     "UnitPower", "UnitPowerMax", "UnitPowerPercent",
     "UnitName", "UnitFullName", "UnitLevel", "UnitClass", "UnitRace", "GetUnitName",
     "UnitGUID", "UnitExists", "UnitIsDead", "UnitIsUnit", "UnitTokenFromGUID",
-    "UnitGroupRolesAssigned", "UnitBuff", "UnitDebuff",
+    "UnitGroupRolesAssigned",
     "UnitGetTotalAbsorbs",
     "AbbreviateNumbers", "AbbreviateLargeNumbers", "BreakUpLargeNumbers",
     "UnitNameFromGUID", "UnitNameUnmodified", "UnitClassFromGUID",
@@ -175,7 +173,6 @@ read_globals = {
 
     -- Secret Values (12.0)
     "issecretvalue", "issecrettable", "canaccesstable", "canaccessvalue",
-    "GetRestrictedActionStatus",
     "C_CurveUtil", "C_DurationUtil",
     "C_Secrets", "C_RestrictedActions",
 
@@ -194,7 +191,6 @@ read_globals = {
     "GetAddOnMemoryUsage", "UpdateAddOnMemoryUsage",
     "GetAddOnCPUUsage", "UpdateAddOnCPUUsage",
     "GetFrameCPUUsage", "ResetCPUUsage",
-    "GetAddOnMetadata",
     "C_AddOns", "C_AddOnProfiler",
 
     -- CVar
@@ -228,7 +224,6 @@ read_globals = {
     "PaperDollFrame_SetLevel", "PaperDollFrame_UpdateStats",
     "InspectPaperDollItemSlotButton_Update", "InspectPaperDollFrame_SetLevel",
     "InspectPaperDollItemsFrame", "C_PaperDollInfo",
-    "ActionButtonSpellAlertManager",
 
     -- Loot
     "GetLootRollItemLink", "RollOnLoot", "ConfirmLootRoll",
@@ -292,7 +287,7 @@ read_globals = {
 
     -- Macro
     "CreateMacro", "EditMacro", "GetMacroIndexByName",
-    "GetMacroItem", "GetMacroSpell", "GetNumMacros", "MAX_ACCOUNT_MACROS",
+    "GetMacroSpell", "GetNumMacros", "MAX_ACCOUNT_MACROS",
 
     -- Keybinding
     "GetBindingKey", "SetBinding", "SaveBindings", "GetCurrentBindingSet",
@@ -302,7 +297,6 @@ read_globals = {
     "SetOverrideBindingClick", "ClearOverrideBindings",
     "SecureCmdOptionParse",
     "SecureHandlerExecute", "SecureHandlerWrapScript",
-    "issecurevariable",
 
     -- Shapeshifting / Stance
     "GetNumShapeshiftForms", "GetShapeshiftForm", "GetShapeshiftFormInfo",

@@ -1775,3 +1775,14 @@ _tipPoll:SetScript("OnUpdate", function(self, elapsed)
     DM._hoverTipDirty = false
     DM:ShowHoverTip(bar.win, bar, false)      -- re-populate live / flip to/from the combat message; skip re-anchor
 end)
+
+---------------------------------------------------------------------------------
+-- Busted seam (dev/spec/dm_breakdown_spec.lua). The pure aggregation helpers
+-- above are file-locals; expose them as statics on DM so the headless spec
+-- tests the REAL bodies instead of a drifting mirror (same static-helper
+-- pattern as MPT.FormatTime / MPT.ResolvePBFrom). Inert in-game: nothing in
+-- the addon reads these keys — internal callers keep using the locals.
+---------------------------------------------------------------------------------
+DM.AggregateEnemyPlayers = AggregateEnemyPlayers
+DM.AutoAttackName = AutoAttackName
+DM.MergeSpellsByName = MergeSpellsByName

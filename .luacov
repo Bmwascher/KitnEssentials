@@ -1,0 +1,22 @@
+-- luacov configuration: `busted --coverage` collects stats, `luacov` writes
+-- the report. Coverage is informational — no threshold gating. Report and
+-- stats files land in the repo root (gitignored); CI uploads the report as
+-- an artifact (test.yml).
+return {
+	-- Shipped source only. Specs/harness (dev/) never match these anchors,
+	-- and vendored Libs/ are excluded explicitly for safety.
+	include = {
+		"^Core",
+		"^Modules",
+		"^GUI",
+	},
+	exclude = {
+		"^Libs",
+		"^dev",
+	},
+	statsfile = "luacov.stats.out",
+	reportfile = "luacov.report.out",
+	-- Wipe stats once reported: accumulated stats mislead when specs change
+	-- between runs (deliberate deviation from the luacov default).
+	deletestats = true,
+}
