@@ -197,14 +197,15 @@ local MPT_DEFAULTS = {
     -- (the edge-straddling look) | CORNER: fully below | CENTER | BESIDE
     ForcesPlacement = "EDGE",
     ForcesColor = {0.73, 0.62, 0.13},
-    ForcesCompleteColor = {0.2, 0.82, 0.31},
+    ForcesCompleteColor = {0, 1, 0.14},  -- % TEXT color once forces cap (the bar fill no longer recolors)
     ForcesTextColor = {1, 1, 1},  -- percent/count text — independent of the bar fill
     ForcesCustomFormat = ":count:/:totalcount: :percent:",
     ForcesBracketStyle = "NONE",  -- NONE|SQUARE|ROUND (wraps the count portion)
     ForcesBandedColors = false,
     -- 5-band quintile palette (0-19 / 20-39 / 40-59 / 60-79 / 80-99 %) plus a
     -- distinct 100% color, used by RenderForces when ForcesBandedColors is on
-    -- (ForcesCompleteColor still wins at criterion completion).
+    -- (at completion the bar keeps its Full band; ForcesCompleteColor moves
+    -- to the % text instead).
     ForcesBandPalette = {
         {1, 0.459, 0.502},        -- 0-19%
         {1, 0.510, 0.282},        -- 20-39%
@@ -236,7 +237,7 @@ local MPT_DEFAULTS = {
     -- CLOSEST|CLOSEST_LOWER|CLOSEST_HIGHER|HIGHEST|LOWEST|OFF
     PBFallbackMode = "CLOSEST",
     ObjectiveColor = {0.85, 0.85, 0.85},
-    ObjectiveDoneColor = {0.2, 0.82, 0.31},
+    ObjectiveDoneColor = {0, 1, 0.14},
     SplitAheadColor = {0.25, 0.88, 0.82},
     SplitBehindColor = {1, 0.34, 0.34},
     PBColor = {0.85, 0.79, 0.54},
