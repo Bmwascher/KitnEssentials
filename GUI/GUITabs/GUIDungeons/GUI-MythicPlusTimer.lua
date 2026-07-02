@@ -134,9 +134,9 @@ local FORCES_PLACEMENT_OPTIONS = {
 }
 
 local FORCES_BRACKET_OPTIONS = {
-    { key = "NONE",   text = "None  (198/240)" },
-    { key = "SQUARE", text = "Square  ([198/240])" },
-    { key = "ROUND",  text = "Round  ((198/240))" },
+    { key = "NONE",   text = "None  198/240" },
+    { key = "SQUARE", text = "Square  [198/240]" },
+    { key = "ROUND",  text = "Round  (198/240)" },
 }
 
 -- PB target source when the current key level has no stored record
@@ -478,6 +478,13 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
     manager:SetCondition("forcesBar", function()
         return db.Enabled ~= false and db.ShowForces ~= false and db.ShowForcesBar ~= false
     end)
+    -- Brackets wrap only the COUNT-bearing formats (_Brk in RenderForces);
+    -- Percent / Percent+Label / Custom never use them.
+    manager:SetCondition("forcesBrackets", function()
+        local fmt = db.ForcesFormat or "PERCENT"
+        return db.Enabled ~= false and db.ShowForces ~= false
+            and (fmt == "COUNT" or fmt == "COUNT_PERCENT" or fmt == "REMAINING")
+    end)
 
     -- Card 1: Forces (toggle + text format + placement + custom tokens)
     local forcesCard = GUIFrame:CreateCard(scrollChild, "Forces", yOffset)
@@ -524,13 +531,13 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
     })
     rowFo2:AddWidget(placeDrop, 1 / 3)
     manager:Register(placeDrop, "forcesBar")
-    local bracketDrop = GUIFrame:CreateDropdown(rowFo2, "Bracket Style", {
+    local bracketDrop = GUIFrame:CreateDropdown(rowFo2, "Count Brackets", {
         options = FORCES_BRACKET_OPTIONS,
         value = db.ForcesBracketStyle or "NONE",
         callback = function(key) db.ForcesBracketStyle = key; ApplySettings() end,
     })
     rowFo2:AddWidget(bracketDrop, 1 / 3)
-    manager:Register(bracketDrop, "all")
+    manager:Register(bracketDrop, "forcesBrackets")
     forcesCard:AddRow(rowFo2, Theme.rowHeight)
 
     local rowFo3 = GUIFrame:CreateRow(forcesCard.content, Theme.rowHeight)
