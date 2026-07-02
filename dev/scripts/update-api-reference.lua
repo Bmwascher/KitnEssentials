@@ -14,6 +14,11 @@ local _dir = _script:match("^(.*\\)[^\\]+$") or ".\\dev\\scripts\\"
 local P = dofile(_dir .. "_apidocs_parser.lua")
 local C = dofile(_dir .. "_api_drift_core.lua")
 
+-- drift-check allowlist: C-SIDE entries that are missing_ok members get a
+-- cross-reference annotation (spec: "so the two tools cross-reference")
+local allowOk, allow = pcall(dofile, _dir .. "luacheckrc-drift-allow.lua")
+local missingOk = (allowOk and type(allow) == "table" and allow.missing_ok) or {}
+
 local MODE = "update"
 for i = 1, #arg do
     if arg[i] == "--report-only" then MODE = "report" end
@@ -185,7 +190,9 @@ elseif oldBir and oldBir.bir then
         local d = C.diffMaps(oldBir.bir[k] or {}, birSets[k] or {})
         local p2 = (k == "cvars") and pred.cvar or (k == "events") and pred.event or pred.name
         for _, sym in ipairs(C.filterUsed(d.removed, p2).hit) do
-            cside[#cside + 1] = ("%s  REMOVED from %s dump"):format(sym, k)
+            local note = missingOk[sym]
+                and ("  (drift-check allowlisted: " .. missingOk[sym] .. ")") or ""
+            cside[#cside + 1] = ("%s  REMOVED from %s dump%s"):format(sym, k, note)
         end
     end
 end
