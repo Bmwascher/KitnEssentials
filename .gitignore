@@ -26,6 +26,3 @@ References/
 # luacov output (busted --coverage && luacov) — throwaway, regenerated per run
 luacov.stats.out
 luacov.report.out
-
-# superpowers brainstorm companion sessions
-.superpowers/
