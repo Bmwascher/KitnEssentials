@@ -877,10 +877,16 @@ BuildOverlayTab = function(scrollChild, yOffset, db, manager)
             and (db.OverlayColorMode or "theme") == "custom"
     end)
 
-    -- Card 1: Enable (nameplate % + tooltip count + combat-only)
+    -- Card 1: Enable (tooltip count + nameplate % + combat-only)
     local card1 = GUIFrame:CreateCard(scrollChild, "Enemy Overlay", yOffset)
     manager:Register(card1, "all")
     local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local tipCheck = GUIFrame:CreateCheckbox(row1, "Enemy Count on Tooltip", {
+        value = db.OverlayTooltipEnabled ~= false,
+        callback = function(checked) db.OverlayTooltipEnabled = checked; ApplyOverlaySettings() end,
+    })
+    row1:AddWidget(tipCheck, 1 / 3)
+    manager:Register(tipCheck, "all")
     local npCheck = GUIFrame:CreateCheckbox(row1, "Show % on Nameplates", {
         value = db.OverlayNameplateEnabled == true,
         -- ApplyOverlaySettings re-wires the whole nameplate subsystem from DB
@@ -893,12 +899,6 @@ BuildOverlayTab = function(scrollChild, yOffset, db, manager)
     })
     row1:AddWidget(npCheck, 1 / 3)
     manager:Register(npCheck, "all")
-    local tipCheck = GUIFrame:CreateCheckbox(row1, "Enemy Count on Tooltip", {
-        value = db.OverlayTooltipEnabled ~= false,
-        callback = function(checked) db.OverlayTooltipEnabled = checked; ApplyOverlaySettings() end,
-    })
-    row1:AddWidget(tipCheck, 1 / 3)
-    manager:Register(tipCheck, "all")
     local combatOnlyCheck = GUIFrame:CreateCheckbox(row1, "Only in Combat", {
         value = db.OverlayCombatOnly ~= false,
         callback = function(checked) db.OverlayCombatOnly = checked; ApplyOverlaySettings() end,
