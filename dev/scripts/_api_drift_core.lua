@@ -166,4 +166,68 @@ function C.parseBIRSource(src, loadSandboxed)
     return set
 end
 
+local function quoteKey(k)
+    if type(k) == "string" and k:match("^[A-Za-z_][A-Za-z0-9_]*$") then return k end
+    return "[" .. string.format("%q", k) .. "]"
+end
+
+local function serializeValue(v, indent)
+    if type(v) ~= "table" then
+        if type(v) == "string" then return string.format("%q", v) end
+        return tostring(v)
+    end
+    local pad = string.rep("    ", indent)
+    local parts = { "{" }
+    local isArray = #v > 0
+    if isArray then
+        for _, item in ipairs(v) do
+            parts[#parts + 1] = pad .. "    " .. serializeValue(item, indent + 1) .. ","
+        end
+    else
+        local keys = {}
+        for k in pairs(v) do keys[#keys + 1] = k end
+        table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+        for _, k in ipairs(keys) do
+            parts[#parts + 1] = pad .. "    " .. quoteKey(k) .. " = "
+                .. serializeValue(v[k], indent + 1) .. ","
+        end
+    end
+    parts[#parts + 1] = pad .. "}"
+    return table.concat(parts, "\n")
+end
+
+function C.serializeSnapshot(snap)
+    return "-- api-drift snapshot (generated; do not edit)\nreturn "
+        .. serializeValue(snap, 0) .. "\n"
+end
+
+function C.loadSnapshotFromString(src, loadSandboxed)
+    local chunk = loadSandboxed(src, "@snapshot", {})
+    if not chunk then return nil end
+    local ok, snap = pcall(chunk)
+    if not ok or type(snap) ~= "table" then return nil end
+    return snap
+end
+
+function C.renderReport(ctx)
+    local L = {}
+    local function add(s) L[#L + 1] = s end
+    add(("api-drift: %s -> %s   [snapshot %s -> %s]")
+        :format(ctx.oldBuild, ctx.newBuild, ctx.oldDate, ctx.date))
+    add("")
+    add(("[BREAKING-USED] (%d)"):format(#ctx.sections.breaking))
+    for _, s in ipairs(ctx.sections.breaking) do add("  " .. s) end
+    add("")
+    add(("[C-SIDE] (%d)"):format(#ctx.sections.cside))
+    for _, s in ipairs(ctx.sections.cside) do add("  " .. s) end
+    add("")
+    add(("[ADDITIONS] (%d)"):format(#ctx.sections.additions))
+    for _, s in ipairs(ctx.sections.additions) do add("  " .. s) end
+    add("")
+    add(("[FYI] %d total doc changes this update; %d intersect the used surface.")
+        :format(ctx.fyiTotal, ctx.fyiUsed))
+    for _, s in ipairs(ctx.links) do add("links: " .. s) end
+    return L, (#ctx.sections.breaking > 0) and 1 or 0
+end
+
 return C

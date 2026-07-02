@@ -132,4 +132,37 @@ describe("api-drift core (dev/scripts/_api_drift_core.lua)", function()
             assert.is_true(s.StillFound)
         end)
     end)
+
+    describe("snapshot round-trip", function()
+        it("serialize -> load restores the maps", function()
+            local P = dofile("dev/scripts/_apidocs_parser.lua")
+            local snap = { build = "12.0.7.68275", date = "2026-07-01",
+                functions = { ["C_Toy.GetToy"] = "Name=GetToy" },
+                events = { TOYS_UPDATED = "LiteralName=TOYS_UPDATED" },
+                enums = { ["Enum.ToyQuality.Rare"] = 1 },
+                dirs = { "Blizzard_Toys" },
+                bir = { globals = { UnitFoo = true }, cvars = {}, events = {},
+                        frames = {}, mixins = {} } }
+            local back = C.loadSnapshotFromString(C.serializeSnapshot(snap), P.loadSandboxed)
+            assert.same(snap, back)
+        end)
+    end)
+
+    describe("renderReport", function()
+        it("exit 1 with breaking lines, 0 without; sections render", function()
+            local lines, code = C.renderReport({
+                oldBuild = "A", newBuild = "B", oldDate = "d1", date = "d2",
+                sections = { breaking = { "C_X.Y REMOVED" }, cside = {}, additions = {} },
+                fyiTotal = 10, fyiUsed = 1, links = {} })
+            assert.equals(1, code)
+            local text = table.concat(lines, "\n")
+            assert.matches("%[BREAKING%-USED%]", text)
+            assert.matches("C_X%.Y REMOVED", text)
+            local _, code0 = C.renderReport({ oldBuild = "A", newBuild = "B",
+                oldDate = "d1", date = "d2",
+                sections = { breaking = {}, cside = {}, additions = {} },
+                fyiTotal = 0, fyiUsed = 0, links = {} })
+            assert.equals(0, code0)
+        end)
+    end)
 end)
