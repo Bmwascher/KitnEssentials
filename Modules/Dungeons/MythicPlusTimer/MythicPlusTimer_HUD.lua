@@ -199,7 +199,9 @@ function MPT:BuildHUD()
     root.thresh1Text   = FS(nil, textOverlay)  -- remaining label at +1 (bar end)
     root.forcesText    = FS(nil, textOverlay)  -- forces percent/count text
 
-    root.timerPBText:SetPoint("RIGHT", root.timerText, "LEFT", -4, 0)  -- rendered in Task 3.7 (gold PB)
+    -- timerPBText anchor is owned by ApplyLayout's stacking pass (LEFT-pinned
+    -- to the frame edge). Anchoring it to timerText's left edge here made it
+    -- ride the changing part's re-measured width every tick (2026-07-02).
 
     local barTex = KE:GetStatusbarPath(self.db and self.db.BarTexture or "KitnUI")
 
@@ -864,13 +866,11 @@ end
 -- issecretvalue guard per spec §8 "aggregate GetCriteriaInfo").
 -- Fill = percent/100 via SetValueGated.
 --
--- BAR color resolution order (highest wins last):
---   1. db.ForcesColor (base)
---   2. db.ForcesBandedColors (quintile palette; skipped at completion)
---   3. db.ForcesCompleteColor (wins unconditionally at completion)
--- The percent/count TEXT uses its own db.ForcesTextColor — independent of the
--- bar fill (2026-06-10 round-3 feedback: recoloring the bar dragged the text
--- along with it).
+-- BAR color: db.ForcesColor, or the quintile palette when ForcesBandedColors
+-- is on (Full band at 100%). The bar never recolors at completion — the
+-- percent/count TEXT flips to db.ForcesCompleteColor instead, over its usual
+-- db.ForcesTextColor (2026-07-02 feedback; same ownership rule as the timer
+-- bar: the number conveys state, the fill stays put).
 --
 -- ForcesBandPalette bands: [1]=0-20%, [2]=20-40%, [3]=40-60%,
 -- [4]=60-80%, [5]=80-100%, Full=exactly 100%.
@@ -901,15 +901,13 @@ function MPT:RenderForces()
     local widthPx = bars.forcesWrap:GetWidth() or (db.BarWidth or 300)
     self.SetValueGated(bars.forcesBar, min(1, pct / 100), widthPx)
 
-    -- Color: banded quintile palette (opt-in) -> completion color wins last.
+    -- Bar color: base ForcesColor or the banded quintile palette. Completion
+    -- no longer recolors the fill — ForcesCompleteColor moved to the text below.
     local r, g, b = db.ForcesColor[1], db.ForcesColor[2], db.ForcesColor[3]
-    if db.ForcesBandedColors and not fo.completed then
+    if db.ForcesBandedColors then
         local band = min(5, floor(pct / 20) + 1)
         local c = (pct >= 100 and db.ForcesBandPalette.Full) or db.ForcesBandPalette[band]
         if c then r, g, b = c[1], c[2], c[3] end
-    end
-    if fo.completed and db.ForcesCompleteColor then
-        r, g, b = db.ForcesCompleteColor[1], db.ForcesCompleteColor[2], db.ForcesCompleteColor[3]
     end
     -- Gate the recolor: SetStatusBarColor is a draw call; skip when unchanged.
     local fb = bars.forcesBar
@@ -961,7 +959,9 @@ function MPT:RenderForces()
         end
     end
 
-    local tc = db.ForcesTextColor or { 1, 1, 1 }
+    -- Completion recolors the TEXT (not the bar): ForcesCompleteColor wins
+    -- over ForcesTextColor once the criterion caps.
+    local tc = (fo.completed and db.ForcesCompleteColor) or db.ForcesTextColor or { 1, 1, 1 }
     self.SetTextGated(f.forcesText, str)
     self.SetColorGated(f.forcesText, tc[1], tc[2], tc[3])
     f.forcesText:Show()
@@ -1015,7 +1015,7 @@ function MPT:RenderObjectives()
 
         -- Name color: done = ObjectiveDoneColor, pending = ObjectiveColor.
         if obj.completed then
-            local c = db.ObjectiveDoneColor or { 0.2, 0.82, 0.31 }
+            local c = db.ObjectiveDoneColor or { 0, 1, 0.14 }
             nameFS:SetTextColor(c[1], c[2], c[3])
         else
             local c = db.ObjectiveColor or { 0.85, 0.85, 0.85 }
@@ -1039,7 +1039,7 @@ function MPT:RenderObjectives()
             -- "Show Clear Times" gates the [clear] bracket itself;
             -- the PB delta is self-contained and independently gated below.
             if db.ShowObjectiveTimes ~= false then
-                local doneHex = Hex(db.ObjectiveDoneColor or { 0.2, 0.82, 0.31 })
+                local doneHex = Hex(db.ObjectiveDoneColor or { 0, 1, 0.14 })
                 rightText = format("%s[%s]|r", doneHex, MPT.FormatTime(obj.clearTime, false))
             end
             if db.ShowPBDelta and obj.pbTime then
@@ -1290,7 +1290,15 @@ function MPT:ApplyLayout()
         else
             f.timerText:SetPoint("TOPRIGHT", f, "TOPRIGHT", -PAD, y)
         end
-        y = y - (f.timerText:GetStringHeight() or (db.FontSize or 13)) - ROW
+        local rowH = f.timerText:GetStringHeight() or (db.FontSize or 13)
+        -- PB/delta text: LEFT-pinned to the frame edge, vertically centered on
+        -- the timer row. Anchoring it to timerText's left edge (the original
+        -- build-time anchor) made it ride the changing part's re-measured
+        -- width every tick — visible jitter with live milliseconds on
+        -- (2026-07-02 feedback: far-left pin).
+        f.timerPBText:ClearAllPoints()
+        f.timerPBText:SetPoint("LEFT", f, "TOPLEFT", PAD, y - rowH / 2)
+        y = y - rowH - ROW
     end
     -- Key + affix row: the affixes own the right edge with the key bracket to
     -- their LEFT (round-3 feedback). affixText is the row anchor even when

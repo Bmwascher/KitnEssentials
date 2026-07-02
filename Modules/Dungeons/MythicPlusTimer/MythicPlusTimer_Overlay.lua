@@ -55,15 +55,18 @@ local function SetupTooltip()
         if not IsInChallengeMode() then return end
 
         -- Read progress off the mouseover token Blizzard's tooltip resolves
-        -- against. Truthy check ONLY — no numeric comparison/arithmetic, which
-        -- crash on secret values. format() tolerates secret numeric args
-        -- (verified safe — string.format passes them through untouched).
-        local value, percent = GetProgress("mouseover")
-        if not value or not percent then return end
+        -- against. Returns: (actualValue, percentValue, percentValueString).
+        -- percentValue (#2) is a RAW 0-1 fraction (live-confirmed 2026-07-02:
+        -- 15/607 rendered "0.02%"), and scaling it up is off-limits — secret
+        -- math throws — so display Blizzard's pre-formatted string (#3).
+        -- Truthy check ONLY — no numeric comparison/arithmetic. format()
+        -- tolerates secret args (%d/%s pass them through untouched).
+        local value, _, percentStr = GetProgress("mouseover")
+        if not value or not percentStr then return end
 
         local themeHex = KE:GetThemeColorHex()
-        tooltip:AddLine(format("|TInterface\\AddOns\\KitnEssentials\\Media\\Icon\\KitnUI:0:0|t|cff%sCount:|r |cffffffff+%d | %.2f%%|r",
-            themeHex, value, percent))
+        tooltip:AddLine(format("|TInterface\\AddOns\\KitnEssentials\\Media\\Icon\\KitnUI:0:0|t|cff%sCount:|r |cffffffff+%d | %s|r",
+            themeHex, value, percentStr))
         tooltip:Show()
     end)
 end
@@ -201,9 +204,12 @@ local function UpdateNameplateTextFor(unit)
         end
     end
 
-    -- Truthy check only — percent may be a secret value; no comparison/arithmetic.
-    local _, percent = GetProgress(unit)
-    if not percent then
+    -- Return #3 is Blizzard's pre-formatted percent string (#2 is a raw 0-1
+    -- fraction — see the tooltip note). Truthy check only — the value may be
+    -- secret; no comparison/arithmetic, and the SetText below must never gain
+    -- a last-string dirty-check gate.
+    local _, _, percentStr = GetProgress(unit)
+    if not percentStr then
         ReleaseNameplateText(unit)
         return
     end
@@ -217,7 +223,7 @@ local function UpdateNameplateTextFor(unit)
         ReleaseNameplateText(unit)
         return
     end
-    obj.fs:SetText(format(db.OverlayFormat or "%.2f%%", percent))
+    obj.fs:SetText(format(db.OverlayFormat or "%s", percentStr))
 end
 
 local function UpdateAllNameplateTexts()
