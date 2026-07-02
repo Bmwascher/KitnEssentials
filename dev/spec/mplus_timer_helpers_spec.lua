@@ -1,33 +1,19 @@
--- Pure-helper spec. Mirrors MPT.FormatTime / ComputeThresholds / ThresholdRemaining.
--- If these bodies drift from MythicPlusTimer.lua the spec is stale; keep in sync.
-local floor, max, format = math.floor, math.max, string.format
-local PLUS_TWO_RATIO, PLUS_THREE_RATIO = 0.8, 0.6
+-- Pure-helper spec for MPT.FormatTime / ComputeThresholds / ThresholdRemaining.
+-- Loads the REAL Modules/Dungeons/MythicPlusTimer/MythicPlusTimer.lua headlessly
+-- (no mirrored bodies) so the assertions run against the live implementation.
+-- If the file ever gains load-time C_* calls / event registrations this setup
+-- breaks loudly — that is the intended tripwire; fix the load path, don't re-mirror.
+local helpers = require("dev.spec._helpers")
+local mock = require("dev.spec._wow_mock")
 
-local MPT = {}
-function MPT.FormatTime(sec, withMs)
-    if not sec or sec < 0 then sec = 0 end
-    local whole = floor(sec)
-    local m, s = floor(whole / 60), floor(whole % 60)
-    if withMs then
-        local ms = floor(((sec - whole) * 1000) + 0.5)
-        if ms >= 1000 then whole = whole + 1; m = floor(whole/60); s = floor(whole%60); ms = 0 end
-        return format("%02d:%02d.%03d", m, s, ms)
-    end
-    return format("%02d:%02d", m, s)
-end
-function MPT.ComputeThresholds(maxTime, hasPeril)
-    maxTime = maxTime or 0
-    if maxTime <= 0 then return { plus1 = 0, plus2 = 0, plus3 = 0 } end
-    local plus2, plus3 = maxTime * PLUS_TWO_RATIO, maxTime * PLUS_THREE_RATIO
-    if hasPeril then
-        local base = maxTime - 90
-        if base > 0 then plus2 = base * PLUS_TWO_RATIO + 90; plus3 = base * PLUS_THREE_RATIO + 90 end
-    end
-    return { plus1 = maxTime, plus2 = plus2, plus3 = plus3 }
-end
-function MPT.ThresholdRemaining(elapsed, cutoff)
-    return max(0, (cutoff or 0) - (elapsed or 0))
-end
+local MPT
+setup(function()
+    mock.install()   -- CreateFrame (tickerFrame), wipe
+    local modules = helpers.installAddonShim()
+    helpers.loadModule("Modules/Dungeons/MythicPlusTimer/MythicPlusTimer.lua")
+    MPT = modules["MythicPlusTimer"]
+    assert(MPT and MPT.FormatTime, "real MythicPlusTimer.lua did not expose FormatTime")
+end)
 
 describe("MPT.FormatTime", function()
     it("formats whole seconds as MM:SS", function()

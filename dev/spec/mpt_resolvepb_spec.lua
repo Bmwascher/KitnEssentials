@@ -3,27 +3,21 @@
 -- busted is unavailable, run the equivalent /run self-check macro noted at
 -- the bottom of this file in-game.
 --
--- STALE-MIRROR WARNING: This spec loads the real MythicPlusTimer_Splits.lua via
--- loadfile so it tests the live implementation, not a copy. If the file path or
--- function signature changes, update the loader below accordingly (same rule as
--- the stale-mirror comment in mplus_timer_helpers_spec.lua for FormatTime/etc.).
+-- Loads the REAL MythicPlusTimer_Splits.lua via helpers.loadModule, which
+-- raises on loadfile failure and runs the chunk UNPROTECTED — a load error
+-- fails the suite loudly instead of leaving MPT.ResolvePBFrom nil (the old
+-- loadfile+pcall route swallowed both).
+local helpers = require("dev.spec._helpers")
+local mock = require("dev.spec._wow_mock")
 
--- Minimal AceAddon shim so the module file's GetModule call resolves.
-_G.KitnEssentials = _G.KitnEssentials or {
-    db = { global = {}, profile = {} },
-    GetModule = function() return _G.__MPT_STUB end,
-    NewModule = function() return _G.__MPT_STUB end,
-}
-_G.__MPT_STUB = _G.__MPT_STUB or {}
-local MPT = _G.__MPT_STUB
-
--- Re-declare the pure resolver exactly as in MythicPlusTimer_Splits.lua by
--- loading that file's ResolvePBFrom. We dofile the source so the test tracks
--- the real implementation (no copy).
-local addonVararg = { [1] = "MythicPlusTimer", [2] = setmetatable({}, { __index = function() return function() end end }) }
--- NOTE: loadfile path is relative to repo root where busted runs.
-local chunk = loadfile("Modules/Dungeons/MythicPlusTimer/MythicPlusTimer_Splits.lua")
-if chunk then pcall(chunk, "MythicPlusTimer", addonVararg[2]) end
+local MPT
+setup(function()
+    mock.install()
+    local modules = helpers.installAddonShim()
+    helpers.loadModule("Modules/Dungeons/MythicPlusTimer/MythicPlusTimer_Splits.lua")
+    MPT = modules["MythicPlusTimer"]
+    assert(MPT and MPT.ResolvePBFrom, "Splits file did not expose ResolvePBFrom")
+end)
 
 describe("MPT.ResolvePBFrom", function()
     local store
@@ -112,6 +106,14 @@ describe("MPT.ResolvePBFrom", function()
             local rec = MPT.ResolvePBFrom(store, 2648, 12, nil, "OFF")
             assert.are.equal(1400, rec.overall)
         end)
+    end)
+end)
+
+describe("loader failure is LOUD (regression guard for the old pcall swallow)", function()
+    it("raises on a missing file instead of silently continuing", function()
+        local ok, err = pcall(helpers.loadModule, "Modules/DoesNotExist/Nope.lua")
+        assert.is_false(ok)
+        assert.matches("loadfile failed", tostring(err))
     end)
 end)
 
