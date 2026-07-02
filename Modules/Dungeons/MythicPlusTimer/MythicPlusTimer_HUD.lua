@@ -281,9 +281,9 @@ function MPT:BuildHUD()
     deathTT:SetFrameLevel(200)
     deathTT:SetClampedToScreen(true)  -- cursor-left anchor near the screen edge
     deathTT:Hide()
-    -- Near-black @ 0.8 — matches the bars' empty-track tint (#080808; the
-    -- solid 0.9 black read too harsh against the HUD, round-6 feedback).
-    KE:ApplyBackdrop(deathTT, { Enabled = true, Color = {0.031, 0.031, 0.031, 0.8}, BorderColor = {0, 0, 0, 1}, BorderSize = 1 })
+    -- Matches the Damage Meter segment-menu hover panel (0.05 fill @ 0.97,
+    -- solid black 1px border) so KE's hover popups read as one style.
+    KE:ApplyBackdrop(deathTT, { Enabled = true, Color = {0.05, 0.05, 0.05, 0.97}, BorderColor = {0, 0, 0, 1}, BorderSize = 1 })
     deathTT._rows = {}
     MPT.frames.deathsTooltip = deathTT
 
