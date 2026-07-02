@@ -1,5 +1,8 @@
 # KitnEssentials
 
+[![Lint](https://github.com/Bmwascher/KitnEssentials/actions/workflows/lint.yml/badge.svg)](https://github.com/Bmwascher/KitnEssentials/actions/workflows/lint.yml)
+[![Test](https://github.com/Bmwascher/KitnEssentials/actions/workflows/test.yml/badge.svg)](https://github.com/Bmwascher/KitnEssentials/actions/workflows/test.yml)
+
 Standalone combat, utilities, quality of life, dungeons, and skinning modules for **KitnUI**.
 
 KitnEssentials adds HUD elements, buff trackers, automation features, and Blizzard UI skinning through a fully themed settings panel. Every module is independently toggleable and repositionable via a built-in edit mode.

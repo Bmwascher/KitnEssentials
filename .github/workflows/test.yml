@@ -3,26 +3,72 @@ name: Test
 # Headless unit/smoke tests on every push and PR. This is the durable safety
 # net: it runs on GitHub's runners regardless of any local or cloud container
 # state. Does NOT replace in-game /reload testing (frame layout, secure
-# frames, taint, EditMode are in-game-only — see spec/README.md).
+# frames, taint, EditMode are in-game-only — see dev/README.md).
+#
+# Runs under Lua 5.1.5 — the same major version as WoW's embedded runtime —
+# via leafo/gh-actions-lua (local dev stays on Lua 5.4; luacheck's std=lua51
+# plus this job catch 5.4-isms). dev/scripts/setup-lua-toolchain.sh is no
+# longer used here; it remains for Claude Code cloud environments.
 #
 # Static analysis lives in lint.yml (BigWigsMods/luacheck, strict — the
-# warning baseline was cleared 2026-06-11, so the old "advisory" mode from
-# the original harness branch is no longer needed).
+# warning baseline was cleared 2026-06-11).
 on:
   push:
     branches: ['**']
   pull_request:
 
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # The job id `busted` is the literal status-check name required by the
+  # main-branch ruleset and by release.yml — do not rename it or add a
+  # `name:` override without updating both.
   busted:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Lua toolchain
-        run: bash dev/scripts/setup-lua-toolchain.sh
+      # Self-caches the compiled interpreter (buildCache defaults to true).
+      - uses: leafo/gh-actions-lua@6919171ccf181b826f44b9bca76307b577217377 # v13.0.0
+        with:
+          luaVersion: "5.1.5"
+
+      # Restore the LuaRocks prefix + installed rocks BEFORE the luarocks
+      # action runs: its cheap make-install overlays the restored tree and
+      # re-exports PATH/LUA_PATH/LUA_CPATH either way.
+      - uses: actions/cache@v4
+        id: rocks
+        with:
+          path: .luarocks
+          key: ${{ runner.os }}-lua5.1.5-luarocks3.13.0-busted2.3.0-luacov0.17.0
+
+      - uses: leafo/gh-actions-luarocks@35d062def313a7699a0d513e996bcf4352f05389 # v6.1.0
+
+      # Keep these versions in lockstep with the cache key above.
+      - name: Install rocks
+        if: steps.rocks.outputs.cache-hit != 'true'
+        run: |
+          luarocks install busted 2.3.0-1
+          luarocks install luacov 0.17.0-1
 
       # Hard gate: unit specs + the loadfile smoke (which fails on any syntax
       # error in any shipped source file).
-      - name: Busted
-        run: busted
+      - name: Busted (with coverage)
+        run: busted --coverage
+
+      # Informational only — no threshold gating (.luacov config).
+      - name: Coverage report
+        run: |
+          luacov
+          tail -n 40 luacov.report.out
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: luacov-report
+          path: luacov.report.out
+          if-no-files-found: ignore
+          retention-days: 14
