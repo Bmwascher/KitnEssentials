@@ -1,5 +1,25 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v3.1.0
+
+### Mythic+ Timer
+- **NEW:** "Text Line" threshold mode — swaps the timer bar and its tick labels for a single collapsing timer line ("+2 Chest (26:24): 5:31") that always shows the next reward still in reach: the countdown runs teal while you're ahead, flips to a red +overshoot when a cutoff falls, drops to the next tier, and locks green or red at the finish. The final tier timer bare completion and reads "Timed"
+- **NEW:** "Below Bar" threshold label position — keeps every cutoff visible: live cutoffs count down under their ticks, and passed cutoffs grey out to their absolute times as permanent pacing marks
+- **NEW:** Thresholds font card — the +3/+2/+1 labels and the race line get their own font face, size, and outline, independent of the global HUD font
+- **NEW:** "Live Sub-Seconds" timer option (replaces the old milliseconds toggle) — the running timer ticks a smooth tenths-of-a-second digit ten times per second, driven by a precise clock so it never drifts or jitters. The frozen completion time always shows full milliseconds regardless of the toggle
+- **NEW:** Show Forces Bar toggle — hide the bar and the forces text becomes a stacked HUD row for an all-text look; plus a new forces format that appends an "Enemy Forces" label to the percent
+- **NEW:** Row Spacing slider — tune the vertical gap between HUD rows and boss rows
+- **NEW:** Optional dungeon name on the key row, which is restyled to "+12 Kings Rest" with dot-separated affixes ("Fortified · Peril · Tyrannical")
+- Completion colors refreshed: the timer lands green on a timed finish (was gold), completed forces recolor the percent text instead of the bar fill, PB targets read grey-white, and the key row reads white; boss clear times drop their brackets
+- Threshold labels in the Above and Below positions right-align to their tick marks, so labels near the end of the bar no longer collide or clip the frame edge
+- The PB readout beside the timer sits in a fixed slot against the timer's reserved width, so it no longer shifts as the timer digits change
+- Left-edge boss-row times (Time Position "Start") read time-first with the PB delta beside them, mirroring the right-edge order
+- The deaths hover log backdrop now matches the Damage Meter panels (solid dark fill, black border)
+- **Fixed:** The enemy overlay showed the raw progress fraction as the forces percent ("0.02%" instead of "2.47%") on nameplates and the tooltip Count line — both now display the game's pre-formatted percent
+- Config page polish: bar color controls grey out while their bar is hidden, Count Brackets enables only for count-bearing formats, and the tooltip toggle now leads the Overlay tab
+
+---
+
 ## v3.0.3
 
 ### Damage Meter
