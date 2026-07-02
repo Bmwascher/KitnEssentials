@@ -73,6 +73,9 @@ local _sigBuf = {}
 -- pull both the elapsed and total sides inward toward the separator.
 local TIMER_SEP_GAP = 3
 
+-- Gap (px) between the PB/delta text and the reserved timer-row width.
+local TIMER_PB_GAP = 18
+
 ---------------------------------------------------------------------------------
 -- Gating helpers (module functions — not methods; take widget explicitly)
 ---------------------------------------------------------------------------------
@@ -198,10 +201,13 @@ function MPT:BuildHUD()
     root.thresh2Text   = FS(nil, textOverlay)  -- remaining label at +2 tick
     root.thresh1Text   = FS(nil, textOverlay)  -- remaining label at +1 (bar end)
     root.forcesText    = FS(nil, textOverlay)  -- forces percent/count text
+    root.timerMeasureText = FS()           -- hidden ruler for the PB tuck's
+    root.timerMeasureText:Hide()           -- worst-case timer-width reservation
 
-    -- timerPBText anchor is owned by ApplyLayout's stacking pass (LEFT-pinned
-    -- to the frame edge). Anchoring it to timerText's left edge here made it
-    -- ride the changing part's re-measured width every tick (2026-07-02).
+    -- timerPBText anchor is owned by ApplyLayout's stacking pass
+    -- (reservation-tuck right-anchored). Anchoring it to timerText's left
+    -- edge here made it ride the changing part's re-measured width every
+    -- tick (2026-07-02).
 
     local barTex = KE:GetStatusbarPath(self.db and self.db.BarTexture or "KitnUI")
 
@@ -1171,6 +1177,15 @@ function MPT:ApplyLayout()
         applyFont(f.thresh1Text, "Threshold")
         applyFont(f.forcesText,  "Forces")
 
+        applyFont(f.timerMeasureText, "Timer")
+        -- PB tuck reservation: worst-case timer-row width at the Timer font
+        -- for the active format (ms always included on elapsed modes — the
+        -- frozen completion string must fit). Measured on a hidden ruler FS,
+        -- never the live timerText. Config-pass timing keeps GetStringWidth
+        -- off the per-tick path.
+        f.timerMeasureText:SetText(MPT.BuildTimerTemplate(db.TimerFormat))
+        f._timerResW = f.timerMeasureText:GetStringWidth() or 0
+
         -- Bar sizes, HUD anchor, scale, backdrop recolor.
         f:SetWidth(barW + PAD * 2)
         bars.timerWrap:SetSize(barW, barH)
@@ -1295,13 +1310,13 @@ function MPT:ApplyLayout()
             f.timerText:SetPoint("TOPRIGHT", f, "TOPRIGHT", -PAD, y)
         end
         local rowH = f.timerText:GetStringHeight() or (db.FontSize or 13)
-        -- PB/delta text: LEFT-pinned to the frame edge, vertically centered on
-        -- the timer row. Anchoring it to timerText's left edge (the original
-        -- build-time anchor) made it ride the changing part's re-measured
-        -- width every tick — visible jitter with live milliseconds on
-        -- (2026-07-02 feedback: far-left pin).
+        -- PB/delta text: tucked just left of the RESERVED worst-case timer
+        -- width (f._timerResW, config pass) — close to the timer, and still
+        -- jitter-proof because it aligns to the reservation, never the live
+        -- string (2026-07-02 design: reservation-tuck).
         f.timerPBText:ClearAllPoints()
-        f.timerPBText:SetPoint("LEFT", f, "TOPLEFT", PAD, y - rowH / 2)
+        f.timerPBText:SetPoint("RIGHT", f, "TOPRIGHT",
+            -(PAD + (f._timerResW or 0) + TIMER_PB_GAP), y - rowH / 2)
         y = y - rowH - ROW
     end
     -- Key + affix row: the affixes own the right edge with the key bracket to
