@@ -15,6 +15,7 @@ local CreateFrame = CreateFrame
 local floor = math.floor
 local min, max, abs = math.min, math.max, math.abs  -- max/abs used here; min used by RenderBar
 local format = string.format
+local GetTimePreciseSec = GetTimePreciseSec
 
 -- Color array → "|cffRRGGBB" prefix (used by RenderObjectives per-row).
 -- floor already declared above; do NOT re-declare it.
@@ -73,6 +74,10 @@ local _sigBuf = {}
 -- pull both the elapsed and total sides inward toward the separator.
 local TIMER_SEP_GAP = 3
 
+-- Gap (px) between the PB/delta text and the reserved timer-row width
+-- (tightened 18 -> 8, 2026-07-02 in-game feedback: PB sat too far left).
+local TIMER_PB_GAP = 8
+
 ---------------------------------------------------------------------------------
 -- Gating helpers (module functions — not methods; take widget explicitly)
 ---------------------------------------------------------------------------------
@@ -113,7 +118,7 @@ function MPT.SetValueGated(bar, v, widthPx)
     bar:SetValue(v)
 end
 
--- True when the gold PB "target" displays (live timer PB, forces target, and
+-- True when the PB "target" displays (live timer PB, forces target, and
 -- pending boss-row targets) should be visible. Resolves db.SplitsShowMode:
 --   ALWAYS    — visible for the whole run.
 --   COUNTDOWN — visible only before the timer starts ticking (the pre-pull
@@ -190,18 +195,22 @@ function MPT:BuildHUD()
     root.timerText     = FS()              -- changing timer part ("15:00")
     root.timerSepText  = FS()              -- static "/" separator (own FS so both side-gaps are anchor-tunable)
     root.timerSuffixText = FS()            -- static total ("28:00"), pinned at the right edge
-    root.timerPBText   = FS()              -- gold PB beside timer (countdown)
-    root.keyText       = FS()              -- "[30]" key bracket
+    root.timerPBText   = FS()              -- PB beside timer (countdown)
+    root.keyText       = FS()              -- "+30" key bracket
     root.affixText     = FS()              -- affix names (TEXT mode)
     root.affixIcons    = {}                -- ICON-mode textures (lazy, Task 2.4)
     root.thresh3Text   = FS(nil, textOverlay)  -- remaining label at +3 tick
     root.thresh2Text   = FS(nil, textOverlay)  -- remaining label at +2 tick
     root.thresh1Text   = FS(nil, textOverlay)  -- remaining label at +1 (bar end)
     root.forcesText    = FS(nil, textOverlay)  -- forces percent/count text
+    root.timerMeasureText = FS()           -- hidden ruler for the PB tuck's
+    root.timerMeasureText:Hide()           -- worst-case timer-width reservation
+    root.raceLineText  = FS()              -- LINES-mode collapsing race line
 
-    -- timerPBText anchor is owned by ApplyLayout's stacking pass (LEFT-pinned
-    -- to the frame edge). Anchoring it to timerText's left edge here made it
-    -- ride the changing part's re-measured width every tick (2026-07-02).
+    -- timerPBText anchor is owned by ApplyLayout's stacking pass
+    -- (reservation-tuck right-anchored). Anchoring it to timerText's left
+    -- edge here made it ride the changing part's re-measured width every
+    -- tick (2026-07-02).
 
     local barTex = KE:GetStatusbarPath(self.db and self.db.BarTexture or "KitnUI")
 
@@ -390,9 +399,77 @@ function MPT:BuildHUD()
 end
 
 ---------------------------------------------------------------------------------
+-- Live milliseconds driver — an OnUpdate that owns f.timerText's string
+-- while active (RenderTimer skips that one write; color, "/", and the
+-- static total stay on the 1 Hz path). GetWorldElapsedTime only carries
+-- whole seconds, so the fraction comes from MPT.LiveMsElapsed's precise
+-- clock, re-glued at every whole-second flip by OnTimerTick. Display is
+-- throttled to 10 Hz (WarpDeplete's cadence) and shows ONE decisecond
+-- digit — a 60 Hz three-digit readout churned unreadably and its
+-- proportional-font width danced at frame rate (user feedback 2026-07-02);
+-- the frozen completion time keeps the full .mmm via RenderTimer. The
+-- width reservation stays the .mmm template, so completion never moves
+-- the PB text. Detach-when-idle: the script exists only while
+-- MsDriverActive(); UpdateMsDriver (called from Render's tail) attaches/
+-- detaches, and the handler self-detaches the moment the predicate flips.
+---------------------------------------------------------------------------------
+
+function MPT:MsDriverActive()
+    local run, db = self.run, self.db
+    if not (run and db and db.Enabled) then return false end
+    if not db.ShowMilliseconds or self.isPreview then return false end
+    if not run.active or run.completed then return false end
+    local mode = db.TimerFormat or "ELAPSED_TOTAL"
+    if mode == "REMAINING" or mode == "REMAINING_TOTAL" then return false end
+    return GetTimePreciseSec ~= nil
+end
+
+local MS_DRIVER_INTERVAL = 0.1
+local msDriverAccum = MS_DRIVER_INTERVAL
+
+local function MsDriverOnUpdate(_, dt)
+    msDriverAccum = msDriverAccum + (dt or 0)
+    if msDriverAccum < MS_DRIVER_INTERVAL then return end
+    msDriverAccum = 0
+    local f = MPT.frames and MPT.frames.root
+    if not f then return end
+    if not MPT:MsDriverActive() then
+        f:SetScript("OnUpdate", nil)   -- self-detach; Render re-attaches when eligible
+        return
+    end
+    local run, db = MPT.run, MPT.db
+    local p, nb = MPT.LiveMsElapsed(GetTimePreciseSec(), run.msBase, run.elapsed)
+    run.msBase = nb
+    local str
+    if (db.TimerFormat or "ELAPSED_TOTAL") == "ELAPSED_DETAIL" then
+        -- Same composition as RenderTimer's DETAIL branch, driven by the
+        -- precise clock so the whole string stays self-consistent per frame.
+        local maxTime = run.maxTime or 0
+        str = MPT.FormatTimeDeci(p) .. " (" .. MPT.FormatTime(max(0, maxTime - p), false)
+            .. " / " .. MPT.FormatTime(maxTime, false) .. ")"
+    else
+        str = MPT.FormatTimeDeci(p)
+    end
+    MPT.SetTextGated(f.timerText, str)
+end
+
+function MPT:UpdateMsDriver()
+    local f = self.frames and self.frames.root
+    if not f then return end
+    if self:MsDriverActive() then
+        if not f:GetScript("OnUpdate") then
+            msDriverAccum = MS_DRIVER_INTERVAL   -- first tick renders immediately
+            f:SetScript("OnUpdate", MsDriverOnUpdate)
+        end
+    else
+        f:SetScript("OnUpdate", nil)
+    end
+end
+
+---------------------------------------------------------------------------------
 -- RenderTimer — format elapsed/limit into one of five display strings and
--- recolor the FontString: white while running, gold on timed completion,
--- red when depleted (elapsed > limit or run completed past limit).
+-- recolor the FontString: white while running, TimerSuccessColor on timed
+-- completion, red when depleted (elapsed > limit or run completed past limit).
 -- Design: uniform white (no separate gray "/ limit") per user direction.
 -- FormatTime resolved lazily to be load-order-safe (Phase 1 assigns it after
 -- this file parses).
@@ -410,8 +487,17 @@ function MPT:RenderTimer()
     -- Milliseconds: ALWAYS on the frozen completion time (run.elapsed is the
     -- authoritative GetChallengeCompletionInfo().time/1000, so
     -- the precise .mmm is the headline result and shows even with the live toggle
-    -- off). On the live running timer they're opt-in via db.ShowMilliseconds.
-    local elaStr = FormatTime(elapsed, run.completed or db.ShowMilliseconds)
+    -- off). Live with the toggle on, the shape is the driver's single
+    -- decisecond — this path renders it only where the driver can't run
+    -- (preview; REMAINING modes ignore elaStr).
+    local elaStr
+    if run.completed then
+        elaStr = FormatTime(elapsed, true)
+    elseif db.ShowMilliseconds then
+        elaStr = MPT.FormatTimeDeci(elapsed)
+    else
+        elaStr = FormatTime(elapsed, false)
+    end
     local maxStr = FormatTime(maxTime, false)
     local remStr = FormatTime(timeLeft, false)
     local mode = db.TimerFormat or "ELAPSED_TOTAL"
@@ -439,7 +525,7 @@ function MPT:RenderTimer()
     end
 
     -- Default: white from db.TimerColor.
-    -- Completion: gold if timed, red if depleted.
+    -- Completion: TimerSuccessColor if timed, red if depleted.
     -- Running past limit (elapsed > maxTime): red immediately.
     local r, g, b = db.TimerColor[1], db.TimerColor[2], db.TimerColor[3]
     if run.completed then
@@ -451,7 +537,11 @@ function MPT:RenderTimer()
         r, g, b = c[1], c[2], c[3]
     end
 
-    self.SetTextGated(f.timerText, str)
+    -- While the live-ms driver owns the changing part, skip this one write —
+    -- the 1 Hz whole-second string would fight the per-frame ms string.
+    if not self:MsDriverActive() then
+        self.SetTextGated(f.timerText, str)
+    end
     self.SetColorGated(f.timerText, r, g, b)
     f.timerText:Show()
     self.SetTextGated(f.timerSuffixText, suffix)
@@ -482,14 +572,14 @@ function MPT:RenderTimer()
         f.timerPBText:SetAlpha(1)
         f.timerPBText:Show()
     elseif MPT.run.bestOverall and self:ShouldShowRecords() then
-        -- The gold overall PB target — shown per SplitsShowMode (ALWAYS, or
+        -- The overall PB target — shown per SplitsShowMode (ALWAYS, or
         -- COUNTDOWN before the timer starts; hidden mid-run / on NEVER).
-        local pbHex = Hex(MPT.db.PBColor or {0.85, 0.79, 0.54})
+        local pbHex = Hex(MPT.db.PBColor or {0.81, 0.81, 0.81})
         local a = max(0, min(1, MPT.db.PBOpacity or 1))
         -- Fallback source tag: when the record came from a DIFFERENT key
         -- level, show which one you're
         -- racing — "PB 25:30 [11]" on a 12. Exact-level records stay clean.
-        -- One tag on the overall line only; the per-boss gold targets come
+        -- One tag on the overall line only; the per-boss PB targets come
         -- from the same whole-record resolve, so it speaks for all of them.
         local src = MPT.run.pbSourceLevel
         local tag = (src and src ~= (MPT.run.level or 0)) and format(" [%d]", src) or ""
@@ -518,6 +608,13 @@ local function StateFillColor(elapsed, thresholds)
     return 0.40, 1.00, 0.40                   -- on for +3: green
 end
 
+-- True while the LINES threshold mode owns the display: the race line
+-- renders and the timer bar (with its ticks) hides. Labels off => bar
+-- returns, so pacing never fully disappears.
+local function LinesModeActive(db)
+    return db.ShowThresholdLabels ~= false and (db.ThresholdPlacement or "EDGE") == "LINES"
+end
+
 ---------------------------------------------------------------------------------
 -- RenderBar — single timer-bar fill. Default: neutral db.BarColor, kept at that
 -- color through completion (the timer NUMBER conveys timed/depleted via
@@ -530,6 +627,11 @@ function MPT:RenderBar()
     local run, db = self.run, self.db
     local bars = self.frames and self.frames.bars
     if not bars or not db then return end
+    if LinesModeActive(db) then
+        bars.timerWrap:Hide()   -- race line owns pacing; ticks hide with the wrap
+        return
+    end
+    bars.timerWrap:Show()
     local bar = bars.timerBar
     local maxTime = run.maxTime or 0
     if maxTime <= 0 then
@@ -552,7 +654,7 @@ function MPT:RenderBar()
     else
         -- Neutral fill at all times, INCLUDING completion (user direction: the
         -- bar keeps its configured BarColor; only the timer number recolors
-        -- gold/red on a timed/depleted finish).
+        -- TimerSuccessColor/TimerExpiredColor on a timed/depleted finish).
         r, g, b = db.BarColor[1], db.BarColor[2], db.BarColor[3]
     end
 
@@ -595,8 +697,15 @@ local function _PlaceLabel(fs, timerBar, barW, cutoff, maxTime, place)
         -- texture via the textOverlay parent.
         fs:SetPoint("RIGHT", timerBar, "LEFT", x - 3, 0)
     elseif place == "ABOVE" then
-        -- Centered on the tick, fully above the bar.
-        fs:SetPoint("BOTTOM", timerBar, "TOPLEFT", x, 2)
+        -- Right-aligned to the tick, fully above the bar — the same stagger
+        -- rule as EDGE. Centering collided near the bar end: the centered
+        -- +1 label clipped the frame edge, and right-aligning only the end
+        -- label jammed it into the centered +2 (2026-07-02 live feedback,
+        -- rounds 1 + 2).
+        fs:SetPoint("BOTTOMRIGHT", timerBar, "TOPLEFT", x - 3, 2)
+    elseif place == "BELOW" then
+        -- Same right-aligned stagger, fully below the bar.
+        fs:SetPoint("TOPRIGHT", timerBar, "BOTTOMLEFT", x - 3, -2)
     else  -- EDGE (default): straddles the bar's TOP edge (the edge-straddling
           -- look) — label center ON the edge, half in / half out, left of its tick.
         fs:SetPoint("RIGHT", timerBar, "TOPLEFT", x - 3, 0)
@@ -613,6 +722,16 @@ end
 -- stays visible permanently as a bar divider (round-3c feedback).
 local function _ThreshLabel(elapsed, cutoff)
     if elapsed > cutoff then return nil end
+    return _FmtShort(cutoff - elapsed)
+end
+
+-- BELOW placement: a passed cutoff greys to its ABSOLUTE time instead of
+-- hiding — the below-bar labels double as permanent pacing marks under
+-- their ticks (prototype style). Live cutoffs count down like _ThreshLabel.
+local function _ThreshLabelBelow(elapsed, cutoff)
+    if elapsed > cutoff then
+        return "|cff787878" .. _FmtShort(cutoff) .. "|r"
+    end
     return _FmtShort(cutoff - elapsed)
 end
 
@@ -646,6 +765,48 @@ function MPT:RenderThresholds()
     local run, db = self.run, self.db
     local bars = self.frames and self.frames.bars
     if not bars or not db then return end
+    local f0 = self.frames.root
+    if LinesModeActive(db) then
+        -- LINES: one collapsing race line replaces all bar-attached labels.
+        -- Bust the geometry cache so the next tick-placement render re-places
+        -- the ticks we force-hide here (same-sig skip would strand them).
+        bars._keThreshSig = nil
+        bars.tick3:Hide(); bars.tick2:Hide()
+        if f0 then
+            self.SetTextGated(f0.thresh3Text, ""); f0.thresh3Text:Hide()
+            self.SetTextGated(f0.thresh2Text, ""); f0.thresh2Text:Hide()
+            self.SetTextGated(f0.thresh1Text, ""); f0.thresh1Text:Hide()
+            -- Elapsed-bearing formats race the +1 deadline after +2 falls
+            -- (the count-up big timer doesn't show time-remaining); REMAINING
+            -- formats keep the +2 overshoot — their big timer IS that countdown.
+            local mode = db.TimerFormat or "ELAPSED_TOTAL"
+            local tier, cutoff, value, state =
+                MPT.ResolveRaceLine(self.run.elapsed, self.run.thresholds, self.run.completed,
+                    mode ~= "REMAINING" and mode ~= "REMAINING_TOTAL")
+            if not tier then
+                self.SetTextGated(f0.raceLineText, ""); f0.raceLineText:Hide()
+            else
+                local col
+                if state == "RACING" then          col = db.SplitAheadColor   or { 0.25, 0.88, 0.82 }
+                elseif state == "OVER" then        col = db.SplitBehindColor  or { 1, 0.34, 0.34 }
+                elseif state == "LOCKED_MADE" then col = db.TimerSuccessColor or { 0, 1, 0.14 }
+                else                               col = db.TimerExpiredColor or { 1, 0.16, 0.18 }
+                end
+                local sign = (state == "OVER" or state == "LOCKED_MISSED") and "+" or ""
+                -- Tier 1 races bare completion, not an upgrade chest — the
+                -- community term is "Timed" (user direction 2026-07-02).
+                local label = tier == 1 and "Timed" or format("+%d Chest", tier)
+                self.SetTextGated(f0.raceLineText, format("%s (%s): %s%s%s|r",
+                    label, _FmtShort(cutoff), Hex(col), sign, _FmtShort(value)))
+                self.SetColorGated(f0.raceLineText, 0.85, 0.85, 0.85)
+                f0.raceLineText:Show()
+            end
+        end
+        return
+    end
+    if f0 and f0.raceLineText then
+        self.SetTextGated(f0.raceLineText, ""); f0.raceLineText:Hide()
+    end
     local maxTime = run.maxTime or 0
     if maxTime <= 0 then
         bars.tick3:Hide(); bars.tick2:Hide()
@@ -697,8 +858,11 @@ function MPT:RenderThresholds()
         self.SetTextGated(f.thresh1Text, ""); f.thresh1Text:Hide()
         return
     end
-    _SetThreshText(f.thresh3Text, _ThreshLabel(elapsed, t3))
-    _SetThreshText(f.thresh2Text, _ThreshLabel(elapsed, t2))
+    -- BELOW keeps passed cutoffs visible as greyed absolute times; every
+    -- other placement hides them (_ThreshLabel returns nil).
+    local labelFn = (place == "BELOW") and _ThreshLabelBelow or _ThreshLabel
+    _SetThreshText(f.thresh3Text, labelFn(elapsed, t3))
+    _SetThreshText(f.thresh2Text, labelFn(elapsed, t2))
     -- The +1 (bar end) label keeps counting INTO the negative after the timer
     -- depletes ("-0:46" in the depleted color, round-3 feedback) instead of
     -- hiding like the passed +3/+2 cutoffs.
@@ -714,7 +878,7 @@ end
 -- RenderKey — key level bracket + affix line (TEXT or ICON mode).
 -- Steps 1-3 of Task 2.4.
 --
--- Row layout (round-3 feedback: "[3] Lindormi's Guidance" — key LEFT of the
+-- Row layout (round-3 feedback: "+3 Lindormi's Guidance" — key LEFT of the
 -- affixes): affixText is the row anchor at the frame's right edge, owned by
 -- ApplyLayout's stacking pass even when hidden (ICON mode zeroes its text so
 -- the rect collapses to the edge). keyText anchors LEFT of the affixes —
@@ -741,7 +905,11 @@ function MPT:RenderKey()
     if not db.ShowKeyLevel then
         f.keyText:Hide()
     else
-        self.SetTextGated(f.keyText, format("[%d]", run.level or 0))
+        local keyStr = format("+%d", run.level or 0)
+        if db.ShowDungeonName and run.mapName then
+            keyStr = keyStr .. " " .. run.mapName
+        end
+        self.SetTextGated(f.keyText, keyStr)
         self.SetColorGated(f.keyText, db.KeyColor[1], db.KeyColor[2], db.KeyColor[3])
         f.keyText:Show()
     end
@@ -893,27 +1061,32 @@ function MPT:RenderForces()
     if not db.ShowForces then
         bars.forcesWrap:Hide(); f.forcesText:Hide(); return
     end
-    bars.forcesWrap:Show()
+    -- Bar-only visibility (ShowForcesBar): the text below always renders —
+    -- with the bar hidden it becomes a stacked row (ApplyLayout owns that).
+    local barShown = db.ShowForcesBar ~= false
+    if barShown then bars.forcesWrap:Show() else bars.forcesWrap:Hide() end
 
     local fo = run.forces or {}
     local cur, total = fo.current or 0, fo.total or 0
     local pct = fo.percent or 0
-    local widthPx = bars.forcesWrap:GetWidth() or (db.BarWidth or 300)
-    self.SetValueGated(bars.forcesBar, min(1, pct / 100), widthPx)
+    if barShown then
+        local widthPx = bars.forcesWrap:GetWidth() or (db.BarWidth or 300)
+        self.SetValueGated(bars.forcesBar, min(1, pct / 100), widthPx)
 
-    -- Bar color: base ForcesColor or the banded quintile palette. Completion
-    -- no longer recolors the fill — ForcesCompleteColor moved to the text below.
-    local r, g, b = db.ForcesColor[1], db.ForcesColor[2], db.ForcesColor[3]
-    if db.ForcesBandedColors then
-        local band = min(5, floor(pct / 20) + 1)
-        local c = (pct >= 100 and db.ForcesBandPalette.Full) or db.ForcesBandPalette[band]
-        if c then r, g, b = c[1], c[2], c[3] end
-    end
-    -- Gate the recolor: SetStatusBarColor is a draw call; skip when unchanged.
-    local fb = bars.forcesBar
-    if fb._keFillR ~= r or fb._keFillG ~= g or fb._keFillB ~= b then
-        fb._keFillR, fb._keFillG, fb._keFillB = r, g, b
-        fb:SetStatusBarColor(r, g, b)
+        -- Bar color: base ForcesColor or the banded quintile palette. Completion
+        -- no longer recolors the fill — ForcesCompleteColor moved to the text below.
+        local r, g, b = db.ForcesColor[1], db.ForcesColor[2], db.ForcesColor[3]
+        if db.ForcesBandedColors then
+            local band = min(5, floor(pct / 20) + 1)
+            local c = (pct >= 100 and db.ForcesBandPalette.Full) or db.ForcesBandPalette[band]
+            if c then r, g, b = c[1], c[2], c[3] end
+        end
+        -- Gate the recolor: SetStatusBarColor is a draw call; skip when unchanged.
+        local fb = bars.forcesBar
+        if fb._keFillR ~= r or fb._keFillG ~= g or fb._keFillB ~= b then
+            fb._keFillR, fb._keFillG, fb._keFillB = r, g, b
+            fb:SetStatusBarColor(r, g, b)
+        end
     end
 
     local fmt = db.ForcesFormat or "PERCENT"
@@ -935,11 +1108,13 @@ function MPT:RenderForces()
         -- formatted number first then append the literal "%" via "%%".
         str = str:gsub(":percent:", format("%.2f", pct) .. "%%")
         str = str:gsub(":remainingpercent:", format("%.2f", max(0, 100 - pct)) .. "%%")
+    elseif fmt == "PERCENT_LABEL" then
+        str = format("%.2f%% Enemy Forces", pct)
     else -- PERCENT (default)
         str = format("%.2f%%", pct)
     end
 
-    -- Forces PB (inline after the %/count): bare gold target while filling,
+    -- Forces PB (inline after the %/count): bare PB target while filling,
     -- teal(-)/red(+) delta once capped. Reuses the boss-row PB toggles + split
     -- colors. fo.pbTime is resolved by UpdateSplits from a stored `forces`
     -- split, so it only appears after one completed seed run in this dungeon.
@@ -955,7 +1130,7 @@ function MPT:RenderForces()
                 str = str .. format("  %s(%s%s)|r", Hex(col), sign, dStr)
             end
         elseif self:ShouldShowRecords() then
-            str = str .. format("  %s%s|r", Hex(db.PBColor or { 0.85, 0.79, 0.54 }), MPT.FormatTime(fpbt, false))
+            str = str .. format("  %s%s|r", Hex(db.PBColor or { 0.81, 0.81, 0.81 }), MPT.FormatTime(fpbt, false))
         end
     end
 
@@ -976,8 +1151,8 @@ end
 -- ReleaseAll is at the top so surplus rows from a previous run vanish
 -- immediately; the pool's hidden holder reparents them safely (no orphans).
 --
--- Row format: name (left, engine-truncated) | [clearTime] ±delta OR PB target (right).
--- Completed rows:  ObjectiveDoneColor name + bracketed clear time + SplitAhead/BehindColor delta.
+-- Row format: name (left, engine-truncated) | clearTime ±delta OR PB target (right).
+-- Completed rows:  ObjectiveDoneColor name + clear time + SplitAhead/BehindColor delta.
 -- Pending rows:    ObjectiveColor name + PBColor "PB m:ss" at PBOpacity.
 -- Zero objectives or ShowObjectives=false: _objRowEndY = _objRowStartY (no height consumed).
 --
@@ -1032,15 +1207,15 @@ function MPT:RenderObjectives()
             displayName = format("%d/%d %s", obj.quantity or 0, obj.totalQuantity, TitleCase(displayName))
         end
 
-        -- Right text: completed → [clear] + optional delta; pending → gold PB target.
+        -- Right text: completed → clear time + optional delta; pending → PB target.
         local rightText = ""
         if obj.completed and obj.clearTime and obj.clearTime > 0 then
             timeFS:SetAlpha(1)  -- clear a possible pending-row PBOpacity dim on this pooled slot
-            -- "Show Clear Times" gates the [clear] bracket itself;
+            -- "Show Clear Times" gates the clear-time text itself;
             -- the PB delta is self-contained and independently gated below.
             if db.ShowObjectiveTimes ~= false then
                 local doneHex = Hex(db.ObjectiveDoneColor or { 0, 1, 0.14 })
-                rightText = format("%s[%s]|r", doneHex, MPT.FormatTime(obj.clearTime, false))
+                rightText = format("%s%s|r", doneHex, MPT.FormatTime(obj.clearTime, false))
             end
             if db.ShowPBDelta and obj.pbTime then
                 local diff = obj.clearTime - obj.pbTime
@@ -1052,11 +1227,11 @@ function MPT:RenderObjectives()
                 rightText  = rightText .. sep .. format("%s(%s%s)|r", Hex(col), sign, dStr)
             end
         elseif (not obj.completed) and obj.pbTime and self:ShouldShowRecords() then
-            -- Pending gold targets are governed by SplitsShowMode (see
+            -- Pending PB targets are governed by SplitsShowMode (see
             -- ShouldShowRecords) — ALWAYS, or COUNTDOWN before the timer starts.
-            local pbHex = Hex(db.PBColor or { 0.85, 0.79, 0.54 })
+            local pbHex = Hex(db.PBColor or { 0.81, 0.81, 0.81 })
             local a = max(0, min(1, db.PBOpacity or 1))
-            -- Bare time, no "PB" prefix (round-4 cleanup): the gold color already
+            -- Bare time, no "PB" prefix (round-4 cleanup): the PB color already
             -- reads as the target, and the prefix crowded the row.
             rightText = format("%s%s|r", pbHex, MPT.FormatTime(obj.pbTime, false))
             if a < 1 then timeFS:SetAlpha(a) else timeFS:SetAlpha(1) end
@@ -1133,7 +1308,7 @@ function MPT:ApplyLayout()
 
     -- Locals shared by both the config section and the stacking pass below.
     local PAD  = 12
-    local ROW  = 2   -- tightened from 6 (2026-06-10 feedback: denser row spacing)
+    local ROW  = db.RowSpacing or 2   -- user slider (default 2 = the 2026-06-10 dense look)
     local barW = db.BarWidth  or 300
     local barH = db.BarHeight or 14
     local bars = self.frames.bars
@@ -1165,7 +1340,22 @@ function MPT:ApplyLayout()
         applyFont(f.thresh3Text, "Threshold")
         applyFont(f.thresh2Text, "Threshold")
         applyFont(f.thresh1Text, "Threshold")
+        applyFont(f.raceLineText, "Threshold")
         applyFont(f.forcesText,  "Forces")
+
+        applyFont(f.timerMeasureText, "Timer")
+        -- PB tuck reservation: worst-case timer-row width at the Timer font.
+        -- ms is reserved only when it can render (live toggle on, or the
+        -- frozen completion time) — StartRun/CompleteRun bust _keConfigDone
+        -- so this re-measures on that transition (one-time shift, no
+        -- per-tick jitter). sepGaps adds the split-FontString row's real
+        -- anchor gaps; the template itself is space-free. Measured on a
+        -- hidden ruler FS, never the live timerText; config-pass timing
+        -- keeps GetStringWidth off the per-tick path.
+        local tpl, sepGaps = MPT.BuildTimerTemplate(db.TimerFormat,
+            db.ShowMilliseconds == true or (self.run and self.run.completed) or false)
+        f.timerMeasureText:SetText(tpl)
+        f._timerResW = (f.timerMeasureText:GetStringWidth() or 0) + sepGaps * TIMER_SEP_GAP
 
         -- Bar sizes, HUD anchor, scale, backdrop recolor.
         f:SetWidth(barW + PAD * 2)
@@ -1174,7 +1364,21 @@ function MPT:ApplyLayout()
         -- Height is load-bearing: a one-point + width-only frame has no
         -- resolvable rect, so WoW refuses to render every child anchored
         -- inside it (both bars, ticks, and the bar-relative threshold labels).
-        bars:SetSize(barW, barH * 2 + ROW)
+        -- BELOW labels hang under the timer bar inside the bars block;
+        -- reserve their line so the forces bar clears them.
+        local belowPad = 0
+        if db.ShowThresholdLabels and (db.ThresholdPlacement or "EDGE") == "BELOW" then
+            belowPad = (db.ThresholdFontSize or db.FontSize or 13) + 2
+        end
+        bars._belowPad = belowPad
+        -- LINES hides the timer bar: the bars block shrinks to the forces
+        -- bar alone. Height stays >= 1 — a width-only frame has no
+        -- resolvable rect and WoW silently skips the whole subtree.
+        if LinesModeActive(db) then
+            bars:SetSize(barW, math.max(1, (db.ShowForcesBar ~= false) and barH or 1))
+        else
+            bars:SetSize(barW, barH * 2 + ROW + belowPad)
+        end
 
         f:SetScale(db.Scale or 1.0)
 
@@ -1194,7 +1398,7 @@ function MPT:ApplyLayout()
 
         -- Straggler anchors: relative positions that only change on config change.
         -- Never re-anchored inside Render* hot paths (perf: skip-SetPoint-when-stationary).
-        -- Key bracket rides LEFT of the affixes ("[12] Fortified - ...",
+        -- Key bracket rides LEFT of the affixes ("+12 Fortified · ...",
         -- round-3 feedback). TEXT mode anchors it here; ICON mode re-anchors
         -- it in RenderKey (icon count varies per run); with affixes hidden
         -- the stacking pass row()-anchors it alone at the right edge.
@@ -1205,7 +1409,12 @@ function MPT:ApplyLayout()
 
         f.forcesText:ClearAllPoints()
         local place = db.ForcesPlacement or "EDGE"
-        if place == "CENTER" then
+        if db.ShowForcesBar == false then
+            place = "ROW"   -- bar hidden: the stacking pass row()-anchors the text
+        end
+        if place == "ROW" then -- luacheck: ignore 542
+            -- anchored in the stacking pass
+        elseif place == "CENTER" then
             f.forcesText:SetPoint("CENTER", bars.forcesBar)
         elseif place == "BESIDE" then
             f.forcesText:SetPoint("RIGHT", bars.forcesWrap, "LEFT", -4, 0)  -- overhangs backdrop left
@@ -1252,19 +1461,23 @@ function MPT:ApplyLayout()
     _sigBuf[11] = objCount
     _sigBuf[12] = objDone
     _sigBuf[13] = objSum
-    -- ShouldShowRecords flips once per run (COUNTDOWN hides the gold PB targets
+    -- ShouldShowRecords flips once per run (COUNTDOWN hides the PB targets
     -- the moment the clock starts). RenderObjectives runs ONLY inside this gated
     -- pass, so without a sig term the pending boss-row targets would linger after
     -- the countdown ends until some unrelated change happened to bust the sig
     -- (the timer/forces targets re-hide on their own — those Render* run every
     -- tick). One bit; the boolean is stable except at that single transition.
     _sigBuf[14] = self:ShouldShowRecords() and 1 or 0
+    _sigBuf[15] = ROW
+    _sigBuf[16] = db.ThresholdPlacement or "EDGE"
+    _sigBuf[17] = #(f.raceLineText:GetText() or "")   -- collapse/lock transitions restack
+    _sigBuf[18] = (db.ShowForcesBar == false) and 0 or 1
     local sig = table.concat(_sigBuf, ":")
     if f._keLayoutSig == sig then return end
     f._keLayoutSig = sig
 
     -- Publish the layout-cursor constants consumed by RenderObjectives (Task 3.2).
-    MPT._PAD, MPT._ROW_GAP, MPT._OBJ_GAP = PAD, ROW, 2
+    MPT._PAD, MPT._ROW_GAP, MPT._OBJ_GAP = PAD, ROW, ROW
     local y = -PAD
     local function row(fs, gap)
         if fs:IsShown() then
@@ -1291,13 +1504,13 @@ function MPT:ApplyLayout()
             f.timerText:SetPoint("TOPRIGHT", f, "TOPRIGHT", -PAD, y)
         end
         local rowH = f.timerText:GetStringHeight() or (db.FontSize or 13)
-        -- PB/delta text: LEFT-pinned to the frame edge, vertically centered on
-        -- the timer row. Anchoring it to timerText's left edge (the original
-        -- build-time anchor) made it ride the changing part's re-measured
-        -- width every tick — visible jitter with live milliseconds on
-        -- (2026-07-02 feedback: far-left pin).
+        -- PB/delta text: tucked just left of the RESERVED worst-case timer
+        -- width (f._timerResW, config pass) — close to the timer, and still
+        -- jitter-proof because it aligns to the reservation, never the live
+        -- string (2026-07-02 design: reservation-tuck).
         f.timerPBText:ClearAllPoints()
-        f.timerPBText:SetPoint("LEFT", f, "TOPLEFT", PAD, y - rowH / 2)
+        f.timerPBText:SetPoint("RIGHT", f, "TOPRIGHT",
+            -(PAD + (f._timerResW or 0) + TIMER_PB_GAP), y - rowH / 2)
         y = y - rowH - ROW
     end
     -- Key + affix row: the affixes own the right edge with the key bracket to
@@ -1316,6 +1529,8 @@ function MPT:ApplyLayout()
     -- Reserve room for the threshold labels: a full row for ABOVE, the
     -- protruding half-line for EDGE (half-in/half-out on the bar's top
     -- edge); INSIDE sits fully on the bar and consumes nothing.
+    -- BELOW reserves under the bar via bars._belowPad instead.
+    if LinesModeActive(db) then row(f.raceLineText) end
     if db.ShowThresholdLabels then
         local tPlace = db.ThresholdPlacement or "EDGE"
         local tSize = db.ThresholdFontSize or db.FontSize or 13
@@ -1330,18 +1545,28 @@ function MPT:ApplyLayout()
     bars.timerWrap:ClearAllPoints()
     bars.timerWrap:SetPoint("TOPRIGHT", bars, "TOPRIGHT", 0, 0)
     bars.forcesWrap:ClearAllPoints()
-    bars.forcesWrap:SetPoint("TOPRIGHT", bars.timerWrap, "BOTTOMRIGHT", 0, -ROW)
-    y = y - barH - ROW             -- timer bar
-    if db.ShowForces then          -- forces bar consumes height only when shown
-        y = y - barH - ROW         -- (sig term 7 re-runs this pass on toggle)
-        -- Reserve room for the forces label below the bar: a full line for
-        -- CORNER, the protruding half-line for EDGE (half-in/half-out).
-        local fPlace = db.ForcesPlacement or "EDGE"
-        local fSize = db.ForcesFontSize or db.FontSize or 13
-        if fPlace == "CORNER" then
-            y = y - fSize - 2
-        elseif fPlace == "EDGE" then
-            y = y - floor(fSize / 2) - 2
+    if LinesModeActive(db) then
+        -- Timer bar hidden: the forces bar takes the bars block's top slot.
+        -- (Anchoring to the hidden timerWrap would leave a dead gap.)
+        bars.forcesWrap:SetPoint("TOPRIGHT", bars, "TOPRIGHT", 0, 0)
+    else
+        bars.forcesWrap:SetPoint("TOPRIGHT", bars.timerWrap, "BOTTOMRIGHT", 0, -(ROW + (bars._belowPad or 0)))
+        y = y - barH - ROW - (bars._belowPad or 0)   -- timer bar (+ BELOW labels)
+    end
+    if db.ShowForces then          -- forces block consumes height only when shown
+        if db.ShowForcesBar == false then
+            row(f.forcesText)      -- all-text: the label is a stacked row
+        else
+            y = y - barH - ROW     -- (sig terms 7/18 re-run this pass on toggle)
+            -- Reserve room for the forces label below the bar: a full line for
+            -- CORNER, the protruding half-line for EDGE (half-in/half-out).
+            local fPlace = db.ForcesPlacement or "EDGE"
+            local fSize = db.ForcesFontSize or db.FontSize or 13
+            if fPlace == "CORNER" then
+                y = y - fSize - 2
+            elseif fPlace == "EDGE" then
+                y = y - floor(fSize / 2) - 2
+            end
         end
     end
     -- Hand the cursor to the objectives pass: Task 3.2's RenderObjectives
@@ -1385,6 +1610,7 @@ function MPT:Render()
     self:RenderForces()
     -- RenderObjectives (Task 3.2) is called from INSIDE ApplyLayout — see note above.
     self:RequestLayout()
+    self:UpdateMsDriver()
 end
 
 ---------------------------------------------------------------------------------
@@ -1450,11 +1676,12 @@ local function BuildPreviewRun()
     end
     return {
         mapID = 1387,       -- placeholder map; HUD reads cached affixNames so any id is fine for preview
+        mapName = "The Rookery",            -- demos the ShowDungeonName key row
         level = 12,
         affixIDs   = affixIDs,
         affixFileIDs = affixFileIDs,
         affixNames = { "Fortified", "Peril", "Tyrannical" },  -- shortened (ShortenAffix)
-        affixNamesStr = "Fortified - Peril - Tyrannical",
+        affixNamesStr = "Fortified · Peril · Tyrannical",
         maxTime = maxTime,
         thresholds = MPT.ComputeThresholds(maxTime, true),  -- peril-correct (affix 152 above); never hardcode
         elapsed = 600,                          -- 10:00 in
@@ -1463,7 +1690,7 @@ local function BuildPreviewRun()
             { t = 142, name = "Healer", class = "PRIEST" },
             { t = 488, name = "Tank",   class = "WARRIOR" },
         },
-        forces = { total = 240, current = 156, percent = 65.0, completed = false, pbTime = 720 },  -- pbTime demos the gold forces target
+        forces = { total = 240, current = 156, percent = 65.0, completed = false, pbTime = 720 },  -- pbTime demos the forces PB target
         objectives = {
             { name = "First Boss",  completed = true,  clearTime = 180,  pbTime = 165,  criteriaIndex = 1 },
             { name = "Second Boss", completed = true,  clearTime = 410,  pbTime = 430,  criteriaIndex = 2 },

@@ -167,14 +167,14 @@ function MPT:UpdateSplits()
     -- Normalise: false means no record; treat as nil for downstream logic.
     local r = rec or nil
     run.bestOverall = r and r.overall or run.bestOverall
-    -- Forces 100% PB target/delta source (gold while filling, +/- once capped).
+    -- Forces 100% PB target/delta source (PB target while filling, +/- once capped).
     -- Stored under the dedicated `forces` field by CommitSplits.
     if run.forces then
         run.forces.pbTime = (r and r.forces) or run.forces.pbTime
     end
     for i = 1, #run.objectives do
         local obj = run.objectives[i]
-        -- pbTime drives both the cyan/red delta (completed rows) and the gold
+        -- pbTime drives both the cyan/red delta (completed rows) and the PB
         -- target time (pending rows). Resolve once per objective from the record.
         obj.pbTime = r and r[obj.criteriaIndex] or obj.pbTime
     end

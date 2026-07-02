@@ -71,6 +71,8 @@ MPT.run = {
     active = false, completed = false,
     mapID = nil, level = 0, affixIDs = {}, affixNames = {}, affixFileIDs = {},
     affixNamesStr = nil,
+    mapName = nil,        -- localized dungeon name (ShowDungeonName key row)
+    msBase = nil,         -- live-ms clock anchor: re-glued each flip by OnTimerTick (HUD driver nil-inits pre-first-flip)
     maxTime = 0, thresholds = { plus1 = 0, plus2 = 0, plus3 = 0 },
     elapsed = 0, lastTickedSec = -1,
     deaths = 0, deathTimeLost = 0, deathLog = {},
@@ -105,6 +107,17 @@ function MPT.FormatTime(sec, withMs)
     return format("%02d:%02d", m, s)
 end
 
+-- Pure: seconds -> "MM:SS.d" — one truncated decisecond digit, the live ms
+-- driver's 10 Hz form (the frozen completion time keeps FormatTime's full
+-- .mmm). Truncation, not rounding: the digit must never carry into the
+-- seconds field. Busted-testable.
+function MPT.FormatTimeDeci(sec)
+    if not sec or sec < 0 then sec = 0 end
+    local whole = floor(sec)
+    local d = floor((sec - whole) * 10)
+    return format("%02d:%02d.%d", floor(whole / 60), floor(whole % 60), d)
+end
+
 -- Pure: peril-aware +3/+2/+1 cutoff seconds. hasPeril => recompute on (maxTime-90).
 -- plus1 = full limit, plus2 = 80%, plus3 = 60%. Busted-testable.
 -- Allocates a new table per call — callers cache the result (compute once per run).
@@ -128,6 +141,88 @@ end
 -- Pure: remaining seconds until a cutoff (never negative). Busted-testable.
 function MPT.ThresholdRemaining(elapsed, cutoff)
     return max(0, (cutoff or 0) - (elapsed or 0))
+end
+
+-- Pure: the LINES-mode race line — which chest tier is being raced and how
+-- it's going. Returns (tier, cutoff, value, state):
+--   tier   3|2|1 (1 only while plusOneRace races the depletion deadline)
+--   cutoff that tier's cutoff in seconds
+--   value  seconds remaining (RACING/LOCKED_MADE) or overshoot (OVER/LOCKED_MISSED)
+--   state  "RACING" | "OVER" | "LOCKED_MADE" | "LOCKED_MISSED"
+-- plusOneRace (elapsed-bearing timer formats): after +2 falls, race the +1
+-- deadline live — the count-up big timer never shows time-remaining, so the
+-- line carries it. REMAINING formats pass false (their big timer IS the +1
+-- countdown) and keep the +2 overshoot. Completion in the missed-+2 window
+-- ALWAYS locks the +2 delta (user direction 2026-07-02), so the lock is
+-- identical with the flag on or off.
+-- completed=true picks the locked state — CompleteRun freezes run.elapsed,
+-- so the "lock" is the caller re-rendering the frozen value.
+-- nil while thresholds are unusable (maxTime-0 reload-repair window).
+-- Busted-testable (dev/spec/mpt_raceline_spec.lua).
+function MPT.ResolveRaceLine(elapsed, thresholds, completed, plusOneRace)
+    if not thresholds or (thresholds.plus2 or 0) <= 0 then return nil end
+    elapsed = elapsed or 0
+    local t3, t2, t1 = thresholds.plus3, thresholds.plus2, thresholds.plus1
+    if elapsed <= t3 then
+        return 3, t3, t3 - elapsed, completed and "LOCKED_MADE" or "RACING"
+    elseif elapsed <= t2 then
+        return 2, t2, t2 - elapsed, completed and "LOCKED_MADE" or "RACING"
+    end
+    if completed then
+        return 2, t2, elapsed - t2, "LOCKED_MISSED"
+    end
+    if plusOneRace and t1 and t1 > 0 then
+        if elapsed <= t1 then
+            return 1, t1, t1 - elapsed, "RACING"
+        end
+        return 1, t1, elapsed - t1, "OVER"
+    end
+    return 2, t2, elapsed - t2, "OVER"
+end
+
+-- Pure: worst-case timer-row string per TimerFormat, for the PB tuck's
+-- width reservation ("8" as the widest-digit assumption). showMs reserves
+-- the millisecond form of the elapsed part — pass true when the live
+-- toggle is on OR the run is completed (the frozen completion time always
+-- shows ms); REMAINING modes never display ms. Returns (template, sepGaps):
+-- split-FontString rows (changing | "/" | total) carry their side gaps as
+-- anchor offsets, so the template is SPACE-FREE and sepGaps tells the
+-- caller how many TIMER_SEP_GAP gaps to add to the measured width.
+-- Minutes render %02d uncapped — a >99-minute string would exceed the
+-- reservation; irrelevant for M+ (max ~44 min), documented deliberately.
+-- Busted-testable (dev/spec/mpt_raceline_spec.lua).
+function MPT.BuildTimerTemplate(mode, showMs)
+    local ela = showMs and "88:88.888" or "88:88"
+    if mode == "REMAINING" then return "88:88", 0 end
+    if mode == "REMAINING_TOTAL" then return "88:88/88:88", 2 end
+    if mode == "ELAPSED" then return ela, 0 end
+    if mode == "ELAPSED_DETAIL" then return ela .. " (88:88 / 88:88)", 0 end
+    return ela .. "/88:88", 2   -- ELAPSED_TOTAL (default)
+end
+
+-- Pure: live-milliseconds display clock. GetWorldElapsedTime only carries
+-- whole seconds (its fraction is always 0), so the HUD's ms driver runs a
+-- GetTimePreciseSec-based clock glued to the authoritative one. OnTimerTick
+-- re-anchors run.msBase at every whole-second flip (phase error = flip
+-- detection latency), so between corrections this is pure pass-through:
+--   * pass the precise clock through untouched (smooth)
+--   * snap FORWARD when the authoritative clock is ahead (stale first
+--     anchor before the first flip, or a death-penalty leap landing
+--     between driver frames)
+--   * never snap backward — when the authoritative feed stalls, the
+--     precise clock free-runs ahead; yanking it back to a stale tick
+--     re-created the per-second sawtooth this replaced (2026-07-02)
+-- Returns (displaySeconds, newMsBase). Busted-testable
+-- (dev/spec/mpt_raceline_spec.lua).
+function MPT.LiveMsElapsed(now, msBase, elapsed)
+    elapsed = elapsed or 0
+    if not msBase then msBase = now - elapsed end
+    local p = now - msBase
+    if p < elapsed then
+        msBase = now - elapsed
+        p = elapsed
+    end
+    return p, msBase
 end
 
 -- Posts a one-line boss-kill split to the group channel (INSTANCE_CHAT / RAID /
@@ -175,12 +270,13 @@ local MPT_DEFAULTS = {
     TimerFormat = "ELAPSED_TOTAL",  -- ELAPSED_TOTAL|REMAINING|REMAINING_TOTAL|ELAPSED|ELAPSED_DETAIL
     ShowMilliseconds = false,
     TimerColor = {1, 1, 1},
-    TimerSuccessColor = {1, 0.83, 0.22},
+    TimerSuccessColor = {0, 1, 0.14},
     TimerExpiredColor = {1, 0.16, 0.18},
 
     -- Timer bar + thresholds
     BarTexture = "KitnUI",
     BarWidth = 275, BarHeight = 14,
+    RowSpacing = 2,   -- vertical gap between stacked HUD rows AND boss rows
     BarColor = {0.56, 0.56, 0.56},
     BarBackgroundColor = {0.031, 0.031, 0.031},  -- empty-track tint, both bars (#080808; fixed 0.8 alpha)
     StateColorFill = false,
@@ -192,6 +288,7 @@ local MPT_DEFAULTS = {
 
     -- Forces
     ShowForces = true,
+    ShowForcesBar = true,   -- bar-only visibility; text stays (all-text HUD)
     ForcesFormat = "PERCENT",   -- PERCENT|COUNT|COUNT_PERCENT|REMAINING|CUSTOM
     -- EDGE (default): half-in/half-out on the bar's bottom-right corner
     -- (the edge-straddling look) | CORNER: fully below | CENTER | BESIDE
@@ -221,9 +318,9 @@ local MPT_DEFAULTS = {
 
     -- Objectives / boss list
     ShowObjectives = true,
-    ShowObjectiveTimes = true,  -- the [clear] bracket on completed rows
+    ShowObjectiveTimes = true,  -- the clear time on completed rows
     ShowPBDelta = true,         -- the (+/-) delta beside a clear time
-    -- Visibility of the gold "PB m:ss" TARGET (pending boss rows + the live
+    -- Visibility of the "PB m:ss" TARGET (pending boss rows + the live
     -- timer/forces PB), gated by MPT:ShouldShowRecords: ALWAYS keeps it up for
     -- the whole run; COUNTDOWN (default) shows it only before the timer starts
     -- ticking and hides it for the live run so the HUD stays clean; NEVER hides
@@ -240,7 +337,7 @@ local MPT_DEFAULTS = {
     ObjectiveDoneColor = {0, 1, 0.14},
     SplitAheadColor = {0.25, 0.88, 0.82},
     SplitBehindColor = {1, 0.34, 0.34},
-    PBColor = {0.85, 0.79, 0.54},
+    PBColor = {0.81, 0.81, 0.81},
     PBOpacity = 1.0,
 
     -- Deaths
@@ -254,7 +351,9 @@ local MPT_DEFAULTS = {
     AffixMode = "TEXT",         -- TEXT|ICON
     AffixColor = {0.69, 0.69, 0.69},
     ShowKeyLevel = true,
-    KeyColor = {0.69, 0.69, 0.69},
+    KeyColor = {1, 1, 1},
+    -- Appends the dungeon name to the key bracket ("+12 Nexus-Point Xenas").
+    ShowDungeonName = false,
 
     -- Enemy overlay (folded from the retired forces-overlay module).
     -- Nameplate per-mob forces % + enemy-tooltip count via
@@ -263,8 +362,9 @@ local MPT_DEFAULTS = {
     -- OverlayNameplateEnabled defaults the nameplate percent off.
     OverlayNameplateEnabled = false,
     OverlayTooltipEnabled = true,
-    OverlayFormat = "%s",   -- a string.format spec (NOT an enum) applied to the
-                            -- pre-formatted percentValueString (API return #3)
+    OverlayFormat = "%s%%", -- a string.format spec (NOT an enum) applied to the
+                            -- pre-formatted percentValueString (API return #3 —
+                            -- "0.87", NO percent sign; live-confirmed 2026-07-02)
     OverlayCombatOnly = true,
     OverlayFontFace = "Expressway",
     OverlayFontSize = 12,
@@ -503,10 +603,13 @@ function MPT:UpdateDB()
     -- Persisted-value repairs: early dev builds saved the retired enum value
     -- "PERCENT"; builds through 2026-07 saved the numeric spec "%.2f%%" for
     -- what is now Blizzard's pre-formatted percent STRING (the overlay binds
-    -- GetUnitCriteriaProgressValues return #3 — %.2f on it would error).
-    -- Normalize both to the "%s" passthrough.
-    if self.db.OverlayFormat == "PERCENT" or self.db.OverlayFormat == "%.2f%%" then
-        self.db.OverlayFormat = "%s"
+    -- GetUnitCriteriaProgressValues return #3 — %.2f on it would error), then
+    -- briefly the bare "%s" passthrough, which dropped the % sign the string
+    -- doesn't carry (live-confirmed 2026-07-02). Normalize all three to "%s%%".
+    -- OverlayFormat has no GUI control, so no user-customized value exists.
+    if self.db.OverlayFormat == "PERCENT" or self.db.OverlayFormat == "%.2f%%"
+        or self.db.OverlayFormat == "%s" then
+        self.db.OverlayFormat = "%s%%"
     end
 
     -- MigrateLegacyOverlayDB lives in MythicPlusTimer_Overlay.lua, which is
@@ -784,6 +887,13 @@ function MPT:OnTimerTick()
     -- world clock goes stale post-depletion.
     if not run.preciseBase and GetTimePreciseSec then
         run.preciseBase = GetTimePreciseSec() - elapsed
+    end
+    -- Re-glue the live-ms driver's clock at every whole-second flip: the
+    -- flip is the only moment the true fraction is known (~0, within flip
+    -- detection latency). A one-shot anchor bakes a stale fraction into
+    -- every later second — the 2026-07-02 "spazzing" sawtooth.
+    if GetTimePreciseSec then
+        run.msBase = GetTimePreciseSec() - elapsed
     end
     self:OnDeathCountUpdated()
     self:UpdateForces()
@@ -1066,7 +1176,11 @@ function MPT:CacheKeystoneInfo(level, affixIDs)
             run.affixFileIDs[i] = fileID
         end
     end
-    run.affixNamesStr = table.concat(run.affixNames, " - ")
+    run.affixNamesStr = table.concat(run.affixNames, " · ")
+    -- Dungeon name for the optional "+12 Name" key row (ShowDungeonName).
+    -- GetMapUIInfo's first return is the localized name — non-secret map
+    -- metadata (same call RepairRunInfo already uses for timeLimit).
+    run.mapName = (run.mapID and C_ChallengeMode.GetMapUIInfo(run.mapID)) or nil
     run.thresholds = MPT.ComputeThresholds(run.maxTime, HasPerilAffix(run.affixIDs))
 end
 
@@ -1102,6 +1216,10 @@ function MPT:StartRun()
         if DEBUG_MPT then KE:Print("[MPT] StartRun: already active, ignoring") end
         return
     end
+    -- Fresh run: the reservation returns to the live-toggle width (the
+    -- completed-run measurement included ms).
+    local rootF = self.frames and self.frames.root
+    if rootF then rootF._keConfigDone = nil end
     local mapID = C_ChallengeMode.GetActiveChallengeMapID()
     if not mapID then
         if DEBUG_MPT then KE:Print("[MPT] StartRun: no active map ID, ignoring") end
@@ -1119,6 +1237,7 @@ function MPT:StartRun()
     run.elapsed = 0
     run.lastTickedSec = -1
     run.preciseBase = nil  -- re-anchored by OnTimerTick's first good tick
+    run.msBase = nil       -- re-anchored by OnTimerTick at each whole-second flip
     self:CacheKeystoneInfo(level, affixIDs)
     wipe(run.objectives)
     run.forces.current, run.forces.total, run.forces.percent, run.forces.completed = 0, 0, 0, false
@@ -1162,6 +1281,11 @@ function MPT:CompleteRun()
     if DEBUG_MPT then KE:Print("[MPT] CompleteRun: completing run") end
     run.completed = true
     run.active = false
+    -- The frozen completion time always shows ms — bust the config gate so
+    -- ApplyLayout re-measures the PB tuck reservation for the wider string
+    -- (one-time state change; the EditMode drag path uses the same bust).
+    local rootF = self.frames and self.frames.root
+    if rootF then rootF._keConfigDone = nil end
     self:StopTimerLoop()
     self:UnregisterRunEvents()
     -- Authoritative final time (ms). GetWorldElapsedTime can go secret/stale ("99:99")
@@ -1251,6 +1375,7 @@ function MPT:ResetRun()
     run.elapsed = 0
     run.lastTickedSec = -1
     run.preciseBase = nil
+    run.msBase = nil
     run.deaths = 0
     run.deathTimeLost = 0
     wipe(run.deathLog); _prevDeathCount = 0; wipe(_partyAlive)
@@ -1258,6 +1383,7 @@ function MPT:ResetRun()
     wipe(run.affixNames)
     wipe(run.affixFileIDs)
     run.affixNamesStr = nil
+    run.mapName = nil
     wipe(run.objectives)
     run.thresholds = { plus1 = 0, plus2 = 0, plus3 = 0 }
     run.forces.current, run.forces.total, run.forces.percent, run.forces.completed = 0, 0, 0, false

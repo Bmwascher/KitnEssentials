@@ -43,8 +43,10 @@ local function MediaList(kind, fallback)
     return out
 end
 
--- Multi-up color-picker row: items = { {label, key, default}, ... } placed
--- 1/n each. Used by every Colors card on this page.
+-- Multi-up color-picker row: items = { {label, key, default, group?}, ... }
+-- placed 1/n each; the optional 4th element routes that picker to a
+-- WidgetStateManager condition group (default "all"). Used by every Colors
+-- card on this page.
 local function AddColorRow(card, db, manager, applyFn, items, isLast)
     local h = isLast and Theme.rowHeightLast or Theme.rowHeight
     local row = GUIFrame:CreateRow(card.content, h)
@@ -56,7 +58,7 @@ local function AddColorRow(card, db, manager, applyFn, items, isLast)
             callback = function(r, g, b) db[key] = { r, g, b }; applyFn() end,
         })
         row:AddWidget(picker, frac)
-        manager:Register(picker, "all")
+        manager:Register(picker, it[4] or "all")
     end
     card:AddRow(row, h, isLast and 0 or nil)
 end
@@ -117,6 +119,7 @@ end
 
 local FORCES_FORMAT_OPTIONS = {
     { key = "PERCENT",       text = "Percent  (82.52%)" },
+    { key = "PERCENT_LABEL", text = "Percent + Label  (82.52% Enemy Forces)" },
     { key = "COUNT",         text = "Count  (198/240)" },
     { key = "COUNT_PERCENT", text = "Count + Percent  (198/240 - 82.52%)" },
     { key = "REMAINING",     text = "Remaining  (42 left)" },
@@ -131,9 +134,9 @@ local FORCES_PLACEMENT_OPTIONS = {
 }
 
 local FORCES_BRACKET_OPTIONS = {
-    { key = "NONE",   text = "None  (198/240)" },
-    { key = "SQUARE", text = "Square  ([198/240])" },
-    { key = "ROUND",  text = "Round  ((198/240))" },
+    { key = "NONE",   text = "None  198/240" },
+    { key = "SQUARE", text = "Square  [198/240]" },
+    { key = "ROUND",  text = "Round  (198/240)" },
 }
 
 -- PB target source when the current key level has no stored record
@@ -147,7 +150,7 @@ local PB_FALLBACK_OPTIONS = {
     { key = "OFF",            text = "Off (Exact Level Only)" },
 }
 
--- When the gold PB target is visible (db.SplitsShowMode, gated by
+-- When the PB target is visible (db.SplitsShowMode, gated by
 -- MPT:ShouldShowRecords — WarpDeplete showSplitRecords parity).
 local SPLITS_SHOW_OPTIONS = {
     { key = "ALWAYS",    text = "Always" },
@@ -176,6 +179,13 @@ BuildGeneralTab = function(scrollChild, yOffset, db, manager)
     end)
     manager:SetCondition("threshLabels", function()
         return db.Enabled ~= false and db.ShowThresholdLabels ~= false
+    end)
+    -- Timer-bar-dependent controls (fill, ticks, state fill): the bar and
+    -- its ticks are hidden while the LINES threshold mode owns the display —
+    -- mirrors the HUD's LinesModeActive predicate.
+    manager:SetCondition("timerBar", function()
+        return db.Enabled ~= false
+            and not (db.ShowThresholdLabels ~= false and (db.ThresholdPlacement or "EDGE") == "LINES")
     end)
 
     local function ApplyModuleState(enabled)
@@ -240,7 +250,7 @@ BuildGeneralTab = function(scrollChild, yOffset, db, manager)
     manager:Register(scaleSlider, "all")
     layoutCard:AddRow(rowL, Theme.rowHeight)
 
-    local rowL2 = GUIFrame:CreateRow(layoutCard.content, Theme.rowHeightLast)
+    local rowL2 = GUIFrame:CreateRow(layoutCard.content, Theme.rowHeight)
     local wSlider = GUIFrame:CreateSlider(rowL2, "Bar Width", {
         min = 150, max = 500, step = 1, value = db.BarWidth or 300,
         callback = function(val) db.BarWidth = val; ApplySettings() end,
@@ -253,7 +263,16 @@ BuildGeneralTab = function(scrollChild, yOffset, db, manager)
     })
     rowL2:AddWidget(hSlider, 0.5)
     manager:Register(hSlider, "all")
-    layoutCard:AddRow(rowL2, Theme.rowHeightLast, 0)
+    layoutCard:AddRow(rowL2, Theme.rowHeight)
+
+    local rowL3 = GUIFrame:CreateRow(layoutCard.content, Theme.rowHeightLast)
+    local spacingSlider = GUIFrame:CreateSlider(rowL3, "Row Spacing", {
+        min = 0, max = 10, step = 1, value = db.RowSpacing or 2,
+        callback = function(val) db.RowSpacing = val; ApplySettings() end,
+    })
+    rowL3:AddWidget(spacingSlider, 0.5)
+    manager:Register(spacingSlider, "all")
+    layoutCard:AddRow(rowL3, Theme.rowHeightLast, 0)
     yOffset = layoutCard:GetNextOffset()
 
     -- Card 4: Thresholds (+3 / +2 / +1 chest timers — split out of Layout,
@@ -275,9 +294,14 @@ BuildGeneralTab = function(scrollChild, yOffset, db, manager)
             { key = "EDGE",   text = "On Bar Edge (half-in)" },
             { key = "ABOVE",  text = "Above Bar" },
             { key = "INSIDE", text = "In Bar" },
+            { key = "BELOW",  text = "Below Bar" },
+            { key = "LINES",  text = "Text Line (hides timer bar)" },
         },
         value = db.ThresholdPlacement or "EDGE",
-        callback = function(key) db.ThresholdPlacement = key; ApplySettings() end,
+        callback = function(key)
+            db.ThresholdPlacement = key; ApplySettings()
+            manager:UpdateAll(db.Enabled ~= false)
+        end,
     })
     rowT:AddWidget(threshPlaceDrop, 0.5)
     manager:Register(threshPlaceDrop, "threshLabels")
@@ -295,7 +319,7 @@ BuildGeneralTab = function(scrollChild, yOffset, db, manager)
         callback = function(checked) db.StateColorFill = checked; ApplySettings() end,
     })
     rowT2:AddWidget(stateFillCheck, 1)
-    manager:Register(stateFillCheck, "all")
+    manager:Register(stateFillCheck, "timerBar")
     threshCard:AddRow(rowT2, Theme.rowHeight)
 
     local rowTNote = GUIFrame:CreateRow(threshCard.content, 48)
@@ -306,7 +330,7 @@ BuildGeneralTab = function(scrollChild, yOffset, db, manager)
         "Overrides the Bar Fill color (including at completion).",
         48, "hide")
     rowTNote:AddWidget(tNote, 1)
-    manager:Register(tNote, "all")
+    manager:Register(tNote, "timerBar")
     threshCard:AddRow(rowTNote, 48, 0)
     yOffset = threshCard:GetNextOffset()
 
@@ -327,9 +351,10 @@ BuildGeneralTab = function(scrollChild, yOffset, db, manager)
     })
     rowF:AddWidget(fmtDrop, 0.5)
     manager:Register(fmtDrop, "all")
-    -- The final completion time ALWAYS shows milliseconds; this toggle only adds
-    -- them to the live running timer (default off).
-    local msCheck = GUIFrame:CreateCheckbox(rowF, "Live Milliseconds", {
+    -- The final completion time ALWAYS shows milliseconds; this toggle adds a
+    -- tenths digit to the live running timer (default off). The db key keeps
+    -- its historical ShowMilliseconds name — no profile migrations.
+    local msCheck = GUIFrame:CreateCheckbox(rowF, "Live Sub-Seconds", {
         value = db.ShowMilliseconds == true,
         callback = function(checked) db.ShowMilliseconds = checked; ApplySettings() end,
     })
@@ -451,20 +476,42 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
     manager:SetCondition("forcesCustom", function()
         return db.Enabled ~= false and db.ShowForces ~= false and (db.ForcesFormat == "CUSTOM")
     end)
+    manager:SetCondition("forcesBar", function()
+        return db.Enabled ~= false and db.ShowForces ~= false and db.ShowForcesBar ~= false
+    end)
+    -- Brackets wrap only the COUNT-bearing formats (_Brk in RenderForces);
+    -- Percent / Percent+Label / Custom never use them.
+    manager:SetCondition("forcesBrackets", function()
+        local fmt = db.ForcesFormat or "PERCENT"
+        return db.Enabled ~= false and db.ShowForces ~= false
+            and (fmt == "COUNT" or fmt == "COUNT_PERCENT" or fmt == "REMAINING")
+    end)
 
     -- Card 1: Forces (toggle + text format + placement + custom tokens)
     local forcesCard = GUIFrame:CreateCard(scrollChild, "Forces", yOffset)
     manager:Register(forcesCard, "all")
     local rowFo1 = GUIFrame:CreateRow(forcesCard.content, Theme.rowHeight)
-    local showForcesCheck = GUIFrame:CreateCheckbox(rowFo1, "Show Forces Bar", {
+    -- Whole-block toggle (bar + text); the bar-only toggle sits beside it.
+    local showForcesCheck = GUIFrame:CreateCheckbox(rowFo1, "Show Forces", {
         value = db.ShowForces ~= false,
         callback = function(checked)
             db.ShowForces = checked; ApplySettings()
             manager:UpdateAll(db.Enabled ~= false)
         end,
     })
-    rowFo1:AddWidget(showForcesCheck, 1)
+    rowFo1:AddWidget(showForcesCheck, 0.5)
     manager:Register(showForcesCheck, "all")
+    -- Bar-only visibility: the % text survives as a stacked row (all-text
+    -- HUD); Placement is moot while hidden (gated via the forcesBar group).
+    local forcesBarCheck = GUIFrame:CreateCheckbox(rowFo1, "Show Forces Bar", {
+        value = db.ShowForcesBar ~= false,
+        callback = function(checked)
+            db.ShowForcesBar = checked; ApplySettings()
+            manager:UpdateAll(db.Enabled ~= false)
+        end,
+    })
+    rowFo1:AddWidget(forcesBarCheck, 0.5)
+    manager:Register(forcesBarCheck, "all")
     forcesCard:AddRow(rowFo1, Theme.rowHeight)
 
     local rowFo2 = GUIFrame:CreateRow(forcesCard.content, Theme.rowHeight)
@@ -484,14 +531,14 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
         callback = function(key) db.ForcesPlacement = key; ApplySettings() end,
     })
     rowFo2:AddWidget(placeDrop, 1 / 3)
-    manager:Register(placeDrop, "all")
-    local bracketDrop = GUIFrame:CreateDropdown(rowFo2, "Bracket Style", {
+    manager:Register(placeDrop, "forcesBar")
+    local bracketDrop = GUIFrame:CreateDropdown(rowFo2, "Count Brackets", {
         options = FORCES_BRACKET_OPTIONS,
         value = db.ForcesBracketStyle or "NONE",
         callback = function(key) db.ForcesBracketStyle = key; ApplySettings() end,
     })
     rowFo2:AddWidget(bracketDrop, 1 / 3)
-    manager:Register(bracketDrop, "all")
+    manager:Register(bracketDrop, "forcesBrackets")
     forcesCard:AddRow(rowFo2, Theme.rowHeight)
 
     local rowFo3 = GUIFrame:CreateRow(forcesCard.content, Theme.rowHeight)
@@ -532,7 +579,7 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
     })
     rowO1:AddWidget(showObjCheck, 0.5)
     manager:Register(showObjCheck, "all")
-    local timesCheck = GUIFrame:CreateCheckbox(rowO1, "Show Clear Times", {
+    local timesCheck = GUIFrame:CreateCheckbox(rowO1, "Show Boss Clear Times", {
         value = db.ShowObjectiveTimes ~= false,
         callback = function(checked) db.ShowObjectiveTimes = checked; ApplySettings() end,
     })
@@ -547,7 +594,7 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
     })
     rowO2:AddWidget(pbCheck, 0.5)
     manager:Register(pbCheck, "all")
-    -- Gold PB "target" visibility (timer + forces + pending boss rows). The
+    -- PB "target" visibility (timer + forces + pending boss rows). The
     -- (+/-) deltas above are independent (Show PB Delta).
     local splitsModeDrop = GUIFrame:CreateDropdown(rowO2, "Show PB Targets", {
         options = SPLITS_SHOW_OPTIONS,
@@ -624,7 +671,7 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
     -- Card 4: Affixes & Key (display toggles; colors live on the Display tab)
     local affixCard = GUIFrame:CreateCard(scrollChild, "Affixes & Key", yOffset)
     manager:Register(affixCard, "all")
-    local rowA1 = GUIFrame:CreateRow(affixCard.content, Theme.rowHeightLast)
+    local rowA1 = GUIFrame:CreateRow(affixCard.content, Theme.rowHeight)
     local affixCheck = GUIFrame:CreateCheckbox(rowA1, "Show Affixes", {
         value = db.ShowAffixes ~= false,
         callback = function(checked) db.ShowAffixes = checked; ApplySettings() end,
@@ -644,7 +691,16 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
     })
     rowA1:AddWidget(affixModeDrop, 1 / 3)
     manager:Register(affixModeDrop, "all")
-    affixCard:AddRow(rowA1, Theme.rowHeightLast, 0)
+    affixCard:AddRow(rowA1, Theme.rowHeight)
+
+    local rowA2 = GUIFrame:CreateRow(affixCard.content, Theme.rowHeightLast)
+    local dungeonNameCheck = GUIFrame:CreateCheckbox(rowA2, "Show Dungeon Name", {
+        value = db.ShowDungeonName == true,
+        callback = function(checked) db.ShowDungeonName = checked; ApplySettings() end,
+    })
+    rowA2:AddWidget(dungeonNameCheck, 1)
+    manager:Register(dungeonNameCheck, "all")
+    affixCard:AddRow(rowA2, Theme.rowHeightLast, 0)
     yOffset = affixCard:GetNextOffset()
 
     return yOffset
@@ -657,7 +713,20 @@ end
 
 BuildDisplayTab = function(scrollChild, yOffset, db, manager)
     manager:SetCondition("forcesBanded", function()
-        return db.Enabled ~= false and db.ShowForces ~= false and db.ForcesBandedColors == true
+        return db.Enabled ~= false and db.ShowForces ~= false
+            and db.ShowForcesBar ~= false and db.ForcesBandedColors == true
+    end)
+    -- Per-tab manager: these groups also exist in BuildGeneralTab /
+    -- BuildFeaturesTab; each tab defines every condition its own widgets use.
+    manager:SetCondition("timerBar", function()
+        return db.Enabled ~= false
+            and not (db.ShowThresholdLabels ~= false and (db.ThresholdPlacement or "EDGE") == "LINES")
+    end)
+    manager:SetCondition("forcesBar", function()
+        return db.Enabled ~= false and db.ShowForces ~= false and db.ShowForcesBar ~= false
+    end)
+    manager:SetCondition("threshLabels", function()
+        return db.Enabled ~= false and db.ShowThresholdLabels ~= false
     end)
 
     -- Card 1: Timer — Colors
@@ -665,13 +734,16 @@ BuildDisplayTab = function(scrollChild, yOffset, db, manager)
     manager:Register(timerColors, "all")
     AddColorRow(timerColors, db, manager, ApplySettings, {
         { "Timer (running)",  "TimerColor",        { 1, 1, 1 } },
-        { "Timer (timed)",    "TimerSuccessColor", { 1, 0.83, 0.22 } },
+        { "Timer (timed)",    "TimerSuccessColor", { 0, 1, 0.14 } },
         { "Timer (depleted)", "TimerExpiredColor", { 1, 0.16, 0.18 } },
     })
     AddColorRow(timerColors, db, manager, ApplySettings, {
-        { "Bar Fill",        "BarColor",           { 0.56, 0.56, 0.56 } },
+        -- Bar Background stays ungated: it tints BOTH bars' empty tracks
+        -- (ApplySettings re-tints timerBg AND forcesBg), so it stays usable
+        -- while only the timer bar is hidden.
+        { "Bar Fill",        "BarColor",           { 0.56, 0.56, 0.56 },   "timerBar" },
         { "Bar Background",  "BarBackgroundColor", { 0.031, 0.031, 0.031 } },
-        { "Threshold Ticks", "TickColor",          { 1, 1, 1 } },
+        { "Threshold Ticks", "TickColor",          { 1, 1, 1 },            "timerBar" },
     }, true)
     yOffset = timerColors:GetNextOffset()
 
@@ -679,7 +751,9 @@ BuildDisplayTab = function(scrollChild, yOffset, db, manager)
     local forcesColors = GUIFrame:CreateCard(scrollChild, "Forces — Colors", yOffset)
     manager:Register(forcesColors, "all")
     AddColorRow(forcesColors, db, manager, ApplySettings, {
-        { "Forces Bar",      "ForcesColor",         { 0.73, 0.62, 0.13 } },
+        -- Bar fill gates on the bar being visible; the text colors survive
+        -- Show Forces Bar off (the % text becomes a stacked row).
+        { "Forces Bar",      "ForcesColor",         { 0.73, 0.62, 0.13 }, "forcesBar" },
         { "Forces Complete", "ForcesCompleteColor", { 0, 1, 0.14 } },
         { "Forces Text",     "ForcesTextColor",     { 1, 1, 1 } },
     })
@@ -693,7 +767,7 @@ BuildDisplayTab = function(scrollChild, yOffset, db, manager)
         end,
     })
     bandedRow:AddWidget(bandedCheck, 1)
-    manager:Register(bandedCheck, "all")
+    manager:Register(bandedCheck, "forcesBar")
     forcesColors:AddRow(bandedRow, Theme.rowHeight)
 
     local BAND_LABELS = { "0-20%", "20-40%", "40-60%", "60-80%", "80-100%" }
@@ -732,7 +806,7 @@ BuildDisplayTab = function(scrollChild, yOffset, db, manager)
     AddColorRow(objColors, db, manager, ApplySettings, {
         { "Split Ahead",  "SplitAheadColor",  { 0.25, 0.88, 0.82 } },
         { "Split Behind", "SplitBehindColor", { 1, 0.34, 0.34 } },
-        { "PB Target",    "PBColor",          { 0.85, 0.79, 0.54 } },
+        { "PB Target",    "PBColor",          { 0.81, 0.81, 0.81 } },
     })
 
     local rowOp = GUIFrame:CreateRow(objColors.content, Theme.rowHeightLast)
@@ -759,17 +833,22 @@ BuildDisplayTab = function(scrollChild, yOffset, db, manager)
     manager:Register(affixColors, "all")
     AddColorRow(affixColors, db, manager, ApplySettings, {
         { "Affix Text", "AffixColor", { 0.69, 0.69, 0.69 } },
-        { "Key Level",  "KeyColor",   { 0.69, 0.69, 0.69 } },
+        { "Key Level",  "KeyColor",   { 1, 1, 1 } },
     }, true)
     yOffset = affixColors:GetNextOffset()
 
     -- Font cards: global default first, then one per HUD section.
     yOffset = AddFontCard(scrollChild, yOffset, db, manager, "", {
         title = "Default Font",
-        note = "Applies to the affix line, key level, PB text, and threshold labels.",
+        note = "Applies to the affix line, key level, and PB text — and any per-section font left unset.",
     })
     yOffset = AddFontCard(scrollChild, yOffset, db, manager, "Timer", {
         title = "Timer — Font", maxSize = 48,
+    })
+    yOffset = AddFontCard(scrollChild, yOffset, db, manager, "Threshold", {
+        title = "Thresholds — Font",
+        group = "threshLabels",
+        note = "The +3/+2/+1 labels and the Text Line race readout.",
     })
     yOffset = AddFontCard(scrollChild, yOffset, db, manager, "Forces", {
         title = "Forces — Font",
@@ -799,10 +878,16 @@ BuildOverlayTab = function(scrollChild, yOffset, db, manager)
             and (db.OverlayColorMode or "theme") == "custom"
     end)
 
-    -- Card 1: Enable (nameplate % + tooltip count + combat-only)
+    -- Card 1: Enable (tooltip count + nameplate % + combat-only)
     local card1 = GUIFrame:CreateCard(scrollChild, "Enemy Overlay", yOffset)
     manager:Register(card1, "all")
     local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local tipCheck = GUIFrame:CreateCheckbox(row1, "Enemy Count on Tooltip", {
+        value = db.OverlayTooltipEnabled ~= false,
+        callback = function(checked) db.OverlayTooltipEnabled = checked; ApplyOverlaySettings() end,
+    })
+    row1:AddWidget(tipCheck, 1 / 3)
+    manager:Register(tipCheck, "all")
     local npCheck = GUIFrame:CreateCheckbox(row1, "Show % on Nameplates", {
         value = db.OverlayNameplateEnabled == true,
         -- ApplyOverlaySettings re-wires the whole nameplate subsystem from DB
@@ -815,12 +900,6 @@ BuildOverlayTab = function(scrollChild, yOffset, db, manager)
     })
     row1:AddWidget(npCheck, 1 / 3)
     manager:Register(npCheck, "all")
-    local tipCheck = GUIFrame:CreateCheckbox(row1, "Enemy Count on Tooltip", {
-        value = db.OverlayTooltipEnabled ~= false,
-        callback = function(checked) db.OverlayTooltipEnabled = checked; ApplyOverlaySettings() end,
-    })
-    row1:AddWidget(tipCheck, 1 / 3)
-    manager:Register(tipCheck, "all")
     local combatOnlyCheck = GUIFrame:CreateCheckbox(row1, "Only in Combat", {
         value = db.OverlayCombatOnly ~= false,
         callback = function(checked) db.OverlayCombatOnly = checked; ApplyOverlaySettings() end,
