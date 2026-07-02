@@ -22,3 +22,7 @@ References/
 # symlinks as files, and a trailing-slash pattern only matches directories
 # (this exact bug bit us on 2026-06-11).
 .wow-api-reference
+
+# luacov output (busted --coverage && luacov) — throwaway, regenerated per run
+luacov.stats.out
+luacov.report.out

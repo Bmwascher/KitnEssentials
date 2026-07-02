@@ -16,6 +16,7 @@ ignore:
   - .gitignore
   - .luacheckrc
   - .busted
+  - .luacov
   - dev
   - CHANGELOG.md
   - README.md
