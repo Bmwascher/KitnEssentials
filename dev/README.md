@@ -42,22 +42,30 @@ luacheck .        # static analysis (strict — zero-warning baseline since 2026
 
 ## One-time local setup
 
-### Windows (scoop)
+### Windows (hererocks — Lua 5.1.5, matching WoW and CI)
+
+The suite runs under Lua **5.1.5** everywhere (WoW's embedded major version):
+a dedicated hererocks tree holds the interpreter plus busted/luacov, wired up
+by the scoop LuaRocks. Needs python and a C compiler (mingw gcc) on PATH.
 
 ```powershell
-scoop install lua luarocks luacheck
-luarocks install busted --lua-dir="$(scoop prefix lua)"
+scoop install luacheck luarocks
+python -m pip install hererocks
+python -m hererocks "$HOME\Documents\WoW-Dev\lua51" -l 5.1.5
+luarocks --lua-version=5.1 --lua-dir="$HOME\Documents\WoW-Dev\lua51" --tree="$HOME\Documents\WoW-Dev\lua51" install busted 2.3.0-1
+luarocks --lua-version=5.1 --lua-dir="$HOME\Documents\WoW-Dev\lua51" --tree="$HOME\Documents\WoW-Dev\lua51" install luacov 0.17.0-1
 ```
 
-`luarocks` installs `busted` to `%APPDATA%\luarocks\bin`. Add that dir to your
-**PATH** so `busted` (and the pre-push hook) resolve it:
+(Skip hererocks' own LuaRocks (`-r`) — its Windows installer is broken; the
+scoop LuaRocks manages the tree fine via `--lua-version/--lua-dir/--tree`.)
+
+Prepend the tree's `bin` to your **user PATH** so `lua`, `busted`, and
+`luacov` (and the pre-push hook) resolve from it:
 
 ```powershell
 [Environment]::SetEnvironmentVariable(
-  "Path", "$env:APPDATA\luarocks\bin;" + [Environment]::GetEnvironmentVariable("Path","User"), "User")
+  "Path", "$HOME\Documents\WoW-Dev\lua51\bin;" + [Environment]::GetEnvironmentVariable("Path","User"), "User")
 ```
-
-(busted needs a C compiler for two dependencies — TDM-GCC / mingw on PATH.)
 
 ### Linux / WSL / the cloud
 
@@ -113,5 +121,6 @@ describe("MyThing (Modules/.../MyThing.lua)", function()
 end)
 ```
 
-CI runs busted under Lua 5.4; `luacheck` enforces Lua 5.1 semantics (WoW's
-runtime) statically, so keep helpers 5.1-compatible.
+Local and CI both run busted under Lua **5.1.5** — the same major version as
+WoW's embedded runtime — and `luacheck` enforces 5.1 semantics statically on
+top. Keep all spec/harness code 5.1-compatible.
