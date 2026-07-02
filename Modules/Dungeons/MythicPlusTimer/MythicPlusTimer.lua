@@ -134,24 +134,39 @@ end
 
 -- Pure: the LINES-mode race line — which chest tier is being raced and how
 -- it's going. Returns (tier, cutoff, value, state):
---   tier   3|2 (never 1 — the big timer owns the +1/depletion story)
+--   tier   3|2|1 (1 only while plusOneRace races the depletion deadline)
 --   cutoff that tier's cutoff in seconds
 --   value  seconds remaining (RACING/LOCKED_MADE) or overshoot (OVER/LOCKED_MISSED)
 --   state  "RACING" | "OVER" | "LOCKED_MADE" | "LOCKED_MISSED"
--- completed=true just picks the locked state — CompleteRun freezes
--- run.elapsed, so the "lock" is the caller re-rendering the frozen value.
+-- plusOneRace (elapsed-bearing timer formats): after +2 falls, race the +1
+-- deadline live — the count-up big timer never shows time-remaining, so the
+-- line carries it. REMAINING formats pass false (their big timer IS the +1
+-- countdown) and keep the +2 overshoot. Completion in the missed-+2 window
+-- ALWAYS locks the +2 delta (user direction 2026-07-02), so the lock is
+-- identical with the flag on or off.
+-- completed=true picks the locked state — CompleteRun freezes run.elapsed,
+-- so the "lock" is the caller re-rendering the frozen value.
 -- nil while thresholds are unusable (maxTime-0 reload-repair window).
 -- Busted-testable (dev/spec/mpt_raceline_spec.lua).
-function MPT.ResolveRaceLine(elapsed, thresholds, completed)
+function MPT.ResolveRaceLine(elapsed, thresholds, completed, plusOneRace)
     if not thresholds or (thresholds.plus2 or 0) <= 0 then return nil end
     elapsed = elapsed or 0
-    local t3, t2 = thresholds.plus3, thresholds.plus2
+    local t3, t2, t1 = thresholds.plus3, thresholds.plus2, thresholds.plus1
     if elapsed <= t3 then
         return 3, t3, t3 - elapsed, completed and "LOCKED_MADE" or "RACING"
     elseif elapsed <= t2 then
         return 2, t2, t2 - elapsed, completed and "LOCKED_MADE" or "RACING"
     end
-    return 2, t2, elapsed - t2, completed and "LOCKED_MISSED" or "OVER"
+    if completed then
+        return 2, t2, elapsed - t2, "LOCKED_MISSED"
+    end
+    if plusOneRace and t1 and t1 > 0 then
+        if elapsed <= t1 then
+            return 1, t1, t1 - elapsed, "RACING"
+        end
+        return 1, t1, elapsed - t1, "OVER"
+    end
+    return 2, t2, elapsed - t2, "OVER"
 end
 
 -- Pure: worst-case timer-row string per TimerFormat, for the PB tuck's

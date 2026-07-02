@@ -754,8 +754,13 @@ function MPT:RenderThresholds()
             self.SetTextGated(f0.thresh3Text, ""); f0.thresh3Text:Hide()
             self.SetTextGated(f0.thresh2Text, ""); f0.thresh2Text:Hide()
             self.SetTextGated(f0.thresh1Text, ""); f0.thresh1Text:Hide()
+            -- Elapsed-bearing formats race the +1 deadline after +2 falls
+            -- (the count-up big timer doesn't show time-remaining); REMAINING
+            -- formats keep the +2 overshoot — their big timer IS that countdown.
+            local mode = db.TimerFormat or "ELAPSED_TOTAL"
             local tier, cutoff, value, state =
-                MPT.ResolveRaceLine(self.run.elapsed, self.run.thresholds, self.run.completed)
+                MPT.ResolveRaceLine(self.run.elapsed, self.run.thresholds, self.run.completed,
+                    mode ~= "REMAINING" and mode ~= "REMAINING_TOTAL")
             if not tier then
                 self.SetTextGated(f0.raceLineText, ""); f0.raceLineText:Hide()
             else
