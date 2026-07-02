@@ -284,6 +284,8 @@ BuildGeneralTab = function(scrollChild, yOffset, db, manager)
             { key = "EDGE",   text = "On Bar Edge (half-in)" },
             { key = "ABOVE",  text = "Above Bar" },
             { key = "INSIDE", text = "In Bar" },
+            { key = "BELOW",  text = "Below Bar" },
+            { key = "LINES",  text = "Text Line (hides timer bar)" },
         },
         value = db.ThresholdPlacement or "EDGE",
         callback = function(key) db.ThresholdPlacement = key; ApplySettings() end,

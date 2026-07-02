@@ -603,6 +603,9 @@ local function _PlaceLabel(fs, timerBar, barW, cutoff, maxTime, place)
     elseif place == "ABOVE" then
         -- Centered on the tick, fully above the bar.
         fs:SetPoint("BOTTOM", timerBar, "TOPLEFT", x, 2)
+    elseif place == "BELOW" then
+        -- Centered under the tick, fully below the bar (prototype style).
+        fs:SetPoint("TOP", timerBar, "BOTTOMLEFT", x, -2)
     else  -- EDGE (default): straddles the bar's TOP edge (the edge-straddling
           -- look) — label center ON the edge, half in / half out, left of its tick.
         fs:SetPoint("RIGHT", timerBar, "TOPLEFT", x - 3, 0)
@@ -619,6 +622,16 @@ end
 -- stays visible permanently as a bar divider (round-3c feedback).
 local function _ThreshLabel(elapsed, cutoff)
     if elapsed > cutoff then return nil end
+    return _FmtShort(cutoff - elapsed)
+end
+
+-- BELOW placement: a passed cutoff greys to its ABSOLUTE time instead of
+-- hiding — the below-bar labels double as permanent pacing marks under
+-- their ticks (prototype style). Live cutoffs count down like _ThreshLabel.
+local function _ThreshLabelBelow(elapsed, cutoff)
+    if elapsed > cutoff then
+        return "|cff787878" .. _FmtShort(cutoff) .. "|r"
+    end
     return _FmtShort(cutoff - elapsed)
 end
 
@@ -703,8 +716,11 @@ function MPT:RenderThresholds()
         self.SetTextGated(f.thresh1Text, ""); f.thresh1Text:Hide()
         return
     end
-    _SetThreshText(f.thresh3Text, _ThreshLabel(elapsed, t3))
-    _SetThreshText(f.thresh2Text, _ThreshLabel(elapsed, t2))
+    -- BELOW keeps passed cutoffs visible as greyed absolute times; every
+    -- other placement hides them (_ThreshLabel returns nil).
+    local labelFn = (place == "BELOW") and _ThreshLabelBelow or _ThreshLabel
+    _SetThreshText(f.thresh3Text, labelFn(elapsed, t3))
+    _SetThreshText(f.thresh2Text, labelFn(elapsed, t2))
     -- The +1 (bar end) label keeps counting INTO the negative after the timer
     -- depletes ("-0:46" in the depleted color, round-3 feedback) instead of
     -- hiding like the passed +3/+2 cutoffs.
@@ -1193,7 +1209,14 @@ function MPT:ApplyLayout()
         -- Height is load-bearing: a one-point + width-only frame has no
         -- resolvable rect, so WoW refuses to render every child anchored
         -- inside it (both bars, ticks, and the bar-relative threshold labels).
-        bars:SetSize(barW, barH * 2 + ROW)
+        -- BELOW labels hang under the timer bar inside the bars block;
+        -- reserve their line so the forces bar clears them.
+        local belowPad = 0
+        if db.ShowThresholdLabels and (db.ThresholdPlacement or "EDGE") == "BELOW" then
+            belowPad = (db.ThresholdFontSize or db.FontSize or 13) + 2
+        end
+        bars._belowPad = belowPad
+        bars:SetSize(barW, barH * 2 + ROW + belowPad)
 
         f:SetScale(db.Scale or 1.0)
 
@@ -1279,6 +1302,7 @@ function MPT:ApplyLayout()
     -- tick). One bit; the boolean is stable except at that single transition.
     _sigBuf[14] = self:ShouldShowRecords() and 1 or 0
     _sigBuf[15] = ROW
+    _sigBuf[16] = db.ThresholdPlacement or "EDGE"
     local sig = table.concat(_sigBuf, ":")
     if f._keLayoutSig == sig then return end
     f._keLayoutSig = sig
@@ -1336,6 +1360,7 @@ function MPT:ApplyLayout()
     -- Reserve room for the threshold labels: a full row for ABOVE, the
     -- protruding half-line for EDGE (half-in/half-out on the bar's top
     -- edge); INSIDE sits fully on the bar and consumes nothing.
+    -- BELOW reserves under the bar via bars._belowPad instead.
     if db.ShowThresholdLabels then
         local tPlace = db.ThresholdPlacement or "EDGE"
         local tSize = db.ThresholdFontSize or db.FontSize or 13
@@ -1350,8 +1375,8 @@ function MPT:ApplyLayout()
     bars.timerWrap:ClearAllPoints()
     bars.timerWrap:SetPoint("TOPRIGHT", bars, "TOPRIGHT", 0, 0)
     bars.forcesWrap:ClearAllPoints()
-    bars.forcesWrap:SetPoint("TOPRIGHT", bars.timerWrap, "BOTTOMRIGHT", 0, -ROW)
-    y = y - barH - ROW             -- timer bar
+    bars.forcesWrap:SetPoint("TOPRIGHT", bars.timerWrap, "BOTTOMRIGHT", 0, -(ROW + (bars._belowPad or 0)))
+    y = y - barH - ROW - (bars._belowPad or 0)   -- timer bar (+ BELOW labels)
     if db.ShowForces then          -- forces bar consumes height only when shown
         y = y - barH - ROW         -- (sig term 7 re-runs this pass on toggle)
         -- Reserve room for the forces label below the bar: a full line for
