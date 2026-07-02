@@ -203,6 +203,7 @@ function MPT:BuildHUD()
     root.forcesText    = FS(nil, textOverlay)  -- forces percent/count text
     root.timerMeasureText = FS()           -- hidden ruler for the PB tuck's
     root.timerMeasureText:Hide()           -- worst-case timer-width reservation
+    root.raceLineText  = FS()              -- LINES-mode collapsing race line
 
     -- timerPBText anchor is owned by ApplyLayout's stacking pass
     -- (reservation-tuck right-anchored). Anchoring it to timerText's left
@@ -524,6 +525,13 @@ local function StateFillColor(elapsed, thresholds)
     return 0.40, 1.00, 0.40                   -- on for +3: green
 end
 
+-- True while the LINES threshold mode owns the display: the race line
+-- renders and the timer bar (with its ticks) hides. Labels off => bar
+-- returns, so pacing never fully disappears.
+local function LinesModeActive(db)
+    return db.ShowThresholdLabels ~= false and (db.ThresholdPlacement or "EDGE") == "LINES"
+end
+
 ---------------------------------------------------------------------------------
 -- RenderBar — single timer-bar fill. Default: neutral db.BarColor, kept at that
 -- color through completion (the timer NUMBER conveys timed/depleted via
@@ -536,6 +544,11 @@ function MPT:RenderBar()
     local run, db = self.run, self.db
     local bars = self.frames and self.frames.bars
     if not bars or not db then return end
+    if LinesModeActive(db) then
+        bars.timerWrap:Hide()   -- race line owns pacing; ticks hide with the wrap
+        return
+    end
+    bars.timerWrap:Show()
     local bar = bars.timerBar
     local maxTime = run.maxTime or 0
     if maxTime <= 0 then
@@ -665,6 +678,40 @@ function MPT:RenderThresholds()
     local run, db = self.run, self.db
     local bars = self.frames and self.frames.bars
     if not bars or not db then return end
+    local f0 = self.frames.root
+    if LinesModeActive(db) then
+        -- LINES: one collapsing race line replaces all bar-attached labels.
+        -- Bust the geometry cache so the next tick-placement render re-places
+        -- the ticks we force-hide here (same-sig skip would strand them).
+        bars._keThreshSig = nil
+        bars.tick3:Hide(); bars.tick2:Hide()
+        if f0 then
+            self.SetTextGated(f0.thresh3Text, ""); f0.thresh3Text:Hide()
+            self.SetTextGated(f0.thresh2Text, ""); f0.thresh2Text:Hide()
+            self.SetTextGated(f0.thresh1Text, ""); f0.thresh1Text:Hide()
+            local tier, cutoff, value, state =
+                MPT.ResolveRaceLine(self.run.elapsed, self.run.thresholds, self.run.completed)
+            if not tier then
+                self.SetTextGated(f0.raceLineText, ""); f0.raceLineText:Hide()
+            else
+                local col
+                if state == "RACING" then          col = db.SplitAheadColor   or { 0.25, 0.88, 0.82 }
+                elseif state == "OVER" then        col = db.SplitBehindColor  or { 1, 0.34, 0.34 }
+                elseif state == "LOCKED_MADE" then col = db.TimerSuccessColor or { 0, 1, 0.14 }
+                else                               col = db.TimerExpiredColor or { 1, 0.16, 0.18 }
+                end
+                local sign = (state == "OVER" or state == "LOCKED_MISSED") and "+" or ""
+                self.SetTextGated(f0.raceLineText, format("+%d (%s): %s%s%s|r",
+                    tier, _FmtShort(cutoff), Hex(col), sign, _FmtShort(value)))
+                self.SetColorGated(f0.raceLineText, 0.85, 0.85, 0.85)
+                f0.raceLineText:Show()
+            end
+        end
+        return
+    end
+    if f0 and f0.raceLineText then
+        self.SetTextGated(f0.raceLineText, ""); f0.raceLineText:Hide()
+    end
     local maxTime = run.maxTime or 0
     if maxTime <= 0 then
         bars.tick3:Hide(); bars.tick2:Hide()
@@ -1191,6 +1238,7 @@ function MPT:ApplyLayout()
         applyFont(f.thresh3Text, "Threshold")
         applyFont(f.thresh2Text, "Threshold")
         applyFont(f.thresh1Text, "Threshold")
+        applyFont(f.raceLineText, "Threshold")
         applyFont(f.forcesText,  "Forces")
 
         applyFont(f.timerMeasureText, "Timer")
@@ -1216,7 +1264,14 @@ function MPT:ApplyLayout()
             belowPad = (db.ThresholdFontSize or db.FontSize or 13) + 2
         end
         bars._belowPad = belowPad
-        bars:SetSize(barW, barH * 2 + ROW + belowPad)
+        -- LINES hides the timer bar: the bars block shrinks to the forces
+        -- bar alone. Height stays >= 1 — a width-only frame has no
+        -- resolvable rect and WoW silently skips the whole subtree.
+        if LinesModeActive(db) then
+            bars:SetSize(barW, math.max(1, barH))
+        else
+            bars:SetSize(barW, barH * 2 + ROW + belowPad)
+        end
 
         f:SetScale(db.Scale or 1.0)
 
@@ -1303,6 +1358,7 @@ function MPT:ApplyLayout()
     _sigBuf[14] = self:ShouldShowRecords() and 1 or 0
     _sigBuf[15] = ROW
     _sigBuf[16] = db.ThresholdPlacement or "EDGE"
+    _sigBuf[17] = #(f.raceLineText:GetText() or "")   -- collapse/lock transitions restack
     local sig = table.concat(_sigBuf, ":")
     if f._keLayoutSig == sig then return end
     f._keLayoutSig = sig
@@ -1361,6 +1417,7 @@ function MPT:ApplyLayout()
     -- protruding half-line for EDGE (half-in/half-out on the bar's top
     -- edge); INSIDE sits fully on the bar and consumes nothing.
     -- BELOW reserves under the bar via bars._belowPad instead.
+    if LinesModeActive(db) then row(f.raceLineText) end
     if db.ShowThresholdLabels then
         local tPlace = db.ThresholdPlacement or "EDGE"
         local tSize = db.ThresholdFontSize or db.FontSize or 13
@@ -1375,8 +1432,14 @@ function MPT:ApplyLayout()
     bars.timerWrap:ClearAllPoints()
     bars.timerWrap:SetPoint("TOPRIGHT", bars, "TOPRIGHT", 0, 0)
     bars.forcesWrap:ClearAllPoints()
-    bars.forcesWrap:SetPoint("TOPRIGHT", bars.timerWrap, "BOTTOMRIGHT", 0, -(ROW + (bars._belowPad or 0)))
-    y = y - barH - ROW - (bars._belowPad or 0)   -- timer bar (+ BELOW labels)
+    if LinesModeActive(db) then
+        -- Timer bar hidden: the forces bar takes the bars block's top slot.
+        -- (Anchoring to the hidden timerWrap would leave a dead gap.)
+        bars.forcesWrap:SetPoint("TOPRIGHT", bars, "TOPRIGHT", 0, 0)
+    else
+        bars.forcesWrap:SetPoint("TOPRIGHT", bars.timerWrap, "BOTTOMRIGHT", 0, -(ROW + (bars._belowPad or 0)))
+        y = y - barH - ROW - (bars._belowPad or 0)   -- timer bar (+ BELOW labels)
+    end
     if db.ShowForces then          -- forces bar consumes height only when shown
         y = y - barH - ROW         -- (sig term 7 re-runs this pass on toggle)
         -- Reserve room for the forces label below the bar: a full line for
