@@ -152,6 +152,21 @@ function MPT.ResolveRaceLine(elapsed, thresholds, completed)
     return 2, t2, elapsed - t2, completed and "LOCKED_MISSED" or "OVER"
 end
 
+-- Pure: worst-case timer-row string per TimerFormat, for the PB tuck's
+-- width reservation ("8" as the widest-digit assumption). Elapsed-bearing
+-- modes always reserve the millisecond form: the frozen completion time
+-- shows ms regardless of db.ShowMilliseconds, and the reservation must
+-- never be narrower than what completion renders (PB text sits just left
+-- of it). REMAINING modes never display ms.
+-- Busted-testable (dev/spec/mpt_raceline_spec.lua).
+function MPT.BuildTimerTemplate(mode)
+    if mode == "REMAINING" then return "88:88" end
+    if mode == "REMAINING_TOTAL" then return "88:88 / 88:88" end
+    if mode == "ELAPSED" then return "88:88.888" end
+    if mode == "ELAPSED_DETAIL" then return "88:88.888 (88:88 / 88:88)" end
+    return "88:88.888 / 88:88"   -- ELAPSED_TOTAL (default)
+end
+
 -- Posts a one-line boss-kill split to the group channel (INSTANCE_CHAT / RAID /
 -- PARTY). Called from the fresh-stamp arm of UpdateObjectives ONLY — the
 -- restoration arm (reload mid-run) must never re-post. Guard: ChatOutputSplits
