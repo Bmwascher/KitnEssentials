@@ -231,6 +231,7 @@ local MPT_DEFAULTS = {
 
     -- Forces
     ShowForces = true,
+    ShowForcesBar = true,   -- bar-only visibility; text stays (all-text HUD)
     ForcesFormat = "PERCENT",   -- PERCENT|COUNT|COUNT_PERCENT|REMAINING|CUSTOM
     -- EDGE (default): half-in/half-out on the bar's bottom-right corner
     -- (the edge-straddling look) | CORNER: fully below | CENTER | BESIDE

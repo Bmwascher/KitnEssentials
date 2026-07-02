@@ -966,27 +966,32 @@ function MPT:RenderForces()
     if not db.ShowForces then
         bars.forcesWrap:Hide(); f.forcesText:Hide(); return
     end
-    bars.forcesWrap:Show()
+    -- Bar-only visibility (ShowForcesBar): the text below always renders —
+    -- with the bar hidden it becomes a stacked row (ApplyLayout owns that).
+    local barShown = db.ShowForcesBar ~= false
+    if barShown then bars.forcesWrap:Show() else bars.forcesWrap:Hide() end
 
     local fo = run.forces or {}
     local cur, total = fo.current or 0, fo.total or 0
     local pct = fo.percent or 0
-    local widthPx = bars.forcesWrap:GetWidth() or (db.BarWidth or 300)
-    self.SetValueGated(bars.forcesBar, min(1, pct / 100), widthPx)
+    if barShown then
+        local widthPx = bars.forcesWrap:GetWidth() or (db.BarWidth or 300)
+        self.SetValueGated(bars.forcesBar, min(1, pct / 100), widthPx)
 
-    -- Bar color: base ForcesColor or the banded quintile palette. Completion
-    -- no longer recolors the fill — ForcesCompleteColor moved to the text below.
-    local r, g, b = db.ForcesColor[1], db.ForcesColor[2], db.ForcesColor[3]
-    if db.ForcesBandedColors then
-        local band = min(5, floor(pct / 20) + 1)
-        local c = (pct >= 100 and db.ForcesBandPalette.Full) or db.ForcesBandPalette[band]
-        if c then r, g, b = c[1], c[2], c[3] end
-    end
-    -- Gate the recolor: SetStatusBarColor is a draw call; skip when unchanged.
-    local fb = bars.forcesBar
-    if fb._keFillR ~= r or fb._keFillG ~= g or fb._keFillB ~= b then
-        fb._keFillR, fb._keFillG, fb._keFillB = r, g, b
-        fb:SetStatusBarColor(r, g, b)
+        -- Bar color: base ForcesColor or the banded quintile palette. Completion
+        -- no longer recolors the fill — ForcesCompleteColor moved to the text below.
+        local r, g, b = db.ForcesColor[1], db.ForcesColor[2], db.ForcesColor[3]
+        if db.ForcesBandedColors then
+            local band = min(5, floor(pct / 20) + 1)
+            local c = (pct >= 100 and db.ForcesBandPalette.Full) or db.ForcesBandPalette[band]
+            if c then r, g, b = c[1], c[2], c[3] end
+        end
+        -- Gate the recolor: SetStatusBarColor is a draw call; skip when unchanged.
+        local fb = bars.forcesBar
+        if fb._keFillR ~= r or fb._keFillG ~= g or fb._keFillB ~= b then
+            fb._keFillR, fb._keFillG, fb._keFillB = r, g, b
+            fb:SetStatusBarColor(r, g, b)
+        end
     end
 
     local fmt = db.ForcesFormat or "PERCENT"
@@ -1008,6 +1013,8 @@ function MPT:RenderForces()
         -- formatted number first then append the literal "%" via "%%".
         str = str:gsub(":percent:", format("%.2f", pct) .. "%%")
         str = str:gsub(":remainingpercent:", format("%.2f", max(0, 100 - pct)) .. "%%")
+    elseif fmt == "PERCENT_LABEL" then
+        str = format("%.2f%% Enemy Forces", pct)
     else -- PERCENT (default)
         str = format("%.2f%%", pct)
     end
@@ -1268,7 +1275,7 @@ function MPT:ApplyLayout()
         -- bar alone. Height stays >= 1 — a width-only frame has no
         -- resolvable rect and WoW silently skips the whole subtree.
         if LinesModeActive(db) then
-            bars:SetSize(barW, math.max(1, barH))
+            bars:SetSize(barW, math.max(1, (db.ShowForcesBar ~= false) and barH or 1))
         else
             bars:SetSize(barW, barH * 2 + ROW + belowPad)
         end
@@ -1302,7 +1309,12 @@ function MPT:ApplyLayout()
 
         f.forcesText:ClearAllPoints()
         local place = db.ForcesPlacement or "EDGE"
-        if place == "CENTER" then
+        if db.ShowForcesBar == false then
+            place = "ROW"   -- bar hidden: the stacking pass row()-anchors the text
+        end
+        if place == "ROW" then -- luacheck: ignore 542
+            -- anchored in the stacking pass
+        elseif place == "CENTER" then
             f.forcesText:SetPoint("CENTER", bars.forcesBar)
         elseif place == "BESIDE" then
             f.forcesText:SetPoint("RIGHT", bars.forcesWrap, "LEFT", -4, 0)  -- overhangs backdrop left
@@ -1359,6 +1371,7 @@ function MPT:ApplyLayout()
     _sigBuf[15] = ROW
     _sigBuf[16] = db.ThresholdPlacement or "EDGE"
     _sigBuf[17] = #(f.raceLineText:GetText() or "")   -- collapse/lock transitions restack
+    _sigBuf[18] = (db.ShowForcesBar == false) and 0 or 1
     local sig = table.concat(_sigBuf, ":")
     if f._keLayoutSig == sig then return end
     f._keLayoutSig = sig
@@ -1440,16 +1453,20 @@ function MPT:ApplyLayout()
         bars.forcesWrap:SetPoint("TOPRIGHT", bars.timerWrap, "BOTTOMRIGHT", 0, -(ROW + (bars._belowPad or 0)))
         y = y - barH - ROW - (bars._belowPad or 0)   -- timer bar (+ BELOW labels)
     end
-    if db.ShowForces then          -- forces bar consumes height only when shown
-        y = y - barH - ROW         -- (sig term 7 re-runs this pass on toggle)
-        -- Reserve room for the forces label below the bar: a full line for
-        -- CORNER, the protruding half-line for EDGE (half-in/half-out).
-        local fPlace = db.ForcesPlacement or "EDGE"
-        local fSize = db.ForcesFontSize or db.FontSize or 13
-        if fPlace == "CORNER" then
-            y = y - fSize - 2
-        elseif fPlace == "EDGE" then
-            y = y - floor(fSize / 2) - 2
+    if db.ShowForces then          -- forces block consumes height only when shown
+        if db.ShowForcesBar == false then
+            row(f.forcesText)      -- all-text: the label is a stacked row
+        else
+            y = y - barH - ROW     -- (sig terms 7/18 re-run this pass on toggle)
+            -- Reserve room for the forces label below the bar: a full line for
+            -- CORNER, the protruding half-line for EDGE (half-in/half-out).
+            local fPlace = db.ForcesPlacement or "EDGE"
+            local fSize = db.ForcesFontSize or db.FontSize or 13
+            if fPlace == "CORNER" then
+                y = y - fSize - 2
+            elseif fPlace == "EDGE" then
+                y = y - floor(fSize / 2) - 2
+            end
         end
     end
     -- Hand the cursor to the objectives pass: Task 3.2's RenderObjectives

@@ -117,6 +117,7 @@ end
 
 local FORCES_FORMAT_OPTIONS = {
     { key = "PERCENT",       text = "Percent  (82.52%)" },
+    { key = "PERCENT_LABEL", text = "Percent + Label  (82.52% Enemy Forces)" },
     { key = "COUNT",         text = "Count  (198/240)" },
     { key = "COUNT_PERCENT", text = "Count + Percent  (198/240 - 82.52%)" },
     { key = "REMAINING",     text = "Remaining  (42 left)" },
@@ -462,20 +463,35 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
     manager:SetCondition("forcesCustom", function()
         return db.Enabled ~= false and db.ShowForces ~= false and (db.ForcesFormat == "CUSTOM")
     end)
+    manager:SetCondition("forcesBar", function()
+        return db.Enabled ~= false and db.ShowForces ~= false and db.ShowForcesBar ~= false
+    end)
 
     -- Card 1: Forces (toggle + text format + placement + custom tokens)
     local forcesCard = GUIFrame:CreateCard(scrollChild, "Forces", yOffset)
     manager:Register(forcesCard, "all")
     local rowFo1 = GUIFrame:CreateRow(forcesCard.content, Theme.rowHeight)
-    local showForcesCheck = GUIFrame:CreateCheckbox(rowFo1, "Show Forces Bar", {
+    -- Whole-block toggle (bar + text); the bar-only toggle sits beside it.
+    local showForcesCheck = GUIFrame:CreateCheckbox(rowFo1, "Show Forces", {
         value = db.ShowForces ~= false,
         callback = function(checked)
             db.ShowForces = checked; ApplySettings()
             manager:UpdateAll(db.Enabled ~= false)
         end,
     })
-    rowFo1:AddWidget(showForcesCheck, 1)
+    rowFo1:AddWidget(showForcesCheck, 0.5)
     manager:Register(showForcesCheck, "all")
+    -- Bar-only visibility: the % text survives as a stacked row (all-text
+    -- HUD); Placement is moot while hidden (gated via the forcesBar group).
+    local forcesBarCheck = GUIFrame:CreateCheckbox(rowFo1, "Show Forces Bar", {
+        value = db.ShowForcesBar ~= false,
+        callback = function(checked)
+            db.ShowForcesBar = checked; ApplySettings()
+            manager:UpdateAll(db.Enabled ~= false)
+        end,
+    })
+    rowFo1:AddWidget(forcesBarCheck, 0.5)
+    manager:Register(forcesBarCheck, "all")
     forcesCard:AddRow(rowFo1, Theme.rowHeight)
 
     local rowFo2 = GUIFrame:CreateRow(forcesCard.content, Theme.rowHeight)
@@ -495,7 +511,7 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
         callback = function(key) db.ForcesPlacement = key; ApplySettings() end,
     })
     rowFo2:AddWidget(placeDrop, 1 / 3)
-    manager:Register(placeDrop, "all")
+    manager:Register(placeDrop, "forcesBar")
     local bracketDrop = GUIFrame:CreateDropdown(rowFo2, "Bracket Style", {
         options = FORCES_BRACKET_OPTIONS,
         value = db.ForcesBracketStyle or "NONE",
