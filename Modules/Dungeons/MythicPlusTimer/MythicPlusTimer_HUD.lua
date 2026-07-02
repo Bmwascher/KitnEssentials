@@ -980,8 +980,8 @@ end
 -- ReleaseAll is at the top so surplus rows from a previous run vanish
 -- immediately; the pool's hidden holder reparents them safely (no orphans).
 --
--- Row format: name (left, engine-truncated) | [clearTime] ±delta OR PB target (right).
--- Completed rows:  ObjectiveDoneColor name + bracketed clear time + SplitAhead/BehindColor delta.
+-- Row format: name (left, engine-truncated) | clearTime ±delta OR PB target (right).
+-- Completed rows:  ObjectiveDoneColor name + clear time + SplitAhead/BehindColor delta.
 -- Pending rows:    ObjectiveColor name + PBColor "PB m:ss" at PBOpacity.
 -- Zero objectives or ShowObjectives=false: _objRowEndY = _objRowStartY (no height consumed).
 --
@@ -1044,7 +1044,7 @@ function MPT:RenderObjectives()
             -- the PB delta is self-contained and independently gated below.
             if db.ShowObjectiveTimes ~= false then
                 local doneHex = Hex(db.ObjectiveDoneColor or { 0, 1, 0.14 })
-                rightText = format("%s[%s]|r", doneHex, MPT.FormatTime(obj.clearTime, false))
+                rightText = format("%s%s|r", doneHex, MPT.FormatTime(obj.clearTime, false))
             end
             if db.ShowPBDelta and obj.pbTime then
                 local diff = obj.clearTime - obj.pbTime
