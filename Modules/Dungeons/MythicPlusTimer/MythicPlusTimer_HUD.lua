@@ -199,7 +199,9 @@ function MPT:BuildHUD()
     root.thresh1Text   = FS(nil, textOverlay)  -- remaining label at +1 (bar end)
     root.forcesText    = FS(nil, textOverlay)  -- forces percent/count text
 
-    root.timerPBText:SetPoint("RIGHT", root.timerText, "LEFT", -4, 0)  -- rendered in Task 3.7 (gold PB)
+    -- timerPBText anchor is owned by ApplyLayout's stacking pass (LEFT-pinned
+    -- to the frame edge). Anchoring it to timerText's left edge here made it
+    -- ride the changing part's re-measured width every tick (2026-07-02).
 
     local barTex = KE:GetStatusbarPath(self.db and self.db.BarTexture or "KitnUI")
 
@@ -1290,7 +1292,15 @@ function MPT:ApplyLayout()
         else
             f.timerText:SetPoint("TOPRIGHT", f, "TOPRIGHT", -PAD, y)
         end
-        y = y - (f.timerText:GetStringHeight() or (db.FontSize or 13)) - ROW
+        local rowH = f.timerText:GetStringHeight() or (db.FontSize or 13)
+        -- PB/delta text: LEFT-pinned to the frame edge, vertically centered on
+        -- the timer row. Anchoring it to timerText's left edge (the original
+        -- build-time anchor) made it ride the changing part's re-measured
+        -- width every tick — visible jitter with live milliseconds on
+        -- (2026-07-02 feedback: far-left pin).
+        f.timerPBText:ClearAllPoints()
+        f.timerPBText:SetPoint("LEFT", f, "TOPLEFT", PAD, y - rowH / 2)
+        y = y - rowH - ROW
     end
     -- Key + affix row: the affixes own the right edge with the key bracket to
     -- their LEFT (round-3 feedback). affixText is the row anchor even when
