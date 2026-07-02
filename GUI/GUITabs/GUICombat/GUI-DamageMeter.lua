@@ -1113,6 +1113,7 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     local row2d = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
     local selfChk = GUIFrame:CreateCheckbox(row2d, "Always Show Self", {
         value = db.AlwaysShowSelf ~= false,
+        tooltip = "Pins your row to the last visible slot when you fall off-screen. Role-aware: damage views pin DPS and tanks, healing views pin healers; other views never pin.",
         callback = function(checked) db.AlwaysShowSelf = checked; ApplySettings() end,
     })
     row2d:AddWidget(selfChk, 0.5)

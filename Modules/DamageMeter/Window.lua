@@ -26,6 +26,7 @@ local issecretvalue = issecretvalue
 local RAID_CLASS_COLORS = RAID_CLASS_COLORS
 local Enum = Enum
 local Ambiguate = Ambiguate
+local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 local math_min = math.min
 local math_max = math.max
 local math_floor = math.floor
@@ -68,6 +69,32 @@ end
 DM.RANK_STRINGS = RANK_STRINGS
 DM.BAR_POOL_SIZE = BAR_POOL_SIZE
 
+-- Fixed value-column gutter. The name's RIGHT edge stops at a FIXED reserve from
+-- the row edge instead of tracking the live value string's left edge -- so a big
+-- number no longer steals name space on every tick; an extreme value overflows
+-- leftward over the name's ellipsis instead (rare, and the reference meters ship
+-- the same trade-off). Multiples of the bar FontSize, pixel-snapped at anchor
+-- time: WIDE reserves room for the two-part "total | perSec" string ("Both" mode
+-- on a rate-type view), SINGLE covers everything else (one value / counts /
+-- death times). Tuning knobs -- adjust here after in-game eyeballing.
+local VALUE_GUTTER_WIDE = 6     -- x FontSize: "Both" format on a rate-type view
+local VALUE_GUTTER_SINGLE = 4   -- x FontSize: single-value / count / death time
+
+-- AlwaysShowSelf role relevance: the pin only applies where the player's own row
+-- is meaningful for their assigned role -- a DPS pinned at zero in the healing
+-- meter (or a healer in the damage meter) is noise. Damage views pin DAMAGER and
+-- TANK, healing views pin HEALER, and every view absent from this table NEVER
+-- pins -- deliberately including the other RANKED player views (Absorbs, Damage
+-- Taken, Avoidable Damage Taken, Interrupts, Dispels): the self pin is reserved
+-- for the two core throughput views by design. An unassigned role ("NONE": solo /
+-- world content) keeps the pin on the views listed here.
+local PIN_ROLES = {
+    [Enum.DamageMeterType.DamageDone]  = { DAMAGER = true, TANK = true },
+    [Enum.DamageMeterType.Dps]         = { DAMAGER = true, TANK = true },
+    [Enum.DamageMeterType.HealingDone] = { HEALER = true },
+    [Enum.DamageMeterType.Hps]         = { HEALER = true },
+}
+
 -- Anchor a bar's StatusBar fill: the full row (normal) or a thin strip pinned to the
 -- row's bottom edge (BarThinLine mode). Thin-line keeps the row's icon + text at full
 -- size -- they anchor to the row, NOT the fill (see MakeBar / the RenderBar layout
@@ -97,9 +124,12 @@ end
 -- icon/text/value and bar fill; this only constructs the widget tree.
 --
 -- Layout (left -> right inside the fill):
---   [rank] [icon] name .................................... value
--- rank and icon are optional (driven by ShowRank / ShowIcon at render time;
--- both start hidden). name is left-justified after the icon; value is right-
+--   [icon] [rank] name .................................... value
+-- icon and rank are optional (driven by ShowIcon / ShowRank at render time;
+-- both start hidden). The icon sits flush at the row's left edge; the rank sits
+-- between the icon and the name ("[icon] 1. Name"); the name is left-justified
+-- after them and its right edge stops at the FIXED value gutter (VALUE_GUTTER_*,
+-- so name space doesn't track the live value width); the value is right-
 -- justified. The icon lives in its own square frame (row.iconFrame) so the
 -- standard KE 1px borders tightly bound the icon, not the whole row.
 ---------------------------------------------------------------------------------
@@ -148,13 +178,14 @@ local function MakeBar(parent, db)
     local fontSize = db and db.FontSize
     local fontOutline = db and db.FontOutline
 
-    -- Rank: far-left, left-justified (shown only when ShowRank is set).
+    -- Rank: between the icon and the name, left-justified in a fixed gutter
+    -- (shown only when ShowRank is set).
     row.rank = row.fill:CreateFontString(nil, "OVERLAY")
     row.rank:SetJustifyH("LEFT")
     KE:ApplyFontToText(row.rank, fontFace, fontSize, fontOutline)
     row.rank:Hide()
 
-    -- Name: left-justified, fills the space between icon and value.
+    -- Name: left-justified, fills the space between icon/rank and the value gutter.
     row.name = row.fill:CreateFontString(nil, "OVERLAY")
     row.name:SetJustifyH("LEFT")
     row.name:SetWordWrap(false)
@@ -189,8 +220,9 @@ local function MakeBar(parent, db)
     --   _cachedVal        -- last plain (non-secret) value string set; nil while secret
     --   _cachedSlot       -- last displayed rank whose "N." label was set (may be
     --                        a pinned player's real rank, not the pool slot index)
-    --   _layoutKey        -- (ShowIcon, ShowRank) combo driving the rank-gutter /
-    --                        icon / name LEFT anchors; re-anchored only on change
+    --   _layoutKey        -- (hasIcon, ShowRank, wide-value, no-value) combo driving the
+    --                        icon / rank-gutter / name anchors; re-anchored only on change
+    --                        (ReapplyBarVisuals nils it: the gutters scale with FontSize)
     --   _iconShown / _nameShown / _rankShown -- cached element visibility so a
     --                        stable toggle does no per-tick Show/Hide widget call
     --   _sourceGUID / _sourceCreatureID / _deathRecapID / _classFilename -- source
@@ -494,6 +526,9 @@ function DM:CreateWindow(winIdx)
     local snapHeight = KE:PixelSnap(barHeight)
     local snapSpacing = KE:PixelSnap(barSpacing)
     local snapStride = snapHeight + snapSpacing
+    -- Default value gutter for the pre-render name anchor below (single-value
+    -- width; RenderBar re-anchors per the live view/format on first paint).
+    local valueGutter = KE:PixelSnap(((self.db and self.db.FontSize) or 12) * VALUE_GUTTER_SINGLE)
 
     -- Create-once bar rows. KE.FramePool is a render-time pool (ReleaseAll +
     -- Acquire each tick); these rows are permanent and owned by the window, so
@@ -517,14 +552,15 @@ function DM:CreateWindow(winIdx)
 
         -- rank/name anchor left after the icon; resolved fully in the render
         -- chunk (which knows ShowIcon/ShowRank). Provide a sane default anchor
-        -- so the row is laid out even before first render. Anchored to the ROW (not
-        -- row.fill) so vertical centering holds in BarThinLine mode; identical in
-        -- normal mode (fill == row).
+        -- so the row is laid out even before first render. Anchored to the ROW /
+        -- icon frame (not row.fill) so vertical centering holds in BarThinLine
+        -- mode; identical in normal mode (fill == row). The name's RIGHT edge
+        -- stops at the fixed value gutter, never at the live value text.
         row.rank:ClearAllPoints()
-        row.rank:SetPoint("LEFT", row, "LEFT", 3, 0)
+        row.rank:SetPoint("LEFT", row.iconFrame, "RIGHT", 3, 0)
         row.name:ClearAllPoints()
         row.name:SetPoint("LEFT", row.iconFrame, "RIGHT", 3, 0)
-        row.name:SetPoint("RIGHT", row.value, "LEFT", -3, 0)
+        row.name:SetPoint("RIGHT", row, "RIGHT", -valueGutter, 0)
 
         -- Back-reference for the render layer / OnClick (forward-compatible).
         bar.win = W
@@ -720,6 +756,10 @@ function DM:ReapplyBarVisuals(W)
         bar._cachedNameColorClass = nil
         bar._cachedNameColorOn = nil
         bar._cachedValColorTbl = nil
+        -- The rank slot and the fixed value gutter both scale with FontSize, which
+        -- the layout dirty key doesn't carry -- nil the key so a live font-size
+        -- change re-anchors on the next tick instead of keeping stale gutter widths.
+        bar._layoutKey = nil
     end
 
     -- The detail panel (Detail.lua) is lazily built once on first bar click, so it
@@ -1101,26 +1141,41 @@ function DM:RenderWindow(W)
     -- Skip Deaths: that view is a chronological event LOG, not a ranked list, so
     -- there is no "self rank" to keep on screen -- pinning the player's death into
     -- a fixed slot just displaces a real death and breaks the time order.
+    -- Role relevance (PIN_ROLES, top of file): the pin only applies where the
+    -- player's own row is meaningful for their role -- Damage views pin
+    -- DAMAGER/TANK, Healing views pin HEALER, every other view never pins.
     local pinSource, pinRank, pinSlot
     if self.db and self.db.AlwaysShowSelf and count >= 1 and not isDeaths then
-        local inView = false
-        for i = firstVis, lastVis do
-            local s = sources[i]
-            if s and s.isLocalPlayer then inView = true; break end
+        local pinRoles = PIN_ROLES[meterType]
+        local allowPin = false
+        if pinRoles then
+            -- The player's OWN assigned role: a plain string ("TANK" / "HEALER" /
+            -- "DAMAGER" / "NONE"), read fresh each tick so a role swap applies on
+            -- the next paint. "NONE" (solo / world content, no assigned role)
+            -- keeps the pin -- the pre-gate behavior.
+            local role = UnitGroupRolesAssigned and UnitGroupRolesAssigned("player")
+            allowPin = (not role) or role == "NONE" or pinRoles[role] == true
         end
-        if not inView then
-            for i = 1, #sources do
+        if allowPin then
+            local inView = false
+            for i = firstVis, lastVis do
                 local s = sources[i]
-                if s and s.isLocalPlayer then
-                    pinSource = s
-                    pinRank = i
-                    break
-                end
+                if s and s.isLocalPlayer then inView = true; break end
             end
-            if pinSource then
-                -- Last slot whose row bottom still fits inside the viewport (slot i
-                -- spans [(i-1)*stride, i*stride], so bottom <= scroll + viewH).
-                pinSlot = math_min(count, math_max(firstVis, math_floor((scroll + viewH) / stride)))
+            if not inView then
+                for i = 1, #sources do
+                    local s = sources[i]
+                    if s and s.isLocalPlayer then
+                        pinSource = s
+                        pinRank = i
+                        break
+                    end
+                end
+                if pinSource then
+                    -- Last slot whose row bottom still fits inside the viewport (slot i
+                    -- spans [(i-1)*stride, i*stride], so bottom <= scroll + viewH).
+                    pinSlot = math_min(count, math_max(firstVis, math_floor((scroll + viewH) / stride)))
+                end
             end
         end
     end
@@ -1328,47 +1383,56 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         row.iconFrame:Hide()
     end
 
-    -- Layout (rank-gutter / icon / name LEFT anchors), dirty-gated on the
-    -- (hasIcon, ShowRank) combination so a stable config does NO per-tick re-anchor.
-    -- hasIcon (not the raw ShowIcon) is the key so an icon-less enemy row drops the icon
-    -- gutter and the name goes flush left. When ShowRank is on, the rank occupies a fixed
-    -- left gutter and the icon/name start to its right -- fixing the rank-label-over-icon
-    -- overlap; when off, the icon (or name) sits flush at the left edge as before.
+    -- Layout (icon / rank-gutter / name anchors), dirty-gated on the (hasIcon,
+    -- ShowRank, wide-value) combination so a stable config does NO per-tick
+    -- re-anchor. hasIcon (not the raw ShowIcon) is the key so an icon-less enemy
+    -- row drops the icon gutter and the rank/name go flush left. The icon always
+    -- sits at the row's left edge (its factory anchor -- never moved here); when
+    -- ShowRank is on, the rank occupies a fixed gutter BETWEEN the icon and the
+    -- name ("[icon] 1. Name") so names start at a deterministic x. The name's
+    -- RIGHT edge stops at the fixed value gutter: wide when this window renders
+    -- the two-part "total | perSec" string, single otherwise. Both gutters scale
+    -- with FontSize, which the key doesn't carry -- ReapplyBarVisuals nils
+    -- _layoutKey so a live font change re-anchors on the next tick.
     local showRank = db.ShowRank
-    local layoutKey = (hasIcon and 1 or 0) + (showRank and 2 or 0)
+    local wideValue = (not W._isDeaths) and W._isRateType and (db.NumberFormat or "Both") == "Both"
+    -- Overall Deaths renders an always-empty value (the "" branch below): drop the
+    -- gutter to the bare edge pad so names keep the full row width in that view --
+    -- matching the old value-anchored behavior when the value string is empty.
+    local noValue = W._isDeaths and W._isOverall
+    local layoutKey = (hasIcon and 1 or 0) + (showRank and 2 or 0) + (wideValue and 4 or 0) + (noValue and 8 or 0)
     if bar._layoutKey ~= layoutKey then
         bar._layoutKey = layoutKey
 
         -- Rank gutter: left-justified within a fixed slot (width scales with the
-        -- font) so the icon/name to its right start at a deterministic x.
+        -- font) so the name to its right starts at a deterministic x.
         local gutter = KE:PixelSnap((db.FontSize or 12) + 8)
         row.rank:ClearAllPoints()
-        -- Anchor to the ROW (not row.fill) so vertical centering survives BarThinLine mode
-        -- (thin fill = bottom strip); identical to row.fill in normal mode (fill == row).
-        row.rank:SetPoint("LEFT", row, "LEFT", 3, 0)
+        -- Anchor to the icon frame / ROW (not row.fill) so vertical centering
+        -- survives BarThinLine mode (thin fill = bottom strip); identical to
+        -- row.fill in normal mode (fill == row).
+        if hasIcon then
+            row.rank:SetPoint("LEFT", row.iconFrame, "RIGHT", 3, 0)
+        else
+            row.rank:SetPoint("LEFT", row, "LEFT", 3, 0)
+        end
         row.rank:SetWidth(showRank and gutter or 1)
 
-        -- Icon frame: right of the rank gutter when rank is shown, else flush left.
-        row.iconFrame:ClearAllPoints()
-        if showRank then
-            row.iconFrame:SetPoint("LEFT", row.rank, "RIGHT", 2, 0)
-        else
-            row.iconFrame:SetPoint("LEFT", row, "LEFT", 0, 0)
-        end
-
-        -- Name: after the icon when shown, else after the rank gutter when rank is
-        -- shown, else flush at the fill's left edge.
+        -- Name: after the rank gutter when rank is shown, else after the icon,
+        -- else flush at the row's left edge.
         row.name:ClearAllPoints()
-        if hasIcon then
+        if showRank then
+            row.name:SetPoint("LEFT", row.rank, "RIGHT", 2, 0)
+        elseif hasIcon then
             row.name:SetPoint("LEFT", row.iconFrame, "RIGHT", 3, 0)
-        elseif showRank then
-            row.name:SetPoint("LEFT", row.rank, "RIGHT", 3, 0)
         else
             -- Flush at the row's left edge (anchored to the ROW, not row.fill, so it stays
             -- centered in BarThinLine mode; equal to row.fill in normal mode).
             row.name:SetPoint("LEFT", row, "LEFT", 3, 0)
         end
-        row.name:SetPoint("RIGHT", row.value, "LEFT", -3, 0)
+        local vGutter = noValue and 3
+            or KE:PixelSnap((db.FontSize or 12) * (wideValue and VALUE_GUTTER_WIDE or VALUE_GUTTER_SINGLE))
+        row.name:SetPoint("RIGHT", row, "RIGHT", -vGutter, 0)
     end
 
     -- Name (secret-aware). In combat src.name may be secret: SetText accepts it,
