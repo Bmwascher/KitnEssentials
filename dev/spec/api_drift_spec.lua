@@ -50,4 +50,46 @@ describe("api-drift core (dev/scripts/_api_drift_core.lua)", function()
             assert.equals(1, flat.enums["Enum.ToyQuality.Rare"])
         end)
     end)
+
+    describe("diffMaps", function()
+        local old = { A = "1", B = "2", C = "3" }
+        local new = { A = "1", B = "2x", D = "4" }
+        local d = C.diffMaps(old, new)
+        it("finds added, removed, changed — sorted", function()
+            assert.same({ "D" }, d.added)
+            assert.same({ "C" }, d.removed)
+            assert.same({ "B" }, d.changed)
+        end)
+        it("reports enum renumbers as changed", function()
+            local e = C.diffMaps({ ["Enum.X.A"] = 5 }, { ["Enum.X.A"] = 6 })
+            assert.same({ "Enum.X.A" }, e.changed)
+        end)
+    end)
+
+    describe("usedPredicates / filterUsed", function()
+        local used = {
+            names = { UnitFoo = true },                -- bare globals/frames
+            nsCalls = { ["C_Toy.GetToy"] = true },      -- C_Ns.member call sites
+            nsAll = { C_Toy = true },                   -- namespaces touched at all
+            events = { TOYS_UPDATED = true },
+            enums = { ["Enum.ToyQuality.Rare"] = true },
+            cvars = { someCVar = true },
+        }
+        local p = C.usedPredicates(used)
+        it("matches functions by exact key or bare-global name", function()
+            assert.is_true(p.fn("C_Toy.GetToy"))
+            assert.is_true(p.fn("UnitFoo"))
+            assert.is_false(p.fn("C_Toy.Other"))
+            assert.is_false(p.fn("C_Other.GetToy"))
+        end)
+        it("namespace-additions predicate matches any member of a used namespace", function()
+            assert.is_true(p.fnNsAddition("C_Toy.Brand New"))
+            assert.is_false(p.fnNsAddition("C_Other.New"))
+        end)
+        it("filterUsed splits hits from a miss count", function()
+            local r = C.filterUsed({ "C_Toy.GetToy", "C_Other.X", "UnitFoo" }, p.fn)
+            assert.same({ "C_Toy.GetToy", "UnitFoo" }, r.hit)
+            assert.equals(1, r.miss)
+        end)
+    end)
 end)

@@ -72,4 +72,43 @@ function C.flattenDocs(tables)
     return flat
 end
 
+function C.diffMaps(old, new)
+    local added, removed, changed = {}, {}, {}
+    for k, v in pairs(new) do
+        if old[k] == nil then added[#added + 1] = k
+        elseif old[k] ~= v then changed[#changed + 1] = k end
+    end
+    for k in pairs(old) do
+        if new[k] == nil then removed[#removed + 1] = k end
+    end
+    table.sort(added); table.sort(removed); table.sort(changed)
+    return { added = added, removed = removed, changed = changed }
+end
+
+function C.usedPredicates(used)
+    local p = {}
+    function p.fn(key)
+        if used.nsCalls[key] then return true end
+        if not key:find(".", 1, true) and used.names[key] then return true end
+        return false
+    end
+    function p.fnNsAddition(key)
+        local ns = key:match("^(C_[%w_]+)%.")
+        return (ns and used.nsAll[ns]) and true or false
+    end
+    function p.event(key) return used.events[key] == true end
+    function p.enum(key) return used.enums[key] == true end
+    function p.name(key) return used.names[key] == true end
+    function p.cvar(key) return used.cvars[key] == true end
+    return p
+end
+
+function C.filterUsed(keys, pred)
+    local hit, miss = {}, 0
+    for _, k in ipairs(keys) do
+        if pred(k) then hit[#hit + 1] = k else miss = miss + 1 end
+    end
+    return { hit = hit, miss = miss }
+end
+
 return C
