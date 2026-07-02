@@ -615,22 +615,15 @@ local function _PlaceLabel(fs, timerBar, barW, cutoff, maxTime, place)
         -- texture via the textOverlay parent.
         fs:SetPoint("RIGHT", timerBar, "LEFT", x - 3, 0)
     elseif place == "ABOVE" then
-        -- Centered on the tick, fully above the bar. The bar-END (+1) label
-        -- right-aligns to the bar end instead: centered, its right half
-        -- clips past the frame edge (2026-07-02 in-game feedback).
-        if cutoff >= maxTime then
-            fs:SetPoint("BOTTOMRIGHT", timerBar, "TOPRIGHT", 0, 2)
-        else
-            fs:SetPoint("BOTTOM", timerBar, "TOPLEFT", x, 2)
-        end
+        -- Right-aligned to the tick, fully above the bar — the same stagger
+        -- rule as EDGE. Centering collided near the bar end: the centered
+        -- +1 label clipped the frame edge, and right-aligning only the end
+        -- label jammed it into the centered +2 (2026-07-02 live feedback,
+        -- rounds 1 + 2).
+        fs:SetPoint("BOTTOMRIGHT", timerBar, "TOPLEFT", x - 3, 2)
     elseif place == "BELOW" then
-        -- Centered under the tick, fully below the bar (prototype style);
-        -- same end-label right-alignment as ABOVE.
-        if cutoff >= maxTime then
-            fs:SetPoint("TOPRIGHT", timerBar, "BOTTOMRIGHT", 0, -2)
-        else
-            fs:SetPoint("TOP", timerBar, "BOTTOMLEFT", x, -2)
-        end
+        -- Same right-aligned stagger, fully below the bar.
+        fs:SetPoint("TOPRIGHT", timerBar, "BOTTOMLEFT", x - 3, -2)
     else  -- EDGE (default): straddles the bar's TOP edge (the edge-straddling
           -- look) — label center ON the edge, half in / half out, left of its tick.
         fs:SetPoint("RIGHT", timerBar, "TOPLEFT", x - 3, 0)
