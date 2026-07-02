@@ -1121,12 +1121,11 @@ function MPT:RenderObjectives()
         local rightText = ""
         if obj.completed and obj.clearTime and obj.clearTime > 0 then
             timeFS:SetAlpha(1)  -- clear a possible pending-row PBOpacity dim on this pooled slot
-            local timePart, deltaPart = "", ""
             -- "Show Clear Times" gates the clear-time text itself;
             -- the PB delta is self-contained and independently gated below.
             if db.ShowObjectiveTimes ~= false then
                 local doneHex = Hex(db.ObjectiveDoneColor or { 0, 1, 0.14 })
-                timePart = format("%s%s|r", doneHex, MPT.FormatTime(obj.clearTime, false))
+                rightText = format("%s%s|r", doneHex, MPT.FormatTime(obj.clearTime, false))
             end
             if db.ShowPBDelta and obj.pbTime then
                 local diff = obj.clearTime - obj.pbTime
@@ -1134,16 +1133,9 @@ function MPT:RenderObjectives()
                                        or  (db.SplitBehindColor or { 1, 0.34, 0.34 })
                 local sign = diff < 0 and "-" or "+"
                 local dStr = (diff == 0) and "0:00" or MPT.FormatTime(abs(diff), false)
-                deltaPart  = format("%s(%s%s)|r", Hex(col), sign, dStr)
+                local sep  = (rightText ~= "") and "  " or ""
+                rightText  = rightText .. sep .. format("%s(%s%s)|r", Hex(col), sign, dStr)
             end
-            -- START (left-edge) mirrors END: delta outermost on both edges
-            -- (2026-07-02 in-game feedback, tentative — single-line revert).
-            local first, second = timePart, deltaPart
-            if (db.ObjectiveTimePosition or "END") == "START" then
-                first, second = deltaPart, timePart
-            end
-            local sep = (first ~= "" and second ~= "") and "  " or ""
-            rightText = first .. sep .. second
         elseif (not obj.completed) and obj.pbTime and self:ShouldShowRecords() then
             -- Pending PB targets are governed by SplitsShowMode (see
             -- ShouldShowRecords) — ALWAYS, or COUNTDOWN before the timer starts.
