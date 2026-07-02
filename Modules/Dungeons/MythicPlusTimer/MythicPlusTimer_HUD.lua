@@ -484,7 +484,7 @@ function MPT:RenderTimer()
     elseif MPT.run.bestOverall and self:ShouldShowRecords() then
         -- The gold overall PB target — shown per SplitsShowMode (ALWAYS, or
         -- COUNTDOWN before the timer starts; hidden mid-run / on NEVER).
-        local pbHex = Hex(MPT.db.PBColor or {0.85, 0.79, 0.54})
+        local pbHex = Hex(MPT.db.PBColor or {0.81, 0.81, 0.81})
         local a = max(0, min(1, MPT.db.PBOpacity or 1))
         -- Fallback source tag: when the record came from a DIFFERENT key
         -- level, show which one you're
@@ -959,7 +959,7 @@ function MPT:RenderForces()
                 str = str .. format("  %s(%s%s)|r", Hex(col), sign, dStr)
             end
         elseif self:ShouldShowRecords() then
-            str = str .. format("  %s%s|r", Hex(db.PBColor or { 0.85, 0.79, 0.54 }), MPT.FormatTime(fpbt, false))
+            str = str .. format("  %s%s|r", Hex(db.PBColor or { 0.81, 0.81, 0.81 }), MPT.FormatTime(fpbt, false))
         end
     end
 
@@ -1058,7 +1058,7 @@ function MPT:RenderObjectives()
         elseif (not obj.completed) and obj.pbTime and self:ShouldShowRecords() then
             -- Pending gold targets are governed by SplitsShowMode (see
             -- ShouldShowRecords) — ALWAYS, or COUNTDOWN before the timer starts.
-            local pbHex = Hex(db.PBColor or { 0.85, 0.79, 0.54 })
+            local pbHex = Hex(db.PBColor or { 0.81, 0.81, 0.81 })
             local a = max(0, min(1, db.PBOpacity or 1))
             -- Bare time, no "PB" prefix (round-4 cleanup): the gold color already
             -- reads as the target, and the prefix crowded the row.

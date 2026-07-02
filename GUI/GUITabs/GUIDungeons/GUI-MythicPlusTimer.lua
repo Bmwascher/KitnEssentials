@@ -674,7 +674,7 @@ BuildDisplayTab = function(scrollChild, yOffset, db, manager)
     manager:Register(timerColors, "all")
     AddColorRow(timerColors, db, manager, ApplySettings, {
         { "Timer (running)",  "TimerColor",        { 1, 1, 1 } },
-        { "Timer (timed)",    "TimerSuccessColor", { 1, 0.83, 0.22 } },
+        { "Timer (timed)",    "TimerSuccessColor", { 0, 1, 0.14 } },
         { "Timer (depleted)", "TimerExpiredColor", { 1, 0.16, 0.18 } },
     })
     AddColorRow(timerColors, db, manager, ApplySettings, {
@@ -741,7 +741,7 @@ BuildDisplayTab = function(scrollChild, yOffset, db, manager)
     AddColorRow(objColors, db, manager, ApplySettings, {
         { "Split Ahead",  "SplitAheadColor",  { 0.25, 0.88, 0.82 } },
         { "Split Behind", "SplitBehindColor", { 1, 0.34, 0.34 } },
-        { "PB Target",    "PBColor",          { 0.85, 0.79, 0.54 } },
+        { "PB Target",    "PBColor",          { 0.81, 0.81, 0.81 } },
     })
 
     local rowOp = GUIFrame:CreateRow(objColors.content, Theme.rowHeightLast)

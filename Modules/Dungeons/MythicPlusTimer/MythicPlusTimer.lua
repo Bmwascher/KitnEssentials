@@ -213,7 +213,7 @@ local MPT_DEFAULTS = {
     TimerFormat = "ELAPSED_TOTAL",  -- ELAPSED_TOTAL|REMAINING|REMAINING_TOTAL|ELAPSED|ELAPSED_DETAIL
     ShowMilliseconds = false,
     TimerColor = {1, 1, 1},
-    TimerSuccessColor = {1, 0.83, 0.22},
+    TimerSuccessColor = {0, 1, 0.14},
     TimerExpiredColor = {1, 0.16, 0.18},
 
     -- Timer bar + thresholds
@@ -278,7 +278,7 @@ local MPT_DEFAULTS = {
     ObjectiveDoneColor = {0, 1, 0.14},
     SplitAheadColor = {0.25, 0.88, 0.82},
     SplitBehindColor = {1, 0.34, 0.34},
-    PBColor = {0.85, 0.79, 0.54},
+    PBColor = {0.81, 0.81, 0.81},
     PBOpacity = 1.0,
 
     -- Deaths
