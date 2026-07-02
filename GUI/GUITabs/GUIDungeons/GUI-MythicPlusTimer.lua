@@ -578,7 +578,7 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
     })
     rowO1:AddWidget(showObjCheck, 0.5)
     manager:Register(showObjCheck, "all")
-    local timesCheck = GUIFrame:CreateCheckbox(rowO1, "Show Clear Times", {
+    local timesCheck = GUIFrame:CreateCheckbox(rowO1, "Show Boss Clear Times", {
         value = db.ShowObjectiveTimes ~= false,
         callback = function(checked) db.ShowObjectiveTimes = checked; ApplySettings() end,
     })
