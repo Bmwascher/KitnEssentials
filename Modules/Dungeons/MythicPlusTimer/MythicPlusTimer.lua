@@ -72,6 +72,7 @@ MPT.run = {
     mapID = nil, level = 0, affixIDs = {}, affixNames = {}, affixFileIDs = {},
     affixNamesStr = nil,
     mapName = nil,        -- localized dungeon name (ShowDungeonName key row)
+    msBase = nil,         -- live-ms driver's precise-clock anchor (HUD OnUpdate)
     maxTime = 0, thresholds = { plus1 = 0, plus2 = 0, plus3 = 0 },
     elapsed = 0, lastTickedSec = -1,
     deaths = 0, deathTimeLost = 0, deathLog = {},
@@ -171,6 +172,27 @@ function MPT.BuildTimerTemplate(mode, showMs)
     if mode == "ELAPSED" then return ela, 0 end
     if mode == "ELAPSED_DETAIL" then return ela .. " (88:88 / 88:88)", 0 end
     return ela .. "/88:88", 2   -- ELAPSED_TOTAL (default)
+end
+
+-- Pure: live-milliseconds display clock. GetWorldElapsedTime only carries
+-- whole seconds (its fraction is always 0), so the HUD's ms driver runs a
+-- GetTimePreciseSec-based clock glued to the authoritative one:
+--   * pass the precise clock through untouched between corrections (smooth)
+--   * snap FORWARD when the authoritative clock leaps past it (death
+--     penalty: +5s/+15s applied to world elapsed)
+--   * re-anchor when the precise clock runs >= 1.6s ahead (reload restore;
+--     1.6 tolerates one late 1 Hz tick without per-second stutter)
+-- Returns (displaySeconds, newMsBase). Busted-testable
+-- (dev/spec/mpt_raceline_spec.lua).
+function MPT.LiveMsElapsed(now, msBase, elapsed)
+    elapsed = elapsed or 0
+    if not msBase then msBase = now - elapsed end
+    local p = now - msBase
+    if p < elapsed or p >= elapsed + 1.6 then
+        msBase = now - elapsed
+        p = elapsed
+    end
+    return p, msBase
 end
 
 -- Posts a one-line boss-kill split to the group channel (INSTANCE_CHAT / RAID /
@@ -1174,6 +1196,7 @@ function MPT:StartRun()
     run.elapsed = 0
     run.lastTickedSec = -1
     run.preciseBase = nil  -- re-anchored by OnTimerTick's first good tick
+    run.msBase = nil       -- self-initialized by the HUD ms driver's first frame
     self:CacheKeystoneInfo(level, affixIDs)
     wipe(run.objectives)
     run.forces.current, run.forces.total, run.forces.percent, run.forces.completed = 0, 0, 0, false
@@ -1311,6 +1334,7 @@ function MPT:ResetRun()
     run.elapsed = 0
     run.lastTickedSec = -1
     run.preciseBase = nil
+    run.msBase = nil
     run.deaths = 0
     run.deathTimeLost = 0
     wipe(run.deathLog); _prevDeathCount = 0; wipe(_partyAlive)

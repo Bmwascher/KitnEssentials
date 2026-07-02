@@ -15,6 +15,7 @@ local CreateFrame = CreateFrame
 local floor = math.floor
 local min, max, abs = math.min, math.max, math.abs  -- max/abs used here; min used by RenderBar
 local format = string.format
+local GetTimePreciseSec = GetTimePreciseSec
 
 -- Color array → "|cffRRGGBB" prefix (used by RenderObjectives per-row).
 -- floor already declared above; do NOT re-declare it.
@@ -398,6 +399,61 @@ function MPT:BuildHUD()
 end
 
 ---------------------------------------------------------------------------------
+-- Live milliseconds driver — a per-frame OnUpdate that owns f.timerText's
+-- string while active (RenderTimer skips that one write; color, "/", and
+-- the static total stay on the 1 Hz path). GetWorldElapsedTime only carries
+-- whole seconds, so the fraction comes from MPT.LiveMsElapsed's precise
+-- clock. Detach-when-idle: the script exists only while MsDriverActive();
+-- UpdateMsDriver (called from Render's tail) attaches/detaches, and the
+-- handler self-detaches the moment the predicate flips.
+---------------------------------------------------------------------------------
+
+function MPT:MsDriverActive()
+    local run, db = self.run, self.db
+    if not (run and db and db.Enabled) then return false end
+    if not db.ShowMilliseconds or self.isPreview then return false end
+    if not run.active or run.completed then return false end
+    local mode = db.TimerFormat or "ELAPSED_TOTAL"
+    if mode == "REMAINING" or mode == "REMAINING_TOTAL" then return false end
+    return GetTimePreciseSec ~= nil
+end
+
+local function MsDriverOnUpdate()
+    local f = MPT.frames and MPT.frames.root
+    if not f then return end
+    if not MPT:MsDriverActive() then
+        f:SetScript("OnUpdate", nil)   -- self-detach; Render re-attaches when eligible
+        return
+    end
+    local run, db = MPT.run, MPT.db
+    local p, nb = MPT.LiveMsElapsed(GetTimePreciseSec(), run.msBase, run.elapsed)
+    run.msBase = nb
+    local str
+    if (db.TimerFormat or "ELAPSED_TOTAL") == "ELAPSED_DETAIL" then
+        -- Same composition as RenderTimer's DETAIL branch, driven by the
+        -- precise clock so the whole string stays self-consistent per frame.
+        local maxTime = run.maxTime or 0
+        str = MPT.FormatTime(p, true) .. " (" .. MPT.FormatTime(max(0, maxTime - p), false)
+            .. " / " .. MPT.FormatTime(maxTime, false) .. ")"
+    else
+        str = MPT.FormatTime(p, true)
+    end
+    MPT.SetTextGated(f.timerText, str)
+end
+
+function MPT:UpdateMsDriver()
+    local f = self.frames and self.frames.root
+    if not f then return end
+    if self:MsDriverActive() then
+        if not f:GetScript("OnUpdate") then
+            f:SetScript("OnUpdate", MsDriverOnUpdate)
+        end
+    else
+        f:SetScript("OnUpdate", nil)
+    end
+end
+
+---------------------------------------------------------------------------------
 -- RenderTimer — format elapsed/limit into one of five display strings and
 -- recolor the FontString: white while running, TimerSuccessColor on timed
 -- completion, red when depleted (elapsed > limit or run completed past limit).
@@ -459,7 +515,11 @@ function MPT:RenderTimer()
         r, g, b = c[1], c[2], c[3]
     end
 
-    self.SetTextGated(f.timerText, str)
+    -- While the live-ms driver owns the changing part, skip this one write —
+    -- the 1 Hz whole-second string would fight the per-frame ms string.
+    if not self:MsDriverActive() then
+        self.SetTextGated(f.timerText, str)
+    end
     self.SetColorGated(f.timerText, r, g, b)
     f.timerText:Show()
     self.SetTextGated(f.timerSuffixText, suffix)
@@ -1520,6 +1580,7 @@ function MPT:Render()
     self:RenderForces()
     -- RenderObjectives (Task 3.2) is called from INSIDE ApplyLayout — see note above.
     self:RequestLayout()
+    self:UpdateMsDriver()
 end
 
 ---------------------------------------------------------------------------------

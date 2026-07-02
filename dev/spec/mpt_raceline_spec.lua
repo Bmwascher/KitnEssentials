@@ -124,3 +124,46 @@ describe("MPT.BuildTimerTemplate", function()
         assert.are.equal("88:88/88:88",     (MPT.BuildTimerTemplate("BOGUS", false)))
     end)
 end)
+
+describe("MPT.LiveMsElapsed", function()
+    -- Glues GetTimePreciseSec to the authoritative whole-second clock:
+    -- smooth pass-through between corrections, forward snap on death
+    -- penalties, re-anchor when the precise clock runs away.
+    it("initializes the anchor from the authoritative elapsed", function()
+        local p, base = MPT.LiveMsElapsed(1000.25, nil, 926)
+        assert.are.equal(926, p)
+        assert.are.equal(1000.25 - 926, base)
+    end)
+
+    it("passes the precise clock through between corrections", function()
+        local base = 1000.25 - 926
+        local p, nb = MPT.LiveMsElapsed(1000.75, base, 926)
+        assert.are.equal(926.5, p)
+        assert.are.equal(base, nb)
+    end)
+
+    it("tolerates a late authoritative tick without stuttering", function()
+        -- precise reaches elapsed+1.3 because the 1 Hz tick fired late:
+        -- NOT a correction — snapping here would reset the fraction every
+        -- second and the ms display would stutter.
+        local base = 1000.25 - 926
+        local p, nb = MPT.LiveMsElapsed(1001.55, base, 926)
+        assert.are.equal(927.3, p)
+        assert.are.equal(base, nb)
+    end)
+
+    it("snaps forward when a death penalty jumps the authoritative clock", function()
+        -- +15s penalty: authoritative elapsed leaps past the precise clock.
+        local base = 1000.25 - 926
+        local p, nb = MPT.LiveMsElapsed(1000.75, base, 941)
+        assert.are.equal(941, p)
+        assert.are.equal(1000.75 - 941, nb)
+    end)
+
+    it("re-anchors when the precise clock runs too far ahead (reload restore)", function()
+        local base = 1000.25 - 926
+        local p, nb = MPT.LiveMsElapsed(1002.00, base, 926)  -- precise 927.75 >= 926 + 1.6
+        assert.are.equal(926, p)
+        assert.are.equal(1002.00 - 926, nb)
+    end)
+end)
