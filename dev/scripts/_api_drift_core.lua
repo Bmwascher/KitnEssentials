@@ -111,4 +111,59 @@ function C.filterUsed(keys, pred)
     return { hit = hit, miss = miss }
 end
 
+function C.newUsedSurface()
+    return { names = {}, nsCalls = {}, nsAll = {}, events = {}, enums = {}, cvars = {} }
+end
+
+function C.harvestUsedFromSource(src, used)
+    -- bare identifiers (not preceded by . or :) — same rule as the drift check
+    for pos, id in src:gmatch("()([A-Za-z_][A-Za-z0-9_]*)") do
+        local prev = pos > 1 and src:sub(pos - 1, pos - 1) or ""
+        if prev ~= "." and prev ~= ":" then used.names[id] = true end
+    end
+    for id in src:gmatch("_G%.([A-Za-z_][A-Za-z0-9_]*)") do used.names[id] = true end
+    for id in src:gmatch("_G%[\"([A-Za-z_][A-Za-z0-9_]*)\"%]") do used.names[id] = true end
+    for ns, member in src:gmatch("(C_[%w_]+)[%.:]([A-Za-z_][A-Za-z0-9_]*)") do
+        used.nsCalls[ns .. "." .. member] = true
+        used.nsAll[ns] = true
+    end
+    for name, member in src:gmatch("Enum%.([%w_]+)%.([%w_]+)") do
+        used.enums["Enum." .. name .. "." .. member] = true
+    end
+    for ev in src:gmatch("Register[%w]*Event%(%s*[\"']([A-Z][A-Z0-9_]+)[\"']") do
+        used.events[ev] = true
+    end
+    for cv in src:gmatch("[GS]etCVar%(%s*[\"']([%w_%.]+)[\"']") do used.cvars[cv] = true end
+    for cv in src:gmatch("C_CVar%.[%w_]+%(%s*[\"']([%w_%.]+)[\"']") do used.cvars[cv] = true end
+end
+
+function C.addLuacheckrcNames(rcGlobals, rcRead, used)
+    for _, sym in ipairs(rcGlobals or {}) do used.names[sym] = true end
+    for _, sym in ipairs(rcRead or {}) do used.names[sym] = true end
+end
+
+function C.parseBIRSource(src, loadSandboxed)
+    local set = {}
+    local function walk(t, seen)
+        if seen[t] then return end
+        seen[t] = true
+        for k, v in pairs(t) do
+            if type(v) == "string" then set[v] = true
+            elseif type(v) == "table" then walk(v, seen) end
+            if type(k) == "string" and type(v) ~= "table" then set[k] = true end
+        end
+    end
+    local env = {}
+    local chunk = loadSandboxed(src, "@bir", env)
+    local ok, ret
+    if chunk then ok, ret = pcall(chunk) end
+    if ok then
+        if type(ret) == "table" then walk(ret, {}) end
+        walk(env, {})
+    else
+        for name in src:gmatch("[\"']([A-Za-z_][A-Za-z0-9_%.]*)[\"']") do set[name] = true end
+    end
+    return set
+end
+
 return C
