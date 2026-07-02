@@ -154,21 +154,23 @@ function MPT.ResolveRaceLine(elapsed, thresholds, completed)
 end
 
 -- Pure: worst-case timer-row string per TimerFormat, for the PB tuck's
--- width reservation ("8" as the widest-digit assumption). Elapsed-bearing
--- modes always reserve the millisecond form: the frozen completion time
--- shows ms regardless of db.ShowMilliseconds, and the reservation must
--- never be narrower than what completion renders (PB text sits just left
--- of it). REMAINING modes never display ms.
--- Minutes render via "%02d" (MPT.FormatTime) with no upper-digit cap, so a
--- run past 99 minutes would exceed this 2-digit reservation — irrelevant
--- for M+ (max ~44 min); left uncapped deliberately.
+-- width reservation ("8" as the widest-digit assumption). showMs reserves
+-- the millisecond form of the elapsed part — pass true when the live
+-- toggle is on OR the run is completed (the frozen completion time always
+-- shows ms); REMAINING modes never display ms. Returns (template, sepGaps):
+-- split-FontString rows (changing | "/" | total) carry their side gaps as
+-- anchor offsets, so the template is SPACE-FREE and sepGaps tells the
+-- caller how many TIMER_SEP_GAP gaps to add to the measured width.
+-- Minutes render %02d uncapped — a >99-minute string would exceed the
+-- reservation; irrelevant for M+ (max ~44 min), documented deliberately.
 -- Busted-testable (dev/spec/mpt_raceline_spec.lua).
-function MPT.BuildTimerTemplate(mode)
-    if mode == "REMAINING" then return "88:88" end
-    if mode == "REMAINING_TOTAL" then return "88:88 / 88:88" end
-    if mode == "ELAPSED" then return "88:88.888" end
-    if mode == "ELAPSED_DETAIL" then return "88:88.888 (88:88 / 88:88)" end
-    return "88:88.888 / 88:88"   -- ELAPSED_TOTAL (default)
+function MPT.BuildTimerTemplate(mode, showMs)
+    local ela = showMs and "88:88.888" or "88:88"
+    if mode == "REMAINING" then return "88:88", 0 end
+    if mode == "REMAINING_TOTAL" then return "88:88/88:88", 2 end
+    if mode == "ELAPSED" then return ela, 0 end
+    if mode == "ELAPSED_DETAIL" then return ela .. " (88:88 / 88:88)", 0 end
+    return ela .. "/88:88", 2   -- ELAPSED_TOTAL (default)
 end
 
 -- Posts a one-line boss-kill split to the group channel (INSTANCE_CHAT / RAID /
@@ -1151,6 +1153,10 @@ function MPT:StartRun()
         if DEBUG_MPT then KE:Print("[MPT] StartRun: already active, ignoring") end
         return
     end
+    -- Fresh run: the reservation returns to the live-toggle width (the
+    -- completed-run measurement included ms).
+    local rootF = self.frames and self.frames.root
+    if rootF then rootF._keConfigDone = nil end
     local mapID = C_ChallengeMode.GetActiveChallengeMapID()
     if not mapID then
         if DEBUG_MPT then KE:Print("[MPT] StartRun: no active map ID, ignoring") end
@@ -1211,6 +1217,11 @@ function MPT:CompleteRun()
     if DEBUG_MPT then KE:Print("[MPT] CompleteRun: completing run") end
     run.completed = true
     run.active = false
+    -- The frozen completion time always shows ms — bust the config gate so
+    -- ApplyLayout re-measures the PB tuck reservation for the wider string
+    -- (one-time state change; the EditMode drag path uses the same bust).
+    local rootF = self.frames and self.frames.root
+    if rootF then rootF._keConfigDone = nil end
     self:StopTimerLoop()
     self:UnregisterRunEvents()
     -- Authoritative final time (ms). GetWorldElapsedTime can go secret/stale ("99:99")

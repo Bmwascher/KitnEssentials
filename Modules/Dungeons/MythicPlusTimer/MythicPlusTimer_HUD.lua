@@ -73,8 +73,9 @@ local _sigBuf = {}
 -- pull both the elapsed and total sides inward toward the separator.
 local TIMER_SEP_GAP = 3
 
--- Gap (px) between the PB/delta text and the reserved timer-row width.
-local TIMER_PB_GAP = 18
+-- Gap (px) between the PB/delta text and the reserved timer-row width
+-- (tightened 18 -> 8, 2026-07-02 in-game feedback: PB sat too far left).
+local TIMER_PB_GAP = 8
 
 ---------------------------------------------------------------------------------
 -- Gating helpers (module functions — not methods; take widget explicitly)
@@ -1249,13 +1250,18 @@ function MPT:ApplyLayout()
         applyFont(f.forcesText,  "Forces")
 
         applyFont(f.timerMeasureText, "Timer")
-        -- PB tuck reservation: worst-case timer-row width at the Timer font
-        -- for the active format (ms always included on elapsed modes — the
-        -- frozen completion string must fit). Measured on a hidden ruler FS,
-        -- never the live timerText. Config-pass timing keeps GetStringWidth
-        -- off the per-tick path.
-        f.timerMeasureText:SetText(MPT.BuildTimerTemplate(db.TimerFormat))
-        f._timerResW = f.timerMeasureText:GetStringWidth() or 0
+        -- PB tuck reservation: worst-case timer-row width at the Timer font.
+        -- ms is reserved only when it can render (live toggle on, or the
+        -- frozen completion time) — StartRun/CompleteRun bust _keConfigDone
+        -- so this re-measures on that transition (one-time shift, no
+        -- per-tick jitter). sepGaps adds the split-FontString row's real
+        -- anchor gaps; the template itself is space-free. Measured on a
+        -- hidden ruler FS, never the live timerText; config-pass timing
+        -- keeps GetStringWidth off the per-tick path.
+        local tpl, sepGaps = MPT.BuildTimerTemplate(db.TimerFormat,
+            db.ShowMilliseconds == true or (self.run and self.run.completed) or false)
+        f.timerMeasureText:SetText(tpl)
+        f._timerResW = (f.timerMeasureText:GetStringWidth() or 0) + sepGaps * TIMER_SEP_GAP
 
         -- Bar sizes, HUD anchor, scale, backdrop recolor.
         f:SetWidth(barW + PAD * 2)
