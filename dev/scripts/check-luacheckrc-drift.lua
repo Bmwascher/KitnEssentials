@@ -31,82 +31,15 @@ for i = 1, #arg do
     if arg[i] == "--soft" then SOFT = true end
 end
 
--- ---- Windows-hardened file access -------------------------------------
--- io.open wrapper: the \\?\ extended-length prefix defeats the MAX_PATH
--- (260) limit, under which io.open fails SILENTLY (masked 30% of the
--- source scan in the prototype)
-local function openLong(path)
-    if path:match("^%a:\\") then
-        return io.open("\\\\?\\" .. path, "r")
-    end
-    return io.open(path, "r")
-end
+-- bootstrap: locate the lib next to this script, before root resolution
+local _script = (arg[0] or ""):gsub("/", "\\")
+local _dir = _script:match("^(.*\\)[^\\]+$") or ".\\dev\\scripts\\"
+local P = dofile(_dir .. "_apidocs_parser.lua")
 
-local function readAll(path)
-    local fh = openLong(path)
-    if not fh then return nil end
-    local src = fh:read("*a")
-    fh:close()
-    return src
-end
-
--- recursive file listing via cmd.exe; returns absolute paths
-local function listFiles(dir, pat)
-    local out = {}
-    local p = io.popen('dir /b /s "' .. dir .. '\\' .. pat .. '" 2>nul')
-    if p then
-        for line in p:lines() do out[#out + 1] = line end
-        p:close()
-    end
-    return out
-end
-
-local function listDirs(dir)
-    local out = {}
-    local p = io.popen('dir /b /ad "' .. dir .. '" 2>nul')
-    if p then
-        for line in p:lines() do out[#out + 1] = line end
-        p:close()
-    end
-    return out
-end
-
-local function count(t)
-    local n = 0
-    for _ in pairs(t) do n = n + 1 end
-    return n
-end
-
--- Lua 5.1/5.4 compat: sandboxed chunk loader. 5.2+ load() takes the env
--- as its 4th argument; 5.1 needs loadstring + setfenv instead.
-local function loadSandboxed(src, name, env)
-    if setfenv then
-        local chunk, err = loadstring(src, name)
-        if chunk then setfenv(chunk, env) end
-        return chunk, err
-    end
-    return load(src, name, "t", env)
-end
-
--- ---- resolve repo root from the script path ---------------------------
-local function getCwd()
-    local p = io.popen("cd")
-    local d = p and p:read("*l")
-    if p then p:close() end
-    return d
-end
-
-local scriptPath = (arg[0] or ""):gsub("/", "\\")
-local prefix = scriptPath:match("^(.-)dev\\scripts\\[^\\]+$")
-local ROOT
-if not prefix or prefix == "" or prefix == ".\\" then
-    ROOT = getCwd()
-elseif prefix:match("^%a:\\") or prefix:match("^\\\\") then
-    ROOT = (prefix:gsub("\\+$", ""))
-else
-    ROOT = getCwd() .. "\\" .. (prefix:gsub("\\+$", ""))
-end
-assert(ROOT and #ROOT > 0, "could not resolve repo root from arg[0]")
+local openLong, readAll = P.openLong, P.readAll        -- luacheck: ignore 211
+local listFiles, listDirs, count = P.listFiles, P.listDirs, P.count
+local loadSandboxed, harvestLua = P.loadSandboxed, P.harvestLua
+local ROOT = P.resolveRepoRoot(arg[0])
 
 local REF = ROOT .. "\\.wow-api-reference"
 local ADDONS = REF .. "\\Interface\\AddOns"
@@ -157,41 +90,9 @@ if #docFiles == 0 then
 end
 
 -- ---- tier 1: parse the API docs ------------------------------------------
--- permissive sandbox: any unknown global resolves to a stub that can be
--- indexed/called; APIDocumentation:AddDocumentationTable collects the
--- tables. The stub needs arithmetic metamethods because 3 constants files
--- compute values from other constants (e.g. PetConstants MAX_STABLE_SLOTS + 1).
-local collected = {}
-local stub
-stub = setmetatable({}, {
-    __index = function() return stub end,
-    __call = function() return stub end,
-    __add = function() return 0 end, __sub = function() return 0 end,
-    __mul = function() return 0 end, __div = function() return 0 end,
-    __unm = function() return 0 end, __concat = function() return "" end,
-})
-local docsEnv = setmetatable({
-    APIDocumentation = {
-        AddDocumentationTable = function(_, tbl) collected[#collected + 1] = tbl end,
-    },
-}, { __index = function() return stub end })
-
-local parseErrors, nDocsRead = {}, 0
-for _, path in ipairs(docFiles) do
-    local src = readAll(path)
-    if not src then
-        parseErrors[#parseErrors + 1] = path .. ": unreadable"
-    else
-        nDocsRead = nDocsRead + 1
-        local docChunk, docErr = loadSandboxed(src, "@" .. path, docsEnv)
-        if not docChunk then
-            parseErrors[#parseErrors + 1] = path .. ": " .. tostring(docErr)
-        else
-            local ok, runErr = pcall(docChunk)
-            if not ok then parseErrors[#parseErrors + 1] = path .. ": " .. tostring(runErr) end
-        end
-    end
-end
+local docRes = P.collectDocTables(DOCS)
+local parseErrors, nDocsRead = docRes.errors, docRes.filesRead
+local collected = docRes.tables
 assert(nDocsRead >= 500, ("only %d API-docs files read (expected >= 500) -- docs checkout is damaged"):format(nDocsRead))
 
 local namespaces, globalFns, docEvents = {}, {}, {}
@@ -212,16 +113,6 @@ for _, tbl in ipairs(collected) do
             local lit = rawget(ev, "LiteralName")
             if lit then docEvents[lit] = true end
         end
-    end
-end
-
--- ---- shared identifier harvest --------------------------------------------
--- bare identifiers: not preceded by '.' or ':' (field/method accesses don't
--- count). Comments and strings DO count — known over-approximation.
-local function harvestLua(src, set)
-    for pos, id in src:gmatch("()([A-Za-z_][A-Za-z0-9_]*)") do
-        local prev = pos > 1 and src:sub(pos - 1, pos - 1) or ""
-        if prev ~= "." and prev ~= ":" then set[id] = true end
     end
 end
 
