@@ -43,8 +43,10 @@ local function MediaList(kind, fallback)
     return out
 end
 
--- Multi-up color-picker row: items = { {label, key, default}, ... } placed
--- 1/n each. Used by every Colors card on this page.
+-- Multi-up color-picker row: items = { {label, key, default, group?}, ... }
+-- placed 1/n each; the optional 4th element routes that picker to a
+-- WidgetStateManager condition group (default "all"). Used by every Colors
+-- card on this page.
 local function AddColorRow(card, db, manager, applyFn, items, isLast)
     local h = isLast and Theme.rowHeightLast or Theme.rowHeight
     local row = GUIFrame:CreateRow(card.content, h)
@@ -56,7 +58,7 @@ local function AddColorRow(card, db, manager, applyFn, items, isLast)
             callback = function(r, g, b) db[key] = { r, g, b }; applyFn() end,
         })
         row:AddWidget(picker, frac)
-        manager:Register(picker, "all")
+        manager:Register(picker, it[4] or "all")
     end
     card:AddRow(row, h, isLast and 0 or nil)
 end
@@ -178,6 +180,13 @@ BuildGeneralTab = function(scrollChild, yOffset, db, manager)
     manager:SetCondition("threshLabels", function()
         return db.Enabled ~= false and db.ShowThresholdLabels ~= false
     end)
+    -- Timer-bar-dependent controls (fill, ticks, state fill): the bar and
+    -- its ticks are hidden while the LINES threshold mode owns the display —
+    -- mirrors the HUD's LinesModeActive predicate.
+    manager:SetCondition("timerBar", function()
+        return db.Enabled ~= false
+            and not (db.ShowThresholdLabels ~= false and (db.ThresholdPlacement or "EDGE") == "LINES")
+    end)
 
     local function ApplyModuleState(enabled)
         if not KitnEssentials then return end
@@ -289,7 +298,10 @@ BuildGeneralTab = function(scrollChild, yOffset, db, manager)
             { key = "LINES",  text = "Text Line (hides timer bar)" },
         },
         value = db.ThresholdPlacement or "EDGE",
-        callback = function(key) db.ThresholdPlacement = key; ApplySettings() end,
+        callback = function(key)
+            db.ThresholdPlacement = key; ApplySettings()
+            manager:UpdateAll(db.Enabled ~= false)
+        end,
     })
     rowT:AddWidget(threshPlaceDrop, 0.5)
     manager:Register(threshPlaceDrop, "threshLabels")
@@ -307,7 +319,7 @@ BuildGeneralTab = function(scrollChild, yOffset, db, manager)
         callback = function(checked) db.StateColorFill = checked; ApplySettings() end,
     })
     rowT2:AddWidget(stateFillCheck, 1)
-    manager:Register(stateFillCheck, "all")
+    manager:Register(stateFillCheck, "timerBar")
     threshCard:AddRow(rowT2, Theme.rowHeight)
 
     local rowTNote = GUIFrame:CreateRow(threshCard.content, 48)
@@ -318,7 +330,7 @@ BuildGeneralTab = function(scrollChild, yOffset, db, manager)
         "Overrides the Bar Fill color (including at completion).",
         48, "hide")
     rowTNote:AddWidget(tNote, 1)
-    manager:Register(tNote, "all")
+    manager:Register(tNote, "timerBar")
     threshCard:AddRow(rowTNote, 48, 0)
     yOffset = threshCard:GetNextOffset()
 
@@ -693,7 +705,8 @@ end
 
 BuildDisplayTab = function(scrollChild, yOffset, db, manager)
     manager:SetCondition("forcesBanded", function()
-        return db.Enabled ~= false and db.ShowForces ~= false and db.ForcesBandedColors == true
+        return db.Enabled ~= false and db.ShowForces ~= false
+            and db.ShowForcesBar ~= false and db.ForcesBandedColors == true
     end)
 
     -- Card 1: Timer — Colors
@@ -705,9 +718,12 @@ BuildDisplayTab = function(scrollChild, yOffset, db, manager)
         { "Timer (depleted)", "TimerExpiredColor", { 1, 0.16, 0.18 } },
     })
     AddColorRow(timerColors, db, manager, ApplySettings, {
-        { "Bar Fill",        "BarColor",           { 0.56, 0.56, 0.56 } },
+        -- Bar Background stays ungated: it tints BOTH bars' empty tracks
+        -- (ApplySettings re-tints timerBg AND forcesBg), so it stays usable
+        -- while only the timer bar is hidden.
+        { "Bar Fill",        "BarColor",           { 0.56, 0.56, 0.56 },   "timerBar" },
         { "Bar Background",  "BarBackgroundColor", { 0.031, 0.031, 0.031 } },
-        { "Threshold Ticks", "TickColor",          { 1, 1, 1 } },
+        { "Threshold Ticks", "TickColor",          { 1, 1, 1 },            "timerBar" },
     }, true)
     yOffset = timerColors:GetNextOffset()
 
@@ -715,7 +731,9 @@ BuildDisplayTab = function(scrollChild, yOffset, db, manager)
     local forcesColors = GUIFrame:CreateCard(scrollChild, "Forces — Colors", yOffset)
     manager:Register(forcesColors, "all")
     AddColorRow(forcesColors, db, manager, ApplySettings, {
-        { "Forces Bar",      "ForcesColor",         { 0.73, 0.62, 0.13 } },
+        -- Bar fill gates on the bar being visible; the text colors survive
+        -- Show Forces Bar off (the % text becomes a stacked row).
+        { "Forces Bar",      "ForcesColor",         { 0.73, 0.62, 0.13 }, "forcesBar" },
         { "Forces Complete", "ForcesCompleteColor", { 0, 1, 0.14 } },
         { "Forces Text",     "ForcesTextColor",     { 1, 1, 1 } },
     })
@@ -729,7 +747,7 @@ BuildDisplayTab = function(scrollChild, yOffset, db, manager)
         end,
     })
     bandedRow:AddWidget(bandedCheck, 1)
-    manager:Register(bandedCheck, "all")
+    manager:Register(bandedCheck, "forcesBar")
     forcesColors:AddRow(bandedRow, Theme.rowHeight)
 
     local BAND_LABELS = { "0-20%", "20-40%", "40-60%", "60-80%", "80-100%" }
