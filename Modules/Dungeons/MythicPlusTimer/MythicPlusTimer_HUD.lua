@@ -487,8 +487,17 @@ function MPT:RenderTimer()
     -- Milliseconds: ALWAYS on the frozen completion time (run.elapsed is the
     -- authoritative GetChallengeCompletionInfo().time/1000, so
     -- the precise .mmm is the headline result and shows even with the live toggle
-    -- off). On the live running timer they're opt-in via db.ShowMilliseconds.
-    local elaStr = FormatTime(elapsed, run.completed or db.ShowMilliseconds)
+    -- off). Live with the toggle on, the shape is the driver's single
+    -- decisecond — this path renders it only where the driver can't run
+    -- (preview; REMAINING modes ignore elaStr).
+    local elaStr
+    if run.completed then
+        elaStr = FormatTime(elapsed, true)
+    elseif db.ShowMilliseconds then
+        elaStr = MPT.FormatTimeDeci(elapsed)
+    else
+        elaStr = FormatTime(elapsed, false)
+    end
     local maxStr = FormatTime(maxTime, false)
     local remStr = FormatTime(timeLeft, false)
     local mode = db.TimerFormat or "ELAPSED_TOTAL"
@@ -784,8 +793,11 @@ function MPT:RenderThresholds()
                 else                               col = db.TimerExpiredColor or { 1, 0.16, 0.18 }
                 end
                 local sign = (state == "OVER" or state == "LOCKED_MISSED") and "+" or ""
-                self.SetTextGated(f0.raceLineText, format("+%d Chest (%s): %s%s%s|r",
-                    tier, _FmtShort(cutoff), Hex(col), sign, _FmtShort(value)))
+                -- Tier 1 races bare completion, not an upgrade chest — the
+                -- community term is "Timed" (user direction 2026-07-02).
+                local label = tier == 1 and "Timed" or format("+%d Chest", tier)
+                self.SetTextGated(f0.raceLineText, format("%s (%s): %s%s%s|r",
+                    label, _FmtShort(cutoff), Hex(col), sign, _FmtShort(value)))
                 self.SetColorGated(f0.raceLineText, 0.85, 0.85, 0.85)
                 f0.raceLineText:Show()
             end
