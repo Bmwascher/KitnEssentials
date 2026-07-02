@@ -15,6 +15,25 @@ set -uo pipefail
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root" || exit 1
 
+# Release-tag guard (blocking): a v* tag must point at the release commit —
+# subject "vX.Y.Z: …". Tagging a merge/feature commit instead broke the
+# naming convention for v1.17.0, v3.0.0, v3.0.3. Git feeds the pushed refs
+# on stdin. Override a deliberate exception with: git push --no-verify
+while read -r _lref _lsha _rref _rsha; do
+    case "$_rref" in refs/tags/v*) ;; *) continue ;; esac
+    # skip tag deletions (local sha is all zeros)
+    case "$_lsha" in *[!0]*) ;; *) continue ;; esac
+    tag="${_rref#refs/tags/}"
+    subject="$(git log -1 --format=%s "$_lsha" 2>/dev/null)"
+    case "$subject" in
+        "$tag:"*) ;;
+        *)
+            echo "[pre-push] BLOCKED: $tag points at '$subject' — tag the release commit ('$tag: …') instead, or override with: git push --no-verify" >&2
+            exit 1
+            ;;
+    esac
+done
+
 # AGENTS.md drift check (non-blocking): warn when Modules/ on disk and the
 # AGENTS.md Structure block disagree, in either direction. AGENTS.md is
 # gitignored, so read it from the working tree. Runs before the busted
