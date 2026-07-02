@@ -741,7 +741,11 @@ function MPT:RenderKey()
     if not db.ShowKeyLevel then
         f.keyText:Hide()
     else
-        self.SetTextGated(f.keyText, format("[%d]", run.level or 0))
+        local keyStr = format("+%d", run.level or 0)
+        if db.ShowDungeonName and run.mapName then
+            keyStr = keyStr .. " " .. run.mapName
+        end
+        self.SetTextGated(f.keyText, keyStr)
         self.SetColorGated(f.keyText, db.KeyColor[1], db.KeyColor[2], db.KeyColor[3])
         f.keyText:Show()
     end
@@ -1450,11 +1454,12 @@ local function BuildPreviewRun()
     end
     return {
         mapID = 1387,       -- placeholder map; HUD reads cached affixNames so any id is fine for preview
+        mapName = "The Rookery",            -- demos the ShowDungeonName key row
         level = 12,
         affixIDs   = affixIDs,
         affixFileIDs = affixFileIDs,
         affixNames = { "Fortified", "Peril", "Tyrannical" },  -- shortened (ShortenAffix)
-        affixNamesStr = "Fortified - Peril - Tyrannical",
+        affixNamesStr = "Fortified · Peril · Tyrannical",
         maxTime = maxTime,
         thresholds = MPT.ComputeThresholds(maxTime, true),  -- peril-correct (affix 152 above); never hardcode
         elapsed = 600,                          -- 10:00 in

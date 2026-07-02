@@ -71,6 +71,7 @@ MPT.run = {
     active = false, completed = false,
     mapID = nil, level = 0, affixIDs = {}, affixNames = {}, affixFileIDs = {},
     affixNamesStr = nil,
+    mapName = nil,        -- localized dungeon name (ShowDungeonName key row)
     maxTime = 0, thresholds = { plus1 = 0, plus2 = 0, plus3 = 0 },
     elapsed = 0, lastTickedSec = -1,
     deaths = 0, deathTimeLost = 0, deathLog = {},
@@ -291,7 +292,9 @@ local MPT_DEFAULTS = {
     AffixMode = "TEXT",         -- TEXT|ICON
     AffixColor = {0.69, 0.69, 0.69},
     ShowKeyLevel = true,
-    KeyColor = {0.69, 0.69, 0.69},
+    KeyColor = {1, 1, 1},
+    -- Appends the dungeon name to the key bracket ("+12 Nexus-Point Xenas").
+    ShowDungeonName = false,
 
     -- Enemy overlay (folded from the retired forces-overlay module).
     -- Nameplate per-mob forces % + enemy-tooltip count via
@@ -1103,7 +1106,11 @@ function MPT:CacheKeystoneInfo(level, affixIDs)
             run.affixFileIDs[i] = fileID
         end
     end
-    run.affixNamesStr = table.concat(run.affixNames, " - ")
+    run.affixNamesStr = table.concat(run.affixNames, " · ")
+    -- Dungeon name for the optional "+12 Name" key row (ShowDungeonName).
+    -- GetMapUIInfo's first return is the localized name — non-secret map
+    -- metadata (same call RepairRunInfo already uses for timeLimit).
+    run.mapName = (run.mapID and C_ChallengeMode.GetMapUIInfo(run.mapID)) or nil
     run.thresholds = MPT.ComputeThresholds(run.maxTime, HasPerilAffix(run.affixIDs))
 end
 
@@ -1295,6 +1302,7 @@ function MPT:ResetRun()
     wipe(run.affixNames)
     wipe(run.affixFileIDs)
     run.affixNamesStr = nil
+    run.mapName = nil
     wipe(run.objectives)
     run.thresholds = { plus1 = 0, plus2 = 0, plus3 = 0 }
     run.forces.current, run.forces.total, run.forces.percent, run.forces.completed = 0, 0, 0, false

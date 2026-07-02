@@ -624,7 +624,7 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
     -- Card 4: Affixes & Key (display toggles; colors live on the Display tab)
     local affixCard = GUIFrame:CreateCard(scrollChild, "Affixes & Key", yOffset)
     manager:Register(affixCard, "all")
-    local rowA1 = GUIFrame:CreateRow(affixCard.content, Theme.rowHeightLast)
+    local rowA1 = GUIFrame:CreateRow(affixCard.content, Theme.rowHeight)
     local affixCheck = GUIFrame:CreateCheckbox(rowA1, "Show Affixes", {
         value = db.ShowAffixes ~= false,
         callback = function(checked) db.ShowAffixes = checked; ApplySettings() end,
@@ -644,7 +644,16 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
     })
     rowA1:AddWidget(affixModeDrop, 1 / 3)
     manager:Register(affixModeDrop, "all")
-    affixCard:AddRow(rowA1, Theme.rowHeightLast, 0)
+    affixCard:AddRow(rowA1, Theme.rowHeight)
+
+    local rowA2 = GUIFrame:CreateRow(affixCard.content, Theme.rowHeightLast)
+    local dungeonNameCheck = GUIFrame:CreateCheckbox(rowA2, "Show Dungeon Name", {
+        value = db.ShowDungeonName == true,
+        callback = function(checked) db.ShowDungeonName = checked; ApplySettings() end,
+    })
+    rowA2:AddWidget(dungeonNameCheck, 1)
+    manager:Register(dungeonNameCheck, "all")
+    affixCard:AddRow(rowA2, Theme.rowHeightLast, 0)
     yOffset = affixCard:GetNextOffset()
 
     return yOffset
@@ -759,7 +768,7 @@ BuildDisplayTab = function(scrollChild, yOffset, db, manager)
     manager:Register(affixColors, "all")
     AddColorRow(affixColors, db, manager, ApplySettings, {
         { "Affix Text", "AffixColor", { 0.69, 0.69, 0.69 } },
-        { "Key Level",  "KeyColor",   { 0.69, 0.69, 0.69 } },
+        { "Key Level",  "KeyColor",   { 1, 1, 1 } },
     }, true)
     yOffset = affixColors:GetNextOffset()
 
