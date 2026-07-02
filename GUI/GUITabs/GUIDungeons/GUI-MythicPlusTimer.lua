@@ -240,7 +240,7 @@ BuildGeneralTab = function(scrollChild, yOffset, db, manager)
     manager:Register(scaleSlider, "all")
     layoutCard:AddRow(rowL, Theme.rowHeight)
 
-    local rowL2 = GUIFrame:CreateRow(layoutCard.content, Theme.rowHeightLast)
+    local rowL2 = GUIFrame:CreateRow(layoutCard.content, Theme.rowHeight)
     local wSlider = GUIFrame:CreateSlider(rowL2, "Bar Width", {
         min = 150, max = 500, step = 1, value = db.BarWidth or 300,
         callback = function(val) db.BarWidth = val; ApplySettings() end,
@@ -253,7 +253,16 @@ BuildGeneralTab = function(scrollChild, yOffset, db, manager)
     })
     rowL2:AddWidget(hSlider, 0.5)
     manager:Register(hSlider, "all")
-    layoutCard:AddRow(rowL2, Theme.rowHeightLast, 0)
+    layoutCard:AddRow(rowL2, Theme.rowHeight)
+
+    local rowL3 = GUIFrame:CreateRow(layoutCard.content, Theme.rowHeightLast)
+    local spacingSlider = GUIFrame:CreateSlider(rowL3, "Row Spacing", {
+        min = 0, max = 10, step = 1, value = db.RowSpacing or 2,
+        callback = function(val) db.RowSpacing = val; ApplySettings() end,
+    })
+    rowL3:AddWidget(spacingSlider, 0.5)
+    manager:Register(spacingSlider, "all")
+    layoutCard:AddRow(rowL3, Theme.rowHeightLast, 0)
     yOffset = layoutCard:GetNextOffset()
 
     -- Card 4: Thresholds (+3 / +2 / +1 chest timers — split out of Layout,

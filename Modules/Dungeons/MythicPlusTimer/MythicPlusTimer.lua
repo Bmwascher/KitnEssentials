@@ -219,6 +219,7 @@ local MPT_DEFAULTS = {
     -- Timer bar + thresholds
     BarTexture = "KitnUI",
     BarWidth = 275, BarHeight = 14,
+    RowSpacing = 2,   -- vertical gap between stacked HUD rows AND boss rows
     BarColor = {0.56, 0.56, 0.56},
     BarBackgroundColor = {0.031, 0.031, 0.031},  -- empty-track tint, both bars (#080808; fixed 0.8 alpha)
     StateColorFill = false,

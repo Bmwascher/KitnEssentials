@@ -1143,7 +1143,7 @@ function MPT:ApplyLayout()
 
     -- Locals shared by both the config section and the stacking pass below.
     local PAD  = 12
-    local ROW  = 2   -- tightened from 6 (2026-06-10 feedback: denser row spacing)
+    local ROW  = db.RowSpacing or 2   -- user slider (default 2 = the 2026-06-10 dense look)
     local barW = db.BarWidth  or 300
     local barH = db.BarHeight or 14
     local bars = self.frames.bars
@@ -1278,12 +1278,13 @@ function MPT:ApplyLayout()
     -- (the timer/forces targets re-hide on their own — those Render* run every
     -- tick). One bit; the boolean is stable except at that single transition.
     _sigBuf[14] = self:ShouldShowRecords() and 1 or 0
+    _sigBuf[15] = ROW
     local sig = table.concat(_sigBuf, ":")
     if f._keLayoutSig == sig then return end
     f._keLayoutSig = sig
 
     -- Publish the layout-cursor constants consumed by RenderObjectives (Task 3.2).
-    MPT._PAD, MPT._ROW_GAP, MPT._OBJ_GAP = PAD, ROW, 2
+    MPT._PAD, MPT._ROW_GAP, MPT._OBJ_GAP = PAD, ROW, ROW
     local y = -PAD
     local function row(fs, gap)
         if fs:IsShown() then
