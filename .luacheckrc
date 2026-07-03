@@ -148,6 +148,7 @@ read_globals = {
     "UnitCastingDuration", "UnitChannelDuration",
     "UnitEmpoweredChannelDuration",
     "UnitIsSpellTarget", "UnitSpellTargetName", "UnitSpellTargetClass",
+    "PlayerIsSpellTarget",
     "UnitShouldDisplaySpellTargetName",
     "C_CastingInfo",
 
@@ -173,7 +174,7 @@ read_globals = {
 
     -- Secret Values (12.0)
     "issecretvalue", "issecrettable", "canaccesstable", "canaccessvalue",
-    "C_CurveUtil", "C_DurationUtil",
+    "C_CurveUtil", "C_DurationUtil", "C_StringUtil",
     "C_Secrets", "C_RestrictedActions",
 
     -- Timer

@@ -42,6 +42,7 @@ local KETheme
 ---@class KE.Curves
 ---@field HealthMissingAlpha CurveObjectBase
 ---@field DurationDecimals CurveObjectBase
+---@field IsLongCast LuaCurveObject
 
 ---@class KE.FramePool
 local KE_FramePool = {}

@@ -28,3 +28,15 @@ KE.curves.HealthMissingAlpha:SetType(Enum.LuaCurveType.Step)
 KE.curves.HealthMissingAlpha:AddPoint(0, 1)
 KE.curves.HealthMissingAlpha:AddPoint(0.999, 1)
 KE.curves.HealthMissingAlpha:AddPoint(1, 0)
+
+-- Hides absurdly long NPC casts/channels (e.g. multi-day flavor channels
+-- like Extract Essence): alpha 1 while remaining <= 60s, 0 above. Evaluated
+-- via LuaDurationObject:EvaluateRemainingDuration so the secret duration
+-- never enters Lua; a plain-constant curve yields a plain result
+-- (SecretWhenCurveSecret). Consumers: TargetedSpells, DungeonCasts,
+-- CastbarHelpers.
+KE.curves.IsLongCast = C_CurveUtil.CreateCurve()
+KE.curves.IsLongCast:SetType(Enum.LuaCurveType.Linear)
+KE.curves.IsLongCast:AddPoint(0, 1)
+KE.curves.IsLongCast:AddPoint(60, 1)
+KE.curves.IsLongCast:AddPoint(60.001, 0)
