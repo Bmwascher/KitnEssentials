@@ -1404,9 +1404,12 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
     if bar._layoutKey ~= layoutKey then
         bar._layoutKey = layoutKey
 
-        -- Rank gutter: left-justified within a fixed slot (width scales with the
-        -- font) so the name to its right starts at a deterministic x.
-        local gutter = KE:PixelSnap((db.FontSize or 12) + 8)
+        -- Rank: content-sized (SetWidth 0 = natural width) so the name hugs the
+        -- number -- the old fixed alignment slot (sized for "40.") left a dead gap
+        -- after 1-digit ranks. Names on 1- vs 2-digit rank rows start a few px
+        -- apart; the tight read wins over column alignment (the Details!-style
+        -- look). The name's LEFT anchor tracks the FontString's live rect, so a
+        -- rank width change (9. -> 10.) reflows without a re-anchor.
         row.rank:ClearAllPoints()
         -- Anchor to the icon frame / ROW (not row.fill) so vertical centering
         -- survives BarThinLine mode (thin fill = bottom strip); identical to
@@ -1416,7 +1419,7 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         else
             row.rank:SetPoint("LEFT", row, "LEFT", 3, 0)
         end
-        row.rank:SetWidth(showRank and gutter or 1)
+        row.rank:SetWidth(0)
 
         -- Name: after the rank gutter when rank is shown, else after the icon,
         -- else flush at the row's left edge.
