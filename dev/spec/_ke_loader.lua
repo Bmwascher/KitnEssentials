@@ -184,4 +184,15 @@ function L.loadNicknames(overrides)
     return helpers.loadModule("Core/Nicknames.lua", KE)
 end
 
+-- Modules/Dungeons/TargetedSpells.lua pure helpers. Returns TS, KE.
+function L.loadTargetedSpells(overrides)
+    installMock(overrides, { C_Timer = inertTimer() })
+    local modules = helpers.installAddonShim()
+    _G.UIParent = noopFrame()
+    _G.LibStub = function() return nil end
+    local KE = { Print = function() end, curves = {} }
+    helpers.loadModule("Modules/Dungeons/TargetedSpells.lua", KE)
+    return modules["TargetedSpells"], KE
+end
+
 return L
