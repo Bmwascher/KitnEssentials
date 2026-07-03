@@ -104,12 +104,33 @@ function H.UnitIsRelevant(self)
     return true
 end
 
+-- Per-castbar cache of the out-of-range dim curve, keyed by the (plain)
+-- opacity setting. Rebuilt only when the GUI changes OutOfRangeOpacity;
+-- GetRangeOpacity runs every OnUpdate tick (<=33ms) while dimming, so no
+-- per-call allocation.
+function H.GetDimCurve(self, opacity)
+    if self.dimCurveOpacity ~= opacity then
+        local curve = C_CurveUtil.CreateCurve()
+        curve:SetType(Enum.LuaCurveType.Linear)
+        curve:AddPoint(0, opacity)
+        curve:AddPoint(60, opacity)
+        curve:AddPoint(60.001, 0)
+        self.dimCurve, self.dimCurveOpacity = curve, opacity
+    end
+    return self.dimCurve
+end
+
 -- Opt-in (FocusCastbar sets db.OutOfRangeOpacity). Returns `base` when in range or
--- when range can't be determined; returns the dimmed opacity scaled by `base` (base
--- is the long-cast suppression factor, plain 1/0) when the player's interrupt is
--- out of range of the tracked unit. Uses the cached interruptId as the range proxy
--- (matches AdvancedFocusCastBar). C_Spell.IsSpellInRange returns a plain
+-- when range can't be determined; returns the dimmed opacity when the player's
+-- interrupt is out of range of the tracked unit. Uses the cached interruptId as the
+-- range proxy (matches AdvancedFocusCastBar). C_Spell.IsSpellInRange returns a plain
 -- boolean/nil, so direct comparison is safe.
+-- `base` is the long-cast suppression factor: a SECRET number (0 or 1) from the
+-- cast's DurationObject, or plain 1. Secret numbers tolerate truth tests and
+-- alpha sinks but NEVER Lua arithmetic (in-game crash 2026-07-03), so the
+-- out-of-range dim is recomposed widget-side: the cached DurationObject is
+-- evaluated against an opacity-scaled curve (<=60s -> opacity, >60s -> 0)
+-- instead of multiplying opacity * base.
 function H.GetRangeOpacity(self, base)
     local opacity = self.db.OutOfRangeOpacity
     if not opacity or opacity >= 1 then return base end
@@ -118,7 +139,11 @@ function H.GetRangeOpacity(self, base)
     local inRange = C_Spell.IsSpellInRange(self.interruptId, self.unit)
     if inRange == nil then return base end
     if inRange == true then return base end
-    return opacity * base
+    local duration = self.cachedDuration
+    if duration then
+        return duration:EvaluateRemainingDuration(H.GetDimCurve(self, opacity))
+    end
+    return opacity
 end
 
 -- Important-spell glow. isImportant (C_Spell.IsSpellImportant) may be a SECRET
@@ -795,10 +820,11 @@ function H.StartCast(self)
     if type(notInterruptible) == "nil" then notInterruptible = false end
     self.notInterruptible = notInterruptible
 
-    -- Long-cast suppression: hide absurd multi-day NPC channels. Plain 1/0
-    -- (plain-constant curve -> plain result); threads through every alpha
-    -- writer below as the base so range-dimming and HideNotInterruptible
-    -- cannot resurrect a suppressed bar.
+    -- Long-cast suppression: hide absurd multi-day NPC channels. The evaluated
+    -- factor is a SECRET number (0 or 1) — in-game confirmed 2026-07-03 — legal
+    -- in truth tests ("or 1") and alpha sinks, never arithmetic; GetRangeOpacity
+    -- recomposes the out-of-range dim via an opacity-scaled curve instead of
+    -- multiplying.
     if duration then
         self.longCastAlpha = duration:EvaluateRemainingDuration(KE.curves.IsLongCast)
     else

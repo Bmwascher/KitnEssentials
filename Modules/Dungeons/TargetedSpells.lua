@@ -20,7 +20,8 @@ local function dbg(...)
     if DEBUG_TS then KE:Print("|cff88ccff[TS]|r", ...) end
 end
 
--- Delve difficultyID — verified in Task 5 step 5 (in-game probe + .wow-api-reference).
+-- Delve difficultyID — probe-confirmed in-game 2026-07-03 (Collegiate
+-- Calamity delve: instanceType "scenario", difficultyID 208).
 TS.DELVE_DIFFICULTY_ID = 208
 
 ---------------------------------------------------------------------------------
