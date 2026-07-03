@@ -87,6 +87,7 @@ function H.ResetCastState(self)
     self.castID, self.spellID, self.spellName = nil, nil, nil
     self.notInterruptible = nil
     self.cachedDuration = nil
+    self.longCastAlpha = nil
     self.isImportant = nil
     H.CancelKickReadyTimer(self, "ResetCastState")
     H.HideKickTick(self)
@@ -104,9 +105,10 @@ function H.UnitIsRelevant(self)
 end
 
 -- Opt-in (FocusCastbar sets db.OutOfRangeOpacity). Returns `base` when in range or
--- when range can't be determined; returns the dimmed opacity when the player's
--- interrupt is out of range of the tracked unit. Uses the cached interruptId as the
--- range proxy (matches AdvancedFocusCastBar). C_Spell.IsSpellInRange returns a plain
+-- when range can't be determined; returns the dimmed opacity scaled by `base` (base
+-- is the long-cast suppression factor, plain 1/0) when the player's interrupt is
+-- out of range of the tracked unit. Uses the cached interruptId as the range proxy
+-- (matches AdvancedFocusCastBar). C_Spell.IsSpellInRange returns a plain
 -- boolean/nil, so direct comparison is safe.
 function H.GetRangeOpacity(self, base)
     local opacity = self.db.OutOfRangeOpacity
@@ -116,7 +118,7 @@ function H.GetRangeOpacity(self, base)
     local inRange = C_Spell.IsSpellInRange(self.interruptId, self.unit)
     if inRange == nil then return base end
     if inRange == true then return base end
-    return opacity
+    return opacity * base
 end
 
 -- Important-spell glow. isImportant (C_Spell.IsSpellImportant) may be a SECRET
@@ -793,7 +795,17 @@ function H.StartCast(self)
     if type(notInterruptible) == "nil" then notInterruptible = false end
     self.notInterruptible = notInterruptible
 
-    local shownAlpha = H.GetRangeOpacity(self, 1)
+    -- Long-cast suppression: hide absurd multi-day NPC channels. Plain 1/0
+    -- (plain-constant curve -> plain result); threads through every alpha
+    -- writer below as the base so range-dimming and HideNotInterruptible
+    -- cannot resurrect a suppressed bar.
+    if duration then
+        self.longCastAlpha = duration:EvaluateRemainingDuration(KE.curves.IsLongCast)
+    else
+        self.longCastAlpha = nil
+    end
+
+    local shownAlpha = H.GetRangeOpacity(self, self.longCastAlpha or 1)
     if self.db.HideNotInterruptible then
         self.frame:SetAlphaFromBoolean(notInterruptible, 0, shownAlpha)
     else
@@ -903,7 +915,7 @@ function H.UpdateInterruptible(self)
         -- (OnUpdate would re-dim within ~33ms, but that one-frame flash is visible).
         -- GetRangeOpacity returns a plain number (1 when the feature is off / on
         -- TargetCastbar), so this is a no-op there and secret-safe via SetAlphaFromBoolean.
-        self.frame:SetAlphaFromBoolean(notInterruptible, 0, H.GetRangeOpacity(self, 1))
+        self.frame:SetAlphaFromBoolean(notInterruptible, 0, H.GetRangeOpacity(self, self.longCastAlpha or 1))
     end
 
     H.UpdateKickIndicator(self, nil)
@@ -1057,7 +1069,7 @@ function H.OnUpdate(self, elapsed)
     -- alpha, preserving the HideNotInterruptible behavior (notInterruptible may be
     -- a secret boolean -> SetAlphaFromBoolean is secret-safe).
     if hasActiveCast and self.db.OutOfRangeOpacity and self.db.OutOfRangeOpacity < 1 then
-        local shownAlpha = H.GetRangeOpacity(self, 1)
+        local shownAlpha = H.GetRangeOpacity(self, self.longCastAlpha or 1)
         if self.db.HideNotInterruptible and self.notInterruptible ~= nil then
             self.frame:SetAlphaFromBoolean(self.notInterruptible, 0, shownAlpha)
         else
