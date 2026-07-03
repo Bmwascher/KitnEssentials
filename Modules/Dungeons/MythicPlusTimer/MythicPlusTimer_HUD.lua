@@ -79,7 +79,7 @@ local TIMER_SEP_GAP = 3
 local TIMER_PB_GAP = 8
 
 -- Gap (px) between the race-line label ("+2 Chest (26:24):") and the value's
--- reserved worst-case box ("28:88") — the label pins LEFT of the box so the
+-- reserved worst-case box ("24:58") — the label pins LEFT of the box so the
 -- per-second countdown never re-flows it.
 local RACE_VAL_GAP = 4
 
@@ -1375,11 +1375,11 @@ function MPT:ApplyLayout()
         f.timerMeasureText:SetText(tpl)
         f._timerResW = (f.timerMeasureText:GetStringWidth() or 0) + sepGaps * TIMER_SEP_GAP
 
-        -- Race-line value reservation: "28:88" is the per-position-widest
-        -- string a value can render — the +3 countdown never exceeds 25:00
-        -- (user cap 2026-07-03), so the tens-of-minutes glyph caps at "2";
-        -- "8" is the widest-digit stand-in elsewhere. Kept tight so the
-        -- label sits as close as the worst case allows. Signed overshoots
+        -- Race-line value reservation: "24:58" is the widest REAL time a
+        -- value can render — the +3 countdown never exceeds 25:00 (user cap
+        -- 2026-07-03), seconds never pass :59, and the remaining positions
+        -- take the widest digit validity allows. Kept tight so the label
+        -- sits as close as the worst case allows. Signed overshoots
         -- ("+9:59") still fit — "+" is no wider than "2"; a locked
         -- completion 10+ min past the cutoff may graze the gap (accepted).
         -- The label FS pins LEFT of this box, so the per-second countdown
@@ -1387,7 +1387,7 @@ function MPT:ApplyLayout()
         -- hidden ruler: measuring on the live value FS would flash the
         -- template for a tick after every settings change.
         applyFont(f.raceMeasureText, "Threshold")
-        f.raceMeasureText:SetText("28:88")
+        f.raceMeasureText:SetText("24:58")
         f._raceValResW = f.raceMeasureText:GetStringWidth() or 0
 
         -- Bar sizes, HUD anchor, scale, backdrop recolor.
