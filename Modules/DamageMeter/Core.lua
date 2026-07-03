@@ -77,12 +77,177 @@ for i = 1, 40 do _raidUnits[i] = "raid" .. i end
 for i = 1, 4 do _partyUnits[i] = "party" .. i end
 
 ---------------------------------------------------------------------------------
+-- Module-owned defaults (MPT pattern)
+--
+-- Canonical defaults for KE.db.profile.DamageMeter, seeded by DM:UpdateDB --
+-- Core/Defaults.lua carries NO DamageMeter section (this table is the single
+-- source of truth, mirroring MythicPlusTimer's MPT_DEFAULTS). Values equal to
+-- the old AceDB-registered defaults were stripped from SavedVariables at
+-- logout, so the seed below re-materializes them as real persisted values on
+-- the first login with this build; user-changed values survive untouched
+-- (saved[k] ~= nil is never overwritten). No Enum references needed here --
+-- the Windows/Dock layout seed stays in OnEnable (it reads Enum at runtime).
+---------------------------------------------------------------------------------
+
+local function DeepCopy(src)
+    if type(src) ~= "table" then return src end
+    local dst = {}
+    for k, v in pairs(src) do dst[k] = DeepCopy(v) end
+    return dst
+end
+
+-- Recursive missing-key fill: a defaults key absent from the saved section is
+-- deep-copied in; when BOTH sides are tables, recurse. This mirrors what
+-- AceDB's copyDefaults did at every login while these defaults were still
+-- registered in Core/Defaults.lua -- which is LOAD-BEARING for migration: the
+-- v3.0.x releases shipped registered defaults, and AceDB's logout-time
+-- removeDefaults stripped default-equal leaves and DELETED nested tables that
+-- became empty. Real v3.0.x SavedVariables therefore carry holes like
+-- Dock.Columns[1] = nil (the shipped layout's column 1 equals the default)
+-- and Position tables with offsets but no anchors (EditMode drags preserve
+-- anchors, so they matched the default and were stripped). A top-level-only
+-- fill would skip those non-nil parent tables and window 1 / the dock anchor
+-- would silently break on the first login after this build. Never overwrites
+-- a non-nil leaf, so user-set values and user-restructured arrays (the
+-- structural editors always write dense arrays) are untouched.
+local function FillMissing(saved, defaults)
+    for k, v in pairs(defaults) do
+        if type(v) == "table" and type(saved[k]) == "table" then
+            FillMissing(saved[k], v)
+        elseif saved[k] == nil then
+            saved[k] = DeepCopy(v)
+        end
+    end
+end
+
+local DM_DEFAULTS = {
+    Enabled = true,
+    Locked = true,              -- when true, disables EditMode drag of the dock
+    RefreshRate = 0.5,
+    UIBudgetMs = 1.2,
+    MaxWindows = 5,
+    AlwaysShowSelf = false,     -- pin the player to the last visible slot when off-list
+                                -- (role-relevant views only -- Window.lua PIN_ROLES)
+
+    -- Visibility conditions (independent; ALL enabled conditions must pass for the
+    -- meter to show). GUI preview / EditMode always force-show regardless.
+    HideOutOfCombat = false,    -- show only while the player/group is in combat
+    OnlyInInstances = false,    -- show only inside a dungeon / raid / arena / BG / scenario
+
+    -- Bar appearance (flat, KE convention)
+    BarHeight = 23,
+    BarSpacing = 1,
+    Width = 212,
+    StatusBarTexture = "KitnUI",
+    FontFace = "Expressway",
+    FontSize = 14,              -- bar row text size
+    HeaderFontSize = 14,        -- window header text size (independent of the bar text)
+    FontOutline = "SLUG,OUTLINE",
+    ShowRank = false,
+    ShowIcon = true,
+    ShowName = true,
+    ShowRealm = false,          -- false: strip the "-Realm" suffix from cross-realm names
+    UseNicknames = true,        -- show saved nicknames (Custom Nicknames) in place of bar names
+    ClassColorName = false,
+    -- Number Format (replaces the old ShowPerSec boolean): "Both" = amount | dps,
+    -- "Amount" = amount only, "PerSec" = rate only.
+    NumberFormat = "Both",
+    ShowPercent = false,
+    VisibleBars = 9,
+
+    -- Bar fill color: "Class" (per-source class color), "Custom" (BarColor),
+    -- "Theme" (the theme accent color). BarColorAlpha is the fill opacity (0..1).
+    BarColorMode = "Class",
+    BarColor = { 0.302, 0.549, 0.851 },   -- #4D8CD9 (used when BarColorMode = "Custom")
+    BarColorAlpha = 1,
+    -- Bar text color: the value column always; the name column when NOT class-tinted.
+    BarTextColor = { 1, 1, 1 },
+    -- Thin-line bar style: the colored fill is a thin strip (BarThinLineHeight px)
+    -- pinned to the row's bottom edge instead of the full row; the icon + text
+    -- stay full size.
+    BarThinLine = false,
+    BarThinLineHeight = 2,
+
+    -- Header bar: the meter-type glyph beside the title (ShowTypeIcon) and the
+    -- settings / reset / segment action buttons (ShowHeaderIcons + its mouseover-
+    -- reveal). Independent toggles -- the glyph is informational, the buttons are
+    -- the Phase 4 detail-surface controls.
+    ShowTypeIcon = false,
+    ShowHeaderIcons = true,
+    HeaderIconsMouseover = true,
+    ShowCombatClock = false,    -- fight-length clock "[M:SS]" on window 1's header
+    DetailMaxRows = 40,
+
+    -- Hover quick-peek tooltip (Phase 4b) -- hover a bar -> floating breakdown/recap
+    HoverTooltip = true,
+    -- Phase 4c: "smart" (auto side, away from the nearer screen edge) | "bar"
+    -- (above the hovered bar) | "left" / "right" (beside the meter) | "center".
+    HoverTooltipAnchor = "smart",
+
+    -- Shared backdrop (flat); arrangement is owned by Dock below
+    BackdropEnabled = true,                     -- off: windows render with no wrapping bg/border
+    BackdropBorderStyle = "neutral",            -- neutral | accent | theme
+    BackdropBorderColor = { 0, 0, 0, 1 },        -- solid black
+    BackdropColor = { 0.031, 0.031, 0.031, 0.8 }, -- #080808 @ 80% opacity
+    BackdropPadding = 1,
+    Strata = "MEDIUM",
+    Position = {
+        AnchorFrom = "BOTTOMRIGHT",
+        AnchorTo = "BOTTOMRIGHT",
+        XOffset = -3,
+        YOffset = 3,
+    },
+
+    -- Dock layout (structured: no flat equivalent)
+    Dock = {
+        Columns = {
+            { WidthRatio = 1, Windows = { 1 }, RowRatios = { 1 } },
+        },
+    },
+
+    -- Per-window per-context configs (structured); inherit Default unless present.
+    -- [i] = { Contexts = { Default = { Enabled, MeterType, SessionType }, ... } }
+    Windows = {},
+
+    -- Internal segment-token bookkeeping for the in-world view selector
+    -- (Selector.lua). _SegSerial is a persisted monotonic counter bumped at
+    -- each combat-segment boundary (boss pull / new instance / keystone); a
+    -- window's ViewOverride is tagged with it and clears when it changes.
+    -- _SegContext (written at runtime, also persisted) is the last segment's
+    -- content context, compared to tell a real context change from a
+    -- /reload-in-place. Not user settings.
+    _SegSerial = 0,
+
+    HistoryRetain = 20,
+    DeathCap = 50,
+}
+
+---------------------------------------------------------------------------------
 -- DB Helper
+--
+-- Seeds KE.db.profile.DamageMeter from DM_DEFAULTS via the RECURSIVE
+-- FillMissing above (NOT a top-level-only fill -- see its migration note; MPT's
+-- top-level seed doesn't transfer because MPT never had AceDB-registered
+-- defaults whose stripped SVs need deep refilling), then binds self.db.
+-- NAME IS LOAD-BEARING: ProfileManager:RefreshAllModules duck-types
+-- `module.UpdateDB` and re-runs this on every profile switch/copy/reset,
+-- re-seeding the new profile's section and re-binding self.db. Do not rename.
 ---------------------------------------------------------------------------------
 
 function DM:UpdateDB()
-    self.db = KE.db.profile.DamageMeter
+    local profile = KE.db.profile
+    if type(profile.DamageMeter) ~= "table" then
+        profile.DamageMeter = {}
+    end
+    FillMissing(profile.DamageMeter, DM_DEFAULTS)
+    self.db = profile.DamageMeter
 end
+
+-- Busted seam (dev/spec/dm_defaults_spec.lua): expose the real seed helper as
+-- a static so the headless spec exercises the actual body -- the migration
+-- refill semantics above are exactly the class of behavior worth pinning.
+-- Inert in-game (nothing reads this key; internal callers use the local).
+DM.FillMissingDefaults = FillMissing
 
 ---------------------------------------------------------------------------------
 -- Live settings apply
@@ -113,10 +278,12 @@ end
 ---------------------------------------------------------------------------------
 -- Blizzard meter replacement
 --
--- When ReplaceBlizzard is on, suppress Blizzard's built-in damage meter via the
--- damageMeterEnabled CVar ("0" = off). When off, restore it ("1"). Guarded +
--- pcall'd: the CVar is settable in combat, but a future Blizzard rename must not
--- throw. Confirmed in the Phase 0 dry-run as the disable CVar.
+-- Suppress Blizzard's built-in damage meter via the damageMeterEnabled CVar
+-- ("0" = off) while KE's meter is enabled; restore it ("1") on disable.
+-- Unconditional (no DB toggle -- the vestigial ReplaceBlizzard default was
+-- dropped in the module-owned defaults move). Guarded + pcall'd: the CVar is
+-- settable in combat, but a future Blizzard rename must not throw. Confirmed
+-- in the Phase 0 dry-run as the disable CVar.
 ---------------------------------------------------------------------------------
 
 function DM:ApplyReplaceBlizzard()
