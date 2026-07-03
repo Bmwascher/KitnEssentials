@@ -80,8 +80,9 @@ local TIMER_PB_GAP = 8
 
 -- Gap (px) between the race-line label ("+2 Chest (26:24):") and the value's
 -- reserved worst-case box ("24:58") — the label pins LEFT of the box so the
--- per-second countdown never re-flows it.
-local RACE_VAL_GAP = 4
+-- per-second countdown never re-flows it. (4 -> 2, 2026-07-03 live feedback:
+-- the label sat a touch too far from the countdown.)
+local RACE_VAL_GAP = 2
 
 ---------------------------------------------------------------------------------
 -- Gating helpers (module functions — not methods; take widget explicitly)
