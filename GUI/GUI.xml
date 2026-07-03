@@ -67,6 +67,7 @@
     <Script file="GUITabs\GUIClassUtilities\GUI-HuntersMark.lua" />
     <Script file="GUITabs\GUIClassUtilities\GUI-SpellAlerts.lua" />
     <Script file="GUITabs\GUIClassUtilities\GUI-BurningRush.lua" />
+    <Script file="GUITabs\GUIClassUtilities\GUI-PIMacroBuilder.lua" />
 
     <!-- Utilities tabs -->
     <Script file="GUITabs\GUIUtilities\GUI-PlayerAbsorbs.lua" />
@@ -75,15 +76,13 @@
     <Script file="GUITabs\GUIUtilities\GUI-TimeSpiral.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-Recuperate.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-WorldMarkerCycler.lua" />
-    <Script file="GUITabs\GUIUtilities\GUI-FocusMarker.lua" />
-    <Script file="GUITabs\GUIUtilities\GUI-PIMacroBuilder.lua" />
-    <Script file="GUITabs\GUIUtilities\GUI-MacroBuilders.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-PotionReady.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-ReadyCheckConsumables.lua" />
 
     <!-- Dungeons tabs -->
     <Script file="GUITabs\GUIDungeons\GUI-DungeonCasts.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-EnemyCounter.lua" />
+    <Script file="GUITabs\GUIDungeons\GUI-FocusMarker.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-DeathNotifications.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-MythicPlusTimer.lua" />
 

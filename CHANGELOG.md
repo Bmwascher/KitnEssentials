@@ -28,6 +28,9 @@
 - **Fixed:** The enemy overlay showed the raw progress fraction as the forces percent ("0.02%" instead of "2.47%") on nameplates and the tooltip Count line — both now display the game's pre-formatted percent
 - Config page polish: bar color controls grey out while their bar is hidden, Count Brackets enables only for count-bearing formats, and the tooltip toggle now leads the Overlay tab
 
+### GUI
+- The combined Macro Builders page split into standalone pages — Power Infusion Macro now lives under Class Utilities ("Priest: Power Infusion Macro") and Focus Marker under Dungeon & Party Utilities. Settings carry over unchanged
+
 ---
 
 ## v3.0.3
