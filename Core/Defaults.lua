@@ -1512,6 +1512,7 @@ local Defaults = {
             UIBudgetMs = 1.2,
             MaxWindows = 5,
             AlwaysShowSelf = false,     -- pin the player to the last visible slot when off-list
+                                        -- (role-relevant views only -- Window.lua PIN_ROLES)
 
             -- Visibility conditions (independent; ALL enabled conditions must pass for the
             -- meter to show). GUI preview / EditMode always force-show regardless.

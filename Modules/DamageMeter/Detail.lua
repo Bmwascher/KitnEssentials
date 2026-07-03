@@ -1482,12 +1482,19 @@ function DM:PopulateHoverTip(W, bar)
         -- Breakdown path: show the column-header row and push the data rows down past it.
         -- Reserve scales with the now-larger (size-1) white headers so big fonts can't overlap row 1.
         bodyTop = math_max(TIP_COL_HDR_H, (size or 12) + 2)
+        -- Count-type views (Interrupts / Dispels / Absorbs -- absent from RATE_METER_TYPES)
+        -- have no meaningful per-second: drop the DPS column entirely (parity with the main
+        -- bars, which drop the rate half of the value string). The Amount column slides
+        -- right into the vacated DPS slot so the two remaining columns stay packed and the
+        -- spell name gains the width.
+        local isRate = (self.RATE_METER_TYPES and self.RATE_METER_TYPES[meterType]) == true
+        local amtX = isRate and TIP_AMT_X or TIP_DPS_X
         if _tip.colHdr then
             local hdrY = -(headerH)
             _tip.colHdr.spell:ClearAllPoints()
             _tip.colHdr.spell:SetPoint("TOPLEFT", _tip, "TOPLEFT", TIP_PAD, hdrY)
             _tip.colHdr.amount:ClearAllPoints()
-            _tip.colHdr.amount:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", TIP_AMT_X, hdrY)
+            _tip.colHdr.amount:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", amtX, hdrY)
             -- Re-apply the Spell label's right-stop (ClearAllPoints above dropped the
             -- build-time TOPRIGHT) so it stays bounded by the Amount column's left edge.
             _tip.colHdr.spell:SetPoint("TOPRIGHT", _tip.colHdr.amount, "TOPLEFT", -3, 0)
@@ -1497,7 +1504,8 @@ function DM:PopulateHoverTip(W, bar)
             _tip.colHdr.pct:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", TIP_PCT_X, hdrY)
             -- Reset the Spell label (the EnemyDamageTaken branch retitles it "Player").
             _tip.colHdr.spell:SetText("Spell")
-            _tip.colHdr.spell:Show(); _tip.colHdr.amount:Show(); _tip.colHdr.dps:Show(); _tip.colHdr.pct:Show()
+            _tip.colHdr.spell:Show(); _tip.colHdr.amount:Show(); _tip.colHdr.pct:Show()
+            if isRate then _tip.colHdr.dps:Show() else _tip.colHdr.dps:Hide() end
         end
 
         -- Fill max = the top MERGED row's total (a merged melee line can exceed the API's
@@ -1538,10 +1546,11 @@ function DM:PopulateHoverTip(W, bar)
 
                 -- Per-path column anchors. The row pool is shared with the recap branch,
                 -- which re-anchors row.value to the full right edge (-TIP_PAD); re-pin the
-                -- three numeric columns to their fixed offsets here so a breakdown render
-                -- after a recap render restores the aligned-column layout.
+                -- numeric columns to their fixed offsets here so a breakdown render after
+                -- a recap render restores the aligned-column layout. Amount sits at amtX:
+                -- the usual slot on rate types, the DPS slot on count types (DPS dropped).
                 row.value:ClearAllPoints()
-                row.value:SetPoint("RIGHT", row.fill, "RIGHT", TIP_AMT_X, 0)
+                row.value:SetPoint("RIGHT", row.fill, "RIGHT", amtX, 0)
                 row.dps:ClearAllPoints()
                 row.dps:SetPoint("RIGHT", row.fill, "RIGHT", TIP_DPS_X, 0)
                 row.pct:ClearAllPoints()
@@ -1581,11 +1590,16 @@ function DM:PopulateHoverTip(W, bar)
 
                 -- DPS column: per-second value from spell.amountPerSecond, sanitized to a
                 -- plain number exactly like amtPlain before FormatBarValue (which itself is
-                -- AllowedWhenTainted / secret-safe). No bare math on the raw value.
-                local ps = spell.amountPerSecond
-                if issecretvalue(ps) or type(ps) ~= "number" then ps = 0 end
-                local dpsStr = (self.FormatBarValue and select(1, self.FormatBarValue(ps, nil, false))) or ""
-                row.dps:SetText(dpsStr)
+                -- AllowedWhenTainted / secret-safe). No bare math on the raw value. Count
+                -- types (isRate false) leave the column empty -- a rate on a count is noise.
+                if isRate then
+                    local ps = spell.amountPerSecond
+                    if issecretvalue(ps) or type(ps) ~= "number" then ps = 0 end
+                    local dpsStr = (self.FormatBarValue and select(1, self.FormatBarValue(ps, nil, false))) or ""
+                    row.dps:SetText(dpsStr)
+                else
+                    row.dps:SetText("")
+                end
 
                 -- % column: share of this source's total (gated on canPercent; arithmetic
                 -- runs on the sanitized amtPlain / guarded total only).
