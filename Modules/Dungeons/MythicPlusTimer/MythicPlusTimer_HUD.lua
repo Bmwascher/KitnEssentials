@@ -79,9 +79,10 @@ local TIMER_SEP_GAP = 3
 local TIMER_PB_GAP = 8
 
 -- Gap (px) between the race-line label ("+2 Chest (26:24):") and the value's
--- reserved worst-case box ("24:58") — the label pins LEFT of the box so the
--- per-second countdown never re-flows it. (4 -> 2, 2026-07-03 live feedback:
--- the label sat a touch too far from the countdown.)
+-- reserved box — the label pins LEFT of the box so the per-second countdown
+-- never re-flows it. The box follows the value's digit shape (re-measured
+-- once per crossing in ApplyLayout), so this gap is the WHOLE visible gap.
+-- (4 -> 2, 2026-07-03 live feedback: hug the countdown.)
 local RACE_VAL_GAP = 2
 
 ---------------------------------------------------------------------------------
@@ -795,6 +796,7 @@ function MPT:RenderThresholds()
             if not tier then
                 self.SetTextGated(f0.raceLineText, ""); f0.raceLineText:Hide()
                 self.SetTextGated(f0.raceLineValueText, ""); f0.raceLineValueText:Hide()
+                f0._raceValShape = nil
             else
                 local col
                 if state == "RACING" then          col = db.SplitAheadColor   or { 0.25, 0.88, 0.82 }
@@ -814,9 +816,16 @@ function MPT:RenderThresholds()
                 self.SetTextGated(f0.raceLineText, format("%s (%s):", label, _FmtShort(cutoff)))
                 self.SetColorGated(f0.raceLineText, 0.85, 0.85, 0.85)
                 f0.raceLineText:Show()
-                self.SetTextGated(f0.raceLineValueText, sign .. _FmtShort(value))
+                local valStr = sign .. _FmtShort(value)
+                self.SetTextGated(f0.raceLineValueText, valStr)
                 self.SetColorGated(f0.raceLineValueText, col[1], col[2], col[3])
                 f0.raceLineValueText:Show()
+                -- Publish the value's digit SHAPE ("9:48" -> "8:88") for the
+                -- layout pass's reservation. The label re-anchors only when
+                -- the shape changes (a digit-count crossing or sign flip —
+                -- minute-scale events), so it hugs the countdown at
+                -- RACE_VAL_GAP without riding the per-second width.
+                f0._raceValShape = valStr:gsub("%d", "8")
             end
         end
         return
@@ -824,6 +833,7 @@ function MPT:RenderThresholds()
     if f0 and f0.raceLineText then
         self.SetTextGated(f0.raceLineText, ""); f0.raceLineText:Hide()
         self.SetTextGated(f0.raceLineValueText, ""); f0.raceLineValueText:Hide()
+        f0._raceValShape = nil
     end
     local maxTime = run.maxTime or 0
     if maxTime <= 0 then
@@ -1376,20 +1386,19 @@ function MPT:ApplyLayout()
         f.timerMeasureText:SetText(tpl)
         f._timerResW = (f.timerMeasureText:GetStringWidth() or 0) + sepGaps * TIMER_SEP_GAP
 
-        -- Race-line value reservation: "24:58" is the widest REAL time a
-        -- value can render — the +3 countdown never exceeds 25:00 (user cap
-        -- 2026-07-03), seconds never pass :59, and the remaining positions
-        -- take the widest digit validity allows. Kept tight so the label
-        -- sits as close as the worst case allows. Signed overshoots
-        -- ("+9:59") still fit — "+" is no wider than "2"; a locked
-        -- completion 10+ min past the cutoff may graze the gap (accepted).
-        -- The label FS pins LEFT of this box, so the per-second countdown
-        -- never re-flows it — same reservation-tuck as the PB text. Own
-        -- hidden ruler: measuring on the live value FS would flash the
+        -- Race-line value reservation SEED: "24:58" is the widest REAL time
+        -- a value can render — the +3 countdown never exceeds 25:00 (user
+        -- cap 2026-07-03), seconds never pass :59. This is only the
+        -- pre-first-render fallback: the stacking pass re-measures the box
+        -- against the value's live digit shape (published by
+        -- RenderThresholds) so the label hugs the countdown instead of
+        -- sitting a dead digit away whenever the race drops under 10:00.
+        -- Own hidden ruler: measuring on the live value FS would flash the
         -- template for a tick after every settings change.
         applyFont(f.raceMeasureText, "Threshold")
         f.raceMeasureText:SetText("24:58")
         f._raceValResW = f.raceMeasureText:GetStringWidth() or 0
+        f._raceValShapeMeasured = nil  -- font changed: live-shape width is stale
 
         -- Bar sizes, HUD anchor, scale, backdrop recolor.
         f:SetWidth(barW + PAD * 2)
@@ -1506,6 +1515,10 @@ function MPT:ApplyLayout()
     _sigBuf[16] = db.ThresholdPlacement or "EDGE"
     _sigBuf[17] = #(f.raceLineText:GetText() or "")   -- collapse/lock transitions restack
     _sigBuf[18] = (db.ShowForcesBar == false) and 0 or 1
+    -- Race value shape ("8:88"/"88:88"/"+8:88"): digit-count crossings and
+    -- sign flips re-run the stack so the label re-anchors to the re-measured
+    -- reservation (shape-following box; see the race-line row below).
+    _sigBuf[19] = f._raceValShape or ""
     local sig = table.concat(_sigBuf, ":")
     if f._keLayoutSig == sig then return end
     f._keLayoutSig = sig
@@ -1566,9 +1579,17 @@ function MPT:ApplyLayout()
     -- BELOW reserves under the bar via bars._belowPad instead.
     -- Race-line row: split like the timer row — the changing countdown value
     -- is right-pinned at the frame edge, and the static label pins LEFT of
-    -- the value's reserved worst-case box (f._raceValResW, config pass), so
-    -- the per-second re-measure never moves the label.
+    -- the value's reserved box, so the per-second re-measure never moves the
+    -- label. The box follows the value's digit SHAPE (sig term 19 re-runs
+    -- this pass on shape changes): re-measured here, once per crossing —
+    -- gated-pass timing, never per-tick.
     if LinesModeActive(db) and f.raceLineText:IsShown() then
+        local shape = f._raceValShape
+        if shape and shape ~= f._raceValShapeMeasured then
+            f._raceValShapeMeasured = shape
+            f.raceMeasureText:SetText(shape)
+            f._raceValResW = f.raceMeasureText:GetStringWidth() or 0
+        end
         f.raceLineValueText:ClearAllPoints()
         f.raceLineValueText:SetPoint("TOPRIGHT", f, "TOPRIGHT", -PAD, y)
         f.raceLineText:ClearAllPoints()
