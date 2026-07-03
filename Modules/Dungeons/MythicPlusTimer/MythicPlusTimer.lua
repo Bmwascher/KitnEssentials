@@ -535,7 +535,8 @@ function MPT:UpdateObjectives()
                 -- Reload survival: reuse the persisted split only when it
                 -- belongs to THIS run (identity-stamped "mapID:level"). A
                 -- stale cache from another key must never back-stamp — see
-                -- ResetRun's hoisted clear for the cross-session leak path.
+                -- CHALLENGE_MODE_START's staleness wipe for the
+                -- cross-session leak path.
                 local cache = MPT.db._activeRunSplits
                 local runKey = MPT.BuildSplitKey(run.mapID, run.level)
                 local saved = cache and cache.key == runKey and cache[objIdx]
@@ -777,10 +778,13 @@ function MPT:RecordDeath(guid, knownName, knownUnit)
         class = class,
     }
     -- Reload/DC survival: persist the log write-through (same lifecycle as
-    -- _activeRunSplits — cleared by ResetRun's hoisted block + CompleteRun).
-    -- mapID-only identity is sufficient: any same-dungeon RE-run passes
-    -- through a clear first; only a reload-recovery StartRun sees the cache
-    -- alive. (No composite level key — unlike splits there is no level-keyed
+    -- _activeRunSplits — cleared by CHALLENGE_MODE_START's staleness wipe,
+    -- CHALLENGE_MODE_RESET, and CompleteRun; a mid-key walk-out SPARES it so
+    -- re-entry restores). mapID-only identity is sufficient: any genuinely
+    -- new same-dungeon run passes through the START wipe first, so only a
+    -- recovery StartRun (reload, DC, or walk-back-in) sees the cache alive —
+    -- and the restore is reconcile-trimmed against GetDeathCount right after.
+    -- (No composite level key — unlike splits there is no level-keyed
     -- store to poison, and the level-0 API race would drop the restore.)
     -- cache.log shares table identity with run.deathLog, so later appends and
     -- the OnDeathCountUpdated reconcile-trim persist for free.
@@ -1033,6 +1037,14 @@ function MPT:PLAYER_ENTERING_WORLD()
 end
 
 function MPT:CHALLENGE_MODE_START()
+    -- New-key staleness boundary: this event NEVER fires for a reload or
+    -- mid-key re-entry (those recover through CheckForActiveRun), so it owns
+    -- the wipe of the run-recovery caches that the location-gated ResetRun
+    -- paths deliberately spare (a mid-key walk-out keeps them so re-entry can
+    -- restore splits + death log). Also covers the logout-outside-mid-key
+    -- cross-session leak the old ResetRun hoisted clear used to catch.
+    self.db._activeRunSplits = nil
+    self.db._activeRunDeaths = nil
     -- A genuinely new key replaces any lingering completed summary (completed
     -- state otherwise survives until the player leaves the instance).
     if self.run.completed then self:ResetRun() end
@@ -1093,7 +1105,11 @@ function MPT:WORLD_STATE_TIMER_STOP()
     -- Completed gate: the M+ world timer stops AT completion — without it
     -- this wipes the frozen summary + fanfare tracker suppression seconds
     -- after every finish (ResetRun's guard deliberately admits completed runs).
-    if not self.run.active and not self.run.completed then self:ResetRun() end
+    -- keepCaches: at a mid-key walk-out this event can trail the PEW reset
+    -- (run already inert) — it must not wipe the recovery caches that path
+    -- spared. Cache staleness is owned by CHALLENGE_MODE_START / _RESET /
+    -- CompleteRun.
+    if not self.run.active and not self.run.completed then self:ResetRun(true) end
 end
 
 -- Auto-insert keystone when the font of power receptacle opens (Task 5.1).
@@ -1246,8 +1262,9 @@ function MPT:StartRun()
     wipe(run.deathLog); _prevDeathCount = 0; wipe(_partyAlive); ScanPartyAlive()
     -- Reload/DC survival for the hover death log: restore the persisted log
     -- when it belongs to THIS dungeon. A genuinely new run never sees a live
-    -- cache (ResetRun's hoisted clear ran on every non-recovery path);
-    -- defensive shape checks because the table round-trips SavedVariables.
+    -- cache (CHALLENGE_MODE_START wipes both caches before its StartRun);
+    -- recovery paths — reload, DC, and mid-key walk-back-in — restore here.
+    -- Defensive shape checks because the table round-trips SavedVariables.
     local dCache = self.db._activeRunDeaths
     if dCache and dCache.mapID == mapID and type(dCache.log) == "table" then
         for i = 1, #dCache.log do
@@ -1344,19 +1361,26 @@ function MPT:CompleteRun()
     self:NotifyRefresh()
 end
 
-function MPT:ResetRun()
+function MPT:ResetRun(keepCaches)
     -- preview teardown (ShowPreview/HidePreview: Task 2.6); isPreview is nil until then, so this is inert in Phase 1
     if self.isPreview then self:HidePreview() end
-    -- The persisted in-flight split cache is independent of in-memory run
-    -- state: clear it BEFORE the early-return below. A logout mid-key leaves
-    -- it alive across sessions (fresh session = pristine memory = the guard
-    -- returns), and the next run would back-stamp the old key's clear times
-    -- into the improve-only PB store — permanently.
-    MPT.db._activeRunSplits = nil
-    -- Same hoist for the reload-survival death log: a stale cache would
-    -- restore another session's deaths into the next run of that dungeon.
-    MPT.db._activeRunDeaths = nil
-    -- Same hoist rationale for the salvage flag: a pending 2s salvage timer
+    -- Recovery-cache lifecycle: the default (keepCaches falsy — the
+    -- CHALLENGE_MODE_RESET path) wipes both persisted caches BEFORE the
+    -- early-return below, hoisted because they are independent of in-memory
+    -- run state. keepCaches=true is passed by the LOCATION-gated paths
+    -- (mid-key walk-out in CheckForActiveRun, a trailing
+    -- WORLD_STATE_TIMER_STOP): the key is still live server-side, so re-entry
+    -- restores splits + death log through the same path a /reload uses.
+    -- Staleness is safe: CHALLENGE_MODE_START wipes both caches for every
+    -- genuinely new key (including the logout-outside-mid-key cross-session
+    -- leak), _activeRunSplits self-guards via its "mapID:level" identity
+    -- stamp, and a restored death log is immediately reconcile-trimmed
+    -- against the authoritative GetDeathCount.
+    if not keepCaches then
+        MPT.db._activeRunSplits = nil
+        MPT.db._activeRunDeaths = nil
+    end
+    -- Hoist rationale also applies to the salvage flag: a pending 2s salvage timer
     -- must not leave the flag armed into a chained new run (the
     -- not-_salvagePending guard would suppress that run's salvage net). The
     -- fire callback's run-state guards make any stale timer inert.
@@ -1416,15 +1440,20 @@ function MPT:CheckForActiveRun()
             -- Salvage: everything finished but the completion
             -- event was never processed — commit the run instead of wiping it.
             self:CompleteRun()
-        elseif not (self.run.completed and InChallengeInstance()) then
-            -- Fanfare window: the map ID flips nil at completion while still
-            -- inside — keep the frozen summary + tracker suppression alive ONLY
-            -- until the player leaves the dungeon. Visibility gates on
-            -- GetInstanceInfo (party + difficulty 8, == InChallengeInstance) and
-            -- the summary tears down the instant you zone out to a city; it never
-            -- persists into town. ShouldHideTracker's completed arm uses the
-            -- same predicate, so tracker suppression ends at the door too.
-            self:ResetRun()
+        elseif (self.run.active or self.run.completed) and not InChallengeInstance() then
+            -- Reset ONLY once the player is genuinely OUTSIDE the keystone
+            -- instance (upstream parity — the 2026-07-03 walk-out/in bug):
+            -- GetActiveChallengeMapID reads nil in the PLAYER_ENTERING_WORLD
+            -- window even while standing inside a live key, and resetting an
+            -- ACTIVE run on that flap wiped the freshly rebuilt run right
+            -- after re-entry. For completed runs this is the fanfare window:
+            -- the map ID flips nil at completion while still inside — the
+            -- frozen summary + tracker suppression stay up until the player
+            -- actually leaves (ShouldHideTracker's completed arm uses the
+            -- same predicate, so suppression ends at the door too).
+            -- keepCaches: a walked-out key is still live server-side —
+            -- re-entry restores splits + death log via the /reload path.
+            self:ResetRun(true)
         end
     end
     -- Re-apply tracker visibility after any reload recovery: StartRun/ResetRun
