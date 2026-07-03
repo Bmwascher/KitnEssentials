@@ -26,6 +26,7 @@ local ipairs = ipairs
 local pairs = pairs
 local select = select
 local max = math.max
+local floor = math.floor
 
 -- The live Current/Overall pair offered under the session list. Built once at file
 -- load (plain enum order, Current first) -- a Core.lua local of the same name owns
@@ -35,11 +36,13 @@ local SEGMENT_SESSION_TYPES = {
     Enum.DamageMeterSessionType.Overall,
 }
 
-local SEG_W = 198          -- panel width (px); names truncate (no wrap) to fit
+local SEG_W = 198          -- MINIMUM panel width (px); the panel widens to match its
+                           -- window (PopulateSegmentMenu) so long names + times fit --
+                           -- names still truncate (no wrap) past that
 local SEG_PAD = 3          -- inner padding inside the viewport
 local SEG_ROW_GAP = 1      -- vertical gap between rows
 local SEG_DIV_H = 1        -- divider line thickness
-local SEG_MAX_H = 300      -- panel caps here and scrolls when the list is taller
+local SEG_MAX_H = 300      -- panel caps here and the session list scrolls when taller
 
 -- Resting paint for a row: accent fill + white text when it's the active pick,
 -- transparent + dim text otherwise. The hover highlight (row.hl) is separate and
@@ -116,44 +119,64 @@ function DM:EnsureSegmentMenu(W)
     s:SetScript("OnLeave", function() DM:ScheduleSegmentClose(W) end)
     s:Hide()
 
+    -- Viewport anchored at the TOP only; PopulateSegmentMenu sets its SIZE. The
+    -- Current/Overall footer owns the panel's bottom band (outside the scroll), so
+    -- a bottom anchor would let the list slide under it.
     s.view = CreateFrame("ScrollFrame", nil, s)
     s.view:SetPoint("TOPLEFT", s, "TOPLEFT", 1, -1)
-    s.view:SetPoint("BOTTOMRIGHT", s, "BOTTOMRIGHT", -1, 1)
     s.content = CreateFrame("Frame", nil, s.view)
     s.content:SetSize(1, 1)
     s.view:SetScrollChild(s.content)
-    s.view:EnableMouseWheel(true)
-    s.view:SetScript("OnMouseWheel", function(self, delta)
-        local viewH = self:GetHeight() or 0
+    -- One wheel handler serves the viewport AND the panel itself: the footer band
+    -- (Current/Overall) sits OUTSIDE the viewport, and a wheel over a frame that
+    -- never registered for it falls THROUGH to whatever is behind the menu -- in a
+    -- stacked dock that's the window above, which would scroll its bars. Routing
+    -- the panel's wheel into the same list scroll plugs the leak and reads naturally.
+    local function onWheel(_, delta)
+        local viewH = s.view:GetHeight() or 0
         local contentH = s.content:GetHeight() or 0
         local maxScroll = contentH - viewH
-        if maxScroll <= 0 then self:SetVerticalScroll(0); return end
+        if maxScroll <= 0 then s.view:SetVerticalScroll(0); return end
         local step = ((DM.db and DM.db.FontSize) or 12) + 10
-        local new = (self:GetVerticalScroll() or 0) - delta * step
+        local new = (s.view:GetVerticalScroll() or 0) - delta * step
         if new < 0 then new = 0 elseif new > maxScroll then new = maxScroll end
-        self:SetVerticalScroll(new)
-    end)
+        s.view:SetVerticalScroll(new)
+    end
+    s.view:EnableMouseWheel(true)
+    s.view:SetScript("OnMouseWheel", onWheel)
+    s:EnableMouseWheel(true)
+    s:SetScript("OnMouseWheel", onWheel)
 
-    s.divider = s.content:CreateTexture(nil, "ARTWORK")
+    -- Divider = the footer's top edge. Parented to the PANEL (not the scroll
+    -- content) because the Current/Overall rows below it never scroll.
+    s.divider = s:CreateTexture(nil, "ARTWORK")
     s.divider:SetColorTexture(1, 1, 1, 0.18)
     s.divider:Hide()
 
     s.rows = {}
+    s.footRows = {}   -- pinned Current/Overall rows (fixed footer, never scrolled)
     W.segMenu = s
     return s
 end
 
 -- Rebuild the row list from the current sessions every open (the generator pattern --
--- the list is always fresh). Order: up to the last 20 stored sessions (name + M:SS,
--- accent-filled when pinned), a divider, then Current / Overall (filled when live and
--- matching the resolved config). Sizes the content child to the full list and the panel
--- to min(content, SEG_MAX_H) so a long list scrolls instead of running off-screen.
+-- the list is always fresh). The stored sessions (up to 20, name + M:SS, accent-filled
+-- when pinned) fill the SCROLL list; Current / Overall live in a FIXED footer below it,
+-- always visible at any scroll offset (they used to scroll away with a long history),
+-- separated by the divider. The panel matches its window's width (floored at SEG_W) so
+-- long names + durations fit; the list caps at SEG_MAX_H and scrolls, opening
+-- pre-scrolled to the NEWEST stored sessions (bottom, nearest the footer).
 function DM:PopulateSegmentMenu(W)
     local s = W.segMenu
     if not s then return end
     local db = self.db
     local ar, ag, ab = KE:GetAccentColor()
-    local viewW = SEG_W - 2
+    -- Panel width tracks the anchor window ("same size as one panel"), floored at
+    -- the legacy fixed width so a skinny window can't crush the labels.
+    local segW = SEG_W
+    local winW = W.frame and W.frame:GetWidth()
+    if winW and winW > segW then segW = floor(winW + 0.5) end
+    local viewW = segW - 2
     s.content:SetWidth(viewW)
     local rowW = viewW - SEG_PAD * 2
     local rowH = max(16, ((db and db.FontSize) or 12) + 8)
@@ -211,35 +234,62 @@ function DM:PopulateSegmentMenu(W)
         end
     end
 
+    -- Hide any leftover pooled rows from a longer previous list.
+    for i = idx + 1, #rows do rows[i]:Hide() end
+
+    -- Fixed footer: Current / Overall pinned at the panel bottom (nearest the ⌚
+    -- icon the menu grows up from), OUTSIDE the scroll viewport so a long history
+    -- can't scroll them away. Active when nothing is pinned AND the type matches
+    -- the window's resolved per-context config -- all plain enum compares. Rows
+    -- pooled once in s.footRows; live font changes reach them via Window.lua
+    -- ReapplyBarVisuals exactly like the scroll rows.
+    local cfg = self:ResolveWindowConfig(W.idx)
+    for fi, sType in ipairs(SEGMENT_SESSION_TYPES) do
+        local row = s.footRows[fi]
+        if not row then
+            row = MakeSegRow(s, W, db)
+            s.footRows[fi] = row
+        end
+        row._sid = nil
+        row._sType = sType
+        row:ClearAllPoints()
+        -- Stack upward from the bottom border: the LAST entry (Overall) sits lowest.
+        row:SetPoint("BOTTOMLEFT", s, "BOTTOMLEFT", 1 + SEG_PAD,
+            1 + SEG_PAD + (#SEGMENT_SESSION_TYPES - fi) * (rowH + SEG_ROW_GAP))
+        row:SetSize(rowW, rowH)
+        row.text:SetText((self.SESSION_TYPE_NAMES and self.SESSION_TYPE_NAMES[sType]) or "Unknown")
+        PaintSegRowActive(row, (W._curSessionID == nil and cfg ~= nil and cfg.SessionType == sType), ar, ag, ab)
+        row:Show()
+    end
+    -- Footer band height: inner pad + the footer rows + the divider band above them.
+    local footerH = SEG_PAD + #SEGMENT_SESSION_TYPES * (rowH + SEG_ROW_GAP) + SEG_DIV_H + 2
+
+    -- Divider = the footer's top edge; hidden when no scroll list sits above it.
     if hadSessions then
         s.divider:ClearAllPoints()
-        s.divider:SetPoint("TOPLEFT", s.content, "TOPLEFT", SEG_PAD, y - 1)
+        s.divider:SetPoint("BOTTOMLEFT", s, "BOTTOMLEFT", 1 + SEG_PAD,
+            1 + SEG_PAD + #SEGMENT_SESSION_TYPES * (rowH + SEG_ROW_GAP) + 2)
         s.divider:SetSize(rowW, SEG_DIV_H)
         s.divider:Show()
-        y = y - (SEG_DIV_H + 2 + SEG_ROW_GAP)
     else
         s.divider:Hide()
     end
 
-    -- Live Current / Overall: active when nothing is pinned AND the type matches the
-    -- window's resolved per-context config. All plain enum compares.
-    local cfg = self:ResolveWindowConfig(W.idx)
-    for _, sType in ipairs(SEGMENT_SESSION_TYPES) do
-        local label = (self.SESSION_TYPE_NAMES and self.SESSION_TYPE_NAMES[sType]) or "Unknown"
-        local active = (W._curSessionID == nil and cfg ~= nil and cfg.SessionType == sType)
-        place(label, active, nil, sType)
-    end
-
-    -- Hide any leftover pooled rows from a longer previous list.
-    for i = idx + 1, #rows do rows[i]:Hide() end
-
-    local contentH = (-y) - SEG_ROW_GAP + SEG_PAD
-    if contentH < rowH then contentH = rowH end
-    s.content:SetHeight(contentH)
-    local panelH = contentH + 2
-    if panelH > SEG_MAX_H then panelH = SEG_MAX_H end
-    s:SetSize(SEG_W, panelH)
-    s.view:SetVerticalScroll(0)
+    -- Scroll-list viewport: everything above the footer, capped so the whole panel
+    -- stays under SEG_MAX_H. Open pre-scrolled to the BOTTOM of the list -- the
+    -- newest stored sessions sit there, adjacent to the footer. A short list has
+    -- maxScroll == 0 (the view fits the content exactly) and the floor below keeps
+    -- a negative out of SetVerticalScroll -- do NOT rely on native ScrollFrame
+    -- clamping (the wheel handler above clamps manually for the same reason).
+    local contentH = hadSessions and ((-y) - SEG_ROW_GAP + SEG_PAD) or 0
+    s.content:SetHeight(max(contentH, 1))
+    local viewH = contentH
+    local maxViewH = SEG_MAX_H - footerH - 2
+    if viewH > maxViewH then viewH = maxViewH end
+    s.view:SetSize(viewW, max(viewH, 1))
+    s:SetSize(segW, viewH + footerH + 2)
+    local maxScroll = contentH - viewH
+    s.view:SetVerticalScroll(maxScroll > 0 and maxScroll or 0)
 end
 
 -- Show the picker, anchored to grow UPWARD from the ⌚ icon (BOTTOMRIGHT of the panel

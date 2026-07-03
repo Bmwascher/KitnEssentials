@@ -792,11 +792,21 @@ function DM:ReapplyBarVisuals(W)
     end
 
     -- Segment-menu rows (SegmentMenu.lua) likewise. Pooled + lazy-built, so this is a
-    -- no-op until the ⌚ picker has been opened once for this window.
-    if W.segMenu and W.segMenu.rows then
+    -- no-op until the ⌚ picker has been opened once for this window. The pinned
+    -- Current/Overall footer rows live OUTSIDE the scroll content (s.footRows) --
+    -- any new text element added to the menu must join one of these loops or it
+    -- keeps a stale font after a live GUI change.
+    if W.segMenu then
         local rowSize = math_max(8, (size or 12) - 1)
-        for _, row in ipairs(W.segMenu.rows) do
-            KE:ApplyFontToText(row.text, face, rowSize, outline)
+        if W.segMenu.rows then
+            for _, row in ipairs(W.segMenu.rows) do
+                KE:ApplyFontToText(row.text, face, rowSize, outline)
+            end
+        end
+        if W.segMenu.footRows then
+            for _, row in ipairs(W.segMenu.footRows) do
+                KE:ApplyFontToText(row.text, face, rowSize, outline)
+            end
         end
     end
 
