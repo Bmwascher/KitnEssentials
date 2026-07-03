@@ -89,6 +89,12 @@ function DM:EnsureDock()
     local dock = CreateFrame("Frame", "KE_DamageMeter_Dock", UIParent, "BackdropTemplate")
     self.dock = dock
 
+    -- Never render off-screen: a stale saved Position (resolution change) or an
+    -- edit-mode drag could otherwise strand the whole meter outside the viewport.
+    -- Same flag as the MPT HUD root; the windows are dock children, so clamping
+    -- the dock covers the entire meter.
+    dock:SetClampedToScreen(true)
+
     -- Position + strata via the shared helper (KE:ApplyFramePosition reads
     -- self.db.Strata internally and runs the always-on pixel snap).
     if self.db then
