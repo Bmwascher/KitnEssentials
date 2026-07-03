@@ -897,7 +897,9 @@ function DM:ApplyHeaderIcons(W)
     if W.clock and W.headerBar then
         W._clockSuppressed = false
         W.clock:ClearAllPoints()
-        W.clock:SetPoint("RIGHT", W.headerBar, "RIGHT", (show and not mouseover) and -74 or -4, 0)
+        -- +1 y: the FontString reads a touch low when dead-centered in the band
+        -- (descender space), so it rides one pixel high of center. Eyeball knob.
+        W.clock:SetPoint("RIGHT", W.headerBar, "RIGHT", (show and not mouseover) and -74 or -4, 1)
         -- Re-gate the clock's visibility too: LayoutDock re-runs this per placed
         -- window on every structural pass with a FRESH _winDisplayPos, so a dock
         -- rearrangement that moves display position 1 migrates the clock to the
