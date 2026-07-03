@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## Unreleased
+
+### Added
+- **Targeted Spells** (Dungeons) — shows enemy casts aimed at you as mirrored icon + countdown entries, important-spell glow, interrupt indication, content-type filters, Edit Mode support.
+
+### Fixed
+- Enemy casts longer than 60 seconds (broken multi-day NPC channels) no longer render in Dungeon Casts or the Target/Focus castbars.
+
+---
+
 ## v3.1.0
 
 ### Damage Meter
