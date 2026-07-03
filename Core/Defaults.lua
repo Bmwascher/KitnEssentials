@@ -929,6 +929,43 @@ local Defaults = {
             AnnounceReadyCheck = true,
         },
 
+        KeystoneHelper = {
+            Enabled = true,
+
+            -- Feature toggles
+            ResetEnabled = true,
+            ResetMessage = "Instance reset!",
+            RerollEnabled = true,
+            YourKeyEnabled = true,
+
+            -- Shared reminder appearance/position (one block for both frames —
+            -- Reroll and Your Key? are never on screen together live)
+            Size = 64,
+            FontFace = "Expressway",
+            FontOutline = "SOFTOUTLINE",
+            FontSize = 36,
+            FontColor = { 1, 1, 1, 1 },
+            FontColorKey = { 1, 1, 1, 1 },
+            Strata = "MEDIUM",
+            AnchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            Position = DefaultPosition(0, 165),
+
+            -- Per-feature glow
+            RerollGlowEnabled = true,
+            RerollGlowColor = { 0, 1, 0, 1 },
+            RerollGlowLines = 5,
+            RerollGlowFrequency = 0.25,
+            RerollGlowLength = 10,
+            RerollGlowThickness = 2,
+            YourKeyGlowEnabled = true,
+            YourKeyGlowColor = { 0.2, 0.6, 1, 1 },
+            YourKeyGlowLines = 5,
+            YourKeyGlowFrequency = 0.25,
+            YourKeyGlowLength = 10,
+            YourKeyGlowThickness = 2,
+        },
+
         PIMacroBuilder = {
             Enabled = true,
             MacroName = "PI",
