@@ -2,6 +2,14 @@
 
 ## v3.1.0
 
+### Damage Meter
+- **NEW:** Nicknames on the meter — names you've set in Custom Nicknames now display on the meter bars, hover tooltips, and the out-of-combat breakdown rows in place of real character names. Display-only: chat reports still post real names. Your own bar always shows its nickname; other players' nicknames hold through a fight once they've been seen. Toggle with "Use Nicknames" (on by default)
+- **NEW:** Combat clock — an optional bracketed fight timer ("[2:41]") on window 1's header that ticks while you fight and freezes, dimmed, at the final time when combat ends. It shares the corner with the header action buttons: mousing over the header swaps the buttons in, and the clock returns when the mouse leaves. Off by default
+- Segment menu overhaul — Current and Overall now sit in a fixed footer below the fight list so a long history can't scroll them away, the menu matches its window's width, and it opens pre-scrolled to the newest fights
+- Bar layout — the rank number moved between the spec icon and the name (icon first, then "1. Name") and hugs the name, and the value column now reserves a fixed width so growing numbers no longer squeeze names mid-fight
+- "Always Show Self" is now role-aware — damage views pin your row as a DPS or tank, healing views pin it as a healer, and the remaining views (Damage Taken, Interrupts, Dispels, ...) no longer force a zero row in
+- **Fixed:** Interrupts and Dispels hover tooltips showed a meaningless DPS column — count views now read Amount and share % only
+
 ### Mythic+ Timer
 - **NEW:** "Text Line" threshold mode — swaps the timer bar and its tick labels for a single collapsing timer line ("+2 Chest (26:24): 5:31") that always shows the next reward still in reach: the countdown runs teal while you're ahead, flips to a red +overshoot when a cutoff falls, drops to the next tier, and locks green or red at the finish. The final tier timer bare completion and reads "Timed"
 - **NEW:** "Below Bar" threshold label position — keeps every cutoff visible: live cutoffs count down under their ticks, and passed cutoffs grey out to their absolute times as permanent pacing marks

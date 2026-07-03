@@ -28,7 +28,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Advanced Debuffs | Bar-based dispellable-debuff display with cooldown swipe, native countdown text, dispel-type border color and atlas overlay, PLAYER filter, per-type include/exclude, and spell-ID blocklist (subsumes the older Boss Debuffs module) |
 | External and Defensive Buffs | External defensive cooldowns cast onto you (Pain Suppression, Ironbark, etc.) with cooldown swipe, native countdown text, configurable glow per cast, BigWigs glow integration on incoming raid hits, and a Sound Test button |
 | Focus & Target Castbar | Repositionable cast bars with kick indicators, target names, focus raid marker, important-spell glow, out-of-range dimming, color settings, and cast sound alert (tabbed GUI) |
-| Damage Meter | Standalone multi-window damage/healing meter built on the 12.0 C_DamageMeter API — proportional dock with shared backdrop, per-content auto-swapping layouts, eight meter types, class-colored bars, out-of-combat spell breakdown / death recap / target details, segment history, report-to-chat, and a replace-Blizzard option |
+| Damage Meter | Standalone multi-window damage/healing meter built on the 12.0 C_DamageMeter API (replaces Blizzard's built-in meter) — proportional dock with shared backdrop, per-content auto-swapping layouts, eight meter types, class-colored bars with nickname support, header combat clock, out-of-combat spell breakdown / death recap / target details, segment history, and report-to-chat |
 
 ## Utilities
 
@@ -67,7 +67,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Skyriding UI | Skyriding vigor bar with second wind tracker and whirling surge cooldown icon |
 | Position Controller | Auto-anchors ElvUI Player/Target frames beside SkironCooldownManager or Ayije_CDM (auto-detected, clears the widest cooldown row); Focus/Pet anchor freely; CDM racials bar offset with pet detection (works with ElvUI and UUF). Writes through ElvUI's mover system so placements survive `/reload`. Yields to the standalone ElvUI_Anchor addon if loaded; ignores healer specs by default |
 | Spell Alert Opacity | Per-spec opt-in/out grid for Blizzard's proc activation overlay flashes (every class, 4-column layout), plus an opacity slider for the overlay |
-| Custom Nicknames | Map characters to personal nicknames on ElvUI and Unhalted Unit Frames via the `[kes:nickname]` tag family (plus class-color variants `[kes:nickname:color]` for UUF); includes a management GUI with search, import/export, and replace/merge modes |
+| Custom Nicknames | Map characters to personal nicknames on ElvUI and Unhalted Unit Frames via the `[kes:nickname]` tag family (plus class-color variants `[kes:nickname:color]` for UUF); includes a management GUI with search, import/export, and replace/merge modes; nicknames also display on the KitnEssentials Damage Meter |
 | WindTools Game Bar | Opt-in toggle to hide WindTools' Game Bar without unloading the module |
 | Great Vault Alert | Shows your loot spec when opening the Great Vault with class color and sound |
 | Character Panel | Per-slot item level, enchant labels, gem icons, missing-gem cue, and item-track letters (M/H/C/V/A) on the player and inspect frames; decimal stat-pane and inspect item level; interactive Gem Socket Helper; auto-disables BetterCharacterPanel if loaded |
