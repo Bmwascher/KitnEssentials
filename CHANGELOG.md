@@ -10,6 +10,7 @@
 - "Always Show Self" is now role-aware — damage views pin your row as a DPS or tank, healing views pin it as a healer, and the remaining views (Damage Taken, Interrupts, Dispels, ...) no longer force a zero row in
 - The dock now clamps to the screen, so the meter can't be dragged or end up positioned off-screen
 - **Fixed:** Interrupts and Dispels hover tooltips showed a meaningless DPS column — count views now read Amount and share % only
+- **Fixed:** The segment menu's kill/wipe coloring skipped a final boss whose kill completed the key — the run's "+NN" history entry took the green instead. Both the boss row and the run row now tint
 
 ### Mythic+ Timer
 - **NEW:** "Text Line" threshold mode — swaps the timer bar and its tick labels for a single collapsing timer line ("+2 Chest (26:24): 5:31") that always shows the next reward still in reach: the countdown runs teal while you're ahead, flips to a red +overshoot when a cutoff falls, drops to the next tier, and locks green or red at the finish. The final tier timer bare completion and reads "Timed"
