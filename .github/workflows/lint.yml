@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Runs upstream luacheck (Lua 5.1, in Docker) against the repo using
       # the checked-in .luacheckrc — same config as the local luacheck.exe.

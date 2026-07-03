@@ -29,7 +29,7 @@ jobs:
   busted:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Self-caches the compiled interpreter (buildCache defaults to true).
       - uses: leafo/gh-actions-lua@6919171ccf181b826f44b9bca76307b577217377 # v13.0.0
@@ -39,7 +39,7 @@ jobs:
       # Restore the LuaRocks prefix + installed rocks BEFORE the luarocks
       # action runs: its cheap make-install overlays the restored tree and
       # re-exports PATH/LUA_PATH/LUA_CPATH either way.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         id: rocks
         with:
           path: .luarocks
@@ -67,7 +67,7 @@ jobs:
 
       - name: Upload coverage artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: luacov-report
           path: luacov.report.out
