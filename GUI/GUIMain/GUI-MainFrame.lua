@@ -151,6 +151,7 @@ GUIFrame.sidebarConfig = {
             { id = "KickTracker",                 text = "Interrupt Tracker", keywords = { "interrupt", "kick", "tracker", "cc", "stop", "party", "m+" } },
             { id = "KeystoneHelper",              text = "Keystone Helper", keywords = { "keystone", "reset", "reroll", "key", "announcer", "mythic", "m+" } },
             { id = "MythicPlusTimer",             text = "Mythic+ Timer", keywords = { "mythic plus", "m+", "keystone", "timer", "forces", "deaths", "splits", "objective", "personal best", "affix", "warpdeplete" } },
+            { id = "TargetedSpells",              text = "Targeted Spells", keywords = { "targeted", "spells", "cast", "incoming", "self", "target", "warning", "m+" } },
         },
     },
     {

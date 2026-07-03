@@ -568,6 +568,102 @@ function TS:OnUnitTarget(_, unit)
 end
 
 ---------------------------------------------------------------------------------
+-- Settings application / preview
+---------------------------------------------------------------------------------
+
+-- Structural keys (IconSize/Gap/Grow/Font*/MaxIcons) invalidate pooled frame
+-- geometry: drop the pool and re-derive everything.
+function TS:RebuildEntries()
+    self:ReleaseAllEntries()
+    for _, entry in ipairs(self.entryPool) do
+        entry:SetParent(nil)
+        entry:Hide()
+    end
+    self.entryPool = {}
+    if self.anchorFrame then
+        local db = self.db
+        self.anchorFrame:SetSize(db.IconSize * 2 + db.FontSize * 3, db.IconSize)
+    end
+    self:ApplyPosition()
+    if self.isPreview then self:ShowPreview() end
+    self:CheckContentGate()
+end
+
+-- In-place keys (ShowSwipe / GlowImportant / IndicateInterrupts / content
+-- checkboxes): re-apply to live entries, re-evaluate the gate immediately.
+function TS:ApplySettings()
+    self:UpdateDB()
+    local db = self.db
+    for _, entry in pairs(self.activeEntries) do
+        entry.leftIcon.cooldown:SetDrawSwipe(db.ShowSwipe ~= false)
+        entry.rightIcon.cooldown:SetDrawSwipe(db.ShowSwipe ~= false)
+        self:UpdateGlow(entry)
+    end
+    self:CheckContentGate()
+end
+
+local PREVIEW_ENTRIES = {
+    { icon = 135846, duration = 8 },   -- Frostbolt
+    { icon = 136197, duration = 5 },   -- Shadow Bolt
+}
+
+function TS:ShowPreview()
+    self:UpdateDB()
+    if not self.anchorFrame then self:CreateAnchorFrame() end
+    self:ApplyPosition()
+    self:HidePreview()
+    self.isPreview = true
+    self.anchorFrame:Show()
+    self.previewEntries = {}
+    local now = GetTime()
+    for i, p in ipairs(PREVIEW_ENTRIES) do
+        local entry = self:CreateEntry()
+        entry.receiptTime = now + i
+        entry.leftIcon.tex:SetTexture(p.icon)
+        entry.rightIcon.tex:SetTexture(p.icon)
+        -- Plain-number cooldown path: previews never touch secret values.
+        entry.leftIcon.cooldown:SetHideCountdownNumbers(false)
+        entry.leftIcon.cooldown:SetCountdownFormatter(GetCastFormatter())
+        entry.leftIcon.cooldown:SetCooldown(now, p.duration)
+        entry.rightIcon.cooldown:SetCooldown(now, p.duration)
+        local fs = entry.leftIcon.cooldown:GetCountdownFontString()
+        if fs then
+            fs:ClearAllPoints()
+            fs:SetPoint("CENTER", entry, "CENTER", 0, 0)
+            pcall(fs.SetFont, fs, KE:GetFontPath(self.db.FontFace), self.db.FontSize,
+                KE:GetFontOutline(self.db.FontOutline))
+        end
+        entry:Show()
+        tinsert(self.previewEntries, entry)
+    end
+    -- Chain the preview entries exactly like live ones.
+    local saveActive, saveCount = self.activeEntries, self.activeCount
+    self.activeEntries, self.activeCount = {}, 0
+    for i, e in ipairs(self.previewEntries) do
+        self.activeEntries["preview" .. i] = e
+        self.activeCount = self.activeCount + 1
+    end
+    self:RepositionEntries()
+    self.activeEntries, self.activeCount = saveActive, saveCount
+end
+
+function TS:HidePreview()
+    self.isPreview = false
+    if self.previewEntries then
+        for _, entry in ipairs(self.previewEntries) do
+            entry:Hide()
+            entry:ClearAllPoints()
+            entry.Spacer:ClearAllPoints()
+            entry.leftIcon.cooldown:Clear()
+            entry.rightIcon.cooldown:Clear()
+            tinsert(self.entryPool, entry)
+        end
+        self.previewEntries = nil
+    end
+    self:CheckContentGate()
+end
+
+---------------------------------------------------------------------------------
 -- Stubs completed by Task 11 (keep so the file loads and lints clean)
 ---------------------------------------------------------------------------------
 
