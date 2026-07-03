@@ -18,11 +18,15 @@ local UnitCastingInfo, UnitChannelInfo = UnitCastingInfo, UnitChannelInfo
 local UnitCastingDuration, UnitChannelDuration = UnitCastingDuration, UnitChannelDuration
 local UnitEmpoweredChannelDuration = UnitEmpoweredChannelDuration
 local PlayerIsSpellTarget = PlayerIsSpellTarget
+local C_Spell = C_Spell
 local GetTime = GetTime
 local C_Timer = C_Timer
 local C_StringUtil = C_StringUtil
 local tinsert, tremove, tsort = table.insert, table.remove, table.sort
 local strmatch = string.match
+local type, ipairs = type, ipairs
+
+local LCG = LibStub and LibStub("LibCustomGlow-1.0", true)
 
 local DEBUG_TS = false
 local function dbg(...)
@@ -37,6 +41,8 @@ local FALLBACK_ICON = 136243
 local NAMEPLATE_PATTERN = "^nameplate%d+$"
 local MAX_NAMEPLATES = 40
 local SETTLE_DELAY = 0.2
+local INTERRUPT_LINGER = 1.0   -- seconds the desaturated icon stays up post-interrupt
+local INTERRUPT_HOLD = 0.95    -- Release() suppression window; < LINGER avoids a same-tick race with the linger timer
 
 -- Breakpoint countdown formatter (reference pattern): tenths under 3s,
 -- whole seconds to 60, m:ss above (only reachable if the >60s gate changes).
@@ -281,7 +287,7 @@ function TS:Release(entry, generation, reason)
     end
     entry.generation = entry.generation + 1  -- invalidate pending callbacks
     entry.unit, entry.castKey, entry.kind = nil, nil, nil
-    entry.receiptTime, entry.durationObject, entry.durationAlpha = nil, nil, nil
+    entry.receiptTime, entry.durationObject = nil, nil
     entry.spellId = nil
     entry.wasInterrupted, entry.doNotHideBefore = nil, nil
     -- Idempotent teardown: pooled frames must come back visually neutral.
@@ -290,8 +296,9 @@ function TS:Release(entry, generation, reason)
     entry.leftIcon.tex:SetDesaturated(false)
     entry.rightIcon.tex:SetDesaturated(false)
     entry.leftIcon.cooldown:Clear()
+    entry.leftIcon.cooldown:SetScript("OnCooldownDone", nil)
     entry.rightIcon.cooldown:Clear()
-    self:StopGlow(entry)                    -- Task 9 (stub until then)
+    self:StopGlow(entry)
     entry:Hide()
     entry:ClearAllPoints()
     entry.Spacer:ClearAllPoints()
@@ -311,7 +318,41 @@ function TS:ReleaseAllEntries()
     end
 end
 
-function TS:StopGlow() end  -- completed in Task 9
+local GLOW_KEY = "KE_TS"
+
+-- Reference pattern: glow runs whenever a spellId exists; the SECRET
+-- importance boolean only drives the glow child's alpha (never branched on).
+-- Shipped precedent: CastbarHelpers H.UpdateGlow. Icon frames are plainly
+-- SetSize'd, so stock LCG reading their size is safe; if secret-size errors
+-- appear in BugSack, port the reference's size-parameterized glow fork.
+function TS:UpdateGlow(entry)
+    if not LCG then return end
+    if not self.db.GlowImportant or not entry.spellId then
+        self:StopGlow(entry)
+        return
+    end
+    local isImportant = C_Spell and C_Spell.IsSpellImportant
+        and C_Spell.IsSpellImportant(entry.spellId)
+    if type(isImportant) == "nil" then isImportant = false end  -- taint-safe nil check
+    for _, iconFrame in ipairs({ entry.leftIcon, entry.rightIcon }) do
+        LCG.PixelGlow_Start(iconFrame, nil, nil, nil, nil, nil, nil, nil, nil, GLOW_KEY)
+        local child = iconFrame["_PixelGlow" .. GLOW_KEY]
+        if child then
+            child:SetAlphaFromBoolean(isImportant, 1, 0)
+        end
+    end
+end
+
+function TS:StopGlow(entry)
+    if not LCG or not entry.leftIcon then return end
+    for _, iconFrame in ipairs({ entry.leftIcon, entry.rightIcon }) do
+        LCG.PixelGlow_Stop(iconFrame, GLOW_KEY)
+        -- Pooled glow children keep their bound (possibly 0) alpha — reset
+        -- so a recycled entry's glow can show (reference Reset behavior).
+        local child = iconFrame["_PixelGlow" .. GLOW_KEY]
+        if child then child:SetAlpha(1) end
+    end
+end
 
 ---------------------------------------------------------------------------------
 -- Populate + visibility binding
@@ -367,10 +408,8 @@ function TS:PopulateEntry(entry, unit, info)
     entry:SetAlphaFromBoolean(PlayerIsSpellTarget(unit), durationAlpha, 0)
     entry.Spacer:SetValue(entry:GetAlpha())
 
-    self:UpdateGlow(entry)                  -- Task 9 (stub until then)
+    self:UpdateGlow(entry)
 end
-
-function TS:UpdateGlow() end  -- completed in Task 9
 
 ---------------------------------------------------------------------------------
 -- Layout (spacer chain)
@@ -464,10 +503,8 @@ function TS:OnCastEvent(event, unit, castGUID)
 
     if event == "UNIT_SPELLCAST_START" or event == "UNIT_SPELLCAST_CHANNEL_START"
         or event == "UNIT_SPELLCAST_EMPOWER_START" then
-        local kind = (event == "UNIT_SPELLCAST_CHANNEL_START") and "channel"
-            or (event == "UNIT_SPELLCAST_EMPOWER_START") and "empower" or "cast"
         C_Timer.After(SETTLE_DELAY, function()
-            TS:TryStart(unit, castGUID, kind)
+            TS:TryStart(unit, castGUID)
         end)
     elseif event == "UNIT_SPELLCAST_INTERRUPTED" then
         self:OnInterrupted(unit, castGUID)               -- Task 9
@@ -479,7 +516,24 @@ function TS:OnCastEvent(event, unit, castGUID)
     end
 end
 
-function TS:OnInterrupted() end  -- completed in Task 9
+function TS:OnInterrupted(unit, castGUID)
+    local entry = self.activeEntries[unit]
+    if not entry then return end
+    if entry.castKey and castGUID and entry.castKey ~= castGUID then return end
+    if not self.db.IndicateInterrupts then
+        self:Release(entry, entry.generation, "stop")
+        return
+    end
+    dbg("interrupted", unit)
+    entry.wasInterrupted = true
+    entry.doNotHideBefore = GetTime() + INTERRUPT_HOLD
+    entry.leftIcon.tex:SetDesaturated(true)
+    entry.rightIcon.tex:SetDesaturated(true)
+    local gen = entry.generation
+    C_Timer.After(INTERRUPT_LINGER, function()
+        TS:Release(entry, gen, "force")
+    end)
+end
 
 function TS:ScanExistingNameplates()
     for i = 1, MAX_NAMEPLATES do
