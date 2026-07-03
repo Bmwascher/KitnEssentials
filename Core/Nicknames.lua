@@ -66,6 +66,32 @@ function KE:GetNicknameOrName(unit)
     return UnitName(unit) or ""
 end
 
+-- Builds the store key ("Name-NormalizedRealm") from a raw name STRING (not a
+-- unit token) as data APIs return them: "Name" for a same-realm player (the
+-- caller passes its realm -- normally GetNormalizedRealmName() -- as the
+-- fallback) or "Name-Realm" for a cross-realm one. Whichever side supplies the
+-- realm, it is normalized defensively -- spaces / apostrophes / inner hyphens
+-- stripped ("Twisting Nether" -> "TwistingNether", "Azjol-Nerub" ->
+-- "AzjolNerub") -- so the key matches the UnitFullName-based store writes
+-- whether or not the source already normalized it. A character name never
+-- contains a hyphen, so the FIRST hyphen is always the separator. Pure string
+-- helper (no store or unit reads): the Damage Meter render path memoizes
+-- around it, and the busted spec drives it directly.
+---@param rawName string|nil "Name" or "Name-Realm" (plain, never secret)
+---@param fallbackRealm string|nil realm for suffix-less names
+---@return string|nil key store key, or nil when either side is unresolvable
+function KE:BuildNicknameKey(rawName, fallbackRealm)
+    if type(rawName) ~= "string" or rawName == "" then return nil end
+    local name, realm = rawName:match("^([^-]+)%-(.+)$")
+    if not name then
+        name, realm = rawName, fallbackRealm
+    end
+    if type(realm) ~= "string" then return nil end
+    realm = realm:gsub("[%s'%-]", "")
+    if realm == "" then return nil end
+    return name .. "-" .. realm
+end
+
 ---------------------------------------------------------------------------------
 -- Export
 ---------------------------------------------------------------------------------
@@ -222,4 +248,10 @@ function KE:RefreshNicknameTags()
     if UUFG and UUFG.UpdateAllTags then
         UUFG:UpdateAllTags()
     end
+    -- The Damage Meter substitutes nicknames at render time behind memo tables
+    -- (Modules/DamageMeter/Window.lua); tell it to drop them so a store edit
+    -- repaints the bars instead of serving stale (or missing) nicknames.
+    local KEAddon = _G.KitnEssentials
+    local DM = KEAddon and KEAddon.GetModule and KEAddon:GetModule("DamageMeter", true)
+    if DM and DM.OnNicknamesChanged then DM:OnNicknamesChanged() end
 end

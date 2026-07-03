@@ -270,6 +270,15 @@ function KE:CreateReloadPrompt(reason) end
 
 function KE:SkinningReloadPrompt() end
 
+-- ─── Nicknames (Core/Nicknames.lua) ──────────────────────
+--- Store key ("Name-NormalizedRealm") from a raw name STRING ("Name" or
+--- "Name-Realm"; the realm side is normalized defensively). Pure string
+--- helper; nil when either side is unresolvable.
+---@param rawName string?
+---@param fallbackRealm string? # normalized realm for suffix-less names
+---@return string?
+function KE:BuildNicknameKey(rawName, fallbackRealm) end
+
 -- ─── KitnEssentials AceAddon globals ──────────────────────
 ---@class KitnEssentials
 ---@field db AceDB
