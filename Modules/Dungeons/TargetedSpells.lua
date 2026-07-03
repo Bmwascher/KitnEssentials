@@ -114,6 +114,10 @@ function TS:OnEnable()
 
     self:CreateAnchorFrame()
     self:ApplyPosition()
+    -- OnDisable hides the anchor and nothing else re-Shows it (ApplyPosition
+    -- doesn't); without this a GUI disable→re-enable leaves live entries
+    -- parented to a hidden frame until a preview fires or /reload.
+    self.anchorFrame:Show()
 
     self:RegisterEvent("UNIT_SPELLCAST_START", "OnCastEvent")
     self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START", "OnCastEvent")
@@ -574,6 +578,11 @@ end
 -- Structural keys (IconSize/Gap/Grow/Font*/MaxIcons) invalidate pooled frame
 -- geometry: drop the pool and re-derive everything.
 function TS:RebuildEntries()
+    -- Hide (and pool) any preview entries FIRST so the stale-geometry frames
+    -- are dropped with the rest of the pool below, then re-show after the
+    -- rebuild so the GUI preview reflects the new settings.
+    local wasPreview = self.isPreview
+    self:HidePreview()
     self:ReleaseAllEntries()
     for _, entry in ipairs(self.entryPool) do
         entry:SetParent(nil)
@@ -585,7 +594,7 @@ function TS:RebuildEntries()
         self.anchorFrame:SetSize(db.IconSize * 2 + db.FontSize * 3, db.IconSize)
     end
     self:ApplyPosition()
-    if self.isPreview then self:ShowPreview() end
+    if wasPreview then self:ShowPreview() end
     self:CheckContentGate()
 end
 
