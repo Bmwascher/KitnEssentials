@@ -78,6 +78,11 @@ local TIMER_SEP_GAP = 3
 -- (tightened 18 -> 8, 2026-07-02 in-game feedback: PB sat too far left).
 local TIMER_PB_GAP = 8
 
+-- Gap (px) between the race-line label ("+2 Chest (26:24):") and the value's
+-- reserved worst-case box ("28:88") — the label pins LEFT of the box so the
+-- per-second countdown never re-flows it.
+local RACE_VAL_GAP = 4
+
 ---------------------------------------------------------------------------------
 -- Gating helpers (module functions — not methods; take widget explicitly)
 ---------------------------------------------------------------------------------
@@ -205,7 +210,10 @@ function MPT:BuildHUD()
     root.forcesText    = FS(nil, textOverlay)  -- forces percent/count text
     root.timerMeasureText = FS()           -- hidden ruler for the PB tuck's
     root.timerMeasureText:Hide()           -- worst-case timer-width reservation
-    root.raceLineText  = FS()              -- LINES-mode collapsing race line
+    root.raceLineText  = FS()              -- LINES-mode race line: static label ("+2 Chest (26:24):")
+    root.raceLineValueText = FS()          -- race-line countdown value, right-pinned in a reserved box
+    root.raceMeasureText = FS()            -- hidden ruler for the race value's
+    root.raceMeasureText:Hide()            -- worst-case width reservation
 
     -- timerPBText anchor is owned by ApplyLayout's stacking pass
     -- (reservation-tuck right-anchored). Anchoring it to timerText's left
@@ -785,6 +793,7 @@ function MPT:RenderThresholds()
                     mode ~= "REMAINING" and mode ~= "REMAINING_TOTAL")
             if not tier then
                 self.SetTextGated(f0.raceLineText, ""); f0.raceLineText:Hide()
+                self.SetTextGated(f0.raceLineValueText, ""); f0.raceLineValueText:Hide()
             else
                 local col
                 if state == "RACING" then          col = db.SplitAheadColor   or { 0.25, 0.88, 0.82 }
@@ -796,16 +805,24 @@ function MPT:RenderThresholds()
                 -- Tier 1 races bare completion, not an upgrade chest — the
                 -- community term is "Timed" (user direction 2026-07-02).
                 local label = tier == 1 and "Timed" or format("+%d Chest", tier)
-                self.SetTextGated(f0.raceLineText, format("%s (%s): %s%s%s|r",
-                    label, _FmtShort(cutoff), Hex(col), sign, _FmtShort(value)))
+                -- Label and value are SEPARATE FontStrings: the label is
+                -- static per tier while the value re-measures every second,
+                -- so splitting them (label pinned left of the value's
+                -- reserved worst-case box — ApplyLayout's race-line row)
+                -- keeps the label from dancing with the countdown's width.
+                self.SetTextGated(f0.raceLineText, format("%s (%s):", label, _FmtShort(cutoff)))
                 self.SetColorGated(f0.raceLineText, 0.85, 0.85, 0.85)
                 f0.raceLineText:Show()
+                self.SetTextGated(f0.raceLineValueText, sign .. _FmtShort(value))
+                self.SetColorGated(f0.raceLineValueText, col[1], col[2], col[3])
+                f0.raceLineValueText:Show()
             end
         end
         return
     end
     if f0 and f0.raceLineText then
         self.SetTextGated(f0.raceLineText, ""); f0.raceLineText:Hide()
+        self.SetTextGated(f0.raceLineValueText, ""); f0.raceLineValueText:Hide()
     end
     local maxTime = run.maxTime or 0
     if maxTime <= 0 then
@@ -1341,6 +1358,7 @@ function MPT:ApplyLayout()
         applyFont(f.thresh2Text, "Threshold")
         applyFont(f.thresh1Text, "Threshold")
         applyFont(f.raceLineText, "Threshold")
+        applyFont(f.raceLineValueText, "Threshold")
         applyFont(f.forcesText,  "Forces")
 
         applyFont(f.timerMeasureText, "Timer")
@@ -1356,6 +1374,21 @@ function MPT:ApplyLayout()
             db.ShowMilliseconds == true or (self.run and self.run.completed) or false)
         f.timerMeasureText:SetText(tpl)
         f._timerResW = (f.timerMeasureText:GetStringWidth() or 0) + sepGaps * TIMER_SEP_GAP
+
+        -- Race-line value reservation: "28:88" is the per-position-widest
+        -- string a value can render — the +3 countdown never exceeds 25:00
+        -- (user cap 2026-07-03), so the tens-of-minutes glyph caps at "2";
+        -- "8" is the widest-digit stand-in elsewhere. Kept tight so the
+        -- label sits as close as the worst case allows. Signed overshoots
+        -- ("+9:59") still fit — "+" is no wider than "2"; a locked
+        -- completion 10+ min past the cutoff may graze the gap (accepted).
+        -- The label FS pins LEFT of this box, so the per-second countdown
+        -- never re-flows it — same reservation-tuck as the PB text. Own
+        -- hidden ruler: measuring on the live value FS would flash the
+        -- template for a tick after every settings change.
+        applyFont(f.raceMeasureText, "Threshold")
+        f.raceMeasureText:SetText("28:88")
+        f._raceValResW = f.raceMeasureText:GetStringWidth() or 0
 
         -- Bar sizes, HUD anchor, scale, backdrop recolor.
         f:SetWidth(barW + PAD * 2)
@@ -1530,7 +1563,18 @@ function MPT:ApplyLayout()
     -- protruding half-line for EDGE (half-in/half-out on the bar's top
     -- edge); INSIDE sits fully on the bar and consumes nothing.
     -- BELOW reserves under the bar via bars._belowPad instead.
-    if LinesModeActive(db) then row(f.raceLineText) end
+    -- Race-line row: split like the timer row — the changing countdown value
+    -- is right-pinned at the frame edge, and the static label pins LEFT of
+    -- the value's reserved worst-case box (f._raceValResW, config pass), so
+    -- the per-second re-measure never moves the label.
+    if LinesModeActive(db) and f.raceLineText:IsShown() then
+        f.raceLineValueText:ClearAllPoints()
+        f.raceLineValueText:SetPoint("TOPRIGHT", f, "TOPRIGHT", -PAD, y)
+        f.raceLineText:ClearAllPoints()
+        f.raceLineText:SetPoint("TOPRIGHT", f, "TOPRIGHT",
+            -(PAD + (f._raceValResW or 0) + RACE_VAL_GAP), y)
+        y = y - (f.raceLineText:GetStringHeight() or (db.FontSize or 13)) - ROW
+    end
     if db.ShowThresholdLabels then
         local tPlace = db.ThresholdPlacement or "EDGE"
         local tSize = db.ThresholdFontSize or db.FontSize or 13
