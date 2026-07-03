@@ -922,6 +922,31 @@ function DM:OnEncounterStart()
     -- Segment boundary: a boss pull starts a new segment, so a view override from the
     -- previous boss/trash clears ("until another raid boss starts").
     self:BumpSegment()
+    -- Stored-id snapshot for the kill/wipe tint: OnEncounterEnd tags only sessions
+    -- stored SINCE this pull. "Tag the newest" mis-tagged a key-completing final
+    -- kill -- Blizzard stores the run-level "+NN" session on top of the boss's own
+    -- (live repro 2026-07-03), so the boss's outcome landed on the run row. Plain
+    -- ids only (sessionID is never secret; guarded anyway). nil snapshot = the
+    -- pcall'd list read failed -> OnEncounterEnd falls back to newest-only.
+    local list = self:GetAvailableSessions()
+    if list then
+        self._preEncounterIds = self._preEncounterIds or {}
+        wipe(self._preEncounterIds)
+        for i = 1, #list do
+            local id = list[i] and list[i].sessionID
+            if id and not issecretvalue(id) then
+                self._preEncounterIds[id] = true
+            else
+                -- An unreadable id would leave a HOLE the end-side walk reads as
+                -- "new since the pull" and mis-tags. Drop the whole snapshot and
+                -- degrade to newest-only, matching the failed-read branch below.
+                self._preEncounterIds = nil
+                break
+            end
+        end
+    else
+        self._preEncounterIds = nil
+    end
 end
 
 -- Boss kill/wipe: a hard segment boundary, but the session totals are not yet
@@ -930,10 +955,16 @@ end
 -- the encounter-active flag immediately.
 --
 -- The payload's `success` (1 = kill, 0 = wipe; plain event payload, never secret)
--- feeds the segment-menu kill/wipe tint: shortly AFTER the finalize delay, the
--- newest entry in GetAvailableCombatSessions is this attempt's stored session --
--- tag its id in the runtime outcome map. Runtime-only on purpose: stored sessions
--- don't survive a /reload, so neither must the map (wiped on every session reset).
+-- feeds the segment-menu kill/wipe tint: shortly AFTER the finalize delay, every
+-- session stored SINCE the pull (the OnEncounterStart snapshot) gets tagged --
+-- normally just the boss's own session, but a key-completing final kill also
+-- stores the run-level "+NN" session, and both belong to this kill (a last-boss
+-- wipe never completes the key, so the run row can't inherit a red). Sessions
+-- only append, so new ids sit contiguously at the list tail -- walk backward and
+-- stop at the first pre-pull id. No snapshot (the pcall'd read failed at the
+-- pull, or a mid-encounter /reload) -> fall back to tagging the newest only.
+-- Runtime-only on purpose: stored sessions don't survive a /reload, so neither
+-- must the map (wiped on every session reset).
 function DM:OnEncounterEnd(_, _, _, _, _, success)
     if DEBUG_DM then KE:Print("[DM] ENCOUNTER_END -> delayed StopTicker (0.5s)") end
     self._inEncounter = false
@@ -943,11 +974,16 @@ function DM:OnEncounterEnd(_, _, _, _, _, success)
     local won = (success == 1)
     C_Timer.After(0.75, function()
         if not DM.enabled then return end
-        local list = DM:GetAvailableSessions(1)
-        local newest = list and list[#list]
-        local nid = newest and newest.sessionID
-        if nid and not issecretvalue(nid) then
-            DM._sessionOutcomes = DM._sessionOutcomes or {}
+        local snap = DM._preEncounterIds
+        local list = DM:GetAvailableSessions(5)
+        if not list or #list == 0 then return end
+        DM._sessionOutcomes = DM._sessionOutcomes or {}
+        local first = snap and 1 or #list   -- no snapshot: newest entry only
+        for i = #list, first, -1 do
+            local entry = list[i]
+            local nid = entry and entry.sessionID
+            if not nid or issecretvalue(nid) then break end
+            if snap and snap[nid] then break end   -- reached pre-pull territory
             DM._sessionOutcomes[nid] = won
             if DEBUG_DM then
                 KE:Print("[DM] outcome tagged: session " .. tostring(nid) .. " -> " .. (won and "kill" or "wipe"))
