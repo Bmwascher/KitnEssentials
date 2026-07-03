@@ -820,12 +820,21 @@ function MPT:RenderThresholds()
                 self.SetTextGated(f0.raceLineValueText, valStr)
                 self.SetColorGated(f0.raceLineValueText, col[1], col[2], col[3])
                 f0.raceLineValueText:Show()
-                -- Publish the value's digit SHAPE ("9:48" -> "8:88") for the
-                -- layout pass's reservation. The label re-anchors only when
-                -- the shape changes (a digit-count crossing or sign flip —
-                -- minute-scale events), so it hugs the countdown at
-                -- RACE_VAL_GAP without riding the per-second width.
-                f0._raceValShape = valStr:gsub("%d", "8")
+                -- Publish the value's digit SHAPE ("15:27" -> "18:88") for
+                -- the layout pass's reservation. The LEADING digit stays
+                -- exact — a countdown's leading digit only shrinks, and an
+                -- overshoot's leading-digit growth changes the shape string
+                -- itself (forcing a re-measure) — so the box can never be
+                -- outgrown; the ticking positions use the project's
+                -- widest-digit "8" stand-in. An all-8s template kept a dead
+                -- half-digit of slack whenever the leading digit was a
+                -- narrow "1" (2026-07-03 live feedback). The label re-anchors
+                -- only when the shape changes (leading-digit step,
+                -- digit-count crossing, sign flip — minute-scale events), so
+                -- it hugs the countdown at RACE_VAL_GAP without riding the
+                -- per-second width.
+                local head, tail = valStr:match("^(%D*%d)(.*)$")
+                f0._raceValShape = head and (head .. tail:gsub("%d", "8")) or valStr
             end
         end
         return
@@ -1515,9 +1524,10 @@ function MPT:ApplyLayout()
     _sigBuf[16] = db.ThresholdPlacement or "EDGE"
     _sigBuf[17] = #(f.raceLineText:GetText() or "")   -- collapse/lock transitions restack
     _sigBuf[18] = (db.ShowForcesBar == false) and 0 or 1
-    -- Race value shape ("8:88"/"88:88"/"+8:88"): digit-count crossings and
-    -- sign flips re-run the stack so the label re-anchors to the re-measured
-    -- reservation (shape-following box; see the race-line row below).
+    -- Race value shape ("18:88"/"8:88"/"+8:88"): leading-digit steps,
+    -- digit-count crossings, and sign flips re-run the stack so the label
+    -- re-anchors to the re-measured reservation (shape-following box; see
+    -- the race-line row below).
     _sigBuf[19] = f._raceValShape or ""
     local sig = table.concat(_sigBuf, ":")
     if f._keLayoutSig == sig then return end
