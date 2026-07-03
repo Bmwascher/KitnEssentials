@@ -14,6 +14,15 @@ local TS = KitnEssentials:NewModule("TargetedSpells", "AceEvent-3.0")
 
 local CreateFrame = CreateFrame
 local IsInInstance, GetInstanceInfo = IsInInstance, GetInstanceInfo
+local UnitCastingInfo, UnitChannelInfo = UnitCastingInfo, UnitChannelInfo
+local UnitCastingDuration, UnitChannelDuration = UnitCastingDuration, UnitChannelDuration
+local UnitEmpoweredChannelDuration = UnitEmpoweredChannelDuration
+local PlayerIsSpellTarget = PlayerIsSpellTarget
+local GetTime = GetTime
+local C_Timer = C_Timer
+local C_StringUtil = C_StringUtil
+local tinsert, tremove, tsort = table.insert, table.remove, table.sort
+local strmatch = string.match
 
 local DEBUG_TS = false
 local function dbg(...)
@@ -23,6 +32,27 @@ end
 -- Delve difficultyID — probe-confirmed in-game 2026-07-03 (Collegiate
 -- Calamity delve: instanceType "scenario", difficultyID 208).
 TS.DELVE_DIFFICULTY_ID = 208
+
+local FALLBACK_ICON = 136243
+local NAMEPLATE_PATTERN = "^nameplate%d+$"
+local MAX_NAMEPLATES = 40
+local SETTLE_DELAY = 0.2
+
+-- Breakpoint countdown formatter (reference pattern): tenths under 3s,
+-- whole seconds to 60, m:ss above (only reachable if the >60s gate changes).
+-- Lazy so headless spec loads (no C_StringUtil in busted) never touch it.
+local castFormatter
+local function GetCastFormatter()
+    if not castFormatter and C_StringUtil and C_StringUtil.CreateNumericRuleFormatter then
+        castFormatter = C_StringUtil.CreateNumericRuleFormatter()
+        castFormatter:SetBreakpoints({
+            { threshold = 0, format = "%.1f" },
+            { threshold = 3.01, format = "%d" },
+            { threshold = 60, format = "%d:%02d", components = { { div = 60 }, { mod = 60 } } },
+        })
+    end
+    return castFormatter
+end
 
 ---------------------------------------------------------------------------------
 -- Module State
@@ -176,13 +206,314 @@ function TS:RegisterEditMode()
 end
 
 ---------------------------------------------------------------------------------
--- Stubs completed by Tasks 8-11 (keep so the file loads and lints clean)
+-- Entry frames
 ---------------------------------------------------------------------------------
 
-function TS:ScanExistingNameplates() end
-function TS:ReleaseAllEntries() end
-function TS:OnCastEvent() end
-function TS:OnUnitTarget() end
-function TS:OnNameplateAdded() end
-function TS:OnNameplateRemoved() end
+local function CreateIconFrame(entry, db)
+    local f = CreateFrame("Frame", nil, entry)
+    f:SetSize(db.IconSize, db.IconSize)
+    f.tex = f:CreateTexture(nil, "ARTWORK")
+    f.tex:SetAllPoints(f)
+    KE:ApplyIconZoom(f.tex, 0.3)
+    KE:AddIconBorders(f)
+    f.cooldown = CreateFrame("Cooldown", nil, f, "CooldownFrameTemplate")
+    f.cooldown:SetAllPoints(f)
+    f.cooldown:SetDrawEdge(false)
+    return f
+end
+
+function TS:CreateEntry()
+    local db = self.db
+    local width = db.IconSize * 2 + db.FontSize * 3
+    local entry = CreateFrame("Frame", nil, self.anchorFrame)
+    entry:SetSize(width, db.IconSize)
+
+    -- Layout spine: textureless StatusBar whose fill extent mirrors entry
+    -- alpha, so invisible entries compact out of the stack (reference
+    -- spacer-chain mechanism). Length covers the entry + gap.
+    entry.Spacer = CreateFrame("StatusBar", nil, entry)
+    entry.Spacer:SetStatusBarTexture("")
+    entry.Spacer:SetOrientation("VERTICAL")
+    entry.Spacer:SetMinMaxValues(0, 1)
+    entry.Spacer:SetSize(1, db.IconSize + db.Gap)
+    entry.Spacer:SetValue(1)
+
+    entry.leftIcon = CreateIconFrame(entry, db)
+    entry.leftIcon:SetPoint("LEFT", entry, "LEFT", 0, 0)
+    entry.rightIcon = CreateIconFrame(entry, db)
+    entry.rightIcon:SetPoint("RIGHT", entry, "RIGHT", 0, 0)
+    entry.rightIcon.cooldown:SetHideCountdownNumbers(true)
+
+    entry.generation = 0
+    return entry
+end
+
+---------------------------------------------------------------------------------
+-- Entry pool / release
+---------------------------------------------------------------------------------
+
+function TS:AcquireEntry(unit)
+    local entry = tremove(self.entryPool)
+    if not entry then entry = self:CreateEntry() end
+    entry.unit = unit
+    entry.generation = (entry.generation or 0) + 1
+    self.activeEntries[unit] = entry
+    self.activeCount = self.activeCount + 1
+    entry:Show()
+    return entry
+end
+
+-- Single funnel for every removal path. Generation guards stale timers and
+-- widget callbacks; the interrupt linger suppresses STOP/OnCooldownDone
+-- racing in behind an interrupt ("force" = linger timer / nameplate gone).
+function TS:Release(entry, generation, reason)
+    if not entry or entry.generation ~= generation then return end
+    if entry.wasInterrupted and reason ~= "force" then
+        if GetTime() < (entry.doNotHideBefore or 0) then
+            dbg("release suppressed (linger)", entry.unit, reason)
+            return
+        end
+    end
+    dbg("release", entry.unit, reason)
+    if self.activeEntries[entry.unit] == entry then
+        self.activeEntries[entry.unit] = nil
+        self.activeCount = self.activeCount - 1
+    end
+    entry.generation = entry.generation + 1  -- invalidate pending callbacks
+    entry.unit, entry.castKey, entry.kind = nil, nil, nil
+    entry.receiptTime, entry.durationObject, entry.durationAlpha = nil, nil, nil
+    entry.spellId = nil
+    entry.wasInterrupted, entry.doNotHideBefore = nil, nil
+    -- Idempotent teardown: pooled frames must come back visually neutral.
+    entry:SetAlpha(1)
+    entry.Spacer:SetValue(1)
+    entry.leftIcon.tex:SetDesaturated(false)
+    entry.rightIcon.tex:SetDesaturated(false)
+    entry.leftIcon.cooldown:Clear()
+    entry.rightIcon.cooldown:Clear()
+    self:StopGlow(entry)                    -- Task 9 (stub until then)
+    entry:Hide()
+    entry:ClearAllPoints()
+    entry.Spacer:ClearAllPoints()
+    tinsert(self.entryPool, entry)
+    self:RepositionEntries()
+end
+
+-- ReleaseAllEntries empties activeEntries first, so Release's active-table
+-- bookkeeping no-ops safely; count is reset wholesale.
+function TS:ReleaseAllEntries()
+    local entries = self.activeEntries
+    self.activeEntries = {}
+    self.activeCount = 0
+    for _, entry in pairs(entries) do
+        entry.wasInterrupted = nil
+        self:Release(entry, entry.generation, "force")
+    end
+end
+
+function TS:StopGlow() end  -- completed in Task 9
+
+---------------------------------------------------------------------------------
+-- Populate + visibility binding
+---------------------------------------------------------------------------------
+
+-- info: { kind = "cast"|"channel"|"empower", castKey, name, texture,
+--         spellId, duration (LuaDurationObject) }
+function TS:PopulateEntry(entry, unit, info)
+    local db = self.db
+    entry.castKey = info.castKey
+    entry.kind = info.kind
+    entry.spellId = info.spellId
+    entry.receiptTime = GetTime()
+    entry.durationObject = info.duration
+    entry.wasInterrupted, entry.doNotHideBefore = nil, nil
+    entry.leftIcon.tex:SetDesaturated(false)
+    entry.rightIcon.tex:SetDesaturated(false)
+
+    entry.leftIcon.tex:SetTexture(info.texture or FALLBACK_ICON)
+    entry.rightIcon.tex:SetTexture(info.texture or FALLBACK_ICON)
+
+    local lc, rc = entry.leftIcon.cooldown, entry.rightIcon.cooldown
+    lc:SetDrawSwipe(db.ShowSwipe ~= false)
+    rc:SetDrawSwipe(db.ShowSwipe ~= false)
+    lc:SetHideCountdownNumbers(false)
+    lc:SetCountdownFormatter(GetCastFormatter())
+    lc:SetCooldownFromDurationObject(info.duration)
+    rc:SetCooldownFromDurationObject(info.duration)
+
+    -- Widget-managed FontString: the Cooldown resets font/anchors on
+    -- Clear()/SetCooldown, so re-apply BOTH on every populate.
+    local fs = lc:GetCountdownFontString()
+    if fs then
+        fs:ClearAllPoints()
+        fs:SetPoint("CENTER", entry, "CENTER", 0, 0)
+        local ok = pcall(fs.SetFont, fs, KE:GetFontPath(db.FontFace), db.FontSize,
+            KE:GetFontOutline(db.FontOutline))
+        if not ok then
+            pcall(fs.SetFont, fs, KE:GetFontPath("Expressway"), db.FontSize, "OUTLINE")
+        end
+    end
+
+    lc:SetScript("OnCooldownDone", function()
+        TS:Release(entry, entry.generation, "cooldown-done")
+    end)
+
+    -- THE verbatim core (spec "Visibility binding"): the secret targeting
+    -- boolean never enters Lua; durationAlpha doubles as the >60s gate; the
+    -- spacer mirrors alpha so hidden entries compact out of the stack.
+    local durationAlpha = info.duration:EvaluateRemainingDuration(KE.curves.IsLongCast)
+    entry:SetAlpha(durationAlpha)
+    entry.Spacer:SetValue(durationAlpha)
+    entry:SetAlphaFromBoolean(PlayerIsSpellTarget(unit), durationAlpha, 0)
+    entry.Spacer:SetValue(entry:GetAlpha())
+
+    self:UpdateGlow(entry)                  -- Task 9 (stub until then)
+end
+
+function TS:UpdateGlow() end  -- completed in Task 9
+
+---------------------------------------------------------------------------------
+-- Layout (spacer chain)
+---------------------------------------------------------------------------------
+
+function TS:RepositionEntries()
+    local db = self.db
+    local list = {}
+    for _, entry in pairs(self.activeEntries) do tinsert(list, entry) end
+    tsort(list, TS.CompareEntries)
+
+    local growDown = (db.Grow or "DOWN") == "DOWN"
+    local point = growDown and "TOP" or "BOTTOM"
+    local relPoint = growDown and "BOTTOM" or "TOP"
+    local prevTexture
+    for i, entry in ipairs(list) do
+        local spacer = entry.Spacer
+        -- Fill from the anchored edge so a zero-value spacer's texture edge
+        -- collapses to the chain point (verify direction in-game; reference
+        -- layout: Utils.lua:202-246).
+        spacer:SetReverseFill(growDown)
+        spacer:ClearAllPoints()
+        spacer:SetPoint(point, (i == 1) and self.anchorFrame or prevTexture, relPoint, 0, 0)
+        entry:ClearAllPoints()
+        entry:SetPoint(point, spacer, point, 0, 0)
+        prevTexture = spacer:GetStatusBarTexture()
+    end
+end
+
+---------------------------------------------------------------------------------
+-- Cast start pipeline
+---------------------------------------------------------------------------------
+
+local function IsRelevantUnit(unit)
+    return unit and strmatch(unit, NAMEPLATE_PATTERN)
+        and UnitExists(unit) and UnitCanAttack("player", unit)
+end
+
+-- Delayed re-read: cast target/duration data settles ~0.2s after the event
+-- (reference behavior). castKey aborts the stale handler when two casts
+-- land <0.2s apart on one unit.
+function TS:TryStart(unit, castKey)
+    if not self.contentActive then return end
+    if not IsRelevantUnit(unit) then return end
+
+    local info
+    local name, _, texture, _, _, _, castID, _, spellID = UnitCastingInfo(unit)
+    if name then
+        if castKey and castID and castKey ~= castID then
+            dbg("stale delayed start (cast)", unit)
+            return
+        end
+        local duration = UnitCastingDuration(unit)
+        if not duration then return end
+        info = { kind = "cast", castKey = castID or castKey,
+                 name = name, texture = texture, spellId = spellID, duration = duration }
+    else
+        -- Empowered casts report through UnitChannelInfo with isEmpowered set
+        -- and use UnitEmpoweredChannelDuration — KE's own CastbarHelpers
+        -- H.StartCast is the shipped precedent (CastbarHelpers.lua:751-761).
+        local cname, _, ctexture, _, _, _, _, cspellID, isEmpowered = UnitChannelInfo(unit)
+        if not cname then return end
+        local duration
+        if isEmpowered then
+            duration = UnitEmpoweredChannelDuration(unit)
+        else
+            duration = UnitChannelDuration(unit)
+        end
+        if not duration then return end
+        -- UnitChannelInfo exposes no cast GUID; the event-payload castGUID
+        -- captured at dispatch is the key (spec "castKey").
+        info = { kind = isEmpowered and "empower" or "channel", castKey = castKey,
+                 name = cname, texture = ctexture, spellId = cspellID, duration = duration }
+    end
+
+    local entry = self.activeEntries[unit]
+    if entry then
+        self:Release(entry, entry.generation, "force")   -- replace-by-unit
+    elseif self.activeCount >= (self.db.MaxIcons or 10) then
+        dbg("at cap, ignoring", unit)
+        return
+    end
+    entry = self:AcquireEntry(unit)
+    self:PopulateEntry(entry, unit, info)
+    self:RepositionEntries()
+    dbg("started", unit, info.kind, info.name)
+end
+
+function TS:OnCastEvent(event, unit, castGUID)
+    if not strmatch(unit or "", NAMEPLATE_PATTERN) then return end
+
+    if event == "UNIT_SPELLCAST_START" or event == "UNIT_SPELLCAST_CHANNEL_START"
+        or event == "UNIT_SPELLCAST_EMPOWER_START" then
+        local kind = (event == "UNIT_SPELLCAST_CHANNEL_START") and "channel"
+            or (event == "UNIT_SPELLCAST_EMPOWER_START") and "empower" or "cast"
+        C_Timer.After(SETTLE_DELAY, function()
+            TS:TryStart(unit, castGUID, kind)
+        end)
+    elseif event == "UNIT_SPELLCAST_INTERRUPTED" then
+        self:OnInterrupted(unit, castGUID)               -- Task 9
+    else -- STOP / CHANNEL_STOP / EMPOWER_STOP
+        local entry = self.activeEntries[unit]
+        if entry and (not entry.castKey or not castGUID or entry.castKey == castGUID) then
+            self:Release(entry, entry.generation, "stop")
+        end
+    end
+end
+
+function TS:OnInterrupted() end  -- completed in Task 9
+
+function TS:ScanExistingNameplates()
+    for i = 1, MAX_NAMEPLATES do
+        local unit = "nameplate" .. i
+        if UnitExists(unit) and UnitCanAttack("player", unit) then
+            C_Timer.After(SETTLE_DELAY, function() TS:TryStart(unit) end)
+        end
+    end
+end
+
+function TS:OnNameplateAdded(_, unit)
+    if self.contentActive and IsRelevantUnit(unit) then
+        C_Timer.After(SETTLE_DELAY, function() TS:TryStart(unit) end)
+    end
+end
+
+function TS:OnNameplateRemoved(_, unit)
+    local entry = self.activeEntries[unit]
+    if entry then
+        entry.wasInterrupted = nil
+        self:Release(entry, entry.generation, "force")
+    end
+end
+
+function TS:OnUnitTarget(_, unit)
+    -- Retarget mid-cast: rebuild (release + reacquire re-runs the binding
+    -- and refreshes receiptTime — reference behavior, re-sorts to newest).
+    if self.activeEntries[unit] then
+        self:TryStart(unit)
+    end
+end
+
+---------------------------------------------------------------------------------
+-- Stubs completed by Task 11 (keep so the file loads and lints clean)
+---------------------------------------------------------------------------------
+
 function TS:CheckCVarPrompt() end
