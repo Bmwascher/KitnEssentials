@@ -47,6 +47,7 @@ local math_min = math.min
 local IsInRaid = IsInRaid
 local IsInGroup = IsInGroup
 local IsInGuild = IsInGuild
+local GetTime = GetTime
 local GetNumGroupMembers = GetNumGroupMembers
 local GetUnitName = GetUnitName
 local UnitGUID = UnitGUID
@@ -506,6 +507,8 @@ function DM:OnDisable()
     self._pvpMatchOver = false
     self._activeContext = nil
     self._ctxCheckPending = false
+    self._combatStartT = nil
+    self._combatEndT = nil
 
     -- Hand the meter back to Blizzard and drop the EditMode mover.
     self:RestoreBlizzardMeter()
@@ -576,6 +579,14 @@ function DM:StartTicker()
     if self._ticker then
         self._ticker:Cancel()
         self._ticker = nil
+    else
+        -- Combat clock: arming from IDLE marks a new fight's start. Gated on the
+        -- ticker being down so a mid-combat restart (the GUI's Combat Refresh
+        -- slider re-calls StartTicker while running) never resets the clock.
+        -- Plain GetTime numbers -- never secret. Rendered by Window.lua's
+        -- UpdateCombatClock; _combatEndT (StopTicker) freezes it post-fight.
+        self._combatStartT = GetTime()
+        self._combatEndT = nil
     end
 
     local rate = (self.db and self.db.RefreshRate) or 0.5
@@ -604,6 +615,13 @@ function DM:StopTicker()
     if self._ticker then
         self._ticker:Cancel()
         self._ticker = nil
+        -- Combat clock: freeze at the fight's end BEFORE the final paint below,
+        -- so that paint (and any later out-of-combat repaint -- scroll, GUI
+        -- change, session settle) shows the frozen final duration instead of a
+        -- still-growing one. Only stamped when a fight was actually running.
+        if self._combatStartT and not self._combatEndT then
+            self._combatEndT = GetTime()
+        end
     end
 
     self._needsFinalRefresh = false
@@ -779,6 +797,13 @@ function DM:OnCombatForceStop()
     -- Zoning clears any PvP match-end suppression: a new instance/world is a clean slate
     -- for the UNIT_FLAGS auto-restart (the just-left arena no longer applies).
     self._pvpMatchOver = false
+    -- A new zone is a clean slate for the combat clock too: drop the stamps BEFORE
+    -- StopTicker so its built-in final paint HIDES the clock. Nil'ing after would
+    -- leave the frozen last-fight time painted with no guaranteed later repaint --
+    -- a same-context zoning (hearth across the world) never re-Ticks on its own
+    -- (ApplyActiveContext early-returns when the context is unchanged).
+    self._combatStartT = nil
+    self._combatEndT = nil
     self:StopTicker()
     -- Zoning may change the content context (entered/left an instance) -- schedule a
     -- settled re-check (debounced; IsInInstance isn't reliable until the world loads).
@@ -865,6 +890,12 @@ function DM:OnMeterReset()
     -- Stored sessions are gone; their kill/wipe outcome tags go with them (a future
     -- session could reuse a wiped id and inherit a stale tint otherwise).
     if self._sessionOutcomes then wipe(self._sessionOutcomes) end
+    -- The frozen combat clock referenced the wiped data -- hide it (out of combat;
+    -- an in-combat reset keeps the live clock since the fight itself continues).
+    if not self._ticker then
+        self._combatStartT = nil
+        self._combatEndT = nil
+    end
     -- A reset empties the bars; close any open selector so the cleared bars show
     -- (DAMAGE_METER_RESET can fire from an external reset with a selector still open).
     if self.CloseAllSelectors then self:CloseAllSelectors() end
@@ -1293,6 +1324,12 @@ function DM:HeaderReset(_)
     -- Outcome tags reference the wiped session ids -- drop them with the data
     -- (mirrors OnMeterReset; covers a reset that doesn't fire the event).
     if self._sessionOutcomes then wipe(self._sessionOutcomes) end
+    -- Frozen combat clock referenced the wiped data too (mirrors OnMeterReset;
+    -- in-combat resets keep the live clock -- the fight itself continues).
+    if not self._ticker then
+        self._combatStartT = nil
+        self._combatEndT = nil
+    end
     -- Close any open view-selector too so the freshly-emptied bars are visible (the
     -- selector overlays the body with the same anchors, so it would block them).
     if self.CloseAllSelectors then self:CloseAllSelectors() end

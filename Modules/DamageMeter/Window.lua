@@ -27,6 +27,8 @@ local RAID_CLASS_COLORS = RAID_CLASS_COLORS
 local Enum = Enum
 local Ambiguate = Ambiguate
 local UnitGroupRolesAssigned = UnitGroupRolesAssigned
+local GetTime = GetTime
+local format = string.format
 local math_min = math.min
 local math_max = math.max
 local math_floor = math.floor
@@ -341,6 +343,27 @@ function DM:CreateWindow(winIdx)
     if W.headerBar.SetPropagateMouseClicks then
         W.headerBar:SetPropagateMouseClicks(true)
     end
+
+    -- Combat clock (ShowCombatClock): fight length "[M:SS]" at the right end of
+    -- the header band, shown on the display-position-1 window only. Built on EVERY
+    -- window (a cheap FontString) because display positions shift with dock edits;
+    -- UpdateCombatClock gates visibility per tick. It SHARES the header's right-end
+    -- slot with the mouseover-revealed action icons: revealing them hides the clock
+    -- (SetHeaderIconAlpha sets _clockSuppressed), leaving re-shows it. Anchored by
+    -- ApplyHeaderIcons (steps left of the strip only when the icons are ALWAYS
+    -- visible); font tracks the header size (ReapplyBarVisuals). Bright while the
+    -- fight runs, dimmed once the final time is frozen (UpdateCombatClock owns the
+    -- tint -- this init just matches the live color for the first paint).
+    W.clock = W.frame:CreateFontString(nil, "OVERLAY")
+    W.clock:SetJustifyH("RIGHT")
+    KE:ApplyFontToText(
+        W.clock,
+        self.db and self.db.FontFace,
+        self.db and ((self.db.HeaderFontSize or self.db.FontSize) or 12),
+        self.db and self.db.FontOutline
+    )
+    W.clock:SetTextColor(0.85, 0.85, 0.85)
+    W.clock:Hide()
 
     -- Window-index badge: a solid accent-colored chip (top-right) with a bright
     -- white number, shown ONLY during GUI preview / edit so the "Window N" rows in
@@ -736,6 +759,14 @@ function DM:ReapplyBarVisuals(W)
     local texPath = KE:GetStatusbarPath(db and db.StatusBarTexture or "KitnUI")
 
     KE:ApplyFontToText(W.header, face, headerSize, outline)
+    -- Combat clock tracks the header font; the re-apply resets the FontString
+    -- tint, so nil the frozen dirty key -- the ApplyHeaderIcons call at the end of
+    -- this function funnels into UpdateCombatClock, which re-tints from the live
+    -- frozen/running state (mirrors the value-color note below).
+    if W.clock then
+        KE:ApplyFontToText(W.clock, face, headerSize, outline)
+        W._clockFrozen = nil
+    end
     -- Force RenderWindow's header block to rebuild next tick so a live GUI change to
     -- ShowTypeIcon (or the header font) re-evaluates the meter-type glyph + title anchor --
     -- that block is otherwise dirty-gated on meter/session type, which a toggle doesn't move.
@@ -855,6 +886,29 @@ function DM:ApplyHeaderIcons(W)
     local show = not db or db.ShowHeaderIcons ~= false
     local mouseover = db and db.HeaderIconsMouseover
 
+    -- Combat clock anchor: the clock lives IN the icon strip's slot (flush right)
+    -- and yields it while the icons are revealed -- mouseover mode hides the clock
+    -- during the reveal (SetHeaderIconAlpha drives _clockSuppressed), so the two
+    -- never overlap. Only the ALWAYS-visible icon mode pushes the clock left past
+    -- the strip (the report button's left edge sits ~70px in on MakeHeaderBtn's
+    -- step grid). Anchored to the headerBar strip so vertical centering tracks the
+    -- band height. Any mode change re-lands here, so drop a stale suppression
+    -- (e.g. mouseover turned off while revealed) before re-gating.
+    if W.clock and W.headerBar then
+        W._clockSuppressed = false
+        W.clock:ClearAllPoints()
+        -- +1 y: the FontString reads a touch low when dead-centered in the band
+        -- (descender space), so it rides one pixel high of center. Eyeball knob.
+        W.clock:SetPoint("RIGHT", W.headerBar, "RIGHT", (show and not mouseover) and -74 or -4, 1)
+        -- Re-gate the clock's visibility too: LayoutDock re-runs this per placed
+        -- window on every structural pass with a FRESH _winDisplayPos, so a dock
+        -- rearrangement that moves display position 1 migrates the clock to the
+        -- new #1 window immediately instead of leaving a stale one until the next
+        -- Tick (Remove/Move/arrangement paths don't Tick on their own -- only
+        -- AddWindow sets _needsRenderAfterLayout).
+        self:UpdateCombatClock(W)
+    end
+
     if not show then
         -- Hidden entirely; drop any hover scripts so a stale mouseover handler
         -- can't re-reveal them after the toggle is turned off.
@@ -890,6 +944,12 @@ function DM:ApplyHeaderIcons(W)
             W.headerBar:SetScript("OnLeave", function() DM:HeaderIconLeave(W) end)
             W._headerIconHover = true
         end
+        -- Re-derive the reveal from the LIVE overlay/hover state: the alpha-0 loop
+        -- above is only the at-rest baseline. A mid-overlay re-apply (ApplySettings
+        -- while the segment menu is open) or one with the cursor already on the
+        -- strip would otherwise collapse the icons under the open overlay -- and,
+        -- with the clock sharing the slot, pop the clock in beneath it.
+        self:SyncHeaderIconsToOverlayState(W)
     else
         for _, b in pairs(W.headerBtns) do
             b:SetAlpha(1)
@@ -901,22 +961,32 @@ function DM:ApplyHeaderIcons(W)
 end
 
 -- Hover helper for the mouseover-reveal mode; pulls the icon set to alpha a.
+-- Every reveal/hide (hover, icon-leave, overlay sync) funnels through here, so
+-- this is also where the combat clock yields/reclaims the shared header slot:
+-- revealed icons suppress the clock, hiding them hands the slot back.
 function DM:SetHeaderIconAlpha(W, a)
     if not W or not W.headerBtns then return end
     for _, b in pairs(W.headerBtns) do
         b:SetAlpha(a)
     end
+    W._clockSuppressed = (a or 0) > 0
+    self:UpdateCombatClock(W)
 end
 
 -- Force the header icons visible while any overlay is open, restore the at-rest alpha
 -- (0) once they all close. Called from every overlay open/close (Selector / Detail /
 -- SegmentMenu) so the icons snap to the right state immediately rather than waiting for
--- a W.frame:OnEnter that never comes while a child overlay owns the mouse. No-op unless
--- mouseover-reveal is active for this window (_headerIconHover is false in the
--- always-visible and hide-entirely modes, where the alpha is owned elsewhere).
+-- a W.frame:OnEnter that never comes while a child overlay owns the mouse. An overlay
+-- closing with the cursor still on the header strip keeps the reveal (IsMouseOver --
+-- same geometric test HeaderIconLeave uses): no OnEnter re-fires without a boundary
+-- crossing, so dropping to 0 here would collapse the icons (and swap the clock in)
+-- under an actively hovering cursor. No-op unless mouseover-reveal is active for this
+-- window (_headerIconHover is false in the always-visible and hide-entirely modes,
+-- where the alpha is owned elsewhere).
 function DM:SyncHeaderIconsToOverlayState(W)
     if not W or not W.headerBtns or not W._headerIconHover then return end
-    self:SetHeaderIconAlpha(W, _AnyOverlayOpen(W) and 1 or 0)
+    local up = _AnyOverlayOpen(W) or (W.headerBar and W.headerBar:IsMouseOver())
+    self:SetHeaderIconAlpha(W, up and 1 or 0)
 end
 
 -- Reveal the header icons (mouseover-reveal mode only -- no-op otherwise). Called from
@@ -955,6 +1025,53 @@ function DM:_UnwireHeaderHover(W)
         W.headerBar:EnableMouse(false)
     end
     W._headerIconHover = false
+end
+
+---------------------------------------------------------------------------------
+-- Combat clock (header)
+--
+-- Fight length "[M:SS]" at the right end of the display-position-1 window's
+-- header band (db.ShowCombatClock, default off). Driven by the same combat ticker
+-- as the bars -- zero idle cost. Core.lua stamps _combatStartT when the ticker
+-- arms from idle and _combatEndT in StopTicker, so an out-of-combat repaint
+-- (scroll, GUI change, session settle) shows the FROZEN final duration instead of
+-- a still-growing one; reset/zone paths nil both stamps and the clock hides. The
+-- frozen time renders DIMMED so a settled fight reads at a glance as over; the
+-- live tick is bright. _clockSuppressed (SetHeaderIconAlpha) yields the shared
+-- slot while the mouseover icons are revealed. All plain GetTime numbers -- never
+-- secret. Text dirty-gated on the whole second, tint on the frozen flip.
+---------------------------------------------------------------------------------
+function DM:UpdateCombatClock(W)
+    local clock = W.clock
+    if not clock then return end
+    local db = self.db
+    local startT = self._combatStartT
+    local show = db and db.ShowCombatClock and startT
+        and not W._clockSuppressed
+        and self._winDisplayPos and self._winDisplayPos[W.idx] == 1
+    if not show then
+        if W._clockShown then W._clockShown = false; clock:Hide() end
+        return
+    end
+    local endT = self._combatEndT
+    local secs = math_floor(((endT or GetTime()) - startT) + 0.5)
+    if secs < 0 then secs = 0 end
+    if W._clockSecs ~= secs then
+        W._clockSecs = secs
+        clock:SetText(format("[%d:%02d]", math_floor(secs / 60), secs % 60))
+    end
+    -- Frozen = dimmed, live = bright. ReapplyBarVisuals nils _clockFrozen after a
+    -- font re-apply (which resets the FontString color) so this re-tints then too.
+    local frozen = endT ~= nil
+    if W._clockFrozen ~= frozen then
+        W._clockFrozen = frozen
+        if frozen then
+            clock:SetTextColor(0.45, 0.45, 0.45)
+        else
+            clock:SetTextColor(0.85, 0.85, 0.85)
+        end
+    end
+    if W._clockShown ~= true then W._clockShown = true; clock:Show() end
 end
 
 ---------------------------------------------------------------------------------
@@ -1046,6 +1163,11 @@ function DM:RenderWindow(W)
             end
         end
     end
+
+    -- Combat clock (display-position-1 window only; see UpdateCombatClock).
+    -- Placed BEFORE the session resolution so the frozen post-fight time keeps
+    -- painting even when the live session has emptied.
+    self:UpdateCombatClock(W)
 
     -- Phase 4 segment/history: W._curSessionID pins a specific stored session
     -- (set by the ⌚ menu, ToggleSegmentMenu). nil = live cfg.SessionType.
