@@ -305,6 +305,52 @@ describe("Nicknames.lua GetNicknameOrName", function()
     end)
 end)
 
+describe("Nicknames.lua BuildNicknameKey", function()
+    local KE
+    before_each(function()
+        KE = L.loadNicknames()
+    end)
+
+    it("appends the fallback realm to a bare same-realm name", function()
+        -- The probe-confirmed C_DamageMeter shape (2026-07-02): same-realm
+        -- source names arrive with NO realm suffix.
+        assert.equals("Bite-Area52", KE:BuildNicknameKey("Bite", "Area52"))
+    end)
+
+    it("passes an already-normalized suffix through, ignoring the fallback", function()
+        assert.equals("Bob-TwistingNether", KE:BuildNicknameKey("Bob-TwistingNether", "Area52"))
+    end)
+
+    it("normalizes spaces, apostrophes, and inner hyphens in the realm", function()
+        assert.equals("Bob-TwistingNether", KE:BuildNicknameKey("Bob-Twisting Nether", "Area52"))
+        assert.equals("Bob-MalGanis", KE:BuildNicknameKey("Bob-Mal'Ganis", "Area52"))
+        -- First hyphen is the separator; later ones belong to the realm.
+        assert.equals("Bob-AzjolNerub", KE:BuildNicknameKey("Bob-Azjol-Nerub", "Area52"))
+    end)
+
+    it("normalizes the FALLBACK realm too", function()
+        assert.equals("Bite-Area52", KE:BuildNicknameKey("Bite", "Area 52"))
+        -- a fallback that normalizes to nothing is unresolvable
+        assert.is_nil(KE:BuildNicknameKey("Bite", " ' -"))
+    end)
+
+    it("returns nil when either side is unresolvable", function()
+        assert.is_nil(KE:BuildNicknameKey(nil, "Area52"))
+        assert.is_nil(KE:BuildNicknameKey("", "Area52"))
+        assert.is_nil(KE:BuildNicknameKey(42, "Area52"))
+        -- bare name with no fallback realm (pre-login GetNormalizedRealmName)
+        assert.is_nil(KE:BuildNicknameKey("Bite", nil))
+        assert.is_nil(KE:BuildNicknameKey("Bite", ""))
+    end)
+
+    it("built keys resolve against real store writes", function()
+        local nicks = KE.db.global.Nicknames
+        nicks["Bob-Realm"] = "Bobby"
+        assert.equals("Bobby", nicks[KE:BuildNicknameKey("Bob", "Realm")])
+        assert.equals("Bobby", nicks[KE:BuildNicknameKey("Bob-Realm", "Elsewhere")])
+    end)
+end)
+
 describe("Nicknames.lua ClearAllNicknames + tag refresh", function()
     local KE, nicks
     before_each(function()

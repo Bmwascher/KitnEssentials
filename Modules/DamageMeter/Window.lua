@@ -27,7 +27,10 @@ local RAID_CLASS_COLORS = RAID_CLASS_COLORS
 local Enum = Enum
 local Ambiguate = Ambiguate
 local UnitGroupRolesAssigned = UnitGroupRolesAssigned
+local UnitFullName = UnitFullName
+local GetNormalizedRealmName = GetNormalizedRealmName
 local GetTime = GetTime
+local wipe = wipe
 local format = string.format
 local math_min = math.min
 local math_max = math.max
@@ -46,6 +49,18 @@ local math_ceil = math.ceil
 -- /reload), so it needs no eviction. Some meters sidestep all this by always stripping
 -- the realm (Ambiguate "short"); ShowRealm is a KE-only feature, hence a KE-only memo.
 local realmNames = {}
+
+-- Nickname memos (db.UseNicknames -- see the Nickname support section below).
+-- nickLookup memoizes the store lookup per raw display name ("Bob" /
+-- "Bob-Realm" -> nickname string, or false for a confirmed miss) so the
+-- steady-state render does no per-tick key building -- hit AND miss are both
+-- remembered. nickByGUID keeps the last plain-tick nickname per (plain) player
+-- GUID so it keeps rendering while the name field is secret in combat (raids /
+-- active keystones) -- positive entries only, learned exclusively from plain
+-- ticks. Both wiped by DM:OnNicknamesChanged (store edits) so changes repaint;
+-- bounded like realmNames (distinct names/players seen; wiped on /reload).
+local nickLookup = {}
+local nickByGUID = {}
 
 ---------------------------------------------------------------------------------
 -- Constants
@@ -1075,6 +1090,78 @@ function DM:UpdateCombatClock(W)
 end
 
 ---------------------------------------------------------------------------------
+-- Nickname support (db.UseNicknames)
+--
+-- Substitutes the user's saved nicknames (KE.db.global.Nicknames -- the Custom
+-- Nicknames feature) for player names on the bars at DISPLAY time only: chat
+-- reports and the Detail targets keying (bar._rawName) keep real names.
+-- Resolution never touches a secret name -- the self row keys off isLocalPlayer
+-- (NeverSecret), plain names build a store key via KE:BuildNicknameKey
+-- (memoized in nickLookup), and a secret-in-combat name falls back to the
+-- nickByGUID memo learned while it was plain. A player never seen plain this
+-- session keeps their real name until combat drops.
+---------------------------------------------------------------------------------
+
+-- The player's own nickname, resolved once and cached on the module (false =
+-- confirmed none set) so the isLocalPlayer render path does no per-tick store
+-- work. OnNicknamesChanged nils the cache so store edits re-resolve. Caches
+-- ONLY once the identity actually resolved: at the login-time first paint
+-- UnitFullName / GetNormalizedRealmName can still be nil, and caching `false`
+-- then would stick "no nickname" for the session (the render path only calls
+-- back in while _selfNick is nil) -- returning nil un-cached lets the next
+-- tick retry, which settles within moments of login.
+function DM:ResolveSelfNickname()
+    -- Same key construction as KE:GetNicknameOrName (Core/Nicknames.lua).
+    local name, realm = UnitFullName("player")
+    if not name or name == "" then return nil end
+    if not realm or realm == "" then realm = GetNormalizedRealmName() end
+    if not realm or realm == "" then return nil end
+    local nick = false
+    local nicks = KE.db and KE.db.global and KE.db.global.Nicknames
+    if nicks then
+        local n = nicks[name .. "-" .. realm]
+        if n and n ~= "" then nick = n end
+    end
+    self._selfNick = nick
+    return nick
+end
+
+-- Display-point nickname resolution shared by the bar render path and the
+-- module's other player-name surfaces (the hover-tip / detail-panel enemy
+-- breakdowns in Detail.lua): plain raw name in ("Name" or "Name-Realm" -- the
+-- CALLER guarantees it is non-secret), nickname string or nil out. One
+-- nickLookup memo index in the steady state; a miss builds the store key once
+-- (KE:BuildNicknameKey) and remembers hit AND miss. Memoizes only a REAL
+-- resolution: key is nil while the realm is still unresolved (login-time first
+-- paint), and caching that false would kill nicknames for the whole session.
+function DM:LookupNickname(rawName)
+    local db = self.db
+    if not db or db.UseNicknames == false then return nil end
+    if not rawName or rawName == "" then return nil end
+    local c = nickLookup[rawName]
+    if c == nil then
+        local nicks = KE.db and KE.db.global and KE.db.global.Nicknames
+        local key = nicks and KE:BuildNicknameKey(rawName, GetNormalizedRealmName())
+        c = (key and nicks[key]) or false
+        if c == "" then c = false end
+        if key then nickLookup[rawName] = c end
+    end
+    return c or nil
+end
+
+-- Store-change hook, fanned out from KE:RefreshNicknameTags (the canonical
+-- "nicknames edited" notification: GUI edits, imports, clears). Drops every
+-- memo so the next paint re-resolves; the trailing Tick repaints immediately
+-- (nickname edits happen in the GUI, i.e. out of combat, where no ticker runs
+-- to pick the change up otherwise -- Tick is OOC-safe, see the wheel handler).
+function DM:OnNicknamesChanged()
+    wipe(nickLookup)
+    wipe(nickByGUID)
+    self._selfNick = nil
+    if self.enabled and self.Tick then self:Tick() end
+end
+
+---------------------------------------------------------------------------------
 -- Render path
 --
 -- RenderWindow repaints one window from its current session; RenderBar fills a
@@ -1575,7 +1662,69 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
     -- the cache. Out of combat it's a plain string and dirty-checked. Visibility
     -- tracks ShowName every tick so the GUI toggle takes effect on the next paint.
     local nm = src.name
-    if issecretvalue(nm) then
+    local nmSecret = issecretvalue(nm)
+
+    -- Nickname substitution (see the Nickname support section above), resolved
+    -- BEFORE the secret/plain branches so a nicknamed row always renders the
+    -- plain nickname string (dirty-checkable) -- even while the underlying name
+    -- is secret. `nick` stays nil when the feature is off / no nickname applies,
+    -- and the branches below then behave exactly as before.
+    local nick
+    if db.UseNicknames ~= false then
+        if src.isLocalPlayer then
+            -- Own row: isLocalPlayer is NeverSecret, so this works mid-combat
+            -- without ever reading the (possibly secret) name.
+            local sn = self._selfNick
+            if sn == nil then sn = self:ResolveSelfNickname() end
+            if sn then nick = sn end
+        else
+            local guid = bar._sourceGUID
+            -- Truthiness FIRST, never ==/~= -- the GUID itself can be SECRET
+            -- (creature rows in instances), and an equality compare on a secret
+            -- throws before issecretvalue ever sees it. A secret is always
+            -- truthy, so issecretvalue stays first contact -- the same idiom as
+            -- the spec-icon and realmNames guards in this function.
+            local guidPlain = guid and not issecretvalue(guid)
+            -- classFile "" is the documented enemy-mob marker (see the icon
+            -- tiers above): creatures can't have nicknames, so skip the store
+            -- work entirely and keep creature names out of the memos.
+            if not nmSecret and nm and classFile ~= "" then
+                -- Learn the realm-bearing form REGARDLESS of ShowRealm (the
+                -- ShowRealm branch's own write below only feeds its display
+                -- upgrade): cross-realm names intermittently drop their suffix,
+                -- and without this memo a bare cross-realm name keys onto OUR
+                -- realm -- at worst matching a same-named local player's
+                -- nickname on those flicker ticks.
+                if guidPlain and nm:find("-", 1, true) then
+                    realmNames[guid] = nm
+                end
+                local full = (guidPlain and realmNames[guid]) or nm
+                local c = self:LookupNickname(full)
+                if guidPlain then
+                    -- The LATEST plain resolution is authoritative: a miss
+                    -- clears a stale entry (e.g. a flicker tick's wrong-realm
+                    -- hit), so the secret-name fallback below can never carry
+                    -- a wrong nickname into combat. Players' GUIDs stay plain
+                    -- even in combat, so the memo survives where the name doesn't.
+                    nickByGUID[guid] = c
+                end
+                if c then nick = c end
+            elseif guidPlain then
+                -- Secret name this tick: use the last plain-tick resolution.
+                nick = nickByGUID[guid]
+            end
+        end
+    end
+    if nick then
+        -- Plain nickname display. _rawName keeps the UNSTRIPPED real name when
+        -- we have one (the Detail Targets lookup keys on it); a secret tick
+        -- clears it exactly like the secret branch below.
+        bar._rawName = (not nmSecret) and nm or nil
+        if nick ~= bar._cachedName then
+            bar._cachedName = nick
+            row.name:SetText(nick)
+        end
+    elseif nmSecret then
         -- Secret name (identity-restricted unit -- group members inside a raid or an active
         -- keystone; source.name is ConditionalSecret in DamageMeterDocumentation). Ambiguate
         -- is SecretArguments=AllowedWhenTainted (PlayerScriptDocumentation) -- it accepts the
