@@ -1559,6 +1559,7 @@ local Defaults = {
             ShowTypeIcon = false,
             ShowHeaderIcons = true,
             HeaderIconsMouseover = true,
+            ShowCombatClock = false,    -- fight-length clock (M:SS) on window 1's header
             DetailMaxRows = 40,
 
             -- Hover quick-peek tooltip (Phase 4b) — hover a bar -> floating breakdown/recap

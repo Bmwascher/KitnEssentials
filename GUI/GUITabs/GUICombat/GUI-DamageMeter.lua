@@ -1236,18 +1236,28 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     })
     rowHdr2:AddWidget(headerMouseoverChk, 0.5)
     manager:Register(headerMouseoverChk, "headericons")
+
+    -- Combat clock: header chrome like the icons, so it shares this card.
+    local clockChk = GUIFrame:CreateCheckbox(rowHdr2, "Combat Clock", {
+        value = db.ShowCombatClock == true,
+        tooltip = "Shows the fight length (M:SS) on window 1's header while in combat; freezes at the final time when the fight ends.",
+        callback = function(checked) db.ShowCombatClock = checked; ApplySettings() end,
+    })
+    rowHdr2:AddWidget(clockChk, 0.5)
+    manager:Register(clockChk, "all")
     cardHeaderIcons:AddRow(rowHdr2, Theme.rowHeight)
 
     -- What each toggle controls.
-    local rowHdrNote = GUIFrame:CreateRow(cardHeaderIcons.content, 54)
+    local rowHdrNote = GUIFrame:CreateRow(cardHeaderIcons.content, 68)
     local hdrNote = GUIFrame:CreateText(rowHdrNote,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " Action Buttons: the settings / reset / segment icons (top-right).\n" ..
-        KE:ColorTextByTheme("-") .. " Type Icon: the meter-type glyph beside the window title.",
-        54, "hide")
+        KE:ColorTextByTheme("-") .. " Type Icon: the meter-type glyph beside the window title.\n" ..
+        KE:ColorTextByTheme("-") .. " Combat Clock: fight length on window 1, frozen when the fight ends.",
+        68, "hide")
     rowHdrNote:AddWidget(hdrNote, 1)
     manager:Register(hdrNote, "all")
-    cardHeaderIcons:AddRow(rowHdrNote, 54, 0)
+    cardHeaderIcons:AddRow(rowHdrNote, 68, 0)
 
     yOffset = cardHeaderIcons:GetNextOffset()
 

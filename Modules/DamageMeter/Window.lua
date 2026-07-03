@@ -27,6 +27,8 @@ local RAID_CLASS_COLORS = RAID_CLASS_COLORS
 local Enum = Enum
 local Ambiguate = Ambiguate
 local UnitGroupRolesAssigned = UnitGroupRolesAssigned
+local GetTime = GetTime
+local format = string.format
 local math_min = math.min
 local math_max = math.max
 local math_floor = math.floor
@@ -341,6 +343,23 @@ function DM:CreateWindow(winIdx)
     if W.headerBar.SetPropagateMouseClicks then
         W.headerBar:SetPropagateMouseClicks(true)
     end
+
+    -- Combat clock (ShowCombatClock): fight length (M:SS) at the right end of the
+    -- header band, shown on the display-position-1 window only. Built on EVERY
+    -- window (a cheap FontString) because display positions shift with dock edits;
+    -- UpdateCombatClock gates visibility per tick. Anchored by ApplyHeaderIcons
+    -- (the offset depends on whether the icon strip occupies the header's right
+    -- end); font tracks the header size (ReapplyBarVisuals).
+    W.clock = W.frame:CreateFontString(nil, "OVERLAY")
+    W.clock:SetJustifyH("RIGHT")
+    KE:ApplyFontToText(
+        W.clock,
+        self.db and self.db.FontFace,
+        self.db and ((self.db.HeaderFontSize or self.db.FontSize) or 12),
+        self.db and self.db.FontOutline
+    )
+    W.clock:SetTextColor(0.85, 0.85, 0.85)
+    W.clock:Hide()
 
     -- Window-index badge: a solid accent-colored chip (top-right) with a bright
     -- white number, shown ONLY during GUI preview / edit so the "Window N" rows in
@@ -736,6 +755,12 @@ function DM:ReapplyBarVisuals(W)
     local texPath = KE:GetStatusbarPath(db and db.StatusBarTexture or "KitnUI")
 
     KE:ApplyFontToText(W.header, face, headerSize, outline)
+    -- Combat clock tracks the header font; the re-apply resets the FontString
+    -- tint, so re-set it (mirrors the value-color note below).
+    if W.clock then
+        KE:ApplyFontToText(W.clock, face, headerSize, outline)
+        W.clock:SetTextColor(0.85, 0.85, 0.85)
+    end
     -- Force RenderWindow's header block to rebuild next tick so a live GUI change to
     -- ShowTypeIcon (or the header font) re-evaluates the meter-type glyph + title anchor --
     -- that block is otherwise dirty-gated on meter/session type, which a toggle doesn't move.
@@ -855,6 +880,22 @@ function DM:ApplyHeaderIcons(W)
     local show = not db or db.ShowHeaderIcons ~= false
     local mouseover = db and db.HeaderIconsMouseover
 
+    -- Combat clock anchor: right end of the header band, stepping left past the
+    -- icon strip when the action buttons occupy it (the report button's left edge
+    -- sits ~70px in on MakeHeaderBtn's step grid), flush right otherwise. Anchored
+    -- to the headerBar strip so vertical centering tracks the band height.
+    if W.clock and W.headerBar then
+        W.clock:ClearAllPoints()
+        W.clock:SetPoint("RIGHT", W.headerBar, "RIGHT", show and -74 or -4, 0)
+        -- Re-gate the clock's visibility too: LayoutDock re-runs this per placed
+        -- window on every structural pass with a FRESH _winDisplayPos, so a dock
+        -- rearrangement that moves display position 1 migrates the clock to the
+        -- new #1 window immediately instead of leaving a stale one until the next
+        -- Tick (Remove/Move/arrangement paths don't Tick on their own -- only
+        -- AddWindow sets _needsRenderAfterLayout).
+        self:UpdateCombatClock(W)
+    end
+
     if not show then
         -- Hidden entirely; drop any hover scripts so a stale mouseover handler
         -- can't re-reveal them after the toggle is turned off.
@@ -958,6 +999,37 @@ function DM:_UnwireHeaderHover(W)
 end
 
 ---------------------------------------------------------------------------------
+-- Combat clock (header)
+--
+-- Fight length (M:SS) at the right end of the display-position-1 window's header
+-- band (db.ShowCombatClock, default off). Driven by the same combat ticker as the
+-- bars -- zero idle cost. Core.lua stamps _combatStartT when the ticker arms from
+-- idle and _combatEndT in StopTicker, so an out-of-combat repaint (scroll, GUI
+-- change, session settle) shows the FROZEN final duration instead of a still-
+-- growing one; reset/zone paths nil both stamps and the clock hides. All plain
+-- GetTime numbers -- never secret. Dirty-gated on the whole second.
+---------------------------------------------------------------------------------
+function DM:UpdateCombatClock(W)
+    local clock = W.clock
+    if not clock then return end
+    local db = self.db
+    local startT = self._combatStartT
+    local show = db and db.ShowCombatClock and startT
+        and self._winDisplayPos and self._winDisplayPos[W.idx] == 1
+    if not show then
+        if W._clockShown then W._clockShown = false; clock:Hide() end
+        return
+    end
+    local secs = math_floor(((self._combatEndT or GetTime()) - startT) + 0.5)
+    if secs < 0 then secs = 0 end
+    if W._clockSecs ~= secs then
+        W._clockSecs = secs
+        clock:SetText(format("%d:%02d", math_floor(secs / 60), secs % 60))
+    end
+    if W._clockShown ~= true then W._clockShown = true; clock:Show() end
+end
+
+---------------------------------------------------------------------------------
 -- Render path
 --
 -- RenderWindow repaints one window from its current session; RenderBar fills a
@@ -1046,6 +1118,11 @@ function DM:RenderWindow(W)
             end
         end
     end
+
+    -- Combat clock (display-position-1 window only; see UpdateCombatClock).
+    -- Placed BEFORE the session resolution so the frozen post-fight time keeps
+    -- painting even when the live session has emptied.
+    self:UpdateCombatClock(W)
 
     -- Phase 4 segment/history: W._curSessionID pins a specific stored session
     -- (set by the ⌚ menu, ToggleSegmentMenu). nil = live cfg.SessionType.
