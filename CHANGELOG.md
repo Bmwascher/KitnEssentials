@@ -8,6 +8,7 @@
 - Segment menu overhaul — Current and Overall now sit in a fixed footer below the fight list so a long history can't scroll them away, the menu matches its window's width, and it opens pre-scrolled to the newest fights
 - Bar layout — the rank number moved between the spec icon and the name (icon first, then "1. Name") and hugs the name, and the value column now reserves a fixed width so growing numbers no longer squeeze names mid-fight
 - "Always Show Self" is now role-aware — damage views pin your row as a DPS or tank, healing views pin it as a healer, and the remaining views (Damage Taken, Interrupts, Dispels, ...) no longer force a zero row in
+- The dock now clamps to the screen, so the meter can't be dragged or end up positioned off-screen
 - **Fixed:** Interrupts and Dispels hover tooltips showed a meaningless DPS column — count views now read Amount and share % only
 
 ### Mythic+ Timer
