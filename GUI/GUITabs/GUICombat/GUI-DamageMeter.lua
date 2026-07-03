@@ -1240,7 +1240,7 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     -- Combat clock: header chrome like the icons, so it shares this card.
     local clockChk = GUIFrame:CreateCheckbox(rowHdr2, "Combat Clock", {
         value = db.ShowCombatClock == true,
-        tooltip = "Shows the fight length (M:SS) on window 1's header while in combat; freezes at the final time when the fight ends.",
+        tooltip = "Shows the fight length [M:SS] on window 1's header while in combat; freezes and dims at the final time when the fight ends. Sits in the action-button slot and steps aside while those icons are revealed.",
         callback = function(checked) db.ShowCombatClock = checked; ApplySettings() end,
     })
     rowHdr2:AddWidget(clockChk, 0.5)
@@ -1253,7 +1253,7 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " Action Buttons: the settings / reset / segment icons (top-right).\n" ..
         KE:ColorTextByTheme("-") .. " Type Icon: the meter-type glyph beside the window title.\n" ..
-        KE:ColorTextByTheme("-") .. " Combat Clock: fight length on window 1, frozen when the fight ends.",
+        KE:ColorTextByTheme("-") .. " Combat Clock: fight length on window 1, frozen + dimmed when the fight ends.",
         68, "hide")
     rowHdrNote:AddWidget(hdrNote, 1)
     manager:Register(hdrNote, "all")
