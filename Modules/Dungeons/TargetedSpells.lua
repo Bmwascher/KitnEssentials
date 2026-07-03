@@ -134,7 +134,7 @@ function TS:OnEnable()
 
     self:CheckContentGate()
     self:RegisterEditMode()
-    self:CheckCVarPrompt()   -- Task 11 (no-op stub until then)
+    self:CheckCVarPrompt()   -- one-time nameplateShowOffscreen prompt
 end
 
 function TS:OnDisable()
@@ -692,6 +692,7 @@ StaticPopupDialogs["KE_TARGETEDSPELLS_CVAR"] = {
     timeout = 0,
     whileDead = true,
     hideOnEscape = true,
+    noCancelOnEscape = true,  -- Escape = soft dismiss (prompt returns next enable); only the button declines permanently
     preferredIndex = 3,
 }
 
