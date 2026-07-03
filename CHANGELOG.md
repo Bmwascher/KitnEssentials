@@ -29,7 +29,7 @@
 - Config page polish: bar color controls grey out while their bar is hidden, Count Brackets enables only for count-bearing formats, and the tooltip toggle now leads the Overlay tab
 
 ### GUI
-- The combined Macro Builders page split into standalone pages — Power Infusion Macro now lives under Class Utilities ("Priest: Power Infusion Macro") and Focus Marker under Dungeon & Party Utilities. Settings carry over unchanged
+- The combined Macro Builders page split into standalone pages — Power Infusion Macro now lives under Class Utilities ("Priest: PI Macro") and Focus Marker under Dungeon & Party Utilities. Settings carry over unchanged
 
 ---
 

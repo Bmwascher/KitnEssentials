@@ -65,7 +65,7 @@ GUIFrame.sidebarConfig = {
             { id = "EvokerSuite",   text = "Evoker Suite", keywords = { "evoker", "dragon", "empower", "ebon might", "prescience", "disintegrate", "augmentation", "devastation", "preservation" } },
             { id = "HuntersMark",   text = "Hunter: Mark Missing", keywords = { "hunter", "hunters mark", "mark", "marksman", "beast mastery", "survival" } },
             { id = "PetStatusText", text = "Pet Status Texts", keywords = { "pet", "status", "hunter", "warlock", "demon", "summon" } },
-            { id = "PIMacroBuilder", text = "Priest: Power Infusion Macro", keywords = { "priest", "power infusion", "pi", "macro", "builder", "trinket", "racial", "potion" } },
+            { id = "PIMacroBuilder", text = "Priest: PI Macro", keywords = { "priest", "power infusion", "pi", "macro", "builder", "trinket", "racial", "potion" } },
             { id = "SpellAlerts",   text = "Spell Alert Opacity", keywords = { "spell alert", "opacity", "proc", "alert", "glow", "overlay" } },
             { id = "StanceText",    text = "Stance Text", keywords = { "stance", "form", "shapeshift", "druid", "warrior", "evoker", "presence" } },
             { id = "TotemTracker",  text = "Totem Tracker", keywords = { "totem", "totems", "shaman", "evoker" } },
