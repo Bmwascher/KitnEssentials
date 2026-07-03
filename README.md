@@ -99,6 +99,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Enemy Counter | Displays the number of enemies currently in combat via nameplate scanning with editable prefix and combat-only visibility |
 | Focus Marker | Auto-creates a focus targeting + raid marker macro, with optional party ready-check announce |
 | Interrupt Tracker | Party interrupt cooldown bars with class colors, dark mode, channel kick detection, and healer position override (currently non-functional in 12.0.5 due to API changes — under investigation) |
+| Keystone Helper | Three M+ keystone reminders: party/raid announce on instance reset, a glowing "reroll your key" prompt after timing a key at/above your keystone's level, and a "Your Key?" prompt when entering the Mythic 0 dungeon matching your owned keystone |
 | Mythic+ Timer | Self-contained keystone timer HUD — count-up timer with +3/+2/+1 threshold marks, aggregate forces bar, per-boss objective list with clear times and personal-best deltas, deaths line with class-colored hover log, personal-best splits, Challenger's Peril aware cutoffs, enemy tooltip + nameplate forces overlay (replaces the standalone WarpDeplete+ overlay), keystone auto-insert, Blizzard objective-tracker hider, boss-split party chat posts, and a Rookery +12 live preview. Six-tab config page (`/kes mt`) |
 
 ## ElvUI Tags

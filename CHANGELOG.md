@@ -26,7 +26,15 @@
 - Left-edge boss-row times (Time Position "Start") read time-first with the PB delta beside them, mirroring the right-edge order
 - The deaths hover log backdrop now matches the Damage Meter panels (solid dark fill, black border)
 - **Fixed:** The enemy overlay showed the raw progress fraction as the forces percent ("0.02%" instead of "2.47%") on nameplates and the tooltip Count line — both now display the game's pre-formatted percent
+- **Fixed:** Walking out of a live key and re-entering could blank the timer HUD and permanently lose the run's boss splits and death log — run state now survives the walk-out and restores on re-entry
 - Config page polish: bar color controls grey out while their bar is hidden, Count Brackets enables only for count-bearing formats, and the tooltip toggle now leads the Overlay tab
+
+### Keystone Helper
+- **NEW:** Keystone Helper module — three Mythic+ keystone QoL reminders in one Dungeon & Party Utilities page
+- **NEW:** Instance Reset Announcer — posts a configurable message to party/raid chat whenever you reset instances (the announcer that disappeared with the old WarpDeplete Forces module, back as a standalone feature)
+- **NEW:** Reroll Key Reminder — after you time a key at or above your own keystone's level, a keystone icon pops up glowing "REROLL KEY?" for 5 minutes and flips to "NEW KEY" once you've rerolled
+- **NEW:** "Your Key?" Reminder — walking into a Mythic 0 dungeon that matches your owned keystone shows a "Your Key?" prompt so you remember to slot it, and clears the moment the key goes in
+- Both reminders share one appearance and screen position (icon size, font with soft-outline support, text colors), each with its own glow color; a key line under the icon shows your keystone as "(dungeon icon) Dungeon Name - level"
 
 ### GUI
 - The combined Macro Builders page split into standalone pages — Power Infusion Macro now lives under Class Utilities ("Priest: PI Macro") and Focus Marker under Dungeon & Party Utilities. Settings carry over unchanged
