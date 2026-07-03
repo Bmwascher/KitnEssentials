@@ -396,6 +396,7 @@ function DC:ReleaseBar(bar)
     if not bar then return end
     bar:Hide()
     bar:ClearAllPoints()
+    bar:SetAlpha(1)
     bar.unit = nil
     bar.casting = nil
     bar.channeling = nil
@@ -631,6 +632,11 @@ function DC:PopulateBar(bar, unit, data)
 
     if data.duration then
         bar.castBar:SetTimerDuration(data.duration, Enum.StatusBarInterpolation.Immediate, data.direction)
+        -- Suppress absurd multi-day NPC channels (secret-safe: the secret
+        -- remaining duration is sampled by the curve, never read in Lua).
+        bar:SetAlpha(data.duration:EvaluateRemainingDuration(KE.curves.IsLongCast))
+    else
+        bar:SetAlpha(1)
     end
 
     self:UpdateBarColor(bar)
