@@ -65,6 +65,7 @@ GUIFrame.sidebarConfig = {
             { id = "EvokerSuite",   text = "Evoker Suite", keywords = { "evoker", "dragon", "empower", "ebon might", "prescience", "disintegrate", "augmentation", "devastation", "preservation" } },
             { id = "HuntersMark",   text = "Hunter: Mark Missing", keywords = { "hunter", "hunters mark", "mark", "marksman", "beast mastery", "survival" } },
             { id = "PetStatusText", text = "Pet Status Texts", keywords = { "pet", "status", "hunter", "warlock", "demon", "summon" } },
+            { id = "PIMacroBuilder", text = "Priest: PI Macro", keywords = { "priest", "power infusion", "pi", "macro", "builder", "trinket", "racial", "potion" } },
             { id = "SpellAlerts",   text = "Spell Alert Opacity", keywords = { "spell alert", "opacity", "proc", "alert", "glow", "overlay" } },
             { id = "StanceText",    text = "Stance Text", keywords = { "stance", "form", "shapeshift", "druid", "warrior", "evoker", "presence" } },
             { id = "TotemTracker",  text = "Totem Tracker", keywords = { "totem", "totems", "shaman", "evoker" } },
@@ -78,7 +79,6 @@ GUIFrame.sidebarConfig = {
         defaultExpanded = false,
         items = {
             { id = "PotionReady",   text = "Combat Potion Ready", keywords = { "potion", "pot", "combat", "consumable" } },
-            { id = "MacroBuilders", text = "Macro Builders", keywords = { "macro", "macros", "builder", "focus", "pi", "power infusion", "command" } },
             { id = "NoMovementAlert", text = "No Movement Alert", keywords = { "movement", "alert", "cooldown" } },
             { id = "PlayerAbsorbs", text = "Player Absorbs", keywords = { "absorb", "shield", "heal absorb", "necrotic", "pw:s", "power word shield", "damage absorb", "overlay" } },
             { id = "RaidNotifications", text = "Raid Notifications", keywords = { "raid", "notification", "alert", "gateway", "soulwell", "feast", "repair", "portal" } },
@@ -147,6 +147,7 @@ GUIFrame.sidebarConfig = {
             { id = "DeathNotifications",          text = "Death Notifications", keywords = { "death", "notification", "died", "dead", "party", "m+", "mythic" } },
             { id = "DungeonCasts",                text = "Dungeon Casts", keywords = { "dungeon cast", "cast", "interrupt", "mob", "enemy", "castbar", "m+" } },
             { id = "EnemyCounter",                text = "Enemy Counter", keywords = { "enemy", "counter", "count", "mobs", "pull", "nameplate", "m+" } },
+            { id = "FocusMarker",                 text = "Focus Marker", keywords = { "focus", "marker", "focus marker", "macro", "builder", "raid marker" } },
             { id = "KickTracker",                 text = "Interrupt Tracker", keywords = { "interrupt", "kick", "tracker", "cc", "stop", "party", "m+" } },
             { id = "MythicPlusTimer",             text = "Mythic+ Timer", keywords = { "mythic plus", "m+", "keystone", "timer", "forces", "deaths", "splits", "objective", "personal best", "affix", "warpdeplete" } },
         },

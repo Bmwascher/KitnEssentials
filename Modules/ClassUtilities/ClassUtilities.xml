@@ -12,4 +12,5 @@
     <Script file="HuntersMark.lua" />
     <Script file="SpellAlerts.lua" />
     <Script file="BurningRush.lua" />
+    <Script file="PIMacroBuilder.lua" />
 </Ui>

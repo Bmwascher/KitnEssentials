@@ -41,7 +41,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Recuperate Button | One-click self-heal with configurable raid/party visibility and health-based alpha |
 | Evoker Suite | Disintegrate tick marks, Preservation Stasis tracker, Ebon Might crit/dupe tracker with pandemic refresh glow and ally extension warning, and Prescience Tracker (Prescience/Shifting Sands on allies) — tabbed GUI |
 | World Marker Cycler | Cycle through world markers at cursor with drag-to-reorder priority |
-| Macro Builders | Focus Marker and Power Infusion macro builders in one tabbed GUI |
+| Power Infusion Macro | Priest macro builder — dynamically builds a PI macro with trinkets, racials, and potions |
 | Combat Potion Ready | "Potion Ready" text when a combat potion is in bags and off cooldown, with instance/combat/healer visibility toggles |
 | Ready Check Consumables | On ready check, attaches a row of clickable consumable icons (food, flask, weapon enhancement MH/OH, augment rune, healthstone, and Warlock Soulstone with auto-target healer) for one-click application |
 | Player Absorbs | On-screen text readout of your active damage-absorb shield and heal-absorb, with optional icons, flexible layout (stacked/side-by-side/split), and player-frame anchoring |
@@ -97,6 +97,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Dungeon Casts | Enemy cast bars for M+ nameplates with icon, target text, raid icons, bar stacking, and interruptible/shielded status colors |
 | Dungeon Timers | Curated dungeon ability timers driven by BigWigs events with hand-tuned cast durations, phase tracker for HP-based encounter transitions, role-based filtering, and per-spell display overrides |
 | Enemy Counter | Displays the number of enemies currently in combat via nameplate scanning with editable prefix and combat-only visibility |
+| Focus Marker | Auto-creates a focus targeting + raid marker macro, with optional party ready-check announce |
 | Interrupt Tracker | Party interrupt cooldown bars with class colors, dark mode, channel kick detection, and healer position override (currently non-functional in 12.0.5 due to API changes — under investigation) |
 | Mythic+ Timer | Self-contained keystone timer HUD — count-up timer with +3/+2/+1 threshold marks, aggregate forces bar, per-boss objective list with clear times and personal-best deltas, deaths line with class-colored hover log, personal-best splits, Challenger's Peril aware cutoffs, enemy tooltip + nameplate forces overlay (replaces the standalone WarpDeplete+ overlay), keystone auto-insert, Blizzard objective-tracker hider, boss-split party chat posts, and a Rookery +12 live preview. Six-tab config page (`/kes mt`) |
 
