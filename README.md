@@ -9,7 +9,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 
 ## Features
 
-- **50+ modules** — combat HUD, buff tracking, automation, dungeon tools, and UI skinning
+- **55+ modules** — combat HUD, buff tracking, automation, dungeon tools, and UI skinning
 - **Dark themed GUI** — custom settings panel with sidebar navigation and 8 color themes
 - **Edit mode** — drag any element to reposition, with anchor and strata controls
 - **Profile system** — save, copy, and reset per-character or shared profiles
@@ -23,37 +23,48 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Combat Timer | Configurable in-combat duration display |
 | Player Crosshair | Static crosshair overlay with range warning (melee/ranged/healer) |
 | Combat Texts | Combat enter/exit, no target warning, interrupt announce with spell icon, and low durability warnings |
-| Cursor Circle | Cursor-following ring with GCD overlay, multiple texture options |
+| Cursor Effects | Cursor-following ring with GCD overlay, multiple texture options, and an optional dispel-cooldown countdown at the cursor |
 | Range Display | Target range text with out-of-range color warning |
 | Advanced Debuffs | Bar-based dispellable-debuff display with cooldown swipe, native countdown text, dispel-type border color and atlas overlay, PLAYER filter, per-type include/exclude, and spell-ID blocklist (subsumes the older Boss Debuffs module) |
 | External and Defensive Buffs | External defensive cooldowns cast onto you (Pain Suppression, Ironbark, etc.) with cooldown swipe, native countdown text, configurable glow per cast, BigWigs glow integration on incoming raid hits, and a Sound Test button |
-| Focus & Target Castbar | Repositionable cast bars with kick indicators, target names, focus raid marker, important-spell glow, out-of-range dimming, color settings, and cast sound alert (tabbed GUI) |
+| Focus & Target Castbars | Repositionable cast bars with kick indicators, target names, focus raid marker, important-spell glow, out-of-range dimming, color settings, and cast sound alert (tabbed GUI) |
 | Damage Meter | Standalone multi-window damage/healing meter built on the 12.0 C_DamageMeter API (replaces Blizzard's built-in meter) — proportional dock with shared backdrop, per-content auto-swapping layouts, eight meter types, class-colored bars with nickname support, header combat clock, out-of-combat spell breakdown / death recap / target details, segment history, and report-to-chat |
+
+## Class Utilities
+
+| Module | Description |
+|---|---|
+| Evoker Suite | Disintegrate tick marks, Preservation Stasis tracker, Ebon Might crit/dupe tracker with pandemic refresh glow and ally extension warning, and Prescience Tracker (Prescience/Shifting Sands on allies) — tabbed GUI |
+| Hunter: Mark Missing | Alert when Hunter's Mark is not applied |
+| Pet Status Texts | On-screen pet status text alerts for pet classes (Hunter, Warlock, Death Knight, Mage) |
+| Priest: PI Macro | Dynamically builds a Power Infusion macro with trinkets, racials, and potions |
+| Spell Alert Opacity | Per-spec opt-in/out grid for Blizzard's proc activation overlay flashes (every class, 4-column layout), plus an opacity slider for the overlay |
+| Stance Text | Your current stance/shapeshift form name as configurable on-screen text |
+| Totem Tracker | Shaman-only bar tracker for active totems with destroy buttons, configurable layout, and EditMode integration |
+| Warlock: Burning Rush | Glowing icon reminder while Burning Rush is active |
 
 ## Utilities
 
 | Module | Description |
 |---|---|
-| Raid Notifications | Gateway usability, reset boss reminder, loot boss reminder, Mythic raid bench alert, and seasonal bonus rolls reminder with per-alert toggles |
-| Class Status Texts | Pet status, class stance, movement alert, and dispel CD — 4 class-specific text alerts in one tabbed GUI |
-| Totem Tracker | Shaman-only bar tracker for active totems with destroy buttons, configurable layout, and EditMode integration |
-| Time Spiral Tracker | Movement spell proc tracker with glow effects, cooldown spiral, and countdown timer (all classes) |
-| Recuperate Button | One-click self-heal with configurable raid/party visibility and health-based alpha |
-| Evoker Suite | Disintegrate tick marks, Preservation Stasis tracker, Ebon Might crit/dupe tracker with pandemic refresh glow and ally extension warning, and Prescience Tracker (Prescience/Shifting Sands on allies) — tabbed GUI |
-| World Marker Cycler | Cycle through world markers at cursor with drag-to-reorder priority |
-| Power Infusion Macro | Priest macro builder — dynamically builds a PI macro with trinkets, racials, and potions |
 | Combat Potion Ready | "Potion Ready" text when a combat potion is in bags and off cooldown, with instance/combat/healer visibility toggles |
-| Ready Check Consumables | On ready check, attaches a row of clickable consumable icons (food, flask, weapon enhancement MH/OH, augment rune, healthstone, and Warlock Soulstone with auto-target healer) for one-click application |
+| No Movement Alert | Remaining-cooldown alert when your movement ability is unavailable — auto-detects your highest-priority movement spell (all classes) |
 | Player Absorbs | On-screen text readout of your active damage-absorb shield and heal-absorb, with optional icons, flexible layout (stacked/side-by-side/split), and player-frame anchoring |
+| Raid Notifications | Gateway usability, reset boss reminder, loot boss reminder, Mythic raid bench alert, and seasonal bonus rolls reminder with per-alert toggles |
+| Ready Check Consumables | On ready check, attaches a row of clickable consumable icons (food, flask, weapon enhancement MH/OH, augment rune, healthstone, and Warlock Soulstone with auto-target healer) for one-click application |
+| Recuperate Button | One-click self-heal with configurable raid/party visibility and health-based alpha |
+| Time Spiral Tracker | Movement spell proc tracker with glow effects, cooldown spiral, and countdown timer (all classes) |
+| World Marker Cycler | Cycle through world markers at cursor with drag-to-reorder priority |
 
 ## Healer
 
 | Module | Description |
 |---|---|
+| Dispel Frame Glow | Colored border + top fade on ElvUI party/raid/tank frames with a dispellable debuff (including private auras), tinted by your dispel-type palette with adjustable thickness; requires ElvUI |
+| Dispel on Cursor | Your dispel spell's cooldown countdown at the cursor — a healer-focused view of the Cursor Effects dispel countdown (shared settings) |
+| Healer Mana | Displays the current party healer's name, spec icon, and mana % (party-only; hidden in raid); shows OFFLINE when the healer disconnects |
 | Innervate Tracker | Icon + countdown while Innervate is on you, with configurable label, glow, and alert sound; detected via mana-cost polling (Innervate is hidden from the aura API in 12.0); healer-capable classes only |
 | Maintenance Tracker | One icon per key maintenance buff with group-member count and lowest remaining duration, color-coded by urgency; spec-aware (Atonement, Renewing/Enveloping Mist, Rejuvenation, Riptide, Echo) with side-by-side multi-spell layout and GUI preview |
-| Dispel Glow | Colored border + top fade on ElvUI party/raid/tank frames with a dispellable debuff (including private auras), tinted by your dispel-type palette with adjustable thickness; requires ElvUI |
-| Healer Mana Tracker | Displays the current party healer's name, spec icon, and mana % (party-only; hidden in raid); shows OFFLINE when the healer disconnects |
 
 ## Quality of Life
 
@@ -62,11 +73,9 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Automation | Auto-repair, auto-sell, auto-confirm queue, auto-slot keystone, skip cinematics, hide event toasts/zone text, and more |
 | Combat Logger | Automatic combat logging for raids, dungeons, M+, PvP, and arenas with per-content toggles |
 | CVars | One-click CVar optimization panel |
-| Slash Commands | Custom slash command utilities |
-| Hunter's Mark Missing | Alert when Hunter's Mark is not applied |
+| Slash Commands | Toggleable shorthand slash commands (`/rl`, `/cd`, `/fs`, `/leave`, `/reset`, `/mute`, `/music`) |
 | Skyriding UI | Skyriding vigor bar with second wind tracker and whirling surge cooldown icon |
 | Position Controller | Auto-anchors ElvUI Player/Target frames beside SkironCooldownManager or Ayije_CDM (auto-detected, clears the widest cooldown row); Focus/Pet anchor freely; CDM racials bar offset with pet detection (works with ElvUI and UUF). Writes through ElvUI's mover system so placements survive `/reload`. Yields to the standalone ElvUI_Anchor addon if loaded; ignores healer specs by default |
-| Spell Alert Opacity | Per-spec opt-in/out grid for Blizzard's proc activation overlay flashes (every class, 4-column layout), plus an opacity slider for the overlay |
 | Custom Nicknames | Map characters to personal nicknames on ElvUI and Unhalted Unit Frames via the `[kes:nickname]` tag family (plus class-color variants `[kes:nickname:color]` for UUF); includes a management GUI with search, import/export, and replace/merge modes; nicknames also display on the KitnEssentials Damage Meter |
 | WindTools Game Bar | Opt-in toggle to hide WindTools' Game Bar without unloading the module |
 | Great Vault Alert | Shows your loot spec when opening the Great Vault with class color and sound |
@@ -128,6 +137,8 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 |---|---|
 | `/kes` or `/kitnessentials` | Toggle settings GUI |
 | `/kes edit` | Toggle edit mode |
+| `/kes mt` | Open the Mythic+ Timer settings page |
+| `/kes dm` | Toggle the Damage Meter dock (`/kes dm reset` clears segment history) |
 | `/kes resetgui` | Reset GUI position and size |
 
 ## Credits
