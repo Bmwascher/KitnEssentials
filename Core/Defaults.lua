@@ -1312,6 +1312,30 @@ local Defaults = {
             DispelPosition = { AnchorFrom = "TOPRIGHT",    AnchorTo = "TOPRIGHT",    XOffset = 0, YOffset = 0 },
         },
 
+        TargetedSpells = {
+            Enabled = false,
+            IconSize = 40,
+            Gap = 2,
+            Grow = "DOWN",              -- "DOWN" | "UP" only (no horizontal in v1)
+            MaxIcons = 10,              -- entry cap; invisible entries count (secret targeting)
+            FontFace = "Expressway",
+            FontSize = 20,
+            FontOutline = "OUTLINE",    -- no SOFTOUTLINE (widget-managed countdown text)
+            ShowSwipe = true,
+            GlowImportant = true,
+            IndicateInterrupts = true,
+            ShowInDungeons = true,
+            ShowInDelves = true,
+            ShowInRaids = false,
+            ShowInOpenWorld = false,
+            ShowInPvP = false,
+            Strata = "HIGH",
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            Position = DefaultPosition(0, 100),
+            CVarDeclined = false,       -- internal: nameplateShowOffscreen prompt
+        },
+
         -----------------------------------------------------------------
         -- Dungeons Modules
         -----------------------------------------------------------------
