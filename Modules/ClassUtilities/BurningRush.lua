@@ -1,9 +1,9 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  BurningRush.lua                                         ║
 -- ║  Module: Burning Rush (Warlock)                          ║
--- ║  Purpose: Glowing icon while Burning Rush (111400) is     ║
--- ║           active. Warlock-only; cast + glow events.       ║
--- ║  Credit: Ported from NorskenUI ClassUtil/BurningRush.     ║
+-- ║  Purpose: Glowing icon while Burning Rush (111400) is    ║
+-- ║           active. Warlock-only; cast + glow events.      ║
+-- ║  Credit: Ported from NorskenUI ClassUtil/BurningRush.    ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE

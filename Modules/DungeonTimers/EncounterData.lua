@@ -23,7 +23,7 @@
 -- ║                                  --   (spread/movement;  ║
 -- ║                                  --    tank anchored)    ║
 -- ║                display         = "bar"|"text",           ║
--- ║                displayText     = "DODGE"|...,           ║
+-- ║                displayText     = "DODGE"|...,            ║
 -- ║                                  -- short curated label  ║
 -- ║                                  -- shown instead of the ║
 -- ║                                  -- BigWigs spell name.  ║
@@ -32,7 +32,7 @@
 -- ║                                  -- "SPREAD". Fall back  ║
 -- ║                                  -- to BigWigs name when ║
 -- ║                                  -- absent.              ║
--- ║                castDisplayText = "AOE"|...,             ║
+-- ║                castDisplayText = "AOE"|...,              ║
 -- ║                                  -- optional cast-phase  ║
 -- ║                                  -- label/color swap.    ║
 -- ║                                  -- When set, the bar    ║
@@ -74,7 +74,7 @@
 -- ║                                  -- that would clutter   ║
 -- ║                                  -- the screen by        ║
 -- ║                                  -- default.             ║
--- ║                showAtSeconds   = <seconds>,             ║
+-- ║                showAtSeconds   = <seconds>,              ║
 -- ║                                  -- per-spell visibility ║
 -- ║                                  -- override. Hides the  ║
 -- ║                                  -- bar until last N sec ║
@@ -85,7 +85,7 @@
 -- ║                                  -- visible even when    ║
 -- ║                                  -- group hides. Omit    ║
 -- ║                                  -- to inherit group.    ║
--- ║                color           = { r, g, b },          ║
+-- ║                color           = { r, g, b },            ║
 -- ║                                  -- curator-default RGB  ║
 -- ║                                  -- color. Overrides the ║
 -- ║                                  -- displayText preset   ║
@@ -95,7 +95,7 @@
 -- ║                                  -- the preset palette.  ║
 -- ║                                  -- User color override  ║
 -- ║                                  -- still wins over this.║
--- ║                sortAtEnd      = true,                   ║
+-- ║                sortAtEnd      = true,                    ║
 -- ║                                  -- push this entry to   ║
 -- ║                                  -- the end of the spell ║
 -- ║                                  -- list in the GUI      ║
@@ -106,7 +106,7 @@
 -- ║                                  -- conceptually rather  ║
 -- ║                                  -- than mixed in with   ║
 -- ║                                  -- regular cast warnings║
--- ║                iconOverride   = <textureID|path>,       ║
+-- ║                iconOverride   = <textureID|path>,        ║
 -- ║                                  -- replace BigWigs's    ║
 -- ║                                  -- supplied icon. Useful║
 -- ║                                  -- when the spell's     ║
@@ -118,7 +118,7 @@
 -- ║                                  -- aids identification. ║
 -- ║                                  -- Accepts a texture    ║
 -- ║                                  -- file ID or path.     ║
--- ║                forceDuration  = <seconds>,              ║
+-- ║                forceDuration  = <seconds>,               ║
 -- ║                                  -- override the BigWigs ║
 -- ║                                  -- duration with a      ║
 -- ║                                  -- known-correct value. ║
@@ -135,7 +135,7 @@
 -- ║                                  -- ignore BigWigs's     ║
 -- ║                                  -- StopBar so its early ║
 -- ║                                  -- end doesn't kill us. ║
--- ║                postCastBar    = {                       ║
+-- ║                postCastBar    = {                        ║
 -- ║                                    duration    = <s>,    ║
 -- ║                                    display     = "bar"|  ║
 -- ║                                                  "text", ║
@@ -174,7 +174,7 @@
 -- ║                                  -- everyone (no role).  ║
 -- ║                phantomFollowupOf =                       ║
 -- ║                                  <parentSpellId>,        ║
--- ║                duration       = <s>,                    ║
+-- ║                duration       = <s>,                     ║
 -- ║                                  -- top-level GUI entry  ║
 -- ║                                  -- that opts out of the ║
 -- ║                                  -- BigWigs_Timer path   ║
@@ -199,36 +199,36 @@
 -- ║                                  -- iconOverride/color/  ║
 -- ║                                  -- displayText for the  ║
 -- ║                                  -- follow-up's visuals. ║
--- ║                spawnOnMessage = true,                   ║
--- ║                duration       = <s>,                    ║
--- ║                leadDelay      = <s>,  -- optional       ║
--- ║                                  -- BigWigs_Message-    ║
--- ║                                  -- driven spawn. Used  ║
--- ║                                  -- for vulnerability   ║
--- ║                                  -- bars whose trigger  ║
--- ║                                  -- is a non-cast event ║
--- ║                                  -- (widget update,     ║
--- ║                                  -- boss emote) that    ║
--- ║                                  -- LittleWigs surfaces ║
--- ║                                  -- via self:Message(   ║
--- ║                                  -- spellId, ...). When ║
--- ║                                  -- BigWigs_Message     ║
--- ║                                  -- fires with this     ║
--- ║                                  -- spellId, we spawn a ║
--- ║                                  -- bar of `duration`   ║
--- ║                                  -- seconds (optionally ║
--- ║                                  -- after `leadDelay`   ║
--- ║                                  -- seconds, matching   ║
--- ║                                  -- ExBoss's "prepare"  ║
--- ║                                  -- phase before the    ║
--- ║                                  -- active window).     ║
--- ║                                  -- Use this when       ║
--- ║                                  -- SPELL_AURA_APPLIED  ║
--- ║                                  -- doesn't fire in 12.0║
--- ║                                  -- (most boss-applied  ║
--- ║                                  -- auras). Entry skips ║
--- ║                                  -- BigWigs_Timer path. ║
--- ║                shieldBar      = {                       ║
+-- ║                spawnOnMessage = true,                    ║
+-- ║                duration       = <s>,                     ║
+-- ║                leadDelay      = <s>,  -- optional        ║
+-- ║                                  -- BigWigs_Message-     ║
+-- ║                                  -- driven spawn. Used   ║
+-- ║                                  -- for vulnerability    ║
+-- ║                                  -- bars whose trigger   ║
+-- ║                                  -- is a non-cast event  ║
+-- ║                                  -- (widget update,      ║
+-- ║                                  -- boss emote) that     ║
+-- ║                                  -- LittleWigs surfaces  ║
+-- ║                                  -- via self:Message(    ║
+-- ║                                  -- spellId, ...). When  ║
+-- ║                                  -- BigWigs_Message      ║
+-- ║                                  -- fires with this      ║
+-- ║                                  -- spellId, we spawn a  ║
+-- ║                                  -- bar of `duration`    ║
+-- ║                                  -- seconds (optionally  ║
+-- ║                                  -- after `leadDelay`    ║
+-- ║                                  -- seconds, matching    ║
+-- ║                                  -- ExBoss's "prepare"   ║
+-- ║                                  -- phase before the     ║
+-- ║                                  -- active window).      ║
+-- ║                                  -- Use this when        ║
+-- ║                                  -- SPELL_AURA_APPLIED   ║
+-- ║                                  -- doesn't fire in 12.0 ║
+-- ║                                  -- (most boss-applied   ║
+-- ║                                  -- auras). Entry skips  ║
+-- ║                                  -- BigWigs_Timer path.  ║
+-- ║                shieldBar      = {                        ║
 -- ║                                    baseAmount = <number>,║
 -- ║                                    displayText = ...,    ║
 -- ║                                  },                      ║
@@ -258,7 +258,7 @@
 -- ║                                  -- and passed only to   ║
 -- ║                                  -- allowed-when-tainted ║
 -- ║                                  -- formatters.          ║
--- ║                secondary       = {                      ║
+-- ║                secondary       = {                       ║
 -- ║                                    role = ...,           ║
 -- ║                                    display = ...,        ║
 -- ║                                    displayText = ...,    ║
@@ -311,9 +311,9 @@
 -- ║                                       --   shows alert)  ║
 -- ║                sound       = "...",  -- curator on-show  ║
 -- ║                soundOnHide = "...",  -- curator on-hide  ║
--- ║                                       --   LSM keys; same ║
--- ║                                       --   override rules ║
--- ║                                       --   as spell.sound ║
+-- ║                                       --   LSM keys; same║
+-- ║                                       --   override rules║
+-- ║                                       --   as spell.sound║
 -- ║            },                                            ║
 -- ║            ...                                           ║
 -- ║        },                                                ║
