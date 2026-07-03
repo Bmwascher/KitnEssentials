@@ -149,6 +149,7 @@ GUIFrame.sidebarConfig = {
             { id = "EnemyCounter",                text = "Enemy Counter", keywords = { "enemy", "counter", "count", "mobs", "pull", "nameplate", "m+" } },
             { id = "FocusMarker",                 text = "Focus Marker", keywords = { "focus", "marker", "focus marker", "macro", "builder", "raid marker" } },
             { id = "KickTracker",                 text = "Interrupt Tracker", keywords = { "interrupt", "kick", "tracker", "cc", "stop", "party", "m+" } },
+            { id = "KeystoneHelper",              text = "Keystone Helper", keywords = { "keystone", "reset", "reroll", "key", "announcer", "mythic", "m+" } },
             { id = "MythicPlusTimer",             text = "Mythic+ Timer", keywords = { "mythic plus", "m+", "keystone", "timer", "forces", "deaths", "splits", "objective", "personal best", "affix", "warpdeplete" } },
         },
     },
