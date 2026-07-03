@@ -527,7 +527,12 @@ function DM:RenderEnemyBreakdown(W, src)
             if cc then row.fill:SetStatusBarColor(cc.r, cc.g, cc.b)
             else row.fill:SetStatusBarColor(DETAIL_BAR_COLOR[1], DETAIL_BAR_COLOR[2], DETAIL_BAR_COLOR[3]) end
 
-            row.label:SetText(StripRealmName(self.db, p.name) or "Unknown")
+            -- Display-point nickname (parity with the main bars; Window.lua
+            -- LookupNickname, runtime-resolved). p.name is plain by construction
+            -- (AggregateEnemyPlayers guards it) -- the helper's contract.
+            local shownName = (self.LookupNickname and self:LookupNickname(p.name))
+                or StripRealmName(self.db, p.name)
+            row.label:SetText(shownName or "Unknown")
 
             -- Value: abbreviated amount + share-of-this-enemy %. p.total is a plain number by
             -- construction (AggregateEnemyPlayers sanitizes each addend); total is guarded above.
@@ -1450,7 +1455,12 @@ function DM:PopulateHoverTip(W, bar)
                 if cc then row.fill:SetStatusBarColor(cc.r, cc.g, cc.b)
                 else row.fill:SetStatusBarColor(DETAIL_BAR_COLOR[1], DETAIL_BAR_COLOR[2], DETAIL_BAR_COLOR[3]) end
 
-                row.label:SetText(StripRealmName(self.db, p.name) or "Unknown")
+                -- Display-point nickname (parity with the main bars; Window.lua
+                -- LookupNickname, runtime-resolved). p.name is plain by construction
+                -- (AggregateEnemyPlayers guards it) -- the helper's contract.
+                local shownName = (self.LookupNickname and self:LookupNickname(p.name))
+                    or StripRealmName(self.db, p.name)
+                row.label:SetText(shownName or "Unknown")
 
                 -- Amount / DPS / % columns. p.total and p.dps are plain numbers by
                 -- construction (AggregateEnemyPlayers sanitizes each addend); total guarded above.

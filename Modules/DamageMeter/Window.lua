@@ -1126,6 +1126,29 @@ function DM:ResolveSelfNickname()
     return nick
 end
 
+-- Display-point nickname resolution shared by the bar render path and the
+-- module's other player-name surfaces (the hover-tip / detail-panel enemy
+-- breakdowns in Detail.lua): plain raw name in ("Name" or "Name-Realm" -- the
+-- CALLER guarantees it is non-secret), nickname string or nil out. One
+-- nickLookup memo index in the steady state; a miss builds the store key once
+-- (KE:BuildNicknameKey) and remembers hit AND miss. Memoizes only a REAL
+-- resolution: key is nil while the realm is still unresolved (login-time first
+-- paint), and caching that false would kill nicknames for the whole session.
+function DM:LookupNickname(rawName)
+    local db = self.db
+    if not db or db.UseNicknames == false then return nil end
+    if not rawName or rawName == "" then return nil end
+    local c = nickLookup[rawName]
+    if c == nil then
+        local nicks = KE.db and KE.db.global and KE.db.global.Nicknames
+        local key = nicks and KE:BuildNicknameKey(rawName, GetNormalizedRealmName())
+        c = (key and nicks[key]) or false
+        if c == "" then c = false end
+        if key then nickLookup[rawName] = c end
+    end
+    return c or nil
+end
+
 -- Store-change hook, fanned out from KE:RefreshNicknameTags (the canonical
 -- "nicknames edited" notification: GUI edits, imports, clears). Drops every
 -- memo so the next paint re-resolves; the trailing Tick repaints immediately
@@ -1676,24 +1699,14 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
                     realmNames[guid] = nm
                 end
                 local full = (guidPlain and realmNames[guid]) or nm
-                local c = nickLookup[full]
-                if c == nil then
-                    local nicks = KE.db and KE.db.global and KE.db.global.Nicknames
-                    local key = nicks and KE:BuildNicknameKey(full, GetNormalizedRealmName())
-                    c = (key and nicks[key]) or false
-                    if c == "" then c = false end
-                    -- Memoize only a REAL resolution: key is nil while the realm
-                    -- is still unresolved (login-time first paint), and caching
-                    -- that false would kill nicknames for the whole session.
-                    if key then nickLookup[full] = c end
-                end
+                local c = self:LookupNickname(full)
                 if guidPlain then
                     -- The LATEST plain resolution is authoritative: a miss
                     -- clears a stale entry (e.g. a flicker tick's wrong-realm
                     -- hit), so the secret-name fallback below can never carry
                     -- a wrong nickname into combat. Players' GUIDs stay plain
                     -- even in combat, so the memo survives where the name doesn't.
-                    nickByGUID[guid] = c or nil
+                    nickByGUID[guid] = c
                 end
                 if c then nick = c end
             elseif guidPlain then
