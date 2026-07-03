@@ -346,11 +346,12 @@ end
 function TS:StopGlow(entry)
     if not LCG or not entry.leftIcon then return end
     for _, iconFrame in ipairs({ entry.leftIcon, entry.rightIcon }) do
-        LCG.PixelGlow_Stop(iconFrame, GLOW_KEY)
-        -- Pooled glow children keep their bound (possibly 0) alpha — reset
-        -- so a recycled entry's glow can show (reference Reset behavior).
+        -- Reset the bound (possibly 0) alpha BEFORE Stop: PixelGlow_Stop's
+        -- pool resetter nils iconFrame["_PixelGlow"..GLOW_KEY] as it releases
+        -- the child, and the pool is shared with every LCG consumer.
         local child = iconFrame["_PixelGlow" .. GLOW_KEY]
         if child then child:SetAlpha(1) end
+        LCG.PixelGlow_Stop(iconFrame, GLOW_KEY)
     end
 end
 
