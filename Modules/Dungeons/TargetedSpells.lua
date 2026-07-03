@@ -673,7 +673,32 @@ function TS:HidePreview()
 end
 
 ---------------------------------------------------------------------------------
--- Stubs completed by Task 11 (keep so the file loads and lints clean)
+-- CVar Prompt (Task 11)
 ---------------------------------------------------------------------------------
 
-function TS:CheckCVarPrompt() end
+StaticPopupDialogs = StaticPopupDialogs or {}
+StaticPopupDialogs["KE_TARGETEDSPELLS_CVAR"] = {
+    text = "Targeted Spells: enemies casting from off-screen only produce nameplates when 'nameplateShowOffscreen' is enabled. Turn it on now?",
+    button1 = "Enable it",
+    button2 = "No thanks",
+    OnAccept = function()
+        SetCVar("nameplateShowOffscreen", "1")
+        KE:Print("nameplateShowOffscreen enabled.")
+    end,
+    OnCancel = function()
+        local db = KE.db and KE.db.profile.TargetedSpells
+        if db then db.CVarDeclined = true end
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+function TS:CheckCVarPrompt()
+    local db = self.db
+    if not db or db.CVarDeclined then return end
+    if GetCVar("nameplateShowOffscreen") ~= "1" then
+        StaticPopup_Show("KE_TARGETEDSPELLS_CVAR")
+    end
+end
