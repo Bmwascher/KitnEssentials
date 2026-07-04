@@ -46,18 +46,25 @@ local SETTLE_DELAY = 0.2
 local INTERRUPT_LINGER = 1.0   -- seconds the desaturated icon stays up post-interrupt
 local INTERRUPT_HOLD = 0.95    -- Release() suppression window; < LINGER avoids a same-tick race with the linger timer
 
--- Breakpoint countdown formatter: tenths for the whole sub-60 range
--- (deliberate deviation from the reference's 3s cutoff — user preference),
--- m:ss above (only reachable if the >60s gate changes).
--- Lazy so headless spec loads (no C_StringUtil in busted) never touch it.
-local castFormatter
-local function GetCastFormatter()
+-- Breakpoint countdown formatter: db.Decimals digits for the whole sub-60
+-- range (deliberate deviation from the reference's 3s cutoff — user
+-- preference), m:ss above (only reachable if the >60s gate changes). The
+-- format string is plain — the widget does the secret-side formatting.
+-- Lazy so headless spec loads (no C_StringUtil in busted) never touch it;
+-- cache is keyed on the decimals value so the GUI slider rebuilds it.
+local castFormatter, castFormatterDecimals
+local function GetCastFormatter(decimals)
+    decimals = decimals or 1
+    if castFormatter and castFormatterDecimals ~= decimals then
+        castFormatter = nil
+    end
     if not castFormatter and C_StringUtil and C_StringUtil.CreateNumericRuleFormatter then
         castFormatter = C_StringUtil.CreateNumericRuleFormatter()
         castFormatter:SetBreakpoints({
-            { threshold = 0, format = "%.1f" },
+            { threshold = 0, format = "%." .. decimals .. "f" },
             { threshold = 60, format = "%d:%02d", components = { { div = 60 }, { mod = 60 } } },
         })
+        castFormatterDecimals = decimals
     end
     return castFormatter
 end
@@ -396,12 +403,12 @@ function TS:PopulateEntry(entry, unit, info)
 
     local lc, rc = entry.leftIcon.cooldown, entry.rightIcon.cooldown
     lc:SetHideCountdownNumbers(false)
-    lc:SetCountdownFormatter(GetCastFormatter())
+    lc:SetCountdownFormatter(GetCastFormatter(db.Decimals))
     lc:SetCooldownFromDurationObject(info.duration)
     rc:SetCooldownFromDurationObject(info.duration)
 
     -- Widget-managed FontString: the Cooldown resets font/anchors on
-    -- Clear()/SetCooldown, so re-apply BOTH on every populate.
+    -- Clear()/SetCooldown, so re-apply everything on every populate.
     local fs = lc:GetCountdownFontString()
     if fs then
         fs:ClearAllPoints()
@@ -411,6 +418,8 @@ function TS:PopulateEntry(entry, unit, info)
         if not ok then
             pcall(fs.SetFont, fs, KE:GetFontPath("Expressway"), db.FontSize, "OUTLINE")
         end
+        local c = db.FontColor
+        if c then fs:SetTextColor(c[1], c[2], c[3], c[4] or 1) end
     end
 
     lc:SetScript("OnCooldownDone", function()
@@ -690,6 +699,8 @@ function TS:ShowPreview()
             fs:SetPoint("CENTER", entry, "CENTER", 0, 0)
             pcall(fs.SetFont, fs, KE:GetFontPath(db.FontFace), db.FontSize,
                 KE:GetFontOutline(db.FontOutline))
+            local c = db.FontColor
+            if c then fs:SetTextColor(c[1], c[2], c[3], c[4] or 1) end
         end
     end
     local now = GetTime()
@@ -700,7 +711,7 @@ function TS:ShowPreview()
         entry.rightIcon.tex:SetTexture(p.icon)
         -- Plain-number cooldown path: previews never touch secret values.
         entry.leftIcon.cooldown:SetHideCountdownNumbers(false)
-        entry.leftIcon.cooldown:SetCountdownFormatter(GetCastFormatter())
+        entry.leftIcon.cooldown:SetCountdownFormatter(GetCastFormatter(db.Decimals))
         startCooldowns(entry, p)
         -- Looping timers (DungeonTimers text-mode preview pattern): each
         -- entry restarts its own countdown when it runs out.

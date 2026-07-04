@@ -116,6 +116,10 @@ GUIFrame:RegisterContent("TargetedSpells", function(scrollChild, yOffset)
             fontOutline = "FontOutline",
         },
         includeSoftOutline = false,   -- widget-managed countdown text (spec constraint 3)
+        extraSlider = {
+            label = "Decimals", min = 0, max = 2, step = 1,
+            dbKey = "Decimals", default = 1,
+        },
         onChangeCallback = Rebuild,
     })
     manager:Register(fontCard, "all")
@@ -169,7 +173,27 @@ GUIFrame:RegisterContent("TargetedSpells", function(scrollChild, yOffset)
     yOffset = cardL:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 5: Features
+    -- Card 5: Colors
+    ----------------------------------------------------------------
+    local cardCol = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
+    manager:Register(cardCol, "all")
+
+    local rowCol = GUIFrame:CreateRow(cardCol.content, Theme.rowHeightLast)
+    local textColorPicker = GUIFrame:CreateColorPicker(rowCol, "Countdown Text", {
+        color = db.FontColor or { 1, 1, 1, 1 },
+        callback = function(r, g, b, a)
+            db.FontColor = { r, g, b, a }
+            Rebuild()
+        end,
+    })
+    rowCol:AddWidget(textColorPicker, 0.5)
+    manager:Register(textColorPicker, "all")
+    cardCol:AddRow(rowCol, Theme.rowHeightLast, 0)
+
+    yOffset = cardCol:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 6: Features
     ----------------------------------------------------------------
     local cardF = GUIFrame:CreateCard(scrollChild, "Features", yOffset)
     manager:Register(cardF, "all")
@@ -193,7 +217,7 @@ GUIFrame:RegisterContent("TargetedSpells", function(scrollChild, yOffset)
     yOffset = cardF:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 6: Show In (content gating)
+    -- Card 7: Show In (content gating)
     ----------------------------------------------------------------
     local cardC = GUIFrame:CreateCard(scrollChild, "Show In", yOffset)
     manager:Register(cardC, "all")
