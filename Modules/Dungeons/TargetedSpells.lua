@@ -527,7 +527,8 @@ function TS:TryStart(unit, token)
     entry = self:AcquireEntry(unit)
     self:PopulateEntry(entry, unit, info)
     self:RepositionEntries()
-    dbg("started", unit, info.kind, info.name)
+    -- info.name is a secret string on hostile units — never print it.
+    dbg("started", unit, info.kind)
 end
 
 function TS:OnCastEvent(event, unit, ...)
@@ -596,7 +597,9 @@ function TS:OnNameplateAdded(_, unit)
 end
 
 function TS:OnNameplateRemoved(_, unit)
-    self.pendingDispatch[unit] = nil
+    -- pendingDispatch[unit] is deliberately NOT cleared: keeping the counter
+    -- monotonic closes the token-collision window when a nameplate token is
+    -- recycled to a new mob within the settle delay (bounded at 40 keys).
     local entry = self.activeEntries[unit]
     if entry then
         entry.wasInterrupted = nil
