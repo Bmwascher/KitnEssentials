@@ -174,30 +174,21 @@ GUIFrame:RegisterContent("TargetedSpells", function(scrollChild, yOffset)
     local cardF = GUIFrame:CreateCard(scrollChild, "Features", yOffset)
     manager:Register(cardF, "all")
 
-    local rowF1 = GUIFrame:CreateRow(cardF.content, Theme.rowHeight)
-    local swipeCheck = GUIFrame:CreateCheckbox(rowF1, "Cooldown Swipe", {
-        value = db.ShowSwipe ~= false,
-        callback = function(checked) db.ShowSwipe = checked; ApplySettings() end,
-    })
-    rowF1:AddWidget(swipeCheck, 0.5)
-    manager:Register(swipeCheck, "all")
-
+    local rowF1 = GUIFrame:CreateRow(cardF.content, Theme.rowHeightLast)
     local glowCheck = GUIFrame:CreateCheckbox(rowF1, "Glow Important Spells", {
         value = db.GlowImportant ~= false,
         callback = function(checked) db.GlowImportant = checked; ApplySettings() end,
     })
     rowF1:AddWidget(glowCheck, 0.5)
     manager:Register(glowCheck, "all")
-    cardF:AddRow(rowF1, Theme.rowHeight)
 
-    local rowF2 = GUIFrame:CreateRow(cardF.content, Theme.rowHeightLast)
-    local interruptCheck = GUIFrame:CreateCheckbox(rowF2, "Indicate Interrupts", {
+    local interruptCheck = GUIFrame:CreateCheckbox(rowF1, "Indicate Interrupts", {
         value = db.IndicateInterrupts ~= false,
         callback = function(checked) db.IndicateInterrupts = checked; ApplySettings() end,
     })
-    rowF2:AddWidget(interruptCheck, 1)
+    rowF1:AddWidget(interruptCheck, 0.5)
     manager:Register(interruptCheck, "all")
-    cardF:AddRow(rowF2, Theme.rowHeightLast, 0)
+    cardF:AddRow(rowF1, Theme.rowHeightLast, 0)
 
     yOffset = cardF:GetNextOffset()
 

@@ -46,8 +46,9 @@ local SETTLE_DELAY = 0.2
 local INTERRUPT_LINGER = 1.0   -- seconds the desaturated icon stays up post-interrupt
 local INTERRUPT_HOLD = 0.95    -- Release() suppression window; < LINGER avoids a same-tick race with the linger timer
 
--- Breakpoint countdown formatter (reference pattern): tenths under 3s,
--- whole seconds to 60, m:ss above (only reachable if the >60s gate changes).
+-- Breakpoint countdown formatter: tenths for the whole sub-60 range
+-- (deliberate deviation from the reference's 3s cutoff — user preference),
+-- m:ss above (only reachable if the >60s gate changes).
 -- Lazy so headless spec loads (no C_StringUtil in busted) never touch it.
 local castFormatter
 local function GetCastFormatter()
@@ -55,7 +56,6 @@ local function GetCastFormatter()
         castFormatter = C_StringUtil.CreateNumericRuleFormatter()
         castFormatter:SetBreakpoints({
             { threshold = 0, format = "%.1f" },
-            { threshold = 3.01, format = "%d" },
             { threshold = 60, format = "%d:%02d", components = { { div = 60 }, { mod = 60 } } },
         })
     end
@@ -246,12 +246,13 @@ local function CreateIconFrame(entry, db)
     f.cooldown = CreateFrame("Cooldown", nil, f, "CooldownFrameTemplate")
     f.cooldown:SetAllPoints(f)
     f.cooldown:SetDrawEdge(false)
+    f.cooldown:SetDrawSwipe(false)
     return f
 end
 
 function TS:CreateEntry()
     local db = self.db
-    local width = db.IconSize * 2 + db.FontSize * 3
+    local width = db.IconSize * 2 + db.FontSize * 2
     local entry = CreateFrame("Frame", nil, self.anchorFrame)
     entry:SetSize(width, db.IconSize)
 
@@ -394,8 +395,6 @@ function TS:PopulateEntry(entry, unit, info)
     entry.rightIcon.tex:SetTexture(info.texture or FALLBACK_ICON)
 
     local lc, rc = entry.leftIcon.cooldown, entry.rightIcon.cooldown
-    lc:SetDrawSwipe(db.ShowSwipe ~= false)
-    rc:SetDrawSwipe(db.ShowSwipe ~= false)
     lc:SetHideCountdownNumbers(false)
     lc:SetCountdownFormatter(GetCastFormatter())
     lc:SetCooldownFromDurationObject(info.duration)
@@ -636,7 +635,7 @@ function TS:RebuildEntries()
     self.entryPool = {}
     if self.anchorFrame then
         local db = self.db
-        self.anchorFrame:SetSize(db.IconSize * 2 + db.FontSize * 3, db.IconSize)
+        self.anchorFrame:SetSize(db.IconSize * 2 + db.FontSize * 2, db.IconSize)
     end
     self:ApplyPosition()
     if wasPreview then self:ShowPreview() end
@@ -649,19 +648,16 @@ function TS:QueueRebuild()
     if self._rebuildQueued then return end
     self._rebuildQueued = true
     C_Timer.After(0.25, function()
-        TS._rebuildQueued = nil
+        TS._rebuildQueued = false
         TS:RebuildEntries()
     end)
 end
 
--- In-place keys (ShowSwipe / GlowImportant / IndicateInterrupts / content
--- checkboxes): re-apply to live entries, re-evaluate the gate immediately.
+-- In-place keys (GlowImportant / IndicateInterrupts / content checkboxes):
+-- re-apply to live entries, re-evaluate the gate immediately.
 function TS:ApplySettings()
     self:UpdateDB()
-    local db = self.db
     for _, entry in pairs(self.activeEntries) do
-        entry.leftIcon.cooldown:SetDrawSwipe(db.ShowSwipe ~= false)
-        entry.rightIcon.cooldown:SetDrawSwipe(db.ShowSwipe ~= false)
         self:UpdateGlow(entry)
     end
     self:CheckContentGate()
@@ -680,6 +676,22 @@ function TS:ShowPreview()
     self.isPreview = true
     self.anchorFrame:Show()
     self.previewEntries = {}
+    self.previewTickers = {}
+    local db = self.db
+    -- The Cooldown widget resets its FontString on SetCooldown, so every
+    -- (re)start re-applies anchor + font.
+    local function startCooldowns(entry, p)
+        local now = GetTime()
+        entry.leftIcon.cooldown:SetCooldown(now, p.duration)
+        entry.rightIcon.cooldown:SetCooldown(now, p.duration)
+        local fs = entry.leftIcon.cooldown:GetCountdownFontString()
+        if fs then
+            fs:ClearAllPoints()
+            fs:SetPoint("CENTER", entry, "CENTER", 0, 0)
+            pcall(fs.SetFont, fs, KE:GetFontPath(db.FontFace), db.FontSize,
+                KE:GetFontOutline(db.FontOutline))
+        end
+    end
     local now = GetTime()
     for i, p in ipairs(PREVIEW_ENTRIES) do
         local entry = tremove(self.entryPool) or self:CreateEntry()
@@ -689,15 +701,12 @@ function TS:ShowPreview()
         -- Plain-number cooldown path: previews never touch secret values.
         entry.leftIcon.cooldown:SetHideCountdownNumbers(false)
         entry.leftIcon.cooldown:SetCountdownFormatter(GetCastFormatter())
-        entry.leftIcon.cooldown:SetCooldown(now, p.duration)
-        entry.rightIcon.cooldown:SetCooldown(now, p.duration)
-        local fs = entry.leftIcon.cooldown:GetCountdownFontString()
-        if fs then
-            fs:ClearAllPoints()
-            fs:SetPoint("CENTER", entry, "CENTER", 0, 0)
-            pcall(fs.SetFont, fs, KE:GetFontPath(self.db.FontFace), self.db.FontSize,
-                KE:GetFontOutline(self.db.FontOutline))
-        end
+        startCooldowns(entry, p)
+        -- Looping timers (DungeonTimers text-mode preview pattern): each
+        -- entry restarts its own countdown when it runs out.
+        tinsert(self.previewTickers, C_Timer.NewTicker(p.duration, function()
+            startCooldowns(entry, p)
+        end))
         entry:Show()
         tinsert(self.previewEntries, entry)
     end
@@ -714,6 +723,10 @@ end
 
 function TS:HidePreview()
     self.isPreview = false
+    if self.previewTickers then
+        for _, ticker in ipairs(self.previewTickers) do ticker:Cancel() end
+        self.previewTickers = nil
+    end
     if self.previewEntries then
         for _, entry in ipairs(self.previewEntries) do
             entry:Hide()
