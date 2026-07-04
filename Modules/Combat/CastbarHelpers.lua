@@ -767,7 +767,7 @@ function H.StartCast(self)
         self.frame:Hide()
         return
     end
-    local name, text, texture, castID, notInterruptible, spellID, isEmpowered
+    local name, text, texture, castID, notInterruptible, spellID, isEmpowered, _
     local duration, direction = nil, Enum.StatusBarTimerDirection.ElapsedTime
 
     name, text, texture, _, _, _, castID, notInterruptible, spellID = UnitCastingInfo(unit)

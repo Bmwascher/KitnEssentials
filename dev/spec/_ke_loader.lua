@@ -190,6 +190,7 @@ function L.loadTargetedSpells(overrides)
     local modules = helpers.installAddonShim()
     _G.UIParent = noopFrame()
     _G.LibStub = function() return nil end
+    _G.StaticPopupDialogs = {}  -- in-game Blizzard defines it; module must never assign the global
     local KE = { Print = function() end, curves = {} }
     helpers.loadModule("Modules/Dungeons/TargetedSpells.lua", KE)
     return modules["TargetedSpells"], KE

@@ -733,7 +733,9 @@ end
 -- CVar Prompt (Task 11)
 ---------------------------------------------------------------------------------
 
-StaticPopupDialogs = StaticPopupDialogs or {}
+-- Field write only — never reassign the StaticPopupDialogs global itself:
+-- that taints the _G slot and every secure popup read (talent-commit confirm
+-- included) then carries KE taint into OverlayPlayerCastingBarFrame.
 StaticPopupDialogs["KE_TARGETEDSPELLS_CVAR"] = {
     text = "Targeted Spells: enemies casting from off-screen only produce nameplates when 'nameplateShowOffscreen' is enabled. Turn it on now?",
     button1 = "Enable it",
