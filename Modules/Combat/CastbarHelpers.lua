@@ -939,8 +939,9 @@ function H.UpdateInterruptible(self)
         -- Honor out-of-range dimming: an INTERRUPTIBLE state-change firing mid-cast
         -- must not snap the bar back to full alpha while the unit is out of range
         -- (OnUpdate would re-dim within ~33ms, but that one-frame flash is visible).
-        -- GetRangeOpacity returns a plain number (1 when the feature is off / on
-        -- TargetCastbar), so this is a no-op there and secret-safe via SetAlphaFromBoolean.
+        -- GetRangeOpacity passes through the possibly-SECRET long-cast base (or the
+        -- dim-curve evaluation), so the value must go straight into
+        -- SetAlphaFromBoolean/SetAlpha -- never Lua math.
         self.frame:SetAlphaFromBoolean(notInterruptible, 0, H.GetRangeOpacity(self, self.longCastAlpha or 1))
     end
 

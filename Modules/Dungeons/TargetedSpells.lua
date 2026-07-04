@@ -106,6 +106,13 @@ end
 
 function TS:OnInitialize()
     self:UpdateDB()
+    -- Ace default module state is enabled; without this a db-disabled module
+    -- still counts as IsEnabled() (first GUI enable becomes a no-op and core
+    -- PEW ApplySettings runs the gate with no anchor frame). Sibling idiom:
+    -- DungeonCasts.lua / KeystoneHelper.lua / TargetCastbar.lua /
+    -- PlayerAbsorbs.lua — Core/Main.lua's OnEnable loop owns the actual
+    -- enable decision via db.Enabled.
+    self:SetEnabledState(false)
 end
 
 function TS:OnEnable()
@@ -155,6 +162,10 @@ function TS:ShouldBeActive()
 end
 
 function TS:CheckContentGate()
+    -- PreviewManager calls HidePreview (-> CheckContentGate) unconditionally
+    -- on section transitions even for db-disabled modules; the gate must
+    -- never run while the module is disabled (anchorFrame may not exist).
+    if not self:IsEnabled() then return end
     local shouldBeActive = self:ShouldBeActive()
     if shouldBeActive and not self.contentActive then
         self.contentActive = true
@@ -598,6 +609,17 @@ function TS:RebuildEntries()
     self:CheckContentGate()
 end
 
+-- Structural sliders fire during drag (~100ms throttle); coalesce so a drag
+-- costs one rebuild instead of orphaning a pool per tick.
+function TS:QueueRebuild()
+    if self._rebuildQueued then return end
+    self._rebuildQueued = true
+    C_Timer.After(0.25, function()
+        TS._rebuildQueued = nil
+        TS:RebuildEntries()
+    end)
+end
+
 -- In-place keys (ShowSwipe / GlowImportant / IndicateInterrupts / content
 -- checkboxes): re-apply to live entries, re-evaluate the gate immediately.
 function TS:ApplySettings()
@@ -626,7 +648,7 @@ function TS:ShowPreview()
     self.previewEntries = {}
     local now = GetTime()
     for i, p in ipairs(PREVIEW_ENTRIES) do
-        local entry = self:CreateEntry()
+        local entry = tremove(self.entryPool) or self:CreateEntry()
         entry.receiptTime = now + i
         entry.leftIcon.tex:SetTexture(p.icon)
         entry.rightIcon.tex:SetTexture(p.icon)

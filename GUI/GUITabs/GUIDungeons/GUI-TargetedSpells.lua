@@ -27,7 +27,7 @@ GUIFrame:RegisterContent("TargetedSpells", function(scrollChild, yOffset)
 
     local function Rebuild()
         local mod = GetModule()
-        if mod and mod.RebuildEntries then mod:RebuildEntries() end
+        if mod and mod.QueueRebuild then mod:QueueRebuild() end
     end
 
     local function ApplyModuleState(enabled)
