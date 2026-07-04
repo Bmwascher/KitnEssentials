@@ -69,6 +69,10 @@ TS.activeEntries = {}   -- unit -> entry
 TS.activeCount = 0
 TS.contentActive = false
 TS.isPreview = false
+-- unit -> plain counter, bumped on every delayed-start dispatch. TryStart
+-- aborts unless its token still matches, coalescing stale/superseded
+-- dispatches without comparing any secret cast id (see BumpDispatchToken).
+TS.pendingDispatch = {}
 
 ---------------------------------------------------------------------------------
 -- Pure helpers (busted-covered — keep WoW-API-free)
@@ -301,7 +305,7 @@ function TS:Release(entry, generation, reason)
         self.activeCount = self.activeCount - 1
     end
     entry.generation = entry.generation + 1  -- invalidate pending callbacks
-    entry.unit, entry.castKey, entry.kind = nil, nil, nil
+    entry.unit, entry.castBarID, entry.kind = nil, nil, nil
     entry.receiptTime, entry.durationObject = nil, nil
     entry.spellId = nil
     entry.wasInterrupted, entry.doNotHideBefore = nil, nil
@@ -374,11 +378,11 @@ end
 -- Populate + visibility binding
 ---------------------------------------------------------------------------------
 
--- info: { kind = "cast"|"channel"|"empower", castKey, name, texture,
+-- info: { kind = "cast"|"channel"|"empower", castBarID, name, texture,
 --         spellId, duration (LuaDurationObject) }
 function TS:PopulateEntry(entry, unit, info)
     local db = self.db
-    entry.castKey = info.castKey
+    entry.castBarID = info.castBarID
     entry.kind = info.kind
     entry.spellId = info.spellId
     entry.receiptTime = GetTime()
@@ -464,29 +468,43 @@ local function IsRelevantUnit(unit)
         and UnitExists(unit) and UnitCanAttack("player", unit)
 end
 
+-- Every delayed-start dispatch (event-driven or scan/retarget-driven) bumps
+-- the unit's token before scheduling; TryStart aborts unless its token is
+-- still the latest, coalescing a superseded dispatch WITHOUT comparing any
+-- secret cast id — the token is a plain per-unit counter.
+function TS:BumpDispatchToken(unit)
+    local token = (self.pendingDispatch[unit] or 0) + 1
+    self.pendingDispatch[unit] = token
+    return token
+end
+
 -- Delayed re-read: cast target/duration data settles ~0.2s after the event
--- (reference behavior). castKey aborts the stale handler when two casts
--- land <0.2s apart on one unit.
-function TS:TryStart(unit, castKey)
+-- (reference behavior). The dispatch token (not any cast id) aborts the
+-- handler once a later dispatch has superseded it for this unit.
+function TS:TryStart(unit, token)
     if not self.contentActive then return end
     if not IsRelevantUnit(unit) then return end
+    if self.pendingDispatch[unit] ~= token then
+        dbg("stale delayed start (superseded)", unit)
+        return
+    end
 
     local info
-    local name, _, texture, _, _, _, castID, _, spellID = UnitCastingInfo(unit)
+    -- castID (position 7) is a SECRET WOWGUID — never bound. castBarID
+    -- (position 10) is the plain NeverSecret correlation id 12.0 added
+    -- specifically so addons don't have to touch the secret one.
+    local name, _, texture, _, _, _, _, _, spellID, castBarID = UnitCastingInfo(unit)
     if name then
-        if castKey and castID and castKey ~= castID then
-            dbg("stale delayed start (cast)", unit)
-            return
-        end
         local duration = UnitCastingDuration(unit)
         if not duration then return end
-        info = { kind = "cast", castKey = castID or castKey,
+        info = { kind = "cast", castBarID = castBarID,
                  name = name, texture = texture, spellId = spellID, duration = duration }
     else
         -- Empowered casts report through UnitChannelInfo with isEmpowered set
         -- and use UnitEmpoweredChannelDuration — KE's own CastbarHelpers
         -- H.StartCast is the shipped precedent (CastbarHelpers.lua:751-761).
-        local cname, _, ctexture, _, _, _, _, cspellID, isEmpowered = UnitChannelInfo(unit)
+        -- castBarID here is UnitChannelInfo's 11th return (plain, NeverSecret).
+        local cname, _, ctexture, _, _, _, _, cspellID, isEmpowered, _, ccastBarID = UnitChannelInfo(unit)
         if not cname then return end
         local duration
         if isEmpowered then
@@ -495,9 +513,7 @@ function TS:TryStart(unit, castKey)
             duration = UnitChannelDuration(unit)
         end
         if not duration then return end
-        -- UnitChannelInfo exposes no cast GUID; the event-payload castGUID
-        -- captured at dispatch is the key (spec "castKey").
-        info = { kind = isEmpowered and "empower" or "channel", castKey = castKey,
+        info = { kind = isEmpowered and "empower" or "channel", castBarID = ccastBarID,
                  name = cname, texture = ctexture, spellId = cspellID, duration = duration }
     end
 
@@ -514,28 +530,39 @@ function TS:TryStart(unit, castKey)
     dbg("started", unit, info.kind, info.name)
 end
 
-function TS:OnCastEvent(event, unit, castGUID)
+function TS:OnCastEvent(event, unit, ...)
     if not strmatch(unit or "", NAMEPLATE_PATTERN) then return end
 
     if event == "UNIT_SPELLCAST_START" or event == "UNIT_SPELLCAST_CHANNEL_START"
         or event == "UNIT_SPELLCAST_EMPOWER_START" then
+        local token = self:BumpDispatchToken(unit)
         C_Timer.After(SETTLE_DELAY, function()
-            TS:TryStart(unit, castGUID)
+            TS:TryStart(unit, token)
         end)
     elseif event == "UNIT_SPELLCAST_INTERRUPTED" then
-        self:OnInterrupted(unit, castGUID)               -- Task 9
+        -- Payload: castGUID, spellID, interruptedBy, castBarID (plain, NeverSecret).
+        local castBarID = select(4, ...)
+        self:OnInterrupted(unit, castBarID)               -- Task 9
     else -- STOP / CHANNEL_STOP / EMPOWER_STOP
+        local castBarID
+        if event == "UNIT_SPELLCAST_STOP" then
+            castBarID = select(3, ...)                    -- castGUID, spellID, castBarID
+        elseif event == "UNIT_SPELLCAST_CHANNEL_STOP" then
+            castBarID = select(4, ...)                    -- +interruptedBy before castBarID
+        elseif event == "UNIT_SPELLCAST_EMPOWER_STOP" then
+            castBarID = select(5, ...)                    -- +complete, interruptedBy before castBarID
+        end
         local entry = self.activeEntries[unit]
-        if entry and (not entry.castKey or not castGUID or entry.castKey == castGUID) then
+        if entry and (not entry.castBarID or not castBarID or entry.castBarID == castBarID) then
             self:Release(entry, entry.generation, "stop")
         end
     end
 end
 
-function TS:OnInterrupted(unit, castGUID)
+function TS:OnInterrupted(unit, castBarID)
     local entry = self.activeEntries[unit]
     if not entry then return end
-    if entry.castKey and castGUID and entry.castKey ~= castGUID then return end
+    if entry.castBarID and castBarID and entry.castBarID ~= castBarID then return end
     if not self.db.IndicateInterrupts then
         self:Release(entry, entry.generation, "stop")
         return
@@ -555,18 +582,21 @@ function TS:ScanExistingNameplates()
     for i = 1, MAX_NAMEPLATES do
         local unit = "nameplate" .. i
         if UnitExists(unit) and UnitCanAttack("player", unit) then
-            C_Timer.After(SETTLE_DELAY, function() TS:TryStart(unit) end)
+            local token = self:BumpDispatchToken(unit)
+            C_Timer.After(SETTLE_DELAY, function() TS:TryStart(unit, token) end)
         end
     end
 end
 
 function TS:OnNameplateAdded(_, unit)
     if self.contentActive and IsRelevantUnit(unit) then
-        C_Timer.After(SETTLE_DELAY, function() TS:TryStart(unit) end)
+        local token = self:BumpDispatchToken(unit)
+        C_Timer.After(SETTLE_DELAY, function() TS:TryStart(unit, token) end)
     end
 end
 
 function TS:OnNameplateRemoved(_, unit)
+    self.pendingDispatch[unit] = nil
     local entry = self.activeEntries[unit]
     if entry then
         entry.wasInterrupted = nil
@@ -577,8 +607,10 @@ end
 function TS:OnUnitTarget(_, unit)
     -- Retarget mid-cast: rebuild (release + reacquire re-runs the binding
     -- and refreshes receiptTime — reference behavior, re-sorts to newest).
+    -- Synchronous, but still bumps the token so it supersedes any in-flight
+    -- delayed dispatch for this unit.
     if self.activeEntries[unit] then
-        self:TryStart(unit)
+        self:TryStart(unit, self:BumpDispatchToken(unit))
     end
 end
 
