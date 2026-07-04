@@ -26,7 +26,9 @@ local tinsert, tremove, tsort = table.insert, table.remove, table.sort
 local strmatch = string.match
 local type, ipairs = type, ipairs
 
-local LCG = LibStub and LibStub("LibCustomGlow-1.0", true)
+-- Size-parameterized pixel glow fork (TargetedSpellsGlow.lua, loads first);
+-- nil in headless specs, so glow paths gate on it.
+local Glows = KE.TSGlow
 
 local DEBUG_TS = false
 local function dbg(...)
@@ -337,15 +339,14 @@ function TS:ReleaseAllEntries()
     end
 end
 
-local GLOW_KEY = "KE_TS"
-
 -- Reference pattern: glow runs whenever a spellId exists; the SECRET
 -- importance boolean only drives the glow child's alpha (never branched on).
--- Shipped precedent: CastbarHelpers H.UpdateGlow. Icon frames are plainly
--- SetSize'd, so stock LCG reading their size is safe; if secret-size errors
--- appear in BugSack, port the reference's size-parameterized glow fork.
+-- Uses the size-parameterized fork with plain db.IconSize — stock LCG reads
+-- frame:GetSize(), which returns SECRET numbers anywhere in this entry
+-- subtree (its alpha is bound to secret values; rect queries under it are
+-- secret so targeting can't be inferred by measuring — BugSack 2026-07-03).
 function TS:UpdateGlow(entry)
-    if not LCG then return end
+    if not Glows then return end
     if not self.db.GlowImportant or not entry.spellId then
         self:StopGlow(entry)
         return
@@ -353,24 +354,22 @@ function TS:UpdateGlow(entry)
     local isImportant = C_Spell and C_Spell.IsSpellImportant
         and C_Spell.IsSpellImportant(entry.spellId)
     if type(isImportant) == "nil" then isImportant = false end  -- taint-safe nil check
+    local size = self.db.IconSize
     for _, iconFrame in ipairs({ entry.leftIcon, entry.rightIcon }) do
-        LCG.PixelGlow_Start(iconFrame, nil, nil, nil, nil, nil, nil, nil, nil, GLOW_KEY)
-        local child = iconFrame["_PixelGlow" .. GLOW_KEY]
+        Glows.PixelGlow_Start(iconFrame, size, size)
+        local child = iconFrame._PixelGlow
         if child then
             child:SetAlphaFromBoolean(isImportant, 1, 0)
         end
     end
 end
 
+-- The fork's pool resetter restores alpha 1 as the child is released, so no
+-- pre-stop reset is needed here (pool is private to this module).
 function TS:StopGlow(entry)
-    if not LCG or not entry.leftIcon then return end
+    if not Glows or not entry.leftIcon then return end
     for _, iconFrame in ipairs({ entry.leftIcon, entry.rightIcon }) do
-        -- Reset the bound (possibly 0) alpha BEFORE Stop: PixelGlow_Stop's
-        -- pool resetter nils iconFrame["_PixelGlow"..GLOW_KEY] as it releases
-        -- the child, and the pool is shared with every LCG consumer.
-        local child = iconFrame["_PixelGlow" .. GLOW_KEY]
-        if child then child:SetAlpha(1) end
-        LCG.PixelGlow_Stop(iconFrame, GLOW_KEY)
+        Glows.PixelGlow_Stop(iconFrame)
     end
 end
 

@@ -99,6 +99,7 @@ read_globals = {
     -- Frame and UI
     "CreateFrame", "CreateFont", "CreateColor", "UIParent", "Settings",
     "CreateAbbreviateConfig",
+    "CreateFramePool", "CreateTexturePool",
     "BackdropTemplateMixin", "Mixin", "CreateFromMixins", "CreateAndInitFromMixin",
     "ImportDataStreamMixin",
     "MapCanvasPinMixin", "MapCanvasDataProviderMixin",
