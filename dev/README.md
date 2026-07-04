@@ -49,12 +49,20 @@ a dedicated hererocks tree holds the interpreter plus busted/luacov, wired up
 by the scoop LuaRocks. Needs python and a C compiler (mingw gcc) on PATH.
 
 ```powershell
-scoop install luacheck luarocks
+scoop install luarocks
 python -m pip install hererocks
 python -m hererocks "$HOME\Documents\WoW-Dev\lua51" -l 5.1.5
 luarocks --lua-version=5.1 --lua-dir="$HOME\Documents\WoW-Dev\lua51" --tree="$HOME\Documents\WoW-Dev\lua51" install busted 2.3.0-1
 luarocks --lua-version=5.1 --lua-dir="$HOME\Documents\WoW-Dev\lua51" --tree="$HOME\Documents\WoW-Dev\lua51" install luacov 0.17.0-1
+luarocks --lua-version=5.1 --lua-dir="$HOME\Documents\WoW-Dev\lua51" --tree="$HOME\Documents\WoW-Dev\lua51" install luacheck
 ```
+
+luacheck must be the LuaRocks rock (runs through the tree's `lua.exe`), NOT
+the standalone `luacheck.exe` from scoop/GitHub releases: that binary is
+unsigned and Windows 11 **Smart App Control** blocks it outright
+(CodeIntegrity events 3033/3077; SAC has no per-file exclusions). Confirmed
+2026-07-03 — the old standalone exe is parked at
+`%LOCALAPPDATA%\Programs\luacheck\luacheck.exe.sac-blocked`.
 
 (Skip hererocks' own LuaRocks (`-r`) — its Windows installer is broken; the
 scoop LuaRocks manages the tree fine via `--lua-version/--lua-dir/--tree`.)
