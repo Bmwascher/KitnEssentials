@@ -419,9 +419,9 @@ function KT:BroadcastKick(spellID, cd)
     local ok, ret = pcall(C_ChatInfo.SendAddonMessage, COMM_PREFIX, msg, channel)
     if ok and ret == COMM_SUCCESS then return end
 
-    -- Reference-verified behavior: result 11 = timed M+ has blocked addon
-    -- channels. Whisper each member individually instead (also covers any
-    -- other send failure).
+    -- Result 11 = Enum.SendAddonMessageResult.AddOnMessageLockdown (timed M+
+    -- has blocked addon channels). Whisper each member individually instead
+    -- (also covers any other send failure).
     for i = 1, 4 do
         local unit = "party" .. i
         if UnitExists(unit) then
@@ -462,7 +462,8 @@ function KT:OnCommReceived(_, prefix, message, _, sender)
         end
     end)
     if not ok and DEBUG_KT then
-        KE:Print("[KT] kick comm parse failed from " .. tostring(sender))
+        local okS, senderStr = pcall(tostring, sender)
+        KE:Print("[KT] kick comm parse failed from " .. (okS and senderStr or "?"))
     end
 end
 
