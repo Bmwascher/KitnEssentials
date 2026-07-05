@@ -49,7 +49,6 @@ local IsInGroup = IsInGroup
 local IsInGuild = IsInGuild
 local GetTime = GetTime
 local GetNumGroupMembers = GetNumGroupMembers
-local GetUnitName = GetUnitName
 local UnitGUID = UnitGUID
 local Ambiguate = Ambiguate
 local GetSpecializationInfoByID = GetSpecializationInfoByID
@@ -471,7 +470,10 @@ local function ResolveGroupGUID(playerName)
     if not target or issecretvalue(target) then return nil end
 
     local function matchUnit(unit)
-        local nm = GetUnitName(unit, false)
+        -- UnitName's FIRST return is always the bare name (realm split into the
+        -- second return) — GetUnitName(unit, false) appends FOREIGN_SERVER_LABEL
+        -- ("(*)") for coalesced members and would never match the Ambiguate'd target.
+        local nm = UnitName(unit)
         if nm and not issecretvalue(nm) and nm == target then
             return UnitGUID(unit)
         end
