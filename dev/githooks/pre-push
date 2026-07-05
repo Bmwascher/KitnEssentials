@@ -62,9 +62,12 @@ fi
 # others (a missing busted used to skip lint too — fixed 2026-07-01).
 
 # Blocking since 2026-06-11: the luacheck warning baseline is zero.
+# luacheck ships as a luarocks .bat since 2026-07-03 (Smart App Control
+# blocks the standalone exe) — resolve both forms, same as busted below.
+luacheck_bin="$(command -v luacheck || command -v luacheck.bat || true)"
 echo "[pre-push] luacheck…"
-if command -v luacheck >/dev/null 2>&1; then
-    if ! luacheck . -q; then
+if [ -n "$luacheck_bin" ]; then
+    if ! "$luacheck_bin" . -q; then
         echo "[pre-push] BLOCKED: luacheck warnings. Fix them, or override with: git push --no-verify" >&2
         exit 1
     fi
@@ -72,9 +75,8 @@ else
     echo "[pre-push] luacheck not on PATH — skipping lint. (CI will still lint.)" >&2
 fi
 
-# Windows: luarocks generates only busted.bat, which bash's plain
-# `command -v busted` cannot resolve — check both forms. (.exe tools like
-# luacheck.exe resolve automatically under git's msys bash.)
+# Windows: luarocks generates only .bat launchers, which bash's plain
+# `command -v busted` cannot resolve — check both forms.
 busted_bin="$(command -v busted || command -v busted.bat || true)"
 
 if [ -n "$busted_bin" ]; then
