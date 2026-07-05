@@ -1,5 +1,30 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v3.2.1
+
+### Targeted Spells
+- **Fixed:** casts shorter than 2 seconds showed their icons but no countdown — the cooldown widget's built-in 2-second minimum countdown duration is now zeroed
+- **Fixed:** rebuilding an entry mid-cast (retargets, replace-by-unit) could drop its countdown or release a live entry — pooled cooldown lifecycle hardened
+- Targeted Spells is now ON by default, with a one-time fixup so profiles saved under v3.2.0's default-off setting pick it up too; disabling it afterward sticks
+- Default anchor recentered on the screen
+
+### Damage Meter
+- **Fixed:** cross-realm group members now resolve their spec icons (names matched without the realm suffix)
+- **Fixed:** a boss pull chained immediately after the previous fight ended could steal that fight's kill/wipe tagging in segment history
+- **Fixed:** death recap times in long fights could render abbreviated ("1Ks") — now always plain seconds
+- The dock self-repairs after profile switch, copy, or reset operations
+
+### Mythic+ Timer
+- Clearing your splits now also clears the forces personal best
+- Dungeon-name title-casing now applies only on English clients
+
+### General
+- **NEW:** `/kes help` (or any unrecognized command) lists every subcommand in chat
+- Prompt dialogs no longer touch combat-protected keyboard APIs when opened in combat
+- The one-time redundant-addon warning can no longer mark itself as shown without actually displaying
+
+---
+
 ## v3.2.0
 
 ### Targeted Spells
