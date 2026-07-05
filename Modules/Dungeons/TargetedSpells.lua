@@ -462,8 +462,13 @@ function TS:PopulateEntry(entry, unit, info)
         if c then fs:SetTextColor(c[1], c[2], c[3], c[4] or 1) end
     end
 
+    -- Capture the generation NOW (interrupt-timer idiom): reading
+    -- entry.generation at fire time always matches, turning the stale-guard
+    -- into a no-op — a late done event queued by the widget would then
+    -- release the entry's NEXT occupant.
+    local gen = entry.generation
     lc:SetScript("OnCooldownDone", function()
-        TS:Release(entry, entry.generation, "cooldown-done")
+        TS:Release(entry, gen, "cooldown-done")
     end)
 
     -- THE verbatim core (spec "Visibility binding"): the secret targeting
