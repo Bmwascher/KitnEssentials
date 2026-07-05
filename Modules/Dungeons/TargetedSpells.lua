@@ -287,15 +287,32 @@ function TS:CreateEntry()
 
     -- Center X: fills the countdown slot while an interrupted entry lingers
     -- (GUI close-button idiom: cross rotated 45°). Capped to the slot width
-    -- so a tight TextSpacing never pushes it into the icons.
+    -- so a tight TextSpacing never pushes it into the icons. Outline = 8
+    -- black offset copies (CustomOutline idiom applied to a texture); the
+    -- whole stack sits on one sub-frame so it shows/hides atomically — no
+    -- ghosting window.
     local xSize = math.min(db.FontSize * 1.2, db.TextSpacing or 32)
-    entry.interruptX = entry:CreateTexture(nil, "OVERLAY", nil, 6)
-    entry.interruptX:SetSize(xSize, xSize)
-    entry.interruptX:SetPoint("CENTER", entry, "CENTER", 0, 0)
-    entry.interruptX:SetTexture(INTERRUPT_ICON)
-    entry.interruptX:SetRotation(math.rad(45))
-    entry.interruptX:SetVertexColor(1, 0.2, 0.2, 1)
-    entry.interruptX:Hide()
+    local xFrame = CreateFrame("Frame", nil, entry)
+    xFrame:SetSize(xSize, xSize)
+    xFrame:SetPoint("CENTER", entry, "CENTER", 0, 0)
+    local px = KE:GetPixelSize()
+    local offsets = { {-px,0}, {px,0}, {0,-px}, {0,px},
+                      {-px,-px}, {-px,px}, {px,-px}, {px,px} }
+    for _, off in ipairs(offsets) do
+        local shadow = xFrame:CreateTexture(nil, "OVERLAY", nil, 5)
+        shadow:SetSize(xSize, xSize)
+        shadow:SetPoint("CENTER", xFrame, "CENTER", off[1], off[2])
+        shadow:SetTexture(INTERRUPT_ICON)
+        shadow:SetRotation(math.rad(45))
+        shadow:SetVertexColor(0, 0, 0, 1)
+    end
+    local xTex = xFrame:CreateTexture(nil, "OVERLAY", nil, 6)
+    xTex:SetAllPoints(xFrame)
+    xTex:SetTexture(INTERRUPT_ICON)
+    xTex:SetRotation(math.rad(45))
+    xTex:SetVertexColor(1, 0.2, 0.2, 1)
+    xFrame:Hide()
+    entry.interruptX = xFrame
 
     entry.generation = 0
     return entry
