@@ -399,19 +399,60 @@ function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
     end
     if ok and token then return end
 
-    self:AddKickRecord(interruptedBy, spellID)
+    self:ProcessTeammateKick(interruptedBy, spellID)
 end
 
-function KT:AddKickRecord(interrupterGuid, interruptedSpellID)
-    -- Display name; drop the record if nothing resolves (matches the references).
+function KT:ProcessTeammateKick(interrupterGuid, interruptedSpellID)
+    -- Resolve what the game lets us see about the kicker. The name may be
+    -- secret (SecretWhenUnitIdentityRestricted); classFilename is documented
+    -- plain (no secret flag in UnitDocumentation) — IsSafeValue-check both
+    -- anyway before using either as a comparison value.
     local ok, name = pcall(UnitNameFromGUID, interrupterGuid)
     if not ok or name == nil then return end
 
-    -- Class color is best-effort: the class token may come back secret, in
-    -- which case it can't be a lookup key and we fall back to CoolingColor.
+    local classToken
+    local okClass, _, cf = pcall(UnitClassFromGUID, interrupterGuid)
+    if okClass and cf and KE:IsSafeValue(cf) then classToken = cf end
+
+    -- Deterministic attribution — flip the real roster bar when identity
+    -- data is readable: (1) plain name -> exact member; (2) plain class ->
+    -- the ONLY kick-capable member of that class. No guessing beyond that
+    -- (the references discarded roster heuristics for false attributions).
+    local target
+    if KE:IsSafeValue(name) then
+        for guid, member in pairs(self.partyMembers) do
+            if member.unit ~= "player" and member.name == name
+                and member.interruptData then
+                target = guid
+                break
+            end
+        end
+    end
+    if not target and classToken then
+        local matches, candidate = 0, nil
+        for guid, member in pairs(self.partyMembers) do
+            if member.unit ~= "player" and member.classToken == classToken
+                and member.interruptData then
+                matches = matches + 1
+                candidate = guid
+            end
+        end
+        if matches == 1 then target = candidate end
+    end
+
+    if DEBUG_KT then
+        KE:Print(string_format("[KT] teammate kick nameSafe=%s classSafe=%s attributed=%s",
+            tostring(KE:IsSafeValue(name)), tostring(classToken ~= nil), tostring(target ~= nil)))
+    end
+
+    if target then
+        self:ConfirmKick(target)
+        return
+    end
+
+    -- Unattributable — transient record fallback. Class color best-effort.
     local color
-    local okClass, _, classToken = pcall(UnitClassFromGUID, interrupterGuid)
-    if okClass and classToken and KE:IsSafeValue(classToken) then
+    if classToken then
         local okColor, c = pcall(C_ClassColor.GetClassColor, classToken)
         if okColor and c then color = c end
     end
