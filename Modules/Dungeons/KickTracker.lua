@@ -26,6 +26,7 @@ local IsInInstance = IsInInstance
 local IsInGroup = IsInGroup
 local GetSpecialization = GetSpecialization
 local GetSpecializationInfo = GetSpecializationInfo
+local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 local C_Timer = C_Timer
 local C_ClassColor = C_ClassColor
 local C_Spell = C_Spell
@@ -120,6 +121,28 @@ INTERRUPT_SPELL_IDS[119910] = true  -- Command Demon: Spell Lock
 INTERRUPT_SPELL_IDS[89766]  = true  -- Axe Toss (Felguard pet actual)
 INTERRUPT_SPELL_IDS[119914] = true  -- Command Demon: Axe Toss
 
+-- Class-default kicks for members whose spec is still unknown (teammates
+-- without a LibSpec-carrying addon never broadcast their spec). Values match
+-- INTERRUPT_DATA; where specs differ the reference's lowest-CD rule applies.
+-- allRoles = every spec of the class has this kick; otherwise only a
+-- DAMAGER/TANK role assignment proves a kicking spec. Healer shamans keep
+-- Wind Shear at its 30s CD.
+local CLASS_FALLBACK_INTERRUPTS = {
+    DEATHKNIGHT = { id = 47528,  cd = 12, allRoles = true },
+    DEMONHUNTER = { id = 183752, cd = 15, allRoles = true },
+    DRUID       = { id = 106839, cd = 15 },
+    EVOKER      = { id = 351338, cd = 18 },
+    HUNTER      = { id = 187707, cd = 15, allRoles = true },
+    MAGE        = { id = 2139,   cd = 20, allRoles = true },
+    MONK        = { id = 116705, cd = 15 },
+    PALADIN     = { id = 96231,  cd = 15 },
+    PRIEST      = { id = 15487,  cd = 30 },  -- Shadow only; a DPS role proves it
+    ROGUE       = { id = 1766,   cd = 15, allRoles = true },
+    SHAMAN      = { id = 57994,  cd = 12, allRoles = true, healerCd = 30 },
+    WARLOCK     = { id = 19647,  cd = 24, allRoles = true },
+    WARRIOR     = { id = 6552,   cd = 15, allRoles = true },
+}
+
 local KICK_RECORD_FALLBACK_DURATION = 15
 
 -- Flip true to trace preview lifecycle, cooling-bar OnUpdate cadence,
@@ -179,6 +202,35 @@ function KT:GetInterruptDataForSpec(specID)
     return nil
 end
 
+-- Spec unknown (teammate without a LibSpec-carrying addon): reference
+-- safe-optimistic rule — assign the class-default kick only when it can't
+-- be wrong (every spec of the class kicks, or a DPS/TANK role proves a
+-- kicking spec; ambiguous healer/NONE stays hidden rather than showing a
+-- phantom bar). Refined or cleared as soon as the real spec arrives.
+function KT:GuessClassInterrupt(unit, classToken)
+    local fallback = classToken and CLASS_FALLBACK_INTERRUPTS[classToken]
+    if not fallback then return nil end
+
+    local role = UnitGroupRolesAssigned(unit)
+    if role == "HEALER" then
+        if fallback.healerCd then
+            return { id = fallback.id, cd = fallback.healerCd, role = "HEALER" }
+        end
+        if fallback.allRoles then
+            return { id = fallback.id, cd = fallback.cd, role = "HEALER" }
+        end
+        return nil
+    end
+    if not fallback.allRoles and role ~= "DAMAGER" and role ~= "TANK" then
+        return nil
+    end
+    return {
+        id = fallback.id,
+        cd = fallback.cd,
+        role = (role == "TANK") and "TANK" or "DAMAGER",
+    }
+end
+
 function KT:RefreshPartyRoster()
     if not self.db or not self.db.Enabled then return end
 
@@ -222,6 +274,10 @@ function KT:RefreshPartyRoster()
                 if specID > 0 then
                     member.specID = specID
                     member.interruptData = self:GetInterruptDataForSpec(specID)
+                elseif unit ~= "player" and not member.interruptData then
+                    -- No spec data yet — class-default fallback so the bar
+                    -- exists at all (LibSpec/comm refinement overwrites it)
+                    member.interruptData = self:GuessClassInterrupt(unit, classToken)
                 end
             end
         end
