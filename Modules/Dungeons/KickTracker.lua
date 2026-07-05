@@ -163,10 +163,10 @@ KT.editModeRegistered = false
 KT.previewContext = nil    -- "HEALER" | "DEFAULT" | nil (GUI editing/preview override)
 KT.guiConfigContext = nil  -- "HEALER" | "DEFAULT" | nil (which context the GUI edits)
 
-KT.partyMembers = {}     -- [guid] = { unit, name, classToken, specID, interruptData, kickStart, kickDuration }
+KT.partyMembers = {}     -- [guid] = { unit, name, classToken, specID, interruptData, kickStart, kickDuration, kickVerified }
 KT.nameSpecCache = {}    -- [playerName] = specID, fed by LibSpec.RegisterGroup callback
 
-KT.kickRecords = {}       -- array of { id, name, color, iconID, startTime, duration } — teammate kick records
+KT.kickRecords = {}       -- array of { id, name, iconID, startTime, duration } — teammate kick records
 KT.nextRecordID = 0       -- monotonic; records keyed "record"..id in activeBars (GUIDs may be secret)
 
 KT.barPool = {}           -- array of reusable bar frames
@@ -270,6 +270,8 @@ function KT:RefreshPartyRoster()
                 local specID = 0
                 if unit == "player" then
                     specID = GetPlayerSpecID() or 0
+                    -- Own kicks are always tracked — the bar may claim Ready
+                    member.kickVerified = true
                 elseif name and KE:IsSafeValue(name) then
                     specID = self.nameSpecCache[name] or 0
                 end
@@ -454,15 +456,11 @@ function KT:ProcessTeammateKick(interrupterGuid, interruptedSpellID)
     end
 
     if target then
+        -- We can see this member's kicks — their bar state is tracked from
+        -- here on, so it may claim Ready between cooldowns.
+        self.partyMembers[target].kickVerified = true
         self:ConfirmKick(target)
         return
-    end
-
-    -- Unattributable — transient record fallback. Class color best-effort.
-    local color
-    if classToken then
-        local okColor, c = pcall(C_ClassColor.GetClassColor, classToken)
-        if okColor and c then color = c end
     end
 
     -- Interrupted spell's icon (display-only; both id and texture may be secret).
@@ -476,7 +474,6 @@ function KT:ProcessTeammateKick(interrupterGuid, interruptedSpellID)
     local record = {
         id = self.nextRecordID,
         name = name,          -- possibly secret; SetText-only
-        color = color,        -- plain color object or nil
         iconID = iconID,      -- possibly secret; SetTexture-only
         startTime = GetTime(),
         duration = self.db.KickRecordDuration or KICK_RECORD_FALLBACK_DURATION,
@@ -576,6 +573,7 @@ function KT:OnCommReceived(_, prefix, message, _, sender)
         for guid, member in pairs(self.partyMembers) do
             if member.unit ~= "player" and member.name == shortSender then
                 if member.interruptData then
+                    member.kickVerified = true  -- comm user: bar is tracked for real
                     self:ConfirmKick(guid, cd or member.interruptData.cd)
                     -- The nameplate event usually spawned a record for this
                     -- same kick moments ago — drop it (names may be secret,
@@ -876,19 +874,19 @@ function KT:UpdateRecordBarVisuals(bar, record)
 
     KE:ApplyFont(bar.nameText, db.FontFace, db.FontSize, db.FontOutline)
     bar.nameText:SetShown(db.ShowName)
-    local nameOk = pcall(bar.nameText.SetText, bar.nameText, record.name)
-    if not nameOk then bar.nameText:SetText("") end
+    -- "> " prefix marks this as an event entry, not a member row. Concat
+    -- with a secret string is legal in 12.0 (yields a secret string).
+    local nameOk = pcall(function() bar.nameText:SetText("> " .. record.name) end)
+    if not nameOk then bar.nameText:SetText(">") end
     bar.nameText:SetTextColor(1, 1, 1, 1)
 
     KE:ApplyFont(bar.timerText, db.FontFace, db.FontSize, db.FontOutline)
     bar.timerText:SetShown(db.ShowTimer)
     bar.timerText:SetTextColor(1, 1, 1, 1)
 
-    if record.color then
-        bar.statusBar:SetStatusBarColor(record.color.r, record.color.g, record.color.b, 1)
-    else
-        bar.statusBar:SetStatusBarColor(unpack(db.CoolingColor))
-    end
+    -- Records always use the cooling color (never class color) so they read
+    -- as events, distinct from member rows.
+    bar.statusBar:SetStatusBarColor(unpack(db.CoolingColor))
 end
 
 function KT:UpdateBarVisuals(bar, member)
@@ -941,7 +939,11 @@ function KT:UpdateBarVisuals(bar, member)
         -- Dark mode: no fill visible (just dark background). Class mode: full bar.
         bar.statusBar:SetValue(isDarkMode and 0 or 1)
         if db.ShowTimer then
-            if db.ShowReadyText then
+            -- "Ready" is a claim — only bars we can actually track make it
+            -- (self, comm-verified, or attribution-verified members).
+            -- Unverified members' timer area stays blank: 12.0.5 hides
+            -- their kicks, so Ready would be a guess.
+            if db.ShowReadyText and member and member.kickVerified then
                 bar.timerText:SetText(db.ReadyText or "Ready")
             else
                 bar.timerText:SetText("")
@@ -1385,6 +1387,7 @@ function KT:ShowPreview()
             classToken = data.classToken,
             interruptData = { id = data.spellID, cd = data.cd or 15, role = "DAMAGER" },
             kickStart = (not data.ready) and GetTime() or nil,
+            kickVerified = true,  -- preview mocks show the verified look
         }
         self:UpdateBarVisuals(bar, fakeMember)
 
