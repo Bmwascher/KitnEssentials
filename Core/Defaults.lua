@@ -1314,15 +1314,15 @@ local Defaults = {
 
         TargetedSpells = {
             Enabled = false,
-            IconSize = 40,
-            Gap = 2,
-            TextSpacing = 32,           -- middle countdown slot width (px)
-            Grow = "DOWN",              -- "DOWN" | "UP" only (no horizontal in v1)
+            IconSize = 36,
+            Gap = 3,
+            TextSpacing = 45,           -- middle countdown slot width (px)
+            Grow = "UP",                -- "DOWN" | "UP" only (no horizontal in v1)
             MaxIcons = 10,              -- entry cap; invisible entries count (secret targeting)
             FontFace = "Expressway",
-            FontSize = 20,
+            FontSize = 32,
             FontOutline = "OUTLINE",    -- no SOFTOUTLINE (widget-managed countdown text)
-            FontColor = { 1, 1, 1, 1 }, -- countdown text (plain values into SetTextColor)
+            FontColor = { 1, 0.976, 0.153, 1 }, -- countdown text #FFF927 (plain values into SetTextColor)
             Decimals = 1,               -- countdown digits below 60s (0-2)
             GlowImportant = true,
             IndicateInterrupts = true,
@@ -1334,7 +1334,7 @@ local Defaults = {
             Strata = "MEDIUM",
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
-            Position = DefaultPosition(0, 100),
+            Position = DefaultPosition(0, 20),
             CVarDeclined = false,       -- internal: nameplateShowOffscreen prompt
         },
 
