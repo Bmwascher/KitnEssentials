@@ -149,6 +149,9 @@ local KICK_RECORD_FALLBACK_DURATION = 15
 -- container OnUpdate ticks, and nameplate-interrupt token resolution.
 -- Default false; revert after diagnosis.
 local DEBUG_KT = false
+-- Per-frame heartbeat logging (container tick + preview cooling tick) is far
+-- spammier than the event logs — separate opt-in.
+local DEBUG_KT_TICKS = false
 local _ktContainerTickCounter = 0
 local _ktCoolingTickCounter = 0
 local KT_TICK_LOG_EVERY = 20   -- container OnUpdate at 20fps -> ~once/sec
@@ -418,6 +421,11 @@ function KT:ProcessTeammateKick(interrupterGuid, interruptedSpellID)
     -- data is readable: (1) plain name -> exact member; (2) plain class ->
     -- the ONLY kick-capable member of that class. No guessing beyond that
     -- (the references discarded roster heuristics for false attributions).
+    -- In-game 2026-07-05: name AND classFilename are BOTH secret in live
+    -- dungeon combat (classFilename's missing secret flag in the generated
+    -- docs is an annotation gap) — so this waterfall never fires in
+    -- restricted content today. Kept: two pcalls per interrupt, and it
+    -- self-activates wherever Blizzard relaxes identity restrictions.
     local target
     if KE:IsSafeValue(name) then
         for guid, member in pairs(self.partyMembers) do
@@ -1225,7 +1233,7 @@ function KT:OnUpdateBars(elapsed)
     local needsRelayout = false
     local anyCooling = false
 
-    if DEBUG_KT then
+    if DEBUG_KT_TICKS then
         _ktContainerTickCounter = _ktContainerTickCounter + 1
         if _ktContainerTickCounter >= KT_TICK_LOG_EVERY then
             _ktContainerTickCounter = 0
@@ -1422,7 +1430,7 @@ function KT:ShowPreview()
                     KT:UpdateBarVisuals(bar, fakeMember)
                     return
                 end
-                if DEBUG_KT then
+                if DEBUG_KT_TICKS then
                     _ktCoolingTickCounter = _ktCoolingTickCounter + 1
                     if _ktCoolingTickCounter >= KT_COOLING_LOG_EVERY then
                         _ktCoolingTickCounter = 0
