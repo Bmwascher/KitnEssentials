@@ -634,8 +634,13 @@ end
 function MPT:ResetToDefaults()
     local profile = KE.db.profile
     local wasEnabled = self.db and self.db.Enabled
+    local wasMigrated = self.db and self.db.OverlayMigrated
     if type(profile.MythicPlusTimer) == "table" then
         wipe(profile.MythicPlusTimer)   -- in place: keep table identity for any held refs
+        -- Re-plant the migration stamp BEFORE UpdateDB: MigrateLegacyOverlayDB runs
+        -- inside UpdateDB and would otherwise re-import the retired (deliberately
+        -- orphaned) profile.Dungeons.WarpDepleteForces keys over the fresh defaults.
+        if wasMigrated then profile.MythicPlusTimer.OverlayMigrated = true end
     end
     self:UpdateDB()                     -- re-seed all defaults + re-bind self.db
     if wasEnabled ~= nil then self.db.Enabled = wasEnabled end
