@@ -123,8 +123,13 @@ function KE:WarnRedundantAddon(addon, label, moduleName, slash, state, key)
         return
     end
     if state[key] then return end
-    state[key] = true
     C_Timer.After(5, function()
+        -- Flag inside the callback: a /reload during the defer window must not
+        -- mark the warning delivered (SavedVariables persist instantly; the print
+        -- doesn't). Re-check the addon — it can disappear during the defer.
+        if state[key] then return end
+        if not C_AddOns.IsAddOnLoaded(addon) then return end
+        state[key] = true
         KE:Print(label .. " is enabled alongside the KitnEssentials " .. moduleName
             .. " - you only need one. Disable " .. label .. ", or turn off the "
             .. moduleName .. " in |cffffff00" .. slash .. "|r.")

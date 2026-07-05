@@ -643,7 +643,7 @@ function DM:OnEnable()
     end
 
     -- Details! is a competing meter — recommend running only one.
-    KE:WarnRedundantAddon("Details", "Details!", "Damage Meter", "/kes dm", self.db, "_detailsWarned")
+    KE:WarnRedundantAddon("Details", "Details!", "Damage Meter", "/kes", self.db, "_detailsWarned")
 
     -- The KE "Details Backdrop" skin only styles the Details! addon, so it's
     -- redundant under our meter. Disable it ONCE when Details is present (a later
