@@ -134,13 +134,17 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 
 ## Slash Commands
 
+`/kes` (also `/kitnessentials` and `/dunnigan`) is the base command for all of the below.
+
 | Command | Description |
 |---|---|
-| `/kes` or `/kitnessentials` | Toggle settings GUI |
-| `/kes edit` | Toggle edit mode |
-| `/kes mt` | Open the Mythic+ Timer settings page |
-| `/kes dm` | Toggle the Damage Meter dock (`/kes dm reset` clears segment history) |
+| `/kes` or `/kes gui` | Toggle settings GUI |
+| `/kes edit` or `/kes unlock` | Toggle edit mode |
+| `/kes profiler` or `/kes prof` | Performance profiler (`/kes profiler help` lists its subcommands) |
+| `/kes mt` | Open the Mythic+ Timer settings page (`/kes mt clearsplits` clears stored PB records) |
+| `/kes dm` | Toggle the Damage Meter dock (`/kes dm reset` clears segment history, `/kes dm report [count] [channel]` posts the view to chat) |
 | `/kes resetgui` | Reset GUI position and size |
+| `/kes help` or any unrecognized command | List all commands in chat |
 
 ## Credits
 
