@@ -1552,7 +1552,7 @@ end
 -- clearsplits (two-step wipe of the global PB store — the recovery path for
 -- a bad improve-only record); anything else — including bare "/kes mt" —
 -- opens the Mythic+ Timer GUI page (the dispatcher's previous behavior).
--- Mirrors DM:HandleSlash (Modules/DamageMeter/Core.lua:231).
+-- Mirrors DM:HandleSlash in Modules/DamageMeter/Core.lua.
 ---------------------------------------------------------------------------------
 
 function MPT:HandleSlash(input)
