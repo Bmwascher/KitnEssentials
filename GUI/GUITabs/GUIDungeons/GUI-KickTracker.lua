@@ -91,7 +91,7 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     local noteRow = GUIFrame:CreateRow(card1.content, 50)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Tracks party interrupt cooldowns in real-time using status bars.\n" ..
+        KE:ColorTextByTheme("-") .. " Your kick: precise cooldown bar. Teammate kicks: temporary records when their interrupt lands (Midnight hides teammate cooldowns).\n" ..
         KE:ColorTextByTheme("-") .. " Only active in 5-player dungeons.",
         50, "hide")
     noteRow:AddWidget(noteText, 1)
@@ -280,7 +280,17 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     })
     row3c:AddWidget(sideDropdown, 0.5)
     manager:Register(sideDropdown, "all")
-    card3:AddRow(row3c, Theme.rowHeightLast, 0)
+    card3:AddRow(row3c, Theme.rowHeight)
+
+    local row3d = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
+    local recordSlider = GUIFrame:CreateSlider(row3d, "Teammate Kick Duration", {
+        min = 5, max = 30, step = 1,
+        value = db.KickRecordDuration or 15,
+        callback = function(val) db.KickRecordDuration = val; ApplySettings() end,
+    })
+    row3d:AddWidget(recordSlider, 0.5)
+    manager:Register(recordSlider, "all")
+    card3:AddRow(row3d, Theme.rowHeightLast, 0)
 
     yOffset = card3:GetNextOffset()
 
