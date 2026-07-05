@@ -355,7 +355,7 @@ read_globals = {
     "IsAltKeyDown", "IsControlKeyDown", "IsShiftKeyDown", "IsMetaKeyDown",
     "IsMouseButtonDown", "IsMounted",
     "ResetInstances",
-    "GetServerTime", "GetTimePreciseSec",
+    "GetServerTime", "GetTimePreciseSec", "GetLocale",
     "ReloadUI", "print",
     "GameMovieFinished", "CinematicFrame_CancelCinematic",
     "Evoker", -- Evoker-specific

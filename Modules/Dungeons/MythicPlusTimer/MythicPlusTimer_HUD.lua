@@ -16,6 +16,7 @@ local floor = math.floor
 local min, max, abs = math.min, math.max, math.abs  -- max/abs used here; min used by RenderBar
 local format = string.format
 local GetTimePreciseSec = GetTimePreciseSec
+local GetLocale = GetLocale
 
 -- Color array → "|cffRRGGBB" prefix (used by RenderObjectives per-row).
 -- floor already declared above; do NOT re-declare it.
@@ -28,6 +29,11 @@ end
 -- those criteria in sentence case while boss names already come proper-cased.
 -- The apostrophe is kept inside a word so possessives survive ("Geist's" stays).
 local function TitleCase(s)
+    -- Byte-wise %a: a leading multibyte (non-ASCII) letter is skipped and the
+    -- first ASCII byte inside the word capitalized instead ("ÉCraser"). The
+    -- sentence-case fixup only matters on English clients; pass others through.
+    local locale = GetLocale()
+    if locale ~= "enUS" and locale ~= "enGB" then return s end
     return (s:gsub("(%a)([%w']*)", function(first, rest) return first:upper() .. rest end))
 end
 

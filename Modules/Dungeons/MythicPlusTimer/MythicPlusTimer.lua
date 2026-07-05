@@ -1575,6 +1575,7 @@ function MPT:HandleSlash(input)
             for i = 1, #self.run.objectives do
                 self.run.objectives[i].pbTime = nil
             end
+            if self.run.forces then self.run.forces.pbTime = nil end
             self:NotifyRefresh()
             KE:Print(format("Mythic+ Timer: cleared %d stored PB record(s).", n))
         elseif n == 0 then
