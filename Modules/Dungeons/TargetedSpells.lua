@@ -627,20 +627,22 @@ function TS:OnInterrupted(unit, castBarID)
     end)
 end
 
+-- Scan/added/retarget paths run synchronously (reference Driver behavior):
+-- the settle delay exists because a FRESH cast's target/duration data lags
+-- the START event — a cast discovered already in flight is settled, and
+-- delaying it just shows the entry 0.2s later than the reference.
 function TS:ScanExistingNameplates()
     for i = 1, MAX_NAMEPLATES do
         local unit = "nameplate" .. i
         if UnitExists(unit) and UnitCanAttack("player", unit) then
-            local token = self:BumpDispatchToken(unit)
-            C_Timer.After(SETTLE_DELAY, function() TS:TryStart(unit, token) end)
+            self:TryStart(unit, self:BumpDispatchToken(unit))
         end
     end
 end
 
 function TS:OnNameplateAdded(_, unit)
     if self.contentActive and IsRelevantUnit(unit) then
-        local token = self:BumpDispatchToken(unit)
-        C_Timer.After(SETTLE_DELAY, function() TS:TryStart(unit, token) end)
+        self:TryStart(unit, self:BumpDispatchToken(unit))
     end
 end
 
@@ -656,13 +658,13 @@ function TS:OnNameplateRemoved(_, unit)
 end
 
 function TS:OnUnitTarget(_, unit)
-    -- Retarget mid-cast: rebuild (release + reacquire re-runs the binding
-    -- and refreshes receiptTime — reference behavior, re-sorts to newest).
-    -- Synchronous, but still bumps the token so it supersedes any in-flight
-    -- delayed dispatch for this unit.
-    if self.activeEntries[unit] then
-        self:TryStart(unit, self:BumpDispatchToken(unit))
-    end
+    -- Retarget mid-cast rebuilds the binding; ALSO the first-target case
+    -- (reference Driver.lua:360): a mob that starts casting untargeted and
+    -- acquires you during the settle window shows NOW, not at +0.2s — so no
+    -- existing-entry gate. Bumping the token supersedes the pending delayed
+    -- dispatch; TryStart's early returns cover no-cast/irrelevant units.
+    if not strmatch(unit or "", NAMEPLATE_PATTERN) then return end
+    self:TryStart(unit, self:BumpDispatchToken(unit))
 end
 
 ---------------------------------------------------------------------------------
