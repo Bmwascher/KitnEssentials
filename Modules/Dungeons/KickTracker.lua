@@ -407,16 +407,18 @@ end
 -- (family rule); every send/parse is pcall'd so blocked contexts degrade
 -- silently to records.
 local COMM_PREFIX = "KEKick"
+-- BliZzi Party Tools interop (reference v4.1.4): their dispatcher accepts
+-- KICK from any class-auto-registered party member — no HELLO handshake
+-- required — and normalizes senders with Ambiguate like we do. Wire format:
+-- "B1;KICK;spellID;cd". Format drift on their side degrades to ignored
+-- messages, never errors (watch on reference syncs).
+local BLIZZI_PREFIX = "BliZziIT"
 local COMM_SUCCESS = Enum and Enum.SendAddonMessageResult
     and Enum.SendAddonMessageResult.Success or 0
 
-function KT:BroadcastKick(spellID, cd)
-    if not self.db.KickSync then return end
-    if not IsInGroup() then return end
-
-    local msg = "1;" .. spellID .. ";" .. cd
+local function transmitKick(prefix, msg)
     local channel = IsInGroup(LE_PARTY_CATEGORY_INSTANCE) and "INSTANCE_CHAT" or "PARTY"
-    local ok, ret = pcall(C_ChatInfo.SendAddonMessage, COMM_PREFIX, msg, channel)
+    local ok, ret = pcall(C_ChatInfo.SendAddonMessage, prefix, msg, channel)
     if ok and ret == COMM_SUCCESS then return end
 
     -- Result 11 = Enum.SendAddonMessageResult.AddOnMessageLockdown (timed M+
@@ -428,14 +430,23 @@ function KT:BroadcastKick(spellID, cd)
             local n, r = UnitName(unit)
             if n then
                 local target = (r and r ~= "") and (n .. "-" .. r) or n
-                pcall(C_ChatInfo.SendAddonMessage, COMM_PREFIX, msg, "WHISPER", target)
+                pcall(C_ChatInfo.SendAddonMessage, prefix, msg, "WHISPER", target)
             end
         end
     end
 end
 
+function KT:BroadcastKick(spellID, cd)
+    if not self.db.KickSync then return end
+    if not IsInGroup() then return end
+
+    transmitKick(COMM_PREFIX, "1;" .. spellID .. ";" .. cd)
+    transmitKick(BLIZZI_PREFIX, "B1;KICK;" .. spellID .. ";" .. cd)
+end
+
 function KT:OnCommReceived(_, prefix, message, _, sender)
-    if prefix ~= COMM_PREFIX then return end
+    local isKE = prefix == COMM_PREFIX
+    if not isKE and prefix ~= BLIZZI_PREFIX then return end
     if not self.db.Enabled or self.isPreview or not self.isActive then return end
     if not self.db.KickSync then return end
 
@@ -445,8 +456,17 @@ function KT:OnCommReceived(_, prefix, message, _, sender)
         local shortSender = Ambiguate(sender, "short")
         if shortSender == UnitName("player") then return end  -- own echo
 
-        local _, _, cdStr = strsplit(";", message)
-        local cd = tonumber(cdStr)
+        local cd
+        if isKE then
+            local _, _, cdStr = strsplit(";", message)
+            cd = tonumber(cdStr)
+        else
+            -- BliZzi wire: "B1;KICK;spellID;cd" — ignore their other verbs
+            local hdr, cmd, _, cdStr = strsplit(";", message)
+            if hdr ~= "B1" or cmd ~= "KICK" then return end
+            cd = tonumber(cdStr)
+            if not cd or cd <= 0 then return end
+        end
 
         for guid, member in pairs(self.partyMembers) do
             if member.unit ~= "player" and member.name == shortSender then
@@ -1421,9 +1441,11 @@ function KT:OnEnable()
     self:CreateFrames()
     self:RegWithEditMode()
 
-    -- Kick-sync comm prefix (pcall: registration can fail at the prefix cap)
+    -- Kick-sync comm prefixes (pcall: registration can fail at the prefix
+    -- cap). BliZzi's prefix is registered so their users' kicks reach us.
     if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
         pcall(C_ChatInfo.RegisterAddonMessagePrefix, COMM_PREFIX)
+        pcall(C_ChatInfo.RegisterAddonMessagePrefix, BLIZZI_PREFIX)
     end
 
     -- Register non-combat events. INSPECT_READY/PLAYER_REGEN_ENABLED no longer
