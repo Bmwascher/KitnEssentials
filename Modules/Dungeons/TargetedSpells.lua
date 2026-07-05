@@ -30,9 +30,23 @@ local type, ipairs = type, ipairs
 -- nil in headless specs, so glow paths gate on it.
 local Glows = KE.TSGlow
 
+local issecretvalue = issecretvalue
+
 local DEBUG_TS = false
+-- KE:Print renders only its first argument — concat everything into one
+-- string. tostring(secret) SUCCEEDS and returns a secret string (concat
+-- then throws), so the guard must be issecretvalue, not pcall.
+local function describeValue(v)
+    if issecretvalue and issecretvalue(v) then return "<secret>" end
+    return tostring(v)
+end
 local function dbg(...)
-    if DEBUG_TS then KE:Print("|cff88ccff[TS]|r", ...) end
+    if not DEBUG_TS then return end
+    local parts = {}
+    for i = 1, select("#", ...) do
+        parts[i] = describeValue((select(i, ...)))
+    end
+    KE:Print("|cff88ccff[TS]|r " .. table.concat(parts, " "))
 end
 
 -- Delve difficultyID — probe-confirmed in-game 2026-07-03 (Collegiate
@@ -261,6 +275,10 @@ local function CreateIconFrame(entry, db)
     f.cooldown:SetAllPoints(f)
     f.cooldown:SetDrawEdge(false)
     f.cooldown:SetDrawSwipe(false)
+    -- Default minimumCountdownDuration is 2000ms (UI.xsd): sub-2s casts get
+    -- NO countdown numbers. Reference templates zero it; mirror them
+    -- (2026-07-05 missing-timer bug — Throw Spear ~1.5s).
+    f.cooldown:SetMinimumCountdownDuration(0)
     return f
 end
 
@@ -470,6 +488,31 @@ function TS:PopulateEntry(entry, unit, info)
     lc:SetScript("OnCooldownDone", function()
         TS:Release(entry, gen, "cooldown-done")
     end)
+
+    -- Missing-timer probe (2026-07-05): report the countdown FontString's
+    -- health 0.3s after populate. Only plain values are read — never the
+    -- text/offsets, which are secret-derived on this subtree in combat.
+    if DEBUG_TS then
+        dbg("populate", unit, info.kind, "fs=" .. tostring(fs ~= nil))
+        C_Timer.After(0.3, function()
+            if entry.generation ~= gen then return end
+            local okProbe, report = pcall(function()
+                local f2 = lc:GetCountdownFontString()
+                if not f2 then return "fs=nil" end
+                local point, rel = f2:GetPoint(1)
+                local fontPath = f2:GetFont()
+                local fontMatch = "<secret>"
+                if not (issecretvalue and issecretvalue(fontPath)) then
+                    fontMatch = tostring(fontPath == KE:GetFontPath(TS.db.FontFace))
+                end
+                return "shown=" .. describeValue(f2:IsShown())
+                    .. " relIsEntry=" .. tostring(rel == entry)
+                    .. " point=" .. describeValue(point)
+                    .. " ourFont=" .. fontMatch
+            end)
+            dbg("fs@0.3", unit, okProbe and report or ("probe error: " .. tostring(report)))
+        end)
+    end
 
     -- THE verbatim core (spec "Visibility binding"): the secret targeting
     -- boolean never enters Lua; durationAlpha doubles as the >60s gate; the
