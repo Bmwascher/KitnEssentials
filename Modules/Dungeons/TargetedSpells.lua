@@ -40,6 +40,8 @@ end
 TS.DELVE_DIFFICULTY_ID = 208
 
 local FALLBACK_ICON = 136243
+-- GUI close-button cross (GUI-MainFrame.lua idiom: rotate 45° into an X).
+local INTERRUPT_ICON = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\KitnCustomCrossv3.png"
 local NAMEPLATE_PATTERN = "^nameplate%d+$"
 local MAX_NAMEPLATES = 40
 local SETTLE_DELAY = 0.2
@@ -201,11 +203,16 @@ end
 -- Anchor frame / position / EditMode
 ---------------------------------------------------------------------------------
 
+-- Entry/anchor width, single source of truth: two icons plus countdown text
+-- gap; the -2 tucks each icon 1px closer to the text (user-tuned).
+local function EntryWidth(db)
+    return db.IconSize * 2 + db.FontSize * 2 - 2
+end
+
 function TS:CreateAnchorFrame()
     if self.anchorFrame then return end
-    local db = self.db
     local f = CreateFrame("Frame", "KE_TargetedSpells", UIParent)
-    f:SetSize(db.IconSize * 2 + db.FontSize * 3, db.IconSize)
+    f:SetSize(EntryWidth(self.db), self.db.IconSize)
     self.anchorFrame = f
 end
 
@@ -254,14 +261,22 @@ local function CreateIconFrame(entry, db)
     f.cooldown:SetAllPoints(f)
     f.cooldown:SetDrawEdge(false)
     f.cooldown:SetDrawSwipe(false)
+    -- Interrupt X overlay (reference: InterruptIcon, 4px inset); OVERLAY
+    -- sublevel 6 keeps it under the 1px borders (sublevel 7).
+    f.interruptX = f:CreateTexture(nil, "OVERLAY", nil, 6)
+    f.interruptX:SetPoint("TOPLEFT", f, "TOPLEFT", 4, -4)
+    f.interruptX:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -4, 4)
+    f.interruptX:SetTexture(INTERRUPT_ICON)
+    f.interruptX:SetRotation(math.rad(45))
+    f.interruptX:SetVertexColor(1, 0.2, 0.2, 1)
+    f.interruptX:Hide()
     return f
 end
 
 function TS:CreateEntry()
     local db = self.db
-    local width = db.IconSize * 2 + db.FontSize * 2
     local entry = CreateFrame("Frame", nil, self.anchorFrame)
-    entry:SetSize(width, db.IconSize)
+    entry:SetSize(EntryWidth(db), db.IconSize)
 
     -- Layout spine: textureless StatusBar whose fill extent mirrors entry
     -- alpha, so invisible entries compact out of the stack (reference
@@ -324,6 +339,8 @@ function TS:Release(entry, generation, reason)
     entry.Spacer:SetValue(1)
     entry.leftIcon.tex:SetDesaturated(false)
     entry.rightIcon.tex:SetDesaturated(false)
+    entry.leftIcon.interruptX:Hide()
+    entry.rightIcon.interruptX:Hide()
     entry.leftIcon.cooldown:Clear()
     entry.leftIcon.cooldown:SetScript("OnCooldownDone", nil)
     entry.rightIcon.cooldown:Clear()
@@ -397,6 +414,8 @@ function TS:PopulateEntry(entry, unit, info)
     entry.wasInterrupted, entry.doNotHideBefore = nil, nil
     entry.leftIcon.tex:SetDesaturated(false)
     entry.rightIcon.tex:SetDesaturated(false)
+    entry.leftIcon.interruptX:Hide()
+    entry.rightIcon.interruptX:Hide()
 
     entry.leftIcon.tex:SetTexture(info.texture or FALLBACK_ICON)
     entry.rightIcon.tex:SetTexture(info.texture or FALLBACK_ICON)
@@ -580,6 +599,11 @@ function TS:OnInterrupted(unit, castBarID)
     entry.doNotHideBefore = GetTime() + INTERRUPT_HOLD
     entry.leftIcon.tex:SetDesaturated(true)
     entry.rightIcon.tex:SetDesaturated(true)
+    -- Reference SetInterrupted: X on, countdown numbers off, glow off.
+    entry.leftIcon.interruptX:Show()
+    entry.rightIcon.interruptX:Show()
+    entry.leftIcon.cooldown:SetHideCountdownNumbers(true)
+    self:StopGlow(entry)
     local gen = entry.generation
     C_Timer.After(INTERRUPT_LINGER, function()
         TS:Release(entry, gen, "force")
@@ -643,8 +667,7 @@ function TS:RebuildEntries()
     end
     self.entryPool = {}
     if self.anchorFrame then
-        local db = self.db
-        self.anchorFrame:SetSize(db.IconSize * 2 + db.FontSize * 2, db.IconSize)
+        self.anchorFrame:SetSize(EntryWidth(self.db), self.db.IconSize)
     end
     self:ApplyPosition()
     if wasPreview then self:ShowPreview() end
