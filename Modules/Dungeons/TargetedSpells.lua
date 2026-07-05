@@ -131,6 +131,15 @@ end
 
 function TS:UpdateDB()
     self.db = KE.db.profile.TargetedSpells
+    -- One-time enable fixup (v3.2.1): a profile that physically stored
+    -- Enabled=false under the v3.2.0 default-off era (AceDB only strips
+    -- default-equal values on a clean logout) would pin the module off
+    -- forever now that the default is on. Runs once per profile; the flag
+    -- then persists, so post-fixup disables stick.
+    if not self.db.EnableFixup then
+        self.db.EnableFixup = true
+        self.db.Enabled = true
+    end
 end
 
 function TS:OnInitialize()
