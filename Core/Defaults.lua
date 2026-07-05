@@ -847,6 +847,8 @@ local Defaults = {
             -- Ready state
             ShowReadyText = true,
             ReadyText = "Ready",
+            -- Teammate kick records (12.0.5: exact teammate CDs are hidden)
+            KickRecordDuration = 15,        -- seconds a teammate kick record stays visible
             -- Sort priorities (1=first, 3=last)
             SortTankPriority = 1,
             SortHealerPriority = 2,
