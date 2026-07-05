@@ -1336,6 +1336,7 @@ local Defaults = {
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, 0),
             CVarDeclined = false,       -- internal: nameplateShowOffscreen prompt
+            EnableFixup = false,        -- internal: one-time v3.2.1 enable migration
         },
 
         -----------------------------------------------------------------
