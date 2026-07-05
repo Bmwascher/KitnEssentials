@@ -32,6 +32,11 @@ while read -r _lref _lsha _rref _rsha; do
             exit 1
             ;;
     esac
+    # Second clause of the release invariant: the tagged commit must sit on main.
+    if ! git merge-base --is-ancestor "$_lsha" refs/heads/main 2>/dev/null; then
+        echo "[pre-push] BLOCKED: $tag targets a commit not on main — merge to main first, then tag. Override: git push --no-verify" >&2
+        exit 1
+    fi
 done
 
 # AGENTS.md drift check (non-blocking): warn when Modules/ on disk and the
