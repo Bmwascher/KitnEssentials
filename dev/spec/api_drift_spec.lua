@@ -164,5 +164,23 @@ describe("api-drift core (dev/scripts/_api_drift_core.lua)", function()
                 fyiTotal = 0, fyiUsed = 0, links = {} })
             assert.equals(0, code0)
         end)
+
+        it("exits 1 when a non-allowlisted c-side removal hits the used surface", function()
+            local _, code = C.renderReport({
+                oldBuild = "a", newBuild = "b", oldDate = "d1", date = "d2",
+                sections = { breaking = {}, cside = { "IsWargame  REMOVED from globals dump" }, additions = {} },
+                csideGating = 1, fyiTotal = 0, fyiUsed = 0, links = {},
+            })
+            assert.equals(1, code)
+        end)
+
+        it("exits 0 when every c-side removal is allowlisted", function()
+            local _, code = C.renderReport({
+                oldBuild = "a", newBuild = "b", oldDate = "d1", date = "d2",
+                sections = { breaking = {}, cside = { "X  REMOVED from globals dump  (drift-check allowlisted: ok)" }, additions = {} },
+                csideGating = 0, fyiTotal = 0, fyiUsed = 0, links = {},
+            })
+            assert.equals(0, code)
+        end)
     end)
 end)

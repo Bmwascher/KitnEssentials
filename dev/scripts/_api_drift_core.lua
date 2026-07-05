@@ -227,7 +227,7 @@ function C.renderReport(ctx)
     add(("[FYI] %d total doc changes this update; %d intersect the used surface.")
         :format(ctx.fyiTotal, ctx.fyiUsed))
     for _, s in ipairs(ctx.links) do add("links: " .. s) end
-    return L, (#ctx.sections.breaking > 0) and 1 or 0
+    return L, ((#ctx.sections.breaking > 0 or (ctx.csideGating or 0) > 0) and 1) or 0
 end
 
 return C

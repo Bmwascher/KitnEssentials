@@ -181,6 +181,7 @@ for _, k in ipairs(C.filterUsed(dEn.changed, pred.enum).hit) do
 end
 
 local cside = {}
+local csideGating = 0
 -- birFilesParsed == 0 must short-circuit: diffing a real old snapshot against
 -- empty parsed sets would report every known name as falsely REMOVED
 if birFilesParsed == 0 then
@@ -192,6 +193,7 @@ elseif oldBir and oldBir.bir then
         for _, sym in ipairs(C.filterUsed(d.removed, p2).hit) do
             local note = missingOk[sym]
                 and ("  (drift-check allowlisted: " .. missingOk[sym] .. ")") or ""
+            if not missingOk[sym] then csideGating = csideGating + 1 end
             cside[#cside + 1] = ("%s  REMOVED from %s dump%s"):format(sym, k, note)
         end
     end
@@ -222,6 +224,7 @@ local lines, code = C.renderReport({
     oldBuild = oldSnap.build or "?", newBuild = version,
     oldDate = oldSnap.date or "?", date = newDocsSnap.date,
     sections = { breaking = breaking, cside = cside, additions = additions },
+    csideGating = csideGating,
     fyiTotal = fyiTotal, fyiUsed = fyiUsed,
     links = {
         "https://www.townlong-yak.com/framexml/" .. buildNum,
