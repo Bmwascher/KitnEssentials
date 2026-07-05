@@ -355,14 +355,17 @@ function TS:Release(entry, generation, reason)
     entry.spellId = nil
     entry.wasInterrupted, entry.doNotHideBefore = nil, nil
     -- Idempotent teardown: pooled frames must come back visually neutral.
+    -- Deliberately NO cooldown:Clear() here (reference Reset never touches
+    -- the Cooldown): replace-by-unit re-acquires this same entry, and Clear +
+    -- SetCooldown on one widget in one frame eats the countdown text
+    -- (2026-07-05 missing-timer bug). Pooled entries are hidden and the next
+    -- populate overwrites the cooldown anyway.
     entry:SetAlpha(1)
     entry.Spacer:SetValue(1)
     entry.leftIcon.tex:SetDesaturated(false)
     entry.rightIcon.tex:SetDesaturated(false)
     entry.interruptX:Hide()
-    entry.leftIcon.cooldown:Clear()
     entry.leftIcon.cooldown:SetScript("OnCooldownDone", nil)
-    entry.rightIcon.cooldown:Clear()
     self:StopGlow(entry)
     entry:Hide()
     entry:ClearAllPoints()
