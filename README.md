@@ -9,7 +9,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 
 ## Features
 
-- **55+ modules** — combat HUD, buff tracking, automation, dungeon tools, and UI skinning
+- **60+ modules** — combat HUD, buff tracking, automation, dungeon tools, and UI skinning
 - **Dark themed GUI** — custom settings panel with sidebar navigation and 8 color themes
 - **Edit mode** — drag any element to reposition, with anchor and strata controls
 - **Profile system** — save, copy, and reset per-character or shared profiles
@@ -110,6 +110,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Interrupt Tracker | Party interrupt cooldown bars with class colors, dark mode, channel kick detection, and healer position override (currently non-functional in 12.0.5 due to API changes — under investigation) |
 | Keystone Helper | Three M+ keystone reminders: party/raid announce on instance reset, a glowing "reroll your key" prompt after timing a key at/above your keystone's level, and a "Your Key?" prompt when entering the Mythic 0 dungeon matching your owned keystone |
 | Mythic+ Timer | Self-contained keystone timer HUD — count-up timer with +3/+2/+1 threshold marks, aggregate forces bar, per-boss objective list with clear times and personal-best deltas, deaths line with class-colored hover log, personal-best splits, Challenger's Peril aware cutoffs, enemy tooltip + nameplate forces overlay (replaces the standalone WarpDeplete+ overlay), keystone auto-insert, Blizzard objective-tracker hider, boss-split party chat posts, and a Rookery +12 live preview. Six-tab config page (`/kes mt`) |
+| Targeted Spells | Mirrored icon + countdown entries for enemy casts targeting you — important-spell glow, interrupt X indicator, per-content filters, and adjustable layout, font, and colors |
 
 ## ElvUI Tags
 

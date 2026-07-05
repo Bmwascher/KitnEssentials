@@ -1,12 +1,25 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
-## Unreleased
+## v3.2.0
 
-### Added
-- **Targeted Spells** (Dungeons) — shows enemy casts aimed at you as mirrored icon + countdown entries, important-spell glow, interrupt indication, content-type filters, Edit Mode support.
+### Targeted Spells
+- **NEW:** Targeted Spells module (Dungeons) — enemy casts aimed at YOU shown as mirrored icon + countdown + icon entries, driven by nameplates and fully 12.0 secret-safe. Entries stack under a repositionable anchor, compact as casts end, and cap at a configurable Max Entries
+- Important spells get a pixel glow on both icons (toggleable)
+- Interrupted casts linger for a second before dropping: both icons desaturate and the countdown swaps to a red outlined X
+- Countdown styling: font face, size, and outline, a text color picker, a decimal precision slider (0-2), and a Text Spacing slider for the icon-to-timer gap
+- Show In filters per content type — Dungeons and Delves on by default; Raids, Open World, and Arenas/Battlegrounds opt-in
+- Casts longer than 60 seconds (broken multi-day NPC channels) are hidden automatically
+- Off-screen casters only produce nameplates with the `nameplateShowOffscreen` CVar — a one-time prompt offers to enable it
+- Edit Mode support and a live looping GUI preview
 
-### Fixed
-- Enemy casts longer than 60 seconds (broken multi-day NPC channels) no longer render in Dungeon Casts or the Target/Focus castbars.
+### Dungeon Casts
+- Enemy casts longer than 60 seconds (broken multi-day NPC channels) no longer render
+
+### Focus & Target Castbars
+- Enemy casts longer than 60 seconds no longer render on the Target and Focus castbars
+
+### General
+- Fixed a taint chain where confirming a talent or spec change could break Blizzard's casting bar ("table cannot be accessed while tainted" errors attributed to KitnEssentials)
 
 ---
 
