@@ -3,8 +3,10 @@
 # this file. Convention: dev tooling goes in dev/ (tracked), personal notes
 # in dev/docs/ (ignored), third-party addon sources in References/ (ignored).
 
-# Claude Code workspace (config, skills, project instructions)
+# Claude Code/Codex workspace (config, skills, project instructions)
 .claude/
+.codex/
+.agents/
 CLAUDE.md
 AGENTS.md
 References/
