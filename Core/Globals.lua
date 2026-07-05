@@ -204,6 +204,9 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
             KE.db.global._guiReset = true
         end
         ReloadUI()
+    else
+        -- "help" and anything unrecognized: list every subcommand.
+        KE:Print("Commands: /kes or gui (settings) | edit or unlock | profiler or prof | dm [reset | report [count] [channel]] | mt [clearsplits] | resetgui")
     end
 end
 

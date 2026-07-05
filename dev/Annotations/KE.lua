@@ -4,8 +4,8 @@
 -- ║                                                          ║
 -- ║  Loaded by wowlua-ls for editor autocomplete + nil-      ║
 -- ║  checking. NOT loaded by WoW (not listed in any .xml     ║
--- ║  manifest). NOT shipped (this folder is in .pkgmeta      ║
--- ║  ignore + .gitignore).                                   ║
+-- ║  manifest). NOT shipped (stripped from the zip by        ║
+-- ║  .pkgmeta's '- dev' entry; the folder IS tracked in git).║
 -- ║                                                          ║
 -- ║  Add fields/methods here as the LS flags them. This is   ║
 -- ║  a living seed — extend, don't replace.                  ║

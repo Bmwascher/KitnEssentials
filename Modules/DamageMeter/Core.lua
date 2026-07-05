@@ -240,6 +240,10 @@ function DM:UpdateDB()
     end
     FillMissing(profile.DamageMeter, DM_DEFAULTS)
     self.db = profile.DamageMeter
+
+    -- Profile ops (switch/copy/reset) re-run UpdateDB without OnEnable; the repair
+    -- is run-once-stamped per profile and signature-gated, so extra calls are free.
+    if self.RepairSquishedDock then self:RepairSquishedDock() end
 end
 
 -- Busted seam (dev/spec/dm_defaults_spec.lua): expose the real seed helper as
@@ -932,8 +936,10 @@ function DM:OnEncounterStart()
     -- pcall'd list read failed -> OnEncounterEnd falls back to newest-only.
     local list = self:GetAvailableSessions()
     if list then
-        self._preEncounterIds = self._preEncounterIds or {}
-        wipe(self._preEncounterIds)
+        -- Fresh table (not wipe-in-place): a pending 0.75s OnEncounterEnd closure
+        -- captured the previous table by reference and must keep its own snapshot
+        -- even if a chained ENCOUNTER_START re-fills this field first.
+        self._preEncounterIds = {}
         for i = 1, #list do
             local id = list[i] and list[i].sessionID
             if id and not issecretvalue(id) then
@@ -974,9 +980,13 @@ function DM:OnEncounterEnd(_, _, _, _, _, success)
         DM:StopTicker()
     end)
     local won = (success == 1)
+    -- Captured now (schedule time), not re-read inside the closure: a chained
+    -- ENCOUNTER_START firing before this 0.75s delay expires re-fills
+    -- DM._preEncounterIds for the NEXT pull, which would otherwise steal this
+    -- boss's outcome tagging out from under it.
+    local snap = self._preEncounterIds
     C_Timer.After(0.75, function()
         if not DM.enabled then return end
-        local snap = DM._preEncounterIds
         local list = DM:GetAvailableSessions(5)
         if not list or #list == 0 then return end
         DM._sessionOutcomes = DM._sessionOutcomes or {}
@@ -1201,6 +1211,18 @@ do
     end
 end
 
+-- Seconds are a clock quantity: never K/M/B-abbreviate them ("1Ks"). Single
+-- breakpoint-1 tier = plain integer seconds through the same secret-safe path.
+local _secondsCfg
+do
+    local opts = {
+        { breakpoint = 1, abbreviation = "", significandDivisor = 1, fractionDivisor = 1, abbreviationIsGlobal = false },
+    }
+    if CreateAbbreviateConfig then
+        _secondsCfg = { config = CreateAbbreviateConfig(opts) }
+    end
+end
+
 -- Secret-safe single-amount formatter. `n` is nil-guarded with a truthiness gate
 -- (NOT `== nil`, which taints on a secret number). AbbreviateNumbers(n, cfg) is
 -- secret-safe and decimal-capable; the returned string is secret iff `n` is.
@@ -1258,7 +1280,7 @@ end
 local function FormatDeathTime(sec)
     if not sec then return "0:00", false end
     if issecretvalue(sec) then
-        local s = AbbreviateNumbers(sec, _abbreviateCfg)
+        local s = AbbreviateNumbers(sec, _secondsCfg)
         if s then
             local str = s .. "s"
             return str, issecretvalue(str)
@@ -1986,7 +2008,7 @@ function DM:ResolveRenderSession(W, cfg, meterType)
     W._fallbackSessionID = nil
     if not W._curSessionID
         and cfg.SessionType == Enum.DamageMeterSessionType.Current
-        and not InCombatLockdown()
+        and not InCombatLockdown() and not self._ticker
         and not (session and session.combatSources and #session.combatSources > 0) then
         local list = self:GetAvailableSessions(1)
         local newest = list and list[#list]

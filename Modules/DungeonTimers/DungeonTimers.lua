@@ -2663,7 +2663,9 @@ function DT:_ShowShieldBar(spellId, unit)
         -- taint on GetMinMaxValues. ReleaseBar then gives it hide-only
         -- teardown, exactly like phase bars. Mirrors ExBoss's dedicated,
         -- never-pooled ExtraShieldBar frame; the GatedSetValue guard above is
-        -- the backstop. Strands one kit per shield session (Vordaza-rare).
+        -- the backstop. Strands one kit per shield hide/show cycle
+        -- (Vordaza-rare), and each re-show pops a fresh kit from the shared
+        -- pool — accepted cost of the secret-taint quarantine.
         bar._dtPoolKey = nil
         bar.isShieldBar = true
         bar.shieldSpellId = spellId

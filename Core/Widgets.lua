@@ -188,11 +188,14 @@ local function EnsurePromptDialog()
     dialog:SetScript("OnDragStop", function(d) d:StopMovingOrSizing() end)
     dialog:EnableKeyboard(true)
     dialog:SetScript("OnKeyDown", function(self, key)
+        -- SetPropagateKeyboardInput is combat-protected for insecure frames;
+        -- skip it in lockdown (ESC-close itself is fine — see EditMode's
+        -- RemoveEscapeHandler for the same treatment).
         if key == "ESCAPE" then
-            self:SetPropagateKeyboardInput(false)
+            if not InCombatLockdown() then self:SetPropagateKeyboardInput(false) end
             ClosePrompt(self, true)
         else
-            self:SetPropagateKeyboardInput(true)
+            if not InCombatLockdown() then self:SetPropagateKeyboardInput(true) end
         end
     end)
     dialog:Hide()

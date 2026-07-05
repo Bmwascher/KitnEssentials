@@ -2,8 +2,8 @@
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
----@class PlayerAbsorbs: AceModule, AceEvent-3.0
-local PA = KitnEssentials:NewModule("PlayerAbsorbs", "AceEvent-3.0")
+---@class PlayerAbsorbs: AceModule
+local PA = KitnEssentials:NewModule("PlayerAbsorbs")
 
 local CreateFrame = CreateFrame
 local UIParent = UIParent
@@ -442,14 +442,11 @@ end
 ---------------------------------------------------------------------------------
 -- Events
 --
--- This module reads ONLY the player's own absorbs, so the unit events are registered
--- with frame:RegisterUnitEvent(event, "player") -- a C-level filter, so the handler
--- fires ONLY for the player and never receives another unit's token. That avoids waking
--- on every group member's max-health / heal-prediction churn, and it sidesteps the
--- secret unit token that UNIT_MAX_HEALTH_MODIFIERS_CHANGED (SecretPayloads=true) carries
--- for non-player units: with no foreign token ever received, there is no unit comparison
--- to taint. AceEvent-3.0 has no RegisterUnitEvent, so these run off the module's own
--- frame; PLAYER_ENTERING_WORLD is not a unit event and uses plain RegisterEvent.
+-- This module reads ONLY the player's own absorbs, so the two ABSORB unit events are
+-- registered with frame:RegisterUnitEvent(event, "player") -- a C-level filter, so the
+-- handler fires ONLY for the player and never receives another unit's token. Events run
+-- off the module's own frame rather than AceEvent (which has no RegisterUnitEvent);
+-- PLAYER_ENTERING_WORLD is not a unit event and uses plain RegisterEvent.
 ---------------------------------------------------------------------------------
 function PA:OnFrameEvent(event)
     if event == "UNIT_ABSORB_AMOUNT_CHANGED" then
@@ -458,10 +455,8 @@ function PA:OnFrameEvent(event)
     elseif event == "UNIT_HEAL_ABSORB_AMOUNT_CHANGED" then
         self:MarkActive("heal")
         self:ScheduleRefresh()
-    elseif event == "PLAYER_ENTERING_WORLD" then
+    else -- PLAYER_ENTERING_WORLD
         self:ApplyPosition()
-        self:ScheduleRefresh()
-    else -- UNIT_HEAL_PREDICTION / UNIT_MAXHEALTH / UNIT_MAX_HEALTH_MODIFIERS_CHANGED
         self:ScheduleRefresh()
     end
 end
@@ -472,9 +467,6 @@ function PA:RegisterFrameEvents()
     f:SetScript("OnEvent", function(_, event) self:OnFrameEvent(event) end)
     f:RegisterUnitEvent("UNIT_ABSORB_AMOUNT_CHANGED", "player")
     f:RegisterUnitEvent("UNIT_HEAL_ABSORB_AMOUNT_CHANGED", "player")
-    f:RegisterUnitEvent("UNIT_HEAL_PREDICTION", "player")
-    f:RegisterUnitEvent("UNIT_MAXHEALTH", "player")
-    f:RegisterUnitEvent("UNIT_MAX_HEALTH_MODIFIERS_CHANGED", "player")
     f:RegisterEvent("PLAYER_ENTERING_WORLD")
 end
 

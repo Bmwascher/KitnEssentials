@@ -15,7 +15,11 @@ describe("PlayerAbsorbsFormat.Format", function()
             issecretvalue = function(v) return v == SECRET end,
         })
         -- C_StringUtil.TruncateWhenZero: secret-safe blank-at-zero stand-in.
-        _G.C_StringUtil = { TruncateWhenZero = function() return "" end }
+        -- C_StringUtil.FloorToNearestString: secret-safe floor-to-string stand-in.
+        _G.C_StringUtil = {
+            TruncateWhenZero = function() return "" end,
+            FloorToNearestString = function(v) return "FLOOR:" .. tostring(v) end,
+        }
         -- Module-file guard `if not KitnEssentials then return end` needs the global.
         _G.KitnEssentials = _G.KitnEssentials or {}
         KE = helpers.loadModule("Modules/Utilities/PlayerAbsorbsFormat.lua", {})
@@ -51,5 +55,10 @@ describe("PlayerAbsorbsFormat.Format", function()
     it("abbreviates a secret value when abbreviate=true (no zero-blank)", function()
         assert.equals("ABBR:" .. tostring(SECRET),
             KE.PlayerAbsorbsFormat.Format(SECRET, true, true))
+    end)
+
+    it("floors a secret value when hideWhenZero is off and not abbreviating", function()
+        assert.equals("FLOOR:" .. tostring(SECRET),
+            KE.PlayerAbsorbsFormat.Format(SECRET, false, false))
     end)
 end)

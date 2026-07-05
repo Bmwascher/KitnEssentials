@@ -1316,7 +1316,7 @@ local Defaults = {
         },
 
         TargetedSpells = {
-            Enabled = false,
+            Enabled = true,
             IconSize = 36,
             Gap = 3,
             TextSpacing = 45,           -- middle countdown slot width (px)
@@ -1337,7 +1337,7 @@ local Defaults = {
             Strata = "MEDIUM",
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
-            Position = DefaultPosition(0, 20),
+            Position = DefaultPosition(0, 0),
             CVarDeclined = false,       -- internal: nameplateShowOffscreen prompt
         },
 
