@@ -88,6 +88,15 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     row1a:AddWidget(enableCheck, 1)
     card1:AddRow(row1a, Theme.rowHeight)
 
+    local rowSync = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local syncCheck = GUIFrame:CreateCheckbox(rowSync, "Sync Kicks with Party KE Users", {
+        value = db.KickSync ~= false,
+        callback = function(checked) db.KickSync = checked end,
+    })
+    rowSync:AddWidget(syncCheck, 1)
+    manager:Register(syncCheck, "all")
+    card1:AddRow(rowSync, Theme.rowHeight)
+
     local noteRow = GUIFrame:CreateRow(card1.content, 50)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),

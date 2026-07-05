@@ -289,12 +289,13 @@ end
 ---------------------------------------------------------------------------------
 -- Self Kick Confirmation
 ---------------------------------------------------------------------------------
-function KT:ConfirmKick(guid)
+-- durationOverride: comm-synced kicks carry the sender's exact CD; nil = spec CD.
+function KT:ConfirmKick(guid, durationOverride)
     local member = self.partyMembers[guid]
     if not member or not member.interruptData then return end
 
     member.kickStart = GetTime()
-    member.kickDuration = member.interruptData.cd
+    member.kickDuration = durationOverride or member.interruptData.cd
 
     -- Immediately update bar visuals so the transition from ready→cooling is instant
     local bar = self.activeBars[guid]
@@ -310,7 +311,7 @@ function KT:ConfirmKick(guid)
             bar.nameText:SetTextColor(1, 1, 1, 1)
         end
         if self.db.ShowTimer and bar.timerText then
-            bar.timerText:SetText(string_format("%d", member.interruptData.cd))
+            bar.timerText:SetText(string_format("%d", member.kickDuration))
         end
     end
 
@@ -397,6 +398,88 @@ function KT:ClearKickRecords()
 end
 
 ---------------------------------------------------------------------------------
+-- KE-to-KE Kick Sync (addon comm)
+---------------------------------------------------------------------------------
+-- Party members also running KitnEssentials broadcast their own kicks, letting
+-- receivers flip the sender's REAL roster bar with the exact CD — full
+-- per-member tracking among KE users. Non-KE teammates keep the record
+-- fallback. Comms over INSTANCE_CHAT probe-verified working 2026-07-05
+-- (family rule); every send/parse is pcall'd so blocked contexts degrade
+-- silently to records.
+local COMM_PREFIX = "KEKick"
+local COMM_SUCCESS = Enum and Enum.SendAddonMessageResult
+    and Enum.SendAddonMessageResult.Success or 0
+
+function KT:BroadcastKick(spellID, cd)
+    if not self.db.KickSync then return end
+    if not IsInGroup() then return end
+
+    local msg = "1;" .. spellID .. ";" .. cd
+    local channel = IsInGroup(LE_PARTY_CATEGORY_INSTANCE) and "INSTANCE_CHAT" or "PARTY"
+    local ok, ret = pcall(C_ChatInfo.SendAddonMessage, COMM_PREFIX, msg, channel)
+    if ok and ret == COMM_SUCCESS then return end
+
+    -- Reference-verified behavior: result 11 = timed M+ has blocked addon
+    -- channels. Whisper each member individually instead (also covers any
+    -- other send failure).
+    for i = 1, 4 do
+        local unit = "party" .. i
+        if UnitExists(unit) then
+            local n, r = UnitName(unit)
+            if n then
+                local target = (r and r ~= "") and (n .. "-" .. r) or n
+                pcall(C_ChatInfo.SendAddonMessage, COMM_PREFIX, msg, "WHISPER", target)
+            end
+        end
+    end
+end
+
+function KT:OnCommReceived(_, prefix, message, _, sender)
+    if prefix ~= COMM_PREFIX then return end
+    if not self.db.Enabled or self.isPreview or not self.isActive then return end
+    if not self.db.KickSync then return end
+
+    -- Wire input is untrusted (and could be secret in odd contexts); one
+    -- pcall wraps parse + attribution so bad input is dropped, not thrown.
+    local ok = pcall(function()
+        local shortSender = Ambiguate(sender, "short")
+        if shortSender == UnitName("player") then return end  -- own echo
+
+        local _, _, cdStr = strsplit(";", message)
+        local cd = tonumber(cdStr)
+
+        for guid, member in pairs(self.partyMembers) do
+            if member.unit ~= "player" and member.name == shortSender then
+                if member.interruptData then
+                    self:ConfirmKick(guid, cd or member.interruptData.cd)
+                    -- The nameplate event usually spawned a record for this
+                    -- same kick moments ago — drop it (names may be secret,
+                    -- so newest-in-window is the best match we can do).
+                    self:RemoveRecentKickRecord(2.5)
+                end
+                return
+            end
+        end
+    end)
+    if not ok and DEBUG_KT then
+        KE:Print("[KT] kick comm parse failed from " .. tostring(sender))
+    end
+end
+
+function KT:RemoveRecentKickRecord(window)
+    local now = GetTime()
+    for i = #self.kickRecords, 1, -1 do
+        local record = self.kickRecords[i]
+        if now - record.startTime <= window then
+            table.remove(self.kickRecords, i)
+            self:ReleaseBar("record" .. record.id)
+            self:LayoutBars()
+            return
+        end
+    end
+end
+
+---------------------------------------------------------------------------------
 -- Event Handlers
 ---------------------------------------------------------------------------------
 function KT:OnSpellcastInterrupted(_, unit, _, spellID, interruptedBy)
@@ -421,6 +504,11 @@ function KT:OnSpellcastSucceeded(_, unit, _, spellID)
     local guid = UnitGUID("player")
     if guid then
         self:ConfirmKick(guid)
+        -- Tell party KE users so they can flip our roster bar with the real CD
+        local member = self.partyMembers[guid]
+        if member and member.interruptData then
+            self:BroadcastKick(member.interruptData.id, member.interruptData.cd)
+        end
     end
 end
 
@@ -432,6 +520,7 @@ function KT:RegisterCombatEvents()
     self:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED", "OnSpellcastInterrupted")
     self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP", "OnChannelStop")
     self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", "OnSpellcastSucceeded")
+    self:RegisterEvent("CHAT_MSG_ADDON", "OnCommReceived")
     self.combatEventsRegistered = true
 end
 
@@ -440,6 +529,7 @@ function KT:UnregisterCombatEvents()
     self:UnregisterEvent("UNIT_SPELLCAST_INTERRUPTED")
     self:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
     self:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+    self:UnregisterEvent("CHAT_MSG_ADDON")
     self.combatEventsRegistered = false
 
     self:ClearKickRecords()
@@ -1329,6 +1419,11 @@ function KT:OnEnable()
 
     self:CreateFrames()
     self:RegWithEditMode()
+
+    -- Kick-sync comm prefix (pcall: registration can fail at the prefix cap)
+    if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
+        pcall(C_ChatInfo.RegisterAddonMessagePrefix, COMM_PREFIX)
+    end
 
     -- Register non-combat events. INSPECT_READY/PLAYER_REGEN_ENABLED no longer
     -- needed — LibSpec handles party spec discovery passively via comms.
