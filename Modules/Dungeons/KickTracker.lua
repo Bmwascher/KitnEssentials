@@ -30,6 +30,8 @@ local C_Timer = C_Timer
 local C_ClassColor = C_ClassColor
 local C_Spell = C_Spell
 local UnitNameFromGUID = UnitNameFromGUID
+local UnitClassFromGUID = UnitClassFromGUID
+local UnitTokenFromGUID = UnitTokenFromGUID
 local string_find = string.find
 local string_format = string.format
 local math_floor = math.floor
@@ -118,11 +120,11 @@ INTERRUPT_SPELL_IDS[119910] = true  -- Command Demon: Spell Lock
 INTERRUPT_SPELL_IDS[89766]  = true  -- Axe Toss (Felguard pet actual)
 INTERRUPT_SPELL_IDS[119914] = true  -- Command Demon: Axe Toss
 
-local TIME_WINDOW = 0.050
-local PROCESS_DELAY = 0.030
+local KICK_RECORD_FALLBACK_DURATION = 15
 
--- Flip true to trace preview lifecycle, cooling-bar OnUpdate cadence, and
--- container OnUpdate ticks. Default false; revert after diagnosis.
+-- Flip true to trace preview lifecycle, cooling-bar OnUpdate cadence,
+-- container OnUpdate ticks, and nameplate-interrupt token resolution.
+-- Default false; revert after diagnosis.
 local DEBUG_KT = false
 local _ktContainerTickCounter = 0
 local _ktCoolingTickCounter = 0
@@ -138,9 +140,8 @@ KT.guiConfigContext = nil  -- "HEALER" | "DEFAULT" | nil (which context the GUI 
 KT.partyMembers = {}     -- [guid] = { unit, name, classToken, specID, interruptData, kickStart, kickDuration }
 KT.nameSpecCache = {}    -- [playerName] = specID, fed by LibSpec.RegisterGroup callback
 
-KT.pendingInterrupts = {} -- [nameplateUnit] = { time, interruptedBy }
-KT.pendingCasts = {}      -- [partyUnit] = { time }
-KT.processScheduled = false
+KT.kickRecords = {}       -- array of { id, name, color, iconID, startTime, duration } — teammate kick records
+KT.nextRecordID = 0       -- monotonic; records keyed "record"..id in activeBars (GUIDs may be secret)
 
 KT.barPool = {}           -- array of reusable bar frames
 KT.activeBars = {}        -- [guid] = barFrame
@@ -286,85 +287,8 @@ function KT:OnPlayerSpecChanged()
 end
 
 ---------------------------------------------------------------------------------
--- Event Correlator
+-- Self Kick Confirmation
 ---------------------------------------------------------------------------------
-function KT:ScheduleProcessing()
-    if self.processScheduled then return end
-    self.processScheduled = true
-    C_Timer.After(PROCESS_DELAY, function()
-        self:ProcessPendingEvents()
-    end)
-end
-
--- Validate that interruptedBy resolves to a real player, then find the
--- closest matching party cast within the time window.
-function KT:ResolveCasterByInterruptSource(targetUnit)
-    local interruptData = self.pendingInterrupts[targetUnit]
-    if not interruptData or not interruptData.interruptedBy then
-        return nil
-    end
-
-    -- interruptedBy is a GUID. Confirm it resolves to a real name.
-    -- In 12.0, pcall guards against potential secret-value errors.
-    local ok, name = pcall(UnitNameFromGUID, interruptData.interruptedBy)
-    if not ok or not name then
-        return nil
-    end
-
-    -- Valid interrupter confirmed — find the closest cast in the time window
-    local bestMatch = nil
-    local bestTimeDiff = math.huge
-    local interruptTime = interruptData.time
-
-    for unit, data in pairs(self.pendingCasts) do
-        local timeDiff = math_abs(interruptTime - data.time)
-        if timeDiff <= TIME_WINDOW and timeDiff < bestTimeDiff then
-            bestMatch = unit
-            bestTimeDiff = timeDiff
-        end
-    end
-
-    return bestMatch
-end
-
-function KT:ProcessPendingEvents()
-    self.processScheduled = false
-
-    -- Count interrupts
-    local interruptCount = 0
-    local targetUnit = nil
-    for unit in pairs(self.pendingInterrupts) do
-        interruptCount = interruptCount + 1
-        targetUnit = unit
-    end
-
-    if interruptCount == 0 then
-        wipe(self.pendingInterrupts)
-        wipe(self.pendingCasts)
-        return
-    end
-
-    -- Multiple nameplates interrupted = AoE CC, ignore all
-    if interruptCount > 1 then
-        wipe(self.pendingInterrupts)
-        wipe(self.pendingCasts)
-        return
-    end
-
-    -- Validate via interruptedBy GUID, then time-window match to caster
-    local caster = self:ResolveCasterByInterruptSource(targetUnit)
-
-    if caster then
-        local guid = UnitGUID(caster)
-        if guid then
-            self:ConfirmKick(guid)
-        end
-    end
-
-    wipe(self.pendingInterrupts)
-    wipe(self.pendingCasts)
-end
-
 function KT:ConfirmKick(guid)
     local member = self.partyMembers[guid]
     if not member or not member.interruptData then return end
@@ -394,62 +318,109 @@ function KT:ConfirmKick(guid)
 end
 
 ---------------------------------------------------------------------------------
--- Event Handlers
+-- Teammate Kick Records (12.0.5 secret-safe)
 ---------------------------------------------------------------------------------
-function KT:OnSpellcastInterrupted(_, unit, _, _, interruptedBy)
+-- A nameplate UNIT_SPELLCAST_INTERRUPTED with a non-nil interruptedBy is ground
+-- truth that someone's kick landed. The GUID is secret for teammates: the game
+-- will render the name/icon we derive from it, but our code can never read or
+-- compare them. So teammate kicks become transient cooling-style records — we
+-- cannot know WHICH roster bar to flip (per-teammate CDs are unrecoverable,
+-- probe-confirmed 2026-07-05).
+function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
     if not self.db.Enabled or self.isPreview or not self.isActive then return end
-    if not unit or not string_find(unit, "nameplate") then return end
-    self.pendingInterrupts[unit] = { time = GetTime(), interruptedBy = interruptedBy }
-    self:ScheduleProcessing()
+    if not unit or not string_find(unit, "^nameplate") then return end
+    if interruptedBy == nil then return end  -- channel ended naturally, not kicked
+
+    -- Self/teammate split without touching the (possibly secret) GUID:
+    -- UnitTokenFromGUID returns a plain token for the player's own units,
+    -- nil for anyone else. Self CD is owned by OnSpellcastSucceeded.
+    local ok, token = pcall(UnitTokenFromGUID, interruptedBy)
+    if DEBUG_KT then
+        KE:Print(string_format("[KT] nameplate interrupt unit=%s tokenOk=%s token=%s guidSecret=%s",
+            tostring(unit), tostring(ok), tostring(token),
+            tostring(not KE:IsSafeValue(interruptedBy))))
+    end
+    if ok and token then return end
+
+    self:AddKickRecord(interruptedBy, spellID)
 end
 
-function KT:OnChannelStop(_, unit, _, interruptedBy)
-    if not self.db.Enabled or self.isPreview or not self.isActive then return end
-    if not unit or not string_find(unit, "nameplate") then return end
-    if interruptedBy == nil then return end  -- channel ended naturally, not kicked
-    self.pendingInterrupts[unit] = { time = GetTime(), interruptedBy = interruptedBy }
-    self:ScheduleProcessing()
+function KT:AddKickRecord(interrupterGuid, interruptedSpellID)
+    -- Display name; drop the record if nothing resolves (matches the references).
+    local ok, name = pcall(UnitNameFromGUID, interrupterGuid)
+    if not ok or name == nil then return end
+
+    -- Class color is best-effort: the class token may come back secret, in
+    -- which case it can't be a lookup key and we fall back to CoolingColor.
+    local color
+    local okClass, _, classToken = pcall(UnitClassFromGUID, interrupterGuid)
+    if okClass and classToken and KE:IsSafeValue(classToken) then
+        local okColor, c = pcall(C_ClassColor.GetClassColor, classToken)
+        if okColor and c then color = c end
+    end
+
+    -- Interrupted spell's icon (display-only; both id and texture may be secret).
+    local iconID
+    if interruptedSpellID ~= nil then
+        local okTex, tex = pcall(C_Spell.GetSpellTexture, interruptedSpellID)
+        if okTex then iconID = tex end
+    end
+
+    self.nextRecordID = self.nextRecordID + 1
+    local record = {
+        id = self.nextRecordID,
+        name = name,          -- possibly secret; SetText-only
+        color = color,        -- plain color object or nil
+        iconID = iconID,      -- possibly secret; SetTexture-only
+        startTime = GetTime(),
+        duration = self.db.KickRecordDuration or KICK_RECORD_FALLBACK_DURATION,
+    }
+    table_insert(self.kickRecords, record)
+
+    -- Bound the list: oldest records fall off past MaxBars.
+    while #self.kickRecords > (self.db.MaxBars or 5) do
+        local old = table.remove(self.kickRecords, 1)
+        self:ReleaseBar("record" .. old.id)
+    end
+
+    local bar = self:GetOrCreateBar("record" .. record.id)
+    self:UpdateRecordBarVisuals(bar, record)
+    bar:Show()
+    self:LayoutBars()
+end
+
+function KT:ClearKickRecords()
+    for _, record in ipairs(self.kickRecords) do
+        self:ReleaseBar("record" .. record.id)
+    end
+    wipe(self.kickRecords)
+end
+
+---------------------------------------------------------------------------------
+-- Event Handlers
+---------------------------------------------------------------------------------
+function KT:OnSpellcastInterrupted(_, unit, _, spellID, interruptedBy)
+    self:HandleNameplateInterrupt(unit, spellID, interruptedBy)
+end
+
+-- Payload matches INTERRUPTED: (unitTarget, castGUID, spellID, interruptedBy).
+-- The pre-rework handler read interruptedBy from the spellID slot (off-by-one,
+-- masked by the old correlator's discard path) — fixed here.
+function KT:OnChannelStop(_, unit, _, spellID, interruptedBy)
+    self:HandleNameplateInterrupt(unit, spellID, interruptedBy)
 end
 
 function KT:OnSpellcastSucceeded(_, unit, _, spellID)
     if not self.db.Enabled or self.isPreview or not self.isActive then return end
-    if not unit then return end
+    if unit ~= "player" and unit ~= "pet" then return end
 
-    -- Player self-kick or pet kick (Warlock Spell Lock / Axe Toss)
-    -- spellID is NOT secret for own casts; pet commands map to player's GUID
-    if unit == "player" or unit == "pet" then
-        if not INTERRUPT_SPELL_IDS[spellID] then return end
-        local guid = UnitGUID("player")
-        if guid then
-            self:ConfirmKick(guid)
-        end
-        return
-    end
-
-    -- Party member casts: spellID is SECRET in 12.0.5, cannot be inspected.
-    -- Instead of filtering by spell ID, record ALL party casts with timestamps.
-    -- The time-window correlation with UNIT_SPELLCAST_INTERRUPTED determines
-    -- whether it was actually a kick. This matches ExWind's approach.
-    if string_find(unit, "^party%d") then
-        self.pendingCasts[unit] = { time = GetTime() }
-        self:ScheduleProcessing()
-        return
-    end
-
-    -- KE FIX: Warlock pet interrupts (ExWind does NOT handle this)
-    -- Spell Lock (19647) fires on partypetN, not the warlock player.
-    -- Pet spellID is also secret, so we can't filter — just record the cast.
-    if string_find(unit, "^partypet") then
-        -- Map pet unit back to owner party unit for time-window correlation
-        local partyIndex = unit:match("^partypet(%d)")
-        if partyIndex then
-            local ownerUnit = "party" .. partyIndex
-            if UnitExists(ownerUnit) then
-                self.pendingCasts[ownerUnit] = { time = GetTime() }
-                self:ScheduleProcessing()
-            end
-        end
-        return
+    -- Own casts (player + own pet) deliver a PLAIN spellID in 12.0.5. Party
+    -- members' casts do not fire this event for kicks at all (probe-confirmed
+    -- 2026-07-05) — teammate detection lives in HandleNameplateInterrupt.
+    if not INTERRUPT_SPELL_IDS[spellID] then return end
+    local guid = UnitGUID("player")
+    if guid then
+        self:ConfirmKick(guid)
     end
 end
 
@@ -471,9 +442,7 @@ function KT:UnregisterCombatEvents()
     self:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED")
     self.combatEventsRegistered = false
 
-    wipe(self.pendingInterrupts)
-    wipe(self.pendingCasts)
-    self.processScheduled = false
+    self:ClearKickRecords()
 end
 
 ---------------------------------------------------------------------------------
@@ -500,7 +469,7 @@ function KT:CheckActivation()
         self:RefreshPartyRoster()
     elseif not shouldBeActive and self.isActive then
         self.isActive = false
-        self:UnregisterCombatEvents()
+        self:UnregisterCombatEvents()  -- also clears kick records
         self:HideAllBars()
         if self.containerFrame then self.containerFrame:Hide() end
         wipe(self.partyMembers)
@@ -631,9 +600,9 @@ local function GetClassColor(classToken)
     return C_ClassColor.GetClassColor(classToken)
 end
 
-function KT:UpdateBarVisuals(bar, member)
+-- Geometry + textures that depend only on db (shared by member and record bars).
+function KT:ApplyBarGeometry(bar)
     local db = self.db
-    local isDarkMode = db.ColorMode == "dark"
 
     -- Size
     bar:SetSize(db.BarWidth, db.BarHeight)
@@ -674,6 +643,43 @@ function KT:UpdateBarVisuals(bar, member)
     -- Name text position (offset past icon)
     bar.nameText:ClearAllPoints()
     bar.nameText:SetPoint("LEFT", bar.statusBar, "LEFT", 2, 0)
+end
+
+-- Record bars: teammate kick records. name/iconID may be SECRET — the game
+-- renders them; never read back, never compare, never dirty-check SetText.
+function KT:UpdateRecordBarVisuals(bar, record)
+    local db = self.db
+    self:ApplyBarGeometry(bar)
+
+    if record.iconID ~= nil then
+        pcall(bar.iconTex.SetTexture, bar.iconTex, record.iconID)
+    else
+        bar.iconTex:SetTexture(134400)
+    end
+    bar.iconTex:SetDesaturated(true)
+
+    KE:ApplyFont(bar.nameText, db.FontFace, db.FontSize, db.FontOutline)
+    bar.nameText:SetShown(db.ShowName)
+    local nameOk = pcall(bar.nameText.SetText, bar.nameText, record.name)
+    if not nameOk then bar.nameText:SetText("") end
+    bar.nameText:SetTextColor(1, 1, 1, 1)
+
+    KE:ApplyFont(bar.timerText, db.FontFace, db.FontSize, db.FontOutline)
+    bar.timerText:SetShown(db.ShowTimer)
+    bar.timerText:SetTextColor(1, 1, 1, 1)
+
+    if record.color then
+        bar.statusBar:SetStatusBarColor(record.color.r, record.color.g, record.color.b, 1)
+    else
+        bar.statusBar:SetStatusBarColor(unpack(db.CoolingColor))
+    end
+end
+
+function KT:UpdateBarVisuals(bar, member)
+    local db = self.db
+    local isDarkMode = db.ColorMode == "dark"
+
+    self:ApplyBarGeometry(bar)
 
     -- Set icon texture
     if member and member.interruptData then
@@ -790,9 +796,10 @@ function KT:UpdateBars()
         end
     end
 
-    -- Release bars for members who no longer qualify
+    -- Release bars for members who no longer qualify (record bars are owned
+    -- by the kickRecords lifecycle, not the roster — skip them here)
     for guid in pairs(self.activeBars) do
-        if not needsBars[guid] then
+        if not needsBars[guid] and not string_find(guid, "^record") then
             self:ReleaseBar(guid)
         end
     end
@@ -906,6 +913,18 @@ function KT:LayoutBars()
                     member.kickDuration = nil
                 end
                 table_insert(readyList, { guid = guid, bar = bar, member = member })
+            end
+        end
+    end
+
+    -- Teammate kick records join the cooling section (sorted by remaining
+    -- like member cooldowns; they never enter the ready list)
+    for _, record in ipairs(self.kickRecords) do
+        local bar = self.activeBars["record" .. record.id]
+        if bar then
+            local remaining = record.duration - (now - record.startTime)
+            if remaining > 0 then
+                table_insert(coolingList, { bar = bar, record = record, remaining = remaining })
             end
         end
     end
@@ -1039,6 +1058,36 @@ function KT:OnUpdateBars(elapsed)
                     else
                         bar.timerText:SetText(string_format("%.1f", remaining))
                     end
+                end
+            end
+        end
+    end
+
+    -- Drain + expire teammate kick records under the same 0.05s accumulator.
+    -- All arithmetic here is our own GetTime() math — plain values, no secrets.
+    local isDark = db.ColorMode == "dark"
+    for i = #self.kickRecords, 1, -1 do
+        local record = self.kickRecords[i]
+        local key = "record" .. record.id
+        local bar = self.activeBars[key]
+        local remaining = record.duration - (now - record.startTime)
+
+        if remaining <= 0 then
+            table.remove(self.kickRecords, i)
+            self:ReleaseBar(key)
+            needsRelayout = true
+        elseif bar then
+            anyCooling = true
+            if isDark then
+                bar.statusBar:SetValue(remaining / record.duration)
+            else
+                bar.statusBar:SetValue((now - record.startTime) / record.duration)
+            end
+            if db.ShowTimer and bar.timerText then
+                if remaining > 6 then
+                    bar.timerText:SetText(string_format("%d", math_floor(remaining)))
+                else
+                    bar.timerText:SetText(string_format("%.1f", remaining))
                 end
             end
         end
@@ -1311,15 +1360,13 @@ function KT:OnDisable()
     self:CancelAllTimers()
     self:StopOnUpdate()
 
+    self:ClearKickRecords()
     self:HideAllBars()
     wipe(self.partyMembers)
     wipe(self.nameSpecCache)
-    wipe(self.pendingInterrupts)
-    wipe(self.pendingCasts)
 
     self.isActive = false
     self.isPreview = false
-    self.processScheduled = false
 
     if self.containerFrame then self.containerFrame:Hide() end
 end
