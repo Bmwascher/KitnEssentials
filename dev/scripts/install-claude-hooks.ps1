@@ -16,7 +16,7 @@ $templates = Join-Path $root 'dev\claude-hooks'
 $hooksDir = Join-Path $root '.claude\hooks'
 $settingsPath = Join-Path $root '.claude\settings.json'
 
-# 1. Hook scripts: template copies are canonical — always refresh.
+# 1. Hook scripts: template copies are canonical - always refresh.
 New-Item -ItemType Directory -Force $hooksDir | Out-Null
 foreach ($name in @('branch-guard.ps1', 'luacheck-postedit.ps1')) {
     Copy-Item (Join-Path $templates $name) (Join-Path $hooksDir $name) -Force
@@ -24,7 +24,7 @@ foreach ($name in @('branch-guard.ps1', 'luacheck-postedit.ps1')) {
 }
 
 # 2. settings.json: create from template, or inject the hooks block if the
-#    file exists without one. An existing hooks block is left untouched —
+#    file exists without one. An existing hooks block is left untouched -
 #    diff against dev/claude-hooks/settings.template.json by hand if needed.
 $template = Get-Content (Join-Path $templates 'settings.template.json') -Raw | ConvertFrom-Json
 if (-not (Test-Path $settingsPath)) {

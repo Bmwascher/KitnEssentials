@@ -7,8 +7,9 @@ manual-changelog:
   markup-type: markdown
 
 # Only tracked files need listing here — gitignored paths (References/,
-# dev/docs/, dev/Annotations/, editor configs, …) never reach the packager's
-# clone in the first place.
+# dev/docs/, editor configs, …) never reach the packager's clone. Tracked
+# dev-tree files (incl. dev/Annotations/) are stripped solely by the `- dev`
+# entry below.
 ignore:
   - .pkgmeta
   - .github
