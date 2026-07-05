@@ -1316,6 +1316,7 @@ local Defaults = {
             Enabled = false,
             IconSize = 40,
             Gap = 2,
+            TextSpacing = 32,           -- middle countdown slot width (px)
             Grow = "DOWN",              -- "DOWN" | "UP" only (no horizontal in v1)
             MaxIcons = 10,              -- entry cap; invisible entries count (secret targeting)
             FontFace = "Expressway",

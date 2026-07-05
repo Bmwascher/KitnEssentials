@@ -152,7 +152,7 @@ GUIFrame:RegisterContent("TargetedSpells", function(scrollChild, yOffset)
     manager:Register(gapSlider, "all")
     cardL:AddRow(rowL1, Theme.rowHeight)
 
-    local rowL2 = GUIFrame:CreateRow(cardL.content, Theme.rowHeightLast)
+    local rowL2 = GUIFrame:CreateRow(cardL.content, Theme.rowHeight)
     local growDrop = GUIFrame:CreateDropdown(rowL2, "Grow Direction", {
         options = { { key = "DOWN", text = "Down" }, { key = "UP", text = "Up" } },
         value = db.Grow or "DOWN",
@@ -168,7 +168,17 @@ GUIFrame:RegisterContent("TargetedSpells", function(scrollChild, yOffset)
     })
     rowL2:AddWidget(maxSlider, 0.5)
     manager:Register(maxSlider, "all")
-    cardL:AddRow(rowL2, Theme.rowHeightLast, 0)
+    cardL:AddRow(rowL2, Theme.rowHeight)
+
+    local rowL3 = GUIFrame:CreateRow(cardL.content, Theme.rowHeightLast)
+    local spacingSlider = GUIFrame:CreateSlider(rowL3, "Text Spacing", {
+        min = 16, max = 80, step = 1,
+        value = db.TextSpacing or 32,
+        callback = function(val) db.TextSpacing = val; Rebuild() end,
+    })
+    rowL3:AddWidget(spacingSlider, 0.5)
+    manager:Register(spacingSlider, "all")
+    cardL:AddRow(rowL3, Theme.rowHeightLast, 0)
 
     yOffset = cardL:GetNextOffset()
 

@@ -203,10 +203,10 @@ end
 -- Anchor frame / position / EditMode
 ---------------------------------------------------------------------------------
 
--- Entry/anchor width, single source of truth: two icons plus countdown text
--- gap; the -2 tucks each icon 1px closer to the text (user-tuned).
+-- Entry/anchor width, single source of truth: two icons plus the middle
+-- countdown slot (db.TextSpacing px, user-tunable in the Layout card).
 local function EntryWidth(db)
-    return db.IconSize * 2 + db.FontSize * 2 - 2
+    return db.IconSize * 2 + (db.TextSpacing or 32)
 end
 
 function TS:CreateAnchorFrame()
@@ -261,15 +261,6 @@ local function CreateIconFrame(entry, db)
     f.cooldown:SetAllPoints(f)
     f.cooldown:SetDrawEdge(false)
     f.cooldown:SetDrawSwipe(false)
-    -- Interrupt X overlay (reference: InterruptIcon, 4px inset); OVERLAY
-    -- sublevel 6 keeps it under the 1px borders (sublevel 7).
-    f.interruptX = f:CreateTexture(nil, "OVERLAY", nil, 6)
-    f.interruptX:SetPoint("TOPLEFT", f, "TOPLEFT", 4, -4)
-    f.interruptX:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -4, 4)
-    f.interruptX:SetTexture(INTERRUPT_ICON)
-    f.interruptX:SetRotation(math.rad(45))
-    f.interruptX:SetVertexColor(1, 0.2, 0.2, 1)
-    f.interruptX:Hide()
     return f
 end
 
@@ -293,6 +284,18 @@ function TS:CreateEntry()
     entry.rightIcon = CreateIconFrame(entry, db)
     entry.rightIcon:SetPoint("RIGHT", entry, "RIGHT", 0, 0)
     entry.rightIcon.cooldown:SetHideCountdownNumbers(true)
+
+    -- Center X: fills the countdown slot while an interrupted entry lingers
+    -- (GUI close-button idiom: cross rotated 45°). Capped to the slot width
+    -- so a tight TextSpacing never pushes it into the icons.
+    local xSize = math.min(db.FontSize * 1.2, db.TextSpacing or 32)
+    entry.interruptX = entry:CreateTexture(nil, "OVERLAY", nil, 6)
+    entry.interruptX:SetSize(xSize, xSize)
+    entry.interruptX:SetPoint("CENTER", entry, "CENTER", 0, 0)
+    entry.interruptX:SetTexture(INTERRUPT_ICON)
+    entry.interruptX:SetRotation(math.rad(45))
+    entry.interruptX:SetVertexColor(1, 0.2, 0.2, 1)
+    entry.interruptX:Hide()
 
     entry.generation = 0
     return entry
@@ -339,8 +342,7 @@ function TS:Release(entry, generation, reason)
     entry.Spacer:SetValue(1)
     entry.leftIcon.tex:SetDesaturated(false)
     entry.rightIcon.tex:SetDesaturated(false)
-    entry.leftIcon.interruptX:Hide()
-    entry.rightIcon.interruptX:Hide()
+    entry.interruptX:Hide()
     entry.leftIcon.cooldown:Clear()
     entry.leftIcon.cooldown:SetScript("OnCooldownDone", nil)
     entry.rightIcon.cooldown:Clear()
@@ -414,8 +416,7 @@ function TS:PopulateEntry(entry, unit, info)
     entry.wasInterrupted, entry.doNotHideBefore = nil, nil
     entry.leftIcon.tex:SetDesaturated(false)
     entry.rightIcon.tex:SetDesaturated(false)
-    entry.leftIcon.interruptX:Hide()
-    entry.rightIcon.interruptX:Hide()
+    entry.interruptX:Hide()
 
     entry.leftIcon.tex:SetTexture(info.texture or FALLBACK_ICON)
     entry.rightIcon.tex:SetTexture(info.texture or FALLBACK_ICON)
@@ -600,8 +601,7 @@ function TS:OnInterrupted(unit, castBarID)
     entry.leftIcon.tex:SetDesaturated(true)
     entry.rightIcon.tex:SetDesaturated(true)
     -- Reference SetInterrupted: X on, countdown numbers off, glow off.
-    entry.leftIcon.interruptX:Show()
-    entry.rightIcon.interruptX:Show()
+    entry.interruptX:Show()
     entry.leftIcon.cooldown:SetHideCountdownNumbers(true)
     self:StopGlow(entry)
     local gen = entry.generation
