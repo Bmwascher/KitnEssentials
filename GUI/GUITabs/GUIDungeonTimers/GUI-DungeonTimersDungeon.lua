@@ -672,7 +672,7 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
     local TOGGLE_COL_STRIDE = 110
     local prev = nil
     local firstToggle = nil
-    for i, roleEntry in ipairs(PLAYER_ROLE_TOKENS) do
+    for _, roleEntry in ipairs(PLAYER_ROLE_TOKENS) do
         local startedOn = DT and DT:IsSpellAllowedForRole(spellId, roleEntry.token) or false
         local togRow = GUIFrame:CreateCheckbox(body, roleEntry.label, {
             value = startedOn,
@@ -695,8 +695,6 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
         togRow:SetWidth(TOGGLE_COL_STRIDE - 8)
         prev = togRow
         secondaryWidgets[#secondaryWidgets + 1] = togRow
-        -- Suppress luacheck unused (`i` reserved for future per-column tweaks)
-        _ = i
     end
 
     -- Curator default — anchored BELOW the first toggle (Tank column),
@@ -1175,7 +1173,7 @@ end
 -- Builds the Display tab body. N13f's first knob: bar/text mode toggle.
 -- Future knobs (custom displayText, format string, color override) slot
 -- below the mode section as additional CreateSectionHeader blocks.
-local function BuildDisplayTabBody(parent, spellId, spell)
+local function BuildDisplayTabBody(parent, spellId, _)
     local DT = GetModule()
     local body = CreateFrame("Frame", nil, parent)
     body:SetAllPoints()
@@ -1606,10 +1604,6 @@ local function BuildDisplayTabBody(parent, spellId, spell)
     colorCaption:SetText(
         "Default = the matching preset color (DODGE \194\187 orange, etc.), "
         .. "or blue if there's no preset.")
-
-    -- Suppress the unused-variable luacheck — `spell` is available for
-    -- future knobs that need curator-side data.
-    _ = spell
 
     -- Initial disabled-state propagation. Mirror the Visibility tab:
     -- when the spell starts disabled, the mode toggle is inert and
@@ -2160,7 +2154,6 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     leftCol:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", Theme.paddingSmall, -yOffset)
 
     local listY = 0
-    local lastEncounterId = nil
     for encIndex, enc in ipairs(encounters) do
         -- Encounter header row (not pooled — low count, transient).
         -- Prefix with "B1 - ", "B2 - ", etc. so users can quickly map
@@ -2172,7 +2165,6 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
         header:SetText(string_format("B%d - %s", encIndex, enc.name))
         header:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
         listY = listY + ENC_HEADER_HEIGHT
-        lastEncounterId = enc.id
 
         for _, sItem in ipairs(enc.spells) do
             local kit = listRowPool:Acquire(leftCol)
@@ -2187,8 +2179,6 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
         end
     end
     leftCol:SetHeight(listY + Theme.paddingSmall)
-    -- Suppress luacheck unused — kept for future "expand encounter" affordance
-    _ = lastEncounterId
 
     ---------------------------------------------------------------------------
     -- RIGHT COLUMN: tab bar + tab body for selected spell.

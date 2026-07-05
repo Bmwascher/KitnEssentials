@@ -17,7 +17,6 @@ files["dev/spec"] = {
 }
 
 -- Suppress legitimate patterns:
---  111-113/_  — discard variable convention
 --  212/_      — unused argument with _ name (discard)
 --  212/self   — unused self in methods
 --  212/event  — unused event arg in OnEvent callbacks (common WoW pattern)
@@ -28,7 +27,6 @@ files["dev/spec"] = {
 --  432/self   — inner closure shadowing outer self (widget callback pattern)
 --  431/CP     — widget callback re-fetches module fresh, shadowing outer CP
 ignore = {
-    "111/_", "112/_", "113/_",
     "212/_", "212/self", "212/event", "212/msg", "212/editbox", "212/width", "212/height",
     "212/timeToFade", "212/endAlpha", "212/loopCallback",     -- UIFrameFade callback signature
     "212/elapsed",                                            -- OnUpdate callback signature
