@@ -347,6 +347,7 @@ function PA:RenderRow(textObj, iconFrame, iconTex, amount, lastEvent, now, hold,
 end
 
 function PA:RefreshDisplay()
+    if self.refreshScheduled then self.refreshScheduled:Cancel() end
     self.refreshScheduled = nil
     if not self.frame then return end
     local db = self.db
