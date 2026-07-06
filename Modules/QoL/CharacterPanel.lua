@@ -1798,6 +1798,147 @@ function CP:ScanBagsForGems()
     return gemCache
 end
 
+---------------------------------------------------------------------------------
+-- Replace All (Shift-click) — Socket Helper (DSH) replace-all model.
+-- Shift-clicking a gem in the popup replaces EVERY equipped socket holding the
+-- same gem as the target socket's current gem. Unique-Equipped gems are exempt
+-- in both directions: a unique current gem can't have duplicates (flow never
+-- offers), and a unique replacement falls back to the single-socket path (the
+-- client rejects staging a second copy).
+---------------------------------------------------------------------------------
+
+-- Memoized Unique-Equipped check from the gem's own tooltip. English-literal
+-- match, same convention as GetItemTrack's "Upgrade Level:"/"Crafted" lines.
+-- Only memoizes when tooltip data actually resolved, so a cold-cache read
+-- can't latch a wrong "not unique".
+local _gemUniqueCache = {}  -- [gemID] = true/false
+local function IsGemUnique(gemLink, gemID)
+    if not gemLink or not gemID then return false end
+    local cached = _gemUniqueCache[gemID]
+    if cached ~= nil then return cached end
+    local data = C_TooltipInfo.GetHyperlink(gemLink)
+    if not (data and data.lines) then return false end
+    local unique = false
+    for _, line in ipairs(data.lines) do
+        local text = line.leftText
+        if text and text:find("Unique%-Equipped") then
+            unique = true
+            break
+        end
+    end
+    _gemUniqueCache[gemID] = unique
+    return unique
+end
+
+-- All equipped sockets currently holding gemID. Fresh scan, slot order — so
+-- consecutive sockets on the SAME item are adjacent for the CloseSocketInfo
+-- handling in the replace loop.
+function CP:GetMatchingGemSockets(gemID)
+    local matches = {}
+    for _, itemSocketInfo in ipairs(self:ScanAllEquippedSockets()) do
+        for _, socket in ipairs(itemSocketInfo.sockets) do
+            if socket.filled and socket.gemID == gemID then
+                table.insert(matches, {
+                    slotID = itemSocketInfo.slotID,
+                    socketIndex = socket.index,
+                })
+            end
+        end
+    end
+    return matches
+end
+
+-- One bag position currently holding itemID. Re-resolved per placement —
+-- socketing consumes from the stack, so a cached bag/slot goes stale mid-loop.
+local function FindGemInBags(itemID)
+    for bag = 0, (NUM_BAG_SLOTS or 4) do
+        for slot = 1, C_Container.GetContainerNumSlots(bag) do
+            if C_Container.GetContainerItemID(bag, slot) == itemID then
+                return bag, slot
+            end
+        end
+    end
+    return nil
+end
+
+-- The replace loop. Upstream-verified sequencing on 12.0.7 (DSH ships this
+-- working): SocketInventoryItem opens the socketing UI for the equipped item;
+-- verify it actually opened (GetExistingSocketLink(1)) and that the staged gem
+-- landed (GetNewSocketLink) before accepting — one 0.1s-delayed full retry
+-- pass if either check fails, since the socket UI can lag the call by a frame.
+-- Upstream-documented gotcha: the API cannot stage gems into two sockets of
+-- the SAME item in one open — close between consecutive matches on one slotID.
+-- Uses the canonical C_ItemSocketInfo namespace (the bare globals DSH calls
+-- are Blizzard_DeprecatedItemSocketInfo shims in 12.0.7).
+function CP:ReplaceAllMatchingGems(oldGemID, newGemID, isRetry)
+    if InCombatLockdown() then
+        KE:Print("Cannot socket during combat")
+        return
+    end
+    if not oldGemID or not newGemID or oldGemID == newGemID then return end
+
+    local matches = self:GetMatchingGemSockets(oldGemID)
+    if #matches == 0 then return end
+
+    local have = GetItemCount(newGemID)
+    if have < #matches then
+        KE:Print(string.format(
+            "Replace All: only %d replacement gem%s for %d sockets - replacing what fits.",
+            have, have == 1 and "" or "s", #matches))
+    end
+
+    local replaced = 0
+    for i, m in ipairs(matches) do
+        SocketInventoryItem(m.slotID)
+        if not C_ItemSocketInfo.GetExistingSocketLink(1) and not isRetry then
+            -- Socket UI wasn't ready; close and re-run the whole pass once.
+            -- Already-replaced sockets no longer match oldGemID, so the retry
+            -- pass naturally resumes where this one stopped.
+            C_Timer.After(0.1, function()
+                CloseSocketInfo()
+                CP:ReplaceAllMatchingGems(oldGemID, newGemID, true)
+            end)
+            return
+        end
+
+        local existing = C_ItemSocketInfo.GetExistingSocketLink(m.socketIndex)
+        local existingID = existing and GetItemInfoInstant(existing)
+        if existingID == oldGemID then
+            local bag, slot = FindGemInBags(newGemID)
+            if not bag then break end  -- out of replacement gems; stop cleanly
+
+            C_Container.PickupContainerItem(bag, slot)
+            C_ItemSocketInfo.ClickSocketButton(m.socketIndex)
+            ClearCursor()
+
+            local staged = C_ItemSocketInfo.GetNewSocketLink(m.socketIndex)
+            local stagedID = staged and GetItemInfoInstant(staged)
+            if stagedID ~= newGemID then
+                if not isRetry then
+                    C_Timer.After(0.1, function()
+                        CloseSocketInfo()
+                        CP:ReplaceAllMatchingGems(oldGemID, newGemID, true)
+                    end)
+                    return
+                end
+                -- Retry pass failed for this socket too; skip it and continue.
+            else
+                AcceptSockets()
+                replaced = replaced + 1
+                if matches[i + 1] and matches[i + 1].slotID == m.slotID then
+                    CloseSocketInfo()
+                end
+            end
+        end
+    end
+
+    CloseSocketInfo()
+    if ItemSocketingFrame then HideUIPanel(ItemSocketingFrame) end
+    if DEBUG_CP then
+        KE:Print(string.format("[CP] Replace All: %d/%d sockets replaced", replaced, #matches))
+    end
+end
+
 function CP:CreateSocketContainer()
     if self.socketContainer then return self.socketContainer end
 
@@ -1844,8 +1985,10 @@ function CP:CreateSocketButton(index)
 
     btn:SetScript("OnEnter", function(self)
         CP.currentSocketBtn = self
+        -- ShowGemPopup ends in UpdateReplaceAllPreview, which sets the slot
+        -- glow (single, or multi when Shift is already held) — so no separate
+        -- ShowSlotHighlight here; a direct call would clobber the multi-glow.
         CP:ShowGemPopup(self)
-        if self.socketInfo then CP:ShowSlotHighlight(self.socketInfo.slotID) end
         if self.socket and self.socket.filled and self.socket.gemLink then
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT", 40, 0)
             GameTooltip:SetHyperlink(self.socket.gemLink)
@@ -1906,6 +2049,24 @@ function CP:CreateGemPopup()
     popup.noGems:SetText("No compatible gems")
     popup.noGems:SetTextColor(Theme.textMuted[1], Theme.textMuted[2], Theme.textMuted[3])
     popup.noGems:Hide()
+
+    -- Replace All footer hint. Text/visibility driven by UpdateReplaceAllPreview.
+    popup.replaceHint = popup:CreateFontString(nil, "OVERLAY")
+    popup.replaceHint:SetPoint("BOTTOMLEFT", popup, "BOTTOMLEFT", 6, 5)
+    popup.replaceHint:SetPoint("BOTTOMRIGHT", popup, "BOTTOMRIGHT", -6, 5)
+    popup.replaceHint:SetJustifyH("LEFT")
+    KE:ApplyFontToText(popup.replaceHint, "Expressway", 11, "OUTLINE")
+    popup.replaceHint:Hide()
+
+    -- Live Shift preview (DSH model): listen for modifier changes only while
+    -- the popup is shown, so Shift-down glows the affected slots immediately.
+    popup:SetScript("OnEvent", function(_, _, key)
+        if key == "LSHIFT" or key == "RSHIFT" then
+            CP:UpdateReplaceAllPreview()
+        end
+    end)
+    popup:SetScript("OnShow", function(p) p:RegisterEvent("MODIFIER_STATE_CHANGED") end)
+    popup:SetScript("OnHide", function(p) p:UnregisterEvent("MODIFIER_STATE_CHANGED") end)
 
     popup:EnableMouse(true)
     popup:SetScript("OnEnter", function()
@@ -1986,7 +2147,10 @@ function CP:CreateGemButton(index)
 
     btn:SetScript("OnEnter", function(self)
         self._hoverTarget = 1
-        if self.targetSlotID then CP:ShowSlotHighlight(self.targetSlotID) end
+        -- Glow via the preview authority so Shift keeps the multi-slot preview
+        -- while hovering a candidate row (targetSlotID == the current socket's
+        -- slot, so the single-glow case matches the old direct call).
+        CP:UpdateReplaceAllPreview()
         if self.gemData and self.gemData.link then
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT", 40, 0)
             GameTooltip:SetHyperlink(self.gemData.link)
@@ -2007,6 +2171,21 @@ function CP:CreateGemButton(index)
     btn:SetScript("OnClick", function(self)
         if InCombatLockdown() then
             KE:Print("Cannot socket during combat")
+            return
+        end
+        -- Shift: Replace All — swap every equipped socket holding the target's
+        -- current gem for this row's gem. A unique replacement gem falls
+        -- through to the normal single-socket path (can't equip duplicates).
+        if IsShiftKeyDown() and CP.gemPopup and CP.gemPopup._replaceAllGemID
+            and self.gemData and not IsGemUnique(self.gemData.link, self.gemData.itemID) then
+            local oldGemID = CP.gemPopup._replaceAllGemID
+            CP:HideGemPopup()
+            CP:HideSlotHighlight()
+            CP:ReplaceAllMatchingGems(oldGemID, self.gemData.itemID)
+            C_Timer.After(0.1, function()
+                if InCombatLockdown() then return end
+                CP:RefreshSocketButtons()
+            end)
             return
         end
         if self.gemData and self.targetSlotID and self.targetSocketIndex then
@@ -2099,6 +2278,13 @@ function CP:ShowGemPopup(socketBtn)
         if gemData.itemID ~= currentGemID then table.insert(gemList, gemData) end
     end
 
+    -- Replace All eligibility: candidate rows exist and the target socket holds
+    -- a resolvable, non-unique gem (a unique gem can't have duplicates to
+    -- replace). Consumed by the OnClick shift branch + the footer preview.
+    popup._replaceAllGemID = (#gemList > 0 and socketBtn.socket.filled and currentGemID
+        and not IsGemUnique(socketBtn.socket.gemLink, currentGemID))
+        and currentGemID or nil
+
     popup.title:SetText(socketBtn.socket.filled and "Replace Gem" or "Socket Gem")
     popup.title:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3])
 
@@ -2151,12 +2337,52 @@ function CP:ShowGemPopup(socketBtn)
 
         popup:SetWidth(280)
         targetHeight = yOffset
+        if popup._replaceAllGemID then
+            targetHeight = targetHeight + 16  -- footer hint row
+        end
     end
 
     popup:ClearAllPoints()
     popup:SetPoint("TOPLEFT", socketBtn, "BOTTOMLEFT", 0, -1)
     popup:SetHeight(targetHeight)
     popup:Show()
+    self:UpdateReplaceAllPreview()
+end
+
+-- Sole authority for the socket-helper glow + Replace All footer while the
+-- popup is open. Shift + a replace-eligible socket = glow every affected slot
+-- and show the match count; otherwise the hovered socket's single glow, plus
+-- the discoverability hint when eligible. Called at popup build, on
+-- MODIFIER_STATE_CHANGED, and from the socket/gem hover handlers — so the
+-- glow can't be left in a stale single/multi state by a hover-then-shift race.
+function CP:UpdateReplaceAllPreview()
+    local popup = self.gemPopup
+    if not popup or not popup:IsShown() then return end
+    local Theme = KE.Theme
+    local oldGemID = popup._replaceAllGemID
+
+    if oldGemID and IsShiftKeyDown() then
+        local matches = self:GetMatchingGemSockets(oldGemID)
+        local slotIDs = {}
+        for _, m in ipairs(matches) do table.insert(slotIDs, m.slotID) end
+        self:ShowSlotHighlights(slotIDs)
+        popup.replaceHint:SetText(string.format("Replace All: %d socket%s",
+            #matches, #matches == 1 and "" or "s"))
+        popup.replaceHint:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3])
+        popup.replaceHint:Show()
+    else
+        -- Single glow on the hovered socket (the pre-Replace-All behavior).
+        if self.currentSocketBtn and self.currentSocketBtn.socketInfo then
+            self:ShowSlotHighlight(self.currentSocketBtn.socketInfo.slotID)
+        end
+        if oldGemID then
+            popup.replaceHint:SetText("Shift-Click: Replace All")
+            popup.replaceHint:SetTextColor(Theme.textMuted[1], Theme.textMuted[2], Theme.textMuted[3])
+            popup.replaceHint:Show()
+        else
+            popup.replaceHint:Hide()
+        end
+    end
 end
 
 function CP:HideGemPopup()
@@ -2164,26 +2390,37 @@ function CP:HideGemPopup()
 end
 
 function CP:ShowSlotHighlight(slotID)
+    self:ShowSlotHighlights({ slotID })
+end
+
+-- Multi-slot variant for the Replace All preview: Shift-down glows every slot
+-- the replace would touch. Native Blizzard spell-activation overlay glow —
+-- the same code path DominationSocketHelper uses (pixel-identical to the
+-- in-game "ability ready" glow). No accent overlay underneath.
+function CP:ShowSlotHighlights(slotIDs)
     self:HideSlotHighlight()
-
-    local frameName = SLOT_FRAMES[slotID]
-    if not frameName then return end
-    local slotFrame = _G[frameName]
-    if not slotFrame then return end
-
-    -- Native Blizzard spell-activation overlay glow on the gear slot — the same
-    -- code path DominationSocketHelper uses (pixel-identical to the in-game
-    -- "ability ready" glow). No accent overlay underneath.
-    if ActionButtonSpellAlertManager then
-        ActionButtonSpellAlertManager:ShowAlert(slotFrame)
-        self._glowingSlotFrame = slotFrame
+    if not ActionButtonSpellAlertManager then return end
+    self._glowingSlotFrames = self._glowingSlotFrames or {}
+    local seen = {}
+    for _, slotID in ipairs(slotIDs) do
+        local frameName = SLOT_FRAMES[slotID]
+        local slotFrame = frameName and _G[frameName]
+        -- Dedup: two matched sockets on one item glow its slot frame once
+        -- (a second ShowAlert would orphan an overlay on the single HideAlert).
+        if slotFrame and not seen[slotFrame] then
+            seen[slotFrame] = true
+            ActionButtonSpellAlertManager:ShowAlert(slotFrame)
+            table.insert(self._glowingSlotFrames, slotFrame)
+        end
     end
 end
 
 function CP:HideSlotHighlight()
-    if ActionButtonSpellAlertManager and self._glowingSlotFrame then
-        ActionButtonSpellAlertManager:HideAlert(self._glowingSlotFrame)
-        self._glowingSlotFrame = nil
+    if ActionButtonSpellAlertManager and self._glowingSlotFrames then
+        for _, slotFrame in ipairs(self._glowingSlotFrames) do
+            ActionButtonSpellAlertManager:HideAlert(slotFrame)
+        end
+        wipe(self._glowingSlotFrames)
     end
 end
 
