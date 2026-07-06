@@ -117,10 +117,11 @@ for _, t in ipairs(GEM_SOCKET_TYPES) do EMPTY_SOCKET_ICON[t.name] = t.icon end
 -- C_TooltipInfo gem-socket line type (3); resolved from Enum with a literal fallback.
 local SOCKET_LINE_TYPE = (Enum and Enum.TooltipDataLineType and Enum.TooltipDataLineType.GemSocket) or 3
 
--- Inspect socket-scan tracing. Flip true, /reload, inspect a target with gemmed
--- gear, paste the chat log. Dumps (once per unit+slot) every C_TooltipInfo line that
--- looks gem-related plus what C_Item.GetItemGem returns, so we can see exactly where
--- the inspect gem data lives. Leave false in shipped code.
+-- Socket-scan tracing. Flip true, /reload, then either inspect a target with
+-- gemmed gear (dumps, once per unit+slot, every C_TooltipInfo line that looks
+-- gem-related plus what C_Item.GetItemGem returns) or open the character panel
+-- on a cold item cache (logs QueueGemLoad requests + ITEM_DATA_LOAD_RESULT
+-- repaints for the player gem-hydration path). Leave false in shipped code.
 local DEBUG_CP = false
 
 -- Slot IDs the gem socket helper scans.
@@ -370,6 +371,38 @@ local function _slotState(slotID)
     local s = _lastSlotState[slotID]
     if not s then s = {}; _lastSlotState[slotID] = s end
     return s
+end
+
+---------------------------------------------------------------------------------
+-- Cold-cache gem hydration (player path).
+-- A client patch wipes the local item cache; at the first logins after it the
+-- GEM items socketed into equipped gear aren't loaded yet, so the tooltip's
+-- socket lines come back with gemIcon == nil on FILLED sockets (gem icons
+-- require item-sparse data — see Blizzard's PaperDollItemSocketDisplayMixin:
+-- SetItem, which documents that even C_Item.GetItemGem can't resolve then).
+-- The equipped item LINK still carries the gem IDs, so C_Item.GetItemGemID is
+-- the uncached-safe filled-vs-empty truth. Unresolved icons are requested via
+-- RequestLoadItemDataByID and the slot repaints on ITEM_DATA_LOAD_RESULT —
+-- the same event chain InspectPanel's gem-race fix uses on the inspect side.
+---------------------------------------------------------------------------------
+local _pendingGemLoads = {}   -- [itemID] = { [slotID] = true }
+local _gemLoadAttempts = {}   -- [itemID] = request count (loop cap, mirrors InspectPanel's paint passes)
+local MAX_GEM_LOAD_ATTEMPTS = 5
+
+local function QueueGemLoad(itemID, slotID)
+    if not itemID then return end
+    local attempts = _gemLoadAttempts[itemID] or 0
+    if attempts >= MAX_GEM_LOAD_ATTEMPTS then return end
+    local slots = _pendingGemLoads[itemID]
+    if not slots then slots = {}; _pendingGemLoads[itemID] = slots end
+    if slots[slotID] then return end
+    slots[slotID] = true
+    _gemLoadAttempts[itemID] = attempts + 1
+    if DEBUG_CP then
+        KE:Print(string.format("[CP] queue item load %d for slot %d (attempt %d)",
+            itemID, slotID, attempts + 1))
+    end
+    C_Item.RequestLoadItemDataByID(itemID)
 end
 
 ---------------------------------------------------------------------------------
@@ -683,6 +716,7 @@ local function HookCharacterPanel()
             if CP.eventFrame then
                 CP.eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
                 CP.eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
+                CP.eventFrame:RegisterEvent("ITEM_DATA_LOAD_RESULT")
             end
             QueueUpdate()                                 -- warnings
             if CP.db.HideCharacterBackground then HideCharacterBackground() end
@@ -696,7 +730,12 @@ local function HookCharacterPanel()
             if CP.eventFrame then
                 CP.eventFrame:UnregisterEvent("PLAYER_EQUIPMENT_CHANGED")
                 CP.eventFrame:UnregisterEvent("BAG_UPDATE_DELAYED")
+                CP.eventFrame:UnregisterEvent("ITEM_DATA_LOAD_RESULT")
             end
+            -- In-flight gem loads lose their listener with the pane; drop the
+            -- mapping. The slot's detailGemsPending dirty-state survives, so a
+            -- reopen re-scans and re-queues anything still unresolved.
+            wipe(_pendingGemLoads)
             if CP.socketContainer then CP.socketContainer:Hide() end
             CP:HideGemPopup()
             CP:HideSlotHighlight()
@@ -707,17 +746,37 @@ local function HookCharacterPanel()
     -- (above) on PaperDollFrame Show/Hide. The frame itself is cheap; what
     -- mattered was the dispatch overhead from always-listening.
     CP.eventFrame = CreateFrame("Frame")
-    CP.eventFrame:SetScript("OnEvent", function(_, event, slotID)
+    CP.eventFrame:SetScript("OnEvent", function(_, event, arg1)
         if not CP.db.Enabled then return end
         if event == "PLAYER_EQUIPMENT_CHANGED" then
-            -- Route by slotID so we update one slot's overlays, not all 17.
-            -- The keyed-queue / debounce paths (QueueUpdate, socket helper)
+            -- Route by slotID (arg1) so we update one slot's overlays, not all
+            -- 17. The keyed-queue / debounce paths (QueueUpdate, socket helper)
             -- still operate panel-wide because they aggregate cross-slot
             -- state (warning visibility, socket-button row).
             QueueUpdate()                                 -- warnings (debounced, panel-wide)
             if CP.db.SocketHelperEnabled then CP:RefreshSocketButtons() end
-            if slotID then
-                CP:RefreshSlot(slotID, "player")          -- detail + track for the affected slot only
+            if arg1 then
+                CP:RefreshSlot(arg1, "player")            -- detail + track for the affected slot only
+            end
+        elseif event == "ITEM_DATA_LOAD_RESULT" then
+            -- A gem/base item we requested (QueueGemLoad) finished loading;
+            -- repaint the slots that were waiting on it. Clearing the slot's
+            -- dirty state first is required — link/enchant/ilvl haven't
+            -- changed, so RefreshSlot would otherwise short-circuit on the
+            -- stale cold-cache render.
+            local slots = _pendingGemLoads[arg1]
+            if slots then
+                _pendingGemLoads[arg1] = nil
+                if DEBUG_CP then
+                    KE:Print(string.format("[CP] item %s loaded -> repaint", tostring(arg1)))
+                end
+                for pendingSlotID in pairs(slots) do
+                    _lastSlotState[pendingSlotID] = nil
+                    CP:RefreshSlot(pendingSlotID, "player")
+                end
+                if CP.db.SocketHelperEnabled and CP.socketContainer and CP.socketContainer:IsShown() then
+                    CP:RefreshSocketButtons()
+                end
             end
         elseif event == "BAG_UPDATE_DELAYED" then
             -- Socketing a gem / applying an enchant consumes the item from bags
@@ -1260,7 +1319,11 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems)
         local link = GetInventoryItemLink(unit, slotID)
         local enchantID = self:GetSlotEnchantID(unit, slotID)
         local ilvl = self:GetSlotItemLevel(unit, slotID)
-        if s.detailLink == link and s.detailEnchant == enchantID and s.detailIlvl == ilvl then
+        -- detailGemsPending: the previous render ran on unhydrated gem data
+        -- (cold item cache), so the link/enchant/ilvl key is NOT sufficient —
+        -- skip the short-circuit and re-scan until the gems resolve.
+        if s.detailLink == link and s.detailEnchant == enchantID and s.detailIlvl == ilvl
+            and not s.detailGemsPending then
             return
         end
         s.detailLink, s.detailEnchant, s.detailIlvl = link, enchantID, ilvl
@@ -1311,11 +1374,13 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems)
     -- empty-socket icon (ShowMissingGems) — the reference-style missing-gem cue
     -- that replaces the old "No Gem" text (no room to stack a third text line).
     local gemCount = 0
+    local gemsPending = false
     if not suppressGems then
         local showFilled = self.db.ShowSlotGems
         local showEmpty  = self.db.ShowMissingGems ~= false
         if (showFilled or showEmpty) and socketableSlotSet[slotID] then
             local result = self:ScanItemSockets(unit, slotID)
+            gemsPending = (result and result.pendingGems) or false
             if result and result.sockets then
                 local iconSize = SLOT_GEM_ICON_SIZE
                 for _, socket in ipairs(result.sockets) do
@@ -1342,6 +1407,10 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems)
     -- (clean transparent state until the retry resolves the inspect packet).
     for i = gemCount + 1, SLOT_DETAIL_MAX_GEMS do
         detail.gemIcons[i]:Hide()
+    end
+
+    if unit == "player" then
+        _slotState(slotID).detailGemsPending = gemsPending or nil
     end
 
     -- Transparent container — element visibility controls what's drawn.
@@ -1485,7 +1554,14 @@ function CP:ScanItemSockets(unit, slotID)
     -- each socket's true index for both filled and empty — no position reconciliation
     -- needed. (Reference: BetterCharacterPanel.)
     local data = C_TooltipInfo.GetInventoryItem(unit, slotID)
-    if not data or not data.lines then return nil end
+    local lines = data and data.lines
+    if not lines then
+        -- Inspect: no tooltip data means nothing to show. Player: fall through
+        -- with zero socket lines so the cold-cache fallback below can still
+        -- synthesize filled sockets from the link's gem IDs.
+        if unit ~= "player" then return nil end
+        lines = {}
+    end
 
     if DEBUG_CP and unit ~= "player" and socketableSlotSet[slotID] then
         self._cpDbg = self._cpDbg or {}
@@ -1516,21 +1592,41 @@ function CP:ScanItemSockets(unit, slotID)
     }
 
     local socketIndex = 0
-    for _, line in ipairs(data.lines) do
+    for _, line in ipairs(lines) do
         if line.type == SOCKET_LINE_TYPE then
             socketIndex = socketIndex + 1
             result.totalCount = result.totalCount + 1
-            if line.gemIcon then
+            -- line.gemIcon is also nil for a FILLED socket whose gem item isn't
+            -- in the local item cache yet (cold cache at the first logins after
+            -- a client patch). The gem ID is embedded in the equipped item's
+            -- link, so GetItemGemID resolves without the gem's data (Blizzard
+            -- PaperDollFrame pattern). Player-only: inspect links go through
+            -- InspectPanel's own gem-race handling.
+            local coldGemID
+            if not line.gemIcon and unit == "player" then
+                coldGemID = C_Item.GetItemGemID(itemLink, socketIndex)
+            end
+            if line.gemIcon or coldGemID then
                 -- Filled. line.gemIcon is the gem's icon (works on inspect). Enrich
                 -- with GetItemGem for the link/id the player-only socket helper needs;
                 -- nil on inspect is harmless since inspect only displays the icon.
                 result.filledCount = result.filledCount + 1
                 local gemName, gemLink = C_Item.GetItemGem(itemLink, socketIndex)
-                local gemID = gemLink and C_Item.GetItemInfoInstant(gemLink)
+                local gemID = (gemLink and C_Item.GetItemInfoInstant(gemLink)) or coldGemID
+                local icon = line.gemIcon
+                if not icon and coldGemID then
+                    -- The icon needs the gem's item data; request it and repaint
+                    -- this slot on ITEM_DATA_LOAD_RESULT.
+                    icon = C_Item.GetItemIconByID(coldGemID)
+                    if not icon then
+                        QueueGemLoad(coldGemID, slotID)
+                        result.pendingGems = true
+                    end
+                end
                 table.insert(result.sockets, {
                     index = socketIndex, filled = true,
                     gemLink = gemLink, gemName = gemName, gemID = gemID,
-                    icon = line.gemIcon,
+                    icon = icon,
                 })
             else
                 -- Empty. line.socketType is the type string (e.g. "Prismatic").
@@ -1542,6 +1638,30 @@ function CP:ScanItemSockets(unit, slotID)
                     icon = (socketType and EMPTY_SOCKET_ICON[socketType]) or 458977,
                 })
             end
+        end
+    end
+
+    -- Cold-cache fallback (player): the tooltip carried NO socket lines but the
+    -- link says gems are socketed — the BASE item's data isn't hydrated yet, so
+    -- the real socket layout is unknowable. Synthesize the filled sockets from
+    -- the link and request the base item; the slot repaints with the full
+    -- layout (including empty sockets) on ITEM_DATA_LOAD_RESULT.
+    if unit == "player" and result.totalCount == 0 then
+        for i = 1, SLOT_DETAIL_MAX_GEMS do
+            local gemID = C_Item.GetItemGemID(itemLink, i)
+            if gemID then
+                result.totalCount = result.totalCount + 1
+                result.filledCount = result.filledCount + 1
+                local icon = C_Item.GetItemIconByID(gemID)
+                if not icon then QueueGemLoad(gemID, slotID) end
+                table.insert(result.sockets, {
+                    index = i, filled = true, gemID = gemID, icon = icon,
+                })
+            end
+        end
+        if result.totalCount > 0 then
+            result.pendingGems = true
+            QueueGemLoad(GetItemInfoInstant(itemLink), slotID)
         end
     end
 
@@ -1854,8 +1974,11 @@ function CP:RefreshSocketButtons()
                     btn:SetPoint("LEFT", self.socketContainer.buttons[buttonIndex - 1], "RIGHT", db.SocketButtonSpacing, 0)
                 end
 
-                if socket.filled and socket.icon then
-                    btn.icon:SetTexture(socket.icon)
+                if socket.filled then
+                    -- icon can be nil while the gem's item data hydrates (cold
+                    -- cache); show the placeholder at full alpha — the row
+                    -- repaints via ITEM_DATA_LOAD_RESULT once the gem loads.
+                    btn.icon:SetTexture(socket.icon or 458977)
                     btn:SetAlpha(1)
                     local atlas = GetQualityAtlasFromLink(socket.gemLink)
                     SetQualityAtlas(btn.quality, atlas)
@@ -2004,6 +2127,31 @@ end
 ---------------------------------------------------------------------------------
 -- Lifecycle
 ---------------------------------------------------------------------------------
+-- One-shot login cache warm-up. A client patch wipes the local item cache; the
+-- GEM items (not the equipped gear itself) are then unloaded at first login,
+-- so the first character-panel open renders sockets from unhydrated data.
+-- Request everything the gem features will need during the loading screen.
+-- Gem IDs come from the equipped links via GetItemGemID, which resolves
+-- without the gem's item data (Blizzard PaperDollFrame pattern).
+function CP:PrimeGemCache(_, isInitialLogin)
+    if not isInitialLogin then return end
+    for slotID in pairs(SLOT_FRAMES) do
+        local link = GetInventoryItemLink("player", slotID)
+        if link then
+            local baseID = GetItemInfoInstant(link)
+            if baseID and not C_Item.IsItemDataCachedByID(baseID) then
+                C_Item.RequestLoadItemDataByID(baseID)
+            end
+            for i = 1, SLOT_DETAIL_MAX_GEMS do
+                local gemID = C_Item.GetItemGemID(link, i)
+                if gemID and not C_Item.IsItemDataCachedByID(gemID) then
+                    C_Item.RequestLoadItemDataByID(gemID)
+                end
+            end
+        end
+    end
+end
+
 function CP:OnInitialize()
     self.db = KE.db.profile.CharacterPanel
     self:SetEnabledState(false)
@@ -2023,6 +2171,10 @@ function CP:OnEnable()
 
     HookCharacterPanel()
 
+    -- Warm the gem cache during the login loading screen (see PrimeGemCache).
+    -- AceEvent unregisters automatically on module disable.
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "PrimeGemCache")
+
     -- Wake InspectPanel; it owns the inspect orchestration.
     local insp = KitnEssentials:GetModule("InspectPanel", true)
     if insp then insp:Enable() end
@@ -2035,6 +2187,7 @@ function CP:OnEnable()
         if self.eventFrame then
             self.eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
             self.eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
+            self.eventFrame:RegisterEvent("ITEM_DATA_LOAD_RESULT")
         end
         UpdateDisplay()                                   -- warnings
         if self.db.TrackIndicatorsEnabled then self:UpdateAllTrackIndicators() end
@@ -2050,6 +2203,8 @@ function CP:OnDisable()
     self:ClearAll()                                       -- warnings clear
     if self.eventFrame then self.eventFrame:UnregisterAllEvents() end
     wipe(_lastSlotState)
+    wipe(_pendingGemLoads)
+    wipe(_gemLoadAttempts)
     self:DisableGemSocketHelper()
     self:HideAllTrackIndicators()
     self:HideAllSlotDetails()
