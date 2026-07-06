@@ -978,8 +978,11 @@ end
 -- stores the run-level "+NN" session, and both belong to this kill (a last-boss
 -- wipe never completes the key, so the run row can't inherit a red). Sessions
 -- only append, so new ids sit contiguously at the list tail -- walk backward and
--- stop at the first pre-pull id. No snapshot (the pcall'd read failed at the
--- pull, or a mid-encounter /reload) -> fall back to tagging the newest only.
+-- stop at the first pre-pull id, EXCEPT the newest tail entry (the live session
+-- combat just finished), which is always tagged: Blizzard can create the boss's
+-- session just before ENCOUNTER_START fires, landing it in the pre-pull snapshot.
+-- No snapshot (the pcall'd read failed at the pull, or a mid-encounter /reload)
+-- -> fall back to tagging the newest only.
 -- Runtime-only on purpose: stored sessions don't survive a /reload, so neither
 -- must the map (wiped on every session reset).
 function DM:OnEncounterEnd(_, _, _, _, _, success)
@@ -1008,7 +1011,15 @@ function DM:OnEncounterEnd(_, _, _, _, _, success)
                 if DEBUG_DM then KE:Print("[DM] outcome walk stopped at index " .. i .. ": secret/nil session id (tagged " .. tagged .. " so far)") end
                 break
             end
-            if snap and snap[nid] then   -- reached pre-pull territory
+            -- Reached pre-pull history -> stop. EXCEPTION: the newest entry
+            -- (i == #list) is the live session combat just finished, i.e. the
+            -- boss. Blizzard sometimes creates that session a moment BEFORE
+            -- ENCOUNTER_START fires (races the event -- confirmed in a live kill
+            -- 2026-07-06: 10-id snapshot already held the boss's own session),
+            -- so it lands in the snapshot and the walk would otherwise break on
+            -- it and tag nothing -> the boss row stays uncolored. Tag it anyway;
+            -- older in-snapshot sessions are genuine history and still stop here.
+            if snap and snap[nid] and i ~= #list then   -- reached pre-pull territory
                 if DEBUG_DM then KE:Print("[DM] outcome walk stopped at index " .. i .. ": session " .. tostring(nid) .. " was in the pre-pull snapshot (tagged " .. tagged .. " so far)") end
                 break
             end
