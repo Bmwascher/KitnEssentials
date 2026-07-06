@@ -190,6 +190,7 @@ local DM_DEFAULTS = {
     BackdropBorderColor = { 0, 0, 0, 1 },        -- solid black
     BackdropColor = { 0.031, 0.031, 0.031, 0.8 }, -- #080808 @ 80% opacity
     BackdropPadding = 1,
+    BackdropBehindBarsOnly = false,             -- wrap only the bar rows; the header floats above the backdrop
     Strata = "MEDIUM",
     Position = {
         AnchorFrom = "BOTTOMRIGHT",

@@ -89,6 +89,13 @@ function DM:EnsureDock()
     local dock = CreateFrame("Frame", "KE_DamageMeter_Dock", UIParent, "BackdropTemplate")
     self.dock = dock
 
+    -- Backdrop carrier. The bg/border lives on this child rather than the dock
+    -- itself so it can wrap ONLY the bar rows (db.BackdropBehindBarsOnly): its top
+    -- edge insets past the header band while the dock frame still spans everything
+    -- as the layout parent + EditMode mover. Held at the dock's own frame level in
+    -- UpdateBackdrop -> below the child windows (dock+1), so bars/text draw over it.
+    dock.skin = CreateFrame("Frame", nil, dock, "BackdropTemplate")
+
     -- Never render off-screen: a stale saved Position (resolution change) or an
     -- edit-mode drag could otherwise strand the whole meter outside the viewport.
     -- Same flag as the MPT HUD root; the windows are dock children, so clamping
@@ -612,7 +619,22 @@ function DM:UpdateBackdrop()
         cfg.Color = db.BackdropColor
         cfg.BorderColor = self:_ResolveDockBorderColor()
     end
-    KE:ApplyBackdrop(dock, cfg)
+    -- Skin the carrier child (not the dock) so "behind bars only" can drop the
+    -- frame off the header band: inset the top by the header band height (pad +
+    -- header) so the box starts at the first bar and the title floats above it.
+    -- Otherwise it covers the whole dock (unchanged look). Re-level each pass in
+    -- case a strata change re-based the dock.
+    local skin = dock.skin
+    skin:SetFrameLevel(dock:GetFrameLevel())
+    skin:ClearAllPoints()
+    if cfg.Enabled and db.BackdropBehindBarsOnly then
+        local headerH = self._dockHeaderH or KE:PixelSnap((db.FontSize or 12) + 6)
+        skin:SetPoint("TOPLEFT", dock, "TOPLEFT", 0, -(pad + headerH))
+        skin:SetPoint("BOTTOMRIGHT", dock, "BOTTOMRIGHT", 0, 0)
+    else
+        skin:SetAllPoints(dock)
+    end
+    KE:ApplyBackdrop(skin, cfg)
 
     -- Reposition (the dock's own anchor is unchanged, but re-running re-snaps to
     -- the pixel grid after a size change and re-applies the strata).

@@ -1429,7 +1429,18 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     })
     row4c:AddWidget(padSlider, 1)
     manager:Register(padSlider, "backdrop")
-    card4:AddRow(row4c, Theme.rowHeightLast, 0)
+    card4:AddRow(row4c, Theme.rowHeight)
+
+    -- Wrap only the bar rows: drops the backdrop off the header band so the title
+    -- floats above it. Backdrop group so it greys out when the backdrop is off.
+    local row4d = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
+    local behindBarsChk = GUIFrame:CreateCheckbox(row4d, "Behind Bars Only", {
+        value = db.BackdropBehindBarsOnly == true,
+        callback = function(checked) db.BackdropBehindBarsOnly = checked; ApplyBackdropOnly() end,
+    })
+    row4d:AddWidget(behindBarsChk, 0.5)
+    manager:Register(behindBarsChk, "backdrop")
+    card4:AddRow(row4d, Theme.rowHeightLast, 0)
 
     yOffset = card4:GetNextOffset()
     return yOffset
