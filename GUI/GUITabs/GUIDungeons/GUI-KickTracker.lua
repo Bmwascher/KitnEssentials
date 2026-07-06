@@ -100,7 +100,7 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     local noteRow = GUIFrame:CreateRow(card1.content, 50)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Teammate bars appear once their kicks become trackable (kick-sync addons); other kicks show as temporary class-colored records.\n" ..
+        KE:ColorTextByTheme("-") .. " Teammates with kick-sync addons get live bars from the start; other kicks show as temporary class-colored records.\n" ..
         KE:ColorTextByTheme("-") .. " Only active in 5-player dungeons.",
         50, "hide")
     noteRow:AddWidget(noteText, 1)

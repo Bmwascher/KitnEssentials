@@ -560,8 +560,30 @@ function KT:BroadcastKick(spellID, cd)
     if not self.db.KickSync then return end
     if not IsInGroup() then return end
 
-    transmitKick(COMM_PREFIX, "1;" .. spellID .. ";" .. cd)
+    transmitKick(COMM_PREFIX, "1;KICK;" .. spellID .. ";" .. cd)
     transmitKick(BLIZZI_PREFIX, "B1;KICK;" .. spellID .. ";" .. cd)
+end
+
+-- Presence announce: lets other KE users verify us (and show our bar at
+-- Ready) from dungeon start instead of on our first kick. Sent on
+-- activation, roster changes, and as a throttled reply to received hellos
+-- (the throttle also dampens hello reply loops).
+function KT:BroadcastHello()
+    if not self.db.KickSync then return end
+    if not self.isActive or not IsInGroup() then return end
+
+    local now = GetTime()
+    if self._lastHelloSent and (now - self._lastHelloSent) < 10 then return end
+
+    local guid = UnitGUID("player")
+    local member = guid and self.partyMembers[guid]
+    local data = member and member.interruptData
+    if not data then return end  -- current spec has no kick; nothing to announce
+    self._lastHelloSent = now
+
+    transmitKick(COMM_PREFIX, "1;HELLO;" .. data.id .. ";" .. data.cd)
+    -- Deliberately NO BliZzi-format hello: we stay out of their handshake
+    -- (kick-data-only participation, established interop posture).
 end
 
 function KT:OnCommReceived(_, prefix, message, _, sender)
@@ -576,28 +598,47 @@ function KT:OnCommReceived(_, prefix, message, _, sender)
         local shortSender = Ambiguate(sender, "short")
         if shortSender == UnitName("player") then return end  -- own echo
 
-        local cd
+        -- Both protocols carry a verb + the sender's kick spellID and cd:
+        --   KE:     "1;KICK;spellID;cd"   /  "1;HELLO;spellID;cd"
+        --   BliZzi: "B1;KICK;spellID;cd"  /  "B1;HELLO;class;spellID;cd"
+        local verb, sid, cd
         if isKE then
-            local _, _, cdStr = strsplit(";", message)
+            local _, v, sidStr, cdStr = strsplit(";", message)
+            verb = v
+            sid = tonumber(sidStr)
             cd = tonumber(cdStr)
         else
-            -- BliZzi wire: "B1;KICK;spellID;cd" — ignore their other verbs
-            local hdr, cmd, _, cdStr = strsplit(";", message)
-            if hdr ~= "B1" or cmd ~= "KICK" then return end
-            cd = tonumber(cdStr)
-            if not cd or cd <= 0 then return end
+            local hdr, cmd, a3, a4, a5 = strsplit(";", message)
+            if hdr ~= "B1" then return end
+            if cmd == "KICK" then
+                verb, sid, cd = "KICK", tonumber(a3), tonumber(a4)
+            elseif cmd == "HELLO" then
+                verb, sid, cd = "HELLO", tonumber(a4), tonumber(a5)  -- a3 = class
+            end
         end
+        if verb ~= "KICK" and verb ~= "HELLO" then return end
+        if verb == "KICK" and (not cd or cd <= 0) then return end
 
         for guid, member in pairs(self.partyMembers) do
             if member.unit ~= "player" and member.name == shortSender then
-                if member.interruptData then
-                    member.kickVerified = true  -- comm user: bar is tracked for real
-                    self:UpdateBars()           -- materialize the bar (verified-only roster)
+                member.kickVerified = true  -- comm user: bar is tracked for real
+                -- The sender knows their own kick best — refine our data
+                -- (also fills members our spec logic had to defer).
+                if sid and sid > 0 and cd and cd > 0 then
+                    local role = member.interruptData and member.interruptData.role or "DAMAGER"
+                    member.interruptData = { id = sid, cd = cd, role = role }
+                end
+                if not member.interruptData then return end
+                self:UpdateBars()           -- materialize the bar (verified-only roster)
+                if verb == "KICK" then
                     self:ConfirmKick(guid, cd or member.interruptData.cd)
                     -- The nameplate event usually spawned a record for this
                     -- same kick moments ago — drop it (names may be secret,
                     -- so newest-in-window is the best match we can do).
                     self:RemoveRecentKickRecord(2.5)
+                elseif isKE then
+                    -- Reply-hello (throttled) so the sender learns us too
+                    self:BroadcastHello()
                 end
                 return
             end
@@ -674,6 +715,7 @@ function KT:UnregisterCombatEvents()
     self:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED")
     self:UnregisterEvent("CHAT_MSG_ADDON")
     self.combatEventsRegistered = false
+    self._lastHelloSent = nil
 
     self:ClearKickRecords()
 end
@@ -700,6 +742,7 @@ function KT:CheckActivation()
             self.containerFrame:Show()
         end
         self:RefreshPartyRoster()
+        self:BroadcastHello()  -- announce presence to party KE users
     elseif not shouldBeActive and self.isActive then
         self.isActive = false
         self:UnregisterCombatEvents()  -- also clears kick records
@@ -718,6 +761,7 @@ end
 function KT:OnRosterUpdate()
     if self.isActive then
         self:RefreshPartyRoster()
+        self:BroadcastHello()  -- late joiners need to learn us (throttled)
     else
         self:CheckActivation()
     end
