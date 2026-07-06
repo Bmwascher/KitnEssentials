@@ -2050,13 +2050,24 @@ function CP:CreateGemPopup()
     popup.noGems:SetTextColor(Theme.textMuted[1], Theme.textMuted[2], Theme.textMuted[3])
     popup.noGems:Hide()
 
-    -- Replace All footer hint. Text/visibility driven by UpdateReplaceAllPreview.
+    -- Replace All footer hint (its own separated row, reference style). Text +
+    -- visibility driven by UpdateReplaceAllPreview; the modifier keyword is
+    -- colored bright red there so it stands out from the gem rows.
     popup.replaceHint = popup:CreateFontString(nil, "OVERLAY")
-    popup.replaceHint:SetPoint("BOTTOMLEFT", popup, "BOTTOMLEFT", 6, 5)
-    popup.replaceHint:SetPoint("BOTTOMRIGHT", popup, "BOTTOMRIGHT", -6, 5)
+    popup.replaceHint:SetPoint("BOTTOMLEFT", popup, "BOTTOMLEFT", 6, 6)
+    popup.replaceHint:SetPoint("BOTTOMRIGHT", popup, "BOTTOMRIGHT", -6, 6)
     popup.replaceHint:SetJustifyH("LEFT")
-    KE:ApplyFontToText(popup.replaceHint, "Expressway", 11, "OUTLINE")
+    KE:ApplyFontToText(popup.replaceHint, "Expressway", 12, "OUTLINE")
     popup.replaceHint:Hide()
+
+    -- Divider above the footer so it reads as a distinct row, not a trailing
+    -- gem line. Spans the full popup width (the ±6 cancels the hint's insets).
+    popup.replaceSep = popup:CreateTexture(nil, "ARTWORK")
+    popup.replaceSep:SetHeight(1)
+    popup.replaceSep:SetPoint("BOTTOMLEFT", popup.replaceHint, "TOPLEFT", -6, 4)
+    popup.replaceSep:SetPoint("BOTTOMRIGHT", popup.replaceHint, "TOPRIGHT", 6, 4)
+    popup.replaceSep:SetColorTexture(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+    popup.replaceSep:Hide()
 
     -- Live Shift preview (DSH model): listen for modifier changes only while
     -- the popup is shown, so Shift-down glows the affected slots immediately.
@@ -2338,7 +2349,7 @@ function CP:ShowGemPopup(socketBtn)
         popup:SetWidth(280)
         targetHeight = yOffset
         if popup._replaceAllGemID then
-            targetHeight = targetHeight + 16  -- footer hint row
+            targetHeight = targetHeight + 22  -- separator + footer hint row
         end
     end
 
@@ -2358,29 +2369,34 @@ end
 function CP:UpdateReplaceAllPreview()
     local popup = self.gemPopup
     if not popup or not popup:IsShown() then return end
-    local Theme = KE.Theme
     local oldGemID = popup._replaceAllGemID
 
+    -- Bright red modifier keyword matching the DSH reference (|cffFC0316); a
+    -- white base keeps the rest legible against the popup background.
+    local SHIFT_RED = "|cffFC0316"
     if oldGemID and IsShiftKeyDown() then
         local matches = self:GetMatchingGemSockets(oldGemID)
         local slotIDs = {}
         for _, m in ipairs(matches) do table.insert(slotIDs, m.slotID) end
         self:ShowSlotHighlights(slotIDs)
-        popup.replaceHint:SetText(string.format("Replace All: %d socket%s",
-            #matches, #matches == 1 and "" or "s"))
-        popup.replaceHint:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3])
+        popup.replaceHint:SetText(string.format("%sReplace All:|r %d socket%s",
+            SHIFT_RED, #matches, #matches == 1 and "" or "s"))
+        popup.replaceHint:SetTextColor(1, 1, 1)
         popup.replaceHint:Show()
+        popup.replaceSep:Show()
     else
         -- Single glow on the hovered socket (the pre-Replace-All behavior).
         if self.currentSocketBtn and self.currentSocketBtn.socketInfo then
             self:ShowSlotHighlight(self.currentSocketBtn.socketInfo.slotID)
         end
         if oldGemID then
-            popup.replaceHint:SetText("Shift-Click: Replace All")
-            popup.replaceHint:SetTextColor(Theme.textMuted[1], Theme.textMuted[2], Theme.textMuted[3])
+            popup.replaceHint:SetText(SHIFT_RED .. "Shift-Click:|r Replace All")
+            popup.replaceHint:SetTextColor(1, 1, 1)
             popup.replaceHint:Show()
+            popup.replaceSep:Show()
         else
             popup.replaceHint:Hide()
+            popup.replaceSep:Hide()
         end
     end
 end
