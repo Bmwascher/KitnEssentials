@@ -22,6 +22,7 @@ local GetInspectSpecialization = GetInspectSpecialization
 local UnitGUID = UnitGUID
 local C_Timer = C_Timer
 local C_Item = C_Item
+local C_TooltipInfo = C_TooltipInfo
 local C_AddOns = C_AddOns
 local pairs, ipairs = pairs, ipairs
 local next = next
@@ -268,10 +269,12 @@ function InspectPanel:RenderInspectSlot(button)
     local link = GetInventoryItemLink(unit, slotID)
     local enchantID = link and CP:GetSlotEnchantID(unit, slotID) or nil
     local ilvl = link and CP:GetSlotItemLevel(unit, slotID) or nil
-    -- Single ScanItemSockets call; reused for both dirty-check (via ComputeGemHash)
-    -- and suspect detection. Each call allocates a C_TooltipInfo tooltip table,
-    -- so deduping cuts inspect-render allocations notably.
-    local result = link and CP:ScanItemSockets(unit, slotID)
+    -- Single C_TooltipInfo read for the whole slot render: the gem scan here
+    -- (dirty-hash via ComputeGemHash + suspect detection) AND the detail/track
+    -- renders further down all reuse it. Each fetch allocates a fresh tooltip
+    -- table, so this one read replaces what used to be up to four.
+    local data = link and C_TooltipInfo.GetInventoryItem(unit, slotID)
+    local result = link and CP:ScanItemSockets(unit, slotID, data)
     local gemHash = ComputeGemHash(result)
 
     local s = _inspectSlotState(guid, slotID)
@@ -307,10 +310,10 @@ function InspectPanel:RenderInspectSlot(button)
             CP:UpdateSlotWarning(button, unit, slotID)
             if CP.db.ShowSlotItemLevel or CP.db.ShowEnchantNames
                 or CP.db.ShowSlotGems or CP.db.ShowMissingGems then
-                CP:UpdateSlotDetail(button, slotID, unit, true)
+                CP:UpdateSlotDetail(button, slotID, unit, true, data)
             end
             if CP.db.TrackIndicatorsEnabled then
-                CP:UpdateSlotTrackIndicator(button, slotID, unit)
+                CP:UpdateSlotTrackIndicator(button, slotID, unit, data)
             end
             return
         end
@@ -325,10 +328,10 @@ function InspectPanel:RenderInspectSlot(button)
     CP:UpdateSlotWarning(button, unit, slotID)
     if CP.db.ShowSlotItemLevel or CP.db.ShowEnchantNames
         or CP.db.ShowSlotGems or CP.db.ShowMissingGems then
-        CP:UpdateSlotDetail(button, slotID, unit)
+        CP:UpdateSlotDetail(button, slotID, unit, nil, data)
     end
     if CP.db.TrackIndicatorsEnabled then
-        CP:UpdateSlotTrackIndicator(button, slotID, unit)
+        CP:UpdateSlotTrackIndicator(button, slotID, unit, data)
     end
 end
 

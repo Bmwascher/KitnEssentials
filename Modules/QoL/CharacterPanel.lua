@@ -250,7 +250,15 @@ table.sort(enchantNicknameOrder, function(a, b) return #a > #b end)
 
 -- Pipeline (in order): strip the "Enchant <Slot> - " prefix from the raw effect
 -- text, map the bare name through the nickname table, then abbreviate stat words.
+-- Memoized by raw effect name: the pipeline runs ~76 gsubs per label and the
+-- same handful of equipped enchant names re-resolve on every slot render
+-- (including inspect gem-race retries). Pure function of the input and the
+-- load-time constant tables above, so entries never invalidate.
+local _enchantLabelCache = {}
 local function ProcessEnchantText(text)
+    local cached = _enchantLabelCache[text]
+    if cached then return cached end
+    local raw = text
     -- Strip the "Enchant <Slot> - " prefix (and any stray "+") from the raw effect
     -- text FIRST, so nickname lookups match the bare effect name and the "+"-strip
     -- can't later eat a "+" a nickname value intentionally adds (e.g. "Crit%+").
@@ -268,6 +276,7 @@ local function ProcessEnchantText(text)
     for word, abbrev in pairs(enchantStatAbbrev) do
         text = text:gsub(word, abbrev)
     end
+    _enchantLabelCache[raw] = text
     return text
 end
 
@@ -450,9 +459,12 @@ end
 -- Returns the full "Enchant <Slot> - <Effect>" text after the "Enchanted: "
 -- prefix. ProcessEnchantText does the nickname-map / strip / abbreviate (in that
 -- order), so we deliberately do NOT pre-strip here.
-local function GetSlotEnchantName(unit, slot)
+-- data (optional): pre-fetched C_TooltipInfo.GetInventoryItem(unit, slot) table
+-- shared by the caller's render pass — each fetch allocates a fresh table, so
+-- the render paths thread ONE read through enchant/track/gem consumers.
+local function GetSlotEnchantName(unit, slot, data)
     unit = unit or "player"
-    local data = C_TooltipInfo.GetInventoryItem(unit, slot)
+    data = data or C_TooltipInfo.GetInventoryItem(unit, slot)
     if not data or not data.lines then return nil end
     local prefix = ENCHANTED_TOOLTIP_LINE:gsub("%%s.*$", "")  -- "Enchanted: "
     for _, line in ipairs(data.lines) do
@@ -473,12 +485,12 @@ end
 local SLOT_ENCHANT_MAX_LEN = 18
 local SLOT_GEM_ICON_SIZE   = 14
 
-function CP:ResolveEnchantLabel(unit, slot)
+function CP:ResolveEnchantLabel(unit, slot, data)
     unit = unit or "player"
     -- Enchant-ID check is the locale-robust "is it enchanted?" gate; the readable
     -- label comes from the tooltip + ProcessEnchantText.
     if not self:GetSlotEnchantID(unit, slot) then return nil end
-    local name = GetSlotEnchantName(unit, slot)
+    local name = GetSlotEnchantName(unit, slot, data)
     if not name then return "Enchanted" end
     name = ProcessEnchantText(name)
     if #name > SLOT_ENCHANT_MAX_LEN then name = name:sub(1, SLOT_ENCHANT_MAX_LEN) end
@@ -652,6 +664,24 @@ local function QueueUpdate()
     end)
 end
 
+-- Debounced socket-helper refresh — same trailing pattern as QueueUpdate.
+-- ScanAllEquippedSockets has no dirty-check (the row is rebuilt from live
+-- socket state), so un-collapsed event bursts (looting, procs, gem swaps)
+-- each re-scanned all 11 socketable slots; this folds a burst into one scan.
+local socketRefreshPending = false
+local function QueueSocketRefresh()
+    if socketRefreshPending then return end
+    if not (PaperDollFrame and PaperDollFrame:IsShown()) then return end
+    socketRefreshPending = true
+    C_Timer.After(UPDATE_DEBOUNCE, function()
+        socketRefreshPending = false
+        if CP.db and CP.db.Enabled and CP.db.SocketHelperEnabled
+            and PaperDollFrame and PaperDollFrame:IsShown() then
+            CP:RefreshSocketButtons()
+        end
+    end)
+end
+
 local function HideCharacterBackground()
     local scene = _G.CharacterModelScene
     if not scene then return end
@@ -758,7 +788,7 @@ local function HookCharacterPanel()
             -- still operate panel-wide because they aggregate cross-slot
             -- state (warning visibility, socket-button row).
             QueueUpdate()                                 -- warnings (debounced, panel-wide)
-            if CP.db.SocketHelperEnabled then CP:RefreshSocketButtons() end
+            if CP.db.SocketHelperEnabled then QueueSocketRefresh() end
             if arg1 then
                 CP:RefreshSlot(arg1, "player")            -- detail + track for the affected slot only
             end
@@ -783,9 +813,7 @@ local function HookCharacterPanel()
                         _lastSlotState[pendingSlotID] = nil
                         CP:RefreshSlot(pendingSlotID, "player")
                     end
-                    if CP.db.SocketHelperEnabled and CP.socketContainer and CP.socketContainer:IsShown() then
-                        CP:RefreshSocketButtons()
-                    end
+                    if CP.db.SocketHelperEnabled then QueueSocketRefresh() end
                 end
             end
         elseif event == "BAG_UPDATE_DELAYED" then
@@ -794,7 +822,7 @@ local function HookCharacterPanel()
             -- missing-enchant/gem warnings here too (debounced + panel-gated).
             QueueUpdate()
             if CP.socketContainer and CP.socketContainer:IsShown() then
-                CP:RefreshSocketButtons()
+                QueueSocketRefresh()
             end
             if CP.db.ShowSlotItemLevel or CP.db.ShowEnchantNames or CP.db.ShowSlotGems or CP.db.ShowMissingGems then
                 CP:UpdateAllSlotDetails()
@@ -1061,9 +1089,9 @@ end
 ---------------------------------------------------------------------------------
 -- Item Track Indicators
 ---------------------------------------------------------------------------------
-function CP:GetItemTrack(unit, slotID)
+function CP:GetItemTrack(unit, slotID, data)
     unit = unit or "player"
-    local data = C_TooltipInfo.GetInventoryItem(unit, slotID)
+    data = data or C_TooltipInfo.GetInventoryItem(unit, slotID)
     if not data or not data.lines then return nil end
 
     local isCrafted = false
@@ -1129,23 +1157,25 @@ function CP:CreateTrackOverlay(slotFrame, slotID)
     return overlay
 end
 
-function CP:UpdateSlotTrackIndicator(slotFrame, slotID, unit)
+function CP:UpdateSlotTrackIndicator(slotFrame, slotID, unit, data)
     unit = unit or "player"
     if not slotFrame then return end
+
+    -- One tooltip read serves both the dirty-check and the render below (the
+    -- render previously re-fetched identical data a second time).
+    local track = self:GetItemTrack(unit, slotID, data)
 
     -- Dirty-check (player path only): itemLink + track letter determine the
     -- rendered output. Skip the font re-apply + SetText when unchanged.
     if unit == "player" then
         local s = _slotState(slotID)
         local link = GetInventoryItemLink(unit, slotID)
-        local track = self:GetItemTrack(unit, slotID)
         local key = track and track.letter or nil
         if s.trackLink == link and s.trackKey == key then return end
         s.trackLink, s.trackKey = link, key
     end
 
     local overlay = self:CreateTrackOverlay(slotFrame, slotID)
-    local track = self:GetItemTrack(unit, slotID)
 
     if track then
         -- Re-apply font each update so a TrackLetterSize change is live.
@@ -1199,6 +1229,18 @@ local SLOT_DETAIL_MAX_GEMS = 3
 local function SanitizeDetailOutline(outline)
     if outline == "SOFTOUTLINE" then return "OUTLINE" end
     return outline or "OUTLINE"
+end
+
+-- Lazy quality→hex cache: C_Item.GetItemQualityColor returns constants, so
+-- resolve each quality once instead of a C call + select() per slot render.
+local QUALITY_HEX = {}
+local function GetQualityHex(quality)
+    local hex = QUALITY_HEX[quality]
+    if not hex then
+        hex = select(4, C_Item.GetItemQualityColor(quality))
+        QUALITY_HEX[quality] = hex
+    end
+    return hex
 end
 
 local CENTER_SLOTS = { [16] = true, [17] = true }
@@ -1316,7 +1358,10 @@ end
 -- suppressGems (optional): when true, skip the gem-icon scan + render and hide
 -- all icon slots. Used by InspectPanel's paint-pass retry to avoid flashing red
 -- "empty socket" cues while the inspect packet's gem data is still resolving.
-function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems)
+-- data (optional): pre-fetched C_TooltipInfo.GetInventoryItem table from the
+-- caller's render pass (RefreshSlot / RenderInspectSlot) — threaded down to the
+-- enchant label + gem scan so one read serves the whole slot render.
+function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
     unit = unit or "player"
     if not slotFrame then return end
 
@@ -1339,6 +1384,10 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems)
         s.detailLink, s.detailEnchant, s.detailIlvl = link, enchantID, ilvl
     end
 
+    -- Fetch after the dirty check so a short-circuited call allocates nothing;
+    -- both tooltip consumers below (enchant label, gem scan) share this read.
+    data = data or C_TooltipInfo.GetInventoryItem(unit, slotID)
+
     local detail = self:CreateSlotDetail(slotFrame, slotID)
     local fontFace    = self.db.FontFace or "Expressway"
     local fontSize    = self.db.SlotInfoFontSize or 11
@@ -1350,7 +1399,7 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems)
 
     -- Enchant label (green). "No Enchant" stays with the warning feature.
     if self.db.ShowEnchantNames then
-        local label = self:ResolveEnchantLabel(unit, slotID)
+        local label = self:ResolveEnchantLabel(unit, slotID, data)
         detail.enchantText:SetText(label or "")
         detail.enchantText:SetShown(label ~= nil)
     else
@@ -1364,7 +1413,7 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems)
         if lvl then
             local quality = GetInventoryItemQuality(unit, slotID)
             if quality then
-                local hex = select(4, C_Item.GetItemQualityColor(quality))
+                local hex = GetQualityHex(quality)
                 detail.ilvlText:SetText("|c" .. hex .. lvl .. "|r")
             else
                 detail.ilvlText:SetText(tostring(lvl))
@@ -1389,7 +1438,7 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems)
         local showFilled = self.db.ShowSlotGems
         local showEmpty  = self.db.ShowMissingGems ~= false
         if (showFilled or showEmpty) and socketableSlotSet[slotID] then
-            local result = self:ScanItemSockets(unit, slotID)
+            local result = self:ScanItemSockets(unit, slotID, data)
             gemsPending = (result and result.pendingGems) or false
             if result and result.sockets then
                 local iconSize = SLOT_GEM_ICON_SIZE
@@ -1449,13 +1498,24 @@ function CP:RefreshSlot(slotID, unit)
         self:UpdateSlotWarning(button, unit, slotID)
     end
 
-    if self.db.TrackIndicatorsEnabled then
-        self:UpdateSlotTrackIndicator(slotFrame, slotID, unit)
+    -- One tooltip read shared by the track + detail renders below (each used
+    -- to fetch its own copy of identical same-frame data). RefreshSlot's
+    -- callers fire on actual slot changes, so the dirty checks downstream
+    -- rarely short-circuit — prefetching here doesn't waste the read.
+    local wantsTrack  = self.db.TrackIndicatorsEnabled
+    local wantsDetail = self.db.ShowSlotItemLevel or self.db.ShowEnchantNames
+        or self.db.ShowSlotGems or self.db.ShowMissingGems
+    local data
+    if wantsTrack or wantsDetail then
+        data = C_TooltipInfo.GetInventoryItem(unit, slotID)
     end
 
-    if self.db.ShowSlotItemLevel or self.db.ShowEnchantNames
-       or self.db.ShowSlotGems or self.db.ShowMissingGems then
-        self:UpdateSlotDetail(slotFrame, slotID, unit)
+    if wantsTrack then
+        self:UpdateSlotTrackIndicator(slotFrame, slotID, unit, data)
+    end
+
+    if wantsDetail then
+        self:UpdateSlotDetail(slotFrame, slotID, unit, nil, data)
     end
 end
 
@@ -1552,7 +1612,9 @@ local function CreateQualityOverlay(parent, anchor)
     return frame, texture
 end
 
-function CP:ScanItemSockets(unit, slotID)
+-- data (optional): pre-fetched C_TooltipInfo.GetInventoryItem table shared by
+-- the caller's render pass (UpdateSlotDetail / RenderInspectSlot).
+function CP:ScanItemSockets(unit, slotID, data)
     unit = unit or "player"
     local itemLink = GetInventoryItemLink(unit, slotID)
     if not itemLink then return nil end
@@ -1563,7 +1625,7 @@ function CP:ScanItemSockets(unit, slotID)
     -- rendered. Socket lines come back in physical order, so the running counter IS
     -- each socket's true index for both filled and empty — no position reconciliation
     -- needed. (Reference: BetterCharacterPanel.)
-    local data = C_TooltipInfo.GetInventoryItem(unit, slotID)
+    data = data or C_TooltipInfo.GetInventoryItem(unit, slotID)
     local lines = data and data.lines
     if not lines then
         -- Inspect: no tooltip data means nothing to show. Player: fall through
