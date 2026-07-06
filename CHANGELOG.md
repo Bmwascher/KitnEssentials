@@ -1,5 +1,16 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v3.3.0
+
+### Interrupt Tracker
+- **NEW:** Rebuilt for 12.0.5 — the module works again. Detection now keys off the interrupt events Midnight still exposes; the old cast-correlation approach the API changes killed is gone
+- Your own interrupt keeps its live per-spec cooldown bar, as before
+- **NEW:** Kick Sync — teammates running KitnEssentials or a compatible interrupt addon get real, live cooldown bars: kicks broadcast to the party, and presence is announced on zone-in so synced bars are there from the first pull. Toggle: "Sync Kicks with Party Addon Users" (on by default)
+- Teammates without a sync-capable addon can't expose exact cooldowns in 12.0.5 — their kicks show as temporary class-colored record bars ("> Name") that drain out and disappear; the new "Teammate Kick Duration" slider (5-30s) controls how long they linger
+- Roster bars are verified-only: a bar appears once a teammate's kick data is confirmed, so the list never shows dead bars that can't update
+
+---
+
 ## v3.2.1
 
 ### Targeted Spells
