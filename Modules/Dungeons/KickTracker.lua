@@ -213,7 +213,10 @@ end
 -- kicking spec; ambiguous healer/NONE stays hidden rather than showing a
 -- phantom bar). Refined or cleared as soon as the real spec arrives.
 function KT:GuessClassInterrupt(unit, classToken)
-    local fallback = classToken and CLASS_FALLBACK_INTERRUPTS[classToken]
+    -- IsSafeValue before the table key: plain today for party units, but a
+    -- secret key would throw (parity with the name-cache guard above).
+    local fallback = classToken and KE:IsSafeValue(classToken)
+        and CLASS_FALLBACK_INTERRUPTS[classToken]
     if not fallback then return nil end
 
     local role = UnitGroupRolesAssigned(unit)
@@ -558,20 +561,42 @@ local COMM_SUCCESS = Enum and Enum.SendAddonMessageResult
     and Enum.SendAddonMessageResult.Success or 0
 
 local function transmitKick(prefix, msg)
-    local channel = IsInGroup(LE_PARTY_CATEGORY_INSTANCE) and "INSTANCE_CHAT" or "PARTY"
+    local inInstanceGroup = IsInGroup(LE_PARTY_CATEGORY_INSTANCE)
+    local channel = inInstanceGroup and "INSTANCE_CHAT" or "PARTY"
     local ok, ret = pcall(C_ChatInfo.SendAddonMessage, prefix, msg, channel)
-    if ok and ret == COMM_SUCCESS then return end
+    if ok and ret == COMM_SUCCESS then
+        KT._commBlocked = nil
+        return
+    end
 
-    -- Result 11 = Enum.SendAddonMessageResult.AddOnMessageLockdown (timed M+
-    -- has blocked addon channels). Whisper each member individually instead
-    -- (also covers any other send failure).
+    -- Result 11 = Enum.SendAddonMessageResult.AddOnMessageLockdown (timed
+    -- M+): ALL addon channels including whispers are blocked. Remember the
+    -- state and skip the futile fan-out — the single broadcast above stays
+    -- as the probe that clears the flag once the lockdown lifts.
+    if ok and ret == 11 then KT._commBlocked = true end
+    if KT._commBlocked then return end
+
+    -- Non-lockdown failure: try PARTY (premade groups inside instances),
+    -- then whisper each member (reference fallback chain).
+    if inInstanceGroup then
+        ok, ret = pcall(C_ChatInfo.SendAddonMessage, prefix, msg, "PARTY")
+        if ok and ret == COMM_SUCCESS then return end
+        if ok and ret == 11 then
+            KT._commBlocked = true
+            return
+        end
+    end
     for i = 1, 4 do
         local unit = "party" .. i
         if UnitExists(unit) then
             local n, r = UnitName(unit)
             if n then
                 local target = (r and r ~= "") and (n .. "-" .. r) or n
-                pcall(C_ChatInfo.SendAddonMessage, prefix, msg, "WHISPER", target)
+                local wok, wret = pcall(C_ChatInfo.SendAddonMessage, prefix, msg, "WHISPER", target)
+                if wok and wret == 11 then
+                    KT._commBlocked = true
+                    return
+                end
             end
         end
     end
@@ -624,7 +649,8 @@ function KT:OnCommReceived(_, prefix, message, _, sender)
         --   BliZzi: "B1;KICK;spellID;cd"  /  "B1;HELLO;class;spellID;cd"
         local verb, sid, cd
         if isKE then
-            local _, v, sidStr, cdStr = strsplit(";", message)
+            local ver, v, sidStr, cdStr = strsplit(";", message)
+            if ver ~= "1" then return end  -- version-gate our own wire
             verb = v
             sid = tonumber(sidStr)
             cd = tonumber(cdStr)
@@ -639,6 +665,9 @@ function KT:OnCommReceived(_, prefix, message, _, sender)
         end
         if verb ~= "KICK" and verb ~= "HELLO" then return end
         if verb == "KICK" and (not cd or cd <= 0) then return end
+        -- Wire cd is untrusted external input: real kick CDs top out at
+        -- 30s — clamp so a bad client can't wedge a bar for hours.
+        if cd and cd > 60 then cd = 60 end
 
         for guid, member in pairs(self.partyMembers) do
             if member.unit ~= "player" and member.name == shortSender then
@@ -653,10 +682,10 @@ function KT:OnCommReceived(_, prefix, message, _, sender)
                 self:UpdateBars()           -- materialize the bar (verified-only roster)
                 if verb == "KICK" then
                     self:ConfirmKick(guid, cd or member.interruptData.cd)
-                    -- The nameplate event usually spawned a record for this
-                    -- same kick moments ago — drop it (names may be secret,
-                    -- so newest-in-window is the best match we can do).
-                    self:RemoveRecentKickRecord(2.5)
+                    -- The nameplate event usually stashed a record for this
+                    -- same kick moments ago — claim it (see the ambiguity
+                    -- rule in RemoveRecentKickRecord).
+                    self:RemoveRecentKickRecord(1.5)
                 elseif isKE then
                     -- Reply-hello (throttled) so the sender learns us too
                     self:BroadcastHello()
@@ -671,16 +700,27 @@ function KT:OnCommReceived(_, prefix, message, _, sender)
     end
 end
 
+-- Claim the record a comm attribution just superseded. Record names may be
+-- secret, so identity matching is impossible — remove ONLY when exactly one
+-- record sits in the window. With two or more we can't tell whose is whose;
+-- removing the wrong one would erase a non-comm teammate's only
+-- representation, so we keep both (worst case: a brief duplicate for the
+-- comm user — preferable to losing a real event). This also makes duplicate
+-- comm delivery a safe no-op.
 function KT:RemoveRecentKickRecord(window)
     local now = GetTime()
+    local found
     for i = #self.kickRecords, 1, -1 do
         local record = self.kickRecords[i]
         if now - record.startTime <= window then
-            table.remove(self.kickRecords, i)
-            self:ReleaseBar("record" .. record.id)
-            self:LayoutBars()
-            return
+            if found then return end  -- ambiguous: two candidates, remove none
+            found = i
         end
+    end
+    if found then
+        local record = table.remove(self.kickRecords, found)
+        self:ReleaseBar("record" .. record.id)
+        self:LayoutBars()
     end
 end
 
@@ -737,6 +777,7 @@ function KT:UnregisterCombatEvents()
     self:UnregisterEvent("CHAT_MSG_ADDON")
     self.combatEventsRegistered = false
     self._lastHelloSent = nil
+    self._commBlocked = nil
 
     self:ClearKickRecords()
 end
@@ -763,6 +804,7 @@ function KT:CheckActivation()
             self.containerFrame:Show()
         end
         self:RefreshPartyRoster()
+        self._commBlocked = nil  -- new instance: re-probe the comm channel
         self:BroadcastHello()  -- announce presence to party KE users
     elseif not shouldBeActive and self.isActive then
         self.isActive = false
@@ -1448,6 +1490,9 @@ function KT:ShowPreview()
 
     self.isPreview = true
     self:HideAllBars()
+    -- Drop live kick records too: their bars were just released and nothing
+    -- re-renders an unexpired record after preview ends.
+    self:ClearKickRecords()
 
     self:ApplyContainerPosition()
 
@@ -1699,6 +1744,12 @@ function KT:ApplySettings()
         local member = self.partyMembers[guid]
         if member then
             self:UpdateBarVisuals(bar, member)
+        end
+    end
+    for _, record in ipairs(self.kickRecords) do
+        local bar = self.activeBars["record" .. record.id]
+        if bar then
+            self:UpdateRecordBarVisuals(bar, record)
         end
     end
 
