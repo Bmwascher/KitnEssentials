@@ -540,12 +540,29 @@ function MPT:UpdateObjectives()
                 local cache = MPT.db._activeRunSplits
                 local runKey = MPT.BuildSplitKey(run.mapID, run.level)
                 local saved = cache and cache.key == runKey and cache[objIdx]
+                -- Count/progress criteria (Quarry Camps 6/6) leave info.elapsed
+                -- pinned to the FIRST increment (1/6) — it never advances to the
+                -- 6/6 moment — so back-dating (elapsed - info.elapsed) yields the
+                -- time the first camp was tagged, not the completion. (Confirmed
+                -- against the MPlusTimer + EllesmereUIMythicTimer references, which
+                -- both stamp the live world clock at the completion transition for
+                -- this case rather than trusting the criterion's elapsed.) Boss
+                -- criteria report elapsed as time-since-completed, so they still
+                -- back-date correctly. totalQuantity > 1 marks the count case
+                -- (same gate the HUD uses for the "6/6" name prefix).
+                local isCountObjective = (obj.totalQuantity or 1) > 1
                 if saved and saved > 0 then
                     obj.clearTime = saved
                 else
-                    -- Back-dated to the actual kill moment:
-                    -- info.elapsed is the time since this criterion completed.
-                    obj.clearTime = elapsed - (info.elapsed or 0)
+                    if isCountObjective then
+                        -- SCENARIO_CRITERIA_UPDATE fires at the completing
+                        -- increment, so the live run clock is the true 6/6 time.
+                        obj.clearTime = elapsed
+                    else
+                        -- Back-dated to the actual kill moment:
+                        -- info.elapsed is the time since this criterion completed.
+                        obj.clearTime = elapsed - (info.elapsed or 0)
+                    end
                     -- Create-or-rekey: also displaces a legacy keyless table.
                     if not cache or cache.key ~= runKey then
                         cache = { key = runKey }
@@ -557,7 +574,9 @@ function MPT:UpdateObjectives()
                     -- re-walk old kills through this arm when the persisted cache
                     -- was discarded (identity mismatch on a level-0 API race) —
                     -- their back-dated clearTime keeps chat silent (Task 5.3).
-                    if (elapsed - obj.clearTime) <= 5 then
+                    -- The chat line is a boss-kill announcement; count objectives
+                    -- (which now stamp elapsed, so delta is always 0) are excluded.
+                    if not isCountObjective and (elapsed - obj.clearTime) <= 5 then
                         self:ChatOutputBossSplit(obj)
                     end
                 end
