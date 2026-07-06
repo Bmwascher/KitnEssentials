@@ -1359,7 +1359,18 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     })
     row3b:AddWidget(barSizeSlider, 0.5)
     manager:Register(barSizeSlider, "all")
-    card3:AddRow(row3b, Theme.rowHeightLast, 0)
+    card3:AddRow(row3b, Theme.rowHeight)
+
+    -- Header title color: tint the header line with the KitnUI theme accent
+    -- instead of white. Header-only (bar text keeps its own Text Color picker).
+    local row3c = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
+    local headerThemeChk = GUIFrame:CreateCheckbox(row3c, "Theme Color Header", {
+        value = db.HeaderThemeColor == true,
+        callback = function(checked) db.HeaderThemeColor = checked; ApplySettings() end,
+    })
+    row3c:AddWidget(headerThemeChk, 0.5)
+    manager:Register(headerThemeChk, "all")
+    card3:AddRow(row3c, Theme.rowHeightLast, 0)
 
     yOffset = card3:GetNextOffset()
 

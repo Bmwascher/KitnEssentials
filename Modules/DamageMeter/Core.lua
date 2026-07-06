@@ -141,6 +141,7 @@ local DM_DEFAULTS = {
     FontFace = "Expressway",
     FontSize = 14,              -- bar row text size
     HeaderFontSize = 14,        -- window header text size (independent of the bar text)
+    HeaderThemeColor = false,   -- tint the header title with the KitnUI theme accent (else white)
     FontOutline = "SLUG,OUTLINE",
     ShowRank = false,
     ShowIcon = true,

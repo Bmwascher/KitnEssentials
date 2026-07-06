@@ -340,6 +340,7 @@ function DM:CreateWindow(winIdx)
         self.db and ((self.db.HeaderFontSize or self.db.FontSize) or 12),
         self.db and self.db.FontOutline
     )
+    self:ApplyHeaderColor(W)
 
     -- Header hover region: a full-width strip over the whole header band (title -> icons).
     -- ApplyHeaderIcons wires its OnEnter/OnLeave to drive the mouseover-reveal, so hovering
@@ -759,6 +760,19 @@ function DM:ApplyWindowGeometry(W)
     self:LayoutWindow(W)
 end
 
+-- Header title color: the KitnUI theme accent when db.HeaderThemeColor is on,
+-- else white. KE:ApplyFontToText resets the FontString tint, so this must run
+-- AFTER any header font (re)apply -- both CreateWindow (first paint) and
+-- ReapplyBarVisuals (live GUI change) call it.
+function DM:ApplyHeaderColor(W)
+    if not (W and W.header) then return end
+    if self.db and self.db.HeaderThemeColor then
+        W.header:SetTextColor(KE:GetAccentColor("theme"))
+    else
+        W.header:SetTextColor(1, 1, 1)
+    end
+end
+
 -- Re-applies font (header + every bar's rank/name/value) and the status-bar
 -- texture to every pooled row. The cached value/name strings are NOT secret out
 -- of combat; a font swap doesn't change the string, so the next Tick repaints
@@ -774,6 +788,7 @@ function DM:ReapplyBarVisuals(W)
     local texPath = KE:GetStatusbarPath(db and db.StatusBarTexture or "KitnUI")
 
     KE:ApplyFontToText(W.header, face, headerSize, outline)
+    self:ApplyHeaderColor(W)
     -- Combat clock tracks the header font; the re-apply resets the FontString
     -- tint, so nil the frozen dirty key -- the ApplyHeaderIcons call at the end of
     -- this function funnels into UpdateCombatClock, which re-tints from the live
