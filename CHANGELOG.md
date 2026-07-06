@@ -19,6 +19,8 @@
 
 ### Damage Meter
 - **Fixed:** a boss's segment row could stay uncolored — missing its green (kill) or red (wipe) tint — when the boss was pulled while already in combat; the fight's outcome now tags reliably regardless of when the game created its combat session
+- **NEW:** "Theme Color Header" toggle (Font settings) — tint the meter window's title with your KitnUI theme accent instead of white
+- **NEW:** "Behind Bars Only" toggle (Backdrop settings) — wrap the backdrop around just the bar rows, leaving the header title floating above it
 
 ---
 
