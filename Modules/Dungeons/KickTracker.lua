@@ -144,6 +144,8 @@ local CLASS_FALLBACK_INTERRUPTS = {
 }
 
 local KICK_RECORD_FALLBACK_DURATION = 15
+local KICK_RECORD_GRACE = 0.4  -- records stay invisible this long so a comm
+                               -- claim can discard them before they render
 
 -- Flip true to trace preview lifecycle, cooling-bar OnUpdate cadence,
 -- container OnUpdate ticks, and nameplate-interrupt token resolution.
@@ -504,10 +506,29 @@ function KT:ProcessTeammateKick(interrupterGuid, interruptedSpellID)
         self:ReleaseBar("record" .. old.id)
     end
 
-    local bar = self:GetOrCreateBar("record" .. record.id)
-    self:UpdateRecordBarVisuals(bar, record)
-    bar:Show()
-    self:LayoutBars()
+    -- Stash grace (reference pattern): the local nameplate event always
+    -- beats the network, so a comm user's kick would blink a record before
+    -- the comm claims it. Hold the record invisible for the grace window —
+    -- claimed records die unseen; unclaimed ones render 0.4s late.
+    local recordID = record.id
+    C_Timer.After(KICK_RECORD_GRACE, function()
+        self:ShowKickRecord(recordID)
+    end)
+end
+
+-- Render a stashed record if it survived the grace window (a comm claim or
+-- eviction during the grace removes it from kickRecords — never rendered).
+function KT:ShowKickRecord(recordID)
+    if not self.isActive or self.isPreview then return end
+    for _, record in ipairs(self.kickRecords) do
+        if record.id == recordID then
+            local bar = self:GetOrCreateBar("record" .. recordID)
+            self:UpdateRecordBarVisuals(bar, record)
+            bar:Show()
+            self:LayoutBars()
+            return
+        end
+    end
 end
 
 function KT:ClearKickRecords()
