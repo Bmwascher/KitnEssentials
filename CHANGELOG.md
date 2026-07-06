@@ -9,6 +9,11 @@
 - Teammates without a sync-capable addon can't expose exact cooldowns in 12.0.5 — their kicks show as temporary class-colored record bars ("> Name") that drain out and disappear; the new "Teammate Kick Duration" slider (5-30s) controls how long they linger
 - Roster bars are verified-only: a bar appears once a teammate's kick data is confirmed, so the list never shows dead bars that can't update
 
+### Character Panel
+- **Fixed:** socketed gems could show as empty on your character sheet at the first login after a game patch, correcting only after a `/reload` or zone change — the panel now loads gem data during login and fills the icons in as they resolve
+- **NEW:** Shift-click a gem in the Gem Socket Helper to replace every equipped socket holding that same gem in one action; your unique (meta) gem is left untouched. The slots that will change glow, and a footer shows the count while you hold Shift
+- Opening the character panel and inspecting other players is a little lighter — each gear slot is now read once per refresh instead of several times
+
 ---
 
 ## v3.2.1
