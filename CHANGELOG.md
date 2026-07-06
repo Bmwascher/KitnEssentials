@@ -14,6 +14,9 @@
 - **NEW:** Shift-click a gem in the Gem Socket Helper to replace every equipped socket holding that same gem in one action; your unique (meta) gem is left untouched. The slots that will change glow, and a footer shows the count while you hold Shift
 - Opening the character panel and inspecting other players is a little lighter — each gear slot is now read once per refresh instead of several times
 
+### Mythic+ Timer
+- **Fixed:** count objectives like Pit of Saron's "Quarry Camps Liberated" (6/6) showed the wrong completion time — the moment the first camp was tagged rather than when the sixth finished, because the game never advances that objective's timer past its first tick. The row now records the true completion time
+
 ---
 
 ## v3.2.1
