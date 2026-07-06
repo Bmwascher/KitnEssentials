@@ -280,6 +280,18 @@ function DM:ApplySettings()
     if self.Tick then self:Tick() end
 end
 
+-- Live theme-preset change: KE:NotifyThemeChange (AddonTheme.lua) calls this on
+-- every module AFTER the accent-family colors update. DM has three theme-colored
+-- surfaces -- the header title (HeaderThemeColor), Theme-mode bars (BarColorMode
+-- "Theme"), and the theme-style backdrop border -- so reuse ApplySettings (the
+-- module's single repaint entry) to re-read the new accent everywhere at once
+-- rather than duplicating each per-surface accent read. Without this handler a
+-- preset change didn't reach the meter until a /reload.
+function DM:OnThemeChanged()
+    if not self.enabled then return end
+    self:ApplySettings()
+end
+
 ---------------------------------------------------------------------------------
 -- Blizzard meter replacement
 --
