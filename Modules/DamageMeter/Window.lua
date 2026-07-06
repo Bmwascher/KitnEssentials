@@ -788,7 +788,10 @@ function DM:ReapplyBarVisuals(W)
     local texPath = KE:GetStatusbarPath(db and db.StatusBarTexture or "KitnUI")
 
     KE:ApplyFontToText(W.header, face, headerSize, outline)
-    self:ApplyHeaderColor(W)
+    -- Title color is (re)applied in RenderWindow's header block, which the
+    -- W._headerType = nil below forces to rebuild next tick -- the render path is
+    -- where the live recolor actually sticks (matching how the bar colors
+    -- live-update); a one-shot set here did not. See DM:ApplyHeaderColor.
     -- Combat clock tracks the header font; the re-apply resets the FontString
     -- tint, so nil the frozen dirty key -- the ApplyHeaderIcons call at the end of
     -- this function funnels into UpdateCombatClock, which re-tints from the live
@@ -1264,6 +1267,10 @@ function DM:RenderWindow(W)
                 W.header:SetPoint("LEFT", W.headerBar, "LEFT", 4, 0)
             end
         end
+        -- Recolor the title on every header rebuild. ReapplyBarVisuals nils
+        -- W._headerType so a live "Theme Color Header" toggle (or a theme change)
+        -- re-enters this block and repaints; a meter-type switch keeps it correct too.
+        self:ApplyHeaderColor(W)
     end
 
     -- Combat clock (display-position-1 window only; see UpdateCombatClock).
