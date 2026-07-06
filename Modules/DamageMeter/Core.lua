@@ -955,6 +955,15 @@ function DM:OnEncounterStart()
     else
         self._preEncounterIds = nil
     end
+    if DEBUG_DM then
+        if self._preEncounterIds then
+            local n = 0
+            for _ in pairs(self._preEncounterIds) do n = n + 1 end
+            KE:Print("[DM] ENCOUNTER_START snapshot: " .. n .. " pre-pull session ids")
+        else
+            KE:Print("[DM] ENCOUNTER_START snapshot: dropped (secret/unreadable id) -> newest-only tagging")
+        end
+    end
 end
 
 -- Boss kill/wipe: a hard segment boundary, but the session totals are not yet
@@ -991,15 +1000,28 @@ function DM:OnEncounterEnd(_, _, _, _, _, success)
         if not list or #list == 0 then return end
         DM._sessionOutcomes = DM._sessionOutcomes or {}
         local first = snap and 1 or #list   -- no snapshot: newest entry only
+        local tagged = 0
         for i = #list, first, -1 do
             local entry = list[i]
             local nid = entry and entry.sessionID
-            if not nid or issecretvalue(nid) then break end
-            if snap and snap[nid] then break end   -- reached pre-pull territory
+            if not nid or issecretvalue(nid) then
+                if DEBUG_DM then KE:Print("[DM] outcome walk stopped at index " .. i .. ": secret/nil session id (tagged " .. tagged .. " so far)") end
+                break
+            end
+            if snap and snap[nid] then   -- reached pre-pull territory
+                if DEBUG_DM then KE:Print("[DM] outcome walk stopped at index " .. i .. ": session " .. tostring(nid) .. " was in the pre-pull snapshot (tagged " .. tagged .. " so far)") end
+                break
+            end
             DM._sessionOutcomes[nid] = won
+            tagged = tagged + 1
             if DEBUG_DM then
                 KE:Print("[DM] outcome tagged: session " .. tostring(nid) .. " -> " .. (won and "kill" or "wipe"))
             end
+        end
+        if DEBUG_DM and tagged == 0 then
+            KE:Print("[DM] WARNING: ENCOUNTER_END tagged 0 sessions (won=" .. tostring(won)
+                .. ", hadSnapshot=" .. tostring(snap ~= nil) .. ", listSize=" .. #list
+                .. ") -- boss row will stay uncolored")
         end
     end)
 end
