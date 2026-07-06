@@ -108,10 +108,10 @@ function KE:SetupMinimapIcon()
             end
         end,
         OnTooltipShow = function(tt)
-            tt:AddLine(KE:ColorTextByTheme("Kitn") .. "|cffb3b3b3Essentials|r")
-            tt:AddLine("|cffFFD100Left-Click|r to open options", 0.60, 0.60, 0.60)
-            tt:AddLine("|cffFFD100Right-Click|r to toggle edit mode", 0.60, 0.60, 0.60)
-            tt:AddLine("|cffFFD100Middle-Click|r to reload UI", 0.60, 0.60, 0.60)
+            tt:AddLine(KE:ColorTextByTheme("Kitn") .. "|cffffffffEssentials|r")
+            tt:AddLine(KE:ColorTextByTheme("Left-Click") .. " to open options", 1, 1, 1)
+            tt:AddLine(KE:ColorTextByTheme("Right-Click") .. " to toggle edit mode", 1, 1, 1)
+            tt:AddLine(KE:ColorTextByTheme("Middle-Click") .. " to reload UI", 1, 1, 1)
         end,
     })
 
