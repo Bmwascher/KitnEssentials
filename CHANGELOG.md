@@ -17,6 +17,9 @@
 ### Mythic+ Timer
 - **Fixed:** count objectives like Pit of Saron's "Quarry Camps Liberated" (6/6) showed the wrong completion time — the moment the first camp was tagged rather than when the sixth finished, because the game never advances that objective's timer past its first tick. The row now records the true completion time
 
+### Damage Meter
+- **Fixed:** a boss's segment row could stay uncolored — missing its green (kill) or red (wipe) tint — when the boss was pulled while already in combat; the fight's outcome now tags reliably regardless of when the game created its combat session
+
 ---
 
 ## v3.2.1
