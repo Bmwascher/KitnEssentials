@@ -26,10 +26,13 @@ local IsInInstance = IsInInstance
 local IsInGroup = IsInGroup
 local GetSpecialization = GetSpecialization
 local GetSpecializationInfo = GetSpecializationInfo
+local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 local C_Timer = C_Timer
 local C_ClassColor = C_ClassColor
 local C_Spell = C_Spell
 local UnitNameFromGUID = UnitNameFromGUID
+local UnitClassFromGUID = UnitClassFromGUID
+local UnitTokenFromGUID = UnitTokenFromGUID
 local string_find = string.find
 local string_format = string.format
 local math_floor = math.floor
@@ -118,12 +121,39 @@ INTERRUPT_SPELL_IDS[119910] = true  -- Command Demon: Spell Lock
 INTERRUPT_SPELL_IDS[89766]  = true  -- Axe Toss (Felguard pet actual)
 INTERRUPT_SPELL_IDS[119914] = true  -- Command Demon: Axe Toss
 
-local TIME_WINDOW = 0.050
-local PROCESS_DELAY = 0.030
+-- Class-default kicks for members whose spec is still unknown (teammates
+-- without a LibSpec-carrying addon never broadcast their spec). Values match
+-- INTERRUPT_DATA; where specs differ the reference's lowest-CD rule applies.
+-- allRoles = every spec of the class has this kick; otherwise only a
+-- DAMAGER/TANK role assignment proves a kicking spec. Healer shamans keep
+-- Wind Shear at its 30s CD.
+local CLASS_FALLBACK_INTERRUPTS = {
+    DEATHKNIGHT = { id = 47528,  cd = 12, allRoles = true },
+    DEMONHUNTER = { id = 183752, cd = 15, allRoles = true },
+    DRUID       = { id = 106839, cd = 15 },
+    EVOKER      = { id = 351338, cd = 18 },
+    HUNTER      = { id = 187707, cd = 15, allRoles = true },
+    MAGE        = { id = 2139,   cd = 20, allRoles = true },
+    MONK        = { id = 116705, cd = 15 },
+    PALADIN     = { id = 96231,  cd = 15 },
+    PRIEST      = { id = 15487,  cd = 30 },  -- Shadow only; a DPS role proves it
+    ROGUE       = { id = 1766,   cd = 15, allRoles = true },
+    SHAMAN      = { id = 57994,  cd = 12, allRoles = true, healerCd = 30 },
+    WARLOCK     = { id = 19647,  cd = 24, allRoles = true },
+    WARRIOR     = { id = 6552,   cd = 15, allRoles = true },
+}
 
--- Flip true to trace preview lifecycle, cooling-bar OnUpdate cadence, and
--- container OnUpdate ticks. Default false; revert after diagnosis.
+local KICK_RECORD_FALLBACK_DURATION = 15
+local KICK_RECORD_GRACE = 0.4  -- records stay invisible this long so a comm
+                               -- claim can discard them before they render
+
+-- Flip true to trace preview lifecycle, cooling-bar OnUpdate cadence,
+-- container OnUpdate ticks, and nameplate-interrupt token resolution.
+-- Default false; revert after diagnosis.
 local DEBUG_KT = false
+-- Per-frame heartbeat logging (container tick + preview cooling tick) is far
+-- spammier than the event logs — separate opt-in.
+local DEBUG_KT_TICKS = false
 local _ktContainerTickCounter = 0
 local _ktCoolingTickCounter = 0
 local KT_TICK_LOG_EVERY = 20   -- container OnUpdate at 20fps -> ~once/sec
@@ -135,12 +165,11 @@ KT.editModeRegistered = false
 KT.previewContext = nil    -- "HEALER" | "DEFAULT" | nil (GUI editing/preview override)
 KT.guiConfigContext = nil  -- "HEALER" | "DEFAULT" | nil (which context the GUI edits)
 
-KT.partyMembers = {}     -- [guid] = { unit, name, classToken, specID, interruptData, kickStart, kickDuration }
+KT.partyMembers = {}     -- [guid] = { unit, name, classToken, specID, interruptData, kickStart, kickDuration, kickVerified }
 KT.nameSpecCache = {}    -- [playerName] = specID, fed by LibSpec.RegisterGroup callback
 
-KT.pendingInterrupts = {} -- [nameplateUnit] = { time, interruptedBy }
-KT.pendingCasts = {}      -- [partyUnit] = { time }
-KT.processScheduled = false
+KT.kickRecords = {}       -- array of { id, name, iconID, colorR/G/B, startTime, duration } — teammate kick records
+KT.nextRecordID = 0       -- monotonic; records keyed "record"..id in activeBars (GUIDs may be secret)
 
 KT.barPool = {}           -- array of reusable bar frames
 KT.activeBars = {}        -- [guid] = barFrame
@@ -176,6 +205,38 @@ function KT:GetInterruptDataForSpec(specID)
         return data
     end
     return nil
+end
+
+-- Spec unknown (teammate without a LibSpec-carrying addon): reference
+-- safe-optimistic rule — assign the class-default kick only when it can't
+-- be wrong (every spec of the class kicks, or a DPS/TANK role proves a
+-- kicking spec; ambiguous healer/NONE stays hidden rather than showing a
+-- phantom bar). Refined or cleared as soon as the real spec arrives.
+function KT:GuessClassInterrupt(unit, classToken)
+    -- IsSafeValue before the table key: plain today for party units, but a
+    -- secret key would throw (parity with the name-cache guard above).
+    local fallback = classToken and KE:IsSafeValue(classToken)
+        and CLASS_FALLBACK_INTERRUPTS[classToken]
+    if not fallback then return nil end
+
+    local role = UnitGroupRolesAssigned(unit)
+    if role == "HEALER" then
+        if fallback.healerCd then
+            return { id = fallback.id, cd = fallback.healerCd, role = "HEALER" }
+        end
+        if fallback.allRoles then
+            return { id = fallback.id, cd = fallback.cd, role = "HEALER" }
+        end
+        return nil
+    end
+    if not fallback.allRoles and role ~= "DAMAGER" and role ~= "TANK" then
+        return nil
+    end
+    return {
+        id = fallback.id,
+        cd = fallback.cd,
+        role = (role == "TANK") and "TANK" or "DAMAGER",
+    }
 end
 
 function KT:RefreshPartyRoster()
@@ -214,6 +275,8 @@ function KT:RefreshPartyRoster()
                 local specID = 0
                 if unit == "player" then
                     specID = GetPlayerSpecID() or 0
+                    -- Own kicks are always tracked — the bar may claim Ready
+                    member.kickVerified = true
                 elseif name and KE:IsSafeValue(name) then
                     specID = self.nameSpecCache[name] or 0
                 end
@@ -221,6 +284,10 @@ function KT:RefreshPartyRoster()
                 if specID > 0 then
                     member.specID = specID
                     member.interruptData = self:GetInterruptDataForSpec(specID)
+                elseif unit ~= "player" and not member.interruptData then
+                    -- No spec data yet — class-default fallback so the bar
+                    -- exists at all (LibSpec/comm refinement overwrites it)
+                    member.interruptData = self:GuessClassInterrupt(unit, classToken)
                 end
             end
         end
@@ -286,91 +353,15 @@ function KT:OnPlayerSpecChanged()
 end
 
 ---------------------------------------------------------------------------------
--- Event Correlator
+-- Self Kick Confirmation
 ---------------------------------------------------------------------------------
-function KT:ScheduleProcessing()
-    if self.processScheduled then return end
-    self.processScheduled = true
-    C_Timer.After(PROCESS_DELAY, function()
-        self:ProcessPendingEvents()
-    end)
-end
-
--- Validate that interruptedBy resolves to a real player, then find the
--- closest matching party cast within the time window.
-function KT:ResolveCasterByInterruptSource(targetUnit)
-    local interruptData = self.pendingInterrupts[targetUnit]
-    if not interruptData or not interruptData.interruptedBy then
-        return nil
-    end
-
-    -- interruptedBy is a GUID. Confirm it resolves to a real name.
-    -- In 12.0, pcall guards against potential secret-value errors.
-    local ok, name = pcall(UnitNameFromGUID, interruptData.interruptedBy)
-    if not ok or not name then
-        return nil
-    end
-
-    -- Valid interrupter confirmed — find the closest cast in the time window
-    local bestMatch = nil
-    local bestTimeDiff = math.huge
-    local interruptTime = interruptData.time
-
-    for unit, data in pairs(self.pendingCasts) do
-        local timeDiff = math_abs(interruptTime - data.time)
-        if timeDiff <= TIME_WINDOW and timeDiff < bestTimeDiff then
-            bestMatch = unit
-            bestTimeDiff = timeDiff
-        end
-    end
-
-    return bestMatch
-end
-
-function KT:ProcessPendingEvents()
-    self.processScheduled = false
-
-    -- Count interrupts
-    local interruptCount = 0
-    local targetUnit = nil
-    for unit in pairs(self.pendingInterrupts) do
-        interruptCount = interruptCount + 1
-        targetUnit = unit
-    end
-
-    if interruptCount == 0 then
-        wipe(self.pendingInterrupts)
-        wipe(self.pendingCasts)
-        return
-    end
-
-    -- Multiple nameplates interrupted = AoE CC, ignore all
-    if interruptCount > 1 then
-        wipe(self.pendingInterrupts)
-        wipe(self.pendingCasts)
-        return
-    end
-
-    -- Validate via interruptedBy GUID, then time-window match to caster
-    local caster = self:ResolveCasterByInterruptSource(targetUnit)
-
-    if caster then
-        local guid = UnitGUID(caster)
-        if guid then
-            self:ConfirmKick(guid)
-        end
-    end
-
-    wipe(self.pendingInterrupts)
-    wipe(self.pendingCasts)
-end
-
-function KT:ConfirmKick(guid)
+-- durationOverride: comm-synced kicks carry the sender's exact CD; nil = spec CD.
+function KT:ConfirmKick(guid, durationOverride)
     local member = self.partyMembers[guid]
     if not member or not member.interruptData then return end
 
     member.kickStart = GetTime()
-    member.kickDuration = member.interruptData.cd
+    member.kickDuration = durationOverride or member.interruptData.cd
 
     -- Immediately update bar visuals so the transition from ready→cooling is instant
     local bar = self.activeBars[guid]
@@ -386,7 +377,7 @@ function KT:ConfirmKick(guid)
             bar.nameText:SetTextColor(1, 1, 1, 1)
         end
         if self.db.ShowTimer and bar.timerText then
-            bar.timerText:SetText(string_format("%d", member.interruptData.cd))
+            bar.timerText:SetText(string_format("%d", member.kickDuration))
         end
     end
 
@@ -394,62 +385,375 @@ function KT:ConfirmKick(guid)
 end
 
 ---------------------------------------------------------------------------------
--- Event Handlers
+-- Teammate Kick Records (12.0.5 secret-safe)
 ---------------------------------------------------------------------------------
-function KT:OnSpellcastInterrupted(_, unit, _, _, interruptedBy)
+-- A nameplate UNIT_SPELLCAST_INTERRUPTED with a non-nil interruptedBy is ground
+-- truth that someone's kick landed. The GUID is secret for teammates: the game
+-- will render the name/icon we derive from it, but our code can never read or
+-- compare them. So teammate kicks become transient cooling-style records — we
+-- cannot know WHICH roster bar to flip (per-teammate CDs are unrecoverable,
+-- probe-confirmed 2026-07-05).
+function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
     if not self.db.Enabled or self.isPreview or not self.isActive then return end
-    if not unit or not string_find(unit, "nameplate") then return end
-    self.pendingInterrupts[unit] = { time = GetTime(), interruptedBy = interruptedBy }
-    self:ScheduleProcessing()
+    if not unit or not string_find(unit, "^nameplate") then return end
+    if interruptedBy == nil then return end  -- channel ended naturally, not kicked
+
+    -- Self/teammate split without touching the (possibly secret) GUID:
+    -- UnitTokenFromGUID returns a plain token for the player's own units,
+    -- nil for anyone else. Self CD is owned by OnSpellcastSucceeded.
+    local ok, token = pcall(UnitTokenFromGUID, interruptedBy)
+    if DEBUG_KT then
+        KE:Print(string_format("[KT] nameplate interrupt unit=%s tokenOk=%s token=%s guidSecret=%s",
+            tostring(unit), tostring(ok), tostring(token),
+            tostring(not KE:IsSafeValue(interruptedBy))))
+    end
+    if ok and token then return end
+
+    self:ProcessTeammateKick(interruptedBy, spellID)
 end
 
-function KT:OnChannelStop(_, unit, _, interruptedBy)
+function KT:ProcessTeammateKick(interrupterGuid, interruptedSpellID)
+    -- Resolve what the game lets us see about the kicker. The name may be
+    -- secret (SecretWhenUnitIdentityRestricted); classFilename is documented
+    -- plain (no secret flag in UnitDocumentation) — IsSafeValue-check both
+    -- anyway before using either as a comparison value.
+    local ok, name = pcall(UnitNameFromGUID, interrupterGuid)
+    if not ok or name == nil then return end
+
+    -- classToken may be SECRET: still usable for class COLOR (C-side
+    -- GetClassColor is AllowedWhenTainted — reference-proven); only a PLAIN
+    -- token may be used for attribution comparisons below.
+    local okClass, _, cf = pcall(UnitClassFromGUID, interrupterGuid)
+    local classToken = (okClass and cf ~= nil) and cf or nil
+    local plainClassToken = (classToken ~= nil and KE:IsSafeValue(classToken)) and classToken or nil
+
+    -- Deterministic attribution — flip the real roster bar when identity
+    -- data is readable: (1) plain name -> exact member; (2) plain class ->
+    -- the ONLY kick-capable member of that class. No guessing beyond that
+    -- (the references discarded roster heuristics for false attributions).
+    -- In-game 2026-07-05: name AND classFilename are BOTH secret in live
+    -- dungeon combat (classFilename's missing secret flag in the generated
+    -- docs is an annotation gap) — so this waterfall never fires in
+    -- restricted content today. Kept: two pcalls per interrupt, and it
+    -- self-activates wherever Blizzard relaxes identity restrictions.
+    local target
+    if KE:IsSafeValue(name) then
+        for guid, member in pairs(self.partyMembers) do
+            if member.unit ~= "player" and member.name == name
+                and member.interruptData then
+                target = guid
+                break
+            end
+        end
+    end
+    if not target and plainClassToken then
+        local matches, candidate = 0, nil
+        for guid, member in pairs(self.partyMembers) do
+            if member.unit ~= "player" and member.classToken == plainClassToken
+                and member.interruptData then
+                matches = matches + 1
+                candidate = guid
+            end
+        end
+        if matches == 1 then target = candidate end
+    end
+
+    if DEBUG_KT then
+        KE:Print(string_format("[KT] teammate kick nameSafe=%s classSafe=%s attributed=%s",
+            tostring(KE:IsSafeValue(name)), tostring(plainClassToken ~= nil), tostring(target ~= nil)))
+    end
+
+    if target then
+        -- We can see this member's kicks — their bar state is tracked from
+        -- here on: it materializes (verified-only roster) and may claim Ready.
+        self.partyMembers[target].kickVerified = true
+        self:UpdateBars()
+        self:ConfirmKick(target)
+        return
+    end
+
+    -- Class color for the record: pass the (possibly secret) token to the
+    -- C-side GetClassColor and apply r/g/b VERBATIM — storing/applying
+    -- secrets is legal, any math or comparison on them is not.
+    local colorR, colorG, colorB
+    if classToken ~= nil then
+        local okColor, col = pcall(C_ClassColor.GetClassColor, classToken)
+        if okColor and col then
+            colorR, colorG, colorB = col.r, col.g, col.b
+        end
+    end
+
+    -- Interrupted spell's icon (display-only; both id and texture may be secret).
+    local iconID
+    if interruptedSpellID ~= nil then
+        local okTex, tex = pcall(C_Spell.GetSpellTexture, interruptedSpellID)
+        if okTex then iconID = tex end
+    end
+
+    self.nextRecordID = self.nextRecordID + 1
+    local record = {
+        id = self.nextRecordID,
+        name = name,          -- possibly secret; SetText-only
+        iconID = iconID,      -- possibly secret; SetTexture-only
+        colorR = colorR,      -- class color; possibly secret — apply verbatim,
+        colorG = colorG,      -- never do math or comparisons on these
+        colorB = colorB,
+        startTime = GetTime(),
+        duration = self.db.KickRecordDuration or KICK_RECORD_FALLBACK_DURATION,
+    }
+    table_insert(self.kickRecords, record)
+
+    -- Bound the list: oldest records fall off past MaxBars.
+    while #self.kickRecords > (self.db.MaxBars or 5) do
+        local old = table.remove(self.kickRecords, 1)
+        self:ReleaseBar("record" .. old.id)
+    end
+
+    -- Stash grace (reference pattern): the local nameplate event always
+    -- beats the network, so a comm user's kick would blink a record before
+    -- the comm claims it. Hold the record invisible for the grace window —
+    -- claimed records die unseen; unclaimed ones render 0.4s late.
+    local recordID = record.id
+    C_Timer.After(KICK_RECORD_GRACE, function()
+        self:ShowKickRecord(recordID)
+    end)
+end
+
+-- Render a stashed record if it survived the grace window (a comm claim or
+-- eviction during the grace removes it from kickRecords — never rendered).
+function KT:ShowKickRecord(recordID)
+    if not self.isActive or self.isPreview then return end
+    for _, record in ipairs(self.kickRecords) do
+        if record.id == recordID then
+            local bar = self:GetOrCreateBar("record" .. recordID)
+            self:UpdateRecordBarVisuals(bar, record)
+            bar:Show()
+            self:LayoutBars()
+            return
+        end
+    end
+end
+
+function KT:ClearKickRecords()
+    for _, record in ipairs(self.kickRecords) do
+        self:ReleaseBar("record" .. record.id)
+    end
+    wipe(self.kickRecords)
+end
+
+---------------------------------------------------------------------------------
+-- KE-to-KE Kick Sync (addon comm)
+---------------------------------------------------------------------------------
+-- Party members also running KitnEssentials broadcast their own kicks, letting
+-- receivers flip the sender's REAL roster bar with the exact CD — full
+-- per-member tracking among KE users. Non-KE teammates keep the record
+-- fallback. Comms over INSTANCE_CHAT probe-verified working 2026-07-05
+-- (family rule); every send/parse is pcall'd so blocked contexts degrade
+-- silently to records.
+local COMM_PREFIX = "KEKick"
+-- BliZzi Party Tools interop (reference v4.1.4): their dispatcher accepts
+-- KICK from any class-auto-registered party member — no HELLO handshake
+-- required — and normalizes senders with Ambiguate like we do. Wire format:
+-- "B1;KICK;spellID;cd". Format drift on their side degrades to ignored
+-- messages, never errors (watch on reference syncs).
+local BLIZZI_PREFIX = "BliZziIT"
+local COMM_SUCCESS = Enum and Enum.SendAddonMessageResult
+    and Enum.SendAddonMessageResult.Success or 0
+
+local function transmitKick(prefix, msg)
+    local inInstanceGroup = IsInGroup(LE_PARTY_CATEGORY_INSTANCE)
+    local channel = inInstanceGroup and "INSTANCE_CHAT" or "PARTY"
+    local ok, ret = pcall(C_ChatInfo.SendAddonMessage, prefix, msg, channel)
+    if ok and ret == COMM_SUCCESS then
+        KT._commBlocked = nil
+        return
+    end
+
+    -- Result 11 = Enum.SendAddonMessageResult.AddOnMessageLockdown (timed
+    -- M+): ALL addon channels including whispers are blocked. Remember the
+    -- state and skip the futile fan-out — the single broadcast above stays
+    -- as the probe that clears the flag once the lockdown lifts.
+    if ok and ret == 11 then KT._commBlocked = true end
+    if KT._commBlocked then return end
+
+    -- Non-lockdown failure: try PARTY (premade groups inside instances),
+    -- then whisper each member (reference fallback chain).
+    if inInstanceGroup then
+        ok, ret = pcall(C_ChatInfo.SendAddonMessage, prefix, msg, "PARTY")
+        if ok and ret == COMM_SUCCESS then return end
+        if ok and ret == 11 then
+            KT._commBlocked = true
+            return
+        end
+    end
+    for i = 1, 4 do
+        local unit = "party" .. i
+        if UnitExists(unit) then
+            local n, r = UnitName(unit)
+            if n then
+                local target = (r and r ~= "") and (n .. "-" .. r) or n
+                local wok, wret = pcall(C_ChatInfo.SendAddonMessage, prefix, msg, "WHISPER", target)
+                if wok and wret == 11 then
+                    KT._commBlocked = true
+                    return
+                end
+            end
+        end
+    end
+end
+
+function KT:BroadcastKick(spellID, cd)
+    if not self.db.KickSync then return end
+    if not IsInGroup() then return end
+
+    transmitKick(COMM_PREFIX, "1;KICK;" .. spellID .. ";" .. cd)
+    transmitKick(BLIZZI_PREFIX, "B1;KICK;" .. spellID .. ";" .. cd)
+end
+
+-- Presence announce: lets other KE users verify us (and show our bar at
+-- Ready) from dungeon start instead of on our first kick. Sent on
+-- activation, roster changes, and as a throttled reply to received hellos
+-- (the throttle also dampens hello reply loops).
+function KT:BroadcastHello()
+    if not self.db.KickSync then return end
+    if not self.isActive or not IsInGroup() then return end
+
+    local now = GetTime()
+    if self._lastHelloSent and (now - self._lastHelloSent) < 10 then return end
+
+    local guid = UnitGUID("player")
+    local member = guid and self.partyMembers[guid]
+    local data = member and member.interruptData
+    if not data then return end  -- current spec has no kick; nothing to announce
+    self._lastHelloSent = now
+
+    transmitKick(COMM_PREFIX, "1;HELLO;" .. data.id .. ";" .. data.cd)
+    -- Deliberately NO BliZzi-format hello: we stay out of their handshake
+    -- (kick-data-only participation, established interop posture).
+end
+
+function KT:OnCommReceived(_, prefix, message, _, sender)
+    local isKE = prefix == COMM_PREFIX
+    if not isKE and prefix ~= BLIZZI_PREFIX then return end
     if not self.db.Enabled or self.isPreview or not self.isActive then return end
-    if not unit or not string_find(unit, "nameplate") then return end
-    if interruptedBy == nil then return end  -- channel ended naturally, not kicked
-    self.pendingInterrupts[unit] = { time = GetTime(), interruptedBy = interruptedBy }
-    self:ScheduleProcessing()
+    if not self.db.KickSync then return end
+
+    -- Wire input is untrusted (and could be secret in odd contexts); one
+    -- pcall wraps parse + attribution so bad input is dropped, not thrown.
+    local ok = pcall(function()
+        local shortSender = Ambiguate(sender, "short")
+        if shortSender == UnitName("player") then return end  -- own echo
+
+        -- Both protocols carry a verb + the sender's kick spellID and cd:
+        --   KE:     "1;KICK;spellID;cd"   /  "1;HELLO;spellID;cd"
+        --   BliZzi: "B1;KICK;spellID;cd"  /  "B1;HELLO;class;spellID;cd"
+        local verb, sid, cd
+        if isKE then
+            local ver, v, sidStr, cdStr = strsplit(";", message)
+            if ver ~= "1" then return end  -- version-gate our own wire
+            verb = v
+            sid = tonumber(sidStr)
+            cd = tonumber(cdStr)
+        else
+            local hdr, cmd, a3, a4, a5 = strsplit(";", message)
+            if hdr ~= "B1" then return end
+            if cmd == "KICK" then
+                verb, sid, cd = "KICK", tonumber(a3), tonumber(a4)
+            elseif cmd == "HELLO" then
+                verb, sid, cd = "HELLO", tonumber(a4), tonumber(a5)  -- a3 = class
+            end
+        end
+        if verb ~= "KICK" and verb ~= "HELLO" then return end
+        if verb == "KICK" and (not cd or cd <= 0) then return end
+        -- Wire cd is untrusted external input: real kick CDs top out at
+        -- 30s — clamp so a bad client can't wedge a bar for hours.
+        if cd and cd > 60 then cd = 60 end
+
+        for guid, member in pairs(self.partyMembers) do
+            if member.unit ~= "player" and member.name == shortSender then
+                member.kickVerified = true  -- comm user: bar is tracked for real
+                -- The sender knows their own kick best — refine our data
+                -- (also fills members our spec logic had to defer).
+                if sid and sid > 0 and cd and cd > 0 then
+                    local role = member.interruptData and member.interruptData.role or "DAMAGER"
+                    member.interruptData = { id = sid, cd = cd, role = role }
+                end
+                if not member.interruptData then return end
+                self:UpdateBars()           -- materialize the bar (verified-only roster)
+                if verb == "KICK" then
+                    self:ConfirmKick(guid, cd or member.interruptData.cd)
+                    -- The nameplate event usually stashed a record for this
+                    -- same kick moments ago — claim it (see the ambiguity
+                    -- rule in RemoveRecentKickRecord).
+                    self:RemoveRecentKickRecord(1.5)
+                elseif isKE then
+                    -- Reply-hello (throttled) so the sender learns us too
+                    self:BroadcastHello()
+                end
+                return
+            end
+        end
+    end)
+    if not ok and DEBUG_KT then
+        local okS, senderStr = pcall(tostring, sender)
+        KE:Print("[KT] kick comm parse failed from " .. (okS and senderStr or "?"))
+    end
+end
+
+-- Claim the record a comm attribution just superseded. Record names may be
+-- secret, so identity matching is impossible — remove ONLY when exactly one
+-- record sits in the window. With two or more we can't tell whose is whose;
+-- removing the wrong one would erase a non-comm teammate's only
+-- representation, so we keep both (worst case: a brief duplicate for the
+-- comm user — preferable to losing a real event). This also makes duplicate
+-- comm delivery a safe no-op.
+function KT:RemoveRecentKickRecord(window)
+    local now = GetTime()
+    local found
+    for i = #self.kickRecords, 1, -1 do
+        local record = self.kickRecords[i]
+        if now - record.startTime <= window then
+            if found then return end  -- ambiguous: two candidates, remove none
+            found = i
+        end
+    end
+    if found then
+        local record = table.remove(self.kickRecords, found)
+        self:ReleaseBar("record" .. record.id)
+        self:LayoutBars()
+    end
+end
+
+---------------------------------------------------------------------------------
+-- Event Handlers
+---------------------------------------------------------------------------------
+function KT:OnSpellcastInterrupted(_, unit, _, spellID, interruptedBy)
+    self:HandleNameplateInterrupt(unit, spellID, interruptedBy)
+end
+
+-- Payload matches INTERRUPTED: (unitTarget, castGUID, spellID, interruptedBy).
+-- The pre-rework handler read interruptedBy from the spellID slot (off-by-one,
+-- masked by the old correlator's discard path) — fixed here.
+function KT:OnChannelStop(_, unit, _, spellID, interruptedBy)
+    self:HandleNameplateInterrupt(unit, spellID, interruptedBy)
 end
 
 function KT:OnSpellcastSucceeded(_, unit, _, spellID)
     if not self.db.Enabled or self.isPreview or not self.isActive then return end
-    if not unit then return end
+    if unit ~= "player" and unit ~= "pet" then return end
 
-    -- Player self-kick or pet kick (Warlock Spell Lock / Axe Toss)
-    -- spellID is NOT secret for own casts; pet commands map to player's GUID
-    if unit == "player" or unit == "pet" then
-        if not INTERRUPT_SPELL_IDS[spellID] then return end
-        local guid = UnitGUID("player")
-        if guid then
-            self:ConfirmKick(guid)
+    -- Own casts (player + own pet) deliver a PLAIN spellID in 12.0.5. Party
+    -- members' casts do not fire this event for kicks at all (probe-confirmed
+    -- 2026-07-05) — teammate detection lives in HandleNameplateInterrupt.
+    if not INTERRUPT_SPELL_IDS[spellID] then return end
+    local guid = UnitGUID("player")
+    if guid then
+        self:ConfirmKick(guid)
+        -- Tell party KE users so they can flip our roster bar with the real CD
+        local member = self.partyMembers[guid]
+        if member and member.interruptData then
+            self:BroadcastKick(member.interruptData.id, member.interruptData.cd)
         end
-        return
-    end
-
-    -- Party member casts: spellID is SECRET in 12.0.5, cannot be inspected.
-    -- Instead of filtering by spell ID, record ALL party casts with timestamps.
-    -- The time-window correlation with UNIT_SPELLCAST_INTERRUPTED determines
-    -- whether it was actually a kick. This matches ExWind's approach.
-    if string_find(unit, "^party%d") then
-        self.pendingCasts[unit] = { time = GetTime() }
-        self:ScheduleProcessing()
-        return
-    end
-
-    -- KE FIX: Warlock pet interrupts (ExWind does NOT handle this)
-    -- Spell Lock (19647) fires on partypetN, not the warlock player.
-    -- Pet spellID is also secret, so we can't filter — just record the cast.
-    if string_find(unit, "^partypet") then
-        -- Map pet unit back to owner party unit for time-window correlation
-        local partyIndex = unit:match("^partypet(%d)")
-        if partyIndex then
-            local ownerUnit = "party" .. partyIndex
-            if UnitExists(ownerUnit) then
-                self.pendingCasts[ownerUnit] = { time = GetTime() }
-                self:ScheduleProcessing()
-            end
-        end
-        return
     end
 end
 
@@ -461,6 +765,7 @@ function KT:RegisterCombatEvents()
     self:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED", "OnSpellcastInterrupted")
     self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP", "OnChannelStop")
     self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", "OnSpellcastSucceeded")
+    self:RegisterEvent("CHAT_MSG_ADDON", "OnCommReceived")
     self.combatEventsRegistered = true
 end
 
@@ -469,11 +774,12 @@ function KT:UnregisterCombatEvents()
     self:UnregisterEvent("UNIT_SPELLCAST_INTERRUPTED")
     self:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
     self:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+    self:UnregisterEvent("CHAT_MSG_ADDON")
     self.combatEventsRegistered = false
+    self._lastHelloSent = nil
+    self._commBlocked = nil
 
-    wipe(self.pendingInterrupts)
-    wipe(self.pendingCasts)
-    self.processScheduled = false
+    self:ClearKickRecords()
 end
 
 ---------------------------------------------------------------------------------
@@ -498,9 +804,11 @@ function KT:CheckActivation()
             self.containerFrame:Show()
         end
         self:RefreshPartyRoster()
+        self._commBlocked = nil  -- new instance: re-probe the comm channel
+        self:BroadcastHello()  -- announce presence to party KE users
     elseif not shouldBeActive and self.isActive then
         self.isActive = false
-        self:UnregisterCombatEvents()
+        self:UnregisterCombatEvents()  -- also clears kick records
         self:HideAllBars()
         if self.containerFrame then self.containerFrame:Hide() end
         wipe(self.partyMembers)
@@ -516,6 +824,7 @@ end
 function KT:OnRosterUpdate()
     if self.isActive then
         self:RefreshPartyRoster()
+        self:BroadcastHello()  -- late joiners need to learn us (throttled)
     else
         self:CheckActivation()
     end
@@ -631,9 +940,9 @@ local function GetClassColor(classToken)
     return C_ClassColor.GetClassColor(classToken)
 end
 
-function KT:UpdateBarVisuals(bar, member)
+-- Geometry + textures that depend only on db (shared by member and record bars).
+function KT:ApplyBarGeometry(bar)
     local db = self.db
-    local isDarkMode = db.ColorMode == "dark"
 
     -- Size
     bar:SetSize(db.BarWidth, db.BarHeight)
@@ -674,6 +983,47 @@ function KT:UpdateBarVisuals(bar, member)
     -- Name text position (offset past icon)
     bar.nameText:ClearAllPoints()
     bar.nameText:SetPoint("LEFT", bar.statusBar, "LEFT", 2, 0)
+end
+
+-- Record bars: teammate kick records. name/iconID may be SECRET — the game
+-- renders them; never read back, never compare, never dirty-check SetText.
+function KT:UpdateRecordBarVisuals(bar, record)
+    local db = self.db
+    self:ApplyBarGeometry(bar)
+
+    if record.iconID ~= nil then
+        pcall(bar.iconTex.SetTexture, bar.iconTex, record.iconID)
+    else
+        bar.iconTex:SetTexture(134400)
+    end
+    bar.iconTex:SetDesaturated(true)
+
+    KE:ApplyFont(bar.nameText, db.FontFace, db.FontSize, db.FontOutline)
+    bar.nameText:SetShown(db.ShowName)
+    -- "> " prefix marks this as an event entry, not a member row. Concat
+    -- with a secret string is legal in 12.0 (yields a secret string).
+    local nameOk = pcall(function() bar.nameText:SetText("> " .. record.name) end)
+    if not nameOk then bar.nameText:SetText(">") end
+    bar.nameText:SetTextColor(1, 1, 1, 1)
+
+    KE:ApplyFont(bar.timerText, db.FontFace, db.FontSize, db.FontOutline)
+    bar.timerText:SetShown(db.ShowTimer)
+    bar.timerText:SetTextColor(1, 1, 1, 1)
+
+    -- Kicker's class color when the game resolved one (r/g/b may be secret —
+    -- applied verbatim, the game paints it); CoolingColor fallback otherwise.
+    if record.colorR ~= nil then
+        bar.statusBar:SetStatusBarColor(record.colorR, record.colorG, record.colorB, 1)
+    else
+        bar.statusBar:SetStatusBarColor(unpack(db.CoolingColor))
+    end
+end
+
+function KT:UpdateBarVisuals(bar, member)
+    local db = self.db
+    local isDarkMode = db.ColorMode == "dark"
+
+    self:ApplyBarGeometry(bar)
 
     -- Set icon texture
     if member and member.interruptData then
@@ -719,7 +1069,11 @@ function KT:UpdateBarVisuals(bar, member)
         -- Dark mode: no fill visible (just dark background). Class mode: full bar.
         bar.statusBar:SetValue(isDarkMode and 0 or 1)
         if db.ShowTimer then
-            if db.ShowReadyText then
+            -- "Ready" is a claim — only bars we can actually track make it
+            -- (self, comm-verified, or attribution-verified members).
+            -- Unverified members' timer area stays blank: 12.0.5 hides
+            -- their kicks, so Ready would be a guess.
+            if db.ShowReadyText and member and member.kickVerified then
                 bar.timerText:SetText(db.ReadyText or "Ready")
             else
                 bar.timerText:SetText("")
@@ -782,17 +1136,21 @@ end
 function KT:UpdateBars()
     if self.isPreview then return end
 
-    -- Collect eligible members (those with interrupt abilities)
+    -- Collect eligible members: has a kick AND we can actually track it
+    -- (self, comm users, attribution-verified). Unverified members get no
+    -- bar — their kicks surface as feed records instead (user call
+    -- 2026-07-05: clarity over composition info).
     local needsBars = {}
     for guid, member in pairs(self.partyMembers) do
-        if member.interruptData then
+        if member.interruptData and member.kickVerified then
             needsBars[guid] = true
         end
     end
 
-    -- Release bars for members who no longer qualify
+    -- Release bars for members who no longer qualify (record bars are owned
+    -- by the kickRecords lifecycle, not the roster — skip them here)
     for guid in pairs(self.activeBars) do
-        if not needsBars[guid] then
+        if not needsBars[guid] and not string_find(guid, "^record") then
             self:ReleaseBar(guid)
         end
     end
@@ -910,6 +1268,18 @@ function KT:LayoutBars()
         end
     end
 
+    -- Teammate kick records join the cooling section (sorted by remaining
+    -- like member cooldowns; they never enter the ready list)
+    for _, record in ipairs(self.kickRecords) do
+        local bar = self.activeBars["record" .. record.id]
+        if bar then
+            local remaining = record.duration - (now - record.startTime)
+            if remaining > 0 then
+                table_insert(coolingList, { bar = bar, record = record, remaining = remaining })
+            end
+        end
+    end
+
     -- Sort: ready bars by role priority, cooling bars by remaining time
     table_sort(readyList, function(a, b)
         local pa = self:GetRolePriority(a.member)
@@ -998,7 +1368,7 @@ function KT:OnUpdateBars(elapsed)
     local needsRelayout = false
     local anyCooling = false
 
-    if DEBUG_KT then
+    if DEBUG_KT_TICKS then
         _ktContainerTickCounter = _ktContainerTickCounter + 1
         if _ktContainerTickCounter >= KT_TICK_LOG_EVERY then
             _ktContainerTickCounter = 0
@@ -1039,6 +1409,36 @@ function KT:OnUpdateBars(elapsed)
                     else
                         bar.timerText:SetText(string_format("%.1f", remaining))
                     end
+                end
+            end
+        end
+    end
+
+    -- Drain + expire teammate kick records under the same 0.05s accumulator.
+    -- All arithmetic here is our own GetTime() math — plain values, no secrets.
+    local isDark = db.ColorMode == "dark"
+    for i = #self.kickRecords, 1, -1 do
+        local record = self.kickRecords[i]
+        local key = "record" .. record.id
+        local bar = self.activeBars[key]
+        local remaining = record.duration - (now - record.startTime)
+
+        if remaining <= 0 then
+            table.remove(self.kickRecords, i)
+            self:ReleaseBar(key)
+            needsRelayout = true
+        elseif bar then
+            anyCooling = true
+            if isDark then
+                bar.statusBar:SetValue(remaining / record.duration)
+            else
+                bar.statusBar:SetValue((now - record.startTime) / record.duration)
+            end
+            if db.ShowTimer and bar.timerText then
+                if remaining > 6 then
+                    bar.timerText:SetText(string_format("%d", math_floor(remaining)))
+                else
+                    bar.timerText:SetText(string_format("%.1f", remaining))
                 end
             end
         end
@@ -1090,6 +1490,9 @@ function KT:ShowPreview()
 
     self.isPreview = true
     self:HideAllBars()
+    -- Drop live kick records too: their bars were just released and nothing
+    -- re-renders an unexpired record after preview ends.
+    self:ClearKickRecords()
 
     self:ApplyContainerPosition()
 
@@ -1120,6 +1523,7 @@ function KT:ShowPreview()
             classToken = data.classToken,
             interruptData = { id = data.spellID, cd = data.cd or 15, role = "DAMAGER" },
             kickStart = (not data.ready) and GetTime() or nil,
+            kickVerified = true,  -- preview mocks show the verified look
         }
         self:UpdateBarVisuals(bar, fakeMember)
 
@@ -1165,7 +1569,7 @@ function KT:ShowPreview()
                     KT:UpdateBarVisuals(bar, fakeMember)
                     return
                 end
-                if DEBUG_KT then
+                if DEBUG_KT_TICKS then
                     _ktCoolingTickCounter = _ktCoolingTickCounter + 1
                     if _ktCoolingTickCounter >= KT_COOLING_LOG_EVERY then
                         _ktCoolingTickCounter = 0
@@ -1281,6 +1685,13 @@ function KT:OnEnable()
     self:CreateFrames()
     self:RegWithEditMode()
 
+    -- Kick-sync comm prefixes (pcall: registration can fail at the prefix
+    -- cap). BliZzi's prefix is registered so their users' kicks reach us.
+    if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
+        pcall(C_ChatInfo.RegisterAddonMessagePrefix, COMM_PREFIX)
+        pcall(C_ChatInfo.RegisterAddonMessagePrefix, BLIZZI_PREFIX)
+    end
+
     -- Register non-combat events. INSPECT_READY/PLAYER_REGEN_ENABLED no longer
     -- needed — LibSpec handles party spec discovery passively via comms.
     self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnRosterUpdate")
@@ -1311,15 +1722,13 @@ function KT:OnDisable()
     self:CancelAllTimers()
     self:StopOnUpdate()
 
+    self:ClearKickRecords()
     self:HideAllBars()
     wipe(self.partyMembers)
     wipe(self.nameSpecCache)
-    wipe(self.pendingInterrupts)
-    wipe(self.pendingCasts)
 
     self.isActive = false
     self.isPreview = false
-    self.processScheduled = false
 
     if self.containerFrame then self.containerFrame:Hide() end
 end
@@ -1335,6 +1744,12 @@ function KT:ApplySettings()
         local member = self.partyMembers[guid]
         if member then
             self:UpdateBarVisuals(bar, member)
+        end
+    end
+    for _, record in ipairs(self.kickRecords) do
+        local bar = self.activeBars["record" .. record.id]
+        if bar then
+            self:UpdateRecordBarVisuals(bar, record)
         end
     end
 
