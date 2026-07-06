@@ -166,7 +166,7 @@ KT.guiConfigContext = nil  -- "HEALER" | "DEFAULT" | nil (which context the GUI 
 KT.partyMembers = {}     -- [guid] = { unit, name, classToken, specID, interruptData, kickStart, kickDuration, kickVerified }
 KT.nameSpecCache = {}    -- [playerName] = specID, fed by LibSpec.RegisterGroup callback
 
-KT.kickRecords = {}       -- array of { id, name, iconID, startTime, duration } — teammate kick records
+KT.kickRecords = {}       -- array of { id, name, iconID, colorR/G/B, startTime, duration } — teammate kick records
 KT.nextRecordID = 0       -- monotonic; records keyed "record"..id in activeBars (GUIDs may be secret)
 
 KT.barPool = {}           -- array of reusable bar frames
@@ -415,9 +415,12 @@ function KT:ProcessTeammateKick(interrupterGuid, interruptedSpellID)
     local ok, name = pcall(UnitNameFromGUID, interrupterGuid)
     if not ok or name == nil then return end
 
-    local classToken
+    -- classToken may be SECRET: still usable for class COLOR (C-side
+    -- GetClassColor is AllowedWhenTainted — reference-proven); only a PLAIN
+    -- token may be used for attribution comparisons below.
     local okClass, _, cf = pcall(UnitClassFromGUID, interrupterGuid)
-    if okClass and cf and KE:IsSafeValue(cf) then classToken = cf end
+    local classToken = (okClass and cf ~= nil) and cf or nil
+    local plainClassToken = (classToken ~= nil and KE:IsSafeValue(classToken)) and classToken or nil
 
     -- Deterministic attribution — flip the real roster bar when identity
     -- data is readable: (1) plain name -> exact member; (2) plain class ->
@@ -438,10 +441,10 @@ function KT:ProcessTeammateKick(interrupterGuid, interruptedSpellID)
             end
         end
     end
-    if not target and classToken then
+    if not target and plainClassToken then
         local matches, candidate = 0, nil
         for guid, member in pairs(self.partyMembers) do
-            if member.unit ~= "player" and member.classToken == classToken
+            if member.unit ~= "player" and member.classToken == plainClassToken
                 and member.interruptData then
                 matches = matches + 1
                 candidate = guid
@@ -452,15 +455,27 @@ function KT:ProcessTeammateKick(interrupterGuid, interruptedSpellID)
 
     if DEBUG_KT then
         KE:Print(string_format("[KT] teammate kick nameSafe=%s classSafe=%s attributed=%s",
-            tostring(KE:IsSafeValue(name)), tostring(classToken ~= nil), tostring(target ~= nil)))
+            tostring(KE:IsSafeValue(name)), tostring(plainClassToken ~= nil), tostring(target ~= nil)))
     end
 
     if target then
         -- We can see this member's kicks — their bar state is tracked from
-        -- here on, so it may claim Ready between cooldowns.
+        -- here on: it materializes (verified-only roster) and may claim Ready.
         self.partyMembers[target].kickVerified = true
+        self:UpdateBars()
         self:ConfirmKick(target)
         return
+    end
+
+    -- Class color for the record: pass the (possibly secret) token to the
+    -- C-side GetClassColor and apply r/g/b VERBATIM — storing/applying
+    -- secrets is legal, any math or comparison on them is not.
+    local colorR, colorG, colorB
+    if classToken ~= nil then
+        local okColor, col = pcall(C_ClassColor.GetClassColor, classToken)
+        if okColor and col then
+            colorR, colorG, colorB = col.r, col.g, col.b
+        end
     end
 
     -- Interrupted spell's icon (display-only; both id and texture may be secret).
@@ -475,6 +490,9 @@ function KT:ProcessTeammateKick(interrupterGuid, interruptedSpellID)
         id = self.nextRecordID,
         name = name,          -- possibly secret; SetText-only
         iconID = iconID,      -- possibly secret; SetTexture-only
+        colorR = colorR,      -- class color; possibly secret — apply verbatim,
+        colorG = colorG,      -- never do math or comparisons on these
+        colorB = colorB,
         startTime = GetTime(),
         duration = self.db.KickRecordDuration or KICK_RECORD_FALLBACK_DURATION,
     }
@@ -574,6 +592,7 @@ function KT:OnCommReceived(_, prefix, message, _, sender)
             if member.unit ~= "player" and member.name == shortSender then
                 if member.interruptData then
                     member.kickVerified = true  -- comm user: bar is tracked for real
+                    self:UpdateBars()           -- materialize the bar (verified-only roster)
                     self:ConfirmKick(guid, cd or member.interruptData.cd)
                     -- The nameplate event usually spawned a record for this
                     -- same kick moments ago — drop it (names may be secret,
@@ -884,9 +903,13 @@ function KT:UpdateRecordBarVisuals(bar, record)
     bar.timerText:SetShown(db.ShowTimer)
     bar.timerText:SetTextColor(1, 1, 1, 1)
 
-    -- Records always use the cooling color (never class color) so they read
-    -- as events, distinct from member rows.
-    bar.statusBar:SetStatusBarColor(unpack(db.CoolingColor))
+    -- Kicker's class color when the game resolved one (r/g/b may be secret —
+    -- applied verbatim, the game paints it); CoolingColor fallback otherwise.
+    if record.colorR ~= nil then
+        bar.statusBar:SetStatusBarColor(record.colorR, record.colorG, record.colorB, 1)
+    else
+        bar.statusBar:SetStatusBarColor(unpack(db.CoolingColor))
+    end
 end
 
 function KT:UpdateBarVisuals(bar, member)
@@ -1006,10 +1029,13 @@ end
 function KT:UpdateBars()
     if self.isPreview then return end
 
-    -- Collect eligible members (those with interrupt abilities)
+    -- Collect eligible members: has a kick AND we can actually track it
+    -- (self, comm users, attribution-verified). Unverified members get no
+    -- bar — their kicks surface as feed records instead (user call
+    -- 2026-07-05: clarity over composition info).
     local needsBars = {}
     for guid, member in pairs(self.partyMembers) do
-        if member.interruptData then
+        if member.interruptData and member.kickVerified then
             needsBars[guid] = true
         end
     end
