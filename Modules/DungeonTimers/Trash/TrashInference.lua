@@ -1,0 +1,556 @@
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  TrashInference.lua                                      ║
+-- ║  Pure inference core for the Dungeon Trash tracker.      ║
+-- ║                                                          ║
+-- ║  In a 12.0 instance you can read neither a nameplate's   ║
+-- ║  npcID (UnitGUID secret) nor a cast's spellID (secret),  ║
+-- ║  so trash detection is a behavioral-inference engine:    ║
+-- ║    Layer1 — fingerprint the mob from non-secret identity ║
+-- ║             (level/sex/power/class/aura-count) against   ║
+-- ║             KE.TrashTraits → candidate npcIDs.           ║
+-- ║    Layer2 — disambiguate the CAST from measured cast/    ║
+-- ║             channel duration + boolean fingerprints.     ║
+-- ║    cd walk — predict the next cast from first + cd[].    ║
+-- ║                                                          ║
+-- ║  This file is PURE (no WoW API, no per-nameplate state); ║
+-- ║  DungeonTrash.lua owns the event loop + runtime state    ║
+-- ║  and calls these decision functions. Ported from ExBoss  ║
+-- ║  TrashCD (Layer1Filter/Layer2Filter/Calibration); see    ║
+-- ║  dev/docs/dungeon-trash-engine-port-spec.md.             ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+---@class KE
+local KE = select(2, ...)
+if not KitnEssentials then return end
+
+local math_floor = math.floor
+local table_sort = table.sort
+local type = type
+local tonumber = tonumber
+local pairs = pairs
+local ipairs = ipairs
+local abs = math.abs
+
+local TI = {}
+KE.TrashInference = TI
+
+-- ── Constants (verbatim from the ExBoss engine) ────────────────────────────
+TI.CAST_TIME_TOLERANCE = 0.20   -- measured vs curated cast/channel duration
+TI.FIRST_CAST_TOLERANCE = 2.0   -- first-cast schedule-proximity window
+TI.LEVEL_SQUISH_OFFSET = 60     -- Layer1 accepts obs.level == template-60
+TI.MIN_LEAD = 0.20              -- a predicted cast nearer than this is dropped
+
+-- Algeth'ar Academy (map 2526) is the one dungeon whose several eagle/tamer
+-- mobs share an identical identity fingerprint; ExBoss disambiguates them by
+-- M+ enemy-forces %. These are the four npcIDs that share the signature.
+local ACADEMY_MAP_ID = 2526
+local ACADEMY_ROUTED_NPCS = {
+    [197219] = true, [192680] = true, [192333] = true, [196671] = true,
+}
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  _r — packed identity decoder (verification / fallback)  ║
+-- ╚══════════════════════════════════════════════════════════╝
+-- The data already ships decoded `identity` tables; this mirrors ExBoss's
+-- EXDB._r so a spec can round-trip packedIdentity → identity and catch a
+-- generator drift. b(shift,width) = the `width` bits of `p` at `shift`.
+function TI.DecodePackedIdentity(p)
+    p = tonumber(p) or 0
+    local function b(shift, width)
+        return math_floor(p / (2 ^ shift)) % (2 ^ width)
+    end
+    return {
+        buffCount        = b(0, 4),
+        classID          = b(4, 4),
+        sex              = b(8, 3),
+        power            = b(11, 3),
+        level            = b(14, 7),
+        hasCastSkill     = b(37, 1) == 1,
+        noCastSkill      = b(38, 1) == 1,
+        hasCastSpell     = b(39, 1) == 1,
+        hasChannelSpell  = b(40, 1) == 1,
+        hasInterruptFlag = b(41, 1) == 1,
+        cannotInterrupt  = b(42, 1) == 1,
+        nonElite         = b(43, 1) == 1,
+    }
+end
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  Layer 1 — mob candidate scoring                         ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+-- Placement gate. `placement` is a CSV: values ≤20 are dungeon boss-progress
+-- indices, values >20 are sub-zone mapIDs (multi-floor dungeons). A row is
+-- allowed if any stage equals the live bossProgressIndex, or any mapID equals
+-- the live sub-zone map. Map 2526 is exempt. Missing/unparseable placement or
+-- unknown runtime context fails OPEN (never over-filter on missing data).
+function TI.IsPlacementAllowed(placement, opts)
+    if opts and opts.mapID == ACADEMY_MAP_ID then return true end
+    if type(placement) ~= "string" or placement == "" then return true end
+
+    local bossIndex = opts and opts.bossProgressIndex
+    local subZone = opts and opts.currentSubZoneMapID
+    local sawStage, sawMap = false, false
+    for token in placement:gmatch("[^,]+") do
+        local n = tonumber(token)
+        if n then
+            if n <= 20 then
+                sawStage = true
+                if bossIndex and n == bossIndex then return true end
+            else
+                sawMap = true
+                if subZone and n == subZone then return true end
+            end
+        end
+    end
+    -- Constraint kind present but the matching runtime datum is unknown → allow.
+    if sawStage and not (opts and opts.bossProgressIndex) then return true end
+    if sawMap and not (opts and opts.currentSubZoneMapID) then return true end
+    return not (sawStage or sawMap)
+end
+
+-- Score one trait row against an identity snapshot.
+-- obs fields (all optional; nil = "not observed", scored leniently):
+--   level, sex, power, classID, buffCount, unitClassification,
+--   sawCastStart, sawChannelStart, sawInterrupted.
+-- Returns matched(bool), score(int), strength(int), reject(string|nil).
+-- A present-in-row / present-in-obs exact-mismatch HARD-REJECTS (matched=false).
+function TI.ScoreTraitRow(obs, trait, opts)
+    local id = trait and trait.identity
+    if not id then return false, 0, 0, "no-identity" end
+    local score, strength = 0, 0
+    -- Resolve-confidence flag (5th return). A lone Layer1 survivor is only trusted
+    -- as a CONFIDENT single resolve if it agreed on the level — the one
+    -- discriminating soft field — not merely on the coarse sex/power/classID triple
+    -- many mobs share. Without it, a mob whose own row is pruned/absent collapses
+    -- onto a fingerprint-sibling and gets rubber-stamped (Rokh'zal/Gnarldin false
+    -- positives, in-game 2026-07-07). ExBoss gets this by HARD-rejecting level; KE
+    -- keeps level soft for candidate SURVIVAL (Maisara scaling) but gates the
+    -- confident resolve on agreement. buffCount is deliberately NOT counted here —
+    -- buffCount 0 is too common to be evidence. See BuildCandidates.
+    local levelAgreed = false
+
+    -- level: SOFT tiebreak — scores on an exact match (or the level-squish
+    -- alternate) but NEVER rejects. Curated levels are a capture-time artifact and
+    -- drift against live scaling: Maisara mobs captured at 91 read as 90 in the
+    -- live key, and a HARD level reject then pruned every mob's OWN row and
+    -- collapsed the whole pull onto the sole curated level-90 row (the Hexbound
+    -- Eagle, 249020). Score-not-reject keeps the correct row alive and lets Layer2
+    -- cast/channel DURATION — stable across scaling — disambiguate. Same rationale
+    -- as buffCount below (in-game proven 2026-07-07, log wz0ofknbw).
+    if id.level ~= nil and obs.level ~= nil then
+        strength = strength + 1
+        if obs.level == id.level or obs.level == (id.level - TI.LEVEL_SQUISH_OFFSET) then
+            score = score + 1
+            levelAgreed = true
+        end
+    end
+
+    -- sex / power / classID: exact equality; mismatch HARD-REJECTS. These are
+    -- stable, non-secret identity — they do not drift.
+    local exactFields = { "sex", "power", "classID" }
+    for _, f in ipairs(exactFields) do
+        if id[f] ~= nil and obs[f] ~= nil then
+            strength = strength + 1
+            if tonumber(obs[f]) == tonumber(id[f]) then
+                score = score + 1
+            else
+                return false, score, strength, f
+            end
+        end
+    end
+
+    -- buffCount: SOFT tiebreak — scores on an exact match but NEVER rejects.
+    -- In a 12.0 instance we can COUNT a mob's auras but not read their
+    -- spellID/source (secret), so the observed value is a raw HELPFUL count
+    -- minus a blanket M+ "-1" (readIdentity). That matches the captured
+    -- fingerprint only when the live aura set equals the capture-time set;
+    -- across affix seasons / patches / key levels it drifts (proven in-game:
+    -- a proto-drake's passive buffs inflate the count past its stored value).
+    -- A hard reject on a drifted count zeroes the candidate pool, so buffCount
+    -- only breaks ties among identity-equal survivors and Layer2 cast-duration
+    -- disambiguation — stable across patches — resolves the collision. This is
+    -- a deliberate deviation from ExBoss (which hard-rejects here); rationale
+    -- + collision-safety proof in dev/docs/dungeon-trash-engine-port-spec.md §3.
+    if id.buffCount ~= nil and obs.buffCount ~= nil then
+        strength = strength + 1
+        if tonumber(obs.buffCount) == tonumber(id.buffCount) then
+            score = score + 1
+        end
+    end
+
+    -- classification: elite rows need obs "elite"; nonElite rows need not-"elite".
+    if obs.unitClassification ~= nil then
+        strength = strength + 1
+        if id.nonElite == true then
+            if obs.unitClassification == "elite" then return false, score, strength, "classification" end
+        else
+            if obs.unitClassification ~= "elite" then return false, score, strength, "classification" end
+        end
+    elseif id.nonElite ~= true then
+        -- elite row but classification unknown → reject (matches ExBoss).
+        return false, score, strength, "classification-missing"
+    end
+
+    -- behavior capability: only gates once the plate was SEEN doing the thing.
+    if obs.sawCastStart and not (id.hasCastSpell or id.hasCastSkill) then
+        return false, score, strength, "saw-cast-no-cast-spell"
+    end
+    if obs.sawChannelStart and not (id.hasChannelSpell or obs.sawCastIntoChannel) then
+        return false, score, strength, "saw-channel-no-channel-spell"
+    end
+    if obs.sawInterrupted and id.cannotInterrupt == true then
+        return false, score, strength, "saw-interrupt-but-cannot"
+    elseif obs.sawInterrupted then
+        score = score + 1
+    end
+
+    -- placement.
+    if not TI.IsPlacementAllowed(trait.placement, opts) then
+        return false, score, strength, "placement"
+    end
+
+    return true, score, strength, nil, levelAgreed
+end
+
+-- Academy shared-signature test: the eagle/tamer mobs collapse to this.
+function TI.MatchesAcademySignature(obs)
+    return (obs.level == 91 or obs.level == 31)
+        and obs.sex == 1 and obs.power == 1
+        and obs.classID == 1 and obs.buffCount == 0
+end
+
+-- Route the Academy signature to a single npcID by M+ enemy-forces %.
+-- Boundaries ported verbatim (note the deliberate gaps → fall to 196671).
+function TI.ResolveAcademyForcesNPC(forcesPercent)
+    local f = tonumber(forcesPercent)
+    if not f then return 196671 end
+    if f < 20 then return 197219 end
+    if f > 20 and f < 25 then return 192680 end
+    if f > 26 and f < 42 then return 192333 end
+    return 196671
+end
+
+-- Build the sorted candidate list for a dungeon from an identity snapshot.
+-- opts: { traits=KE.TrashTraits, dungeonKey, mapID, forcesPercent, forcesValid,
+--         bossProgressIndex, currentSubZoneMapID }
+-- Returns candidates (array of {npcID,name,score,strength}) and resolved
+-- (single-survivor npcID or nil).
+function TI.BuildCandidates(obs, opts)
+    opts = opts or {}
+    local traits = opts.traits or KE.TrashTraits or {}
+    local dungeonKey = opts.dungeonKey
+    local out = {}
+
+    for npcID, trait in pairs(traits) do
+        if trait.dungeonKey == dungeonKey then
+            local matched, score, strength, _, levelAgreed = TI.ScoreTraitRow(obs, trait, opts)
+            if matched then
+                out[#out + 1] = { npcID = npcID, name = trait.name, score = score,
+                    strength = strength, levelAgreed = levelAgreed }
+            end
+        end
+    end
+
+    -- Academy forces-% routing: if the shared signature is active and forces
+    -- are known, drop every routed npc except the resolved one.
+    if opts.mapID == ACADEMY_MAP_ID and opts.forcesValid and TI.MatchesAcademySignature(obs) then
+        local keep = TI.ResolveAcademyForcesNPC(opts.forcesPercent)
+        local filtered = {}
+        for _, c in ipairs(out) do
+            if not ACADEMY_ROUTED_NPCS[c.npcID] or c.npcID == keep then
+                filtered[#filtered + 1] = c
+            end
+        end
+        out = filtered
+    end
+
+    -- score desc → strength desc → npcID asc (stable, deterministic).
+    table_sort(out, function(a, b)
+        if a.score ~= b.score then return a.score > b.score end
+        if a.strength ~= b.strength then return a.strength > b.strength end
+        return a.npcID < b.npcID
+    end)
+
+    -- Confident single resolve requires the lone survivor to have AGREED on level,
+    -- not just the coarse sex/power/classID triple. A lone survivor that matched
+    -- only that triple (level disagreed) stays unresolved and defers to Layer2 cast
+    -- disambiguation — killing the Rokh'zal/Gnarldin rubber-stamp while Souleater
+    -- (level agrees) still resolves. Multi-candidate sets are unaffected (they were
+    -- already nil → Layer2). See ScoreTraitRow's levelAgreed.
+    local resolved = (#out == 1 and out[1].levelAgreed) and out[1].npcID or nil
+    return out, resolved
+end
+
+-- Reconcile each trait's capability fingerprint against its curated spells. The
+-- upstream extractor drops hasChannelSpell for cast-into-channel spells (castTime
+-- AND channelTime both > 0) — a FALSE NEGATIVE that makes the Layer1 channel gate
+-- in ScoreTraitRow ("saw-channel-no-channel-spell") HARD-REJECT the correct mob
+-- the instant it channels, flipping the plate to an identical-except-that-bit
+-- twin (Arcane Sentry -> Shadowrift Voidcaller) or to zero candidates. Deriving
+-- hasChannelSpell from channelTime>0 (and hasCastSpell from castTime>0) at load
+-- keeps the fingerprint from ever contradicting a curated ability. Idempotent:
+-- only ever SETS true, never clears (the fingerprint may legitimately know a
+-- capability outside the curated subset). Pure — busted-testable.
+function TI.ReconcileTraitCapabilities(dataByMap, traits)
+    if type(dataByMap) ~= "table" or type(traits) ~= "table" then return end
+    for _, dungeon in pairs(dataByMap) do
+        local mobs = dungeon and dungeon.mobs
+        if mobs then
+            for npcID, mob in pairs(mobs) do
+                local trait = traits[npcID]
+                local id = trait and trait.identity
+                if id and mob.spells then
+                    for _, sp in pairs(mob.spells) do
+                        if (sp.castTime or 0) > 0 then id.hasCastSpell = true end
+                        if (sp.channelTime or 0) > 0 then id.hasChannelSpell = true end
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  Layer 2 — cast disambiguation                           ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+-- Data fingerprint field → observed-sample field. Compared only when the
+-- data field is present AND both sides are the right type (never reject on an
+-- unsampled/nil observation — matches ExBoss's type()=="boolean" gate).
+local BOOL_FINGERPRINTS = {
+    { data = "targetExists",           obs = "targetExists" },
+    { data = "targetAPIExists",        obs = "targetAPIExists" },
+    { data = "castStartChangeTarget",  obs = "castStartChangeTarget" },
+    { data = "targetClearOnCastStart", obs = "targetClearOnCastStart" },
+    { data = "castStartAuraDelta",     obs = "castStartAuraDelta" },
+}
+
+local function durationWithin(a, b, tol)
+    return type(a) == "number" and type(b) == "number" and abs(a - b) <= tol
+end
+
+-- Do a spell's boolean/numeric fingerprints agree with an observed cast? This is
+-- the DURATION-AGNOSTIC tail of matching, shared by SpellMatchesObserved and by
+-- InferSucceededSpell's channel fallback (Pass 2), which must identify a channel
+-- WITHOUT a duration gate.
+local function fingerprintsMatch(spellData, observed)
+    local fp = observed.fingerprints
+    if fp then
+        for _, m in ipairs(BOOL_FINGERPRINTS) do
+            local want = spellData[m.data]
+            local got = fp[m.obs]
+            if type(want) == "boolean" and type(got) == "boolean" and want ~= got then
+                return false
+            end
+        end
+    end
+    -- numeric success buff-count delta fingerprint.
+    if type(spellData.selfBuffCountDeltaOnSuccess) == "number"
+        and type(observed.selfBuffCountDelta) == "number"
+        and spellData.selfBuffCountDeltaOnSuccess ~= observed.selfBuffCountDelta then
+        return false
+    end
+    return true
+end
+
+-- Does one curated spell match an observed cast?
+-- observed: { kind="cast"|"channel", duration, fingerprints={...}, selfBuffCountDelta }
+-- Returns true if kind + duration (± tolerance, incl. castTimeExtra alternates)
+-- + every present boolean fingerprint agree.
+function TI.SpellMatchesObserved(spellData, observed)
+    if not (spellData and observed) then return false end
+    local tol = TI.CAST_TIME_TOLERANCE
+
+    -- kind + duration.
+    if observed.kind == "channel" then
+        if not spellData.channelTime then return false end
+        if not durationWithin(observed.duration, spellData.channelTime, tol) then return false end
+    else
+        -- cast: primary castTime or any castTimeExtra alternate.
+        local ok = durationWithin(observed.duration, spellData.castTime, tol)
+        if not ok and type(spellData.castTimeExtra) == "table" then
+            for _, alt in ipairs(spellData.castTimeExtra) do
+                if durationWithin(observed.duration, alt, tol) then ok = true; break end
+            end
+        end
+        if not ok then return false end
+    end
+
+    return fingerprintsMatch(spellData, observed)
+end
+
+-- Narrow a candidate npcID list by an observed cast. dataByNpc(npcID) returns
+-- that mob's data table (with .spells). Keeps only candidates having at least
+-- one spell that matches; if that collapses to a strict subset it wins, else
+-- the original list is returned (ambiguous → resolve stays nil upstream).
+function TI.FilterCandidates(candidates, observed, dataByNpc)
+    if type(candidates) ~= "table" then return candidates, nil end
+    if #candidates <= 1 then
+        return candidates, (candidates[1] and candidates[1].npcID) or nil
+    end
+    local kept = {}
+    for _, c in ipairs(candidates) do
+        local mob = dataByNpc and dataByNpc(c.npcID)
+        local anyMatch = false
+        if mob and mob.spells then
+            for _, spell in pairs(mob.spells) do
+                if TI.SpellMatchesObserved(spell, observed) then anyMatch = true; break end
+            end
+        end
+        if anyMatch then kept[#kept + 1] = c end
+    end
+    if #kept > 0 and #kept < #candidates then
+        return kept, (#kept == 1) and kept[1].npcID or nil
+    end
+    return candidates, nil
+end
+
+-- Pick which of a mob's spells just SUCCEEDED. Scores each timed spell by
+-- durationDelta*100 + scheduleProximity; lowest wins; a spell whose measured
+-- duration is outside tolerance, or whose fingerprints disagree, is skipped.
+-- anchors[spellID] = { anchorAt } (nil ok). Returns spellID or nil.
+function TI.InferSucceededSpell(mobData, observed, anchors, now, excludeTwoPhase)
+    if not (mobData and mobData.spells and observed) then return nil end
+    local tol = TI.CAST_TIME_TOLERANCE
+    local best, bestScore
+    for spellID, spell in pairs(mobData.spells) do
+        local first = spell.first
+        -- excludeTwoPhase: skip cast→channel spells so a shared-castTime one-phase
+        -- twin (e.g. Crowd Dispersal vs Arcane Beam) can be resolved on its own.
+        local skip = excludeTwoPhase and (spell.channelTime or 0) > 0
+        if first ~= nil and not skip and TI.SpellMatchesObserved(spell, observed) then
+            local dur = (observed.kind == "channel") and spell.channelTime or spell.castTime
+            local durationDelta = durationWithin(observed.duration, dur, tol)
+                and abs(observed.duration - dur) or nil
+            -- castTimeExtra: take the closest alternate if the primary missed.
+            if durationDelta == nil and type(spell.castTimeExtra) == "table" then
+                for _, alt in ipairs(spell.castTimeExtra) do
+                    if durationWithin(observed.duration, alt, tol) then
+                        local d = abs(observed.duration - alt)
+                        if durationDelta == nil or d < durationDelta then durationDelta = d end
+                    end
+                end
+            end
+            if durationDelta ~= nil then
+                local expectedDelta = 9999
+                local anchor = anchors and anchors[spellID]
+                if anchor and anchor.anchorAt and now then
+                    expectedDelta = abs((observed.startAt or now) - (anchor.anchorAt + first))
+                end
+                local s = durationDelta * 100 + expectedDelta
+                if not bestScore or s < bestScore then bestScore = s; best = spellID end
+            end
+        end
+    end
+    if best then return best end
+
+    -- Pass 2 — channel fallback. A grab/beam channel's caster CHANNEL_STOP fires
+    -- when the cast BAR closes, far short of the gameplay channelTime, so Pass 1's
+    -- duration gate wrongly drops it (Plungegrip 0.85s vs 12s; Arcane Beam 0.21s
+    -- vs 5s). The true channel duration is unreadable in 12.0 (secret), so identify
+    -- a channel by FINGERPRINT ONLY, no duration gate: a unique channel spell wins
+    -- outright; multiple channels break the tie by schedule proximity (never by the
+    -- untrustworthy measured duration) and only when an anchor already exists —
+    -- else stay unresolved and let a later anchored cast decide.
+    if observed.kind ~= "channel" then return nil end
+    local bestC, bestCScore, count = nil, nil, 0
+    for spellID, spell in pairs(mobData.spells) do
+        local first = spell.first
+        local skip = excludeTwoPhase and (spell.channelTime or 0) > 0
+        if first ~= nil and not skip and (spell.channelTime or 0) > 0
+            and fingerprintsMatch(spell, observed) then
+            count = count + 1
+            local expectedDelta = 9999
+            local anchor = anchors and anchors[spellID]
+            if anchor and anchor.anchorAt and now then
+                expectedDelta = abs((observed.startAt or now) - (anchor.anchorAt + first))
+            end
+            if not bestCScore or expectedDelta < bestCScore then
+                bestCScore = expectedDelta; bestC = spellID
+            end
+        end
+    end
+    if count == 1 then return bestC end
+    if count > 1 and bestCScore and bestCScore < 9999 then return bestC end
+    return nil
+end
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  cd walk — next-cast prediction                          ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+-- Next cast for a spell given its last success time and the cd[] index.
+-- cd[] is a round-robin sequence (last value effectively repeats via wrap).
+-- Returns nextStart, followingSeqIndex, isFuture. nil when unschedulable.
+function TI.ComputeNextCast(spellData, lastSucceededAt, seqIndex, now, minLead)
+    local cd = spellData and spellData.cd
+    if type(cd) ~= "table" or #cd == 0 or lastSucceededAt == nil then return nil end
+    local n = #cd
+    seqIndex = tonumber(seqIndex) or 1
+    if seqIndex < 1 or seqIndex > n then seqIndex = ((seqIndex - 1) % n) + 1 end
+    local step = cd[seqIndex]
+    if not step then return nil end
+    local nextStart = lastSucceededAt + step
+    local following = (seqIndex % n) + 1
+    local isFuture = (now == nil) or (nextStart > now + (minLead or TI.MIN_LEAD))
+    return nextStart, following, isFuture
+end
+
+-- Roll a spell's schedule forward to the next FUTURE cast: start at
+-- lastEventAt + cd[seqIndex] and, while that occurrence is already past, keep
+-- adding the successive cd[] steps (round-robin) until it lands in the future.
+-- Lets a missed / CC'd / delayed cast advance to the next cycle instead of the
+-- prediction going dark. Returns nextStart, followingSeqIndex, isFuture (isFuture
+-- false only when the spell is unschedulable). Bounded so a tiny cd can't spin.
+function TI.NextScheduledCast(spellData, lastEventAt, seqIndex, now, minLead)
+    local nextStart, following, isFuture = TI.ComputeNextCast(spellData, lastEventAt, seqIndex, now, minLead)
+    local guard = 0
+    while nextStart and not isFuture and guard < 128 do
+        nextStart, following, isFuture = TI.ComputeNextCast(spellData, nextStart, following, now, minLead)
+        guard = guard + 1
+    end
+    return nextStart, following, isFuture
+end
+
+-- First-cast prediction from mob ENGAGE, before any cast has been observed: the
+-- first occurrence is enterAt + first, later occurrences add cd[] round-robin. If
+-- we joined after the first cast was already due, it rolls forward. Returns
+-- nextStart, followingSeqIndex, isFuture (nil when unschedulable).
+function TI.NextEnterCast(spellData, enterAt, now, minLead)
+    local first = spellData and spellData.first
+    if type(first) ~= "number" or enterAt == nil then return nil end
+    local firstAt = enterAt + first
+    if now == nil or firstAt > now + (minLead or TI.MIN_LEAD) then
+        return firstAt, 1, true  -- first cast still upcoming; next interval is cd[1]
+    end
+    return TI.NextScheduledCast(spellData, firstAt, 1, now, minLead)
+end
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  Schedule signature (dirty-gate for reschedules)         ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+-- Cheap stable string; identical inputs → identical signature so an unchanged
+-- schedule skips the rebuild. anchors: { [spellID] = {mode,anchorAt,nextSeqIndex} }.
+function TI.BuildScheduleSignature(npcID, defaultAnchorAt, activeKind, activeStartAt, configRevision, anchors)
+    local parts = {
+        "npc=" .. tostring(npcID),
+        string.format("base=%.1f", tonumber(defaultAnchorAt) or 0),
+        string.format("active=%s@%.1f", tostring(activeKind or "-"), tonumber(activeStartAt) or 0),
+        "cfg=" .. tostring(configRevision or 0),
+    }
+    if type(anchors) == "table" then
+        local spellParts = {}
+        for spellID, a in pairs(anchors) do
+            spellParts[#spellParts + 1] = string.format("%s:%s:%.1f:%s",
+                tostring(spellID), tostring(a.mode or "-"),
+                tonumber(a.anchorAt) or 0, tostring(a.nextSeqIndex or 1))
+        end
+        table_sort(spellParts)
+        for _, sp in ipairs(spellParts) do parts[#parts + 1] = sp end
+    end
+    return table.concat(parts, "|")
+end
+
+return TI

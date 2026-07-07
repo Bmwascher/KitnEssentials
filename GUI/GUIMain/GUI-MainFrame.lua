@@ -167,6 +167,7 @@ GUIFrame.sidebarConfig = {
             { id = "DTimers_General",                  text = "General",         alwaysEnabled = true, keywords = { "dungeon timers", "timer", "general", "bigwigs", "boss", "enable" } },
             { id = "DTimers_Bars",                     text = "Bar Settings", keywords = { "bar", "bars", "timer", "color", "texture", "size" } },
             { id = "DTimers_Texts",                    text = "Text Settings", keywords = { "text", "font", "label", "timer" } },
+            { id = "DTimers_Nameplates",               text = "Nameplate Settings", alwaysEnabled = true, keywords = { "nameplate", "trash", "mob", "icon", "cooldown", "predict", "dungeon" } },
             { id = "DTimers_Dungeon_AlgetharAcademy",  text = "Algeth'ar Academy", keywords = { "algethar", "academy", "aa", "dungeon", "timer" } },
             { id = "DTimers_Dungeon_MagistersTerrace", text = "Magisters' Terrace", keywords = { "magisters", "terrace", "mgt", "dungeon", "timer" } },
             { id = "DTimers_Dungeon_MaisaraCaverns",   text = "Maisara Caverns", keywords = { "maisara", "caverns", "dungeon", "timer" } },

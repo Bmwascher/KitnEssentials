@@ -101,6 +101,17 @@ local function ResetOverridesForDungeon(DT, dungeonKey)
             end
         end
     end
+
+    -- Also clear standalone trash-tracker overrides for the same dungeon(s).
+    -- Keyed by mapID; dungeonKey == nil resets every dungeon's trash too.
+    local DTrash = KitnEssentials and KitnEssentials:GetModule("DungeonTrash", true)
+    if DTrash and DTrash.ResetTrashOverridesForDungeon and KE.TrashData then
+        for mapID, d in pairs(KE.TrashData) do
+            if not dungeonKey or d.dungeonKey == dungeonKey then
+                DTrash:ResetTrashOverridesForDungeon(mapID)
+            end
+        end
+    end
 end
 
 GUIFrame:RegisterContent("DTimers_General", function(scrollChild, yOffset)

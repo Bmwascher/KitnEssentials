@@ -204,9 +204,17 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
             KE.db.global._guiReset = true
         end
         ReloadUI()
+    elseif msg == "trash" then
+        -- Diagnostic snapshot of the Dungeon Trash tracker (see DTrash:DumpState).
+        local dt = KitnEssentials and KitnEssentials:GetModule("DungeonTrash", true)
+        if dt and dt.DumpState then
+            dt:DumpState()
+        else
+            KE:Print("Dungeon Trash tracker unavailable.")
+        end
     else
         -- "help" and anything unrecognized: list every subcommand.
-        KE:Print("Commands: /kes or gui (settings) | edit or unlock | profiler or prof | dm [reset | report [count] [channel]] | mt [clearsplits] | resetgui")
+        KE:Print("Commands: /kes or gui (settings) | edit or unlock | profiler or prof | dm [reset | report [count] [channel]] | mt [clearsplits] | trash | resetgui")
     end
 end
 

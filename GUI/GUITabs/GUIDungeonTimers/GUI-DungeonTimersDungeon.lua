@@ -134,6 +134,16 @@ local function GetModule()
     return nil
 end
 
+-- The standalone DungeonTrash module owns the trash-ability override backend
+-- (keyed mapID:npcID:spellID). Trash rows are folded into the same list+detail
+-- editor as boss spells/phases; this fetches the module the trash branches read.
+local function GetTrashModule()
+    if KitnEssentials then
+        return KitnEssentials:GetModule("DungeonTrash", true)
+    end
+    return nil
+end
+
 ---------------------------------------------------------------------------------
 -- Per-spell preview thunks. Wrap the DT module methods so callers can use
 -- them as `KE.GUI.DungeonTimers.<name>()` from sibling DT settings pages
@@ -175,6 +185,28 @@ local function ShowSpellPreview(spellId)
 end
 
 KE.GUI.DungeonTimers.HideSpellPreview = HideSpellPreview
+
+-- Trash-ability preview thunks — parallel to the boss spell preview above, but
+-- routed to the DungeonTrash module. The preview is a looping sample alert at
+-- the shared bar/text position; ShowTrashPreview only renders while a per-dungeon
+-- page is active (same guard as ShowSpellPreview).
+local function HideTrashPreview()
+    local mod = GetTrashModule()
+    if mod and mod.HideTrashPreview then mod:HideTrashPreview() end
+end
+
+local function RefreshTrashPreview()
+    local mod = GetTrashModule()
+    if mod and mod.RefreshTrashPreview then mod:RefreshTrashPreview() end
+end
+
+local function ShowTrashPreview(mapID, npcID, spellID)
+    if not GUIFrame or not GUIFrame:IsShown() then return end
+    local sel = GUIFrame.selectedSidebarItem or ""
+    if not sel:find("^DTimers_Dungeon_") then return end
+    local mod = GetTrashModule()
+    if mod and mod.ShowTrashPreview then mod:ShowTrashPreview(mapID, npcID, spellID) end
+end
 
 ---------------------------------------------------------------------------------
 -- Per-dungeon sticky state. Survives RefreshContent rebuilds so spell + tab
@@ -254,6 +286,51 @@ local function CollectEncountersForDungeon(dungeonKey)
         if ao ~= bo then return ao < bo end
         return a.id < b.id
     end)
+
+    -- Append ONE flat "Trash" group after the bosses — a single pseudo-encounter
+    -- (isTrash) whose "spells" are every curated trash-ability row for the
+    -- dungeon, keyed "trash:mapID:npcID:spellID". The same list+detail path
+    -- handles them; the render loop skips the "B#" boss prefix for isTrash
+    -- headers. Rows carry mobName so the detail tooltip can name the caster
+    -- (the flat list has no per-mob headers). TrashData is runtime-static like
+    -- EncounterData, so this belongs in the same cache.
+    local DTrash = GetTrashModule()
+    if DTrash and DTrash.TrashDungeonByKey then
+        local dungeon = DTrash:TrashDungeonByKey(dungeonKey)
+        if dungeon and dungeon.mobs then
+            local mapID = dungeon.mapID
+            local trashSpells = {}
+            for npcID, mob in pairs(dungeon.mobs) do
+                for spellID, spell in pairs(mob.spells or {}) do
+                    trashSpells[#trashSpells + 1] = {
+                        id      = string_format("trash:%d:%d:%d", mapID, npcID, spellID),
+                        data    = spell,
+                        isTrash = true,
+                        mapID   = mapID,
+                        npcID   = npcID,
+                        spellID = spellID,
+                        mobName = mob.name,
+                    }
+                end
+            end
+            -- Sort by casting mob, then ability name, so a mob's abilities stay
+            -- adjacent even without per-mob headers.
+            table_sort(trashSpells, function(a, b)
+                local an, bn = a.mobName or "", b.mobName or ""
+                if an ~= bn then return an < bn end
+                return (a.data.name or "") < (b.data.name or "")
+            end)
+            if #trashSpells > 0 then
+                table_insert(encList, {
+                    id      = string_format("trash:%d", mapID),
+                    name    = "Trash",
+                    isTrash = true,
+                    spells  = trashSpells,
+                })
+            end
+        end
+    end
+
     _encListCache[dungeonKey] = encList
     return encList
 end
@@ -303,16 +380,36 @@ end
 local STRIPE_RED    = { 1.0, 0.25, 0.25, 1.0 }
 local STRIPE_YELLOW = { 1.0, 0.85, 0.0,  1.0 }
 
+-- Detects trash rows — synthetic string key "trash:<mapID>:<npcID>:<spellID>".
+-- The same recurring spellID appears across dungeons/mobs, so all three IDs
+-- ride in the key; ParseTrashKey splits them back out for the DTrash accessors.
+local function IsTrashKey(key)
+    return type(key) == "string" and key:find("^trash:%d+:%d+:%d+$") ~= nil
+end
+
+local function ParseTrashKey(key)
+    local m, n, s = key:match("^trash:(%d+):(%d+):(%d+)$")
+    if not m then return nil end
+    return tonumber(m), tonumber(n), tonumber(s)
+end
+
 local function ApplyOverrideStripe(kit, spellId)
     if not (kit and kit.overrideStripe) then return end
-    local DT = GetModule()
     local hasOverrides, isDisabled
-    if IsPhaseKey(spellId) then
-        hasOverrides = (DT and DT.HasPhaseOverrides and DT:HasPhaseOverrides(spellId)) or false
-        isDisabled   = (DT and DT.IsPhaseDisabled   and DT:IsPhaseDisabled(spellId))   or false
+    if IsTrashKey(spellId) then
+        local DTrash = GetTrashModule()
+        local m, n, s = ParseTrashKey(spellId)
+        hasOverrides = (DTrash and DTrash.HasSpellOverrides and DTrash:HasSpellOverrides(m, n, s)) or false
+        isDisabled   = (DTrash and DTrash.GetSpellDisabled  and DTrash:GetSpellDisabled(m, n, s))  or false
     else
-        hasOverrides = (DT and DT.HasSpellOverrides and DT:HasSpellOverrides(spellId)) or false
-        isDisabled   = (DT and DT.IsSpellDisabled   and DT:IsSpellDisabled(spellId))   or false
+        local DT = GetModule()
+        if IsPhaseKey(spellId) then
+            hasOverrides = (DT and DT.HasPhaseOverrides and DT:HasPhaseOverrides(spellId)) or false
+            isDisabled   = (DT and DT.IsPhaseDisabled   and DT:IsPhaseDisabled(spellId))   or false
+        else
+            hasOverrides = (DT and DT.HasSpellOverrides and DT:HasSpellOverrides(spellId)) or false
+            isDisabled   = (DT and DT.IsSpellDisabled   and DT:IsSpellDisabled(spellId))   or false
+        end
     end
     if not hasOverrides then
         kit.overrideStripe:Hide()
@@ -331,31 +428,41 @@ local PHASE_ROW_ICON = 6013778
 local function ConfigureListRow(kit, spellId, spell, isSelected, item)
     kit._spellId = spellId
     local isPhase = item and item.isPhase or false
+    local isTrash = item and item.isTrash or false
     kit._isPhase = isPhase
+    kit._isTrash = isTrash
     -- Cache curated role on the kit so future hover handlers don't pay a
     -- DT helper lookup at hover time — pure-table read.
-    kit._roleTag = (not isPhase) and spell.role or nil
+    kit._roleTag = (not isPhase and not isTrash) and spell.role or nil
 
     if isPhase then
         kit.label:SetText(ResolvePhaseRowLabel(item))
+    elseif isTrash then
+        -- Trash rows label with the mob-spell's name (not any custom label),
+        -- mirroring how boss rows show the spell name rather than displayText.
+        kit.label:SetText(spell.name or "Trash")
     else
         kit.label:SetText(ResolveSpellDisplayName(spellId, spell))
     end
 
-    -- Override stripe — phase rules use HasPhaseOverrides / IsPhaseDisabled;
-    -- spells use the existing spell helpers. ApplyOverrideStripe routes
-    -- internally based on key shape.
+    -- Override stripe — routes internally on key shape (trash / phase / spell).
     ApplyOverrideStripe(kit, spellId)
 
     -- Display-mode tag (Bar / Text). Phase rules read via GetPhaseDisplay;
-    -- spells via GetSpellDisplay. RefreshListRowTag updates on Display tab toggles.
+    -- trash via DTrash:GetSpellDisplay; spells via GetSpellDisplay.
+    -- RefreshListRowTag updates on Display tab toggles.
     if kit.tagLabel then
-        local DT = GetModule()
         local effectiveDisplay
-        if isPhase then
-            effectiveDisplay = (DT and DT:GetPhaseDisplay(spellId)) or "text"
+        if isTrash then
+            local DTrash = GetTrashModule()
+            effectiveDisplay = (DTrash and DTrash:GetSpellDisplay(item.mapID, item.npcID, item.spellID)) or "bar"
         else
-            effectiveDisplay = (DT and DT:GetSpellDisplay(spellId)) or spell.display or "text"
+            local DT = GetModule()
+            if isPhase then
+                effectiveDisplay = (DT and DT:GetPhaseDisplay(spellId)) or "text"
+            else
+                effectiveDisplay = (DT and DT:GetSpellDisplay(spellId)) or spell.display or "text"
+            end
         end
         if effectiveDisplay == "bar" then
             kit.tagLabel:SetText("Bar")
@@ -368,12 +475,17 @@ local function ConfigureListRow(kit, spellId, spell, isSelected, item)
 
     -- Sound indicator: "S" if any onShow/onHide sound configured.
     if kit.soundLabel then
-        local DT_mod = GetModule()
         local hasSound
-        if isPhase then
-            hasSound = (DT_mod and DT_mod.HasPhaseSound and DT_mod:HasPhaseSound(spellId)) or false
+        if isTrash then
+            local DTrash = GetTrashModule()
+            hasSound = (DTrash and DTrash.HasSpellSound and DTrash:HasSpellSound(item.mapID, item.npcID, item.spellID)) or false
         else
-            hasSound = (DT_mod and DT_mod.HasSpellSound and DT_mod:HasSpellSound(spellId)) or false
+            local DT_mod = GetModule()
+            if isPhase then
+                hasSound = (DT_mod and DT_mod.HasPhaseSound and DT_mod:HasPhaseSound(spellId)) or false
+            else
+                hasSound = (DT_mod and DT_mod.HasSpellSound and DT_mod:HasSpellSound(spellId)) or false
+            end
         end
         if hasSound then
             kit.soundLabel:SetText("S")
@@ -383,11 +495,15 @@ local function ConfigureListRow(kit, spellId, spell, isSelected, item)
         end
     end
 
-    -- Icon: phase rules get a heart texture; spells route through DT:ResolveSpellIcon
-    -- so curator iconOverride (e.g. Backlash → 4914666) wins over the spell's default.
+    -- Icon: phase rules get a heart texture; trash + spells resolve from the
+    -- spell's texture (trash has no curator icon override, so straight lookup).
     if kit.icon then
         if isPhase then
             kit.icon:SetTexture(PHASE_ROW_ICON)
+        elseif isTrash then
+            local tex = (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(item.spellID))
+                        or 134400
+            kit.icon:SetTexture(tex)
         else
             local DT = GetModule()
             local tex = (DT and DT.ResolveSpellIcon and DT:ResolveSpellIcon(spellId))
@@ -411,6 +527,7 @@ local function ResetListRow(kit)
     kit._spellId = nil
     kit._roleTag = nil
     kit._isPhase = nil
+    kit._isTrash = nil
     if kit.label then kit.label:SetText("") end
     if kit.bg then kit.bg:SetColorTexture(0, 0, 0, 0) end
     if kit.icon then kit.icon:SetTexture(134400) end
@@ -538,12 +655,18 @@ end
 -- immediately when a sound is set or cleared.
 local function RefreshListRowSound(spellId)
     if not spellId then return end
-    local DT = GetModule()
     local hasSound
-    if IsPhaseKey(spellId) then
-        hasSound = (DT and DT.HasPhaseSound and DT:HasPhaseSound(spellId)) or false
+    if IsTrashKey(spellId) then
+        local DTrash = GetTrashModule()
+        local m, n, s = ParseTrashKey(spellId)
+        hasSound = (DTrash and DTrash.HasSpellSound and DTrash:HasSpellSound(m, n, s)) or false
     else
-        hasSound = (DT and DT.HasSpellSound and DT:HasSpellSound(spellId)) or false
+        local DT = GetModule()
+        if IsPhaseKey(spellId) then
+            hasSound = (DT and DT.HasPhaseSound and DT:HasPhaseSound(spellId)) or false
+        else
+            hasSound = (DT and DT.HasSpellSound and DT:HasSpellSound(spellId)) or false
+        end
     end
     for i = 1, listRowPool._activeCount do
         local kit = listRowPool._kits[i]
@@ -566,12 +689,18 @@ end
 -- destroy the toggle widget mid-animation).
 local function RefreshListRowTag(spellId)
     if not spellId then return end
-    local DT = GetModule()
     local effectiveDisplay
-    if IsPhaseKey(spellId) then
-        effectiveDisplay = (DT and DT:GetPhaseDisplay(spellId)) or "text"
+    if IsTrashKey(spellId) then
+        local DTrash = GetTrashModule()
+        local m, n, s = ParseTrashKey(spellId)
+        effectiveDisplay = (DTrash and DTrash:GetSpellDisplay(m, n, s)) or "bar"
     else
-        effectiveDisplay = (DT and DT:GetSpellDisplay(spellId)) or "text"
+        local DT = GetModule()
+        if IsPhaseKey(spellId) then
+            effectiveDisplay = (DT and DT:GetPhaseDisplay(spellId)) or "text"
+        else
+            effectiveDisplay = (DT and DT:GetSpellDisplay(spellId)) or "text"
+        end
     end
     for i = 1, listRowPool._activeCount do
         local kit = listRowPool._kits[i]
@@ -2074,6 +2203,614 @@ local function BuildPhaseActionsTabBody(parent, phaseKey)
 end
 
 ---------------------------------------------------------------------------------
+-- Trash ability tab bodies. Trash rows are folded into the same list+detail
+-- editor as boss spells/phases (keyed "trash:mapID:npcID:spellID"); these three
+-- builders mirror the boss Visibility/Display/Actions tabs but read/write the
+-- DungeonTrash override backend via explicit (mapID, npcID, spellID). Built
+-- fresh per render like the boss tabs; teardown rides the same ReleaseAll hook.
+-- Each takes the list `item` ({ id, data, mapID, npcID, spellID }).
+---------------------------------------------------------------------------------
+local ROLE_TOKEN_TO_KEY = { TANK = "tank", HEALER = "healer", DAMAGER = "dps" }
+
+-- Friendly "Default: X" summary of a curated {tank,healer,dps} role set.
+local function TrashFriendlyRoles(r)
+    if not r or (r.tank and r.healer and r.dps) then return "Everyone" end
+    local parts = {}
+    if r.tank then parts[#parts + 1] = "Tank" end
+    if r.healer then parts[#parts + 1] = "Healer" end
+    if r.dps then parts[#parts + 1] = "DPS" end
+    if #parts == 0 then return "No one" end
+    return table.concat(parts, ", ")
+end
+
+local function BuildTrashVisibilityTabBody(parent, item)
+    local DTrash = GetTrashModule()
+    local m, n, s = item.mapID, item.npcID, item.spellID
+    local key = item.id
+    local body = CreateFrame("Frame", nil, parent)
+    body:SetAllPoints()
+
+    -- Section: Master
+    local masterHeader = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(masterHeader, "Expressway", 13, "OUTLINE")
+    masterHeader:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
+    masterHeader:SetText("Master")
+    masterHeader:SetPoint("TOPLEFT", body, "TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING)
+    do
+        local underline = body:CreateTexture(nil, "ARTWORK")
+        underline:SetHeight(1)
+        underline:SetColorTexture(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3], 0.4)
+        underline:SetPoint("LEFT", masterHeader, "RIGHT", 6, 0)
+        underline:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+        underline:SetPoint("TOP", masterHeader, "TOP", 0, -8)
+    end
+
+    local secondaryWidgets = {}
+
+    local enableState = true
+    if DTrash then enableState = not DTrash:GetSpellDisabled(m, n, s) end
+    local enableToggle = GUIFrame:CreateCheckbox(body, "Enable this ability", {
+        value = enableState,
+        callback = function(checked)
+            if not (DTrash and DTrash.SetSpellDisabled) then return end
+            DTrash:SetSpellDisabled(m, n, s, not checked)
+            RefreshOverrideStripe(key)
+            for _, w in ipairs(secondaryWidgets) do
+                if w.SetEnabled then w:SetEnabled(checked) end
+            end
+        end,
+    })
+    enableToggle:SetPoint("TOPLEFT", masterHeader, "BOTTOMLEFT", 0, -10)
+    enableToggle:SetWidth(200)
+
+    -- Section: Who Sees It — role allow-list (same three toggles as boss spells,
+    -- driven by the DungeonTrash role backend instead of the DungeonTimers one).
+    local whoHeader = CreateSectionHeader(body, enableToggle, "Who Sees It", 16)
+
+    local sectionLabel = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(sectionLabel, "Expressway", 12, "OUTLINE")
+    sectionLabel:SetPoint("TOPLEFT", whoHeader, "BOTTOMLEFT", 0, -10)
+    sectionLabel:SetTextColor(0.85, 0.85, 0.85)
+    sectionLabel:SetText("Show this alert for:")
+
+    local roles = (DTrash and DTrash:GetSpellEffectiveRoles(m, n, s))
+                  or { tank = true, healer = true, dps = true }
+    local TOGGLE_COL_STRIDE = 110
+    local prev, firstToggle
+    for _, roleEntry in ipairs(PLAYER_ROLE_TOKENS) do
+        local roleKey = ROLE_TOKEN_TO_KEY[roleEntry.token]
+        local togRow = GUIFrame:CreateCheckbox(body, roleEntry.label, {
+            value = roles[roleKey] and true or false,
+            callback = function(checked)
+                if not (DTrash and DTrash.SetSpellRoleOverride) then return end
+                DTrash:SetSpellRoleOverride(m, n, s, roleKey, checked and true or false)
+                RefreshOverrideStripe(key)
+            end,
+        })
+        if prev then
+            togRow:SetPoint("TOPLEFT", prev, "TOPLEFT", TOGGLE_COL_STRIDE, 0)
+        else
+            togRow:SetPoint("TOPLEFT", sectionLabel, "BOTTOMLEFT", 0, -8)
+            firstToggle = togRow
+        end
+        togRow:SetWidth(TOGGLE_COL_STRIDE - 8)
+        prev = togRow
+        secondaryWidgets[#secondaryWidgets + 1] = togRow
+    end
+
+    local defaultLabel
+    if firstToggle then
+        defaultLabel = body:CreateFontString(nil, "OVERLAY")
+        KE:ApplyFontToText(defaultLabel, "Expressway", 12, "OUTLINE")
+        defaultLabel:SetPoint("TOPLEFT", firstToggle, "BOTTOMLEFT", 0, -8)
+        defaultLabel:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
+        defaultLabel:SetJustifyH("LEFT")
+        defaultLabel:SetWordWrap(false)
+        local curated = DTrash and DTrash:GetSpellCuratedRoles(m, n, s)
+        defaultLabel:SetText(string_format("Default: %s", TrashFriendlyRoles(curated)))
+    end
+
+    -- Section: On Nameplate — the one addition over the boss Visibility tab.
+    local plateAnchor = defaultLabel or firstToggle or sectionLabel
+    local plateHeader = CreateSectionHeader(body, plateAnchor, "On Nameplate", 18)
+
+    local plateOn = true
+    if DTrash then plateOn = DTrash:GetSpellShowNameplate(m, n, s) end
+    local plateCheck = GUIFrame:CreateCheckbox(body, "Show cooldown icon on the enemy nameplate", {
+        value = plateOn,
+        callback = function(checked)
+            if not (DTrash and DTrash.SetSpellNameplateOverride) then return end
+            DTrash:SetSpellNameplateOverride(m, n, s, checked)
+            RefreshOverrideStripe(key)
+        end,
+    })
+    plateCheck:SetPoint("TOPLEFT", plateHeader, "BOTTOMLEFT", 0, -10)
+    plateCheck:SetWidth(360)
+    secondaryWidgets[#secondaryWidgets + 1] = plateCheck
+
+    local plateCaption = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(plateCaption, "Expressway", 11, "OUTLINE")
+    plateCaption:SetPoint("TOPLEFT", plateCheck, "BOTTOMLEFT", 0, -10)
+    plateCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    plateCaption:SetJustifyH("LEFT")
+    plateCaption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
+    plateCaption:SetText("Draws a small countdown icon over the casting mob's nameplate. The central alert is unaffected.")
+
+    -- Section: When It Appears — per-ability reveal window (how many seconds
+    -- before the predicted cast the central alert appears). Trash alerts are
+    -- pure countdowns with no spawn moment, so the minimum is 1s (no boss-style
+    -- "0 = always visible"). Unset follows the shared group's ShowAtSeconds.
+    local revealHeader = CreateSectionHeader(body, plateCaption, "When It Appears", 18)
+    local groupReveal = (DTrash and DTrash:GetSpellRevealAtDefault(m, n, s)) or 8
+    local revealValue = (DTrash and DTrash:GetSpellRevealAt(m, n, s)) or groupReveal
+    if revealValue < 1 then revealValue = 1 end
+    local revealRow = GUIFrame:CreateRow(body, 36)
+    revealRow:SetPoint("TOPLEFT", revealHeader, "BOTTOMLEFT", 0, -8)
+    revealRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    local revealSlider = GUIFrame:CreateSlider(revealRow, "Reveal at (s before cast)", {
+        min = 1, max = 30, step = 1,
+        value = revealValue,
+        labelWidth = 160,
+        callback = function(val)
+            if not (DTrash and DTrash.SetSpellRevealAtOverride) then return end
+            DTrash:SetSpellRevealAtOverride(m, n, s, val)
+            RefreshOverrideStripe(key)
+            RefreshTrashPreview()
+        end,
+    })
+    revealRow:AddWidget(revealSlider, 1.0, 0)
+    secondaryWidgets[#secondaryWidgets + 1] = revealSlider
+
+    local revealCaption = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(revealCaption, "Expressway", 11, "OUTLINE")
+    revealCaption:SetPoint("TOPLEFT", revealRow, "BOTTOMLEFT", 8, -12)
+    revealCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    revealCaption:SetJustifyH("LEFT")
+    revealCaption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
+    revealCaption:SetText(string_format("Seconds before the predicted cast the alert appears. Group default: %d.", groupReveal))
+
+    -- Reset button (destructive; red text + confirm prompt).
+    local resetRow = GUIFrame:CreateRow(body, 28)
+    resetRow:SetPoint("LEFT", body, "LEFT", DETAIL_PADDING, 0)
+    resetRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    resetRow:SetPoint("TOP", revealCaption, "BOTTOM", 0, -16)
+    local resetBtn = GUIFrame:CreateButton(resetRow, "Reset ability to default", {
+        height = 26,
+        callback = function()
+            if not (DTrash and DTrash.ResetSpellOverrides) then return end
+            KE:CreatePrompt(
+                "Reset ability to default",
+                "Clear all overrides for this trash ability?\n\nVisibility, display, and actions overrides will revert to curated defaults. This cannot be undone.",
+                false, nil, false, nil, nil, nil, nil,
+                function()
+                    DTrash:ResetSpellOverrides(m, n, s)
+                    -- Rebuild the live preview from the now-cleared overrides.
+                    -- RefreshContent's in-place refresh skips the cleanup
+                    -- callbacks (same sidebar item), so ShowTrashPreview's
+                    -- signature dedup would otherwise keep the stale sample up.
+                    RefreshTrashPreview()
+                    if GUIFrame.RefreshContent then GUIFrame:RefreshContent() end
+                end,
+                nil, "Reset", "Cancel"
+            )
+        end,
+    })
+    if resetBtn.text then
+        resetBtn.text:SetTextColor(REMOVE_COLOR[1], REMOVE_COLOR[2], REMOVE_COLOR[3], REMOVE_COLOR[4])
+    end
+    resetRow:AddWidget(resetBtn, 1.0, 0)
+
+    if not enableState then
+        for _, w in ipairs(secondaryWidgets) do
+            if w.SetEnabled then w:SetEnabled(false) end
+        end
+    end
+
+    return body
+end
+
+local function BuildTrashDisplayTabBody(parent, item)
+    local DTrash = GetTrashModule()
+    local DT = GetModule()  -- DISPLAY_PRESETS palette lives on the DungeonTimers module
+    local m, n, s = item.mapID, item.npcID, item.spellID
+    local key = item.id
+    local body = CreateFrame("Frame", nil, parent)
+    body:SetAllPoints()
+
+    local secondaryWidgets = {}
+    local refreshColorPicker  -- forward-declared; assigned after the picker exists
+
+    -- Section: Display Mode
+    local modeHeader = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(modeHeader, "Expressway", 13, "OUTLINE")
+    modeHeader:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
+    modeHeader:SetText("Display Mode")
+    modeHeader:SetPoint("TOPLEFT", body, "TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING)
+    do
+        local underline = body:CreateTexture(nil, "ARTWORK")
+        underline:SetHeight(1)
+        underline:SetColorTexture(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3], 0.4)
+        underline:SetPoint("LEFT", modeHeader, "RIGHT", 6, 0)
+        underline:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+        underline:SetPoint("TOP", modeHeader, "TOP", 0, -8)
+    end
+
+    local sectionLabel = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(sectionLabel, "Expressway", 12, "OUTLINE")
+    sectionLabel:SetPoint("TOPLEFT", modeHeader, "BOTTOMLEFT", 0, -14)
+    sectionLabel:SetTextColor(0.85, 0.85, 0.85)
+    sectionLabel:SetText("Render this ability as:")
+
+    local currentMode = (DTrash and DTrash:GetSpellDisplay(m, n, s)) or "bar"
+    local toggle = CreateSegmentedToggle(body,
+        { { id = "bar", label = "Bar" }, { id = "text", label = "Text" } },
+        currentMode,
+        function(newId)
+            if not (DTrash and DTrash.SetSpellDisplayOverride) then return end
+            DTrash:SetSpellDisplayOverride(m, n, s, newId)
+            RefreshOverrideStripe(key)
+            RefreshListRowTag(key)
+            RefreshTrashPreview()
+        end)
+    toggle:SetPoint("TOPLEFT", sectionLabel, "BOTTOMLEFT", 0, -8)
+    secondaryWidgets[#secondaryWidgets + 1] = toggle
+
+    local curatedDisplay = (DTrash and DTrash:GetSpellCuratedDisplay(m, n, s)) or "bar"
+    local defaultLabel = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(defaultLabel, "Expressway", 12, "OUTLINE")
+    defaultLabel:SetPoint("LEFT", toggle, "RIGHT", 16, 0)
+    defaultLabel:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
+    defaultLabel:SetJustifyH("LEFT")
+    defaultLabel:SetText(string_format("Default: %s", (curatedDisplay == "bar") and "Bar" or "Text"))
+
+    local caption = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(caption, "Expressway", 11, "OUTLINE")
+    caption:SetPoint("TOPLEFT", toggle, "BOTTOMLEFT", 0, -12)
+    caption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    caption:SetJustifyH("LEFT")
+    caption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
+    caption:SetText(
+        "Bar = filled countdown bar with icon and timer.\n"
+        .. "Text = single-line label counting down to the next cast.")
+
+    -- Section: Custom Label
+    local labelHeader = CreateSectionHeader(body, caption, "Custom Label", 22)
+
+    local labelEditRow = GUIFrame:CreateRow(body, 40)
+    labelEditRow:SetPoint("TOPLEFT", labelHeader, "BOTTOMLEFT", 0, -12)
+    labelEditRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+
+    local currentOverride = (DTrash and DTrash:GetSpellLabelOverride(m, n, s)) or ""
+    local labelEdit = GUIFrame:CreateEditBox(labelEditRow, "Override", {
+        value = currentOverride,
+        callback = function(text)
+            if not (DTrash and DTrash.SetSpellLabelOverride) then return end
+            DTrash:SetSpellLabelOverride(m, n, s, text)
+            RefreshOverrideStripe(key)
+            RefreshTrashPreview()
+        end,
+        tooltip = "Custom short label for the alert (e.g. DODGE, SOAK, INTERRUPT).\n"
+               .. "Empty = use the ability's name.",
+    })
+    labelEditRow:AddWidget(labelEdit, 1)
+    secondaryWidgets[#secondaryWidgets + 1] = labelEdit
+
+    local labelCaption = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(labelCaption, "Expressway", 11, "OUTLINE")
+    labelCaption:SetPoint("TOPLEFT", labelEditRow, "BOTTOMLEFT", 0, -8)
+    labelCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    labelCaption:SetJustifyH("LEFT")
+    labelCaption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
+    labelCaption:SetText(string_format("Empty = use the built-in name. Default: %s.",
+        (DTrash and DTrash:GetSpellCuratedLabel(m, n, s)) or "Trash"))
+
+    -- Section: Available Presets — reuse the DungeonTimers DISPLAY_PRESETS
+    -- palette. Trash has no label->color auto-resolver, so a preset click
+    -- writes BOTH the label and the matching color override in one action.
+    local presetHeader = CreateSectionHeader(body, labelCaption, "Available Presets", 22)
+
+    local presetKeys = {}
+    if DT and DT.DISPLAY_PRESETS then
+        for k, p in pairs(DT.DISPLAY_PRESETS) do
+            if not (p and p.hidden) then presetKeys[#presetKeys + 1] = k end
+        end
+        table_sort(presetKeys)
+    end
+
+    local CHIP_WIDTH, CHIP_HEIGHT, CHIP_HGAP, CHIP_VGAP, CHIPS_PER_ROW = 80, 24, 4, 4, 5
+    local presetGrid = CreateFrame("Frame", nil, body)
+    presetGrid:SetPoint("TOPLEFT", presetHeader, "BOTTOMLEFT", 0, -10)
+    presetGrid:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+
+    for i, k in ipairs(presetKeys) do
+        local p = DT.DISPLAY_PRESETS[k]
+        local gridRow = math.floor((i - 1) / CHIPS_PER_ROW)
+        local col = (i - 1) % CHIPS_PER_ROW
+        local chip = CreateFrame("Button", nil, presetGrid, "BackdropTemplate")
+        chip:SetSize(CHIP_WIDTH, CHIP_HEIGHT)
+        chip:SetPoint("TOPLEFT", presetGrid, "TOPLEFT",
+            col * (CHIP_WIDTH + CHIP_HGAP), -gridRow * (CHIP_HEIGHT + CHIP_VGAP))
+        chip:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1,
+        })
+        chip:SetBackdropColor(KE.Theme.bgMedium[1], KE.Theme.bgMedium[2], KE.Theme.bgMedium[3], 1)
+        chip:SetBackdropBorderColor(KE.Theme.border[1], KE.Theme.border[2], KE.Theme.border[3], 1)
+        local txt = chip:CreateFontString(nil, "OVERLAY")
+        KE:ApplyFontToText(txt, "Expressway", 12, "OUTLINE")
+        txt:SetPoint("CENTER")
+        txt:SetText(p.label)
+        txt:SetTextColor(p.color[1], p.color[2], p.color[3], 1)
+        chip:SetScript("OnEnter", function(self)
+            self:SetBackdropBorderColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3], 1)
+        end)
+        chip:SetScript("OnLeave", function(self)
+            self:SetBackdropBorderColor(KE.Theme.border[1], KE.Theme.border[2], KE.Theme.border[3], 1)
+        end)
+        local chipLabel, chipColor = p.label, p.color
+        chip:SetScript("OnClick", function()
+            if not (DTrash and DTrash.SetSpellLabelOverride) then return end
+            DTrash:SetSpellLabelOverride(m, n, s, chipLabel)
+            DTrash:SetSpellColorOverride(m, n, s, { chipColor[1], chipColor[2], chipColor[3] })
+            local actual = DTrash:GetSpellLabelOverride(m, n, s) or ""
+            if labelEdit.SetValue then labelEdit:SetValue(actual, true) end
+            if refreshColorPicker then refreshColorPicker() end
+            RefreshOverrideStripe(key)
+            RefreshTrashPreview()
+        end)
+        function chip:SetEnabled(enabled)
+            if enabled then
+                self:Enable(); self:EnableMouse(true); self:SetAlpha(1)
+            else
+                self:Disable(); self:EnableMouse(false); self:SetAlpha(0.5)
+            end
+        end
+        secondaryWidgets[#secondaryWidgets + 1] = chip
+    end
+
+    if #presetKeys > 0 then
+        local totalRows = math.ceil(#presetKeys / CHIPS_PER_ROW)
+        presetGrid:SetHeight(totalRows * CHIP_HEIGHT + (totalRows - 1) * CHIP_VGAP)
+    else
+        presetGrid:SetHeight(1)
+    end
+
+    local presetCaption = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(presetCaption, "Expressway", 11, "OUTLINE")
+    presetCaption:SetPoint("TOPLEFT", presetGrid, "BOTTOMLEFT", 0, -8)
+    presetCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    presetCaption:SetJustifyH("LEFT")
+    presetCaption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
+    presetCaption:SetText("Click a preset to apply its label and color.")
+
+    -- Section: Color
+    local colorHeader = CreateSectionHeader(body, presetCaption, "Color", 22)
+
+    local function ResolveEffectiveColor()
+        return (DTrash and DTrash:GetSpellEffectiveColor(m, n, s)) or { 0.3, 0.5, 0.9 }
+    end
+    local effectiveColor = ResolveEffectiveColor()
+
+    local colorRow = CreateFrame("Frame", nil, body)
+    colorRow:SetHeight(36)
+    colorRow:SetPoint("TOPLEFT", colorHeader, "BOTTOMLEFT", 0, -10)
+    colorRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+
+    local colorPicker = GUIFrame:CreateColorPicker(colorRow, "Color", {
+        color = { effectiveColor[1], effectiveColor[2], effectiveColor[3], 1 },
+        callback = function(r, g, b)
+            if not (DTrash and DTrash.SetSpellColorOverride) then return end
+            DTrash:SetSpellColorOverride(m, n, s, { r, g, b })
+            RefreshOverrideStripe(key)
+            RefreshTrashPreview()
+        end,
+        tooltip = "Bar fill / text color for this ability's countdown alert.",
+    })
+    colorPicker:ClearAllPoints()
+    colorPicker:SetPoint("TOPLEFT", colorRow, "TOPLEFT", 0, 0)
+    colorPicker:SetWidth(150)
+
+    local resetColorBtn = GUIFrame:CreateButton(colorRow, "Reset to default", {
+        height = 24, width = 130,
+        callback = function()
+            if not (DTrash and DTrash.SetSpellColorOverride) then return end
+            DTrash:SetSpellColorOverride(m, n, s, nil)
+            local saved = colorPicker._callback
+            colorPicker._callback = nil
+            local c = ResolveEffectiveColor()
+            colorPicker:SetColor(c[1], c[2], c[3], 1)
+            colorPicker._callback = saved
+            RefreshOverrideStripe(key)
+            RefreshTrashPreview()
+        end,
+    })
+    resetColorBtn:ClearAllPoints()
+    resetColorBtn:SetPoint("LEFT", colorPicker, "RIGHT", 12, -7)
+    secondaryWidgets[#secondaryWidgets + 1] = colorPicker
+    secondaryWidgets[#secondaryWidgets + 1] = resetColorBtn
+
+    refreshColorPicker = function()
+        if not colorPicker then return end
+        local saved = colorPicker._callback
+        colorPicker._callback = nil
+        local c = ResolveEffectiveColor()
+        colorPicker:SetColor(c[1], c[2], c[3], 1)
+        colorPicker._callback = saved
+    end
+
+    local colorCaption = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(colorCaption, "Expressway", 11, "OUTLINE")
+    colorCaption:SetPoint("TOPLEFT", colorRow, "BOTTOMLEFT", 0, -8)
+    colorCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    colorCaption:SetJustifyH("LEFT")
+    colorCaption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
+    colorCaption:SetText("Applies to the bar fill in Bar mode and the label in Text mode.")
+
+    -- Section: Time Format — per-ability decimal threshold. Default 10 (trash's
+    -- existing cutoff; the boss editor defaults to 30). Below the threshold the
+    -- countdown shows one decimal; at or above, whole seconds.
+    local timeFmtHeader = CreateSectionHeader(body, colorCaption, "Time Format", 22)
+    local currentThreshold = (DTrash and DTrash:GetSpellDecimalThreshold(m, n, s)) or 10
+    local thresholdRow = GUIFrame:CreateRow(body, 36)
+    thresholdRow:SetPoint("TOPLEFT", timeFmtHeader, "BOTTOMLEFT", 0, -10)
+    thresholdRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    local thresholdSlider = GUIFrame:CreateSlider(thresholdRow, "Show decimals under (s)", {
+        min = 0, max = 30, step = 1,
+        value = currentThreshold,
+        labelWidth = 160,
+        callback = function(val)
+            if not (DTrash and DTrash.SetSpellDecimalThreshold) then return end
+            DTrash:SetSpellDecimalThreshold(m, n, s, val)
+            RefreshOverrideStripe(key)
+            RefreshTrashPreview()
+        end,
+    })
+    thresholdRow:AddWidget(thresholdSlider, 1.0, 0)
+    secondaryWidgets[#secondaryWidgets + 1] = thresholdSlider
+
+    local thresholdCaption = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(thresholdCaption, "Expressway", 11, "OUTLINE")
+    thresholdCaption:SetPoint("TOPLEFT", thresholdRow, "BOTTOMLEFT", 0, -12)
+    thresholdCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    thresholdCaption:SetJustifyH("LEFT")
+    thresholdCaption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
+    thresholdCaption:SetText("0 = always whole seconds. 30 = always decimals. Default 10.")
+
+    if DTrash and DTrash:GetSpellDisabled(m, n, s) then
+        for _, w in ipairs(secondaryWidgets) do
+            if w.SetEnabled then w:SetEnabled(false) end
+        end
+    end
+
+    return body
+end
+
+local function BuildTrashActionsTabBody(parent, item)
+    local DTrash = GetTrashModule()
+    local m, n, s = item.mapID, item.npcID, item.spellID
+    local key = item.id
+    local body = CreateFrame("Frame", nil, parent)
+    body:SetAllPoints()
+
+    local soundList = { ["None"] = "None" }
+    local LSM = KE.LSM
+    if LSM then
+        for name in pairs(LSM:HashTable("sound")) do soundList[name] = name end
+    end
+
+    -- Preview always plays (editor preview, not gated by the live mute). Channel
+    -- tracks the DungeonTimers SoundChannel so it matches in-encounter playback.
+    local function PreviewSound(soundKey)
+        if not soundKey or soundKey == "None" or soundKey == "" then return end
+        if not LSM then return end
+        local file = LSM:Fetch("sound", soundKey)
+        if file then
+            local DT_mod = GetModule()
+            local channel = (DT_mod and DT_mod.db and DT_mod.db.SoundChannel) or "Master"
+            PlaySoundFile(file, channel)
+        end
+    end
+
+    local secondaryWidgets = {}
+
+    -- Section: On Show
+    local showHeader = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(showHeader, "Expressway", 13, "OUTLINE")
+    showHeader:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
+    showHeader:SetText("On Show")
+    showHeader:SetPoint("TOPLEFT", body, "TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING)
+    do
+        local underline = body:CreateTexture(nil, "ARTWORK")
+        underline:SetHeight(1)
+        underline:SetColorTexture(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3], 0.4)
+        underline:SetPoint("LEFT", showHeader, "RIGHT", 6, 0)
+        underline:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+        underline:SetPoint("TOP", showHeader, "TOP", 0, -8)
+    end
+
+    local showRow = GUIFrame:CreateRow(body, 36)
+    showRow:SetPoint("TOPLEFT", showHeader, "BOTTOMLEFT", 0, -10)
+    showRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    local showDropdown = GUIFrame:CreateDropdown(showRow, "Sound when alert appears", {
+        options = soundList,
+        value = (DTrash and DTrash:GetSpellSoundOnShow(m, n, s)) or "None",
+        callback = function(choice)
+            if not (DTrash and DTrash.SetSpellSoundOnShow) then return end
+            DTrash:SetSpellSoundOnShow(m, n, s, choice)
+            PreviewSound(choice)
+            RefreshOverrideStripe(key)
+            RefreshListRowSound(key)
+        end,
+        searchable = true,
+    })
+    showRow:AddWidget(showDropdown, 0.7)
+    secondaryWidgets[#secondaryWidgets + 1] = showDropdown
+
+    local showTestBtn = GUIFrame:CreateButton(showRow, "Test", {
+        height = 28,
+        callback = function()
+            if DTrash then PreviewSound(DTrash:GetSpellSoundOnShow(m, n, s)) end
+        end,
+    })
+    showRow:AddWidget(showTestBtn, 0.3, 0, 0, -12)
+    secondaryWidgets[#secondaryWidgets + 1] = showTestBtn
+
+    local showCaption = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(showCaption, "Expressway", 11, "OUTLINE")
+    showCaption:SetPoint("TOPLEFT", showRow, "BOTTOMLEFT", 0, -8)
+    showCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    showCaption:SetJustifyH("LEFT")
+    showCaption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
+    showCaption:SetText("Plays when the countdown alert appears (a cast is predicted).")
+
+    -- Section: On Hide
+    local hideHeader = CreateSectionHeader(body, showCaption, "On Hide", 22)
+
+    local hideRow = GUIFrame:CreateRow(body, 36)
+    hideRow:SetPoint("TOPLEFT", hideHeader, "BOTTOMLEFT", 0, -10)
+    hideRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    local hideDropdown = GUIFrame:CreateDropdown(hideRow, "Sound when alert expires", {
+        options = soundList,
+        value = (DTrash and DTrash:GetSpellSoundOnHide(m, n, s)) or "None",
+        callback = function(choice)
+            if not (DTrash and DTrash.SetSpellSoundOnHide) then return end
+            DTrash:SetSpellSoundOnHide(m, n, s, choice)
+            PreviewSound(choice)
+            RefreshOverrideStripe(key)
+            RefreshListRowSound(key)
+        end,
+        searchable = true,
+    })
+    hideRow:AddWidget(hideDropdown, 0.7)
+    secondaryWidgets[#secondaryWidgets + 1] = hideDropdown
+
+    local hideTestBtn = GUIFrame:CreateButton(hideRow, "Test", {
+        height = 28,
+        callback = function()
+            if DTrash then PreviewSound(DTrash:GetSpellSoundOnHide(m, n, s)) end
+        end,
+    })
+    hideRow:AddWidget(hideTestBtn, 0.3, 0, 0, -12)
+    secondaryWidgets[#secondaryWidgets + 1] = hideTestBtn
+
+    local hideCaption = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(hideCaption, "Expressway", 11, "OUTLINE")
+    hideCaption:SetPoint("TOPLEFT", hideRow, "BOTTOMLEFT", 0, -8)
+    hideCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    hideCaption:SetJustifyH("LEFT")
+    hideCaption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
+    hideCaption:SetText("Plays when the cast lands and the alert clears.")
+
+    if DTrash and DTrash:GetSpellDisabled(m, n, s) then
+        for _, w in ipairs(secondaryWidgets) do
+            if w.SetEnabled then w:SetEnabled(false) end
+        end
+    end
+
+    return body
+end
+
+---------------------------------------------------------------------------------
 -- Page builder. Called from the per-dungeon RegisterContent factory below.
 ---------------------------------------------------------------------------------
 local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
@@ -2092,6 +2829,8 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
         label:SetPoint("LEFT", row, "LEFT", 8, 0)
         label:SetText("No curated encounters yet for this dungeon.")
         card:AddRow(row, Theme.rowHeightLast, 0)
+        -- #encounters now counts trash-mob groups too, so this branch means the
+        -- dungeon has neither curated bosses NOR curated trash — nothing to add.
         return card:GetNextOffset()
     end
 
@@ -2103,7 +2842,7 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     hint:SetPoint("LEFT", hintRow, "LEFT", 8, 0)
     hint:SetPoint("RIGHT", hintRow, "RIGHT", -8, 0)
     hint:SetJustifyH("LEFT")
-    hint:SetText("Pick a spell or phase rule on the left to edit its overrides. Role filter must be enabled on the General page.")
+    hint:SetText("Pick a spell, phase rule, or trash ability on the left to edit its overrides. Boss role filters require the General-page toggle.")
     hint:SetTextColor(0.85, 0.85, 0.85)
     hintCard:AddRow(hintRow, Theme.rowHeightLast, 0)
     yOffset = hintCard:GetNextOffset()
@@ -2123,27 +2862,39 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     if not state.selectedTab then state.selectedTab = "Visibility" end
 
     local selectedIsPhase = IsPhaseKey(state.selectedSpellId)
+    local selectedIsTrash = IsTrashKey(state.selectedSpellId)
 
     -- Live preview. Spells route through ShowSpellPreview; phase rules use
-    -- ShowPhasePreview (a static "Phase Transition X%" sample bar with the
-    -- rule's effective settings). Either path internally hides the other,
-    -- so swapping selection types is clean.
-    if state.selectedSpellId then
-        if selectedIsPhase then
-            HideSpellPreview()
-            local mod = GetModule()
-            if mod and mod.ShowPhasePreview then
-                mod:ShowPhasePreview(state.selectedSpellId)
-            end
-        else
-            local mod = GetModule()
-            if mod and mod.HidePhasePreview then mod:HidePhasePreview() end
-            ShowSpellPreview(state.selectedSpellId)
-        end
-    else
+    -- ShowPhasePreview (a static "Phase Transition X%" sample bar); trash
+    -- abilities route through ShowTrashPreview (a looping sample bar/text alert
+    -- at the shared DungeonTimers position — see DTrash:ShowTrashPreview). These
+    -- per-page preview thunks are independent of the global PREVIEW_MODULES /
+    -- PreviewManager toggle. Each path hides the others, so swapping selection
+    -- types stays clean.
+    local function clearBossPreviews()
         HideSpellPreview()
         local mod = GetModule()
         if mod and mod.HidePhasePreview then mod:HidePhasePreview() end
+    end
+    if not state.selectedSpellId then
+        clearBossPreviews()
+        HideTrashPreview()
+    elseif selectedIsTrash then
+        clearBossPreviews()
+        local tMap, tNpc, tSpell = ParseTrashKey(state.selectedSpellId)
+        ShowTrashPreview(tMap, tNpc, tSpell)
+    elseif selectedIsPhase then
+        HideSpellPreview()
+        HideTrashPreview()
+        local mod = GetModule()
+        if mod and mod.ShowPhasePreview then
+            mod:ShowPhasePreview(state.selectedSpellId)
+        end
+    else
+        local mod = GetModule()
+        if mod and mod.HidePhasePreview then mod:HidePhasePreview() end
+        HideTrashPreview()
+        ShowSpellPreview(state.selectedSpellId)
     end
 
     ---------------------------------------------------------------------------
@@ -2154,15 +2905,21 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     leftCol:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", Theme.paddingSmall, -yOffset)
 
     local listY = 0
-    for encIndex, enc in ipairs(encounters) do
-        -- Encounter header row (not pooled — low count, transient).
-        -- Prefix with "B1 - ", "B2 - ", etc. so users can quickly map
-        -- spell rows back to which boss they belong to (matches the
-        -- BigWigs in-fight shorthand convention).
+    local bossNum = 0
+    for _, enc in ipairs(encounters) do
+        -- Encounter header row (not pooled — low count, transient). Bosses get
+        -- a "B1 - ", "B2 - " prefix (BigWigs in-fight shorthand); trash-mob
+        -- groups render the mob name plainly so they read as a separate block
+        -- below the bosses.
         local header = leftCol:CreateFontString(nil, "OVERLAY")
         KE:ApplyFontToText(header, "Expressway", 15, "OUTLINE")
         header:SetPoint("TOPLEFT", leftCol, "TOPLEFT", 4, -listY - 6)
-        header:SetText(string_format("B%d - %s", encIndex, enc.name))
+        if enc.isTrash then
+            header:SetText(enc.name)
+        else
+            bossNum = bossNum + 1
+            header:SetText(string_format("B%d - %s", bossNum, enc.name))
+        end
         header:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
         listY = listY + ENC_HEADER_HEIGHT
 
@@ -2210,6 +2967,7 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     end
     -- Re-derive in case selection got resolved during validity-fallback above.
     selectedIsPhase = selectedSpell and selectedSpell.isPhase or false
+    selectedIsTrash = selectedSpell and selectedSpell.isTrash or false
 
     -- Title row: spell icon + spell name wrapped in a single Frame so the
     -- whole "icon-and-name area" is one tooltip hover target. Wrapping the
@@ -2236,6 +2994,11 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     if selectedSpell then
         if selectedIsPhase then
             titleIcon:SetTexture(PHASE_ROW_ICON)
+        elseif selectedIsTrash then
+            titleIcon:SetTexture(
+                (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(selectedSpell.spellID))
+                or 134400
+            )
         else
             local DT = GetModule()
             titleIcon:SetTexture(
@@ -2254,6 +3017,8 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     if selectedSpell then
         if selectedIsPhase then
             titleFs:SetText(ResolvePhaseRowLabel(selectedSpell))
+        elseif selectedIsTrash then
+            titleFs:SetText((selectedSpellData and selectedSpellData.name) or "Trash")
         else
             titleFs:SetText(ResolveSpellDisplayName(selectedSpell.id, selectedSpellData))
         end
@@ -2270,7 +3035,11 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     if selectedSpell then
         local hoverId = selectedSpell.id
         local hoverIsPhase = selectedIsPhase
-        local hoverRoleTag = (not hoverIsPhase) and selectedSpellData and selectedSpellData.role or nil
+        local hoverIsTrash = selectedIsTrash
+        local hoverTrashSpellID = selectedIsTrash and selectedSpell.spellID or nil
+        local hoverTrashMob = selectedIsTrash and selectedSpell.mobName or nil
+        local hoverRoleTag = (not hoverIsPhase and not hoverIsTrash)
+                             and selectedSpellData and selectedSpellData.role or nil
         local hoverPhaseRule = hoverIsPhase and selectedSpellData or nil
         local hoverPhaseIdx = hoverIsPhase and (selectedSpell.ruleIndex or 1) or nil
         titleRow:EnableMouse(true)
@@ -2287,6 +3056,16 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
                     GameTooltip:AddLine(string_format("Triggers when the boss drops below %s%% HP (alert window: %s%%).",
                                                        tostring(thr), tostring(lead)),
                                         0.85, 0.85, 0.85, true)
+                end
+            elseif hoverIsTrash then
+                if hoverTrashSpellID then
+                    GameTooltip:SetSpellByID(hoverTrashSpellID)
+                    if hoverTrashMob then
+                        GameTooltip:AddLine(" ")
+                        GameTooltip:AddLine(string_format("Cast by: %s", hoverTrashMob),
+                                            0.7, 0.7, 0.7)
+                    end
+                    GameTooltip:AddLine(string_format("Spell ID: %d", hoverTrashSpellID), 1, 1, 1)
                 end
             else
                 GameTooltip:SetSpellByID(hoverId)
@@ -2331,7 +3110,15 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     tabBody:SetPoint("BOTTOMRIGHT", rightCol, "BOTTOMRIGHT", -DETAIL_PADDING, DETAIL_PADDING)
 
     if selectedSpell then
-        if selectedIsPhase then
+        if selectedIsTrash then
+            if state.selectedTab == "Visibility" then
+                BuildTrashVisibilityTabBody(tabBody, selectedSpell)
+            elseif state.selectedTab == "Display" then
+                BuildTrashDisplayTabBody(tabBody, selectedSpell)
+            elseif state.selectedTab == "Actions" then
+                BuildTrashActionsTabBody(tabBody, selectedSpell)
+            end
+        elseif selectedIsPhase then
             if state.selectedTab == "Visibility" then
                 BuildPhaseVisibilityTabBody(tabBody, selectedSpell.id, selectedSpellData)
             elseif state.selectedTab == "Display" then
@@ -2360,7 +3147,8 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     local rightHeight = math.max(listY + Theme.paddingSmall, 760)
     rightCol:SetHeight(rightHeight)
 
-    return yOffset + math.max(listY, rightHeight) + Theme.paddingSmall
+    yOffset = yOffset + math.max(listY, rightHeight) + Theme.paddingSmall
+    return yOffset
 end
 
 ---------------------------------------------------------------------------------
@@ -2382,6 +3170,7 @@ for _, d in ipairs(DUNGEONS) do
     -- was last visited (FireOnCloseCallbacks iterates all entries).
     GUIFrame.onCloseCallbacks["DTimers_Dungeon_" .. dungeonKey] = function()
         HideSpellPreview()
+        HideTrashPreview()
         local mod = GetModule()
         if mod and mod.HidePhasePreview then mod:HidePhasePreview() end
     end
@@ -2395,6 +3184,7 @@ end
 -- by DungeonTimersCfg for Settings previews) so the two don't clobber.
 GUIFrame.contentCleanupCallbacks["DTimers_Dungeon_SpellPreview"] = function()
     HideSpellPreview()
+    HideTrashPreview()
     local mod = GetModule()
     if mod and mod.HidePhasePreview then mod:HidePhasePreview() end
 end

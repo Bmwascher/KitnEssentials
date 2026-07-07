@@ -99,6 +99,7 @@
     <Script file="GUITabs\GUIDungeonTimers\GUI-DungeonTimersCfg.lua" />
     <Script file="GUITabs\GUIDungeonTimers\GUI-DungeonTimersBars.lua" />
     <Script file="GUITabs\GUIDungeonTimers\GUI-DungeonTimersTexts.lua" />
+    <Script file="GUITabs\GUIDungeonTimers\GUI-DungeonTimersNameplates.lua" />
     <Script file="GUITabs\GUIDungeonTimers\GUI-DungeonTimersDungeon.lua" />
 
     <!-- QoL tabs -->

@@ -1568,6 +1568,51 @@ local Defaults = {
         },
 
         -----------------------------------------------------------------
+        -- Dungeon Trash Tracker (nameplate-driven trash-cast inference)
+        --
+        -- A sibling of DungeonTimers that shares its GUI section but runs
+        -- off nameplate cast inference rather than BigWigs. Central alerts
+        -- reuse the DungeonTimers bar/text renderer + groups; only the
+        -- on-plate icons are configured here. Per-ability overrides are
+        -- keyed "mapID:npcID:spellID" (parallel to the DungeonTimers
+        -- per-spell override tables above).
+        -----------------------------------------------------------------
+
+        DungeonTrash = {
+            Enabled = true,
+
+            -- Central bar/text alerts fully reuse DungeonTimers' Bar/Text groups:
+            -- visuals (BarDisplay/TextDisplay) AND position/growth/reveal window
+            -- (BarGroup/TextGroup, incl. ShowAtSeconds). A trash alert in "bar"
+            -- mode lands on the boss BAR stack, "text" on the boss TEXT stack, at
+            -- the exact same placement + reveal timing — there is no separate
+            -- trash position to configure (user directive 2026-07-06). Only the
+            -- on-nameplate icons below are trash-owned config.
+
+            -- On-nameplate cooldown icons (Phase 4 render surface).
+            Nameplate = {
+                ShowIcons = true,
+                IconSize = 32,
+                AnchorSide = "LEFT",
+                Gap = 8,
+                OffsetX = 0,
+                OffsetY = 0,
+                BorderOverride = false,
+                BorderColor = { 0.2, 0.85, 0.2, 1 },
+                CountFontSize = 14,
+            },
+
+            -- Per-ability overrides (keyed "mapID:npcID:spellID").
+            SpellDisabled = {},
+            SpellColorOverrides = {},
+            SpellDisplayOverrides = {},
+            SpellDisplayTextOverrides = {},
+            SpellNameplateOverrides = {},
+            SpellRoleOverrides = {},
+            SpellLeadOffsets = {},
+        },
+
+        -----------------------------------------------------------------
         -- Damage Meter Module
         --
         -- Module-owned defaults (MPT pattern): the canonical table is
