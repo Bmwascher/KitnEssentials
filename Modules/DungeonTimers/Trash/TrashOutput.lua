@@ -105,6 +105,18 @@ function DTrash:UpdateAlertGroupPosition(mode)
     if not group then return end
     local settings = dtGroup(mode)
     if not settings then return end
+    -- Re-applying an already-placed group re-runs KE:ApplyFramePosition, whose
+    -- ClearAllPoints + SetPoint(raw config) + pixel re-snap flip-flops the stack a
+    -- hair between the snapped and unsnapped position. On the ShowAlert hot path
+    -- (once per new alert) that made the whole bar/text stack visibly JITTER in a
+    -- busy pull. Skip when the position config is unchanged — the group only needs
+    -- to move when the shared DungeonTimers group is repositioned in the GUI.
+    local sig = tostring(settings.AnchorFrom) .. "|" .. tostring(settings.AnchorTo)
+        .. "|" .. tostring(settings.XOffset) .. "|" .. tostring(settings.YOffset)
+        .. "|" .. tostring(settings.anchorFrameType) .. "|" .. tostring(settings.ParentFrame)
+        .. "|" .. tostring(settings.Strata)
+    if group._posSig == sig then return end
+    group._posSig = sig
     KE:ApplyFramePosition(group, settings, settings)
 end
 
