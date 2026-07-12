@@ -1,5 +1,12 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v3.4.1
+
+### Dungeon Timers
+- Better out-of-the-box defaults for the trash tracker's nameplate cooldown icons: they now anchor to the right side of the plate, at icon size 30 with a 1px gap
+
+---
+
 ## v3.4.0
 
 ### Dungeon Timers
