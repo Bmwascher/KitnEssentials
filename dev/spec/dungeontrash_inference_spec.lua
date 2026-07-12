@@ -83,6 +83,24 @@ describe("DungeonTrash inference — Layer1 ScoreTraitRow", function()
         assert.is_false(levelAgreed)
     end)
 
+    it("hard-rejects an observed buff count below the row (Maisara warrior signature)", function()
+        local id = { level = 91, sex = 1, power = 1, classID = 1, buffCount = 1, nonElite = false }
+        local ok, _, _, reason = TI.ScoreTraitRow(
+            { level = 90, sex = 1, power = 1, classID = 1, buffCount = 0, unitClassification = "elite" },
+            trait(id))
+        assert.is_false(ok)
+        assert.equals("buffcount-below", reason)
+    end)
+
+    it("keeps an inflated observed buff count as a soft non-match (proto-drake drift)", function()
+        local id = { level = 91, sex = 1, power = 1, classID = 1, buffCount = 1, nonElite = false }
+        local ok, _, _, reason = TI.ScoreTraitRow(
+            { level = 91, sex = 1, power = 1, classID = 1, buffCount = 3, unitClassification = "elite" },
+            trait(id))
+        assert.is_true(ok)
+        assert.is_nil(reason)
+    end)
+
     it("hard-rejects a mismatched exact field", function()
         local ok, _, _, reason = TI.ScoreTraitRow(
             { level = 91, sex = 0, power = 1, classID = 2, buffCount = 0 }, trait(BASE))

@@ -197,23 +197,31 @@ function TI.ScoreTraitRow(obs, trait, opts)
         end
     end
 
-    -- buffCount: SOFT tiebreak — scores on an exact match but NEVER rejects.
-    -- In a 12.0 instance we can COUNT a mob's auras but not read their
-    -- spellID/source (secret), so the observed value is a raw HELPFUL count
-    -- minus a blanket M+ "-1" (readIdentity). That matches the captured
-    -- fingerprint only when the live aura set equals the capture-time set;
-    -- across affix seasons / patches / key levels it drifts (proven in-game:
-    -- a proto-drake's passive buffs inflate the count past its stored value).
-    -- A hard reject on a drifted count zeroes the candidate pool, so buffCount
-    -- only breaks ties among identity-equal survivors and Layer2 cast-duration
-    -- disambiguation — stable across patches — resolves the collision. This is
-    -- a deliberate deviation from the reference (which hard-rejects here);
-    -- rationale + collision-safety proof in
-    -- dev/docs/dungeon-trash-engine-port-spec.md §3.
+    -- buffCount: SOFT above the row, HARD reject below it. In a 12.0 instance
+    -- we can COUNT a mob's auras but not read their spellID/source (secret),
+    -- so the observed value is a raw HELPFUL count minus a blanket M+ "-1"
+    -- (readIdentity). Live counts drift UPWARD past the captured fingerprint
+    -- (proven in-game: a proto-drake's passive buffs inflate the count past
+    -- its stored value), and a hard reject on that inflation zeroed the
+    -- candidate pool — so an observed count ABOVE the row scores softly and
+    -- Layer2 cast-duration disambiguation resolves collisions. A count BELOW
+    -- the row is a different animal: nothing inflates downward, and a mob
+    -- MISSING the fingerprint's own buffs is a different mob. The reference
+    -- hard-rejects any buffCount mismatch, and going soft in both directions
+    -- let Maisara's uncurated Reanimated Warriors (b0, otherwise
+    -- identity-identical) wear Bound Defender's (b1) timers as its lone
+    -- surviving sibling (proven in-game). Rejecting only the below case
+    -- restores the reference's discriminator where our field evidence never
+    -- contradicted it, keeps the proto-drake alive, and fails safe. Same
+    -- asymmetric shape as the level axis above; supersedes the all-soft
+    -- rationale in dev/docs/dungeon-trash-engine-port-spec.md §3.
     if id.buffCount ~= nil and obs.buffCount ~= nil then
         strength = strength + 1
-        if tonumber(obs.buffCount) == tonumber(id.buffCount) then
+        local obsCount, idCount = tonumber(obs.buffCount), tonumber(id.buffCount)
+        if obsCount == idCount then
             score = score + 1
+        elseif obsCount ~= nil and idCount ~= nil and obsCount < idCount then
+            return false, score, strength, "buffcount-below"
         end
     end
 
