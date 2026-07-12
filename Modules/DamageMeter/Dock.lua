@@ -60,7 +60,7 @@ local DEBUG_DOCK_TEST = false
 
 -- Inter-window / inter-column gap, snapped to the pixel grid once at file load.
 -- A local const (not a DB key) per the Phase 2 geometry model.
-local GAP = KE:PixelSnap(4)
+local GAP = KE:PixelSnap(2)
 
 ---------------------------------------------------------------------------------
 -- Dock frame
