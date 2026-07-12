@@ -2815,7 +2815,9 @@ local function BuildTrashActionsTabBody(parent, item)
     castRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
     local castDropdown = GUIFrame:CreateDropdown(castRow, "Sound when the cast actually starts", {
         options = soundList,
-        value = (DTrash and DTrash:GetSpellSoundOnCastStart(m, n, s)) or "None",
+        -- Show the effective sound (override > curated castSound default >
+        -- None), mirroring the boss timers' On Show dropdown.
+        value = (DTrash and DTrash:GetEffectiveSpellSoundOnCastStart(m, n, s)) or "None",
         callback = function(choice)
             if not (DTrash and DTrash.SetSpellSoundOnCastStart) then return end
             DTrash:SetSpellSoundOnCastStart(m, n, s, choice)
@@ -2831,7 +2833,7 @@ local function BuildTrashActionsTabBody(parent, item)
     local castTestBtn = GUIFrame:CreateButton(castRow, "Test", {
         height = 28,
         callback = function()
-            if DTrash then PreviewSound(DTrash:GetSpellSoundOnCastStart(m, n, s)) end
+            if DTrash then PreviewSound(DTrash:GetEffectiveSpellSoundOnCastStart(m, n, s)) end
         end,
     })
     castRow:AddWidget(castTestBtn, 0.3, 0, 0, -12)

@@ -89,6 +89,26 @@ describe("DungeonTrash config — override backend", function()
         assert.is_false(DT:HasSpellOverrides(MAP, NPC, SPELL))        -- pruned
     end)
 
+    it("cast-start sound is three-state: override > curated castSound > silent, 'None' mutes", function()
+        -- No override, no curated default → silent.
+        assert.is_nil(DT:GetEffectiveSpellSoundOnCastStart(MAP, NPC, SPELL))
+        -- Curated default from the overlay.
+        KE.TrashCurated[MAP] = { [NPC] = { [SPELL] = { castSound = "Frontal" } } }
+        assert.equals("Frontal", DT:GetCuratedCastStartSound(MAP, NPC, SPELL))
+        assert.equals("Frontal", DT:GetEffectiveSpellSoundOnCastStart(MAP, NPC, SPELL))
+        -- The user's own pick wins.
+        DT:SetSpellSoundOnCastStart(MAP, NPC, SPELL, "Kick")
+        assert.equals("Kick", DT:GetEffectiveSpellSoundOnCastStart(MAP, NPC, SPELL))
+        -- Explicit "None" mutes the curated default (the false/nil trap, sound flavor).
+        DT:SetSpellSoundOnCastStart(MAP, NPC, SPELL, "None")
+        assert.is_nil(DT:GetEffectiveSpellSoundOnCastStart(MAP, NPC, SPELL))
+        -- Clearing the override falls back to the curated default.
+        DT:SetSpellSoundOnCastStart(MAP, NPC, SPELL, nil)
+        assert.equals("Frontal", DT:GetEffectiveSpellSoundOnCastStart(MAP, NPC, SPELL))
+        -- onShow/onHide stay pure-override: no curated fallback exists for them.
+        assert.is_nil(DT:GetSpellSoundOnShow(MAP, NPC, SPELL))
+    end)
+
     it("round-trips a color override and falls back to the default when cleared", function()
         assert.is_nil(DT:GetSpellColorOverride(MAP, NPC, SPELL))
         assert.same({ 0.3, 0.5, 0.9 }, DT:GetSpellEffectiveColor(MAP, NPC, SPELL))

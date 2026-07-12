@@ -43,6 +43,13 @@ if not KitnEssentials then return end
 -- label, so a spell can keep its real name yet borrow a preset's colour (e.g. an
 -- interrupt kept as "Fire Spit" but coloured KICK red). An explicit user colour
 -- override still wins.
+--
+-- `castSound = "<LSM sound name>"` ships a default for the ability's Cast
+-- Start sound slot — it plays the moment the mob's real cast bar is observed,
+-- the same curated-voice model the boss timers use on their On Show slot.
+-- The user's own Cast Start pick still wins, and selecting "None" in the GUI
+-- mutes the default. Names must match a registered LSM sound (Core/Globals.lua
+-- registers KE's voice pack; the .ogg filename is the name).
 KE.TrashCurated = {
     -- ── Pit of Saron (658) ──────────────────────────────────────────────────
     [658] = {

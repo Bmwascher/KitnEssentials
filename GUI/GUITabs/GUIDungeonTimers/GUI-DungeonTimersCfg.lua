@@ -79,6 +79,20 @@ local function CountCoverage()
     return dungeons, encounters, spells
 end
 
+-- Trash-tracker side of the coverage card: fingerprinted mobs and their
+-- tracked abilities across KE.TrashData (the boss counts above read
+-- KE.EncounterData).
+local function CountTrashCoverage()
+    local mobs, spells = 0, 0
+    for _, dungeon in pairs(KE.TrashData or {}) do
+        for _, mob in pairs(dungeon.mobs or {}) do
+            mobs = mobs + 1
+            for _ in pairs(mob.spells or {}) do spells = spells + 1 end
+        end
+    end
+    return mobs, spells
+end
+
 -- Clears every per-spell + per-phase override entry whose owner encounter
 -- lives in the given dungeon. Leaves global display settings (BarDisplay /
 -- TextDisplay / BarGroup / TextGroup) alone — those are shared across all
@@ -317,10 +331,14 @@ GUIFrame:RegisterContent("DTimers_General", function(scrollChild, yOffset)
     -- Card 5: Curated Coverage (footer-style info card, read-only)
     ---------------------------------------------------------------------------
     local dungeons, encounters, spells = CountCoverage()
+    local trashMobs, trashSpells = CountTrashCoverage()
     local card5 = GUIFrame:CreateCard(scrollChild, "Curated Coverage", yOffset)
     card5:AddLabel(string_format(
-        "%d dungeons / %d encounters / %d curated spells.",
+        "%d dungeons / %d encounters / %d curated boss spells.",
         dungeons, encounters, spells))
+    card5:AddLabel(string_format(
+        "%d trash mobs fingerprinted / %d trash abilities tracked.",
+        trashMobs, trashSpells))
     card5:AddLabel("All hand-tuned by Cruzer's Kittens.")
     yOffset = card5:GetNextOffset()
 

@@ -742,7 +742,8 @@ function DTrash:FireObservedCastStartCue(rt, kind, seq)
     local spellID = best.spellID
     if self:IsTrashSpellDisabled(npcID, spellID) then return end
     if not self:PlayerSeesTrashSpell(self.currentMapID, npcID, spellID) then return end
-    local sound = self:GetSpellSoundOnCastStart(self.currentMapID, npcID, spellID)
+    -- Effective resolver: user override > curated castSound default > silent.
+    local sound = self:GetEffectiveSpellSoundOnCastStart(self.currentMapID, npcID, spellID)
     if not sound then return end
     rt._castStartCuedSeq = seq
     playTrashSound(sound)

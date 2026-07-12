@@ -517,7 +517,9 @@ describe("DungeonTrash — deferred reveal pending-recovery gate (real ScheduleA
         KE.LSM = { Fetch = function(_, _, name) return "sound/" .. name end }
         local played = {}
         _G.PlaySoundFile = function(file) played[#played + 1] = file end
-        DTrash.GetSpellSoundOnCastStart = function(_, _, _, spellID)
+        -- The cue consults the EFFECTIVE resolver (override > curated default);
+        -- resolution itself is pinned in dungeontrash_config_spec.
+        DTrash.GetEffectiveSpellSoundOnCastStart = function(_, _, _, spellID)
             return "Ding" .. spellID
         end
         return played

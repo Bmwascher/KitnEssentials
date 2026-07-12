@@ -274,6 +274,13 @@ end
 -- key; any may be nil. onShow fires at the alert reveal and onHide at
 -- countdown-zero — both PREDICTION-driven; onCastStart fires the moment the
 -- mob's real cast bar is observed (see DTrash:PlayObservedCastStartCue).
+--
+-- onCastStart alone is THREE-STATE, mirroring the boss timers' curated sound
+-- model (there the curated default rides the On Show slot; for trash it rides
+-- Cast Start): nil = inherit the curated default from the TrashCurated
+-- overlay's `castSound`, literal "None" = user explicitly muted, anything
+-- else = the user's own LSM pick. Playback and the GUI dropdown both read
+-- GetEffectiveSpellSoundOnCastStart, never the raw stored value.
 
 local function soundEntry(mapID, npcID, spellID)
     local db = profileDB()
@@ -294,6 +301,22 @@ end
 function DTrash:GetSpellSoundOnCastStart(mapID, npcID, spellID)
     local e = soundEntry(mapID, npcID, spellID)
     return e and e.onCastStart or nil
+end
+
+-- Shipped cast-start default from the curation overlay (TrashCurated.lua).
+function DTrash:GetCuratedCastStartSound(mapID, npcID, spellID)
+    local o = curatedOverlay(mapID, npcID, spellID)
+    return o and o.castSound or nil
+end
+
+-- Resolves the cast-start three-state into the LSM key playback should use.
+-- Returns nil for "play nothing" (explicit "None" mute, or no override and
+-- no curated default).
+function DTrash:GetEffectiveSpellSoundOnCastStart(mapID, npcID, spellID)
+    local override = self:GetSpellSoundOnCastStart(mapID, npcID, spellID)
+    if override == "None" then return nil end
+    if override then return override end
+    return self:GetCuratedCastStartSound(mapID, npcID, spellID)
 end
 
 function DTrash:HasSpellSound(mapID, npcID, spellID)
