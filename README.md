@@ -104,7 +104,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 |---|---|
 | Death Notifications | On-screen alert when party/raid members or your focus target dies, with class portrait + color, configurable text format, and an optional voice (TTS) reminder when your focus dies in combat. Active in dungeons by default; raid activation is opt-in |
 | Dungeon Casts | Enemy cast bars for M+ nameplates with icon, target text, raid icons, bar stacking, and interruptible/shielded status colors |
-| Dungeon Timers | Curated dungeon ability timers driven by BigWigs events with hand-tuned cast durations, phase tracker for HP-based encounter transitions, role-based filtering, and per-spell display overrides |
+| Dungeon Timers | Curated dungeon ability timers driven by BigWigs events with hand-tuned cast durations, phase tracker for HP-based encounter transitions, role-based filtering, and per-spell display overrides; plus a Dungeon Trash Tracker that predicts trash-pack casts from nameplate observation across 8 dungeons, with on-nameplate countdown icons and per-ability sounds |
 | Enemy Counter | Displays the number of enemies currently in combat via nameplate scanning with editable prefix and combat-only visibility |
 | Focus Marker | Auto-creates a focus targeting + raid marker macro, with optional party ready-check announce |
 | Interrupt Tracker | Party interrupt cooldown bars rebuilt for 12.0.5 — live synced bars for teammates with kick-sync addons, temporary class-colored kick records for everyone else, dark mode, and healer position override |

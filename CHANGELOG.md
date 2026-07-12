@@ -1,5 +1,25 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v3.4.0
+
+### Dungeon Timers
+- **NEW:** Dungeon Trash Tracker — countdown timers for dangerous trash-pack casts, covering 8 dungeons: Pit of Saron, Skyreach, Seat of the Triumvirate, Algeth'ar Academy, Windrunner Spire, Magisters' Terrace, Maisara Caverns, and Nexus-Point Xenas. With the combat log gone in Midnight, the tracker identifies each mob and predicts its next cast purely from what nameplates expose — curated cast data matched against live observation of the pull. On by default
+- Trash alerts render on the same bar and text stacks as the boss timers — same position, same styling, continuing the stack below any boss rows, so there's no separate trash anchor to manage
+- Alerts are per-mob: two mobs winding up the same spell show two timers, each tied to its own caster
+- **NEW:** on-nameplate cooldown icons — each enemy's upcoming casts show as countdown icons attached to its nameplate, configured on the new Nameplates settings tab (icon size, timer text size, anchor side, gap, offsets, strata) with a live preview. Works with the default nameplates and Plater; other nameplate addons best-effort
+- Every tracked ability is editable from its dungeon's spell list: per-ability enable, tank/healer/DPS role filters, custom label, bar color, reveal-at lead time, decimal countdown threshold, a per-ability nameplate icon toggle, and reset-to-default
+- Three sound slots per ability, each with a Test button — when the alert appears, when it expires, and when the cast actually starts. The cast-start sound names the right spell when two abilities share a timer, and stays silent rather than guess
+- **NEW:** default cast-start voices — 44 hand-picked abilities across the 8 dungeons ship a fitting voice line ("AoE", "Frontal", "Feet", "Interrupt", ...) that calls out the moment the real cast begins; override or mute any of them per ability, and abilities with a sound show an "S" badge in the spell list
+- Timers follow the pull as it happens: kicks, cast completions, cast-into-channel transitions, and deaths re-anchor the next prediction, and timers survive nameplate flicker instead of resetting
+- Trash timers stand down during boss encounters whose adds could be mistaken for trash (Pit of Saron's Ick & Krick)
+- A one-time warning popup appears if a tank in your group has Lindormi's Guidance active — the keystone NPC's assist changes enemy cast behavior and breaks the trash timers
+
+### Damage Meter
+- **Fixed:** with "Behind Bars Only" the backdrop's 1px top border was hidden under the first bar row — it now caps the bars with the same inset as the other sides
+- The gap between docked meter windows is tighter (4px → 1px)
+
+---
+
 ## v3.3.0
 
 ### Interrupt Tracker
