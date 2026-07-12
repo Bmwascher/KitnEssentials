@@ -97,3 +97,94 @@ describe("DungeonTrash data integrity — TrashTraits <-> TrashData", function()
         assert.same({}, conflicts)
     end)
 end)
+
+-- TrashCurated (the HAND-MAINTAINED overlay) integrity. Its keys and preset
+-- names are typed by a human against auto-generated data and a palette in a
+-- different file, and every mistake fails SILENTLY in-game: a typo'd
+-- mapID/npcID/spellID key no-ops the whole entry, a typo'd label/colorKey
+-- degrades the alert to the flat default colour, a typo'd role key drops the
+-- restriction. The real DungeonTimers.lua is loaded so labels resolve through
+-- the REAL preset/alias tables — no stub to drift.
+describe("DungeonTrash data integrity — TrashCurated overlay", function()
+    local loader = require("dev.spec._ke_loader")
+    local KE2, curated, cdata
+
+    -- Labels DELIBERATELY rendered verbatim in the flat default colour (no
+    -- preset/alias match intended). Add here with a reason, or the resolution
+    -- test flags them as probable typos.
+    local VERBATIM_LABELS = {}
+
+    local ROLE_KEYS = { tank = true, healer = true, dps = true }
+
+    setup(function()
+        KE2 = select(2, loader.loadDungeonTimers())
+        helpers.loadModule("Modules/DungeonTimers/Trash/TrashData.lua", KE2)
+        helpers.loadModule("Modules/DungeonTimers/Trash/TrashCurated.lua", KE2)
+        curated, cdata = KE2.TrashCurated, KE2.TrashData
+    end)
+
+    it("loads the overlay and the shared palette resolver", function()
+        assert.is_table(curated)
+        assert.is_function(KE2.ResolveTrashPresetColor)
+    end)
+
+    it("every curated key points at a real TrashData spell (a typo silently no-ops)", function()
+        local orphans = {}
+        for mapID, mobs in pairs(curated) do
+            for npcID, spells in pairs(mobs) do
+                for spellID in pairs(spells) do
+                    local d = cdata[mapID]
+                    local mob = d and d.mobs and d.mobs[npcID]
+                    if not (mob and mob.spells and mob.spells[spellID]) then
+                        orphans[#orphans + 1] = string.format("%s/%s/%s",
+                            tostring(mapID), tostring(npcID), tostring(spellID))
+                    end
+                end
+            end
+        end
+        assert.same({}, orphans)
+    end)
+
+    it("every curated label and colorKey resolves to a preset colour", function()
+        local misses = {}
+        for mapID, mobs in pairs(curated) do
+            for npcID, spells in pairs(mobs) do
+                for spellID, o in pairs(spells) do
+                    if o.colorKey and not KE2.ResolveTrashPresetColor(o.colorKey) then
+                        misses[#misses + 1] = string.format("%d/%d/%d colorKey %q",
+                            mapID, npcID, spellID, o.colorKey)
+                    end
+                    if o.label and not VERBATIM_LABELS[o.label]
+                        and not KE2.ResolveTrashPresetColor(o.label) then
+                        misses[#misses + 1] = string.format("%d/%d/%d label %q",
+                            mapID, npcID, spellID, o.label)
+                    end
+                end
+            end
+        end
+        assert.same({}, misses)
+    end)
+
+    it("display values are only 'bar' or 'text', and role tables carry only known keys", function()
+        local bad = {}
+        for mapID, mobs in pairs(curated) do
+            for npcID, spells in pairs(mobs) do
+                for spellID, o in pairs(spells) do
+                    if o.display ~= nil and o.display ~= "bar" and o.display ~= "text" then
+                        bad[#bad + 1] = string.format("%d/%d/%d display %q",
+                            mapID, npcID, spellID, tostring(o.display))
+                    end
+                    if o.roles ~= nil then
+                        for k in pairs(o.roles) do
+                            if not ROLE_KEYS[k] then
+                                bad[#bad + 1] = string.format("%d/%d/%d role key %q",
+                                    mapID, npcID, spellID, tostring(k))
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        assert.same({}, bad)
+    end)
+end)

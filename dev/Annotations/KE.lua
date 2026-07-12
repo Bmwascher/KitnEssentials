@@ -167,6 +167,23 @@ function KE:ApplyFontToText(fontStr, face, size, outline, shadowConfig) end
 ---@param options table?
 function KE:CreateSoftOutline(fontStr, options) end
 
+--- Preset/alias colour for arbitrary display text, or nil when nothing matches
+--- (defined in DungeonTimers.lua; shared with the Dungeon Trash resolvers).
+---@param text string?
+---@return number[]? color
+function KE.ResolveTrashPresetColor(text) end
+
+--- Split text-mode layout shared by the boss text timers and the Dungeon Trash
+--- alerts (defined in DungeonTimers.lua): label is the static pivot, icon off
+--- its LEFT, timer off its RIGHT; 2px icon gap / 5px timer gap.
+---@param anchor Frame
+---@param label FontString
+---@param timerText FontString
+---@param iconFrame Frame?
+---@param showIcon boolean?
+---@param align string?
+function KE.ApplySplitTextLayout(anchor, label, timerText, iconFrame, showIcon, align) end
+
 function KE:ValidateProfileFonts() end
 
 function KE:FillProfileDefaults() end

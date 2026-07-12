@@ -60,6 +60,19 @@ local function curatedSpell(mapID, npcID, spellID)
     return mob and mob.spells and mob.spells[spellID]
 end
 
+-- Hand-maintained curation overlay (TrashCurated.lua) for (mapID, npcID,
+-- spellID), or nil — KE's shipped label/display defaults that survive data
+-- re-extraction. Sits between the user's GUI overrides and the extracted data.
+local function curatedOverlay(mapID, npcID, spellID)
+    local d = KE.TrashCurated and KE.TrashCurated[mapID]
+    local m = d and d[npcID]
+    return m and m[spellID]
+end
+
+-- Shipped default display mode when neither a user override nor the curation
+-- overlay pins one (deliberate default: text).
+local CURATED_DEFAULT_DISPLAY = "text"
+
 -- Reverse lookup used by the GUI: dungeonKey → the TrashData entry (mapID+mobs).
 function DTrash:TrashDungeonByKey(dungeonKey)
     if not KE.TrashData then return nil end
@@ -74,6 +87,20 @@ end
 function DTrash:SetSpellDisabled(mapID, npcID, spellID, disabled)
     local t = ovTable("SpellDisabled"); if not t then return end
     t[overrideKey(mapID, npcID, spellID)] = disabled and true or nil
+    -- Re-ENABLE recovery: KE's arms are one-shot, so a mid-dungeon disable
+    -- consumed the spell's armed output at fire time (deferred reveals died
+    -- at their gate re-check; the marker prune deleted stored predictions)
+    -- and nothing else ever re-reads the still-correct anchors — the spell
+    -- stayed output-dead until its next COMPLETED cast. The reference
+    -- recovers within one refresh via its config-revision schedule rebuild;
+    -- re-arming the affected runtimes from their anchors reproduces that.
+    if not disabled and self.monitoring and mapID == self.currentMapID then
+        for _, rt in pairs(self.tracked) do
+            if rt.matchedNPCID == npcID then
+                self:ReArmFromAnchors(rt, true)
+            end
+        end
+    end
 end
 
 function DTrash:GetSpellDisabled(mapID, npcID, spellID)
@@ -102,21 +129,43 @@ function DTrash:GetSpellColorOverride(mapID, npcID, spellID)
     return t and t[overrideKey(mapID, npcID, spellID)] or nil
 end
 
--- Fallback color when no per-ability override is set. Mirror of TrashOutput's
--- DEFAULT_TRASH_COLOR — keep the two values in sync.
-local DEFAULT_TRASH_COLOR = { 0.3, 0.5, 0.9 }
+-- Fallback color when no per-ability override or preset matches. Single owner:
+-- this file loads before TrashOutput (Trash.xml), which aliases the module
+-- field — one value, no keep-in-sync mirror.
+DTrash.DEFAULT_TRASH_COLOR = { 0.3, 0.5, 0.9 }
+local DEFAULT_TRASH_COLOR = DTrash.DEFAULT_TRASH_COLOR
 
 -- Effective color (override → default) — the config swatch shows THIS so an
 -- unset ability displays its real alert color rather than a blank white.
 function DTrash:GetSpellEffectiveColor(mapID, npcID, spellID)
-    return self:GetSpellColorOverride(mapID, npcID, spellID) or DEFAULT_TRASH_COLOR
+    local ov = self:GetSpellColorOverride(mapID, npcID, spellID)
+    if ov then return ov end
+    if KE.ResolveTrashPresetColor then
+        -- An explicit colorKey pins the colour to a preset independent of the
+        -- label — used to keep a real spell name yet borrow a preset's colour
+        -- (e.g. an interrupt shown as "Fire Spit" in KICK red).
+        local o = curatedOverlay(mapID, npcID, spellID)
+        if o and o.colorKey then
+            local c = KE.ResolveTrashPresetColor(o.colorKey)
+            if c then return c end
+        end
+        -- Otherwise the colour follows the EFFECTIVE label through the shared boss
+        -- preset palette (SOAK→green, DODGE→orange, …); unmatched → flat default.
+        local c = KE.ResolveTrashPresetColor(self:GetSpellLabel(mapID, npcID, spellID))
+        if c then return c end
+    end
+    return DEFAULT_TRASH_COLOR
 end
 
 -- ── Display (bar / text) ────────────────────────────────────────────────────
 
+-- Shipped default display: curation overlay wins, else the flat author default
+-- (text). The extracted per-spell `display` is intentionally NOT consulted —
+-- KE curates its own bar/text exceptions in TrashCurated.lua.
 function DTrash:GetSpellCuratedDisplay(mapID, npcID, spellID)
-    local s = curatedSpell(mapID, npcID, spellID)
-    return (s and s.display == "text") and "text" or "bar"
+    local o = curatedOverlay(mapID, npcID, spellID)
+    if o and (o.display == "bar" or o.display == "text") then return o.display end
+    return CURATED_DEFAULT_DISPLAY
 end
 
 function DTrash:SetSpellDisplayOverride(mapID, npcID, spellID, mode)
@@ -170,6 +219,8 @@ end
 local ALL_ROLES = { tank = true, healer = true, dps = true }
 
 function DTrash:GetSpellCuratedRoles(mapID, npcID, spellID)
+    local o = curatedOverlay(mapID, npcID, spellID)
+    if o and type(o.roles) == "table" then return o.roles end
     local s = curatedSpell(mapID, npcID, spellID)
     local r = s and s.roles
     if type(r) ~= "table" then return ALL_ROLES end
@@ -219,7 +270,10 @@ function DTrash:PlayerSeesTrashSpell(mapID, npcID, spellID)
 end
 
 -- ── Sounds (Actions) ─────────────────────────────────────────────────────────
--- Stored as { onShow=<lsmName>, onHide=<lsmName> } per key; either may be nil.
+-- Stored as { onShow=<lsmName>, onHide=<lsmName>, onCastStart=<lsmName> } per
+-- key; any may be nil. onShow fires at the alert reveal and onHide at
+-- countdown-zero — both PREDICTION-driven; onCastStart fires the moment the
+-- mob's real cast bar is observed (see DTrash:PlayObservedCastStartCue).
 
 local function soundEntry(mapID, npcID, spellID)
     local db = profileDB()
@@ -237,9 +291,15 @@ function DTrash:GetSpellSoundOnHide(mapID, npcID, spellID)
     return e and e.onHide or nil
 end
 
+function DTrash:GetSpellSoundOnCastStart(mapID, npcID, spellID)
+    local e = soundEntry(mapID, npcID, spellID)
+    return e and e.onCastStart or nil
+end
+
 function DTrash:HasSpellSound(mapID, npcID, spellID)
     return (self:GetSpellSoundOnShow(mapID, npcID, spellID) ~= nil)
         or (self:GetSpellSoundOnHide(mapID, npcID, spellID) ~= nil)
+        or (self:GetSpellSoundOnCastStart(mapID, npcID, spellID) ~= nil)
 end
 
 local function setSound(self, mapID, npcID, spellID, field, sound)
@@ -247,7 +307,11 @@ local function setSound(self, mapID, npcID, spellID, field, sound)
     local key = overrideKey(mapID, npcID, spellID)
     local e = t[key] or {}
     e[field] = (sound ~= nil and sound ~= "") and sound or nil
-    if e.onShow == nil and e.onHide == nil then t[key] = nil else t[key] = e end
+    if e.onShow == nil and e.onHide == nil and e.onCastStart == nil then
+        t[key] = nil
+    else
+        t[key] = e
+    end
 end
 
 function DTrash:SetSpellSoundOnShow(mapID, npcID, spellID, sound)
@@ -258,9 +322,15 @@ function DTrash:SetSpellSoundOnHide(mapID, npcID, spellID, sound)
     setSound(self, mapID, npcID, spellID, "onHide", sound)
 end
 
+function DTrash:SetSpellSoundOnCastStart(mapID, npcID, spellID, sound)
+    setSound(self, mapID, npcID, spellID, "onCastStart", sound)
+end
+
 -- ── Label / display text ─────────────────────────────────────────────────────
 
 function DTrash:GetSpellCuratedLabel(mapID, npcID, spellID)
+    local o = curatedOverlay(mapID, npcID, spellID)
+    if o and o.label and o.label ~= "" then return o.label end
     local s = curatedSpell(mapID, npcID, spellID)
     return (s and s.name) or "Trash"
 end
@@ -295,23 +365,38 @@ end
 
 -- ── Reveal window (lead time before the predicted cast) ──────────────────────
 -- Trash has no curated reveal value; the effective default is the shared
--- DungeonTimers group ShowAtSeconds (fallback 8). A per-ability override sets
+-- DungeonTimers group ShowAtSeconds (per-mode floor text 5 / bar 10). A per-ability override sets
 -- how many seconds before the predicted cast the alert appears. Unlike the boss
 -- "0 = always visible", trash alerts are pure countdowns with no spawn moment,
 -- so the GUI slider clamps to a 1s minimum — 0 has no meaning here.
+-- Per-mode reveal floor, used when the shared group value is unset or <= 0 (a
+-- boss stack set to "always visible", which is meaningless for a pure-countdown
+-- trash alert). Reads the SHIPPED BarGroup/TextGroup ShowAtSeconds defaults
+-- through KE:GetDefaultDB() so a future retune propagates here automatically;
+-- the literal 5/10 floor only backstops a missing defaults table (headless).
+local function trashRevealFloor(mode)
+    local d = KE.GetDefaultDB and KE:GetDefaultDB()
+    local dt = d and d.profile and d.profile.DungeonTimers
+    local g = dt and ((mode == "text") and dt.TextGroup or dt.BarGroup)
+    local v = g and tonumber(g.ShowAtSeconds)
+    if v and v > 0 then return v end
+    return (mode == "text") and 5 or 10
+end
+
 local function revealGroupDefault(mapID, npcID, spellID)
-    local dt = KE.db and KE.db.profile and KE.db.profile.DungeonTimers
-    if not dt then return 8 end
     local mode = DTrash:GetSpellDisplay(mapID, npcID, spellID)
+    local fallback = trashRevealFloor(mode)
+    local dt = KE.db and KE.db.profile and KE.db.profile.DungeonTimers
+    if not dt then return fallback end
     local g = (mode == "text") and dt.TextGroup or dt.BarGroup
     local v = g and g.ShowAtSeconds
     -- The shared boss slider allows 0 ("always visible"), but trash alerts are
     -- pure countdowns with no spawn moment, so a 0/negative group value is
     -- meaningless here. An explicit <= 0 check is required: Lua treats 0 as
-    -- truthy, so `(g and g.ShowAtSeconds) or 8` would leak a stored 0 straight
-    -- into ScheduleAlert, and ShowAlert's duration<=0 guard would then silently
-    -- drop every trash alert. Fall back to the 8s trash default instead.
-    if not v or v <= 0 then return 8 end
+    -- truthy, so `(g and g.ShowAtSeconds) or fallback` would leak a stored 0
+    -- straight into ScheduleAlert, and ShowAlert's duration<=0 guard would then
+    -- silently drop every trash alert. Fall back to the per-mode floor instead.
+    if not v or v <= 0 then return fallback end
     return v
 end
 

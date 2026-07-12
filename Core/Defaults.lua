@@ -1586,7 +1586,7 @@ local Defaults = {
             -- (BarGroup/TextGroup, incl. ShowAtSeconds). A trash alert in "bar"
             -- mode lands on the boss BAR stack, "text" on the boss TEXT stack, at
             -- the exact same placement + reveal timing — there is no separate
-            -- trash position to configure (user directive 2026-07-06). Only the
+            -- trash position to configure. Only the
             -- on-nameplate icons below are trash-owned config.
 
             -- On-nameplate cooldown icons (Phase 4 render surface).
@@ -1600,16 +1600,23 @@ local Defaults = {
                 BorderOverride = false,
                 BorderColor = { 0.2, 0.85, 0.2, 1 },
                 CountFontSize = 14,
+                Strata = "MEDIUM",
             },
 
-            -- Per-ability overrides (keyed "mapID:npcID:spellID").
+            -- Per-ability overrides (keyed "mapID:npcID:spellID"). Keep this
+            -- list in lockstep with TrashConfig.lua's OVERRIDE_TABLES — an
+            -- undeclared table still works (ovTable lazy-creates) but AceDB's
+            -- logout defaults-stripping then leaves empty `{}` clutter in the
+            -- SavedVariables forever.
             SpellDisabled = {},
             SpellColorOverrides = {},
             SpellDisplayOverrides = {},
-            SpellDisplayTextOverrides = {},
             SpellNameplateOverrides = {},
             SpellRoleOverrides = {},
-            SpellLeadOffsets = {},
+            SpellSoundOverrides = {},
+            SpellLabelOverrides = {},
+            SpellRevealOverrides = {},
+            SpellDecimalThresholds = {},
         },
 
         -----------------------------------------------------------------

@@ -302,15 +302,21 @@ local function CollectEncountersForDungeon(dungeonKey)
             local trashSpells = {}
             for npcID, mob in pairs(dungeon.mobs) do
                 for spellID, spell in pairs(mob.spells or {}) do
-                    trashSpells[#trashSpells + 1] = {
-                        id      = string_format("trash:%d:%d:%d", mapID, npcID, spellID),
-                        data    = spell,
-                        isTrash = true,
-                        mapID   = mapID,
-                        npcID   = npcID,
-                        spellID = spellID,
-                        mobName = mob.name,
-                    }
+                    -- hidden = fingerprint-only row (no first/cd — can never
+                    -- schedule an alert): every knob would be a silent no-op,
+                    -- so keep it out of the config list entirely (the upstream
+                    -- GUI filters the same flag).
+                    if spell.hidden ~= true then
+                        trashSpells[#trashSpells + 1] = {
+                            id      = string_format("trash:%d:%d:%d", mapID, npcID, spellID),
+                            data    = spell,
+                            isTrash = true,
+                            mapID   = mapID,
+                            npcID   = npcID,
+                            spellID = spellID,
+                            mobName = mob.name,
+                        }
+                    end
                 end
             end
             -- Sort by casting mob, then ability name, so a mob's abilities stay
@@ -2800,6 +2806,45 @@ local function BuildTrashActionsTabBody(parent, item)
     hideCaption:SetJustifyH("LEFT")
     hideCaption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
     hideCaption:SetText("Plays when the cast lands and the alert clears.")
+
+    -- Section: Cast Start (observed — not a prediction like the two above).
+    local castHeader = CreateSectionHeader(body, hideCaption, "Cast Start", 22)
+
+    local castRow = GUIFrame:CreateRow(body, 36)
+    castRow:SetPoint("TOPLEFT", castHeader, "BOTTOMLEFT", 0, -10)
+    castRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    local castDropdown = GUIFrame:CreateDropdown(castRow, "Sound when the cast actually starts", {
+        options = soundList,
+        value = (DTrash and DTrash:GetSpellSoundOnCastStart(m, n, s)) or "None",
+        callback = function(choice)
+            if not (DTrash and DTrash.SetSpellSoundOnCastStart) then return end
+            DTrash:SetSpellSoundOnCastStart(m, n, s, choice)
+            PreviewSound(choice)
+            RefreshOverrideStripe(key)
+            RefreshListRowSound(key)
+        end,
+        searchable = true,
+    })
+    castRow:AddWidget(castDropdown, 0.7)
+    secondaryWidgets[#secondaryWidgets + 1] = castDropdown
+
+    local castTestBtn = GUIFrame:CreateButton(castRow, "Test", {
+        height = 28,
+        callback = function()
+            if DTrash then PreviewSound(DTrash:GetSpellSoundOnCastStart(m, n, s)) end
+        end,
+    })
+    castRow:AddWidget(castTestBtn, 0.3, 0, 0, -12)
+    secondaryWidgets[#secondaryWidgets + 1] = castTestBtn
+
+    local castCaption = body:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(castCaption, "Expressway", 11, "OUTLINE")
+    castCaption:SetPoint("TOPLEFT", castRow, "BOTTOMLEFT", 0, -8)
+    castCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
+    castCaption:SetJustifyH("LEFT")
+    castCaption:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
+    castCaption:SetText("Plays the moment the mob REALLY begins casting this ability (observed"
+        .. " cast bar, not the predicted countdown) - the reliable kick cue.")
 
     if DTrash and DTrash:GetSpellDisabled(m, n, s) then
         for _, w in ipairs(secondaryWidgets) do

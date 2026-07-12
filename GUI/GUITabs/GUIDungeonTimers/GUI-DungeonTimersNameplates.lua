@@ -16,11 +16,28 @@ local GUIFrame = KE.GUIFrame
 
 local pairs = pairs
 
--- LEFT/RIGHT = which side of the plate the icon row grows toward. Array form
+-- Where the icon row anchors on the plate. The row always grows AWAY from the
+-- plate (never inside the bar), so the anchor implies the grow direction:
+-- Left/Right grow outward to that side, Top centres a row above. Array form
 -- preserves dropdown order (hash form is pairs()-iterated and unordered).
 local ANCHOR_SIDE_OPTIONS = {
-    { key = "LEFT",  text = "Left of plate" },
-    { key = "RIGHT", text = "Right of plate" },
+    { key = "LEFT",  text = "Left" },
+    { key = "RIGHT", text = "Right" },
+    { key = "TOP",   text = "Top" },
+}
+
+-- Frame strata for the on-plate icon markers — which UI layer they draw on.
+-- Mirrors the canonical KE strata list (GUI-PositionCard) so the choices match
+-- the rest of the addon; default is Medium (db.Nameplate.Strata).
+local STRATA_OPTIONS = {
+    { key = "TOOLTIP",           text = "Tooltip" },
+    { key = "FULLSCREEN_DIALOG", text = "Fullscreen Dialog" },
+    { key = "FULLSCREEN",        text = "Fullscreen" },
+    { key = "DIALOG",            text = "Dialog" },
+    { key = "HIGH",              text = "High" },
+    { key = "MEDIUM",            text = "Medium" },
+    { key = "LOW",               text = "Low" },
+    { key = "BACKGROUND",        text = "Background" },
 }
 
 local function GetTrashDB()
@@ -105,8 +122,8 @@ GUIFrame:RegisterContent("DTimers_Nameplates", function(scrollChild, yOffset)
     manager:Register(previewCard, "all")
 
     local previewHost = CreateFrame("Frame", nil, previewCard.content)
-    previewHost:SetHeight(84)
-    previewCard:AddRow(previewHost, 84)
+    previewHost:SetHeight(116)
+    previewCard:AddRow(previewHost, 116)
 
     local previewMod = GetTrashModule()
     local detectedName = FRIENDLY_ADDON.BLIZZARD
@@ -114,13 +131,13 @@ GUIFrame:RegisterContent("DTimers_Nameplates", function(scrollChild, yOffset)
         detectedName = FRIENDLY_ADDON[previewMod:BuildNameplatePreview(previewHost)] or detectedName
     end
     previewCard:AddLabel("Reflects your nameplate addon: |cffffffff" .. detectedName
-        .. "|r. Icon size, spacing, side and offset are accurate; the bar is a static stand-in, not a live copy of your resized bar.")
+        .. "|r — a stand-in plate (health bar, name and cast bar). For Plater and EllesmereUI the bar is sized from your saved profile; other addons use a representative default. Icon size, spacing, side and offset are drawn by the real layout — only the plate skin itself is a static stand-in.")
     yOffset = previewCard:GetNextOffset()
 
     ---------------------------------------------------------------------------
-    -- Card 2: Nameplate Icons — size/layout of the per-cast cooldown icons.
+    -- Card 2: Cooldown Icons — whether to show them, and their size/count font.
     ---------------------------------------------------------------------------
-    local iconCard = GUIFrame:CreateCard(scrollChild, "Nameplate Icons", yOffset)
+    local iconCard = GUIFrame:CreateCard(scrollChild, "Cooldown Icons", yOffset)
     manager:Register(iconCard, "all")
 
     local iconRow1 = GUIFrame:CreateRow(iconCard.content, Theme.rowHeight)
@@ -131,7 +148,7 @@ GUIFrame:RegisterContent("DTimers_Nameplates", function(scrollChild, yOffset)
     iconRow1:AddWidget(showCheck, 1)
     iconCard:AddRow(iconRow1, Theme.rowHeight)
 
-    local iconRow2 = GUIFrame:CreateRow(iconCard.content, Theme.rowHeight)
+    local iconRow2 = GUIFrame:CreateRow(iconCard.content, Theme.rowHeightLast)
     local sizeSlider = GUIFrame:CreateSlider(iconRow2, "Icon Size", {
         min = 16, max = 64, step = 1,
         value = npc.IconSize or 32,
@@ -139,78 +156,106 @@ GUIFrame:RegisterContent("DTimers_Nameplates", function(scrollChild, yOffset)
         callback = function(val) npc.IconSize = val; RefreshMarkers() end,
     })
     iconRow2:AddWidget(sizeSlider, 0.5)
-    local fontSlider = GUIFrame:CreateSlider(iconRow2, "Count Font Size", {
+    local fontSlider = GUIFrame:CreateSlider(iconRow2, "Timer Text Size", {
         min = 8, max = 28, step = 1,
         value = npc.CountFontSize or 14,
-        labelWidth = 110,
+        labelWidth = 100,
         callback = function(val) npc.CountFontSize = val; RefreshMarkers() end,
     })
     iconRow2:AddWidget(fontSlider, 0.5)
-    iconCard:AddRow(iconRow2, Theme.rowHeight)
+    iconCard:AddRow(iconRow2, Theme.rowHeightLast, 0)
+    yOffset = iconCard:GetNextOffset()
 
-    local iconRow3 = GUIFrame:CreateRow(iconCard.content, Theme.rowHeight)
-    local sideDropdown = GUIFrame:CreateDropdown(iconRow3, "Grow Direction", {
+    ---------------------------------------------------------------------------
+    -- Card 3: Placement — where the icon row anchors on the plate, its spacing,
+    -- and a fine nudge. The row always grows AWAY from the plate, so the anchor
+    -- alone sets the grow direction (it can't overlap the bar).
+    ---------------------------------------------------------------------------
+    local placeCard = GUIFrame:CreateCard(scrollChild, "Placement", yOffset)
+    manager:Register(placeCard, "all")
+
+    local placeRow1 = GUIFrame:CreateRow(placeCard.content, Theme.rowHeight)
+    local sideDropdown = GUIFrame:CreateDropdown(placeRow1, "Anchor Location", {
         options = ANCHOR_SIDE_OPTIONS,
         value = npc.AnchorSide or "LEFT",
         callback = function(key) npc.AnchorSide = key; RefreshMarkers() end,
+        tooltip = "Where the cooldown-icon row attaches to the plate. The row"
+            .. " always grows away from the plate, so it never overlaps the bar:"
+            .. " Left/Right grow outward to that side, Top centres a row above.",
     })
-    iconRow3:AddWidget(sideDropdown, 0.5)
-    local gapSlider = GUIFrame:CreateSlider(iconRow3, "Icon Gap", {
+    placeRow1:AddWidget(sideDropdown, 0.5)
+    local gapSlider = GUIFrame:CreateSlider(placeRow1, "Icon Gap", {
         min = 0, max = 24, step = 1,
         value = npc.Gap or 8,
         labelWidth = 70,
         callback = function(val) npc.Gap = val; RefreshMarkers() end,
     })
-    iconRow3:AddWidget(gapSlider, 0.5)
-    iconCard:AddRow(iconRow3, Theme.rowHeight)
+    placeRow1:AddWidget(gapSlider, 0.5)
+    placeCard:AddRow(placeRow1, Theme.rowHeight)
 
-    local iconRow4 = GUIFrame:CreateRow(iconCard.content, Theme.rowHeightLast)
-    local offXSlider = GUIFrame:CreateSlider(iconRow4, "Offset X", {
+    local placeRow2 = GUIFrame:CreateRow(placeCard.content, Theme.rowHeightLast)
+    local offXSlider = GUIFrame:CreateSlider(placeRow2, "Offset X", {
         min = -100, max = 100, step = 1,
         value = npc.OffsetX or 0,
         labelWidth = 70,
         callback = function(val) npc.OffsetX = val; RefreshMarkers() end,
     })
-    iconRow4:AddWidget(offXSlider, 0.5)
-    local offYSlider = GUIFrame:CreateSlider(iconRow4, "Offset Y", {
+    placeRow2:AddWidget(offXSlider, 0.5)
+    local offYSlider = GUIFrame:CreateSlider(placeRow2, "Offset Y", {
         min = -100, max = 100, step = 1,
         value = npc.OffsetY or 0,
         labelWidth = 70,
         callback = function(val) npc.OffsetY = val; RefreshMarkers() end,
     })
-    iconRow4:AddWidget(offYSlider, 0.5)
-    iconCard:AddRow(iconRow4, Theme.rowHeightLast, 0)
-    yOffset = iconCard:GetNextOffset()
+    placeRow2:AddWidget(offYSlider, 0.5)
+    placeCard:AddRow(placeRow2, Theme.rowHeightLast, 0)
+    yOffset = placeCard:GetNextOffset()
 
     ---------------------------------------------------------------------------
-    -- Card 3: Ready Highlight — border tint flashed when a cast is due.
+    -- Card 4: Appearance — which UI layer the icons draw on, and the border
+    -- tint flashed the moment a predicted cast comes due.
     ---------------------------------------------------------------------------
-    local readyCard = GUIFrame:CreateCard(scrollChild, "Ready Highlight", yOffset)
-    manager:Register(readyCard, "all")
-    readyCard:AddLabel("Border color flashed on an icon the moment its predicted cast comes due.")
+    local appearCard = GUIFrame:CreateCard(scrollChild, "Appearance", yOffset)
+    manager:Register(appearCard, "all")
 
-    local readyRow = GUIFrame:CreateRow(readyCard.content, Theme.rowHeightLast)
+    local appearRow = GUIFrame:CreateRow(appearCard.content, Theme.rowHeightLast)
+    local strataDropdown = GUIFrame:CreateDropdown(appearRow, "Frame Strata", {
+        options = STRATA_OPTIONS,
+        value = npc.Strata or "MEDIUM",
+        callback = function(key) npc.Strata = key; RefreshMarkers() end,
+        tooltip = "Which UI layer the on-plate icons draw on. Lower it (Medium/Low)"
+            .. " if the icons cover other UI; raise it (High) to keep them on top.",
+    })
+    appearRow:AddWidget(strataDropdown, 0.5)
     local bc = npc.BorderColor or { 0.2, 0.85, 0.2, 1 }
-    local colorPicker = GUIFrame:CreateColorPicker(readyRow, "Ready Border", {
+    local colorPicker = GUIFrame:CreateColorPicker(appearRow, "Ready Border", {
         color = { bc[1], bc[2], bc[3], bc[4] or 1 },
         callback = function(r, g, b, a)
             npc.BorderColor = { r, g, b, a or 1 }
             RefreshMarkers()
         end,
-        tooltip = "Color of an icon's border when its predicted cast is imminent.",
+        tooltip = "Colour flashed on an icon's border the moment its predicted"
+            .. " cast is due.",
     })
-    readyRow:AddWidget(colorPicker, 1)
-    readyCard:AddRow(readyRow, Theme.rowHeightLast, 0)
-    yOffset = readyCard:GetNextOffset()
+    appearRow:AddWidget(colorPicker, 0.5)
+    appearCard:AddRow(appearRow, Theme.rowHeightLast, 0)
+    yOffset = appearCard:GetNextOffset()
 
     manager:UpdateAll(not isModuleDisabled)
     return yOffset
 end)
 
--- Hide the in-page sample when leaving this page or closing the GUI (fires on a
--- real sidebar item switch). The persistent preview frames are reparented back
--- in on the next visit via BuildNameplatePreview.
+-- Hide the in-page sample when SWITCHING away to another sidebar page, so the
+-- persistent preview frames don't float over the page you moved to. This fires
+-- on both a page switch AND a full GUI close, but we must only act on the
+-- former: on a close, mainFrame is already hidden (so nothing shows anyway), and
+-- reopening re-shows the cached page content WITHOUT re-running the builder — so
+-- a Hide() here would stick and the preview would be gone until you navigated
+-- away and back. mainFrame:Hide() runs before this cleanup loop on close, so
+-- GUIFrame:IsShown() is the exact discriminator: true = page switch (hide),
+-- false = window close (leave it; mainFrame:Show() brings it back).
 GUIFrame:RegisterContentCleanup("DTimers_Nameplates_preview", function()
+    if not GUIFrame:IsShown() then return end
     local mod = GetTrashModule()
     if mod and mod.HideNameplatePreview then mod:HideNameplatePreview() end
 end)

@@ -2,10 +2,12 @@
     <!-- Data first (KE.TrashData / KE.TrashTraits), then the pure inference
          core, then the stateful module that drives it. -->
     <Script file="TrashData.lua" />
+    <Script file="TrashCurated.lua" />
     <Script file="TrashTraits.lua" />
     <Script file="TrashInference.lua" />
     <Script file="DungeonTrash.lua" />
     <Script file="TrashConfig.lua" />
     <Script file="TrashOutput.lua" />
     <Script file="TrashNameplate.lua" />
+    <Script file="TrashCache.lua" />
 </Ui>

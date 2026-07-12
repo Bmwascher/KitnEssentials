@@ -160,7 +160,7 @@ read_globals = {
     "C_CreatureInfo",
 
     -- Instance / Group
-    "IsInInstance", "GetInstanceInfo",
+    "IsInInstance", "GetInstanceInfo", "GetMinimapZoneText",
     "IsInRaid", "IsInGroup", "IsInGuild", "GetNumGroupMembers", "GetRaidRosterInfo", "GetRaidDifficultyID",
     "IsWargame", "SendChatMessage", "LE_PARTY_CATEGORY_INSTANCE", "LE_PARTY_CATEGORY_HOME",
 

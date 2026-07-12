@@ -195,6 +195,7 @@ local DISPLAY_PRESETS = {
     FEET    = { label = "FEET",     color = { 1.0,  0.6,  0.0  } },
     FRONTAL = { label = "FRONTAL",  color = { 0.77, 0.17, 0.17 } },
     HIDE    = { label = "HIDE",     color = { 0.3,  0.9,  1.0  } },
+    KICK    = { label = "KICK",     color = { 1.0,  0.15, 0.15 }, hidden = true },
     MOVE    = { label = "MOVE",     color = { 1.0,  0.6,  0.0  } },
     PULL    = { label = "PULL",     color = { 0.3,  0.9,  1.0  } },
     SOAK    = { label = "SOAK",     color = { 0.2,  1.0,  0.4  } },
@@ -209,21 +210,29 @@ local DISPLAY_PRESETS = {
 
 -- Color-only aliases. The original text is preserved; only the color is borrowed from the aliased preset.
 local DISPLAY_PRESET_ALIASES = {
+    ["ADD GRIP"]  = "ADD",
     ADDS         = "ADD",
     ["AIM BEAMS"] = "CLEAR",
     ["AOE + FEET"] = "FEET",
+    BAIT         = "PULL",
     BEAM         = "AMP",
+    ["BIG HIT"]  = "TANK",
     ["CC ADDS"]  = "ADD",
+    CHAINS       = "AOE",
     CLEARS       = "CLEAR",
     DISPEL       = "CLEAR",
     DROPS        = "SPREAD",
     FIXATES      = "FRONTAL",
+    ["HEAL ABSORB"] = "CLEAR",
     HOOK         = "FRONTAL",
     INTERMISSION = "DANCE",
     KNOCK        = "PULL",
     LEAP         = "PULL",
+    LEAPS        = "PULL",
     MARKS        = "FRONTAL",
     MINIGAME     = "DANCE",
+    ["ORB SPAWN"] = "ADD",
+    SHIELD       = "VULN",
     SPLIT        = "AMP",
     SUCC          = "AOE",
     TOTEMS        = "ADD",
@@ -256,9 +265,65 @@ end
 
 DT._ResolvePresetByText = ResolvePresetByText
 
+-- Preset/alias colour for arbitrary text, or nil when nothing matches. The
+-- Dungeon Trash Tracker borrows the boss palette so a curated/overridden trash
+-- label (SOAK, DODGE, FRONTAL…) colours its alert exactly like a boss timer;
+-- an unmatched label (e.g. a raw spell name) returns nil so the caller can fall
+-- back to its own default. Lives on KE so trash resolvers reach it without a
+-- GetModule round-trip.
+function KE.ResolveTrashPresetColor(text)
+    if not text then return nil end
+    local preset = ResolvePresetByText(text)
+    if preset then return preset.color end
+    local aliasKey = DISPLAY_PRESET_ALIASES[text:upper()]
+    if aliasKey and DISPLAY_PRESETS[aliasKey] then return DISPLAY_PRESETS[aliasKey].color end
+    return nil
+end
+
 -- Read-only by convention — mutating either would break the ResolveDisplayPreset closure.
 DT.DISPLAY_PRESETS = DISPLAY_PRESETS
 DT.DISPLAY_PRESET_ALIASES = DISPLAY_PRESET_ALIASES
+
+-- Split text-mode layout, shared by the boss text timers and
+-- the Dungeon Trash central alerts — one implementation so the two renderers,
+-- which draw at the same shared TextGroup position, can never drift (they had:
+-- 2/5px boss vs 4/4px trash gaps). Label is the static pivot; the icon hangs
+-- off its LEFT and the timer extends off its RIGHT, so digit-width changes
+-- never shift the label:
+--   LEFT   → icon → label → timer, chained from anchor:LEFT
+--   CENTER → label static at anchor:CENTER; icon off label:LEFT, timer off
+--            label:RIGHT (block expands asymmetrically, LABEL+ICON stay put)
+--   RIGHT  → timer pinned to anchor:RIGHT, label/icon to its left (timer
+--            width changes shift them — CENTER/LEFT are the canonical cases)
+-- Lives on KE so the trash renderer reaches it without a GetModule round-trip.
+function KE.ApplySplitTextLayout(anchor, label, timerText, iconFrame, showIcon, align)
+    label:SetJustifyH("CENTER")  -- single-token, justify within auto-width
+    timerText:SetJustifyH("LEFT")
+    label:ClearAllPoints()
+    timerText:ClearAllPoints()
+    if iconFrame then iconFrame:ClearAllPoints() end
+    if align == "LEFT" then
+        if showIcon then
+            iconFrame:SetPoint("LEFT", anchor, "LEFT", 0, 0)
+            label:SetPoint("LEFT", iconFrame, "RIGHT", 2, 0)
+        else
+            label:SetPoint("LEFT", anchor, "LEFT", 0, 0)
+        end
+        timerText:SetPoint("LEFT", label, "RIGHT", 5, 0)
+    elseif align == "RIGHT" then
+        timerText:SetPoint("RIGHT", anchor, "RIGHT", 0, 0)
+        label:SetPoint("RIGHT", timerText, "LEFT", -5, 0)
+        if showIcon then
+            iconFrame:SetPoint("RIGHT", label, "LEFT", -2, 0)
+        end
+    else  -- CENTER
+        label:SetPoint("CENTER", anchor, "CENTER", 0, 0)
+        if showIcon then
+            iconFrame:SetPoint("RIGHT", label, "LEFT", -2, 0)
+        end
+        timerText:SetPoint("LEFT", label, "RIGHT", 5, 0)
+    end
+end
 
 DT.bars = {}
 DT.barGroup = nil
@@ -1597,49 +1662,11 @@ local function ApplyVisualsToBar(frame)
             local showTextIcon = frame.iconFrame and frame.iconFrame:IsShown()
 
             if frame.timerText then
-                -- Split-layout (ExBoss-style): label and (if shown) icon stay
-                -- put; only the timerText extends to the right as the timer
-                -- counts down. Per-alignment anchoring keeps the right element
-                -- nailed to a fixed edge so element widths can vary without
-                -- shifting their static siblings.
-                --
-                --   LEFT   → icon → label → timer, chained from frame:LEFT
-                --   CENTER → label is the static anchor at frame:CENTER,
-                --            icon hangs off label:LEFT, timer off label:RIGHT
-                --            (block expands asymmetrically as timer changes
-                --            but the LABEL+ICON stay put)
-                --   RIGHT  → timer pinned to frame:RIGHT, label and icon to
-                --            its left (timer width changes shift label/icon
-                --            — RIGHT align doesn't get full "static" behavior;
-                --            CENTER/LEFT are the canonical use cases)
-                frame.label:SetJustifyH("CENTER")  -- single-token, justify within auto-width
-                frame.timerText:SetJustifyH("LEFT")
-                -- Already cleared above for label; clear timer + icon too so
-                -- per-tick re-anchoring doesn't stack residual SetPoints.
-                frame.timerText:ClearAllPoints()
-                if frame.iconFrame then frame.iconFrame:ClearAllPoints() end
-
-                if align == "LEFT" then
-                    if showTextIcon then
-                        frame.iconFrame:SetPoint("LEFT", frame.bar, "LEFT", 0, 0)
-                        frame.label:SetPoint("LEFT", frame.iconFrame, "RIGHT", 2, 0)
-                    else
-                        frame.label:SetPoint("LEFT", frame.bar, "LEFT", 0, 0)
-                    end
-                    frame.timerText:SetPoint("LEFT", frame.label, "RIGHT", 5, 0)
-                elseif align == "RIGHT" then
-                    frame.timerText:SetPoint("RIGHT", frame.bar, "RIGHT", 0, 0)
-                    frame.label:SetPoint("RIGHT", frame.timerText, "LEFT", -5, 0)
-                    if showTextIcon then
-                        frame.iconFrame:SetPoint("RIGHT", frame.label, "LEFT", -2, 0)
-                    end
-                else  -- CENTER
-                    frame.label:SetPoint("CENTER", frame.bar, "CENTER", 0, 0)
-                    if showTextIcon then
-                        frame.iconFrame:SetPoint("RIGHT", frame.label, "LEFT", -2, 0)
-                    end
-                    frame.timerText:SetPoint("LEFT", frame.label, "RIGHT", 5, 0)
-                end
+                -- Split-layout: the shared KE.ApplySplitTextLayout (defined
+                -- with the preset tables above; also used by the Dungeon Trash
+                -- alerts) — label/icon stay put, only the timerText extends.
+                KE.ApplySplitTextLayout(frame.bar, frame.label, frame.timerText,
+                    frame.iconFrame, showTextIcon, align)
             else
                 -- Legacy single-label path (no timerText). Used by phase bars
                 -- in text mode — they render via _ShowPhaseBar's direct SetText,
@@ -1878,6 +1905,29 @@ function DT:LayoutBars()
             textY = textY + textStride
         end
     end
+
+    -- Merged stacking with the Dungeon Trash tracker: trash alerts share
+    -- this module's group positions and CONTINUE each stack past the boss
+    -- rows instead of drawing over them.
+    -- Publish the per-mode extents and re-flow the trash block whenever the
+    -- boss stack resizes (read-only in the other direction — no recursion).
+    self._stackExtents = self._stackExtents or {}
+    if self._stackExtents.bar ~= barY or self._stackExtents.text ~= textY then
+        self._stackExtents.bar = barY
+        self._stackExtents.text = textY
+        local DTrash = KitnEssentials:GetModule("DungeonTrash", true)
+        if DTrash and DTrash.LayoutAlerts then
+            DTrash:LayoutAlerts("bar")
+            DTrash:LayoutAlerts("text")
+        end
+    end
+end
+
+-- Visible extent of one stack (bar/text), refreshed by every LayoutBars —
+-- the trash tracker's merged stack starts from it.
+function DT:GetStackExtent(mode)
+    local e = self._stackExtents
+    return (e and e[mode]) or 0
 end
 
 function DT:ApplySettings()

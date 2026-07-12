@@ -9,8 +9,9 @@
 
 local helpers = require("dev.spec._helpers")
 
--- Pit of Saron / Dreadpulse Lich / Torrent of Misery — a real curated spell
--- whose defaults are display="bar", showNameplate=true (see TrashData.lua).
+-- Pit of Saron / Dreadpulse Lich / Torrent of Misery — a real curated spell.
+-- Shipped display default is now "text" (author default; the curation overlay
+-- can pin a per-spell exception), showNameplate=true (see TrashData.lua).
 local MAP, NPC, SPELL = 658, 252563, 1258820
 
 local function loadConfig()
@@ -18,16 +19,44 @@ local function loadConfig()
     local KE = { db = { profile = { DungeonTrash = {} } } }
     helpers.loadModule("Modules/DungeonTimers/Trash/TrashData.lua", KE)
     helpers.loadModule("Modules/DungeonTimers/Trash/TrashConfig.lua", KE)
+    -- Controlled EMPTY overlay so resolver tests stay independent of the shipped
+    -- TrashCurated.lua content (which grows as dungeons are curated). Tests that
+    -- need overlay behaviour inject KE.TrashCurated[map] themselves.
+    KE.TrashCurated = {}
     return modules["DungeonTrash"], KE
 end
 
 describe("DungeonTrash config — override backend", function()
-    local DT
-    before_each(function() DT = loadConfig() end)
+    local DT, KE
+    before_each(function() DT, KE = loadConfig() end)
 
-    it("confirms the curated fixture defaults (bar / nameplate-on)", function()
-        assert.equals("bar", DT:GetSpellCuratedDisplay(MAP, NPC, SPELL))
+    it("confirms the shipped defaults (text / nameplate-on)", function()
+        assert.equals("text", DT:GetSpellCuratedDisplay(MAP, NPC, SPELL))
         assert.is_true(DT:GetSpellCuratedNameplate(MAP, NPC, SPELL))
+    end)
+
+    it("curation overlay supplies shipped label/display/roles; user overrides still win", function()
+        KE.TrashCurated[MAP] = { [NPC] = { [SPELL] = {
+            display = "bar", label = "SOAK",
+            roles = { tank = false, healer = true, dps = false },
+        } } }
+        assert.equals("bar", DT:GetSpellCuratedDisplay(MAP, NPC, SPELL))
+        assert.equals("SOAK", DT:GetSpellCuratedLabel(MAP, NPC, SPELL))
+        assert.equals("SOAK", DT:GetSpellLabel(MAP, NPC, SPELL))       -- no user override → overlay
+        assert.same({ tank = false, healer = true, dps = false },      -- overlay role restriction
+            DT:GetSpellCuratedRoles(MAP, NPC, SPELL))
+        DT:SetSpellLabelOverride(MAP, NPC, SPELL, "INCOMING")
+        assert.equals("INCOMING", DT:GetSpellLabel(MAP, NPC, SPELL))   -- user override wins
+    end)
+
+    it("colorKey pins the colour to a preset independent of the label", function()
+        KE.ResolveTrashPresetColor = function(text)
+            return (text == "KICK") and { 1.0, 0.15, 0.15 } or nil
+        end
+        KE.TrashCurated[MAP] = { [NPC] = { [SPELL] = { display = "text", colorKey = "KICK" } } }
+        assert.same({ 1.0, 0.15, 0.15 }, DT:GetSpellEffectiveColor(MAP, NPC, SPELL))
+        DT:SetSpellColorOverride(MAP, NPC, SPELL, { 0, 0, 1 })          -- user colour still wins
+        assert.same({ 0, 0, 1 }, DT:GetSpellEffectiveColor(MAP, NPC, SPELL))
     end)
 
     it("round-trips the disabled flag and prunes on re-enable", function()
@@ -41,12 +70,12 @@ describe("DungeonTrash config — override backend", function()
     end)
 
     it("stores a display override and prunes when set back to the curated default", function()
-        assert.equals("bar", DT:GetSpellDisplay(MAP, NPC, SPELL))     -- curated
-        DT:SetSpellDisplayOverride(MAP, NPC, SPELL, "text")
-        assert.equals("text", DT:GetSpellDisplay(MAP, NPC, SPELL))
-        assert.is_true(DT:HasSpellOverrides(MAP, NPC, SPELL))
-        DT:SetSpellDisplayOverride(MAP, NPC, SPELL, "bar")            -- == curated
+        assert.equals("text", DT:GetSpellDisplay(MAP, NPC, SPELL))    -- curated default (text)
+        DT:SetSpellDisplayOverride(MAP, NPC, SPELL, "bar")
         assert.equals("bar", DT:GetSpellDisplay(MAP, NPC, SPELL))
+        assert.is_true(DT:HasSpellOverrides(MAP, NPC, SPELL))
+        DT:SetSpellDisplayOverride(MAP, NPC, SPELL, "text")           -- == curated
+        assert.equals("text", DT:GetSpellDisplay(MAP, NPC, SPELL))
         assert.is_false(DT:HasSpellOverrides(MAP, NPC, SPELL))        -- pruned, not stored
     end)
 
@@ -85,7 +114,7 @@ describe("DungeonTrash config — override backend", function()
         -- second curated spell in the same dungeon (Glacieth / Cryoburst)
         local NPC2, SPELL2 = 252564, 1259188
         DT:SetSpellDisabled(MAP, NPC, SPELL, true)
-        DT:SetSpellDisplayOverride(MAP, NPC2, SPELL2, "text")
+        DT:SetSpellDisplayOverride(MAP, NPC2, SPELL2, "bar")  -- differs from the "text" default
         assert.is_true(DT:HasSpellOverrides(MAP, NPC, SPELL))
         assert.is_true(DT:HasSpellOverrides(MAP, NPC2, SPELL2))
         DT:ResetTrashOverridesForDungeon(MAP)
@@ -185,6 +214,19 @@ describe("DungeonTrash config — sound overrides", function()
         assert.is_false(DT:HasSpellSound(MAP, NPC, SPELL))
         assert.is_false(DT:HasSpellOverrides(MAP, NPC, SPELL))          -- pruned
     end)
+
+    -- Third slot (2026-07-10): the observed cast-start cue — same entry, same
+    -- prune rule, independent of the two prediction-fired slots.
+    it("round-trips onCastStart and keeps the entry alive on its own", function()
+        assert.is_nil(DT:GetSpellSoundOnCastStart(MAP, NPC, SPELL))
+        DT:SetSpellSoundOnCastStart(MAP, NPC, SPELL, "Kick")
+        assert.equals("Kick", DT:GetSpellSoundOnCastStart(MAP, NPC, SPELL))
+        assert.is_nil(DT:GetSpellSoundOnShow(MAP, NPC, SPELL))
+        assert.is_true(DT:HasSpellSound(MAP, NPC, SPELL))
+        DT:SetSpellSoundOnCastStart(MAP, NPC, SPELL, nil)
+        assert.is_false(DT:HasSpellSound(MAP, NPC, SPELL))              -- pruned again
+        assert.is_false(DT:HasSpellOverrides(MAP, NPC, SPELL))
+    end)
 end)
 
 -- Custom label (Display tab text + preset chips write here).
@@ -256,13 +298,18 @@ describe("DungeonTrash config — reveal window (lead time)", function()
     -- Regression (2026-07-06 review): the shared boss "Reveal at" slider allows
     -- 0 ("always visible"), but 0 is meaningless for a trash countdown — it would
     -- reach ShowAlert as duration<=0 and be silently dropped, killing every
-    -- trash alert. The group default must floor a 0/negative to the 8s trash
-    -- fallback rather than leak a truthy 0.
-    it("floors a shared group ShowAtSeconds of 0 to the 8s trash default", function()
+    -- trash alert. The group default must floor a 0/negative to the per-mode
+    -- trash fallback (text 5 / bar 10) rather than leak a truthy 0.
+    it("floors a shared group ShowAtSeconds of 0 to the per-mode trash floor", function()
         KE.db.profile.DungeonTimers.BarGroup.ShowAtSeconds = 0
         KE.db.profile.DungeonTimers.TextGroup.ShowAtSeconds = 0
-        assert.equals(8, DT:GetSpellRevealAtDefault(MAP, NPC, SPELL))
-        assert.equals(8, DT:GetSpellRevealAt(MAP, NPC, SPELL))
+        -- SPELL (Torrent of Misery) resolves to text mode -> 5s floor.
+        assert.equals(5, DT:GetSpellRevealAtDefault(MAP, NPC, SPELL))
+        assert.equals(5, DT:GetSpellRevealAt(MAP, NPC, SPELL))
+        -- Bar-mode alerts floor to 10s.
+        DT:SetSpellDisplayOverride(MAP, NPC, SPELL, "bar")
+        assert.equals(10, DT:GetSpellRevealAtDefault(MAP, NPC, SPELL))
+        assert.equals(10, DT:GetSpellRevealAt(MAP, NPC, SPELL))
     end)
 end)
 

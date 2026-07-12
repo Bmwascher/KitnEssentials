@@ -4,7 +4,7 @@
 -- ║  DO NOT EDIT BY HAND — re-run the extractor to refresh.  ║
 -- ║                                                          ║
 -- ║  Curated dungeon-trash cast-timer data, ported verbatim  ║
--- ║  from the upstream ExBoss data tables (v26.6.29.1618).   ║
+-- ║  from the upstream reference data tables.                ║
 -- ║  Keyed by mapID, then npcID, then spellID.               ║
 -- ║                                                          ║
 -- ║  Schema:                                                 ║
@@ -18,7 +18,7 @@
 -- ║                        spellID, name,  -- enUS spell name║
 -- ║                        castTime, channelTime, first,     ║
 -- ║                        cd = { ... }, cdMode,             ║
--- ║                      -- fingerprints (present when set): ║
+-- ║                       -- fingerprints (present when set):║
 -- ║                        targetExists, targetAPIExists,    ║
 -- ║                        castStartChangeTarget,            ║
 -- ║                        targetClearOnCastStart,           ║
@@ -26,7 +26,7 @@
 -- ║                        selfBuffCountDeltaOnSuccess,      ║
 -- ║                        channelRefreshOnInterruptible,    ║
 -- ║                        castTimeExtra = { ... },          ║
--- ║                      -- display defaults (TrashCDPreset):║
+-- ║                        -- shipped display defaults:      ║
 -- ║                        showNameplate,  -- default true   ║
 -- ║                        display,        -- "bar"|"text"   ║
 -- ║                        roles = { tank, healer, dps },    ║
@@ -42,11 +42,15 @@ local KE = select(2, ...)
 if not KitnEssentials then return end
 
 KE.TrashData = {
+    -- ╔══════════════════════════════════════════════════════════╗
+    -- ║  Pit of Saron (658)                                      ║
+    -- ╚══════════════════════════════════════════════════════════╝
     [658] = {
         mapID = 658,
         dungeonKey = "PitOfSaron",
         name = "Pit of Saron",
         mobs = {
+            -- ── Dreadpulse Lich ──────────────────────────────────────────
             [252563] = {
                 npcID = 252563,
                 name = "Dreadpulse Lich",
@@ -64,6 +68,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Glacieth ─────────────────────────────────────────────────
             [252564] = {
                 npcID = 252564,
                 name = "Glacieth",
@@ -91,6 +97,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Plungetalon Gargoyle ─────────────────────────────────────
             [252606] = {
                 npcID = 252606,
                 name = "Plungetalon Gargoyle",
@@ -109,6 +117,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Ymirjar Graveblade ───────────────────────────────────────
             [252610] = {
                 npcID = 252610,
                 name = "Ymirjar Graveblade",
@@ -137,6 +147,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Iceborn Proto-Drake ──────────────────────────────────────
             [257190] = {
                 npcID = 257190,
                 name = "Iceborn Proto-Drake",
@@ -155,11 +167,16 @@ KE.TrashData = {
             },
         },
     },
+
+    -- ╔══════════════════════════════════════════════════════════╗
+    -- ║  Skyreach (1209)                                         ║
+    -- ╚══════════════════════════════════════════════════════════╝
     [1209] = {
         mapID = 1209,
         dungeonKey = "Skyreach",
         name = "Skyreach",
         mobs = {
+            -- ── Solar Construct ──────────────────────────────────────────
             [76087] = {
                 npcID = 76087,
                 name = "Solar Construct",
@@ -191,6 +208,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Dread Raven ──────────────────────────────────────────────
             [76149] = {
                 npcID = 76149,
                 name = "Dread Raven",
@@ -223,6 +242,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Suntalon Tamer ───────────────────────────────────────────
             [76154] = {
                 npcID = 76154,
                 name = "Suntalon Tamer",
@@ -239,6 +260,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Solar Elemental ──────────────────────────────────────────
             [78933] = {
                 npcID = 78933,
                 name = "Solar Elemental",
@@ -270,6 +293,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Adorned Bladetalon ───────────────────────────────────────
             [79303] = {
                 npcID = 79303,
                 name = "Adorned Bladetalon",
@@ -303,11 +328,16 @@ KE.TrashData = {
             },
         },
     },
+
+    -- ╔══════════════════════════════════════════════════════════╗
+    -- ║  Seat of the Triumvirate (1753)                          ║
+    -- ╚══════════════════════════════════════════════════════════╝
     [1753] = {
         mapID = 1753,
         dungeonKey = "SeatOfTriumvirate",
         name = "Seat of the Triumvirate",
         mobs = {
+            -- ── Umbral War-Adept ─────────────────────────────────────────
             [122421] = {
                 npcID = 122421,
                 name = "Umbral War-Adept",
@@ -324,6 +354,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Grand Shadow-Weaver ──────────────────────────────────────
             [122423] = {
                 npcID = 122423,
                 name = "Grand Shadow-Weaver",
@@ -353,6 +385,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Rift Warden ──────────────────────────────────────────────
             [122571] = {
                 npcID = 122571,
                 name = "Rift Warden",
@@ -380,6 +414,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Merciless Subjugator ─────────────────────────────────────
             [124171] = {
                 npcID = 124171,
                 name = "Merciless Subjugator",
@@ -409,6 +445,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Void-Infused Destroyer ───────────────────────────────────
             [252756] = {
                 npcID = 252756,
                 name = "Void-Infused Destroyer",
@@ -437,11 +475,16 @@ KE.TrashData = {
             },
         },
     },
+
+    -- ╔══════════════════════════════════════════════════════════╗
+    -- ║  Algeth'ar Academy (2526)                                ║
+    -- ╚══════════════════════════════════════════════════════════╝
     [2526] = {
         mapID = 2526,
         dungeonKey = "AlgetharAcademy",
         name = "Algeth'ar Academy",
         mobs = {
+            -- ── Alpha Eagle ──────────────────────────────────────────────
             [192333] = {
                 npcID = 192333,
                 name = "Alpha Eagle",
@@ -470,6 +513,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Guardian Sentry ──────────────────────────────────────────
             [192680] = {
                 npcID = 192680,
                 name = "Guardian Sentry",
@@ -509,6 +554,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Algeth'ar Echoknight ─────────────────────────────────────
             [196200] = {
                 npcID = 196200,
                 name = "Algeth'ar Echoknight",
@@ -525,6 +572,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Vicious Ravager ──────────────────────────────────────────
             [196671] = {
                 npcID = 196671,
                 name = "Vicious Ravager",
@@ -554,6 +603,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Vile Lasher ──────────────────────────────────────────────
             [197219] = {
                 npcID = 197219,
                 name = "Vile Lasher",
@@ -572,11 +623,16 @@ KE.TrashData = {
             },
         },
     },
+
+    -- ╔══════════════════════════════════════════════════════════╗
+    -- ║  Windrunner Spire (2805)                                 ║
+    -- ╚══════════════════════════════════════════════════════════╝
     [2805] = {
         mapID = 2805,
         dungeonKey = "WindrunnerSpire",
         name = "Windrunner Spire",
         mobs = {
+            -- ── Territorial Dragonhawk ───────────────────────────────────
             [232056] = {
                 npcID = 232056,
                 name = "Territorial Dragonhawk",
@@ -595,6 +651,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Apex Lynx ────────────────────────────────────────────────
             [232063] = {
                 npcID = 232063,
                 name = "Apex Lynx",
@@ -623,6 +681,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Spellguard Magus ─────────────────────────────────────────
             [232113] = {
                 npcID = 232113,
                 name = "Spellguard Magus",
@@ -641,6 +701,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Phalanx Breaker ──────────────────────────────────────────
             [232122] = {
                 npcID = 232122,
                 name = "Phalanx Breaker",
@@ -668,6 +730,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Phantasmal Mystic ────────────────────────────────────────
             [232146] = {
                 npcID = 232146,
                 name = "Phantasmal Mystic",
@@ -687,6 +751,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Devoted Woebringer ───────────────────────────────────────
             [232175] = {
                 npcID = 232175,
                 name = "Devoted Woebringer",
@@ -706,6 +772,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Flesh Behemoth ───────────────────────────────────────────
             [232176] = {
                 npcID = 232176,
                 name = "Flesh Behemoth",
@@ -732,6 +800,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Bloated Lasher ───────────────────────────────────────────
             [236894] = {
                 npcID = 236894,
                 name = "Bloated Lasher",
@@ -751,11 +821,16 @@ KE.TrashData = {
             },
         },
     },
+
+    -- ╔══════════════════════════════════════════════════════════╗
+    -- ║  Magisters' Terrace (2811)                               ║
+    -- ╚══════════════════════════════════════════════════════════╝
     [2811] = {
         mapID = 2811,
         dungeonKey = "MagistersTerrace",
         name = "Magisters' Terrace",
         mobs = {
+            -- ── Arcane Sentry ────────────────────────────────────────────
             [234062] = {
                 npcID = 234062,
                 name = "Arcane Sentry",
@@ -793,6 +868,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Devouring Tyrant ─────────────────────────────────────────
             [234066] = {
                 npcID = 234066,
                 name = "Devouring Tyrant",
@@ -809,6 +886,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Shadowrift Voidcaller ────────────────────────────────────
             [234068] = {
                 npcID = 234068,
                 name = "Shadowrift Voidcaller",
@@ -837,6 +916,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Runed Spellbreaker ───────────────────────────────────────
             [240973] = {
                 npcID = 240973,
                 name = "Runed Spellbreaker",
@@ -863,6 +944,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Blazing Pyromancer ───────────────────────────────────────
             [251861] = {
                 npcID = 251861,
                 name = "Blazing Pyromancer",
@@ -893,11 +976,16 @@ KE.TrashData = {
             },
         },
     },
+
+    -- ╔══════════════════════════════════════════════════════════╗
+    -- ║  Maisara Caverns (2874)                                  ║
+    -- ╚══════════════════════════════════════════════════════════╝
     [2874] = {
         mapID = 2874,
         dungeonKey = "MaisaraCaverns",
         name = "Maisara Caverns",
         mobs = {
+            -- ── Hulking Juggernaut ───────────────────────────────────────
             [248678] = {
                 npcID = 248678,
                 name = "Hulking Juggernaut",
@@ -926,6 +1014,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Dread Souleater ──────────────────────────────────────────
             [248686] = {
                 npcID = 248686,
                 name = "Dread Souleater",
@@ -944,6 +1034,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Hexbound Eagle ───────────────────────────────────────────
             [249020] = {
                 npcID = 249020,
                 name = "Hexbound Eagle",
@@ -962,6 +1054,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Hollow Soulrender ────────────────────────────────────────
             [249024] = {
                 npcID = 249024,
                 name = "Hollow Soulrender",
@@ -989,6 +1083,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Bound Defender ───────────────────────────────────────────
             [249025] = {
                 npcID = 249025,
                 name = "Bound Defender",
@@ -1016,6 +1112,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Restless Gnarldin ────────────────────────────────────────
             [249030] = {
                 npcID = 249030,
                 name = "Restless Gnarldin",
@@ -1044,6 +1142,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Hex Guardian ─────────────────────────────────────────────
             [253302] = {
                 npcID = 253302,
                 name = "Hex Guardian",
@@ -1070,6 +1170,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Rokh'zal ─────────────────────────────────────────────────
             [253683] = {
                 npcID = 253683,
                 name = "Rokh'zal",
@@ -1099,11 +1201,16 @@ KE.TrashData = {
             },
         },
     },
+
+    -- ╔══════════════════════════════════════════════════════════╗
+    -- ║  Nexus-Point Xenas (2915)                                ║
+    -- ╚══════════════════════════════════════════════════════════╝
     [2915] = {
         mapID = 2915,
         dungeonKey = "NexusPointXenas",
         name = "Nexus-Point Xenas",
         mobs = {
+            -- ── Lingering Image ──────────────────────────────────────────
             [241642] = {
                 npcID = 241642,
                 name = "Lingering Image",
@@ -1143,6 +1250,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Duskfright Herald ────────────────────────────────────────
             [241660] = {
                 npcID = 241660,
                 name = "Duskfright Herald",
@@ -1173,6 +1282,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Circuit Seer ─────────────────────────────────────────────
             [248373] = {
                 npcID = 248373,
                 name = "Circuit Seer",
@@ -1200,6 +1311,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Null Sentinel ────────────────────────────────────────────
             [248502] = {
                 npcID = 248502,
                 name = "Null Sentinel",
@@ -1229,6 +1342,8 @@ KE.TrashData = {
                     },
                 },
             },
+
+            -- ── Dreadflail ───────────────────────────────────────────────
             [248506] = {
                 npcID = 248506,
                 name = "Dreadflail",
