@@ -319,10 +319,16 @@ function DTrash:GetEffectiveSpellSoundOnCastStart(mapID, npcID, spellID)
     return self:GetCuratedCastStartSound(mapID, npcID, spellID)
 end
 
+-- "Does anything actually play?" — drives the list rows' "S" badge. Reads
+-- EFFECTIVE state like the boss timers' HasSpellSound: a curated castSound
+-- default lights it with no override stored, and a stored "None" (mute)
+-- doesn't count as a sound.
 function DTrash:HasSpellSound(mapID, npcID, spellID)
-    return (self:GetSpellSoundOnShow(mapID, npcID, spellID) ~= nil)
-        or (self:GetSpellSoundOnHide(mapID, npcID, spellID) ~= nil)
-        or (self:GetSpellSoundOnCastStart(mapID, npcID, spellID) ~= nil)
+    local onShow = self:GetSpellSoundOnShow(mapID, npcID, spellID)
+    local onHide = self:GetSpellSoundOnHide(mapID, npcID, spellID)
+    return (onShow ~= nil and onShow ~= "None")
+        or (onHide ~= nil and onHide ~= "None")
+        or (self:GetEffectiveSpellSoundOnCastStart(mapID, npcID, spellID) ~= nil)
 end
 
 local function setSound(self, mapID, npcID, spellID, field, sound)

@@ -109,6 +109,22 @@ describe("DungeonTrash config — override backend", function()
         assert.is_nil(DT:GetSpellSoundOnShow(MAP, NPC, SPELL))
     end)
 
+    it("HasSpellSound reflects effective state (curated default lights it, 'None' doesn't)", function()
+        -- Nothing stored, nothing curated → no badge.
+        assert.is_false(DT:HasSpellSound(MAP, NPC, SPELL))
+        -- A curated castSound default alone lights the badge.
+        KE.TrashCurated[MAP] = { [NPC] = { [SPELL] = { castSound = "Frontal" } } }
+        assert.is_true(DT:HasSpellSound(MAP, NPC, SPELL))
+        -- Muting the default with "None" turns it back off.
+        DT:SetSpellSoundOnCastStart(MAP, NPC, SPELL, "None")
+        assert.is_false(DT:HasSpellSound(MAP, NPC, SPELL))
+        -- A stored "None" on onShow doesn't count either; a real pick does.
+        DT:SetSpellSoundOnShow(MAP, NPC, SPELL, "None")
+        assert.is_false(DT:HasSpellSound(MAP, NPC, SPELL))
+        DT:SetSpellSoundOnShow(MAP, NPC, SPELL, "Kick")
+        assert.is_true(DT:HasSpellSound(MAP, NPC, SPELL))
+    end)
+
     it("round-trips a color override and falls back to the default when cleared", function()
         assert.is_nil(DT:GetSpellColorOverride(MAP, NPC, SPELL))
         assert.same({ 0.3, 0.5, 0.9 }, DT:GetSpellEffectiveColor(MAP, NPC, SPELL))
