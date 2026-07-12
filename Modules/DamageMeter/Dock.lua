@@ -620,16 +620,19 @@ function DM:UpdateBackdrop()
         cfg.BorderColor = self:_ResolveDockBorderColor()
     end
     -- Skin the carrier child (not the dock) so "behind bars only" can drop the
-    -- frame off the header band: inset the top by the header band height (pad +
-    -- header) so the box starts at the first bar and the title floats above it.
-    -- Otherwise it covers the whole dock (unchanged look). Re-level each pass in
-    -- case a strata change re-based the dock.
+    -- frame off the header band: inset the top by the header band height ONLY
+    -- (not pad + header) so the top edge sits pad above the first bar — the
+    -- same border + pad inset as the other three sides. Flush with the bar top
+    -- instead would bury the 1px top border under the bars, which draw a frame
+    -- level above the skin. The title floats above the box. Otherwise it covers
+    -- the whole dock (unchanged look). Re-level each pass in case a strata
+    -- change re-based the dock.
     local skin = dock.skin
     skin:SetFrameLevel(dock:GetFrameLevel())
     skin:ClearAllPoints()
     if cfg.Enabled and db.BackdropBehindBarsOnly then
         local headerH = self._dockHeaderH or KE:PixelSnap((db.FontSize or 12) + 6)
-        skin:SetPoint("TOPLEFT", dock, "TOPLEFT", 0, -(pad + headerH))
+        skin:SetPoint("TOPLEFT", dock, "TOPLEFT", 0, -headerH)
         skin:SetPoint("BOTTOMRIGHT", dock, "BOTTOMRIGHT", 0, 0)
     else
         skin:SetAllPoints(dock)
