@@ -187,4 +187,50 @@ describe("DungeonTrash data integrity — TrashCurated overlay", function()
         end
         assert.same({}, bad)
     end)
+
+    -- The resolvers read exactly these fields off an overlay entry; anything
+    -- else (e.g. a typo'd castSounds) is dead weight that fails silently.
+    local ENTRY_FIELDS = { label = true, display = true, colorKey = true,
+                           roles = true, castSound = true }
+
+    it("overlay entries carry only fields the resolvers read", function()
+        local bad = {}
+        for mapID, mobs in pairs(curated) do
+            for npcID, spells in pairs(mobs) do
+                for spellID, o in pairs(spells) do
+                    for k in pairs(o) do
+                        if not ENTRY_FIELDS[k] then
+                            bad[#bad + 1] = string.format("%d/%d/%d field %q",
+                                mapID, npcID, spellID, tostring(k))
+                        end
+                    end
+                end
+            end
+        end
+        assert.same({}, bad)
+    end)
+
+    -- Shipped cast-start defaults must name KE's own voice pack — a typo (or
+    -- a sound only some other addon registers) would silently never play.
+    -- The pack's LSM names ARE the .ogg filenames (Core/Globals.lua), so the
+    -- repo's Media/Sounds/ directory is the source of truth.
+    it("every curated castSound names a shipped voice file (Media/Sounds)", function()
+        local missing = {}
+        for mapID, mobs in pairs(curated) do
+            for npcID, spells in pairs(mobs) do
+                for spellID, o in pairs(spells) do
+                    if o.castSound ~= nil then
+                        local f = io.open("Media/Sounds/" .. tostring(o.castSound) .. ".ogg", "rb")
+                        if f then
+                            f:close()
+                        else
+                            missing[#missing + 1] = string.format("%d/%d/%d castSound %q",
+                                mapID, npcID, spellID, tostring(o.castSound))
+                        end
+                    end
+                end
+            end
+        end
+        assert.same({}, missing)
+    end)
 end)

@@ -54,183 +54,187 @@ KE.TrashCurated = {
     -- ── Pit of Saron (658) ──────────────────────────────────────────────────
     [658] = {
         [252563] = {  -- Dreadpulse Lich
-            [1258820] = { label = "SUCC",     display = "bar"  },  -- Torrent of Misery (→ AOE yellow)
+            [1258820] = { label = "SUCC",     display = "bar"  },                          -- Torrent of Misery (→ AOE yellow; no cast sound)
         },
         [252564] = {  -- Glacieth
-            [1259188] = { label = "SPREAD",   display = "text" },  -- Cryoburst (→ orange)
-            [1259226] = { label = "SHIELD",   display = "text" },  -- Focused Guard (→ VULN green)
+            [1259188] = { label = "SPREAD",   display = "text", castSound = "Spread" },    -- Cryoburst (→ orange)
+            [1259226] = { label = "SHIELD",   display = "text" },                          -- Focused Guard (→ VULN green; no cast sound)
         },
         [252606] = {  -- Plungetalon Gargoyle
-            [1258997] = { label = "Add Grip", display = "bar"  },  -- Plungegrip (→ ADD pink)
+            [1258997] = { label = "Add Grip", display = "bar"  },                          -- Plungegrip (→ ADD pink; no cast sound)
         },
         [252610] = {  -- Ymirjar Graveblade
-            [1258439] = { label = "TANK HIT", display = "bar"  },  -- Frostbane Slash (→ red)
-            [1278963] = { label = "FEET",     display = "text" },  -- Dark Rupture (→ orange)
+            [1258439] = { label = "TANK HIT", display = "bar"  },                          -- Frostbane Slash (→ red; no cast sound)
+            [1278963] = { label = "FEET",     display = "text", castSound = "Feet" },      -- Dark Rupture (→ orange)
         },
         [257190] = {  -- Iceborn Proto-Drake
-            [1278986] = { label = "FRONTAL",  display = "text" },  -- Frost Breath (→ red)
+            [1278986] = { label = "FRONTAL",  display = "text", castSound = "Frontal" },   -- Frost Breath (→ red)
         },
     },
 
     -- ── Skyreach (1209) ─────────────────────────────────────────────────────
     [1209] = {
         [76087] = {  -- Solar Construct
-            [1253446] = { label = "SUCC",      display = "bar"  },  -- Solar Flame (→ AOE yellow)
-            [1253448] = { label = "FEET",      display = "text" },  -- Solar Nova (→ orange)
+            [1253446] = { label = "SUCC",      display = "bar"  },                        -- Solar Flame (→ AOE yellow; no cast sound)
+            [1253448] = { label = "FEET",      display = "text", castSound = "Move" },    -- Solar Nova (→ orange)
         },
         [76149] = {  -- Dread Raven
-            [1254566] = { label = "AOE",       display = "text" },  -- Dire Screech (→ yellow)
-            [1258174] = { label = "BIG HIT",   display = "bar"  },  -- Dread Wind (→ TANK red)
+            [1254566] = { label = "AOE",       display = "text", castSound = "AoE" },     -- Dire Screech (→ yellow)
+            [1258174] = { label = "BIG HIT",   display = "bar"  },                        -- Dread Wind (→ TANK red; no cast sound)
         },
         [76154] = {  -- Suntalon Tamer
-            [1254686] = { label = "Fixates",   display = "bar"  },  -- Mark of Death (→ FRONTAL red)
+            [1254686] = { label = "Fixates",   display = "bar"  },                        -- Mark of Death (→ FRONTAL red; no cast sound)
         },
         [78933] = {  -- Solar Elemental
-            [1254355] = { label = "Orb Spawn", display = "bar"  },  -- Solar Orb (→ ADD pink)
-            [1258217] = { label = "FEET",      display = "text" },  -- Solar Fire (→ orange)
+            [1254355] = { label = "Orb Spawn", display = "bar",  castSound = "Add" },     -- Solar Orb (→ ADD pink)
+            [1258217] = { label = "FEET",      display = "text", castSound = "Feet" },    -- Solar Fire (→ orange)
         },
         [79303] = {  -- Adorned Bladetalon
-            [1254380] = { label = "TANK HIT",  display = "bar"  },  -- Shear (→ red)
-            [1254460] = { label = "AOE",       display = "bar"  },  -- Blade Rush (→ yellow)
+            [1254380] = { label = "TANK HIT",  display = "bar"  },                        -- Shear (→ red; no cast sound)
+            [1254460] = { label = "AOE",       display = "bar",  castSound = "AoE" },     -- Blade Rush (→ yellow)
         },
     },
 
     -- ── Seat of the Triumvirate (1753) ──────────────────────────────────────
     [1753] = {
         [122421] = {  -- Umbral War-Adept
-            [1280326] = { label = "TANK HIT",    display = "bar"  },  -- Void Bash (→ red)
+            [1280326] = { label = "TANK HIT",    display = "bar"  },                          -- Void Bash (→ red; no cast sound)
         },
         [122423] = {  -- Grand Shadow-Weaver
-            [1262508] = { label = "SUCC",        display = "text" },  -- Void Infusion (→ AOE yellow)
-            [1264286] = { label = "DODGE",       display = "text" },  -- Gate of the Abyss (→ orange)
+            [1262508] = { label = "SUCC",        display = "text" },                          -- Void Infusion (→ AOE yellow; no cast sound)
+            [1264286] = { label = "DODGE",       display = "text", castSound = "Move" },      -- Gate of the Abyss (→ orange)
         },
         [122571] = {  -- Rift Warden
-            [1264499] = { label = "AOE",         display = "bar"  },  -- Rift Tear (→ yellow)
+            [1264499] = { label = "AOE",         display = "bar",  castSound = "AoE" },       -- Rift Tear (→ yellow)
             [1280330] = { label = "DISPEL",      display = "text",     -- Rift Essence (→ CLEAR white)
+                          castSound = "Dispell",
                           roles = { tank = false, healer = true, dps = false } },  -- healer only
         },
         [124171] = {  -- Merciless Subjugator
-            [1262506] = { label = "Heal Absorb", display = "bar"  },  -- Leeching Void (→ CLEAR white)
-            [1262509] = { label = "CHAINS",      display = "text" },  -- Chains of Subjugation (→ AOE yellow)
+            [1262506] = { label = "Heal Absorb", display = "bar"  },                          -- Leeching Void (→ CLEAR white; no cast sound)
+            [1262509] = { label = "CHAINS",      display = "text" },                          -- Chains of Subjugation (→ AOE yellow; no cast sound)
         },
         [252756] = {  -- Void-Infused Destroyer
-            [1262335] = { label = "FRONTAL",     display = "text" },  -- Void Cleave (→ red)
-            [1262429] = { label = "BIG HIT",     display = "bar"  },  -- Eruption (→ TANK red)
+            [1262335] = { label = "FRONTAL",     display = "text", castSound = "Frontal" },   -- Void Cleave (→ red)
+            [1262429] = { label = "BIG HIT",     display = "bar"  },                          -- Eruption (→ TANK red; no cast sound)
         },
     },
 
     -- ── Algeth'ar Academy (2526) ────────────────────────────────────────────
     [2526] = {
         [192333] = {  -- Alpha Eagle
-            [377383] = { label = "FRONTAL",   display = "text" },  -- Gust (→ red)
-            [377389] = { label = "AOE",       display = "text" },  -- Raging Screech (→ yellow)
+            [377383] = { label = "FRONTAL",   display = "text", castSound = "Frontal" },  -- Gust (→ red)
+            [377389] = { label = "AOE",       display = "text", castSound = "AoE" },      -- Raging Screech (→ yellow)
         },
         [192680] = {  -- Guardian Sentry
-            [377912] = { label = "HIDE",      display = "text" },  -- Expel Intruders (→ cyan)
-            [377991] = { label = "TANK HIT",  display = "bar"  },  -- Storm Slash (→ red)
-            [378003] = { label = "FEET",      display = "bar"  },  -- Deadly Winds (→ orange)
+            [377912] = { label = "HIDE",      display = "text", castSound = "Hide" },     -- Expel Intruders (→ cyan)
+            [377991] = { label = "TANK HIT",  display = "bar"  },                         -- Storm Slash (→ red; no cast sound)
+            [378003] = { label = "FEET",      display = "bar",  castSound = "Feet" },     -- Deadly Winds (→ orange)
         },
         [196200] = {  -- Algeth'ar Echoknight
-            [1270356] = { label = "AOE",      display = "bar"  },  -- Arcane Smash (→ yellow)
+            [1270356] = { label = "AOE",      display = "bar",  castSound = "AoE" },      -- Arcane Smash (→ yellow)
         },
         [196671] = {  -- Vicious Ravager
-            [388942] = { label = "BAIT",      display = "text" },  -- Vicious Ambush (→ PULL cyan)
-            [388976] = { label = "FRONTAL",   display = "text" },  -- Riftbreath (→ red)
+            [388942] = { label = "BAIT",      display = "text" },                         -- Vicious Ambush (→ PULL cyan; no cast sound)
+            [388976] = { label = "FRONTAL",   display = "text", castSound = "Frontal" },  -- Riftbreath (→ red)
         },
         [197219] = {  -- Vile Lasher
-            [1282244] = { label = "TANK HIT", display = "bar"  },  -- Vile Bite (→ red)
+            [1282244] = { label = "TANK HIT", display = "bar"  },                         -- Vile Bite (→ red; no cast sound)
         },
     },
 
     -- ── Windrunner Spire (2805) ─────────────────────────────────────────────
     [2805] = {
         [232056] = {  -- Territorial Dragonhawk
-            [1216848] = { display = "text", colorKey = "KICK" },  -- Fire Spit (interrupt — keeps name, → KICK red)
+            [1216848] = { display = "text", colorKey = "KICK", castSound = "Interrupt" },  -- Fire Spit (interrupt — keeps name, → KICK red)
         },
         [232063] = {  -- Apex Lynx
-            [1216985] = { label = "TANK HIT", display = "bar"  },  -- Puncturing Bite (→ red)
-            [1217010] = { label = "LEAPS",    display = "text" },  -- Ferocious Pounce (→ LEAP/PULL cyan)
+            [1216985] = { label = "TANK HIT", display = "bar"  },                          -- Puncturing Bite (→ red; no cast sound)
+            [1217010] = { label = "LEAPS",    display = "text", castSound = "Spread" },    -- Ferocious Pounce (→ LEAP/PULL cyan)
         },
         [232113] = {  -- Spellguard Magus
-            [1216250] = { label = "AOE",      display = "bar"  },  -- Arcane Salvo (→ yellow)
+            [1216250] = { label = "AOE",      display = "bar"  },                          -- Arcane Salvo (→ yellow; no cast sound)
         },
         [232122] = {  -- Phalanx Breaker
-            [471643] = { label = "AOE",       display = "text" },  -- Interrupting Screech (→ yellow)
-            [471648] = { label = "DODGE",     display = "text" },  -- Break Ranks (→ orange)
+            [471643] = { label = "AOE",       display = "text", castSound = "Stop Casting" },  -- Interrupting Screech (→ yellow)
+            [471648] = { label = "DODGE",     display = "text", castSound = "Dodge" },     -- Break Ranks (→ orange)
         },
         [232146] = {  -- Phantasmal Mystic
-            [1270618] = { label = "AOE",      display = "text" },  -- Flame Nova (→ yellow)
+            [1270618] = { label = "AOE",      display = "text", castSound = "AoE" },       -- Flame Nova (→ yellow)
         },
         [232175] = {  -- Devoted Woebringer
-            [473672] = { label = "AOE",       display = "bar"  },  -- Pulsing Shriek (→ yellow)
+            [473672] = { label = "AOE",       display = "bar",  castSound = "AoE" },       -- Pulsing Shriek (→ yellow)
         },
         [232176] = {  -- Flesh Behemoth
-            [473776] = { label = "AOE",       display = "bar"  },  -- Fetid Spew (→ yellow)
-            [1277799] = { label = "TANK HIT", display = "bar"  },  -- Brutal Chop (→ red)
+            [473776] = { label = "AOE",       display = "bar",  castSound = "AoE" },       -- Fetid Spew (→ yellow)
+            [1277799] = { label = "TANK HIT", display = "bar"  },                          -- Brutal Chop (→ red; no cast sound)
         },
         [236894] = {  -- Bloated Lasher
-            [1216963] = { label = "AOE",      display = "bar"  },  -- Spore Dispersal (→ yellow)
+            [1216963] = { label = "AOE",      display = "bar",  castSound = "AoE" },       -- Spore Dispersal (→ yellow)
         },
     },
 
     -- ── Magisters' Terrace (2811) ───────────────────────────────────────────
     [2811] = {
         [234062] = {  -- Arcane Sentry
-            [473258]  = { label = "AOE",      display = "text" },  -- Crowd Dispersal (→ yellow)
-            [1282050] = { label = "SUCC",     display = "bar"  },  -- Arcane Beam (→ AOE yellow)
+            [473258]  = { label = "AOE",      display = "text", castSound = "AoE" },      -- Crowd Dispersal (→ yellow)
+            [1282050] = { label = "SUCC",     display = "bar"  },                         -- Arcane Beam (→ AOE yellow; no cast sound)
             [1282055] = { label = "DISPEL",   display = "text",     -- Ethereal Shackles (→ CLEAR white)
+                          castSound = "Dispell",
                           roles = { tank = false, healer = true, dps = false } },  -- healer only
         },
         [234066] = {  -- Devouring Tyrant
-            [1264687] = { label = "TANK HIT", display = "bar"  },  -- Devouring Strike (→ red)
+            [1264687] = { label = "TANK HIT", display = "bar"  },                         -- Devouring Strike (→ red; no cast sound)
         },
         [234068] = {  -- Shadowrift Voidcaller
-            [1255462] = { label = "ADDS",     display = "bar"  },  -- Call of the Void (→ ADD pink)
-            [1265977] = { label = "AOE",      display = "text" },  -- Consuming Shadows (→ yellow)
+            [1255462] = { label = "ADDS",     display = "bar",  castSound = "Adds" },     -- Call of the Void (→ ADD pink)
+            [1265977] = { label = "AOE",      display = "text", castSound = "AoE" },      -- Consuming Shadows (→ yellow)
         },
         [240973] = {  -- Runed Spellbreaker
-            [1244907] = { label = "BIG HIT",  display = "bar"  },  -- Runic Glaive (→ TANK red)
-            [1283901] = { label = "FEET",     display = "text" },  -- Shield Slam (→ orange)
+            [1244907] = { label = "BIG HIT",  display = "bar"  },                         -- Runic Glaive (→ TANK red; no cast sound)
+            [1283901] = { label = "FEET",     display = "text", castSound = "Feet" },     -- Shield Slam (→ orange)
         },
         [251861] = {  -- Blazing Pyromancer
-            [1254301] = { label = "FEET",     display = "text" },  -- Flamestrike (→ orange)
-            [1254336] = { label = "AOE",      display = "text" },  -- Ignition (→ yellow)
+            [1254301] = { label = "FEET",     display = "text", castSound = "Feet" },     -- Flamestrike (→ orange)
+            [1254336] = { label = "AOE",      display = "text", castSound = "AoE" },      -- Ignition (→ yellow)
         },
     },
 
     -- ── Maisara Caverns (2874) ──────────────────────────────────────────────
     [2874] = {
         [248678] = {  -- Hulking Juggernaut
-            [1256047] = { label = "AOE",      display = "text" },  -- Deafening Roar (→ yellow)
-            [1256059] = { label = "TANK HIT", display = "bar"  },  -- Rending Gore (→ red)
+            [1256047] = { label = "AOE",      display = "text", castSound = "Stop Casting" },  -- Deafening Roar (→ yellow)
+            [1256059] = { label = "TANK HIT", display = "bar"  },                              -- Rending Gore (→ red; no cast sound)
         },
         [248686] = {  -- Dread Souleater
-            [1257155] = { label = "FEET",     display = "text" },  -- Rain of Toads (→ orange)
+            [1257155] = { label = "FEET",     display = "text", castSound = "Feet" },          -- Rain of Toads (→ orange)
         },
         [249020] = {  -- Hexbound Eagle
-            [1257781] = { label = "DODGE",    display = "bar"  },  -- Shredding Talons (→ orange)
+            [1257781] = { label = "DODGE",    display = "bar",  castSound = "Move" },          -- Shredding Talons (→ orange)
         },
         [249024] = {  -- Hollow Soulrender
-            [1259677] = { label = "DODGE",    display = "bar"  },  -- Rend Souls (→ orange)
+            [1259677] = { label = "DODGE",    display = "bar"  },                              -- Rend Souls (→ orange; no cast sound)
             [1271623] = { label = "DISPEL",   display = "text",     -- Frost Nova (→ CLEAR white)
+                          castSound = "Dispell",
                           roles = { tank = false, healer = true, dps = false } },  -- healer only
         },
         [249025] = {  -- Bound Defender
-            [1257546] = { label = "SHIELD",   display = "bar"  },  -- Vigilant Defense (→ VULN green)
-            [1259651] = { label = "DODGE",    display = "bar"  },  -- Soulstorms (→ orange)
+            [1257546] = { label = "SHIELD",   display = "bar"  },                              -- Vigilant Defense (→ VULN green; no cast sound)
+            [1259651] = { label = "DODGE",    display = "bar"  },                              -- Soulstorms (→ orange; no cast sound)
         },
         [249030] = {  -- Restless Gnarldin
-            [1257895] = { label = "DODGE",    display = "bar"  },  -- Ancestral Crush (→ orange)
-            [1259631] = { label = "TANK HIT", display = "bar"  },  -- Staggering Blow (→ red)
+            [1257895] = { label = "DODGE",    display = "bar",  castSound = "Move" },          -- Ancestral Crush (→ orange)
+            [1259631] = { label = "TANK HIT", display = "bar"  },                              -- Staggering Blow (→ red; no cast sound)
         },
         [253302] = {  -- Hex Guardian
-            [1258475] = { label = "FRONTAL",  display = "text" },  -- Magma Surge (→ red)
+            [1258475] = { label = "FRONTAL",  display = "text", castSound = "Frontal" },       -- Magma Surge (→ red)
             [1258806] = { label = "DISPEL",   display = "text",     -- Ritual Firebrand (→ CLEAR white)
+                          castSound = "Dispell",
                           roles = { tank = false, healer = true, dps = false } },  -- healer only
         },
         [253683] = {  -- Rokh'zal
-            [1259786] = { display = "bar" },  -- Ritual Sacrifice (keep name, default colour)
-            [1262241] = { label = "BAIT",     display = "text" },  -- Invoke Shadow (→ PULL cyan)
+            [1259786] = { display = "bar" },                       -- Ritual Sacrifice (keep name, default colour; no cast sound)
+            [1262241] = { label = "BAIT",     display = "text" },  -- Invoke Shadow (→ PULL cyan; no cast sound)
         },
     },
 
@@ -240,25 +244,25 @@ KE.TrashCurated = {
     -- a predicted countdown for it — no overlay entry needed to "skip" it.
     [2915] = {
         [241642] = {  -- Lingering Image
-            [1257701] = { label = "TANK HIT", display = "bar"  },  -- Searing Rend (→ red)
-            [1264354] = { label = "FRONTAL",  display = "text" },  -- Luciferin Flare (→ red)
-            [1281657] = { label = "BIG HIT",  display = "bar"  },  -- Blistering Smite (→ TANK red)
+            [1257701] = { label = "TANK HIT", display = "bar"  },                            -- Searing Rend (→ red; no cast sound)
+            [1264354] = { label = "FRONTAL",  display = "text", castSound = "Frontal" },     -- Luciferin Flare (→ red)
+            [1281657] = { label = "BIG HIT",  display = "bar"  },                            -- Blistering Smite (→ TANK red; no cast sound)
         },
         [241660] = {  -- Duskfright Herald
-            [1252062] = { label = "SUCC",     display = "bar"  },  -- Entropic Leech (→ AOE yellow)
-            [1252076] = { label = "DODGE",    display = "text" },  -- Dark Beckoning (→ orange)
+            [1252062] = { label = "SUCC",     display = "bar"  },                            -- Entropic Leech (→ AOE yellow; no cast sound)
+            [1252076] = { label = "DODGE",    display = "text", castSound = "Move" },        -- Dark Beckoning (→ orange)
         },
         [248373] = {  -- Circuit Seer
-            [1249801] = { label = "AOE",      display = "text" },  -- Arcing Mana (→ yellow)
+            [1249801] = { label = "AOE",      display = "text", castSound = "AoE" },         -- Arcing Mana (→ yellow)
             -- 1262720 Energy Overflow: skipped (no first/cd → never scheduled).
         },
         [248502] = {  -- Null Sentinel
-            [1252406] = { label = "AOE",      display = "text" },  -- Dreadbellow (→ yellow)
-            [1252417] = { label = "TANK HIT", display = "bar"  },  -- Nullwark Blast (→ red)
+            [1252406] = { label = "AOE",      display = "text", castSound = "AoE" },         -- Dreadbellow (→ yellow)
+            [1252417] = { label = "TANK HIT", display = "bar"  },                            -- Nullwark Blast (→ red; no cast sound)
         },
         [248506] = {  -- Dreadflail
-            [1252436] = { label = "FRONTAL",  display = "text" },  -- Void Lash (→ red)
-            [1252622] = { label = "DODGE",    display = "text" },  -- Flailstorm (→ orange)
+            [1252436] = { label = "FRONTAL",  display = "text", castSound = "Frontal" },     -- Void Lash (→ red)
+            [1252622] = { label = "DODGE",    display = "text" },                            -- Flailstorm (→ orange; no cast sound)
         },
     },
 }
