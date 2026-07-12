@@ -1592,9 +1592,9 @@ local Defaults = {
             -- On-nameplate cooldown icons (Phase 4 render surface).
             Nameplate = {
                 ShowIcons = true,
-                IconSize = 32,
-                AnchorSide = "LEFT",
-                Gap = 8,
+                IconSize = 30,
+                AnchorSide = "RIGHT",
+                Gap = 1,
                 OffsetX = 0,
                 OffsetY = 0,
                 BorderOverride = false,
