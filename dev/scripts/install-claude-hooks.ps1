@@ -4,9 +4,9 @@
 #
 #   pwsh dev/scripts/install-claude-hooks.ps1
 #
-# Idempotent: copies the hook scripts, merges the hooks block into
-# .claude/settings.json only when absent (never overwrites an existing hooks
-# config or personal permissions), and sets core.hooksPath for the pre-push
+# Idempotent: copies the hook scripts, merges missing hook entries into
+# .claude/settings.json per event and per script (never overwrites existing
+# entries or personal permissions), and sets core.hooksPath for the pre-push
 # gate. Safe to re-run any time.
 
 $ErrorActionPreference = 'Stop'
@@ -18,26 +18,62 @@ $settingsPath = Join-Path $root '.claude\settings.json'
 
 # 1. Hook scripts: template copies are canonical - always refresh.
 New-Item -ItemType Directory -Force $hooksDir | Out-Null
-foreach ($name in @('branch-guard.ps1', 'luacheck-postedit.ps1')) {
+foreach ($name in @('branch-guard.ps1', 'luacheck-postedit.ps1', 'superpowers-review-companion.ps1')) {
     Copy-Item (Join-Path $templates $name) (Join-Path $hooksDir $name) -Force
     Write-Host "[install] .claude/hooks/$name refreshed from dev/claude-hooks/"
 }
 
-# 2. settings.json: create from template, or inject the hooks block if the
-#    file exists without one. An existing hooks block is left untouched -
-#    diff against dev/claude-hooks/settings.template.json by hand if needed.
+# 2. settings.json: create from template, or merge missing hook entries in.
+#    Merge is per event and per entry, keyed on the hook script filename in
+#    args - existing entries and personal settings are never touched, so new
+#    tracked hooks land in a settings.json that already has a hooks block.
 $template = Get-Content (Join-Path $templates 'settings.template.json') -Raw | ConvertFrom-Json
 if (-not (Test-Path $settingsPath)) {
     Copy-Item (Join-Path $templates 'settings.template.json') $settingsPath
     Write-Host "[install] .claude/settings.json created from template"
 } else {
     $settings = Get-Content $settingsPath -Raw | ConvertFrom-Json
-    if ($settings.PSObject.Properties.Name -contains 'hooks') {
-        Write-Host "[install] .claude/settings.json already has a hooks block - left as is"
-    } else {
+    $changed = $false
+    if (-not ($settings.PSObject.Properties.Name -contains 'hooks')) {
         $settings | Add-Member -MemberType NoteProperty -Name 'hooks' -Value $template.hooks
-        $settings | ConvertTo-Json -Depth 10 | Set-Content $settingsPath -Encoding UTF8
+        $changed = $true
         Write-Host "[install] hooks block injected into existing .claude/settings.json"
+    } else {
+        foreach ($eventProp in $template.hooks.PSObject.Properties) {
+            $event = $eventProp.Name
+            if (-not ($settings.hooks.PSObject.Properties.Name -contains $event)) {
+                $settings.hooks | Add-Member -MemberType NoteProperty -Name $event -Value $eventProp.Value
+                $changed = $true
+                Write-Host "[install] hooks.$event added from template"
+                continue
+            }
+            $existing = @($settings.hooks.$event)
+            foreach ($entry in @($eventProp.Value)) {
+                $script = ''
+                foreach ($h in @($entry.hooks)) {
+                    if (($h.args -join ' ') -match '([\w-]+\.ps1)') { $script = $Matches[1]; break }
+                }
+                if (-not $script) { continue }
+                $present = $false
+                foreach ($e in $existing) {
+                    foreach ($h in @($e.hooks)) {
+                        if (($h.args -join ' ') -match [regex]::Escape($script)) { $present = $true; break }
+                    }
+                    if ($present) { break }
+                }
+                if (-not $present) {
+                    $existing += $entry
+                    $changed = $true
+                    Write-Host "[install] hooks.$event entry for $script appended"
+                }
+            }
+            $settings.hooks.$event = $existing
+        }
+    }
+    if ($changed) {
+        $settings | ConvertTo-Json -Depth 10 | Set-Content $settingsPath -Encoding UTF8
+    } else {
+        Write-Host "[install] .claude/settings.json already has all tracked hook entries"
     }
 }
 

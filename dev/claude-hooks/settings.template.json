@@ -36,6 +36,23 @@
             "statusMessage": "luacheck"
           }
         ]
+      },
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh",
+            "args": [
+              "-NoProfile",
+              "-NonInteractive",
+              "-Command",
+              "& \"$env:CLAUDE_PROJECT_DIR/.claude/hooks/superpowers-review-companion.ps1\"; exit $LASTEXITCODE"
+            ],
+            "timeout": 10,
+            "statusMessage": "review companion"
+          }
+        ]
       }
     ]
   }
