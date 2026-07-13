@@ -129,18 +129,21 @@ filename) and never overwrites existing entries or personal permissions in
 `.claude/settings.json`. When changing a live hook under `.claude/hooks/`,
 mirror the change into `dev/claude-hooks/` so the template stays current.
 
-Current hooks: `branch-guard.ps1` (PreToolUse, blocks .lua/.xml edits on
-main), `luacheck-postedit.ps1` (PostToolUse, lints every .lua edit), and
+Repo-scope hooks: `branch-guard.ps1` (PreToolUse, blocks .lua/.xml edits on
+main) and `luacheck-postedit.ps1` (PostToolUse, lints every .lua edit).
 `superpowers-review-companion.ps1` (PostToolUse on Task — when the
 superpowers code-review subagent runs, injects a reminder to run the
-multi-model-verify skill's diff mode on the same commit range).
+multi-model-verify skill's diff mode on the same commit range) is tracked
+here too but installs USER-scope via `install-claude-skills.ps1`, so it
+fires in every KitnDev project.
 
 ## Claude Code skills + evals
 
 Tracked skills live in `dev/claude-skills/<name>/` (currently
 `multi-model-verify` — the Fable 5 / GPT-5.6 Sol debate layer for
-reference-port plans and diffs). Install them user-scope (all KitnDev
-projects) as directory junctions:
+reference-port plans and diffs). One installer puts the whole system in
+user scope (all KitnDev projects): skill junctions into `~/.claude/skills/`
+plus the review-companion hook into `~/.claude/hooks/` + `~/.claude/settings.json`:
 
 ```powershell
 pwsh dev/scripts/install-claude-skills.ps1

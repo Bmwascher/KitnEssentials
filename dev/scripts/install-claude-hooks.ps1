@@ -18,7 +18,9 @@ $settingsPath = Join-Path $root '.claude\settings.json'
 
 # 1. Hook scripts: template copies are canonical - always refresh.
 New-Item -ItemType Directory -Force $hooksDir | Out-Null
-foreach ($name in @('branch-guard.ps1', 'luacheck-postedit.ps1', 'superpowers-review-companion.ps1')) {
+# (superpowers-review-companion.ps1 installs USER-scope via
+# install-claude-skills.ps1 - not here, or it would double-fire.)
+foreach ($name in @('branch-guard.ps1', 'luacheck-postedit.ps1')) {
     Copy-Item (Join-Path $templates $name) (Join-Path $hooksDir $name) -Force
     Write-Host "[install] .claude/hooks/$name refreshed from dev/claude-hooks/"
 }
