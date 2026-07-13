@@ -127,6 +127,11 @@ TRIAGE: none affect KE at runtime - <one-line reason>
             -RedirectStandardOutput $triageFile `
             -RedirectStandardError $errFile
         $finished = $proc.WaitForExit(1200000)
+        if ($finished) {
+            # No-arg WaitForExit flushes process state; without it,
+            # .ExitCode reads null after the timed overload (PS 5.1).
+            $proc.WaitForExit()
+        }
         if (-not $finished) {
             try { $proc.Kill() } catch {}
         } elseif ($proc.ExitCode -eq 0) {
