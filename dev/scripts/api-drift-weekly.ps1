@@ -13,10 +13,19 @@
 #
 #   -ReportOnly   pass --report-only to the script (no fetch, no state writes)
 #   -TestNotify   fire a sample toast and exit (wiring check)
+#   -NoAutoTriage skip the headless analysis pass on findings
+#
+# On BREAKING-USED findings the report is piped into a headless Claude Code
+# run (analysis-only: Read/Glob/Grep/Skill, no edits) that greps KE call
+# sites and reads the API reference, so the toast can say WHAT is affected
+# instead of just "go triage". The toast always fires on findings - the
+# headless pass enriches it, never gates it. Code fixes stay manual via
+# /api-drift (in-game probes and approval required).
 
 param(
     [switch]$ReportOnly,
-    [switch]$TestNotify
+    [switch]$TestNotify,
+    [switch]$NoAutoTriage
 )
 
 $RepoRoot = Split-Path (Split-Path $PSScriptRoot)
@@ -77,7 +86,49 @@ if ($code -eq 0) {
 $breakLine = $output | Where-Object { $_ -match '^\[BREAKING-USED\] \((\d+)\)' } | Select-Object -First 1
 if ($breakLine -and $breakLine -match '\((\d+)\)') {
     $n = $Matches[1]
-    Show-Toast "WoW API drift: $n change(s) hit KE" "Report saved: $relReport - triage with /api-drift notes."
+    $toastBody = "Report saved: $relReport - triage with /api-drift notes."
+    $claudeCmd = Get-Command claude -ErrorAction SilentlyContinue
+    if (-not $NoAutoTriage -and $claudeCmd) {
+        $triageFile = Join-Path $ReportDir "$Stamp-autotriage.txt"
+        $promptFile = Join-Path $ReportDir "$Stamp-autotriage-prompt.txt"
+        $reportText = $output -join "`r`n"
+        $prompt = @"
+Headless ANALYSIS-ONLY triage of a WoW API drift report for KitnEssentials.
+No user is available - never wait for input. You are in the KE repo root.
+The drift script ALREADY ran and advanced its baseline - do NOT run
+update-api-reference.lua again (the report below is the only copy of this
+week's diff).
+
+--- REPORT ---
+$reportText
+--- END REPORT ---
+
+For each [BREAKING-USED] line: grep the symbol under Core/, Modules/, and
+GUI/ to list every KE call site; read the symbol's entry under
+.wow-api-reference/Interface/AddOns/Blizzard_APIDocumentationGenerated/ to
+see exactly what changed (signature, SecretReturns flags, removal); assess
+severity. For secret-flag changes consult the wow-midnight-api skill - do
+not propose over-guarding. Make NO code edits and write NO files - output
+your triage table (symbol | change | affected files | severity | proposed
+fix) as text only.
+End your reply with EXACTLY one line:
+TRIAGE: <count> breakage(s) affect KE - <comma-separated modules>
+or
+TRIAGE: none affect KE at runtime - <one-line reason>
+"@
+        $prompt | Set-Content -Path $promptFile
+        Get-Content -Raw $promptFile | & claude -p --allowedTools "Skill,Read,Glob,Grep" > $triageFile 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            $triageLine = Select-String -Path $triageFile -Pattern '^TRIAGE: (.+)$' | Select-Object -Last 1
+            if ($triageLine) {
+                $verdict = $triageLine.Matches[0].Groups[1].Value.Trim()
+                Add-Content -Path $ReportFile -Value "`r`nAuto-triage: $verdict (table: dev\docs\api-drift-reports\$Stamp-autotriage.txt)"
+                $toastBody = "$verdict. Triage table in $relReport."
+            }
+        }
+        # No verdict line or nonzero exit: keep the manual-triage toast body.
+    }
+    Show-Toast "WoW API drift: $n change(s) hit KE" $toastBody
 } else {
     # exit != 0 with no report header = the script aborted (fetch failed,
     # damaged reference) - snapshots untouched, safe to rerun
