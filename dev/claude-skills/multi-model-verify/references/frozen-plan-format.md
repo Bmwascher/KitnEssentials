@@ -37,7 +37,7 @@ Every frozen plan ends with:
 
 **Participants:** Fable 5 (session) / GPT-5.6 Sol (codex exec, session <id>)
 **Rounds used:** N of CAP
-**Outcome:** converged | escalated
+**Outcome:** converged | converged with amendments | escalated
 
 ### Resolved points
 | # | Claim | Raised by | Outcome | Evidence |
@@ -60,7 +60,9 @@ the appendix was not verified — treat it as an unfrozen draft.
 
 ## Freezing
 
-A plan is frozen when: both sides verdict PASS (or escalations carry
-Brandon's recorded call), the writing-plans self-review checklist has run,
-and the file is saved. After freezing, changes require reopening the debate
+A plan is frozen when: both sides verdict PASS — or the final round's FIXes
+are accepted on the record (converged with amendments, per
+debate-protocol.md) — with any escalations carrying Brandon's recorded
+call, the writing-plans self-review checklist has run, and the file is
+saved. After freezing, changes require reopening the debate
 (a new round appended to the record) — the implementer never edits the plan.

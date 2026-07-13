@@ -63,7 +63,7 @@ toggled on, its stop-time review overlaps mode `diff` — expected, not a bug.
    precede the resume subcommand (flags after it are a usage error):
 
    ```powershell
-   codex exec --sandbox read-only --output-last-message <reply-file> resume <SESSION_ID> "<rebuttal-brief>"
+   codex exec --sandbox read-only -m gpt-5.6-sol -c model_reasoning_effort=high --output-last-message <reply-file> resume <SESSION_ID> "<rebuttal-brief>"
    ```
 
 4. Iterate per debate-protocol.md until convergence or the round cap, then

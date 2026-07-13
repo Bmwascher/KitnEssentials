@@ -28,8 +28,11 @@ foreach ($src in Get-ChildItem $srcRoot -Directory | Where-Object { $_.Name -ne 
         continue
     }
     $dst = Join-Path $dstRoot $name
-    if (Test-Path $dst) {
-        $item = Get-Item $dst -Force
+    # Get-Item -Force, not Test-Path: Test-Path follows the link and returns
+    # false for a junction whose target vanished, which would leave the
+    # dangling reparse point in place and make New-Item fail.
+    $item = Get-Item -LiteralPath $dst -Force -ErrorAction SilentlyContinue
+    if ($item) {
         if ($item.LinkType -eq 'Junction') {
             $target = [string]($item.LinkTarget ?? $item.Target)
             if ($target -eq $src.FullName) {

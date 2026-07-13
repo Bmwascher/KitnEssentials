@@ -95,9 +95,13 @@ class TestTransportContract:
 
     def test_resume_flags_before_subcommand(self):
         text = read(SKILL_MD)
+        # Model and effort must be re-pinned on EVERY call including resume -
+        # a resume that falls back to config defaults silently changes the
+        # debate's model (cross-review finding, 2026-07-12).
         assert re.search(
-            r"codex exec --sandbox read-only [^\n]*resume <SESSION_ID>", text
-        ), "resume syntax must show flags BEFORE the resume subcommand"
+            r"codex exec --sandbox read-only -m gpt-5\.6-sol"
+            r" -c model_reasoning_effort=high [^\n]*resume <SESSION_ID>", text
+        ), "resume must re-pin model and effort, flags BEFORE the subcommand"
         assert "resume --last" not in text, (
             "resume --last is fragile under concurrent codex sessions and"
             " must not appear in SKILL.md (prohibition lives in"
