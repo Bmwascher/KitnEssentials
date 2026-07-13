@@ -131,40 +131,17 @@ mirror the change into `dev/claude-hooks/` so the template stays current.
 
 Repo-scope hooks: `branch-guard.ps1` (PreToolUse, blocks .lua/.xml edits on
 main) and `luacheck-postedit.ps1` (PostToolUse, lints every .lua edit).
-`superpowers-review-companion.ps1` (PostToolUse on Task — when the
-superpowers code-review subagent runs, injects a reminder to run the
-multi-model-verify skill's diff mode on the same commit range) is tracked
-here too but installs USER-scope via `install-claude-skills.ps1`, so it
-fires in every KitnDev project.
 
-## Claude Code skills + evals
+## Multi-model verification (crosscheck plugin)
 
-Tracked skills live in `dev/claude-skills/<name>/` (currently
-`multi-model-verify` — the Fable 5 / GPT-5.6 Sol debate layer for
-reference-port plans and diffs). One installer puts the whole system in
-user scope (all KitnDev projects): skill junctions into `~/.claude/skills/`
-plus the review-companion hook into `~/.claude/hooks/` + `~/.claude/settings.json`:
-
-```powershell
-pwsh dev/scripts/install-claude-skills.ps1
-```
-
-Repo edits are live through the junction — no re-install. Each skill has a
-deterministic eval suite under `dev/claude-skills/evals/` (tools vendored
-from Shubhamsaboo/awesome-llm-apps, Apache-2.0 — see
-`evals/tools/LICENSE-THIRD-PARTY.md`):
-
-```powershell
-python dev/claude-skills/evals/tools/skill_lint.py dev/claude-skills/multi-model-verify --strict   # Tier 1: spec lint
-python dev/claude-skills/evals/tools/skill_scanner.py dev/claude-skills                            # Tier 1b: security scan
-python dev/claude-skills/evals/tools/run_trigger_evals.py                                          # Tier 2: trigger/routing
-python -m pytest dev/claude-skills/evals -q                                                        # Tier 2b: structural tests
-```
-
-CI runs all four on any `dev/claude-skills/**` change
-(`.github/workflows/skill-evals.yml`, path-filtered — its job is NOT a
-ruleset-required check). `evals/<skill>/evals.json` holds Tier 3 behavioral
-cases (model-graded, run manually when the skill changes materially).
+The multi-model-verify skill (Fable 5 / GPT-5.6 Sol debate gates at plan
+time and diff time), the superpowers review-companion hook, the swappable
+implementer agent, and their eval harness live in the private **crosscheck**
+plugin — repo `Bmwascher/crosscheck`, local working copy at
+`Documents/crosscheck`. It installs user-scope through Claude Code's plugin
+system (`claude plugin install crosscheck@crosscheck`), so it works in
+every project with zero per-repo wiring. Evals and CI for the skill run in
+that repo, not here.
 
 ## Adding a spec
 
