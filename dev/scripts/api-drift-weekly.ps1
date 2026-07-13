@@ -126,6 +126,9 @@ TRIAGE: none affect KE at runtime - <one-line reason>
             -RedirectStandardInput $promptFile `
             -RedirectStandardOutput $triageFile `
             -RedirectStandardError $errFile
+        # Cache the handle NOW: without it, .ExitCode reads null after the
+        # process exits (PS 5.1 Start-Process quirk, probed 2026-07-12).
+        $null = $proc.Handle
         $finished = $proc.WaitForExit(1200000)
         if ($finished) {
             # No-arg WaitForExit flushes process state; without it,
