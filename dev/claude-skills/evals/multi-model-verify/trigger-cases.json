@@ -1,0 +1,66 @@
+{
+  "skill": "multi-model-verify",
+  "purpose": "Routing: fire on reference-port planning and post-implementation port/spec review; stay quiet on ordinary bugfixes, docs, GUI tweaks, and releases.",
+  "cases": [
+    {
+      "id": "trigger-port-plan",
+      "prompt": "Let's plan porting DungeonAlerts from References into a new KE module. I want the approach verified before we write the plan.",
+      "should_trigger": true,
+      "assert": "Mode plan debate runs before the implementation plan is frozen."
+    },
+    {
+      "id": "trigger-brainstorm-approaches",
+      "prompt": "We just brainstormed three approaches for adapting the NorskenUI castbar module. Which one should we commit to?",
+      "should_trigger": true,
+      "assert": "Approach choice is debated by both models with References/ evidence, not decided single-model."
+    },
+    {
+      "id": "trigger-api-risk-plan",
+      "prompt": "This new module touches nameplates and aura durations in 12.0 — verify the plan handles secret values before we implement.",
+      "should_trigger": true,
+      "assert": "WoW API risk claims are cross-verified against .wow-api-reference with file citations."
+    },
+    {
+      "id": "trigger-diff-review",
+      "prompt": "Implementation of the frozen plan is done. Review the diff against the plan and the reference addon before merge.",
+      "should_trigger": true,
+      "assert": "Mode diff debate reviews spec fidelity and port fidelity on the same base/head SHAs."
+    },
+    {
+      "id": "trigger-port-fidelity-doubt",
+      "prompt": "I think our port drifted from the reference implementation - can you cross-check what atrocityEssentials actually does here?",
+      "should_trigger": true,
+      "assert": "Claims about the reference are grounded in References/atrocityEssentials file:line evidence."
+    },
+    {
+      "id": "no-trigger-plain-bugfix",
+      "prompt": "BugSack shows a nil index error in DamageMeter/Core.lua line 412, fix it.",
+      "should_trigger": false,
+      "assert": "Ordinary debugging follows the debug-first workflow, no multi-model debate."
+    },
+    {
+      "id": "no-trigger-docs",
+      "prompt": "Update the changelog and README for the v3.4.1 release.",
+      "should_trigger": false,
+      "assert": "Docs and release chores never invoke the debate."
+    },
+    {
+      "id": "no-trigger-gui-tweak",
+      "prompt": "Add a width slider to the HealerMana GUI page.",
+      "should_trigger": false,
+      "assert": "Routine GUI work uses gui-module-page conventions only."
+    },
+    {
+      "id": "no-trigger-lint",
+      "prompt": "Run luacheck across the repo and clean up warnings.",
+      "should_trigger": false,
+      "assert": "Lint sweeps are mechanical; no debate."
+    },
+    {
+      "id": "no-trigger-git",
+      "prompt": "Commit these changes and tag the release.",
+      "should_trigger": false,
+      "assert": "Git operations never invoke the debate."
+    }
+  ]
+}

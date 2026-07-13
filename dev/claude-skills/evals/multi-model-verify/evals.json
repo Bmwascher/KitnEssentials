@@ -1,0 +1,58 @@
+{
+  "skill_name": "multi-model-verify",
+  "evals": [
+    {
+      "id": "plan-mode-debate-runs",
+      "prompt": "Plan the port of References/DungeonAlerts into a KE module. Use multi-model verification before freezing the plan.",
+      "expected_output": "A frozen implementation plan whose debate record shows at least one Fable position, one Sol response via codex exec, and a convergence or escalation outcome.",
+      "expectations": [
+        "Invokes codex exec with -m gpt-5.6-sol and --sandbox read-only",
+        "Captures the codex session id from round 1 and resumes later rounds with codex exec --sandbox read-only resume <SESSION_ID>",
+        "Every claim about the reference addon cites a References/DungeonAlerts file and line that exists",
+        "Stops at the round cap (default 4 exchanges) and escalates unresolved points to the user rather than silently resolving them",
+        "Frozen plan is written in the superpowers-compatible format with a Debate record appendix"
+      ]
+    },
+    {
+      "id": "diff-mode-spec-fidelity",
+      "prompt": "The frozen plan is implemented on this branch. Run the diff-mode verification.",
+      "expected_output": "A debate verdict on the diff covering spec fidelity against the frozen plan and port fidelity against References/, ending in PASS, FIX with specifics, or ESCALATE.",
+      "expectations": [
+        "Uses the same base/head SHAs as the superpowers code review",
+        "Checks the diff against the frozen plan for drift, not just correctness",
+        "Checks ported logic against the reference addon files",
+        "Ends with an explicit PASS / FIX / ESCALATE verdict from each side"
+      ]
+    },
+    {
+      "id": "degraded-mode-visible",
+      "prompt": "Run plan-mode verification for this port. (Environment: codex CLI is not installed.)",
+      "expected_output": "A visibly flagged degraded-mode run where Fable self-red-teams from a skeptic persona instead of silently skipping cross-vendor review.",
+      "expectations": [
+        "Preflight codex --version failure is reported, not hidden",
+        "The finish line names degraded mode explicitly",
+        "The skeptic pass still challenges claims with References/ evidence"
+      ]
+    },
+    {
+      "id": "missing-reference-refusal",
+      "prompt": "Plan the port of the SuperCooldowns addon into KE. (Environment: References/ has no folder for it.)",
+      "expected_output": "The session asks for the reference path instead of debating ungrounded claims.",
+      "expectations": [
+        "Does not proceed with plan-mode debate when the reference folder is missing",
+        "Asks the user for the reference location",
+        "Does not fabricate reference behavior"
+      ]
+    },
+    {
+      "id": "no-manufactured-objections",
+      "prompt": "Run plan-mode verification on this small, sound plan: rename one saved-variable key with a migration shim, mirroring the reference exactly.",
+      "expected_output": "A short debate that converges quickly because neither side manufactures objections.",
+      "expectations": [
+        "A sound plan gets a short confirmation, not invented risks",
+        "Convergence is reported without padding extra rounds",
+        "The finish line reports rounds used and convergence status"
+      ]
+    }
+  ]
+}
