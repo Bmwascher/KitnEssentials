@@ -117,16 +117,30 @@ or
 TRIAGE: none affect KE at runtime - <one-line reason>
 "@
         $prompt | Set-Content -Path $promptFile
-        Get-Content -Raw $promptFile | & claude -p --allowedTools "Skill,Read,Glob,Grep" > $triageFile 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            $triageLine = Select-String -Path $triageFile -Pattern '^TRIAGE: (.+)$' | Select-Object -Last 1
-            if ($triageLine) {
-                $verdict = $triageLine.Matches[0].Groups[1].Value.Trim()
-                Add-Content -Path $ReportFile -Value "`r`nAuto-triage: $verdict (table: dev\docs\api-drift-reports\$Stamp-autotriage.txt)"
-                $toastBody = "$verdict. Triage table in $relReport."
+        $errFile = Join-Path $ReportDir "$Stamp-autotriage-err.txt"
+        # Bounded run: a hung headless session must not hold the toast
+        # hostage - kill after 20 min and fall back to the manual body.
+        $proc = Start-Process -FilePath (Get-Command claude).Source `
+            -ArgumentList @("-p", "--allowedTools", "Skill,Read,Glob,Grep") `
+            -WorkingDirectory $RepoRoot -NoNewWindow -PassThru `
+            -RedirectStandardInput $promptFile `
+            -RedirectStandardOutput $triageFile `
+            -RedirectStandardError $errFile
+        $finished = $proc.WaitForExit(1200000)
+        if (-not $finished) {
+            try { $proc.Kill() } catch {}
+        } elseif ($proc.ExitCode -eq 0) {
+            # Exactly ONE strict verdict line, or the output is not trusted
+            # (quoted/injected TRIAGE text must not replace the real result).
+            $triageLines = @(Select-String -Path $triageFile -Pattern '^TRIAGE: (.+)$')
+            if ($triageLines.Count -eq 1) {
+                $verdict = $triageLines[0].Matches[0].Groups[1].Value.Trim()
+                $relTriage = "dev\docs\api-drift-reports\$Stamp-autotriage.txt"
+                Add-Content -Path $ReportFile -Value "`r`nAuto-triage: $verdict (table: $relTriage)"
+                $toastBody = "$verdict. Table: $relTriage; report: $relReport."
             }
         }
-        # No verdict line or nonzero exit: keep the manual-triage toast body.
+        # Timeout, nonzero exit, or no single verdict: manual toast body.
     }
     Show-Toast "WoW API drift: $n change(s) hit KE" $toastBody
 } else {
