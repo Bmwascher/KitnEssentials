@@ -516,6 +516,7 @@ local Defaults = {
             IconSpacing = 1,
             GrowDirection = "RIGHT", -- RIGHT | LEFT | UP | DOWN
             ShowTimer = true,
+            DecimalThreshold = 5, -- seconds; below this the timer shows one decimal (0 = off)
             Swipe = false,
             Reverse = false,
 

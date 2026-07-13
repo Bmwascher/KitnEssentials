@@ -30,6 +30,7 @@ GUIFrame:RegisterContent("TotemTracker", function(scrollChild, yOffset)
     local manager = GUIFrame:CreateWidgetStateManager()
 
     manager:SetCondition("swipeOn", function() return db.Swipe end)
+    manager:SetCondition("timerOn", function() return db.ShowTimer end)
 
     local function ApplySettings()
         local TT = GetModule()
@@ -194,7 +195,11 @@ GUIFrame:RegisterContent("TotemTracker", function(scrollChild, yOffset)
     local row5b = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
     local showTimerCheck = GUIFrame:CreateCheckbox(row5b, "Show Timer", {
         value = db.ShowTimer,
-        callback = function(checked) db.ShowTimer = checked; ApplySettings() end,
+        callback = function(checked)
+            db.ShowTimer = checked
+            ApplySettings()
+            UpdateAllWidgetStates()
+        end,
     })
     row5b:AddWidget(showTimerCheck, 0.5)
     manager:Register(showTimerCheck, "all")
@@ -212,6 +217,16 @@ GUIFrame:RegisterContent("TotemTracker", function(scrollChild, yOffset)
     row5b:AddWidget(growDropdown, 0.5)
     manager:Register(growDropdown, "all")
     card5:AddRow(row5b, Theme.rowHeight)
+
+    local row5c = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
+    local decimalSlider = GUIFrame:CreateSlider(row5c, "Show Decimals Below (sec)", {
+        min = 0, max = 10, step = 1,
+        value = db.DecimalThreshold,
+        callback = function(val) db.DecimalThreshold = val; ApplySettings() end,
+    })
+    row5c:AddWidget(decimalSlider, 0.5)
+    manager:Register(decimalSlider, "timerOn")
+    card5:AddRow(row5c, Theme.rowHeight)
 
     local rowSep5 = GUIFrame:CreateRow(card5.content, Theme.rowHeightSeparator)
     local sep5 = GUIFrame:CreateSeparator(rowSep5)

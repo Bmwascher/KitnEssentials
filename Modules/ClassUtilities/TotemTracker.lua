@@ -1,9 +1,12 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  TotemTracker.lua                                        ║
--- ║  Module: Totem Tracker (Shaman)                          ║
+-- ║  Module: Totem Tracker                                   ║
 -- ║  Purpose: Custom totem icon bar with cooldown swipes,    ║
 -- ║           timer text, and a destroy-all-totems macro.    ║
 -- ║  Credit: Ported from NorskenUI v3.13 TotemTracker.       ║
+-- ║                                                          ║
+-- ║  Not Shaman-only: Augmentation Evoker dupes ("Future     ║
+-- ║  Self") are pseudo-totems and occupy real totem slots.   ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -12,11 +15,12 @@ if not KitnEssentials then return end
 
 ---@class TotemTracker: AceModule, AceEvent-3.0
 local TT = KitnEssentials:NewModule("TotemTracker", "AceEvent-3.0")
-TT.classRestriction = "SHAMAN"
 
 local CreateFrame = CreateFrame
 local ipairs = ipairs
+local type = type
 local GetTotemInfo = GetTotemInfo
+local GetNumTotemSlots = GetNumTotemSlots
 local GetTime = GetTime
 local UIParent = UIParent
 local GetTotemDuration = GetTotemDuration
@@ -24,7 +28,6 @@ local InCombatLockdown = InCombatLockdown
 local C_Timer = C_Timer
 
 local MAX_TOTEMS = MAX_TOTEMS
-local TOTEM_PRIORITIES = STANDARD_TOTEM_PRIORITIES
 
 local containerFrame = nil
 local totemButtons = {}
@@ -36,7 +39,17 @@ local PREVIEW_ICONS = {
     [2] = 136024, -- Capacitor Totem
     [3] = 136114, -- Tremor Totem
     [4] = 136013, -- Earthbind Totem
+    [5] = 7514181, -- Future Self (Augmentation Evoker dupe)
 }
+
+-- MAX_TOTEMS (4) and STANDARD_TOTEM_PRIORITIES are legacy constants that
+-- Blizzard's own TotemFrame still hardcodes. GetNumTotemSlots() reports the
+-- real count (5 on 12.0.7) and is what Blizzard's CooldownViewer uses.
+local function GetTotemSlotCount()
+    local count = GetNumTotemSlots()
+    if type(count) ~= "number" or count < 1 then return MAX_TOTEMS end
+    return count
+end
 
 function TT:UpdateDB()
     self.db = KE.db.profile.TotemTracker
@@ -49,7 +62,8 @@ function TT:OnInitialize()
 end
 
 function TT:CreateDestroyButtons()
-    if destroyButtons[1] then return end
+    local slotCount = GetTotemSlotCount()
+    if destroyButtons[slotCount] then return end
     if InCombatLockdown() then
         -- AceEvent-3.0 closure callbacks receive (event, ...args), NOT (self, ...).
         -- Capture the module table via an upvalue.
@@ -61,15 +75,19 @@ function TT:CreateDestroyButtons()
         return
     end
 
-    for slot = 1, MAX_TOTEMS do
-        local btn = CreateFrame("Button", "KE_DestroyTotem" .. slot, UIParent, "SecureActionButtonTemplate")
-        btn:SetAttribute("type",                "destroytotem")
-        btn:SetAttribute("typerelease",         "destroytotem")
-        btn:SetAttribute("totem-slot",          slot)
-        btn:SetAttribute("pressAndHoldAction",  1)
-        btn:RegisterForClicks("AnyUp", "AnyDown")
-        btn:Hide()
-        destroyButtons[slot] = btn
+    -- The GUI's destroy-all macro clicks KE_DestroyTotem1..5, so every slot
+    -- GetNumTotemSlots() reports needs a button behind it.
+    for slot = 1, slotCount do
+        if not destroyButtons[slot] then
+            local btn = CreateFrame("Button", "KE_DestroyTotem" .. slot, UIParent, "SecureActionButtonTemplate")
+            btn:SetAttribute("type",                "destroytotem")
+            btn:SetAttribute("typerelease",         "destroytotem")
+            btn:SetAttribute("totem-slot",          slot)
+            btn:SetAttribute("pressAndHoldAction",  1)
+            btn:RegisterForClicks("AnyUp", "AnyDown")
+            btn:Hide()
+            destroyButtons[slot] = btn
+        end
     end
 end
 
@@ -123,6 +141,9 @@ function TT:CreateTotemButton(slot)
     btn.cooldown:SetReverse(db.Reverse)
     btn.cooldown:SetDrawBling(false)
     btn.cooldown:SetHideCountdownNumbers(not db.ShowTimer)
+    -- Despite the name, the argument is in SECONDS: below it the countdown
+    -- shows one decimal place ("8.7"). 0 disables decimals entirely.
+    btn.cooldown:SetCountdownMillisecondsThreshold(db.DecimalThreshold or 0)
 
     btn:Hide()
 
@@ -136,9 +157,20 @@ function TT:CreateContainer()
     containerFrame:SetSize(200, 50)
     containerFrame:SetClampedToScreen(true)
 
-    for slot = 1, MAX_TOTEMS do
+    for slot = 1, GetTotemSlotCount() do
         totemButtons[slot] = self:CreateTotemButton(slot)
     end
+end
+
+---@param slot number
+---@return table|nil
+function TT:EnsureButton(slot)
+    if not containerFrame then return nil end
+    if not totemButtons[slot] then
+        totemButtons[slot] = self:CreateTotemButton(slot)
+        self:UpdateButtonSettings(totemButtons[slot])
+    end
+    return totemButtons[slot]
 end
 
 function TT:UpdateButtonSettings(btn)
@@ -147,6 +179,7 @@ function TT:UpdateButtonSettings(btn)
     btn.cooldown:SetDrawSwipe(db.Swipe)
     btn.cooldown:SetReverse(db.Reverse)
     btn.cooldown:SetHideCountdownNumbers(not db.ShowTimer)
+    btn.cooldown:SetCountdownMillisecondsThreshold(db.DecimalThreshold or 0)
     ApplyCooldownTextStyle(btn.cooldown, db)
 end
 
@@ -224,37 +257,57 @@ function TT:LayoutButtons(visibleButtons)
 end
 
 ---@param btn table
----@param totem table
-function TT:UpdateButton(btn, totem)
-    if not (btn and totem) then return end
-    if not totem.slot then return end
+---@param slot number
+---@return boolean occupied
+function TT:UpdateButton(btn, slot)
+    if not btn then return false end
 
-    local slot = totem.slot
-    -- 12.0: GetTotemInfo is SecretWhenTotemSlotSecret — in tainted execution all
-    -- returns are secret. Gate on startTime (return 3, a secret NUMBER) not
-    -- haveTotem (return 1, a secret BOOLEAN): boolean tests on secret booleans
-    -- throw, but secret numbers are truthy and test cleanly. icon (return 5) is a
-    -- secret fileID; SetTexture accepts it (display-only). Matches NUI reference.
-    local _, _, startTime, _, icon = GetTotemInfo(slot)
+    -- 12.0: GetTotemInfo is SecretWhenTotemSlotSecret — every return goes SECRET
+    -- while combat/encounter/challenge-mode/PvP restrictions are in effect (see
+    -- SecretPredicatesDocumentation.lua). Which return we gate on is load-bearing:
+    --   * haveTotem (1) is a BOOLEAN — never truth-test it. Doing so threw
+    --     "boolean test on a secret boolean value" and crashed this module once.
+    --   * startTime (3) is a secret NUMBER and safe to truth-test, but it comes
+    --     back as 0 — TRUTHY — on an empty slot. That was harmless while we only
+    --     visited totems TotemFrame had already confirmed active; now that we walk
+    --     every slot ourselves, it can no longer signal occupancy.
+    --   * icon (5) is the one return that is nil on an empty slot (probe
+    --     2026-07-13: empty slot -> false, "", 0, 0, nil, 0, 0), and it is what the
+    --     field-proven AddUI-Totem reference gates on.
+    -- That probe ran in OPEN-WORLD combat, where restrictions are not active — the
+    -- nil-on-empty behavior still needs a smoke test inside an instance.
+    local _, _, _, _, icon = GetTotemInfo(slot)
 
-    if startTime then
-        btn.icon:SetTexture(icon)
-        btn.cooldown:SetCooldownFromDurationObject(GetTotemDuration(slot))
-        btn:Show()
-    else
+    -- Detect presence WITHOUT truth-testing or nil-comparing a secret: issecretvalue
+    -- short-circuits true for a present secret, so `~= nil` only ever runs on a
+    -- confirmed non-secret value. Same idiom as DungeonTrash:OnChannelStop. Note
+    -- `not icon` would NOT be equivalent — that truth-tests the secret itself, which
+    -- is exactly the operation that crashed this module on haveTotem.
+    local occupied = (issecretvalue and issecretvalue(icon)) or (icon ~= nil)
+
+    if not occupied then
         btn.cooldown:Clear()
         btn:Hide()
+        return false
     end
+
+    btn.icon:SetTexture(icon)
+    btn.cooldown:SetCooldownFromDurationObject(GetTotemDuration(slot))
+    btn:Show()
+    return true
 end
 
 function TT:UpdateTotems()
     if not self.db or not self.db.Enabled then return end
+    if not containerFrame then return end
+
+    local slotCount = GetTotemSlotCount()
+    local visibleButtons = {}
 
     if isPreviewActive then
         local currentTime = GetTime()
-        local visibleButtons = {}
-        for slot = 1, MAX_TOTEMS do
-            local btn = totemButtons[slot]
+        for slot = 1, slotCount do
+            local btn = self:EnsureButton(slot)
             if btn then
                 btn.icon:SetTexture(PREVIEW_ICONS[slot] or PREVIEW_ICONS[1])
                 btn.cooldown:SetCooldown(currentTime - (slot * 10), 120)
@@ -266,22 +319,25 @@ function TT:UpdateTotems()
         return
     end
 
-    for i = 1, MAX_TOTEMS do
-        local btn = totemButtons[i]
-        if btn then btn:Hide() end
-    end
-
-    local visibleButtons = {}
-    if TotemFrame and TotemFrame.totemPool then
-        for totem in TotemFrame.totemPool:EnumerateActive() do
-            local priorityIndex = TOTEM_PRIORITIES[totem.layoutIndex]
-            if priorityIndex then
-                local btn = totemButtons[priorityIndex]
-                self:UpdateButton(btn, totem)
-                if btn and btn:IsShown() then
-                    visibleButtons[#visibleButtons + 1] = btn
-                end
-            end
+    -- Read the totem API directly rather than mirroring TotemFrame.totemPool.
+    -- Blizzard's displays are each lossy in their own way: TotemFrame iterates
+    -- only MAX_TOTEMS (4) slots so it cannot see slot 5, its pool enumerates via
+    -- pairs() so icon order is nondeterministic, and the Cooldown Manager keys
+    -- totems by spellID (CooldownViewerItemData.lua:452-478) — which collapses
+    -- every Augmentation Evoker dupe into one entry, since they all share
+    -- spellID 1259171. An independent read avoids all of it.
+    --
+    -- (The player reports Blizzard's bar stops at 2 dupes. That exact number is
+    -- NOT explained by any Blizzard source path we could find — treat the
+    -- mechanism as unidentified rather than assuming this fix inherits it.)
+    --
+    -- Occupied slots are sparse and unordered — dupes fill whatever slot is free
+    -- (probed: 3 dupes landed in slots 1,3,4 on one pull and 1,2,4 on the next) —
+    -- so walk every slot and let LayoutButtons compact the holes out.
+    for slot = 1, slotCount do
+        local btn = self:EnsureButton(slot)
+        if self:UpdateButton(btn, slot) then
+            visibleButtons[#visibleButtons + 1] = btn
         end
     end
 
@@ -296,8 +352,8 @@ function TT:ApplySettings()
     self:UpdateDB()
     self:UpdateContainerPosition()
 
-    for slot = 1, MAX_TOTEMS do
-        if totemButtons[slot] then self:UpdateButtonSettings(totemButtons[slot]) end
+    for _, btn in ipairs(totemButtons) do
+        self:UpdateButtonSettings(btn)
     end
 
     self:UpdateTotems()
@@ -308,12 +364,9 @@ function TT:ShowPreview()
     if not containerFrame then return end
     isPreviewActive = true
 
-    for slot = 1, MAX_TOTEMS do
-        local btn = totemButtons[slot]
-        if btn then
-            btn:Show()
-            btn:SetAlpha(1)
-        end
+    for _, btn in ipairs(totemButtons) do
+        btn:Show()
+        btn:SetAlpha(1)
     end
 
     containerFrame:Show()
@@ -347,11 +400,12 @@ function TT:OnEnable()
     if not self.db or not self.db.Enabled then return end
 
     self:CreateContainer()
+    self:CreateDestroyButtons()
     self:UpdateContainerPosition()
     self:LayoutButtons()
 
-    for slot = 1, MAX_TOTEMS do
-        if totemButtons[slot] then self:UpdateButtonSettings(totemButtons[slot]) end
+    for _, btn in ipairs(totemButtons) do
+        self:UpdateButtonSettings(btn)
     end
 
     if containerFrame then containerFrame:Show() end
@@ -387,12 +441,9 @@ function TT:OnDisable()
 
     self:UnregisterAllEvents()
 
-    for slot = 1, MAX_TOTEMS do
-        local btn = totemButtons[slot]
-        if btn then
-            btn:SetAlpha(0)
-            btn:Hide()
-        end
+    for _, btn in ipairs(totemButtons) do
+        btn:SetAlpha(0)
+        btn:Hide()
     end
 
     if containerFrame then containerFrame:Hide() end

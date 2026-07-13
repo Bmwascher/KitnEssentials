@@ -140,7 +140,7 @@ read_globals = {
     "InCombatLockdown",
 
     -- Totem functions
-    "GetTotemInfo", "GetTotemDuration", "MAX_TOTEMS", "STANDARD_TOTEM_PRIORITIES",
+    "GetTotemInfo", "GetTotemDuration", "GetNumTotemSlots", "MAX_TOTEMS", "STANDARD_TOTEM_PRIORITIES",
 
     -- Casting (12.0 Duration-based)
     "UnitCastingInfo", "UnitChannelInfo",
