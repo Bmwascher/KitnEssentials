@@ -120,11 +120,13 @@ TRIAGE: none affect KE at runtime - <one-line reason>
         $errFile = Join-Path $ReportDir "$Stamp-autotriage-err.txt"
         # Bounded run: a hung headless session must not hold the toast
         # hostage - kill after 20 min and fall back to the manual body.
-        # --tools restricts AVAILABILITY (unlisted tools do not exist for
-        # this agent, so ambient allow rules cannot widen it);
-        # --allowedTools only pre-approves within that set.
+        # --tools restricts AVAILABILITY of built-ins (unlisted tools do
+        # not exist for this agent, so ambient allow rules cannot widen
+        # it); --strict-mcp-config with no --mcp-config loads zero MCP
+        # servers; --allowedTools only pre-approves within that set. No
+        # --bare: the triage needs the repo's wow-midnight-api skill.
         $proc = Start-Process -FilePath (Get-Command claude).Source `
-            -ArgumentList @("-p", "--tools", "Skill,Read,Glob,Grep", "--allowedTools", "Skill,Read,Glob,Grep") `
+            -ArgumentList @("-p", "--strict-mcp-config", "--tools", "Skill,Read,Glob,Grep", "--allowedTools", "Skill,Read,Glob,Grep") `
             -WorkingDirectory $RepoRoot -NoNewWindow -PassThru `
             -RedirectStandardInput $promptFile `
             -RedirectStandardOutput $triageFile `
