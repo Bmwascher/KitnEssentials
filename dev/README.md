@@ -124,9 +124,44 @@ main-branch guard die with the checkout. The tracked templates in
 pwsh dev/scripts/install-claude-hooks.ps1
 ```
 
-Idempotent; never overwrites an existing hooks block or personal permissions
-in `.claude/settings.json`. When changing a live hook under `.claude/hooks/`,
+Idempotent; merges missing hook entries per event (keyed on the hook script
+filename) and never overwrites existing entries or personal permissions in
+`.claude/settings.json`. When changing a live hook under `.claude/hooks/`,
 mirror the change into `dev/claude-hooks/` so the template stays current.
+
+Current hooks: `branch-guard.ps1` (PreToolUse, blocks .lua/.xml edits on
+main), `luacheck-postedit.ps1` (PostToolUse, lints every .lua edit), and
+`superpowers-review-companion.ps1` (PostToolUse on Task — when the
+superpowers code-review subagent runs, injects a reminder to run the
+multi-model-verify skill's diff mode on the same commit range).
+
+## Claude Code skills + evals
+
+Tracked skills live in `dev/claude-skills/<name>/` (currently
+`multi-model-verify` — the Fable 5 / GPT-5.6 Sol debate layer for
+reference-port plans and diffs). Install them user-scope (all KitnDev
+projects) as directory junctions:
+
+```powershell
+pwsh dev/scripts/install-claude-skills.ps1
+```
+
+Repo edits are live through the junction — no re-install. Each skill has a
+deterministic eval suite under `dev/claude-skills/evals/` (tools vendored
+from Shubhamsaboo/awesome-llm-apps, Apache-2.0 — see
+`evals/tools/LICENSE-THIRD-PARTY.md`):
+
+```powershell
+python dev/claude-skills/evals/tools/skill_lint.py dev/claude-skills/multi-model-verify --strict   # Tier 1: spec lint
+python dev/claude-skills/evals/tools/skill_scanner.py dev/claude-skills                            # Tier 1b: security scan
+python dev/claude-skills/evals/tools/run_trigger_evals.py                                          # Tier 2: trigger/routing
+python -m pytest dev/claude-skills/evals -q                                                        # Tier 2b: structural tests
+```
+
+CI runs all four on any `dev/claude-skills/**` change
+(`.github/workflows/skill-evals.yml`, path-filtered — its job is NOT a
+ruleset-required check). `evals/<skill>/evals.json` holds Tier 3 behavioral
+cases (model-graded, run manually when the skill changes materially).
 
 ## Adding a spec
 
