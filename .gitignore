@@ -9,7 +9,10 @@
 .agents/
 CLAUDE.md
 AGENTS.md
-References/
+# Root-anchored: on Windows git matches ignore patterns case-insensitively,
+# and an unanchored References/ also swallows nested references/ dirs
+# (e.g. dev/claude-skills/*/references/).
+/References/
 
 # Personal dev notes, audits, Superpowers artifacts (local-only by choice)
 dev/docs/
@@ -24,3 +27,6 @@ dev/docs/
 # luacov output (busted --coverage && luacov) — throwaway, regenerated per run
 luacov.stats.out
 luacov.report.out
+
+# Python bytecode from the skill-evals pytest suite
+__pycache__/
