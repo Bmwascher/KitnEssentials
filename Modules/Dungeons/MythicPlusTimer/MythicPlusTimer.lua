@@ -487,6 +487,22 @@ function MPT:UpdateObjectives()
     local elapsed = run.elapsed or 0
     local objIdx = 0
 
+    -- ONE live clock for this pass. run.elapsed is refreshed only by OnTimerTick
+    -- (deduped to once per whole second), so it lags a criteria event by up to
+    -- ~1s. The count-objective stamp and the cache provenance bound below MUST
+    -- share the same clock: stamping from the live clock while bounding against
+    -- the cached one makes a legitimately-stamped split read as "in the future"
+    -- (saved 101 vs elapsed 100) and get thrown away.
+    --
+    -- Only while the run is live. In CompleteRun's backfill pass run.elapsed is
+    -- the authoritative final time (GetChallengeCompletionInfo — the world clock
+    -- goes stale post-depletion, the "99:99" class), so there it wins.
+    local liveElapsed = elapsed
+    if not run.completed then
+        local _, live = GetWorldElapsedTime(1)
+        if live and live >= 0 then liveElapsed = live end
+    end
+
     for i = 1, numCriteria do
         local info = C_ScenarioInfo.GetCriteriaInfo(i)
         if info and not info.isWeightedProgress then
@@ -544,16 +560,20 @@ function MPT:UpdateObjectives()
                 -- re-stamped at the reload time (see MPT.CacheBelongsToRun).
                 local cacheOK = MPT.CacheBelongsToRun(cache, run.mapID, run.level)
                 local saved = cacheOK and cache[objIdx]
-                -- Provenance guard. The cache is NOT reliably wiped between runs:
-                -- every clear (CHALLENGE_MODE_START / CompleteRun / ResetRun) is
-                -- event-driven, and OnDisable unregisters all events, so a cache
-                -- can outlive its run and be adopted by a later run of the same
-                -- map. Catch that without trusting the wipe: a split can never
-                -- postdate the run clock, because elapsed only advances within a
-                -- run. If it does, the cache is someone else's — drop it whole
-                -- and let this run re-stamp. (Skipped before the first tick,
-                -- where run.elapsed is still 0 and proves nothing.)
-                if saved and elapsed > 0 and saved > elapsed then
+                -- Provenance backstop: a split can never postdate the run clock,
+                -- because elapsed only advances within a run. Bounded against
+                -- liveElapsed, NOT the cached run.elapsed — a count split is
+                -- stamped from the live clock, so bounding it against the lagging
+                -- cached value rejects legitimate data (saved 101 vs elapsed 100).
+                --
+                -- This is a backstop only. It catches a foreign cache whose
+                -- splits postdate this run, but NOT one whose splits predate it
+                -- (an older run's 60s split looks fine against a 300s clock) —
+                -- and that direction is the dangerous one, since a too-LOW value
+                -- committed as a PB is exactly the immortal poison this branch
+                -- exists to remove. Cross-run adoption is prevented at the
+                -- source, by wiping the cache in OnDisable (see there).
+                if saved and liveElapsed > 0 and saved > liveElapsed then
                     cacheOK, saved = false, nil
                 end
                 -- Count/progress criteria (Quarry Camps 6/6) leave info.elapsed
@@ -593,12 +613,7 @@ function MPT:UpdateObjectives()
                         --
                         -- Boss criteria need none of this: they back-date off
                         -- info.elapsed, which is exact.
-                        local stamp = elapsed
-                        if not run.completed then
-                            local _, liveElapsed = GetWorldElapsedTime(1)
-                            if liveElapsed and liveElapsed >= 0 then stamp = liveElapsed end
-                        end
-                        obj.clearTime = stamp
+                        obj.clearTime = liveElapsed
                     else
                         -- Back-dated to the actual kill moment:
                         -- info.elapsed is the time since this criterion completed.
@@ -793,6 +808,22 @@ function MPT:OnDisable()
         self._keHidTracker = nil
         if DEBUG_MPT then KE:Print("[MPT] OnDisable: tracker restored") end
     end
+    -- Drop the in-flight split cache. Every other clear (CHALLENGE_MODE_START,
+    -- CompleteRun, ResetRun) is event-driven, and the UnregisterAllEvents below
+    -- blinds us — so a cache kept across a disable has unknown provenance: a key
+    -- can start and finish while we are dark. A later run of the same map would
+    -- then adopt another run's clear times, and CommitSplits would persist them.
+    -- A stale split that PREDATES the new run reads as perfectly plausible
+    -- against its clock, so no sanity check downstream can catch it; the only
+    -- sound move is to not carry the cache across the blind window at all.
+    --
+    -- Cost is bounded: disabling and re-enabling mid-run re-stamps that run's
+    -- count objectives at the re-enable moment (bosses still back-date exactly
+    -- off info.elapsed). A /reload does NOT come through here — Ace3 tears the
+    -- Lua state down without OnDisable — so the reload-survival path the cache
+    -- exists for is untouched.
+    if self.db then self.db._activeRunSplits = nil end
+
     self:UnregisterAllEvents()
     self:UnhookAll()
 end
