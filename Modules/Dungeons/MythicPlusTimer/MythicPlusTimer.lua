@@ -560,13 +560,29 @@ function MPT:UpdateObjectives()
                         -- has to be read LIVE. The `elapsed` upvalue is
                         -- run.elapsed, which only OnTimerTick refreshes, and that
                         -- dedupes to once per whole second (lastTickedSec). Using
-                        -- it here stamps the previous tick, up to ~1s early —
-                        -- and since this time becomes the stored PB, that
-                        -- optimism would be baked into every future delta.
-                        -- Boss criteria don't need this: they back-date off
+                        -- it here stamps the previous tick, up to ~1s early — and
+                        -- since this time becomes the stored PB, that optimism
+                        -- would be baked into every future delta.
+                        --
+                        -- ONLY while the run is live. CompleteRun sets
+                        -- run.completed, then resolves the authoritative final
+                        -- time (GetChallengeCompletionInfo, precisely because
+                        -- GetWorldElapsedTime goes stale post-depletion — the
+                        -- "99:99" class), and only then calls UpdateObjectives to
+                        -- backfill. Re-reading the world clock in THAT pass would
+                        -- override the authoritative value with a stale one, and
+                        -- CommitSplits would persist it as a PB — improve-only,
+                        -- so a stale-low value would poison the record exactly
+                        -- like the bug this all fixes. There, run.elapsed wins.
+                        --
+                        -- Boss criteria need none of this: they back-date off
                         -- info.elapsed, which is exact.
-                        local _, liveElapsed = GetWorldElapsedTime(1)
-                        obj.clearTime = (liveElapsed and liveElapsed >= 0) and liveElapsed or elapsed
+                        local stamp = elapsed
+                        if not run.completed then
+                            local _, liveElapsed = GetWorldElapsedTime(1)
+                            if liveElapsed and liveElapsed >= 0 then stamp = liveElapsed end
+                        end
+                        obj.clearTime = stamp
                     else
                         -- Back-dated to the actual kill moment:
                         -- info.elapsed is the time since this criterion completed.
