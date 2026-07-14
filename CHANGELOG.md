@@ -1,5 +1,16 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v3.4.2
+
+### Totem Tracker
+- **Fixed:** an Augmentation Evoker's dupes are totems, and only two of them ever showed no matter how many were up. The tracker mirrored Blizzard's totem frame, which loses them — it now reads the totem slots itself, so all four dupes appear, each with its own countdown
+- **NEW:** the module is no longer Shaman-only. Evokers get the bar, its preview, and its position settings, all of which were previously locked out
+- **NEW:** "Show Decimals Below (sec)" — under the threshold you set (default 5), the countdown switches to tenths of a second, so four staggered dupe timers stay readable at a glance
+- Icon order no longer shuffles between refreshes
+- The destroy-all-totems macro now covers every totem slot; its fifth click previously pointed at a button that was never created
+
+---
+
 ## v3.4.1
 
 ### Dungeon Timers

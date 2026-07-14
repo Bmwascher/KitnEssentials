@@ -40,7 +40,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Priest: PI Macro | Dynamically builds a Power Infusion macro with trinkets, racials, and potions |
 | Spell Alert Opacity | Per-spec opt-in/out grid for Blizzard's proc activation overlay flashes (every class, 4-column layout), plus an opacity slider for the overlay |
 | Stance Text | Your current stance/shapeshift form name as configurable on-screen text |
-| Totem Tracker | Shaman-only bar tracker for active totems with destroy buttons, configurable layout, and EditMode integration |
+| Totem Tracker | Bar tracker for active totems with destroy buttons, configurable layout, and EditMode integration. Tracks **all four Augmentation Evoker dupes** with independent timers — the default UI shows only two |
 | Warlock: Burning Rush | Glowing icon reminder while Burning Rush is active |
 
 ## Utilities
