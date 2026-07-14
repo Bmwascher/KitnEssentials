@@ -4,6 +4,9 @@
 
 ### Mythic+ Timer
 - **Fixed:** count objectives like Pit of Saron's "Quarry Camps" (6/6) showed an absurd delta against your best time — often +19:00 or worse. The objective's clear time was already correct; the stored personal best was not. Older builds recorded that best at the moment the *first* camp was tagged (around 80 seconds), and because a best time is only ever overwritten by a faster one, a real ~21-minute completion could never replace it. Those poisoned records are now cleared the next time you run the dungeon, and the following completion sets an honest baseline
+- **Fixed:** the moment a count objective completes is now recorded exactly. It was stamped from a clock that only refreshes once per second, so every 6/6 time came in up to a second early — and since that time becomes your personal best, the error was baked into every delta after it
+- **Fixed:** reloading mid-run no longer re-times an already-completed count objective to the moment of the reload — it keeps the time it actually finished at
+- Personal bests are better protected from bad data: disabling the module mid-key, or switching profiles mid-run, could previously let a different run's clear times be written over your records
 
 ### Totem Tracker
 - **Fixed:** an Augmentation Evoker's dupes are totems, and only two of them ever showed no matter how many were up. The tracker mirrored Blizzard's totem frame, which loses them — it now reads the totem slots itself, so all four dupes appear, each with its own countdown
