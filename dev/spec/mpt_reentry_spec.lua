@@ -1,6 +1,10 @@
 -- Lifecycle spec for MythicPlusTimer's mid-key exit/re-entry behavior:
--- CheckForActiveRun's reset gating and the recovery-cache (db._activeRunSplits /
--- db._activeRunDeaths) ownership boundaries.
+-- CheckForActiveRun's reset gating and the recovery-cache ownership boundaries.
+--
+-- The split cache lives in db.GLOBAL (KE.db.global.MPTActiveRunSplits), not on
+-- the profile: an AceDB profile switch mid-run rebinds MPT.db and would hand the
+-- live run another profile's stale splits. The death log cache is still profile-
+-- scoped (display-only; it cannot poison the improve-only PB store).
 --
 -- Loads the REAL Modules/Dungeons/MythicPlusTimer/MythicPlusTimer.lua headlessly
 -- (fresh per test — file-local state resets with the reload). Collaborator
@@ -13,7 +17,7 @@ local helpers = require("dev.spec._helpers")
 local mock = require("dev.spec._wow_mock")
 
 describe("MPT run lifecycle: mid-key exit / re-entry", function()
-    local MPT
+    local MPT, KE
     local activeMapID          -- what C_ChallengeMode.GetActiveChallengeMapID returns
     local instanceInfo         -- {name, type, difficulty} for GetInstanceInfo
     local startRunCalls
@@ -49,8 +53,8 @@ describe("MPT run lifecycle: mid-key exit / re-entry", function()
             return instanceInfo[1], instanceInfo[2], instanceInfo[3]
         end
 
-        helpers.loadModule("Modules/Dungeons/MythicPlusTimer/MythicPlusTimer.lua",
-            { Print = function() end })
+        KE = helpers.loadModule("Modules/Dungeons/MythicPlusTimer/MythicPlusTimer.lua",
+            { Print = function() end, db = { global = {}, profile = {} } })
         MPT = modules["MythicPlusTimer"]
         assert(MPT and MPT.CheckForActiveRun, "real MythicPlusTimer.lua did not load")
 
@@ -61,13 +65,14 @@ describe("MPT run lifecycle: mid-key exit / re-entry", function()
         MPT.UnregisterRunEvents = function() end
         MPT.NotifyRefresh = function() end
         MPT.StartRun = function() startRunCalls = startRunCalls + 1 end
+        MPT.MigrateLegacyOverlayDB = function() end  -- lives in the Overlay file
 
         -- Minimal db with live recovery caches, as a mid-key run would have.
         MPT.db = {
             Enabled = true,
-            _activeRunSplits = { key = "375:12", [1] = 180 },
             _activeRunDeaths = { mapID = 375, log = { { t = 142, name = "Healer" } } },
         }
+        KE.db.global.MPTActiveRunSplits = { key = "375:12", [1] = 180 }
     end)
 
     local function seedActiveRun()
@@ -90,7 +95,7 @@ describe("MPT run lifecycle: mid-key exit / re-entry", function()
         MPT:CheckForActiveRun()
         assert.is_true(MPT.run.active)
         assert.equals(375, MPT.run.mapID)
-        assert.is_table(MPT.db._activeRunSplits)
+        assert.is_table(KE.db.global.MPTActiveRunSplits)
         assert.is_table(MPT.db._activeRunDeaths)
     end)
 
@@ -103,7 +108,7 @@ describe("MPT run lifecycle: mid-key exit / re-entry", function()
         setInstance("open-world")
         MPT:CheckForActiveRun()
         assert.is_false(MPT.run.active)
-        assert.is_table(MPT.db._activeRunSplits)
+        assert.is_table(KE.db.global.MPTActiveRunSplits)
         assert.is_table(MPT.db._activeRunDeaths)
     end)
 
@@ -116,7 +121,7 @@ describe("MPT run lifecycle: mid-key exit / re-entry", function()
         setInstance("open-world")
         MPT:CheckForActiveRun()          -- walk-out reset (keeps caches)
         MPT:WORLD_STATE_TIMER_STOP()     -- trailing stop event
-        assert.is_table(MPT.db._activeRunSplits)
+        assert.is_table(KE.db.global.MPTActiveRunSplits)
         assert.is_table(MPT.db._activeRunDeaths)
     end)
 
@@ -124,7 +129,7 @@ describe("MPT run lifecycle: mid-key exit / re-entry", function()
         -- The new-key event owns the staleness wipe: a cache left over from a
         -- walked-out or logged-out run must never leak into a fresh key.
         MPT:CHALLENGE_MODE_START()
-        assert.is_nil(MPT.db._activeRunSplits)
+        assert.is_nil(KE.db.global.MPTActiveRunSplits)
         assert.is_nil(MPT.db._activeRunDeaths)
         assert.equals(1, startRunCalls)
     end)
@@ -133,8 +138,30 @@ describe("MPT run lifecycle: mid-key exit / re-entry", function()
         seedActiveRun()
         MPT:CHALLENGE_MODE_RESET()
         assert.is_false(MPT.run.active)
-        assert.is_nil(MPT.db._activeRunSplits)
+        assert.is_nil(KE.db.global.MPTActiveRunSplits)
         assert.is_nil(MPT.db._activeRunDeaths)
+    end)
+
+    it("survives a profile switch — the split cache is global, not profile-scoped", function()
+        -- Regression (Codex, 2026-07-14): the cache used to live on MPT.db, i.e.
+        -- KE.db.profile.MythicPlusTimer. ProfileManager:RefreshAllModules calls
+        -- UpdateDB on every module, and UpdateDB REBINDS self.db — so a mid-run
+        -- profile switch handed the live run another profile's stale splits. Those
+        -- times PREDATE the current run clock, so they read as plausible and no
+        -- downstream sanity check can reject them; CommitSplits would then persist
+        -- one as a personal best, and improve-only makes a too-low value immortal.
+        seedActiveRun()
+        MPT:UpdateDB()  -- exactly what a profile switch does
+
+        assert.is_nil(MPT.db._activeRunSplits)                    -- not on the profile at all
+        assert.is_table(KE.db.global.MPTActiveRunSplits)          -- untouched by the rebind
+        assert.equals("375:12", KE.db.global.MPTActiveRunSplits.key)
+
+        -- ...and the module still OWNS the surviving cache: its own wipe path has
+        -- to reach it. (Pre-fix this is where it breaks: the wipe nils the key on
+        -- the freshly-rebound PROFILE table, and the run's real cache lives on.)
+        MPT:CHALLENGE_MODE_RESET()
+        assert.is_nil(KE.db.global.MPTActiveRunSplits)
     end)
 
     it("leaves a completed run alone during the inside-instance fanfare window", function()

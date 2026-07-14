@@ -64,6 +64,29 @@ local DEBUG_MPT = false
 local _prevDeathCount = 0
 local _partyAlive = {}  -- [name] = true while alive
 
+-- In-flight split cache: the objective clear times of the run currently being
+-- played, so a /reload can back-stamp them instead of re-timing them (a count
+-- objective cannot be re-timed — it has no back-date source). Identity-stamped
+-- "mapID:level"; see MPT.CacheBelongsToRun.
+--
+-- Lives in db.GLOBAL, deliberately. It is transient RUN state, not user config,
+-- and it used to sit on MPT.db (= KE.db.profile.MythicPlusTimer) — where an
+-- AceDB profile switch mid-run rebinds it wholesale (ProfileManager:
+-- RefreshAllModules -> UpdateDB), handing the live run a stale cache from
+-- ANOTHER profile's earlier run. Those splits PREDATE the current run clock, so
+-- they read as entirely plausible and no downstream sanity check can catch them;
+-- CommitSplits would then persist one as a personal best, and improve-only makes
+-- a too-low value immortal — the exact poison this module was just fixed to
+-- remove. Global storage is not rebound by a profile switch, so the vector is
+-- closed at the source rather than guarded against.
+local function GetRunSplitCache()
+    return KE.db and KE.db.global and KE.db.global.MPTActiveRunSplits or nil
+end
+
+local function SetRunSplitCache(cache)
+    if KE.db and KE.db.global then KE.db.global.MPTActiveRunSplits = cache end
+end
+
 -- Single shared run state (the contract's MPT.run). Reset by MPT:ResetRun(),
 -- which wipes the array tables in place (affixIDs/affixNames/objectives/deathLog);
 -- thresholds is re-assigned (tiny flat table, once per run).
@@ -553,7 +576,7 @@ function MPT:UpdateObjectives()
                 -- stale cache from another key must never back-stamp — see
                 -- CHALLENGE_MODE_START's staleness wipe for the
                 -- cross-session leak path.
-                local cache = MPT.db._activeRunSplits
+                local cache = GetRunSplitCache()
                 local runKey = MPT.BuildSplitKey(run.mapID, run.level)
                 -- Tolerates the reload-recovery level-0 window, where an exact
                 -- key compare misses and a count objective would otherwise be
@@ -625,7 +648,7 @@ function MPT:UpdateObjectives()
                     -- rekeying would throw away the very splits it is holding.
                     if not cacheOK then
                         cache = { key = runKey }
-                        MPT.db._activeRunSplits = cache
+                        SetRunSplitCache(cache)
                     end
                     cache[objIdx] = obj.clearTime
                     -- Fresh-stamp arm ONLY (never the restoration arm above), AND
@@ -822,7 +845,7 @@ function MPT:OnDisable()
     -- off info.elapsed). A /reload does NOT come through here — Ace3 tears the
     -- Lua state down without OnDisable — so the reload-survival path the cache
     -- exists for is untouched.
-    if self.db then self.db._activeRunSplits = nil end
+    SetRunSplitCache(nil)
 
     self:UnregisterAllEvents()
     self:UnhookAll()
@@ -1142,7 +1165,7 @@ function MPT:CHALLENGE_MODE_START()
     -- paths deliberately spare (a mid-key walk-out keeps them so re-entry can
     -- restore splits + death log). Also covers the logout-outside-mid-key
     -- cross-session leak the old ResetRun hoisted clear used to catch.
-    self.db._activeRunSplits = nil
+    SetRunSplitCache(nil)
     self.db._activeRunDeaths = nil
     -- A genuinely new key replaces any lingering completed summary (completed
     -- state otherwise survives until the player leaves the instance).
@@ -1321,7 +1344,7 @@ function MPT:RepairRunInfo()
             -- Re-stamp the in-flight split cache with the now-known level, so
             -- identity goes back to EXACT matching instead of staying on the
             -- level-0 window's relaxed map-only rule (MPT.CacheBelongsToRun).
-            local cache = MPT.db._activeRunSplits
+            local cache = GetRunSplitCache()
             if MPT.CacheBelongsToRun(cache, run.mapID, 0) then
                 cache.key = MPT.BuildSplitKey(run.mapID, run.level)
             end
@@ -1460,7 +1483,7 @@ function MPT:CompleteRun()
             if not (fo.clearTime and fo.clearTime > 0) then fo.clearTime = finalElapsed end
         end
     end
-    MPT.db._activeRunSplits = nil  -- run over; in-progress split cache no longer needed
+    SetRunSplitCache(nil)  -- run over; in-progress split cache no longer needed
     MPT.db._activeRunDeaths = nil  -- ditto for the reload-survival death log
     self:CommitSplits()   -- persist improved per-boss + overall times to the global store
     self:SetOverlayActive(false)          -- release nameplate texts; run is over
@@ -1483,7 +1506,7 @@ function MPT:ResetRun(keepCaches)
     -- stamp, and a restored death log is immediately reconcile-trimmed
     -- against the authoritative GetDeathCount.
     if not keepCaches then
-        MPT.db._activeRunSplits = nil
+        SetRunSplitCache(nil)
         MPT.db._activeRunDeaths = nil
     end
     -- Hoist rationale also applies to the salvage flag: a pending 2s salvage timer
