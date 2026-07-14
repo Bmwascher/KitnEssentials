@@ -101,6 +101,40 @@ describe("MPT.RepairCountSplitsIn", function()
     end)
 end)
 
+describe("MPT.CacheBelongsToRun", function()
+    -- The in-flight split cache is identity-stamped "mapID:level" so it can only
+    -- restore into the run that wrote it. But a reload-recovery StartRun races
+    -- GetActiveKeystoneInfo, so run.level reads 0 until RepairRunInfo fixes it —
+    -- and an exact compare misses in that window. A boss criterion survives the
+    -- miss (it back-dates off info.elapsed); a COUNT criterion would be
+    -- re-stamped at the RELOAD time and CommitSplits would persist that.
+
+    it("matches the exact key", function()
+        assert.is_true(MPT.CacheBelongsToRun({ key = "556:23" }, 556, 23))
+    end)
+
+    it("matches on mapID alone while the level is still unknown", function()
+        assert.is_true(MPT.CacheBelongsToRun({ key = "556:23" }, 556, 0))
+        assert.is_true(MPT.CacheBelongsToRun({ key = "556:23" }, 556, nil))
+    end)
+
+    it("does NOT relax across maps, even at level 0", function()
+        assert.is_false(MPT.CacheBelongsToRun({ key = "402:23" }, 556, 0))
+        assert.is_false(MPT.CacheBelongsToRun({ key = "5566:23" }, 556, 0))
+    end)
+
+    it("does NOT relax once the level is known", function()
+        -- A known-level mismatch is a genuinely different run: stay strict.
+        assert.is_false(MPT.CacheBelongsToRun({ key = "556:23" }, 556, 24))
+    end)
+
+    it("rejects a missing, keyless, or legacy cache", function()
+        assert.is_false(MPT.CacheBelongsToRun(nil, 556, 23))
+        assert.is_false(MPT.CacheBelongsToRun({}, 556, 23))
+        assert.is_false(MPT.CacheBelongsToRun({ key = "556:23" }, nil, 23))
+    end)
+end)
+
 -- Lifecycle cover, driving the real UpdateSplits/CommitSplits against the live
 -- store. The pure-core tests above pass even when the repair is never REACHED —
 -- both defects Codex caught (a session-sticky run flag, and CommitSplits

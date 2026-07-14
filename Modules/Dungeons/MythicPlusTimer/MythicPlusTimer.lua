@@ -539,7 +539,11 @@ function MPT:UpdateObjectives()
                 -- cross-session leak path.
                 local cache = MPT.db._activeRunSplits
                 local runKey = MPT.BuildSplitKey(run.mapID, run.level)
-                local saved = cache and cache.key == runKey and cache[objIdx]
+                -- Tolerates the reload-recovery level-0 window, where an exact
+                -- key compare misses and a count objective would otherwise be
+                -- re-stamped at the reload time (see MPT.CacheBelongsToRun).
+                local cacheOK = MPT.CacheBelongsToRun(cache, run.mapID, run.level)
+                local saved = cacheOK and cache[objIdx]
                 -- Count/progress criteria (Quarry Camps 6/6) leave info.elapsed
                 -- pinned to the FIRST increment (1/6) — it never advances to the
                 -- 6/6 moment — so back-dating (elapsed - info.elapsed) yields the
@@ -589,7 +593,10 @@ function MPT:UpdateObjectives()
                         obj.clearTime = elapsed - (info.elapsed or 0)
                     end
                     -- Create-or-rekey: also displaces a legacy keyless table.
-                    if not cache or cache.key ~= runKey then
+                    -- Gate on cacheOK, NOT on an exact key compare: during the
+                    -- level-0 window the key differs but the cache is ours, and
+                    -- rekeying would throw away the very splits it is holding.
+                    if not cacheOK then
                         cache = { key = runKey }
                         MPT.db._activeRunSplits = cache
                     end
@@ -1268,6 +1275,13 @@ function MPT:RepairRunInfo()
             self:CacheKeystoneInfo(level, affixIDs)
             -- PB store is level-keyed: re-resolve pbRec + reseed bestOverall.
             self:LoadSplits()
+            -- Re-stamp the in-flight split cache with the now-known level, so
+            -- identity goes back to EXACT matching instead of staying on the
+            -- level-0 window's relaxed map-only rule (MPT.CacheBelongsToRun).
+            local cache = MPT.db._activeRunSplits
+            if MPT.CacheBelongsToRun(cache, run.mapID, 0) then
+                cache.key = MPT.BuildSplitKey(run.mapID, run.level)
+            end
             if DEBUG_MPT then KE:Print(format("[MPT] RepairRunInfo: level=%d", level)) end
         end
     end

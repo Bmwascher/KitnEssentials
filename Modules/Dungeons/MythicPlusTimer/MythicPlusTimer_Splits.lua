@@ -36,6 +36,34 @@ end
 -- exact run ("mapID:level") that wrote it.
 MPT.BuildSplitKey = BuildKey
 
+-- Does this in-flight split cache belong to the run we are in?
+--
+-- Identity is normally exact ("mapID:level"). But a reload-recovery StartRun can
+-- race GetActiveKeystoneInfo: run.level stays 0 until RepairRunInfo fixes it on a
+-- later tick (core file), and during that window an exact compare MISSES
+-- ("556:0" vs "556:23"). A boss criterion survives a miss — it back-dates off
+-- info.elapsed — but a COUNT criterion cannot, so it would be re-stamped at the
+-- RELOAD time instead of its true 6/6 time, and CommitSplits would persist that.
+--
+-- So while the level is still unknown, match on mapID alone. That is safe:
+-- _activeRunSplits is wiped by CHALLENGE_MODE_START / CHALLENGE_MODE_RESET, so a
+-- live cache for this map can only belong to THIS run.
+--
+-- Pure (no WoW API, no upvalue access) so it is busted-testable.
+---@param cache table|nil the _activeRunSplits table
+---@param mapID number|string
+---@param level number|nil 0 while the keystone API has not populated yet
+---@return boolean
+function MPT.CacheBelongsToRun(cache, mapID, level)
+    if not cache or not cache.key or not mapID then return false end
+    if cache.key == BuildKey(mapID, level) then return true end
+    -- Level-0 recovery window: the map still has to match.
+    if (level or 0) == 0 then
+        return cache.key:match("^(.+):%d+$") == tostring(mapID)
+    end
+    return false
+end
+
 ---------------------------------------------------------------------------------
 -- LoadSplits — store-ensure + seed run.bestOverall (called from StartRun)
 ---------------------------------------------------------------------------------
