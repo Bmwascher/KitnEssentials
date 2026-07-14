@@ -45,9 +45,14 @@ MPT.BuildSplitKey = BuildKey
 -- info.elapsed — but a COUNT criterion cannot, so it would be re-stamped at the
 -- RELOAD time instead of its true 6/6 time, and CommitSplits would persist that.
 --
--- So while the level is still unknown, match on mapID alone. That is safe:
--- _activeRunSplits is wiped by CHALLENGE_MODE_START / CHALLENGE_MODE_RESET, so a
--- live cache for this map can only belong to THIS run.
+-- So while the level is still unknown, match on mapID alone.
+--
+-- That relaxation is NOT self-securing, and the obvious justification is wrong:
+-- the cache is not reliably wiped between runs. Every clear (CHALLENGE_MODE_START
+-- / CompleteRun / ResetRun) is event-driven, and OnDisable unregisters all
+-- events — so a cache can outlive its run and a later run of the SAME map could
+-- adopt it here. The caller (UpdateObjectives) closes that with a provenance
+-- guard that trusts no wipe: a cached split can never postdate the run clock.
 --
 -- Pure (no WoW API, no upvalue access) so it is busted-testable.
 ---@param cache table|nil the _activeRunSplits table

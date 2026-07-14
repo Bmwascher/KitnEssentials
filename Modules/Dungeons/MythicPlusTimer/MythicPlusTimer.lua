@@ -544,6 +544,18 @@ function MPT:UpdateObjectives()
                 -- re-stamped at the reload time (see MPT.CacheBelongsToRun).
                 local cacheOK = MPT.CacheBelongsToRun(cache, run.mapID, run.level)
                 local saved = cacheOK and cache[objIdx]
+                -- Provenance guard. The cache is NOT reliably wiped between runs:
+                -- every clear (CHALLENGE_MODE_START / CompleteRun / ResetRun) is
+                -- event-driven, and OnDisable unregisters all events, so a cache
+                -- can outlive its run and be adopted by a later run of the same
+                -- map. Catch that without trusting the wipe: a split can never
+                -- postdate the run clock, because elapsed only advances within a
+                -- run. If it does, the cache is someone else's — drop it whole
+                -- and let this run re-stamp. (Skipped before the first tick,
+                -- where run.elapsed is still 0 and proves nothing.)
+                if saved and elapsed > 0 and saved > elapsed then
+                    cacheOK, saved = false, nil
+                end
                 -- Count/progress criteria (Quarry Camps 6/6) leave info.elapsed
                 -- pinned to the FIRST increment (1/6) — it never advances to the
                 -- 6/6 moment — so back-dating (elapsed - info.elapsed) yields the
