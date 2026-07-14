@@ -556,8 +556,17 @@ function MPT:UpdateObjectives()
                 else
                     if isCountObjective then
                         -- SCENARIO_CRITERIA_UPDATE fires at the completing
-                        -- increment, so the live run clock is the true 6/6 time.
-                        obj.clearTime = elapsed
+                        -- increment, so the run clock IS the 6/6 moment — but it
+                        -- has to be read LIVE. The `elapsed` upvalue is
+                        -- run.elapsed, which only OnTimerTick refreshes, and that
+                        -- dedupes to once per whole second (lastTickedSec). Using
+                        -- it here stamps the previous tick, up to ~1s early —
+                        -- and since this time becomes the stored PB, that
+                        -- optimism would be baked into every future delta.
+                        -- Boss criteria don't need this: they back-date off
+                        -- info.elapsed, which is exact.
+                        local _, liveElapsed = GetWorldElapsedTime(1)
+                        obj.clearTime = (liveElapsed and liveElapsed >= 0) and liveElapsed or elapsed
                     else
                         -- Back-dated to the actual kill moment:
                         -- info.elapsed is the time since this criterion completed.
