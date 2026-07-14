@@ -8,11 +8,14 @@
 local helpers = require("dev.spec._helpers")
 local mock = require("dev.spec._wow_mock")
 
-local MPT
+local MPT, KE
 setup(function()
     mock.install()
     local modules = helpers.installAddonShim()
-    helpers.loadModule("Modules/Dungeons/MythicPlusTimer/MythicPlusTimer_Splits.lua")
+    -- Seed KE.db: the live-store paths (GetStore) read KE.db.global, unlike the
+    -- pure resolver spec which never touches it.
+    KE = helpers.loadModule("Modules/Dungeons/MythicPlusTimer/MythicPlusTimer_Splits.lua",
+        { db = { global = {} } })
     MPT = modules["MythicPlusTimer"]
     assert(MPT and MPT.RepairCountSplitsIn, "Splits file did not expose RepairCountSplitsIn")
 end)
@@ -95,5 +98,87 @@ describe("MPT.RepairCountSplitsIn", function()
             MPT.RepairCountSplitsIn(store, 556, { 3 })
         end)
         assert.is_true(store["556:30"].countRepaired)
+    end)
+end)
+
+-- Lifecycle cover, driving the real UpdateSplits/CommitSplits against the live
+-- store. The pure-core tests above pass even when the repair is never REACHED —
+-- both defects Codex caught (a session-sticky run flag, and CommitSplits
+-- creating an unstamped entry) lived in the wiring, not in the core.
+describe("count-split repair lifecycle", function()
+    local store
+
+    local function boss(i)  return { criteriaIndex = i, totalQuantity = 1 } end
+    local function count(i) return { criteriaIndex = i, totalQuantity = 6 } end
+
+    local function armRun(mapID, level, objectives)
+        MPT.run = {
+            mapID = mapID, level = level, objectives = objectives,
+            forces = {}, elapsed = 0,
+        }
+        return MPT.run
+    end
+
+    before_each(function()
+        KE.db.global.MythicPlusTimerSplits = {
+            ["556:22"] = { best = { [1] = 613, [2] = 996,  [3] = 71,  [4] = 1453, overall = 1452 } },
+            ["556:23"] = { best = { [1] = 640, [2] = 1010, [3] = 81,  [4] = 1500, overall = 1499 } },
+            ["402:15"] = { best = { [1] = 970, [2] = 624,  [3] = 233, [4] = 1319, overall = 1319 } },
+        }
+        store = KE.db.global.MythicPlusTimerSplits
+    end)
+
+    it("still repairs after an earlier count-free run in the same session", function()
+        -- MPT.run is ONE long-lived table whose fields StartRun/ResetRun reset
+        -- individually, so a run-scoped "already repaired" flag survives into
+        -- the next run: the first dungeon of a session would latch it and every
+        -- dungeon after would skip the repair. There must be no such flag.
+        armRun(402, 15, { boss(1), boss(2), boss(3), boss(4) })  -- no count criterion
+        MPT:UpdateSplits()
+
+        armRun(556, 23, { boss(1), boss(2), count(3), boss(4) })
+        MPT:UpdateSplits()
+
+        assert.is_nil(store["556:23"].best[3])
+        assert.is_nil(store["556:22"].best[3])
+    end)
+
+    it("clears the poisoned pbTime so no bogus delta can render", function()
+        local objs = { boss(1), boss(2), count(3), boss(4) }
+        armRun(556, 23, objs)
+        MPT:UpdateSplits()
+
+        assert.is_nil(objs[3].pbTime)          -- the 81s poison never reaches the HUD
+        assert.are.equal(640, objs[1].pbTime)  -- real boss PBs survive
+    end)
+
+    it("keeps a split written into a NEW level entry across the next run's sweep", function()
+        -- CommitSplits creating `{ best = {} }` without the countRepaired stamp
+        -- let the following run's sweep delete the correct count PB it had just
+        -- written — a new level key could never hold a count PB at all.
+        local objs = { boss(1), boss(2), count(3), boss(4) }
+        objs[3].completed, objs[3].clearTime = true, 1257
+
+        local run = armRun(556, 24, objs)  -- 556:24 does not exist yet
+        run.elapsed = 1800
+        MPT:UpdateSplits()
+        MPT:CommitSplits()
+        assert.are.equal(1257, store["556:24"].best[3])
+
+        armRun(556, 23, { boss(1), boss(2), count(3), boss(4) })
+        MPT:UpdateSplits()
+        assert.are.equal(1257, store["556:24"].best[3])
+    end)
+
+    it("retries when a count criterion is discovered late", function()
+        -- GetCriteriaInfo can transiently return nil, so a run can tick with
+        -- only some criteria known. That must not latch the run as repaired.
+        armRun(556, 23, { boss(1), boss(2) })
+        MPT:UpdateSplits()
+        assert.are.equal(81, store["556:23"].best[3])  -- not yet discovered, nothing purged
+
+        MPT.run.objectives = { boss(1), boss(2), count(3), boss(4) }
+        MPT:UpdateSplits()
+        assert.is_nil(store["556:23"].best[3])
     end)
 end)

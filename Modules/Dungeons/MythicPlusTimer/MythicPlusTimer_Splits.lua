@@ -224,14 +224,23 @@ function MPT:UpdateSplits()
     local run = self.run
     if not run.mapID then return end
 
-    -- Repair BEFORE any pbTime is read. The loop below falls back to the
-    -- existing obj.pbTime when the record has no entry (`or obj.pbTime`), so a
-    -- poisoned value that reaches obj.pbTime once would stay sticky for the rest
-    -- of the run. Runs once per run, and only after the criteria have populated.
-    -- Mutates rec.best in place, which is the same table run.pbRec caches — the
-    -- cache needs no invalidation.
-    if not run._countRepaired and run.objectives and #run.objectives > 0 then
-        run._countRepaired = true
+    -- Repair BEFORE any pbTime is read. The loop below keeps the existing
+    -- obj.pbTime when the record has none (`or obj.pbTime`), so a poisoned value
+    -- that lands once would stay sticky for the rest of the run.
+    --
+    -- Deliberately NO run-scoped "already repaired" flag. MPT.run is a single
+    -- long-lived table (core file) whose fields StartRun/ResetRun reset
+    -- individually — a flag parked on it would survive into the NEXT run, so the
+    -- first dungeon of a session would suppress the repair for every dungeon
+    -- after it. Idempotence and termination come from the per-entry
+    -- `countRepaired` stamp instead: repeat calls skip every flagged entry.
+    -- This also lets the repair retry on a later tick when a criterion has not
+    -- been discovered yet (GetCriteriaInfo can transiently return nil — see
+    -- UpdateObjectives), rather than latching a half-discovered run as done.
+    --
+    -- Mutates rec.best in place, which is the same table run.pbRec caches, so
+    -- the cache needs no invalidation.
+    if run.objectives and #run.objectives > 0 then
         self:RepairCountSplits()
     end
 
@@ -277,7 +286,12 @@ function MPT:CommitSplits()
     local store = GetStore()
     local key = KeyFor(run.mapID, run.level)
     local entry = store[key]
-    if not entry then entry = { best = {} }; store[key] = entry end
+    -- A brand-new entry is written by the current (fixed) recorder, so it holds
+    -- no pre-fix count poison — stamp it repaired on creation. Without the
+    -- stamp, the next run of this map would sweep the entry as unrepaired and
+    -- delete the correct count split this run is about to write, so a new level
+    -- key could never keep a count PB.
+    if not entry then entry = { best = {}, countRepaired = true }; store[key] = entry end
     entry.best = entry.best or {}
     local seasonFn = C_MythicPlus and C_MythicPlus.GetCurrentSeason
     local season = seasonFn and seasonFn()
