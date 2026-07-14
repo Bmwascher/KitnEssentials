@@ -2,6 +2,9 @@
 
 ## v3.4.2
 
+### Mythic+ Timer
+- **Fixed:** count objectives like Pit of Saron's "Quarry Camps" (6/6) showed an absurd delta against your best time — often +19:00 or worse. The objective's clear time was already correct; the stored personal best was not. Older builds recorded that best at the moment the *first* camp was tagged (around 80 seconds), and because a best time is only ever overwritten by a faster one, a real ~21-minute completion could never replace it. Those poisoned records are now cleared the next time you run the dungeon, and the following completion sets an honest baseline
+
 ### Totem Tracker
 - **Fixed:** an Augmentation Evoker's dupes are totems, and only two of them ever showed no matter how many were up. The tracker mirrored Blizzard's totem frame, which loses them — it now reads the totem slots itself, so all four dupes appear, each with its own countdown
 - **NEW:** the module is no longer Shaman-only. Evokers get the bar, its preview, and its position settings, all of which were previously locked out

@@ -145,6 +145,74 @@ function MPT:ResolvePB(mapID, level, affixIDs)
 end
 
 ---------------------------------------------------------------------------------
+-- RepairCountSplitsIn / RepairCountSplits — one-time purge of poisoned count PBs
+---------------------------------------------------------------------------------
+
+-- Builds before the count-objective fix back-dated count/progress criteria (Pit
+-- of Saron's "Quarry Camps" 6/6) to the moment the FIRST increment landed —
+-- info.elapsed stays pinned there and never advances to 6/6 (see the core file's
+-- isCountObjective branch). That stamped splits minutes too fast: an 81s "PB"
+-- against a real 20:57 clear. CommitSplits is improve-only, so a legitimate
+-- completion can never beat a bogus one — the record is permanent and the row's
+-- delta stays wrong forever (+19:36, and worse on slower runs).
+--
+-- Repair: drop every count-criterion split for this map, once per store entry.
+--
+-- Sweeps ALL level keys for the map, not just the run's exact key: ResolvePBFrom
+-- falls back across levels within a dungeon, so a poisoned split at any level is
+-- reachable from a run at any other.
+--
+-- Deliberately NOT threshold-based. A value cutoff is unsound in both directions:
+-- a slow start can tag the first camp several minutes in (poison survives), and a
+-- genuine 6/6 can be quick (clean split destroyed). So a correct split for the
+-- same criterion is dropped along with the poisoned ones and re-earned on the
+-- next completion — cheaper than a heuristic that silently keeps bad data.
+--
+-- Pure (no WoW API, no upvalue access) so it is busted-testable.
+---@param store table
+---@param mapID number|string
+---@param countIndices table criteriaIndex values that are count objectives
+---@return number repaired number of store entries repaired
+function MPT.RepairCountSplitsIn(store, mapID, countIndices)
+    if not store or not mapID then return 0 end
+    if not countIndices or #countIndices == 0 then return 0 end
+
+    local prefix = tostring(mapID) .. ":"
+    local repaired = 0
+    for key, rec in pairs(store) do
+        if not rec.countRepaired and key:sub(1, #prefix) == prefix then
+            if rec.best then
+                for i = 1, #countIndices do
+                    rec.best[countIndices[i]] = nil
+                end
+            end
+            rec.countRepaired = true
+            repaired = repaired + 1
+        end
+    end
+    return repaired
+end
+
+-- Wrapper: collect this run's count criteria and repair the live store.
+function MPT:RepairCountSplits()
+    local run = self.run
+    if not run.mapID or not run.objectives then return 0 end
+
+    local countIndices
+    for i = 1, #run.objectives do
+        local obj = run.objectives[i]
+        -- Same gate the core file and HUD use to identify a count objective.
+        if (obj.totalQuantity or 1) > 1 and obj.criteriaIndex then
+            countIndices = countIndices or {}
+            countIndices[#countIndices + 1] = obj.criteriaIndex
+        end
+    end
+    if not countIndices then return 0 end
+
+    return MPT.RepairCountSplitsIn(GetStore(), run.mapID, countIndices)
+end
+
+---------------------------------------------------------------------------------
 -- UpdateSplits — refresh per-objective pbTime + run.bestOverall (live deltas)
 ---------------------------------------------------------------------------------
 
@@ -155,6 +223,18 @@ end
 function MPT:UpdateSplits()
     local run = self.run
     if not run.mapID then return end
+
+    -- Repair BEFORE any pbTime is read. The loop below falls back to the
+    -- existing obj.pbTime when the record has no entry (`or obj.pbTime`), so a
+    -- poisoned value that reaches obj.pbTime once would stay sticky for the rest
+    -- of the run. Runs once per run, and only after the criteria have populated.
+    -- Mutates rec.best in place, which is the same table run.pbRec caches — the
+    -- cache needs no invalidation.
+    if not run._countRepaired and run.objectives and #run.objectives > 0 then
+        run._countRepaired = true
+        self:RepairCountSplits()
+    end
+
     -- Use the cached record. If nil (defensive: LoadSplits not yet called),
     -- resolve once and cache so subsequent ticks are free.
     local rec = run.pbRec
