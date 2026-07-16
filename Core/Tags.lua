@@ -102,12 +102,15 @@ E:AddTagInfo('kes:group', 'KitnEssentials', "Shows 'Group: X' only while in a ra
 
 E:AddTag('kes:mana:percent', 'UNIT_POWER_FREQUENT UNIT_MAXPOWER UNIT_DISPLAYPOWER', function(unit)
     local max = UnitPowerMax(unit, Enum.PowerType.Mana)
-    if max == 0 then return end
     local cur = UnitPower(unit, Enum.PowerType.Mana)
     -- UnitPower/UnitPowerMax can return secret values on hostile/encounter
     -- targets in 12.0.5. Fail-closed visibly rather than propagating the
-    -- secret into ElvUF's tag pipeline via SetText.
+    -- secret into ElvUF's tag pipeline via SetText. The guard must run
+    -- BEFORE the max == 0 compare — comparison against a non-nil value on a
+    -- secret throws, so the old order crashed exactly the case the guard
+    -- was written for.
     if issecretvalue and (issecretvalue(max) or issecretvalue(cur)) then return end
+    if max == 0 then return end
     local pct = math_floor((cur / max) * 100)
     if pct >= 100 then return end
     return pct
