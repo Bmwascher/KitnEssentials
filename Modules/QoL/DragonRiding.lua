@@ -675,10 +675,13 @@ end
 function DR:HidePreview()
     self.isPreview = false
     if self.parent then
-        RegisterStateDriver(self.parent, "visibility", "[bonusbar:5] show; hide")
-        if self.parent:IsShown() then
-            self:OnShowHandler()
-        end
+        KE:RunAfterCombat(function()
+            if self.isPreview or not self.parent then return end
+            RegisterStateDriver(self.parent, "visibility", "[bonusbar:5] show; hide")
+            if self.parent:IsShown() then
+                self:OnShowHandler()
+            end
+        end)
     end
 end
 
@@ -765,13 +768,19 @@ function DR:OnEnable()
         self._parentHooked = true
     end
 
-    RegisterStateDriver(self.parent, "visibility", "[bonusbar:5] show; hide")
+    KE:RunAfterCombat(function()
+        if not self:IsEnabled() then return end
+        RegisterStateDriver(self.parent, "visibility", "[bonusbar:5] show; hide")
+    end)
 end
 
 function DR:OnDisable()
     if self.parent then
-        self.parent:Hide()
-        UnregisterStateDriver(self.parent, "visibility")
+        KE:RunAfterCombat(function()
+            if self:IsEnabled() or not self.parent then return end
+            self.parent:Hide()
+            UnregisterStateDriver(self.parent, "visibility")
+        end)
     end
 
     if self.speedTicker then
