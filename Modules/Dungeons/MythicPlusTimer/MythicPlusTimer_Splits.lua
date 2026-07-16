@@ -31,9 +31,10 @@ local function KeyFor(mapID, level)
     return BuildKey(mapID, level)
 end
 
--- Exported for the run-identity stamp on MPT.db._activeRunSplits (core file's
--- UpdateObjectives): a persisted in-flight cache must only restore into the
--- exact run ("mapID:level") that wrote it.
+-- Exported for the run-identity stamp on the in-flight split cache
+-- (KE.db.global.MPTActiveRunSplits; core file's UpdateObjectives): a
+-- persisted cache must only restore into the exact run ("mapID:level")
+-- that wrote it.
 MPT.BuildSplitKey = BuildKey
 
 -- Does this in-flight split cache belong to the run we are in?
@@ -54,13 +55,24 @@ MPT.BuildSplitKey = BuildKey
 -- adopt it here. The caller (UpdateObjectives) closes that with a provenance
 -- guard that trusts no wipe: a cached split can never postdate the run clock.
 --
+-- Character ownership: the cache is account-GLOBAL, and it deliberately
+-- survives a mid-key logout (that persistence IS the DC-recovery feature) —
+-- so "mapID:level" alone collides across characters: char A logs out
+-- mid-key, char B recovers its own live key on the same map, and A's
+-- splits PREDATE B's clock, sailing through the provenance bound. Identity
+-- therefore includes WHO wrote the cache. charKey is nil-tolerant on the
+-- CACHE side only: a cache written before the stamp existed has no owner
+-- and dies out at its next wipe or rekey.
+--
 -- Pure (no WoW API, no upvalue access) so it is busted-testable.
----@param cache table|nil the _activeRunSplits table
+---@param cache table|nil the in-flight split cache (KE.db.global.MPTActiveRunSplits)
 ---@param mapID number|string
 ---@param level number|nil 0 while the keystone API has not populated yet
+---@param charKey string|nil UnitGUID("player") of the character asking
 ---@return boolean
-function MPT.CacheBelongsToRun(cache, mapID, level)
+function MPT.CacheBelongsToRun(cache, mapID, level, charKey)
     if not cache or not cache.key or not mapID then return false end
+    if cache.char ~= nil and cache.char ~= charKey then return false end
     if cache.key == BuildKey(mapID, level) then return true end
     -- Level-0 recovery window: the map still has to match.
     if (level or 0) == 0 then

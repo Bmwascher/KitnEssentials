@@ -501,9 +501,11 @@ end
 -- pbTime is left nil here — MPT:ResolvePB (Splits phase) fills it per run.
 -- Plain reads: GetCriteriaInfo description/completed/elapsed and
 -- GetStepInfo are non-secret (contract "DO NOT GUARD" set).
--- (GetWorldElapsedTime removed from this path; info.elapsed back-dates instead.)
--- Reload-safe: clearTime is back-stamped via _activeRunSplits so a /reload
--- mid-run restores prior kill times without re-triggering chat output (Task 5.3).
+-- The whole pass shares ONE live clock (liveElapsed below) — stamps and the
+-- cache provenance bound must never mix clocks.
+-- Reload-safe: clearTime is back-stamped via the in-flight split cache
+-- (KE.db.global.MPTActiveRunSplits) so a /reload mid-run restores prior
+-- kill times without re-triggering chat output (Task 5.3).
 function MPT:UpdateObjectives()
     local run = MPT.run
     local numCriteria = select(3, C_Scenario.GetStepInfo()) or 0  -- non-secret loop bound
@@ -525,6 +527,13 @@ function MPT:UpdateObjectives()
         local _, live = GetWorldElapsedTime(1)
         if live and live >= 0 then liveElapsed = live end
     end
+
+    -- Character ownership token for the split cache: the cache is
+    -- account-GLOBAL and survives a mid-key logout (the DC-recovery
+    -- feature), so "mapID:level" alone collides across characters —
+    -- identity must include WHO wrote it. Stamped at create, required to
+    -- match on adoption (MPT.CacheBelongsToRun).
+    local myChar = UnitGUID("player")
 
     for i = 1, numCriteria do
         local info = C_ScenarioInfo.GetCriteriaInfo(i)
@@ -581,7 +590,9 @@ function MPT:UpdateObjectives()
                 -- Tolerates the reload-recovery level-0 window, where an exact
                 -- key compare misses and a count objective would otherwise be
                 -- re-stamped at the reload time (see MPT.CacheBelongsToRun).
-                local cacheOK = MPT.CacheBelongsToRun(cache, run.mapID, run.level)
+                -- myChar closes cross-character adoption: same map+level on
+                -- another character is a foreign cache, not a recovery.
+                local cacheOK = MPT.CacheBelongsToRun(cache, run.mapID, run.level, myChar)
                 local saved = cacheOK and cache[objIdx]
                 -- Provenance backstop: a split can never postdate the run clock,
                 -- because elapsed only advances within a run. Bounded against
@@ -634,20 +645,27 @@ function MPT:UpdateObjectives()
                         -- so a stale-low value would poison the record exactly
                         -- like the bug this all fixes. There, run.elapsed wins.
                         --
-                        -- Boss criteria need none of this: they back-date off
-                        -- info.elapsed, which is exact.
+                        -- Boss criteria back-date off info.elapsed instead —
+                        -- but their minuend must be the live clock too (below).
                         obj.clearTime = liveElapsed
                     else
-                        -- Back-dated to the actual kill moment:
-                        -- info.elapsed is the time since this criterion completed.
-                        obj.clearTime = elapsed - (info.elapsed or 0)
+                        -- Back-dated to the actual kill moment: info.elapsed
+                        -- is the time since this criterion completed, fresh at
+                        -- event time — so the minuend must be the LIVE clock.
+                        -- Subtracting from the once-per-second run.elapsed
+                        -- mixes clocks and under-stamps by up to ~1s, the same
+                        -- improve-only optimism the count fix removed (the
+                        -- WarpDeplete and Reloe references both back-date from
+                        -- the live world clock). In CompleteRun's backfill
+                        -- pass liveElapsed IS the authoritative run.elapsed.
+                        obj.clearTime = liveElapsed - (info.elapsed or 0)
                     end
                     -- Create-or-rekey: also displaces a legacy keyless table.
                     -- Gate on cacheOK, NOT on an exact key compare: during the
                     -- level-0 window the key differs but the cache is ours, and
                     -- rekeying would throw away the very splits it is holding.
                     if not cacheOK then
-                        cache = { key = runKey }
+                        cache = { key = runKey, char = myChar }
                         SetRunSplitCache(cache)
                     end
                     cache[objIdx] = obj.clearTime
@@ -819,7 +837,8 @@ function MPT:OnDisable()
     -- Show-hook, which would re-hide the tracker and steal _keHidTracker
     -- ownership while run.active still read true (tracker stuck hidden until
     -- /reload). Re-enable mid-key rebuilds via CheckForActiveRun -> StartRun,
-    -- the same path a /reload uses (clear times restore from _activeRunSplits).
+    -- the same path a /reload uses (clear times restore from the in-flight
+    -- split cache — but see the OnDisable wipe below).
     self.run.active = false
     self.run.completed = false
     -- Restore a tracker WE hid (mid-key disable would otherwise leave it hidden
@@ -900,7 +919,7 @@ function MPT:RecordDeath(guid, knownName, knownUnit)
         class = class,
     }
     -- Reload/DC survival: persist the log write-through (same lifecycle as
-    -- _activeRunSplits — cleared by CHALLENGE_MODE_START's staleness wipe,
+    -- the in-flight split cache — cleared by CHALLENGE_MODE_START's staleness wipe,
     -- CHALLENGE_MODE_RESET, and CompleteRun; a mid-key walk-out SPARES it so
     -- re-entry restores). mapID-only identity is sufficient: any genuinely
     -- new same-dungeon run passes through the START wipe first, so only a
@@ -1344,9 +1363,14 @@ function MPT:RepairRunInfo()
             -- Re-stamp the in-flight split cache with the now-known level, so
             -- identity goes back to EXACT matching instead of staying on the
             -- level-0 window's relaxed map-only rule (MPT.CacheBelongsToRun).
+            -- Character-gated like every adoption: a foreign character's
+            -- cache must never be re-identified as this run's.
             local cache = GetRunSplitCache()
-            if MPT.CacheBelongsToRun(cache, run.mapID, 0) then
+            local myChar = UnitGUID("player")
+            if MPT.CacheBelongsToRun(cache, run.mapID, 0, myChar) then
                 cache.key = MPT.BuildSplitKey(run.mapID, run.level)
+                -- Legacy (pre-stamp) cache adopted as ours: give it an owner.
+                cache.char = cache.char or myChar
             end
             if DEBUG_MPT then KE:Print(format("[MPT] RepairRunInfo: level=%d", level)) end
         end
@@ -1502,9 +1526,9 @@ function MPT:ResetRun(keepCaches)
     -- restores splits + death log through the same path a /reload uses.
     -- Staleness is safe: CHALLENGE_MODE_START wipes both caches for every
     -- genuinely new key (including the logout-outside-mid-key cross-session
-    -- leak), _activeRunSplits self-guards via its "mapID:level" identity
-    -- stamp, and a restored death log is immediately reconcile-trimmed
-    -- against the authoritative GetDeathCount.
+    -- leak), the split cache self-guards via its "mapID:level" + character
+    -- identity stamp, and a restored death log is immediately
+    -- reconcile-trimmed against the authoritative GetDeathCount.
     if not keepCaches then
         SetRunSplitCache(nil)
         MPT.db._activeRunDeaths = nil

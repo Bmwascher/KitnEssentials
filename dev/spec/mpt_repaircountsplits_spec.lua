@@ -133,6 +133,30 @@ describe("MPT.CacheBelongsToRun", function()
         assert.is_false(MPT.CacheBelongsToRun({}, 556, 23))
         assert.is_false(MPT.CacheBelongsToRun({ key = "556:23" }, nil, 23))
     end)
+
+    it("accepts the owning character and rejects a foreign one at the exact key", function()
+        -- The cache is account-GLOBAL and survives a mid-key logout, so the
+        -- same map+level on another character is a collision, not a recovery
+        -- — no API race required (review finding, 2026-07-16).
+        local cache = { key = "556:23", char = "Player-1234-000A" }
+        assert.is_true(MPT.CacheBelongsToRun(cache, 556, 23, "Player-1234-000A"))
+        assert.is_false(MPT.CacheBelongsToRun(cache, 556, 23, "Player-1234-000B"))
+    end)
+
+    it("rejects a foreign character in the level-0 window too", function()
+        -- The relaxed map-only match must never widen ACROSS characters:
+        -- a foreign cache's splits predate the new run's clock, so the
+        -- caller's provenance bound cannot catch them.
+        local cache = { key = "556:23", char = "Player-1234-000A" }
+        assert.is_true(MPT.CacheBelongsToRun(cache, 556, 0, "Player-1234-000A"))
+        assert.is_false(MPT.CacheBelongsToRun(cache, 556, 0, "Player-1234-000B"))
+    end)
+
+    it("tolerates a legacy cache with no character stamp", function()
+        -- Pre-stamp caches have no owner; they die out at the next wipe or
+        -- rekey (RepairRunInfo stamps ownership on adoption).
+        assert.is_true(MPT.CacheBelongsToRun({ key = "556:23" }, 556, 23, "Player-1234-000A"))
+    end)
 end)
 
 -- Lifecycle cover, driving the real UpdateSplits/CommitSplits against the live
