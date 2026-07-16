@@ -60,7 +60,7 @@ function KitnEssentials:OnInitialize()
         if KE._MigrateDungeonTimersDB then KE._MigrateDungeonTimersDB() end
         KE:FillProfileDefaults()
         KE:ValidateProfileFonts()
-        if KE.ProfileManager then
+        if KE.ProfileManager and not KE.ProfileManager:IsRefreshSuppressed() then
             KE.ProfileManager:RefreshAllModules()
         end
     end)
@@ -68,7 +68,7 @@ function KitnEssentials:OnInitialize()
         if KE._MigrateDungeonTimersDB then KE._MigrateDungeonTimersDB() end
         KE:FillProfileDefaults()
         KE:ValidateProfileFonts()
-        if KE.ProfileManager then
+        if KE.ProfileManager and not KE.ProfileManager:IsRefreshSuppressed() then
             KE.ProfileManager:RefreshAllModules()
         end
     end)
@@ -76,7 +76,7 @@ function KitnEssentials:OnInitialize()
         if KE._MigrateDungeonTimersDB then KE._MigrateDungeonTimersDB() end
         KE:FillProfileDefaults()
         KE:ValidateProfileFonts()
-        if KE.ProfileManager then
+        if KE.ProfileManager and not KE.ProfileManager:IsRefreshSuppressed() then
             KE.ProfileManager:RefreshAllModules()
         end
     end)

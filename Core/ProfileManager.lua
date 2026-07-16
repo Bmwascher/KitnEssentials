@@ -22,6 +22,25 @@ local time = time
 local wipe = wipe
 local next = next
 
+-- Refresh policy: the AceDB callbacks in Core/Main.lua are the single
+-- refresh trigger (they also catch third-party KE.db:SetProfile calls).
+-- Multi-hop operations wrap their intermediate SetProfile/CopyProfile hops
+-- in withRefreshSuppressed so per-hop callbacks skip the refresh (the
+-- defaults-fill/migration in those callbacks still runs on every hop), then
+-- run exactly one RefreshAllModules at the end.
+local suppressRefresh = false
+
+local function withRefreshSuppressed(fn)
+    suppressRefresh = true
+    local ok, err = pcall(fn)
+    suppressRefresh = false
+    if not ok then error(err, 0) end
+end
+
+function ProfileManager:IsRefreshSuppressed()
+    return suppressRefresh
+end
+
 ---------------------------------------------------------------------------------
 -- Profile CRUD
 ---------------------------------------------------------------------------------
@@ -51,7 +70,6 @@ function ProfileManager:SetProfile(profileName)
 
     -- SetProfile handles creation if profile doesn't exist
     KE.db:SetProfile(profileName)
-    self:RefreshAllModules()
 
     return true
 end
@@ -74,13 +92,11 @@ function ProfileManager:CreateProfile(profileName)
 
     -- Create by setting to it
     local currentProfile = self:GetCurrentProfile()
-    KE.db:SetProfile(profileName)
-
-    -- Reset to defaults
-    KE.db:ResetProfile()
-
-    -- Switch back to original profile
-    KE.db:SetProfile(currentProfile)
+    withRefreshSuppressed(function()
+        KE.db:SetProfile(profileName)
+        KE.db:ResetProfile()
+        KE.db:SetProfile(currentProfile)
+    end)
 
     return true
 end
@@ -111,13 +127,15 @@ function ProfileManager:CopyProfile(sourceProfile, targetProfile)
     -- AceDB's CopyProfile copies TO the current profile FROM the source
     local currentProfile = self:GetCurrentProfile()
 
-    -- If target is not current, switch to target first
-    if targetProfile ~= currentProfile then KE.db:SetProfile(targetProfile) end
+    withRefreshSuppressed(function()
+        -- If target is not current, switch to target first
+        if targetProfile ~= currentProfile then KE.db:SetProfile(targetProfile) end
 
-    KE.db:CopyProfile(sourceProfile)
+        KE.db:CopyProfile(sourceProfile)
 
-    -- Switch back if needed
-    if targetProfile ~= currentProfile then KE.db:SetProfile(currentProfile) end
+        -- Switch back if needed
+        if targetProfile ~= currentProfile then KE.db:SetProfile(currentProfile) end
+    end)
 
     self:RefreshAllModules()
     return true
@@ -186,18 +204,21 @@ function ProfileManager:RenameProfile(oldName, newName)
     local isCurrentProfile = (oldName == previousProfile)
     local isGlobalProfile = KE.db.global and KE.db.global.GlobalProfile == oldName
 
-    -- Create new profile with old profile's data
-    KE.db:SetProfile(newName)
+    withRefreshSuppressed(function()
+        -- Create new profile with old profile's data
+        KE.db:SetProfile(newName)
 
-    -- Copy from old profile
-    KE.db:CopyProfile(oldName)
+        -- Copy from old profile
+        KE.db:CopyProfile(oldName)
 
-    -- If old was current, stay on new; otherwise restore the profile that was
-    -- active before the rename (GetCurrentProfile() would return newName here).
-    if not isCurrentProfile then KE.db:SetProfile(previousProfile) end
+        -- If old was current, stay on new; otherwise restore the profile that
+        -- was active before the rename (GetCurrentProfile() would return
+        -- newName here).
+        if not isCurrentProfile then KE.db:SetProfile(previousProfile) end
 
-    -- Delete old profile
-    KE.db:DeleteProfile(oldName)
+        -- Delete old profile
+        KE.db:DeleteProfile(oldName)
+    end)
 
     -- Update global profile reference if needed
     if isGlobalProfile then KE.db.global.GlobalProfile = newName end
@@ -212,7 +233,6 @@ function ProfileManager:ResetProfile()
     if not KE.db then return false end
 
     KE.db:ResetProfile()
-    self:RefreshAllModules()
     return true
 end
 
@@ -233,7 +253,6 @@ function ProfileManager:SetUseGlobalProfile(enabled)
         KE.db:SetProfile(globalProfile)
     end
 
-    self:RefreshAllModules()
     return true
 end
 
@@ -257,7 +276,6 @@ function ProfileManager:SetGlobalProfile(profileName)
     -- If global mode is active, switch to this profile
     if KE.db.global.UseGlobalProfile then
         KE.db:SetProfile(profileName)
-        self:RefreshAllModules()
     end
 
     return true
@@ -385,20 +403,22 @@ function ProfileManager:ImportProfile(importString, targetName)
     -- Create the profile
     local currentProfile = self:GetCurrentProfile()
 
-    -- Switch to new profile (creates it)
-    KE.db:SetProfile(finalName)
+    withRefreshSuppressed(function()
+        -- Switch to new profile (creates it)
+        KE.db:SetProfile(finalName)
 
-    -- Copy imported data to profile
-    local profileRef = KE.db.profile
-    if profileRef then
-        wipe(profileRef)
-        for k, v in pairs(profileData) do
-            profileRef[k] = v
+        -- Copy imported data to profile
+        local profileRef = KE.db.profile
+        if profileRef then
+            wipe(profileRef)
+            for k, v in pairs(profileData) do
+                profileRef[k] = v
+            end
         end
-    end
 
-    -- Switch back to original profile
-    KE.db:SetProfile(currentProfile)
+        -- Switch back to original profile
+        KE.db:SetProfile(currentProfile)
+    end)
 
     return true, finalName
 end
@@ -472,11 +492,9 @@ function KitnEssentialsAPI:ImportProfile(profileString, profileKey)
     local success, finalName = ProfileManager:ImportProfile(profileString, profileKey)
     if not success then return end
 
-    -- Activate the imported profile
+    -- Activate the imported profile (fires the OnProfileChanged callback,
+    -- which refreshes without a ReloadUI)
     KE.db:SetProfile(finalName)
-
-    -- Refresh without ReloadUI
-    ProfileManager:RefreshAllModules()
 end
 
 --- Decode a profile string without importing
@@ -532,7 +550,6 @@ function KitnEssentialsAPI:SetProfile(profileKey)
     if not KE.db then return end
 
     KE.db:SetProfile(profileKey)
-    ProfileManager:RefreshAllModules()
 end
 
 --- Get all profile keys
