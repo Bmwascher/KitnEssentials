@@ -178,7 +178,7 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
         if KE.Profiler and KE.Profiler.RunCommand then
             KE.Profiler.RunCommand(profileRest)
         else
-            print("|cffFF008CKitn|r|cffffffffEssentials:|r profiler not loaded.")
+            KE:Print("profiler not loaded.")
         end
         return
     end

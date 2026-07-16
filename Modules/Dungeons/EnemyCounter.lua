@@ -63,8 +63,8 @@ local function GetEnemyCount()
     end
     -- Only print when count changes
     if DEBUG_EC and count ~= lastDebugCount then
-        for _, line in ipairs(debugLines --[[@as table]]) do print(line) end
-        print(("[EC] count=%d (was %d)"):format(count, lastDebugCount))
+        for _, line in ipairs(debugLines --[[@as table]]) do KE:Print(line) end
+        KE:Print(("[EC] count=%d (was %d)"):format(count, lastDebugCount))
         lastDebugCount = count
     end
     return count
@@ -189,29 +189,29 @@ end
 ---------------------------------------------------------------------------------
 
 function EC:NAME_PLATE_UNIT_ADDED(_, unit)
-    if DEBUG_EC then print("[EC] event=NP_ADDED", unit) end
+    if DEBUG_EC then KE:Print("[EC] event=NP_ADDED " .. tostring(unit)) end
     self:UpdateText()
 end
 
 function EC:NAME_PLATE_UNIT_REMOVED(_, unit)
-    if DEBUG_EC then print("[EC] event=NP_REMOVED", unit) end
+    if DEBUG_EC then KE:Print("[EC] event=NP_REMOVED " .. tostring(unit)) end
     self:UpdateText()
 end
 
 function EC:UNIT_FLAGS(_, unit)
     if unit and unit:find("nameplate", 1, true) then
-        if DEBUG_EC then print("[EC] event=UNIT_FLAGS", unit) end
+        if DEBUG_EC then KE:Print("[EC] event=UNIT_FLAGS " .. tostring(unit)) end
         self:UpdateText()
     end
 end
 
 function EC:PLAYER_REGEN_DISABLED()
-    if DEBUG_EC then print("[EC] event=REGEN_DISABLED") end
+    if DEBUG_EC then KE:Print("[EC] event=REGEN_DISABLED") end
     self:UpdateText()
 end
 
 function EC:PLAYER_REGEN_ENABLED()
-    if DEBUG_EC then print("[EC] event=REGEN_ENABLED") end
+    if DEBUG_EC then KE:Print("[EC] event=REGEN_ENABLED") end
     if self.db.CombatOnly then
         self.frame:Hide()
     else
