@@ -25,6 +25,7 @@ local GetPetActionInfo = GetPetActionInfo
 local GetShapeshiftFormInfo = GetShapeshiftFormInfo
 local getmetatable = getmetatable
 local table_insert = table.insert
+local wipe = wipe
 local _G = _G
 
 ---------------------------------------------------------------------------------
@@ -578,6 +579,8 @@ local function CalculateButtonPosition(index, layout, columns, rows, growLeft, b
     return dx, dy
 end
 
+local SetMouseoverPolling  -- defined below the fade closures; forward-declared for SkinBar
+
 ---------------------------------------------------------------------------------
 -- Layout
 ---------------------------------------------------------------------------------
@@ -607,6 +610,7 @@ local function SkinBar(cfg)
     container._fadeInDur = cfg.mouseover and cfg.mouseover.fadeInDuration or 0.3
     container._fadeOutDur = cfg.mouseover and cfg.mouseover.fadeOutDuration or 1
     container._mouseoverEnabled = mouseoverEnabled
+    SetMouseoverPolling(container, mouseoverEnabled)
     container._isMouseOver = false
     cfg.ke_container = container
 
@@ -632,19 +636,54 @@ end
 ---------------------------------------------------------------------------------
 -- Hooks
 ---------------------------------------------------------------------------------
+-- Shared mouseover poller: one frame, one GetCursorPosition() per tick, only
+-- alive while at least one container has mouseover enabled (detach-when-idle
+-- + cursor-cache perf patterns; replaces the per-container 10 Hz OnUpdate).
+local pollerContainers = {}
+local pollerFrame
+
+local function EnsurePollerFrame()
+    if pollerFrame then return end
+    pollerFrame = CreateFrame("Frame")
+    pollerFrame:Hide()
+    local elapsed = 0
+    pollerFrame:SetScript("OnUpdate", function(_, delta)
+        elapsed = elapsed + delta
+        if elapsed < 0.1 then return end
+        elapsed = 0
+        local cursorX, cursorY = GetCursorPosition()
+        for container in pairs(pollerContainers) do
+            local left, bottom, width, height = container:GetRect()
+            if left then
+                local scale = container:GetEffectiveScale()
+                local x, y = cursorX / scale, cursorY / scale
+                local isOver = x >= left and x <= (left + width) and y >= bottom and y <= (bottom + height)
+                if isOver and not container._isMouseOver then
+                    container._keFadeIn()
+                elseif not isOver and container._isMouseOver then
+                    container._keFadeOut()
+                end
+            end
+        end
+    end)
+end
+
+function SetMouseoverPolling(container, active)  -- assigns the forward-declared local from Step 0
+    if not container or not container._keFadeIn then return end
+    if active then
+        EnsurePollerFrame()
+        pollerContainers[container] = true
+        pollerFrame:Show()
+    else
+        pollerContainers[container] = nil
+        if pollerFrame and not next(pollerContainers) then pollerFrame:Hide() end
+    end
+end
+
 local function SetupMouseoverScript(container)
     if not container then return end
     if container._mouseoverScriptSetup then return end
     container._mouseoverScriptSetup = true
-
-    local function IsMouseOverContainer()
-        local left, bottom, width, height = container:GetRect()
-        if not left then return false end
-        local scale = container:GetEffectiveScale()
-        local x, y = GetCursorPosition()
-        x, y = x / scale, y / scale
-        return x >= left and x <= (left + width) and y >= bottom and y <= (bottom + height)
-    end
 
     local function FadeIn()
         if container._isMouseOver then return end
@@ -668,20 +707,9 @@ local function SetupMouseoverScript(container)
         KE:CombatSafeFade(container, alpha, dur)
     end
 
-    local pollInterval = 0.1
-    local elapsed = 0
-
-    container:SetScript("OnUpdate", function(self, delta)
-        elapsed = elapsed + delta
-        if elapsed < pollInterval then return end
-        elapsed = 0
-        local isOver = IsMouseOverContainer()
-        if isOver and not self._isMouseOver then
-            FadeIn()
-        elseif not isOver and self._isMouseOver then
-            FadeOut()
-        end
-    end)
+    container._keFadeIn = FadeIn
+    container._keFadeOut = FadeOut
+    SetMouseoverPolling(container, container._mouseoverEnabled)
 end
 
 -- Setup vehicle/bonusbar override for Bar1
@@ -1079,6 +1107,8 @@ function SK:UpdateBarMouseover(barKey)
     container._fadeInDur = fadeInDur
     container._fadeOutDur = fadeOutDur
     container._mouseoverEnabled = mouseoverEnabled
+    SetMouseoverPolling(container, mouseoverEnabled)
+    container._isMouseOver = false
 
     if not container._isMouseOver and not container._bonusBarActive then
         if mouseoverEnabled then
@@ -1335,4 +1365,7 @@ end
 function SK:OnDisable()
     self:UnregisterAllEvents()
     self:UnhookAll()
+    self._enableGen = (self._enableGen or 0) + 1
+    if pollerFrame then pollerFrame:Hide() end
+    wipe(pollerContainers)
 end
