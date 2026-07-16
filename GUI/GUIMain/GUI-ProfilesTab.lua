@@ -58,13 +58,14 @@ GUIFrame:RegisterContent("Profiles", function(scrollChild, yOffset)
         value = currentProfile,
         labelWidth = 100,
         callback = function(key)
-            if key == currentProfile then return end
+            -- Live lookup, not the page-build capture: the closure's
+            -- `currentProfile` goes stale after the first switch, silently
+            -- swallowing A→B→A while the page stays open (pre-existing bug).
+            if key == PM:GetCurrentProfile() then return end
 
             local success, err = PM:SetProfile(key)
             if not success then
                 KE:Print("Failed to switch profile: " .. (err or "Unknown error"))
-            else
-                KE:CreateReloadPrompt("Profile changed. Reload UI to apply?")
             end
         end,
     })

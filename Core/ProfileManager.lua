@@ -435,10 +435,49 @@ function ProfileManager:RefreshAllModules()
     -- Stop previews before refreshing anything
     if KE.PreviewManager then KE.PreviewManager:StopAllPreviews() end
 
-    -- Refresh module DB's and apply settings
-    for _, module in KitnEssentials:IterateModules() do
+    -- Sync module enabled state to the (possibly new) profile. Startup does
+    -- this in Core/Main.lua OnEnable; profile switches previously didn't —
+    -- modules enabled under the old profile kept their events/frames live,
+    -- and newly-enabled modules stayed dormant. Only modules that publish a
+    -- db.Enabled flag are synced; keSelfManagedEnable modules
+    -- (PositionController: its CDM Racials half runs independent of the
+    -- master toggle) manage their own state. Skin* modules are NEVER flipped
+    -- live — skinning applies destructively at enable and OnDisable has no
+    -- frame teardown — a mismatch prompts for the /reload that lets startup
+    -- apply the new flags (silently skipped when ElvUI handles skinning).
+    local skipSkinning = KE.ShouldNotLoadModule and KE:ShouldNotLoadModule()
+    local skinningChanged = false
+    for name, module in KitnEssentials:IterateModules() do
         if module.UpdateDB then module:UpdateDB() end
-        if module:IsEnabled() and module.ApplySettings then module:ApplySettings() end
+        local wasEnabled = module:IsEnabled()
+        local wantEnabled = module.db and module.db.Enabled
+        local stateMismatch = wantEnabled ~= nil and not module.keSelfManagedEnable
+            and (not wantEnabled) ~= (not wasEnabled)
+        local skinDeferred = false
+        if stateMismatch then
+            if name:find("^Skin") then
+                skinDeferred = true
+                if not skipSkinning then skinningChanged = true end
+            elseif wantEnabled then
+                KitnEssentials:EnableModule(name)
+            else
+                KitnEssentials:DisableModule(name)
+            end
+        end
+        -- Newly-enabled modules apply settings inside their own OnEnable
+        -- (AceAddon dispatches it from EnableModule); re-applying here would
+        -- double-run their setup (e.g. DragonRiding:OnEnable → ApplySettings).
+        -- Skin modules pending a reload must not apply the mismatched
+        -- profile's settings either (ActionBars:ApplySettings has no master
+        -- db.Enabled guard — it would destructively apply a disabled-intent
+        -- profile's config).
+        if wasEnabled and module:IsEnabled() and module.ApplySettings and not skinDeferred then
+            module:ApplySettings()
+        end
+    end
+
+    if skinningChanged and KE.SkinningReloadPrompt then
+        KE:SkinningReloadPrompt()
     end
 
     -- Refresh theme
