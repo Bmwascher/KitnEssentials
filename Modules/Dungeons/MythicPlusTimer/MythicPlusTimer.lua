@@ -481,7 +481,20 @@ function MPT:UpdateForces()
             if info.completed or (total > 0 and f.current >= total) then
                 f.completed = true
                 if not wasCompleted then
-                    f.clearTime = (run.elapsed or 0) - (info.elapsed or 0)
+                    -- Back-dated from the LIVE clock, same mixed-clock fix as
+                    -- the boss arm in UpdateObjectives: run.elapsed lags this
+                    -- event by up to ~1s while info.elapsed is fresh, and
+                    -- best.forces commits improve-only, so the skew bakes in
+                    -- (WarpDeplete back-dates its forces cap from the live
+                    -- clock too). Callers gate on run.active, so this never
+                    -- runs in CompleteRun's backfill; the completed guard is
+                    -- kept anyway to mirror UpdateObjectives' clock rule.
+                    local elapsedNow = run.elapsed or 0
+                    if not run.completed then
+                        local _, live = GetWorldElapsedTime(1)
+                        if live and live >= 0 then elapsedNow = live end
+                    end
+                    f.clearTime = elapsedNow - (info.elapsed or 0)
                 end
             end
             return
