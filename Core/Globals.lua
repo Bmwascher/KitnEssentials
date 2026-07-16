@@ -111,6 +111,28 @@ function KE:Print(msg)
     print(self:ColorTextByTheme("Kitn") .. "Essentials:|r " .. msg)
 end
 
+-- Run fn now, or defer it to the next PLAYER_REGEN_ENABLED when in combat
+-- lockdown. Queued closures run once, FIFO. Secure-frame mutations (state
+-- drivers, secure attributes, Show/Hide on protected frames) route through
+-- this instead of executing blocked mid-combat (CODE-04, 2026-07-13 audit).
+function KE:RunAfterCombat(fn)
+    if not InCombatLockdown() then
+        fn()
+        return
+    end
+    if not self._combatQueue then
+        self._combatQueue = {}
+        self._combatQueueFrame = CreateFrame("Frame")
+        self._combatQueueFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+        self._combatQueueFrame:SetScript("OnEvent", function()
+            local fns = KE._combatQueue
+            KE._combatQueue = {}
+            for i = 1, #fns do fns[i]() end
+        end)
+    end
+    self._combatQueue[#self._combatQueue + 1] = fn
+end
+
 -- Recommend disabling a redundant external addon when a KitnEssentials
 -- replacement module is enabled alongside it. Prints ONCE (the flag re-arms if
 -- the addon is later removed, so it warns again only if the addon returns). The
