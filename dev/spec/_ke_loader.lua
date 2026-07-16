@@ -196,4 +196,64 @@ function L.loadTargetedSpells(overrides)
     return modules["TargetedSpells"], KE
 end
 
+-- Core/ProfileManager.lua over a fake AceDB-shaped KE.db. Mirrors the AceDB
+-- semantics the manager depends on: SetProfile early-returns when already on
+-- that profile, and OnProfileChanged/OnProfileCopied/OnProfileReset fire
+-- SYNCHRONOUSLY inside the mutating call (AceDB-3.0.lua:452,482,619,658).
+-- Specs replicate Core/Main.lua's callback registration themselves.
+-- Returns PM, KE, db.
+function L.loadProfileManager(overrides)
+    installMock(overrides, { C_Timer = inertTimer() })
+    helpers.installAddonShim()
+    _G.LibStub = function() return setmetatable({}, { __index = function() return function() end end }) end
+    local callbacks = {}
+    local db = {
+        profiles = { Default = {} },
+        keys = { profile = "Default" },
+        global = {},
+    }
+    db.profile = db.profiles.Default
+    local function fire(event, ...)
+        for _, fn in ipairs(callbacks[event] or {}) do fn(...) end
+    end
+    function db:GetProfiles(into)
+        local list = into or {}
+        for name in pairs(self.profiles) do list[#list + 1] = name end
+        return list
+    end
+    function db:GetCurrentProfile() return self.keys.profile end
+    function db:SetProfile(name)
+        if name == self.keys.profile then return end
+        self.profiles[name] = self.profiles[name] or {}
+        self.keys.profile = name
+        self.profile = self.profiles[name]
+        fire("OnProfileChanged", self, name)
+    end
+    function db:CopyProfile(source)
+        local target = self.profiles[self.keys.profile]
+        for k in pairs(target) do target[k] = nil end
+        for k, v in pairs(self.profiles[source] or {}) do target[k] = v end
+        fire("OnProfileCopied", self, source)
+    end
+    function db:ResetProfile()
+        local target = self.profiles[self.keys.profile]
+        for k in pairs(target) do target[k] = nil end
+        fire("OnProfileReset", self)
+    end
+    function db:DeleteProfile(name) self.profiles[name] = nil end
+    db.RegisterCallback = function(_, event, fn)
+        callbacks[event] = callbacks[event] or {}
+        callbacks[event][#callbacks[event] + 1] = fn
+    end
+    -- RefreshAllModules walks _G.KitnEssentials:IterateModules(); give the
+    -- addon shim the minimal surface so profile ops don't crash in specs
+    -- that don't install their own fake module registry.
+    _G.KitnEssentials.IterateModules = _G.KitnEssentials.IterateModules or function() return pairs({}) end
+    _G.KitnEssentials.EnableModule = _G.KitnEssentials.EnableModule or function() end
+    _G.KitnEssentials.DisableModule = _G.KitnEssentials.DisableModule or function() end
+    local KE = { db = db }
+    helpers.loadModule("Core/ProfileManager.lua", KE)
+    return KE.ProfileManager, KE, db
+end
+
 return L

@@ -182,7 +182,8 @@ function ProfileManager:RenameProfile(oldName, newName)
 
     if not oldExists then return false, "Profile '" .. oldName .. "' does not exist" end
 
-    local isCurrentProfile = (oldName == self:GetCurrentProfile())
+    local previousProfile = self:GetCurrentProfile()
+    local isCurrentProfile = (oldName == previousProfile)
     local isGlobalProfile = KE.db.global and KE.db.global.GlobalProfile == oldName
 
     -- Create new profile with old profile's data
@@ -191,8 +192,9 @@ function ProfileManager:RenameProfile(oldName, newName)
     -- Copy from old profile
     KE.db:CopyProfile(oldName)
 
-    -- If old was current, stay on new; otherwise switch back
-    if not isCurrentProfile then KE.db:SetProfile(self:GetCurrentProfile()) end
+    -- If old was current, stay on new; otherwise restore the profile that was
+    -- active before the rename (GetCurrentProfile() would return newName here).
+    if not isCurrentProfile then KE.db:SetProfile(previousProfile) end
 
     -- Delete old profile
     KE.db:DeleteProfile(oldName)
