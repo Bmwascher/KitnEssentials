@@ -15,6 +15,34 @@
 - Icon order no longer shuffles between refreshes
 - The destroy-all-totems macro now covers every totem slot; its fifth click previously pointed at a button that was never created
 
+### Profiles
+- **Fixed:** switching profiles now applies everything live — modules turn on and off to match the new profile immediately, no `/reload` required. The one exception is Skinning modules, whose changes can't be unwound in place: if a switch changes one of those, you get a single reload prompt (and only then)
+- **Fixed:** renaming your active profile no longer leaves the addon pointing at the old name
+- **Fixed:** switching from the Profiles page back to a profile you'd just left silently did nothing until the page was reopened — it works in place now
+- Profile copies, renames, and resets used to refresh every module several times over; each operation now applies exactly once
+- Toggling a module off and on while its settings page is open brings its preview back immediately, instead of waiting for you to visit another section and return
+
+### Skinned Action Bars
+- **Fixed:** changing mouseover fade settings while hovering a bar now takes effect on the spot, instead of holding the old behavior until the mouse left
+- **Fixed:** repeatedly disabling and re-enabling the bag-bar mouseover fade stacked up stale fade behavior behind the scenes — teardown is clean now
+- All mouseover bars now share one lightweight cursor watcher instead of each running their own
+
+### Skyriding UI
+- **Fixed:** the settings preview's demo speed ("420%") could stick on the real HUD after closing settings, lingering until your first glide — it's cleared the moment the preview ends
+- **Fixed:** disabling the module while its preview was showing could leave a speed updater running in the background
+
+### Dungeon Casts
+- **Fixed:** the "Show Raid Target Icon" toggle now applies to bars on the spot — the preview previously ignored the flip entirely
+
+### World Marker Cycler
+- **Fixed:** disabling the module now releases its place/clear keybinds immediately. They previously stayed bound until a `/reload` — and a disable during combat left them bound even after that combat ended
+
+### General
+- Settings changes that touch protected frames — action-bar skinning, the Skyriding UI, Recuperate's button, world-marker keybinds — made during combat now apply the moment combat ends, instead of being silently dropped
+- **Fixed:** the mana percent unit-frame tag could error during combat in Midnight
+- **Fixed:** the TalkingHead auto-hide kept working only until you toggled Automation off and on
+- All chat output now uses the standard "KitnEssentials:" prefix (a few messages said "Kitn:")
+
 ---
 
 ## v3.4.1
