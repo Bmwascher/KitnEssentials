@@ -22,6 +22,19 @@ _G.KitnEssentials = KitnEssentials
 -- KE-level state (singletons, helpers). Not a public API.
 _G.KITNESSENTIALS_NS = KE
 
+-- Every module enable/disable funnels through these two AceAddon methods
+-- (GUI checkboxes, the profile enable-state sync, and module:Enable()
+-- internally), so this is the one seam that keeps GUI previews honest
+-- across toggles — the handler no-ops unless the GUI or edit mode is
+-- showing previews. PreviewManager exists: Globals.lua loads before this
+-- file (Core.xml).
+hooksecurefunc(KitnEssentials, "EnableModule", function(_, name)
+    KE.PreviewManager:OnModuleEnableChanged(name)
+end)
+hooksecurefunc(KitnEssentials, "DisableModule", function(_, name)
+    KE.PreviewManager:OnModuleEnableChanged(name)
+end)
+
 KE.encounterActive = false
 
 ---------------------------------------------------------------------------------
@@ -60,7 +73,7 @@ function KitnEssentials:OnInitialize()
         if KE._MigrateDungeonTimersDB then KE._MigrateDungeonTimersDB() end
         KE:FillProfileDefaults()
         KE:ValidateProfileFonts()
-        if KE.ProfileManager then
+        if KE.ProfileManager and not KE.ProfileManager:IsRefreshSuppressed() then
             KE.ProfileManager:RefreshAllModules()
         end
     end)
@@ -68,7 +81,7 @@ function KitnEssentials:OnInitialize()
         if KE._MigrateDungeonTimersDB then KE._MigrateDungeonTimersDB() end
         KE:FillProfileDefaults()
         KE:ValidateProfileFonts()
-        if KE.ProfileManager then
+        if KE.ProfileManager and not KE.ProfileManager:IsRefreshSuppressed() then
             KE.ProfileManager:RefreshAllModules()
         end
     end)
@@ -76,7 +89,7 @@ function KitnEssentials:OnInitialize()
         if KE._MigrateDungeonTimersDB then KE._MigrateDungeonTimersDB() end
         KE:FillProfileDefaults()
         KE:ValidateProfileFonts()
-        if KE.ProfileManager then
+        if KE.ProfileManager and not KE.ProfileManager:IsRefreshSuppressed() then
             KE.ProfileManager:RefreshAllModules()
         end
     end)

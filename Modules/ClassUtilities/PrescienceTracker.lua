@@ -250,7 +250,7 @@ function PT:OnUnitAura(_, unit, info)
                         if not issecretvalue(aura.expirationTime) then
                             tracked.expirationTime = aura.expirationTime
                             tracked.duration = aura.duration or 0
-                            tracked.isCrit = aura.points and aura.points[1] == 6 and aura.spellId == PRESCIENCE_ID
+                            tracked.isCrit = aura.points and not issecretvalue(aura.points) and aura.points[1] == 6 and aura.spellId == PRESCIENCE_ID
                             changed = true
                         end
                     end

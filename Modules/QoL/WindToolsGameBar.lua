@@ -33,7 +33,9 @@ local select = select
 -- UpdateBar hooks. Off in shipped code; flip true to verify hide/show
 -- transitions in the chat log (matches project DEBUG_X convention).
 local DEBUG_WTGB = false
-local function dprint(...) if DEBUG_WTGB then KE:Print("[WTGB]", ...) end end
+local function dprint(msg)
+    if DEBUG_WTGB then KE:Print("[WTGB] " .. tostring(msg)) end
+end
 
 ---------------------------------------------------------------------------------
 -- Constants
@@ -137,7 +139,7 @@ function WT:ApplyState()
         self._hardHidden = false
         local s = BuildVisibilityString(self.db)
         RegisterStateDriver(bar, "visibility", s)
-        dprint("driver →", s)
+        dprint("driver → " .. s)
     end
 end
 

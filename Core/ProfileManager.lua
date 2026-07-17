@@ -22,6 +22,25 @@ local time = time
 local wipe = wipe
 local next = next
 
+-- Refresh policy: the AceDB callbacks in Core/Main.lua are the single
+-- refresh trigger (they also catch third-party KE.db:SetProfile calls).
+-- Multi-hop operations wrap their intermediate SetProfile/CopyProfile hops
+-- in withRefreshSuppressed so per-hop callbacks skip the refresh (the
+-- defaults-fill/migration in those callbacks still runs on every hop), then
+-- run exactly one RefreshAllModules at the end.
+local suppressRefresh = false
+
+local function withRefreshSuppressed(fn)
+    suppressRefresh = true
+    local ok, err = pcall(fn)
+    suppressRefresh = false
+    if not ok then error(err, 0) end
+end
+
+function ProfileManager:IsRefreshSuppressed()
+    return suppressRefresh
+end
+
 ---------------------------------------------------------------------------------
 -- Profile CRUD
 ---------------------------------------------------------------------------------
@@ -51,7 +70,6 @@ function ProfileManager:SetProfile(profileName)
 
     -- SetProfile handles creation if profile doesn't exist
     KE.db:SetProfile(profileName)
-    self:RefreshAllModules()
 
     return true
 end
@@ -74,13 +92,11 @@ function ProfileManager:CreateProfile(profileName)
 
     -- Create by setting to it
     local currentProfile = self:GetCurrentProfile()
-    KE.db:SetProfile(profileName)
-
-    -- Reset to defaults
-    KE.db:ResetProfile()
-
-    -- Switch back to original profile
-    KE.db:SetProfile(currentProfile)
+    withRefreshSuppressed(function()
+        KE.db:SetProfile(profileName)
+        KE.db:ResetProfile()
+        KE.db:SetProfile(currentProfile)
+    end)
 
     return true
 end
@@ -111,13 +127,15 @@ function ProfileManager:CopyProfile(sourceProfile, targetProfile)
     -- AceDB's CopyProfile copies TO the current profile FROM the source
     local currentProfile = self:GetCurrentProfile()
 
-    -- If target is not current, switch to target first
-    if targetProfile ~= currentProfile then KE.db:SetProfile(targetProfile) end
+    withRefreshSuppressed(function()
+        -- If target is not current, switch to target first
+        if targetProfile ~= currentProfile then KE.db:SetProfile(targetProfile) end
 
-    KE.db:CopyProfile(sourceProfile)
+        KE.db:CopyProfile(sourceProfile)
 
-    -- Switch back if needed
-    if targetProfile ~= currentProfile then KE.db:SetProfile(currentProfile) end
+        -- Switch back if needed
+        if targetProfile ~= currentProfile then KE.db:SetProfile(currentProfile) end
+    end)
 
     self:RefreshAllModules()
     return true
@@ -182,20 +200,25 @@ function ProfileManager:RenameProfile(oldName, newName)
 
     if not oldExists then return false, "Profile '" .. oldName .. "' does not exist" end
 
-    local isCurrentProfile = (oldName == self:GetCurrentProfile())
+    local previousProfile = self:GetCurrentProfile()
+    local isCurrentProfile = (oldName == previousProfile)
     local isGlobalProfile = KE.db.global and KE.db.global.GlobalProfile == oldName
 
-    -- Create new profile with old profile's data
-    KE.db:SetProfile(newName)
+    withRefreshSuppressed(function()
+        -- Create new profile with old profile's data
+        KE.db:SetProfile(newName)
 
-    -- Copy from old profile
-    KE.db:CopyProfile(oldName)
+        -- Copy from old profile
+        KE.db:CopyProfile(oldName)
 
-    -- If old was current, stay on new; otherwise switch back
-    if not isCurrentProfile then KE.db:SetProfile(self:GetCurrentProfile()) end
+        -- If old was current, stay on new; otherwise restore the profile that
+        -- was active before the rename (GetCurrentProfile() would return
+        -- newName here).
+        if not isCurrentProfile then KE.db:SetProfile(previousProfile) end
 
-    -- Delete old profile
-    KE.db:DeleteProfile(oldName)
+        -- Delete old profile
+        KE.db:DeleteProfile(oldName)
+    end)
 
     -- Update global profile reference if needed
     if isGlobalProfile then KE.db.global.GlobalProfile = newName end
@@ -210,7 +233,6 @@ function ProfileManager:ResetProfile()
     if not KE.db then return false end
 
     KE.db:ResetProfile()
-    self:RefreshAllModules()
     return true
 end
 
@@ -231,7 +253,6 @@ function ProfileManager:SetUseGlobalProfile(enabled)
         KE.db:SetProfile(globalProfile)
     end
 
-    self:RefreshAllModules()
     return true
 end
 
@@ -255,7 +276,6 @@ function ProfileManager:SetGlobalProfile(profileName)
     -- If global mode is active, switch to this profile
     if KE.db.global.UseGlobalProfile then
         KE.db:SetProfile(profileName)
-        self:RefreshAllModules()
     end
 
     return true
@@ -383,20 +403,22 @@ function ProfileManager:ImportProfile(importString, targetName)
     -- Create the profile
     local currentProfile = self:GetCurrentProfile()
 
-    -- Switch to new profile (creates it)
-    KE.db:SetProfile(finalName)
+    withRefreshSuppressed(function()
+        -- Switch to new profile (creates it)
+        KE.db:SetProfile(finalName)
 
-    -- Copy imported data to profile
-    local profileRef = KE.db.profile
-    if profileRef then
-        wipe(profileRef)
-        for k, v in pairs(profileData) do
-            profileRef[k] = v
+        -- Copy imported data to profile
+        local profileRef = KE.db.profile
+        if profileRef then
+            wipe(profileRef)
+            for k, v in pairs(profileData) do
+                profileRef[k] = v
+            end
         end
-    end
 
-    -- Switch back to original profile
-    KE.db:SetProfile(currentProfile)
+        -- Switch back to original profile
+        KE.db:SetProfile(currentProfile)
+    end)
 
     return true, finalName
 end
@@ -413,10 +435,49 @@ function ProfileManager:RefreshAllModules()
     -- Stop previews before refreshing anything
     if KE.PreviewManager then KE.PreviewManager:StopAllPreviews() end
 
-    -- Refresh module DB's and apply settings
-    for _, module in KitnEssentials:IterateModules() do
+    -- Sync module enabled state to the (possibly new) profile. Startup does
+    -- this in Core/Main.lua OnEnable; profile switches previously didn't —
+    -- modules enabled under the old profile kept their events/frames live,
+    -- and newly-enabled modules stayed dormant. Only modules that publish a
+    -- db.Enabled flag are synced; keSelfManagedEnable modules
+    -- (PositionController: its CDM Racials half runs independent of the
+    -- master toggle) manage their own state. Skin* modules are NEVER flipped
+    -- live — skinning applies destructively at enable and OnDisable has no
+    -- frame teardown — a mismatch prompts for the /reload that lets startup
+    -- apply the new flags (silently skipped when ElvUI handles skinning).
+    local skipSkinning = KE.ShouldNotLoadModule and KE:ShouldNotLoadModule()
+    local skinningChanged = false
+    for name, module in KitnEssentials:IterateModules() do
         if module.UpdateDB then module:UpdateDB() end
-        if module:IsEnabled() and module.ApplySettings then module:ApplySettings() end
+        local wasEnabled = module:IsEnabled()
+        local wantEnabled = module.db and module.db.Enabled
+        local stateMismatch = wantEnabled ~= nil and not module.keSelfManagedEnable
+            and (not wantEnabled) ~= (not wasEnabled)
+        local skinDeferred = false
+        if stateMismatch then
+            if name:find("^Skin") then
+                skinDeferred = true
+                if not skipSkinning then skinningChanged = true end
+            elseif wantEnabled then
+                KitnEssentials:EnableModule(name)
+            else
+                KitnEssentials:DisableModule(name)
+            end
+        end
+        -- Newly-enabled modules apply settings inside their own OnEnable
+        -- (AceAddon dispatches it from EnableModule); re-applying here would
+        -- double-run their setup (e.g. DragonRiding:OnEnable → ApplySettings).
+        -- Skin modules pending a reload must not apply the mismatched
+        -- profile's settings either (ActionBars:ApplySettings has no master
+        -- db.Enabled guard — it would destructively apply a disabled-intent
+        -- profile's config).
+        if wasEnabled and module:IsEnabled() and module.ApplySettings and not skinDeferred then
+            module:ApplySettings()
+        end
+    end
+
+    if skinningChanged and KE.SkinningReloadPrompt then
+        KE:SkinningReloadPrompt()
     end
 
     -- Refresh theme
@@ -470,11 +531,9 @@ function KitnEssentialsAPI:ImportProfile(profileString, profileKey)
     local success, finalName = ProfileManager:ImportProfile(profileString, profileKey)
     if not success then return end
 
-    -- Activate the imported profile
+    -- Activate the imported profile (fires the OnProfileChanged callback,
+    -- which refreshes without a ReloadUI)
     KE.db:SetProfile(finalName)
-
-    -- Refresh without ReloadUI
-    ProfileManager:RefreshAllModules()
 end
 
 --- Decode a profile string without importing
@@ -530,7 +589,6 @@ function KitnEssentialsAPI:SetProfile(profileKey)
     if not KE.db then return end
 
     KE.db:SetProfile(profileKey)
-    ProfileManager:RefreshAllModules()
 end
 
 --- Get all profile keys

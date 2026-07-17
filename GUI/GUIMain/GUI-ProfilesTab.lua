@@ -58,13 +58,14 @@ GUIFrame:RegisterContent("Profiles", function(scrollChild, yOffset)
         value = currentProfile,
         labelWidth = 100,
         callback = function(key)
-            if key == currentProfile then return end
+            -- Live lookup, not the page-build capture: the closure's
+            -- `currentProfile` goes stale after the first switch, silently
+            -- swallowing A→B→A while the page stays open (pre-existing bug).
+            if key == PM:GetCurrentProfile() then return end
 
             local success, err = PM:SetProfile(key)
             if not success then
                 KE:Print("Failed to switch profile: " .. (err or "Unknown error"))
-            else
-                KE:CreateReloadPrompt("Profile changed. Reload UI to apply?")
             end
         end,
     })
@@ -388,52 +389,6 @@ GUIFrame:RegisterContent("Profiles", function(scrollChild, yOffset)
     })
     row4b:AddWidget(exportBtn, 1)
     card4:AddRow(row4b, Theme.rowHeightLast, 0)
-
-    --[[ BACKUP: Original import with inline name input
-    card4:AddLabel("Import Profile")
-
-    local row4b = GUIFrame:CreateRow(card4.content, 40)
-    local importNameInput = GUIFrame:CreateEditBox(row4b, "Profile Name (leave empty for default)", "", function() end)
-    row4b:AddWidget(importNameInput, 1)
-    card4:AddRow(row4b, 40)
-
-    local row4c = GUIFrame:CreateRow(card4.content, 36)
-    local importBtn = GUIFrame:CreateButton(row4c, "Import Profile from String", {
-        callback = function()
-            KE:CreatePrompt(
-                "Import Profile",
-                "Paste import string and press Enter",
-                true,
-                "",
-                false, nil, nil, nil, nil,
-                function(importString)
-                    if importString and importString ~= "" then
-                        local targetName = importNameInput:GetValue()
-                        if targetName == "" then targetName = nil end
-
-                        local success, nameOrErr = PM:ImportProfile(importString, targetName)
-                        if success then
-                            KE:Print("Imported profile: " .. nameOrErr)
-                            importNameInput:SetValue("")
-                            C_Timer.After(0.1, function()
-                                if GUIFrame.mainFrame and GUIFrame.mainFrame:IsShown() then
-                                    GUIFrame:RefreshContent()
-                                end
-                            end)
-                        else
-                            KE:Print("Import failed: " .. (nameOrErr or "Unknown error"))
-                        end
-                    end
-                end,
-                nil,
-                "Import",
-                "Cancel"
-            )
-        end
-    })
-    row4c:AddWidget(importBtn, 1)
-    card4:AddRow(row4c, 36)
-    --]]
 
     yOffset = card4:GetNextOffset()
 

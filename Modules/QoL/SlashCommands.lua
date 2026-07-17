@@ -17,13 +17,11 @@ local IsInGroup = IsInGroup
 local UnitIsGroupLeader = UnitIsGroupLeader
 local _G = _G
 local table_insert = table.insert
-local print = print
 
 ---------------------------------------------------------------------------------
 -- Module State
 ---------------------------------------------------------------------------------
 local db
-local PREFIX = "|cffFF008CKitn:|r "
 
 ---------------------------------------------------------------------------------
 -- Core Logic
@@ -118,9 +116,9 @@ local function RegisterLeaveParty()
     function SlashCmdList.KE_LEAVE(msg, editbox)
         if IsInGroup() then
             C_PartyInfo.LeaveParty()
-            print(PREFIX .. "Left the group.")
+            KE:Print("Left the group.")
         else
-            print(PREFIX .. "You are not in a group.")
+            KE:Print("You are not in a group.")
         end
     end
     leaveRegistered = true
@@ -144,9 +142,9 @@ local function RegisterResetInstances()
     function SlashCmdList.KE_RESET(msg, editbox)
         if not IsInGroup() or UnitIsGroupLeader("player") then
             ResetInstances()
-            print(PREFIX .. "Instances reset.")
+            KE:Print("Instances reset.")
         else
-            print(PREFIX .. "Only the party leader can reset instances.")
+            KE:Print("Only the party leader can reset instances.")
         end
     end
     resetRegistered = true
@@ -171,7 +169,7 @@ local function RegisterMute()
         local newVal = current == "1" and "0" or "1"
         SetCVar("Sound_EnableAllSound", newVal)
         local status = newVal == "1" and "unmuted" or "muted"
-        print(PREFIX .. "Sound " .. status .. ".")
+        KE:Print("Sound " .. status .. ".")
     end
     muteRegistered = true
 end
@@ -195,7 +193,7 @@ local function RegisterMusic()
         local newVal = current == "1" and "0" or "1"
         SetCVar("Sound_EnableMusic", newVal)
         local status = newVal == "1" and "enabled" or "disabled"
-        print(PREFIX .. "Music " .. status .. ".")
+        KE:Print("Music " .. status .. ".")
     end
     musicRegistered = true
 end
@@ -247,7 +245,7 @@ local function RegisterKitnCommands()
         if PImod and PImod:IsEnabled() then
             PImod:SetPITarget()
         else
-            print(PREFIX .. "PI Macro Builder is not enabled.")
+            KE:Print("PI Macro Builder is not enabled.")
         end
     end
 
@@ -259,38 +257,38 @@ local function RegisterKitnCommands()
                 frame:Clear()
             end
         end
-        print(PREFIX .. "Chat cleared.")
+        KE:Print("Chat cleared.")
     end
 
     -- /kitn chatbubbles — toggle chat bubbles
     KitnCommands["chatbubbles"] = function()
         local enabled = ToggleCVar("chatBubbles")
-        print(PREFIX .. "Chat bubbles " .. (enabled and "enabled" or "disabled") .. ".")
+        KE:Print("Chat bubbles " .. (enabled and "enabled" or "disabled") .. ".")
     end
 
     -- /kitn nameplates — toggle enemy nameplates
     KitnCommands["nameplates"] = function()
         local enabled = ToggleCVar("nameplateShowEnemies")
-        print(PREFIX .. "Enemy nameplates " .. (enabled and "enabled" or "disabled") .. ".")
+        KE:Print("Enemy nameplates " .. (enabled and "enabled" or "disabled") .. ".")
     end
 
     -- /kitn friendplates — toggle friendly nameplates
     KitnCommands["friendplates"] = function()
         local enabled = ToggleCVar("nameplateShowFriends")
-        print(PREFIX .. "Friendly nameplates " .. (enabled and "enabled" or "disabled") .. ".")
+        KE:Print("Friendly nameplates " .. (enabled and "enabled" or "disabled") .. ".")
     end
 
     -- /kitn actioncam — toggle action camera
     KitnCommands["actioncam"] = function()
         local enabled = ToggleCVar("test_cameraOverShoulder")
         SetCVar("test_cameraDynamicPitch", enabled and "1" or "0")
-        print(PREFIX .. "Action camera " .. (enabled and "enabled" or "disabled") .. ".")
+        KE:Print("Action camera " .. (enabled and "enabled" or "disabled") .. ".")
     end
 
     -- /kitn errors — toggle Lua error display
     KitnCommands["errors"] = function()
         local enabled = ToggleCVar("scriptErrors")
-        print(PREFIX .. "Lua errors " .. (enabled and "shown" or "hidden") .. ".")
+        KE:Print("Lua errors " .. (enabled and "shown" or "hidden") .. ".")
     end
 
     -- Slash lines (printed by /kitn slash)

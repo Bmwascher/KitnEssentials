@@ -101,10 +101,12 @@ end
 function REC:UpdateStateDriver()
     if not self.button then return end
     if self.isPreview then return end
-
-    UnregisterStateDriver(self.button, "visibility")
-    RegisterStateDriver(self.button, "visibility", self:GetVisibilityString())
-    self:UpdateAlpha()
+    KE:RunAfterCombat(function()
+        if self.isPreview or not self.button then return end
+        UnregisterStateDriver(self.button, "visibility")
+        RegisterStateDriver(self.button, "visibility", self:GetVisibilityString())
+        self:UpdateAlpha()
+    end)
 end
 
 ---------------------------------------------------------------------------------
@@ -161,8 +163,11 @@ end
 ---------------------------------------------------------------------------------
 function REC:OnEnable()
     if not self.db.Enabled then return end
-    self:CreateButton()
-    self:RegWithEditMode()
+    KE:RunAfterCombat(function()
+        if not self:IsEnabled() then return end
+        self:CreateButton()
+        self:RegWithEditMode()
+    end)
     C_Timer.After(0.5, function()
         self:ApplySettings()
     end)
@@ -177,11 +182,14 @@ end
 
 function REC:OnDisable()
     self:UnregisterAllEvents()
-    if self.button then
-        UnregisterStateDriver(self.button, "visibility")
-        self.button:Hide()
-    end
     self.isPreview = false
+    if self.button then
+        KE:RunAfterCombat(function()
+            if self:IsEnabled() or not self.button then return end
+            UnregisterStateDriver(self.button, "visibility")
+            self.button:Hide()
+        end)
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -204,6 +212,7 @@ end
 -- Preview
 ---------------------------------------------------------------------------------
 function REC:ShowPreview()
+    if InCombatLockdown() then return end
     if not self.button then self:CreateButton() end
     self:RegWithEditMode()
     self.isPreview = true
@@ -216,10 +225,13 @@ end
 function REC:HidePreview()
     self.isPreview = false
     if not self.button then return end
-    if self.db.Enabled then
-        RegisterStateDriver(self.button, "visibility", self:GetVisibilityString())
-        self:UpdateAlpha()
-    else
-        self.button:Hide()
-    end
+    KE:RunAfterCombat(function()
+        if self.isPreview or not self.button then return end
+        if self.db.Enabled then
+            RegisterStateDriver(self.button, "visibility", self:GetVisibilityString())
+            self:UpdateAlpha()
+        else
+            self.button:Hide()
+        end
+    end)
 end

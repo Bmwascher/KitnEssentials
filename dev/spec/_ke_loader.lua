@@ -76,7 +76,10 @@ end
 
 -- Core/Globals.lua. The KE seed carries the two Core/Colors.lua members
 -- Globals reads (Theme accent + ColorTextByTheme — Colors loads first
--- in-game). Returns the KE table.
+-- in-game). Returns the KE table, plus a table that the geterrorhandler
+-- stub appends xpcall-caught error messages into (used by the
+-- KE:RunAfterCombat drain spec to assert an errored closure still reaches
+-- the error handler).
 function L.loadGlobals(overrides)
     installMock(overrides, { C_Timer = inertTimer() })
     helpers.installAddonShim()
@@ -101,11 +104,20 @@ function L.loadGlobals(overrides)
     _G.ReloadUI = function() end
     _G.GetSpecialization = function() return 2 end
     _G.GetSpecializationRole = function() return "HEALER" end   -- healer-context live path reachable
+    _G.UnitClass = function() return "Mock", "EVOKER" end       -- PreviewManager classRestriction gate
+    -- geterrorhandler() returns Blizzard's current error handler function;
+    -- KE:RunAfterCombat's drain loop passes it to xpcall so one closure's
+    -- error can't abort the rest of the queue. Not stubbed by _wow_mock, so
+    -- record here in the same style as the frames it returns for firing events.
+    local caughtErrors = {}
+    _G.geterrorhandler = function()
+        return function(err) caughtErrors[#caughtErrors + 1] = err end
+    end
     local KE = {
         Theme = { accent = { 1, 0, 0.549, 1 } },
         ColorTextByTheme = function(_, text) return text end,
     }
-    return helpers.loadModule("Core/Globals.lua", KE)
+    return helpers.loadModule("Core/Globals.lua", KE), caughtErrors
 end
 
 -- Modules/DamageMeter/Core.lua (KE.DamageMeter is set at file scope).
@@ -194,6 +206,66 @@ function L.loadTargetedSpells(overrides)
     local KE = { Print = function() end, curves = {} }
     helpers.loadModule("Modules/Dungeons/TargetedSpells.lua", KE)
     return modules["TargetedSpells"], KE
+end
+
+-- Core/ProfileManager.lua over a fake AceDB-shaped KE.db. Mirrors the AceDB
+-- semantics the manager depends on: SetProfile early-returns when already on
+-- that profile, and OnProfileChanged/OnProfileCopied/OnProfileReset fire
+-- SYNCHRONOUSLY inside the mutating call (AceDB-3.0.lua:452,482,619,658).
+-- Specs replicate Core/Main.lua's callback registration themselves.
+-- Returns PM, KE, db.
+function L.loadProfileManager(overrides)
+    installMock(overrides, { C_Timer = inertTimer() })
+    helpers.installAddonShim()
+    _G.LibStub = function() return setmetatable({}, { __index = function() return function() end end }) end
+    local callbacks = {}
+    local db = {
+        profiles = { Default = {} },
+        keys = { profile = "Default" },
+        global = {},
+    }
+    db.profile = db.profiles.Default
+    local function fire(event, ...)
+        for _, fn in ipairs(callbacks[event] or {}) do fn(...) end
+    end
+    function db:GetProfiles(into)
+        local list = into or {}
+        for name in pairs(self.profiles) do list[#list + 1] = name end
+        return list
+    end
+    function db:GetCurrentProfile() return self.keys.profile end
+    function db:SetProfile(name)
+        if name == self.keys.profile then return end
+        self.profiles[name] = self.profiles[name] or {}
+        self.keys.profile = name
+        self.profile = self.profiles[name]
+        fire("OnProfileChanged", self, name)
+    end
+    function db:CopyProfile(source)
+        local target = self.profiles[self.keys.profile]
+        for k in pairs(target) do target[k] = nil end
+        for k, v in pairs(self.profiles[source] or {}) do target[k] = v end
+        fire("OnProfileCopied", self, source)
+    end
+    function db:ResetProfile()
+        local target = self.profiles[self.keys.profile]
+        for k in pairs(target) do target[k] = nil end
+        fire("OnProfileReset", self)
+    end
+    function db:DeleteProfile(name) self.profiles[name] = nil end
+    db.RegisterCallback = function(_, event, fn)
+        callbacks[event] = callbacks[event] or {}
+        callbacks[event][#callbacks[event] + 1] = fn
+    end
+    -- RefreshAllModules walks _G.KitnEssentials:IterateModules(); give the
+    -- addon shim the minimal surface so profile ops don't crash in specs
+    -- that don't install their own fake module registry.
+    _G.KitnEssentials.IterateModules = _G.KitnEssentials.IterateModules or function() return pairs({}) end
+    _G.KitnEssentials.EnableModule = _G.KitnEssentials.EnableModule or function() end
+    _G.KitnEssentials.DisableModule = _G.KitnEssentials.DisableModule or function() end
+    local KE = { db = db }
+    helpers.loadModule("Core/ProfileManager.lua", KE)
+    return KE.ProfileManager, KE, db
 end
 
 return L

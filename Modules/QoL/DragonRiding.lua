@@ -674,11 +674,23 @@ end
 
 function DR:HidePreview()
     self.isPreview = false
+    -- Clear the preview's demo speed ("420%", ApplySettings) on the way out:
+    -- UpdateSpeed's not-gliding branch only clears when its dirty-check cache
+    -- is non-nil, and the preview writer nils the cache — so without this,
+    -- mounting shows the stale demo text until the first real glide renders.
+    if self.speedText then
+        self.speedText:SetText("")
+        self._lastSpeedPct = nil
+    end
     if self.parent then
-        RegisterStateDriver(self.parent, "visibility", "[bonusbar:5] show; hide")
-        if self.parent:IsShown() then
-            self:OnShowHandler()
-        end
+        KE:RunAfterCombat(function()
+            if not self:IsEnabled() then return end
+            if self.isPreview or not self.parent then return end
+            RegisterStateDriver(self.parent, "visibility", "[bonusbar:5] show; hide")
+            if self.parent:IsShown() then
+                self:OnShowHandler()
+            end
+        end)
     end
 end
 
@@ -721,6 +733,7 @@ function DR:OnShowHandler()
     self.secondWindFrame:RegisterEvent("SPELL_UPDATE_CHARGES")
     self.secondWindFrame:SetScript("OnEvent", function() UpdateSecondWind(self) end)
 
+    if self.speedTicker then self.speedTicker:Cancel() end
     self.speedTicker = C_Timer.NewTicker(0.05, function() UpdateSpeed(self) end)
 
     UpdateVigor(self)
@@ -765,13 +778,19 @@ function DR:OnEnable()
         self._parentHooked = true
     end
 
-    RegisterStateDriver(self.parent, "visibility", "[bonusbar:5] show; hide")
+    KE:RunAfterCombat(function()
+        if not self:IsEnabled() then return end
+        RegisterStateDriver(self.parent, "visibility", "[bonusbar:5] show; hide")
+    end)
 end
 
 function DR:OnDisable()
     if self.parent then
-        self.parent:Hide()
-        UnregisterStateDriver(self.parent, "visibility")
+        KE:RunAfterCombat(function()
+            if self:IsEnabled() or not self.parent then return end
+            self.parent:Hide()
+            UnregisterStateDriver(self.parent, "visibility")
+        end)
     end
 
     if self.speedTicker then

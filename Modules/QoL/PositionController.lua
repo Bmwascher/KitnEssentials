@@ -19,6 +19,11 @@ if not KitnEssentials then return end
 ---@class PositionController: AceModule, AceEvent-3.0
 local PC = KitnEssentials:NewModule("PositionController", "AceEvent-3.0")
 
+-- Profile state-sync opt-out: the CDM Racials half runs independent of the
+-- master db.Enabled toggle (see OnInitialize) — ProfileManager must never
+-- auto-disable this module on profile switch.
+PC.keSelfManagedEnable = true
+
 local _G = _G
 local InCombatLockdown = InCombatLockdown
 local C_Timer = C_Timer

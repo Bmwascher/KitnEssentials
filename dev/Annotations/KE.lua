@@ -86,6 +86,15 @@ local KE = {}
 ---@param msg string|number
 function KE:Print(msg) end
 
+--- Run fn now, or defer it to the next PLAYER_REGEN_ENABLED when in combat
+--- lockdown. Queued closures run once, FIFO, each wrapped in
+--- xpcall(fn, geterrorhandler()) so one erroring closure can't drop the rest
+--- of the queue. Secure-frame mutations (state drivers, secure attributes,
+--- Show/Hide on protected frames) route through this instead of executing
+--- blocked mid-combat (CODE-04, 2026-07-13 audit).
+---@param fn fun()
+function KE:RunAfterCombat(fn) end
+
 --- Recommend disabling a redundant external addon when a KE module runs alongside it.
 ---@param addon string       addon folder name to detect via C_AddOns.IsAddOnLoaded
 ---@param label string       display name shown to the user

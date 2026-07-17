@@ -11,12 +11,6 @@ local Theme = KE.Theme
 local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
 
 local pairs = pairs
-local string_format = string.format
-
-local function AccentText(text)
-    local a = KE.Theme.accent
-    return string_format("|cff%02x%02x%02x%s|r", a[1] * 255, a[2] * 255, a[3] * 255, text)
-end
 
 local SETTINGS_OUTLINE_OPTIONS = KE:GetFontOutlineOptions()
 
@@ -88,13 +82,13 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
     local textRowSize = 140
     local row1b = GUIFrame:CreateRow(card1.content, textRowSize)
     local ttInfoText = GUIFrame:CreateText(row1b,
-        AccentText("Important Tooltip Info"),
-        AccentText("- ") ..
+        KE:ColorTextByTheme("Important Tooltip Info"),
+        KE:ColorTextByTheme("- ") ..
         "As of 1/24/2026, Blizzard themselves have issues with tooltip errors. Tooltip skinning by this addon has protected checks so errors are most likely caused by Blizzard.\n\n" ..
-        AccentText("These are some common Blizzard errors:\n") ..
-        AccentText("- ") .. "Blizzard_SharedXML/Backdrop.lua" .. "\n" ..
-        AccentText("- ") .. "Blizzard_MoneyFrame/Mainline/MoneyFrame.lua" .. "\n" ..
-        AccentText("- ") .. "Blizzard_SharedXML/Tooltip/TooltipComparisonManager.lua",
+        KE:ColorTextByTheme("These are some common Blizzard errors:\n") ..
+        KE:ColorTextByTheme("- ") .. "Blizzard_SharedXML/Backdrop.lua" .. "\n" ..
+        KE:ColorTextByTheme("- ") .. "Blizzard_MoneyFrame/Mainline/MoneyFrame.lua" .. "\n" ..
+        KE:ColorTextByTheme("- ") .. "Blizzard_SharedXML/Tooltip/TooltipComparisonManager.lua",
         textRowSize, "hide")
     row1b:AddWidget(ttInfoText, 1)
     manager:Register(ttInfoText, "all")

@@ -14,7 +14,6 @@ local SK = KitnEssentials:NewModule("SkinBlizzardMouseover", "AceEvent-3.0")
 local UIFrameFadeOut = UIFrameFadeOut
 local UIFrameFadeIn = UIFrameFadeIn
 local ipairs = ipairs
-local pairs = pairs
 local BagsBar = BagsBar
 
 ---------------------------------------------------------------------------------
@@ -24,6 +23,11 @@ local BagsBar = BagsBar
 local appliedHooks = {
     bags = false,
 }
+
+-- Bumped on every enter/leave; a pending fade-out only fires if it is still
+-- the newest intent (prevents a stale timer fading the bar while the cursor
+-- has re-entered).
+local bagFadeGen = 0
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -49,12 +53,18 @@ function SK:SetupBagHooks()
         if child:IsObjectType("Button") then
             child:HookScript("OnEnter", function()
                 if self.db.Enabled and self.db.BagMouseover.Enabled then
+                    bagFadeGen = bagFadeGen + 1
                     UIFrameFadeIn(BagsBar, self.db.FadeInDuration, BagsBar:GetAlpha(), 1.0)
                 end
             end)
             child:HookScript("OnLeave", function()
                 if self.db.Enabled and self.db.BagMouseover.Enabled then
+                    bagFadeGen = bagFadeGen + 1
+                    local gen = bagFadeGen
                     C_Timer.After(self.db.FadeOutDuration, function()
+                        if gen ~= bagFadeGen then return end
+                        if not self:IsEnabled() then return end
+                        if not (self.db.Enabled and self.db.BagMouseover.Enabled) then return end
                         UIFrameFadeOut(BagsBar, self.db.FadeOutDuration, BagsBar:GetAlpha(), self.db.Alpha)
                     end)
                 end
@@ -101,6 +111,7 @@ end
 
 function SK:ApplySettings()
     if KE:ShouldNotLoadModule() then return end
+    bagFadeGen = bagFadeGen + 1
     if self.db.Enabled then
         self:UpdateAllAlpha()
     end
@@ -119,6 +130,7 @@ function SK:OnEnable()
     if KE:ShouldNotLoadModule() then return end
     if not self.db.Enabled then return end
     C_Timer.After(0.5, function()
+        if not self:IsEnabled() or not self.db.Enabled then return end
         self:SetupAllHooks()
         self:UpdateAllAlpha()
     end)
@@ -126,7 +138,7 @@ end
 
 function SK:OnDisable()
     self:Reset()
-    for key in pairs(appliedHooks) do
-        appliedHooks[key] = false
-    end
+    -- Invalidate pending fade-out timers; without this a timer queued before
+    -- disable fires against the next enable cycle's state.
+    bagFadeGen = bagFadeGen + 1
 end

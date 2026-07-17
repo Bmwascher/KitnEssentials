@@ -111,6 +111,28 @@ function KE:Print(msg)
     print(self:ColorTextByTheme("Kitn") .. "Essentials:|r " .. msg)
 end
 
+-- Run fn now, or defer it to the next PLAYER_REGEN_ENABLED when in combat
+-- lockdown. Queued closures run once, FIFO. Secure-frame mutations (state
+-- drivers, secure attributes, Show/Hide on protected frames) route through
+-- this instead of executing blocked mid-combat (CODE-04, 2026-07-13 audit).
+function KE:RunAfterCombat(fn)
+    if not InCombatLockdown() then
+        fn()
+        return
+    end
+    if not self._combatQueue then
+        self._combatQueue = {}
+        self._combatQueueFrame = CreateFrame("Frame")
+        self._combatQueueFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+        self._combatQueueFrame:SetScript("OnEvent", function()
+            local fns = KE._combatQueue
+            KE._combatQueue = {}
+            for i = 1, #fns do xpcall(fns[i], geterrorhandler()) end
+        end)
+    end
+    self._combatQueue[#self._combatQueue + 1] = fn
+end
+
 -- Recommend disabling a redundant external addon when a KitnEssentials
 -- replacement module is enabled alongside it. Prints ONCE (the flag re-arms if
 -- the addon is later removed, so it warns again only if the addon returns). The
@@ -156,7 +178,7 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
         if KE.Profiler and KE.Profiler.RunCommand then
             KE.Profiler.RunCommand(profileRest)
         else
-            print("|cffFF008CKitn|r|cffffffffEssentials:|r profiler not loaded.")
+            KE:Print("profiler not loaded.")
         end
         return
     end
@@ -565,6 +587,21 @@ function PreviewManager:SetActivePage(itemId)
     local lookup = GetItemToSection()
     local sectionId = lookup[itemId]
     self:SetActiveSection(sectionId)
+end
+
+-- Called from the EnableModule/DisableModule hooks (Core/Main.lua) when a
+-- module's enable state flips. The _moduleStates cache pins the last
+-- show/hide decision, so a module toggled off and back on while its GUI
+-- section is on screen would otherwise keep its stale "preview" entry and
+-- not re-preview until the next section change. Clearing the one entry and
+-- re-running the state machine lets ShowSectionPreviews decide fresh —
+-- section wanting, db.Enabled, and class restriction still apply, so
+-- non-applicable-class modules stay silent (project convention).
+function PreviewManager:OnModuleEnableChanged(moduleName)
+    if not (self.guiOpen or self.editModeActive) then return end
+    if InCombatLockdown() then return end
+    self._moduleStates[moduleName] = nil
+    self:UpdatePreviewState()
 end
 
 function PreviewManager:ShowSectionPreviews(sectionId)

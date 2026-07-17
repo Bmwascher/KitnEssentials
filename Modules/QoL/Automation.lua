@@ -1056,4 +1056,8 @@ end
 
 function AU:OnDisable()
     self:UnregisterAllEvents()
+    -- AceHook auto-unhooks everything on module disable; reset the SecureHook
+    -- guard so re-enable actually rehooks TalkingHeadFrame. (_eventToastsHooked
+    -- and friends use raw hooksecurefunc — permanent — their flags must stay.)
+    self._talkingHeadHooked = nil
 end

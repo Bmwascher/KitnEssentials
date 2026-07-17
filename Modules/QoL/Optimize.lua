@@ -5,6 +5,9 @@
 -- ║           graphics, UI, and performance settings.        ║
 -- ╚══════════════════════════════════════════════════════════╝
 
+---@class KE
+local KE = select(2, ...)
+
 ---@type KitnEssentials
 local KitnEssentials = _G.KitnEssentials
 if not KitnEssentials then
@@ -393,16 +396,16 @@ function OPT:OptimizeAll()
     local KE_ACCENT = "|cffFF008C"
     local KE_GREEN  = "|cff00ff00"
     local KE_RESET  = "|r"
-    print(KE_ACCENT .. "KitnEssentials:|r " .. KE_GREEN .. applied .. " settings optimized." .. KE_RESET)
+    KE:Print(KE_GREEN .. applied .. " settings optimized." .. KE_RESET)
     if failed > 0 then
-        print(KE_ACCENT .. "Warning:|r " .. failed .. " settings could not be applied.")
+        KE:Print(KE_ACCENT .. "Warning:|r " .. failed .. " settings could not be applied.")
     end
 end
 
 function OPT:RevertAll()
     local backup = GetBackupDB()
     if not backup.SavedSettings or not next(backup.SavedSettings) then
-        print("|cffFF008CKitnEssentials:|r No saved settings to revert.")
+        KE:Print("No saved settings to revert.")
         return
     end
 
@@ -413,21 +416,12 @@ function OPT:RevertAll()
     end
     backup.SavedSettings = {}
 
-    print("|cffFF008CKitnEssentials:|r |cff00ff00" .. count .. " settings reverted.|r")
+    KE:Print("|cff00ff00" .. count .. " settings reverted.|r")
 end
 
 function OPT:HasAnySavedSettings()
     local backup = GetBackupDB()
     return backup.SavedSettings and next(backup.SavedSettings) ~= nil
-end
-
----------------------------------------------------------------------------------
--- Lifecycle
----------------------------------------------------------------------------------
-function OPT:OnInitialize()
-end
-
-function OPT:OnEnable()
 end
 
 ---------------------------------------------------------------------------------

@@ -25,6 +25,7 @@ local GetPetActionInfo = GetPetActionInfo
 local GetShapeshiftFormInfo = GetShapeshiftFormInfo
 local getmetatable = getmetatable
 local table_insert = table.insert
+local wipe = wipe
 local _G = _G
 
 ---------------------------------------------------------------------------------
@@ -578,6 +579,8 @@ local function CalculateButtonPosition(index, layout, columns, rows, growLeft, b
     return dx, dy
 end
 
+local SetMouseoverPolling  -- defined below the fade closures; forward-declared for SkinBar
+
 ---------------------------------------------------------------------------------
 -- Layout
 ---------------------------------------------------------------------------------
@@ -607,6 +610,7 @@ local function SkinBar(cfg)
     container._fadeInDur = cfg.mouseover and cfg.mouseover.fadeInDuration or 0.3
     container._fadeOutDur = cfg.mouseover and cfg.mouseover.fadeOutDuration or 1
     container._mouseoverEnabled = mouseoverEnabled
+    SetMouseoverPolling(container, mouseoverEnabled)
     container._isMouseOver = false
     cfg.ke_container = container
 
@@ -632,19 +636,54 @@ end
 ---------------------------------------------------------------------------------
 -- Hooks
 ---------------------------------------------------------------------------------
+-- Shared mouseover poller: one frame, one GetCursorPosition() per tick, only
+-- alive while at least one container has mouseover enabled (detach-when-idle
+-- + cursor-cache perf patterns; replaces the per-container 10 Hz OnUpdate).
+local pollerContainers = {}
+local pollerFrame
+
+local function EnsurePollerFrame()
+    if pollerFrame then return end
+    pollerFrame = CreateFrame("Frame")
+    pollerFrame:Hide()
+    local elapsed = 0
+    pollerFrame:SetScript("OnUpdate", function(_, delta)
+        elapsed = elapsed + delta
+        if elapsed < 0.1 then return end
+        elapsed = 0
+        local cursorX, cursorY = GetCursorPosition()
+        for container in pairs(pollerContainers) do
+            local left, bottom, width, height = container:GetRect()
+            if left then
+                local scale = container:GetEffectiveScale()
+                local x, y = cursorX / scale, cursorY / scale
+                local isOver = x >= left and x <= (left + width) and y >= bottom and y <= (bottom + height)
+                if isOver and not container._isMouseOver then
+                    container._keFadeIn()
+                elseif not isOver and container._isMouseOver then
+                    container._keFadeOut()
+                end
+            end
+        end
+    end)
+end
+
+function SetMouseoverPolling(container, active)  -- assigns the forward-declared local from Step 0
+    if not container or not container._keFadeIn then return end
+    if active then
+        EnsurePollerFrame()
+        pollerContainers[container] = true
+        pollerFrame:Show()
+    else
+        pollerContainers[container] = nil
+        if pollerFrame and not next(pollerContainers) then pollerFrame:Hide() end
+    end
+end
+
 local function SetupMouseoverScript(container)
     if not container then return end
     if container._mouseoverScriptSetup then return end
     container._mouseoverScriptSetup = true
-
-    local function IsMouseOverContainer()
-        local left, bottom, width, height = container:GetRect()
-        if not left then return false end
-        local scale = container:GetEffectiveScale()
-        local x, y = GetCursorPosition()
-        x, y = x / scale, y / scale
-        return x >= left and x <= (left + width) and y >= bottom and y <= (bottom + height)
-    end
 
     local function FadeIn()
         if container._isMouseOver then return end
@@ -668,20 +707,9 @@ local function SetupMouseoverScript(container)
         KE:CombatSafeFade(container, alpha, dur)
     end
 
-    local pollInterval = 0.1
-    local elapsed = 0
-
-    container:SetScript("OnUpdate", function(self, delta)
-        elapsed = elapsed + delta
-        if elapsed < pollInterval then return end
-        elapsed = 0
-        local isOver = IsMouseOverContainer()
-        if isOver and not self._isMouseOver then
-            FadeIn()
-        elseif not isOver and self._isMouseOver then
-            FadeOut()
-        end
-    end)
+    container._keFadeIn = FadeIn
+    container._keFadeOut = FadeOut
+    SetMouseoverPolling(container, container._mouseoverEnabled)
 end
 
 -- Setup vehicle/bonusbar override for Bar1
@@ -858,42 +886,50 @@ function SK:OnEnable()
     if not self.db.Enabled then return end
     self:BuildConfigTable()
 
+    -- Generation token: a queued setup closure from a previous enable must
+    -- not run after a disable→re-enable cycle queues a fresh one.
+    self._enableGen = (self._enableGen or 0) + 1
+    local gen = self._enableGen
+
     C_Timer.After(0.5, function()
-        self:HideBlizzardBars()
+        KE:RunAfterCombat(function()
+            if gen ~= self._enableGen or not self:IsEnabled() or not self.db.Enabled then return end
+            self:HideBlizzardBars()
 
-        for _, cfg in ipairs(configTable) do
-            SkinBar(cfg)
-            SetupMouseoverScript(cfg.ke_container)
-            RegisterBarWithEditMode(cfg.name, cfg.dbReference, cfg.ke_container, cfg.relativeTo)
+            for _, cfg in ipairs(configTable) do
+                SkinBar(cfg)
+                SetupMouseoverScript(cfg.ke_container)
+                RegisterBarWithEditMode(cfg.name, cfg.dbReference, cfg.ke_container, cfg.relativeTo)
 
-            if cfg.name == "Bar1" and cfg.ke_container then
-                SetupBonusBarOverride(cfg.ke_container, self.db)
-                self:UpdateBonusBarOverride()
+                if cfg.name == "Bar1" and cfg.ke_container then
+                    SetupBonusBarOverride(cfg.ke_container, self.db)
+                    self:UpdateBonusBarOverride()
+                end
+
+                if cfg.name == "PetBar" and cfg.ke_container then
+                    SetupPetBarVisibility(cfg.ke_container)
+                elseif cfg.name == "StanceBar" and cfg.ke_container then
+                    SetupStanceBarVisibility(cfg.ke_container)
+                end
+
+                if not cfg.enabled and cfg.ke_container then
+                    cfg.ke_container:Hide()
+                end
             end
 
-            if cfg.name == "PetBar" and cfg.ke_container then
-                SetupPetBarVisibility(cfg.ke_container)
-            elseif cfg.name == "StanceBar" and cfg.ke_container then
-                SetupStanceBarVisibility(cfg.ke_container)
+            for i = 2, 8 do
+                Settings.SetValue("PROXY_SHOW_ACTIONBAR_" .. i, false)
             end
+            C_CVar.SetCVar("countdownForCooldowns", 1)
+            SettingsPanel:CommitSettings(true)
 
-            if not cfg.enabled and cfg.ke_container then
-                cfg.ke_container:Hide()
-            end
-        end
+            C_Timer.After(1, function() SK:UpdateButtonTexts() end)
+            C_Timer.After(2, function() SK:UpdateButtonTexts() end)
 
-        for i = 2, 8 do
-            Settings.SetValue("PROXY_SHOW_ACTIONBAR_" .. i, false)
-        end
-        C_CVar.SetCVar("countdownForCooldowns", 1)
-        SettingsPanel:CommitSettings(true)
-
-        C_Timer.After(1, function() SK:UpdateButtonTexts() end)
-        C_Timer.After(2, function() SK:UpdateButtonTexts() end)
-
-        self:SetupDragDetection()
-        self:SetupRangeIndicatorHook()
-        self:SetupProcGlowHook()
+            self:SetupDragDetection()
+            self:SetupRangeIndicatorHook()
+            self:SetupProcGlowHook()
+        end)
     end)
 end
 
@@ -1071,6 +1107,8 @@ function SK:UpdateBarMouseover(barKey)
     container._fadeInDur = fadeInDur
     container._fadeOutDur = fadeOutDur
     container._mouseoverEnabled = mouseoverEnabled
+    SetMouseoverPolling(container, mouseoverEnabled)
+    container._isMouseOver = false
 
     if not container._isMouseOver and not container._bonusBarActive then
         if mouseoverEnabled then
@@ -1088,6 +1126,18 @@ function SK:UpdateAllMouseover()
 end
 
 function SK:UpdateBarLayout(barKey)
+    if InCombatLockdown() then
+        self._pendingLayout = self._pendingLayout or {}
+        if not self._pendingLayout[barKey] then
+            self._pendingLayout[barKey] = true
+            KE:RunAfterCombat(function()
+                self._pendingLayout[barKey] = nil
+                if self:IsEnabled() and self.db.Enabled then self:UpdateBarLayout(barKey) end
+            end)
+        end
+        return
+    end
+
     local barDB, container = GetBarData(barKey)
     if not barDB or not container then return end
 
@@ -1236,7 +1286,16 @@ end
 function SK:ApplySettings()
     if KE:ShouldNotLoadModule() then return end
     C_Timer.After(0.1, function()
-        if InCombatLockdown() then return end
+        if InCombatLockdown() then
+            if not self._pendingApply then
+                self._pendingApply = true
+                KE:RunAfterCombat(function()
+                    self._pendingApply = nil
+                    if self:IsEnabled() and self.db.Enabled then self:ApplySettings() end
+                end)
+            end
+            return
+        end
         self:HideBlizzardBars()
 
         for i = 2, 8 do
@@ -1306,4 +1365,7 @@ end
 function SK:OnDisable()
     self:UnregisterAllEvents()
     self:UnhookAll()
+    self._enableGen = (self._enableGen or 0) + 1
+    if pollerFrame then pollerFrame:Hide() end
+    wipe(pollerContainers)
 end

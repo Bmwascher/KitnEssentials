@@ -716,10 +716,10 @@ end
 -- the saved profile is missing (mirrors KE:FillProfileDefaults' deep-fill
 -- intent, scoped to this module), then bind MPT.db. Also guarantee the global
 -- splits store. Splits keyed "mapID:level" -> { total=sec, objectives={...} }.
--- NAME IS LOAD-BEARING: ProfileManager:RefreshAllModules
--- (Core/ProfileManager.lua:417-419) duck-types `module.UpdateDB` and re-runs
--- this on every profile switch/copy/reset — re-seeding the new profile's
--- section and re-binding self.db. Do not rename.
+-- NAME IS LOAD-BEARING: ProfileManager:RefreshAllModules (Core/ProfileManager.lua)
+-- duck-types `module.UpdateDB` and re-runs this on every profile switch/copy/
+-- reset — re-seeding the new profile's section and re-binding self.db. Do not
+-- rename.
 function MPT:UpdateDB()
     local profile = KE.db.profile
     if type(profile.MythicPlusTimer) ~= "table" then
