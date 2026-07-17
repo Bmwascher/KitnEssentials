@@ -589,6 +589,21 @@ function PreviewManager:SetActivePage(itemId)
     self:SetActiveSection(sectionId)
 end
 
+-- Called from the EnableModule/DisableModule hooks (Core/Main.lua) when a
+-- module's enable state flips. The _moduleStates cache pins the last
+-- show/hide decision, so a module toggled off and back on while its GUI
+-- section is on screen would otherwise keep its stale "preview" entry and
+-- not re-preview until the next section change. Clearing the one entry and
+-- re-running the state machine lets ShowSectionPreviews decide fresh —
+-- section wanting, db.Enabled, and class restriction still apply, so
+-- non-applicable-class modules stay silent (project convention).
+function PreviewManager:OnModuleEnableChanged(moduleName)
+    if not (self.guiOpen or self.editModeActive) then return end
+    if InCombatLockdown() then return end
+    self._moduleStates[moduleName] = nil
+    self:UpdatePreviewState()
+end
+
 function PreviewManager:ShowSectionPreviews(sectionId)
     local Addon = KitnEssentials
     if not Addon then return end

@@ -104,6 +104,7 @@ function L.loadGlobals(overrides)
     _G.ReloadUI = function() end
     _G.GetSpecialization = function() return 2 end
     _G.GetSpecializationRole = function() return "HEALER" end   -- healer-context live path reachable
+    _G.UnitClass = function() return "Mock", "EVOKER" end       -- PreviewManager classRestriction gate
     -- geterrorhandler() returns Blizzard's current error handler function;
     -- KE:RunAfterCombat's drain loop passes it to xpcall so one closure's
     -- error can't abort the rest of the queue. Not stubbed by _wow_mock, so
