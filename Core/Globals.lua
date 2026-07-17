@@ -112,9 +112,11 @@ function KE:Print(msg)
 end
 
 -- Run fn now, or defer it to the next PLAYER_REGEN_ENABLED when in combat
--- lockdown. Queued closures run once, FIFO. Secure-frame mutations (state
--- drivers, secure attributes, Show/Hide on protected frames) route through
--- this instead of executing blocked mid-combat (CODE-04, 2026-07-13 audit).
+-- lockdown. Queued closures run once, FIFO, each via xpcall(fn,
+-- geterrorhandler()) so one erroring closure cannot drop the rest of the
+-- queue. Secure-frame mutations (state drivers, secure attributes,
+-- Show/Hide on protected frames) route through this instead of executing
+-- blocked mid-combat (CODE-04, 2026-07-13 audit).
 function KE:RunAfterCombat(fn)
     if not InCombatLockdown() then
         fn()
