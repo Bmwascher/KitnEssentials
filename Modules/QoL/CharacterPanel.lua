@@ -1880,7 +1880,7 @@ function CP:ReplaceAllMatchingGems(oldGemID, newGemID, isRetry)
     local matches = self:GetMatchingGemSockets(oldGemID)
     if #matches == 0 then return end
 
-    local have = GetItemCount(newGemID)
+    local have = C_Item.GetItemCount(newGemID)
     if have < #matches then
         KE:Print(string.format(
             "Replace All: only %d replacement gem%s for %d sockets - replacing what fits.",

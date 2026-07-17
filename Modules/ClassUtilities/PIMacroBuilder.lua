@@ -131,9 +131,12 @@ function PI:OnEnable()
 
     self:ApplyMacro()
 
-    -- Backward compat: existing macros may contain /run SetPITarget()
+    -- Backward compat: existing macros may contain /run SetPITarget().
+    -- The NAME must stay (v1.4.0 removed it, v1.4.1 had to restore it —
+    -- users' macro-book macros call it); the enabled gate makes module
+    -- disable actually stick.
     _G.SetPITarget = function()
-        PI:SetPITarget()
+        if PI:IsEnabled() then PI:SetPITarget() end
     end
 
     self:RegisterEvent("PLAYER_REGEN_ENABLED", function()
