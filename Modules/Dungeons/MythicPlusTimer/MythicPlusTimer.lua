@@ -1376,14 +1376,13 @@ function MPT:RepairRunInfo()
             -- Re-stamp the in-flight split cache with the now-known level, so
             -- identity goes back to EXACT matching instead of staying on the
             -- level-0 window's relaxed map-only rule (MPT.CacheBelongsToRun).
-            -- Character-gated like every adoption: a foreign character's
-            -- cache must never be re-identified as this run's.
+            -- Character-gated like every adoption: only OUR stamped cache
+            -- reaches the rekey — ownerless caches are rejected outright
+            -- (2026-07-17 review), so there is no legacy adoption arm here.
             local cache = GetRunSplitCache()
             local myChar = UnitGUID("player")
             if MPT.CacheBelongsToRun(cache, run.mapID, 0, myChar) then
                 cache.key = MPT.BuildSplitKey(run.mapID, run.level)
-                -- Legacy (pre-stamp) cache adopted as ours: give it an owner.
-                cache.char = cache.char or myChar
             end
             if DEBUG_MPT then KE:Print(format("[MPT] RepairRunInfo: level=%d", level)) end
         end

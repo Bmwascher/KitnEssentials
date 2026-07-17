@@ -109,29 +109,33 @@ describe("MPT.CacheBelongsToRun", function()
     -- miss (it back-dates off info.elapsed); a COUNT criterion would be
     -- re-stamped at the RELOAD time and CommitSplits would persist that.
 
+    -- All positive cases carry a char stamp: ownership is REQUIRED
+    -- (ownerless caches are rejected outright — see the last case).
+    local ME = "Player-1234-000A"
+
     it("matches the exact key", function()
-        assert.is_true(MPT.CacheBelongsToRun({ key = "556:23" }, 556, 23))
+        assert.is_true(MPT.CacheBelongsToRun({ key = "556:23", char = ME }, 556, 23, ME))
     end)
 
     it("matches on mapID alone while the level is still unknown", function()
-        assert.is_true(MPT.CacheBelongsToRun({ key = "556:23" }, 556, 0))
-        assert.is_true(MPT.CacheBelongsToRun({ key = "556:23" }, 556, nil))
+        assert.is_true(MPT.CacheBelongsToRun({ key = "556:23", char = ME }, 556, 0, ME))
+        assert.is_true(MPT.CacheBelongsToRun({ key = "556:23", char = ME }, 556, nil, ME))
     end)
 
     it("does NOT relax across maps, even at level 0", function()
-        assert.is_false(MPT.CacheBelongsToRun({ key = "402:23" }, 556, 0))
-        assert.is_false(MPT.CacheBelongsToRun({ key = "5566:23" }, 556, 0))
+        assert.is_false(MPT.CacheBelongsToRun({ key = "402:23", char = ME }, 556, 0, ME))
+        assert.is_false(MPT.CacheBelongsToRun({ key = "5566:23", char = ME }, 556, 0, ME))
     end)
 
     it("does NOT relax once the level is known", function()
         -- A known-level mismatch is a genuinely different run: stay strict.
-        assert.is_false(MPT.CacheBelongsToRun({ key = "556:23" }, 556, 24))
+        assert.is_false(MPT.CacheBelongsToRun({ key = "556:23", char = ME }, 556, 24, ME))
     end)
 
-    it("rejects a missing, keyless, or legacy cache", function()
-        assert.is_false(MPT.CacheBelongsToRun(nil, 556, 23))
-        assert.is_false(MPT.CacheBelongsToRun({}, 556, 23))
-        assert.is_false(MPT.CacheBelongsToRun({ key = "556:23" }, nil, 23))
+    it("rejects a missing, keyless, or mapless probe", function()
+        assert.is_false(MPT.CacheBelongsToRun(nil, 556, 23, ME))
+        assert.is_false(MPT.CacheBelongsToRun({}, 556, 23, ME))
+        assert.is_false(MPT.CacheBelongsToRun({ key = "556:23", char = ME }, nil, 23, ME))
     end)
 
     it("accepts the owning character and rejects a foreign one at the exact key", function()
@@ -152,10 +156,14 @@ describe("MPT.CacheBelongsToRun", function()
         assert.is_false(MPT.CacheBelongsToRun(cache, 556, 0, "Player-1234-000B"))
     end)
 
-    it("tolerates a legacy cache with no character stamp", function()
-        -- Pre-stamp caches have no owner; they die out at the next wipe or
-        -- rekey (RepairRunInfo stamps ownership on adoption).
-        assert.is_true(MPT.CacheBelongsToRun({ key = "556:23" }, 556, 23, "Player-1234-000A"))
+    it("rejects a cache with no character stamp", function()
+        -- Ownerless caches are untrusted by definition (2026-07-17 review):
+        -- every released writer stamps char at create, so an unstamped cache
+        -- is a pre-stamp artifact whose owner cannot be recovered. Adopting
+        -- one would launder a possibly-foreign cache into this character's
+        -- improve-only PB store; rejection displaces it at the next create.
+        assert.is_false(MPT.CacheBelongsToRun({ key = "556:23" }, 556, 23, "Player-1234-000A"))
+        assert.is_false(MPT.CacheBelongsToRun({ key = "556:23" }, 556, 0, "Player-1234-000A"))
     end)
 end)
 

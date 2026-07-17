@@ -60,9 +60,11 @@ MPT.BuildSplitKey = BuildKey
 -- so "mapID:level" alone collides across characters: char A logs out
 -- mid-key, char B recovers its own live key on the same map, and A's
 -- splits PREDATE B's clock, sailing through the provenance bound. Identity
--- therefore includes WHO wrote the cache. charKey is nil-tolerant on the
--- CACHE side only: a cache written before the stamp existed has no owner
--- and dies out at its next wipe or rekey.
+-- therefore includes WHO wrote the cache, and a cache with NO owner is
+-- rejected outright (2026-07-17 review): every released writer stamps
+-- `char` at create, so an ownerless cache can only be a pre-stamp dev
+-- artifact whose owner cannot be recovered — it is displaced by the next
+-- create rather than adopted.
 --
 -- Pure (no WoW API, no upvalue access) so it is busted-testable.
 ---@param cache table|nil the in-flight split cache (KE.db.global.MPTActiveRunSplits)
@@ -72,7 +74,7 @@ MPT.BuildSplitKey = BuildKey
 ---@return boolean
 function MPT.CacheBelongsToRun(cache, mapID, level, charKey)
     if not cache or not cache.key or not mapID then return false end
-    if cache.char ~= nil and cache.char ~= charKey then return false end
+    if not cache.char or cache.char ~= charKey then return false end
     if cache.key == BuildKey(mapID, level) then return true end
     -- Level-0 recovery window: the map still has to match.
     if (level or 0) == 0 then
