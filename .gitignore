@@ -9,8 +9,6 @@
 .agents/
 CLAUDE.md
 AGENTS.md
-# Root-anchored: on Windows git matches ignore patterns case-insensitively,
-# and an unanchored References/ would also swallow nested references/ dirs.
 /References/
 
 # Personal dev notes, audits, Superpowers artifacts (local-only by choice)
