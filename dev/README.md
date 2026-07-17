@@ -81,10 +81,10 @@ Prepend the tree's `bin` to your **user PATH** so `lua`, `busted`, and
 bash dev/scripts/setup-lua-toolchain.sh
 ```
 
-This same script is what GitHub Actions runs, and what the **Claude Code on the
-web** environment setup script should point at — once it does, cloud sessions
-have `luacheck` + `busted` and the recurring "no Lua interpreter / no busted on
-this box" message stops.
+CI no longer uses this; it remains for Claude Code cloud environments — point
+the **Claude Code on the web** environment setup script at it so cloud
+sessions have `luacheck` + `busted` and the recurring "no Lua interpreter / no
+busted on this box" message stops.
 
 ## Pre-push gate (optional)
 
@@ -123,6 +123,10 @@ main-branch guard die with the checkout. The tracked templates in
 ```powershell
 pwsh dev/scripts/install-claude-hooks.ps1
 ```
+
+Agent config more broadly — `.claude/`, `.agents/`, `AGENTS.md`, `CLAUDE.md`,
+and `dev/docs/` — is deliberately local-only; none of it lives in git. After
+a re-clone, restore it from the local backup/export, not from this repo.
 
 Idempotent; merges missing hook entries per event (keyed on the hook script
 filename) and never overwrites existing entries or personal permissions in
