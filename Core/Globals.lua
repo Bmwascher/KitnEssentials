@@ -127,7 +127,7 @@ function KE:RunAfterCombat(fn)
         self._combatQueueFrame:SetScript("OnEvent", function()
             local fns = KE._combatQueue
             KE._combatQueue = {}
-            for i = 1, #fns do fns[i]() end
+            for i = 1, #fns do xpcall(fns[i], geterrorhandler()) end
         end)
     end
     self._combatQueue[#self._combatQueue + 1] = fn

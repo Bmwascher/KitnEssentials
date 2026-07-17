@@ -676,6 +676,7 @@ function DR:HidePreview()
     self.isPreview = false
     if self.parent then
         KE:RunAfterCombat(function()
+            if not self:IsEnabled() then return end
             if self.isPreview or not self.parent then return end
             RegisterStateDriver(self.parent, "visibility", "[bonusbar:5] show; hide")
             if self.parent:IsShown() then
@@ -724,6 +725,7 @@ function DR:OnShowHandler()
     self.secondWindFrame:RegisterEvent("SPELL_UPDATE_CHARGES")
     self.secondWindFrame:SetScript("OnEvent", function() UpdateSecondWind(self) end)
 
+    if self.speedTicker then self.speedTicker:Cancel() end
     self.speedTicker = C_Timer.NewTicker(0.05, function() UpdateSpeed(self) end)
 
     UpdateVigor(self)

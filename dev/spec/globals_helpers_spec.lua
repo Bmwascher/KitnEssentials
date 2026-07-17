@@ -377,4 +377,19 @@ describe("KE:RunAfterCombat", function()
         f:GetScript("OnEvent")(f, "PLAYER_REGEN_ENABLED")
         assert.equal(2, runs)  -- queue drained, no double-run
     end)
+
+    it("runs the remaining queued closures when an earlier one errors", function()
+        local KE, caughtErrors = L.loadGlobals()
+        local inCombat = true
+        _G.InCombatLockdown = function() return inCombat end
+        local secondRan = false
+        KE:RunAfterCombat(function() error("boom") end)
+        KE:RunAfterCombat(function() secondRan = true end)
+        inCombat = false
+        local f = KE._combatQueueFrame
+        f:GetScript("OnEvent")(f, "PLAYER_REGEN_ENABLED")
+        assert.is_true(secondRan)
+        assert.equal(1, #caughtErrors)
+        assert.matches("boom", caughtErrors[1])
+    end)
 end)

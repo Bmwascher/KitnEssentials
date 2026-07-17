@@ -76,7 +76,10 @@ end
 
 -- Core/Globals.lua. The KE seed carries the two Core/Colors.lua members
 -- Globals reads (Theme accent + ColorTextByTheme — Colors loads first
--- in-game). Returns the KE table.
+-- in-game). Returns the KE table, plus a table that the geterrorhandler
+-- stub appends xpcall-caught error messages into (used by the
+-- KE:RunAfterCombat drain spec to assert an errored closure still reaches
+-- the error handler).
 function L.loadGlobals(overrides)
     installMock(overrides, { C_Timer = inertTimer() })
     helpers.installAddonShim()
@@ -101,11 +104,19 @@ function L.loadGlobals(overrides)
     _G.ReloadUI = function() end
     _G.GetSpecialization = function() return 2 end
     _G.GetSpecializationRole = function() return "HEALER" end   -- healer-context live path reachable
+    -- geterrorhandler() returns Blizzard's current error handler function;
+    -- KE:RunAfterCombat's drain loop passes it to xpcall so one closure's
+    -- error can't abort the rest of the queue. Not stubbed by _wow_mock, so
+    -- record here in the same style as the frames it returns for firing events.
+    local caughtErrors = {}
+    _G.geterrorhandler = function()
+        return function(err) caughtErrors[#caughtErrors + 1] = err end
+    end
     local KE = {
         Theme = { accent = { 1, 0, 0.549, 1 } },
         ColorTextByTheme = function(_, text) return text end,
     }
-    return helpers.loadModule("Core/Globals.lua", KE)
+    return helpers.loadModule("Core/Globals.lua", KE), caughtErrors
 end
 
 -- Modules/DamageMeter/Core.lua (KE.DamageMeter is set at file scope).
