@@ -653,15 +653,20 @@ local function EnsurePollerFrame()
         elapsed = 0
         local cursorX, cursorY = GetCursorPosition()
         for container in pairs(pollerContainers) do
-            local left, bottom, width, height = container:GetRect()
-            if left then
-                local scale = container:GetEffectiveScale()
-                local x, y = cursorX / scale, cursorY / scale
-                local isOver = x >= left and x <= (left + width) and y >= bottom and y <= (bottom + height)
-                if isOver and not container._isMouseOver then
-                    container._keFadeIn()
-                elseif not isOver and container._isMouseOver then
-                    container._keFadeOut()
+            -- Hidden containers (e.g. bonus-bar override) skip the rect math;
+            -- _isMouseOver may go stale while hidden, but the first evaluated
+            -- tick after re-show resyncs it through the normal branches.
+            if container:IsShown() then
+                local left, bottom, width, height = container:GetRect()
+                if left then
+                    local scale = container:GetEffectiveScale()
+                    local x, y = cursorX / scale, cursorY / scale
+                    local isOver = x >= left and x <= (left + width) and y >= bottom and y <= (bottom + height)
+                    if isOver and not container._isMouseOver then
+                        container._keFadeIn()
+                    elseif not isOver and container._isMouseOver then
+                        container._keFadeOut()
+                    end
                 end
             end
         end
