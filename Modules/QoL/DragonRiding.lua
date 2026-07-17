@@ -674,6 +674,14 @@ end
 
 function DR:HidePreview()
     self.isPreview = false
+    -- Clear the preview's demo speed ("420%", ApplySettings) on the way out:
+    -- UpdateSpeed's not-gliding branch only clears when its dirty-check cache
+    -- is non-nil, and the preview writer nils the cache — so without this,
+    -- mounting shows the stale demo text until the first real glide renders.
+    if self.speedText then
+        self.speedText:SetText("")
+        self._lastSpeedPct = nil
+    end
     if self.parent then
         KE:RunAfterCombat(function()
             if not self:IsEnabled() then return end
