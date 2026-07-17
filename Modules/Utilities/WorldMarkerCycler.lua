@@ -135,9 +135,17 @@ function WMC:OnEnable()
 end
 
 function WMC:OnDisable()
-    if not InCombatLockdown() then
+    -- Teardown must survive a mid-combat disable: the old in-combat skip
+    -- also unregistered this module's own regen listener below, so the
+    -- override bindings stayed live until /reload. RunAfterCombat runs the
+    -- teardown now when possible, else at PLAYER_REGEN_ENABLED. Inverted
+    -- gate (like DragonRiding's OnDisable drain): if the module was
+    -- re-enabled before the drain, OnEnable already rebuilt the bindings —
+    -- do not clobber them.
+    KE:RunAfterCombat(function()
+        if self:IsEnabled() then return end
         ClearOverrideBindings(bindingsFrame)
         SecureHandlerExecute(cycleBtn, "i=0")
-    end
+    end)
     self:UnregisterAllEvents()
 end
