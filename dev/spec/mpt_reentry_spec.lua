@@ -177,3 +177,85 @@ describe("MPT run lifecycle: mid-key exit / re-entry", function()
         assert.is_true(MPT.run.completed)
     end)
 end)
+
+describe("MPT:UpdateForces — forces-cap clock rule", function()
+    -- Regression cover for the back-dated forces cap: the 100% stamp must use
+    -- the LIVE world clock while the run is live (run.elapsed is refreshed only
+    -- once per whole second, so it lags the criteria event by up to ~1s and the
+    -- improve-only best.forces commit would bake the skew in), and must fall
+    -- back to run.elapsed once the run is completed (the world clock goes stale
+    -- post-depletion — the "99:99" class). Same load pattern as the lifecycle
+    -- describe above: C_Scenario/C_ScenarioInfo/GetWorldElapsedTime are
+    -- file-scope captures, so their mocks must exist BEFORE loadModule.
+    local MPT, run, criteria, worldElapsed
+
+    before_each(function()
+        mock.install({
+            C_Timer = {
+                After = function() end,
+                NewTicker = function() return { Cancel = function() end } end,
+            },
+        })
+        local modules = helpers.installAddonShim()
+
+        criteria = {}
+        worldElapsed = 0
+        _G.C_ChallengeMode = { GetActiveChallengeMapID = function() return nil end }
+        _G.GetInstanceInfo = function() return "Some Dungeon", "party", 8 end
+        _G.C_Scenario = { GetStepInfo = function() return nil, nil, #criteria end }
+        _G.C_ScenarioInfo = { GetCriteriaInfo = function(i) return criteria[i] end }
+        _G.GetWorldElapsedTime = function() return 0, worldElapsed end
+
+        helpers.loadModule("Modules/Dungeons/MythicPlusTimer/MythicPlusTimer.lua",
+            { Print = function() end, db = { global = {}, profile = {} } })
+        MPT = modules["MythicPlusTimer"]
+        assert(MPT and MPT.UpdateForces, "real MythicPlusTimer.lua did not load")
+
+        run = MPT.run
+        run.forces = {}
+    end)
+
+    local function capCriterion(infoElapsed)
+        return { isWeightedProgress = true, completed = true, elapsed = infoElapsed,
+                 quantityString = "100%", totalQuantity = 100 }
+    end
+
+    it("back-dates the cap from the live clock while the run is live", function()
+        run.completed = false
+        run.elapsed = 100          -- lagging once-per-second tick clock
+        worldElapsed = 101.4       -- fresh live clock at the criteria event
+        criteria[1] = capCriterion(0.4)
+        MPT:UpdateForces()
+        assert.is_true(run.forces.completed)
+        assert.near(101.0, run.forces.clearTime, 1e-9)   -- live - info.elapsed, not run.elapsed
+    end)
+
+    it("stamps the cap exactly once (sticky completion)", function()
+        run.completed = false
+        run.elapsed = 100
+        worldElapsed = 101.4
+        criteria[1] = capCriterion(0.4)
+        MPT:UpdateForces()
+        worldElapsed = 200         -- a later teardown re-read must not restamp
+        MPT:UpdateForces()
+        assert.near(101.0, run.forces.clearTime, 1e-9)
+    end)
+
+    it("uses authoritative run.elapsed once the run is completed", function()
+        run.completed = true
+        run.elapsed = 1500         -- GetChallengeCompletionInfo's final time
+        worldElapsed = 42          -- stale/garbage world clock post-depletion
+        criteria[1] = capCriterion(2)
+        MPT:UpdateForces()
+        assert.near(1498, run.forces.clearTime, 1e-9)
+    end)
+
+    it("falls back to run.elapsed when the live clock reads negative", function()
+        run.completed = false
+        run.elapsed = 100
+        worldElapsed = -1          -- guarded: live and live >= 0
+        criteria[1] = capCriterion(0.4)
+        MPT:UpdateForces()
+        assert.near(99.6, run.forces.clearTime, 1e-9)
+    end)
+end)
