@@ -614,6 +614,11 @@ describe("DungeonTrash inference — FilterCandidates trait-duration keep tier",
             dataByNpc2, traitByNpc2)
         assert.equals(1, #kept)
         assert.equals(76149, resolved)
+        local keptF, resolvedF = TI.FilterCandidates(cands,
+            { kind = "cast", duration = 3.0, fingerprints = { castStartChangeTarget = false } },
+            dataByNpc2, traitByNpc2)
+        assert.equals(1, #keptF)
+        assert.equals(79303, resolvedF)               -- the opposite polarity narrows too
         -- An UNSAMPLED fingerprint is not a rejection: both twins full-match
         -- leniently and the pool stays ambiguous (never a false narrow).
         local kept2, resolved2 = TI.FilterCandidates(cands,
