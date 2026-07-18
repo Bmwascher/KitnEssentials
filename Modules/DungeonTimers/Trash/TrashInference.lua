@@ -395,6 +395,8 @@ local BOOL_FINGERPRINTS = {
     { data = "targetAPIExists",        obs = "targetAPIExists" },
     { data = "castStartChangeTarget",  obs = "castStartChangeTarget" },
     { data = "targetClearOnCastStart", obs = "targetClearOnCastStart" },
+    -- castStartAuraDelta additionally carries a PRESENCE-SYMMETRIC clause in
+    -- fingerprintsMatch below: a sampled delta with no curating spell rejects.
     { data = "castStartAuraDelta",     obs = "castStartAuraDelta" },
     -- Declared upstream but backed by zero shipped data rows — mapped anyway
     -- so a future TrashData regeneration that adds rows cannot silently
@@ -436,6 +438,19 @@ local function fingerprintsMatch(spellData, observed)
             if type(want) == "boolean" and type(got) == "boolean" and want ~= got then
                 return false
             end
+        end
+        -- castStartAuraDelta is PRESENCE-SYMMETRIC, unlike the rows above
+        -- (reference: a RESOLVED aura delta rejects every non-curating spell
+        -- when matched AND every curating spell when not — that branch has no
+        -- nil-data wildcard). The sampler resolves the observation to a hard
+        -- true/false on every sampled cast, so "a fresh party debuff landed
+        -- but this spell doesn't curate one" is disconfirming evidence, not
+        -- an unknown. An UNSAMPLED nil observation stays lenient (sampler
+        -- unavailable, or the needs gate skipped the mob) like every other
+        -- fingerprint here.
+        if type(fp.castStartAuraDelta) == "boolean"
+            and fp.castStartAuraDelta ~= (spellData.castStartAuraDelta == true) then
+            return false
         end
     end
     -- numeric success buff-count delta fingerprint.
@@ -524,17 +539,26 @@ local function hasPositiveDuration(v)
 end
 
 -- Is a CAST_START spell OWNED by the start-advance path? Requires every
--- curated start fingerprint to be one the engine samples: castStartAuraDelta
--- has no KE sampler (deliberately unported), so a spell curating it can be
--- neither proven nor refuted at cast start — it keeps the success-path anchor
--- instead. One shipped row (Vicious Ambush 388942, whose mob also casts
--- Riftbreath: an unguarded start-advance would cross-anchor Ambush on every
--- Riftbreath start; the reference discriminates with the aura-delta sampler
--- it does ship).
-function TI.IsStartAdvanceOwned(spellData)
-    return type(spellData) == "table"
-        and spellData.cdMode == "CAST_START"
-        and spellData.castStartAuraDelta ~= true
+-- curated start fingerprint to be one the engine can sample:
+-- castStartAuraDelta needs the party aura-delta sampler (TrashAuraDelta.lua,
+-- the reference's own discriminator, now ported), which only runs while
+-- group auras are readable — the caller passes that availability as
+-- auraDeltaLive. Sampler live → the fingerprint discriminates the start
+-- (a Riftbreath start carries no fresh party debuff, so Vicious Ambush
+-- 388942 — the one shipped row — cannot cross-anchor on it) and a
+-- meld-FAILED Ambush still advances at its observed START. Sampler dark →
+-- the spell can be neither proven nor refuted at start and keeps the
+-- success-path anchor (the pre-sampler behavior): a nil fingerprint is
+-- LENIENT, and lenient ownership would be exactly the cross-anchor the old
+-- unconditional exclusion existed to prevent.
+function TI.IsStartAdvanceOwned(spellData, auraDeltaLive)
+    if type(spellData) ~= "table" or spellData.cdMode ~= "CAST_START" then
+        return false
+    end
+    if spellData.castStartAuraDelta == true and auraDeltaLive ~= true then
+        return false
+    end
+    return true
 end
 
 -- Does any start-advance-owned spell curate a boolean start fingerprint?
@@ -543,10 +567,10 @@ end
 -- nothing curated there is nothing to sample, and the wait must not gate
 -- consumption — the sampler is the only writer of the ready bit, and a plate
 -- blink inside the 0.10s window would otherwise strand the pending forever.
-function TI.NeedsStartFingerprints(mobData)
+function TI.NeedsStartFingerprints(mobData, auraDeltaLive)
     if not (mobData and mobData.spells) then return false end
     for _, spell in pairs(mobData.spells) do
-        if TI.IsStartAdvanceOwned(spell) then
+        if TI.IsStartAdvanceOwned(spell, auraDeltaLive) then
             for _, m in ipairs(BOOL_FINGERPRINTS) do
                 if type(spell[m.data]) == "boolean" then return true end
             end
@@ -561,8 +585,8 @@ end
 -- (its channel start is the transition pairing's job, never a fresh advance).
 -- Fingerprints reuse the shared duration-agnostic tail; duration itself is
 -- unknowable at start.
-function TI.MatchesObservedCastStart(spellData, kind, fingerprints)
-    if not TI.IsStartAdvanceOwned(spellData) then return false end
+function TI.MatchesObservedCastStart(spellData, kind, fingerprints, auraDeltaLive)
+    if not TI.IsStartAdvanceOwned(spellData, auraDeltaLive) then return false end
     local hasCast = hasPositiveDuration(spellData.castTime)
         or hasPositiveDuration(spellData.castTimeExtra)
     if kind == "cast" then

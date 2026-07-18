@@ -28,6 +28,7 @@ if not KitnEssentials then return end
 local DTrash = KitnEssentials:NewModule("DungeonTrash", "AceEvent-3.0", "AceTimer-3.0")
 
 local TI = KE.TrashInference
+local TAD = KE.TrashAuraDelta  -- Trash.xml: the aura-delta sampler loads first
 
 local GetTime = GetTime
 local time = time
@@ -128,6 +129,11 @@ DTrash.subZoneMapID = nil
 DTrash.zoneText = nil
 DTrash.forcesPercent = nil
 DTrash.forcesValid = false
+-- Aura-delta sampler availability for the current monitor session (set once
+-- per StartMonitor; see the gate there). Threads into TI ownership checks as
+-- auraDeltaLive: with the sampler dark, castStartAuraDelta-curating spells
+-- keep the success-path anchor instead of a lenient nil-fingerprint advance.
+DTrash._auraDeltaLive = false
 
 local function dprint(msg)
     if DEBUG_DTRASH then KE:Print("[DTrash] " .. tostring(msg)) end
@@ -484,6 +490,7 @@ end
 function DTrash:OnEnable()
     self:UpdateDB()
     TI = TI or KE.TrashInference
+    TAD = TAD or KE.TrashAuraDelta
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "EvaluateGate")
     self:RegisterEvent("ZONE_CHANGED_NEW_AREA", "EvaluateGate")
     -- Lindormi's Guidance detection rides roster/role churn too (the
@@ -566,6 +573,26 @@ function DTrash:StartMonitor()
     for event, handler in pairs(CAST_EVENTS) do
         self:RegisterEvent(event, handler)
     end
+    -- Aura-delta sampler (castStartAuraDelta): watches HARMFUL auras landing
+    -- on the PARTY (player+party1-4) — friendly units, never the plate — so
+    -- it needs readable group auras: C_Secrets.ShouldAurasBeSecret() ==
+    -- false, the same gate the Guidance check runs on (proven readable in
+    -- party dungeons in-game). When live, UNIT_AURA feeds the ring —
+    -- registered HERE, outside CAST_EVENTS, so the hot event stays fully
+    -- detached whenever the sampler can't run — and castStartAuraDelta-
+    -- curating spells become start-advance-owned. When dark, everything
+    -- degrades to the success-path anchor via the auraDeltaLive ownership
+    -- gate (TI.IsStartAdvanceOwned).
+    self._auraDeltaLive = false
+    if TAD and C_Secrets and type(C_Secrets.ShouldAurasBeSecret) == "function"
+        and C_UnitAuras and type(C_UnitAuras.GetDebuffDataByIndex) == "function" then
+        local okS, secretAuras = pcall(C_Secrets.ShouldAurasBeSecret)
+        if okS and secretAuras == false then
+            self._auraDeltaLive = true
+            TAD.SetEnabled(true)
+            self:RegisterEvent("UNIT_AURA", "OnUnitAura")
+        end
+    end
     -- Reload/login recovery: ENCOUNTER_START does not replay after a /reload,
     -- so a monitor starting mid-encounter would fail OPEN on a blocklisted
     -- fight — the exact Ick & Krick case the blackout exists for. Mirror the
@@ -602,6 +629,10 @@ function DTrash:StopMonitor()
     for event in pairs(CAST_EVENTS) do
         self:UnregisterEvent(event)
     end
+    -- Registered outside CAST_EVENTS (live-gated); a no-op if never registered.
+    self:UnregisterEvent("UNIT_AURA")
+    if TAD then TAD.SetEnabled(false) end
+    self._auraDeltaLive = false
     if self.HideAllAlerts then self:HideAllAlerts() end
     if self.StopMarkers then self:StopMarkers() end
     wipe(self.tracked)
@@ -764,6 +795,9 @@ end
 
 function DTrash:OnRosterChanged()
     self:ScheduleGuidanceCheck(GUIDANCE_ROSTER_DELAY)
+    -- Roster churn re-keys the party unit tokens, so the aura-delta
+    -- baselines are meaningless: wipe + reseed (gated on enabled inside).
+    if TAD then TAD.OnRosterChanged() end
     -- Role churn can flip PlayerSeesTrashSpell from blocked to visible, and
     -- KE's arms are one-shot (a reveal consumed at fire time never re-arms):
     -- re-arm every tracked runtime from its still-correct anchors. Idempotent
@@ -1070,6 +1104,61 @@ local function safeBuffCount(unit)
     return nil
 end
 
+-- Party-debuff feed for the aura-delta sampler (TrashAuraDelta.lua):
+-- registered only while the monitor runs AND group auras are readable (see
+-- StartMonitor). TAD does the tracked-unit filter (player+party1-4), so
+-- nameplate UNIT_AURA churn exits on its first check.
+function DTrash:OnUnitAura(_, unit)
+    if TAD then TAD.OnUnitAura(unit) end
+end
+
+-- Needs-based aura-delta sampling (reference parity: its aura-delta check
+-- is SCHEDULED only when a pending candidate spell curates
+-- castStartAuraDelta — an unscheduled cast never resolves the observation,
+-- so the presence-symmetric fingerprint clause stays lenient for every mob
+-- that never curated the field). A blanket sample would turn every
+-- coincidental party debuff near an unrelated mob's cast start into
+-- disconfirming evidence against its whole spell table. Unknown identity
+-- (no candidates yet) samples leniently: a wrong extra sample risks one
+-- missed credit, while a missing one risks a lenient-nil CAST_START
+-- advance cross-anchoring on the wrong start.
+local function mobCuratesAuraDelta(mob)
+    if not (mob and mob.spells) then return false end
+    for _, sp in pairs(mob.spells) do
+        if sp.castStartAuraDelta == true then return true end
+    end
+    return false
+end
+
+function DTrash:RuntimeNeedsAuraDelta(rt)
+    if rt.matchedNPCID then
+        return mobCuratesAuraDelta(self:MobData(rt.matchedNPCID))
+    end
+    local cands = rt.candidates
+    if not cands then return true end
+    for _, c in ipairs(cands) do
+        if mobCuratesAuraDelta(self:MobData(c.npcID)) then return true end
+    end
+    return false
+end
+
+-- +0.10s aura-delta sample: did a fresh HARMFUL aura land on the party
+-- inside startAt ± 0.10s (reference: a RefreshGroup catch-up sweep, then
+-- FindRecentAdd over [start - pre, min(start + post, now)])? Reads the
+-- PARTY, never the plate token, so it stays sampleable through a flicker
+-- gap. Writes a hard true/false when sampled; skipped (nil = lenient)
+-- when the sampler is dark or the needs gate says no candidate curates it.
+function DTrash:SampleAuraDelta(rt)
+    if not (self._auraDeltaLive and TAD) then return end
+    local startAt = rt.activeCastStartAt
+    if not startAt or not self:RuntimeNeedsAuraDelta(rt) then return end
+    TAD.RefreshGroup(false)
+    local now = GetTime()
+    local endAt = startAt + TARGET_SAMPLE_DELAY
+    if endAt > now then endAt = now end
+    rt.fpCastStartAuraDelta = TAD.FindRecentAdd(startAt - TARGET_SAMPLE_DELAY, endAt) ~= nil
+end
+
 -- Every UNIT_TARGET on a tracked, in-combat plate records a switch timestamp;
 -- an exists→not-exists transition additionally records a clear (reference:
 -- MarkRuntimeUnitTarget + UpdateRuntimeTargetState, which appends ONLY that
@@ -1229,6 +1318,7 @@ function DTrash:BeginCast(unit, kind, castGUID, castBarID)
     rt.fpCastStartChangeTarget = nil
     rt.fpTargetClearOnCastStart = nil
     rt.fpTargetIsTank = nil
+    rt.fpCastStartAuraDelta = nil
     if kind == "cast" then
         rt.sawCastStart = true
     else
@@ -1254,6 +1344,12 @@ function DTrash:BeginCast(unit, kind, castGUID, castBarID)
             -- completes so the pending start-advance can't be permanently
             -- poisoned by a 0.10s plate blink.
             if rt._cachePending == true and rt.activeCastSeq == seq then
+                -- The aura-delta sample reads the PARTY, not the plate
+                -- token — unlike the unit-read fingerprints above it
+                -- survives the gap, and must: ownership made it the
+                -- discriminator that keeps a curating spell's start-advance
+                -- off its mob's OTHER cast starts.
+                self:SampleAuraDelta(rt)
                 rt.startFingerprintsReady = true
                 self:ApplyPendingStartAdvance(rt)
             end
@@ -1280,6 +1376,7 @@ function DTrash:BeginCast(unit, kind, castGUID, castBarID)
             r.fpTargetClearOnCastStart = hasEventInWindow(r.targetClearEvents,
                 startAt - TARGET_SAMPLE_DELAY, startAt + TARGET_SAMPLE_DELAY)
         end
+        self:SampleAuraDelta(r)
         -- Start fingerprints are now as sampled as they will get: the pending
         -- CAST_START start-advance may consume them (no-op until resolved) —
         -- the reference's pending-start fingerprint wait, timer-driven.
@@ -1485,7 +1582,7 @@ local function creditFinishedChannel(self, rt, mob, observed, startAt, transitio
     -- Start-advance-owned CAST_START channels were anchored at their observed
     -- START; a success emit here would advance the cd[] round-robin a second
     -- time (reference: success-mode advance returns nil for CAST_START).
-    if TI.IsStartAdvanceOwned(spellData) then return end
+    if TI.IsStartAdvanceOwned(spellData, self._auraDeltaLive) then return end
     -- The caster's CHANNEL_STOP fires when its cast bar closes, which for
     -- grab/beam mechanics is far short of the ability's real channelTime, so
     -- the STOP is an unreliable success time. Reconstruct the true effect end
@@ -1531,7 +1628,7 @@ local function creditFinishedCast(self, rt, mob, observed, startAt, stopAt)
     end
     -- Start-advance-owned CAST_START spells already anchored at their START
     -- (reference: success-mode advance returns nil for CAST_START).
-    if TI.IsStartAdvanceOwned(mob.spells and mob.spells[spellID]) then return end
+    if TI.IsStartAdvanceOwned(mob.spells and mob.spells[spellID], self._auraDeltaLive) then return end
     self:EmitCastResolution(rt, mob, spellID, startAt, stopAt, now, "cast", observed.duration)
 end
 
@@ -1667,7 +1764,7 @@ function DTrash:ApplyPendingStartAdvance(rt)
     -- blink inside the sample window strand the pending forever — no cd bar
     -- until a full cycle later, on mobs (e.g. Devoted Woebringer) whose
     -- spells curate zero start fingerprints and never needed the wait.
-    if not rt.startFingerprintsReady and TI.NeedsStartFingerprints(mob) then return end
+    if not rt.startFingerprintsReady and TI.NeedsStartFingerprints(mob, self._auraDeltaLive) then return end
     local kind = rt.pendingStartAdvanceKind
     rt.pendingStartAdvanceAt, rt.pendingStartAdvanceKind = nil, nil
     local fingerprints = {
@@ -1676,10 +1773,11 @@ function DTrash:ApplyPendingStartAdvance(rt)
         castStartChangeTarget = rt.fpCastStartChangeTarget,
         targetClearOnCastStart = rt.fpTargetClearOnCastStart,
         targetIsTank = rt.fpTargetIsTank,
+        castStartAuraDelta = rt.fpCastStartAuraDelta,
     }
     local now = GetTime()
     for spellID, spellData in pairs(mob.spells) do
-        if TI.MatchesObservedCastStart(spellData, kind, fingerprints) then
+        if TI.MatchesObservedCastStart(spellData, kind, fingerprints, self._auraDeltaLive) then
             self:EmitCastResolution(rt, mob, spellID, startAt, startAt, now, kind, nil)
         end
     end
@@ -1779,6 +1877,7 @@ function DTrash:FinishCast(unit, kind, interrupted, castBarID)
             castStartChangeTarget = rt.fpCastStartChangeTarget,
             targetClearOnCastStart = rt.fpTargetClearOnCastStart,
             targetIsTank = rt.fpTargetIsTank,
+            castStartAuraDelta = rt.fpCastStartAuraDelta,
         },
     }
 
@@ -1829,6 +1928,7 @@ function DTrash:FinishCast(unit, kind, interrupted, castBarID)
                     adopted.fpCastStartChangeTarget = rt.fpCastStartChangeTarget
                     adopted.fpTargetClearOnCastStart = rt.fpTargetClearOnCastStart
                     adopted.fpTargetIsTank = rt.fpTargetIsTank
+                    adopted.fpCastStartAuraDelta = rt.fpCastStartAuraDelta
                     adopted.lastCastBarID = rt.lastCastBarID
                     adopted.lastCastStartAt = rt.lastCastStartAt
                     adopted.lastCastEndAt = rt.lastCastEndAt

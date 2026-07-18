@@ -16,7 +16,7 @@ describe("DungeonTrash — CAST_START start-advance", function()
     before_each(function()
         clock = { now = 100 }
         timers = {}
-        world = { combat = {} }
+        world = { combat = {}, debuffs = {} }
         scheduled, predicted = {}, {}
 
         mock.install({
@@ -31,10 +31,22 @@ describe("DungeonTrash — CAST_START start-advance", function()
         _G.UnitAffectingCombat = function(u) return world.combat[u] == true end
         _G.GetInstanceInfo = function() return "Dungeon", "party", 8, nil, nil, nil, nil, 1 end
         _G.IsInInstance = function() return true, "party" end
+        -- Party-debuff surface for the aura-delta sampler; set BEFORE the
+        -- module loads so the parse-time locals capture it.
+        _G.C_UnitAuras = {
+            GetAuraDataByIndex = function() return nil end,
+            GetDebuffDataByIndex = function(unit, index)
+                local list = world.debuffs[unit]
+                local id = list and list[index]
+                if id then return { auraInstanceID = id } end
+                return nil
+            end,
+        }
 
         local modules = helpers.installAddonShim()
         KE = { Print = function() end }  -- DEBUG_DTRASH dprints route here
         helpers.loadModule("Modules/DungeonTimers/Trash/TrashInference.lua", KE)
+        helpers.loadModule("Modules/DungeonTimers/Trash/TrashAuraDelta.lua", KE)
         helpers.loadModule("Modules/DungeonTimers/Trash/DungeonTrash.lua", KE)
         helpers.loadModule("Modules/DungeonTimers/Trash/TrashCache.lua", KE)
         DTrash = modules["DungeonTrash"]
@@ -67,6 +79,7 @@ describe("DungeonTrash — CAST_START start-advance", function()
         _G.UnitAffectingCombat = nil
         _G.GetInstanceInfo = nil
         _G.IsInInstance = nil
+        _G.C_UnitAuras = nil
         _G.KitnEssentials = nil
     end)
 
@@ -299,12 +312,44 @@ describe("DungeonTrash — CAST_START start-advance", function()
             assert.is_true(TI.MatchesObservedCastStart(pureChannel, "channel", {}))
         end)
 
-        it("a spell curating the unported castStartAuraDelta is not start-advance owned", function()
+        it("castStartAuraDelta ownership follows the sampler's availability", function()
             local ambush = { cdMode = "CAST_START", castTime = 3.5, castStartAuraDelta = true }
+            -- sampler dark: neither provable nor refutable at start → success path
             assert.is_false(TI.IsStartAdvanceOwned(ambush))
             assert.is_false(TI.MatchesObservedCastStart(ambush, "cast", {}))
+            -- sampler live: start-advance-owned, discriminated by the sampled delta
+            assert.is_true(TI.IsStartAdvanceOwned(ambush, true))
+            assert.is_true(TI.MatchesObservedCastStart(ambush, "cast",
+                { castStartAuraDelta = true }, true))
+            -- a start with no fresh party debuff (the mob's OTHER cast) can
+            -- never cross-anchor the curating spell
+            assert.is_false(TI.MatchesObservedCastStart(ambush, "cast",
+                { castStartAuraDelta = false }, true))
             assert.is_true(TI.IsStartAdvanceOwned({ cdMode = "CAST_START", channelTime = 5 }))
             assert.is_false(TI.IsStartAdvanceOwned({ cdMode = "SUCCESS", castTime = 2 }))
+        end)
+
+        it("a sampled aura delta is presence-symmetric at success matching", function()
+            local plain = { castTime = 3.5 }
+            local curating = { castTime = 3.5, castStartAuraDelta = true }
+            local matched = { kind = "cast", duration = 3.5,
+                fingerprints = { castStartAuraDelta = true } }
+            local unmatched = { kind = "cast", duration = 3.5,
+                fingerprints = { castStartAuraDelta = false } }
+            local unsampled = { kind = "cast", duration = 3.5, fingerprints = {} }
+            assert.is_false(TI.SpellMatchesObserved(plain, matched))  -- delta the spell can't explain
+            assert.is_true(TI.SpellMatchesObserved(plain, unmatched))
+            assert.is_true(TI.SpellMatchesObserved(plain, unsampled)) -- nil stays lenient
+            assert.is_true(TI.SpellMatchesObserved(curating, matched))
+            assert.is_false(TI.SpellMatchesObserved(curating, unmatched))
+            assert.is_true(TI.SpellMatchesObserved(curating, unsampled))
+        end)
+
+        it("NeedsStartFingerprints counts castStartAuraDelta only when the sampler is live", function()
+            local mob = { spells = { [30] = { cdMode = "CAST_START", castTime = 3.5,
+                castStartAuraDelta = true } } }
+            assert.is_false(TI.NeedsStartFingerprints(mob))       -- not owned → nothing to wait for
+            assert.is_true(TI.NeedsStartFingerprints(mob, true))  -- owned → wait for the sampler
         end)
 
         it("sampled fingerprints gate the match; unsampled stay lenient", function()
@@ -312,6 +357,74 @@ describe("DungeonTrash — CAST_START start-advance", function()
             assert.is_false(TI.MatchesObservedCastStart(sp, "channel", { castStartChangeTarget = false }))
             assert.is_true(TI.MatchesObservedCastStart(sp, "channel", { castStartChangeTarget = true }))
             assert.is_true(TI.MatchesObservedCastStart(sp, "channel", {}))
+        end)
+    end)
+
+    -- Vicious Ravager shape (Academy 196671): Ambush curates castStartAuraDelta
+    -- + CAST_START; Riftbreath is a two-phase success-mode spell. The aura-delta
+    -- sampler (TrashAuraDelta.lua) makes Ambush start-advance-owned, so a
+    -- meld-FAILED cast still advances its schedule instead of stranding the
+    -- plate marker past-due — the Shadowmeld plate-break headline fix.
+    describe("aura-delta sampled start-advance (Vicious Ambush shape)", function()
+        local TAD
+        local function ravagerData()
+            KE.TrashData[1].mobs[111].spells = {
+                [30] = { name = "Ambush", castTime = 3.5, first = 3.3, cd = { 14.5 },
+                    cdMode = "CAST_START", castStartAuraDelta = true },
+                [40] = { name = "Riftbreath", castTime = 2.5, channelTime = 2.5,
+                    first = 7, cd = { 13.2 } },
+            }
+            TAD = KE.TrashAuraDelta
+            DTrash._auraDeltaLive = true
+            TAD.SetEnabled(true)
+        end
+
+        it("a FAILED cast still advances the schedule (start-advance owns it)", function()
+            ravagerData()
+            local rt = trackResolved("nameplate1")
+            local base = #timers
+            DTrash:OnCastStart(nil, "nameplate1", nil, nil, 3)   -- Ambush start at 100
+            world.debuffs.player = { 501 }                       -- pounce debuff lands on the party
+            clock.now = 100.05
+            TAD.OnUnitAura("player")                             -- UNIT_AURA edge feeds the ring
+            clock.now = 100.1
+            fireTimersAfter(base)                                -- +0.10s sampler
+            assert.is_true(rt.fpCastStartAuraDelta)
+            assert.equals("success", rt.anchors[30].mode)
+            assert.equals(114.5, rt.anchors[30].nextStartAt)     -- start + cd 14.5
+            clock.now = 102                                      -- Shadowmeld abort
+            DTrash:OnCastFailed(nil, "nameplate1", nil, nil, 3)
+            assert.equals(114.5, rt.anchors[30].nextStartAt)     -- anchor survives the FAILED
+            assert.is_nil(rt.sawInterrupted)                     -- FAILED still isn't kick evidence
+        end)
+
+        it("a start with no fresh party debuff cannot cross-anchor the curating spell", function()
+            ravagerData()
+            local rt = trackResolved("nameplate1")
+            local base = #timers
+            DTrash:OnCastStart(nil, "nameplate1", nil, nil, 3)   -- Riftbreath-shaped start
+            clock.now = 100.1
+            fireTimersAfter(base)
+            assert.is_false(rt.fpCastStartAuraDelta)
+            assert.equals("enter", rt.anchors[30].mode)          -- Ambush NOT start-advanced
+            assert.is_nil(rt.pendingStartAdvanceAt)              -- consumed, nothing matched
+        end)
+
+        it("with the sampler dark, the curating spell keeps the success-path anchor", function()
+            ravagerData()
+            DTrash._auraDeltaLive = false
+            TAD.SetEnabled(false)
+            local rt = trackResolved("nameplate1")
+            local base = #timers
+            DTrash:OnCastStart(nil, "nameplate1", nil, nil, 3)
+            clock.now = 100.1
+            fireTimersAfter(base)
+            assert.is_nil(rt.fpCastStartAuraDelta)               -- never sampled
+            assert.equals("enter", rt.anchors[30].mode)          -- no start advance
+            clock.now = 103.5
+            DTrash:OnCastStop(nil, "nameplate1", nil, nil, 3)
+            assert.equals("success", rt.anchors[30].mode)        -- success credit lands
+            assert.equals(114.5, rt.anchors[30].nextStartAt)     -- CAST_START origin: start 100 + 14.5
         end)
     end)
 

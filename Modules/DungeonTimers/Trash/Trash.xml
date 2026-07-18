@@ -5,6 +5,7 @@
     <Script file="TrashCurated.lua" />
     <Script file="TrashTraits.lua" />
     <Script file="TrashInference.lua" />
+    <Script file="TrashAuraDelta.lua" />
     <Script file="DungeonTrash.lua" />
     <Script file="TrashConfig.lua" />
     <Script file="TrashOutput.lua" />
