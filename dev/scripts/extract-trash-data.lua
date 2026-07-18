@@ -260,16 +260,16 @@ local function serializeTrashData()
     w("-- ║                                                          ║")
     w("-- ║  Schema:                                                 ║")
     w("-- ║    KE.TrashData[mapID] = {                               ║")
-    w("-- ║        mapID, dungeonKey, name,   -- English dungeon name ║")
+    w("-- ║        mapID, dungeonKey, name,   -- English dungeon name║")
     w("-- ║        mobs = {                                          ║")
     w("-- ║            [npcID] = {                                   ║")
     w("-- ║                npcID, name,       -- enUS mob name       ║")
     w("-- ║                spells = {                                ║")
     w("-- ║                    [spellID] = {                         ║")
-    w("-- ║                        spellID, name,  -- enUS spell name ║")
+    w("-- ║                        spellID, name,  -- enUS spell name║")
     w("-- ║                        castTime, channelTime, first,     ║")
     w("-- ║                        cd = { ... }, cdMode,             ║")
-    w("-- ║                        -- fingerprints (present when set):║")
+    w("-- ║                       -- fingerprints (present when set):║")
     w("-- ║                        targetExists, targetAPIExists,    ║")
     w("-- ║                        castStartChangeTarget,            ║")
     w("-- ║                        targetClearOnCastStart,           ║")
@@ -279,11 +279,11 @@ local function serializeTrashData()
     w("-- ║                        castTimeExtra = { ... },          ║")
     w("-- ║                        -- shipped display defaults:      ║")
     w("-- ║                        showNameplate,  -- default true   ║")
-    w("-- ║                        display,        -- \"bar\"|\"text\"    ║")
+    w("-- ║                        display,        -- \"bar\"|\"text\"   ║")
     w("-- ║                        roles = { tank, healer, dps },    ║")
-    w("-- ║                    },                                     ║")
-    w("-- ║                },                                         ║")
-    w("-- ║            },                                             ║")
+    w("-- ║                    },                                    ║")
+    w("-- ║                },                                        ║")
+    w("-- ║            },                                            ║")
     w("-- ║        },                                                ║")
     w("-- ║    }                                                     ║")
     w("-- ╚══════════════════════════════════════════════════════════╝")
@@ -409,7 +409,7 @@ local function serializeTrashTraits()
     w("-- ║        identity = { level, sex, power, classID,          ║")
     w("-- ║            buffCount, hasCastSkill, noCastSkill,         ║")
     w("-- ║            hasCastSpell, hasChannelSpell,                ║")
-    w("-- ║            hasInterruptFlag, cannotInterrupt, nonElite }, ║")
+    w("-- ║            hasInterruptFlag, cannotInterrupt, nonElite },║")
     w("-- ║        placement,    -- verbatim CSV nameplate slot set  ║")
     w("-- ║        castTimeSet,  -- parsed cast-time numbers         ║")
     w("-- ║        channelTimeSet,                                   ║")
@@ -527,9 +527,19 @@ local DIFF_FIELDS = {
     "castTime", "channelTime", "first", "cd", "cdMode",
     "targetExists", "targetAPIExists", "castStartChangeTarget",
     "targetClearOnCastStart", "castStartAuraDelta",
-    "selfBuffCountDeltaOnSuccess", "channelRefreshOnInterruptible",
+    "selfBuffCountDeltaOnSuccess", "targetBuffCountDeltaOnSuccess",
+    "channelRefreshOnInterruptible",
     "castTimeExtra",
 }
+
+-- Fields the upstream ENGINE consumes but KE deliberately does not port
+-- (audit F3, 2026-07-18: targetBuffCountDeltaOnSuccess — an abandoned
+-- upstream experiment; its one historical row, Vicious Ambush in v26.5.12,
+-- was superseded by castStartAuraDelta in v26.6.29. Decision: no KE runtime
+-- until a real row exists). A row in the PRIMARY build would flow into
+-- TrashData verbatim with NO KE consumer — harmless but silent — so the
+-- summary shouts when one appears: it must trigger a port decision.
+local UNPORTED_RUNTIME_FIELDS = { "targetBuffCountDeltaOnSuccess" }
 
 -- Canonical string form so absent-field / array / scalar all compare cleanly.
 local function canon(v)
@@ -715,7 +725,9 @@ end
 ---------------------------------------------------------------------------
 
 local function writeFile(path, content)
-    local f, err = io.open(path, "w")
+    -- binary mode: keep LF endings on Windows so regeneration is byte-identical
+    -- to the committed files (repo stores these as eol=lf)
+    local f, err = io.open(path, "wb")
     if not f then error("cannot write " .. path .. ": " .. tostring(err)) end
     f:write(content)
     f:close()
@@ -744,4 +756,26 @@ if next(unknownFields) then
     for k in pairs(unknownFields) do names[#names + 1] = k end
     table.sort(names)
     print("  NOTE unmodeled source fields copied verbatim: " .. table.concat(names, ", "))
+end
+
+-- Loud check for deliberately-unported engine fields in the PRIMARY build
+-- (see UNPORTED_RUNTIME_FIELDS above the diff section).
+for _, field in ipairs(UNPORTED_RUNTIME_FIELDS) do
+    local hits = {}
+    for mapID, dungeon in pairs(CD_DATA) do
+        for npcID, mob in pairs(dungeon.mobs or {}) do
+            for spellID, spell in pairs(mob.spells or {}) do
+                if spell[field] ~= nil then
+                    hits[#hits + 1] = string.format("%d/%d/%d", mapID, npcID, spellID)
+                end
+            end
+        end
+    end
+    if #hits > 0 then
+        print("  *** WARNING: PRIMARY data now ships '" .. field .. "' ("
+            .. table.concat(hits, ", ") .. ") — KE has NO runtime consumer "
+            .. "for it. Revisit the audit F3 port decision "
+            .. "(dev/docs/audits/2026-07-18-trash-module-exboss-audit.md) "
+            .. "before shipping this data refresh. ***")
+    end
 end
