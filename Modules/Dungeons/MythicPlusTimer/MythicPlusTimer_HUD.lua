@@ -583,7 +583,8 @@ function MPT:RenderTimer()
         local col = diff <= 0 and (MPT.db.SplitAheadColor or {0.25, 0.88, 0.82})
                               or (MPT.db.SplitBehindColor or {1, 0.34, 0.34})
         local sign = diff < 0 and "-" or "+"
-        local dStr = (diff == 0) and "0:00" or MPT.FormatTime(abs(diff), false)
+        -- Unpadded ("+2:10", not "+02:10") — user direction 2026-07-18.
+        local dStr = (diff == 0) and "0:00" or _FmtShort(abs(diff))
         MPT.SetTextGated(f.timerPBText, format("%s%s%s|r", Hex(col), sign, dStr))
         f.timerPBText:SetAlpha(1)
         f.timerPBText:Show()
@@ -599,7 +600,7 @@ function MPT:RenderTimer()
         -- from the same whole-record resolve, so it speaks for all of them.
         local src = MPT.run.pbSourceLevel
         local tag = (src and src ~= (MPT.run.level or 0)) and format(" [%d]", src) or ""
-        local pbStr = format("%sPB %s%s|r", pbHex, MPT.FormatTime(MPT.run.bestOverall, false), tag)
+        local pbStr = format("%sPB %s%s|r", pbHex, _FmtShort(MPT.run.bestOverall), tag)
         MPT.SetTextGated(f.timerPBText, pbStr)
         f.timerPBText:SetAlpha(a)
         f.timerPBText:Show()
@@ -749,6 +750,21 @@ local function _ThreshLabelBelow(elapsed, cutoff)
         return "|cff787878" .. _FmtShort(cutoff) .. "|r"
     end
     return _FmtShort(cutoff - elapsed)
+end
+
+-- Completion: the +3/+2 labels lock to their margin/overshoot vs the frozen
+-- clear time — the bar-mode analogue of the race line's LOCKED_MADE/
+-- LOCKED_MISSED states, same sign/color convention (made = bare margin in
+-- TimerSuccessColor, missed = "+overshoot" in TimerExpiredColor). The +1
+-- (bar end) label keeps its own behavior — white frozen remaining when
+-- timed, red negative overrun when depleted — via the existing path.
+local function _ThreshLockedLabel(elapsed, cutoff, db)
+    if elapsed <= cutoff then
+        local c = db.TimerSuccessColor or { 0, 1, 0.14 }
+        return Hex(c) .. _FmtShort(cutoff - elapsed) .. "|r"
+    end
+    local c = db.TimerExpiredColor or { 1, 0.16, 0.18 }
+    return Hex(c) .. "+" .. _FmtShort(elapsed - cutoff) .. "|r"
 end
 
 -- Apply a threshold label: nil hides (passed cutoff), a string shows.
@@ -903,9 +919,17 @@ function MPT:RenderThresholds()
     end
     -- BELOW keeps passed cutoffs visible as greyed absolute times; every
     -- other placement hides them (_ThreshLabel returns nil).
-    local labelFn = (place == "BELOW") and _ThreshLabelBelow or _ThreshLabel
-    _SetThreshText(f.thresh3Text, labelFn(elapsed, t3))
-    _SetThreshText(f.thresh2Text, labelFn(elapsed, t2))
+    -- Completion overrides every placement: the +3/+2 labels un-hide and lock
+    -- to their signed margin/overshoot vs the frozen clear time (BELOW's grey
+    -- absolute state is a mid-run pacing aid, not a result readout).
+    if run.completed then
+        _SetThreshText(f.thresh3Text, _ThreshLockedLabel(elapsed, t3, db))
+        _SetThreshText(f.thresh2Text, _ThreshLockedLabel(elapsed, t2, db))
+    else
+        local labelFn = (place == "BELOW") and _ThreshLabelBelow or _ThreshLabel
+        _SetThreshText(f.thresh3Text, labelFn(elapsed, t3))
+        _SetThreshText(f.thresh2Text, labelFn(elapsed, t2))
+    end
     -- The +1 (bar end) label keeps counting INTO the negative after the timer
     -- depletes ("-0:46" in the depleted color, round-3 feedback) instead of
     -- hiding like the passed +3/+2 cutoffs.
@@ -1157,24 +1181,33 @@ function MPT:RenderForces()
         str = format("%.2f%%", pct)
     end
 
-    -- Forces PB (inline after the %/count): bare PB target while filling,
-    -- teal(-)/red(+) delta once capped. Reuses the boss-row PB toggles + split
-    -- colors. fo.pbTime is resolved by UpdateSplits from a stored `forces`
-    -- split, so it only appears after one completed seed run in this dungeon.
+    -- Forces PB: bare PB target after the %/count while filling; once capped,
+    -- a completion PREFIX to the LEFT of the forces text — "<delta> [<time>]
+    -- <forces text>" (user direction 2026-07-18, screenshot parity; no extra
+    -- separator — the " - " seen in COUNT_PERCENT belongs to that format).
+    -- The delta keeps the boss-row style/gate (ShowPBDelta, ahead/behind
+    -- colors, bare unpadded); the bracketed forces clear time shares the boss
+    -- rows' "Show Clear Times" gate and needs NO PB (a first-ever run has a
+    -- clear time but no delta), inheriting the line's ForcesCompleteColor tint.
+    -- fo.pbTime is resolved by UpdateSplits from a stored `forces` split, so
+    -- delta/target only appear after one completed seed run in this dungeon.
     local fpbt = fo.pbTime
-    if fpbt and fpbt > 0 then
-        if fo.completed then
-            if db.ShowPBDelta and fo.clearTime and fo.clearTime > 0 then
-                local diff = fo.clearTime - fpbt
-                local col  = diff <= 0 and (db.SplitAheadColor or { 0.25, 0.88, 0.82 })
-                                       or  (db.SplitBehindColor or { 1, 0.34, 0.34 })
-                local sign = diff < 0 and "-" or "+"
-                local dStr = (diff == 0) and "0:00" or MPT.FormatTime(abs(diff), false)
-                str = str .. format("  %s(%s%s)|r", Hex(col), sign, dStr)
-            end
-        elseif self:ShouldShowRecords() then
-            str = str .. format("  %s%s|r", Hex(db.PBColor or { 0.81, 0.81, 0.81 }), MPT.FormatTime(fpbt, false))
+    if fo.completed then
+        local prefix = ""
+        if db.ShowPBDelta and fpbt and fpbt > 0 and fo.clearTime and fo.clearTime > 0 then
+            local diff = fo.clearTime - fpbt
+            local col  = diff <= 0 and (db.SplitAheadColor or { 0.25, 0.88, 0.82 })
+                                   or  (db.SplitBehindColor or { 1, 0.34, 0.34 })
+            local sign = diff < 0 and "-" or "+"
+            local dStr = (diff == 0) and "0:00" or _FmtShort(abs(diff))
+            prefix = format("%s%s%s|r ", Hex(col), sign, dStr)
         end
+        if db.ShowObjectiveTimes ~= false and fo.clearTime and fo.clearTime > 0 then
+            prefix = prefix .. format("[%s] ", _FmtShort(fo.clearTime))
+        end
+        str = prefix .. str
+    elseif fpbt and fpbt > 0 and self:ShouldShowRecords() then
+        str = str .. format("  %s%s|r", Hex(db.PBColor or { 0.81, 0.81, 0.81 }), _FmtShort(fpbt))
     end
 
     -- Completion recolors the TEXT (not the bar): ForcesCompleteColor wins
@@ -1256,18 +1289,20 @@ function MPT:RenderObjectives()
             timeFS:SetAlpha(1)  -- clear a possible pending-row PBOpacity dim on this pooled slot
             -- "Show Clear Times" gates the clear-time text itself;
             -- the PB delta is self-contained and independently gated below.
+            -- Row style (user direction 2026-07-18): bracketed unpadded clear
+            -- time + bare unpadded delta — "[9:09] +0:27", not "09:09 (+00:30)".
             if db.ShowObjectiveTimes ~= false then
                 local doneHex = Hex(db.ObjectiveDoneColor or { 0, 1, 0.14 })
-                rightText = format("%s%s|r", doneHex, MPT.FormatTime(obj.clearTime, false))
+                rightText = format("%s[%s]|r", doneHex, _FmtShort(obj.clearTime))
             end
             if db.ShowPBDelta and obj.pbTime then
                 local diff = obj.clearTime - obj.pbTime
                 local col  = diff <= 0 and (db.SplitAheadColor or { 0.25, 0.88, 0.82 })
                                        or  (db.SplitBehindColor or { 1, 0.34, 0.34 })
                 local sign = diff < 0 and "-" or "+"
-                local dStr = (diff == 0) and "0:00" or MPT.FormatTime(abs(diff), false)
-                local sep  = (rightText ~= "") and "  " or ""
-                rightText  = rightText .. sep .. format("%s(%s%s)|r", Hex(col), sign, dStr)
+                local dStr = (diff == 0) and "0:00" or _FmtShort(abs(diff))
+                local sep  = (rightText ~= "") and " " or ""
+                rightText  = rightText .. sep .. format("%s%s%s|r", Hex(col), sign, dStr)
             end
         elseif (not obj.completed) and obj.pbTime and self:ShouldShowRecords() then
             -- Pending PB targets are governed by SplitsShowMode (see
@@ -1276,7 +1311,7 @@ function MPT:RenderObjectives()
             local a = max(0, min(1, db.PBOpacity or 1))
             -- Bare time, no "PB" prefix (round-4 cleanup): the PB color already
             -- reads as the target, and the prefix crowded the row.
-            rightText = format("%s%s|r", pbHex, MPT.FormatTime(obj.pbTime, false))
+            rightText = format("%s%s|r", pbHex, _FmtShort(obj.pbTime))
             if a < 1 then timeFS:SetAlpha(a) else timeFS:SetAlpha(1) end
         end
 
