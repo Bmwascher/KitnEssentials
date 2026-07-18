@@ -447,6 +447,41 @@ describe("DungeonTrash — CAST_START start-advance", function()
             assert.is_nil(rt.pendingStartAdvanceAt)              -- consumed exactly once
         end)
 
+        -- Churn guard (review find, round 2): the curator present at the hold
+        -- decision, absent when the +0.10s sampler recomputes need (sample
+        -- skipped, delta nil, ready bit set anyway), then present again at
+        -- resolution. An unsampled delta must fail ownership — never match on
+        -- the lenient nil — and the success path recovers the anchor.
+        it("candidate churn across the sample window cannot produce a lenient-nil advance", function()
+            ravagerData()
+            KE.TrashData[1].mobs[222] = { npcID = 222, name = "Decoy", spells = {
+                [50] = { name = "Bolt", castTime = 3, first = 12, cd = { 15 } },
+            } }
+            local rt = trackResolved("nameplate1")
+            rt.matchedNPCID = nil
+            rt.candidates = { { npcID = 111 } }        -- curator present at the hold
+            local base = #timers
+            DTrash:OnCastStart(nil, "nameplate1", nil, nil, 3)   -- real Ambush start at 100
+            world.debuffs.player = { 601 }             -- the debuff DOES land...
+            clock.now = 100.05
+            TAD.OnUnitAura("player")
+            rt.candidates = { { npcID = 222 } }        -- ...but churn hides the curator at +0.10s
+            clock.now = 100.1
+            fireTimersAfter(base)                      -- sampling skipped: need=false at fire time
+            assert.is_nil(rt.fpCastStartAuraDelta)
+            assert.is_true(rt.startFingerprintsReady)
+            assert.equals(100, rt.pendingStartAdvanceAt)
+            rt.matchedNPCID = 111                      -- the curator returns and resolves
+            rt.candidates = { { npcID = 111, levelAgreed = true } }
+            DTrash:ApplyPendingStartAdvance(rt)
+            assert.is_nil(rt.anchors)                  -- unsampled delta: NOT owned, no advance
+            assert.equals(100, rt.pendingStartAdvanceAt)         -- retained, never lenient-consumed
+            clock.now = 103.5
+            DTrash:OnCastStop(nil, "nameplate1", nil, nil, 3)
+            assert.equals("success", rt.anchors[30].mode)        -- success path recovers the anchor
+            assert.equals(114.5, rt.anchors[30].nextStartAt)     -- CAST_START origin: start 100 + 14.5
+        end)
+
         it("with the sampler dark, the curating spell keeps the success-path anchor", function()
             ravagerData()
             DTrash._auraDeltaLive = false

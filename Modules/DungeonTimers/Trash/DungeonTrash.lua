@@ -1590,7 +1590,13 @@ local function creditFinishedChannel(self, rt, mob, observed, startAt, transitio
     -- Start-advance-owned CAST_START channels were anchored at their observed
     -- START; a success emit here would advance the cd[] round-robin a second
     -- time (reference: success-mode advance returns nil for CAST_START).
-    if TI.IsStartAdvanceOwned(spellData, self._auraDeltaLive) then return end
+    -- Ownership mirrors the start path's PER-CAST rule via the fingerprint
+    -- snapshot frozen into `observed` at FinishCast (churn guard): an
+    -- unsampled delta means the start path never advanced, so the success
+    -- credit must land — and the frozen snapshot keeps a new cast's field
+    -- clear inside a deferred-credit window from faking "unsampled".
+    if TI.IsStartAdvanceOwned(spellData,
+        type(observed.fingerprints.castStartAuraDelta) == "boolean") then return end
     -- The caster's CHANNEL_STOP fires when its cast bar closes, which for
     -- grab/beam mechanics is far short of the ability's real channelTime, so
     -- the STOP is an unreliable success time. Reconstruct the true effect end
@@ -1635,8 +1641,11 @@ local function creditFinishedCast(self, rt, mob, observed, startAt, stopAt)
         return
     end
     -- Start-advance-owned CAST_START spells already anchored at their START
-    -- (reference: success-mode advance returns nil for CAST_START).
-    if TI.IsStartAdvanceOwned(mob.spells and mob.spells[spellID], self._auraDeltaLive) then return end
+    -- (reference: success-mode advance returns nil for CAST_START). Same
+    -- per-cast ownership rule as the channel path above (churn guard, via
+    -- the frozen fingerprint snapshot).
+    if TI.IsStartAdvanceOwned(mob.spells and mob.spells[spellID],
+        type(observed.fingerprints.castStartAuraDelta) == "boolean") then return end
     self:EmitCastResolution(rt, mob, spellID, startAt, stopAt, now, "cast", observed.duration)
 end
 
@@ -1792,6 +1801,13 @@ function DTrash:ApplyPendingStartAdvance(rt)
         targetIsTank = rt.fpTargetIsTank,
         castStartAuraDelta = rt.fpCastStartAuraDelta,
     }
+    -- Per-cast delta resolution (churn guard): ownership of a curating
+    -- spell requires THIS cast's delta to have actually been SAMPLED.
+    -- Candidate churn across the +0.10s window can skip the sample while
+    -- the ready bit still sets, and an owned match on the lenient nil
+    -- would anchor at a start the sample never discriminated. Unsampled →
+    -- not owned this cast → the success path credits instead.
+    local deltaSampled = type(fingerprints.castStartAuraDelta) == "boolean"
     local now = GetTime()
     -- Consume ON MATCH, not unconditionally (reference: the pending start
     -- is retained while its fingerprint needs are unresolved and re-applied
@@ -1804,7 +1820,7 @@ function DTrash:ApplyPendingStartAdvance(rt)
     -- the same window the kick-survival behavior already keeps it for.
     local consumed = false
     for spellID, spellData in pairs(mob.spells) do
-        if TI.MatchesObservedCastStart(spellData, kind, fingerprints, self._auraDeltaLive) then
+        if TI.MatchesObservedCastStart(spellData, kind, fingerprints, deltaSampled) then
             consumed = true
             self:EmitCastResolution(rt, mob, spellID, startAt, startAt, now, kind, nil)
         end

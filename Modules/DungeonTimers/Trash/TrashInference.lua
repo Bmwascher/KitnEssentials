@@ -539,23 +539,30 @@ local function hasPositiveDuration(v)
 end
 
 -- Is a CAST_START spell OWNED by the start-advance path? Requires every
--- curated start fingerprint to be one the engine can sample:
+-- curated start fingerprint to be one the engine can discriminate with:
 -- castStartAuraDelta needs the party aura-delta sampler (TrashAuraDelta.lua,
 -- the reference's own discriminator, now ported), which only runs while
--- group auras are readable — the caller passes that availability as
--- auraDeltaLive. Sampler live → the fingerprint discriminates the start
--- (a Riftbreath start carries no fresh party debuff, so Vicious Ambush
--- 388942 — the one shipped row — cannot cross-anchor on it) and a
--- meld-FAILED Ambush still advances at its observed START. Sampler dark →
--- the spell can be neither proven nor refuted at start and keeps the
--- success-path anchor (the pre-sampler behavior): a nil fingerprint is
--- LENIENT, and lenient ownership would be exactly the cross-anchor the old
--- unconditional exclusion existed to prevent.
-function TI.IsStartAdvanceOwned(spellData, auraDeltaLive)
+-- group auras are readable. auraDeltaUsable answers "can the delta
+-- discriminate THIS consult" and callers derive it per site:
+--   • the pre-sample WAIT decision (NeedsStartFingerprints) passes the
+--     SESSION sampler availability — before the sample lands, availability
+--     is the only knowable thing;
+--   • MATCH/ownership decisions (start consumption, success-credit swallow)
+--     pass the PER-CAST sampled state (type(fp.castStartAuraDelta) ==
+--     "boolean") — candidate churn across the sample window can leave the
+--     delta unsampled with the ready bit set, and an owned spell matched on
+--     a lenient nil would anchor at a start the sample never discriminated
+--     (churn guard, review find 2026-07-18).
+-- Usable → the fingerprint discriminates the start (a Riftbreath start
+-- carries no fresh party debuff, so Vicious Ambush 388942 — the one shipped
+-- row — cannot cross-anchor on it) and a meld-FAILED Ambush still advances
+-- at its observed START. Not usable → the spell keeps the success-path
+-- anchor for that cast (the pre-sampler behavior).
+function TI.IsStartAdvanceOwned(spellData, auraDeltaUsable)
     if type(spellData) ~= "table" or spellData.cdMode ~= "CAST_START" then
         return false
     end
-    if spellData.castStartAuraDelta == true and auraDeltaLive ~= true then
+    if spellData.castStartAuraDelta == true and auraDeltaUsable ~= true then
         return false
     end
     return true
@@ -567,10 +574,10 @@ end
 -- nothing curated there is nothing to sample, and the wait must not gate
 -- consumption — the sampler is the only writer of the ready bit, and a plate
 -- blink inside the 0.10s window would otherwise strand the pending forever.
-function TI.NeedsStartFingerprints(mobData, auraDeltaLive)
+function TI.NeedsStartFingerprints(mobData, auraDeltaUsable)
     if not (mobData and mobData.spells) then return false end
     for _, spell in pairs(mobData.spells) do
-        if TI.IsStartAdvanceOwned(spell, auraDeltaLive) then
+        if TI.IsStartAdvanceOwned(spell, auraDeltaUsable) then
             for _, m in ipairs(BOOL_FINGERPRINTS) do
                 if type(spell[m.data]) == "boolean" then return true end
             end
@@ -585,8 +592,8 @@ end
 -- (its channel start is the transition pairing's job, never a fresh advance).
 -- Fingerprints reuse the shared duration-agnostic tail; duration itself is
 -- unknowable at start.
-function TI.MatchesObservedCastStart(spellData, kind, fingerprints, auraDeltaLive)
-    if not TI.IsStartAdvanceOwned(spellData, auraDeltaLive) then return false end
+function TI.MatchesObservedCastStart(spellData, kind, fingerprints, auraDeltaUsable)
+    if not TI.IsStartAdvanceOwned(spellData, auraDeltaUsable) then return false end
     local hasCast = hasPositiveDuration(spellData.castTime)
         or hasPositiveDuration(spellData.castTimeExtra)
     if kind == "cast" then
