@@ -407,7 +407,44 @@ describe("DungeonTrash — CAST_START start-advance", function()
             fireTimersAfter(base)
             assert.is_false(rt.fpCastStartAuraDelta)
             assert.equals("enter", rt.anchors[30].mode)          -- Ambush NOT start-advanced
-            assert.is_nil(rt.pendingStartAdvanceAt)              -- consumed, nothing matched
+            -- Nothing matched → the pending is RETAINED (consume-on-match);
+            -- the transition pairing or the next start clears/re-arms it.
+            assert.equals(100, rt.pendingStartAdvanceAt)
+        end)
+
+        -- Divergent matched/candidates regression (review find, 2026-07-18):
+        -- a runtime Layer2-locked onto the WRONG identity while Layer1's
+        -- candidate list already names the curating mob must (a) still
+        -- sample the delta, (b) hold the pending past the pre-sample
+        -- resolution pass, and (c) retain it through the sampler-time pass
+        -- (the stale mob's spells all reject the sampled delta) so the
+        -- Layer2 flip at FinishCast can claim the TRUE observed start.
+        it("a stale locked identity holds the pending until the Layer2 flip claims it", function()
+            ravagerData()
+            KE.TrashData[1].mobs[222] = { npcID = 222, name = "Decoy", spells = {
+                [50] = { name = "Bolt", castTime = 3, first = 12, cd = { 15 } },
+            } }
+            local rt = trackResolved("nameplate1")
+            rt.matchedNPCID = 222                       -- stale Layer2-locked identity
+            rt.castConfirmed = true
+            rt.candidates = { { npcID = 111, levelAgreed = true } }
+            local base = #timers
+            DTrash:OnCastStart(nil, "nameplate1", nil, nil, 3)   -- real Ambush start at 100
+            DTrash:ApplyPendingStartAdvance(rt)         -- ResolveMob-tail stand-in, pre-sampler
+            assert.equals(100, rt.pendingStartAdvanceAt)         -- held: a candidate curates the delta
+            world.debuffs.player = { 601 }
+            clock.now = 100.05
+            TAD.OnUnitAura("player")
+            clock.now = 100.1
+            fireTimersAfter(base)                                -- +0.10s sampler
+            assert.is_true(rt.fpCastStartAuraDelta)              -- candidates made it sample
+            assert.equals(100, rt.pendingStartAdvanceAt)         -- retained: Decoy's spells reject
+            clock.now = 103.5
+            DTrash:OnCastStop(nil, "nameplate1", nil, nil, 3)    -- Layer2 flips to the Ravager...
+            assert.equals(111, rt.matchedNPCID)
+            assert.equals("success", rt.anchors[30].mode)        -- ...which claims the held start
+            assert.equals(114.5, rt.anchors[30].nextStartAt)     -- anchored at the TRUE start
+            assert.is_nil(rt.pendingStartAdvanceAt)              -- consumed exactly once
         end)
 
         it("with the sampler dark, the curating spell keeps the success-path anchor", function()

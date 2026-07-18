@@ -1131,13 +1131,21 @@ local function mobCuratesAuraDelta(mob)
 end
 
 function DTrash:RuntimeNeedsAuraDelta(rt)
-    if rt.matchedNPCID then
-        return mobCuratesAuraDelta(self:MobData(rt.matchedNPCID))
+    -- UNION of matched + candidates (divergent-candidates review find,
+    -- 2026-07-18): a Layer2-locked identity does NOT rule the curating mob
+    -- out — the lock is flippable by cast evidence, Layer1 keeps refreshing
+    -- rt.candidates underneath it, and the flip's start-advance needs this
+    -- sample to have landed. Checking only the stale matched mob skipped
+    -- the sample exactly when the flip was about to need it.
+    if rt.matchedNPCID and mobCuratesAuraDelta(self:MobData(rt.matchedNPCID)) then
+        return true
     end
     local cands = rt.candidates
-    if not cands then return true end
-    for _, c in ipairs(cands) do
-        if mobCuratesAuraDelta(self:MobData(c.npcID)) then return true end
+    if not (rt.matchedNPCID or cands) then return true end
+    if cands then
+        for _, c in ipairs(cands) do
+            if mobCuratesAuraDelta(self:MobData(c.npcID)) then return true end
+        end
     end
     return false
 end
@@ -1749,7 +1757,9 @@ end
 -- next-cast countdown, and 5 of the 6 shipped CAST_START spells are exactly
 -- the long interrupt-priority channels groups always kick (Pulsing Shriek,
 -- Plungegrip, Fire Spit, Arcane Salvo, Shredding Talons). Gated on
--- resolution + the sampled fingerprints; consumed once; a new start re-arms.
+-- resolution + the sampled fingerprints; consumed on the first MATCHING
+-- resolution (retained otherwise — see the consume-on-match note below);
+-- a new start re-arms.
 -- (The reference's other interrupt advance, InferInterruptedChannelSpell, is
 -- gated on cdOnInterruptedChannel-family flags that ZERO data rows carry
 -- upstream or here — dormant, not ported.)
@@ -1764,9 +1774,16 @@ function DTrash:ApplyPendingStartAdvance(rt)
     -- blink inside the sample window strand the pending forever — no cd bar
     -- until a full cycle later, on mobs (e.g. Devoted Woebringer) whose
     -- spells curate zero start fingerprints and never needed the wait.
-    if not rt.startFingerprintsReady and TI.NeedsStartFingerprints(mob, self._auraDeltaLive) then return end
+    if not rt.startFingerprintsReady then
+        if TI.NeedsStartFingerprints(mob, self._auraDeltaLive) then return end
+        -- The MATCHED mob may not be the delta's consumer: when any viable
+        -- candidate curates castStartAuraDelta, the sample must land before
+        -- consumption — a stale Layer2-locked identity consuming the
+        -- pending pre-sample would strand the curating mob's start on the
+        -- later Layer2 flip (divergent-candidates review find, 2026-07-18).
+        if self._auraDeltaLive and self:RuntimeNeedsAuraDelta(rt) then return end
+    end
     local kind = rt.pendingStartAdvanceKind
-    rt.pendingStartAdvanceAt, rt.pendingStartAdvanceKind = nil, nil
     local fingerprints = {
         targetExists = rt.fpTargetExists,
         targetAPIExists = rt.fpTargetAPIExists,
@@ -1776,10 +1793,24 @@ function DTrash:ApplyPendingStartAdvance(rt)
         castStartAuraDelta = rt.fpCastStartAuraDelta,
     }
     local now = GetTime()
+    -- Consume ON MATCH, not unconditionally (reference: the pending start
+    -- is retained while its fingerprint needs are unresolved and re-applied
+    -- per resolution pass): under a stale locked identity whose spells all
+    -- reject the sampled delta, the pending must survive to the Layer2 flip
+    -- that names the true consumer — FinishCast re-applies it right after
+    -- the flip. Retention is bounded: the next BeginCast re-arms
+    -- (overwrites) the pending and a paired transition clears it, so a
+    -- never-matching start can outlive its cast by at most one lifecycle —
+    -- the same window the kick-survival behavior already keeps it for.
+    local consumed = false
     for spellID, spellData in pairs(mob.spells) do
         if TI.MatchesObservedCastStart(spellData, kind, fingerprints, self._auraDeltaLive) then
+            consumed = true
             self:EmitCastResolution(rt, mob, spellID, startAt, startAt, now, kind, nil)
         end
+    end
+    if consumed then
+        rt.pendingStartAdvanceAt, rt.pendingStartAdvanceKind = nil, nil
     end
 end
 
