@@ -127,6 +127,9 @@ local DM_DEFAULTS = {
     MaxWindows = 5,
     AlwaysShowSelf = false,     -- pin the player to the last visible slot when off-list
                                 -- (role-relevant views only -- Window.lua PIN_ROLES)
+    ResetOnKeyStart = true,     -- wipe all combat sessions when a keystone starts, so
+                                -- "Overall" (and the segment history) covers just that
+                                -- run; off = data accumulates until a manual reset
 
     -- Visibility conditions (independent; ALL enabled conditions must pass for the
     -- meter to show). GUI preview / EditMode always force-show regardless.
@@ -1915,9 +1918,22 @@ function DM:OnChallengeEvent(event)
     -- in the C_DamageMeter contract. Without this, "Overall" (and a window pinned to a
     -- prior session) carries the PREVIOUS key's data, incl. its deaths, into the new
     -- run. Reset on START only: resetting on COMPLETED/RESET would wipe a just-finished
-    -- run the user is still reviewing. Standalone meters reset at this same boundary so
-    -- "Overall" means "this run".
-    if event == "CHALLENGE_MODE_START" then
+    -- run the user is still reviewing. Upstream verified 2026-07-18: the reference
+    -- meter does this exact unconditional reset on CHALLENGE_MODE_START ("wipe data
+    -- so Overall = this dungeon run"), and Details-Midnight resets the server store
+    -- at key start too -- Details keeps cross-key history only because it snapshots
+    -- each finalized fight into addon-local tables (the server store is just its
+    -- live feed). KE renders the server store directly, and ResetAllCombatSessions
+    -- is C_DamageMeter's ONLY mutator (12.0.7: no overall-only reset, no per-session
+    -- delete; in-combat amounts are secret, so summing a per-run Overall locally is
+    -- blocked). So the ResetOnKeyStart toggle (Behavior tab) picks which cost to eat:
+    -- on = "Overall" means "this run" but history dies at each key start;
+    -- off = sessions survive the boundary (history AND Overall span keys; pins stay
+    -- valid, so none of the reset teardown below applies) until a manual reset; the
+    -- run-level "+NN" session stored at key completion still gives a per-run summary
+    -- after the fact. A Details-style local snapshot store would give both at once --
+    -- that's a feature (new data layer), not a different gate here.
+    if event == "CHALLENGE_MODE_START" and self.db and self.db.ResetOnKeyStart then
         if self.windows_rt then
             for _, W in pairs(self.windows_rt) do
                 -- ResetAllCombatSessions invalidates every sessionID, so a window still

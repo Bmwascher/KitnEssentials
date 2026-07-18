@@ -1497,7 +1497,38 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
     yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 2: Visibility (conditional show / hide)
+    -- Card 2: Segments (session data lifecycle)
+    ----------------------------------------------------------------
+    local cardSeg = GUIFrame:CreateCard(scrollChild, "Segments", yOffset)
+    manager:Register(cardSeg, "all")
+
+    local rowSeg = GUIFrame:CreateRow(cardSeg.content, Theme.rowHeight)
+    local keyResetChk = GUIFrame:CreateCheckbox(rowSeg, "Reset on Key Start", {
+        value = db.ResetOnKeyStart ~= false,
+        callback = function(checked) db.ResetOnKeyStart = checked end,
+    })
+    rowSeg:AddWidget(keyResetChk, 1)
+    manager:Register(keyResetChk, "all")
+    cardSeg:AddRow(rowSeg, Theme.rowHeight)
+
+    local segNoteRow = GUIFrame:CreateRow(cardSeg.content, 65)
+    local segNote = GUIFrame:CreateText(segNoteRow,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " On: all segments clear when a keystone starts, so " ..
+        KE:ColorTextByTheme("Overall") .. " covers just that run.\n" ..
+        KE:ColorTextByTheme("-") .. " Off: history and " .. KE:ColorTextByTheme("Overall") ..
+        " both span keys until you clear them with " ..
+        KE:ColorTextByTheme("/kes dm reset") .. " or the header reset button.\n" ..
+        KE:ColorTextByTheme("-") .. " Blizzard's meter data resets all-or-nothing — one reset clears every window and the segment history together.",
+        65, "hide")
+    segNoteRow:AddWidget(segNote, 1)
+    manager:Register(segNote, "all")
+    cardSeg:AddRow(segNoteRow, 65, 0)
+
+    yOffset = cardSeg:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 3: Visibility (conditional show / hide)
     ----------------------------------------------------------------
     local cardVis = GUIFrame:CreateCard(scrollChild, "Visibility", yOffset)
     manager:Register(cardVis, "all")
