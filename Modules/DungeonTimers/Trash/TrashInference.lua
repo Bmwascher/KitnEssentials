@@ -462,30 +462,38 @@ local function fingerprintsMatch(spellData, observed)
     return true
 end
 
+-- Kind + duration SHAPE alone — no evidence tail (fingerprints / channel
+-- evidence). Split out so FilterCandidates can distinguish "this observation
+-- is uncurated FILLER for the mob" (no curated spell fits the shape → the
+-- trait-duration keep tier may apply) from "a curated spell fits the shape
+-- but its EVIDENCE rejects" (affirmative disconfirmation the trait tier must
+-- never override — see anySpellMatches).
+local function spellShapeMatches(spellData, observed)
+    local tol = TI.CAST_TIME_TOLERANCE
+    if observed.kind == "channel" then
+        if not spellData.channelTime then return false end
+        return durationWithin(observed.duration, spellData.channelTime, tol)
+    end
+    -- cast: primary castTime or any castTimeExtra alternate.
+    local ok = durationWithin(observed.duration, spellData.castTime, tol)
+    if not ok and type(spellData.castTimeExtra) == "table" then
+        for _, alt in ipairs(spellData.castTimeExtra) do
+            if durationWithin(observed.duration, alt, tol) then ok = true; break end
+        end
+    end
+    return ok
+end
+
 -- Does one curated spell match an observed cast?
 -- observed: { kind="cast"|"channel", duration, fingerprints={...}, selfBuffCountDelta }
 -- Returns true if kind + duration (± tolerance, incl. castTimeExtra alternates)
 -- + every present boolean fingerprint agree.
 function TI.SpellMatchesObserved(spellData, observed)
     if not (spellData and observed) then return false end
-    local tol = TI.CAST_TIME_TOLERANCE
-
-    -- kind + duration.
-    if observed.kind == "channel" then
-        if not spellData.channelTime then return false end
-        if not channelEvidenceMatches(spellData, observed) then return false end
-        if not durationWithin(observed.duration, spellData.channelTime, tol) then return false end
-    else
-        -- cast: primary castTime or any castTimeExtra alternate.
-        local ok = durationWithin(observed.duration, spellData.castTime, tol)
-        if not ok and type(spellData.castTimeExtra) == "table" then
-            for _, alt in ipairs(spellData.castTimeExtra) do
-                if durationWithin(observed.duration, alt, tol) then ok = true; break end
-            end
-        end
-        if not ok then return false end
+    if not spellShapeMatches(spellData, observed) then return false end
+    if observed.kind == "channel" and not channelEvidenceMatches(spellData, observed) then
+        return false
     end
-
     return fingerprintsMatch(spellData, observed)
 end
 
@@ -629,7 +637,17 @@ end
 -- consults it — a filler cast keeps the mob alive without crediting a timer.
 function TI.TraitDurationMatches(trait, observed)
     if not (trait and observed) then return false end
-    local set = (observed.kind == "channel") and trait.channelTimeSet or trait.castTimeSet
+    -- Explicit per-kind select: the and/or form fell through to castTimeSet
+    -- when a CHANNEL observation met a nil channelTimeSet, so a cast-only
+    -- mob survived real channel evidence (audit F2 — the same and/or-collapse
+    -- class as the 2026-07-10 alert-group field bug; the reference compiles
+    -- and consumes the two sets independently).
+    local set
+    if observed.kind == "channel" then
+        set = trait.channelTimeSet
+    else
+        set = trait.castTimeSet
+    end
     if type(set) ~= "table" then return false end
     for _, dur in ipairs(set) do
         if durationWithin(observed.duration, dur, TI.CAST_TIME_TOLERANCE) then
@@ -694,24 +712,45 @@ function TI.FilterCandidates(candidates, observed, dataByNpc, traitByNpc)
     end
     local function anySpellMatches(npcID)
         local mob = dataByNpc and dataByNpc(npcID)
+        local shapeRejected = false
         if mob and mob.spells then
             for _, spell in pairs(mob.spells) do
                 if TI.SpellMatchesObserved(spell, observed) then return true end
+                if spellShapeMatches(spell, observed) then shapeRejected = true end
             end
         end
+        -- Trait-duration revival is FILLER-ONLY (audit F1; reference:
+        -- fingerprint narrowing is a separate FIRST stage —
+        -- NarrowByCurrentFingerprint — and duration rules apply only to its
+        -- survivors): a curated spell whose kind+duration fit but whose
+        -- EVIDENCE rejected is affirmative disconfirmation, and letting the
+        -- fingerprint-blind trait set resurrect the candidate would
+        -- neutralize every curated discriminator that shares a trait
+        -- duration (the Skyreach twins' castStartChangeTarget: both trait
+        -- sets carry the shared 3s cast, so the old fallthrough kept both
+        -- twins forever and the Batch E splitter was dead in production).
+        if shapeRejected then return false end
         return traitMatches(npcID)
     end
     local function channelVerifies(npcID)
         local mob = dataByNpc and dataByNpc(npcID)
+        local evidenceRejected = false
         if mob and mob.spells then
             for _, spell in pairs(mob.spells) do
-                if (tonumber(spell.channelTime) or 0) > 0
-                    and channelEvidenceMatches(spell, observed)
-                    and fingerprintsMatch(spell, observed) then
-                    return true
+                if (tonumber(spell.channelTime) or 0) > 0 then
+                    if channelEvidenceMatches(spell, observed)
+                        and fingerprintsMatch(spell, observed) then
+                        return true
+                    end
+                    -- Same filler-only rule as anySpellMatches; the channel
+                    -- verify's "shape" is channel capability (Pass-2 has no
+                    -- duration gate), so a channel-capable spell rejected by
+                    -- evidence blocks the trait fallback.
+                    evidenceRejected = true
                 end
             end
         end
+        if evidenceRejected then return false end
         return traitMatches(npcID)
     end
     if #candidates <= 1 then

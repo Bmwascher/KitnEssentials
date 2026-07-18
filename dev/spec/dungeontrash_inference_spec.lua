@@ -579,6 +579,59 @@ describe("DungeonTrash inference — FilterCandidates trait-duration keep tier",
         assert.is_false(TI.TraitDurationMatches(nil, { kind = "cast", duration = 3 }))
         assert.is_false(TI.TraitDurationMatches({}, { kind = "cast", duration = 3 }))
     end)
+
+    -- Audit F2 (2026-07-18): the old and/or select fell through to castTimeSet
+    -- when a CHANNEL observation met a nil channelTimeSet — a real 2.5s channel
+    -- kept a cast-only mob alive under fail-open routing (Riftbreath vs the
+    -- cast-only Academy sibling). The reference consumes the sets independently.
+    it("a channel observation never borrows castTimeSet when channelTimeSet is absent", function()
+        local castOnly = { castTimeSet = { 2.5 } }
+        assert.is_false(TI.TraitDurationMatches(castOnly, { kind = "channel", duration = 2.5 }))
+        assert.is_true(TI.TraitDurationMatches(castOnly, { kind = "cast", duration = 2.5 }))
+    end)
+
+    -- Audit F1 (2026-07-18): the trait keep tier is FILLER-ONLY. In production
+    -- both Skyreach twins' trait castTimeSet carry the shared 3s cast, so the
+    -- old unconditional trait fallthrough revived the fingerprint-rejected twin
+    -- and the pool never narrowed — the Batch E castStartChangeTarget splitter
+    -- was dead with traitByNpc wired (the sampler spec above omits traitByNpc,
+    -- which is why it stayed green). Reference: fingerprint narrowing is a
+    -- separate FIRST stage; duration rules see only its survivors.
+    it("the trait tier cannot revive a fingerprint-rejected twin (production shape)", function()
+        local DATA2 = {
+            [76149] = { spells = { [1258174] = { castTime = 3, castStartChangeTarget = true } } },
+            [79303] = { spells = { [1254380] = { castTime = 3, castStartChangeTarget = false } } },
+        }
+        local TRAITS2 = {
+            [76149] = { castTimeSet = { 3 } },
+            [79303] = { castTimeSet = { 3 } },
+        }
+        local dataByNpc2 = function(npc) return DATA2[npc] end
+        local traitByNpc2 = function(npc) return TRAITS2[npc] end
+        local cands = { { npcID = 76149 }, { npcID = 79303 } }
+        local kept, resolved = TI.FilterCandidates(cands,
+            { kind = "cast", duration = 3.0, fingerprints = { castStartChangeTarget = true } },
+            dataByNpc2, traitByNpc2)
+        assert.equals(1, #kept)
+        assert.equals(76149, resolved)
+        -- An UNSAMPLED fingerprint is not a rejection: both twins full-match
+        -- leniently and the pool stays ambiguous (never a false narrow).
+        local kept2, resolved2 = TI.FilterCandidates(cands,
+            { kind = "cast", duration = 3.0, fingerprints = {} }, dataByNpc2, traitByNpc2)
+        assert.equals(2, #kept2)
+        assert.is_nil(resolved2)
+    end)
+
+    it("a channel with evidence-rejecting channel spells cannot trait-verify (lone survivor)", function()
+        -- Pure-channel mob + a PROVEN transition observation: the channel spell
+        -- is evidence-rejected, and the trait channelTimeSet must not revive
+        -- the verify (filler-only rule on the channel path).
+        local mob = function() return { spells = { [1] = { castTime = 0, channelTime = 12 } } } end
+        local trait = function() return { channelTimeSet = { 12 } } end
+        local _, resolved = TI.FilterCandidates({ { npcID = 7 } },
+            { kind = "channel", duration = 12, castIntoChannel = true }, mob, trait)
+        assert.is_nil(resolved)
+    end)
 end)
 
 describe("DungeonTrash inference — lone-survivor channel verification (Pass-2 shape)", function()
