@@ -15,11 +15,18 @@ set -uo pipefail
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root" || exit 1
 
+# Buffer the pushed refs FIRST: git feeds one line per ref on stdin,
+# consumable exactly once, and both the tag guard and the attestation
+# check below need them (a second `while read` would see nothing).
+pushed_refs=()
+while IFS= read -r _line; do pushed_refs+=("$_line"); done
+
 # Release-tag guard (blocking): a v* tag must point at the release commit —
 # subject "vX.Y.Z: …". Tagging a merge/feature commit instead broke the
-# naming convention for v1.17.0, v3.0.0, v3.0.3. Git feeds the pushed refs
-# on stdin. Override a deliberate exception with: git push --no-verify
-while read -r _lref _lsha _rref _rsha; do
+# naming convention for v1.17.0, v3.0.0, v3.0.3. Override a deliberate
+# exception with: git push --no-verify
+for _line in "${pushed_refs[@]}"; do
+    read -r _lref _lsha _rref _rsha <<< "$_line"
     case "$_rref" in refs/tags/v*) ;; *) continue ;; esac
     # skip tag deletions (local sha is all zeros)
     case "$_lsha" in *[!0]*) ;; *) continue ;; esac
@@ -38,6 +45,35 @@ while read -r _lref _lsha _rref _rsha; do
         exit 1
     fi
 done
+
+# Attestation check (non-blocking, parallax 0.6.0): a main push whose range
+# touches .lua/.xml should carry a multi-model-verify attestation for the
+# pushed head — the SHA-bound review record written at final adjudication
+# (fast-forward and merge matching rules documented in the verifier).
+# Warn only: trivial direct-to-main pushes stay allowed by the family git
+# rules, and dev-tooling/docs ranges are not filtered in.
+parallax_verifier="$HOME/Documents/parallax/tools/verify-attestation.ps1"
+if [ -f "$parallax_verifier" ]; then
+    for _line in "${pushed_refs[@]}"; do
+        read -r _lref _lsha _rref _rsha <<< "$_line"
+        [ "$_rref" = "refs/heads/main" ] || continue
+        case "$_lsha" in *[!0]*) ;; *) continue ;; esac
+        range_touches=""
+        case "$_rsha" in
+            *[!0]*) range_touches="$(git diff --name-only "$_rsha".."$_lsha" -- '*.lua' '*.xml' 2>/dev/null | head -1)" ;;
+            *) range_touches="first-push" ;;
+        esac
+        [ -n "$range_touches" ] || continue
+        # powershell.exe needs Windows paths; cygpath ships with git-bash.
+        win_verifier="$(cygpath -w "$parallax_verifier" 2>/dev/null || echo "$parallax_verifier")"
+        win_root="$(cygpath -w "$repo_root" 2>/dev/null || echo "$repo_root")"
+        if out="$(powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$win_verifier" -RepoRoot "$win_root" -LocalSha "$_lsha" 2>&1)"; then
+            echo "[pre-push] attestation: $out"
+        else
+            echo "[pre-push] note (non-blocking): main push $_lsha touches .lua/.xml without a matching multi-model-verify attestation — $out (run mode diff + write-attestation.ps1, or ignore for a trivial change)" >&2
+        fi
+    done
+fi
 
 # AGENTS.md drift check (non-blocking): warn when Modules/ on disk and the
 # AGENTS.md Structure block disagree, in either direction. AGENTS.md is
