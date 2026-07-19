@@ -13,6 +13,7 @@ AGENTS.md
 
 # Personal dev notes, audits, Superpowers artifacts (local-only by choice)
 dev/docs/
+.superpowers/
 
 # Editor settings & language-server config (machine-local)
 .vscode/
