@@ -85,10 +85,15 @@ describe("plain-name identity memo", function()
     end)
     it("refuses secret inputs (declared)", function()
         local secret = { __secret = true }
+        -- Seed a live memo FIRST so the secret-guid lookup below traverses the
+        -- full PlainNameFor guard, not the empty-store short-circuit (Codex
+        -- delta review, F2).
+        DM:NotePlainName("Player-1-S", "Seeder")
         DM:NotePlainName(secret, "Unsub-BurningLegion")
         DM:NotePlainName("Player-1-B", secret)
         assert.is_nil(DM:PlainNameFor("Player-1-B"))
         assert.is_nil(DM:PlainNameFor(secret))
+        assert.equals("Seeder", DM:PlainNameFor("Player-1-S"))
     end)
     it("refuses nil and empty names", function()
         DM:NotePlainName("Player-1-C", nil)
@@ -98,6 +103,10 @@ describe("plain-name identity memo", function()
     end)
     it("never downgrades a realm-bearing name to a bare flicker form", function()
         DM:NotePlainName("Player-1-D", "Unsub")                 -- bare first sighting
+        -- Bare names DO store: same-realm members are bare in det.unitName too
+        -- (probe 2026-07-19) — only the realm-bearing->bare OVERWRITE is
+        -- refused (Codex delta review, F3).
+        assert.equals("Unsub", DM:PlainNameFor("Player-1-D"))
         DM:NotePlainName("Player-1-D", "Unsub-BurningLegion")   -- upgrade sticks
         DM:NotePlainName("Player-1-D", "Unsub")                 -- flicker tick: ignored
         assert.equals("Unsub-BurningLegion", DM:PlainNameFor("Player-1-D"))
