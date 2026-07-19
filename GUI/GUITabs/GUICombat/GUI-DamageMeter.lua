@@ -1511,6 +1511,17 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
     manager:Register(keyResetChk, "all")
     cardSeg:AddRow(rowSeg, Theme.rowHeight)
 
+    local rowRetain = GUIFrame:CreateRow(cardSeg.content, Theme.rowHeight)
+    local retainSlider = GUIFrame:CreateSlider(rowRetain, "Key History (keys kept)", {
+        min = 1, max = 10, step = 1,
+        value = (type(db.HistoryRetain) == "number" and db.HistoryRetain >= 1
+            and db.HistoryRetain <= 10) and db.HistoryRetain or 5,
+        callback = function(v) db.HistoryRetain = v end,
+    })
+    rowRetain:AddWidget(retainSlider, 1)
+    manager:Register(retainSlider, "all")
+    cardSeg:AddRow(rowRetain, Theme.rowHeight)
+
     local segNoteRow = GUIFrame:CreateRow(cardSeg.content, 65)
     local segNote = GUIFrame:CreateText(segNoteRow,
         KE:ColorTextByTheme("Note"),
@@ -1519,7 +1530,8 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
         KE:ColorTextByTheme("-") .. " Off: history and " .. KE:ColorTextByTheme("Overall") ..
         " both span keys until you clear them with " ..
         KE:ColorTextByTheme("/kes dm reset") .. " or the header reset button.\n" ..
-        KE:ColorTextByTheme("-") .. " Blizzard's meter data resets all-or-nothing — one reset clears every window and the segment history together.",
+        KE:ColorTextByTheme("-") .. " With reset on, the last " ..
+        KE:ColorTextByTheme("Key History") .. " keys stay browsable in the segment menu (this session only — history clears on reload; the header reset clears it too).",
         65, "hide")
     segNoteRow:AddWidget(segNote, 1)
     manager:Register(segNote, "all")
