@@ -323,6 +323,10 @@ describe("OnChallengeEvent wiring", function()
         DM.InvalidateTargetsCache = function() end
         DM.Tick = function() end
         DM.windows_rt = nil
+        -- The toggle-ON test sets this one-shot flag via the real START path;
+        -- the stubbed ResetAllCombatSessions never fires DAMAGE_METER_RESET to
+        -- consume it, so it would otherwise leak into later tests/describes.
+        DM._historyOwnReset = nil
         _G.C_DamageMeter = { ResetAllCombatSessions = function() calls[#calls + 1] = "reset" end }
     end)
 
@@ -355,6 +359,9 @@ describe("HeaderReset clears history; OnMeterReset must NOT", function()
         DM.CloseAllSelectors = function() end
         DM.CloseAllSegmentMenus = function() end
         DM.Tick = function() end
+        -- Start flag-clean regardless of prior describes/ordering — only the
+        -- "module's OWN reset" test below arms this itself.
+        DM._historyOwnReset = nil
         _G.C_DamageMeter = { ResetAllCombatSessions = function() end }
     end)
     it("HeaderReset empties the store", function()
