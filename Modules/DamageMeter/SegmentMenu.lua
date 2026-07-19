@@ -418,6 +418,11 @@ function DM:EnsureSegmentFlyout(W)
     f:SetBackdropBorderColor(0, 0, 0, 1)
     f:EnableMouse(true)
     f:SetScript("OnLeave", function() DM:ScheduleSegmentClose(W) end)
+    -- Fixed-height list (no scroll), but the panel still sits over the window's
+    -- bars -- swallow the wheel so it doesn't fall through and scroll them (mirrors
+    -- the main menu panel's fall-through plug, EnsureSegmentMenu's onWheel above).
+    f:EnableMouseWheel(true)
+    f:SetScript("OnMouseWheel", function() end)
     f:Hide()
     f.rows = {}
     W.segFlyout = f

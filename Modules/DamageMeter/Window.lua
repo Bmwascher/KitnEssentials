@@ -874,6 +874,16 @@ function DM:ReapplyBarVisuals(W)
         end
     end
 
+    -- Per-key flyout rows (SegmentMenu.lua EnsureSegmentFlyout/OpenSegmentFlyout)
+    -- are a separate pooled row set from W.segMenu above and must join the same
+    -- live-refresh pass or they keep a stale font after a GUI font change.
+    if W.segFlyout and W.segFlyout.rows then
+        local rowSize = math_max(8, (size or 12) - 1)
+        for _, row in ipairs(W.segFlyout.rows) do
+            KE:ApplyFontToText(row.text, face, rowSize, outline)
+        end
+    end
+
     -- The hover quick-peek tip (Detail.lua) is a module-level singleton shared by
     -- every window and lives in Detail.lua's file scope, so it can't be reached
     -- through W here. Route the same font/texture reapply through a DM method;

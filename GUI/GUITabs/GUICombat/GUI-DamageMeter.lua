@@ -1512,10 +1512,22 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
     cardSeg:AddRow(rowSeg, Theme.rowHeight)
 
     local rowRetain = GUIFrame:CreateRow(cardSeg.content, Theme.rowHeight)
+    -- Display-only clamp mirroring History.lua evictOverCap's read semantics exactly
+    -- (non-number -> 5; <1 -> 1; >10 -> 10): a legacy profile can hold a materialized
+    -- HistoryRetain = 20, which evictOverCap clamps to an EFFECTIVE 10 at capture time.
+    -- Falling back to 5 here (instead of clamping) would show 5 while the module still
+    -- retains 10. No SV write, no migration -- the stored value is untouched.
+    local retainDisplay = db.HistoryRetain
+    if type(retainDisplay) ~= "number" then
+        retainDisplay = 5
+    elseif retainDisplay < 1 then
+        retainDisplay = 1
+    elseif retainDisplay > 10 then
+        retainDisplay = 10
+    end
     local retainSlider = GUIFrame:CreateSlider(rowRetain, "Key History (keys kept)", {
         min = 1, max = 10, step = 1,
-        value = (type(db.HistoryRetain) == "number" and db.HistoryRetain >= 1
-            and db.HistoryRetain <= 10) and db.HistoryRetain or 5,
+        value = retainDisplay,
         callback = function(v) db.HistoryRetain = v end,
     })
     rowRetain:AddWidget(retainSlider, 1)
