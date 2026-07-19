@@ -222,7 +222,10 @@ local DM_DEFAULTS = {
     -- /reload-in-place. Not user settings.
     _SegSerial = 0,
 
-    HistoryRetain = 20,
+    -- Key-history bundles kept (History.lua; GUI slider 1-10). Legacy
+    -- profiles may hold the old default 20 — clamped to [1,10] at read,
+    -- never migrated.
+    HistoryRetain = 5,
     DeathCap = 50,
 }
 
@@ -1135,6 +1138,18 @@ end
 -- Meter data was reset: repaint immediately so cleared bars show. Tick is
 -- guarded (resolved at runtime from the render chunk).
 function DM:OnMeterReset()
+    -- History bundles are already-captured data and survive every reset
+    -- event (only eviction / HeaderReset / reload clear them). But pending
+    -- PROVENANCE does not: an external reset empties the native store, so
+    -- the armed key label would mislabel whatever accumulates afterwards —
+    -- clear it. EXCEPT for the module's own key-start wipe (one-shot flag
+    -- set just before its ResetAllCombatSessions call): consume the flag
+    -- and keep pending, which OnChallengeEvent arms right after.
+    if self._historyOwnReset then
+        self._historyOwnReset = nil
+    else
+        self._pendingBundle = nil
+    end
     if DEBUG_DM then KE:Print("[DM] DAMAGE_METER_RESET -> Tick") end
     -- Drop the hover-tip Targets cache (Phase 4c / Detail.lua) -- the EnemyDamageTaken
     -- cross-reference it was built from is now stale. Resolved at runtime (Detail.lua
@@ -1184,6 +1199,14 @@ end
 -- sessionID is non-nil the FromID variant is used (a specific stored session);
 -- otherwise the live FromType variant is used.
 function DM:GetSession(sessionType, dmType, sessionID)
+    -- Negative id = local key-history snapshot (History.lua). The API only
+    -- ever issues positive ids, so this cannot shadow a live session; the
+    -- serve is a plain table read (no pcall needed). Resolved at runtime —
+    -- History.lua loads after this file.
+    if type(sessionID) == "number" and sessionID < 0 then
+        if self.HistorySession then return self:HistorySession(sessionID, dmType) end
+        return nil
+    end
     if not C_DamageMeter then return nil end
 
     if sessionID ~= nil then
@@ -1204,6 +1227,12 @@ end
 -- Returns the per-source detail table for a single combat source (keyed by
 -- sourceGUID), or nil on failure. Mirrors GetSession's FromID/FromType branch.
 function DM:GetSource(sessionType, dmType, sourceGUID, sourceCreatureID, sessionID)
+    if type(sessionID) == "number" and sessionID < 0 then
+        if self.HistorySource then
+            return self:HistorySource(sessionID, dmType, sourceGUID, sourceCreatureID)
+        end
+        return nil
+    end
     if not C_DamageMeter then return nil end
 
     if sessionID ~= nil then
@@ -1601,6 +1630,16 @@ function DM:HeaderReset(_)
     -- Outcome tags reference the wiped session ids -- drop them with the data
     -- (mirrors OnMeterReset; covers a reset that doesn't fire the event).
     if self._sessionOutcomes then wipe(self._sessionOutcomes) end
+    -- Key history is part of a manual reset by design (the GUI note
+    -- promises "one reset clears every window and the segment history
+    -- together"). Resolved at runtime; guarded for load order. NOTE:
+    -- OnMeterReset deliberately does NOT clear the store — our own
+    -- key-start wipe fires DAMAGE_METER_RESET right after capture.
+    if self.HistoryClear then self:HistoryClear() end
+    -- A mid-run manual reset also breaks pending provenance: the store no
+    -- longer holds the armed key from its wipe boundary, so a later
+    -- capture must seal as "Earlier runs", not under this key's label.
+    self._pendingBundle = nil
     -- Frozen combat clock referenced the wiped data too (mirrors OnMeterReset;
     -- in-combat resets keep the live clock -- the fight itself continues).
     if not self._ticker then
@@ -1933,30 +1972,54 @@ function DM:OnChallengeEvent(event)
     -- run-level "+NN" session stored at key completion still gives a per-run summary
     -- after the fact. A Details-style local snapshot store would give both at once --
     -- that's a feature (new data layer), not a different gate here.
-    if event == "CHALLENGE_MODE_START" and self.db and self.db.ResetOnKeyStart then
-        if self.windows_rt then
-            for _, W in pairs(self.windows_rt) do
-                -- ResetAllCombatSessions invalidates every sessionID, so a window still
-                -- pinned (W._curSessionID) to a prior-key session would read a dead id.
-                -- Drop the pin so it falls back to the live Current/Overall session.
-                -- Runtime-only field (not persisted), safe to clear unconditionally.
-                W._curSessionID = nil
-                -- Close a detail panel keyed to the about-to-be-wiped session (mirrors
-                -- HeaderReset's teardown). Resolved at runtime; guarded for load order.
-                if W._detailOpen and self.CloseDetail then self:CloseDetail(W) end
+    if event == "CHALLENGE_MODE_START" then
+        if self.db and self.db.ResetOnKeyStart then
+            -- Snapshot the whole store BEFORE the wipe (History.lua): seals
+            -- the previous key's bundle, reading _sessionOutcomes and the
+            -- pending key metadata while both still describe it. Resolved
+            -- at runtime; guarded for load order.
+            if self.HistoryCapture then self:HistoryCapture() end
+            if self.windows_rt then
+                for _, W in pairs(self.windows_rt) do
+                    -- ResetAllCombatSessions invalidates every sessionID, so a window still
+                    -- pinned (W._curSessionID) to a prior-key session would read a dead id.
+                    -- Drop the pin so it falls back to the live Current/Overall session.
+                    -- Runtime-only field (not persisted), safe to clear unconditionally.
+                    W._curSessionID = nil
+                    -- Close a detail panel keyed to the about-to-be-wiped session (mirrors
+                    -- HeaderReset's teardown). Resolved at runtime; guarded for load order.
+                    if W._detailOpen and self.CloseDetail then self:CloseDetail(W) end
+                end
             end
+            -- One-shot: our own wipe fires DAMAGE_METER_RESET, whose
+            -- handler must not clear the pending record this handler
+            -- arms below (provenance rule — see OnMeterReset).
+            self._historyOwnReset = true
+            if C_DamageMeter and C_DamageMeter.ResetAllCombatSessions then
+                pcall(C_DamageMeter.ResetAllCombatSessions)
+            end
+            -- The hover-tip Targets cache cross-references the now-wiped data.
+            if self.InvalidateTargetsCache then self:InvalidateTargetsCache() end
+            -- Outcome tags reference the wiped session ids (mirrors OnMeterReset).
+            if self._sessionOutcomes then wipe(self._sessionOutcomes) end
+            -- Repaint the emptied bars now: ApplyActiveContext below early-returns when the
+            -- content context is unchanged (a key RE-RUN stays "Mythic+"), so it can't be
+            -- relied on to paint after the reset. BumpSegment already closed selectors/menus.
+            if self.Tick then self:Tick() end
+            -- Arm the pending metadata for THIS key — only ever on a wipe
+            -- boundary; the labeling contract [C2] depends on it.
+            if self.HistoryArmPending then self:HistoryArmPending() end
+        else
+            -- Key boundary WITHOUT a wipe: the store now spans multiple
+            -- keys, so an armed label no longer describes it. Clear it so a
+            -- later capture seals honestly as "Earlier runs" [C2] (covers
+            -- flipping the toggle off and back on across runs).
+            self._pendingBundle = nil
         end
-        if C_DamageMeter and C_DamageMeter.ResetAllCombatSessions then
-            pcall(C_DamageMeter.ResetAllCombatSessions)
-        end
-        -- The hover-tip Targets cache cross-references the now-wiped data.
-        if self.InvalidateTargetsCache then self:InvalidateTargetsCache() end
-        -- Outcome tags reference the wiped session ids (mirrors OnMeterReset).
-        if self._sessionOutcomes then wipe(self._sessionOutcomes) end
-        -- Repaint the emptied bars now: ApplyActiveContext below early-returns when the
-        -- content context is unchanged (a key RE-RUN stays "Mythic+"), so it can't be
-        -- relied on to paint after the reset. BumpSegment already closed selectors/menus.
-        if self.Tick then self:Tick() end
+    elseif event == "CHALLENGE_MODE_COMPLETED" then
+        -- Freeze outcome/duration + repair keystone metadata from the
+        -- authoritative completion info [C1][C4].
+        if self.HistoryOnKeyComplete then self:HistoryOnKeyComplete() end
     end
 
     self:ApplyActiveContext()

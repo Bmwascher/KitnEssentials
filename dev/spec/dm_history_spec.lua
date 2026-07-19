@@ -291,3 +291,98 @@ describe("pending-key metadata", function()
         assert.is_nil(DM._pendingBundle)
     end)
 end)
+
+describe("Core chokepoint branches", function()
+    it("GetSession serves negative ids from the store, never the API", function()
+        DM._history = { bundles = {}, byID = { [-4] = { byType = { [2] = { totalAmount = 5 } }, sources = {} } }, nextID = -5 }
+        _G.C_DamageMeter = { GetCombatSessionFromID = function() error("API must not be called for snapshots") end }
+        assert.equals(5, DM:GetSession(nil, 2, -4).totalAmount)
+        assert.is_nil(DM:GetSession(nil, 9, -4))
+        assert.is_nil(DM:GetSession(nil, 2, -99))   -- evicted/unknown -> "no session"
+    end)
+
+    it("GetSource serves negative ids via HistorySourceKey", function()
+        DM._history = { bundles = {}, byID = { [-4] = { byType = {},
+            sources = { ["c:42"] = { [0] = { totalAmount = 7 } } } } }, nextID = -5 }
+        _G.C_DamageMeter = { GetCombatSessionSourceFromID = function() error("API must not be called") end }
+        assert.equals(7, DM:GetSource(nil, 0, nil, 42, -4).totalAmount)
+        assert.is_nil(DM:GetSource(nil, 0, "g9", nil, -4))
+    end)
+end)
+
+describe("OnChallengeEvent wiring", function()
+    local calls
+    before_each(function()
+        calls = {}
+        -- Order-sensitive: capture must precede the API reset.
+        DM.HistoryCapture = function() calls[#calls + 1] = "capture" end
+        DM.HistoryArmPending = function() calls[#calls + 1] = "arm" end
+        DM.HistoryOnKeyComplete = function() calls[#calls + 1] = "complete" end
+        DM.BumpSegment = function() end
+        DM.ApplyActiveContext = function() end
+        DM.InvalidateTargetsCache = function() end
+        DM.Tick = function() end
+        DM.windows_rt = nil
+        _G.C_DamageMeter = { ResetAllCombatSessions = function() calls[#calls + 1] = "reset" end }
+    end)
+
+    it("key start with the toggle ON: capture -> reset -> arm", function()
+        DM.db = { ResetOnKeyStart = true, HistoryRetain = 5 }
+        DM:OnChallengeEvent("CHALLENGE_MODE_START")
+        assert.same({ "capture", "reset", "arm" }, calls)
+    end)
+
+    it("key start with the toggle OFF: no capture, pending cleared [C2]", function()
+        DM.db = { ResetOnKeyStart = false }
+        DM._pendingBundle = { label = "Stale" }
+        DM:OnChallengeEvent("CHALLENGE_MODE_START")
+        assert.same({}, calls)
+        assert.is_nil(DM._pendingBundle)
+    end)
+
+    it("completion routes to HistoryOnKeyComplete", function()
+        DM.db = { ResetOnKeyStart = true }
+        DM:OnChallengeEvent("CHALLENGE_MODE_COMPLETED")
+        assert.same({ "complete" }, calls)
+    end)
+end)
+
+describe("HeaderReset clears history; OnMeterReset must NOT", function()
+    before_each(function()
+        DM.db = { HistoryRetain = 5 }
+        DM._history = { bundles = { { sessions = {} } }, byID = {}, nextID = -2 }
+        DM.InvalidateTargetsCache = function() end
+        DM.CloseAllSelectors = function() end
+        DM.CloseAllSegmentMenus = function() end
+        DM.Tick = function() end
+        _G.C_DamageMeter = { ResetAllCombatSessions = function() end }
+    end)
+    it("HeaderReset empties the store", function()
+        DM:HeaderReset()
+        assert.equals(0, #DM._history.bundles)
+    end)
+    it("OnMeterReset leaves the store alone (our own wipe fires this event)", function()
+        DM:OnMeterReset()
+        assert.equals(1, #DM._history.bundles)
+    end)
+    it("an EXTERNAL reset clears pending provenance but not bundles [F5']", function()
+        DM._pendingBundle = { label = "Algeth'ar Academy", level = 12 }
+        DM:OnMeterReset()
+        assert.is_nil(DM._pendingBundle)
+        assert.equals(1, #DM._history.bundles)
+    end)
+    it("the module's OWN reset preserves pending via the one-shot flag [F5']", function()
+        DM._pendingBundle = { label = "Algeth'ar Academy", level = 12 }
+        DM._historyOwnReset = true
+        DM:OnMeterReset()
+        assert.equals("Algeth'ar Academy", DM._pendingBundle.label)
+        assert.is_nil(DM._historyOwnReset)   -- consumed: the next reset is external
+        DM:OnMeterReset()
+        assert.is_nil(DM._pendingBundle)
+    end)
+    it("HeaderReset clears pending provenance too [F5']", function()
+        DM._pendingBundle = { label = "Algeth'ar Academy" }
+        DM:HeaderReset()
+        assert.is_nil(DM._pendingBundle)
+    end)
+end)
