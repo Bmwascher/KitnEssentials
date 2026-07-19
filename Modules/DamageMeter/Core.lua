@@ -1991,12 +1991,15 @@ function DM:OnChallengeEvent(event)
                     if W._detailOpen and self.CloseDetail then self:CloseDetail(W) end
                 end
             end
-            -- One-shot: our own wipe fires DAMAGE_METER_RESET, whose
-            -- handler must not clear the pending record this handler
-            -- arms below (provenance rule — see OnMeterReset).
-            self._historyOwnReset = true
             if C_DamageMeter and C_DamageMeter.ResetAllCombatSessions then
-                pcall(C_DamageMeter.ResetAllCombatSessions)
+                -- One-shot: our own wipe fires DAMAGE_METER_RESET, whose handler must
+                -- not clear the pending record this handler arms below. Armed before
+                -- the call (delivery can be synchronous), un-armed if the call failed
+                -- (a stale flag would eat the NEXT external reset's provenance clear).
+                self._historyOwnReset = true
+                if not pcall(C_DamageMeter.ResetAllCombatSessions) then
+                    self._historyOwnReset = nil
+                end
             end
             -- The hover-tip Targets cache cross-references the now-wiped data.
             if self.InvalidateTargetsCache then self:InvalidateTargetsCache() end

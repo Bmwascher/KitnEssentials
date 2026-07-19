@@ -336,6 +336,18 @@ describe("OnChallengeEvent wiring", function()
         assert.same({ "capture", "reset", "arm" }, calls)
     end)
 
+    it("key start with the toggle ON: a failed reset call un-arms the flag [F pcall]", function()
+        DM.db = { ResetOnKeyStart = true, HistoryRetain = 5 }
+        _G.C_DamageMeter = { ResetAllCombatSessions = function() error("boom") end }
+        DM:OnChallengeEvent("CHALLENGE_MODE_START")
+        assert.is_nil(DM._historyOwnReset)
+        -- No stale flag left to shield it: the NEXT (external) reset still
+        -- clears pending provenance normally.
+        DM._pendingBundle = { label = "Algeth'ar Academy" }
+        DM:OnMeterReset()
+        assert.is_nil(DM._pendingBundle)
+    end)
+
     it("key start with the toggle OFF: no capture, pending cleared [C2]", function()
         DM.db = { ResetOnKeyStart = false }
         DM._pendingBundle = { label = "Stale" }
