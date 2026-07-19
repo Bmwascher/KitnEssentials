@@ -217,7 +217,6 @@ function DM:PopulateSegmentMenu(W)
     -- Stored sessions (newest nearest the icon). sessionID is a plain id (NeverSecret)
     -- so the active == compare is taint-safe; name/duration are secret-guarded.
     local list = self:GetAvailableSessions(20)
-    local hadSessions = false
     -- Kill/wipe tint map: tagged on ENCOUNTER_END's authoritative success flag
     -- (Core.lua) -- NOT parsed from the session name, which stays verbatim
     -- (including Blizzard's own markers). Runtime-only, like stored sessions.
@@ -241,15 +240,15 @@ function DM:PopulateSegmentMenu(W)
                 end
                 local dur = select(1, self.FormatDeathTime(sdata.durationSeconds))
                 place(label .. "  |cff999999(" .. dur .. ")|r", W._curSessionID == sid, sid, nil)
-                hadSessions = true
             end
         end
     end
 
     -- ── Key history (History.lua bundles) ──────────────────────────────────
-    -- Rendered below the live list per the approved design. placeLabel is a
-    -- click-less variant of place() for the section header: same pooling,
-    -- no _sid (OnClick pins nil -> live; prevented by disabling the row).
+    -- Rendered below the live list per the approved design. The header row is
+    -- placed directly (not via place()) and mouse-disabled: a click-less
+    -- pooled label, same pooling as the row list, no _sid (OnClick pins nil
+    -- -> live; prevented by disabling the row).
     local bundles = self.HistoryBundles and self:HistoryBundles() or nil
     if bundles then
         idx = idx + 1
@@ -324,7 +323,9 @@ function DM:PopulateSegmentMenu(W)
     local footerH = SEG_PAD + #SEGMENT_SESSION_TYPES * (rowH + SEG_ROW_GAP) + SEG_DIV_H + 2
 
     -- Divider = the footer's top edge; hidden when no scroll list sits above it.
-    if hadSessions then
+    -- idx > 0 means the scroll list has SOME row -- a live session, the HISTORY
+    -- header, or a bundle row (all three bump idx) -- not just a live session.
+    if idx > 0 then
         s.divider:ClearAllPoints()
         s.divider:SetPoint("BOTTOMLEFT", s, "BOTTOMLEFT", 1 + SEG_PAD,
             1 + SEG_PAD + #SEGMENT_SESSION_TYPES * (rowH + SEG_ROW_GAP) + 2)
@@ -340,7 +341,11 @@ function DM:PopulateSegmentMenu(W)
     -- maxScroll == 0 (the view fits the content exactly) and the floor below keeps
     -- a negative out of SetVerticalScroll -- do NOT rely on native ScrollFrame
     -- clamping (the wheel handler above clamps manually for the same reason).
-    local contentH = hadSessions and ((-y) - SEG_ROW_GAP + SEG_PAD) or 0
+    -- Gate on idx > 0 (not "any live session") so the HISTORY section still gets
+    -- a sized viewport when the live list is empty -- the normal state right
+    -- after a key-start wipe, when bundles exist but nothing has been captured
+    -- into the live list yet.
+    local contentH = (idx > 0) and ((-y) - SEG_ROW_GAP + SEG_PAD) or 0
     s.content:SetHeight(max(contentH, 1))
     local viewH = contentH
     local maxViewH = SEG_MAX_H - footerH - 2
