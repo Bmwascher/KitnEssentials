@@ -702,16 +702,10 @@ local function BuildAllPlayerTargets(session, sessionID)
     if not C_DamageMeter then return nil end
     local enemyType = Enum.DamageMeterType.EnemyDamageTaken
 
-    -- Pull the EnemyDamageTaken session (FromID for a pinned session, else FromType
-    -- for the live one); both pcall'd -- the API can reject while execution is tainted.
-    local enemySession
-    if sessionID ~= nil and C_DamageMeter.GetCombatSessionFromID then
-        local ok, s = pcall(C_DamageMeter.GetCombatSessionFromID, sessionID, enemyType)
-        if ok then enemySession = s end
-    elseif C_DamageMeter.GetCombatSessionFromType then
-        local ok, s = pcall(C_DamageMeter.GetCombatSessionFromType, session, enemyType)
-        if ok then enemySession = s end
-    end
+    -- Pull the EnemyDamageTaken session through the module chokepoint: same
+    -- FromID/FromType + pcall behavior as the old inline calls, PLUS the
+    -- negative-id branch so the Targets tip serves key-history snapshots.
+    local enemySession = DM:GetSession(session, enemyType, sessionID)
     if not enemySession or not enemySession.combatSources or #enemySession.combatSources == 0 then
         _targetsCache.key = cacheKey
         _targetsCache.map = nil
@@ -735,14 +729,8 @@ local function BuildAllPlayerTargets(session, sessionID)
         if issecretvalue(etot) or type(etot) ~= "number" then etot = 0 end
         enemyTotals[eKey] = etot
 
-        local srcData
-        if sessionID ~= nil and C_DamageMeter.GetCombatSessionSourceFromID then
-            local ok, sd = pcall(C_DamageMeter.GetCombatSessionSourceFromID, sessionID, enemyType, enemy.sourceGUID, enemy.sourceCreatureID)
-            if ok then srcData = sd end
-        elseif C_DamageMeter.GetCombatSessionSourceFromType then
-            local ok, sd = pcall(C_DamageMeter.GetCombatSessionSourceFromType, session, enemyType, enemy.sourceGUID, enemy.sourceCreatureID)
-            if ok then srcData = sd end
-        end
+        local srcData = DM:GetSource(session, enemyType,
+            enemy.sourceGUID, enemy.sourceCreatureID, sessionID)
 
         if srcData and srcData.combatSpells then
             for _, spell in ipairs(srcData.combatSpells) do
