@@ -12,24 +12,25 @@
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
-local KE = select(2, ...) -- luacheck: ignore 211
+local KE = select(2, ...)
 if not KitnEssentials then return end
 
 ---@class DamageMeter: AceModule
 local DM = KitnEssentials:GetModule("DamageMeter")
 
-local ipairs = ipairs -- luacheck: ignore 211
-local type = type -- luacheck: ignore 211
+local ipairs = ipairs
+local type = type
 local wipe = wipe
 local issecretvalue = issecretvalue
-local tremove = table.remove -- luacheck: ignore 211
-local tinsert = table.insert -- luacheck: ignore 211
+local tremove = table.remove
+local tinsert = table.insert
+local debugprofilestop = debugprofilestop
 
-local DEBUG_DMH = false -- luacheck: ignore 211
+local DEBUG_DMH = false
 
 -- Lazy store. nextID decreases monotonically and is NEVER reused (a stale
 -- window pin can never alias a newer snapshot); HistoryClear keeps it.
-local function store(self) -- luacheck: ignore 211
+local function store(self)
     local h = self._history
     if not h then
         h = { bundles = {}, byID = {}, nextID = -1 }
@@ -90,4 +91,202 @@ function DM:HistoryClear()
     if not h then return end
     wipe(h.bundles)
     wipe(h.byID)
+end
+
+---------------------------------------------------------------------------------
+-- Pending-key metadata (feeds bundle labeling [C2][C4])
+--
+-- Armed ONLY at a key start where the wipe actually fired (Core.lua calls
+-- this at the END of the gated reset block). A capture that finds pending
+-- unarmed seals as the label-less "Earlier runs" bundle — the store's
+-- contents then span more than one wipe boundary and must not be labeled
+-- with any single key.
+---------------------------------------------------------------------------------
+
+function DM:HistoryArmPending()
+    local label, level
+    if C_ChallengeMode then
+        local mapID = C_ChallengeMode.GetActiveChallengeMapID
+            and C_ChallengeMode.GetActiveChallengeMapID()
+        if mapID and C_ChallengeMode.GetMapUIInfo then
+            -- First return = localized dungeon name (non-secret; same read
+            -- MythicPlusTimer uses).
+            local name = C_ChallengeMode.GetMapUIInfo(mapID)
+            if name ~= nil and not issecretvalue(name) then label = name end
+        end
+        if C_ChallengeMode.GetActiveKeystoneInfo then
+            -- Can read 0 at the start boundary [C4]; completion repairs it.
+            local lvl = C_ChallengeMode.GetActiveKeystoneInfo()
+            if type(lvl) == "number" and lvl > 0 then level = lvl end
+        end
+    end
+    self._pendingBundle = { label = label, level = level }
+end
+
+-- CHALLENGE_MODE_COMPLETED: authoritative outcome/duration + metadata
+-- repair [C1][C4]. GetChallengeCompletionInfo is the completion source of
+-- truth (MythicPlusTimer.lua CompleteRun uses the same field for the same
+-- reason: world-elapsed goes stale after depletion). A depleted-but-
+-- completed key is onTime == false -> outcome false (shown as a loss) —
+-- NEVER derived from _sessionOutcomes, which is per-boss kill/wipe tagging.
+-- The run-level "+NN" summary session is stored by Blizzard around this
+-- event, but the final BOSS session already exists by kill time and the
+-- boss/summary append ORDER is not pinned — "newest at the event" could
+-- target the boss. Identify by SET DIFF instead: remember the ids stored
+-- at event time, then after a 1s settle (same delayed-read pattern as
+-- OnEncounterEnd's outcome tagging) prefer the newest id that appeared
+-- AFTER the event, falling back to the newest overall. Correct under
+-- either append order; session NAMES can be secret and are never matched.
+function DM:HistoryOnKeyComplete()
+    local pending = self._pendingBundle
+    if not pending then return end
+    local info = C_ChallengeMode and C_ChallengeMode.GetChallengeCompletionInfo
+        and C_ChallengeMode.GetChallengeCompletionInfo()
+    if info then
+        if type(info.level) == "number" and info.level > 0 then
+            pending.level = info.level
+        end
+        if info.mapChallengeModeID and C_ChallengeMode.GetMapUIInfo then
+            local name = C_ChallengeMode.GetMapUIInfo(info.mapChallengeModeID)
+            if name ~= nil and not issecretvalue(name) then pending.label = name end
+        end
+        pending.outcome = info.onTime == true
+        if type(info.time) == "number" and info.time > 0 then
+            pending.durationMs = info.time
+        end
+    end
+    -- Ids already stored when the event fired (the boss session is in
+    -- here; the summary lands at/after the event under either ordering).
+    local known = {}
+    local atEvent = self:GetAvailableSessions(1e9)
+    if atEvent then
+        for i = 1, #atEvent do
+            local id = atEvent[i] and atEvent[i].sessionID
+            if id ~= nil and not issecretvalue(id) then known[id] = true end
+        end
+    end
+    C_Timer.After(1, function()
+        -- Still the same pending run? (A key start inside the 1s window
+        -- consumes pending via HistoryCapture; do not resurrect it.)
+        if DM._pendingBundle ~= pending then return end
+        local list = DM:GetAvailableSessions(1e9)
+        if not list or #list == 0 then return end
+        local pick
+        for i = #list, 1, -1 do   -- newest -> oldest
+            local id = list[i] and list[i].sessionID
+            if id ~= nil and not issecretvalue(id) then
+                pick = pick or id            -- newest overall = the fallback
+                if not known[id] then        -- newest POST-event id wins
+                    pick = id
+                    break
+                end
+            end
+        end
+        if pick ~= nil then pending.summarySessionID = pick end
+    end)
+end
+
+---------------------------------------------------------------------------------
+-- Capture — synchronous, at CHALLENGE_MODE_START, BEFORE the wipe [C5]
+---------------------------------------------------------------------------------
+
+local METER_TYPE_MIN, METER_TYPE_MAX = 0, 10   -- Enum.DamageMeterType range
+
+-- Whole-bundle eviction, oldest first. HistoryRetain is clamped at READ so
+-- a legacy stored value (old default 20) needs no migration.
+local function evictOverCap(self, h)
+    local cap = self.db and self.db.HistoryRetain
+    if type(cap) ~= "number" then cap = 5 end
+    if cap < 1 then cap = 1 elseif cap > 10 then cap = 10 end
+    while #h.bundles > cap do
+        local old = tremove(h.bundles)   -- bundles is newest-first: tail = oldest
+        for _, entry in ipairs(old.sessions) do
+            h.byID[entry.id] = nil
+        end
+    end
+end
+
+-- Snapshot every stored session × all 11 meter types (+ per-source deep
+-- pass) into one sealed bundle. Reads go through the module's own pcall'd
+-- getters with POSITIVE ids (the API path). Returns the bundle, or nil when
+-- the store was empty/unreadable. ALWAYS consumes _pendingBundle.
+function DM:HistoryCapture()
+    local pending = self._pendingBundle
+    self._pendingBundle = nil
+
+    if not (C_DamageMeter and C_DamageMeter.GetAvailableCombatSessions) then return nil end
+    -- EXPLICIT huge cap: the helper defaults an omitted cap to 20 (its menu
+    -- contract, Core.lua:1669) — an implicit call would silently drop the
+    -- OLDEST segments of a long key (Codex round 2, F2').
+    local list = self:GetAvailableSessions(1e9)
+    if not list or #list == 0 then return nil end
+
+    local h = store(self)
+    local outcomes = self._sessionOutcomes
+    local startT = debugprofilestop()
+
+    local bundle = {
+        label = pending and pending.label or nil,   -- nil = "Earlier runs" row [C2]
+        level = pending and pending.level or nil,
+        outcome = pending and pending.outcome,       -- nil = abandoned / unarmed
+        durationMs = pending and pending.durationMs or nil,
+        sessions = {},
+    }
+
+    for i = 1, #list do
+        local avail = list[i]
+        local oldID = avail and avail.sessionID
+        if oldID ~= nil and not issecretvalue(oldID) then
+            local entry = {
+                id = h.nextID,
+                name = avail.name,                       -- may be secret: SetText-only
+                durationSeconds = avail.durationSeconds, -- may be secret: FormatDeathTime guards
+                -- Frozen tint [C1]. NO `or nil` tail — a false (wipe) tag is
+                -- a legitimate value and `and/or` would collapse it to nil
+                -- (the and/or-collapse bug class; see the 2026-07-18 trash
+                -- audit F2).
+                outcome = outcomes and outcomes[oldID],
+                isSummary = (pending and pending.summarySessionID == oldID) or nil,
+                byType = {},
+                sources = {},
+            }
+            h.nextID = h.nextID - 1
+            for dmType = METER_TYPE_MIN, METER_TYPE_MAX do
+                local session = self:GetSession(nil, dmType, oldID)
+                if session then
+                    entry.byType[dmType] = session
+                    local srcs = session.combatSources
+                    if srcs then
+                        for si = 1, #srcs do
+                            local src = srcs[si]
+                            local key = DM.HistorySourceKey(src.sourceGUID, src.sourceCreatureID)
+                            if key ~= nil then
+                                local detail = self:GetSource(nil, dmType,
+                                    src.sourceGUID, src.sourceCreatureID, oldID)
+                                if detail then
+                                    local perSource = entry.sources[key]
+                                    if not perSource then
+                                        perSource = {}
+                                        entry.sources[key] = perSource
+                                    end
+                                    perSource[dmType] = detail
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            bundle.sessions[#bundle.sessions + 1] = entry
+            h.byID[entry.id] = entry
+        end
+    end
+
+    if #bundle.sessions == 0 then return nil end
+    tinsert(h.bundles, 1, bundle)   -- newest first
+    evictOverCap(self, h)
+    if DEBUG_DMH then
+        KE:Print(("[DMH] capture: %d sessions, %.1fms"):format(
+            #bundle.sessions, debugprofilestop() - startT))
+    end
+    return bundle
 end
