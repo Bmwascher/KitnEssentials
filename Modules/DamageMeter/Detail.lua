@@ -1087,7 +1087,15 @@ local function RenderTipTargets(self, bar, cfg, sessionID, topY, stride, barH)
     -- cross-realm members. bar._cachedName loses that suffix when ShowRealm is off
     -- (the default), so it would miss; bar._rawName preserves it. The lookup keys on
     -- the raw name (realm stripped for display only, never for the targets key).
-    local targets = BuildPlayerTargets(bar._rawName, cfg.SessionType, sessionID, TIP_TGT_ROWS)
+    -- _rawName is nil while the source's name is SECRET (a member who left the
+    -- group before the snapshot capture): fall back to the identity memo, whose
+    -- realm-bearing form matches det.unitName — the attribution side stays plain
+    -- (probe 2026-07-19), so the memo name restores the whole section.
+    local playerName = bar._rawName
+    if not playerName and self.PlainNameFor then
+        playerName = self:PlainNameFor(bar._sourceGUID)
+    end
+    local targets = BuildPlayerTargets(playerName, cfg.SessionType, sessionID, TIP_TGT_ROWS)
     if not targets then
         HideTipTargets()
         return 0
@@ -1200,6 +1208,19 @@ local function RenderTipTargets(self, bar, cfg, sessionID, topY, stride, barH)
     return TIP_TGT_GAP + 1 + TIP_TGT_LABEL_H + shownTargets * stride
 end
 
+-- Tip title: the last plain name RenderBar cached, else the identity memo
+-- (History.lua PlainNameFor, keyed on the bar's GUID) — restores the name for
+-- sources frozen with a secret name (member left the group before the
+-- snapshot capture). Always returns a PLAIN string: the tip measures text
+-- widths for layout, so a secret must never reach this FontString.
+local function TipHeaderName(self, bar)
+    local nm = bar._cachedName
+    if not nm and self.PlainNameFor then
+        nm = self:PlainNameFor(bar._sourceGUID)
+    end
+    return nm or "Breakdown"
+end
+
 -- Fill the tip from a bar's stashed source identity (set by RenderBar, Task 2).
 -- Returns true if it has content to show, false if it should stay hidden. Mirrors
 -- the secret contract of RenderBreakdown / RenderDeathRecap exactly. OOC ONLY for
@@ -1220,7 +1241,7 @@ function DM:PopulateHoverTip(W, bar)
             _tip.colHdr.spell:Hide(); _tip.colHdr.amount:Hide(); _tip.colHdr.dps:Hide(); _tip.colHdr.pct:Hide()
         end
         HideTipTargets()
-        _tip.header:SetText(bar._cachedName or "Breakdown")
+        _tip.header:SetText(TipHeaderName(self, bar))
         -- Class-tint the title (bar._classFilename is NeverSecret). White fallback for
         -- an unknown/enemy class so the centered title is always legible.
         local chc = bar._classFilename and RAID_CLASS_COLORS[bar._classFilename]
@@ -1247,7 +1268,7 @@ function DM:PopulateHoverTip(W, bar)
     local barH = math_max(8, (W._snapHeight or 16) - 2)
     local stride = barH + (W._snapSpacing or 2)
     local shown = 0
-    local headerText = bar._cachedName or "Breakdown"
+    local headerText = TipHeaderName(self, bar)
 
     -- Phase 4c: the column-header row (Spell · Amount · DPS · %) is shown only for the
     -- breakdown path; the Deaths recap keeps its single value column. bodyTop pushes the

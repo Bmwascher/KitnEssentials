@@ -74,6 +74,40 @@ describe("store lookups", function()
     end)
 end)
 
+describe("plain-name identity memo", function()
+    it("stores a player name and serves it back", function()
+        DM:NotePlainName("Player-1-A", "Itsgg-Illidan")
+        assert.equals("Itsgg-Illidan", DM:PlainNameFor("Player-1-A"))
+    end)
+    it("ignores creature GUIDs (identity restriction is player-only)", function()
+        DM:NotePlainName("Creature-0-123", "Overgrown Ancient")
+        assert.is_nil(DM:PlainNameFor("Creature-0-123"))
+    end)
+    it("refuses secret inputs (declared)", function()
+        local secret = { __secret = true }
+        DM:NotePlainName(secret, "Unsub-BurningLegion")
+        DM:NotePlainName("Player-1-B", secret)
+        assert.is_nil(DM:PlainNameFor("Player-1-B"))
+        assert.is_nil(DM:PlainNameFor(secret))
+    end)
+    it("refuses nil and empty names", function()
+        DM:NotePlainName("Player-1-C", nil)
+        DM:NotePlainName("Player-1-C", "")
+        DM:NotePlainName(nil, "Ghost")
+        assert.is_nil(DM:PlainNameFor("Player-1-C"))
+    end)
+    it("never downgrades a realm-bearing name to a bare flicker form", function()
+        DM:NotePlainName("Player-1-D", "Unsub")                 -- bare first sighting
+        DM:NotePlainName("Player-1-D", "Unsub-BurningLegion")   -- upgrade sticks
+        DM:NotePlainName("Player-1-D", "Unsub")                 -- flicker tick: ignored
+        assert.equals("Unsub-BurningLegion", DM:PlainNameFor("Player-1-D"))
+    end)
+    it("PlainNameFor is nil-safe before anything is learned", function()
+        assert.is_nil(DM:PlainNameFor("Player-1-E"))
+        assert.is_nil(DM:PlainNameFor(nil))
+    end)
+end)
+
 -- Fake C_DamageMeter backing an 11-type store: sessions[oldID][dmType] =
 -- session table, sourceDetails[oldID][dmType][guidOrCid] = source table.
 local function installFakeMeter(sessions, sourceDetails)
@@ -182,6 +216,24 @@ describe("HistoryCapture", function()
         assert.is_nil(bundle.label)
         assert.is_nil(bundle.outcome)
         assert.is_nil(bundle.durationMs)
+    end)
+
+    it("learns current members' plain names during the deep pass", function()
+        local sessions = { [7] = { [0] = {
+            totalAmount = 100,
+            combatSources = {
+                { sourceGUID = "Player-1-A", name = "Itsgg-Illidan", totalAmount = 60 },
+                { sourceGUID = "Creature-0-9", name = "Territorial Eagle", totalAmount = 40 },
+                -- Departed member: the name marshaled SECRET at capture time —
+                -- must never enter the memo (it was learned live, if at all).
+                { sourceGUID = "Player-1-B", name = { __secret = true }, totalAmount = 20 },
+            } } } }
+        installFakeMeter(sessions, { [7] = { [0] = {} } })
+        DM._pendingBundle = nil
+        DM:HistoryCapture()
+        assert.equals("Itsgg-Illidan", DM:PlainNameFor("Player-1-A"))
+        assert.is_nil(DM:PlainNameFor("Creature-0-9"))
+        assert.is_nil(DM:PlainNameFor("Player-1-B"))
     end)
 
     it("seals no bundle on an empty store but still clears pending", function()

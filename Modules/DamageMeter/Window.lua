@@ -1751,7 +1751,14 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         -- Plain nickname display. _rawName keeps the UNSTRIPPED real name when
         -- we have one (the Detail Targets lookup keys on it); a secret tick
         -- clears it exactly like the secret branch below.
-        bar._rawName = (not nmSecret) and nm or nil
+        local raw = (not nmSecret) and nm or nil
+        -- Identity memo (History.lua): learn on a CHANGED raw name only, so the
+        -- steady state adds one plain compare per tick. Backs the Detail tip's
+        -- secret-name fallback once this member leaves the group.
+        if raw and raw ~= bar._rawName and self.NotePlainName then
+            self:NotePlainName(bar._sourceGUID, raw)
+        end
+        bar._rawName = raw
         if nick ~= bar._cachedName then
             bar._cachedName = nick
             row.name:SetText(nick)
@@ -1779,6 +1786,11 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         -- keys its per-player lookup on the raw det.unitName (which carries the
         -- "-Realm" suffix for cross-realm members), so it must match against the raw
         -- name, never the realm-stripped display name.
+        -- Identity memo (History.lua): changed-name gate as in the nickname
+        -- branch above; both operands are plain here (non-secret branch).
+        if nm and nm ~= bar._rawName and self.NotePlainName then
+            self:NotePlainName(bar._sourceGUID, nm)
+        end
         bar._rawName = nm
         if nm then
             if db.ShowRealm then

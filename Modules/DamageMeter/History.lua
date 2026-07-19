@@ -94,6 +94,45 @@ function DM:HistoryClear()
 end
 
 ---------------------------------------------------------------------------------
+-- Plain-name identity memo (GUID -> last plain, realm-bearing name)
+--
+-- DamageMeterCombatSource.name is ConditionalSecret and stamps secrecy at
+-- MARSHAL time: a member who leaves the group before the key-start capture is
+-- frozen into the snapshot with a permanently secret name, while their
+-- enemy-side attribution (combatSpellDetails.unitName — not conditional)
+-- stays plain (in-game probe 2026-07-19: 7/7 attackers plain, 0 secret).
+-- Learned wherever a source name renders/marshals plain (RenderBar's plain
+-- ticks + the capture deep pass); Detail.lua falls back to it for the tip
+-- header and the Targets lookup when a bar's name is secret. Player GUIDs
+-- only — identity restriction never applies to creatures. Runtime lifetime,
+-- exactly matching the store it backs; survives HeaderReset (identity is not
+-- meter data).
+---------------------------------------------------------------------------------
+
+function DM:NotePlainName(guid, name)
+    -- Truthiness first, never ==/~= — both inputs can be secret (RenderBar's
+    -- guid-guard idiom); issecretvalue stays first contact after truthy.
+    if not guid or issecretvalue(guid) or type(guid) ~= "string" then return end
+    if not name or issecretvalue(name) or type(name) ~= "string" or name == "" then return end
+    if guid:sub(1, 7) ~= "Player-" then return end
+    local m = self._plainNames
+    if not m then m = {}; self._plainNames = m end
+    local prev = m[guid]
+    -- Never downgrade: cross-realm names intermittently drop their "-Realm"
+    -- suffix (the realmNames flicker, Window.lua), but the Targets map keys
+    -- on the realm-BEARING det.unitName — a bare flicker tick must not
+    -- overwrite the matchable form.
+    if prev and prev:find("-", 1, true) and not name:find("-", 1, true) then return end
+    m[guid] = name
+end
+
+function DM:PlainNameFor(guid)
+    local m = self._plainNames
+    if not m or not guid or issecretvalue(guid) then return nil end
+    return m[guid]
+end
+
+---------------------------------------------------------------------------------
 -- Pending-key metadata (feeds bundle labeling [C2][C4])
 --
 -- Armed ONLY at a key start where the wipe actually fired (Core.lua calls
@@ -259,6 +298,9 @@ function DM:HistoryCapture()
                     if srcs then
                         for si = 1, #srcs do
                             local src = srcs[si]
+                            -- Current members marshal plain here — feed the
+                            -- identity memo (self-filters secrets/creatures).
+                            self:NotePlainName(src.sourceGUID, src.name)
                             local key = DM.HistorySourceKey(src.sourceGUID, src.sourceCreatureID)
                             if key ~= nil then
                                 local detail = self:GetSource(nil, dmType,
