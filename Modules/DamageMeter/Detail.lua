@@ -1819,3 +1819,4 @@ end)
 DM.AggregateEnemyPlayers = AggregateEnemyPlayers
 DM.AutoAttackName = AutoAttackName
 DM.MergeSpellsByName = MergeSpellsByName
+DM.TipHeaderName = TipHeaderName

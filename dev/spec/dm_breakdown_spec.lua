@@ -4,8 +4,8 @@
 -- ╚══════════════════════════════════════════════════════════╝
 --
 -- Loads the REAL Modules/DamageMeter/Detail.lua headlessly and tests
--- AggregateEnemyPlayers / AutoAttackName / MergeSpellsByName through the DM.*
--- seam at its EOF (the helpers are file-locals). If Detail.lua ever gains
+-- AggregateEnemyPlayers / AutoAttackName / MergeSpellsByName / TipHeaderName
+-- through the DM.* seam at its EOF (the helpers are file-locals). If Detail.lua ever gains
 -- load-time C_* calls / event registrations this load breaks loudly — that is
 -- the intended tripwire; fix the load path, don't re-mirror the bodies.
 --
@@ -191,5 +191,32 @@ describe("AggregateEnemyPlayers", function()
         } }
         -- "sa" -> 0, fails amt > 0 -> no row -> nil
         assert.is_nil(DM.AggregateEnemyPlayers(src))
+    end)
+end)
+
+describe("TipHeaderName", function()
+    -- History.lua is not loaded here: DM.PlainNameFor is stubbed per test
+    -- (fresh DM each before_each, so stubs never leak).
+    it("prefers the cached plain name and never consults the memo", function()
+        DM.PlainNameFor = function() error("memo must not be consulted when a cached name exists") end
+        local bar = { _cachedName = "Itsgg", _sourceGUID = "Player-1-A" }
+        assert.equals("Itsgg", DM.TipHeaderName(DM, bar))
+    end)
+
+    it("falls back to the identity memo when the cached name is nil (secret-named bar)", function()
+        DM.PlainNameFor = function(_, guid)
+            return guid == "Player-1-A" and "Unsub-BurningLegion" or nil
+        end
+        assert.equals("Unsub-BurningLegion", DM.TipHeaderName(DM, { _sourceGUID = "Player-1-A" }))
+    end)
+
+    it("defaults to Breakdown on a memo miss", function()
+        DM.PlainNameFor = function() return nil end
+        assert.equals("Breakdown", DM.TipHeaderName(DM, { _sourceGUID = "Player-1-Z" }))
+    end)
+
+    it("defaults to Breakdown when no memo is installed (load-order safety)", function()
+        assert.is_nil(DM.PlainNameFor)
+        assert.equals("Breakdown", DM.TipHeaderName(DM, {}))
     end)
 end)
