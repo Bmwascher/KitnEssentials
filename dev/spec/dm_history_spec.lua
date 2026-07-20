@@ -117,6 +117,33 @@ describe("plain-name identity memo", function()
     end)
 end)
 
+describe("SetWindowView (right-click view switch)", function()
+    -- Core.lua's SetWindowView; the repaint/teardown collaborators are absent
+    -- headlessly (CloseDetail/CloseSelector unloaded, Tick stubbed) — under
+    -- test is pin retention + override bookkeeping, not rendering.
+    local W
+    before_each(function()
+        DM.db.Windows = { {} }
+        DM.Tick = function() end
+        W = { idx = 1 }
+    end)
+
+    it("keeps a pinned history snapshot (negative id) across a meter-type switch", function()
+        W._curSessionID = -3
+        DM:SetWindowView(W, Enum.DamageMeterType.HealingDone)
+        assert.equals(-3, W._curSessionID)
+        assert.equals(Enum.DamageMeterType.HealingDone, DM.db.Windows[1].ViewOverride)
+        assert.equals(DM:CurrentSegmentToken(), DM.db.Windows[1].ViewOverrideToken)
+    end)
+
+    it("keeps a pinned live stored session (positive id) too — the keep is not history-gated", function()
+        W._curSessionID = 7
+        DM:SetWindowView(W, Enum.DamageMeterType.Interrupts)
+        assert.equals(7, W._curSessionID)
+        assert.equals(Enum.DamageMeterType.Interrupts, DM.db.Windows[1].ViewOverride)
+    end)
+end)
+
 -- Fake C_DamageMeter backing an 11-type store: sessions[oldID][dmType] =
 -- session table, sourceDetails[oldID][dmType][guidOrCid] = source table.
 local function installFakeMeter(sessions, sourceDetails)

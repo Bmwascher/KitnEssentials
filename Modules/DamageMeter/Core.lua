@@ -1868,12 +1868,13 @@ end
 
 -- In-world view pick (right-click selector, Selector.lua). Writes a per-window view
 -- override tagged with the current segment token (so it persists -- including across
--- /reload -- until the user re-picks or a segment boundary passes), drops any pinned
--- history session so the new view shows live data (a pin from the old meter type
--- wouldn't map to the new type's sessions; CachedSession keys on
--- (sessionType, meterType, sessionID)), closes the detail panel (its breakdown/recap
--- was keyed to the old view), closes the selector, and repaints. meterType is a plain
--- Enum.DamageMeterType value -- never secret.
+-- /reload -- until the user re-picks or a segment boundary passes), KEEPS any pinned
+-- session -- a session id (stored or history) serves every meter type, since
+-- GetSession passes dmType through both id branches, so the switch re-reads the SAME
+-- segment's new metric (the GUI meter-type path keeps pins the same way; CachedSession's
+-- (sessionType, meterType, sessionID) key is memoization, not identity) -- closes the
+-- detail panel (its breakdown/recap was keyed to the old view), closes the selector,
+-- and repaints. meterType is a plain Enum.DamageMeterType value -- never secret.
 function DM:SetWindowView(W, meterType)
     if not W then return end
     local windows = self.db and self.db.Windows
@@ -1881,7 +1882,6 @@ function DM:SetWindowView(W, meterType)
     if not window then return end
     window.ViewOverride = meterType
     window.ViewOverrideToken = self:CurrentSegmentToken()
-    W._curSessionID = nil
     if self.CloseDetail then self:CloseDetail(W) end
     if self.CloseSelector then self:CloseSelector(W) end
     if self.Tick then self:Tick() end
