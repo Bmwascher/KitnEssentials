@@ -1534,7 +1534,9 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
     manager:Register(retainSlider, "all")
     cardSeg:AddRow(rowRetain, Theme.rowHeight)
 
-    local segNoteRow = GUIFrame:CreateRow(cardSeg.content, 65)
+    -- 80px, not the usual 65: the third bullet wraps to a 4th body line (65 fits
+    -- title + 3 at the small font's ~16px line pitch; smoke 2026-07-24 clipped it).
+    local segNoteRow = GUIFrame:CreateRow(cardSeg.content, 80)
     local segNote = GUIFrame:CreateText(segNoteRow,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " On: all segments clear when a keystone starts, so " ..
@@ -1544,10 +1546,10 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
         KE:ColorTextByTheme("/kes dm reset") .. " or the header reset button.\n" ..
         KE:ColorTextByTheme("-") .. " With reset on, the last " ..
         KE:ColorTextByTheme("Key History") .. " keys stay browsable in the segment menu (this session only — history clears on reload; the header reset clears it too).",
-        65, "hide")
+        80, "hide")
     segNoteRow:AddWidget(segNote, 1)
     manager:Register(segNote, "all")
-    cardSeg:AddRow(segNoteRow, 65, 0)
+    cardSeg:AddRow(segNoteRow, 80, 0)
 
     yOffset = cardSeg:GetNextOffset()
 
