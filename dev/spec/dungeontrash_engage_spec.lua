@@ -427,11 +427,11 @@ describe("DungeonTrash — engage-gated first-cast seeding", function()
     -- interruptedBy on a correlated CHANNEL_STOP is a lifecycle signal, not
     -- kick evidence (reference parity: MarkRuntimeChannelStop feeds it only
     -- into pendingInterrupted; the Layer1-visible sawInterrupted latches
-    -- ONLY from the INTERRUPTED/FAILED events). Field case (Algeth'ar
-    -- Academy 2026-07-24): Shadowmeld breaking Riftbreath's CHANNEL phase
-    -- stops it with interruptedBy present — the cast-phase FAILED deviation
-    -- above did not cover it, and the latch rejected every cannotInterrupt
-    -- Academy row exactly like the FAILED latch had.
+    -- ONLY from the INTERRUPTED/FAILED events). Hardening alongside the
+    -- 2026-07-24 keep-locked fix: a Shadowmeld breaking a channel aimed at
+    -- the melder (Riftbreath's channel phase) would stop it with
+    -- interruptedBy present, and the old latch here rejected every
+    -- cannotInterrupt Academy row exactly like the FAILED latch had.
     it("an interruptedBy channel stop ends the lifecycle without latching kick evidence", function()
         KE.TrashTraits = { [111] = { dungeonKey = "D", name = "Mob",
             identity = { level = 91, sex = 2, power = 0, classID = 2, nonElite = true,

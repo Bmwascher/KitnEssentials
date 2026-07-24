@@ -918,8 +918,10 @@ function DTrash:ResolveMob(rt)
     -- the identity up front. It only ARMS the unlock: the flip commits below
     -- iff this pass re-derives a DIFFERENT mob. When every row rejects, the
     -- identity and its output are KEPT — field case (Algeth'ar 2026-07-24):
-    -- all five Academy rows are cannotInterrupt, so one Shadowmeld-shaped
-    -- interrupt latch rejected them ALL and the old eager drop blanked the
+    -- Shadowmeld breaking a Vicious Ambush cast still latched sawInterrupted
+    -- AFTER the FAILED deviation shipped, so INTERRUPTED is the remaining
+    -- latch path for a melded cast; all five Academy rows are cannotInterrupt,
+    -- one such latch rejected them ALL, and the old eager drop blanked the
     -- plate's timers for good (the reference kept them). Mirrors
     -- ScoreTraitRow's behavior gates EXACTLY; placement/level/classification
     -- stay ordinary Layer1 inputs (transient context must never unlock).
@@ -1895,11 +1897,12 @@ function DTrash:FinishCast(unit, kind, interrupted, castBarID)
         -- but it is NOT Layer1 kick evidence: the reference's channel-stop
         -- handler feeds it only into the cast lifecycle (pendingInterrupted)
         -- — its Layer1-visible sawInterrupted latches ONLY from the
-        -- INTERRUPTED/FAILED events. Field case (Algeth'ar 2026-07-24):
-        -- Shadowmeld breaking Riftbreath's CHANNEL phase stops it with
-        -- interruptedBy present; latching here rejected every
-        -- cannotInterrupt Academy row exactly like the FAILED latch this
-        -- module already reverted (see OnCastFailed).
+        -- INTERRUPTED/FAILED events. Parity hardening alongside the
+        -- 2026-07-24 keep-locked fix (see ResolveMob): a Shadowmeld breaking
+        -- a channel aimed at the melder would stop it with interruptedBy
+        -- present, and a latch here would reject every cannotInterrupt
+        -- Academy row exactly like the FAILED latch this module already
+        -- reverted (see OnCastFailed).
         return
     end
     if kind == "cast" then
