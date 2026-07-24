@@ -140,7 +140,27 @@ end
 -- unarmed seals as the label-less "Earlier runs" bundle — the store's
 -- contents then span more than one wipe boundary and must not be labeled
 -- with any single key.
+--
+-- Lives in TWO places: the runtime field (the working copy, trusted
+-- unconditionally — same-session continuity is its own provenance) and a
+-- persisted db copy (db.HistoryPending, the SAME table so completion
+-- repairs flow to both). The db copy exists solely to survive /reload —
+-- the native session store is server-side and outlives a reload, so
+-- without it a between-keys reload sealed a fully-labeled run as "Earlier
+-- runs" (smoke 2026-07-24). A RESTORED copy is only ever trusted against
+-- an anchor: its completed key's summary session id must still be in the
+-- store (HistoryCapture) or CHALLENGE_MODE_COMPLETED must fire for it
+-- (HistoryOnKeyComplete — the event itself proves the key is still live).
+-- Every field is written through a plain-value guard, so the table is
+-- SavedVariables-safe by construction.
 ---------------------------------------------------------------------------------
+
+-- Drops pending provenance everywhere it lives. Core's reset/boundary
+-- paths call this whenever the native store stops matching the armed key.
+function DM:HistoryDropPending()
+    self._pendingBundle = nil
+    if self.db then self.db.HistoryPending = nil end
+end
 
 function DM:HistoryArmPending()
     local label, level
@@ -159,7 +179,10 @@ function DM:HistoryArmPending()
             if type(lvl) == "number" and lvl > 0 then level = lvl end
         end
     end
-    self._pendingBundle = { label = label, level = level }
+    local pending = { label = label, level = level }
+    self._pendingBundle = pending
+    -- Persisted copy for reload survival — same table, never a clone.
+    if self.db then self.db.HistoryPending = pending end
 end
 
 -- CHALLENGE_MODE_COMPLETED: authoritative outcome/duration + metadata
@@ -178,6 +201,14 @@ end
 -- either append order; session NAMES can be secret and are never matched.
 function DM:HistoryOnKeyComplete()
     local pending = self._pendingBundle
+    if not pending then
+        -- Mid-key /reload: the runtime copy died but the persisted one
+        -- survived, and COMPLETED firing is proof the key it describes is
+        -- still the live one — re-adopt it so the repairs + summary pick
+        -- land and the next capture labels normally.
+        pending = self.db and self.db.HistoryPending or nil
+        self._pendingBundle = pending
+    end
     if not pending then return end
     local info = C_ChallengeMode and C_ChallengeMode.GetChallengeCompletionInfo
         and C_ChallengeMode.GetChallengeCompletionInfo()
@@ -250,10 +281,15 @@ end
 -- Snapshot every stored session × all 11 meter types (+ per-source deep
 -- pass) into one sealed bundle. Reads go through the module's own pcall'd
 -- getters with POSITIVE ids (the API path). Returns the bundle, or nil when
--- the store was empty/unreadable. ALWAYS consumes _pendingBundle.
+-- the store was empty/unreadable. ALWAYS consumes the pending metadata —
+-- BOTH copies, even on the early returns.
 function DM:HistoryCapture()
     local pending = self._pendingBundle
     self._pendingBundle = nil
+    -- Normally the db copy IS pending (same table) and is consumed with it;
+    -- after a /reload it's the lone survivor — adopted below only if anchored.
+    local restored = not pending and self.db and self.db.HistoryPending or nil
+    if self.db then self.db.HistoryPending = nil end
 
     if not (C_DamageMeter and C_DamageMeter.GetAvailableCombatSessions) then return nil end
     -- EXPLICIT huge cap: the helper defaults an omitted cap to 20 (its menu
@@ -261,6 +297,24 @@ function DM:HistoryCapture()
     -- OLDEST segments of a long key (Codex round 2, F2').
     local list = self:GetAvailableSessions(1e9)
     if not list or #list == 0 then return nil end
+
+    if restored then
+        -- Reload survivor: trust its label ONLY if the completed key it
+        -- describes is still in the native store — the summary session id
+        -- it sealed at completion must appear in this capture's list. No id
+        -- (key never completed) or no match (store reset/replaced since) ->
+        -- stay unarmed and seal honestly as "Earlier runs" [C2].
+        local sid = restored.summarySessionID
+        if sid ~= nil then
+            for i = 1, #list do
+                local id = list[i] and list[i].sessionID
+                if id ~= nil and not issecretvalue(id) and id == sid then
+                    pending = restored
+                    break
+                end
+            end
+        end
+    end
 
     local h = store(self)
     local outcomes = self._sessionOutcomes

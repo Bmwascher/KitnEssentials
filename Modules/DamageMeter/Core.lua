@@ -1148,7 +1148,8 @@ function DM:OnMeterReset()
     if self._historyOwnReset then
         self._historyOwnReset = nil
     else
-        self._pendingBundle = nil
+        -- Both copies (runtime + persisted; History.lua). Guarded for load order.
+        if self.HistoryDropPending then self:HistoryDropPending() else self._pendingBundle = nil end
     end
     if DEBUG_DM then KE:Print("[DM] DAMAGE_METER_RESET -> Tick") end
     -- Drop the hover-tip Targets cache (Phase 4c / Detail.lua) -- the EnemyDamageTaken
@@ -1639,7 +1640,8 @@ function DM:HeaderReset(_)
     -- A mid-run manual reset also breaks pending provenance: the store no
     -- longer holds the armed key from its wipe boundary, so a later
     -- capture must seal as "Earlier runs", not under this key's label.
-    self._pendingBundle = nil
+    -- Both copies (runtime + persisted; History.lua). Guarded for load order.
+    if self.HistoryDropPending then self:HistoryDropPending() else self._pendingBundle = nil end
     -- Frozen combat clock referenced the wiped data too (mirrors OnMeterReset;
     -- in-combat resets keep the live clock -- the fight itself continues).
     if not self._ticker then
@@ -2016,8 +2018,9 @@ function DM:OnChallengeEvent(event)
             -- Key boundary WITHOUT a wipe: the store now spans multiple
             -- keys, so an armed label no longer describes it. Clear it so a
             -- later capture seals honestly as "Earlier runs" [C2] (covers
-            -- flipping the toggle off and back on across runs).
-            self._pendingBundle = nil
+            -- flipping the toggle off and back on across runs). Both copies
+            -- (runtime + persisted; History.lua). Guarded for load order.
+            if self.HistoryDropPending then self:HistoryDropPending() else self._pendingBundle = nil end
         end
     elseif event == "CHALLENGE_MODE_COMPLETED" then
         -- Freeze outcome/duration + repair keystone metadata from the
