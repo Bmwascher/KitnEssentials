@@ -893,8 +893,8 @@ function DTrash:SnapshotUnit(unit, attempt)
 end
 
 -- Cancel every output artifact keyed to the runtime's CURRENT identity —
--- shared by the pre-castConfirmed identity flip and the behavior-
--- contradiction unlock below (both must kill armed bars, deferred reveals
+-- shared by ResolveMob's Layer1 identity flip (contradiction-driven or not)
+-- and FinishCast's Layer2 flip (both must kill armed bars, deferred reveals
 -- and plate icons before the identity changes). Leaves the behavior flags
 -- alone: they are observation evidence and keep guarding the re-derivation.
 local function resetResolvedOutput(self, rt)
@@ -909,30 +909,31 @@ end
 -- Layer1: fingerprint the mob → candidates. Re-run whenever behavior flags
 -- change (a seen cast/channel/interrupt refines the candidate set).
 function DTrash:ResolveMob(rt)
-    -- Reference-exact re-derivation on a HARD capability contradiction: the
-    -- references never lock an identity — every pass re-derives, so a row the
-    -- behavior evidence now rejects simply drops out and its timers stop.
-    -- KE's castConfirmed stickiness (deliberate, stronger) must not survive
-    -- evidence the resolved row calls impossible — a kicked cannotInterrupt
+    -- Behavior-contradiction unlock, KEEP-LOCKED form (reference parity —
+    -- ObservationTest's keepLockedRuntime retains a locked in-combat runtime
+    -- whenever re-derivation fails, "to avoid clearing in-flight spells and
+    -- local CDs"): a HARD capability contradiction — a kicked cannotInterrupt
     -- row (the Maisara hexxer wore Rokh'zal's timers through repeated kicks),
-    -- or a cast/channel from a row without that capability. Mirrors
+    -- or a cast/channel from a row without that capability — no longer drops
+    -- the identity up front. It only ARMS the unlock: the flip commits below
+    -- iff this pass re-derives a DIFFERENT mob. When every row rejects, the
+    -- identity and its output are KEPT — field case (Algeth'ar 2026-07-24):
+    -- all five Academy rows are cannotInterrupt, so one Shadowmeld-shaped
+    -- interrupt latch rejected them ALL and the old eager drop blanked the
+    -- plate's timers for good (the reference kept them). Mirrors
     -- ScoreTraitRow's behavior gates EXACTLY; placement/level/classification
     -- stay ordinary Layer1 inputs (transient context must never unlock).
-    -- Runs before the obs gate so a runtime without a fresh snapshot still
-    -- self-heals. (FAILED casts no longer testify: sawInterrupted is a
-    -- genuine-kick latch — see OnCastFailed for the documented deviation from
-    -- the reference's FAILED handlers, which carry that exposure.)
+    -- A runtime without a snapshot (rt.obs nil) can't re-derive, so it keeps
+    -- its identity too — the deliberate cost of keep-locked (the old eager
+    -- drop self-healed there; the reference does not).
+    local contradicted = false
     if rt.matchedNPCID then
         local trait = KE.TrashTraits and KE.TrashTraits[rt.matchedNPCID]
         local id = trait and trait.identity
         if id and ((rt.sawInterrupted and id.cannotInterrupt == true)
             or (rt.sawCastStart and not (id.hasCastSpell or id.hasCastSkill))
             or (rt.sawChannelStart and not (id.hasChannelSpell or rt.sawCastIntoChannel))) then
-            resetResolvedOutput(self, rt)
-            dprint(string_format("%s: behavior contradicts %s — identity dropped, re-deriving",
-                rt.unit, tostring(rt.matchedNPCID)))
-            rt.matchedNPCID = nil
-            rt.castConfirmed = nil
+            contradicted = true
         end
     end
     if not rt.obs then return end
@@ -958,9 +959,11 @@ function DTrash:ResolveMob(rt)
     -- Layer1 (fingerprint) must NOT downgrade a Layer2 (observed cast/channel
     -- DURATION) resolution to a different mob: duration is stable, non-secret
     -- evidence and outranks fingerprint uniqueness. Once a cast confirms the mob,
-    -- Layer1 may only re-affirm the same npcID, never flip it. Backstops the
-    -- capability reconcile against any residual differential-flag prune.
-    if resolved and (not rt.castConfirmed or resolved == rt.matchedNPCID) then
+    -- Layer1 may only re-affirm the same npcID, never flip it — EXCEPT through
+    -- a capability contradiction, which is exactly the evidence that the lock
+    -- was earned by the wrong row (`contradicted` re-computes identically every
+    -- pass from the sticky behavior flags, so the bypass needs no state).
+    if resolved and (not rt.castConfirmed or contradicted or resolved == rt.matchedNPCID) then
         -- TrashCache restore: a VIRGIN runtime (never resolved, never
         -- restored) independently re-resolving to a flicker-cached npcID
         -- adopts the cached runtime — identity, anchors and live alerts carry
@@ -970,20 +973,28 @@ function DTrash:ResolveMob(rt)
             local adopted = self:TryRestoreCachedRuntime(rt, resolved)
             if adopted then return end
         end
-        -- Pre-castConfirmed identity FLIP (Layer1 re-resolving mob A → B):
-        -- cancel A's armed output BEFORE adopting B — the references full-
-        -- cancel + rebuild whenever the resolved candidate changes, while
-        -- KE's enterSeeded latch would otherwise leave A's bars, deferred
-        -- reveals and plate predictions live and make B's first-cast timers
-        -- permanently unseedable. Every anchor is keyed by A's spellIDs, so
-        -- the whole table goes. (castConfirmed flips are blocked above.)
+        -- Identity FLIP (Layer1 re-resolving mob A → B): cancel A's armed
+        -- output BEFORE adopting B — the references full-cancel + rebuild
+        -- whenever the resolved candidate changes, while KE's enterSeeded
+        -- latch would otherwise leave A's bars, deferred reveals and plate
+        -- predictions live and make B's first-cast timers permanently
+        -- unseedable. Every anchor is keyed by A's spellIDs, so the whole
+        -- table goes. A contradicted lock ends here: the flip result is a
+        -- fresh Layer1 resolve and starts unlocked.
         if rt.matchedNPCID ~= nil and resolved ~= rt.matchedNPCID then
             resetResolvedOutput(self, rt)
+            rt.castConfirmed = nil
             dprint(string_format("%s: identity flip %s -> %s — output rebuilt",
                 rt.unit, tostring(rt.matchedNPCID), tostring(resolved)))
         end
         rt.matchedNPCID = resolved
         self:SeedFirstCasts(rt)  -- resolve-after-engage: no-op unless engaged and unseeded
+    elseif contradicted and not resolved and not rt._contraKeepDbg then
+        -- One-shot diagnostic: the contradiction is live but nothing else
+        -- resolves — keep-locked keeps painting the current identity.
+        rt._contraKeepDbg = true
+        dprint(string_format("%s: behavior contradicts %s but no alternative resolves — identity kept",
+            rt.unit, tostring(rt.matchedNPCID)))
     end
     -- The pass may have just named the mob (fresh resolve, or an interrupt's
     -- flag-prune re-resolve): consume any pending CAST_START start-advance.
@@ -1431,8 +1442,10 @@ end
 -- rejected every Academy trait row (all five are cannotInterrupt) on that
 -- plate: unresolved mobs never gained timers, and a resolved Ravager hit the
 -- contradiction unlock and never re-resolved. sawInterrupted stays a
--- genuine-kick latch: UNIT_SPELLCAST_INTERRUPTED and the
--- interruptedBy-correlated channel stop.
+-- genuine-kick latch: UNIT_SPELLCAST_INTERRUPTED only — the interruptedBy-
+-- correlated channel stop was removed from it too (2026-07-24, the channel-
+-- phase twin of this same Shadowmeld failure; see FinishCast), matching the
+-- reference, whose channel-stop interrupt never reaches its Layer1 filter.
 function DTrash:OnCastFailed(_, unit, _castGUID, _spellID, castBarID)
     self:MarkCastInterrupted(unit, castBarID, true)
 end
@@ -1878,8 +1891,15 @@ function DTrash:FinishCast(unit, kind, interrupted, castBarID)
         rt.transitionCastStartAt = nil
     end
     if interrupted then
-        rt.sawInterrupted = true
-        self:ResolveMob(rt)  -- kick evidence prunes cannotInterrupt candidates now (mirrors OnCastInterrupted)
+        -- interruptedBy presence ends the channel WITHOUT a success credit,
+        -- but it is NOT Layer1 kick evidence: the reference's channel-stop
+        -- handler feeds it only into the cast lifecycle (pendingInterrupted)
+        -- — its Layer1-visible sawInterrupted latches ONLY from the
+        -- INTERRUPTED/FAILED events. Field case (Algeth'ar 2026-07-24):
+        -- Shadowmeld breaking Riftbreath's CHANNEL phase stops it with
+        -- interruptedBy present; latching here rejected every
+        -- cannotInterrupt Academy row exactly like the FAILED latch this
+        -- module already reverted (see OnCastFailed).
         return
     end
     if kind == "cast" then
