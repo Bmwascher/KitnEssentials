@@ -232,11 +232,13 @@ end
 local METER_TYPE_MIN, METER_TYPE_MAX = 0, 10   -- Enum.DamageMeterType range
 
 -- Whole-bundle eviction, oldest first. HistoryRetain is clamped at READ so
--- a legacy stored value (old default 20) needs no migration.
+-- a legacy stored value (old slider max 10, older default 20) needs no
+-- migration. Max 5: a deep bundle measured ~2.9MB live (2026-07-24 smoke),
+-- so 5 keys ≈ 15MB runtime ceiling — 10 was ruled too heavy.
 local function evictOverCap(self, h)
     local cap = self.db and self.db.HistoryRetain
     if type(cap) ~= "number" then cap = 5 end
-    if cap < 1 then cap = 1 elseif cap > 10 then cap = 10 end
+    if cap < 1 then cap = 1 elseif cap > 5 then cap = 5 end
     while #h.bundles > cap do
         local old = tremove(h.bundles)   -- bundles is newest-first: tail = oldest
         for _, entry in ipairs(old.sessions) do

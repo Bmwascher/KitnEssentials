@@ -280,7 +280,7 @@ describe("HistoryCapture", function()
         assert.is_nil(DM:HistoryBundles())
     end)
 
-    it("evicts whole oldest bundles beyond HistoryRetain, clamped to [1,10]", function()
+    it("evicts whole oldest bundles beyond HistoryRetain, clamped to [1,5]", function()
         DM.db.HistoryRetain = 2
         for i = 1, 3 do
             installFakeMeter(oneSessionStore())
@@ -294,11 +294,18 @@ describe("HistoryCapture", function()
         -- evicted bundle's ids are gone from byID; survivors still resolve
         assert.is_nil(DM:HistorySession(-1, 0))
         assert.is_not_nil(DM:HistorySession(-3, 0))
-        -- legacy out-of-range value clamps at read (NO migration)
+        -- legacy out-of-range value (old slider max 10, older default 20)
+        -- clamps at read (NO migration): 6 bundles under retain 20 evict to 5
         DM.db.HistoryRetain = 20
-        installFakeMeter(oneSessionStore())
-        DM:HistoryCapture()
-        assert.equals(3, #DM:HistoryBundles())      -- 20 clamps to 10; nothing evicted at 3
+        for i = 4, 7 do
+            installFakeMeter(oneSessionStore())
+            DM._pendingBundle = { label = "Key " .. i }
+            DM:HistoryCapture()
+        end
+        bundles = DM:HistoryBundles()
+        assert.equals(5, #bundles)
+        assert.equals("Key 7", bundles[1].label)
+        assert.equals("Key 3", bundles[5].label)    -- Key 2 evicted at the clamp
     end)
 end)
 
