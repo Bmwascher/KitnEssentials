@@ -271,6 +271,18 @@ describe("HistoryCapture", function()
         assert.is_nil(KE.db.global.DMHistoryPending)           -- consumed like the runtime copy
     end)
 
+    it("rejects a LEGACY record with no charKey even when the anchor matches", function()
+        -- Pre-charKey records carry no owner stamp. nil must fail CLOSED —
+        -- a nil-as-wildcard implementation (charKey == nil or charKey == me)
+        -- would resurrect the cross-character mislabel on upgrade leftovers
+        -- (Codex round 5, MINOR).
+        installFakeMeter(oneSessionStore())
+        DM._pendingBundle = nil
+        KE.db.global.DMHistoryPending = { label = "Pre-upgrade Key", summarySessionID = 7 }
+        assert.is_nil(DM:HistoryCapture().label)
+        assert.is_nil(KE.db.global.DMHistoryPending)
+    end)
+
     it("rejects a restored pending from ANOTHER CHARACTER even when the anchor matches", function()
         -- The persisted slot is ACCOUNT-wide (KE.db.global) but the native
         -- store is per-character: an alt's small-integer session ids collide
@@ -494,6 +506,14 @@ describe("pending-key metadata", function()
         assert.equals(12, DM._pendingBundle.level)              -- repairs landed
         firedRef()()
         assert.equals(9, DM._pendingBundle.summarySessionID)
+    end)
+
+    it("HistoryOnKeyComplete refuses to re-adopt a LEGACY record with no charKey", function()
+        DM._pendingBundle = nil
+        KE.db.global.DMHistoryPending = { label = "Pre-upgrade Key" }
+        _G.C_ChallengeMode = { GetChallengeCompletionInfo = function() error("must not be called") end }
+        DM:HistoryOnKeyComplete()
+        assert.is_nil(DM._pendingBundle)
     end)
 
     it("HistoryOnKeyComplete refuses to re-adopt another character's record", function()
