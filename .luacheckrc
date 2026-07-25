@@ -6,6 +6,9 @@ exclude_files = {
     ".wow-api-reference/**",
     "References/**",
     "dev/Annotations/**",   -- wowlua-ls ---@meta stubs (local-only, not real code)
+    ".claude/**",           -- Claude Code worktrees/tooling: a parallel session's
+                            -- registered worktree is a full repo copy — sweeping it
+                            -- blocked a main push (2026-07-24, 233 foreign warnings)
 }
 
 -- Headless test harness (busted, not in-game). These files run under a desktop
