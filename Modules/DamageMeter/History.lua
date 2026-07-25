@@ -25,6 +25,7 @@ local issecretvalue = issecretvalue
 local tremove = table.remove
 local tinsert = table.insert
 local debugprofilestop = debugprofilestop
+local UnitGUID = UnitGUID
 
 local DEBUG_DMH = false
 
@@ -155,9 +156,19 @@ end
 -- A RESTORED copy is only ever trusted against an anchor: a session id it
 -- stamped must still be in the store (HistoryCapture) or
 -- CHALLENGE_MODE_COMPLETED must fire for it (HistoryOnKeyComplete — the
--- event itself proves the key is still live). Every field is written
+-- event itself proves the key is still live) — AND its charKey must match
+-- the current character: the global slot is ACCOUNT-wide while the native
+-- store is per-character, and an alt's small-integer session ids collide
+-- with the main's trivially (Codex round 4). Every field is written
 -- through a plain-value guard, so the table is SavedVariables-safe by
 -- construction.
+--
+-- ACCEPTED residual (documented, not fixable by observation): keys run on
+-- THIS character while the addon itself was disabled/absent pass boundaries
+-- nobody saw — a survivor from before that gap can then label a store
+-- spanning them. A logged-out character cannot pass boundaries, and the
+-- /reload gap is seconds, so the arm requires deliberately playing keys
+-- with KE off.
 ---------------------------------------------------------------------------------
 
 -- The profile-independent persistence slot. nil until Core's AceDB init;
@@ -193,6 +204,9 @@ function DM:HistoryArmPending()
         end
     end
     local pending = { label = label, level = level }
+    -- Owner stamp: the restore paths refuse records from other characters.
+    local me = UnitGUID and UnitGUID("player")
+    if me ~= nil and not issecretvalue(me) then pending.charKey = me end
     self._pendingBundle = pending
     -- Persisted copy for reload survival — same table, never a clone.
     local g = globalDB()
@@ -213,15 +227,24 @@ end
 -- OnEncounterEnd's outcome tagging) prefer the newest id that appeared
 -- AFTER the event, falling back to the newest overall. Correct under
 -- either append order; session NAMES can be secret and are never matched.
+-- A restored (post-reload) record is only usable by the character that
+-- wrote it: the event/anchor liveness proofs say nothing about WHOSE store
+-- they ran against. nil/legacy charKey fails closed.
+local function restoredBelongsHere(restored)
+    local me = UnitGUID and UnitGUID("player")
+    return me ~= nil and not issecretvalue(me) and restored.charKey == me
+end
+
 function DM:HistoryOnKeyComplete()
     local pending = self._pendingBundle
     if not pending then
         -- Mid-key /reload: the runtime copy died but the persisted one
         -- survived, and COMPLETED firing is proof the key it describes is
-        -- still the live one — re-adopt it so the repairs + summary pick
-        -- land and the next capture labels normally.
+        -- still the live one — re-adopt it (same character only) so the
+        -- repairs + summary pick land and the next capture labels normally.
         local g = globalDB()
-        pending = g and g.DMHistoryPending or nil
+        local restored = g and g.DMHistoryPending or nil
+        pending = (restored and restoredBelongsHere(restored)) and restored or nil
         self._pendingBundle = pending
     end
     if not pending then return end
@@ -319,6 +342,7 @@ function DM:HistoryCapture()
     local g = globalDB()
     local restored = not pending and g and g.DMHistoryPending or nil
     if g then g.DMHistoryPending = nil end
+    if restored and not restoredBelongsHere(restored) then restored = nil end
 
     if not (C_DamageMeter and C_DamageMeter.GetAvailableCombatSessions) then return nil end
     -- EXPLICIT huge cap: the helper defaults an omitted cap to 20 (its menu

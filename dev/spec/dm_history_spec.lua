@@ -261,7 +261,8 @@ describe("HistoryCapture", function()
         installFakeMeter(oneSessionStore())
         DM._pendingBundle = nil                       -- /reload killed the runtime copy
         KE.db.global.DMHistoryPending = { label = "Algeth'ar Academy", level = 20,
-                                 outcome = true, summarySessionID = 7 }
+                                 outcome = true, summarySessionID = 7,
+                                 charKey = "Player-0000-DEADBEEF" }
         local bundle = DM:HistoryCapture()
         assert.equals("Algeth'ar Academy", bundle.label)
         assert.equals(20, bundle.level)
@@ -270,16 +271,33 @@ describe("HistoryCapture", function()
         assert.is_nil(KE.db.global.DMHistoryPending)           -- consumed like the runtime copy
     end)
 
-    it("discards a persisted pending whose anchor is missing (abandoned key or wiped store)", function()
+    it("rejects a restored pending from ANOTHER CHARACTER even when the anchor matches", function()
+        -- The persisted slot is ACCOUNT-wide (KE.db.global) but the native
+        -- store is per-character: an alt's small-integer session ids collide
+        -- with the main's trivially, so a cross-character record must never
+        -- pass the anchor check (Codex round 4, MAJOR — cross-char arm).
         installFakeMeter(oneSessionStore())
         DM._pendingBundle = nil
-        KE.db.global.DMHistoryPending = { label = "Algeth'ar Academy", summarySessionID = 99 }
+        KE.db.global.DMHistoryPending = { label = "Main's Key", summarySessionID = 7,
+                                 charKey = "Player-0000-SOMEALT" }
+        local bundle = DM:HistoryCapture()
+        assert.is_nil(bundle.label)                   -- honest "Earlier runs"
+        assert.is_nil(KE.db.global.DMHistoryPending)  -- still consumed
+    end)
+
+    it("discards a persisted pending whose anchor is missing (abandoned key or wiped store)", function()
+        -- charKey matches throughout: these cases must fail on the ANCHOR.
+        installFakeMeter(oneSessionStore())
+        DM._pendingBundle = nil
+        KE.db.global.DMHistoryPending = { label = "Algeth'ar Academy", summarySessionID = 99,
+                                 charKey = "Player-0000-DEADBEEF" }
         local bundle = DM:HistoryCapture()
         assert.is_nil(bundle.label)                   -- honest "Earlier runs"
         assert.is_nil(KE.db.global.DMHistoryPending)
         -- no summary id at all (key never sealed a completion): same fallback
         installFakeMeter(oneSessionStore())
-        KE.db.global.DMHistoryPending = { label = "Algeth'ar Academy" }
+        KE.db.global.DMHistoryPending = { label = "Algeth'ar Academy",
+                                 charKey = "Player-0000-DEADBEEF" }
         assert.is_nil(DM:HistoryCapture().label)
         assert.is_nil(KE.db.global.DMHistoryPending)
     end)
@@ -293,7 +311,8 @@ describe("HistoryCapture", function()
     it("adopts a reload survivor on the immediate anchor when the settle never ran", function()
         installFakeMeter(oneSessionStore())
         DM._pendingBundle = nil
-        KE.db.global.DMHistoryPending = { label = "Algeth'ar Academy", anchorSessionID = 7 }
+        KE.db.global.DMHistoryPending = { label = "Algeth'ar Academy", anchorSessionID = 7,
+                                 charKey = "Player-0000-DEADBEEF" }
         local bundle = DM:HistoryCapture()
         assert.equals("Algeth'ar Academy", bundle.label)
         assert.is_nil(bundle.sessions[1].isSummary)   -- anchor id is NOT the summary flag
@@ -389,6 +408,17 @@ describe("pending-key metadata", function()
         assert.equals(DM._pendingBundle, KE.db.global.DMHistoryPending)
     end)
 
+    it("HistoryArmPending stamps the owning character", function()
+        -- The account-wide slot must never label another character's store.
+        _G.C_ChallengeMode = {
+            GetActiveChallengeMapID = function() return 501 end,
+            GetMapUIInfo = function() return "Algeth'ar Academy" end,
+            GetActiveKeystoneInfo = function() return 12, {} end,
+        }
+        DM:HistoryArmPending()
+        assert.equals("Player-0000-DEADBEEF", DM._pendingBundle.charKey)
+    end)
+
     local function completionEnv()
         _G.C_ChallengeMode = {
             GetChallengeCompletionInfo = function()
@@ -454,7 +484,8 @@ describe("pending-key metadata", function()
 
     it("HistoryOnKeyComplete re-adopts the persisted pending after a mid-key reload", function()
         DM._pendingBundle = nil                        -- reload killed runtime state
-        KE.db.global.DMHistoryPending = { label = "Algeth'ar Academy" }
+        KE.db.global.DMHistoryPending = { label = "Algeth'ar Academy",
+                                          charKey = "Player-0000-DEADBEEF" }
         local lists, firedRef = completionEnv()
         lists[1] = { { sessionID = 7 } }
         lists[2] = { { sessionID = 7 }, { sessionID = 9 } }
@@ -463,6 +494,17 @@ describe("pending-key metadata", function()
         assert.equals(12, DM._pendingBundle.level)              -- repairs landed
         firedRef()()
         assert.equals(9, DM._pendingBundle.summarySessionID)
+    end)
+
+    it("HistoryOnKeyComplete refuses to re-adopt another character's record", function()
+        -- A completion on an alt must not resurrect the main's persisted
+        -- pending — the event proves A key finished, not WHOSE record it is.
+        DM._pendingBundle = nil
+        KE.db.global.DMHistoryPending = { label = "Main's Key",
+                                          charKey = "Player-0000-SOMEALT" }
+        _G.C_ChallengeMode = { GetChallengeCompletionInfo = function() error("must not be called") end }
+        DM:HistoryOnKeyComplete()
+        assert.is_nil(DM._pendingBundle)
     end)
 
     it("HistoryOnKeyComplete is a no-op when pending is unarmed", function()
@@ -588,9 +630,14 @@ describe("OnDisable provenance", function()
         DM.specIconByGUID = {}
         DM._pendingBundle = { label = "Key X", anchorSessionID = 7 }
         KE.db.global.DMHistoryPending = DM._pendingBundle
+        DM._history = { bundles = { { sessions = {} } }, byID = {}, nextID = -2 }
         DM:OnDisable()
         assert.is_nil(DM._pendingBundle)
         assert.is_nil(KE.db.global.DMHistoryPending)
+        -- Bundles are captured DATA, not provenance: disable must keep them
+        -- (an implementation also calling HistoryClear here would erase the
+        -- user's history on every profile switch — Codex round 4, MINOR).
+        assert.equals(1, #DM._history.bundles)
     end)
 end)
 
