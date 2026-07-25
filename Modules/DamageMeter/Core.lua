@@ -706,6 +706,12 @@ function DM:OnDisable()
     self._ctxCheckPending = false
     self._combatStartT = nil
     self._combatEndT = nil
+    -- Pending provenance requires CONTINUOUS observation: a disabled module
+    -- misses key boundaries (no START events), so an armed record can no
+    -- longer be vouched for — one surviving disable->enable would mislabel
+    -- a multi-key store. Bundles stay: they are already-captured data, not
+    -- provenance. Guarded for load order (History.lua).
+    if self.HistoryDropPending then self:HistoryDropPending() end
 
     -- Hand the meter back to Blizzard and drop the EditMode mover.
     self:RestoreBlizzardMeter()

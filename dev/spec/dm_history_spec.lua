@@ -575,6 +575,25 @@ describe("OnChallengeEvent wiring", function()
     end)
 end)
 
+describe("OnDisable provenance", function()
+    it("drops pending — a disabled module can't observe key boundaries [R3 MAJOR]", function()
+        -- A profile switch can disable DamageMeter (RefreshAllModules); while
+        -- disabled it misses CHALLENGE_MODE_START, so a no-wipe boundary
+        -- passes unseen and a surviving runtime pending would be trusted
+        -- unconditionally at the next capture, mislabeling a multi-key store.
+        DM.UnregisterAllEvents = function() end
+        DM.StopTicker = function() end
+        DM.RestoreBlizzardMeter = function() end
+        DM.UnregisterEditMode = function() end
+        DM.specIconByGUID = {}
+        DM._pendingBundle = { label = "Key X", anchorSessionID = 7 }
+        KE.db.global.DMHistoryPending = DM._pendingBundle
+        DM:OnDisable()
+        assert.is_nil(DM._pendingBundle)
+        assert.is_nil(KE.db.global.DMHistoryPending)
+    end)
+end)
+
 describe("HeaderReset clears history; OnMeterReset must NOT", function()
     before_each(function()
         DM.db = { HistoryRetain = 5 }
