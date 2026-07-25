@@ -8,10 +8,13 @@
 -- against DECLARED values, never real 12.0 taint semantics (in-game only).
 local L = require("dev.spec._ke_loader")
 
-local DM
+local DM, KE
 before_each(function()
-    DM = (L.loadDMHistory())
+    DM, KE = L.loadDMHistory()
     DM.db = { HistoryRetain = 5 }
+    -- Persisted pending lives in the PROFILE-INDEPENDENT AceDB global
+    -- section (it describes the global native store, never one profile).
+    KE.db = { global = {} }
 end)
 
 describe("HistorySourceKey", function()
@@ -257,28 +260,28 @@ describe("HistoryCapture", function()
     it("adopts a reload-surviving persisted pending when its summary session is still stored", function()
         installFakeMeter(oneSessionStore())
         DM._pendingBundle = nil                       -- /reload killed the runtime copy
-        DM.db.HistoryPending = { label = "Algeth'ar Academy", level = 20,
+        KE.db.global.DMHistoryPending = { label = "Algeth'ar Academy", level = 20,
                                  outcome = true, summarySessionID = 7 }
         local bundle = DM:HistoryCapture()
         assert.equals("Algeth'ar Academy", bundle.label)
         assert.equals(20, bundle.level)
         assert.is_true(bundle.outcome)
         assert.is_true(bundle.sessions[1].isSummary)  -- anchor id keeps its summary flag
-        assert.is_nil(DM.db.HistoryPending)           -- consumed like the runtime copy
+        assert.is_nil(KE.db.global.DMHistoryPending)           -- consumed like the runtime copy
     end)
 
     it("discards a persisted pending whose anchor is missing (abandoned key or wiped store)", function()
         installFakeMeter(oneSessionStore())
         DM._pendingBundle = nil
-        DM.db.HistoryPending = { label = "Algeth'ar Academy", summarySessionID = 99 }
+        KE.db.global.DMHistoryPending = { label = "Algeth'ar Academy", summarySessionID = 99 }
         local bundle = DM:HistoryCapture()
         assert.is_nil(bundle.label)                   -- honest "Earlier runs"
-        assert.is_nil(DM.db.HistoryPending)
+        assert.is_nil(KE.db.global.DMHistoryPending)
         -- no summary id at all (key never sealed a completion): same fallback
         installFakeMeter(oneSessionStore())
-        DM.db.HistoryPending = { label = "Algeth'ar Academy" }
+        KE.db.global.DMHistoryPending = { label = "Algeth'ar Academy" }
         assert.is_nil(DM:HistoryCapture().label)
-        assert.is_nil(DM.db.HistoryPending)
+        assert.is_nil(KE.db.global.DMHistoryPending)
     end)
 
     it("trusts a live runtime pending without any anchor (abandoned key, same session)", function()
@@ -290,7 +293,7 @@ describe("HistoryCapture", function()
     it("adopts a reload survivor on the immediate anchor when the settle never ran", function()
         installFakeMeter(oneSessionStore())
         DM._pendingBundle = nil
-        DM.db.HistoryPending = { label = "Algeth'ar Academy", anchorSessionID = 7 }
+        KE.db.global.DMHistoryPending = { label = "Algeth'ar Academy", anchorSessionID = 7 }
         local bundle = DM:HistoryCapture()
         assert.equals("Algeth'ar Academy", bundle.label)
         assert.is_nil(bundle.sessions[1].isSummary)   -- anchor id is NOT the summary flag
@@ -317,10 +320,10 @@ describe("HistoryCapture", function()
     it("seals no bundle on an empty store but still clears pending (both copies)", function()
         installFakeMeter({}, {})
         DM._pendingBundle = { label = "X" }
-        DM.db.HistoryPending = DM._pendingBundle
+        KE.db.global.DMHistoryPending = DM._pendingBundle
         assert.is_nil(DM:HistoryCapture())
         assert.is_nil(DM._pendingBundle)
-        assert.is_nil(DM.db.HistoryPending)
+        assert.is_nil(KE.db.global.DMHistoryPending)
         assert.is_nil(DM:HistoryBundles())
     end)
 
@@ -383,7 +386,7 @@ describe("pending-key metadata", function()
         }
         DM:HistoryArmPending()
         -- Identity, not deep-equal: completion repairs must flow to both.
-        assert.equals(DM._pendingBundle, DM.db.HistoryPending)
+        assert.equals(DM._pendingBundle, KE.db.global.DMHistoryPending)
     end)
 
     local function completionEnv()
@@ -451,12 +454,12 @@ describe("pending-key metadata", function()
 
     it("HistoryOnKeyComplete re-adopts the persisted pending after a mid-key reload", function()
         DM._pendingBundle = nil                        -- reload killed runtime state
-        DM.db.HistoryPending = { label = "Algeth'ar Academy" }
+        KE.db.global.DMHistoryPending = { label = "Algeth'ar Academy" }
         local lists, firedRef = completionEnv()
         lists[1] = { { sessionID = 7 } }
         lists[2] = { { sessionID = 7 }, { sessionID = 9 } }
         DM:HistoryOnKeyComplete()
-        assert.equals(DM.db.HistoryPending, DM._pendingBundle)  -- re-adopted, same table
+        assert.equals(KE.db.global.DMHistoryPending, DM._pendingBundle)  -- re-adopted, same table
         assert.equals(12, DM._pendingBundle.level)              -- repairs landed
         firedRef()()
         assert.equals(9, DM._pendingBundle.summarySessionID)
@@ -532,17 +535,43 @@ describe("OnChallengeEvent wiring", function()
     it("key start with the toggle OFF: no capture, pending cleared [C2]", function()
         DM.db = { ResetOnKeyStart = false }
         DM._pendingBundle = { label = "Stale" }
-        DM.db.HistoryPending = DM._pendingBundle
+        KE.db.global.DMHistoryPending = DM._pendingBundle
         DM:OnChallengeEvent("CHALLENGE_MODE_START")
         assert.same({}, calls)
         assert.is_nil(DM._pendingBundle)
-        assert.is_nil(DM.db.HistoryPending)   -- persisted copy dropped with it
+        assert.is_nil(KE.db.global.DMHistoryPending)   -- persisted copy dropped with it
+    end)
+
+    it("the boundary drop kills THE copy — no profile switch can resurrect it [C2]", function()
+        -- The global-section design's core guarantee (Codex round 2, MAJOR):
+        -- pending is ONE profile-independent record, so once a no-wipe
+        -- boundary drops it, switching profiles cannot bring back a stale
+        -- anchored copy to mislabel a multi-key store.
+        DM.db = { ResetOnKeyStart = false }
+        DM._pendingBundle = { label = "Key X", anchorSessionID = 7 }
+        KE.db.global.DMHistoryPending = DM._pendingBundle
+        DM:OnChallengeEvent("CHALLENGE_MODE_START")   -- no-wipe boundary
+        -- Simulate any number of profile switches: rebinding the profile
+        -- section never touches the global one.
+        KE.db.profile = { DamageMeter = {} }
+        assert.is_nil(KE.db.global.DMHistoryPending)
+        assert.is_nil(DM._pendingBundle)
     end)
 
     it("completion routes to HistoryOnKeyComplete", function()
         DM.db = { ResetOnKeyStart = true }
         DM:OnChallengeEvent("CHALLENGE_MODE_COMPLETED")
         assert.same({ "complete" }, calls)
+    end)
+
+    it("key start with C_DamageMeter ABSENT: no wipe possible, so no arm", function()
+        -- Kills the wrong implementation that treats a missing API as a
+        -- successful wipe (Codex round 2, finding 6).
+        DM.db = { ResetOnKeyStart = true, HistoryRetain = 5 }
+        _G.C_DamageMeter = nil
+        DM:OnChallengeEvent("CHALLENGE_MODE_START")
+        assert.same({ "capture" }, calls)
+        assert.is_nil(DM._historyOwnReset)
     end)
 end)
 
@@ -569,29 +598,29 @@ describe("HeaderReset clears history; OnMeterReset must NOT", function()
     end)
     it("an EXTERNAL reset clears pending provenance but not bundles [F5']", function()
         DM._pendingBundle = { label = "Algeth'ar Academy", level = 12 }
-        DM.db.HistoryPending = DM._pendingBundle
+        KE.db.global.DMHistoryPending = DM._pendingBundle
         DM:OnMeterReset()
         assert.is_nil(DM._pendingBundle)
-        assert.is_nil(DM.db.HistoryPending)
+        assert.is_nil(KE.db.global.DMHistoryPending)
         assert.equals(1, #DM._history.bundles)
     end)
     it("the module's OWN reset preserves pending via the one-shot flag [F5']", function()
         DM._pendingBundle = { label = "Algeth'ar Academy", level = 12 }
-        DM.db.HistoryPending = DM._pendingBundle
+        KE.db.global.DMHistoryPending = DM._pendingBundle
         DM._historyOwnReset = true
         DM:OnMeterReset()
         assert.equals("Algeth'ar Academy", DM._pendingBundle.label)
-        assert.equals(DM._pendingBundle, DM.db.HistoryPending)   -- kept in lockstep
+        assert.equals(DM._pendingBundle, KE.db.global.DMHistoryPending)   -- kept in lockstep
         assert.is_nil(DM._historyOwnReset)   -- consumed: the next reset is external
         DM:OnMeterReset()
         assert.is_nil(DM._pendingBundle)
-        assert.is_nil(DM.db.HistoryPending)
+        assert.is_nil(KE.db.global.DMHistoryPending)
     end)
     it("HeaderReset clears pending provenance too [F5']", function()
         DM._pendingBundle = { label = "Algeth'ar Academy" }
-        DM.db.HistoryPending = DM._pendingBundle
+        KE.db.global.DMHistoryPending = DM._pendingBundle
         DM:HeaderReset()
         assert.is_nil(DM._pendingBundle)
-        assert.is_nil(DM.db.HistoryPending)
+        assert.is_nil(KE.db.global.DMHistoryPending)
     end)
 end)

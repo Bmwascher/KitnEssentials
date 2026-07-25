@@ -143,23 +143,36 @@ end
 --
 -- Lives in TWO places: the runtime field (the working copy, trusted
 -- unconditionally — same-session continuity is its own provenance) and a
--- persisted db copy (db.HistoryPending, the SAME table so completion
--- repairs flow to both). The db copy exists solely to survive /reload —
--- the native session store is server-side and outlives a reload, so
--- without it a between-keys reload sealed a fully-labeled run as "Earlier
--- runs" (smoke 2026-07-24). A RESTORED copy is only ever trusted against
--- an anchor: its completed key's summary session id must still be in the
--- store (HistoryCapture) or CHALLENGE_MODE_COMPLETED must fire for it
--- (HistoryOnKeyComplete — the event itself proves the key is still live).
--- Every field is written through a plain-value guard, so the table is
--- SavedVariables-safe by construction.
+-- persisted copy (KE.db.global.DMHistoryPending, the SAME table so
+-- completion repairs flow to both). The persisted copy exists solely to
+-- survive /reload — the native session store is server-side and outlives
+-- a reload, so without it a between-keys reload sealed a fully-labeled
+-- run as "Earlier runs" (smoke 2026-07-24). It lives in the AceDB GLOBAL
+-- section, never the profile: pending describes the global native store,
+-- and a per-profile copy shards that state — an inactive profile could
+-- retain an anchored stale record across a no-wipe boundary drop and
+-- resurrect it to mislabel a multi-key store (Codex round 2, MAJOR).
+-- A RESTORED copy is only ever trusted against an anchor: a session id it
+-- stamped must still be in the store (HistoryCapture) or
+-- CHALLENGE_MODE_COMPLETED must fire for it (HistoryOnKeyComplete — the
+-- event itself proves the key is still live). Every field is written
+-- through a plain-value guard, so the table is SavedVariables-safe by
+-- construction.
 ---------------------------------------------------------------------------------
+
+-- The profile-independent persistence slot. nil until Core's AceDB init;
+-- every caller treats a nil section as "no persisted copy".
+local function globalDB()
+    local db = KE.db
+    return db and db.global or nil
+end
 
 -- Drops pending provenance everywhere it lives. Core's reset/boundary
 -- paths call this whenever the native store stops matching the armed key.
 function DM:HistoryDropPending()
     self._pendingBundle = nil
-    if self.db then self.db.HistoryPending = nil end
+    local g = globalDB()
+    if g then g.DMHistoryPending = nil end
 end
 
 function DM:HistoryArmPending()
@@ -182,7 +195,8 @@ function DM:HistoryArmPending()
     local pending = { label = label, level = level }
     self._pendingBundle = pending
     -- Persisted copy for reload survival — same table, never a clone.
-    if self.db then self.db.HistoryPending = pending end
+    local g = globalDB()
+    if g then g.DMHistoryPending = pending end
 end
 
 -- CHALLENGE_MODE_COMPLETED: authoritative outcome/duration + metadata
@@ -206,7 +220,8 @@ function DM:HistoryOnKeyComplete()
         -- survived, and COMPLETED firing is proof the key it describes is
         -- still the live one — re-adopt it so the repairs + summary pick
         -- land and the next capture labels normally.
-        pending = self.db and self.db.HistoryPending or nil
+        local g = globalDB()
+        pending = g and g.DMHistoryPending or nil
         self._pendingBundle = pending
     end
     if not pending then return end
@@ -298,10 +313,12 @@ end
 function DM:HistoryCapture()
     local pending = self._pendingBundle
     self._pendingBundle = nil
-    -- Normally the db copy IS pending (same table) and is consumed with it;
-    -- after a /reload it's the lone survivor — adopted below only if anchored.
-    local restored = not pending and self.db and self.db.HistoryPending or nil
-    if self.db then self.db.HistoryPending = nil end
+    -- Normally the persisted copy IS pending (same table) and is consumed
+    -- with it; after a /reload it's the lone survivor — adopted below only
+    -- if anchored.
+    local g = globalDB()
+    local restored = not pending and g and g.DMHistoryPending or nil
+    if g then g.DMHistoryPending = nil end
 
     if not (C_DamageMeter and C_DamageMeter.GetAvailableCombatSessions) then return nil end
     -- EXPLICIT huge cap: the helper defaults an omitted cap to 20 (its menu

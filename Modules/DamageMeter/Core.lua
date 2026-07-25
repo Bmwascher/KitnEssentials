@@ -249,16 +249,9 @@ function DM:UpdateDB()
     FillMissing(profile.DamageMeter, DM_DEFAULTS)
     self.db = profile.DamageMeter
 
-    -- A LIVE profile op rebinds self.db mid-session: keep the pending-key
-    -- metadata's two-copy invariant (History.lua) by mirroring the runtime
-    -- copy — the in-session source of truth — into the newly bound profile
-    -- (this also scrubs a foreign stale HistoryPending there). Runtime nil
-    -- means startup or no armed key: leave the profile's copy ALONE — at
-    -- startup it is the reload survivor HistoryCapture's anchor check
-    -- exists for, and mirroring nil would destroy reload survival.
-    if self._pendingBundle then
-        self.db.HistoryPending = self._pendingBundle
-    end
+    -- Pending-key metadata needs NO handling here: its persisted copy lives
+    -- in the profile-independent KE.db.global (History.lua) precisely so
+    -- profile ops can't shard or strand it.
 
     -- Profile ops (switch/copy/reset) re-run UpdateDB without OnEnable; the repair
     -- is run-once-stamped per profile and signature-gated, so extra calls are free.

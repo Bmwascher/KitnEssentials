@@ -112,23 +112,16 @@ describe("DamageMeter UpdateDB migration refill (real DM_DEFAULTS)", function()
         assert.equals(11, a.VisibleBars)   -- the old profile slice is untouched
     end)
 
-    it("mirrors a live runtime pending into the newly bound profile (mid-key switch)", function()
-        -- A live profile switch rebinds self.db; the pending-key metadata's
-        -- two-copy invariant (History.lua) must follow — the runtime copy is
-        -- the in-session source of truth and scrubs any foreign stale record.
+    it("never touches pending state — it lives in the global section, not the profile", function()
+        -- Persisted pending is PROFILE-INDEPENDENT (KE.db.global, History.lua):
+        -- a profile op must neither mirror nor clear it. A leftover
+        -- profile-section HistoryPending from the short-lived per-profile
+        -- design is inert data UpdateDB simply ignores.
         local pending = { label = "Algeth'ar Academy", level = 20 }
         DM._pendingBundle = pending
-        local db = seed({ HistoryPending = { label = "Foreign stale" } })
-        assert.equals(pending, db.HistoryPending)
-    end)
-
-    it("leaves a persisted pending alone when no runtime copy exists (startup path)", function()
-        -- Startup runs UpdateDB with a fresh runtime: the profile's copy is
-        -- the reload survivor that HistoryCapture's anchor check exists for —
-        -- mirroring nil here would destroy reload survival entirely.
-        DM._pendingBundle = nil
-        local db = seed({ HistoryPending = { label = "Algeth'ar Academy", summarySessionID = 9 } })
-        assert.equals("Algeth'ar Academy", db.HistoryPending.label)
+        local db = seed({ HistoryPending = { label = "Leftover per-profile record" } })
+        assert.equals("Leftover per-profile record", db.HistoryPending.label)
+        assert.equals(pending, DM._pendingBundle)
     end)
 
     it("leaves the empty Windows default empty (no phantom windows)", function()
