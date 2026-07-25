@@ -1511,7 +1511,33 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
     manager:Register(keyResetChk, "all")
     cardSeg:AddRow(rowSeg, Theme.rowHeight)
 
-    local segNoteRow = GUIFrame:CreateRow(cardSeg.content, 65)
+    local rowRetain = GUIFrame:CreateRow(cardSeg.content, Theme.rowHeight)
+    -- Display-only clamp mirroring History.lua evictOverCap's read semantics exactly
+    -- (non-number -> 5; <1 -> 1; >5 -> 5): a legacy profile can hold a materialized
+    -- HistoryRetain = 10 (old slider max) or 20, which evictOverCap clamps to an
+    -- EFFECTIVE 5 at capture time. Falling back to 5 here (instead of clamping)
+    -- would desync if the mirror ever diverges. No SV write, no migration -- the
+    -- stored value is untouched.
+    local retainDisplay = db.HistoryRetain
+    if type(retainDisplay) ~= "number" then
+        retainDisplay = 5
+    elseif retainDisplay < 1 then
+        retainDisplay = 1
+    elseif retainDisplay > 5 then
+        retainDisplay = 5
+    end
+    local retainSlider = GUIFrame:CreateSlider(rowRetain, "Key History (keys kept)", {
+        min = 1, max = 5, step = 1,
+        value = retainDisplay,
+        callback = function(v) db.HistoryRetain = v end,
+    })
+    rowRetain:AddWidget(retainSlider, 1)
+    manager:Register(retainSlider, "all")
+    cardSeg:AddRow(rowRetain, Theme.rowHeight)
+
+    -- 80px, not the usual 65: the third bullet wraps to a 4th body line (65 fits
+    -- title + 3 at the small font's ~16px line pitch; smoke 2026-07-24 clipped it).
+    local segNoteRow = GUIFrame:CreateRow(cardSeg.content, 80)
     local segNote = GUIFrame:CreateText(segNoteRow,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " On: all segments clear when a keystone starts, so " ..
@@ -1519,11 +1545,12 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
         KE:ColorTextByTheme("-") .. " Off: history and " .. KE:ColorTextByTheme("Overall") ..
         " both span keys until you clear them with " ..
         KE:ColorTextByTheme("/kes dm reset") .. " or the header reset button.\n" ..
-        KE:ColorTextByTheme("-") .. " Blizzard's meter data resets all-or-nothing — one reset clears every window and the segment history together.",
-        65, "hide")
+        KE:ColorTextByTheme("-") .. " With reset on, the last " ..
+        KE:ColorTextByTheme("Key History") .. " keys stay browsable in the segment menu (this session only — history clears on reload; the header reset clears it too).",
+        80, "hide")
     segNoteRow:AddWidget(segNote, 1)
     manager:Register(segNote, "all")
-    cardSeg:AddRow(segNoteRow, 65, 0)
+    cardSeg:AddRow(segNoteRow, 80, 0)
 
     yOffset = cardSeg:GetNextOffset()
 

@@ -5,8 +5,9 @@
 -- ║           the bar box -> the body is replaced by a 2x4   ║
 -- ║           card grid of the 8 view types; clicking a card ║
 -- ║           sets a per-window view override (Core:         ║
--- ║           SetWindowView) and reverts to live data. Mirror║
--- ║           of Detail.lua's in-window overlay machinery.   ║
+-- ║           SetWindowView) and keeps any pinned session    ║
+-- ║           (stored or history). Mirror of Detail.lua's    ║
+-- ║           in-window overlay machinery.                   ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE

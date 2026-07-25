@@ -84,6 +84,16 @@ local function MakeSegRow(parent, W, db)
     row:SetScript("OnEnter", function(r)
         r.hl:Show()
         r.text:SetTextColor(1, 1, 1)
+        -- Bundle rows open their key's flyout; MAIN-MENU non-bundle rows
+        -- close a stale one (the cursor left the history section). Flyout
+        -- rows do NEITHER — they come from this same factory, and closing
+        -- here would hide their own containing panel on hover (Codex round
+        -- 2, F4').
+        if r._bundle then
+            DM:OpenSegmentFlyout(W, r._bundle, r)
+        elseif not r._inFlyout then
+            DM:CloseSegmentFlyout(W)
+        end
     end)
     row:SetScript("OnLeave", function(r)
         r.hl:Hide()
@@ -193,6 +203,8 @@ function DM:PopulateSegmentMenu(W)
         end
         row._sid = sid
         row._sType = sType
+        row._bundle = nil
+        row:EnableMouse(true)
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", s.content, "TOPLEFT", SEG_PAD, y)
         row:SetSize(rowW, rowH)
@@ -205,7 +217,6 @@ function DM:PopulateSegmentMenu(W)
     -- Stored sessions (newest nearest the icon). sessionID is a plain id (NeverSecret)
     -- so the active == compare is taint-safe; name/duration are secret-guarded.
     local list = self:GetAvailableSessions(20)
-    local hadSessions = false
     -- Kill/wipe tint map: tagged on ENCOUNTER_END's authoritative success flag
     -- (Core.lua) -- NOT parsed from the session name, which stays verbatim
     -- (including Blizzard's own markers). Runtime-only, like stored sessions.
@@ -229,8 +240,55 @@ function DM:PopulateSegmentMenu(W)
                 end
                 local dur = select(1, self.FormatDeathTime(sdata.durationSeconds))
                 place(label .. "  |cff999999(" .. dur .. ")|r", W._curSessionID == sid, sid, nil)
-                hadSessions = true
             end
+        end
+    end
+
+    -- ── Key history (History.lua bundles) ──────────────────────────────────
+    -- Rendered below the live list per the approved design. The header row is
+    -- placed directly (not via place()) and mouse-disabled: a click-less
+    -- pooled label, same pooling as the row list, no _sid (OnClick pins nil
+    -- -> live; prevented by disabling the row).
+    local bundles = self.HistoryBundles and self:HistoryBundles() or nil
+    if bundles then
+        idx = idx + 1
+        local hdr = rows[idx]
+        if not hdr then hdr = MakeSegRow(s.content, W, db); rows[idx] = hdr end
+        hdr._sid, hdr._sType, hdr._bundle = nil, nil, nil
+        hdr:ClearAllPoints()
+        hdr:SetPoint("TOPLEFT", s.content, "TOPLEFT", SEG_PAD, y)
+        hdr:SetSize(rowW, rowH)
+        hdr.text:SetText("|cff999999HISTORY|r")
+        PaintSegRowActive(hdr, false, ar, ag, ab)
+        hdr:EnableMouse(false)   -- label only: no hover, no click
+        hdr:Show()
+        y = y - (rowH + SEG_ROW_GAP)
+
+        for bi = 1, #bundles do
+            local bundle = bundles[bi]
+            local label = bundle.label or "Earlier runs"
+            if bundle.level then label = label .. " +" .. bundle.level end
+            if bundle.outcome == true then
+                label = "|cff33ff33" .. label .. "|r"
+            elseif bundle.outcome == false then
+                label = "|cffff3333" .. label .. "|r"
+            end
+            if bundle.durationMs then
+                local dur = select(1, self.FormatDeathTime(bundle.durationMs / 1000))
+                label = label .. "  |cff999999(" .. dur .. ")|r"
+            end
+            -- Click pins the run summary (or the first segment) via the
+            -- normal row pin path; hover opens the flyout.
+            local pinEntry = nil
+            for _, entry in ipairs(bundle.sessions) do
+                if entry.isSummary then pinEntry = entry; break end
+            end
+            pinEntry = pinEntry or bundle.sessions[1]
+            place(label, W._curSessionID ~= nil and pinEntry ~= nil
+                and W._curSessionID == pinEntry.id, pinEntry and pinEntry.id or nil, nil)
+            local row = rows[idx]
+            row:EnableMouse(true)
+            row._bundle = bundle
         end
     end
 
@@ -265,7 +323,9 @@ function DM:PopulateSegmentMenu(W)
     local footerH = SEG_PAD + #SEGMENT_SESSION_TYPES * (rowH + SEG_ROW_GAP) + SEG_DIV_H + 2
 
     -- Divider = the footer's top edge; hidden when no scroll list sits above it.
-    if hadSessions then
+    -- idx > 0 means the scroll list has SOME row -- a live session, the HISTORY
+    -- header, or a bundle row (all three bump idx) -- not just a live session.
+    if idx > 0 then
         s.divider:ClearAllPoints()
         s.divider:SetPoint("BOTTOMLEFT", s, "BOTTOMLEFT", 1 + SEG_PAD,
             1 + SEG_PAD + #SEGMENT_SESSION_TYPES * (rowH + SEG_ROW_GAP) + 2)
@@ -281,7 +341,11 @@ function DM:PopulateSegmentMenu(W)
     -- maxScroll == 0 (the view fits the content exactly) and the floor below keeps
     -- a negative out of SetVerticalScroll -- do NOT rely on native ScrollFrame
     -- clamping (the wheel handler above clamps manually for the same reason).
-    local contentH = hadSessions and ((-y) - SEG_ROW_GAP + SEG_PAD) or 0
+    -- Gate on idx > 0 (not "any live session") so the HISTORY section still gets
+    -- a sized viewport when the live list is empty -- the normal state right
+    -- after a key-start wipe, when bundles exist but nothing has been captured
+    -- into the live list yet.
+    local contentH = (idx > 0) and ((-y) - SEG_ROW_GAP + SEG_PAD) or 0
     s.content:SetHeight(max(contentH, 1))
     local viewH = contentH
     local maxViewH = SEG_MAX_H - footerH - 2
@@ -318,6 +382,7 @@ end
 
 function DM:CloseSegmentMenu(W)
     if not W or not W.segMenu then return end
+    self:CloseSegmentFlyout(W)
     W._segMenuOpen = false
     W.segMenu:Hide()
     if self.SyncHeaderIconsToOverlayState then self:SyncHeaderIconsToOverlayState(W) end
@@ -333,6 +398,117 @@ function DM:CloseAllSegmentMenus()
     end
 end
 
+-- ── Per-key flyout (second menu level for a HISTORY bundle) ────────────────
+-- One pooled panel per window, same construction as the main menu minus the
+-- footer/scroll: bundles cap at 20 visible rows + a "... N more" tail, so a
+-- fixed-height list suffices. Anchored to open INWARD from the bundle row
+-- (menus hug the screen edge on the right).
+local FLYOUT_MAX_ROWS = 20
+
+function DM:EnsureSegmentFlyout(W)
+    if W.segFlyout then return W.segFlyout end
+    local f = CreateFrame("Frame", nil, W.frame, "BackdropTemplate")
+    f:SetFrameLevel(W.frame:GetFrameLevel() + 11)   -- above the menu panel
+    f:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = 1,
+    })
+    f:SetBackdropColor(0.05, 0.05, 0.05, 0.97)
+    f:SetBackdropBorderColor(0, 0, 0, 1)
+    f:EnableMouse(true)
+    f:SetScript("OnLeave", function() DM:ScheduleSegmentClose(W) end)
+    -- Fixed-height list (no scroll), but the panel still sits over the window's
+    -- bars -- swallow the wheel so it doesn't fall through and scroll them (mirrors
+    -- the main menu panel's fall-through plug, EnsureSegmentMenu's onWheel above).
+    f:EnableMouseWheel(true)
+    f:SetScript("OnMouseWheel", function() end)
+    f:Hide()
+    f.rows = {}
+    W.segFlyout = f
+    return f
+end
+
+function DM:OpenSegmentFlyout(W, bundle, anchorRow)
+    if not W or not bundle then return end
+    local f = self:EnsureSegmentFlyout(W)
+    if f._bundle == bundle and f:IsShown() then return end
+    f._bundle = bundle
+    local db = self.db
+    local ar, ag, ab = KE:GetAccentColor()
+    local rowH = max(16, ((db and db.FontSize) or 12) + 8)
+    local rowW = SEG_W - 2 - SEG_PAD * 2
+
+    -- Summary first, then capture order.
+    local ordered = {}
+    for _, entry in ipairs(bundle.sessions) do
+        if entry.isSummary then ordered[#ordered + 1] = entry end
+    end
+    for _, entry in ipairs(bundle.sessions) do
+        if not entry.isSummary then ordered[#ordered + 1] = entry end
+    end
+
+    local shown = #ordered
+    local overflow = 0
+    if shown > FLYOUT_MAX_ROWS then
+        overflow = shown - FLYOUT_MAX_ROWS
+        shown = FLYOUT_MAX_ROWS
+    end
+
+    local y = -SEG_PAD
+    local idx = 0
+    local function placeRow(text, sid, active)
+        idx = idx + 1
+        local row = f.rows[idx]
+        if not row then row = MakeSegRow(f, W, db); f.rows[idx] = row end
+        row._sid = sid
+        row._sType = nil
+        row._bundle = nil
+        row._inFlyout = true   -- see MakeSegRow OnEnter: never self-close [F4']
+        row:EnableMouse(sid ~= nil)
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", f, "TOPLEFT", 1 + SEG_PAD, y)
+        row:SetSize(rowW, rowH)
+        row.text:SetText(text)
+        PaintSegRowActive(row, active, ar, ag, ab)
+        row:Show()
+        y = y - (rowH + SEG_ROW_GAP)
+    end
+
+    for i = 1, shown do
+        local entry = ordered[i]
+        local label
+        if entry.isSummary then
+            label = "Run Summary"
+        else
+            label = self:SafeSessionName(entry.name)
+            if entry.outcome == true then
+                label = "|cff33ff33" .. label .. "|r"
+            elseif entry.outcome == false then
+                label = "|cffff3333" .. label .. "|r"
+            end
+        end
+        local dur = select(1, self.FormatDeathTime(entry.durationSeconds))
+        placeRow(label .. "  |cff999999(" .. dur .. ")|r",
+            entry.id, W._curSessionID == entry.id)
+    end
+    if overflow > 0 then
+        placeRow("|cff999999... " .. overflow .. " more|r", nil, false)
+    end
+    for i = idx + 1, #f.rows do f.rows[i]:Hide() end
+
+    f:SetSize(SEG_W, (-y) + SEG_PAD + 2)
+    f:ClearAllPoints()
+    f:SetPoint("TOPRIGHT", anchorRow, "TOPLEFT", -2, SEG_PAD)
+    f:Show()
+end
+
+function DM:CloseSegmentFlyout(W)
+    if not W or not W.segFlyout then return end
+    W.segFlyout._bundle = nil
+    W.segFlyout:Hide()
+end
+
 -- Hover-away close with a short grace: the ⌚ icon is tiny, so leaving it (or a row)
 -- schedules a close that only fires if, after the grace, the cursor is over NEITHER the
 -- panel nor the icon -- letting the mouse travel across the 2px gap onto the list.
@@ -341,6 +517,7 @@ function DM:ScheduleSegmentClose(W)
     C_Timer.After(0.2, function()
         if not W._segMenuOpen or not W.segMenu then return end
         if W.segMenu:IsMouseOver() then return end
+        if W.segFlyout and W.segFlyout:IsShown() and W.segFlyout:IsMouseOver() then return end
         local icon = W.headerBtns and W.headerBtns.segment
         if icon and icon:IsMouseOver() then return end
         DM:CloseSegmentMenu(W)

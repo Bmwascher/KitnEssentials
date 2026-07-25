@@ -154,6 +154,15 @@ function L.loadDMCore(overrides)
     return KE.DamageMeter, KE
 end
 
+-- Modules/DamageMeter/History.lua on top of a loaded DM Core. Same honesty
+-- boundary as loadDMCore (declared secrets, mocked C_*). Returns DM, KE.
+function L.loadDMHistory(overrides)
+    local DM, KE = L.loadDMCore(overrides)
+    _G.debugprofilestop = _G.debugprofilestop or function() return 0 end
+    helpers.loadModule("Modules/DamageMeter/History.lua", KE)
+    return DM, KE
+end
+
 -- Core/PixelPerfect.lua. Defaults model a PERFECT UI scale (768/1440 at
 -- 1440p → pixelSize exactly 1). The stubs read opts live: mutate
 -- opts.effectiveScale (or physicalHeight) and call KE:UpdatePixelCache() to

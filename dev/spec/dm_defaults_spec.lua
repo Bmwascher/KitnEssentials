@@ -112,6 +112,18 @@ describe("DamageMeter UpdateDB migration refill (real DM_DEFAULTS)", function()
         assert.equals(11, a.VisibleBars)   -- the old profile slice is untouched
     end)
 
+    it("never touches pending state — it lives in the global section, not the profile", function()
+        -- Persisted pending is PROFILE-INDEPENDENT (KE.db.global, History.lua):
+        -- a profile op must neither mirror nor clear it. A leftover
+        -- profile-section HistoryPending from the short-lived per-profile
+        -- design is inert data UpdateDB simply ignores.
+        local pending = { label = "Algeth'ar Academy", level = 20 }
+        DM._pendingBundle = pending
+        local db = seed({ HistoryPending = { label = "Leftover per-profile record" } })
+        assert.equals("Leftover per-profile record", db.HistoryPending.label)
+        assert.equals(pending, DM._pendingBundle)
+    end)
+
     it("leaves the empty Windows default empty (no phantom windows)", function()
         local db = seed(nil)
         assert.is_nil(next(db.Windows))
