@@ -222,9 +222,9 @@ local DM_DEFAULTS = {
     -- /reload-in-place. Not user settings.
     _SegSerial = 0,
 
-    -- Key-history bundles kept (History.lua; GUI slider 1-10). Legacy
-    -- profiles may hold the old default 20 — clamped to [1,10] at read,
-    -- never migrated.
+    -- Key-history bundles kept (History.lua; GUI slider 1-5). Legacy
+    -- profiles may hold the old slider max 10 or the older default 20 —
+    -- clamped to [1,5] at read, never migrated.
     HistoryRetain = 5,
     DeathCap = 50,
 }
@@ -248,6 +248,17 @@ function DM:UpdateDB()
     end
     FillMissing(profile.DamageMeter, DM_DEFAULTS)
     self.db = profile.DamageMeter
+
+    -- A LIVE profile op rebinds self.db mid-session: keep the pending-key
+    -- metadata's two-copy invariant (History.lua) by mirroring the runtime
+    -- copy — the in-session source of truth — into the newly bound profile
+    -- (this also scrubs a foreign stale HistoryPending there). Runtime nil
+    -- means startup or no armed key: leave the profile's copy ALONE — at
+    -- startup it is the reload survivor HistoryCapture's anchor check
+    -- exists for, and mirroring nil would destroy reload survival.
+    if self._pendingBundle then
+        self.db.HistoryPending = self._pendingBundle
+    end
 
     -- Profile ops (switch/copy/reset) re-run UpdateDB without OnEnable; the repair
     -- is run-once-stamped per profile and signature-gated, so extra calls are free.
@@ -1993,13 +2004,15 @@ function DM:OnChallengeEvent(event)
                     if W._detailOpen and self.CloseDetail then self:CloseDetail(W) end
                 end
             end
+            local wiped = false
             if C_DamageMeter and C_DamageMeter.ResetAllCombatSessions then
                 -- One-shot: our own wipe fires DAMAGE_METER_RESET, whose handler must
                 -- not clear the pending record this handler arms below. Armed before
                 -- the call (delivery can be synchronous), un-armed if the call failed
                 -- (a stale flag would eat the NEXT external reset's provenance clear).
                 self._historyOwnReset = true
-                if not pcall(C_DamageMeter.ResetAllCombatSessions) then
+                wiped = pcall(C_DamageMeter.ResetAllCombatSessions)
+                if not wiped then
                     self._historyOwnReset = nil
                 end
             end
@@ -2012,8 +2025,9 @@ function DM:OnChallengeEvent(event)
             -- relied on to paint after the reset. BumpSegment already closed selectors/menus.
             if self.Tick then self:Tick() end
             -- Arm the pending metadata for THIS key — only ever on a wipe
-            -- boundary; the labeling contract [C2] depends on it.
-            if self.HistoryArmPending then self:HistoryArmPending() end
+            -- boundary that actually HAPPENED; arming after a failed reset
+            -- would label a store still spanning multiple keys [C2].
+            if wiped and self.HistoryArmPending then self:HistoryArmPending() end
         else
             -- Key boundary WITHOUT a wipe: the store now spans multiple
             -- keys, so an armed label no longer describes it. Clear it so a

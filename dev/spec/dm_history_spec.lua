@@ -287,6 +287,15 @@ describe("HistoryCapture", function()
         assert.equals("Algeth'ar Academy", DM:HistoryCapture().label)
     end)
 
+    it("adopts a reload survivor on the immediate anchor when the settle never ran", function()
+        installFakeMeter(oneSessionStore())
+        DM._pendingBundle = nil
+        DM.db.HistoryPending = { label = "Algeth'ar Academy", anchorSessionID = 7 }
+        local bundle = DM:HistoryCapture()
+        assert.equals("Algeth'ar Academy", bundle.label)
+        assert.is_nil(bundle.sessions[1].isSummary)   -- anchor id is NOT the summary flag
+    end)
+
     it("learns current members' plain names during the deep pass", function()
         local sessions = { [7] = { [0] = {
             totalAmount = 100,
@@ -425,6 +434,21 @@ describe("pending-key metadata", function()
         assert.equals(8, DM._pendingBundle.summarySessionID)
     end)
 
+    it("stamps an immediate anchor id at the event, before the settle timer", function()
+        -- A /reload inside the 1s settle window kills the timer; without an
+        -- anchor stamped AT the event, the persisted copy would fail the
+        -- capture's reload-survivor check and cost the label.
+        DM._pendingBundle = { label = "Algeth'ar Academy" }
+        local lists, firedRef = completionEnv()
+        lists[1] = { { sessionID = 7 }, { sessionID = 8 } }
+        lists[2] = { { sessionID = 7 }, { sessionID = 8 }, { sessionID = 9 } }
+        DM:HistoryOnKeyComplete()
+        assert.equals(8, DM._pendingBundle.anchorSessionID)   -- newest at event, no wait
+        firedRef()()
+        assert.equals(9, DM._pendingBundle.summarySessionID)  -- settle still refines the pick
+        assert.equals(8, DM._pendingBundle.anchorSessionID)   -- anchor stays as stamped
+    end)
+
     it("HistoryOnKeyComplete re-adopts the persisted pending after a mid-key reload", function()
         DM._pendingBundle = nil                        -- reload killed runtime state
         DM.db.HistoryPending = { label = "Algeth'ar Academy" }
@@ -495,6 +519,9 @@ describe("OnChallengeEvent wiring", function()
         _G.C_DamageMeter = { ResetAllCombatSessions = function() error("boom") end }
         DM:OnChallengeEvent("CHALLENGE_MODE_START")
         assert.is_nil(DM._historyOwnReset)
+        -- And never arms pending for a wipe that didn't happen: the store
+        -- still spans multiple keys, so a label would misdescribe it [C2].
+        assert.same({ "capture" }, calls)
         -- No stale flag left to shield it: the NEXT (external) reset still
         -- clears pending provenance normally.
         DM._pendingBundle = { label = "Algeth'ar Academy" }

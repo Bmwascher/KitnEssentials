@@ -234,6 +234,18 @@ function DM:HistoryOnKeyComplete()
             local id = atEvent[i] and atEvent[i].sessionID
             if id ~= nil and not issecretvalue(id) then known[id] = true end
         end
+        -- Immediate anchor for the reload-survivor check: the newest plain
+        -- id already stored at the event (usually the final boss). The
+        -- summary pick below lands only after the 1s settle — a /reload
+        -- inside that window would otherwise leave the persisted copy
+        -- anchor-less and cost the label (Codex tail review, F2).
+        for i = #atEvent, 1, -1 do
+            local id = atEvent[i] and atEvent[i].sessionID
+            if id ~= nil and not issecretvalue(id) then
+                pending.anchorSessionID = id
+                break
+            end
+        end
     end
     C_Timer.After(1, function()
         -- Still the same pending run? (A key start inside the 1s window
@@ -300,15 +312,22 @@ function DM:HistoryCapture()
 
     if restored then
         -- Reload survivor: trust its label ONLY if the completed key it
-        -- describes is still in the native store — the summary session id
-        -- it sealed at completion must appear in this capture's list. No id
-        -- (key never completed) or no match (store reset/replaced since) ->
-        -- stay unarmed and seal honestly as "Earlier runs" [C2].
+        -- describes is still in the native store — a session id it stamped
+        -- at completion (the immediate anchor, or the settle-refined summary
+        -- pick) must appear in this capture's list. No id (key never
+        -- completed) or no match (store reset/replaced since) -> stay
+        -- unarmed and seal honestly as "Earlier runs" [C2]. Known
+        -- theoretical hole: ids carry no documented uniqueness across full
+        -- client restarts, so a coincidental reuse could false-positive
+        -- (probe pending) — still strictly narrower than the pre-fix
+        -- always-lose-the-label behavior.
         local sid = restored.summarySessionID
-        if sid ~= nil then
+        local aid = restored.anchorSessionID
+        if sid ~= nil or aid ~= nil then
             for i = 1, #list do
                 local id = list[i] and list[i].sessionID
-                if id ~= nil and not issecretvalue(id) and id == sid then
+                if id ~= nil and not issecretvalue(id)
+                    and (id == sid or id == aid) then
                     pending = restored
                     break
                 end
