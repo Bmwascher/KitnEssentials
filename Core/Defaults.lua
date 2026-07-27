@@ -1027,14 +1027,14 @@ local Defaults = {
             IlvlValueSize            = 18,
         },
 
-        WorldMap = {
+        -- Map scale. Extracted from the removed WorldMap module. Not a CVar:
+        -- this is WorldMapFrame:SetScale(). Its own module (not a lodger in
+        -- Automation) so it keeps an independent enable state.
+        -- Default matches the old WorldMap.ScaleEnabled so existing users keep
+        -- the behaviour they have today.
+        MapScale = {
             Enabled = true,
-            ScaleEnabled = true,
             Scale = 1.2,
-            WaypointBarEnabled = true,
-            MapIconsEnabled = true,
-            MapIconsProfessionFilter = true,
-            MapIconsStyle = "small", -- "regular" or "small"
         },
 
         SpellAlerts = {

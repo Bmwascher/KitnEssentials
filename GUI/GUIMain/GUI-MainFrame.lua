@@ -110,11 +110,10 @@ GUIFrame.sidebarConfig = {
             { id = "CharacterPanel",    text = "Character Panel", keywords = { "character", "panel", "stats", "item level", "ilvl", "gear", "durability", "inspect" } },
             { id = "CombatLogger",      text = "Combat Logger", keywords = { "combat log", "logging", "advanced logging", "warcraftlogs", "raid" } },
             { id = "Nicknames",         text = "Custom Nicknames", keywords = { "nickname", "nicknames", "name", "custom", "rename" } },
-            { id = "CVars",             text = "CVars", keywords = { "cvar", "cvars", "console", "variable", "setting" } },
+            { id = "CVars",             text = "CVars", keywords = { "cvar", "cvars", "console", "variable", "setting", "world map", "map", "scale" } },
             { id = "GreatVaultAlert",   text = "Great Vault Alert", keywords = { "great vault", "vault", "weekly", "reward", "chest" } },
             { id = "DragonRiding",      text = "Skyriding UI", keywords = { "skyriding", "dragonriding", "dragon riding", "vigor", "speed", "fly" } },
             { id = "SlashCommands",     text = "Slash Commands", keywords = { "slash", "command", "commands", "slash command" } },
-            { id = "WorldMap",          text = "World Map", keywords = { "world map", "map", "coordinates", "coords", "scale", "fade", "icons" } },
         },
     },
     {

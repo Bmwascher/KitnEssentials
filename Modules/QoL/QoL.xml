@@ -11,6 +11,6 @@
     <Script file="VantusRune.lua" />
     <Script file="CharacterPanel.lua" />
     <Script file="InspectPanel.lua" />
-    <Script file="WorldMap.lua" />
+    <Script file="MapScale.lua" />
     <Script file="WindToolsGameBar.lua" />
 </Ui>
