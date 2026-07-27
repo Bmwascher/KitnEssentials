@@ -152,7 +152,8 @@ local function BuildGeneralTab(scrollChild, yOffset, db, manager)
 
     ----------------------------------------------------------------
     -- Card 2: Position Settings (the dock is the positioned frame)
-    -- Position immediately follows Enable per the canonical card order.
+    -- Position follows the Dock card, which the header-toggle conversion
+    -- inserted between it and the enable switch.
     ----------------------------------------------------------------
     local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         title = "Position Settings",

@@ -51,7 +51,7 @@ GUIFrame:RegisterContent("BurningRush", function(scrollChild, yOffset)
         KE:ColorTextByTheme("-") .. " Position with the Position card or " .. KE:ColorTextByTheme("/kes edit") .. ".",
         40, "hide")
     noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, 40)
+    card1:AddRow(noteRow, 40, 0)
 
     yOffset = card1:GetNextOffset()
 

@@ -57,7 +57,7 @@ GUIFrame:RegisterContent("KeystoneHelper", function(scrollChild, yOffset)
         "announce, reroll-your-key, and \"is this your key?\".",
         50, "hide")
     noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, 50)
+    card1:AddRow(noteRow, 50, 0)
 
     yOffset = card1:GetNextOffset()
 

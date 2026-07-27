@@ -248,6 +248,8 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
         yOffset = card7:GetNextOffset()
 
         if mapDB.Enabled ~= false then
+            -- Not a CVar: this drives WorldMapFrame:SetScale() directly, unlike
+            -- every other slider on this page.
             local row7b = GUIFrame:CreateRow(card7.content, Theme.rowHeightLast)
             local mapScaleSlider = GUIFrame:CreateSlider(row7b, "Scale", {
                 min = 0.5, max = 2.0, step = 0.05,
