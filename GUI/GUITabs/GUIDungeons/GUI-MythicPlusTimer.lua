@@ -199,19 +199,16 @@ BuildGeneralTab = function(scrollChild, yOffset, db, manager)
 
     -- Card 1: Enable
     local card1 = GUIFrame:CreateCard(scrollChild, "Mythic+ Timer", yOffset)
-    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Mythic+ Timer", {
-        value = db.Enabled ~= false,
-        callback = function(checked)
-            db.Enabled = checked
-            ApplyModuleState(checked)
-            manager:UpdateAll(db.Enabled ~= false)
-        end,
-        msgPopup = true, msgText = "Mythic+ Timer", msgOn = "On", msgOff = "Off",
-    })
-    row1:AddWidget(enableCheck, 1)
-    card1:AddRow(row1, Theme.rowHeight, 0)
+    card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
+        db.Enabled = checked
+        ApplyModuleState(checked)
+        KE:Print("Mythic+ Timer: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+    end)
+
     yOffset = card1:GetNextOffset()
+
+    -- Lone header bar: a disabled module shows its switch and nothing else.
+    if db.Enabled == false then return yOffset end
 
     -- Card 2: Position Settings
     local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {

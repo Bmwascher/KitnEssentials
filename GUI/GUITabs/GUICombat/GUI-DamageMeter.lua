@@ -93,8 +93,6 @@ end
 -- General tab
 ---------------------------------------------------------------------------------
 local function BuildGeneralTab(scrollChild, yOffset, db, manager)
-    local DM = GetDM()
-
     local function ApplyModuleState(enabled)
         if not KitnEssentials then return end
         local mod = KitnEssentials:GetModule("DamageMeter", true)
@@ -111,34 +109,11 @@ local function BuildGeneralTab(scrollChild, yOffset, db, manager)
     -- Card 1: Enable
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Damage Meter", yOffset)
-
-    local row1a = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local enableCheck = GUIFrame:CreateCheckbox(row1a, "Enable Damage Meter", {
-        value = db.Enabled ~= false,
-        callback = function(checked)
-            db.Enabled = checked
-            ApplyModuleState(checked)
-            manager:UpdateAll(db.Enabled ~= false)
-        end,
-        msgPopup = true,
-        msgText = "Damage Meter",
-        msgOn = "On",
-        msgOff = "Off",
-    })
-    row1a:AddWidget(enableCheck, 0.5)
-
-    -- Lock Dock lives on the Enable row (far right) -- it's a tightly-coupled
-    -- behavior toggle, not worth its own card. Greyed with the module (group "all").
-    local lockCheck = GUIFrame:CreateCheckbox(row1a, "Lock Dock", {
-        value = db.Locked == true,
-        callback = function(checked)
-            db.Locked = checked
-            if DM and DM.ApplyLockState then DM:ApplyLockState() end
-        end,
-    })
-    row1a:AddWidget(lockCheck, 0.5)
-    manager:Register(lockCheck, "all")
-    card1:AddRow(row1a, Theme.rowHeight)
+    card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
+        db.Enabled = checked
+        ApplyModuleState(checked)
+        KE:Print("Damage Meter: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+    end)
 
     local noteRow = GUIFrame:CreateRow(card1.content, 68)
     local noteText = GUIFrame:CreateText(noteRow,
@@ -150,6 +125,30 @@ local function BuildGeneralTab(scrollChild, yOffset, db, manager)
     card1:AddRow(noteRow, 68, 0)
 
     yOffset = card1:GetNextOffset()
+
+    -- Lone header bar: a disabled module shows its switch and nothing else.
+    if db.Enabled == false then return yOffset end
+
+    ----------------------------------------------------------------
+    -- Card: Dock (Lock Dock -- moved off the enable row into its own row here)
+    ----------------------------------------------------------------
+    local DM = GetDM()
+    local cardDock = GUIFrame:CreateCard(scrollChild, "Dock", yOffset)
+    manager:Register(cardDock, "all")
+
+    local rowDock = GUIFrame:CreateRow(cardDock.content, Theme.rowHeightLast)
+    local lockCheck = GUIFrame:CreateCheckbox(rowDock, "Lock Dock", {
+        value = db.Locked == true,
+        callback = function(checked)
+            db.Locked = checked
+            if DM and DM.ApplyLockState then DM:ApplyLockState() end
+        end,
+    })
+    rowDock:AddWidget(lockCheck, 1)
+    manager:Register(lockCheck, "all")
+    cardDock:AddRow(rowDock, Theme.rowHeightLast, 0)
+
+    yOffset = cardDock:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 2: Position Settings (the dock is the positioned frame)
