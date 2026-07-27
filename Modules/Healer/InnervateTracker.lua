@@ -265,7 +265,8 @@ function IT:RegWithEditMode()
             getParentFrame = function()
                 return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
             end,
-            guiPath = "InnervateTracker",
+            guiPath = "HealerTools",
+            guiTab = "InnervateTracker",
         })
         self.editModeRegistered = true
     end
