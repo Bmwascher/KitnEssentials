@@ -109,7 +109,6 @@
     <Script file="GUITabs\GUIQoL\GUI-CharacterPanel.lua" />
     <Script file="GUITabs\GUIQoL\GUI-Nicknames.lua" />
     <Script file="GUITabs\GUIQoL\GUI-WorldMap.lua" />
-    <Script file="GUITabs\GUIQoL\GUI-PositionController.lua" />
 
     <!-- Skinning tabs -->
     <Script file="GUITabs\GUISkinning\GUI-Tooltips.lua" />

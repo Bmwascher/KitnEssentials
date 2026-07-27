@@ -112,7 +112,6 @@ GUIFrame.sidebarConfig = {
             { id = "Nicknames",         text = "Custom Nicknames", keywords = { "nickname", "nicknames", "name", "custom", "rename" } },
             { id = "CVars",             text = "CVars", keywords = { "cvar", "cvars", "console", "variable", "setting" } },
             { id = "GreatVaultAlert",   text = "Great Vault Alert", keywords = { "great vault", "vault", "weekly", "reward", "chest" } },
-            { id = "PositionController", text = "Position Controller", keywords = { "position", "move", "anchor", "frame", "controller", "edit" } },
             { id = "DragonRiding",      text = "Skyriding UI", keywords = { "skyriding", "dragonriding", "dragon riding", "vigor", "speed", "fly" } },
             { id = "SlashCommands",     text = "Slash Commands", keywords = { "slash", "command", "commands", "slash command" } },
             { id = "WorldMap",          text = "World Map", keywords = { "world map", "map", "coordinates", "coords", "scale", "fade", "icons" } },

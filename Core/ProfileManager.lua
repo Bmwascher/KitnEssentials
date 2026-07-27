@@ -439,9 +439,9 @@ function ProfileManager:RefreshAllModules()
     -- this in Core/Main.lua OnEnable; profile switches previously didn't —
     -- modules enabled under the old profile kept their events/frames live,
     -- and newly-enabled modules stayed dormant. Only modules that publish a
-    -- db.Enabled flag are synced; keSelfManagedEnable modules
-    -- (PositionController: its CDM Racials half runs independent of the
-    -- master toggle) manage their own state. Skin* modules are NEVER flipped
+    -- db.Enabled flag are synced; keSelfManagedEnable modules (any module
+    -- with a sub-feature that runs independent of the master toggle)
+    -- manage their own state. Skin* modules are NEVER flipped
     -- live — skinning applies destructively at enable and OnDisable has no
     -- frame teardown — a mismatch prompts for the /reload that lets startup
     -- apply the new flags (silently skipped when ElvUI handles skinning).
