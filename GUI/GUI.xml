@@ -89,9 +89,9 @@
 
     <!-- Healer tabs -->
     <Script file="GUITabs\GUIHealer\GUI-HealerMana.lua" />
-    <Script file="GUITabs\GUIHealer\GUI-DispelOnCursor.lua" />
     <Script file="GUITabs\GUIHealer\GUI-InnervateTracker.lua" />
     <Script file="GUITabs\GUIHealer\GUI-MaintenanceTracker.lua" />
+    <Script file="GUITabs\GUIHealer\GUI-HealerTools.lua" />
 
     <!-- DungeonsTimers tabs -->
     <Script file="GUITabs\GUIDungeonTimers\GUI-DungeonTimersCfg.lua" />

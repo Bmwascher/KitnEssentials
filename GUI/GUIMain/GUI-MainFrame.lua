@@ -48,7 +48,7 @@ GUIFrame.sidebarConfig = {
             { id = "CombatRes",     text = "Battle Res", keywords = { "battle res", "brez", "combat res", "resurrect", "raid res", "cr" } },
             { id = "CombatTexts",   text = "Combat Texts", keywords = { "combat text", "scrolling", "no target", "interrupt", "durability" } },
             { id = "CombatTimer",   text = "Combat Timer", keywords = { "combat timer", "encounter", "duration", "stopwatch", "fight length" } },
-            { id = "Cursor",        text = "Cursor Effects", keywords = { "cursor", "mouse", "pointer", "trail", "circle" } },
+            { id = "Cursor",        text = "Cursor Effects", keywords = { "cursor", "mouse", "pointer", "trail", "circle", "dispel", "cleanse", "purge", "magic", "curse", "poison", "disease", "debuff" } },
             { id = "DamageMeter",   text = "Damage Meter", keywords = { "damage meter", "dps", "damage", "healing", "threat", "meter", "recount", "details" } },
             { id = "AuraExternals", text = "External and Defensive Buffs", keywords = { "external", "externals", "defensive", "buff", "cooldown", "mitigation" } },
             { id = "FocusCastbar",  text = "Focus Castbar", keywords = { "castbar", "cast", "focus", "casting", "interrupt" } },
@@ -94,10 +94,7 @@ GUIFrame.sidebarConfig = {
         text = "\226\128\162 Healer Utilities",
         defaultExpanded = false,
         items = {
-            { id = "DispelOnCursor",        text = "Dispel on Cursor", keywords = { "dispel", "cursor", "cleanse", "purge", "magic", "curse", "poison", "disease", "debuff" } },
-            { id = "HealerMana",            text = "Healer Mana", keywords = { "mana", "healer", "oom", "raid", "dungeon", "party" } },
-            { id = "InnervateTracker",      text = "Innervate Tracker", keywords = { "innervate", "mana", "druid", "cooldown" } },
-            { id = "MaintenanceTracker",    text = "Maintenance Tracker", keywords = { "maintenance", "buff", "uptime", "hot", "refresh", "tracker", "count", "duration" } },
+            { id = "HealerTools", text = "Healer Tools", keywords = { "healer", "mana", "oom", "innervate", "maintenance", "buff", "uptime", "hot", "refresh", "tracker", "raid", "dungeon", "party", "druid", "cooldown", "duration", "count" } },
         },
     },
     {
