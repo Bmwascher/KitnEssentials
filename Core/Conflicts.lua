@@ -40,6 +40,37 @@ local CONFLICTS = {
         -- restyles. The other three are tooltip replacements carried over
         -- from the reference's list.
         addons = { "TipTac", "TinyTooltip", "TacoTip", "EllesmereUIBlizzardSkin" },
+        -- Rivals that expose a switch for JUST the conflicting feature. Turning
+        -- the whole addon off would be disproportionate here: EUI's Blizz UI
+        -- Enhanced also skins the character sheet, inspect sheet, great vault,
+        -- group finder, socket panel, dragon riding and diminishing returns, and
+        -- a user who picked KE for TOOLTIPS did not ask to lose any of that.
+        -- Rivals with no resolver (TipTac, TinyTooltip, TacoTip) still get the
+        -- whole-addon disable, which is right -- they are tooltip addons and
+        -- nothing else.
+        resolvers = {
+            EllesmereUIBlizzardSkin = {
+                label = "EllesmereUI's tooltip reskin",
+                -- EllesmereUIDB is the base EllesmereUI addon's saved variable
+                -- (EllesmereUI.toc:6); customTooltips is the "Reskin Tooltip"
+                -- toggle, and EUI's own source says it governs ONLY the game
+                -- tooltip (EllesmereUIBlizzardSkin.lua:113-114).
+                apply = function()
+                    if type(_G.EllesmereUIDB) ~= "table" then return false end
+                    _G.EllesmereUIDB.customTooltips = false
+                    return true
+                end,
+                -- Stateless companion to apply(). Flipping the switch leaves the
+                -- addon loaded AND enabled, so the enable-state half of
+                -- deviation 8 cannot see the resolution -- without this the next
+                -- scan would re-raise a conflict the user just settled. Mirrors
+                -- EUI's own test: absent means ON, only a literal false is off.
+                isActive = function()
+                    return type(_G.EllesmereUIDB) ~= "table"
+                        or _G.EllesmereUIDB.customTooltips ~= false
+                end,
+            },
+        },
     },
     -- The Chat entry lands here when A3 ships the module.
 }
@@ -76,12 +107,20 @@ local function LiveEnv()
         -- point: re-enabling the rival re-arms the prompt by itself.
         -- The > 0 comparison is Blizzard's own
         -- (.wow-api-reference/.../Blizzard_AddOnList/AddonList.lua:188).
-        isLoaded = function(name)
+        -- The optional second argument is the rival's resolver. A resolver
+        -- flips the rival's OWN switch rather than disabling it, which leaves
+        -- the addon loaded and enabled, so the two checks above cannot see that
+        -- the conflict is settled. Asking the resolver is what keeps the
+        -- subsystem stateless on that path too. The global read lives HERE, in
+        -- the presentation layer, so the decision layer stays pure.
+        isLoaded = function(name, resolver)
             if not (C_AddOns and C_AddOns.IsAddOnLoaded) then return false end
             if not C_AddOns.IsAddOnLoaded(name) then return false end
-            if C_AddOns.GetAddOnEnableState then
-                return (C_AddOns.GetAddOnEnableState(name) or 0) > 0
+            if C_AddOns.GetAddOnEnableState
+                and (C_AddOns.GetAddOnEnableState(name) or 0) <= 0 then
+                return false
             end
+            if resolver and resolver.isActive then return resolver.isActive() end
             return true
         end,
         shouldNotLoad = KE:ShouldNotLoadModule() and true or false,
@@ -105,12 +144,14 @@ function KE:BuildConflictQueue(env)
             local moduleDB = ResolveDB(env.profile, conflict.dbPath)
             if moduleDB and moduleDB.Enabled then
                 for _, addonName in ipairs(conflict.addons) do
-                    if env.isLoaded(addonName) then
+                    local resolver = conflict.resolvers and conflict.resolvers[addonName]
+                    if env.isLoaded(addonName, resolver) then
                         queue[#queue + 1] = {
-                            module = conflict.module,
-                            label  = conflict.label,
-                            dbPath = conflict.dbPath,
-                            source = addonName,
+                            module   = conflict.module,
+                            label    = conflict.label,
+                            dbPath   = conflict.dbPath,
+                            source   = addonName,
+                            resolver = resolver,
                         }
                     end
                 end
@@ -141,7 +182,8 @@ function KE:GetModuleConflict(moduleName, env)
             -- report a conflict for a module we could not read.
             if not moduleDB or moduleDB.Enabled then return nil end
             for _, addonName in ipairs(conflict.addons) do
-                if env.isLoaded(addonName) then return addonName end
+                local resolver = conflict.resolvers and conflict.resolvers[addonName]
+                if env.isLoaded(addonName, resolver) then return addonName end
             end
             return nil
         end
@@ -193,11 +235,21 @@ local function ShowNextPrompt()
             " functional conflicts.\n\nWhich would you like to use?",
         false, nil, false, nil, nil, nil, nil,
         function()
-            if C_AddOns and C_AddOns.DisableAddOn then
-                C_AddOns.DisableAddOn(item.source)
+            -- Prefer the rival's own switch where it has one, so choosing KE
+            -- over a tooltip clash does not also take out the eight unrelated
+            -- features that ship in the same addon. Falling back to the
+            -- whole-addon disable when apply() cannot run still resolves the
+            -- conflict, which is the outcome the user asked for.
+            local resolver = item.resolver
+            if resolver and resolver.apply and resolver.apply() then
+                KE:Print(resolver.label .. " disabled - reload to apply.")
+            else
+                if C_AddOns and C_AddOns.DisableAddOn then
+                    C_AddOns.DisableAddOn(item.source)
+                end
+                KE:Print(friendly .. " disabled - reload to apply.")
             end
             pendingReload = true
-            KE:Print(friendly .. " disabled - reload to apply.")
             ShowNextPrompt()
         end,
         -- Escape and the close button reach THIS callback too

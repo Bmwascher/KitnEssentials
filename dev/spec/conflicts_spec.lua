@@ -288,6 +288,38 @@ describe("Core/Conflicts.lua prompt queue", function()
         KE:ScanAddonConflicts()
         assert.equals(0, #prompts)
     end)
+
+    -- A rival that exposes a switch for just the conflicting feature gets that
+    -- switch flipped, NOT the whole addon disabled. EUI's Blizz UI Enhanced
+    -- also skins eight unrelated panels, and a user choosing KE for tooltips
+    -- did not ask to lose them.
+    it("flips the rival's own switch when it has one", function()
+        _G.EllesmereUIDB = {}
+        login({ "EllesmereUIBlizzardSkin" })
+        prompts[1].onAccept()
+        assert.is_false(_G.EllesmereUIDB.customTooltips)
+        assert.same({}, disabled)
+        assert.is_truthy(printed[1]:find("tooltip reskin", 1, true))
+    end)
+
+    it("falls back to disabling the addon when the switch is unreachable", function()
+        _G.EllesmereUIDB = nil
+        login({ "EllesmereUIBlizzardSkin" })
+        prompts[1].onAccept()
+        assert.same({ "EllesmereUIBlizzardSkin" }, disabled)
+    end)
+
+    -- The resolver path's half of deviation 8. Flipping a switch leaves the
+    -- addon loaded AND enabled, so neither of the other two checks can tell the
+    -- conflict was settled; only the resolver's isActive can.
+    it("self-silences on a rescan once the rival's switch is off", function()
+        _G.EllesmereUIDB = {}
+        login({ "EllesmereUIBlizzardSkin" })
+        prompts[1].onAccept()
+        local answered = #prompts
+        KE:ScanAddonConflicts()
+        assert.equals(answered, #prompts)
+    end)
 end)
 
 -- The /kes dispatcher lives in Core/Globals.lua and registers into
