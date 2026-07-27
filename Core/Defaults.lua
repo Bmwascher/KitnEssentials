@@ -544,11 +544,6 @@ local Defaults = {
             Position = DefaultPosition(0, -160),
         },
 
-        DispelGlow = {
-            Enabled = false,
-            BorderSize = 2,   -- border thickness in px (1-4)
-        },
-
         DisintegrateTicks = {
             Enabled = false,
             TickColor = { 1, 1, 1, 0.8 },

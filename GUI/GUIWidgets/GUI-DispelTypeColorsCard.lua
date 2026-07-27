@@ -3,10 +3,8 @@
 -- ║  Purpose: Shared "Dispel Type Colors" card builder.      ║
 -- ║  The per-type dispel color palette lives on the          ║
 -- ║  AuraDebuffs profile (db.DispelColors) and is consumed   ║
--- ║  by BOTH the Aura Debuffs icon highlight AND the Dispel  ║
--- ║  Glow border. This card is rendered on the Aura Debuffs  ║
--- ║  page AND cross-linked onto the Healer Utilities > Dispel║
--- ║  Glow page; edits from either refresh both consumers.    ║
+-- ║  by the Aura Debuffs icon highlight. This card is        ║
+-- ║  rendered on the Aura Debuffs page.                      ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -33,16 +31,12 @@ local DISPEL_DEFAULTS = {
 -- 4x2 grid order: None | Magic | Curse | Disease | Poison | Bleed | Enrage
 local DISPEL_TYPES = { "None", "Magic", "Curse", "Disease", "Poison", "Bleed", "Enrage" }
 
--- Refresh every consumer of the dispel palette after an edit. AuraDebuffs
--- rebuilds its color curve + repaints icons; DispelGlow re-evaluates each
--- managed frame's border. Both calls are no-ops when the module is absent
--- or disabled, so this is safe to fire from either page.
+-- Refresh AuraDebuffs after an edit: rebuilds its color curve + repaints
+-- icons. No-op when the module is absent or disabled.
 local function ApplyPalette()
     if not KitnEssentials then return end
     local ad = KitnEssentials:GetModule("AuraDebuffs", true)
     if ad and ad.ApplySettings then ad:ApplySettings() end
-    local dg = KitnEssentials:GetModule("DispelGlow", true)
-    if dg and dg.ApplySettings then dg:ApplySettings() end
 end
 
 -- config = {
