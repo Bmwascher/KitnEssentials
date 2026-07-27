@@ -252,11 +252,10 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 6: Dispel Type Colors (shared builder)
     --
-    -- The per-type palette (db.DispelColors) is also consumed by the Dispel
-    -- Glow border, so the card lives in a shared builder and is cross-linked
-    -- onto the Healer Utilities > Dispel Glow page. Edits from either page
-    -- refresh both consumers. Registered to "all" here, so it greys out with
-    -- the Aura Debuffs master enable (unchanged behaviour).
+    -- The per-type palette (db.DispelColors) card lives in a shared builder
+    -- (GUI-DispelTypeColorsCard.lua); Aura Debuffs is its only consumer.
+    -- Registered to "all" here, so it greys out with the Aura Debuffs
+    -- master enable (unchanged behaviour).
     ----------------------------------------------------------------
     yOffset = GUIFrame:CreateDispelTypeColorsCard(scrollChild, yOffset, {
         db         = db,
