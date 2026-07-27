@@ -42,26 +42,25 @@ GUIFrame:RegisterContent("TotemTracker", function(scrollChild, yOffset)
     -- Card 1: Enable
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Totem Tracker", yOffset)
+    card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
+        db.Enabled = checked
+        local TT = GetModule()
+        if TT then
+            if checked then KitnEssentials:EnableModule("TotemTracker")
+            else KitnEssentials:DisableModule("TotemTracker") end
+        end
+        KE:Print("Totem Tracker: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+    end)
 
-    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Totem Tracker", {
-        value = db.Enabled ~= false,
-        callback = function(checked)
-            db.Enabled = checked
-            local TT = GetModule()
-            if TT then
-                if checked then KitnEssentials:EnableModule("TotemTracker")
-                else KitnEssentials:DisableModule("TotemTracker") end
-            end
-            UpdateAllWidgetStates()
-        end,
-        msgPopup = true,
-        msgText = "Totem Tracker",
-    })
-    row1:AddWidget(enableCheck, (2 / 3))
+    yOffset = card1:GetNextOffset()
 
+    -- Lone header bar: a disabled module shows its switch and nothing else.
+    if db.Enabled == false then return yOffset end
+
+    local cardPreview = GUIFrame:CreateCard(scrollChild, "Preview", yOffset)
+    local rowPreview = GUIFrame:CreateRow(cardPreview.content, Theme.rowHeightLast)
     local previewBtn
-    previewBtn = GUIFrame:CreateButton(row1, "Show Preview", {
+    previewBtn = GUIFrame:CreateButton(rowPreview, "Show Preview", {
         height = 30,
         callback = function()
             local TT = GetModule()
@@ -71,14 +70,14 @@ GUIFrame:RegisterContent("TotemTracker", function(scrollChild, yOffset)
             end
         end,
     })
-    row1:AddWidget(previewBtn, (1 / 3), nil, 0, -6)
+    rowPreview:AddWidget(previewBtn, 1)
     local TT = GetModule()
     if TT and TT.IsPreviewActive and TT:IsPreviewActive() then
         previewBtn:SetLabel("Hide Preview")
     end
-    card1:AddRow(row1, Theme.rowHeight)
+    cardPreview:AddRow(rowPreview, Theme.rowHeightLast, 0)
 
-    yOffset = card1:GetNextOffset()
+    yOffset = cardPreview:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 2: Destroy All Totems (Macro)

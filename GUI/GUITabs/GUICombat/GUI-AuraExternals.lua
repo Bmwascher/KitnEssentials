@@ -52,28 +52,22 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
 
     ----------------------------------------------------------------
     -- Card 1: Enable
-    --
-    -- Two toggles: master Enable + "Include Defensives" (your own large
-    -- defensive CDs alongside externally-applied ones).
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Aura Externals", yOffset)
+    card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
+        ApplyModuleState(checked)
+        KE:Print("Aura Externals: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+    end)
 
-    local row1a = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local enableCheck = GUIFrame:CreateCheckbox(row1a, "Enable Aura Externals", {
-        value = db.Enabled ~= false,
-        callback = function(checked)
-            ApplyModuleState(checked)
-            RefreshStates()
-        end,
-        msgPopup = true,
-        msgText = "Aura Externals",
-        msgOn = "On",
-        msgOff = "Off",
-    })
-    row1a:AddWidget(enableCheck, 1)
-    card1:AddRow(row1a, Theme.rowHeight)
+    yOffset = card1:GetNextOffset()
 
-    local row1b = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    -- Lone header bar: a disabled module shows its switch and nothing else.
+    if db.Enabled == false then return yOffset end
+
+    local cardTracked = GUIFrame:CreateCard(scrollChild, "Tracked Auras", yOffset)
+    manager:Register(cardTracked, "all")
+
+    local row1b = GUIFrame:CreateRow(cardTracked.content, Theme.rowHeightLast)
     local defensivesCheck = GUIFrame:CreateCheckbox(row1b, "Include Defensives", {
         value = db.ShowBigDefensives ~= false,
         callback = function(checked) db.ShowBigDefensives = checked; ApplySettings() end,
@@ -81,9 +75,9 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     })
     row1b:AddWidget(defensivesCheck, 1)
     manager:Register(defensivesCheck, "all")
-    card1:AddRow(row1b, Theme.rowHeightLast, 0)
+    cardTracked:AddRow(row1b, Theme.rowHeightLast, 0)
 
-    yOffset = card1:GetNextOffset()
+    yOffset = cardTracked:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 2: Position Settings
