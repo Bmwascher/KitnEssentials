@@ -9,7 +9,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 
 ## Features
 
-- **60+ modules** — combat HUD, buff tracking, automation, dungeon tools, and UI skinning
+- **Dozens of modules** — combat HUD, buff tracking, automation, dungeon tools, and UI skinning
 - **Dark themed GUI** — custom settings panel with sidebar navigation and 8 color themes
 - **Edit mode** — drag any element to reposition, with anchor and strata controls
 - **Profile system** — save, copy, and reset per-character or shared profiles
@@ -74,7 +74,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Custom Nicknames | Map characters to personal nicknames on ElvUI and Unhalted Unit Frames via the `[kes:nickname]` tag family (plus class-color variants `[kes:nickname:color]` for UUF); includes a management GUI with search, import/export, and replace/merge modes; nicknames also display on the KitnEssentials Damage Meter |
 | Great Vault Alert | Shows your loot spec when opening the Great Vault with class color and sound |
 | Character Panel | Per-slot item level, enchant labels, gem icons, missing-gem cue, and item-track letters (M/H/C/V/A) on the player and inspect frames; decimal stat-pane and inspect item level; interactive Gem Socket Helper (Shift-click to replace all matching gems); auto-disables BetterCharacterPanel if loaded |
-| Map Scale | Adjustable world map scale, configured from the CVars page; reverts to normal scale when disabled |
+| Map Scale | Adjustable minimized map scale, configured from the CVars page; reverts to normal scale when disabled |
 | Vantus Rune | One-click Vantus Rune withdrawal from Guild Bank with priority and confirmation |
 
 ## Skinning
