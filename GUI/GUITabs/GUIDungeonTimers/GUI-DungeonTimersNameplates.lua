@@ -98,7 +98,6 @@ GUIFrame:RegisterContent("DTimers_Nameplates", function(scrollChild, yOffset)
     -- Lone header bar: a disabled module shows its switch and nothing else.
     if db.Enabled == false then return yOffset end
 
-    local isModuleDisabled = db.Enabled == false
     local manager = GUIFrame:CreateWidgetStateManager()
 
     ---------------------------------------------------------------------------
@@ -235,7 +234,7 @@ GUIFrame:RegisterContent("DTimers_Nameplates", function(scrollChild, yOffset)
     appearCard:AddRow(appearRow, Theme.rowHeightLast, 0)
     yOffset = appearCard:GetNextOffset()
 
-    manager:UpdateAll(not isModuleDisabled)
+    manager:UpdateAll(db.Enabled ~= false)
     return yOffset
 end)
 
