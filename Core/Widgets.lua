@@ -634,12 +634,28 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
         ThemeButton(dialog.acceptBtn, Theme, acceptText or "Accept", true)
         ThemeButton(dialog.cancelBtn, Theme, cancelText or "Cancel", false)
 
-        -- ThemeButton grows a button to fit its label, so a long label pair can
-        -- now outgrow the dialog itself. Widen to fit: the two buttons, the 8px
-        -- gap between them, and the container's 12px inset each side. Grow-only
-        -- against POPUP_WIDTH, so short-label prompts keep their exact size.
-        local pairWidth = dialog.acceptBtn:GetWidth() + dialog.cancelBtn:GetWidth() + 8 + 24
-        dialog:SetWidth(math.max(POPUP_WIDTH, pairWidth))
+        -- ThemeButton grows a button to fit its label, so the pair can now
+        -- outgrow the dialog. Two things follow, and the second is the one an
+        -- obvious fix misses.
+        --
+        -- RE-ANCHOR AS A GROUP. The create pass anchors accept entirely LEFT of
+        -- the container's center and cancel entirely RIGHT of it. That centers
+        -- the pair only while the two are the same width; with a long label on
+        -- one side the group sits off-center and the wide button alone needs
+        -- HALF the container, so sizing the dialog by the sum still overflows.
+        -- Anchoring the pair as one group makes the sum correct and squares the
+        -- layout. For equal-width buttons this is pixel-identical to the old
+        -- anchoring, so the 19 short-label prompts are untouched.
+        local pairWidth = dialog.acceptBtn:GetWidth() + dialog.cancelBtn:GetWidth() + 8
+        dialog.acceptBtn:ClearAllPoints()
+        dialog.acceptBtn:SetPoint("LEFT", dialog.buttonContainer, "CENTER", -pairWidth / 2, 0)
+        dialog.cancelBtn:ClearAllPoints()
+        dialog.cancelBtn:SetPoint("LEFT", dialog.acceptBtn, "RIGHT", 8, 0)
+
+        -- Then widen to fit the group plus the container's 12px inset each
+        -- side. Grow-only against POPUP_WIDTH, so short-label prompts keep
+        -- their exact size.
+        dialog:SetWidth(math.max(POPUP_WIDTH, pairWidth + 24))
     else
         -- The dialog is a singleton: without this, a button-less prompt would
         -- inherit the width of whatever wide-labelled prompt ran before it.
