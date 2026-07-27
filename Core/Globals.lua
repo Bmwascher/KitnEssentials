@@ -471,7 +471,7 @@ KE.PreviewManager = PreviewManager
 local PREVIEW_MODULES = {
     "StanceText", "CombatCross", "CombatTexts", "CombatRes",
     "CombatTimer", "PetStatusText", "DragonRiding",
-    "FocusCastbar", "TargetCastbar", "RaidNotifications", "HuntersMark", "RangeChecker",
+    "FocusCastbar", "RaidNotifications", "HuntersMark", "RangeChecker",
     "TimeSpiral", "TotemTracker", "DisintegrateTicks", "StasisTracker", "Recuperate", "KickTracker",
     "NoMovementAlert", "PrescienceTracker", "GreatVaultAlert", "PotionReady", "AuraExternals", "AuraDebuffs",
     "EnemyCounter", "EbonMightTracker", "DungeonCasts", "HealerMana", "InnervateTracker", "MaintenanceTracker",
@@ -488,7 +488,7 @@ local PREVIEW_MODULES = {
 local SECTION_PREVIEW_MODULES = {
     combat_section = {
         "CombatRes", "AuraExternals", "AuraDebuffs", "CombatTexts", "CombatTimer",
-        "FocusCastbar", "TargetCastbar", "CombatCross", "RangeChecker",
+        "FocusCastbar", "CombatCross", "RangeChecker",
         "Cursor", "DamageMeter",
     },
     utilities_section = {

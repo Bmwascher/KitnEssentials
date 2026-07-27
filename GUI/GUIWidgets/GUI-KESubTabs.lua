@@ -36,8 +36,8 @@ end
 -- Usage:
 --   local _, newOffset = GUIFrame:CreateSubTabs(scrollChild, yOffset, {
 --       tabs = {
---           { id = "TargetCastbar", label = "Target" },
---           { id = "FocusCastbar",  label = "Focus"  },
+--           { id = "General", label = "General" },
+--           { id = "Windows", label = "Windows" },
 --       },
 --       activeId = currentTab,
 --       onSwitch = function(newId)

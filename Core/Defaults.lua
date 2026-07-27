@@ -308,47 +308,6 @@ local Defaults = {
             MaxCooldown = 30,
         },
 
-        TargetCastbar = {
-            Enabled = false,
-            Width = 250,
-            Height = 20,
-            Strata = "HIGH",
-            anchorFrameType = "UIPARENT",
-            ParentFrame = "UIParent",
-            Position = DefaultPosition(0, -200),
-            FontSize = 12,
-            FontFace = "Expressway",
-            FontOutline = "OUTLINE",
-            StatusBarTexture = "KitnUI",
-            CastingColor = { 1, 0.7, 0, 1 },
-            ChannelingColor = { 0, 0.7, 1, 1 },
-            EmpoweringColor = { 0.8, 0.4, 1, 1 },
-            NotInterruptibleColor = { 0.7, 0.7, 0.7, 1 },
-            HideNotInterruptible = false,
-            TextColor = { 1, 1, 1, 1 },
-            BackdropColor = { 0, 0, 0, 0.8 },
-            BorderColor = { 0, 0, 0, 1 },
-            HoldTimer = {
-                Enabled = true,
-                Duration = 0.5,
-                InterruptedColor = { 0.1, 0.8, 0.1, 1 },
-                SuccessColor = { 0.8, 0.1, 0.1, 1 },
-            },
-            KickIndicator = {
-                Enabled = true,
-                ReadyColor = { 0.1, 0.8, 0.1, 1 },
-                NotReadyColor = { 0.5, 0.5, 0.5, 1 },
-                TickColor = { 1, 1, 1, 1 },
-            },
-            TargetNames = {
-                Enabled = true,
-                Anchor = "RIGHT",
-                XOffset = 0,
-                YOffset = 14,
-                FontSize = 12,
-            },
-        },
-
         FocusCastbar = {
             Enabled = true,
             Width = 350,
@@ -373,7 +332,7 @@ local Defaults = {
             TextColor = { 1, 1, 1, 1 },
             BackdropColor = { 0, 0, 0, 0.8 },
             BorderColor = { 0, 0, 0, 1 },
-            -- Focus-castbar-only features (opt-in; TargetCastbar lacks these keys):
+            -- Focus-castbar-only features (opt-in):
             OutOfRangeOpacity = 1,        -- 1 = disabled; < 1 dims bar when interrupt out of range
             IgnoreFriendlies = false,     -- hide bar when focus is not attackable
             ImportantGlow = {

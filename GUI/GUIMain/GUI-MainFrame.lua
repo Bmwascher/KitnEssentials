@@ -51,7 +51,7 @@ GUIFrame.sidebarConfig = {
             { id = "Cursor",        text = "Cursor Effects", keywords = { "cursor", "mouse", "pointer", "trail", "circle" } },
             { id = "DamageMeter",   text = "Damage Meter", keywords = { "damage meter", "dps", "damage", "healing", "threat", "meter", "recount", "details" } },
             { id = "AuraExternals", text = "External and Defensive Buffs", keywords = { "external", "externals", "defensive", "buff", "cooldown", "mitigation" } },
-            { id = "Castbars",      text = "Focus & Target Castbars", keywords = { "castbar", "cast", "focus", "target", "casting", "interrupt" } },
+            { id = "FocusCastbar",  text = "Focus Castbar", keywords = { "castbar", "cast", "focus", "casting", "interrupt" } },
             { id = "CombatCross",   text = "Player Crosshair", keywords = { "crosshair", "cross", "aim", "reticle", "player" } },
             { id = "RangeChecker",  text = "Range Display", keywords = { "range", "distance", "yards", "melee", "ranged" } },
         },
