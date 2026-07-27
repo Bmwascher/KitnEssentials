@@ -58,23 +58,15 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
     -- Card 1: Enable
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Aura Debuffs", yOffset)
-
-    local row1a = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local enableCheck = GUIFrame:CreateCheckbox(row1a, "Enable Aura Debuffs", {
-        value = db.Enabled ~= false,
-        callback = function(checked)
-            ApplyModuleState(checked)
-            RefreshStates()
-        end,
-        msgPopup = true,
-        msgText  = "Aura Debuffs",
-        msgOn    = "On",
-        msgOff   = "Off",
-    })
-    row1a:AddWidget(enableCheck, 1)
-    card1:AddRow(row1a, Theme.rowHeightLast, 0)
+    card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
+        ApplyModuleState(checked)
+        KE:Print("Aura Debuffs: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+    end)
 
     yOffset = card1:GetNextOffset()
+
+    -- Lone header bar: a disabled module shows its switch and nothing else.
+    if db.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------
     -- Card 2: Position Settings
