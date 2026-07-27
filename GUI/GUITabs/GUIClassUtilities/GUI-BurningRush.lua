@@ -44,14 +44,13 @@ GUIFrame:RegisterContent("BurningRush", function(scrollChild, yOffset)
         KE:Print("Burning Rush: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, 50)
+    local noteRow = GUIFrame:CreateRow(card1.content, 40)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Warlock only. Shows a glowing icon while Burning Rush is active.\n" ..
-        KE:ColorTextByTheme("-") .. " Position with the Position card or " .. KE:ColorTextByTheme("/kes edit") .. ".",
-        50, "hide")
+        KE:ColorTextByTheme("-") .. " Warlock only. Shows a glowing icon while Burning Rush is active.",
+        40, "hide")
     noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, 50, 0)
+    card1:AddRow(noteRow, 40, 0)
 
     yOffset = card1:GetNextOffset()
 

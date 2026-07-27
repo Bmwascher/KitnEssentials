@@ -421,7 +421,12 @@ function GUIFrame:CreateCard(parent, title, yOffset, width)
     function card:UpdateHeight()
         local totalHeight
         if self.currentY == 0 and self.headerHeight > 0 then
-            totalHeight = self.headerHeight + T.borderSize * 2
+            -- Exactly the header, so the header plate covers the card entirely
+            -- and the bar is one solid colour. AES adds borderSize*2 here, but
+            -- its header is inset by borderSize and draws no edge of its own;
+            -- KE's is flush at (0,0) with its own edge, so the same allowance
+            -- would expose two pixels of card backdrop under the header.
+            totalHeight = self.headerHeight
             self.content:Hide()
         else
             totalHeight = self.headerHeight + self.currentY + T.paddingMedium * 2
