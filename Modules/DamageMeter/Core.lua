@@ -673,20 +673,6 @@ function DM:OnEnable()
     -- Details! is a competing meter — recommend running only one.
     KE:WarnRedundantAddon("Details", "Details!", "Damage Meter", "/kes", self.db, "_detailsWarned")
 
-    -- The KE "Details Backdrop" skin only styles the Details! addon, so it's
-    -- redundant under our meter. Disable it ONCE when Details is present (a later
-    -- deliberate re-enable is respected via the _detailsSkinOff flag).
-    if not self.db._detailsSkinOff and C_AddOns and C_AddOns.IsAddOnLoaded
-        and C_AddOns.IsAddOnLoaded("Details") then
-        local skinDB = KE.db.profile.Skinning and KE.db.profile.Skinning.Details
-        if skinDB and skinDB.Enabled then
-            self.db._detailsSkinOff = true
-            skinDB.Enabled = false
-            KitnEssentials:DisableModule("SkinDetailsBackdrop")
-            KE:Print("Disabled the KitnEssentials Details Backdrop skin - redundant with the KitnEssentials Damage Meter.")
-        end
-    end
-
     if DEBUG_DM then
         KE:Print("[DM] OnEnable: module active")
     end

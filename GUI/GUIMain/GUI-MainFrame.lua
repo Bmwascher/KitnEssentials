@@ -126,16 +126,9 @@ GUIFrame.sidebarConfig = {
         defaultExpanded = false,
         elvUIDisabled = true,
         items = {
-            { id = "SkinUICleanup",    text = "General UI Clean Up", keywords = { "clean up", "cleanup", "ui", "hide", "declutter", "skin" } },
-            { id = "SkinAuras",        text = "Buffs, Debuffs & Externals", keywords = { "aura", "buffs", "debuffs", "externals", "skin", "frame" } },
-            { id = "SkinActionBars",   text = "Action Bars", keywords = { "action bar", "actionbars", "bars", "skin", "button" } },
             { id = "SkinBattlenet",    text = "Battle.net Toast", keywords = { "battlenet", "battle.net", "bnet", "toast", "friend", "popup" } },
-            { id = "SkinMouseover",    text = "Blizzard Mouseover", keywords = { "mouseover", "blizzard", "highlight", "skin" } },
             { id = "SkinMessages",     text = "Blizzard Texts", keywords = { "blizzard", "text", "message", "error", "raid warning", "ui error" } },
             { id = "SkinTooltips",     text = "Blizzard Tooltips", keywords = { "tooltip", "tooltips", "blizzard", "mouseover", "skin" } },
-            { id = "SkinMicroMenu",    text = "Micro Menu", keywords = { "micro menu", "micromenu", "menu", "bag", "button" } },
-            { id = "SkinDetails",      text = "Details Backdrop", keywords = { "details", "backdrop", "damage meter", "dps", "skin" } },
-            { id = "SkinRaidManager",  text = "Raid Manager Panel", keywords = { "raid manager", "raid", "panel", "lfg", "group" } },
         },
     },
     {

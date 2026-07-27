@@ -3,12 +3,5 @@
 
     <Script file="Tooltips.lua" />
     <Script file="BlizzardMessages.lua" />
-    <Script file="BlizzardMouseover.lua" />
-    <Script file="BlizzardMicroMenu.lua" />
-    <Script file="DetailsBackdrop.lua" />
-    <Script file="ActionBars.lua" />
-    <Script file="Auras.lua" />
-    <Script file="UICleanup.lua" />
     <Script file="Battlenet.lua" />
-    <Script file="BlizzardRaidmanager.lua" />
 </Ui>
