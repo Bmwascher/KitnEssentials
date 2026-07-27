@@ -34,26 +34,15 @@ GUIFrame:RegisterContent("BurningRush", function(scrollChild, yOffset)
     -- Card 1: Enable
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Warlock: Burning Rush", yOffset)
-
-    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Burning Rush", {
-        value = db.Enabled ~= false,
-        callback = function(checked)
-            db.Enabled = checked
-            if checked then
-                KitnEssentials:EnableModule("BurningRush")
-            else
-                KitnEssentials:DisableModule("BurningRush")
-            end
-            RefreshStates()
-        end,
-        msgPopup = true,
-        msgText = "Burning Rush",
-        msgOn = "On",
-        msgOff = "Off",
-    })
-    row1:AddWidget(enableCheck, 1)
-    card1:AddRow(row1, Theme.rowHeight)
+    card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
+        db.Enabled = checked
+        if checked then
+            KitnEssentials:EnableModule("BurningRush")
+        else
+            KitnEssentials:DisableModule("BurningRush")
+        end
+        KE:Print("Burning Rush: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+    end)
 
     local noteRow = GUIFrame:CreateRow(card1.content, 40)
     local noteText = GUIFrame:CreateText(noteRow,
@@ -64,12 +53,15 @@ GUIFrame:RegisterContent("BurningRush", function(scrollChild, yOffset)
     noteRow:AddWidget(noteText, 1)
     card1:AddRow(noteRow, 40)
 
-    local sepRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightSeparator)
-    local sep1 = GUIFrame:CreateSeparator(sepRow)
-    sepRow:AddWidget(sep1, 1)
-    card1:AddRow(sepRow, Theme.rowHeightSeparator)
+    yOffset = card1:GetNextOffset()
 
-    local row2 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    -- Lone header bar: a disabled module shows its switch and nothing else.
+    if db.Enabled == false then return yOffset end
+
+    local cardDisplay = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
+    manager:Register(cardDisplay, "all")
+
+    local row2 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeightLast)
     local iconSizeSlider = GUIFrame:CreateSlider(row2, "Icon Size", {
         min = 20, max = 100, step = 1,
         value = db.IconSize or 40,
@@ -77,9 +69,9 @@ GUIFrame:RegisterContent("BurningRush", function(scrollChild, yOffset)
     })
     row2:AddWidget(iconSizeSlider, 1)
     manager:Register(iconSizeSlider, "all")
-    card1:AddRow(row2, Theme.rowHeightLast, 0)
+    cardDisplay:AddRow(row2, Theme.rowHeightLast, 0)
 
-    yOffset = card1:GetNextOffset()
+    yOffset = cardDisplay:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 2: Position Settings

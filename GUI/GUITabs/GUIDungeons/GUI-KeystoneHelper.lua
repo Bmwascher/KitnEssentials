@@ -40,26 +40,15 @@ GUIFrame:RegisterContent("KeystoneHelper", function(scrollChild, yOffset)
     -- Card 1: Enable
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Keystone Helper", yOffset)
-
-    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Keystone Helper", {
-        value = db.Enabled ~= false,
-        callback = function(checked)
-            db.Enabled = checked
-            local KH = GetModule()
-            if KH then
-                if checked then KitnEssentials:EnableModule("KeystoneHelper")
-                else KitnEssentials:DisableModule("KeystoneHelper") end
-            end
-            RefreshStates()
-        end,
-        msgPopup = true,
-        msgText = "Keystone Helper",
-        msgOn = "On",
-        msgOff = "Off",
-    })
-    row1:AddWidget(enableCheck, 1)
-    card1:AddRow(row1, Theme.rowHeight)
+    card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
+        db.Enabled = checked
+        local KH = GetModule()
+        if KH then
+            if checked then KitnEssentials:EnableModule("KeystoneHelper")
+            else KitnEssentials:DisableModule("KeystoneHelper") end
+        end
+        KE:Print("Keystone Helper: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+    end)
 
     local noteRow = GUIFrame:CreateRow(card1.content, 50)
     local noteText = GUIFrame:CreateText(noteRow,
@@ -70,7 +59,15 @@ GUIFrame:RegisterContent("KeystoneHelper", function(scrollChild, yOffset)
     noteRow:AddWidget(noteText, 1)
     card1:AddRow(noteRow, 50)
 
-    local row2 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    yOffset = card1:GetNextOffset()
+
+    -- Lone header bar: a disabled module shows its switch and nothing else.
+    if db.Enabled == false then return yOffset end
+
+    local cardReminders = GUIFrame:CreateCard(scrollChild, "Reminders", yOffset)
+    manager:Register(cardReminders, "all")
+
+    local row2 = GUIFrame:CreateRow(cardReminders.content, Theme.rowHeightLast)
     local rerollEnableCheck = GUIFrame:CreateCheckbox(row2, "Enable Reroll Reminder", {
         value = db.RerollEnabled ~= false,
         callback = function(checked) db.RerollEnabled = checked; ApplySettings() end,
@@ -92,9 +89,9 @@ GUIFrame:RegisterContent("KeystoneHelper", function(scrollChild, yOffset)
     })
     row2:AddWidget(yourKeyEnableCheck, 0.5)
     manager:Register(yourKeyEnableCheck, "all")
-    card1:AddRow(row2, Theme.rowHeightLast, 0)
+    cardReminders:AddRow(row2, Theme.rowHeightLast, 0)
 
-    yOffset = card1:GetNextOffset()
+    yOffset = cardReminders:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 2: Instance Reset Announcer

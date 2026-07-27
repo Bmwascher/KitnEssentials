@@ -231,30 +231,21 @@ GUIFrame:RegisterContent("Cursor", function(scrollChild, yOffset)
     -- Card 1: Cursor (Enable + Master Visibility)
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Cursor", yOffset)
+    card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
+        db.Enabled = checked
+        ApplyModuleState(checked)
+        KE:Print("Cursor: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+    end)
 
-    local row1a = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local enableCheck = GUIFrame:CreateCheckbox(row1a, "Enable Cursor", {
-        value = db.Enabled ~= false,
-        callback = function(checked)
-            db.Enabled = checked
-            ApplyModuleState(checked)
-            RefreshStates()
-        end,
-        msgPopup = true,
-        msgText = "Cursor",
-        msgOn = "On",
-        msgOff = "Off",
-    })
-    row1a:AddWidget(enableCheck, 1)
-    card1:AddRow(row1a, Theme.rowHeight)
+    yOffset = card1:GetNextOffset()
 
-    local row1sep = GUIFrame:CreateRow(card1.content, Theme.rowHeightSeparator)
-    local sep1 = GUIFrame:CreateSeparator(row1sep)
-    row1sep:AddWidget(sep1, 1)
-    manager:Register(sep1, "all")
-    card1:AddRow(row1sep, Theme.rowHeightSeparator)
+    -- Lone header bar: a disabled module shows its switch and nothing else.
+    if db.Enabled == false then return yOffset end
 
-    local row1b = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local cardVis = GUIFrame:CreateCard(scrollChild, "Visibility", yOffset)
+    manager:Register(cardVis, "all")
+
+    local row1b = GUIFrame:CreateRow(cardVis.content, Theme.rowHeightLast)
     local visDropdown = GUIFrame:CreateDropdown(row1b, "Visibility State", {
         options = (GetModule() and GetModule().VISIBILITY_MODES) or {},
         value = db.Visibility or "always",
@@ -262,9 +253,9 @@ GUIFrame:RegisterContent("Cursor", function(scrollChild, yOffset)
     })
     row1b:AddWidget(visDropdown, 1)
     manager:Register(visDropdown, "all")
-    card1:AddRow(row1b, Theme.rowHeightLast, 0)
+    cardVis:AddRow(row1b, Theme.rowHeightLast, 0)
 
-    yOffset = card1:GetNextOffset()
+    yOffset = cardVis:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 2: Cursor Style (Size + Texture + Color)
