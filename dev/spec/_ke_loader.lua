@@ -277,4 +277,66 @@ function L.loadProfileManager(overrides)
     return KE.ProfileManager, KE, db
 end
 
+-- Core/Conflicts.lua. The fake KE carries the prompt API so a spec can capture
+-- a prompt and answer it by calling the recorded onAccept/onCancel. Returns
+-- KE, prompts (every CreatePrompt/CreateReloadPrompt call, in order),
+-- disabled (addon names passed to C_AddOns.DisableAddOn), and printed (chat
+-- lines, kept separate so prompt-count assertions stay exact).
+function L.loadConflicts(overrides)
+    installMock(overrides, {})
+    local disabled = {}
+    -- Models production: DisableAddOn flips the enable state while the addon
+    -- stays LOADED for the rest of the session. Absent means enabled.
+    local enableState = {}
+    _G.C_AddOns = {
+        IsAddOnLoaded = function() return false end,
+        GetAddOnEnableState = function(name) return enableState[name] or 2 end,
+        DisableAddOn = function(name)
+            disabled[#disabled + 1] = name
+            enableState[name] = 0
+        end,
+    }
+    local prompts = {}
+    local printed = {}
+    local KE
+    KE = {
+        db = { profile = {} },
+        activePrompt = nil,
+        ShouldNotLoadModule = function() return false end,
+        -- SEVEN placeholders between text and onAccept, matching the real
+        -- signature's showEditBox, editBoxLabelText, useTexture, texturePath,
+        -- textureSizeX, textureSizeY, textureColor (Core/Widgets.lua:252-254).
+        -- Six would shift every later argument by one and silently capture
+        -- closures as button labels.
+        CreatePrompt = function(_, title, text, _, _, _, _, _, _, _,
+                                onAccept, onCancel, acceptText, cancelText)
+            -- ClosePrompt CLEARS the handle at Core/Widgets.lua:167 BEFORE
+            -- invoking either callback at :168, so the fake wraps them to do
+            -- the same. A fake that leaves the handle set while a callback
+            -- runs does not model production.
+            local function wrap(fn)
+                if not fn then return nil end
+                return function(...) KE.activePrompt = nil; return fn(...) end
+            end
+            prompts[#prompts + 1] = {
+                title = title, text = text,
+                onAccept = wrap(onAccept), onCancel = wrap(onCancel),
+                acceptText = acceptText, cancelText = cancelText,
+            }
+            -- The real CreatePrompt sets this singleton handle
+            -- (Core/Widgets.lua:642); the stall-recovery path reads it.
+            KE.activePrompt = { n = #prompts }
+        end,
+        CreateReloadPrompt = function(_, reason)
+            prompts[#prompts + 1] = { reload = true, reason = reason }
+            KE.activePrompt = { n = #prompts }
+        end,
+        RunAfterCombat = function(_, fn) fn() end,
+        -- Chat lines go in their OWN list: folding them into prompts would
+        -- break every "#prompts" assertion, since each choice prints.
+        Print = function(_, msg) printed[#printed + 1] = msg end,
+    }
+    return helpers.loadModule("Core/Conflicts.lua", KE), prompts, disabled, printed
+end
+
 return L

@@ -11,6 +11,7 @@
     <Script file="FramePool.lua" />
     <Script file="Defaults.lua"/>
     <Script file="Globals.lua" />
+    <Script file="Conflicts.lua" />
     <Script file="EditMode.lua" />
     <Script file="Main.lua" />
     <Script file="ProfileManager.lua" />
