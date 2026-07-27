@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-HealerTools.lua                                     ║
 -- ║  GUI: Healer Utilities — three modules on one page.      ║
--- ║  The per-module builders stay registered under their own  ║
+-- ║  The per-module builders stay registered under their own ║
 -- ║  ids and are dispatched here as tabs.                    ║
 -- ╚══════════════════════════════════════════════════════════╝
 

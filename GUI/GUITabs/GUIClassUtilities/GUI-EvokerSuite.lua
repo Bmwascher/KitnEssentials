@@ -1,7 +1,8 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-EvokerSuite.lua                                     ║
--- ║  GUI: Evoker Suite                                       ║
--- ║  Purpose: Configuration panel for the EvokerSuite module.║
+-- ║  GUI: Evoker Suite — four modules on one page. The       ║
+-- ║  per-module builders stay registered under their own ids ║
+-- ║  and are dispatched here as tabs.                        ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE

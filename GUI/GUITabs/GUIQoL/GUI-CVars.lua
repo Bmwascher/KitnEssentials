@@ -1,7 +1,8 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-CVars.lua                                           ║
 -- ║  GUI: CVars                                              ║
--- ║  Purpose: Configuration panel for the CVars module.      ║
+-- ║  Purpose: Configuration panel for the CVars module, and  ║
+-- ║  the host page for the Map Scale card (its own module).  ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
