@@ -54,30 +54,14 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
     -- Card 1: Enable + Info
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Tooltip Skinning", yOffset)
-
-    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Tooltip Skinning", {
-        value = db.Enabled ~= false,
-        callback = function(checked)
-            db.Enabled = checked
-            ApplyTooltipState(checked)
-            manager:UpdateAll(checked)
-            if not checked then
-                KE:CreateReloadPrompt("Enabling Blizzard UI elements requires a reload to take full effect.")
-            end
-        end,
-        msgPopup = true,
-        msgText = "Tooltip Skinning",
-        msgOn = "On",
-        msgOff = "Off",
-    })
-    row1:AddWidget(enableCheck, 0.5)
-    card1:AddRow(row1, Theme.rowHeight)
-
-    local sepRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightSeparator)
-    local sep1 = GUIFrame:CreateSeparator(sepRow)
-    sepRow:AddWidget(sep1, 1)
-    card1:AddRow(sepRow, Theme.rowHeightSeparator)
+    card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
+        db.Enabled = checked
+        ApplyTooltipState(checked)
+        if not checked then
+            KE:CreateReloadPrompt("Enabling Blizzard UI elements requires a reload to take full effect.")
+        end
+        KE:Print("Tooltip Skinning: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+    end)
 
     local textRowSize = 140
     local row1b = GUIFrame:CreateRow(card1.content, textRowSize)
@@ -91,10 +75,12 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
         KE:ColorTextByTheme("- ") .. "Blizzard_SharedXML/Tooltip/TooltipComparisonManager.lua",
         textRowSize, "hide")
     row1b:AddWidget(ttInfoText, 1)
-    manager:Register(ttInfoText, "all")
     card1:AddRow(row1b, textRowSize, 0)
 
     yOffset = card1:GetNextOffset()
+
+    -- Lone header bar: a disabled module shows its switch and nothing else.
+    if db.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------
     -- Card 2: General Settings

@@ -149,22 +149,15 @@ GUIFrame:RegisterContent("DTimers_General", function(scrollChild, yOffset)
     -- Card 1: Enable
     ---------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Dungeon Timers", yOffset)
-
-    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Dungeon Timers", {
-        value = db.Enabled ~= false,
-        callback = function(checked)
-            ApplyModuleState(checked)
-            KE:CreateReloadPrompt("Enabling/Disabling this module requires a reload to take full effect.")
-        end,
-        msgPopup = true,
-        msgText = "Dungeon Timers",
-        msgOn = "On",
-        msgOff = "Off",
-    })
-    row1:AddWidget(enableCheck, 1)
-    card1:AddRow(row1, Theme.rowHeightLast, 0)
+    card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
+        ApplyModuleState(checked)
+        KE:CreateReloadPrompt("Enabling/Disabling this module requires a reload to take full effect.")
+        KE:Print("Dungeon Timers: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+    end)
     yOffset = card1:GetNextOffset()
+
+    -- Lone header bar: a disabled module shows its switch and nothing else.
+    if db.Enabled == false then return yOffset end
 
     ---------------------------------------------------------------------------
     -- Card 2: Role Filter
