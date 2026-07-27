@@ -238,33 +238,30 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
             if MS and MS.ApplyScale then MS:ApplyScale() end
         end
 
-        -- Not a CVar: this drives WorldMapFrame:SetScale() directly.
-        local row7a = GUIFrame:CreateRow(card7.content, Theme.rowHeight)
-        local mapScaleCheck = GUIFrame:CreateCheckbox(row7a, "Scale World Map", {
-            value = mapDB.Enabled ~= false,
-            callback = function(checked)
-                mapDB.Enabled = checked
-                if checked then KitnEssentials:EnableModule("MapScale")
-                else KitnEssentials:DisableModule("MapScale") end
-                ApplyMapScale()
-            end,
-        })
-        row7a:AddWidget(mapScaleCheck, 1)
-        card7:AddRow(row7a, Theme.rowHeight)
-
-        local row7b = GUIFrame:CreateRow(card7.content, Theme.rowHeightLast)
-        local mapScaleSlider = GUIFrame:CreateSlider(row7b, "Scale", {
-            min = 0.5, max = 2.0, step = 0.05,
-            value = mapDB.Scale or 1.2,
-            callback = function(val)
-                mapDB.Scale = val
-                ApplyMapScale()
-            end,
-        })
-        row7b:AddWidget(mapScaleSlider, 1)
-        card7:AddRow(row7b, Theme.rowHeightLast, 0)
-
+        card7:AddHeaderToggle(mapDB.Enabled ~= false, function(checked)
+            mapDB.Enabled = checked
+            if checked then KitnEssentials:EnableModule("MapScale")
+            else KitnEssentials:DisableModule("MapScale") end
+            ApplyMapScale()
+            KE:Print("Map Scale: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+        end)
         yOffset = card7:GetNextOffset()
+
+        if mapDB.Enabled ~= false then
+            local row7b = GUIFrame:CreateRow(card7.content, Theme.rowHeightLast)
+            local mapScaleSlider = GUIFrame:CreateSlider(row7b, "Scale", {
+                min = 0.5, max = 2.0, step = 0.05,
+                value = mapDB.Scale or 1.2,
+                callback = function(val)
+                    mapDB.Scale = val
+                    ApplyMapScale()
+                end,
+            })
+            row7b:AddWidget(mapScaleSlider, 1)
+            card7:AddRow(row7b, Theme.rowHeightLast, 0)
+
+            yOffset = card7:GetNextOffset()
+        end
     end
 
     RefreshStates()
