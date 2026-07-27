@@ -53,24 +53,16 @@ GUIFrame:RegisterContent("RaidNotifications", function(scrollChild, yOffset)
     -- Card 1: Enable
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Raid Notifications", yOffset)
-
-    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Raid Notifications", {
-        value = db.Enabled ~= false,
-        callback = function(checked)
-            db.Enabled = checked
-            ApplyModuleState(checked)
-            RefreshStates()
-        end,
-        msgPopup = true,
-        msgText = "Raid Notifications",
-        msgOn = "On",
-        msgOff = "Off",
-    })
-    row1:AddWidget(enableCheck, 1)
-    card1:AddRow(row1, Theme.rowHeightLast, 0)
+    card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
+        db.Enabled = checked
+        ApplyModuleState(checked)
+        KE:Print("Raid Notifications: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+    end)
 
     yOffset = card1:GetNextOffset()
+
+    -- Lone header bar: a disabled module shows its switch and nothing else.
+    if db.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------
     -- Card 2: Alert Settings
