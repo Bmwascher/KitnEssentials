@@ -1042,19 +1042,6 @@ local Defaults = {
             EnabledSpecs = {},  -- nil/missing = ON, false = OFF (per spec index)
         },
 
-        -- WindTools GameBar visibility shim. No-op if ElvUI_WindTools isn't
-        -- loaded. Combat hiding rides on the [combat] macro conditional,
-        -- M+ hiding uses CHALLENGE_MODE_* events + UnregisterStateDriver +
-        -- bar:Hide() since Blizzard exposes no [mythicplus] conditional.
-        -- Defaults to enabled so the feature works without configuration —
-        -- the underlying WindTools visibility string is preserved and
-        -- restored when this module disables.
-        WindToolsGameBar = {
-            Enabled = true,
-            HideInCombat = true,
-            HideInMythicPlus = true,
-        },
-
         ReadyCheckConsumables = {
             Enabled = true,
             -- Position override (default is auto-anchor to ReadyCheckListenerFrame)
