@@ -289,3 +289,40 @@ describe("Core/Conflicts.lua prompt queue", function()
         assert.equals(0, #prompts)
     end)
 end)
+
+-- The /kes dispatcher lives in Core/Globals.lua and registers into
+-- _G.SlashCmdList at file scope. loadGlobals stubs SlashCmdList, so a spec can
+-- call the handler directly. Conflicts.lua is not loaded here: the branch is
+-- nil-guarded, so a stub on the shared KE table is enough to observe it.
+describe("/kes conflicts", function()
+    local KE, handler
+
+    before_each(function()
+        KE = L.loadGlobals()
+        handler = _G.SlashCmdList["KITNESSENTIALS"]
+    end)
+
+    it("runs the conflict rescan", function()
+        local calls = 0
+        KE.ScanAddonConflicts = function() calls = calls + 1 end
+        handler("conflicts")
+        assert.equals(1, calls)
+    end)
+
+    it("is a no-op when Conflicts.lua never loaded", function()
+        KE.ScanAddonConflicts = nil
+        assert.has_no.errors(function() handler("conflicts") end)
+    end)
+
+    -- Stub KE.Print, NOT _G.print: Core/Globals.lua:13 captures print into a
+    -- file-local at load, so a _G.print stub installed after loadGlobals is
+    -- invisible and the assertion could never pass. The handler resolves
+    -- KE.Print at call time, so replacing it on the shared table works.
+    it("lists conflicts in the help output", function()
+        local printed = {}
+        KE.Print = function(_, msg) printed[#printed + 1] = msg end
+        handler("nonsense")
+        assert.equals(1, #printed)
+        assert.is_truthy(printed[1]:find("conflicts", 1, true))
+    end)
+end)

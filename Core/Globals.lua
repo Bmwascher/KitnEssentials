@@ -236,9 +236,16 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
         else
             KE:Print("Dungeon Trash tracker unavailable.")
         end
+    elseif msg == "conflicts" then
+        -- Re-runs the addon conflict scan (Core/Conflicts.lua) so a resolved
+        -- conflict can be retested without a relog. Silent when nothing
+        -- conflicts. Nil-guarded like the module routes above.
+        if KE.ScanAddonConflicts then
+            KE:ScanAddonConflicts()
+        end
     else
         -- "help" and anything unrecognized: list every subcommand.
-        KE:Print("Commands: /kes or gui (settings) | edit or unlock | profiler or prof | dm [reset | report [count] [channel]] | mt [clearsplits] | trash | resetgui")
+        KE:Print("Commands: /kes or gui (settings) | edit or unlock | profiler or prof | dm [reset | report [count] [channel]] | mt [clearsplits] | trash | conflicts | resetgui")
     end
 end
 
