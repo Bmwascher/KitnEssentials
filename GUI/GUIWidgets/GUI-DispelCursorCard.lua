@@ -1,8 +1,8 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-DispelCursorCard.lua                                ║
 -- ║  Purpose: Shared "Dispel Countdown" card builder.        ║
--- ║  Used by Combat Utilities > Cursor Effects AND the       ║
--- ║  Healer Utilities > Dispel on Cursor cross-link page.    ║
+-- ║  Used by Combat Utilities > Cursor Effects — the         ║
+-- ║  only place these settings live.                         ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
