@@ -31,6 +31,7 @@
     <Script file="GUIWidgets\GUI-DispelTypeColorsCard.lua" />
     <Script file="GUIWidgets\GUI-Sidebar.lua" />
     <Script file="GUIWidgets\GUI-KESubTabs.lua" />
+    <Script file="GUIMain\GUI-TabbedContent.lua" />
 
     <!-- Main frame and pages -->
     <Script file="GUIMain\GUI-MainFrame.lua" />
