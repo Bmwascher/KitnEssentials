@@ -227,8 +227,10 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
     -- Card 7: Map Scale
     ----------------------------------------------------------------
     if mapDB then
+        -- Not registered with `manager` — MapScale has its own independent
+        -- enable lifecycle (see the module-vs-Automation note above), so this
+        -- card must not grey out when "Apply CVars on Login" is off.
         local card7 = GUIFrame:CreateCard(scrollChild, "Map Scale", yOffset)
-        manager:Register(card7, "all")
 
         local function ApplyMapScale()
             local MS = GetMapScaleModule()
@@ -248,7 +250,6 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
         })
         row7a:AddWidget(mapScaleCheck, 1)
         card7:AddRow(row7a, Theme.rowHeight)
-        manager:Register(mapScaleCheck, "all")
 
         local row7b = GUIFrame:CreateRow(card7.content, Theme.rowHeightLast)
         local mapScaleSlider = GUIFrame:CreateSlider(row7b, "Scale", {
@@ -261,7 +262,6 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
         })
         row7b:AddWidget(mapScaleSlider, 1)
         card7:AddRow(row7b, Theme.rowHeightLast, 0)
-        manager:Register(mapScaleSlider, "all")
 
         yOffset = card7:GetNextOffset()
     end

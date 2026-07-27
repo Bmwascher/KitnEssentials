@@ -68,6 +68,20 @@ function MS:RevertScale()
 end
 
 ---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
+-- Refreshes the db reference and re-applies. Called by the central
+-- PLAYER_ENTERING_WORLD loop (Core/Main.lua) and after a profile switch
+-- (Core/ProfileManager.lua) so a profile with a different Scale takes effect
+-- immediately instead of waiting for the next WorldMapMinimized event.
+function MS:ApplySettings()
+    self:UpdateDB()
+    if not self.db then return end
+
+    self:ApplyScale()
+end
+
+---------------------------------------------------------------------------------
 -- Lifecycle
 ---------------------------------------------------------------------------------
 function MS:OnInitialize()
@@ -81,12 +95,12 @@ function MS:OnEnable()
     -- Blizzard_WorldMap / Blizzard_MapCanvas may not be loaded at login.
     self:RegisterEvent("ADDON_LOADED", function(_, addonName)
         if addonName == "Blizzard_WorldMap" or addonName == "Blizzard_MapCanvas" then
-            self:ApplyScale()
+            self:ApplySettings()
         end
     end)
 
     C_Timer.After(0, function()
-        self:ApplyScale()
+        self:ApplySettings()
     end)
 end
 
