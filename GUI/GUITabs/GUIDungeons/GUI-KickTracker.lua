@@ -77,14 +77,14 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
         KE:Print("Interrupt Tracker: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, 50)
+    local noteRow = GUIFrame:CreateRow(card1.content, 65)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " Teammates with kick-sync addons get live bars from the start; other kicks show as temporary class-colored records.\n" ..
         KE:ColorTextByTheme("-") .. " Only active in 5-player dungeons.",
-        50, "hide")
+        65, "hide")
     noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, 50, 0)
+    card1:AddRow(noteRow, 65, 0)
 
     yOffset = card1:GetNextOffset()
 

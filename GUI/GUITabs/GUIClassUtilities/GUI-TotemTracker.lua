@@ -57,27 +57,11 @@ GUIFrame:RegisterContent("TotemTracker", function(scrollChild, yOffset)
     -- Lone header bar: a disabled module shows its switch and nothing else.
     if db.Enabled == false then return yOffset end
 
-    local cardPreview = GUIFrame:CreateCard(scrollChild, "Preview", yOffset)
-    local rowPreview = GUIFrame:CreateRow(cardPreview.content, Theme.rowHeightLast)
-    local previewBtn
-    previewBtn = GUIFrame:CreateButton(rowPreview, "Show Preview", {
-        height = 30,
-        callback = function()
-            local TT = GetModule()
-            if TT and TT.TogglePreview then
-                local isActive = TT:TogglePreview()
-                previewBtn:SetLabel(isActive and "Hide Preview" or "Show Preview")
-            end
-        end,
-    })
-    rowPreview:AddWidget(previewBtn, 1)
-    local TT = GetModule()
-    if TT and TT.IsPreviewActive and TT:IsPreviewActive() then
-        previewBtn:SetLabel("Hide Preview")
-    end
-    cardPreview:AddRow(rowPreview, Theme.rowHeightLast, 0)
-
-    yOffset = cardPreview:GetNextOffset()
+    -- No manual preview card: the tracker previews itself whenever this page is
+    -- open (SECTION_PREVIEW_MODULES' class_utilities_section entry in
+    -- Core/Globals.lua), and positioning is handled by /kes edit via the
+    -- EditMode element the module registers in OnEnable. A Show Preview button
+    -- would only duplicate both.
 
     ----------------------------------------------------------------
     -- Card 2: Destroy All Totems (Macro)

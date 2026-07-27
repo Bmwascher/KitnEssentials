@@ -413,8 +413,20 @@ function GUIFrame:CreateCard(parent, title, yOffset, width)
         self:UpdateHeight()
     end
 
+    -- Header-only collapse: a card with no body rows or labels — a module whose
+    -- only control is its header toggle, or any module rendered as a lone header
+    -- bar while disabled — is just its title bar. Without this branch the card
+    -- still reserves paddingMedium*2 of empty body beneath the header, which
+    -- reads as a stray gap between it and the next card.
     function card:UpdateHeight()
-        local totalHeight = self.headerHeight + self.currentY + T.paddingMedium * 2
+        local totalHeight
+        if self.currentY == 0 and self.headerHeight > 0 then
+            totalHeight = self.headerHeight + T.borderSize * 2
+            self.content:Hide()
+        else
+            totalHeight = self.headerHeight + self.currentY + T.paddingMedium * 2
+            self.content:Show()
+        end
         self:SetHeight(totalHeight)
         self.contentHeight = totalHeight
     end
@@ -488,7 +500,9 @@ function GUIFrame:CreateCard(parent, title, yOffset, width)
         self.currentY = 0
         self.contentHeight = 0
         self.content:SetHeight(1)
-        self:SetHeight(self.headerHeight + T.paddingMedium * 2)
+        -- One source of truth for card height; a reset card has no rows, so this
+        -- resolves to the header-only collapse above.
+        self:UpdateHeight()
     end
 
     card:UpdateHeight()
