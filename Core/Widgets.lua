@@ -101,6 +101,8 @@ local POPUP_WIDTH = 360
 local POPUP_HEIGHT = 120
 local BUTTON_WIDTH = 100
 local BUTTON_HEIGHT = 26
+-- Breathing room each side of a label that outgrows BUTTON_WIDTH.
+local BUTTON_TEXT_PADDING = 24
 
 -- Re-applies theme colors, edge size, and label to a themed button. Split
 -- from CreateThemedButton so the singleton prompt can re-theme its
@@ -129,6 +131,16 @@ local function ThemeButton(btn, Theme, labelText, isPrimary)
     btn.label:SetText(labelText)
     btn.label:SetTextColor(textColor[1], textColor[2], textColor[3], 1)
     btn.label:SetShadowColor(0, 0, 0, 0)
+
+    -- GROW-ONLY: the label is a centered FontString with no width limit, so a
+    -- label wider than BUTTON_WIDTH spilled equally past both edges and drew
+    -- straight over the neighbouring button (the two sit 8px apart around the
+    -- container's center). Every prior caller used short labels -- "Reset",
+    -- "Reload Now" -- which is why this only surfaced once a prompt put a
+    -- variable-length addon name on a button. Widening only when the text
+    -- demands it leaves every existing prompt pixel-identical.
+    local textWidth = btn.label:GetStringWidth() or 0
+    btn:SetWidth(math.max(BUTTON_WIDTH, textWidth + BUTTON_TEXT_PADDING))
 end
 
 local function CreateThemedButton(parent, Theme, labelText, isPrimary)
@@ -621,6 +633,17 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     if dialog.buttonContainer and showButtons then
         ThemeButton(dialog.acceptBtn, Theme, acceptText or "Accept", true)
         ThemeButton(dialog.cancelBtn, Theme, cancelText or "Cancel", false)
+
+        -- ThemeButton grows a button to fit its label, so a long label pair can
+        -- now outgrow the dialog itself. Widen to fit: the two buttons, the 8px
+        -- gap between them, and the container's 12px inset each side. Grow-only
+        -- against POPUP_WIDTH, so short-label prompts keep their exact size.
+        local pairWidth = dialog.acceptBtn:GetWidth() + dialog.cancelBtn:GetWidth() + 8 + 24
+        dialog:SetWidth(math.max(POPUP_WIDTH, pairWidth))
+    else
+        -- The dialog is a singleton: without this, a button-less prompt would
+        -- inherit the width of whatever wide-labelled prompt ran before it.
+        dialog:SetWidth(POPUP_WIDTH)
     end
 
     ------------------------------------------------------------------
