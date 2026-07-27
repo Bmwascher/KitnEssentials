@@ -122,3 +122,170 @@ describe("Core/Conflicts.lua decision layer", function()
         end)
     end)
 end)
+
+describe("Core/Conflicts.lua prompt queue", function()
+    local KE, prompts, disabled, printed
+
+    -- Loads the module with SkinTooltips enabled and the named addons loaded,
+    -- then fires the login event. _wow_mock's C_Timer.After runs callbacks
+    -- immediately and the fake RunAfterCombat runs its closure inline, so the
+    -- whole delayed scan completes synchronously.
+    local function login(loadedNames)
+        KE, prompts, disabled, printed = L.loadConflicts()
+        KE.db.profile.Skinning = { Tooltips = { Enabled = true } }
+        local loaded = {}
+        for _, name in ipairs(loadedNames or {}) do loaded[name] = true end
+        _G.C_AddOns.IsAddOnLoaded = function(name) return loaded[name] == true end
+        _G.frames[1]:Fire("PLAYER_ENTERING_WORLD")
+    end
+
+    it("raises no prompt when nothing conflicts", function()
+        login({})
+        assert.equals(0, #prompts)
+    end)
+
+    it("raises one conflict prompt naming both owners", function()
+        login({ "TipTac" })
+        assert.equals(1, #prompts)
+        assert.equals("Tooltip Conflict", prompts[1].title)
+        assert.equals("|cff00ff00Use KitnEssentials|r", prompts[1].acceptText)
+        assert.equals("Use TipTac", prompts[1].cancelText)
+    end)
+
+    it("shows the friendly name rather than the folder name", function()
+        login({ "EllesmereUIBlizzardSkin" })
+        assert.equals("Use EllesmereUI BlizzUI Enhanced", prompts[1].cancelText)
+    end)
+
+    it("disables the rival addon when the user picks KitnEssentials", function()
+        login({ "TipTac" })
+        prompts[1].onAccept()
+        assert.same({ "TipTac" }, disabled)
+    end)
+
+    -- The mitigation for the accepted dismissal risk: Escape reaches onCancel,
+    -- so every choice must announce itself in chat.
+    it("announces each choice in chat", function()
+        login({ "TipTac" })
+        prompts[1].onAccept()
+        assert.equals(1, #printed)
+        assert.is_truthy(printed[1]:find("TipTac", 1, true))
+
+        login({ "TipTac" })
+        prompts[1].onCancel()
+        assert.equals(1, #printed)
+        assert.is_truthy(printed[1]:find("Tooltip", 1, true))
+    end)
+
+    it("disables the KE module when the user picks the rival", function()
+        login({ "TipTac" })
+        prompts[1].onCancel()
+        assert.is_false(KE.db.profile.Skinning.Tooltips.Enabled)
+        assert.same({}, disabled)
+    end)
+
+    it("follows a single answered conflict with one reload prompt", function()
+        login({ "TipTac" })
+        prompts[1].onAccept()
+        assert.equals(2, #prompts)
+        assert.is_true(prompts[2].reload)
+    end)
+
+    -- Regression guard for deviation 4. The reference fires a reload prompt
+    -- per choice and never sets pendingReload, so with KE's singleton dialog
+    -- the first reload prompt would be replaced by the second conflict prompt
+    -- before it could be clicked.
+    it("shows both conflicts first, then exactly one reload prompt", function()
+        login({ "TipTac", "TacoTip" })
+        assert.equals(1, #prompts)
+        assert.equals("Use TipTac", prompts[1].cancelText)
+
+        prompts[1].onAccept()
+        assert.equals(2, #prompts)
+        assert.is_nil(prompts[2].reload)
+        assert.equals("Use TacoTip", prompts[2].cancelText)
+
+        prompts[2].onAccept()
+        assert.equals(3, #prompts)
+        assert.is_true(prompts[3].reload)
+        assert.same({ "TipTac", "TacoTip" }, disabled)
+    end)
+
+    it("self-silences on a rescan once the module is off", function()
+        login({ "TipTac" })
+        prompts[1].onCancel()
+        local answered = #prompts
+        KE:ScanAddonConflicts()
+        assert.equals(answered, #prompts)
+    end)
+
+    -- Regression guard for deviation 8. DisableAddOn does not unload the rival,
+    -- so IsAddOnLoaded still reports it until the reload; without the
+    -- enable-state check this rescan would re-raise the conflict the user just
+    -- answered. There is no "already answered" set -- do not add one.
+    it("self-silences on a rescan after the rival was disabled", function()
+        login({ "TipTac" })
+        prompts[1].onAccept()
+        local answered = #prompts
+        KE:ScanAddonConflicts()
+        assert.equals(answered, #prompts)
+    end)
+
+    -- Regression guard for deviation 9. Draining the queue is what makes the
+    -- duplicate observable: a rescan that wrongly appends leaves #prompts at 1
+    -- either way, because the show guard still withholds it. The extra copies
+    -- only surface once the open prompt is answered.
+    it("ignores a rescan while a prompt is still open", function()
+        login({ "TipTac", "TacoTip" })
+        assert.equals(1, #prompts)
+        KE:ScanAddonConflicts()
+        prompts[1].onAccept()
+        prompts[2].onAccept()
+        assert.equals(3, #prompts)
+        assert.is_true(prompts[3].reload)
+    end)
+
+    -- An unrelated KE:CreatePrompt replaces the singleton and drops our
+    -- callbacks, so nothing would ever clear promptActive. Once no prompt is
+    -- on screen the next scan must reclaim the queue instead of stalling --
+    -- and must DISCARD the stranded tail, or the rebuild queues it twice.
+    -- Two rivals are required: with one, the queue is already empty and a
+    -- missing wipe cannot show.
+    it("recovers a queue stranded by an unrelated prompt", function()
+        login({ "TipTac", "TacoTip" })
+        assert.equals(1, #prompts)      -- TipTac showing, TacoTip still queued
+        KE.activePrompt = nil           -- the foreign prompt opened, then closed
+        KE:ScanAddonConflicts()
+        assert.equals(2, #prompts)
+        assert.equals("Use TipTac", prompts[2].cancelText)
+        prompts[2].onAccept()
+        assert.equals(3, #prompts)
+        assert.equals("Use TacoTip", prompts[3].cancelText)
+        prompts[3].onAccept()
+        assert.equals(4, #prompts)
+        assert.is_true(prompts[4].reload)
+    end)
+
+    -- Regression guard for deviation 8's statelessness half. Nothing records
+    -- "already answered", so turning the rival back on must bring the prompt
+    -- back without a relog.
+    it("re-arms once the rival is enabled again", function()
+        login({ "TipTac" })
+        prompts[1].onAccept()
+        local answered = #prompts
+        KE:ScanAddonConflicts()
+        assert.equals(answered, #prompts)
+
+        _G.C_AddOns.GetAddOnEnableState = function() return 2 end
+        KE:ScanAddonConflicts()
+        assert.equals(answered + 1, #prompts)
+        assert.equals("Use TipTac", prompts[answered + 1].cancelText)
+    end)
+
+    it("raises nothing when the DB is not ready", function()
+        KE, prompts = L.loadConflicts()
+        KE.db = nil
+        KE:ScanAddonConflicts()
+        assert.equals(0, #prompts)
+    end)
+end)

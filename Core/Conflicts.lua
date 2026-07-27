@@ -149,3 +149,125 @@ function KE:GetModuleConflict(moduleName, env)
 
     return nil
 end
+
+---------------------------------------------------------------------------------
+-- Prompt queue
+---------------------------------------------------------------------------------
+
+-- Folder names read badly in a prompt; show what the user calls them.
+local ADDON_LABELS = {
+    ["EllesmereUIBlizzardSkin"] = "EllesmereUI BlizzUI Enhanced",
+}
+
+local promptQueue = {}
+local promptActive = false
+-- ONE reload prompt after every conflict is answered, never one per choice.
+-- KE:CreatePrompt is a singleton that hides the active dialog
+-- (Core/Widgets.lua:271-273), so a per-choice reload prompt would be replaced
+-- by the next conflict prompt before it could be clicked. The reference
+-- declares this flag but never sets it (v28.1 Core/Conflicts.lua:56), so its
+-- own single-reload comment describes behaviour its code does not have.
+local pendingReload = false
+
+-- Recursive: the accept and cancel closures call it to advance the queue.
+-- `local function` puts the name in scope inside its own body, so no forward
+-- declaration is needed.
+local function ShowNextPrompt()
+    local item = table.remove(promptQueue, 1)
+    if not item then
+        promptActive = false
+        if pendingReload then
+            pendingReload = false
+            KE:CreateReloadPrompt("Addon conflicts resolved - reload to apply.")
+        end
+        return
+    end
+    promptActive = true
+
+    local friendly = ADDON_LABELS[item.source] or item.source
+
+    KE:CreatePrompt(
+        item.label .. " Conflict",
+        friendly .. " and the KitnEssentials " .. item.label ..
+            " module are both enabled - running both will cause visual and" ..
+            " functional conflicts.\n\nWhich would you like to use?",
+        false, nil, false, nil, nil, nil, nil,
+        function()
+            if C_AddOns and C_AddOns.DisableAddOn then
+                C_AddOns.DisableAddOn(item.source)
+            end
+            pendingReload = true
+            KE:Print(friendly .. " disabled - reload to apply.")
+            ShowNextPrompt()
+        end,
+        -- Escape and the close button reach THIS callback too
+        -- (Core/Widgets.lua:194-196, :238) -- an accepted risk, recorded in the
+        -- Global Constraints. The chat line is the mitigation: an accidental
+        -- dismissal announces what it did instead of changing state silently.
+        function()
+            local moduleDB = ResolveDB(KE.db and KE.db.profile, item.dbPath)
+            if moduleDB then moduleDB.Enabled = false end
+            pendingReload = true
+            KE:Print("KitnEssentials " .. item.label .. " module disabled - reload to apply.")
+            ShowNextPrompt()
+        end,
+        -- Green marks the recommended choice at a glance; the label is a
+        -- FontString so the escape renders. Both buttons read "Use X" because
+        -- the choice is symmetric -- "Keep" implied the other option was the
+        -- destructive one.
+        "|cff00ff00Use KitnEssentials|r",
+        "Use " .. friendly
+    )
+end
+
+---------------------------------------------------------------------------------
+-- Scanner
+---------------------------------------------------------------------------------
+
+--- Rescans and raises any outstanding conflict prompts. Public so
+--- `/kes conflicts` can retest a fix without a relog.
+function KE:ScanAddonConflicts()
+    -- Stall recovery: our callbacks are the only thing that clears
+    -- promptActive, and an unrelated KE:CreatePrompt replaces the singleton
+    -- and drops them (Core/Widgets.lua:271-273). If no prompt is on screen at
+    -- all, ours died unanswered -- reclaim rather than stall forever.
+    if promptActive and not KE.activePrompt then
+        promptActive = false
+        -- Drop the stranded tail too. Whatever survived belongs to a session
+        -- whose callbacks are gone, and the rebuild below re-derives every
+        -- conflict that is still live -- keeping it would queue each survivor
+        -- twice.
+        wipe(promptQueue)
+    end
+
+    -- A rescan while a prompt is open would append a second copy of a queue
+    -- the open session already covers.
+    if promptActive then return end
+
+    local env = LiveEnv()
+    if not env then return end
+
+    local queue = self:BuildConflictQueue(env)
+    for _, item in ipairs(queue) do
+        promptQueue[#promptQueue + 1] = item
+    end
+
+    if #promptQueue > 0 then
+        ShowNextPrompt()
+    end
+end
+
+local scanner = CreateFrame("Frame")
+scanner:RegisterEvent("PLAYER_ENTERING_WORLD")
+scanner:SetScript("OnEvent", function(self)
+    self:UnregisterAllEvents()
+    -- Delayed so the login rush settles first. The reference tuned 5s down to
+    -- 2s: longer read as a hang.
+    C_Timer.After(2, function()
+        -- RunAfterCombat defers to PLAYER_REGEN_ENABLED when in combat, so a
+        -- mid-pull login never gets a prompt over the fight.
+        KE:RunAfterCombat(function()
+            KE:ScanAddonConflicts()
+        end)
+    end)
+end)
