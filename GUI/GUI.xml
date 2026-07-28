@@ -115,6 +115,7 @@
     <Script file="GUITabs\GUISkinning\GUI-BlizzardMessages.lua" />
     <Script file="GUITabs\GUISkinning\GUI-Battlenet.lua" />
     <Script file="GUITabs\GUISkinning\GUI-Chat.lua" />
+    <Script file="GUITabs\GUISkinning\GUI-BlizzardFrames.lua" />
 
     <!-- Optimize tab -->
     <Script file="GUITabs\GUIQoL\GUI-Optimize.lua" />
