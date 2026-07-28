@@ -348,4 +348,33 @@ function L.loadChatMessageHandler(overrides)
     return helpers.loadModule("Modules/Skinning/ChatMessageHandler.lua", KE)
 end
 
+-- Modules/Skinning/SkinAPI.lua. Creates frames at file scope (the hidden
+-- parking frame and the edge refresher), so CreateFrame must exist before
+-- the load. GetThemeColor is seeded rather than loading Core/AddonTheme.lua,
+-- which would drag in the whole profile stack for two colour lookups.
+local SKINAPI_THEME = {
+    accent      = { 1.0, 0.0, 0.549, 1 },
+    accentHover = { 1.0, 0.0, 0.549, 0.25 },
+}
+
+function L.loadSkinAPI(overrides)
+    installMock(overrides, { C_Timer = inertTimer() })
+    helpers.installAddonShim()
+    _G.GetPhysicalScreenSize = function() return 2560, 1440 end
+    _G.UIParent = {
+        GetScale = function() return 1 end,
+        GetEffectiveScale = function() return 1 end,
+    }
+    _G.CreateFrame = function() return noopFrame() end
+    _G.hooksecurefunc = function() end
+    _G.SetCheckButtonIsRadio = nil
+    local KE = {
+        Print = function() end,
+        GetThemeColor = function(_, key) return SKINAPI_THEME[key] end,
+        db = { profile = { Skinning = { BlizzardFrames = {} } } },
+    }
+    helpers.loadModule("Core/Secret.lua", KE)
+    return helpers.loadModule("Modules/Skinning/SkinAPI.lua", KE)
+end
+
 return L

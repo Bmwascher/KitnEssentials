@@ -249,7 +249,7 @@ local function ColorizeBNSenders(msg)
 end
 
 local function SafeSetupTextureCoordinates(frame)
-    local width, height = CHAT:SafeSize(frame)
+    local width, height = KE.Skins.SafeSize(frame)
     if width and height and width > 0 and height > 0 then BackdropTemplateMixin.SetupTextureCoordinates(frame) end
 end
 
@@ -804,34 +804,10 @@ function CHAT:GetPanelAnchoredChat()
     end
 end
 
--- Secret-safe geometry reads (ported inline from the reference's skinning
--- API): a frame that came from Blizzard can return secret values from
--- GetRect/GetSize while a secret-value restriction is active, so callers
--- degrade to "skip the adjustment" rather than throwing.
-function CHAT:SafeRect(frame)
-    if not (frame and frame.GetRect) then return nil end
-
-    local l, b, w, h = frame:GetRect()
-    if not l then return nil end
-    if KE:IsSecretValue(l) or KE:IsSecretValue(b)
-        or KE:IsSecretValue(w) or KE:IsSecretValue(h) then
-        return nil
-    end
-    return l, b, w, h
-end
-
-function CHAT:SafeSize(frame)
-    if not (frame and frame.GetSize) then return nil end
-
-    local w, h = frame:GetSize()
-    if not w or KE:IsSecretValue(w) or KE:IsSecretValue(h) then return nil end
-    return w, h
-end
-
 function CHAT:FrameOverlapsPanel(frame)
     if not frame or not self.panel then return false end
 
-    local frameLeft, frameBottom, frameWidth, frameHeight = self:SafeRect(frame)
+    local frameLeft, frameBottom, frameWidth, frameHeight = KE.Skins.SafeRect(frame)
     local panelLeft, panelBottom, panelWidth, panelHeight = self.panel:GetRect()
 
     if not frameLeft or not panelLeft then return false end
