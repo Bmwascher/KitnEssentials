@@ -455,7 +455,7 @@ function ProfileManager:RefreshAllModules()
             and (not wantEnabled) ~= (not wasEnabled)
         local skinDeferred = false
         if stateMismatch then
-            if name:find("^Skin") then
+            if name:find("^Skin") or module.keDeferToReload then
                 skinDeferred = true
                 if not skipSkinning then skinningChanged = true end
             elseif wantEnabled then

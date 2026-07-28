@@ -4,4 +4,5 @@
     <Script file="Tooltips.lua" />
     <Script file="BlizzardMessages.lua" />
     <Script file="Battlenet.lua" />
+    <Script file="Chat.lua" />
 </Ui>
