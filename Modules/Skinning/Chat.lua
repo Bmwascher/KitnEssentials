@@ -309,11 +309,18 @@ function CHAT:RegisterWhisperSounds()
     if self.whisperSoundsRegistered then return end
     self.whisperSoundsRegistered = true
 
+    -- Read the table fresh on every fire rather than closing over `ws`.
+    -- Unchecking the GUI box only sets Enabled = false and calls this
+    -- function again, which early-returns without unregistering -- so the
+    -- check has to happen here or the sound keeps playing. Reading through
+    -- self.db also survives a profile switch, which a captured `ws` would not.
     self:RegisterEvent("CHAT_MSG_WHISPER", function()
-        self:PlayWhisperSound(ws.WhisperSound)
+        local live = self.db and self.db.WhisperSounds
+        if live and live.Enabled then self:PlayWhisperSound(live.WhisperSound) end
     end)
     self:RegisterEvent("CHAT_MSG_BN_WHISPER", function()
-        self:PlayWhisperSound(ws.BNetWhisperSound)
+        local live = self.db and self.db.WhisperSounds
+        if live and live.Enabled then self:PlayWhisperSound(live.BNetWhisperSound) end
     end)
 end
 
@@ -2670,6 +2677,14 @@ function CHAT:RestoreChat(chat)
 
         chat.OldAddMessage, chat.keOldOnEvent, chat.keOldOnMouseWheel = nil, nil, nil
         if tab then tab.keOldOnClick = nil end
+
+        -- StyleEditbox early-returns on editbox.styled, but OnDisable's
+        -- UnhookAll has already removed the hooks that flag stands for. Left
+        -- set, a disable then re-enable in the same session silently loses
+        -- focus-shows-panel, Up/Down history recall and the chat-type border
+        -- for the rest of the session.
+        if chat.editBox then chat.editBox.styled = nil end
+
         chat.keStyled = nil
     end
 
