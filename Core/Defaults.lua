@@ -1541,15 +1541,25 @@ local Defaults = {
                 TimestampColor = { r = 0.6, g = 0.6, b = 0.6 },
                 Backdrop = {
                     Enabled = true,
-                    Color = { 0, 0, 0, 0.8 },
+                    -- #080808 @ 80% -- matches the Damage Meter backdrop
+                    -- (Modules/DamageMeter/Core.lua:194) so the two panels
+                    -- read as one family on screen.
+                    Color = { 0.031, 0.031, 0.031, 0.8 },
                     BorderColor = { 0, 0, 0, 1 },
                 },
                 EditBox = {
-                    BackdropColor = { 0, 0, 0, 0.8 },
+                    -- Opaque on purpose: at 0.8 the tab strip behind the edit
+                    -- box bleeds through its text (ABOVE_CHAT_INSIDE overlaps
+                    -- the tab bar).
+                    BackdropColor = { 0.031, 0.031, 0.031, 1 },
                     BorderColor = { 0, 0, 0, 1 },
                 },
                 TabBackdrop = {
-                    Enabled = true,
+                    -- Off by default so the tab strip blends into the panel.
+                    -- When on, this frame draws its own solid 1px border over
+                    -- the panel backdrop, which reads as a seam across the
+                    -- top of the chat window.
+                    Enabled = false,
                     Color = { 0, 0, 0, 0.2 },
                     BorderColor = { 0, 0, 0, 1 },
                 },

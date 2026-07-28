@@ -358,7 +358,7 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
 
     local row7b = GUIFrame:CreateRow(card7.content, Theme.rowHeight)
     local panelColorPicker = GUIFrame:CreateColorPicker(row7b, "Panel Color", {
-        color = db.Backdrop.Color or { 0, 0, 0, 0.8 },
+        color = db.Backdrop.Color or { 0.031, 0.031, 0.031, 0.8 },
         callback = function(r, g, b, a)
             db.Backdrop.Color = { r, g, b, a }
             ApplySettings()
@@ -384,7 +384,7 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     -- be applied then instantly overridden.
     local row7c = GUIFrame:CreateRow(card7.content, Theme.rowHeight)
     local editBoxColorPicker = GUIFrame:CreateColorPicker(row7c, "Edit Box Color", {
-        color = db.EditBox.BackdropColor or { 0, 0, 0, 0.8 },
+        color = db.EditBox.BackdropColor or { 0.031, 0.031, 0.031, 1 },
         callback = function(r, g, b, a)
             db.EditBox.BackdropColor = { r, g, b, a }
             ApplySettings()
