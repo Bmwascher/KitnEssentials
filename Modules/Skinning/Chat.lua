@@ -1984,7 +1984,7 @@ function CHAT:BuildCopyChatFrame()
 end
 
 function CHAT:CreateCopyButton(chat)
-    if chat.copyButton then return end
+    if chat.copyButton then chat.copyButton:Show(); return end
     if _G.IsCombatLog and _G.IsCombatLog(chat) then return end
 
     local id = chat:GetID()
@@ -2229,7 +2229,7 @@ function CHAT:PositionButtonFrame(chat)
         for i = 1, buttonFrame:GetNumPoints() do
             buttonFrame.keOldPoints[i] = { buttonFrame:GetPoint(i) }
         end
-        buttonFrame.keOldClipsChildren = buttonFrame:GetClipsChildren()
+        buttonFrame.keOldClipsChildren = buttonFrame:DoesClipChildren()
     end
 
     buttonFrame:ClearAllPoints()
