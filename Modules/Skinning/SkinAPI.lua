@@ -16,6 +16,7 @@ local ipairs = ipairs
 local math_max = math.max
 local CreateFrame = CreateFrame
 local unpack = unpack
+local hooksecurefunc = hooksecurefunc
 local GetPhysicalScreenSize = GetPhysicalScreenSize
 
 local function PixelBorder()
@@ -374,4 +375,327 @@ function S.WaitFor(check, run, maxFrames)
         end
     end
     _G.C_Timer.After(0, poll)
+end
+
+local CONTROL_BG = S.palette.control
+S.controlBg = CONTROL_BG
+
+local function clearButtonStates(button)
+    for _, getter in ipairs({ "GetNormalTexture", "GetPushedTexture", "GetDisabledTexture" }) do
+        if button[getter] then
+            local t = button[getter](button)
+            if t then
+                t:SetTexture(S.ClearTexture)
+                if t.SetAtlas then t:SetAtlas("") end
+            end
+        end
+    end
+end
+
+local HOVER_COLOR = S.palette.hover
+local HOVER_ALPHA = 0.15
+
+local HOVER_TEX = "Interface\\Buttons\\WHITE8x8"
+local function killRegisteredHighlight(btn)
+    local reg = btn.GetHighlightTexture and btn:GetHighlightTexture()
+    if reg then S.KillTexture(reg) end
+end
+local function armHover(button, anchor, l, t, r, b)
+    local d = S.data(button)
+    local hl = d.hover
+    if not hl then
+        hl = button:CreateTexture(nil, "HIGHLIGHT")
+        hl:SetTexture(HOVER_TEX)
+        hl:SetVertexColor(HOVER_COLOR[1], HOVER_COLOR[2], HOVER_COLOR[3])
+        hl:SetAlpha(HOVER_ALPHA)
+        d.hover = hl
+    end
+    if l == 1 and t == -1 and r == -1 and b == 1 and anchor and anchor.backdropInfo then
+        S.InsetToEdge(hl, anchor)
+    else
+        hl:ClearAllPoints()
+        hl:SetPoint("TOPLEFT", anchor, "TOPLEFT", l, t)
+        hl:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", r, b)
+    end
+    if not d.hoverArmed then
+        d.hoverArmed = true
+        killRegisteredHighlight(button)
+        hooksecurefunc(button, "SetHighlightTexture", killRegisteredHighlight)
+        if button.SetHighlightAtlas then
+            hooksecurefunc(button, "SetHighlightAtlas", killRegisteredHighlight)
+        end
+    end
+end
+
+function S.Hover(button, anchor)
+    if not button or not button.SetHighlightTexture then return end
+    anchor = anchor or S.GetBackdrop(button) or button
+    armHover(button, anchor, 1, -1, -1, 1)
+end
+
+local killedTextures = setmetatable({}, { __mode = "k" })
+
+-- v4.0.0: regions exempt from all kill sweeps (KillTexture and every
+-- caller: KillAllTextures, S.Button child sweeps). For Blizzard-managed
+-- child art a skin must keep alive inside an otherwise-stripped control
+-- (e.g. barbershop dropdown color swatches, which Blizzard re-atlases,
+-- vertex-colors and Show()s per selection).
+local protectedTextures = setmetatable({}, { __mode = "k" })
+
+function S.Protect(region)
+    if region then protectedTextures[region] = true end
+end
+
+function S.KillTexture(t)
+    -- v3.5.828 (flyout equip taint, THE root after seven rounds):
+    -- replacing methods (SetTexture/Show/... = NOOP) on Blizzard's
+    -- texture objects plants tainted FUNCTION values their secure
+    -- code CALLS -- every SetItemButton*/state-texture touch in a
+    -- display loop executed our NOOP and tainted everything written
+    -- after it (the combat flyout-equip ADDON_ACTION_BLOCKED).
+    -- Method surgery on Blizzard objects is BANNED alongside field
+    -- writes: kill by state, re-assert from our own passes when
+    -- Blizzard re-dresses. killedTextures (external, weak) lets
+    -- re-assertion stay cheap.
+    if not t then return end
+    if protectedTextures[t] then return end
+    -- v3.5.838: aligned with ElvUI's Kill (Toolkit.lua:430) -- their
+    -- one tool for "stay dead" regions: a single Show->Hide redirect,
+    -- not our old four-method NOOP. State-only (v828-v837) was the
+    -- other extreme and let Blizzard re-dress everything (BigWigs
+    -- tiles, character art). This is their middle ground.
+    S.Kill(t)
+    killedTextures[t] = true
+end
+
+local function zeroArrowStates(button)
+
+    for _, key in ipairs({ "Icon", "Texture", "Overlay", "NormalTexture", "PushedTexture",
+                           "HighlightTexture", "DisabledTexture" }) do
+        S.KillTexture(button[key])
+    end
+    for _, getter in ipairs({ "GetNormalTexture", "GetPushedTexture",
+                              "GetHighlightTexture", "GetDisabledTexture" }) do
+        if button[getter] then
+            local t = button[getter](button)
+            if t and t ~= S.data(button).arrow then S.KillTexture(t) end
+        end
+    end
+end
+
+local ARROW_STATE_SETTERS = {
+    "SetNormalTexture", "SetNormalAtlas", "SetPushedTexture", "SetPushedAtlas",
+    "SetHighlightTexture", "SetHighlightAtlas", "SetDisabledTexture", "SetDisabledAtlas",
+}
+
+function S.KillAllTextures(frame, keep)
+    if not frame then return end
+
+    if not frame.GetRegions then
+        if frame.IsObjectType and frame:IsObjectType("Texture") then S.KillTexture(frame) end
+        return
+    end
+    for _, r in ipairs({ frame:GetRegions() }) do
+        if r ~= keep and r.IsObjectType and r:IsObjectType("Texture") then
+            S.KillTexture(r)
+        end
+    end
+    for _, child in ipairs({ frame:GetChildren() }) do
+        for _, r in ipairs({ child:GetRegions() }) do
+            if r.IsObjectType and r:IsObjectType("Texture") then
+                S.KillTexture(r)
+            end
+        end
+    end
+end
+
+local function killAllButOurArrow(button)
+    local keep = S.data(button).arrow
+    for _, r in ipairs({ button:GetRegions() }) do
+        if r ~= keep and r.IsObjectType and r:IsObjectType("Texture") then
+            S.KillTexture(r)
+        end
+    end
+
+    for _, child in ipairs({ button:GetChildren() }) do
+        for _, r in ipairs({ child:GetRegions() }) do
+            if r.IsObjectType and r:IsObjectType("Texture") then
+                S.KillTexture(r)
+            end
+        end
+        if child.EnableMouse then child:EnableMouse(false) end
+    end
+end
+
+local function reKillArrowStates(button)
+    zeroArrowStates(button)
+    killAllButOurArrow(button)
+end
+
+-- v3.5.838: ElvUI's texture-clearing idiom, ported exactly
+-- (E.ClearTexture = 0 in their Core.lua:81; S:ClearNormalTexture and
+-- friends in Skins.lua:178). Two ideas we never copied:
+--   1. Clear state art by passing fileID 0 to the BUTTON's own setter.
+--      Never touch the texture object, never NOOP a method.
+--   2. Get permanence by HOOKING the setter and re-clearing through
+--      the official API. Self-terminating: re-setting to ClearTexture
+--      fails the ~= check, so no recursion.
+-- This is what our KillTexture was badly reinventing: pre-v828 with
+-- NOOP surgery (tainted the flyout display loop), post-v828 state-only
+-- (Blizzard re-dressed it -> the flash regressions). Every skin that
+-- calls S.ClearButtonArt inherits the correct behaviour from here.
+
+local function ClearNormal(btn, texture)
+    if texture ~= S.ClearTexture then btn:SetNormalTexture(S.ClearTexture) end
+end
+local function ClearPushed(btn, texture)
+    if texture ~= S.ClearTexture then btn:SetPushedTexture(S.ClearTexture) end
+end
+local function ClearDisabled(btn, texture)
+    if texture ~= S.ClearTexture then btn:SetDisabledTexture(S.ClearTexture) end
+end
+local function ClearHighlight(btn, texture)
+    if texture ~= S.ClearTexture then btn:SetHighlightTexture(S.ClearTexture) end
+end
+
+function S.ClearButtonArt(btn, keepHighlight)
+    if not btn then return end
+
+    if btn.SetNormalTexture then btn:SetNormalTexture(S.ClearTexture) end
+    if btn.SetPushedTexture then btn:SetPushedTexture(S.ClearTexture) end
+    if btn.SetDisabledTexture then btn:SetDisabledTexture(S.ClearTexture) end
+    if not keepHighlight and btn.SetHighlightTexture then
+        btn:SetHighlightTexture(S.ClearTexture)
+    end
+
+    local d = S.data(btn)
+    if d.artHooked then return end
+    d.artHooked = true
+    if btn.SetNormalTexture then hooksecurefunc(btn, "SetNormalTexture", ClearNormal) end
+    if btn.SetPushedTexture then hooksecurefunc(btn, "SetPushedTexture", ClearPushed) end
+    if btn.SetDisabledTexture then hooksecurefunc(btn, "SetDisabledTexture", ClearDisabled) end
+    if not keepHighlight and btn.SetHighlightTexture then
+        hooksecurefunc(btn, "SetHighlightTexture", ClearHighlight)
+    end
+end
+
+function S.Button(button, keepRegion)
+
+    if keepRegion == "killIcon" then
+        keepRegion = nil
+    elseif not keepRegion and button and button.Icon and button.Icon.IsObjectType
+        and button.Icon:IsObjectType("Texture") then
+        keepRegion = button.Icon
+    elseif not keepRegion and button and button.icon and button.icon.IsObjectType
+        and button.icon:IsObjectType("Texture") then
+
+        keepRegion = button.icon
+    end
+    if not button or S.data(button).skinned then return end
+
+    local keepAtlas = keepRegion and keepRegion.GetAtlas and keepRegion:GetAtlas()
+    local keepTex = keepRegion and keepRegion.GetTexture and keepRegion:GetTexture()
+    S.StripTextures(button)
+    clearButtonStates(button)
+
+    S.KillAllTextures(button, keepRegion)
+    if keepRegion then
+        if keepAtlas and keepRegion.SetAtlas then keepRegion:SetAtlas(keepAtlas)
+        elseif keepTex and keepRegion.SetTexture then keepRegion:SetTexture(keepTex) end
+    end
+
+    if button.SetPushedTextOffset then button:SetPushedTextOffset(0, 0) end
+    local aeBD = S.Backdrop(button)
+    if aeBD then aeBD:SetBackdropColor(CONTROL_BG[1], CONTROL_BG[2], CONTROL_BG[3], CONTROL_BG[4]) end
+
+    S.Hover(button, aeBD)
+    S.data(button).skinned = true
+end
+
+local CLOSE_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\KitnCustomCrossv3.png"
+local ARROW_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.tga"
+local ARROW_ROT = { down = 0, up = 3.14159, right = 1.5708, left = -1.5708 }
+local CLOSE_REST = S.palette.hover
+local ARROW_REST = { 0.85, 0.85, 0.85 }
+local CLOSE_HOVER = S.palette.brand
+
+local function closeOnEnter(btn)
+    local x = S.data(btn).closeX
+    if x then x:SetVertexColor(CLOSE_HOVER[1], CLOSE_HOVER[2], CLOSE_HOVER[3]) end
+end
+local function closeOnLeave(btn)
+    local x = S.data(btn).closeX
+    if x then x:SetVertexColor(CLOSE_REST[1], CLOSE_REST[2], CLOSE_REST[3]) end
+end
+
+function S.CloseButton(button, size)
+
+    if not button or S.data(button).skinned then return end
+    S.StripTextures(button)
+    if button.SetText then button:SetText("") end
+    if not S.data(button).closeX then
+        local x = button:CreateTexture(nil, "OVERLAY")
+        x:SetPoint("CENTER")
+        x:SetTexture(CLOSE_TEX)
+        x:SetSize(size or 13, size or 13)
+        x:SetVertexColor(CLOSE_REST[1], CLOSE_REST[2], CLOSE_REST[3])
+        S.data(button).closeX = x
+        button:HookScript("OnEnter", closeOnEnter)
+        button:HookScript("OnLeave", closeOnLeave)
+    end
+    S.data(button).skinned = true
+end
+
+local function arrowOnEnter(btn)
+    local a = S.data(btn).arrow
+    if a then a:SetVertexColor(CLOSE_HOVER[1], CLOSE_HOVER[2], CLOSE_HOVER[3]) end
+end
+local function arrowOnLeave(btn)
+    local a = S.data(btn).arrow
+    if a then a:SetVertexColor(ARROW_REST[1], ARROW_REST[2], ARROW_REST[3]) end
+end
+
+function S.ArrowTexture(tex, dir, size)
+    if not tex then return end
+    tex:SetTexture(ARROW_TEX)
+    tex:SetTexCoord(0, 1, 0, 1)
+    tex:SetRotation(ARROW_ROT[dir or "down"] or 0)
+    tex:SetVertexColor(ARROW_REST[1], ARROW_REST[2], ARROW_REST[3])
+    if size then
+        tex:SetSize(size, size)
+        tex:ClearAllPoints()
+        tex:SetPoint("CENTER")
+    end
+end
+
+function S.ArrowButton(button, dir, size)
+    if not button or S.data(button).skinned then return end
+    S.StripTextures(button)
+    zeroArrowStates(button)
+    if not S.data(button).armor then
+        for _, m in ipairs(ARROW_STATE_SETTERS) do
+            if type(button[m]) == "function" then
+                hooksecurefunc(button, m, reKillArrowStates)
+            end
+        end
+        button:HookScript("OnEnter", killAllButOurArrow)
+        button:HookScript("OnLeave", killAllButOurArrow)
+        button:HookScript("OnShow", killAllButOurArrow)
+        S.data(button).armor = true
+    end
+
+    if not S.data(button).arrow then
+        local a = button:CreateTexture(nil, "OVERLAY")
+        a:SetPoint("CENTER")
+        size = size or 15
+        a:SetSize(size, size)
+        a:SetTexture(ARROW_TEX)
+        a:SetRotation(ARROW_ROT[dir or "down"] or 0)
+        a:SetVertexColor(ARROW_REST[1], ARROW_REST[2], ARROW_REST[3])
+        S.data(button).arrow = a
+        button:HookScript("OnEnter", arrowOnEnter)
+        button:HookScript("OnLeave", arrowOnLeave)
+    end
+    killAllButOurArrow(button)
+    S.data(button).skinned = true
 end
