@@ -1846,16 +1846,16 @@ function CHAT:BuildCopyChatFrame()
     frame.title = title
 
     local closeBtn = CreateFrame("Button", nil, header)
-    closeBtn:SetSize(18, 18)
-    closeBtn:SetPoint("RIGHT", header, "RIGHT", -8, 0)
+    closeBtn:SetSize(22, 22)
+    closeBtn:SetPoint("RIGHT", header, "RIGHT", -6, 0)
 
     local closeTex = closeBtn:CreateTexture(nil, "ARTWORK")
-    closeTex:SetPoint("CENTER")
-    closeTex:SetSize(13, 13)
+    closeTex:SetAllPoints()
     closeTex:SetTexture("Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\KitnCustomCrossv3.png")
+    closeTex:SetRotation(math.rad(45))
     closeTex:SetVertexColor(0.851, 0.851, 0.851, 1)
     closeTex:SetTexelSnappingBias(0)
-    closeTex:SetSnapToPixelGrid(true)
+    closeTex:SetSnapToPixelGrid(false)
 
     closeBtn:SetScript("OnEnter", function()
         closeTex:SetVertexColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
