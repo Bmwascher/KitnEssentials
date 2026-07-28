@@ -1973,15 +1973,17 @@ function CHAT:BuildCopyChatFrame()
         editBox:SetFocus()
     end)
 
-    frame:SetScript("OnKeyDown", function(f, key)
-        if key == "ESCAPE" then
-            f:SetPropagateKeyboardInput(false)
-            f:Hide()
-        else
-            f:SetPropagateKeyboardInput(true)
-        end
-    end)
-    frame:EnableKeyboard(true)
+    -- No keyboard grab. This used EnableKeyboard(true) plus an OnKeyDown
+    -- calling SetPropagateKeyboardInput, which is PROTECTED IN COMBAT:
+    --
+    --   [ADDON_ACTION_BLOCKED] tried to call the protected function
+    --   'KE_CopyChatFrame:SetPropagateKeyboardInput()'
+    --
+    -- and because the frame was holding the keyboard, the blocked call
+    -- meant propagation was never restored -- keys stopped reaching the
+    -- game while the window was open. The frame is registered in
+    -- UISpecialFrames above, which is Blizzard's own Escape-to-close
+    -- mechanism and needs no keyboard grab at all.
 end
 
 function CHAT:CreateCopyButton(chat)
