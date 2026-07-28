@@ -1643,6 +1643,14 @@ local Defaults = {
                     YOffset = 0,
                 },
             },
+            BlizzardFrames = {
+                Enabled    = false,
+                FontOffset = 0,
+                -- Per-frame opt-out. A missing key means ON; only an
+                -- explicit false disables a skin. The registry's gate reads
+                -- Skins[key] ~= false, so the polarity matters.
+                Skins      = {},
+            },
         },
 
     },

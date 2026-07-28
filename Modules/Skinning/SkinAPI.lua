@@ -19,6 +19,7 @@ local unpack = unpack
 local hooksecurefunc = hooksecurefunc
 local GetPhysicalScreenSize = GetPhysicalScreenSize
 local pcall = pcall
+local C_AddOns = C_AddOns
 
 local function PixelBorder()
     local _, ph = GetPhysicalScreenSize()
@@ -1227,4 +1228,141 @@ function S.StepSlider(stepper)
         end
     end
     S.data(stepper).skinned = true
+end
+
+function S:IsActive()
+    if KE:ShouldNotLoadModule() then return false end
+    local db = KE.db and KE.db.profile and KE.db.profile.Skinning
+        and KE.db.profile.Skinning.BlizzardFrames
+    return db and db.Enabled == true
+end
+
+local addonSkins = {}
+local earlySkins = {}
+
+local function SkinEnabled(key)
+    if not key then return true end
+    local frames = KE.db and KE.db.profile and KE.db.profile.Skinning
+        and KE.db.profile.Skinning.BlizzardFrames
+    local skins = frames and frames.Skins
+    return not skins or skins[key] ~= false
+end
+
+function S:Register(addonName, fn, key)
+    local list = addonSkins[addonName]
+    if not list then list = {}; addonSkins[addonName] = list end
+    list[#list + 1] = { fn = fn, key = key }
+end
+
+function S:RegisterEarly(fn, key)
+    earlySkins[#earlySkins + 1] = { fn = fn, key = key }
+end
+
+S.skinStatus = {}
+S.skinIndex = {}
+
+local function runList(list)
+    if not list then return end
+    for _, entry in ipairs(list) do
+        if entry.key then S.skinIndex[entry.key] = entry end
+        if SkinEnabled(entry.key) then
+            local ok, err = pcall(entry.fn)
+            if entry.key then
+                S.skinStatus[entry.key] = ok and "ok" or ("ERROR: " .. tostring(err))
+            end
+            if not ok then
+
+                local tag = entry.key and ("[" .. entry.key .. "] ") or ""
+                KE:Print("|cffff0000KE SKIN ERROR (report this line):|r " .. tag .. tostring(err))
+            end
+        elseif entry.key then
+            S.skinStatus[entry.key] = "disabled"
+        end
+    end
+end
+
+-- Test seam: runList is file-local because nothing outside this file should
+-- dispatch a skin list, but its enable gate and error isolation are the two
+-- behaviours that keep one broken skin from taking the rest down.
+S._runList = runList
+
+function S.DebugVerify()
+    local n = 0
+    for key, status in pairs(S.skinStatus) do
+        n = n + 1
+        local color = status == "ok" and "|cff00ff00" or status == "disabled" and "|cff888888" or "|cffff0000"
+        print(("|cffFF008CKitn|r|cffffffffEssentials:|r %-24s %s%s|r"):format(key, color, status))
+    end
+    print(("|cffFF008CKitn|r|cffffffffEssentials:|r verify done (%d registered-and-dispatched; anything you expected but missing here = its addon never loaded or it was never registered)"):format(n))
+end
+
+function S.DebugRerun(key)
+    local entry = S.skinIndex[key]
+    if not entry then
+
+        local lk = tostring(key):lower()
+        for k, e in pairs(S.skinIndex) do
+            if k:lower() == lk then key, entry = k, e break end
+        end
+    end
+    if not entry then
+        print("|cffFF008CKitn|r|cffffffffEssentials:|r no dispatched skin named '" .. tostring(key) .. "' -- run /aesskin verify for the list")
+        return
+    end
+    local ok, err = pcall(entry.fn)
+    print("|cffFF008CKitn|r|cffffffffEssentials:|r rerun " .. key .. ": " .. (ok and "|cff00ff00completed|r -- if the frame just fixed itself, this skin needs on-show re-runs (report that!)" or ("|cffff0000ERROR:|r " .. tostring(err))))
+end
+
+local function anyPending()
+    for _ in pairs(addonSkins) do return true end -- luacheck: ignore 512
+    return false
+end
+
+local BF = KitnEssentials:NewModule("BlizzardFrames", "AceEvent-3.0")
+
+function BF:UpdateDB()
+    self.db = KE.db.profile.Skinning.BlizzardFrames
+end
+
+function BF:OnInitialize()
+    self:UpdateDB()
+    self:SetEnabledState(false)
+end
+
+function BF:RunForAddon(addonName)
+    local list = addonSkins[addonName]
+    if list then
+        runList(list)
+        addonSkins[addonName] = nil
+    end
+end
+
+function BF:OnEnable()
+    if not S:IsActive() then return end
+
+    -- The palette's accent comes from the theme, which needs KE.db. File
+    -- scope runs before that exists, so the placeholder set at parse time
+    -- is replaced here with the real accent.
+    S.RefreshPalette()
+
+    local bs = KE.db and KE.db.profile and KE.db.profile.Skinning
+        and KE.db.profile.Skinning.BlizzardFrames
+    S.fontOffset = (bs and tonumber(bs.FontOffset)) or 0
+
+    runList(earlySkins)
+
+    if C_AddOns and C_AddOns.IsAddOnLoaded then
+        for addonName in pairs(addonSkins) do
+            if C_AddOns.IsAddOnLoaded(addonName) then
+                self:RunForAddon(addonName)
+            end
+        end
+    end
+
+    if anyPending() then
+        self:RegisterEvent("ADDON_LOADED", function(_, name)
+            self:RunForAddon(name)
+            if not anyPending() then self:UnregisterEvent("ADDON_LOADED") end
+        end)
+    end
 end

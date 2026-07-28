@@ -279,3 +279,87 @@ describe("SkinAPI SetFont", function()
         assert.equals(12, applied[1].size)
     end)
 end)
+
+describe("SkinAPI skin registry", function()
+    local KE, S
+
+    before_each(function()
+        KE = L.loadSkinAPI()
+        S = KE.Skins
+        KE.ShouldNotLoadModule = function() return false end
+        KE.db.profile.Skinning.BlizzardFrames = { Enabled = true, Skins = {} }
+    end)
+
+    it("runs a skin whose key is absent from the Skins table", function()
+        local ran = false
+        S._runList({ { fn = function() ran = true end, key = "alpha" } })
+        assert.is_true(ran)
+        assert.equals("ok", S.skinStatus.alpha)
+    end)
+
+    it("skips a skin explicitly set to false and records it as disabled", function()
+        KE.db.profile.Skinning.BlizzardFrames.Skins.alpha = false
+        local ran = false
+        S._runList({ { fn = function() ran = true end, key = "alpha" } })
+        assert.is_false(ran)
+        assert.equals("disabled", S.skinStatus.alpha)
+    end)
+
+    it("treats an entry with no key as always enabled", function()
+        local ran = false
+        S._runList({ { fn = function() ran = true end } })
+        assert.is_true(ran)
+    end)
+
+    it("records a throwing skin as an error rather than propagating", function()
+        assert.has_no.errors(function()
+            S._runList({ { fn = function() error("boom") end, key = "alpha" } })
+        end)
+        assert.truthy(S.skinStatus.alpha:find("ERROR"))
+    end)
+
+    it("keeps running later skins after one throws", function()
+        local second = false
+        S._runList({
+            { fn = function() error("boom") end, key = "alpha" },
+            { fn = function() second = true end, key = "beta" },
+        })
+        assert.is_true(second)
+        assert.equals("ok", S.skinStatus.beta)
+    end)
+
+    it("indexes every entry that carries a key, enabled or not", function()
+        KE.db.profile.Skinning.BlizzardFrames.Skins.beta = false
+        S._runList({
+            { fn = function() end, key = "alpha" },
+            { fn = function() end, key = "beta" },
+        })
+        assert.truthy(S.skinIndex.alpha)
+        assert.truthy(S.skinIndex.beta)
+    end)
+
+    it("is inactive when the module is disabled", function()
+        KE.db.profile.Skinning.BlizzardFrames.Enabled = false
+        assert.is_false(S:IsActive() and true or false)
+    end)
+
+    it("is inactive when another addon owns Blizzard skinning", function()
+        KE.ShouldNotLoadModule = function() return true end
+        assert.is_false(S:IsActive())
+    end)
+
+    -- Regression for the load-on-demand trap: a plan draft registered the
+    -- GM chat skin early, which would have run it once before its addon
+    -- existed and then dropped it. This pins the queueing behaviour.
+    it("holds an addon-registered skin until that addon is announced", function()
+        local ran = 0
+        S:Register("Blizzard_GMChatUI", function() ran = ran + 1 end, "GMChat")
+        S._runList({})                  -- the early list: must not run it
+        assert.equals(0, ran)
+        local BF = _G.KitnEssentials:GetModule("BlizzardFrames")
+        BF:RunForAddon("Blizzard_GMChatUI")
+        assert.equals(1, ran)
+        BF:RunForAddon("Blizzard_GMChatUI")
+        assert.equals(1, ran)           -- drained, not re-run
+    end)
+end)
