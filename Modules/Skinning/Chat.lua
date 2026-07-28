@@ -118,16 +118,15 @@ function CHAT:ApplyBackdrop(backdrop)
     end
 end
 
-function CHAT:SetBackgroundVisible(visible)
-    local backdrop = self.panel and self.panel.backdrop
-    if not backdrop then return end
+function CHAT:SetBackgroundVisible(background, show)
+    if not background then return end
 
-    if visible then
-        backdrop.Show = nil
-        backdrop:Show()
+    if show then
+        background.Show = nil
+        background:Show()
     else
-        backdrop:Hide()
-        backdrop.Show = backdrop.Hide
+        background:Hide()
+        background.Show = background.Hide
     end
 end
 
