@@ -18,6 +18,7 @@ local CreateFrame = CreateFrame
 local unpack = unpack
 local hooksecurefunc = hooksecurefunc
 local GetPhysicalScreenSize = GetPhysicalScreenSize
+local pcall = pcall
 
 local function PixelBorder()
     local _, ph = GetPhysicalScreenSize()
@@ -377,6 +378,8 @@ function S.WaitFor(check, run, maxFrames)
     _G.C_Timer.After(0, poll)
 end
 
+local BRAND_HL = S.palette.brand
+
 local CONTROL_BG = S.palette.control
 S.controlBg = CONTROL_BG
 
@@ -698,4 +701,295 @@ function S.ArrowButton(button, dir, size)
     end
     killAllButOurArrow(button)
     S.data(button).skinned = true
+end
+
+function S.CheckRefresh(check)
+    if not check or not S.data(check).skinned then return end
+    S.ClearButtonArt(check)
+    local aeBD = S.GetBackdrop(check)
+    -- v3.5.835: NOOP surgery removed here too (ElvUI parity -- see
+    -- S.CheckBox). CheckRefresh IS the re-assert path; it re-runs from
+    -- the SetCheckedTexture hook, which is how ElvUI keeps its check
+    -- art through Blizzard's repaints.
+    local function flat(region)
+        if not region then return end
+        S.data(region).flat = true
+        region:SetAlpha(1)
+        region:SetTexture("Interface\\Buttons\\WHITE8x8")
+        region:SetVertexColor(BRAND_HL[1], BRAND_HL[2], BRAND_HL[3], S.palette.brandRestA)
+        region:ClearAllPoints()
+
+        region:SetPoint("TOPLEFT", aeBD or check, "TOPLEFT", 1, -1)
+        region:SetPoint("BOTTOMRIGHT", aeBD or check, "BOTTOMRIGHT", -1, 1)
+    end
+    if check.SetCheckedTexture and check.GetCheckedTexture and not check:GetCheckedTexture() then
+        check:SetCheckedTexture("Interface\\Buttons\\WHITE8x8")
+    end
+    local checked = check.GetCheckedTexture and check:GetCheckedTexture()
+    local disabledChecked = check.GetDisabledCheckedTexture and check:GetDisabledCheckedTexture()
+    if check.GetRegions then
+        for _, region in ipairs({ check:GetRegions() }) do
+            if region.IsObjectType and region:IsObjectType("Texture")
+                and region ~= checked and region ~= disabledChecked then
+                region:SetTexture("")
+            end
+        end
+    end
+    if check.GetChildren then
+        local ours = S.GetBackdrop(check)
+        for _, child in ipairs({ check:GetChildren() }) do
+            if child ~= ours and child.SetAlpha then
+                child:SetAlpha(0)
+            end
+        end
+    end
+    flat(checked)
+    flat(disabledChecked)
+end
+
+if _G.SetCheckButtonIsRadio then
+    hooksecurefunc("SetCheckButtonIsRadio", function(button)
+        S.CheckRefresh(button)
+    end)
+end
+
+function S.CheckBox(check)
+    if not check or S.data(check).skinned then return end
+    S.ClearButtonArt(check)
+
+    local aeBD = S.Backdrop(check, 4)
+    if aeBD then aeBD:SetBackdropColor(CONTROL_BG[1], CONTROL_BG[2], CONTROL_BG[3], CONTROL_BG[4]) end
+
+    -- v3.5.835: ElvUI parity. Their HandleCheckBox replaces the check
+    -- ASSET via the official setters and re-asserts through
+    -- hooksecurefunc(frame, "SetCheckedTexture", ...) -- it never owns
+    -- methods on the texture. Ours did both: asset swap AND
+    -- SetAlpha/SetAtlas/SetVertexColor = NOOP. The NOOPs are gone; the
+    -- methodArmor hooks below (which we already had) are the ElvUI
+    -- mechanism and are enough.
+    local function flatCheck(region)
+        S.data(region).flat = true
+
+        region:SetAlpha(1)
+        region:SetTexture("Interface\\Buttons\\WHITE8x8")
+
+        region:SetVertexColor(BRAND_HL[1], BRAND_HL[2], BRAND_HL[3], S.palette.brandRestA)
+        region:ClearAllPoints()
+
+        region:SetPoint("TOPLEFT", aeBD or check, "TOPLEFT", 1, -1)
+        region:SetPoint("BOTTOMRIGHT", aeBD or check, "BOTTOMRIGHT", -1, 1)
+    end
+
+    if check.SetCheckedTexture and check.GetCheckedTexture and not check:GetCheckedTexture() then
+        check:SetCheckedTexture("Interface\\Buttons\\WHITE8x8")
+    end
+    if check.SetDisabledCheckedTexture and check.GetDisabledCheckedTexture and not check:GetDisabledCheckedTexture() then
+        check:SetDisabledCheckedTexture("Interface\\Buttons\\WHITE8x8")
+    end
+    local checked = check.GetCheckedTexture and check:GetCheckedTexture()
+    local disabledChecked = check.GetDisabledCheckedTexture and check:GetDisabledCheckedTexture()
+
+    if not S.data(check).methodArmor then
+        S.data(check).methodArmor = true
+        if check.SetCheckedTexture then
+            hooksecurefunc(check, "SetCheckedTexture", function(c)
+                local t = c:GetCheckedTexture()
+                if not t then return end
+                if S.data(t).flat then
+
+                    t:SetTexture("Interface\\Buttons\\WHITE8x8")
+                else
+                    S.CheckRefresh(c)
+                end
+            end)
+        end
+        -- v3.5.838: our bespoke re-kill hooks replaced by the ported
+        -- ElvUI idiom -- ClearButtonArt (called at the top of
+        -- S.CheckBox) already installs their re-clear-on-set hooks.
+
+    end
+
+    if check.GetRegions then
+        for _, region in ipairs({ check:GetRegions() }) do
+            if region.IsObjectType and region:IsObjectType("Texture")
+                and region ~= checked and region ~= disabledChecked then
+                local atlas = region.GetAtlas and region:GetAtlas()
+                if atlas == "checkmark-minimal" then
+                    flatCheck(region)
+                else
+                    region:SetTexture("")
+                end
+            end
+        end
+    end
+
+    if check.GetChildren then
+        local ours = S.GetBackdrop(check)
+        for _, child in ipairs({ check:GetChildren() }) do
+            if child ~= ours and child.SetAlpha then
+                child:SetAlpha(0)
+            end
+        end
+    end
+
+    if checked then
+        flatCheck(checked)
+    end
+    if disabledChecked then
+        flatCheck(disabledChecked)
+    end
+    S.data(check).skinned = true
+end
+
+function S.EnsureCaretRoom(box)
+    if not box then return end
+    local eb = box
+    if box.EditBox and box.IsObjectType and not box:IsObjectType("EditBox") then
+        eb = box.EditBox
+    end
+    if not (eb and eb.IsObjectType and eb:IsObjectType("EditBox") and eb.GetTextInsets and eb.SetTextInsets) then return end
+    local l, r, t, b = eb:GetTextInsets()
+    if (l or 0) < 4 then eb:SetTextInsets(4, r or 0, t or 0, b or 0) end
+end
+
+-- v3.5.848: duplicate BLIZZARD_REGIONS removed -- the second copy
+-- silently shadowed the first and was missing the ScrollFrameBorder
+-- entries, so those never got stripped anywhere.
+function S.HideBlizzardRegions(frame)
+    if not frame then return end
+
+    local okName, name = pcall(frame.GetName, frame)
+    if not okName then name = nil end
+
+    for _, area in ipairs(BLIZZARD_REGIONS) do
+        -- Both are hidden rather than one or the other. Blizzard hardcodes
+        -- names inside virtual templates (AuctionHouse BidAmount is
+        -- instantiated twice), so the global resolves to whichever instance
+        -- loaded last -- on any other instance it hides the wrong frame's art
+        -- and leaves the visible one alone.
+        local own = frame[area]
+        if own and own.Hide then own:Hide() end
+
+        local global = name and _G[name .. area]
+        if global and global ~= own and global.Hide then global:Hide() end
+    end
+end
+
+-- Border pieces are not always reachable by name: MoneyFrameEditBoxTemplate's
+-- $parentMiddle carries a global name and no parentKey, and Blizzard reuses
+-- hardcoded names inside virtual templates, so that global can resolve to a
+-- different instance. Sweeping the box's own BACKGROUND textures reaches every
+-- piece without naming any of them. The coin icon and label sit on OVERLAY and
+-- are left alone.
+local function ClearInputBackground(editbox)
+    if not editbox.GetRegions then return end
+
+    for _, region in ipairs({ editbox:GetRegions() }) do
+        if region.IsObjectType and region:IsObjectType("Texture")
+            and region.GetDrawLayer and region:GetDrawLayer() == "BACKGROUND"
+            and region.Hide then
+            region:Hide()
+        end
+    end
+end
+
+function S.EditBox(editbox, keepFont)
+    if not editbox or S.data(editbox).skinned then return end
+
+    S.HideBlizzardRegions(editbox)
+    ClearInputBackground(editbox)
+    if editbox.NineSlice and editbox.NineSlice.SetAlpha then
+        editbox.NineSlice:SetAlpha(0)
+    end
+    local aeBD = S.Backdrop(editbox)
+    if aeBD then aeBD:SetBackdropColor(CONTROL_BG[1], CONTROL_BG[2], CONTROL_BG[3], CONTROL_BG[4]) end
+
+    if not keepFont then
+
+        S.SetFont(editbox, 12, "")
+        if editbox.Instructions then S.SetFont(editbox.Instructions, 12, "") end
+        S.EnsureCaretRoom(editbox)
+    end
+    S.data(editbox).skinned = true
+end
+
+function S.DropDown(dropdown, withCaret)
+    if not dropdown or S.data(dropdown).skinned then return end
+
+    S.ClearButtonArt(dropdown)
+    S.StripTextures(dropdown)
+    if dropdown.GetRegions then
+        for _, r in ipairs({ dropdown:GetRegions() }) do
+            if r.IsObjectType and r:IsObjectType("Texture") then S.KillTexture(r) end
+        end
+    end
+    local aeBD = S.Backdrop(dropdown)
+    if aeBD then aeBD:SetBackdropColor(CONTROL_BG[1], CONTROL_BG[2], CONTROL_BG[3], CONTROL_BG[4]) end
+
+    local arrow = dropdown.Arrow
+    if arrow and arrow.SetAlpha then arrow:SetAlpha(0) end
+
+    if withCaret ~= "noCaret" and dropdown.CreateTexture then
+        local c = dropdown:CreateTexture(nil, "OVERLAY")
+        c:SetTexture(ARROW_TEX)
+        c:SetSize(14, 14)
+        c:SetPoint("RIGHT", dropdown, "RIGHT", -4, 0)
+        c:SetVertexColor(ARROW_REST[1], ARROW_REST[2], ARROW_REST[3])
+        S.data(dropdown).caret = c
+    end
+    S.data(dropdown).skinned = true
+end
+
+S.FONT_FACE = "Expressway"
+
+local fontRegistry = setmetatable({}, { __mode = "k" })
+S.fontOffset = 0
+
+function S.SetFontOffset(offset)
+    -- Plan-introduced: an explicit offset call is authoritative. Without
+    -- this, the lazy database pull inside SetFont (below) would still fire
+    -- on the next call and clobber it back to the saved/default value.
+    S._offsetInit = true
+    offset = tonumber(offset) or 0
+    if offset == S.fontOffset then return end
+    S.fontOffset = offset
+    for fs, rec in pairs(fontRegistry) do
+        S.SetFont(fs, rec.size, rec.outline)
+    end
+end
+
+function S.SetFont(fontString, size, outline)
+    if not fontString or not fontString.SetFont then return end
+
+    if not S._offsetInit and KE.db and KE.db.profile then
+        S._offsetInit = true
+        local bs = KE.db.profile.Skinning.BlizzardFrames
+        S.fontOffset = (bs and tonumber(bs.FontOffset)) or 0
+    end
+    outline = outline or ""
+    local rec = fontRegistry[fontString]
+
+    if not size then
+        if rec then
+            size = rec.size
+        else
+            local _, cur = fontString:GetFont()
+            size = cur or 12
+        end
+    end
+    local d = S.data(fontString)
+    if d.fontSize == size and d.fontOutline == outline and d.fontOffset == S.fontOffset then return end
+    local eff = size + S.fontOffset
+    if eff < 8 then eff = 8 end
+    pcall(KE.ApplyFont, KE, fontString, S.FONT_FACE, eff, outline)
+
+    if fontString.SetShadowColor then pcall(fontString.SetShadowColor, fontString, 0, 0, 0, 0) end
+    d.fontSize = size
+    d.fontOutline = outline
+    d.fontOffset = S.fontOffset
+    if rec then
+        rec.size, rec.outline = size, outline
+    else
+        fontRegistry[fontString] = { size = size, outline = outline }
+    end
 end

@@ -180,3 +180,101 @@ describe("SkinAPI WaitFor", function()
         assert.equals(0, #timers)   -- stopped queueing
     end)
 end)
+
+describe("SkinAPI SetFont", function()
+    local KE, S, applied
+
+    local function fontString()
+        return {
+            SetFont = function() end,
+            GetFont = function() return "Fonts\\FRIZQT__.TTF", 12, "" end,
+            SetShadowColor = function() end,
+        }
+    end
+
+    before_each(function()
+        KE = L.loadSkinAPI()
+        S = KE.Skins
+        applied = {}
+        -- SetFont routes through KE:ApplyFont; record every call it makes.
+        KE.ApplyFont = function(_, fs, face, size, outline)
+            applied[#applied + 1] = { fs = fs, face = face, size = size, outline = outline }
+        end
+    end)
+
+    it("applies the font on first call", function()
+        local fs = fontString()
+        S.SetFont(fs, 12, "")
+        assert.equals(1, #applied)
+        assert.equals(12, applied[1].size)
+        assert.equals(S.FONT_FACE, applied[1].face)
+    end)
+
+    it("skips a repeat call with identical size, outline and offset", function()
+        local fs = fontString()
+        S.SetFont(fs, 12, "")
+        S.SetFont(fs, 12, "")
+        assert.equals(1, #applied)
+    end)
+
+    it("re-applies when the outline changes", function()
+        local fs = fontString()
+        S.SetFont(fs, 12, "")
+        S.SetFont(fs, 12, "OUTLINE")
+        assert.equals(2, #applied)
+    end)
+
+    it("re-applies every registered string when the offset moves", function()
+        local a, b = fontString(), fontString()
+        S.SetFont(a, 12, "")
+        S.SetFont(b, 14, "")
+        assert.equals(2, #applied)
+        S.SetFontOffset(2)
+        assert.equals(4, #applied)
+        -- The offset-change loop walks fontRegistry with pairs(), whose
+        -- iteration order over table keys is unspecified by Lua and not
+        -- something a correct S.SetFontOffset can control. Sort instead of
+        -- indexing a fixed slot so this doesn't hinge on hash-bucket luck.
+        local sizes = { applied[3].size, applied[4].size }
+        table.sort(sizes)
+        assert.same({ 14, 16 }, sizes)   -- a's and b's rec.size, each +2 offset
+    end)
+
+    it("adds the offset to the applied size", function()
+        local fs = fontString()
+        S.SetFontOffset(3)
+        S.SetFont(fs, 12, "")
+        assert.equals(15, applied[1].size)
+    end)
+
+    it("clamps the effective size to 8", function()
+        local fs = fontString()
+        S.SetFontOffset(-4)
+        S.SetFont(fs, 10, "")
+        assert.equals(8, applied[1].size)
+    end)
+
+    it("ignores a repeated offset set", function()
+        local fs = fontString()
+        S.SetFont(fs, 12, "")
+        S.SetFontOffset(0)
+        assert.equals(1, #applied)
+    end)
+
+    -- The lazy offset init is plan-introduced: the reference reads a
+    -- different db path (SkinningAPI.lua:2130-2134). Exercise the repointed
+    -- one so a wrong key surfaces here rather than in game.
+    it("picks the offset up from the database on first call", function()
+        KE.db.profile.Skinning.BlizzardFrames.FontOffset = 2
+        local fs = fontString()
+        S.SetFont(fs, 12, "")
+        assert.equals(14, applied[1].size)
+    end)
+
+    it("treats a missing database section as offset zero", function()
+        KE.db.profile.Skinning.BlizzardFrames = nil
+        local fs = fontString()
+        S.SetFont(fs, 12, "")
+        assert.equals(12, applied[1].size)
+    end)
+end)
