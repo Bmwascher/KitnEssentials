@@ -46,9 +46,25 @@ local GetRealmName = GetRealmName
 local GetPlayerInfoByGUID = GetPlayerInfoByGUID
 local GetServerTime = GetServerTime
 local PlaySound = PlaySound
+local PlaySoundFile = PlaySoundFile
 local GameTooltip = GameTooltip
 local RAID_CLASS_COLORS = RAID_CLASS_COLORS
+local STANDARD_TEXT_FONT = STANDARD_TEXT_FONT
+local tconcat = table.concat
+local math_max = math.max
+local math_min = math.min
+local IsInGuild = IsInGuild
+local IsInGroup = IsInGroup
+local IsInRaid = IsInRaid
+local GetNumGroupMembers = GetNumGroupMembers
+local UnitGroupRolesAssigned = UnitGroupRolesAssigned
+local UnitFullName = UnitFullName
+local UnitName = UnitName
+local UnitExists = UnitExists
+local UnitIsUnit = UnitIsUnit
+local Ambiguate = Ambiguate
 local _G = _G
+local Theme = KE.Theme
 
 -- Blizzard globals not on KE's read_globals allowlist -- read through _G.
 -- per family convention rather than growing .luacheckrc for this port.
@@ -65,6 +81,8 @@ local PADDING = 5
 local H_PADDING = 5
 local TAB_HEIGHT = 22
 local GUID_CACHE_MAX = 500
+local COPY_FRAME_WIDTH = 700
+local COPY_FRAME_HEIGHT = 300
 
 local IGNORE_FRAMES = { [2] = "CombatLog", [3] = "Voice", }
 local TAB_TEXTURES = { "", "Selected", "Active", "Highlight" }
@@ -261,19 +279,156 @@ function CHAT:UpdateDB()
     end
 end
 
+-- Forward declarations: OnInitialize/OnEnable call these before their
+-- file-local definitions (Step 3b, near the end of the file) are reached;
+-- assigned there, not re-localized, so this same upvalue is what
+-- OnInitialize/OnEnable's closures see.
+local RebuildLFGRoles
+local BuildGuildStatusPatterns
+
 function CHAT:OnInitialize()
     self:UpdateDB()
     self:SetEnabledState(false)
     BuildShortChannelPatterns()
+    BuildGuildStatusPatterns()
+end
+
+------------------------------------------------------------------------
+-- Whisper features (Task 4)
+------------------------------------------------------------------------
+
+function CHAT:PlayWhisperSound(soundName)
+    if not soundName or soundName == "None" then return end
+    local file = KE.LSM:Fetch("sound", soundName)
+    if file then PlaySoundFile(file, "Master") end
+end
+
+function CHAT:RegisterWhisperSounds()
+    local ws = self.db.WhisperSounds
+    if not ws or not ws.Enabled then return end
+    if self.whisperSoundsRegistered then return end
+    self.whisperSoundsRegistered = true
+
+    self:RegisterEvent("CHAT_MSG_WHISPER", function()
+        self:PlayWhisperSound(ws.WhisperSound)
+    end)
+    self:RegisterEvent("CHAT_MSG_BN_WHISPER", function()
+        self:PlayWhisperSound(ws.BNetWhisperSound)
+    end)
+end
+
+-- Taint protection: forces whisper mode to be inline always. Auto-opening
+-- new tabs while a secret value is in play on the whisper name causes
+-- taint errors.
+function CHAT:ForceInlineWhispers()
+    if self.inlineWhispersSetup then return end
+    self.inlineWhispersSetup = true
+
+    _G.C_CVar.SetCVar("whisperMode", "inline")
+    local frame = CreateFrame("Frame")
+    frame:RegisterEvent("VARIABLES_LOADED")
+    frame:SetScript("OnEvent", function() _G.C_CVar.SetCVar("whisperMode", "inline") end)
+end
+
+-- Adds a warning label with a tooltip explaining why New Tab whisper mode
+-- is forced to In-line.
+function CHAT:AddWhisperModeWarning()
+    if self.whisperWarningSetup then return end
+    self.whisperWarningSetup = true
+
+    local warningFrame = CreateFrame("Frame", nil, UIParent)
+    warningFrame:SetSize(200, 20)
+    warningFrame:SetFrameStrata("DIALOG")
+    warningFrame:Hide()
+    warningFrame:EnableMouse(true)
+
+    local text = warningFrame:CreateFontString(nil, "OVERLAY")
+    text:SetPoint("LEFT", 0, 0)
+    text:SetJustifyH("LEFT")
+    text:SetFont(STANDARD_TEXT_FONT, 10, "OUTLINE")
+    text:SetShadowColor(0, 0, 0, 0)
+    text:SetText("|cff7381FFKitnEssentials|r\nNew Tab disabled")
+
+    warningFrame:SetScript("OnEnter", function(frame)
+        GameTooltip:SetOwner(frame, "ANCHOR_RIGHT")
+        GameTooltip:AddLine("KitnEssentials: New Tab Disabled", Theme.accent[1], Theme.accent[2], Theme.accent[3])
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine(
+            "The 'New Tab' whisper mode causes taint errors when clicking on whisper tabs with secret player names.",
+            1, 1, 1, true)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("KitnEssentials forces 'In-line' mode to prevent these errors.", 0.7, 0.7, 0.7, true)
+        GameTooltip:Show()
+    end)
+
+    warningFrame:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    local function UpdateWarningPosition()
+        local settingsPanel = _G.SettingsPanel
+        if not settingsPanel or not settingsPanel:IsShown() then
+            warningFrame:Hide()
+            return
+        end
+
+        local scrollBox = settingsPanel.Container and settingsPanel.Container.SettingsList and
+            settingsPanel.Container.SettingsList.ScrollBox
+        if not scrollBox or not scrollBox.ScrollTarget then
+            warningFrame:Hide()
+            return
+        end
+
+        for _, child in pairs({ scrollBox.ScrollTarget:GetChildren() }) do
+            local labelText = child.Text and child.Text:GetText()
+            if labelText == "New Whispers" and child:IsShown() then
+                warningFrame:SetParent(child)
+                warningFrame:ClearAllPoints()
+                warningFrame:SetPoint("LEFT", child.Text, "RIGHT", 300, 2)
+                warningFrame:Show()
+                return
+            end
+        end
+
+        warningFrame:Hide()
+    end
+
+    local function SetupHooks()
+        if _G.SettingsPanel then
+            hooksecurefunc(_G.SettingsPanel, "Show", UpdateWarningPosition)
+            hooksecurefunc(_G.SettingsPanel, "Hide", function() warningFrame:Hide() end)
+        end
+        if _G.SettingsPanel and _G.SettingsPanel.Container and _G.SettingsPanel.Container.SettingsList then
+            hooksecurefunc(_G.SettingsPanel.Container.SettingsList.ScrollBox, "Update", UpdateWarningPosition)
+        end
+    end
+
+    local frame = CreateFrame("Frame")
+    frame:RegisterEvent("ADDON_LOADED")
+    frame:SetScript("OnEvent", function(_, _, addon)
+        if addon == "Blizzard_Settings" or addon == "Blizzard_SettingsDefinitions_Frame" then
+            C_Timer.After(0.5, SetupHooks)
+        end
+    end)
+
+    SetupHooks()
 end
 
 function CHAT:OnEnable()
     if KE:ShouldNotLoadModule() then return end
     if not self.db.Enabled then return end
     self:UpdateDB()
+    self:BuildCopyChatFrame()
     self:CreateChatPanel()
 
     self:SetupChat()
+    self:RegisterEditMode()
+    self:SetupBlizzardEditModeLock()
+    self:RegisterWhisperSounds()
+    self:ForceInlineWhispers()
+    self:AddWhisperModeWarning()
+    self:SetupSocialEvents()
+    self:ApplyGuildMemberStatus()
+    RebuildLFGRoles()
+
     self:RegisterEvent("UPDATE_CHAT_WINDOWS", "SetupChat")
     self:RegisterEvent("UPDATE_FLOATING_CHAT_WINDOWS", "SetupChat")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "RefreshDockPosition")
@@ -291,10 +446,72 @@ function CHAT:OnEnable()
             end
         end)
     end
+
+    if _G.EditModeManagerFrame then
+        self:SecureHook(_G.EditModeManagerFrame, "UpdateLayoutInfo", "OnEditModeLayoutChange")
+    end
 end
 
+-- OnDisable must reverse everything OnEnable and the styling pass did, not
+-- just hide the panel: unlike the sibling Skin* modules, Chat does not
+-- match ProfileManager's "^Skin" gate, so a GUI toggle disables it LIVE
+-- (see CHAT.keDeferToReload's note at the top of this file for the
+-- reload-deferred path, which is the primary protection; this teardown is
+-- the backstop for every other path that reaches OnDisable).
 function CHAT:OnDisable()
+    if KE.ChatMessageHandler and KE.ChatMessageHandler.lfgRoles then
+        wipe(KE.ChatMessageHandler.lfgRoles)
+    end
+
+    self:UnregisterEvent("UPDATE_CHAT_WINDOWS")
+    self:UnregisterEvent("UPDATE_FLOATING_CHAT_WINDOWS")
+    self:UnregisterEvent("CVAR_UPDATE")
+    self:UnregisterEvent("CHAT_MSG_WHISPER")
+    self:UnregisterEvent("CHAT_MSG_BN_WHISPER")
+    self.whisperSoundsRegistered = false
+
+    self:TeardownSocialEvents()
+    self:TeardownGuildMemberStatus()
+
+    self:UnhookAll()
+    self._inviteLinkHooked = false
+
+    self:RestoreAllChats()
+    self:UnregisterEditMode()
+    self.hooksSecured = false
+
     if self.panel then self.panel:Hide() end
+end
+
+------------------------------------------------------------------------
+-- Edit mode (Task 4)
+------------------------------------------------------------------------
+
+function CHAT:RegisterEditMode()
+    if KE.EditMode and not self.editModeRegistered then
+        KE.EditMode:RegisterElement({
+            key = "Chat", displayName = "Chat", frame = self.panel,
+            getPosition = function() return self.db.Position end,
+            setPosition = function(pos)
+                self.db.Position = pos
+                KE:ApplyFramePosition(self.panel, self.db.Position, self.db)
+            end,
+            getParentFrame = function()
+                return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
+            end,
+            guiPath = "Chat",
+        })
+        self.editModeRegistered = true
+    end
+end
+
+function CHAT:UnregisterEditMode()
+    if KE.EditMode then KE.EditMode:UnregisterElement("Chat") end
+    self.editModeRegistered = false
+end
+
+function CHAT:OnEditModeLayoutChange()
+    self:PositionChats()
 end
 
 function CHAT:CreateChatPanel()
@@ -1467,6 +1684,337 @@ function CHAT:UpdateEditboxAnchors(cvar, value)
     end
 end
 
+------------------------------------------------------------------------
+-- Chat copy feature (Task 4)
+------------------------------------------------------------------------
+
+local copyLines = {}
+
+local removeIconFromLine
+do
+    local raidIconFunc = function(x)
+        x = x ~= "" and _G["RAID_TARGET_" .. x]
+        return x and ("{" .. strlower(x) .. "}") or ""
+    end
+    local stripTextureFunc = function(w, x, y)
+        if x == "" then return (w ~= "" and w) or (y ~= "" and y) or "" end
+    end
+    local hyperLinkFunc = function(w, _, y)
+        if w ~= "" then return end
+        return y
+    end
+    local fourString = function(v, w, x, y)
+        return format("%s%s%s", v, w, (v and v == "1" and x) or y)
+    end
+
+    removeIconFromLine = function(text)
+        if not text then return "" end
+        text = gsub(text, [[|TInterface\TargetingFrame\UI%-RaidTargetingIcon_(%d+):0|t]], raidIconFunc)
+        text = gsub(text, "(%s?)(|?)|[TA].-|[ta](%s?)", stripTextureFunc)
+        text = gsub(text, "(|?)|H(.-)|h(.-)|h", hyperLinkFunc)
+        text = gsub(text, "(%d+)(.-)|4(.-):(.-);", fourString)
+        return text
+    end
+end
+
+local function ColorizeLine(text, r, g, b)
+    return format("|cff%02x%02x%02x%s|r", r * 255, g * 255, b * 255, text)
+end
+
+function CHAT:GetChatLines(frame)
+    if not frame or not frame.GetNumMessages then
+        return 0
+    end
+
+    local numMessages = frame:GetNumMessages()
+    if not numMessages or numMessages == 0 then
+        return 0
+    end
+
+    local index = 1
+    for i = 1, numMessages do
+        local message, r, g, b = frame:GetMessageInfo(i)
+        if message and not self:MessageIsProtected(message) then
+            r, g, b = r or 1, g or 1, b or 1
+            message = removeIconFromLine(message)
+            message = ColorizeLine(message, r, g, b)
+            copyLines[index] = message
+            index = index + 1
+        end
+    end
+    return index - 1
+end
+
+function CHAT:CopyChat(frame)
+    if not self.CopyChatFrame then
+        self:BuildCopyChatFrame()
+    end
+
+    if not self.CopyChatFrame then
+        return
+    end
+
+    if self.CopyChatFrame:IsShown() then
+        self.copyRawText = ""
+        self.CopyChatFrameEditBox:SetText("")
+        self.CopyChatFrame:Hide()
+    else
+        local count = self:GetChatLines(frame)
+        if count > 0 then
+            local text = tconcat(copyLines, " \n", 1, count)
+            self.copyRawText = text
+            self.CopyChatFrameEditBox:SetText(text)
+        else
+            self.copyRawText = ""
+            self.CopyChatFrameEditBox:SetText("")
+        end
+        self.CopyChatFrame:Show()
+        -- Default to everything selected -- open, Ctrl+C, done.
+        self.CopyChatFrameEditBox:SetFocus()
+        self.CopyChatFrameEditBox:HighlightText()
+    end
+end
+
+function CHAT:CopyChatEditBox_OnEscapePressed()
+    CHAT.CopyChatFrame:Hide()
+end
+
+function CHAT:BuildCopyChatFrame()
+    if self.CopyChatFrame then return end
+
+    local HEADER_HEIGHT = 32
+    local SCROLLBAR_WIDTH = 10
+    local CONTENT_PADDING = 8
+
+    local frame = CreateFrame("Frame", "KE_CopyChatFrame", UIParent, "BackdropTemplate")
+    tinsert(_G.UISpecialFrames, "KE_CopyChatFrame")
+    frame:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1, })
+    frame:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], Theme.bgDark[4])
+    frame:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+    frame:SetSize(COPY_FRAME_WIDTH, COPY_FRAME_HEIGHT)
+    frame:SetPoint("CENTER", UIParent, "CENTER", 0, 100)
+    frame:Hide()
+    frame:SetMovable(true)
+    frame:EnableMouse(true)
+    frame:SetResizable(true)
+    frame:SetFrameStrata("DIALOG")
+    frame:SetClampedToScreen(true)
+    frame:RegisterForDrag("LeftButton")
+    frame:SetScript("OnDragStart", function(f) f:StartMoving() end)
+    frame:SetScript("OnDragStop", function(f) f:StopMovingOrSizing() end)
+    self.CopyChatFrame = frame
+
+    local header = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+    header:SetHeight(HEADER_HEIGHT)
+    header:SetPoint("TOPLEFT", frame, "TOPLEFT", 1, -1)
+    header:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -1, -1)
+    header:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8" })
+    header:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], Theme.bgDark[4] or 1)
+    header:EnableMouse(true)
+    header:RegisterForDrag("LeftButton")
+    header:SetScript("OnDragStart", function() frame:StartMoving() end)
+    header:SetScript("OnDragStop", function() frame:StopMovingOrSizing() end)
+    frame.header = header
+
+    local headerBorder = header:CreateTexture(nil, "BORDER")
+    headerBorder:SetHeight(1)
+    headerBorder:SetPoint("BOTTOMLEFT", header, "BOTTOMLEFT", 0, 0)
+    headerBorder:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", 0, 0)
+    headerBorder:SetColorTexture(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+
+    local title = header:CreateFontString(nil, "OVERLAY")
+    title:SetPoint("LEFT", header, "LEFT", 12, 0)
+    title:SetPoint("RIGHT", header, "RIGHT", -34, 0)
+    title:SetJustifyH("CENTER")
+    title:SetFont(cachedFontPath, 14, "OUTLINE")
+    title:SetText("Chat Copy")
+    title:SetTextColor(1, 1, 1, 1)
+    title:SetShadowColor(0, 0, 0, 0)
+    frame.title = title
+
+    local closeBtn = CreateFrame("Button", nil, header)
+    closeBtn:SetSize(18, 18)
+    closeBtn:SetPoint("RIGHT", header, "RIGHT", -8, 0)
+
+    local closeTex = closeBtn:CreateTexture(nil, "ARTWORK")
+    closeTex:SetPoint("CENTER")
+    closeTex:SetSize(13, 13)
+    closeTex:SetTexture("Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\KitnCustomCrossv3.png")
+    closeTex:SetVertexColor(0.851, 0.851, 0.851, 1)
+    closeTex:SetTexelSnappingBias(0)
+    closeTex:SetSnapToPixelGrid(true)
+
+    closeBtn:SetScript("OnEnter", function()
+        closeTex:SetVertexColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+    end)
+    closeBtn:SetScript("OnLeave", function()
+        closeTex:SetVertexColor(0.851, 0.851, 0.851, 1)
+    end)
+    closeBtn:SetScript("OnClick", function() frame:Hide() end)
+    frame.closeButton = closeBtn
+
+    local hint = header:CreateFontString(nil, "OVERLAY")
+    hint:SetFont(cachedFontPath, 11, "OUTLINE")
+    hint:SetPoint("RIGHT", closeBtn, "LEFT", -12, 0)
+    do
+        local a = Theme.accent
+        local hex = format("%02x%02x%02x", (a[1] or 1) * 255, (a[2] or 1) * 255, (a[3] or 1) * 255)
+        hint:SetFormattedText("Press |cff%sCtrl+C|r to copy", hex)
+    end
+    hint:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 0.8)
+    frame.hint = hint
+
+    local contentArea = CreateFrame("Frame", nil, frame)
+    contentArea:SetPoint("TOPLEFT", frame, "TOPLEFT", CONTENT_PADDING, -HEADER_HEIGHT - CONTENT_PADDING)
+    contentArea:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -CONTENT_PADDING, CONTENT_PADDING)
+    frame.contentArea = contentArea
+
+    local scrollbar = CreateFrame("Slider", nil, contentArea, "BackdropTemplate")
+    scrollbar:SetWidth(SCROLLBAR_WIDTH)
+    scrollbar:SetPoint("TOPRIGHT", contentArea, "TOPRIGHT", 0, 0)
+    scrollbar:SetPoint("BOTTOMRIGHT", contentArea, "BOTTOMRIGHT", 0, 0)
+    scrollbar:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1, })
+    scrollbar:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 0.5)
+    scrollbar:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+    scrollbar:SetOrientation("VERTICAL")
+    scrollbar:SetMinMaxValues(0, 1)
+    scrollbar:SetValue(0)
+    scrollbar:Hide()
+    frame.scrollbar = scrollbar
+
+    local thumb = scrollbar:CreateTexture(nil, "OVERLAY")
+    thumb:SetSize(SCROLLBAR_WIDTH - 2, 40)
+    local brand = { 0.451, 0.506, 1.0 }
+    thumb:SetColorTexture(brand[1], brand[2], brand[3], 0.8)
+    scrollbar:SetThumbTexture(thumb)
+    scrollbar.thumb = thumb
+
+    local scrollFrame = CreateFrame("ScrollFrame", "KE_CopyChatScrollFrame", contentArea)
+    scrollFrame:SetPoint("TOPLEFT", contentArea, "TOPLEFT", 0, 0)
+    scrollFrame:SetPoint("BOTTOMRIGHT", contentArea, "BOTTOMRIGHT", 0, 0)
+    self.CopyChatScrollFrame = scrollFrame
+
+    local editBox = CreateFrame("EditBox", "KE_CopyChatFrameEditBox", scrollFrame)
+    editBox:SetMultiLine(true)
+    editBox:SetMaxLetters(99999)
+    editBox:EnableMouse(true)
+    editBox:SetAutoFocus(false)
+    editBox:SetFont(cachedFontPath, 12, "OUTLINE")
+    editBox:SetShadowColor(0, 0, 0, 0)
+    editBox:SetShadowOffset(0, 0)
+    editBox:SetTextColor(Theme.textPrimary[1], Theme.textPrimary[2], Theme.textPrimary[3], 1)
+    editBox:SetScript("OnEscapePressed", self.CopyChatEditBox_OnEscapePressed)
+    self.CopyChatFrameEditBox = editBox
+
+    scrollFrame:SetScrollChild(editBox)
+    editBox:SetWidth(scrollFrame:GetWidth())
+    editBox:SetHeight(COPY_FRAME_HEIGHT)
+
+    scrollbar:SetScript("OnValueChanged", function(_, value) scrollFrame:SetVerticalScroll(value) end)
+
+    scrollFrame:SetScript("OnScrollRangeChanged", function(_, _, yRange)
+        if yRange and yRange > 0 then
+            scrollbar:Show()
+            scrollbar:SetMinMaxValues(0, yRange)
+            scrollFrame:SetPoint("BOTTOMRIGHT", contentArea, "BOTTOMRIGHT", -SCROLLBAR_WIDTH - 4, 0)
+        else
+            scrollbar:Hide()
+            scrollbar:SetMinMaxValues(0, 0)
+            scrollFrame:SetPoint("BOTTOMRIGHT", contentArea, "BOTTOMRIGHT", 0, 0)
+        end
+        editBox:SetWidth(scrollFrame:GetWidth())
+    end)
+
+    scrollFrame:EnableMouseWheel(true)
+    scrollFrame:SetScript("OnMouseWheel", function(_, delta)
+        local current = scrollbar:GetValue()
+        local _, maxVal = scrollbar:GetMinMaxValues()
+        local step = 40
+        local newVal = current - (delta * step)
+        newVal = math_max(0, math_min(maxVal, newVal))
+        scrollbar:SetValue(newVal)
+    end)
+
+    -- Read-only: any user edit (typing, paste, delete) synchronously
+    -- restores the canonical snapshot and re-selects all. Selection and
+    -- Ctrl+C keep working since the box stays enabled.
+    local restoring = false
+    editBox:SetScript("OnTextChanged", function(eb, userInput)
+        if restoring then return end
+        if userInput then
+            restoring = true
+            eb:SetText(CHAT.copyRawText or "")
+            restoring = false
+            eb:HighlightText()
+            return
+        end
+        C_Timer.After(0.01, function()
+            local _, maxVal = scrollbar:GetMinMaxValues()
+            scrollbar:SetValue(maxVal)
+        end)
+    end)
+
+    scrollFrame:SetScript("OnSizeChanged", function() editBox:SetWidth(scrollFrame:GetWidth()) end)
+
+    frame:SetScript("OnShow", function()
+        editBox:SetWidth(scrollFrame:GetWidth())
+    end)
+
+    -- Clicking anywhere in the window focuses the editbox, so Ctrl+A
+    -- (native select-all while focused) always works.
+    frame:SetScript("OnMouseDown", function()
+        editBox:SetFocus()
+    end)
+
+    frame:SetScript("OnKeyDown", function(f, key)
+        if key == "ESCAPE" then
+            f:SetPropagateKeyboardInput(false)
+            f:Hide()
+        else
+            f:SetPropagateKeyboardInput(true)
+        end
+    end)
+    frame:EnableKeyboard(true)
+end
+
+function CHAT:CreateCopyButton(chat)
+    if chat.copyButton then return end
+    if _G.IsCombatLog and _G.IsCombatLog(chat) then return end
+
+    local id = chat:GetID()
+    local copyButton = CreateFrame("Frame", format("KE_CopyChatButton%d", id), chat)
+    copyButton:EnableMouse(true)
+    copyButton:SetSize(20, 22)
+    copyButton:SetPoint("TOPRIGHT", chat, "TOPRIGHT", 4, 6)
+    copyButton:SetFrameLevel(chat:GetFrameLevel() + 5)
+    chat.copyButton = copyButton
+
+    -- Chevron icon (collapse.tga, same texture as the sidebar section
+    -- headers) rotated to point right; accent-independent (always white).
+    local icon = copyButton:CreateTexture(nil, "OVERLAY")
+    icon:SetSize(14, 14)
+    icon:SetPoint("CENTER", copyButton, "CENTER", 0, 0)
+    icon:SetTexture(ARROW_TEX)
+    icon:SetRotation(math.pi / 2)
+    icon:SetTexelSnappingBias(0)
+    icon:SetSnapToPixelGrid(false)
+    copyButton.icon = icon
+
+    icon:SetVertexColor(1, 1, 1, 0.5)
+
+    copyButton:SetScript("OnMouseUp", function(btn, mouseBtn)
+        if mouseBtn == "LeftButton" then
+            local chatFrame = btn:GetParent()
+            if chatFrame.isDocked and _G.GeneralDockManager then
+                chatFrame = _G.GeneralDockManager.selected or chatFrame
+            end
+            CHAT:CopyChat(chatFrame)
+        end
+    end)
+    copyButton:SetScript("OnEnter", function() icon:SetVertexColor(1, 1, 1, 1) end)
+    copyButton:SetScript("OnLeave", function() icon:SetVertexColor(1, 1, 1, 0.5) end)
+end
+
 function CHAT:StyleChat(chat)
     if not chat then return end
 
@@ -1492,7 +2040,10 @@ function CHAT:StyleChat(chat)
         chat.AddMessage = self.AddMessage
     end
 
-    if tab and not (_G.IsCombatLog and _G.IsCombatLog(chat)) then tab:SetScript("OnClick", CHAT.Tab_OnClick) end
+    if tab and not (_G.IsCombatLog and _G.IsCombatLog(chat)) then
+        tab.keOldOnClick = tab.keOldOnClick or tab:GetScript("OnClick")
+        tab:SetScript("OnClick", CHAT.Tab_OnClick)
+    end
 
     if tab and tab.Text then
         local tabFontSize = db.TabFontSize or 12
@@ -1516,7 +2067,12 @@ function CHAT:StyleChat(chat)
             timeVisible = chat.GetTimeVisible and chat:GetTimeVisible(),
             maxLines = chat.GetMaxLines and chat:GetMaxLines(),
             fading = chat.GetFading and chat:GetFading(),
+            clampedToScreen = chat.IsClampedToScreen and chat:IsClampedToScreen(),
         }
+
+        if chat.GetClampRectInsets then
+            self.originalStates[id].clampRectInsets = { chat:GetClampRectInsets() }
+        end
 
         for i = 1, chat:GetNumPoints() do
             local point, relativeTo, relativePoint, xOfs, yOfs = chat:GetPoint(i)
@@ -1542,6 +2098,7 @@ function CHAT:StyleChat(chat)
     self:CreateCopyButton(chat)
 
     chat.styled = true
+    chat.keStyled = true
 end
 
 local HiddenFrame = CreateFrame("Frame")
@@ -1552,12 +2109,35 @@ function CHAT:DisableFrame(object)
 
     if object.GetChildren then for _, child in pairs({ object:GetChildren() }) do self:DisableFrame(child) end end
     if object.UnregisterAllEvents then
+        -- UnregisterAllEvents has no inverse query API, so the events this
+        -- drops cannot be recovered on restore; the reparent and the Hide
+        -- below are the only pieces of this that are capturable.
         object:UnregisterAllEvents()
+        object.keOldParent = object.keOldParent or object:GetParent()
         object:SetParent(HiddenFrame)
     else
+        object.keOldShow = object.keOldShow or object.Show
         object.Show = object.Hide
     end
     object:Hide()
+end
+
+-- Reverses the capturable half of DisableFrame (reparent + Show override);
+-- see the comment there for what cannot be undone.
+function CHAT:RestoreDisabledFrame(object)
+    if not object then return end
+
+    if object.GetChildren then for _, child in pairs({ object:GetChildren() }) do self:RestoreDisabledFrame(child) end end
+
+    if object.keOldParent then
+        object:SetParent(object.keOldParent)
+        object.keOldParent = nil
+    end
+    if object.keOldShow then
+        object.Show = object.keOldShow
+        object.keOldShow = nil
+    end
+    object:Show()
 end
 
 function CHAT:ClearFrameTextures(frame, kill)
@@ -1610,6 +2190,30 @@ function CHAT:HideChatElements(chat)
     if editRight then self:DisableFrame(editRight) end
 end
 
+-- Reverses the DisableFrame calls HideChatElements made, for the same set
+-- of chat sub-elements, in the same order.
+function CHAT:RestoreChatElements(chat)
+    local name = chat:GetName()
+
+    if chat.ScrollBar then self:RestoreDisabledFrame(chat.ScrollBar) end
+    if chat.ScrollToBottomButton then self:RestoreDisabledFrame(chat.ScrollToBottomButton) end
+
+    local thumbTexture = _G[name .. "ThumbTexture"]
+    if thumbTexture then self:RestoreDisabledFrame(thumbTexture) end
+
+    local minimize = _G[name .. "MinimizeButton"]
+    if minimize then self:RestoreDisabledFrame(minimize) end
+
+    local editLeft = _G[name .. "EditBoxLeft"]
+    if editLeft then self:RestoreDisabledFrame(editLeft) end
+
+    local editMid = _G[name .. "EditBoxMid"]
+    if editMid then self:RestoreDisabledFrame(editMid) end
+
+    local editRight = _G[name .. "EditBoxRight"]
+    if editRight then self:RestoreDisabledFrame(editRight) end
+end
+
 function CHAT:PositionButtonFrame(chat)
     if not chat.buttonFrame then return end
     chat.buttonFrame:ClearAllPoints()
@@ -1653,11 +2257,13 @@ function CHAT:SetupChatScripts(chat)
     -- KE.ChatMessageHandler is Task 7's module; until it exists this
     -- guard leaves Blizzard's own OnEvent in place rather than nil-ing it.
     if allowHooks and KE.ChatMessageHandler then
+        chat.keOldOnEvent = chat.keOldOnEvent or chat:GetScript("OnEvent")
         chat:SetScript("OnEvent", function(frame, event, ...)
             KE.ChatMessageHandler:FloatingChatFrame_OnEvent(frame, event, ...)
         end)
     end
 
+    chat.keOldOnMouseWheel = chat.keOldOnMouseWheel or chat:GetScript("OnMouseWheel")
     chat.keSettingMouseWheel = true
     chat:SetScript("OnMouseWheel", function(frame, delta) self:ChatFrame_OnMouseWheel(frame, delta) end)
     chat.keSettingMouseWheel = nil
@@ -1944,12 +2550,94 @@ function CHAT:ChatFrame_SetScript(frame, scriptType)
     if scriptType == "OnMouseWheel" and not frame.keSettingMouseWheel then
         C_Timer.After(0, function()
             if frame and frame.scriptsSet and not frame.keSettingMouseWheel then
+                frame.keOldOnMouseWheel = frame.keOldOnMouseWheel or frame:GetScript("OnMouseWheel")
                 frame.keSettingMouseWheel = true
                 frame:SetScript("OnMouseWheel", function(f, delta) self:ChatFrame_OnMouseWheel(f, delta) end)
                 frame.keSettingMouseWheel = nil
             end
         end)
     end
+end
+
+------------------------------------------------------------------------
+-- Teardown (Task 4)
+------------------------------------------------------------------------
+
+function CHAT:RestoreAllChats()
+    for _, frameName in ipairs(_G.CHAT_FRAMES) do
+        local chat = _G[frameName]
+        if chat then self:RestoreChat(chat) end
+    end
+
+    self:RestoreDockManager()
+    self.originalStates = {}
+    self.ChatWindow = nil
+end
+
+function CHAT:RestoreChat(chat)
+    if not chat then return end
+
+    local id = chat:GetID()
+    local state = self.originalStates[id]
+    if not state then return end
+
+    if state.parent then chat:SetParent(state.parent) end
+    if state.points then
+        chat:ClearAllPoints()
+        for _, pointData in ipairs(state.points) do
+            if pointData[2] then
+                chat:SetPoint(pointData[1], pointData[2], pointData[3], pointData[4], pointData[5])
+            end
+        end
+    end
+
+    if state.width and state.height then chat:SetSize(state.width, state.height) end
+    if state.frameLevel then chat:SetFrameLevel(state.frameLevel) end
+    if state.timeVisible then chat:SetTimeVisible(state.timeVisible) end
+    if state.maxLines then chat:SetMaxLines(state.maxLines) end
+    if state.fading ~= nil then chat:SetFading(state.fading) end
+    if state.clampRectInsets then chat:SetClampRectInsets(unpack(state.clampRectInsets)) end
+    if state.clampedToScreen ~= nil then chat:SetClampedToScreen(state.clampedToScreen) end
+
+    local tab = self:GetTab(chat)
+    if tab and state.tabParent then tab:SetParent(state.tabParent) end
+    if chat.Background then
+        chat.Background.Show = nil
+        if state.backgroundShown then chat.Background:Show() end
+    end
+
+    -- Scripts/child-frame mutations only ever happened if the styling pass
+    -- reached its one-time block for this frame (chat.keStyled); gating on
+    -- it here keeps an untouched frame (e.g. the combat log) from having
+    -- SetScript(..., nil) called on it and losing Blizzard's own handler.
+    if chat.keStyled then
+        if chat.keOldOnEvent then chat:SetScript("OnEvent", chat.keOldOnEvent) end
+        if chat.keOldOnMouseWheel then chat:SetScript("OnMouseWheel", chat.keOldOnMouseWheel) end
+        chat.AddMessage = chat.OldAddMessage or chat.AddMessage
+        if tab and tab.keOldOnClick then tab:SetScript("OnClick", tab.keOldOnClick) end
+
+        self:RestoreChatElements(chat)
+
+        chat.OldAddMessage, chat.keOldOnEvent, chat.keOldOnMouseWheel = nil, nil, nil
+        if tab then tab.keOldOnClick = nil end
+        chat.keStyled = nil
+    end
+
+    chat.styled = nil
+    chat.scriptsSet = nil
+end
+
+function CHAT:RestoreDockManager()
+    local docker = _G.GeneralDockManager
+    if not docker or not self.originalDockState then return end
+    if self.originalDockState.parent then docker:SetParent(self.originalDockState.parent) end
+    if self.originalDockState.points then
+        docker:ClearAllPoints()
+        for _, pointData in ipairs(self.originalDockState.points) do
+            if pointData[2] then docker:SetPoint(pointData[1], pointData[2], pointData[3], pointData[4], pointData[5]) end
+        end
+    end
+    self.originalDockState = nil
 end
 
 function CHAT:UpdatePanel()
@@ -1965,12 +2653,227 @@ function CHAT:UpdatePanel()
     self:PositionChats()
 end
 
+------------------------------------------------------------------------
+-- Social status and role icons (Task 4 Step 3b)
+------------------------------------------------------------------------
+-- Guild member login/logout messages -- rewrites the system lines with
+-- class-colored names, green (online) / red (offline), via the official
+-- ChatFrameUtil.AddMessageEventFilter pipeline on CHAT_MSG_SYSTEM (returns
+-- a modified message, so it works in both the default chat and the panel).
+-- Class cache built from GetGuildRosterInfo on GUILD_ROSTER_UPDATE only --
+-- no polling. [Invite] link on guild logins dispatched from a secure
+-- post-hook on ItemRefTooltip:SetHyperlink. Role icons before names in
+-- group chat -- lfgRoles cache rebuilt on GROUP_ROSTER_UPDATE, consumed at
+-- the pflag site in ChatMessageHandler (Task 7).
+--
+-- Deviation from the reference: these installs are panel-DEPENDENT here
+-- (wired from OnEnable/OnDisable) rather than the reference's
+-- panel-independent OnInitialize install, so the three config keys
+-- (GuildMemberStatus, GuildMemberStatusInviteLink, RoleIcons) only take
+-- effect while the Chat module itself is enabled.
+local guildPlayerCache = {}
+local guildStatusFilterActive = false
+local socialEventFrame
+
+local offlineMessageTemplate, offlineMessagePattern
+local onlineMessageTemplate, onlineMessagePattern
+function BuildGuildStatusPatterns()
+    if offlineMessagePattern then return end
+    offlineMessageTemplate = "%s" .. _G.ERR_FRIEND_OFFLINE_S
+    offlineMessagePattern = format("^%s$", (gsub(_G.ERR_FRIEND_OFFLINE_S, "%%s", "(.+)")))
+    onlineMessageTemplate = (gsub(_G.ERR_FRIEND_ONLINE_SS, "%[%%s%]", "%%s%%s"))
+    onlineMessagePattern = format("^%s$",
+        (gsub(_G.ERR_FRIEND_ONLINE_SS, "|Hplayer:%%s|h%[%%s%]|h", "|Hplayer:(.+)|h%%[(.+)%%]|h")))
+end
+
+local GREEN_ONLINE = "4ade80"
+local RED_OFFLINE = "f43f5e"
+local BRAND_HEX = "7381FF"
+
+local function RebuildGuildCache()
+    wipe(guildPlayerCache)
+    if not IsInGuild() then return end
+    for i = 1, (_G.GetNumGuildMembers() or 0) do
+        local name, _, _, _, _, _, _, _, _, _, classFile = _G.GetGuildRosterInfo(i)
+        if name and classFile then
+            guildPlayerCache[Ambiguate(name, "none")] = classFile
+        end
+    end
+end
+
+local function ClassColoredName(name, classFile)
+    local color = classFile and RAID_CLASS_COLORS[classFile]
+    if color and color.colorStr then
+        return format("|c%s%s|r", color.colorStr, name)
+    end
+    return name
+end
+
+local function GuildStatusFilter(_, _, msg, ...)
+    local db = CHAT.db
+    if not (db and db.GuildMemberStatus) then return false end
+    if type(msg) ~= "string" then return false end
+
+    local link, name = nil, strmatch(msg, offlineMessagePattern)
+    if not name then
+        link, name = strmatch(msg, onlineMessagePattern)
+    end
+    if not name then return false end
+
+    local class = guildPlayerCache[name] or (link and guildPlayerCache[link])
+    if not class then return false end -- not a guildmate; leave the line alone
+
+    local displayName = (db.ShortChannels ~= false) and Ambiguate(name, "short") or name
+    local coloredName = ClassColoredName(displayName, class)
+
+    if link then -- online
+        local resultText = format(onlineMessageTemplate, link, "", coloredName)
+        resultText = format("|cff%s%s|r", GREEN_ONLINE, resultText)
+        if db.GuildMemberStatusInviteLink then
+            resultText = resultText .. format(" |Hkeslink:invite:%s|h|cff%s[Invite]|r|h", link, BRAND_HEX)
+        end
+        return false, resultText, select(1, ...)
+    else -- offline
+        local resultText = format(offlineMessageTemplate, "", coloredName)
+        return false, format("|cff%s%s|r", RED_OFFLINE, resultText), select(1, ...)
+    end
+end
+
+function CHAT:OnInviteLinkClick(_, data)
+    if type(data) ~= "string" or strsub(data, 1, 7) ~= "keslink" then return end
+    local feature, arg = strmatch(data, "^keslink:([^:]+):(.*)$")
+    if feature == "invite" and arg and arg ~= "" then
+        if _G.C_PartyInfo and _G.C_PartyInfo.InviteUnit then
+            _G.C_PartyInfo.InviteUnit(arg)
+        elseif _G.InviteUnit then
+            _G.InviteUnit(arg)
+        end
+    end
+end
+
+function CHAT:ApplyGuildMemberStatus()
+    local db = self.db
+    local want = db and db.GuildMemberStatus ~= false
+    if want and not guildStatusFilterActive then
+        if _G.ChatFrameUtil and _G.ChatFrameUtil.AddMessageEventFilter then
+            _G.ChatFrameUtil.AddMessageEventFilter("CHAT_MSG_SYSTEM", GuildStatusFilter)
+        elseif _G.ChatFrame_AddMessageEventFilter then
+            _G.ChatFrame_AddMessageEventFilter("CHAT_MSG_SYSTEM", GuildStatusFilter)
+        end
+        guildStatusFilterActive = true
+        if not self._inviteLinkHooked then
+            self:SecureHook(_G.ItemRefTooltip, "SetHyperlink", "OnInviteLinkClick")
+            self._inviteLinkHooked = true
+        end
+    elseif not want and guildStatusFilterActive then
+        self:RemoveGuildMemberStatusFilter()
+    end
+end
+
+function CHAT:RemoveGuildMemberStatusFilter()
+    if not guildStatusFilterActive then return end
+    if _G.ChatFrameUtil and _G.ChatFrameUtil.RemoveMessageEventFilter then
+        _G.ChatFrameUtil.RemoveMessageEventFilter("CHAT_MSG_SYSTEM", GuildStatusFilter)
+    elseif _G.ChatFrame_RemoveMessageEventFilter then
+        _G.ChatFrame_RemoveMessageEventFilter("CHAT_MSG_SYSTEM", GuildStatusFilter)
+    end
+    guildStatusFilterActive = false
+end
+
+function CHAT:TeardownGuildMemberStatus()
+    self:RemoveGuildMemberStatusFilter()
+end
+
+-- Role icon textures: the reference ships custom PNGs (AE.ROLE_ICONS) that
+-- have no KE equivalent, so this uses Blizzard's own group-finder role
+-- atlases instead (same atlas names PrescienceTracker already uses for its
+-- role badges) rather than a broken texture path.
+local ROLE_ICON_ATLASES = {
+    TANK    = "groupfinder-icon-role-large-tank",
+    HEALER  = "groupfinder-icon-role-large-heal",
+    DAMAGER = "groupfinder-icon-role-large-dps",
+}
+
+local ROLE_ICON_STRINGS
+local function BuildRoleIconStrings()
+    if ROLE_ICON_STRINGS then return end
+    ROLE_ICON_STRINGS = {}
+    for role, atlas in pairs(ROLE_ICON_ATLASES) do
+        ROLE_ICON_STRINGS[role] = format("|A:%s:14:14|a", atlas)
+    end
+end
+
+function RebuildLFGRoles()
+    local CMH = KE.ChatMessageHandler
+    if not CMH then return end
+    wipe(CMH.lfgRoles)
+
+    local db = CHAT.db
+    if not (db and db.Enabled and db.RoleIcons ~= false) then return end
+    if not IsInGroup() then return end
+    BuildRoleIconStrings()
+
+    local myRole = UnitGroupRolesAssigned("player")
+    local myName, myRealm = UnitFullName("player")
+    if myRole and myName and ROLE_ICON_STRINGS[myRole] then
+        CMH.lfgRoles[myName] = ROLE_ICON_STRINGS[myRole]
+        if myRealm and myRealm ~= "" then
+            CMH.lfgRoles[myName .. "-" .. myRealm] = ROLE_ICON_STRINGS[myRole]
+        end
+    end
+
+    local unit = IsInRaid() and "raid" or "party"
+    for i = 1, GetNumGroupMembers() do
+        local u = unit .. i
+        if UnitExists(u) and not UnitIsUnit(u, "player") then
+            local role = UnitGroupRolesAssigned(u)
+            local icon = role and ROLE_ICON_STRINGS[role]
+            local name, realm = UnitName(u)
+            if icon and name then
+                CMH.lfgRoles[name] = icon
+                if realm and realm ~= "" then
+                    CMH.lfgRoles[name .. "-" .. realm] = icon
+                end
+            end
+        end
+    end
+end
+
+-- Guarded on the registration state (self.socialEventsRegistered), not the
+-- frame's existence: the frame itself is a harmless one-time allocation,
+-- but after a disable/re-enable cycle the frame already exists, and an
+-- existence-only guard would silently skip re-registering its events.
+function CHAT:SetupSocialEvents()
+    if self.socialEventsRegistered then return end
+
+    if not socialEventFrame then
+        socialEventFrame = CreateFrame("Frame")
+        socialEventFrame:SetScript("OnEvent", function(_, event)
+            if event == "GROUP_ROSTER_UPDATE" then
+                RebuildLFGRoles()
+            else
+                RebuildGuildCache()
+                if event == "PLAYER_ENTERING_WORLD" then
+                    if _G.C_GuildInfo and _G.C_GuildInfo.GuildRoster then _G.C_GuildInfo.GuildRoster() end
+                    RebuildLFGRoles()
+                end
+            end
+        end)
+    end
+
+    socialEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+    socialEventFrame:RegisterEvent("GUILD_ROSTER_UPDATE")
+    socialEventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
+    self.socialEventsRegistered = true
+end
+
+function CHAT:TeardownSocialEvents()
+    if socialEventFrame then socialEventFrame:UnregisterAllEvents() end
+    self.socialEventsRegistered = false
+end
+
 -- Task 5's GUI callbacks call this to push config changes onto live
--- frames. Note: the reference's ApplySettings also calls
--- self:ApplyGuildMemberStatus() and the file-local RebuildLFGRoles() --
--- both belong to the social/role-icon subsystem Task 4 Step 3b ports;
--- wiring them in here is left to that task, same as OnEnable/OnDisable
--- were left thin in Task 2 for methods that didn't exist yet.
+-- frames.
 function CHAT:ApplySettings()
     if KE:ShouldNotLoadModule() then return end
     if not self.db.Enabled then return end
@@ -1991,5 +2894,183 @@ function CHAT:ApplySettings()
 
     if _G.FCFDock_UpdateTabs and _G.GeneralDockManager then
         _G.FCFDock_UpdateTabs(_G.GeneralDockManager, true)
+    end
+
+    self:ApplyGuildMemberStatus()
+    RebuildLFGRoles()
+end
+
+------------------------------------------------------------------------
+-- Blizzard Edit Mode lock (Task 4)
+------------------------------------------------------------------------
+-- Prevents dragging/resizing chat in Blizzard's own Edit Mode and shows
+-- helper text redirecting to KE's edit mode instead.
+local blizzEditModeLockState = setmetatable({}, { __mode = "k" })
+
+function CHAT:GetBlizzEditModeLockState(selection)
+    local state = blizzEditModeLockState[selection]
+    if not state then
+        state = {}
+        blizzEditModeLockState[selection] = state
+    end
+    return state
+end
+
+function CHAT:EnsureBlizzEditModeLockText(selection)
+    if not selection then return end
+    local state = self:GetBlizzEditModeLockState(selection)
+    if state.lockText then return end
+
+    if not state.textOverlay then
+        state.textOverlay = CreateFrame("Frame", nil, UIParent)
+        state.textOverlay:SetAllPoints(selection)
+        state.textOverlay:SetFrameStrata("TOOLTIP")
+        state.textOverlay:SetFrameLevel(selection:GetFrameLevel() + 5)
+    end
+
+    local text = state.textOverlay:CreateFontString(nil, "OVERLAY")
+    text:SetIgnoreParentScale(true)
+    text:SetPoint("CENTER")
+    text:SetJustifyH("CENTER")
+    text:SetJustifyV("MIDDLE")
+    text:SetWordWrap(true)
+    state.lockText = text
+end
+
+function CHAT:SetBlizzEditModeLockText(frame, shown)
+    if InCombatLockdown() then return end
+
+    local selection = frame.Selection
+    if not selection then return end
+
+    if not shown then
+        local state = blizzEditModeLockState[selection]
+        if state then
+            if state.lockText then state.lockText:Hide() end
+            if state.textOverlay then state.textOverlay:Hide() end
+        end
+        return
+    end
+
+    self:EnsureBlizzEditModeLockText(selection)
+    local state = self:GetBlizzEditModeLockState(selection)
+    local text = state.lockText
+    if state.textOverlay then state.textOverlay:Show() end
+
+    local fontPath = KE.FONT or STANDARD_TEXT_FONT
+    text:SetFont(fontPath, 12, "OUTLINE")
+    text:SetShadowColor(0, 0, 0, 0)
+    text:SetShadowOffset(0, 0)
+    text:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+
+    local maxWidth = selection:GetWidth() - 12
+    if maxWidth > 0 then text:SetWidth(maxWidth) end
+
+    text:SetText("Edit Mode locked for the chat\nUse |cff00ff00/kes edit|r or |cff00ff00/kes|r -> Chat")
+    text:Show()
+end
+
+function CHAT:SetupBlizzEditModeLockHandlers(frame)
+    if InCombatLockdown() then return end
+
+    local selection = frame.Selection
+    if not selection then return end
+
+    local state = self:GetBlizzEditModeLockState(selection)
+    if state.handlersSet then return end
+
+    state.handlersSet = true
+
+    selection:HookScript("OnMouseDown", function()
+        self:SetBlizzEditModeLockText(frame, true)
+        state.lockTextToken = (state.lockTextToken or 0) + 1
+        local token = state.lockTextToken
+        C_Timer.After(3, function()
+            if state.lockTextToken == token then self:SetBlizzEditModeLockText(frame, false) end
+        end)
+    end)
+
+    selection:HookScript("OnHide", function() self:SetBlizzEditModeLockText(frame, false) end)
+end
+
+function CHAT:LockChatInBlizzEditMode(chat)
+    if not chat then return end
+    if InCombatLockdown() then return end
+
+    local selection = chat.Selection
+    if selection then
+        selection:SetScript("OnDragStart", nil)
+        selection:SetScript("OnDragStop", nil)
+        selection:EnableMouse(false)
+    end
+
+    if chat.EditModeResizeButton then
+        chat.EditModeResizeButton:Hide()
+        chat.EditModeResizeButton:EnableMouse(false)
+        chat.EditModeResizeButton.Show = chat.EditModeResizeButton.Hide
+    end
+
+    self:SetupBlizzEditModeLockHandlers(chat)
+    self:SetBlizzEditModeLockText(chat, false)
+end
+
+function CHAT:SetupBlizzardEditModeLock()
+    if self.blizzEditModeLockSetup then return end
+
+    local function TrySetup()
+        local EditModeSystemSettingsDialog = _G.EditModeSystemSettingsDialog
+        if not EditModeSystemSettingsDialog then return false end
+
+        local chatFrame = _G.ChatFrame1
+        if not chatFrame then return false end
+
+        hooksecurefunc(EditModeSystemSettingsDialog, "AttachToSystemFrame", function(dialog, systemFrame)
+            if not systemFrame then return end
+            local name = systemFrame:GetName()
+            if not name then return end
+
+            if strmatch(name, "^ChatFrame%d+$") then
+                dialog:Hide()
+                self:SetupBlizzEditModeLockHandlers(systemFrame)
+                if not self.blizzEditModeChatNoticeShown then
+                    KE:Print("Chat position is managed by |cff00ff00/kes edit|r or |cff00ff00/kes|r settings.")
+                    self.blizzEditModeChatNoticeShown = true
+                end
+            end
+        end)
+
+        for i = 1, 12 do
+            local chat = _G["ChatFrame" .. i]
+            if chat then
+                if chat.SelectSystem then
+                    hooksecurefunc(chat, "SelectSystem", function(cf)
+                        if EditModeSystemSettingsDialog.attachedToSystem == cf then EditModeSystemSettingsDialog:Hide() end
+                        self:SetupBlizzEditModeLockHandlers(cf)
+                        if cf.Selection then cf.Selection:EnableMouse(false) end
+                        if not self.blizzEditModeChatNoticeShown then
+                            KE:Print(
+                                "Chat position is managed by |cff00ff00/kes edit|r or |cff00ff00/kes|r settings.")
+                            self.blizzEditModeChatNoticeShown = true
+                        end
+                    end)
+                end
+
+                if chat.HighlightSystem then
+                    hooksecurefunc(chat, "HighlightSystem", function(cf) self:SetupBlizzEditModeLockHandlers(cf) end)
+                end
+                if chat.ClearHighlight then
+                    hooksecurefunc(chat, "ClearHighlight", function(cf) self:SetBlizzEditModeLockText(cf, false) end)
+                end
+
+                self:LockChatInBlizzEditMode(chat)
+            end
+        end
+
+        self.blizzEditModeLockSetup = true
+        return true
+    end
+
+    if not TrySetup() then
+        _G.EventUtil.ContinueOnAddOnLoaded("Blizzard_EditMode", function() TrySetup() end)
     end
 end
