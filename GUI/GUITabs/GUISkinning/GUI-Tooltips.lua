@@ -181,7 +181,11 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
         MkCheck("Mythic+ Score",
             function() return db.MythicPlusLine == true end,
             function(v) db.MythicPlusLine = v end,
-            "Adds the player's current season Mythic+ rating, coloured by score. Only shows for players the game already has rating data for."), 40)
+            "Adds the player's current season Mythic+ rating, coloured by score. Only shows for players the game already has rating data for."), 40,
+        MkCheck("Hide Faction Line",
+            function() return db.HideFactionLine ~= false end,
+            function(v) db.HideFactionLine = v end,
+            "Removes the plain 'Alliance' or 'Horde' line. The name and level lines already carry it."), 40)
     PairRow(card2,
         MkCheck("Hide In Combat",
             function() return db.HideInCombat == true end,

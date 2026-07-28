@@ -1522,6 +1522,7 @@ local Defaults = {
                 TargetLine = true,
                 GuildRankLine = false,
                 HideGuildRealm = false,
+                HideFactionLine = true,
                 MythicPlusLine = false,
                 HideInCombat = false,
                 CursorAnchor = false,

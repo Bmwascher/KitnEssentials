@@ -26,6 +26,7 @@ local TT = KitnEssentials:NewModule("SkinTooltips", "AceEvent-3.0", "AceHook-3.0
 local _G = _G
 local pairs = pairs
 local format = string.format
+local strlower = string.lower
 local unpack = unpack
 local CreateFrame = CreateFrame
 local UnitExists = UnitExists
@@ -33,6 +34,10 @@ local UnitIsPlayer = UnitIsPlayer
 local UnitClass = UnitClass
 local UnitName = UnitName
 local UnitReaction = UnitReaction
+local UnitLevel = UnitLevel
+local UnitEffectiveLevel = UnitEffectiveLevel
+local UnitRace = UnitRace
+local GetCreatureDifficultyColor = GetCreatureDifficultyColor
 local GetGuildInfo = GetGuildInfo
 local InCombatLockdown = InCombatLockdown
 local IsModifierKeyDown = IsModifierKeyDown
@@ -306,6 +311,62 @@ local function TipHasText(tt, needle)
     return false
 end
 
+-- Locating the level row.
+--
+-- Blizzard publishes no line type for it: TooltipDataLineType has UnitName,
+-- UnitThreat and UnitOwner but nothing for level (12.0.7 reference,
+-- TooltipInfoSharedDocumentation.lua:27-80). So the row is found the way
+-- ElvUI finds it -- by matching the localized level template against each
+-- line's text. The templates are GlobalStrings and are reduced to plain
+-- substrings once, on first use rather than at file scope, so load order
+-- cannot matter.
+local levelMatchA, levelMatchB
+local function LevelMatchers()
+    if levelMatchA == nil then
+        local plain = _G.TOOLTIP_UNIT_LEVEL
+        local raced = _G.TOOLTIP_UNIT_LEVEL_RACE or _G.TOOLTIP_UNIT_LEVEL_CLASS
+        levelMatchA = plain and strlower(plain:gsub("%s?%%s%s?%-?", "")) or false
+        -- The second chain strips the reordered "%2$s ... %1$s" form some
+        -- locales use, then the leading Russian ordinal, then the remaining
+        -- specifiers. Transcribed from ElvUI rather than re-derived --
+        -- getting it wrong only shows up in one locale.
+        levelMatchB = raced
+            and strlower(raced:gsub("^%%2$s%s?(.-)%s?%%1$s", "%1")
+                              :gsub("^%-?г?о?%s?", "")
+                              :gsub("%s?%%s%s?%-?", ""))
+            or false
+    end
+    return levelMatchA, levelMatchB
+end
+
+-- Returns the level row and the row directly after it (the spec/class row),
+-- both as FontStrings, or nil when the tooltip has no level row.
+--
+-- `offset` is the last row to SKIP, not the first to read: a guild row pushes
+-- the level down one, and starting the scan too early matches the guild name
+-- in locales where it can contain the level word.
+local function FindLevelLine(tt, offset)
+    local ok, info = pcall(tt.GetTooltipData, tt)
+    if not ok or not info or not info.lines then return nil end
+
+    local matchA, matchB = LevelMatchers()
+    if not matchA and not matchB then return nil end
+
+    for i = offset + 1, #info.lines do
+        local line = info.lines[i]
+        local text = line and line.leftText
+        if text and not KE:IsSecretValue(text) then
+            if text == "" then return nil end
+            local lower = strlower(text)
+            if (matchA and lower:find(matchA, 1, true))
+                or (matchB and lower:find(matchB, 1, true)) then
+                return _G["GameTooltipTextLeft" .. i],
+                       _G["GameTooltipTextLeft" .. (i + 1)]
+            end
+        end
+    end
+end
+
 -- Embedded tooltips (UIWidgetBaseItemEmbeddedTooltip*, the reward previews
 -- inside UI widgets) must not be written to. Blizzard sizes the host widget
 -- from them -- Blizzard_UIWidgetTemplateBase.lua:1638 does
@@ -410,6 +471,14 @@ function TT:OnTooltipSetUnit(tt)
                         end
                     end
 
+                    -- Angle brackets around the guild name itself, before
+                    -- the rank is appended: "<Instant Dollars> [Officer]".
+                    -- Same form ElvUI writes (Tooltip.lua:269). Guarded on
+                    -- the first character so refresh ticks cannot nest them.
+                    if out:sub(1, 1) ~= "<" then
+                        out = "<" .. out .. ">"
+                    end
+
                     -- Refresh ticks re-run this on text that may already
                     -- carry the rank, so re-appending has to be guarded.
                     if suffix and out:sub(-#suffix) ~= suffix then
@@ -418,6 +487,76 @@ function TT:OnTooltipSetUnit(tt)
 
                     if out ~= text and out ~= "" then line:SetText(out) end
                     break
+                end
+            end
+        end
+    end
+
+    -- Level row rebuild: "90 Dark Iron Dwarf" in place of Blizzard's
+    -- "Level 90 Dark Iron Dwarf (Player)", with the number tinted by how
+    -- dangerous the unit is. Ports ElvUI's SetUnitText/GetLevelLine pair
+    -- (Tooltip.lua:263-304).
+    --
+    -- Deliberate divergence: ElvUI also rebuilds the NAME row from
+    -- UnitName (:261), which is SecretWhenUnitIdentityRestricted. Ours
+    -- stays a recolour -- rebuilding it would put secret name strings
+    -- through format(), which is the one thing this module never does.
+    if UnitIsPlayer(unit) then
+        local guildName = GetGuildInfo(unit)
+        local levelLine, specLine = FindLevelLine(tt, guildName and 2 or 1)
+
+        if levelLine then
+            -- Effective level is what the unit fights at (scaled content);
+            -- real level is what it actually is. ElvUI shows both when they
+            -- differ, so a scaled-down 80 reads "80 (90) Night Elf".
+            local level = UnitEffectiveLevel(unit)
+            local realLevel = UnitLevel(unit)
+            local race = UnitRace(unit)
+            local diff = GetCreatureDifficultyColor(level)
+            local r = (diff and diff.r or 1) * 255
+            local g = (diff and diff.g or 1) * 255
+            local b = (diff and diff.b or 1) * 255
+
+            local shown = (level and level > 0) and level or "??"
+            local text
+            if level and realLevel and level < realLevel then
+                text = format("|cff%02x%02x%02x%s|r |cffFFFFFF(%s)|r %s",
+                    r, g, b, tostring(shown), tostring(realLevel), race or "")
+            else
+                text = format("|cff%02x%02x%02x%s|r %s",
+                    r, g, b, tostring(shown), race or "")
+            end
+            levelLine:SetText(text)
+        end
+
+        -- The row after the level row is the spec/class row ("Protection
+        -- Paladin"). ElvUI rewrites it wrapped in a colour code; a plain
+        -- SetTextColor gets the same look without reading the text, so no
+        -- secret check is needed here.
+        if specLine and db.ClassColorNames then
+            local cr, cg, cb = UnitColor(unit)
+            specLine:SetTextColor(cr, cg, cb)
+        end
+    end
+
+    -- Faction row. "Alliance" / "Horde" duplicates what the name and level
+    -- rows already convey, and the reference look drops it. Ports the
+    -- faction half of ElvUI's RemoveTrashLines (Tooltip.lua:193-204); the
+    -- PvP tag it also strips is left alone.
+    if db.HideFactionLine then
+        local okData, info = pcall(tt.GetTooltipData, tt)
+        if okData and info and info.lines then
+            for i = 3, #info.lines do
+                local text = info.lines[i] and info.lines[i].leftText
+                if text and not KE:IsSecretValue(text) then
+                    if text == "" then break end
+                    if text == _G.FACTION_ALLIANCE or text == _G.FACTION_HORDE then
+                        local left = _G["GameTooltipTextLeft" .. i]
+                        if left then
+                            left:SetText("")
+                            left:Hide()
+                        end
+                    end
                 end
             end
         end

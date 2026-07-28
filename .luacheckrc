@@ -126,7 +126,8 @@ read_globals = {
     -- Unit functions
     "UnitHealth", "UnitHealthMax", "UnitHealthPercent",
     "UnitPower", "UnitPowerMax", "UnitPowerPercent",
-    "UnitName", "UnitFullName", "UnitLevel", "UnitClass", "UnitRace", "GetUnitName",
+    "UnitName", "UnitFullName", "UnitLevel", "UnitEffectiveLevel", "UnitClass", "UnitRace", "GetUnitName",
+    "GetCreatureDifficultyColor",
     "UnitGUID", "UnitExists", "UnitIsDead", "UnitIsUnit", "UnitTokenFromGUID",
     "UnitGroupRolesAssigned",
     "UnitGetTotalAbsorbs",
