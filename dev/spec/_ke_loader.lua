@@ -339,4 +339,13 @@ function L.loadConflicts(overrides)
     return helpers.loadModule("Core/Conflicts.lua", KE), prompts, disabled, printed
 end
 
+-- Modules/Skinning/ChatMessageHandler.lua. GetPFlag is pure string logic --
+-- no WoW API -- so it unit-tests directly against the real KE table the
+-- module writes onto (KE.ChatMessageHandler).
+function L.loadChatMessageHandler(overrides)
+    installMock(overrides, {})
+    local KE = { db = { profile = { Skinning = { Chat = {} } } } }
+    return helpers.loadModule("Modules/Skinning/ChatMessageHandler.lua", KE)
+end
+
 return L
