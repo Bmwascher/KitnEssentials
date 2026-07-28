@@ -958,7 +958,7 @@ end
 function S.SetFont(fontString, size, outline)
     if not fontString or not fontString.SetFont then return end
 
-    if not S._offsetInit and KE.db and KE.db.profile then
+    if not S._offsetInit and KE.db and KE.db.profile and KE.db.profile.Skinning then
         S._offsetInit = true
         local bs = KE.db.profile.Skinning.BlizzardFrames
         S.fontOffset = (bs and tonumber(bs.FontOffset)) or 0
@@ -1320,8 +1320,14 @@ end
 
 local BF = KitnEssentials:NewModule("BlizzardFrames", "AceEvent-3.0")
 
+-- Skinning applies destructively at enable and OnDisable has no frame
+-- teardown, same as the Skin* modules; the name doesn't match
+-- ProfileManager's "^Skin" test, so opt in explicitly.
+BF.keDeferToReload = true
+
 function BF:UpdateDB()
-    self.db = KE.db.profile.Skinning.BlizzardFrames
+    self.db = KE.db and KE.db.profile and KE.db.profile.Skinning
+        and KE.db.profile.Skinning.BlizzardFrames
 end
 
 function BF:OnInitialize()
