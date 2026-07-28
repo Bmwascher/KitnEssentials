@@ -498,9 +498,16 @@ function TT:OnTooltipSetUnit(tt)
     -- (Tooltip.lua:263-304).
     --
     -- Deliberate divergence: ElvUI also rebuilds the NAME row from
-    -- UnitName (:261), which is SecretWhenUnitIdentityRestricted. Ours
-    -- stays a recolour -- rebuilding it would put secret name strings
-    -- through format(), which is the one thing this module never does.
+    -- UnitName (:261), gaining player titles, realm suffixes and AFK/DND
+    -- labels. Ours stays a recolour. That is a scope choice, NOT a safety
+    -- one -- the rebuild is perfectly doable, but it needs the guard ElvUI
+    -- uses. UnitName is SecretWhenUnitIdentityRestricted, and the predicate
+    -- that matches it is ShouldUnitIdentityBeSecret (12.0.7 reference,
+    -- SecretPredicateAPIDocumentation.lua:305), which is what oUF's
+    -- NotSecretUnit wraps (ElvUI_Libraries/.../oUF/init.lua:59-65).
+    -- KE:IsSecretValue(unit) is a WEAKER, different test: it asks whether
+    -- the token is a secret value, not whether the unit's identity is
+    -- restricted. Do not treat the two as interchangeable.
     if UnitIsPlayer(unit) then
         local guildName = GetGuildInfo(unit)
         local levelLine, specLine = FindLevelLine(tt, guildName and 2 or 1)

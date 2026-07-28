@@ -1518,7 +1518,8 @@ local Defaults = {
                 HealthTextSize = 10,
                 ClassColorNames = true,
                 GuildColorEnabled = true,
-                GuildColor = { r = 0, g = 0.8, b = 0.4 },
+                -- ElvUI's guild green (|cff00ff10), which the rank shares.
+                GuildColor = { r = 0, g = 1, b = 0.0627 },
                 TargetLine = true,
                 GuildRankLine = false,
                 HideGuildRealm = false,
