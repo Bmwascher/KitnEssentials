@@ -946,10 +946,6 @@ local fontRegistry = setmetatable({}, { __mode = "k" })
 S.fontOffset = 0
 
 function S.SetFontOffset(offset)
-    -- Plan-introduced: an explicit offset call is authoritative. Without
-    -- this, the lazy database pull inside SetFont (below) would still fire
-    -- on the next call and clobber it back to the saved/default value.
-    S._offsetInit = true
     offset = tonumber(offset) or 0
     if offset == S.fontOffset then return end
     S.fontOffset = offset
