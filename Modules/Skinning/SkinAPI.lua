@@ -989,3 +989,242 @@ function S.SetFont(fontString, size, outline)
         fontRegistry[fontString] = { size = size, outline = outline }
     end
 end
+
+local THUMB_REST, THUMB_HOT = S.palette.brandRestA, 0.75
+local function thumbColor(t, a)
+    local tbd = backdropCache[t]
+    if tbd then tbd:SetBackdropColor(BRAND_HL[1], BRAND_HL[2], BRAND_HL[3], a) end
+end
+local function thumbOnEnter(t) thumbColor(t, THUMB_HOT) end
+local function thumbOnLeave(t) if not t.__aeActive then thumbColor(t, THUMB_REST) end end
+local function thumbOnMouseDown(t) t.__aeActive = true; thumbColor(t, THUMB_HOT) end
+local function thumbOnMouseUp(t) t.__aeActive = nil; thumbColor(t, THUMB_REST) end
+
+local function skinScrollArrows(frame)
+    -- v3.5.860 (currency-transfer FORBIDDEN, the actual root):
+    -- this used S.ArrowButton on the trim bar's steppers, which runs
+    -- zeroArrowStates -> S.KillTexture -> `t.Show = t.Hide` SLOT WRITES
+    -- on stepper textures, plus OnEnter/OnLeave/OnShow re-kill hooks
+    -- that re-poisoned those slots on every hover, plus an
+    -- AdjustPointsOffset nudge (insecure anchor writes on managed
+    -- stepper geometry that ScrollBarMixin:Update reads back through
+    -- GetTrackExtent). ScrollBar:Update runs INSIDE the ScrollBox
+    -- layout pass that initializes list rows -- on TokenFrame that
+    -- poisoned every row's elementData/currencyIndex, and the row
+    -- click carried the taint all the way to
+    -- RequestCurrencyFromAccountCharacter (convicted by config bisect
+    -- + issecurevariable ladder, v859 session).
+    -- ElvUI's stepper contact (ReskinScrollBarArrow) is STATE-ONLY:
+    -- StripTextures + Texture/Overlay alpha 0 + their own arrow art.
+    -- Ported exactly; our overlay glyph replaces their SetNormalTexture.
+    for _, side in ipairs({ { frame.Back, "up" }, { frame.Forward, "down" } }) do
+        local b = side[1]
+        if b then
+            S.StripTextures(b)
+            if b.Texture and b.Texture.SetAlpha then b.Texture:SetAlpha(0) end
+            if b.Overlay and b.Overlay.SetAlpha then b.Overlay:SetAlpha(0) end
+
+            local d = S.data(b)
+            if not d.arrow then
+                local a = b:CreateTexture(nil, "OVERLAY")
+                a:SetPoint("CENTER")
+                a:SetSize(15, 15)
+                a:SetTexture(ARROW_TEX)
+                a:SetRotation(ARROW_ROT[side[2]] or 0)
+                a:SetVertexColor(ARROW_REST[1], ARROW_REST[2], ARROW_REST[3])
+                d.arrow = a
+                b:HookScript("OnEnter", arrowOnEnter)
+                b:HookScript("OnLeave", arrowOnLeave)
+            end
+        end
+    end
+end
+
+function S.TrimScrollBar(frame, ignoreUpdates) -- luacheck: ignore 212/ignoreUpdates
+    if not frame then return end
+    S.StripTextures(frame)
+    skinScrollArrows(frame)
+    if frame.Background and frame.Background.Hide then frame.Background:Hide() end
+    if frame.Track and frame.Track.DisableDrawLayer then frame.Track:DisableDrawLayer("ARTWORK") end
+    local thumb = frame.GetThumb and frame:GetThumb()
+    if thumb and not backdropCache[thumb] then
+        if thumb.DisableDrawLayer then
+            thumb:DisableDrawLayer("ARTWORK")
+            thumb:DisableDrawLayer("BACKGROUND")
+        end
+        local bd = S.Backdrop(thumb)
+        if bd then
+            bd:SetBackdropColor(BRAND_HL[1], BRAND_HL[2], BRAND_HL[3], THUMB_REST)
+            bd:SetFrameLevel((thumb.GetFrameLevel and thumb:GetFrameLevel()) or 1)
+        end
+        thumb:HookScript("OnEnter", thumbOnEnter)
+        thumb:HookScript("OnLeave", thumbOnLeave)
+        thumb:HookScript("OnMouseDown", thumbOnMouseDown)
+        thumb:HookScript("OnMouseUp", thumbOnMouseUp)
+    end
+
+    -- v3.5.868 -- THE ROOT. This used to be:
+    --     hooksecurefunc(frame, "Update", skinScrollArrows)
+    -- and it is the reason atrocityEssentials has been named as the owner
+    -- of taint in Blizzard code all over the addon.
+    --
+    -- ScrollBoxListMixin:Update() calls ScrollBar:Update() partway through
+    -- its own body. Our hook fired there, taint landed, and control then
+    -- returned INTO THE MIDDLE of ScrollBox:Update() -- so every write it
+    -- had left to do was ours. /aeloot proved it key by key: everything
+    -- dirty on the loot history frame is written by that one function
+    -- after the ScrollBar:Update call --
+    --     ScrollBox.updateLock, ScrollBox.panExtentPercentage
+    --     view.acquireLock, view.dataIndexBegin, view.dataIndexEnd,
+    --     view.extent, view.calculatedElementExtents,
+    --     view.hasIdenticalTemplateExtent
+    --     ScrollBar.scrollPercentage/panExtentPercentage/visibleExtentPercentage
+    --     row.GetElementData/SetOrderIndex/GetOrderIndex/GetData/... (the
+    --       ScrollBoxFactoryInitializer mixin, re-applied on frame acquire)
+    --     row.dropInfo/encounterID/lootListID (the element initializer
+    --       calling row:Init)
+    --     row.Item.isCraftedItem/isProfessionItem (SetItemButtonQuality,
+    --       called from inside that Init)
+    -- and row.dropInfo is what LootHistory:38 reads first in SetTooltip,
+    -- which taints the OnEnter and detonates Midnight's secret roll
+    -- geometry at Layout. Intermittent because only updates that actually
+    -- move the scrollbar route through ScrollBar:Update.
+    --
+    -- ElvUI's HandleTrimScrollBar has NO Update hook -- it reskins the
+    -- steppers once and they stay. That is why ElvUI is clean on this and
+    -- we were not. Ours is now theirs: skin once, no hook.
+    --
+    -- `ignoreUpdates` is kept only so the ~40 call sites keep working; it
+    -- is now inert. It was a misport in the first place: ElvUI's second arg
+    -- goes to thumb:CreateBackdrop('Transparent', nil, ignoreUpdates) and
+    -- is a backdrop-registration flag, not a gate on an Update hook they
+    -- never had. Currency passing `true` was accidentally the only skin
+    -- immune to this.
+    --
+    -- v3.5.873 CORRECTION: v868 claimed this hook was the root of the
+    -- LootHistory taint and attached a doctrine to it -- "never
+    -- hooksecurefunc a method Blizzard calls from the middle of another
+    -- Blizzard function". Both were wrong. Removing this hook changed
+    -- nothing, and the v869 staged bisect then installed
+    -- hooksecurefunc(scrollBox, "Update", apply) -- a method Blizzard calls
+    -- mid-function, the exact shape the doctrine forbade -- and every
+    -- object stayed 100% secure. The real root was load-time: the skin ran
+    -- from RegisterEarly and triggered the ScrollBox's FIRST layout, which
+    -- stamped ScrollBox.updateLock ours, and updateLock is read on Update's
+    -- first line so it self-perpetuated (fixed v870 by deferring to first
+    -- OnShow). hooksecurefunc on a Blizzard method is fine and stays fine:
+    -- ElvUI does it thousands of times, S.IconBorder and S.LockStripped
+    -- both hook SetAtlas on Blizzard regions.
+    --
+    -- The removal itself stands anyway, on ElvUI parity: their
+    -- HandleTrimScrollBar has no Update hook, it reskins the steppers once
+    -- and they stay (our v860 state-only rewrite is what makes that true
+    -- for us too). One less per-update closure, no behaviour change.
+end
+
+function S.ScrollBar(scrollbar, ignoreUpdates)
+    if not scrollbar or S.data(scrollbar).skinned then return end
+    if scrollbar.GetThumb or scrollbar.Back or scrollbar.Forward then
+        S.TrimScrollBar(scrollbar, ignoreUpdates)
+    else
+
+        local name = scrollbar.GetName and scrollbar:GetName()
+        local up = scrollbar.ScrollUpButton or scrollbar.UpButton or scrollbar.ScrollUp
+            or (name and _G[name .. "ScrollUpButton"])
+        local down = scrollbar.ScrollDownButton or scrollbar.DownButton or scrollbar.ScrollDown
+            or (name and _G[name .. "ScrollDownButton"])
+        local thumb = scrollbar.ThumbTexture or scrollbar.thumbTexture or scrollbar.Thumb
+            or (name and _G[name .. "ThumbTexture"])
+            or (scrollbar.GetThumbTexture and scrollbar:GetThumbTexture())
+        S.StripTextures(scrollbar)
+        if scrollbar.trackBG then S.KillTexture(scrollbar.trackBG) end
+        if scrollbar.Background and scrollbar.Background.Hide then scrollbar.Background:Hide() end
+        if scrollbar.ScrollUpBorder then scrollbar.ScrollUpBorder:Hide() end
+        if scrollbar.ScrollDownBorder then scrollbar.ScrollDownBorder:Hide() end
+
+        local bd = S.Backdrop(scrollbar)
+        if bd then
+            bd:ClearAllPoints()
+            bd:SetPoint("TOPLEFT", up or scrollbar, up and "BOTTOMLEFT" or "TOPLEFT", 0, 1)
+            bd:SetPoint("BOTTOMRIGHT", down or scrollbar, down and "TOPRIGHT" or "BOTTOMRIGHT", 0, -1)
+        end
+        local lvl = scrollbar.GetFrameLevel and scrollbar:GetFrameLevel() or 1
+        if up then S.ArrowButton(up, "up"); up:SetFrameLevel(lvl + 2) end
+        if down then S.ArrowButton(down, "down"); down:SetFrameLevel(lvl + 2) end
+        if thumb and thumb.SetTexture then
+            thumb:SetTexture("Interface\\Buttons\\WHITE8x8")
+            if thumb.SetTexCoord then thumb:SetTexCoord(0, 1, 0, 1) end
+            thumb:SetVertexColor(BRAND_HL[1], BRAND_HL[2], BRAND_HL[3], THUMB_REST)
+        end
+    end
+    S.data(scrollbar).skinned = true
+end
+
+function S.StepSlider(stepper)
+    if not stepper or S.data(stepper).skinned then return end
+    S.StripTextures(stepper)
+
+    local slider = stepper.Slider
+    if slider then
+        if slider.DisableDrawLayer then slider:DisableDrawLayer("ARTWORK") end
+
+        local thumb = slider.Thumb
+        if thumb then
+            thumb:SetTexture("Interface\\Buttons\\WHITE8x8")
+            thumb:SetVertexColor(BRAND_HL[1], BRAND_HL[2], BRAND_HL[3], S.palette.brandFillA)
+            thumb:SetSize(10, 18)
+        end
+
+        local bd = S.Backdrop(slider)
+        if bd then
+            bd:ClearAllPoints()
+
+            bd:SetPoint("TOPLEFT", slider, "TOPLEFT", 2, -13)
+            bd:SetPoint("BOTTOMRIGHT", slider, "BOTTOMRIGHT", -2, 13)
+
+            bd:SetParent(stepper)
+            bd:SetBackdropColor(CONTROL_BG[1], CONTROL_BG[2], CONTROL_BG[3], CONTROL_BG[4])
+
+            if thumb and not S.data(slider).stepBar then
+                local step = CreateFrame("StatusBar", nil, slider)
+                step:SetFrameLevel(bd:GetFrameLevel() + 1)
+                step:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
+                step:SetStatusBarColor(BRAND_HL[1], BRAND_HL[2], BRAND_HL[3], 0.35)
+                local px = PixelBorder()
+                step:SetPoint("TOPLEFT", bd, "TOPLEFT", px, -px)
+                step:SetPoint("BOTTOMLEFT", bd, "BOTTOMLEFT", px, px)
+                step:SetPoint("RIGHT", thumb, "CENTER")
+                S.data(slider).stepBar = step
+
+                if thumb.SetIgnoreParentAlpha then thumb:SetIgnoreParentAlpha(true) end
+                if step.SetIgnoreParentAlpha then step:SetIgnoreParentAlpha(true) end
+                local function stateColor()
+                    local on = not slider.IsEnabled or slider:IsEnabled()
+                    if on then
+                        thumb:SetVertexColor(BRAND_HL[1], BRAND_HL[2], BRAND_HL[3], S.palette.brandFillA)
+                        step:SetStatusBarColor(BRAND_HL[1], BRAND_HL[2], BRAND_HL[3], 0.35)
+                    else
+                        thumb:SetVertexColor(0.486, 0.486, 0.486, 1)
+                        step:SetStatusBarColor(0.486, 0.486, 0.486, 0.35)
+                    end
+                end
+                if slider.HookScript then
+                    hooksecurefunc(slider, "Enable", stateColor)
+                    hooksecurefunc(slider, "Disable", stateColor)
+                    if slider.SetEnabled then hooksecurefunc(slider, "SetEnabled", stateColor) end
+                end
+                stateColor()
+            end
+        end
+    end
+
+    for _, side in ipairs({ { stepper.Back, "left" }, { stepper.Forward, "right" } }) do
+        local b = side[1]
+        if b then
+            if b.Texture and b.Texture.SetAlpha then b.Texture:SetAlpha(0) end
+            if b.Overlay and b.Overlay.SetAlpha then b.Overlay:SetAlpha(0) end
+            S.ArrowButton(b, side[2])
+        end
+    end
+    S.data(stepper).skinned = true
+end
