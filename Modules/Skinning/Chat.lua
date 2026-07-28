@@ -1629,6 +1629,10 @@ function CHAT:StyleEditbox(editbox)
     end
 
     editbox:HookScript("OnEditFocusGained", function(eb)
+        -- Rewind history to the newest entry every time the box is opened.
+        -- Set synchronously, not inside the deferred call below, so it lands
+        -- before the first key press. See the AddHistoryLine hook for why.
+        eb.historyIndex = 0
         C_Timer.After(0, function() CHAT:EditBoxFocusGained(eb) end)
     end)
     editbox:HookScript("OnEditFocusLost", function(eb)
@@ -1646,6 +1650,13 @@ function CHAT:StyleEditbox(editbox)
                 while #eb.historyLines > 50 do
                     tremove(eb.historyLines, 1)
                 end
+                -- DELIBERATE DEVIATION from the reference, which sets
+                -- historyIndex to 0 once at style time and never again. The
+                -- index therefore carried over between uses: after browsing
+                -- back three entries, the next Up resumed from there instead
+                -- of the newest line. Reset on every send as well as on
+                -- focus, so Up always starts at the most recent message.
+                eb.historyIndex = 0
             end
         end)
     end
