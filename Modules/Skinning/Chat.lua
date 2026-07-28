@@ -299,7 +299,7 @@ end
 
 function CHAT:PlayWhisperSound(soundName)
     if not soundName or soundName == "None" then return end
-    local file = KE.LSM:Fetch("sound", soundName)
+    local file = KE.LSM and KE.LSM:Fetch("sound", soundName)
     if file then PlaySoundFile(file, "Master") end
 end
 
@@ -479,7 +479,9 @@ function CHAT:OnDisable()
     self:RestoreAllChats()
     self:UnregisterEditMode()
     self.hooksSecured = false
+    self.blizzEditModeLockSetup = false
 
+    if self.CopyChatFrame then self.CopyChatFrame:Hide() end
     if self.panel then self.panel:Hide() end
 end
 
@@ -495,6 +497,7 @@ function CHAT:RegisterEditMode()
             setPosition = function(pos)
                 self.db.Position = pos
                 KE:ApplyFramePosition(self.panel, self.db.Position, self.db)
+                self.panel:SetFrameStrata("BACKGROUND")
             end,
             getParentFrame = function()
                 return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
@@ -1296,8 +1299,11 @@ function CHAT:UpdateChatTab(chat)
     chat:SetParent(parent)
 
     if chat.EditModeResizeButton then
-        chat.EditModeResizeButton:SetFrameStrata("HIGH")
-        chat.EditModeResizeButton:SetFrameLevel(6)
+        local resizeButton = chat.EditModeResizeButton
+        resizeButton.keOldStrata = resizeButton.keOldStrata or resizeButton:GetFrameStrata()
+        resizeButton.keOldFrameLevel = resizeButton.keOldFrameLevel or resizeButton:GetFrameLevel()
+        resizeButton:SetFrameStrata("HIGH")
+        resizeButton:SetFrameLevel(6)
     end
 end
 
@@ -2104,14 +2110,20 @@ end
 local HiddenFrame = CreateFrame("Frame")
 HiddenFrame:Hide()
 
-function CHAT:DisableFrame(object)
+-- `list`, when passed, collects every object touched (this one plus all
+-- recursed-into children) in a flat sequence so RestoreDisabledFrame can
+-- restore each one directly instead of re-walking the tree: DisableFrame
+-- reparents children to HiddenFrame before reparenting the object itself,
+-- so by restore time the children are no longer object:GetChildren().
+function CHAT:DisableFrame(object, list)
     if not object then return end
 
-    if object.GetChildren then for _, child in pairs({ object:GetChildren() }) do self:DisableFrame(child) end end
+    if object.GetChildren then for _, child in pairs({ object:GetChildren() }) do self:DisableFrame(child, list) end end
     if object.UnregisterAllEvents then
         -- UnregisterAllEvents has no inverse query API, so the events this
         -- drops cannot be recovered on restore; the reparent and the Hide
-        -- below are the only pieces of this that are capturable.
+        -- below are the only pieces of this that are capturable. The same
+        -- irreversible call also happens inside ClearFrameTextures(frame, true).
         object:UnregisterAllEvents()
         object.keOldParent = object.keOldParent or object:GetParent()
         object:SetParent(HiddenFrame)
@@ -2120,14 +2132,14 @@ function CHAT:DisableFrame(object)
         object.Show = object.Hide
     end
     object:Hide()
+
+    if list then list[#list + 1] = object end
 end
 
--- Reverses the capturable half of DisableFrame (reparent + Show override);
--- see the comment there for what cannot be undone.
+-- Reverses the capturable half of DisableFrame (reparent + Show override)
+-- for a single object; see the comment there for what cannot be undone.
 function CHAT:RestoreDisabledFrame(object)
     if not object then return end
-
-    if object.GetChildren then for _, child in pairs({ object:GetChildren() }) do self:RestoreDisabledFrame(child) end end
 
     if object.keOldParent then
         object:SetParent(object.keOldParent)
@@ -2171,54 +2183,76 @@ function CHAT:HideChatElements(chat)
 
     self:ClearFrameTextures(chat, true)
 
-    if chat.ScrollBar then self:DisableFrame(chat.ScrollBar) end
-    if chat.ScrollToBottomButton then self:DisableFrame(chat.ScrollToBottomButton) end
+    chat.keDisabledObjects = chat.keDisabledObjects or {}
+    local list = chat.keDisabledObjects
+
+    if chat.ScrollBar then self:DisableFrame(chat.ScrollBar, list) end
+    if chat.ScrollToBottomButton then self:DisableFrame(chat.ScrollToBottomButton, list) end
 
     local thumbTexture = _G[name .. "ThumbTexture"]
-    if thumbTexture then self:DisableFrame(thumbTexture) end
+    if thumbTexture then self:DisableFrame(thumbTexture, list) end
 
     local minimize = _G[name .. "MinimizeButton"]
-    if minimize then self:DisableFrame(minimize) end
+    if minimize then self:DisableFrame(minimize, list) end
 
     local editLeft = _G[name .. "EditBoxLeft"]
-    if editLeft then self:DisableFrame(editLeft) end
+    if editLeft then self:DisableFrame(editLeft, list) end
 
     local editMid = _G[name .. "EditBoxMid"]
-    if editMid then self:DisableFrame(editMid) end
+    if editMid then self:DisableFrame(editMid, list) end
 
     local editRight = _G[name .. "EditBoxRight"]
-    if editRight then self:DisableFrame(editRight) end
+    if editRight then self:DisableFrame(editRight, list) end
 end
 
--- Reverses the DisableFrame calls HideChatElements made, for the same set
--- of chat sub-elements, in the same order.
+-- Reverses the DisableFrame calls HideChatElements made by restoring the
+-- flat list of objects DisableFrame actually touched (itself plus every
+-- recursed-into child), rather than re-walking the object tree: those
+-- children are no longer reachable via GetChildren() once DisableFrame has
+-- reparented them to HiddenFrame.
 function CHAT:RestoreChatElements(chat)
-    local name = chat:GetName()
+    if not chat.keDisabledObjects then return end
 
-    if chat.ScrollBar then self:RestoreDisabledFrame(chat.ScrollBar) end
-    if chat.ScrollToBottomButton then self:RestoreDisabledFrame(chat.ScrollToBottomButton) end
+    for _, object in ipairs(chat.keDisabledObjects) do
+        self:RestoreDisabledFrame(object)
+    end
 
-    local thumbTexture = _G[name .. "ThumbTexture"]
-    if thumbTexture then self:RestoreDisabledFrame(thumbTexture) end
-
-    local minimize = _G[name .. "MinimizeButton"]
-    if minimize then self:RestoreDisabledFrame(minimize) end
-
-    local editLeft = _G[name .. "EditBoxLeft"]
-    if editLeft then self:RestoreDisabledFrame(editLeft) end
-
-    local editMid = _G[name .. "EditBoxMid"]
-    if editMid then self:RestoreDisabledFrame(editMid) end
-
-    local editRight = _G[name .. "EditBoxRight"]
-    if editRight then self:RestoreDisabledFrame(editRight) end
+    chat.keDisabledObjects = nil
 end
 
 function CHAT:PositionButtonFrame(chat)
     if not chat.buttonFrame then return end
-    chat.buttonFrame:ClearAllPoints()
-    chat.buttonFrame:SetPoint("TOP", chat, "BOTTOM", 0, -90000)
-    chat.buttonFrame:SetClipsChildren(true)
+    local buttonFrame = chat.buttonFrame
+
+    if not buttonFrame.keOldPoints then
+        buttonFrame.keOldPoints = {}
+        for i = 1, buttonFrame:GetNumPoints() do
+            buttonFrame.keOldPoints[i] = { buttonFrame:GetPoint(i) }
+        end
+        buttonFrame.keOldClipsChildren = buttonFrame:GetClipsChildren()
+    end
+
+    buttonFrame:ClearAllPoints()
+    buttonFrame:SetPoint("TOP", chat, "BOTTOM", 0, -90000)
+    buttonFrame:SetClipsChildren(true)
+end
+
+-- Reverses PositionButtonFrame's reparent-off-screen and clips-children
+-- override.
+function CHAT:RestoreButtonFrame(chat)
+    local buttonFrame = chat.buttonFrame
+    if not buttonFrame or not buttonFrame.keOldPoints then return end
+
+    buttonFrame:ClearAllPoints()
+    for _, pointData in ipairs(buttonFrame.keOldPoints) do
+        if pointData[2] then
+            buttonFrame:SetPoint(pointData[1], pointData[2], pointData[3], pointData[4], pointData[5])
+        end
+    end
+    buttonFrame:SetClipsChildren(buttonFrame.keOldClipsChildren or false)
+
+    buttonFrame.keOldPoints = nil
+    buttonFrame.keOldClipsChildren = nil
 end
 
 local hyperlinkHoveredFrame
@@ -2308,9 +2342,12 @@ function CHAT:StyleOverflowButton()
     local btn = _G.GeneralDockManagerOverflowButton
     if not btn then return end
 
-    if _G.GeneralDockManagerOverflowButtonList then
-        _G.GeneralDockManagerOverflowButtonList:SetFrameStrata("LOW")
-        _G.GeneralDockManagerOverflowButtonList:SetFrameLevel(5)
+    local overflowList = _G.GeneralDockManagerOverflowButtonList
+    if overflowList then
+        overflowList.keOldStrata = overflowList.keOldStrata or overflowList:GetFrameStrata()
+        overflowList.keOldFrameLevel = overflowList.keOldFrameLevel or overflowList:GetFrameLevel()
+        overflowList:SetFrameStrata("LOW")
+        overflowList:SetFrameLevel(5)
     end
 
     btn:ClearAllPoints()
@@ -2396,7 +2433,8 @@ function CHAT:StyleOverflowButton()
     end
 
     if not btn.SetAlphaHooked then
-        local origSetAlpha = btn.SetAlpha
+        btn.keOldSetAlpha = btn.keOldSetAlpha or btn.SetAlpha
+        local origSetAlpha = btn.keOldSetAlpha
         btn.SetAlpha = function(frame, alpha)
             if frame.alerting then
                 alpha = 1
@@ -2485,8 +2523,11 @@ function CHAT:PositionChat(chat)
     end
 
     if chat.EditModeResizeButton then
-        chat.EditModeResizeButton:SetFrameStrata("HIGH")
-        chat.EditModeResizeButton:SetFrameLevel(6)
+        local resizeButton = chat.EditModeResizeButton
+        resizeButton.keOldStrata = resizeButton.keOldStrata or resizeButton:GetFrameStrata()
+        resizeButton.keOldFrameLevel = resizeButton.keOldFrameLevel or resizeButton:GetFrameLevel()
+        resizeButton:SetFrameStrata("HIGH")
+        resizeButton:SetFrameLevel(6)
     end
 
     self.isPositioning = false
@@ -2578,8 +2619,59 @@ function CHAT:RestoreChat(chat)
     if not chat then return end
 
     local id = chat:GetID()
+    local tab = self:GetTab(chat)
+
+    -- Scripts/child-frame mutations only ever happened if the styling pass
+    -- reached its one-time block for this frame (chat.keStyled); gating on
+    -- it here keeps an untouched frame (e.g. the combat log) from having
+    -- SetScript(..., nil) called on it and losing Blizzard's own handler.
+    -- Checked BEFORE the originalStates[id] lookup below: OnFCF_Close nils
+    -- originalStates[id] on window close while leaving keStyled and the
+    -- keOld* saves set, so gating this block on state instead would skip
+    -- it forever for any chat window closed during the session.
+    if chat.keStyled then
+        if chat.keOldOnEvent then chat:SetScript("OnEvent", chat.keOldOnEvent) end
+        if chat.keOldOnMouseWheel then chat:SetScript("OnMouseWheel", chat.keOldOnMouseWheel) end
+        chat.AddMessage = chat.OldAddMessage or chat.AddMessage
+        if tab and tab.keOldOnClick then tab:SetScript("OnClick", tab.keOldOnClick) end
+
+        self:RestoreChatElements(chat)
+        self:RestoreButtonFrame(chat)
+        if chat.copyButton then chat.copyButton:Hide() end
+
+        if chat.Selection and (chat.Selection.keOldOnDragStart ~= nil or chat.Selection.keOldOnDragStop ~= nil) then
+            local selection = chat.Selection
+            selection:SetScript("OnDragStart", selection.keOldOnDragStart)
+            selection:SetScript("OnDragStop", selection.keOldOnDragStop)
+            selection:EnableMouse(true)
+            selection.keOldOnDragStart, selection.keOldOnDragStop = nil, nil
+        end
+
+        if chat.EditModeResizeButton then
+            local resizeButton = chat.EditModeResizeButton
+            if resizeButton.keOldShow then
+                resizeButton.Show = resizeButton.keOldShow
+                resizeButton.keOldShow = nil
+                resizeButton:EnableMouse(true)
+            end
+            if resizeButton.keOldStrata then
+                resizeButton:SetFrameStrata(resizeButton.keOldStrata)
+                resizeButton:SetFrameLevel(resizeButton.keOldFrameLevel)
+                resizeButton.keOldStrata, resizeButton.keOldFrameLevel = nil, nil
+            end
+        end
+
+        chat.OldAddMessage, chat.keOldOnEvent, chat.keOldOnMouseWheel = nil, nil, nil
+        if tab then tab.keOldOnClick = nil end
+        chat.keStyled = nil
+    end
+
     local state = self.originalStates[id]
-    if not state then return end
+    if not state then
+        chat.styled = nil
+        chat.scriptsSet = nil
+        return
+    end
 
     if state.parent then chat:SetParent(state.parent) end
     if state.points then
@@ -2599,28 +2691,10 @@ function CHAT:RestoreChat(chat)
     if state.clampRectInsets then chat:SetClampRectInsets(unpack(state.clampRectInsets)) end
     if state.clampedToScreen ~= nil then chat:SetClampedToScreen(state.clampedToScreen) end
 
-    local tab = self:GetTab(chat)
     if tab and state.tabParent then tab:SetParent(state.tabParent) end
     if chat.Background then
         chat.Background.Show = nil
         if state.backgroundShown then chat.Background:Show() end
-    end
-
-    -- Scripts/child-frame mutations only ever happened if the styling pass
-    -- reached its one-time block for this frame (chat.keStyled); gating on
-    -- it here keeps an untouched frame (e.g. the combat log) from having
-    -- SetScript(..., nil) called on it and losing Blizzard's own handler.
-    if chat.keStyled then
-        if chat.keOldOnEvent then chat:SetScript("OnEvent", chat.keOldOnEvent) end
-        if chat.keOldOnMouseWheel then chat:SetScript("OnMouseWheel", chat.keOldOnMouseWheel) end
-        chat.AddMessage = chat.OldAddMessage or chat.AddMessage
-        if tab and tab.keOldOnClick then tab:SetScript("OnClick", tab.keOldOnClick) end
-
-        self:RestoreChatElements(chat)
-
-        chat.OldAddMessage, chat.keOldOnEvent, chat.keOldOnMouseWheel = nil, nil, nil
-        if tab then tab.keOldOnClick = nil end
-        chat.keStyled = nil
     end
 
     chat.styled = nil
@@ -2638,6 +2712,20 @@ function CHAT:RestoreDockManager()
         end
     end
     self.originalDockState = nil
+
+    local overflowList = _G.GeneralDockManagerOverflowButtonList
+    if overflowList and overflowList.keOldStrata then
+        overflowList:SetFrameStrata(overflowList.keOldStrata)
+        overflowList:SetFrameLevel(overflowList.keOldFrameLevel)
+        overflowList.keOldStrata, overflowList.keOldFrameLevel = nil, nil
+    end
+
+    local overflowBtn = _G.GeneralDockManagerOverflowButton
+    if overflowBtn and overflowBtn.SetAlphaHooked then
+        overflowBtn.SetAlpha = overflowBtn.keOldSetAlpha
+        overflowBtn.keOldSetAlpha = nil
+        overflowBtn.SetAlphaHooked = nil
+    end
 end
 
 function CHAT:UpdatePanel()
@@ -2999,6 +3087,8 @@ function CHAT:LockChatInBlizzEditMode(chat)
 
     local selection = chat.Selection
     if selection then
+        selection.keOldOnDragStart = selection.keOldOnDragStart or selection:GetScript("OnDragStart")
+        selection.keOldOnDragStop = selection.keOldOnDragStop or selection:GetScript("OnDragStop")
         selection:SetScript("OnDragStart", nil)
         selection:SetScript("OnDragStop", nil)
         selection:EnableMouse(false)
@@ -3007,6 +3097,7 @@ function CHAT:LockChatInBlizzEditMode(chat)
     if chat.EditModeResizeButton then
         chat.EditModeResizeButton:Hide()
         chat.EditModeResizeButton:EnableMouse(false)
+        chat.EditModeResizeButton.keOldShow = chat.EditModeResizeButton.keOldShow or chat.EditModeResizeButton.Show
         chat.EditModeResizeButton.Show = chat.EditModeResizeButton.Hide
     end
 
