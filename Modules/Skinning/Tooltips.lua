@@ -334,7 +334,8 @@ function TT:OnTooltipSetUnit(tt)
         return
     end
 
-    local _, unit = tt:GetUnit()
+    local unitOk, _, unit = pcall(tt.GetUnit, tt)
+    if not unitOk then return end
     if not unit or KE:IsSecretValue(unit) or not UnitExists(unit) then return end
 
     -- Class/reaction color: recolor the existing name line (EUI's
@@ -668,22 +669,25 @@ function TT:OnEnable()
                 if TT:IsEnabled() and TT.db and TT.db.HealthBarHidden then bar:Hide() end
             end)
         end
-
-        self:SecureHook("GameTooltip_SetDefaultAnchor", "SetDefaultAnchor")
-
-        -- v4.0.7 (buff frame missing Spell IDs with shift): the modern
-        -- BuffFrame builds its tooltips through SetUnitBuffByAuraInstanceID,
-        -- which is TooltipDataType.UnitAura -- the Spell post-call never
-        -- fires. ElvUI hooks the aura setters directly; same here, with
-        -- the spellId resolved from C_UnitAuras at hook time.
-        if _G.GameTooltip.SetUnitBuffByAuraInstanceID then
-            self:SecureHook(_G.GameTooltip, "SetUnitBuffByAuraInstanceID", "AuraIDByInstance")
-            self:SecureHook(_G.GameTooltip, "SetUnitDebuffByAuraInstanceID", "AuraIDByInstance")
-        end
-        self:SecureHook(_G.GameTooltip, "SetUnitAura", "AuraIDByIndex")
-        self:SecureHook(_G.GameTooltip, "SetUnitBuff", "AuraIDByIndex")
-        self:SecureHook(_G.GameTooltip, "SetUnitDebuff", "AuraIDByIndex")
     end
+
+    -- AceHook's UnhookAll (OnEmbedDisable) strips every SecureHook when the
+    -- module disables, but self.hooked stays true -- so these live outside
+    -- the guard above and re-register on every enable.
+    self:SecureHook("GameTooltip_SetDefaultAnchor", "SetDefaultAnchor")
+
+    -- v4.0.7 (buff frame missing Spell IDs with shift): the modern
+    -- BuffFrame builds its tooltips through SetUnitBuffByAuraInstanceID,
+    -- which is TooltipDataType.UnitAura -- the Spell post-call never
+    -- fires. ElvUI hooks the aura setters directly; same here, with
+    -- the spellId resolved from C_UnitAuras at hook time.
+    if _G.GameTooltip.SetUnitBuffByAuraInstanceID then
+        self:SecureHook(_G.GameTooltip, "SetUnitBuffByAuraInstanceID", "AuraIDByInstance")
+        self:SecureHook(_G.GameTooltip, "SetUnitDebuffByAuraInstanceID", "AuraIDByInstance")
+    end
+    self:SecureHook(_G.GameTooltip, "SetUnitAura", "AuraIDByIndex")
+    self:SecureHook(_G.GameTooltip, "SetUnitBuff", "AuraIDByIndex")
+    self:SecureHook(_G.GameTooltip, "SetUnitDebuff", "AuraIDByIndex")
 
     -- v3.5.893 (holding a modifier after the tooltip was already
     -- up never added the ID lines): ElvUI's mechanism -- on modifier

@@ -399,15 +399,9 @@ function L.loadTooltips(opts, overrides)
     }
     _G.UnitReaction = opts.UnitReaction or function() return 5 end
     _G.IsModifierKeyDown = opts.IsModifierKeyDown or function() return false end
-    -- The CURRENT module indexes these two at file scope
-    -- (Modules/Skinning/Tooltips.lua:29 and :35). Without them Step 2's red
-    -- would be a load-time nil index instead of the missing test seams, and
-    -- the test would be passing for the wrong reason. The ported module reads
-    -- neither at file scope, so neither is needed to LOAD it -- Enum is still
-    -- read at runtime inside OnEnable, which no spec here exercises.
-    _G.C_CurrencyInfo = { GetCoinTextureString = function() return "" end }
-    _G.Enum = _G.Enum or {}
-    _G.Enum.TooltipDataType = { Unit = 0, Spell = 1, Item = 2, Macro = 3 }
+    -- Only the pure helpers (_ShortValue/_ColorsMatch/_ReactionColor/
+    -- _WantIDs) are reachable from a spec; nothing here calls OnEnable, so
+    -- only the globals those four touch need a stub.
     local KE = {
         Print = function() end,
         ShouldNotLoadModule = function() return false end,
