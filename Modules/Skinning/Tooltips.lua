@@ -551,13 +551,7 @@ function TT:EnsureAnchor()
     local f = CreateFrame("Frame", "KE_TooltipAnchor", UIParent)
     f:SetSize(130, 20)
     self.anchorFrame = f
-    local function place()
-        local p = self.db.Position
-        f:ClearAllPoints()
-        f:SetPoint(p.AnchorFrom or "BOTTOMRIGHT", UIParent, p.AnchorTo or "BOTTOMRIGHT",
-            p.XOffset or -120, p.YOffset or 220)
-    end
-    place()
+    self:ApplyPosition()
     if KE.EditMode and KE.EditMode.RegisterElement then
         KE.EditMode:RegisterElement({
             key = "TooltipAnchor",
@@ -570,11 +564,37 @@ function TT:EnsureAnchor()
                 p.AnchorTo = pos.AnchorTo
                 p.XOffset = pos.XOffset
                 p.YOffset = pos.YOffset
-                place()
+                self:ApplyPosition()
             end,
-            getParentFrame = function() return UIParent end,
+            getParentFrame = function()
+                local p = self.db.Position
+                return KE:ResolveAnchorFrame(p.AnchorFrameType, p.ParentFrame)
+            end,
             guiPath = "SkinTooltips",
         })
+    end
+end
+
+-- KE-only. The reference anchors to UIParent and never repositions; KE's
+-- position card offers a parent frame and a strata, and both need somewhere
+-- to land. Before EnsureAnchor has run there is no frame to move, so only
+-- the strata pass does anything.
+function TT:ApplyPosition()
+    local p = self.db and self.db.Position
+    if not p then return end
+
+    if self.anchorFrame then
+        local parent = KE:ResolveAnchorFrame(p.AnchorFrameType, p.ParentFrame)
+        self.anchorFrame:ClearAllPoints()
+        self.anchorFrame:SetPoint(p.AnchorFrom or "BOTTOMRIGHT", parent,
+            p.AnchorTo or "BOTTOMRIGHT", p.XOffset or -120, p.YOffset or 220)
+    end
+
+    if p.Strata then
+        for _, name in pairs(STYLE_LIST) do
+            local tt = _G[name]
+            if tt and tt.SetFrameStrata then tt:SetFrameStrata(p.Strata) end
+        end
     end
 end
 
@@ -585,6 +605,7 @@ function TT:ApplySettings()
     self:UpdateDB()
     self:ApplyFonts()
     self:StyleHealthBar()
+    self:ApplyPosition()
     -- Restyle anything currently shown so color edits apply live.
     for _, name in pairs(STYLE_LIST) do
         local tt = _G[name]
