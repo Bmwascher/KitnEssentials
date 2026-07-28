@@ -41,7 +41,6 @@ local UnitPVPName = UnitPVPName
 local UnitRealmRelationship = UnitRealmRelationship
 local UnitIsAFK = UnitIsAFK
 local UnitIsDND = UnitIsDND
-local IsShiftKeyDown = IsShiftKeyDown
 local GetCreatureDifficultyColor = GetCreatureDifficultyColor
 local GetGuildInfo = GetGuildInfo
 local InCombatLockdown = InCombatLockdown
@@ -485,8 +484,16 @@ function TT:OnTooltipSetUnit(tt)
             local pvpName = UnitPVPName(unit)
             if pvpName and pvpName ~= "" then name = pvpName end
 
-            -- Shift spells the realm out in full; otherwise Blizzard's own
-            -- compact marker says "different realm" without the width.
+            -- AlwaysShowRealm spells the realm out in full; otherwise
+            -- Blizzard's own compact marker says "different realm" without
+            -- the width.
+            --
+            -- Deliberately a SETTING and not a Shift modifier, which is what
+            -- the reference uses. MODIFIER_STATE_CHANGED below refuses to
+            -- refresh unit tooltips on purpose (see v3.5.899 there: the
+            -- refresh re-runs Blizzard's line builders on our tainted
+            -- execution and throws on a secret unit), so a modifier would be
+            -- read once on hover and never again -- a dead control.
             --
             -- Shaped after Blizzard's GetUnitName
             -- (Blizzard_UnitFrame/Mainline/UnitFrame.lua:1085-1101): a
@@ -498,7 +505,7 @@ function TT:OnTooltipSetUnit(tt)
             -- comparing against a nil constant would also make a nil
             -- relationship match by accident.
             if realm and realm ~= "" then
-                if IsShiftKeyDown() then
+                if db.AlwaysShowRealm then
                     name = name .. "-" .. realm
                 elseif UnitRealmRelationship(unit) ~= _G.LE_REALM_RELATION_VIRTUAL then
                     name = name .. (_G.FOREIGN_SERVER_LABEL or "")

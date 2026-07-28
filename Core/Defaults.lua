@@ -1524,6 +1524,7 @@ local Defaults = {
                 GuildRankLine = false,
                 HideGuildRealm = false,
                 HideFactionLine = true,
+                AlwaysShowRealm = false,
                 MythicPlusLine = false,
                 HideInCombat = false,
                 CursorAnchor = false,

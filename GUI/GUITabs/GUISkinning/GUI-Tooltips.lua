@@ -199,7 +199,11 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
             function() return db.CursorAnchor == true end,
             function(v) db.CursorAnchor = v end,
             "Default-anchored tooltips follow the mouse cursor instead."), 40,
-        nil, nil, true)
+        MkCheck("Always Show Realm",
+            function() return db.AlwaysShowRealm == true end,
+            function(v) db.AlwaysShowRealm = v end,
+            "Spells out a cross-realm player's realm in full. Off shows Blizzard's short marker instead, which keeps the tooltip narrow."), 40,
+        true)
     yOffset = card2:GetNextOffset()
 
     ----------------------------------------------------------------
