@@ -925,10 +925,10 @@ function CHAT:AddMessageEdits(_, msg, isHistory, historyTime)
     local isProtected = self:MessageIsProtected(msg)
     if isProtected then return msg end
 
-    if strmatch(msg, '^%s*$') or strmatch(msg, '^|Hnrsktime|h') then return msg end
+    if strmatch(msg, '^%s*$') or strmatch(msg, '^|Hketime|h') then return msg end
 
     local historyTimestamp
-    if isHistory == "AES_ChatHistory" then historyTimestamp = historyTime end
+    if isHistory == "KE_ChatHistory" then historyTimestamp = historyTime end
     if db.ShortChannels then msg = self:HandleShortChannels(msg, false) end
     if db.TimestampFormat and db.TimestampFormat ~= "NONE" then
         local timestamp = BetterDate(db.TimestampFormat, historyTimestamp or self:GetDateTime(db.UseLocalTime))
@@ -938,9 +938,9 @@ function CHAT:AddMessageEdits(_, msg, isHistory, historyTime)
         if db.TimestampColorEnabled and db.TimestampColor then
             local c = db.TimestampColor
             local colorCode = format("|cff%02x%02x%02x", (c.r or 0.6) * 255, (c.g or 0.6) * 255, (c.b or 0.6) * 255)
-            msg = format("|Hnrsktime|h%s%s|r|h %s", colorCode, timestamp, msg)
+            msg = format("|Hketime|h%s%s|r|h %s", colorCode, timestamp, msg)
         else
-            msg = format("|Hnrsktime|h%s|h %s", timestamp, msg)
+            msg = format("|Hketime|h%s|h %s", timestamp, msg)
         end
     end
 
@@ -1642,8 +1642,8 @@ function CHAT:SetupChatScripts(chat)
     local id = chat:GetID()
     local allowHooks = id and not IGNORE_FRAMES[id]
 
-    if not chat.nrsknSetScriptHooked then
-        chat.nrsknSetScriptHooked = true
+    if not chat.keSetScriptHooked then
+        chat.keSetScriptHooked = true
         hooksecurefunc(chat, "SetScript", function(frame, scriptType, handler)
             self:ChatFrame_SetScript(frame, scriptType, handler)
         end)
@@ -1658,9 +1658,9 @@ function CHAT:SetupChatScripts(chat)
         end)
     end
 
-    chat.nrsknSettingMouseWheel = true
+    chat.keSettingMouseWheel = true
     chat:SetScript("OnMouseWheel", function(frame, delta) self:ChatFrame_OnMouseWheel(frame, delta) end)
-    chat.nrsknSettingMouseWheel = nil
+    chat.keSettingMouseWheel = nil
 
     if not self:IsHooked(chat, "OnHyperlinkEnter") then self:HookScript(chat, "OnHyperlinkEnter", "OnHyperlinkEnter") end
     if not self:IsHooked(chat, "OnHyperlinkLeave") then self:HookScript(chat, "OnHyperlinkLeave", "OnHyperlinkLeave") end
@@ -1941,12 +1941,12 @@ function CHAT:ChatFrame_OnMouseWheel(frame, delta)
 end
 
 function CHAT:ChatFrame_SetScript(frame, scriptType)
-    if scriptType == "OnMouseWheel" and not frame.nrsknSettingMouseWheel then
+    if scriptType == "OnMouseWheel" and not frame.keSettingMouseWheel then
         C_Timer.After(0, function()
-            if frame and frame.scriptsSet and not frame.nrsknSettingMouseWheel then
-                frame.nrsknSettingMouseWheel = true
+            if frame and frame.scriptsSet and not frame.keSettingMouseWheel then
+                frame.keSettingMouseWheel = true
                 frame:SetScript("OnMouseWheel", function(f, delta) self:ChatFrame_OnMouseWheel(f, delta) end)
-                frame.nrsknSettingMouseWheel = nil
+                frame.keSettingMouseWheel = nil
             end
         end)
     end
@@ -1958,6 +1958,7 @@ function CHAT:UpdatePanel()
 
     self.panel:SetSize(db.Width or PANEL_WIDTH, db.Height or PANEL_HEIGHT)
     KE:ApplyFramePosition(self.panel, db.Position, db)
+    self.panel:SetFrameStrata("BACKGROUND")
 
     if self.panel.backdrop then self:ApplyBackdrop(self.panel.backdrop) end
     self:UpdateTabBackdrop()
