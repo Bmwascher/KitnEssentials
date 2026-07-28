@@ -659,6 +659,19 @@ local function arrowOnLeave(btn)
     if a then a:SetVertexColor(ARROW_REST[1], ARROW_REST[2], ARROW_REST[3]) end
 end
 
+function S.StatusBar(bar, inset)
+    if not bar or S.data(bar).skinned then return end
+    S.Backdrop(bar, inset or -1)
+    S.data(bar).skinned = true
+end
+
+function S.ProgressFill(bar)
+    if not bar or not bar.SetStatusBarTexture then return end
+    bar:SetStatusBarTexture(HOVER_TEX)
+    local c = S.palette.progress
+    bar:SetStatusBarColor(c[1], c[2], c[3], c[4])
+end
+
 function S.ArrowTexture(tex, dir, size)
     if not tex then return end
     tex:SetTexture(ARROW_TEX)
