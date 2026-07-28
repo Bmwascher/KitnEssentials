@@ -1134,22 +1134,29 @@ function CHAT:AddMessageEdits(_, msg, isHistory, historyTime)
     if not msg then return msg end
     if KE:IsSecretValue(msg) then return msg end
 
-    -- BN colorize runs BEFORE the |K protection bail below: BN messages
+    -- BN colorize runs BEFORE the |K protection check below: BN messages
     -- ALWAYS contain |K names, so MessageIsProtected is true for every
-    -- one of them and the rest of the edit pipeline skips them.
+    -- one of them.
     local db = self.db
     if db.ClassColorWhispers ~= false and strfind(msg, "|HBNplayer:", 1, true) then
         msg = ColorizeBNSenders(msg)
     end
 
+    -- Protected messages skip the string-parsing steps below (the
+    -- strmatch early-return and HandleShortChannels' gsub rewrite) but
+    -- still fall through to the timestamp block, which only prepends via
+    -- format and never parses the |K payload. Matches ElvUI's
+    -- AddMessageEdits (ElvUI/Game/Shared/Modules/Chat/Chat.lua:1100-1128),
+    -- which uses the same isProtected flag only to skip its strmatch guards.
     local isProtected = self:MessageIsProtected(msg)
-    if isProtected then return msg end
 
-    if strmatch(msg, '^%s*$') or strmatch(msg, '^|Hketime|h') then return msg end
+    if not isProtected then
+        if strmatch(msg, '^%s*$') or strmatch(msg, '^|Hketime|h') then return msg end
+    end
 
     local historyTimestamp
     if isHistory == "KE_ChatHistory" then historyTimestamp = historyTime end
-    if db.ShortChannels then msg = self:HandleShortChannels(msg, false) end
+    if not isProtected and db.ShortChannels then msg = self:HandleShortChannels(msg, false) end
     if db.TimestampFormat and db.TimestampFormat ~= "NONE" then
         local timestamp = BetterDate(db.TimestampFormat, historyTimestamp or self:GetDateTime(db.UseLocalTime))
         timestamp = gsub(timestamp, " ", "")
