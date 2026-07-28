@@ -127,6 +127,7 @@ read_globals = {
     "UnitHealth", "UnitHealthMax", "UnitHealthPercent",
     "UnitPower", "UnitPowerMax", "UnitPowerPercent",
     "UnitName", "UnitFullName", "UnitLevel", "UnitEffectiveLevel", "UnitClass", "UnitRace", "GetUnitName",
+    "UnitPVPName", "UnitRealmRelationship", "UnitIsAFK", "UnitIsDND",
     "GetCreatureDifficultyColor",
     "UnitGUID", "UnitExists", "UnitIsDead", "UnitIsUnit", "UnitTokenFromGUID",
     "UnitGroupRolesAssigned",

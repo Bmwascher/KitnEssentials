@@ -37,6 +37,11 @@ local UnitReaction = UnitReaction
 local UnitLevel = UnitLevel
 local UnitEffectiveLevel = UnitEffectiveLevel
 local UnitRace = UnitRace
+local UnitPVPName = UnitPVPName
+local UnitRealmRelationship = UnitRealmRelationship
+local UnitIsAFK = UnitIsAFK
+local UnitIsDND = UnitIsDND
+local IsShiftKeyDown = IsShiftKeyDown
 local GetCreatureDifficultyColor = GetCreatureDifficultyColor
 local GetGuildInfo = GetGuildInfo
 local InCombatLockdown = InCombatLockdown
@@ -367,6 +372,49 @@ local function FindLevelLine(tt, offset)
     end
 end
 
+-- Reading a unit's name is only safe when its identity is not restricted.
+-- UnitName and UnitPVPName are both SecretWhenUnitIdentityRestricted, and
+-- C_Secrets.ShouldUnitIdentityBeSecret is the predicate that matches them
+-- (12.0.7 reference, SecretPredicateAPIDocumentation.lua:305 -- it returns a
+-- plain bool, so testing it directly is safe).
+--
+-- This is a STRICTER test than KE:IsSecretValue(unit), which only asks
+-- whether the token is a secret value. The two are NOT interchangeable, and
+-- only this one licenses concatenating a name.
+--
+-- Deliberately NOT copied from oUF, whose NotSecretUnit calls the BARE global
+-- `ShouldUnitIdentityBeSecret` (ElvUI_Libraries/.../oUF/init.lua:59-65). That
+-- global does not exist: the system declares Namespace = "C_Secrets", so it
+-- only ever exports under C_Secrets. oUF's `ShouldUnitIdentityBeSecret and`
+-- short-circuit therefore always yields nil, making NotSecretUnit constantly
+-- true and ElvUI's name rebuild effectively unguarded. Caught by KE's
+-- luacheckrc drift check 2026-07-28. Fail CLOSED here: no predicate, no
+-- rebuild.
+local function CanReadIdentity(unit)
+    local fn = C_Secrets and C_Secrets.ShouldUnitIdentityBeSecret
+    if not fn then return false end
+
+    local ok, restricted = pcall(fn, unit)
+    return ok and not restricted
+end
+
+-- The "<Away>" / "<Busy>" suffix.
+--
+-- UnitIsAFK and UnitIsDND are SecretInChatMessagingLockdown -- a DIFFERENT
+-- condition from identity restriction, so CanReadIdentity does not cover
+-- them and they need their own check. The secret test has to come first: a
+-- truth test on a secret boolean throws. Same shape as ElvUI's E:UnitIsAFK
+-- wrapper (ElvUI/Game/Shared/General/API.lua:1439-1449).
+local function AwayLabel(unit)
+    local afk = UnitIsAFK(unit)
+    if not KE:IsSecretValue(afk) and afk then return _G.AFK_LABEL or "" end
+
+    local dnd = UnitIsDND(unit)
+    if not KE:IsSecretValue(dnd) and dnd then return _G.DND_LABEL or "" end
+
+    return ""
+end
+
 -- Embedded tooltips (UIWidgetBaseItemEmbeddedTooltip*, the reward previews
 -- inside UI widgets) must not be written to. Blizzard sizes the host widget
 -- from them -- Blizzard_UIWidgetTemplateBase.lua:1638 does
@@ -408,6 +456,45 @@ function TT:OnTooltipSetUnit(tt)
         if line1 then line1:SetTextColor(r, g, b) end
         local bar = _G.GameTooltipStatusBar
         if bar then bar:SetStatusBarColor(r, g, b) end
+    end
+
+    -- Name row rebuild: player title, realm suffix and the Away/Busy label,
+    -- none of which Blizzard's own row carries. Ports ElvUI SetUnitText
+    -- (Tooltip.lua:231-261) minus its ElvUI-version lookup and its gender
+    -- prefix.
+    --
+    -- Colour is deliberately NOT set here. SetText does not clear a
+    -- SetTextColor, so the ClassColorNames block above stays the single
+    -- owner of the colour instead of two paths fighting over it.
+    --
+    -- CanReadIdentity is the only guard, matching the reference: it is the
+    -- documented predicate for exactly these returns, so re-checking each
+    -- value with KE:IsSecretValue would be the over-guarding that has
+    -- silently killed features in this project before.
+    if UnitIsPlayer(unit) and CanReadIdentity(unit) then
+        local name, realm = UnitName(unit)
+        if name then
+            local pvpName = UnitPVPName(unit)
+            if pvpName and pvpName ~= "" then name = pvpName end
+
+            -- Shift spells the realm out in full; otherwise Blizzard's own
+            -- compact markers say "different realm" without the width.
+            if realm and realm ~= "" then
+                if IsShiftKeyDown() then
+                    name = name .. "-" .. realm
+                else
+                    local rel = UnitRealmRelationship(unit)
+                    if rel == _G.LE_REALM_RELATION_COALESCED then
+                        name = name .. (_G.FOREIGN_SERVER_LABEL or "")
+                    elseif rel == _G.LE_REALM_RELATION_VIRTUAL then
+                        name = name .. (_G.INTERACTIVE_SERVER_LABEL or "")
+                    end
+                end
+            end
+
+            local line1 = _G.GameTooltipTextLeft1
+            if line1 then line1:SetText(name .. AwayLabel(unit)) end
+        end
     end
 
     -- Guild line color: for players with a guild, Blizzard's line 2 is
@@ -497,17 +584,7 @@ function TT:OnTooltipSetUnit(tt)
     -- dangerous the unit is. Ports ElvUI's SetUnitText/GetLevelLine pair
     -- (Tooltip.lua:263-304).
     --
-    -- Deliberate divergence: ElvUI also rebuilds the NAME row from
-    -- UnitName (:261), gaining player titles, realm suffixes and AFK/DND
-    -- labels. Ours stays a recolour. That is a scope choice, NOT a safety
-    -- one -- the rebuild is perfectly doable, but it needs the guard ElvUI
-    -- uses. UnitName is SecretWhenUnitIdentityRestricted, and the predicate
-    -- that matches it is ShouldUnitIdentityBeSecret (12.0.7 reference,
-    -- SecretPredicateAPIDocumentation.lua:305), which is what oUF's
-    -- NotSecretUnit wraps (ElvUI_Libraries/.../oUF/init.lua:59-65).
-    -- KE:IsSecretValue(unit) is a WEAKER, different test: it asks whether
-    -- the token is a secret value, not whether the unit's identity is
-    -- restricted. Do not treat the two as interchangeable.
+    -- The name row above is rebuilt separately, behind CanReadIdentity.
     if UnitIsPlayer(unit) then
         local guildName = GetGuildInfo(unit)
         local levelLine, specLine = FindLevelLine(tt, guildName and 2 or 1)
