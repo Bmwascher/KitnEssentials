@@ -377,4 +377,45 @@ function L.loadSkinAPI(overrides)
     return helpers.loadModule("Modules/Skinning/SkinAPI.lua", KE)
 end
 
+-- Modules/Skinning/Tooltips.lua. TT is a file-local never assigned onto KE --
+-- the shim registry is the only handle to it. Returns TT, KE.
+-- `opts` carries globals _wow_mock does NOT manage (UnitReaction,
+-- IsModifierKeyDown): those go straight on _G, so the `overrides` path cannot
+-- reach them. `overrides` is for mock-managed keys only.
+function L.loadTooltips(opts, overrides)
+    opts = opts or {}
+    installMock(overrides, { C_Timer = inertTimer() })
+    local modules = helpers.installAddonShim()
+    _G.UIParent = noopFrame()
+    _G.CreateFrame = function() return noopFrame() end
+    _G.hooksecurefunc = function() end
+    _G.FACTION_BAR_COLORS = {
+        [1] = { r = 0.87, g = 0.37, b = 0.37 },
+        [4] = { r = 0.87, g = 0.87, b = 0.37 },
+        [5] = { r = 0.37, g = 0.87, b = 0.37 },
+    }
+    _G.RAID_CLASS_COLORS = {
+        EVOKER = { r = 0.20, g = 0.58, b = 0.50 },
+    }
+    _G.UnitReaction = opts.UnitReaction or function() return 5 end
+    _G.IsModifierKeyDown = opts.IsModifierKeyDown or function() return false end
+    -- The CURRENT module indexes these two at file scope
+    -- (Modules/Skinning/Tooltips.lua:29 and :35). Without them Step 2's red
+    -- would be a load-time nil index instead of the missing test seams, and
+    -- the test would be passing for the wrong reason. The ported module reads
+    -- neither at file scope, so neither is needed to LOAD it -- Enum is still
+    -- read at runtime inside OnEnable, which no spec here exercises.
+    _G.C_CurrencyInfo = { GetCoinTextureString = function() return "" end }
+    _G.Enum = _G.Enum or {}
+    _G.Enum.TooltipDataType = { Unit = 0, Spell = 1, Item = 2, Macro = 3 }
+    local KE = {
+        Print = function() end,
+        ShouldNotLoadModule = function() return false end,
+        db = { profile = { Skinning = { Tooltips = { ShowIDs = "MODIFIER" } } } },
+    }
+    helpers.loadModule("Core/Secret.lua", KE)
+    helpers.loadModule("Modules/Skinning/Tooltips.lua", KE)
+    return modules["SkinTooltips"], KE
+end
+
 return L
