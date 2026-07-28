@@ -1867,7 +1867,7 @@ function CHAT:BuildCopyChatFrame()
     frame.closeButton = closeBtn
 
     local hint = header:CreateFontString(nil, "OVERLAY")
-    hint:SetFont(cachedFontPath, 11, "OUTLINE")
+    hint:SetFont(cachedFontPath, 13, "OUTLINE")
     hint:SetPoint("RIGHT", closeBtn, "LEFT", -12, 0)
     do
         local a = Theme.accent
@@ -1912,7 +1912,7 @@ function CHAT:BuildCopyChatFrame()
     editBox:SetMaxLetters(99999)
     editBox:EnableMouse(true)
     editBox:SetAutoFocus(false)
-    editBox:SetFont(cachedFontPath, 12, "OUTLINE")
+    editBox:SetFont(cachedFontPath, 15, "OUTLINE")
     editBox:SetShadowColor(0, 0, 0, 0)
     editBox:SetShadowOffset(0, 0)
     editBox:SetTextColor(Theme.textPrimary[1], Theme.textPrimary[2], Theme.textPrimary[3], 1)
