@@ -398,8 +398,16 @@ local function CanReadIdentity(unit)
     return ok and not restricted
 end
 
--- The "<Away>" / "<Busy>" suffix.
+-- The " [AFK]" / " [DND]" suffix.
 --
+-- These two strings are OURS, not Blizzard's. There is no AFK_LABEL or
+-- DND_LABEL global -- ElvUI builds its own file-locals at Tooltip.lua:98-99
+-- and this reads as though they were globals until you look. Colours and
+-- bracket form are copied from there; the words are literals, per the port
+-- convention against locale tables.
+local AFK_LABEL = " |cffFFFFFF[|r|cffFF9900AFK|r|cffFFFFFF]|r"
+local DND_LABEL = " |cffFFFFFF[|r|cffFF3333DND|r|cffFFFFFF]|r"
+
 -- UnitIsAFK and UnitIsDND are SecretInChatMessagingLockdown -- a DIFFERENT
 -- condition from identity restriction, so CanReadIdentity does not cover
 -- them and they need their own check. The secret test has to come first: a
@@ -407,10 +415,10 @@ end
 -- wrapper (ElvUI/Game/Shared/General/API.lua:1439-1449).
 local function AwayLabel(unit)
     local afk = UnitIsAFK(unit)
-    if not KE:IsSecretValue(afk) and afk then return _G.AFK_LABEL or "" end
+    if not KE:IsSecretValue(afk) and afk then return AFK_LABEL end
 
     local dnd = UnitIsDND(unit)
-    if not KE:IsSecretValue(dnd) and dnd then return _G.DND_LABEL or "" end
+    if not KE:IsSecretValue(dnd) and dnd then return DND_LABEL end
 
     return ""
 end
@@ -478,17 +486,22 @@ function TT:OnTooltipSetUnit(tt)
             if pvpName and pvpName ~= "" then name = pvpName end
 
             -- Shift spells the realm out in full; otherwise Blizzard's own
-            -- compact markers say "different realm" without the width.
+            -- compact marker says "different realm" without the width.
+            --
+            -- Shaped after Blizzard's GetUnitName
+            -- (Blizzard_UnitFrame/Mainline/UnitFrame.lua:1085-1101): a
+            -- virtual realm is one you are effectively already on, so it
+            -- gets no marker, and every other cross-realm case gets the
+            -- foreign-server suffix. ElvUI adds a second branch on
+            -- INTERACTIVE_SERVER_LABEL / LE_REALM_RELATION_COALESCED, but
+            -- neither name occurs anywhere in the 12.0.7 reference, and
+            -- comparing against a nil constant would also make a nil
+            -- relationship match by accident.
             if realm and realm ~= "" then
                 if IsShiftKeyDown() then
                     name = name .. "-" .. realm
-                else
-                    local rel = UnitRealmRelationship(unit)
-                    if rel == _G.LE_REALM_RELATION_COALESCED then
-                        name = name .. (_G.FOREIGN_SERVER_LABEL or "")
-                    elseif rel == _G.LE_REALM_RELATION_VIRTUAL then
-                        name = name .. (_G.INTERACTIVE_SERVER_LABEL or "")
-                    end
+                elseif UnitRealmRelationship(unit) ~= _G.LE_REALM_RELATION_VIRTUAL then
+                    name = name .. (_G.FOREIGN_SERVER_LABEL or "")
                 end
             end
 
