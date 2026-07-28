@@ -488,6 +488,7 @@ local PREVIEW_MODULES = {
     "DamageMeter",
     "MythicPlusTimer", "KeystoneHelper", "TargetedSpells",
     "PlayerAbsorbs",
+    "Chat",
 }
 
 -- Section → preview module mapping for section-based previews
