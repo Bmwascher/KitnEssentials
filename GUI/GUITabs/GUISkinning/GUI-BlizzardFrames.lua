@@ -19,11 +19,12 @@ local FRAME_SKINS = {
 }
 
 local function GetDB()
-    return KE.db.profile.Skinning.BlizzardFrames
+    return KE.db and KE.db.profile.Skinning.BlizzardFrames
 end
 
 GUIFrame:RegisterContent("SkinBlizzardFramesGeneral", function(scrollChild, yOffset)
     local db = GetDB()
+    if not db then return yOffset end
     local card = GUIFrame:CreateCard(scrollChild, "Global Font Adjust", yOffset)
 
     local row = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
@@ -38,11 +39,12 @@ GUIFrame:RegisterContent("SkinBlizzardFramesGeneral", function(scrollChild, yOff
     row:AddWidget(slider, 1)
     card:AddRow(row, Theme.rowHeightLast, 0)
 
-    return yOffset + card:GetContentHeight() + Theme.paddingMedium
+    return card:GetNextOffset()
 end)
 
 GUIFrame:RegisterContent("SkinBlizzardFramesFrames", function(scrollChild, yOffset)
     local db = GetDB()
+    if not db then return yOffset end
     db.Skins = db.Skins or {}
     local card = GUIFrame:CreateCard(scrollChild, "Frame Skins", yOffset)
 
@@ -65,11 +67,13 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFrames", function(scrollChild, yOffs
             end
         end
         KE:SkinningReloadPrompt()
-        GUIFrame:RefreshContent()
+        -- AddHeaderToggle's own OnClick already calls RefreshContent.
     end)
 
-    for _, entry in ipairs(FRAME_SKINS) do
-        local row = GUIFrame:CreateRow(card.content, Theme.rowHeight)
+    for i, entry in ipairs(FRAME_SKINS) do
+        local isLast = i == #FRAME_SKINS
+        local rowHeight = isLast and Theme.rowHeightLast or Theme.rowHeight
+        local row = GUIFrame:CreateRow(card.content, rowHeight)
         local check = GUIFrame:CreateCheckbox(row, entry.text, {
             value = db.Skins[entry.key] ~= false,
             callback = function(checked)
@@ -79,13 +83,20 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFrames", function(scrollChild, yOffs
                     db.Skins[entry.key] = false
                 end
                 KE:SkinningReloadPrompt()
+                -- Keeps the header toggle's any-on state truthful when a
+                -- single frame is unticked rather than the whole card.
+                GUIFrame:RefreshContent()
             end,
         })
         row:AddWidget(check, 1)
-        card:AddRow(row, Theme.rowHeight, 0)
+        if isLast then
+            card:AddRow(row, rowHeight, 0)
+        else
+            card:AddRow(row, rowHeight)
+        end
     end
 
-    return yOffset + card:GetContentHeight() + Theme.paddingMedium
+    return card:GetNextOffset()
 end)
 
 GUIFrame:RegisterTabbedContent("SkinBlizzardFrames", {
@@ -94,11 +105,12 @@ GUIFrame:RegisterTabbedContent("SkinBlizzardFrames", {
 }, {
     headerBuilder = function(scrollChild, yOffset)
         local db = GetDB()
+        if not db then return yOffset, true end
         local card = GUIFrame:CreateCard(scrollChild, "Blizzard Frames", yOffset)
         card:AddHeaderToggle(db.Enabled == true, function(checked)
             db.Enabled = checked
             KE:SkinningReloadPrompt()
-            GUIFrame:RefreshContent()
+            -- AddHeaderToggle's own OnClick already calls RefreshContent.
         end)
         local newOffset = yOffset + card:GetContentHeight() + Theme.paddingSmall
         -- Disabled collapses to the header bar alone: no tab strip, no page.
