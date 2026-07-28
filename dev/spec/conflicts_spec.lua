@@ -74,6 +74,36 @@ describe("Core/Conflicts.lua decision layer", function()
             assert.same({}, KE:BuildConflictQueue(nil))
             assert.same({}, KE:BuildConflictQueue({}))
         end)
+
+        it("queues a prompt for EllesmereUIChat when the Chat module is on", function()
+            local queue = KE:BuildConflictQueue({
+                profile = { Skinning = { Chat = { Enabled = true } } },
+                isLoaded = function(name) return name == "EllesmereUIChat" end,
+                shouldNotLoad = false,
+            })
+            assert.equals(1, #queue)
+            assert.equals("EllesmereUIChat", queue[1].source)
+            assert.equals("Chat", queue[1].module)
+            assert.equals("Chat", queue[1].label)
+        end)
+
+        it("queues nothing for a chat rival when the Chat module is off", function()
+            local queue = KE:BuildConflictQueue({
+                profile = { Skinning = { Chat = { Enabled = false } } },
+                isLoaded = function(name) return name == "Prat-3.0" end,
+                shouldNotLoad = false,
+            })
+            assert.same({}, queue)
+        end)
+
+        it("skips the skin-gated Chat entry when ElvUI owns skinning", function()
+            local queue = KE:BuildConflictQueue({
+                profile = { Skinning = { Chat = { Enabled = true } } },
+                isLoaded = function(name) return name == "Chatter" end,
+                shouldNotLoad = true,
+            })
+            assert.same({}, queue)
+        end)
     end)
 
     describe("KE:GetModuleConflict", function()

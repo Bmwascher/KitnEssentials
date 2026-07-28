@@ -72,7 +72,14 @@ local CONFLICTS = {
             },
         },
     },
-    -- The Chat entry lands here when A3 ships the module.
+    {
+        module = "Chat",
+        label  = "Chat",
+        dbPath = { "Skinning", "Chat" },
+        skinGated = true,
+        addons = { "Prat-3.0", "Chatter", "Glass", "ls_Glass",
+                   "BasicChatMods", "EllesmereUIChat" },
+    },
 }
 
 ---------------------------------------------------------------------------------
@@ -199,6 +206,9 @@ end
 -- Folder names read badly in a prompt; show what the user calls them.
 local ADDON_LABELS = {
     ["EllesmereUIBlizzardSkin"] = "EllesmereUI BlizzUI Enhanced",
+    ["EllesmereUIChat"] = "EllesmereUI Chat",
+    ["Prat-3.0"] = "Prat",
+    ["BasicChatMods"] = "Basic Chat Mods",
 }
 
 local promptQueue = {}
