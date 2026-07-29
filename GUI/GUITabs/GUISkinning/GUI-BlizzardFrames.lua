@@ -131,11 +131,10 @@ local function BuildCheckGrid(card, entries, skins)
                     end,
                 })
                 if suppressor then
-                    check:SetAlpha(0.35)
                     -- SetEnabled, not EnableMouse. CreateCheckbox returns the
                     -- ROW; the clickable object is a child button, and
                     -- row:SetEnabled is what reaches it
-                    -- (GUI/GUIWidgets/GUI-KEToggle.lua:301-310). EnableMouse on
+                    -- (GUI/GUIWidgets/GUI-KEToggle.lua:301-311). EnableMouse on
                     -- the row leaves the button live and the row still clicks.
                     check:SetEnabled(false)
                 end
@@ -202,7 +201,15 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFrames", function(scrollChild, yOffs
     card:AddHeaderToggle(anyOn, function(checked)
         local needsReload = false
         for _, entry in ipairs(FRAME_SKINS) do
-            if SetEntry(entry, db.Skins, checked) then needsReload = true end
+            -- A suppressed row cannot be clicked individually, so a bulk
+            -- toggle must not write it either -- that is what keeps the
+            -- user's real choice intact until EllesmereUI stops covering
+            -- the window.
+            local suppressor = KE.Skins and KE.Skins.suppressed
+                and KE.Skins.suppressed[entry.key]
+            if not suppressor and SetEntry(entry, db.Skins, checked) then
+                needsReload = true
+            end
         end
         -- One prompt for the whole batch, not one per entry.
         if needsReload then KE:SkinningReloadPrompt() end

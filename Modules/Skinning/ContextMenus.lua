@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  ContextMenus.lua                                        ║
 -- ║  Module: ContextMenus                                    ║
--- ║  Purpose: Skins Blizzard right-click context menus.       ║
+-- ║  Purpose: Skins Blizzard right-click context menus.      ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE

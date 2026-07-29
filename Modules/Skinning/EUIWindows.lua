@@ -128,8 +128,12 @@ end
 function KE:ResolveSkinSuppression()
     local loaded = false
     local version
+    -- IsAddOnLoaded returns TWO booleans: loadedOrLoading, then loaded. Gate
+    -- on the second -- the first is true for a still-loading addon, whose
+    -- tables aren't populated yet
+    -- (.wow-api-reference/Interface/AddOns/Blizzard_APIDocumentationGenerated/AddOnsDocumentation.lua:322-336).
     if C_AddOns and C_AddOns.IsAddOnLoaded
-        and C_AddOns.IsAddOnLoaded("EllesmereUIBlizzardSkin") then
+        and select(2, C_AddOns.IsAddOnLoaded("EllesmereUIBlizzardSkin")) then
         -- DisableAddOn leaves an addon loaded for the rest of the session,
         -- so "loaded" alone would keep suppressing after the user turned
         -- EllesmereUI's skin addon off. Blizzard's own > 0 comparison:

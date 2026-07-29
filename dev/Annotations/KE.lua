@@ -306,6 +306,16 @@ function KE:SkinningReloadPrompt() end
 ---@return string?
 function KE:BuildNicknameKey(rawName, fallbackRealm) end
 
+-- ─── Skinning (Modules/Skinning/EUIWindows.lua) ──────────
+--- Pure. Which of our skin keys EllesmereUI already covers.
+---@param env { loaded: boolean, version: string?, getStyle: (fun(euiKey: string): string?)? }
+---@return table set # [skinKey] = euiKey; never nil
+function KE:BuildSkinSuppressionSet(env) end
+
+--- Live. Reads the globals, resolves once, caches on KE.Skins.suppressed.
+---@return table set # [skinKey] = euiKey; never nil
+function KE:ResolveSkinSuppression() end
+
 -- ─── KitnEssentials AceAddon globals ──────────────────────
 ---@class KitnEssentials
 ---@field db AceDB

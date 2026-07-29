@@ -160,7 +160,7 @@ describe("EUIWindows", function()
             local _, KE = loader.loadEUIWindows()
             for _, entry in ipairs(KE.Skins.WINDOW_MAP) do
                 if entry.since then
-                    assert.equal(0, KE.Skins.CompareVersion(entry.since, entry.since),
+                    assert.is_true(KE.Skins.CompareVersion(entry.since, "0") > 0,
                         entry.euiKey .. " has an unparseable since")
                 end
             end
