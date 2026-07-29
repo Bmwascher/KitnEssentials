@@ -1,7 +1,6 @@
--- atrocityEssentials Item Upgrade skin (v3.5.796)
--- ElvUI Mainline/Skins/ItemUpgrade.lua transcription ( report:
--- window mostly unskinned -- only the S.Frame stub existed).
 ---@class KE
+-- ElvUI Mainline/Skins/ItemUpgrade.lua transcription (v3.5.796):
+-- window mostly unskinned -- only the S.Frame stub existed.
 local KE = select(2, ...)
 local S = KE.Skins
 local _G = _G

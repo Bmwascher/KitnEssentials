@@ -58,9 +58,10 @@ local function Skin()
         S.Button(_G.ClassTrainerTrainButton)
     end
 
-    -- v3.5.729: also targets AES's own Train All button (Automation
-    -- port). It self-skins at creation, but the OnShow hook here covers
-    -- the case where the Automation feature enables after this skin ran.
+    -- v3.5.729: also targets a Train All button, if one exists. Both
+    -- names below are third-party globals -- KitnEssentials has no
+    -- Train All button of its own. The OnShow hook and the S.WaitFor
+    -- poll below catch a button created after this skin already ran.
     local function SkinEUIButton()
         for _, name in ipairs({ "EUI_TrainAllButton", "AES_TrainAllButton" }) do
             local b = _G[name]
