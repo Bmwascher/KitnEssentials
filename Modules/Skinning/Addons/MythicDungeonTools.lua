@@ -5,7 +5,11 @@ local pairs = pairs
 local hooksecurefunc = hooksecurefunc
 local WHITE = "Interface\\Buttons\\WHITE8x8"
 local ARROW_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.tga"
-local BRAND = { 0.451, 0.506, 1.0 }
+-- The reference hardcodes this literal, but the value IS its own
+-- palette.brand -- so copying the number verbatim shipped the upstream
+-- periwinkle instead of KE's accent. Read the palette table (mutated in
+-- place by S.RefreshPalette) so it tracks the live theme.
+local BRAND = S.palette.brand
 
 -- v3.5.853: was a 0.1s poll (MDT skinned in visibly). Per-frame now.
 local function WaitFor(check, run, tries)

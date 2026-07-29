@@ -13,7 +13,11 @@ local setmetatable = setmetatable
 
 local CreateFrame = CreateFrame
 local WHITE = "Interface\\Buttons\\WHITE8x8"
-local BRAND = { 0.451, 0.506, 1.0 }
+-- The reference hardcodes this literal, but the value IS its own
+-- palette.brand -- so copying the number verbatim shipped the upstream
+-- periwinkle instead of KE's accent. Read the palette table (mutated in
+-- place by S.RefreshPalette) so it tracks the live theme.
+local BRAND = S.palette.brand
 local LevelLock
 
 local function TabSetSelected(tab, selected)

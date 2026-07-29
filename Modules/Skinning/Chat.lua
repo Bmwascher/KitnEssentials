@@ -354,7 +354,7 @@ function CHAT:AddWhisperModeWarning()
     text:SetJustifyH("LEFT")
     text:SetFont(STANDARD_TEXT_FONT, 10, "OUTLINE")
     text:SetShadowColor(0, 0, 0, 0)
-    text:SetText("|cff7381FFKitnEssentials|r\nNew Tab disabled")
+    text:SetText(KE:ColorTextByTheme("KitnEssentials") .. "\nNew Tab disabled")
 
     warningFrame:SetScript("OnEnter", function(frame)
         GameTooltip:SetOwner(frame, "ANCHOR_RIGHT")
@@ -1891,7 +1891,10 @@ function CHAT:BuildCopyChatFrame()
 
     local thumb = scrollbar:CreateTexture(nil, "OVERLAY")
     thumb:SetSize(SCROLLBAR_WIDTH - 2, 40)
-    local brand = { 0.451, 0.506, 1.0 }
+    -- The reference read its own theme here and only fell back to a literal;
+    -- the port kept the fallback and dropped the lookup, so this thumb
+    -- shipped the upstream periwinkle instead of KE's accent.
+    local brand = (KE.GetThemeColor and KE:GetThemeColor("accent")) or { 1.0, 0.0, 0.549 }
     thumb:SetColorTexture(brand[1], brand[2], brand[3], 0.8)
     scrollbar:SetThumbTexture(thumb)
     scrollbar.thumb = thumb
@@ -2787,7 +2790,11 @@ end
 
 local GREEN_ONLINE = "4ade80"
 local RED_OFFLINE = "f43f5e"
-local BRAND_HEX = "7381FF"
+-- Resolved per call, never at file scope: the theme DB does not exist yet
+-- when this file parses, and a captured hex would freeze at the fallback.
+local function BrandHex()
+    return (KE.GetThemeColorHex and KE:GetThemeColorHex()) or "FF008C"
+end
 
 local function RebuildGuildCache()
     wipe(guildPlayerCache)
@@ -2829,7 +2836,7 @@ local function GuildStatusFilter(_, _, msg, ...)
         local resultText = format(onlineMessageTemplate, link, "", coloredName)
         resultText = format("|cff%s%s|r", GREEN_ONLINE, resultText)
         if db.GuildMemberStatusInviteLink then
-            resultText = resultText .. format(" |Hkeslink:invite:%s|h|cff%s[Invite]|r|h", link, BRAND_HEX)
+            resultText = resultText .. format(" |Hkeslink:invite:%s|h|cff%s[Invite]|r|h", link, BrandHex())
         end
         return false, resultText, select(1, ...)
     else -- offline
