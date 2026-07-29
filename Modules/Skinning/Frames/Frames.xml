@@ -3,8 +3,10 @@
 
     <Script file="Ace3.lua" />
     <Script file="ChatConfig.lua" />
+    <Script file="Friends.lua" />
     <Script file="GMChat.lua" />
     <Script file="Guild.lua" />
+    <Script file="PetBattle.lua" />
     <Script file="Socket.lua" />
     <Script file="Taxi.lua" />
 </Ui>
