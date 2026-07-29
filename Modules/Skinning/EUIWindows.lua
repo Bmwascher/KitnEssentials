@@ -139,7 +139,7 @@ function KE:BuildSkinSuppressionSet(env)
                 -- gets a table value. A uniform record would give every
                 -- already-ported key with a row (Socket today) a table too,
                 -- and those keys DO get dispatched, so the concatenation at
-                -- SkinAPI.lua:2689 would hit a table the first time anyone
+                -- SkinAPI.lua:2698 would hit a table the first time anyone
                 -- ran /kes skins verify. Step 4 removes that crash
                 -- regardless; sparse means it was never reachable at all.
                 local value = entry.euiKey
@@ -188,7 +188,10 @@ function S.GetSuppression(key, addon)
         -- only claims the addons it names -- it cannot claim "no addon".
         return nil
     end
-    if entry.addons[addon] then return entry.euiKey end
+    -- entry.addons is always set by BuildSkinSuppressionSet, but a later
+    -- task or a spec seeding S.suppressed by hand could hand a filtered
+    -- record with no addons table, so guard the index rather than trust it.
+    if entry.addons and entry.addons[addon] then return entry.euiKey end
     return nil
 end
 

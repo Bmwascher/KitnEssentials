@@ -2688,7 +2688,14 @@ function S.DebugVerify()
             -- opt-out, which is the one question this command answers.
             -- suppressor may be a table (a filtered row's resolved record);
             -- GetSuppressionState is the only shape-safe source of its euiKey.
-            shown = "suppressed by EllesmereUI (" .. select(2, S.GetSuppressionState(key)) .. ")"
+            -- Captured into a local with a fallback: GetSuppressionState
+            -- returns NO second value for "none", and a zero-value call
+            -- inside a concat becomes nil, which throws -- unreachable today
+            -- (this read and the accessor agree per-key) but not once a
+            -- later per-registration guard can disagree with this per-key
+            -- print.
+            local _, euiKey = S.GetSuppressionState(key)
+            shown = "suppressed by EllesmereUI (" .. (euiKey or "unknown") .. ")"
         end
         local color = status == "ok" and "|cff00ff00" or status == "disabled" and "|cff888888" or "|cffff0000"
         print(("|cffFF008CKitn|r|cffffffffEssentials:|r %-24s %s%s|r"):format(key, color, shown))
@@ -2714,8 +2721,11 @@ function S.DebugRerun(key)
     if suppressor then
         -- suppressor may be a table (a filtered row's resolved record);
         -- GetSuppressionState is the only shape-safe source of its euiKey.
+        -- Captured with the same fallback as DebugVerify above -- see that
+        -- comment for why GetSuppressionState's second return can be absent.
+        local _, euiKey = S.GetSuppressionState(key)
         print("|cffFF008CKitn|r|cffffffffEssentials:|r " .. key
-            .. " is suppressed by EllesmereUI (" .. select(2, S.GetSuppressionState(key))
+            .. " is suppressed by EllesmereUI (" .. (euiKey or "unknown")
             .. "). Rerunning it would double-skin the window. Turn EllesmereUI's window skin off first.")
         return
     end

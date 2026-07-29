@@ -181,15 +181,22 @@ describe("EUIWindows", function()
 
         it("keeps `addons` to exactly the housing and delves rows", function()
             local _, KE = loader.loadEUIWindows()
+            local sawHousing, sawDelves = false, false
             for _, entry in ipairs(KE.Skins.WINDOW_MAP) do
                 if entry.euiKey == "housing" then
+                    sawHousing = true
                     assert.same({ "Blizzard_HousingDashboard" }, entry.addons)
                 elseif entry.euiKey == "delves" then
+                    sawDelves = true
                     assert.same({ "Blizzard_DelvesCompanionConfiguration" }, entry.addons)
                 else
                     assert.is_nil(entry.addons, entry.euiKey .. " should not have grown an addons filter")
                 end
             end
+            -- Positive control: without this, deleting either row entirely
+            -- leaves the branch above unreached and the test still green.
+            assert.is_true(sawHousing, "housing row is missing")
+            assert.is_true(sawDelves, "delves row is missing")
         end)
     end)
 
@@ -249,7 +256,7 @@ describe("EUIWindows", function()
         -- concatenation: DebugVerify's fires only for a key present in
         -- skinStatus (SkinAPI.lua:2686), and DebugRerun early-returns before
         -- its own concat unless skinIndex has the key
-        -- (SkinAPI.lua:2707-2710). Both require a real dispatch, so this
+        -- (SkinAPI.lua:2716-2718). Both require a real dispatch, so this
         -- registers a synthetic skin and runs it through the real path
         -- (S:Register + BF:RunForAddon, same as skinapi_spec.lua's
         -- "holds an addon-registered skin" case) on the composed loader,

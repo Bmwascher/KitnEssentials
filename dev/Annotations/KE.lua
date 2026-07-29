@@ -73,6 +73,7 @@ function KE_FramePool:ReleaseAll() end
 ---@field GUI table
 ---@field FramePool KE.FramePool
 ---@field curves KE.Curves
+---@field Skins table # Modules/Skinning/*.lua shared namespace (KE.Skins)
 ---@field msgContainer Frame? # message-popup singleton (Core/Widgets.lua)
 ---@field promptDialog Frame? # prompt-dialog singleton (Core/Widgets.lua)
 ---@field activePrompt Frame? # currently-open prompt; nil when closed
