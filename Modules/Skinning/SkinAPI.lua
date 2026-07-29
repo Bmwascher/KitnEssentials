@@ -1680,6 +1680,491 @@ function S.DropDown(dropdown, withCaret)
     S.data(dropdown).skinned = true
 end
 
+local buttonOverlays = setmetatable({}, { __mode = "k" })
+function S.OverlayButton(button, width, height, text, level, strata)
+    if not button or buttonOverlays[button] then return end
+    local o = CreateFrame("Frame", nil, UIParent)
+    o:SetSize(width or 120, height or 22)
+    S.Backdrop(o)
+    o:SetPoint(button:GetPoint())
+    o:SetFrameLevel(level or 10)
+    o:SetFrameStrata(strata or "MEDIUM")
+    o:Hide()
+    local txt = o:CreateFontString(nil, "OVERLAY")
+    txt:SetPoint("CENTER")
+    S.SetFont(txt, 12)
+    txt:SetTextColor(1, 0.81, 0)
+    txt:SetText(text or "")
+    o.text = txt
+    button:HookScript("OnEnter", function(b)
+        local ov = buttonOverlays[b]
+        if not ov then return end
+        ov.text:SetTextColor(1, 1, 1)
+        local bd = S.GetBackdrop(ov)
+        if bd then bd:SetBackdropBorderColor(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 1) end
+    end)
+    button:HookScript("OnLeave", function(b)
+        local ov = buttonOverlays[b]
+        if not ov then return end
+        ov.text:SetTextColor(1, 0.81, 0)
+        local bd = S.GetBackdrop(ov)
+        if bd then bd:SetBackdropBorderColor(unpack(S.borderColor)) end
+    end)
+    button:HookScript("OnShow", function(b)
+        local ov = buttonOverlays[b]
+        if not ov then return end
+        ov:ClearAllPoints()
+        ov:SetPoint(b:GetPoint())
+        ov:Show()
+    end)
+    button:HookScript("OnHide", function(b)
+        local ov = buttonOverlays[b]
+        if ov then ov:Hide() end
+    end)
+    if button:IsVisible() then o:Show() end
+    buttonOverlays[button] = o
+end
+
+-- v3.5.863: dedupe flag moved OFF the Blizzard texture and into S.data.
+-- `icon.aeIcon = true` was an AES-named field write on a Blizzard object
+-- -- banned by our own doctrine three functions down (S.ItemButton,
+-- v827: "NO AES-named fields on Blizzard frames, ever -- S.data only").
+-- S.Icon is the highest-traffic primitive we have and it was the one
+-- place still doing it; it runs on the LootHistory row icons, which is
+-- inside the Midnight secret-value path that is currently throwing on
+-- roll tooltips. Whether that is the cause of the loot errors is NOT
+-- established -- this is a doctrine fix that is free and correct either
+-- way. Do not record it as the loot fix without a raid retest.
+-- Blizzard's slot art sits flush with the button; ours bleeds a pixel past it
+-- so the border reads as an outline rather than an inset.
+function S.BleedOutside(tex, frame)
+    if not tex then return end
+
+    tex:ClearAllPoints()
+    tex:SetPoint("TOPLEFT", frame, "TOPLEFT", -1, 1)
+    tex:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 1, -1)
+end
+
+-- Numeric input with its own increment/decrement pair.
+function S.Stepper(box)
+    if not box then return end
+
+    box:DisableDrawLayer("BACKGROUND")
+    S.EditBox(box)
+    S.ArrowButton(box.DecrementButton, "left")
+    S.ArrowButton(box.IncrementButton, "right")
+end
+
+-- A crafting quality tier: icon button plus the count field beside it.
+function S.QualityTier(container)
+    if not container then return end
+
+    local button = container.Button
+    if button then
+        S.StripTextures(button)
+        button:SetNormalTexture(0)
+        button:SetPushedTexture(0)
+        button:SetHighlightTexture(0)
+        S.SlotIcon(button.Icon, button.IconBorder)
+    end
+
+    S.Stepper(container.EditBox)
+end
+
+-- Blanking Blizzard art is a list of region names, not a statement each.
+function S.Vanish(root, keys)
+    if not root then return end
+
+    for i = 1, #keys do
+        local region = root[keys[i]]
+        if region and region.SetAlpha then region:SetAlpha(0) end
+    end
+end
+
+function S.HideAll(root, keys)
+    if not root then return end
+
+    for i = 1, #keys do
+        local region = root[keys[i]]
+        if region and region.Hide then region:Hide() end
+    end
+end
+
+-- Skinning a container is mostly "if this child exists, treat it". Expressed
+-- as data rather than a block per child, so adding a region is one line and
+-- absent regions cost nothing.
+function S.Apply(root, map)
+    if not root then return end
+
+    for key, treat in next, map do
+        local child = root[key]
+        if child then treat(child) end
+    end
+end
+
+-- Same treatment across several children of one container.
+function S.Each(root, treat, ...)
+    if not root then return end
+
+    for i = 1, select("#", ...) do
+        local child = root[select(i, ...)]
+        if child then treat(child) end
+    end
+end
+
+-- An icon and its quality border are never independent: the border is drawn
+-- against the backdrop the icon just gained, so both are set in one call.
+function S.SlotIcon(icon, border, withBackdrop)
+    if not icon then return end
+
+    S.Icon(icon, withBackdrop ~= false)
+    if border then S.IconBorder(border, S.GetBackdrop(icon)) end
+end
+
+function S.Icon(icon, withBackdrop)
+    if not icon or S.data(icon).aeIcon then return end
+    if icon.SetTexCoord then icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+
+    S.PixelSnap(icon)
+    if withBackdrop then
+
+        local bd = S.Backdrop(icon, -1, true)
+        local parent = icon.GetParent and icon:GetParent()
+        if bd and parent and parent.GetFrameLevel then
+            bd:SetFrameLevel(parent:GetFrameLevel() + 1)
+        end
+    end
+    S.data(icon).aeIcon = true
+end
+
+function S.ItemButton(button, opts)
+    -- v3.5.827 (flyout equip taint, FINAL root): writing our dedupe
+    -- flag DIRECTLY ON Blizzard's button plants a tainted key in a
+    -- secure table -- contaminating iteration/field-fallback reads
+    -- Blizzard's item-button code performs mid-display-loop, which
+    -- tainted every subsequent button's location/id writes (the
+    -- combat flyout-equip ADDON_ACTION_BLOCKED). Same disease v814
+    -- cured for ScrollBoxes; flag lives in S.data now. DOCTRINE:
+    -- NO AES-named fields on Blizzard frames, ever -- S.data only.
+    if not button or S.data(button).itemSkinned then return end
+
+    local keepAnchors = (opts == "keepAnchors")
+    local name = button.GetName and button:GetName()
+    local icon = button.icon or button.Icon or button.IconTexture or button.iconTexture
+        or (name and (_G[name .. "IconTexture"] or _G[name .. "Icon"]))
+    local tex = icon and icon.GetTexture and icon:GetTexture()
+
+    S.StripTextures(button)
+    S.Backdrop(button)
+
+    if icon then
+        if tex then icon:SetTexture(tex) end
+        if icon.SetDrawLayer then icon:SetDrawLayer("ARTWORK") end
+
+        if icon.ClearAllPoints and not keepAnchors then
+            icon:ClearAllPoints()
+            icon:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
+            icon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+        end
+        S.Icon(icon)
+    end
+    if button.IconBorder and button.IconBorder.SetAlpha then button.IconBorder:SetAlpha(0) end
+
+    if button.CreateTexture then
+        local hl = button:CreateTexture(nil, "HIGHLIGHT")
+        hl:SetColorTexture(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
+        if keepAnchors and icon then
+            hl:SetAllPoints(icon)
+        else
+            hl:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
+            hl:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+        end
+    end
+
+    S.data(button).itemSkinned = true
+end
+
+
+function S.HookScrollBox(scrollBox, styleRow)
+    -- v3.5.840: back to ElvUI's pattern -- hooksecurefunc(ScrollBox,
+    -- 'Update', fn) with fn doing box:ForEachFrame(styleRow). My v814
+    -- rewrite onto the ScrollUtil per-element callback (and the
+    -- "never ForEachFrame a Blizzard ScrollBox" doctrine) came from
+    -- the pool-taint theory, which was wrong: ElvUI ForEachFrames
+    -- Blizzard ScrollBoxes throughout and never uses that callback.
+    -- The LootHistory crash was KillTexture surgery, fixed in v838.
+    if not scrollBox or not scrollBox.ForEachFrame then return end
+    local function apply(box)
+        box:ForEachFrame(styleRow)
+    end
+    apply(scrollBox)
+    if scrollBox.Update and not S.data(scrollBox).aeRowHook then
+        S.data(scrollBox).aeRowHook = true
+        hooksecurefunc(scrollBox, "Update", apply)
+    end
+end
+
+function S.HookScrollBoxIcons(scrollBox, getIcon, withBackdrop)
+    if not scrollBox or not scrollBox.ForEachFrame then return end
+    local function cropFrame(frame)
+        local icon = getIcon(frame)
+        if icon then S.Icon(icon, withBackdrop) end
+    end
+    local function apply()
+        scrollBox:ForEachFrame(cropFrame)
+    end
+    apply()
+    -- v3.5.863: same doctrine fix -- this planted an AES key directly on
+    -- a Blizzard ScrollBox, the exact object class v814 cleaned up.
+    if scrollBox.Update and not S.data(scrollBox).aeIconHook then
+        hooksecurefunc(scrollBox, "Update", apply)
+        S.data(scrollBox).aeIconHook = true
+    end
+end
+
+function S.SideTab(tab, anchorParent, prevTab, iconSize)
+    if not tab or S.data(tab).aeSideTab then return end
+    iconSize = iconSize or 20
+    S.Backdrop(tab)
+    tab:SetSize(30, 40)
+
+    tab:ClearAllPoints()
+    if prevTab then
+        tab:SetPoint("TOP", prevTab, "BOTTOM", 0, -1)
+        hooksecurefunc(tab, "SetPoint", function(t, _, _, _, x, y)
+            if (x ~= 0 or y ~= -1) and not S.data(t).anchoring then
+                S.data(t).anchoring = true
+                t:ClearAllPoints()
+                t:SetPoint("TOP", prevTab, "BOTTOM", 0, -1)
+                S.data(t).anchoring = nil
+            end
+        end)
+    elseif anchorParent then
+        tab:SetPoint("TOPLEFT", anchorParent, "TOPRIGHT", 1, 0)
+        hooksecurefunc(tab, "SetPoint", function(t, _, _, _, x, y)
+            if (x ~= 1 or y ~= 0) and not S.data(t).anchoring then
+                S.data(t).anchoring = true
+                t:ClearAllPoints()
+                t:SetPoint("TOPLEFT", anchorParent, "TOPRIGHT", 1, 0)
+                S.data(t).anchoring = nil
+            end
+        end)
+    end
+
+    local icon = tab.Icon
+    if icon then
+        local function recenter()
+            if S.data(icon).centering then return end
+            S.data(icon).centering = true
+            icon:ClearAllPoints()
+            icon:SetPoint("CENTER")
+            S.data(icon).centering = nil
+        end
+        local function resize()
+            if S.data(icon).sizing then return end
+            S.data(icon).sizing = true
+            icon:SetSize(iconSize, iconSize)
+            S.data(icon).sizing = nil
+        end
+        recenter()
+        resize()
+        hooksecurefunc(icon, "SetPoint", function(_, point, _, _, x, y)
+            if point == "CENTER" and (not x or x == 0) and (not y or y == 0) then return end
+            recenter()
+        end)
+        hooksecurefunc(icon, "SetSize", function(_, w, h)
+            if w ~= iconSize or h ~= iconSize then resize() end
+        end)
+
+        hooksecurefunc(icon, "SetAtlas", function()
+            resize()
+            recenter()
+        end)
+    end
+
+    if tab.Background then tab.Background:SetAlpha(0) end
+    if tab.SelectedTexture then
+        tab.SelectedTexture:SetDrawLayer("BACKGROUND", 1)
+        tab.SelectedTexture:SetColorTexture(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 0.3)
+        local tbd = S.GetBackdrop(tab)
+        if tbd then
+            S.InsetToEdge(tab.SelectedTexture, tbd)
+        else
+            tab.SelectedTexture:ClearAllPoints()
+            tab.SelectedTexture:SetPoint("TOPLEFT", tab, "TOPLEFT", 1, -1)
+            tab.SelectedTexture:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", -1, 1)
+        end
+    end
+    for _, region in ipairs({ tab:GetRegions() }) do
+        if region:IsObjectType("Texture") and region:GetAtlas() == "QuestLog-Tab-side-Glow-hover" then
+            S.KillTexture(region)
+        end
+    end
+    S.HoverWash(tab)
+    S.data(tab).aeSideTab = true
+end
+
+function S.NavCrumb(btn)
+    if not btn then return end
+    S.NavButton(btn)
+    btn.xoffset = 0
+    local bd = S.GetBackdrop(btn)
+    if bd then
+        bd:SetBackdropColor(S.controlBg[1], S.controlBg[2], S.controlBg[3], S.controlBg[4])
+        bd:ClearAllPoints()
+        bd:SetPoint("TOPLEFT", btn, "TOPLEFT", 1, -3)
+        bd:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 3)
+    end
+    local hv = S.data(btn).hover
+    if hv and bd then
+        S.InsetToEdge(hv, bd)
+    end
+    local fs = btn.GetFontString and btn:GetFontString()
+    if fs then S.SetFont(fs, 12, "") end
+end
+
+function S.Collapse(button)
+    if not button or not button.GetNormalTexture then return end
+    local d = S.data(button)
+    if d.collapseArmed then return end
+
+    local function resolveCollapsed(incoming)
+        local parent = button:GetParent()
+        if parent and parent.IsCollapsed then
+            local ok, collapsed = pcall(parent.IsCollapsed, parent)
+            if ok then return collapsed end
+        end
+        if type(incoming) == "string" then
+            local lower = incoming:lower()
+            if lower:find("plus", 1, true) or lower:find("closed", 1, true)
+                or lower:find("expand", 1, true) then
+                return true
+            end
+            if lower:find("minus", 1, true) or lower:find("open", 1, true)
+                or lower:find("collapse", 1, true) or lower:find("shrink", 1, true) then
+                return false
+            end
+        end
+        return nil
+    end
+
+    local function apply(incoming)
+        if d.collapseBusy then return end
+        local collapsed = resolveCollapsed(incoming)
+        if collapsed == nil then return end
+        local tex = button:GetNormalTexture()
+        if not tex then return end
+        d.collapseBusy = true
+        tex:SetAtlas(collapsed and "Soulbinds_Collection_CategoryHeader_Expand"
+            or "Soulbinds_Collection_CategoryHeader_Collapse", true)
+        tex:SetVertexColor(1, 1, 1)
+        d.collapseBusy = nil
+    end
+
+    local pushed = button.GetPushedTexture and button:GetPushedTexture()
+    if pushed then pushed:SetAlpha(0) end
+    local hl = button.GetHighlightTexture and button:GetHighlightTexture()
+    if hl then hl:SetAlpha(0) end
+
+    hooksecurefunc(button, "SetNormalTexture", function(_, texture) apply(texture) end)
+    if button.SetNormalAtlas then
+        hooksecurefunc(button, "SetNormalAtlas", function(_, atlas) apply(atlas) end)
+    end
+    button:HookScript("OnClick", function() apply() end)
+    button:HookScript("OnShow", function() apply() end)
+    apply()
+    d.collapseArmed = true
+end
+
+function S.ReplaceIconString(fs, text)
+    if not fs then return end
+    if not text then text = fs.GetText and fs:GetText() end
+    if not text or text == "" then return end
+    local newText, count = string.gsub(text, "|T([^:]-):[%d+:]+|t", "|T%1:14:14:0:0:64:64:5:59:5:59|t")
+    if count > 0 then fs:SetFormattedText("%s", newText) end
+end
+
+local PARCHMENT_KEYS = { "Bg", "bg", "Background", "SealMaterialBG", "MaterialBG" }
+
+function S.StripParchment(frame, noChildren)
+    if not frame then return end
+    for _, k in ipairs(PARCHMENT_KEYS) do
+        local r = frame[k]
+        if r and r.SetAlpha then r:SetAlpha(0) end
+    end
+    if frame.GetChildren and not noChildren then
+        for _, child in ipairs({ frame:GetChildren() }) do
+            for _, k in ipairs(PARCHMENT_KEYS) do
+                local r = child[k]
+                if r and r.SetAlpha then r:SetAlpha(0) end
+            end
+        end
+    end
+end
+
+function S.StylePulloutFrames()
+    for n = 1, 30 do
+        local po = _G["AceGUI30Pullout" .. n]
+        if po and not S.data(po).aePulloutNamed then
+            S.data(po).aePulloutNamed = true
+            local function reassert()
+                if po.SetBackdrop then po:SetBackdrop(nil) end
+                local bd = S.GetBackdrop(po)
+                if not bd then
+                    S.StripTextures(po)
+                    bd = S.Template and S.Template(po, "Default") or S.Backdrop(po) -- luacheck: ignore 311/bd
+                else
+                    bd:Show()
+                    bd:SetBackdropColor(S.controlBg[1], S.controlBg[2], S.controlBg[3], S.controlBg[4])
+                end
+                local sb = _G["AceGUI30PulloutScrollbar" .. n]
+                if sb and S.ScrollBar then S.ScrollBar(sb) end
+            end
+            if po.HookScript then po:HookScript("OnShow", reassert) end
+            if po:IsShown() then reassert() end
+        end
+    end
+end
+
+function S.StyleSharedDropDownList()
+    if S._ddListHooked then return end
+    S._ddListHooked = true
+
+    for i = 1, 2 do
+        local list = _G["DropDownList" .. i]
+        if list then
+            S.StripTextures(list)
+            local bd = S.Template and S.Template(list, "Default") or S.Backdrop(list)
+            if bd then bd:SetFrameLevel(math.max(list:GetFrameLevel() - 1, 0)) end
+            local function scrub()
+
+                for _, suffix in ipairs({ "MenuBackdrop", "Backdrop", "Border" }) do
+                    local r = _G["DropDownList" .. i .. suffix]
+                    if r and r.SetAlpha then r:SetAlpha(0) end
+                    if r and r.Hide then r:Hide() end
+                end
+                if list.NineSlice and list.NineSlice.SetAlpha then list.NineSlice:SetAlpha(0) end
+
+                local mb = _G["DropDownList" .. i .. "MenuBackdrop"]
+                if mb and mb.GetRegions then
+                    for _, r in ipairs({ mb:GetRegions() }) do
+                        if r.SetAlpha then r:SetAlpha(0) end
+                    end
+                end
+                local sb = _G["DropDownList" .. i .. "ScrollFrameScrollBar"]
+                    or _G["DropDownList" .. i .. "ScrollBar"]
+                if sb and S.ScrollBar then S.ScrollBar(sb) end
+                for b = 1, (_G.UIDROPDOWNMENU_MAXBUTTONS or 8) do
+                    local txt = _G["DropDownList" .. i .. "Button" .. b .. "NormalText"]
+                    if txt then S.SetFont(txt, 13, "") end
+                end
+            end
+            scrub()
+            if list.HookScript then list:HookScript("OnShow", scrub) end
+        end
+    end
+end
+
 S.FONT_FACE = "Expressway"
 
 local fontRegistry = setmetatable({}, { __mode = "k" })
