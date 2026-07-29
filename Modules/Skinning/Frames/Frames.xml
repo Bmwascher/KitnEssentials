@@ -2,7 +2,9 @@
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/ ..\..\FrameXML\UI.xsd">
 
     <Script file="Ace3.lua" />
+    <Script file="AddonManager.lua" />
     <Script file="AdventureMap.lua" />
+    <Script file="Archaeology.lua" />
     <Script file="Barber.lua" />
     <Script file="Battlenet.lua" />
     <Script file="Binding.lua" />
@@ -26,6 +28,9 @@
     <Script file="GuildControl.lua" />
     <Script file="GuildRegistrar.lua" />
     <Script file="Help.lua" />
+    <Script file="Inspect.lua" />
+    <Script file="ItemInteraction.lua" />
+    <Script file="ItemUpgrade.lua" />
     <Script file="LFGuild.lua" />
     <Script file="LossControl.lua" />
     <Script file="MajorFaction.lua" />
@@ -40,6 +45,7 @@
     <Script file="PvPMatch.lua" />
     <Script file="QuestChoice.lua" />
     <Script file="Raid.lua" />
+    <Script file="Reputation.lua" />
     <Script file="Runeforge.lua" />
     <Script file="Socket.lua" />
     <Script file="Stable.lua" />
@@ -49,5 +55,6 @@
     <Script file="Taxi.lua" />
     <Script file="TimeManager.lua" />
     <Script file="Trade.lua" />
+    <Script file="Trainer.lua" />
     <Script file="TutorialFrame.lua" />
 </Ui>
