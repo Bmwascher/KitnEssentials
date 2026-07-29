@@ -14,6 +14,7 @@ local S = KE.Skins
 
 local ipairs = ipairs
 local math_max = math.max
+local math_floor = math.floor
 local CreateFrame = CreateFrame
 local unpack = unpack
 local hooksecurefunc = hooksecurefunc
@@ -219,6 +220,14 @@ function S.SafeSize(frame)
     return w, h
 end
 
+function S.SafeCenter(frame)
+    if not (frame and frame.GetCenter) then return nil end
+
+    local x, y = frame:GetCenter()
+    if not x or KE:IsSecretValue(x) or KE:IsSecretValue(y) then return nil end
+    return x, y
+end
+
 function S.StripTextures(frame, kill)
     if not frame or not frame.GetRegions then return end
     for _, region in ipairs({ frame:GetRegions() }) do
@@ -261,6 +270,24 @@ function S.PixelSnap(obj)
             end
         end
     end
+end
+
+function S.CropAtlasEdges(tex, xPct, yPct)
+    if not tex then return end
+    local d = S.data(tex)
+    if d.cropping then return end
+    local atlas = tex.GetAtlas and tex:GetAtlas()
+    if not atlas then return end
+    local a = C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(atlas)
+    if not (a and a.file) then return end
+    d.cropping = true
+    local w = a.rightTexCoord - a.leftTexCoord
+    local h = a.bottomTexCoord - a.topTexCoord
+    tex:SetTexture(a.file)
+    tex:SetTexCoord(
+        a.leftTexCoord + w * xPct, a.rightTexCoord - w * xPct,
+        a.topTexCoord + h * yPct, a.bottomTexCoord - h * yPct)
+    d.cropping = nil
 end
 
 -- The reference fills backdrops with its own statusbar art for a faint
@@ -353,6 +380,75 @@ edgeRefresher:SetScript("OnEvent", function()
     end
 end)
 
+function S.RefreshEdgesUnder(root)
+    if not root then return end
+    for frame, bd in pairs(backdropCache) do -- luacheck: ignore 213/frame
+        local p = bd
+        while p do
+            if p == root then RefreshEdge(bd) break end
+            p = p.GetParent and p:GetParent() or nil
+        end
+    end
+end
+
+function S.FixSubPixelEdge(frame, outsetPx)
+    local bd = frame and backdropCache[frame]
+    if not bd then return end
+    local d = S.data(bd)
+
+    local function snap()
+        d.aeSnapPending = nil
+        if not (frame.GetRect and frame.GetEffectiveScale) then return end
+        local eff = frame:GetEffectiveScale()
+        local _, ph = GetPhysicalScreenSize()
+        if not eff or eff <= 0 or not ph or ph <= 0 then return end
+        local toPhys = eff * ph / 768
+
+        local o = (outsetPx or 0) / toPhys
+        local L, B, W, H = frame:GetRect()
+        if not L then return end
+
+        -- Guild roster rows carry secret data (memberId), and GetRect on
+        -- one returns SECRET numbers -- so `B + H` below blew up with
+        -- "attempt to perform arithmetic on local 'B' (a secret number
+        -- value)". Nothing here can be computed from secrets, and there
+        -- is nothing to fall back to, so the row keeps its unsnapped
+        -- backdrop: at most one physical pixel off, versus an error.
+        if KE:IsSecretValue(L) or KE:IsSecretValue(B)
+            or KE:IsSecretValue(W) or KE:IsSecretValue(H) then
+            return
+        end
+
+        local T = B + H
+        local function rnd(v) return math_floor(v * toPhys + 0.5) / toPhys end
+
+        local sL, sT = rnd(L), rnd(T)
+        local sW, sH = rnd(W), rnd(H)
+        bd:ClearAllPoints()
+        bd:SetPoint("TOPLEFT", frame, "TOPLEFT", (sL - L) - o, (sT - T) + o)
+        bd:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", (sL + sW) - (L + W) + o, (sT - sH) - B - o)
+    end
+
+    local function queueSnap()
+        -- v3.5.855: snap NOW as well as next frame. The deferral exists
+        -- because GetRect() can be nil before layout settles (snap()
+        -- bails safely in that case) -- but when the rect IS ready, and
+        -- on a re-show it always is, waiting a frame meant the backdrop
+        -- painted unsnapped and then shifted. Immediate + queued keeps
+        -- both cases correct with no visible adjustment.
+        snap()
+        if d.aeSnapPending then return end
+        d.aeSnapPending = true
+        if _G.C_Timer then _G.C_Timer.After(0, snap) else snap() end
+    end
+
+    if not d.aeSnapHooked and frame.HookScript then
+        d.aeSnapHooked = true
+        frame:HookScript("OnShow", queueSnap)
+    end
+    queueSnap()
+end
+
 -- v3.5.853: the fix for "skins visibly load in". Every wait-for-frame
 -- in the skins used a WALL-CLOCK delay (0.1s-1s), so anything not yet
 -- created when the skin ran stayed Blizzard-art for that long, in
@@ -429,6 +525,42 @@ local function armHover(button, anchor, l, t, r, b)
             hooksecurefunc(button, "SetHighlightAtlas", killRegisteredHighlight)
         end
     end
+end
+
+local function keepStripped(region, atlas)
+    if atlas and atlas ~= "" then
+        region:SetAtlas("")
+        region:SetTexture(S.ClearTexture)
+    end
+end
+
+function S.LockStripped(region)
+    if not region or not region.SetAtlas then return end
+    local d = S.data(region)
+    if d.strippedLocked then return end
+    d.strippedLocked = true
+    region:SetTexture(S.ClearTexture)
+    region:SetAtlas("")
+    hooksecurefunc(region, "SetAtlas", keepStripped)
+end
+
+function S.LockTextColor(fs, r, g, b, a)
+    if not fs or not fs.SetTextColor then return end
+    local d = S.data(fs)
+    d.lockColor = { r, g, b, a }
+    fs:SetTextColor(r, g, b, a)
+    if d.colorHooked then return end
+    d.colorHooked = true
+    local applying = false
+    hooksecurefunc(fs, "SetTextColor", function(self, nr, ng, nb, na)
+        if applying then return end
+        local c = S.data(self).lockColor
+        if not c then return end
+        if nr == c[1] and ng == c[2] and nb == c[3] and na == c[4] then return end
+        applying = true
+        self:SetTextColor(c[1], c[2], c[3], c[4])
+        applying = false
+    end)
 end
 
 function S.Hover(button, anchor)
