@@ -108,7 +108,7 @@ local function Dispatch(details)
     if fn then
         local ok, err = pcall(fn, details.region, details.tags)
         if not ok then
-            print("|cff7381FFAES|r Baganator skin [" .. tostring(details.regionType) .. "]: " .. tostring(err))
+            print("|cffFF008CKitn|r|cffffffffEssentials:|r Baganator skin [" .. tostring(details.regionType) .. "]: " .. tostring(err))
         end
     end
 end
