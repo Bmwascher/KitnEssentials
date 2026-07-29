@@ -167,9 +167,9 @@ end
 -- than hidden: the user chose to turn it on, and silently dropping it from
 -- the list reads as a missing feature. Their saved choice is left untouched,
 -- so it comes back by itself if EllesmereUI stops covering the window. An
--- uninstalled addon row is greyed the same way, and takes precedence to
--- suppression only when there is no suppressor -- a row can only show one
--- reason at a time, and suppression is the one the user can act on today.
+-- uninstalled addon row is greyed the same way, but suppression wins when a
+-- row is both -- a row can only show one reason at a time, and suppression is
+-- the one the user can act on today.
 local function BuildCheckGrid(card, entries, skins)
     local i = 1
     while i <= #entries do
