@@ -121,7 +121,7 @@ GUIFrame.sidebarConfig = {
         elvUIDisabled = true,
         items = {
             { id = "SkinBattlenet",    text = "Battle.net Toast", keywords = { "battlenet", "battle.net", "bnet", "toast", "friend", "popup" } },
-            { id = "SkinBlizzardFrames", text = "Blizzard Frames", keywords = { "blizzard", "frames", "chat config", "chat settings", "gm", "skin", "window" } },
+            { id = "SkinBlizzardFrames", text = "Blizzard Frames", keywords = { "blizzard", "frames", "chat config", "chat settings", "gm", "skin", "window", "dark theme", "dialog", "context menu", "right click", "font", "socket", "taxi", "flight", "guild invite", "addon skins" } },
             { id = "SkinMessages",     text = "Blizzard Texts", keywords = { "blizzard", "text", "message", "error", "raid warning", "ui error" } },
             { id = "SkinTooltips",     text = "Blizzard Tooltips", keywords = { "tooltip", "tooltips", "blizzard", "mouseover", "skin", "anchor", "cursor", "spell id", "item id", "aura id", "guild rank", "mythic rating", "target", "health bar", "class color", "hide in combat" } },
             { id = "Chat",             text = "Chat", keywords = { "chat", "channel", "whisper", "tab", "timestamp", "copy", "guild", "message", "panel" } },
