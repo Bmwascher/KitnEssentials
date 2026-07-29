@@ -270,7 +270,14 @@ describe("EUIWindows", function()
             S:Register("Blizzard_HousingDashboard", function() end, "Housing")
             local BF = _G.KitnEssentials:GetModule("BlizzardFrames")
             BF:RunForAddon("Blizzard_HousingDashboard")
-            assert.equal("disabled", S.skinStatus.Housing)
+            -- "suppressed", not "disabled" (Task 0B): a key whose registration
+            -- never dispatched aggregates to "pending", so this value is only
+            -- reachable once a record actually went through dispatch and hit
+            -- the suppression branch -- still proof of a real dispatch, and a
+            -- stronger one than the old "disabled" (which a merely-undispatched
+            -- key could never produce either, but read the same as the user's
+            -- own opt-out).
+            assert.equal("suppressed", S.skinStatus.Housing)
 
             local printed = {}
             local realPrint = _G.print
