@@ -420,3 +420,346 @@ describe("A6.1 helper surface", function()
         assert.has_no.errors(function() S.Frame(nil) end)
     end)
 end)
+
+-- Task 0B: per-registration bookkeeping (skinRegistrations), the truthful
+-- skinStatus aggregate, and the two diagnostics that read them. Every case
+-- here runs on the composed loader and dispatches through the production
+-- seam (S:Register/S:RegisterEarly + BF:RunForAddon), never solely through a
+-- hand-built S._runList list -- both of the strongest breaks found against
+-- an earlier version of this task worked by satisfying a component test
+-- while the real path never carried the data, which is exactly the gap that
+-- hid Task 0A's crash from busted (dev/spec/euiwindows_spec.lua).
+describe("SkinAPI per-registration diagnostics", function()
+    local KE, S, BF
+
+    before_each(function()
+        KE = L.loadSkinAPI_EUIWindows()
+        S = KE.Skins
+        KE.ShouldNotLoadModule = function() return false end
+        KE.db.profile.Skinning.BlizzardFrames = { Enabled = true, Skins = {} }
+        BF = _G.KitnEssentials:GetModule("BlizzardFrames")
+    end)
+
+    local function captureVerify()
+        local printed = {}
+        local realPrint = _G.print
+        _G.print = function(msg) printed[#printed + 1] = msg end
+        local ok, err = pcall(S.DebugVerify)
+        _G.print = realPrint
+        assert.is_true(ok, err)
+        return printed
+    end
+
+    local function findLine(printed, needle)
+        for _, line in ipairs(printed) do
+            if line:find(needle, 1, true) then return line end
+        end
+        return nil
+    end
+
+    describe("register time", function()
+        it("records the addon and starts pending through S:Register", function()
+            S:Register("Blizzard_X", function() end, "Key")
+            local record = S.skinRegistrations.Key[1]
+            assert.equals("Blizzard_X", record.addon)
+            assert.equals("pending", record.status)
+        end)
+
+        it("leaves addon nil through S:RegisterEarly", function()
+            S:RegisterEarly(function() end, "Key")
+            local record = S.skinRegistrations.Key[1]
+            assert.is_nil(record.addon)
+            -- Positive control: a nil addon is "no addon to match on", not
+            -- "no record" -- the record itself still exists and is pending.
+            assert.equals("pending", record.status)
+        end)
+
+        it("exposes S.skinRegistrations as a table", function()
+            assert.is_table(S.skinRegistrations)
+        end)
+    end)
+
+    describe("dispatch, per record and named", function()
+        local HOUSING_ADDONS = {
+            "Blizzard_HousingDashboard", "Blizzard_HouseList", "Blizzard_HouseEditor",
+            "Blizzard_HouseCustomization", "Blizzard_HouseNeighborhood",
+            "Blizzard_HousingCatalog", "Blizzard_HousingBasicsFTUE",
+            "Blizzard_HouseGuestList", "Blizzard_HousingFacade",
+        }
+
+        -- Nine registrations, one per Blizzard addon name, the dashboard
+        -- among them -- the shape EllesmereUI's real "housing" row filters.
+        -- Nine correct records whose statuses land on the wrong entries
+        -- would still give counts of 8 ok / 1 suppressed, so every
+        -- assertion below names the addon rather than counting.
+        it("suppresses exactly the dashboard and runs the other eight, named", function()
+            S.suppressed = { Housing = { euiKey = "housing", addons = { Blizzard_HousingDashboard = true } } }
+            for _, addon in ipairs(HOUSING_ADDONS) do
+                S:Register(addon, function() end, "Housing")
+            end
+            for _, addon in ipairs(HOUSING_ADDONS) do
+                BF:RunForAddon(addon)
+            end
+
+            local byAddon = {}
+            for _, record in ipairs(S.skinRegistrations.Housing) do
+                byAddon[record.addon] = record
+            end
+
+            assert.equals("suppressed", byAddon.Blizzard_HousingDashboard.status)
+            assert.equals("housing", byAddon.Blizzard_HousingDashboard.suppressor)
+            for _, addon in ipairs(HOUSING_ADDONS) do
+                if addon ~= "Blizzard_HousingDashboard" then
+                    assert.equals("ok", byAddon[addon].status)
+                end
+            end
+        end)
+
+        it("suppresses exactly the companion config and runs the other two, named for Delves", function()
+            local DELVES_ADDONS = {
+                "Blizzard_DelvesCompanionConfiguration", "Blizzard_DelvesDifficultyPicker", "Blizzard_DelvesDashboard",
+            }
+            S.suppressed = { Delves = { euiKey = "delves", addons = { Blizzard_DelvesCompanionConfiguration = true } } }
+            for _, addon in ipairs(DELVES_ADDONS) do
+                S:Register(addon, function() end, "Delves")
+            end
+            for _, addon in ipairs(DELVES_ADDONS) do
+                BF:RunForAddon(addon)
+            end
+
+            local byAddon = {}
+            for _, record in ipairs(S.skinRegistrations.Delves) do
+                byAddon[record.addon] = record
+            end
+            assert.equals("suppressed", byAddon.Blizzard_DelvesCompanionConfiguration.status)
+            assert.equals("ok", byAddon.Blizzard_DelvesDifficultyPicker.status)
+            assert.equals("ok", byAddon.Blizzard_DelvesDashboard.status)
+        end)
+    end)
+
+    describe("suppression precedence pins", function()
+        it("runs a nil-addon registration against a filtered row", function()
+            S.suppressed = { Key = { euiKey = "eui", addons = { Blizzard_X = true } } }
+            local ran = false
+            S:RegisterEarly(function() ran = true end, "Key")
+            local record = S.skinRegistrations.Key[1]
+            S._runList({ record.entry })
+            assert.is_true(ran)
+            assert.equals("ok", record.status)
+        end)
+
+        it("suppresses a nil-addon registration against an unfiltered row", function()
+            S.suppressed = { Key = "eui" }
+            local ran = false
+            S:RegisterEarly(function() ran = true end, "Key")
+            local record = S.skinRegistrations.Key[1]
+            S._runList({ record.entry })
+            assert.is_false(ran)
+            assert.equals("suppressed", record.status)
+        end)
+
+        it("suppresses an addon registration against an unfiltered row", function()
+            S.suppressed = { Key = "eui" }
+            local ran = false
+            S:Register("Blizzard_X", function() ran = true end, "Key")
+            BF:RunForAddon("Blizzard_X")
+            assert.is_false(ran)
+            assert.equals("suppressed", S.skinRegistrations.Key[1].status)
+        end)
+    end)
+
+    describe("aggregate", function()
+        it("aggregates mixed ok+suppressed to partial, specifically not ok, and never colours either record red", function()
+            S.suppressed = { Key = { euiKey = "eui", addons = { Blizzard_A = true } } }
+            S:Register("Blizzard_A", function() end, "Key")
+            S:Register("Blizzard_B", function() end, "Key")
+            BF:RunForAddon("Blizzard_A")
+            BF:RunForAddon("Blizzard_B")
+            assert.equals("partial", S.skinStatus.Key)
+            assert.not_equals("ok", S.skinStatus.Key)
+
+            local printed = captureVerify()
+            local suppressedLine = findLine(printed, "Blizzard_A")
+            local okLine = findLine(printed, "Blizzard_B")
+            assert.truthy(suppressedLine:find("suppressed by EllesmereUI", 1, true))
+            assert.falsy(suppressedLine:find("|cffff0000", 1, true), "suppressed rendered red inside a partial key")
+            assert.falsy(okLine:find("|cffff0000", 1, true), "ok rendered red inside a partial key")
+        end)
+
+        it("lets any error outrank partial", function()
+            S:Register("Blizzard_A", function() error("boom") end, "Key")
+            S:Register("Blizzard_B", function() end, "Key")
+            BF:RunForAddon("Blizzard_A")
+            BF:RunForAddon("Blizzard_B")
+            assert.truthy(S.skinStatus.Key:find("ERROR"))
+            assert.not_equals("partial", S.skinStatus.Key)
+        end)
+
+        it("aggregates all user-disabled to disabled", function()
+            KE.db.profile.Skinning.BlizzardFrames.Skins.Key = false
+            S:Register("Blizzard_A", function() end, "Key")
+            S:Register("Blizzard_B", function() end, "Key")
+            BF:RunForAddon("Blizzard_A")
+            BF:RunForAddon("Blizzard_B")
+            assert.equals("disabled", S.skinStatus.Key)
+        end)
+
+        it("aggregates all suppressed to suppressed, specifically not disabled", function()
+            S.suppressed = { Key = "eui" }
+            S:Register("Blizzard_A", function() end, "Key")
+            S:Register("Blizzard_B", function() end, "Key")
+            BF:RunForAddon("Blizzard_A")
+            BF:RunForAddon("Blizzard_B")
+            assert.equals("suppressed", S.skinStatus.Key)
+            assert.not_equals("disabled", S.skinStatus.Key)
+        end)
+
+        it("aggregates to pending before anything dispatches, and off pending once dispatched", function()
+            S:Register("Blizzard_A", function() end, "Key")
+            assert.equals("pending", S.skinStatus.Key)
+            BF:RunForAddon("Blizzard_A")
+            assert.equals("ok", S.skinStatus.Key)
+        end)
+    end)
+
+    describe("verify output", function()
+        it("prints a suppressed record as 'suppressed by EllesmereUI', never 'disabled', and not in the error colour", function()
+            S.suppressed = { Key = "eui" }
+            S:Register("Blizzard_A", function() end, "Key")
+            BF:RunForAddon("Blizzard_A")
+
+            local line = findLine(captureVerify(), "Blizzard_A")
+            assert.truthy(line, "no line printed for the suppressed record")
+            assert.truthy(line:find("suppressed by EllesmereUI", 1, true))
+            assert.falsy(line:find("|cffff0000", 1, true), "suppressed rendered in the error colour")
+            assert.falsy(line:find("disabled", 1, true), "suppressed printed as disabled")
+        end)
+
+        it("does not render a pending record in the error colour", function()
+            S:Register("Blizzard_A", function() end, "Key")
+
+            local line = findLine(captureVerify(), "Blizzard_A")
+            assert.truthy(line, "no pending line printed")
+            assert.truthy(line:find("pending", 1, true))
+            assert.falsy(line:find("|cffff0000", 1, true), "pending rendered in the error colour")
+        end)
+    end)
+
+    describe("rerun", function()
+        local function captureOne(fn)
+            local printed = {}
+            local realPrint = _G.print
+            _G.print = function(msg) printed[#printed + 1] = msg end
+            local ok, err = pcall(fn)
+            _G.print = realPrint
+            assert.is_true(ok, err)
+            return printed[1]
+        end
+
+        it("refuses a multi-registration key with no selector, rather than picking one", function()
+            local runsA, runsB = 0, 0
+            S:Register("Blizzard_A", function() runsA = runsA + 1 end, "Key")
+            S:Register("Blizzard_B", function() runsB = runsB + 1 end, "Key")
+            BF:RunForAddon("Blizzard_A")
+            BF:RunForAddon("Blizzard_B")
+
+            local line = captureOne(function() S.DebugRerun("Key") end)
+            assert.equals(1, runsA)   -- from the original dispatch only
+            assert.equals(1, runsB)
+            assert.truthy(line:find("registrations", 1, true))
+        end)
+
+        it("runs only the selected record by addon name", function()
+            local runsA, runsB = 0, 0
+            S:Register("Blizzard_A", function() runsA = runsA + 1 end, "Key")
+            S:Register("Blizzard_B", function() runsB = runsB + 1 end, "Key")
+            BF:RunForAddon("Blizzard_A")
+            BF:RunForAddon("Blizzard_B")
+
+            S.DebugRerun("Key", "Blizzard_B")
+            assert.equals(1, runsA)
+            assert.equals(2, runsB)
+        end)
+
+        it("runs only the selected record by #id", function()
+            local runsA, runsB = 0, 0
+            S:Register("Blizzard_A", function() runsA = runsA + 1 end, "Key")
+            S:Register("Blizzard_B", function() runsB = runsB + 1 end, "Key")
+            BF:RunForAddon("Blizzard_A")
+            BF:RunForAddon("Blizzard_B")
+
+            S.DebugRerun("Key", "#1")
+            assert.equals(2, runsA)
+            assert.equals(1, runsB)
+        end)
+
+        it("refuses a selected suppressed record with its own message", function()
+            S.suppressed = { Key = { euiKey = "eui", addons = { Blizzard_A = true } } }
+            local runsA = 0
+            S:Register("Blizzard_A", function() runsA = runsA + 1 end, "Key")
+            S:Register("Blizzard_B", function() end, "Key")
+            BF:RunForAddon("Blizzard_A")
+            BF:RunForAddon("Blizzard_B")
+
+            local line = captureOne(function() S.DebugRerun("Key", "Blizzard_A") end)
+            assert.equals(0, runsA)
+            assert.truthy(line:find("suppressed by EllesmereUI", 1, true))
+            assert.truthy(line:find("Rerunning it would double", 1, true))
+        end)
+
+        it("keeps single-registration behaviour unchanged with no selector", function()
+            local runs = 0
+            S:Register("Blizzard_A", function() runs = runs + 1 end, "Key")
+            BF:RunForAddon("Blizzard_A")
+            assert.equals(1, runs)
+            S.DebugRerun("Key")
+            assert.equals(2, runs)
+        end)
+
+        it("says so on an unknown selector rather than running something", function()
+            local runsA, runsB = 0, 0
+            S:Register("Blizzard_A", function() runsA = runsA + 1 end, "Key")
+            S:Register("Blizzard_B", function() runsB = runsB + 1 end, "Key")
+            BF:RunForAddon("Blizzard_A")
+            BF:RunForAddon("Blizzard_B")
+
+            local line = captureOne(function() S.DebugRerun("Key", "Blizzard_Nope") end)
+            assert.equals(1, runsA)
+            assert.equals(1, runsB)
+            assert.truthy(line:find("has no registration", 1, true))
+        end)
+    end)
+end)
+
+-- Free regression pin (Step 2/8 of the task brief): the "SkinAPI skin
+-- registry" describe block above builds its _runList entries by hand and
+-- never calls S:Register, so those entries carry no skinRegistrations
+-- record. That is deliberate -- it is what proves the dispatch-time update
+-- tolerates a missing record without skipping the skinStatus write. Don't
+-- "fix" those tests to go through S:Register; that would remove the only
+-- coverage of the tolerate-a-missing-record path.
+
+-- The slash parser change (Core/Globals.lua): "rerun <key> [selector]" now
+-- captures an optional second token and forwards both to S.DebugRerun.
+-- KE.Skins is stubbed here (not the real SkinAPI) because this case is only
+-- about the parsing/forwarding wiring -- the registry and dispatch behaviour
+-- behind DebugRerun are already proven above.
+describe("SkinAPI rerun via the real slash handler", function()
+    it("forwards key and selector through the two-token rerun form", function()
+        local KE = L.loadGlobals()
+        local calls = {}
+        KE.Skins = {
+            DebugRerun = function(key, selector) calls[#calls + 1] = { key = key, selector = selector } end,
+            DebugVerify = function() end,
+        }
+        local handler = _G.SlashCmdList["KITNESSENTIALS"]
+
+        handler("skins rerun Housing")
+        assert.equals("Housing", calls[1].key)
+        assert.is_nil(calls[1].selector)
+
+        handler("skins rerun Housing Blizzard_HouseList")
+        assert.equals("Housing", calls[2].key)
+        assert.equals("Blizzard_HouseList", calls[2].selector)
+    end)
+end)
