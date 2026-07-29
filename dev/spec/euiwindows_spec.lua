@@ -106,15 +106,14 @@ describe("EUIWindows", function()
         end)
 
         -- The fail-open trap. GetBlizzWindowStyle answers "eui" for a key it
-        -- has never heard of, so on EllesmereUI 8.5.9 -- which has no `loot`
-        -- key -- asking about `loot` claims ownership of a window it does not
-        -- skin. The `since` gate is the only thing standing between that and
-        -- three silently missing skins.
+        -- has never heard of, so on EllesmereUI 8.5.9 -- which predates
+        -- `itemupgrade` -- asking about it claims ownership of a window it
+        -- does not skin. The `since` gate is the only thing standing between
+        -- that and one silently missing skin. (`loot`/`loottoast` used to be
+        -- gated too; both rows are gone -- see "map integrity" below.)
         it("ignores an entry newer than the installed EllesmereUI", function()
             local _, KE = loader.loadEUIWindows()
             local set = KE:BuildSkinSuppressionSet(env({ version = "8.5.9" }))
-            assert.is_nil(set.Loot)
-            assert.is_nil(set.Alerts)
             assert.is_nil(set.ItemUpgrade)
             -- Everything without a `since` still resolves normally.
             assert.equal("merchant", set.Merchant)
@@ -123,16 +122,12 @@ describe("EUIWindows", function()
         it("honours an entry once the installed version reaches it", function()
             local _, KE = loader.loadEUIWindows()
             local set = KE:BuildSkinSuppressionSet(env({ version = "8.6.4" }))
-            assert.equal("loot", set.Loot)
-            assert.equal("loottoast", set.Alerts)
             assert.equal("itemupgrade", set.ItemUpgrade)
         end)
 
         it("ignores every gated entry when the version is unreadable", function()
             local _, KE = loader.loadEUIWindows()
             local set = KE:BuildSkinSuppressionSet(env({ version = NO_VERSION }))
-            assert.is_nil(set.Loot)
-            assert.is_nil(set.Alerts)
             assert.is_nil(set.ItemUpgrade)
             assert.equal("merchant", set.Merchant)
         end)
@@ -164,6 +159,136 @@ describe("EUIWindows", function()
                         entry.euiKey .. " has an unparseable since")
                 end
             end
+        end)
+
+        it("has deleted the loot and loottoast rows", function()
+            local _, KE = loader.loadEUIWindows()
+            for _, entry in ipairs(KE.Skins.WINDOW_MAP) do
+                assert.are_not.equal("loot", entry.euiKey)
+                assert.are_not.equal("loottoast", entry.euiKey)
+            end
+        end)
+
+        it("repoints inspectrecipe onto InspectRecipe without touching professions", function()
+            -- A repoint that edited the wrong row (or both) would pass a
+            -- single-sided check; this asserts both rows in one test.
+            local _, KE = loader.loadEUIWindows()
+            local byKey = {}
+            for _, entry in ipairs(KE.Skins.WINDOW_MAP) do byKey[entry.euiKey] = entry end
+            assert.same({ "InspectRecipe" }, byKey.inspectrecipe.skins)
+            assert.same({ "Professions" }, byKey.professions.skins)
+        end)
+
+        it("keeps `addons` to exactly the housing and delves rows", function()
+            local _, KE = loader.loadEUIWindows()
+            for _, entry in ipairs(KE.Skins.WINDOW_MAP) do
+                if entry.euiKey == "housing" then
+                    assert.same({ "Blizzard_HousingDashboard" }, entry.addons)
+                elseif entry.euiKey == "delves" then
+                    assert.same({ "Blizzard_DelvesCompanionConfiguration" }, entry.addons)
+                else
+                    assert.is_nil(entry.addons, entry.euiKey .. " should not have grown an addons filter")
+                end
+            end
+        end)
+    end)
+
+    describe("suppression accessors", function()
+        -- Test through the production seam: every case below is fed the
+        -- real BuildSkinSuppressionSet output, never a hand-seeded fixture.
+        it("resolves the accessor triad atomically off one real suppression set", function()
+            local _, KE = loader.loadEUIWindows()
+            KE.Skins.suppressed = KE:BuildSkinSuppressionSet(env())
+
+            -- housing (filtered row): named addon -> suppressed.
+            assert.equal("housing", KE.Skins.GetSuppression("Housing", "Blizzard_HousingDashboard"))
+            -- filtered row: an addon it does not name -> nil.
+            assert.is_nil(KE.Skins.GetSuppression("Housing", "SomeOtherAddon"))
+            -- filtered row: nil addon -> nil (opposite of the unfiltered case
+            -- below -- an early registration cannot match a named filter).
+            assert.is_nil(KE.Skins.GetSuppression("Housing", nil))
+            -- merchant (unfiltered row): nil addon -> suppressed, because an
+            -- unfiltered row covers the whole key, early registrations too.
+            assert.equal("merchant", KE.Skins.GetSuppression("Merchant", nil))
+            -- unfiltered row: any addon -> still suppressed.
+            assert.equal("merchant", KE.Skins.GetSuppression("Merchant", "AnyAddon"))
+
+            -- GetSuppressionState across three different keys in the SAME
+            -- env -- an always-"none" implementation fails two of these.
+            assert.equal("partial", (KE.Skins.GetSuppressionState("Housing")))
+            assert.equal("full", (KE.Skins.GetSuppressionState("Merchant")))
+            -- TalentLoadoutsEx has no WINDOW_MAP row at all (see the comment
+            -- above `playerspells`), so it can never appear in the set.
+            assert.equal("none", (KE.Skins.GetSuppressionState("TalentLoadoutsEx")))
+        end)
+
+        it("gates ItemUpgrade through the accessor, not only the set", function()
+            -- An accessor that reads WINDOW_MAP directly instead of the
+            -- resolved set would pass every other case while ignoring the
+            -- `since` gate entirely -- this runs the gate through
+            -- GetSuppression/GetSuppressionState, not BuildSkinSuppressionSet.
+            local _, KE = loader.loadEUIWindows()
+
+            KE.Skins.suppressed = KE:BuildSkinSuppressionSet(env({ version = "8.6.3" }))
+            assert.is_nil(KE.Skins.GetSuppression("ItemUpgrade", "Blizzard_ItemUpgradeUI"))
+            assert.equal("none", (KE.Skins.GetSuppressionState("ItemUpgrade")))
+            -- Positive control on the SAME env: proves the env resolves
+            -- something at all, so the nils above aren't from an empty set.
+            assert.equal("merchant", KE.Skins.GetSuppression("Merchant", nil))
+
+            KE.Skins.suppressed = KE:BuildSkinSuppressionSet(env({ version = NO_VERSION }))
+            assert.is_nil(KE.Skins.GetSuppression("ItemUpgrade", "Blizzard_ItemUpgradeUI"))
+            assert.equal("none", (KE.Skins.GetSuppressionState("ItemUpgrade")))
+            assert.equal("merchant", KE.Skins.GetSuppression("Merchant", nil))
+        end)
+    end)
+
+    describe("the diagnostics seam (SkinAPI.DebugVerify / DebugRerun)", function()
+        -- Housing has no registrations of its own until a much later task,
+        -- so a test that only calls the two functions never reaches either
+        -- concatenation: DebugVerify's fires only for a key present in
+        -- skinStatus (SkinAPI.lua:2686), and DebugRerun early-returns before
+        -- its own concat unless skinIndex has the key
+        -- (SkinAPI.lua:2707-2710). Both require a real dispatch, so this
+        -- registers a synthetic skin and runs it through the real path
+        -- (S:Register + BF:RunForAddon, same as skinapi_spec.lua's
+        -- "holds an addon-registered skin" case) on the composed loader,
+        -- which is the only loader where a real filtered suppression record
+        -- and the real dispatcher share one KE.
+        it("prints the owning euiKey through both concatenation sites for a dispatched, suppressed skin", function()
+            local KE = loader.loadSkinAPI_EUIWindows()
+            local S = KE.Skins
+
+            S.suppressed = KE:BuildSkinSuppressionSet(env())
+            S:Register("Blizzard_HousingDashboard", function() end, "Housing")
+            local BF = _G.KitnEssentials:GetModule("BlizzardFrames")
+            BF:RunForAddon("Blizzard_HousingDashboard")
+            assert.equal("disabled", S.skinStatus.Housing)
+
+            local printed = {}
+            local realPrint = _G.print
+            _G.print = function(msg) printed[#printed + 1] = msg end
+            local ok = pcall(function()
+                S.DebugVerify()
+                S.DebugRerun("Housing")
+            end)
+            _G.print = realPrint
+            assert.is_true(ok, "DebugVerify/DebugRerun raised an error -- likely a raw table concatenation")
+
+            local verifyLine, rerunLine
+            for _, line in ipairs(printed) do
+                if line:find("Housing", 1, true) and line:find("suppressed by EllesmereUI (", 1, true) then
+                    verifyLine = verifyLine or line
+                end
+                if line:find("Rerunning it would double", 1, true) then
+                    rerunLine = line
+                end
+            end
+
+            assert.truthy(verifyLine, "DebugVerify did not print a suppressed line for Housing")
+            assert.truthy(verifyLine:find("suppressed by EllesmereUI (housing)", 1, true))
+            assert.truthy(rerunLine, "DebugRerun did not print its refusal message")
+            assert.truthy(rerunLine:find("suppressed by EllesmereUI (housing)", 1, true))
         end)
     end)
 end)
