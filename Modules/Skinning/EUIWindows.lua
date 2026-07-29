@@ -44,7 +44,20 @@ S.WINDOW_MAP = {
     { euiKey = "mail",            skins = { "Mail" } },
     { euiKey = "catalyst",        skins = { "ItemInteraction" } },
     { euiKey = "socket",          skins = { "Socket" } },
-    { euiKey = "housing",         skins = { "Housing" } },
+    -- `addons` is SPARSE by design: populate it only where EllesmereUI
+    -- declares a filter AND our key out-registers it (today: exactly the two
+    -- rows below). EllesmereUI's RegisterWindow declarations are NOT a
+    -- complete record of what it skins -- `inspect`, `lfg` and `greatvault`
+    -- have no declaration block at all, and their coverage lives in
+    -- pre-engine files (EllesmereUIBlizzardSkin.lua:61-69). Completing this
+    -- field for every row from declarations alone would therefore silently
+    -- un-suppress our skin underneath one of those.
+    { euiKey = "housing",         skins = { "Housing" },
+      -- EllesmereUIBlizzardSkin_WindowPacks.lua:5890-5892: the declared
+      -- filter names exactly one addon; our key covers nine windows.
+      addons = { "Blizzard_HousingDashboard" },
+      partialLabel = "Housing (EllesmereUI: dashboard only)",
+      partialTooltip = "EllesmereUI currently skins Housing Dashboard. While that overlap is active, this toggle controls KitnEssentials' other eight Housing windows. Your saved choice also applies to the dashboard if EllesmereUI stops covering it." },
     { euiKey = "professions",     skins = { "Professions" } },
     { euiKey = "worldmap",        skins = { "WorldMap" } },
     { euiKey = "dressup",         skins = { "DressingRoom" } },
@@ -58,11 +71,14 @@ S.WINDOW_MAP = {
     { euiKey = "trainer",         skins = { "Trainer" } },
     { euiKey = "gossip",          skins = { "Gossip" } },
     { euiKey = "quest",           skins = { "Quest" } },
-    { euiKey = "inspectrecipe",   skins = { "Professions" } },
-    { euiKey = "delves",          skins = { "Delves" } },
+    { euiKey = "inspectrecipe",   skins = { "InspectRecipe" } },
+    { euiKey = "delves",          skins = { "Delves" },
+      -- EllesmereUIBlizzardSkin_WindowPacks.lua:8464-8466: the declared
+      -- filter names exactly one addon; our key covers three windows.
+      addons = { "Blizzard_DelvesCompanionConfiguration" },
+      partialLabel = "Delves (EllesmereUI: companion only)",
+      partialTooltip = "EllesmereUI currently skins Companion Configuration. While that overlap is active, this toggle controls Difficulty Picker and Delves Dashboard. Your saved choice also applies to Companion Configuration if EllesmereUI stops covering it." },
     { euiKey = "itemupgrade",     skins = { "ItemUpgrade" },  since = "8.6.4" },
-    { euiKey = "loot",            skins = { "Loot" },         since = "8.6.4" },
-    { euiKey = "loottoast",       skins = { "Alerts" },       since = "8.6.4" },
     -- `micromenu` has no row: the reference ships no micro-menu skin and
     -- A0 deleted ours. `Guild` (GuildInviteFrame) is likewise absent on
     -- purpose -- the invite popup is not the Communities window that
@@ -100,7 +116,9 @@ end
 --- env.loaded    boolean  EllesmereUIBlizzardSkin loaded AND enabled
 --- env.version   string   its ## Version, or nil when unreadable
 --- env.getStyle  function(euiKey) -> "off" | "eui" | "modern" | nil
----@return table set [skinKey] = euiKey; never nil
+---@return table set [skinKey] = euiKey (unfiltered row) | resolved record
+---                   { euiKey, addons, partialLabel, partialTooltip }
+---                   (filtered row); never nil
 function KE:BuildSkinSuppressionSet(env)
     local set = {}
     if type(env) ~= "table" then return set end
@@ -117,14 +135,74 @@ function KE:BuildSkinSuppressionSet(env)
         if not gated then
             local style = env.getStyle(entry.euiKey)
             if style and style ~= "off" then
+                -- SPARSE on purpose: only a filtered row (one with `addons`)
+                -- gets a table value. A uniform record would give every
+                -- already-ported key with a row (Socket today) a table too,
+                -- and those keys DO get dispatched, so the concatenation at
+                -- SkinAPI.lua:2689 would hit a table the first time anyone
+                -- ran /kes skins verify. Step 4 removes that crash
+                -- regardless; sparse means it was never reachable at all.
+                local value = entry.euiKey
+                if entry.addons then
+                    local addons = {}
+                    for _, addonName in ipairs(entry.addons) do
+                        addons[addonName] = true
+                    end
+                    value = {
+                        euiKey = entry.euiKey,
+                        addons = addons,
+                        partialLabel = entry.partialLabel,
+                        partialTooltip = entry.partialTooltip,
+                    }
+                end
                 for _, skinKey in ipairs(entry.skins) do
-                    set[skinKey] = entry.euiKey
+                    set[skinKey] = value
                 end
             end
         end
     end
 
     return set
+end
+
+-- Nothing outside this layer may ever index S.suppressed directly again --
+-- go through these two accessors instead.
+
+--- Is THIS ONE registration suppressed? Returns the owning euiKey string
+--- when it is, nil when it is not.
+---@param key string # skin key (S.skinIndex / S.skinStatus key)
+---@param addon string? # the Blizzard addon this registration came from
+---@return string? euiKey
+function S.GetSuppression(key, addon)
+    local entry = S.suppressed and S.suppressed[key]
+    if entry == nil then return nil end
+    if type(entry) == "string" then
+        -- Unfiltered row: covers the whole key, including when `addon` is
+        -- nil -- an early registration has no addon to match, but an
+        -- unfiltered row was never scoped to one.
+        return entry
+    end
+    if addon == nil then
+        -- Filtered row: the opposite nil rule from the string case above.
+        -- An early registration has no addon to match, and a filtered row
+        -- only claims the addons it names -- it cannot claim "no addon".
+        return nil
+    end
+    if entry.addons[addon] then return entry.euiKey end
+    return nil
+end
+
+--- How much of `key` does EllesmereUI own?
+---@param key string
+---@return string state # "none" | "full" | "partial"
+---@return string? euiKey
+---@return string? partialLabel
+---@return string? partialTooltip
+function S.GetSuppressionState(key)
+    local entry = S.suppressed and S.suppressed[key]
+    if entry == nil then return "none" end
+    if type(entry) == "string" then return "full", entry end
+    return "partial", entry.euiKey, entry.partialLabel, entry.partialTooltip
 end
 
 --- Live. Reads the globals, resolves once, caches on S.suppressed.

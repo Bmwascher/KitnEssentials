@@ -2686,7 +2686,9 @@ function S.DebugVerify()
         if suppressor and status == "disabled" then
             -- "disabled" alone cannot be told apart from the user's own
             -- opt-out, which is the one question this command answers.
-            shown = "suppressed by EllesmereUI (" .. suppressor .. ")"
+            -- suppressor may be a table (a filtered row's resolved record);
+            -- GetSuppressionState is the only shape-safe source of its euiKey.
+            shown = "suppressed by EllesmereUI (" .. select(2, S.GetSuppressionState(key)) .. ")"
         end
         local color = status == "ok" and "|cff00ff00" or status == "disabled" and "|cff888888" or "|cffff0000"
         print(("|cffFF008CKitn|r|cffffffffEssentials:|r %-24s %s%s|r"):format(key, color, shown))
@@ -2710,8 +2712,10 @@ function S.DebugRerun(key)
     end
     local suppressor = S.suppressed and S.suppressed[key]
     if suppressor then
+        -- suppressor may be a table (a filtered row's resolved record);
+        -- GetSuppressionState is the only shape-safe source of its euiKey.
         print("|cffFF008CKitn|r|cffffffffEssentials:|r " .. key
-            .. " is suppressed by EllesmereUI (" .. suppressor
+            .. " is suppressed by EllesmereUI (" .. select(2, S.GetSuppressionState(key))
             .. "). Rerunning it would double-skin the window. Turn EllesmereUI's window skin off first.")
         return
     end

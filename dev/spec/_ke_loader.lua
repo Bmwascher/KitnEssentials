@@ -423,4 +423,16 @@ function L.loadEUIWindows(overrides)
     return helpers.loadModule("Modules/Skinning/EUIWindows.lua", KE), KE
 end
 
+-- Modules/Skinning/SkinAPI.lua AND Modules/Skinning/EUIWindows.lua on the
+-- SAME KE instance. loadSkinAPI and loadEUIWindows above each return a
+-- separate KE, so no spec driven through either loader alone can push a real
+-- resolved suppression record through the real dispatcher and diagnostics --
+-- exactly why the table-concatenation crash the two functions used to have
+-- was invisible to busted. Returns the composed KE.
+function L.loadSkinAPI_EUIWindows(overrides)
+    local KE = L.loadSkinAPI(overrides)
+    helpers.loadModule("Modules/Skinning/EUIWindows.lua", KE)
+    return KE
+end
+
 return L
