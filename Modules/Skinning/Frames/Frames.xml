@@ -15,6 +15,8 @@
     <Script file="ChromieTime.lua" />
     <Script file="CooldownManager.lua" />
     <Script file="DeathRecap.lua" />
+    <Script file="Delves.lua" />
+    <Script file="DressingRoom.lua" />
     <Script file="EditMode.lua" />
     <Script file="ExpansionLandingPage.lua" />
     <Script file="ExtraButtons.lua" />
@@ -22,6 +24,7 @@
     <Script file="Friends.lua" />
     <Script file="GenericTrait.lua" />
     <Script file="GMChat.lua" />
+    <Script file="Gossip.lua" />
     <Script file="Guide.lua" />
     <Script file="Guild.lua" />
     <Script file="GuildBank.lua" />
@@ -33,7 +36,10 @@
     <Script file="ItemUpgrade.lua" />
     <Script file="LFGuild.lua" />
     <Script file="LossControl.lua" />
+    <Script file="Macro.lua" />
+    <Script file="Mail.lua" />
     <Script file="MajorFaction.lua" />
+    <Script file="Merchant.lua" />
     <Script file="MirrorTimers.lua" />
     <Script file="Misc.lua" />
     <Script file="NonRaid.lua" />
@@ -56,5 +62,6 @@
     <Script file="TimeManager.lua" />
     <Script file="Trade.lua" />
     <Script file="Trainer.lua" />
+    <Script file="Transmog.lua" />
     <Script file="TutorialFrame.lua" />
 </Ui>
