@@ -3,6 +3,9 @@
 
     <Script file="SkinAPI.lua" />
     <Script file="EUIWindows.lua" />
+    <Script file="Dialogs.lua" />
+    <Script file="GlobalFonts.lua" />
+    <Script file="ContextMenus.lua" />
     <Script file="Tooltips.lua" />
     <Script file="TooltipStatusBar.lua" />
     <Script file="BlizzardMessages.lua" />

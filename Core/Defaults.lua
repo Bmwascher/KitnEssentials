@@ -1665,10 +1665,17 @@ local Defaults = {
             BlizzardFrames = {
                 Enabled    = false,
                 FontOffset = 0,
+                -- Base point size the global Blizzard font override scales
+                -- from. Every font object keeps its own relative size; this
+                -- moves them together. 12 is Blizzard's own baseline.
+                FontBaseSize = 12,
                 -- Per-frame opt-out. A missing key means ON; only an
                 -- explicit false disables a skin. The registry's gate reads
                 -- Skins[key] ~= false, so the polarity matters.
                 Skins      = {},
+            },
+            ContextMenus = {
+                Enabled = false,
             },
         },
 
