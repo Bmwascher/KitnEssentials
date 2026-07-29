@@ -23,9 +23,21 @@ end
 -- ContextMenus is an Ace module with its own Enabled flag, and GlobalFonts
 -- applies and reverts live instead of on reload. An entry with `isOn` and
 -- `onToggle` bypasses the db.Skins read and write entirely.
+--
+-- Ten keys ported alongside these get no row here, on purpose: AdventureMap,
+-- Battlenet, ChromieTime, CooldownManager, ExtraButtons, Help, PetBattle,
+-- Runeforge, TimeManager, TutorialFrame -- minor or loading-screen-rare
+-- frames (reference rationale: GUI/Tabs/Skinning/GUI-BlizzardFrames.lua:
+-- 118-124). A key with no row still dispatches and defaults on, because the
+-- gate above reads Skins[key] ~= false -- don't "fix" this by adding rows.
 local FRAME_SKINS = {
-    { key = "ChatConfig",   text = "Chat Settings" },
-    { key = "ContextMenus", text = "Context Menus (right-click and dropdown menus)",
+    { key = "Barber",                   text = "Barbershop" },
+    { key = "Binding",                  text = "Key Bindings" },
+    { key = "BlackMarket",              text = "Black Market" },
+    { key = "CatalogShop",              text = "Catalog Shop" },
+    { key = "Channels",                 text = "Chat Channels" },
+    { key = "ChatConfig",               text = "Chat Settings" },
+    { key = "ContextMenus",             text = "Context Menus (right-click and dropdown menus)",
       isOn = function()
           local db = KE.db and KE.db.profile.Skinning.ContextMenus
           return db and db.Enabled == true or false
@@ -42,9 +54,15 @@ local FRAME_SKINS = {
           -- Un-skinning needs a reload; the reference flags it one way only.
           return not checked
       end },
-    { key = "Dialogs",      text = "Dialog Borders" },
-    { key = "GMChat",       text = "GM Chat" },
-    { key = "GlobalFonts",  text = "Blizzard Fonts",
+    { key = "DeathRecap",               text = "Death Recap" },
+    { key = "Dialogs",                  text = "Dialog Borders" },
+    { key = "EditMode",                 text = "Edit Mode" },
+    { key = "ExpansionLandingPage",     text = "Expansion Landing Page" },
+    { key = "FlightMap",                text = "Flight Map" },
+    { key = "Friends",                  text = "Friends List (native)" },
+    { key = "GMChat",                   text = "GM Chat" },
+    { key = "GenericTrait",             text = "Generic Traits" },
+    { key = "GlobalFonts",              text = "Blizzard Fonts",
       isOn = function()
           local db = GetDB()
           return not (db and db.Skins and db.Skins.GlobalFonts == false)
@@ -69,14 +87,49 @@ local FRAME_SKINS = {
           -- test it is the wrong experience -- hence RestoreGlobalFonts.
           return false
       end },
-    { key = "Guild",        text = "Guild Invite" },
-    { key = "Socket",       text = "Item Socketing" },
-    { key = "Taxi",         text = "Flight Map" },
+    { key = "Guide",                    text = "New Player Guide" },
+    { key = "Guild",                    text = "Guild Invite" },
+    { key = "GuildBank",                text = "Guild Bank" },
+    { key = "GuildControl",             text = "Guild Control" },
+    { key = "GuildRegistrar",           text = "Guild Registrar" },
+    { key = "LFGuild",                  text = "Guild Finder" },
+    { key = "LossControl",              text = "Loss of Control" },
+    { key = "MajorFaction",             text = "Renown" },
+    { key = "MirrorTimers",             text = "Mirror Timers" },
+    { key = "Misc",                     text = "Misc Dialogs" },
+    { key = "NonRaid",                  text = "Raid Info (Lockouts)" },
+    { key = "PerksProgram",             text = "Trading Post" },
+    { key = "Petition",                 text = "Petitions" },
+    { key = "PlayerChoice",             text = "Player Choice" },
+    { key = "PvP",                      text = "PvP" },
+    { key = "PvPMatch",                 text = "PvP Match" },
+    { key = "QuestChoice",              text = "Quest Choice" },
+    { key = "Raid",                     text = "Raid (Legacy)" },
+    { key = "Socket",                   text = "Item Socketing" },
+    { key = "Stable",                   text = "Stable" },
+    { key = "SubscriptionInterstitial", text = "Subscription Popup" },
+    { key = "Tabard",                   text = "Tabard Designer" },
+    { key = "TalkingHead",              text = "Talking Head" },
+    { key = "Taxi",                     text = "Flight Master" },
+    { key = "Trade",                    text = "Trade" },
 }
 
 -- Skins for other addons. Each runs only when its addon is installed.
--- A6.2 fills this in; the table exists now so the tab is not a special case.
-local ADDON_SKINS = {}
+-- An entry with an `addon` field greys out when that addon is missing.
+-- Ace3 carries none -- it is a library skin covering any AceGUI window,
+-- not one addon's, which is why its file lives under Frames/ while its
+-- row lives here. Presentation only: the skins never run for a missing
+-- addon anyway, because S:Register dispatch is keyed to ADDON_LOADED.
+local ADDON_SKINS = {
+    { key = "Ace3",               text = "Addon Config Windows (AceGUI)" },
+    { key = "Baganator",          text = "Baganator",            addon = "Baganator" },
+    { key = "BetterFriendlist",   text = "Better Friendlist",    addon = "BetterFriendlist" },
+    { key = "BigWigs",            text = "BigWigs",              addon = "BigWigs" },
+    { key = "BugSack",            text = "BugSack",              addon = "BugSack" },
+    { key = "MythicDungeonTools", text = "Mythic Dungeon Tools", addon = "MythicDungeonTools" },
+    { key = "SimpleAddonManager", text = "Simple Addon Manager", addon = "SimpleAddonManager" },
+    { key = "Simulationcraft",    text = "SimulationCraft",      addon = "Simulationcraft" },
+}
 
 -- One read path for every row, so a special entry cannot render the wrong
 -- state. Without this the ContextMenus row reads db.Skins.ContextMenus --
@@ -97,13 +150,26 @@ end
 local PER_ROW = 2
 local CELL_H = 40
 
+-- An ADDON_SKINS row for an addon the user does not have is shown greyed
+-- rather than hidden, so the list reads the same on every machine and a
+-- user can see what installing that addon would get them. FRAME_SKINS
+-- rows have no `addon` field and are never greyed by this.
+local function AddonInstalled(entry)
+    if not entry.addon then return true end
+    if not (C_AddOns and C_AddOns.DoesAddOnExist) then return true end
+    return C_AddOns.DoesAddOnExist(entry.addon)
+end
+
 -- Renders `entries` as a PER_ROW-wide grid of checkboxes. One column would
 -- be unusable at 91 rows.
 --
 -- A row EllesmereUI has taken over is greyed and made unclickable rather
 -- than hidden: the user chose to turn it on, and silently dropping it from
 -- the list reads as a missing feature. Their saved choice is left untouched,
--- so it comes back by itself if EllesmereUI stops covering the window.
+-- so it comes back by itself if EllesmereUI stops covering the window. An
+-- uninstalled addon row is greyed the same way, and takes precedence to
+-- suppression only when there is no suppressor -- a row can only show one
+-- reason at a time, and suppression is the one the user can act on today.
 local function BuildCheckGrid(card, entries, skins)
     local i = 1
     while i <= #entries do
@@ -115,14 +181,20 @@ local function BuildCheckGrid(card, entries, skins)
                 local suppressor = KE.Skins and KE.Skins.suppressed
                     and KE.Skins.suppressed[entry.key]
                 local label = entry.text
+                local tooltip
+                local disabled = false
                 if suppressor then
                     label = label .. " |cff888888(EllesmereUI)|r"
+                    tooltip = "EllesmereUI already skins this window, so KitnEssentials leaves it alone. Turn EllesmereUI's window skin off to use this one."
+                    disabled = true
+                elseif not AddonInstalled(entry) then
+                    label = label .. " |cff888888(not installed)|r"
+                    tooltip = "This addon is not installed, so there is nothing to skin. The setting is kept and applies by itself once you install it."
+                    disabled = true
                 end
                 local check = GUIFrame:CreateCheckbox(row, label, {
                     value = EntryIsOn(entry, skins),
-                    tooltip = suppressor
-                        and "EllesmereUI already skins this window, so KitnEssentials leaves it alone. Turn EllesmereUI's window skin off to use this one."
-                        or nil,
+                    tooltip = tooltip,
                     callback = function(checked)
                         if SetEntry(entry, skins, checked) then
                             KE:SkinningReloadPrompt()
@@ -130,7 +202,7 @@ local function BuildCheckGrid(card, entries, skins)
                         GUIFrame:RefreshContent()
                     end,
                 })
-                if suppressor then
+                if disabled then
                     -- SetEnabled, not EnableMouse. CreateCheckbox returns the
                     -- ROW; the clickable object is a child button, and
                     -- row:SetEnabled is what reaches it
@@ -236,22 +308,26 @@ GUIFrame:RegisterContent("SkinBlizzardFramesAddons", function(scrollChild, yOffs
         return card:GetNextOffset()
     end
 
+    -- Counts only what this toggle can actually write. The bulk loop below
+    -- skips uninstalled entries, so counting them here would make the
+    -- header re-read as on the moment RefreshContent re-runs.
     local anyOn = false
     for _, entry in ipairs(ADDON_SKINS) do
-        if EntryIsOn(entry, db.Skins) then anyOn = true break end
+        if AddonInstalled(entry) and EntryIsOn(entry, db.Skins) then anyOn = true break end
     end
 
     card:AddHeaderToggle(anyOn, function(checked)
         local needsReload = false
         for _, entry in ipairs(ADDON_SKINS) do
-            if SetEntry(entry, db.Skins, checked) then needsReload = true end
+            -- An uninstalled row cannot be clicked individually, so a bulk
+            -- toggle must not write it either -- that is what keeps the
+            -- setting intact until the user installs the addon.
+            if AddonInstalled(entry) and SetEntry(entry, db.Skins, checked) then
+                needsReload = true
+            end
         end
         if needsReload then KE:SkinningReloadPrompt() end
     end)
-
-    if not anyOn then
-        return card:GetNextOffset()
-    end
 
     card:AddLabel("Skins for other addons, applied when that addon loads. Changes apply after a /reload.")
     BuildCheckGrid(card, ADDON_SKINS, db.Skins)
