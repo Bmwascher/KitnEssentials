@@ -182,10 +182,12 @@ end
 -- An uninstalled addon row is greyed the same way as "full", but "full" wins
 -- when a row is both suppressed and not-installed -- a row can only show one
 -- reason at a time, and suppression is the one the user can act on today.
--- "partial" cannot also be not-installed today -- FRAME_SKINS rows carry no
--- `addon` field, so AddonInstalled always returns true for them (:158-162)
--- -- but the branch order below is written explicitly rather than relying
--- on that.
+-- Not-installed is checked before "partial": a row whose addon is missing has
+-- nothing to skin at all, so "(not installed)" is the more useful message and
+-- wins over a partial-coverage note. "partial" cannot also be not-installed
+-- today -- FRAME_SKINS rows carry no `addon` field, so AddonInstalled always
+-- returns true for them (:158-162) -- but the branch order below is written
+-- explicitly rather than relying on that.
 local function BuildCheckGrid(card, entries, skins)
     local i = 1
     while i <= #entries do
@@ -207,13 +209,13 @@ local function BuildCheckGrid(card, entries, skins)
                     label = label .. " |cff888888(EllesmereUI)|r"
                     tooltip = "EllesmereUI already skins this window, so KitnEssentials leaves it alone. Turn EllesmereUI's window skin off to use this one."
                     disabled = true
-                elseif state == "partial" then
-                    label = partialLabel or (label .. " |cff888888(EllesmereUI)|r")
-                    tooltip = partialTooltip or "EllesmereUI already skins this window, so KitnEssentials leaves it alone. Turn EllesmereUI's window skin off to use this one."
                 elseif not AddonInstalled(entry) then
                     label = label .. " |cff888888(not installed)|r"
                     tooltip = "This addon is not installed, so there is nothing to skin. The setting is kept and applies by itself once you install it."
                     disabled = true
+                elseif state == "partial" then
+                    label = partialLabel or (label .. " |cff888888(EllesmereUI)|r")
+                    tooltip = partialTooltip or "EllesmereUI covers part of this window group. This toggle still controls the rest."
                 end
                 local check = GUIFrame:CreateCheckbox(row, label, {
                     value = EntryIsOn(entry, skins),

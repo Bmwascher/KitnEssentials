@@ -8,9 +8,11 @@
 --
 -- Every test constructs the "partial" state itself by stubbing
 -- KE.Skins.GetSuppressionState (rule 1) -- FRAME_SKINS carries no key that is
--- really partial today (Housing/Delves are ADDON_SKINS-shaped rows that
--- don't exist as FRAME_SKINS entries yet), so the only way to exercise the
--- three-state branch at all is to tell the stub what to answer.
+-- really partial today. Housing and Delves, the only two currently-partial
+-- EllesmereUI windows, are real Blizzard windows that land as FRAME_SKINS
+-- rows in a later task in this plan, not ADDON_SKINS rows -- so stubbing the
+-- accessor is the only way to exercise the three-state branch at all right
+-- now.
 local helpers = require("dev.spec._helpers")
 
 describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
@@ -28,8 +30,44 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
         return row[1], row[2], row[3], row[4]
     end
 
+    -- Mirrors the RAW suppression shape (EUIWindows.lua:176-209: an
+    -- unfiltered/"full" row is a bare euiKey STRING, a filtered/"partial" row
+    -- is a TABLE) into KE.Skins.suppressed alongside the stubbed accessor
+    -- answer. Without this, KE.Skins.suppressed stays empty, so a site that
+    -- regressed to reading it directly instead of calling the accessor would
+    -- see nil (falsy) for every key -- indistinguishable from "not
+    -- suppressed", which is exactly what several of the assertions below
+    -- already expect. That would make a raw-read regression invisible. Real
+    -- shapes make a raw read reproduce the OLD two-state behaviour instead
+    -- (any truthy value, string or table, greys the row out) -- the opposite
+    -- of what today's "partial rows stay on" assertions require, so a
+    -- regression actually fails them.
+    local function seedFull(key, euiKey)
+        euiKey = euiKey or "someEuiKey"
+        states[key] = { "full", euiKey }
+        KE.Skins.suppressed[key] = euiKey
+    end
+
+    local function seedPartial(key, euiKey, partialLabel, partialTooltip)
+        euiKey = euiKey or "someEuiKey"
+        states[key] = { "partial", euiKey, partialLabel, partialTooltip }
+        KE.Skins.suppressed[key] = {
+            euiKey = euiKey,
+            addons = {},
+            partialLabel = partialLabel,
+            partialTooltip = partialTooltip,
+        }
+    end
+
     local function freshDB(skins)
         return { Skins = skins }
+    end
+
+    local function containsKey(list, key)
+        for _, k in ipairs(list) do
+            if k == key then return true end
+        end
+        return false
     end
 
     before_each(function()
@@ -47,7 +85,16 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
                 function card:AddRow() end
                 function card:AddLabel() end
                 function card:AddHeaderToggle(anyOn, callback)
-                    headerToggle = { anyOn = anyOn, callback = callback }
+                    -- Snapshot `calls` HERE, not later. AddHeaderToggle is
+                    -- invoked between the header anyOn loop and
+                    -- BuildCheckGrid in the real registered callback, so a
+                    -- copy taken at this exact moment is precisely the
+                    -- header loop's own call list -- BuildCheckGrid asking
+                    -- about the same keys afterward, in the same order,
+                    -- cannot leak into it and make the assertion vacuous.
+                    local snapshot = {}
+                    for idx, key in ipairs(calls) do snapshot[idx] = key end
+                    headerToggle = { anyOn = anyOn, callback = callback, callsAtRegistration = snapshot }
                 end
                 function card:GetNextOffset() return 0 end
                 return card
@@ -74,7 +121,7 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
 
         KE = {
             GUIFrame = GUIFrame,
-            Skins = { GetSuppressionState = stubGetSuppressionState },
+            Skins = { GetSuppressionState = stubGetSuppressionState, suppressed = {} },
             db = { profile = { Skinning = { BlizzardFrames = freshDB({}) } } },
             SkinningReloadPrompt = function() end,
         }
@@ -98,7 +145,7 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
         end)
 
         it("full: greys the label, sets the suppression tooltip, disables", function()
-            states.Barber = { "full", "someEuiKey" }
+            seedFull("Barber")
             buildFrames()
             assert.equal("Barbershop |cff888888(EllesmereUI)|r", checkboxes[1].label)
             assert.equal(
@@ -108,7 +155,7 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
         end)
 
         it("partial: renders the map row's own label/tooltip verbatim, stays enabled", function()
-            states.Barber = { "partial", "someEuiKey", "Barbershop (EllesmereUI: dashboard only)", "Custom partial tooltip text" }
+            seedPartial("Barber", nil, "Barbershop (EllesmereUI: dashboard only)", "Custom partial tooltip text")
             buildFrames()
             -- Positive control: the label is NOT entry.text -- proves the
             -- row actually switched off the "none" rendering above.
@@ -119,12 +166,16 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
             assert.is_true(checkboxes[1].enabled)
         end)
 
-        it("partial with no map strings: falls back to entry.text plus the generic suffix, never nil", function()
-            states.Barber = { "partial", "someEuiKey" }
+        it("partial with no map strings: falls back to entry.text plus a generic suffix, never nil", function()
+            seedPartial("Barber")
             buildFrames()
             assert.equal("Barbershop |cff888888(EllesmereUI)|r", checkboxes[1].label)
+            -- The fallback wording is PARTIAL-specific, not the "full"
+            -- suppression tooltip -- that one claims KitnEssentials leaves
+            -- the window alone entirely, which is false next to a live,
+            -- clickable partial row.
             assert.equal(
-                "EllesmereUI already skins this window, so KitnEssentials leaves it alone. Turn EllesmereUI's window skin off to use this one.",
+                "EllesmereUI covers part of this window group. This toggle still controls the rest.",
                 checkboxes[1].tooltip)
             assert.is_true(checkboxes[1].enabled)
         end)
@@ -139,14 +190,14 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
         end
 
         it("reads on when every other row is off and only the partial row's setting is on", function()
-            states.Socket = { "partial", "someEuiKey" }
+            seedPartial("Socket")
             KE.db.profile.Skinning.BlizzardFrames = freshDB(allOffExcept("Socket", true))
             buildFrames()
             assert.is_true(headerToggle.anyOn)
         end)
 
         it("positive control: reads off when the partial row is ALSO off", function()
-            states.Socket = { "partial", "someEuiKey" }
+            seedPartial("Socket")
             KE.db.profile.Skinning.BlizzardFrames = freshDB(allOffExcept("Socket", false))
             buildFrames()
             assert.is_false(headerToggle.anyOn)
@@ -154,13 +205,16 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
 
         it("calls the accessor per row, in FRAME_SKINS order, until it finds one on", function()
             -- Barber (#1) off, Binding (#2) on and unsuppressed: anyOn must
-            -- consult the accessor for Barber, then Binding, then stop --
-            -- proof this loop (not just BuildCheckGrid, which runs after it)
-            -- reaches S.GetSuppressionState.
+            -- consult the accessor for Barber, then Binding, then stop.
+            -- Asserted against the snapshot AddHeaderToggle's stub takes at
+            -- registration time (BEFORE BuildCheckGrid re-walks the same
+            -- keys), so this is provably the header loop's OWN call list --
+            -- deleting the accessor call from that loop leaves the snapshot
+            -- empty and fails this assertion, regardless of what
+            -- BuildCheckGrid does afterward.
             KE.db.profile.Skinning.BlizzardFrames = freshDB({ Barber = false })
             buildFrames()
-            assert.equal("Barber", calls[1])
-            assert.equal("Binding", calls[2])
+            assert.same({ "Barber", "Binding" }, headerToggle.callsAtRegistration)
         end)
     end)
 
@@ -172,18 +226,15 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
             -- `calls`, that call can only have come from BuildCheckGrid,
             -- which renders every row regardless of anyOn's outcome.
             buildFrames()
-            local sawTrade = false
-            for _, key in ipairs(calls) do
-                if key == "Trade" then sawTrade = true end
-            end
-            assert.is_true(sawTrade, "BuildCheckGrid did not ask about Trade (the last FRAME_SKINS row)")
+            assert.is_true(containsKey(calls, "Trade"),
+                "BuildCheckGrid did not ask about Trade (the last FRAME_SKINS row)")
         end)
     end)
 
     describe("bulk toggle", function()
         it("bulk-off writes the partial row and leaves the fully suppressed row untouched", function()
-            states.Socket = { "partial", "someEuiKey" }
-            states.Barber = { "full", "someEuiKey" }
+            seedPartial("Socket")
+            seedFull("Barber")
             -- Seeded with a placeholder (true), never the canonical on value
             -- (nil/absent), so a write is observable: an absent key already
             -- reads as on, and would look identical to "never touched".
@@ -199,12 +250,13 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
             -- placeholder, proving it was skipped, not merely written the
             -- same value back.
             assert.is_true(skins.Barber)
-            assert.is_true(#calls > 0, "bulk-off never asked the accessor about any row")
+            assert.is_true(containsKey(calls, "Socket"), "bulk-off never asked the accessor about Socket")
+            assert.is_true(containsKey(calls, "Barber"), "bulk-off never asked the accessor about Barber")
         end)
 
         it("bulk-on returns the partial row and leaves the fully suppressed row untouched", function()
-            states.Socket = { "partial", "someEuiKey" }
-            states.Barber = { "full", "someEuiKey" }
+            seedPartial("Socket")
+            seedFull("Barber")
             -- Seeded with the canonical off value (false) so bulk-on's write
             -- (nil) is observable against it.
             KE.db.profile.Skinning.BlizzardFrames = freshDB({ Socket = false, Barber = false })
@@ -215,7 +267,8 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
             -- The write: checked=true stores `nil`, per SetEntry.
             assert.is_nil(skins.Socket)
             assert.is_false(skins.Barber)
-            assert.is_true(#calls > 0, "bulk-on never asked the accessor about any row")
+            assert.is_true(containsKey(calls, "Socket"), "bulk-on never asked the accessor about Socket")
+            assert.is_true(containsKey(calls, "Barber"), "bulk-on never asked the accessor about Barber")
         end)
     end)
 end)
