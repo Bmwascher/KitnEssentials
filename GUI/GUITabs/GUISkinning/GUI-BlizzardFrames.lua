@@ -164,13 +164,28 @@ end
 -- Renders `entries` as a PER_ROW-wide grid of checkboxes. One column would
 -- be unusable at 91 rows.
 --
--- A row EllesmereUI has taken over is greyed and made unclickable rather
--- than hidden: the user chose to turn it on, and silently dropping it from
--- the list reads as a missing feature. Their saved choice is left untouched,
--- so it comes back by itself if EllesmereUI stops covering the window. An
--- uninstalled addon row is greyed the same way, but suppression wins when a
--- row is both -- a row can only show one reason at a time, and suppression is
--- the one the user can act on today.
+-- S.GetSuppressionState answers one of three states per key:
+--   "full"    -- EllesmereUI covers every registration behind this key. The
+--               row is greyed and made unclickable rather than hidden: the
+--               user chose to turn it on, and silently dropping it from the
+--               list reads as a missing feature. Their saved choice is left
+--               untouched, so it comes back by itself if EllesmereUI stops
+--               covering the window.
+--   "partial" -- EllesmereUI covers SOME of the registrations behind this
+--               key and not others. The toggle still genuinely controls the
+--               registrations EllesmereUI does not touch, so the row stays
+--               full opacity and clickable -- greying it would take away the
+--               off-switch for the working skins to describe one overlap.
+--               It is relabelled with the map row's own description of what
+--               is and is not covered, verbatim.
+--   "none"    -- unchanged: falls through to the not-installed check below.
+-- An uninstalled addon row is greyed the same way as "full", but "full" wins
+-- when a row is both suppressed and not-installed -- a row can only show one
+-- reason at a time, and suppression is the one the user can act on today.
+-- "partial" cannot also be not-installed today -- FRAME_SKINS rows carry no
+-- `addon` field, so AddonInstalled always returns true for them (:158-162)
+-- -- but the branch order below is written explicitly rather than relying
+-- on that.
 local function BuildCheckGrid(card, entries, skins)
     local i = 1
     while i <= #entries do
@@ -179,15 +194,22 @@ local function BuildCheckGrid(card, entries, skins)
         for c = 0, PER_ROW - 1 do
             local entry = entries[i + c]
             if entry then
-                local suppressor = KE.Skins and KE.Skins.suppressed
-                    and KE.Skins.suppressed[entry.key]
+                local state = "none"
+                local partialLabel, partialTooltip
+                if KE.Skins and KE.Skins.GetSuppressionState then
+                    local _
+                    state, _, partialLabel, partialTooltip = KE.Skins.GetSuppressionState(entry.key)
+                end
                 local label = entry.text
                 local tooltip
                 local disabled = false
-                if suppressor then
+                if state == "full" then
                     label = label .. " |cff888888(EllesmereUI)|r"
                     tooltip = "EllesmereUI already skins this window, so KitnEssentials leaves it alone. Turn EllesmereUI's window skin off to use this one."
                     disabled = true
+                elseif state == "partial" then
+                    label = partialLabel or (label .. " |cff888888(EllesmereUI)|r")
+                    tooltip = partialTooltip or "EllesmereUI already skins this window, so KitnEssentials leaves it alone. Turn EllesmereUI's window skin off to use this one."
                 elseif not AddonInstalled(entry) then
                     label = label .. " |cff888888(not installed)|r"
                     tooltip = "This addon is not installed, so there is nothing to skin. The setting is kept and applies by itself once you install it."
@@ -269,23 +291,31 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFrames", function(scrollChild, yOffs
     local anyOn = false
     for _, entry in ipairs(FRAME_SKINS) do
         -- Counts only what this toggle can actually write. The bulk loop
-        -- below skips suppressed entries, so counting them here would make
-        -- the header re-read as on the moment RefreshContent re-runs.
-        local suppressor = KE.Skins and KE.Skins.suppressed
-            and KE.Skins.suppressed[entry.key]
-        if not suppressor and EntryIsOn(entry, db.Skins) then anyOn = true break end
+        -- below skips a fully suppressed entry, so counting one here would
+        -- make the header re-read as on the moment RefreshContent re-runs.
+        -- A partial entry IS writable -- EllesmereUI only owns part of it --
+        -- so it counts here the same as an unsuppressed row.
+        local state = "none"
+        if KE.Skins and KE.Skins.GetSuppressionState then
+            state = KE.Skins.GetSuppressionState(entry.key)
+        end
+        if state ~= "full" and EntryIsOn(entry, db.Skins) then anyOn = true break end
     end
 
     card:AddHeaderToggle(anyOn, function(checked)
         local needsReload = false
         for _, entry in ipairs(FRAME_SKINS) do
-            -- A suppressed row cannot be clicked individually, so a bulk
-            -- toggle must not write it either -- that is what keeps the
+            -- A fully suppressed row cannot be clicked individually, so a
+            -- bulk toggle must not write it either -- that is what keeps the
             -- user's real choice intact until EllesmereUI stops covering
-            -- the window.
-            local suppressor = KE.Skins and KE.Skins.suppressed
-                and KE.Skins.suppressed[entry.key]
-            if not suppressor and SetEntry(entry, db.Skins, checked) then
+            -- the window. A partial row IS writable -- the toggle still
+            -- controls the registrations EllesmereUI does not cover -- so
+            -- it is written the same as an unsuppressed row.
+            local state = "none"
+            if KE.Skins and KE.Skins.GetSuppressionState then
+                state = KE.Skins.GetSuppressionState(entry.key)
+            end
+            if state ~= "full" and SetEntry(entry, db.Skins, checked) then
                 needsReload = true
             end
         end
