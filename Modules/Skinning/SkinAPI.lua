@@ -1293,6 +1293,366 @@ function S.EditBox(editbox, keepFont)
     S.data(editbox).skinned = true
 end
 
+local function CalibrateTabGap(tab)
+    local d = S.data(tab)
+    if d.gapDone or not d.selTex then return end
+
+    local n = tab:GetNumPoints()
+    if n == 0 then return end
+    local pts, chainIdx, chainRel = {}, nil, nil
+    for i = 1, n do
+        local point, rel, relPoint, x, y = tab:GetPoint(i)
+        pts[i] = { point, rel, relPoint, x or 0, y or 0 }
+        if not chainIdx and rel and rel.IsObjectType and rel:IsObjectType("Button")
+            and S.data(rel).selTex then
+            chainIdx, chainRel = i, rel
+        end
+    end
+    local myBD = S.GetBackdrop(tab)
+    if not chainIdx then
+
+        local parent = tab:GetParent()
+        local bdL = myBD and myBD:GetLeft()
+        local pL = parent and parent:GetLeft()
+        if not bdL or not pL then return end
+        local delta = bdL - pL
+
+        -- This corrects OUR backdrop's inset on a leading tab -- a few
+        -- pixels. It is not a licence to relocate the tab row: on
+        -- Crafting Orders the parent is the whole frame and the Search
+        -- button sits at its left edge, so an uncapped correction dragged
+        -- the first tab ~85px left and parked it on top of Search.
+        -- Anything past the inset scale is deliberate layout; leave it.
+        local MAX_INSET_CORRECTION = 8
+        if math.abs(delta) > MAX_INSET_CORRECTION then
+            d.gapDone = true
+            return
+        end
+
+        if math.abs(delta) > 0.5 then
+            pts[1][4] = pts[1][4] - delta
+            tab:ClearAllPoints()
+            for i = 1, n do
+                local q = pts[i]
+                tab:SetPoint(q[1], q[2], q[3], q[4], q[5])
+            end
+        end
+        d.gapDone = true
+        return
+    end
+    local prevBD = S.GetBackdrop(chainRel)
+    local left = myBD and myBD:GetLeft()
+    local right = prevBD and prevBD:GetRight()
+    if not left or not right then return end
+    local gap = left - right
+    pts[chainIdx][4] = pts[chainIdx][4] - (gap - 1)
+    tab:ClearAllPoints()
+    for i = 1, n do
+        local q = pts[i]
+        tab:SetPoint(q[1], q[2], q[3], q[4], q[5])
+    end
+    d.gapDone = true
+end
+
+local tabSelHooksDone
+
+local recentering = false
+local RecenterTabText
+function RecenterTabText(tab)
+    local text = tab.Text
+    if not text then return end
+    local n = text:GetNumPoints()
+    if n == 0 then return end
+    recentering = true
+    local pts = {}
+    for i = 1, n do
+        local point, rel, relPoint, x = text:GetPoint(i)
+        pts[i] = { point, rel, relPoint, x or 0 }
+    end
+    text:ClearAllPoints()
+    for i = 1, n do
+        local q = pts[i]
+        text:SetPoint(q[1], q[2], q[3], q[4], 0)
+    end
+    recentering = false
+end
+S.RecenterTabText = RecenterTabText
+
+local function EnsureTabSelHooks()
+    if tabSelHooksDone then return end
+    tabSelHooksDone = true
+
+    local function PinTextFit(tab)
+        if _G.PanelTemplates_TabResize then
+            pcall(_G.PanelTemplates_TabResize, tab, 0)
+        end
+    end
+    if _G.PanelTemplates_SelectTab then
+        hooksecurefunc("PanelTemplates_SelectTab", function(tab)
+            local d = tab and S.data(tab)
+            if d and d.selTex then
+                d.selTex:Show()
+                if not d.noGeometry then
+                    PinTextFit(tab)
+                    CalibrateTabGap(tab)
+                end
+                RecenterTabText(tab)
+            end
+        end)
+    end
+    if _G.PanelTemplates_DeselectTab then
+        hooksecurefunc("PanelTemplates_DeselectTab", function(tab)
+            local d = tab and S.data(tab)
+            if d and d.selTex then
+                d.selTex:Hide()
+                if not d.noGeometry then
+                    PinTextFit(tab)
+                    CalibrateTabGap(tab)
+                end
+                RecenterTabText(tab)
+            end
+        end)
+    end
+end
+
+function S.TabSetSelected(tab, selected)
+    local d = tab and S.data(tab)
+    if d and d.selTex then
+        if selected == nil and tab.IsEnabled then
+            selected = not tab:IsEnabled()
+        end
+        if selected then d.selTex:Show() else d.selTex:Hide() end
+        RecenterTabText(tab)
+        CalibrateTabGap(tab)
+    end
+end
+
+-- v3.5.859: is this one of Blizzard's modern TabSystem tabs?
+-- TabSystemMixin owns their geometry through the MANAGED LAYOUT system:
+-- AddTab/SetTabShown call MarkDirty(), and LayoutMixin resolves size and
+-- position on the NEXT frame via TabSystemButtonMixin:UpdateTabWidth().
+-- PanelTemplates_TabResize is the OLD tab API and has no business here --
+-- when we ran it on these, we sized the tab our way and Blizzard's layout
+-- pass re-sized it a frame later. That is the "tabs snap into place"
+-- hitch on the talent frame: two layout systems fighting, theirs winning
+-- on frame two. This is also our own taint doctrine (never write what the
+-- managed layout reads); geometry is theirs, styling is ours.
+local function IsManagedTab(tab)
+    return (tab.GetTabID ~= nil and tab.UpdateTabWidth ~= nil)
+        or (tab.GetTabSystem ~= nil)
+end
+
+function S.Tab(tab)
+    if not tab or S.data(tab).skinned then return end
+    local managed = IsManagedTab(tab)
+    if managed then S.data(tab).noGeometry = true end
+    if tab.SetPushedTextOffset then tab:SetPushedTextOffset(0, 0) end
+    S.StripTextures(tab)
+
+    local aeBD = S.Template(tab, "Default", 2)
+
+    S.Hover(tab, aeBD)
+
+    -- A managed tab keeps Blizzard's font SIZE. TabSystemButtonMixin:
+    -- UpdateTabWidth() sizes each tab from its text, so forcing 12pt made
+    -- Blizzard widen the tabs to match -- on Crafting Orders that pushed
+    -- the row over the Search button and off the right edge of the frame.
+    -- nil size means "keep what is there"; the face and outline are still
+    -- ours, which is the part that makes it look like the rest of the UI.
+    local tabFontSize = 12
+    if managed then tabFontSize = nil end   -- `managed and nil or 12` is 12
+    S.FontStrings(tab, tabFontSize, "OUTLINE")
+
+    do
+        local d0 = S.data(tab)
+        if tab.Text and not d0.textArmor then
+            d0.textArmor = true
+            local pending = false
+            hooksecurefunc(tab.Text, "SetPoint", function()
+                -- v3.5.855: was deferred a frame (visible text jump when
+                -- Blizzard re-anchors on tab select). `recentering`
+                -- already guards the re-entry from our own SetPoints,
+                -- so this is safe to do inline -- and the text never
+                -- renders off-centre.
+                if recentering or pending or S.data(tab).noGeometry then return end
+                pending = true
+                RecenterTabText(tab)
+                pending = false
+            end)
+        end
+        if not d0.noGeometry and not d0.initFit and _G.PanelTemplates_TabResize then
+            d0.initFit = true
+            -- v3.5.855 (tabs start somewhere then snap into
+            -- place): this fit was deferred a frame, so the tab was
+            -- drawn once at Blizzard's size/position and then jumped to
+            -- ours. Nothing here needs to wait -- the tab and its text
+            -- both exist right now. Fit synchronously; the tab is only
+            -- ever painted in its final geometry.
+            if tab.Text then
+                pcall(_G.PanelTemplates_TabResize, tab, 0)
+                RecenterTabText(tab)
+            end
+        end
+    end
+
+    EnsureTabSelHooks()
+    do
+        local d = S.data(tab)
+        if not d.selTex then
+            local anchor = S.GetBackdrop(tab) or tab
+            local t = tab:CreateTexture(nil, "ARTWORK")
+
+            t:SetColorTexture(BRAND_HL[1], BRAND_HL[2], BRAND_HL[3], 0.15)
+            t:SetPoint("TOPLEFT", anchor, "TOPLEFT", 1, -1)
+            t:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", -1, 1)
+            t:Hide()
+            d.selTex = t
+
+            -- Gap calibration needs resolved geometry, which is not available
+            -- while we skin. It used to happen only on selection, so tabs sat
+            -- at Blizzard's spacing until the first click and then jumped.
+            -- OnShow is the first moment the layout is real. gapDone makes it
+            -- a no-op after it lands.
+            -- OnShow only. Callers routinely re-anchor a tab after S.Tab
+            -- returns (Friends moves the whole row below the frame), so
+            -- calibrating inline would measure anchors that are about to be
+            -- replaced and then latch gapDone against the real ones.
+            tab:HookScript("OnShow", CalibrateTabGap)
+
+            if tab.SetTabSelected then
+
+                local sys = tab:GetParent()
+                local sd = sys and S.data(sys)
+                if sd and not sd.tabRowTuned then
+                    sd.tabRowTuned = true
+
+                    sys:HookScript("OnShow", function(s2)
+                        local sd2 = S.data(s2)
+                        if sd2.flushDone then return end
+                        C_Timer.After(0, function()
+                            if sd2.flushDone then return end
+                            local first = select(1, s2:GetChildren())
+                            local bd = first and S.GetBackdrop(first)
+                            local owner = s2:GetParent()
+                            local bdL = bd and bd:GetLeft()
+                            local oL = owner and owner:GetLeft()
+                            if bdL and oL then
+                                local delta = bdL - oL
+                                if math.abs(delta) > 0.5 and s2.AdjustPointsOffset then
+                                    s2:AdjustPointsOffset(-delta, 0)
+                                end
+                                sd2.flushDone = true
+                            end
+                        end)
+                    end)
+
+                    sys.spacing = -3
+                    if sys.MarkDirty then sys:MarkDirty() end
+                    if sys.AdjustPointsOffset then sys:AdjustPointsOffset(0, -1) end
+                end
+            else
+
+                local _, rel = tab:GetPoint(1)
+                local relIsTab = rel and rel.IsObjectType and rel:IsObjectType("Button")
+                    and S.data(rel).selTex ~= nil
+
+                if not relIsTab and tab.AdjustPointsOffset and not d.noGeometry then
+
+                    local d2 = S.data(tab)
+                    if not d2.ySeamArmed then
+                        d2.ySeamArmed = true
+
+                        local function settle()
+                            local bd = S.GetBackdrop(tab)
+                            local relFrame = select(2, tab:GetPoint(1))
+                            if not (bd and relFrame and relFrame.GetBottom) then return end
+                            local bdTop, bdBottom = bd:GetTop(), bd:GetBottom()
+                            local fTop, fBottom = relFrame:GetTop(), relFrame:GetBottom()
+                            if not (bdTop and bdBottom and fTop and fBottom) then return end
+                            local cy = (bdTop + bdBottom) / 2
+                            local delta
+                            if cy < fBottom then
+                                delta = (fBottom - 1) - bdTop
+                            elseif cy > fTop then
+                                delta = (fTop + 1) - bdBottom
+                            end
+                            if delta and math.abs(delta) > 0.5 then
+                                tab:AdjustPointsOffset(0, delta)
+                            end
+                        end
+                        C_Timer.After(0, settle)
+                        tab:HookScript("OnShow", function()
+                            settle()
+                            C_Timer.After(0, settle)
+                        end)
+                    end
+                end
+            end
+
+            if tab.SetTabSelected and not d.tabSysHook then
+                local sys0 = tab:GetParent()
+                local sd0 = sys0 and S.data(sys0)
+                if sd0 and not sd0.flushShowHook then
+                    sd0.flushShowHook = true
+
+                    local function Reflush0()
+                        for _, c in ipairs({ sys0:GetChildren() }) do
+                            if c.Text and c.SetText and c.GetText then
+                                local txt = c:GetText()
+                                if txt and txt ~= "" then c:SetText(txt) end
+                            end
+                        end
+                        if sys0.MarkDirty then sys0:MarkDirty() end
+                        C_Timer.After(0, function()
+                            local first = select(1, sys0:GetChildren())
+                            local bd = first and S.GetBackdrop(first)
+                            local owner = sys0:GetParent()
+                            local bdL = bd and bd:GetLeft()
+                            local oL = owner and owner:GetLeft()
+                            if bdL and oL then
+                                local delta = bdL - oL
+                                if math.abs(delta) > 0.5 and sys0.AdjustPointsOffset then
+                                    sys0:AdjustPointsOffset(-delta, 0)
+                                end
+                            end
+                        end)
+                    end
+                    sd0.Reflush = Reflush0
+                    C_Timer.After(0, Reflush0)
+                    sys0:HookScript("OnShow", function()
+                        C_Timer.After(0, Reflush0)
+                    end)
+                end
+                d.tabSysHook = true
+                hooksecurefunc(tab, "SetTabSelected", function(t2, selected)
+                    local dd = S.data(t2)
+                    if dd.selTex then
+                        dd.selTex:SetShown(selected and true or false)
+                        RecenterTabText(t2)
+                    end
+
+                    local sys2 = t2:GetParent()
+                    local sd2 = sys2 and S.data(sys2)
+                    if sd2 and sd2.Reflush then sd2.Reflush() end
+                end)
+                if tab.isSelected then
+                    t:Show()
+                    RecenterTabText(tab)
+                end
+            end
+
+            local parent = tab:GetParent()
+            local selected = parent and parent.selectedTab
+                and tab.GetID and tab:GetID() == parent.selectedTab
+            if selected then
+                t:Show()
+                RecenterTabText(tab)
+            end
+        end
+    end
+    S.data(tab).skinned = true
+end
+
 function S.DropDown(dropdown, withCaret)
     if not dropdown or S.data(dropdown).skinned then return end
 
