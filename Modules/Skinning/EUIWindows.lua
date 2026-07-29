@@ -30,7 +30,12 @@ S.WINDOW_MAP = {
     { euiKey = "lfg",             skins = { "LFG" } },
     { euiKey = "greatvault",      skins = { "WeeklyRewards" } },
     { euiKey = "collections",     skins = { "Collectables" } },
-    { euiKey = "playerspells",    skins = { "PlayerSpells", "TalentLoadoutsEx" } },
+    -- TalentLoadoutsEx is deliberately NOT listed here. Its skin styles only
+    -- TalentLoadoutExMainFrame (a third-party window) and merely anchors
+    -- itself beside PlayerSpellsFrame; EllesmereUI never touches that addon
+    -- (grep across every vendored EUI version: zero matches), so suppressing
+    -- it under this key hid our skin against a collision that does not exist.
+    { euiKey = "playerspells",    skins = { "PlayerSpells" } },
     { euiKey = "adventureguide",  skins = { "EncounterJournal" } },
     { euiKey = "professionsbook", skins = { "SpellBook", "Archaeology" } },
     { euiKey = "guild",           skins = { "Communities" } },

@@ -129,6 +129,7 @@ local ADDON_SKINS = {
     { key = "MythicDungeonTools", text = "Mythic Dungeon Tools", addon = "MythicDungeonTools" },
     { key = "SimpleAddonManager", text = "Simple Addon Manager", addon = "SimpleAddonManager" },
     { key = "Simulationcraft",    text = "SimulationCraft",      addon = "Simulationcraft" },
+    { key = "TalentLoadoutsEx",   text = "Talent Loadouts Ex",   addon = "TalentLoadoutsEx" },
 }
 
 -- One read path for every row, so a special entry cannot render the wrong
