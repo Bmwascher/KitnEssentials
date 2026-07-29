@@ -2641,7 +2641,12 @@ local earlySkins = {}
 -- (addonSkins[addonName] = nil, inside BF:RunForAddon), so a dispatch-time
 -- capture would lose the entry reference rerun needs.
 S.skinRegistrations = {}
-local entryRecords = setmetatable({}, { __mode = "k" })
+-- Plain table, not weak: a weak KEY mode could never collect anything here
+-- anyway (the value strongly references its own key via record.entry, Lua
+-- 5.1 has no ephemeron support, and S.skinRegistrations holds every record
+-- for the whole session regardless), so __mode = "k" would only advertise a
+-- lifetime guarantee this table does not actually have.
+local entryRecords = {}
 
 -- The truthful aggregate for skinStatus[key]: an error anywhere outranks
 -- every other state -- Housing's real defect was one throwing registration
@@ -2837,8 +2842,12 @@ local function findBySelector(records, selector)
         end
         return nil
     end
+    -- Case-insensitive, matching the key lookup above -- an addon name typed
+    -- in the wrong case should resolve the same registration, not read as
+    -- an unknown selector.
+    local ls = tostring(selector):lower()
     for _, record in ipairs(records) do
-        if record.addon == selector then return record end
+        if record.addon and record.addon:lower() == ls then return record end
     end
     return nil
 end
@@ -2879,6 +2888,19 @@ function S.DebugRerun(key, selector)
         return
     else
         record = records[1]
+    end
+
+    -- A pending record's frames don't exist yet -- its Blizzard addon
+    -- (or, for an early registration, the registration itself) never
+    -- dispatched this session. Calling entry.fn against nothing would print
+    -- a false "completed" or a false "ERROR:" for a window that was simply
+    -- never opened; refuse instead, same spirit as the dispatch gate the
+    -- old S.skinIndex lookup used to give this for free.
+    if record.status == "pending" then
+        local who = record.addon and (record.addon .. " has not loaded") or "this registration has not run"
+        print("|cffFF008CKitn|r|cffffffffEssentials:|r " .. key .. " #" .. record.id .. " has not dispatched -- "
+            .. who .. " this session, so there is nothing to rerun yet.")
+        return
     end
 
     -- This record's OWN suppressor, not the key's -- the old key-level guard

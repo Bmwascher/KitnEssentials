@@ -253,11 +253,12 @@ describe("EUIWindows", function()
     describe("the diagnostics seam (SkinAPI.DebugVerify / DebugRerun)", function()
         -- Housing has no registrations of its own until a much later task,
         -- so a test that only calls the two functions never reaches either
-        -- concatenation: DebugVerify's fires only for a key present in
-        -- skinStatus (SkinAPI.lua:2686), and DebugRerun early-returns before
-        -- its own concat unless skinIndex has the key
-        -- (SkinAPI.lua:2716-2718). Both require a real dispatch, so this
-        -- registers a synthetic skin and runs it through the real path
+        -- concatenation: DebugVerify iterates S.skinRegistrations, which has
+        -- no entry for a key nothing ever registered (SkinAPI.lua:2798-2800),
+        -- and DebugRerun's own lookup reads that same table
+        -- (SkinAPI.lua:2855-2856), not skinIndex. Both require a real
+        -- dispatch, so this registers a synthetic skin and runs it through
+        -- the real path
         -- (S:Register + BF:RunForAddon, same as skinapi_spec.lua's
         -- "holds an addon-registered skin" case) on the composed loader,
         -- which is the only loader where a real filtered suppression record

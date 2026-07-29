@@ -593,6 +593,13 @@ describe("SkinAPI per-registration diagnostics", function()
             BF:RunForAddon("Blizzard_B")
             assert.truthy(S.skinStatus.Key:find("ERROR"))
             assert.not_equals("partial", S.skinStatus.Key)
+
+            -- Positive control for every "not the error colour" assertion in
+            -- this file: a real error string must still render red, or the
+            -- fallback in statusColor could silently stop being red (or its
+            -- literal could drift) with every falsy assertion staying green.
+            local errLine = findLine(captureVerify(), "Blizzard_A")
+            assert.truthy(errLine:find("|cffff0000", 1, true), "a real error did not render in the error colour")
         end)
 
         it("aggregates all user-disabled to disabled", function()
@@ -714,6 +721,26 @@ describe("SkinAPI per-registration diagnostics", function()
             assert.equals(1, runs)
             captureOne(function() S.DebugRerun("Key") end)
             assert.equals(2, runs)
+        end)
+
+        -- Regression: a registered-but-never-dispatched key used to hit the
+        -- old S.skinIndex lookup's "no dispatched skin named" refusal for
+        -- free, because skinIndex is only ever written inside runList.
+        -- S.skinRegistrations is written at REGISTER time, so that dispatch
+        -- gate disappeared -- rerunning a pending record would call
+        -- entry.fn against frames that were never created, printing a false
+        -- "completed" or a false "ERROR:" for a window that simply never
+        -- opened. Positive control is the test just above: a dispatched
+        -- single registration runs fine with the same call shape.
+        it("refuses a pending record rather than running it against nothing", function()
+            local ran = false
+            S:Register("Blizzard_A", function() ran = true end, "Key")
+            -- Never dispatched: Blizzard_A never "loaded" this session.
+
+            local line = captureOne(function() S.DebugRerun("Key") end)
+            assert.is_false(ran)
+            assert.truthy(line:find("Blizzard_A", 1, true))
+            assert.truthy(line:find("has not loaded", 1, true))
         end)
 
         it("says so on an unknown selector rather than running something", function()

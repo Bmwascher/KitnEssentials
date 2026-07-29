@@ -213,9 +213,9 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
         return
     end
 
-    -- /kes skins [verify|rerun <key>] — skin dispatch diagnostics. Matched
-    -- before the lowercase pass because rerun takes a skin key and the keys
-    -- are CamelCase.
+    -- /kes skins [verify|rerun <key> [selector]] — skin dispatch diagnostics.
+    -- Matched before the lowercase pass because rerun takes a skin key and
+    -- the keys are CamelCase.
     local skinRest = msg:match("^[Ss][Kk][Ii][Nn][Ss]%s*(.*)$")
     if skinRest then
         local S = KE.Skins
