@@ -95,7 +95,7 @@ local function SetEntry(entry, skins, checked)
 end
 
 local PER_ROW = 2
-local CELL_H = 22
+local CELL_H = 40
 
 -- Renders `entries` as a PER_ROW-wide grid of checkboxes. One column would
 -- be unusable at 91 rows.
