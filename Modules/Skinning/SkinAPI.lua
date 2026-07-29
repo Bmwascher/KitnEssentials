@@ -75,25 +75,27 @@ S.palette = {
     inlineTint = { 0, 0, 0, 0.25 },
     border     = { 0, 0, 0, 1 },
     brand      = { 1, 1, 1 },
-    hover      = { 1, 1, 1, 0.15 },
+    hover      = { 0.851, 0.851, 0.851, 0.15 },
     progress   = { 1, 1, 1, 0.40 },
     brandFillA = 0.8,
     brandRestA = 0.35,
 }
 
--- Mutates in place, never reassigns. BRAND_HL/HOVER_COLOR/CLOSE_REST/
--- CLOSE_HOVER capture these tables at file scope, which runs before KE.db
--- exists; replacing a table here would leave those four holding a dead one
--- and freeze the accent at its placeholder for the whole session.
+-- Mutates in place, never reassigns. BRAND_HL/HOVER_COLOR/CLOSE_HOVER
+-- capture these tables at file scope, which runs before KE.db exists;
+-- replacing a table here would leave those holding a dead one and freeze
+-- the accent at its placeholder for the whole session.
+--
+-- palette.hover is deliberately NOT themed. It is the reference's neutral
+-- grey mouseover wash, not an accent: theme accent and accentHover share
+-- the same RGB and differ only in alpha, so driving hover from accentHover
+-- collapsed every rest/hover pair (rows, tabs, buttons, the close X) onto
+-- one flat brand colour with no visible mouseover state at all.
 function S.RefreshPalette()
     local accent = KE.GetThemeColor and KE:GetThemeColor("accent")
-    local hover = KE.GetThemeColor and KE:GetThemeColor("accentHover")
     if accent then
         S.palette.brand[1], S.palette.brand[2], S.palette.brand[3] = accent[1], accent[2], accent[3]
         S.palette.progress[1], S.palette.progress[2], S.palette.progress[3] = accent[1], accent[2], accent[3]
-    end
-    if hover then
-        S.palette.hover[1], S.palette.hover[2], S.palette.hover[3] = hover[1], hover[2], hover[3]
     end
 end
 
@@ -825,7 +827,15 @@ end
 local CLOSE_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\KitnCustomCrossv3.png"
 local ARROW_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.tga"
 local ARROW_ROT = { down = 0, up = 3.14159, right = 1.5708, left = -1.5708 }
-local CLOSE_REST = S.palette.hover
+-- KitnCustomCrossv3 is a PLUS glyph -- KE's own GUI close button draws it as
+-- an X by rotating 45 degrees (GUI/GUIMain/GUI-MainFrame.lua:334). The skin
+-- swapped the reference's pre-rotated aesClose art for this one but kept the
+-- reference's geometry, so every skinned window drew a small upright plus.
+-- Rest colour is KE's GUI white (T.textPrimary), not the reference's 0.851
+-- grey, for the same reason: these must read as the same button.
+local CLOSE_ROT = math.rad(45)
+local CLOSE_SIZE = 16
+local CLOSE_REST = { 1, 1, 1 }
 local ARROW_REST = { 0.85, 0.85, 0.85 }
 local CLOSE_HOVER = S.palette.brand
 
@@ -847,7 +857,8 @@ function S.CloseButton(button, size)
         local x = button:CreateTexture(nil, "OVERLAY")
         x:SetPoint("CENTER")
         x:SetTexture(CLOSE_TEX)
-        x:SetSize(size or 13, size or 13)
+        x:SetSize(size or CLOSE_SIZE, size or CLOSE_SIZE)
+        x:SetRotation(CLOSE_ROT)
         x:SetVertexColor(CLOSE_REST[1], CLOSE_REST[2], CLOSE_REST[3])
         S.data(button).closeX = x
         button:HookScript("OnEnter", closeOnEnter)
@@ -1067,7 +1078,7 @@ function S.NavButton(button)
             arrow.Art:SetTexture(ARROW_TEX)
             arrow.Art:SetTexCoord(0, 1, 0, 1)
             arrow.Art:SetRotation(0)
-            arrow.Art:SetVertexColor(CLOSE_REST[1], CLOSE_REST[2], CLOSE_REST[3])
+            arrow.Art:SetVertexColor(ARROW_REST[1], ARROW_REST[2], ARROW_REST[3])
         end
     end
     S.data(button).skinned = true

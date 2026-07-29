@@ -104,9 +104,19 @@ describe("SkinAPI palette", function()
         assert.near(0.549, S.palette.brand[3], 1e-9)
     end)
 
-    it("keeps the reference hover alpha, not the theme alpha", function()
-        -- armHover applies 0.15 separately; a themed alpha would double-apply
-        assert.equals(0.15, S.palette.hover[4])
+    it("keeps the reference hover wash verbatim, rgb included", function()
+        -- Was themed from accentHover. Because accent and accentHover share
+        -- one rgb and differ only in alpha, that made hover identical to
+        -- brand and every rest/hover pair invisible. armHover applies 0.15
+        -- separately, so a themed alpha would double-apply on top.
+        assert.same({ 0.851, 0.851, 0.851, 0.15 }, S.palette.hover)
+    end)
+
+    it("never lets the hover wash collapse onto the brand colour", function()
+        -- The regression this guards: a mouseover state the same colour as
+        -- the resting state reads in-game as no mouseover at all.
+        local h, b = S.palette.hover, S.palette.brand
+        assert.is_false(h[1] == b[1] and h[2] == b[2] and h[3] == b[3])
     end)
 
     it("gives progress the accent rgb at alpha 0.40", function()
@@ -115,9 +125,9 @@ describe("SkinAPI palette", function()
     end)
 
     it("mutates colour tables in place so file-scope captures stay live", function()
-        -- brand is captured by BRAND_HL:431, hover by HOVER_COLOR:448 and
-        -- CLOSE_REST:626. Both tables must keep their identity across a
-        -- refresh or those captures hold an orphan.
+        -- brand is captured by BRAND_HL and CLOSE_HOVER, hover by
+        -- HOVER_COLOR. Both tables must keep their identity across a refresh
+        -- or those captures hold an orphan.
         local capturedBrand = S.palette.brand
         local capturedHover = S.palette.hover
         KE.GetThemeColor = function(_, key)
@@ -130,8 +140,9 @@ describe("SkinAPI palette", function()
         assert.near(0.0, capturedBrand[1], 1e-9)
         assert.near(1.0, capturedBrand[2], 1e-9)
         assert.near(0.5, capturedBrand[3], 1e-9)
-        assert.near(0.2, capturedHover[1], 1e-9)
-        assert.equals(0.15, capturedHover[4])   -- reference alpha survives
+        -- A refresh themes brand and progress only; the hover wash is
+        -- neutral by design and no accent may reach it.
+        assert.same({ 0.851, 0.851, 0.851, 0.15 }, capturedHover)
     end)
 end)
 
