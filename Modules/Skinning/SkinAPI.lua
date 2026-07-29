@@ -2617,6 +2617,11 @@ local earlySkins = {}
 
 local function SkinEnabled(key)
     if not key then return true end
+    -- EllesmereUI already skins this window. Two engines backdropping one
+    -- frame gives it two borders. This is a SEPARATE axis from the user's
+    -- own toggle below and never writes to it, so a skin comes straight
+    -- back when EllesmereUI stops owning the window.
+    if S.suppressed and S.suppressed[key] then return false end
     local frames = KE.db and KE.db.profile and KE.db.profile.Skinning
         and KE.db.profile.Skinning.BlizzardFrames
     local skins = frames and frames.Skins
@@ -2720,6 +2725,10 @@ end
 
 function BF:OnEnable()
     if not S:IsActive() then return end
+
+    -- Resolve BEFORE any skin runs. SkinEnabled reads S.suppressed on every
+    -- dispatch, so resolving afterwards would let the early skins through.
+    KE:ResolveSkinSuppression()
 
     -- The palette's accent comes from the theme, which needs KE.db. File
     -- scope runs before that exists, so the placeholder set at parse time

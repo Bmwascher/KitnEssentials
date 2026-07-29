@@ -412,4 +412,15 @@ function L.loadTooltips(opts, overrides)
     return modules["SkinTooltips"], KE
 end
 
+-- Modules/Skinning/EUIWindows.lua. Pure decision layer, so the load needs
+-- no frames and no DB -- only a KE table to hang the two functions on and a
+-- KE.Skins table for the cache. C_AddOns is left absent on purpose: the
+-- live path must be a no-op when it cannot read an addon version, and a
+-- spec that always supplies one would never exercise that.
+function L.loadEUIWindows(overrides)
+    installMock(overrides, {})
+    local KE = { Skins = {} }
+    return helpers.loadModule("Modules/Skinning/EUIWindows.lua", KE), KE
+end
+
 return L
