@@ -272,6 +272,12 @@ function S.PixelSnap(obj)
     end
 end
 
+-- v3.5.786: crops a baked decorative border off an atlas texture in
+-- TEXCOORD space (for art and border sharing one atlas -- e.g. the LFG
+-- ApplicationViewer InfoBackground, the ChallengeMode keystone frame
+-- background). Resolves the atlas's raw file rect via
+-- C_Texture.GetAtlasInfo and insets by the given fractions. Reentry-
+-- guarded so it can be called from a SetAtlas post-hook.
 function S.CropAtlasEdges(tex, xPct, yPct)
     if not tex then return end
     local d = S.data(tex)
@@ -380,6 +386,9 @@ edgeRefresher:SetScript("OnEvent", function()
     end
 end)
 
+-- v4.0.16: re-check every backdrop under a root whose scale changed
+-- (world map min/max toggles 1.1 <-> 1.0; scale changes fire no
+-- OnSizeChanged on descendants, so callers hook the root's resize).
 function S.RefreshEdgesUnder(root)
     if not root then return end
     for frame, bd in pairs(backdropCache) do -- luacheck: ignore 213/frame
@@ -527,6 +536,23 @@ local function armHover(button, anchor, l, t, r, b)
     end
 end
 
+-- v3.5.856: hold a fontstring's colour without owning its setter.
+-- ElvUI's pattern (hook + re-assert); never `SetTextColor = NOOP`.
+-- v3.5.873: the texture analogue of S.LockTextColor, for plain art regions
+-- that Blizzard re-dresses BY ATLAS on a state change.
+--
+-- Found on SettingsPanel.GameTab/AddOnsTab: /aesskin regions after a hover
+-- showed Left/Middle/Right back at atlas=Options_Tab_Active_Left/Middle/
+-- Right. Those tabs are NOT PanelTopTabButtons -- there are no *Active
+-- regions at all; they swap the atlas on the SAME three regions, so
+-- PanelTemplates_SelectTab/DeselectTab (Show/Hide only) never touch them
+-- and our one-shot StripTextures had nothing to re-assert against. They are
+-- SelectableButtons in a RadioButtonGroup, and the derived state handler
+-- re-atlases them on hover/click/selection.
+--
+-- Self-terminating exactly like ElvUI's ClearNormalTexture: re-clearing
+-- fires the hook again with atlas == "", which fails the guard and stops.
+-- This is the same permanence idiom S.IconBorder already uses on SetAtlas.
 local function keepStripped(region, atlas)
     if atlas and atlas ~= "" then
         region:SetAtlas("")
