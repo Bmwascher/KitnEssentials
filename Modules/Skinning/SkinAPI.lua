@@ -589,10 +589,58 @@ function S.LockTextColor(fs, r, g, b, a)
     end)
 end
 
+function S.RowHover(row)
+    if not row or S.data(row).hover then return end
+    if row.SetHighlightTexture then
+        armHover(row, row, 0, -1, 0, 1)
+    elseif row.CreateTexture and row.HookScript then
+
+        local tex = row:CreateTexture(nil, "OVERLAY")
+        tex:SetTexture("Interface\\Buttons\\WHITE8x8")
+        tex:SetVertexColor(HOVER_COLOR[1], HOVER_COLOR[2], HOVER_COLOR[3])
+        tex:SetAlpha(HOVER_ALPHA)
+        tex:Hide()
+        tex:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -1)
+        tex:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 1)
+        -- v3.5.856 AUDIT: never enable input on a row Blizzard left
+        -- mouse-disabled. This is our own hover standard, and it is the
+        -- exact call that put AES in the currency-transfer FORBIDDEN
+        -- (v841): changing input state on Blizzard's rows drags us into
+        -- flows we have no business being in. If a row cannot take the
+        -- mouse, it does not get a manufactured hover -- ElvUI does the
+        -- same (backdrop only, no input changes).
+        if row.IsMouseEnabled and not row:IsMouseEnabled() then
+            return
+        end
+        row:HookScript("OnEnter", function() tex:Show() end)
+        row:HookScript("OnLeave", function() tex:Hide() end)
+        S.data(row).hover = tex
+    end
+end
+
 function S.Hover(button, anchor)
     if not button or not button.SetHighlightTexture then return end
     anchor = anchor or S.GetBackdrop(button) or button
     armHover(button, anchor, 1, -1, -1, 1)
+end
+
+function S.HoverWash(frame)
+    if not frame or S.data(frame).hoverWash then return end
+    local anchor = S.GetBackdrop(frame) or frame
+    local tex = frame:CreateTexture(nil, "BACKGROUND", nil, 2)
+    tex:SetTexture(HOVER_TEX)
+    tex:SetVertexColor(HOVER_COLOR[1], HOVER_COLOR[2], HOVER_COLOR[3])
+    tex:SetAlpha(HOVER_ALPHA)
+    if anchor.backdropInfo then
+        S.InsetToEdge(tex, anchor)
+    else
+        tex:SetPoint("TOPLEFT", anchor, "TOPLEFT", 1, -1)
+        tex:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", -1, 1)
+    end
+    tex:Hide()
+    frame:HookScript("OnEnter", function() tex:Show() end)
+    frame:HookScript("OnLeave", function() tex:Hide() end)
+    S.data(frame).hoverWash = tex
 end
 
 local killedTextures = setmetatable({}, { __mode = "k" })
@@ -843,6 +891,37 @@ function S.ArrowTexture(tex, dir, size)
     end
 end
 
+function S.RotateButton(button, direction)
+    if not button or S.data(button).aeRotate then return end
+    button:SetSize(24, 24)
+    S.StripTextures(button)
+    S.Backdrop(button)
+    local atlas = direction == "left" and "common-icon-rotateleft" or "common-icon-rotateright"
+    local norm = button.GetNormalTexture and button:GetNormalTexture()
+    if norm then
+        norm:ClearAllPoints()
+        norm:SetPoint("TOPLEFT", 1, -1)
+        norm:SetPoint("BOTTOMRIGHT", -1, 1)
+        norm:SetAtlas(atlas)
+        norm:SetTexCoord(0.05, 1.05, -0.05, 1)
+        norm:SetAlpha(1)
+        norm:Show()
+    end
+    local push = button.GetPushedTexture and button:GetPushedTexture()
+    if push and norm then
+        push:SetAllPoints(norm)
+        push:SetAtlas(atlas)
+        push:SetTexCoord(0, 1, -0.1, 0.95)
+        push:SetAlpha(1)
+    end
+    local hl = button.GetHighlightTexture and button:GetHighlightTexture()
+    if hl and norm then
+        hl:SetAllPoints(norm)
+        hl:SetColorTexture(1, 1, 1, 0.3)
+    end
+    S.data(button).aeRotate = true
+end
+
 function S.ArrowButton(button, dir, size)
     if not button or S.data(button).skinned then return end
     S.StripTextures(button)
@@ -873,6 +952,135 @@ function S.ArrowButton(button, dir, size)
     end
     killAllButOurArrow(button)
     S.data(button).skinned = true
+end
+
+function S.SelectedFill(bu)
+    local sel = bu and bu.SelectedTexture
+    if not sel or not sel.SetColorTexture then return end
+    sel:SetColorTexture(BRAND_HL[1], BRAND_HL[2], BRAND_HL[3], 0.15)
+    local anchor = S.GetBackdrop(bu) or bu
+    sel:ClearAllPoints()
+    sel:SetPoint("TOPLEFT", anchor, "TOPLEFT", 1, -1)
+    sel:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", -1, 1)
+end
+
+function S.MaxMinFrame(frame)
+    if not frame or S.data(frame).skinned then return end
+
+    if frame.MaximizeButton then S.ArrowButton(frame.MaximizeButton, "up", 18) end
+    if frame.MinimizeButton then S.ArrowButton(frame.MinimizeButton, "down", 18) end
+    S.data(frame).skinned = true
+end
+
+local IB_ATLAS_QUALITY
+local function ibQuality(atlas)
+    if not IB_ATLAS_QUALITY then
+        local Q = Enum and Enum.ItemQuality
+        if not Q then return nil end
+        IB_ATLAS_QUALITY = {
+            ["auctionhouse-itemicon-border-gray"]     = Q.Poor,
+            ["auctionhouse-itemicon-border-white"]    = Q.Common,
+            ["auctionhouse-itemicon-border-green"]    = Q.Uncommon,
+            ["auctionhouse-itemicon-border-blue"]     = Q.Rare,
+            ["auctionhouse-itemicon-border-purple"]   = Q.Epic,
+            ["auctionhouse-itemicon-border-orange"]   = Q.Legendary,
+            ["auctionhouse-itemicon-border-artifact"] = Q.Artifact,
+            ["auctionhouse-itemicon-border-account"]  = Q.Heirloom,
+            ["Professions-Slot-Frame"]                = Q.Common,
+            ["Professions-Slot-Frame-Green"]          = Q.Uncommon,
+            ["Professions-Slot-Frame-Blue"]           = Q.Rare,
+            ["Professions-Slot-Frame-Epic"]           = Q.Epic,
+            ["Professions-Slot-Frame-Legendary"]      = Q.Legendary,
+        }
+    end
+    return atlas and IB_ATLAS_QUALITY[atlas]
+end
+local function ibQualityRGB(q)
+    local c = q and _G.ITEM_QUALITY_COLORS and _G.ITEM_QUALITY_COLORS[q]
+    if c then return c.r, c.g, c.b end
+end
+local function ibReset(border)
+    local bd = S.data(border).ibBackdrop
+    if bd then
+        bd:SetBackdropBorderColor(S.borderColor[1], S.borderColor[2], S.borderColor[3], S.borderColor[4])
+    end
+end
+local function ibHide(border, sentinel)
+    if sentinel == 0 then return end
+    ibReset(border)
+end
+local function ibShow(border)
+    border:Hide(0)
+end
+local function ibShown(border, shown)
+    if shown then border:Hide(0) else ibReset(border) end
+end
+local function ibAtlas(border, atlas)
+    local r, g, b = ibQualityRGB(ibQuality(atlas))
+    local bd = S.data(border).ibBackdrop
+    if bd and r then bd:SetBackdropBorderColor(r, g, b, 1) end
+end
+local function ibVertex(border, r, g, b)
+    if ibQuality(border:GetAtlas()) then return end
+    local bd = S.data(border).ibBackdrop
+    if bd and r then bd:SetBackdropBorderColor(r, g, b, 1) end
+end
+function S.IconBorder(border, backdrop)
+    if not border then return end
+    backdrop = backdrop or S.GetBackdrop(border:GetParent())
+    if not backdrop then return end
+    local d = S.data(border)
+    d.ibBackdrop = backdrop
+
+    if border:IsShown() then
+        local r, g, b = ibQualityRGB(ibQuality(border:GetAtlas()))
+        if not r then r, g, b = border:GetVertexColor() end
+        if r then backdrop:SetBackdropBorderColor(r, g, b, 1) end
+    else
+        ibReset(border)
+    end
+    if not d.ibHooked then
+        d.ibHooked = true
+        border:Hide()
+        hooksecurefunc(border, "SetAtlas", ibAtlas)
+        hooksecurefunc(border, "SetVertexColor", ibVertex)
+        hooksecurefunc(border, "SetShown", ibShown)
+        hooksecurefunc(border, "Show", ibShow)
+        hooksecurefunc(border, "Hide", ibHide)
+    end
+end
+
+function S.NavButton(button)
+    if not button or S.data(button).skinned then return end
+    S.StripTextures(button)
+
+    S.ClearButtonArt(button)
+    local bd = S.Backdrop(button)
+    if bd then bd:SetBackdropColor(CONTROL_BG[1], CONTROL_BG[2], CONTROL_BG[3], CONTROL_BG[4]) end
+    S.Hover(button)
+    local fs = button.GetFontString and button:GetFontString()
+    if fs then fs:SetTextColor(1, 1, 1) end
+    local arrow = button.MenuArrowButton
+    if arrow then
+        S.StripTextures(arrow)
+        if arrow.Art then
+            arrow.Art:SetTexture(ARROW_TEX)
+            arrow.Art:SetTexCoord(0, 1, 0, 1)
+            arrow.Art:SetRotation(0)
+            arrow.Art:SetVertexColor(CLOSE_REST[1], CLOSE_REST[2], CLOSE_REST[3])
+        end
+    end
+    S.data(button).skinned = true
+end
+
+function S.SweepCheckChildren(check)
+    if not check or not check.GetChildren then return end
+    local ours = S.GetBackdrop(check)
+    for _, child in ipairs({ check:GetChildren() }) do
+        if child ~= ours and child.SetAlpha then
+            child:SetAlpha(0)
+        end
+    end
 end
 
 function S.CheckRefresh(check)
