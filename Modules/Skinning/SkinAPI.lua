@@ -2670,23 +2670,38 @@ function S.DebugVerify()
     local n = 0
     for key, status in pairs(S.skinStatus) do
         n = n + 1
+        local shown = status
+        local suppressor = S.suppressed and S.suppressed[key]
+        if suppressor and status == "disabled" then
+            -- "disabled" alone cannot be told apart from the user's own
+            -- opt-out, which is the one question this command answers.
+            shown = "suppressed by EllesmereUI (" .. suppressor .. ")"
+        end
         local color = status == "ok" and "|cff00ff00" or status == "disabled" and "|cff888888" or "|cffff0000"
-        print(("|cffFF008CKitn|r|cffffffffEssentials:|r %-24s %s%s|r"):format(key, color, status))
+        print(("|cffFF008CKitn|r|cffffffffEssentials:|r %-24s %s%s|r"):format(key, color, shown))
     end
     print(("|cffFF008CKitn|r|cffffffffEssentials:|r verify done (%d registered-and-dispatched; anything you expected but missing here = its addon never loaded or it was never registered)"):format(n))
 end
 
 function S.DebugRerun(key)
     local entry = S.skinIndex[key]
+    if type(entry) ~= "table" then entry = nil end
     if not entry then
 
         local lk = tostring(key):lower()
         for k, e in pairs(S.skinIndex) do
-            if k:lower() == lk then key, entry = k, e break end
+            if k:lower() == lk and type(e) == "table" then key, entry = k, e break end
         end
     end
     if not entry then
-        print("|cffFF008CKitn|r|cffffffffEssentials:|r no dispatched skin named '" .. tostring(key) .. "' -- run /aesskin verify for the list")
+        print("|cffFF008CKitn|r|cffffffffEssentials:|r no dispatched skin named '" .. tostring(key) .. "' -- run /kes skins verify for the list")
+        return
+    end
+    local suppressor = S.suppressed and S.suppressed[key]
+    if suppressor then
+        print("|cffFF008CKitn|r|cffffffffEssentials:|r " .. key
+            .. " is suppressed by EllesmereUI (" .. suppressor
+            .. "). Rerunning it would double-skin the window. Turn EllesmereUI's window skin off first.")
         return
     end
     local ok, err = pcall(entry.fn)

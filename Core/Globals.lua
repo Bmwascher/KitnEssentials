@@ -213,6 +213,27 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
         return
     end
 
+    -- /kes skins [verify|rerun <key>] — skin dispatch diagnostics. Matched
+    -- before the lowercase pass because rerun takes a skin key and the keys
+    -- are CamelCase.
+    local skinRest = msg:match("^[Ss][Kk][Ii][Nn][Ss]%s*(.*)$")
+    if skinRest then
+        local S = KE.Skins
+        if not S then
+            KE:Print("skinning not loaded.")
+            return
+        end
+        local rerunKey = skinRest:match("^[Rr][Ee][Rr][Uu][Nn]%s+(%S+)$")
+        if rerunKey then
+            if S.DebugRerun then S.DebugRerun(rerunKey) end
+        elseif skinRest == "" or skinRest:lower() == "verify" then
+            if S.DebugVerify then S.DebugVerify() end
+        else
+            KE:Print("usage: /kes skins verify | /kes skins rerun <key>")
+        end
+        return
+    end
+
     msg = msg:lower()
     if msg == "" or msg == "gui" then
         if KE.GUIFrame then
@@ -245,7 +266,7 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
         end
     else
         -- "help" and anything unrecognized: list every subcommand.
-        KE:Print("Commands: /kes or gui (settings) | edit or unlock | profiler or prof | dm [reset | report [count] [channel]] | mt [clearsplits] | trash | conflicts | resetgui")
+        KE:Print("Commands: /kes or gui (settings) | edit or unlock | profiler or prof | dm [reset | report [count] [channel]] | mt [clearsplits] | skins [verify | rerun <key>] | trash | conflicts | resetgui")
     end
 end
 
