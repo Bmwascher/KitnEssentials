@@ -2215,6 +2215,48 @@ function S.SetFont(fontString, size, outline)
     end
 end
 
+function S.FontStrings(frame, size, outline)
+    if not frame or not frame.GetRegions then return end
+    for _, r in ipairs({ frame:GetRegions() }) do
+        if r.GetObjectType and r:GetObjectType() == "FontString" then
+            S.SetFont(r, size, outline)
+        end
+    end
+end
+
+function S.FontStringsDeep(frame, size, outline, depth)
+    if depth == nil then depth = 2 end
+    if not frame or depth < 0 then return end
+    if frame.GetRegions then
+        for _, r in ipairs({ frame:GetRegions() }) do
+            if r.GetObjectType and r:GetObjectType() == "FontString" then
+                S.SetFont(r, size, outline)
+            end
+        end
+    end
+    if frame.GetChildren then
+        for _, c in ipairs({ frame:GetChildren() }) do
+            S.FontStringsDeep(c, size, outline, depth - 1)
+        end
+    end
+end
+
+function S.Portrait(frame)
+    if not frame then return end
+    if frame.portrait and frame.portrait.SetAlpha then frame.portrait:SetAlpha(0) end
+    if frame.Portrait and frame.Portrait.SetAlpha then frame.Portrait:SetAlpha(0) end
+    if frame.PortraitContainer then
+        if frame.PortraitContainer.SetAlpha then frame.PortraitContainer:SetAlpha(0) end
+        local p = frame.PortraitContainer.portrait
+        if p and p.SetAlpha then p:SetAlpha(0) end
+    end
+    local name = frame.GetName and frame:GetName()
+    if name then
+        local p = _G[name .. "Portrait"]
+        if p and p.SetAlpha then p:SetAlpha(0) end
+    end
+end
+
 local THUMB_REST, THUMB_HOT = S.palette.brandRestA, 0.75
 local function thumbColor(t, a)
     local tbd = backdropCache[t]
@@ -2452,6 +2494,115 @@ function S.StepSlider(stepper)
         end
     end
     S.data(stepper).skinned = true
+end
+
+function S.Inset(frame, withBackdrop)
+    if not frame or S.data(frame).inset then return end
+    for _, key in ipairs({
+        "InsetBorderTop", "InsetBorderTopLeft", "InsetBorderTopRight",
+        "InsetBorderBottom", "InsetBorderBottomLeft", "InsetBorderBottomRight",
+        "InsetBorderLeft", "InsetBorderRight", "Bg",
+    }) do
+        local r = frame[key]
+        if r and r.Hide then r:Hide() end
+    end
+
+    if frame.NineSlice then
+        S.StripTextures(frame.NineSlice)
+        frame.NineSlice:Hide()
+
+        frame.NineSlice:SetAlpha(0)
+        if frame.NineSlice.EnableMouse then frame.NineSlice:EnableMouse(false) end
+        if not S.data(frame.NineSlice).reHide then
+            S.data(frame.NineSlice).reHide = true
+            hooksecurefunc(frame.NineSlice, "Show", function(ns) ns:Hide() end)
+        end
+    end
+    S.StripTextures(frame)
+    if withBackdrop then S.Backdrop(frame, 0, true) end
+    S.data(frame).inset = true
+end
+
+function S.StaticPopup(popup)
+    if not popup then return end
+    if not S.data(popup).skinned then
+        S.StripTextures(popup)
+        S.Backdrop(popup)
+        S.data(popup).skinned = true
+    end
+
+    if popup.BG then S.StripTextures(popup.BG) end
+    local name = popup.GetName and popup:GetName()
+    for i = 1, 4 do
+        local b = popup["button" .. i] or popup["Button" .. i] or (name and _G[name .. "Button" .. i])
+        if b then S.Button(b) end
+    end
+    local edit = popup.editBox or popup.EditBox or (name and _G[name .. "EditBox"])
+    if edit then S.EditBox(edit) end
+    local close = popup.CloseButton or (name and _G[name .. "CloseButton"])
+    if close then S.CloseButton(close) end
+end
+
+function S.Frame(frame, keepChildArt)
+    if not frame or S.data(frame).skinned then return end
+
+    if frame.PortraitContainer then frame.PortraitContainer:SetAlpha(0) end
+    if frame.portrait then frame.portrait:SetAlpha(0) end
+
+    S.Portrait(frame)
+    S.StripTextures(frame)
+
+    for _, key in ipairs({ "Bg", "bg", "Background", "TopTileStreaks", "TitleBg", "FrameBg" }) do
+        local r = frame[key]
+        if r and r.SetAlpha then r:SetAlpha(0) end
+    end
+    if frame.NineSlice and frame.NineSlice.SetAlpha then
+        frame.NineSlice:SetAlpha(0)
+
+        if frame.NineSlice.EnableMouse then frame.NineSlice:EnableMouse(false) end
+    end
+
+    if frame.BorderFrame then S.StripTextures(frame.BorderFrame) end
+
+    S.StripParchment(frame, keepChildArt)
+
+    S.Backdrop(frame)
+
+    local name = frame.GetName and frame:GetName()
+    local close = frame.CloseButton or (name and _G[name .. "CloseButton"])
+    if close then
+
+        local label = close.GetText and close:GetText()
+        if label and label ~= "" then
+            S.Button(close)
+        else
+            S.CloseButton(close)
+        end
+    end
+
+    local inset = frame.Inset or (name and _G[name .. "Inset"])
+    if inset then S.Inset(inset) end
+    for _, key in ipairs({ "LeftInset", "RightInset", "BottomInset" }) do
+        if frame[key] then S.Inset(frame[key]) end
+    end
+
+    if frame.ScrollBar then S.ScrollBar(frame.ScrollBar) end
+    if frame.GetChildren then
+        for _, child in ipairs({ frame:GetChildren() }) do
+            if child.GetThumb or child.Back or child.Forward then
+                S.ScrollBar(child)
+            end
+        end
+    end
+
+    S.data(frame).skinned = true
+end
+
+function S.Tabs(prefix, maxN)
+    for i = 1, (maxN or 12) do
+        local tab = _G[prefix .. i]
+        if tab then S.Tab(tab) end
+    end
 end
 
 function S:IsActive()

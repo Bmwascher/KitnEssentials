@@ -363,3 +363,49 @@ describe("SkinAPI skin registry", function()
         assert.equals(1, ran)           -- drained, not re-run
     end)
 end)
+
+describe("A6.1 helper surface", function()
+    -- S.Frame is the entry point most skin files call first: 59 direct calls
+    -- across 50 files under Frames/ and Addons/. A missing or misnamed helper
+    -- here fails those ports together rather than one at a time.
+    local REQUIRED = {
+        "SafeCenter", "CropAtlasEdges", "RefreshEdgesUnder", "FixSubPixelEdge",
+        "LockStripped", "LockTextColor", "RowHover", "HoverWash",
+        "RotateButton", "SelectedFill", "MaxMinFrame", "IconBorder",
+        "NavButton", "SweepCheckChildren", "RecenterTabText", "TabSetSelected",
+        "Tab", "OverlayButton", "BleedOutside", "Stepper", "QualityTier",
+        "Vanish", "HideAll", "Apply", "Each", "SlotIcon", "Icon", "ItemButton",
+        "HookScrollBox", "HookScrollBoxIcons", "SideTab", "NavCrumb",
+        "Collapse", "ReplaceIconString", "StripParchment", "StylePulloutFrames",
+        "StyleSharedDropDownList", "FontStrings", "FontStringsDeep", "Portrait",
+        "Inset", "StaticPopup", "Frame", "Tabs",
+    }
+
+    it("exposes every helper the frame skins call", function()
+        -- `.Skins` is load-bearing. L.loadSkinAPI returns the KE table
+        -- (dev/spec/_helpers.lua:17-24 returns KE), not the Skins namespace;
+        -- indexing the return directly finds nothing and the test can never
+        -- pass. dev/spec/skinapi_spec.lua:9 already does it this way.
+        local S = L.loadSkinAPI().Skins
+        local missing = {}
+        for _, name in ipairs(REQUIRED) do
+            if type(S[name]) ~= "function" then
+                missing[#missing + 1] = name
+            end
+        end
+        assert.same({}, missing)
+    end)
+
+    it("leaks no global named RecenterTabText", function()
+        L.loadSkinAPI()
+        -- The reference forward-declares it as a local at SkinningAPI.lua:1305
+        -- so the eight call sites below it can reach it. Dropping that line
+        -- turns the definition into a global write.
+        assert.is_nil(rawget(_G, "RecenterTabText"))
+    end)
+
+    it("S.Frame tolerates a nil frame", function()
+        local S = L.loadSkinAPI().Skins
+        assert.has_no.errors(function() S.Frame(nil) end)
+    end)
+end)
