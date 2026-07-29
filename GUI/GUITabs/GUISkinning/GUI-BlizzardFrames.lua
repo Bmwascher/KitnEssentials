@@ -195,7 +195,12 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFrames", function(scrollChild, yOffs
     -- own choices while the remaining skins keep applying.
     local anyOn = false
     for _, entry in ipairs(FRAME_SKINS) do
-        if EntryIsOn(entry, db.Skins) then anyOn = true break end
+        -- Counts only what this toggle can actually write. The bulk loop
+        -- below skips suppressed entries, so counting them here would make
+        -- the header re-read as on the moment RefreshContent re-runs.
+        local suppressor = KE.Skins and KE.Skins.suppressed
+            and KE.Skins.suppressed[entry.key]
+        if not suppressor and EntryIsOn(entry, db.Skins) then anyOn = true break end
     end
 
     card:AddHeaderToggle(anyOn, function(checked)
