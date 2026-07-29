@@ -12,4 +12,5 @@
     <Script file="ChatMessageHandler.lua" />
     <Script file="Chat.lua" />
     <Include file="Frames\Frames.xml" />
+    <Include file="Addons\Addons.xml" />
 </Ui>
