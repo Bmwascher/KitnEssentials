@@ -3,4 +3,7 @@
 
     <Script file="ChatConfig.lua" />
     <Script file="GMChat.lua" />
+    <Script file="Guild.lua" />
+    <Script file="Socket.lua" />
+    <Script file="Taxi.lua" />
 </Ui>
