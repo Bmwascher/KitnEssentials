@@ -2626,13 +2626,79 @@ end
 local addonSkins = {}
 local earlySkins = {}
 
-local function SkinEnabled(key)
+-- Per-registration bookkeeping: S.skinRegistrations[key] is an ORDERED array
+-- of records, one per S:Register/S:RegisterEarly call naming this key. A key
+-- can carry many registrations (Housing carries nine), and the old
+-- skinStatus/skinIndex writes were last-wins per key -- one broken
+-- registration could hide behind a later healthy one.
+--
+-- Appended here, at REGISTER time, not at dispatch: a dispatch-time log
+-- cannot see a registration whose Blizzard addon never loaded -- it simply
+-- has no record, indistinguishable from a key that has none. Register-time
+-- gives stable ordering AND surfaces those as "pending", which is the
+-- difference between "this window was never opened" and "this skin is
+-- missing". The addon queues are also drained after dispatch
+-- (addonSkins[addonName] = nil, inside BF:RunForAddon), so a dispatch-time
+-- capture would lose the entry reference rerun needs.
+S.skinRegistrations = {}
+local entryRecords = setmetatable({}, { __mode = "k" })
+
+-- The truthful aggregate for skinStatus[key]: an error anywhere outranks
+-- every other state -- Housing's real defect was one throwing registration
+-- hiding behind eight "ok" ones -- and each uniform state below it only
+-- applies when EVERY record agrees. Any disagreement falls through to
+-- "partial", the honest answer once one key can carry many registrations. A
+-- one-registration key aggregates to itself.
+local function aggregateStatus(key)
+    local records = S.skinRegistrations[key]
+    if not records or #records == 0 then return nil end
+
+    local errorStatus
+    local allPending, allOk, allDisabled, allSuppressed = true, true, true, true
+    for _, record in ipairs(records) do
+        local status = record.status
+        if status ~= "pending" and status ~= "ok"
+            and status ~= "disabled" and status ~= "suppressed" then
+            errorStatus = errorStatus or status
+        end
+        if status ~= "pending" then allPending = false end
+        if status ~= "ok" then allOk = false end
+        if status ~= "disabled" then allDisabled = false end
+        if status ~= "suppressed" then allSuppressed = false end
+    end
+
+    if errorStatus then return errorStatus end
+    if allPending then return "pending" end
+    if allOk then return "ok" end
+    if allDisabled then return "disabled" end
+    if allSuppressed then return "suppressed" end
+    return "partial"
+end
+
+local function newRecord(key, addon, entry)
+    local records = S.skinRegistrations[key]
+    if not records then records = {}; S.skinRegistrations[key] = records end
+    local record = { id = #records + 1, addon = addon, entry = entry, status = "pending" }
+    records[#records + 1] = record
+    entryRecords[entry] = record
+    -- Keeps skinStatus a live aggregate from the moment a key gets its first
+    -- registration, not only once dispatch first touches it -- otherwise
+    -- "pending" (a key with registrations that never dispatched) would be
+    -- unobservable through skinStatus at all.
+    S.skinStatus[key] = aggregateStatus(key)
+    return record
+end
+
+local function SkinEnabled(key, addon)
     if not key then return true end
     -- EllesmereUI already skins this window. Two engines backdropping one
     -- frame gives it two borders. This is a SEPARATE axis from the user's
     -- own toggle below and never writes to it, so a skin comes straight
     -- back when EllesmereUI stops owning the window.
-    if S.suppressed and S.suppressed[key] then return false end
+    --
+    -- S.GetSuppression is EUIWindows.lua's accessor, guarded because a
+    -- headless spec can load this file alone, with no accessor to call.
+    if S.GetSuppression and S.GetSuppression(key, addon) then return false end
     local frames = KE.db and KE.db.profile and KE.db.profile.Skinning
         and KE.db.profile.Skinning.BlizzardFrames
     local skins = frames and frames.Skins
@@ -2642,11 +2708,15 @@ end
 function S:Register(addonName, fn, key)
     local list = addonSkins[addonName]
     if not list then list = {}; addonSkins[addonName] = list end
-    list[#list + 1] = { fn = fn, key = key }
+    local entry = { fn = fn, key = key, addon = addonName }
+    list[#list + 1] = entry
+    if key then newRecord(key, addonName, entry) end
 end
 
 function S:RegisterEarly(fn, key)
-    earlySkins[#earlySkins + 1] = { fn = fn, key = key }
+    local entry = { fn = fn, key = key }
+    earlySkins[#earlySkins + 1] = entry
+    if key then newRecord(key, nil, entry) end
 end
 
 S.skinStatus = {}
@@ -2656,10 +2726,25 @@ local function runList(list)
     if not list then return end
     for _, entry in ipairs(list) do
         if entry.key then S.skinIndex[entry.key] = entry end
-        if SkinEnabled(entry.key) then
+        local record = entryRecords[entry]
+
+        if SkinEnabled(entry.key, entry.addon) then
             local ok, err = pcall(entry.fn)
             if entry.key then
-                S.skinStatus[entry.key] = ok and "ok" or ("ERROR: " .. tostring(err))
+                local status = ok and "ok" or ("ERROR: " .. tostring(err))
+                if record then
+                    record.status = status
+                    S.skinStatus[entry.key] = aggregateStatus(entry.key)
+                else
+                    -- Free regression pin: the existing suite's synthetic
+                    -- _runList entries never went through S:Register, so
+                    -- they have no record here. Tolerate that WITHOUT
+                    -- skipping the skinStatus write -- falling back to the
+                    -- direct write keeps skinStatus populated for them, same
+                    -- as before this task. Don't "fix" this away; the
+                    -- existing suite depends on it.
+                    S.skinStatus[entry.key] = status
+                end
             end
             if not ok then
 
@@ -2667,7 +2752,20 @@ local function runList(list)
                 KE:Print("|cffff0000KE SKIN ERROR (report this line):|r " .. tag .. tostring(err))
             end
         elseif entry.key then
-            S.skinStatus[entry.key] = "disabled"
+            -- SkinEnabled folds both axes (EllesmereUI suppression, the
+            -- user's own opt-out) into one boolean, so it alone can't say
+            -- WHICH one fired. Ask the accessor again, this time for the
+            -- reason rather than the verdict, so "suppressed" and "disabled"
+            -- land as distinct statuses instead of both reading "disabled".
+            local suppressor = S.GetSuppression and S.GetSuppression(entry.key, entry.addon)
+            local status = suppressor and "suppressed" or "disabled"
+            if record then
+                record.status = status
+                record.suppressor = suppressor
+                S.skinStatus[entry.key] = aggregateStatus(entry.key)
+            else
+                S.skinStatus[entry.key] = status
+            end
         end
     end
 end
@@ -2677,59 +2775,123 @@ end
 -- behaviours that keep one broken skin from taking the rest down.
 S._runList = runList
 
-function S.DebugVerify()
-    local n = 0
-    for key, status in pairs(S.skinStatus) do
-        n = n + 1
-        local shown = status
-        local suppressor = S.suppressed and S.suppressed[key]
-        if suppressor and status == "disabled" then
-            -- "disabled" alone cannot be told apart from the user's own
-            -- opt-out, which is the one question this command answers.
-            -- suppressor may be a table (a filtered row's resolved record);
-            -- GetSuppressionState is the only shape-safe source of its euiKey.
-            -- Captured into a local with a fallback: GetSuppressionState
-            -- returns NO second value for "none", and a zero-value call
-            -- inside a concat becomes nil, which throws -- unreachable today
-            -- (this read and the accessor agree per-key) but not once a
-            -- later per-registration guard can disagree with this per-key
-            -- print.
-            local _, euiKey = S.GetSuppressionState(key)
-            shown = "suppressed by EllesmereUI (" .. (euiKey or "unknown") .. ")"
-        end
-        local color = status == "ok" and "|cff00ff00" or status == "disabled" and "|cff888888" or "|cffff0000"
-        print(("|cffFF008CKitn|r|cffffffffEssentials:|r %-24s %s%s|r"):format(key, color, shown))
-    end
-    print(("|cffFF008CKitn|r|cffffffffEssentials:|r verify done (%d registered-and-dispatched; anything you expected but missing here = its addon never loaded or it was never registered)"):format(n))
+-- "ok" and "disabled" keep their long-standing colours; the three states a
+-- multi-registration key can now report (pending/partial/suppressed) each
+-- get their own non-red rendering, so only a genuine error string (the
+-- "ERROR: ..." shape runList builds) ever reads as one.
+local STATUS_COLOR = {
+    ok         = "|cff00ff00",
+    disabled   = "|cff888888",
+    suppressed = "|cff33ccff",
+    pending    = "|cffffff00",
+    partial    = "|cffff9900",
+}
+local function statusColor(status)
+    return STATUS_COLOR[status] or "|cffff0000"
 end
 
-function S.DebugRerun(key)
-    local entry = S.skinIndex[key]
-    if type(entry) ~= "table" then entry = nil end
-    if not entry then
+function S.DebugVerify()
+    local n, keyCount = 0, 0
+    for key, records in pairs(S.skinRegistrations) do
+        keyCount = keyCount + 1
+        local hasNonOk = false
+        for _, record in ipairs(records) do
+            if record.status ~= "ok" then
+                hasNonOk = true
+                break
+            end
+        end
 
-        local lk = tostring(key):lower()
-        for k, e in pairs(S.skinIndex) do
-            if k:lower() == lk and type(e) == "table" then key, entry = k, e break end
+        if #records > 1 or hasNonOk then
+            -- More than one registration, or at least one non-"ok" record:
+            -- an aggregate line would hide which of several registrations is
+            -- the problem, so print every registration under this key.
+            for _, record in ipairs(records) do
+                n = n + 1
+                local shown = record.status
+                if record.status == "suppressed" then
+                    -- Captured into a local with a fallback: GetSuppressionState
+                    -- returns NO second value for "none", and a zero-value call
+                    -- inside a concat becomes nil, which throws.
+                    local _, euiKey = S.GetSuppressionState(key)
+                    shown = "suppressed by EllesmereUI (" .. (euiKey or record.suppressor or "unknown") .. ")"
+                end
+                local label = key .. " #" .. record.id .. " (" .. (record.addon or "early") .. ")"
+                print(("|cffFF008CKitn|r|cffffffffEssentials:|r %-32s %s%s|r"):format(label, statusColor(record.status), shown))
+            end
+        else
+            n = n + 1
+            local status = records[1].status
+            print(("|cffFF008CKitn|r|cffffffffEssentials:|r %-24s %s%s|r"):format(key, statusColor(status), status))
         end
     end
-    if not entry then
+    print(("|cffFF008CKitn|r|cffffffffEssentials:|r verify done (%d lines across %d registered keys; a key absent here means its addon never loaded or it was never registered)"):format(n, keyCount))
+end
+
+local function findBySelector(records, selector)
+    local id = tostring(selector):match("^#(%d+)$")
+    if id then
+        id = tonumber(id)
+        for _, record in ipairs(records) do
+            if record.id == id then return record end
+        end
+        return nil
+    end
+    for _, record in ipairs(records) do
+        if record.addon == selector then return record end
+    end
+    return nil
+end
+
+function S.DebugRerun(key, selector)
+    local records = S.skinRegistrations[key]
+    local matchedKey = key
+    if not records then
+
+        local lk = tostring(key):lower()
+        for k, recs in pairs(S.skinRegistrations) do
+            if k:lower() == lk then matchedKey, records = k, recs break end
+        end
+    end
+    if not records or #records == 0 then
         print("|cffFF008CKitn|r|cffffffffEssentials:|r no dispatched skin named '" .. tostring(key) .. "' -- run /kes skins verify for the list")
         return
     end
-    local suppressor = S.suppressed and S.suppressed[key]
+    key = matchedKey
+
+    local record
+    if selector then
+        record = findBySelector(records, selector)
+        if not record then
+            print("|cffFF008CKitn|r|cffffffffEssentials:|r " .. key .. " has no registration '" .. tostring(selector) .. "' -- run /kes skins verify for the list")
+            return
+        end
+    elseif #records > 1 then
+        -- Several registrations and no selector: refuse rather than
+        -- silently picking one -- today's per-key guard reruns only the
+        -- LAST registration, which for Housing would be one of nine.
+        local choices = {}
+        for _, r in ipairs(records) do
+            choices[#choices + 1] = "#" .. r.id .. " (" .. (r.addon or "early") .. ")"
+        end
+        print("|cffFF008CKitn|r|cffffffffEssentials:|r " .. key .. " has " .. #records
+            .. " registrations -- specify one: " .. table.concat(choices, ", "))
+        return
+    else
+        record = records[1]
+    end
+
+    -- This record's OWN suppressor, not the key's -- the old key-level guard
+    -- was false for eight of Housing's nine registrations.
+    local suppressor = S.GetSuppression and S.GetSuppression(key, record.addon)
     if suppressor then
-        -- suppressor may be a table (a filtered row's resolved record);
-        -- GetSuppressionState is the only shape-safe source of its euiKey.
-        -- Captured with the same fallback as DebugVerify above -- see that
-        -- comment for why GetSuppressionState's second return can be absent.
-        local _, euiKey = S.GetSuppressionState(key)
         print("|cffFF008CKitn|r|cffffffffEssentials:|r " .. key
-            .. " is suppressed by EllesmereUI (" .. (euiKey or "unknown")
+            .. " is suppressed by EllesmereUI (" .. suppressor
             .. "). Rerunning it would double-skin the window. Turn EllesmereUI's window skin off first.")
         return
     end
-    local ok, err = pcall(entry.fn)
+
+    local ok, err = pcall(record.entry.fn)
     print("|cffFF008CKitn|r|cffffffffEssentials:|r rerun " .. key .. ": " .. (ok and "|cff00ff00completed|r -- if the frame just fixed itself, this skin needs on-show re-runs (report that!)" or ("|cffff0000ERROR:|r " .. tostring(err))))
 end
 

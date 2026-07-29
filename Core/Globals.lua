@@ -223,13 +223,14 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
             KE:Print("skinning not loaded.")
             return
         end
-        local rerunKey = skinRest:match("^[Rr][Ee][Rr][Uu][Nn]%s+(%S+)$")
+        local rerunKey, rerunSelector = skinRest:match("^[Rr][Ee][Rr][Uu][Nn]%s+(%S+)%s*(%S*)$")
         if rerunKey then
-            if S.DebugRerun then S.DebugRerun(rerunKey) end
+            if rerunSelector == "" then rerunSelector = nil end
+            if S.DebugRerun then S.DebugRerun(rerunKey, rerunSelector) end
         elseif skinRest == "" or skinRest:lower() == "verify" then
             if S.DebugVerify then S.DebugVerify() end
         else
-            KE:Print("usage: /kes skins verify | /kes skins rerun <key>")
+            KE:Print("usage: /kes skins verify | /kes skins rerun <key> [selector]")
         end
         return
     end
