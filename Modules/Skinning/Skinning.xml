@@ -9,7 +9,6 @@
     <Script file="Tooltips.lua" />
     <Script file="TooltipStatusBar.lua" />
     <Script file="BlizzardMessages.lua" />
-    <Script file="Battlenet.lua" />
     <Script file="ChatMessageHandler.lua" />
     <Script file="Chat.lua" />
     <Include file="Frames\Frames.xml" />

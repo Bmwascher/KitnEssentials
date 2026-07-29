@@ -1653,15 +1653,6 @@ local Defaults = {
                     },
                 },
             },
-            Battlenet    = {
-                Enabled = true,
-                Position = {
-                    AnchorFrom = "BOTTOMLEFT",
-                    AnchorTo = "LEFT",
-                    XOffset = 1,
-                    YOffset = 0,
-                },
-            },
             BlizzardFrames = {
                 Enabled    = false,
                 FontOffset = 0,
