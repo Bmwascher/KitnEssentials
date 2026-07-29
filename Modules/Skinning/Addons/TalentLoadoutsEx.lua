@@ -11,7 +11,14 @@ local hooksecurefunc = hooksecurefunc
 -- place by S.RefreshPalette) so it tracks the live theme.
 local BRAND = S.palette.brand
 
-local ICON_ZOOM = 0.20
+-- Crop fraction per side, NOT the same scale as KE:ApplyIconZoom's `zoom`
+-- argument: that helper turns its 0.3 default into a 0.075 crop. The
+-- reference's 0.20 therefore cropped ~2.7x harder than every other KE icon.
+-- 0.075 matches the centralized helper exactly. We keep this file's own
+-- routine rather than calling the helper because TLX resets its texcoords on
+-- every scroll update, so the crop must be re-applied from stored base
+-- coords instead of compounding.
+local ICON_ZOOM = 0.075
 local abs = math.abs
 local function ZoomTexture(tex, zoom)
     if not tex or not tex.GetTexCoord then return end
