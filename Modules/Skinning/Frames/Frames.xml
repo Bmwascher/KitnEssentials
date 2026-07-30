@@ -37,6 +37,7 @@
     <Script file="ItemInteraction.lua" />
     <Script file="ItemUpgrade.lua" />
     <Script file="LFGuild.lua" />
+    <Script file="Loot.lua" />
     <Script file="LossControl.lua" />
     <Script file="Macro.lua" />
     <Script file="Mail.lua" />
@@ -50,6 +51,7 @@
     <Script file="Petition.lua" />
     <Script file="PlayerChoice.lua" />
     <Script file="PlayerSpells.lua" />
+    <Script file="ProfessionsOrders.lua" />
     <Script file="PvP.lua" />
     <Script file="PvPMatch.lua" />
     <Script file="QuestChoice.lua" />
