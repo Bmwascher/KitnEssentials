@@ -29,6 +29,28 @@ KE.LDS = LibStub("LibDualSpec-1.0", true)
 KE.PATH = ([[Interface\AddOns\%s\Media\]]):format(addonName)
 KE.FONT = KE.PATH .. [[Fonts\]] .. "Expressway.TTF"
 
+-- Gem socket types, ordered as the socket-helper scan walks them. Shared
+-- because two unrelated features need the same list: CharacterPanel's socket
+-- helper and the Character window skin's empty-socket icons. `locale` is the
+-- Blizzard global whose string a tooltip line is matched against; `icon` is
+-- the fallback fileID when the socket is empty.
+KE.GEM_SOCKET_TYPES = {
+    { name = "Prismatic",  locale = "EMPTY_SOCKET_PRISMATIC",  icon = 458977 },
+    { name = "Meta",       locale = "EMPTY_SOCKET_META",       icon = 136257 },
+    { name = "Tinker",     locale = "EMPTY_SOCKET_TINKER",     icon = 2958630 },
+    { name = "Cogwheel",   locale = "EMPTY_SOCKET_COGWHEEL",   icon = 407324 },
+    { name = "Primordial", locale = "EMPTY_SOCKET_PRIMORDIAL", icon = 4095404 },
+    { name = "Fiber",      locale = "EMPTY_SOCKET_FIBER",      icon = 136260 },
+}
+
+-- Role icons for group-finder and role-check displays. Keyed by the string
+-- Blizzard's role APIs return, so a lookup miss is the correct no-op.
+KE.ROLE_ICONS = {
+    TANK    = KE.PATH .. [[RoleIcons\tank-modern.png]],
+    HEALER  = KE.PATH .. [[RoleIcons\healer-modern.png]],
+    DAMAGER = KE.PATH .. [[RoleIcons\dps-modern.png]],
+}
+
 if KE.LSM then
     KE.LSM:Register("font", "Expressway", KE.FONT)
     KE.LSM:Register("statusbar", "KitnUI", KE.PATH .. [[Statusbars\KitnEssentials.blp]])

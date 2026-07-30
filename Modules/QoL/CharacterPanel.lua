@@ -100,15 +100,9 @@ local gemSlotButtons = {
     [INVSLOT_FINGER2] = "CharacterFinger1Slot",
 }
 
--- Gem socket types for socket helper scanning.
-local GEM_SOCKET_TYPES = {
-    { name = "Prismatic",  locale = "EMPTY_SOCKET_PRISMATIC",  icon = 458977 },
-    { name = "Meta",       locale = "EMPTY_SOCKET_META",       icon = 136257 },
-    { name = "Tinker",     locale = "EMPTY_SOCKET_TINKER",     icon = 2958630 },
-    { name = "Cogwheel",   locale = "EMPTY_SOCKET_COGWHEEL",   icon = 407324 },
-    { name = "Primordial", locale = "EMPTY_SOCKET_PRIMORDIAL", icon = 4095404 },
-    { name = "Fiber",      locale = "EMPTY_SOCKET_FIBER",      icon = 136260 },
-}
+-- Gem socket types for socket helper scanning. Canonical list lives on KE
+-- (Core/Globals.lua) because the Character window skin needs the same one.
+local GEM_SOCKET_TYPES = KE.GEM_SOCKET_TYPES
 
 -- Empty-socket fallback icon keyed by C_TooltipInfo's line.socketType string.
 local EMPTY_SOCKET_ICON = {}
