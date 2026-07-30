@@ -129,25 +129,26 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
     end)
 
     -- Invokes the REAL registered content builder for the Frames tab.
-    -- Barber is FRAME_SKINS entry #1, so checkboxes[1] is always its row --
-    -- the grid renders every entry every time, regardless of which key's
-    -- state a test is exercising.
+    -- Achievement is FRAME_SKINS entry #1 (alphabetically first as of Task
+    -- 15's wiring), so checkboxes[1] is always its row -- the grid renders
+    -- every entry every time, regardless of which key's state a test is
+    -- exercising.
     local function buildFrames()
         GUIFrame.registeredContent["SkinBlizzardFramesFrames"](nil, 0)
     end
 
-    describe("row rendering across all three states (same key: Barber)", function()
+    describe("row rendering across all three states (same key: Achievement)", function()
         it("none: renders unchanged, no tooltip, not disabled", function()
             buildFrames()
-            assert.equal("Barbershop", checkboxes[1].label)
+            assert.equal("Achievements", checkboxes[1].label)
             assert.is_nil(checkboxes[1].tooltip)
             assert.is_true(checkboxes[1].enabled)
         end)
 
         it("full: greys the label, sets the suppression tooltip, disables", function()
-            seedFull("Barber")
+            seedFull("Achievement")
             buildFrames()
-            assert.equal("Barbershop |cff888888(EllesmereUI)|r", checkboxes[1].label)
+            assert.equal("Achievements |cff888888(EllesmereUI)|r", checkboxes[1].label)
             assert.equal(
                 "EllesmereUI already skins this window, so KitnEssentials leaves it alone. Turn EllesmereUI's window skin off to use this one.",
                 checkboxes[1].tooltip)
@@ -155,11 +156,11 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
         end)
 
         it("partial: renders the map row's own label/tooltip verbatim, stays enabled", function()
-            seedPartial("Barber", nil, "Barbershop (EllesmereUI: dashboard only)", "Custom partial tooltip text")
+            seedPartial("Achievement", nil, "Achievements (EllesmereUI: dashboard only)", "Custom partial tooltip text")
             buildFrames()
             -- Positive control: the label is NOT entry.text -- proves the
             -- row actually switched off the "none" rendering above.
-            assert.equal("Barbershop (EllesmereUI: dashboard only)", checkboxes[1].label)
+            assert.equal("Achievements (EllesmereUI: dashboard only)", checkboxes[1].label)
             assert.equal("Custom partial tooltip text", checkboxes[1].tooltip)
             -- The negative assertion the whole feature exists for: a
             -- partial row must NOT be disabled.
@@ -167,9 +168,9 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
         end)
 
         it("partial with no map strings: falls back to entry.text plus a generic suffix, never nil", function()
-            seedPartial("Barber")
+            seedPartial("Achievement")
             buildFrames()
-            assert.equal("Barbershop |cff888888(EllesmereUI)|r", checkboxes[1].label)
+            assert.equal("Achievements |cff888888(EllesmereUI)|r", checkboxes[1].label)
             -- The fallback wording is PARTIAL-specific, not the "full"
             -- suppression tooltip -- that one claims KitnEssentials leaves
             -- the window alone entirely, which is false next to a live,
@@ -183,8 +184,8 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
 
     describe("header anyOn, in isolation", function()
         -- A metatable default of `false` models "every row off" without
-        -- hardcoding the full FRAME_SKINS key list (41 entries and rising) --
-        -- only the designated key is given a real, on-reading value.
+        -- hardcoding the full FRAME_SKINS key list (76 entries) -- only the
+        -- designated key is given a real, on-reading value.
         local function allOffExcept(key, value)
             return setmetatable({ [key] = value }, { __index = function() return false end })
         end
@@ -204,30 +205,30 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
         end)
 
         it("calls the accessor per row, in FRAME_SKINS order, until it finds one on", function()
-            -- Barber (#1) off, Binding (#2) on and unsuppressed: anyOn must
-            -- consult the accessor for Barber, then Binding, then stop.
-            -- Asserted against the snapshot AddHeaderToggle's stub takes at
-            -- registration time (BEFORE BuildCheckGrid re-walks the same
-            -- keys), so this is provably the header loop's OWN call list --
-            -- deleting the accessor call from that loop leaves the snapshot
-            -- empty and fails this assertion, regardless of what
-            -- BuildCheckGrid does afterward.
-            KE.db.profile.Skinning.BlizzardFrames = freshDB({ Barber = false })
+            -- Achievement (#1) off, AddonManager (#2) on and unsuppressed:
+            -- anyOn must consult the accessor for Achievement, then
+            -- AddonManager, then stop. Asserted against the snapshot
+            -- AddHeaderToggle's stub takes at registration time (BEFORE
+            -- BuildCheckGrid re-walks the same keys), so this is provably the
+            -- header loop's OWN call list -- deleting the accessor call from
+            -- that loop leaves the snapshot empty and fails this assertion,
+            -- regardless of what BuildCheckGrid does afterward.
+            KE.db.profile.Skinning.BlizzardFrames = freshDB({ Achievement = false })
             buildFrames()
-            assert.same({ "Barber", "Binding" }, headerToggle.callsAtRegistration)
+            assert.same({ "Achievement", "AddonManager" }, headerToggle.callsAtRegistration)
         end)
     end)
 
     describe("BuildCheckGrid calls the accessor for every row", function()
         it("reaches the last FRAME_SKINS entry even though anyOn already broke on the first", function()
-            -- Default db.Skins (empty): Barber reads on immediately, so
-            -- anyOn's loop calls the accessor exactly once (Barber) and
-            -- breaks. If "Trade" (FRAME_SKINS' last entry) still shows up in
-            -- `calls`, that call can only have come from BuildCheckGrid,
+            -- Default db.Skins (empty): Achievement reads on immediately, so
+            -- anyOn's loop calls the accessor exactly once (Achievement) and
+            -- breaks. If "WorldMap" (FRAME_SKINS' last entry) still shows up
+            -- in `calls`, that call can only have come from BuildCheckGrid,
             -- which renders every row regardless of anyOn's outcome.
             buildFrames()
-            assert.is_true(containsKey(calls, "Trade"),
-                "BuildCheckGrid did not ask about Trade (the last FRAME_SKINS row)")
+            assert.is_true(containsKey(calls, "WorldMap"),
+                "BuildCheckGrid did not ask about WorldMap (the last FRAME_SKINS row)")
         end)
     end)
 
