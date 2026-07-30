@@ -224,6 +224,9 @@ read_globals = {
     "ClearCursor", "ResetCursor", "SetCursor",
     "NUM_BAG_SLOTS",
 
+    -- Collections (Mounts / Pets / Toys / Heirlooms)
+    "PlayerHasToy", "C_MountJournal", "C_Heirloom", "C_TransmogCollection",
+
     -- Gem Socketing
     "C_ItemSocketInfo", "SocketInventoryItem", "AcceptSockets", "CloseSocketInfo",
 

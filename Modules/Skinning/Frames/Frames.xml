@@ -18,6 +18,7 @@
     <Script file="Character.lua" />
     <Script file="ChatConfig.lua" />
     <Script file="ChromieTime.lua" />
+    <Script file="Collectables.lua" />
     <Script file="Communities.lua" />
     <Script file="CooldownManager.lua" />
     <Script file="Currency.lua" />
