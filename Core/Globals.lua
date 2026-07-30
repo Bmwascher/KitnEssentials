@@ -475,6 +475,22 @@ function KE:ApplyFont(fontString, fontName, fontSize, fontOutline)
     end
     local outline = self:GetFontOutline(fontOutline)
     local size = (fontSize and fontSize > 0) and fontSize or 12
+
+    -- SimpleHTML frames (guild MOTD and Info bodies, anything rendering
+    -- links) expose SetFont with a textType-FIRST signature:
+    -- SetFont(textType, fontFile, height, flags), per
+    -- .wow-api-reference SimpleHTMLAPIDocumentation.lua:203-215. Calling the
+    -- FontString form on one throws "bad argument #1". Callers cannot tell
+    -- the two apart by testing for SetFont, because both have it, so the
+    -- branch belongs here. Each text type is pcall'd: the set below is not
+    -- enumerated in the generated docs, so an unsupported one must not throw.
+    if fontString.IsObjectType and fontString:IsObjectType("SimpleHTML") then
+        for _, textType in ipairs({ "p", "h1", "h2", "h3" }) do
+            pcall(fontString.SetFont, fontString, textType, fontPath, size, outline)
+        end
+        return true
+    end
+
     local success = fontString:SetFont(fontPath, size, outline)
     if not success then
         success = fontString:SetFont("Fonts\\FRIZQT__.TTF", size, outline)
