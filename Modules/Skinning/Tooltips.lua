@@ -64,7 +64,7 @@ end
 -- SetFont -> "Invalid font asset (Expressway)"). Silent fetch + stock
 -- fallback so a missing registration degrades instead of erroring.
 local function ResolveFont(db)
-    local name = db and (db.FontFace or db.Font or db.fontFace) or "Friz Quadrata TT"
+    local name = KE:GetEffectiveFont(db)
     local path = KE.LSM and KE.LSM:Fetch("font", name, true)
     return path or _G.STANDARD_TEXT_FONT
 end

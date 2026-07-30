@@ -449,3 +449,39 @@ describe("KE:RunAfterCombat", function()
         assert.matches("boom", caughtErrors[1])
     end)
 end)
+
+describe("KE:GetEffectiveFont", function()
+    local KE
+
+    before_each(function()
+        KE = L.loadGlobals()
+    end)
+
+    it("prefers FontFace", function()
+        assert.equals("Expressway", KE:GetEffectiveFont({ FontFace = "Expressway" }))
+    end)
+
+    it("falls back to Font when FontFace is absent", function()
+        assert.equals("Movie", KE:GetEffectiveFont({ Font = "Movie" }))
+    end)
+
+    it("falls back to fontFace last", function()
+        assert.equals("Arial", KE:GetEffectiveFont({ fontFace = "Arial" }))
+    end)
+
+    -- Precedence, not just presence: a table carrying all three must return
+    -- the FIRST key. Three separate single-key tests cannot catch a helper
+    -- that reads them in the wrong order.
+    it("reads the three keys in FontFace, Font, fontFace order", function()
+        assert.equals("A", KE:GetEffectiveFont({ FontFace = "A", Font = "B", fontFace = "C" }))
+        assert.equals("B", KE:GetEffectiveFont({ Font = "B", fontFace = "C" }))
+    end)
+
+    it("returns the stock face for a nil table", function()
+        assert.equals("Friz Quadrata TT", KE:GetEffectiveFont(nil))
+    end)
+
+    it("returns the stock face for a table with no font key", function()
+        assert.equals("Friz Quadrata TT", KE:GetEffectiveFont({ Size = 12 }))
+    end)
+end)

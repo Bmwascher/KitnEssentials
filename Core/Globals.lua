@@ -92,6 +92,18 @@ function KE:GetFontPath(fontName)
     return "Fonts\\FRIZQT__.TTF"
 end
 
+-- Returns the LSM font NAME a module is configured with, never a file path --
+-- wrap it in KE:GetFontPath when a path is wanted. Modules disagree on the key
+-- (FontFace / Font / fontFace), which is the only reason this is a helper.
+-- Hoisted from an inline copy in Tooltips.lua so the skin modules share one
+-- definition; two copies of a resolution rule drifting apart is a failure mode
+-- this project has already had.
+---@param moduleDB table? Module settings table
+---@return string fontName
+function KE:GetEffectiveFont(moduleDB)
+    return moduleDB and (moduleDB.FontFace or moduleDB.Font or moduleDB.fontFace) or "Friz Quadrata TT"
+end
+
 function KE:GetStatusbarPath(barName)
     if KE.LSM and barName then
         local path = KE.LSM:Fetch("statusbar", barName)
