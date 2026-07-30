@@ -2180,11 +2180,41 @@ S.FONT_FACE = "Expressway"
 
 local fontRegistry = setmetatable({}, { __mode = "k" })
 S.fontOffset = 0
+-- Mirrors the BlizzardFrames.FontOutline default. Keep the two in step: this
+-- governs any SetFont that lands before the db read below can happen.
+S.fontOutline = false
+
+-- One-shot db read for both font switches. It has to run BEFORE either setter
+-- assigns, not just on the first SetFont: the GUI writes the db and calls the
+-- setter straight through, so a still-pending read would clobber the new value
+-- on the next skinned string.
+local function EnsureFontInit()
+    if S._offsetInit then return end
+    if not (KE.db and KE.db.profile and KE.db.profile.Skinning) then return end
+    S._offsetInit = true
+    local bs = KE.db.profile.Skinning.BlizzardFrames
+    S.fontOffset = (bs and tonumber(bs.FontOffset)) or 0
+    S.fontOutline = (bs and bs.FontOutline) and true or false
+end
 
 function S.SetFontOffset(offset)
+    EnsureFontInit()
     offset = tonumber(offset) or 0
     if offset == S.fontOffset then return end
     S.fontOffset = offset
+    for fs, rec in pairs(fontRegistry) do
+        S.SetFont(fs, rec.size, rec.outline)
+    end
+end
+
+-- Global outline switch. fontRegistry holds the outline each call site ASKED
+-- for, never the effective one, so flipping this off strips outlines and
+-- flipping it back restores each string's designed flag.
+function S.SetFontOutline(enabled)
+    EnsureFontInit()
+    enabled = enabled and true or false
+    if enabled == S.fontOutline then return end
+    S.fontOutline = enabled
     for fs, rec in pairs(fontRegistry) do
         S.SetFont(fs, rec.size, rec.outline)
     end
@@ -2221,11 +2251,7 @@ end
 function S.SetFont(fontString, size, outline)
     if not fontString or not fontString.SetFont then return end
 
-    if not S._offsetInit and KE.db and KE.db.profile and KE.db.profile.Skinning then
-        S._offsetInit = true
-        local bs = KE.db.profile.Skinning.BlizzardFrames
-        S.fontOffset = (bs and tonumber(bs.FontOffset)) or 0
-    end
+    EnsureFontInit()
     outline = outline or ""
     local rec = fontRegistry[fontString]
 
@@ -2238,16 +2264,21 @@ function S.SetFont(fontString, size, outline)
         end
     end
     local d = S.data(fontString)
-    if d.fontSize == size and d.fontOutline == outline and d.fontOffset == S.fontOffset then return end
+    if d.fontSize == size and d.fontOutline == outline and d.fontOffset == S.fontOffset
+        and d.fontOutlineOn == S.fontOutline then return end
     local eff = size + S.fontOffset
     if eff < 8 then eff = 8 end
+    -- Requested outline goes to the registry and the dirty record; only the
+    -- effective one reaches the font, so the switch is reversible.
+    local effOutline = S.fontOutline and outline or ""
     S.PrimeNoShadow(fontString)
-    pcall(KE.ApplyFont, KE, fontString, S.FONT_FACE, eff, outline)
+    pcall(KE.ApplyFont, KE, fontString, S.FONT_FACE, eff, effOutline)
 
     if fontString.SetShadowColor then pcall(fontString.SetShadowColor, fontString, 0, 0, 0, 0) end
     d.fontSize = size
     d.fontOutline = outline
     d.fontOffset = S.fontOffset
+    d.fontOutlineOn = S.fontOutline
     if rec then
         rec.size, rec.outline = size, outline
     else
@@ -2991,6 +3022,7 @@ function BF:OnEnable()
     local bs = KE.db and KE.db.profile and KE.db.profile.Skinning
         and KE.db.profile.Skinning.BlizzardFrames
     S.fontOffset = (bs and tonumber(bs.FontOffset)) or 0
+    S.fontOutline = (bs and bs.FontOutline) and true or false
 
     runList(earlySkins)
 

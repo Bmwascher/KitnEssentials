@@ -311,7 +311,21 @@ GUIFrame:RegisterContent("SkinBlizzardFramesGeneral", function(scrollChild, yOff
         end,
     })
     rowB:AddWidget(baseSlider, 1)
-    card:AddRow(rowB, Theme.rowHeightLast, 0)
+    card:AddRow(rowB, Theme.rowHeightLast)
+
+    local rowC = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
+    local outlineCheck = GUIFrame:CreateCheckbox(rowC, "Text Outline", {
+        value = db.FontOutline and true or false,
+        tooltip = "Draws a black outline around text inside skinned windows. Off is thinner and easier to read in dense lists such as the guild roster; on is the designed look.",
+        callback = function(checked)
+            db.FontOutline = checked and true or false
+            if KE.Skins and KE.Skins.SetFontOutline then
+                KE.Skins.SetFontOutline(db.FontOutline)
+            end
+        end,
+    })
+    rowC:AddWidget(outlineCheck, 1)
+    card:AddRow(rowC, Theme.rowHeightLast, 0)
 
     return card:GetNextOffset()
 end)

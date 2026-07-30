@@ -1656,6 +1656,13 @@ local Defaults = {
             BlizzardFrames = {
                 Enabled    = false,
                 FontOffset = 0,
+                -- Global outline switch for skinned Blizzard text. The skin
+                -- asks for OUTLINE at 104 call sites (the reference's design);
+                -- at 12px that dilate closes the counters of tight glyphs and
+                -- dense lists like the guild roster read as blobby. Off by
+                -- default, matching EllesmereUI, which never outlines Blizzard
+                -- text. On restores every call site's designed outline.
+                FontOutline = false,
                 -- Base point size the global Blizzard font override scales
                 -- from. Every font object keeps its own relative size; this
                 -- moves them together. 12 is Blizzard's own baseline.

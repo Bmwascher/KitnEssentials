@@ -289,6 +289,76 @@ describe("SkinAPI SetFont", function()
         S.SetFont(fs, 12, "")
         assert.equals(12, applied[1].size)
     end)
+
+    -- The global outline switch. Skin call sites ask for OUTLINE at 104 places;
+    -- the switch decides whether that flag reaches the font. Every negative
+    -- assertion below is paired with a positive control, so a SetFont that
+    -- ignored the switch entirely could not pass both.
+    it("passes the requested outline through when the switch is on", function()
+        S.SetFontOutline(true)
+        local fs = fontString()
+        S.SetFont(fs, 12, "OUTLINE")
+        assert.equals("OUTLINE", applied[1].outline)   -- POSITIVE CONTROL
+    end)
+
+    it("strips the outline when the switch is off", function()
+        local fs = fontString()
+        S.SetFont(fs, 12, "OUTLINE")
+        assert.equals("", applied[1].outline)
+    end)
+
+    it("leaves an unoutlined call unoutlined either way", function()
+        local a, b = fontString(), fontString()
+        S.SetFont(a, 12, "")
+        assert.equals("", applied[1].outline)
+        S.SetFontOutline(true)
+        S.SetFont(b, 12, "")
+        assert.equals("", applied[#applied].outline)
+    end)
+
+    -- The reversibility invariant: fontRegistry must hold the REQUESTED
+    -- outline, never the effective one. Storing the effective flag would make
+    -- the first switch-off permanent, and this is the test that catches it.
+    it("restores each string's designed outline when switched back on", function()
+        S.SetFontOutline(true)
+        local fs = fontString()
+        S.SetFont(fs, 12, "OUTLINE")
+        assert.equals("OUTLINE", applied[1].outline)
+        S.SetFontOutline(false)
+        assert.equals("", applied[#applied].outline)
+        S.SetFontOutline(true)
+        assert.equals("OUTLINE", applied[#applied].outline)
+    end)
+
+    it("re-applies every registered string when the switch moves", function()
+        local a, b = fontString(), fontString()
+        S.SetFont(a, 12, "OUTLINE")
+        S.SetFont(b, 14, "OUTLINE")
+        assert.equals(2, #applied)
+        S.SetFontOutline(true)
+        assert.equals(4, #applied)
+    end)
+
+    it("ignores a repeated switch set", function()
+        local fs = fontString()
+        S.SetFont(fs, 12, "OUTLINE")
+        S.SetFontOutline(false)
+        assert.equals(1, #applied)
+    end)
+
+    it("picks the switch up from the database on first call", function()
+        KE.db.profile.Skinning.BlizzardFrames.FontOutline = true
+        local fs = fontString()
+        S.SetFont(fs, 12, "OUTLINE")
+        assert.equals("OUTLINE", applied[1].outline)
+    end)
+
+    it("treats a missing database section as outline off", function()
+        KE.db.profile.Skinning.BlizzardFrames = nil
+        local fs = fontString()
+        S.SetFont(fs, 12, "OUTLINE")
+        assert.equals("", applied[1].outline)
+    end)
 end)
 
 describe("SkinAPI skin registry", function()
