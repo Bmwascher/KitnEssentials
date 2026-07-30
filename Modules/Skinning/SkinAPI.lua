@@ -2190,6 +2190,34 @@ function S.SetFontOffset(offset)
     end
 end
 
+-- 12.0.7 shadow doctrine (EllesmereUI's finding, adopted by the reference
+-- skin engine): instance-level SetShadowColor/SetShadowOffset no longer
+-- affect RENDERING -- a FontString's shadow now comes solely from its
+-- FontObject. The per-string zeroing below and at several skin call sites
+-- has therefore been silently no-oping on every Blizzard FontString whose
+-- inherited object carries a shadow, which is most of them: the text renders
+-- OUTLINE plus an unkillable shadow and reads as heavy or blobby at 12px.
+--
+-- Priming a shared no-shadow FontObject BEFORE SetFont is the fix. SetFont
+-- then restores face, size and flags at instance level, while the (absent)
+-- object shadow governs rendering.
+--
+-- Deliberately scoped to the skin engine rather than KE:ApplyFont, which the
+-- reference's equivalent does: KE:ApplyFont is shared with KE's own modules,
+-- whose text has its own shadow and soft-outline pipeline
+-- (KE:ApplyFontToText). Skinned Blizzard frames all funnel through here.
+local noShadowFont
+function S.PrimeNoShadow(fontString)
+    if not (fontString and fontString.SetFontObject) then return end
+    if not noShadowFont then
+        noShadowFont = CreateFont("KE_SkinNoShadowFont")
+        noShadowFont:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
+        noShadowFont:SetShadowColor(0, 0, 0, 0)
+        noShadowFont:SetShadowOffset(0, 0)
+    end
+    pcall(fontString.SetFontObject, fontString, noShadowFont)
+end
+
 function S.SetFont(fontString, size, outline)
     if not fontString or not fontString.SetFont then return end
 
@@ -2213,6 +2241,7 @@ function S.SetFont(fontString, size, outline)
     if d.fontSize == size and d.fontOutline == outline and d.fontOffset == S.fontOffset then return end
     local eff = size + S.fontOffset
     if eff < 8 then eff = 8 end
+    S.PrimeNoShadow(fontString)
     pcall(KE.ApplyFont, KE, fontString, S.FONT_FACE, eff, outline)
 
     if fontString.SetShadowColor then pcall(fontString.SetShadowColor, fontString, 0, 0, 0, 0) end
