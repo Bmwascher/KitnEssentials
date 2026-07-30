@@ -435,4 +435,59 @@ function L.loadSkinAPI_EUIWindows(overrides)
     return KE
 end
 
+-- Walks a Lua function's upvalues by NAME. Returns the upvalue's current
+-- value, or nil if fn has no upvalue by that name.
+local function findUpvalue(fn, name)
+    local i = 1
+    while true do
+        local upName, upVal = debug.getupvalue(fn, i)
+        if not upName then return nil end
+        if upName == name then return upVal end
+        i = i + 1
+    end
+end
+
+-- Modules/Skinning/UIWidgets.lua. StyleWidgetByType is a module METHOD, so
+-- it's reachable straight off the returned UIW table -- no seam needed.
+-- InTooltip and SetFontIfChanged are file-locals with no stored handle:
+--   * SetFontIfChanged is itself a local FUNCTION value, so it is an upvalue
+--     of any stored method that calls it directly (StyleStatusBarWidget).
+--     findUpvalue recovers the function object straight off that upvalue
+--     slot -- no need to ever run StyleStatusBarWidget itself.
+--   * InTooltip is referenced only inside the anonymous closures SetupHooks
+--     hands to hooksecurefunc, never by a stored method. hooksecurefunc is
+--     stubbed to capture those closures; SetupHooks is run once (with both
+--     stock mixins present so it hooks in one pass, no deferred retry) to
+--     create them; InTooltip is pulled off the first captured closure's
+--     upvalues.
+-- Returns UIW, KE, seams (seams.InTooltip, seams.SetFontIfChanged).
+function L.loadUIWidgets(overrides)
+    installMock(overrides, { C_Timer = inertTimer() })
+    local modules = helpers.installAddonShim()
+    _G.UIParent = noopFrame()
+    local hooks = {}
+    _G.hooksecurefunc = function(target, method, fn)
+        hooks[#hooks + 1] = { target = target, method = method, fn = fn }
+    end
+    _G.UIWidgetTemplateStatusBarMixin = {}
+    _G.UIWidgetTemplateTextWithStateMixin = {}
+    local KE = {
+        db = { profile = { Skinning = { UIWidgets = {} } } },
+        ShouldNotLoadModule = function() return false end,
+        GetFontPath = function(_, name) return name end,
+        GetFontOutline = function(_, o) return o end,
+        GetEffectiveFont = function(_, db) return db and db.FontFace end,
+        AddBorders = function() end,
+    }
+    helpers.loadModule("Modules/Skinning/UIWidgets.lua", KE)
+    local UIW = modules["UIWidgets"]
+
+    UIW:SetupHooks()
+    local seams = {
+        SetFontIfChanged = findUpvalue(UIW.StyleStatusBarWidget, "SetFontIfChanged"),
+        InTooltip = hooks[1] and findUpvalue(hooks[1].fn, "InTooltip"),
+    }
+    return UIW, KE, seams
+end
+
 return L
