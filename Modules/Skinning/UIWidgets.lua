@@ -308,8 +308,18 @@ function UIW:StyleWidgetByType(widget)
     end
 end
 
+-- <REF>/Skinning/UIWidgets.lua:302-306 has this same omission -- ApplySettings
+-- never calls UpdateDB. GetFontSettings (:61-68) caches its resolved font
+-- path and outline keyed on _styleGen, and _styleGen only bumps inside
+-- UpdateDB (:37), so without this call the Font and Outline dropdowns write
+-- to the DB but the cache never invalidates: nothing restyles until a reload
+-- or profile switch, and even newly created widgets get the stale font.
+-- BlizzardFonts.lua:278-280 already calls UpdateDB in this same slot of its
+-- own ApplySettings; this mirrors that shape. Intentional departure from the
+-- reference, not a port gap.
 function UIW:ApplySettings()
     if KE:ShouldNotLoadModule() then return end
+    self:UpdateDB()
     if not self.db.Enabled then return end
     self:StyleExistingWidgets()
 end
