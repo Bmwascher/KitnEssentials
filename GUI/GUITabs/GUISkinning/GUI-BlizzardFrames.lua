@@ -420,6 +420,7 @@ GUIFrame:RegisterTabbedContent("SkinBlizzardFrames", {
     { id = "SkinBlizzardFramesGeneral", label = "General" },
     { id = "SkinBlizzardFramesFrames",  label = "Frames" },
     { id = "SkinBlizzardFramesAddons",  label = "Addons" },
+    { id = "SkinBlizzardFramesWidgets", label = "UI Widgets" },
 }, {
     headerBuilder = function(scrollChild, yOffset)
         local db = GetDB()
