@@ -16,6 +16,8 @@ local pairs = pairs
 local table_insert = table.insert
 local table_sort = table.sort
 
+local OUTLINE_OPTIONS = KE:GetFontOutlineOptions()
+
 GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOffset)
     if KE:ShouldNotLoadModule() then return end
     local db = KE.db and KE.db.profile.Skinning.UIWidgets
@@ -46,13 +48,6 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
     local function RefreshStates()
         manager:UpdateAll(db.Enabled ~= false)
     end
-
-    local OUTLINE_OPTIONS = {
-        { key = "NONE",         text = "None" },
-        { key = "OUTLINE",      text = "Outline" },
-        { key = "THICKOUTLINE", text = "Thick" }, -- v3.5.546: Slug keys
-        -- removed; global slug gate governs (standard option set).
-    }
 
     -- Build font list
     local function GetFontList()
@@ -139,7 +134,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
     manager:Register(card3, "all")
 
     -- Enable toggle
-    local row3a = GUIFrame:CreateRow(card3.content, 40)
+    local row3a = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
     local enableBarCheck = GUIFrame:CreateCheckbox(row3a, "Enable Status Bar Styling", {
         value = barDB.Enabled ~= false,
         callback = function(checked)
@@ -166,10 +161,10 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
     })
     row3a:AddWidget(barWidthSlider, 0.5)
     manager:Register(barWidthSlider, "statusbar")
-    card3:AddRow(row3a, 40)
+    card3:AddRow(row3a, Theme.rowHeight)
 
     -- Style Label toggle
-    local row3b = GUIFrame:CreateRow(card3.content, 40)
+    local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
     local styleLabelCheck = GUIFrame:CreateCheckbox(row3b, "Style Label Text", {
         value = barDB.StyleLabel ~= false,
         callback = function(checked)
@@ -190,10 +185,10 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
     })
     row3b:AddWidget(styleBarTextCheck, 0.5)
     manager:Register(styleBarTextCheck, "statusbar")
-    card3:AddRow(row3b, 40)
+    card3:AddRow(row3b, Theme.rowHeight)
 
     -- Font Size Sliders
-    local row3c = GUIFrame:CreateRow(card3.content, 40)
+    local row3c = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
     local labelSizeSlider = GUIFrame:CreateSlider(row3c, "Label Size", {
         min = 8,
         max = 24,
@@ -221,17 +216,17 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
     })
     row3c:AddWidget(barTextSizeSlider, 0.5)
     manager:Register(barTextSizeSlider, "statusbar")
-    card3:AddRow(row3c, 40)
+    card3:AddRow(row3c, Theme.rowHeight)
 
     -- Separator
-    local row3sep = GUIFrame:CreateRow(card3.content, 8)
+    local row3sep = GUIFrame:CreateRow(card3.content, Theme.rowHeightSeparator)
     local sep1 = GUIFrame:CreateSeparator(row3sep)
     row3sep:AddWidget(sep1, 1)
     manager:Register(sep1, "statusbar")
-    card3:AddRow(row3sep, 8)
+    card3:AddRow(row3sep, Theme.rowHeightSeparator)
 
     -- Strip Textures toggle
-    local row3d = GUIFrame:CreateRow(card3.content, 40)
+    local row3d = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
     local stripTexturesCheck = GUIFrame:CreateCheckbox(row3d, "Strip Blizzard Textures & Add Backdrop", {
         value = barDB.StripTextures ~= false,
         callback = function(checked)
@@ -241,7 +236,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
     })
     row3d:AddWidget(stripTexturesCheck, 1)
     manager:Register(stripTexturesCheck, "statusbar")
-    card3:AddRow(row3d, 40)
+    card3:AddRow(row3d, Theme.rowHeight)
 
     -- Backdrop Color
     local row3e = GUIFrame:CreateRow(card3.content, 36)
@@ -276,7 +271,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
     manager:Register(card4, "all")
 
     -- Enable toggle and Style Text
-    local row4a = GUIFrame:CreateRow(card4.content, 40)
+    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
     local enableTextCheck = GUIFrame:CreateCheckbox(row4a, "Enable Text Widget Styling", {
         value = textDB.Enabled ~= false,
         callback = function(checked)
@@ -299,10 +294,10 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
     })
     row4a:AddWidget(styleTextCheck, 0.5)
     manager:Register(styleTextCheck, "textwidget")
-    card4:AddRow(row4a, 40)
+    card4:AddRow(row4a, Theme.rowHeight)
 
     -- Width slider (0 = default/auto)
-    local row4width = GUIFrame:CreateRow(card4.content, 40)
+    local row4width = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
     local textWidthSlider = GUIFrame:CreateSlider(row4width, "Width (0=Auto)", {
         min = 0,
         max = 400,
@@ -316,10 +311,10 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
     })
     row4width:AddWidget(textWidthSlider, 1)
     manager:Register(textWidthSlider, "textwidget")
-    card4:AddRow(row4width, 40)
+    card4:AddRow(row4width, Theme.rowHeight)
 
     -- Font Size Slider
-    local row4b = GUIFrame:CreateRow(card4.content, 40)
+    local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
     local textSizeSlider = GUIFrame:CreateSlider(row4b, "Font Size", {
         min = 8,
         max = 24,
@@ -333,7 +328,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
     })
     row4b:AddWidget(textSizeSlider, 1)
     manager:Register(textSizeSlider, "textwidget")
-    card4:AddRow(row4b, 40)
+    card4:AddRow(row4b, Theme.rowHeight)
 
     yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
 
