@@ -2,10 +2,12 @@
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/ ..\..\FrameXML\UI.xsd">
 
     <Script file="Ace3.lua" />
+    <Script file="Achievement.lua" />
     <Script file="AddonManager.lua" />
     <Script file="AdventureMap.lua" />
     <Script file="Alerts.lua" />
     <Script file="Archaeology.lua" />
+    <Script file="AuctionHouse.lua" />
     <Script file="Barber.lua" />
     <Script file="Battlenet.lua" />
     <Script file="Binding.lua" />
