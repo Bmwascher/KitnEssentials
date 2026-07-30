@@ -4,6 +4,7 @@
     <Script file="Ace3.lua" />
     <Script file="AddonManager.lua" />
     <Script file="AdventureMap.lua" />
+    <Script file="Alerts.lua" />
     <Script file="Archaeology.lua" />
     <Script file="Barber.lua" />
     <Script file="Battlenet.lua" />
