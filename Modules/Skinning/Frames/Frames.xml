@@ -9,11 +9,13 @@
     <Script file="Battlenet.lua" />
     <Script file="Binding.lua" />
     <Script file="BlackMarket.lua" />
+    <Script file="Calendar.lua" />
     <Script file="CatalogShop.lua" />
     <Script file="Channels.lua" />
     <Script file="ChatConfig.lua" />
     <Script file="ChromieTime.lua" />
     <Script file="CooldownManager.lua" />
+    <Script file="Currency.lua" />
     <Script file="DeathRecap.lua" />
     <Script file="Delves.lua" />
     <Script file="DressingRoom.lua" />
@@ -47,13 +49,16 @@
     <Script file="PetBattle.lua" />
     <Script file="Petition.lua" />
     <Script file="PlayerChoice.lua" />
+    <Script file="PlayerSpells.lua" />
     <Script file="PvP.lua" />
     <Script file="PvPMatch.lua" />
     <Script file="QuestChoice.lua" />
     <Script file="Raid.lua" />
     <Script file="Reputation.lua" />
     <Script file="Runeforge.lua" />
+    <Script file="SettingsPanel.lua" />
     <Script file="Socket.lua" />
+    <Script file="SpellBook.lua" />
     <Script file="Stable.lua" />
     <Script file="SubscriptionInterstitial.lua" />
     <Script file="Tabard.lua" />
@@ -64,4 +69,5 @@
     <Script file="Trainer.lua" />
     <Script file="Transmog.lua" />
     <Script file="TutorialFrame.lua" />
+    <Script file="WeeklyRewards.lua" />
 </Ui>
