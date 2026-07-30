@@ -1672,6 +1672,50 @@ local Defaults = {
                 -- Skins[key] ~= false, so the polarity matters.
                 Skins      = {},
             },
+            -- Blizzard's UI widget frames: the top-centre status bars and text
+            -- widgets used by M+ timers, event progress, power bars and zone
+            -- objectives. Standalone module, not a skin key -- it hooks the
+            -- widget mixins rather than a named window.
+            UIWidgets = {
+                Enabled = true,
+                FontFace = "Expressway",
+                FontOutline = "OUTLINE",
+                -- Status bar widgets (M+ timer, power bars)
+                StatusBar = {
+                    Enabled = true,
+                    Width = 0,            -- Custom width (0 = use default)
+                    StyleLabel = true,    -- Style the label above bars
+                    StyleBarText = true,  -- Style text on the bar
+                    LabelSize = 14,       -- Font size for labels
+                    BarTextSize = 12,     -- Font size for bar text
+                    StripTextures = true, -- Remove Blizzard textures and add backdrop
+                    BackdropColor = { 0, 0, 0, 0.8 },
+                    BorderColor = { 0, 0, 0, 1 },
+                },
+                -- Text widgets
+                TextWidget = {
+                    Enabled = true,
+                    Width = 400, -- Custom width (0 = use default)
+                    StyleText = true,
+                    Size = 17,
+                },
+            },
+            -- Game-wide replacement of Blizzard's shared font OBJECTS (quest
+            -- text, objective tracker, number fonts, mail, tooltips...). Off by
+            -- default: it changes text everywhere, not just inside skinned
+            -- windows, so it is opt-in.
+            BlizzardFonts = {
+                Enabled = false,
+                -- Per-category size overrides (GUI sliders). Unlisted objects
+                -- keep their stock size scaled by BlizzardFrames.FontBaseSize.
+                Sizes = {
+                    Objective = 13,  -- objective tracker lines (stock 12)
+                    QuestText = 13,  -- quest body text (stock 13)
+                    QuestTitle = 14, -- quest titles (stock 18)
+                    QuestSmall = 12, -- small quest text (stock 12)
+                    MailBody = 13,   -- mail body (stock 15)
+                },
+            },
             ContextMenus = {
                 Enabled = false,
             },
