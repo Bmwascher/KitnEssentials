@@ -177,7 +177,10 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
 
     yOffset = card1:GetNextOffset()
 
-    -- Lone header bar: a disabled module shows its switch and nothing else.
+    -- Lone header bar: a disabled module shows only its own switch below --
+    -- the font-replacement block above is a separate module gated by its
+    -- own Enabled key, independent of this page's master toggle, so it is
+    -- placed before this return on purpose and stays visible either way.
     if db.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------
