@@ -92,7 +92,7 @@ read_globals = {
     -- Lua standard extensions in WoW
     "strsplit", "strjoin", "strtrim", "format", "tinsert", "tremove",
     "wipe", "CopyTable", "tContains", "strsub", "strlen", "strupper",
-    "strlower", "nop", "time", "date",
+    "strlower", "strmatch", "nop", "time", "date",
 
     -- Core math (WoW re-exports)
     "ceil", "floor", "min", "max", "abs", "sort",
@@ -218,7 +218,8 @@ read_globals = {
     "GetItemInfo", "GetItemInfoInstant", "GetItemSpell", "GetItemCount",
     "GetInventoryItemID", "GetInventoryItemDurability", "GetInventoryItemTexture", "GetInventoryItemLink",
     "GetDetailedItemLevelInfo",
-    "GetInventoryItemQuality", "GetItemQualityColor",
+    "GetInventoryItemQuality", "GetItemQualityColor", "ITEM_QUALITY_COLORS",
+    "GetItemGem", -- deprecated compat shim (C_Item.GetItemGem), Blizzard_DeprecatedItemScript
     "GetWeaponEnchantInfo",
     "ClearCursor", "ResetCursor", "SetCursor",
     "NUM_BAG_SLOTS",
@@ -228,6 +229,7 @@ read_globals = {
 
     -- PaperDoll layout
     "PaperDollFrame_SetLevel", "PaperDollFrame_UpdateStats",
+    "PanelTemplates_TabResize",
     "InspectPaperDollItemSlotButton_Update", "InspectPaperDollFrame_SetLevel",
     "InspectPaperDollItemsFrame", "C_PaperDollInfo",
 

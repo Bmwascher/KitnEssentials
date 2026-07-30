@@ -15,6 +15,7 @@
     <Script file="Calendar.lua" />
     <Script file="CatalogShop.lua" />
     <Script file="Channels.lua" />
+    <Script file="Character.lua" />
     <Script file="ChatConfig.lua" />
     <Script file="ChromieTime.lua" />
     <Script file="Communities.lua" />
