@@ -5,6 +5,7 @@
     <Script file="EUIWindows.lua" />
     <Script file="Dialogs.lua" />
     <Script file="GlobalFonts.lua" />
+    <Script file="BlizzardFonts.lua" />
     <Script file="ContextMenus.lua" />
     <Script file="Tooltips.lua" />
     <Script file="TooltipStatusBar.lua" />
