@@ -103,11 +103,18 @@ end
 -- Given the position right after a call's opening '(', walks forward with
 -- balanced-paren depth tracking (across newlines) until that same paren
 -- closes, and returns every string literal seen at the call's own argument
--- depth, in order. Nested calls (e.g. a function-literal argument's body)
--- sit one depth deeper and their string literals are never collected, so
--- the LAST entry in the returned list is the call's last string ARGUMENT --
--- exactly the skin key -- not merely the last string literal anywhere
--- inside it.
+-- depth, in order. A NESTED CALL's arguments sit one depth deeper and are
+-- never collected, so the LAST entry is normally the call's last string
+-- ARGUMENT -- exactly the skin key.
+--
+-- KNOWN LIMIT: an inline `function() ... end` argument does NOT raise the
+-- depth (its `()` opens and closes immediately), so a bare string literal
+-- in such a body WOULD be collected and could be mistaken for the key.
+-- The two registrations that pass a function literal --
+-- Frames/EncounterJournal.lua:686 and GlobalFonts.lua:110 -- contain no
+-- string literals at all, so this is latent rather than live. A future
+-- inline body with a bare string needs that argument hoisted to a named
+-- local, or this scanner taught to skip `function`..`end` spans.
 local function callArgStrings(text, startPos)
     local depth = 1
     local i = startPos

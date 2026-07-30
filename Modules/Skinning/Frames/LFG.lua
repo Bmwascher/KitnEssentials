@@ -54,7 +54,8 @@ local ROLE_ICON = KE.ROLE_ICONS
 -- do not replace the texture, so Blizzard's own atlas stays -- nothing
 -- is blanked and no restore pass is needed.
 local function UseModernRoleIcons()
-    local bs = KE.db and KE.db.profile and KE.db.profile.Skinning.BlizzardFrames
+    local bs = KE.db and KE.db.profile and KE.db.profile.Skinning
+        and KE.db.profile.Skinning.BlizzardFrames
     local opt = bs and bs.ModernRoleIcons
     return not opt or opt.Enabled ~= false
 end
