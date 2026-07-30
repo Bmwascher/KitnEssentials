@@ -1588,7 +1588,7 @@ local Defaults = {
                 TabSelector = "NONE",
                 TabSelectorColor = { r = 1, g = 1, b = 1 },
                 TabSelectedTextEnabled = true,
-                TabSelectedTextColor = { r = 0.451, g = 0.506, b = 1 },
+                TabSelectedTextColor = { r = 1, g = 0, b = 0.549 },  -- #FF008C
                 TabTextColor = { r = 0.57, g = 0.57, b = 0.57 },
                 TabFontOutline = "OUTLINE",
                 anchorFrameType = "UIPARENT",

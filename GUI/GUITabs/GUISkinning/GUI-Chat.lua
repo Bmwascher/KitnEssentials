@@ -535,7 +535,7 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     manager:Register(tabSelectedEnabledCheck, "all")
 
     local tabSelectedColorPicker = GUIFrame:CreateColorPicker(row9c, "Selected Tab Color", {
-        color = { db.TabSelectedTextColor.r or 0.451, db.TabSelectedTextColor.g or 0.506, db.TabSelectedTextColor.b or 1, 1 },
+        color = { db.TabSelectedTextColor.r or 1, db.TabSelectedTextColor.g or 0, db.TabSelectedTextColor.b or 0.549, 1 },
         callback = function(r, g, b)
             db.TabSelectedTextColor.r, db.TabSelectedTextColor.g, db.TabSelectedTextColor.b = r, g, b
             ApplySettings()
