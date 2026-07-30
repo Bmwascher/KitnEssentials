@@ -308,6 +308,13 @@ GUIFrame:RegisterContent("SkinBlizzardFramesGeneral", function(scrollChild, yOff
             if KE.Skins and KE.Skins.ApplyGlobalFonts then
                 KE.Skins.ApplyGlobalFonts()
             end
+            -- The BlizzardFonts sweep scales every UNOVERRIDDEN font object off
+            -- this same base, so it has to re-run or the two systems drift
+            -- apart. Objects with a per-category size in db.Sizes skip the
+            -- scaling entirely (<REF>/Skinning/BlizzardFonts.lua:223-228).
+            local bf = KitnEssentials:GetModule("BlizzardFonts", true)
+            local fdb = KE.db and KE.db.profile.Skinning.BlizzardFonts
+            if bf and fdb and fdb.Enabled and bf.ApplyAll then bf:ApplyAll() end
         end,
     })
     rowB:AddWidget(baseSlider, 1)

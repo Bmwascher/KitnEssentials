@@ -105,6 +105,76 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
         KE:Print("Blizzard Text Skinning: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
 
+    -- Full Blizzard font-object replacement (BlizzardFonts module): re-fonts
+    -- the shared Blizzard font objects (tooltips, quest text, objective
+    -- tracker, number fonts, mail...) to the brand font at Blizzard's stock
+    -- sizes, scaled by the Blizzard Font Base Size on the Blizzard Frames
+    -- page. One-time application, no per-frame cost.
+    local fontsDb = KE.db and KE.db.profile.Skinning.BlizzardFonts
+    if fontsDb then
+        local rowBF = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+        local fontsCheck = GUIFrame:CreateCheckbox(rowBF, "Replace All Blizzard Fonts", {
+            value = fontsDb.Enabled == true,
+            callback = function(checked)
+                fontsDb.Enabled = checked
+                local bf = KitnEssentials:GetModule("BlizzardFonts", true)
+                if checked then
+                    KitnEssentials:EnableModule("BlizzardFonts")
+                    if bf then bf:ApplyAll() end
+                else
+                    KitnEssentials:DisableModule("BlizzardFonts")
+                    KE:SkinningReloadPrompt()
+                end
+            end,
+        })
+        rowBF:AddWidget(fontsCheck, 1)
+        card1:AddRow(rowBF, Theme.rowHeight)
+    end
+
+    if fontsDb then
+        fontsDb.Sizes = fontsDb.Sizes or {}
+        local sizes = fontsDb.Sizes
+        local function ReapplyFonts()
+            local bf = KitnEssentials:GetModule("BlizzardFonts", true)
+            if bf and fontsDb.Enabled and bf.ApplyAll then bf:ApplyAll() end
+        end
+        card1:AddLabel("Sizes for the font categories the sweep controls. Requires 'Replace All Blizzard Fonts'; applies live.")
+
+        local rowA = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+        local objSlider = GUIFrame:CreateSlider(rowA, "Objective Tracker", {
+            min = 8, max = 20, step = 1, value = sizes.Objective or 13,
+            callback = function(val) sizes.Objective = val; ReapplyFonts() end,
+        })
+        rowA:AddWidget(objSlider, 0.5)
+        local mailSlider = GUIFrame:CreateSlider(rowA, "Mail Body", {
+            min = 8, max = 20, step = 1, value = sizes.MailBody or 13,
+            callback = function(val) sizes.MailBody = val; ReapplyFonts() end,
+        })
+        rowA:AddWidget(mailSlider, 0.5)
+        card1:AddRow(rowA, Theme.rowHeight)
+
+        local rowB = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+        local qtSlider = GUIFrame:CreateSlider(rowB, "Quest Title", {
+            min = 8, max = 24, step = 1, value = sizes.QuestTitle or 14,
+            callback = function(val) sizes.QuestTitle = val; ReapplyFonts() end,
+        })
+        rowB:AddWidget(qtSlider, 0.5)
+        local qxSlider = GUIFrame:CreateSlider(rowB, "Quest Text", {
+            min = 8, max = 20, step = 1, value = sizes.QuestText or 13,
+            callback = function(val) sizes.QuestText = val; ReapplyFonts() end,
+        })
+        rowB:AddWidget(qxSlider, 0.5)
+        card1:AddRow(rowB, Theme.rowHeight)
+
+        local rowC = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+        local qsSlider = GUIFrame:CreateSlider(rowC, "Quest Text (Small)", {
+            min = 8, max = 18, step = 1, value = sizes.QuestSmall or 12,
+            callback = function(val) sizes.QuestSmall = val; ReapplyFonts() end,
+        })
+        rowC:AddWidget(qsSlider, 0.5)
+        card1:AddRow(rowC, Theme.rowHeight, 0)
+    end
+
     yOffset = card1:GetNextOffset()
 
     -- Lone header bar: a disabled module shows its switch and nothing else.
