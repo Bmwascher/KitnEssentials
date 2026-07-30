@@ -315,7 +315,8 @@ read_globals = {
     "GetQuestReward", "GetNumQuestChoices", "GetQuestID",
     "GetActiveTitle", "GetNumActiveQuests",
     "GetNumAvailableQuests", "SelectActiveQuest", "SelectAvailableQuest",
-    "C_QuestLog",
+    "GetNumQuestLeaderBoards", "GetQuestLogLeaderBoard",
+    "C_QuestLog", "C_QuestInfoSystem",
 
     -- Guild Bank
     "GetGuildBankItemLink", "GetGuildBankTabInfo",

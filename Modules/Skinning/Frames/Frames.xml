@@ -57,6 +57,7 @@
     <Script file="ProfessionsOrders.lua" />
     <Script file="PvP.lua" />
     <Script file="PvPMatch.lua" />
+    <Script file="Quest.lua" />
     <Script file="QuestChoice.lua" />
     <Script file="Raid.lua" />
     <Script file="Reputation.lua" />
@@ -75,4 +76,5 @@
     <Script file="Transmog.lua" />
     <Script file="TutorialFrame.lua" />
     <Script file="WeeklyRewards.lua" />
+    <Script file="WorldMap.lua" />
 </Ui>
