@@ -17,6 +17,7 @@
     <Script file="Channels.lua" />
     <Script file="ChatConfig.lua" />
     <Script file="ChromieTime.lua" />
+    <Script file="Communities.lua" />
     <Script file="CooldownManager.lua" />
     <Script file="Currency.lua" />
     <Script file="DeathRecap.lua" />
