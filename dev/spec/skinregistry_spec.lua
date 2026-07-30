@@ -1,16 +1,24 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  dev/spec/skinregistry_spec.lua                          ║
 -- ║  Proves the config grid and the S:Register dispatcher    ║
--- ║  agree on every key. Reads both source trees as TEXT --   ║
--- ║  no module is loaded, so this needs no _ke_loader entry.  ║
+-- ║  agree on every key, AND that every WINDOW_MAP addon     ║
+-- ║  filter names an addon a real registration actually uses. ║
 -- ╚══════════════════════════════════════════════════════════╝
 --
 -- The gate this closes: GUI/GUITabs/GUISkinning/GUI-BlizzardFrames.lua reads
 -- `Skins[key] ~= false`, so a key nothing registers is always "on" and a
 -- misspelt row controls nothing. Neither direction of that typo shows up any
 -- other way -- it is silent in-game and silent in luacheck.
+--
+-- The grid/dispatcher agreement above reads both source trees as TEXT. The
+-- dead-filter guard (Task 15) cannot: WINDOW_MAP nests `skins` and `addons`
+-- lists, and a second hand-rolled text parser for that shape would be its
+-- own defect surface. So this file ALSO loads
+-- Modules/Skinning/EUIWindows.lua for real, through dev/spec/_ke_loader.lua,
+-- and reads S.WINDOW_MAP as an actual Lua table.
 
 local lfs = require("lfs")
+local L = require("dev.spec._ke_loader")
 
 local GUI_FILE = "GUI/GUITabs/GUISkinning/GUI-BlizzardFrames.lua"
 local SKINNING_ROOT = "Modules/Skinning"
@@ -128,16 +136,39 @@ local function callArgStrings(text, startPos)
 end
 
 -- Scans one file's text for every S:Register(...) / S:RegisterEarly(...)
--- call and adds the last string argument of each to `into`. %a* covers both
+-- call and adds the last string argument of each to `registrations[key]`,
+-- alongside the call's addon (the FIRST depth-1 string) -- or `false` for a
+-- RegisterEarly call, which has no addon argument at all. %a* covers both
 -- spellings ("Register" / "RegisterEarly") in one pass.
-local function collectRegistrations(text, into)
+--
+-- A zero-string match is how the scanner steps over S:Register's and
+-- S:RegisterEarly's own function DEFINITIONS in SkinAPI.lua (their parameter
+-- lists are bare identifiers, never string literals) -- `if key then` skips
+-- it, same as before this file recorded addons. A plain S:Register call
+-- yielding only ONE string is different: it means the addon was passed as a
+-- variable, which this codebase never does, and silently skipping it would
+-- make the dead-filter guard below vacuous for exactly the file that broke
+-- the convention -- so that case is a hard failure instead.
+local function collectRegistrations(text, registrations, path)
     local pos = 1
     while true do
         local s, e = text:find("S:Register%a*%s*%(", pos)
         if not s then break end
+        local isEarly = text:sub(s, e):find("RegisterEarly", 1, true) ~= nil
         local strings = callArgStrings(text, e + 1)
         local key = strings[#strings]
-        if key then into[key] = true end
+        if key then
+            local addon = false
+            if not isEarly then
+                if #strings < 2 then
+                    error("S:Register call in " .. path
+                        .. " has no addon string literal -- addon passed as a variable?", 0)
+                end
+                addon = strings[1]
+            end
+            registrations[key] = registrations[key] or {}
+            registrations[key][#registrations[key] + 1] = addon
+        end
         pos = e + 1
     end
 end
@@ -197,18 +228,18 @@ describe("skin grid and dispatcher agree (GUI-BlizzardFrames.lua <-> Modules/Ski
     local frameKeySet = toSet(frameKeys)
     local addonKeySet = toSet(addonKeys)
 
-    local registered = {}
+    local registrations = {}
     local files = walkLuaFiles(SKINNING_ROOT, {})
     assert(#files > 0, "expected at least one .lua file under " .. SKINNING_ROOT)
     for _, path in ipairs(files) do
-        collectRegistrations(readFile(path), registered)
+        collectRegistrations(readFile(path), registrations, path)
     end
 
     it("registers every FRAME_SKINS / ADDON_SKINS key somewhere under Modules/Skinning/, except NON_REGISTRY_ROWS", function()
         local missing = {}
         local function check(keys)
             for _, key in ipairs(keys) do
-                if not NON_REGISTRY_ROWS[key] and not registered[key] then
+                if not NON_REGISTRY_ROWS[key] and not registrations[key] then
                     missing[#missing + 1] = key
                 end
             end
@@ -222,7 +253,7 @@ describe("skin grid and dispatcher agree (GUI-BlizzardFrames.lua <-> Modules/Ski
 
     it("gives every registered key a grid row or an ALWAYS_ON entry", function()
         local unaccounted = {}
-        for key in pairs(registered) do
+        for key in pairs(registrations) do
             if not frameKeySet[key] and not addonKeySet[key] and not ALWAYS_ON[key] then
                 unaccounted[#unaccounted + 1] = key
             end
@@ -239,5 +270,71 @@ describe("skin grid and dispatcher agree (GUI-BlizzardFrames.lua <-> Modules/Ski
         end
         table.sort(both)
         assert.same({}, both, "key(s) present in both FRAME_SKINS and ADDON_SKINS: " .. table.concat(both, ", "))
+    end)
+
+    -- Task 15's dead-filter guard: WINDOW_MAP's `addons` filter matches
+    -- EllesmereUI's own coverage per Blizzard addon name. If a filter names
+    -- an addon no registration under its skin key(s) actually uses,
+    -- S.GetSuppression matches nothing and the row behaves as fully
+    -- unsuppressed while GetSuppressionState still reports "partial" -- the
+    -- grid claims a coverage overlap that isn't real, and in game the window
+    -- carries two borders. Nothing else catches this: it is silent in
+    -- luacheck and silent in every OTHER busted spec.
+    --
+    -- WINDOW_MAP nests `skins` and `addons` lists, so this loads
+    -- EUIWindows.lua for real (via _ke_loader) instead of adding a second
+    -- hand-rolled text parser for its shape.
+    local _, euiKE = L.loadEUIWindows()
+    local WINDOW_MAP = euiKE.Skins.WINDOW_MAP
+
+    local filteredRows = {}
+    for _, row in ipairs(WINDOW_MAP) do
+        if row.addons then filteredRows[#filteredRows + 1] = row end
+    end
+
+    it("positive control: exactly the housing and delves rows carry an addons filter", function()
+        -- Without this, the two assertions below pass trivially on an empty
+        -- loop the moment WINDOW_MAP stops carrying any filtered row at all --
+        -- the same vacuity class this plan has rejected three times already.
+        local euiKeys = {}
+        for _, row in ipairs(filteredRows) do euiKeys[#euiKeys + 1] = row.euiKey end
+        table.sort(euiKeys)
+        assert.same({ "delves", "housing" }, euiKeys)
+    end)
+
+    it("every addon a filtered row names matches at least one real registration under its skin key", function()
+        for _, row in ipairs(filteredRows) do
+            for _, skinKey in ipairs(row.skins) do
+                local regs = registrations[skinKey] or {}
+                for _, addonName in ipairs(row.addons) do
+                    local found = false
+                    for _, regAddon in ipairs(regs) do
+                        if regAddon == addonName then found = true break end
+                    end
+                    assert.is_true(found,
+                        "WINDOW_MAP row '" .. row.euiKey .. "' filters addon '" .. addonName
+                            .. "' but no S:Register under key '" .. skinKey .. "' uses that addon name")
+                end
+            end
+        end
+    end)
+
+    it("every filtered row leaves at least one registration NOT covered by its filter", function()
+        for _, row in ipairs(filteredRows) do
+            local addonSet = {}
+            for _, a in ipairs(row.addons) do addonSet[a] = true end
+            for _, skinKey in ipairs(row.skins) do
+                local regs = registrations[skinKey] or {}
+                local hasUncovered = false
+                for _, regAddon in ipairs(regs) do
+                    -- A `false` entry (RegisterEarly, no addon) can never match
+                    -- a named filter, so it always counts as uncovered too.
+                    if not (regAddon and addonSet[regAddon]) then hasUncovered = true break end
+                end
+                assert.is_true(hasUncovered,
+                    "WINDOW_MAP row '" .. row.euiKey .. "' filter covers EVERY registration under key '"
+                        .. skinKey .. "' -- it should be an unfiltered row instead")
+            end
+        end
     end)
 end)
