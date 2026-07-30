@@ -44,6 +44,7 @@
     <Script file="Inspect.lua" />
     <Script file="ItemInteraction.lua" />
     <Script file="ItemUpgrade.lua" />
+    <Script file="LFG.lua" />
     <Script file="LFGuild.lua" />
     <Script file="Loot.lua" />
     <Script file="LossControl.lua" />
