@@ -21,6 +21,7 @@ BF.keDeferToReload = true
 
 local _G = _G
 local C_Timer = C_Timer
+local unpack = unpack -- luacheck: ignore 211/unpack
 
 -- v3.5.772: FONT_LIST audited against Blizzard's UI source
 -- (Gethe/wow-ui-source, live branch, Blizzard_Fonts_Shared XML with
