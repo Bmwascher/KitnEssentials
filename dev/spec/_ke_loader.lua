@@ -569,10 +569,18 @@ function L.loadLootRoll(overrides)
     _G.CreateFrame = function() return noopFrame() end
     _G.hooksecurefunc = function() end
     _G.InCombatLockdown = function() return false end
+    -- The module's DEBUG_LR tracer captures these as upvalues AT LOAD, so they
+    -- must exist before loadModule -- and the whole suite must survive the flag
+    -- being flipped to true. It shipped `true` once during the 2026-07-31 probe
+    -- and every LootRoll spec errored on a nil debugprofilestop, which is a
+    -- spec-harness gap, not a module bug: a debug flag must never be able to
+    -- break the test suite. KE:Print is stubbed for the same reason.
+    _G.debugprofilestop = _G.debugprofilestop or function() return 0 end
     local KE = {
         db = { profile = { Skinning = { LootRoll = {} } } },
         ShouldNotLoadModule = function() return false end,
         Skins = {},
+        Print = function() end,
     }
     helpers.loadModule("Modules/Skinning/LootRoll.lua", KE)
     local LR = modules["LootRoll"]
@@ -665,6 +673,10 @@ function L.loadLootRollBars(overrides)
             borderColor = { 0, 0, 0, 1 },
         },
     }
+    -- Same reason as loadLootRoll: LootRoll.lua's DEBUG_LR tracer captures
+    -- debugprofilestop at load, and the suite must not break when that flag is
+    -- flipped on for a live probe.
+    _G.debugprofilestop = _G.debugprofilestop or function() return 0 end
     helpers.loadModule("Modules/Skinning/LootRoll.lua", KE)
     helpers.loadModule("Modules/Skinning/LootRollBars.lua", KE)
     local LR = modules["LootRoll"]

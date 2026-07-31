@@ -14,6 +14,12 @@ describe("LootRoll ApplyPosition", function()
     local LR, container
 
     -- Records the last SetPoint the module applied to the container.
+    --
+    -- GetPoint/IsShown are here for the DEBUG_LR tracer, which reads them on
+    -- every ApplyPosition. They are not what these specs assert, but a mock
+    -- missing them makes the whole file error the moment that flag is flipped
+    -- on for a live probe -- which happened on 2026-07-31. A frame mock should
+    -- model the frame, not just the calls one spec happens to check.
     local function makeContainer(height, parent)
         return {
             _points = {},
@@ -25,6 +31,12 @@ describe("LootRoll ApplyPosition", function()
                 self._points[#self._points + 1] =
                     { point = point, relPoint = relPoint, x = x, y = y }
             end,
+            GetPoint = function(self)
+                local p = self._points[#self._points]
+                if not p then return nil end
+                return p.point, self, p.relPoint, p.x, p.y
+            end,
+            IsShown = function() return true end,
         }
     end
 

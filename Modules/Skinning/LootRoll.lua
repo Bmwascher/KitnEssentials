@@ -142,7 +142,14 @@ local function SkinAllRollFrames(container)
 end
 LR.SkinAllRollFrames = SkinAllRollFrames
 
-function LR:ApplyPosition()
+-- `why` is DEBUG_LR-only: it names the caller in the trace. Probe run 1
+-- (2026-07-31) logged an ApplyPosition whose "before" state was already
+-- correct, and there was no way to tell which of the six call sites produced
+-- it -- Setup, the GLC_Update hook, the OnShow hook, either ReassertPosition
+-- tick, the regen watcher, or an external GUI/EditMode call. Untagged, the
+-- trace could not answer its own question. Callers that do not pass it show as
+-- "external", which is itself the answer for the GUI and EditMode paths.
+function LR:ApplyPosition(why)
     if not self.db then return end
 
     if self.db.Replace and self.RollBars_Anchor and self._barsWired then
@@ -197,10 +204,11 @@ function LR:ApplyPosition()
         y = y - (c:GetHeight() or 0) / 2
     end
 
-    LogState("ApplyPosition:before")
+    local tag = "ApplyPosition<" .. (why or "external") .. ">"
+    LogState(tag .. ":before")
     c:ClearAllPoints()
     c:SetPoint(point, UIParent, p.RelPoint or "CENTER", p.X or 0, y)
-    LogState("ApplyPosition:after")
+    LogState(tag .. ":after")
 end
 
 -- Single watcher: unmanage (if still pending) then position, in that
@@ -230,12 +238,12 @@ function LR:ReassertPosition()
             LR._reassertPending = nil
             return
         end
-        self:ApplyPosition()
+        self:ApplyPosition("reassert-tick1")
         C_Timer.After(0, function()
             LogState("ReassertPosition:tick2")
             self._reassertPending = nil
             if not LR:IsEnabled() then return end
-            self:ApplyPosition()
+            self:ApplyPosition("reassert-tick2")
         end)
     end)
 end
@@ -260,7 +268,7 @@ function LR:WaitForRegen()
         -- -- see the longer note at the hook installs below.
         if not LR:IsEnabled() then return end
         if LR._unmanage then LR._unmanage() end
-        LR:ApplyPosition()
+        LR:ApplyPosition("regen-watcher")
     end)
 end
 
@@ -361,6 +369,13 @@ function LR:Setup()
     local c = _G.GroupLootContainer
     if not c then return end
 
+    -- Probe run 1 (2026-07-31) captured no Container:OnShow at all, and the two
+    -- explanations need different fixes: the container was already shown when
+    -- the hooks went in (so OnShow had already fired and we can never see it),
+    -- or the hooks were not installed yet. This line dates the install and
+    -- records whether the container was already up at that moment.
+    LogState("Setup:pre-wire wired=" .. tostring(self._wired == true))
+
     if not self._wired then
         -- v3.5.755 (taint report: ADDON_ACTION_BLOCKED on
         -- UIParentRightManagedFrameContainer:ClearAllPoints during a
@@ -451,7 +466,7 @@ function LR:Setup()
             hooksecurefunc("GroupLootContainer_Update", function(container)
                 LogState("GLC_Update:hook")
                 if not LR:IsEnabled() then return end
-                LR:ApplyPosition()
+                LR:ApplyPosition("glc-update")
                 SkinAllRollFrames(container)
                 LR:ReassertPosition()
             end)
@@ -471,7 +486,7 @@ function LR:Setup()
             -- container in, which is the whole question.
             LogState("Container:OnShow")
             if not LR:IsEnabled() then return end
-            LR:ApplyPosition()
+            LR:ApplyPosition("container-onshow")
             LR:ReassertPosition()
         end)
         c:HookScript("OnHide", function() LogState("Container:OnHide") end)
@@ -485,7 +500,7 @@ function LR:Setup()
         self._wired = true
     end
 
-    self:ApplyPosition()
+    self:ApplyPosition("setup")
     SkinAllRollFrames(c)
 end
 
@@ -518,7 +533,7 @@ function LR:RegisterEditMode()
             self.db.Position.X = pos.XOffset
             self.db.Position.Y = pos.YOffset
             self:SyncMover()
-            self:ApplyPosition()
+            self:ApplyPosition("editmode")
             if KE.GUIFrame and KE.GUIFrame.RefreshContent then
                 pcall(function() KE.GUIFrame:RefreshContent("LootRoll") end)
             end
