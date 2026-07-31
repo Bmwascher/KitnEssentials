@@ -106,6 +106,7 @@ C.gcdFrame      = nil
 C.castFrame     = nil
 C.trailFrame    = nil
 C.dispelFrame   = nil
+C.tauntFrame    = nil
 
 -- Cached visibility state used by satellites (updated by UpdateVisibility)
 C._cursorShown        = false
@@ -948,6 +949,149 @@ function C:_TauntFindSpell()
             self._tauntTrackedSpellID = spellID
             return
         end
+    end
+end
+
+-- Declared here, not in Task 3, because luacheck warning 211 (unused variable)
+-- is not suppressed by .luacheckrc:33-49 and Task 3's lint gate is 0 warnings.
+-- Its first reader is Step 3 of this task.
+local _tauntFollowCursor = nil
+
+-- Taint note: identical handling to the Dispel satellite. We never test the
+-- duration object's own booleans (in Midnight those are secret and throw on a
+-- raw truth test). We always call SetCooldownFromDurationObject, which is
+-- taint-safe and renders nothing at zero, so a ready taunt simply draws no text.
+local function _tauntOnEvent(self, event)
+    if event == "PLAYER_ENTERING_WORLD" or event == "PLAYER_SPECIALIZATION_CHANGED" then
+        C:_TauntEvaluateGate()
+        return
+    end
+    -- SPELLS_CHANGED re-resolves the tracked spell without re-running the gate:
+    -- the spellbook can populate after PLAYER_ENTERING_WORLD, and without this
+    -- a login that lands before the spellbook is ready leaves the countdown
+    -- permanently blank. Undebounced on purpose -- see sanctioned deviation 3.
+    if event == "SPELLS_CHANGED" then
+        C:_TauntFindSpell()
+    end
+    -- Don't clobber an active test preview. SPELL_UPDATE_COOLDOWN fires from
+    -- background sources and would otherwise wipe the preview countdown.
+    if C._tauntPreviewActive then return end
+    if not C._tauntTrackedSpellID then
+        self.cooldown:Clear()
+        return
+    end
+    local duration = C_Spell.GetSpellCooldownDuration(C._tauntTrackedSpellID)
+    if duration then
+        self.cooldown:SetCooldownFromDurationObject(duration, false)
+    else
+        self.cooldown:Clear()
+    end
+end
+
+function C:CreateTauntSatellite()
+    if self.tauntFrame then return end
+    local db = self.db.Taunt
+
+    local tf = CreateFrame("Frame", "KE_CursorTauntText", UIParent)
+    tf:SetFrameStrata("TOOLTIP")
+    tf:SetSize(1, 1)
+
+    -- Hidden CooldownFrameTemplate drives the countdown text.
+    tf.cooldown = CreateFrame("Cooldown", nil, tf, "CooldownFrameTemplate")
+    tf.cooldown:SetSize(1, 1)
+    tf.cooldown:SetDrawSwipe(false)
+    tf.cooldown:SetDrawEdge(false)
+    if tf.cooldown.SetDrawBling then tf.cooldown:SetDrawBling(false) end
+    tf.cooldown:SetHideCountdownNumbers(false)
+
+    -- Find the countdown FontString region inside the Cooldown.
+    local cooldownText = nil
+    for _, region in ipairs({ tf.cooldown:GetRegions() }) do
+        if region:GetObjectType() == "FontString" then
+            cooldownText = region
+            break
+        end
+    end
+    if not cooldownText then
+        cooldownText = tf:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+    end
+    tf.text = cooldownText
+    local fontPath = KE:GetFontPath(db.FontFace) or KE.FONT
+    tf.text:SetFont(fontPath, db.FontSize or 18, "OUTLINE")
+    tf.text:SetTextColor(unpack(db.TextColor or { 1, 1, 1, 1 }))
+
+    tf:SetScript("OnEvent", _tauntOnEvent)
+    tf:Hide()
+    self.tauntFrame = tf
+end
+
+function C:_AttachTauntScripts()
+    local tf = self.tauntFrame
+    if not tf then return end
+    tf:UnregisterAllEvents()
+    tf:RegisterEvent("SPELL_UPDATE_COOLDOWN")
+    tf:RegisterEvent("SPELLS_CHANGED")
+    tf:RegisterEvent("PLAYER_ENTERING_WORLD")
+    tf:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+end
+
+function C:_DetachTauntScripts()
+    local tf = self.tauntFrame
+    if not tf then return end
+    tf:UnregisterAllEvents()
+    tf:SetScript("OnUpdate", nil)
+end
+
+function C:ApplyTauntSatellite()
+    local db = self.db.Taunt
+    local function applyLook()
+        local fontPath = KE:GetFontPath(db.FontFace) or KE.FONT
+        self.tauntFrame.text:SetFont(fontPath, db.FontSize or 18, "OUTLINE")
+        self.tauntFrame.text:SetTextColor(unpack(db.TextColor or { 1, 1, 1, 1 }))
+        self.tauntFrame.text:ClearAllPoints()
+        if self.cursorFrame and self.cursorFrame:IsShown() then
+            self.tauntFrame:SetScript("OnUpdate", nil)
+            self.tauntFrame.text:SetPoint(db.AnchorPoint or "CENTER",
+                self.cursorFrame, db.AnchorPoint or "CENTER",
+                db.XOffset or 10, db.YOffset or 10)
+        else
+            -- Detached: anchor text to tauntFrame, which the OnUpdate moves with
+            -- the cursor. (Anchoring to UIParent with static coords would freeze it.)
+            if not _tauntFollowCursor then _tauntFollowCursor = _makeFollowCursorOnUpdate() end
+            self.tauntFrame:SetScript("OnUpdate", _tauntFollowCursor)
+            self.tauntFrame.text:SetPoint(db.AnchorPoint or "CENTER",
+                self.tauntFrame, "CENTER",
+                db.XOffset or 10, db.YOffset or 10)
+        end
+    end
+
+    if not db.Enabled then
+        -- During an active test preview keep the frame visible and refresh
+        -- visuals so slider tweaks take effect live.
+        if self._tauntPreviewActive and self.tauntFrame then
+            applyLook()
+            return
+        end
+        if self.tauntFrame then
+            self:_DetachTauntScripts()
+            self.tauntFrame:Hide()
+        end
+        return
+    end
+
+    if not self.tauntFrame then self:CreateTauntSatellite() end
+    self:_AttachTauntScripts()
+    applyLook()
+    self:_TauntFindSpell()
+    self.tauntFrame:Show()
+    -- Render the CURRENT cooldown immediately. Without this the frame shows
+    -- nothing until the next SPELL_UPDATE_COOLDOWN happens to fire, so a taunt
+    -- already on cooldown when the satellite starts draws blank. The reference
+    -- pairs its find and update for the same reason
+    -- (<REF>/Combat/TauntCursor.lua:278-279); the Dispel sibling omits it and is
+    -- masked by how often SPELL_UPDATE_COOLDOWN fires. Caught by the reviewer.
+    if self.tauntFrame.cooldown then
+        _tauntOnEvent(self.tauntFrame, "SPELL_UPDATE_COOLDOWN")
     end
 end
 
