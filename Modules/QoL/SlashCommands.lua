@@ -16,6 +16,7 @@ local SetCVar = C_CVar.SetCVar
 local IsInGroup = IsInGroup
 local UnitIsGroupLeader = UnitIsGroupLeader
 local _G = _G
+local ipairs = ipairs
 local table_insert = table.insert
 
 ---------------------------------------------------------------------------------
@@ -43,11 +44,30 @@ local function ShowCooldownViewerSettings()
     end
 end
 
+-- Aura-addon detection. GetAddOnInfo THROWS for an addon that isn't installed
+-- rather than returning nil, so an unwrapped call short-circuits the whole
+-- check on the first missing name -- hence the pcall per name. This tests
+-- INSTALLED, not loaded: a user who has M33kAuras but hasn't loaded it yet
+-- still owns /wa.
+local AURA_ADDONS = { "WeakAuras", "M33kAuras", "M33kAurasOptions" }
+
+local function IsAddOnInstalled(name)
+    if not C_AddOns or not C_AddOns.GetAddOnInfo then return false end
+    local ok, result = pcall(C_AddOns.GetAddOnInfo, name)
+    return ok and result ~= nil
+end
+
+function KE:HasAuraAddon()
+    for _, name in ipairs(AURA_ADDONS) do
+        if IsAddOnInstalled(name) then return true end
+    end
+    return false
+end
+
 local function RegisterCDM()
     if cdmRegistered then return end
-    local waLoaded = WeakAuras ~= nil
     SLASH_KE_CDM1 = "/cd"
-    if not waLoaded then
+    if not KE:HasAuraAddon() then
         SLASH_KE_CDM2 = "/wa"
     end
     function SlashCmdList.KE_CDM(msg, editbox)

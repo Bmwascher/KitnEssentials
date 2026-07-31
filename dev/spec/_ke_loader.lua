@@ -807,4 +807,38 @@ function L.loadCursor(overrides)
     return C, KE, seams
 end
 
+-- Modules/QoL/SlashCommands.lua. The file guards on a truthy KitnEssentials at
+-- load, which installAddonShim supplies, and it indexes C_CVar at file scope
+-- (SlashCommands.lua:14-15), so C_CVar must exist before load. Nothing registers
+-- a slash command until KE:ApplySlashCommands runs, which this loader
+-- deliberately does not call.
+--
+-- Managed overrides (InCombatLockdown and anything else in MANAGED_MOCK_KEYS)
+-- are forwarded to installMock. C_CVar, C_AddOns, ReloadUI, SlashCmdList and
+-- NUM_CHAT_WINDOWS are UNMANAGED (dev/spec/_wow_mock.lua:51-92), so they are
+-- assigned to _G directly; handing them to installMock would silently drop
+-- them. Returns KE.
+function L.loadSlashCommands(overrides)
+    overrides = overrides or {}
+    -- Managed subset routed through installMock so a caller's
+    -- InCombatLockdown override still reaches _wow_mock. Same regression class
+    -- as loadCursor's.
+    installMock(managedSubset(overrides), {
+        InCombatLockdown = function() return false end,
+    })
+    helpers.installAddonShim()
+
+    _G.C_CVar = overrides.C_CVar
+        or { GetCVar = function() return "1" end, SetCVar = function() end }
+    _G.C_AddOns = overrides.C_AddOns
+        or { GetAddOnInfo = function(name) return name end }
+    _G.ReloadUI = overrides.ReloadUI or function() end
+    _G.SlashCmdList = overrides.SlashCmdList or {}
+    _G.NUM_CHAT_WINDOWS = overrides.NUM_CHAT_WINDOWS or 10
+
+    local KE = { db = { profile = { SlashCommands = {} } }, Print = function() end }
+    helpers.loadModule("Modules/QoL/SlashCommands.lua", KE)
+    return KE
+end
+
 return L

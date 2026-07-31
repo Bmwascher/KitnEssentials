@@ -35,7 +35,7 @@ GUIFrame:RegisterContent("SlashCommands", function(scrollChild, yOffset)
     row1:AddWidget(cdmCheck, 1)
     card1:AddRow(row1, Theme.rowHeightLast, 0)
 
-    card1:AddLabel("|cff888888Registers " .. KE:ColorTextByTheme("/cd") .. " (and " .. KE:ColorTextByTheme("/wa") .. " if WeakAuras is not loaded) to toggle the Blizzard Cooldown Manager settings panel.|r")
+    card1:AddLabel("|cff888888Registers " .. KE:ColorTextByTheme("/cd") .. " (and " .. KE:ColorTextByTheme("/wa") .. " if no aura addon is installed) to toggle the Blizzard Cooldown Manager settings panel.|r")
 
     yOffset = card1:GetNextOffset()
 
