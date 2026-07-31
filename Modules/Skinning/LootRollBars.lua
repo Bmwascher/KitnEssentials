@@ -277,9 +277,19 @@ function LR:RollBars_Layout()
 
         bar.status:SetStatusBarTexture(KE:GetStatusbarPath(db.BarTexture or "KitnUI"))
 
+        -- DEVIATION (2026-07-31, Brandon's call after the smoke). The
+        -- reference sizes the item icon to the BAR FRAME height and centres
+        -- it there (<REF>/Skinning/LootRollBars.lua:279-281). But the visible
+        -- row is taller than the frame: the roll buttons sit ABOVE the status
+        -- bar (see the anchors below), so the content spans
+        -- status height + button size, and a frame-height icon reads small
+        -- and sits low against it. Size the icon to the real content height
+        -- and bottom-align it with the status bar instead. Tracks both the
+        -- Bar Height and Button Size sliders; no magic number.
+        local iconSize = (height / 3) + btnSize
         bar.button:ClearAllPoints()
-        bar.button:SetPoint("RIGHT", bar, "LEFT", -2, 0)
-        bar.button:SetSize(height, height)
+        bar.button:SetPoint("BOTTOMRIGHT", bar, "BOTTOMLEFT", -2, 0)
+        bar.button:SetSize(iconSize, iconSize)
 
         for _, key in next, rollTypes do
             local btn = bar[key]
@@ -399,20 +409,24 @@ function LR:ShowPreview()
     bar.bind:SetText("BoP")
 
     local db = self.db
-    if not db or db.QualityBorder ~= false then
-        bar.status:SetStatusBarColor(r, g, b, 0.7)
-        bar.status.spark:SetColorTexture(r, g, b, 0.9)
-        local ibd = S.GetBackdrop(bar.button)
-        if ibd then ibd:SetBackdropBorderColor(r, g, b, 1) end
-    else
-        -- v3.5.694: QualityBorder off = the brand path, same as live
-        -- rolls -- the missing branch left the statusbar at its
-        -- uncolored default (the white-and-grey report).
-        local br2, bg2, bb2 = S.palette.brand[1], S.palette.brand[2], S.palette.brand[3]
-        bar.status:SetStatusBarColor(br2, bg2, bb2, 0.7)
-        bar.status.spark:SetColorTexture(br2, bg2, bb2, 0.9)
-        local ibd = S.GetBackdrop(bar.button)
-        if ibd then ibd:SetBackdropBorderColor(unpack(S.borderColor)) end
+    -- DEVIATION (2026-07-31, Brandon's call after the smoke). The reference
+    -- lets QualityBorder drive the bar fill and spark as well as the icon
+    -- border (<REF>/Skinning/LootRollBars.lua:394-408), so a legendary drop
+    -- turned the whole countdown bar orange and the setting's own label
+    -- ("Item-Quality Border Colors") was untrue. Bar and spark now always
+    -- take the theme accent; only the icon border follows item quality.
+    -- The v3.5.694 fix this replaces -- never leave the statusbar at its
+    -- uncolored default -- still holds: the brand path is now unconditional.
+    local br2, bg2, bb2 = S.palette.brand[1], S.palette.brand[2], S.palette.brand[3]
+    bar.status:SetStatusBarColor(br2, bg2, bb2, 0.7)
+    bar.status.spark:SetColorTexture(br2, bg2, bb2, 0.9)
+    local ibd = S.GetBackdrop(bar.button)
+    if ibd then
+        if not db or db.QualityBorder ~= false then
+            ibd:SetBackdropBorderColor(r, g, b, 1)
+        else
+            ibd:SetBackdropBorderColor(unpack(S.borderColor))
+        end
     end
 
     bar.status.elapsed = 1
@@ -497,17 +511,20 @@ function LR:START_LOOT_ROLL(event, rollID, rollTime)
     bar.bind:SetVertexColor(bop and 1 or 0.3, bop and 0.3 or 1, bop and 0.1 or 0.3)
     bar.bind:SetText(BIND_TEXT[bindType] or "")
 
-    if db.QualityBorder ~= false then
-        bar.status:SetStatusBarColor(r, g, b, 0.7)
-        bar.status.spark:SetColorTexture(r, g, b, 0.9)
-        local ibd = S.GetBackdrop(bar.button)
-        if ibd then ibd:SetBackdropBorderColor(r, g, b, 1) end
-    else
-        local br2, bg2, bb2 = S.palette.brand[1], S.palette.brand[2], S.palette.brand[3]
-        bar.status:SetStatusBarColor(br2, bg2, bb2, 0.7)
-        bar.status.spark:SetColorTexture(br2, bg2, bb2, 0.9)
-        local ibd = S.GetBackdrop(bar.button)
-        if ibd then ibd:SetBackdropBorderColor(unpack(S.borderColor)) end
+    -- Same deviation as ShowPreview above: bar and spark always take the
+    -- theme accent, only the icon border follows item quality. Keep the two
+    -- paths identical -- the preview exists to show what a real roll looks
+    -- like, and they drifted apart once already (the v3.5.694 report).
+    local br2, bg2, bb2 = S.palette.brand[1], S.palette.brand[2], S.palette.brand[3]
+    bar.status:SetStatusBarColor(br2, bg2, bb2, 0.7)
+    bar.status.spark:SetColorTexture(br2, bg2, bb2, 0.9)
+    local ibd = S.GetBackdrop(bar.button)
+    if ibd then
+        if db.QualityBorder ~= false then
+            ibd:SetBackdropBorderColor(r, g, b, 1)
+        else
+            ibd:SetBackdropBorderColor(unpack(S.borderColor))
+        end
     end
 
     bar.status.elapsed = 1
