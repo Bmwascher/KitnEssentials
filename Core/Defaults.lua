@@ -236,6 +236,24 @@ local Defaults = {
                 VisibilityOverride = nil,
                 InstanceOnly       = false,
             },
+
+            -- Taunt cooldown countdown at the cursor. Tank specs only --
+            -- C:_TauntEvaluateGate activates it on a tank spec and tears it
+            -- down otherwise, so Enabled=true still shows nothing on a healer.
+            -- Ships OFF: the reference disables its module at init for the
+            -- same reason (<REF>/Combat/TauntCursor.lua:53).
+            Taunt = {
+                Enabled            = false,
+                Attached           = true,
+                AnchorPoint        = "CENTER",
+                XOffset            = 10,
+                YOffset            = 10,
+                FontFace           = "Expressway",
+                FontSize           = 18,
+                TextColor          = { 1, 1, 1, 1 },
+                VisibilityOverride = nil,
+                InstanceOnly       = false,
+            },
         },
 
         PetStatusText = {
