@@ -85,6 +85,7 @@
     <Script file="GUITabs\GUIDungeons\GUI-EnemyCounter.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-FocusMarker.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-KeystoneHelper.lua" />
+    <Script file="GUITabs\GUIDungeons\GUI-LFGReminder.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-DeathNotifications.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-MythicPlusTimer.lua" />
 
