@@ -958,11 +958,6 @@ local Defaults = {
         SlashCommands = {
             CDMEnabled = true,
             RLEnabled = true,
-            FSEnabled = true,
-            LeavePartyEnabled = true,
-            ResetInstancesEnabled = true,
-            MuteEnabled = true,
-            MusicEnabled = true,
         },
 
         Recuperate = {

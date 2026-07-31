@@ -70,11 +70,6 @@ globals = {
     "SlashCmdList",
     "SLASH_KITNESSENTIALS1", "SLASH_KITNESSENTIALS2", "SLASH_KITNESSENTIALS3",
     "SLASH_KE_CDM1", "SLASH_KE_CDM2",
-    "SLASH_KE_FS1",
-    "SLASH_KE_LEAVE1", "SLASH_KE_LEAVE2",
-    "SLASH_KE_MUSIC1",
-    "SLASH_KE_MUTE1",
-    "SLASH_KE_RESET1",
     "SLASH_KE_RL1",
 
     -- Blizzard tables/frames this addon WRITES fields on (dialog

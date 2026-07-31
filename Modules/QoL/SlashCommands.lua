@@ -1,8 +1,8 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  SlashCommands.lua                                       ║
 -- ║  Module: Slash Commands                                  ║
--- ║  Purpose: Registers /cd, /wa, /rl, /fs, /leave, /drop,   ║
--- ║           /reset, /mute, /music, and macro helpers.      ║
+-- ║  Purpose: Registers /cd, /wa, /rl and the /kitn          ║
+-- ║           subcommands.                                   ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -13,8 +13,6 @@ local InCombatLockdown = InCombatLockdown
 local ReloadUI = ReloadUI
 local GetCVar = C_CVar.GetCVar
 local SetCVar = C_CVar.SetCVar
-local IsInGroup = IsInGroup
-local UnitIsGroupLeader = UnitIsGroupLeader
 local _G = _G
 local ipairs = ipairs
 local table_insert = table.insert
@@ -102,127 +100,6 @@ local function UnregisterRL()
     SLASH_KE_RL1 = nil
     SlashCmdList.KE_RL = nil
     rlRegistered = false
-end
-
--- /fs --
-
-local fsRegistered = false
-
-local function RegisterFS()
-    if fsRegistered then return end
-    SLASH_KE_FS1 = "/fs"
-    function SlashCmdList.KE_FS(msg, editbox)
-        UIParentLoadAddOn("Blizzard_DebugTools")
-        FrameStackTooltip_Toggle()
-    end
-    fsRegistered = true
-end
-
-local function UnregisterFS()
-    if not fsRegistered then return end
-    SLASH_KE_FS1 = nil
-    SlashCmdList.KE_FS = nil
-    fsRegistered = false
-end
-
--- /leave + /drop --
-
-local leaveRegistered = false
-
-local function RegisterLeaveParty()
-    if leaveRegistered then return end
-    SLASH_KE_LEAVE1 = "/leave"
-    SLASH_KE_LEAVE2 = "/drop"
-    function SlashCmdList.KE_LEAVE(msg, editbox)
-        if IsInGroup() then
-            C_PartyInfo.LeaveParty()
-            KE:Print("Left the group.")
-        else
-            KE:Print("You are not in a group.")
-        end
-    end
-    leaveRegistered = true
-end
-
-local function UnregisterLeaveParty()
-    if not leaveRegistered then return end
-    SLASH_KE_LEAVE1 = nil
-    SLASH_KE_LEAVE2 = nil
-    SlashCmdList.KE_LEAVE = nil
-    leaveRegistered = false
-end
-
--- /reset --
-
-local resetRegistered = false
-
-local function RegisterResetInstances()
-    if resetRegistered then return end
-    SLASH_KE_RESET1 = "/reset"
-    function SlashCmdList.KE_RESET(msg, editbox)
-        if not IsInGroup() or UnitIsGroupLeader("player") then
-            ResetInstances()
-            KE:Print("Instances reset.")
-        else
-            KE:Print("Only the party leader can reset instances.")
-        end
-    end
-    resetRegistered = true
-end
-
-local function UnregisterResetInstances()
-    if not resetRegistered then return end
-    SLASH_KE_RESET1 = nil
-    SlashCmdList.KE_RESET = nil
-    resetRegistered = false
-end
-
--- /mute --
-
-local muteRegistered = false
-
-local function RegisterMute()
-    if muteRegistered then return end
-    SLASH_KE_MUTE1 = "/mute"
-    function SlashCmdList.KE_MUTE(msg, editbox)
-        local current = GetCVar("Sound_EnableAllSound")
-        local newVal = current == "1" and "0" or "1"
-        SetCVar("Sound_EnableAllSound", newVal)
-        local status = newVal == "1" and "unmuted" or "muted"
-        KE:Print("Sound " .. status .. ".")
-    end
-    muteRegistered = true
-end
-
-local function UnregisterMute()
-    if not muteRegistered then return end
-    SLASH_KE_MUTE1 = nil
-    SlashCmdList.KE_MUTE = nil
-    muteRegistered = false
-end
-
--- /music --
-
-local musicRegistered = false
-
-local function RegisterMusic()
-    if musicRegistered then return end
-    SLASH_KE_MUSIC1 = "/music"
-    function SlashCmdList.KE_MUSIC(msg, editbox)
-        local current = GetCVar("Sound_EnableMusic")
-        local newVal = current == "1" and "0" or "1"
-        SetCVar("Sound_EnableMusic", newVal)
-        local status = newVal == "1" and "enabled" or "disabled"
-        KE:Print("Music " .. status .. ".")
-    end
-    musicRegistered = true
-end
-
-local function UnregisterMusic()
-    if not musicRegistered then return end
-    SLASH_KE_MUSIC1 = nil
-    SlashCmdList.KE_MUSIC = nil
-    musicRegistered = false
 end
 
 -- /kitn subcommands --
@@ -345,36 +222,6 @@ function KE:ApplySlashCommands()
         RegisterRL()
     else
         UnregisterRL()
-    end
-
-    if db.FSEnabled then
-        RegisterFS()
-    else
-        UnregisterFS()
-    end
-
-    if db.LeavePartyEnabled then
-        RegisterLeaveParty()
-    else
-        UnregisterLeaveParty()
-    end
-
-    if db.ResetInstancesEnabled then
-        RegisterResetInstances()
-    else
-        UnregisterResetInstances()
-    end
-
-    if db.MuteEnabled then
-        RegisterMute()
-    else
-        UnregisterMute()
-    end
-
-    if db.MusicEnabled then
-        RegisterMusic()
-    else
-        UnregisterMusic()
     end
 
     -- Always register /kitn subcommands
