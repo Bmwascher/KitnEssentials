@@ -942,6 +942,15 @@ local Defaults = {
             YourKeyGlowThickness = 2,
         },
 
+        -- Popup with a one-click dungeon teleport when you join a Group
+        -- Finder group. Hides on entering the dungeon, leaving the group,
+        -- or entering combat.
+        LFGReminder = {
+            Enabled     = true,
+            Scale       = 1.05,
+            ShowDisable = true,
+        },
+
         PIMacroBuilder = {
             Enabled = true,
             MacroName = "PI",
