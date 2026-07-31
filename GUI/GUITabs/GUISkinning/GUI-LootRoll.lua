@@ -83,8 +83,15 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
                 KE:SkinningReloadPrompt() -- v3.5.548: unified close-time prompt
             end
         end,
+        -- msgOn/msgOff are REQUIRED whenever msgPopup is set: the toggle
+        -- concatenates them unguarded (GUI/GUIWidgets/GUI-KEToggle.lua:241,243)
+        -- and there is no default, so omitting them throws on every click.
+        -- The reference's own config carries only msgPopup + msgText, which is
+        -- why porting it verbatim crashed; every other KE page passes all four.
         msgPopup = true,
         msgText = "Slim Loot Roll Bars",
+        msgOn = "On",
+        msgOff = "Off",
     })
     rowRep:AddWidget(repCheck, 1)
     manager:Register(repCheck, "all")
