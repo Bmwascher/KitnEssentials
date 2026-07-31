@@ -61,6 +61,17 @@ local DISPEL_SPELL_IDS = {
     119905, 213634, 218164, 213644, 2782, 475, 365585, 51886,  -- DPS/Tank dispels
 }
 
+-- Taunt spell IDs per tank class (player spellbook). The satellite only
+-- activates on tank specs, and each tank class has exactly one of these.
+local TAUNT_SPELL_IDS = {
+    355,    -- Taunt (Warrior - Protection)
+    62124,  -- Hand of Reckoning (Paladin - Protection)
+    56222,  -- Dark Command (Death Knight - Blood)
+    6795,   -- Growl (Druid - Guardian)
+    115546, -- Provoke (Monk - Brewmaster)
+    185245, -- Torment (Demon Hunter - Vengeance)
+}
+
 C.CIRCLE_TEXTURES = CIRCLE_TEXTURES
 C.TEXTURE_ORDER   = { "circle_thin", "circle_light", "circle_normal", "circle_heavy", "circle_thick", "circle_backup" }
 C.TEXTURE_LABELS  = {
@@ -924,6 +935,20 @@ function C:ApplyDispelSatellite()
 
     _dispelFindSpell()
     self.dispelFrame:Show()
+end
+
+---------------------------------------------------------------------------------
+-- Taunt countdown satellite
+---------------------------------------------------------------------------------
+function C:_TauntFindSpell()
+    self._tauntTrackedSpellID = nil
+    if not C_SpellBook or not C_SpellBook.IsSpellInSpellBook then return end
+    for _, spellID in ipairs(TAUNT_SPELL_IDS) do
+        if C_SpellBook.IsSpellInSpellBook(spellID) then
+            self._tauntTrackedSpellID = spellID
+            return
+        end
+    end
 end
 
 ---------------------------------------------------------------------------------
