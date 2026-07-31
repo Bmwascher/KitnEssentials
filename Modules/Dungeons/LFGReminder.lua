@@ -317,30 +317,39 @@ UpdateButtonVisuals = function()
     local lc = known and 1 or 0.5
     secureBtn._label:SetTextColor(lc, lc, lc, 1)
     if known then
-        -- pcall'd whole-condition, per the note below.
-        local ok, applied = pcall(function()
-            local cdInfo = C_Spell and C_Spell.GetSpellCooldown and C_Spell.GetSpellCooldown(sid)
-            if cdInfo and cdInfo.startTime and cdInfo.duration and cdInfo.duration > 0 then
-                secureBtn._cd:SetCooldown(cdInfo.startTime, cdInfo.duration)
-                return true
-            end
-            return false
-        end)
-        if not (ok and applied) then secureBtn._cd:Clear() end
+        -- Duration object, not the startTime/duration pair: those two carry no
+        -- NeverSecret flag, so under SecretWhenCooldownsRestricted the
+        -- comparison throws and a live cooldown renders as ready.
+        -- GetSpellCooldownDuration is AllowedWhenTainted and returns a handle we
+        -- only truth-test, never read (SpellDocumentation.lua:265-282). Same
+        -- shape as Modules/Combat/Cursor.lua:826-831.
+        local duration = C_Spell and C_Spell.GetSpellCooldownDuration
+            and C_Spell.GetSpellCooldownDuration(sid)
+        if duration then
+            secureBtn._cd:SetCooldownFromDurationObject(duration, true)
+        else
+            secureBtn._cd:Clear()
+        end
     else
         secureBtn._cd:Clear()
     end
 end
 
--- Resolve the accepted dungeon via a CLEAN string chain. resultID is
--- only ever passed as a function argument (safe even if secret).
+-- Resolve the accepted dungeon via a CLEAN string chain. The pcall below is
+-- LOAD-BEARING, not belt-and-braces: GetSearchResultInfo and
+-- GetActivityInfoTable are both SecretArguments = "AllowedWhenUntainted"
+-- (LFGListInfoDocumentation.lua:378, :167), so a secret resultID throws.
 ResolveDungeon = function(resultID)
     if not (C_LFGList and C_LFGList.GetSearchResultInfo) then return end
     pcall(function()
         local info = C_LFGList.GetSearchResultInfo(resultID)
         if type(info) ~= "table" then return end
         local activityID = info.activityID
-        if activityID == nil and info.activityIDs and not issecretvalue(info.activityIDs) then
+        -- issecretTABLE, not issecretvalue: a table can be non-secret itself
+        -- while its reads produce secrets (FrameScriptDocumentation.lua:227-231
+        -- vs :244-248). This is the only live path -- LfgSearchResultData has no
+        -- activityID field in 12.0.7 (LFGListInfoDocumentation.lua:905-910).
+        if activityID == nil and info.activityIDs and not issecrettable(info.activityIDs) then
             activityID = info.activityIDs[1]
         end
         if issecretvalue(activityID) or activityID == nil then return end

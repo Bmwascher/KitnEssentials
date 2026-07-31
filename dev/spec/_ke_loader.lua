@@ -921,6 +921,7 @@ function L.loadLFGReminder(overrides)
     _G.C_Spell = overrides.C_Spell or {
         GetSpellInfo = function() return nil end,
         GetSpellCooldown = function() return nil end,
+        GetSpellCooldownDuration = function() return nil end,
     }
     _G.C_LFGList = overrides.C_LFGList or {
         GetSearchResultInfo = function() return nil end,
