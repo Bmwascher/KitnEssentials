@@ -48,7 +48,7 @@ GUIFrame.sidebarConfig = {
             { id = "CombatRes",     text = "Battle Res", keywords = { "battle res", "brez", "combat res", "resurrect", "raid res", "cr" } },
             { id = "CombatTexts",   text = "Combat Texts", keywords = { "combat text", "scrolling", "no target", "interrupt", "durability" } },
             { id = "CombatTimer",   text = "Combat Timer", keywords = { "combat timer", "encounter", "duration", "stopwatch", "fight length" } },
-            { id = "Cursor",        text = "Cursor Effects", keywords = { "cursor", "mouse", "pointer", "trail", "circle", "dispel", "cleanse", "purge", "magic", "curse", "poison", "disease", "debuff" } },
+            { id = "Cursor",        text = "Cursor Effects", keywords = { "cursor", "mouse", "pointer", "trail", "circle", "dispel", "cleanse", "purge", "magic", "curse", "poison", "disease", "debuff", "taunt" } },
             { id = "DamageMeter",   text = "Damage Meter", keywords = { "damage meter", "dps", "damage", "healing", "threat", "meter", "recount", "details" } },
             { id = "AuraExternals", text = "External and Defensive Buffs", keywords = { "external", "externals", "defensive", "buff", "cooldown", "mitigation" } },
             { id = "FocusCastbar",  text = "Focus Castbar", keywords = { "castbar", "cast", "focus", "casting", "interrupt" } },
