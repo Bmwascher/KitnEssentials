@@ -75,6 +75,91 @@ describe("LootRoll ApplyPosition", function()
     end)
 end)
 
+-- The container's OnShow hook must position SYNCHRONOUSLY, not only queue a
+-- deferred re-assert.
+--
+-- Blizzard's managed-frame system runs AddManagedFrame from the container's own
+-- OnShow (Blizzard_UIParent/Shared/UIParent.lua:120-122), which clears our
+-- anchor and drags the frame to the bottom of the screen. Our hook runs after
+-- it. If the hook only calls ReassertPosition, whose first correction is a
+-- C_Timer.After(0) away, the container renders one frame at Blizzard's spot
+-- before moving -- part of the 2026-07-31 "jumps to the bottom then back"
+-- report. The GroupLootContainer_Update hook always called ApplyPosition
+-- synchronously; the OnShow hook did not, and nothing in this file or the
+-- upstream reference explained the asymmetry.
+--
+-- The spec is falsifiable BECAUSE the loader installs an inert C_Timer: nothing
+-- deferred ever runs here, so a SetPoint landing during the handler can only
+-- have come from a synchronous ApplyPosition. Restore the old
+-- ReassertPosition-only body and this test fails.
+describe("LootRoll container OnShow hook", function()
+    local LR, container
+
+    local function makeHookableContainer()
+        return {
+            _points = {},
+            _scripts = {},
+            GetHeight = function() return 80 end,
+            GetParent = function(self) return self._parent or _G.UIParent end,
+            SetParent = function(self, p) self._parent = p end,
+            ClearAllPoints = function(self) self._points = {} end,
+            SetPoint = function(self, point, rel, relPoint, x, y)
+                self._points[#self._points + 1] =
+                    { point = point, relPoint = relPoint, x = x, y = y }
+            end,
+            HookScript = function(self, event, fn) self._scripts[event] = fn end,
+            IsShown = function() return true end,
+            GetPoint = function(self)
+                local p = self._points[#self._points]
+                if not p then return nil end
+                return p.point, self, p.relPoint, p.x, p.y
+            end,
+        }
+    end
+
+    before_each(function()
+        LR, container = L.loadLootRoll()
+        LR.db = {
+            Enabled = true, Replace = false, Skin = false, Reposition = true,
+            Position = { Point = "BOTTOM", RelPoint = "CENTER", X = 0, Y = 205 },
+        }
+        -- AceAddon supplies IsEnabled in game; the headless shim does not, and
+        -- every hook body guards on it (the DEVIATION A disabled-module guard).
+        LR.IsEnabled = function() return true end
+    end)
+
+    it("positions the container during the handler, not on a later frame", function()
+        local c = makeHookableContainer()
+        container(c)
+        LR:Setup()
+
+        -- Positive control: Setup must actually install the hook, or the
+        -- assertion below would be testing nothing at all.
+        assert.is_function(c._scripts["OnShow"])
+
+        c._points = {}          -- discard Setup's own ApplyPosition
+        c._scripts["OnShow"]()  -- the frame Blizzard just re-anchored
+
+        assert.equal(1, #c._points)
+        assert.equal("BOTTOM", c._points[1].point)
+        assert.equal(205, c._points[1].y)
+    end)
+
+    it("still arms the deferred re-assert as a backstop", function()
+        -- Synchronous positioning fixes the show path. It does NOT cover the
+        -- layout pass that settles a frame or two later, which is what
+        -- ReassertPosition exists for. Dropping it would trade one bug for
+        -- another.
+        local c = makeHookableContainer()
+        container(c)
+        LR:Setup()
+        LR._reassertPending = nil
+
+        c._scripts["OnShow"]()
+        assert.is_true(LR._reassertPending)
+    end)
+end)
+
 describe("LootRoll RollBar_Get", function()
     local LR
 
