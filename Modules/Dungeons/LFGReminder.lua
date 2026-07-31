@@ -119,3 +119,204 @@ function LR:UpdateDB()
         self.db = KE.db.profile.LFGReminder
     end
 end
+
+local function ShowTip(owner, text)
+    GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+    GameTooltip:SetText(text, 1, 1, 1, 1, true)
+    GameTooltip:Show()
+end
+
+SavePosition = function()
+    if not (popup and LR.db) then return end
+    local p, _, rp, x, yo = popup:GetPoint()
+    if p then LR.db.Pos = { p = p, rp = rp, x = x, y = yo } end
+end
+
+ApplySavedPosition = function()
+    if not popup then return end
+    popup:ClearAllPoints()
+    local pos = LR.db and LR.db.Pos
+    if pos and pos.p then
+        popup:SetPoint(pos.p, UIParent, pos.rp or pos.p, pos.x or 0, pos.y or 0)
+    else
+        popup:SetPoint("CENTER", UIParent, "CENTER", 0, 150)
+    end
+end
+
+-- Show/hide the "Disable Feature" text, trimming the window 20px when
+-- hidden. Driven by db.ShowDisable (default ON).
+ApplyDisableVisibility = function()
+    if not popup then return end
+    local show = not LR.db or LR.db.ShowDisable ~= false
+    if popup._disableBtn then popup._disableBtn:SetShown(show) end
+    popup:SetHeight(show and POPUP_H or (POPUP_H - 20))
+end
+
+-- Build the popup + secure button (once, out of combat)
+BuildPopup = function()
+    if popup then return popup end
+    -- Resolved HERE, not at file scope: Dungeons.xml loads before
+    -- Skinning.xml (KitnEssentials.toc:21 vs :25), so a file-top capture
+    -- is nil and every skin call silently no-ops.
+    local S = KE.Skins
+
+    popup = CreateFrame("Frame", "KE_LFGReminderPopup", UIParent)
+    popup:SetSize(POPUP_W, POPUP_H)
+    popup:SetFrameStrata("DIALOG")
+    popup:SetMovable(true)
+    popup:EnableMouse(true)
+    popup:RegisterForDrag("LeftButton")
+    popup:SetScript("OnDragStart", function(s) s:StartMoving() end)
+    popup:SetScript("OnDragStop", function(s) s:StopMovingOrSizing(); SavePosition() end)
+
+    if S and S.Backdrop then S.Backdrop(popup) end
+
+    -- Header bar with the static title
+    local hdrBg = popup:CreateTexture(nil, "BORDER")
+    hdrBg:SetColorTexture(0, 0, 0, 0.25)
+    hdrBg:SetPoint("TOPLEFT", 1, -1); hdrBg:SetPoint("TOPRIGHT", -1, 0); hdrBg:SetHeight(TITLE_H)
+
+    local title = popup:CreateFontString(nil, "OVERLAY")
+    if S and S.SetFont then S.SetFont(title, 11, "") end
+    title:SetPoint("TOPLEFT", PAD, -8)
+    title:SetPoint("TOPRIGHT", -(PAD + 16), -8)
+    title:SetJustifyH("LEFT")
+    title:SetWordWrap(false)
+    title:SetText("LFG Reminder")
+
+    -- Joined dungeon's full name (SetText accepts secret strings)
+    local nameFS = popup:CreateFontString(nil, "OVERLAY")
+    if S and S.SetFont then S.SetFont(nameFS, 13, "") end
+    nameFS:SetPoint("TOPLEFT", popup, "TOPLEFT", PAD, -NAME_TOP)
+    nameFS:SetPoint("TOPRIGHT", popup, "TOPRIGHT", -PAD, -NAME_TOP)
+    nameFS:SetJustifyH("CENTER")
+    nameFS:SetWordWrap(true)
+    popup._name = nameFS
+
+    -- Close (X) in the header
+    local xBtn = CreateFrame("Button", nil, popup)
+    xBtn:SetSize(16, 16)
+    xBtn:SetPoint("RIGHT", hdrBg, "RIGHT", -6, 0)
+    if S and S.CloseButton then S.CloseButton(xBtn, 12) end
+    xBtn:SetScript("OnClick", function() HidePrompt() end)
+
+    -- Secure teleport button (once; type + clicks set here and NEVER
+    -- touched again; only "spell" is rewritten, out of combat).
+    secureBtn = CreateFrame("Button", "KE_LFGReminderTeleport", popup, "SecureActionButtonTemplate")
+    secureBtn:SetSize(POPUP_W - PAD * 2, BTN_H)
+    -- A protected frame can only be anchored to another FRAME, never a
+    -- region -- anchor to the popup, below the name text.
+    secureBtn:SetPoint("TOP", popup, "TOP", 0, -BTN_TOP)
+    secureBtn:RegisterForClicks("AnyUp", "AnyDown")
+    secureBtn:SetAttribute("type", "spell")
+
+    -- A child frame parented to the secure button is legal, and the button
+    -- is only ever created out of combat.
+    if S and S.Backdrop then
+        S.Backdrop(secureBtn)
+    else
+        local btnBg = secureBtn:CreateTexture(nil, "BACKGROUND")
+        btnBg:SetAllPoints()
+        btnBg:SetColorTexture(0.04, 0.04, 0.06, 0.9)
+    end
+
+    local icon = secureBtn:CreateTexture(nil, "ARTWORK")
+    icon:SetSize(40, 40)
+    icon:SetPoint("LEFT", 8, 0)
+    if S and S.Icon then S.Icon(icon, true) else icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+    secureBtn._icon = icon
+
+    local btnLabel = secureBtn:CreateFontString(nil, "OVERLAY")
+    if S and S.SetFont then S.SetFont(btnLabel, 12, "") end
+    btnLabel:SetPoint("LEFT", icon, "RIGHT", 8, 0)
+    btnLabel:SetPoint("RIGHT", -6, 0)
+    btnLabel:SetJustifyH("LEFT")
+    btnLabel:SetWordWrap(false)
+    btnLabel:SetText("Teleport")
+    secureBtn._label = btnLabel
+
+    local hover = secureBtn:CreateTexture(nil, "HIGHLIGHT")
+    hover:SetAllPoints()
+    hover:SetColorTexture(1, 1, 1, 0.12)
+
+    -- Cooldown inherits the button's protection: anchor to the button
+    -- FRAME matching the icon's rect, never to the icon texture.
+    local cd = CreateFrame("Cooldown", nil, secureBtn, "CooldownFrameTemplate")
+    cd:SetPoint("LEFT", secureBtn, "LEFT", 8, 0)
+    cd:SetSize(40, 40)
+    cd:SetHideCountdownNumbers(true)
+    cd:SetDrawSwipe(true); cd:SetDrawBling(false); cd:SetDrawEdge(false)
+    secureBtn._cd = cd
+
+    secureBtn:SetScript("OnEnter", function(self)
+        local sid = pendingSpellID
+        if not sid then return end
+        if not IsPlayerSpell(sid) then
+            ShowTip(self, "You have not learned this dungeon teleport yet.")
+            return
+        end
+        -- pcall'd whole-condition: see the note under UpdateButtonVisuals.
+        local ok, onCD = pcall(function()
+            local cdInfo = C_Spell and C_Spell.GetSpellCooldown and C_Spell.GetSpellCooldown(sid)
+            return cdInfo and cdInfo.duration and cdInfo.duration > 0
+        end)
+        if ok and onCD then
+            ShowTip(self, "Teleport on Cooldown")
+        else
+            ShowTip(self, "Teleport to " .. (pendingName or "dungeon"))
+        end
+    end)
+    secureBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    -- "Disable Feature" text: turns the whole feature off immediately
+    local disableBtn = CreateFrame("Button", nil, popup)
+    disableBtn:SetSize(POPUP_W - PAD * 2, DISABLE_H)
+    disableBtn:SetPoint("TOP", popup, "TOP", 0, -DISABLE_TOP)
+    local disableLbl = disableBtn:CreateFontString(nil, "OVERLAY")
+    if S and S.SetFont then S.SetFont(disableLbl, 10, "") end
+    disableLbl:SetAllPoints()
+    disableLbl:SetJustifyH("CENTER")
+    disableLbl:SetText("Disable Feature")
+    disableLbl:SetTextColor(0.6, 0.6, 0.6, 1)
+    disableBtn:SetScript("OnEnter", function() disableLbl:SetTextColor(1, 0.3, 0.3, 1) end)
+    disableBtn:SetScript("OnLeave", function() disableLbl:SetTextColor(0.6, 0.6, 0.6, 1) end)
+    disableBtn:SetScript("OnClick", function()
+        if LR.db then LR.db.Enabled = false end
+        KitnEssentials:DisableModule("LFGReminder")
+    end)
+    popup._disableBtn = disableBtn
+
+    -- Intentionally NOT Escape-closable: stays until teleport, dungeon
+    -- entry, group leave, or disable.
+    popup:SetScale((LR.db and LR.db.Scale) or 1.05)
+    ApplySavedPosition()
+    ApplyDisableVisibility()
+    popup:Hide()
+    return popup
+end
+
+UpdateButtonVisuals = function()
+    if not secureBtn or not pendingSpellID then return end
+    local sid = pendingSpellID
+    local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(sid)
+    if info and info.iconID then secureBtn._icon:SetTexture(info.iconID) end
+    local known = IsPlayerSpell(sid)
+    secureBtn._icon:SetDesaturated(not known)
+    secureBtn._icon:SetAlpha(known and 1 or 0.4)
+    local lc = known and 1 or 0.5
+    secureBtn._label:SetTextColor(lc, lc, lc, 1)
+    if known then
+        -- pcall'd whole-condition, per the note below.
+        local ok, applied = pcall(function()
+            local cdInfo = C_Spell and C_Spell.GetSpellCooldown and C_Spell.GetSpellCooldown(sid)
+            if cdInfo and cdInfo.startTime and cdInfo.duration and cdInfo.duration > 0 then
+                secureBtn._cd:SetCooldown(cdInfo.startTime, cdInfo.duration)
+                return true
+            end
+            return false
+        end)
+        if not (ok and applied) then secureBtn._cd:Clear() end
+    else
+        secureBtn._cd:Clear()
+    end
+end
