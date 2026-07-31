@@ -490,4 +490,50 @@ function L.loadUIWidgets(overrides)
     return UIW, KE, seams
 end
 
+-- Modules/Skinning/ContextMenus.lua. SkinFrame is a file-local with no stored
+-- handle, but OnMenuOpen -- also a file-local -- calls it directly, so it sits
+-- in OnMenuOpen's upvalue slots. OnMenuOpen is handed straight to
+-- hooksecurefunc by CM:Setup, so stubbing hooksecurefunc captures the function
+-- object itself and findUpvalue lifts SkinFrame off it.
+-- Returns CM, KE, seams (seams.SkinFrame), and a `calls` recorder holding the
+-- skin operations SkinFrame performed.
+function L.loadContextMenus(overrides)
+    installMock(overrides, { C_Timer = inertTimer() })
+    local modules = helpers.installAddonShim()
+    local hooks = {}
+    _G.hooksecurefunc = function(target, method, fn)
+        hooks[#hooks + 1] = { target = target, method = method, fn = fn }
+    end
+    local manager = {}
+    _G.Menu = { GetManager = function() return manager end }
+
+    local calls = { stripped = {}, backdrops = {} }
+    local KE = {
+        db = { profile = { Skinning = { ContextMenus = { Enabled = true } } } },
+        IsSecretValue = function(_, v) return v == "SECRET" end,
+        Print = function() end,
+        Skins = {
+            StripTextures = function(frame) calls.stripped[#calls.stripped + 1] = frame end,
+            Backdrop = function(frame)
+                local bd = { frame = frame, w = nil, h = nil, shown = false }
+                function bd:ClearAllPoints() end
+                function bd:SetPoint() end
+                function bd:SetSize(w, h) self.w, self.h = w, h end
+                function bd:SetFrameLevel() end
+                function bd:Show() self.shown = true end
+                function bd:Hide() self.shown = false end
+                calls.backdrops[#calls.backdrops + 1] = bd
+                return bd
+            end,
+            TrimScrollBar = function() end,
+        },
+    }
+    helpers.loadModule("Modules/Skinning/ContextMenus.lua", KE)
+    local CM = modules["ContextMenus"]
+
+    CM:Setup()
+    local seams = { SkinFrame = hooks[1] and findUpvalue(hooks[1].fn, "SkinFrame") }
+    return CM, KE, seams, calls
+end
+
 return L

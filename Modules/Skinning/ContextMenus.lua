@@ -23,6 +23,7 @@ local hooksecurefunc = hooksecurefunc
 local ipairs = ipairs -- luacheck: ignore 211/ipairs
 local math_max = math.max
 local C_AddOns = C_AddOns
+local C_Timer = C_Timer
 
 -- Flip to true, /reload, then right-click a UNIT and hover a submenu. The log
 -- answers the one thing source cannot: which branch of SkinFrame's
@@ -128,6 +129,30 @@ local function SkinFrame(frame)
         return
     end
 
+    -- PRE-LAYOUT GUARD (2026-07-30). A menu frame reports 1x1 until Blizzard
+    -- has laid it out, and the acquired-frame callback can fire before that
+    -- happens. Those numbers are READABLE -- just wrong -- so the secret-value
+    -- test above cannot catch them, and every branch below trusts them.
+    --
+    -- Stripping on a 1x1 measurement is unrecoverable in one pass: the Blizzard
+    -- art goes, our backdrop is built 1x1 and is invisible, and the menu then
+    -- lays out to full size with its text drawn over nothing. That is exactly
+    -- the submenu bug Brandon reported -- confirmed by an in-game DEBUG_CM log
+    -- showing the root at 164x342 and the submenu at 1x1 in the same open.
+    --
+    -- Bailing WITHOUT stripping leaves Blizzard's own art in place, which looks
+    -- correct. The deferral in OnMenuOpen is what actually gets these frames
+    -- skinned; this guard is the backstop for anything that is still unlaid
+    -- out a frame later. 16 is below any real menu (one row is ~20px tall) and
+    -- far above the 1x1 default.
+    if w < 16 or h < 16 then
+        if DEBUG_CM then
+            KE:Print("[CM]   PRE-LAYOUT skip (not stripped): w=" .. tostring(w)
+                .. " h=" .. tostring(h))
+        end
+        return
+    end
+
     -- Stripped only once we know the menu can be skinned -- stripping and
     -- then bailing would leave it with no background at all.
     S.StripTextures(frame)
@@ -176,8 +201,27 @@ local function OnMenuOpen(manager, _ownerRegion, menuDescription)
     end
     if menu then SkinFrame(menu) end
 
+    -- DEFERRED BY ONE FRAME (2026-07-30). Acquired frames -- which is how
+    -- SUBMENUS reach us -- arrive before Blizzard has laid them out, measuring
+    -- 1x1. Skinning them synchronously stripped their art and built an
+    -- invisible 1x1 backdrop; see the pre-layout guard in SkinFrame for the
+    -- full diagnosis. C_Timer.After(0) puts the measurement one frame later,
+    -- by which point the layout has run.
+    --
+    -- This is EllesmereUI's shape and is why its menu skin does not have this
+    -- bug (EllesmereUIBlizzardSkin.lua:798, :805 defer both the root skin and
+    -- every acquired frame). It is NOT the timing change reverted in v3.5.834:
+    -- that reverted a POLLER that had replaced the hooks outright, on a theory
+    -- about hooks tainting that the note itself calls wrong. The hooks stay
+    -- exactly as they are here; only the visual work inside them moves.
+    --
+    -- The root menu above is deliberately NOT deferred. It measures correctly
+    -- today (164x342 in the diagnostic log) and deferring it would flash an
+    -- unskinned menu for a frame. The guard covers it if that ever changes.
     if menuDescription and menuDescription.AddMenuAcquiredCallback then
-        menuDescription:AddMenuAcquiredCallback(SkinFrame)
+        menuDescription:AddMenuAcquiredCallback(function(frame)
+            C_Timer.After(0, function() SkinFrame(frame) end)
+        end)
     end
 end
 
