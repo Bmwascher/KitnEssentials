@@ -136,7 +136,12 @@ local function CreateSlot(id)
     count:SetJustifyH("RIGHT")
     count:SetPoint("BOTTOMRIGHT", iconFrame, -2, 2)
     S.SetFont(count, 12, "OUTLINE")
-    count:SetText(1)
+    -- Reference passes the NUMBER 1 here (<REF>/Skinning/LootFrame.lua:131).
+    -- Quoted instead: SetText is annotated string?, and the number form was
+    -- this wave's only new wowlua-ls warning. Render is identical (SetText
+    -- coerces), and the value never reaches the screen -- LOOT_OPENED
+    -- overwrites it with the real stack count before the slot is shown.
+    count:SetText("1")
     slot.count = count
 
     local name = slot:CreateFontString(nil, "OVERLAY")
