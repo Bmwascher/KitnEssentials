@@ -1716,6 +1716,46 @@ local Defaults = {
                     MailBody = 13,   -- mail body (stock 15)
                 },
             },
+            -- Group loot rolls. Two mutually exclusive modes: Replace = true
+            -- swaps Blizzard's chunky GroupLootFrames for a slim bar stack of
+            -- our own; Replace = false skins and repositions Blizzard's own
+            -- windows instead.
+            LootRoll = {
+                Enabled = true,
+                Replace = true,
+                Width = 340,
+                Height = 22,
+                ButtonSize = 22,
+                Spacing = 1,
+                NameFontSize = 13,
+                BarTexture = "KitnUI", -- LSM statusbar name
+                Skin = true,          -- (legacy mode) flatten + border the roll windows
+                QualityBorder = true, -- quality colour: bar/icon border (both modes)
+                Reposition = true,    -- (legacy mode) re-anchor the container
+                Position = {
+                    -- BOTTOM: the container grows upward as rolls stack,
+                    -- so anchoring the bottom keeps the first roll still.
+                    Point = "BOTTOM",
+                    RelPoint = "CENTER",
+                    X = 0,
+                    Y = 205,       -- lift the stack up out of dead centre
+                },
+            },
+            -- Compact replacement loot window: a slim one-row-per-item list at
+            -- a fixed position, replacing Blizzard's LootFrame entirely while
+            -- enabled. Opt-in, because the Loot skin key already styles
+            -- Blizzard's own window and that is the default look.
+            Loot = {
+                Enabled = false,
+                QualityBorder = true, -- tint the window border to the best drop
+                MinWidth = 150,
+                Position = {
+                    Point = "TOPRIGHT",
+                    RelPoint = "TOPRIGHT",
+                    X = -618,
+                    Y = -564,
+                },
+            },
             ContextMenus = {
                 Enabled = false,
             },
