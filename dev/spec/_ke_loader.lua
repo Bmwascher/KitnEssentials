@@ -641,6 +641,7 @@ function L.loadLootRollBars(overrides)
     _G.hooksecurefunc = function() end
     _G.InCombatLockdown = function() return false end
     local backdrops = setmetatable({}, { __mode = "k" })
+    local iconCalls = {}
     local KE = {
         db = { profile = { Skinning = { LootRoll = {} } } },
         ShouldNotLoadModule = function() return false end,
@@ -653,6 +654,13 @@ function L.loadLootRollBars(overrides)
             end,
             GetBackdrop = function(frame) return backdrops[frame] end,
             SetFont = function() end,
+            -- The real S.Icon (Modules/Skinning/SkinAPI.lua:1835) applies the
+            -- standard crop and a pixel snap. Neither is observable headlessly,
+            -- so this records the call instead: a spec can assert the item icon
+            -- goes through the shared helper rather than a hardcoded SetTexCoord.
+            Icon = function(icon, withBackdrop)
+                iconCalls[#iconCalls + 1] = { icon = icon, withBackdrop = withBackdrop }
+            end,
             palette = { brand = { 1, 0, 0.549 } },
             borderColor = { 0, 0, 0, 1 },
         },
@@ -661,7 +669,7 @@ function L.loadLootRollBars(overrides)
     helpers.loadModule("Modules/Skinning/LootRollBars.lua", KE)
     local LR = modules["LootRoll"]
     LR:UpdateDB()
-    return LR
+    return LR, iconCalls
 end
 
 -- Modules/Skinning/LootFrame.lua. LF:UpdateDB/OnInitialize/OnEnable are never

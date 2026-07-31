@@ -164,3 +164,22 @@ describe("LootRoll preview button coverage", function()
                      upvalue(LR.HidePreview, "previewButtons"))
     end)
 end)
+
+-- The item icon must go through the shared skinning helper, not a hardcoded
+-- SetTexCoord. The reference hardcodes the crop; routing it through S.Icon is
+-- what keeps this icon on the project's standard if that standard ever moves,
+-- and it is the only way the icon picks up the helper's pixel snap.
+describe("LootRoll item icon", function()
+    it("is skinned through the shared icon helper", function()
+        local LR, iconCalls = L.loadLootRollBars()
+        LR:RollBar_Get(1)
+
+        -- Positive control: the seam must record something, or the
+        -- withBackdrop assertion below would pass against an empty list.
+        assert.equal(1, #iconCalls)
+        -- Falsy, not merely "not true": the button already carries its own
+        -- S.Backdrop, and asking the helper for a second one would double the
+        -- border on every roll bar.
+        assert.is_falsy(iconCalls[1].withBackdrop)
+    end)
+end)
