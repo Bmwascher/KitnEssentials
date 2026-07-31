@@ -853,4 +853,134 @@ function L.loadSlashCommands(overrides)
     return KE
 end
 
+-- Modules/Dungeons/LFGReminder.lua. The file-scope `local X = X` captures
+-- include C_Spell, C_LFGList, GameTooltip and UIParent, so all four must
+-- exist before load or the capture takes nil. `issecretvalue` is captured
+-- with an `or function() return false end` fallback in the module itself,
+-- so it needs no stub here -- but _wow_mock manages it, so a caller
+-- override still routes through installMock.
+--
+-- Nothing creates a frame at load time: BuildPopup only runs from OnEnable
+-- and from the show path, neither of which this loader calls.
+-- Returns LR, KE, seams.
+-- BuildPopup chains off its CreateTexture returns (hdrBg:SetColorTexture,
+-- icon:SetTexCoord, hover:SetAllPoints), and the shared noopFrame() returns
+-- nil from every method except CreateFontString (see :45-48 above), so a
+-- popup built on it errors on the first texture call. Supply a richer stub
+-- locally rather than widening the shared helper that other module loaders
+-- depend on.
+-- Show/Hide/IsShown track real state, because the teardown paths branch on
+-- popup:IsShown() and a frame that is never "shown" would make those tests
+-- vacuous.
+local function lfgFrame()
+    local shown, attrs = false, {}
+    local f = {
+        CreateFontString = function() return noopObject() end,
+        CreateTexture    = function() return noopObject() end,
+        Show             = function() shown = true end,
+        Hide             = function() shown = false end,
+        IsShown          = function() return shown end,
+        GetPoint         = function() return nil end,
+        -- Recorded so teardown specs can assert the secure button was
+        -- actually disarmed, not merely hidden.
+        SetAttribute     = function(_, k, v) attrs[k] = v end,
+        GetAttribute     = function(_, k) return attrs[k] end,
+    }
+    return setmetatable(f, { __index = function() return function() end end })
+end
+
+function L.loadLFGReminder(overrides)
+    overrides = overrides or {}
+    local createdFrames = {}
+    -- Managed overrides go THROUGH installMock so the caller still wins on
+    -- them; everything below is unmanaged and goes straight to _G.
+    installMock(managedSubset(overrides), {
+        C_Timer = inertTimer(),
+        GetTime = function() return 0 end,
+        -- inCombatFn lets a test flip combat state mid-test; inCombat is the
+        -- fixed-value shorthand.
+        InCombatLockdown = overrides.inCombatFn
+            or (overrides.inCombat and function() return true end)
+            or function() return false end,
+        -- onCreateFrame is a loader-only spy. It never replaces the return
+        -- value: a stub that returns nil would make BuildPopup error before
+        -- a test could assert anything about it. Named frames are recorded
+        -- so specs can reach the popup and the secure button directly
+        -- (CreateFrame's second argument is the global name).
+        CreateFrame = function(_, name, ...)
+            if overrides.onCreateFrame then overrides.onCreateFrame(name, ...) end
+            local f = lfgFrame()
+            if name then createdFrames[name] = f end
+            return f
+        end,
+    })
+    local modules = helpers.installAddonShim()
+    _G.UIParent = noopFrame()
+    _G.GameTooltip = overrides.GameTooltip or noopFrame()
+
+    _G.C_Spell = overrides.C_Spell or {
+        GetSpellInfo = function() return nil end,
+        GetSpellCooldown = function() return nil end,
+    }
+    _G.C_LFGList = overrides.C_LFGList or {
+        GetSearchResultInfo = function() return nil end,
+        GetActivityInfoTable = function() return nil end,
+    }
+    _G.IsPlayerSpell = overrides.IsPlayerSpell or function() return true end
+    _G.IsInGroup = overrides.IsInGroup or function() return true end
+    _G.IsInInstance = overrides.IsInInstance or function() return false, "none" end
+
+    local profile = {
+        LFGReminder = {
+            Enabled     = true,
+            Scale       = 1.05,
+            ShowDisable = true,
+        },
+    }
+    -- RunAfterCombat mirrors Core/Globals.lua:154 -- immediate when out of
+    -- combat, queued otherwise. Tests drain the queue with
+    -- seams.runCombatQueue() to simulate combat ending.
+    local combatQueue = {}
+    local KE = {
+        db = { profile = profile },
+        Print = function() end,
+        Skins = overrides.Skins or nil,
+        RunAfterCombat = function(_, fn)
+            if not _G.InCombatLockdown() then fn(); return end
+            combatQueue[#combatQueue + 1] = fn
+        end,
+    }
+    helpers.loadModule("Modules/Dungeons/LFGReminder.lua", KE)
+    local LR = modules["LFGReminder"]
+    LR:UpdateDB()
+
+    -- ResolveTeleportSpellByName has no stored handle and no caller that
+    -- references it, so debug.getupvalue cannot reach it -- the module
+    -- exports it directly as LR._ResolveTeleportSpellByName (Task 3).
+    -- The deferral helpers ARE upvalues of the module methods that call
+    -- them, so findUpvalue recovers those without running anything.
+    -- Both are guarded: Task 5 is what creates these methods.
+    -- The module lifecycle methods (SetEnabledState, IsEnabled,
+    -- RegisterEvent) are NOT stubbed by helpers.installAddonShim -- its
+    -- modules are bare tables. A test that drives a path calling one of
+    -- them stubs it itself, e.g. LR.IsEnabled = function() return true end.
+    local seams = {}
+    seams.resolveByName = LR._ResolveTeleportSpellByName
+    -- Drain the deferred-teardown queue, i.e. "combat ended".
+    seams.runCombatQueue = function()
+        local fns = combatQueue
+        combatQueue = {}
+        for i = 1, #fns do fns[i]() end
+    end
+    -- Named frames, so a spec can assert on the popup and the secure button
+    -- themselves: seams.frames["KE_LFGReminderPopup"],
+    -- seams.frames["KE_LFGReminderTeleport"].
+    seams.frames = createdFrames
+    if LR.LFG_LIST_JOINED_GROUP then
+        seams.resolveDungeon = findUpvalue(LR.LFG_LIST_JOINED_GROUP, "ResolveDungeon")
+        seams.showPrompt     = findUpvalue(LR.LFG_LIST_JOINED_GROUP, "ShowPrompt")
+    end
+    return LR, KE, seams
+end
+
 return L
