@@ -41,6 +41,7 @@ ignore = {
     "212/KE",                                                  -- bootstrap guard arg (GetModule files)
     "212/triggerId", "212/addon",                             -- DungeonTimers/Ace addon hooks
     "212/wrapOn",                                             -- KEText format helper
+    "212/rel",                                                -- SetPoint(point, rel, ...) mock signature
     "432/self",
     "431/CP",                                                 -- widget callback re-fetches module fresh
 }
@@ -237,7 +238,7 @@ read_globals = {
     "InspectPaperDollItemsFrame", "C_PaperDollInfo",
 
     -- Loot
-    "GetLootRollItemLink", "RollOnLoot", "ConfirmLootRoll",
+    "GetLootRollItemLink", "GetLootRollItemInfo", "RollOnLoot", "ConfirmLootRoll",
     "BonusRollFrame", "BonusRollFrame_StartBonusRoll",
 
     -- Resurrection

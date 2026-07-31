@@ -553,4 +553,41 @@ function L.loadContextMenus(overrides)
     return CM, KE, seams, calls
 end
 
+-- Modules/Skinning/LootRoll.lua. LR:UpdateDB/OnInitialize/OnEnable are never
+-- run -- specs set LR.db themselves, the same way a real OnInitialize would
+-- have via KE.db.profile.Skinning.LootRoll. GroupLootContainer is a
+-- secure-managed Blizzard frame, headlessly replaced by calling the returned
+-- `container(mock)` setter, which just assigns _G.GroupLootContainer -- the
+-- global LR:ApplyPosition reads. LR._lastPoint() reads the mock's own
+-- _points log (see lootroll_spec.lua's makeContainer) so a spec can assert
+-- the most recent SetPoint without the mock needing a shared upvalue with
+-- this loader. Returns LR, container.
+function L.loadLootRoll(overrides)
+    installMock(overrides, { C_Timer = inertTimer() })
+    local modules = helpers.installAddonShim()
+    _G.UIParent = noopFrame()
+    _G.CreateFrame = function() return noopFrame() end
+    _G.hooksecurefunc = function() end
+    _G.InCombatLockdown = function() return false end
+    local KE = {
+        db = { profile = { Skinning = { LootRoll = {} } } },
+        ShouldNotLoadModule = function() return false end,
+        Skins = {},
+    }
+    helpers.loadModule("Modules/Skinning/LootRoll.lua", KE)
+    local LR = modules["LootRoll"]
+
+    local function container(mockContainer)
+        _G.GroupLootContainer = mockContainer
+    end
+
+    LR._lastPoint = function()
+        local c = _G.GroupLootContainer
+        if not c or not c._points or #c._points == 0 then return nil end
+        return c._points[#c._points]
+    end
+
+    return LR, container
+end
+
 return L

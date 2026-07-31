@@ -13,6 +13,9 @@
     <Script file="BlizzardMessages.lua" />
     <Script file="ChatMessageHandler.lua" />
     <Script file="Chat.lua" />
+    <Script file="LootRoll.lua" />
+    <Script file="LootRollBars.lua" />
+    <Script file="LootFrame.lua" />
     <Include file="Frames\Frames.xml" />
     <Include file="Addons\Addons.xml" />
 </Ui>
