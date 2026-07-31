@@ -1,9 +1,9 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  GUI-LFGReminder.lua                                      ║
--- ║  GUI: LFG Reminder                                        ║
--- ║  Purpose: Configuration panel for the LFGReminder module  ║
--- ║           (teleport popup shown after joining a Group     ║
--- ║           Finder dungeon group).                          ║
+-- ║  GUI-LFGReminder.lua                                     ║
+-- ║  GUI: LFG Reminder                                       ║
+-- ║  Purpose: Configuration panel for the LFGReminder module ║
+-- ║           (teleport popup shown after joining a Group    ║
+-- ║           Finder dungeon group).                         ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
