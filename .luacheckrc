@@ -29,6 +29,7 @@ files["dev/spec"] = {
 --  212/height
 --  432/self   — inner closure shadowing outer self (widget callback pattern)
 --  431/CP     — widget callback re-fetches module fresh, shadowing outer CP
+--  431/LR     — LootRoll preview callback re-fetches module fresh, shadowing outer LR
 ignore = {
     "212/_", "212/self", "212/event", "212/msg", "212/editbox", "212/width", "212/height",
     "212/timeToFade", "212/endAlpha", "212/loopCallback",     -- UIFrameFade callback signature
@@ -44,6 +45,7 @@ ignore = {
     "212/rel",                                                -- SetPoint(point, rel, ...) mock signature
     "432/self",
     "431/CP",                                                 -- widget callback re-fetches module fresh
+    "431/LR",                                                 -- LootRoll preview callback re-fetches module fresh
 }
 
 -- Globals this addon sets

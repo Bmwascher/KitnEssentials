@@ -114,6 +114,8 @@
     <Script file="GUITabs\GUISkinning\GUI-Tooltips.lua" />
     <Script file="GUITabs\GUISkinning\GUI-BlizzardMessages.lua" />
     <Script file="GUITabs\GUISkinning\GUI-UIWidgets.lua" />
+    <Script file="GUITabs\GUISkinning\GUI-LootRoll.lua" />
+    <Script file="GUITabs\GUISkinning\GUI-LootFrame.lua" />
     <Script file="GUITabs\GUISkinning\GUI-Chat.lua" />
     <Script file="GUITabs\GUISkinning\GUI-BlizzardFrames.lua" />
 
