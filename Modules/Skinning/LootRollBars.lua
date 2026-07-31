@@ -221,9 +221,17 @@ function LR:RollBar_Create(index)
     bar.button = button
 
     button.icon = button:CreateTexture(nil, "OVERLAY")
+    -- 1px inset inside the button's own S.Backdrop border above: fill sits
+    -- INSIDE the border, the standard convention here.
     button.icon:SetPoint("TOPLEFT", 1, -1)
     button.icon:SetPoint("BOTTOMRIGHT", -1, 1)
-    button.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    -- DEVIATION (2026-07-31): the reference hardcodes the crop
+    -- (<REF>/Skinning/LootRollBars.lua:224). Route it through the shared
+    -- skinning helper instead -- same 0.08/0.92 crop, plus the pixel snap and
+    -- the re-entry guard a hardcoded SetTexCoord skips, and it tracks any
+    -- future change to the standard. No second backdrop: the button already
+    -- carries one, so withBackdrop stays false.
+    S.Icon(button.icon)
 
     button.stack = button:CreateFontString(nil, "OVERLAY")
     button.stack:SetPoint("BOTTOMRIGHT", -1, 1)
