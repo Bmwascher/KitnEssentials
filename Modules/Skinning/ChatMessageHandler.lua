@@ -1,9 +1,9 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  ChatMessageHandler.lua                                  ║
 -- ║  Module: Chat                                            ║
--- ║  Purpose: Secret-safe message routing, formatting, and    ║
--- ║           OnEvent dispatch for the Chat module's styled   ║
--- ║           chat frames.                                    ║
+-- ║  Purpose: Secret-safe message routing, formatting, and   ║
+-- ║           OnEvent dispatch for the Chat module's styled  ║
+-- ║           chat frames.                                   ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE

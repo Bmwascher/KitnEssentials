@@ -3,7 +3,7 @@
 -- ║  Purpose: Shared skinning helpers for Blizzard frames.   ║
 -- ║           Ported from the upstream skinning API; the     ║
 -- ║           inline comments are the upstream evidence      ║
--- ║           trail and are kept deliberately.                ║
+-- ║           trail and are kept deliberately.               ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE

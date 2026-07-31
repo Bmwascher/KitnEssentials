@@ -1,8 +1,8 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  Chat.lua                                                ║
 -- ║  Module: Chat                                            ║
--- ║  Purpose: Chat panel backdrop, positioning, and           ║
--- ║           lifecycle.                                      ║
+-- ║  Purpose: Chat panel backdrop, positioning, and          ║
+-- ║           lifecycle.                                     ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
