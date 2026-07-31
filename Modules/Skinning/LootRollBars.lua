@@ -354,7 +354,14 @@ end
 -- (Thunderfury: legendary color, BoP, ilvl, all four buttons lit) with
 -- clicks neutralized so nothing ever calls RollOnLoot on a fake id.
 local PREVIEW_SECONDS = 15
-local previewButtons = { "need", "greed", "disenchant", "transmog" }
+-- DEVIATION (2026-07-31, found in smoke). The reference lists only four here
+-- (<REF>/Skinning/LootRollBars.lua:356) while CreateRollButton makes FIVE --
+-- `pass` is missing, so its comment at <REF>:354 ("clicks neutralized so
+-- nothing ever calls RollOnLoot on a fake id") is false for Pass: clicking it
+-- during a preview called RollOnLoot("PREVIEW", 0) and errored with
+-- `Usage: RollOnLoot(id, rollType)`. Both ShowPreview and HidePreview iterate
+-- this list, so adding the key neutralizes and restores the button together.
+local previewButtons = { "need", "greed", "disenchant", "transmog", "pass" }
 
 function LR:ShowPreview()
     self:HidePreview()

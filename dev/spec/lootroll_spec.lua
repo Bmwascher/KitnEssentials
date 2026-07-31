@@ -114,3 +114,53 @@ describe("LootRoll RollBar_Get", function()
         assert.is_nil(LR:RollBar_Get())
     end)
 end)
+
+-- The preview must neutralize EVERY roll button, not most of them.
+--
+-- Found in game 2026-07-31: the reference lists four button keys in
+-- previewButtons while CreateRollButton makes five, so Pass stayed
+-- mouse-enabled during a preview and clicking it called
+-- RollOnLoot("PREVIEW", 0) -- the sentinel rollID reaching the real API.
+-- The two lists are file-locals, so this lifts each off the function that
+-- closes over it rather than re-declaring the expected set here: a test
+-- carrying its own copy of the button names would still pass if a sixth
+-- button were added and left out of both.
+describe("LootRoll preview button coverage", function()
+    local function upvalue(fn, want)
+        local i = 1
+        while true do
+            local name, value = debug.getupvalue(fn, i)
+            if not name then return nil end
+            if name == want then return value end
+            i = i + 1
+        end
+    end
+
+    it("neutralizes every button CreateRollButton makes", function()
+        local LR = L.loadLootRollBars()
+        local preview = upvalue(LR.ShowPreview, "previewButtons")
+        local rollTypes = upvalue(LR.RollBars_Layout, "rollTypes")
+
+        -- Positive controls: both seams must actually resolve, or every
+        -- assertion below would pass vacuously against a nil table.
+        assert.is_table(preview)
+        assert.is_table(rollTypes)
+        assert.is_true(#preview > 0)
+
+        local neutralized = {}
+        for _, key in ipairs(preview) do neutralized[key] = true end
+
+        for _, key in pairs(rollTypes) do
+            assert.is_true(neutralized[key],
+                "roll button '" .. key .. "' is never mouse-disabled during preview")
+        end
+    end)
+
+    it("restores exactly what it neutralized", function()
+        -- ShowPreview and HidePreview must walk the SAME list, or a button
+        -- disabled for the preview would stay dead for the next real roll.
+        local LR = L.loadLootRollBars()
+        assert.equal(upvalue(LR.ShowPreview, "previewButtons"),
+                     upvalue(LR.HidePreview, "previewButtons"))
+    end)
+end)
