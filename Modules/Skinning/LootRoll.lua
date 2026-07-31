@@ -43,7 +43,7 @@ local tostring = tostring
 -- dev/docs/superpowers/plans/2026-07-31-lootroll-bonus-roll-position-jump.md).
 -- Leave the instrumentation in place after diagnosis -- free tracing if this
 -- regresses.
-local DEBUG_LR = true
+local DEBUG_LR = false
 
 -- GetTime() is FRAME-STABLE -- every call inside one frame returns the same
 -- value -- which is exactly the discriminator this bug needs: a correction
