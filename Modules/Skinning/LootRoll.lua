@@ -8,6 +8,10 @@ if not KitnEssentials then
 end
 
 ---@class LootRoll: AceModule, AceEvent-3.0
+---@field _reassertPending boolean? true while a ReassertPosition retry is queued; nil once it settles
+---@field _regenPending boolean? true while WaitForRegen's PLAYER_REGEN_ENABLED watcher is armed; nil once it fires
+---@field editModeRegistered boolean? true while the EditMode element is registered; nil after OnDisable/UnregisterElement
+---@field _pendingRestore boolean? true while OnDisable's combat-deferred GroupLootContainer restore watcher is armed; nil once it fires
 local LR = KitnEssentials:NewModule("LootRoll", "AceEvent-3.0")
 
 -- The profile-switch path and the ElvUI startup skip both gate on
@@ -346,8 +350,13 @@ function LR:RegisterEditMode()
         -- Blizzard Frames tab, so route through it (KE's sidebar id:
         -- GUI/GUIMain/GUI-MainFrame.lua:123). guiContext is dropped here:
         -- KE's GUIFrame:OpenPage stores it as pendingContext and nothing
-        -- reads it (GUI/GUIWidgets/GUI-Sidebar.lua:756).
+        -- reads it (GUI/GUIWidgets/GUI-Sidebar.lua:756). guiTab IS set --
+        -- it is KE's live equivalent of the same intent, seeding
+        -- GUIFrame.tabbedPageState so Open Settings lands on the right
+        -- subtab of the tabbed Blizzard Frames page (Core/EditMode.lua:56,
+        -- :1122-1126). The subtab id itself is created in Task 6.
         guiPath = "SkinBlizzardFrames",
+        guiTab = "SkinBlizzardFramesLootRoll",
     })
 end
 
