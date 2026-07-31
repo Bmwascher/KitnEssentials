@@ -558,7 +558,7 @@ local PREVIEW_MODULES = {
     "BurningRush",
     "Cursor",
     "DamageMeter",
-    "MythicPlusTimer", "KeystoneHelper", "TargetedSpells",
+    "MythicPlusTimer", "KeystoneHelper", "TargetedSpells", "LFGReminder",
     "PlayerAbsorbs",
     "Chat",
 }
@@ -587,7 +587,7 @@ local SECTION_PREVIEW_MODULES = {
     },
     dungeons_section = {
         "EnemyCounter", "KickTracker", "DungeonCasts", "DeathNotifications",
-        "MythicPlusTimer", "KeystoneHelper", "TargetedSpells",
+        "MythicPlusTimer", "KeystoneHelper", "TargetedSpells", "LFGReminder",
     },
     healer_section = {
         "HealerMana", "InnervateTracker", "MaintenanceTracker",

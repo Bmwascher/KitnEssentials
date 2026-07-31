@@ -516,3 +516,52 @@ function LR:OnDisable()
         end)
     end
 end
+
+---------------------------------------------------------------------------------
+-- Preview
+---------------------------------------------------------------------------------
+
+-- Force-show the popup with sample contents so the user can drag it into
+-- place from the config panel. The reference has no preview; KE adds one
+-- because dragging is the only way to position this frame and the only
+-- other route to seeing it is joining a real dungeon group.
+--
+-- The "spell" attribute is CLEARED here, not just left unwritten. This is
+-- the same secure button a real prompt arms, and nothing on the teardown
+-- path unsets it -- so without this line a preview shown after any real
+-- prompt would still cast that dungeon's teleport on click, from a config
+-- screen. Combat-gated like every other write to this button.
+function LR:ShowPreview()
+    if not self:IsEnabled() then return end
+    if InCombatLockdown() then return end
+    BuildPopup()
+    if not popup then return end
+    if secureBtn then secureBtn:SetAttribute("spell", nil) end
+    popup._name:SetText("Skyreach")
+    if secureBtn and secureBtn._icon then
+        local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(159898)
+        if info and info.iconID then secureBtn._icon:SetTexture(info.iconID) end
+        secureBtn._icon:SetDesaturated(false)
+        secureBtn._icon:SetAlpha(1)
+    end
+    if secureBtn and secureBtn._label then
+        secureBtn._label:SetTextColor(1, 1, 1, 1)
+    end
+    popup:Show()
+end
+
+function LR:HidePreview()
+    if not popup then return end
+    -- Same protection as HidePrompt: the popup parents a secure button.
+    if InCombatLockdown() then return end
+    if pendingSpellID then
+        -- A real prompt is live underneath the preview -- restore it
+        -- rather than hiding the user's actual teleport. The attribute has
+        -- to be re-armed too: ShowPreview cleared it.
+        if secureBtn then secureBtn:SetAttribute("spell", pendingSpellID) end
+        popup._name:SetText(pendingName or "")
+        UpdateButtonVisuals()
+        return
+    end
+    popup:Hide()
+end
