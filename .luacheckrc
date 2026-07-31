@@ -241,6 +241,9 @@ read_globals = {
     "GetLootRollItemLink", "GetLootRollItemInfo", "RollOnLoot", "ConfirmLootRoll",
     "BonusRollFrame", "BonusRollFrame_StartBonusRoll", "GetLootRollTimeLeft",
     "NEED", "GREED", "PASS", "TRANSMOGRIFY", "ROLL_DISENCHANT",
+    "CloseLoot", "LootSlot", "LootSlotHasItem", "GetNumLootItems",
+    "GetLootSlotInfo", "GetLootSlotLink", "IsFishingLoot",
+    "CursorUpdate", "CursorOnUpdate", "UnitIsFriend", "C_TradeSkillUI",
 
     -- Resurrection
     "AcceptResurrect", "IsEncounterInProgress",

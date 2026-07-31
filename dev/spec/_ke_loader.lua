@@ -664,4 +664,28 @@ function L.loadLootRollBars(overrides)
     return LR
 end
 
+-- Modules/Skinning/LootFrame.lua. LF:UpdateDB/OnInitialize/OnEnable are never
+-- run -- specs set LF.db themselves, the same way a real OnInitialize would
+-- have via KE.db.profile.Skinning.Loot. All the file-scope `local X = X`
+-- captures (CloseLoot, LootSlot, GetNumLootItems, ...) tolerate a nil global
+-- at load time, so this loader only needs KitnEssentials truthy and a KE.Skins
+-- table -- nothing calls into the Loot API surface until LF:Build()/OnEnable
+-- run, which this loader deliberately does not do. Returns LF.
+function L.loadLootFrame(overrides)
+    installMock(overrides, { C_Timer = inertTimer() })
+    local modules = helpers.installAddonShim()
+    _G.UIParent = noopFrame()
+    _G.CreateFrame = function() return noopFrame() end
+    _G.hooksecurefunc = function() end
+    local KE = {
+        db = { profile = { Skinning = { Loot = {} } } },
+        ShouldNotLoadModule = function() return false end,
+        Skins = {},
+    }
+    helpers.loadModule("Modules/Skinning/LootFrame.lua", KE)
+    local LF = modules["LootFrame"]
+    LF:UpdateDB()
+    return LF
+end
+
 return L
