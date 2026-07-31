@@ -964,8 +964,15 @@ local _tauntFollowCursor = nil
 -- duration object's own booleans (in Midnight those are secret and throw on a
 -- raw truth test). We always call SetCooldownFromDurationObject, which is
 -- taint-safe and renders nothing at zero, so a ready taunt simply draws no text.
-local function _tauntOnEvent(self, event)
-    if event == "PLAYER_ENTERING_WORLD" or event == "PLAYER_SPECIALIZATION_CHANGED" then
+local function _tauntOnEvent(self, event, unit)
+    if event == "PLAYER_ENTERING_WORLD" then
+        C:_TauntEvaluateGate()
+        return
+    end
+    -- PLAYER_SPECIALIZATION_CHANGED fires for ANY unit, not just the player
+    -- (UnitDocumentation.lua:3765-3773) -- filter out groupmates' spec swaps.
+    if event == "PLAYER_SPECIALIZATION_CHANGED" then
+        if unit and unit ~= "player" then return end
         C:_TauntEvaluateGate()
         return
     end
@@ -1135,6 +1142,21 @@ function C:_TauntEvaluateGate()
             self.tauntFrame:Hide()
         end
     end
+end
+
+-- PLAYER_SPECIALIZATION_CHANGED fires for ANY unit, not just the player
+-- (UnitDocumentation.lua:3765-3773 -- it carries a unitTarget payload), so a
+-- groupmate's spec swap would otherwise run our gate. The filter lives here
+-- rather than inside _TauntEvaluateGate because OnEnable, Refresh and the
+-- preview timer all call the gate with no unit argument.
+--
+-- UpdateVisibility runs after the gate because ApplyTauntSatellite ends in an
+-- unconditional Show(): without this, gating in would force the satellite
+-- visible even in a mode that had correctly hidden it.
+function C:_TauntSpecChanged(_, unit)
+    if unit and unit ~= "player" then return end
+    self:_TauntEvaluateGate()
+    self:UpdateVisibility()
 end
 
 -- Test mode: force-show the taunt countdown for 7 seconds so users can verify
@@ -1364,7 +1386,7 @@ function C:OnEnable()
     self:RegisterEvent("PLAYER_REGEN_DISABLED",  "UpdateVisibility")
     self:RegisterEvent("PLAYER_REGEN_ENABLED",   "UpdateVisibility")
     self:RegisterEvent("GROUP_ROSTER_UPDATE",    "UpdateVisibility")
-    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "_TauntEvaluateGate")
+    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "_TauntSpecChanged")
 
     -- Initial visibility decision for cursor (before satellites exist)
     self:UpdateVisibility()
