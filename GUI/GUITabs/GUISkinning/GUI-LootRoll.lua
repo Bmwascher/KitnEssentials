@@ -82,6 +82,12 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
             if not checked then
                 KE:SkinningReloadPrompt() -- v3.5.548: unified close-time prompt
             end
+            -- The Position card's contents differ by mode -- "Move Loot Rolls"
+            -- exists only in legacy mode -- so the page is rebuilt, not just
+            -- re-enabled. Deferred a frame: RefreshContent destroys and
+            -- recreates the widget whose callback is still running. Same idiom
+            -- as GUI/GUITabs/GUICombat/GUI-DamageMeter.lua:76.
+            C_Timer.After(0, function() GUIFrame:RefreshContent() end)
         end,
         -- msgOn/msgOff are REQUIRED whenever msgPopup is set: the toggle
         -- concatenates them unguarded (GUI/GUIWidgets/GUI-KEToggle.lua:241,243)
@@ -175,21 +181,32 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
     local card2 = GUIFrame:CreateCard(scrollChild, "Position", yOffset)
     manager:Register(card2, "all")
 
-    local rowR = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local repoCheck = GUIFrame:CreateCheckbox(rowR, "Move Loot Rolls", {
-        value = db.Reposition ~= false,
-        callback = function(checked)
-            db.Reposition = checked
-            Apply()
-            UpdateAllWidgetStates()
-        end,
-    })
-    -- v3.5.871: "Unlock (drag to move)" removed. It was a second anchor UI
-    -- competing with /kes edit on the same frame and the two disagreed about
-    -- where the anchor was. Positioning is /kes edit + these offsets now.
-    rowR:AddWidget(repoCheck, 1)
-    manager:Register(repoCheck, "legacy")
-    card2:AddRow(rowR, Theme.rowHeight)
+    -- DEVIATION (2026-07-31, Brandon's report). The reference renders this row
+    -- unconditionally and greys it out in Replace mode
+    -- (<REF>/GUI/Tabs/Skinning/GUI-LootRoll.lua:162-176), which shows a ticked
+    -- checkbox the user cannot untick while the X/Y sliders under it stay live
+    -- -- it reads as "locked on" when the truth is "does not apply". Reposition
+    -- only means anything in legacy mode: Replace mode positions through
+    -- RollBars_Anchor and never consults it. So omit the row entirely rather
+    -- than disable it. The Replace toggle refreshes the page, so it appears and
+    -- disappears as the mode changes.
+    if not db.Replace then
+        local rowR = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+        local repoCheck = GUIFrame:CreateCheckbox(rowR, "Move Loot Rolls", {
+            value = db.Reposition ~= false,
+            callback = function(checked)
+                db.Reposition = checked
+                Apply()
+                UpdateAllWidgetStates()
+            end,
+        })
+        -- v3.5.871: "Unlock (drag to move)" removed. It was a second anchor UI
+        -- competing with /kes edit on the same frame and the two disagreed about
+        -- where the anchor was. Positioning is /kes edit + these offsets now.
+        rowR:AddWidget(repoCheck, 1)
+        manager:Register(repoCheck, "legacy")
+        card2:AddRow(rowR, Theme.rowHeight)
+    end
 
     local rowX = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local xSlider = GUIFrame:CreateSlider(rowX, "X Offset", {
