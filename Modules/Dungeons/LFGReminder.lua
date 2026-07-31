@@ -42,7 +42,8 @@ local type = type
 local pcall = pcall
 local CreateFrame = CreateFrame
 local InCombatLockdown = InCombatLockdown
-local IsPlayerSpell = IsPlayerSpell
+local C_SpellBook = C_SpellBook
+local SpellBookBank_Player = Enum.SpellBookSpellBank.Player
 local IsInGroup = IsInGroup
 local IsInInstance = IsInInstance
 local UIParent = UIParent
@@ -261,7 +262,7 @@ BuildPopup = function()
     secureBtn:SetScript("OnEnter", function(self)
         local sid = pendingSpellID
         if not sid then return end
-        if not IsPlayerSpell(sid) then
+        if not C_SpellBook.IsSpellKnown(sid, SpellBookBank_Player) then
             ShowTip(self, "You have not learned this dungeon teleport yet.")
             return
         end
@@ -310,7 +311,7 @@ UpdateButtonVisuals = function()
     local sid = pendingSpellID
     local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(sid)
     if info and info.iconID then secureBtn._icon:SetTexture(info.iconID) end
-    local known = IsPlayerSpell(sid)
+    local known = C_SpellBook.IsSpellKnown(sid, SpellBookBank_Player)
     secureBtn._icon:SetDesaturated(not known)
     secureBtn._icon:SetAlpha(known and 1 or 0.4)
     local lc = known and 1 or 0.5

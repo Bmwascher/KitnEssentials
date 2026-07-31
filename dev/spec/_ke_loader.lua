@@ -926,7 +926,12 @@ function L.loadLFGReminder(overrides)
         GetSearchResultInfo = function() return nil end,
         GetActivityInfoTable = function() return nil end,
     }
-    _G.IsPlayerSpell = overrides.IsPlayerSpell or function() return true end
+    -- LFGReminder.lua reads Enum.SpellBookSpellBank.Player at file scope, so the
+    -- stub must exist BEFORE helpers.loadModule runs.
+    _G.Enum = overrides.Enum or { SpellBookSpellBank = { Player = "Player" } }
+    _G.C_SpellBook = overrides.C_SpellBook or {
+        IsSpellKnown = function() return true end,
+    }
     _G.IsInGroup = overrides.IsInGroup or function() return true end
     _G.IsInInstance = overrides.IsInInstance or function() return false, "none" end
 
