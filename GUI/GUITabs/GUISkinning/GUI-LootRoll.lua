@@ -54,7 +54,18 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
     if db.Enabled == false then
         return yOffset + card1:GetContentHeight() + Theme.paddingSmall
     end
-    card1:AddLabel("Group loot rolls: slim replacement bars (ElvUI style), or skin and reposition Blizzard's windows.")
+    -- DEVIATION (2026-07-31, Brandon's report). The reference ships one static
+    -- sentence here (<REF>/GUI/Tabs/Skinning/GUI-LootRoll.lua:48). The two
+    -- modes drive controls on THREE different cards, and nothing said which
+    -- ones were live, so turning Replace off silently changed the meaning of
+    -- settings the user could not see. This names the active mode and points at
+    -- the controls it enables. The page rebuilds on the Replace toggle, so the
+    -- text follows the mode.
+    if db.Replace then
+        card1:AddLabel("Slim bars mode. KitnEssentials draws its own roll bars and hides Blizzard's roll windows. Bar size and colour are on the Display Settings card. Turning this off asks for a /reload.")
+    else
+        card1:AddLabel("Blizzard mode. Blizzard draws the roll windows. Skin Roll Windows on the Display Settings card styles them, and Move Loot Rolls on the Position card moves them.")
+    end
 
     -- v3.5.693: sample roll bar (fake legendary, clicks inert).
     local prow = GUIFrame:CreateRow(card1.content, 30)
@@ -109,6 +120,14 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
     -- Card 2: Display
     local card3 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
     manager:Register(card3, "all")
+
+    -- Same reason as card1's label: this card holds controls for BOTH modes,
+    -- and the greyed-out ones give no clue why. Name which set is live.
+    if db.Replace then
+        card3:AddLabel("Slim bars mode: the bar size options apply. Skin Roll Windows is for Blizzard mode only.")
+    else
+        card3:AddLabel("Blizzard mode: Skin Roll Windows applies. The bar size options are for the slim bars only.")
+    end
 
     local rowS = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
     local skinCheck = GUIFrame:CreateCheckbox(rowS, "Skin Roll Windows (Blizzard mode)", {
