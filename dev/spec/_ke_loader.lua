@@ -696,4 +696,115 @@ function L.loadLootFrame(overrides)
     return LF
 end
 
+-- Modules/Combat/Cursor.lua. The file-scope `local X = X` captures include
+-- C_Spell.GetSpellCooldown, so C_Spell must exist before load or the index
+-- throws. Nothing creates a frame at load time -- CreateCursorFrame and the
+-- satellite constructors only run from lifecycle methods, which this loader
+-- deliberately does not call. C.db is pointed at the profile table the same
+-- way a real C:UpdateDB() would.
+--
+-- Any override for a key in MANAGED_MOCK_KEYS (C_Timer, GetTime,
+-- InCombatLockdown, CreateFrame and the rest) is forwarded to installMock so
+-- the caller still wins on it. Every other API here is UNMANAGED, so it is
+-- assigned to _G directly and its per-test override is read off `overrides`
+-- here rather than handed to installMock, which would drop it.
+-- Returns C, KE, seams.
+-- Keys _wow_mock.install actually consumes (dev/spec/_wow_mock.lua:51-92).
+-- A caller override for one of these MUST be routed through installMock or it
+-- is discarded; anything not on this list must be assigned to _G directly.
+local MANAGED_MOCK_KEYS = {
+    "CreateFrame", "InCombatLockdown", "GetTime", "C_Timer",
+    "issecretvalue", "issecrettable", "canaccessvalue", "canaccesstable",
+    "UnitName", "UnitGUID", "UnitExists", "UnitIsUnit",
+    "AbbreviateNumbers", "BreakUpLargeNumbers",
+}
+
+local function managedSubset(overrides)
+    local t = {}
+    for _, k in ipairs(MANAGED_MOCK_KEYS) do
+        if overrides[k] ~= nil then t[k] = overrides[k] end
+    end
+    return t
+end
+
+function L.loadCursor(overrides)
+    overrides = overrides or {}
+    -- Managed overrides go THROUGH installMock so the caller still wins on
+    -- them; passing {} here would silently discard a caller's C_Timer or
+    -- GetTime override. CreateFrame is a default rather than a later _G
+    -- assignment for the same reason.
+    installMock(managedSubset(overrides), {
+        C_Timer = inertTimer(),
+        GetTime = function() return 0 end,
+        InCombatLockdown = function() return false end,
+        CreateFrame = function() return noopFrame() end,
+    })
+    local modules = helpers.installAddonShim()
+    _G.UIParent = noopFrame()
+
+    _G.C_Spell = overrides.C_Spell or {
+        GetSpellCooldown = function() return nil end,
+        GetSpellCooldownDuration = function() return nil end,
+    }
+    _G.C_SpellBook = overrides.C_SpellBook or {
+        IsSpellInSpellBook = function() return false end,
+    }
+    -- Cursor.lua resolves the spec getter as
+    -- `C_SpecializationInfo.GetSpecialization or GetSpecialization`, so it needs
+    -- EITHER getter plus GetSpecializationRole. With neither, _isTankSpec
+    -- returns false and the tank-positive test FAILS -- it does not pass
+    -- vacuously. Because the modern getter is installed by default it would
+    -- shadow a caller's legacy override, so pass `C_SpecializationInfo = false`
+    -- to remove it and make the legacy global the seam under test.
+    if overrides.C_SpecializationInfo == false then
+        _G.C_SpecializationInfo = nil
+    else
+        _G.C_SpecializationInfo = overrides.C_SpecializationInfo
+            or { GetSpecialization = function() return 1 end }
+    end
+    _G.GetSpecialization = overrides.GetSpecialization or function() return 1 end
+    _G.GetSpecializationRole = overrides.GetSpecializationRole
+        or function() return "TANK" end
+    _G.GetCursorPosition = overrides.GetCursorPosition or function() return 0, 0 end
+    _G.UnitCastingInfo = overrides.UnitCastingInfo or function() return nil end
+    _G.UnitChannelInfo = overrides.UnitChannelInfo or function() return nil end
+    _G.IsMouseButtonDown = overrides.IsMouseButtonDown or function() return false end
+    _G.IsInRaid = overrides.IsInRaid or function() return false end
+    _G.IsInGroup = overrides.IsInGroup or function() return false end
+    _G.GetInstanceInfo = overrides.GetInstanceInfo or function() return "none", "none" end
+
+    local profile = {
+        Cursor = {
+            Enabled = true,
+            GCD = {}, Cast = {}, Trail = {},
+            Dispel = {},
+            Taunt = {
+                Enabled = true, AnchorPoint = "CENTER",
+                XOffset = 10, YOffset = 10,
+                FontFace = "Expressway", FontSize = 18,
+                TextColor = { 1, 1, 1, 1 },
+            },
+        },
+    }
+    local KE = {
+        db = { profile = profile },
+        FONT = "Fonts\\Expressway.TTF",
+        GetFontPath = function() return "Fonts\\Expressway.TTF" end,
+        GetAccentColor = function() return 1, 1, 1, 1 end,
+    }
+    helpers.loadModule("Modules/Combat/Cursor.lua", KE)
+    local C = modules["Cursor"]
+    C:UpdateDB()
+    -- _tauntOnEvent is a file-local with no stored handle, and the noop frame's
+    -- GetScript cannot hand it back. It IS an upvalue of CreateTauntSatellite,
+    -- which stores it via SetScript, so findUpvalue recovers the function object
+    -- without ever running the constructor. Guarded because Task 2 runs before
+    -- Task 4 creates that method.
+    local seams = {}
+    if C.CreateTauntSatellite then
+        seams.tauntOnEvent = findUpvalue(C.CreateTauntSatellite, "_tauntOnEvent")
+    end
+    return C, KE, seams
+end
+
 return L

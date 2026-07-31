@@ -1,0 +1,10 @@
+local loader = require("dev.spec._ke_loader")
+
+describe("Cursor module", function()
+    it("loads in the spec harness", function()
+        local C = loader.loadCursor()
+        assert.is_table(C)
+        assert.is_table(C.db)
+        assert.is_table(C.db.Taunt)
+    end)
+end)
