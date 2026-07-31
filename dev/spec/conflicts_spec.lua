@@ -151,6 +151,44 @@ describe("Core/Conflicts.lua decision layer", function()
             })))
         end)
     end)
+
+    describe("LFGReminder conflict entry", function()
+        it("queues one entry when LFGReminder is enabled and EllesmereUIQoL is loaded", function()
+            local queue = KE:BuildConflictQueue({
+                profile = { LFGReminder = { Enabled = true } },
+                isLoaded = function(name) return name == "EllesmereUIQoL" end,
+                shouldNotLoad = false,
+            })
+            assert.equals(1, #queue)
+            assert.equals("LFGReminder", queue[1].module)
+        end)
+
+        -- Regression guard: this row is deliberately NOT skinGated, so a
+        -- copied-from-SkinTooltips row would wrongly clear this queue.
+        it("still queues the entry when ElvUI owns skinning", function()
+            local queue = KE:BuildConflictQueue({
+                profile = { LFGReminder = { Enabled = true } },
+                isLoaded = function(name) return name == "EllesmereUIQoL" end,
+                shouldNotLoad = true,
+            })
+            assert.equals(1, #queue)
+            assert.equals("LFGReminder", queue[1].module)
+        end)
+
+        it("resolver isActive returns false once the rival's prompt is disabled", function()
+            _G.EllesmereUIDB = { teleportPrompt = { enabled = false } }
+            local queue = KE:BuildConflictQueue({
+                profile = { LFGReminder = { Enabled = true } },
+                isLoaded = function(name, resolver)
+                    if name ~= "EllesmereUIQoL" then return false end
+                    if resolver and resolver.isActive then return resolver.isActive() end
+                    return true
+                end,
+                shouldNotLoad = false,
+            })
+            assert.same({}, queue)
+        end)
+    end)
 end)
 
 describe("Core/Conflicts.lua prompt queue", function()

@@ -80,6 +80,49 @@ local CONFLICTS = {
         addons = { "Prat-3.0", "Chatter", "Glass", "ls_Glass",
                    "BasicChatMods", "EllesmereUIChat" },
     },
+    {
+        module = "LFGReminder",
+        label  = "LFG Teleport Prompt",
+        -- Flat single-element path: this module's settings are top-level,
+        -- unlike the two skinning rows above whose DB is nested.
+        dbPath = { "LFGReminder" },
+        -- Deliberately NOT skinGated. The two rows above are skinning
+        -- modules that go inert under ElvUI, so prompting about them would
+        -- be prompting about a conflict that is not happening. This module
+        -- runs regardless of ElvUI, so the gate must not apply.
+        addons = { "EllesmereUIQoL" },
+        resolvers = {
+            EllesmereUIQoL = {
+                label = "EllesmereUI's teleport prompt",
+                -- EllesmereUIQoL_TeleportPrompt keeps its settings at
+                -- EllesmereUIDB.teleportPrompt and tests `enabled ~= false`,
+                -- so it is ON unless explicitly switched off. Flip that one
+                -- switch rather than disabling the whole addon: EllesmereUI
+                -- QoL carries features unrelated to this prompt, and a user
+                -- who picked KE for the teleport popup did not ask to lose
+                -- them.
+                apply = function()
+                    if type(_G.EllesmereUIDB) ~= "table" then return false end
+                    if type(_G.EllesmereUIDB.teleportPrompt) ~= "table" then
+                        _G.EllesmereUIDB.teleportPrompt = {}
+                    end
+                    _G.EllesmereUIDB.teleportPrompt.enabled = false
+                    return true
+                end,
+                -- Stateless companion to apply(). Flipping the switch leaves
+                -- the addon loaded AND enabled, so the enable-state check in
+                -- LiveEnv cannot see the resolution -- without this the next
+                -- scan would re-raise a conflict the user just settled.
+                -- Mirrors EUI's own test: absent means ON, only a literal
+                -- false is off.
+                isActive = function()
+                    if type(_G.EllesmereUIDB) ~= "table" then return true end
+                    local cfg = _G.EllesmereUIDB.teleportPrompt
+                    return type(cfg) ~= "table" or cfg.enabled ~= false
+                end,
+            },
+        },
+    },
 }
 
 ---------------------------------------------------------------------------------
