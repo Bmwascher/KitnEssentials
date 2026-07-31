@@ -13,6 +13,7 @@ end
 ---@field editModeRegistered boolean? true while the EditMode element is registered; nil after OnDisable/UnregisterElement
 ---@field _pendingRestore boolean? true while OnDisable's combat-deferred GroupLootContainer restore watcher is armed; nil once it fires
 ---@field _barsWired boolean? true once SetupRollBars has registered START_LOOT_ROLL and unregistered UIParent's; nil after TeardownRollBars
+---@field _bonusWired boolean? true once the Replace-mode BonusRollFrame re-anchor hook is installed; never cleared (hooksecurefunc is permanent)
 ---@field _previewBar table? the RollBar table currently showing the GUI preview; nil when no preview is active
 ---@field _previewTimer table? the C_Timer handle draining the preview; nil once cancelled or fired
 local LR = KitnEssentials:NewModule("LootRoll", "AceEvent-3.0")
@@ -297,7 +298,59 @@ function LR:SyncMover()
     m:SetPoint(p.Point or "BOTTOM", UIParent, p.RelPoint or "CENTER", p.X or 0, p.Y or 0)
 end
 
+-- Replace mode: put the BONUS ROLL prompt where the roll bars are.
+--
+-- Bonus rolls never become KE roll bars -- they arrive on
+-- SPELL_CONFIRMATION_PROMPT, not START_LOOT_ROLL, so SetupRollBars'
+-- unregister does not intercept them. Blizzard hands BonusRollFrame to
+-- GroupLootContainer and anchors it there, which in Replace mode leaves it at
+-- Blizzard's bottom-centre managed spot while every other roll obeys the
+-- user's position.
+--
+-- We re-anchor the FRAME rather than moving the container, which is what the
+-- legacy branch does. That avoids the managed-frame system entirely:
+-- BonusRollFrame is parented to UIParent and is a plain <Frame>
+-- (Blizzard_UIPanels_Game/Mainline/GroupLootFrame.xml:23), so ClearAllPoints
+-- and SetPoint on it are legal in combat and taint nothing. And it is
+-- sufficient: GroupLootFrame.lua:87-88 is the ONLY place any roll frame is
+-- ever anchored, and both entry paths -- AddFrame (:25-40) and ReplaceFrame
+-- (:68-75) -- end in GroupLootContainer_Update, the function we post-hook.
+--
+-- Only the PROMPT. BonusRollLootWonFrame / BonusRollMoneyWonFrame, which
+-- replace it once the roll resolves, are loot toasts: they set AlertFrame as
+-- their alert container (GroupLootFrame.lua:626-632) and are handed to
+-- AlertFrame:AddAlertFrame, so the alert chain owns their placement and
+-- re-anchoring them would just fight it.
+local function AnchorBonusRoll()
+    if not LR:IsEnabled() then return end
+    local db = LR.db
+    if not db or not db.Replace then return end
+
+    local f = _G.BonusRollFrame
+    if not f or not f:IsShown() then return end
+
+    -- Bar 1's own anchor and defaults (LootRollBars.lua:343), so the prompt
+    -- lands where a roll bar would. NOT the legacy branch's BOTTOM/0 pair, and
+    -- emphatically not its CENTER->BOTTOM conversion -- that exists because the
+    -- legacy container grows upward as rolls stack, and this is one fixed-size
+    -- frame anchored directly.
+    local p = db.Position or {}
+    f:ClearAllPoints()
+    f:SetPoint(p.Point or "CENTER", UIParent, p.RelPoint or "CENTER", p.X or 0, p.Y or 250)
+    LogState("AnchorBonusRoll")
+end
+LR.AnchorBonusRoll = AnchorBonusRoll
+
 function LR:Setup()
+
+    -- Installed for BOTH modes and guarded inside on db.Replace, because
+    -- hooksecurefunc cannot be undone -- the DEVIATION A lesson below. Its own
+    -- flag, not _wired: _wired belongs to the legacy branch that Setup never
+    -- reaches in Replace mode.
+    if not self._bonusWired and type(_G.GroupLootContainer_Update) == "function" then
+        hooksecurefunc("GroupLootContainer_Update", AnchorBonusRoll)
+        self._bonusWired = true
+    end
 
     if self.db.Replace then
         if self.SetupRollBars then self:SetupRollBars() end
@@ -329,8 +382,9 @@ function LR:Setup()
         --  1. LAYOUT CHILD ENUMERATION -- exited. BaseLayoutMixin's
         --     GetLayoutChildren walks GetChildren()
         --     (Blizzard_SharedXML/LayoutFrame.lua:58-60), so once the
-        --     container is our child, UIParentBottomManagedFrameContainer's
-        --     Layout() genuinely cannot reach it.
+        --     container is reparented to UIParent instead,
+        --     UIParentBottomManagedFrameContainer's Layout() genuinely
+        --     cannot reach it.
         --  2. MANAGER MEMBERSHIP -- kept. The frame stays in the container's
         --     showingFrames table (written Blizzard_UIParent/Shared/
         --     UIParent.lua:182, cleared only at :204). UpdateManagedFrames

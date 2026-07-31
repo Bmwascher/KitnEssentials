@@ -160,6 +160,97 @@ describe("LootRoll container OnShow hook", function()
     end)
 end)
 
+-- Replace mode must place the BONUS ROLL prompt at the roll-bar position.
+--
+-- Bonus rolls arrive on SPELL_CONFIRMATION_PROMPT, not START_LOOT_ROLL, so
+-- SetupRollBars' unregister never intercepts them and they stay Blizzard's
+-- frame at Blizzard's bottom-centre spot -- while every other roll obeys the
+-- user's position. The fix re-anchors BonusRollFrame itself rather than moving
+-- GroupLootContainer, so these specs pin the two things that make that choice
+-- correct: it targets bar 1's defaults, and it leaves the reward toasts alone.
+describe("LootRoll bonus roll anchoring", function()
+    local LR
+
+    local function makeFrame()
+        return {
+            _points = {},
+            _shown = true,
+            IsShown = function(self) return self._shown end,
+            ClearAllPoints = function(self) self._points = {} end,
+            SetPoint = function(self, point, rel, relPoint, x, y)
+                self._points[#self._points + 1] =
+                    { point = point, relPoint = relPoint, x = x, y = y }
+            end,
+        }
+    end
+
+    before_each(function()
+        LR = L.loadLootRoll()
+        LR.IsEnabled = function() return true end
+        _G.BonusRollFrame = makeFrame()
+    end)
+
+    after_each(function() _G.BonusRollFrame = nil end)
+
+    it("anchors the prompt to the roll bar position in Replace mode", function()
+        LR.db = { Enabled = true, Replace = true,
+            Position = { Point = "TOP", RelPoint = "TOP", X = 30, Y = -120 } }
+        LR.AnchorBonusRoll()
+
+        local p = _G.BonusRollFrame._points[1]
+        assert.is_table(p)   -- positive control: it must anchor at all
+        assert.equal("TOP", p.point)
+        assert.equal(30, p.x)
+        assert.equal(-120, p.y)
+    end)
+
+    it("uses bar 1's defaults, not the legacy container's", function()
+        -- The legacy branch defaults to BOTTOM/0 and converts CENTER->BOTTOM
+        -- because that container grows upward as rolls stack. Reusing either
+        -- here would mis-place a single fixed-size frame.
+        LR.db = { Enabled = true, Replace = true, Position = {} }
+        LR.AnchorBonusRoll()
+
+        local p = _G.BonusRollFrame._points[1]
+        assert.equal("CENTER", p.point)
+        assert.equal("CENTER", p.relPoint)
+        assert.equal(250, p.y)
+    end)
+
+    it("does nothing in legacy mode", function()
+        -- Legacy mode moves the container instead. Doing both would place the
+        -- prompt twice, by two mechanisms that disagree.
+        LR.db = { Enabled = true, Replace = false,
+            Position = { Point = "TOP", RelPoint = "TOP", X = 30, Y = -120 } }
+        LR.AnchorBonusRoll()
+        assert.equal(0, #_G.BonusRollFrame._points)
+    end)
+
+    it("does nothing while the prompt is hidden", function()
+        LR.db = { Enabled = true, Replace = true, Position = {} }
+        _G.BonusRollFrame._shown = false
+        LR.AnchorBonusRoll()
+        assert.equal(0, #_G.BonusRollFrame._points)
+    end)
+
+    it("leaves the reward toasts to the alert frame system", function()
+        -- BonusRollLootWonFrame / BonusRollMoneyWonFrame replace the prompt in
+        -- the same container slot, but they set AlertFrame as their alert
+        -- container and are handed to AlertFrame:AddAlertFrame -- the alert
+        -- chain owns their placement. Touching them starts a fight we gain
+        -- nothing from.
+        LR.db = { Enabled = true, Replace = true, Position = {} }
+        _G.BonusRollLootWonFrame = makeFrame()
+        _G.BonusRollMoneyWonFrame = makeFrame()
+
+        LR.AnchorBonusRoll()
+
+        assert.equal(0, #_G.BonusRollLootWonFrame._points)
+        assert.equal(0, #_G.BonusRollMoneyWonFrame._points)
+        _G.BonusRollLootWonFrame, _G.BonusRollMoneyWonFrame = nil, nil
+    end)
+end)
+
 describe("LootRoll RollBar_Get", function()
     local LR
 
