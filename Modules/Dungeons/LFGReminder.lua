@@ -114,6 +114,16 @@ local BuildPopup, ShowPrompt, HidePrompt, ClearPending
 local UpdateButtonVisuals, ResolveDungeon
 local SavePosition, ApplySavedPosition, ApplyDisableVisibility
 
+-- Read-only test seams. The pending state stays in the upvalues above --
+-- these expose it without creating a second source of truth that could
+-- drift from it. _GetPendingAttrSpellID exists specifically so the
+-- cancellation spec can observe the deferred ATTRIBUTE write: asserting on
+-- pendingSpellID alone would pass even without ClearPending's
+-- pendingAttrSpellID line, making that test a false gate.
+function LR:_GetPendingSpellID()     return pendingSpellID end
+function LR:_GetPendingName()        return pendingName end
+function LR:_GetPendingAttrSpellID() return pendingAttrSpellID end
+
 function LR:UpdateDB()
     if KE.db and KE.db.profile then
         self.db = KE.db.profile.LFGReminder
@@ -318,5 +328,191 @@ UpdateButtonVisuals = function()
         if not (ok and applied) then secureBtn._cd:Clear() end
     else
         secureBtn._cd:Clear()
+    end
+end
+
+-- Resolve the accepted dungeon via a CLEAN string chain. resultID is
+-- only ever passed as a function argument (safe even if secret).
+ResolveDungeon = function(resultID)
+    if not (C_LFGList and C_LFGList.GetSearchResultInfo) then return end
+    pcall(function()
+        local info = C_LFGList.GetSearchResultInfo(resultID)
+        if type(info) ~= "table" then return end
+        local activityID = info.activityID
+        if activityID == nil and info.activityIDs and not issecretvalue(info.activityIDs) then
+            activityID = info.activityIDs[1]
+        end
+        if issecretvalue(activityID) or activityID == nil then return end
+        local act = C_LFGList.GetActivityInfoTable(activityID)
+        if type(act) ~= "table" then return end
+        local fullName = act.fullName
+        if type(fullName) ~= "string" or issecretvalue(fullName) then return end
+        local spellID = ResolveTeleportSpellByName(fullName)
+        if spellID then
+            pendingSpellID = spellID
+            -- Name only, no trailing difficulty suffix
+            pendingName = (fullName:gsub("%s*%b()%s*$", ""))
+        end
+    end)
+end
+
+ShowPrompt = function()
+    if not (LR.db and LR.db.Enabled ~= false) or not pendingSpellID then return end
+    if InCombatLockdown() then
+        -- Deferral comes BEFORE BuildPopup, unlike the reference. BuildPopup
+        -- calls secureBtn:SetAttribute("type", "spell") on a protected frame
+        -- (<REF>:194), which combat blocks -- and OnEnable skips the build in
+        -- combat, so this path IS reachable with no popup at all: enable or
+        -- /reload during combat, then join a group before it ends.
+        -- PLAYER_REGEN_ENABLED builds it and finishes the show.
+        pendingAttrSpellID = pendingSpellID
+        pendingShow = true
+        pendingHide = nil  -- a deferred show supersedes a deferred hide
+        return
+    end
+    BuildPopup()
+    popup._name:SetText(pendingName or "")
+    secureBtn:SetAttribute("spell", pendingSpellID)  -- static integer
+    pendingAttrSpellID = nil
+    pendingHide = nil
+    UpdateButtonVisuals()
+    popup:Show()
+end
+
+HidePrompt = function()
+    pendingShow = nil
+    -- popup parents a SecureActionButton, so popup:Hide() is protected
+    -- in combat. Already hidden = nothing to do (the common case when
+    -- leaving an instance in combat); genuinely shown in combat = defer.
+    if not (popup and popup:IsShown()) then pendingHide = nil; return end
+    if InCombatLockdown() then pendingHide = true; return end
+    pendingHide = nil
+    popup:Hide()
+end
+
+ClearPending = function()
+    pendingSpellID     = nil
+    pendingName        = nil
+    pendingShow        = nil
+    -- Also clear the deferred attribute write. A combat join sets BOTH
+    -- pendingAttrSpellID and pendingShow; if the group breaks before combat
+    -- ends, clearing only pendingShow would leave PLAYER_REGEN_ENABLED to
+    -- build a popup nobody asked for and arm it with the cancelled
+    -- dungeon's teleport. The reference does not clear it because its
+    -- ShowPrompt built the popup up front.
+    pendingAttrSpellID = nil
+end
+
+-- Live refresh for the GUI (scale + disable-text row)
+function LR:RefreshVisuals()
+    if not popup then return end
+    popup:SetScale((self.db and self.db.Scale) or 1.05)
+    ApplyDisableVisibility()
+end
+
+function LR:LFG_LIST_JOINED_GROUP(_, resultID)
+    -- Fires the moment the player joins a Group Finder group; unlike
+    -- browse/apply, the search result is readable here. Capture
+    -- immediately -- the result can expire shortly after joining.
+    ClearPending()
+    ResolveDungeon(resultID)
+    if pendingSpellID then ShowPrompt() end
+end
+
+function LR:GROUP_ROSTER_UPDATE()
+    if not IsInGroup() then
+        ClearPending(); HidePrompt()
+    end
+end
+
+function LR:CheckInstance()
+    local inInstance, instanceType = IsInInstance()
+    if inInstance and instanceType == "party" then
+        ClearPending(); HidePrompt()
+    end
+end
+
+function LR:PLAYER_REGEN_DISABLED()
+    HidePrompt()  -- teleports can't be cast in combat
+end
+
+function LR:PLAYER_REGEN_ENABLED()
+    -- Build now if combat prevented it. Both OnEnable and ShowPrompt skip
+    -- BuildPopup during combat, so a join that landed mid-combat can arrive
+    -- here with no popup at all. Out of combat now, so the secure frame and
+    -- its "type" attribute are safe to create.
+    --
+    -- Gated on a COHERENT live show -- pending show AND pending spell AND
+    -- still enabled -- so a cancelled or disabled join never materialises a
+    -- popup here.
+    local wantShow = pendingShow and pendingSpellID
+        and self.db and self.db.Enabled ~= false
+    if wantShow and not popup then
+        BuildPopup()
+    end
+    -- Flush a secure attribute write blocked during combat
+    if pendingAttrSpellID and secureBtn then
+        secureBtn:SetAttribute("spell", pendingAttrSpellID)
+        pendingAttrSpellID = nil
+    end
+    -- Surface a prompt whose join landed mid-combat. The name is set here
+    -- rather than in ShowPrompt: that path returned before touching the
+    -- popup, which may not have existed yet.
+    if wantShow then
+        pendingShow = nil
+        if popup then popup._name:SetText(pendingName or "") end
+        UpdateButtonVisuals()
+        if popup then popup:Show() end
+    end
+    -- Flush a hide blocked during combat
+    if pendingHide then
+        pendingHide = nil
+        if popup and popup:IsShown() then popup:Hide() end
+    end
+end
+
+function LR:OnInitialize()
+    self:UpdateDB()
+    self:SetEnabledState(false)
+end
+
+function LR:OnEnable()
+    self:UpdateDB()
+    if not (self.db and self.db.Enabled ~= false) then return end
+    if not InCombatLockdown() then
+        BuildPopup()  -- secure button needs out-of-combat creation
+    end
+    self:RegisterEvent("LFG_LIST_JOINED_GROUP")
+    self:RegisterEvent("GROUP_ROSTER_UPDATE")
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "CheckInstance")
+    self:RegisterEvent("ZONE_CHANGED_NEW_AREA", "CheckInstance")
+    self:RegisterEvent("PLAYER_REGEN_DISABLED")
+    self:RegisterEvent("PLAYER_REGEN_ENABLED")
+end
+
+function LR:OnDisable()
+    ClearPending()
+    pendingHide = nil
+    -- Do NOT use HidePrompt here. AceAddon disables our embeds immediately
+    -- after this returns, and AceEvent's OnEmbedDisable calls
+    -- UnregisterAllEvents (Libs/AceEvent-3.0/AceEvent-3.0.lua:112-115) --
+    -- so a hide that HidePrompt deferred via pendingHide could never be
+    -- flushed: our PLAYER_REGEN_ENABLED is gone.
+    --
+    -- KE:RunAfterCombat (Core/Globals.lua:154) owns its own frame and its
+    -- own PLAYER_REGEN_ENABLED registration, so it survives our disable.
+    -- It runs the closure immediately when out of combat.
+    if popup and popup:IsShown() then
+        KE:RunAfterCombat(function()
+            -- Keep the popup ONLY if the module came back AND has a fresh
+            -- live prompt. "Enabled" alone is not enough: this disable just
+            -- cleared the pending state, so a re-enable with no new join
+            -- would strand the old popup on screen with its old teleport
+            -- still armed.
+            if LR:IsEnabled() and pendingSpellID then return end
+            -- Out of combat here, so both writes are safe.
+            if secureBtn then secureBtn:SetAttribute("spell", nil) end
+            if popup and popup:IsShown() then popup:Hide() end
+        end)
     end
 end
