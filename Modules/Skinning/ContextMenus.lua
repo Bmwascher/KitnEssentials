@@ -24,6 +24,12 @@ local ipairs = ipairs -- luacheck: ignore 211/ipairs
 local math_max = math.max
 local C_AddOns = C_AddOns
 
+-- Flip to true, /reload, then right-click a UNIT and hover a submenu. The log
+-- answers the one thing source cannot: which branch of SkinFrame's
+-- secret-dimension rescue a submenu frame actually takes. See
+-- dev/docs/superpowers/plans/2026-07-30-context-menu-submenu-bug.md.
+local DEBUG_CM = false
+
 local backdrops = setmetatable({}, { __mode = "k" })
 -- Frames whose Blizzard art we have removed. Weak-keyed: pooled menu
 -- frames must not be held alive by this.
@@ -71,6 +77,15 @@ local function SkinFrame(frame)
     -- already be too late. A menu that will not give usable numbers simply
     -- goes unskinned; it keeps Blizzard's own look rather than erroring.
     local w, h = frame:GetWidth(), frame:GetHeight()
+    if DEBUG_CM then
+        -- tostring(frame) is the table address: the same address reappearing
+        -- across menus is what proves pooling, which is the whole question here.
+        KE:Print("[CM] SkinFrame " .. tostring(frame)
+            .. " usableSize=" .. tostring(w ~= nil and h ~= nil
+                and not KE:IsSecretValue(w) and not KE:IsSecretValue(h))
+            .. " hasBackdrop=" .. tostring(backdrops[frame] ~= nil)
+            .. " wasStripped=" .. tostring(stripped[frame] ~= nil))
+    end
     if not w or not h or KE:IsSecretValue(w) or KE:IsSecretValue(h) then
         -- v4.0.154: menu frames are POOLED. A frame stripped on an earlier
         -- (readable) menu comes back for a secret one, and hiding our
@@ -83,6 +98,10 @@ local function SkinFrame(frame)
         -- known size. Only frames we have never touched are left alone.
         local existing = backdrops[frame]
         if existing then
+            if DEBUG_CM then
+                KE:Print("[CM]   rescue A: reuse existing backdrop -> "
+                    .. (stripped[frame] and "SHOW" or "HIDE"))
+            end
             if stripped[frame] then existing:Show() else existing:Hide() end
         elseif stripped[frame] then
             -- Stripped on a previous use and pooled back with no backdrop
@@ -91,11 +110,20 @@ local function SkinFrame(frame)
             -- SetAllPoints on a frame that is already ours to draw is the
             -- lesser evil against an invisible menu.
             local bd = S.Backdrop(frame)
+            if DEBUG_CM then
+                KE:Print("[CM]   rescue B: rebuild on stripped pooled frame -> bd="
+                    .. tostring(bd ~= nil))
+            end
             if bd then
                 backdrops[frame] = bd
                 ourFrames[bd] = true
                 bd:Show()
             end
+        elseif DEBUG_CM then
+            -- The suspected submenu case: never skinned, never stripped, so
+            -- nothing happens and Blizzard's own art should still be showing.
+            -- If the submenu looks BARE here, the strip came from somewhere else.
+            KE:Print("[CM]   rescue C: untouched frame, no action")
         end
         return
     end
@@ -128,10 +156,24 @@ local function SkinFrame(frame)
         bd:SetFrameLevel(math_max(lvl - 1, 0))
         bd:Show()
     end
+    if DEBUG_CM then
+        KE:Print("[CM]   SKINNED normally: w=" .. tostring(w) .. " h=" .. tostring(h)
+            .. " bd=" .. tostring(bd ~= nil))
+    end
 end
 
 local function OnMenuOpen(manager, _ownerRegion, menuDescription)
     local menu = manager and manager.GetOpenMenu and manager:GetOpenMenu()
+    -- This marker is what separates ROOT from SUBMENU in the log: the first
+    -- SkinFrame line after an OPEN is the root menu; every SkinFrame line after
+    -- that with no intervening OPEN arrived through the acquired-frame
+    -- callback, which is how submenus reach us.
+    if DEBUG_CM then
+        KE:Print("[CM] === OPEN === root=" .. tostring(menu ~= nil)
+            .. " canRegisterAcquired="
+            .. tostring(menuDescription ~= nil
+                and menuDescription.AddMenuAcquiredCallback ~= nil))
+    end
     if menu then SkinFrame(menu) end
 
     if menuDescription and menuDescription.AddMenuAcquiredCallback then
