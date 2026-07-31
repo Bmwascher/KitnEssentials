@@ -82,9 +82,13 @@ S.WINDOW_MAP = {
     -- A6.3a deleted this row when it mapped to the whole `Alerts` key, because
     -- an unfiltered row cost up to nineteen alert systems to avoid one
     -- collision (2026-07-29-aes-a6-3a-colliding-window-skins.md:121-125). The
-    -- key split above is A6.3a's own named remedy for that shape: `LootToast`
-    -- covers only the six item-drop toasts EllesmereUI's loot-event trigger set
-    -- actually visits, so the row now costs nothing it does not buy back.
+    -- key split above is A6.3a's own named remedy for that shape: suppression
+    -- now reaches only our six item-drop toasts instead of all twenty-five.
+    -- It does NOT follow that EllesmereUI visits exactly those six. Its sweep
+    -- walks every active alert subsystem and duck-types on a label field
+    -- (EllesmereUIBlizzardSkin_WindowPacks.lua:11295-11302), so over-suppression
+    -- is bounded here, not eliminated -- which is the accepted trade, in the
+    -- visible-failure direction A6.3a chose.
     -- Its sibling `loot` row stays deleted: EllesmereUI's loot pack touches
     -- only _G.LootFrame while our `Loot` key covers four families.
     { euiKey = "loottoast",       skins = { "LootToast" },  since = "8.6.4" },

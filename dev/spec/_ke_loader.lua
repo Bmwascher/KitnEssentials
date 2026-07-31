@@ -435,6 +435,23 @@ function L.loadSkinAPI_EUIWindows(overrides)
     return KE
 end
 
+-- Modules/Skinning/Frames/Alerts.lua. The Alerts/LootToast key split lives
+-- entirely in the two S:RegisterEarly call sites at file scope -- nothing
+-- else in the file needs to run to observe it, so KE.Skins carries only a
+-- recorder for that one method (every Dress*/Skin* function stays merely
+-- DEFINED, never invoked, since nothing here calls hooksecurefunc's
+-- captured closures). Returns the recorded calls, each
+-- { fn = <function>, key = <string> }, in registration order.
+function L.loadAlertsSkin(overrides)
+    installMock(overrides, {})
+    local calls = {}
+    local KE = { Skins = {
+        RegisterEarly = function(_, fn, key) calls[#calls + 1] = { fn = fn, key = key } end,
+    } }
+    helpers.loadModule("Modules/Skinning/Frames/Alerts.lua", KE)
+    return calls
+end
+
 -- Walks a Lua function's upvalues by NAME. Returns the upvalue's current
 -- value, or nil if fn has no upvalue by that name.
 local function findUpvalue(fn, name)

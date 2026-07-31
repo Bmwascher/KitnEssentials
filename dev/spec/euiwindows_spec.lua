@@ -159,12 +159,18 @@ describe("EUIWindows", function()
 
         it("leaves the toast key to us on EllesmereUI 8.6.3", function()
             local _, KE = loader.loadEUIWindows()
+            -- SAME-KEY positive control, and it has to come first. Asserting
+            -- only that `merchant` resolves would leave this test green if the
+            -- loottoast ROW were missing entirely -- the exact missing-row
+            -- vacuity this suite exists to prevent.
+            local on = KE:BuildSkinSuppressionSet(env({ version = "8.6.4" }))
+            assert.equal("loottoast", on.LootToast)
             local set = KE:BuildSkinSuppressionSet(env({ version = "8.6.3" }))
             -- The key does not exist before 8.6.4, and GetBlizzWindowStyle
             -- fails OPEN, so without the gate an 8.6.3 client would answer
             -- "eui" for it and silently drop our skin.
             assert.is_nil(set.LootToast)
-            -- Positive control: an ungated row still resolves on 8.6.3.
+            -- And an ungated row still resolves on 8.6.3.
             assert.equal("merchant", set.Merchant)
         end)
     end)
