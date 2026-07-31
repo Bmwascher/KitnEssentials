@@ -1,0 +1,38 @@
+local loader = require("dev.spec._ke_loader")
+
+describe("LFGReminder module", function()
+    it("loads in the spec harness", function()
+        local LR = loader.loadLFGReminder()
+        assert.is_table(LR)
+        assert.is_table(LR.db)
+        assert.equals(1.05, LR.db.Scale)
+    end)
+
+    describe("teleport lookup", function()
+        it("resolves an exact lowercase name", function()
+            local _, _, seams = loader.loadLFGReminder()
+            assert.equals(159898, seams.resolveByName("skyreach"))
+        end)
+
+        it("is case-insensitive", function()
+            local _, _, seams = loader.loadLFGReminder()
+            assert.equals(159898, seams.resolveByName("Skyreach"))
+        end)
+
+        it("strips a trailing difficulty suffix", function()
+            local _, _, seams = loader.loadLFGReminder()
+            assert.equals(393273, seams.resolveByName("Algeth'ar Academy (Mythic)"))
+        end)
+
+        it("returns nil for an unknown dungeon", function()
+            local _, _, seams = loader.loadLFGReminder()
+            assert.is_nil(seams.resolveByName("Not A Dungeon"))
+        end)
+
+        it("returns nil for a non-string", function()
+            local _, _, seams = loader.loadLFGReminder()
+            assert.is_nil(seams.resolveByName(42))
+            assert.is_nil(seams.resolveByName(nil))
+        end)
+    end)
+end)
