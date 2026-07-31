@@ -171,10 +171,22 @@ function LR:ReassertPosition()
     if self._reassertPending then return end
     self._reassertPending = true
 
+    -- DEVIATION A (task-3 FIX ROUND 2): both timer callbacks below are two
+    -- of the five async re-entries the module-disabled guard covers (see
+    -- the longer note at the hook installs below). Each bails when the
+    -- module is disabled, but must still clear _reassertPending first --
+    -- otherwise a disable mid-flight would leave the flag stuck true and
+    -- silently block every ReassertPosition call for the rest of the
+    -- session, even after the module is re-enabled.
     C_Timer.After(0, function()
+        if not LR:IsEnabled() then
+            LR._reassertPending = nil
+            return
+        end
         self:ApplyPosition()
         C_Timer.After(0, function()
             self._reassertPending = nil
+            if not LR:IsEnabled() then return end
             self:ApplyPosition()
         end)
     end)
@@ -189,6 +201,11 @@ function LR:WaitForRegen()
     w:SetScript("OnEvent", function(f)
         f:UnregisterAllEvents()
         LR._regenPending = nil
+        -- DEVIATION A (task-3 FIX ROUND 2): the watcher must always disarm
+        -- itself (UnregisterAllEvents + clear the pending flag above), but
+        -- must not re-apply the feature once the module has been disabled
+        -- -- see the longer note at the hook installs below.
+        if not LR:IsEnabled() then return end
         if LR._unmanage then LR._unmanage() end
         LR:ApplyPosition()
     end)
@@ -278,7 +295,7 @@ function LR:Setup()
         -- Re-asserting on the frame after the layout has settled is what
         -- makes it stick. Cheap: it only runs while a roll is on screen.
         --
-        -- DEVIATION (task-3, corrects <REF>:266-279): these three hooks
+        -- DEVIATION A (task-3, corrects <REF>:266-279): these three hooks
         -- are PERMANENT -- hooksecurefunc cannot be undone, and none of
         -- the reference's three callbacks tested whether the module was
         -- still enabled, so KitnEssentials:DisableModule("LootRoll") left
@@ -286,6 +303,28 @@ function LR:Setup()
         -- skinned anyway -- the user's off-switch did not turn the
         -- feature off. Each callback below now bails first when the
         -- module is disabled.
+        --
+        -- FIX ROUND 2: the same guard is needed on two ASYNC re-entries
+        -- these hooks feed into, not just here -- five paths total.
+        -- WaitForRegen's PLAYER_REGEN_ENABLED watcher and both of
+        -- ReassertPosition's C_Timer.After callbacks call ApplyPosition
+        -- on a later frame, after this Setup call has returned; a disable
+        -- that lands in the gap between arming one of those and it firing
+        -- otherwise re-applies the feature anyway. Worse, in combat that
+        -- race pits WaitForRegen's watcher against Deviation B's own
+        -- restore watcher on the SAME PLAYER_REGEN_ENABLED event, and
+        -- registration order decides which one wins -- the unfavourable
+        -- order undoes the disable-time restore until reload. Both
+        -- watchers now check LR:IsEnabled() before touching the container
+        -- (see WaitForRegen and ReassertPosition above), while still
+        -- disarming/clearing their own pending flags unconditionally.
+        --
+        -- ApplyPosition itself stays deliberately UNGUARDED: every
+        -- synchronous caller (Setup, the GUI position sliders, Edit
+        -- Mode's setPosition) only runs while the module is legitimately
+        -- enabled, and a blanket guard inside ApplyPosition would risk
+        -- breaking those live paths for no gain -- the leak is strictly
+        -- in the async re-entries, so that's where the guard belongs.
         if type(_G.GroupLootContainer_Update) == "function" then
             hooksecurefunc("GroupLootContainer_Update", function(container)
                 if not LR:IsEnabled() then return end
@@ -396,6 +435,11 @@ function LR:OnDisable()
     -- the user just disabled.
     if c and LR._origGLCParent and c:GetParent() ~= LR._origGLCParent then
         if InCombatLockdown() then
+            -- Diagnostic state only -- nothing reads this flag or gates on
+            -- it. The watcher below is already one-shot (UnregisterAllEvents
+            -- on first fire) and idempotent (re-checks _origGLCParent vs.
+            -- the current parent before setting), so a later reader should
+            -- not assume _pendingRestore is what prevents double-arming.
             LR._pendingRestore = true
             local w = CreateFrame("Frame")
             w:RegisterEvent("PLAYER_REGEN_ENABLED")
