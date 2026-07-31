@@ -590,4 +590,78 @@ function L.loadLootRoll(overrides)
     return LR, container
 end
 
+-- Modules/Skinning/LootRoll.lua followed by Modules/Skinning/LootRollBars.lua
+-- on the same KE/module instance -- LootRollBars.lua attaches its pool
+-- (RollBar_Get/Create, ShowPreview/HidePreview, SetupRollBars/TeardownRollBars)
+-- onto the LR table LootRoll.lua registered, exactly as they load in-game via
+-- Skinning.xml. CreateFrame returns a rich stub whose Get*Texture methods
+-- return real (if inert) texture objects -- RollBar_Create's RollTexCoords
+-- pass calls `icon:SetTexCoord(...)` on whatever GetNormalTexture() et al.
+-- return, so a plain nil (the generic noopFrame's metatable fallback) would
+-- error there. Unlike noopFrame, the stub's __index only synthesises a
+-- no-op for CapitalCase keys (WoW API method convention) -- RollBar_Create
+-- stores plain data straight on the frame (bar.rollID, bar.time, ...), all
+-- lowercase-first, and a blanket "any missing key is a truthy function"
+-- fallback would make `if not bar.rollID` always false, breaking every free/
+-- busy pool check. KE.Skins carries just enough of the real S surface
+-- (Backdrop/GetBackdrop paired through a per-frame table, SetFont, palette,
+-- borderColor) for RollBar_Create/ShowPreview/START_LOOT_ROLL to run without
+-- touching real skinning code. LR:UpdateDB() seeds LR.db the same way a real
+-- OnInitialize would. Returns LR.
+function L.loadLootRollBars(overrides)
+    installMock(overrides, { C_Timer = inertTimer() })
+    local modules = helpers.installAddonShim()
+    _G.UIParent = noopFrame()
+    -- Missing CapitalCase keys (WoW API methods) resolve to a no-op;
+    -- missing lowercase keys (data fields the module assigns itself) read
+    -- as a real nil, same as an unset field on a genuine WoW frame.
+    local function apiStubIndex(_, key)
+        if type(key) == "string" and key:match("^%u") then
+            return function() end
+        end
+        return nil
+    end
+    local function textureStub()
+        return setmetatable({}, { __index = apiStubIndex })
+    end
+    local function rollBarFrame()
+        local normalTex, pushedTex, disabledTex, highlightTex =
+            textureStub(), textureStub(), textureStub(), textureStub()
+        local f = {
+            GetNormalTexture = function() return normalTex end,
+            GetPushedTexture = function() return pushedTex end,
+            GetDisabledTexture = function() return disabledTex end,
+            GetHighlightTexture = function() return highlightTex end,
+            CreateFontString = function() return textureStub() end,
+            CreateTexture = function() return textureStub() end,
+        }
+        return setmetatable(f, { __index = apiStubIndex })
+    end
+    _G.CreateFrame = function() return rollBarFrame() end
+    _G.hooksecurefunc = function() end
+    _G.InCombatLockdown = function() return false end
+    local backdrops = setmetatable({}, { __mode = "k" })
+    local KE = {
+        db = { profile = { Skinning = { LootRoll = {} } } },
+        ShouldNotLoadModule = function() return false end,
+        GetStatusbarPath = function(_, name) return name end,
+        Skins = {
+            Backdrop = function(frame)
+                local bd = textureStub()
+                backdrops[frame] = bd
+                return bd
+            end,
+            GetBackdrop = function(frame) return backdrops[frame] end,
+            SetFont = function() end,
+            palette = { brand = { 1, 0, 0.549 } },
+            borderColor = { 0, 0, 0, 1 },
+        },
+    }
+    helpers.loadModule("Modules/Skinning/LootRoll.lua", KE)
+    helpers.loadModule("Modules/Skinning/LootRollBars.lua", KE)
+    local LR = modules["LootRoll"]
+    LR:UpdateDB()
+    return LR
+end
+
 return L

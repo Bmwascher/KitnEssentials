@@ -74,3 +74,43 @@ describe("LootRoll ApplyPosition", function()
         assert.is_nil(LR._lastPoint())
     end)
 end)
+
+describe("LootRoll RollBar_Get", function()
+    local LR
+
+    before_each(function()
+        LR = L.loadLootRollBars()
+    end)
+
+    -- POSITIVE CONTROL: the indexed form must actually create bars, or the
+    -- free-bar assertions below would pass against an empty pool.
+    it("creates a bar on demand for an index", function()
+        local bar = LR:RollBar_Get(1)
+        assert.is_table(bar)
+        assert.equal(1, #LR.RollBars)
+        assert.equal(bar, LR:RollBar_Get(1))   -- same bar, not a second one
+    end)
+
+    it("hands out a bar with no rollID when called with no index", function()
+        LR:RollBar_Get(1)
+        LR:RollBar_Get(2)
+        LR.RollBars[1].rollID = 42
+        assert.equal(LR.RollBars[2], LR:RollBar_Get())
+    end)
+
+    it("returns nil when every bar is busy", function()
+        -- The caller queues the roll in waitingRolls on nil. Returning a
+        -- busy bar instead would silently drop an in-flight roll.
+        LR:RollBar_Get(1)
+        LR.RollBars[1].rollID = 42
+        assert.is_nil(LR:RollBar_Get())
+    end)
+
+    it("treats the preview sentinel as busy", function()
+        -- ShowPreview parks the string "PREVIEW" in rollID precisely so a
+        -- real roll cannot steal a bar whose buttons have mouse disabled.
+        LR:RollBar_Get(1)
+        LR.RollBars[1].rollID = "PREVIEW"
+        assert.is_nil(LR:RollBar_Get())
+    end)
+end)

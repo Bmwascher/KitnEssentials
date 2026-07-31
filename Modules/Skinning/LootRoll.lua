@@ -12,6 +12,9 @@ end
 ---@field _regenPending boolean? true while WaitForRegen's PLAYER_REGEN_ENABLED watcher is armed; nil once it fires
 ---@field editModeRegistered boolean? true while the EditMode element is registered; nil after OnDisable/UnregisterElement
 ---@field _pendingRestore boolean? true while OnDisable's combat-deferred GroupLootContainer restore watcher is armed; nil once it fires
+---@field _barsWired boolean? true once SetupRollBars has registered START_LOOT_ROLL and unregistered UIParent's; nil after TeardownRollBars
+---@field _previewBar table? the RollBar table currently showing the GUI preview; nil when no preview is active
+---@field _previewTimer table? the C_Timer handle draining the preview; nil once cancelled or fired
 local LR = KitnEssentials:NewModule("LootRoll", "AceEvent-3.0")
 
 -- The profile-switch path and the ElvUI startup skip both gate on

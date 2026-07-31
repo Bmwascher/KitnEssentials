@@ -239,7 +239,8 @@ read_globals = {
 
     -- Loot
     "GetLootRollItemLink", "GetLootRollItemInfo", "RollOnLoot", "ConfirmLootRoll",
-    "BonusRollFrame", "BonusRollFrame_StartBonusRoll",
+    "BonusRollFrame", "BonusRollFrame_StartBonusRoll", "GetLootRollTimeLeft",
+    "NEED", "GREED", "PASS", "TRANSMOGRIFY", "ROLL_DISENCHANT",
 
     -- Resurrection
     "AcceptResurrect", "IsEncounterInProgress",
@@ -257,7 +258,7 @@ read_globals = {
     "GetMoney", "GetCoinTextureString",
 
     -- Tooltip
-    "GameTooltip", "GameTooltip_Hide",
+    "GameTooltip", "GameTooltip_Hide", "GameTooltip_ShowCompareItem",
     "TooltipDataProcessor",
     "C_TooltipInfo",
 
@@ -366,7 +367,7 @@ read_globals = {
 
     -- Misc API
     "IsAltKeyDown", "IsControlKeyDown", "IsShiftKeyDown", "IsMetaKeyDown",
-    "IsMouseButtonDown", "IsMounted",
+    "IsMouseButtonDown", "IsMounted", "IsModifiedClick",
     "ResetInstances",
     "GetServerTime", "GetTimePreciseSec", "GetLocale",
     "ReloadUI", "print",

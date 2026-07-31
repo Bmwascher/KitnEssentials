@@ -22,6 +22,7 @@ return {
         IsWargame = "undocumented C-side; /run-verified function (type probe) 12.0.7 2026-07-05 (CombatLogger.lua:156)",
         NUM_LE_FRAME_TUTORIALS = "C-side constant, not in the UI-source export; /run-verified = 163 in 12.0.7 2026-07-01 (Automation.lua:60)",
         CharacterFrameTitleText = "generated frame name ($parentTitleText — literal grep can't see it); /run-verified frame exists in 12.0.7 2026-07-01 (CharacterPanel.lua:855)",
+        ROLL_DISENCHANT = "GlobalStrings.lua constant, not in the UI-source export (same class as NUM_LE_FRAME_TUTORIALS); deliberate `or \"Disenchant\"` fallback guards a nil global (Modules/Skinning/LootRollBars.lua:237)",
     },
     unused_ok = {
         canaccesstable = "declared for symmetry with the secret-intrinsics family",
