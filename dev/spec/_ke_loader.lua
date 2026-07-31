@@ -854,11 +854,13 @@ function L.loadSlashCommands(overrides)
 end
 
 -- Modules/Dungeons/LFGReminder.lua. The file-scope `local X = X` captures
--- include C_Spell, C_LFGList, GameTooltip and UIParent, so all four must
--- exist before load or the capture takes nil. `issecretvalue` is captured
--- with an `or function() return false end` fallback in the module itself,
--- so it needs no stub here -- but _wow_mock manages it, so a caller
--- override still routes through installMock.
+-- include C_Spell, C_SpellBook, C_LFGList, GameTooltip and UIParent, and the
+-- file also reads Enum.SpellBookSpellBank.Player at file scope, so all of
+-- them must exist before load or the capture takes nil. `issecretvalue` and
+-- `issecrettable` are captured with an `or function() return false end`
+-- fallback in the module itself, so neither needs a stub here -- but
+-- _wow_mock manages both, so a caller override still routes through
+-- installMock.
 --
 -- Nothing creates a frame at load time: BuildPopup only runs from OnEnable
 -- and from the show path, neither of which this loader calls.

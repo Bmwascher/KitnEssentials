@@ -55,7 +55,10 @@ local C_Spell = C_Spell
 -- Do NOT widen .luacheckrc instead.
 local C_LFGList = _G.C_LFGList
 local GameTooltip = GameTooltip
+-- Both secret predicates get the same fallback: an environment missing one
+-- would be missing both, and a bare call to either throws.
 local issecretvalue = issecretvalue or function() return false end
+local issecrettable = issecrettable or function() return false end
 
 -- Dungeon display name (lowercase, difficulty suffix stripped) ->
 -- teleport spellID. Season-volatile data matched by name against

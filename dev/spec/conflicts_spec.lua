@@ -175,6 +175,10 @@ describe("Core/Conflicts.lua decision layer", function()
             assert.equals("LFGReminder", queue[1].module)
         end)
 
+        -- _G is shared across the whole run, so this one must put it back or
+        -- every later spec inherits a disabled rival prompt.
+        after_each(function() _G.EllesmereUIDB = nil end)
+
         it("resolver isActive returns false once the rival's prompt is disabled", function()
             _G.EllesmereUIDB = { teleportPrompt = { enabled = false } }
             local queue = KE:BuildConflictQueue({

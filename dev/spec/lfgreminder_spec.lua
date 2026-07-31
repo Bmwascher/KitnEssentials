@@ -41,7 +41,14 @@ describe("LFGReminder module", function()
             opts = opts or {}
             local LR, _, seams = loader.loadLFGReminder({
                 C_LFGList = {
-                    GetSearchResultInfo = function() return { activityID = 7 } end,
+                    -- 12.0.7's LfgSearchResultData carries activityIDs and NO
+                    -- activityID (LFGListInfoDocumentation.lua:905-910), so the
+                    -- DEFAULT stub uses the real shape and every join test below
+                    -- exercises the live resolution branch. Override
+                    -- opts.searchResult to pin the legacy field instead.
+                    GetSearchResultInfo = function()
+                        return opts.searchResult or { activityIDs = { 7 } }
+                    end,
                     GetActivityInfoTable = function() return { fullName = fullName } end,
                 },
                 -- Loader-level knobs; the loader keeps returning a usable
@@ -65,6 +72,12 @@ describe("LFGReminder module", function()
 
         it("resolves a known dungeon on join", function()
             local LR = joinedWith("Skyreach")
+            LR:LFG_LIST_JOINED_GROUP(nil, 1)
+            assert.equals(159898, LR:_GetPendingSpellID())
+        end)
+
+        it("still resolves through the legacy activityID field", function()
+            local LR = joinedWith("Skyreach", { searchResult = { activityID = 7 } })
             LR:LFG_LIST_JOINED_GROUP(nil, 1)
             assert.equals(159898, LR:_GetPendingSpellID())
         end)
