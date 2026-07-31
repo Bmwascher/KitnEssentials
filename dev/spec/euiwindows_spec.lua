@@ -109,8 +109,9 @@ describe("EUIWindows", function()
         -- has never heard of, so on EllesmereUI 8.5.9 -- which predates
         -- `itemupgrade` -- asking about it claims ownership of a window it
         -- does not skin. The `since` gate is the only thing standing between
-        -- that and one silently missing skin. (`loot`/`loottoast` used to be
-        -- gated too; both rows are gone -- see "map integrity" below.)
+        -- that and one silently missing skin. `loottoast` is gated the same
+        -- way -- see the split-specific cases below. (`loot` carries no row
+        -- at all -- see "map integrity" below.)
         it("ignores an entry newer than the installed EllesmereUI", function()
             local _, KE = loader.loadEUIWindows()
             local set = KE:BuildSkinSuppressionSet(env({ version = "8.5.9" }))
@@ -129,6 +130,41 @@ describe("EUIWindows", function()
             local _, KE = loader.loadEUIWindows()
             local set = KE:BuildSkinSuppressionSet(env({ version = NO_VERSION }))
             assert.is_nil(set.ItemUpgrade)
+            assert.equal("merchant", set.Merchant)
+        end)
+
+        it("never suppresses our four-family loot window key", function()
+            local _, KE = loader.loadEUIWindows()
+            local set = KE:BuildSkinSuppressionSet(env())
+            -- Positive control: with every style answering "eui" the sibling
+            -- toast key IS suppressed, so the negative below cannot be passing
+            -- against a resolver that suppresses nothing at all.
+            assert.equal("loottoast", set.LootToast)
+            -- EllesmereUI's loot pack touches only _G.LootFrame; our `Loot`
+            -- key covers four families, so it is never suppressed whole.
+            assert.is_nil(set.Loot)
+        end)
+
+        it("never suppresses the non-toast alert popups", function()
+            local _, KE = loader.loadEUIWindows()
+            local set = KE:BuildSkinSuppressionSet(env())
+            -- Positive control first: with every style answering "eui" the
+            -- toast key IS suppressed, so a resolver that suppressed nothing
+            -- at all could not satisfy the negative below.
+            assert.equal("loottoast", set.LootToast)
+            -- EllesmereUI leaves achievement and other alert styles alone,
+            -- so our nineteen-system `Alerts` key must survive.
+            assert.is_nil(set.Alerts)
+        end)
+
+        it("leaves the toast key to us on EllesmereUI 8.6.3", function()
+            local _, KE = loader.loadEUIWindows()
+            local set = KE:BuildSkinSuppressionSet(env({ version = "8.6.3" }))
+            -- The key does not exist before 8.6.4, and GetBlizzWindowStyle
+            -- fails OPEN, so without the gate an 8.6.3 client would answer
+            -- "eui" for it and silently drop our skin.
+            assert.is_nil(set.LootToast)
+            -- Positive control: an ungated row still resolves on 8.6.3.
             assert.equal("merchant", set.Merchant)
         end)
     end)
@@ -161,12 +197,22 @@ describe("EUIWindows", function()
             end
         end)
 
-        it("has deleted the loot and loottoast rows", function()
+        it("has no loot row, and maps loottoast to the split key only", function()
             local _, KE = loader.loadEUIWindows()
+            local byKey = {}
             for _, entry in ipairs(KE.Skins.WINDOW_MAP) do
+                -- EllesmereUI's loot pack touches only _G.LootFrame; our `Loot`
+                -- key covers four families. An unfiltered row here silently
+                -- costs three (a6-3a:121-125). It must never come back.
                 assert.are_not.equal("loot", entry.euiKey)
-                assert.are_not.equal("loottoast", entry.euiKey)
+                byKey[entry.euiKey] = entry
             end
+            -- Positive control: the sibling row DOES exist, so the assertion
+            -- above cannot be passing merely because the map is empty.
+            assert.is_table(byKey.loottoast)
+            -- And it points at the split key, never back at the whole
+            -- twenty-five-system `Alerts` key it used to carry.
+            assert.same({ "LootToast" }, byKey.loottoast.skins)
         end)
 
         it("repoints inspectrecipe onto InspectRecipe without touching professions", function()

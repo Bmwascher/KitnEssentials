@@ -114,6 +114,7 @@ local FRAME_SKINS = {
     { key = "LFG",                      text = "Group Finder (LFG)" },
     { key = "LFGuild",                  text = "Guild Finder" },
     { key = "Loot",                     text = "Loot Window" },
+    { key = "LootToast",                text = "Loot Toasts" },
     { key = "LossControl",              text = "Loss of Control" },
     { key = "Macro",                    text = "Macros" },
     { key = "Mail",                     text = "Mail" },

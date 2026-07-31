@@ -360,6 +360,13 @@ local function DressMoneyWon(frame)
     end
 end
 
+-- Two dispatch tables, one skin key each. The split exists so the
+-- EllesmereUI `loottoast` overlap can be suppressed on its own:
+-- EllesmereUI skins item-drop toasts (icon + item name) and explicitly
+-- leaves achievement and other alert styles alone
+-- (EllesmereUIBlizzardSkin_WindowPacks.lua:11166-11177). Greying the
+-- combined key against that overlap would un-skin nineteen popups
+-- EllesmereUI never touches.
 local SYSTEM_SKINS = {
 
     AchievementAlertSystem = DressAchievement,
@@ -374,12 +381,6 @@ local SYSTEM_SKINS = {
 
     HonorAwardedAlertSystem = DressHonor,
 
-    LegendaryItemAlertSystem = DressLegendary,
-    LootAlertSystem = DressLootWon,
-    LootUpgradeAlertSystem = DressLootUpgrade,
-    MoneyWonAlertSystem = DressMoneyWon,
-    EntitlementDeliveredAlertSystem = DressEntitlement,
-    RafRewardDeliveredAlertSystem = DressEntitlement,
     HousingItemEarnedAlertFrameSystem = DressHousingItem,
     InitiativeTaskCompleteAlertFrameSystem = DressHousingItem,
 
@@ -392,6 +393,19 @@ local SYSTEM_SKINS = {
     NewToyAlertSystem = DressMiscAlert,
     NewCosmeticAlertFrameSystem = DressMiscAlert,
     NewWarbandSceneAlertSystem = DressMiscAlert,
+
+}
+
+-- Item-drop toasts: icon plus item name. This is the set EllesmereUI's
+-- `loottoast` pack also claims.
+local TOAST_SKINS = {
+
+    LegendaryItemAlertSystem = DressLegendary,
+    LootAlertSystem = DressLootWon,
+    LootUpgradeAlertSystem = DressLootUpgrade,
+    MoneyWonAlertSystem = DressMoneyWon,
+    EntitlementDeliveredAlertSystem = DressEntitlement,
+    RafRewardDeliveredAlertSystem = DressEntitlement,
 
 }
 
@@ -408,15 +422,27 @@ local function DressBonusRollToasts()
     end
 end
 
-local function SkinAlerts()
-    for name, fn in next, SYSTEM_SKINS do
+-- Hooks each system's setUpFunction once. `S.data(sys).hooked` is per
+-- system table, so the two passes below cannot double-hook each other's
+-- entries even though they share this helper.
+local function HookSystems(map)
+    for name, fn in next, map do
         local sys = _G[name]
         if sys and not S.data(sys).hooked and type(sys.setUpFunction) == "function" then
             hooksecurefunc(sys, "setUpFunction", function(frame, ...) fn(frame, ...) end)
             S.data(sys).hooked = true
         end
     end
+end
+
+local function SkinAlerts()
+    HookSystems(SYSTEM_SKINS)
+end
+
+local function SkinLootToasts()
+    HookSystems(TOAST_SKINS)
     DressBonusRollToasts()
 end
 
 S:RegisterEarly(SkinAlerts, "Alerts")
+S:RegisterEarly(SkinLootToasts, "LootToast")

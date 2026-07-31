@@ -79,6 +79,15 @@ S.WINDOW_MAP = {
       partialLabel = "Delves (EllesmereUI: companion only)",
       partialTooltip = "EllesmereUI currently skins Companion Configuration. While that overlap is active, this toggle controls Difficulty Picker and Delves Dashboard. Your saved choice also applies to Companion Configuration if EllesmereUI stops covering it." },
     { euiKey = "itemupgrade",     skins = { "ItemUpgrade" },  since = "8.6.4" },
+    -- A6.3a deleted this row when it mapped to the whole `Alerts` key, because
+    -- an unfiltered row cost up to nineteen alert systems to avoid one
+    -- collision (2026-07-29-aes-a6-3a-colliding-window-skins.md:121-125). The
+    -- key split above is A6.3a's own named remedy for that shape: `LootToast`
+    -- covers only the six item-drop toasts EllesmereUI's loot-event trigger set
+    -- actually visits, so the row now costs nothing it does not buy back.
+    -- Its sibling `loot` row stays deleted: EllesmereUI's loot pack touches
+    -- only _G.LootFrame while our `Loot` key covers four families.
+    { euiKey = "loottoast",       skins = { "LootToast" },  since = "8.6.4" },
     -- `micromenu` has no row: the reference ships no micro-menu skin and
     -- A0 deleted ours. `Guild` (GuildInviteFrame) is likewise absent on
     -- purpose -- the invite popup is not the Communities window that
