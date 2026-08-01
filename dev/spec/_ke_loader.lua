@@ -1126,17 +1126,22 @@ end
 -- which this loader never calls.
 function L.loadGroupFinderPanel(overrides)
     overrides = overrides or {}
+    -- ONLY keys in MANAGED_MOCK_KEYS go in this dict. `_wow_mock.install`
+    -- reads a fixed key list and SILENTLY DROPS anything else, so an
+    -- unmanaged key placed here never reaches _G and the spec fails with
+    -- "attempt to call a nil value" far from the cause.
     installMock(managedSubset(overrides), {
         C_Timer = inertTimer(),
         GetTime = function() return 0 end,
         InCombatLockdown = function() return false end,
         CreateFrame = function(_, name) return qcFrame(name or "anon") end,
-        IsInGroup = overrides.isInGroup or function() return false end,
-        GetNumGroupMembers = overrides.getNumGroupMembers or function() return 0 end,
-        UnitGroupRolesAssigned = overrides.unitGroupRolesAssigned
-            or function() return "NONE" end,
-        hooksecurefunc = function() end,
     })
+
+    _G.IsInGroup = overrides.IsInGroup or function() return false end
+    _G.GetNumGroupMembers = overrides.GetNumGroupMembers or function() return 0 end
+    _G.UnitGroupRolesAssigned = overrides.UnitGroupRolesAssigned
+        or function() return "NONE" end
+    _G.hooksecurefunc = overrides.hooksecurefunc or function() end
     local modules = helpers.installAddonShim()
 
     _G.bit = _G.bit or {
@@ -1160,13 +1165,10 @@ function L.loadGroupFinderPanel(overrides)
     }
     _G.C_AddOns = overrides.C_AddOns or { IsAddOnLoaded = function() return false end }
     _G.C_SocialQueue = overrides.C_SocialQueue
-    -- issecretvalue / issecrettable exist in the live client but not in the
-    -- mock. Deviation 5's boundary calls them on EVERY field, so a nil here
-    -- would make every spec exercise the guard-threw path instead of the
-    -- happy path. Default to "nothing is secret"; a spec that wants the
-    -- rejection path overrides them.
-    _G.issecretvalue = overrides.issecretvalue or function() return false end
-    _G.issecrettable = overrides.issecrettable or function() return false end
+    -- issecretvalue / issecrettable are deliberately NOT set here. They ARE
+    -- in MANAGED_MOCK_KEYS, so `managedSubset` already forwards a caller's
+    -- override through installMock, and _wow_mock defaults both to "nothing
+    -- is secret". Task 3's specs override them the ordinary way.
     _G.GROUP_FINDER_CATEGORY_ID_DUNGEONS = 2
 
     local profile = {
