@@ -8,6 +8,7 @@
     <Script file="FocusMarker.lua" />
     <Script file="KeystoneHelper.lua" />
     <Script file="LFGReminder.lua" />
+    <Script file="LFGQuickCreate.lua" />
     <Script file="MythicPlusTimer\MythicPlusTimer.lua" />
     <Script file="MythicPlusTimer\MythicPlusTimer_HUD.lua" />
     <Script file="MythicPlusTimer\MythicPlusTimer_Splits.lua" />
