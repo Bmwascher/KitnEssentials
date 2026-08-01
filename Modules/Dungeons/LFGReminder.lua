@@ -113,6 +113,8 @@ local pendingName          -- dungeon display name (clean)
 local pendingAttrSpellID   -- spell attr stashed for out-of-combat write
 local pendingShow          -- join landed in combat; show on REGEN_ENABLED
 local pendingHide          -- hide requested in combat; flush on REGEN_ENABLED
+local combatHidden         -- the hide came from combat, not from the user
+
 
 local BuildPopup, ShowPrompt, HidePrompt, ClearPending
 local UpdateButtonVisuals, ResolveDungeon
@@ -297,6 +299,15 @@ BuildPopup = function()
     disableBtn:SetScript("OnClick", function()
         if LR.db then LR.db.Enabled = false end
         KitnEssentials:DisableModule("LFGReminder")
+        -- The DB write and the disable both land, but nothing redraws an
+        -- open config page, so its master toggle kept showing ON until a
+        -- reload. EnableModule/DisableModule's posthook only refreshes
+        -- previews, not content. The IsShown guard is load-bearing:
+        -- RefreshContent refuses to rebuild while hidden and defers instead,
+        -- because a hidden rebuild orphaned frames in a past leak.
+        if KE.GUIFrame and KE.GUIFrame:IsShown() then
+            KE.GUIFrame:RefreshContent()
+        end
     end)
     popup._disableBtn = disableBtn
 
@@ -407,6 +418,9 @@ ClearPending = function()
     pendingSpellID     = nil
     pendingName        = nil
     pendingShow        = nil
+    -- Whatever combat took away is no longer wanted either: this runs on
+    -- group-leave and instance-entry, both of which invalidate the prompt.
+    combatHidden       = nil
     -- Also clear the deferred attribute write. A combat join sets BOTH
     -- pendingAttrSpellID and pendingShow; if the group breaks before combat
     -- ends, clearing only pendingShow would leave PLAYER_REGEN_ENABLED to
@@ -446,6 +460,13 @@ function LR:CheckInstance()
 end
 
 function LR:PLAYER_REGEN_DISABLED()
+    -- Remember that COMBAT is what took the prompt away, so REGEN_ENABLED can
+    -- put it back. HidePrompt clears pendingShow unconditionally, which is why
+    -- the reference never re-shows: by the time combat ends there is no flag
+    -- left saying a prompt was wanted. Deliberate deviation from the reference
+    -- (Brandon, 2026-08-01) -- the group and dungeon are unchanged, and the
+    -- end of the fight is exactly when the teleport becomes useful.
+    combatHidden = (popup and popup:IsShown()) or nil
     HidePrompt()  -- teleports can't be cast in combat
 end
 
@@ -477,10 +498,24 @@ function LR:PLAYER_REGEN_ENABLED()
         UpdateButtonVisuals()
         if popup then popup:Show() end
     end
-    -- Flush a hide blocked during combat
+    -- Flush a hide blocked during combat -- UNLESS combat is what caused it
+    -- and the prompt is still live. The popup is still on screen at this
+    -- point (HidePrompt deferred rather than hid), so "re-showing" is really
+    -- just cancelling the pending hide. Anything that invalidated the prompt
+    -- during the fight -- leaving the group, entering the dungeon -- ran
+    -- ClearPending, which nils pendingSpellID and combatHidden, so the hide
+    -- proceeds normally in those cases.
+    local keepShown = combatHidden and pendingSpellID
+        and self.db and self.db.Enabled ~= false
+    combatHidden = nil
     if pendingHide then
         pendingHide = nil
-        if popup and popup:IsShown() then popup:Hide() end
+        if keepShown and popup and popup:IsShown() then
+            popup._name:SetText(pendingName or "")
+            UpdateButtonVisuals()
+        elseif popup and popup:IsShown() then
+            popup:Hide()
+        end
     end
 end
 

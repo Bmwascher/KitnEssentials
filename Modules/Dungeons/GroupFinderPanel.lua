@@ -917,6 +917,23 @@ function GFP:ApplyAndRefresh()
     end
 end
 
+-- Re-run a button's own OnEnter so its tooltip redraws IN PLACE after a
+-- click. GameTooltip otherwise keeps the lines built on the last
+-- mouse-enter, and since the cursor never leaves the button, OnLeave/OnEnter
+-- do not fire again -- the user has to move off and back on to see the new
+-- state (smoke D-6). The button's own label updates immediately, which is
+-- what made the stale tooltip obvious.
+--
+-- Guarded twice on purpose: still hovered AND the tooltip still belongs to
+-- this button, so a programmatic state change can never hijack a tooltip
+-- some other frame owns.
+local function RefreshTooltip(btn)
+    if not (btn and btn.IsMouseOver and btn:IsMouseOver()) then return end
+    if _G.GameTooltip:GetOwner() ~= btn then return end
+    local onEnter = btn:GetScript("OnEnter")
+    if onEnter then onEnter(btn) end
+end
+
 local function SetToggleVisual(btn, active)
     if btn.selTex then btn.selTex:SetShown(active and true or false) end
 end
@@ -1104,6 +1121,7 @@ local function CreateFilterPanel()
             end
         end
         SortLabel()
+        RefreshTooltip(sortBtn)
         GFP:ApplyAndRefresh()
     end)
 
@@ -1134,6 +1152,7 @@ local function CreateFilterPanel()
         -- nil: true->false, false->true, nil->false.
         db.SortDescending = (db.SortDescending == false)
         DirVisual()
+        RefreshTooltip(dirBtn)  -- same stale-tooltip bug as sortBtn
         GFP:ApplyAndRefresh()
     end)
     y = y - 30

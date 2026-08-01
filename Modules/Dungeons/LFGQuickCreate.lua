@@ -370,7 +370,7 @@ SyncVisibility = function()
     container:SetShown(cs ~= nil and cs.selectedCategory == 2)
 end
 
--- One-time initialization, deferred until Blizzard_LFGList is ready.
+-- One-time initialization, deferred until LFGListFrame exists.
 Init = function()
     if initialized then return end
     if not (QC.db and QC.db.Enabled ~= false) then return end
@@ -535,8 +535,10 @@ function QC:OnInitialize()
     self:SetEnabledState(false)
 end
 
-function QC:OnAddonLoaded(_, addonName)
-    if addonName ~= "Blizzard_LFGList" then return end
+function QC:OnAddonLoaded()
+    -- Same reasoning as the OnEnable gate: wait for the OBJECT, not a name.
+    -- Fires for every addon load, so it is cheap and it cannot miss.
+    if not _G.LFGListFrame then return end
     self:UnregisterEvent("ADDON_LOADED")
     C_Timer.After(0.1, Init)
 end
@@ -569,11 +571,19 @@ function QC:OnEnable()
         end)
         self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnRosterUpdate")
     end
-    -- BOTH returns: C_AddOns.IsAddOnLoaded gives loadedOrLoading THEN loaded
-    -- (AddOnsDocumentation.lua:322-336). Taking only the first would run Init
-    -- against a half-built LFGListFrame.
-    local _, loaded = C_AddOns.IsAddOnLoaded("Blizzard_LFGList")
-    if loaded then
+    -- Gate on the OBJECT, not on an addon name.
+    --
+    -- This used to wait for "Blizzard_LFGList" to load. That addon DOES NOT
+    -- EXIST in 12.0 -- the Group Finder UI moved into Blizzard_GroupFinder,
+    -- which is `DefaultState: enabled` with no LoadOnDemand and is therefore
+    -- always present. So the wait never ended: enabling the module at runtime
+    -- registered ADDON_LOADED for a name that never arrives, Init never ran,
+    -- and no buttons appeared until a /reload took a different path in.
+    -- (Smoke C-3/C-10, 2026-08-01.)
+    --
+    -- The object is what Init actually needs, and gating on it does not
+    -- depend on how Blizzard lays its files out next patch.
+    if _G.LFGListFrame then
         C_Timer.After(0.1, Init)
     else
         self:RegisterEvent("ADDON_LOADED", "OnAddonLoaded")
