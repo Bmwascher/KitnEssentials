@@ -709,3 +709,128 @@ local function TeardownRaiderIO()
         end
     end
 end
+
+------------------------------------------------------------------------
+-- Quick search: navigate to Premade Groups if needed, then set category
+-- and fire the search. All calls are Blizzard's own public flow.
+------------------------------------------------------------------------
+local function RunQuickSearch(categoryID, filters)
+    -- Task 7: IsActive() gate.
+    local pve = _G.PVEFrame
+    if not pve then return end
+    if pve.activeTabIndex ~= 1 and _G.PVEFrame_ShowFrame then
+        _G.PVEFrame_ShowFrame("GroupFinderFrame")
+    end
+    local lfg = _G.LFGListFrame
+    local gff = _G.GroupFinderFrame
+    if not lfg or not gff then return end
+    -- Select the Premade Groups sub-panel if it is not active. The button
+    -- index depends on whether the scenarios button is present this season.
+    if (not lfg.SearchPanel or not lfg.SearchPanel:IsShown())
+        or gff.selection ~= _G.LFGListPVEStub then
+        local premade = (pve.ScenariosEnabled and pve:ScenariosEnabled() and gff.groupButton4)
+            or gff.groupButton3
+        if premade and _G.GroupFinderFrameGroupButton_OnClick then
+            _G.GroupFinderFrameGroupButton_OnClick(premade)
+        end
+    end
+    local searchPanel = lfg.SearchPanel
+    if not searchPanel then return end
+    if _G.LFGListSearchPanel_Clear then _G.LFGListSearchPanel_Clear(searchPanel) end
+    if _G.LFGListSearchPanel_SetCategory then
+        _G.LFGListSearchPanel_SetCategory(searchPanel, categoryID, filters, lfg.baseFilters or 0)
+    end
+    if _G.LFGListSearchPanel_DoSearch then _G.LFGListSearchPanel_DoSearch(searchPanel) end
+    if _G.LFGListFrame_SetActivePanel then _G.LFGListFrame_SetActivePanel(lfg, searchPanel) end
+end
+
+------------------------------------------------------------------------
+-- Panel construction (lazy, once)
+------------------------------------------------------------------------
+local function CreatePanel()
+    if panel then return panel end
+    local pve = _G.PVEFrame
+    local S = KE.Skins            -- CALL time. Never hoist.
+    if not pve or not S then return nil end
+    local accent = Accent()
+
+    panel = CreateFrame("Frame", "KE_GroupFinderPanel", pve)
+    panel:SetPoint("TOPLEFT", pve, "TOPRIGHT", 2, 0)
+    panel:SetPoint("BOTTOMLEFT", pve, "BOTTOMRIGHT", 2, 0)
+    panel:SetWidth(PANEL_WIDTH)
+    S.Backdrop(panel)
+    -- The Show/Hide METHODS, not the OnShow/OnHide scripts. Method hooks
+    -- fire on every call, including Show() on an already-visible frame --
+    -- the born-visible first open, where the OnShow EVENT never fires.
+    -- Script hooks kept for implicit visibility changes via the parent.
+    hooksecurefunc(panel, "Show", EnsureRaiderIOWrap)
+    hooksecurefunc(panel, "Hide", RepositionRaiderIO)
+    panel:HookScript("OnShow", EnsureRaiderIOWrap)
+    panel:HookScript("OnHide", RepositionRaiderIO)
+
+    -- Affix icon row (this week)
+    panel.affixes = {}
+    for i = 1, 5 do
+        local holder = CreateFrame("Button", nil, panel)
+        holder:SetSize(AFFIX_SIZE, AFFIX_SIZE)
+        S.Backdrop(holder)
+        holder.icon = holder:CreateTexture(nil, "ARTWORK")
+        holder.icon:SetPoint("TOPLEFT", 1, -1)
+        holder.icon:SetPoint("BOTTOMRIGHT", -1, 1)
+        holder.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        holder:SetScript("OnEnter", AffixOnEnter)
+        holder:SetScript("OnLeave", AffixOnLeave)
+        holder:Hide()
+        panel.affixes[i] = holder
+    end
+
+    -- Quick Access pane (swapped for the Filters pane in M+ search mode)
+    panel.quick = CreateFrame("Frame", nil, panel)
+    panel.quick:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -48)
+    panel.quick:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 0)
+
+    local title = panel.quick:CreateFontString(nil, "OVERLAY")
+    S.SetFont(title, 14, "")
+    title:SetPoint("TOP", panel.quick, "TOP", 0, -4)
+    title:SetText("Quick Access")
+    title:SetTextColor(accent[1], accent[2], accent[3])
+
+    -- Category buttons
+    local prev
+    for _, data in ipairs(CATEGORY_DATA) do
+        local btn = CreateFrame("Button", nil, panel.quick)
+        btn:SetHeight(BUTTON_HEIGHT)
+        if not prev then
+            btn:SetPoint("TOPLEFT", panel.quick, "TOPLEFT", 10, -26)
+            btn:SetPoint("TOPRIGHT", panel.quick, "TOPRIGHT", -10, -26)
+        else
+            btn:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, -BUTTON_GAP)
+            btn:SetPoint("TOPRIGHT", prev, "BOTTOMRIGHT", 0, -BUTTON_GAP)
+        end
+        prev = btn
+        S.Button(btn)
+        local fs = btn:CreateFontString(nil, "OVERLAY")
+        S.SetFont(fs, 12, "")
+        fs:SetPoint("CENTER")
+        fs:SetText(data.key)
+        btn:SetScript("OnClick", function()
+            RunQuickSearch(data.categoryID, data.filters)
+        end)
+    end
+
+    -- Weekly runs footer
+    local footer = CreateFrame("Frame", nil, panel)
+    footer:SetHeight(BUTTON_HEIGHT)
+    footer:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 10, 12)
+    footer:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -10, 12)
+    local fbd = S.Backdrop(footer)
+    if fbd then fbd:SetBackdropColor(0.055, 0.055, 0.055, 0.95) end
+    panel.runsText = footer:CreateFontString(nil, "OVERLAY")
+    S.SetFont(panel.runsText, 12, "")
+    panel.runsText:SetPoint("CENTER")
+    footer:EnableMouse(true)
+    footer:SetScript("OnEnter", RunsTooltip)
+    footer:SetScript("OnLeave", function() _G.GameTooltip:Hide() end)
+
+    return panel
+end
