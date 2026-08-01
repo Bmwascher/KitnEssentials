@@ -991,4 +991,129 @@ function L.loadLFGReminder(overrides)
     return LR, KE, seams
 end
 
+-- LFGQuickCreate builds real Buttons with textures and font strings, which
+-- the shared noopFrame cannot supply (its CreateTexture returns nil).
+-- Records scripts and shown state so specs can drive them.
+local function qcFrame(name)
+    local f
+    f = {
+        _name    = name,
+        _shown   = false,
+        _scripts = {},
+        _attrs   = {},
+        _points  = {},
+        SetSize = function() end, SetPoint = function(_, ...) f._points[#f._points + 1] = { ... } end,
+        ClearAllPoints = function() f._points = {} end, SetAllPoints = function() end,
+        SetHeight = function() end, GetHeight = function() return 100 end,
+        GetPoint = function() return "TOPLEFT", nil, "TOPLEFT", 0, -55 end,
+        GetParent = function() return f._parent end,
+        GetFrameLevel = function() return 1 end, SetFrameLevel = function() end,
+        Show = function() f._shown = true end,
+        Hide = function() f._shown = false end,
+        SetShown = function(_, s) f._shown = s and true or false end,
+        IsShown = function() return f._shown end,
+        IsEnabled = function() return true end,
+        SetScript = function(_, k, fn) f._scripts[k] = fn end,
+        HookScript = function(_, k, fn) f._scripts[k] = fn end,
+        GetScript = function(_, k) return f._scripts[k] end,
+        SetAttribute = function(_, k, v) f._attrs[k] = v end,
+        GetAttribute = function(_, k) return f._attrs[k] end,
+        RegisterForClicks = function() end,
+        SetTexture = function() end, SetColorTexture = function() end,
+        SetTexCoord = function() end, SetFont = function() end,
+        SetText = function(_, t) f._text = t end, GetText = function() return f._text end,
+        SetDesaturated = function() end, SetAlpha = function() end,
+    }
+    f.CreateTexture = function() return qcFrame(name .. "_tex") end
+    f.CreateFontString = function() return qcFrame(name .. "_fs") end
+    return f
+end
+
+-- Modules/Dungeons/LFGQuickCreate.lua. The file-scope `local X = X` captures
+-- include C_Timer, C_LFGList, C_ChallengeMode, C_MythicPlus, GameTooltip,
+-- IsInGroup, LibStub, hooksecurefunc and InCombatLockdown, so every one must
+-- exist BEFORE helpers.loadModule or the capture takes nil. The module reads
+-- Enum.LFGEntryPlaystyle at click time only, not at file scope.
+--
+-- Nothing creates a frame at load time: Init() runs only from OnEnable and the
+-- ADDON_LOADED / PLAYER_ENTERING_WORLD paths, none of which this loader calls.
+function L.loadLFGQuickCreate(overrides)
+    overrides = overrides or {}
+    -- Managed overrides go THROUGH installMock so a caller still wins on them;
+    -- everything below is unmanaged and goes straight to _G. CreateFrame and
+    -- UnitName are MANAGED (MANAGED_MOCK_KEYS above) -- assigning either to _G
+    -- directly would be silently discarded.
+    installMock(managedSubset(overrides), {
+        C_Timer = inertTimer(),
+        GetTime = function() return 0 end,
+        InCombatLockdown = overrides.inCombatFn
+            or (overrides.inCombat and function() return true end)
+            or function() return false end,
+        CreateFrame = function(_, name) return qcFrame(name or "anon") end,
+        UnitName = function() return "Tester" end,
+    })
+    local modules = helpers.installAddonShim()
+
+    _G.UIParent = qcFrame("UIParent")
+    _G.GameTooltip = overrides.GameTooltip or qcFrame("GameTooltip")
+
+    _G.LFGListFrame = overrides.LFGListFrame or nil
+    _G.C_LFGList = overrides.C_LFGList or {
+        GetActivityInfoTable = function() return nil end,
+        GetOwnedKeystoneActivityAndGroupAndLevel = function() return nil end,
+        CreateListing = function() return true end,
+    }
+    _G.C_ChallengeMode = overrides.C_ChallengeMode or {
+        GetMapTable = function() return {} end,
+        GetMapUIInfo = function() return nil end,
+    }
+    _G.C_MythicPlus = overrides.C_MythicPlus or {
+        RequestMapInfo = function() end,
+        GetCurrentSeason = function() return 1 end,
+    }
+    _G.C_AddOns = overrides.C_AddOns or {
+        IsAddOnLoaded = function() return false, false end,
+    }
+    _G.IsInGroup = overrides.IsInGroup or function() return false end
+    _G.LibStub = overrides.LibStub or nil
+    _G.hooksecurefunc = overrides.hooksecurefunc or function() end
+    -- UnitNameUnmodified is NOT managed, unlike UnitName -- check the list
+    -- rather than pairing them by name.
+    _G.UnitNameUnmodified = overrides.UnitNameUnmodified or function() return "Tester" end
+    _G.Enum = overrides.Enum or { LFGEntryPlaystyle = { None = 0 } }
+
+    local profile = {
+        LFGQuickCreate = {
+            Enabled          = true,
+            QuickCreate      = true,
+            DefaultPlaystyle = 1,
+            DoubleClickStart = true,
+        },
+    }
+    local KE = {
+        db = { profile = profile },
+        FONT = "Fonts\\FRIZQT__.TTF",
+        Print = function() end,
+    }
+    if overrides.profile then KE.db.profile = overrides.profile end
+
+    -- loadModule returns the KE table, so the MODULE comes from the shim's
+    -- registry, never from this call's return value.
+    helpers.loadModule("Modules/Dungeons/LFGQuickCreate.lua", KE)
+    local QC = modules["LFGQuickCreate"]
+
+    -- Seed db DIRECTLY rather than calling QC:UpdateDB(). The sibling loader
+    -- can call its module's UpdateDB because that module is complete; this
+    -- plan builds incrementally and UpdateDB does not exist until Task 6,
+    -- while Task 3 is the first task to use this loader. Task 6's sanitizer
+    -- specs call the real QC:UpdateDB() themselves, after it exists.
+    QC.db = KE.db.profile.LFGQuickCreate
+
+    local seams = {
+        activeDungeons   = QC._ActiveDungeons,
+        currentPlaystyle = QC._CurrentPlaystyle,
+    }
+    return QC, KE, seams
+end
+
 return L
