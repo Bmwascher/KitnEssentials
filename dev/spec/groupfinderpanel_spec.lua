@@ -199,3 +199,83 @@ describe("GroupFinderPanel SanitizeScore", function()
         assert.equals(1800, GFP._SanitizeScore(1))
     end)
 end)
+
+describe("GroupFinderPanel lifecycle", function()
+    it("is inactive when PGF is loaded, even with Enabled true", function()
+        local GFP = loader.loadGroupFinderPanel({
+            C_AddOns = { IsAddOnLoaded = function(n) return n == "PremadeGroupsFilter" end },
+        })
+        GFP.db.Enabled = true
+        assert.is_true(GFP._PGFPresent())
+        assert.is_false(GFP._IsActive())
+    end)
+
+    it("is inactive when disabled, even without PGF", function()
+        local GFP = loader.loadGroupFinderPanel()
+        GFP.db.Enabled = false
+        assert.is_false(GFP._IsActive())
+    end)
+
+    it("is active when enabled and PGF is absent", function()
+        local GFP = loader.loadGroupFinderPanel()
+        GFP.db.Enabled = true
+        assert.is_true(GFP._IsActive())
+    end)
+
+    it("takes the FIRST IsAddOnLoaded return, not the second", function()
+        -- loadedOrLoading true, loaded false: a conflict bail must still fire.
+        local GFP = loader.loadGroupFinderPanel({
+            C_AddOns = { IsAddOnLoaded = function() return true, false end },
+        })
+        assert.is_true(GFP._PGFPresent())
+    end)
+
+    it("carries the six session keys across an enabled-to-enabled switch", function()
+        local GFP, KE = loader.loadGroupFinderPanel()
+        GFP.db.Enabled = true
+        GFP.db.SortBy = "OVERALL_SCORE"
+        GFP.db.HasTank = true
+        GFP.db.DungeonFilter[7] = true
+        local incoming = { Enabled = true, DungeonFilter = { [99] = true }, SortBy = "DEFAULT",
+                           HasTank = false, HasHealer = false, PartyFit = false,
+                           SortDescending = true }
+        KE.db.profile.GroupFinderPanel = incoming
+        GFP:UpdateDB()
+        assert.equals("OVERALL_SCORE", GFP.db.SortBy)
+        assert.is_true(GFP.db.HasTank)
+        assert.is_true(GFP.db.DungeonFilter[7])
+        assert.is_nil(GFP.db.DungeonFilter[99])
+    end)
+
+    it("COPIES DungeonFilter rather than aliasing it", function()
+        local GFP, KE = loader.loadGroupFinderPanel()
+        GFP.db.Enabled = true
+        GFP.db.DungeonFilter[7] = true
+        local old = GFP.db
+        KE.db.profile.GroupFinderPanel = { Enabled = true, DungeonFilter = {} }
+        GFP:UpdateDB()
+        assert.is_false(rawequal(old.DungeonFilter, GFP.db.DungeonFilter))
+        GFP.db.DungeonFilter[8] = true
+        assert.is_nil(old.DungeonFilter[8])
+    end)
+
+    it("does not carry state when the incoming profile has the module off", function()
+        local GFP, KE = loader.loadGroupFinderPanel()
+        GFP.db.Enabled = true
+        GFP.db.SortBy = "OVERALL_SCORE"
+        KE.db.profile.GroupFinderPanel = { Enabled = false, DungeonFilter = {}, SortBy = "DEFAULT" }
+        GFP:UpdateDB()
+        assert.equals("DEFAULT", GFP.db.SortBy)
+    end)
+
+    it("sanitizes an unknown saved sort mode", function()
+        local GFP, KE = loader.loadGroupFinderPanel()
+        KE.db.profile.GroupFinderPanel.SortBy = "NO_SUCH_MODE"
+        -- SetEnabledState is an Ace module lifecycle method; installAddonShim
+        -- deliberately leaves those unstubbed (see _ke_loader.lua's
+        -- loadLFGReminder note), so a test that drives OnInitialize stubs it.
+        GFP.SetEnabledState = function() end
+        GFP:OnInitialize()
+        assert.equals("DEFAULT", GFP.db.SortBy)
+    end)
+end)

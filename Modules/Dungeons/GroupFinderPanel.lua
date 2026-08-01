@@ -79,6 +79,15 @@ local DUNGEON_CAT = _G.GROUP_FINDER_CATEGORY_ID_DUNGEONS or 2
 
 local panel
 
+-- Forward declared, assigned in the Lifecycle section at the bottom of
+-- this file. Every one of the fourteen gate sites above that section
+-- closes over this same upvalue -- declaring IsActive inline down there
+-- (as `local function IsActive`) would leave every earlier `IsActive()`
+-- read resolving to the global namespace instead, which luacheck reports
+-- as W113 and which is nil at call time. Same scoping trap as
+-- resortFromSnapshot above, same fix: declare where the readers are.
+local IsActive
+
 -- Preferred short names (Midnight Season 1); anything unlisted falls back
 -- to the initials algorithm, so new seasons degrade gracefully.
 local ABBREV_OVERRIDE = {
@@ -372,7 +381,7 @@ local function OnUpdateResultList(searchPanel)
     -- in earlier versions.
     if resorting then return end
     local db = GFP.db
-    if not db or not db.Enabled then return end   -- Task 7 converts to IsActive()
+    if not IsActive() then return end
     if not IsDungeonSearchMode() then return end
     local results = searchPanel.results
     if not results or #results == 0 then return end
@@ -506,8 +515,7 @@ end
 -- entry's name line, using Blizzard's own rarity ramp.
 ------------------------------------------------------------------------
 local function DecorateSearchEntry(entry)
-    local db = GFP.db
-    if not db or not db.Enabled or not IsDungeonSearchMode() then return end  -- Task 7: IsActive()
+    if not IsActive() or not IsDungeonSearchMode() then return end
     if not entry.resultID or not entry.Name then return end
     local score = SanitizeScore(entry.resultID)
     if not score then return end
@@ -618,8 +626,9 @@ end
 -- ClearAllPoints/SetPoint below are themselves protected functions. The
 -- probe is a BLOCKING smoke step -- if it returns true, stop and replan.
 local function RepositionRaiderIO()
-    -- Task 7: IsActive() gate -- while inactive, do nothing except the one
-    -- forced re-anchor the teardown helper performs.
+    -- While inactive, do nothing except the one forced re-anchor the
+    -- teardown helper performs.
+    if not IsActive() then return end
     local anchor = _G.RaiderIO_ProfileTooltipAnchor
     if not anchor then return end
 
@@ -627,10 +636,10 @@ local function RepositionRaiderIO()
         anchor.__keGFPWrapped = true
         local orig = anchor.SetPoint
         anchor.SetPoint = function(self, p, rel, rp, x, y)
-            -- Task 7: while inactive this wrapper delegates straight to
-            -- `orig` without substituting. It stays installed; it stops
-            -- changing behaviour.
-            if rel and (rel == _G.PVEFrame or rel == panel) then
+            -- While inactive this wrapper delegates straight to `orig`
+            -- without substituting `rel` or nudging `x`. It stays
+            -- installed; it stops changing behaviour.
+            if IsActive() and rel and (rel == _G.PVEFrame or rel == panel) then
                 local usePanel = panel and panel:IsShown()
                 rel = usePanel and panel or _G.PVEFrame
                 -- RIO's stock x is -16, a tuck sized for PVEFrame's thick
@@ -671,9 +680,10 @@ end
 -- creation instead of assuming it.
 local rioWatcher
 local function EnsureRaiderIOWrap()
-    -- Task 7: IsActive() gate. Cancelling the ticker is NOT sufficient on
-    -- its own -- the permanent panel Show hook can call this again and
-    -- install the wrapper while inactive.
+    -- Cancelling the ticker is NOT sufficient on its own -- the permanent
+    -- panel Show hook can call this again and install the wrapper while
+    -- inactive.
+    if not IsActive() then return end
     if _G.RaiderIO_ProfileTooltipAnchor then
         RepositionRaiderIO()
         return
@@ -715,7 +725,7 @@ end
 -- and fire the search. All calls are Blizzard's own public flow.
 ------------------------------------------------------------------------
 local function RunQuickSearch(categoryID, filters)
-    -- Task 7: IsActive() gate.
+    if not IsActive() then return end
     local pve = _G.PVEFrame
     if not pve then return end
     if pve.activeTabIndex ~= 1 and _G.PVEFrame_ShowFrame then
@@ -842,9 +852,10 @@ end
 ------------------------------------------------------------------------
 
 function GFP:ApplyAdvancedFilters()
-    -- Task 7: IsActive() gate. This reaches C_LFGList.SaveAdvancedFilter,
-    -- which persists BLIZZARD's own filter state -- it is the single most
-    -- important thing to stop while inactive.
+    -- This reaches C_LFGList.SaveAdvancedFilter, which persists BLIZZARD's
+    -- own filter state -- it is the single most important thing to stop
+    -- while inactive.
+    if not IsActive() then return end
     --
     -- The server-side filter is kept PERMISSIVE: all dungeons, no
     -- has/needs constraints. The client pass over the raw snapshot is the
@@ -875,7 +886,7 @@ local function ResolveCategoryFilters(categoryID, filters)
 end
 
 function GFP:ApplyAndRefresh()
-    -- Task 7: IsActive() gate.
+    if not IsActive() then return end
     self:ApplyAdvancedFilters()
     -- The client-side pass over the raw snapshot is authoritative and
     -- INSTANT -- run it unconditionally. The real server re-search is a
@@ -928,10 +939,10 @@ local function MakeToggle(parent, S, label, getter, onClick)
     fs:SetWordWrap(false)
     btn.text = fs
     btn:SetScript("OnClick", function(b)
-        -- Task 7: IsActive() gate goes HERE, before onClick -- not around
-        -- the refresh. Every one of these callbacks mutates the profile on
-        -- its first statement, and a mutation on a stranded panel outlives
-        -- the hide.
+        -- Gate goes HERE, before onClick -- not around the refresh. Every
+        -- one of these callbacks mutates the profile on its first
+        -- statement, and a mutation on a stranded panel outlives the hide.
+        if not IsActive() then return end
         onClick(b)
         SetToggleVisual(b, getter())
     end)
@@ -1080,9 +1091,9 @@ local function CreateFilterPanel()
     end)
     sortBtn:SetScript("OnLeave", function() _G.GameTooltip:Hide() end)
     sortBtn:SetScript("OnClick", function()
-        -- Task 7: IsActive() gate HERE. This handler does not go through
-        -- MakeToggle, so it needs its own -- and it mutates before it
-        -- refreshes, same as the toggles.
+        -- This handler does not go through MakeToggle, so it needs its own
+        -- gate -- and it mutates before it refreshes, same as the toggles.
+        if not IsActive() then return end
         local db = GFP.db
         if not db then return end
         local cur = db.SortBy or "DEFAULT"
@@ -1114,7 +1125,8 @@ local function CreateFilterPanel()
     end)
     dirBtn:SetScript("OnLeave", function() _G.GameTooltip:Hide() end)
     dirBtn:SetScript("OnClick", function()
-        -- Task 7: IsActive() gate, for the same reason as sortBtn.
+        -- Same reason as sortBtn.
+        if not IsActive() then return end
         local db = GFP.db
         if not db then return end
         -- Deviation 15. Was `not (db.SortDescending ~= false)`, which
@@ -1136,8 +1148,9 @@ local function CreateFilterPanel()
     st:SetPoint("CENTER")
     st:SetText("Search")
     searchBtn:SetScript("OnClick", function()
-        -- Task 7: IsActive() gate. This calls ApplyAdvancedFilters
-        -- directly, so gating ApplyAndRefresh does not cover it.
+        -- This calls ApplyAdvancedFilters directly, so gating
+        -- ApplyAndRefresh does not cover it.
+        if not IsActive() then return end
         GFP:ApplyAdvancedFilters()
         local sp = _G.LFGListFrame and _G.LFGListFrame.SearchPanel
         if not sp then return end
@@ -1157,11 +1170,12 @@ local function CreateFilterPanel()
 end
 
 function GFP:UpdateMode()
-    -- Task 7: IsActive() gate. UpdateMode has NO enabled check in the
-    -- reference and reaches SaveAdvancedFilter through
-    -- ApplyAdvancedFilters, so a disabled module keeps overwriting the
-    -- user's Blizzard filter settings on every category change.
+    -- UpdateMode has NO enabled check in the reference and reaches
+    -- SaveAdvancedFilter through ApplyAdvancedFilters, so a disabled
+    -- module keeps overwriting the user's Blizzard filter settings on
+    -- every category change.
     if not panel then return end
+    if not IsActive() then return end
     local dungeonMode = IsDungeonSearchMode()
     if dungeonMode then
         local f = CreateFilterPanel()
@@ -1173,3 +1187,225 @@ function GFP:UpdateMode()
         if panel.quick then panel.quick:Show() end
     end
 end
+
+------------------------------------------------------------------------
+-- Lifecycle
+------------------------------------------------------------------------
+
+-- Deviation 13. The ONLY place the PGF question is asked. Evaluated at
+-- call time, never cached: a cached boolean would be stale for the rest
+-- of the session. Takes the FIRST return, loadedOrLoading -- deliberately
+-- the opposite of the two sibling modules, which take `loaded` because
+-- they wait for another addon's objects. This is a CONFLICT BAIL: if PGF
+-- is merely loading, competing behaviour must still not be installed, or
+-- both addons rewrite the same results table in the gap. No fallback to
+-- the legacy global IsAddOnLoaded -- the 12.0.7 authority documents this
+-- only under C_AddOns.
+local function PGFPresent()
+    return (C_AddOns and C_AddOns.IsAddOnLoaded
+        and C_AddOns.IsAddOnLoaded("PremadeGroupsFilter")) and true or false
+end
+
+-- The single gate every resident effect reads. Note what is NOT here:
+-- teardown. The config page clears db.Enabled BEFORE disabling the
+-- module, so IsActive() is already false when OnDisable runs -- gating
+-- teardown on it would skip the cleanup it exists to perform.
+--
+-- Assigned (not `local function`) because IsActive is forward-declared at
+-- file scope, above CATEGORY_DATA -- every gate site earlier in this file
+-- closes over that same upvalue, and a fresh `local function IsActive`
+-- here would shadow it instead of filling it in.
+IsActive = function()
+    local db = GFP.db
+    return (db and db.Enabled == true and not PGFPresent()) and true or false
+end
+
+function GFP:OnInitialize()
+    self.db = KE.db and KE.db.profile and KE.db.profile.GroupFinderPanel
+    -- Sanitize a sort mode that no longer exists in a saved profile.
+    if self.db and self.db.SortBy and not SORT_MODE[self.db.SortBy] then
+        self.db.SortBy = "DEFAULT"
+    end
+    -- Respect the saved toggle at login; Ace defaults modules to enabled.
+    self:SetEnabledState((self.db and self.db.Enabled) == true)
+end
+
+-- Deviation 12. KE's profile manager calls this on every switch. Without
+-- it the module keeps writing to the previous profile's table.
+function GFP:UpdateDB()
+    local old = self.db
+    self.db = KE.db and KE.db.profile and KE.db.profile.GroupFinderPanel
+    local new = self.db
+    if not new then return end
+    -- The six filter/sort keys are MODULE-SESSION state, independent of
+    -- profile. On an enabled-to-enabled switch, carry the CURRENT values
+    -- across rather than adopting whatever the incoming profile was left
+    -- with in some past session -- a bare rebind resurrects stale filters.
+    -- Newly enabling still runs the clean reset in OnEnable.
+    if old and old ~= new and old.Enabled == true and new.Enabled == true then
+        -- COPY DungeonFilter; aliasing would make two profiles share one
+        -- table and every later write would land in both.
+        local copy = {}
+        for k, v in pairs(old.DungeonFilter or {}) do copy[k] = v end
+        new.DungeonFilter  = copy
+        new.HasTank        = old.HasTank
+        new.HasHealer      = old.HasHealer
+        new.PartyFit       = old.PartyFit
+        new.SortBy         = old.SortBy
+        new.SortDescending = old.SortDescending
+    end
+end
+
+-- Deviation 12. Refresh() cannot do this: CreateFilterPanel returns the
+-- already-built pane, and every filter visual is written at construction
+-- or on click. Any path where the displayed values change without a click
+-- needs this explicit re-apply.
+function GFP:ApplySettings()
+    if not IsActive() then return end
+    if panel and panel.filters and panel.filters._refreshVisuals then
+        panel.filters._refreshVisuals()
+    end
+    self:Refresh()
+end
+
+function GFP:Refresh()
+    -- IsActive() folds into the existing condition. It does NOT
+    -- early-return: the else branch below is what hides a panel stranded
+    -- by a late conflict, and an early return would leave it on screen.
+    local enabled = self:IsEnabled() and IsActive()
+    local pve = _G.PVEFrame
+    if enabled and pve and pve:IsShown() then
+        local p = CreatePanel()
+        if p then
+            p:Show()
+            -- CreateFrame births frames VISIBLE, so on the session's first
+            -- open p:Show() is a no-op on an already-shown frame and the
+            -- OnShow hook registered during CreatePanel never fires --
+            -- the RIO wrap would only install at first CLOSE. Install
+            -- from the show PATH instead of the show EVENT.
+            EnsureRaiderIOWrap()
+            if C_MythicPlus and C_MythicPlus.RequestMapInfo then C_MythicPlus.RequestMapInfo() end
+            UpdateAffixes()
+            UpdateRuns()
+            self:UpdateMode()
+        end
+    else
+        TeardownRaiderIO()
+        if panel then panel:Hide() end
+    end
+end
+
+function GFP:OnRosterChanged()
+    -- No gate of its own: ApplyAdvancedFilters has one, and gating both
+    -- would be two places to keep in sync.
+    self:ApplyAdvancedFilters()
+end
+
+-- Recolour friend-group entry names ourselves -- BATTLENET_FONT_COLOR,
+-- exactly what Blizzard's own (currently blind) branch would do.
+-- Post-hook so we run after Blizzard's SetTextColor.
+local entryHookInstalled = false
+local function InstallEntryHook()
+    if entryHookInstalled or not _G.LFGListSearchEntry_Update then return end
+    entryHookInstalled = true
+    hooksecurefunc("LFGListSearchEntry_Update", function(entry)
+        if not IsActive() then
+            if entry._keFriendBG then entry._keFriendBG:Hide() end
+            return
+        end
+        local id = entry.resultID
+        local isFriend = id and friendResultSet[id] or false
+        -- Full blue backdrop, not just the name: created once per recycled
+        -- button, toggled per update.
+        if isFriend and not entry._keFriendBG then
+            local bg = entry:CreateTexture(nil, "BACKGROUND", nil, 1)
+            bg:SetPoint("TOPLEFT", 0, -1)
+            bg:SetPoint("BOTTOMRIGHT", 0, 1)
+            local c = _G.BATTLENET_FONT_COLOR
+            bg:SetColorTexture(c and c.r or 0.51, c and c.g or 0.77, c and c.b or 1, 0.14)
+            entry._keFriendBG = bg
+        end
+        if entry._keFriendBG then entry._keFriendBG:SetShown(isFriend) end
+        if isFriend and entry.Name then
+            local c = _G.BATTLENET_FONT_COLOR
+            if c then entry.Name:SetTextColor(c.r, c.g, c.b) end
+        end
+    end)
+end
+
+function GFP:OnEnable()
+    -- Deviation 6: the PGF bail comes FIRST. In the reference,
+    -- InstallEntryHook and the session-state reset run ABOVE the bail, so
+    -- a permanent unremovable hook plus six DB writes land even on the
+    -- "stepping aside" path. Installing a permanent hook is not stepping
+    -- aside. The hook is inert on that path -- friendResultSet is never
+    -- populated -- but that is a reason it costs little to move, not a
+    -- reason to leave it.
+    if PGFPresent() then
+        KE:Print("Group Finder Panel disabled: Premade Groups Filter is installed and provides the same filtering.")
+        return
+    end
+
+    InstallEntryHook()
+    -- Filters are session state, not preferences: every login and reload
+    -- starts clean. This overwrites six of the seven saved keys -- every
+    -- one except Enabled -- which is why the Core/Defaults.lua entries for
+    -- SortBy and SortDescending are effectively dead.
+    if self.db then
+        self.db.DungeonFilter = {}
+        self.db.HasTank = false
+        self.db.HasHealer = false
+        self.db.PartyFit = false
+        self.db.SortBy = "OVERALL_SCORE"
+        self.db.SortDescending = true
+    end
+
+    local pve = _G.PVEFrame
+    if pve and not self.hooked then
+        self.hooked = true
+        pve:HookScript("OnShow", function() self:Refresh() end)
+        pve:HookScript("OnHide", function() if panel then panel:Hide() end end)
+    end
+    self:RegisterEvent("CHALLENGE_MODE_MAPS_UPDATE", "Refresh")
+    self:RegisterEvent("MYTHIC_PLUS_CURRENT_AFFIX_UPDATE", "Refresh")
+    self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnRosterChanged")
+    -- Our UpdateResultList hook fires once, but on first open the search
+    -- is still in flight, so searchPanel.results is empty and we bail --
+    -- and nothing re-filtered when the async results arrived. A /reload
+    -- masked it because results were already cached.
+    self:RegisterEvent("LFG_LIST_SEARCH_RESULTS_RECEIVED", function()
+        local sp = _G.LFGListFrame and _G.LFGListFrame.SearchPanel
+        if sp and sp:IsShown() then OnUpdateResultList(sp) end
+    end)
+    -- Pane switching follows the M+ search state. SetCategory covers the
+    -- quick buttons and manual navigation; Show/Hide covers back-outs.
+    if not self.modeHooks then
+        self.modeHooks = true
+        if _G.LFGListSearchPanel_SetCategory then
+            hooksecurefunc("LFGListSearchPanel_SetCategory", function() self:UpdateMode() end)
+        end
+        if _G.LFGListSearchPanel_UpdateResultList then
+            hooksecurefunc("LFGListSearchPanel_UpdateResultList", OnUpdateResultList)
+        end
+        if _G.LFGListSearchEntry_Update then
+            hooksecurefunc("LFGListSearchEntry_Update", DecorateSearchEntry)
+        end
+        local sp = _G.LFGListFrame and _G.LFGListFrame.SearchPanel
+        if sp then
+            sp:HookScript("OnShow", function() self:UpdateMode() end)
+            sp:HookScript("OnHide", function() self:UpdateMode() end)
+        end
+    end
+    self:Refresh()
+end
+
+function GFP:OnDisable()
+    self:UnregisterAllEvents()
+    -- UNCONDITIONAL. IsActive() is already false by the time this runs,
+    -- because the config page writes db.Enabled = false first.
+    TeardownRaiderIO()
+    if panel then panel:Hide() end
+end
+
+GFP._PGFPresent = PGFPresent
+GFP._IsActive   = IsActive
