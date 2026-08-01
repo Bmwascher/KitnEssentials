@@ -942,6 +942,17 @@ local Defaults = {
             YourKeyGlowThickness = 2,
         },
 
+        -- Quick Create: a row of season-dungeon buttons on the Group Finder
+        -- Entry Creation form. One click lists a group for that dungeon.
+        -- Ships DISABLED: it modifies a Blizzard form's layout, so it is
+        -- opt-in, matching the reference.
+        LFGQuickCreate = {
+            Enabled          = false,
+            QuickCreate      = true,
+            DefaultPlaystyle = 1,
+            DoubleClickStart = true,
+        },
+
         -- Popup with a one-click dungeon teleport when you join a Group
         -- Finder group. Hides on entering the dungeon, leaving the group,
         -- or entering combat.
