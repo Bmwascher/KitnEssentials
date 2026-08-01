@@ -138,6 +138,7 @@ GUIFrame.sidebarConfig = {
             { id = "FocusMarker",                 text = "Focus Marker", keywords = { "focus", "marker", "focus marker", "macro", "builder", "raid marker" } },
             { id = "KickTracker",                 text = "Interrupt Tracker", keywords = { "interrupt", "kick", "tracker", "cc", "stop", "party", "m+" } },
             { id = "KeystoneHelper",              text = "Keystone Helper", keywords = { "keystone", "reset", "reroll", "key", "announcer", "mythic", "m+" } },
+            { id = "LFGQuickCreate",              text = "LFG Quick Create", keywords = { "lfg", "group finder", "quick create", "premade", "list group", "keystone", "playstyle", "dungeon", "m+" } },
             { id = "LFGReminder",                 text = "LFG Reminder", keywords = { "lfg", "group finder", "teleport", "dungeon teleport", "reminder", "popup", "premade", "portal" } },
             { id = "MythicPlusTimer",             text = "Mythic+ Timer", keywords = { "mythic plus", "m+", "keystone", "timer", "forces", "deaths", "splits", "objective", "personal best", "affix", "warpdeplete" } },
             { id = "TargetedSpells",              text = "Targeted Spells", keywords = { "targeted", "spells", "cast", "incoming", "self", "target", "warning", "m+" } },
