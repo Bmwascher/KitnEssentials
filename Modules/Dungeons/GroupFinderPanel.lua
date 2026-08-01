@@ -1235,13 +1235,15 @@ local function CreateFilterPanel()
         GFP:ApplyAndRefresh()
     end)
 
-    -- The two action buttons anchor to the BOTTOM of the pane, not to the
-    -- running `y`. The dungeon grid's height changes with the season, so a
-    -- top-down flow can push these into the footer on a longer list.
+    -- The two action buttons share ONE row at the BOTTOM of the pane, not the
+    -- running `y`. Two reasons: the dungeon grid's height changes with the
+    -- season, so a top-down flow can push them into the footer; and stacking
+    -- them cost a full row the pane does not have -- they ran into the sort
+    -- row above.
     local searchBtn = CreateFrame("Button", nil, f)
     S.Button(searchBtn)
-    searchBtn:SetSize(PANEL_WIDTH - 20, BUTTON_HEIGHT)
-    searchBtn:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 0, BUTTON_HEIGHT + BUTTON_GAP)
+    searchBtn:SetSize(BW, BUTTON_HEIGHT)
+    searchBtn:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 0, 0)
     local st = searchBtn:CreateFontString(nil, "OVERLAY")
     S.SetFont(st, 13, "")
     st:SetPoint("CENTER")
@@ -1263,12 +1265,12 @@ local function CreateFilterPanel()
     -- the individual toggles, so one refresh covers the whole pane.
     local resetBtn = CreateFrame("Button", nil, f)
     S.Button(resetBtn)
-    resetBtn:SetSize(PANEL_WIDTH - 20, BUTTON_HEIGHT)
-    resetBtn:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 0, 0)
+    resetBtn:SetSize(BW, BUTTON_HEIGHT)
+    resetBtn:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", 0, 0)
     local rt = resetBtn:CreateFontString(nil, "OVERLAY")
     S.SetFont(rt, 13, "")
     rt:SetPoint("CENTER")
-    rt:SetText("Reset Filters")
+    rt:SetText("Reset")
     resetBtn:SetScript("OnEnter", function(b)
         _G.GameTooltip:SetOwner(b, "ANCHOR_TOP")
         _G.GameTooltip:SetText("Reset Filters", 1, 1, 1)
