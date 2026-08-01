@@ -68,7 +68,7 @@ local partyKeys = {}   -- [senderShortName] = { level = n, cmID = n }
 -- Flip to true, /reload, click a category tile, read the chat log. Reports
 -- why the double-click overlay did or did not arm for that tile. Left in
 -- place after diagnosis, per the debug-first workflow.
-local DEBUG_QC = false
+local DEBUG_QC = true
 local function qcdbg(msg)
     if DEBUG_QC then KE:Print("QuickCreate: " .. msg) end
 end
@@ -523,9 +523,29 @@ Init = function()
             HideDoubleClickOverlay()
         end)
     end
-    if _G.LFGListCategorySelectionButton_OnClick then
-        hooksecurefunc("LFGListCategorySelectionButton_OnClick", ArmDoubleClick)
+    -- Hook the TILES, not LFGListCategorySelectionButton_OnClick.
+    --
+    -- The Questing tile carries its own OnClick and never reaches that global,
+    -- so hooking the global armed every category except Questing. In-game
+    -- probe 2026-08-01 on the six live tiles: categoryID 1 (Questing) compared
+    -- NOT equal to the global handler, 121/2/3/3/6 all compared equal, and
+    -- Questing was exactly the one the double-click never worked on.
+    --
+    -- Tiles are pooled and reused across category lists, so each is hooked
+    -- once and the handler reads catBtn.categoryID at click time.
+    local function HookCategoryTiles(cs)
+        if not (cs and cs.CategoryButtons) then return end
+        for _, catBtn in ipairs(cs.CategoryButtons) do
+            if not catBtn.__keQCDoubleClickHooked then
+                catBtn.__keQCDoubleClickHooked = true
+                catBtn:HookScript("OnClick", ArmDoubleClick)
+            end
+        end
     end
+    if _G.LFGListCategorySelection_UpdateCategoryButtons then
+        hooksecurefunc("LFGListCategorySelection_UpdateCategoryButtons", HookCategoryTiles)
+    end
+    HookCategoryTiles(_G.LFGListFrame and _G.LFGListFrame.CategorySelection)
 
     local function HookDD(dd)
         if not dd then return end
