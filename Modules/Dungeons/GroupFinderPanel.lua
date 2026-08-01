@@ -525,3 +525,187 @@ GFP._SanitizeScore       = SanitizeScore
 GFP._OnUpdateResultList  = OnUpdateResultList
 GFP._ReSort              = ReSort
 GFP._DecorateSearchEntry = DecorateSearchEntry
+
+------------------------------------------------------------------------
+-- Weekly runs footer: vault-aware tooltip (top runs + reward levels).
+------------------------------------------------------------------------
+local function RunsTooltip(footer)
+    local history = C_MythicPlus and C_MythicPlus.GetRunHistory and C_MythicPlus.GetRunHistory(false, true)
+    if not history or #history == 0 then return end
+    local levels = {}
+    for _, run in ipairs(history) do levels[#levels + 1] = run.level end
+    table.sort(levels, function(a, b) return a > b end)
+    local accent = Accent()
+    _G.GameTooltip:SetOwner(footer, "ANCHOR_TOP")
+    _G.GameTooltip:SetText("Mythic+ Runs", 1, 1, 1)
+    for _, slot in ipairs({ 1, 4, 8 }) do
+        local lvl = levels[slot]
+        if lvl then
+            local ilvl = C_MythicPlus.GetRewardLevelForDifficultyLevel
+                and select(2, C_MythicPlus.GetRewardLevelForDifficultyLevel(lvl))
+            _G.GameTooltip:AddDoubleLine(format("Best %d", slot),
+                ilvl and format("+%d (%d)", lvl, ilvl) or ("+" .. lvl),
+                0.85, 0.85, 0.85, accent[1], accent[2], accent[3])
+        end
+    end
+    _G.GameTooltip:Show()
+end
+
+local function UpdateRuns()
+    if not panel or not panel.runsText then return end
+    local history = C_MythicPlus and C_MythicPlus.GetRunHistory and C_MythicPlus.GetRunHistory(false, true)
+    local n = history and #history or 0
+    if n == 0 then
+        panel.runsText:SetText("No Mythic+ Runs")
+        panel.runsText:SetTextColor(0.486, 0.486, 0.486) -- #7c7c7c
+    else
+        panel.runsText:SetText(format("%d Mythic+ runs this week", n))
+        panel.runsText:SetTextColor(0.85, 0.85, 0.85)
+    end
+end
+
+local function AffixOnEnter(btn)
+    if not btn.affixID then return end
+    local name, desc = C_ChallengeMode.GetAffixInfo(btn.affixID)
+    if not name then return end
+    _G.GameTooltip:SetOwner(btn, "ANCHOR_BOTTOM")
+    _G.GameTooltip:SetText(name, 1, 1, 1)
+    if desc then _G.GameTooltip:AddLine(desc, nil, nil, nil, true) end
+    _G.GameTooltip:Show()
+end
+
+local function AffixOnLeave()
+    _G.GameTooltip:Hide()
+end
+
+local function UpdateAffixes()
+    if not panel or not panel.affixes then return end
+    local current = C_MythicPlus and C_MythicPlus.GetCurrentAffixes and C_MythicPlus.GetCurrentAffixes()
+    local shown = 0
+    for i, holder in ipairs(panel.affixes) do
+        local info = current and current[i]
+        if info and info.id then
+            local _, _, filedataid = C_ChallengeMode.GetAffixInfo(info.id)
+            holder.icon:SetTexture(filedataid)
+            holder.affixID = info.id
+            holder:Show()
+            shown = shown + 1
+        else
+            holder:Hide()
+        end
+    end
+    local total = shown * AFFIX_SIZE + (shown - 1) * 4
+    for i = 1, shown do
+        local holder = panel.affixes[i]
+        holder:ClearAllPoints()
+        holder:SetPoint("TOPLEFT", panel, "TOP", -total / 2 + (i - 1) * (AFFIX_SIZE + 4), -12)
+    end
+end
+
+------------------------------------------------------------------------
+-- Raider.IO coexistence. RIO parks its profile via a global anchor
+-- (RaiderIO_ProfileTooltipAnchor) SetPoint'd against PVEFrame's right
+-- edge -- our panel's exact spot. Wrap the anchor's SetPoint so that
+-- whenever RIO anchors relative to PVEFrame or to us, we substitute
+-- whichever currently owns the right edge, then re-assert the point so
+-- the change lands immediately.
+--
+-- THE LEGAL BASIS IS PARTLY UNVERIFIED. Established: the anchor belongs to
+-- RaiderIO, not Blizzard, and this wrapper is idempotent and irreversible
+-- (the original is captured in a closure and never restored). NOT
+-- established: that the frame is unprotected. Neither RaiderIO's source
+-- nor an in-game anchor:IsProtected() probe has been consulted, and
+-- ClearAllPoints/SetPoint below are themselves protected functions. The
+-- probe is a BLOCKING smoke step -- if it returns true, stop and replan.
+local function RepositionRaiderIO()
+    -- Task 7: IsActive() gate -- while inactive, do nothing except the one
+    -- forced re-anchor the teardown helper performs.
+    local anchor = _G.RaiderIO_ProfileTooltipAnchor
+    if not anchor then return end
+
+    if not anchor.__keGFPWrapped then
+        anchor.__keGFPWrapped = true
+        local orig = anchor.SetPoint
+        anchor.SetPoint = function(self, p, rel, rp, x, y)
+            -- Task 7: while inactive this wrapper delegates straight to
+            -- `orig` without substituting. It stays installed; it stops
+            -- changing behaviour.
+            if rel and (rel == _G.PVEFrame or rel == panel) then
+                local usePanel = panel and panel:IsShown()
+                rel = usePanel and panel or _G.PVEFrame
+                -- RIO's stock x is -16, a tuck sized for PVEFrame's thick
+                -- border art -- flush against our flat panel. Nudge by +1
+                -- for a 1px gap ONLY when anchored to us; the native
+                -- PVEFrame tuck stays theirs.
+                if usePanel and type(x) == "number" then
+                    x = x + 1
+                end
+            end
+            if rp == nil and x == nil and y == nil then
+                return orig(self, p, rel)
+            end
+            return orig(self, p, rel, rp, x, y)
+        end
+    end
+
+    -- Re-assert on THEIR tooltip's show as well: each profile render can
+    -- re-point, and this also heals any SetPoint that landed before the
+    -- wrap installed.
+    local tip = _G.RaiderIO_ProfileTooltip
+    if tip and not tip.__keGFPShowHook then
+        tip.__keGFPShowHook = true
+        tip:HookScript("OnShow", function() RepositionRaiderIO() end)
+    end
+
+    local p1, p2, p3, p4, p5 = anchor:GetPoint(1)
+    if p1 then
+        anchor:ClearAllPoints()
+        anchor:SetPoint(p1, p2, p3, p4, p5)
+    end
+end
+
+-- RIO creates RaiderIO_ProfileTooltipAnchor lazily when a profile first
+-- renders -- often AFTER our first OnShow -- so RepositionRaiderIO bailed
+-- on the nil anchor and the wrap never installed that session. Reopening
+-- worked because the anchor existed by then. Watch for the anchor's
+-- creation instead of assuming it.
+local rioWatcher
+local function EnsureRaiderIOWrap()
+    -- Task 7: IsActive() gate. Cancelling the ticker is NOT sufficient on
+    -- its own -- the permanent panel Show hook can call this again and
+    -- install the wrapper while inactive.
+    if _G.RaiderIO_ProfileTooltipAnchor then
+        RepositionRaiderIO()
+        return
+    end
+    if rioWatcher then return end
+    local loaded = C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("RaiderIO")
+    if not loaded then return end
+    rioWatcher = C_Timer.NewTicker(0.25, function(t)
+        if _G.RaiderIO_ProfileTooltipAnchor then
+            t:Cancel()
+            rioWatcher = nil
+            RepositionRaiderIO()
+        end
+    end, 120) -- up to 30s of lazy creation, then give up quietly
+end
+
+-- Shared UNCONDITIONAL teardown. Called by OnDisable and by Refresh's
+-- inactive branch (deviations 11 and 13). Deliberately NOT gated: the
+-- config page clears db.Enabled BEFORE disabling the module, so an
+-- IsActive() gate here would skip the very cleanup it exists to do.
+-- Never installs a wrapper that is not already there.
+local function TeardownRaiderIO()
+    if rioWatcher then
+        rioWatcher:Cancel()
+        rioWatcher = nil
+    end
+    local anchor = _G.RaiderIO_ProfileTooltipAnchor
+    if anchor and anchor.__keGFPWrapped then
+        local p1, p2, p3, p4, p5 = anchor:GetPoint(1)
+        if p1 then
+            anchor:ClearAllPoints()
+            anchor:SetPoint(p1, p2, p3, p4, p5)
+        end
+    end
+end
