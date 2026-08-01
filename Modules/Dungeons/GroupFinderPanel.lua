@@ -415,11 +415,14 @@ local function OnUpdateResultList(searchPanel)
         -- GetSearchResultInfo returns nil, and the dead id sits in the
         -- list until someone hovers it.
         local info = C_LFGList.GetSearchResultInfo(resultID)
-        if not info then
-            -- Dropped entirely: no button, nothing to hover.
-        elseif pendingStatus then
+        -- Deviation 15: positive tests, not the reference's empty leading
+        -- branch. A nil info means the listing died between Blizzard
+        -- building the id list and us reading it back; it is dropped by
+        -- falling through, which is safe because no button is built for it
+        -- and so nothing can hover it.
+        if info and pendingStatus then
             pending[#pending + 1] = resultID
-        else
+        elseif info then
             local ok = true
             -- Friends' groups BYPASS every predicate.
             local isFriend = friendResultSet[resultID] and true or false
