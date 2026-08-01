@@ -91,3 +91,111 @@ describe("GroupFinderPanel pure helpers", function()
         end)
     end)
 end)
+
+describe("GroupFinderPanel SanitizeResult", function()
+    local function load(secretFields)
+        secretFields = secretFields or {}
+        return loader.loadGroupFinderPanel({
+            issecretvalue = function(v)
+                for _, s in ipairs(secretFields) do if rawequal(v, s) then return true end end
+                return false
+            end,
+        })
+    end
+
+    local info
+    before_each(function()
+        info = {
+            activityIDs = { 42 },
+            numMembers = 3,
+            numBNetFriends = 1, numCharFriends = 0, numGuildMates = 2,
+            leaderOverallDungeonScore = 2500,
+            leaderBestDungeonScoreInfo = { mapScore = 180 },
+        }
+    end)
+
+    it("derives plain values when nothing is secret", function()
+        local GFP = load()
+        _G.C_LFGList.GetActivityInfoTable = function() return { groupFinderActivityGroupID = 7 } end
+        _G.C_LFGList.GetSearchResultPlayerInfo = function() return { assignedRole = "DAMAGER" } end
+        local rec = GFP._SanitizeResult(1, info, true, true)
+        assert.is_true(rec.gidKnown)
+        assert.equals(7, rec.gid)
+        assert.equals(3, rec.roles.DAMAGER)
+        assert.equals(3, rec.friends)
+        assert.equals(2500, rec.overall)
+        assert.equals(180, rec.leaderScore)
+    end)
+
+    it("returns no raw API field -- the record is newly constructed", function()
+        local GFP = load()
+        _G.C_LFGList.GetActivityInfoTable = function() return { groupFinderActivityGroupID = 7 } end
+        _G.C_LFGList.GetSearchResultPlayerInfo = function() return { assignedRole = "TANK" } end
+        local rec = GFP._SanitizeResult(1, info, true, true)
+        assert.is_false(rawequal(rec.roles, info))
+        assert.is_false(rawequal(rec.leaderScore, info.leaderBestDungeonScoreInfo))
+    end)
+
+    it("zeroes a secret score rather than carrying it", function()
+        local GFP = load({ 2500 })
+        local rec = GFP._SanitizeResult(1, info, false, false)
+        assert.equals(0, rec.overall)
+    end)
+
+    it("reports the group as UNKNOWN when numMembers is secret, and keeps roles nil", function()
+        local GFP = load({ 3 })
+        local rec = GFP._SanitizeResult(1, info, false, true)
+        assert.is_nil(rec.roles)
+    end)
+
+    it("skips a secret role rather than using it as a table key", function()
+        local GFP = load({ "HEALER" })
+        _G.C_LFGList.GetSearchResultPlayerInfo = function() return { assignedRole = "HEALER" } end
+        local rec = GFP._SanitizeResult(1, info, false, true)
+        assert.equals(0, rec.roles.HEALER)
+    end)
+
+    it("zeroes friend counts when any one of the three is secret", function()
+        local GFP = load({ 2 })  -- numGuildMates
+        local rec = GFP._SanitizeResult(1, info, false, false)
+        assert.equals(0, rec.friends)
+    end)
+
+    it("fails OPEN -- a throwing guard yields neutral values, not a dropped result", function()
+        local GFP = loader.loadGroupFinderPanel({
+            issecretvalue = function() error("simulated taint throw") end,
+        })
+        local rec = GFP._SanitizeResult(1, info, true, true)
+        assert.equals(0, rec.overall)
+        assert.is_false(rec.gidKnown)
+        assert.is_nil(rec.roles)
+    end)
+end)
+
+describe("GroupFinderPanel SanitizeScore", function()
+    it("fails CLOSED on a secret score", function()
+        local GFP = loader.loadGroupFinderPanel({
+            issecretvalue = function(v) return v == 2500 end,
+        })
+        _G.C_LFGList.GetSearchResultInfo = function()
+            return { leaderOverallDungeonScore = 2500 }
+        end
+        assert.is_nil(GFP._SanitizeScore(1))
+    end)
+
+    it("returns nil for a zero score", function()
+        local GFP = loader.loadGroupFinderPanel()
+        _G.C_LFGList.GetSearchResultInfo = function()
+            return { leaderOverallDungeonScore = 0 }
+        end
+        assert.is_nil(GFP._SanitizeScore(1))
+    end)
+
+    it("returns the score when readable and non-zero", function()
+        local GFP = loader.loadGroupFinderPanel()
+        _G.C_LFGList.GetSearchResultInfo = function()
+            return { leaderOverallDungeonScore = 1800 }
+        end
+        assert.equals(1800, GFP._SanitizeScore(1))
+    end)
+end)
