@@ -162,6 +162,11 @@ RefreshGlow = function()
     if not C_LFGList then return end
     local ok, ownLfgID, _, ownLevel = pcall(C_LFGList.GetOwnedKeystoneActivityAndGroupAndLevel)
     if not ok then ownLfgID, ownLevel = nil, nil end
+    -- Themed: this was the reference project's own accent literal, now KE's.
+    -- Read once per call, not once per button -- KE.Theme.accent[4] is the
+    -- theme's alpha, not this glow's; the glow keeps its own measured 0.38.
+    -- A live theme switch repaints on the next 2s ticker, not instantly.
+    local accent = KE.Theme and KE.Theme.accent or { 0.45, 0.505, 1 }
     for i = 1, #buttons do
         local btn = buttons[i]
         local ownMatch = ownLfgID and (btn._lfgID == ownLfgID)
@@ -179,7 +184,7 @@ RefreshGlow = function()
             btn._lvlText:SetText(ownLevel and ("+" .. ownLevel) or "")
             btn._lvlText:Show()
         elseif partyLevel then
-            btn._glow:SetColorTexture(0.45, 0.505, 1, 0.38)      -- party: #7381FF
+            btn._glow:SetColorTexture(accent[1], accent[2], accent[3], 0.38) -- party: themed accent
             btn._glow:Show()
             btn._lvlText:SetText("+" .. partyLevel)
             btn._lvlText:Show()
@@ -257,9 +262,12 @@ MakeButton = function(parent, dungeon, index)
             -- (see the file header). The line still carries the useful half.
             GameTooltip:AddLine((playerShortName or "You") .. ": +" .. ownLevel, 1, 0.82, 0)
         end
+        -- Themed: this was the reference project's own accent literal, now
+        -- KE's. A live theme switch repaints on the next hover, not instantly.
+        local accent = KE.Theme and KE.Theme.accent or { 0.45, 0.505, 1 }
         for name, info in pairs(partyKeys) do
             if info.cmID == self._cmID and info.level and info.level > 0 then
-                GameTooltip:AddLine(name .. ": +" .. info.level, 0.45, 0.505, 1)
+                GameTooltip:AddLine(name .. ": +" .. info.level, accent[1], accent[2], accent[3])
             end
         end
         GameTooltip:Show()
