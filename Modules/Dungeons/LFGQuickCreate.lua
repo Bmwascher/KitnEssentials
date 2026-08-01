@@ -296,3 +296,201 @@ MakeButton = function(parent, dungeon, index)
 
     return btn
 end
+
+-- Saves the form's original layout, then pushes two labels down to make room
+-- for the button row.
+local origLayout = {}
+
+SaveLayout = function(ec)
+    if origLayout.done then return end
+    if ec.DescriptionLabel then
+        local _, _, _, ox, oy = ec.DescriptionLabel:GetPoint()
+        origLayout.dlX, origLayout.dlY = ox, oy
+    end
+    if ec.Description then
+        origLayout.dH = ec.Description:GetHeight()
+    end
+    if ec.PlayStyleLabel then
+        local _, _, _, ox, oy = ec.PlayStyleLabel:GetPoint()
+        origLayout.plX, origLayout.plY = ox, oy
+    end
+    origLayout.done = true
+end
+
+PushLayout = function(ec)
+    if ec.DescriptionLabel and ec.NameLabel then
+        ec.DescriptionLabel:SetPoint("TOPLEFT", ec.NameLabel, "TOPLEFT", 0, -85)
+    end
+    if ec.Description then
+        ec.Description:SetHeight(25)
+    end
+    if ec.PlayStyleLabel and ec.DescriptionLabel then
+        ec.PlayStyleLabel:SetPoint("TOPLEFT", ec.DescriptionLabel, "TOPLEFT", 0, -55)
+    end
+end
+
+PopLayout = function(ec)
+    if not origLayout.done then return end
+    if ec.DescriptionLabel and ec.NameLabel then
+        ec.DescriptionLabel:SetPoint("TOPLEFT", ec.NameLabel, "TOPLEFT",
+            origLayout.dlX or 0, origLayout.dlY or -55)
+    end
+    if ec.Description and origLayout.dH then
+        ec.Description:SetHeight(origLayout.dH)
+    end
+    if ec.PlayStyleLabel and ec.DescriptionLabel and origLayout.plY then
+        ec.PlayStyleLabel:SetPoint("TOPLEFT", ec.DescriptionLabel, "TOPLEFT",
+            origLayout.plX or 0, origLayout.plY)
+    end
+end
+
+-- The row belongs to the Dungeons category (2) only.
+SyncVisibility = function()
+    if not container then return end
+    if not (QC.db and QC.db.Enabled ~= false and QC.db.QuickCreate ~= false) then
+        container:Hide()
+        return
+    end
+    local cs = _G.LFGListFrame and _G.LFGListFrame.CategorySelection
+    container:SetShown(cs ~= nil and cs.selectedCategory == 2)
+end
+
+-- One-time initialization, deferred until Blizzard_LFGList is ready.
+Init = function()
+    if initialized then return end
+    if not (QC.db and QC.db.Enabled ~= false) then return end
+
+    local ec = _G.LFGListFrame and _G.LFGListFrame.EntryCreation
+    if not ec then return end
+
+    -- GetCurrentSeason() returns -1 until RequestMapInfo resolves, and the
+    -- dungeon filter is worthless until it does.
+    if not C_MythicPlus then return end
+    C_MythicPlus.RequestMapInfo()
+    if C_MythicPlus.GetCurrentSeason() == -1 then
+        C_Timer.After(0.5, Init)
+        return
+    end
+
+    initialized = true
+
+    SaveLayout(ec)
+
+    local list    = ActiveDungeons()
+    local totalW  = #list * ICON_SIZE + math_max(0, #list - 1) * ICON_GAP
+    local nameBox = ec.Name or ec.NameBox
+
+    container = CreateFrame("Frame", "KE_LFGQCContainer", ec)
+    container:SetSize(totalW, ICON_SIZE)
+    -- Centered under the name box. The 1px borders add a pixel each side and
+    -- centering absorbs it.
+    container:SetPoint("TOP", nameBox, "BOTTOM", 0, -3)
+    container:Hide()
+
+    for i, d in ipairs(list) do
+        buttons[#buttons + 1] = MakeButton(container, d, i)
+    end
+
+    -- Secure click relay -- see the file header. The overlay exists only while
+    -- the Group Finder is in use, is armed for 0.35s after a category click,
+    -- and hides after firing or on timeout. Every secure-frame write is
+    -- combat-guarded.
+    local dblOverlay, dblTimer
+
+    -- DEVIATION from the reference, and it fixes a live defect there. The
+    -- reference hides the overlay only when out of combat and never retries
+    -- (<REF>:426, :444), so combat starting inside the 0.35s window leaves the
+    -- overlay SHOWN indefinitely, still covering that category tile and still
+    -- armed to click Start a Group. Route every hide through KE:RunAfterCombat
+    -- (Core/Globals.lua:154-170), which owns its own frame and its own
+    -- PLAYER_REGEN_ENABLED registration and therefore survives module disable.
+    HideDoubleClickOverlay = function()
+        if not dblOverlay then return end
+        if InCombatLockdown() then
+            KE:RunAfterCombat(function()
+                if dblOverlay then dblOverlay:Hide() end
+            end)
+            return
+        end
+        dblOverlay:Hide()
+    end
+
+    local function EnsureDoubleClickOverlay(cs)
+        if dblOverlay then return dblOverlay end
+        if InCombatLockdown() then return nil end
+        dblOverlay = CreateFrame("Button", "KE_LFGQCDblClick", cs, "SecureActionButtonTemplate")
+        -- MUST include the DOWN edge: modern secure buttons ignore mouse
+        -- input registered up-only, which is what stopped the relay working.
+        dblOverlay:RegisterForClicks("LeftButtonDown", "LeftButtonUp")
+        dblOverlay:SetAttribute("type", "click")
+        dblOverlay:SetAttribute("clickbutton", cs.StartGroupButton)
+        dblOverlay:SetFrameLevel(cs:GetFrameLevel() + 100)
+        dblOverlay:Hide()
+        dblOverlay:SetScript("PostClick", function()
+            if dblTimer then dblTimer:Cancel(); dblTimer = nil end
+            HideDoubleClickOverlay()
+        end)
+        return dblOverlay
+    end
+    local function ArmDoubleClick(catBtn)
+        if not (QC.db and QC.db.Enabled ~= false and QC.db.DoubleClickStart ~= false) then return end
+        if InCombatLockdown() then return end
+        local cs = catBtn:GetParent()
+        local sgb = cs and cs.StartGroupButton
+        if not (sgb and sgb:IsEnabled()) then return end
+        local ov = EnsureDoubleClickOverlay(cs)
+        if not ov then return end
+        ov:ClearAllPoints()
+        ov:SetAllPoints(catBtn)
+        ov:Show()
+        if dblTimer then dblTimer:Cancel() end
+        dblTimer = C_Timer.NewTimer(0.35, function()
+            dblTimer = nil
+            HideDoubleClickOverlay()
+        end)
+    end
+    if _G.LFGListCategorySelectionButton_OnClick then
+        hooksecurefunc("LFGListCategorySelectionButton_OnClick", ArmDoubleClick)
+    end
+
+    local function HookDD(dd)
+        if not dd then return end
+        dd:HookScript("OnHide", function()
+            C_Timer.After(0.05, SyncVisibility)
+        end)
+    end
+    HookDD(ec.GroupDropdown)
+    HookDD(ec.ActivityDropdown)
+    if ec.CategoryDropdown and ec.CategoryDropdown ~= ec.GroupDropdown then
+        HookDD(ec.CategoryDropdown)
+    end
+
+    ec:HookScript("OnShow", function()
+        local db = QC.db
+        local moduleOn = db and db.Enabled ~= false
+        if moduleOn and db.QuickCreate ~= false then
+            PushLayout(ec)
+            SyncVisibility()
+            RefreshGlow()
+            RequestPartyKeys()
+            if not updateTicker then
+                updateTicker = C_Timer.NewTicker(2, RefreshGlow)
+            end
+        else
+            PopLayout(ec)
+            container:Hide()
+        end
+    end)
+
+    ec:HookScript("OnHide", function()
+        if updateTicker then updateTicker:Cancel(); updateTicker = nil end
+    end)
+
+    if ec:IsShown() then
+        if QC.db.QuickCreate ~= false then
+            PushLayout(ec)
+            SyncVisibility()
+            RefreshGlow()
+        end
+    end
+end
