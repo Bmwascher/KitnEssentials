@@ -63,17 +63,9 @@ local BUTTON_GAP    = 6
 local TOGGLE_HEIGHT = 30   -- filter-pane toggles, up from 24
 local TOGGLE_ICON   = 22   -- dungeon icon, left of the short name
 
--- The panel's own window backdrop, matching the Damage Meter dock and the
--- skinned Chat panel so the three read as one family
--- (Modules/DamageMeter/Core.lua:193-194, Core/Defaults.lua:1616-1623).
---
--- Deliberately NOT S.Backdrop, which the reference used. S.Backdrop parents
--- its carrier to the frame's PARENT and sits one level below -- fine for
--- reskinning a Blizzard frame in place, but here the parent is PVEFrame,
--- whose own art then competes with it and washes the panel out. This panel
--- owns its background.
-local WINDOW_BG     = { 0.031, 0.031, 0.031, 0.80 }
-local WINDOW_BORDER = { 0, 0, 0, 1 }
+-- The panel's background stays on S.Backdrop, whose carrier is parented to
+-- PVEFrame. A self-owned KE:ApplyBackdrop was tried on 2026-08-01 and did
+-- not draw in game -- don't retry it without an in-game probe first.
 
 -- Themed, not the reference's #7381FF literal -- that was the upstream
 -- project's own accent. Read once per function, keep each site's alpha.
@@ -782,18 +774,11 @@ local function CreatePanel()
     if not pve or not S then return nil end
     local accent = Accent()
 
-    panel = CreateFrame("Frame", "KE_GroupFinderPanel", pve, "BackdropTemplate")
+    panel = CreateFrame("Frame", "KE_GroupFinderPanel", pve)
     panel:SetPoint("TOPLEFT", pve, "TOPRIGHT", 2, 0)
     panel:SetPoint("BOTTOMLEFT", pve, "BOTTOMRIGHT", 2, 0)
     panel:SetWidth(PANEL_WIDTH)
-    -- The panel owns its background rather than borrowing S.Backdrop, whose
-    -- carrier is parented to PVEFrame and competes with Blizzard's own art.
-    -- Same values as the Damage Meter dock and the Chat panel.
-    KE:ApplyBackdrop(panel, {
-        Color       = WINDOW_BG,
-        BorderColor = WINDOW_BORDER,
-        BorderSize  = 1,
-    })
+    S.Backdrop(panel)
     -- The Show/Hide METHODS, not the OnShow/OnHide scripts. Method hooks
     -- fire on every call, including Show() on an already-visible frame --
     -- the born-visible first open, where the OnShow EVENT never fires.
@@ -858,6 +843,7 @@ local function CreatePanel()
 
     -- Weekly runs footer
     local footer = CreateFrame("Frame", nil, panel)
+    panel.footer = footer          -- the filter pane anchors its bottom to this
     footer:SetHeight(BUTTON_HEIGHT)
     footer:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 10, 12)
     footer:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -10, 12)
@@ -1059,9 +1045,16 @@ local function CreateFilterPanel()
     GFP.db.DungeonFilter = GFP.db.DungeonFilter or {}
     local accent = Accent()
 
+    -- Bottom stops ABOVE the weekly-runs footer, which shares the panel and
+    -- stays visible in M+ mode -- anchoring to the panel's own bottom edge
+    -- put the Reset button on top of the footer text.
     local f = CreateFrame("Frame", nil, panel)
-    f:SetPoint("TOPLEFT", panel, "TOPLEFT", 10, -48)
-    f:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -10, 12)
+    f:SetPoint("TOPLEFT", panel, "TOPLEFT", 10, -(AFFIX_SIZE + 14))
+    if panel.footer then
+        f:SetPoint("BOTTOMRIGHT", panel.footer, "TOPRIGHT", 0, BUTTON_GAP)
+    else
+        f:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -10, 12)
+    end
     panel.filters = f
 
     local title = f:CreateFontString(nil, "OVERLAY")
@@ -1241,13 +1234,14 @@ local function CreateFilterPanel()
         RefreshTooltip(dirBtn)  -- same stale-tooltip bug as sortBtn
         GFP:ApplyAndRefresh()
     end)
-    y = y - (TOGGLE_HEIGHT + 10)
 
-    -- Manual re-search
+    -- The two action buttons anchor to the BOTTOM of the pane, not to the
+    -- running `y`. The dungeon grid's height changes with the season, so a
+    -- top-down flow can push these into the footer on a longer list.
     local searchBtn = CreateFrame("Button", nil, f)
     S.Button(searchBtn)
     searchBtn:SetSize(PANEL_WIDTH - 20, BUTTON_HEIGHT)
-    searchBtn:SetPoint("TOPLEFT", f, "TOPLEFT", 0, y)
+    searchBtn:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 0, BUTTON_HEIGHT + BUTTON_GAP)
     local st = searchBtn:CreateFontString(nil, "OVERLAY")
     S.SetFont(st, 13, "")
     st:SetPoint("CENTER")
@@ -1263,7 +1257,6 @@ local function CreateFilterPanel()
             _G.LFGListSearchPanel_DoSearch(sp) -- hardware event: allowed
         end
     end)
-    y = y - (BUTTON_HEIGHT + BUTTON_GAP)
 
     -- Reset: every filter back to its shipped default, which is the widest
     -- possible result list. Writes the profile directly rather than calling
@@ -1271,7 +1264,7 @@ local function CreateFilterPanel()
     local resetBtn = CreateFrame("Button", nil, f)
     S.Button(resetBtn)
     resetBtn:SetSize(PANEL_WIDTH - 20, BUTTON_HEIGHT)
-    resetBtn:SetPoint("TOPLEFT", f, "TOPLEFT", 0, y)
+    resetBtn:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 0, 0)
     local rt = resetBtn:CreateFontString(nil, "OVERLAY")
     S.SetFont(rt, 13, "")
     rt:SetPoint("CENTER")
