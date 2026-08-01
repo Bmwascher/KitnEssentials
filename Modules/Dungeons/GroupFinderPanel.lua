@@ -834,3 +834,339 @@ local function CreatePanel()
 
     return panel
 end
+
+------------------------------------------------------------------------
+-- Mythic+ filter pane: dungeon toggles, Needs Role, Has Tank/Healer, and
+-- client-side sorting. Shown in place of the Quick Access buttons
+-- whenever the M+ search is active.
+------------------------------------------------------------------------
+
+function GFP:ApplyAdvancedFilters()
+    -- Task 7: IsActive() gate. This reaches C_LFGList.SaveAdvancedFilter,
+    -- which persists BLIZZARD's own filter state -- it is the single most
+    -- important thing to stop while inactive.
+    --
+    -- The server-side filter is kept PERMISSIVE: all dungeons, no
+    -- has/needs constraints. The client pass over the raw snapshot is the
+    -- authority, and a broad server list is what lets friends' groups
+    -- bypass filters -- a server-excluded result cannot be resurrected
+    -- client-side.
+    local db = self.db
+    if not db or not (C_LFGList and C_LFGList.GetAdvancedFilter) then return end
+    local adv = C_LFGList.GetAdvancedFilter()
+    if not adv then return end
+    adv.needsTank, adv.needsHealer, adv.needsDamage = false, false, false
+    adv.hasTank, adv.hasHealer = false, false
+    local activities = {}
+    for _, g in ipairs(SeasonGroups()) do activities[#activities + 1] = g end
+    for _, g in ipairs(ExpansionGroups()) do activities[#activities + 1] = g end
+    adv.activities = activities
+    C_LFGList.SaveAdvancedFilter(adv)
+end
+
+-- Blizzard's ResolveCategoryFilters is file-local; replicated verbatim
+-- (dungeons only display recommended groups).
+local function ResolveCategoryFilters(categoryID, filters)
+    if categoryID == DUNGEON_CAT then
+        return bit.band(bit.bnot(Enum.LFGListFilter.NotRecommended),
+            bit.bor(filters or 0, Enum.LFGListFilter.Recommended))
+    end
+    return filters
+end
+
+function GFP:ApplyAndRefresh()
+    -- Task 7: IsActive() gate.
+    self:ApplyAdvancedFilters()
+    -- The client-side pass over the raw snapshot is authoritative and
+    -- INSTANT -- run it unconditionally. The real server re-search is a
+    -- freshness assist only, and Blizzard throttles it hard; per-click
+    -- DoSearch was tripping "Search failed, please wait a moment". Gate
+    -- the server hit to one per 10s window; skipped refreshes cost
+    -- nothing because the snapshot filter already answered the click.
+    ReSort()
+    local now = GetTime()
+    if (now - (self._lastServerSearch or 0)) < 10 then return end
+    local sp = _G.LFGListFrame and _G.LFGListFrame.SearchPanel
+    if not (sp and sp:IsShown()) then return end
+    self._lastServerSearch = now
+    -- C_LFGList.Search is HasRestrictions. It is reached SYNCHRONOUSLY
+    -- from the click handler: deferring to a timer sheds the hardware
+    -- context and produces ADDON_ACTION_BLOCKED. Whether an ordinary
+    -- OnClick counts as legal provenance is UNVERIFIED -- inherited from
+    -- the reference, which ships it working, and exercised by the smoke.
+    if C_LFGList and C_LFGList.Search and sp.categoryID then
+        local filters = ResolveCategoryFilters(sp.categoryID, sp.filters)
+        local languages = C_LFGList.GetLanguageSearchFilter and C_LFGList.GetLanguageSearchFilter()
+        local adv = IsDungeonSearchMode() and C_LFGList.GetAdvancedFilter and C_LFGList.GetAdvancedFilter() or nil
+        local ok = pcall(C_LFGList.Search, sp.categoryID, filters, sp.preferredFilters, languages, nil, adv)
+        if ok then return end
+    end
+    if _G.LFGListSearchPanel_DoSearch then
+        _G.LFGListSearchPanel_DoSearch(sp)
+    end
+end
+
+local function SetToggleVisual(btn, active)
+    if btn.selTex then btn.selTex:SetShown(active and true or false) end
+end
+
+local function MakeToggle(parent, S, label, getter, onClick)
+    local btn = CreateFrame("Button", nil, parent)
+    local accent = Accent()
+    S.Button(btn)
+    local t = btn:CreateTexture(nil, "ARTWORK")
+    t:SetColorTexture(accent[1], accent[2], accent[3], 0.15)
+    local anchor = S.GetBackdrop(btn) or btn
+    t:SetPoint("TOPLEFT", anchor, "TOPLEFT", 1, -1)
+    t:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", -1, 1)
+    t:Hide()
+    btn.selTex = t
+    local fs = btn:CreateFontString(nil, "OVERLAY")
+    S.SetFont(fs, 11, "")
+    fs:SetPoint("CENTER")
+    fs:SetText(label)
+    fs:SetWordWrap(false)
+    btn.text = fs
+    btn:SetScript("OnClick", function(b)
+        -- Task 7: IsActive() gate goes HERE, before onClick -- not around
+        -- the refresh. Every one of these callbacks mutates the profile on
+        -- its first statement, and a mutation on a stranded panel outlives
+        -- the hide.
+        onClick(b)
+        SetToggleVisual(b, getter())
+    end)
+    SetToggleVisual(btn, getter())
+    return btn
+end
+
+local function CreateFilterPanel()
+    if panel.filters then return panel.filters end
+    local S = KE.Skins
+    if not S or not GFP.db then return nil end
+    GFP.db.DungeonFilter = GFP.db.DungeonFilter or {}
+    local accent = Accent()
+
+    local f = CreateFrame("Frame", nil, panel)
+    f:SetPoint("TOPLEFT", panel, "TOPLEFT", 10, -48)
+    f:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -10, 12)
+    panel.filters = f
+
+    local title = f:CreateFontString(nil, "OVERLAY")
+    S.SetFont(title, 14, "")
+    title:SetPoint("TOP", f, "TOP", 0, 0)
+    title:SetText("Filters")
+    title:SetTextColor(accent[1], accent[2], accent[3])
+
+    -- Deviation 12: every visual written during construction is collected
+    -- here so ApplySettings can re-apply them. CreateFilterPanel returns
+    -- the built pane on later calls, so it cannot serve as the refresh.
+    local visualRefreshers = {}
+
+    -- Dungeon toggles: two-column grid from the live season groups.
+    local groups = SeasonGroups()
+    local col, rowN = 0, 0
+    local BW = (PANEL_WIDTH - 20 - 6) / 2
+    for _, groupID in ipairs(groups) do
+        local name = C_LFGList.GetActivityGroupInfo and C_LFGList.GetActivityGroupInfo(groupID)
+        if name then
+            local btn = MakeToggle(f, S, Abbreviate(name),
+                function() return GFP.db and GFP.db.DungeonFilter[groupID] end,
+                function()
+                    local db = GFP.db
+                    if not db then return end
+                    db.DungeonFilter[groupID] = not db.DungeonFilter[groupID] or nil
+                    GFP:ApplyAndRefresh()
+                end)
+            btn:SetSize(BW, 24)
+            btn:SetPoint("TOPLEFT", f, "TOPLEFT", col * (BW + 6), -22 - rowN * 28)
+            btn.text:SetWidth(BW - 8)
+            btn:SetScript("OnEnter", function(b)
+                _G.GameTooltip:SetOwner(b, "ANCHOR_TOP")
+                _G.GameTooltip:SetText(name, 1, 1, 1)
+                _G.GameTooltip:Show()
+            end)
+            btn:SetScript("OnLeave", function() _G.GameTooltip:Hide() end)
+            visualRefreshers[#visualRefreshers + 1] = function()
+                SetToggleVisual(btn, GFP.db and GFP.db.DungeonFilter[groupID])
+            end
+            col = col + 1
+            if col == 2 then col = 0; rowN = rowN + 1 end
+        end
+    end
+    if col == 1 then rowN = rowN + 1 end
+    local y = -22 - rowN * 28 - 8
+
+    -- Needs Role / Has Tank / Has Healer
+    local pf = MakeToggle(f, S, "Needs Role",
+        function() return GFP.db and GFP.db.PartyFit end,
+        function()
+            local db = GFP.db
+            if not db then return end
+            db.PartyFit = not db.PartyFit
+            GFP:ApplyAndRefresh()
+        end)
+    pf:SetSize(PANEL_WIDTH - 20, 24)
+    pf:SetPoint("TOPLEFT", f, "TOPLEFT", 0, y)
+    visualRefreshers[#visualRefreshers + 1] = function()
+        SetToggleVisual(pf, GFP.db and GFP.db.PartyFit)
+    end
+    y = y - 30
+
+    local ht = MakeToggle(f, S, "Has Tank",
+        function() return GFP.db and GFP.db.HasTank end,
+        function()
+            local db = GFP.db
+            if not db then return end
+            db.HasTank = not db.HasTank
+            GFP:ApplyAndRefresh()
+        end)
+    ht:SetSize(BW, 24)
+    ht:SetPoint("TOPLEFT", f, "TOPLEFT", 0, y)
+    visualRefreshers[#visualRefreshers + 1] = function()
+        SetToggleVisual(ht, GFP.db and GFP.db.HasTank)
+    end
+
+    local hh = MakeToggle(f, S, "Has Healer",
+        function() return GFP.db and GFP.db.HasHealer end,
+        function()
+            local db = GFP.db
+            if not db then return end
+            db.HasHealer = not db.HasHealer
+            GFP:ApplyAndRefresh()
+        end)
+    hh:SetSize(BW, 24)
+    hh:SetPoint("TOPLEFT", f, "TOPLEFT", BW + 6, y)
+    visualRefreshers[#visualRefreshers + 1] = function()
+        SetToggleVisual(hh, GFP.db and GFP.db.HasHealer)
+    end
+    y = y - 34
+
+    -- Sort: click cycles the modes; the arrow toggles direction. Reorders
+    -- the current list immediately.
+    local sortTitle = f:CreateFontString(nil, "OVERLAY")
+    S.SetFont(sortTitle, 12, "")
+    sortTitle:SetPoint("TOPLEFT", f, "TOPLEFT", 0, y)
+    sortTitle:SetText("Sort")
+    sortTitle:SetTextColor(accent[1], accent[2], accent[3])
+    y = y - 18
+
+    local sortBtn = CreateFrame("Button", nil, f)
+    S.Button(sortBtn)
+    sortBtn:SetSize(PANEL_WIDTH - 20 - 30, 24)
+    sortBtn:SetPoint("TOPLEFT", f, "TOPLEFT", 0, y)
+    local sortText = sortBtn:CreateFontString(nil, "OVERLAY")
+    S.SetFont(sortText, 11, "")
+    sortText:SetPoint("CENTER")
+    local function SortLabel()
+        local db = GFP.db
+        local mode = SORT_MODE[(db and db.SortBy) or "DEFAULT"]
+        sortText:SetText(mode and mode.text or "Default")
+    end
+    SortLabel()
+    visualRefreshers[#visualRefreshers + 1] = SortLabel
+    sortBtn:SetScript("OnEnter", function(b)
+        local db = GFP.db
+        _G.GameTooltip:SetOwner(b, "ANCHOR_TOP")
+        _G.GameTooltip:SetText("Sort", 1, 1, 1)
+        for _, key in ipairs(SORT_ORDER) do
+            local isCur = ((db and db.SortBy) or "DEFAULT") == key
+            if isCur then
+                _G.GameTooltip:AddLine(SORT_MODE[key].text, accent[1], accent[2], accent[3])
+            else
+                _G.GameTooltip:AddLine(SORT_MODE[key].text, 0.85, 0.85, 0.85)
+            end
+        end
+        _G.GameTooltip:Show()
+    end)
+    sortBtn:SetScript("OnLeave", function() _G.GameTooltip:Hide() end)
+    sortBtn:SetScript("OnClick", function()
+        -- Task 7: IsActive() gate HERE. This handler does not go through
+        -- MakeToggle, so it needs its own -- and it mutates before it
+        -- refreshes, same as the toggles.
+        local db = GFP.db
+        if not db then return end
+        local cur = db.SortBy or "DEFAULT"
+        for i, key in ipairs(SORT_ORDER) do
+            if key == cur then
+                db.SortBy = SORT_ORDER[(i % #SORT_ORDER) + 1]
+                break
+            end
+        end
+        SortLabel()
+        GFP:ApplyAndRefresh()
+    end)
+
+    local dirBtn = CreateFrame("Button", nil, f)
+    S.ArrowButton(dirBtn, "down")
+    dirBtn:SetSize(24, 24)
+    dirBtn:SetPoint("LEFT", sortBtn, "RIGHT", 6, 0)
+    local function DirVisual()
+        local a = S.data(dirBtn).arrow
+        if a then a:SetRotation((GFP.db and GFP.db.SortDescending ~= false) and 0 or 3.14159) end
+    end
+    DirVisual()
+    visualRefreshers[#visualRefreshers + 1] = DirVisual
+    dirBtn:SetScript("OnEnter", function(b)
+        _G.GameTooltip:SetOwner(b, "ANCHOR_TOP")
+        _G.GameTooltip:SetText((GFP.db and GFP.db.SortDescending ~= false)
+            and "Descending" or "Ascending", 1, 1, 1)
+        _G.GameTooltip:Show()
+    end)
+    dirBtn:SetScript("OnLeave", function() _G.GameTooltip:Hide() end)
+    dirBtn:SetScript("OnClick", function()
+        -- Task 7: IsActive() gate, for the same reason as sortBtn.
+        local db = GFP.db
+        if not db then return end
+        db.SortDescending = not (db.SortDescending ~= false)
+        DirVisual()
+        GFP:ApplyAndRefresh()
+    end)
+    y = y - 30
+
+    -- Manual re-search
+    local searchBtn = CreateFrame("Button", nil, f)
+    S.Button(searchBtn)
+    searchBtn:SetSize(PANEL_WIDTH - 20, 24)
+    searchBtn:SetPoint("TOPLEFT", f, "TOPLEFT", 0, y)
+    local st = searchBtn:CreateFontString(nil, "OVERLAY")
+    S.SetFont(st, 12, "")
+    st:SetPoint("CENTER")
+    st:SetText("Search")
+    searchBtn:SetScript("OnClick", function()
+        -- Task 7: IsActive() gate. This calls ApplyAdvancedFilters
+        -- directly, so gating ApplyAndRefresh does not cover it.
+        GFP:ApplyAdvancedFilters()
+        local sp = _G.LFGListFrame and _G.LFGListFrame.SearchPanel
+        if not sp then return end
+        if _G.LFGListSearchPanel_DoSearch then
+            _G.LFGListSearchPanel_DoSearch(sp) -- hardware event: allowed
+        end
+    end)
+
+    -- Deviation 12's refresh routine. ApplySettings calls this; nothing
+    -- else can, because every visual above is written at construction or
+    -- on click.
+    f._refreshVisuals = function()
+        for _, fn in ipairs(visualRefreshers) do fn() end
+    end
+
+    return f
+end
+
+function GFP:UpdateMode()
+    -- Task 7: IsActive() gate. UpdateMode has NO enabled check in the
+    -- reference and reaches SaveAdvancedFilter through
+    -- ApplyAdvancedFilters, so a disabled module keeps overwriting the
+    -- user's Blizzard filter settings on every category change.
+    if not panel then return end
+    local dungeonMode = IsDungeonSearchMode()
+    if dungeonMode then
+        local f = CreateFilterPanel()
+        if f then f:Show() end
+        if panel.quick then panel.quick:Hide() end
+        self:ApplyAdvancedFilters()
+    else
+        if panel.filters then panel.filters:Hide() end
+        if panel.quick then panel.quick:Show() end
+    end
+end
