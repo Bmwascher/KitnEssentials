@@ -1117,7 +1117,10 @@ local function CreateFilterPanel()
         -- Task 7: IsActive() gate, for the same reason as sortBtn.
         local db = GFP.db
         if not db then return end
-        db.SortDescending = not (db.SortDescending ~= false)
+        -- Deviation 15. Was `not (db.SortDescending ~= false)`, which
+        -- luacheck reports as W581. Identical for every value including
+        -- nil: true->false, false->true, nil->false.
+        db.SortDescending = (db.SortDescending == false)
         DirVisual()
         GFP:ApplyAndRefresh()
     end)
