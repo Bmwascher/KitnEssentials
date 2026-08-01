@@ -942,6 +942,28 @@ local Defaults = {
             YourKeyGlowThickness = 2,
         },
 
+        -- Quick-access side panel docked to the right of the Group Finder:
+        -- this week's affixes, one-click category searches, a Mythic+
+        -- dungeon/role filter pane, and a weekly-runs footer.
+        -- Ships DISABLED: it rewrites Blizzard's LFGList search results, so
+        -- it is opt-in.
+        --
+        -- The six keys below Enabled are SESSION state, not preferences: the
+        -- module overwrites every one of them on each OnEnable (login, reload
+        -- and toggle) by design -- filters are meant to start clean each
+        -- session. That makes the SortBy and SortDescending values here
+        -- effectively dead. They are kept so the shape is complete. Do not
+        -- "fix" them by deleting the reset; the reset is the behaviour.
+        GroupFinderPanel = {
+            Enabled        = false,
+            DungeonFilter  = {},        -- [activityGroupID] = true
+            PartyFit       = false,     -- shown as "Needs Role"
+            HasTank        = false,
+            HasHealer      = false,
+            SortBy         = "DEFAULT", -- DEFAULT / OVERALL_SCORE / DUNGEON_SCORE
+            SortDescending = true,
+        },
+
         -- Quick Create: a row of season-dungeon buttons on the Group Finder
         -- Entry Creation form. One click lists a group for that dungeon.
         -- Ships DISABLED: it modifies a Blizzard form's layout, so it is

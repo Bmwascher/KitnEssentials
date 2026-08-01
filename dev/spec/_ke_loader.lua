@@ -1116,4 +1116,97 @@ function L.loadLFGQuickCreate(overrides)
     return QC, KE, seams
 end
 
+-- Modules/Dungeons/GroupFinderPanel.lua. The file-scope `local X = X` captures
+-- are _G, ipairs, CreateFrame and string.format, so all four must exist BEFORE
+-- helpers.loadModule. C_LFGList, C_MythicPlus, C_ChallengeMode, C_SocialQueue,
+-- C_AddOns, C_Timer, Enum and bit are read at CALL time, not file scope, but
+-- the helpers under test call several of them, so they are stubbed here.
+--
+-- Nothing creates a frame at load time: CreatePanel runs only from Refresh,
+-- which this loader never calls.
+function L.loadGroupFinderPanel(overrides)
+    overrides = overrides or {}
+    installMock(managedSubset(overrides), {
+        C_Timer = inertTimer(),
+        GetTime = function() return 0 end,
+        InCombatLockdown = function() return false end,
+        CreateFrame = function(_, name) return qcFrame(name or "anon") end,
+        IsInGroup = overrides.isInGroup or function() return false end,
+        GetNumGroupMembers = overrides.getNumGroupMembers or function() return 0 end,
+        UnitGroupRolesAssigned = overrides.unitGroupRolesAssigned
+            or function() return "NONE" end,
+        hooksecurefunc = function() end,
+    })
+    local modules = helpers.installAddonShim()
+
+    _G.bit = _G.bit or {
+        bor  = function(a, b) return (a or 0) + (b or 0) end,
+        band = function(a) return a or 0 end,
+        bnot = function(a) return -(a or 0) - 1 end,
+    }
+    _G.Enum = overrides.Enum or {
+        LFGListFilter = {
+            PvE = 1, Recommended = 2, NotRecommended = 4,
+            CurrentSeason = 8, CurrentExpansion = 16, NotCurrentSeason = 32,
+        },
+    }
+    _G.C_SpecializationInfo = overrides.C_SpecializationInfo or {
+        GetSpecialization = function() return 1 end,
+        GetSpecializationInfo = function() return 1, "Spec", "", nil, "DAMAGER" end,
+    }
+    _G.C_LFGList = overrides.C_LFGList or {
+        GetAvailableActivityGroups = function() return {} end,
+        GetActivityGroupInfo = function() return nil end,
+    }
+    _G.C_AddOns = overrides.C_AddOns or { IsAddOnLoaded = function() return false end }
+    _G.C_SocialQueue = overrides.C_SocialQueue
+    -- issecretvalue / issecrettable exist in the live client but not in the
+    -- mock. Deviation 5's boundary calls them on EVERY field, so a nil here
+    -- would make every spec exercise the guard-threw path instead of the
+    -- happy path. Default to "nothing is secret"; a spec that wants the
+    -- rejection path overrides them.
+    _G.issecretvalue = overrides.issecretvalue or function() return false end
+    _G.issecrettable = overrides.issecrettable or function() return false end
+    _G.GROUP_FINDER_CATEGORY_ID_DUNGEONS = 2
+
+    local profile = {
+        GroupFinderPanel = {
+            Enabled        = true,
+            DungeonFilter  = {},
+            PartyFit       = false,
+            HasTank        = false,
+            HasHealer      = false,
+            SortBy         = "DEFAULT",
+            SortDescending = true,
+        },
+    }
+    local KE = {
+        db = { profile = profile },
+        FONT = "Fonts\\FRIZQT__.TTF",
+        Print = function() end,
+        Theme = { accent = { 1, 0, 0.549, 1 } },
+    }
+    if overrides.profile then KE.db.profile = overrides.profile end
+
+    helpers.loadModule("Modules/Dungeons/GroupFinderPanel.lua", KE)
+    local GFP = modules["GroupFinderPanel"]
+
+    -- Seeded DIRECTLY, not via GFP:UpdateDB(). UpdateDB does not exist until
+    -- Task 7, and Task 2 is the first task to use this loader. Task 7's own
+    -- specs call the real GFP:UpdateDB() after it exists.
+    GFP.db = KE.db.profile.GroupFinderPanel
+
+    local seams = {
+        playerSpecRole      = GFP._PlayerSpecRole,
+        getPartyRoles       = GFP._GetPartyRoles,
+        seasonGroups        = GFP._SeasonGroups,
+        expansionGroups     = GFP._ExpansionGroups,
+        isDungeonSearchMode = GFP._IsDungeonSearchMode,
+        abbreviate          = GFP._Abbreviate,
+        sortOrder           = GFP._SORT_ORDER,
+        sortMode            = GFP._SORT_MODE,
+    }
+    return GFP, KE, seams
+end
+
 return L
