@@ -66,16 +66,26 @@ GUIFrame:RegisterContent("LFGQuickCreate", function(scrollChild, yOffset)
 
     card2:AddLabel("|cff888888Adds a row of season-dungeon buttons to the Group Finder's create form. One click lists a group for that dungeon using the Default Playstyle below. Your own keystone's dungeon glows gold with its key level; party members' keys glow blue.|r")
 
+    -- Both switches share one row; they are short labels and the card read
+    -- sparse with a line each.
     local row1 = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local qcCheck = GUIFrame:CreateCheckbox(row1, "Quick Create Buttons", {
         value = db.QuickCreate ~= false,
         callback = function(checked) db.QuickCreate = checked; ApplySettings() end,
     })
-    row1:AddWidget(qcCheck, 1)
+    row1:AddWidget(qcCheck, 0.5)
     manager:Register(qcCheck, "all")
+
+    local dcCheck = GUIFrame:CreateCheckbox(row1, "Double-Click Category to Start", {
+        value = db.DoubleClickStart ~= false,
+        callback = function(checked) db.DoubleClickStart = checked; ApplySettings() end,
+        tooltip = "Double-clicking a category tile on the Premade Groups screen immediately opens Start a Group for that category.",
+    })
+    row1:AddWidget(dcCheck, 0.5)
+    manager:Register(dcCheck, "all")
     card2:AddRow(row1, Theme.rowHeight)
 
-    local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
     -- The ORDERED {key=,text=} form is required. The labels are this
     -- feature's own wording, not the enum's names -- the VALUES are what
     -- reach the listing payload and they match
@@ -92,17 +102,7 @@ GUIFrame:RegisterContent("LFGQuickCreate", function(scrollChild, yOffset)
     })
     row2:AddWidget(psDropdown, 1)
     manager:Register(psDropdown, "all")
-    card2:AddRow(row2, Theme.rowHeight)
-
-    local row3 = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
-    local dcCheck = GUIFrame:CreateCheckbox(row3, "Double-Click Category to Start", {
-        value = db.DoubleClickStart ~= false,
-        callback = function(checked) db.DoubleClickStart = checked; ApplySettings() end,
-        tooltip = "Double-clicking a category tile on the Premade Groups screen immediately opens Start a Group for that category.",
-    })
-    row3:AddWidget(dcCheck, 1)
-    manager:Register(dcCheck, "all")
-    card2:AddRow(row3, Theme.rowHeightLast, 0)
+    card2:AddRow(row2, Theme.rowHeightLast, 0)
 
     yOffset = card2:GetNextOffset()
 

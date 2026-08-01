@@ -208,6 +208,31 @@ local function QueueGlowRefresh()
     end)
 end
 
+-- Class token for the party member LibKeystone named, so their tooltip line
+-- can carry their class colour. The library sends no class, so the roster is
+-- the only source.
+--
+-- UnitName is SecretWhenUnitIdentityRestricted
+-- (.wow-api-reference Interface/AddOns/Blizzard_APIDocumentationGenerated/
+-- UnitDocumentation.lua:2368-2371), so inside a dungeon the name comes back
+-- secret and comparing it would throw -- that unit is skipped and the line
+-- keeps the accent colour. UnitClass's SECOND return (classFilename) has no
+-- ConditionalSecret flag (same file :908-913); the first one does, so it is
+-- deliberately not read.
+local function PartyClassToken(shortName)
+    for i = 1, 4 do
+        local unit = "party" .. i
+        if UnitExists(unit) then
+            local n = UnitName(unit)
+            if not (issecretvalue and issecretvalue(n)) and n == shortName then
+                local _, classFile = UnitClass(unit)
+                return classFile
+            end
+        end
+    end
+    return nil
+end
+
 local function RequestPartyKeys()
     if LKS and IsInGroup() then
         LKS.Request("PARTY") -- library-throttled at 3s; replies land in the callback
@@ -223,16 +248,13 @@ MakeButton = function(parent, dungeon, index)
     btn:SetSize(ICON_SIZE, ICON_SIZE)
     btn:SetPoint("TOPLEFT", (index - 1) * (ICON_SIZE + ICON_GAP), 0)
 
-    -- 1px black border behind the icon.
-    local border = btn:CreateTexture(nil, "BACKGROUND")
-    border:SetColorTexture(0, 0, 0, 1)
-    border:SetPoint("TOPLEFT", btn, "TOPLEFT", -1, 1)
-    border:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 1, -1)
-
     local tex = btn:CreateTexture(nil, "ARTWORK")
     tex:SetAllPoints()
-    tex:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    -- The shared helpers, not a hand-rolled crop and border: KE's standard
+    -- icon treatment is a 0.3 zoom and a pixel-snapped 1px black frame.
+    KE:ApplyIconZoom(tex)
     if iconTex and iconTex ~= 0 then tex:SetTexture(iconTex) end
+    KE:AddIconBorders(btn)
 
     local hl = btn:CreateTexture(nil, "HIGHLIGHT")
     hl:SetAllPoints()
@@ -271,7 +293,12 @@ MakeButton = function(parent, dungeon, index)
         local accent = KE.Theme and KE.Theme.accent or { 1, 0, 0.549 }
         for name, info in pairs(partyKeys) do
             if info.cmID == self._cmID and info.level and info.level > 0 then
-                GameTooltip:AddLine(name .. ": +" .. info.level, accent[1], accent[2], accent[3])
+                -- Class colour when the roster gave one up, accent when it
+                -- did not. KE:GetClassColor falls back to the PLAYER's colour
+                -- on a nil token, which would be wrong here, so the nil case
+                -- never reaches it.
+                local c = info.class and KE:GetClassColor(info.class) or accent
+                GameTooltip:AddLine(name .. ": +" .. info.level, c[1], c[2], c[3])
             end
         end
         GameTooltip:Show()
@@ -307,6 +334,19 @@ MakeButton = function(parent, dungeon, index)
             requiredItemLevel     = 0,
             requiredPvpRating     = 0,
         })
+
+        -- Point the create form at this dungeon too. The listing above is
+        -- already away and does not need it -- this is so clicking Edit on
+        -- the new listing opens a form that knows which dungeon it is,
+        -- instead of a blank one.
+        --
+        -- Same call and same argument shape Blizzard's own activity dropdown
+        -- uses (.wow-api-reference Interface/AddOns/Blizzard_GroupFinder/
+        -- Mainline/LFGList.lua:824-826): everything but the activity is nil.
+        local ec = _G.LFGListFrame and _G.LFGListFrame.EntryCreation
+        if ec and _G.LFGListEntryCreation_Select then
+            _G.LFGListEntryCreation_Select(ec, nil, nil, nil, self._lfgID)
+        end
     end)
 
     return btn
@@ -563,7 +603,11 @@ function QC:OnEnable()
             if playerShortName and sender == playerShortName then return end -- own key is read directly
             if type(keyLevel) == "number" and type(keyChallengeMapID) == "number"
                 and keyLevel > 0 and keyChallengeMapID > 0 then
-                partyKeys[sender] = { level = keyLevel, cmID = keyChallengeMapID }
+                partyKeys[sender] = {
+                    level = keyLevel,
+                    cmID  = keyChallengeMapID,
+                    class = PartyClassToken(sender),
+                }
             else
                 partyKeys[sender] = nil
             end

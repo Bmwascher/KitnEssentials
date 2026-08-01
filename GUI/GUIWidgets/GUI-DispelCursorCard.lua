@@ -34,6 +34,8 @@ function GUIFrame:CreateDispelCursorCard(scrollChild, yOffset, config)
     local card = GUIFrame:CreateCard(scrollChild, "Dispel Countdown", yOffset)
     manager:Register(card, "all")
 
+    card:AddLabel("|cff888888Shows your dispel cooldown at the cursor. Your dispel spell is detected automatically from your spellbook. Nothing is drawn on a spec without one.|r")
+
     local row1 = GUIFrame:CreateRow(card.content, Theme.rowHeight)
     local dispelEnable = GUIFrame:CreateCheckbox(row1, "Enable Dispel Countdown", {
         value = db.Dispel.Enabled == true,

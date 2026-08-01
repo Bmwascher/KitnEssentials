@@ -1000,8 +1000,9 @@ local function MakeToggle(parent, S, label, getter, onClick, iconTex)
     btn.selTex = t
 
     if iconTex then
-        -- 1px black frame under the art, matching the icon treatment the
-        -- sibling module uses (Modules/Dungeons/LFGQuickCreate.lua:227-235).
+        -- 1px black frame under the art. KE:AddIconBorders needs a frame and
+        -- this is a texture, so the backing plate is drawn by hand; the crop
+        -- still goes through the shared helper.
         local border = btn:CreateTexture(nil, "BACKGROUND")
         border:SetColorTexture(0, 0, 0, 1)
         border:SetPoint("LEFT", anchor, "LEFT", 3, 0)
