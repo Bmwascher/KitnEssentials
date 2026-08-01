@@ -65,6 +65,14 @@ local InCombatLockdown = InCombatLockdown
 local LKS = LibStub and LibStub:GetLibrary("LibKeystone", true)
 local partyKeys = {}   -- [senderShortName] = { level = n, cmID = n }
 
+-- Flip to true, /reload, click a category tile, read the chat log. Reports
+-- why the double-click overlay did or did not arm for that tile. Left in
+-- place after diagnosis, per the debug-first workflow.
+local DEBUG_QC = false
+local function qcdbg(msg)
+    if DEBUG_QC then KE:Print("QuickCreate: " .. msg) end
+end
+
 local issecretvalue = issecretvalue
 local playerShortName = UnitNameUnmodified and UnitNameUnmodified("player") or UnitName("player")
 -- Both name APIs are SecretWhenUnitIdentityRestricted (UnitDocumentation.lua
@@ -335,18 +343,13 @@ MakeButton = function(parent, dungeon, index)
             requiredPvpRating     = 0,
         })
 
-        -- Point the create form at this dungeon too. The listing above is
-        -- already away and does not need it -- this is so clicking Edit on
-        -- the new listing opens a form that knows which dungeon it is,
-        -- instead of a blank one.
-        --
-        -- Same call and same argument shape Blizzard's own activity dropdown
-        -- uses (.wow-api-reference Interface/AddOns/Blizzard_GroupFinder/
-        -- Mainline/LFGList.lua:824-826): everything but the activity is nil.
-        local ec = _G.LFGListFrame and _G.LFGListFrame.EntryCreation
-        if ec and _G.LFGListEntryCreation_Select then
-            _G.LFGListEntryCreation_Select(ec, nil, nil, nil, self._lfgID)
-        end
+        -- DO NOT call LFGListEntryCreation_Select here to pre-fill the form.
+        -- Tried 2026-08-01 and it is BLOCKED: Select reaches
+        -- LFGListEntryCreation_SetTitleFromActivityInfo
+        -- (.wow-api-reference Interface/AddOns/Blizzard_GroupFinder/
+        -- Mainline/LFGList.lua:1104, :1311), which calls the protected
+        -- SetEntryTitle. In-game trace: ADDON_ACTION_BLOCKED, 'SetEntryTitle()'.
+        -- The form staying blank is cosmetic and stays that way.
     end)
 
     return btn
@@ -488,13 +491,29 @@ Init = function()
         return dblOverlay
     end
     local function ArmDoubleClick(catBtn)
-        if not (QC.db and QC.db.Enabled ~= false and QC.db.DoubleClickStart ~= false) then return end
-        if InCombatLockdown() then return end
+        qcdbg("tile clicked, categoryID=" .. tostring(catBtn and catBtn.categoryID)
+            .. " filters=" .. tostring(catBtn and catBtn.filters))
+        if not (QC.db and QC.db.Enabled ~= false and QC.db.DoubleClickStart ~= false) then
+            qcdbg("bail: feature off")
+            return
+        end
+        if InCombatLockdown() then
+            qcdbg("bail: in combat")
+            return
+        end
         local cs = catBtn:GetParent()
         local sgb = cs and cs.StartGroupButton
-        if not (sgb and sgb:IsEnabled()) then return end
+        if not (sgb and sgb:IsEnabled()) then
+            qcdbg("bail: start button missing or disabled, tooltip="
+                .. tostring(sgb and sgb.tooltip))
+            return
+        end
         local ov = EnsureDoubleClickOverlay(cs)
-        if not ov then return end
+        if not ov then
+            qcdbg("bail: overlay could not be created")
+            return
+        end
+        qcdbg("armed over the tile")
         ov:ClearAllPoints()
         ov:SetAllPoints(catBtn)
         ov:Show()
