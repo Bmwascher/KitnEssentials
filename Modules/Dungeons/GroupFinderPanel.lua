@@ -52,10 +52,28 @@ local bit = _G.bit
 -- loads before Skinning.xml in the toc, so a file-top capture is nil.
 -- Never hoist it, even though every S.* name it uses does exist.
 
-local PANEL_WIDTH  = 170
-local AFFIX_SIZE   = 24
-local BUTTON_HEIGHT = 26
-local BUTTON_GAP   = 6
+-- Sizing overhauled 2026-08-01 on Brandon's smoke feedback: the panel read
+-- cramped next to the Group Finder. Everything grew; the Mythic+ button grew
+-- more than the rest because it is the one people click most.
+local PANEL_WIDTH   = 220
+local AFFIX_SIZE    = 34
+local BUTTON_HEIGHT = 32
+local MPLUS_HEIGHT  = 46   -- the headline button, deliberately taller
+local BUTTON_GAP    = 6
+local TOGGLE_HEIGHT = 30   -- filter-pane toggles, up from 24
+local TOGGLE_ICON   = 22   -- dungeon icon, left of the short name
+
+-- The panel's own window backdrop, matching the Damage Meter dock and the
+-- skinned Chat panel so the three read as one family
+-- (Modules/DamageMeter/Core.lua:193-194, Core/Defaults.lua:1616-1623).
+--
+-- Deliberately NOT S.Backdrop, which the reference used. S.Backdrop parents
+-- its carrier to the frame's PARENT and sits one level below -- fine for
+-- reskinning a Blizzard frame in place, but here the parent is PVEFrame,
+-- whose own art then competes with it and washes the panel out. This panel
+-- owns its background.
+local WINDOW_BG     = { 0.031, 0.031, 0.031, 0.80 }
+local WINDOW_BORDER = { 0, 0, 0, 1 }
 
 -- Themed, not the reference's #7381FF literal -- that was the upstream
 -- project's own accent. Read once per function, keep each site's alpha.
@@ -91,12 +109,12 @@ local IsActive
 -- Preferred short names (Midnight Season 1); anything unlisted falls back
 -- to the initials algorithm, so new seasons degrade gracefully.
 local ABBREV_OVERRIDE = {
-    ["Windrunner Spire"]        = "WRS",
+    ["Windrunner Spire"]        = "WS",
     ["Magisters' Terrace"]      = "MT",
-    ["Maisara Caverns"]         = "MRC",
+    ["Maisara Caverns"]         = "MC",
     ["Nexus-Point Xenas"]       = "NPX",
-    ["Skyreach"]                = "SKY",
-    ["Pit of Saron"]            = "PIT",
+    ["Skyreach"]                = "SR",
+    ["Pit of Saron"]            = "POS",
     ["Seat of the Triumvirate"] = "SEAT",
     ["Algeth'ar Academy"]       = "AA",
 }
@@ -764,11 +782,18 @@ local function CreatePanel()
     if not pve or not S then return nil end
     local accent = Accent()
 
-    panel = CreateFrame("Frame", "KE_GroupFinderPanel", pve)
+    panel = CreateFrame("Frame", "KE_GroupFinderPanel", pve, "BackdropTemplate")
     panel:SetPoint("TOPLEFT", pve, "TOPRIGHT", 2, 0)
     panel:SetPoint("BOTTOMLEFT", pve, "BOTTOMRIGHT", 2, 0)
     panel:SetWidth(PANEL_WIDTH)
-    S.Backdrop(panel)
+    -- The panel owns its background rather than borrowing S.Backdrop, whose
+    -- carrier is parented to PVEFrame and competes with Blizzard's own art.
+    -- Same values as the Damage Meter dock and the Chat panel.
+    KE:ApplyBackdrop(panel, {
+        Color       = WINDOW_BG,
+        BorderColor = WINDOW_BORDER,
+        BorderSize  = 1,
+    })
     -- The Show/Hide METHODS, not the OnShow/OnHide scripts. Method hooks
     -- fire on every call, including Show() on an already-visible frame --
     -- the born-visible first open, where the OnShow EVENT never fires.
@@ -794,25 +819,28 @@ local function CreatePanel()
         panel.affixes[i] = holder
     end
 
-    -- Quick Access pane (swapped for the Filters pane in M+ search mode)
+    -- Quick Access pane (swapped for the Filters pane in M+ search mode).
+    -- Top offset clears the taller affix row.
     panel.quick = CreateFrame("Frame", nil, panel)
-    panel.quick:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -48)
+    panel.quick:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -(AFFIX_SIZE + 22))
     panel.quick:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 0)
 
     local title = panel.quick:CreateFontString(nil, "OVERLAY")
-    S.SetFont(title, 14, "")
-    title:SetPoint("TOP", panel.quick, "TOP", 0, -4)
+    S.SetFont(title, 16, "")
+    title:SetPoint("TOP", panel.quick, "TOP", 0, -6)
     title:SetText("Quick Access")
     title:SetTextColor(accent[1], accent[2], accent[3])
 
-    -- Category buttons
+    -- Category buttons. Mythic+ is first and deliberately taller than the
+    -- rest -- it is the one people come here for.
     local prev
     for _, data in ipairs(CATEGORY_DATA) do
         local btn = CreateFrame("Button", nil, panel.quick)
-        btn:SetHeight(BUTTON_HEIGHT)
+        local isMPlus = (data.key == "Mythic+")
+        btn:SetHeight(isMPlus and MPLUS_HEIGHT or BUTTON_HEIGHT)
         if not prev then
-            btn:SetPoint("TOPLEFT", panel.quick, "TOPLEFT", 10, -26)
-            btn:SetPoint("TOPRIGHT", panel.quick, "TOPRIGHT", -10, -26)
+            btn:SetPoint("TOPLEFT", panel.quick, "TOPLEFT", 10, -32)
+            btn:SetPoint("TOPRIGHT", panel.quick, "TOPRIGHT", -10, -32)
         else
             btn:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, -BUTTON_GAP)
             btn:SetPoint("TOPRIGHT", prev, "BOTTOMRIGHT", 0, -BUTTON_GAP)
@@ -820,7 +848,7 @@ local function CreatePanel()
         prev = btn
         S.Button(btn)
         local fs = btn:CreateFontString(nil, "OVERLAY")
-        S.SetFont(fs, 12, "")
+        S.SetFont(fs, isMPlus and 15 or 13, "")
         fs:SetPoint("CENTER")
         fs:SetText(data.key)
         btn:SetScript("OnClick", function()
@@ -934,11 +962,46 @@ local function RefreshTooltip(btn)
     if onEnter then onEnter(btn) end
 end
 
+-- Dungeon art for a filter toggle, keyed on the activity group's NAME.
+--
+-- The two IDs are different namespaces and there is no bridge between them:
+-- the filter pane works in activityGroupIDs, GetActivityGroupInfo returns a
+-- name and nothing else, and the art lives on C_ChallengeMode.GetMapUIInfo,
+-- which is keyed on the challenge map. Matching by name is the only route
+-- that does not hardcode a per-season table.
+--
+-- Built once per session and only cached once it actually found something --
+-- GetMapTable can come back empty before the map info has arrived, and
+-- caching that would leave every toggle iconless for the rest of the session.
+local iconByName
+local function DungeonIcon(name)
+    if not name then return nil end
+    if not iconByName then
+        local maps = C_ChallengeMode and C_ChallengeMode.GetMapTable
+            and C_ChallengeMode.GetMapTable()
+        if not maps then return nil end
+        local built, found = {}, false
+        for _, cmID in ipairs(maps) do
+            local mapName, _, _, tex = C_ChallengeMode.GetMapUIInfo(cmID)
+            if mapName and tex and tex ~= 0 then
+                built[mapName] = tex
+                found = true
+            end
+        end
+        if not found then return nil end
+        iconByName = built
+    end
+    return iconByName[name]
+end
+
 local function SetToggleVisual(btn, active)
     if btn.selTex then btn.selTex:SetShown(active and true or false) end
 end
 
-local function MakeToggle(parent, S, label, getter, onClick)
+-- `iconTex` is optional. When given, the dungeon art sits at the LEFT edge
+-- and the label centres in the space beside it; without it the label centres
+-- across the whole button, which is what the role and sort toggles want.
+local function MakeToggle(parent, S, label, getter, onClick, iconTex)
     local btn = CreateFrame("Button", nil, parent)
     local accent = Accent()
     S.Button(btn)
@@ -949,9 +1012,31 @@ local function MakeToggle(parent, S, label, getter, onClick)
     t:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", -1, 1)
     t:Hide()
     btn.selTex = t
+
+    if iconTex then
+        -- 1px black frame under the art, matching the icon treatment the
+        -- sibling module uses (Modules/Dungeons/LFGQuickCreate.lua:227-235).
+        local border = btn:CreateTexture(nil, "BACKGROUND")
+        border:SetColorTexture(0, 0, 0, 1)
+        border:SetPoint("LEFT", anchor, "LEFT", 3, 0)
+        border:SetSize(TOGGLE_ICON + 2, TOGGLE_ICON + 2)
+        local icon = btn:CreateTexture(nil, "ARTWORK")
+        icon:SetPoint("CENTER", border, "CENTER")
+        icon:SetSize(TOGGLE_ICON, TOGGLE_ICON)
+        icon:SetTexture(iconTex)
+        KE:ApplyIconZoom(icon)
+        btn.icon = icon
+    end
+
     local fs = btn:CreateFontString(nil, "OVERLAY")
-    S.SetFont(fs, 11, "")
-    fs:SetPoint("CENTER")
+    S.SetFont(fs, 12, "")
+    if iconTex then
+        fs:SetPoint("LEFT", btn, "LEFT", TOGGLE_ICON + 9, 0)
+        fs:SetPoint("RIGHT", btn, "RIGHT", -4, 0)
+        fs:SetJustifyH("CENTER")
+    else
+        fs:SetPoint("CENTER")
+    end
     fs:SetText(label)
     fs:SetWordWrap(false)
     btn.text = fs
@@ -993,7 +1078,8 @@ local function CreateFilterPanel()
     -- Dungeon toggles: two-column grid from the live season groups.
     local groups = SeasonGroups()
     local col, rowN = 0, 0
-    local BW = (PANEL_WIDTH - 20 - 6) / 2
+    local BW = (PANEL_WIDTH - 20 - BUTTON_GAP) / 2
+    local ROW_PITCH = TOGGLE_HEIGHT + 4
     for _, groupID in ipairs(groups) do
         local name = C_LFGList.GetActivityGroupInfo and C_LFGList.GetActivityGroupInfo(groupID)
         if name then
@@ -1004,10 +1090,10 @@ local function CreateFilterPanel()
                     if not db then return end
                     db.DungeonFilter[groupID] = not db.DungeonFilter[groupID] or nil
                     GFP:ApplyAndRefresh()
-                end)
-            btn:SetSize(BW, 24)
-            btn:SetPoint("TOPLEFT", f, "TOPLEFT", col * (BW + 6), -22 - rowN * 28)
-            btn.text:SetWidth(BW - 8)
+                end,
+                DungeonIcon(name))
+            btn:SetSize(BW, TOGGLE_HEIGHT)
+            btn:SetPoint("TOPLEFT", f, "TOPLEFT", col * (BW + BUTTON_GAP), -22 - rowN * ROW_PITCH)
             btn:SetScript("OnEnter", function(b)
                 _G.GameTooltip:SetOwner(b, "ANCHOR_TOP")
                 _G.GameTooltip:SetText(name, 1, 1, 1)
@@ -1022,10 +1108,10 @@ local function CreateFilterPanel()
         end
     end
     if col == 1 then rowN = rowN + 1 end
-    local y = -22 - rowN * 28 - 8
+    local y = -22 - rowN * ROW_PITCH - 8
 
     -- Needs Role / Has Tank / Has Healer
-    local pf = MakeToggle(f, S, "Needs Role",
+    local pf = MakeToggle(f, S, "Role Available",
         function() return GFP.db and GFP.db.PartyFit end,
         function()
             local db = GFP.db
@@ -1033,12 +1119,12 @@ local function CreateFilterPanel()
             db.PartyFit = not db.PartyFit
             GFP:ApplyAndRefresh()
         end)
-    pf:SetSize(PANEL_WIDTH - 20, 24)
+    pf:SetSize(PANEL_WIDTH - 20, TOGGLE_HEIGHT)
     pf:SetPoint("TOPLEFT", f, "TOPLEFT", 0, y)
     visualRefreshers[#visualRefreshers + 1] = function()
         SetToggleVisual(pf, GFP.db and GFP.db.PartyFit)
     end
-    y = y - 30
+    y = y - (TOGGLE_HEIGHT + BUTTON_GAP)
 
     local ht = MakeToggle(f, S, "Has Tank",
         function() return GFP.db and GFP.db.HasTank end,
@@ -1048,7 +1134,7 @@ local function CreateFilterPanel()
             db.HasTank = not db.HasTank
             GFP:ApplyAndRefresh()
         end)
-    ht:SetSize(BW, 24)
+    ht:SetSize(BW, TOGGLE_HEIGHT)
     ht:SetPoint("TOPLEFT", f, "TOPLEFT", 0, y)
     visualRefreshers[#visualRefreshers + 1] = function()
         SetToggleVisual(ht, GFP.db and GFP.db.HasTank)
@@ -1062,12 +1148,12 @@ local function CreateFilterPanel()
             db.HasHealer = not db.HasHealer
             GFP:ApplyAndRefresh()
         end)
-    hh:SetSize(BW, 24)
-    hh:SetPoint("TOPLEFT", f, "TOPLEFT", BW + 6, y)
+    hh:SetSize(BW, TOGGLE_HEIGHT)
+    hh:SetPoint("TOPLEFT", f, "TOPLEFT", BW + BUTTON_GAP, y)
     visualRefreshers[#visualRefreshers + 1] = function()
         SetToggleVisual(hh, GFP.db and GFP.db.HasHealer)
     end
-    y = y - 34
+    y = y - (TOGGLE_HEIGHT + 10)
 
     -- Sort: click cycles the modes; the arrow toggles direction. Reorders
     -- the current list immediately.
@@ -1080,10 +1166,10 @@ local function CreateFilterPanel()
 
     local sortBtn = CreateFrame("Button", nil, f)
     S.Button(sortBtn)
-    sortBtn:SetSize(PANEL_WIDTH - 20 - 30, 24)
+    sortBtn:SetSize(PANEL_WIDTH - 20 - TOGGLE_HEIGHT - BUTTON_GAP, TOGGLE_HEIGHT)
     sortBtn:SetPoint("TOPLEFT", f, "TOPLEFT", 0, y)
     local sortText = sortBtn:CreateFontString(nil, "OVERLAY")
-    S.SetFont(sortText, 11, "")
+    S.SetFont(sortText, 12, "")
     sortText:SetPoint("CENTER")
     local function SortLabel()
         local db = GFP.db
@@ -1127,8 +1213,8 @@ local function CreateFilterPanel()
 
     local dirBtn = CreateFrame("Button", nil, f)
     S.ArrowButton(dirBtn, "down")
-    dirBtn:SetSize(24, 24)
-    dirBtn:SetPoint("LEFT", sortBtn, "RIGHT", 6, 0)
+    dirBtn:SetSize(TOGGLE_HEIGHT, TOGGLE_HEIGHT)
+    dirBtn:SetPoint("LEFT", sortBtn, "RIGHT", BUTTON_GAP, 0)
     local function DirVisual()
         local a = S.data(dirBtn).arrow
         if a then a:SetRotation((GFP.db and GFP.db.SortDescending ~= false) and 0 or 3.14159) end
@@ -1155,15 +1241,15 @@ local function CreateFilterPanel()
         RefreshTooltip(dirBtn)  -- same stale-tooltip bug as sortBtn
         GFP:ApplyAndRefresh()
     end)
-    y = y - 30
+    y = y - (TOGGLE_HEIGHT + 10)
 
     -- Manual re-search
     local searchBtn = CreateFrame("Button", nil, f)
     S.Button(searchBtn)
-    searchBtn:SetSize(PANEL_WIDTH - 20, 24)
+    searchBtn:SetSize(PANEL_WIDTH - 20, BUTTON_HEIGHT)
     searchBtn:SetPoint("TOPLEFT", f, "TOPLEFT", 0, y)
     local st = searchBtn:CreateFontString(nil, "OVERLAY")
-    S.SetFont(st, 12, "")
+    S.SetFont(st, 13, "")
     st:SetPoint("CENTER")
     st:SetText("Search")
     searchBtn:SetScript("OnClick", function()
@@ -1176,6 +1262,41 @@ local function CreateFilterPanel()
         if _G.LFGListSearchPanel_DoSearch then
             _G.LFGListSearchPanel_DoSearch(sp) -- hardware event: allowed
         end
+    end)
+    y = y - (BUTTON_HEIGHT + BUTTON_GAP)
+
+    -- Reset: every filter back to its shipped default, which is the widest
+    -- possible result list. Writes the profile directly rather than calling
+    -- the individual toggles, so one refresh covers the whole pane.
+    local resetBtn = CreateFrame("Button", nil, f)
+    S.Button(resetBtn)
+    resetBtn:SetSize(PANEL_WIDTH - 20, BUTTON_HEIGHT)
+    resetBtn:SetPoint("TOPLEFT", f, "TOPLEFT", 0, y)
+    local rt = resetBtn:CreateFontString(nil, "OVERLAY")
+    S.SetFont(rt, 13, "")
+    rt:SetPoint("CENTER")
+    rt:SetText("Reset Filters")
+    resetBtn:SetScript("OnEnter", function(b)
+        _G.GameTooltip:SetOwner(b, "ANCHOR_TOP")
+        _G.GameTooltip:SetText("Reset Filters", 1, 1, 1)
+        _G.GameTooltip:AddLine("Clears every dungeon and role filter and "
+            .. "returns the sort to Default.", 0.85, 0.85, 0.85, true)
+        _G.GameTooltip:Show()
+    end)
+    resetBtn:SetScript("OnLeave", function() _G.GameTooltip:Hide() end)
+    resetBtn:SetScript("OnClick", function()
+        -- Mutates the profile, so it needs the same gate the toggles carry.
+        if not IsActive() then return end
+        local db = GFP.db
+        if not db then return end
+        db.DungeonFilter = {}
+        db.PartyFit = false
+        db.HasTank = false
+        db.HasHealer = false
+        db.SortBy = "DEFAULT"
+        db.SortDescending = true
+        if f._refreshVisuals then f._refreshVisuals() end
+        GFP:ApplyAndRefresh()
     end)
 
     -- Deviation 12's refresh routine. ApplySettings calls this; nothing

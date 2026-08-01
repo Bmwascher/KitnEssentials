@@ -11,7 +11,7 @@ describe("GroupFinderPanel pure helpers", function()
         end)
 
         it("prefers the override table", function()
-            assert.equals("WRS", abbrev("Windrunner Spire"))
+            assert.equals("WS", abbrev("Windrunner Spire"))
         end)
 
         it("takes initials of a plain multi-word name", function()
