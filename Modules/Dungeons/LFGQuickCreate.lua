@@ -68,7 +68,7 @@ local partyKeys = {}   -- [senderShortName] = { level = n, cmID = n }
 -- Flip to true, /reload, click a category tile, read the chat log. Reports
 -- why the double-click overlay did or did not arm for that tile. Left in
 -- place after diagnosis, per the debug-first workflow.
-local DEBUG_QC = true
+local DEBUG_QC = false
 local function qcdbg(msg)
     if DEBUG_QC then KE:Print("QuickCreate: " .. msg) end
 end
