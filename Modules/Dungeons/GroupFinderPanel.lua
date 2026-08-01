@@ -1059,7 +1059,9 @@ local function CreateFilterPanel()
 
     local title = f:CreateFontString(nil, "OVERLAY")
     S.SetFont(title, 14, "")
-    title:SetPoint("TOP", f, "TOP", 0, 0)
+    -- Sits low in its own space so it reads as a heading for the dungeon
+    -- grid below rather than as a caption on the affix row above.
+    title:SetPoint("TOP", f, "TOP", 0, -5)
     title:SetText("Filters")
     title:SetTextColor(accent[1], accent[2], accent[3])
 
