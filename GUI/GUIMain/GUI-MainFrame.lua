@@ -136,6 +136,7 @@ GUIFrame.sidebarConfig = {
             { id = "DungeonCasts",                text = "Dungeon Casts", keywords = { "dungeon cast", "cast", "interrupt", "mob", "enemy", "castbar", "m+" } },
             { id = "EnemyCounter",                text = "Enemy Counter", keywords = { "enemy", "counter", "count", "mobs", "pull", "nameplate", "m+" } },
             { id = "FocusMarker",                 text = "Focus Marker", keywords = { "focus", "marker", "focus marker", "macro", "builder", "raid marker" } },
+            { id = "GroupFinderPanel",            text = "Group Finder Panel", keywords = { "group finder", "lfg", "premade", "affix", "filter", "sort", "dungeon", "raider io", "m+" } },
             { id = "KickTracker",                 text = "Interrupt Tracker", keywords = { "interrupt", "kick", "tracker", "cc", "stop", "party", "m+" } },
             { id = "KeystoneHelper",              text = "Keystone Helper", keywords = { "keystone", "reset", "reroll", "key", "announcer", "mythic", "m+" } },
             { id = "LFGQuickCreate",              text = "LFG Quick Create", keywords = { "lfg", "group finder", "quick create", "premade", "list group", "keystone", "playstyle", "dungeon", "m+" } },

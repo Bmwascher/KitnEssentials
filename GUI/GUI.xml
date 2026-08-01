@@ -84,6 +84,7 @@
     <Script file="GUITabs\GUIDungeons\GUI-TargetedSpells.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-EnemyCounter.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-FocusMarker.lua" />
+    <Script file="GUITabs\GUIDungeons\GUI-GroupFinderPanel.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-KeystoneHelper.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-LFGQuickCreate.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-LFGReminder.lua" />
