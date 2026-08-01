@@ -165,8 +165,10 @@ RefreshGlow = function()
     -- Themed: this was the reference project's own accent literal, now KE's.
     -- Read once per call, not once per button -- KE.Theme.accent[4] is the
     -- theme's alpha, not this glow's; the glow keeps its own measured 0.38.
+    -- Fallback is KE's own brand pink (VantusRune.lua:184 precedent), not the
+    -- old literal -- that literal was the reference project's own accent.
     -- A live theme switch repaints on the next 2s ticker, not instantly.
-    local accent = KE.Theme and KE.Theme.accent or { 0.45, 0.505, 1 }
+    local accent = KE.Theme and KE.Theme.accent or { 1, 0, 0.549 }
     for i = 1, #buttons do
         local btn = buttons[i]
         local ownMatch = ownLfgID and (btn._lfgID == ownLfgID)
@@ -263,8 +265,10 @@ MakeButton = function(parent, dungeon, index)
             GameTooltip:AddLine((playerShortName or "You") .. ": +" .. ownLevel, 1, 0.82, 0)
         end
         -- Themed: this was the reference project's own accent literal, now
-        -- KE's. A live theme switch repaints on the next hover, not instantly.
-        local accent = KE.Theme and KE.Theme.accent or { 0.45, 0.505, 1 }
+        -- KE's. Fallback is KE's own brand pink (VantusRune.lua:184
+        -- precedent), not the old literal. A live theme switch repaints on
+        -- the next hover, not instantly.
+        local accent = KE.Theme and KE.Theme.accent or { 1, 0, 0.549 }
         for name, info in pairs(partyKeys) do
             if info.cmID == self._cmID and info.level and info.level > 0 then
                 GameTooltip:AddLine(name .. ": +" .. info.level, accent[1], accent[2], accent[3])
