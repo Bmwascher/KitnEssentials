@@ -152,3 +152,147 @@ end
 -- handle; exporting them creates no second source of truth.
 QC._ActiveDungeons   = ActiveDungeons
 QC._CurrentPlaystyle = CurrentPlaystyle
+
+-- Highlights the dungeon matching the player's own keystone in gold, and any
+-- dungeon a party member holds a key for in blue (best level among holders).
+RefreshGlow = function()
+    if not C_LFGList then return end
+    local ok, ownLfgID, _, ownLevel = pcall(C_LFGList.GetOwnedKeystoneActivityAndGroupAndLevel)
+    if not ok then ownLfgID, ownLevel = nil, nil end
+    for i = 1, #buttons do
+        local btn = buttons[i]
+        local ownMatch = ownLfgID and (btn._lfgID == ownLfgID)
+        local partyLevel = nil
+        for _, info in pairs(partyKeys) do
+            if info.cmID == btn._cmID and info.level and info.level > 0 then
+                if not partyLevel or info.level > partyLevel then
+                    partyLevel = info.level
+                end
+            end
+        end
+        if ownMatch then
+            btn._glow:SetColorTexture(1, 0.82, 0, 0.38)          -- own: gold
+            btn._glow:Show()
+            btn._lvlText:SetText(ownLevel and ("+" .. ownLevel) or "")
+            btn._lvlText:Show()
+        elseif partyLevel then
+            btn._glow:SetColorTexture(0.45, 0.505, 1, 0.38)      -- party: blue
+            btn._glow:Show()
+            btn._lvlText:SetText("+" .. partyLevel)
+            btn._lvlText:Show()
+        else
+            btn._glow:Hide()
+            btn._lvlText:Hide()
+        end
+    end
+end
+
+-- Debounced, because the library's callback arrives once per party member.
+local glowRefreshPending = false
+local function QueueGlowRefresh()
+    if glowRefreshPending then return end
+    glowRefreshPending = true
+    C_Timer.After(0.2, function()
+        glowRefreshPending = false
+        RefreshGlow()
+    end)
+end
+
+local function RequestPartyKeys()
+    if LKS and IsInGroup() then
+        LKS.Request("PARTY") -- library-throttled at 3s; replies land in the callback
+    end
+end
+
+MakeButton = function(parent, dungeon, index)
+    local _, _, _, iconTex = C_ChallengeMode.GetMapUIInfo(dungeon.cmID)
+    local actInfo = C_LFGList.GetActivityInfoTable(dungeon.lfgID)
+    local label   = actInfo and actInfo.fullName ~= "" and actInfo.fullName or dungeon.key
+
+    local btn = CreateFrame("Button", "KE_LFGQC_" .. dungeon.key, parent)
+    btn:SetSize(ICON_SIZE, ICON_SIZE)
+    btn:SetPoint("TOPLEFT", (index - 1) * (ICON_SIZE + ICON_GAP), 0)
+
+    -- 1px black border behind the icon.
+    local border = btn:CreateTexture(nil, "BACKGROUND")
+    border:SetColorTexture(0, 0, 0, 1)
+    border:SetPoint("TOPLEFT", btn, "TOPLEFT", -1, 1)
+    border:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 1, -1)
+
+    local tex = btn:CreateTexture(nil, "ARTWORK")
+    tex:SetAllPoints()
+    tex:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    if iconTex and iconTex ~= 0 then tex:SetTexture(iconTex) end
+
+    local hl = btn:CreateTexture(nil, "HIGHLIGHT")
+    hl:SetAllPoints()
+    hl:SetColorTexture(1, 1, 1, 0.18)
+
+    local glow = btn:CreateTexture(nil, "OVERLAY", nil, 1)
+    glow:SetAllPoints()
+    glow:SetColorTexture(1, 0.82, 0, 0.38)
+    glow:Hide()
+
+    local lvl = btn:CreateFontString(nil, "OVERLAY")
+    lvl:SetFont(KE.FONT or "Fonts\\FRIZQT__.TTF", 13, "OUTLINE")
+    lvl:SetPoint("CENTER")
+    lvl:Hide()
+
+    btn._lfgID   = dungeon.lfgID
+    btn._cmID    = dungeon.cmID
+    btn._glow    = glow
+    btn._lvlText = lvl
+    btn._label   = label
+
+    btn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:ClearLines()
+        GameTooltip:SetText(self._label, 1, 1, 1, 1, true)
+        local ok, ownLfgID, _, ownLevel = pcall(C_LFGList.GetOwnedKeystoneActivityAndGroupAndLevel)
+        if ok and ownLfgID and ownLfgID == self._lfgID and ownLevel then
+            -- playerShortName is nil when the load-time capture was secret
+            -- (see the file header). The line still carries the useful half.
+            GameTooltip:AddLine((playerShortName or "You") .. ": +" .. ownLevel, 1, 0.82, 0)
+        end
+        for name, info in pairs(partyKeys) do
+            if info.cmID == self._cmID and info.level and info.level > 0 then
+                GameTooltip:AddLine(name .. ": +" .. info.level, 0.45, 0.505, 1)
+            end
+        end
+        GameTooltip:Show()
+    end)
+    btn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    btn:SetScript("OnClick", function(self, mb)
+        if mb ~= "LeftButton" then return end
+        -- No typed-name gate: the CreateListing payload has no name or title
+        -- field at all. M+ titles are generated server-side as
+        -- "+<level> <playstyle>", so one click lists immediately with the key
+        -- level as the title. The form's own dropdown staying blank is
+        -- cosmetic; this path bypasses the form entirely.
+        --
+        -- CreateListing is HasRestrictions and MUST be called directly from
+        -- this hardware event -- see the file header.
+        --
+        -- BOTH playstyle enums are required. `playstyle` is the legacy
+        -- LFGEntryPlaystyle and `generalPlaystyle` is the current
+        -- LFGEntryGeneralPlaystyle. Putting the general value in the legacy
+        -- field and leaving generalPlaystyle at None makes the server reject
+        -- the listing silently. This mirrors Blizzard's own assembly.
+        C_LFGList.CreateListing({
+            activityIDs           = { self._lfgID },
+            questID               = nil,
+            isAutoAccept          = false,
+            isCrossFactionListing = true,
+            isPrivateGroup        = false,
+            newPlayerFriendly     = false,
+            playstyle             = (Enum.LFGEntryPlaystyle and Enum.LFGEntryPlaystyle.None) or 0,
+            generalPlaystyle      = CurrentPlaystyle(),
+            requiredDungeonScore  = 0,
+            requiredItemLevel     = 0,
+            requiredPvpRating     = 0,
+        })
+    end)
+
+    return btn
+end
