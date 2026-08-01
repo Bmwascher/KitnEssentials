@@ -494,3 +494,113 @@ Init = function()
         end
     end
 end
+
+function QC:UpdateDB()
+    if KE.db and KE.db.profile then
+        self.db = KE.db.profile.LFGQuickCreate
+    end
+    -- Generic saved-variables validation, NOT a migration: KE has never
+    -- shipped this module, so no user can be holding a bad value from an
+    -- older build. It is here because this key is user-editable through
+    -- saved variables, because a plain string-array dropdown would return
+    -- the LABEL (GUI-KEDropdown.lua:198-202 -- the ordered form in the config
+    -- page is what avoids that), and because the value feeds a protected API
+    -- call where a string is a usage error.
+    -- Enum.LFGEntryGeneralPlaystyle runs 0-4; 0 is None and never valid here.
+    if self.db then
+        local ps = self.db.DefaultPlaystyle
+        if type(ps) ~= "number" or ps < 1 or ps > 4 then
+            self.db.DefaultPlaystyle = 1
+        end
+    end
+end
+
+function QC:OnInitialize()
+    self:UpdateDB()
+    self:SetEnabledState(false)
+end
+
+function QC:OnAddonLoaded(_, addonName)
+    if addonName ~= "Blizzard_LFGList" then return end
+    self:UnregisterEvent("ADDON_LOADED")
+    C_Timer.After(0.1, Init)
+end
+
+function QC:OnRosterUpdate()
+    -- Drop leavers, then re-request so current members repopulate.
+    for k in pairs(partyKeys) do partyKeys[k] = nil end
+    RequestPartyKeys()
+    QueueGlowRefresh()
+end
+
+function QC:OnEnable()
+    self:UpdateDB()
+    if not (self.db and self.db.Enabled ~= false) then return end
+    if LKS then
+        LKS.Register(QC, function(keyLevel, keyChallengeMapID, _, sender, channel)
+            if channel ~= "PARTY" then return end
+            -- Fail closed on a secret sender: it is used as a TABLE KEY below
+            -- and concatenated into tooltip text, both of which throw. Losing
+            -- one party member's blue glow beats an error.
+            if issecretvalue and issecretvalue(sender) then return end
+            if playerShortName and sender == playerShortName then return end -- own key is read directly
+            if type(keyLevel) == "number" and type(keyChallengeMapID) == "number"
+                and keyLevel > 0 and keyChallengeMapID > 0 then
+                partyKeys[sender] = { level = keyLevel, cmID = keyChallengeMapID }
+            else
+                partyKeys[sender] = nil
+            end
+            QueueGlowRefresh()
+        end)
+        self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnRosterUpdate")
+    end
+    -- BOTH returns: C_AddOns.IsAddOnLoaded gives loadedOrLoading THEN loaded
+    -- (AddOnsDocumentation.lua:322-336). Taking only the first would run Init
+    -- against a half-built LFGListFrame.
+    local _, loaded = C_AddOns.IsAddOnLoaded("Blizzard_LFGList")
+    if loaded then
+        C_Timer.After(0.1, Init)
+    else
+        self:RegisterEvent("ADDON_LOADED", "OnAddonLoaded")
+    end
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnPEW")
+end
+
+function QC:OnPEW()
+    self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+    C_Timer.After(0.5, Init)
+end
+
+function QC:OnDisable()
+    self:UnregisterAllEvents()
+    if LKS then LKS.Unregister(QC) end
+    for k in pairs(partyKeys) do partyKeys[k] = nil end
+    if updateTicker then updateTicker:Cancel(); updateTicker = nil end
+    if container then container:Hide() end
+    -- Deviation, paired with Task 5's: the secure overlay must not survive a
+    -- disable still armed over a category tile. Routed through the same
+    -- combat-safe helper, which queues on KE's own frame -- Ace has already
+    -- unregistered this module's events by the time OnDisable runs, so the
+    -- module could never flush a deferred hide itself.
+    if HideDoubleClickOverlay then HideDoubleClickOverlay() end
+    local ec = _G.LFGListFrame and _G.LFGListFrame.EntryCreation
+    if ec then PopLayout(ec) end
+end
+
+-- Live-settings hook for the config page.
+function QC:ApplySettings()
+    self:UpdateDB()
+    if self.db and self.db.Enabled ~= false then
+        Init()
+        local ec = _G.LFGListFrame and _G.LFGListFrame.EntryCreation
+        if ec and ec:IsShown() and container then
+            if self.db.QuickCreate ~= false then
+                PushLayout(ec); SyncVisibility(); RefreshGlow()
+            else
+                PopLayout(ec); container:Hide()
+            end
+        end
+    else
+        if container then container:Hide() end
+    end
+end

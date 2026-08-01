@@ -96,4 +96,40 @@ describe("Modules/Dungeons/LFGQuickCreate.lua", function()
             assert.equals(0, seams.currentPlaystyle())
         end)
     end)
+
+    describe("UpdateDB sanitizer", function()
+
+        local function withPlaystyle(value)
+            local QC = loader.loadLFGQuickCreate({
+                profile = {
+                    LFGQuickCreate = {
+                        Enabled = true, QuickCreate = true,
+                        DefaultPlaystyle = value, DoubleClickStart = true,
+                    },
+                },
+            })
+            QC:UpdateDB()
+            return QC.db.DefaultPlaystyle
+        end
+
+        it("keeps a valid numeric playstyle", function()
+            assert.equals(3, withPlaystyle(3))
+        end)
+
+        it("repairs a nonnumeric label value", function()
+            assert.equals(1, withPlaystyle("Learning"))
+        end)
+
+        it("repairs a value below the enum range", function()
+            assert.equals(1, withPlaystyle(0))
+        end)
+
+        it("repairs a value above the enum range", function()
+            assert.equals(1, withPlaystyle(9))
+        end)
+
+        it("repairs a missing value", function()
+            assert.equals(1, withPlaystyle(nil))
+        end)
+    end)
 end)
