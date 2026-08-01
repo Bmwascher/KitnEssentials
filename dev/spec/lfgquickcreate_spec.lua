@@ -136,10 +136,11 @@ describe("Modules/Dungeons/LFGQuickCreate.lua", function()
     describe("OnEnable secret-sender guard (LibKeystone callback)", function()
 
         -- Same technique as dev/spec/lootroll_spec.lua's local `upvalue`
-        -- helper: partyKeys is a file-local in the module with one reader
-        -- (RefreshGlow) and one writer (this callback) and no other handle.
-        -- Reading it off the captured callback's upvalues observes the real
-        -- write, without adding a second production-code surface for it.
+        -- helper: partyKeys is a file-local in the module with four readers
+        -- (LFGQuickCreate.lua:166, :257, :531, :577) and this callback as a
+        -- writer, and no other handle. Reading it off the captured
+        -- callback's upvalues observes the real write, without adding a
+        -- second production-code surface for it.
         local function upvalue(fn, want)
             local i = 1
             while true do
@@ -187,6 +188,28 @@ describe("Modules/Dungeons/LFGQuickCreate.lua", function()
                 function(v) return type(v) == "table" and v.__secret == true end)
             callback(10, 500, nil, "Cleansender", "PARTY")
             assert.same({ level = 10, cmID = 500 }, partyKeys["Cleansender"])
+        end)
+
+        -- Covers the load-time guard at LFGQuickCreate.lua:79, never exercised
+        -- before. A distinct marker keeps issecretvalue scoped to the
+        -- load-time player-name capture (:69), not an unrelated sender.
+        it("captures playerShortName as nil when the load-time name is secret", function()
+            local secretName = { __secret = true }
+            local capturedCallback
+            local fakeLKS = {
+                Register = function(_, cb) capturedCallback = cb end,
+                Unregister = function() end,
+                Request = function() end,
+            }
+            local QC = loader.loadLFGQuickCreate({
+                LibStub = { GetLibrary = function() return fakeLKS end },
+                UnitNameUnmodified = function() return secretName end,
+                issecretvalue = function(v) return v == secretName end,
+            })
+            QC.RegisterEvent = function() end
+            QC:OnEnable()
+            assert.is_function(capturedCallback)
+            assert.is_nil(upvalue(capturedCallback, "playerShortName"))
         end)
     end)
 end)

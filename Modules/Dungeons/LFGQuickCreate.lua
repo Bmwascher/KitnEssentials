@@ -68,11 +68,14 @@ local partyKeys = {}   -- [senderShortName] = { level = n, cmID = n }
 local issecretvalue = issecretvalue
 local playerShortName = UnitNameUnmodified and UnitNameUnmodified("player") or UnitName("player")
 -- Both name APIs are SecretWhenUnitIdentityRestricted (UnitDocumentation.lua
--- :2367-2382 and :2401-2415). This capture runs once at file load, which is
--- normally unrestricted -- but a /reload inside a restricted context captures
--- a SECRET string, and this value is later concatenated into tooltip text and
--- compared against a comms sender. Both throw on a secret. Fail closed to nil;
--- the one tooltip use site falls back to a generic label.
+-- :2367-2382 and :2401-2415). By that predicate's own documented text
+-- (SecretPredicatesDocumentation.lua:108-111: secret only when the unit
+-- isn't player-controlled or in the party/raid) the "player" token should
+-- never trigger it -- this guard is belt-and-braces against an undocumented
+-- restriction state, not a known one. Kept anyway: failing closed costs
+-- nothing at file load, while an unguarded secret would throw at the
+-- tooltip concatenation and at the sender comparison that guards the
+-- partyKeys table write.
 if issecretvalue and issecretvalue(playerShortName) then playerShortName = nil end
 
 local ICON_SIZE = 32
@@ -176,7 +179,7 @@ RefreshGlow = function()
             btn._lvlText:SetText(ownLevel and ("+" .. ownLevel) or "")
             btn._lvlText:Show()
         elseif partyLevel then
-            btn._glow:SetColorTexture(0.45, 0.505, 1, 0.38)      -- party: blue
+            btn._glow:SetColorTexture(0.45, 0.505, 1, 0.38)      -- party: #7381FF
             btn._glow:Show()
             btn._lvlText:SetText("+" .. partyLevel)
             btn._lvlText:Show()
