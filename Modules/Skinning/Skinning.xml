@@ -16,6 +16,7 @@
     <Script file="LootRoll.lua" />
     <Script file="LootRollBars.lua" />
     <Script file="LootFrame.lua" />
+    <Script file="CompareHeader.lua" />
     <Include file="Frames\Frames.xml" />
     <Include file="Addons\Addons.xml" />
 </Ui>

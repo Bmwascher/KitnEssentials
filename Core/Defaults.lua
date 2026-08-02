@@ -1267,6 +1267,34 @@ local Defaults = {
             EnableFixup = false,        -- internal: one-time v3.2.1 enable migration
         },
 
+        CopyAnything = {
+            Enabled = false,
+            Key = "C",
+            Modifier = "ctrl",
+        },
+
+        AlertFrames = {
+            Enabled = false,
+            Position = {
+                AnchorFrom = "TOP",
+                AnchorTo = "TOP",
+                XOffset = 0,
+                YOffset = -60,
+            },
+            MoveEventToasts = false,
+            EventToastPosition = {
+                AnchorFrom = "TOP",
+                AnchorTo = "TOP",
+                XOffset = 0,
+                YOffset = -190,
+            },
+        },
+
+        MerchantPages = {
+            Enabled = false,
+            Pages = 2,
+        },
+
         -----------------------------------------------------------------
         -- Dungeons Modules
         -----------------------------------------------------------------
@@ -1580,6 +1608,7 @@ local Defaults = {
                 HideGuildRealm = false,
                 HideFactionLine = true,
                 AlwaysShowRealm = false,
+                CompareHeader = false,
                 MythicPlusLine = false,
                 HideInCombat = false,
                 CursorAnchor = false,
