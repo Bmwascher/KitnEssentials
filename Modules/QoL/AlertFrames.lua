@@ -42,9 +42,14 @@ function AF:UpdateDB()
     self.db = KE.db.profile.AlertFrames
 end
 
+-- ElvUI owns this area and the controls are unreachable there, so the module does not run.
+local function Suppressed()
+    return KE.ShouldNotLoadModule and KE:ShouldNotLoadModule() and true or false
+end
+
 function AF:OnInitialize()
     self:UpdateDB()
-    self:SetEnabledState(false)
+    self:SetEnabledState((self.db.Enabled and not Suppressed()) and true or false)
 end
 
 ---------------------------------------------------------------------------------
@@ -284,10 +289,9 @@ function AF:RegisterEditMode()
             self.db.Position.YOffset = pos.YOffset
             self:ApplyPosition()
         end,
-        -- follow-up A: guiPath is a SIDEBAR ITEM ID and there is no sidebar
-        -- item "AlertFrames" anymore -- its config cards moved onto the UI
-        -- Widgets tab, and that sidebar row was deleted with it. Open
-        -- Settings was silently falling through to "just open the GUI".
+        -- guiPath is a SIDEBAR ITEM ID, and this module has no sidebar row
+        -- of its own -- its config cards live on the UI Widgets tab instead.
+        -- Open Settings was silently falling through to "just open the GUI".
         -- Route through the tab that now hosts these cards (KE's sidebar
         -- id: GUI/GUIMain/GUI-MainFrame.lua:124). guiTab seeds
         -- GUIFrame.tabbedPageState so Open Settings lands on the right
@@ -319,6 +323,7 @@ end
 ---------------------------------------------------------------------------------
 function AF:OnEnable()
     self:UpdateDB()
+    if Suppressed() then return end
     if not self.holder then
         self.holder = CreateFrame("Frame", "KE_AlertFrameHolder", UIParent)
         self.holder:SetSize(180, 20)
@@ -342,6 +347,10 @@ end
 
 function AF:ApplySettings()
     self:UpdateDB()
+    if Suppressed() then
+        if self:IsEnabled() then self:Disable() end
+        return
+    end
     if self:IsEnabled() then
         self:ApplyPosition()
         self:ApplyEventToastPosition()
