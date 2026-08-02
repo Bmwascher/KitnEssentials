@@ -284,7 +284,17 @@ function AF:RegisterEditMode()
             self.db.Position.YOffset = pos.YOffset
             self:ApplyPosition()
         end,
-        guiPath = "AlertFrames",
+        -- follow-up A: guiPath is a SIDEBAR ITEM ID and there is no sidebar
+        -- item "AlertFrames" anymore -- its config cards moved onto the UI
+        -- Widgets tab, and that sidebar row was deleted with it. Open
+        -- Settings was silently falling through to "just open the GUI".
+        -- Route through the tab that now hosts these cards (KE's sidebar
+        -- id: GUI/GUIMain/GUI-MainFrame.lua:124). guiTab seeds
+        -- GUIFrame.tabbedPageState so Open Settings lands on the right
+        -- subtab (Core/EditMode.lua:56, :1122-1126) -- same fix as
+        -- Modules/Skinning/LootRoll.lua:541-553.
+        guiPath = "SkinBlizzardFrames",
+        guiTab = "SkinBlizzardFramesWidgets",
     })
     KE.EditMode:RegisterElement({
         key = "EventToasts",
@@ -298,7 +308,9 @@ function AF:RegisterEditMode()
             self.db.EventToastPosition.YOffset = pos.YOffset
             self:ApplyEventToastPosition()
         end,
-        guiPath = "AlertFrames",
+        -- Same page as the AlertFrames element above -- see its comment.
+        guiPath = "SkinBlizzardFrames",
+        guiTab = "SkinBlizzardFramesWidgets",
     })
 end
 

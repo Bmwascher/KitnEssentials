@@ -336,8 +336,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
     end
 
     ----------------------------------------------------------------
-    -- Alert Frames (independent module — hosted on this page; see
-    -- .superpowers/sdd/2026-08-01-aes-a7-3-qol-batch/followup-a-alertframes-brief.md)
+    -- Alert Frames (independent module — hosted on this page)
     ----------------------------------------------------------------
     local function GetModule()
         if KitnEssentials then
