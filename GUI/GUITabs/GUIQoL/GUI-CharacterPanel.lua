@@ -70,7 +70,9 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     yOffset = card1:GetNextOffset()
 
     -- Lone header bar: a disabled module shows its switch and nothing else.
-    if db.Enabled == false then return yOffset end
+    -- Wrapped (not an early return) so Card 8 below -- a separate module --
+    -- still renders while Character Panel itself is off.
+    if db.Enabled ~= false then
 
     ----------------------------------------------------------------
     -- Card 2: Warning Display
@@ -380,6 +382,44 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     if fontWidgets then manager:RegisterGroup(fontWidgets, "all") end
     yOffset = fontOffset
 
+    end
+
     RefreshStates()
+
+    ----------------------------------------------------------------
+    -- Card 8: Compare Header (independent module — own cascade)
+    ----------------------------------------------------------------
+    local chDB = KE.db and KE.db.profile.CompareHeader
+    if chDB then
+        local function GetCompareHeaderModule()
+            if KitnEssentials then
+                return KitnEssentials:GetModule("CompareHeader", true)
+            end
+            return nil
+        end
+
+        local card8 = GUIFrame:CreateCard(scrollChild, "Compare Header", yOffset)
+
+        local row8 = GUIFrame:CreateRow(card8.content, Theme.rowHeightLast)
+        local compareHeaderCheck = GUIFrame:CreateCheckbox(row8, "Style Compare Header", {
+            value = chDB.Enabled == true,
+            callback = function(checked)
+                chDB.Enabled = checked
+                local CH = GetCompareHeaderModule()
+                if CH then CH:ApplySettings() end
+                -- Turning it ON styles the header immediately; turning it OFF
+                -- cannot un-style it, so that direction needs a reload. Same
+                -- helper and same one-directional idiom as
+                -- GUI/GUITabs/GUISkinning/GUI-UIWidgets.lua:75.
+                if not checked then KE:SkinningReloadPrompt() end
+            end,
+            tooltip = "Styles the \"Equipped\" header on item comparison tooltips to match the rest of the tooltip skin. Turning it off needs a reload.",
+        })
+        row8:AddWidget(compareHeaderCheck, 1)
+        card8:AddRow(row8, Theme.rowHeightLast, 0)
+
+        yOffset = card8:GetNextOffset()
+    end
+
     return yOffset
 end)

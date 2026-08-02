@@ -138,8 +138,6 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
             KitnEssentials:DisableModule("SkinTooltips")
             KE:SkinningReloadPrompt()
         end
-        local CH = KitnEssentials:GetModule("CompareHeader", true)
-        if CH and CH.ApplySettings then CH:ApplySettings() end
         -- AddHeaderToggle's own OnClick already calls RefreshContent.
     end)
     card1:AddLabel("Skins the game tooltip and its companions: dark backdrop, custom fonts, health bar styling, class-colored names, target line, and spell/item IDs. Visual-only post-hooks in the EllesmereUI performance style -- zero cost while no tooltip is shown.")
@@ -204,22 +202,8 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
         MkCheck("Always Show Realm",
             function() return db.AlwaysShowRealm == true end,
             function(v) db.AlwaysShowRealm = v end,
-            "Spells out a cross-realm player's realm in full. Off shows Blizzard's short marker instead, which keeps the tooltip narrow."), 40)
-    PairRow(card2,
-        MkCheck("Style Compare Header",
-            function() return db.CompareHeader == true end,
-            function(v)
-                db.CompareHeader = v
-                local CH = KitnEssentials and KitnEssentials:GetModule("CompareHeader", true)
-                if CH then CH:ApplySettings() end
-                -- Turning it ON styles the header immediately; turning it OFF
-                -- cannot un-style it, so that direction needs a reload. Same
-                -- helper and same one-directional idiom as
-                -- GUI/GUITabs/GUISkinning/GUI-UIWidgets.lua:75.
-                if not v then KE:SkinningReloadPrompt() end
-            end,
-            "Styles the \"Equipped\" header on item comparison tooltips to match the rest of the tooltip skin. Turning it off needs a reload."), 40,
-        nil, nil, true)
+            "Spells out a cross-realm player's realm in full. Off shows Blizzard's short marker instead, which keeps the tooltip narrow."), 40,
+        true)
     yOffset = card2:GetNextOffset()
 
     ----------------------------------------------------------------

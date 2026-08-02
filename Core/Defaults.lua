@@ -1295,6 +1295,10 @@ local Defaults = {
             Pages = 2,
         },
 
+        CompareHeader = {
+            Enabled = true,
+        },
+
         -----------------------------------------------------------------
         -- Dungeons Modules
         -----------------------------------------------------------------
@@ -1608,7 +1612,6 @@ local Defaults = {
                 HideGuildRealm = false,
                 HideFactionLine = true,
                 AlwaysShowRealm = false,
-                CompareHeader = false,
                 MythicPlusLine = false,
                 HideInCombat = false,
                 CursorAnchor = false,

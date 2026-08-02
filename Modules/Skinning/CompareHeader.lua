@@ -37,32 +37,16 @@ local function StyleHeader(tt)
     S.data(header).skinned = true
 end
 
--- A PRIVATE lifecycle table, deliberately not the saved tooltip block.
---
--- Both of KE's lifecycle passes read `module.db.Enabled` and do nothing at
--- all for a module that does not publish one: the startup enable loop
+-- self.db points straight at the module's own saved-profile block
+-- (Core/Defaults.lua's CompareHeader block), the same block both of KE's
+-- lifecycle passes read via `module.db.Enabled`: the startup enable loop
 -- (Core/Main.lua:169-178) and the profile-switch sync
 -- (Core/ProfileManager.lua:449-475, where `wantEnabled ~= nil` gates the
--- whole comparison). This module's real setting lives inside the tooltip
--- block, so it publishes an effective flag here and mirrors `active` into it.
--- NEVER write this back into the saved profile -- it is a lifecycle mirror,
--- not a setting.
-CH.db = { Enabled = false }
-
+-- whole comparison). No private mirror is needed now that the module
+-- publishes its own key instead of borrowing the tooltip skin's.
 function CH:UpdateDB()
-    -- Same block the tooltip page reads (GUI/GUITabs/GUISkinning/GUI-Tooltips.lua:50).
-    --
-    -- Gated on the tooltip module's own Enabled as well as our setting. The
-    -- page returns right after its master toggle when tooltip skinning is off
-    -- (GUI-Tooltips.lua:152-154), so our checkbox is unreachable in that
-    -- state; without this second condition the module would keep styling with
-    -- no control the user can see. The reference had a standalone toggle and
-    -- so had no such coupling -- this follows from KE's placement, not from
-    -- the port.
-    local skin = KE.db and KE.db.profile and KE.db.profile.Skinning
-    local db = skin and skin.Tooltips
-    self.active = (db and db.Enabled == true and db.CompareHeader == true) and true or false
-    self.db.Enabled = self.active
+    self.db = KE.db and KE.db.profile and KE.db.profile.CompareHeader
+    self.active = (self.db and self.db.Enabled == true) and true or false
 end
 
 -- ElvUI styles this same header itself, so KE stands down when ElvUI owns
