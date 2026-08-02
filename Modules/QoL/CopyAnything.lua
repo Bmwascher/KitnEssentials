@@ -41,12 +41,27 @@ end
 -- Core Logic
 ---------------------------------------------------------------------------------
 
+-- Builds the copy dialog's hint line: "Press <Modifier>-<Key> to copy", with
+-- the key combo wrapped in the theme accent so it reads like the reference
+-- module's hint line (KE:ColorTextByTheme is the established |cff……|r
+-- wrapper -- Core/Colors.lua:98).
+local function BuildCopyHint(modifier, key)
+    local mod = modifier or ""
+    local combo = strupper(mod:sub(1, 1)) .. mod:sub(2) .. "-" .. (key or "")
+    return "Press " .. KE:ColorTextByTheme(combo) .. " to copy"
+end
+
 -- Shows the copy dialog with the given spell/item/NPC ID and name.
 local function ShowCopyDialog(name, id)
     -- KE:CreatePrompt is positional (Core/Widgets.lua:264):
     -- (title, text, showEditBox, ...). The reference passes a config table;
     -- that shape does not exist here.
-    KE:CreatePrompt(name or "Copy", tostring(id), true)
+    local db = CA.db
+    local hint = BuildCopyHint(db and db.Modifier, db and db.Key)
+    -- cancelText ("Close") is the opt-in Core/Widgets.lua reads to show a
+    -- single Close button AND swap this prompt's title/edit-box colours to
+    -- match the reference -- see CreatePrompt's isCopyPrompt flag.
+    KE:CreatePrompt(name or "Copy", tostring(id), true, hint, false, nil, nil, nil, nil, nil, nil, nil, "Close")
 end
 
 -- Checks the configured modifier key(s) against the keyboard state.

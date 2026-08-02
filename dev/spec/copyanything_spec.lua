@@ -76,4 +76,24 @@ describe("Modules/QoL/CopyAnything.lua", function()
             assert.is_nil(getNPCIDFromGUID("Creature-0-1234"))
         end)
     end)
+
+    describe("BuildCopyHint", function()
+        local buildCopyHint
+
+        before_each(function()
+            local _, _, seams = loader.loadCopyAnything()
+            buildCopyHint = seams.buildCopyHint
+        end)
+
+        it("composes the capitalised modifier and key into the hint text", function()
+            -- ColorTextByTheme is stubbed as identity in the loader, so the
+            -- wrapper is invisible here and this pins the MODIFIER-KEY
+            -- composition itself, not a constant string.
+            assert.equals("Press Ctrl-C to copy", buildCopyHint("ctrl", "C"))
+        end)
+
+        it("reflects a different modifier/key pair, not a fixed default", function()
+            assert.equals("Press Shift-V to copy", buildCopyHint("shift", "V"))
+        end)
+    end)
 end)
