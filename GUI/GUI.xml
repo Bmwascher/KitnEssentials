@@ -114,6 +114,7 @@
     <Script file="GUITabs\GUIQoL\GUI-CharacterPanel.lua" />
     <Script file="GUITabs\GUIQoL\GUI-Nicknames.lua" />
     <Script file="GUITabs\GUIQoL\GUI-CopyAnything.lua" />
+    <Script file="GUITabs\GUIQoL\GUI-ColorPicker.lua" />
 
     <!-- Skinning tabs -->
     <Script file="GUITabs\GUISkinning\GUI-Tooltips.lua" />

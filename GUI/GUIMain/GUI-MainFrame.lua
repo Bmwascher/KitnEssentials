@@ -105,6 +105,7 @@ GUIFrame.sidebarConfig = {
         items = {
             { id = "Automation",        text = "Automation", keywords = { "automation", "auto", "role", "quest", "repair", "sell", "accept", "group", "duel", "delete", "ah", "auction house", "house", "housing", "vantus rune", "merchant", "vendor", "pages", "shop", "buy", "buyback", "extend", "wide" } },
             { id = "CharacterPanel",    text = "Character Panel", keywords = { "character", "panel", "stats", "item level", "ilvl", "gear", "durability", "inspect" } },
+            { id = "ColorPicker",       text = "Color Picker", keywords = { "color", "colour", "picker", "rgb", "hex", "alpha", "opacity", "swatch", "class color" } },
             { id = "CombatLogger",      text = "Combat Logger", keywords = { "combat log", "logging", "advanced logging", "warcraftlogs", "raid" } },
             { id = "CopyAnything",      text = "Copy Anything", keywords = { "copy", "spell id", "item id", "npc id", "aura id", "macro", "clipboard", "tooltip" } },
             { id = "Nicknames",         text = "Custom Nicknames", keywords = { "nickname", "nicknames", "name", "custom", "rename" } },
