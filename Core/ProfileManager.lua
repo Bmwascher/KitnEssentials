@@ -447,6 +447,7 @@ function ProfileManager:RefreshAllModules()
     -- apply the new flags (silently skipped when ElvUI handles skinning).
     local skipSkinning = KE.ShouldNotLoadModule and KE:ShouldNotLoadModule()
     local skinningChanged = false
+    local reloadNeeded = false
     for name, module in KitnEssentials:IterateModules() do
         if module.UpdateDB then module:UpdateDB() end
         local wasEnabled = module:IsEnabled()
@@ -454,12 +455,21 @@ function ProfileManager:RefreshAllModules()
         local stateMismatch = wantEnabled ~= nil and not module.keSelfManagedEnable
             and (not wantEnabled) ~= (not wasEnabled)
         local skinDeferred = false
+        local reloadDeferred = false
         if stateMismatch then
             if name:find("^Skin") or module.keDeferToReload then
                 skinDeferred = true
                 if not skipSkinning then skinningChanged = true end
             elseif wantEnabled then
                 KitnEssentials:EnableModule(name)
+            elseif module.keReloadOnDisable then
+                -- Module has no live teardown for what OnEnable does
+                -- (permanent hooks, replaced Blizzard functions, or a raised
+                -- Blizzard constant) — disabling it live would leave those
+                -- changes in place while the module reports itself off.
+                -- Stay enabled until the reload fixes the mismatch.
+                reloadDeferred = true
+                reloadNeeded = true
             else
                 KitnEssentials:DisableModule(name)
             end
@@ -470,14 +480,20 @@ function ProfileManager:RefreshAllModules()
         -- Skin modules pending a reload must not apply the mismatched
         -- profile's settings either (ActionBars:ApplySettings has no master
         -- db.Enabled guard — it would destructively apply a disabled-intent
-        -- profile's config).
-        if wasEnabled and module:IsEnabled() and module.ApplySettings and not skinDeferred then
+        -- profile's config). Same for reload-deferred modules: the new
+        -- profile wants this module OFF, so applying its settings now would
+        -- configure a module that's about to be torn down by /reload.
+        if wasEnabled and module:IsEnabled() and module.ApplySettings and not skinDeferred and not reloadDeferred then
             module:ApplySettings()
         end
     end
 
     if skinningChanged and KE.SkinningReloadPrompt then
         KE:SkinningReloadPrompt()
+    end
+
+    if reloadNeeded and KE.CreateReloadPrompt then
+        KE:CreateReloadPrompt("This profile turns off a feature that needs a UI reload to fully take effect.")
     end
 
     -- Refresh theme

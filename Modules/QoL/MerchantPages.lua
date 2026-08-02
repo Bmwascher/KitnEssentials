@@ -21,6 +21,11 @@ if not KitnEssentials then return end
 ---@class MerchantPages: AceModule
 local MP = KitnEssentials:NewModule("MerchantPages")
 
+-- No live teardown for the raised MERCHANT_ITEMS_PER_PAGE, the Blizzard-named
+-- frames, or the permanent hooks above, so a profile switch that wants this
+-- module OFF must stay enabled and prompt for /reload instead of disabling live.
+MP.keReloadOnDisable = true
+
 local _G = _G
 local floor = math.floor
 local pairs = pairs

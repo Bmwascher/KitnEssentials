@@ -20,6 +20,11 @@ if not KitnEssentials then return end
 ---@class AlertFrames: AceModule
 local AF = KitnEssentials:NewModule("AlertFrames")
 
+-- No live teardown for the replaced AdjustAnchors methods or the permanent
+-- hooksecurefunc hooks above, so a profile switch that wants this module
+-- OFF must stay enabled and prompt for /reload instead of disabling live.
+AF.keReloadOnDisable = true
+
 local _G = _G
 local ipairs = ipairs
 local CreateFrame = CreateFrame
