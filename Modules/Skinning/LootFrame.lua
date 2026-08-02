@@ -178,6 +178,20 @@ local function AnchorSlots(frame)
     frame:SetHeight(max(shownSlots * ROW_H + 16, 20))
 end
 
+-- Anchors `frame`'s TOPLEFT to Blizzard's LootFrame's TOPLEFT (its
+-- authoritative Edit Mode position -- Blizzard re-applies it on every show)
+-- when that frame exists, falling back to the saved db.Position otherwise.
+-- Read _G.LootFrame at call time, never captured at file scope.
+local function AnchorToBlizzardLoot(frame, db)
+    local blizzFrame = _G.LootFrame
+    if blizzFrame then
+        frame:SetPoint("TOPLEFT", blizzFrame, "TOPLEFT", 0, 0)
+    else
+        local p = db and db.Position or {}
+        frame:SetPoint(p.Point or "TOPRIGHT", UIParent, p.RelPoint or "TOPRIGHT", p.X or -618, p.Y or -564)
+    end
+end
+
 local function FrameHide()
     StaticPopup_Hide("CONFIRM_LOOT_DISTRIBUTION")
     CloseLoot()
@@ -220,8 +234,7 @@ function LF:LOOT_OPENED(_, autoloot)
         lootFrame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", (x / scale) - 40, (y / scale) + 20)
         lootFrame:Raise()
     else
-        local p = self.db.Position or {}
-        lootFrame:SetPoint(p.Point or "TOPRIGHT", UIParent, p.RelPoint or "TOPRIGHT", p.X or -618, p.Y or -564)
+        AnchorToBlizzardLoot(lootFrame, self.db)
     end
 
     local maxQuality, maxWidth = 0, 0
@@ -312,16 +325,22 @@ function LF:UPDATE_MASTER_LOOT_LIST()
     end
 end
 
--- This module owns no Edit Mode anchor -- LootRoll.lua's mover is the only
--- Edit Mode element Skinning registers. ApplyPosition exists so the GUI's
--- Position card offset sliders still drive this window's placement.
+-- This module owns no Edit Mode anchor of its own -- it follows Blizzard's
+-- LootFrame anchor instead (AnchorToBlizzardLoot above). ApplyPosition
+-- re-runs that anchor on demand; see EDIT_MODE_LAYOUTS_UPDATED below.
 function LF:ApplyPosition()
     local f = _G.KE_LootFrame
     if f and f:IsShown() then
-        local p = self.db and self.db.Position or {}
         f:ClearAllPoints()
-        f:SetPoint(p.Point or "TOPRIGHT", UIParent, p.RelPoint or "TOPRIGHT", p.X or -618, p.Y or -564)
+        AnchorToBlizzardLoot(f, self.db)
     end
+end
+
+-- Blizzard's LootFrame only receives its Edit Mode anchor when a layout is
+-- applied (login, or the player switches Edit Mode layouts). Re-run our own
+-- anchor after that so we don't anchor to a not-yet-laid-out Blizzard frame.
+function LF:EDIT_MODE_LAYOUTS_UPDATED()
+    self:ApplyPosition()
 end
 
 function LF:UpdateDB()
@@ -371,6 +390,7 @@ function LF:OnEnable()
     self:RegisterEvent("LOOT_OPENED")
     self:RegisterEvent("LOOT_SLOT_CLEARED")
     self:RegisterEvent("LOOT_CLOSED")
+    self:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
 
     pcall(self.RegisterEvent, self, "OPEN_MASTER_LOOT_LIST")
     pcall(self.RegisterEvent, self, "UPDATE_MASTER_LOOT_LIST")

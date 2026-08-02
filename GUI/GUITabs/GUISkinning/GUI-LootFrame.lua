@@ -78,33 +78,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootWindow", function(scrollChild, y
     local card3 = GUIFrame:CreateCard(scrollChild, "Position", yOffset)
     manager:Register(card3, "all")
 
-    -- v3.5.871: "Unlock (drag to move)" removed -- this window registers no
-    -- Edit Mode anchor (LootRoll.lua's mover is the only one Skinning
-    -- registers); the X/Y sliders below are the only way to move it.
-
-    local rowX = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
-    local xSlider = GUIFrame:CreateSlider(rowX, "X Offset", {
-        min = -2500, max = 2500, step = 1, value = db.Position.X,
-        callback = function(val)
-            db.Position.X = val
-            if LF and LF.ApplyPosition then LF:ApplyPosition() end
-        end
-    })
-    rowX:AddWidget(xSlider, 1)
-    manager:Register(xSlider, "all")
-    card3:AddRow(rowX, Theme.rowHeight)
-
-    local rowY = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
-    local ySlider = GUIFrame:CreateSlider(rowY, "Y Offset", {
-        min = -1500, max = 1500, step = 1, value = db.Position.Y,
-        callback = function(val)
-            db.Position.Y = val
-            if LF and LF.ApplyPosition then LF:ApplyPosition() end
-        end
-    })
-    rowY:AddWidget(ySlider, 1)
-    manager:Register(ySlider, "all")
-    card3:AddRow(rowY, Theme.rowHeightLast, 0)
+    card3:AddLabel("Follows the position you set for Blizzard's loot window in Blizzard's Edit Mode. Drag it there and this window follows.")
 
     yOffset = card3:GetNextOffset()
 
