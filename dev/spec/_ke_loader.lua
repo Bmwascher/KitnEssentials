@@ -1287,4 +1287,48 @@ function L.loadAlertFrames()
     return AF, KE, seams
 end
 
+-- Modules/QoL/ColorPicker.lua captures WoW string globals as file-scope
+-- upvalues at load time (`local format, strlen, strjoin = format, strlen,
+-- strjoin`, plus gsub/strsub/floor separately), so real Lua equivalents must
+-- exist on _G BEFORE helpers.loadModule runs, exactly like wowStrsplit above.
+-- strjoin's contract is strjoin(delimiter, ...) -- the OPPOSITE argument
+-- order from table.concat -- so it needs its own shim, not a table.concat
+-- alias.
+local function wowStrjoin(delimiter, ...)
+    return table.concat({ ... }, delimiter)
+end
+
+-- Enhance/OnEnable are never invoked (the five pure conversion helpers this
+-- spec targets are reached purely through debug.getupvalue chains), so no
+-- Blizzard frame or CreateFrame stub is needed here.
+-- Returns CP, KE, seams:
+--   seams.getHexColor      seams.round255      seams.alphaValue
+--   seams.expandFromThree  seams.extendToSix
+function L.loadColorPicker(overrides)
+    overrides = overrides or {}
+    local modules = helpers.installAddonShim()
+    _G.strlen = overrides.strlen or string.len
+    _G.strsub = overrides.strsub or string.sub
+    _G.gsub = overrides.gsub or string.gsub
+    _G.format = overrides.format or string.format
+    _G.floor = overrides.floor or math.floor
+    _G.strjoin = overrides.strjoin or wowStrjoin
+    local KE = { db = { profile = { ColorPicker = {} } } }
+    helpers.loadModule("Modules/QoL/ColorPicker.lua", KE)
+    local CP = modules["ColorPicker"]
+
+    local updateColorTexts = findUpvalue(CP.Enhance, "UpdateColorTexts")
+    local onColorSelect = findUpvalue(CP.Enhance, "OnColorSelect")
+    local getHexColor = findUpvalue(updateColorTexts, "GetHexColor")
+    local updateAlphaText = findUpvalue(onColorSelect, "UpdateAlphaText")
+    local seams = {
+        getHexColor = getHexColor,
+        round255 = findUpvalue(updateColorTexts, "Round255"),
+        alphaValue = findUpvalue(updateAlphaText, "AlphaValue"),
+        expandFromThree = findUpvalue(getHexColor, "ExpandFromThree"),
+        extendToSix = findUpvalue(getHexColor, "ExtendToSix"),
+    }
+    return CP, KE, seams
+end
+
 return L

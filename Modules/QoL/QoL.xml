@@ -15,4 +15,5 @@
     <Script file="CopyAnything.lua" />
     <Script file="AlertFrames.lua" />
     <Script file="MerchantPages.lua" />
+    <Script file="ColorPicker.lua" />
 </Ui>

@@ -1295,6 +1295,10 @@ local Defaults = {
             Pages = 2,
         },
 
+        ColorPicker = {
+            Enabled = false,
+        },
+
         CompareHeader = {
             Enabled = true,
         },
