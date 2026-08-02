@@ -1217,12 +1217,6 @@ end
 -- findUpvalue recovers them without running any tooltip logic (so GameTooltip,
 -- C_ChallengeMode, C_Spell, C_Item and C_AddOns need no stubs here).
 --
--- BuildCopyHint is a file local too, but TryCopy does NOT call it directly --
--- only ShowCopyDialog does. findUpvalue only walks a function's OWN upvalues,
--- so reaching BuildCopyHint takes two hops: recover ShowCopyDialog off
--- TryCopy first (ShowCopyDialog is itself a TryCopy upvalue, same as the
--- other two), then recover BuildCopyHint off ShowCopyDialog.
---
 -- IsControlKeyDown/IsShiftKeyDown/IsAltKeyDown are NOT in MANAGED_MOCK_KEYS,
 -- so a caller override placed in `overrides` and routed through installMock
 -- would be silently dropped. The module captures each as a file-scope upvalue
@@ -1257,26 +1251,15 @@ function L.loadCopyAnything(overrides)
     _G.IsShiftKeyDown = overrides.IsShiftKeyDown or function() return false end
     _G.IsAltKeyDown = overrides.IsAltKeyDown or function() return false end
     _G.strsplit = overrides.strsplit or wowStrsplit
-    -- strupper is a WoW-provided global (not standard Lua) and, like
-    -- strsplit above, a file-scope upvalue capture -- BuildCopyHint (used
-    -- via the buildCopyHint seam) needs it even though TryCopy itself never
-    -- runs here. string.upper is a correct stand-in for the ASCII input
-    -- every caller passes it (modifier names, single-letter keys).
-    _G.strupper = overrides.strupper or string.upper
     local KE = {
         db = { profile = { CopyAnything = {} } },
         CreatePrompt = function() end,
-        -- Same identity stub as loadGlobals: the hint-text spec asserts the
-        -- MODIFIER/KEY composition, not the theme's hex wrapper.
-        ColorTextByTheme = function(_, txt) return txt end,
     }
     helpers.loadModule("Modules/QoL/CopyAnything.lua", KE)
     local CA = modules["CopyAnything"]
-    local showCopyDialog = findUpvalue(CA.TryCopy, "ShowCopyDialog")
     local seams = {
         checkModifiers = findUpvalue(CA.TryCopy, "CheckModifiers"),
         getNPCIDFromGUID = findUpvalue(CA.TryCopy, "GetNPCIDFromGUID"),
-        buildCopyHint = showCopyDialog and findUpvalue(showCopyDialog, "BuildCopyHint"),
     }
     return CA, KE, seams
 end

@@ -41,23 +41,21 @@ end
 -- Core Logic
 ---------------------------------------------------------------------------------
 
--- Builds the copy dialog's hint line: "Press <Modifier>-<Key> to copy", with
--- the key combo wrapped in the theme accent so it reads like the reference
--- module's hint line (KE:ColorTextByTheme is the established |cff……|r
--- wrapper -- Core/Colors.lua:98).
-local function BuildCopyHint(modifier, key)
-    local mod = modifier or ""
-    local combo = strupper(mod:sub(1, 1)) .. mod:sub(2) .. "-" .. (key or "")
-    return "Press " .. KE:ColorTextByTheme(combo) .. " to copy"
-end
-
 -- Shows the copy dialog with the given spell/item/NPC ID and name.
 local function ShowCopyDialog(name, id)
     -- KE:CreatePrompt is positional (Core/Widgets.lua:264):
     -- (title, text, showEditBox, ...). The reference passes a config table;
     -- that shape does not exist here.
-    local db = CA.db
-    local hint = BuildCopyHint(db and db.Modifier, db and db.Key)
+    -- The hint always names Ctrl-C, never db.Modifier/db.Key: those two
+    -- settings only gate the TOOLTIP-HOVER trigger that opens this window
+    -- (TryCopy, below), not a binding inside it. The dialog's own copy
+    -- handler is hardcoded to Ctrl+C (Core/Widgets.lua:350), same as the
+    -- reference (References/atrocityEssentials .../Utils/AE-Dialog.lua:474)
+    -- and this addon's three other copy-mode prompts (GUI-ProfilesTab.lua,
+    -- GUI-Nicknames.lua, GUI-BlizzardMessages.lua). Naming the configured
+    -- key here would send a user on e.g. Shift+V into overwriting the
+    -- highlighted id with the letter V instead of copying it.
+    local hint = "Press " .. KE:ColorTextByTheme("Ctrl-C") .. " to copy"
     -- cancelText ("Close") is the opt-in Core/Widgets.lua reads to show a
     -- single Close button AND swap this prompt's title/edit-box colours to
     -- match the reference -- see CreatePrompt's isCopyPrompt flag.
