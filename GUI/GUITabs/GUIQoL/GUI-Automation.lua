@@ -445,6 +445,95 @@ GUIFrame:RegisterContent("Automation", function(scrollChild, yOffset)
         RefreshVRStates()
     end
 
+    ----------------------------------------------------------------
+    -- Card 11: Merchant Pages (independent module — own cascade)
+    ----------------------------------------------------------------
+    local mpDB = KE.db and KE.db.profile.MerchantPages
+    if mpDB then
+        local mpManager = GUIFrame:CreateWidgetStateManager()
+
+        local function GetMerchantPagesModule()
+            if KitnEssentials then
+                return KitnEssentials:GetModule("MerchantPages", true)
+            end
+            return nil
+        end
+
+        local MP = GetMerchantPagesModule()
+
+        local function ApplyMPState(enabled)
+            if not MP then return end
+            mpDB.Enabled = enabled
+            if enabled then KitnEssentials:EnableModule("MerchantPages")
+            else KitnEssentials:DisableModule("MerchantPages") end
+        end
+
+        local function RefreshMPStates()
+            mpManager:UpdateAll(mpDB.Enabled ~= false)
+        end
+
+        local card11 = GUIFrame:CreateCard(scrollChild, "Merchant Pages", yOffset)
+        card11:AddHeaderToggle(mpDB.Enabled ~= false, function(checked)
+            mpDB.Enabled = checked
+            ApplyMPState(checked)
+            -- The MERCHANT_ITEMS_PER_PAGE global write, the created Blizzard-named
+            -- MerchantItem<N> frames, and the hooksecurefunc hooks this module
+            -- installs cannot be undone (Modules/QoL/MerchantPages.lua header
+            -- taint note): turning the toggle off would otherwise leave the
+            -- vendor window overridden by a module that reports itself off.
+            if not checked then
+                KE:CreateReloadPrompt("Turning off extended vendor pages requires a UI reload to restore Blizzard's window.")
+            end
+            KE:Print("Merchant Pages: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+        end)
+
+        local mpNoteHeight = 90
+        local mpNoteRow = GUIFrame:CreateRow(card11.content, mpNoteHeight)
+        local mpNoteText = GUIFrame:CreateText(mpNoteRow,
+            KE:ColorTextByTheme("Note"),
+            KE:ColorTextByTheme("-") ..
+            " Widens the vendor window to show several pages at once. This " ..
+            "changes Blizzard's own merchant frames, which can make some later " ..
+            "tooltips stop working until you reload. Turn it off and reload if " ..
+            "you see that. Skipped automatically if you run a dedicated vendor " ..
+            "addon. Turning it off needs a reload.",
+            mpNoteHeight, "hide")
+        mpNoteRow:AddWidget(mpNoteText, 1)
+        card11:AddRow(mpNoteRow, mpNoteHeight, 0)
+
+        yOffset = card11:GetNextOffset()
+
+        -- Lone header bar: a disabled module shows its switch and nothing else.
+        if mpDB.Enabled ~= false then
+
+            ----------------------------------------------------------------
+            -- Card 12: Pages
+            ----------------------------------------------------------------
+            local card12 = GUIFrame:CreateCard(scrollChild, "Pages", yOffset)
+
+            local row12 = GUIFrame:CreateRow(card12.content, Theme.rowHeightLast)
+            local mpPagesSlider = GUIFrame:CreateSlider(row12, "Pages", {
+                min = 2, max = 4, step = 1,
+                value = mpDB.Pages or 2,
+                callback = function(val)
+                    mpDB.Pages = val
+                    -- The frame count is fixed at Setup and cannot change live
+                    -- (Modules/QoL/MerchantPages.lua Setup ordering note) -- same
+                    -- reload idiom the skinning pages use for a setting that only
+                    -- takes effect on the next load.
+                    KE:CreateReloadPrompt("Changing the vendor page count requires a UI reload to take effect.")
+                end,
+            })
+            row12:AddWidget(mpPagesSlider, 1)
+            mpManager:Register(mpPagesSlider, "all")
+            card12:AddRow(row12, Theme.rowHeightLast, 0)
+
+            yOffset = card12:GetNextOffset()
+        end
+
+        RefreshMPStates()
+    end
+
     RefreshAutoStates()
     return yOffset
 end)
