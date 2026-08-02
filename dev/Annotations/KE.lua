@@ -400,11 +400,15 @@ function AceModule:SecureHook(object, method, handler) end
 ---@param handler function|string?
 function AceModule:Hook(object, method, handler) end
 
----@overload fun(self: AceModule, functionName: string, handler: function|string?)
+--- RawHook additionally accepts a hookSecure boolean, either as a 3rd arg
+--- after the object/method/handler form or, string-object shorthand, right
+--- after the handler: `self:RawHook(functionName, handler, hookSecure)`.
+---@overload fun(self: AceModule, functionName: string, handler: function|string?, hookSecure: boolean?)
 ---@param object table
 ---@param method string
 ---@param handler function|string?
-function AceModule:RawHook(object, method, handler) end
+---@param hookSecure boolean?
+function AceModule:RawHook(object, method, handler, hookSecure) end
 
 ---@param msg string
 function AceModule:Hide(msg) end

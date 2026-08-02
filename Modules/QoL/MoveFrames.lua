@@ -25,6 +25,7 @@ local KE = select(2, ...)
 if not KitnEssentials then return end
 
 ---@class MoveFrames: AceModule, AceEvent-3.0, AceHook-3.0
+---@field initialized boolean?
 local MF = KitnEssentials:NewModule("MoveFrames", "AceEvent-3.0", "AceHook-3.0")
 
 local _G = _G
