@@ -447,18 +447,6 @@ local BlizzardFramesOnDemand = {
 local disabled = {}    -- [frame] = true while movement is suppressed via SetMovable API
 local moveTargets = {} -- [handle frame] = frame that actually moves
 
--- Blizzard's panel manager re-anchors a UI panel whenever its width changes --
--- clicking a Character Frame tab is the common case (CharacterFrame.lua:137-139
--- calls UpdateUIPanelPositions only when the new tab is a different width).
--- That wipes a drag. These two tables let the module put the drag back.
---
--- STILL NOT PERSISTENCE: this lives in memory for the session only, nothing
--- reaches SavedVariables, and a /reload returns every window to Blizzard's own
--- layout. A frame is recorded ONLY if the player actually moved it, so a panel
--- the player merely clicked stays under Blizzard's multi-panel layout control.
-local dragStart = {}    -- [frame] = { x, y } captured at StartMoving
-local sessionPoints = {} -- [frame] = { point, relativeTo, relativePoint, x, y }
-
 -- Combat deferral (the upstream mover used a shared task manager; KE has none,
 -- so this is a minimal local queue drained on PLAYER_REGEN_ENABLED).
 local combatQueue = {}
@@ -505,10 +493,6 @@ function MF:Frame_StartMoving(this, button)
     end
     local moveTarget = moveTargets[this]
     if button == "LeftButton" and moveTarget and moveTarget:IsMovable() and not disabled[moveTarget] then
-        -- Remember where it sat, so StopMoving can tell a real drag from a
-        -- plain click and only record the former.
-        local _, _, _, startX, startY = moveTarget:GetPoint()
-        dragStart[moveTarget] = { startX or 0, startY or 0 }
         moveTarget:StartMoving()
     end
 end
@@ -520,39 +504,9 @@ function MF:Frame_StopMoving(this, button)
     local moveTarget = moveTargets[this]
     if button == "LeftButton" and moveTarget then
         moveTarget:StopMovingOrSizing()
-        -- The upstream mover saved the position to disk here -- still skipped.
-        -- What follows is session-only and exists solely so Blizzard's panel
-        -- manager cannot silently undo a drag (see the note by sessionPoints).
-        local started = dragStart[moveTarget]
-        if started then
-            dragStart[moveTarget] = nil
-            local point, relativeTo, relativePoint, x, y = moveTarget:GetPoint()
-            -- Record only a REAL move. A plain click leaves the frame where it
-            -- was, and pinning that would fight Blizzard's multi-panel layout.
-            if point and ((x or 0) ~= started[1] or (y or 0) ~= started[2]) then
-                sessionPoints[moveTarget] = { point, relativeTo, relativePoint, x, y }
-            end
-        end
+        -- The upstream mover saved the position here -- skipped: positions
+        -- are deliberately temporary in this port.
     end
-end
-
----Put a drag back after Blizzard's panel manager re-anchors a panel.
----Hooked to the global UpdateUIPanelPositions, which the manager calls
----synchronously, so this lands in the same frame and never renders the
----intermediate position.
-function MF:PanelRepositioned(frame)
-    if not frame then
-        return
-    end
-    local saved = sessionPoints[frame]
-    if not saved then
-        return
-    end
-    if InCombatLockdown() and frame:IsProtected() then
-        return
-    end
-    frame:ClearAllPoints()
-    frame:SetPoint(saved[1], saved[2], saved[3], saved[4], saved[5])
 end
 
 function MF:HandleFrame(this, bindTo)
@@ -750,13 +704,6 @@ function MF:OnEnable()
             end
         end)
     end
-
-    -- Deviation from the reference: put a drag back after Blizzard's panel
-    -- manager re-anchors a panel. Routed through AceHook so module disable
-    -- removes it, rather than a permanent hooksecurefunc.
-    if _G.UpdateUIPanelPositions then
-        self:SecureHook("UpdateUIPanelPositions", "PanelRepositioned")
-    end
 end
 
 function MF:OnDisable()
@@ -768,8 +715,6 @@ function MF:OnDisable()
     wipe(moveTargets)
     wipe(disabled)
     wipe(combatQueue)
-    wipe(dragStart)
-    wipe(sessionPoints)
     self.initialized = nil
     self.StopRunning = nil
 end
