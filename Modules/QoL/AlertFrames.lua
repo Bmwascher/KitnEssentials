@@ -117,16 +117,26 @@ function AF:PostAlertMove()
     self:PositionGroupLootContainer()
 end
 
+-- LootRoll (non-Replace, Reposition on) owns the container outright -- both
+-- its anchor (PositionGroupLootContainer, below) and its removal from
+-- Blizzard's managed layout (InstallHooks' reparent) must stand down for it,
+-- or Alert Frames reparenting first leaves LootRoll's own origin-parent
+-- capture (Modules/Skinning/LootRoll.lua:182-185) never set, permanently
+-- breaking its disable-time restore (Modules/Skinning/LootRoll.lua:588).
+-- One helper, called from both places, so the three-key test is never
+-- written twice.
+local function LootRollOwnsGroupLootContainer()
+    local LR = KitnEssentials.GetModule and KitnEssentials:GetModule("LootRoll", true)
+    return LR and LR.db and LR.db.Enabled and LR.db.Reposition and not LR.db.Replace and true or false
+end
+
 -- The container renders wherever its LAST anchors point, so it only snaps
 -- into the stack when AlertFrame:UpdateAnchors next runs. GroupLootContainer
 -- is absent from .luacheckrc's read_globals, so it is reached through _G.
 function AF:PositionGroupLootContainer()
     local glc = _G.GroupLootContainer
     if not (glc and self.holder) then return end
-    -- LootRoll (non-Replace, Reposition on) owns the container's anchor
-    -- outright -- don't fight its ApplyPosition.
-    local LR = KitnEssentials.GetModule and KitnEssentials:GetModule("LootRoll", true)
-    if LR and LR.db and LR.db.Enabled and LR.db.Reposition and not LR.db.Replace then return end
+    if LootRollOwnsGroupLootContainer() then return end
     local perksAnchor = GetPerksAnchor()
     glc:ClearAllPoints()
     glc:SetPoint(POSITION, perksAnchor or self.holder, POINT, X_OFFSET, Y_OFFSET)
@@ -203,11 +213,19 @@ function AF:InstallHooks()
     -- managed layout is by REPARENTING to UIParent only, and only out of
     -- combat -- ignoreInLayout / UIPARENT_MANAGED_FRAME_POSITIONS writes both
     -- taint the secure managed-layout pass and are never written here (see
-    -- the LootRoll module's own note on the same mechanism).
+    -- the LootRoll module's own note on the same mechanism). The reparent
+    -- additionally stands down when LootRoll owns the container -- same
+    -- condition PositionGroupLootContainer already guards its anchor with
+    -- (LootRollOwnsGroupLootContainer, above). Reparenting here first would
+    -- otherwise beat LootRoll to it: LootRoll captures the container's
+    -- ORIGINAL parent lazily, only inside its own reparent branch
+    -- (Modules/Skinning/LootRoll.lua:182-185), so if Alert Frames reparents
+    -- first that capture never happens and LootRoll's disable-time restore
+    -- (Modules/Skinning/LootRoll.lua:588) becomes a permanent no-op.
     local glc = _G.GroupLootContainer
     if glc then
         glc:EnableMouse(false)
-        if not InCombatLockdown() and glc:GetParent() ~= UIParent then
+        if not LootRollOwnsGroupLootContainer() and not InCombatLockdown() and glc:GetParent() ~= UIParent then
             glc:SetParent(UIParent)
         end
     end
