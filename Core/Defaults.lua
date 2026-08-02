@@ -1836,6 +1836,10 @@ local Defaults = {
                 Enabled = false,
                 QualityBorder = true, -- tint the window border to the best drop
                 MinWidth = 150,
+                -- Code-side fallback only, used when _G.LootFrame is missing
+                -- (Modules/Skinning/LootFrame.lua's AnchorToBlizzardLoot).
+                -- The window normally follows Blizzard's own Edit Mode loot
+                -- frame position instead -- this has no control on the page.
                 Position = {
                     Point = "TOPRIGHT",
                     RelPoint = "TOPRIGHT",

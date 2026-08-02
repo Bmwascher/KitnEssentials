@@ -326,21 +326,15 @@ function LF:UPDATE_MASTER_LOOT_LIST()
 end
 
 -- This module owns no Edit Mode anchor of its own -- it follows Blizzard's
--- LootFrame anchor instead (AnchorToBlizzardLoot above). ApplyPosition
--- re-runs that anchor on demand; see EDIT_MODE_LAYOUTS_UPDATED below.
+-- LootFrame anchor instead (AnchorToBlizzardLoot above). SetPoint against
+-- Blizzard's frame is a live frame relationship: when Blizzard re-anchors
+-- its own frame, ours moves with it, with no re-application needed.
 function LF:ApplyPosition()
     local f = _G.KE_LootFrame
     if f and f:IsShown() then
         f:ClearAllPoints()
         AnchorToBlizzardLoot(f, self.db)
     end
-end
-
--- Blizzard's LootFrame only receives its Edit Mode anchor when a layout is
--- applied (login, or the player switches Edit Mode layouts). Re-run our own
--- anchor after that so we don't anchor to a not-yet-laid-out Blizzard frame.
-function LF:EDIT_MODE_LAYOUTS_UPDATED()
-    self:ApplyPosition()
 end
 
 function LF:UpdateDB()
@@ -390,7 +384,6 @@ function LF:OnEnable()
     self:RegisterEvent("LOOT_OPENED")
     self:RegisterEvent("LOOT_SLOT_CLEARED")
     self:RegisterEvent("LOOT_CLOSED")
-    self:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
 
     pcall(self.RegisterEvent, self, "OPEN_MASTER_LOOT_LIST")
     pcall(self.RegisterEvent, self, "UPDATE_MASTER_LOOT_LIST")
