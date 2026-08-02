@@ -1211,4 +1211,57 @@ function L.loadGroupFinderPanel(overrides)
     return GFP, KE, seams
 end
 
+-- Modules/QoL/CopyAnything.lua. TryCopy is never invoked by this loader --
+-- CheckModifiers and GetNPCIDFromGUID are file locals with no stored handle,
+-- but TryCopy calls both directly, so they sit in its upvalue slots;
+-- findUpvalue recovers them without running any tooltip logic (so GameTooltip,
+-- C_ChallengeMode, C_Spell, C_Item and C_AddOns need no stubs here).
+--
+-- IsControlKeyDown/IsShiftKeyDown/IsAltKeyDown are NOT in MANAGED_MOCK_KEYS,
+-- so a caller override placed in `overrides` and routed through installMock
+-- would be silently dropped. The module captures each as a file-scope upvalue
+-- at load time (`local IsControlKeyDown = IsControlKeyDown`), so this loader
+-- assigns them to _G directly BEFORE helpers.loadModule, and the caller's
+-- override (or the "not held" default) is what CheckModifiers actually closes
+-- over. A spec must assert `_G.IsControlKeyDown == theFunctionItPassed` after
+-- calling this loader -- a regression that reroutes these three through
+-- installMock would drop them back to the default and read exactly like a
+-- passing test otherwise.
+-- Returns CA, KE, seams (seams.checkModifiers, seams.getNPCIDFromGUID).
+--
+-- strsplit is a WoW-provided global, not standard Lua, and GetNPCIDFromGUID
+-- calls it directly -- also captured as a file-scope upvalue, so it must
+-- exist on _G before helpers.loadModule. The stand-in treats each character
+-- of the delimiter as its own separator (WoW's own documented behaviour),
+-- which is all GetNPCIDFromGUID's single-character "-" delimiter needs.
+local function wowStrsplit(delimiter, str)
+    if not str then return end
+    local escaped = delimiter:gsub("(%W)", "%%%1")
+    local pieces = {}
+    for piece in str:gmatch("[^" .. escaped .. "]+") do
+        pieces[#pieces + 1] = piece
+    end
+    return unpack(pieces)
+end
+
+function L.loadCopyAnything(overrides)
+    overrides = overrides or {}
+    local modules = helpers.installAddonShim()
+    _G.IsControlKeyDown = overrides.IsControlKeyDown or function() return false end
+    _G.IsShiftKeyDown = overrides.IsShiftKeyDown or function() return false end
+    _G.IsAltKeyDown = overrides.IsAltKeyDown or function() return false end
+    _G.strsplit = overrides.strsplit or wowStrsplit
+    local KE = {
+        db = { profile = { CopyAnything = {} } },
+        CreatePrompt = function() end,
+    }
+    helpers.loadModule("Modules/QoL/CopyAnything.lua", KE)
+    local CA = modules["CopyAnything"]
+    local seams = {
+        checkModifiers = findUpvalue(CA.TryCopy, "CheckModifiers"),
+        getNPCIDFromGUID = findUpvalue(CA.TryCopy, "GetNPCIDFromGUID"),
+    }
+    return CA, KE, seams
+end
+
 return L
