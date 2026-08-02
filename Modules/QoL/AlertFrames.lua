@@ -51,9 +51,22 @@ function AF:ApplyPosition()
     self:PostAlertMove()
 end
 
+-- The event toast holder anchors independently of the alert stack holder, so
+-- it needs its own anchorFrameType/ParentFrame/Strata root keys rather than
+-- sharing self.db's (fix round 1, CRITICAL/IMPORTANT: the GUI's Card 4 used
+-- to write db.Position and db.anchorFrameType/ParentFrame/Strata -- the same
+-- fields Card 2 owns -- so the two position cards silently mirrored each
+-- other. Card 4 now writes EventToastAnchorFrameType/EventToastParentFrame/
+-- EventToastStrata; this builds the Config shape KE:ApplyFramePosition
+-- expects out of those, mirroring HealerMana's GetActiveAnchorConfig
+-- (Modules/Healer/HealerMana.lua:198-208).
 function AF:ApplyEventToastPosition()
     if not (self.toastHolder and self.db and self.db.EventToastPosition) then return end
-    KE:ApplyFramePosition(self.toastHolder, self.db.EventToastPosition, self.db)
+    KE:ApplyFramePosition(self.toastHolder, self.db.EventToastPosition, {
+        anchorFrameType = self.db.EventToastAnchorFrameType,
+        ParentFrame = self.db.EventToastParentFrame,
+        Strata = self.db.EventToastStrata,
+    })
 end
 
 -- Trading Post (PerksProgram) support: when Blizzard re-bases the alert stack
@@ -270,7 +283,7 @@ end
 -- Lifecycle
 ---------------------------------------------------------------------------------
 function AF:OnEnable()
-    if not self.db.Enabled then return end
+    self:UpdateDB()
     if not self.holder then
         self.holder = CreateFrame("Frame", "KE_AlertFrameHolder", UIParent)
         self.holder:SetSize(180, 20)

@@ -58,8 +58,8 @@ GUIFrame:RegisterContent("AlertFrames", function(scrollChild, yOffset)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") ..
-        " Moves the whole Blizzard toast stack -- loot, achievements, dungeon " ..
-        "completion -- to a spot you choose. The stack grows upward when the " ..
+        " Moves the whole Blizzard toast stack — loot, achievements, dungeon " ..
+        "completion — to a spot you choose. The stack grows upward when the " ..
         "anchor is in the lower half of the screen and downward when it is in " ..
         "the upper half. Use /kes edit to drag it. Turning it off needs a reload.",
         noteHeight, "hide")
@@ -120,14 +120,30 @@ GUIFrame:RegisterContent("AlertFrames", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 4: Event Toast Position
     ----------------------------------------------------------------
+    -- positionKey routes this card at db.EventToastPosition instead of the
+    -- default db.Position (Card 2's table) -- GUI-PositionCard.lua:226,245.
+    -- Root keys (anchorFrameType/ParentFrame/Strata) live at the db ROOT
+    -- regardless of positionKey (GUI-PositionCard.lua:456-460), so they also
+    -- need their own names or this card would still clobber Card 2's anchor
+    -- type/parent/strata. Fix round 1 finding: db.EventToastPosition is
+    -- already seeded by Task 1's defaults (Core/Defaults.lua:1276-1291), and
+    -- the three EventToast* root keys are plain scalars that default safely
+    -- to "SCREEN"/"HIGH" when unset (GUI-PositionCard.lua:492,522) the same
+    -- way Card 2's un-seeded root keys already do -- so no Core/Defaults.lua
+    -- change is needed for either. Same shape as HealerMana's Raid/Dungeon
+    -- split (GUI-HealerMana.lua:151-161).
     local toastPosCard, toastPosOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         title = "Event Toast Position",
         db = db,
+        positionKey = "EventToastPosition",
         dbKeys = {
+            anchorFrameType = "EventToastAnchorFrameType",
+            anchorFrameFrame = "EventToastParentFrame",
             selfPoint = "AnchorFrom",
             anchorPoint = "AnchorTo",
             xOffset = "XOffset",
             yOffset = "YOffset",
+            strata = "EventToastStrata",
         },
         showAnchorFrameType = true,
         showStrata = true,
