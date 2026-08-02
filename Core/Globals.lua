@@ -479,6 +479,11 @@ function KE:ResolveColor(saved, default)
            saved[4] or default[4] or 1
 end
 
+---@param fontString FontString
+---@param fontName string
+---@param fontSize number
+---@param fontOutline string?
+---@return boolean
 function KE:ApplyFont(fontString, fontName, fontSize, fontOutline)
     if not fontString then return false end
     local fontPath = self:GetFontPath(fontName)
@@ -503,6 +508,7 @@ function KE:ApplyFont(fontString, fontName, fontSize, fontOutline)
         return true
     end
 
+    ---@cast fontString FontString
     local success = fontString:SetFont(fontPath, size, outline)
     if not success then
         success = fontString:SetFont("Fonts\\FRIZQT__.TTF", size, outline)

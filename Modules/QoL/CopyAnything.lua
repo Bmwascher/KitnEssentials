@@ -28,6 +28,7 @@ local CreateFrame = CreateFrame
 local type = type
 local InCombatLockdown = InCombatLockdown
 local C_AddOns = C_AddOns
+local C_ActionBar = C_ActionBar
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -102,6 +103,12 @@ function CA:TryCopy(key)
     -- Item
     if not issecretvalue(GameTooltip:GetItem()) then
         if not copyId then
+            -- GameTooltipDataMixin:GetItem() returns (name, hyperlink, id) --
+            -- three values, per .wow-api-reference Blizzard_GameTooltip/
+            -- Mainline/GameTooltip.lua:1023-1025 delegating to
+            -- Blizzard_SharedXMLGame/Tooltip/TooltipUtil.lua:9-23. The bundled
+            -- type-checker DB models only two, a known DB gap.
+            ---@diagnostic disable-next-line
             local itemName, _, itemId = GameTooltip:GetItem()
             if itemId then
                 copyId = itemId
@@ -113,6 +120,12 @@ function CA:TryCopy(key)
     -- Unit / NPC / Player
     if not issecretvalue(GameTooltip:GetUnit()) then
         if not copyId then
+            -- GameTooltipDataMixin:GetUnit() returns (name, unit, guid) --
+            -- three values, per .wow-api-reference Blizzard_GameTooltip/
+            -- Mainline/GameTooltip.lua:1031-1033 delegating to
+            -- Blizzard_SharedXMLGame/Tooltip/TooltipUtil.lua:34-42. The
+            -- bundled type-checker DB models only two, a known DB gap.
+            ---@diagnostic disable-next-line
             local unitName, _, unitGUID = GameTooltip:GetUnit()
             local npcId = GetNPCIDFromGUID(unitGUID)
 
@@ -195,7 +208,7 @@ function CA:TryCopy(key)
             local info = GameTooltip:GetPrimaryTooltipInfo()
             if info and info.getterArgs then
                 local actionSlot = info.getterArgs[1]
-                local macroName = GetActionText(actionSlot)
+                local macroName = C_ActionBar.GetActionText(actionSlot)
 
                 if macroName then
                     local macroSlot = GetMacroIndexByName(macroName)
