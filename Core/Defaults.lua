@@ -1299,6 +1299,10 @@ local Defaults = {
             Enabled = false,
         },
 
+        MoveFrames = {
+            Enabled = false,
+        },
+
         CompareHeader = {
             Enabled = true,
         },

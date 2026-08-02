@@ -16,4 +16,5 @@
     <Script file="AlertFrames.lua" />
     <Script file="MerchantPages.lua" />
     <Script file="ColorPicker.lua" />
+    <Script file="MoveFrames.lua" />
 </Ui>

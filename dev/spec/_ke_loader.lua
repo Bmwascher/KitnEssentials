@@ -1331,4 +1331,37 @@ function L.loadColorPicker(overrides)
     return CP, KE, seams
 end
 
+-- Modules/QoL/MoveFrames.lua. GetFrame is called directly by MF.HandleFrame
+-- (<REF>:521); both frame tables are referenced directly by MF.OnEnable
+-- (<REF>:682 and <REF>:693); disabled is the file-local table MF:SetMovable
+-- writes to (<REF>:633) -- all four seams are one debug.getupvalue hop.
+-- strsplit is delimiter-first and not supplied by _wow_mock.lua; the module
+-- captures it as a file-scope local, so a real equivalent must be on _G
+-- before helpers.loadModule -- reusing wowStrsplit above (already
+-- delimiter-first) rather than adding a second local of the same name.
+-- Returns MF, KE, seams (seams.getFrame, seams.blizzardFrames,
+-- seams.blizzardFramesOnDemand, seams.disabled).
+function L.loadMoveFrames(overrides)
+    overrides = overrides or {}
+    local modules = helpers.installAddonShim()
+    _G.strsplit = overrides.strsplit or wowStrsplit
+    _G.wipe = overrides.wipe or function(t) for k in pairs(t) do t[k] = nil end return t end
+    _G.tDeleteItem = overrides.tDeleteItem or function() end
+    _G.RunNextFrame = overrides.RunNextFrame or function() end
+    _G.GenerateFlatClosure = overrides.GenerateFlatClosure or function(f) return f end
+    _G.InCombatLockdown = overrides.InCombatLockdown or function() return false end
+    _G.C_AddOns = { IsAddOnLoaded = function() return false end }
+    local KE = { db = { profile = { MoveFrames = {} } } }
+    helpers.loadModule("Modules/QoL/MoveFrames.lua", KE)
+    local MF = modules["MoveFrames"]
+
+    local seams = {
+        getFrame = findUpvalue(MF.HandleFrame, "GetFrame"),
+        blizzardFrames = findUpvalue(MF.OnEnable, "BlizzardFrames"),
+        blizzardFramesOnDemand = findUpvalue(MF.OnEnable, "BlizzardFramesOnDemand"),
+        disabled = findUpvalue(MF.SetMovable, "disabled"),
+    }
+    return MF, KE, seams
+end
+
 return L
