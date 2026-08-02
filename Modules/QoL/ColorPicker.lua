@@ -15,9 +15,9 @@
 -- ║  can hook, so a child frame polls IsMouseOver() instead. ║
 -- ║  It costs nothing while the picker is closed.            ║
 -- ║                                                          ║
--- ║  Blizzard's own Okay button calls swatchFunc              ║
+-- ║  Blizzard's own Okay button calls swatchFunc             ║
 -- ║  unconditionally, and that field is only assigned by     ║
--- ║  SetupColorPickerAndShow -- frame.swatchFunc = noop       ║
+-- ║  SetupColorPickerAndShow -- frame.swatchFunc = noop      ║
 -- ║  below patches any path that shows the frame without a   ║
 -- ║  full setup, which would otherwise crash on Okay.        ║
 -- ╚══════════════════════════════════════════════════════════╝
