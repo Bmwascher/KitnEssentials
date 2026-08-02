@@ -1264,4 +1264,27 @@ function L.loadCopyAnything(overrides)
     return CA, KE, seams
 end
 
+-- Modules/QoL/AlertFrames.lua. AF:PostAlertMove/InstallHooks/OnEnable are
+-- never invoked -- nothing at file scope beyond function definitions and
+-- constant assignments runs on load, so no CreateFrame/hooksecurefunc/Blizzard
+-- frame stubs are needed here. ShouldGrowUp is a file local with no stored
+-- handle, but AF:PostAlertMove calls it directly, so it sits in that method's
+-- upvalue slots; findUpvalue recovers it without ever creating a frame or
+-- calling OnEnable. Returns AF, KE, seams (seams.shouldGrowUp).
+function L.loadAlertFrames()
+    local modules = helpers.installAddonShim()
+    local KE = {
+        db = { profile = { AlertFrames = {} } },
+        ApplyFramePosition = function() end,
+        CreateReloadPrompt = function() end,
+        Print = function() end,
+    }
+    helpers.loadModule("Modules/QoL/AlertFrames.lua", KE)
+    local AF = modules["AlertFrames"]
+    local seams = {
+        shouldGrowUp = findUpvalue(AF.PostAlertMove, "ShouldGrowUp"),
+    }
+    return AF, KE, seams
+end
+
 return L

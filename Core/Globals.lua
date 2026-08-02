@@ -561,6 +561,7 @@ local PREVIEW_MODULES = {
     "MythicPlusTimer", "KeystoneHelper", "TargetedSpells", "LFGReminder",
     "PlayerAbsorbs",
     "Chat",
+    "AlertFrames",
 }
 
 -- Section → preview module mapping for section-based previews
