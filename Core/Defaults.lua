@@ -1274,14 +1274,14 @@ local Defaults = {
         },
 
         AlertFrames = {
-            Enabled = false,
+            Enabled = true,
             Position = {
                 AnchorFrom = "TOP",
                 AnchorTo = "TOP",
                 XOffset = 0,
                 YOffset = -60,
             },
-            MoveEventToasts = false,
+            MoveEventToasts = true,
             EventToastPosition = {
                 AnchorFrom = "TOP",
                 AnchorTo = "TOP",
