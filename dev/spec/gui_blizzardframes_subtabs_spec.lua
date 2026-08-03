@@ -74,8 +74,14 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
     -- must stay reachable while it is off. There is no other route to them --
     -- not the sidebar, not the keyword search, not Edit Mode's Open Settings.
     it("keeps exactly the engine-independent tabs while the engine is off", function()
+        local tabs = strip(false)
+        -- Count first. A set keyed by id cannot see a duplicate or a fourth
+        -- entry, so the membership assertions below would all still pass while
+        -- the strip rendered more than the three promised tabs.
+        assert.equals(3, #tabs)
+
         local ids = {}
-        for _, tab in ipairs(strip(false)) do ids[tab.id] = true end
+        for _, tab in ipairs(tabs) do ids[tab.id] = true end
 
         assert.is_true(ids["SkinBlizzardFramesLootRoll"])
         assert.is_true(ids["SkinBlizzardFramesLootWindow"])
