@@ -3,33 +3,6 @@
 -- in-game (spec section 10).
 local L = require("dev.spec._ke_loader")
 
-describe("Tooltips ShortValue", function()
-    local TT
-    before_each(function() TT = L.loadTooltips() end)
-
-    it("formats billions with one decimal", function()
-        assert.equals("1.5B", TT._ShortValue(1.5e9))
-    end)
-
-    it("formats millions with one decimal", function()
-        assert.equals("2.3M", TT._ShortValue(2.3e6))
-    end)
-
-    it("formats thousands with one decimal", function()
-        assert.equals("4.2K", TT._ShortValue(4200))
-    end)
-
-    it("formats values below a thousand as whole numbers", function()
-        assert.equals("999", TT._ShortValue(999))
-    end)
-
-    it("takes the higher bracket exactly on a boundary", function()
-        assert.equals("1.0K", TT._ShortValue(1000))
-        assert.equals("1.0M", TT._ShortValue(1e6))
-        assert.equals("1.0B", TT._ShortValue(1e9))
-    end)
-end)
-
 describe("Tooltips ColorsMatch", function()
     local TT
     before_each(function() TT = L.loadTooltips() end)

@@ -271,16 +271,13 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
                 function(v) db.HealthBarHeight = v end), 44,
             MkDropdown("Bar Texture", BuildStatusbarOptions(),
                 function() return db.HealthBarTexture or "Blizzard" end,
-                function(v) db.HealthBarTexture = v end), 40)
-        PairRow(card5,
-            MkCheck("Health Text",
-                function() return db.HealthBarText ~= false end,
-                function(v) db.HealthBarText = v; GUIFrame:RefreshContent() end,
-                "Shows current / max health centered on the bar. Hidden automatically when health values are protected."), 40,
-            db.HealthBarText ~= false and MkSlider("Health Text Size", 7, 16, 1,
-                function() return db.HealthTextSize or 10 end,
-                function(v) db.HealthTextSize = v end) or nil, 44,
+                function(v) db.HealthBarTexture = v end), 40,
             true)
+        -- A "Health Text" toggle and its size slider used to sit here. They
+        -- were removed 2026-08-03: 12.0 rebuilt this bar to carry a 0..1
+        -- fraction driven by UnitPercentHealthFromGUID, which is declared
+        -- SecretReturns unconditionally, so no current/max readout is
+        -- reachable. See Modules/Skinning/Tooltips.lua StyleHealthBar.
     end
     yOffset = card5:GetNextOffset()
 

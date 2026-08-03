@@ -50,15 +50,6 @@ local FACTION_BAR_COLORS = FACTION_BAR_COLORS
 local hooksecurefunc = hooksecurefunc
 local S = KE.Skins
 
--- Compact number formatting for the health text (no AE-level helper
--- exists; local keeps it allocation-free on the hot path).
-local function ShortValue(v)
-    if v >= 1e9 then return format("%.1fB", v / 1e9)
-    elseif v >= 1e6 then return format("%.1fM", v / 1e6)
-    elseif v >= 1e3 then return format("%.1fK", v / 1e3)
-    else return format("%d", v) end
-end
-
 -- v3.5.892: AE:GetEffectiveFont returns the LSM NAME, not a file path
 -- (every consumer resolves it through LSM; v891 passed the raw name to
 -- SetFont -> "Invalid font asset (Expressway)"). Silent fetch + stock
@@ -230,44 +221,37 @@ function TT:StyleHealthBar()
     local bar = _G.GameTooltipStatusBar
     if not bar or not self.db then return end
     local db = self.db
-    -- Same doctrine as the styler above: the FontString handle is held in
-    -- S.data, not as a field on Blizzard's status bar.
-    local d = S.data(bar)
     -- v3.5.893: fully remove the bar. Blizzard re-shows it per
     -- unit tooltip, so the OnShow hook in OnEnable keeps it hidden.
     if db.HealthBarHidden then
         bar:Hide()
-        if d.healthText then d.healthText:Hide() end
         return
     end
     bar:SetHeight(db.HealthBarHeight or 7)
     local tex = KE.LSM and KE.LSM:Fetch("statusbar", db.HealthBarTexture or "Blizzard", true)
     if tex then bar:SetStatusBarTexture(tex) end
-    if db.HealthBarText and not d.healthText then
-        local text = bar:CreateFontString(nil, "OVERLAY")
-        text:SetPoint("CENTER", bar, "CENTER", 0, 0)
-        d.healthText = text
-    end
-    if d.healthText then
-        d.healthText:SetFont(ResolveFont(db), db.HealthTextSize or 10, "OUTLINE")
-        d.healthText:SetShown(db.HealthBarText and true or false)
-    end
 end
 
-function TT:HealthBarValueChanged(bar, value)
-    local text = bar and S.data(bar).healthText
-    if not text or not self.db or not self.db.HealthBarText then return end
-    -- Health can be SECRET in Midnight content: arithmetic or format on
-    -- it would throw. Secret -> show nothing rather than error.
-    if KE:IsSecretValue(value) then text:SetText("") return end
-    local _, maxv = bar:GetMinMaxValues()
-    if KE:IsSecretValue(maxv) or not maxv or maxv == 0 then text:SetText("") return end
-    if value <= 0 then
-        text:SetText(_G.DEAD or "Dead")
-    else
-        text:SetFormattedText("%s / %s", ShortValue(value), ShortValue(maxv))
-    end
-end
+-- No current/max readout on this bar, and there cannot be one.
+--
+-- 12.0 rebuilt it: GameTooltipUnitHealthBarMixin:OnLoad fixes the range at
+-- 0..1 and drives the value from UnitPercentHealthFromGUID
+-- (Blizzard_GameTooltip/Mainline/GameTooltip.lua:1037-1078), so the bar
+-- carries a FRACTION, not health. That function is declared
+-- SecretReturns = true with no condition attached
+-- (UnitDocumentation.lua:2514-2516), and UnitHealth is unconditionally
+-- secret too, so the real numbers are unreachable from here.
+--
+-- A percentage is out as well: SetText and SetFormattedText do accept
+-- secret arguments, but scaling 0.57 to 57 is arithmetic on a secret and
+-- throws, and there is no C-side scaler.
+--
+-- We shipped the readout anyway until 2026-08-03, blank on every unit,
+-- behind a toggle that could never do anything. Probe that day, hovering a
+-- unit: GetMinMaxValues returned 0, 1 and issecretvalue(GetValue()) was
+-- true. Toggle, size slider and handler all removed; the reference carries
+-- the same dead code. HealthBarText and HealthTextSize survive in
+-- Core/Defaults.lua only so no profile needs migrating.
 
 -- Unit extras ---------------------------------------------------------
 
@@ -917,9 +901,6 @@ function TT:OnEnable()
         end
 
         if _G.GameTooltipStatusBar then
-            _G.GameTooltipStatusBar:HookScript("OnValueChanged", function(bar, value)
-                if TT:IsEnabled() then TT:HealthBarValueChanged(bar, value) end
-            end)
             _G.GameTooltipStatusBar:HookScript("OnShow", function(bar)
                 if TT:IsEnabled() and TT.db and TT.db.HealthBarHidden then bar:Hide() end
             end)
@@ -1011,16 +992,10 @@ function TT:OnDisable()
         local tt = _G[name]
         if tt then UnstyleTooltip(tt) end
     end
-    local bar = _G.GameTooltipStatusBar
-    if bar then
-        local text = S.data(bar).healthText
-        if text then text:Hide() end
-    end
 end
 
 -- Test seams. dev/spec/tooltips_spec.lua reaches the pure helpers through
 -- these; nothing in the addon calls them.
-TT._ShortValue = ShortValue
 TT._ColorsMatch = ColorsMatch
 TT._ReactionColor = ReactionColor
 TT._WantIDs = WantIDs

@@ -1617,6 +1617,10 @@ local Defaults = {
                 HealthBarHidden = false,
                 HealthBarHeight = 7,
                 HealthBarTexture = "Blizzard",
+                -- Inert since 2026-08-03. Both controls and the handler were
+                -- removed -- 12.0's tooltip health bar carries a secret 0..1
+                -- fraction, so no readout is possible. Kept only so existing
+                -- profiles need no migration; do not build a control on them.
                 HealthBarText = true,
                 HealthTextSize = 10,
                 ClassColorNames = true,
