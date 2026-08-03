@@ -2764,12 +2764,31 @@ end
 --       reliably there either.
 --
 -- Head is NOT in here, and must not go back in: Midnight ships current helm
--- enchants ("Enchant Helm - Empowered Rune of Avoidance", seen in game
--- 2026-08-03). Two head-targeting items DID throw ADDON_ACTION_FORBIDDEN on
--- UseContainerItem that day, but the working helm enchant sat in the same bag
--- at the same time, so the slot was never the discriminator -- the specific
--- legacy items are. See BLOCKED_ENCHANT_ITEMS below.
+-- enchants. See BLOCKED_ENCHANT_ITEMS below for what actually fails.
 local UNOFFERABLE_ENCHANT_SLOTS = { [7] = true }
+
+-- Individual items that throw ADDON_ACTION_FORBIDDEN on UseContainerItem. The
+-- call is blocked before it does anything, so there is nothing to catch -- the
+-- only way to keep the error out of the player's log is not to offer the row.
+--
+--   [210494] Incandescent Essence
+--
+-- This is a blacklist rather than a rule because the in-game data gives no rule
+-- to write. Probed 2026-08-03, every enchant in one bag at once:
+--
+--   itemID  name                                        subclass  expansion
+--   244007  Enchant Helm - Empowered Rune of Avoidance   0         11   works
+--   210494  Incandescent Essence                         0          9   BLOCKED
+--   243977  Enchant Chest - Mark of the Worldsoul        4         11   works
+--   243959  Enchant Ring - Zul'jin's Mastery            10         11   works
+--
+-- Same class, and the same subclass as the helm enchant that works, so neither
+-- separates them. Expansion does, but "older than current" is not the same
+-- claim as "blocked" -- plenty of old enchants still apply to old gear, and
+-- filtering on it would hide them. One confirmed item, one entry.
+local BLOCKED_ENCHANT_ITEMS = {
+    [210494] = true,
+}
 
 -- True when EVERY slot the enchant could target is unofferable. A weapon
 -- enchant ({16, 17}) or a ring enchant ({11, 12}) keeps its offerable half.
@@ -2781,6 +2800,13 @@ local function IsUnofferableEnchant(targetSlots)
     return true
 end
 CP._IsUnofferableEnchant = IsUnofferableEnchant
+
+-- Both refusals in one question, asked once per bag item and again on click.
+local function IsOfferableEnchant(itemID, targetSlots)
+    if BLOCKED_ENCHANT_ITEMS[itemID] then return false end
+    return not IsUnofferableEnchant(targetSlots)
+end
+CP._IsOfferableEnchant = IsOfferableEnchant
 
 function CP:ScanBagsForEnchants()
     wipe(enchantCache)
@@ -2796,7 +2822,7 @@ function CP:ScanBagsForEnchants()
                 local _, _, _, _, _, classID = C_Item.GetItemInfoInstant(info.itemID)
                 if classID == ITEM_ENHANCEMENT then
                     local targetSlots = GetEnchantTargetSlots(info.hyperlink)
-                    if targetSlots and not IsUnofferableEnchant(targetSlots) then
+                    if targetSlots and IsOfferableEnchant(info.itemID, targetSlots) then
                         local existing = enchantCache[info.itemID]
                         if existing then
                             existing.count = existing.count + info.stackCount
@@ -3018,6 +3044,13 @@ function CP:ApplyEnchantFromBags(enchantData)
         return false
     end
     if not enchantData then return false end
+    -- Second line of defence on the blacklist. ScanBagsForEnchants already
+    -- keeps these out of the popup, but a row built before the list is only
+    -- rebuilt on a refresh, and the whole point is that this call cannot fail
+    -- quietly -- it puts an error in the player's log with our name on it.
+    if not IsOfferableEnchant(enchantData.itemID, enchantData.targetSlots) then
+        return false
+    end
     -- DEVIATION 3: the reference calls the bare UseContainerItem global.
     -- Blizzard's own code uses the namespaced form everywhere in 12.0.7
     -- (ContainerFrame.lua:1342, SecureTemplates.lua:771), so the bare name is

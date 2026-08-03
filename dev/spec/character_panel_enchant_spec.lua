@@ -146,6 +146,32 @@ describe("Enchant helper: slots we refuse to offer", function()
     end)
 end)
 
+-- The item blacklist. Also a refusal rule, and the one most likely to be
+-- "cleaned up" by someone who reads it as a stray magic number.
+describe("Enchant helper: items we refuse to offer", function()
+    it("refuses Incandescent Essence, which blocks UseContainerItem", function()
+        local CP = loadCP()
+        assert.is_false(CP._IsOfferableEnchant(210494, { 1 }))
+    end)
+
+    -- Same slot, same subclass, different item: the blacklist must be reading
+    -- the ITEM. Refusing by slot instead is the mistake this guards against.
+    it("still offers the current helm enchant that shares its slot", function()
+        local CP = loadCP()
+        assert.is_true(CP._IsOfferableEnchant(244007, { 1 }))
+    end)
+
+    it("applies the slot refusal too, for an item not on the list", function()
+        local CP = loadCP()
+        assert.is_false(CP._IsOfferableEnchant(999999, { 7 }))
+    end)
+
+    it("refuses a blacklisted item even when its slot is fine", function()
+        local CP = loadCP()
+        assert.is_false(CP._IsOfferableEnchant(210494, { 5 }))
+    end)
+end)
+
 describe("Enchant helper: combat refusal", function()
     local function armed(inCombat)
         local used = {}
@@ -163,16 +189,23 @@ describe("Enchant helper: combat refusal", function()
         return CP, KE, used
     end
 
+    -- Shaped like what ScanBagsForEnchants actually stores. itemID and
+    -- targetSlots are load-bearing now: the click path re-checks the refusals,
+    -- so a fixture missing them is refused before combat is ever consulted.
+    local function chestEnchant()
+        return { itemID = 243977, bagID = 3, slotID = 7, targetSlots = { 5 } }
+    end
+
     it("picks the enchant up out of combat", function()
         local CP, _, used = armed(false)
-        assert.is_true(CP:ApplyEnchantFromBags({ bagID = 3, slotID = 7 }))
+        assert.is_true(CP:ApplyEnchantFromBags(chestEnchant()))
         assert.equals(1, #used)
         assert.same({ bag = 3, slot = 7 }, used[1])
     end)
 
     it("refuses in combat and touches no bag slot", function()
         local CP, _, used = armed(true)
-        assert.is_false(CP:ApplyEnchantFromBags({ bagID = 3, slotID = 7 }))
+        assert.is_false(CP:ApplyEnchantFromBags(chestEnchant()))
         assert.equals(0, #used)
     end)
 
@@ -180,7 +213,7 @@ describe("Enchant helper: combat refusal", function()
         local CP, KE = armed(true)
         local said
         KE.Print = function(_, msg) said = msg end
-        CP:ApplyEnchantFromBags({ bagID = 3, slotID = 7 })
+        CP:ApplyEnchantFromBags(chestEnchant())
         assert.is_truthy(said)
         assert.is_truthy(said:lower():find("combat", 1, true))
     end)
@@ -189,5 +222,27 @@ describe("Enchant helper: combat refusal", function()
         local CP, _, used = armed(false)
         assert.is_false(CP:ApplyEnchantFromBags(nil))
         assert.equals(0, #used)
+    end)
+
+    -- The click path re-checks the blacklist rather than trusting the row.
+    it("refuses a blacklisted item on click, out of combat", function()
+        local CP, _, used = armed(false)
+        local blocked = chestEnchant()
+        blocked.itemID = 210494
+        assert.is_false(CP:ApplyEnchantFromBags(blocked))
+        assert.equals(0, #used)
+    end)
+
+    -- Combat is checked FIRST, so the player still gets told why. Reordering
+    -- the two guards would silently swallow the combat message.
+    it("blames combat, not the blacklist, when both would refuse", function()
+        local CP, KE = armed(true)
+        local said
+        KE.Print = function(_, msg) said = msg end
+        local blocked = chestEnchant()
+        blocked.itemID = 210494
+        CP:ApplyEnchantFromBags(blocked)
+        assert.is_truthy(said)
+        assert.is_truthy(said:lower():find("combat", 1, true))
     end)
 end)
