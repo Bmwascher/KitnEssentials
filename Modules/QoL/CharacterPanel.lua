@@ -897,12 +897,17 @@ function CP:ApplySettings()
     if self.db.SocketHelperEnabled and PaperDollFrame and PaperDollFrame:IsShown() then
         self:RefreshSocketButtons()
     end
-    if self.db.TrackIndicatorsEnabled and PaperDollFrame and PaperDollFrame:IsShown() then
-        self:UpdateAllTrackIndicators()
-    end
-    if (self.db.ShowSlotItemLevel or self.db.ShowEnchantNames or self.db.ShowSlotGems or self.db.ShowMissingGems)
-        and PaperDollFrame and PaperDollFrame:IsShown() then
-        self:UpdateAllSlotDetails()
+    -- Both branches run whether the feature is on or OFF: the off case is what
+    -- hides what the previous settings drew. Gating the call on the setting
+    -- meant turning the last detail option off left its text on screen until
+    -- something else refreshed the slot.
+    if PaperDollFrame and PaperDollFrame:IsShown() then
+        if self.db.TrackIndicatorsEnabled then
+            self:UpdateAllTrackIndicators()
+        else
+            self:HideAllTrackIndicators()
+        end
+        self:UpdateAllSlotDetails()   -- routes to HideAllSlotDetails when all off
     end
 end
 
@@ -1231,10 +1236,15 @@ function CP:UpdateAllTrackIndicators()
 end
 
 function CP:HideAllTrackIndicators()
-    for _, frameName in pairs(SLOT_FRAMES) do
+    for slotID, frameName in pairs(SLOT_FRAMES) do
         local slotFrame = _G[frameName]
         local overlay = slotFrame and FFD[slotFrame] and FFD[slotFrame].track
         if overlay then overlay:Hide() end
+        -- Hiding without clearing the key left the setting one-way: turning the
+        -- indicators back on hit the unchanged-item short-circuit and the
+        -- overlay stayed hidden until the item itself changed.
+        local s = _slotState(slotID)
+        s.trackLink, s.trackKey = nil, nil
     end
     for _, frameName in pairs(INSPECT_SLOT_FRAMES) do
         local slotFrame = _G[frameName]
@@ -1617,10 +1627,14 @@ function CP:UpdateAllSlotDetails()
 end
 
 function CP:HideAllSlotDetails()
-    for _, frameName in pairs(SLOT_FRAMES) do
+    for slotID, frameName in pairs(SLOT_FRAMES) do
         local slotFrame = _G[frameName]
         local detail = slotFrame and FFD[slotFrame] and FFD[slotFrame].detail
         if detail then detail:Hide() end
+        -- Same one-way-setting bug as the track overlays: clear the key so
+        -- re-enabling a detail option redraws an item that has not changed.
+        local s = _slotState(slotID)
+        s.detailLink, s.detailEnchant, s.detailIlvl, s.detailOwn = nil, nil, nil, nil
     end
     for _, frameName in pairs(INSPECT_SLOT_FRAMES) do
         local slotFrame = _G[frameName]
