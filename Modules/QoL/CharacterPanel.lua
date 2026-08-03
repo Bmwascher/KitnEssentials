@@ -766,15 +766,10 @@ local function HookCharacterPanel()
             QueueUpdate()                                 -- warnings
             if CP.db.HideCharacterBackground then HideCharacterBackground() end
             if CP.db.SocketHelperEnabled then CP:RefreshSocketButtons() end
-            -- Off is not "do nothing": a setting turned off while the pane was
-            -- CLOSED never got a hide, so the old display would come back with
-            -- the feature off. Same rule as ApplySettings.
-            if CP.db.TrackIndicatorsEnabled then
-                CP:UpdateAllTrackIndicators()
-            else
-                CP:HideAllTrackIndicators()
-            end
-            CP:UpdateAllSlotDetails()   -- routes to HideAllSlotDetails when all off
+            -- Full refresh, not the dirty-checked one: a setting changed while
+            -- the pane was CLOSED never got applied, so the old display would
+            -- otherwise come back with the feature off.
+            CP:RefreshSlotDisplays()
         end)
         PaperDollFrame:HookScript("OnHide", function()
             if CP.eventFrame then
@@ -902,17 +897,12 @@ function CP:ApplySettings()
     if self.db.SocketHelperEnabled and PaperDollFrame and PaperDollFrame:IsShown() then
         self:RefreshSocketButtons()
     end
-    -- Both branches run whether the feature is on or OFF: the off case is what
-    -- hides what the previous settings drew. Gating the call on the setting
-    -- meant turning the last detail option off left its text on screen until
-    -- something else refreshed the slot.
-    if PaperDollFrame and PaperDollFrame:IsShown() then
-        if self.db.TrackIndicatorsEnabled then
-            self:UpdateAllTrackIndicators()
-        else
-            self:HideAllTrackIndicators()
-        end
-        self:UpdateAllSlotDetails()   -- routes to HideAllSlotDetails when all off
+    -- EITHER frame: the inspect overlays follow the same settings, and the
+    -- inspect frame can be open while the character panel is not.
+    local inspectFrame = _G.InspectFrame
+    if (PaperDollFrame and PaperDollFrame:IsShown())
+        or (inspectFrame and inspectFrame:IsShown()) then
+        self:RefreshSlotDisplays()
     end
 end
 
@@ -1247,6 +1237,26 @@ local function RepaintInspectSlots()
     if not (frame and frame:IsShown()) then return end
     local insp = KitnEssentials:GetModule("InspectPanel", true)
     if insp and insp:IsEnabled() then insp:UpdateAllInspectSlots() end
+end
+
+-- Settings-change entry point for both per-slot displays. The dirty checks in
+-- UpdateSlotDetail and UpdateSlotTrackIndicator key on the ITEM, so a settings
+-- change that leaves the item alone is invisible to them and the display keeps
+-- whatever the previous settings drew -- turning one detail option off while
+-- another stays on was the visible case. Dropping the caches first is what
+-- makes the settings two-way.
+--
+-- Deliberately NOT folded into the All-level updaters below: those also run on
+-- bag and equipment events, where the dirty check is the whole point.
+function CP:RefreshSlotDisplays()
+    wipe(_lastSlotState)
+    InvalidateInspectSlots()
+    if self.db.TrackIndicatorsEnabled then
+        self:UpdateAllTrackIndicators()
+    else
+        self:HideAllTrackIndicators()
+    end
+    self:UpdateAllSlotDetails()   -- routes to HideAllSlotDetails when all off
 end
 
 function CP:UpdateAllTrackIndicators()
@@ -3138,10 +3148,7 @@ function CP:OnEnable()
             self.eventFrame:RegisterEvent("ITEM_DATA_LOAD_RESULT")
         end
         UpdateDisplay()                                   -- warnings
-        if self.db.TrackIndicatorsEnabled then self:UpdateAllTrackIndicators() end
-        if self.db.ShowSlotItemLevel or self.db.ShowEnchantNames or self.db.ShowSlotGems or self.db.ShowMissingGems then
-            self:UpdateAllSlotDetails()
-        end
+        self:RefreshSlotDisplays()
     end
 
     self:ApplySettings()

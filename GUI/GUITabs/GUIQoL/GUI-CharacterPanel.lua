@@ -176,12 +176,8 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
             db.TrackIndicatorsEnabled = checked
             local CP = GetModule()
             if CP then
-                if checked then
-                    CP:SetupTrackIndicators()
-                    CP:UpdateAllTrackIndicators()
-                else
-                    CP:HideAllTrackIndicators()
-                end
+                if checked then CP:SetupTrackIndicators() end
+                CP:RefreshSlotDisplays()
             end
             RefreshStates()
         end,
@@ -198,7 +194,7 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
         callback = function(val)
             db.TrackLetterSize = val
             local CP = GetModule()
-            if CP then CP:UpdateAllTrackIndicators() end
+            if CP then CP:RefreshSlotDisplays() end
         end,
     })
     row4b:AddWidget(trackSizeSlider, 1)
@@ -226,7 +222,7 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
         callback = function(checked)
             db.ShowSlotItemLevel = checked
             local CP = GetModule()
-            if CP then CP:UpdateAllSlotDetails() end
+            if CP then CP:RefreshSlotDisplays() end
         end,
         tooltip = "Shows the item level on each equipped gear slot.",
     })
@@ -238,7 +234,7 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
         callback = function(checked)
             db.ShowEnchantNames = checked
             local CP = GetModule()
-            if CP then CP:UpdateAllSlotDetails() end
+            if CP then CP:RefreshSlotDisplays() end
         end,
         tooltip = "Shows the enchant name on enchantable gear slots.",
     })
@@ -250,7 +246,7 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
         callback = function(checked)
             db.ShowSlotGems = checked
             local CP = GetModule()
-            if CP then CP:UpdateAllSlotDetails() end
+            if CP then CP:RefreshSlotDisplays() end
         end,
         tooltip = "Shows equipped gem icons on each gear slot.",
     })
@@ -265,7 +261,7 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
         callback = function(val)
             db.SlotInfoFontSize = val
             local CP = GetModule()
-            if CP then CP:UpdateAllSlotDetails() end
+            if CP then CP:RefreshSlotDisplays() end
         end,
     })
     rowSD2:AddWidget(infoSizeSlider, 1)
