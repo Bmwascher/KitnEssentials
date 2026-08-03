@@ -9,9 +9,17 @@ param(
 # pass. Both outputs come from the SAME parsed diff, so the proof and the
 # report cannot disagree with each other.
 #
-# The claim being proved: every changed line in GUI/GUITabs differs from its
-# predecessor ONLY by a bare number being replaced with a theme constant whose
-# value equals that number. If that holds for every line, no page can move.
+# WHAT THIS PROVES, exactly: within the two pathspecs below, every changed line
+# differs from its predecessor only by a bare number becoming a theme constant
+# of equal value, in Lua CODE rather than inside a string or comment. If that
+# holds for every line, no page can move.
+#
+# WHAT IT DOES NOT PROVE, and never did: that the plan was followed. It accepts
+# any rowHeight* constant at any site, so a swap the plan explicitly forbade -
+# the excluded DamageMeter 80s, say - passes here because it genuinely does not
+# move a pixel. Plan conformance is a separate question, answered by reading the
+# diff against the plan. Do not read a green run as "the plan was obeyed".
+# (Both limits named by review, 2026-08-03.)
 
 $ErrorActionPreference = 'Stop'
 
@@ -36,6 +44,52 @@ function Get-ThemeValues($repo) {
     return $values
 }
 
+# Which characters of a Lua line are CODE, as opposed to string or comment.
+#
+# Needed because a substitution inside a string literal changes displayed text
+# while rebuilding to a line identical to the original: "foo 50 bar" becoming
+# "foo Theme.rowHeightNote bar" rebuilds to "foo 50 bar" and would otherwise
+# pass while the user sees different words on screen. Named by review 2026-08-03.
+#
+# Deliberately a line-level scanner, not a Lua parser: it handles quoted strings
+# with escapes, [[ ]] long brackets and -- comments, all of which open and close
+# on one line in this codebase. A multi-line string is treated as code on its
+# continuation lines, which fails toward reporting an offender, never toward a
+# silent pass.
+function Get-CodeMask([string]$line) {
+    $mask = New-Object 'bool[]' $line.Length
+    $i = 0
+    while ($i -lt $line.Length) {
+        $c = $line[$i]
+
+        if ($c -eq '-' -and $i + 1 -lt $line.Length -and $line[$i + 1] -eq '-') {
+            break   # comment runs to end of line; everything from here is not code
+        }
+
+        if ($c -eq '[' -and $i + 1 -lt $line.Length -and $line[$i + 1] -eq '[') {
+            $close = $line.IndexOf(']]', $i + 2)
+            if ($close -lt 0) { break }
+            $i = $close + 2
+            continue
+        }
+
+        if ($c -eq "'" -or $c -eq '"') {
+            $quote = $c
+            $i++
+            while ($i -lt $line.Length) {
+                if ($line[$i] -eq '\') { $i += 2; continue }
+                if ($line[$i] -eq $quote) { $i++; break }
+                $i++
+            }
+            continue
+        }
+
+        $mask[$i] = $true
+        $i++
+    }
+    return $mask
+}
+
 # One changed line pair, reduced to what actually differs.
 function Test-LinePreservesValue($removed, $added, $themeValues) {
     # Normalise: strip the leading +/- and collapse nothing else. Whitespace
@@ -55,6 +109,15 @@ function Test-LinePreservesValue($removed, $added, $themeValues) {
     # on the strength of its suffix. Longest alternative first - the regex
     # engine takes the first that matches, so KE\.Theme must precede Theme.
     $pattern = '(?<![\w.])(?:KE\.Theme|Theme|T)\.(rowHeight\w*)\b'
+
+    # Every theme reference must sit in code. One inside a string or comment is
+    # rejected outright rather than rebuilt, so it cannot reconstruct its way to
+    # a false pass.
+    $mask = Get-CodeMask $a
+    foreach ($m in [regex]::Matches($a, $pattern)) {
+        if (-not $mask[$m.Index]) { return $false }
+    }
+
     $rebuilt = [regex]::Replace($a, $pattern, {
         param($m)
         $name = $m.Groups[1].Value
@@ -103,12 +166,37 @@ $offenders = New-Object System.Collections.ArrayList
 $entries = New-Object System.Collections.ArrayList
 $themeAdditions = 0
 
+# Header lines are recognized by POSITION IN THE DIFF, not by how they look.
+#
+# Matching on content alone cannot work: a deleted Lua comment reading
+# "-- a/foo" arrives as "--- a/foo" and is indistinguishable from a real
+# "--- a/<path>" header, so a content filter silently discards a real deletion.
+# Git only emits '---' and '+++' inside a file's header block, between
+# 'diff --git' and that file's first '@@', so tracking that block settles it.
+# Named by review 2026-08-03, along with the '+++ /dev/null' twin the old
+# content filter also missed.
+$inHeader = $false
+
 foreach ($line in $diff) {
-    if ($line -match '^\+\+\+ b/(.+)$') {
+    if ($line -like 'diff --git*') {
         if ($file) { Flush-Leftovers $removedQueue $file $offenders }
-        $file = $Matches[1]
+        $inHeader = $true
+        $file = $null
         continue
     }
+
+    if ($inHeader) {
+        if ($line -match '^\+\+\+ b/(.+)$') { $file = $Matches[1]; continue }
+        if ($line -eq '+++ /dev/null') { continue }   # deleted file; $file stays null
+        if ($line -like '--- *') { continue }
+        if ($line -like '@@*') {
+            $inHeader = $false
+            # fall through to the hunk handling below
+        } else {
+            continue   # index, mode, similarity, rename - all header noise
+        }
+    }
+
     # A hunk boundary ends pairing just as a file boundary does. Under
     # --unified=0 each hunk emits its own '-' lines then its own '+' lines, so
     # a queue carried across '@@' can pair a deletion in one hunk with an
@@ -118,14 +206,16 @@ foreach ($line in $diff) {
         if ($file) { Flush-Leftovers $removedQueue $file $offenders }
         continue
     }
-    # Match the two real '---' header forms, NOT a bare '---*'. A deleted Lua
-    # comment starting at column 1 renders as "--- foo" and a wildcard filter
-    # would swallow it instead of flushing it as an unpaired removal.
-    if ($line -like '--- a/*' -or $line -eq '--- /dev/null' -or
-        $line -like 'diff --git*' -or
-        $line -like 'index *' -or $line -like 'new file*' -or $line -like 'deleted file*') {
+
+    if (-not $file) {
+        # Content outside any recognized file - a deleted file's body, or a
+        # parse this script does not model. Never silently skipped.
+        if ($line.StartsWith('-') -or $line.StartsWith('+')) {
+            Add-Offender $offenders '<unattributed>' "changed line outside a recognized file header: $($line.Trim())"
+        }
         continue
     }
+
     if ($line.StartsWith('-')) { [void]$removedQueue.Add($line); continue }
     if (-not $line.StartsWith('+')) { continue }
 
