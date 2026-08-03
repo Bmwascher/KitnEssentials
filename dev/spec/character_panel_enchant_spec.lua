@@ -108,6 +108,42 @@ describe("Enchant helper: target slot resolution", function()
     end)
 end)
 
+-- A refusal rule, so it is tested even though the list it guards is a data
+-- table (AGENTS.md: guard rules WIN over the verbatim-port exemption). The
+-- failure it prevents is loud but blames the wrong addon: clicking a head
+-- enchant threw ADDON_ACTION_FORBIDDEN on UseContainerItem and BugSack
+-- reported it against KitnEssentials (in game, 2026-08-03).
+describe("Enchant helper: slots we refuse to offer", function()
+    it("refuses head, the slot that threw the protected-function error", function()
+        local CP = loadCP()
+        assert.is_true(CP._IsUnofferableEnchant({ 1 }))
+    end)
+
+    it("refuses leg armour kits", function()
+        local CP = loadCP()
+        assert.is_true(CP._IsUnofferableEnchant({ 7 }))
+    end)
+
+    it("offers every slot that is actually enchantable", function()
+        local CP = loadCP()
+        for _, slots in ipairs({ { 5 }, { 15 }, { 9 }, { 8 }, { 11, 12 }, { 16, 17 }, { 16 } }) do
+            assert.is_false(CP._IsUnofferableEnchant(slots), table.concat(slots, ","))
+        end
+    end)
+
+    -- The half-and-half case. Refusing on ANY unofferable slot rather than ALL
+    -- of them would silently drop a real enchant that happens to list one.
+    it("keeps an enchant whose other target slot is fine", function()
+        local CP = loadCP()
+        assert.is_false(CP._IsUnofferableEnchant({ 1, 5 }))
+    end)
+
+    it("refuses a nil slot list rather than offering it", function()
+        local CP = loadCP()
+        assert.is_true(CP._IsUnofferableEnchant(nil))
+    end)
+end)
+
 describe("Enchant helper: combat refusal", function()
     local function armed(inCombat)
         local used = {}

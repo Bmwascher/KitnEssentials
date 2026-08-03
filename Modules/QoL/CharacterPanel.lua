@@ -2757,17 +2757,35 @@ local function IsRingEnchant(targetSlots)
     return false
 end
 
--- Leg armour kits are excluded from the list. The reference excludes them with
--- no rationale in the source; Brandon confirmed why on 2026-08-03 -- they did
--- not work reliably there. Keeping them out until someone establishes what
--- breaks, rather than shipping a row that fails on click.
-local function IsArmorKit(targetSlots)
-    if not targetSlots then return false end
+-- Slots KE will not offer an enchant for, whatever the tooltip claims.
+--
+--   [7] legs -- armour kits. The reference excludes them with no rationale in
+--       its source; Brandon confirmed why 2026-08-03: they did not work
+--       reliably there either.
+--   [1] head -- head has not been an enchantable slot since Mists, so every
+--       head "enchant" still in a bag is a legacy item. Clicking one throws
+--       ADDON_ACTION_FORBIDDEN on UseContainerItem and BugSack reports it
+--       against KE. Confirmed in game 2026-08-03 on two separate items --
+--       Incandescent Essence (spell 426327, item subtype "Head") and an older
+--       helm enchant. A ring enchant applied fine in the same session, so the
+--       block is the slot, not the helper.
+--
+-- Extending this is one line. The same legacy risk exists for any other slot
+-- the game stopped enchanting -- shoulder, neck, trinket and glove are the
+-- candidates -- but nothing has been seen failing there, so they stay in
+-- rather than being trimmed on a guess.
+local UNOFFERABLE_ENCHANT_SLOTS = { [1] = true, [7] = true }
+
+-- True when EVERY slot the enchant could target is unofferable. A weapon
+-- enchant ({16, 17}) or a ring enchant ({11, 12}) keeps its offerable half.
+local function IsUnofferableEnchant(targetSlots)
+    if not targetSlots then return true end
     for _, slotID in ipairs(targetSlots) do
-        if slotID == 7 then return true end
+        if not UNOFFERABLE_ENCHANT_SLOTS[slotID] then return false end
     end
-    return false
+    return true
 end
+CP._IsUnofferableEnchant = IsUnofferableEnchant
 
 function CP:ScanBagsForEnchants()
     wipe(enchantCache)
@@ -2783,7 +2801,7 @@ function CP:ScanBagsForEnchants()
                 local _, _, _, _, _, classID = C_Item.GetItemInfoInstant(info.itemID)
                 if classID == ITEM_ENHANCEMENT then
                     local targetSlots = GetEnchantTargetSlots(info.hyperlink)
-                    if targetSlots and not IsArmorKit(targetSlots) then
+                    if targetSlots and not IsUnofferableEnchant(targetSlots) then
                         local existing = enchantCache[info.itemID]
                         if existing then
                             existing.count = existing.count + info.stackCount
