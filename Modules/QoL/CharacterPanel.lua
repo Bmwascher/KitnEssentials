@@ -1167,6 +1167,17 @@ function CP:UpdateSlotTrackIndicator(slotFrame, slotID, unit, data)
     unit = unit or "player"
     if not slotFrame then return end
 
+    -- EllesmereUI's themed character AND inspect sheets both print the upgrade
+    -- track beside their own item level ("(Myth)"), so our corner letter is the
+    -- same fact twice. It does not overlap theirs, but two readings of one thing
+    -- on every slot is clutter -- Brandon's call, 2026-08-03. Bail before the
+    -- tooltip read: GetItemTrack allocates one per slot to decide the letter.
+    if KE:EUICharacterSheetActive() then
+        local d = FFD[slotFrame]
+        if d and d.track then d.track:Hide() end
+        return
+    end
+
     -- One tooltip read serves both the dirty-check and the render below (the
     -- render previously re-fetched identical data a second time).
     local track = self:GetItemTrack(unit, slotID, data)
@@ -1530,9 +1541,14 @@ function CP:RefreshSlot(slotID, unit)
     -- to fetch its own copy of identical same-frame data). RefreshSlot's
     -- callers fire on actual slot changes, so the dirty checks downstream
     -- rarely short-circuit — prefetching here doesn't waste the read.
-    local wantsTrack  = self.db.TrackIndicatorsEnabled
-    local wantsDetail = self.db.ShowSlotItemLevel or self.db.ShowEnchantNames
-        or self.db.ShowSlotGems or self.db.ShowMissingGems
+    -- Mirrors the stand-down rules in the two Update* functions below, purely so
+    -- the shared tooltip read is skipped when neither will draw. Getting this
+    -- wrong costs an allocation, never correctness -- each function re-checks.
+    local euiActive   = KE:EUICharacterSheetActive()
+    local wantsTrack  = self.db.TrackIndicatorsEnabled and not euiActive
+    local wantsDetail = (self.db.ShowSlotItemLevel or self.db.ShowEnchantNames
+        or self.db.ShowSlotGems or self.db.ShowMissingGems)
+        and not (euiActive and unit == "player")
     local data
     if wantsTrack or wantsDetail then
         data = C_TooltipInfo.GetInventoryItem(unit, slotID)
@@ -2600,9 +2616,10 @@ local function IsRingEnchant(targetSlots)
     return false
 end
 
--- Leg armour kits are excluded from the list. Carried over from the reference
--- verbatim; it gives no rationale and this is a deliberate port, not a guess.
--- Flagged for review -- it also removes legitimate leg enchants from the bar.
+-- Leg armour kits are excluded from the list. The reference excludes them with
+-- no rationale in the source; Brandon confirmed why on 2026-08-03 -- they did
+-- not work reliably there. Keeping them out until someone establishes what
+-- breaks, rather than shipping a row that fails on click.
 local function IsArmorKit(targetSlots)
     if not targetSlots then return false end
     for _, slotID in ipairs(targetSlots) do
