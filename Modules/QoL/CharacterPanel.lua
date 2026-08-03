@@ -2055,6 +2055,12 @@ function CP:CreateSocketButton(index)
     btn.qualityFrame, btn.quality = CreateQualityOverlay(btn)
 
     btn:SetScript("OnEnter", function(self)
+        -- Mirrors the enchant button's own OnEnter, and the reference's
+        -- (NorskenUI v6 CharacterPanel.lua:730). Without it, sliding from the
+        -- enchant popup onto a socket leaves BOTH popups up: IsMouseOverGemUI
+        -- now recognises the socket you just moved onto, so the enchant popup's
+        -- 0.05s close timer sees the bar still hovered and bails.
+        CP:HideEnchantPopup()
         CP.currentSocketBtn = self
         -- ShowGemPopup ends in UpdateReplaceAllPreview, which sets the slot
         -- glow (single, or multi when Shift is already held) — so no separate
