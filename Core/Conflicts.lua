@@ -123,6 +123,29 @@ local CONFLICTS = {
             },
         },
     },
+    -- Neither row below carries a resolver, and that is deliberate.
+    -- EllesmereUI ships each of these as its own single-purpose addon --
+    -- own .toc, own SavedVariables, one feature -- so the whole-addon
+    -- disable takes out exactly the conflicting feature and nothing else.
+    -- That is why EllesmereUIChat has no resolver either. The two
+    -- resolvers above exist only because EllesmereUIBlizzardSkin and
+    -- EllesmereUIQoL bundle unrelated features a user did not ask to lose.
+    --
+    -- Neither is skinGated, for the same reason as LFGReminder: both
+    -- modules run whether or not ElvUI owns skinning, so the gate would
+    -- silence a conflict that is genuinely happening.
+    {
+        module = "DamageMeter",
+        label  = "Damage Meter",
+        dbPath = { "DamageMeter" },
+        addons = { "EllesmereUIDamageMeters" },
+    },
+    {
+        module = "MythicPlusTimer",
+        label  = "Mythic+ Timer",
+        dbPath = { "MythicPlusTimer" },
+        addons = { "EllesmereUIMythicTimer" },
+    },
 }
 
 ---------------------------------------------------------------------------------
@@ -250,6 +273,8 @@ end
 local ADDON_LABELS = {
     ["EllesmereUIBlizzardSkin"] = "EllesmereUI BlizzUI Enhanced",
     ["EllesmereUIChat"] = "EllesmereUI Chat",
+    ["EllesmereUIDamageMeters"] = "EllesmereUI Damage Meters",
+    ["EllesmereUIMythicTimer"] = "EllesmereUI Mythic+ Timer",
     ["Prat-3.0"] = "Prat",
     ["BasicChatMods"] = "Basic Chat Mods",
 }
