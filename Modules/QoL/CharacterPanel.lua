@@ -605,6 +605,14 @@ function CP:UpdateSlotWarning(button, unit, slot)
     if KE:EUIDrawsSlotElement(unit, "missingEnchant") then
         local d = FFD[button]
         if d and d.warning then d.warning:SetText("") end
+        -- Drop the dirty key on the way out, not just skip storing it. The key
+        -- describes an item, so on an UNCHANGED item it still matches the one
+        -- the last real render left behind -- and the handback would then
+        -- short-circuit against it and leave the slot blank in both addons.
+        if unit == "player" then
+            local s = _slotState(slot)
+            s.warnLink, s.warnEnchant = nil, nil
+        end
         return
     end
 
@@ -1179,6 +1187,12 @@ function CP:UpdateSlotTrackIndicator(slotFrame, slotID, unit, data)
     if KE:EUIDrawsSlotElement(unit, "track") then
         local d = FFD[slotFrame]
         if d and d.track then d.track:Hide() end
+        -- Same reason as the warning stand-down: clear the key so a handback on
+        -- an unchanged item redraws instead of matching the pre-stand-down one.
+        if unit == "player" then
+            local s = _slotState(slotID)
+            s.trackLink, s.trackKey = nil, nil
+        end
         return
     end
 
@@ -1395,12 +1409,17 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
     local euiOwnsEnchant = KE:EUIDrawsSlotElement(unit, "enchant")
     local euiOwnsIlvl    = KE:EUIDrawsSlotElement(unit, "ilvl")
     local euiOwnsGems    = KE:EUIDrawsSlotElement(unit, "gems")
+    -- Ownership is part of what this slot renders, so it has to be part of the
+    -- dirty key below -- three elements means ownership can change while the
+    -- item does not, and the item-only key cannot see that. Unlike the warning
+    -- and track stand-downs, clearing the key on the way out is not enough here:
+    -- those are all-or-nothing, this one keeps drawing whatever EUI left us.
+    local ownKey = (euiOwnsEnchant and 1 or 0) + (euiOwnsIlvl and 2 or 0)
+        + (euiOwnsGems and 4 or 0)
 
     -- Nothing left for us to draw on this frame: bail before BOTH the dirty-check
-    -- store and the tooltip read. Order matters -- storing the link/enchant/ilvl
-    -- key while standing down would make a later handback short-circuit against a
-    -- key recorded when EUI owned the slot, and the display would stay blank
-    -- until the item itself changed. FFD is indexed directly so a slot that never
+    -- store and the tooltip read, and clear the key on the way out so a handback
+    -- on an unchanged item redraws. FFD is indexed directly so a slot that never
     -- had a detail frame does not get one built just to hide it.
     --
     -- A handback lands on the next refresh -- an equipment change or a panel
@@ -1415,13 +1434,18 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
     if not (wantsText or wantsGems) then
         local existing = FFD[slotFrame]
         if existing and existing.detail then existing.detail:Hide() end
+        if unit == "player" then
+            local s = _slotState(slotID)
+            s.detailLink, s.detailEnchant, s.detailIlvl = nil, nil, nil
+        end
         return
     end
 
-    -- Dirty-check (player path only): itemLink + enchantID + ilvl determine
-    -- the rendered output. If all three match the previous render, skip the
-    -- font re-apply + SetText + gem-icon work entirely. Inspect path goes
-    -- unguarded here — its own invalidation lives in INSPECT_READY.
+    -- Dirty-check (player path only): itemLink + enchantID + ilvl + the EUI
+    -- ownership stamp determine the rendered output. If all four match the
+    -- previous render, skip the font re-apply + SetText + gem-icon work
+    -- entirely. Inspect path goes unguarded here — its own invalidation lives
+    -- in INSPECT_READY.
     if unit == "player" then
         local s = _slotState(slotID)
         local link = GetInventoryItemLink(unit, slotID)
@@ -1431,10 +1455,11 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
         -- (cold item cache), so the link/enchant/ilvl key is NOT sufficient —
         -- skip the short-circuit and re-scan until the gems resolve.
         if s.detailLink == link and s.detailEnchant == enchantID and s.detailIlvl == ilvl
-            and not s.detailGemsPending then
+            and s.detailOwn == ownKey and not s.detailGemsPending then
             return
         end
         s.detailLink, s.detailEnchant, s.detailIlvl = link, enchantID, ilvl
+        s.detailOwn = ownKey
     end
 
     -- Fetch after the dirty check so a short-circuited call allocates nothing;
