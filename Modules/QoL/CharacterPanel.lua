@@ -2762,19 +2762,14 @@ end
 --   [7] legs -- armour kits. The reference excludes them with no rationale in
 --       its source; Brandon confirmed why 2026-08-03: they did not work
 --       reliably there either.
---   [1] head -- head has not been an enchantable slot since Mists, so every
---       head "enchant" still in a bag is a legacy item. Clicking one throws
---       ADDON_ACTION_FORBIDDEN on UseContainerItem and BugSack reports it
---       against KE. Confirmed in game 2026-08-03 on two separate items --
---       Incandescent Essence (spell 426327, item subtype "Head") and an older
---       helm enchant. A ring enchant applied fine in the same session, so the
---       block is the slot, not the helper.
 --
--- Extending this is one line. The same legacy risk exists for any other slot
--- the game stopped enchanting -- shoulder, neck, trinket and glove are the
--- candidates -- but nothing has been seen failing there, so they stay in
--- rather than being trimmed on a guess.
-local UNOFFERABLE_ENCHANT_SLOTS = { [1] = true, [7] = true }
+-- Head is NOT in here, and must not go back in: Midnight ships current helm
+-- enchants ("Enchant Helm - Empowered Rune of Avoidance", seen in game
+-- 2026-08-03). Two head-targeting items DID throw ADDON_ACTION_FORBIDDEN on
+-- UseContainerItem that day, but the working helm enchant sat in the same bag
+-- at the same time, so the slot was never the discriminator -- the specific
+-- legacy items are. See BLOCKED_ENCHANT_ITEMS below.
+local UNOFFERABLE_ENCHANT_SLOTS = { [7] = true }
 
 -- True when EVERY slot the enchant could target is unofferable. A weapon
 -- enchant ({16, 17}) or a ring enchant ({11, 12}) keeps its offerable half.
