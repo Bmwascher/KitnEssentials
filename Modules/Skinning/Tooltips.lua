@@ -98,8 +98,16 @@ end
 -- width, tainted by atrocityEssentials" (field BugSack). Textures
 -- anchored to the frame resize in C -- zero Lua size math, nothing to
 -- go secret.
+--
+-- The styler handle lives in S.data, never on the tooltip itself. Doctrine
+-- (SkinAPI.lua:1858): a field we write onto a Blizzard frame plants a tainted
+-- key in a secure table, which contaminates the iteration and field-fallback
+-- reads Blizzard's own code performs -- the v3.5.827 combat
+-- ADDON_ACTION_BLOCKED. S.data is a weak-keyed side table, so nothing of ours
+-- ever lands on the frame.
 local function EnsureStyler(tt)
-    local s = tt.AESTooltipStyle
+    local d = S.data(tt)
+    local s = d.tooltipStyle
     if s then return s end
     s = { regions = {} }
 
@@ -137,7 +145,7 @@ local function EnsureStyler(tt)
         for _, r in ipairs(s.regions) do r:Hide() end
     end
 
-    tt.AESTooltipStyle = s
+    d.tooltipStyle = s
     return s
 end
 
@@ -166,7 +174,7 @@ end
 function TT:StyleTooltip(tt)
     if not self.db or not tt or tt:IsForbidden() then return end
 
-    local s = tt.AESTooltipStyle
+    local s = S.data(tt).tooltipStyle
     if s and s.shown and ColorsMatch(s.bgApplied, self.db.BackdropColor)
         and ColorsMatch(s.bdApplied, self.db.BorderColor) then
         return
@@ -187,10 +195,11 @@ end
 
 local function UnstyleTooltip(tt)
     if tt.NineSlice then tt.NineSlice:SetAlpha(1) end
-    if tt.AESTooltipStyle then
-        tt.AESTooltipStyle.Hide()
+    local s = S.data(tt).tooltipStyle
+    if s then
+        s.Hide()
         -- Clear the fast-path flag so the next StyleTooltip re-shows.
-        tt.AESTooltipStyle.shown = nil
+        s.shown = nil
     end
 end
 
@@ -221,29 +230,32 @@ function TT:StyleHealthBar()
     local bar = _G.GameTooltipStatusBar
     if not bar or not self.db then return end
     local db = self.db
+    -- Same doctrine as the styler above: the FontString handle is held in
+    -- S.data, not as a field on Blizzard's status bar.
+    local d = S.data(bar)
     -- v3.5.893: fully remove the bar. Blizzard re-shows it per
     -- unit tooltip, so the OnShow hook in OnEnable keeps it hidden.
     if db.HealthBarHidden then
         bar:Hide()
-        if bar.AESText then bar.AESText:Hide() end
+        if d.healthText then d.healthText:Hide() end
         return
     end
     bar:SetHeight(db.HealthBarHeight or 7)
     local tex = KE.LSM and KE.LSM:Fetch("statusbar", db.HealthBarTexture or "Blizzard", true)
     if tex then bar:SetStatusBarTexture(tex) end
-    if db.HealthBarText and not bar.AESText then
+    if db.HealthBarText and not d.healthText then
         local text = bar:CreateFontString(nil, "OVERLAY")
         text:SetPoint("CENTER", bar, "CENTER", 0, 0)
-        bar.AESText = text
+        d.healthText = text
     end
-    if bar.AESText then
-        bar.AESText:SetFont(ResolveFont(db), db.HealthTextSize or 10, "OUTLINE")
-        bar.AESText:SetShown(db.HealthBarText and true or false)
+    if d.healthText then
+        d.healthText:SetFont(ResolveFont(db), db.HealthTextSize or 10, "OUTLINE")
+        d.healthText:SetShown(db.HealthBarText and true or false)
     end
 end
 
 function TT:HealthBarValueChanged(bar, value)
-    local text = bar and bar.AESText
+    local text = bar and S.data(bar).healthText
     if not text or not self.db or not self.db.HealthBarText then return end
     -- Health can be SECRET in Midnight content: arithmetic or format on
     -- it would throw. Secret -> show nothing rather than error.
@@ -1000,7 +1012,10 @@ function TT:OnDisable()
         if tt then UnstyleTooltip(tt) end
     end
     local bar = _G.GameTooltipStatusBar
-    if bar and bar.AESText then bar.AESText:Hide() end
+    if bar then
+        local text = S.data(bar).healthText
+        if text then text:Hide() end
+    end
 end
 
 -- Test seams. dev/spec/tooltips_spec.lua reaches the pure helpers through
