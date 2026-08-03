@@ -383,10 +383,7 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
         manager = manager,
         onChangeCallback = function()
             local CP = GetModule()
-            if CP then
-                CP:Refresh()
-                CP:ApplySettings()
-            end
+            if CP then CP:Refresh() end   -- Refresh ends in ApplySettings
         end,
     })
     manager:Register(fontCard, "all")
