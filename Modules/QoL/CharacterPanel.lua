@@ -777,6 +777,7 @@ local function HookCharacterPanel()
             wipe(_gemLoadAttempts)
             if CP.socketContainer then CP.socketContainer:Hide() end
             CP:HideGemPopup()
+            CP:HideEnchantPopup()
             CP:HideSlotHighlight()
         end)
     end
@@ -1612,6 +1613,9 @@ local function GetGemStatsFromLink(link)
     return nil
 end
 
+-- Covers BOTH popups on the bar: leaving the gem popup to cross onto the
+-- enchant button (or the reverse) must not count as leaving the UI, or the
+-- 0.05s close timer fires mid-move and the popup you were heading for shuts.
 local function IsMouseOverGemUI()
     if CP.gemPopup and CP.gemPopup:IsMouseOver() then return true end
     if CP.gemPopup then
@@ -1619,6 +1623,14 @@ local function IsMouseOverGemUI()
             if btn:IsShown() and btn:IsMouseOver() then return true end
         end
     end
+    if CP.enchantPopup and CP.enchantPopup:IsMouseOver() then return true end
+    if CP.enchantPopup then
+        for _, btn in pairs(CP.enchantPopup.buttons) do
+            if btn:IsShown() and btn:IsMouseOver() then return true end
+        end
+    end
+    if CP.enchantButton and CP.enchantButton:IsShown()
+        and CP.enchantButton:IsMouseOver() then return true end
     if CP.currentSocketBtn and CP.currentSocketBtn:IsMouseOver() then return true end
     if CP.socketContainer then
         for _, socketBtn in pairs(CP.socketContainer.buttons) do
@@ -2295,10 +2307,18 @@ function CP:RefreshSocketButtons()
         self.socketContainer.buttons[i]:Hide()
     end
 
-    local totalWidth = (buttonIndex - 1) * (db.SocketButtonSize + db.SocketButtonSpacing)
+    -- After the hide loop: the enchant button parks itself after the last
+    -- button still SHOWN, so it has to read their final state.
+    self:RefreshEnchantButton()
+    local enchantShown = (self.enchantButton and self.enchantButton:IsShown()) and 1 or 0
+
+    local slotCount = (buttonIndex - 1) + enchantShown
+    local totalWidth = slotCount * (db.SocketButtonSize + db.SocketButtonSpacing)
     self.socketContainer:SetWidth(totalWidth > 0 and totalWidth or 1)
 
-    if buttonIndex > 1 then self.socketContainer:Show() else self.socketContainer:Hide() end
+    -- Shown when EITHER half has something to offer: with no sockets at all
+    -- the enchant button is still worth a bar of its own.
+    if slotCount > 0 then self.socketContainer:Show() else self.socketContainer:Hide() end
 end
 
 function CP:ShowGemPopup(socketBtn)
@@ -2481,7 +2501,465 @@ end
 function CP:DisableGemSocketHelper()
     if self.socketContainer then self.socketContainer:Hide() end
     self:HideGemPopup()
+    self:HideEnchantPopup()
+    if self.enchantButton then self.enchantButton:Hide() end
     self:HideSlotHighlight()
+end
+
+---------------------------------------------------------------------------------
+-- Enchant Helper
+---------------------------------------------------------------------------------
+-- One extra button on the right end of the socket bar. Hovering it lists every
+-- enchant in your bags; clicking a row starts Blizzard's normal "now click the
+-- item" flow. Ported from NorskenUI v6 CharacterPanel.lua:1162-1562. Three
+-- deliberate deviations from that source, each noted at its site below.
+
+-- Enchanting profession icon. The reference uses a bare fileID (4620672); a
+-- named texture path says what it is and survives an asset renumber.
+local ENCHANT_BUTTON_ICON = "Interface\\Icons\\Trade_Engraving"
+
+-- Which slots an enchant targets, resolved from words in its tooltip. English
+-- literals, same convention as GetItemTrack's "Upgrade Level:" and IsGemUnique's
+-- "Unique-Equipped" scans.
+local ENCHANT_SLOT_KEYWORDS = {
+    ["chest"] = { 5 },
+    ["cloak"] = { 15 },
+    ["back"] = { 15 },
+    ["cape"] = { 15 },
+    ["legs"] = { 7 },
+    ["leg"] = { 7 },
+    ["boot"] = { 8 },
+    ["feet"] = { 8 },
+    ["bracer"] = { 9 },
+    ["wrist"] = { 9 },
+    ["ring"] = { 11, 12 },
+    ["2h weapon"] = { 16 },
+    ["weapon"] = { 16, 17 },
+    ["staff"] = { 16 },
+    ["glove"] = { 10 },
+    ["hand"] = { 10 },
+    ["helm"] = { 1 },
+    ["head"] = { 1 },
+    ["shoulder"] = { 3 },
+    ["belt"] = { 6 },
+    ["waist"] = { 6 },
+    ["neck"] = { 2 },
+    ["trinket"] = { 13, 14 },
+}
+
+-- DEVIATION 1 (bug fix). The reference walks this table with pairs() and
+-- returns on the first hit, so a tooltip containing two keywords resolves
+-- non-deterministically. "Enchant 2H Weapon - ..." contains BOTH "2h weapon"
+-- ({16}) and "weapon" ({16, 17}), and which one wins can differ between
+-- sessions. Longest key first makes the most specific match win every time.
+-- Same fix, same reason as enchantNicknameOrder above.
+local enchantKeywordOrder = {}
+for keyword in pairs(ENCHANT_SLOT_KEYWORDS) do
+    enchantKeywordOrder[#enchantKeywordOrder + 1] = keyword
+end
+table.sort(enchantKeywordOrder, function(a, b) return #a > #b end)
+
+local enchantCache = {}
+
+local function GetEnchantTargetSlots(itemLink)
+    if not itemLink then return nil end
+    local data = C_TooltipInfo.GetHyperlink(itemLink)
+    if not data or not data.lines then return nil end
+
+    for _, line in ipairs(data.lines) do
+        local text = line.leftText
+        if text then
+            local lowerText = text:lower()
+            for _, keyword in ipairs(enchantKeywordOrder) do
+                if lowerText:find(keyword, 1, true) then
+                    return ENCHANT_SLOT_KEYWORDS[keyword]
+                end
+            end
+        end
+    end
+    return nil
+end
+CP._GetEnchantTargetSlots = GetEnchantTargetSlots
+
+local function GetEnchantDisplayName(itemLink)
+    if not itemLink then return nil end
+    local data = C_TooltipInfo.GetHyperlink(itemLink)
+    if not data or not data.lines or not data.lines[1] then return nil end
+    local name = data.lines[1].leftText
+    if name then
+        name = name:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+    end
+    return name
+end
+
+local function IsRingEnchant(targetSlots)
+    if not targetSlots then return false end
+    for _, slotID in ipairs(targetSlots) do
+        if slotID == 11 or slotID == 12 then return true end
+    end
+    return false
+end
+
+-- Leg armour kits are excluded from the list. Carried over from the reference
+-- verbatim; it gives no rationale and this is a deliberate port, not a guess.
+-- Flagged for review -- it also removes legitimate leg enchants from the bar.
+local function IsArmorKit(targetSlots)
+    if not targetSlots then return false end
+    for _, slotID in ipairs(targetSlots) do
+        if slotID == 7 then return true end
+    end
+    return false
+end
+
+function CP:ScanBagsForEnchants()
+    wipe(enchantCache)
+    local NUM_BAG_SLOTS = NUM_BAG_SLOTS or 4
+    -- DEVIATION 2: the reference reads LE_ITEM_CLASS_ITEM_ENHANCEMENT, a legacy
+    -- global. Enum with a literal fallback matches ScanBagsForGems above.
+    local ITEM_ENHANCEMENT = (Enum and Enum.ItemClass and Enum.ItemClass.ItemEnhancement) or 8
+    for bag = 0, NUM_BAG_SLOTS do
+        local numSlots = C_Container.GetContainerNumSlots(bag)
+        for slot = 1, numSlots do
+            local info = C_Container.GetContainerItemInfo(bag, slot)
+            if info and info.itemID then
+                local _, _, _, _, _, classID = C_Item.GetItemInfoInstant(info.itemID)
+                if classID == ITEM_ENHANCEMENT then
+                    local targetSlots = GetEnchantTargetSlots(info.hyperlink)
+                    if targetSlots and not IsArmorKit(targetSlots) then
+                        local existing = enchantCache[info.itemID]
+                        if existing then
+                            existing.count = existing.count + info.stackCount
+                        else
+                            enchantCache[info.itemID] = {
+                                itemID = info.itemID, icon = info.iconFileID,
+                                count = info.stackCount, link = info.hyperlink,
+                                bagID = bag, slotID = slot,
+                                targetSlots = targetSlots,
+                            }
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return enchantCache
+end
+
+-- The first target slot that actually holds an item. Drives the hover glow
+-- only; the click path hands off to Blizzard, which picks the real target.
+function CP:FindBestEnchantSlot(targetSlots)
+    if not targetSlots or #targetSlots == 0 then return nil end
+    for _, slotID in ipairs(targetSlots) do
+        if GetInventoryItemLink("player", slotID) then return slotID end
+    end
+    return nil
+end
+
+function CP:CreateEnchantButton()
+    if self.enchantButton then return self.enchantButton end
+
+    local db = self.db
+    local Theme = KE.Theme
+
+    local btn = CreateFrame("Button", nil, self.socketContainer)
+    btn:SetSize(db.SocketButtonSize, db.SocketButtonSize)
+
+    btn.icon = btn:CreateTexture(nil, "ARTWORK")
+    btn.icon:SetAllPoints()
+    btn.icon:SetTexture(ENCHANT_BUTTON_ICON)
+    KE:ApplyIconZoom(btn.icon, 0.3)
+    KE:AddIconBorders(btn, Theme.border)
+
+    btn.highlight = btn:CreateTexture(nil, "HIGHLIGHT")
+    btn.highlight:SetPoint("TOPLEFT", btn, "TOPLEFT", 1, -1)
+    btn.highlight:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
+    btn.highlight:SetColorTexture(1, 1, 1, 0.2)
+    btn.highlight:SetBlendMode("ADD")
+
+    btn:SetScript("OnEnter", function()
+        -- The two popups share the bar, so opening this one closes the gem
+        -- popup and its slot glow first.
+        CP:HideGemPopup()
+        CP:HideSlotHighlight()
+        CP:ShowEnchantPopup(btn)
+    end)
+
+    btn:SetScript("OnLeave", function()
+        C_Timer.After(0.05, function()
+            if IsMouseOverGemUI() then return end
+            CP:HideGemPopup()
+            CP:HideEnchantPopup()
+            CP:HideSlotHighlight()
+        end)
+    end)
+
+    btn:Hide()
+    self.enchantButton = btn
+    return btn
+end
+
+function CP:CreateEnchantPopup()
+    if self.enchantPopup then return self.enchantPopup end
+
+    local Theme = KE.Theme
+
+    local popup = CreateFrame("Frame", "KE_EnchantPopup", UIParent, "BackdropTemplate")
+    popup:SetBackdrop(STANDARD_BACKDROP)
+    popup:SetBackdropColor(Theme.bgMedium[1], Theme.bgMedium[2], Theme.bgMedium[3], Theme.bgMedium[4])
+    popup:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+    popup:SetSize(280, 50)
+    popup:SetFrameStrata("TOOLTIP")
+    popup:SetClipsChildren(true)
+    popup:Hide()
+
+    popup.title = popup:CreateFontString(nil, "OVERLAY")
+    popup.title:SetPoint("TOPLEFT", 6, -6)
+    KE:ApplyFontToText(popup.title, "Expressway", 14, "OUTLINE")
+    popup.title:SetText("Enchants")
+    popup.title:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3])
+
+    popup.separator = popup:CreateTexture(nil, "ARTWORK")
+    popup.separator:SetHeight(1)
+    popup.separator:SetPoint("TOPLEFT", popup, "TOPLEFT", 0, -TITLE_HEIGHT)
+    popup.separator:SetPoint("TOPRIGHT", popup, "TOPRIGHT", 0, -TITLE_HEIGHT)
+    popup.separator:SetColorTexture(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+
+    popup.noEnchants = popup:CreateFontString(nil, "OVERLAY")
+    popup.noEnchants:SetPoint("CENTER", 0, -8)
+    KE:ApplyFontToText(popup.noEnchants, "Expressway", 14, "OUTLINE")
+    popup.noEnchants:SetText("No enchants in bags")
+    popup.noEnchants:SetTextColor(Theme.textMuted[1], Theme.textMuted[2], Theme.textMuted[3])
+    popup.noEnchants:Hide()
+
+    popup:EnableMouse(true)
+    popup:SetScript("OnLeave", function()
+        C_Timer.After(0.05, function()
+            if IsMouseOverGemUI() then return end
+            CP:HideEnchantPopup()
+            CP:HideSlotHighlight()
+        end)
+    end)
+
+    popup.buttons = {}
+    self.enchantPopup = popup
+    return popup
+end
+
+function CP:CreateEnchantRow(index)
+    local popup = self.enchantPopup
+    local Theme = KE.Theme
+    local iconSize = POPUP_ICON_SIZE
+    local rowHeight = POPUP_ICON_SIZE + ITEM_ROW_PADDING
+
+    if popup.buttons[index] then return popup.buttons[index] end
+
+    local btn = CreateFrame("Button", "KE_EnchantBtn" .. index, popup)
+    btn:SetHeight(rowHeight)
+    btn:SetPoint("TOPLEFT",  popup, "TOPLEFT",  POPUP_PADDING, -TITLE_HEIGHT - (index - 1) * rowHeight)
+    btn:SetPoint("TOPRIGHT", popup, "TOPRIGHT", -POPUP_PADDING, -TITLE_HEIGHT - (index - 1) * rowHeight)
+
+    btn.iconFrame = CreateFrame("Frame", nil, btn)
+    btn.iconFrame:SetSize(iconSize, iconSize)
+    btn.iconFrame:SetPoint("LEFT", 0, 0)
+    KE:AddIconBorders(btn.iconFrame, Theme.border)
+
+    btn.icon = btn.iconFrame:CreateTexture(nil, "ARTWORK")
+    btn.icon:SetAllPoints()
+    KE:ApplyIconZoom(btn.icon, 0.3)
+
+    btn.qualityFrame, btn.quality = CreateQualityOverlay(btn, btn.iconFrame)
+
+    btn.stats = btn:CreateFontString(nil, "OVERLAY")
+    btn.stats:SetPoint("LEFT", btn.iconFrame, "RIGHT", 6, 0)
+    btn.stats:SetWidth(220)
+    btn.stats:SetJustifyH("LEFT")
+    btn.stats:SetWordWrap(true)
+    KE:ApplyFontToText(btn.stats, "Expressway", 12, "OUTLINE")
+    btn.stats:SetTextColor(Theme.textPrimary[1], Theme.textPrimary[2], Theme.textPrimary[3])
+    btn.stats:SetShadowColor(0, 0, 0, 0)
+
+    btn.count = btn:CreateFontString(nil, "OVERLAY")
+    btn.count:SetPoint("RIGHT", btn, "RIGHT", -4, 0)
+    KE:ApplyFontToText(btn.count, "Expressway", 12, "OUTLINE")
+    btn.count:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3])
+    btn.count:SetShadowColor(0, 0, 0, 0)
+
+    local hoverBg = btn:CreateTexture(nil, "BACKGROUND")
+    hoverBg:SetAllPoints()
+    hoverBg:SetColorTexture(1, 1, 1, 0.05)
+    hoverBg:SetAlpha(0)
+    btn._hoverBg = hoverBg
+    btn._hoverTarget = 0
+
+    btn:SetScript("OnUpdate", function(button, elapsed)
+        local current = button._hoverBg:GetAlpha()
+        if math.abs(current - button._hoverTarget) > 0.01 then
+            local speed = elapsed / HOVER_DURATION
+            if button._hoverTarget > current then
+                button._hoverBg:SetAlpha(math.min(current + speed, button._hoverTarget))
+            else
+                button._hoverBg:SetAlpha(math.max(current - speed, button._hoverTarget))
+            end
+        end
+    end)
+
+    btn:SetScript("OnEnter", function(button)
+        button._hoverTarget = 1
+        -- Ring enchants can go on either finger, so glow both.
+        if button.enchantData and IsRingEnchant(button.enchantData.targetSlots) then
+            CP:ShowSlotHighlights(button.enchantData.targetSlots)
+        elseif button.targetSlotID then
+            CP:ShowSlotHighlight(button.targetSlotID)
+        end
+        if button.enchantData and button.enchantData.link then
+            GameTooltip:SetOwner(button, "ANCHOR_RIGHT", 40, 0)
+            GameTooltip:SetHyperlink(button.enchantData.link)
+            GameTooltip:Show()
+        end
+    end)
+
+    btn:SetScript("OnLeave", function(button)
+        button._hoverTarget = 0
+        GameTooltip:Hide()
+        C_Timer.After(0.05, function()
+            if IsMouseOverGemUI() then return end
+            CP:HideEnchantPopup()
+            CP:HideSlotHighlight()
+        end)
+    end)
+
+    btn:SetScript("OnClick", function(button)
+        CP:ApplyEnchantFromBags(button.enchantData)
+    end)
+
+    popup.buttons[index] = btn
+    return btn
+end
+
+-- Split out of the OnClick closure so the combat refusal is reachable without
+-- standing up a frame (dev/spec/character_panel_enchant_spec.lua). Returns
+-- true only when the pickup was actually issued.
+function CP:ApplyEnchantFromBags(enchantData)
+    if InCombatLockdown() then
+        KE:Print("Cannot enchant during combat")
+        return false
+    end
+    if not enchantData then return false end
+    -- DEVIATION 3: the reference calls the bare UseContainerItem global.
+    -- Blizzard's own code uses the namespaced form everywhere in 12.0.7
+    -- (ContainerFrame.lua:1342, SecureTemplates.lua:771), so the bare name is
+    -- at best a deprecated shim.
+    -- This picks the enchant up; the player then clicks the item to apply it.
+    -- Deliberately NOT auto-applied -- same as the reference.
+    C_Container.UseContainerItem(enchantData.bagID, enchantData.slotID)
+    self:HideEnchantPopup()
+    self:HideSlotHighlight()
+    return true
+end
+
+function CP:ShowEnchantPopup(enchantBtn)
+    local popup = self:CreateEnchantPopup()
+    local enchants = self:ScanBagsForEnchants()
+    local Theme = KE.Theme
+
+    -- Only offer an enchant whose target slot actually holds gear.
+    local enchantList = {}
+    for _, enchantData in pairs(enchants) do
+        local targetSlotID = self:FindBestEnchantSlot(enchantData.targetSlots)
+        if targetSlotID then
+            enchantData.resolvedSlotID = targetSlotID
+            table.insert(enchantList, enchantData)
+        end
+    end
+
+    popup.title:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3])
+
+    local minWidth = popup.title:GetStringWidth() + 26
+    local minRowHeight = POPUP_ICON_SIZE + ITEM_ROW_PADDING
+    local targetHeight
+
+    if #enchantList == 0 then
+        popup.noEnchants:Show()
+        popup.separator:Hide()
+        popup.noEnchants:SetTextColor(Theme.textMuted[1], Theme.textMuted[2], Theme.textMuted[3])
+        for _, btn in pairs(popup.buttons) do btn:Hide() end
+        popup:SetWidth(math.max(200, minWidth))
+        targetHeight = 50
+    else
+        popup.noEnchants:Hide()
+        popup.separator:Show()
+
+        local yOffset = TITLE_HEIGHT
+        for i, enchantData in ipairs(enchantList) do
+            local btn = self:CreateEnchantRow(i)
+            btn.enchantData = enchantData
+            btn.targetSlotID = enchantData.resolvedSlotID
+            btn.icon:SetTexture(enchantData.icon)
+            btn.count:SetText(enchantData.count .. "x")
+            btn.count:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3])
+            btn._hoverBg:SetAlpha(0); btn._hoverTarget = 0
+
+            btn.stats:SetText(GetEnchantDisplayName(enchantData.link) or "")
+            btn.stats:SetTextColor(Theme.textPrimary[1], Theme.textPrimary[2], Theme.textPrimary[3])
+
+            local textHeight = btn.stats:GetStringHeight()
+            local rowHeight = math.max(minRowHeight, textHeight + ITEM_ROW_PADDING)
+            btn:SetHeight(rowHeight)
+            btn:ClearAllPoints()
+            btn:SetPoint("TOPLEFT", popup, "TOPLEFT", POPUP_PADDING, -yOffset)
+            btn:SetPoint("TOPRIGHT", popup, "TOPRIGHT", -POPUP_PADDING, -yOffset)
+            btn.iconFrame:SetSize(POPUP_ICON_SIZE, POPUP_ICON_SIZE)
+
+            SetQualityAtlas(btn.quality, GetQualityAtlasFromLink(enchantData.link))
+
+            btn:Show()
+            yOffset = yOffset + rowHeight
+        end
+        for i = #enchantList + 1, #popup.buttons do popup.buttons[i]:Hide() end
+
+        popup:SetWidth(280)
+        targetHeight = yOffset
+    end
+
+    popup:ClearAllPoints()
+    popup:SetPoint("TOPLEFT", enchantBtn, "BOTTOMLEFT", 0, -1)
+    popup:SetHeight(targetHeight)
+    popup:Show()
+end
+
+function CP:HideEnchantPopup()
+    if self.enchantPopup then self.enchantPopup:Hide() end
+end
+
+-- Parks the button after the last VISIBLE socket button, so it stays flush
+-- with the bar whether there are eleven sockets or none.
+function CP:RefreshEnchantButton()
+    if not self.socketContainer then return end
+    if not (self.db.SocketHelperEnabled and self.db.EnchantHelperEnabled) then
+        if self.enchantButton then self.enchantButton:Hide() end
+        return
+    end
+
+    local db = self.db
+    local btn = self:CreateEnchantButton()
+    btn:SetSize(db.SocketButtonSize, db.SocketButtonSize)
+    btn:ClearAllPoints()
+
+    local lastSocketBtn
+    for i = #self.socketContainer.buttons, 1, -1 do
+        if self.socketContainer.buttons[i]:IsShown() then
+            lastSocketBtn = self.socketContainer.buttons[i]
+            break
+        end
+    end
+
+    if lastSocketBtn then
+        btn:SetPoint("LEFT", lastSocketBtn, "RIGHT", db.SocketButtonSpacing, 0)
+    else
+        btn:SetPoint("LEFT", self.socketContainer, "LEFT", 0, 0)
+    end
+
+    btn:Show()
 end
 
 ---------------------------------------------------------------------------------
