@@ -1303,6 +1303,14 @@ local Defaults = {
             Enabled = false,
         },
 
+        RaidControl = {
+            Enabled = false,
+            Position = {               -- Show-button position, saved on right-drag
+                bottom = false,        -- Snapped to the bottom edge instead of the top
+                x = -400,              -- Horizontal offset from screen centre
+            },
+        },
+
         CompareHeader = {
             Enabled = true,
         },

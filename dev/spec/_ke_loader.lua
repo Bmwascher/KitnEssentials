@@ -1364,4 +1364,69 @@ function L.loadMoveFrames(overrides)
     return MF, KE, seams
 end
 
+-- Modules/QoL/RaidControl.lua captures WoW globals as file-scope upvalues AND
+-- calls SetGrabCoords three times at file scope (<REF>:110-112), so
+-- GetTexCoordsByGrid, SOUNDKIT and RAID_CLASS_COLORS must exist on _G BEFORE
+-- helpers.loadModule runs or the file errors while loading.
+-- Seams, and the hop chain that reaches each:
+--   targetIconsGetCoords  <- RC.CreateTargetIcons                 (1 hop)
+--   screenPosition        <- RC.PositionSections                  (1 hop)
+--   inGroup               <- RC.ToggleRaidControl                 (1 hop)
+--   notInPVP              <- inGroup                              (2 hops)
+--   onEnterRole            <- RC.CreateRoleIcons                  (1 hop)
+--   roleIconsSortNames    <- onEnterRole                          (2 hops)
+--   roleIconsAddNames     <- onEnterRole                          (2 hops)
+--   setGrabCoords         <- RC.UpdateDB is NOT a holder; SetGrabCoords is
+--                            called only at file scope, so it is reached
+--                            through no exported function and is NOT a seam.
+function L.loadRaidControl(overrides)
+    overrides = overrides or {}
+    -- installMock installs _G.CreateFrame (dev/spec/_wow_mock.lua:55). The
+    -- module calls CreateFrame at FILE SCOPE for the frame hider's parked
+    -- parent, so this cannot be skipped the way loadMoveFrames skips it.
+    installMock(overrides, {})
+    local modules = helpers.installAddonShim()
+    _G.mod = overrides.mod or math.fmod
+    _G.floor = overrides.floor or math.floor
+    _G.strsub = overrides.strsub or string.sub
+    _G.format = overrides.format or string.format
+    _G.gsub = overrides.gsub or string.gsub
+    _G.strfind = overrides.strfind or string.find
+    _G.tinsert = overrides.tinsert or table.insert
+    _G.sort = overrides.sort or table.sort
+    _G.wipe = overrides.wipe or function(t) for k in pairs(t) do t[k] = nil end return t end
+    _G.GetTexCoordsByGrid = overrides.GetTexCoordsByGrid or function() return 0, 1, 0, 1 end
+    _G.RAID_CLASS_COLORS = overrides.RAID_CLASS_COLORS
+        or { PRIEST = { r = 1, g = 1, b = 1 }, MAGE = { r = 0.25, g = 0.78, b = 0.92 } }
+    _G.SOUNDKIT = overrides.SOUNDKIT or { IG_MAINMENU_OPTION_CHECKBOX_ON = 1 }
+    _G.C_PartyInfo = overrides.C_PartyInfo
+        or { SetEveryoneIsAssistant = function() end, DoReadyCheck = function() end, DoCountdown = function() end }
+    _G.C_AddOns = overrides.C_AddOns or { IsAddOnLoaded = function() return false end }
+    _G.InCombatLockdown = overrides.InCombatLockdown or function() return false end
+    _G.IsInInstance = overrides.IsInInstance or function() return false, "none" end
+    _G.IsInGroup = overrides.IsInGroup or function() return false end
+    -- UIParent is captured as a file-scope local at <REF>:74, so it must exist
+    -- on _G BEFORE loadModule. Setting it afterwards has no effect on the
+    -- module's captured upvalue -- ScreenPosition would read a stale table.
+    _G.UIParent = overrides.UIParent
+        or { GetSize = function() return 1600, 900 end, GetWidth = function() return 1600 end }
+    local KE = { db = { profile = { RaidControl = { Position = {} } } }, Skins = {} }
+    KE.Skins.SafeCenter = overrides.SafeCenter or function() return 0, 0 end
+    helpers.loadModule("Modules/QoL/RaidControl.lua", KE)
+    local RC = modules["RaidControl"]
+
+    local inGroup = findUpvalue(RC.ToggleRaidControl, "InGroup")
+    local onEnterRole = findUpvalue(RC.CreateRoleIcons, "OnEnter_Role")
+    local seams = {
+        targetIconsGetCoords = findUpvalue(RC.CreateTargetIcons, "TargetIcons_GetCoords"),
+        screenPosition = findUpvalue(RC.PositionSections, "ScreenPosition"),
+        inGroup = inGroup,
+        notInPVP = findUpvalue(inGroup, "NotInPVP"),
+        onEnterRole = onEnterRole,
+        roleIconsSortNames = findUpvalue(onEnterRole, "RoleIcons_SortNames"),
+        roleIconsAddNames = findUpvalue(onEnterRole, "RoleIcons_AddNames"),
+    }
+    return RC, KE, seams
+end
+
 return L
