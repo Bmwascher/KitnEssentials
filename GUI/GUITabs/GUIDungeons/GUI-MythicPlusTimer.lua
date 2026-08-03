@@ -654,7 +654,7 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
     manager:Register(tipCheck, "all")
     deathsCard:AddRow(rowD1, Theme.rowHeight)
 
-    local dNoteRow = GUIFrame:CreateRow(deathsCard.content, 50)
+    local dNoteRow = GUIFrame:CreateRow(deathsCard.content, Theme.rowHeightNote)
     local dNoteText = GUIFrame:CreateText(dNoteRow,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " Count and time-penalty read from Blizzard's authoritative death tracker.\n" ..
@@ -662,7 +662,7 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
         50, "hide")
     dNoteRow:AddWidget(dNoteText, 1)
     manager:Register(dNoteText, "all")
-    deathsCard:AddRow(dNoteRow, 50, 0)
+    deathsCard:AddRow(dNoteRow, Theme.rowHeightNote, 0)
     yOffset = deathsCard:GetNextOffset()
 
     -- Card 4: Affixes & Key (display toggles; colors live on the Display tab)

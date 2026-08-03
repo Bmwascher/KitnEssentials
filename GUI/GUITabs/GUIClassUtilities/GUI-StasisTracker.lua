@@ -64,14 +64,14 @@ GUIFrame:RegisterContent("StasisTracker", function(scrollChild, yOffset)
         KE:Print("Stasis Tracker: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, 50)
+    local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightNote)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " Preservation Evoker only.\n" ..
         KE:ColorTextByTheme("-") .. " Shows stored spell icons and a 30-second countdown bar during Stasis.",
         50, "hide")
     noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, 50, 0)
+    card1:AddRow(noteRow, Theme.rowHeightNote, 0)
 
     yOffset = card1:GetNextOffset()
 

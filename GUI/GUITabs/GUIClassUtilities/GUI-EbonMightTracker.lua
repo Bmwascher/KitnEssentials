@@ -114,7 +114,7 @@ GUIFrame:RegisterContent("EbonMightTracker", function(scrollChild, yOffset)
     manager:Register(updateBtn, "all")
     card2:AddRow(updateRow, Theme.rowHeight)
 
-    local rowMSNote = GUIFrame:CreateRow(card2.content, 50)
+    local rowMSNote = GUIFrame:CreateRow(card2.content, Theme.rowHeightNote)
     local msNote = GUIFrame:CreateText(rowMSNote,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " Auto-saves on combat exit and /reload. Button is a manual fallback.\n" ..
@@ -122,7 +122,7 @@ GUIFrame:RegisterContent("EbonMightTracker", function(scrollChild, yOffset)
         50, "hide")
     rowMSNote:AddWidget(msNote, 1)
     manager:Register(msNote, "all")
-    card2:AddRow(rowMSNote, 50, 0)
+    card2:AddRow(rowMSNote, Theme.rowHeightNote, 0)
 
     yOffset = card2:GetNextOffset()
 

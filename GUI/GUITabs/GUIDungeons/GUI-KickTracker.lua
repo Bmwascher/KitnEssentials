@@ -175,14 +175,14 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     manager:Register(configureForDropdown, "healerConfig")  -- greyed when override off
     cardPosMode:AddRow(rowPosMode, Theme.rowHeight)
 
-    local posModeNoteRow = GUIFrame:CreateRow(cardPosMode.content, 50)
+    local posModeNoteRow = GUIFrame:CreateRow(cardPosMode.content, Theme.rowHeightNote)
     local posModeNote = GUIFrame:CreateText(posModeNoteRow,
         KE:ColorTextByTheme("Note"),
         "Auto-swaps to a separate position when you're playing a healer spec. " ..
         "Configure For picks which one to edit below; all other settings are shared.",
         50, "hide")
     posModeNoteRow:AddWidget(posModeNote, 1)
-    cardPosMode:AddRow(posModeNoteRow, 50, 0)
+    cardPosMode:AddRow(posModeNoteRow, Theme.rowHeightNote, 0)
     yOffset = cardPosMode:GetNextOffset()
 
     -- Configure For only matters when healer override is on.
@@ -441,7 +441,7 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     manager:Register(classColorCDCheck, "classOnly")
     card5:AddRow(row5a, Theme.rowHeight)
 
-    local row5note = GUIFrame:CreateRow(card5.content, 50)
+    local row5note = GUIFrame:CreateRow(card5.content, Theme.rowHeightNote)
     local note5 = GUIFrame:CreateText(row5note,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " " .. KE:ColorTextByTheme("Class Colored") .. " — class-colored bars with white names.\n" ..
@@ -449,7 +449,7 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
         50, "hide")
     row5note:AddWidget(note5, 1)
     manager:Register(note5, "all")
-    card5:AddRow(row5note, 50)
+    card5:AddRow(row5note, Theme.rowHeightNote)
 
     local row5b = GUIFrame:CreateRow(card5.content, Theme.rowHeightLast)
     local coolingPicker = GUIFrame:CreateColorPicker(row5b, "Cooling Color", {
