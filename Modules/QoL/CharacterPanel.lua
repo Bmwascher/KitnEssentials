@@ -1581,8 +1581,11 @@ function CP:RefreshSlot(slotID, unit)
     -- callers fire on actual slot changes, so the dirty checks downstream
     -- rarely short-circuit — prefetching here doesn't waste the read.
     -- Mirrors the stand-down rules in the two Update* functions below, purely so
-    -- the shared tooltip read is skipped when neither will draw. Getting this
-    -- wrong costs an allocation, never correctness -- each function re-checks.
+    -- the shared tooltip read is skipped when neither will draw. This decides
+    -- the READ, never the CALL: each function owns its own EUI stand-down, and
+    -- that stand-down is what hides the leftover frame and clears the dirty key.
+    -- Gating the call on ownership instead would leave KE's old text sitting on
+    -- top of EUI's, stale, until something else refreshed the slot.
     local wantsTrack  = self.db.TrackIndicatorsEnabled
         and not KE:EUIDrawsSlotElement(unit, "track")
     local wantsDetail =
@@ -1595,13 +1598,12 @@ function CP:RefreshSlot(slotID, unit)
         data = C_TooltipInfo.GetInventoryItem(unit, slotID)
     end
 
-    if wantsTrack then
+    -- The track overlay has no enable check of its own, so the setting is still
+    -- the caller's to test. UpdateSlotDetail tests every one of its own.
+    if self.db.TrackIndicatorsEnabled then
         self:UpdateSlotTrackIndicator(slotFrame, slotID, unit, data)
     end
-
-    if wantsDetail then
-        self:UpdateSlotDetail(slotFrame, slotID, unit, nil, data)
-    end
+    self:UpdateSlotDetail(slotFrame, slotID, unit, nil, data)
 end
 
 function CP:UpdateAllSlotDetails()
