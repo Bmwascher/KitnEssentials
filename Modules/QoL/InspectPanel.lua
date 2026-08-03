@@ -389,6 +389,15 @@ function InspectPanel:UpdateAllInspectSlots()
     end
 end
 
+-- Drop the per-GUID dirty cache so the next render repaints a slot whose item
+-- has not changed. CharacterPanel calls this whenever a setting hides the
+-- inspect overlays: the hide leaves the cache describing a slot that IS drawn,
+-- so re-enabling the setting would short-circuit and the overlay would stay
+-- hidden until the inspect frame was closed and reopened.
+function InspectPanel:InvalidateSlotCache()
+    wipe(_inspectCache)
+end
+
 -- Returns the equipped average item level to 2 decimals, or nil if the inspect
 -- data isn't ready yet (caller retries on the next INSPECT_READY / late-data event).
 function InspectPanel:GetInspectAverageItemLevel(unit)
@@ -455,6 +464,17 @@ function InspectPanel:UpdateInspectItemLevel()
     -- self-gates on data readiness (returns nil until spec + all slot links
     -- resolve), so incomplete cross-map data simply hides the average rather
     -- than needing a blanket map check.
+
+    -- EllesmereUI's themed inspect sheet prints its own average near the top,
+    -- and its layout puts the Talents button exactly where ours anchors, so
+    -- ours ends up half-hidden behind it (Brandon, 2026-08-03). EUI's is
+    -- Blizzard's whole-number call formatted to two places, so it always ends
+    -- .00 -- ours is the real decimal, which is why it stays on the unthemed
+    -- sheet. It just cannot be READ on the themed one.
+    if KE:EUIDrawsSlotElement(unit, "avgIlvl") then
+        if self._inspectIlvl then self._inspectIlvl:Hide() end
+        return
+    end
 
     local parent = _G.InspectPaperDollItemsFrame or InspectFrame
     if not parent then return end

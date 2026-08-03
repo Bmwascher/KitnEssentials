@@ -595,6 +595,27 @@ function CP:UpdateSlotWarning(button, unit, slot)
     if not button then return end
     unit = unit or "player"
 
+    -- EllesmereUI flags a missing enchant itself, in exactly the place this text
+    -- goes (its enchant label anchors to the same slot edge). Stand down only
+    -- when it is ACTUALLY drawing that cue on THIS frame -- on inspect the cue
+    -- is an icon that its own inspectShowEnchants toggle can switch off, and
+    -- then nothing would mark the slot at all. Ahead of the dirty-check store
+    -- below, so a handback redraws instead of short-circuiting on a key cached
+    -- while EUI owned the slot.
+    if KE:EUIDrawsSlotElement(unit, "missingEnchant") then
+        local d = FFD[button]
+        if d and d.warning then d.warning:SetText("") end
+        -- Drop the dirty key on the way out, not just skip storing it. The key
+        -- describes an item, so on an UNCHANGED item it still matches the one
+        -- the last real render left behind -- and the handback would then
+        -- short-circuit against it and leave the slot blank in both addons.
+        if unit == "player" then
+            local s = _slotState(slot)
+            s.warnLink, s.warnEnchant = nil, nil
+        end
+        return
+    end
+
     -- Dirty-check: itemLink + enchantID determine the warning. If neither
     -- changed since last render, skip the work. Cached only for the player
     -- slot path (inspect path goes through different functions); inspect's
@@ -745,10 +766,10 @@ local function HookCharacterPanel()
             QueueUpdate()                                 -- warnings
             if CP.db.HideCharacterBackground then HideCharacterBackground() end
             if CP.db.SocketHelperEnabled then CP:RefreshSocketButtons() end
-            if CP.db.TrackIndicatorsEnabled then CP:UpdateAllTrackIndicators() end
-            if CP.db.ShowSlotItemLevel or CP.db.ShowEnchantNames or CP.db.ShowSlotGems or CP.db.ShowMissingGems then
-                CP:UpdateAllSlotDetails()
-            end
+            -- Full refresh, not the dirty-checked one: a setting changed while
+            -- the pane was CLOSED never got applied, so the old display would
+            -- otherwise come back with the feature off.
+            CP:RefreshSlotDisplays()
         end)
         PaperDollFrame:HookScript("OnHide", function()
             if CP.eventFrame then
@@ -766,6 +787,7 @@ local function HookCharacterPanel()
             wipe(_gemLoadAttempts)
             if CP.socketContainer then CP.socketContainer:Hide() end
             CP:HideGemPopup()
+            CP:HideEnchantPopup()
             CP:HideSlotHighlight()
         end)
     end
@@ -875,12 +897,12 @@ function CP:ApplySettings()
     if self.db.SocketHelperEnabled and PaperDollFrame and PaperDollFrame:IsShown() then
         self:RefreshSocketButtons()
     end
-    if self.db.TrackIndicatorsEnabled and PaperDollFrame and PaperDollFrame:IsShown() then
-        self:UpdateAllTrackIndicators()
-    end
-    if (self.db.ShowSlotItemLevel or self.db.ShowEnchantNames or self.db.ShowSlotGems or self.db.ShowMissingGems)
-        and PaperDollFrame and PaperDollFrame:IsShown() then
-        self:UpdateAllSlotDetails()
+    -- EITHER frame: the inspect overlays follow the same settings, and the
+    -- inspect frame can be open while the character panel is not.
+    local inspectFrame = _G.InspectFrame
+    if (PaperDollFrame and PaperDollFrame:IsShown())
+        or (inspectFrame and inspectFrame:IsShown()) then
+        self:RefreshSlotDisplays()
     end
 end
 
@@ -933,19 +955,77 @@ function CP:SetupDecimalItemLevel()
     end)
 end
 
+-- Blizzard's own font on the two header strings, captured before KE first
+-- overwrites it. Weak-keyed: never a field on a Blizzard frame.
+--
+-- Skipping the write is NOT enough to stand down here. EUI only re-anchors
+-- these strings (CharacterSheet.lua:497-505) -- it never sets a font -- so
+-- whatever KE applied while EUI's sheet was off survives into EUI's header and
+-- no later refresh can release it. The stand-down has to hand back what it took.
+local headerTextOriginals = setmetatable({}, { __mode = "k" })
+
+-- withLayout: also capture width and word wrap, for the string whose layout KE
+-- actually changes. CharacterLevelText is configured 220x24 in Blizzard's own
+-- XML (.wow-api-reference PaperDollFrame.xml:460), so GetWidth() here reads a
+-- real configured width, not a measurement of auto-sized text -- restoring it
+-- is right. CharacterFrameTitleText only ever gets a font from us.
+local function RememberHeaderText(fs, withLayout)
+    if headerTextOriginals[fs] ~= nil then return end
+    local record = {}
+    -- The font OBJECT where there is one: restoring that also clears any
+    -- explicit SetFont, which restoring file/height/flags by hand does not.
+    record.fontObject = fs.GetFontObject and fs:GetFontObject() or nil
+    if not record.fontObject then
+        local file, height, flags = fs:GetFont()
+        if not file then return end
+        record.font = { file, height, flags }
+    end
+    if withLayout then
+        record.width = fs:GetWidth()
+        -- Not `x and x() or nil`: a legitimate false would collapse to nil
+        -- there and the restore would silently skip it.
+        if fs.CanWordWrap then record.wordWrap = fs:CanWordWrap() end
+    end
+    headerTextOriginals[fs] = record
+end
+
+local function RestoreHeaderText(fs)
+    local original = headerTextOriginals[fs]
+    if not original then return end
+    headerTextOriginals[fs] = nil
+    if original.fontObject then
+        fs:SetFontObject(original.fontObject)
+    else
+        fs:SetFont(original.font[1], original.font[2], original.font[3])
+    end
+    if original.width then fs:SetWidth(original.width) end
+    if original.wordWrap ~= nil then fs:SetWordWrap(original.wordWrap) end
+end
+
 function CP:StyleCharacterTexts()
     if ElvUILoaded() then return end
 
     local levelText = CharacterLevelText
-    if levelText then
-        self:ApplyFont(levelText, self.db.LevelTextSize or 12)
-        levelText:SetWidth(0)
-        levelText:SetWordWrap(true)
-    end
-
     local nameText = CharacterFrameTitleText
-    if nameText then
-        self:ApplyFont(nameText, self.db.NameTextSize or 12)
+
+    -- EllesmereUI re-anchors both strings into its own header, so re-fonting
+    -- them from here is two addons fighting over the same FontStrings. The
+    -- stats pane below is still ours to style -- EUI leaves those alone.
+    if KE:EUIDrawsSlotElement("player", "headerText") then
+        if levelText then RestoreHeaderText(levelText) end
+        if nameText then RestoreHeaderText(nameText) end
+    else
+        if levelText then
+            RememberHeaderText(levelText, true)   -- width + wrap change below
+            self:ApplyFont(levelText, self.db.LevelTextSize or 12)
+            levelText:SetWidth(0)
+            levelText:SetWordWrap(true)
+        end
+
+        if nameText then
+            RememberHeaderText(nameText)
+            self:ApplyFont(nameText, self.db.NameTextSize or 12)
+        end
     end
 
     self:StyleStatsPaneTexts()
@@ -1007,10 +1087,12 @@ function CP:UpdateLevelTextWithFaction()
     local text = levelText:GetText()
     if not text then return end
 
-    -- Strip any prior suffix we added.
+    -- Strip any prior suffix we added. Unconditional, and ahead of the EUI
+    -- stand-down below, so handing the string back removes our tag instead of
+    -- freezing it into EUI's header.
     text = text:gsub(" |c%x%x%x%x%x%x%x%x%([AH]%)|r$", "")
 
-    if self.db.ShowFactionOnLevel then
+    if self.db.ShowFactionOnLevel and not KE:EUIDrawsSlotElement("player", "headerText") then
         local faction = UnitFactionGroup("player")
         if faction == "Alliance" then
             text = text .. " |cff3399ff(A)|r"
@@ -1049,6 +1131,10 @@ end
 function CP:UpdateRaceTextPosition()
     if not self._raceText then return end
     if not self.db.ShowRaceText then return end
+    -- Also gated: HideRaceText re-runs Blizzard's level layout, which fires our
+    -- own PaperDollFrame_SetLevel hook straight back into here. Without this the
+    -- stand-down would re-apply the very offset it just cleared.
+    if KE:EUIDrawsSlotElement("player", "headerText") then return end
     if not CharacterLevelText then return end
     CharacterLevelText:SetPointsOffset(0, -37)
 end
@@ -1056,6 +1142,14 @@ end
 function CP:ShowRaceText()
     if ElvUILoaded() then return end
     if not self.db.ShowRaceText then return end
+    -- Our race line sits under the level string, and getting it there means
+    -- displacing that string by 37px. EUI has already re-anchored it into its
+    -- own header, so the offset drags EUI's text out of place and ours lands on
+    -- top of it. Stand down entirely rather than fight over the anchor.
+    if KE:EUIDrawsSlotElement("player", "headerText") then
+        self:HideRaceText()
+        return
+    end
 
     local text = self:CreateRaceText()
     self:ApplyFont(text, self.db.LevelTextSize or 12)
@@ -1155,6 +1249,25 @@ function CP:UpdateSlotTrackIndicator(slotFrame, slotID, unit, data)
     unit = unit or "player"
     if not slotFrame then return end
 
+    -- EllesmereUI prints the upgrade track beside its own item level ("(Myth)"),
+    -- so our corner letter is the same fact twice. It does not overlap theirs,
+    -- but two readings of one thing on every slot is clutter -- Brandon's call,
+    -- 2026-08-03. Only while EUI is actually drawing it on THIS frame: its
+    -- showUpgradeTrack / inspectShowUpgradeTrack toggles turn it off separately,
+    -- and then ours is the only one left. Bail before the tooltip read too --
+    -- GetItemTrack allocates one per slot just to decide the letter.
+    if KE:EUIDrawsSlotElement(unit, "track") then
+        local d = FFD[slotFrame]
+        if d and d.track then d.track:Hide() end
+        -- Same reason as the warning stand-down: clear the key so a handback on
+        -- an unchanged item redraws instead of matching the pre-stand-down one.
+        if unit == "player" then
+            local s = _slotState(slotID)
+            s.trackLink, s.trackKey = nil, nil
+        end
+        return
+    end
+
     -- One tooltip read serves both the dirty-check and the render below (the
     -- render previously re-fetched identical data a second time).
     local track = self:GetItemTrack(unit, slotID, data)
@@ -1182,24 +1295,67 @@ function CP:UpdateSlotTrackIndicator(slotFrame, slotID, unit, data)
     end
 end
 
+-- The inspect half of every All-level function below. Its dirty state lives in
+-- InspectPanel, keyed per GUID, so this file cannot reach it directly -- and
+-- should not: hiding an inspect overlay without dropping that state left the
+-- setting one-way there exactly as it did for the player keys.
+local function InvalidateInspectSlots()
+    local insp = KitnEssentials:GetModule("InspectPanel", true)
+    if insp and insp.InvalidateSlotCache then insp:InvalidateSlotCache() end
+end
+
+local function RepaintInspectSlots()
+    local frame = _G.InspectFrame
+    if not (frame and frame:IsShown()) then return end
+    local insp = KitnEssentials:GetModule("InspectPanel", true)
+    if insp and insp:IsEnabled() then insp:UpdateAllInspectSlots() end
+end
+
+-- Settings-change entry point for both per-slot displays. The dirty checks in
+-- UpdateSlotDetail and UpdateSlotTrackIndicator key on the ITEM, so a settings
+-- change that leaves the item alone is invisible to them and the display keeps
+-- whatever the previous settings drew -- turning one detail option off while
+-- another stays on was the visible case. Dropping the caches first is what
+-- makes the settings two-way.
+--
+-- Deliberately NOT folded into the All-level updaters below: those also run on
+-- bag and equipment events, where the dirty check is the whole point.
+function CP:RefreshSlotDisplays()
+    wipe(_lastSlotState)
+    InvalidateInspectSlots()
+    if self.db.TrackIndicatorsEnabled then
+        self:UpdateAllTrackIndicators()
+    else
+        self:HideAllTrackIndicators()
+    end
+    self:UpdateAllSlotDetails()   -- routes to HideAllSlotDetails when all off
+end
+
 function CP:UpdateAllTrackIndicators()
     if not self.db.TrackIndicatorsEnabled then return end
     for slotID, frameName in pairs(SLOT_FRAMES) do
         self:UpdateSlotTrackIndicator(_G[frameName], slotID, "player")
     end
+    RepaintInspectSlots()
 end
 
 function CP:HideAllTrackIndicators()
-    for _, frameName in pairs(SLOT_FRAMES) do
+    for slotID, frameName in pairs(SLOT_FRAMES) do
         local slotFrame = _G[frameName]
         local overlay = slotFrame and FFD[slotFrame] and FFD[slotFrame].track
         if overlay then overlay:Hide() end
+        -- Hiding without clearing the key left the setting one-way: turning the
+        -- indicators back on hit the unchanged-item short-circuit and the
+        -- overlay stayed hidden until the item itself changed.
+        local s = _slotState(slotID)
+        s.trackLink, s.trackKey = nil, nil
     end
     for _, frameName in pairs(INSPECT_SLOT_FRAMES) do
         local slotFrame = _G[frameName]
         local overlay = slotFrame and FFD[slotFrame] and FFD[slotFrame].track
         if overlay then overlay:Hide() end
     end
+    InvalidateInspectSlots()
 end
 
 function CP:SetupTrackIndicators()
@@ -1359,10 +1515,52 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
     unit = unit or "player"
     if not slotFrame then return end
 
-    -- Dirty-check (player path only): itemLink + enchantID + ilvl determine
-    -- the rendered output. If all three match the previous render, skip the
-    -- font re-apply + SetText + gem-icon work entirely. Inspect path goes
-    -- unguarded here — its own invalidation lives in INSPECT_READY.
+    -- EllesmereUI ownership, resolved FIRST -- ahead of the dirty-check store.
+    -- Asked per ELEMENT and per FRAME, never as one blanket "is EUI on": EUI has
+    -- an independent live toggle for each of these, so a single test would delete
+    -- an element from both addons the moment the user turned EUI's copy off.
+    -- Its inspect sheet also draws no gems at any setting, which is why the gem
+    -- row survives there.
+    local euiOwnsEnchant = KE:EUIDrawsSlotElement(unit, "enchant")
+    local euiOwnsIlvl    = KE:EUIDrawsSlotElement(unit, "ilvl")
+    local euiOwnsGems    = KE:EUIDrawsSlotElement(unit, "gems")
+    -- Ownership is part of what this slot renders, so it has to be part of the
+    -- dirty key below -- three elements means ownership can change while the
+    -- item does not, and the item-only key cannot see that. Unlike the warning
+    -- and track stand-downs, clearing the key on the way out is not enough here:
+    -- those are all-or-nothing, this one keeps drawing whatever EUI left us.
+    local ownKey = (euiOwnsEnchant and 1 or 0) + (euiOwnsIlvl and 2 or 0)
+        + (euiOwnsGems and 4 or 0)
+
+    -- Nothing left for us to draw on this frame: bail before BOTH the dirty-check
+    -- store and the tooltip read, and clear the key on the way out so a handback
+    -- on an unchanged item redraws. FFD is indexed directly so a slot that never
+    -- had a detail frame does not get one built just to hide it.
+    --
+    -- A handback lands on the next refresh -- an equipment change or a panel
+    -- reopen -- not on the same frame the user flips EUI's setting: nothing
+    -- notifies KE of a write to EUI's saved variables. On the inspect side
+    -- InspectPanel's own per-GUID cache gates ahead of this function too, and it
+    -- is wiped when the inspect frame hides, so a reopen is the reliable trigger.
+    local wantsText = (self.db.ShowEnchantNames and not euiOwnsEnchant)
+        or (self.db.ShowSlotItemLevel and not euiOwnsIlvl)
+    local wantsGems = (self.db.ShowSlotGems or self.db.ShowMissingGems ~= false)
+        and not euiOwnsGems and not suppressGems
+    if not (wantsText or wantsGems) then
+        local existing = FFD[slotFrame]
+        if existing and existing.detail then existing.detail:Hide() end
+        if unit == "player" then
+            local s = _slotState(slotID)
+            s.detailLink, s.detailEnchant, s.detailIlvl = nil, nil, nil
+        end
+        return
+    end
+
+    -- Dirty-check (player path only): itemLink + enchantID + ilvl + the EUI
+    -- ownership stamp determine the rendered output. If all four match the
+    -- previous render, skip the font re-apply + SetText + gem-icon work
+    -- entirely. Inspect path goes unguarded here — its own invalidation lives
+    -- in INSPECT_READY.
     if unit == "player" then
         local s = _slotState(slotID)
         local link = GetInventoryItemLink(unit, slotID)
@@ -1372,10 +1570,11 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
         -- (cold item cache), so the link/enchant/ilvl key is NOT sufficient —
         -- skip the short-circuit and re-scan until the gems resolve.
         if s.detailLink == link and s.detailEnchant == enchantID and s.detailIlvl == ilvl
-            and not s.detailGemsPending then
+            and s.detailOwn == ownKey and not s.detailGemsPending then
             return
         end
         s.detailLink, s.detailEnchant, s.detailIlvl = link, enchantID, ilvl
+        s.detailOwn = ownKey
     end
 
     -- Fetch after the dirty check so a short-circuited call allocates nothing;
@@ -1392,7 +1591,7 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
     KE:ApplyFont(detail.ilvlText, fontFace, fontSize, fontOutline)
 
     -- Enchant label (green). "No Enchant" stays with the warning feature.
-    if self.db.ShowEnchantNames then
+    if self.db.ShowEnchantNames and not euiOwnsEnchant then
         local label = self:ResolveEnchantLabel(unit, slotID, data)
         detail.enchantText:SetText(label or "")
         detail.enchantText:SetShown(label ~= nil)
@@ -1402,7 +1601,7 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
     end
 
     -- Item level, colored by the equipped item's quality.
-    if self.db.ShowSlotItemLevel then
+    if self.db.ShowSlotItemLevel and not euiOwnsIlvl then
         local lvl = self:GetSlotItemLevel(unit, slotID)
         if lvl then
             local quality = GetInventoryItemQuality(unit, slotID)
@@ -1429,8 +1628,8 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
     local gemCount = 0
     local gemsPending = false
     if not suppressGems then
-        local showFilled = self.db.ShowSlotGems
-        local showEmpty  = self.db.ShowMissingGems ~= false
+        local showFilled = self.db.ShowSlotGems and not euiOwnsGems
+        local showEmpty  = self.db.ShowMissingGems ~= false and not euiOwnsGems
         if (showFilled or showEmpty) and socketableSlotSet[slotID] then
             local result = self:ScanItemSockets(unit, slotID, data)
             gemsPending = (result and result.pendingGems) or false
@@ -1496,21 +1695,30 @@ function CP:RefreshSlot(slotID, unit)
     -- to fetch its own copy of identical same-frame data). RefreshSlot's
     -- callers fire on actual slot changes, so the dirty checks downstream
     -- rarely short-circuit — prefetching here doesn't waste the read.
+    -- Mirrors the stand-down rules in the two Update* functions below, purely so
+    -- the shared tooltip read is skipped when neither will draw. This decides
+    -- the READ, never the CALL: each function owns its own EUI stand-down, and
+    -- that stand-down is what hides the leftover frame and clears the dirty key.
+    -- Gating the call on ownership instead would leave KE's old text sitting on
+    -- top of EUI's, stale, until something else refreshed the slot.
     local wantsTrack  = self.db.TrackIndicatorsEnabled
-    local wantsDetail = self.db.ShowSlotItemLevel or self.db.ShowEnchantNames
-        or self.db.ShowSlotGems or self.db.ShowMissingGems
+        and not KE:EUIDrawsSlotElement(unit, "track")
+    local wantsDetail =
+        (self.db.ShowSlotItemLevel and not KE:EUIDrawsSlotElement(unit, "ilvl"))
+        or (self.db.ShowEnchantNames and not KE:EUIDrawsSlotElement(unit, "enchant"))
+        or ((self.db.ShowSlotGems or self.db.ShowMissingGems ~= false)
+            and not KE:EUIDrawsSlotElement(unit, "gems"))
     local data
     if wantsTrack or wantsDetail then
         data = C_TooltipInfo.GetInventoryItem(unit, slotID)
     end
 
-    if wantsTrack then
+    -- The track overlay has no enable check of its own, so the setting is still
+    -- the caller's to test. UpdateSlotDetail tests every one of its own.
+    if self.db.TrackIndicatorsEnabled then
         self:UpdateSlotTrackIndicator(slotFrame, slotID, unit, data)
     end
-
-    if wantsDetail then
-        self:UpdateSlotDetail(slotFrame, slotID, unit, nil, data)
-    end
+    self:UpdateSlotDetail(slotFrame, slotID, unit, nil, data)
 end
 
 function CP:UpdateAllSlotDetails()
@@ -1521,19 +1729,25 @@ function CP:UpdateAllSlotDetails()
     for slotID, frameName in pairs(SLOT_FRAMES) do
         self:UpdateSlotDetail(_G[frameName], slotID, "player")
     end
+    RepaintInspectSlots()
 end
 
 function CP:HideAllSlotDetails()
-    for _, frameName in pairs(SLOT_FRAMES) do
+    for slotID, frameName in pairs(SLOT_FRAMES) do
         local slotFrame = _G[frameName]
         local detail = slotFrame and FFD[slotFrame] and FFD[slotFrame].detail
         if detail then detail:Hide() end
+        -- Same one-way-setting bug as the track overlays: clear the key so
+        -- re-enabling a detail option redraws an item that has not changed.
+        local s = _slotState(slotID)
+        s.detailLink, s.detailEnchant, s.detailIlvl, s.detailOwn = nil, nil, nil, nil
     end
     for _, frameName in pairs(INSPECT_SLOT_FRAMES) do
         local slotFrame = _G[frameName]
         local detail = slotFrame and FFD[slotFrame] and FFD[slotFrame].detail
         if detail then detail:Hide() end
     end
+    InvalidateInspectSlots()
     -- Inspect ilvl FontString lives on InspectPanel; cleanup happens via
     -- InspectPanel:HideAllInspectOverlays (called from InspectPanel:OnDisable
     -- cascaded by CP:OnDisable).
@@ -1554,6 +1768,14 @@ local ITEM_ROW_PADDING  = 4
 local POPUP_PADDING     = 2
 local POPUP_ICON_SIZE   = 24
 local STANDARD_BACKDROP = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 }
+
+-- Popup fill, shared by the gem and enchant popups. Theme.bgMedium is 60%
+-- alpha, which is right for a panel sitting on another panel but washes out
+-- over open world -- these two float over whatever is behind the character
+-- sheet. Matched instead to the Damage Meter's own popup menus
+-- (DamageMeter/SegmentMenu.lua:126), the closest thing KE already has to a
+-- transient list over the world.
+local POPUP_BG = { 0.05, 0.05, 0.05, 0.97 }
 
 local function GetQualityAtlasFromLink(link)
     if not link then return nil end
@@ -1579,6 +1801,9 @@ local function GetGemStatsFromLink(link)
     return nil
 end
 
+-- Covers BOTH popups on the bar: leaving the gem popup to cross onto the
+-- enchant button (or the reverse) must not count as leaving the UI, or the
+-- 0.05s close timer fires mid-move and the popup you were heading for shuts.
 local function IsMouseOverGemUI()
     if CP.gemPopup and CP.gemPopup:IsMouseOver() then return true end
     if CP.gemPopup then
@@ -1586,6 +1811,14 @@ local function IsMouseOverGemUI()
             if btn:IsShown() and btn:IsMouseOver() then return true end
         end
     end
+    if CP.enchantPopup and CP.enchantPopup:IsMouseOver() then return true end
+    if CP.enchantPopup then
+        for _, btn in pairs(CP.enchantPopup.buttons) do
+            if btn:IsShown() and btn:IsMouseOver() then return true end
+        end
+    end
+    if CP.enchantButton and CP.enchantButton:IsShown()
+        and CP.enchantButton:IsMouseOver() then return true end
     if CP.currentSocketBtn and CP.currentSocketBtn:IsMouseOver() then return true end
     if CP.socketContainer then
         for _, socketBtn in pairs(CP.socketContainer.buttons) do
@@ -1855,6 +2088,50 @@ local function FindGemInBags(itemID)
     return nil
 end
 
+-- Where the row's gem is RIGHT NOW, or nil if it has left the bags.
+--
+-- The popup row caches the bag position it was scanned from, and bags move
+-- underneath an open popup. SocketInventoryItem resolves the DESTINATION
+-- socket only, so trusting that cached position would pick up whatever now
+-- sits there and socket it. Replace All already re-resolves per placement
+-- (FindGemInBags above, and its comment); the single-gem click did not.
+--
+function CP:ResolveGemSource(gemData)
+    if not gemData or not gemData.itemID then return nil end
+    return FindGemInBags(gemData.itemID)
+end
+
+-- The socket button's whole click action, lifted out of the OnClick closure so
+-- the REFUSAL is reachable, not just the resolver behind it. A spec that only
+-- calls ResolveGemSource proves nothing about the call site: swapping it back
+-- for the cached bagID/slotID there would leave every such test green.
+--
+-- Returns true only when the pickup was actually issued. The socket calls
+-- themselves stay unasserted -- the tiered test policy leaves those to the
+-- in-game smoke, and the missing-gem case returns before reaching any of them.
+function CP:SocketGemFromPopup(gemData, targetSlotID, targetSocketIndex)
+    local bag, slot = self:ResolveGemSource(gemData)
+    if not bag then
+        self:HideGemPopup()
+        self:HideSlotHighlight()
+        return false
+    end
+    SocketInventoryItem(targetSlotID)
+    C_Container.PickupContainerItem(bag, slot)
+    C_ItemSocketInfo.ClickSocketButton(targetSocketIndex)
+    ClearCursor()
+    AcceptSockets()
+    CloseSocketInfo()
+    if ItemSocketingFrame then HideUIPanel(ItemSocketingFrame) end
+    self:HideGemPopup()
+    self:HideSlotHighlight()
+    C_Timer.After(0.1, function()
+        if InCombatLockdown() then return end
+        CP:RefreshSocketButtons()
+    end)
+    return true
+end
+
 -- The replace loop. Upstream-verified sequencing on 12.0.7 (DSH ships this
 -- working): SocketInventoryItem opens the socketing UI for the equipped item;
 -- verify it actually opened (GetExistingSocketLink(1)) and that the staged gem
@@ -1978,6 +2255,12 @@ function CP:CreateSocketButton(index)
     btn.qualityFrame, btn.quality = CreateQualityOverlay(btn)
 
     btn:SetScript("OnEnter", function(self)
+        -- Mirrors the enchant button's own OnEnter, and the reference's
+        -- (NorskenUI v6 CharacterPanel.lua:730). Without it, sliding from the
+        -- enchant popup onto a socket leaves BOTH popups up: IsMouseOverGemUI
+        -- now recognises the socket you just moved onto, so the enchant popup's
+        -- 0.05s close timer sees the bar still hovered and bails.
+        CP:HideEnchantPopup()
         CP.currentSocketBtn = self
         -- ShowGemPopup ends in UpdateReplaceAllPreview, which sets the slot
         -- glow (single, or multi when Shift is already held) — so no separate
@@ -2018,7 +2301,7 @@ function CP:CreateGemPopup()
 
     local popup = CreateFrame("Frame", "KE_GemPopup", UIParent, "BackdropTemplate")
     popup:SetBackdrop(STANDARD_BACKDROP)
-    popup:SetBackdropColor(Theme.bgMedium[1], Theme.bgMedium[2], Theme.bgMedium[3], Theme.bgMedium[4])
+    popup:SetBackdropColor(POPUP_BG[1], POPUP_BG[2], POPUP_BG[3], POPUP_BG[4])
     popup:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
     popup:SetSize(280, 50)
     popup:SetFrameStrata("TOOLTIP")
@@ -2194,19 +2477,7 @@ function CP:CreateGemButton(index)
             return
         end
         if self.gemData and self.targetSlotID and self.targetSocketIndex then
-            SocketInventoryItem(self.targetSlotID)
-            C_Container.PickupContainerItem(self.gemData.bagID, self.gemData.slotID)
-            C_ItemSocketInfo.ClickSocketButton(self.targetSocketIndex)
-            ClearCursor()
-            AcceptSockets()
-            CloseSocketInfo()
-            if ItemSocketingFrame then HideUIPanel(ItemSocketingFrame) end
-            CP:HideGemPopup()
-            CP:HideSlotHighlight()
-            C_Timer.After(0.1, function()
-                if InCombatLockdown() then return end
-                CP:RefreshSocketButtons()
-            end)
+            CP:SocketGemFromPopup(self.gemData, self.targetSlotID, self.targetSocketIndex)
         end
     end)
 
@@ -2218,42 +2489,49 @@ function CP:RefreshSocketButtons()
     if not self.socketContainer then return end
     if not self.db.SocketHelperEnabled then return end
 
-    local allSockets = self:ScanAllEquippedSockets()
     local db = self.db
     local buttonIndex = 1
 
     self.socketContainer:SetHeight(db.SocketButtonSize)
 
-    for _, itemSocketInfo in ipairs(allSockets) do
-        for _, socket in ipairs(itemSocketInfo.sockets) do
-            if not db.ShowOnlyEmptySockets or not socket.filled then
-                local btn = self:CreateSocketButton(buttonIndex)
-                btn.socketInfo = itemSocketInfo
-                btn.socket = socket
-                btn:SetSize(db.SocketButtonSize, db.SocketButtonSize)
-                btn:ClearAllPoints()
-                if buttonIndex == 1 then
-                    btn:SetPoint("LEFT", self.socketContainer, "LEFT", 0, 0)
-                else
-                    btn:SetPoint("LEFT", self.socketContainer.buttons[buttonIndex - 1], "RIGHT", db.SocketButtonSpacing, 0)
-                end
+    -- EllesmereUI ships the same socket row along the bottom of its themed
+    -- sheet (SocketPanel.lua: one icon per equipped socket, click for a bag-gem
+    -- flyout). Only the SOCKETS stand down -- the enchant button below has no
+    -- EUI equivalent, so the bar stays and carries it alone. Brandon's call,
+    -- 2026-08-03. The scan is skipped too: it walks every equipped item.
+    if not KE:EUIDrawsSlotElement("player", "socketPanel") then
+        local allSockets = self:ScanAllEquippedSockets()
+        for _, itemSocketInfo in ipairs(allSockets) do
+            for _, socket in ipairs(itemSocketInfo.sockets) do
+                if not db.ShowOnlyEmptySockets or not socket.filled then
+                    local btn = self:CreateSocketButton(buttonIndex)
+                    btn.socketInfo = itemSocketInfo
+                    btn.socket = socket
+                    btn:SetSize(db.SocketButtonSize, db.SocketButtonSize)
+                    btn:ClearAllPoints()
+                    if buttonIndex == 1 then
+                        btn:SetPoint("LEFT", self.socketContainer, "LEFT", 0, 0)
+                    else
+                        btn:SetPoint("LEFT", self.socketContainer.buttons[buttonIndex - 1], "RIGHT", db.SocketButtonSpacing, 0)
+                    end
 
-                if socket.filled then
-                    -- icon can be nil while the gem's item data hydrates (cold
-                    -- cache); show the placeholder at full alpha — the row
-                    -- repaints via ITEM_DATA_LOAD_RESULT once the gem loads.
-                    btn.icon:SetTexture(socket.icon or 458977)
-                    btn:SetAlpha(1)
-                    local atlas = GetQualityAtlasFromLink(socket.gemLink)
-                    SetQualityAtlas(btn.quality, atlas)
-                else
-                    btn.icon:SetTexture(socket.icon or 458977)
-                    btn:SetAlpha(0.85)
-                    btn.quality:Hide()
-                end
+                    if socket.filled then
+                        -- icon can be nil while the gem's item data hydrates (cold
+                        -- cache); show the placeholder at full alpha — the row
+                        -- repaints via ITEM_DATA_LOAD_RESULT once the gem loads.
+                        btn.icon:SetTexture(socket.icon or 458977)
+                        btn:SetAlpha(1)
+                        local atlas = GetQualityAtlasFromLink(socket.gemLink)
+                        SetQualityAtlas(btn.quality, atlas)
+                    else
+                        btn.icon:SetTexture(socket.icon or 458977)
+                        btn:SetAlpha(0.85)
+                        btn.quality:Hide()
+                    end
 
-                btn:Show()
-                buttonIndex = buttonIndex + 1
+                    btn:Show()
+                    buttonIndex = buttonIndex + 1
+                end
             end
         end
     end
@@ -2262,10 +2540,26 @@ function CP:RefreshSocketButtons()
         self.socketContainer.buttons[i]:Hide()
     end
 
-    local totalWidth = (buttonIndex - 1) * (db.SocketButtonSize + db.SocketButtonSpacing)
+    -- The gem popup anchors to a socket button. With none left showing it would
+    -- hang there orphaned, so close it -- reachable both from EUI taking the
+    -- sockets and from "only empty sockets" with everything gemmed.
+    if buttonIndex == 1 then
+        self:HideGemPopup()
+        self:HideSlotHighlight()
+    end
+
+    -- After the hide loop: the enchant button parks itself after the last
+    -- button still SHOWN, so it has to read their final state.
+    self:RefreshEnchantButton()
+    local enchantShown = (self.enchantButton and self.enchantButton:IsShown()) and 1 or 0
+
+    local slotCount = (buttonIndex - 1) + enchantShown
+    local totalWidth = slotCount * (db.SocketButtonSize + db.SocketButtonSpacing)
     self.socketContainer:SetWidth(totalWidth > 0 and totalWidth or 1)
 
-    if buttonIndex > 1 then self.socketContainer:Show() else self.socketContainer:Hide() end
+    -- Shown when EITHER half has something to offer: with no sockets at all
+    -- the enchant button is still worth a bar of its own.
+    if slotCount > 0 then self.socketContainer:Show() else self.socketContainer:Hide() end
 end
 
 function CP:ShowGemPopup(socketBtn)
@@ -2448,7 +2742,526 @@ end
 function CP:DisableGemSocketHelper()
     if self.socketContainer then self.socketContainer:Hide() end
     self:HideGemPopup()
+    self:HideEnchantPopup()
+    if self.enchantButton then self.enchantButton:Hide() end
     self:HideSlotHighlight()
+end
+
+---------------------------------------------------------------------------------
+-- Enchant Helper
+---------------------------------------------------------------------------------
+-- One extra button on the right end of the socket bar. Hovering it lists every
+-- enchant in your bags; clicking a row starts Blizzard's normal "now click the
+-- item" flow. Ported from NorskenUI v6 CharacterPanel.lua:1162-1562. Three
+-- deliberate deviations from that source, each noted at its site below.
+
+-- Enchanting profession icon. The reference uses a bare fileID (4620672); a
+-- named texture path says what it is and survives an asset renumber.
+local ENCHANT_BUTTON_ICON = "Interface\\Icons\\Trade_Engraving"
+
+-- Which slots an enchant targets, resolved from words in its tooltip. English
+-- literals, same convention as GetItemTrack's "Upgrade Level:" and IsGemUnique's
+-- "Unique-Equipped" scans.
+local ENCHANT_SLOT_KEYWORDS = {
+    ["chest"] = { 5 },
+    ["cloak"] = { 15 },
+    ["back"] = { 15 },
+    ["cape"] = { 15 },
+    ["legs"] = { 7 },
+    ["leg"] = { 7 },
+    ["boot"] = { 8 },
+    ["feet"] = { 8 },
+    ["bracer"] = { 9 },
+    ["wrist"] = { 9 },
+    ["ring"] = { 11, 12 },
+    ["2h weapon"] = { 16 },
+    ["weapon"] = { 16, 17 },
+    ["staff"] = { 16 },
+    ["glove"] = { 10 },
+    ["hand"] = { 10 },
+    ["helm"] = { 1 },
+    ["head"] = { 1 },
+    ["shoulder"] = { 3 },
+    ["belt"] = { 6 },
+    ["waist"] = { 6 },
+    ["neck"] = { 2 },
+    ["trinket"] = { 13, 14 },
+}
+
+-- DEVIATION 1 (bug fix). The reference walks this table with pairs() and
+-- returns on the first hit, so a tooltip containing two keywords resolves
+-- non-deterministically. "Enchant 2H Weapon - ..." contains BOTH "2h weapon"
+-- ({16}) and "weapon" ({16, 17}), and which one wins can differ between
+-- sessions. Longest key first makes the most specific match win every time.
+-- Same fix, same reason as enchantNicknameOrder above.
+local enchantKeywordOrder = {}
+for keyword in pairs(ENCHANT_SLOT_KEYWORDS) do
+    enchantKeywordOrder[#enchantKeywordOrder + 1] = keyword
+end
+table.sort(enchantKeywordOrder, function(a, b) return #a > #b end)
+
+local enchantCache = {}
+
+local function GetEnchantTargetSlots(itemLink)
+    if not itemLink then return nil end
+    local data = C_TooltipInfo.GetHyperlink(itemLink)
+    if not data or not data.lines then return nil end
+
+    for _, line in ipairs(data.lines) do
+        local text = line.leftText
+        if text then
+            local lowerText = text:lower()
+            for _, keyword in ipairs(enchantKeywordOrder) do
+                if lowerText:find(keyword, 1, true) then
+                    return ENCHANT_SLOT_KEYWORDS[keyword]
+                end
+            end
+        end
+    end
+    return nil
+end
+CP._GetEnchantTargetSlots = GetEnchantTargetSlots
+
+local function GetEnchantDisplayName(itemLink)
+    if not itemLink then return nil end
+    local data = C_TooltipInfo.GetHyperlink(itemLink)
+    if not data or not data.lines or not data.lines[1] then return nil end
+    local name = data.lines[1].leftText
+    if name then
+        name = name:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+    end
+    return name
+end
+
+local function IsRingEnchant(targetSlots)
+    if not targetSlots then return false end
+    for _, slotID in ipairs(targetSlots) do
+        if slotID == 11 or slotID == 12 then return true end
+    end
+    return false
+end
+
+-- Slots KE will not offer an enchant for, whatever the tooltip claims.
+--
+--   [7] legs -- armour kits. The reference excludes them with no rationale in
+--       its source; Brandon confirmed why 2026-08-03: they did not work
+--       reliably there either.
+--
+-- Head is NOT in here, and must not go back in: Midnight ships current helm
+-- enchants. See BLOCKED_ENCHANT_ITEMS below for what actually fails.
+local UNOFFERABLE_ENCHANT_SLOTS = { [7] = true }
+
+-- Individual items that throw ADDON_ACTION_FORBIDDEN on UseContainerItem. The
+-- call is blocked before it does anything, so there is nothing to catch -- the
+-- only way to keep the error out of the player's log is not to offer the row.
+--
+--   [210494] Incandescent Essence
+--
+-- This is a blacklist rather than a rule because the in-game data gives no rule
+-- to write. Probed 2026-08-03, every enchant in one bag at once:
+--
+--   itemID  name                                        subclass  expansion
+--   244007  Enchant Helm - Empowered Rune of Avoidance   0         11   works
+--   210494  Incandescent Essence                         0          9   BLOCKED
+--   243977  Enchant Chest - Mark of the Worldsoul        4         11   works
+--   243959  Enchant Ring - Zul'jin's Mastery            10         11   works
+--
+-- Same class, and the same subclass as the helm enchant that works, so neither
+-- separates them. Expansion does, but "older than current" is not the same
+-- claim as "blocked" -- plenty of old enchants still apply to old gear, and
+-- filtering on it would hide them. One confirmed item, one entry.
+local BLOCKED_ENCHANT_ITEMS = {
+    [210494] = true,
+}
+
+-- True when EVERY slot the enchant could target is unofferable. A weapon
+-- enchant ({16, 17}) or a ring enchant ({11, 12}) keeps its offerable half.
+local function IsUnofferableEnchant(targetSlots)
+    if not targetSlots then return true end
+    for _, slotID in ipairs(targetSlots) do
+        if not UNOFFERABLE_ENCHANT_SLOTS[slotID] then return false end
+    end
+    return true
+end
+CP._IsUnofferableEnchant = IsUnofferableEnchant
+
+-- Both refusals in one question, asked once per bag item and again on click.
+local function IsOfferableEnchant(itemID, targetSlots)
+    if BLOCKED_ENCHANT_ITEMS[itemID] then return false end
+    return not IsUnofferableEnchant(targetSlots)
+end
+CP._IsOfferableEnchant = IsOfferableEnchant
+
+function CP:ScanBagsForEnchants()
+    wipe(enchantCache)
+    local NUM_BAG_SLOTS = NUM_BAG_SLOTS or 4
+    -- DEVIATION 2: the reference reads LE_ITEM_CLASS_ITEM_ENHANCEMENT, a legacy
+    -- global. Enum with a literal fallback matches ScanBagsForGems above.
+    local ITEM_ENHANCEMENT = (Enum and Enum.ItemClass and Enum.ItemClass.ItemEnhancement) or 8
+    for bag = 0, NUM_BAG_SLOTS do
+        local numSlots = C_Container.GetContainerNumSlots(bag)
+        for slot = 1, numSlots do
+            local info = C_Container.GetContainerItemInfo(bag, slot)
+            if info and info.itemID then
+                local _, _, _, _, _, classID = C_Item.GetItemInfoInstant(info.itemID)
+                if classID == ITEM_ENHANCEMENT then
+                    local targetSlots = GetEnchantTargetSlots(info.hyperlink)
+                    if targetSlots and IsOfferableEnchant(info.itemID, targetSlots) then
+                        local existing = enchantCache[info.itemID]
+                        if existing then
+                            existing.count = existing.count + info.stackCount
+                        else
+                            enchantCache[info.itemID] = {
+                                itemID = info.itemID, icon = info.iconFileID,
+                                count = info.stackCount, link = info.hyperlink,
+                                bagID = bag, slotID = slot,
+                                targetSlots = targetSlots,
+                            }
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return enchantCache
+end
+
+-- The first target slot that actually holds an item. Drives the hover glow
+-- only; the click path hands off to Blizzard, which picks the real target.
+function CP:FindBestEnchantSlot(targetSlots)
+    if not targetSlots or #targetSlots == 0 then return nil end
+    for _, slotID in ipairs(targetSlots) do
+        if GetInventoryItemLink("player", slotID) then return slotID end
+    end
+    return nil
+end
+
+function CP:CreateEnchantButton()
+    if self.enchantButton then return self.enchantButton end
+
+    local db = self.db
+    local Theme = KE.Theme
+
+    local btn = CreateFrame("Button", nil, self.socketContainer)
+    btn:SetSize(db.SocketButtonSize, db.SocketButtonSize)
+
+    btn.icon = btn:CreateTexture(nil, "ARTWORK")
+    btn.icon:SetAllPoints()
+    btn.icon:SetTexture(ENCHANT_BUTTON_ICON)
+    KE:ApplyIconZoom(btn.icon, 0.3)
+    KE:AddIconBorders(btn, Theme.border)
+
+    btn.highlight = btn:CreateTexture(nil, "HIGHLIGHT")
+    btn.highlight:SetPoint("TOPLEFT", btn, "TOPLEFT", 1, -1)
+    btn.highlight:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
+    btn.highlight:SetColorTexture(1, 1, 1, 0.2)
+    btn.highlight:SetBlendMode("ADD")
+
+    btn:SetScript("OnEnter", function()
+        -- The two popups share the bar, so opening this one closes the gem
+        -- popup and its slot glow first.
+        CP:HideGemPopup()
+        CP:HideSlotHighlight()
+        CP:ShowEnchantPopup(btn)
+    end)
+
+    btn:SetScript("OnLeave", function()
+        C_Timer.After(0.05, function()
+            if IsMouseOverGemUI() then return end
+            CP:HideGemPopup()
+            CP:HideEnchantPopup()
+            CP:HideSlotHighlight()
+        end)
+    end)
+
+    btn:Hide()
+    self.enchantButton = btn
+    return btn
+end
+
+function CP:CreateEnchantPopup()
+    if self.enchantPopup then return self.enchantPopup end
+
+    local Theme = KE.Theme
+
+    local popup = CreateFrame("Frame", "KE_EnchantPopup", UIParent, "BackdropTemplate")
+    popup:SetBackdrop(STANDARD_BACKDROP)
+    popup:SetBackdropColor(POPUP_BG[1], POPUP_BG[2], POPUP_BG[3], POPUP_BG[4])
+    popup:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+    popup:SetSize(280, 50)
+    popup:SetFrameStrata("TOOLTIP")
+    popup:SetClipsChildren(true)
+    popup:Hide()
+
+    popup.title = popup:CreateFontString(nil, "OVERLAY")
+    popup.title:SetPoint("TOPLEFT", 6, -6)
+    KE:ApplyFontToText(popup.title, "Expressway", 14, "OUTLINE")
+    popup.title:SetText("Enchants")
+    popup.title:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3])
+
+    popup.separator = popup:CreateTexture(nil, "ARTWORK")
+    popup.separator:SetHeight(1)
+    popup.separator:SetPoint("TOPLEFT", popup, "TOPLEFT", 0, -TITLE_HEIGHT)
+    popup.separator:SetPoint("TOPRIGHT", popup, "TOPRIGHT", 0, -TITLE_HEIGHT)
+    popup.separator:SetColorTexture(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+
+    popup.noEnchants = popup:CreateFontString(nil, "OVERLAY")
+    popup.noEnchants:SetPoint("CENTER", 0, -8)
+    KE:ApplyFontToText(popup.noEnchants, "Expressway", 14, "OUTLINE")
+    popup.noEnchants:SetText("No enchants in bags")
+    popup.noEnchants:SetTextColor(Theme.textMuted[1], Theme.textMuted[2], Theme.textMuted[3])
+    popup.noEnchants:Hide()
+
+    popup:EnableMouse(true)
+    popup:SetScript("OnLeave", function()
+        C_Timer.After(0.05, function()
+            if IsMouseOverGemUI() then return end
+            CP:HideEnchantPopup()
+            CP:HideSlotHighlight()
+        end)
+    end)
+
+    popup.buttons = {}
+    self.enchantPopup = popup
+    return popup
+end
+
+function CP:CreateEnchantRow(index)
+    local popup = self.enchantPopup
+    local Theme = KE.Theme
+    local iconSize = POPUP_ICON_SIZE
+    local rowHeight = POPUP_ICON_SIZE + ITEM_ROW_PADDING
+
+    if popup.buttons[index] then return popup.buttons[index] end
+
+    local btn = CreateFrame("Button", "KE_EnchantBtn" .. index, popup)
+    btn:SetHeight(rowHeight)
+    btn:SetPoint("TOPLEFT",  popup, "TOPLEFT",  POPUP_PADDING, -TITLE_HEIGHT - (index - 1) * rowHeight)
+    btn:SetPoint("TOPRIGHT", popup, "TOPRIGHT", -POPUP_PADDING, -TITLE_HEIGHT - (index - 1) * rowHeight)
+
+    btn.iconFrame = CreateFrame("Frame", nil, btn)
+    btn.iconFrame:SetSize(iconSize, iconSize)
+    btn.iconFrame:SetPoint("LEFT", 0, 0)
+    KE:AddIconBorders(btn.iconFrame, Theme.border)
+
+    btn.icon = btn.iconFrame:CreateTexture(nil, "ARTWORK")
+    btn.icon:SetAllPoints()
+    KE:ApplyIconZoom(btn.icon, 0.3)
+
+    btn.qualityFrame, btn.quality = CreateQualityOverlay(btn, btn.iconFrame)
+
+    btn.stats = btn:CreateFontString(nil, "OVERLAY")
+    btn.stats:SetPoint("LEFT", btn.iconFrame, "RIGHT", 6, 0)
+    btn.stats:SetWidth(220)
+    btn.stats:SetJustifyH("LEFT")
+    btn.stats:SetWordWrap(true)
+    KE:ApplyFontToText(btn.stats, "Expressway", 12, "OUTLINE")
+    btn.stats:SetTextColor(Theme.textPrimary[1], Theme.textPrimary[2], Theme.textPrimary[3])
+    btn.stats:SetShadowColor(0, 0, 0, 0)
+
+    btn.count = btn:CreateFontString(nil, "OVERLAY")
+    btn.count:SetPoint("RIGHT", btn, "RIGHT", -4, 0)
+    KE:ApplyFontToText(btn.count, "Expressway", 12, "OUTLINE")
+    btn.count:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3])
+    btn.count:SetShadowColor(0, 0, 0, 0)
+
+    local hoverBg = btn:CreateTexture(nil, "BACKGROUND")
+    hoverBg:SetAllPoints()
+    hoverBg:SetColorTexture(1, 1, 1, 0.05)
+    hoverBg:SetAlpha(0)
+    btn._hoverBg = hoverBg
+    btn._hoverTarget = 0
+
+    btn:SetScript("OnUpdate", function(button, elapsed)
+        local current = button._hoverBg:GetAlpha()
+        if math.abs(current - button._hoverTarget) > 0.01 then
+            local speed = elapsed / HOVER_DURATION
+            if button._hoverTarget > current then
+                button._hoverBg:SetAlpha(math.min(current + speed, button._hoverTarget))
+            else
+                button._hoverBg:SetAlpha(math.max(current - speed, button._hoverTarget))
+            end
+        end
+    end)
+
+    btn:SetScript("OnEnter", function(button)
+        button._hoverTarget = 1
+        -- Ring enchants can go on either finger, so glow both.
+        if button.enchantData and IsRingEnchant(button.enchantData.targetSlots) then
+            CP:ShowSlotHighlights(button.enchantData.targetSlots)
+        elseif button.targetSlotID then
+            CP:ShowSlotHighlight(button.targetSlotID)
+        end
+        if button.enchantData and button.enchantData.link then
+            -- 40px right of the row put it well clear of the popup; Brandon
+            -- read that as detached. 8px keeps the gap without the drift.
+            GameTooltip:SetOwner(button, "ANCHOR_RIGHT", 8, 0)
+            GameTooltip:SetHyperlink(button.enchantData.link)
+            GameTooltip:Show()
+        end
+    end)
+
+    btn:SetScript("OnLeave", function(button)
+        button._hoverTarget = 0
+        GameTooltip:Hide()
+        C_Timer.After(0.05, function()
+            if IsMouseOverGemUI() then return end
+            CP:HideEnchantPopup()
+            CP:HideSlotHighlight()
+        end)
+    end)
+
+    btn:SetScript("OnClick", function(button)
+        CP:ApplyEnchantFromBags(button.enchantData)
+    end)
+
+    popup.buttons[index] = btn
+    return btn
+end
+
+-- Split out of the OnClick closure so the combat refusal is reachable without
+-- standing up a frame (dev/spec/character_panel_enchant_spec.lua). Returns
+-- true only when the pickup was actually issued.
+function CP:ApplyEnchantFromBags(enchantData)
+    if InCombatLockdown() then
+        KE:Print("Cannot enchant during combat")
+        return false
+    end
+    if not enchantData then return false end
+    -- Second line of defence on the blacklist. ScanBagsForEnchants already
+    -- keeps these out of the popup, but a row built before the list is only
+    -- rebuilt on a refresh, and the whole point is that this call cannot fail
+    -- quietly -- it puts an error in the player's log with our name on it.
+    if not IsOfferableEnchant(enchantData.itemID, enchantData.targetSlots) then
+        return false
+    end
+    -- ...and the id we just vetted has to be the id we act on. The row caches
+    -- the bag and slot it was scanned from, but bags move underneath an open
+    -- popup: BAG_UPDATE_DELAYED refreshes the socket bar and never rebuilds
+    -- this list, so a sort can slide a different item into that exact slot.
+    -- Without this the vetted id passes and UseContainerItem fires on whatever
+    -- is there now -- including the one item the blacklist exists to stop.
+    local live = C_Container.GetContainerItemInfo(enchantData.bagID, enchantData.slotID)
+    if not live or live.itemID ~= enchantData.itemID then
+        self:HideEnchantPopup()
+        self:HideSlotHighlight()
+        return false
+    end
+    -- DEVIATION 3: the reference calls the bare UseContainerItem global.
+    -- Blizzard's own code uses the namespaced form everywhere in 12.0.7
+    -- (ContainerFrame.lua:1342, SecureTemplates.lua:771), so the bare name is
+    -- at best a deprecated shim.
+    -- This picks the enchant up; the player then clicks the item to apply it.
+    -- Deliberately NOT auto-applied -- same as the reference.
+    C_Container.UseContainerItem(enchantData.bagID, enchantData.slotID)
+    self:HideEnchantPopup()
+    self:HideSlotHighlight()
+    return true
+end
+
+function CP:ShowEnchantPopup(enchantBtn)
+    local popup = self:CreateEnchantPopup()
+    local enchants = self:ScanBagsForEnchants()
+    local Theme = KE.Theme
+
+    -- Only offer an enchant whose target slot actually holds gear.
+    local enchantList = {}
+    for _, enchantData in pairs(enchants) do
+        local targetSlotID = self:FindBestEnchantSlot(enchantData.targetSlots)
+        if targetSlotID then
+            enchantData.resolvedSlotID = targetSlotID
+            table.insert(enchantList, enchantData)
+        end
+    end
+
+    popup.title:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3])
+
+    local minWidth = popup.title:GetStringWidth() + 26
+    local minRowHeight = POPUP_ICON_SIZE + ITEM_ROW_PADDING
+    local targetHeight
+
+    if #enchantList == 0 then
+        popup.noEnchants:Show()
+        popup.separator:Hide()
+        popup.noEnchants:SetTextColor(Theme.textMuted[1], Theme.textMuted[2], Theme.textMuted[3])
+        for _, btn in pairs(popup.buttons) do btn:Hide() end
+        popup:SetWidth(math.max(200, minWidth))
+        targetHeight = 50
+    else
+        popup.noEnchants:Hide()
+        popup.separator:Show()
+
+        local yOffset = TITLE_HEIGHT
+        for i, enchantData in ipairs(enchantList) do
+            local btn = self:CreateEnchantRow(i)
+            btn.enchantData = enchantData
+            btn.targetSlotID = enchantData.resolvedSlotID
+            btn.icon:SetTexture(enchantData.icon)
+            btn.count:SetText(enchantData.count .. "x")
+            btn.count:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3])
+            btn._hoverBg:SetAlpha(0); btn._hoverTarget = 0
+
+            btn.stats:SetText(GetEnchantDisplayName(enchantData.link) or "")
+            btn.stats:SetTextColor(Theme.textPrimary[1], Theme.textPrimary[2], Theme.textPrimary[3])
+
+            local textHeight = btn.stats:GetStringHeight()
+            local rowHeight = math.max(minRowHeight, textHeight + ITEM_ROW_PADDING)
+            btn:SetHeight(rowHeight)
+            btn:ClearAllPoints()
+            btn:SetPoint("TOPLEFT", popup, "TOPLEFT", POPUP_PADDING, -yOffset)
+            btn:SetPoint("TOPRIGHT", popup, "TOPRIGHT", -POPUP_PADDING, -yOffset)
+            btn.iconFrame:SetSize(POPUP_ICON_SIZE, POPUP_ICON_SIZE)
+
+            SetQualityAtlas(btn.quality, GetQualityAtlasFromLink(enchantData.link))
+
+            btn:Show()
+            yOffset = yOffset + rowHeight
+        end
+        for i = #enchantList + 1, #popup.buttons do popup.buttons[i]:Hide() end
+
+        popup:SetWidth(280)
+        targetHeight = yOffset
+    end
+
+    popup:ClearAllPoints()
+    popup:SetPoint("TOPLEFT", enchantBtn, "BOTTOMLEFT", 0, -1)
+    popup:SetHeight(targetHeight)
+    popup:Show()
+end
+
+function CP:HideEnchantPopup()
+    if self.enchantPopup then self.enchantPopup:Hide() end
+end
+
+-- Parks the button after the last VISIBLE socket button, so it stays flush
+-- with the bar whether there are eleven sockets or none.
+function CP:RefreshEnchantButton()
+    if not self.socketContainer then return end
+    if not (self.db.SocketHelperEnabled and self.db.EnchantHelperEnabled) then
+        if self.enchantButton then self.enchantButton:Hide() end
+        return
+    end
+
+    local db = self.db
+    local btn = self:CreateEnchantButton()
+    btn:SetSize(db.SocketButtonSize, db.SocketButtonSize)
+    btn:ClearAllPoints()
+
+    local lastSocketBtn
+    for i = #self.socketContainer.buttons, 1, -1 do
+        if self.socketContainer.buttons[i]:IsShown() then
+            lastSocketBtn = self.socketContainer.buttons[i]
+            break
+        end
+    end
+
+    if lastSocketBtn then
+        btn:SetPoint("LEFT", lastSocketBtn, "RIGHT", db.SocketButtonSpacing, 0)
+    else
+        btn:SetPoint("LEFT", self.socketContainer, "LEFT", 0, 0)
+    end
+
+    btn:Show()
 end
 
 ---------------------------------------------------------------------------------
@@ -2522,10 +3335,7 @@ function CP:OnEnable()
             self.eventFrame:RegisterEvent("ITEM_DATA_LOAD_RESULT")
         end
         UpdateDisplay()                                   -- warnings
-        if self.db.TrackIndicatorsEnabled then self:UpdateAllTrackIndicators() end
-        if self.db.ShowSlotItemLevel or self.db.ShowEnchantNames or self.db.ShowSlotGems or self.db.ShowMissingGems then
-            self:UpdateAllSlotDetails()
-        end
+        self:RefreshSlotDisplays()
     end
 
     self:ApplySettings()

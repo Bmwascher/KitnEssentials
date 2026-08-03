@@ -1060,6 +1060,8 @@ local Defaults = {
             SocketButtonSize         = 24,
             SocketButtonSpacing      = 1,
             ShowOnlyEmptySockets     = false,
+            -- Enchant helper shares the socket bar, so it needs both flags on
+            EnchantHelperEnabled     = true,
 
             -- Per-slot detail overlays (no ElvUI conflict)
             ShowSlotItemLevel    = true,

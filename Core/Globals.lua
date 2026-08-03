@@ -770,6 +770,125 @@ function PreviewManager:IsPreviewActive()
 end
 
 ---------------------------------------------------------------------------------
+-- EllesmereUI themed character sheet
+---------------------------------------------------------------------------------
+-- EUI's Blizz UI Enhanced does not skin the character sheet, it REPLACES it:
+-- it hides Blizzard's slot wrappers, re-anchors every slot into its own
+-- two-column grid, swaps the model, and draws its own per-slot item level,
+-- upgrade track, enchant and gem icons (EllesmereUIBlizzardSkin_CharacterSheet.lua,
+-- and _InspectSheet.lua for the inspect frame). Its column sides happen to match
+-- ours almost exactly, so KE's own per-slot text lands on top of EUI's rather
+-- than beside it.
+--
+-- CharacterPanel / InspectPanel therefore stand down from the overlapping
+-- display while this is live, the same way they already stand down for ElvUI.
+-- Everything EUI does NOT draw (the socket helper, inspect gems, race text,
+-- the faction tag) keeps running.
+--
+-- The test is EUI's OWN gate, copied from the places it guards each sheet with
+-- (CharacterSheet.lua:4436, 4773, 4897; InspectSheet.lua:1207, 1235, 1248), so
+-- turning a themed sheet off hands that display straight back to us. Absent
+-- means ON -- only a literal false is off, EUI's convention.
+--
+-- The two sheets have SEPARATE enable keys and separate user-facing toggles
+-- (EUI_BlizzardSkin_Options.lua:1174-1183 is the inspect one), so they really
+-- do diverge by a click. Gating the inspect frame on the character sheet's key
+-- breaks both ways: inspect text vanishes when only the inspect sheet is off,
+-- and double-draws when only the character sheet is off. Pass the unit and let
+-- this pick, rather than leaving the choice to each call site.
+---@param unit string? "player" selects the character sheet; anything else, inspect
+function KE:EUISheetActive(unit)
+    if not (C_AddOns and C_AddOns.IsAddOnLoaded
+        and C_AddOns.IsAddOnLoaded("EllesmereUIBlizzardSkin")) then
+        return false
+    end
+    local db = _G.EllesmereUIDB
+    local key = (unit == nil or unit == "player") and "themedCharacterSheet"
+        or "themedInspectSheet"
+    if type(db) == "table" and db[key] == false then return false end
+    -- EUI's master "no Blizzard window skins" switch, which kills both sheets
+    -- at once. Guarded: it is a function on EUI's own namespace, absent in
+    -- older builds.
+    local eui = _G.EllesmereUI
+    if eui and type(eui.BlizzWindowSkinsKilled) == "function" then
+        local ok, killed = pcall(eui.BlizzWindowSkinsKilled)
+        if ok and killed then return false end
+    end
+    return true
+end
+
+-- Whether EUI is drawing ONE PARTICULAR per-slot element on a given frame.
+--
+-- The sheet being on is not enough to decide ownership: EUI ships six
+-- independent per-element toggles on top of it, all live and all user-facing
+-- (EUI_BlizzardSkin_Options.lua:893-951 for the character sheet, :1198-1230 for
+-- inspect). Standing down on the sheet alone means turning EUI's "Show Gems"
+-- off deletes the gems from BOTH addons -- strictly worse than the doubling
+-- this was meant to solve. Ask per element instead.
+--
+-- Two asymmetries in EUI worth knowing, both verified in its source:
+--   * gems: the inspect sheet draws none at all, at any setting.
+--   * missingEnchant: on the CHARACTER sheet the pulsing red border fires
+--     outside the showEnchants branch (CharacterSheet.lua:4736-4740), so EUI
+--     still flags a missing enchant with enchant display off. The INSPECT
+--     sheet has no border -- icon only, and that icon IS gated -- so with
+--     inspectShowEnchants off nothing marks it and ours should show.
+--
+-- Absent means ON throughout, EUI's own convention.
+local EUI_ELEMENT_KEYS = {
+    player = {
+        ilvl = "showItemLevel", enchant = "showEnchants",
+        gems = "showGems",     track   = "showUpgradeTrack",
+        -- EUI's own bottom-of-sheet socket row (SocketPanel.lua), the same
+        -- feature as KE's socket bar down to the click-to-flyout behaviour.
+        socketPanel = "charSheetSocketPanel",
+    },
+    inspect = {
+        ilvl = "inspectShowItemLevel", enchant = "inspectShowEnchants",
+        track = "inspectShowUpgradeTrack",
+        -- gems deliberately absent: see above.
+    },
+}
+
+---@param unit string? "player" selects the character sheet; anything else, inspect
+---@param element string "ilvl" | "enchant" | "gems" | "track" | "missingEnchant"
+function KE:EUIDrawsSlotElement(unit, element)
+    if not self:EUISheetActive(unit) then return false end
+    local isPlayer = (unit == nil or unit == "player")
+
+    if element == "missingEnchant" then
+        -- Character sheet: the border is unconditional, so EUI always marks it.
+        if isPlayer then return true end
+        element = "enchant"  -- inspect: rides entirely on the enchant icon
+    end
+
+    -- Elements EUI ships with NO switch of its own. The sheet being active IS
+    -- the answer for these, so they never reach the key table below.
+    if element == "headerText" then
+        -- Character sheet only. EUI re-anchors Blizzard's own name and level
+        -- strings into its header (CharacterSheet.lua:497-505) rather than
+        -- drawing its own. KE restyling them and displacing the level string
+        -- to make room for race text lands on top of that -- the overlap
+        -- Brandon photographed 2026-08-03.
+        return isPlayer
+    end
+    if element == "avgIlvl" then
+        -- INSPECT only, and deliberately not the character sheet: there KE's
+        -- decimal item level feeds EUI's own readout rather than drawing a
+        -- second one, so it is an enhancement, not a duplicate. On inspect EUI
+        -- prints its own average and ours lands under the Talents button.
+        return not isPlayer
+    end
+
+    local keys = isPlayer and EUI_ELEMENT_KEYS.player or EUI_ELEMENT_KEYS.inspect
+    local key = keys[element]
+    if not key then return false end  -- EUI never draws this element on this frame
+
+    local db = _G.EllesmereUIDB
+    return not (type(db) == "table" and db[key] == false)
+end
+
+---------------------------------------------------------------------------------
 -- Healer Position Override
 ---------------------------------------------------------------------------------
 

@@ -15,7 +15,8 @@
 --   local DM = L.loadDMCore({ issecretvalue = myFn })
 --
 -- Loaders taking opts (loadDungeonTimers, loadPixelPerfect) accept mock
--- overrides as a second arg; the rest take overrides first. Override keys
+-- overrides as a second arg; the rest take overrides first (loadGlobals takes
+-- overrides first AND an optional opts second). Override keys
 -- _wow_mock manages (issecretvalue, C_Timer, AbbreviateNumbers, ...) win
 -- over the loader defaults; stubs _wow_mock does NOT manage live on _G and
 -- can simply be reassigned after the loader returns.
@@ -80,7 +81,8 @@ end
 -- stub appends xpcall-caught error messages into (used by the
 -- KE:RunAfterCombat drain spec to assert an errored closure still reaches
 -- the error handler).
-function L.loadGlobals(overrides)
+function L.loadGlobals(overrides, opts)
+    opts = opts or {}
     installMock(overrides, { C_Timer = inertTimer() })
     helpers.installAddonShim()
     -- Fake LSM: "GoodFont" is a known-valid non-default key so font-repair
@@ -94,9 +96,14 @@ function L.loadGlobals(overrides)
         if name == "LibSharedMedia-3.0" then return lsm end
         return nil
     end
+    -- opts.loadedAddOns is a name->true set of addons IsAddOnLoaded reports;
+    -- absent means nothing is loaded, the historical behaviour. It is an opt
+    -- rather than a mock override because Core/Globals.lua localizes C_AddOns
+    -- at file scope, so reassigning the namespace after the load is too late.
+    local loadedAddOns = opts.loadedAddOns or {}
     _G.C_AddOns = {
         GetAddOnMetadata = function() return "KE" end,
-        IsAddOnLoaded = function() return false end,
+        IsAddOnLoaded = function(name) return loadedAddOns[name] == true end,
     }
     _G.EditModeManagerFrame = nil
     _G.UIParent = noopFrame()   -- file-scope font probe: UIParent:CreateFontString()

@@ -14,10 +14,6 @@ local STAT_CATEGORIES = { "ItemLevelCategory", "AttributesCategory", "Enhancemen
 local ILVL_SIZE, HEADER_SIZE, ROW_SIZE = 20, 14, 12
 local HEADER_INSET = 6
 
-local GetInventoryItemLink = GetInventoryItemLink
-local GetItemGem = GetItemGem or (C_Item and C_Item.GetItemGem)
-local GetItemIcon = C_Item and C_Item.GetItemIconByID
-local ITEM_QUALITY_COLORS = ITEM_QUALITY_COLORS
 local ItemLocation = ItemLocation
 
 local ILVL_FONT = 13
@@ -25,188 +21,19 @@ local TAB_FONT = 13
 local TITLE_FONT = 13
 local BRAND = S.palette.brand
 
-local TEXT_SIDE = {
-    Head = "R", Neck = "R", Shoulder = "R", Back = "R", Chest = "R", Wrist = "R",
-    Hands = "L", Waist = "L", Legs = "L", Feet = "L",
-    Finger0 = "L", Finger1 = "L", Trinket0 = "L", Trinket1 = "L",
-    MainHand = "T", SecondaryHand = "T",
-}
-local NO_ILVL = { [4] = true, [19] = true }
-
-local function EnsureSlotDisplay(button, side)
-    if S.data(button).aeILvl then return end
-    local ilvl = button:CreateFontString(nil, "OVERLAY")
-    S.SetFont(ilvl, ILVL_FONT, "OUTLINE")
-    if side == "R" then
-        ilvl:SetPoint("TOPLEFT", button, "TOPRIGHT", 3, -2)
-        ilvl:SetJustifyH("LEFT")
-    elseif side == "L" then
-        ilvl:SetPoint("TOPRIGHT", button, "TOPLEFT", -3, -2)
-        ilvl:SetJustifyH("RIGHT")
-    else
-        ilvl:SetPoint("BOTTOM", button, "TOP", 0, 3)
-    end
-    S.data(button).aeILvl = ilvl
-
-    S.data(button).aeGems = {}
-    for i = 1, 3 do
-        local border = button:CreateTexture(nil, "OVERLAY", nil, 1)
-        border:SetColorTexture(0, 0, 0, 0.9)
-        local g = button:CreateTexture(nil, "OVERLAY", nil, 2)
-        g:SetSize(12, 12)
-        g:SetTexCoord(0.1, 0.9, 0.1, 0.9)
-        border:SetPoint("TOPLEFT", g, "TOPLEFT", -1, 1)
-        border:SetPoint("BOTTOMRIGHT", g, "BOTTOMRIGHT", 1, -1)
-        g.aeBorder = border
-        if i == 1 then
-            if side == "L" then
-                g:SetPoint("RIGHT", ilvl, "LEFT", -4, 0)
-            else
-                g:SetPoint("LEFT", ilvl, "RIGHT", 4, 0)
-            end
-        else
-            if side == "L" then
-                g:SetPoint("RIGHT", S.data(button).aeGems[i - 1], "LEFT", -2, 0)
-            else
-                g:SetPoint("LEFT", S.data(button).aeGems[i - 1], "RIGHT", 2, 0)
-            end
-        end
-        g:Hide()
-        border:Hide()
-        S.data(button).aeGems[i] = g
-    end
-end
-
--- v4.0.3 (empty sockets should show on the character panel):
--- the gem row previously rendered only FILLED sockets (positional
--- GetItemGem), so an ungemmed socket was invisible -- exactly the case
--- where the player most wants the reminder. Empty sockets are detected
--- from C_Item.GetItemStats, with KE.GEM_SOCKET_TYPES supplying the
--- socket-type icon. Exposed as KE.GetEmptySocketIcons for the inspect
--- panel (CharacterScreen) to share -- both frames draw their per-slot
--- gem icons through this one function.
--- Sockets per item; matches the paperdoll's cap.
-local MAX_ITEM_SOCKETS = 4
-
--- v4.0.155: rewritten. The inspect frame uses this, NOT the paperdoll's
--- CS:ScanItemSockets, so none of the socket fixes since v4.0.137 reached
--- it -- which is why the paperdoll behaved and inspect did not.
---
--- What it used to do wrong, all at once:
---   * scraped a GameTooltip. That tip inherits GameTooltipTemplate, so
---     every other addon's OnTooltipSetItem hook fires on it and any
---     socket line they add was counted as a real socket.
---   * no break after a match, so one line matching several socket
---     strings counted once per match.
---   * cached the result by link FOREVER, including negative results. On
---     inspect the first scan usually runs before the item has arrived
---     ("Retrieving item information"), finds zero sockets, and caches
---     that -- the gem never appears no matter how long you wait, and
---     reopening gives a different answer because the gem loop beside it
---     resolves independently. That is exactly the reported "gem missing,
---     then doubled after reopening".
---
--- Now: counts from C_Item.GetItemStats like the paperdoll, returns only
--- the sockets the caller's gem loop will NOT fill, and never caches an
--- answer taken before the item is known.
-local function GetEmptySocketIcons(unit, slotID, link) -- luacheck: ignore 212/unit 212/slotID
-    if not link then return nil end
-
-    -- v4.0.157: NO CACHE. v4.0.155 cached on IsItemDataCachedByID(link),
-    -- but that tests the ITEM -- the gem inside it is a separate item and
-    -- resolves later. On a first inspect the ring was cached while its
-    -- gem was not, so filled=0, and "1 empty socket" got cached forever.
-    -- The second inspect then drew the now-resolved gem PLUS the cached
-    -- empty: two icons on a one-socket ring.
-    --
-    -- The cache only ever existed to avoid a tooltip scrape, and that is
-    -- gone -- GetItemStats and GetItemGem are plain lookups. Removing it
-    -- removes the entire class of stale-partial-result bugs rather than
-    -- adding another condition to guess at.
-    local stats = C_Item.GetItemStats and C_Item.GetItemStats(link)
-    if not stats then return nil end
-
-    -- One icon per socket, in type order.
-    local slots = {}
-    for _, socketType in ipairs(KE.GEM_SOCKET_TYPES) do
-        local count = tonumber(stats[socketType.locale]) or 0
-        for _ = 1, count do
-            if #slots >= MAX_ITEM_SOCKETS then break end
-            slots[#slots + 1] = socketType.icon
-        end
-    end
-
-    if #slots == 0 then return nil end
-
-    -- The caller fills the first `filled` icons from GetItemGem; only the
-    -- remainder are empty.
-    local filled = 0
-    for i = 1, #slots do
-        local _, gemLink = C_Item.GetItemGem(link, i)
-        if gemLink then filled = filled + 1 end
-    end
-
-    local icons
-    for i = filled + 1, #slots do
-        icons = icons or {}
-        icons[#icons + 1] = slots[i]
-    end
-
-    return icons
-end
-
-KE.GetEmptySocketIcons = GetEmptySocketIcons
-
-local function UpdateSlotDisplay(button)
-    if not button or not S.data(button).aeILvl then return end
-    local slotID = button:GetID()
-    local link = slotID and slotID > 0 and GetInventoryItemLink("player", slotID)
-    if not link then
-        S.data(button).aeILvl:SetText("")
-        for _, g in ipairs(S.data(button).aeGems) do g:Hide(); g.aeBorder:Hide() end
-        return
-    end
-
-    if NO_ILVL[slotID] then
-        S.data(button).aeILvl:SetText("")
-    else
-        local loc = ItemLocation:CreateFromEquipmentSlot(slotID)
-        local ilvl = loc and C_Item.DoesItemExist(loc) and C_Item.GetCurrentItemLevel(loc)
-        S.data(button).aeILvl:SetText(ilvl or "")
-        local q = loc and C_Item.GetItemQuality(loc)
-        local c = q and ITEM_QUALITY_COLORS[q]
-        if c then S.data(button).aeILvl:SetTextColor(c.r, c.g, c.b) else S.data(button).aeILvl:SetTextColor(1, 1, 1) end
-    end
-
-    -- Filled gems first (positional), then empty-socket icons for the
-    -- item's remaining sockets, then hide the rest of the row.
-    local emptyIcons = GetEmptySocketIcons("player", slotID, link)
-    local emptyIndex = 0
-    for i, g in ipairs(S.data(button).aeGems) do
-        local tex, isEmptySocket
-        if GetItemGem then
-            local _, gemLink = GetItemGem(link, i)
-            local gemID = gemLink and tonumber(strmatch(gemLink, "item:(%d+)"))
-            if gemID and GetItemIcon then tex = GetItemIcon(gemID) end
-        end
-        if not tex and emptyIcons and emptyIndex < #emptyIcons then
-            emptyIndex = emptyIndex + 1
-            tex = emptyIcons[emptyIndex]
-            isEmptySocket = true
-        end
-        if tex then
-            g:SetTexture(tex)
-            g:SetDesaturated(isEmptySocket and true or false)
-            g:SetAlpha(isEmptySocket and 0.85 or 1)
-            g:Show(); g.aeBorder:Show()
-        else
-            g:Hide(); g.aeBorder:Hide()
-        end
-    end
-end
-
-local slotHooked = false
-local slotNoticeShown
+-- Per-slot item level + gem icons used to be drawn here (EnsureSlotDisplay /
+-- UpdateSlotDisplay / GetEmptySocketIcons, ported from the reference skin).
+-- Removed: KE already draws all three from Modules/QoL/CharacterPanel.lua, at
+-- anchors within 2px of these, so every character slot rendered them TWICE
+-- whenever this skin was on. The reference has no such overlap -- there the
+-- skin owns the paperdoll and its info module deliberately stands down (its
+-- CharacterScreen.lua:1710 guards on the skin's own store before drawing, and
+-- reads the skin's fontstring to anchor enchant text). KE's panel was ported
+-- first, before this skin existed, so it grew its own copy instead.
+-- CharacterPanel is the single owner now: it ships enabled by default, this
+-- skin ships disabled, and it also covers the inspect frame, which this never
+-- did. KE.GetEmptySocketIcons went with them -- it was exported for the
+-- reference's info module and nothing in KE ever called it.
 
 local function UpdateStatsPane()
     local pane = _G.CharacterStatsPane
@@ -626,37 +453,14 @@ local function Skin()
             if PanelTemplates_TabResize then PanelTemplates_TabResize(tab, 0) end
         end
     end
+    -- Art only. The per-slot ilvl/gem text this loop used to add, and the
+    -- PaperDollItemSlotButton_Update hook that refreshed it, are gone --
+    -- CharacterPanel owns that display (see the note at the top of this file).
     for _, slot in ipairs(SLOTS) do
         local button = _G["Character" .. slot .. "Slot"]
         if button then
             S.ItemButton(button)
-            local side = TEXT_SIDE[slot]
-            if side then
-                EnsureSlotDisplay(button, side)
-                UpdateSlotDisplay(button)
-            end
         end
-    end
-
-    -- v3.5.826 EXPERIMENT GATE: last hook in paperdoll flows suspected
-    -- of tainting the flow.
-    -- Temporarily disabled so the next session is a binary verdict: audit
-    -- silent = this hook (or the retired flyout ilvl) was the seed;
-    -- audit still noisy = the taint isn't in this code path, and it
-    -- escalates to a full-session taint log + Ellesmere.
-    -- RE-ENABLE in v827 regardless of outcome (feature is wanted;
-    -- if it proves to be the seed it gets the deferred treatment).
-    -- v3.5.827: root found (tainted-key field writes, migrated to
-    -- S.data) -- experiment gate lifted, feature restored.
-    local SLOT_HOOK_DIAG_DISABLED = false
-    if SLOT_HOOK_DIAG_DISABLED then
-        if not slotNoticeShown then
-            slotNoticeShown = true
-            print("|cffFF008CKitn|r|cffffffffEssentials:|r diagnostic build: character-slot ilvl/enchant text temporarily off")
-        end
-    elseif not slotHooked and _G.PaperDollItemSlotButton_Update then
-        hooksecurefunc("PaperDollItemSlotButton_Update", UpdateSlotDisplay)
-        slotHooked = true
     end
 
     local cf = _G.CharacterModelScene and _G.CharacterModelScene.ControlFrame
