@@ -172,6 +172,42 @@ describe("Enchant helper: items we refuse to offer", function()
     end)
 end)
 
+-- The gem popup's sibling of the enchant bag-slot guard. Its row caches the
+-- bag position it was scanned from, and bags move under an open popup, so the
+-- source gem has to be re-resolved before it is picked up. A refusal rule, so
+-- it is specced even though the socket sequence around it is not.
+describe("Gem helper: resolving the source gem at click time", function()
+    -- bags: { [bag] = { [slot] = itemID } }
+    local function withBags(bags)
+        return loadCP({
+            C_Container = {
+                GetContainerNumSlots = function(bag) return bags[bag] and 20 or 0 end,
+                GetContainerItemID = function(bag, slot)
+                    return bags[bag] and bags[bag][slot] or nil
+                end,
+            },
+        })
+    end
+
+    it("finds the gem where it actually is now, not where the row cached it", function()
+        local CP = withBags({ [2] = { [11] = 5555 } })
+        local bag, slot = CP:ResolveGemSource({ itemID = 5555, bagID = 0, slotID = 1 })
+        assert.equals(2, bag)
+        assert.equals(11, slot)
+    end)
+
+    it("refuses when the gem has left the bags entirely", function()
+        local CP = withBags({ [2] = { [11] = 9999 } })
+        assert.is_nil(CP:ResolveGemSource({ itemID = 5555, bagID = 2, slotID = 11 }))
+    end)
+
+    it("refuses without gem data, and without an item id", function()
+        local CP = withBags({ [2] = { [11] = 5555 } })
+        assert.is_nil(CP:ResolveGemSource(nil))
+        assert.is_nil(CP:ResolveGemSource({ bagID = 2, slotID = 11 }))
+    end)
+end)
+
 describe("Enchant helper: combat refusal", function()
     -- occupantID: what GetContainerItemInfo reports is actually sitting in the
     -- row's cached bag slot at click time. Defaults to the row's own item;

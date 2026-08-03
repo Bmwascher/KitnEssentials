@@ -2088,6 +2088,23 @@ local function FindGemInBags(itemID)
     return nil
 end
 
+-- Where the row's gem is RIGHT NOW, or nil if it has left the bags.
+--
+-- The popup row caches the bag position it was scanned from, and bags move
+-- underneath an open popup. SocketInventoryItem resolves the DESTINATION
+-- socket only, so trusting that cached position would pick up whatever now
+-- sits there and socket it. Replace All already re-resolves per placement
+-- (FindGemInBags above, and its comment); the single-gem click did not.
+--
+-- Split out of the button's OnClick so the refusal is reachable without the
+-- socketing frames. The click sequence around it stays inline: it drives
+-- SocketInventoryItem / ClickSocketButton / AcceptSockets, which the tiered
+-- test policy leaves to the in-game smoke.
+function CP:ResolveGemSource(gemData)
+    if not gemData or not gemData.itemID then return nil end
+    return FindGemInBags(gemData.itemID)
+end
+
 -- The replace loop. Upstream-verified sequencing on 12.0.7 (DSH ships this
 -- working): SocketInventoryItem opens the socketing UI for the equipped item;
 -- verify it actually opened (GetExistingSocketLink(1)) and that the staged gem
@@ -2433,13 +2450,7 @@ function CP:CreateGemButton(index)
             return
         end
         if self.gemData and self.targetSlotID and self.targetSocketIndex then
-            -- Re-resolve the SOURCE gem instead of trusting the bag position
-            -- this row was scanned from. SocketInventoryItem resolves the
-            -- destination socket only, so a bag sort under an open popup would
-            -- otherwise have us pick up whatever now sits in that slot and
-            -- socket it. Replace All above already re-resolves per placement
-            -- for the same reason -- this path was the one that did not.
-            local bag, slot = FindGemInBags(self.gemData.itemID)
+            local bag, slot = CP:ResolveGemSource(self.gemData)
             if not bag then
                 CP:HideGemPopup()
                 CP:HideSlotHighlight()
