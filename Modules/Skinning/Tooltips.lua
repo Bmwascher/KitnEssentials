@@ -794,7 +794,7 @@ function TT:SetDefaultAnchor(tt, parent)
             db.CursorOffsetX or 10, db.CursorOffsetY or -10)
     elseif self.anchorFrame then
         -- v3.5.897 (the ORIGINAL ask, ElvUI TooltipMover
-        -- pattern): default-anchored tooltips dock to the movable AES
+        -- pattern): default-anchored tooltips dock to KE's own movable
         -- Tooltip anchor instead of Blizzard's corner.
         tt:SetOwner(parent, "ANCHOR_NONE")
         tt:ClearAllPoints()

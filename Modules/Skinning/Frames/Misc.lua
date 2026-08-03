@@ -78,7 +78,7 @@ local function SkinGameMenu()
 
     if frame.InitButtons then
         hooksecurefunc(frame, "InitButtons", function(menu)
-            -- EllesmereUI loads after AES and creates its button in its
+            -- EllesmereUI loads after us and creates its button in its
             -- own InitButtons hook, so defer one frame to catch it.
             SkinGameMenuButtons(menu)
             C_Timer.After(0, function() SkinGameMenuButtons(menu) end)
