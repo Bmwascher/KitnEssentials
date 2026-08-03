@@ -459,6 +459,14 @@ end, {
             KE:SkinningReloadPrompt()
             -- AddHeaderToggle's own OnClick already calls RefreshContent.
         end)
+        -- Say WHY the engine's own tabs are absent. Hiding them is right --
+        -- greyed controls read as "locked on" rather than "does not apply"
+        -- (the A6.3b Move Loot Rolls ruling) -- but hiding alone leaves a user
+        -- unable to tell those settings exist at all. AddLabel bumps the card
+        -- off its lone-header-bar height, which is the intended look here.
+        if db.Enabled ~= true then
+            card:AddLabel("Turn this on to configure frame and addon skins. The tabs below belong to modules that work with it off.")
+        end
         local newOffset = yOffset + card:GetContentHeight() + Theme.paddingSmall
         -- Never collapse: the tab list above already drops the engine's own
         -- tabs when it is off, and collapsing as well would take the three
