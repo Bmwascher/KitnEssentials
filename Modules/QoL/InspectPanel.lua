@@ -389,6 +389,15 @@ function InspectPanel:UpdateAllInspectSlots()
     end
 end
 
+-- Drop the per-GUID dirty cache so the next render repaints a slot whose item
+-- has not changed. CharacterPanel calls this whenever a setting hides the
+-- inspect overlays: the hide leaves the cache describing a slot that IS drawn,
+-- so re-enabling the setting would short-circuit and the overlay would stay
+-- hidden until the inspect frame was closed and reopened.
+function InspectPanel:InvalidateSlotCache()
+    wipe(_inspectCache)
+end
+
 -- Returns the equipped average item level to 2 decimals, or nil if the inspect
 -- data isn't ready yet (caller retries on the next INSPECT_READY / late-data event).
 function InspectPanel:GetInspectAverageItemLevel(unit)

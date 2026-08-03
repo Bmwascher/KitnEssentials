@@ -766,10 +766,15 @@ local function HookCharacterPanel()
             QueueUpdate()                                 -- warnings
             if CP.db.HideCharacterBackground then HideCharacterBackground() end
             if CP.db.SocketHelperEnabled then CP:RefreshSocketButtons() end
-            if CP.db.TrackIndicatorsEnabled then CP:UpdateAllTrackIndicators() end
-            if CP.db.ShowSlotItemLevel or CP.db.ShowEnchantNames or CP.db.ShowSlotGems or CP.db.ShowMissingGems then
-                CP:UpdateAllSlotDetails()
+            -- Off is not "do nothing": a setting turned off while the pane was
+            -- CLOSED never got a hide, so the old display would come back with
+            -- the feature off. Same rule as ApplySettings.
+            if CP.db.TrackIndicatorsEnabled then
+                CP:UpdateAllTrackIndicators()
+            else
+                CP:HideAllTrackIndicators()
             end
+            CP:UpdateAllSlotDetails()   -- routes to HideAllSlotDetails when all off
         end)
         PaperDollFrame:HookScript("OnHide", function()
             if CP.eventFrame then
@@ -1228,11 +1233,28 @@ function CP:UpdateSlotTrackIndicator(slotFrame, slotID, unit, data)
     end
 end
 
+-- The inspect half of every All-level function below. Its dirty state lives in
+-- InspectPanel, keyed per GUID, so this file cannot reach it directly -- and
+-- should not: hiding an inspect overlay without dropping that state left the
+-- setting one-way there exactly as it did for the player keys.
+local function InvalidateInspectSlots()
+    local insp = KitnEssentials:GetModule("InspectPanel", true)
+    if insp and insp.InvalidateSlotCache then insp:InvalidateSlotCache() end
+end
+
+local function RepaintInspectSlots()
+    local frame = _G.InspectFrame
+    if not (frame and frame:IsShown()) then return end
+    local insp = KitnEssentials:GetModule("InspectPanel", true)
+    if insp and insp:IsEnabled() then insp:UpdateAllInspectSlots() end
+end
+
 function CP:UpdateAllTrackIndicators()
     if not self.db.TrackIndicatorsEnabled then return end
     for slotID, frameName in pairs(SLOT_FRAMES) do
         self:UpdateSlotTrackIndicator(_G[frameName], slotID, "player")
     end
+    RepaintInspectSlots()
 end
 
 function CP:HideAllTrackIndicators()
@@ -1251,6 +1273,7 @@ function CP:HideAllTrackIndicators()
         local overlay = slotFrame and FFD[slotFrame] and FFD[slotFrame].track
         if overlay then overlay:Hide() end
     end
+    InvalidateInspectSlots()
 end
 
 function CP:SetupTrackIndicators()
@@ -1624,6 +1647,7 @@ function CP:UpdateAllSlotDetails()
     for slotID, frameName in pairs(SLOT_FRAMES) do
         self:UpdateSlotDetail(_G[frameName], slotID, "player")
     end
+    RepaintInspectSlots()
 end
 
 function CP:HideAllSlotDetails()
@@ -1641,6 +1665,7 @@ function CP:HideAllSlotDetails()
         local detail = slotFrame and FFD[slotFrame] and FFD[slotFrame].detail
         if detail then detail:Hide() end
     end
+    InvalidateInspectSlots()
     -- Inspect ilvl FontString lives on InspectPanel; cleanup happens via
     -- InspectPanel:HideAllInspectOverlays (called from InspectPanel:OnDisable
     -- cascaded by CP:OnDisable).
