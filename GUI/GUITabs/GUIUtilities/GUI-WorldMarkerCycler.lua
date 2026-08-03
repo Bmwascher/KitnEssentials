@@ -90,7 +90,7 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
     local activeCapture
 
     local function CreateKeybindButton(parent, label, modifier, key, onBind)
-        local row = GUIFrame:CreateRow(parent, 40)
+        local row = GUIFrame:CreateRow(parent, Theme.rowHeight)
 
         local labelRow = GUIFrame:CreateRow(parent, 16)
         local labelText = labelRow:CreateFontString(nil, "OVERLAY")
@@ -217,8 +217,8 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
     card2:AddRow(placeLabelRow, 16)
     card2:AddRow(placeRow, 30)
 
-    local spacer1 = GUIFrame:CreateRow(card2.content, 8)
-    card2:AddRow(spacer1, 8)
+    local spacer1 = GUIFrame:CreateRow(card2.content, Theme.rowHeightSeparator)
+    card2:AddRow(spacer1, Theme.rowHeightSeparator)
 
     local clearLabelRow, clearRow = CreateKeybindButton(card2.content, "Clear Markers",
         db.ClearModifier or "", db.ClearKey or "",

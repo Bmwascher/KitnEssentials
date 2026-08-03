@@ -1398,7 +1398,7 @@ local function BuildDisplayTabBody(parent, spellId, _)
     -- inside a self-anchored row frame; we stuff it into a CreateRow + AddWidget
     -- so it stretches to fill the right pane width, mirroring how
     -- DisintegrateTicks / FocusMarker use the widget.
-    local labelEditRow = GUIFrame:CreateRow(body, 40)
+    local labelEditRow = GUIFrame:CreateRow(body, KE.Theme.rowHeight)
     labelEditRow:SetPoint("TOPLEFT", labelHeader, "BOTTOMLEFT", 0, -12)
     labelEditRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
 
@@ -1960,7 +1960,7 @@ local function BuildPhaseDisplayTabBody(parent, phaseKey, _)
     -- Section: Custom Label
     local labelHeader = CreateSectionHeader(body, caption, "Custom Label", 22)
 
-    local labelEditRow = GUIFrame:CreateRow(body, 40)
+    local labelEditRow = GUIFrame:CreateRow(body, KE.Theme.rowHeight)
     labelEditRow:SetPoint("TOPLEFT", labelHeader, "BOTTOMLEFT", 0, -12)
     labelEditRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
 
@@ -2482,7 +2482,7 @@ local function BuildTrashDisplayTabBody(parent, item)
     -- Section: Custom Label
     local labelHeader = CreateSectionHeader(body, caption, "Custom Label", 22)
 
-    local labelEditRow = GUIFrame:CreateRow(body, 40)
+    local labelEditRow = GUIFrame:CreateRow(body, KE.Theme.rowHeight)
     labelEditRow:SetPoint("TOPLEFT", labelHeader, "BOTTOMLEFT", 0, -12)
     labelEditRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
 

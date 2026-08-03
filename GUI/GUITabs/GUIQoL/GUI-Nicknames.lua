@@ -299,7 +299,7 @@ GUIFrame:RegisterContent("Nicknames", function(scrollChild, yOffset)
     local nameRow = GUIFrame:CreateEditBox(addCard.content, "Character  (Name-Realm)", { value = "" })
     -- Bump label font from "small" default to "normal" for readability
     if nameRow.label then KE:ApplyThemeFont(nameRow.label, "normal") end
-    addCard:AddRow(nameRow, 40, 2)
+    addCard:AddRow(nameRow, Theme.rowHeight, 2)
 
     -- "Use Current Target" secondary action, right-aligned beneath the field
     local linkRow = CreateFrame("Frame", nil, addCard.content)
@@ -315,7 +315,7 @@ GUIFrame:RegisterContent("Nicknames", function(scrollChild, yOffset)
     -- Nickname editbox (full width, uniform with Character)
     local nickRow = GUIFrame:CreateEditBox(addCard.content, "Nickname", { value = "" })
     if nickRow.label then KE:ApplyThemeFont(nickRow.label, "normal") end
-    addCard:AddRow(nickRow, 40)
+    addCard:AddRow(nickRow, Theme.rowHeight)
 
     local function DoSave()
         local key = strtrim(nameRow:GetValue() or "")

@@ -143,7 +143,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
     card3:AddRow(rowS, Theme.rowHeight)
 
     -- Slim-bar geometry (replacement mode; the ElvUI values as defaults).
-    local rowG1 = GUIFrame:CreateRow(card3.content, 40)
+    local rowG1 = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
     local widthSlider = GUIFrame:CreateSlider(rowG1, "Bar Width", {
         min = 150, max = 600, step = 5, value = db.Width or 340,
         callback = function(val) db.Width = val; Apply() end
@@ -156,9 +156,9 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
     })
     rowG1:AddWidget(heightSlider, 0.5)
     manager:Register(heightSlider, "replace")
-    card3:AddRow(rowG1, 40)
+    card3:AddRow(rowG1, Theme.rowHeight)
 
-    local rowG2 = GUIFrame:CreateRow(card3.content, 40)
+    local rowG2 = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
     local btnSlider = GUIFrame:CreateSlider(rowG2, "Button Size", {
         min = 14, max = 40, step = 1, value = db.ButtonSize or 22,
         callback = function(val) db.ButtonSize = val; Apply() end
@@ -171,16 +171,16 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
     })
     rowG2:AddWidget(fontSlider, 0.5)
     manager:Register(fontSlider, "replace")
-    card3:AddRow(rowG2, 40)
+    card3:AddRow(rowG2, Theme.rowHeight)
 
-    local rowG3 = GUIFrame:CreateRow(card3.content, 40)
+    local rowG3 = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
     local spacingSlider = GUIFrame:CreateSlider(rowG3, "Bar Spacing", {
         min = 0, max = 20, step = 1, value = db.Spacing or 1,
         callback = function(val) db.Spacing = val; Apply() end
     })
     rowG3:AddWidget(spacingSlider, 0.5)
     manager:Register(spacingSlider, "replace")
-    card3:AddRow(rowG3, 40)
+    card3:AddRow(rowG3, Theme.rowHeight)
 
     local rowQ = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
     local qualityCheck = GUIFrame:CreateCheckbox(rowQ, "Item-Quality Border Colors", {
