@@ -667,18 +667,64 @@ local function OnEvent_EveryoneAssist(self)
 end
 
 -- --- Dropdown menus (Midnight menu API) --------------------------------------
-local function SetupDungeonDifficulty(dropdown)
-    local function IsSelected(difficultyID)
+-- The difficulty control follows the group you are actually in: a raid sets the
+-- RAID difficulty, anything else sets the DUNGEON difficulty. Blizzard's own
+-- raid manager branches the same way and on the same helpers
+-- (Blizzard_CompactRaidFrames/Mainline/Blizzard_CompactRaidFrameManager.lua:216-259).
+-- The branch lives inside the menu generator, which re-runs every time the menu
+-- opens, so converting a party to a raid needs no extra wiring.
+--
+-- The raid side delegates to the global SetRaidDifficulties rather than calling
+-- SetRaidDifficultyID directly: that global also maps the matching legacy
+-- 10/25-player difficulty and handles dynamic instances
+-- (Blizzard_UnitPopup/Mainline/UnitPopup.lua:29-61). Reimplementing it here
+-- would be a slow-motion bug.
+local DIFFICULTY_RAID = { 14, 15, 16 }   -- DifficultyUtil.ID PrimaryRaid Normal/Heroic/Mythic
+local DIFFICULTY_PARTY = { 1, 2, 23 }    -- DifficultyUtil.ID Dungeon Normal/Heroic/Mythic
+
+local function SetupDifficulty(dropdown)
+    local function IsDungeonSelected(difficultyID)
         return GetDungeonDifficultyID() == difficultyID
     end
-    local function SetSelected(difficultyID)
+    local function SetDungeonSelected(difficultyID)
         SetDungeonDifficultyID(difficultyID)
     end
+    local function IsRaidSelected(difficultyID)
+        local util = _G.DifficultyUtil
+        return util and util.DoesCurrentRaidDifficultyMatch(difficultyID)
+    end
+    local function SetRaidSelected(difficultyID)
+        local setter = _G.SetRaidDifficulties
+        if setter then setter(true, difficultyID) end
+    end
+
     dropdown:SetupMenu(function(_, root)
         root:SetTag("KE_RAID_CONTROL_DIFFICULTY")
-        root:CreateRadio(_G.PLAYER_DIFFICULTY1, IsSelected, SetSelected, 1)
-        root:CreateRadio(_G.PLAYER_DIFFICULTY2, IsSelected, SetSelected, 2)
-        root:CreateRadio(_G.PLAYER_DIFFICULTY6, IsSelected, SetSelected, 23)
+
+        local util = _G.DifficultyUtil
+        -- The raid branch needs both helpers; without them fall back to the
+        -- dungeon list rather than draw a menu whose entries do nothing.
+        local inRaid = IsInRaid() and util ~= nil and _G.SetRaidDifficulties ~= nil
+        local ids = inRaid and DIFFICULTY_RAID or DIFFICULTY_PARTY
+        local isSelected = inRaid and IsRaidSelected or IsDungeonSelected
+        local setSelected = inRaid and SetRaidSelected or SetDungeonSelected
+        local isEnabled = util and (inRaid and util.IsRaidDifficultyEnabled or util.IsDungeonDifficultyEnabled)
+
+        local labels = {
+            _G.PLAYER_DIFFICULTY1 or "Normal",
+            _G.PLAYER_DIFFICULTY2 or "Heroic",
+            _G.PLAYER_DIFFICULTY6 or "Mythic",
+        }
+
+        for i = 1, 3 do
+            local radio = root:CreateRadio(labels[i], isSelected, setSelected, ids[i])
+            -- Grey out a difficulty the player cannot actually set (locked
+            -- instance, story raid, size mismatch) instead of letting the click
+            -- silently do nothing.
+            if isEnabled and radio and radio.SetEnabled then
+                radio:SetEnabled(isEnabled(ids[i]))
+            end
+        end
     end)
 end
 
@@ -825,7 +871,11 @@ function RC:Setup()
     -- Row 3: Dungeon Difficulty
     local DifficultyDropdown = CreateDropdown("KE_RaidControlDifficulty", panel, 85,
         "TOPLEFT", Countdown10Button, "BOTTOMLEFT", 0, -5, -- rows now share x=10
-        _G.CRF_DIFFICULTY or "Difficulty", { "PLAYER_DIFFICULTY_CHANGED" }, OnEvent_RefreshMenu, SetupDungeonDifficulty)
+        _G.CRF_DIFFICULTY or "Difficulty",
+        -- GROUP_ROSTER_UPDATE as well as the difficulty event: converting a
+        -- party to a raid changes which difficulty the control reads, and the
+        -- closed dropdown's own label has to follow.
+        { "PLAYER_DIFFICULTY_CHANGED", "GROUP_ROSTER_UPDATE" }, OnEvent_RefreshMenu, SetupDifficulty)
 
     -- Everyone Assist
     local EveryoneAssist = CreateCheckBox("KE_RaidControlEveryoneAssist", panel, BUTTON_HEIGHT + 4,
