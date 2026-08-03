@@ -785,19 +785,30 @@ end
 -- Everything EUI does NOT draw (the socket helper, inspect gems, race text,
 -- the faction tag) keeps running.
 --
--- The test is EUI's OWN gate, copied verbatim from the three places it guards
--- its character sheet with (CharacterSheet.lua:4436, 4773, 4897) so a user
--- turning the themed sheet off hands the display straight back to us. Absent
+-- The test is EUI's OWN gate, copied from the places it guards each sheet with
+-- (CharacterSheet.lua:4436, 4773, 4897; InspectSheet.lua:1207, 1235, 1248), so
+-- turning a themed sheet off hands that display straight back to us. Absent
 -- means ON -- only a literal false is off, EUI's convention.
-function KE:EUICharacterSheetActive()
+--
+-- The two sheets have SEPARATE enable keys and separate user-facing toggles
+-- (EUI_BlizzardSkin_Options.lua:1174-1183 is the inspect one), so they really
+-- do diverge by a click. Gating the inspect frame on the character sheet's key
+-- breaks both ways: inspect text vanishes when only the inspect sheet is off,
+-- and double-draws when only the character sheet is off. Pass the unit and let
+-- this pick, rather than leaving the choice to each call site.
+---@param unit string? "player" selects the character sheet; anything else, inspect
+function KE:EUISheetActive(unit)
     if not (C_AddOns and C_AddOns.IsAddOnLoaded
         and C_AddOns.IsAddOnLoaded("EllesmereUIBlizzardSkin")) then
         return false
     end
     local db = _G.EllesmereUIDB
-    if type(db) == "table" and db.themedCharacterSheet == false then return false end
-    -- EUI's master "no Blizzard window skins" switch. Guarded: it is a function
-    -- on EUI's own namespace, absent in older builds.
+    local key = (unit == nil or unit == "player") and "themedCharacterSheet"
+        or "themedInspectSheet"
+    if type(db) == "table" and db[key] == false then return false end
+    -- EUI's master "no Blizzard window skins" switch, which kills both sheets
+    -- at once. Guarded: it is a function on EUI's own namespace, absent in
+    -- older builds.
     local eui = _G.EllesmereUI
     if eui and type(eui.BlizzWindowSkinsKilled) == "function" then
         local ok, killed = pcall(eui.BlizzWindowSkinsKilled)
