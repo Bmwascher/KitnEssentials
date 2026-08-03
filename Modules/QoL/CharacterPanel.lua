@@ -962,33 +962,44 @@ end
 -- these strings (CharacterSheet.lua:497-505) -- it never sets a font -- so
 -- whatever KE applied while EUI's sheet was off survives into EUI's header and
 -- no later refresh can release it. The stand-down has to hand back what it took.
-local headerFontOriginals = setmetatable({}, { __mode = "k" })
+local headerTextOriginals = setmetatable({}, { __mode = "k" })
 
-local function RememberHeaderFont(fs)
-    if headerFontOriginals[fs] ~= nil then return end
+-- withLayout: also capture width and word wrap, for the string whose layout KE
+-- actually changes. CharacterLevelText is configured 220x24 in Blizzard's own
+-- XML (.wow-api-reference PaperDollFrame.xml:460), so GetWidth() here reads a
+-- real configured width, not a measurement of auto-sized text -- restoring it
+-- is right. CharacterFrameTitleText only ever gets a font from us.
+local function RememberHeaderText(fs, withLayout)
+    if headerTextOriginals[fs] ~= nil then return end
+    local record = {}
     -- The font OBJECT where there is one: restoring that also clears any
     -- explicit SetFont, which restoring file/height/flags by hand does not.
-    local obj = fs.GetFontObject and fs:GetFontObject()
-    if obj then headerFontOriginals[fs] = obj; return end
-    local file, height, flags = fs:GetFont()
-    if file then headerFontOriginals[fs] = { file, height, flags } end
+    record.fontObject = fs.GetFontObject and fs:GetFontObject() or nil
+    if not record.fontObject then
+        local file, height, flags = fs:GetFont()
+        if not file then return end
+        record.font = { file, height, flags }
+    end
+    if withLayout then
+        record.width = fs:GetWidth()
+        -- Not `x and x() or nil`: a legitimate false would collapse to nil
+        -- there and the restore would silently skip it.
+        if fs.CanWordWrap then record.wordWrap = fs:CanWordWrap() end
+    end
+    headerTextOriginals[fs] = record
 end
 
-local function RestoreHeaderFont(fs)
-    local original = headerFontOriginals[fs]
+local function RestoreHeaderText(fs)
+    local original = headerTextOriginals[fs]
     if not original then return end
-    headerFontOriginals[fs] = nil
-    if type(original) == "table" then
-        fs:SetFont(original[1], original[2], original[3])
+    headerTextOriginals[fs] = nil
+    if original.fontObject then
+        fs:SetFontObject(original.fontObject)
     else
-        fs:SetFontObject(original)
+        fs:SetFont(original.font[1], original.font[2], original.font[3])
     end
-    -- Width and word wrap are deliberately NOT restored. KE sets SetWidth(0),
-    -- which means "auto"; GetWidth() beforehand reports the MEASURED width, not
-    -- whatever Blizzard had configured, so writing it back would pin a width
-    -- that was never set and change how the string wraps. Leaving them auto is
-    -- the closer of the two wrong answers, and matches Blizzard's own default
-    -- for these strings.
+    if original.width then fs:SetWidth(original.width) end
+    if original.wordWrap ~= nil then fs:SetWordWrap(original.wordWrap) end
 end
 
 function CP:StyleCharacterTexts()
@@ -1001,18 +1012,18 @@ function CP:StyleCharacterTexts()
     -- them from here is two addons fighting over the same FontStrings. The
     -- stats pane below is still ours to style -- EUI leaves those alone.
     if KE:EUIDrawsSlotElement("player", "headerText") then
-        if levelText then RestoreHeaderFont(levelText) end
-        if nameText then RestoreHeaderFont(nameText) end
+        if levelText then RestoreHeaderText(levelText) end
+        if nameText then RestoreHeaderText(nameText) end
     else
         if levelText then
-            RememberHeaderFont(levelText)
+            RememberHeaderText(levelText, true)   -- width + wrap change below
             self:ApplyFont(levelText, self.db.LevelTextSize or 12)
             levelText:SetWidth(0)
             levelText:SetWordWrap(true)
         end
 
         if nameText then
-            RememberHeaderFont(nameText)
+            RememberHeaderText(nameText)
             self:ApplyFont(nameText, self.db.NameTextSize or 12)
         end
     end
@@ -2422,8 +2433,20 @@ function CP:CreateGemButton(index)
             return
         end
         if self.gemData and self.targetSlotID and self.targetSocketIndex then
+            -- Re-resolve the SOURCE gem instead of trusting the bag position
+            -- this row was scanned from. SocketInventoryItem resolves the
+            -- destination socket only, so a bag sort under an open popup would
+            -- otherwise have us pick up whatever now sits in that slot and
+            -- socket it. Replace All above already re-resolves per placement
+            -- for the same reason -- this path was the one that did not.
+            local bag, slot = FindGemInBags(self.gemData.itemID)
+            if not bag then
+                CP:HideGemPopup()
+                CP:HideSlotHighlight()
+                return
+            end
             SocketInventoryItem(self.targetSlotID)
-            C_Container.PickupContainerItem(self.gemData.bagID, self.gemData.slotID)
+            C_Container.PickupContainerItem(bag, slot)
             C_ItemSocketInfo.ClickSocketButton(self.targetSocketIndex)
             ClearCursor()
             AcceptSockets()
