@@ -173,13 +173,20 @@ describe("Enchant helper: items we refuse to offer", function()
 end)
 
 describe("Enchant helper: combat refusal", function()
-    local function armed(inCombat)
+    -- occupantID: what GetContainerItemInfo reports is actually sitting in the
+    -- row's cached bag slot at click time. Defaults to the row's own item;
+    -- pass something else to model bags having moved under an open popup.
+    local function armed(inCombat, occupantID)
         local used = {}
         local CP, KE = loadCP({
             InCombatLockdown = function() return inCombat end,
             C_Container = {
                 UseContainerItem = function(bag, slot)
                     used[#used + 1] = { bag = bag, slot = slot }
+                end,
+                GetContainerItemInfo = function()
+                    if occupantID == false then return nil end
+                    return { itemID = occupantID or 243977 }
                 end,
             },
         })
@@ -244,5 +251,26 @@ describe("Enchant helper: combat refusal", function()
         CP:ApplyEnchantFromBags(blocked)
         assert.is_truthy(said)
         assert.is_truthy(said:lower():find("combat", 1, true))
+    end)
+
+    -- THE BYPASS. Every check above reads the row's CACHED item id, but the
+    -- call acts on a cached bag SLOT, and bags move under an open popup. Vet
+    -- one item and use another and the blacklist means nothing.
+    it("refuses when another item now occupies the cached bag slot", function()
+        local CP, _, used = armed(false, 210494)
+        assert.is_false(CP:ApplyEnchantFromBags(chestEnchant()))
+        assert.equals(0, #used)
+    end)
+
+    it("refuses when the cached bag slot is now empty", function()
+        local CP, _, used = armed(false, false)
+        assert.is_false(CP:ApplyEnchantFromBags(chestEnchant()))
+        assert.equals(0, #used)
+    end)
+
+    it("proceeds when the slot still holds the item the row was built from", function()
+        local CP, _, used = armed(false, 243977)
+        assert.is_true(CP:ApplyEnchantFromBags(chestEnchant()))
+        assert.equals(1, #used)
     end)
 end)

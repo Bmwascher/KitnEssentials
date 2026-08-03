@@ -955,23 +955,64 @@ function CP:SetupDecimalItemLevel()
     end)
 end
 
+-- Blizzard's own font on the two header strings, captured before KE first
+-- overwrites it. Weak-keyed: never a field on a Blizzard frame.
+--
+-- Skipping the write is NOT enough to stand down here. EUI only re-anchors
+-- these strings (CharacterSheet.lua:497-505) -- it never sets a font -- so
+-- whatever KE applied while EUI's sheet was off survives into EUI's header and
+-- no later refresh can release it. The stand-down has to hand back what it took.
+local headerFontOriginals = setmetatable({}, { __mode = "k" })
+
+local function RememberHeaderFont(fs)
+    if headerFontOriginals[fs] ~= nil then return end
+    -- The font OBJECT where there is one: restoring that also clears any
+    -- explicit SetFont, which restoring file/height/flags by hand does not.
+    local obj = fs.GetFontObject and fs:GetFontObject()
+    if obj then headerFontOriginals[fs] = obj; return end
+    local file, height, flags = fs:GetFont()
+    if file then headerFontOriginals[fs] = { file, height, flags } end
+end
+
+local function RestoreHeaderFont(fs)
+    local original = headerFontOriginals[fs]
+    if not original then return end
+    headerFontOriginals[fs] = nil
+    if type(original) == "table" then
+        fs:SetFont(original[1], original[2], original[3])
+    else
+        fs:SetFontObject(original)
+    end
+    -- Width and word wrap are deliberately NOT restored. KE sets SetWidth(0),
+    -- which means "auto"; GetWidth() beforehand reports the MEASURED width, not
+    -- whatever Blizzard had configured, so writing it back would pin a width
+    -- that was never set and change how the string wraps. Leaving them auto is
+    -- the closer of the two wrong answers, and matches Blizzard's own default
+    -- for these strings.
+end
+
 function CP:StyleCharacterTexts()
     if ElvUILoaded() then return end
 
-    -- EllesmereUI re-anchors Blizzard's name and level strings into its own
-    -- header, so re-fonting and re-sizing them from here is two addons fighting
-    -- over the same FontStrings. The stats pane below is still ours to style --
-    -- EUI leaves those alone.
-    if not KE:EUIDrawsSlotElement("player", "headerText") then
-        local levelText = CharacterLevelText
+    local levelText = CharacterLevelText
+    local nameText = CharacterFrameTitleText
+
+    -- EllesmereUI re-anchors both strings into its own header, so re-fonting
+    -- them from here is two addons fighting over the same FontStrings. The
+    -- stats pane below is still ours to style -- EUI leaves those alone.
+    if KE:EUIDrawsSlotElement("player", "headerText") then
+        if levelText then RestoreHeaderFont(levelText) end
+        if nameText then RestoreHeaderFont(nameText) end
+    else
         if levelText then
+            RememberHeaderFont(levelText)
             self:ApplyFont(levelText, self.db.LevelTextSize or 12)
             levelText:SetWidth(0)
             levelText:SetWordWrap(true)
         end
 
-        local nameText = CharacterFrameTitleText
         if nameText then
+            RememberHeaderFont(nameText)
             self:ApplyFont(nameText, self.db.NameTextSize or 12)
         end
     end
@@ -3049,6 +3090,18 @@ function CP:ApplyEnchantFromBags(enchantData)
     -- rebuilt on a refresh, and the whole point is that this call cannot fail
     -- quietly -- it puts an error in the player's log with our name on it.
     if not IsOfferableEnchant(enchantData.itemID, enchantData.targetSlots) then
+        return false
+    end
+    -- ...and the id we just vetted has to be the id we act on. The row caches
+    -- the bag and slot it was scanned from, but bags move underneath an open
+    -- popup: BAG_UPDATE_DELAYED refreshes the socket bar and never rebuilds
+    -- this list, so a sort can slide a different item into that exact slot.
+    -- Without this the vetted id passes and UseContainerItem fires on whatever
+    -- is there now -- including the one item the blacklist exists to stop.
+    local live = C_Container.GetContainerItemInfo(enchantData.bagID, enchantData.slotID)
+    if not live or live.itemID ~= enchantData.itemID then
+        self:HideEnchantPopup()
+        self:HideSlotHighlight()
         return false
     end
     -- DEVIATION 3: the reference calls the bare UseContainerItem global.
