@@ -1429,4 +1429,63 @@ function L.loadRaidControl(overrides)
     return RC, KE, seams
 end
 
+-- Modules/QoL/GroupSort.lua. The module captures its WoW API functions as
+-- file-scope locals at load, so every mock must be on _G BEFORE
+-- helpers.loadModule runs -- setting one afterwards leaves the module
+-- holding a stale upvalue. installMock(overrides, {}) is required even though
+-- no defaults are needed: the continuation driver calls CreateFrame at file
+-- scope (<REF>:490).
+-- Groups (engine state) is reached through GS.GetSortedGroup's upvalues;
+-- writing Processing/ProcessStart into it drives the in-progress refusal
+-- rule. Returns GS, KE, seams.
+function L.loadGroupSort(overrides)
+    overrides = overrides or {}
+    -- The continuation driver calls CreateFrame at FILE SCOPE (<REF>:490), so
+    -- installMock cannot be skipped.
+    installMock(overrides, {})
+    helpers.installAddonShim()
+    -- Every one of these is captured as a file-scope local at load, so it has
+    -- to exist on _G BEFORE loadModule. Setting any of them afterwards leaves
+    -- the module holding a stale upvalue.
+    _G.GetTime = overrides.GetTime or function() return 1000 end
+    _G.UnitExists = overrides.UnitExists or function() return false end
+    _G.UnitName = overrides.UnitName or function(unit) return unit end
+    _G.UnitGUID = overrides.UnitGUID or function(unit) return "GUID-" .. tostring(unit) end
+    _G.UnitClass = overrides.UnitClass or function() return "Priest", "PRIEST", 5 end
+    _G.UnitInRaid = overrides.UnitInRaid or function() return nil end
+    _G.UnitIsUnit = overrides.UnitIsUnit or function(a, b) return a == b end
+    _G.UnitFullName = overrides.UnitFullName or function() return "Tester", "Realm" end
+    _G.UnitIsGroupLeader = overrides.UnitIsGroupLeader or function() return false end
+    _G.UnitIsGroupAssistant = overrides.UnitIsGroupAssistant or function() return false end
+    _G.UnitAffectingCombat = overrides.UnitAffectingCombat or function() return false end
+    _G.UnitGroupRolesAssigned = overrides.UnitGroupRolesAssigned or function() return "DAMAGER" end
+    _G.GetRaidRosterInfo = overrides.GetRaidRosterInfo or function() return nil end
+    _G.GetInstanceInfo = overrides.GetInstanceInfo or function() return "Zone", "none", 0 end
+    _G.GetRaidDifficultyID = overrides.GetRaidDifficultyID or function() return 14 end
+    _G.SetRaidSubgroup = overrides.SetRaidSubgroup or function() end
+    _G.SwapRaidSubgroup = overrides.SwapRaidSubgroup or function() end
+    _G.InCombatLockdown = overrides.InCombatLockdown or function() return false end
+    _G.issecretvalue = overrides.issecretvalue or function() return false end
+    _G.strsplit = overrides.strsplit or function(sep, str)
+        local a, b = string.match(str, "^(.-)" .. sep .. "(.*)$")
+        if a then return a, b end
+        return str
+    end
+    _G.C_ChatInfo = overrides.C_ChatInfo or { InChatMessagingLockdown = function() return false end }
+    _G.C_Timer = overrides.C_Timer or { After = function() end }
+    _G.LibStub = overrides.LibStub or function() return nil end
+
+    local prints = {}
+    local KE = { Print = function(_, msg) prints[#prints + 1] = msg end }
+    helpers.loadModule("Modules/QoL/GroupSort.lua", KE)
+    local GS = KE.GroupSort
+
+    local seams = {
+        prints = prints,
+        -- Engine state. The in-progress refusal rule is driven through this.
+        groups = findUpvalue(GS.GetSortedGroup, "Groups"),
+    }
+    return GS, KE, seams
+end
+
 return L
