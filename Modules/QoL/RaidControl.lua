@@ -41,6 +41,11 @@ end
 ---@class RaidControl: AceModule, AceEvent-3.0
 local RC = KitnEssentials:NewModule("RaidControl", "AceEvent-3.0")
 
+-- No live teardown for the permanently hidden Blizzard raid manager (Setup's
+-- HideFrame call), so a profile switch that wants this module OFF must stay
+-- enabled and prompt for /reload instead of disabling live.
+RC.keReloadOnDisable = true
+
 local _G = _G
 local next, floor = next, floor
 local mod = _G.mod
