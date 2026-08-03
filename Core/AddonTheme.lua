@@ -47,6 +47,7 @@ local ThemeDefaults = {
     rowHeightLast      = 44,   -- Last row in a card (use 0 spacing in AddRow)
     rowHeightTall      = 80,   -- Anchor point selector rows
     rowHeightSeparator = 8,    -- Separator-only rows
+    rowHeightNote      = 50,   -- "Note" text block at the foot of a card
 
     -- Spacing
     paddingSmall   = 4,
