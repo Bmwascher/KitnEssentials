@@ -178,14 +178,46 @@ describe("RefreshAllModules enabled-state sync", function()
         assert.is_nil(skinB.applied)
     end)
 
-    it("silently skips Skin state changes (no prompt) when ElvUI handles skinning", function()
+    it("skips the SKINNING prompt when ElvUI handles skinning, but still prompts", function()
         local skin = fakeModule("SkinActionBars", { Enabled = true })
         local PM, reg, KE = harness({ skin })
         KE.ShouldNotLoadModule = function() return true end
-        local prompts = 0
-        KE.SkinningReloadPrompt = function() prompts = prompts + 1 end
+        local skinPrompts, generic = 0, 0
+        KE.SkinningReloadPrompt = function() skinPrompts = skinPrompts + 1 end
+        KE.CreateReloadPrompt = function() generic = generic + 1 end
         PM:RefreshAllModules()
         assert.is_false(reg["SkinActionBars"].enabled)
-        assert.equal(0, prompts)
+        assert.equal(0, skinPrompts)
+        -- A profile operation always prompts (Brandon 2026-08-02); suppressing
+        -- the skinning-specific wording does not suppress the prompt itself.
+        assert.equal(1, generic)
+    end)
+
+    it("prompts for a reload even when no module changed state at all", function()
+        local steady = fakeModule("Cursor", { Enabled = true })
+        steady.enabled = true
+        local PM, _, KE = harness({ steady })
+        local skinPrompts, generic = 0, 0
+        KE.SkinningReloadPrompt = function() skinPrompts = skinPrompts + 1 end
+        KE.CreateReloadPrompt = function() generic = generic + 1 end
+        PM:RefreshAllModules()
+        assert.equal(0, skinPrompts)
+        assert.equal(1, generic)
+    end)
+
+    it("issues exactly ONE prompt when a skin change and a reload-deferred module coincide", function()
+        local skin = fakeModule("SkinActionBars", { Enabled = false })
+        skin.enabled = true
+        local deferred = fakeModule("MoveFrames", { Enabled = false })
+        deferred.enabled = true
+        deferred.keReloadOnDisable = true
+        local PM, _, KE = harness({ skin, deferred })
+        local skinPrompts, generic = 0, 0
+        KE.SkinningReloadPrompt = function() skinPrompts = skinPrompts + 1 end
+        KE.CreateReloadPrompt = function() generic = generic + 1 end
+        PM:RefreshAllModules()
+        -- KE:CreatePrompt stores KE.activePrompt, so a second prompt would
+        -- replace the first rather than queue. Never two.
+        assert.equal(1, skinPrompts + generic)
     end)
 end)
