@@ -217,27 +217,36 @@ describe("DungeonTrash — engage-gated first-cast seeding", function()
 
     -- Drift review B7: a deferred credit lands only under the identity that
     -- earned it (reference: candidateChanged wipes pending success state
-    -- before consumption). A contradiction-drop inside the 0.10s sample
+    -- before consumption). A contradiction FLIP inside the 0.10s sample
     -- window otherwise re-armed the discredited npcID's anchors and alerts
     -- right after resetResolvedOutput swept them.
-    it("a deferred credit dies when the identity drops inside its window (B7)", function()
+    it("a deferred credit dies when the identity flips inside its window (B7)", function()
+        KE.TrashData[1].dungeonKey = "D"
         KE.TrashData[1].mobs[111].spells = {
             [50] = { name = "Drain", channelTime = 4, first = 6, cd = { 20 },
                 selfBuffCountDeltaOnSuccess = 1 },
         }
-        KE.TrashTraits = { [111] = { dungeonKey = "D", name = "Mob",
-            identity = { level = 91, sex = 2, power = 0, classID = 2,
-                hasCastSpell = true, hasChannelSpell = true, cannotInterrupt = true } } }
+        KE.TrashTraits = {
+            [111] = { dungeonKey = "D", name = "Mob",
+                identity = { level = 91, sex = 2, power = 0, classID = 2, nonElite = true,
+                    hasCastSpell = true, hasChannelSpell = true, cannotInterrupt = true } },
+            [222] = { dungeonKey = "D", name = "Twin",
+                identity = { level = 91, sex = 2, power = 0, classID = 2, nonElite = true,
+                    hasCastSpell = true, hasChannelSpell = true } },
+        }
         local rt = trackResolved("nameplate1")
+        rt.obs = { level = 91, sex = 2, power = 0, classID = 2, buffCount = 0,
+            unitClassification = "normal" }
         world.auras.nameplate1 = 2
         DTrash:OnChannelStart(nil, "nameplate1", nil, nil, 7)
         clock.now = 104
         local base = #timers
         DTrash:OnChannelStop(nil, "nameplate1", nil, nil, nil, 7)  -- credit deferred
-        -- contradiction evidence lands inside the window: a kick on a
-        -- cannotInterrupt identity drops the lock and sweeps its output
+        -- contradiction evidence lands inside the window: the kick rejects
+        -- 111 (cannotInterrupt) and re-derivation flips to its interruptible
+        -- twin, sweeping 111's output
         DTrash:OnCastInterrupted(nil, "nameplate1", nil, nil, nil, 9)
-        assert.is_nil(rt.matchedNPCID)
+        assert.equals(222, rt.matchedNPCID)
         world.auras.nameplate1 = 3                                 -- delta WOULD match
         for i = base + 1, #timers do timers[i].fn() end            -- closure fires
         assert.is_nil(rt.anchors)                                  -- no resurrected credit
@@ -312,29 +321,68 @@ describe("DungeonTrash — engage-gated first-cast seeding", function()
         assert.is_true(#scheduled > 0)
     end)
 
-    -- Reference-exact re-derivation: the references never LOCK an identity —
-    -- every pass re-derives, so behavior evidence the resolved row calls
-    -- impossible drops the identity and its output (the Maisara hexxer wore
-    -- Rokh'zal's cannotInterrupt timers through repeated kicks).
-    it("a kick on a cannotInterrupt identity drops the lock and its output", function()
+    -- Keep-locked contradiction handling (reference parity, ExBoss v26.6.29
+    -- ObservationTest keepLockedRuntime): a behavior contradiction commits
+    -- only when re-derivation actually lands on a DIFFERENT mob. When every
+    -- surviving row rejects — all five Algeth'ar Academy rows are
+    -- cannotInterrupt, so a Shadowmeld-shaped interrupt latch rejects them
+    -- ALL — the identity, its lock and its output are KEPT: the reference
+    -- retains a locked in-combat runtime rather than blanking the plate
+    -- forever (the 2026-07-24 disappearing-timer field report).
+    it("a kick contradiction with no resolvable alternative keeps the lock and its output", function()
+        KE.TrashData[1].dungeonKey = "D"
         KE.TrashTraits = { [111] = { dungeonKey = "D", name = "Mob",
-            identity = { level = 91, sex = 2, power = 0, classID = 2,
+            identity = { level = 91, sex = 2, power = 0, classID = 2, nonElite = true,
                 hasCastSpell = true, hasChannelSpell = true, cannotInterrupt = true } } }
         local hidden = {}
         DTrash.HideUnitAlerts = function(_, unit, npcID) hidden[#hidden + 1] = { unit, npcID } end
         local rt = trackResolved("nameplate1")
         DTrash:MarkEngaged(rt)                            -- armed output for 111
-        rt.castConfirmed = true                           -- even a Layer2 lock must drop
+        rt.castConfirmed = true
+        rt.obs = { level = 91, sex = 2, power = 0, classID = 2, buffCount = 0,
+            unitClassification = "normal" }               -- re-derivation runs and yields nothing
         rt._alertTokens = { ["nameplate1:111:10"] = 1 }
         rt.predictions = { [10] = { nextStart = 115 } }
         DTrash:OnCastInterrupted(nil, "nameplate1", nil, nil, nil, 4)
-        assert.is_nil(rt.matchedNPCID)
+        assert.is_true(rt.sawInterrupted)                 -- evidence still latched
+        assert.equals(111, rt.matchedNPCID)               -- identity kept
+        assert.is_true(rt.castConfirmed)                  -- lock kept
+        assert.same({}, hidden)                           -- output untouched
+        assert.is_not_nil(next(rt.predictions))
+        assert.is_not_nil(rt.anchors)
+        assert.is_true(rt.enterSeeded)
+    end)
+
+    -- The Maisara-hexxer heal the unlock exists for (it wore Rokh'zal's
+    -- cannotInterrupt timers through repeated kicks): when the kick's
+    -- re-derivation DOES resolve an interruptible sibling, the flip still
+    -- commits — through even a castConfirmed lock — with full output hygiene.
+    it("a kick contradiction re-resolving to an interruptible sibling flips through the lock", function()
+        KE.TrashData[1].dungeonKey = "D"
+        KE.TrashData[1].mobs[222] = { npcID = 222, name = "Twin", spells = {
+            [77] = { name = "Rend", first = 6, cd = { 18 }, castTime = 2 },
+        } }
+        KE.TrashTraits = {
+            [111] = { dungeonKey = "D", name = "Mob",
+                identity = { level = 91, sex = 2, power = 0, classID = 2, nonElite = true,
+                    hasCastSpell = true, cannotInterrupt = true } },
+            [222] = { dungeonKey = "D", name = "Twin",
+                identity = { level = 91, sex = 2, power = 0, classID = 2, nonElite = true,
+                    hasCastSpell = true } },
+        }
+        local hidden = {}
+        DTrash.HideUnitAlerts = function(_, unit, npcID) hidden[#hidden + 1] = { unit, npcID } end
+        local rt = trackResolved("nameplate1")
+        DTrash:MarkEngaged(rt)                            -- seeds 111's spells
+        rt.castConfirmed = true                           -- even a Layer2 lock flips on contradiction
+        rt.obs = { level = 91, sex = 2, power = 0, classID = 2, buffCount = 0,
+            unitClassification = "normal" }
+        DTrash:OnCastInterrupted(nil, "nameplate1", nil, nil, nil, 4)  -- genuine kick
+        assert.equals(222, rt.matchedNPCID)
         assert.is_nil(rt.castConfirmed)
-        assert.same({ { "nameplate1", 111 } }, hidden)    -- scoped output sweep
-        assert.is_nil(next(rt.predictions))
-        assert.is_nil(rt.anchors)
-        assert.is_nil(rt.enterSeeded)                     -- may re-seed under a correct identity
-        assert.is_true(rt.sawInterrupted)                 -- evidence kept: guards re-derivation
+        assert.same({ { "nameplate1", 111 } }, hidden)    -- old output swept, scoped
+        assert.equals("enter", rt.anchors[77].mode)       -- new identity seeded
+        assert.is_nil(rt.anchors[10])                     -- old spellID anchors gone
     end)
 
     it("a kick on an interruptible identity keeps the lock", function()
@@ -368,10 +416,36 @@ describe("DungeonTrash — engage-gated first-cast seeding", function()
         assert.equals(111, rt.matchedNPCID)               -- identity kept
         assert.is_true(rt.enterSeeded)                    -- output kept
         assert.is_nil(rt.activeCastKind)                  -- lifecycle torn down
-        -- a REAL kick afterwards still drops the contradicted row
+        -- a REAL kick afterwards still latches evidence — but with every row
+        -- cannotInterrupt and no resolvable alternative, the identity is KEPT
+        -- (keep-locked) instead of blanking the plate
         DTrash:OnCastInterrupted(nil, "nameplate1", nil, nil, nil, 5)
         assert.is_true(rt.sawInterrupted)
-        assert.is_nil(rt.matchedNPCID)
+        assert.equals(111, rt.matchedNPCID)
+    end)
+
+    -- interruptedBy on a correlated CHANNEL_STOP is a lifecycle signal, not
+    -- kick evidence (reference parity: MarkRuntimeChannelStop feeds it only
+    -- into pendingInterrupted; the Layer1-visible sawInterrupted latches
+    -- ONLY from the INTERRUPTED/FAILED events). Hardening alongside the
+    -- 2026-07-24 keep-locked fix: a Shadowmeld breaking a channel aimed at
+    -- the melder (Riftbreath's channel phase) would stop it with
+    -- interruptedBy present, and the old latch here rejected every
+    -- cannotInterrupt Academy row exactly like the FAILED latch had.
+    it("an interruptedBy channel stop ends the lifecycle without latching kick evidence", function()
+        KE.TrashTraits = { [111] = { dungeonKey = "D", name = "Mob",
+            identity = { level = 91, sex = 2, power = 0, classID = 2, nonElite = true,
+                hasCastSpell = true, hasChannelSpell = true, cannotInterrupt = true } } }
+        local rt = trackResolved("nameplate1")
+        DTrash:MarkEngaged(rt)
+        DTrash:OnChannelStart(nil, "nameplate1", nil, nil, 7)
+        clock.now = 102
+        DTrash:OnChannelStop(nil, "nameplate1", nil, nil, "Player-1-ABCD", 7)  -- meld-broken
+        assert.is_nil(rt.sawInterrupted)              -- no false kick testimony
+        assert.equals(111, rt.matchedNPCID)           -- identity kept
+        assert.is_true(rt.enterSeeded)                -- output kept
+        assert.is_nil(rt.activeCastKind)              -- lifecycle torn down
+        assert.equals("enter", rt.anchors[10].mode)   -- no success credit for the abort
     end)
 
     -- castConfirmed gating (drift review A2): the lock's strength comes from
