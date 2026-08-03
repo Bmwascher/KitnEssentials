@@ -9,7 +9,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 
 ## Features
 
-- **60+ modules** — combat HUD, buff tracking, automation, dungeon tools, and UI skinning
+- **Dozens of modules** — combat HUD, buff tracking, automation, dungeon tools, and UI skinning
 - **Dark themed GUI** — custom settings panel with sidebar navigation and 8 color themes
 - **Edit mode** — drag any element to reposition, with anchor and strata controls
 - **Profile system** — save, copy, and reset per-character or shared profiles
@@ -27,7 +27,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | Range Display | Target range text with out-of-range color warning |
 | Advanced Debuffs | Bar-based dispellable-debuff display with cooldown swipe, native countdown text, dispel-type border color and atlas overlay, PLAYER filter, per-type include/exclude, and spell-ID blocklist (subsumes the older Boss Debuffs module) |
 | External and Defensive Buffs | External defensive cooldowns cast onto you (Pain Suppression, Ironbark, etc.) with cooldown swipe, native countdown text, configurable glow per cast, BigWigs glow integration on incoming raid hits, and a Sound Test button |
-| Focus & Target Castbars | Repositionable cast bars with kick indicators, target names, focus raid marker, important-spell glow, out-of-range dimming, color settings, and cast sound alert (tabbed GUI) |
+| Focus Castbar | Repositionable cast bar with kick indicators, target names, focus raid marker, important-spell glow, out-of-range dimming, color settings, and cast sound alert |
 | Damage Meter | Standalone multi-window damage/healing meter built on the 12.0 C_DamageMeter API (replaces Blizzard's built-in meter) — proportional dock with shared backdrop, per-content auto-swapping layouts, eight meter types, class-colored bars with nickname support, header combat clock, out-of-combat spell breakdown / death recap / target details, segment history, and report-to-chat |
 
 ## Class Utilities
@@ -60,11 +60,7 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 
 | Module | Description |
 |---|---|
-| Dispel Frame Glow | Colored border + top fade on ElvUI party/raid/tank frames with a dispellable debuff (including private auras), tinted by your dispel-type palette with adjustable thickness; requires ElvUI |
-| Dispel on Cursor | Your dispel spell's cooldown countdown at the cursor — a healer-focused view of the Cursor Effects dispel countdown (shared settings) |
-| Healer Mana | Displays the current party healer's name, spec icon, and mana % (party-only; hidden in raid); shows OFFLINE when the healer disconnects |
-| Innervate Tracker | Icon + countdown while Innervate is on you, with configurable label, glow, and alert sound; detected via mana-cost polling (Innervate is hidden from the aura API in 12.0); healer-capable classes only |
-| Maintenance Tracker | One icon per key maintenance buff with group-member count and lowest remaining duration, color-coded by urgency; spec-aware (Atonement, Renewing/Enveloping Mist, Rejuvenation, Riptide, Echo) with side-by-side multi-spell layout and GUI preview |
+| Healer Tools | Healer Mana (current party healer's name, spec icon, and mana %; party-only, hidden in raid; shows OFFLINE when the healer disconnects), Innervate Tracker (icon + countdown while Innervate is on you, detected via mana-cost polling; healer-capable classes only), and Maintenance Tracker (one icon per key maintenance buff with group-member count and lowest remaining duration, color-coded by urgency, spec-aware for Atonement, Renewing/Enveloping Mist, Rejuvenation, Riptide, and Echo) — tabbed GUI |
 
 ## Quality of Life
 
@@ -75,28 +71,19 @@ KitnEssentials adds HUD elements, buff trackers, automation features, and Blizza
 | CVars | One-click CVar optimization panel |
 | Slash Commands | Toggleable shorthand slash commands (`/rl`, `/cd`, `/fs`, `/leave`, `/reset`, `/mute`, `/music`) |
 | Skyriding UI | Skyriding vigor bar with second wind tracker and whirling surge cooldown icon |
-| Position Controller | Auto-anchors ElvUI Player/Target frames beside SkironCooldownManager or Ayije_CDM (auto-detected, clears the widest cooldown row); Focus/Pet anchor freely; CDM racials bar offset with pet detection (works with ElvUI and UUF). Writes through ElvUI's mover system so placements survive `/reload`. Yields to the standalone ElvUI_Anchor addon if loaded; ignores healer specs by default |
 | Custom Nicknames | Map characters to personal nicknames on ElvUI and Unhalted Unit Frames via the `[kes:nickname]` tag family (plus class-color variants `[kes:nickname:color]` for UUF); includes a management GUI with search, import/export, and replace/merge modes; nicknames also display on the KitnEssentials Damage Meter |
-| WindTools Game Bar | Opt-in toggle to hide WindTools' Game Bar without unloading the module |
 | Great Vault Alert | Shows your loot spec when opening the Great Vault with class color and sound |
 | Character Panel | Per-slot item level, enchant labels, gem icons, missing-gem cue, and item-track letters (M/H/C/V/A) on the player and inspect frames; decimal stat-pane and inspect item level; interactive Gem Socket Helper (Shift-click to replace all matching gems); auto-disables BetterCharacterPanel if loaded |
-| World Map | Adjustable minimized map scale, coordinate waypoint search bar, and city map icons for Silvermoon / Stormwind / Orgrimmar |
+| Map Scale | Adjustable minimized map scale, configured from the CVars page; reverts to normal scale when disabled |
 | Vantus Rune | One-click Vantus Rune withdrawal from Guild Bank with priority and confirmation |
 
 ## Skinning
 
 | Module | Description |
 |---|---|
-| General UI Clean Up | Hide unnecessary Blizzard UI elements |
-| Buffs, Debuffs & Externals | Restyle aura icons and bars |
-| Action Bars | Dark themed backdrops, cooldown text styling and proc glow sizing |
-| Blizzard Mouseover | Highlight and tooltip behavior tweaks |
 | Blizzard Texts | Font and outline changes for Blizzard text |
 | Blizzard Tooltips | Tooltip backdrop and font restyling |
-| Micro Menu | Micro menu bar appearance |
 | Battle.net Toast | Dark theme for BNet notification toasts with custom anchor positioning |
-| Details Backdrop | Details! Damage Meter backdrop styling |
-| Raid Manager Panel | Raid manager panel appearance |
 
 ## Dungeons
 

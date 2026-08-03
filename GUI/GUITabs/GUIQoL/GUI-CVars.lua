@@ -1,7 +1,8 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-CVars.lua                                           ║
 -- ║  GUI: CVars                                              ║
--- ║  Purpose: Configuration panel for the CVars module.      ║
+-- ║  Purpose: Configuration panel for the CVars module, and  ║
+-- ║  the host page for the Map Scale card (its own module).  ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -18,9 +19,17 @@ local function GetAutomationModule()
     return nil
 end
 
+local function GetMapScaleModule()
+    return KitnEssentials and KitnEssentials:GetModule("MapScale", true)
+end
+
 GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.Automation
     if not db then return yOffset end
+
+    -- Map scale lives in its own profile block (KE.db.profile.MapScale), not
+    -- in `db` above — a separate module keeps its own enable lifecycle.
+    local mapDB = KE.db and KE.db.profile.MapScale
 
     local AU = GetAutomationModule()
     local manager = GUIFrame:CreateWidgetStateManager()
@@ -214,6 +223,48 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
     end
 
     yOffset = card6:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 7: Map Scale
+    ----------------------------------------------------------------
+    if mapDB then
+        -- Not registered with `manager` — MapScale has its own independent
+        -- enable lifecycle (see the module-vs-Automation note above), so this
+        -- card must not grey out when "Apply CVars on Login" is off.
+        local card7 = GUIFrame:CreateCard(scrollChild, "Map Scale", yOffset)
+
+        local function ApplyMapScale()
+            local MS = GetMapScaleModule()
+            if MS and MS.ApplyScale then MS:ApplyScale() end
+        end
+
+        card7:AddHeaderToggle(mapDB.Enabled ~= false, function(checked)
+            mapDB.Enabled = checked
+            if checked then KitnEssentials:EnableModule("MapScale")
+            else KitnEssentials:DisableModule("MapScale") end
+            ApplyMapScale()
+            KE:Print("Map Scale: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+        end)
+        yOffset = card7:GetNextOffset()
+
+        if mapDB.Enabled ~= false then
+            -- Not a CVar: this drives WorldMapFrame:SetScale() directly, unlike
+            -- every other slider on this page.
+            local row7b = GUIFrame:CreateRow(card7.content, Theme.rowHeightLast)
+            local mapScaleSlider = GUIFrame:CreateSlider(row7b, "Scale", {
+                min = 0.5, max = 2.0, step = 0.05,
+                value = mapDB.Scale or 1.2,
+                callback = function(val)
+                    mapDB.Scale = val
+                    ApplyMapScale()
+                end,
+            })
+            row7b:AddWidget(mapScaleSlider, 1)
+            card7:AddRow(row7b, Theme.rowHeightLast, 0)
+
+            yOffset = card7:GetNextOffset()
+        end
+    end
 
     RefreshStates()
     return yOffset

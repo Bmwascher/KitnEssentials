@@ -36,18 +36,6 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
         if mod and mod.Refresh then mod:Refresh() end
     end
 
-    local function ApplyModuleState(enabled)
-        if not KitnEssentials then return end
-        local mod = GetModule()
-        if not mod then return end
-        mod.db.Enabled = enabled
-        if enabled then
-            KitnEssentials:EnableModule("HealerMana")
-        else
-            KitnEssentials:DisableModule("HealerMana")
-        end
-    end
-
     local function RefreshStates()
         manager:UpdateAll(db.Enabled ~= false)
     end
@@ -56,24 +44,18 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
     -- Card 1: Enable
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Healer Mana Tracker", yOffset)
-
-    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Healer Mana Tracker", {
-        value = db.Enabled ~= false,
-        callback = function(checked)
-            db.Enabled = checked
-            ApplyModuleState(checked)
-            RefreshStates()
-        end,
-        msgPopup = true,
-        msgText = "Healer Mana",
-        msgOn = "On",
-        msgOff = "Off",
-    })
-    row1:AddWidget(enableCheck, 1)
-    card1:AddRow(row1, Theme.rowHeightLast, 0)
-
+    card1:AddHeaderToggle(db.Enabled == true, function(checked)
+        db.Enabled = checked
+        if GetModule() then
+            if checked then KitnEssentials:EnableModule("HealerMana")
+            else KitnEssentials:DisableModule("HealerMana") end
+        end
+        KE:Print("Healer Mana: " ..
+            (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+    end)
     yOffset = card1:GetNextOffset()
+
+    if db.Enabled ~= true then return yOffset end
 
     ----------------------------------------------------------------
     -- Card 2: Position Mode (split toggle + configure-for context)

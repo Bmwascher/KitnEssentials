@@ -42,43 +42,26 @@ GUIFrame:RegisterContent("TotemTracker", function(scrollChild, yOffset)
     -- Card 1: Enable
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Totem Tracker", yOffset)
-
-    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Totem Tracker", {
-        value = db.Enabled ~= false,
-        callback = function(checked)
-            db.Enabled = checked
-            local TT = GetModule()
-            if TT then
-                if checked then KitnEssentials:EnableModule("TotemTracker")
-                else KitnEssentials:DisableModule("TotemTracker") end
-            end
-            UpdateAllWidgetStates()
-        end,
-        msgPopup = true,
-        msgText = "Totem Tracker",
-    })
-    row1:AddWidget(enableCheck, (2 / 3))
-
-    local previewBtn
-    previewBtn = GUIFrame:CreateButton(row1, "Show Preview", {
-        height = 30,
-        callback = function()
-            local TT = GetModule()
-            if TT and TT.TogglePreview then
-                local isActive = TT:TogglePreview()
-                previewBtn:SetLabel(isActive and "Hide Preview" or "Show Preview")
-            end
-        end,
-    })
-    row1:AddWidget(previewBtn, (1 / 3), nil, 0, -6)
-    local TT = GetModule()
-    if TT and TT.IsPreviewActive and TT:IsPreviewActive() then
-        previewBtn:SetLabel("Hide Preview")
-    end
-    card1:AddRow(row1, Theme.rowHeight)
+    card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
+        db.Enabled = checked
+        local TT = GetModule()
+        if TT then
+            if checked then KitnEssentials:EnableModule("TotemTracker")
+            else KitnEssentials:DisableModule("TotemTracker") end
+        end
+        KE:Print("Totem Tracker: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+    end)
 
     yOffset = card1:GetNextOffset()
+
+    -- Lone header bar: a disabled module shows its switch and nothing else.
+    if db.Enabled == false then return yOffset end
+
+    -- No manual preview card: the tracker previews itself whenever this page is
+    -- open (SECTION_PREVIEW_MODULES' class_utilities_section entry in
+    -- Core/Globals.lua), and positioning is handled by /kes edit via the
+    -- EditMode element the module registers in OnEnable. A Show Preview button
+    -- would only duplicate both.
 
     ----------------------------------------------------------------
     -- Card 2: Destroy All Totems (Macro)

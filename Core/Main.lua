@@ -30,6 +30,33 @@ _G.KITNESSENTIALS_NS = KE
 -- file (Core.xml).
 hooksecurefunc(KitnEssentials, "EnableModule", function(_, name)
     KE.PreviewManager:OnModuleEnableChanged(name)
+    -- Conflicts are keyed on the KE module being ENABLED (Core/Conflicts.lua
+    -- BuildConflictQueue), so the login scan correctly skips a module that
+    -- ships off -- and nothing re-armed it afterwards. The Tooltips page tells
+    -- the user in shipped text to "enable this one to be prompted again", and
+    -- that promise went unkept until a reload or /kes conflicts. Gated on the
+    -- login scan having run, and deferred out of combat, both matching that
+    -- scan's own conventions. Rescanning is a no-op when nothing conflicts and
+    -- returns early while a prompt is already open, so a profile switch
+    -- enabling several modules costs one queue, not one per module.
+    -- Deferred a frame, NOT run inline, and coalesced. RunAfterCombat calls
+    -- straight through outside combat (Core/Globals.lua:155-158), and a profile
+    -- switch enables modules from inside RefreshAllModules and then raises its
+    -- own reload prompt in the SAME call stack (Core/ProfileManager.lua:464,
+    -- :501-507). KE:CreatePrompt is a singleton that replaces the live dialog
+    -- with a bare Hide() and never runs its callbacks (Core/Widgets.lua:283-285
+    -- vs ClosePrompt at :173-182) -- so an inline conflict prompt was destroyed
+    -- unanswered, leaving promptActive set and the user with both features live.
+    -- Next frame the refresh has finished, so the conflict prompt replaces the
+    -- generic reload prompt instead; answering it raises a reload prompt of its
+    -- own, and when nothing conflicts no prompt is built at all.
+    if KE.loginConflictScanDone and KE.ScanAddonConflicts and not KE.conflictScanQueued then
+        KE.conflictScanQueued = true
+        C_Timer.After(0, function()
+            KE.conflictScanQueued = nil
+            KE:RunAfterCombat(function() KE:ScanAddonConflicts() end)
+        end)
+    end
 end)
 hooksecurefunc(KitnEssentials, "DisableModule", function(_, name)
     KE.PreviewManager:OnModuleEnableChanged(name)
@@ -171,7 +198,7 @@ function KitnEssentials:OnEnable()
     for name, module in self:IterateModules() do
         if module.db and module.db.Enabled then
             -- Skip skinning modules when ElvUI handles skinning
-            if not (skipSkinning and name:find("^Skin")) then
+            if not (skipSkinning and (name:find("^Skin") or module.keDeferToReload)) then
                 self:EnableModule(name)
             end
         end

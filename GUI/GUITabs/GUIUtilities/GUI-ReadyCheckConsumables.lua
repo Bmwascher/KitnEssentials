@@ -54,22 +54,11 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
     -- Card 1: Enable
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Ready Check Consumables", yOffset)
-
-    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Ready Check Consumables", {
-        value = db.Enabled ~= false,
-        callback = function(checked)
-            db.Enabled = checked
-            ApplyModuleState(checked)
-            RefreshStates()
-        end,
-        msgPopup = true,
-        msgText = "Ready Check Consumables",
-        msgOn = "On",
-        msgOff = "Off",
-    })
-    row1:AddWidget(enableCheck, 1)
-    card1:AddRow(row1, Theme.rowHeight)
+    card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
+        db.Enabled = checked
+        ApplyModuleState(checked)
+        KE:Print("Ready Check Consumables: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+    end)
 
     local noteRow = GUIFrame:CreateRow(card1.content, 35)
     local noteText = GUIFrame:CreateText(noteRow,
@@ -80,6 +69,9 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
     card1:AddRow(noteRow, 35, 0)
 
     yOffset = card1:GetNextOffset()
+
+    -- Lone header bar: a disabled module shows its switch and nothing else.
+    if db.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------
     -- Card 2: General Settings

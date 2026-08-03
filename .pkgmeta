@@ -50,12 +50,14 @@ externals:
   Libs/LibDualSpec-1.0:
     url: https://github.com/AdiAddons/LibDualSpec-1.0.git
     branch: master
+  Libs/LibKeystone:
+    url: https://github.com/BigWigsMods/LibKeystone.git/LibKeystone
   Libs/LibRangeCheck-3.0:
     url: https://github.com/WeakAuras/LibRangeCheck-3.0
   Libs/LibSharedMedia-3.0:
     url: https://repos.curseforge.com/wow/libsharedmedia-3-0/trunk/LibSharedMedia-3.0
   Libs/LibSpecialization:
-    url: https://github.com/BigWigsMods/LibSpecialization
+    url: https://github.com/BigWigsMods/LibSpecialization.git/LibSpecialization
   Libs/LibStub:
     url: https://repos.curseforge.com/wow/libstub/trunk
   Libs/TaintLess:

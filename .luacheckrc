@@ -29,6 +29,7 @@ files["dev/spec"] = {
 --  212/height
 --  432/self   — inner closure shadowing outer self (widget callback pattern)
 --  431/CP     — widget callback re-fetches module fresh, shadowing outer CP
+--  431/LR     — LootRoll preview callback re-fetches module fresh, shadowing outer LR
 ignore = {
     "212/_", "212/self", "212/event", "212/msg", "212/editbox", "212/width", "212/height",
     "212/timeToFade", "212/endAlpha", "212/loopCallback",     -- UIFrameFade callback signature
@@ -41,8 +42,10 @@ ignore = {
     "212/KE",                                                  -- bootstrap guard arg (GetModule files)
     "212/triggerId", "212/addon",                             -- DungeonTimers/Ace addon hooks
     "212/wrapOn",                                             -- KEText format helper
+    "212/rel",                                                -- SetPoint(point, rel, ...) mock signature
     "432/self",
     "431/CP",                                                 -- widget callback re-fetches module fresh
+    "431/LR",                                                 -- LootRoll preview callback re-fetches module fresh
 }
 
 -- Globals this addon sets
@@ -67,11 +70,6 @@ globals = {
     "SlashCmdList",
     "SLASH_KITNESSENTIALS1", "SLASH_KITNESSENTIALS2", "SLASH_KITNESSENTIALS3",
     "SLASH_KE_CDM1", "SLASH_KE_CDM2",
-    "SLASH_KE_FS1",
-    "SLASH_KE_LEAVE1", "SLASH_KE_LEAVE2",
-    "SLASH_KE_MUSIC1",
-    "SLASH_KE_MUTE1",
-    "SLASH_KE_RESET1",
     "SLASH_KE_RL1",
 
     -- Blizzard tables/frames this addon WRITES fields on (dialog
@@ -92,7 +90,7 @@ read_globals = {
     -- Lua standard extensions in WoW
     "strsplit", "strjoin", "strtrim", "format", "tinsert", "tremove",
     "wipe", "CopyTable", "tContains", "strsub", "strlen", "strupper",
-    "strlower", "nop", "time", "date",
+    "strlower", "strmatch", "nop", "time", "date",
 
     -- Core math (WoW re-exports)
     "ceil", "floor", "min", "max", "abs", "sort",
@@ -110,6 +108,7 @@ read_globals = {
     "MouseIsOver", "GetMouseFoci", "GetMouseFocus",
     "GetPhysicalScreenSize", "GetCursorPosition",
     "RunNextFrame",
+    "IsModifierKeyDown",
 
     -- Enums and constants
     "Enum", "Constants", "CurveConstants",
@@ -118,14 +117,16 @@ read_globals = {
     "FACTION_ALLIANCE", "FACTION_HORDE",
     "BASE_MOVEMENT_SPEED",
     "NUM_BAG_FRAMES", "NUM_CHAT_WINDOWS", "NUM_LE_FRAME_TUTORIALS",
-    "RAID_CLASS_COLORS", "GetClassColor", "CLASS_ICON_TCOORDS",
+    "RAID_CLASS_COLORS", "FACTION_BAR_COLORS", "GetClassColor", "CLASS_ICON_TCOORDS",
     "STANDARD_TEXT_FONT",
     "NORMAL_FONT_COLOR", "NORMAL_FONT_COLOR_CODE",
 
     -- Unit functions
     "UnitHealth", "UnitHealthMax", "UnitHealthPercent",
     "UnitPower", "UnitPowerMax", "UnitPowerPercent",
-    "UnitName", "UnitFullName", "UnitLevel", "UnitClass", "UnitRace", "GetUnitName",
+    "UnitName", "UnitFullName", "UnitLevel", "UnitEffectiveLevel", "UnitClass", "UnitRace", "GetUnitName",
+    "UnitPVPName", "UnitRealmRelationship", "UnitIsAFK", "UnitIsDND",
+    "GetCreatureDifficultyColor",
     "UnitGUID", "UnitExists", "UnitIsDead", "UnitIsUnit", "UnitTokenFromGUID",
     "UnitGroupRolesAssigned",
     "UnitGetTotalAbsorbs",
@@ -215,22 +216,31 @@ read_globals = {
     "GetItemInfo", "GetItemInfoInstant", "GetItemSpell", "GetItemCount",
     "GetInventoryItemID", "GetInventoryItemDurability", "GetInventoryItemTexture", "GetInventoryItemLink",
     "GetDetailedItemLevelInfo",
-    "GetInventoryItemQuality", "GetItemQualityColor",
+    "GetInventoryItemQuality", "GetItemQualityColor", "ITEM_QUALITY_COLORS",
+    "GetItemGem", -- deprecated compat shim (C_Item.GetItemGem), Blizzard_DeprecatedItemScript
     "GetWeaponEnchantInfo",
     "ClearCursor", "ResetCursor", "SetCursor",
     "NUM_BAG_SLOTS",
+
+    -- Collections (Mounts / Pets / Toys / Heirlooms)
+    "PlayerHasToy", "C_MountJournal", "C_Heirloom", "C_TransmogCollection",
 
     -- Gem Socketing
     "C_ItemSocketInfo", "SocketInventoryItem", "AcceptSockets", "CloseSocketInfo",
 
     -- PaperDoll layout
     "PaperDollFrame_SetLevel", "PaperDollFrame_UpdateStats",
+    "PanelTemplates_TabResize",
     "InspectPaperDollItemSlotButton_Update", "InspectPaperDollFrame_SetLevel",
     "InspectPaperDollItemsFrame", "C_PaperDollInfo",
 
     -- Loot
-    "GetLootRollItemLink", "RollOnLoot", "ConfirmLootRoll",
-    "BonusRollFrame", "BonusRollFrame_StartBonusRoll",
+    "GetLootRollItemLink", "GetLootRollItemInfo", "RollOnLoot", "ConfirmLootRoll",
+    "BonusRollFrame", "BonusRollFrame_StartBonusRoll", "GetLootRollTimeLeft",
+    "NEED", "GREED", "PASS", "TRANSMOGRIFY", "ROLL_DISENCHANT",
+    "CloseLoot", "LootSlot", "LootSlotHasItem", "GetNumLootItems",
+    "GetLootSlotInfo", "GetLootSlotLink", "IsFishingLoot",
+    "CursorUpdate", "CursorOnUpdate", "UnitIsFriend", "C_TradeSkillUI",
 
     -- Resurrection
     "AcceptResurrect", "IsEncounterInProgress",
@@ -248,7 +258,7 @@ read_globals = {
     "GetMoney", "GetCoinTextureString",
 
     -- Tooltip
-    "GameTooltip", "GameTooltip_Hide",
+    "GameTooltip", "GameTooltip_Hide", "GameTooltip_ShowCompareItem",
     "TooltipDataProcessor",
     "C_TooltipInfo",
 
@@ -312,7 +322,8 @@ read_globals = {
     "GetQuestReward", "GetNumQuestChoices", "GetQuestID",
     "GetActiveTitle", "GetNumActiveQuests",
     "GetNumAvailableQuests", "SelectActiveQuest", "SelectAvailableQuest",
-    "C_QuestLog",
+    "GetNumQuestLeaderBoards", "GetQuestLogLeaderBoard",
+    "C_QuestLog", "C_QuestInfoSystem",
 
     -- Guild Bank
     "GetGuildBankItemLink", "GetGuildBankTabInfo",
@@ -356,7 +367,7 @@ read_globals = {
 
     -- Misc API
     "IsAltKeyDown", "IsControlKeyDown", "IsShiftKeyDown", "IsMetaKeyDown",
-    "IsMouseButtonDown", "IsMounted",
+    "IsMouseButtonDown", "IsMounted", "IsModifiedClick",
     "ResetInstances",
     "GetServerTime", "GetTimePreciseSec", "GetLocale",
     "ReloadUI", "print",

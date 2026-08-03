@@ -71,42 +71,39 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     -- Card 1: Enable
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Interrupt Tracker", yOffset)
+    card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
+        db.Enabled = checked
+        ApplyModuleState(checked)
+        KE:Print("Interrupt Tracker: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+    end)
 
-    local row1a = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local enableCheck = GUIFrame:CreateCheckbox(row1a, "Enable Interrupt Tracker", {
-        value = db.Enabled ~= false,
-        callback = function(checked)
-            db.Enabled = checked
-            ApplyModuleState(checked)
-            RefreshStates()
-        end,
-        msgPopup = true,
-        msgText = "Interrupt Tracker",
-        msgOn = "On",
-        msgOff = "Off",
-    })
-    row1a:AddWidget(enableCheck, 1)
-    card1:AddRow(row1a, Theme.rowHeight)
+    local noteRow = GUIFrame:CreateRow(card1.content, 65)
+    local noteText = GUIFrame:CreateText(noteRow,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " Teammates with kick-sync addons get live bars from the start; other kicks show as temporary class-colored records.\n" ..
+        KE:ColorTextByTheme("-") .. " Only active in 5-player dungeons.",
+        65, "hide")
+    noteRow:AddWidget(noteText, 1)
+    card1:AddRow(noteRow, 65, 0)
 
-    local rowSync = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    yOffset = card1:GetNextOffset()
+
+    -- Lone header bar: a disabled module shows its switch and nothing else.
+    if db.Enabled == false then return yOffset end
+
+    local cardSync = GUIFrame:CreateCard(scrollChild, "Kick Sync", yOffset)
+    manager:Register(cardSync, "all")
+
+    local rowSync = GUIFrame:CreateRow(cardSync.content, Theme.rowHeightLast)
     local syncCheck = GUIFrame:CreateCheckbox(rowSync, "Sync Kicks with Party Addon Users", {
         value = db.KickSync ~= false,
         callback = function(checked) db.KickSync = checked end,
     })
     rowSync:AddWidget(syncCheck, 1)
     manager:Register(syncCheck, "all")
-    card1:AddRow(rowSync, Theme.rowHeight)
+    cardSync:AddRow(rowSync, Theme.rowHeightLast, 0)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, 50)
-    local noteText = GUIFrame:CreateText(noteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Teammates with kick-sync addons get live bars from the start; other kicks show as temporary class-colored records.\n" ..
-        KE:ColorTextByTheme("-") .. " Only active in 5-player dungeons.",
-        50, "hide")
-    noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, 50, 0)
-
-    yOffset = card1:GetNextOffset()
+    yOffset = cardSync:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 2: Position Mode (healer override toggle + configure-for context)

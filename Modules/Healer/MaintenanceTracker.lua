@@ -735,7 +735,8 @@ function MT:OnEnable()
             getParentFrame = function()
                 return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
             end,
-            guiPath = "MaintenanceTracker",
+            guiPath = "HealerTools",
+            guiTab = "MaintenanceTracker",
         })
     end
 end

@@ -1,8 +1,8 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-DispelCursorCard.lua                                ║
 -- ║  Purpose: Shared "Dispel Countdown" card builder.        ║
--- ║  Used by Combat Utilities > Cursor Effects AND the       ║
--- ║  Healer Utilities > Dispel on Cursor cross-link page.    ║
+-- ║  Used by Combat Utilities > Cursor Effects — the         ║
+-- ║  only place these settings live.                         ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -33,6 +33,8 @@ function GUIFrame:CreateDispelCursorCard(scrollChild, yOffset, config)
     ----------------------------------------------------------------
     local card = GUIFrame:CreateCard(scrollChild, "Dispel Countdown", yOffset)
     manager:Register(card, "all")
+
+    card:AddLabel("|cff888888Shows your dispel cooldown at the cursor. Your dispel spell is detected automatically from your spellbook. Nothing is drawn on a spec without one.|r")
 
     local row1 = GUIFrame:CreateRow(card.content, Theme.rowHeight)
     local dispelEnable = GUIFrame:CreateCheckbox(row1, "Enable Dispel Countdown", {

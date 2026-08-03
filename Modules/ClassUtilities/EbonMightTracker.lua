@@ -878,7 +878,8 @@ function EMT:RegWithEditMode()
             getParentFrame = function()
                 return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
             end,
-            guiPath = "EbonMightTracker",
+            guiPath = "EvokerSuite",
+            guiTab = "EbonMightHelper",
         })
         self.editModeRegistered = true
     end

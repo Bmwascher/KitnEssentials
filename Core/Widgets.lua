@@ -101,6 +101,8 @@ local POPUP_WIDTH = 360
 local POPUP_HEIGHT = 120
 local BUTTON_WIDTH = 100
 local BUTTON_HEIGHT = 26
+-- Breathing room each side of a label that outgrows BUTTON_WIDTH.
+local BUTTON_TEXT_PADDING = 24
 
 -- Re-applies theme colors, edge size, and label to a themed button. Split
 -- from CreateThemedButton so the singleton prompt can re-theme its
@@ -129,6 +131,16 @@ local function ThemeButton(btn, Theme, labelText, isPrimary)
     btn.label:SetText(labelText)
     btn.label:SetTextColor(textColor[1], textColor[2], textColor[3], 1)
     btn.label:SetShadowColor(0, 0, 0, 0)
+
+    -- GROW-ONLY: the label is a centered FontString with no width limit, so a
+    -- label wider than BUTTON_WIDTH spilled equally past both edges and drew
+    -- straight over the neighbouring button (the two sit 8px apart around the
+    -- container's center). Every prior caller used short labels -- "Reset",
+    -- "Reload Now" -- which is why this only surfaced once a prompt put a
+    -- variable-length addon name on a button. Widening only when the text
+    -- demands it leaves every existing prompt pixel-identical.
+    local textWidth = btn.label:GetStringWidth() or 0
+    btn:SetWidth(math.max(BUTTON_WIDTH, textWidth + BUTTON_TEXT_PADDING))
 end
 
 local function CreateThemedButton(parent, Theme, labelText, isPrimary)
@@ -285,7 +297,15 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     -- Hard-codes the original's effective evaluation (its `and not
     -- dialog.messageLabel` guard could never fire on a fresh frame).
     local showMessage = (not showEditBox) or (onAccept ~= nil)
-    local showButtons = (not showEditBox) or (onAccept ~= nil)
+    -- OPT-IN single Close button for copy mode (edit box, no accept
+    -- callback): the caller asks for it by passing cancelText. No other
+    -- mode can reach this flag -- showEditBox+onAccept~=nil already shows
+    -- buttons the ordinary way, and confirm mode (not showEditBox) always
+    -- did. A copy prompt carrying a cancelText IS the Copy Anything window;
+    -- the title/edit-box colour swap below keys off the same flag rather
+    -- than adding a second parameter for what is really one signal.
+    local isCopyPrompt = showEditBox and not onAccept and cancelText and true or false
+    local showButtons = (not showEditBox) or (onAccept ~= nil) or isCopyPrompt
 
     ------------------------------------------------------------------
     -- PASS 1: ensure-create every widget the current mode needs.
@@ -485,7 +505,11 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     dialog.headerBottomBorder:SetColorTexture(border[1], border[2], border[3], border[4] or 1)
 
     dialog.titleLabel:SetText(title or "Confirm")
-    dialog.titleLabel:SetTextColor(accent[1], accent[2], accent[3], accent[4] or 1)
+    -- Copy Anything is the one KE popup styled against the reference: white
+    -- title, accent-coloured id (edit box, below). isCopyPrompt is the same
+    -- flag Step 2 uses for the Close button -- see its definition above.
+    local titleColor = isCopyPrompt and textPrimary or accent
+    dialog.titleLabel:SetTextColor(titleColor[1], titleColor[2], titleColor[3], titleColor[4] or 1)
     dialog.titleLabel:SetShadowColor(0, 0, 0, 0)
     dialog.closeTex:SetVertexColor(textPrimary[1], textPrimary[2], textPrimary[3], textPrimary[4] or 1)
 
@@ -557,7 +581,10 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
         else
             editBox:SetFont(STANDARD_TEXT_FONT, 12, "OUTLINE")
         end
-        editBox:SetTextColor(textPrimary[1], textPrimary[2], textPrimary[3], 1)
+        -- Same isCopyPrompt swap as the title above: Copy Anything shows its
+        -- id in the accent colour instead of the usual white.
+        local editTextColor = isCopyPrompt and accent or textPrimary
+        editBox:SetTextColor(editTextColor[1], editTextColor[2], editTextColor[3], 1)
         editBox:SetShadowColor(0, 0, 0, 0)
         editBox:SetText(text or "")
         editBox:HighlightText()
@@ -618,9 +645,48 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
         dialog:SetHeight(POPUP_HEIGHT + 70)
     end
 
-    if dialog.buttonContainer and showButtons then
+    if dialog.buttonContainer and showButtons and isCopyPrompt then
+        -- Copy Anything's opt-in: ONE centred button carrying cancelText,
+        -- no accept button at all. ThemeButton alone (not both), so the
+        -- hidden acceptBtn keeps whatever theme/label it last had -- fine,
+        -- since PASS 3 below hides it and the mode that shows it again
+        -- always re-themes it itself.
+        ThemeButton(dialog.cancelBtn, Theme, cancelText, false)
+        dialog.cancelBtn:ClearAllPoints()
+        dialog.cancelBtn:SetPoint("CENTER", dialog.buttonContainer, "CENTER", 0, 0)
+        -- Same grow-only idiom as the two-button branch below, sized for one
+        -- button instead of a pair.
+        dialog:SetWidth(math.max(POPUP_WIDTH, dialog.cancelBtn:GetWidth() + 24))
+    elseif dialog.buttonContainer and showButtons then
         ThemeButton(dialog.acceptBtn, Theme, acceptText or "Accept", true)
         ThemeButton(dialog.cancelBtn, Theme, cancelText or "Cancel", false)
+
+        -- ThemeButton grows a button to fit its label, so the pair can now
+        -- outgrow the dialog. Two things follow, and the second is the one an
+        -- obvious fix misses.
+        --
+        -- RE-ANCHOR AS A GROUP. The create pass anchors accept entirely LEFT of
+        -- the container's center and cancel entirely RIGHT of it. That centers
+        -- the pair only while the two are the same width; with a long label on
+        -- one side the group sits off-center and the wide button alone needs
+        -- HALF the container, so sizing the dialog by the sum still overflows.
+        -- Anchoring the pair as one group makes the sum correct and squares the
+        -- layout. For equal-width buttons this is pixel-identical to the old
+        -- anchoring, so the 19 short-label prompts are untouched.
+        local pairWidth = dialog.acceptBtn:GetWidth() + dialog.cancelBtn:GetWidth() + 8
+        dialog.acceptBtn:ClearAllPoints()
+        dialog.acceptBtn:SetPoint("LEFT", dialog.buttonContainer, "CENTER", -pairWidth / 2, 0)
+        dialog.cancelBtn:ClearAllPoints()
+        dialog.cancelBtn:SetPoint("LEFT", dialog.acceptBtn, "RIGHT", 8, 0)
+
+        -- Then widen to fit the group plus the container's 12px inset each
+        -- side. Grow-only against POPUP_WIDTH, so short-label prompts keep
+        -- their exact size.
+        dialog:SetWidth(math.max(POPUP_WIDTH, pairWidth + 24))
+    else
+        -- The dialog is a singleton: without this, a button-less prompt would
+        -- inherit the width of whatever wide-labelled prompt ran before it.
+        dialog:SetWidth(POPUP_WIDTH)
     end
 
     ------------------------------------------------------------------
@@ -637,6 +703,11 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     if dialog.editBox2Label then dialog.editBox2Label:SetShown(twoField) end
     if dialog.editBox2 then dialog.editBox2:SetShown(twoField) end
     if dialog.buttonContainer then dialog.buttonContainer:SetShown(showButtons) end
+    -- Individually shown too, not just via the container: isCopyPrompt shows
+    -- the container with only cancelBtn in it, so acceptBtn -- left visible
+    -- from a prior confirm-mode call -- must be hidden explicitly here.
+    if dialog.acceptBtn then dialog.acceptBtn:SetShown(showButtons and not isCopyPrompt) end
+    if dialog.cancelBtn then dialog.cancelBtn:SetShown(showButtons) end
 
     dialog:Show()
     KE.activePrompt = dialog

@@ -621,7 +621,8 @@ function PT:RegWithEditMode()
             getParentFrame = function()
                 return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
             end,
-            guiPath = "PrescienceTracker",
+            guiPath = "EvokerSuite",
+            guiTab = "PrescienceTracker",
         })
         self.editModeRegistered = true
     end

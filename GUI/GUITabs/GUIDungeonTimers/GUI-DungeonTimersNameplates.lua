@@ -81,30 +81,23 @@ GUIFrame:RegisterContent("DTimers_Nameplates", function(scrollChild, yOffset)
     ---------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Dungeon Trash Tracker", yOffset)
     card1:AddLabel("Watches enemy nameplates in 5-player dungeons and predicts when trash mobs will re-cast key abilities, shown as countdown alerts and on-plate cooldown icons.")
-
-    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Trash Tracker", {
-        value = db.Enabled ~= false,
-        callback = function(checked)
-            db.Enabled = checked
-            if KitnEssentials then
-                if checked then
-                    KitnEssentials:EnableModule("DungeonTrash")
-                else
-                    KitnEssentials:DisableModule("DungeonTrash")
-                end
+    card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
+        db.Enabled = checked
+        if KitnEssentials then
+            if checked then
+                KitnEssentials:EnableModule("DungeonTrash")
+            else
+                KitnEssentials:DisableModule("DungeonTrash")
             end
-        end,
-        msgPopup = true,
-        msgText = "Trash Tracker",
-        msgOn = "On",
-        msgOff = "Off",
-    })
-    row1:AddWidget(enableCheck, 1)
-    card1:AddRow(row1, Theme.rowHeightLast, 0)
+        end
+        KE:Print("Trash Tracker: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+    end)
+
     yOffset = card1:GetNextOffset()
 
-    local isModuleDisabled = db.Enabled == false
+    -- Lone header bar: a disabled module shows its switch and nothing else.
+    if db.Enabled == false then return yOffset end
+
     local manager = GUIFrame:CreateWidgetStateManager()
 
     ---------------------------------------------------------------------------
@@ -241,7 +234,7 @@ GUIFrame:RegisterContent("DTimers_Nameplates", function(scrollChild, yOffset)
     appearCard:AddRow(appearRow, Theme.rowHeightLast, 0)
     yOffset = appearCard:GetNextOffset()
 
-    manager:UpdateAll(not isModuleDisabled)
+    manager:UpdateAll(db.Enabled ~= false)
     return yOffset
 end)
 

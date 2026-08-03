@@ -73,6 +73,7 @@ function KE_FramePool:ReleaseAll() end
 ---@field GUI table
 ---@field FramePool KE.FramePool
 ---@field curves KE.Curves
+---@field Skins table # Modules/Skinning/*.lua shared namespace (KE.Skins)
 ---@field msgContainer Frame? # message-popup singleton (Core/Widgets.lua)
 ---@field promptDialog Frame? # prompt-dialog singleton (Core/Widgets.lua)
 ---@field activePrompt Frame? # currently-open prompt; nil when closed
@@ -306,6 +307,36 @@ function KE:SkinningReloadPrompt() end
 ---@return string?
 function KE:BuildNicknameKey(rawName, fallbackRealm) end
 
+-- ─── Skinning (Modules/Skinning/EUIWindows.lua) ──────────
+--- Pure. Which of our skin keys EllesmereUI already covers.
+---@param env { loaded: boolean, version: string?, getStyle: (fun(euiKey: string): string?)? }
+---@return table set # [skinKey] = euiKey (unfiltered row) | resolved record
+---                   { euiKey, addons, partialLabel, partialTooltip }
+---                   (filtered row); never nil
+function KE:BuildSkinSuppressionSet(env) end
+
+--- Live. Reads the globals, resolves once, caches on KE.Skins.suppressed.
+---@return table set # [skinKey] = euiKey | resolved record; never nil
+function KE:ResolveSkinSuppression() end
+
+--- Nothing outside Modules/Skinning/EUIWindows.lua may index
+--- KE.Skins.suppressed directly -- these two accessors are the only
+--- shape-safe reads of it.
+--- Is THIS ONE registration suppressed? Returns the owning euiKey string
+--- when it is, nil when it is not.
+---@param key string # skin key (KE.Skins.skinIndex / skinStatus key)
+---@param addon string? # the Blizzard addon this registration came from
+---@return string? euiKey
+function KE.Skins.GetSuppression(key, addon) end
+
+--- How much of `key` does EllesmereUI own?
+---@param key string
+---@return string state # "none" | "full" | "partial"
+---@return string? euiKey
+---@return string? partialLabel
+---@return string? partialTooltip
+function KE.Skins.GetSuppressionState(key) end
+
 -- ─── KitnEssentials AceAddon globals ──────────────────────
 ---@class KitnEssentials
 ---@field db AceDB
@@ -369,11 +400,15 @@ function AceModule:SecureHook(object, method, handler) end
 ---@param handler function|string?
 function AceModule:Hook(object, method, handler) end
 
----@overload fun(self: AceModule, functionName: string, handler: function|string?)
+--- RawHook additionally accepts a hookSecure boolean, either as a 3rd arg
+--- after the object/method/handler form or, string-object shorthand, right
+--- after the handler: `self:RawHook(functionName, handler, hookSecure)`.
+---@overload fun(self: AceModule, functionName: string, handler: function|string?, hookSecure: boolean?)
 ---@param object table
 ---@param method string
 ---@param handler function|string?
-function AceModule:RawHook(object, method, handler) end
+---@param hookSecure boolean?
+function AceModule:RawHook(object, method, handler, hookSecure) end
 
 ---@param msg string
 function AceModule:Hide(msg) end

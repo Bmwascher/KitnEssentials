@@ -54,26 +54,15 @@ GUIFrame:RegisterContent("MaintenanceTracker", function(scrollChild, yOffset)
     -- Card 1: Enable
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Maintenance Tracker", yOffset)
-
-    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Maintenance Tracker", {
-        value = db.Enabled == true,
-        callback = function(checked)
-            db.Enabled = checked
-            local mod = GetModule()
-            if mod then
-                if checked then KitnEssentials:EnableModule("MaintenanceTracker")
-                else KitnEssentials:DisableModule("MaintenanceTracker") end
-            end
-            UpdateAllWidgetStates()
-        end,
-        msgPopup = true,
-        msgText  = "Maintenance Tracker",
-        msgOn    = "On",
-        msgOff   = "Off",
-    })
-    row1:AddWidget(enableCheck, 1)
-    card1:AddRow(row1, Theme.rowHeight)
+    card1:AddHeaderToggle(db.Enabled == true, function(checked)
+        db.Enabled = checked
+        if GetModule() then
+            if checked then KitnEssentials:EnableModule("MaintenanceTracker")
+            else KitnEssentials:DisableModule("MaintenanceTracker") end
+        end
+        KE:Print("Maintenance Tracker: " ..
+            (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+    end)
 
     card1:AddLabel(
         "Shows an icon per tracked maintenance buff with the " ..
@@ -87,6 +76,8 @@ GUIFrame:RegisterContent("MaintenanceTracker", function(scrollChild, yOffset)
         "Multi-spell specs render icons side-by-side using the layout settings below.")
 
     yOffset = card1:GetNextOffset()
+
+    if db.Enabled ~= true then return yOffset end
 
     ----------------------------------------------------------------
     -- Card 2: Position

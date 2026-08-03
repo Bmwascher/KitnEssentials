@@ -439,14 +439,15 @@ function ProfileManager:RefreshAllModules()
     -- this in Core/Main.lua OnEnable; profile switches previously didn't —
     -- modules enabled under the old profile kept their events/frames live,
     -- and newly-enabled modules stayed dormant. Only modules that publish a
-    -- db.Enabled flag are synced; keSelfManagedEnable modules
-    -- (PositionController: its CDM Racials half runs independent of the
-    -- master toggle) manage their own state. Skin* modules are NEVER flipped
+    -- db.Enabled flag are synced; keSelfManagedEnable modules (any module
+    -- with a sub-feature that runs independent of the master toggle)
+    -- manage their own state. Skin* modules are NEVER flipped
     -- live — skinning applies destructively at enable and OnDisable has no
     -- frame teardown — a mismatch prompts for the /reload that lets startup
     -- apply the new flags (silently skipped when ElvUI handles skinning).
     local skipSkinning = KE.ShouldNotLoadModule and KE:ShouldNotLoadModule()
     local skinningChanged = false
+    local reloadNeeded = false
     for name, module in KitnEssentials:IterateModules() do
         if module.UpdateDB then module:UpdateDB() end
         local wasEnabled = module:IsEnabled()
@@ -454,12 +455,21 @@ function ProfileManager:RefreshAllModules()
         local stateMismatch = wantEnabled ~= nil and not module.keSelfManagedEnable
             and (not wantEnabled) ~= (not wasEnabled)
         local skinDeferred = false
+        local reloadDeferred = false
         if stateMismatch then
-            if name:find("^Skin") then
+            if name:find("^Skin") or module.keDeferToReload then
                 skinDeferred = true
                 if not skipSkinning then skinningChanged = true end
             elseif wantEnabled then
                 KitnEssentials:EnableModule(name)
+            elseif module.keReloadOnDisable then
+                -- Module has no live teardown for what OnEnable does
+                -- (permanent hooks, replaced Blizzard functions, or a raised
+                -- Blizzard constant) — disabling it live would leave those
+                -- changes in place while the module reports itself off.
+                -- Stay enabled until the reload fixes the mismatch.
+                reloadDeferred = true
+                reloadNeeded = true
             else
                 KitnEssentials:DisableModule(name)
             end
@@ -470,14 +480,30 @@ function ProfileManager:RefreshAllModules()
         -- Skin modules pending a reload must not apply the mismatched
         -- profile's settings either (ActionBars:ApplySettings has no master
         -- db.Enabled guard — it would destructively apply a disabled-intent
-        -- profile's config).
-        if wasEnabled and module:IsEnabled() and module.ApplySettings and not skinDeferred then
+        -- profile's config). Same for reload-deferred modules: the new
+        -- profile wants this module OFF, so applying its settings now would
+        -- configure a module that's about to be torn down by /reload.
+        if wasEnabled and module:IsEnabled() and module.ApplySettings and not skinDeferred and not reloadDeferred then
             module:ApplySettings()
         end
     end
 
+    -- Brandon's ruling 2026-08-02: a profile operation ALWAYS prompts for a
+    -- reload, as a precaution. Previously each class prompted only for itself
+    -- — skinning changes, and modules carrying keReloadOnDisable — which left
+    -- every other profile switch silent. The gap that exposed it: a module
+    -- whose OnEnable leaves state behind but which carries no
+    -- keReloadOnDisable flag (MoveFrames sets movable/mouse flags that survive
+    -- DisableModule) went off with no warning and no way for the user to know
+    -- a reload was owed. Rather than chase per-module flags, prompt always.
+    -- ONE prompt, never two: KE:CreatePrompt stores KE.activePrompt, so two
+    -- calls here would have the second replace the first.
     if skinningChanged and KE.SkinningReloadPrompt then
         KE:SkinningReloadPrompt()
+    elseif KE.CreateReloadPrompt then
+        KE:CreateReloadPrompt(reloadNeeded
+            and "This profile turns off a feature that needs a UI reload to fully take effect."
+            or "Profile changed. Reload your UI so every setting applies cleanly.")
     end
 
     -- Refresh theme

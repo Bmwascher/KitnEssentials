@@ -473,6 +473,12 @@ function KH:ApplySettings()
     if self.yourKeyActive then
         self:CheckYourKeyCondition()
     end
+
+    -- The preview is config-driven too. Without this the checks above only ever
+    -- reach a LIVE reminder (rerollActive / yourKeyActive), so toggling a
+    -- sub-reminder while the GUI page is previewing wrote the setting and left
+    -- the preview frame on screen.
+    if self.isPreview then self:ShowPreview() end
 end
 
 ---------------------------------------------------------------------------------
@@ -510,6 +516,11 @@ end
 -- under the icon), so the two lines can't overlap.
 function KH:ApplyPreviewOffset()
     if not (self.yourKeyFrame and self.rerollFrame) then return end
+    -- Only pair them up when the Reroll copy is actually on screen. With its
+    -- sub-toggle off there is nothing to sit beside, and offsetting anyway
+    -- would strand Your Key to the right of a hidden frame — so leave the
+    -- normal position ApplyReminderSettings just set.
+    if self.db.RerollEnabled == false then return end
     local db = self.db
     local keyLine = self.rerollFrame.keyText
     local textWidth = (keyLine and keyLine:GetStringWidth()) or 0
@@ -530,19 +541,32 @@ function KH:ShowPreview()
     local keyLineText, keyLineIcon = GetOwnedKeyDisplay()
     if not keyLineText then keyLineText = "Algeth'ar Academy - 23" end
 
+    -- Each reminder previews only while its own sub-toggle is on, so switching
+    -- one off dismisses its preview immediately instead of leaving it up until
+    -- the page is reopened. ApplySettings re-runs this whenever a toggle moves.
     self:ApplyRerollSettings()
-    self.rerollFrame.title:SetText("REROLL KEY?")
-    SetKeyLine(self.rerollFrame, keyLineText, keyLineIcon)
-    self.rerollFrame:SetAlpha(1)
-    self.rerollFrame:Show()
-    self:StartRerollGlow()
+    if self.db.RerollEnabled ~= false then
+        self.rerollFrame.title:SetText("REROLL KEY?")
+        SetKeyLine(self.rerollFrame, keyLineText, keyLineIcon)
+        self.rerollFrame:SetAlpha(1)
+        self.rerollFrame:Show()
+        self:StartRerollGlow()
+    else
+        self:StopRerollGlow()
+        self.rerollFrame:Hide()
+    end
 
     self:ApplyYourKeySettings()   -- also applies the preview side-by-side offset
-    self.yourKeyFrame.title:SetText("Your Key?")
-    SetKeyLine(self.yourKeyFrame, keyLineText, keyLineIcon)
-    self.yourKeyFrame:SetAlpha(1)
-    self.yourKeyFrame:Show()
-    self:StartYourKeyGlow()
+    if self.db.YourKeyEnabled ~= false then
+        self.yourKeyFrame.title:SetText("Your Key?")
+        SetKeyLine(self.yourKeyFrame, keyLineText, keyLineIcon)
+        self.yourKeyFrame:SetAlpha(1)
+        self.yourKeyFrame:Show()
+        self:StartYourKeyGlow()
+    else
+        self:StopYourKeyGlow()
+        self.yourKeyFrame:Hide()
+    end
 end
 
 function KH:HidePreview()

@@ -1,8 +1,8 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  CastbarHelpers.lua                                      ║
--- ║  Purpose: Shared logic for TargetCastbar and             ║
--- ║           FocusCastbar — plain functions taking (self,   ║
--- ║           ...) where self is the calling AceModule.      ║
+-- ║  Purpose: Shared logic for FocusCastbar — plain functions ║
+-- ║           taking (self, ...) where self is the calling   ║
+-- ║           AceModule.                                     ║
 -- ║  Not inheritance. Not a base class. Just helpers.        ║
 -- ╚══════════════════════════════════════════════════════════╝
 
@@ -94,7 +94,7 @@ function H.ResetCastState(self)
     H.HideGlow(self)
 end
 
--- Opt-in (FocusCastbar sets db.IgnoreFriendlies; TargetCastbar's db lacks it).
+-- Opt-in via db.IgnoreFriendlies.
 -- Returns false when the tracked unit is one we should NOT show a castbar for.
 -- UnitCanAttack returns a plain boolean (not secret).
 function H.UnitIsRelevant(self)
@@ -401,10 +401,10 @@ function H.CreateFrame(self, opts)
     end
 
     -- Optional raid-target marker. Only created when the
-    -- module's defaults populate `db.TargetMarker` — FocusCastbar opts in,
-    -- TargetCastbar does not. When the marker exists, H.UpdateTargetMarker
-    -- and the cast lifecycle handle visibility; otherwise all marker code
-    -- silently no-ops via `if self.targetMarker` guards.
+    -- module's defaults populate `db.TargetMarker` — FocusCastbar opts in.
+    -- When the marker exists, H.UpdateTargetMarker and the cast lifecycle
+    -- handle visibility; otherwise all marker code silently no-ops via
+    -- `if self.targetMarker` guards.
     local targetMarker
     if db.TargetMarker then
         targetMarker = frame:CreateTexture(nil, "OVERLAY")
@@ -1004,8 +1004,8 @@ end
 
 ---------------------------------------------------------------------------------
 -- Raid-target marker (NUI v3.10 port). Module opts in by populating
--- db.TargetMarker; FocusCastbar does, TargetCastbar does not. The owning
--- module wires RAID_TARGET_UPDATE -> H.UpdateTargetMarker via its own event
+-- db.TargetMarker; FocusCastbar does. The owning module wires
+-- RAID_TARGET_UPDATE -> H.UpdateTargetMarker via its own event
 -- registration; H.ToggleTargetMarkerIntegration is a convenience for live
 -- toggle of the Enabled flag.
 ---------------------------------------------------------------------------------

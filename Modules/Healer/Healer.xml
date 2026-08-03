@@ -1,6 +1,5 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
     <Script file="HealerMana.lua" />
-    <Script file="DispelGlow.lua" />
     <Script file="InnervateTracker.lua" />
     <Script file="MaintenanceTracker.lua" />
 </Ui>

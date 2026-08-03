@@ -206,6 +206,17 @@ function KE:RefreshTheme()
     if self.EditMode and self.EditMode:IsActive() then
         self.EditMode:RefreshOverlays()
     end
+    -- The skinning palette takes its accent from the theme, and it is NOT a
+    -- module, so NotifyThemeChange below cannot reach it. It has to be
+    -- refreshed here or not at all: its own file-scope call runs before the db
+    -- exists, and its only other call site sits inside the Blizzard Frames
+    -- module, which ships disabled -- so a user's saved accent never reached
+    -- any skin consumer on a default profile, and a live theme change never
+    -- reached one at all. Ordered BEFORE the notification so a future skinning
+    -- OnThemeChanged handler observes the new palette rather than the old.
+    if self.Skins and self.Skins.RefreshPalette then
+        self.Skins.RefreshPalette()
+    end
     self:NotifyThemeChange()
     isRefreshing = false
 end

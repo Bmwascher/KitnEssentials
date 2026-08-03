@@ -11,7 +11,12 @@
     <Script file="VantusRune.lua" />
     <Script file="CharacterPanel.lua" />
     <Script file="InspectPanel.lua" />
-    <Script file="WorldMap.lua" />
-    <Script file="PositionController.lua" />
-    <Script file="WindToolsGameBar.lua" />
+    <Script file="MapScale.lua" />
+    <Script file="CopyAnything.lua" />
+    <Script file="AlertFrames.lua" />
+    <Script file="MerchantPages.lua" />
+    <Script file="ColorPicker.lua" />
+    <Script file="MoveFrames.lua" />
+    <Script file="GroupSort.lua" />
+    <Script file="RaidControl.lua" />
 </Ui>

@@ -147,7 +147,7 @@ function TS:OnInitialize()
     -- Ace default module state is enabled; without this a db-disabled module
     -- still counts as IsEnabled() (first GUI enable becomes a no-op and core
     -- PEW ApplySettings runs the gate with no anchor frame). Sibling idiom:
-    -- DungeonCasts.lua / KeystoneHelper.lua / TargetCastbar.lua /
+    -- DungeonCasts.lua / KeystoneHelper.lua / FocusCastbar.lua /
     -- PlayerAbsorbs.lua — Core/Main.lua's OnEnable loop owns the actual
     -- enable decision via db.Enabled.
     self:SetEnabledState(false)

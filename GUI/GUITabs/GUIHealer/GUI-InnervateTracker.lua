@@ -54,28 +54,19 @@ GUIFrame:RegisterContent("InnervateTracker", function(scrollChild, yOffset)
     --  no manual preview button — matches the reference behavior.)
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Innervate Tracker", yOffset)
-
-    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Innervate Tracker", {
-        value = db.Enabled == true,
-        callback = function(checked)
-            db.Enabled = checked
-            local IT = GetModule()
-            if IT then
-                if checked then KitnEssentials:EnableModule("InnervateTracker")
-                else KitnEssentials:DisableModule("InnervateTracker") end
-            end
-            UpdateAllWidgetStates()
-        end,
-        msgPopup = true,
-        msgText = "Innervate Tracker",
-        msgOn = "On",
-        msgOff = "Off",
-    })
-    row1:AddWidget(enableCheck, 1)
-    card1:AddRow(row1, Theme.rowHeightLast, 0)
-
+    card1:AddHeaderToggle(db.Enabled == true, function(checked)
+        db.Enabled = checked
+        if GetModule() then
+            if checked then KitnEssentials:EnableModule("InnervateTracker")
+            else KitnEssentials:DisableModule("InnervateTracker") end
+        end
+        KE:Print("Innervate Tracker: " ..
+            (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+    end)
     yOffset = card1:GetNextOffset()
+
+    -- Lone header bar: a disabled module shows its switch and nothing else.
+    if db.Enabled ~= true then return yOffset end
 
     ----------------------------------------------------------------
     -- Card 2: Position (top of the page, per standard card order)

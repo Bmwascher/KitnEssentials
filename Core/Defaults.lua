@@ -236,6 +236,24 @@ local Defaults = {
                 VisibilityOverride = nil,
                 InstanceOnly       = false,
             },
+
+            -- Taunt cooldown countdown at the cursor. Tank specs only --
+            -- C:_TauntEvaluateGate activates it on a tank spec and tears it
+            -- down otherwise, so Enabled=true still shows nothing on a healer.
+            -- Ships OFF: the reference disables its module at init for the
+            -- same reason (<REF>/Combat/TauntCursor.lua:53).
+            Taunt = {
+                Enabled            = false,
+                Attached           = true,
+                AnchorPoint        = "CENTER",
+                XOffset            = 10,
+                YOffset            = 10,
+                FontFace           = "Expressway",
+                FontSize           = 18,
+                TextColor          = { 1, 1, 1, 1 },
+                VisibilityOverride = nil,
+                InstanceOnly       = false,
+            },
         },
 
         PetStatusText = {
@@ -308,47 +326,6 @@ local Defaults = {
             MaxCooldown = 30,
         },
 
-        TargetCastbar = {
-            Enabled = false,
-            Width = 250,
-            Height = 20,
-            Strata = "HIGH",
-            anchorFrameType = "UIPARENT",
-            ParentFrame = "UIParent",
-            Position = DefaultPosition(0, -200),
-            FontSize = 12,
-            FontFace = "Expressway",
-            FontOutline = "OUTLINE",
-            StatusBarTexture = "KitnUI",
-            CastingColor = { 1, 0.7, 0, 1 },
-            ChannelingColor = { 0, 0.7, 1, 1 },
-            EmpoweringColor = { 0.8, 0.4, 1, 1 },
-            NotInterruptibleColor = { 0.7, 0.7, 0.7, 1 },
-            HideNotInterruptible = false,
-            TextColor = { 1, 1, 1, 1 },
-            BackdropColor = { 0, 0, 0, 0.8 },
-            BorderColor = { 0, 0, 0, 1 },
-            HoldTimer = {
-                Enabled = true,
-                Duration = 0.5,
-                InterruptedColor = { 0.1, 0.8, 0.1, 1 },
-                SuccessColor = { 0.8, 0.1, 0.1, 1 },
-            },
-            KickIndicator = {
-                Enabled = true,
-                ReadyColor = { 0.1, 0.8, 0.1, 1 },
-                NotReadyColor = { 0.5, 0.5, 0.5, 1 },
-                TickColor = { 1, 1, 1, 1 },
-            },
-            TargetNames = {
-                Enabled = true,
-                Anchor = "RIGHT",
-                XOffset = 0,
-                YOffset = 14,
-                FontSize = 12,
-            },
-        },
-
         FocusCastbar = {
             Enabled = true,
             Width = 350,
@@ -373,7 +350,7 @@ local Defaults = {
             TextColor = { 1, 1, 1, 1 },
             BackdropColor = { 0, 0, 0, 0.8 },
             BorderColor = { 0, 0, 0, 1 },
-            -- Focus-castbar-only features (opt-in; TargetCastbar lacks these keys):
+            -- Focus-castbar-only features (opt-in):
             OutOfRangeOpacity = 1,        -- 1 = disabled; < 1 dims bar when interrupt out of range
             IgnoreFriendlies = false,     -- hide bar when focus is not attackable
             ImportantGlow = {
@@ -583,11 +560,6 @@ local Defaults = {
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, -160),
-        },
-
-        DispelGlow = {
-            Enabled = false,
-            BorderSize = 2,   -- border thickness in px (1-4)
         },
 
         DisintegrateTicks = {
@@ -970,6 +942,48 @@ local Defaults = {
             YourKeyGlowThickness = 2,
         },
 
+        -- Quick-access side panel docked to the right of the Group Finder:
+        -- this week's affixes, one-click category searches, a Mythic+
+        -- dungeon/role filter pane, and a weekly-runs footer.
+        -- Ships DISABLED: it rewrites Blizzard's LFGList search results, so
+        -- it is opt-in.
+        --
+        -- The six keys below Enabled are SESSION state, not preferences: the
+        -- module overwrites every one of them on each OnEnable (login, reload
+        -- and toggle) by design -- filters are meant to start clean each
+        -- session. That makes the SortBy and SortDescending values here
+        -- effectively dead. They are kept so the shape is complete. Do not
+        -- "fix" them by deleting the reset; the reset is the behaviour.
+        GroupFinderPanel = {
+            Enabled        = false,
+            DungeonFilter  = {},        -- [activityGroupID] = true
+            PartyFit       = false,     -- shown as "Needs Role"
+            HasTank        = false,
+            HasHealer      = false,
+            SortBy         = "DEFAULT", -- DEFAULT / OVERALL_SCORE / DUNGEON_SCORE
+            SortDescending = true,
+        },
+
+        -- Quick Create: a row of season-dungeon buttons on the Group Finder
+        -- Entry Creation form. One click lists a group for that dungeon.
+        -- Ships DISABLED: it modifies a Blizzard form's layout, so it is
+        -- opt-in, matching the reference.
+        LFGQuickCreate = {
+            Enabled          = false,
+            QuickCreate      = true,
+            DefaultPlaystyle = 1,
+            DoubleClickStart = true,
+        },
+
+        -- Popup with a one-click dungeon teleport when you join a Group
+        -- Finder group. Hides on entering the dungeon, leaving the group,
+        -- or entering combat.
+        LFGReminder = {
+            Enabled     = true,
+            Scale       = 1.05,
+            ShowDisable = true,
+        },
+
         PIMacroBuilder = {
             Enabled = true,
             MacroName = "PI",
@@ -986,11 +1000,6 @@ local Defaults = {
         SlashCommands = {
             CDMEnabled = true,
             RLEnabled = true,
-            FSEnabled = true,
-            LeavePartyEnabled = true,
-            ResetInstancesEnabled = true,
-            MuteEnabled = true,
-            MusicEnabled = true,
         },
 
         Recuperate = {
@@ -1073,104 +1082,19 @@ local Defaults = {
             IlvlValueSize            = 18,
         },
 
-        WorldMap = {
+        -- Map scale. Extracted from the removed WorldMap module. Not a CVar:
+        -- this is WorldMapFrame:SetScale(). Its own module (not a lodger in
+        -- Automation) so it keeps an independent enable state.
+        -- Default matches the old WorldMap.ScaleEnabled so existing users keep
+        -- the behaviour they have today.
+        MapScale = {
             Enabled = true,
-            ScaleEnabled = true,
             Scale = 1.2,
-            WaypointBarEnabled = true,
-            MapIconsEnabled = true,
-            MapIconsProfessionFilter = true,
-            MapIconsStyle = "small", -- "regular" or "small"
-        },
-
-        -- Old standalone RacialsAnchor kept for one-time migration into
-        -- PositionController.CDMRacials below. Do not edit; PositionController
-        -- consumes its values on first init then sets _migrated = true.
-        RacialsAnchor = {
-            Enabled = false,
-            AnchorFrom = "",
-            AnchorTo = "",
-            XOffset = 0,
-            YOffset = -2,
-            PetBarOffset = -15,
-        },
-
-        PositionController = {
-            Enabled = false,
-            -- When true, unit frame anchoring goes no-op on healer specs so
-            -- ElvUI's profile positions take back over. Set false to apply
-            -- anchoring on every spec including healer.
-            IgnoreHealerSpec = true,
-            PlayerFrame = {
-                Enabled = true,
-                anchorFrameType = "SELECTFRAME",
-                ParentFrame = "EssentialCooldownViewer",
-                Position = {
-                    AnchorFrom = "RIGHT",
-                    AnchorTo = "LEFT",
-                    XOffset = -20,
-                    YOffset = 0,
-                },
-            },
-            TargetFrame = {
-                Enabled = true,
-                anchorFrameType = "SELECTFRAME",
-                ParentFrame = "EssentialCooldownViewer",
-                Position = {
-                    AnchorFrom = "LEFT",
-                    AnchorTo = "RIGHT",
-                    XOffset = 20,
-                    YOffset = 0,
-                },
-            },
-            FocusFrame = {
-                Enabled = false,
-                anchorFrameType = "SELECTFRAME",
-                ParentFrame = "ElvUF_Target",
-                Position = {
-                    AnchorFrom = "TOPLEFT",
-                    AnchorTo = "TOPRIGHT",
-                    XOffset = 10,
-                    YOffset = 0,
-                },
-            },
-            PetFrame = {
-                Enabled = true,
-                anchorFrameType = "SELECTFRAME",
-                ParentFrame = "ElvUF_Player",
-                Position = {
-                    AnchorFrom = "CENTER",
-                    AnchorTo = "BOTTOM",
-                    XOffset = 0,
-                    YOffset = -10,
-                },
-            },
-            CDMRacials = {
-                Enabled = false,
-                AnchorFrom = "",
-                AnchorTo = "",
-                XOffset = 0,
-                YOffset = -2,
-                PetBarOffset = -15,
-            },
         },
 
         SpellAlerts = {
             Enabled = false,
             EnabledSpecs = {},  -- nil/missing = ON, false = OFF (per spec index)
-        },
-
-        -- WindTools GameBar visibility shim. No-op if ElvUI_WindTools isn't
-        -- loaded. Combat hiding rides on the [combat] macro conditional,
-        -- M+ hiding uses CHALLENGE_MODE_* events + UnregisterStateDriver +
-        -- bar:Hide() since Blizzard exposes no [mythicplus] conditional.
-        -- Defaults to enabled so the feature works without configuration —
-        -- the underlying WindTools visibility string is preserved and
-        -- restored when this module disables.
-        WindToolsGameBar = {
-            Enabled = true,
-            HideInCombat = true,
-            HideInMythicPlus = true,
         },
 
         ReadyCheckConsumables = {
@@ -1341,6 +1265,54 @@ local Defaults = {
             Position = DefaultPosition(0, 0),
             CVarDeclined = false,       -- internal: nameplateShowOffscreen prompt
             EnableFixup = false,        -- internal: one-time v3.2.1 enable migration
+        },
+
+        CopyAnything = {
+            Enabled = false,
+            Key = "C",
+            Modifier = "ctrl",
+        },
+
+        AlertFrames = {
+            Enabled = true,
+            Position = {
+                AnchorFrom = "TOP",
+                AnchorTo = "TOP",
+                XOffset = 0,
+                YOffset = -60,
+            },
+            MoveEventToasts = true,
+            EventToastPosition = {
+                AnchorFrom = "TOP",
+                AnchorTo = "TOP",
+                XOffset = 0,
+                YOffset = -190,
+            },
+        },
+
+        MerchantPages = {
+            Enabled = false,
+            Pages = 2,
+        },
+
+        ColorPicker = {
+            Enabled = false,
+        },
+
+        MoveFrames = {
+            Enabled = false,
+        },
+
+        RaidControl = {
+            Enabled = false,
+            Position = {               -- Show-button position, saved on right-drag
+                bottom = false,        -- Snapped to the bottom edge instead of the top
+                x = -400,              -- Horizontal offset from screen centre
+            },
+        },
+
+        CompareHeader = {
+            Enabled = true,
         },
 
         -----------------------------------------------------------------
@@ -1635,23 +1607,114 @@ local Defaults = {
         Skinning = {
             Tooltips = {
                 Enabled = false,
-                BackgroundColor = { 0, 0, 0, 0.8 },
+                BackdropColor = { 0.063, 0.063, 0.063, 0.9 },
                 BorderColor = { 0, 0, 0, 1 },
-                BorderSize = 1,
-                HideHealthBar = true,
                 FontFace = "Expressway",
                 FontOutline = "OUTLINE",
-                NameFontSize = 17,
-                GuildFontSize = 14,
-                RaceLevelFontSize = 14,
-                SpecFontSize = 14,
-                FactionFontSize = 14,
+                FontSize = 12,
+                HeaderFontSize = 14,
+                SmallFontSize = 11,
+                HealthBarHidden = false,
+                HealthBarHeight = 7,
+                HealthBarTexture = "Blizzard",
+                -- Inert since 2026-08-03. Both controls and the handler were
+                -- removed -- 12.0's tooltip health bar carries a secret 0..1
+                -- fraction, so no readout is possible. Kept only so existing
+                -- profiles need no migration; do not build a control on them.
+                HealthBarText = true,
+                HealthTextSize = 10,
+                ClassColorNames = true,
+                GuildColorEnabled = true,
+                -- ElvUI's guild green (|cff00ff10), which the rank shares.
+                GuildColor = { r = 0, g = 1, b = 0.0627 },
+                TargetLine = true,
+                GuildRankLine = false,
+                HideGuildRealm = false,
+                HideFactionLine = true,
+                AlwaysShowRealm = false,
+                MythicPlusLine = false,
+                HideInCombat = false,
+                CursorAnchor = false,
+                CursorOffsetX = 10,
+                CursorOffsetY = -10,
+                ShowIDs = "MODIFIER",
                 Position = {
                     AnchorFrom = "BOTTOMRIGHT",
                     AnchorTo = "BOTTOMRIGHT",
-                    XOffset = -1,
-                    YOffset = 350,
+                    XOffset = -120,
+                    YOffset = 220,
+                    AnchorFrameType = "SCREEN",
+                    ParentFrame = "UIParent",
+                    Strata = "TOOLTIP",
                 },
+            },
+            Chat = {
+                Enabled = false,
+                Width = 448,
+                Height = 245,
+                FontFace = "Expressway",
+                FontOutline = "OUTLINE",
+                FontSize = 14,
+                TabFontSize = 12,
+                EditBoxFontSize = 14,
+                ShortChannels = true,
+                FadeEnabled = true,
+                FadeTime = 30,
+                MaxLines = 500,
+                TimestampFormat = "[%H:%M] ",
+                UseLocalTime = true,
+                TimestampColorEnabled = true,
+                TimestampColor = { r = 0.6, g = 0.6, b = 0.6 },
+                Backdrop = {
+                    Enabled = true,
+                    -- #080808 @ 80% -- matches the Damage Meter backdrop
+                    -- (Modules/DamageMeter/Core.lua:194) so the two panels
+                    -- read as one family on screen.
+                    Color = { 0.031, 0.031, 0.031, 0.8 },
+                    BorderColor = { 0, 0, 0, 1 },
+                },
+                EditBox = {
+                    -- Opaque on purpose: at 0.8 the tab strip behind the edit
+                    -- box bleeds through its text (ABOVE_CHAT_INSIDE overlaps
+                    -- the tab bar).
+                    BackdropColor = { 0.031, 0.031, 0.031, 1 },
+                    BorderColor = { 0, 0, 0, 1 },
+                },
+                TabBackdrop = {
+                    -- Off by default so the tab strip blends into the panel.
+                    -- When on, this frame draws its own solid 1px border over
+                    -- the panel backdrop, which reads as a seam across the
+                    -- top of the chat window.
+                    Enabled = false,
+                    Color = { 0, 0, 0, 0.2 },
+                    BorderColor = { 0, 0, 0, 1 },
+                },
+                FadeTabs = true,
+                EditBoxPosition = "ABOVE_CHAT_INSIDE",
+                NumScrollMessages = 3,
+                TabSelector = "NONE",
+                TabSelectorColor = { r = 1, g = 1, b = 1 },
+                TabSelectedTextEnabled = true,
+                TabSelectedTextColor = { r = 1, g = 0, b = 0.549 },  -- #FF008C
+                TabTextColor = { r = 0.57, g = 0.57, b = 0.57 },
+                TabFontOutline = "OUTLINE",
+                anchorFrameType = "UIPARENT",
+                ParentFrame = "UIParent",
+                Position = {
+                    AnchorFrom = "BOTTOMLEFT",
+                    AnchorTo = "BOTTOMLEFT",
+                    XOffset = 1,
+                    YOffset = 1,
+                },
+                WhisperSounds = {
+                    Enabled = false,
+                    WhisperSound = "None",
+                    BNetWhisperSound = "None",
+                },
+                ClassColorWhispers = true,
+                GuildMemberStatus = true,
+                GuildMemberStatusInviteLink = true,
+                RoleIcons = true,
             },
             Messages = {
                 Enabled = false,
@@ -1697,246 +1760,115 @@ local Defaults = {
                     },
                 },
             },
-            Mouseover = {
-                Enabled = false,
-                Alpha = 0.0,
-                FadeInDuration = 0.2,
-                FadeOutDuration = 1,
-                BagMouseover = {
-                    Enabled = true,
-                },
+            BlizzardFrames = {
+                Enabled    = false,
+                FontOffset = 0,
+                -- Global outline switch for skinned Blizzard text. The skin
+                -- asks for OUTLINE at 104 call sites (the reference's design);
+                -- at 12px that dilate closes the counters of tight glyphs and
+                -- dense lists like the guild roster read as blobby. Off by
+                -- default, matching EllesmereUI, which never outlines Blizzard
+                -- text. On restores every call site's designed outline.
+                FontOutline = false,
+                -- Base point size the global Blizzard font override scales
+                -- from. Every font object keeps its own relative size; this
+                -- moves them together. 12 is Blizzard's own baseline.
+                FontBaseSize = 12,
+                -- Per-frame opt-out. A missing key means ON; only an
+                -- explicit false disables a skin. The registry's gate reads
+                -- Skins[key] ~= false, so the polarity matters.
+                Skins      = {},
             },
-            MicroMenu = {
-                Enabled = false,
-                ButtonWidth = 23,
-                ButtonHeight = 31,
-                ButtonSpacing = -4,
-                BackdropSpacing = 0,
-                ShowBackdrop = true,
-                BackdropColor = { 0, 0, 0, 0.8 },
-                BackdropBorderColor = { 0, 0, 0, 1 },
-                anchorFrameType = "SELECTFRAME",
-                ParentFrame = "Minimap",
-                Strata = "MEDIUM",
-                Position = {
-                    AnchorFrom = "TOP",
-                    AnchorTo = "BOTTOM",
-                    XOffset = 0,
-                    YOffset = -1,
-                },
-                Mouseover = {
-                    Enabled = false,
-                    Alpha = 0.0,
-                    FadeInDuration = 0.2,
-                    FadeOutDuration = 0.2,
-                },
-            },
-            Details = {
-                Enabled = false,
-                detailsBarH = 26,
-                detailsSpacing = 1,
-                detailsTitelH = 20,
-                detailsWidth = 260,
-                backDropOne = {
-                    Enabled = true,
-                    autoSize = false,
-                    detailsBars = 8,
-                    width = 260,
-                    height = 210,
-                    BackgroundColor = { 0, 0, 0, 0.8 },
-                    BorderColor = { 0, 0, 0, 1 },
-                    Strata = "LOW",
-                    Position = {
-                        AnchorFrom = "BOTTOMRIGHT",
-                        AnchorTo = "BOTTOMRIGHT",
-                        XOffset = -1,
-                        YOffset = 1,
-                    },
-                },
-                backDropTwo = {
-                    Enabled = true,
-                    autoSize = false,
-                    detailsBars = 8,
-                    width = 260,
-                    height = 210,
-                    BackgroundColor = { 0, 0, 0, 0.8 },
-                    BorderColor = { 0, 0, 0, 1 },
-                    Strata = "LOW",
-                    Position = {
-                        AnchorFrom = "BOTTOMRIGHT",
-                        AnchorTo = "BOTTOMRIGHT",
-                        XOffset = -262,
-                        YOffset = 1,
-                    },
-                },
-            },
-            ActionBars = {
-                Enabled = false,
-                HideProfTexture = true,
-                HideMacroText = false,
-                MouseoverOverride = false,
-                Mouseover = {
-                    Enabled = false,
-                    FadeInDuration = 0.3,
-                    FadeOutDuration = 1,
-                    Alpha = 0,
-                },
-                FontFace = "Expressway",
-                FontOutline = "OUTLINE",
-                FontSizes = {
-                    KeybindSize = 12,
-                    CooldownSize = 14,
-                    ChargeSize = 12,
-                    MacroSize = 10,
-                },
-                KeybindAnchor = "TOPRIGHT",
-                KeybindXOffset = -2,
-                KeybindYOffset = -2,
-                ChargeAnchor = "BOTTOMRIGHT",
-                ChargeXOffset = -2,
-                ChargeYOffset = 2,
-                MacroAnchor = "BOTTOM",
-                MacroXOffset = 0,
-                MacroYOffset = 2,
-                CooldownAnchor = "CENTER",
-                CooldownXOffset = 0,
-                CooldownYOffset = 0,
-                Bars = {
-                    Bar1 = {
-                        Enabled = true, Spacing = 1, ButtonSize = 40, TotalButtons = 12,
-                        Layout = "HORIZONTAL", GrowthDirection = "RIGHT", ButtonsPerLine = 12,
-                        ParentFrame = "UIParent", HideEmptyBackdrops = false,
-                        BackdropColor = { 0, 0, 0, 0.8 }, BorderColor = { 0, 0, 0, 1 },
-                        Position = { AnchorFrom = "BOTTOM", AnchorTo = "BOTTOM", XOffset = 0.1, YOffset = 1.1 },
-                        Mouseover = { GlobalOverride = true, Enabled = true, Alpha = 0 },
-                        FontSizes = { GlobalOverride = true, KeybindSize = 12, CooldownSize = 14, ChargeSize = 12, MacroSize = 10 },
-                        TextPositions = { GlobalOverride = true, KeybindAnchor = "TOPRIGHT", KeybindXOffset = -2, KeybindYOffset = -2, ChargeAnchor = "BOTTOMRIGHT", ChargeXOffset = -2, ChargeYOffset = 2, MacroAnchor = "BOTTOM", MacroXOffset = 0, MacroYOffset = -2 },
-                    },
-                    Bar2 = {
-                        Enabled = true, Spacing = 1, ButtonSize = 40, TotalButtons = 12,
-                        Layout = "HORIZONTAL", GrowthDirection = "RIGHT", ButtonsPerLine = 6,
-                        ParentFrame = "UIParent", HideEmptyBackdrops = false,
-                        BackdropColor = { 0, 0, 0, 0.8 }, BorderColor = { 0, 0, 0, 1 },
-                        Position = { AnchorFrom = "BOTTOM", AnchorTo = "BOTTOM", XOffset = 369.1, YOffset = 1.1 },
-                        Mouseover = { GlobalOverride = true, Enabled = true, Alpha = 0 },
-                        FontSizes = { GlobalOverride = true, KeybindSize = 12, CooldownSize = 14, ChargeSize = 12, MacroSize = 10 },
-                        TextPositions = { GlobalOverride = true, KeybindAnchor = "TOPRIGHT", KeybindXOffset = -2, KeybindYOffset = -2, ChargeAnchor = "BOTTOMRIGHT", ChargeXOffset = -2, ChargeYOffset = 2, MacroAnchor = "BOTTOM", MacroXOffset = 0, MacroYOffset = -2 },
-                    },
-                    Bar3 = {
-                        Enabled = true, Spacing = 1, ButtonSize = 40, TotalButtons = 12,
-                        Layout = "HORIZONTAL", GrowthDirection = "RIGHT", ButtonsPerLine = 12,
-                        ParentFrame = "UIParent", HideEmptyBackdrops = false,
-                        BackdropColor = { 0, 0, 0, 0.8 }, BorderColor = { 0, 0, 0, 1 },
-                        Position = { AnchorFrom = "BOTTOM", AnchorTo = "BOTTOM", XOffset = 0.1, YOffset = 42.1 },
-                        Mouseover = { GlobalOverride = true, Enabled = true, Alpha = 0 },
-                        FontSizes = { GlobalOverride = true, KeybindSize = 12, CooldownSize = 14, ChargeSize = 12, MacroSize = 10 },
-                        TextPositions = { GlobalOverride = true, KeybindAnchor = "TOPRIGHT", KeybindXOffset = -2, KeybindYOffset = -2, ChargeAnchor = "BOTTOMRIGHT", ChargeXOffset = -2, ChargeYOffset = 2, MacroAnchor = "BOTTOM", MacroXOffset = 0, MacroYOffset = -2 },
-                    },
-                    Bar4 = {
-                        Enabled = true, Spacing = 1, ButtonSize = 40, TotalButtons = 12,
-                        Layout = "VERTICAL", GrowthDirection = "RIGHT", ButtonsPerLine = 6,
-                        ParentFrame = "UIParent", HideEmptyBackdrops = false,
-                        BackdropColor = { 0, 0, 0, 0.8 }, BorderColor = { 0, 0, 0, 1 },
-                        Position = { AnchorFrom = "BOTTOMLEFT", AnchorTo = "BOTTOMLEFT", XOffset = 450.1, YOffset = 1.1 },
-                        Mouseover = { GlobalOverride = true, Enabled = true, Alpha = 0 },
-                        FontSizes = { GlobalOverride = true, KeybindSize = 12, CooldownSize = 14, ChargeSize = 12, MacroSize = 10 },
-                        TextPositions = { GlobalOverride = true, KeybindAnchor = "TOPRIGHT", KeybindXOffset = -2, KeybindYOffset = -2, ChargeAnchor = "BOTTOMRIGHT", ChargeXOffset = -2, ChargeYOffset = 2, MacroAnchor = "BOTTOM", MacroXOffset = 0, MacroYOffset = -2 },
-                    },
-                    Bar5 = {
-                        Enabled = true, Spacing = 1, ButtonSize = 40, TotalButtons = 12,
-                        Layout = "HORIZONTAL", GrowthDirection = "RIGHT", ButtonsPerLine = 6,
-                        ParentFrame = "UIParent", HideEmptyBackdrops = false,
-                        BackdropColor = { 0, 0, 0, 0.8 }, BorderColor = { 0, 0, 0, 1 },
-                        Position = { AnchorFrom = "BOTTOM", AnchorTo = "BOTTOM", XOffset = -368.1, YOffset = 1.1 },
-                        Mouseover = { GlobalOverride = true, Enabled = true, Alpha = 0 },
-                        FontSizes = { GlobalOverride = true, KeybindSize = 12, CooldownSize = 14, ChargeSize = 12, MacroSize = 10 },
-                        TextPositions = { GlobalOverride = true, KeybindAnchor = "TOPRIGHT", KeybindXOffset = -2, KeybindYOffset = -2, ChargeAnchor = "BOTTOMRIGHT", ChargeXOffset = -2, ChargeYOffset = 2, MacroAnchor = "BOTTOM", MacroXOffset = 0, MacroYOffset = -2 },
-                    },
-                    Bar6 = {
-                        Enabled = true, Spacing = 1, ButtonSize = 40, TotalButtons = 12,
-                        Layout = "VERTICAL", GrowthDirection = "RIGHT", ButtonsPerLine = 6,
-                        ParentFrame = "UIParent", HideEmptyBackdrops = false,
-                        BackdropColor = { 0, 0, 0, 0.8 }, BorderColor = { 0, 0, 0, 1 },
-                        Position = { AnchorFrom = "BOTTOMLEFT", AnchorTo = "BOTTOMLEFT", XOffset = 532.1, YOffset = 1.1 },
-                        Mouseover = { GlobalOverride = true, Enabled = true, Alpha = 0 },
-                        FontSizes = { GlobalOverride = true, KeybindSize = 12, CooldownSize = 14, ChargeSize = 12, MacroSize = 10 },
-                        TextPositions = { GlobalOverride = true, KeybindAnchor = "TOPRIGHT", KeybindXOffset = -2, KeybindYOffset = -2, ChargeAnchor = "BOTTOMRIGHT", ChargeXOffset = -2, ChargeYOffset = 2, MacroAnchor = "BOTTOM", MacroXOffset = 0, MacroYOffset = -2 },
-                    },
-                    Bar7 = {
-                        Enabled = true, Spacing = 1, ButtonSize = 40, TotalButtons = 12,
-                        Layout = "VERTICAL", GrowthDirection = "RIGHT", ButtonsPerLine = 12,
-                        ParentFrame = "UIParent", HideEmptyBackdrops = false,
-                        BackdropColor = { 0, 0, 0, 0.8 }, BorderColor = { 0, 0, 0, 1 },
-                        Position = { AnchorFrom = "LEFT", AnchorTo = "LEFT", XOffset = 1.1, YOffset = 0.1 },
-                        Mouseover = { GlobalOverride = true, Enabled = false, Alpha = 1 },
-                        FontSizes = { GlobalOverride = true, KeybindSize = 12, CooldownSize = 14, ChargeSize = 12, MacroSize = 10 },
-                        TextPositions = { GlobalOverride = true, KeybindAnchor = "TOPRIGHT", KeybindXOffset = -2, KeybindYOffset = -2, ChargeAnchor = "BOTTOMRIGHT", ChargeXOffset = -2, ChargeYOffset = 2, MacroAnchor = "BOTTOM", MacroXOffset = 0, MacroYOffset = -2 },
-                    },
-                    Bar8 = {
-                        Enabled = true, Spacing = 1, ButtonSize = 40, TotalButtons = 12,
-                        Layout = "VERTICAL", GrowthDirection = "RIGHT", ButtonsPerLine = 12,
-                        ParentFrame = "UIParent", HideEmptyBackdrops = false,
-                        BackdropColor = { 0, 0, 0, 0.8 }, BorderColor = { 0, 0, 0, 1 },
-                        Position = { AnchorFrom = "LEFT", AnchorTo = "LEFT", XOffset = 42.1, YOffset = 0.1 },
-                        Mouseover = { GlobalOverride = true, Enabled = false, Alpha = 1 },
-                        FontSizes = { GlobalOverride = true, KeybindSize = 12, CooldownSize = 14, ChargeSize = 12, MacroSize = 10 },
-                        TextPositions = { GlobalOverride = true, KeybindAnchor = "TOPRIGHT", KeybindXOffset = -2, KeybindYOffset = -2, ChargeAnchor = "BOTTOMRIGHT", ChargeXOffset = -2, ChargeYOffset = 2, MacroAnchor = "BOTTOM", MacroXOffset = 0, MacroYOffset = -2 },
-                    },
-                    PetBar = {
-                        Enabled = true, Spacing = 1, ButtonSize = 32, TotalButtons = 10,
-                        Layout = "HORIZONTAL", GrowthDirection = "RIGHT", ButtonsPerLine = 10,
-                        ParentFrame = "UIParent", HideEmptyBackdrops = false,
-                        BackdropColor = { 0, 0, 0, 0.8 }, BorderColor = { 0, 0, 0, 1 },
-                        Position = { AnchorFrom = "BOTTOM", AnchorTo = "BOTTOM", XOffset = 0.1, YOffset = 83.1 },
-                        Mouseover = { GlobalOverride = false, Enabled = false, Alpha = 0 },
-                        FontSizes = { GlobalOverride = true, KeybindSize = 10, CooldownSize = 12, ChargeSize = 10, MacroSize = 8 },
-                        TextPositions = { GlobalOverride = true, KeybindAnchor = "TOPRIGHT", KeybindXOffset = -2, KeybindYOffset = -2, ChargeAnchor = "BOTTOMRIGHT", ChargeXOffset = -2, ChargeYOffset = 2, MacroAnchor = "BOTTOM", MacroXOffset = 0, MacroYOffset = -2 },
-                    },
-                    StanceBar = {
-                        Enabled = true, Spacing = 1, ButtonSize = 32, TotalButtons = 10,
-                        Layout = "HORIZONTAL", GrowthDirection = "RIGHT", ButtonsPerLine = 10,
-                        ParentFrame = "UIParent", HideEmptyBackdrops = true,
-                        BackdropColor = { 0, 0, 0, 0.8 }, BorderColor = { 0, 0, 0, 1 },
-                        Position = { AnchorFrom = "BOTTOM", AnchorTo = "BOTTOM", XOffset = 0.1, YOffset = 117.1 },
-                        Mouseover = { GlobalOverride = false, Enabled = false, Alpha = 0 },
-                        FontSizes = { GlobalOverride = true, KeybindSize = 10, CooldownSize = 12, ChargeSize = 10, MacroSize = 8 },
-                        TextPositions = { GlobalOverride = true, KeybindAnchor = "TOPRIGHT", KeybindXOffset = -2, KeybindYOffset = -2, ChargeAnchor = "BOTTOMRIGHT", ChargeXOffset = -2, ChargeYOffset = 2, MacroAnchor = "BOTTOM", MacroXOffset = 0, MacroYOffset = -2 },
-                    },
-                },
-            },
-            Auras = {
-                Enabled = false,
-                disableFlashing = true,
-                FontFace = "Expressway",
-                FontOutline = "OUTLINE",
-                FontColor = { 1, 1, 1, 1 },
-                buffSize = 36,
-                buffBorderColor = { 0, 0, 0, 1 },
-                debuffSize = 40,
-                debuffBorderColor = { 0.8, 0, 0, 1 },
-                defSize = 42,
-                defBorderColor = { 0, 0, 0, 1 },
-            },
-            UICleanup    = { Enabled = false },
-            Battlenet    = {
+            -- Blizzard's UI widget frames: the top-centre status bars and text
+            -- widgets used by M+ timers, event progress, power bars and zone
+            -- objectives. Standalone module, not a skin key -- it hooks the
+            -- widget mixins rather than a named window.
+            UIWidgets = {
                 Enabled = true,
-                Position = {
-                    AnchorFrom = "BOTTOMLEFT",
-                    AnchorTo = "LEFT",
-                    XOffset = 1,
-                    YOffset = 0,
+                FontFace = "Expressway",
+                FontOutline = "OUTLINE",
+                -- Status bar widgets (M+ timer, power bars)
+                StatusBar = {
+                    Enabled = true,
+                    Width = 0,            -- Custom width (0 = use default)
+                    StyleLabel = true,    -- Style the label above bars
+                    StyleBarText = true,  -- Style text on the bar
+                    LabelSize = 14,       -- Font size for labels
+                    BarTextSize = 12,     -- Font size for bar text
+                    StripTextures = true, -- Remove Blizzard textures and add backdrop
+                    BackdropColor = { 0, 0, 0, 0.8 },
+                    BorderColor = { 0, 0, 0, 1 },
+                },
+                -- Text widgets
+                TextWidget = {
+                    Enabled = true,
+                    Width = 400, -- Custom width (0 = use default)
+                    StyleText = true,
+                    Size = 17,
                 },
             },
-            RaidManager  = {
+            -- Game-wide replacement of Blizzard's shared font OBJECTS (quest
+            -- text, objective tracker, number fonts, mail, tooltips...). Off by
+            -- default: it changes text everywhere, not just inside skinned
+            -- windows, so it is opt-in.
+            BlizzardFonts = {
                 Enabled = false,
-                Position = {
-                    YOffset = -100,
+                -- Per-category size overrides (GUI sliders). Unlisted objects
+                -- keep their stock size scaled by BlizzardFrames.FontBaseSize.
+                Sizes = {
+                    Objective = 13,  -- objective tracker lines (stock 12)
+                    QuestText = 13,  -- quest body text (stock 13)
+                    QuestTitle = 14, -- quest titles (stock 18)
+                    QuestSmall = 12, -- small quest text (stock 12)
+                    MailBody = 13,   -- mail body (stock 15)
                 },
-                Strata = "HIGH",
-                FadeOnMouseOut = true,
-                FadeInDuration = 0.3,
-                FadeOutDuration = 3,
-                Alpha = 0,
+            },
+            -- Group loot rolls. Two mutually exclusive modes: Replace = true
+            -- swaps Blizzard's chunky GroupLootFrames for a slim bar stack of
+            -- our own; Replace = false skins and repositions Blizzard's own
+            -- windows instead.
+            LootRoll = {
+                Enabled = true,
+                Replace = true,
+                Width = 340,
+                Height = 22,
+                ButtonSize = 22,
+                Spacing = 1,
+                NameFontSize = 13,
+                BarTexture = "KitnUI", -- LSM statusbar name
+                Skin = true,          -- (legacy mode) flatten + border the roll windows
+                QualityBorder = true, -- quality colour: bar/icon border (both modes)
+                Reposition = true,    -- (legacy mode) re-anchor the container
+                Position = {
+                    -- BOTTOM: the container grows upward as rolls stack,
+                    -- so anchoring the bottom keeps the first roll still.
+                    Point = "BOTTOM",
+                    RelPoint = "CENTER",
+                    X = 0,
+                    Y = 205,       -- lift the stack up out of dead centre
+                },
+            },
+            -- Compact replacement loot window: a slim one-row-per-item list at
+            -- a fixed position, replacing Blizzard's LootFrame entirely while
+            -- enabled. Opt-in, because the Loot skin key already styles
+            -- Blizzard's own window and that is the default look.
+            Loot = {
+                Enabled = false,
+                QualityBorder = true, -- tint the window border to the best drop
+                MinWidth = 150,
+                -- Code-side fallback only, used when _G.LootFrame is missing
+                -- (Modules/Skinning/LootFrame.lua's AnchorToBlizzardLoot).
+                -- The window normally follows Blizzard's own Edit Mode loot
+                -- frame position instead -- this has no control on the page.
+                Position = {
+                    Point = "TOPRIGHT",
+                    RelPoint = "TOPRIGHT",
+                    X = -618,
+                    Y = -564,
+                },
+            },
+            ContextMenus = {
+                Enabled = false,
             },
         },
 

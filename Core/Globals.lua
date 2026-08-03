@@ -29,6 +29,28 @@ KE.LDS = LibStub("LibDualSpec-1.0", true)
 KE.PATH = ([[Interface\AddOns\%s\Media\]]):format(addonName)
 KE.FONT = KE.PATH .. [[Fonts\]] .. "Expressway.TTF"
 
+-- Gem socket types, ordered as the socket-helper scan walks them. Shared
+-- because two unrelated features need the same list: CharacterPanel's socket
+-- helper and the Character window skin's empty-socket icons. `locale` is the
+-- Blizzard global whose string a tooltip line is matched against; `icon` is
+-- the fallback fileID when the socket is empty.
+KE.GEM_SOCKET_TYPES = {
+    { name = "Prismatic",  locale = "EMPTY_SOCKET_PRISMATIC",  icon = 458977 },
+    { name = "Meta",       locale = "EMPTY_SOCKET_META",       icon = 136257 },
+    { name = "Tinker",     locale = "EMPTY_SOCKET_TINKER",     icon = 2958630 },
+    { name = "Cogwheel",   locale = "EMPTY_SOCKET_COGWHEEL",   icon = 407324 },
+    { name = "Primordial", locale = "EMPTY_SOCKET_PRIMORDIAL", icon = 4095404 },
+    { name = "Fiber",      locale = "EMPTY_SOCKET_FIBER",      icon = 136260 },
+}
+
+-- Role icons for group-finder and role-check displays. Keyed by the string
+-- Blizzard's role APIs return, so a lookup miss is the correct no-op.
+KE.ROLE_ICONS = {
+    TANK    = KE.PATH .. [[RoleIcons\tank-modern.png]],
+    HEALER  = KE.PATH .. [[RoleIcons\healer-modern.png]],
+    DAMAGER = KE.PATH .. [[RoleIcons\dps-modern.png]],
+}
+
 if KE.LSM then
     KE.LSM:Register("font", "Expressway", KE.FONT)
     KE.LSM:Register("statusbar", "KitnUI", KE.PATH .. [[Statusbars\KitnEssentials.blp]])
@@ -68,6 +90,18 @@ function KE:GetFontPath(fontName)
         if path then return path end
     end
     return "Fonts\\FRIZQT__.TTF"
+end
+
+-- Returns the LSM font NAME a module is configured with, never a file path --
+-- wrap it in KE:GetFontPath when a path is wanted. Modules disagree on the key
+-- (FontFace / Font / fontFace), which is the only reason this is a helper.
+-- Hoisted from an inline copy in Tooltips.lua so the skin modules share one
+-- definition; two copies of a resolution rule drifting apart is a failure mode
+-- this project has already had.
+---@param moduleDB table? Module settings table
+---@return string fontName
+function KE:GetEffectiveFont(moduleDB)
+    return moduleDB and (moduleDB.FontFace or moduleDB.Font or moduleDB.fontFace) or "Friz Quadrata TT"
 end
 
 function KE:GetStatusbarPath(barName)
@@ -213,6 +247,28 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
         return
     end
 
+    -- /kes skins [verify|rerun <key> [selector]] — skin dispatch diagnostics.
+    -- Matched before the lowercase pass because rerun takes a skin key and
+    -- the keys are CamelCase.
+    local skinRest = msg:match("^[Ss][Kk][Ii][Nn][Ss]%s*(.*)$")
+    if skinRest then
+        local S = KE.Skins
+        if not S then
+            KE:Print("skinning not loaded.")
+            return
+        end
+        local rerunKey, rerunSelector = skinRest:match("^[Rr][Ee][Rr][Uu][Nn]%s+(%S+)%s*(%S*)$")
+        if rerunKey then
+            if rerunSelector == "" then rerunSelector = nil end
+            if S.DebugRerun then S.DebugRerun(rerunKey, rerunSelector) end
+        elseif skinRest == "" or skinRest:lower() == "verify" then
+            if S.DebugVerify then S.DebugVerify() end
+        else
+            KE:Print("usage: /kes skins verify | /kes skins rerun <key> [selector]")
+        end
+        return
+    end
+
     msg = msg:lower()
     if msg == "" or msg == "gui" then
         if KE.GUIFrame then
@@ -236,9 +292,16 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
         else
             KE:Print("Dungeon Trash tracker unavailable.")
         end
+    elseif msg == "conflicts" then
+        -- Re-runs the addon conflict scan (Core/Conflicts.lua) so a resolved
+        -- conflict can be retested without a relog. Silent when nothing
+        -- conflicts. Nil-guarded like the module routes above.
+        if KE.ScanAddonConflicts then
+            KE:ScanAddonConflicts()
+        end
     else
         -- "help" and anything unrecognized: list every subcommand.
-        KE:Print("Commands: /kes or gui (settings) | edit or unlock | profiler or prof | dm [reset | report [count] [channel]] | mt [clearsplits] | trash | resetgui")
+        KE:Print("Commands: /kes or gui (settings) | edit or unlock | profiler or prof | dm [reset | report [count] [channel]] | mt [clearsplits] | skins [verify | rerun <key>] | trash | conflicts | resetgui")
     end
 end
 
@@ -416,6 +479,11 @@ function KE:ResolveColor(saved, default)
            saved[4] or default[4] or 1
 end
 
+---@param fontString FontString
+---@param fontName string
+---@param fontSize number
+---@param fontOutline string?
+---@return boolean
 function KE:ApplyFont(fontString, fontName, fontSize, fontOutline)
     if not fontString then return false end
     local fontPath = self:GetFontPath(fontName)
@@ -424,6 +492,23 @@ function KE:ApplyFont(fontString, fontName, fontSize, fontOutline)
     end
     local outline = self:GetFontOutline(fontOutline)
     local size = (fontSize and fontSize > 0) and fontSize or 12
+
+    -- SimpleHTML frames (guild MOTD and Info bodies, anything rendering
+    -- links) expose SetFont with a textType-FIRST signature:
+    -- SetFont(textType, fontFile, height, flags), per
+    -- .wow-api-reference SimpleHTMLAPIDocumentation.lua:203-215. Calling the
+    -- FontString form on one throws "bad argument #1". Callers cannot tell
+    -- the two apart by testing for SetFont, because both have it, so the
+    -- branch belongs here. Each text type is pcall'd: the set below is not
+    -- enumerated in the generated docs, so an unsupported one must not throw.
+    if fontString.IsObjectType and fontString:IsObjectType("SimpleHTML") then
+        for _, textType in ipairs({ "p", "h1", "h2", "h3" }) do
+            pcall(fontString.SetFont, fontString, textType, fontPath, size, outline)
+        end
+        return true
+    end
+
+    ---@cast fontString FontString
     local success = fontString:SetFont(fontPath, size, outline)
     if not success then
         success = fontString:SetFont("Fonts\\FRIZQT__.TTF", size, outline)
@@ -471,7 +556,7 @@ KE.PreviewManager = PreviewManager
 local PREVIEW_MODULES = {
     "StanceText", "CombatCross", "CombatTexts", "CombatRes",
     "CombatTimer", "PetStatusText", "DragonRiding",
-    "FocusCastbar", "TargetCastbar", "RaidNotifications", "HuntersMark", "RangeChecker",
+    "FocusCastbar", "RaidNotifications", "HuntersMark", "RangeChecker",
     "TimeSpiral", "TotemTracker", "DisintegrateTicks", "StasisTracker", "Recuperate", "KickTracker",
     "NoMovementAlert", "PrescienceTracker", "GreatVaultAlert", "PotionReady", "AuraExternals", "AuraDebuffs",
     "EnemyCounter", "EbonMightTracker", "DungeonCasts", "HealerMana", "InnervateTracker", "MaintenanceTracker",
@@ -479,8 +564,13 @@ local PREVIEW_MODULES = {
     "BurningRush",
     "Cursor",
     "DamageMeter",
-    "MythicPlusTimer", "KeystoneHelper", "TargetedSpells",
+    "MythicPlusTimer", "KeystoneHelper", "TargetedSpells", "LFGReminder",
     "PlayerAbsorbs",
+    -- Membership means "has ShowPreview/HidePreview". Chat and AlertFrames
+    -- were listed here and define neither, so both were inert; LootRoll
+    -- defines both (Modules/Skinning/LootRollBars.lua) and was missing, so
+    -- /kes edit showed its mover with no sample bars behind it.
+    "LootRoll",
 }
 
 -- Section → preview module mapping for section-based previews
@@ -488,7 +578,7 @@ local PREVIEW_MODULES = {
 local SECTION_PREVIEW_MODULES = {
     combat_section = {
         "CombatRes", "AuraExternals", "AuraDebuffs", "CombatTexts", "CombatTimer",
-        "FocusCastbar", "TargetCastbar", "CombatCross", "RangeChecker",
+        "FocusCastbar", "CombatCross", "RangeChecker",
         "Cursor", "DamageMeter",
     },
     utilities_section = {
@@ -507,7 +597,7 @@ local SECTION_PREVIEW_MODULES = {
     },
     dungeons_section = {
         "EnemyCounter", "KickTracker", "DungeonCasts", "DeathNotifications",
-        "MythicPlusTimer", "KeystoneHelper", "TargetedSpells",
+        "MythicPlusTimer", "KeystoneHelper", "TargetedSpells", "LFGReminder",
     },
     healer_section = {
         "HealerMana", "InnervateTracker", "MaintenanceTracker",

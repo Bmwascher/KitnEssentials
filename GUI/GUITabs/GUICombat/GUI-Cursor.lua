@@ -175,7 +175,7 @@ local function ApplyModuleState(enabled)
     end
 end
 
-GUIFrame:RegisterContent("Cursor", function(scrollChild, yOffset)
+GUIFrame:RegisterContent("CursorGeneral", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.Cursor
     if not db then
         local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
@@ -188,6 +188,7 @@ GUIFrame:RegisterContent("Cursor", function(scrollChild, yOffset)
     db.Cast   = db.Cast   or {}
     db.Trail  = db.Trail  or {}
     db.Dispel = db.Dispel or {}
+    db.Taunt  = db.Taunt  or {}
 
     local manager = GUIFrame:CreateWidgetStateManager()
     manager:SetCondition("gcdEnabled", function()
@@ -227,34 +228,10 @@ GUIFrame:RegisterContent("Cursor", function(scrollChild, yOffset)
         manager:UpdateAll(db.Enabled ~= false)
     end
 
-    ----------------------------------------------------------------
-    -- Card 1: Cursor (Enable + Master Visibility)
-    ----------------------------------------------------------------
-    local card1 = GUIFrame:CreateCard(scrollChild, "Cursor", yOffset)
+    local cardVis = GUIFrame:CreateCard(scrollChild, "Visibility", yOffset)
+    manager:Register(cardVis, "all")
 
-    local row1a = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local enableCheck = GUIFrame:CreateCheckbox(row1a, "Enable Cursor", {
-        value = db.Enabled ~= false,
-        callback = function(checked)
-            db.Enabled = checked
-            ApplyModuleState(checked)
-            RefreshStates()
-        end,
-        msgPopup = true,
-        msgText = "Cursor",
-        msgOn = "On",
-        msgOff = "Off",
-    })
-    row1a:AddWidget(enableCheck, 1)
-    card1:AddRow(row1a, Theme.rowHeight)
-
-    local row1sep = GUIFrame:CreateRow(card1.content, Theme.rowHeightSeparator)
-    local sep1 = GUIFrame:CreateSeparator(row1sep)
-    row1sep:AddWidget(sep1, 1)
-    manager:Register(sep1, "all")
-    card1:AddRow(row1sep, Theme.rowHeightSeparator)
-
-    local row1b = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local row1b = GUIFrame:CreateRow(cardVis.content, Theme.rowHeightLast)
     local visDropdown = GUIFrame:CreateDropdown(row1b, "Visibility State", {
         options = (GetModule() and GetModule().VISIBILITY_MODES) or {},
         value = db.Visibility or "always",
@@ -262,9 +239,9 @@ GUIFrame:RegisterContent("Cursor", function(scrollChild, yOffset)
     })
     row1b:AddWidget(visDropdown, 1)
     manager:Register(visDropdown, "all")
-    card1:AddRow(row1b, Theme.rowHeightLast, 0)
+    cardVis:AddRow(row1b, Theme.rowHeightLast, 0)
 
-    yOffset = card1:GetNextOffset()
+    yOffset = cardVis:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 2: Cursor Style (Size + Texture + Color)
@@ -709,9 +686,24 @@ GUIFrame:RegisterContent("Cursor", function(scrollChild, yOffset)
 
     yOffset = card5:GetNextOffset()
 
-    ----------------------------------------------------------------
-    -- Card 6: Dispel Countdown (shared builder)
-    ----------------------------------------------------------------
+    RefreshStates()
+    return yOffset
+end)
+
+GUIFrame:RegisterContent("CursorDispel", function(scrollChild, yOffset)
+    local db = KE.db and KE.db.profile.Cursor
+    if not db then
+        local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
+        errorCard:AddLabel("Database not available")
+        return errorCard:GetNextOffset()
+    end
+    db.Dispel = db.Dispel or {}
+
+    local manager = GUIFrame:CreateWidgetStateManager()
+    local function RefreshStates()
+        manager:UpdateAll(db.Enabled ~= false)
+    end
+
     yOffset = GUIFrame:CreateDispelCursorCard(scrollChild, yOffset, {
         db            = db,
         manager       = manager,
@@ -723,3 +715,53 @@ GUIFrame:RegisterContent("Cursor", function(scrollChild, yOffset)
     RefreshStates()
     return yOffset
 end)
+
+GUIFrame:RegisterContent("CursorTaunt", function(scrollChild, yOffset)
+    local db = KE.db and KE.db.profile.Cursor
+    if not db then
+        local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
+        errorCard:AddLabel("Database not available")
+        return errorCard:GetNextOffset()
+    end
+    db.Taunt = db.Taunt or {}
+
+    local manager = GUIFrame:CreateWidgetStateManager()
+    local function RefreshStates()
+        manager:UpdateAll(db.Enabled ~= false)
+    end
+
+    yOffset = GUIFrame:CreateTauntCursorCard(scrollChild, yOffset, {
+        db            = db,
+        manager       = manager,
+        refresh       = RefreshModule,
+        refreshStates = RefreshStates,
+        getModule     = GetModule,
+    })
+
+    RefreshStates()
+    return yOffset
+end)
+
+-- The module's master enable renders ABOVE the tab strip: a disabled Cursor
+-- collapses to a lone header bar with no tabs and no content, matching every
+-- other KE page. Precedent: GUI-BlizzardFrames.lua:435.
+GUIFrame:RegisterTabbedContent("Cursor", {
+    { id = "CursorGeneral", label = "Cursor" },
+    { id = "CursorDispel",  label = "Dispel" },
+    { id = "CursorTaunt",   label = "Taunt"  },
+}, {
+    headerBuilder = function(scrollChild, yOffset)
+        local db = KE.db and KE.db.profile.Cursor
+        if not db then return yOffset, false end
+
+        local card = GUIFrame:CreateCard(scrollChild, "Cursor", yOffset)
+        card:AddHeaderToggle(db.Enabled ~= false, function(checked)
+            db.Enabled = checked
+            ApplyModuleState(checked)
+            KE:Print("Cursor: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+        end)
+
+        -- collapse = true suppresses the tab strip and all tab content.
+        return card:GetNextOffset(), db.Enabled == false
+    end,
+})

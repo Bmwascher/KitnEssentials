@@ -169,6 +169,62 @@ describe("Core/Globals.lua helpers", function()
         end)
     end)
 
+    describe("KE:ApplyFont — SimpleHTML vs FontString dispatch", function()
+        -- Regression: the Communities skin fed a guild MOTD body (a SimpleHTML)
+        -- to ApplyFont, which called the FontString form and threw "bad
+        -- argument #1". Both object types expose SetFont, so a caller cannot
+        -- tell them apart — the branch has to live in this helper.
+        local function recorder(isSimpleHTML, throwOn)
+            local obj = { calls = {} }
+            obj.IsObjectType = function(_, t) return isSimpleHTML and t == "SimpleHTML" end
+            obj.SetFont = function(_, ...)
+                local args = { ... }
+                if throwOn and args[1] == throwOn then error("bad textType", 0) end
+                obj.calls[#obj.calls + 1] = args
+                return true
+            end
+            return obj
+        end
+
+        it("POSITIVE CONTROL: a FontString still gets the 3-arg form, path first", function()
+            local fs = recorder(false)
+            KE:ApplyFont(fs, "Expressway", 13, "OUTLINE")
+            assert.equals(1, #fs.calls)
+            assert.equals(3, #fs.calls[1])
+            assert.equals(KE:GetFontPath("Expressway"), fs.calls[1][1])
+            assert.equals(13, fs.calls[1][2])
+            assert.equals("OUTLINE", fs.calls[1][3])
+        end)
+
+        it("a SimpleHTML gets the 4-arg form once per text type, never the 3-arg form", function()
+            local html = recorder(true)
+            KE:ApplyFont(html, "Expressway", 13, "OUTLINE")
+            local types = {}
+            for i, call in ipairs(html.calls) do
+                assert.equals(4, #call)
+                types[i] = call[1]
+                assert.equals(KE:GetFontPath("Expressway"), call[2])
+                assert.equals(13, call[3])
+                assert.equals("OUTLINE", call[4])
+            end
+            assert.same({ "p", "h1", "h2", "h3" }, types)
+        end)
+
+        it("returns true for a SimpleHTML without consulting SetFont's return", function()
+            assert.is_true(KE:ApplyFont(recorder(true), "Expressway", 13, "OUTLINE"))
+        end)
+
+        it("swallows a rejected text type instead of propagating it", function()
+            -- HTMLTextType is not enumerated in the generated API docs, so an
+            -- unsupported member must not abort the remaining types.
+            local html = recorder(true, "h3")
+            assert.has_no.errors(function()
+                KE:ApplyFont(html, "Expressway", 13, "OUTLINE")
+            end)
+            assert.equals(3, #html.calls)
+        end)
+    end)
+
     describe("anchor → justify vs anchor → point (deliberate divergence)", function()
         it("TOPRIGHT: justify expands to RIGHT; GetPointFromAnchor deliberately does not (:415)", function()
             assert.equals("RIGHT", KE:GetTextJustifyFromAnchor("TOPRIGHT"))
@@ -391,5 +447,41 @@ describe("KE:RunAfterCombat", function()
         assert.is_true(secondRan)
         assert.equal(1, #caughtErrors)
         assert.matches("boom", caughtErrors[1])
+    end)
+end)
+
+describe("KE:GetEffectiveFont", function()
+    local KE
+
+    before_each(function()
+        KE = L.loadGlobals()
+    end)
+
+    it("prefers FontFace", function()
+        assert.equals("Expressway", KE:GetEffectiveFont({ FontFace = "Expressway" }))
+    end)
+
+    it("falls back to Font when FontFace is absent", function()
+        assert.equals("Movie", KE:GetEffectiveFont({ Font = "Movie" }))
+    end)
+
+    it("falls back to fontFace last", function()
+        assert.equals("Arial", KE:GetEffectiveFont({ fontFace = "Arial" }))
+    end)
+
+    -- Precedence, not just presence: a table carrying all three must return
+    -- the FIRST key. Three separate single-key tests cannot catch a helper
+    -- that reads them in the wrong order.
+    it("reads the three keys in FontFace, Font, fontFace order", function()
+        assert.equals("A", KE:GetEffectiveFont({ FontFace = "A", Font = "B", fontFace = "C" }))
+        assert.equals("B", KE:GetEffectiveFont({ Font = "B", fontFace = "C" }))
+    end)
+
+    it("returns the stock face for a nil table", function()
+        assert.equals("Friz Quadrata TT", KE:GetEffectiveFont(nil))
+    end)
+
+    it("returns the stock face for a table with no font key", function()
+        assert.equals("Friz Quadrata TT", KE:GetEffectiveFont({ Size = 12 }))
     end)
 end)

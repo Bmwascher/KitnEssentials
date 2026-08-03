@@ -61,6 +61,17 @@ local DISPEL_SPELL_IDS = {
     119905, 213634, 218164, 213644, 2782, 475, 365585, 51886,  -- DPS/Tank dispels
 }
 
+-- Taunt spell IDs per tank class (player spellbook). The satellite only
+-- activates on tank specs, and each tank class has exactly one of these.
+local TAUNT_SPELL_IDS = {
+    355,    -- Taunt (Warrior - Protection)
+    62124,  -- Hand of Reckoning (Paladin - Protection)
+    56222,  -- Dark Command (Death Knight - Blood)
+    6795,   -- Growl (Druid - Guardian)
+    115546, -- Provoke (Monk - Brewmaster)
+    185245, -- Torment (Demon Hunter - Vengeance)
+}
+
 C.CIRCLE_TEXTURES = CIRCLE_TEXTURES
 C.TEXTURE_ORDER   = { "circle_thin", "circle_light", "circle_normal", "circle_heavy", "circle_thick", "circle_backup" }
 C.TEXTURE_LABELS  = {
@@ -95,6 +106,7 @@ C.gcdFrame      = nil
 C.castFrame     = nil
 C.trailFrame    = nil
 C.dispelFrame   = nil
+C.tauntFrame    = nil
 
 -- Cached visibility state used by satellites (updated by UpdateVisibility)
 C._cursorShown        = false
@@ -157,6 +169,9 @@ local function _cursorOnUpdate(f, elapsed)
         end
         if C.dispelFrame and C.dispelFrame:GetAlpha() ~= targetAlpha then
             C.dispelFrame:SetAlpha(targetAlpha)
+        end
+        if C.tauntFrame and C.tauntFrame:GetAlpha() ~= targetAlpha then
+            C.tauntFrame:SetAlpha(targetAlpha)
         end
         -- Trail spawn gate follows hold state too (else dots spawn while cursor invisible).
         -- UpdateVisibility resets this from masterShown when mode changes off mouseDown.
@@ -927,6 +942,270 @@ function C:ApplyDispelSatellite()
 end
 
 ---------------------------------------------------------------------------------
+-- Taunt countdown satellite
+---------------------------------------------------------------------------------
+function C:_TauntFindSpell()
+    self._tauntTrackedSpellID = nil
+    if not C_SpellBook or not C_SpellBook.IsSpellInSpellBook then return end
+    for _, spellID in ipairs(TAUNT_SPELL_IDS) do
+        if C_SpellBook.IsSpellInSpellBook(spellID) then
+            self._tauntTrackedSpellID = spellID
+            return
+        end
+    end
+end
+
+-- Declared here, not in Task 3, because luacheck warning 211 (unused variable)
+-- is not suppressed by .luacheckrc:33-49 and Task 3's lint gate is 0 warnings.
+-- Its first reader is Step 3 of this task.
+local _tauntFollowCursor = nil
+
+-- Taint note: identical handling to the Dispel satellite. We never test the
+-- duration object's own booleans (in Midnight those are secret and throw on a
+-- raw truth test). We always call SetCooldownFromDurationObject, which is
+-- taint-safe and renders nothing at zero, so a ready taunt simply draws no text.
+local function _tauntOnEvent(self, event, unit)
+    if event == "PLAYER_ENTERING_WORLD" then
+        C:_TauntEvaluateGate()
+        return
+    end
+    -- PLAYER_SPECIALIZATION_CHANGED fires for ANY unit, not just the player
+    -- (UnitDocumentation.lua:3765-3773) -- filter out groupmates' spec swaps.
+    if event == "PLAYER_SPECIALIZATION_CHANGED" then
+        if unit and unit ~= "player" then return end
+        C:_TauntEvaluateGate()
+        return
+    end
+    -- SPELLS_CHANGED re-resolves the tracked spell without re-running the gate:
+    -- the spellbook can populate after PLAYER_ENTERING_WORLD, and without this
+    -- a login that lands before the spellbook is ready leaves the countdown
+    -- permanently blank. Undebounced on purpose -- see sanctioned deviation 3.
+    if event == "SPELLS_CHANGED" then
+        C:_TauntFindSpell()
+    end
+    -- Don't clobber an active test preview. SPELL_UPDATE_COOLDOWN fires from
+    -- background sources and would otherwise wipe the preview countdown.
+    if C._tauntPreviewActive then return end
+    if not C._tauntTrackedSpellID then
+        self.cooldown:Clear()
+        return
+    end
+    local duration = C_Spell.GetSpellCooldownDuration(C._tauntTrackedSpellID)
+    if duration then
+        self.cooldown:SetCooldownFromDurationObject(duration, false)
+    else
+        self.cooldown:Clear()
+    end
+end
+
+function C:CreateTauntSatellite()
+    if self.tauntFrame then return end
+    local db = self.db.Taunt
+
+    local tf = CreateFrame("Frame", "KE_CursorTauntText", UIParent)
+    tf:SetFrameStrata("TOOLTIP")
+    tf:SetSize(1, 1)
+
+    -- Hidden CooldownFrameTemplate drives the countdown text.
+    tf.cooldown = CreateFrame("Cooldown", nil, tf, "CooldownFrameTemplate")
+    tf.cooldown:SetSize(1, 1)
+    tf.cooldown:SetDrawSwipe(false)
+    tf.cooldown:SetDrawEdge(false)
+    if tf.cooldown.SetDrawBling then tf.cooldown:SetDrawBling(false) end
+    tf.cooldown:SetHideCountdownNumbers(false)
+
+    -- Find the countdown FontString region inside the Cooldown.
+    local cooldownText = nil
+    for _, region in ipairs({ tf.cooldown:GetRegions() }) do
+        if region:GetObjectType() == "FontString" then
+            cooldownText = region
+            break
+        end
+    end
+    if not cooldownText then
+        cooldownText = tf:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+    end
+    tf.text = cooldownText
+    local fontPath = KE:GetFontPath(db.FontFace) or KE.FONT
+    tf.text:SetFont(fontPath, db.FontSize or 18, "OUTLINE")
+    tf.text:SetTextColor(unpack(db.TextColor or { 1, 1, 1, 1 }))
+
+    tf:SetScript("OnEvent", _tauntOnEvent)
+    tf:Hide()
+    self.tauntFrame = tf
+end
+
+function C:_AttachTauntScripts()
+    local tf = self.tauntFrame
+    if not tf then return end
+    tf:UnregisterAllEvents()
+    tf:RegisterEvent("SPELL_UPDATE_COOLDOWN")
+    tf:RegisterEvent("SPELLS_CHANGED")
+    tf:RegisterEvent("PLAYER_ENTERING_WORLD")
+    tf:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+end
+
+function C:_DetachTauntScripts()
+    local tf = self.tauntFrame
+    if not tf then return end
+    tf:UnregisterAllEvents()
+    tf:SetScript("OnUpdate", nil)
+end
+
+function C:ApplyTauntSatellite()
+    local db = self.db.Taunt
+    local function applyLook()
+        local fontPath = KE:GetFontPath(db.FontFace) or KE.FONT
+        self.tauntFrame.text:SetFont(fontPath, db.FontSize or 18, "OUTLINE")
+        self.tauntFrame.text:SetTextColor(unpack(db.TextColor or { 1, 1, 1, 1 }))
+        self.tauntFrame.text:ClearAllPoints()
+        if self.cursorFrame and self.cursorFrame:IsShown() then
+            self.tauntFrame:SetScript("OnUpdate", nil)
+            self.tauntFrame.text:SetPoint(db.AnchorPoint or "CENTER",
+                self.cursorFrame, db.AnchorPoint or "CENTER",
+                db.XOffset or 10, db.YOffset or 10)
+        else
+            -- Detached: anchor text to tauntFrame, which the OnUpdate moves with
+            -- the cursor. (Anchoring to UIParent with static coords would freeze it.)
+            if not _tauntFollowCursor then _tauntFollowCursor = _makeFollowCursorOnUpdate() end
+            self.tauntFrame:SetScript("OnUpdate", _tauntFollowCursor)
+            self.tauntFrame.text:SetPoint(db.AnchorPoint or "CENTER",
+                self.tauntFrame, "CENTER",
+                db.XOffset or 10, db.YOffset or 10)
+        end
+    end
+
+    if not db.Enabled then
+        -- During an active test preview keep the frame visible and refresh
+        -- visuals so slider tweaks take effect live.
+        if self._tauntPreviewActive and self.tauntFrame then
+            applyLook()
+            return
+        end
+        if self.tauntFrame then
+            self:_DetachTauntScripts()
+            self.tauntFrame:Hide()
+        end
+        return
+    end
+
+    if not self.tauntFrame then self:CreateTauntSatellite() end
+    self:_AttachTauntScripts()
+    applyLook()
+    self:_TauntFindSpell()
+    self.tauntFrame:Show()
+    -- Render the CURRENT cooldown immediately. Without this the frame shows
+    -- nothing until the next SPELL_UPDATE_COOLDOWN happens to fire, so a taunt
+    -- already on cooldown when the satellite starts draws blank. The reference
+    -- pairs its find and update for the same reason
+    -- (<REF>/Combat/TauntCursor.lua:278-279); the Dispel sibling omits it and is
+    -- masked by how often SPELL_UPDATE_COOLDOWN fires. Caught by the reviewer.
+    if self.tauntFrame.cooldown then
+        _tauntOnEvent(self.tauntFrame, "SPELL_UPDATE_COOLDOWN")
+    end
+end
+
+-- Declared here, not in Task 3, because luacheck warning 211 (unused function)
+-- is not suppressed by .luacheckrc:33-49 and Tasks 3 and 4 both gate on
+-- 0 warnings. Its only caller is the gate directly below.
+-- File-local, matching the reference's own shape (<REF>:42). The two-step spec
+-- API resolution mirrors CombatTexts.lua:26 and Globals.lua:769; the
+-- reference's AE.GetSpecialization compat shim has no KE counterpart, which is
+-- why it is resolved inline.
+local function _isTankSpec()
+    local getSpec = C_SpecializationInfo and C_SpecializationInfo.GetSpecialization
+        or _G.GetSpecialization
+    if not getSpec then return false end
+    local specIndex = getSpec()
+    if not specIndex then return false end
+    local getRole = _G.GetSpecializationRole
+    if not getRole then return false end
+    return getRole(specIndex) == "TANK"
+end
+
+-- Tank-spec gating. The satellite stays configured but only activates its frame,
+-- cursor follow and cooldown tracking on tank specs. PLAYER_SPECIALIZATION_CHANGED
+-- and PLAYER_ENTERING_WORLD re-evaluate, so it gates in and out on a spec swap.
+function C:_TauntEvaluateGate()
+    if not self.db or not self.db.Taunt then return end
+    if _isTankSpec() then
+        self._tauntActive = true
+        self:ApplyTauntSatellite()
+    else
+        self._tauntActive = false
+        self._tauntTrackedSpellID = nil
+        -- Don't tear down visuals while a preview is showing.
+        if self._tauntPreviewActive then return end
+        if self.tauntFrame then
+            self:_DetachTauntScripts()
+            self.tauntFrame.cooldown:Clear()
+            self.tauntFrame:Hide()
+        end
+    end
+end
+
+-- PLAYER_SPECIALIZATION_CHANGED fires for ANY unit, not just the player
+-- (UnitDocumentation.lua:3765-3773 -- it carries a unitTarget payload), so a
+-- groupmate's spec swap would otherwise run our gate. The filter lives here
+-- rather than inside _TauntEvaluateGate because OnEnable, Refresh and the
+-- preview timer all call the gate with no unit argument.
+--
+-- UpdateVisibility runs after the gate because ApplyTauntSatellite ends in an
+-- unconditional Show(): without this, gating in would force the satellite
+-- visible even in a mode that had correctly hidden it.
+function C:_TauntSpecChanged(_, unit)
+    if unit and unit ~= "player" then return end
+    self:_TauntEvaluateGate()
+    self:UpdateVisibility()
+end
+
+-- Test mode: force-show the taunt countdown for 7 seconds so users can verify
+-- anchor/offset/font settings without being on a tank spec or waiting for a real
+-- cooldown. Uses plain numbers with SetCooldown (not a secret duration object),
+-- so it is taint-safe. Sets _tauntPreviewActive so ApplyTauntSatellite re-applies
+-- visuals instead of hiding when sliders move during the preview window.
+function C:TauntPreview()
+    if not self.tauntFrame then self:CreateTauntSatellite() end
+    if not self.tauntFrame or not self.tauntFrame.cooldown then return end
+
+    self._tauntPreviewActive = true
+
+    local db = self.db.Taunt
+    local fontPath = KE:GetFontPath(db.FontFace) or KE.FONT
+    self.tauntFrame.text:SetFont(fontPath, db.FontSize or 18, "OUTLINE")
+    self.tauntFrame.text:SetTextColor(unpack(db.TextColor or { 1, 1, 1, 1 }))
+
+    self.tauntFrame.text:ClearAllPoints()
+    if self.cursorFrame and self.cursorFrame:IsShown() then
+        self.tauntFrame.text:SetPoint(db.AnchorPoint or "CENTER",
+            self.cursorFrame, db.AnchorPoint or "CENTER",
+            db.XOffset or 10, db.YOffset or 10)
+    else
+        if not _tauntFollowCursor then _tauntFollowCursor = _makeFollowCursorOnUpdate() end
+        self.tauntFrame:SetScript("OnUpdate", _tauntFollowCursor)
+        self.tauntFrame.text:SetPoint(db.AnchorPoint or "CENTER",
+            self.tauntFrame, "CENTER",
+            db.XOffset or 10, db.YOffset or 10)
+    end
+
+    self.tauntFrame:Show()
+    self.tauntFrame.cooldown:SetCooldown(GetTime(), 7)
+
+    -- Generation token: C_Timer.After hands back nothing cancellable, so a
+    -- second Test click (or a disable) would otherwise leave the first
+    -- callback live and let it clear the flag out from under the new preview.
+    -- Bumping the token orphans every earlier callback.
+    self._tauntPreviewToken = (self._tauntPreviewToken or 0) + 1
+    local token = self._tauntPreviewToken
+
+    C_Timer.After(7.5, function()
+        if C._tauntPreviewToken ~= token then return end
+        C._tauntPreviewActive = false
+        C:_TauntEvaluateGate()
+    end)
+end
+
+---------------------------------------------------------------------------------
 -- Visibility system
 ---------------------------------------------------------------------------------
 -- Internal combat flag driven by PLAYER_REGEN_DISABLED/ENABLED events.
@@ -986,6 +1265,7 @@ function C:UpdateVisibility(event)
             if self.gcdFrame    then self.gcdFrame:SetAlpha(1)    end
             if self.castFrame   then self.castFrame:SetAlpha(1)   end
             if self.dispelFrame then self.dispelFrame:SetAlpha(1) end
+            if self.tauntFrame  then self.tauntFrame:SetAlpha(1)  end
         end
     end
 
@@ -1029,6 +1309,16 @@ function C:UpdateVisibility(event)
             -- otherwise wipe the 7-second preview the user just started.
             self:_DetachDispelScripts()
             self.dispelFrame:Hide()
+        end
+    end
+    if self.tauntFrame then
+        if self._tauntActive and satShouldShow(self.db.Taunt) then
+            self:ApplyTauntSatellite()
+        elseif not self._tauntPreviewActive then
+            -- Don't hide during an active test preview -- background events call
+            -- UpdateVisibility and would otherwise wipe the preview.
+            self:_DetachTauntScripts()
+            self.tauntFrame:Hide()
         end
     end
     if self.trailFrame and self.db.Trail.Enabled and not masterShown then
@@ -1096,6 +1386,7 @@ function C:OnEnable()
     self:RegisterEvent("PLAYER_REGEN_DISABLED",  "UpdateVisibility")
     self:RegisterEvent("PLAYER_REGEN_ENABLED",   "UpdateVisibility")
     self:RegisterEvent("GROUP_ROSTER_UPDATE",    "UpdateVisibility")
+    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "_TauntSpecChanged")
 
     -- Initial visibility decision for cursor (before satellites exist)
     self:UpdateVisibility()
@@ -1107,6 +1398,7 @@ function C:OnEnable()
         self:ApplyCastSatellite()
         self:ApplyTrailSatellite()
         self:ApplyDispelSatellite()
+        self:_TauntEvaluateGate()
         self:UpdateVisibility()  -- re-decide now that satellites exist
     end)
 end
@@ -1132,6 +1424,15 @@ function C:OnDisable()
         self:_DetachDispelScripts()
         self.dispelFrame:Hide()
     end
+    if self.tauntFrame then
+        self:_DetachTauntScripts()
+        self.tauntFrame.cooldown:Clear()
+        self.tauntFrame:Hide()
+    end
+    self._tauntActive = false
+    self._tauntPreviewActive = false
+    -- Orphan any in-flight preview callback (see TauntPreview's token below).
+    self._tauntPreviewToken = (self._tauntPreviewToken or 0) + 1
     self._cursorShown = false
     self:UnregisterAllEvents()
 end
@@ -1193,6 +1494,7 @@ function C:HidePreview()
         if self.castFrame   then self.castFrame:Hide() end
         if self.trailFrame  then _hideAllTrailDots(); self.trailFrame:SetScript("OnUpdate", nil) end
         if self.dispelFrame then self.dispelFrame:Hide() end
+        if self.tauntFrame then self.tauntFrame:Hide() end
         return
     end
     self:UpdateVisibility()
@@ -1207,6 +1509,7 @@ function C:Refresh()
     self:ApplyCastSatellite()
     self:ApplyTrailSatellite()
     self:ApplyDispelSatellite()
+    self:_TauntEvaluateGate()
     self:UpdateVisibility()
 end
 

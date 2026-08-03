@@ -53,6 +53,7 @@ function EditMode:RegisterElement(config)
         getParentFrame = config.getParentFrame,
         getAnchorFrom = config.getAnchorFrom,
         guiPath = config.guiPath,
+        guiTab = config.guiTab,
         guiContext = config.guiContext,
     }
 
@@ -1089,7 +1090,8 @@ function EditMode:OpenElementSettings()
     local GUIFrame = KE.GUIFrame
     if not GUIFrame then return end
 
-    -- guiPath is the sidebar item ID
+    -- guiPath is still the sidebar item id, but for a collapsed module that is
+    -- now the tabbed page's id rather than the module's own id.
     local itemId = element.guiPath
 
     if not itemId then
@@ -1115,6 +1117,13 @@ function EditMode:OpenElementSettings()
             end
             if sectionId then break end
         end
+    end
+
+    -- A collapsed page hosts several modules behind sub-tabs; guiTab names the
+    -- one this element belongs to. tabbedPageState is what ResolveActiveTab
+    -- reads on the rebuild OpenPage triggers, so seed it first.
+    if element.guiTab and GUIFrame.tabbedPageState then
+        GUIFrame.tabbedPageState[itemId] = element.guiTab
     end
 
     -- Use OpenPage which properly handles showing, expanding section, and selecting item

@@ -291,6 +291,69 @@ function GUIFrame:CreateCard(parent, title, yOffset, width)
         titleText:SetTextColor(T.accent[1], T.accent[2], T.accent[3], 1)
         card.titleText = titleText
     end
+
+    -- Header toggle: the MODULE-ENABLE control. A switch in the card's title
+    -- bar reads as "this feature on/off"; everything in the body below is
+    -- settings. Keeps enables visually distinct from ordinary option toggles,
+    -- which live in body rows. Ported from the reference implementation.
+    function card:AddHeaderToggle(initialState, onValueChanged)
+        if not self.header then return nil end
+        local TRACK_W, TRACK_H, KNOB = 34, 16, 12
+
+        local btn = CreateFrame("Button", nil, self.header, "BackdropTemplate")
+        btn:SetSize(TRACK_W, TRACK_H)
+        btn:SetPoint("LEFT", self.titleText, "RIGHT", 12, 0)
+        btn:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Buttons\\WHITE8X8",
+            edgeSize = KE:GetPixelSize(),
+        })
+        btn:SetBackdropBorderColor(T.border[1], T.border[2], T.border[3], 1)
+
+        local knob = btn:CreateTexture(nil, "ARTWORK")
+        knob:SetSize(KNOB, KNOB)
+
+        local function Paint(on)
+            knob:ClearAllPoints()
+            if on then
+                btn:SetBackdropColor(T.accent[1] * 0.5, T.accent[2] * 0.5, T.accent[3] * 0.5, 1)
+                knob:SetPoint("RIGHT", btn, "RIGHT", -2, 0)
+                knob:SetColorTexture(T.accent[1], T.accent[2], T.accent[3], 0.8)
+            else
+                btn:SetBackdropColor(T.bgDark[1], T.bgDark[2], T.bgDark[3], 1)
+                knob:SetPoint("LEFT", btn, "LEFT", 2, 0)
+                knob:SetColorTexture(0.45, 0.45, 0.45, 1)
+            end
+        end
+
+        btn._checked = initialState and true or false
+        Paint(btn._checked)
+
+        function btn:SetChecked(on)
+            self._checked = on and true or false
+            Paint(self._checked)
+        end
+        function btn:GetChecked() return self._checked end
+
+        btn:SetScript("OnClick", function(b)
+            b:SetChecked(not b._checked)
+            if onValueChanged then onValueChanged(b._checked) end
+            -- A disabled module renders as a lone header bar, so the page must
+            -- rebuild here for that to apply immediately.
+            GUIFrame:RefreshContent()
+            GUIFrame:RefreshSidebar()
+        end)
+        btn:SetScript("OnEnter", function(b)
+            GameTooltip:SetOwner(b, "ANCHOR_TOP")
+            GameTooltip:SetText(b._checked and "Enabled" or "Disabled", 1, 1, 1)
+            GameTooltip:Show()
+        end)
+        btn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+        self.headerToggle = btn
+        return btn
+    end
+
     card.headerHeight = headerHeight
 
     -- Content container
@@ -350,8 +413,25 @@ function GUIFrame:CreateCard(parent, title, yOffset, width)
         self:UpdateHeight()
     end
 
+    -- Header-only collapse: a card with no body rows or labels — a module whose
+    -- only control is its header toggle, or any module rendered as a lone header
+    -- bar while disabled — is just its title bar. Without this branch the card
+    -- still reserves paddingMedium*2 of empty body beneath the header, which
+    -- reads as a stray gap between it and the next card.
     function card:UpdateHeight()
-        local totalHeight = self.headerHeight + self.currentY + T.paddingMedium * 2
+        local totalHeight
+        if self.currentY == 0 and self.headerHeight > 0 then
+            -- Exactly the header, so the header plate covers the card entirely
+            -- and the bar is one solid colour. The reference adds borderSize*2, but
+            -- its header is inset by borderSize and draws no edge of its own;
+            -- KE's is flush at (0,0) with its own edge, so the same allowance
+            -- would expose two pixels of card backdrop under the header.
+            totalHeight = self.headerHeight
+            self.content:Hide()
+        else
+            totalHeight = self.headerHeight + self.currentY + T.paddingMedium * 2
+            self.content:Show()
+        end
         self:SetHeight(totalHeight)
         self.contentHeight = totalHeight
     end
@@ -425,7 +505,9 @@ function GUIFrame:CreateCard(parent, title, yOffset, width)
         self.currentY = 0
         self.contentHeight = 0
         self.content:SetHeight(1)
-        self:SetHeight(self.headerHeight + T.paddingMedium * 2)
+        -- One source of truth for card height; a reset card has no rows, so this
+        -- resolves to the header-only collapse above.
+        self:UpdateHeight()
     end
 
     card:UpdateHeight()

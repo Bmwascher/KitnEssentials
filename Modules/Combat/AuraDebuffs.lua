@@ -202,8 +202,8 @@ local function GetDispelColor(auraInstanceID)
     return C_UnitAuras.GetAuraDispelTypeColor(UNIT, auraInstanceID, _dispelColorCurve)
 end
 
--- Public accessor so sibling modules (e.g. DispelGlow) reuse the same dispel
--- palette the user configures here, instead of duplicating the curve. Lazily
+-- Public accessor so sibling modules reuse the same dispel palette the user
+-- configures here, instead of duplicating the curve. Lazily
 -- builds from this module's DB so it resolves even when AuraDebuffs itself is
 -- disabled (the palette still lives in the profile). Returns a LuaCurveObject
 -- (or nil if the curve API is unavailable); callers pass it straight to

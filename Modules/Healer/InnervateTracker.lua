@@ -265,7 +265,8 @@ function IT:RegWithEditMode()
             getParentFrame = function()
                 return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
             end,
-            guiPath = "InnervateTracker",
+            guiPath = "HealerTools",
+            guiTab = "InnervateTracker",
         })
         self.editModeRegistered = true
     end
@@ -439,7 +440,7 @@ end
 ---------------------------------------------------------------------------------
 -- Timer countdown
 -- GetTime() is NOT a secret value — last-string SetText gating is safe here.
--- Format mirrors AES: integer when >=3s remain, 1 decimal under 3s.
+-- Format mirrors the reference: integer when >=3s remain, 1 decimal under 3s.
 ---------------------------------------------------------------------------------
 function IT:UpdateTimer()
     if not self.frame or not self.frame:IsShown() then return end

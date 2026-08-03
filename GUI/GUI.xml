@@ -28,9 +28,11 @@
     <Script file="GUIWidgets\GUI-SpellBrowserCard.lua" />
     <Script file="GUIWidgets\GUI-TextFormatCard.lua" />
     <Script file="GUIWidgets\GUI-DispelCursorCard.lua" />
+    <Script file="GUIWidgets\GUI-TauntCursorCard.lua" />
     <Script file="GUIWidgets\GUI-DispelTypeColorsCard.lua" />
     <Script file="GUIWidgets\GUI-Sidebar.lua" />
     <Script file="GUIWidgets\GUI-KESubTabs.lua" />
+    <Script file="GUIMain\GUI-TabbedContent.lua" />
 
     <!-- Main frame and pages -->
     <Script file="GUIMain\GUI-MainFrame.lua" />
@@ -45,9 +47,7 @@
     <Script file="GUITabs\GUICombat\GUI-CombatRes.lua" />
     <Script file="GUITabs\GUICombat\GUI-CombatTexts.lua" />
     <Script file="GUITabs\GUICombat\GUI-Cursor.lua" />
-    <Script file="GUITabs\GUICombat\GUI-TargetCastbar.lua" />
     <Script file="GUITabs\GUICombat\GUI-FocusCastbar.lua" />
-    <Script file="GUITabs\GUICombat\GUI-Castbars.lua" />
     <Script file="GUITabs\GUICombat\GUI-RangeChecker.lua" />
     <Script file="GUITabs\GUICombat\GUI-AuraDebuffs.lua" />
     <Script file="GUITabs\GUICombat\GUI-AuraExternals.lua" />
@@ -84,16 +84,18 @@
     <Script file="GUITabs\GUIDungeons\GUI-TargetedSpells.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-EnemyCounter.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-FocusMarker.lua" />
+    <Script file="GUITabs\GUIDungeons\GUI-GroupFinderPanel.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-KeystoneHelper.lua" />
+    <Script file="GUITabs\GUIDungeons\GUI-LFGQuickCreate.lua" />
+    <Script file="GUITabs\GUIDungeons\GUI-LFGReminder.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-DeathNotifications.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-MythicPlusTimer.lua" />
 
     <!-- Healer tabs -->
     <Script file="GUITabs\GUIHealer\GUI-HealerMana.lua" />
-    <Script file="GUITabs\GUIHealer\GUI-DispelOnCursor.lua" />
-    <Script file="GUITabs\GUIHealer\GUI-DispelGlow.lua" />
     <Script file="GUITabs\GUIHealer\GUI-InnervateTracker.lua" />
     <Script file="GUITabs\GUIHealer\GUI-MaintenanceTracker.lua" />
+    <Script file="GUITabs\GUIHealer\GUI-HealerTools.lua" />
 
     <!-- DungeonsTimers tabs -->
     <Script file="GUITabs\GUIDungeonTimers\GUI-DungeonTimersCfg.lua" />
@@ -111,20 +113,19 @@
     <Script file="GUITabs\GUIQoL\GUI-GreatVaultAlert.lua" />
     <Script file="GUITabs\GUIQoL\GUI-CharacterPanel.lua" />
     <Script file="GUITabs\GUIQoL\GUI-Nicknames.lua" />
-    <Script file="GUITabs\GUIQoL\GUI-WorldMap.lua" />
-    <Script file="GUITabs\GUIQoL\GUI-PositionController.lua" />
+    <Script file="GUITabs\GUIQoL\GUI-CopyAnything.lua" />
+    <Script file="GUITabs\GUIQoL\GUI-ColorPicker.lua" />
+    <Script file="GUITabs\GUIQoL\GUI-MoveFrames.lua" />
+    <Script file="GUITabs\GUIQoL\GUI-RaidControl.lua" />
 
     <!-- Skinning tabs -->
     <Script file="GUITabs\GUISkinning\GUI-Tooltips.lua" />
     <Script file="GUITabs\GUISkinning\GUI-BlizzardMessages.lua" />
-    <Script file="GUITabs\GUISkinning\GUI-BlizzardMouseover.lua" />
-    <Script file="GUITabs\GUISkinning\GUI-BlizzardMicroMenu.lua" />
-    <Script file="GUITabs\GUISkinning\GUI-DetailsBackdrop.lua" />
-    <Script file="GUITabs\GUISkinning\GUI-ActionBars.lua" />
-    <Script file="GUITabs\GUISkinning\GUI-Auras.lua" />
-    <Script file="GUITabs\GUISkinning\GUI-UICleanup.lua" />
-    <Script file="GUITabs\GUISkinning\GUI-Battlenet.lua" />
-    <Script file="GUITabs\GUISkinning\GUI-BlizzardRaidmanager.lua" />
+    <Script file="GUITabs\GUISkinning\GUI-UIWidgets.lua" />
+    <Script file="GUITabs\GUISkinning\GUI-LootRoll.lua" />
+    <Script file="GUITabs\GUISkinning\GUI-LootFrame.lua" />
+    <Script file="GUITabs\GUISkinning\GUI-Chat.lua" />
+    <Script file="GUITabs\GUISkinning\GUI-BlizzardFrames.lua" />
 
     <!-- Optimize tab -->
     <Script file="GUITabs\GUIQoL\GUI-Optimize.lua" />
