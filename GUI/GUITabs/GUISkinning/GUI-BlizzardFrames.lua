@@ -424,14 +424,32 @@ GUIFrame:RegisterContent("SkinBlizzardFramesAddons", function(scrollChild, yOffs
     return card:GetNextOffset()
 end)
 
-GUIFrame:RegisterTabbedContent("SkinBlizzardFrames", {
-    { id = "SkinBlizzardFramesGeneral",    label = "General" },
-    { id = "SkinBlizzardFramesFrames",     label = "Frames" },
-    { id = "SkinBlizzardFramesAddons",     label = "Addons" },
-    { id = "SkinBlizzardFramesLootRoll",   label = "Loot Roll" },
-    { id = "SkinBlizzardFramesLootWindow", label = "Loot Window" },
-    { id = "SkinBlizzardFramesWidgets",    label = "UI Widgets" },
-}, {
+-- Three of these six tabs belong to modules that are INDEPENDENT of the skin
+-- engine and ship enabled: Loot Roll, Loot Window, and UI Widgets, which also
+-- hosts Alert Frames' controls. They must stay reachable while the engine is
+-- off -- there is no other route to them, not the sidebar, not the keyword
+-- search, not an Edit Mode Open Settings button, all of which land here.
+--
+-- The other three configure the engine itself, so showing them while it is off
+-- renders live-looking controls that do nothing. So the LIST varies with state
+-- rather than the page collapsing wholesale. Evaluated per build, so the master
+-- toggle's own RefreshContent switches between the two sets with no reload.
+GUIFrame:RegisterTabbedContent("SkinBlizzardFrames", function()
+    local db = GetDB()
+    local independent = {
+        { id = "SkinBlizzardFramesLootRoll",   label = "Loot Roll" },
+        { id = "SkinBlizzardFramesLootWindow", label = "Loot Window" },
+        { id = "SkinBlizzardFramesWidgets",    label = "UI Widgets" },
+    }
+    if not db or db.Enabled ~= true then return independent end
+
+    return {
+        { id = "SkinBlizzardFramesGeneral",    label = "General" },
+        { id = "SkinBlizzardFramesFrames",     label = "Frames" },
+        { id = "SkinBlizzardFramesAddons",     label = "Addons" },
+        independent[1], independent[2], independent[3],
+    }
+end, {
     headerBuilder = function(scrollChild, yOffset)
         local db = GetDB()
         if not db then return yOffset, true end
@@ -442,16 +460,9 @@ GUIFrame:RegisterTabbedContent("SkinBlizzardFrames", {
             -- AddHeaderToggle's own OnClick already calls RefreshContent.
         end)
         local newOffset = yOffset + card:GetContentHeight() + Theme.paddingSmall
-        -- Never collapse. This page hosts three modules that are INDEPENDENT
-        -- of the skin engine and ship enabled -- Loot Roll, Loot Window and
-        -- UI Widgets, the last of which also hosts Alert Frames' controls.
-        -- Collapsing on this master's own toggle took their settings with it,
-        -- and there was no other route to them: not the sidebar, not the
-        -- keyword search, not an Edit Mode Open Settings button, all of which
-        -- land on this same page. It also blocked turning those modules OFF.
-        -- The cost of always showing the strip is that the General, Frames and
-        -- Addons tabs stay visible while the engine is off; their controls are
-        -- inert until it is on, which is the lesser problem.
+        -- Never collapse: the tab list above already drops the engine's own
+        -- tabs when it is off, and collapsing as well would take the three
+        -- independent modules' settings with it.
         return newOffset, false
     end,
 })

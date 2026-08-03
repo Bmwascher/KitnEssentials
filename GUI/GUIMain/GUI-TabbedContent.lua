@@ -27,6 +27,12 @@ function GUIFrame:ResolveActiveTab(itemId, tabs)
 end
 
 -- tabs = { { id = "<registered content id>", label = "<display>" }, ... }
+--   or a function returning that list, evaluated at BUILD time. Use the
+--   function form when the tab set depends on state -- a page hosting modules
+--   that outlive its own master toggle offers only those while the master is
+--   off (GUI/GUITabs/GUISkinning/GUI-BlizzardFrames.lua). A shrinking list
+--   needs no extra care: ResolveActiveTab above already falls back to the
+--   first tab when the remembered id is gone.
 -- opts.headerBuilder(scrollChild, yOffset) -> (newYOffset, collapse)
 --   Renders above the tab strip; collapse = true returns immediately with no
 --   strip and no tab content (the lone-header-bar state for a disabled module).
@@ -41,10 +47,11 @@ function GUIFrame:RegisterTabbedContent(itemId, tabs, opts)
             if collapse then return yOffset end
         end
 
-        local activeId = GUIFrame:ResolveActiveTab(itemId, tabs)
+        local tabList = type(tabs) == "function" and tabs() or tabs
+        local activeId = GUIFrame:ResolveActiveTab(itemId, tabList)
 
         local _, tabOffset = GUIFrame:CreateSubTabs(scrollChild, yOffset, {
-            tabs = tabs,
+            tabs = tabList,
             activeId = activeId,
             onSwitch = function(newId)
                 GUIFrame.tabbedPageState[itemId] = newId

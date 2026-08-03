@@ -30,6 +30,10 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
         KE = {
             GUIFrame = GUIFrame,
             GetFontOutlineOptions = function() return {} end,
+            -- GetDB() reads KE.db.profile.Skinning.BlizzardFrames. The strip is
+            -- now state-dependent, so the db has to be real enough to drive
+            -- both branches; Enabled is flipped per example below.
+            db = { profile = { Skinning = { BlizzardFrames = { Enabled = false } } } },
         }
 
         helpers.loadModule("GUI/GUITabs/GUISkinning/GUI-UIWidgets.lua", KE)
@@ -38,13 +42,50 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
         helpers.loadModule("GUI/GUITabs/GUISkinning/GUI-BlizzardFrames.lua", KE)
     end)
 
-    it("registers a RegisterContent builder for every id declared in the strip", function()
+    -- The strip is declared as a function now, evaluated per build, so the
+    -- list depends on whether the skin engine is on. Resolve it the same way
+    -- GUI-TabbedContent.lua does.
+    local function strip(enabled)
+        KE.db.profile.Skinning.BlizzardFrames.Enabled = enabled
         local tabs = GUIFrame.tabStrips["SkinBlizzardFrames"]
         assert.is_not_nil(tabs)
+        return type(tabs) == "function" and tabs() or tabs
+    end
+
+    local function assertEveryIdResolves(tabs)
         for _, tab in ipairs(tabs) do
             assert.is_function(GUIFrame.registeredContent[tab.id],
                 "no RegisterContent builder for declared subtab id " .. tab.id)
         end
+    end
+
+    it("registers a RegisterContent builder for every id declared while the engine is on", function()
+        local tabs = strip(true)
+        assert.equals(6, #tabs)
+        assertEveryIdResolves(tabs)
+    end)
+
+    it("registers a RegisterContent builder for every id declared while the engine is off", function()
+        assertEveryIdResolves(strip(false))
+    end)
+
+    -- The reachability guarantee this page exists to keep: the three modules
+    -- that are independent of the skin engine ship ENABLED, so their settings
+    -- must stay reachable while it is off. There is no other route to them --
+    -- not the sidebar, not the keyword search, not Edit Mode's Open Settings.
+    it("keeps exactly the engine-independent tabs while the engine is off", function()
+        local ids = {}
+        for _, tab in ipairs(strip(false)) do ids[tab.id] = true end
+
+        assert.is_true(ids["SkinBlizzardFramesLootRoll"])
+        assert.is_true(ids["SkinBlizzardFramesLootWindow"])
+        assert.is_true(ids["SkinBlizzardFramesWidgets"])
+
+        -- and none of the engine's own tabs, which would render live-looking
+        -- controls that do nothing.
+        assert.is_nil(ids["SkinBlizzardFramesGeneral"])
+        assert.is_nil(ids["SkinBlizzardFramesFrames"])
+        assert.is_nil(ids["SkinBlizzardFramesAddons"])
     end)
 
     it("positive control: the two new loot subtab ids resolve", function()
