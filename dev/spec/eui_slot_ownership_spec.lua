@@ -117,6 +117,35 @@ describe("EUIDrawsSlotElement", function()
         assert.is_true(KE:EUIDrawsSlotElement("player", "track"))
     end)
 
+    -- One case per key in the table. Without all six, a mapping that pointed an
+    -- element at the WRONG key still passed: every remaining test only ever saw
+    -- both keys absent, where any mapping answers true.
+    it("releases character item level on its own key", function()
+        local KE = loadGlobals({ showItemLevel = false })
+        assert.is_false(KE:EUIDrawsSlotElement("player", "ilvl"))
+        assert.is_true(KE:EUIDrawsSlotElement("player", "track"))
+        assert.is_true(KE:EUIDrawsSlotElement("player", "gems"))
+    end)
+
+    it("releases the character track on its own key", function()
+        local KE = loadGlobals({ showUpgradeTrack = false })
+        assert.is_false(KE:EUIDrawsSlotElement("player", "track"))
+        assert.is_true(KE:EUIDrawsSlotElement("player", "ilvl"))
+    end)
+
+    it("releases the inspect track on its own key", function()
+        local KE = loadGlobals({ inspectShowUpgradeTrack = false })
+        assert.is_false(KE:EUIDrawsSlotElement("target", "track"))
+        assert.is_true(KE:EUIDrawsSlotElement("target", "ilvl"))
+        assert.is_true(KE:EUIDrawsSlotElement("target", "enchant"))
+    end)
+
+    it("releases the inspect enchant on its own key", function()
+        local KE = loadGlobals({ inspectShowEnchants = false })
+        assert.is_false(KE:EUIDrawsSlotElement("target", "enchant"))
+        assert.is_true(KE:EUIDrawsSlotElement("target", "ilvl"))
+    end)
+
     it("uses the inspect-prefixed keys on the inspect frame", function()
         local KE = loadGlobals({ inspectShowItemLevel = false, showItemLevel = true })
         assert.is_false(KE:EUIDrawsSlotElement("target", "ilvl"))
