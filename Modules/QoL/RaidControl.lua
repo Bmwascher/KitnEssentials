@@ -681,6 +681,7 @@ end
 -- would be a slow-motion bug.
 local DIFFICULTY_RAID = { 14, 15, 16 }   -- DifficultyUtil.ID PrimaryRaid Normal/Heroic/Mythic
 local DIFFICULTY_PARTY = { 1, 2, 23 }    -- DifficultyUtil.ID Dungeon Normal/Heroic/Mythic
+local DIFFICULTY_LABEL = _G.CRF_DIFFICULTY or "Difficulty"
 
 local function SetupDifficulty(dropdown)
     local function IsDungeonSelected(difficultyID)
@@ -728,8 +729,17 @@ local function SetupDifficulty(dropdown)
     end)
 end
 
-local function OnEvent_RefreshMenu(self)
+-- The control means a different difficulty depending on the group you are in,
+-- and nothing on screen said which. Name it beside the dropdown, and keep it
+-- current: this runs on creation, on PLAYER_DIFFICULTY_CHANGED, and on
+-- GROUP_ROSTER_UPDATE, so a party-to-raid conversion relabels it immediately.
+local function OnEvent_Difficulty(self)
     self:GenerateMenu()
+
+    if self.label then
+        local scope = IsInRaid() and (_G.RAID or "Raid") or (_G.PARTY or "Party")
+        self.label:SetText(format("%s (%s)", DIFFICULTY_LABEL, scope))
+    end
 end
 
 -- --- Group Sort row (optional; the engine ships separately) ---------------
@@ -871,11 +881,11 @@ function RC:Setup()
     -- Row 3: Dungeon Difficulty
     local DifficultyDropdown = CreateDropdown("KE_RaidControlDifficulty", panel, 85,
         "TOPLEFT", Countdown10Button, "BOTTOMLEFT", 0, -5, -- rows now share x=10
-        _G.CRF_DIFFICULTY or "Difficulty",
+        DIFFICULTY_LABEL,
         -- GROUP_ROSTER_UPDATE as well as the difficulty event: converting a
-        -- party to a raid changes which difficulty the control reads, and the
-        -- closed dropdown's own label has to follow.
-        { "PLAYER_DIFFICULTY_CHANGED", "GROUP_ROSTER_UPDATE" }, OnEvent_RefreshMenu, SetupDifficulty)
+        -- party to a raid changes which difficulty the control reads, and both
+        -- the closed dropdown and its "(Party)"/"(Raid)" label have to follow.
+        { "PLAYER_DIFFICULTY_CHANGED", "GROUP_ROSTER_UPDATE" }, OnEvent_Difficulty, SetupDifficulty)
 
     -- Everyone Assist
     local EveryoneAssist = CreateCheckBox("KE_RaidControlEveryoneAssist", panel, BUTTON_HEIGHT + 4,
