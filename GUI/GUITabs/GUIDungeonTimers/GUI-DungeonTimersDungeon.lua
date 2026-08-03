@@ -3194,6 +3194,7 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     local rightHeight = math.max(listY + Theme.paddingSmall, 760)
     rightCol:SetHeight(rightHeight)
 
+    -- Two-column: advances past the taller column, which no GetNextOffset() reports.
     yOffset = yOffset + math.max(listY, rightHeight) + Theme.paddingSmall
     return yOffset
 end

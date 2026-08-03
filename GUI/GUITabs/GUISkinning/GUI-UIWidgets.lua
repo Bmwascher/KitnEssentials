@@ -85,11 +85,11 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
     -- Disabled modules collapse to the header bar alone (v3.5.188):
     -- settings only render while the module is enabled.
     if db.Enabled == false then
-        yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+        yOffset = card1:GetNextOffset()
     else
         card1:AddLabel("Restyles Blizzard's status bar and text widgets (M+ timer, power bars, event banners).")
 
-        yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
+        yOffset = card1:GetNextOffset()
 
         ----------------------------------------------------------------
         -- Card 2: Global Font Settings
@@ -125,7 +125,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
         manager:Register(outlineDropdown, "all")
         card2:AddRow(row2a, 36)
 
-        yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
+        yOffset = card2:GetNextOffset()
 
         ----------------------------------------------------------------
         -- Card 3: Status Bar Widgets
@@ -262,7 +262,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
         manager:Register(borderColorPicker, "statusbar")
         card3:AddRow(row3e, 36)
 
-        yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
+        yOffset = card3:GetNextOffset()
 
         ----------------------------------------------------------------
         -- Card 4: Text Widgets
@@ -330,7 +330,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
         manager:Register(textSizeSlider, "textwidget")
         card4:AddRow(row4b, Theme.rowHeight)
 
-        yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
+        yOffset = card4:GetNextOffset()
 
         RefreshStates()
     end
