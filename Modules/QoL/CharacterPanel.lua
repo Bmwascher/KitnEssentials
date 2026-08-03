@@ -2096,13 +2096,40 @@ end
 -- sits there and socket it. Replace All already re-resolves per placement
 -- (FindGemInBags above, and its comment); the single-gem click did not.
 --
--- Split out of the button's OnClick so the refusal is reachable without the
--- socketing frames. The click sequence around it stays inline: it drives
--- SocketInventoryItem / ClickSocketButton / AcceptSockets, which the tiered
--- test policy leaves to the in-game smoke.
 function CP:ResolveGemSource(gemData)
     if not gemData or not gemData.itemID then return nil end
     return FindGemInBags(gemData.itemID)
+end
+
+-- The socket button's whole click action, lifted out of the OnClick closure so
+-- the REFUSAL is reachable, not just the resolver behind it. A spec that only
+-- calls ResolveGemSource proves nothing about the call site: swapping it back
+-- for the cached bagID/slotID there would leave every such test green.
+--
+-- Returns true only when the pickup was actually issued. The socket calls
+-- themselves stay unasserted -- the tiered test policy leaves those to the
+-- in-game smoke, and the missing-gem case returns before reaching any of them.
+function CP:SocketGemFromPopup(gemData, targetSlotID, targetSocketIndex)
+    local bag, slot = self:ResolveGemSource(gemData)
+    if not bag then
+        self:HideGemPopup()
+        self:HideSlotHighlight()
+        return false
+    end
+    SocketInventoryItem(targetSlotID)
+    C_Container.PickupContainerItem(bag, slot)
+    C_ItemSocketInfo.ClickSocketButton(targetSocketIndex)
+    ClearCursor()
+    AcceptSockets()
+    CloseSocketInfo()
+    if ItemSocketingFrame then HideUIPanel(ItemSocketingFrame) end
+    self:HideGemPopup()
+    self:HideSlotHighlight()
+    C_Timer.After(0.1, function()
+        if InCombatLockdown() then return end
+        CP:RefreshSocketButtons()
+    end)
+    return true
 end
 
 -- The replace loop. Upstream-verified sequencing on 12.0.7 (DSH ships this
@@ -2450,25 +2477,7 @@ function CP:CreateGemButton(index)
             return
         end
         if self.gemData and self.targetSlotID and self.targetSocketIndex then
-            local bag, slot = CP:ResolveGemSource(self.gemData)
-            if not bag then
-                CP:HideGemPopup()
-                CP:HideSlotHighlight()
-                return
-            end
-            SocketInventoryItem(self.targetSlotID)
-            C_Container.PickupContainerItem(bag, slot)
-            C_ItemSocketInfo.ClickSocketButton(self.targetSocketIndex)
-            ClearCursor()
-            AcceptSockets()
-            CloseSocketInfo()
-            if ItemSocketingFrame then HideUIPanel(ItemSocketingFrame) end
-            CP:HideGemPopup()
-            CP:HideSlotHighlight()
-            C_Timer.After(0.1, function()
-                if InCombatLockdown() then return end
-                CP:RefreshSocketButtons()
-            end)
+            CP:SocketGemFromPopup(self.gemData, self.targetSlotID, self.targetSocketIndex)
         end
     end)
 

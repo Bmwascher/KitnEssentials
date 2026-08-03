@@ -208,6 +208,58 @@ describe("Gem helper: resolving the source gem at click time", function()
     end)
 end)
 
+-- The CLICK ACTION, not the resolver behind it. Testing only the resolver
+-- leaves the call site free to go back to the cached bag position with every
+-- test still green -- which is exactly what the first version of this spec did.
+describe("Gem helper: the click action refuses a gem that has moved", function()
+    local function armed(bags)
+        local picked, sockets, hidden = {}, {}, { popup = 0, glow = 0 }
+        local CP = loadCP({
+            C_Container = {
+                GetContainerNumSlots = function(bag) return bags[bag] and 20 or 0 end,
+                GetContainerItemID = function(bag, slot)
+                    return bags[bag] and bags[bag][slot] or nil
+                end,
+                PickupContainerItem = function(bag, slot)
+                    picked[#picked + 1] = { bag = bag, slot = slot }
+                end,
+            },
+            -- Recorders, not a fake socketing subsystem: nothing below asserts
+            -- on the sequence, they exist so the success path can run at all.
+            SocketInventoryItem = function(slotID) sockets[#sockets + 1] = slotID end,
+            C_ItemSocketInfo = { ClickSocketButton = function() end },
+            ClearCursor = function() end,
+            AcceptSockets = function() end,
+            CloseSocketInfo = function() end,
+            HideUIPanel = function() end,
+            ItemSocketingFrame = nil,
+        })
+        CP.HideGemPopup = function() hidden.popup = hidden.popup + 1 end
+        CP.HideSlotHighlight = function() hidden.glow = hidden.glow + 1 end
+        CP.RefreshSocketButtons = function() end
+        return CP, picked, sockets, hidden
+    end
+
+    it("refuses, and opens no socket session, when the gem is gone", function()
+        local CP, picked, sockets, hidden = armed({ [2] = { [11] = 9999 } })
+        assert.is_false(CP:SocketGemFromPopup({ itemID = 5555, bagID = 2, slotID = 11 }, 5, 1))
+        assert.equals(0, #picked)
+        assert.equals(0, #sockets)
+        assert.equals(1, hidden.popup)
+        assert.equals(1, hidden.glow)
+    end)
+
+    -- THE REGRESSION GUARD. The row's cached position is bag 0 slot 1; the gem
+    -- is really in bag 2 slot 11. Reading the cache instead picks up whatever
+    -- now sits in bag 0 slot 1.
+    it("picks the gem up where it is now, not where the row cached it", function()
+        local CP, picked = armed({ [2] = { [11] = 5555 } })
+        assert.is_true(CP:SocketGemFromPopup({ itemID = 5555, bagID = 0, slotID = 1 }, 5, 1))
+        assert.equals(1, #picked)
+        assert.same({ bag = 2, slot = 11 }, picked[1])
+    end)
+end)
+
 describe("Enchant helper: combat refusal", function()
     -- occupantID: what GetContainerItemInfo reports is actually sitting in the
     -- row's cached bag slot at click time. Defaults to the row's own item;
