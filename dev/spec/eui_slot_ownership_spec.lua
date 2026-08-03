@@ -183,6 +183,51 @@ describe("EUIDrawsSlotElement", function()
         assert.is_true(KE:EUIDrawsSlotElement("target", "missingEnchant"))
     end)
 
+    -- EUI's own socket row at the bottom of the sheet, same feature as KE's bar.
+    it("claims the socket panel on its own key, character sheet only", function()
+        local KE = loadGlobals({})
+        assert.is_true(KE:EUIDrawsSlotElement("player", "socketPanel"))
+        -- No inspect socket row exists in EUI, and KE has no inspect bar either.
+        assert.is_false(KE:EUIDrawsSlotElement("target", "socketPanel"))
+
+        local off = loadGlobals({ charSheetSocketPanel = false })
+        assert.is_false(off:EUIDrawsSlotElement("player", "socketPanel"))
+        assert.is_true(off:EUIDrawsSlotElement("player", "gems"))
+    end)
+
+    -- ASYMMETRY 3. Two elements EUI ships with no switch at all, so the sheet
+    -- being active is the whole answer. Each is live on exactly ONE frame, and
+    -- swapping them would blank a display on the frame that still needs it.
+    it("claims the header text on the character sheet and never on inspect", function()
+        local KE = loadGlobals({})
+        assert.is_true(KE:EUIDrawsSlotElement("player", "headerText"))
+        assert.is_false(KE:EUIDrawsSlotElement("target", "headerText"))
+    end)
+
+    it("claims the average item level on inspect and never on the character sheet", function()
+        local KE = loadGlobals({})
+        assert.is_false(KE:EUIDrawsSlotElement("player", "avgIlvl"))
+        assert.is_true(KE:EUIDrawsSlotElement("target", "avgIlvl"))
+    end)
+
+    it("gives both switchless elements back when their sheet is off", function()
+        local charOff = loadGlobals({ themedCharacterSheet = false })
+        assert.is_false(charOff:EUIDrawsSlotElement("player", "headerText"))
+        local inspOff = loadGlobals({ themedInspectSheet = false })
+        assert.is_false(inspOff:EUIDrawsSlotElement("target", "avgIlvl"))
+    end)
+
+    it("no per-element key can switch off either switchless element", function()
+        local KE = loadGlobals({
+            showItemLevel = false, showEnchants = false, showGems = false,
+            showUpgradeTrack = false, charSheetSocketPanel = false,
+            inspectShowItemLevel = false, inspectShowEnchants = false,
+            inspectShowUpgradeTrack = false,
+        })
+        assert.is_true(KE:EUIDrawsSlotElement("player", "headerText"))
+        assert.is_true(KE:EUIDrawsSlotElement("target", "avgIlvl"))
+    end)
+
     it("negative control: an element EUI has no concept of is never claimed", function()
         local KE = loadGlobals({})
         assert.is_false(KE:EUIDrawsSlotElement("player", "raceText"))

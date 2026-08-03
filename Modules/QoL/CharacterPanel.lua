@@ -958,16 +958,22 @@ end
 function CP:StyleCharacterTexts()
     if ElvUILoaded() then return end
 
-    local levelText = CharacterLevelText
-    if levelText then
-        self:ApplyFont(levelText, self.db.LevelTextSize or 12)
-        levelText:SetWidth(0)
-        levelText:SetWordWrap(true)
-    end
+    -- EllesmereUI re-anchors Blizzard's name and level strings into its own
+    -- header, so re-fonting and re-sizing them from here is two addons fighting
+    -- over the same FontStrings. The stats pane below is still ours to style --
+    -- EUI leaves those alone.
+    if not KE:EUIDrawsSlotElement("player", "headerText") then
+        local levelText = CharacterLevelText
+        if levelText then
+            self:ApplyFont(levelText, self.db.LevelTextSize or 12)
+            levelText:SetWidth(0)
+            levelText:SetWordWrap(true)
+        end
 
-    local nameText = CharacterFrameTitleText
-    if nameText then
-        self:ApplyFont(nameText, self.db.NameTextSize or 12)
+        local nameText = CharacterFrameTitleText
+        if nameText then
+            self:ApplyFont(nameText, self.db.NameTextSize or 12)
+        end
     end
 
     self:StyleStatsPaneTexts()
@@ -1029,10 +1035,12 @@ function CP:UpdateLevelTextWithFaction()
     local text = levelText:GetText()
     if not text then return end
 
-    -- Strip any prior suffix we added.
+    -- Strip any prior suffix we added. Unconditional, and ahead of the EUI
+    -- stand-down below, so handing the string back removes our tag instead of
+    -- freezing it into EUI's header.
     text = text:gsub(" |c%x%x%x%x%x%x%x%x%([AH]%)|r$", "")
 
-    if self.db.ShowFactionOnLevel then
+    if self.db.ShowFactionOnLevel and not KE:EUIDrawsSlotElement("player", "headerText") then
         local faction = UnitFactionGroup("player")
         if faction == "Alliance" then
             text = text .. " |cff3399ff(A)|r"
@@ -1071,6 +1079,10 @@ end
 function CP:UpdateRaceTextPosition()
     if not self._raceText then return end
     if not self.db.ShowRaceText then return end
+    -- Also gated: HideRaceText re-runs Blizzard's level layout, which fires our
+    -- own PaperDollFrame_SetLevel hook straight back into here. Without this the
+    -- stand-down would re-apply the very offset it just cleared.
+    if KE:EUIDrawsSlotElement("player", "headerText") then return end
     if not CharacterLevelText then return end
     CharacterLevelText:SetPointsOffset(0, -37)
 end
@@ -1078,6 +1090,14 @@ end
 function CP:ShowRaceText()
     if ElvUILoaded() then return end
     if not self.db.ShowRaceText then return end
+    -- Our race line sits under the level string, and getting it there means
+    -- displacing that string by 37px. EUI has already re-anchored it into its
+    -- own header, so the offset drags EUI's text out of place and ours lands on
+    -- top of it. Stand down entirely rather than fight over the anchor.
+    if KE:EUIDrawsSlotElement("player", "headerText") then
+        self:HideRaceText()
+        return
+    end
 
     local text = self:CreateRaceText()
     self:ApplyFont(text, self.db.LevelTextSize or 12)
@@ -1697,6 +1717,14 @@ local POPUP_PADDING     = 2
 local POPUP_ICON_SIZE   = 24
 local STANDARD_BACKDROP = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 }
 
+-- Popup fill, shared by the gem and enchant popups. Theme.bgMedium is 60%
+-- alpha, which is right for a panel sitting on another panel but washes out
+-- over open world -- these two float over whatever is behind the character
+-- sheet. Matched instead to the Damage Meter's own popup menus
+-- (DamageMeter/SegmentMenu.lua:126), the closest thing KE already has to a
+-- transient list over the world.
+local POPUP_BG = { 0.05, 0.05, 0.05, 0.97 }
+
 local function GetQualityAtlasFromLink(link)
     if not link then return nil end
     return link:match(qualityAtlasPattern)
@@ -2177,7 +2205,7 @@ function CP:CreateGemPopup()
 
     local popup = CreateFrame("Frame", "KE_GemPopup", UIParent, "BackdropTemplate")
     popup:SetBackdrop(STANDARD_BACKDROP)
-    popup:SetBackdropColor(Theme.bgMedium[1], Theme.bgMedium[2], Theme.bgMedium[3], Theme.bgMedium[4])
+    popup:SetBackdropColor(POPUP_BG[1], POPUP_BG[2], POPUP_BG[3], POPUP_BG[4])
     popup:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
     popup:SetSize(280, 50)
     popup:SetFrameStrata("TOOLTIP")
@@ -2820,7 +2848,7 @@ function CP:CreateEnchantPopup()
 
     local popup = CreateFrame("Frame", "KE_EnchantPopup", UIParent, "BackdropTemplate")
     popup:SetBackdrop(STANDARD_BACKDROP)
-    popup:SetBackdropColor(Theme.bgMedium[1], Theme.bgMedium[2], Theme.bgMedium[3], Theme.bgMedium[4])
+    popup:SetBackdropColor(POPUP_BG[1], POPUP_BG[2], POPUP_BG[3], POPUP_BG[4])
     popup:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
     popup:SetSize(280, 50)
     popup:SetFrameStrata("TOOLTIP")
@@ -2927,7 +2955,9 @@ function CP:CreateEnchantRow(index)
             CP:ShowSlotHighlight(button.targetSlotID)
         end
         if button.enchantData and button.enchantData.link then
-            GameTooltip:SetOwner(button, "ANCHOR_RIGHT", 40, 0)
+            -- 40px right of the row put it well clear of the popup; Brandon
+            -- read that as detached. 8px keeps the gap without the drift.
+            GameTooltip:SetOwner(button, "ANCHOR_RIGHT", 8, 0)
             GameTooltip:SetHyperlink(button.enchantData.link)
             GameTooltip:Show()
         end

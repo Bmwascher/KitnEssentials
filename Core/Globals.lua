@@ -839,6 +839,9 @@ local EUI_ELEMENT_KEYS = {
     player = {
         ilvl = "showItemLevel", enchant = "showEnchants",
         gems = "showGems",     track   = "showUpgradeTrack",
+        -- EUI's own bottom-of-sheet socket row (SocketPanel.lua), the same
+        -- feature as KE's socket bar down to the click-to-flyout behaviour.
+        socketPanel = "charSheetSocketPanel",
     },
     inspect = {
         ilvl = "inspectShowItemLevel", enchant = "inspectShowEnchants",
@@ -857,6 +860,24 @@ function KE:EUIDrawsSlotElement(unit, element)
         -- Character sheet: the border is unconditional, so EUI always marks it.
         if isPlayer then return true end
         element = "enchant"  -- inspect: rides entirely on the enchant icon
+    end
+
+    -- Elements EUI ships with NO switch of its own. The sheet being active IS
+    -- the answer for these, so they never reach the key table below.
+    if element == "headerText" then
+        -- Character sheet only. EUI re-anchors Blizzard's own name and level
+        -- strings into its header (CharacterSheet.lua:497-505) rather than
+        -- drawing its own. KE restyling them and displacing the level string
+        -- to make room for race text lands on top of that -- the overlap
+        -- Brandon photographed 2026-08-03.
+        return isPlayer
+    end
+    if element == "avgIlvl" then
+        -- INSPECT only, and deliberately not the character sheet: there KE's
+        -- decimal item level feeds EUI's own readout rather than drawing a
+        -- second one, so it is an enhancement, not a duplicate. On inspect EUI
+        -- prints its own average and ours lands under the Talents button.
+        return not isPlayer
     end
 
     local keys = isPlayer and EUI_ELEMENT_KEYS.player or EUI_ELEMENT_KEYS.inspect

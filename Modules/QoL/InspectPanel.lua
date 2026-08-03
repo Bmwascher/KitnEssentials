@@ -465,6 +465,17 @@ function InspectPanel:UpdateInspectItemLevel()
     -- resolve), so incomplete cross-map data simply hides the average rather
     -- than needing a blanket map check.
 
+    -- EllesmereUI's themed inspect sheet prints its own average near the top,
+    -- and its layout puts the Talents button exactly where ours anchors, so
+    -- ours ends up half-hidden behind it (Brandon, 2026-08-03). EUI's is
+    -- Blizzard's whole-number call formatted to two places, so it always ends
+    -- .00 -- ours is the real decimal, which is why it stays on the unthemed
+    -- sheet. It just cannot be READ on the themed one.
+    if KE:EUIDrawsSlotElement(unit, "avgIlvl") then
+        if self._inspectIlvl then self._inspectIlvl:Hide() end
+        return
+    end
+
     local parent = _G.InspectPaperDollItemsFrame or InspectFrame
     if not parent then return end
 
