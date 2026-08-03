@@ -553,9 +553,8 @@ function RC:PositionSections()
     -- User-facing ADDON_ACTION_BLOCKED: since the SECURE Close button
     -- anchors to RoleIcons, drafting RoleIcons into the protected anchor
     -- chain -- moving it in combat is now a protected operation, same as
-    -- TargetIcons always was. Combat-deferred dirty flag (combat-deferred
-    -- dirty flag): bail entirely in combat, replay the full layout on
-    -- PLAYER_REGEN_ENABLED.
+    -- TargetIcons always was. Combat-deferred dirty flag: bail entirely in
+    -- combat, replay the full layout on PLAYER_REGEN_ENABLED.
     if InCombatLockdown() then
         if not self._positionDirty then
             self._positionDirty = true
@@ -803,7 +802,7 @@ function RC:Setup()
     -- Top rows started 5px further left than the rest: the
     -- dropdown/assist/Group Sort chain resolves to x=10; Ready Check and
     -- the countdowns anchored at x=5. Aligned: left edge 10, right edge
-    -- 10 + BUTTON_WIDTH (matching the Group Sort row), countdown halves
+    -- 10 + BUTTON_WIDTH (matching the utility rows below), countdown halves
     -- sized (BUTTON_WIDTH - 5) / 2 so the pair plus its 5px gap lands on
     -- the same right edge.
     local ReadyCheckButton = CreateUtilButton("KE_RaidControlReadyCheck", panel, nil,

@@ -107,6 +107,18 @@ describe("RaidControl", function()
             assert.is_true(bottom)
             assert.is_true(left)
         end)
+
+        it("reports top-left for a frame off the diagonal", function()
+            -- The three cases above all sit on the screen diagonal, where
+            -- x and y move together -- a swapped-return implementation
+            -- (bottom, left = (x or 0) < w/2, (y or 0) < h/2) or a
+            -- swapped-dimension one (w and h transposed) satisfies all
+            -- three anyway. An off-diagonal point pins the two returns to
+            -- DIFFERENT halves of the screen, so either swap fails it.
+            local bottom, left = withCentre(10, 890)({})
+            assert.is_false(bottom)
+            assert.is_true(left)
+        end)
     end)
 
     describe("group predicates", function()
