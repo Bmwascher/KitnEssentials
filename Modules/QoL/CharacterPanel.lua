@@ -2405,48 +2405,63 @@ function CP:RefreshSocketButtons()
     if not self.socketContainer then return end
     if not self.db.SocketHelperEnabled then return end
 
-    local allSockets = self:ScanAllEquippedSockets()
     local db = self.db
     local buttonIndex = 1
 
     self.socketContainer:SetHeight(db.SocketButtonSize)
 
-    for _, itemSocketInfo in ipairs(allSockets) do
-        for _, socket in ipairs(itemSocketInfo.sockets) do
-            if not db.ShowOnlyEmptySockets or not socket.filled then
-                local btn = self:CreateSocketButton(buttonIndex)
-                btn.socketInfo = itemSocketInfo
-                btn.socket = socket
-                btn:SetSize(db.SocketButtonSize, db.SocketButtonSize)
-                btn:ClearAllPoints()
-                if buttonIndex == 1 then
-                    btn:SetPoint("LEFT", self.socketContainer, "LEFT", 0, 0)
-                else
-                    btn:SetPoint("LEFT", self.socketContainer.buttons[buttonIndex - 1], "RIGHT", db.SocketButtonSpacing, 0)
-                end
+    -- EllesmereUI ships the same socket row along the bottom of its themed
+    -- sheet (SocketPanel.lua: one icon per equipped socket, click for a bag-gem
+    -- flyout). Only the SOCKETS stand down -- the enchant button below has no
+    -- EUI equivalent, so the bar stays and carries it alone. Brandon's call,
+    -- 2026-08-03. The scan is skipped too: it walks every equipped item.
+    if not KE:EUIDrawsSlotElement("player", "socketPanel") then
+        local allSockets = self:ScanAllEquippedSockets()
+        for _, itemSocketInfo in ipairs(allSockets) do
+            for _, socket in ipairs(itemSocketInfo.sockets) do
+                if not db.ShowOnlyEmptySockets or not socket.filled then
+                    local btn = self:CreateSocketButton(buttonIndex)
+                    btn.socketInfo = itemSocketInfo
+                    btn.socket = socket
+                    btn:SetSize(db.SocketButtonSize, db.SocketButtonSize)
+                    btn:ClearAllPoints()
+                    if buttonIndex == 1 then
+                        btn:SetPoint("LEFT", self.socketContainer, "LEFT", 0, 0)
+                    else
+                        btn:SetPoint("LEFT", self.socketContainer.buttons[buttonIndex - 1], "RIGHT", db.SocketButtonSpacing, 0)
+                    end
 
-                if socket.filled then
-                    -- icon can be nil while the gem's item data hydrates (cold
-                    -- cache); show the placeholder at full alpha — the row
-                    -- repaints via ITEM_DATA_LOAD_RESULT once the gem loads.
-                    btn.icon:SetTexture(socket.icon or 458977)
-                    btn:SetAlpha(1)
-                    local atlas = GetQualityAtlasFromLink(socket.gemLink)
-                    SetQualityAtlas(btn.quality, atlas)
-                else
-                    btn.icon:SetTexture(socket.icon or 458977)
-                    btn:SetAlpha(0.85)
-                    btn.quality:Hide()
-                end
+                    if socket.filled then
+                        -- icon can be nil while the gem's item data hydrates (cold
+                        -- cache); show the placeholder at full alpha — the row
+                        -- repaints via ITEM_DATA_LOAD_RESULT once the gem loads.
+                        btn.icon:SetTexture(socket.icon or 458977)
+                        btn:SetAlpha(1)
+                        local atlas = GetQualityAtlasFromLink(socket.gemLink)
+                        SetQualityAtlas(btn.quality, atlas)
+                    else
+                        btn.icon:SetTexture(socket.icon or 458977)
+                        btn:SetAlpha(0.85)
+                        btn.quality:Hide()
+                    end
 
-                btn:Show()
-                buttonIndex = buttonIndex + 1
+                    btn:Show()
+                    buttonIndex = buttonIndex + 1
+                end
             end
         end
     end
 
     for i = buttonIndex, #self.socketContainer.buttons do
         self.socketContainer.buttons[i]:Hide()
+    end
+
+    -- The gem popup anchors to a socket button. With none left showing it would
+    -- hang there orphaned, so close it -- reachable both from EUI taking the
+    -- sockets and from "only empty sockets" with everything gemmed.
+    if buttonIndex == 1 then
+        self:HideGemPopup()
+        self:HideSlotHighlight()
     end
 
     -- After the hide loop: the enchant button parks itself after the last
