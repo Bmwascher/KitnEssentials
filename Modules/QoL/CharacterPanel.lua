@@ -595,6 +595,17 @@ function CP:UpdateSlotWarning(button, unit, slot)
     if not button then return end
     unit = unit or "player"
 
+    -- EllesmereUI's themed character AND inspect sheets both flag a missing
+    -- enchant themselves -- a red quality icon plus a pulsing red slot border --
+    -- and they put it exactly where this text goes (their enchant label anchors
+    -- to the same slot edge). Stand down, and clear ours in case it was already
+    -- on screen when the setting flipped.
+    if KE:EUICharacterSheetActive() then
+        local d = FFD[button]
+        if d and d.warning then d.warning:SetText("") end
+        return
+    end
+
     -- Dirty-check: itemLink + enchantID determine the warning. If neither
     -- changed since last render, skip the work. Cached only for the player
     -- slot path (inspect path goes through different functions); inspect's
@@ -1378,6 +1389,28 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
         s.detailLink, s.detailEnchant, s.detailIlvl = link, enchantID, ilvl
     end
 
+    -- EllesmereUI split: its themed CHARACTER sheet draws per-slot item level,
+    -- enchant and gems; its themed INSPECT sheet draws item level and enchant
+    -- but no gems at all. So the text stands down on both frames and the gem
+    -- row stands down only on the player's, which is the one place EUI covers
+    -- it. Per-element on purpose -- a blanket early-out on EUI alone would
+    -- drop inspect gems, the display EUI never provides.
+    local euiOwnsText = KE:EUICharacterSheetActive()
+    local euiOwnsGems = euiOwnsText and unit == "player"
+
+    -- Resolved BEFORE the tooltip read below: with EUI owning this frame the
+    -- remaining settings can leave nothing to draw, and the read allocates a
+    -- fresh table per slot. Bail without creating the detail frame at all --
+    -- FFD is indexed directly so a slot that never had one doesn't get one now.
+    local wantsText = (self.db.ShowEnchantNames or self.db.ShowSlotItemLevel) and not euiOwnsText
+    local wantsGems = (self.db.ShowSlotGems or self.db.ShowMissingGems ~= false)
+        and not euiOwnsGems and not suppressGems
+    if not (wantsText or wantsGems) then
+        local existing = FFD[slotFrame]
+        if existing and existing.detail then existing.detail:Hide() end
+        return
+    end
+
     -- Fetch after the dirty check so a short-circuited call allocates nothing;
     -- both tooltip consumers below (enchant label, gem scan) share this read.
     data = data or C_TooltipInfo.GetInventoryItem(unit, slotID)
@@ -1392,7 +1425,7 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
     KE:ApplyFont(detail.ilvlText, fontFace, fontSize, fontOutline)
 
     -- Enchant label (green). "No Enchant" stays with the warning feature.
-    if self.db.ShowEnchantNames then
+    if self.db.ShowEnchantNames and not euiOwnsText then
         local label = self:ResolveEnchantLabel(unit, slotID, data)
         detail.enchantText:SetText(label or "")
         detail.enchantText:SetShown(label ~= nil)
@@ -1402,7 +1435,7 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
     end
 
     -- Item level, colored by the equipped item's quality.
-    if self.db.ShowSlotItemLevel then
+    if self.db.ShowSlotItemLevel and not euiOwnsText then
         local lvl = self:GetSlotItemLevel(unit, slotID)
         if lvl then
             local quality = GetInventoryItemQuality(unit, slotID)
@@ -1429,8 +1462,8 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
     local gemCount = 0
     local gemsPending = false
     if not suppressGems then
-        local showFilled = self.db.ShowSlotGems
-        local showEmpty  = self.db.ShowMissingGems ~= false
+        local showFilled = self.db.ShowSlotGems and not euiOwnsGems
+        local showEmpty  = self.db.ShowMissingGems ~= false and not euiOwnsGems
         if (showFilled or showEmpty) and socketableSlotSet[slotID] then
             local result = self:ScanItemSockets(unit, slotID, data)
             gemsPending = (result and result.pendingGems) or false

@@ -770,6 +770,43 @@ function PreviewManager:IsPreviewActive()
 end
 
 ---------------------------------------------------------------------------------
+-- EllesmereUI themed character sheet
+---------------------------------------------------------------------------------
+-- EUI's Blizz UI Enhanced does not skin the character sheet, it REPLACES it:
+-- it hides Blizzard's slot wrappers, re-anchors every slot into its own
+-- two-column grid, swaps the model, and draws its own per-slot item level,
+-- upgrade track, enchant and gem icons (EllesmereUIBlizzardSkin_CharacterSheet.lua,
+-- and _InspectSheet.lua for the inspect frame). Its column sides happen to match
+-- ours almost exactly, so KE's own per-slot text lands on top of EUI's rather
+-- than beside it.
+--
+-- CharacterPanel / InspectPanel therefore stand down from the overlapping
+-- display while this is live, the same way they already stand down for ElvUI.
+-- Everything EUI does NOT draw (the socket helper, inspect gems, race text,
+-- the faction tag) keeps running.
+--
+-- The test is EUI's OWN gate, copied verbatim from the three places it guards
+-- its character sheet with (CharacterSheet.lua:4436, 4773, 4897) so a user
+-- turning the themed sheet off hands the display straight back to us. Absent
+-- means ON -- only a literal false is off, EUI's convention.
+function KE:EUICharacterSheetActive()
+    if not (C_AddOns and C_AddOns.IsAddOnLoaded
+        and C_AddOns.IsAddOnLoaded("EllesmereUIBlizzardSkin")) then
+        return false
+    end
+    local db = _G.EllesmereUIDB
+    if type(db) == "table" and db.themedCharacterSheet == false then return false end
+    -- EUI's master "no Blizzard window skins" switch. Guarded: it is a function
+    -- on EUI's own namespace, absent in older builds.
+    local eui = _G.EllesmereUI
+    if eui and type(eui.BlizzWindowSkinsKilled) == "function" then
+        local ok, killed = pcall(eui.BlizzWindowSkinsKilled)
+        if ok and killed then return false end
+    end
+    return true
+end
+
+---------------------------------------------------------------------------------
 -- Healer Position Override
 ---------------------------------------------------------------------------------
 
