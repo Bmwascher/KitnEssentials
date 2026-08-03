@@ -817,6 +817,56 @@ function KE:EUISheetActive(unit)
     return true
 end
 
+-- Whether EUI is drawing ONE PARTICULAR per-slot element on a given frame.
+--
+-- The sheet being on is not enough to decide ownership: EUI ships six
+-- independent per-element toggles on top of it, all live and all user-facing
+-- (EUI_BlizzardSkin_Options.lua:893-951 for the character sheet, :1198-1230 for
+-- inspect). Standing down on the sheet alone means turning EUI's "Show Gems"
+-- off deletes the gems from BOTH addons -- strictly worse than the doubling
+-- this was meant to solve. Ask per element instead.
+--
+-- Two asymmetries in EUI worth knowing, both verified in its source:
+--   * gems: the inspect sheet draws none at all, at any setting.
+--   * missingEnchant: on the CHARACTER sheet the pulsing red border fires
+--     outside the showEnchants branch (CharacterSheet.lua:4736-4740), so EUI
+--     still flags a missing enchant with enchant display off. The INSPECT
+--     sheet has no border -- icon only, and that icon IS gated -- so with
+--     inspectShowEnchants off nothing marks it and ours should show.
+--
+-- Absent means ON throughout, EUI's own convention.
+local EUI_ELEMENT_KEYS = {
+    player = {
+        ilvl = "showItemLevel", enchant = "showEnchants",
+        gems = "showGems",     track   = "showUpgradeTrack",
+    },
+    inspect = {
+        ilvl = "inspectShowItemLevel", enchant = "inspectShowEnchants",
+        track = "inspectShowUpgradeTrack",
+        -- gems deliberately absent: see above.
+    },
+}
+
+---@param unit string? "player" selects the character sheet; anything else, inspect
+---@param element string "ilvl" | "enchant" | "gems" | "track" | "missingEnchant"
+function KE:EUIDrawsSlotElement(unit, element)
+    if not self:EUISheetActive(unit) then return false end
+    local isPlayer = (unit == nil or unit == "player")
+
+    if element == "missingEnchant" then
+        -- Character sheet: the border is unconditional, so EUI always marks it.
+        if isPlayer then return true end
+        element = "enchant"  -- inspect: rides entirely on the enchant icon
+    end
+
+    local keys = isPlayer and EUI_ELEMENT_KEYS.player or EUI_ELEMENT_KEYS.inspect
+    local key = keys[element]
+    if not key then return false end  -- EUI never draws this element on this frame
+
+    local db = _G.EllesmereUIDB
+    return not (type(db) == "table" and db[key] == false)
+end
+
 ---------------------------------------------------------------------------------
 -- Healer Position Override
 ---------------------------------------------------------------------------------

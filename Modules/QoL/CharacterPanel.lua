@@ -595,13 +595,14 @@ function CP:UpdateSlotWarning(button, unit, slot)
     if not button then return end
     unit = unit or "player"
 
-    -- EllesmereUI's themed character AND inspect sheets both flag a missing
-    -- enchant themselves -- a red quality icon plus a pulsing red slot border --
-    -- and they put it exactly where this text goes (their enchant label anchors
-    -- to the same slot edge). Stand down per FRAME: the two sheets have separate
-    -- enable keys. Ahead of the dirty-check store below, so a handback redraws
-    -- rather than short-circuiting on a key cached while EUI owned the slot.
-    if KE:EUISheetActive(unit) then
+    -- EllesmereUI flags a missing enchant itself, in exactly the place this text
+    -- goes (its enchant label anchors to the same slot edge). Stand down only
+    -- when it is ACTUALLY drawing that cue on THIS frame -- on inspect the cue
+    -- is an icon that its own inspectShowEnchants toggle can switch off, and
+    -- then nothing would mark the slot at all. Ahead of the dirty-check store
+    -- below, so a handback redraws instead of short-circuiting on a key cached
+    -- while EUI owned the slot.
+    if KE:EUIDrawsSlotElement(unit, "missingEnchant") then
         local d = FFD[button]
         if d and d.warning then d.warning:SetText("") end
         return
@@ -1168,13 +1169,14 @@ function CP:UpdateSlotTrackIndicator(slotFrame, slotID, unit, data)
     unit = unit or "player"
     if not slotFrame then return end
 
-    -- EllesmereUI's themed character AND inspect sheets both print the upgrade
-    -- track beside their own item level ("(Myth)"), so our corner letter is the
-    -- same fact twice. It does not overlap theirs, but two readings of one thing
-    -- on every slot is clutter -- Brandon's call, 2026-08-03. Per FRAME: the two
-    -- sheets have separate enable keys. Bail before the tooltip read too --
+    -- EllesmereUI prints the upgrade track beside its own item level ("(Myth)"),
+    -- so our corner letter is the same fact twice. It does not overlap theirs,
+    -- but two readings of one thing on every slot is clutter -- Brandon's call,
+    -- 2026-08-03. Only while EUI is actually drawing it on THIS frame: its
+    -- showUpgradeTrack / inspectShowUpgradeTrack toggles turn it off separately,
+    -- and then ours is the only one left. Bail before the tooltip read too --
     -- GetItemTrack allocates one per slot just to decide the letter.
-    if KE:EUISheetActive(unit) then
+    if KE:EUIDrawsSlotElement(unit, "track") then
         local d = FFD[slotFrame]
         if d and d.track then d.track:Hide() end
         return
@@ -1384,18 +1386,15 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
     unit = unit or "player"
     if not slotFrame then return end
 
-    -- EllesmereUI split, resolved FIRST -- ahead of the dirty-check store below.
-    -- Its themed CHARACTER sheet draws per-slot item level, enchant and gems;
-    -- its themed INSPECT sheet draws item level and enchant but no gems at all.
-    -- So the text stands down on whichever frame EUI owns, and the gem row only
-    -- on the player's, the one place EUI covers it. Per-element on purpose: a
-    -- blanket early-out would drop inspect gems, the display EUI never provides.
-    --
-    -- The two sheets have SEPARATE enable keys, hence the unit-aware gate -- one
-    -- shared test silently blanked inspect text whenever only the inspect sheet
-    -- was off, and double-drew it whenever only the character sheet was.
-    local euiOwnsText = KE:EUISheetActive(unit)
-    local euiOwnsGems = KE:EUISheetActive("player") and unit == "player"
+    -- EllesmereUI ownership, resolved FIRST -- ahead of the dirty-check store.
+    -- Asked per ELEMENT and per FRAME, never as one blanket "is EUI on": EUI has
+    -- an independent live toggle for each of these, so a single test would delete
+    -- an element from both addons the moment the user turned EUI's copy off.
+    -- Its inspect sheet also draws no gems at any setting, which is why the gem
+    -- row survives there.
+    local euiOwnsEnchant = KE:EUIDrawsSlotElement(unit, "enchant")
+    local euiOwnsIlvl    = KE:EUIDrawsSlotElement(unit, "ilvl")
+    local euiOwnsGems    = KE:EUIDrawsSlotElement(unit, "gems")
 
     -- Nothing left for us to draw on this frame: bail before BOTH the dirty-check
     -- store and the tooltip read. Order matters -- storing the link/enchant/ilvl
@@ -1403,7 +1402,14 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
     -- key recorded when EUI owned the slot, and the display would stay blank
     -- until the item itself changed. FFD is indexed directly so a slot that never
     -- had a detail frame does not get one built just to hide it.
-    local wantsText = (self.db.ShowEnchantNames or self.db.ShowSlotItemLevel) and not euiOwnsText
+    --
+    -- A handback lands on the next refresh -- an equipment change or a panel
+    -- reopen -- not on the same frame the user flips EUI's setting: nothing
+    -- notifies KE of a write to EUI's saved variables. On the inspect side
+    -- InspectPanel's own per-GUID cache gates ahead of this function too, and it
+    -- is wiped when the inspect frame hides, so a reopen is the reliable trigger.
+    local wantsText = (self.db.ShowEnchantNames and not euiOwnsEnchant)
+        or (self.db.ShowSlotItemLevel and not euiOwnsIlvl)
     local wantsGems = (self.db.ShowSlotGems or self.db.ShowMissingGems ~= false)
         and not euiOwnsGems and not suppressGems
     if not (wantsText or wantsGems) then
@@ -1445,7 +1451,7 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
     KE:ApplyFont(detail.ilvlText, fontFace, fontSize, fontOutline)
 
     -- Enchant label (green). "No Enchant" stays with the warning feature.
-    if self.db.ShowEnchantNames and not euiOwnsText then
+    if self.db.ShowEnchantNames and not euiOwnsEnchant then
         local label = self:ResolveEnchantLabel(unit, slotID, data)
         detail.enchantText:SetText(label or "")
         detail.enchantText:SetShown(label ~= nil)
@@ -1455,7 +1461,7 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
     end
 
     -- Item level, colored by the equipped item's quality.
-    if self.db.ShowSlotItemLevel and not euiOwnsText then
+    if self.db.ShowSlotItemLevel and not euiOwnsIlvl then
         local lvl = self:GetSlotItemLevel(unit, slotID)
         if lvl then
             local quality = GetInventoryItemQuality(unit, slotID)
@@ -1552,13 +1558,13 @@ function CP:RefreshSlot(slotID, unit)
     -- Mirrors the stand-down rules in the two Update* functions below, purely so
     -- the shared tooltip read is skipped when neither will draw. Getting this
     -- wrong costs an allocation, never correctness -- each function re-checks.
-    local euiOwnsFrame = KE:EUISheetActive(unit)
-    local wantsTrack  = self.db.TrackIndicatorsEnabled and not euiOwnsFrame
-    -- Gems are the exception: EUI's inspect sheet has none, so on that frame
-    -- there is still something to draw even when EUI owns the text.
-    local wantsDetail = (self.db.ShowSlotItemLevel or self.db.ShowEnchantNames
-        or self.db.ShowSlotGems or self.db.ShowMissingGems)
-        and not (euiOwnsFrame and unit == "player")
+    local wantsTrack  = self.db.TrackIndicatorsEnabled
+        and not KE:EUIDrawsSlotElement(unit, "track")
+    local wantsDetail =
+        (self.db.ShowSlotItemLevel and not KE:EUIDrawsSlotElement(unit, "ilvl"))
+        or (self.db.ShowEnchantNames and not KE:EUIDrawsSlotElement(unit, "enchant"))
+        or ((self.db.ShowSlotGems or self.db.ShowMissingGems ~= false)
+            and not KE:EUIDrawsSlotElement(unit, "gems"))
     local data
     if wantsTrack or wantsDetail then
         data = C_TooltipInfo.GetInventoryItem(unit, slotID)
