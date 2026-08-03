@@ -17,5 +17,6 @@
     <Script file="MerchantPages.lua" />
     <Script file="ColorPicker.lua" />
     <Script file="MoveFrames.lua" />
+    <Script file="GroupSort.lua" />
     <Script file="RaidControl.lua" />
 </Ui>
