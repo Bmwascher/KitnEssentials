@@ -397,6 +397,11 @@ scanner:SetScript("OnEvent", function(self)
         -- RunAfterCombat defers to PLAYER_REGEN_ENABLED when in combat, so a
         -- mid-pull login never gets a prompt over the fight.
         KE:RunAfterCombat(function()
+            -- Set BEFORE the scan, not after: this is the point from which a
+            -- later module enable is worth rescanning for. Core/Main.lua's
+            -- EnableModule hook reads it, so the startup enable burst -- which
+            -- runs before this fires -- does not trigger one scan per module.
+            KE.loginConflictScanDone = true
             KE:ScanAddonConflicts()
         end)
     end)

@@ -30,6 +30,18 @@ _G.KITNESSENTIALS_NS = KE
 -- file (Core.xml).
 hooksecurefunc(KitnEssentials, "EnableModule", function(_, name)
     KE.PreviewManager:OnModuleEnableChanged(name)
+    -- Conflicts are keyed on the KE module being ENABLED (Core/Conflicts.lua
+    -- BuildConflictQueue), so the login scan correctly skips a module that
+    -- ships off -- and nothing re-armed it afterwards. The Tooltips page tells
+    -- the user in shipped text to "enable this one to be prompted again", and
+    -- that promise went unkept until a reload or /kes conflicts. Gated on the
+    -- login scan having run, and deferred out of combat, both matching that
+    -- scan's own conventions. Rescanning is a no-op when nothing conflicts and
+    -- returns early while a prompt is already open, so a profile switch
+    -- enabling several modules costs one queue, not one per module.
+    if KE.loginConflictScanDone and KE.ScanAddonConflicts then
+        KE:RunAfterCombat(function() KE:ScanAddonConflicts() end)
+    end
 end)
 hooksecurefunc(KitnEssentials, "DisableModule", function(_, name)
     KE.PreviewManager:OnModuleEnableChanged(name)

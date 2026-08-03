@@ -442,7 +442,16 @@ GUIFrame:RegisterTabbedContent("SkinBlizzardFrames", {
             -- AddHeaderToggle's own OnClick already calls RefreshContent.
         end)
         local newOffset = yOffset + card:GetContentHeight() + Theme.paddingSmall
-        -- Disabled collapses to the header bar alone: no tab strip, no page.
-        return newOffset, db.Enabled ~= true
+        -- Never collapse. This page hosts three modules that are INDEPENDENT
+        -- of the skin engine and ship enabled -- Loot Roll, Loot Window and
+        -- UI Widgets, the last of which also hosts Alert Frames' controls.
+        -- Collapsing on this master's own toggle took their settings with it,
+        -- and there was no other route to them: not the sidebar, not the
+        -- keyword search, not an Edit Mode Open Settings button, all of which
+        -- land on this same page. It also blocked turning those modules OFF.
+        -- The cost of always showing the strip is that the General, Frames and
+        -- Addons tabs stay visible while the engine is off; their controls are
+        -- inert until it is on, which is the lesser problem.
+        return newOffset, false
     end,
 })
