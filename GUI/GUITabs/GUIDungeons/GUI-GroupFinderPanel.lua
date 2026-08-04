@@ -47,7 +47,7 @@ GUIFrame:RegisterContent("GroupFinderPanel", function(scrollChild, yOffset)
 
     -- Measured AFTER the label, not before: the label grows the card, so an
     -- offset read ahead of it puts the next card on top of this one.
-    card1:AddLabel("|cff888888Adds a panel beside the Group Finder with this week's affixes, one-click category searches, and your weekly Mythic+ run count. While browsing Mythic+ groups it becomes a filter pane: dungeon toggles, role filters and sorting. Steps aside automatically if Premade Groups Filter is installed.|r")
+    card1:AddLabel("Adds a panel beside the Group Finder with this week's affixes, one-click category searches, and your weekly Mythic+ run count. While browsing Mythic+ groups it becomes a filter pane: dungeon toggles, role filters and sorting. Steps aside automatically if Premade Groups Filter is installed.")
 
     return card1:GetNextOffset()
 end)
