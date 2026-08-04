@@ -270,9 +270,8 @@ function TT:UpdateButton(btn, slot)
     --     back as 0 — TRUTHY — on an empty slot. That was harmless while we only
     --     visited totems TotemFrame had already confirmed active; now that we walk
     --     every slot ourselves, it can no longer signal occupancy.
-    --   * icon (5) is the one return that is nil on an empty slot (probe
-    --     2026-07-13: empty slot -> false, "", 0, 0, nil, 0, 0), and it is what the
-    --     field-proven AddUI-Totem reference gates on.
+    --   * icon (5) is the one return that is nil on an empty slot -- a probe
+    --     returned false, "", 0, 0, nil, 0, 0 -- so it is what to gate on.
     -- That probe ran in OPEN-WORLD combat, where restrictions are not active — the
     -- nil-on-empty behavior still needs a smoke test inside an instance.
     local _, _, _, _, icon = GetTotemInfo(slot)

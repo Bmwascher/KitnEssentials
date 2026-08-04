@@ -27,8 +27,7 @@ local C_Timer = C_Timer
 
 -- Flip to true, /reload, then right-click a UNIT and hover a submenu. The log
 -- answers the one thing source cannot: which branch of SkinFrame's
--- secret-dimension rescue a submenu frame actually takes. See
--- dev/docs/superpowers/plans/2026-07-30-context-menu-submenu-bug.md.
+-- secret-dimension rescue a submenu frame actually takes.
 local DEBUG_CM = false
 
 local backdrops = setmetatable({}, { __mode = "k" })

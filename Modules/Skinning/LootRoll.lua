@@ -38,11 +38,9 @@ local string_format = string.format
 local tostring = tostring
 
 -- Flip to true to trace WHO moves GroupLootContainer and WHEN. Diagnoses the
--- 2026-07-31 "bonus roll jumps to the bottom then back" report: three triggers
--- are possible and only a live log separates them (fix plan §2 at
--- dev/docs/superpowers/plans/2026-07-31-lootroll-bonus-roll-position-jump.md).
--- Leave the instrumentation in place after diagnosis -- free tracing if this
--- regresses.
+-- "bonus roll jumps to the bottom then back" class of report: three triggers
+-- are possible and only a live log separates them. Leave the instrumentation in
+-- place after diagnosis -- free tracing if this regresses.
 local DEBUG_LR = false
 
 -- GetTime() is FRAME-STABLE -- every call inside one frame returns the same
@@ -410,9 +408,7 @@ function LR:Setup()
         -- puts the container back at the BOTTOM of the screen and our hook
         -- has to move it again. That is the visible "jumps to the bottom,
         -- then back" the bug report describes. Re-asserting
-        -- after the layout settles is what makes it stick today; the real
-        -- exit from layer 2 is tracked in the fix plan at
-        -- dev/docs/superpowers/plans/2026-07-31-lootroll-bonus-roll-position-jump.md.
+        -- after the layout settles is what makes it stick today.
         local function Unmanage()
             if c:GetParent() ~= _G.UIParent then
                 LR._origGLCParent = LR._origGLCParent or c:GetParent()

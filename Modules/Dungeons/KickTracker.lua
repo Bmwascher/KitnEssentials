@@ -743,8 +743,8 @@ function KT:OnSpellcastSucceeded(_, unit, _, spellID)
     if unit ~= "player" and unit ~= "pet" then return end
 
     -- Own casts (player + own pet) deliver a PLAIN spellID in 12.0.5. Party
-    -- members' casts do not fire this event for kicks at all (probe-confirmed
-    -- 2026-07-05) — teammate detection lives in HandleNameplateInterrupt.
+    -- members' casts do not fire this event for kicks at all (probe-confirmed)
+    -- — teammate detection lives in HandleNameplateInterrupt.
     if not INTERRUPT_SPELL_IDS[spellID] then return end
     local guid = UnitGUID("player")
     if guid then
@@ -1138,8 +1138,8 @@ function KT:UpdateBars()
 
     -- Collect eligible members: has a kick AND we can actually track it
     -- (self, comm users, attribution-verified). Unverified members get no
-    -- bar — their kicks surface as feed records instead (user call
-    -- 2026-07-05: clarity over composition info).
+    -- bar — their kicks surface as feed records instead, choosing clarity over
+    -- composition info.
     local needsBars = {}
     for guid, member in pairs(self.partyMembers) do
         if member.interruptData and member.kickVerified then

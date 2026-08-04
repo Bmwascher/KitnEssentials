@@ -1005,8 +1005,8 @@ function DM:EnsureHoverTip()
     KE:ApplyFontToText(f.header, face, size, outline)
 
     -- Phase 4c: one-time column-header row (Spell · Amount · DPS · %) under the source
-    -- name. The category labels are now WHITE and one notch larger than before (request
-    -- 2026-06-05: the centered class-colored title frees them to be the prominent headers),
+    -- name. The category labels are WHITE and one notch larger than the rows --
+    -- the centered class-colored title frees them to be the prominent headers --
     -- right-aligned over the same fixed columns as the data rows. Shown for the breakdown
     -- path, hidden for the Deaths recap (which keeps a single value column). Anchored just
     -- below the source header; PopulateHoverTip toggles it and offsets the data rows by

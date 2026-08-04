@@ -79,10 +79,9 @@ S.WINDOW_MAP = {
       partialLabel = "Delves (EllesmereUI: companion only)",
       partialTooltip = "EllesmereUI currently skins Companion Configuration. While that overlap is active, this toggle controls Difficulty Picker and Delves Dashboard. Your saved choice also applies to Companion Configuration if EllesmereUI stops covering it." },
     { euiKey = "itemupgrade",     skins = { "ItemUpgrade" },  since = "8.6.4" },
-    -- A6.3a deleted this row when it mapped to the whole `Alerts` key, because
-    -- an unfiltered row cost up to nineteen alert systems to avoid one
-    -- collision (2026-07-29-aes-a6-3a-colliding-window-skins.md). The
-    -- key split above is A6.3a's own named remedy for that shape: suppression
+    -- This row was deleted once, when it mapped to the whole `Alerts` key: an
+    -- unfiltered row cost up to nineteen alert systems to avoid one collision.
+    -- The key split above is the remedy for that shape: suppression
     -- now reaches only our six item-drop toasts instead of all twenty-five.
     -- It does NOT follow that EllesmereUI visits exactly those six. Its sweep
     -- walks every active alert subsystem and duck-types on a label field

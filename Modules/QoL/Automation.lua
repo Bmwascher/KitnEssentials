@@ -992,7 +992,7 @@ function AU:CVAR_UPDATE(_, cvarName)
             matched = true
         end
     end
-    -- 2026-06-12 leak fix: this refresh used to be UNCONDITIONAL — every
+    -- Gated deliberately. Unconditional, every
     -- CVAR_UPDATE delivery (any addon touching any event-named CVar, GUI
     -- open or closed) forced a full page rebuild, orphaning a page of cards
     -- each time. RefreshContent now refuses to run hidden as well, but keep

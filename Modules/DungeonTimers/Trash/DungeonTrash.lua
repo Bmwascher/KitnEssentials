@@ -1144,8 +1144,8 @@ local function mobCuratesAuraDelta(mob)
 end
 
 function DTrash:RuntimeNeedsAuraDelta(rt)
-    -- UNION of matched + candidates (divergent-candidates review find,
-    -- 2026-07-18): a Layer2-locked identity does NOT rule the curating mob
+    -- UNION of matched + candidates: a Layer2-locked identity does NOT rule the
+    -- curating mob
     -- out — the lock is flippable by cast evidence, Layer1 keeps refreshing
     -- rt.candidates underneath it, and the flip's start-advance needs this
     -- sample to have landed. Checking only the stale matched mob skipped
@@ -1445,8 +1445,8 @@ end
 -- plate: unresolved mobs never gained timers, and a resolved Ravager hit the
 -- contradiction unlock and never re-resolved. sawInterrupted stays a
 -- genuine-kick latch: UNIT_SPELLCAST_INTERRUPTED only — the interruptedBy-
--- correlated channel stop was removed from it too (2026-07-24, the channel-
--- phase twin of this same Shadowmeld failure; see FinishCast), matching the
+-- correlated channel stop was removed from it too (the channel-phase twin of
+-- this same Shadowmeld failure; see FinishCast), matching the
 -- reference, whose channel-stop interrupt never reaches its Layer1 filter.
 function DTrash:OnCastFailed(_, unit, _castGUID, _spellID, castBarID)
     self:MarkCastInterrupted(unit, castBarID, true)
@@ -1898,7 +1898,7 @@ function DTrash:FinishCast(unit, kind, interrupted, castBarID)
         -- handler feeds it only into the cast lifecycle (pendingInterrupted)
         -- — its Layer1-visible sawInterrupted latches ONLY from the
         -- INTERRUPTED/FAILED events. Parity hardening alongside the
-        -- 2026-07-24 keep-locked fix (see ResolveMob): a Shadowmeld breaking
+        -- keep-locked fix (see ResolveMob): a Shadowmeld breaking
         -- a channel aimed at the melder would stop it with interruptedBy
         -- present, and a latch here would reject every cannotInterrupt
         -- Academy row exactly like the FAILED latch this module already

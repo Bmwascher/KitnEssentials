@@ -6,9 +6,7 @@
 -- ║          stored session × 11 meter types (+ per-source   ║
 -- ║          details) is RETAINED verbatim as one bundle;    ║
 -- ║          Core.lua's GetSession/GetSource serve entries   ║
--- ║          by NEGATIVE session id. Spec:                   ║
--- ║          dev/docs/superpowers/specs/                     ║
--- ║          2026-07-18-dm-snapshot-store-design.md          ║
+-- ║          by NEGATIVE session id.                         ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE

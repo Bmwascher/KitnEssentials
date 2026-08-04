@@ -1030,8 +1030,8 @@ function DM:OnEncounterEnd(_, _, _, _, _, success)
             -- Reached pre-pull history -> stop. EXCEPTION: the newest entry
             -- (i == #list) is the live session combat just finished, i.e. the
             -- boss. Blizzard sometimes creates that session a moment BEFORE
-            -- ENCOUNTER_START fires (races the event -- confirmed in a live kill
-            -- 2026-07-06: 10-id snapshot already held the boss's own session),
+            -- ENCOUNTER_START fires (races the event -- in a live kill the
+            -- 10-id snapshot already held the boss's own session),
             -- so it lands in the snapshot and the walk would otherwise break on
             -- it and tag nothing -> the boss row stays uncolored. Tag it anyway;
             -- older in-snapshot sessions are genuine history and still stop here.

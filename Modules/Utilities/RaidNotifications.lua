@@ -120,8 +120,7 @@ end
 ---------------------------------------------------------------------------------
 -- Subscription Orchestrator
 ---------------------------------------------------------------------------------
--- See docs/superpowers/specs/2026-05-28-raidnotifications-subsystem-refactor-design.md
--- for the design. Two-layer model: module-level always-on events drive
+-- Two-layer model: module-level always-on events drive
 -- _UpdateSubscriptions() which registers/unregisters per-alert events based on
 -- each alert's shouldSubscribe() gate. Sub-gated events are refcount-managed
 -- so multiple alerts can share an event (PLAYER_REGEN_* shared by ResetBoss +
