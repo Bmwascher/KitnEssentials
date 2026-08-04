@@ -241,6 +241,37 @@ function KE:SetWAEnabled(enabled)
     return settings.WAEnabled
 end
 
+-- Anything that is not "on" or "off" reports the current state rather than
+-- guessing at an intent.
+--
+-- The reload note is not decoration: the chat parser caches a command's hash
+-- the first time that command is typed, so clearing the global takes full
+-- effect on the next load.
+function KE:HandleWACommand(arg)
+    arg = arg and arg:lower() or ""
+    if arg == "on" or arg == "off" then
+        KE:SetWAEnabled(arg == "on")
+        KE:Print("/wa " .. arg .. ". A " .. KE:ColorTextByTheme("/reload") ..
+            " finishes the change if the command was already used this session.")
+        -- Turning the alias on while the whole command pair is off would
+        -- otherwise report success and register nothing.
+        local settings = KE.db and KE.db.profile.SlashCommands
+        if arg == "on" and settings and settings.CDMEnabled == false then
+            KE:Print("Note: the Cooldown Manager commands are switched off, so " ..
+                "neither /cd nor /wa is registered right now.")
+        end
+        return
+    end
+
+    if KE:IsWAEnabled() then
+        KE:Print("/wa is on. It is registered unless another aura addon owns it.")
+    else
+        KE:Print("/wa is off. /cd is unaffected.")
+    end
+    KE:Print("Use " .. KE:ColorTextByTheme("/kes wa on") .. " or " ..
+        KE:ColorTextByTheme("/kes wa off") .. ".")
+end
+
 function KE:ApplySlashCommands()
     db = KE.db and KE.db.profile.SlashCommands
     if not db then return end

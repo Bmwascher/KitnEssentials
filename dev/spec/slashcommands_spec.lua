@@ -97,3 +97,90 @@ describe("/wa gating", function()
         assert.is_nil(_G.SLASH_KE_CDM2)
     end)
 end)
+
+describe("wa command handling", function()
+    local function loaded(settings)
+        local KE = loader.loadSlashCommands({
+            C_AddOns = {
+                GetAddOnInfo = function(name) error("addon not found: " .. tostring(name)) end,
+            },
+        })
+        for key, value in pairs(settings or {}) do
+            KE.db.profile.SlashCommands[key] = value
+        end
+        -- The loader's stub KE carries only db and Print. HandleWACommand
+        -- formats command names through the accent helper, so the stub needs a
+        -- pass-through rather than the module needing a nil guard.
+        KE.ColorTextByTheme = function(_, text) return text end
+        KE:ApplySlashCommands()
+        return KE
+    end
+
+    it("switches the alias off and back on", function()
+        local KE = loaded({ CDMEnabled = true, WAEnabled = true })
+        KE:HandleWACommand("off")
+        assert.is_false(KE.db.profile.SlashCommands.WAEnabled)
+        assert.is_nil(_G.SLASH_KE_CDM2)
+        KE:HandleWACommand("on")
+        assert.is_true(KE.db.profile.SlashCommands.WAEnabled)
+        assert.are.equal("/wa", _G.SLASH_KE_CDM2)
+    end)
+
+    it("leaves the setting alone for any other argument", function()
+        local KE = loaded({ CDMEnabled = true, WAEnabled = true })
+        KE:HandleWACommand("")
+        assert.is_true(KE.db.profile.SlashCommands.WAEnabled)
+        KE:HandleWACommand("banana")
+        assert.is_true(KE.db.profile.SlashCommands.WAEnabled)
+    end)
+
+    it("says so when the whole command pair is switched off", function()
+        local printed = {}
+        local KE = loaded({ CDMEnabled = false, WAEnabled = false })
+        KE.Print = function(_, msg) printed[#printed + 1] = msg end
+        KE:HandleWACommand("on")
+        assert.equals(2, #printed)
+        assert.is_truthy(printed[2]:find("switched off", 1, true))
+    end)
+end)
+
+describe("/kes wa dispatch", function()
+    local KE, handler
+
+    before_each(function()
+        KE = loader.loadGlobals()
+        handler = _G.SlashCmdList["KITNESSENTIALS"]
+    end)
+
+    it("passes the argument through for each accepted form", function()
+        local seen = {}
+        KE.HandleWACommand = function(_, arg) seen[#seen + 1] = arg end
+        handler("wa")
+        handler("wa on")
+        handler("wa off")
+        assert.are.same({ "", "on", "off" }, seen)
+    end)
+
+    it("tolerates surrounding whitespace and capitals", function()
+        local seen = {}
+        KE.HandleWACommand = function(_, arg) seen[#seen + 1] = arg end
+        handler("  WA OFF  ")
+        assert.are.same({ "off" }, seen)
+    end)
+
+    it("refuses with a message when the slash module never loaded", function()
+        local printed = {}
+        KE.HandleWACommand = nil
+        KE.Print = function(_, msg) printed[#printed + 1] = msg end
+        handler("wa off")
+        assert.are.same({ "slash commands are not loaded." }, printed)
+    end)
+
+    it("lists wa in the help output", function()
+        local printed = {}
+        KE.Print = function(_, msg) printed[#printed + 1] = msg end
+        handler("nonsense")
+        assert.equals(1, #printed)
+        assert.is_truthy(printed[1]:find("wa", 1, true))
+    end)
+end)
