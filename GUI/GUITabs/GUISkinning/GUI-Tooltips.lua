@@ -274,7 +274,7 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
                 function(v) db.HealthBarTexture = v end), 40,
             true)
         -- A "Health Text" toggle and its size slider used to sit here. They
-        -- were removed 2026-08-03: 12.0 rebuilt this bar to carry a 0..1
+        -- were removed: 12.0 rebuilt this bar to carry a 0..1
         -- fraction driven by UnitPercentHealthFromGUID, which is declared
         -- SecretReturns unconditionally, so no current/max readout is
         -- reachable. See Modules/Skinning/Tooltips.lua StyleHealthBar.
@@ -282,7 +282,7 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
     yOffset = card5:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 6: Position (KE-only -- appended after the reference's five)
+    -- Card 6: Position
     ----------------------------------------------------------------
     local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         db = db.Position,

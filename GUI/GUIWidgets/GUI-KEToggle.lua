@@ -346,14 +346,9 @@ end
 -- and too wide to fit three to a row. Config-table API, matching every other
 -- widget here: { value, tooltip, callback, disabled }.
 --
--- Ported from the reference (AE v4.0.203/GUI/Widgets/AEToggle.lua:372-428). Three
--- API/behaviour additions it has no equivalent for: the config table, tooltip
--- support, and a disabled state the widget owns instead of the caller doing
--- SetAlpha plus EnableMouse itself. Two further deviations: ApplyThemeColors,
--- which the reference range has no counterpart for, and the fill colour, which
--- is Theme.accent here against the reference's Theme.textPrimary -- a required
--- substitution, since a copied literal would be the reference addon's own
--- accent and would stop tracking the user's chosen theme.
+-- The disabled state belongs to the widget, not the caller: it owns the alpha
+-- and the click refusal so no call site has to remember both. The fill is
+-- Theme.accent so it tracks the user's chosen theme.
 function GUIFrame:CreateCompactCheckbox(parent, labelText, config)
     config = config or {}
     local BOX = 16
@@ -361,8 +356,8 @@ function GUIFrame:CreateCompactCheckbox(parent, labelText, config)
 
     local cell = CreateFrame("Button", nil, parent)
     cell:SetHeight(CELL)
-    -- Tells row:AddWidget to leave the height alone (GUI-Core.lua:537-539);
-    -- without it the cell stretches to the row height and the box floats.
+    -- Tells row:AddWidget to leave the height alone; without it the cell
+    -- stretches to the row height and the box floats.
     cell.explicitHeight = CELL
 
     local box = CreateFrame("Frame", nil, cell, "BackdropTemplate")
@@ -376,8 +371,7 @@ function GUIFrame:CreateCompactCheckbox(parent, labelText, config)
     box:SetBackdropColor(Theme.bgMedium[1], Theme.bgMedium[2], Theme.bgMedium[3], 1)
     box:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
 
-    -- Inset 2, not 3: at 3 the fill reads as a floating dot rather than a check
-    -- (the reference's own note at AEToggle.lua:389-393).
+    -- Inset 2, not 3: at 3 the fill reads as a floating dot rather than a check.
     local fill = box:CreateTexture(nil, "ARTWORK")
     fill:SetPoint("TOPLEFT", box, "TOPLEFT", 2, -2)
     fill:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", -2, 2)
@@ -409,8 +403,8 @@ function GUIFrame:CreateCompactCheckbox(parent, labelText, config)
 
     function cell:GetChecked() return self._checked end
 
-    -- Same name as the sliding toggle's row:SetEnabled (GUI-KEToggle.lua:301),
-    -- so the grid can disable either widget the same way. Shadows Button's own
+    -- Same name as the sliding toggle's row:SetEnabled, so the grid can disable
+    -- either widget the same way. Shadows Button's own
     -- SetEnabled deliberately: that one stops the click but leaves the row at
     -- full opacity, which reads as "locked on" rather than "does not apply".
     --
@@ -443,7 +437,7 @@ function GUIFrame:CreateCompactCheckbox(parent, labelText, config)
         end
         if config.tooltip then
             -- ANCHOR_CURSOR_RIGHT with a 10/10 offset, matching CreateCheckbox
-            -- above (GUI-KEToggle.lua:269) so both widgets tip identically.
+            -- above so both widgets tip identically.
             GameTooltip:SetOwner(self, "ANCHOR_CURSOR_RIGHT", 10, 10)
             GameTooltip:SetText(config.tooltip, 1, 1, 1, 1, true)
             GameTooltip:Show()

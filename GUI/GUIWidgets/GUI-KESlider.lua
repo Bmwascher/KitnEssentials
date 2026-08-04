@@ -21,8 +21,8 @@ local GetTime = GetTime
 ---------------------------------------------------------------------------------
 
 -- Slider widget — config-table API: { min, max, step, value, callback, tooltip, isPercent }
--- TODO: `labelWidth` accepted in API for forward-compat with NUI v3.7 but not
--- yet wired into the widget body. Callers (e.g. `labelWidth = 60`) won't see
+-- TODO: `labelWidth` is accepted in the API but not yet wired into the widget
+-- body. Callers (e.g. `labelWidth = 60`) won't see
 -- the effect — config key passes silently. Implement when needed.
 function GUIFrame:CreateSlider(parent, labelText, config)
     config = config or {}

@@ -65,7 +65,7 @@ local FRAME_SKINS = {
           else
               KitnEssentials:DisableModule("ContextMenus")
           end
-          -- Un-skinning needs a reload; the reference flags it one way only.
+          -- Un-skinning needs a reload; flagged one way only.
           return not checked
       end },
     { key = "Currency",                 text = "Currency" },
@@ -283,8 +283,7 @@ local function ResolveRow(entry)
     local disabled = false
     if state == "full" then
         -- No text marker. At three columns a suffix pushes long names past the
-        -- cell, and the two partial rows' custom labels
-        -- (Modules/Skinning/EUIWindows.lua:59, :79) are 37 and 36 characters and
+        -- cell, and the two partial rows' custom labels run to 37 characters and
         -- clip in every case. The greying plus the note line above the grid
         -- carry the meaning instead.
         tooltip = "EllesmereUI already skins this window, so KitnEssentials leaves it alone. Turn EllesmereUI's window skin off to use this one."
@@ -405,7 +404,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesGeneral", function(scrollChild, yOff
                 -- The BlizzardFonts sweep scales every UNOVERRIDDEN font object off
                 -- this same base, so it has to re-run or the two systems drift
                 -- apart. Objects with a per-category size in db.Sizes skip the
-                -- scaling entirely (<REF>/Skinning/BlizzardFonts.lua:223-228).
+                -- scaling entirely.
                 local bf = KitnEssentials:GetModule("BlizzardFonts", true)
                 local fdb = KE.db and KE.db.profile.Skinning.BlizzardFonts
                 if bf and fdb and fdb.Enabled and bf.ApplyAll then bf:ApplyAll() end
@@ -433,8 +432,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesGeneral", function(scrollChild, yOff
 
     -- Chained, not re-registered: each builder takes (scrollChild, yOffset) and
     -- returns the next offset, which is the same contract RegisterTabbedContent
-    -- uses. Same pattern as GUI/GUITabs/GUIClassUtilities/GUI-EbonMightHelper.lua:22-27.
-    -- Resolved live so GUI.xml load order does not matter.
+    -- uses. Resolved live so GUI.xml load order does not matter.
     local colorPicker = GUIFrame.registeredContent and GUIFrame.registeredContent["ColorPicker"]
     if colorPicker then yOffset = colorPicker(scrollChild, yOffset) end
 
@@ -558,14 +556,12 @@ end)
 -- instead. That is a change from the old rule, which dropped General entirely.
 --
 -- ElvUI is a stricter cut than the engine flag, not a wider one. Loot Roll,
--- Loot Window, UI Widgets and Blizzard Texts all stand down under ElvUI
--- (Modules/Skinning/LootRoll.lua:558, LootFrame.lua:379, UIWidgets.lua:46,
--- BlizzardMessages.lua:181), so they drop out too. General and Character Screen
--- survive because Raid Control (no ElvUI gate at all) rides on General, and
--- Character Panel keeps its non-overlapping features. Color Picker also rides on
--- General but DOES stand down under ElvUI, by its own conflict list rather than
--- the skin gate (Modules/QoL/ColorPicker.lua:58, :259-260); its card already says
--- so, which is why it does not change what this list offers.
+-- Loot Window, UI Widgets and Blizzard Texts all stand down under ElvUI, so they
+-- drop out too. General and Character Screen survive because Raid Control (no
+-- ElvUI gate at all) rides on General, and Character Panel keeps its
+-- non-overlapping features. Color Picker also rides on General but DOES stand
+-- down under ElvUI, by its own conflict list rather than the skin gate; its card
+-- already says so, which is why it does not change what this list offers.
 --
 -- The Character Screen tab is deliberately not named Character Panel -- the
 -- Frame Skins grid already has a row by that name for the window skin (:45).
@@ -594,8 +590,8 @@ end, {
     headerBuilder = function(scrollChild, yOffset)
         local db = GetDB()
         -- No header card without a db -- but do NOT collapse. Collapsing here
-        -- returns before the tab strip is built (GUI-TabbedContent.lua:44-48),
-        -- which would take Character Screen, Color Picker and Raid Control down
+        -- returns before the tab strip is built, which would take Character
+        -- Screen, Color Picker and Raid Control down
         -- with a table this page alone owns. That is the same reachability rule
         -- the tab list keeps; this is the one path that could still break it.
         if not db then return yOffset, false end
@@ -614,9 +610,8 @@ end, {
         -- The toggle above stays live under ElvUI on purpose: the setting is
         -- kept and applies again if ElvUI is turned off, which is what the label
         -- says. The label claims nothing about the remaining tabs -- Color
-        -- Picker stands down under ElvUI too (Modules/QoL/ColorPicker.lua:58,
-        -- :259-260) and says so on its own card, so a blanket "ElvUI does not
-        -- touch these" here would be false.
+        -- Picker stands down under ElvUI too and says so on its own card, so a
+        -- blanket "ElvUI does not touch these" here would be false.
         if KE.ShouldNotLoadModule and KE:ShouldNotLoadModule() then
             card:AddLabel("|cffffd100ElvUI is handling Blizzard frame skinning.|r KitnEssentials stands down so the two do not fight over the same windows, so the frame and addon skins are not applied right now. Your settings are kept and take effect again if you turn ElvUI off.")
         elseif db.Enabled ~= true then

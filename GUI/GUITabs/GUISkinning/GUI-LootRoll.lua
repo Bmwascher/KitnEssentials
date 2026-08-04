@@ -38,7 +38,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
     -- Card 1: Toggle
     local card1 = GUIFrame:CreateCard(scrollChild, "Loot Roll", yOffset)
 
-    -- Module enable lives in the card header (v3.5.183 UX standard).
+    -- Module enable lives in the card header.
     card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
         db.Enabled = checked
         if checked then
@@ -49,16 +49,14 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
         UpdateAllWidgetStates()
     end)
 
-    -- Disabled modules collapse to the header bar alone (v3.5.188):
+    -- Disabled modules collapse to the header bar alone:
     -- settings only render while the module is enabled.
     if db.Enabled == false then
         return yOffset + card1:GetContentHeight() + Theme.paddingSmall
     end
-    -- DEVIATION (2026-07-31, Brandon's report). The reference ships one static
-    -- sentence here (<REF>/GUI/Tabs/Skinning/GUI-LootRoll.lua:48). The two
-    -- modes drive controls on THREE different cards, and nothing said which
-    -- ones were live, so turning Replace off silently changed the meaning of
-    -- settings the user could not see. This names the active mode and points at
+    -- One static sentence is not enough here: the two modes drive controls on
+    -- THREE different cards, so turning Replace off silently changes the meaning
+    -- of settings the user cannot see. This names the active mode and points at
     -- the controls it enables. The page rebuilds on the Replace toggle, so the
     -- text follows the mode.
     if db.Replace then
@@ -67,7 +65,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
         card1:AddLabel("Blizzard mode. Blizzard draws the roll windows. Skin Roll Windows on the Display Settings card styles them, and Move Loot Rolls on the Position card moves them.")
     end
 
-    -- v3.5.693: sample roll bar (fake legendary, clicks inert).
+    -- Sample roll bar (fake legendary, clicks inert).
     local prow = GUIFrame:CreateRow(card1.content, 30)
     local pbtn = GUIFrame:CreateButton(prow, "Preview Roll Bar", {
         callback = function()
@@ -77,7 +75,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
         width = 140, height = 24,
     })
     prow:AddWidget(pbtn, 1)
-    -- v3.5.695: the preview spawns a SLIM bar -- only meaningful in
+    -- The preview spawns a SLIM bar -- only meaningful in
     -- Replace mode (Blizzard-mode rolls are Blizzard's own windows,
     -- which we cannot fake).
     manager:Register(pbtn, "replace")
@@ -91,20 +89,17 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
             Apply()
             UpdateAllWidgetStates()
             if not checked then
-                KE:FlagReloadNeeded() -- v3.5.548: unified close-time prompt
+                KE:FlagReloadNeeded() -- unified close-time prompt
             end
             -- The Position card's contents differ by mode -- "Move Loot Rolls"
             -- exists only in legacy mode -- so the page is rebuilt, not just
             -- re-enabled. Deferred a frame: RefreshContent destroys and
-            -- recreates the widget whose callback is still running. Same idiom
-            -- as GUI/GUITabs/GUICombat/GUI-DamageMeter.lua:76.
+            -- recreates the widget whose callback is still running.
             C_Timer.After(0, function() GUIFrame:RefreshContent() end)
         end,
         -- msgOn/msgOff are REQUIRED whenever msgPopup is set: the toggle
-        -- concatenates them unguarded (GUI/GUIWidgets/GUI-KEToggle.lua:241,243)
-        -- and there is no default, so omitting them throws on every click.
-        -- The reference's own config carries only msgPopup + msgText, which is
-        -- why porting it verbatim crashed; every other KE page passes all four.
+        -- concatenates them unguarded and there is no default, so omitting them
+        -- throws on every click. Every KE page passes all four.
         msgPopup = true,
         msgText = "Slim Loot Roll Bars",
         msgOn = "On",
@@ -200,15 +195,12 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
     local card2 = GUIFrame:CreateCard(scrollChild, "Position Settings", yOffset)
     manager:Register(card2, "all")
 
-    -- DEVIATION (2026-07-31, Brandon's report). The reference renders this row
-    -- unconditionally and greys it out in Replace mode
-    -- (<REF>/GUI/Tabs/Skinning/GUI-LootRoll.lua:162-176), which shows a ticked
-    -- checkbox the user cannot untick while the X/Y sliders under it stay live
-    -- -- it reads as "locked on" when the truth is "does not apply". Reposition
-    -- only means anything in legacy mode: Replace mode positions through
-    -- RollBars_Anchor and never consults it. So omit the row entirely rather
-    -- than disable it. The Replace toggle refreshes the page, so it appears and
-    -- disappears as the mode changes.
+    -- Omitted entirely in Replace mode rather than greyed. A greyed row shows a
+    -- ticked checkbox the user cannot untick while the X/Y sliders under it stay
+    -- live, which reads as "locked on" when the truth is "does not apply".
+    -- Reposition only means anything in legacy mode: Replace mode positions
+    -- through RollBars_Anchor and never consults it. The Replace toggle
+    -- refreshes the page, so the row appears and disappears with the mode.
     if not db.Replace then
         local rowR = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
         local repoCheck = GUIFrame:CreateCheckbox(rowR, "Move Loot Rolls", {
@@ -219,7 +211,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
                 UpdateAllWidgetStates()
             end,
         })
-        -- v3.5.871: "Unlock (drag to move)" removed. It was a second anchor UI
+        -- "Unlock (drag to move)" was removed. It was a second anchor UI
         -- competing with /kes edit on the same frame and the two disagreed about
         -- where the anchor was. Positioning is /kes edit + these offsets now.
         rowR:AddWidget(repoCheck, 1)

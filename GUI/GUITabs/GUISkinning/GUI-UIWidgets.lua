@@ -69,10 +69,10 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "UI Widgets", yOffset)
 
-    -- Module enable lives in the card header (v3.5.183 UX standard).
+    -- Module enable lives in the card header.
     card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
         db.Enabled = checked
-        if not checked then KE:FlagReloadNeeded() end -- v3.5.691: un-skin needs /reload
+        if not checked then KE:FlagReloadNeeded() end -- un-skin needs /reload
         if checked then
             KitnEssentials:EnableModule("UIWidgets")
             ApplySettings()
@@ -82,7 +82,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
         RefreshStates()
     end)
 
-    -- Disabled modules collapse to the header bar alone (v3.5.188):
+    -- Disabled modules collapse to the header bar alone:
     -- settings only render while the module is enabled.
     if db.Enabled == false then
         yOffset = card1:GetNextOffset()
@@ -139,7 +139,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
             value = barDB.Enabled ~= false,
             callback = function(checked)
                 barDB.Enabled = checked
-                if not checked then KE:FlagReloadNeeded() end -- v3.5.691: un-skin needs /reload
+                if not checked then KE:FlagReloadNeeded() end -- un-skin needs /reload
                 ApplySettings()
                 RefreshStates()
             end,
@@ -276,7 +276,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
             value = textDB.Enabled ~= false,
             callback = function(checked)
                 textDB.Enabled = checked
-                if not checked then KE:FlagReloadNeeded() end -- v3.5.691: un-skin needs /reload
+                if not checked then KE:FlagReloadNeeded() end -- un-skin needs /reload
                 ApplySettings()
                 RefreshStates()
             end,
@@ -448,17 +448,12 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
     -- Card 4: Event Toast Position
     ----------------------------------------------------------------
     -- positionKey routes this card at db.EventToastPosition instead of the
-    -- default db.Position (Card 2's table) -- GUI-PositionCard.lua:226,245.
-    -- Root keys (anchorFrameType/ParentFrame/Strata) live at the db ROOT
-    -- regardless of positionKey (GUI-PositionCard.lua:456-460), so they also
-    -- need their own names or this card would still clobber Card 2's anchor
-    -- type/parent/strata. Fix round 1 finding: db.EventToastPosition is
-    -- already seeded by Task 1's defaults (Core/Defaults.lua:1276-1291), and
-    -- the three EventToast* root keys are plain scalars that default safely
-    -- to "SCREEN"/"HIGH" when unset (GUI-PositionCard.lua:492,522) the same
-    -- way Card 2's un-seeded root keys already do -- so no Core/Defaults.lua
-    -- change is needed for either. Same shape as HealerMana's Raid/Dungeon
-    -- split (GUI-HealerMana.lua:151-161).
+    -- default db.Position, which is Card 2's table. Root keys
+    -- (anchorFrameType/ParentFrame/Strata) live at the db ROOT regardless of
+    -- positionKey, so they also need their own names or this card would still
+    -- clobber Card 2's anchor type, parent and strata. The three EventToast*
+    -- root keys are plain scalars that default safely to "SCREEN"/"HIGH" when
+    -- unset, the same way Card 2's un-seeded root keys already do.
     local toastPosCard, toastPosOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         title = "Event Toast Position",
         db = afDB,

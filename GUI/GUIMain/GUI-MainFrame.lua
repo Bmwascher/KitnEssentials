@@ -125,13 +125,12 @@ GUIFrame.sidebarConfig = {
             -- pages behind its own tab strip.
             --
             -- alwaysEnabled keeps it and Skyriding UI clickable while the
-            -- section is greyed for ElvUI (GUI/GUIWidgets/GUI-Sidebar.lua:703).
+            -- section is greyed for ElvUI.
             -- Dark Theme's General tab carries Raid Control, which has no ElvUI
             -- gate at all, and its Character Screen tab keeps Character Panel's
             -- non-overlapping features; Skyriding UI is not a skin. Chat and
             -- Tooltips carry no exemption because both modules genuinely do
-            -- stand down (Modules/Skinning/Chat.lua:423, and Tooltips via
-            -- SkinAPI.lua:2680).
+            -- stand down.
             --
             -- The keyword list absorbs the four rows this page swallowed, so
             -- searching "raid control", "ilvl", "hex" or "objective tracker"
@@ -572,7 +571,7 @@ function GUIFrame:CreateMainFrame()
     -- FRAME rather than GUIFrame:Hide so no close path can skip it -- the
     -- Escape key, the combat auto-close and the profile switcher all reach
     -- here. Set BEFORE the Hide() below, which is inert because only a user
-    -- action ever sets the flag (Core/Widgets.lua:740-765).
+    -- action ever sets the flag.
     frame:SetScript("OnHide", function()
         if KE.FlushPendingReloadPrompt then KE:FlushPendingReloadPrompt() end
     end)

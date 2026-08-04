@@ -130,7 +130,7 @@ end
 
 -- Dropdown Widget — config-table API: { options, value, callback, tooltip }
 -- TODO: `labelWidth`, `searchable`, and `isFontPreview` are accepted in the
--- API for forward-compat with NUI v3.7 but not yet wired into the widget body.
+-- API but not yet wired into the widget body.
 -- Callers (e.g. font dropdowns passing `searchable = true, isFontPreview = true`)
 -- won't see those behaviors. Implement when needed; config keys pass silently.
 function GUIFrame:CreateDropdown(parent, labelText, config)

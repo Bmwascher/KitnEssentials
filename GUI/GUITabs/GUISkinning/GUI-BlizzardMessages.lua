@@ -36,8 +36,8 @@ end
 
 GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
     -- Return the offset, not nil. As a sidebar page a nil return only cost a
-    -- placeholder card (GUI-Core.lua:678-682); as a TAB it propagates out of
-    -- RegisterTabbedContent (GUI-TabbedContent.lua:65), so the OUTER builder
+    -- placeholder card; as a TAB it propagates out of
+    -- RegisterTabbedContent, so the OUTER builder
     -- reads nil too and draws that placeholder at the top offset, on top of the
     -- header card and tab strip this page already built. The strip never offers
     -- this tab under ElvUI, so this is belt and braces -- but it makes that

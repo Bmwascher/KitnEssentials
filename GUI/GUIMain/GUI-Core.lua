@@ -295,7 +295,7 @@ function GUIFrame:CreateCard(parent, title, yOffset, width)
     -- Header toggle: the MODULE-ENABLE control. A switch in the card's title
     -- bar reads as "this feature on/off"; everything in the body below is
     -- settings. Keeps enables visually distinct from ordinary option toggles,
-    -- which live in body rows. Ported from the reference implementation.
+    -- which live in body rows.
     function card:AddHeaderToggle(initialState, onValueChanged)
         if not self.header then return nil end
         local TRACK_W, TRACK_H, KNOB = 34, 16, 12
@@ -563,9 +563,9 @@ end
 -- RefreshContent
 ---------------------------------------------------------------------------------
 function GUIFrame:RefreshContent()
-    -- DEBUG_LEAK tracer (2026-06-12 frame-leak hunt): every call increments a
-    -- /run-readable global so a runaway rebuild loop can be detected and its
-    -- page named live, without a debug build:
+    -- Leak tracer: every call increments a /run-readable global so a runaway
+    -- rebuild loop can be detected and its page named live, without a debug
+    -- build:
     --   /run print(KE_GUI_REFRESH_COUNT, KE_GUI_REFRESH_ITEM, KE_GUI_ORPHAN_COUNT)
     -- Counts ABOVE the contentArea guard on purpose: a pre-first-open call is
     -- still a caller worth catching. Cost is one add + two writes per call.
@@ -574,13 +574,13 @@ function GUIFrame:RefreshContent()
 
     if not self.contentArea then return end
 
-    -- 2026-06-12 leak fix: NEVER rebuild while the GUI is hidden. The clear
-    -- pass below orphans a full page of cards via SetParent(nil), and frames
-    -- are never garbage-collected — an event-driven caller firing with the
-    -- GUI closed (shipped example: Automation's CVAR_UPDATE handler) leaked
-    -- hundreds of permanent frames per event, unbounded (2026-06-11 episode:
-    -- ~660k frames / 233 MB in one evening). Mark dirty and bail; Show()
-    -- replays one refresh so a reopened page is never stale.
+    -- NEVER rebuild while the GUI is hidden. The clear pass below orphans a full
+    -- page of cards via SetParent(nil), and frames are never garbage-collected --
+    -- an event-driven caller firing with the GUI closed (shipped example:
+    -- Automation's CVAR_UPDATE handler) leaks hundreds of permanent frames per
+    -- event, unbounded, and reached hundreds of thousands in one session. Mark
+    -- dirty and bail; Show() replays one refresh so a reopened page is never
+    -- stale.
     if not (self.mainFrame and self.mainFrame:IsShown()) then
         self._contentDirtyWhileHidden = true
         return

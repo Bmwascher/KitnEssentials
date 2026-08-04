@@ -51,7 +51,7 @@ GUIFrame:RegisterContent("InnervateTracker", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 1: Enable
     -- (Preview is automatic via the section PreviewManager + /kes edit;
-    --  no manual preview button — matches the reference behavior.)
+    --  no manual preview button.)
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Innervate Tracker", yOffset)
     card1:AddHeaderToggle(db.Enabled == true, function(checked)
