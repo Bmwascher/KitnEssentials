@@ -47,7 +47,7 @@ GUIFrame:RegisterContent("LFGReminder", function(scrollChild, yOffset)
     end
 
     ----------------------------------------------------------------
-    -- Card 1: Enable
+    -- One card: the switch plus the popup settings it governs
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "LFG Reminder", yOffset)
     card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
@@ -56,20 +56,12 @@ GUIFrame:RegisterContent("LFGReminder", function(scrollChild, yOffset)
         KE:Print("LFG Reminder: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
 
-    yOffset = card1:GetNextOffset()
-
     -- Lone header bar: a disabled module shows its switch and nothing else.
-    if db.Enabled == false then return yOffset end
+    if db.Enabled == false then return card1:GetNextOffset() end
 
-    ----------------------------------------------------------------
-    -- Card 2: Popup
-    ----------------------------------------------------------------
-    local card2 = GUIFrame:CreateCard(scrollChild, "Popup", yOffset)
-    manager:Register(card2, "all")
+    card1:AddLabel("|cff888888Shown when you join a Group Finder group for a dungeon whose teleport you know. Drag the popup to move it; it hides when you enter the dungeon, leave the group, or enter combat.|r")
 
-    card2:AddLabel("|cff888888Shown when you join a Group Finder group for a dungeon whose teleport you know. Drag the popup to move it; it hides when you enter the dungeon, leave the group, or enter combat.|r")
-
-    local row1 = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
     local scale = GUIFrame:CreateSlider(row1, "Scale", {
         min = 0.5, max = 2, step = 0.05,
         value = db.Scale or 1.05,
@@ -77,18 +69,18 @@ GUIFrame:RegisterContent("LFGReminder", function(scrollChild, yOffset)
     })
     row1:AddWidget(scale, 1)
     manager:Register(scale, "all")
-    card2:AddRow(row1, Theme.rowHeight)
+    card1:AddRow(row1, Theme.rowHeight)
 
-    local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local row2 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
     local showDisable = GUIFrame:CreateCheckbox(row2, "Show \"Disable Feature\" link", {
         value = db.ShowDisable ~= false,
         callback = function(checked) db.ShowDisable = checked; RefreshModule() end,
     })
     row2:AddWidget(showDisable, 1)
     manager:Register(showDisable, "all")
-    card2:AddRow(row2, Theme.rowHeightLast, 0)
+    card1:AddRow(row2, Theme.rowHeightLast, 0)
 
-    yOffset = card2:GetNextOffset()
+    yOffset = card1:GetNextOffset()
 
     RefreshStates()
     return yOffset
