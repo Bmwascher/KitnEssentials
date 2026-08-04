@@ -6,10 +6,7 @@ describe("KE:HasAuraAddon", function()
         for _, n in ipairs(names) do set[n] = true end
         return loader.loadSlashCommands({
             C_AddOns = {
-                GetAddOnInfo = function(name)
-                    if set[name] then return name end
-                    error("addon not found: " .. tostring(name))
-                end,
+                DoesAddOnExist = function(name) return set[name] == true end,
             },
         })
     end
@@ -41,10 +38,7 @@ describe("/wa gating", function()
         for _, n in ipairs(names) do set[n] = true end
         local KE = loader.loadSlashCommands({
             C_AddOns = {
-                GetAddOnInfo = function(name)
-                    if set[name] then return name end
-                    error("addon not found: " .. tostring(name))
-                end,
+                DoesAddOnExist = function(name) return set[name] == true end,
             },
         })
         for key, value in pairs(settings or {}) do
@@ -88,6 +82,37 @@ describe("/wa gating", function()
         assert.is_nil(_G.SLASH_KE_CDM2)
     end)
 
+    -- The chat engine reads the alias globals only while it imports the command
+    -- table, so a state change that leaves the handler in place registers
+    -- nothing. These two pin the re-import path in both directions.
+    it("writes the handler back so a newly added alias gets imported", function()
+        local KE = withAuraAddons({}, { CDMEnabled = true, WAEnabled = false })
+        KE:ApplySlashCommands()
+        assert.is_function(_G.SlashCmdList.KE_CDM)
+
+        -- Stand in for the engine having imported and cleared the entry.
+        _G.SlashCmdList.KE_CDM = nil
+        KE.db.profile.SlashCommands.WAEnabled = true
+        KE:ApplySlashCommands()
+
+        assert.are.equal("/wa", _G.SLASH_KE_CDM2)
+        assert.is_function(_G.SlashCmdList.KE_CDM)
+    end)
+
+    it("drops a resolved alias out of the chat caches when /wa goes off", function()
+        local KE = withAuraAddons({}, { CDMEnabled = true, WAEnabled = true })
+        KE:ApplySlashCommands()
+        -- Stand in for the engine having already resolved both commands.
+        _G.hash_SlashCmdList["/WA"] = _G.SlashCmdList.KE_CDM
+        _G.hash_ChatTypeInfoList["/WA"] = "KE_CDM"
+
+        KE.db.profile.SlashCommands.WAEnabled = false
+        KE:ApplySlashCommands()
+
+        assert.is_nil(_G.hash_SlashCmdList["/WA"])
+        assert.is_nil(_G.hash_ChatTypeInfoList["/WA"])
+    end)
+
     it("reports and sets the state through its accessors", function()
         local KE = withAuraAddons({}, { CDMEnabled = true, WAEnabled = true })
         KE:ApplySlashCommands()
@@ -102,7 +127,7 @@ describe("wa command handling", function()
     local function loaded(settings)
         local KE = loader.loadSlashCommands({
             C_AddOns = {
-                GetAddOnInfo = function(name) error("addon not found: " .. tostring(name)) end,
+                DoesAddOnExist = function() return false end,
             },
         })
         for key, value in pairs(settings or {}) do

@@ -43,17 +43,15 @@ local function ShowCooldownViewerSettings()
     end
 end
 
--- Aura-addon detection. GetAddOnInfo THROWS for an addon that isn't installed
--- rather than returning nil, so an unwrapped call short-circuits the whole
--- check on the first missing name -- hence the pcall per name. This tests
--- INSTALLED, not loaded: a user who has M33kAuras but hasn't loaded it yet
--- still owns /wa.
+-- Aura-addon detection. DoesAddOnExist is the only call that answers this
+-- directly: GetAddOnInfo's name return is non-nilable, so its result cannot
+-- distinguish an installed addon from a missing one. This tests INSTALLED,
+-- not loaded: a user who has M33kAuras but hasn't loaded it yet still owns /wa.
 local AURA_ADDONS = { "WeakAuras", "M33kAuras", "M33kAurasOptions" }
 
 local function IsAddOnInstalled(name)
-    if not C_AddOns or not C_AddOns.GetAddOnInfo then return false end
-    local ok, result = pcall(C_AddOns.GetAddOnInfo, name)
-    return ok and result ~= nil
+    if not C_AddOns or not C_AddOns.DoesAddOnExist then return false end
+    return C_AddOns.DoesAddOnExist(name) == true
 end
 
 function KE:HasAuraAddon()
@@ -71,29 +69,43 @@ local function WantsWA()
     return (db == nil or db.WAEnabled ~= false) and not KE:HasAuraAddon()
 end
 
+-- The chat engine reads SLASH_KE_CDM1/2 only while it imports SlashCmdList,
+-- and it moves every imported entry behind a proxy metatable and wipes the
+-- table afterwards. Two consequences drive the shape below: an alias global
+-- assigned after the handler was first registered is never read, and clearing
+-- SlashCmdList.KE_CDM does not reach the imported copy or the resolved-command
+-- cache. So every state change must drop the cached aliases AND write the
+-- handler back, which is what makes the next import re-read the globals.
+local function ForgetAlias(alias)
+    local key = alias:upper()
+    if _G.hash_SlashCmdList then _G.hash_SlashCmdList[key] = nil end
+    if _G.hash_ChatTypeInfoList then _G.hash_ChatTypeInfoList[key] = nil end
+end
+
+local function CDMHandler()
+    ShowCooldownViewerSettings()
+end
+
 local function RegisterCDM()
     local wantWA = WantsWA()
 
     if cdmRegistered and waRegistered == wantWA then return end
 
-    SLASH_KE_CDM1 = "/cd"
-    if wantWA then
-        SLASH_KE_CDM2 = "/wa"
-    else
-        SLASH_KE_CDM2 = nil
-    end
-    waRegistered = wantWA
+    ForgetAlias("/cd")
+    ForgetAlias("/wa")
 
-    if not cdmRegistered then
-        function SlashCmdList.KE_CDM(msg, editbox)
-            ShowCooldownViewerSettings()
-        end
-        cdmRegistered = true
-    end
+    SLASH_KE_CDM1 = "/cd"
+    SLASH_KE_CDM2 = wantWA and "/wa" or nil
+    SlashCmdList.KE_CDM = CDMHandler
+
+    cdmRegistered = true
+    waRegistered = wantWA
 end
 
 local function UnregisterCDM()
     if not cdmRegistered then return end
+    ForgetAlias("/cd")
+    ForgetAlias("/wa")
     SLASH_KE_CDM1 = nil
     SLASH_KE_CDM2 = nil
     SlashCmdList.KE_CDM = nil
@@ -116,6 +128,7 @@ end
 
 local function UnregisterRL()
     if not rlRegistered then return end
+    ForgetAlias("/rl")
     SLASH_KE_RL1 = nil
     SlashCmdList.KE_RL = nil
     rlRegistered = false
@@ -243,16 +256,11 @@ end
 
 -- Anything that is not "on" or "off" reports the current state rather than
 -- guessing at an intent.
---
--- The reload note is not decoration: the chat parser caches a command's hash
--- the first time that command is typed, so clearing the global takes full
--- effect on the next load.
 function KE:HandleWACommand(arg)
     arg = arg and arg:lower() or ""
     if arg == "on" or arg == "off" then
         KE:SetWAEnabled(arg == "on")
-        KE:Print("/wa " .. arg .. ". A " .. KE:ColorTextByTheme("/reload") ..
-            " finishes the change if the command was already used this session.")
+        KE:Print("/wa " .. arg .. ".")
         -- Turning the alias on while the whole command pair is off would
         -- otherwise report success and register nothing.
         local settings = KE.db and KE.db.profile.SlashCommands
