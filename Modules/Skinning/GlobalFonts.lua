@@ -34,7 +34,7 @@ local PLAIN = { "InvoiceTextFontNormal" }
 
 local stockSizes = {}
 
--- v4.0.152: the original face/size/flags of every object we touch, so the
+-- the original face/size/flags of every object we touch, so the
 -- toggle can put them back live. Without this, switching the skin off did
 -- nothing until a reload -- and this is the one skin a user turns off
 -- because another addon is BROKEN, so making them reload to test it is

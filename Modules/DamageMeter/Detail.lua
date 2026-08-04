@@ -843,7 +843,7 @@ local _tipPoll                  -- detach-when-idle OnUpdate frame
 local _tipPollAccum = 0
 
 -- Tooltip text renders one point below the configured bar font so the quick-peek packs
--- densely (request 2026-06-05). Clamped to a readable floor. Every tip text element derives
+-- densely. Clamped to a readable floor. Every tip text element derives
 -- its size from this; the column/section headers sit one notch below it (TipFontSize - 1).
 local function TipFontSize(s) return math_max(8, (s or 12) - 1) end
 
@@ -994,7 +994,7 @@ function DM:EnsureHoverTip()
     local size = TipFontSize(db and db.FontSize)
     local outline = db and db.FontOutline
 
-    -- Source-name title: CENTERED + class-colored (request 2026-06-05). The class tint
+    -- Source-name title: CENTERED + class-colored. The class tint
     -- is applied per-populate from bar._classFilename (PopulateHoverTip); centering makes
     -- the name read as a title so the column-category labels below can be the white headers.
     f.header = f:CreateFontString(nil, "OVERLAY")
@@ -1089,8 +1089,8 @@ local function RenderTipTargets(self, bar, cfg, sessionID, topY, stride, barH)
     -- the raw name (realm stripped for display only, never for the targets key).
     -- _rawName is nil while the source's name is SECRET (a member who left the
     -- group before the snapshot capture): fall back to the identity memo, whose
-    -- realm-bearing form matches det.unitName — the attribution side stays plain
-    -- (probe 2026-07-19), so the memo name restores the whole section.
+    -- realm-bearing form matches det.unitName — the attribution side stays
+    -- plain, so the memo name restores the whole section.
     local playerName = bar._rawName
     if not playerName and self.PlainNameFor then
         playerName = self:PlainNameFor(bar._sourceGUID)
@@ -1263,7 +1263,7 @@ function DM:PopulateHoverTip(W, bar)
     local isEnemyTaken = (meterType == Enum.DamageMeterType.EnemyDamageTaken)
 
     -- Tip rows run ~2px shorter than the configured bar height so the quick-peek packs
-    -- the now-15 rows (+ Targets) densely (request 2026-06-05).
+    -- the now-15 rows (+ Targets) densely.
     -- Clamped to a sane floor; stride keeps the configured inter-row spacing.
     local barH = math_max(8, (W._snapHeight or 16) - 2)
     local stride = barH + (W._snapSpacing or 2)
@@ -1693,7 +1693,7 @@ function DM:ShowHoverTip(W, bar, isInitial)
                     side = (cx > (UIParent:GetWidth() or 0) / 2) and "left" or "right"
                 end
                 -- +1 y nudges the tip's top edge up 1px to line up flush with the
-                -- window's top border (request 2026-06-05).
+                -- window's top border.
                 if side == "left" then
                     _tip:SetPoint("TOPRIGHT", W.frame, "TOPLEFT", -4, 1)
                 else

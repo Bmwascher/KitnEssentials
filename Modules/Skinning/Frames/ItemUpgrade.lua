@@ -1,5 +1,5 @@
 ---@class KE
--- ElvUI Mainline/Skins/ItemUpgrade.lua transcription (v3.5.796):
+-- ElvUI Mainline/Skins/ItemUpgrade.lua transcription:
 -- window mostly unskinned -- only the S.Frame stub existed.
 local KE = select(2, ...)
 local S = KE.Skins
@@ -35,7 +35,7 @@ local function Skin()
         S.KillAllTextures(button, button.icon)
         S.Backdrop(button)
         if button.icon then
-            -- v3.5.798 (slot box mis-sized): ElvUI's recipe is
+            -- (slot box mis-sized): ElvUI's recipe is
             -- icon:SetInside(button) -- the icon fills the slot minus
             -- 1px, so the button backdrop is the ONE visible box.
             -- Skipping it left Blizzard's inset icon floating inside a
@@ -48,7 +48,7 @@ local function Skin()
         -- Quality color goes to the BUTTON backdrop (the visible box);
         -- v3.5.797's icon-backdrop target is gone with SetInside.
         if button.IconBorder then S.IconBorder(button.IconBorder, S.GetBackdrop(button)) end
-        -- v3.5.799 (slot box mis-sized, round two): ButtonFrame
+        -- (slot box mis-sized, round two): ButtonFrame
         -- is a TEXTURE (the ornate itemupgrade_slotborder atlas at
         -- native size, LARGER than the 58px button, centered) -- not a
         -- frame. Backdropping it drew an oversized box around art that
@@ -62,7 +62,7 @@ local function Skin()
     -- touches visibility/anim, never the level.
     if frame.Arrow then
         frame.Arrow:SetFrameLevel(frame:GetFrameLevel() + 20)
-        -- v3.5.799: shift the sweep path left so the arrow
+        -- shift the sweep path left so the arrow
         -- doesn't overlap the upgrade panel's stat text.
         if frame.Arrow.AdjustPointsOffset then
             frame.Arrow:AdjustPointsOffset(-14, 0)

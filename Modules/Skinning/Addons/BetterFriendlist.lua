@@ -602,7 +602,7 @@ local function Skin()
 
     HookBFLTooltip()
     if not tooltipHooked and _G.C_Timer then
-        _G.C_Timer.After(0, HookBFLTooltip) -- v3.5.853: was 2s
+        _G.C_Timer.After(0, HookBFLTooltip) -- was 2s
     end
     FontFriendsTooltip()
     if not S.data(frame).fttShowHook and frame.HookScript then

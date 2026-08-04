@@ -1,4 +1,4 @@
--- KitnEssentials — Tooltips (v3.5.891)
+-- KitnEssentials — Tooltips
 --
 -- the brief: EUI-grade performance, more customization, and enough
 -- coverage to retire EllesmereUIBlizzardSkin ("BlizzUI Enhanced") from
@@ -50,7 +50,7 @@ local FACTION_BAR_COLORS = FACTION_BAR_COLORS
 local hooksecurefunc = hooksecurefunc
 local S = KE.Skins
 
--- v3.5.892: AE:GetEffectiveFont returns the LSM NAME, not a file path
+-- AE:GetEffectiveFont returns the LSM NAME, not a file path
 -- (every consumer resolves it through LSM; v891 passed the raw name to
 -- SetFont -> "Invalid font asset (Expressway)"). Silent fetch + stock
 -- fallback so a missing registration degrades instead of erroring.
@@ -81,7 +81,7 @@ end
 
 -- Style ---------------------------------------------------------------
 
--- v4.0.12: EUI's ACTUAL overlay technique (BlizzardSkin.lua:207-215) --
+-- EUI's ACTUAL overlay technique (BlizzardSkin.lua:207-215) --
 -- plain textures on the tooltip, no BackdropTemplate. The old
 -- BackdropTemplate child ran SetupTextureCoordinates (width/edgeSize
 -- arithmetic) on every tooltip resize, and Midnight world-quest
@@ -140,7 +140,7 @@ local function EnsureStyler(tt)
     return s
 end
 
--- v4.0.147: this runs from GameTooltip's OnShow, so it executes on EVERY
+-- this runs from GameTooltip's OnShow, so it executes on EVERY
 -- tooltip -- including map POI hovers, where Blizzard follows the show
 -- with GameTooltip_AddWidgetSet. Any insecure work here taints that
 -- execution, and the widget layout then dies on a secret number:
@@ -221,7 +221,7 @@ function TT:StyleHealthBar()
     local bar = _G.GameTooltipStatusBar
     if not bar or not self.db then return end
     local db = self.db
-    -- v3.5.893: fully remove the bar. Blizzard re-shows it per
+    -- fully remove the bar. Blizzard re-shows it per
     -- unit tooltip, so the OnShow hook in OnEnable keeps it hidden.
     if db.HealthBarHidden then
         bar:Hide()
@@ -263,7 +263,7 @@ local function ReactionColor(unit)
 end
 
 local function UnitColor(unit)
-    -- v3.5.893: Midnight secret units. UnitName returning a secret is
+    -- Midnight secret units. UnitName returning a secret is
     -- the tell (ElvUI's IsSecretUnit); on that branch UnitIsPlayer /
     -- UnitReaction results are secret booleans -- branching on them is
     -- the crash class -- but UnitClass's classFile stays usable, so
@@ -686,7 +686,7 @@ function TT:OnTooltipSetUnit(tt)
     if db.TargetLine then
         local unitTarget = unit .. "target"
         if unit ~= "player" and UnitExists(unitTarget) then
-            -- v3.5.893: the v891 IsSecretValue skip suppressed the line
+            -- the v891 IsSecretValue skip suppressed the line
             -- for every secret target (most of Midnight group content).
             -- AddDoubleLine is a DISPLAY SINK -- secret text is allowed
             -- through it; what is forbidden is format/concat on the
@@ -712,8 +712,8 @@ end
 
 -- v4.0.41 (field: no Spell ID on macro tooltips despite #showtooltip):
 -- a macro's tooltip is TooltipDataType.MACRO, not SPELL, so the Spell
--- post-call never fired -- the same disease as the buff frame (v4.0.7)
--- and talent tooltips (v4.0.5). ElvUI routes MACRO into this very
+-- post-call never fired -- the same disease as the buff frame
+-- and talent tooltips. ElvUI routes MACRO into this very
 -- handler and reads the id off the first tooltip LINE (Tooltip.lua
 -- ~1000): data.id on a macro is the macro slot, not the spell.
 function TT:OnTooltipSetSpell(tt, data)
@@ -888,7 +888,7 @@ function TT:OnEnable()
             _G.TooltipDataProcessor.AddTooltipPostCall(T.Spell, function(tt, data)
                 if TT:IsEnabled() then TT:OnTooltipSetSpell(tt, data) end
             end)
-            -- v4.0.41: macros are their own data type; ElvUI feeds them
+            -- macros are their own data type; ElvUI feeds them
             -- through the same handler (Tooltip.lua ~1217).
             if T.Macro then
                 _G.TooltipDataProcessor.AddTooltipPostCall(T.Macro, function(tt, data)
@@ -912,7 +912,7 @@ function TT:OnEnable()
     -- the guard above and re-register on every enable.
     self:SecureHook("GameTooltip_SetDefaultAnchor", "SetDefaultAnchor")
 
-    -- v4.0.7 (buff frame missing Spell IDs with shift): the modern
+    -- (buff frame missing Spell IDs with shift): the modern
     -- BuffFrame builds its tooltips through SetUnitBuffByAuraInstanceID,
     -- which is TooltipDataType.UnitAura -- the Spell post-call never
     -- fires. ElvUI hooks the aura setters directly; same here, with
@@ -939,7 +939,7 @@ end
 function TT:MODIFIER_STATE_CHANGED()
     local tt = _G.GameTooltip
     if not (tt and not tt:IsForbidden() and tt:IsShown() and tt.RefreshData) then return end
-    -- v3.5.899: NEVER RefreshData a UNIT tooltip from addon code. The
+    -- NEVER RefreshData a UNIT tooltip from addon code. The
     -- rebuild re-runs Blizzard's own line processors on OUR (tainted)
     -- execution -- GameTooltip_UnitColor then feeds a secret unit into
     -- UnitPlayerControlled, which secrets forbid outside untainted
@@ -948,7 +948,7 @@ function TT:MODIFIER_STATE_CHANGED()
     -- (nil,nil on unit tooltips -- no secret branching involved).
     local itemLink = select(2, tt:GetItem())
     local spellID = select(2, tt:GetSpell())
-    -- v3.5.913: action-button/macro
+    -- action-button/macro
     -- tooltips get their NAME line from the action layer, so a forced
     -- RefreshData rebuilds them lossily (title + rank vanish). They also
     -- self-refresh every ~0.1s through the proper SetAction path, so the

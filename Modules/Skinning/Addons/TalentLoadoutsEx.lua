@@ -250,7 +250,7 @@ local function SkinMainFrame()
         if textFrame then
             S.StripTextures(textFrame); S.Backdrop(textFrame)
             if textFrame.Main then S.StripTextures(textFrame.Main) end
-            -- v3.5.719: border children TLX keys outside
+            -- border children TLX keys outside
             -- .NineSlice stack a second ring on our backdrop.
             local tfB = textFrame.Border
             if tfB and tfB.GetNumChildren and tfB:GetNumChildren() == 0 then
@@ -261,7 +261,7 @@ local function SkinMainFrame()
                 S.EditBox(eb, true)
                 if eb.SetTextInsets then eb:SetTextInsets(6, 6, 2, 2) end
             end
-            -- v3.5.719: the paste bar opened overlapping the
+            -- the paste bar opened overlapping the
             -- icon-picker dialog. Pin it cleanly ABOVE the popup with a
             -- 4px gap (height preserved -- only bottom edge anchored).
             textFrame:ClearAllPoints()
@@ -350,9 +350,9 @@ local function SkinMainFrame()
     local textPopup = frame.TextPopupFrame and frame.TextPopupFrame.Main
     if textPopup then
         ReskinPopupFrame(frame.TextPopupFrame)
-        -- v3.5.719: this dialog originally straddled whatever
+        -- this dialog originally straddled whatever
         -- else was up, so it was pinned ABOVE the TLX panel.
-        -- v3.5.768 (Import/Export opens off-screen): pinning
+        -- (Import/Export opens off-screen): pinning
         -- above breaks when the panel sits at the screen's top edge --
         -- the 400px dialog leaves the screen entirely. It now opens to
         -- the LEFT of the panel, top-aligned, at its designed 500x400
@@ -395,7 +395,7 @@ local function SkinMainFrame()
     local presetPopup = frame.PresetPopupFrame and frame.PresetPopupFrame.Main
     if presetPopup then
         ReskinPopupFrame(frame.PresetPopupFrame)
-        -- v3.5.768: same off-screen guarantee as the Import/Export
+        -- same off-screen guarantee as the Import/Export
         -- dialog (its XML anchor is panel-relative too).
         frame.PresetPopupFrame:SetClampedToScreen(true)
         if presetPopup.AddonDropDownMenu then S.DropDown(presetPopup.AddonDropDownMenu) end
@@ -414,7 +414,7 @@ local function SkinMainFrame()
 end
 
 local function Skin()
-    -- v3.5.852 (TLX visibly skins in after opening): this polled
+    -- (TLX visibly skins in after opening): this polled
     -- for TalentLoadoutExMainFrame every 0.25s -- and never checked
     -- before the first wait -- so even when the frame already existed
     -- we sat unskinned for a quarter second. That IS the flash.

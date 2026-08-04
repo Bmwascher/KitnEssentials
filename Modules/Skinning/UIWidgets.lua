@@ -51,7 +51,7 @@ function UIW:OnEnable()
 
     self:RegisterEvent("PLAYER_ENTERING_WORLD", function()
 
-        C_Timer.After(0, function() -- v3.5.853: was 0.1s
+        C_Timer.After(0, function() -- was 0.1s
             if self:IsEnabled() then self:StyleExistingWidgets() end
         end)
     end)
@@ -195,7 +195,7 @@ end
 --
 -- Nothing is lost by skipping them: tooltip widget sets are transient and
 -- already inherit the tooltip's own styling.
--- v4.0.175: was a parent walk that called :GetName() on whatever it
+-- was a parent walk that called :GetName() on whatever it
 -- found. Something in that chain is not a real frame -- a proxy or a
 -- plain table with a GetName field -- and the call died with
 --
@@ -265,7 +265,7 @@ function UIW:SetupHooks()
     end
 
     if not (hooked.statusBar and hooked.textWithState) then
-        C_Timer.After(0, function() -- v3.5.853: was 1s; widget mixins
+        C_Timer.After(0, function() -- was 1s; widget mixins
             if self:IsEnabled() then self:SetupHooks() end -- appear within frames
         end)
     end

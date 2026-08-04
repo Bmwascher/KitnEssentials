@@ -33,7 +33,7 @@ local installed = false
 
 function S.InstallTooltipStatusBarHook()
     if installed then return end
-    -- v3.5.840: ElvUI's approach restored -- they SecureHook
+    -- ElvUI's approach restored -- they SecureHook
     -- GameTooltip_ShowStatusBar to skin status bars. My v831 event
     -- driver came from the "hooks in a flow taint it" theory, which
     -- ElvUI disproves at scale. The real LootHistory seed was

@@ -10,7 +10,7 @@ local function DressAdventureRewards()
     for reward in pool:EnumerateActive() do
         if not S.data(reward).skinned then
             S.data(reward).skinned = true
-            -- v3.5.901: AdventureMapQuestRewardTemplate is a WIDE 135x41
+            -- AdventureMapQuestRewardTemplate is a WIDE 135x41
             -- row (39px icon LEFT + ItemNameBG plate + Name), not a square
             -- tile. Default S.ItemButton fills the icon to the button rect
             -- -- stretched art, Name/plate pushed off-frame (the

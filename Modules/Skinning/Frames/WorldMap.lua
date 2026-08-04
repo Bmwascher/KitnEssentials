@@ -202,7 +202,7 @@ local function Skin()
         S.Backdrop(frame.ScrollContainer, 0, true)
     end
 
-    -- v4.0.16: min/max flips the map between 1.1 and 1.0; scale changes
+    -- min/max flips the map between 1.1 and 1.0; scale changes
     -- fire no OnSizeChanged on descendants, but the map ITSELF resizes,
     -- so hook that (script hook: our execution, after Blizzard's
     -- handler, touches only our own backdrop frames) and re-fit every

@@ -3,7 +3,7 @@ local S = KE.Skins
 local _G = _G
 local hooksecurefunc = hooksecurefunc
 
--- v4.0.0: barbershop/customization rebuilt on Blizzard_CustomizationUI
+-- barbershop/customization rebuilt on Blizzard_CustomizationUI
 -- (CustomizationFrameBaseMixin). selectionPopoutPool is gone from the
 -- live client; every option is now dropdownPool
 -- (CustomizationDropdownWithSteppersAndLabelTemplate) or sliderPool.

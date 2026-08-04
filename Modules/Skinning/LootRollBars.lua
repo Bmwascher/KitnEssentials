@@ -88,7 +88,7 @@ local function StatusUpdate(status, elapsed)
         bar:Hide()
         return
     end
-    -- v3.5.694: previews drain locally -- GetLootRollTimeLeft errors on
+    -- previews drain locally -- GetLootRollTimeLeft errors on
     -- anything but a live numeric roll id.
     if bar.isPreview then
         local v = (status:GetValue() or 0) - elapsed
@@ -190,7 +190,7 @@ function LR:RollBar_Create(index)
     status:SetScript("OnUpdate", StatusUpdate)
     status:SetStatusBarTexture(KE:GetStatusbarPath(db.BarTexture or "KitnUI"))
     status.parent = bar
-    -- v3.5.818 (bar had no visible outline): the backdrop was
+    -- (bar had no visible outline): the backdrop was
     -- flush with the status bar's rect, so the FILL texture (higher
     -- frame level) painted over the border pixels on every side.
     -- Castbar convention is fill-inside-border; equivalent here:
@@ -225,7 +225,7 @@ function LR:RollBar_Create(index)
     -- INSIDE the border, the standard convention here.
     button.icon:SetPoint("TOPLEFT", 1, -1)
     button.icon:SetPoint("BOTTOMRIGHT", -1, 1)
-    -- DEVIATION (2026-07-31): the reference hardcodes the crop
+    -- DEVIATION: the reference hardcodes the crop
     -- (<REF>/Skinning/LootRollBars.lua:224). Route it through the shared
     -- skinning helper instead -- same 0.08/0.92 crop, plus the pixel snap and
     -- the re-entry guard a hardcoded SetTexCoord skips, and it tracks any
@@ -368,7 +368,7 @@ function LR.CANCEL_ALL_LOOT_ROLLS(bar, event)
     LR:RollBar_Clear(bar, event)
 end
 
--- v3.5.692: sample roll for the GUI -- a fully dressed bar
+-- sample roll for the GUI -- a fully dressed bar
 -- (Thunderfury: legendary color, BoP, ilvl, all four buttons lit) with
 -- clicks neutralized so nothing ever calls RollOnLoot on a fake id.
 local PREVIEW_SECONDS = 15

@@ -767,7 +767,7 @@ local function SkinPulloutFrame(pf)
 end
 S.SkinPulloutFrame = SkinPulloutFrame
 
--- v3.5.900: BigWigs 419 "stock yellow config" regression. BigWigs_Options
+-- BigWigs 419 "stock yellow config" regression. BigWigs_Options
 -- (LoD) embeds its own AceGUI-3.0. Post-ElvUI it is often the FIRST -- or a
 -- NEWER -- AceGUI-3.0 in the session: LibStub:NewLibrary succeeds and the
 -- incoming lib file body reassigns RegisterAsWidget/RegisterAsContainer/

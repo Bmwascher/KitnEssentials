@@ -46,7 +46,7 @@ function CM:UpdateDB()
     self.db = KE.db.profile.Skinning.ContextMenus
 end
 
--- v3.5.836: ElvUI-EXACT port of their menu skin
+-- ElvUI-EXACT port of their menu skin
 -- (ElvUI/Game/Mainline/Skins/Menu.lua). Theirs is four operations on
 -- the menu frame ITSELF: StripTextures, CreateBackdrop + SetInside,
 -- HandleTrimScrollBar, OffsetFrameLevel. Nothing else.
@@ -88,7 +88,7 @@ local function SkinFrame(frame)
             .. " wasStripped=" .. tostring(stripped[frame] ~= nil))
     end
     if not w or not h or KE:IsSecretValue(w) or KE:IsSecretValue(h) then
-        -- v4.0.154: menu frames are POOLED. A frame stripped on an earlier
+        -- menu frames are POOLED. A frame stripped on an earlier
         -- (readable) menu comes back for a secret one, and hiding our
         -- backdrop then left it stripped AND unbacked -- text floating on
         -- the world with no panel, which is what the Target Marker Icon
@@ -129,7 +129,7 @@ local function SkinFrame(frame)
         return
     end
 
-    -- PRE-LAYOUT GUARD (2026-07-30). A menu frame reports 1x1 until Blizzard
+    -- PRE-LAYOUT GUARD. A menu frame reports 1x1 until Blizzard
     -- has laid it out, and the acquired-frame callback can fire before that
     -- happens. Those numbers are READABLE -- just wrong -- so the secret-value
     -- test above cannot catch them, and every branch below trusts them.
@@ -201,7 +201,7 @@ local function OnMenuOpen(manager, _ownerRegion, menuDescription)
     end
     if menu then SkinFrame(menu) end
 
-    -- DEFERRED BY ONE FRAME (2026-07-30). Acquired frames -- which is how
+    -- DEFERRED BY ONE FRAME. Acquired frames -- which is how
     -- SUBMENUS reach us -- arrive before Blizzard has laid them out, measuring
     -- 1x1. Skinning them synchronously stripped their art and built an
     -- invisible 1x1 backdrop; see the pre-layout guard in SkinFrame for the

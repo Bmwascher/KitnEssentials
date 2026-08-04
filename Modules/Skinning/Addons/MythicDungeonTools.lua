@@ -11,7 +11,7 @@ local ARROW_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collap
 -- place by S.RefreshPalette) so it tracks the live theme.
 local BRAND = S.palette.brand
 
--- v3.5.853: was a 0.1s poll (MDT skinned in visibly). Per-frame now.
+-- was a 0.1s poll (MDT skinned in visibly). Per-frame now.
 local function WaitFor(check, run, tries)
     S.WaitFor(check, run, (tries or 20) * 30)
 end

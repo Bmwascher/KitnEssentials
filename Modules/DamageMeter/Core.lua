@@ -947,7 +947,7 @@ function DM:OnEncounterStart()
     -- Stored-id snapshot for the kill/wipe tint: OnEncounterEnd tags only sessions
     -- stored SINCE this pull. "Tag the newest" mis-tagged a key-completing final
     -- kill -- Blizzard stores the run-level "+NN" session on top of the boss's own
-    -- (live repro 2026-07-03), so the boss's outcome landed on the run row. Plain
+    -- (live repro), so the boss's outcome landed on the run row. Plain
     -- ids only (sessionID is never secret; guarded anyway). nil snapshot = the
     -- pcall'd list read failed -> OnEncounterEnd falls back to newest-only.
     local list = self:GetAvailableSessions()

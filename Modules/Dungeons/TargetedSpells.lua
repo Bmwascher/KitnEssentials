@@ -131,7 +131,7 @@ end
 
 function TS:UpdateDB()
     self.db = KE.db.profile.TargetedSpells
-    -- One-time enable fixup (v3.2.1): a profile that physically stored
+    -- One-time enable fixup: a profile that physically stored
     -- Enabled=false under the v3.2.0 default-off era (AceDB only strips
     -- default-equal values on a clean logout) would pin the module off
     -- forever now that the default is on. Runs once per profile; the flag
@@ -498,7 +498,7 @@ function TS:PopulateEntry(entry, unit, info)
         TS:Release(entry, gen, "cooldown-done")
     end)
 
-    -- Missing-timer probe (2026-07-05): report the countdown FontString's
+    -- Missing-timer probe: report the countdown FontString's
     -- health 0.3s after populate. Only plain values are read — never the
     -- text/offsets, which are secret-derived on this subtree in combat.
     if DEBUG_TS then

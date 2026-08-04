@@ -52,7 +52,7 @@ local BlizzardFrames = {
     "ContainerFrame1",
     "ContainerFrameCombinedBags",
     "DestinyFrame",
-    -- v4.0.173: GameMenuFrame REMOVED. Making it movable means
+    -- GameMenuFrame REMOVED. Making it movable means
     -- SetMovable/EnableMouse on a protected frame, which taints it, and
     -- Blizzard's Exit Game handler then calls the protected Quit() from
     -- tainted execution:

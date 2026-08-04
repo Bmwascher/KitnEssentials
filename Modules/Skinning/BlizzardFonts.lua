@@ -23,7 +23,7 @@ local _G = _G
 local C_Timer = C_Timer
 local unpack = unpack -- luacheck: ignore 211/unpack
 
--- v3.5.772: FONT_LIST audited against Blizzard's UI source
+-- FONT_LIST audited against Blizzard's UI source
 -- (Gethe/wow-ui-source, live branch, Blizzard_Fonts_Shared XML with
 -- full inheritance resolution). Result: NO entry strips a stock
 -- outline (the two that did -- SystemFont_Shadow_Large_Outline, the
@@ -41,7 +41,7 @@ local FONT_LIST = {
     { "NumberFont_OutlineThick_Mono_Small", 12, "O" },
     { "NumberFont_Shadow_Small", 12, "S" },
     { "NumberFont_Small", 12 },
-    { "NumberFontNormalSmall", 12, "O" }, -- stock THICK; deliberate: thick at 12px muddies (audit v3.5.772)
+    { "NumberFontNormalSmall", 12, "O" }, -- stock THICK; deliberate: thick at 12px muddies
     { "Number13Font", 13 },
     { "Number13FontGray", 13, "S" },
     { "Number13FontWhite", 13, "S" },
@@ -74,7 +74,7 @@ local FONT_LIST = {
     { "QuestFont_Shadow_Super_Huge", 22, "SB" },
     { "QuestFont_Shadow_Enormous", 25, "SB" },
     { "QuestFont_Large", 15 },
-    { "QuestFont_Larger", 16 }, -- absent from live source mirror; runtime-guarded (audit v3.5.772)
+    { "QuestFont_Larger", 16 }, -- absent from live source mirror; runtime-guarded
     { "QuestFont_Huge", 18 },
     { "QuestFont_Super_Huge", 24 },
     { "QuestFont_Enormous", 30 },
@@ -129,14 +129,14 @@ local FONT_LIST = {
     { "SystemFont_Shadow_Med2", 14, "S" },
     { "SystemFont_Shadow_Med3", 14, "S" },
     { "Game15Font_Shadow", 15, "S" },
-    { "Game15Font_o1", 15, "O" }, -- v3.5.771: "_o1" = stock outline; was stripped
+    { "Game15Font_o1", 15, "O" }, -- "_o1" = stock outline; was stripped
     { "MailFont_Large", 15 },
     { "Game16Font", 16 },
     { "GameFontNormalLarge", 16, "S" },
 
     { "SystemFont_Large", 16 },
     { "SystemFont_Shadow_Large", 16, "S" },
-    { "SystemFont16_Shadow_ThickOutline", 16, "O" }, -- stock THICK; deliberate downgrade (audit v3.5.772)
+    { "SystemFont16_Shadow_ThickOutline", 16, "O" }, -- stock THICK; deliberate downgrade
     { "Game17Font_Shadow", 17, "S" },
     { "Game18Font", 18 },
     { "GameFontNormalLarge2", 18, "S" },
@@ -161,7 +161,7 @@ local FONT_LIST = {
     { "CoreAbilityFont", 32 },
     { "DestinyFontHuge", 32 },
     { "GameFont_Gigantic", 32, "S" },
-    { "SystemFont_OutlineThick_WTF", 32, "O" }, -- stock THICK; deliberate downgrade (audit v3.5.772)
+    { "SystemFont_OutlineThick_WTF", 32, "O" }, -- stock THICK; deliberate downgrade
 
     { "Game40Font", 40 },
     { "Game42Font", 42 },
@@ -174,7 +174,7 @@ local FONT_LIST = {
 }
 
 for i = 12, 22 do
-    FONT_LIST[#FONT_LIST + 1] = { "ObjectiveTrackerFont" .. i, i, "O" } -- v3.5.792: outlined with LineFont
+    FONT_LIST[#FONT_LIST + 1] = { "ObjectiveTrackerFont" .. i, i, "O" } -- outlined with LineFont
 end
 
 local CATEGORY = {

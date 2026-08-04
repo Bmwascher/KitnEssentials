@@ -57,7 +57,7 @@ local GetMobileEmbeddedTexture = (_G.ChatFrameUtil and _G.ChatFrameUtil.GetMobil
 
 local UNKNOWN = _G.UNKNOWN
 
--- v3.5.884 (WindTools ChatText port): role icons before names in group
+-- (WindTools ChatText port): role icons before names in group
 -- chat. CMH.lfgRoles is keyed by sender name (short AND name-realm keys,
 -- both written at cache-build time in Modules/Skinning/Chat.lua on
 -- GROUP_ROSTER_UPDATE); values are ready-made |T|t texture strings.

@@ -226,7 +226,7 @@ function MPT:BuildHUD()
     -- timerPBText anchor is owned by ApplyLayout's stacking pass
     -- (reservation-tuck right-anchored). Anchoring it to timerText's left
     -- edge here made it ride the changing part's re-measured width every
-    -- tick (2026-07-02).
+    -- tick.
 
     local barTex = KE:GetStatusbarPath(self.db and self.db.BarTexture or "KitnUI")
 
@@ -422,7 +422,7 @@ end
 -- clock, re-glued at every whole-second flip by OnTimerTick. Display is
 -- throttled to 10 Hz (WarpDeplete's cadence) and shows ONE decisecond
 -- digit — a 60 Hz three-digit readout churned unreadably and its
--- proportional-font width danced at frame rate (user feedback 2026-07-02);
+-- proportional-font width danced at frame rate (user feedback);
 -- the frozen completion time keeps the full .mmm via RenderTimer. The
 -- width reservation stays the .mmm template, so completion never moves
 -- the PB text. Detach-when-idle: the script exists only while
@@ -828,7 +828,7 @@ function MPT:RenderThresholds()
                 end
                 local sign = (state == "OVER" or state == "LOCKED_MISSED") and "+" or ""
                 -- Tier 1 races bare completion, not an upgrade chest — the
-                -- community term is "Timed" (user direction 2026-07-02).
+                -- community term is "Timed" (user direction).
                 local label = tier == 1 and "Timed" or format("+%d Chest", tier)
                 -- Label and value are SEPARATE FontStrings: the label is
                 -- static per tier while the value re-measures every second,
@@ -1183,7 +1183,7 @@ function MPT:RenderForces()
 
     -- Forces PB: bare PB target after the %/count while filling; once capped,
     -- a completion PREFIX to the LEFT of the forces text — "<delta> [<time>]
-    -- <forces text>" (user direction 2026-07-18, screenshot parity; no extra
+    -- <forces text>" (user direction, screenshot parity; no extra
     -- separator — the " - " seen in COUNT_PERCENT belongs to that format).
     -- The delta keeps the boss-row style/gate (ShowPBDelta, ahead/behind
     -- colors, bare unpadded); the bracketed forces clear time shares the boss
@@ -1289,7 +1289,7 @@ function MPT:RenderObjectives()
             timeFS:SetAlpha(1)  -- clear a possible pending-row PBOpacity dim on this pooled slot
             -- "Show Clear Times" gates the clear-time text itself;
             -- the PB delta is self-contained and independently gated below.
-            -- Row style (user direction 2026-07-18): bracketed unpadded clear
+            -- Row style (user direction): bracketed unpadded clear
             -- time + bare unpadded delta — "[9:09] +0:27", not "09:09 (+00:30)".
             if db.ShowObjectiveTimes ~= false then
                 local doneHex = Hex(db.ObjectiveDoneColor or { 0, 1, 0.14 })

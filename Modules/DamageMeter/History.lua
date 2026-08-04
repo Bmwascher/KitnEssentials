@@ -148,7 +148,7 @@ end
 -- completion repairs flow to both). The persisted copy exists solely to
 -- survive /reload — the native session store is server-side and outlives
 -- a reload, so without it a between-keys reload sealed a fully-labeled
--- run as "Earlier runs" (smoke 2026-07-24). It lives in the AceDB GLOBAL
+-- run as "Earlier runs". It lives in the AceDB GLOBAL
 -- section, never the profile: pending describes the global native store,
 -- and a per-profile copy shards that state — an inactive profile could
 -- retain an anchored stale record across a no-wipe boundary drop and

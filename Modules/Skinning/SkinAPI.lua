@@ -29,7 +29,7 @@ local function PixelBorder()
     return (768 / ph) / uiScale
 end
 
--- v4.0.16: per-frame edge size. PixelBorder() is UIParent-scale math,
+-- per-frame edge size. PixelBorder() is UIParent-scale math,
 -- so inside any SCALED ancestor (world map at 1.1) a border sized with
 -- it is scale-times too thick in physical pixels (1.1px -> renders 2px
 -- at some positions: map tabs/scrollbar/nav field report). Dividing by
@@ -104,7 +104,7 @@ S.RefreshPalette()
 S.bgColor = S.palette.window
 S.borderColor = S.palette.border
 
--- v3.5.847: ElvUI's E.ClearTexture (their Core.lua:81). Their
+-- ElvUI's E.ClearTexture (their Core.lua:81). Their
 -- StripRegion clears art with SetTexture(ClearTexture) + SetAtlas("")
 -- -- we were passing nil to both, which does NOT clear an atlas the
 -- way "" does: the texture kept rendering (green missing-art box on
@@ -124,7 +124,7 @@ local BLIZZARD_REGIONS = {
     "BottomLeftTex", "BottomRightTex", "RightTex", "MiddleTex", "Center",
     "ArtOverlayFrame", "FilligreeOverlay", "PortraitOverlay",
     "ScrollFrameBorder", "ScrollUpBorder", "ScrollDownBorder",
-    -- v3.5.848: NineSlice added (ElvUI Toolkit.lua:25). The region dump
+    -- NineSlice added (ElvUI Toolkit.lua:25). The region dump
     -- proved the surviving character-frame art IS the NineSlice pieces
     -- (UI-Frame-Metal-* on CharacterFrame, UI-Frame-Inner* on
     -- CharacterFrameInsetRight). We only alpha-faded the container --
@@ -134,7 +134,7 @@ local BLIZZARD_REGIONS = {
     "NineSlice",
 }
 
--- v3.5.837: ElvUI's Kill(), ported exactly (their Toolkit.lua:430).
+-- ElvUI's Kill(), ported exactly (their Toolkit.lua:430).
 -- This is how ElvUI makes art stay dead through Blizzard re-dressing:
 -- frames get unregistered + reparented to a hidden frame; regions get
 -- ONE narrow redirect (Show -> the object's own Hide). Note what it is
@@ -142,7 +142,7 @@ local BLIZZARD_REGIONS = {
 -- on every stripped texture, which is what tainted the flyout display
 -- loop (v828). ElvUI uses this narrowly -- two sites in their whole
 -- Character skin -- and StripTextures (state-only) everywhere else.
--- v3.5.838: S.KillTexture now routes through S.Kill (ElvUI's Kill).
+-- S.KillTexture now routes through S.Kill (ElvUI's Kill).
 -- The flyout no longer uses it -- that path moved to ElvUI's
 -- ClearTexture idiom via S.ClearButtonArt, which is surgery-free.
 S.HiddenFrame = S.HiddenFrame or CreateFrame("Frame", nil, _G.UIParent)
@@ -160,7 +160,7 @@ function S.Kill(object)
 end
 
 function S.KillRegions(frame, name)
-    -- v3.5.844 (Equipment Manager buttons vanished): this used
+    -- (Equipment Manager buttons vanished): this used
     -- to :Hide() every name in the list -- and the list has "Right",
     -- so S.StripTextures(CharacterFrameInset) resolved
     -- _G["CharacterFrameInset".."Right"] = CharacterFrameInsetRight
@@ -274,7 +274,7 @@ function S.PixelSnap(obj)
     end
 end
 
--- v3.5.786: crops a baked decorative border off an atlas texture in
+-- crops a baked decorative border off an atlas texture in
 -- TEXCOORD space (for art and border sharing one atlas -- e.g. the LFG
 -- ApplicationViewer InfoBackground, the ChallengeMode keystone frame
 -- background). Resolves the atlas's raw file rect via
@@ -340,8 +340,8 @@ local edgeRefresher = CreateFrame("Frame")
 edgeRefresher:RegisterEvent("PLAYER_ENTERING_WORLD")
 edgeRefresher:RegisterEvent("UI_SCALE_CHANGED")
 edgeRefresher:RegisterEvent("DISPLAY_SIZE_CHANGED")
--- v4.0.17: hover/selection textures inset by the border THICKNESS; with
--- per-frame edges (v4.0.16) that is no longer a literal 1 inside scaled
+-- hover/selection textures inset by the border THICKNESS; with
+-- per-frame edges that is no longer a literal 1 inside scaled
 -- subtrees, so dependent regions register here and re-fit whenever the
 -- backdrop's edge refits (map min/max flips).
 function S.InsetToEdge(region, bd)
@@ -388,7 +388,7 @@ edgeRefresher:SetScript("OnEvent", function()
     end
 end)
 
--- v4.0.16: re-check every backdrop under a root whose scale changed
+-- re-check every backdrop under a root whose scale changed
 -- (world map min/max toggles 1.1 <-> 1.0; scale changes fire no
 -- OnSizeChanged on descendants, so callers hook the root's resize).
 function S.RefreshEdgesUnder(root)
@@ -441,7 +441,7 @@ function S.FixSubPixelEdge(frame, outsetPx)
     end
 
     local function queueSnap()
-        -- v3.5.855: snap NOW as well as next frame. The deferral exists
+        -- snap NOW as well as next frame. The deferral exists
         -- because GetRect() can be nil before layout settles (snap()
         -- bails safely in that case) -- but when the rect IS ready, and
         -- on a re-show it always is, waiting a frame meant the backdrop
@@ -460,7 +460,7 @@ function S.FixSubPixelEdge(frame, outsetPx)
     queueSnap()
 end
 
--- v3.5.853: the fix for "skins visibly load in". Every wait-for-frame
+-- the fix for "skins visibly load in". Every wait-for-frame
 -- in the skins used a WALL-CLOCK delay (0.1s-1s), so anything not yet
 -- created when the skin ran stayed Blizzard-art for that long, in
 -- plain sight. Nothing about those waits needed real time -- they were
@@ -538,9 +538,9 @@ local function armHover(button, anchor, l, t, r, b)
     end
 end
 
--- v3.5.856: hold a fontstring's colour without owning its setter.
+-- hold a fontstring's colour without owning its setter.
 -- ElvUI's pattern (hook + re-assert); never `SetTextColor = NOOP`.
--- v3.5.873: the texture analogue of S.LockTextColor, for plain art regions
+-- the texture analogue of S.LockTextColor, for plain art regions
 -- that Blizzard re-dresses BY ATLAS on a state change.
 --
 -- Found on SettingsPanel.GameTab/AddOnsTab: /aesskin regions after a hover
@@ -647,7 +647,7 @@ end
 
 local killedTextures = setmetatable({}, { __mode = "k" })
 
--- v4.0.0: regions exempt from all kill sweeps (KillTexture and every
+-- regions exempt from all kill sweeps (KillTexture and every
 -- caller: KillAllTextures, S.Button child sweeps). For Blizzard-managed
 -- child art a skin must keep alive inside an otherwise-stripped control
 -- (e.g. barbershop dropdown color swatches, which Blizzard re-atlases,
@@ -671,7 +671,7 @@ function S.KillTexture(t)
     -- re-assertion stay cheap.
     if not t then return end
     if protectedTextures[t] then return end
-    -- v3.5.838: aligned with ElvUI's Kill (Toolkit.lua:430) -- their
+    -- aligned with ElvUI's Kill (Toolkit.lua:430) -- their
     -- one tool for "stay dead" regions: a single Show->Hide redirect,
     -- not our old four-method NOOP. State-only (v828-v837) was the
     -- other extreme and let Blizzard re-dress everything (BigWigs
@@ -744,7 +744,7 @@ local function reKillArrowStates(button)
     killAllButOurArrow(button)
 end
 
--- v3.5.838: ElvUI's texture-clearing idiom, ported exactly
+-- ElvUI's texture-clearing idiom, ported exactly
 -- (E.ClearTexture = 0 in their Core.lua:81; S:ClearNormalTexture and
 -- friends in Skins.lua:178). Two ideas we never copied:
 --   1. Clear state art by passing fileID 0 to the BUTTON's own setter.
@@ -1098,7 +1098,7 @@ function S.CheckRefresh(check)
     if not check or not S.data(check).skinned then return end
     S.ClearButtonArt(check)
     local aeBD = S.GetBackdrop(check)
-    -- v3.5.835: NOOP surgery removed here too (ElvUI parity -- see
+    -- NOOP surgery removed here too (ElvUI parity -- see
     -- S.CheckBox). CheckRefresh IS the re-assert path; it re-runs from
     -- the SetCheckedTexture hook, which is how ElvUI keeps its check
     -- art through Blizzard's repaints.
@@ -1151,7 +1151,7 @@ function S.CheckBox(check)
     local aeBD = S.Backdrop(check, 4)
     if aeBD then aeBD:SetBackdropColor(CONTROL_BG[1], CONTROL_BG[2], CONTROL_BG[3], CONTROL_BG[4]) end
 
-    -- v3.5.835: ElvUI parity. Their HandleCheckBox replaces the check
+    -- ElvUI parity. Their HandleCheckBox replaces the check
     -- ASSET via the official setters and re-asserts through
     -- hooksecurefunc(frame, "SetCheckedTexture", ...) -- it never owns
     -- methods on the texture. Ours did both: asset swap AND
@@ -1194,7 +1194,7 @@ function S.CheckBox(check)
                 end
             end)
         end
-        -- v3.5.838: our bespoke re-kill hooks replaced by the ported
+        -- our bespoke re-kill hooks replaced by the ported
         -- ElvUI idiom -- ClearButtonArt (called at the top of
         -- S.CheckBox) already installs their re-clear-on-set hooks.
 
@@ -1243,7 +1243,7 @@ function S.EnsureCaretRoom(box)
     if (l or 0) < 4 then eb:SetTextInsets(4, r or 0, t or 0, b or 0) end
 end
 
--- v3.5.848: duplicate BLIZZARD_REGIONS removed -- the second copy
+-- duplicate BLIZZARD_REGIONS removed -- the second copy
 -- silently shadowed the first and was missing the ScrollFrameBorder
 -- entries, so those never got stripped anywhere.
 function S.HideBlizzardRegions(frame)
@@ -1438,7 +1438,7 @@ function S.TabSetSelected(tab, selected)
     end
 end
 
--- v3.5.859: is this one of Blizzard's modern TabSystem tabs?
+-- is this one of Blizzard's modern TabSystem tabs?
 -- TabSystemMixin owns their geometry through the MANAGED LAYOUT system:
 -- AddTab/SetTabShown call MarkDirty(), and LayoutMixin resolves size and
 -- position on the NEXT frame via TabSystemButtonMixin:UpdateTabWidth().
@@ -1480,7 +1480,7 @@ function S.Tab(tab)
             d0.textArmor = true
             local pending = false
             hooksecurefunc(tab.Text, "SetPoint", function()
-                -- v3.5.855: was deferred a frame (visible text jump when
+                -- was deferred a frame (visible text jump when
                 -- Blizzard re-anchors on tab select). `recentering`
                 -- already guards the re-entry from our own SetPoints,
                 -- so this is safe to do inline -- and the text never
@@ -1736,7 +1736,7 @@ function S.OverlayButton(button, width, height, text, level, strata)
     buttonOverlays[button] = o
 end
 
--- v3.5.863: dedupe flag moved OFF the Blizzard texture and into S.data.
+-- dedupe flag moved OFF the Blizzard texture and into S.data.
 -- `icon.aeIcon = true` was an AES-named field write on a Blizzard object
 -- -- banned by our own doctrine three functions down (S.ItemButton,
 -- v827: "NO AES-named fields on Blizzard frames, ever -- S.data only").
@@ -1849,7 +1849,7 @@ function S.Icon(icon, withBackdrop)
 end
 
 function S.ItemButton(button, opts)
-    -- v3.5.827 (flyout equip taint, FINAL root): writing our dedupe
+    -- (flyout equip taint, FINAL root): writing our dedupe
     -- flag DIRECTLY ON Blizzard's button plants a tainted key in a
     -- secure table -- contaminating iteration/field-fallback reads
     -- Blizzard's item-button code performs mid-display-loop, which
@@ -1897,7 +1897,7 @@ end
 
 
 function S.HookScrollBox(scrollBox, styleRow)
-    -- v3.5.840: back to ElvUI's pattern -- hooksecurefunc(ScrollBox,
+    -- back to ElvUI's pattern -- hooksecurefunc(ScrollBox,
     -- 'Update', fn) with fn doing box:ForEachFrame(styleRow). My v814
     -- rewrite onto the ScrollUtil per-element callback (and the
     -- "never ForEachFrame a Blizzard ScrollBox" doctrine) came from
@@ -1925,7 +1925,7 @@ function S.HookScrollBoxIcons(scrollBox, getIcon, withBackdrop)
         scrollBox:ForEachFrame(cropFrame)
     end
     apply()
-    -- v3.5.863: same doctrine fix -- this planted an AES key directly on
+    -- same doctrine fix -- this planted an AES key directly on
     -- a Blizzard ScrollBox, the exact object class v814 cleaned up.
     if scrollBox.Update and not S.data(scrollBox).aeIconHook then
         hooksecurefunc(scrollBox, "Update", apply)

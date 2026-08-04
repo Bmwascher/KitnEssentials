@@ -118,7 +118,7 @@ local function SkinMisc()
             local tc = listener.TitleContainer
             local title = tc and tc.TitleText
             if title then S.SetFont(title, 14, "OUTLINE") end
-            -- v3.5.721: Blizzard anchors the TitleContainer
+            -- Blizzard anchors the TitleContainer
             -- asymmetrically (TOPLEFT x=58 clearing the portrait,
             -- TOPRIGHT x=-24); with the portrait killed the title reads
             -- off-center right. Re-anchor symmetric.

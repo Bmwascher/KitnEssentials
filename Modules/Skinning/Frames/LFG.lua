@@ -50,7 +50,7 @@ end
 local unpack = unpack
 local ROLE_ICON = KE.ROLE_ICONS
 
--- v4.0.179: the modern role icons are now optional. When off we simply
+-- the modern role icons are now optional. When off we simply
 -- do not replace the texture, so Blizzard's own atlas stays -- nothing
 -- is blanked and no restore pass is needed.
 local function UseModernRoleIcons()
@@ -497,7 +497,7 @@ local function Skin()
         end
 
         if _G.LFGListCategorySelection_AddButton then
-            -- v4.0.115: these buttons are re-Shown by Blizzard's own secure
+            -- these buttons are re-Shown by Blizzard's own secure
             -- path (LFGListCategorySelection_AddButton -> button:Show()), and
             -- a user hit ADDON_ACTION_BLOCKED on that Show when abandoning a
             -- dungeon. Doing insecure frame work on Blizzard's regions while
@@ -660,7 +660,7 @@ local function Skin()
             -- Blizzard re-SetAtlas-es (activity/category changes), and
             -- a border-only S.Backdrop frame supplies the 1px edge.
             local function CropInfoBackground(tex)
-                S.CropAtlasEdges(tex, 0.035, 0.10) -- v3.5.786: promoted primitive
+                S.CropAtlasEdges(tex, 0.035, 0.10) -- promoted primitive
             end
             if av.InfoBackground and not S.data(av.InfoBackground).cropHooked then
                 S.data(av.InfoBackground).cropHooked = true
@@ -718,7 +718,7 @@ local function Skin()
             else
                 S.Button(btn)
             end
-            -- v3.5.784 (check/x boxes looked grey): compact icon
+            -- (check/x boxes looked grey): compact icon
             -- buttons read better on the theme background than on the
             -- control-grey fill. S.Backdrop cached-returns the existing
             -- backdrop.
@@ -762,7 +762,7 @@ local function Skin()
                     local roleBtn = member["RoleIcon" .. i]
                     local nt = roleBtn and roleBtn.GetNormalTexture and roleBtn:GetNormalTexture()
                     if nt then
-                        -- v3.5.784: match LOWERCASED -- the micro-role
+                        -- match LOWERCASED -- the micro-role
                         -- atlases from GetMicroIconForRole are MixedCase,
                         -- so the case-sensitive find never hit (:
                         -- role icons weren't swapped).
@@ -847,7 +847,7 @@ local function SkinAffixes(child)
     for _, af in ipairs(list) do
         if af.Border then af.Border:SetTexture(nil) end
         if af.CircleMask then af.CircleMask:Hide() end
-        -- v3.5.785 (% text clipping the border): Blizzard
+        -- (% text clipping the border): Blizzard
         -- anchors Percent hanging BELOW the ring (BOTTOM y=-4), which
         -- reads as clipping on our square icons. Re-anchor inside and
         -- standardize the font; Blizzard's SetUp only swaps
@@ -886,7 +886,7 @@ local function SkinChallenges()
         -- in, so crop it in texcoord space and draw a 1px edge
         -- instead. No StripTextures, no slot meddling: the "weird"
         -- bare-square slot was our own S.Icon crop + region sweep.
-        -- v3.5.791 (diagnostic-confirmed): the parchment is region 1
+        -- (diagnostic-confirmed): the parchment is region 1
         -- with the expected atlas, but the frame's INTRO ANIMATION
         -- writes alpha onto its regions every open -- SetAlpha(0) was
         -- applied and then overwritten (dump showed alpha back at

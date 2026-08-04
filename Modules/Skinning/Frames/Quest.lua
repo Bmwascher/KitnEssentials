@@ -400,7 +400,7 @@ local function Skin()
                 local mapFrame = _G.QuestMapFrame and _G.QuestMapFrame:GetParent()
                 scene:ClearAllPoints()
                 scene:SetPoint("TOPLEFT", parent, "TOPRIGHT", (x or 0) + (parent == mapFrame and 11 or 6), y or 0)
-                -- v3.5.902: Blizzard hard-codes ModelTextFrame height (216,
+                -- Blizzard hard-codes ModelTextFrame height (216,
                 -- or 165 compact -- the Prey/AdventureMap dialog passes
                 -- compact) regardless of text length, so one-line flavor
                 -- text sits in a mostly-empty box. UpdatePortraitText runs

@@ -176,7 +176,7 @@ end
 -- deadline live — the count-up big timer never shows time-remaining, so the
 -- line carries it. REMAINING formats pass false (their big timer IS the +1
 -- countdown) and keep the +2 overshoot. Completion in the missed-+2 window
--- ALWAYS locks the +2 delta (user direction 2026-07-02), so the lock is
+-- ALWAYS locks the +2 delta (user direction), so the lock is
 -- identical with the flag on or off.
 -- completed=true picks the locked state — CompleteRun freezes run.elapsed,
 -- so the "lock" is the caller re-rendering the frozen value.
@@ -234,7 +234,7 @@ end
 --     between driver frames)
 --   * never snap backward — when the authoritative feed stalls, the
 --     precise clock free-runs ahead; yanking it back to a stale tick
---     re-created the per-second sawtooth this replaced (2026-07-02)
+--     re-created the per-second sawtooth this replaced
 -- Returns (displaySeconds, newMsBase). Busted-testable
 -- (dev/spec/mpt_raceline_spec.lua).
 function MPT.LiveMsElapsed(now, msBase, elapsed)
@@ -738,7 +738,7 @@ function MPT:UpdateDB()
     -- what is now Blizzard's pre-formatted percent STRING (the overlay binds
     -- GetUnitCriteriaProgressValues return #3 — %.2f on it would error), then
     -- briefly the bare "%s" passthrough, which dropped the % sign the string
-    -- doesn't carry (live-confirmed 2026-07-02). Normalize all three to "%s%%".
+    -- doesn't carry (live-confirmed). Normalize all three to "%s%%".
     -- OverlayFormat has no GUI control, so no user-customized value exists.
     if self.db.OverlayFormat == "PERCENT" or self.db.OverlayFormat == "%.2f%%"
         or self.db.OverlayFormat == "%s" then

@@ -52,7 +52,7 @@ local function SkinHistoryRow(button)
     d.skinned = true
 end
 
--- v3.5.814: HandleScrollElements (C_Timer + our own ForEachFrame per
+-- HandleScrollElements (C_Timer + our own ForEachFrame per
 -- Update) removed -- that pattern seeded the LootHistory secret-taint
 -- crash. Rows now style through S.HookScrollBox's sanctioned
 -- per-element callback.
@@ -72,7 +72,7 @@ local function SkinLootRow(button)
         if item.NormalTexture then item.NormalTexture:SetAlpha(0) end
         if item.IconBorder then item.IconBorder:SetAlpha(0) end
 
-        -- v3.5.815 (slim bars had no outline): the Blizzard bar
+        -- (slim bars had no outline): the Blizzard bar
         -- art is alpha-zeroed (atlas card, correct per ElvUI) but
         -- nothing replaced it -- the name bar was invisible. Backdrop
         -- + 1px border on the NameFrame rect, quality-tinted together
@@ -95,7 +95,7 @@ local function SkinLootRow(button)
         end
     end
 
-    -- v3.5.722 (user report, "attempt to call a nil value"): on
+    -- (user report, "attempt to call a nil value"): on
     -- Midnight NameFrame/BorderFrame/etc. are TEXTURES (atlas item
     -- cards), not frames -- the old StripTextures/Backdrop/
     -- GetFrameLevel block was ElvUI's MasterLooter (frame-based)
@@ -313,7 +313,7 @@ local function DeferToFirstShow(frame, fn)
 end
 
 local function Skin()
-    -- v3.5.870: LootFrame and GroupLootHistoryFrame are no longer skinned
+    -- LootFrame and GroupLootHistoryFrame are no longer skinned
     -- from the early pass. We only arm the OnShow hooks here -- no geometry
     -- is touched at load. See ApplyLootFrame/ApplyLootHistory above.
     DeferToFirstShow(_G.LootFrame, ApplyLootFrame)

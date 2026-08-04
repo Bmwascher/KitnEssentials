@@ -143,7 +143,7 @@ end
 LR.SkinAllRollFrames = SkinAllRollFrames
 
 -- `why` is DEBUG_LR-only: it names the caller in the trace. Probe run 1
--- (2026-07-31) logged an ApplyPosition whose "before" state was already
+-- logged an ApplyPosition whose "before" state was already
 -- correct, and there was no way to tell which of the six call sites produced
 -- it -- Setup, the GLC_Update hook, the OnShow hook, either ReassertPosition
 -- tick, the regen watcher, or an external GUI/EditMode call. Untagged, the
@@ -158,7 +158,7 @@ function LR:ApplyPosition(why)
     end
     local c = _G.GroupLootContainer
     if not c then return end
-    -- v3.5.755: layout removal is by REPARENTING (see the Unmanage note
+    -- layout removal is by REPARENTING (see the Unmanage note
     -- below) -- the ignoreInLayout flag writes are gone; that boolean
     -- is read inside the SECURE managed-layout pass and writing it from
     -- here taints the whole UIParent_ManageFramePositions execution.
@@ -369,7 +369,7 @@ function LR:Setup()
     local c = _G.GroupLootContainer
     if not c then return end
 
-    -- Probe run 1 (2026-07-31) captured no Container:OnShow at all, and the two
+    -- Probe run 1 captured no Container:OnShow at all, and the two
     -- explanations need different fixes: the container was already shown when
     -- the hooks went in (so OnShow had already fired and we can never see it),
     -- or the hooks were not installed yet. This line dates the install and
@@ -538,7 +538,7 @@ function LR:RegisterEditMode()
                 pcall(function() KE.GUIFrame:RefreshContent("LootRoll") end)
             end
         end,
-        -- v3.5.871: guiPath is a SIDEBAR ITEM ID and there is no sidebar
+        -- guiPath is a SIDEBAR ITEM ID and there is no sidebar
         -- item "LootRoll" -- Open Settings was silently falling through to
         -- "just open the GUI". These sections live in the consolidated
         -- Blizzard Frames tab, so route through it (KE's sidebar id:
@@ -563,14 +563,14 @@ end
 
 function LR:OnDisable()
     if self.mover then self.mover:Hide() end
-    -- v3.5.871: leave /kes edit when the module does.
+    -- leave /kes edit when the module does.
     if KE.EditMode then
         KE.EditMode:UnregisterElement("LootRoll")
         self.editModeRegistered = nil
     end
     if self.TeardownRollBars then self:TeardownRollBars() end
     local c = _G.GroupLootContainer
-    -- v3.5.755: restore by reparenting (flag writes taint the secure
+    -- restore by reparenting (flag writes taint the secure
     -- layout pass).
     --
     -- DEVIATION (task-3, corrects <REF>:347-350): the reference's own
