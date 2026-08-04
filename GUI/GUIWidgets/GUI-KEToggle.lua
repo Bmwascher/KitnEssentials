@@ -337,3 +337,135 @@ function GUIFrame:CreateCheckbox(parent, labelText, config)
 
     return row
 end
+
+---------------------------------------------------------------------------------
+-- Compact Checkbox Widget
+---------------------------------------------------------------------------------
+
+-- A square checkbox for DENSE lists, where the sliding toggle above is too tall
+-- and too wide to fit three to a row. Config-table API, matching every other
+-- widget here: { value, tooltip, callback, disabled }.
+--
+-- Ported from the reference (AE v4.0.203/GUI/Widgets/AEToggle.lua:372-428). Three
+-- API/behaviour additions it has no equivalent for: the config table, tooltip
+-- support, and a disabled state the widget owns instead of the caller doing
+-- SetAlpha plus EnableMouse itself. Two further deviations: ApplyThemeColors,
+-- which the reference range has no counterpart for, and the fill colour, which
+-- is Theme.accent here against the reference's Theme.textPrimary -- a required
+-- substitution, since a copied literal would be the reference addon's own
+-- accent and would stop tracking the user's chosen theme.
+function GUIFrame:CreateCompactCheckbox(parent, labelText, config)
+    config = config or {}
+    local BOX = 16
+    local CELL = 22
+
+    local cell = CreateFrame("Button", nil, parent)
+    cell:SetHeight(CELL)
+    -- Tells row:AddWidget to leave the height alone (GUI-Core.lua:537-539);
+    -- without it the cell stretches to the row height and the box floats.
+    cell.explicitHeight = CELL
+
+    local box = CreateFrame("Frame", nil, cell, "BackdropTemplate")
+    box:SetSize(BOX, BOX)
+    box:SetPoint("LEFT", cell, "LEFT", 0, 0)
+    box:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = 1,
+    })
+    box:SetBackdropColor(Theme.bgMedium[1], Theme.bgMedium[2], Theme.bgMedium[3], 1)
+    box:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+
+    -- Inset 2, not 3: at 3 the fill reads as a floating dot rather than a check
+    -- (the reference's own note at AEToggle.lua:389-393).
+    local fill = box:CreateTexture(nil, "ARTWORK")
+    fill:SetPoint("TOPLEFT", box, "TOPLEFT", 2, -2)
+    fill:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", -2, 2)
+    fill:SetColorTexture(Theme.accent[1], Theme.accent[2], Theme.accent[3], 0.9)
+
+    local label = cell:CreateFontString(nil, "OVERLAY")
+    label:SetPoint("LEFT", box, "RIGHT", 8, 0)
+    label:SetPoint("RIGHT", cell, "RIGHT", 0, 0)
+    label:SetJustifyH("LEFT")
+    -- No wrap: a wrapped label would overflow a 22px cell into the row below.
+    -- A name too long for its column clips instead, which is why the three-column
+    -- list carries no per-row suffixes.
+    label:SetWordWrap(false)
+    KE:ApplyThemeFont(label, "small")
+    label:SetText(labelText or "")
+    label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 0.9)
+
+    cell._checked = config.value and true or false
+    cell._enabled = true
+    fill:SetShown(cell._checked)
+
+    function cell:SetChecked(state)
+        self._checked = state and true or false
+        fill:SetShown(self._checked)
+    end
+
+    function cell:GetChecked() return self._checked end
+
+    -- Same name as the sliding toggle's row:SetEnabled (GUI-KEToggle.lua:301),
+    -- so the grid can disable either widget the same way. Shadows Button's own
+    -- SetEnabled deliberately: that one stops the click but leaves the row at
+    -- full opacity, which reads as "locked on" rather than "does not apply".
+    --
+    -- Mouse input stays ON while disabled. The obvious EnableMouse(false) would
+    -- make the row unhoverable, and the tooltip is the ONLY place a greyed row
+    -- says WHY it is greyed once the per-row text marker is gone. The refusal
+    -- lives in OnClick instead, where it is one explicit branch rather than an
+    -- absence of input.
+    function cell:SetEnabled(enabled)
+        self._enabled = enabled and true or false
+        self:SetAlpha(self._enabled and 1 or 0.35)
+    end
+
+    cell:SetScript("OnClick", function(self)
+        -- The refusal rule. A fully suppressed row must not be writable: its
+        -- saved value is the user's real choice, kept intact until EllesmereUI
+        -- stops covering that window.
+        if not self._enabled then return end
+        self:SetChecked(not self._checked)
+        if config.callback then config.callback(self._checked) end
+    end)
+
+    cell:SetScript("OnEnter", function(self)
+        -- Hover STYLING is for live rows only -- a greyed row that lit up on
+        -- hover would read as clickable. The tooltip is not styling and shows
+        -- either way; on a greyed row it is the whole explanation.
+        if self._enabled then
+            label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
+            box:SetBackdropBorderColor(Theme.textPrimary[1], Theme.textPrimary[2], Theme.textPrimary[3], 0.8)
+        end
+        if config.tooltip then
+            -- ANCHOR_CURSOR_RIGHT with a 10/10 offset, matching CreateCheckbox
+            -- above (GUI-KEToggle.lua:269) so both widgets tip identically.
+            GameTooltip:SetOwner(self, "ANCHOR_CURSOR_RIGHT", 10, 10)
+            GameTooltip:SetText(config.tooltip, 1, 1, 1, 1, true)
+            GameTooltip:Show()
+        end
+    end)
+
+    cell:SetScript("OnLeave", function()
+        label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 0.9)
+        box:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+        GameTooltip:Hide()
+    end)
+
+    -- Re-tint after KE:RefreshTheme swaps the Theme colour tables. Unlike the
+    -- sliding toggle this widget is not stateful in colour -- the fill is the
+    -- accent whether checked or not, and only its visibility tracks state -- so
+    -- a straight re-apply is enough.
+    function cell:ApplyThemeColors()
+        local TT = Theme
+        box:SetBackdropColor(TT.bgMedium[1], TT.bgMedium[2], TT.bgMedium[3], 1)
+        box:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], 1)
+        fill:SetColorTexture(TT.accent[1], TT.accent[2], TT.accent[3], 0.9)
+        label:SetTextColor(TT.textSecondary[1], TT.textSecondary[2], TT.textSecondary[3], 0.9)
+    end
+
+    if config.disabled then cell:SetEnabled(false) end
+
+    return cell
+end
