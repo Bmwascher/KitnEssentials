@@ -741,11 +741,11 @@ end
 -- Skinning toggles FLAG instead of prompting. A user ticking eight windows
 -- should get one prompt when they close the GUI, not eight interruptions while
 -- they are still working. Ported from the reference's FlagReloadNeeded
--- (Core/Globals.lua:267-269).
+-- (References/atrocityEssentials/atrocityEssentials v4.0.203/Core/Globals.lua:267-269).
 --
 -- Profile operations deliberately do NOT go through here: Brandon's ruling
 -- 2026-08-02 is that a profile switch always prompts immediately
--- (Core/ProfileManager.lua:490-502).
+-- (Core/ProfileManager.lua:491-507).
 function KE:FlagReloadNeeded()
     self.reloadPending = true
 end
