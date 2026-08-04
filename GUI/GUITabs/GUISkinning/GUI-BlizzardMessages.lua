@@ -107,7 +107,7 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
             ApplySettings()
         else
             KitnEssentials:DisableModule("SkinBlizzardMessages")
-            KE:SkinningReloadPrompt()
+            KE:FlagReloadNeeded()
         end
         KE:Print("Blizzard Text Skinning: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
@@ -130,7 +130,7 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
                     if bf then bf:ApplyAll() end
                 else
                     KitnEssentials:DisableModule("BlizzardFonts")
-                    KE:SkinningReloadPrompt()
+                    KE:FlagReloadNeeded()
                 end
             end,
         })

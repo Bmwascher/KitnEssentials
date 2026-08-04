@@ -198,7 +198,12 @@ local function EnsurePromptDialog()
     dialog:RegisterForDrag("LeftButton")
     dialog:SetScript("OnDragStart", function(d) d:StartMoving(true) end)
     dialog:SetScript("OnDragStop", function(d) d:StopMovingOrSizing() end)
-    dialog:EnableKeyboard(true)
+    -- Guarded for the same reason as the show-time reset (:717-741):
+    -- EnableKeyboard is protected. This builder runs once, on the session's
+    -- FIRST prompt, so an unguarded call here throws for a player whose first
+    -- prompt of the session happens to be raised mid-fight. Skipping it leaves
+    -- that prompt without ESCAPE until the combat watcher arms it (:788-795).
+    if not InCombatLockdown() then dialog:EnableKeyboard(true) end
     dialog:SetScript("OnKeyDown", function(self, key)
         -- SetPropagateKeyboardInput is combat-protected for insecure frames;
         -- skip it in lockdown (ESC-close itself is fine — see EditMode's
@@ -709,6 +714,32 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     if dialog.acceptBtn then dialog.acceptBtn:SetShown(showButtons and not isCopyPrompt) end
     if dialog.cancelBtn then dialog.cancelBtn:SetShown(showButtons) end
 
+    -- Reset the keyboard state on every show, OUT OF COMBAT ONLY.
+    --
+    -- The reset is what matters: an ESCAPE close leaves propagation false
+    -- (:211-213), and without this that state is what the next prompt inherits,
+    -- so a later prompt swallows every key until it is dismissed.
+    --
+    -- Nothing is touched in combat, and that is not caution, it is the API:
+    -- EnableKeyboard is `IsProtectedFunction = true` and
+    -- SetPropagateKeyboardInput is `HasRestrictions = true`
+    -- (.wow-api-reference 12.0.7.68887,
+    -- Blizzard_APIDocumentationGenerated/SimpleFrameAPIDocumentation.lua:217-219,
+    -- :1308-1310). Calling either in lockdown throws, which is worse than the
+    -- state it would repair. Core/EditMode.lua:448-456 records the same contract.
+    --
+    -- Residual, deliberately not fixed here: a prompt RAISED during combat keeps
+    -- whatever state it inherited, so in the narrow case of an ESCAPE close
+    -- immediately before a pull it can still swallow keys. The watcher below
+    -- repairs it the moment combat ends. Repairing it DURING combat needs the
+    -- keyboard capture moved onto a separate child frame that can be Hidden,
+    -- which is EditMode's escapeFrame pattern and a change to every prompt in
+    -- the addon -- out of scope for this branch.
+    if not InCombatLockdown() then
+        dialog:EnableKeyboard(true)
+        dialog:SetPropagateKeyboardInput(true)
+    end
+
     dialog:Show()
     KE.activePrompt = dialog
 
@@ -736,6 +767,75 @@ end
 
 function KE:SkinningReloadPrompt()
     return self:CreateReloadPrompt("Changing this setting may require a reload to take full effect.")
+end
+
+-- Repair, at the end of a fight, a prompt that spent it swallowing keys.
+--
+-- CreatePrompt resets keyboard state on every show, but only out of combat
+-- (:717-741), so a prompt raised in lockdown inherits whatever the previous one
+-- left behind -- and an ESCAPE close leaves "swallow" behind (:211-213). The
+-- builder has the same hole for the session's very first prompt (:201-206).
+-- PLAYER_REGEN_ENABLED fires after lockdown lifts, so both calls are legal here
+-- and this is the only moment the repair can be made.
+--
+-- There is deliberately NO PLAYER_REGEN_DISABLED half. Disarming a prompt at
+-- the pull needs EnableKeyboard, which is `IsProtectedFunction = true`
+-- (.wow-api-reference 12.0.7.68887,
+-- Blizzard_APIDocumentationGenerated/SimpleFrameAPIDocumentation.lua:217-219)
+-- and throws in combat -- the conclusion Core/EditMode.lua:448-456 also reached.
+-- Modules/QoL/CopyAnything.lua:277-286 does call it from a combat handler; per
+-- the reference that call is unsafe, and it is not a precedent to copy.
+local promptCombatWatcher = CreateFrame("Frame")
+promptCombatWatcher:RegisterEvent("PLAYER_REGEN_ENABLED")
+promptCombatWatcher:SetScript("OnEvent", function()
+    local dialog = KE.activePrompt
+    if not dialog or not dialog.IsShown or not dialog:IsShown() then return end
+    dialog:EnableKeyboard(true)
+    dialog:SetPropagateKeyboardInput(true)
+end)
+
+-- Skinning toggles FLAG instead of prompting. A user ticking eight windows
+-- should get one prompt when they close the GUI, not eight interruptions while
+-- they are still working. Ported from the reference's FlagReloadNeeded
+-- (References/atrocityEssentials/atrocityEssentials v4.0.203/Core/Globals.lua:267-269).
+--
+-- Profile operations deliberately do NOT go through here: Brandon's ruling
+-- 2026-08-02 is that a profile switch always prompts immediately
+-- (Core/ProfileManager.lua:491-507).
+function KE:FlagReloadNeeded()
+    self.reloadPending = true
+end
+
+-- Fired from the GUI frame's own OnHide, not from GUIFrame:Hide. The reference
+-- learned this the hard way (its v3.5.548 note at GUI/Main/MainFrame.lua:262-264):
+-- hooking the wrapper let some close paths skip the prompt entirely. The frame
+-- script cannot be skipped.
+--
+-- The creation-time Hide() is inert, because only a user action ever sets the
+-- flag.
+function KE:FlushPendingReloadPrompt()
+    if not self.reloadPending then return end
+
+    -- Entering combat HIDES this GUI (GUI/GUIMain/GUI-MainFrame.lua:682-698),
+    -- which would otherwise put a "Reload Now" button on screen at the pull --
+    -- one misclick from reloading mid-fight. Either guard below KEEPS the flag
+    -- rather than clearing it: the combat handler reopens the GUI when combat
+    -- ends, so the next ordinary close raises the prompt instead.
+    --
+    -- The FIRST guard is the load-bearing one. That handler sets
+    -- reopenAfterCombat immediately BEFORE it hides us, so the flag identifies a
+    -- combat close with no dependence on when the API flips. In-game 2026-08-04:
+    -- the InCombatLockdown check ALONE did not hold -- the prompt still appeared
+    -- on the combat close -- so this is not defence in depth, it is the fix.
+    local gui = self.GUIFrame
+    if gui and gui.reopenAfterCombat then return end
+
+    -- The second still earns its place: a user who opens this GUI during combat
+    -- and closes it themselves never sets the flag above.
+    if InCombatLockdown and InCombatLockdown() then return end
+
+    self.reloadPending = false
+    return self:CreateReloadPrompt("Some of the changes you made need a UI reload to take effect. Reload now?")
 end
 
 ---------------------------------------------------------------------------------

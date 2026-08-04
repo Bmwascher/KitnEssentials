@@ -298,6 +298,14 @@ function KE:CreateReloadPrompt(reason) end
 
 function KE:SkinningReloadPrompt() end
 
+--- Marks a reload as owed. Skinning toggles call this instead of prompting;
+--- the GUI frame's OnHide raises one prompt for the whole session.
+function KE:FlagReloadNeeded() end
+
+--- Raises the deferred prompt if one is owed, and clears the flag.
+---@return Frame?
+function KE:FlushPendingReloadPrompt() end
+
 -- ─── Nicknames (Core/Nicknames.lua) ──────────────────────
 --- Store key ("Name-NormalizedRealm") from a raw name STRING ("Name" or
 --- "Name-Realm"; the realm side is normalized defensively). Pure string

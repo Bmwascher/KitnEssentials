@@ -46,7 +46,12 @@ local FRAME_SKINS = {
     { key = "ChatConfig",               text = "Chat Settings" },
     { key = "Collectables",             text = "Collections" },
     { key = "Communities",              text = "Communities & Guild" },
-    { key = "ContextMenus",             text = "Context Menus (right-click and dropdown menus)",
+    { key = "ContextMenus",             text = "Context Menus",
+      -- The name alone, so it fits a third-column cell at any window width.
+      -- What it covers moves to the tooltip, which every other row already
+      -- uses. The old spelled-out label was 45 characters and needed a
+      -- full-width row of its own to avoid clipping.
+      tooltip = "Skins right-click and dropdown menus.",
       isOn = function()
           local db = KE.db and KE.db.profile.Skinning.ContextMenus
           return db and db.Enabled == true or false
@@ -157,7 +162,11 @@ local FRAME_SKINS = {
 -- row lives here. Presentation only: the skins never run for a missing
 -- addon anyway, because S:Register dispatch is keyed to ADDON_LOADED.
 local ADDON_SKINS = {
-    { key = "Ace3",               text = "Addon Config Windows (AceGUI)" },
+    { key = "Ace3",               text = "Addon Config Windows (AceGUI)",
+      -- Alone on a full-width row above the grid. Its label is the longest
+      -- here, and it is the only row that is not one named addon -- it covers
+      -- any AceGUI window -- so standing apart matches what it is.
+      soloRow = true },
     { key = "Baganator",          text = "Baganator",            addon = "Baganator" },
     { key = "BetterFriendlist",   text = "Better Friendlist",    addon = "BetterFriendlist" },
     { key = "BigWigs",            text = "BigWigs",              addon = "BigWigs" },
@@ -184,8 +193,24 @@ local function SetEntry(entry, skins, checked)
     return true
 end
 
-local PER_ROW = 2
-local CELL_H = 40
+-- Frame Skins takes three columns; Addon Skins takes two. Their labels are
+-- longer ("Mythic Dungeon Tools (not installed)" is 36 characters against the
+-- roughly 29 a third of the content width holds) and the list is only nine
+-- rows, so squeezing it costs readability and buys nothing.
+local FRAME_PER_ROW = 3
+local ADDON_PER_ROW = 2
+local CELL_H = 24
+local CELL_SPACING = 2
+
+-- Sorted by the name the USER reads, not by the internal key. Sorting by key put
+-- Key Bindings between Barbershop and Black Market, and Blizzard Fonts under G.
+-- Done once at file scope, not per build. Display names are unique across both
+-- tables, so table.sort's instability in 5.1 cannot reorder equal keys.
+local function SortByText(list)
+    table.sort(list, function(a, b) return a.text < b.text end)
+end
+SortByText(FRAME_SKINS)
+SortByText(ADDON_SKINS)
 
 -- An ADDON_SKINS row for an addon the user does not have is shown greyed
 -- rather than hidden, so the list reads the same on every machine and a
@@ -195,6 +220,19 @@ local function AddonInstalled(entry)
     if not entry.addon then return true end
     if not (C_AddOns and C_AddOns.DoesAddOnExist) then return true end
     return C_AddOns.DoesAddOnExist(entry.addon)
+end
+
+-- True when at least one row in `entries` is covered by EllesmereUI. Keyed on the
+-- rows themselves rather than on whether EllesmereUI is loaded, so the note
+-- appears exactly when there is a mark on screen to explain -- and never on
+-- Addon Skins, whose keys are not in the EllesmereUI map.
+local function AnySuppressed(entries)
+    if not (KE.Skins and KE.Skins.GetSuppressionState) then return false end
+    for _, entry in ipairs(entries) do
+        local state = KE.Skins.GetSuppressionState(entry.key)
+        if state == "full" or state == "partial" then return true end
+    end
+    return false
 end
 
 -- Renders `entries` as a PER_ROW-wide grid of checkboxes. One column would
@@ -212,8 +250,10 @@ end
 --               registrations EllesmereUI does not touch, so the row stays
 --               full opacity and clickable -- greying it would take away the
 --               off-switch for the working skins to describe one overlap.
---               It is relabelled with the map row's own description of what
---               is and is not covered, verbatim.
+--               It is marked with a trailing " *", and the map row's own
+--               description of what is and is not covered becomes its tooltip.
+--               The description is NOT used as the label: it runs to 37
+--               characters and cannot fit a three-column cell.
 --   "none"    -- unchanged: falls through to the not-installed check below.
 -- An uninstalled addon row is greyed the same way as "full", but "full" wins
 -- when a row is both suppressed and not-installed -- a row can only show one
@@ -224,62 +264,106 @@ end
 -- today -- FRAME_SKINS rows carry no `addon` field, so AddonInstalled always
 -- returns true for them (:158-162) -- but the branch order below is written
 -- explicitly rather than relying on that.
-local function BuildCheckGrid(card, entries, skins)
+-- Resolves one row's rendering: what it says, whether it tips, whether it is
+-- greyed. Shared by the grid and the solo rows so the two cannot drift.
+local function ResolveRow(entry)
+    local state = "none"
+    local partialTooltip
+    if KE.Skins and KE.Skins.GetSuppressionState then
+        local _
+        state, _, _, partialTooltip = KE.Skins.GetSuppressionState(entry.key)
+    end
+    local label = entry.text
+    -- An entry may carry its own explanation of what it skins. Every branch
+    -- below replaces it, because EllesmereUI coverage or a missing addon says
+    -- something about whether the row works at all, which outranks what it
+    -- does. Note "partial" replaces the tooltip WITHOUT disabling the row --
+    -- that one is a caveat, not a refusal.
+    local tooltip = entry.tooltip
+    local disabled = false
+    if state == "full" then
+        -- No text marker. At three columns a suffix pushes long names past the
+        -- cell, and the two partial rows' custom labels
+        -- (Modules/Skinning/EUIWindows.lua:59, :79) are 37 and 36 characters and
+        -- clip in every case. The greying plus the note line above the grid
+        -- carry the meaning instead.
+        tooltip = "EllesmereUI already skins this window, so KitnEssentials leaves it alone. Turn EllesmereUI's window skin off to use this one."
+        disabled = true
+    elseif not AddonInstalled(entry) then
+        -- Addon Skins keeps its per-row text: that list is two columns wide, at
+        -- most nine rows, and WHICH addons are missing differs per machine, so a
+        -- shared note line could not say which rows it meant.
+        label = label .. " |cff888888(not installed)|r"
+        tooltip = "This addon is not installed, so there is nothing to skin. The setting is kept and applies by itself once you install it."
+        disabled = true
+    elseif state == "partial" then
+        -- A partial row must NOT be greyed: the toggle still controls the
+        -- registrations EllesmereUI does not cover, and greying would take away
+        -- a working off-switch to describe an overlap. It gets an asterisk
+        -- instead, explained by the same note line.
+        label = label .. " *"
+        tooltip = partialTooltip or "EllesmereUI covers part of this window group. This toggle still controls the rest."
+    end
+    return label, tooltip, disabled
+end
+
+local function MakeCheck(parent, entry, skins)
+    local label, tooltip, disabled = ResolveRow(entry)
+    return GUIFrame:CreateCompactCheckbox(parent, label, {
+        value = EntryIsOn(entry, skins),
+        tooltip = tooltip,
+        disabled = disabled,
+        callback = function(checked)
+            if SetEntry(entry, skins, checked) then
+                KE:FlagReloadNeeded()
+            end
+            GUIFrame:RefreshContent()
+        end,
+    })
+end
+
+-- Entries flagged soloRow render one per full-width row, above the grid. They
+-- stay MEMBERS of their list: dropping one from the table would take it out of
+-- the header's any-on read and the bulk toggle too, so the master switch would
+-- silently skip a control.
+local function BuildSoloRows(card, entries, skins)
+    for _, entry in ipairs(entries) do
+        if entry.soloRow then
+            local row = GUIFrame:CreateRow(card.content, CELL_H)
+            row:AddWidget(MakeCheck(row, entry, skins), 1)
+            card:AddRow(row, CELL_H, CELL_SPACING)
+        end
+    end
+end
+
+-- The grid gets a FILTERED copy, so a solo entry costs no cell. Striding over
+-- it in place would leave a hole mid-grid and push the tail out of step.
+local function GridEntries(entries)
+    local out = {}
+    for _, entry in ipairs(entries) do
+        if not entry.soloRow then out[#out + 1] = entry end
+    end
+    return out
+end
+
+local function BuildCheckGrid(card, entries, skins, perRow)
+    local grid = GridEntries(entries)
     local i = 1
-    while i <= #entries do
-        local isLastRow = (i + PER_ROW) > #entries
+    while i <= #grid do
+        local isLastRow = (i + perRow) > #grid
         local row = GUIFrame:CreateRow(card.content, CELL_H)
-        for c = 0, PER_ROW - 1 do
-            local entry = entries[i + c]
+        for c = 0, perRow - 1 do
+            local entry = grid[i + c]
             if entry then
-                local state = "none"
-                local partialLabel, partialTooltip
-                if KE.Skins and KE.Skins.GetSuppressionState then
-                    local _
-                    state, _, partialLabel, partialTooltip = KE.Skins.GetSuppressionState(entry.key)
-                end
-                local label = entry.text
-                local tooltip
-                local disabled = false
-                if state == "full" then
-                    label = label .. " |cff888888(EllesmereUI)|r"
-                    tooltip = "EllesmereUI already skins this window, so KitnEssentials leaves it alone. Turn EllesmereUI's window skin off to use this one."
-                    disabled = true
-                elseif not AddonInstalled(entry) then
-                    label = label .. " |cff888888(not installed)|r"
-                    tooltip = "This addon is not installed, so there is nothing to skin. The setting is kept and applies by itself once you install it."
-                    disabled = true
-                elseif state == "partial" then
-                    label = partialLabel or (label .. " |cff888888(EllesmereUI)|r")
-                    tooltip = partialTooltip or "EllesmereUI covers part of this window group. This toggle still controls the rest."
-                end
-                local check = GUIFrame:CreateCheckbox(row, label, {
-                    value = EntryIsOn(entry, skins),
-                    tooltip = tooltip,
-                    callback = function(checked)
-                        if SetEntry(entry, skins, checked) then
-                            KE:SkinningReloadPrompt()
-                        end
-                        GUIFrame:RefreshContent()
-                    end,
-                })
-                if disabled then
-                    -- SetEnabled, not EnableMouse. CreateCheckbox returns the
-                    -- ROW; the clickable object is a child button, and
-                    -- row:SetEnabled is what reaches it
-                    -- (GUI/GUIWidgets/GUI-KEToggle.lua:301-311). EnableMouse on
-                    -- the row leaves the button live and the row still clicks.
-                    check:SetEnabled(false)
-                end
-                row:AddWidget(check, 1 / PER_ROW)
+                row:AddWidget(MakeCheck(row, entry, skins), 1 / perRow)
             end
         end
         if isLastRow then
             card:AddRow(row, CELL_H, 0)
         else
-            card:AddRow(row, CELL_H)
+            card:AddRow(row, CELL_H, CELL_SPACING)
         end
-        i = i + PER_ROW
+        i = i + perRow
     end
 end
 
@@ -401,10 +485,18 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFrames", function(scrollChild, yOffs
             end
         end
         -- One prompt for the whole batch, not one per entry.
-        if needsReload then KE:SkinningReloadPrompt() end
+        if needsReload then KE:FlagReloadNeeded() end
     end)
 
-    BuildCheckGrid(card, FRAME_SKINS, db.Skins)
+    if AnySuppressed(FRAME_SKINS) then
+        card:AddLabel("Greyed windows are already skinned by EllesmereUI. Windows marked with * are partly covered, and their toggle still controls the rest. Hover either for detail.")
+    end
+
+    -- No solo rows in this list today -- Context Menus was one until its label
+    -- was shortened to fit an ordinary cell. Called anyway so adding a flag to
+    -- an entry is all it ever takes.
+    BuildSoloRows(card, FRAME_SKINS, db.Skins)
+    BuildCheckGrid(card, FRAME_SKINS, db.Skins, FRAME_PER_ROW)
 
     return card:GetNextOffset()
 end)
@@ -438,11 +530,12 @@ GUIFrame:RegisterContent("SkinBlizzardFramesAddons", function(scrollChild, yOffs
                 needsReload = true
             end
         end
-        if needsReload then KE:SkinningReloadPrompt() end
+        if needsReload then KE:FlagReloadNeeded() end
     end)
 
     card:AddLabel("Skins for other addons, applied when that addon loads. Changes apply after a /reload.")
-    BuildCheckGrid(card, ADDON_SKINS, db.Skins)
+    BuildSoloRows(card, ADDON_SKINS, db.Skins)
+    BuildCheckGrid(card, ADDON_SKINS, db.Skins, ADDON_PER_ROW)
     return card:GetNextOffset()
 end)
 
@@ -509,7 +602,7 @@ end, {
         local card = GUIFrame:CreateCard(scrollChild, "Dark Theme", yOffset)
         card:AddHeaderToggle(db.Enabled == true, function(checked)
             db.Enabled = checked
-            KE:SkinningReloadPrompt()
+            KE:FlagReloadNeeded()
             -- AddHeaderToggle's own OnClick already calls RefreshContent.
         end)
         -- Say WHY the engine's own tabs are absent. Hiding them is right --

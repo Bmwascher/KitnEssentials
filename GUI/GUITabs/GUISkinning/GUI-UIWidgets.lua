@@ -72,7 +72,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
     -- Module enable lives in the card header (v3.5.183 UX standard).
     card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
         db.Enabled = checked
-        if not checked then KE:SkinningReloadPrompt() end -- v3.5.691: un-skin needs /reload
+        if not checked then KE:FlagReloadNeeded() end -- v3.5.691: un-skin needs /reload
         if checked then
             KitnEssentials:EnableModule("UIWidgets")
             ApplySettings()
@@ -139,7 +139,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
             value = barDB.Enabled ~= false,
             callback = function(checked)
                 barDB.Enabled = checked
-                if not checked then KE:SkinningReloadPrompt() end -- v3.5.691: un-skin needs /reload
+                if not checked then KE:FlagReloadNeeded() end -- v3.5.691: un-skin needs /reload
                 ApplySettings()
                 RefreshStates()
             end,
@@ -276,7 +276,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
             value = textDB.Enabled ~= false,
             callback = function(checked)
                 textDB.Enabled = checked
-                if not checked then KE:SkinningReloadPrompt() end -- v3.5.691: un-skin needs /reload
+                if not checked then KE:FlagReloadNeeded() end -- v3.5.691: un-skin needs /reload
                 ApplySettings()
                 RefreshStates()
             end,
