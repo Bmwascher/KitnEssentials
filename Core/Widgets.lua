@@ -198,7 +198,12 @@ local function EnsurePromptDialog()
     dialog:RegisterForDrag("LeftButton")
     dialog:SetScript("OnDragStart", function(d) d:StartMoving(true) end)
     dialog:SetScript("OnDragStop", function(d) d:StopMovingOrSizing() end)
-    dialog:EnableKeyboard(true)
+    -- Guarded for the same reason as the show-time reset (:717-741):
+    -- EnableKeyboard is protected. This builder runs once, on the session's
+    -- FIRST prompt, so an unguarded call here throws for a player whose first
+    -- prompt of the session happens to be raised mid-fight. Skipping it leaves
+    -- that prompt without ESCAPE until the combat watcher arms it (:788-795).
+    if not InCombatLockdown() then dialog:EnableKeyboard(true) end
     dialog:SetScript("OnKeyDown", function(self, key)
         -- SetPropagateKeyboardInput is combat-protected for insecure frames;
         -- skip it in lockdown (ESC-close itself is fine — see EditMode's
@@ -709,26 +714,28 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     if dialog.acceptBtn then dialog.acceptBtn:SetShown(showButtons and not isCopyPrompt) end
     if dialog.cancelBtn then dialog.cancelBtn:SetShown(showButtons) end
 
-    -- Keyboard capture is decided per show, and the two cases are not
-    -- symmetric, because SetPropagateKeyboardInput is combat-protected
-    -- (:201-212) and so cannot be corrected once a fight has started.
+    -- Reset the keyboard state on every show, OUT OF COMBAT ONLY.
     --
-    -- Out of combat: capture, and RESET to propagate mode. The reset is the
-    -- load-bearing half -- an ESCAPE close leaves propagation false (:206-208),
-    -- and without this that state is what the next prompt inherits.
+    -- The reset is what matters: an ESCAPE close leaves propagation false
+    -- (:211-213), and without this that state is what the next prompt inherits,
+    -- so a later prompt swallows every key until it is dismissed.
     --
-    -- In combat: do not capture at all. Two reasons, and the second is the
-    -- serious one. A captured dialog whose propagation cannot be restored
-    -- swallows every key until it is dismissed, abilities included. And
-    -- listening for keys during combat puts KE on the call stack of the binding
-    -- system, which taints whatever that keybind fires next -- the same reason
-    -- CopyAnything refuses to listen in combat, with a quest item declining to
-    -- cast as the observed symptom (Modules/QoL/CopyAnything.lua:270-286).
-    -- ESCAPE will not close a prompt raised in combat; its Cancel button still
-    -- does, and the watcher below hands the keyboard back when the fight ends.
-    if InCombatLockdown() then
-        dialog:EnableKeyboard(false)
-    else
+    -- Nothing is touched in combat, and that is not caution, it is the API:
+    -- EnableKeyboard is `IsProtectedFunction = true` and
+    -- SetPropagateKeyboardInput is `HasRestrictions = true`
+    -- (.wow-api-reference 12.0.7.68887,
+    -- Blizzard_APIDocumentationGenerated/SimpleFrameAPIDocumentation.lua:217-219,
+    -- :1308-1310). Calling either in lockdown throws, which is worse than the
+    -- state it would repair. Core/EditMode.lua:448-456 records the same contract.
+    --
+    -- Residual, deliberately not fixed here: a prompt RAISED during combat keeps
+    -- whatever state it inherited, so in the narrow case of an ESCAPE close
+    -- immediately before a pull it can still swallow keys. The watcher below
+    -- repairs it the moment combat ends. Repairing it DURING combat needs the
+    -- keyboard capture moved onto a separate child frame that can be Hidden,
+    -- which is EditMode's escapeFrame pattern and a change to every prompt in
+    -- the addon -- out of scope for this branch.
+    if not InCombatLockdown() then
         dialog:EnableKeyboard(true)
         dialog:SetPropagateKeyboardInput(true)
     end
@@ -762,6 +769,31 @@ function KE:SkinningReloadPrompt()
     return self:CreateReloadPrompt("Changing this setting may require a reload to take full effect.")
 end
 
+-- Repair, at the end of a fight, a prompt that spent it swallowing keys.
+--
+-- CreatePrompt resets keyboard state on every show, but only out of combat
+-- (:717-741), so a prompt raised in lockdown inherits whatever the previous one
+-- left behind -- and an ESCAPE close leaves "swallow" behind (:211-213). The
+-- builder has the same hole for the session's very first prompt (:201-206).
+-- PLAYER_REGEN_ENABLED fires after lockdown lifts, so both calls are legal here
+-- and this is the only moment the repair can be made.
+--
+-- There is deliberately NO PLAYER_REGEN_DISABLED half. Disarming a prompt at
+-- the pull needs EnableKeyboard, which is `IsProtectedFunction = true`
+-- (.wow-api-reference 12.0.7.68887,
+-- Blizzard_APIDocumentationGenerated/SimpleFrameAPIDocumentation.lua:217-219)
+-- and throws in combat -- the conclusion Core/EditMode.lua:448-456 also reached.
+-- Modules/QoL/CopyAnything.lua:277-286 does call it from a combat handler; per
+-- the reference that call is unsafe, and it is not a precedent to copy.
+local promptCombatWatcher = CreateFrame("Frame")
+promptCombatWatcher:RegisterEvent("PLAYER_REGEN_ENABLED")
+promptCombatWatcher:SetScript("OnEvent", function()
+    local dialog = KE.activePrompt
+    if not dialog or not dialog.IsShown or not dialog:IsShown() then return end
+    dialog:EnableKeyboard(true)
+    dialog:SetPropagateKeyboardInput(true)
+end)
+
 -- Skinning toggles FLAG instead of prompting. A user ticking eight windows
 -- should get one prompt when they close the GUI, not eight interruptions while
 -- they are still working. Ported from the reference's FlagReloadNeeded
@@ -770,34 +802,6 @@ end
 -- Profile operations deliberately do NOT go through here: Brandon's ruling
 -- 2026-08-02 is that a profile switch always prompts immediately
 -- (Core/ProfileManager.lua:491-507).
--- A prompt raised DURING combat opens with its keyboard capture off, so ESCAPE
--- does nothing while the fight lasts. Hand it back the moment combat ends, so a
--- dialog the user left open behaves normally again without being reopened.
---
--- BOTH directions, because the decision in CreatePrompt is made once at show
--- time and a prompt outlives the moment it was shown. The entry half matters
--- MORE than the exit half, because it is the ordinary path this feature
--- creates: close the GUI, get the reload prompt, ignore it, pull. Without it
--- that prompt sits there listening for keys for the whole fight, which is the
--- taint exposure the in-combat branch above exists to avoid. EnableKeyboard is
--- not combat-protected -- CopyAnything already disarms this way from its own
--- PLAYER_REGEN_DISABLED handler (Modules/QoL/CopyAnything.lua:277-286, :306-312).
-local promptCombatWatcher = CreateFrame("Frame")
-promptCombatWatcher:RegisterEvent("PLAYER_REGEN_ENABLED")
-promptCombatWatcher:RegisterEvent("PLAYER_REGEN_DISABLED")
-promptCombatWatcher:SetScript("OnEvent", function(_, event)
-    local dialog = KE.activePrompt
-    if not dialog or not dialog.IsShown or not dialog:IsShown() then return end
-    if event == "PLAYER_REGEN_DISABLED" then
-        -- Entering combat. Drop the keyboard; SetPropagateKeyboardInput is
-        -- protected here and must not be touched.
-        dialog:EnableKeyboard(false)
-    else
-        dialog:EnableKeyboard(true)
-        dialog:SetPropagateKeyboardInput(true)
-    end
-end)
-
 function KE:FlagReloadNeeded()
     self.reloadPending = true
 end
