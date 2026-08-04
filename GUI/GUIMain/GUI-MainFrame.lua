@@ -44,16 +44,27 @@ GUIFrame.sidebarConfig = {
         text = "\226\128\162 Combat Utilities",
         defaultExpanded = false,
         items = {
-            { id = "AuraDebuffs",   text = "Advanced Debuffs", keywords = { "debuff", "debuffs", "aura", "boss", "dot", "magic", "curse", "poison", "disease" } },
             { id = "CombatRes",     text = "Battle Res", keywords = { "battle res", "brez", "combat res", "resurrect", "raid res", "cr" } },
             { id = "CombatTexts",   text = "Combat Texts", keywords = { "combat text", "scrolling", "no target", "interrupt", "durability" } },
             { id = "CombatTimer",   text = "Combat Timer", keywords = { "combat timer", "encounter", "duration", "stopwatch", "fight length" } },
             { id = "Cursor",        text = "Cursor Effects", keywords = { "cursor", "mouse", "pointer", "trail", "circle", "dispel", "cleanse", "purge", "magic", "curse", "poison", "disease", "debuff", "taunt" } },
             { id = "DamageMeter",   text = "Damage Meter", keywords = { "damage meter", "dps", "damage", "healing", "threat", "meter", "recount", "details" } },
-            { id = "AuraExternals", text = "External and Defensive Buffs", keywords = { "external", "externals", "defensive", "buff", "cooldown", "mitigation" } },
             { id = "FocusCastbar",  text = "Focus Castbar", keywords = { "castbar", "cast", "focus", "casting", "interrupt" } },
+            { id = "HealerTools",   text = "Healer Tools", keywords = { "healer", "mana", "oom", "innervate", "maintenance", "buff", "uptime", "hot", "refresh", "tracker", "raid", "dungeon", "party", "druid", "cooldown", "duration", "count" } },
             { id = "CombatCross",   text = "Player Crosshair", keywords = { "crosshair", "cross", "aim", "reticle", "player" } },
             { id = "RangeChecker",  text = "Range Display", keywords = { "range", "distance", "yards", "melee", "ranged" } },
+        },
+    },
+    -- Player Buffs and Player Debuffs join this section when their modules land.
+    {
+        id = "aura_section",
+        type = "header",
+        text = "\226\128\162 Aura Tracking",
+        defaultExpanded = false,
+        items = {
+            { id = "AuraDebuffs",   text = "Advanced Debuffs", keywords = { "debuff", "debuffs", "aura", "boss", "dot", "magic", "curse", "poison", "disease" } },
+            { id = "AuraExternals", text = "External Tracker", keywords = { "external", "externals", "defensive", "buff", "cooldown", "mitigation" } },
+            { id = "StanceText",    text = "Stance Text", keywords = { "stance", "form", "shapeshift", "druid", "warrior", "evoker", "presence" } },
         },
     },
     {
@@ -67,7 +78,6 @@ GUIFrame.sidebarConfig = {
             { id = "PetStatusText", text = "Pet Status Texts", keywords = { "pet", "status", "hunter", "warlock", "demon", "summon" } },
             { id = "PIMacroBuilder", text = "Priest: PI Macro", keywords = { "priest", "power infusion", "pi", "macro", "builder", "trinket", "racial", "potion" } },
             { id = "SpellAlerts",   text = "Spell Alert Opacity", keywords = { "spell alert", "opacity", "proc", "alert", "glow", "overlay" } },
-            { id = "StanceText",    text = "Stance Text", keywords = { "stance", "form", "shapeshift", "druid", "warrior", "evoker", "presence" } },
             { id = "TotemTracker",  text = "Totem Tracker", keywords = { "totem", "totems", "shaman", "evoker" } },
             { id = "BurningRush",   text = "Warlock: Burning Rush", keywords = { "warlock", "burning rush", "movement", "speed" } },
         },
@@ -89,18 +99,9 @@ GUIFrame.sidebarConfig = {
         },
     },
     {
-        id = "healer_section",
-        type = "header",
-        text = "\226\128\162 Healer Utilities",
-        defaultExpanded = false,
-        items = {
-            { id = "HealerTools", text = "Healer Tools", keywords = { "healer", "mana", "oom", "innervate", "maintenance", "buff", "uptime", "hot", "refresh", "tracker", "raid", "dungeon", "party", "druid", "cooldown", "duration", "count" } },
-        },
-    },
-    {
         id = "qol_section",
         type = "header",
-        text = "\226\128\162 Quality of Life",
+        text = "\226\128\162 QoL",
         defaultExpanded = false,
         items = {
             { id = "Automation",        text = "Automation", keywords = { "automation", "auto", "role", "quest", "repair", "sell", "accept", "group", "duel", "delete", "ah", "auction house", "house", "housing", "vantus rune", "merchant", "vendor", "pages", "shop", "buy", "buyback", "extend", "wide" } },
@@ -110,7 +111,6 @@ GUIFrame.sidebarConfig = {
             { id = "CVars",             text = "CVars", keywords = { "cvar", "cvars", "console", "variable", "setting", "world map", "map", "scale" } },
             { id = "GreatVaultAlert",   text = "Great Vault Alert", keywords = { "great vault", "vault", "weekly", "reward", "chest" } },
             { id = "MoveFrames",        text = "Move Frames", keywords = { "move", "mover", "drag", "draggable", "reposition", "position", "window", "windows", "frame", "frames", "blizzard", "panel", "unlock" } },
-            { id = "SlashCommands",     text = "Slash Commands", keywords = { "slash", "command", "commands", "slash command" } },
         },
     },
     {
@@ -148,7 +148,7 @@ GUIFrame.sidebarConfig = {
     {
         id = "dungeons_section",
         type = "header",
-        text = "\226\128\162 Dungeon & Party Utilities",
+        text = "\226\128\162 Dungeon Tools",
         defaultExpanded = false,
         items = {
             { id = "DeathNotifications",          text = "Death Notifications", keywords = { "death", "notification", "died", "dead", "party", "m+", "mythic" } },

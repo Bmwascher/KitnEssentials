@@ -576,9 +576,13 @@ local PREVIEW_MODULES = {
 -- Sections not listed here (Settings, Optimize) have no previews
 local SECTION_PREVIEW_MODULES = {
     combat_section = {
-        "CombatRes", "AuraExternals", "AuraDebuffs", "CombatTexts", "CombatTimer",
+        "CombatRes", "CombatTexts", "CombatTimer",
         "FocusCastbar", "CombatCross", "RangeChecker",
         "Cursor", "DamageMeter",
+        "HealerMana", "InnervateTracker", "MaintenanceTracker",
+    },
+    aura_section = {
+        "AuraDebuffs", "AuraExternals", "StanceText",
     },
     utilities_section = {
         "PotionReady", "RaidNotifications", "Recuperate",
@@ -587,7 +591,7 @@ local SECTION_PREVIEW_MODULES = {
     },
     class_section = {
         "BurningRush",
-        "PetStatusText", "StanceText", "TotemTracker",
+        "PetStatusText", "TotemTracker",
         "DisintegrateTicks", "StasisTracker", "EbonMightTracker", "PrescienceTracker",
         "HuntersMark",
     },
@@ -603,9 +607,6 @@ local SECTION_PREVIEW_MODULES = {
     dungeons_section = {
         "EnemyCounter", "KickTracker", "DungeonCasts", "DeathNotifications",
         "MythicPlusTimer", "KeystoneHelper", "TargetedSpells", "LFGReminder",
-    },
-    healer_section = {
-        "HealerMana", "InnervateTracker", "MaintenanceTracker",
     },
 }
 
