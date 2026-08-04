@@ -279,10 +279,16 @@ function CA:SetListening(on)
         if not f.keListening then
             f.keListening = true
             f:EnableKeyboard(true)
+            f:Show()
         end
     elseif f.keListening then
         f.keListening = nil
-        f:EnableKeyboard(false)
+        -- Hide is what stops the listening, and it is the only thing that can:
+        -- the combat entry path reaches here in lockdown, where EnableKeyboard
+        -- is protected and throws. A hidden frame runs no OnKeyDown, so the
+        -- taint window closes either way.
+        f:Hide()
+        if not InCombatLockdown() then f:EnableKeyboard(false) end
     end
 end
 
