@@ -197,7 +197,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
     yOffset = card3:GetNextOffset()
 
     -- Card 3: Position
-    local card2 = GUIFrame:CreateCard(scrollChild, "Position", yOffset)
+    local card2 = GUIFrame:CreateCard(scrollChild, "Position Settings", yOffset)
     manager:Register(card2, "all")
 
     -- DEVIATION (2026-07-31, Brandon's report). The reference renders this row

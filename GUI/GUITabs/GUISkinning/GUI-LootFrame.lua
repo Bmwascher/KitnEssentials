@@ -75,7 +75,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootWindow", function(scrollChild, y
     yOffset = card2:GetNextOffset()
 
     -- Card 3: Position
-    local card3 = GUIFrame:CreateCard(scrollChild, "Position", yOffset)
+    local card3 = GUIFrame:CreateCard(scrollChild, "Position Settings", yOffset)
     manager:Register(card3, "all")
 
     card3:AddLabel("Follows the position you set for Blizzard's loot window in Blizzard's Edit Mode. Drag it there and this window follows.")

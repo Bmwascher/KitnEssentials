@@ -98,7 +98,7 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
     -- (Visibility card removed — module is filter-driven now: it shows
     -- whenever Enabled, and the Filters card decides which auras qualify.)
     ----------------------------------------------------------------
-    local card4 = GUIFrame:CreateCard(scrollChild, "Display", yOffset)
+    local card4 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
     manager:Register(card4, "all")
 
     local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)

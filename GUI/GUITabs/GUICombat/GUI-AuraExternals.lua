@@ -107,7 +107,7 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 3: Display
     ----------------------------------------------------------------
-    local card3 = GUIFrame:CreateCard(scrollChild, "Display", yOffset)
+    local card3 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
     manager:Register(card3, "all")
 
     local row3a = GUIFrame:CreateRow(card3.content, Theme.rowHeight)

@@ -167,7 +167,6 @@ GUIFrame:RegisterContent("InnervateTracker", function(scrollChild, yOffset)
     -- Card 4: Font Settings (face + outline + label font size)
     ----------------------------------------------------------------
     local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-        title = "Font",
         db = db,
         dbKeys = {
             fontFace    = "FontFace",

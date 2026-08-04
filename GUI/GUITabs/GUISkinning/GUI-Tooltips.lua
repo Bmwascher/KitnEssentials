@@ -209,7 +209,7 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 3: Font
     ----------------------------------------------------------------
-    local card3 = GUIFrame:CreateCard(scrollChild, "Font", yOffset)
+    local card3 = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
     manager:Register(card3, "all")
     PairRow(card3,
         MkDropdown("Font", BuildFontOptions(),
@@ -285,7 +285,6 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
     -- Card 6: Position (KE-only -- appended after the reference's five)
     ----------------------------------------------------------------
     local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        title = "Position",
         db = db.Position,
         dbKeys = {
             anchorFrameType = "AnchorFrameType",

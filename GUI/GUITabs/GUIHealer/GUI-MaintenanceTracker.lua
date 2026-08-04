@@ -100,7 +100,7 @@ GUIFrame:RegisterContent("MaintenanceTracker", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 3: Display
     ----------------------------------------------------------------
-    local card3 = GUIFrame:CreateCard(scrollChild, "Display", yOffset)
+    local card3 = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
     manager:Register(card3, "all")
 
     -- Icon Size
@@ -164,7 +164,7 @@ GUIFrame:RegisterContent("MaintenanceTracker", function(scrollChild, yOffset)
     -- Card 4: Font (face + outline only; count/duration sizes live
     -- in the Display card)
     ----------------------------------------------------------------
-    local fontCard = GUIFrame:CreateCard(scrollChild, "Font", yOffset)
+    local fontCard = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
     manager:Register(fontCard, "all")
 
     local fontList = {}
