@@ -356,6 +356,19 @@ function KE.Skins.GetSuppression(key, addon) end
 ---@return string? partialTooltip
 function KE.Skins.GetSuppressionState(key) end
 
+-- ─── Skinning (Modules/Skinning/SkinAPI.lua) ──────────────
+--- Mutates the palette in place, then repaints only cached backdrops still
+--- wearing the old colour. Re-colours every skinned window with no reload.
+---@param bg number[]?     {r,g,b,a} or nil to leave unchanged
+---@param border number[]? {r,g,b,a} or nil to leave unchanged
+function KE.Skins.SetSkinColors(bg, border) end
+
+--- Re-applies every registered string with no reload.
+---@param face string?    LibSharedMedia font name, "" for the addon's own font, nil to leave unchanged
+---@param size number?    base size 8-20, nil to leave unchanged
+---@param outline string? "NONE" | "OUTLINE" | "THICK", nil to leave unchanged
+function KE.Skins.SetSkinFont(face, size, outline) end
+
 -- ─── KitnEssentials AceAddon globals ──────────────────────
 ---@class KitnEssentials
 ---@field db AceDB
