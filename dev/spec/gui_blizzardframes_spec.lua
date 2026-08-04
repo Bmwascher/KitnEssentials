@@ -136,17 +136,16 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
     end)
 
     -- Invokes the REAL registered content builder for the Frames tab.
-    --
-    -- checkboxes[1] is now the Context Menus SOLO row, which renders above the
-    -- grid. checkboxes[2] is the grid's first cell, which is Achievements --
-    -- FRAME_SKINS is sorted by display name and "Achievements" sorts first.
     local function buildFrames()
         GUIFrame.registeredContent["SkinBlizzardFramesFrames"](nil, 0)
     end
 
-    -- The grid's Achievements cell. Named rather than written as a bare 2 at
-    -- every call site, so the reason the index moved stays attached to it.
-    local ACHIEVEMENT_CELL = 2
+    -- The grid's Achievements cell. FRAME_SKINS is sorted by display name,
+    -- "Achievements" sorts first, and this list carries no soloRow entry, so it
+    -- is the first widget built. Named rather than written as a bare 1, because
+    -- flagging any entry soloRow would push it down and the reason should stay
+    -- attached to the number.
+    local ACHIEVEMENT_CELL = 1
 
     describe("row rendering across all three states (same key: Achievement)", function()
         it("none: renders unchanged, no tooltip, not disabled", function()
@@ -288,22 +287,26 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
             assert.is_true(containsKey(calls, "Barber"), "bulk-on never asked the accessor about Barber")
         end)
     end)
-    -- Context Menus renders on its own row, outside BuildCheckGrid. The failure
-    -- this pins: dropping it from FRAME_SKINS to stop the grid drawing it twice
-    -- would also drop it from the header any-on read and the bulk toggle, so the
-    -- master switch would silently skip one control.
-    describe("Context Menus stays a FRAME_SKINS member while rendering outside the grid", function()
-        it("renders exactly once, as the first widget, above the grid", function()
+    -- Context Menus is the one FRAME_SKINS row that answers through isOn /
+    -- onToggle instead of db.Skins. The failure this pins: dropping it from the
+    -- table, or special-casing it out of the shared paths, would take it out of
+    -- the header any-on read and the bulk toggle, so the master switch would
+    -- silently skip one control.
+    describe("Context Menus is reached by every shared path", function()
+        it("renders exactly once, in the grid, carrying its own tooltip", function()
             buildFrames()
-            assert.equal("Context Menus (right-click and dropdown menus)", checkboxes[1].label)
 
-            local seen = 0
+            local seen, row = 0, nil
             for _, cb in ipairs(checkboxes) do
-                if cb.label == "Context Menus (right-click and dropdown menus)" then
+                if cb.label == "Context Menus" then
                     seen = seen + 1
+                    row = cb
                 end
             end
             assert.equal(1, seen)
+            -- The explanation moved off the label and into the tooltip when the
+            -- label was shortened to fit a three-column cell.
+            assert.equal("Skins right-click and dropdown menus.", row.tooltip)
         end)
 
         it("the bulk toggle reaches it", function()
