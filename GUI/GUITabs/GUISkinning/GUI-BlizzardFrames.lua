@@ -217,6 +217,19 @@ local function AddonInstalled(entry)
     return C_AddOns.DoesAddOnExist(entry.addon)
 end
 
+-- True when at least one row in `entries` is covered by EllesmereUI. Keyed on the
+-- rows themselves rather than on whether EllesmereUI is loaded, so the note
+-- appears exactly when there is a mark on screen to explain -- and never on
+-- Addon Skins, whose keys are not in the EllesmereUI map.
+local function AnySuppressed(entries)
+    if not (KE.Skins and KE.Skins.GetSuppressionState) then return false end
+    for _, entry in ipairs(entries) do
+        local state = KE.Skins.GetSuppressionState(entry.key)
+        if state == "full" or state == "partial" then return true end
+    end
+    return false
+end
+
 -- Renders `entries` as a PER_ROW-wide grid of checkboxes. One column would
 -- be unusable at 91 rows.
 --
@@ -256,24 +269,37 @@ local function BuildCheckGrid(card, entries, skins, perRow)
             -- is still a FRAME_SKINS member for the bulk toggle's sake.
             if entry and not entry.soloRow then
                 local state = "none"
-                local partialLabel, partialTooltip
+                local partialTooltip
                 if KE.Skins and KE.Skins.GetSuppressionState then
                     local _
-                    state, _, partialLabel, partialTooltip = KE.Skins.GetSuppressionState(entry.key)
+                    state, _, _, partialTooltip = KE.Skins.GetSuppressionState(entry.key)
                 end
                 local label = entry.text
                 local tooltip
                 local disabled = false
                 if state == "full" then
-                    label = label .. " |cff888888(EllesmereUI)|r"
+                    -- No text marker. At three columns a suffix pushes long
+                    -- names past the cell, and the two partial rows' custom
+                    -- labels (Modules/Skinning/EUIWindows.lua:59, :79) are 37 and
+                    -- 36 characters and clip in every case. The greying plus the
+                    -- note line above the grid carry the meaning instead.
                     tooltip = "EllesmereUI already skins this window, so KitnEssentials leaves it alone. Turn EllesmereUI's window skin off to use this one."
                     disabled = true
                 elseif not AddonInstalled(entry) then
+                    -- Addon Skins keeps its per-row text: that list is two
+                    -- columns wide, at most nine rows, and WHICH addons are
+                    -- missing differs per machine, so a shared note line could
+                    -- not say which rows it meant.
                     label = label .. " |cff888888(not installed)|r"
                     tooltip = "This addon is not installed, so there is nothing to skin. The setting is kept and applies by itself once you install it."
                     disabled = true
                 elseif state == "partial" then
-                    label = partialLabel or (label .. " |cff888888(EllesmereUI)|r")
+                    -- A partial row must NOT be greyed: the toggle still controls
+                    -- the registrations EllesmereUI does not cover, and greying
+                    -- would take away a working off-switch to describe an
+                    -- overlap. It gets an asterisk instead, explained by the same
+                    -- note line.
+                    label = label .. " *"
                     tooltip = partialTooltip or "EllesmereUI covers part of this window group. This toggle still controls the rest."
                 end
                 local check = GUIFrame:CreateCompactCheckbox(row, label, {
@@ -419,6 +445,10 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFrames", function(scrollChild, yOffs
         -- One prompt for the whole batch, not one per entry.
         if needsReload then KE:SkinningReloadPrompt() end
     end)
+
+    if AnySuppressed(FRAME_SKINS) then
+        card:AddLabel("Greyed windows are already skinned by EllesmereUI. Windows marked with * are partly covered, and their toggle still controls the rest. Hover either for detail.")
+    end
 
     -- It stays a MEMBER of FRAME_SKINS. Removing it from the table would drop it
     -- from the header's any-on read and from the bulk toggle, so the master

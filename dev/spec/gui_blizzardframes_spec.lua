@@ -16,7 +16,7 @@
 local helpers = require("dev.spec._helpers")
 
 describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
-    local KE, GUIFrame, checkboxes, headerToggle, calls, states
+    local KE, GUIFrame, checkboxes, labels, headerToggle, calls, states
 
     -- calls records every key GetSuppressionState was asked about, in call
     -- order -- this is what proves each production site (not just an
@@ -74,6 +74,7 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
         states = {}
         calls = {}
         checkboxes = {}
+        labels = {}
         headerToggle = nil
 
         GUIFrame = {
@@ -83,7 +84,7 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
             CreateCard = function()
                 local card = { content = {} }
                 function card:AddRow() end
-                function card:AddLabel() end
+                function card:AddLabel(text) labels[#labels + 1] = text end
                 function card:AddHeaderToggle(anyOn, callback)
                     -- Snapshot `calls` HERE, not later. AddHeaderToggle is
                     -- invoked between the header anyOn loop and
@@ -155,36 +156,39 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
             assert.is_true(checkboxes[ACHIEVEMENT_CELL].enabled)
         end)
 
-        it("full: greys the label, sets the suppression tooltip, disables", function()
+        it("full: keeps the plain name, sets the suppression tooltip, disables", function()
             seedFull("Achievement")
             buildFrames()
-            assert.equal("Achievements |cff888888(EllesmereUI)|r", checkboxes[ACHIEVEMENT_CELL].label)
+            -- The marker moved OUT of the label: at three columns a suffix
+            -- clips. Greying plus the note line carry it now.
+            assert.equal("Achievements", checkboxes[ACHIEVEMENT_CELL].label)
             assert.equal(
                 "EllesmereUI already skins this window, so KitnEssentials leaves it alone. Turn EllesmereUI's window skin off to use this one.",
                 checkboxes[ACHIEVEMENT_CELL].tooltip)
             assert.is_false(checkboxes[ACHIEVEMENT_CELL].enabled)
         end)
 
-        it("partial: renders the map row's own label/tooltip verbatim, stays enabled", function()
+        it("partial: marks with an asterisk, keeps the map's tooltip, stays enabled", function()
             seedPartial("Achievement", nil, "Achievements (EllesmereUI: dashboard only)", "Custom partial tooltip text")
             buildFrames()
-            -- Positive control: the label is NOT entry.text -- proves the
-            -- row actually switched off the "none" rendering above.
-            assert.equal("Achievements (EllesmereUI: dashboard only)", checkboxes[ACHIEVEMENT_CELL].label)
+            -- partialLabel is deliberately IGNORED now -- it is 37 characters at
+            -- its longest and cannot fit a three-column cell. The tooltip still
+            -- comes from the map verbatim.
+            assert.equal("Achievements *", checkboxes[ACHIEVEMENT_CELL].label)
             assert.equal("Custom partial tooltip text", checkboxes[ACHIEVEMENT_CELL].tooltip)
-            -- The negative assertion the whole feature exists for: a
-            -- partial row must NOT be disabled.
+            -- The negative assertion the whole feature exists for: a partial row
+            -- must NOT be disabled.
             assert.is_true(checkboxes[ACHIEVEMENT_CELL].enabled)
         end)
 
-        it("partial with no map strings: falls back to entry.text plus a generic suffix, never nil", function()
+        it("partial with no map tooltip: falls back to a generic one, never nil", function()
             seedPartial("Achievement")
             buildFrames()
-            assert.equal("Achievements |cff888888(EllesmereUI)|r", checkboxes[ACHIEVEMENT_CELL].label)
+            assert.equal("Achievements *", checkboxes[ACHIEVEMENT_CELL].label)
             -- The fallback wording is PARTIAL-specific, not the "full"
-            -- suppression tooltip -- that one claims KitnEssentials leaves
-            -- the window alone entirely, which is false next to a live,
-            -- clickable partial row.
+            -- suppression tooltip -- that one claims KitnEssentials leaves the
+            -- window alone entirely, which is false next to a live, clickable
+            -- partial row.
             assert.equal(
                 "EllesmereUI covers part of this window group. This toggle still controls the rest.",
                 checkboxes[ACHIEVEMENT_CELL].tooltip)
@@ -231,11 +235,13 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
 
     describe("BuildCheckGrid calls the accessor for every row", function()
         it("reaches the last FRAME_SKINS entry even though anyOn already broke on the first", function()
-            -- Default db.Skins (empty): Achievement reads on immediately, so
-            -- anyOn's loop calls the accessor exactly once (Achievement) and
-            -- breaks. If "WorldMap" (FRAME_SKINS' last entry) still shows up
-            -- in `calls`, that call can only have come from BuildCheckGrid,
-            -- which renders every row regardless of anyOn's outcome.
+            -- Achievements sorts first, so seeding it full makes AnySuppressed
+            -- return on its very first entry. Without that, AnySuppressed walks
+            -- the whole list and puts WorldMap in `calls` by itself, and this
+            -- assertion would pass with BuildCheckGrid deleted entirely.
+            seedFull("Achievement")
+            -- Default db.Skins (empty) otherwise: the any-on loop stops early
+            -- too. So WorldMap in `calls` can only have come from the grid.
             buildFrames()
             assert.is_true(containsKey(calls, "WorldMap"),
                 "BuildCheckGrid did not ask about WorldMap (the last FRAME_SKINS row)")
@@ -337,6 +343,33 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
                 freshDB(setmetatable({}, { __index = function() return false end }))
             buildFrames()
             assert.is_false(headerToggle.anyOn)
+        end)
+    end)
+    describe("the EllesmereUI note line", function()
+        local NOTE = "Greyed windows are already skinned by EllesmereUI. Windows marked with * are partly covered, and their toggle still controls the rest. Hover either for detail."
+
+        local function containsLabel(text)
+            for _, l in ipairs(labels) do
+                if l == text then return true end
+            end
+            return false
+        end
+
+        it("is absent when no row is suppressed", function()
+            buildFrames()
+            assert.is_false(containsLabel(NOTE))
+        end)
+
+        it("appears when a row is fully suppressed", function()
+            seedFull("Achievement")
+            buildFrames()
+            assert.is_true(containsLabel(NOTE))
+        end)
+
+        it("appears when a row is only partly suppressed", function()
+            seedPartial("Achievement")
+            buildFrames()
+            assert.is_true(containsLabel(NOTE))
         end)
     end)
 end)
