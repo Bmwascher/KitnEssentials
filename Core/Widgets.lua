@@ -773,13 +773,29 @@ end
 -- A prompt raised DURING combat opens with its keyboard capture off, so ESCAPE
 -- does nothing while the fight lasts. Hand it back the moment combat ends, so a
 -- dialog the user left open behaves normally again without being reopened.
+--
+-- BOTH directions, because the decision in CreatePrompt is made once at show
+-- time and a prompt outlives the moment it was shown. The entry half matters
+-- MORE than the exit half, because it is the ordinary path this feature
+-- creates: close the GUI, get the reload prompt, ignore it, pull. Without it
+-- that prompt sits there listening for keys for the whole fight, which is the
+-- taint exposure the in-combat branch above exists to avoid. EnableKeyboard is
+-- not combat-protected -- CopyAnything already disarms this way from its own
+-- PLAYER_REGEN_DISABLED handler (Modules/QoL/CopyAnything.lua:277-286, :306-312).
 local promptCombatWatcher = CreateFrame("Frame")
 promptCombatWatcher:RegisterEvent("PLAYER_REGEN_ENABLED")
-promptCombatWatcher:SetScript("OnEvent", function()
+promptCombatWatcher:RegisterEvent("PLAYER_REGEN_DISABLED")
+promptCombatWatcher:SetScript("OnEvent", function(_, event)
     local dialog = KE.activePrompt
     if not dialog or not dialog.IsShown or not dialog:IsShown() then return end
-    dialog:EnableKeyboard(true)
-    dialog:SetPropagateKeyboardInput(true)
+    if event == "PLAYER_REGEN_DISABLED" then
+        -- Entering combat. Drop the keyboard; SetPropagateKeyboardInput is
+        -- protected here and must not be touched.
+        dialog:EnableKeyboard(false)
+    else
+        dialog:EnableKeyboard(true)
+        dialog:SetPropagateKeyboardInput(true)
+    end
 end)
 
 function KE:FlagReloadNeeded()
