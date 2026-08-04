@@ -26,7 +26,8 @@ local function CreateTextureSelector(parent, textures, textureOrder, currentText
     -- Optional header label rendered above the button row. White text to match
     -- the other widget labels (Size, Color Mode, etc), not gold.
     if labelText and labelText ~= "" then
-        local label = container:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        local label = container:CreateFontString(nil, "OVERLAY")
+        KE:ApplyThemeFont(label, "small")
         label:SetPoint("TOPLEFT", container, "TOPLEFT", 0, 0)
         label:SetText(labelText)
         label:SetTextColor(1, 1, 1)

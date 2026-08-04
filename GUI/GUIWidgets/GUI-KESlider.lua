@@ -406,7 +406,9 @@ function GUIFrame:CreateSlider(parent, labelText, config)
     local valueEdit = CreateFrame("EditBox", nil, valueContainer)
     valueEdit:SetPoint("TOPLEFT", 0, 0)
     valueEdit:SetPoint("BOTTOMRIGHT", 0, 0)
-    valueEdit:SetFontObject("GameFontNormal")
+    -- Own font, not a Blizzard font object: the global font sweep resizes
+    -- those, and the addon's config window must not follow a game-wide setting.
+    KE:ApplyThemeFont(valueEdit, "normal")
     valueEdit:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
     valueEdit:SetJustifyH("CENTER")
     valueEdit:SetAutoFocus(false)

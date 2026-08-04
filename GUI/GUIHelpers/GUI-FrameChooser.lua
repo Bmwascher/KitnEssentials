@@ -81,7 +81,8 @@ local function EnsureFrameChooserUI()
     chooserBox:Hide()
 
     -- Instructions text
-    local instructions = chooserFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    local instructions = chooserFrame:CreateFontString(nil, "OVERLAY")
+    KE:ApplyThemeFont(instructions, "large")
     instructions:SetPoint("TOP", UIParent, "TOP", 0, -50)
     instructions:SetText("Click on a frame to select it as anchor\nRight-click to cancel")
     instructions:SetTextColor(0, 1, 0, 1)
