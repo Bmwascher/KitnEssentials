@@ -405,6 +405,29 @@ describe("Core/Globals.lua helpers", function()
             KE.db = nil
             assert.has_no.errors(function() KE:ValidateProfileFonts() end)
         end)
+
+        -- An empty font key whose own default is empty is a deliberate choice,
+        -- not a broken value. Repairing it would write a font name into every
+        -- profile on every login.
+        it("keeps an empty font whose per-key default is also empty", function()
+            KE.db = {
+                profile = { Module = { FontFace = "" } },
+                defaults = { profile = { Module = { FontFace = "" } } },
+            }
+            KE:ValidateProfileFonts()
+            assert.equals("", KE.db.profile.Module.FontFace)
+        end)
+
+        -- The boundary the exemption must not cross. A blanket "empty is fine"
+        -- rule would pass the test above and fail this one.
+        it("still repairs an empty font whose per-key default is a real font", function()
+            KE.db = {
+                profile = { Module = { FontFace = "" } },
+                defaults = { profile = { Module = { FontFace = "GoodFont" } } },
+            }
+            KE:ValidateProfileFonts()
+            assert.equals("GoodFont", KE.db.profile.Module.FontFace)
+        end)
     end)
 end)
 

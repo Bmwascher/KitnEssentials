@@ -417,7 +417,11 @@ local function ValidateFontsRecursive(tbl, defaults)
 
     for key, value in pairs(tbl) do
         if IsFontKey(key) and type(value) == "string" then
-            if not LSM:IsValid("font", value) then
+            -- An empty font key whose own default is empty is a deliberate
+            -- "use the addon's font" choice, not a broken value. Repairing it
+            -- would write a font name into every profile on every login.
+            local wantsEmpty = value == "" and (defaults and defaults[key]) == ""
+            if not wantsEmpty and not LSM:IsValid("font", value) then
                 local defaultVal = defaults and defaults[key] or DEFAULT_FONT
                 if not LSM:IsValid("font", defaultVal) then
                     defaultVal = DEFAULT_FONT

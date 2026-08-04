@@ -859,3 +859,231 @@ describe("SkinAPI rerun via the real slash handler", function()
         assert.equals("Blizzard_HouseList", calls[2].selector)
     end)
 end)
+
+describe("S.SetSkinColors", function()
+    local S
+    before_each(function() S = L.loadSkinAPI().Skins end)
+
+    it("mutates the palette in place rather than replacing it", function()
+        local windowRef, borderRef = S.palette.window, S.palette.border
+        S.SetSkinColors({ 0.5, 0.4, 0.3, 0.2 }, { 0.1, 0.2, 0.3, 1 })
+        assert.are.equal(windowRef, S.palette.window)
+        assert.are.equal(borderRef, S.palette.border)
+        assert.are.same({ 0.5, 0.4, 0.3, 0.2 }, S.palette.window)
+        assert.are.same({ 0.1, 0.2, 0.3, 1 }, S.palette.border)
+    end)
+
+    it("keeps bgColor and borderColor pointing at the same tables", function()
+        S.SetSkinColors({ 0.9, 0.9, 0.9, 1 }, nil)
+        assert.are.equal(S.palette.window, S.bgColor)
+        assert.are.equal(S.palette.border, S.borderColor)
+    end)
+
+    it("leaves a colour alone when passed nil", function()
+        local before = { unpack(S.palette.border) }
+        S.SetSkinColors({ 0.2, 0.2, 0.2, 1 }, nil)
+        assert.are.same(before, S.palette.border)
+    end)
+
+    it("exposes the shipped defaults for the reset button", function()
+        assert.are.equal(4, #S.DEFAULT_BG)
+        assert.are.equal(4, #S.DEFAULT_BORDER)
+        local shipped = { unpack(S.DEFAULT_BG) }
+        S.SetSkinColors({ 1, 0, 0, 1 }, { 0, 1, 0, 1 })
+        S.SetSkinColors(S.DEFAULT_BG, S.DEFAULT_BORDER)
+        assert.are.same(shipped, S.palette.window)
+    end)
+
+    -- The sweep's whole reason for existing. A backdrop wearing a colour some
+    -- other skin chose must survive a window-colour change untouched.
+    it("repaints a window-coloured backdrop and spares every other one", function()
+        local function fakeBackdrop(r, g, b, a)
+            local bd = { _r = r, _g = g, _b = b, _a = a, _border = nil }
+            function bd:GetBackdropColor() return self._r, self._g, self._b, self._a end
+            function bd:SetBackdropColor(nr, ng, nb, na)
+                self._r, self._g, self._b, self._a = nr, ng, nb, na
+            end
+            function bd:GetBackdropBorderColor() return 0, 0, 0, 1 end
+            function bd:SetBackdropBorderColor(nr, ng, nb, na)
+                self._border = { nr, ng, nb, na }
+            end
+            return bd
+        end
+
+        local w = S.palette.window
+        local onWindow = fakeBackdrop(w[1], w[2], w[3], w[4])
+        local c = S.palette.control
+        local onControl = fakeBackdrop(c[1], c[2], c[3], c[4])
+        local custom = fakeBackdrop(0, 0.6, 1, 0.3)
+
+        S._RegisterBackdropForTest(onWindow)
+        S._RegisterBackdropForTest(onControl)
+        S._RegisterBackdropForTest(custom)
+
+        S.SetSkinColors({ 0.25, 0.25, 0.25, 0.5 }, nil)
+
+        assert.are.same({ 0.25, 0.25, 0.25, 0.5 },
+            { onWindow._r, onWindow._g, onWindow._b, onWindow._a })
+        assert.are.same({ c[1], c[2], c[3], c[4] },
+            { onControl._r, onControl._g, onControl._b, onControl._a })
+        assert.are.same({ 0, 0.6, 1, 0.3 },
+            { custom._r, custom._g, custom._b, custom._a })
+    end)
+
+    -- A border-only backdrop carries the window RGB at alpha 0. It must follow
+    -- the new colour and STAY invisible.
+    it("keeps a border-only backdrop transparent", function()
+        local w = S.palette.window
+        local bd = { _r = w[1], _g = w[2], _b = w[3], _a = 0 }
+        function bd:GetBackdropColor() return self._r, self._g, self._b, self._a end
+        function bd:SetBackdropColor(nr, ng, nb, na)
+            self._r, self._g, self._b, self._a = nr, ng, nb, na
+        end
+        S._RegisterBackdropForTest(bd)
+
+        S.SetSkinColors({ 0.9, 0.1, 0.1, 0.8 }, nil)
+
+        assert.are.same({ 0.9, 0.1, 0.1, 0 }, { bd._r, bd._g, bd._b, bd._a })
+    end)
+
+    -- Some frames hide a border by zeroing its alpha rather than by not asking
+    -- for one. The border sweep needs the same alpha carry the background half
+    -- has, or a deliberately borderless frame grows a border.
+    it("keeps an invisible border invisible while repainting a visible one", function()
+        local function borderBackdrop(a)
+            local b = { _a = a, _set = nil }
+            function b:GetBackdropBorderColor() return 0, 0, 0, self._a end
+            function b:SetBackdropBorderColor(nr, ng, nb, na)
+                self._set = { nr, ng, nb, na }
+            end
+            return b
+        end
+
+        local hidden = borderBackdrop(0)
+        local shown = borderBackdrop(1)
+        S._RegisterBackdropForTest(hidden)
+        S._RegisterBackdropForTest(shown)
+
+        S.SetSkinColors(nil, { 0.4, 0.5, 0.6, 1 })
+
+        assert.are.same({ 0.4, 0.5, 0.6, 0 }, hidden._set)
+        assert.are.same({ 0.4, 0.5, 0.6, 1 }, shown._set)
+    end)
+end)
+
+describe("S.SetSkinFont", function()
+    local S
+    before_each(function() S = L.loadSkinAPI().Skins end)
+
+    it("changes the face and leaves size and outline alone when they are nil", function()
+        S.SetSkinFont("SomeFont", 15, "THICK")
+        S.SetSkinFont("OtherFont", nil, nil)
+        assert.are.equal("OtherFont", S.FONT_FACE)
+        assert.are.equal(15, S.fontBaseSize)
+        assert.are.equal("THICK", S.fontOutlineMode)
+    end)
+
+    it("maps every outline mode onto the switch it drives", function()
+        S.SetSkinFont(nil, nil, "NONE")
+        assert.is_false(S.fontOutline)
+        S.SetSkinFont(nil, nil, "OUTLINE")
+        assert.is_true(S.fontOutline)
+        S.SetSkinFont(nil, nil, "THICK")
+        assert.is_true(S.fontOutline)
+        assert.are.equal("THICK", S.fontOutlineMode)
+    end)
+
+    it("ignores an unknown mode rather than blanking the outline", function()
+        S.SetSkinFont(nil, nil, "OUTLINE")
+        S.SetSkinFont(nil, nil, "banana")
+        assert.are.equal("OUTLINE", S.fontOutlineMode)
+    end)
+
+    it("reads the legacy boolean outline in both directions", function()
+        assert.are.equal("OUTLINE", S._ResolveOutlineMode(true))
+        assert.are.equal("NONE", S._ResolveOutlineMode(false))
+        assert.are.equal("NONE", S._ResolveOutlineMode(nil))
+        assert.are.equal("THICK", S._ResolveOutlineMode("THICK"))
+        assert.are.equal("NONE", S._ResolveOutlineMode("banana"))
+    end)
+
+    -- The base size moves every string together and preserves the gap between
+    -- them. This is the whole reason it is a base and not a flat override.
+    it("shifts sizes by the base delta and keeps their spacing", function()
+        S.SetSkinFont(nil, 12, nil)
+        assert.are.equal(14, S._EffectiveSize(14))
+        assert.are.equal(11, S._EffectiveSize(11))
+        S.SetSkinFont(nil, 16, nil)
+        assert.are.equal(18, S._EffectiveSize(14))
+        assert.are.equal(15, S._EffectiveSize(11))
+    end)
+
+end)
+
+-- These three need the KE.ApplyFont recorder, because S.SetFont routes every
+-- application through it rather than touching the FontString directly. Follow
+-- the "SkinAPI SetFont" block's before_each exactly: keep the KE the loader
+-- returns, then replace KE.ApplyFont.
+describe("S.SetSkinFont applied output", function()
+    local KE, S, applied
+
+    local function fontString()
+        return {
+            SetFont = function() end,
+            GetFont = function() return "Fonts\\FRIZQT__.TTF", 12, "" end,
+            SetShadowColor = function() end,
+        }
+    end
+
+    before_each(function()
+        KE = L.loadSkinAPI()
+        S = KE.Skins
+        applied = {}
+        KE.ApplyFont = function(_, fs, face, size, outline)
+            applied[#applied + 1] = { fs = fs, face = face, size = size, outline = outline }
+        end
+    end)
+
+    -- Without a face field in the dirty record, a face-only change reaches
+    -- nothing that was already styled.
+    it("re-fonts an already-styled string when only the face changes", function()
+        local fs = fontString()
+        S.SetFont(fs, 12, "OUTLINE")
+        assert.equals(1, #applied)
+        S.SetSkinFont("SomeOtherFont", nil, nil)
+        assert.equals(2, #applied)
+        assert.equals("SomeOtherFont", applied[2].face)
+    end)
+
+    -- Both these mode changes leave the boolean switch true, so a dirty record
+    -- that tracks only the boolean swallows them and the text never changes.
+    it("re-fonts when the mode moves between OUTLINE and THICK", function()
+        local fs = fontString()
+        S.SetSkinFont(nil, nil, "OUTLINE")
+        S.SetFont(fs, 12, "OUTLINE")
+        assert.equals("OUTLINE", applied[#applied].outline)
+
+        S.SetSkinFont(nil, nil, "THICK")
+        assert.equals("THICKOUTLINE", applied[#applied].outline)
+
+        S.SetSkinFont(nil, nil, "OUTLINE")
+        assert.equals("OUTLINE", applied[#applied].outline)
+    end)
+
+    -- The legacy boolean setter and the mode are one piece of state. Turning
+    -- the switch off while the mode is THICK must not leave text thick.
+    it("keeps the legacy boolean setter and the mode in step", function()
+        local fs = fontString()
+        S.SetSkinFont(nil, nil, "THICK")
+        S.SetFont(fs, 12, "OUTLINE")
+        assert.equals("THICKOUTLINE", applied[#applied].outline)
+
+        S.SetFontOutline(false)
+        assert.equals("NONE", S.fontOutlineMode)
+        assert.equals("", applied[#applied].outline)
+
+        S.SetFontOutline(true)
+        assert.equals("OUTLINE", S.fontOutlineMode)
+        assert.equals("OUTLINE", applied[#applied].outline)
+    end)
+end)

@@ -1763,12 +1763,17 @@ local Defaults = {
             BlizzardFrames = {
                 Enabled    = false,
                 FontOffset = 0,
-                -- Global outline switch for skinned Blizzard text. The skin asks
-                -- for OUTLINE at over a hundred call sites; at 12px that dilate
-                -- closes the counters of tight glyphs, and dense lists like the
-                -- guild roster read as blobby. Off by default. On restores every
-                -- call site's designed outline.
-                FontOutline = false,
+                FontFace = "",
+                FontSize = 12,
+                -- Three-state outline switch for skinned Blizzard text: NONE,
+                -- OUTLINE, or THICK. The skin asks for OUTLINE at over a
+                -- hundred call sites; at 12px that dilate closes the counters
+                -- of tight glyphs, and dense lists like the guild roster read
+                -- as blobby, so NONE is the default. A legacy boolean is also
+                -- accepted and resolved to NONE/OUTLINE.
+                FontOutline = "NONE",
+                BackdropColor = { 0.031, 0.031, 0.031, 0.80 },
+                BorderColor = { 0, 0, 0, 1 },
                 -- Base point size the global Blizzard font override scales
                 -- from. Every font object keeps its own relative size; this
                 -- moves them together. 12 is Blizzard's own baseline.

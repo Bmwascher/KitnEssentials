@@ -13,6 +13,7 @@ local S = KE.Skins
 
 local ipairs = ipairs
 local math_max = math.max
+local math_abs = math.abs
 local math_floor = math.floor
 local CreateFrame = CreateFrame
 local unpack = unpack
@@ -64,6 +65,12 @@ function S.GetBackdrop(frame)
     return backdropCache[frame]
 end
 
+-- Test seam. The repaint rule below is the only piece of the backdrop layer
+-- that decides anything, and it cannot be reached without entries in the cache.
+function S._RegisterBackdropForTest(bd)
+    backdropCache[bd] = bd
+end
+
 -- Structural colours are left alone — they are tuned
 -- against real Blizzard art. The brand/hover/progress entries follow KE's
 -- live theme so a skinned Blizzard window matches KE's own panels.
@@ -90,18 +97,89 @@ S.palette = {
 -- the same RGB and differ only in alpha, so driving hover from accentHover
 -- collapsed every rest/hover pair (rows, tabs, buttons, the close X) onto
 -- one flat brand colour with no visible mouseover state at all.
+local function ApplyColor(target, value)
+    if not value then return end
+    for i = 1, 4 do
+        if value[i] ~= nil then target[i] = value[i] end
+    end
+end
+
 function S.RefreshPalette()
     local accent = KE.GetThemeColor and KE:GetThemeColor("accent")
     if accent then
         S.palette.brand[1], S.palette.brand[2], S.palette.brand[3] = accent[1], accent[2], accent[3]
         S.palette.progress[1], S.palette.progress[2], S.palette.progress[3] = accent[1], accent[2], accent[3]
     end
+
+    -- Saved window colours. Read here rather than at file scope: this runs
+    -- again once the db exists, and at file scope it never would.
+    local bs = KE.db and KE.db.profile and KE.db.profile.Skinning
+        and KE.db.profile.Skinning.BlizzardFrames
+    if bs then
+        ApplyColor(S.palette.window, bs.BackdropColor)
+        ApplyColor(S.palette.border, bs.BorderColor)
+    end
 end
 
 S.RefreshPalette()
 
+-- Repaint rule: a cached backdrop is repainted only if it is STILL wearing the
+-- colour being replaced. backdropCache records which backdrops this engine
+-- created, not which colour each one ended up with -- roughly forty-five sites
+-- re-colour a backdrop after it is created, S.Template among them, and a
+-- blanket sweep would flatten every one of them onto the window colour.
+--
+-- Only RGB is compared. Alpha is then carried: a zero stays zero, anything else
+-- takes the new alpha. That is what keeps a border-only backdrop, which wears
+-- the window RGB at alpha 0, following the new colour while staying invisible.
+-- The border half needs the same carry for the same reason -- some frames hide
+-- a border by zeroing its alpha rather than by not asking for one, and giving
+-- those a visible border is exactly the damage this rule exists to prevent.
+--
+-- What the RGB match cannot tell apart: a backdrop still wearing the default,
+-- and one a skin deliberately painted the same colour the default happens to
+-- be. Borders used as a state indicator sit in that overlap; they take the new
+-- colour here and are repainted by their own refresh, so the mismatch is
+-- visible only until that frame next updates.
+local function ColorMatches(r, g, b, ref)
+    if not (r and g and b) then return false end
+    local e = 0.001
+    return math_abs(r - ref[1]) < e and math_abs(g - ref[2]) < e and math_abs(b - ref[3]) < e
+end
+
+function S.SetSkinColors(bg, border)
+    local oldBg = { S.palette.window[1], S.palette.window[2], S.palette.window[3] }
+    local oldBorder = { S.palette.border[1], S.palette.border[2], S.palette.border[3] }
+
+    ApplyColor(S.palette.window, bg)
+    ApplyColor(S.palette.border, border)
+
+    for _, bd in pairs(backdropCache) do
+        if bg and bd.GetBackdropColor and bd.SetBackdropColor then
+            local r, g, b, a = bd:GetBackdropColor()
+            if ColorMatches(r, g, b, oldBg) then
+                local alpha = (a == 0) and 0 or S.bgColor[4]
+                bd:SetBackdropColor(S.bgColor[1], S.bgColor[2], S.bgColor[3], alpha)
+            end
+        end
+        if border and bd.GetBackdropBorderColor and bd.SetBackdropBorderColor then
+            local r, g, b, a = bd:GetBackdropBorderColor()
+            if ColorMatches(r, g, b, oldBorder) then
+                local alpha = (a == 0) and 0 or S.borderColor[4]
+                bd:SetBackdropBorderColor(S.borderColor[1], S.borderColor[2],
+                    S.borderColor[3], alpha)
+            end
+        end
+    end
+end
+
 S.bgColor = S.palette.window
 S.borderColor = S.palette.border
+
+-- The shipped look, captured before anything can change it. Reset needs a value
+-- to return to, and reading the palette later returns whatever the user chose.
+S.DEFAULT_BG = { S.palette.window[1], S.palette.window[2], S.palette.window[3], S.palette.window[4] }
+S.DEFAULT_BORDER = { S.palette.border[1], S.palette.border[2], S.palette.border[3], S.palette.border[4] }
 
 -- ElvUI's E.ClearTexture (their Core.lua). Their
 -- StripRegion clears art with SetTexture(ClearTexture) + SetAtlas("")
@@ -2178,6 +2256,34 @@ S.fontOffset = 0
 -- governs any SetFont that lands before the db read below can happen.
 S.fontOutline = false
 
+-- Three-state outline over a two-state engine. The switch decides whether a
+-- string's ASKED-for outline is honoured at all; THICK additionally overrides
+-- what was asked. The mode is what the GUI stores and reads back.
+--
+-- The db key predates the third state and held a boolean, so both forms are
+-- accepted. A second key was rejected: AceDB copies scalar defaults into every
+-- profile, which would make the fallback to the boolean unreachable.
+S.fontOutlineMode = "NONE"
+
+local OUTLINE_MODES = { NONE = true, OUTLINE = true, THICK = true }
+
+function S._ResolveOutlineMode(stored)
+    if type(stored) == "string" and OUTLINE_MODES[stored] then return stored end
+    if stored == true then return "OUTLINE" end
+    return "NONE"
+end
+
+-- Base size, not a flat override. Every call site passes its own size and the
+-- gaps between them are the visual hierarchy, so the base shifts them together
+-- instead of collapsing them.
+S.FONT_BASE_DEFAULT = 12
+S.fontBaseSize = S.FONT_BASE_DEFAULT
+
+function S._EffectiveSize(size)
+    return (tonumber(size) or S.FONT_BASE_DEFAULT)
+        + (S.fontBaseSize - S.FONT_BASE_DEFAULT) + S.fontOffset
+end
+
 -- One-shot db read for both font switches. It has to run BEFORE either setter
 -- assigns, not just on the first SetFont: the GUI writes the db and calls the
 -- setter straight through, so a still-pending read would clobber the new value
@@ -2188,7 +2294,12 @@ local function EnsureFontInit()
     S._offsetInit = true
     local bs = KE.db.profile.Skinning.BlizzardFrames
     S.fontOffset = (bs and tonumber(bs.FontOffset)) or 0
-    S.fontOutline = (bs and bs.FontOutline) and true or false
+    S.fontOutlineMode = S._ResolveOutlineMode(bs and bs.FontOutline)
+    S.fontOutline = (S.fontOutlineMode ~= "NONE")
+    S.fontBaseSize = (bs and tonumber(bs.FontSize)) or S.FONT_BASE_DEFAULT
+    if bs and type(bs.FontFace) == "string" and bs.FontFace ~= "" then
+        S.FONT_FACE = bs.FontFace
+    end
 end
 
 function S.SetFontOffset(offset)
@@ -2206,9 +2317,43 @@ end
 -- flipping it back restores each string's designed flag.
 function S.SetFontOutline(enabled)
     EnsureFontInit()
-    enabled = enabled and true or false
-    if enabled == S.fontOutline then return end
-    S.fontOutline = enabled
+    local mode = enabled and "OUTLINE" or "NONE"
+    if mode == S.fontOutlineMode then return end
+    S.fontOutlineMode = mode
+    S.fontOutline = (mode ~= "NONE")
+    for fs, rec in pairs(fontRegistry) do
+        S.SetFont(fs, rec.size, rec.outline)
+    end
+end
+
+function S.SetSkinFont(face, size, outline)
+    EnsureFontInit()
+    local changed = false
+
+    -- An empty face means the addon's own font, which is what FONT_FACE already
+    -- holds by default.
+    if face ~= nil then
+        local resolved = (face == "" or face == nil) and "Expressway" or face
+        if resolved ~= S.FONT_FACE then
+            S.FONT_FACE = resolved
+            changed = true
+        end
+    end
+
+    size = tonumber(size)
+    if size and size ~= S.fontBaseSize then
+        S.fontBaseSize = size
+        changed = true
+    end
+
+    if outline ~= nil and OUTLINE_MODES[outline] and outline ~= S.fontOutlineMode then
+        S.fontOutlineMode = outline
+        S.fontOutline = (outline ~= "NONE")
+        changed = true
+    end
+
+    if not changed then return end
+
     for fs, rec in pairs(fontRegistry) do
         S.SetFont(fs, rec.size, rec.outline)
     end
@@ -2258,12 +2403,19 @@ function S.SetFont(fontString, size, outline)
     end
     local d = S.data(fontString)
     if d.fontSize == size and d.fontOutline == outline and d.fontOffset == S.fontOffset
-        and d.fontOutlineOn == S.fontOutline then return end
-    local eff = size + S.fontOffset
+        and d.fontOutlineOn == S.fontOutline and d.fontFace == S.FONT_FACE
+        and d.fontBase == S.fontBaseSize
+        and d.fontOutlineMode == S.fontOutlineMode then return end
+    local eff = S._EffectiveSize(size)
     if eff < 8 then eff = 8 end
     -- Requested outline goes to the registry and the dirty record; only the
     -- effective one reaches the font, so the switch is reversible.
-    local effOutline = S.fontOutline and outline or ""
+    local effOutline = ""
+    if S.fontOutlineMode == "THICK" then
+        effOutline = "THICKOUTLINE"
+    elseif S.fontOutline then
+        effOutline = outline
+    end
     S.PrimeNoShadow(fontString)
     pcall(KE.ApplyFont, KE, fontString, S.FONT_FACE, eff, effOutline)
 
@@ -2272,6 +2424,9 @@ function S.SetFont(fontString, size, outline)
     d.fontOutline = outline
     d.fontOffset = S.fontOffset
     d.fontOutlineOn = S.fontOutline
+    d.fontFace = S.FONT_FACE
+    d.fontBase = S.fontBaseSize
+    d.fontOutlineMode = S.fontOutlineMode
     if rec then
         rec.size, rec.outline = size, outline
     else
@@ -3015,7 +3170,12 @@ function BF:OnEnable()
     local bs = KE.db and KE.db.profile and KE.db.profile.Skinning
         and KE.db.profile.Skinning.BlizzardFrames
     S.fontOffset = (bs and tonumber(bs.FontOffset)) or 0
-    S.fontOutline = (bs and bs.FontOutline) and true or false
+    S.fontOutlineMode = S._ResolveOutlineMode(bs and bs.FontOutline)
+    S.fontOutline = (S.fontOutlineMode ~= "NONE")
+    S.fontBaseSize = (bs and tonumber(bs.FontSize)) or S.FONT_BASE_DEFAULT
+    if bs and type(bs.FontFace) == "string" and bs.FontFace ~= "" then
+        S.FONT_FACE = bs.FontFace
+    end
 
     runList(earlySkins)
 
