@@ -6,7 +6,7 @@ local helpers = require("dev.spec._helpers")
 local L = require("dev.spec._ke_loader")
 
 -- Nicknames.lua captures its unit globals as file-scope upvalues at load
--- (Nicknames.lua:12-19), so per-case unit stubs need a _G reassign plus a
+-- (Nicknames.lua), so per-case unit stubs need a _G reassign plus a
 -- fresh loadModule AFTER the loader has installed the base environment.
 local function reloadWithUnitStubs(stubs)
     for k, v in pairs(stubs) do _G[k] = v end
@@ -143,7 +143,7 @@ describe("Nicknames.lua ImportNicknames — real-stack round-trips", function()
     end)
 
     it("replaceAll counts overlapping keys as added, never removed", function()
-        -- Nicknames.lua:152-160: removed counts only keys absent from the
+        -- Nicknames.lua: removed counts only keys absent from the
         -- payload; a key present in both is wiped then re-added.
         nicks["A-Realm"] = "a"
         local encoded = KE:ExportNicknames()
@@ -158,7 +158,7 @@ describe("Nicknames.lua ImportNicknames — real-stack round-trips", function()
 
     it("applies only string-keyed, non-empty string payload entries", function()
         -- Hand-built payload: the import loop re-filters entry types
-        -- (Nicknames.lua:165) even though export never emits these.
+        -- (Nicknames.lua) even though export never emits these.
         local Serializer = LibStub("AceSerializer-3.0")
         local Deflate = LibStub("LibDeflate")
         local serialized = Serializer:Serialize({
@@ -293,7 +293,7 @@ describe("Nicknames.lua GetNicknameOrName", function()
 
     it("falls back to GetNormalizedRealmName when UnitFullName omits the realm", function()
         -- Same-realm units return a nil realm from UnitFullName in-game; the
-        -- key must still resolve via GetNormalizedRealmName (Nicknames.lua:59).
+        -- key must still resolve via GetNormalizedRealmName (Nicknames.lua).
         local KE2 = reloadWithUnitStubs({
             UnitIsPlayer = function() return true end,
             UnitFullName = function() return "Bob", nil end,
@@ -312,7 +312,7 @@ describe("Nicknames.lua BuildNicknameKey", function()
     end)
 
     it("appends the fallback realm to a bare same-realm name", function()
-        -- The probe-confirmed C_DamageMeter shape (2026-07-02): same-realm
+        -- The probe-confirmed C_DamageMeter shape: same-realm
         -- source names arrive with NO realm suffix.
         assert.equals("Bite-Area52", KE:BuildNicknameKey("Bite", "Area52"))
     end)

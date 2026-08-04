@@ -24,7 +24,7 @@ local GUI_FILE = "GUI/GUITabs/GUISkinning/GUI-BlizzardFrames.lua"
 local SKINNING_ROOT = "Modules/Skinning"
 
 -- Keys the reference always dispatches with no grid row, cited at
--- GUI-BlizzardFrames.lua:27-32 (minor or loading-screen-rare frames). A row
+-- GUI-BlizzardFrames.lua (minor or loading-screen-rare frames). A row
 -- is not required for these -- it is also not FORBIDDEN, so ChatConfig and
 -- Dialogs correctly appear both here and as grid rows (Deviation 3).
 local ALWAYS_ON = {
@@ -111,7 +111,7 @@ end
 -- depth (its `()` opens and closes immediately), so a bare string literal
 -- in such a body WOULD be collected and could be mistaken for the key.
 -- The two registrations that pass a function literal --
--- Frames/EncounterJournal.lua:686 and GlobalFonts.lua:110 -- contain no
+-- Frames/EncounterJournal.lua and GlobalFonts.lua -- contain no
 -- string literals at all, so this is latent rather than live. A future
 -- inline body with a bare string needs that argument hoisted to a named
 -- local, or this scanner taught to skip `function`..`end` spans.

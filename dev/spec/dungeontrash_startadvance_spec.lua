@@ -412,7 +412,7 @@ describe("DungeonTrash — CAST_START start-advance", function()
             assert.equals(100, rt.pendingStartAdvanceAt)
         end)
 
-        -- Divergent matched/candidates regression (review find, 2026-07-18):
+        -- Divergent matched/candidates regression (review find):
         -- a runtime Layer2-locked onto the WRONG identity while Layer1's
         -- candidate list already names the curating mob must (a) still
         -- sample the delta, (b) hold the pending past the pre-sample
@@ -500,7 +500,7 @@ describe("DungeonTrash — CAST_START start-advance", function()
         end)
     end)
 
-    -- Producer-side pin for the 2026-07-10 chains fix: KE can PROVE a cast→
+    -- Producer-side pin for the chains fix: KE can PROVE a cast→
     -- channel transition (castBarID +1 in the pairing window) but can never
     -- affirm its ABSENCE — a missed pairing is indistinguishable from a bare
     -- channel — so an unpaired channel must stay LENIENT and still credit a

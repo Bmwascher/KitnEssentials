@@ -227,7 +227,7 @@ end
 -- Core/ProfileManager.lua over a fake AceDB-shaped KE.db. Mirrors the AceDB
 -- semantics the manager depends on: SetProfile early-returns when already on
 -- that profile, and OnProfileChanged/OnProfileCopied/OnProfileReset fire
--- SYNCHRONOUSLY inside the mutating call (AceDB-3.0.lua:452,482,619,658).
+-- SYNCHRONOUSLY inside the mutating call (AceDB-3.0.lua).
 -- Specs replicate Core/Main.lua's callback registration themselves.
 -- Returns PM, KE, db.
 function L.loadProfileManager(overrides)
@@ -312,12 +312,12 @@ function L.loadConflicts(overrides)
         ShouldNotLoadModule = function() return false end,
         -- SEVEN placeholders between text and onAccept, matching the real
         -- signature's showEditBox, editBoxLabelText, useTexture, texturePath,
-        -- textureSizeX, textureSizeY, textureColor (Core/Widgets.lua:252-254).
+        -- textureSizeX, textureSizeY, textureColor (Core/Widgets.lua).
         -- Six would shift every later argument by one and silently capture
         -- closures as button labels.
         CreatePrompt = function(_, title, text, _, _, _, _, _, _, _,
                                 onAccept, onCancel, acceptText, cancelText)
-            -- ClosePrompt CLEARS the handle at Core/Widgets.lua:167 BEFORE
+            -- ClosePrompt CLEARS the handle at Core/Widgets.lua BEFORE
             -- invoking either callback at :168, so the fake wraps them to do
             -- the same. A fake that leaves the handle set while a callback
             -- runs does not model production.
@@ -331,7 +331,7 @@ function L.loadConflicts(overrides)
                 acceptText = acceptText, cancelText = cancelText,
             }
             -- The real CreatePrompt sets this singleton handle
-            -- (Core/Widgets.lua:642); the stall-recovery path reads it.
+            -- (Core/Widgets.lua); the stall-recovery path reads it.
             KE.activePrompt = { n = #prompts }
         end,
         CreateReloadPrompt = function(_, reason)
@@ -578,7 +578,7 @@ function L.loadLootRoll(overrides)
     _G.InCombatLockdown = function() return false end
     -- The module's DEBUG_LR tracer captures these as upvalues AT LOAD, so they
     -- must exist before loadModule -- and the whole suite must survive the flag
-    -- being flipped to true. It shipped `true` once during the 2026-07-31 probe
+    -- being flipped to true. It shipped `true` once during the probe
     -- and every LootRoll spec errored on a nil debugprofilestop, which is a
     -- spec-harness gap, not a module bug: a debug flag must never be able to
     -- break the test suite. KE:Print is stubbed for the same reason.
@@ -669,7 +669,7 @@ function L.loadLootRollBars(overrides)
             end,
             GetBackdrop = function(frame) return backdrops[frame] end,
             SetFont = function() end,
-            -- The real S.Icon (Modules/Skinning/SkinAPI.lua:1835) applies the
+            -- The real S.Icon (Modules/Skinning/SkinAPI.lua) applies the
             -- standard crop and a pixel snap. Neither is observable headlessly,
             -- so this records the call instead: a spec can assert the item icon
             -- goes through the shared helper rather than a hardcoded SetTexCoord.
@@ -728,7 +728,7 @@ end
 -- assigned to _G directly and its per-test override is read off `overrides`
 -- here rather than handed to installMock, which would drop it.
 -- Returns C, KE, seams.
--- Keys _wow_mock.install actually consumes (dev/spec/_wow_mock.lua:51-92).
+-- Keys _wow_mock.install actually consumes (dev/spec/_wow_mock.lua).
 -- A caller override for one of these MUST be routed through installMock or it
 -- is discarded; anything not on this list must be assigned to _G directly.
 local MANAGED_MOCK_KEYS = {
@@ -828,13 +828,13 @@ end
 
 -- Modules/QoL/SlashCommands.lua. The file guards on a truthy KitnEssentials at
 -- load, which installAddonShim supplies, and it indexes C_CVar at file scope
--- (SlashCommands.lua:14-15), so C_CVar must exist before load. Nothing registers
+-- (SlashCommands.lua), so C_CVar must exist before load. Nothing registers
 -- a slash command until KE:ApplySlashCommands runs, which this loader
 -- deliberately does not call.
 --
 -- Managed overrides (InCombatLockdown and anything else in MANAGED_MOCK_KEYS)
 -- are forwarded to installMock. C_CVar, C_AddOns, ReloadUI, SlashCmdList and
--- NUM_CHAT_WINDOWS are UNMANAGED (dev/spec/_wow_mock.lua:51-92), so they are
+-- NUM_CHAT_WINDOWS are UNMANAGED (dev/spec/_wow_mock.lua), so they are
 -- assigned to _G directly; handing them to installMock would silently drop
 -- them. Returns KE.
 function L.loadSlashCommands(overrides)
@@ -952,7 +952,7 @@ function L.loadLFGReminder(overrides)
             ShowDisable = true,
         },
     }
-    -- RunAfterCombat mirrors Core/Globals.lua:154 -- immediate when out of
+    -- RunAfterCombat mirrors Core/Globals.lua -- immediate when out of
     -- combat, queued otherwise. Tests drain the queue with
     -- seams.runCombatQueue() to simulate combat ending.
     local combatQueue = {}
@@ -1388,7 +1388,7 @@ end
 --                            through no exported function and is NOT a seam.
 function L.loadRaidControl(overrides)
     overrides = overrides or {}
-    -- installMock installs _G.CreateFrame (dev/spec/_wow_mock.lua:55). The
+    -- installMock installs _G.CreateFrame (dev/spec/_wow_mock.lua). The
     -- module calls CreateFrame at FILE SCOPE for the frame hider's parked
     -- parent, so this cannot be skipped the way loadMoveFrames skips it.
     installMock(overrides, {})

@@ -381,7 +381,7 @@ describe("DungeonTrash inference — BuildCandidates", function()
         -- Rokh'zal (253683) is the ONLY sex=2/power=0 Maisara mob → a lone Layer1
         -- survivor. Curated level 91; live read 90. It matched only the coarse
         -- sex/power triple, so it must NOT be rubber-stamped — stays unresolved and
-        -- defers to a cast (this was the Rokh'zal false positive in-game 2026-07-07).
+        -- defers to a cast (this was the Rokh'zal false positive in-game).
         local obs = { level = 90, sex = 2, power = 0, unitClassification = "elite" }
         local cands, resolved = ti.BuildCandidates(
             obs, { dungeonKey = "MaisaraCaverns", traits = KE.TrashTraits })
@@ -580,7 +580,7 @@ describe("DungeonTrash inference — FilterCandidates trait-duration keep tier",
         assert.is_false(TI.TraitDurationMatches({}, { kind = "cast", duration = 3 }))
     end)
 
-    -- Audit F2 (2026-07-18): the old and/or select fell through to castTimeSet
+    -- Audit F2: the old and/or select fell through to castTimeSet
     -- when a CHANNEL observation met a nil channelTimeSet — a real 2.5s channel
     -- kept a cast-only mob alive under fail-open routing (Riftbreath vs the
     -- cast-only Academy sibling). The reference consumes the sets independently.
@@ -590,7 +590,7 @@ describe("DungeonTrash inference — FilterCandidates trait-duration keep tier",
         assert.is_true(TI.TraitDurationMatches(castOnly, { kind = "cast", duration = 2.5 }))
     end)
 
-    -- Audit F1 (2026-07-18): the trait keep tier is FILLER-ONLY. In production
+    -- Audit F1: the trait keep tier is FILLER-ONLY. In production
     -- both Skyreach twins' trait castTimeSet carry the shared 3s cast, so the
     -- old unconditional trait fallthrough revived the fingerprint-rejected twin
     -- and the pool never narrowed — the Batch E castStartChangeTarget splitter

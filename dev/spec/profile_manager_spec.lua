@@ -115,7 +115,7 @@ describe("RefreshAllModules enabled-state sync", function()
         local reg = {}
         for _, m in ipairs(mods) do reg[m.name] = m end
         -- Mirror AceAddon semantics: EnableModule/DisableModule dispatch the
-        -- lifecycle methods (AceAddon-3.0.lua:328,516), not just a flag flip.
+        -- lifecycle methods (AceAddon-3.0.lua), not just a flag flip.
         _G.KitnEssentials = {
             IterateModules = function() return pairs(reg) end,
             EnableModule = function(_, name)
@@ -188,7 +188,7 @@ describe("RefreshAllModules enabled-state sync", function()
         PM:RefreshAllModules()
         assert.is_false(reg["SkinActionBars"].enabled)
         assert.equal(0, skinPrompts)
-        -- A profile operation always prompts (Brandon 2026-08-02); suppressing
+        -- A profile operation always prompts; suppressing
         -- the skinning-specific wording does not suppress the prompt itself.
         assert.equal(1, generic)
     end)

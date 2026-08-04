@@ -1,7 +1,7 @@
 -- Tier 2: the enchant helper's two testable pieces.
 --
 -- Scope is deliberate (AGENTS.md tiered test policy). The popup, its rows and
--- the bar anchoring are a port of NorskenUI v6 CharacterPanel.lua:1269-1562 and
+-- the bar anchoring are a port of NorskenUI v6 CharacterPanel.lua and
 -- are verified by diffing against that source plus an in-game smoke -- a spec
 -- there would only encode the porter's reading. What IS covered:
 --

@@ -143,7 +143,7 @@ describe("MPT run lifecycle: mid-key exit / re-entry", function()
     end)
 
     it("survives a profile switch — the split cache is global, not profile-scoped", function()
-        -- Regression (Codex, 2026-07-14): the cache used to live on MPT.db, i.e.
+        -- Regression: the cache used to live on MPT.db, i.e.
         -- KE.db.profile.MythicPlusTimer. ProfileManager:RefreshAllModules calls
         -- UpdateDB on every module, and UpdateDB REBINDS self.db — so a mid-run
         -- profile switch handed the live run another profile's stale splits. Those

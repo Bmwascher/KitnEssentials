@@ -274,7 +274,7 @@ describe("SkinAPI SetFont", function()
     end)
 
     -- The lazy offset init is plan-introduced: the reference reads a
-    -- different db path (SkinningAPI.lua:2130-2134). Exercise the repointed
+    -- different db path (SkinningAPI.lua). Exercise the repointed
     -- one so a wrong key surfaces here rather than in game.
     it("picks the offset up from the database on first call", function()
         KE.db.profile.Skinning.BlizzardFrames.FontOffset = 2
@@ -464,9 +464,9 @@ describe("A6.1 helper surface", function()
 
     it("exposes every helper the frame skins call", function()
         -- `.Skins` is load-bearing. L.loadSkinAPI returns the KE table
-        -- (dev/spec/_helpers.lua:17-24 returns KE), not the Skins namespace;
+        -- (dev/spec/_helpers.lua returns KE), not the Skins namespace;
         -- indexing the return directly finds nothing and the test can never
-        -- pass. dev/spec/skinapi_spec.lua:9 already does it this way.
+        -- pass. dev/spec/skinapi_spec.lua already does it this way.
         local S = L.loadSkinAPI().Skins
         local missing = {}
         for _, name in ipairs(REQUIRED) do
@@ -479,7 +479,7 @@ describe("A6.1 helper surface", function()
 
     it("leaks no global named RecenterTabText", function()
         L.loadSkinAPI()
-        -- The reference forward-declares it as a local at SkinningAPI.lua:1305
+        -- The reference forward-declares it as a local at SkinningAPI.lua
         -- so the eight call sites below it can reach it. Dropping that line
         -- turns the definition into a global write.
         assert.is_nil(rawget(_G, "RecenterTabText"))

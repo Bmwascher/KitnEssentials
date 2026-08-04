@@ -251,7 +251,7 @@ describe("DungeonTrash config — sound overrides", function()
         assert.is_false(DT:HasSpellOverrides(MAP, NPC, SPELL))          -- pruned
     end)
 
-    -- Third slot (2026-07-10): the observed cast-start cue — same entry, same
+    -- Third slot: the observed cast-start cue — same entry, same
     -- prune rule, independent of the two prediction-fired slots.
     it("round-trips onCastStart and keeps the entry alive on its own", function()
         assert.is_nil(DT:GetSpellSoundOnCastStart(MAP, NPC, SPELL))
@@ -331,7 +331,7 @@ describe("DungeonTrash config — reveal window (lead time)", function()
         assert.equals(0, DT:GetSpellRevealAt(MAP, NPC, SPELL))
     end)
 
-    -- Regression (2026-07-06 review): the shared boss "Reveal at" slider allows
+    -- Regression (review): the shared boss "Reveal at" slider allows
     -- 0 ("always visible"), but 0 is meaningless for a trash countdown — it would
     -- reach ShowAlert as duration<=0 and be silently dropped, killing every
     -- trash alert. The group default must floor a 0/negative to the per-mode

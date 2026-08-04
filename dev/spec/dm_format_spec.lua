@@ -5,7 +5,7 @@
 --
 -- Loads the REAL Modules/DamageMeter/Core.lua headlessly (L.loadDMCore) and
 -- tests the render layer's (string, isSecret) contract: FormatBarValue /
--- FormatDeathTime / FormatRecapDelta (cross-chunk exports at Core.lua:1039 /
+-- FormatDeathTime / FormatRecapDelta (cross-chunk exports at Core.lua /
 -- :1078) plus DM:FormatWindowLabel. Unlike dm_breakdown_spec's mirror of
 -- Detail.lua, these are the shipped functions -- a load-time break here is
 -- the intended tripwire.
@@ -34,7 +34,7 @@ before_each(function()
     for i = #ABBR_CALLS, 1, -1 do ABBR_CALLS[i] = nil end
     for k in pairs(ABBR_NIL) do ABBR_NIL[k] = nil end
     -- Core.lua captures issecretvalue/AbbreviateNumbers into file-locals at load
-    -- (Core.lua:37/:39); loadDMCore installs the mock before loadModule, so these
+    -- (Core.lua); loadDMCore installs the mock before loadModule, so these
     -- closures are what the file captures -- per-test SECRET mutation still works.
     DM = L.loadDMCore({
         issecretvalue = function(v) return SECRET[v] == true end,
@@ -95,7 +95,7 @@ describe("FormatBarValue mode routing", function()
     end)
 
     it("default and mode=false are amount-only (the rate is ignored)", function()
-        -- mode=false is the Detail breakdown/recap surfaces' path (Core.lua:982).
+        -- mode=false is the Detail breakdown/recap surfaces' path (Core.lua).
         DM.FormatBarValue(300, 50, nil)
         DM.FormatBarValue(300, 50, false)
         assert.equals(2, #ABBR_CALLS)   -- one call per invocation: the total only
@@ -116,7 +116,7 @@ end)
 
 describe("FormatBarValue sub-1 rate clamp", function()
     -- Overall-window rates can fall below 1 (total / huge elapsed); plain rates
-    -- clamp to 1 so AbbreviateNumbers never emits a raw sub-1 float (Core.lua:989).
+    -- clamp to 1 so AbbreviateNumbers never emits a raw sub-1 float (Core.lua).
     it("clamps a plain sub-1 rate to 1 before formatting", function()
         DM.FormatBarValue(nil, 0.4, "PerSec")
         assert.equals(1, ABBR_CALLS[1])
@@ -185,7 +185,7 @@ describe("FormatDeathTime", function()
 
     it("a declared-secret time routes through the abbreviator + 's' suffix", function()
         -- M:SS arithmetic on a secret would taint; the secret path is
-        -- AbbreviateNumbers(sec) .. "s" (Core.lua:1022).
+        -- AbbreviateNumbers(sec) .. "s" (Core.lua).
         local t = 143
         SECRET[t] = true
         local s, sec = DM.FormatDeathTime(t)
@@ -197,7 +197,7 @@ describe("FormatDeathTime", function()
     end)
 
     it("falls back to ('0:00', false) when the abbreviator yields nothing", function()
-        -- The `if s then` guard at Core.lua:1030.
+        -- The `if s then` guard at Core.lua.
         local t = 200
         SECRET[t] = true
         ABBR_NIL[t] = true
@@ -219,7 +219,7 @@ describe("FormatRecapDelta", function()
     end)
 
     it("returns '' when either operand is declared secret", function()
-        -- Subtraction on a secret throws in-game (Core.lua:1075) -- both operands
+        -- Subtraction on a secret throws in-game (Core.lua) -- both operands
         -- must be checked before the math runs.
         SECRET[6.6] = true
         assert.equals("", DM.FormatRecapDelta(10, 6.6))

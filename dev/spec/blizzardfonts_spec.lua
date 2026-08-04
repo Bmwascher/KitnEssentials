@@ -27,7 +27,7 @@ end
 describe("BlizzardFonts", function()
     local KE, BF, planted
 
-    -- Mirrors Core/Globals.lua:346-351's filter exactly (nil/""/"NONE"/
+    -- Mirrors Core/Globals.lua's filter exactly (nil/""/"NONE"/
     -- "SOFTOUTLINE" collapse to "", everything else passes through), so
     -- assertions can tell OUTLINE/THICKOUTLINE apart from the collapsed case.
     local function stubOutline(_, outline)
@@ -63,7 +63,7 @@ describe("BlizzardFonts", function()
 
     -- Plants a fake font object on _G and remembers the name so after_each
     -- can strike it back off -- busted insulates _G per FILE, not per test
-    -- (dev/spec/_ke_loader.lua:9-10), and every describe below shares one.
+    -- (dev/spec/_ke_loader.lua), and every describe below shares one.
     local function plant(name, obj)
         _G[name] = obj
         planted[#planted + 1] = name

@@ -328,7 +328,7 @@ describe("DungeonTrash — engage-gated first-cast seeding", function()
     -- cannotInterrupt, so a Shadowmeld-shaped interrupt latch rejects them
     -- ALL — the identity, its lock and its output are KEPT: the reference
     -- retains a locked in-combat runtime rather than blanking the plate
-    -- forever (the 2026-07-24 disappearing-timer field report).
+    -- forever (the disappearing-timer field report).
     it("a kick contradiction with no resolvable alternative keeps the lock and its output", function()
         KE.TrashData[1].dungeonKey = "D"
         KE.TrashTraits = { [111] = { dungeonKey = "D", name = "Mob",
@@ -396,7 +396,7 @@ describe("DungeonTrash — engage-gated first-cast seeding", function()
         assert.is_true(rt.enterSeeded)                    -- output untouched
     end)
 
-    -- FAILED is NOT interrupt evidence (in-game Algeth'ar Academy 2026-07-10;
+    -- FAILED is NOT interrupt evidence (in-game Algeth'ar Academy;
     -- documented deviation — the reference's FAILED handlers latch the same
     -- sticky sawInterrupted a kick sets): a cast aborts on Shadowmeld / LoS /
     -- CC without proving anything about interruptibility. All five Academy
@@ -498,7 +498,7 @@ describe("DungeonTrash — engage-gated first-cast seeding", function()
             assert.is_true(rt.castConfirmed)
         end)
 
-        -- A5 resolve-without-lock (Brandon 2026-07-10: reference-true): a bare
+        -- A5 resolve-without-lock (reference-true): a bare
         -- channel — transition unprovable, castIntoChannel nil — matches a
         -- TWO-PHASE spell's channelTime as easily as a pure channel's. The
         -- reference survives that lenient match because it never locks; KE's

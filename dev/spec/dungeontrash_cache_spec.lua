@@ -506,8 +506,7 @@ describe("DungeonTrash — deferred reveal pending-recovery gate (real ScheduleA
         assert.same({ 10 }, predicted)
     end)
 
-    -- Observed cast-start cue (review call C3, 2026-07-10; reworked same day
-    -- after the Academy run): a third sound slot fired at the REAL cast bar.
+    -- Observed cast-start cue: a third sound slot fired at the REAL cast bar.
     -- Deferred one cue window (0.12s — reference's CAST_START_VOICE_TARGET_
     -- DELAY) so the +0.10s sampler's start fingerprints can HARD-filter the
     -- candidates before the nearest-predicted-start scoring; once per cast
@@ -566,7 +565,7 @@ describe("DungeonTrash — deferred reveal pending-recovery gate (real ScheduleA
         _G.PlaySoundFile = nil
     end)
 
-    -- The Academy eagle bug (in-game 2026-07-10): Gust and Raging Screech are
+    -- The Academy eagle bug (in game): Gust and Raging Screech are
     -- both cast-kind, and when the schedule drifts the nearest-prediction
     -- guess picks the wrong one. The reference separates them by SAMPLED
     -- cast-start fingerprint (opposite targetClearOnCastStart curations) —

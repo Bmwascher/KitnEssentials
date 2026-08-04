@@ -220,7 +220,7 @@ describe("DungeonTimers override accessors", function()
 
     describe("IsSpellAllowedForRole", function()
         -- Expected visibility per (curated role × player token), transcribed
-        -- from ROLE_ALLOW_LIST (DungeonTimers.lua:54).
+        -- from ROLE_ALLOW_LIST (DungeonTimers.lua).
         local MATRIX = {
             { spell = 111, role = "tank",     TANK = true,  HEALER = false, DAMAGER = false },
             { spell = 222, role = "heal",     TANK = false, HEALER = true,  DAMAGER = false },

@@ -30,7 +30,7 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
         return row[1], row[2], row[3], row[4]
     end
 
-    -- Mirrors the RAW suppression shape (EUIWindows.lua:176-209: an
+    -- Mirrors the RAW suppression shape (EUIWindows.lua: an
     -- unfiltered/"full" row is a bare euiKey STRING, a filtered/"partial" row
     -- is a TABLE) into KE.Skins.suppressed alongside the stubbed accessor
     -- answer. Without this, KE.Skins.suppressed stays empty, so a site that
@@ -144,7 +144,7 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
     -- Both share BuildSoloRows / BuildCheckGrid, so a change made for one can
     -- break the other silently -- this is the only route that would see it.
     -- AddonInstalled short-circuits to true when C_AddOns is absent
-    -- (GUI-BlizzardFrames.lua:219-221), and this spec installs no such global,
+    -- (GUI-BlizzardFrames.lua), and this spec installs no such global,
     -- so every addon row reads installed here.
     local function buildAddons()
         GUIFrame.registeredContent["SkinBlizzardFramesAddons"](nil, 0)

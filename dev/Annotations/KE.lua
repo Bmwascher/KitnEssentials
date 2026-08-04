@@ -81,7 +81,7 @@ function KE_FramePool:ReleaseAll() end
 local KE = {}
 
 -- ─── Print / chat ─────────────────────────────────────────
---- Real def (Core/Globals.lua:110) takes ONE arg and concatenates it into
+--- Real def (Core/Globals.lua) takes ONE arg and concatenates it into
 --- the "Kitn|rEssentials:" prefix string — NOT varargs. Extra args at a
 --- call site are silently ignored (a real, documented KE:Print bug).
 ---@param msg string|number
@@ -92,7 +92,7 @@ function KE:Print(msg) end
 --- xpcall(fn, geterrorhandler()) so one erroring closure can't drop the rest
 --- of the queue. Secure-frame mutations (state drivers, secure attributes,
 --- Show/Hide on protected frames) route through this instead of executing
---- blocked mid-combat (CODE-04, 2026-07-13 audit).
+--- blocked mid-combat.
 ---@param fn fun()
 function KE:RunAfterCombat(fn) end
 
@@ -148,7 +148,7 @@ function KE:GetStatusbarPath(barName) end
 function KE:GetFontOutline(outline) end
 
 --- Single source of truth for the font-outline dropdown option list used by
---- every GUI font card (Core/Globals.lua:261). `flags.includeSoft` adds the
+--- every GUI font card (Core/Globals.lua). `flags.includeSoft` adds the
 --- SOFTOUTLINE option, `flags.includeMono` adds MONOCHROME — both omitted
 --- from the base set since they aren't universally appropriate.
 ---@param flags { includeSoft: boolean?, includeMono: boolean? }?
@@ -199,7 +199,7 @@ function KE:ValidateProfileFonts() end
 function KE:FillProfileDefaults() end
 
 -- ─── Frame / position helpers ────────────────────────────
---- Real signature (Core/Globals.lua:663). `Config` is REQUIRED — its
+--- Real signature (Core/Globals.lua). `Config` is REQUIRED — its
 --- anchorFrameType/ParentFrame fields are indexed unconditionally (via
 --- ResolveAnchorFrame) even though the fields themselves are optional.
 --- `SetParent` is an optional boolean; truthy reparents `frame` to the
@@ -225,7 +225,7 @@ function KE:AddIconBorders(frame, color) end
 
 ---@param frame Frame
 ---@param color number[]?
----@param borderParent Frame? # frame level control; defaults to `frame` (Core/Widgets.lua:854)
+---@param borderParent Frame? # frame level control; defaults to `frame` (Core/Widgets.lua)
 function KE:AddBorders(frame, color, borderParent) end
 
 ---@param anchorFrameType string?
@@ -291,7 +291,7 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
                               showSecondEditBox, secondEditBoxLabel) end
 
 --- Wraps KE:CreatePrompt with the standard reload-required chrome
---- (Core/Widgets.lua:644). Returns the singleton prompt dialog frame.
+--- (Core/Widgets.lua). Returns the singleton prompt dialog frame.
 ---@param reason string?
 ---@return Frame
 function KE:CreateReloadPrompt(reason) end

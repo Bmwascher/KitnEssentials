@@ -42,7 +42,7 @@ describe("LFGReminder module", function()
             local LR, _, seams = loader.loadLFGReminder({
                 C_LFGList = {
                     -- 12.0.7's LfgSearchResultData carries activityIDs and NO
-                    -- activityID (LFGListInfoDocumentation.lua:905-910), so the
+                    -- activityID (LFGListInfoDocumentation.lua), so the
                     -- DEFAULT stub uses the real shape and every join test below
                     -- exercises the live resolution branch. Override
                     -- opts.searchResult to pin the legacy field instead.

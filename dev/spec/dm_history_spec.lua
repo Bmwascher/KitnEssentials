@@ -89,8 +89,7 @@ describe("plain-name identity memo", function()
     it("refuses secret inputs (declared)", function()
         local secret = { __secret = true }
         -- Seed a live memo FIRST so the secret-guid lookup below traverses the
-        -- full PlainNameFor guard, not the empty-store short-circuit (Codex
-        -- delta review, F2).
+        -- full PlainNameFor guard, not the empty-store short-circuit.
         DM:NotePlainName("Player-1-S", "Seeder")
         DM:NotePlainName(secret, "Unsub-BurningLegion")
         DM:NotePlainName("Player-1-B", secret)
@@ -107,8 +106,8 @@ describe("plain-name identity memo", function()
     it("never downgrades a realm-bearing name to a bare flicker form", function()
         DM:NotePlainName("Player-1-D", "Unsub")                 -- bare first sighting
         -- Bare names DO store: same-realm members are bare in det.unitName too
-        -- (probe 2026-07-19) — only the realm-bearing->bare OVERWRITE is
-        -- refused (Codex delta review, F3).
+        -- — only the realm-bearing->bare OVERWRITE is
+        -- refused.
         assert.equals("Unsub", DM:PlainNameFor("Player-1-D"))
         DM:NotePlainName("Player-1-D", "Unsub-BurningLegion")   -- upgrade sticks
         DM:NotePlainName("Player-1-D", "Unsub")                 -- flicker tick: ignored
@@ -176,7 +175,7 @@ describe("HistoryCapture", function()
     -- Deliberately NO GetAvailableSessions override: capture must flow
     -- through the REAL Core.lua helper (which trims an omitted cap to 20 —
     -- its menu contract). A fake that ignored cap once masked exactly that
-    -- defect (Codex round 2, F2').
+    -- defect.
 
     local function oneSessionStore()
         -- Session 7: type 0 has two sources (one GUID-less), type 9 empty.
@@ -275,7 +274,7 @@ describe("HistoryCapture", function()
         -- Pre-charKey records carry no owner stamp. nil must fail CLOSED —
         -- a nil-as-wildcard implementation (charKey == nil or charKey == me)
         -- would resurrect the cross-character mislabel on upgrade leftovers
-        -- (Codex round 5, MINOR).
+        --.
         installFakeMeter(oneSessionStore())
         DM._pendingBundle = nil
         KE.db.global.DMHistoryPending = { label = "Pre-upgrade Key", summarySessionID = 7 }
@@ -287,7 +286,7 @@ describe("HistoryCapture", function()
         -- The persisted slot is ACCOUNT-wide (KE.db.global) but the native
         -- store is per-character: an alt's small-integer session ids collide
         -- with the main's trivially, so a cross-character record must never
-        -- pass the anchor check (Codex round 4, MAJOR — cross-char arm).
+        -- pass the anchor check.
         installFakeMeter(oneSessionStore())
         DM._pendingBundle = nil
         KE.db.global.DMHistoryPending = { label = "Main's Key", summarySessionID = 7,
@@ -605,7 +604,7 @@ describe("OnChallengeEvent wiring", function()
     end)
 
     it("the boundary drop kills THE copy — no profile switch can resurrect it [C2]", function()
-        -- The global-section design's core guarantee (Codex round 2, MAJOR):
+        -- The global-section design's core guarantee:
         -- pending is ONE profile-independent record, so once a no-wipe
         -- boundary drops it, switching profiles cannot bring back a stale
         -- anchored copy to mislabel a multi-key store.
@@ -628,7 +627,7 @@ describe("OnChallengeEvent wiring", function()
 
     it("key start with C_DamageMeter ABSENT: no wipe possible, so no arm", function()
         -- Kills the wrong implementation that treats a missing API as a
-        -- successful wipe (Codex round 2, finding 6).
+        -- successful wipe.
         DM.db = { ResetOnKeyStart = true, HistoryRetain = 5 }
         _G.C_DamageMeter = nil
         DM:OnChallengeEvent("CHALLENGE_MODE_START")
@@ -656,7 +655,7 @@ describe("OnDisable provenance", function()
         assert.is_nil(KE.db.global.DMHistoryPending)
         -- Bundles are captured DATA, not provenance: disable must keep them
         -- (an implementation also calling HistoryClear here would erase the
-        -- user's history on every profile switch — Codex round 4, MINOR).
+        -- user's history on every profile switch).
         assert.equals(1, #DM._history.bundles)
     end)
 end)

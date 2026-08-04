@@ -418,7 +418,7 @@ describe("/kes conflicts", function()
         assert.has_no.errors(function() handler("conflicts") end)
     end)
 
-    -- Stub KE.Print, NOT _G.print: Core/Globals.lua:13 captures print into a
+    -- Stub KE.Print, NOT _G.print: Core/Globals.lua captures print into a
     -- file-local at load, so a _G.print stub installed after loadGlobals is
     -- invisible and the assertion could never pass. The handler resolves
     -- KE.Print at call time, so replacing it on the shared table works.

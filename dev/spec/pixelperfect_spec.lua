@@ -1,8 +1,8 @@
 -- Tier 2: Core/PixelPerfect.lua snap math, loaded for real via the shared
 -- loader. Pedigree: a pixel-grid divisor mix-up (frame:GetEffectiveScale vs
--- KE:GetPixelSize) was the root cause of the 2026-05-27 pixel-perfect
+-- KE:GetPixelSize) was the root cause of the pixel-perfect
 -- overhaul — these cases pin the surviving formula:
---   pixelSize = 768 / (physH * effScale)   (PixelPerfect.lua:48)
+--   pixelSize = 768 / (physH * effScale)   (PixelPerfect.lua)
 -- Float results are compared NUMERICALLY (assert.near / ==), never through
 -- tostring: 5.1 prints "1" where 5.4 prints "1.0".
 local L = require("dev.spec._ke_loader")
@@ -38,14 +38,14 @@ describe("PixelPerfect.lua pixel-size cache", function()
     end)
 
     it("keeps the last good cache when effScale is invalid", function()
-        opts.effectiveScale = 0            -- recompute guard, PixelPerfect.lua:44
+        opts.effectiveScale = 0            -- recompute guard, PixelPerfect.lua
         KE:UpdatePixelCache()
         assert.equals(1, KE:GetPixelSize())
     end)
 
     it("recomputes on UI_SCALE_CHANGED via the watcher frame", function()
         -- Loader's mock.install starts a fresh frame list; the file creates
-        -- exactly one frame (the watcher, :261) so _G.frames[1] is it. The
+        -- exactly one frame (the watcher) so _G.frames[1] is it. The
         -- handler also calls ResnapAllBorders with no registry (nil-guard :211).
         opts.effectiveScale = 1.0
         _G.frames[1]:Fire("UI_SCALE_CHANGED")
@@ -264,7 +264,7 @@ describe("SnapFrameToPixels", function()
     end)
 
     it("is a no-op for a sub-pixel frame with no anchor point", function()
-        local f = makeFrame(10.2, 20.3, nil)               -- GetPoint → nil, :251
+        local f = makeFrame(10.2, 20.3, nil)               -- GetPoint → nil
         KE:SnapFrameToPixels(f)
         assert.equals(0, f.clearCalls)
         assert.equals(0, #f.setCalls)
@@ -272,7 +272,7 @@ describe("SnapFrameToPixels", function()
 
     it("tolerates frames without geometry and nil frames", function()
         local f = makeFrame(nil, nil, { "CENTER", nil, "CENTER", 0, 0 })
-        KE:SnapFrameToPixels(f)                            -- GetLeft nil, :239
+        KE:SnapFrameToPixels(f)                            -- GetLeft nil
         assert.equals(0, #f.setCalls)
         KE:SnapFrameToPixels(nil)                          -- :234
     end)
