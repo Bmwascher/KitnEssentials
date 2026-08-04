@@ -42,12 +42,12 @@ GUIFrame:RegisterContent("GroupFinderPanel", function(scrollChild, yOffset)
         KE:Print("Group Finder Panel: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
 
-    yOffset = card1:GetNextOffset()
-
     -- Lone header bar: a disabled module shows its switch and nothing else.
-    if db.Enabled ~= true then return yOffset end
+    if db.Enabled ~= true then return card1:GetNextOffset() end
 
-    card1:AddLabel("|cff888888Adds a panel beside the Group Finder with this week's affixes, one-click category searches, and your weekly Mythic+ run count. While browsing Mythic+ groups it becomes a filter pane: dungeon toggles, role filters and sorting. Steps aside automatically if Premade Groups Filter is installed.|r")
+    -- Measured AFTER the label, not before: the label grows the card, so an
+    -- offset read ahead of it puts the next card on top of this one.
+    card1:AddLabel("Adds a panel beside the Group Finder with this week's affixes, one-click category searches, and your weekly Mythic+ run count. While browsing Mythic+ groups it becomes a filter pane: dungeon toggles, role filters and sorting. Steps aside automatically if Premade Groups Filter is installed.")
 
-    return yOffset
+    return card1:GetNextOffset()
 end)

@@ -103,7 +103,9 @@ function GUIFrame:CreateEditBox(parent, labelText, config)
     local editBox = CreateFrame("EditBox", nil, container)
     editBox:SetPoint("TOPLEFT", container, "TOPLEFT", 6, -4)
     editBox:SetPoint("BOTTOMRIGHT", container, "BOTTOMRIGHT", -6, 4)
-    editBox:SetFontObject("GameFontNormal")
+    -- Own font, not a Blizzard font object: the global font sweep resizes
+    -- those, and the addon's config window must not follow a game-wide setting.
+    KE:ApplyThemeFont(editBox, "normal")
     editBox:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
     editBox:SetAutoFocus(false)
     editBox:SetText(value or "")

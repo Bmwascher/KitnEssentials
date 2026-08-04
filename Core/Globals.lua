@@ -278,6 +278,14 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
         if KE.EditMode then
             KE.EditMode:Toggle()
         end
+    elseif msg == "wa" or msg == "wa on" or msg == "wa off" then
+        -- The handler lives in the SlashCommands module, which is where the
+        -- registration it flips lives too.
+        if KE.HandleWACommand then
+            KE:HandleWACommand(msg:match("^wa%s*(%a*)$"))
+        else
+            KE:Print("slash commands are not loaded.")
+        end
     elseif msg == "resetgui" then
         if KE.db and KE.db.global then
             KE.db.global.GUIState = nil
@@ -301,7 +309,7 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
         end
     else
         -- "help" and anything unrecognized: list every subcommand.
-        KE:Print("Commands: /kes or gui (settings) | edit or unlock | profiler or prof | dm [reset | report [count] [channel]] | mt [clearsplits] | skins [verify | rerun <key>] | trash | conflicts | resetgui")
+        KE:Print("Commands: /kes or gui (settings) | edit or unlock | wa [on|off] | profiler or prof | dm [reset | report [count] [channel]] | mt [clearsplits] | skins [verify | rerun <key>] | trash | conflicts | resetgui")
     end
 end
 
@@ -409,7 +417,11 @@ local function ValidateFontsRecursive(tbl, defaults)
 
     for key, value in pairs(tbl) do
         if IsFontKey(key) and type(value) == "string" then
-            if not LSM:IsValid("font", value) then
+            -- An empty font key whose own default is empty is a deliberate
+            -- "use the addon's font" choice, not a broken value. Repairing it
+            -- would write a font name into every profile on every login.
+            local wantsEmpty = value == "" and (defaults and defaults[key]) == ""
+            if not wantsEmpty and not LSM:IsValid("font", value) then
                 local defaultVal = defaults and defaults[key] or DEFAULT_FONT
                 if not LSM:IsValid("font", defaultVal) then
                     defaultVal = DEFAULT_FONT
@@ -576,9 +588,13 @@ local PREVIEW_MODULES = {
 -- Sections not listed here (Settings, Optimize) have no previews
 local SECTION_PREVIEW_MODULES = {
     combat_section = {
-        "CombatRes", "AuraExternals", "AuraDebuffs", "CombatTexts", "CombatTimer",
+        "CombatRes", "CombatTexts", "CombatTimer",
         "FocusCastbar", "CombatCross", "RangeChecker",
         "Cursor", "DamageMeter",
+        "HealerMana", "InnervateTracker", "MaintenanceTracker",
+    },
+    aura_section = {
+        "AuraDebuffs", "AuraExternals", "StanceText",
     },
     utilities_section = {
         "PotionReady", "RaidNotifications", "Recuperate",
@@ -587,7 +603,7 @@ local SECTION_PREVIEW_MODULES = {
     },
     class_section = {
         "BurningRush",
-        "PetStatusText", "StanceText", "TotemTracker",
+        "PetStatusText", "TotemTracker",
         "DisintegrateTicks", "StasisTracker", "EbonMightTracker", "PrescienceTracker",
         "HuntersMark",
     },
@@ -598,14 +614,11 @@ local SECTION_PREVIEW_MODULES = {
     -- module stays in PREVIEW_MODULES but no section reaches it, so opening its
     -- page would show no preview at all.
     skinning_section = {
-        "DragonRiding",
+        "DragonRiding", "LFGReminder",
     },
     dungeons_section = {
         "EnemyCounter", "KickTracker", "DungeonCasts", "DeathNotifications",
-        "MythicPlusTimer", "KeystoneHelper", "TargetedSpells", "LFGReminder",
-    },
-    healer_section = {
-        "HealerMana", "InnervateTracker", "MaintenanceTracker",
+        "MythicPlusTimer", "KeystoneHelper", "TargetedSpells",
     },
 }
 

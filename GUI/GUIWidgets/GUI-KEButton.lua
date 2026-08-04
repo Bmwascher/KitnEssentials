@@ -108,7 +108,7 @@ function GUIFrame:CreateButton(parent, labelText, config)
         contentWidth = contentWidth + imageSize
     end
 
-    textWidget = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    textWidget = button:CreateFontString(nil, "OVERLAY")
     KE:ApplyThemeFont(textWidget, "normal")
     textWidget:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
     textWidget:SetText(label)

@@ -850,9 +850,14 @@ function L.loadSlashCommands(overrides)
     _G.C_CVar = overrides.C_CVar
         or { GetCVar = function() return "1" end, SetCVar = function() end }
     _G.C_AddOns = overrides.C_AddOns
-        or { GetAddOnInfo = function(name) return name end }
+        or { DoesAddOnExist = function() return false end }
     _G.ReloadUI = overrides.ReloadUI or function() end
     _G.SlashCmdList = overrides.SlashCmdList or {}
+    -- The module clears its own aliases out of the chat engine's resolved
+    -- command caches, so both tables have to exist for that path to be visible
+    -- to a spec rather than silently skipped by its nil guard.
+    _G.hash_SlashCmdList = overrides.hash_SlashCmdList or {}
+    _G.hash_ChatTypeInfoList = overrides.hash_ChatTypeInfoList or {}
     _G.NUM_CHAT_WINDOWS = overrides.NUM_CHAT_WINDOWS or 10
 
     local KE = { db = { profile = { SlashCommands = {} } }, Print = function() end }

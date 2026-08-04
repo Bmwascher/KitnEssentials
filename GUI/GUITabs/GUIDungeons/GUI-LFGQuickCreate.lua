@@ -44,7 +44,7 @@ GUIFrame:RegisterContent("LFGQuickCreate", function(scrollChild, yOffset)
     end
 
     ----------------------------------------------------------------
-    -- Card 1: Enable
+    -- One card: the switch plus the buttons it governs
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "LFG Quick Create", yOffset)
     card1:AddHeaderToggle(db.Enabled == true, function(checked)
@@ -53,22 +53,14 @@ GUIFrame:RegisterContent("LFGQuickCreate", function(scrollChild, yOffset)
         KE:Print("LFG Quick Create: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
 
-    yOffset = card1:GetNextOffset()
-
     -- Lone header bar: a disabled module shows its switch and nothing else.
-    if db.Enabled ~= true then return yOffset end
+    if db.Enabled ~= true then return card1:GetNextOffset() end
 
-    ----------------------------------------------------------------
-    -- Card 2: Buttons
-    ----------------------------------------------------------------
-    local card2 = GUIFrame:CreateCard(scrollChild, "Buttons", yOffset)
-    manager:Register(card2, "all")
-
-    card2:AddLabel("|cff888888Adds a row of season-dungeon buttons to the Group Finder's create form. One click lists a group for that dungeon using the Default Playstyle below. Your own keystone's dungeon glows gold with its key level; party members' keys glow blue.|r")
+    card1:AddLabel("Adds a row of season-dungeon buttons to the Group Finder's create form. One click lists a group for that dungeon using the Default Playstyle below. Your own keystone's dungeon glows gold with its key level; party members' keys glow blue.")
 
     -- Both switches share one row; they are short labels and the card read
     -- sparse with a line each.
-    local row1 = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
     local qcCheck = GUIFrame:CreateCheckbox(row1, "Quick Create Buttons", {
         value = db.QuickCreate ~= false,
         callback = function(checked) db.QuickCreate = checked; ApplySettings() end,
@@ -83,9 +75,9 @@ GUIFrame:RegisterContent("LFGQuickCreate", function(scrollChild, yOffset)
     })
     row1:AddWidget(dcCheck, 0.5)
     manager:Register(dcCheck, "all")
-    card2:AddRow(row1, Theme.rowHeight)
+    card1:AddRow(row1, Theme.rowHeight)
 
-    local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local row2 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
     -- The ORDERED {key=,text=} form is required. The labels are this
     -- feature's own wording, not the enum's names -- the VALUES are what
     -- reach the listing payload and they match
@@ -102,9 +94,9 @@ GUIFrame:RegisterContent("LFGQuickCreate", function(scrollChild, yOffset)
     })
     row2:AddWidget(psDropdown, 1)
     manager:Register(psDropdown, "all")
-    card2:AddRow(row2, Theme.rowHeightLast, 0)
+    card1:AddRow(row2, Theme.rowHeightLast, 0)
 
-    yOffset = card2:GetNextOffset()
+    yOffset = card1:GetNextOffset()
 
     RefreshStates()
     return yOffset

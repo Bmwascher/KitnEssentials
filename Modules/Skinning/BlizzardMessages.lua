@@ -15,8 +15,6 @@ local GetTime = GetTime
 local UIErrorsFrame = UIErrorsFrame
 local ActionStatus = ActionStatus
 local ChatBubbleFont = ChatBubbleFont
-local ObjectiveTrackerLineFont = ObjectiveTrackerLineFont
-local ObjectiveTrackerHeaderFont = ObjectiveTrackerHeaderFont
 local C_Timer = C_Timer
 local UIParent = UIParent
 local _G = _G
@@ -127,24 +125,11 @@ function SK:StyleChatBubbles()
     ChatBubbleFont:SetFont(fontPath, bubblesDB.Size, outline)
 end
 
-function SK:StyleObjectiveTracker()
-    local trackerDB = self.db.ObjectiveTracker
-    if not trackerDB or not trackerDB.Enabled then return end
-    local fontPath = KE:GetFontPath(self.db.Font)
-    local outline = self.db.FontOutline == "NONE" and "" or (self.db.FontOutline or "OUTLINE")
-
-    if ObjectiveTrackerLineFont then
-        ObjectiveTrackerLineFont:SetFont(fontPath, trackerDB.QuestTextSize, outline)
-        ObjectiveTrackerLineFont:SetShadowColor(0, 0, 0, 0)
-        ObjectiveTrackerLineFont:SetShadowOffset(0, 0)
-    end
-
-    if ObjectiveTrackerHeaderFont then
-        ObjectiveTrackerHeaderFont:SetFont(fontPath, trackerDB.QuestTitleSize, outline)
-        ObjectiveTrackerHeaderFont:SetShadowColor(0, 0, 0, 0)
-        ObjectiveTrackerHeaderFont:SetShadowOffset(0, 0)
-    end
-end
+-- The objective tracker deliberately has no styling here. The font sweep owns
+-- ObjectiveTrackerLineFont and ObjectiveTrackerHeaderFont, and it covers more
+-- of the tracker besides (ObjectiveFont and the pooled ObjectiveTrackerFont12
+-- to 22). Two writers on the same font objects meant whichever ran last won,
+-- which changed with the order of a login versus a slider drag.
 
 ---------------------------------------------------------------------------------
 -- Reset
@@ -186,7 +171,6 @@ function SK:ApplySettings()
     self:StyleUIErrorsFrame()
     self:StyleActionStatusText()
     self:StyleChatBubbles()
-    self:StyleObjectiveTracker()
     self:ZoneTextStyling()
 end
 

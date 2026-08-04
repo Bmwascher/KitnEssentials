@@ -29,6 +29,7 @@ local db
 -- /cd and /wa --
 
 local cdmRegistered = false
+local waRegistered = false
 
 local function ShowCooldownViewerSettings()
     if InCombatLockdown() then return end
@@ -42,17 +43,15 @@ local function ShowCooldownViewerSettings()
     end
 end
 
--- Aura-addon detection. GetAddOnInfo THROWS for an addon that isn't installed
--- rather than returning nil, so an unwrapped call short-circuits the whole
--- check on the first missing name -- hence the pcall per name. This tests
--- INSTALLED, not loaded: a user who has M33kAuras but hasn't loaded it yet
--- still owns /wa.
+-- Aura-addon detection. DoesAddOnExist is the only call that answers this
+-- directly: GetAddOnInfo's name return is non-nilable, so its result cannot
+-- distinguish an installed addon from a missing one. This tests INSTALLED,
+-- not loaded: a user who has M33kAuras but hasn't loaded it yet still owns /wa.
 local AURA_ADDONS = { "WeakAuras", "M33kAuras", "M33kAurasOptions" }
 
 local function IsAddOnInstalled(name)
-    if not C_AddOns or not C_AddOns.GetAddOnInfo then return false end
-    local ok, result = pcall(C_AddOns.GetAddOnInfo, name)
-    return ok and result ~= nil
+    if not C_AddOns or not C_AddOns.DoesAddOnExist then return false end
+    return C_AddOns.DoesAddOnExist(name) == true
 end
 
 function KE:HasAuraAddon()
@@ -62,24 +61,56 @@ function KE:HasAuraAddon()
     return false
 end
 
+-- /wa is offered only when nothing else owns it AND the user has not turned it
+-- off. Tracked apart from /cd so the two can be re-applied independently: a
+-- single registered flag made every apply after the first a no-op, which left
+-- the alias live after the setting was switched off.
+local function WantsWA()
+    return (db == nil or db.WAEnabled ~= false) and not KE:HasAuraAddon()
+end
+
+-- The chat engine reads SLASH_KE_CDM1/2 only while it imports SlashCmdList,
+-- and it moves every imported entry behind a proxy metatable and wipes the
+-- table afterwards. Two consequences drive the shape below: an alias global
+-- assigned after the handler was first registered is never read, and clearing
+-- SlashCmdList.KE_CDM does not reach the imported copy or the resolved-command
+-- cache. So every state change must drop the cached aliases AND write the
+-- handler back, which is what makes the next import re-read the globals.
+local function ForgetAlias(alias)
+    local key = alias:upper()
+    if _G.hash_SlashCmdList then _G.hash_SlashCmdList[key] = nil end
+    if _G.hash_ChatTypeInfoList then _G.hash_ChatTypeInfoList[key] = nil end
+end
+
+local function CDMHandler()
+    ShowCooldownViewerSettings()
+end
+
 local function RegisterCDM()
-    if cdmRegistered then return end
+    local wantWA = WantsWA()
+
+    if cdmRegistered and waRegistered == wantWA then return end
+
+    ForgetAlias("/cd")
+    ForgetAlias("/wa")
+
     SLASH_KE_CDM1 = "/cd"
-    if not KE:HasAuraAddon() then
-        SLASH_KE_CDM2 = "/wa"
-    end
-    function SlashCmdList.KE_CDM(msg, editbox)
-        ShowCooldownViewerSettings()
-    end
+    SLASH_KE_CDM2 = wantWA and "/wa" or nil
+    SlashCmdList.KE_CDM = CDMHandler
+
     cdmRegistered = true
+    waRegistered = wantWA
 end
 
 local function UnregisterCDM()
     if not cdmRegistered then return end
+    ForgetAlias("/cd")
+    ForgetAlias("/wa")
     SLASH_KE_CDM1 = nil
     SLASH_KE_CDM2 = nil
     SlashCmdList.KE_CDM = nil
     cdmRegistered = false
+    waRegistered = false
 end
 
 -- /rl --
@@ -97,6 +128,7 @@ end
 
 local function UnregisterRL()
     if not rlRegistered then return end
+    ForgetAlias("/rl")
     SLASH_KE_RL1 = nil
     SlashCmdList.KE_RL = nil
     rlRegistered = false
@@ -208,6 +240,46 @@ end
 ---------------------------------------------------------------------------------
 -- Settings
 ---------------------------------------------------------------------------------
+function KE:IsWAEnabled()
+    local settings = KE.db and KE.db.profile.SlashCommands
+    return not (settings and settings.WAEnabled == false)
+end
+
+-- Returns the new state so a caller can report it without re-reading the db.
+function KE:SetWAEnabled(enabled)
+    local settings = KE.db and KE.db.profile.SlashCommands
+    if not settings then return KE:IsWAEnabled() end
+    settings.WAEnabled = enabled and true or false
+    KE:ApplySlashCommands()
+    return settings.WAEnabled
+end
+
+-- Anything that is not "on" or "off" reports the current state rather than
+-- guessing at an intent.
+function KE:HandleWACommand(arg)
+    arg = arg and arg:lower() or ""
+    if arg == "on" or arg == "off" then
+        KE:SetWAEnabled(arg == "on")
+        KE:Print("/wa " .. arg .. ".")
+        -- Turning the alias on while the whole command pair is off would
+        -- otherwise report success and register nothing.
+        local settings = KE.db and KE.db.profile.SlashCommands
+        if arg == "on" and settings and settings.CDMEnabled == false then
+            KE:Print("Note: the Cooldown Manager commands are switched off, so " ..
+                "neither /cd nor /wa is registered right now.")
+        end
+        return
+    end
+
+    if KE:IsWAEnabled() then
+        KE:Print("/wa is on. It is registered unless another aura addon owns it.")
+    else
+        KE:Print("/wa is off. /cd is unaffected.")
+    end
+    KE:Print("Use " .. KE:ColorTextByTheme("/kes wa on") .. " or " ..
+        KE:ColorTextByTheme("/kes wa off") .. ".")
+end
+
 function KE:ApplySlashCommands()
     db = KE.db and KE.db.profile.SlashCommands
     if not db then return end

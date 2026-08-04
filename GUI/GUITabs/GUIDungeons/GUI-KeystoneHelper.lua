@@ -2,8 +2,9 @@
 -- ║  GUI-KeystoneHelper.lua                                  ║
 -- ║  GUI: Keystone Helper                                    ║
 -- ║  Purpose: Configuration panel for the KeystoneHelper     ║
--- ║           module (Instance Reset Announcer, Reroll Key   ║
--- ║           Reminder, and "Your Key?" Reminder). The two   ║
+-- ║           module, split across five tabs (General,       ║
+-- ║           Appearance, Instance Reset, Reroll Key, Your   ║
+-- ║           Key) behind a shared header toggle. The two    ║
 -- ║           reminders share one appearance/font/position   ║
 -- ║           block; only their glows are configured apart.  ║
 -- ╚══════════════════════════════════════════════════════════╝
@@ -17,28 +18,29 @@ local function GetModule()
     return KitnEssentials and KitnEssentials:GetModule("KeystoneHelper", true)
 end
 
-GUIFrame:RegisterContent("KeystoneHelper", function(scrollChild, yOffset)
-    local db = KE.db and KE.db.profile.KeystoneHelper
-    if not db then
-        local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
-        errorCard:AddLabel("Database not available.")
-        return errorCard:GetNextOffset()
-    end
+local function GetDB()
+    return KE.db and KE.db.profile.KeystoneHelper
+end
 
-    local manager = GUIFrame:CreateWidgetStateManager()
+local function ApplySettings()
+    local KH = GetModule()
+    if KH and KH.ApplySettings then KH:ApplySettings() end
+end
 
-    local function ApplySettings()
-        local KH = GetModule()
-        if KH and KH.ApplySettings then KH:ApplySettings() end
-    end
+-- Every tab needs the same guard, and a tab that silently renders nothing is
+-- worse than one that says why.
+local function MissingDB(scrollChild, yOffset)
+    local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
+    errorCard:AddLabel("Database not available.")
+    return errorCard:GetNextOffset()
+end
 
-    local function RefreshStates()
-        manager:UpdateAll(db.Enabled ~= false)
-    end
+-- Renders above the tab strip. A disabled module collapses to this bar alone,
+-- which is what the second return value asks the host to do.
+local function BuildHeader(scrollChild, yOffset)
+    local db = GetDB()
+    if not db then return MissingDB(scrollChild, yOffset), true end
 
-    ----------------------------------------------------------------
-    -- Card 1: Enable
-    ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Keystone Helper", yOffset)
     card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
         db.Enabled = checked
@@ -59,10 +61,20 @@ GUIFrame:RegisterContent("KeystoneHelper", function(scrollChild, yOffset)
     noteRow:AddWidget(noteText, 1)
     card1:AddRow(noteRow, Theme.rowHeightNote, 0)
 
-    yOffset = card1:GetNextOffset()
+    return card1:GetNextOffset(), db.Enabled == false
+end
 
-    -- Lone header bar: a disabled module shows its switch and nothing else.
-    if db.Enabled == false then return yOffset end
+----------------------------------------------------------------
+-- General: Reminders
+----------------------------------------------------------------
+GUIFrame:RegisterContent("KeystoneHelperGeneral", function(scrollChild, yOffset)
+    local db = GetDB()
+    if not db then return MissingDB(scrollChild, yOffset) end
+
+    -- Always true here, because a disabled module never reaches a tab. It is
+    -- not redundant: pooled widgets come back from the pool however the last
+    -- page left them, and this is what hands them back enabled.
+    local manager = GUIFrame:CreateWidgetStateManager()
 
     local cardReminders = GUIFrame:CreateCard(scrollChild, "Reminders", yOffset)
     manager:Register(cardReminders, "all")
@@ -93,42 +105,21 @@ GUIFrame:RegisterContent("KeystoneHelper", function(scrollChild, yOffset)
 
     yOffset = cardReminders:GetNextOffset()
 
-    ----------------------------------------------------------------
-    -- Card 2: Instance Reset Announcer
-    ----------------------------------------------------------------
-    local cardReset = GUIFrame:CreateCard(scrollChild, "Instance Reset Announcer", yOffset)
-    manager:Register(cardReset, "all")
+    manager:UpdateAll(true)
+    return yOffset
+end)
 
-    local rowReset1 = GUIFrame:CreateRow(cardReset.content, Theme.rowHeight)
-    local resetEnableCheck = GUIFrame:CreateCheckbox(rowReset1, "Announce on Instance Reset", {
-        value = db.ResetEnabled ~= false,
-        callback = function(checked) db.ResetEnabled = checked; ApplySettings() end,
-        msgPopup = true,
-        msgText = "Reset Announcer",
-        msgOn = "On",
-        msgOff = "Off",
-    })
-    rowReset1:AddWidget(resetEnableCheck, 1)
-    manager:Register(resetEnableCheck, "all")
-    cardReset:AddRow(rowReset1, Theme.rowHeight)
+----------------------------------------------------------------
+-- Appearance: Font (shared — one size drives title and key line),
+-- Reminder Appearance, then Position — Position stays directly below
+-- Appearance so its "below" note still reads in context.
+----------------------------------------------------------------
+GUIFrame:RegisterContent("KeystoneHelperAppearance", function(scrollChild, yOffset)
+    local db = GetDB()
+    if not db then return MissingDB(scrollChild, yOffset) end
 
-    local rowReset2 = GUIFrame:CreateRow(cardReset.content, Theme.rowHeightLast)
-    local resetMessageBox = GUIFrame:CreateEditBox(rowReset2, "Chat Message", {
-        value = db.ResetMessage or "Instance reset!",
-        callback = function(val)
-            db.ResetMessage = (val ~= "" and val) or "Instance reset!"
-            ApplySettings()
-        end,
-    })
-    rowReset2:AddWidget(resetMessageBox, 1)
-    manager:Register(resetMessageBox, "all")
-    cardReset:AddRow(rowReset2, Theme.rowHeightLast, 0)
+    local manager = GUIFrame:CreateWidgetStateManager()
 
-    yOffset = cardReset:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Card 3: Font (shared — one size drives title and key line)
-    ----------------------------------------------------------------
     local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
         db = db,
         dbKeys = {
@@ -144,10 +135,6 @@ GUIFrame:RegisterContent("KeystoneHelper", function(scrollChild, yOffset)
     if fontWidgets then manager:RegisterGroup(fontWidgets, "all") end
     yOffset = fontOffset
 
-    ----------------------------------------------------------------
-    -- Card 4: Reminder Appearance (shared by both reminders) — sits
-    -- directly above Position so its preview note reads in context.
-    ----------------------------------------------------------------
     local cardLook = GUIFrame:CreateCard(scrollChild, "Reminder Appearance", yOffset)
     manager:Register(cardLook, "all")
 
@@ -194,9 +181,6 @@ GUIFrame:RegisterContent("KeystoneHelper", function(scrollChild, yOffset)
 
     yOffset = cardLook:GetNextOffset()
 
-    ----------------------------------------------------------------
-    -- Card 5: Position (shared — the reminders never coexist live)
-    ----------------------------------------------------------------
     local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         title = "Reminder Position",
         db = db,
@@ -220,9 +204,62 @@ GUIFrame:RegisterContent("KeystoneHelper", function(scrollChild, yOffset)
     end
     yOffset = posOffset
 
-    ----------------------------------------------------------------
-    -- Card 6: Reroll Glow
-    ----------------------------------------------------------------
+    manager:UpdateAll(true)
+    return yOffset
+end)
+
+----------------------------------------------------------------
+-- Instance Reset: Instance Reset Announcer
+----------------------------------------------------------------
+GUIFrame:RegisterContent("KeystoneHelperReset", function(scrollChild, yOffset)
+    local db = GetDB()
+    if not db then return MissingDB(scrollChild, yOffset) end
+
+    local manager = GUIFrame:CreateWidgetStateManager()
+
+    local cardReset = GUIFrame:CreateCard(scrollChild, "Instance Reset Announcer", yOffset)
+    manager:Register(cardReset, "all")
+
+    local rowReset1 = GUIFrame:CreateRow(cardReset.content, Theme.rowHeight)
+    local resetEnableCheck = GUIFrame:CreateCheckbox(rowReset1, "Announce on Instance Reset", {
+        value = db.ResetEnabled ~= false,
+        callback = function(checked) db.ResetEnabled = checked; ApplySettings() end,
+        msgPopup = true,
+        msgText = "Reset Announcer",
+        msgOn = "On",
+        msgOff = "Off",
+    })
+    rowReset1:AddWidget(resetEnableCheck, 1)
+    manager:Register(resetEnableCheck, "all")
+    cardReset:AddRow(rowReset1, Theme.rowHeight)
+
+    local rowReset2 = GUIFrame:CreateRow(cardReset.content, Theme.rowHeightLast)
+    local resetMessageBox = GUIFrame:CreateEditBox(rowReset2, "Chat Message", {
+        value = db.ResetMessage or "Instance reset!",
+        callback = function(val)
+            db.ResetMessage = (val ~= "" and val) or "Instance reset!"
+            ApplySettings()
+        end,
+    })
+    rowReset2:AddWidget(resetMessageBox, 1)
+    manager:Register(resetMessageBox, "all")
+    cardReset:AddRow(rowReset2, Theme.rowHeightLast, 0)
+
+    yOffset = cardReset:GetNextOffset()
+
+    manager:UpdateAll(true)
+    return yOffset
+end)
+
+----------------------------------------------------------------
+-- Reroll Key: Reroll Glow
+----------------------------------------------------------------
+GUIFrame:RegisterContent("KeystoneHelperReroll", function(scrollChild, yOffset)
+    local db = GetDB()
+    if not db then return MissingDB(scrollChild, yOffset) end
+
+    local manager = GUIFrame:CreateWidgetStateManager()
+
     local cardRerollGlow = GUIFrame:CreateCard(scrollChild, "Reroll Glow", yOffset)
     manager:Register(cardRerollGlow, "all")
 
@@ -283,9 +320,19 @@ GUIFrame:RegisterContent("KeystoneHelper", function(scrollChild, yOffset)
 
     yOffset = cardRerollGlow:GetNextOffset()
 
-    ----------------------------------------------------------------
-    -- Card 7: Your Key Glow
-    ----------------------------------------------------------------
+    manager:UpdateAll(true)
+    return yOffset
+end)
+
+----------------------------------------------------------------
+-- Your Key: Your Key Glow
+----------------------------------------------------------------
+GUIFrame:RegisterContent("KeystoneHelperYourKey", function(scrollChild, yOffset)
+    local db = GetDB()
+    if not db then return MissingDB(scrollChild, yOffset) end
+
+    local manager = GUIFrame:CreateWidgetStateManager()
+
     local cardYourKeyGlow = GUIFrame:CreateCard(scrollChild, "Your Key Glow", yOffset)
     manager:Register(cardYourKeyGlow, "all")
 
@@ -346,6 +393,14 @@ GUIFrame:RegisterContent("KeystoneHelper", function(scrollChild, yOffset)
 
     yOffset = cardYourKeyGlow:GetNextOffset()
 
-    RefreshStates()
+    manager:UpdateAll(true)
     return yOffset
 end)
+
+GUIFrame:RegisterTabbedContent("KeystoneHelper", {
+    { id = "KeystoneHelperGeneral",    label = "General" },
+    { id = "KeystoneHelperAppearance", label = "Appearance" },
+    { id = "KeystoneHelperReset",      label = "Instance Reset" },
+    { id = "KeystoneHelperReroll",     label = "Reroll Key" },
+    { id = "KeystoneHelperYourKey",    label = "Your Key" },
+}, { headerBuilder = BuildHeader })
