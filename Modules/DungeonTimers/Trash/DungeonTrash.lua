@@ -67,41 +67,36 @@ local DEBUG_DTRASH = false
 local SNAPSHOT_DELAY = 0.10       -- unit data unstable on the add frame
 local SNAPSHOT_RETRIES = { 0.25, 0.50 }  -- bounded re-reads after a nil identity
 -- Fingerprint sample after cast start; also the ± half-width of the target
--- switch/clear windows and the success buff-count delay (the reference uses
--- one 0.10s value for all four: CAST_TARGET_SAMPLE_DELAY / _SWITCH_WINDOW /
--- _CLEAR_WINDOW / CAST_SUCCESS_TARGET_BUFFCOUNT_DELAY).
+-- switch/clear windows and the success buff-count delay. One value serves all
+-- four on purpose.
 local TARGET_SAMPLE_DELAY = 0.10
--- Target-event rings keep only the last second (reference:
--- AppendRuntimeTargetSwitchEvent's 1.0s front-trim).
+-- Target-event rings keep only the last second, front-trimmed on append.
 local TARGET_EVENT_TRIM = 1.0
 local MAX_NAMEPLATES = 40
 -- A channel flagged channelRefreshOnInterruptible re-emits CHANNEL_START when
 -- its castbar refreshes on becoming interruptible; a start within this window
 -- of the INTERRUPTIBLE event (same cast seq, new castBarID) is a CONTINUATION
--- of the running channel, not a new one (reference:
--- CHANNEL_REFRESH_INTERRUPTIBLE_WINDOW, 1.0s).
+-- of the running channel, not a new one.
 local CHANNEL_REFRESH_WINDOW = 1.00
 -- Cast→channel transition proof: castbar IDs are monotonic per unit, so the
 -- channel phase of a two-phase spell re-emits CHANNEL_START with the finished
--- cast's castBarID +1 (reference: isCastIntoChannel). The
--- pairing is accepted only this soon after the cast stop — a deliberate,
--- documented deviation: the reference's implicit window (its unconsumed-
--- pending lifetime) is unbounded on unresolved mobs, and a stale pairing
--- would poison sawCastIntoChannel, a Layer1 pruning input here. The same
--- window holds an ambiguous one-phase credit (see FinishCast).
+-- cast's castBarID +1. The pairing is accepted only this soon after the cast
+-- stop, and that bound is deliberate: leaving the pending lifetime unbounded
+-- on unresolved mobs lets a stale pairing poison sawCastIntoChannel, which is
+-- a Layer1 pruning input here. The same window holds an ambiguous one-phase
+-- credit (see FinishCast).
 local TRANSITION_PAIR_WINDOW = 0.25
 -- Scenario criteria flip `completed` slightly after the boss actually dies;
--- coalesce the burst of BOSS_KILL/SCENARIO_* events into one re-read
--- (reference: ScheduleDungeonBossProgressRefresh, same 1.0s).
+-- coalesce the burst of BOSS_KILL/SCENARIO_* events into one re-read.
 local SCENARIO_REFRESH_DEBOUNCE = 1.0
 
 -- Boss encounters where the trash engine mislabels the boss and/or its adds:
 -- their nameplates collide with a curated trash mob's static fingerprint (12.0
 -- makes npcID/spellID secret, so a boss can't be told from trash at the plate),
 -- the tracker resolves them to that trash mob and shows its spells. There is no
--- way to exclude the units at the fingerprint layer, so — exactly as the
--- upstream references do — we blackout trash OUTPUT for the
--- encounter's duration while still fingerprinting underneath. Keyed by the
+-- way to exclude the units at the fingerprint layer, so trash OUTPUT is
+-- blacked out for the encounter's duration while fingerprinting keeps running
+-- underneath. Keyed by the
 -- ENCOUNTER_START encounterID.
 -- This list is the LAST resort, not the boss filter: boss-tier plates are
 -- rejected at the identity layer by ScoreTraitRow's "level-above" rule
@@ -198,11 +193,10 @@ local function normalizeNameplate(unit)
     return nil
 end
 
--- Hostile-plate intake gate (reference: IsHostileNameplate = UnitExists +
--- UnitCanAttack player + not dead, checked on EVERY intake path): friendly
--- players, pets, guardians and corpses must never enter the fingerprint
--- machinery. Fails OPEN — a secret/unreadable answer keeps the plate, so a
--- real hostile is never dropped on a bad read.
+-- Hostile-plate intake gate, checked on EVERY intake path: friendly players,
+-- pets, guardians and corpses must never enter the fingerprint machinery.
+-- Fails OPEN — a secret/unreadable answer keeps the plate, so a real hostile is
+-- never dropped on a bad read.
 local function isHostilePlate(unit)
     if safeBool(UnitCanAttack, "player", unit) == false then return false end
     if safeBool(UnitIsDead, unit) == true then return false end
@@ -217,7 +211,7 @@ function DTrash:InMythicPlus()
 end
 
 -- Resolves the current dungeon's KE.TrashData key from the instance mapID
--- (GetInstanceInfo's 8th return; the reference's data is keyed by exactly this).
+-- (GetInstanceInfo's 8th return, which is what the data is keyed by).
 -- Caches currentMapID for downstream data lookups.
 function DTrash:CurrentDungeonKey()
     local mapID = select(8, GetInstanceInfo())
@@ -231,10 +225,9 @@ function DTrash:MobData(npcID)
     return d and d.mobs and d.mobs[npcID]
 end
 
--- Cached C_Map.GetAreaInfo lookups for the placement gate's areaID tier
--- (reference: GetAreaInfoName's areaNameByID cache; false = looked up,
--- no name — never re-queried). Passed into TI as a closure so the inference
--- stays pure and busted can stub it.
+-- Cached C_Map.GetAreaInfo lookups for the placement gate's areaID tier. A
+-- stored `false` means looked up and nameless, and is never re-queried. Passed
+-- into TI as a closure so the inference stays pure and busted can stub it.
 local areaNameByID = {}
 local function areaNameLookup(areaID)
     local hit = areaNameByID[areaID]
@@ -242,8 +235,8 @@ local function areaNameLookup(areaID)
     local ok, name = pcall(C_Map and C_Map.GetAreaInfo, areaID)
     if ok and type(name) == "string" then
         -- Same trim + collapse RefreshZoneState applies to the minimap text:
-        -- the placement gate compares the two with plain equality, and the
-        -- reference runs BOTH sides through one shared normalizer.
+        -- the placement gate compares the two with plain equality, so both
+        -- sides must go through the identical normalizer.
         name = name:gsub("^%s+", ""):gsub("%s+$", ""):gsub("%s+", " ")
     end
     name = (ok and type(name) == "string" and name ~= "") and name or false
@@ -252,10 +245,9 @@ local function areaNameLookup(areaID)
 end
 
 -- Sub-zone context for the placement gate's map-token tier: the player's best
--- uiMapID plus the normalized minimap zone text (the reference reads the same
--- pair from its state module; both are plain in 12.0 — GetBestMapForUnit is
--- documented player/party-only and unmarked, GetMinimapZoneText is a plain
--- cstring).
+-- uiMapID plus the normalized minimap zone text. Both are plain in 12.0 --
+-- GetBestMapForUnit is documented player/party-only and unmarked, and
+-- GetMinimapZoneText is a plain cstring.
 function DTrash:RefreshZoneState()
     if not self.monitoring then return end
     local ok, mapID = pcall(C_Map and C_Map.GetBestMapForUnit, "player")
@@ -264,8 +256,8 @@ function DTrash:RefreshZoneState()
     if GetMinimapZoneText then
         local okZ, text = pcall(GetMinimapZoneText)
         if okZ and type(text) == "string" then
-            -- Normalize like the reference: trim + collapse inner whitespace
-            -- so the compare against C_Map.GetAreaInfo names is stable.
+            -- Trim + collapse inner whitespace so the compare against
+            -- C_Map.GetAreaInfo names is stable.
             zoneText = text:gsub("^%s+", ""):gsub("%s+$", ""):gsub("%s+", " ")
             if zoneText == "" then zoneText = nil end
         end
@@ -278,12 +270,10 @@ end
 -- reads the shipped M+ Timer proves in-game (contract DO-NOT-GUARD set:
 -- GetStepInfo's count and GetCriteriaInfo completed/isWeightedProgress/
 -- quantityString/totalQuantity are plain); pcall-wrapped per KE convention.
--- A boss criterion is non-weighted with totalQuantity ≤ 1 — the locale-
--- independent replacement for the reference's zhCN description-prefix test,
--- which also excludes count objectives (PoS "Quarry Camps", totalQuantity 6).
--- bossProgressIndex = killed + 1 ("the pack before boss N"); nil outside a
--- scenario, where the placement gate then fails open exactly like the
--- reference's index 0.
+-- A boss criterion is non-weighted with totalQuantity ≤ 1 -- a locale-
+-- independent test, which also excludes count objectives (PoS "Quarry Camps",
+-- totalQuantity 6). bossProgressIndex = killed + 1 ("the pack before boss N");
+-- nil outside a scenario, where the placement gate then fails open.
 function DTrash:RefreshScenarioState(forcesOnly)
     if not self.monitoring then return end
     local numCriteria = 0
@@ -511,7 +501,7 @@ end
 -- Only run inside 5-man party instances — the event stream is dormant
 -- elsewhere, so the whole engine detaches outside dungeons (CPU gate).
 function DTrash:EvaluateGate()
-    -- Guidance check rides every world-enter/zone edge (reference: PEW → 5s).
+    -- Guidance check rides every world-enter and zone edge, 5s after settle.
     self:ScheduleGuidanceCheck()
     local inInstance, instanceType = IsInInstance()
     if inInstance and instanceType == "party" then
@@ -533,8 +523,8 @@ local CAST_EVENTS = {
     UNIT_SPELLCAST_CHANNEL_STOP = "OnChannelStop",
     UNIT_SPELLCAST_INTERRUPTED = "OnCastInterrupted",
     -- Cast aborted without succeeding or being kicked (target died / LoS /
-    -- caster CC'd): interrupt-shaped lifecycle evidence, castBarID-gated
-    -- (mirrors the reference's FAILED handlers) — see OnCastFailed.
+    -- caster CC'd): interrupt-shaped lifecycle evidence, castBarID-gated.
+    -- See OnCastFailed.
     UNIT_SPELLCAST_FAILED = "OnCastFailed",
     UNIT_SPELLCAST_FAILED_QUIET = "OnCastFailed",
     -- Marks a running channel's castbar-refresh window so the re-emitted
@@ -695,16 +685,15 @@ end
 -- ── Lindormi's Guidance warning ─────────────────────────────────────────────
 -- Lindormi's Guidance (the keystone-NPC assist, aura 1295927 on the TANK)
 -- changes what the cast/cd machinery observes mid-dungeon and makes the trash
--- timers fire wrong or not at all — the reference ships this exact tank scan
--- and tells the player to turn it off at the NPC. Detection needs readable
--- auras (C_Secrets.ShouldAurasBeSecret() == false; the reference gates on
--- exactly this). Warn once per detection; the aura clearing re-arms the
--- warning. Warns via StaticPopup exactly like the reference, with a chat
--- print as the no-popup-API fallback.
+-- timers fire wrong or not at all, so scan the tanks and tell the player to
+-- turn it off at the NPC. Detection needs readable auras
+-- (C_Secrets.ShouldAurasBeSecret() == false). Warn once per detection; the
+-- aura clearing re-arms the warning. Warns via StaticPopup, with a chat print
+-- as the no-popup-API fallback.
 
 local GUIDANCE_AURA_ID = 1295927
-local GUIDANCE_CHECK_DELAY = 5   -- world-enter settle (reference: CHECK_DELAY)
-local GUIDANCE_ROSTER_DELAY = 1  -- roster/role churn coalesce (reference: ROSTER_CHECK_DELAY)
+local GUIDANCE_CHECK_DELAY = 5   -- world-enter settle
+local GUIDANCE_ROSTER_DELAY = 1  -- roster/role churn coalesce
 local GUIDANCE_POPUP_KEY = "KE_DTRASH_LINDORMI_GUIDANCE"
 local GUIDANCE_WARNING_TEXT = "Dungeon Trash Tracker: a tank in your group has"
     .. " Lindormi's Guidance active - it breaks the trash cast timers."
@@ -781,7 +770,7 @@ function DTrash:CheckGuidanceWarning()
     end
 end
 
--- Token-guarded deferred check (reference: ScheduleCheck): every schedule
+-- Token-guarded deferred check: every schedule
 -- invalidates the previous one, so a roster-event burst collapses into a
 -- single read after the last edge.
 function DTrash:ScheduleGuidanceCheck(delay)
@@ -844,7 +833,7 @@ function DTrash:OnNameplateRemoved(_, unit)
     if self.HideNameplateMarker then self:HideNameplateMarker(unit) end
     -- TrashCache flicker recovery: a resolved runtime is held for the restore
     -- window instead of being torn down — and its CENTRAL alerts deliberately
-    -- keep counting through the window (the reference's deferred cancel); the
+    -- keep counting through the window; the
     -- cache sweeps them iff no restore lands.
     if rt and self:CacheRemovedRuntime(unit, rt) then return end
     -- Scope the teardown to the departing runtime's OWN identity (alert keys
@@ -922,7 +911,7 @@ function DTrash:ResolveMob(rt)
     -- AFTER the FAILED deviation shipped, so INTERRUPTED is the remaining
     -- latch path for a melded cast; all five Academy rows are cannotInterrupt,
     -- one such latch rejected them ALL, and the old eager drop blanked the
-    -- plate's timers for good (the reference kept them). Mirrors
+    -- plate's timers for good. Mirrors
     -- ScoreTraitRow's behavior gates EXACTLY; placement/level/classification
     -- stay ordinary Layer1 inputs (transient context must never unlock).
     -- A runtime without a snapshot (rt.obs nil) can't re-derive, so it keeps
@@ -1053,7 +1042,7 @@ end
 -- cast→channel +1 transition proof, and the channel-refresh continuation.
 -- Guarded anyway: first contact is issecretvalue, and an unreadable id just
 -- degrades that correlation (see activeCastMatches). Non-negative numbers
--- only (reference: NormalizeCastBarID).
+-- only.
 local function safeCastBarID(v)
     if issecretvalue and issecretvalue(v) then return nil end
     local id = tonumber(v)
@@ -1085,7 +1074,7 @@ end
 -- +0.10s cast-start sampler scans them ± the window.
 
 -- Append a timestamp to a runtime target-event ring, trimming entries older
--- than TARGET_EVENT_TRIM off the front (reference: AppendRuntimeTargetSwitchEvent).
+-- than TARGET_EVENT_TRIM off the front.
 local function appendTargetEvent(rt, key, at)
     local ring = rt[key]
     if not ring then ring = {}; rt[key] = ring end
@@ -1204,7 +1193,7 @@ end
 
 -- Does the resolved mob curate a channel that refreshes its castbar on
 -- becoming interruptible? 12.0 hides WHICH spell is channeling, so this is a
--- mob-level gate (the reference gates per resolved spellID); in the shipped
+-- mob-level gate; in the shipped
 -- data exactly one spell carries the flag (Pulsing Shriek, npc 232175).
 local function mobAllowsChannelRefresh(mob)
     if not (mob and mob.spells) then return false end
@@ -1454,7 +1443,7 @@ end
 
 -- Shared interrupt-shaped lifecycle teardown (INTERRUPTED / FAILED /
 -- FAILED_QUIET). The teardown only applies when the event CORRELATES with the
--- active castbar (reference: MarkRuntimeInterrupted): INTERRUPTED is known to
+-- active castbar: INTERRUPTED is known to
 -- double-fire, and a late event for a PREVIOUS castbar arriving after a new
 -- START would otherwise kill the live cast — its FinishCast then early-returns
 -- and that cast's alert is silently lost. A mismatched INTERRUPTED still
@@ -1604,7 +1593,7 @@ local function creditFinishedChannel(self, rt, mob, observed, startAt, transitio
     local spellData = mob.spells[spellID]
     -- Start-advance-owned CAST_START channels were anchored at their observed
     -- START; a success emit here would advance the cd[] round-robin a second
-    -- time (reference: success-mode advance returns nil for CAST_START).
+    -- time.
     -- Ownership mirrors the start path's PER-CAST rule via the fingerprint
     -- snapshot frozen into `observed` at FinishCast (churn guard): an
     -- unsampled delta means the start path never advanced, so the success
@@ -1655,9 +1644,8 @@ local function creditFinishedCast(self, rt, mob, observed, startAt, stopAt)
         self:SeedFirstCasts(rt)
         return
     end
-    -- Start-advance-owned CAST_START spells already anchored at their START
-    -- (reference: success-mode advance returns nil for CAST_START). Same
-    -- per-cast ownership rule as the channel path above (churn guard, via
+    -- Start-advance-owned CAST_START spells already anchored at their START.
+    -- Same per-cast ownership rule as the channel path above (churn guard, via
     -- the frozen fingerprint snapshot).
     if TI.IsStartAdvanceOwned(mob.spells and mob.spells[spellID],
         type(observed.fingerprints.castStartAuraDelta) == "boolean") then return end
@@ -1694,7 +1682,7 @@ function DTrash:MarkEngaged(rt, now)
     self:SeedFirstCasts(rt)
 end
 
--- Speculative first-cast seeding (reference parity): the moment a
+-- Speculative first-cast seeding: the moment a
 -- mob is BOTH resolved and engaged, every curated spell without an observed
 -- anchor gets an "enter"-mode anchor at engagedAt and its first-cast
 -- countdown (first, rolled forward if we joined late) — the reference builds
@@ -1731,7 +1719,7 @@ function DTrash:SeedFirstCasts(rt)
                 if self.SetNameplatePrediction then
                     -- `now`, not engagedAt: a rolled seed (resolution joined
                     -- late) must draw a fresh full swipe, not a pre-drained
-                    -- one (reference: swipe origin = registration time).
+                    -- one.
                     self:SetNameplatePrediction(rt, rt.matchedNPCID, spellID, now, nextStart)
                 end
             end
