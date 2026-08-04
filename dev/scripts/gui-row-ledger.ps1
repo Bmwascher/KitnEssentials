@@ -24,11 +24,13 @@ param(
 # `KE.Theme` all resolve to the theme table at the site where they appear. This
 # script matches the NAME, not the binding, so an undefined or shadowed alias
 # would read nil and the "no page can move" claim would not hold for that line.
-# The backing gate is luacheck, which is required to end 0/0 and reports an
-# undefined global read - that is exactly how the DungeonTimersDungeon.lua case
-# was caught, where no alias is in scope and `KE.Theme` is required. A green run
-# here plus a green luacheck covers it; this script alone does not.
-# (All three limits named by review, 2026-08-03.)
+# luacheck backs ONE HALF of that: it is required to end 0/0 and reports an
+# undefined global read, which is exactly how the DungeonTimersDungeon.lua case
+# was caught, where no alias is in scope and `KE.Theme` is required. It does NOT
+# back the other half - a defined but wrongly bound alias. `local Theme = {}`
+# followed by `Theme.rowHeight` passes luacheck 0/0 and reads nil. Shadowed or
+# mis-bound aliases stay inside the assumption; nothing here checks them.
+# (All limits named by review, 2026-08-03.)
 
 $ErrorActionPreference = 'Stop'
 
@@ -76,10 +78,25 @@ function Get-FileCodeMask([string]$path) {
     $lines = @(Get-Content -LiteralPath $path)
 
     $longLevel = -1        # -1 = not inside a long bracket; else its equals count
+    $openQuote = $null     # set when a quoted string continues onto the next line
     for ($ln = 0; $ln -lt $lines.Count; $ln++) {
         $line = $lines[$ln]
         $mask = New-Object 'bool[]' $line.Length
         $i = 0
+
+        # A quoted string carried in from the previous line. Lua 5.1 lets a short
+        # string span a newline when the newline is backslash-escaped, so quote
+        # state is not a per-line property either. Named by review 2026-08-03.
+        if ($openQuote) {
+            $closed = $false
+            while ($i -lt $line.Length) {
+                if ($line[$i] -eq '\') { $i += 2; continue }
+                if ($line[$i] -eq $openQuote) { $i++; $closed = $true; break }
+                $i++
+            }
+            if (-not $closed) { $masks[$ln + 1] = $mask; continue }   # still open
+            $openQuote = $null
+        }
 
         while ($i -lt $line.Length) {
             # Inside a multi-line long bracket: hunt only for its exact closer.
@@ -115,11 +132,16 @@ function Get-FileCodeMask([string]$path) {
             if ($c -eq "'" -or $c -eq '"') {
                 $quote = $c
                 $i++
+                $closed = $false
                 while ($i -lt $line.Length) {
                     if ($line[$i] -eq '\') { $i += 2; continue }
-                    if ($line[$i] -eq $quote) { $i++; break }
+                    if ($line[$i] -eq $quote) { $i++; $closed = $true; break }
                     $i++
                 }
+                # Ran off the end still inside the string: it continues onto the
+                # next line (backslash-escaped newline), or the source is
+                # malformed. Both carry, so the remainder is never called code.
+                if (-not $closed) { $openQuote = $quote; $i = $line.Length }
                 continue
             }
 
