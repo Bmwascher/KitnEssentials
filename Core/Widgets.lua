@@ -709,6 +709,15 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     if dialog.acceptBtn then dialog.acceptBtn:SetShown(showButtons and not isCopyPrompt) end
     if dialog.cancelBtn then dialog.cancelBtn:SetShown(showButtons) end
 
+    -- Always REST in propagate mode. The dialog takes keyboard focus, and
+    -- OnKeyDown re-propagates anything that is not ESCAPE -- but that call is
+    -- combat-protected (:201-212), so whatever state the frame carries INTO a
+    -- fight is the state it keeps. An ESCAPE-closed prompt leaves it false, and
+    -- the next prompt to open in combat then swallows every key until it is
+    -- dismissed: keybinds, abilities, movement. Resetting on each show out of
+    -- combat means the worst inherited state is "keys work".
+    if not InCombatLockdown() then dialog:SetPropagateKeyboardInput(true) end
+
     dialog:Show()
     KE.activePrompt = dialog
 
@@ -759,12 +768,25 @@ end
 -- flag.
 function KE:FlushPendingReloadPrompt()
     if not self.reloadPending then return end
+
     -- Entering combat HIDES this GUI (GUI/GUIMain/GUI-MainFrame.lua:682-698),
     -- which would otherwise put a "Reload Now" button on screen at the pull --
-    -- one misclick from reloading mid-fight. Keep the flag rather than clearing
-    -- it: the same handler reopens the GUI when combat ends, so the next
-    -- ordinary close raises the prompt.
+    -- one misclick from reloading mid-fight. Either guard below KEEPS the flag
+    -- rather than clearing it: the combat handler reopens the GUI when combat
+    -- ends, so the next ordinary close raises the prompt instead.
+    --
+    -- The FIRST guard is the load-bearing one. That handler sets
+    -- reopenAfterCombat immediately BEFORE it hides us, so the flag identifies a
+    -- combat close with no dependence on when the API flips. In-game 2026-08-04:
+    -- the InCombatLockdown check ALONE did not hold -- the prompt still appeared
+    -- on the combat close -- so this is not defence in depth, it is the fix.
+    local gui = self.GUIFrame
+    if gui and gui.reopenAfterCombat then return end
+
+    -- The second still earns its place: a user who opens this GUI during combat
+    -- and closes it themselves never sets the flag above.
     if InCombatLockdown and InCombatLockdown() then return end
+
     self.reloadPending = false
     return self:CreateReloadPrompt("Some of the changes you made need a UI reload to take effect. Reload now?")
 end

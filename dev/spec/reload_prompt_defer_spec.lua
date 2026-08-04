@@ -11,6 +11,11 @@
 -- handler reopens the GUI when combat ends and the next ordinary close is what
 -- should raise the prompt.
 --
+-- There are TWO gates and the reopenAfterCombat one is load-bearing. The first
+-- attempt gated on InCombatLockdown alone and the prompt still appeared in game
+-- (2026-08-04), so the examples below cover each gate on its own -- passing one
+-- must never stand in for the other.
+--
 -- Loaded against a hand-built KE rather than the real one: this file only needs
 -- the two functions and the CreateReloadPrompt they call, and Core/Widgets.lua
 -- builds nothing at load time.
@@ -53,7 +58,41 @@ describe("Core/Widgets.lua deferred reload prompt", function()
         assert.equals(1, prompts)
     end)
 
-    -- The refusal rule.
+    -- The refusal rule, gate one: the combat AUTO-CLOSE. This is the gate that
+    -- actually fires in game. GUI-MainFrame's combat handler sets
+    -- reopenAfterCombat and then hides the frame, so OnHide runs with the flag
+    -- already set, whatever the combat API happens to report at that instant.
+    it("refuses to prompt when the GUI is closing for combat", function()
+        KE.GUIFrame = { reopenAfterCombat = true }
+        KE:FlagReloadNeeded()
+        KE:FlushPendingReloadPrompt()
+        assert.equals(0, prompts)
+    end)
+
+    it("KEEPS the flag through the combat auto-close, so the reopen-and-close prompts", function()
+        KE.GUIFrame = { reopenAfterCombat = true }
+        KE:FlagReloadNeeded()
+        KE:FlushPendingReloadPrompt()
+        assert.equals(0, prompts)
+
+        -- Combat ends: the handler clears the flag and reopens. The user then
+        -- closes normally.
+        KE.GUIFrame.reopenAfterCombat = nil
+        KE:FlushPendingReloadPrompt()
+        assert.equals(1, prompts)
+    end)
+
+    it("a normal close with a GUIFrame present still prompts", function()
+        -- Positive control for the gate above: the flag, not the presence of a
+        -- GUIFrame, is what suppresses.
+        KE.GUIFrame = {}
+        KE:FlagReloadNeeded()
+        KE:FlushPendingReloadPrompt()
+        assert.equals(1, prompts)
+    end)
+
+    -- Gate two: a user who opened this GUI during combat and closes it himself
+    -- never sets reopenAfterCombat, so the API check is the only thing left.
     it("refuses to prompt in combat", function()
         KE:FlagReloadNeeded()
         inCombat = true
