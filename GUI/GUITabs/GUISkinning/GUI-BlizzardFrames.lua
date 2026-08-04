@@ -424,31 +424,57 @@ GUIFrame:RegisterContent("SkinBlizzardFramesAddons", function(scrollChild, yOffs
     return card:GetNextOffset()
 end)
 
--- Three of these six tabs belong to modules that are INDEPENDENT of the skin
--- engine and ship enabled: Loot Roll, Loot Window, and UI Widgets, which also
--- hosts Alert Frames' controls. They must stay reachable while the engine is
--- off -- there is no other route to them, not the sidebar, not the keyword
--- search, not an Edit Mode Open Settings button, all of which land here.
+-- Three states, evaluated per build, so the master toggle's own RefreshContent
+-- switches between them with no reload.
 --
--- The other three configure the engine itself, so showing them while it is off
--- renders live-looking controls that do nothing. So the LIST varies with state
--- rather than the page collapsing wholesale. Evaluated per build, so the master
--- toggle's own RefreshContent switches between the two sets with no reload.
+-- Exactly TWO of these eight configure the skin engine itself -- Frame Skins and
+-- Addon Skins -- so they drop out while it is off, because showing them there
+-- renders live-looking controls that do nothing.
+--
+-- Five of the remaining six are INDEPENDENT of the engine and ship enabled: Loot
+-- Roll, Loot Window, UI Widgets (which also hosts Alert Frames' controls),
+-- Character Screen, and Blizzard Texts. They must stay reachable while the
+-- engine is off -- there is no other route to them, not the sidebar, not the
+-- keyword search, not an Edit Mode Open Settings button, all of which land here.
+--
+-- General is the sixth and is the hybrid, which is why it is not in either
+-- group. It is offered in EVERY state because Color Picker and Raid Control ride
+-- on it; the engine-specific part of it, the font card, is what turns off
+-- instead. That is a change from the old rule, which dropped General entirely.
+--
+-- ElvUI is a stricter cut than the engine flag, not a wider one. Loot Roll,
+-- Loot Window, UI Widgets and Blizzard Texts all stand down under ElvUI
+-- (Modules/Skinning/LootRoll.lua:558, LootFrame.lua:379, UIWidgets.lua:46,
+-- BlizzardMessages.lua:181), so they drop out too. General and Character Screen
+-- survive because Raid Control (no ElvUI gate at all) rides on General, and
+-- Character Panel keeps its non-overlapping features. Color Picker also rides on
+-- General but DOES stand down under ElvUI, by its own conflict list rather than
+-- the skin gate (Modules/QoL/ColorPicker.lua:58, :259-260); its card already says
+-- so, which is why it does not change what this list offers.
+--
+-- The Character Screen tab is deliberately not named Character Panel -- the
+-- Frame Skins grid already has a row by that name for the window skin (:45).
 GUIFrame:RegisterTabbedContent("SkinBlizzardFrames", function()
     local db = GetDB()
-    local independent = {
-        { id = "SkinBlizzardFramesLootRoll",   label = "Loot Roll" },
-        { id = "SkinBlizzardFramesLootWindow", label = "Loot Window" },
-        { id = "SkinBlizzardFramesWidgets",    label = "UI Widgets" },
-    }
-    if not db or db.Enabled ~= true then return independent end
 
-    return {
-        { id = "SkinBlizzardFramesGeneral",    label = "General" },
-        { id = "SkinBlizzardFramesFrames",     label = "Frames" },
-        { id = "SkinBlizzardFramesAddons",     label = "Addons" },
-        independent[1], independent[2], independent[3],
-    }
+    local GENERAL     = { id = "SkinBlizzardFramesGeneral",    label = "General" }
+    local FRAMES      = { id = "SkinBlizzardFramesFrames",     label = "Frame Skins" }
+    local ADDONS      = { id = "SkinBlizzardFramesAddons",     label = "Addon Skins" }
+    local LOOT_ROLL   = { id = "SkinBlizzardFramesLootRoll",   label = "Loot Roll" }
+    local LOOT_WINDOW = { id = "SkinBlizzardFramesLootWindow", label = "Loot Window" }
+    local WIDGETS     = { id = "SkinBlizzardFramesWidgets",    label = "UI Widgets" }
+    local CHAR_SCREEN = { id = "CharacterPanel",               label = "Character Screen" }
+    local TEXTS       = { id = "SkinMessages",                 label = "Blizzard Texts" }
+
+    if KE.ShouldNotLoadModule and KE:ShouldNotLoadModule() then
+        return { GENERAL, CHAR_SCREEN }
+    end
+
+    if not db or db.Enabled ~= true then
+        return { GENERAL, LOOT_ROLL, LOOT_WINDOW, WIDGETS, CHAR_SCREEN, TEXTS }
+    end
+
+    return { GENERAL, FRAMES, ADDONS, LOOT_ROLL, LOOT_WINDOW, WIDGETS, CHAR_SCREEN, TEXTS }
 end, {
     headerBuilder = function(scrollChild, yOffset)
         local db = GetDB()

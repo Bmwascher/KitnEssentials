@@ -35,7 +35,14 @@ local function GetBlizzardMessagesModule()
 end
 
 GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
-    if KE:ShouldNotLoadModule() then return end
+    -- Return the offset, not nil. As a sidebar page a nil return only cost a
+    -- placeholder card (GUI-Core.lua:678-682); as a TAB it propagates out of
+    -- RegisterTabbedContent (GUI-TabbedContent.lua:65), so the OUTER builder
+    -- reads nil too and draws that placeholder at the top offset, on top of the
+    -- header card and tab strip this page already built. The strip never offers
+    -- this tab under ElvUI, so this is belt and braces -- but it makes that
+    -- gating a UX choice rather than the only thing preventing a broken page.
+    if KE:ShouldNotLoadModule() then return yOffset end
     local db = KE.db and KE.db.profile.Skinning.Messages
     if not db then
         local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
