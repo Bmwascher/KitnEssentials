@@ -864,7 +864,7 @@ function DC:UpdateFrameVisuals()
         self:ConfigureBar(bar)
         self:UpdateBarColor(bar)
         -- Raid icon visibility reacts to the Show Raid Target Icon toggle —
-        -- without this the preview ignored the flip (2026-04-27 report).
+        -- without this the preview ignored the flip (report).
         -- Preview branch reads bar.previewRaidIcon, real branch bar.unit.
         self:UpdateRaidIcon(bar, bar.unit)
         -- Target visibility/styling reacts to GUI Target.* changes. Real-mode

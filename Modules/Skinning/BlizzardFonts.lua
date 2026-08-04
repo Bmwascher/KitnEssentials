@@ -7,16 +7,12 @@ end
 
 local BF = KitnEssentials:NewModule("BlizzardFonts")
 
--- The reference treats DISABLING as reload-requiring even though OnDisable
--- calls RestoreAll (<REF>/Skinning/BlizzardFonts.lua): its own GUI
--- flags a reload on the disable branch
--- (<REF>/GUI/Tabs/Skinning/GUI-BlizzMessagesTab.lua). A PROFILE SWITCH
--- never runs that GUI callback -- Core/ProfileManager.lua gates on
--- name:find("^Skin") or module.keDeferToReload, and "BlizzardFonts" fails the
--- name test -- so without this flag a profile switch silently takes the path
--- the reference deliberately guards. This preserves the reference's
--- reload-required disable contract across non-GUI transitions; it is NOT a
--- claim that teardown is missing, which is UIWidgets' separate problem.
+-- Disabling requires a reload even though OnDisable calls RestoreAll, and the
+-- GUI flags one on the disable branch. A PROFILE SWITCH never runs that GUI
+-- callback -- Core/ProfileManager.lua gates on name:find("^Skin") or
+-- module.keDeferToReload, and "BlizzardFonts" fails the name test -- so without
+-- this flag a profile switch silently skips the reload. Teardown itself is
+-- fine here; that is UIWidgets' separate problem.
 BF.keDeferToReload = true
 
 local _G = _G

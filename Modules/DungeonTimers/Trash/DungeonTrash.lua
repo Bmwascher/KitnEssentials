@@ -917,7 +917,7 @@ function DTrash:ResolveMob(rt)
     -- or a cast/channel from a row without that capability — no longer drops
     -- the identity up front. It only ARMS the unlock: the flip commits below
     -- iff this pass re-derives a DIFFERENT mob. When every row rejects, the
-    -- identity and its output are KEPT — field case (Algeth'ar 2026-07-24):
+    -- identity and its output are KEPT — field case (Algeth'ar):
     -- Shadowmeld breaking a Vicious Ambush cast still latched sawInterrupted
     -- AFTER the FAILED deviation shipped, so INTERRUPTED is the remaining
     -- latch path for a melded cast; all five Academy rows are cannotInterrupt,
@@ -1804,7 +1804,7 @@ function DTrash:ApplyPendingStartAdvance(rt)
         -- candidate curates castStartAuraDelta, the sample must land before
         -- consumption — a stale Layer2-locked identity consuming the
         -- pending pre-sample would strand the curating mob's start on the
-        -- later Layer2 flip (divergent-candidates review find, 2026-07-18).
+        -- later Layer2 flip (divergent-candidates review find).
         if self._auraDeltaLive and self:RuntimeNeedsAuraDelta(rt) then return end
     end
     local kind = rt.pendingStartAdvanceKind

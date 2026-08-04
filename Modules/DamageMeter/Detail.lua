@@ -823,7 +823,7 @@ end
 -- ╚══════════════════════════════════════════════════════════╝
 
 local HOVER_TIP_ROWS = 15       -- top spells/events; the click-inline panel still shows the full list
-local TIP_WIDTH = 340           -- Phase 4c: holds the 3 numeric columns (Amount / DPS / %); the extra width over 300 is all name room (the columns anchor to the right edge, so the spell/enemy-name area grows) -- request 2026-06-05
+local TIP_WIDTH = 340           -- Phase 4c: holds the 3 numeric columns (Amount / DPS / %); the extra width over 300 is all name room (the columns anchor to the right edge, so the spell/enemy-name area grows) --
 local TIP_PAD = 4               -- inner inset for header / rows
 
 -- Phase 4c column geometry: each numeric column is right-aligned at a fixed x-offset
@@ -911,7 +911,7 @@ local function MakeTipRow(parent, rowH)
 end
 
 -- One Targets-sub-section row: [icon] enemyName .... Amount  DPS  %. A dm_deaths glyph
--- leads each enemy name (a per-target icon, request 2026-06-05); the three
+-- leads each enemy name (a per-target icon); the three
 -- numeric columns line up under the SAME fixed offsets as the spell rows (TIP_AMT_X / DPS / PCT)
 -- so the breakdown and Targets share one column grid. Passive like the rest of the tip.
 -- Content-sized columns (no SetWidth) + SetWordWrap(false) so nothing truncates.
@@ -1104,7 +1104,7 @@ local function RenderTipTargets(self, bar, cfg, sessionID, topY, stride, barH)
     -- Lazy-create the divider + section-header ("Targets" + repeated Amount/DPS/% column
     -- headers) + up to TIP_TGT_ROWS bars once. The repeated numeric headers make the Targets
     -- section mirror the spell section; the dm_deaths glyph leads each enemy row (a
-    -- per-target icon, request 2026-06-05), built into MakeTargetRow.
+    -- per-target icon), built into MakeTargetRow.
     if not _tip.tgtDivider then
         _tip.tgtDivider = _tip:CreateTexture(nil, "ARTWORK")
         _tip.tgtDivider:SetHeight(1)

@@ -43,22 +43,15 @@ end
 
 -- Shows the copy dialog with the given spell/item/NPC ID and name.
 local function ShowCopyDialog(name, id)
-    -- KE:CreatePrompt is positional (Core/Widgets.lua):
-    -- (title, text, showEditBox, ...). The reference passes a config table;
-    -- that shape does not exist here.
-    -- The hint always names Ctrl-C, never db.Modifier/db.Key: those two
-    -- settings only gate the TOOLTIP-HOVER trigger that opens this window
-    -- (TryCopy, below), not a binding inside it. The dialog's own copy
-    -- handler is hardcoded to Ctrl+C (Core/Widgets.lua), same as the
-    -- reference (References/atrocityEssentials .../Utils/AE-Dialog.lua)
-    -- and this addon's three other copy-mode prompts (GUI-ProfilesTab.lua,
-    -- GUI-Nicknames.lua, GUI-BlizzardMessages.lua). Naming the configured
-    -- key here would send a user on e.g. Shift+V into overwriting the
-    -- highlighted id with the letter V instead of copying it.
+    -- The hint always names Ctrl-C, never db.Modifier/db.Key: those two settings
+    -- only gate the TOOLTIP-HOVER trigger that opens this window, not a binding
+    -- inside it, and the dialog's own copy handler is hardcoded to Ctrl+C.
+    -- Naming the configured key here would send a user on e.g. Shift+V into
+    -- overwriting the highlighted id with the letter V instead of copying it.
     local hint = "Press " .. KE:ColorTextByTheme("Ctrl-C") .. " to copy"
-    -- cancelText ("Close") is the opt-in Core/Widgets.lua reads to show a
-    -- single Close button AND swap this prompt's title/edit-box colours to
-    -- match the reference -- see CreatePrompt's isCopyPrompt flag.
+    -- cancelText ("Close") is the opt-in Core/Widgets.lua reads to show a single
+    -- Close button and swap this prompt's title and edit-box colours -- see
+    -- CreatePrompt's isCopyPrompt flag.
     KE:CreatePrompt(name or "Copy", tostring(id), true, hint, false, nil, nil, nil, nil, nil, nil, nil, "Close")
 end
 

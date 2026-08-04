@@ -392,7 +392,7 @@ end
 -- will render the name/icon we derive from it, but our code can never read or
 -- compare them. So teammate kicks become transient cooling-style records — we
 -- cannot know WHICH roster bar to flip (per-teammate CDs are unrecoverable,
--- probe-confirmed 2026-07-05).
+-- probe-confirmed).
 function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
     if not self.db.Enabled or self.isPreview or not self.isActive then return end
     if not unit or not string_find(unit, "^nameplate") then return end
@@ -431,7 +431,7 @@ function KT:ProcessTeammateKick(interrupterGuid, interruptedSpellID)
     -- data is readable: (1) plain name -> exact member; (2) plain class ->
     -- the ONLY kick-capable member of that class. No guessing beyond that
     -- (the references discarded roster heuristics for false attributions).
-    -- In-game 2026-07-05: name AND classFilename are BOTH secret in live
+    -- In-game: name AND classFilename are BOTH secret in live
     -- dungeon combat (classFilename's missing secret flag in the generated
     -- docs is an annotation gap) — so this waterfall never fires in
     -- restricted content today. Kept: two pcalls per interrupt, and it
@@ -547,7 +547,7 @@ end
 -- Party members also running KitnEssentials broadcast their own kicks, letting
 -- receivers flip the sender's REAL roster bar with the exact CD — full
 -- per-member tracking among KE users. Non-KE teammates keep the record
--- fallback. Comms over INSTANCE_CHAT probe-verified working 2026-07-05
+-- fallback. Comms over INSTANCE_CHAT probe-verified working
 -- (family rule); every send/parse is pcall'd so blocked contexts degrade
 -- silently to records.
 local COMM_PREFIX = "KEKick"

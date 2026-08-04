@@ -3,7 +3,6 @@
 -- ║  Module: Totem Tracker                                   ║
 -- ║  Purpose: Custom totem icon bar with cooldown swipes,    ║
 -- ║           timer text, and a destroy-all-totems macro.    ║
--- ║  Credit: Ported from NorskenUI v3.13 TotemTracker.       ║
 -- ║                                                          ║
 -- ║  Not Shaman-only: Augmentation Evoker dupes ("Future     ║
 -- ║  Self") are pseudo-totems and occupy real totem slots.   ║

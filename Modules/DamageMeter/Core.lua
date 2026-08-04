@@ -1955,7 +1955,7 @@ function DM:OnChallengeEvent(event)
     -- in the C_DamageMeter contract. Without this, "Overall" (and a window pinned to a
     -- prior session) carries the PREVIOUS key's data, incl. its deaths, into the new
     -- run. Reset on START only: resetting on COMPLETED/RESET would wipe a just-finished
-    -- run the user is still reviewing. Upstream verified 2026-07-18: the reference
+    -- run the user is still reviewing. Upstream verified: the reference
     -- meter does this exact unconditional reset on CHALLENGE_MODE_START ("wipe data
     -- so Overall = this dungeon run"), and Details-Midnight resets the server store
     -- at key start too -- Details keeps cross-key history only because it snapshots

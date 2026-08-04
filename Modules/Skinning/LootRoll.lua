@@ -321,8 +321,8 @@ end
 -- (Blizzard_UIPanels_Game/Mainline/GroupLootFrame.xml), so ClearAllPoints
 -- and SetPoint on it are legal in combat and taint nothing. And it is
 -- sufficient: GroupLootFrame.lua is the ONLY place any roll frame is
--- ever anchored, and both entry paths -- AddFrame (:25-40) and ReplaceFrame
--- (:68-75) -- end in GroupLootContainer_Update, the function we post-hook.
+-- ever anchored, and both entry paths -- AddFrame and ReplaceFrame -- end in
+-- GroupLootContainer_Update, the function we post-hook.
 --
 -- Only the PROMPT. BonusRollLootWonFrame / BonusRollMoneyWonFrame, which
 -- replace it once the roll resolves, are loot toasts: they set AlertFrame as
@@ -401,16 +401,15 @@ function LR:Setup()
         --     UIParentBottomManagedFrameContainer's Layout() genuinely
         --     cannot reach it.
         --  2. MANAGER MEMBERSHIP -- kept. The frame stays in the container's
-        --     showingFrames table (written Blizzard_UIParent/Shared/
-        --     UIParent.lua, cleared only at :204). UpdateManagedFrames
-        --     (:186-193) iterates THAT table, not the child list, and its
-        --     UpdateFrame reparents the frame straight back at :153. Every
+        --     showingFrames table (written in Blizzard_UIParent/Shared/
+        --     UIParent.lua). UpdateManagedFrames iterates THAT table, not the
+        --     child list, and its UpdateFrame reparents the frame back. Every
         --     hide/show cycle also re-runs OnShow -> AddManagedFrame.
         --
         -- So the reparent alone cannot hold the position: the layout pass
         -- puts the container back at the BOTTOM of the screen and our hook
         -- has to move it again. That is the visible "jumps to the bottom,
-        -- then back" the 2026-07-31 bug report describes. Re-asserting
+        -- then back" the bug report describes. Re-asserting
         -- after the layout settles is what makes it stick today; the real
         -- exit from layer 2 is tracked in the fix plan at
         -- dev/docs/superpowers/plans/2026-07-31-lootroll-bonus-roll-position-jump.md.
@@ -432,16 +431,14 @@ function LR:Setup()
         -- moved the container. Cheap -- they only do work while a roll is
         -- on screen.
         --
-        -- DEVIATION A (task-3, corrects <REF>:266-279): these three hooks
-        -- are PERMANENT -- hooksecurefunc cannot be undone, and none of
-        -- the reference's three callbacks tested whether the module was
-        -- still enabled, so KitnEssentials:DisableModule("LootRoll") left
-        -- the container getting repositioned and roll frames getting
-        -- skinned anyway -- the user's off-switch did not turn the
-        -- feature off. Each callback below now bails first when the
-        -- module is disabled.
+        -- These three hooks are PERMANENT -- hooksecurefunc cannot be undone.
+        -- Without an enabled test in each callback,
+        -- KitnEssentials:DisableModule("LootRoll") left the container getting
+        -- repositioned and roll frames getting skinned anyway, so the user's
+        -- off-switch did not turn the feature off. Each callback below bails
+        -- first when the module is disabled.
         --
-        -- FIX ROUND 2: the same guard is needed on two ASYNC re-entries
+        -- The same guard is needed on two ASYNC re-entries
         -- these hooks feed into, not just here -- five paths total.
         -- WaitForRegen's PLAYER_REGEN_ENABLED watcher and both of
         -- ReassertPosition's C_Timer.After callbacks call ApplyPosition
@@ -473,12 +470,9 @@ function LR:Setup()
         end
 
         -- ApplyPosition FIRST, then ReassertPosition -- the same order the
-        -- GroupLootContainer_Update hook above uses. The reference calls
-        -- only ReassertPosition here (<REF>:274), whose first correction is
-        -- a C_Timer.After(0) away, so the container renders for one frame
-        -- at Blizzard's managed spot before moving. Nothing in either file
-        -- explains the asymmetry; treating it as deliberate would mean
-        -- keeping a one-frame flicker on the show path for no reason.
+        -- GroupLootContainer_Update hook above uses. ReassertPosition alone
+        -- puts its first correction a C_Timer.After(0) away, so the container
+        -- renders for one frame at Blizzard's managed spot before moving.
         c:HookScript("OnShow", function()
             -- Logged BEFORE the enabled guard: Blizzard's AddManagedFrame has
             -- already run by the time this fires (it is the mixin's own OnShow),
@@ -573,10 +567,9 @@ function LR:OnDisable()
     -- restore by reparenting (flag writes taint the secure
     -- layout pass).
     --
-    -- DEVIATION (task-3, corrects <REF>:347-350): the reference's own
-    -- comment here claimed this was "combat-deferred implicitly -- next
-    -- ApplyPosition out of combat also restores", which is false on the
-    -- path that actually reaches OnDisable: ApplyPosition's restore
+    -- This is NOT combat-deferred implicitly by the next out-of-combat
+    -- ApplyPosition, which is the tempting reading. On the path that actually
+    -- reaches OnDisable, ApplyPosition's restore
     -- branch only runs when self.db.Reposition is FALSE, so a user who
     -- disables the MODULE while leaving Reposition on (the GUI's normal
     -- toggle) got no restore at all, in or out of combat. When combat

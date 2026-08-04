@@ -58,7 +58,7 @@ local VOIDCORE_CURRENCY_ID = 3418
 -- via an active keystone.
 --
 -- Source: in-game player-location IDs (verified via WeakAuras' Player
--- Location trigger 2026-05-06).
+-- Location trigger).
 local VOIDCORE_UI_MAPS = {
     [2266] = true,  -- Keystone Dungeons (umbrella for all 8 active M+ rotation maps)
     [2501] = true,  -- Maisara Caverns

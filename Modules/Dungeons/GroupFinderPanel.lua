@@ -52,9 +52,8 @@ local bit = _G.bit
 -- loads before Skinning.xml in the toc, so a file-top capture is nil.
 -- Never hoist it, even though every S.* name it uses does exist.
 
--- Sizing overhauled 2026-08-01 on Brandon's smoke feedback: the panel read
--- cramped next to the Group Finder. Everything grew; the Mythic+ button grew
--- more than the rest because it is the one people click most.
+-- Sized to read comfortably next to the Group Finder. The Mythic+ button is
+-- deliberately larger than the rest because it is the one people click most.
 local PANEL_WIDTH   = 220
 local AFFIX_SIZE    = 34
 local BUTTON_HEIGHT = 32
@@ -64,11 +63,11 @@ local TOGGLE_HEIGHT = 30   -- filter-pane toggles, up from 24
 local TOGGLE_ICON   = 22   -- dungeon icon, left of the short name
 
 -- The panel's background stays on S.Backdrop, whose carrier is parented to
--- PVEFrame. A self-owned KE:ApplyBackdrop was tried on 2026-08-01 and did
--- not draw in game -- don't retry it without an in-game probe first.
+-- PVEFrame. A self-owned KE:ApplyBackdrop did not draw in game -- don't retry
+-- it without an in-game probe first.
 
--- Themed, not the reference's #7381FF literal -- that was the upstream
--- project's own accent. Read once per function, keep each site's alpha.
+-- Themed rather than a hardcoded colour, so it tracks the user's accent. Read
+-- once per function, keep each site's alpha.
 local KE_PINK = { 1, 0, 0.549 }
 local function Accent()
     return KE.Theme and KE.Theme.accent or KE_PINK

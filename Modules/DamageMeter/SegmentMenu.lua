@@ -87,8 +87,7 @@ local function MakeSegRow(parent, W, db)
         -- Bundle rows open their key's flyout; MAIN-MENU non-bundle rows
         -- close a stale one (the cursor left the history section). Flyout
         -- rows do NEITHER — they come from this same factory, and closing
-        -- here would hide their own containing panel on hover (Codex round
-        -- 2, F4').
+        -- here would hide their own containing panel on hover.
         if r._bundle then
             DM:OpenSegmentFlyout(W, r._bundle, r)
         elseif not r._inFlyout then

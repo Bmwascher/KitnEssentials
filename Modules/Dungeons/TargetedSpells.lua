@@ -49,7 +49,7 @@ local function dbg(...)
     KE:Print("|cff88ccff[TS]|r " .. table.concat(parts, " "))
 end
 
--- Delve difficultyID — probe-confirmed in-game 2026-07-03 (Collegiate
+-- Delve difficultyID — probe-confirmed in-game (Collegiate
 -- Calamity delve: instanceType "scenario", difficultyID 208).
 TS.DELVE_DIFFICULTY_ID = 208
 
@@ -286,7 +286,7 @@ local function CreateIconFrame(entry, db)
     f.cooldown:SetDrawSwipe(false)
     -- Default minimumCountdownDuration is 2000ms (UI.xsd): sub-2s casts get
     -- NO countdown numbers. Reference templates zero it; mirror them
-    -- (2026-07-05 missing-timer bug — Throw Spear ~1.5s).
+    -- (missing-timer bug — Throw Spear ~1.5s).
     f.cooldown:SetMinimumCountdownDuration(0)
     return f
 end
@@ -385,7 +385,7 @@ function TS:Release(entry, generation, reason)
     -- Deliberately NO cooldown:Clear() here (reference Reset never touches
     -- the Cooldown): replace-by-unit re-acquires this same entry, and Clear +
     -- SetCooldown on one widget in one frame eats the countdown text
-    -- (2026-07-05 missing-timer bug). Pooled entries are hidden and the next
+    -- (missing-timer bug). Pooled entries are hidden and the next
     -- populate overwrites the cooldown anyway.
     entry:SetAlpha(1)
     entry.Spacer:SetValue(1)
@@ -418,7 +418,7 @@ end
 -- Uses the size-parameterized fork with plain db.IconSize — stock LCG reads
 -- frame:GetSize(), which returns SECRET numbers anywhere in this entry
 -- subtree (its alpha is bound to secret values; rect queries under it are
--- secret so targeting can't be inferred by measuring — BugSack 2026-07-03).
+-- secret so targeting can't be inferred by measuring — BugSack).
 function TS:UpdateGlow(entry)
     if not Glows then return end
     if not self.db.GlowImportant or not entry.spellId then

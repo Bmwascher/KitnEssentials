@@ -131,7 +131,7 @@ local function ApplySkin()
     end
 
     -- Transfer Log window (ElvUI Character.lua).
-    -- NOTE their warning at :484 -- they deliberately DON'T skin
+    -- NOTE their warning -- they deliberately DON'T skin
     -- TokenFrame.CurrencyTransferLogToggleButton ("No no no, this
     -- taints"), they only swap its textures. We honour that: the
     -- toggle button on TokenFrame stays untouched entirely.

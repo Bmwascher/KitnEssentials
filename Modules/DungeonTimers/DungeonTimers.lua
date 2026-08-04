@@ -2446,7 +2446,7 @@ DT._phaseCurves = DT._phaseCurves or {}
 -- maps HP fraction (0..1) to an output value, and the curve evaluation runs
 -- server-side. BUT the result is still SECRET-tagged on hostile units (the
 -- base `SecretReturns = true` flag wins over `SecretWhenCurveSecret = true`;
--- confirmed via diagnostic 2026-05-11).
+-- confirmed via diagnostic).
 --
 -- That means we CANNOT extract a clean integer tier in addon code — `==` and
 -- ordered comparisons against secret numbers throw whenever execution is

@@ -560,7 +560,7 @@ end
 --     "boolean") — candidate churn across the sample window can leave the
 --     delta unsampled with the ready bit set, and an owned spell matched on
 --     a lenient nil would anchor at a start the sample never discriminated
---     (churn guard, review find 2026-07-18).
+--     (churn guard, review find).
 -- Usable → the fingerprint discriminates the start (a Riftbreath start
 -- carries no fresh party debuff, so Vicious Ambush 388942 — the one shipped
 -- row — cannot cross-anchor on it) and a meld-FAILED Ambush still advances
@@ -640,7 +640,7 @@ function TI.TraitDurationMatches(trait, observed)
     -- Explicit per-kind select: the and/or form fell through to castTimeSet
     -- when a CHANNEL observation met a nil channelTimeSet, so a cast-only
     -- mob survived real channel evidence (audit F2 — the same and/or-collapse
-    -- class as the 2026-07-10 alert-group field bug; the reference compiles
+    -- class as the alert-group field bug; the reference compiles
     -- and consumes the two sets independently).
     local set
     if observed.kind == "channel" then

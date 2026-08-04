@@ -68,7 +68,7 @@ local issecrettable = issecrettable or function() return false end
 -- were dropped deliberately: they cannot ever match. The lookup lowercases
 -- with Lua's string.lower, which is byte-wise and ASCII-only, so a
 -- capitalised Cyrillic name ("Небесный путь") never folds to the lowercase
--- key ("небесный путь") -- measured 2026-07-31 in this project's Lua 5.1.
+-- key ("небесный путь") -- measured in this project's Lua 5.1.
 -- They are dead entries upstream too, and KE ships no localisation, so
 -- carrying them would imply support that does not exist. Adding real
 -- Russian support means Cyrillic-aware case folding, not these keys.
@@ -172,7 +172,7 @@ end
 BuildPopup = function()
     if popup then return popup end
     -- Resolved HERE, not at file scope: Dungeons.xml loads before
-    -- Skinning.xml (KitnEssentials.toc vs :25), so a file-top capture
+    -- Skinning.xml in the toc, so a file-top capture
     -- is nil and every skin call silently no-ops.
     local S = KE.Skins
 
@@ -360,8 +360,8 @@ ResolveDungeon = function(resultID)
         if type(info) ~= "table" then return end
         local activityID = info.activityID
         -- issecretTABLE, not issecretvalue: a table can be non-secret itself
-        -- while its reads produce secrets (FrameScriptDocumentation.lua
-        -- vs :244-248). This is the only live path -- LfgSearchResultData has no
+        -- while its reads produce secrets (FrameScriptDocumentation.lua).
+        -- This is the only live path -- LfgSearchResultData has no
         -- activityID field in 12.0.7 (LFGListInfoDocumentation.lua).
         if activityID == nil and info.activityIDs and not issecrettable(info.activityIDs) then
             activityID = info.activityIDs[1]
@@ -383,9 +383,9 @@ end
 ShowPrompt = function()
     if not (LR.db and LR.db.Enabled ~= false) or not pendingSpellID then return end
     if InCombatLockdown() then
-        -- Deferral comes BEFORE BuildPopup, unlike the reference. BuildPopup
-        -- calls secureBtn:SetAttribute("type", "spell") on a protected frame
-        -- (<REF>:194), which combat blocks -- and OnEnable skips the build in
+        -- Deferral comes BEFORE BuildPopup, because BuildPopup calls
+        -- secureBtn:SetAttribute("type", "spell") on a protected frame,
+        -- which combat blocks -- and OnEnable skips the build in
         -- combat, so this path IS reachable with no popup at all: enable or
         -- /reload during combat, then join a group before it ends.
         -- PLAYER_REGEN_ENABLED builds it and finishes the show.
@@ -461,11 +461,10 @@ end
 
 function LR:PLAYER_REGEN_DISABLED()
     -- Remember that COMBAT is what took the prompt away, so REGEN_ENABLED can
-    -- put it back. HidePrompt clears pendingShow unconditionally, which is why
-    -- the reference never re-shows: by the time combat ends there is no flag
-    -- left saying a prompt was wanted. Deliberate deviation from the reference
-    -- (Brandon, 2026-08-01) -- the group and dungeon are unchanged, and the
-    -- end of the fight is exactly when the teleport becomes useful.
+    -- put it back. HidePrompt clears pendingShow unconditionally, so by the time
+    -- combat ends there is no flag left saying a prompt was wanted. Re-showing
+    -- is deliberate: the group and dungeon are unchanged, and the end of the
+    -- fight is exactly when the teleport becomes useful.
     combatHidden = (popup and popup:IsShown()) or nil
     HidePrompt()  -- teleports can't be cast in combat
 end

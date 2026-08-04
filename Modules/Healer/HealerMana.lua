@@ -356,7 +356,7 @@ end
 -- Position the container via the active position table, with the grow-adjusted
 -- anchor edge. Adjustment is display-only (not persisted). Uses KE's pixel-
 -- perfect ApplyFramePosition (snaps the container once; children use integer
--- offsets so no per-child re-snap, avoiding the 2026-05-27 buggy-grid issue).
+-- offsets so no per-child re-snap, avoiding the buggy-grid issue).
 function HM:ApplyContainerPosition()
     if not self.containerFrame then return end
     local pos = self:GetActivePosition()

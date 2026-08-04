@@ -61,7 +61,7 @@ MPT.BuildSplitKey = BuildKey
 -- mid-key, char B recovers its own live key on the same map, and A's
 -- splits PREDATE B's clock, sailing through the provenance bound. Identity
 -- therefore includes WHO wrote the cache, and a cache with NO owner is
--- rejected outright (2026-07-17 review): every released writer stamps
+-- rejected outright (review): every released writer stamps
 -- `char` at create, so an ownerless cache can only be a pre-stamp dev
 -- artifact whose owner cannot be recovered — it is displaced by the next
 -- create rather than adopted.

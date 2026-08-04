@@ -344,7 +344,7 @@ MakeButton = function(parent, dungeon, index)
         })
 
         -- DO NOT call LFGListEntryCreation_Select here to pre-fill the form.
-        -- Tried 2026-08-01 and it is BLOCKED: Select reaches
+        -- BLOCKED, do not retry: Select reaches
         -- LFGListEntryCreation_SetTitleFromActivityInfo
         -- (.wow-api-reference Interface/AddOns/Blizzard_GroupFinder/
         -- Mainline/LFGList.lua), which calls the protected
@@ -455,10 +455,9 @@ Init = function()
     -- combat-guarded.
     local dblOverlay, dblTimer
 
-    -- DEVIATION from the reference, and it fixes a live defect there. The
-    -- reference hides the overlay only when out of combat and never retries
-    -- (<REF>:426), so combat starting inside the 0.35s window leaves the
-    -- overlay SHOWN indefinitely, still covering that category tile and still
+    -- Hiding the overlay only when out of combat, with no retry, leaves it
+    -- SHOWN indefinitely when combat starts inside the 0.35s window: still
+    -- covering that category tile and still
     -- armed to click Start a Group. Route every hide through KE:RunAfterCombat
     -- (Core/Globals.lua), which owns its own frame and its own
     -- PLAYER_REGEN_ENABLED registration and therefore survives module disable.
@@ -527,7 +526,7 @@ Init = function()
     --
     -- The Questing tile carries its own OnClick and never reaches that global,
     -- so hooking the global armed every category except Questing. In-game
-    -- probe 2026-08-01 on the six live tiles: categoryID 1 (Questing) compared
+    -- probe on the six live tiles: categoryID 1 (Questing) compared
     -- NOT equal to the global handler, 121/2/3/3/6 all compared equal, and
     -- Questing was exactly the one the double-click never worked on.
     --
@@ -662,7 +661,7 @@ function QC:OnEnable()
     -- always present. So the wait never ended: enabling the module at runtime
     -- registered ADDON_LOADED for a name that never arrives, Init never ran,
     -- and no buttons appeared until a /reload took a different path in.
-    -- (Smoke C-3/C-10, 2026-08-01.)
+    -- (Verified in game.)
     --
     -- The object is what Init actually needs, and gating on it does not
     -- depend on how Blizzard lays its files out next patch.

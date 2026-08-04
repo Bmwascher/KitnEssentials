@@ -7,12 +7,10 @@ end
 
 local UIW = KitnEssentials:NewModule("UIWidgets", "AceEvent-3.0")
 
--- Styling applies destructively (widths, anchors, textures, fonts, backdrops
--- at <REF>/Skinning/UIWidgets.lua) and OnDisable is EMPTY (:308-309),
--- so nothing is ever undone. Core/ProfileManager.lua only defers modules
--- whose name starts "Skin" or that carry this flag, and "UIWidgets" fails the
--- name test. Exact precedent: Modules/Skinning/ContextMenus.lua sets it
--- for the same reason, in the same words.
+-- Styling applies destructively (widths, anchors, textures, fonts, backdrops)
+-- and OnDisable is EMPTY, so nothing is ever undone. Core/ProfileManager.lua
+-- only defers modules whose name starts "Skin" or that carry this flag, and
+-- "UIWidgets" fails the name test. ContextMenus.lua sets it for the same reason.
 UIW.keDeferToReload = true
 
 local hooksecurefunc = hooksecurefunc
@@ -191,7 +189,7 @@ end
 -- execution:
 --
 --   LayoutFrame.lua: attempt to compare a secret number value
---   (execution tainted by 'atrocityEssentials')
+--   (execution tainted by an addon)
 --
 -- Nothing is lost by skipping them: tooltip widget sets are transient and
 -- already inherit the tooltip's own styling.
@@ -308,10 +306,9 @@ function UIW:StyleWidgetByType(widget)
     end
 end
 
--- <REF>/Skinning/UIWidgets.lua has this same omission -- ApplySettings
--- never calls UpdateDB. GetFontSettings (:61-68) caches its resolved font
--- path and outline keyed on _styleGen, and _styleGen only bumps inside
--- UpdateDB (:37), so without this call the Font and Outline dropdowns write
+-- ApplySettings does not call UpdateDB. GetFontSettings caches its resolved
+-- font path and outline keyed on _styleGen, and _styleGen only bumps inside
+-- UpdateDB, so without this call the Font and Outline dropdowns write
 -- to the DB but the cache never invalidates: nothing restyles until a reload
 -- or profile switch, and even newly created widgets get the stale font.
 -- BlizzardFonts.lua already calls UpdateDB in this same slot of its

@@ -467,7 +467,7 @@ function InspectPanel:UpdateInspectItemLevel()
 
     -- EllesmereUI's themed inspect sheet prints its own average near the top,
     -- and its layout puts the Talents button exactly where ours anchors, so
-    -- ours ends up half-hidden behind it (Brandon, 2026-08-03). EUI's is
+    -- ours ends up half-hidden behind it. EUI's is
     -- Blizzard's whole-number call formatted to two places, so it always ends
     -- .00 -- ours is the real decimal, which is why it stays on the unthemed
     -- sheet. It just cannot be READ on the themed one.

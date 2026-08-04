@@ -55,9 +55,9 @@ end
 -- menu's CHILD ENTRIES to re-brand radio ticks, running from inside
 -- the menu system's acquired-frame callback. Those entries carry the
 -- dropdown's selection -- and taint.log convicted exactly that value:
--- CurrencyTransferMenu.sourceCharacterData came back owned by
--- atrocityEssentials, read at CurrencyTransfer.lua, blocking
--- RequestCurrencyFromAccountCharacter at :403. ElvUI never touches
+-- CurrencyTransferMenu.sourceCharacterData came back addon-owned, read at
+-- CurrencyTransfer.lua, blocking
+-- RequestCurrencyFromAccountCharacter. ElvUI never touches
 -- menu entries. Parity beats our brand-colored radial marks.
 local function SkinFrame(frame)
     if not frame then return end
@@ -71,7 +71,7 @@ local function SkinFrame(frame)
     -- GetWidth() and dies at Backdrop.lua:
     --
     --   attempt to perform arithmetic on local 'width' (a secret number
-    --   value, while execution tainted by 'atrocityEssentials')
+    --   value, while execution tainted by an addon)
     --
     -- The size is therefore read BEFORE anything is created or anchored --
     -- S.Backdrop two-point anchors on creation, so checking afterwards would
@@ -137,8 +137,8 @@ local function SkinFrame(frame)
     -- Stripping on a 1x1 measurement is unrecoverable in one pass: the Blizzard
     -- art goes, our backdrop is built 1x1 and is invisible, and the menu then
     -- lays out to full size with its text drawn over nothing. That is exactly
-    -- the submenu bug Brandon reported -- confirmed by an in-game DEBUG_CM log
-    -- showing the root at 164x342 and the submenu at 1x1 in the same open.
+    -- the submenu bug: an in-game log showed the root at 164x342 and the
+    -- submenu at 1x1 in the same open.
     --
     -- Bailing WITHOUT stripping leaves Blizzard's own art in place, which looks
     -- correct. The deferral in OnMenuOpen is what actually gets these frames

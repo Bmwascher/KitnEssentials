@@ -86,7 +86,7 @@ end
 -- BackdropTemplate child ran SetupTextureCoordinates (width/edgeSize
 -- arithmetic) on every tooltip resize, and Midnight world-quest
 -- tooltips resize with SECRET widths: 196x "arithmetic on secret
--- width, tainted by atrocityEssentials" (field BugSack). Textures
+-- width, tainted by an addon" (field BugSack). Textures
 -- anchored to the frame resize in C -- zero Lua size math, nothing to
 -- go secret.
 --
@@ -147,7 +147,7 @@ end
 --
 --   Blizzard_UIWidgetTemplateTextWithState.lua: attempt to perform
 --   arithmetic on local 'textHeight' (a secret number value, while
---   execution tainted by 'atrocityEssentials')
+--   execution tainted by an addon)
 --
 -- The styling is idempotent -- the same textures with the same colours
 -- every time -- so after the first show there is nothing to do. Bailing
@@ -246,11 +246,10 @@ end
 -- secret arguments, but scaling 0.57 to 57 is arithmetic on a secret and
 -- throws, and there is no C-side scaler.
 --
--- We shipped the readout anyway until 2026-08-03, blank on every unit,
--- behind a toggle that could never do anything. Probe that day, hovering a
--- unit: GetMinMaxValues returned 0, 1 and issecretvalue(GetValue()) was
--- true. Toggle, size slider and handler all removed; the reference carries
--- the same dead code. HealthBarText and HealthTextSize survive in
+-- The readout shipped for a while regardless: blank on every unit, behind a
+-- toggle that could never do anything. Probed while hovering a unit,
+-- GetMinMaxValues returned 0, 1 and issecretvalue(GetValue()) was true. Toggle,
+-- size slider and handler are all removed. HealthBarText and HealthTextSize survive in
 -- Core/Defaults.lua only so no profile needs migrating.
 
 -- Unit extras ---------------------------------------------------------
@@ -383,7 +382,7 @@ end
 -- only ever exports under C_Secrets. oUF's `ShouldUnitIdentityBeSecret and`
 -- short-circuit therefore always yields nil, making NotSecretUnit constantly
 -- true and ElvUI's name rebuild effectively unguarded. Caught by KE's
--- luacheckrc drift check 2026-07-28. Fail CLOSED here: no predicate, no
+-- luacheckrc drift check. Fail CLOSED here: no predicate, no
 -- rebuild.
 local function CanReadIdentity(unit)
     local fn = C_Secrets and C_Secrets.ShouldUnitIdentityBeSecret
@@ -425,7 +424,7 @@ end
 --   widgetHeight = math.max(iconSize, self.Tooltip:GetHeight())
 --
 -- and an AddLine from us makes that height a secret number, so the arithmetic
--- fails with "execution tainted by 'atrocityEssentials'". StyleTooltip
+-- fails with "execution tainted by an addon". StyleTooltip
 -- already excluded them; the TooltipDataProcessor post-calls did not, so an
 -- item ID line landed in widget reward tooltips on the world map.
 local function IsEmbeddedTip(tt)

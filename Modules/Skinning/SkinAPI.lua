@@ -195,7 +195,7 @@ end
 -- any arithmetic on it errors:
 --
 --   attempt to perform arithmetic on local 'B' (a secret number value,
---   while execution tainted by 'atrocityEssentials')
+--   while execution tainted by an addon)
 --
 -- Hit on a guild roster row (memberId is secret) via FixSubPixelEdge.
 -- These wrappers return nil instead, so every call site degrades to
@@ -2401,10 +2401,10 @@ function S.TrimScrollBar(frame, ignoreUpdates) -- luacheck: ignore 212/ignoreUpd
         thumb:HookScript("OnMouseUp", thumbOnMouseUp)
     end
 
-    -- v3.5.868 -- THE ROOT. This used to be:
+    -- THE ROOT. This used to be:
     --     hooksecurefunc(frame, "Update", skinScrollArrows)
-    -- and it is the reason atrocityEssentials has been named as the owner
-    -- of taint in Blizzard code all over the addon.
+    -- and it is why this addon was being named as the owner of taint in
+    -- Blizzard code all over the UI.
     --
     -- ScrollBoxListMixin:Update() calls ScrollBar:Update() partway through
     -- its own body. Our hook fired there, taint landed, and control then

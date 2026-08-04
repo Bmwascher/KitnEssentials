@@ -387,7 +387,7 @@ local MPT_DEFAULTS = {
     OverlayTooltipEnabled = true,
     OverlayFormat = "%s%%", -- a string.format spec (NOT an enum) applied to the
                             -- pre-formatted percentValueString (API return #3 —
-                            -- "0.87", NO percent sign; live-confirmed 2026-07-02)
+                            -- "0.87", NO percent sign; live-confirmed)
     OverlayCombatOnly = true,
     OverlayFontFace = "Expressway",
     OverlayFontSize = 12,
@@ -1049,7 +1049,7 @@ function MPT:OnTimerTick()
     -- Re-glue the live-ms driver's clock at every whole-second flip: the
     -- flip is the only moment the true fraction is known (~0, within flip
     -- detection latency). A one-shot anchor bakes a stale fraction into
-    -- every later second — the 2026-07-02 "spazzing" sawtooth.
+    -- every later second — the "spazzing" sawtooth.
     if GetTimePreciseSec then
         run.msBase = GetTimePreciseSec() - elapsed
     end
@@ -1378,7 +1378,7 @@ function MPT:RepairRunInfo()
             -- level-0 window's relaxed map-only rule (MPT.CacheBelongsToRun).
             -- Character-gated like every adoption: only OUR stamped cache
             -- reaches the rekey — ownerless caches are rejected outright
-            -- (2026-07-17 review), so there is no legacy adoption arm here.
+            -- (review), so there is no legacy adoption arm here.
             local cache = GetRunSplitCache()
             local myChar = UnitGUID("player")
             if MPT.CacheBelongsToRun(cache, run.mapID, 0, myChar) then
@@ -1607,7 +1607,7 @@ function MPT:CheckForActiveRun()
             self:CompleteRun()
         elseif (self.run.active or self.run.completed) and not InChallengeInstance() then
             -- Reset ONLY once the player is genuinely OUTSIDE the keystone
-            -- instance (upstream parity — the 2026-07-03 walk-out/in bug):
+            -- instance (upstream parity — the walk-out/in bug):
             -- GetActiveChallengeMapID reads nil in the PLAYER_ENTERING_WORLD
             -- window even while standing inside a live key, and resetting an
             -- ACTIVE run on that flap wiped the freshly rebuilt run right

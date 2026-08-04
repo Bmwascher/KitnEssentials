@@ -76,19 +76,19 @@ MPT._objRowPool = MPT._objRowPool or KE.FramePool:New(
 local _sigBuf = {}
 
 -- Gap (px) on each side of the big timer's "/" separator — roughly half a
--- space glyph at the default 28px timer font. 2026-06-10 round-3 feedback:
--- pull both the elapsed and total sides inward toward the separator.
+-- space glyph at the default 28px timer font. Both the elapsed and total sides
+-- pull inward toward the separator.
 local TIMER_SEP_GAP = 3
 
 -- Gap (px) between the PB/delta text and the reserved timer-row width
--- (tightened 18 -> 8, 2026-07-02 in-game feedback: PB sat too far left).
+-- (tightened 18 -> 8, in-game feedback: PB sat too far left).
 local TIMER_PB_GAP = 8
 
 -- Gap (px) between the race-line label ("+2 Chest (26:24):") and the value's
 -- reserved box — the label pins LEFT of the box so the per-second countdown
 -- never re-flows it. The box follows the value's digit shape (re-measured
 -- once per crossing in ApplyLayout), so this gap is the WHOLE visible gap.
--- (4 -> 2, 2026-07-03 live feedback: hug the countdown.)
+-- (4 -> 2, live feedback: hug the countdown.)
 local RACE_VAL_GAP = 2
 
 ---------------------------------------------------------------------------------
@@ -583,7 +583,7 @@ function MPT:RenderTimer()
         local col = diff <= 0 and (MPT.db.SplitAheadColor or {0.25, 0.88, 0.82})
                               or (MPT.db.SplitBehindColor or {1, 0.34, 0.34})
         local sign = diff < 0 and "-" or "+"
-        -- Unpadded ("+2:10", not "+02:10") — user direction 2026-07-18.
+        -- Unpadded ("+2:10", not "+02:10") — user direction.
         local dStr = (diff == 0) and "0:00" or _FmtShort(abs(diff))
         MPT.SetTextGated(f.timerPBText, format("%s%s%s|r", Hex(col), sign, dStr))
         f.timerPBText:SetAlpha(1)
@@ -717,7 +717,7 @@ local function _PlaceLabel(fs, timerBar, barW, cutoff, maxTime, place)
         -- Right-aligned to the tick, fully above the bar — the same stagger
         -- rule as EDGE. Centering collided near the bar end: the centered
         -- +1 label clipped the frame edge, and right-aligning only the end
-        -- label jammed it into the centered +2 (2026-07-02 live feedback,
+        -- label jammed it into the centered +2 (live feedback,
         -- rounds 1 + 2).
         fs:SetPoint("BOTTOMRIGHT", timerBar, "TOPLEFT", x - 3, 2)
     elseif place == "BELOW" then
@@ -850,7 +850,7 @@ function MPT:RenderThresholds()
                 -- outgrown; the ticking positions use the project's
                 -- widest-digit "8" stand-in. An all-8s template kept a dead
                 -- half-digit of slack whenever the leading digit was a
-                -- narrow "1" (2026-07-03 live feedback). The label re-anchors
+                -- narrow "1" (live feedback). The label re-anchors
                 -- only when the shape changes (leading-digit step,
                 -- digit-count crossing, sign flip — minute-scale events), so
                 -- it hugs the countdown at RACE_VAL_GAP without riding the
@@ -1104,7 +1104,7 @@ end
 -- BAR color: db.ForcesColor, or the quintile palette when ForcesBandedColors
 -- is on (Full band at 100%). The bar never recolors at completion — the
 -- percent/count TEXT flips to db.ForcesCompleteColor instead, over its usual
--- db.ForcesTextColor (2026-07-02 feedback; same ownership rule as the timer
+-- db.ForcesTextColor (feedback; same ownership rule as the timer
 -- bar: the number conveys state, the fill stays put).
 --
 -- ForcesBandPalette bands: [1]=0-20%, [2]=20-40%, [3]=40-60%,
@@ -1386,7 +1386,7 @@ function MPT:ApplyLayout()
 
     -- Locals shared by both the config section and the stacking pass below.
     local PAD  = 12
-    local ROW  = db.RowSpacing or 2   -- user slider (default 2 = the 2026-06-10 dense look)
+    local ROW  = db.RowSpacing or 2   -- user slider (default 2 = the dense look)
     local barW = db.BarWidth  or 300
     local barH = db.BarHeight or 14
     local bars = self.frames.bars
@@ -1438,7 +1438,7 @@ function MPT:ApplyLayout()
 
         -- Race-line value reservation SEED: "24:58" is the widest REAL time
         -- a value can render — the +3 countdown never exceeds 25:00 (user
-        -- cap 2026-07-03), seconds never pass :59. This is only the
+        -- cap), seconds never pass :59. This is only the
         -- pre-first-render fallback: the stacking pass re-measures the box
         -- against the value's live digit shape (published by
         -- RenderThresholds) so the label hugs the countdown instead of
@@ -1518,7 +1518,7 @@ function MPT:ApplyLayout()
         else  -- EDGE (default): straddles the bar's BOTTOM edge at the right
               -- corner (the edge-straddling look) — half in / half out; the stacking
               -- pass reserves the protruding half-line. +2 y-bias rides the
-              -- text slightly higher into the bar (2026-06-10 feedback).
+              -- text slightly higher into the bar (feedback).
             f.forcesText:SetPoint("RIGHT", bars.forcesWrap, "BOTTOMRIGHT", -2, 2)
         end
     end
@@ -1605,7 +1605,7 @@ function MPT:ApplyLayout()
         -- PB/delta text: tucked just left of the RESERVED worst-case timer
         -- width (f._timerResW, config pass) — close to the timer, and still
         -- jitter-proof because it aligns to the reservation, never the live
-        -- string (2026-07-02 design: reservation-tuck).
+        -- string (design: reservation-tuck).
         f.timerPBText:ClearAllPoints()
         f.timerPBText:SetPoint("RIGHT", f, "TOPRIGHT",
             -(PAD + (f._timerResW or 0) + TIMER_PB_GAP), y - rowH / 2)

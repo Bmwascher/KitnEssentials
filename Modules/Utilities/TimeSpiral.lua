@@ -41,7 +41,7 @@ local TIME_SPIRAL_DURATION = 10.5
 -- (Druid Dash/Tiger Dash, Mage Blink/Shimmer, Monk Roll/Chi Torpedo,
 -- Shaman Gust of Wind/Spirit Walk/Spiritwalker's Grace) list multiple
 -- entries so detection works regardless of which talent the player took.
--- Adapted from NorskenUI v3.5 Core/Constants.lua + KE-specific extensions.
+-- Shared constants plus KE-specific extensions.
 local PRIMARY_BY_SPEC = {
     -- Death Knight
     [250]  = { { 48265, 237561 } },                                    -- Blood: Death's Advance

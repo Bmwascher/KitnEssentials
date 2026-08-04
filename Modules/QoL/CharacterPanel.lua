@@ -1251,8 +1251,8 @@ function CP:UpdateSlotTrackIndicator(slotFrame, slotID, unit, data)
 
     -- EllesmereUI prints the upgrade track beside its own item level ("(Myth)"),
     -- so our corner letter is the same fact twice. It does not overlap theirs,
-    -- but two readings of one thing on every slot is clutter -- Brandon's call,
-    -- 2026-08-03. Only while EUI is actually drawing it on THIS frame: its
+    -- but two readings of one thing on every slot is clutter. Suppressed only
+    -- while EUI is actually drawing it on THIS frame: its
     -- showUpgradeTrack / inspectShowUpgradeTrack toggles turn it off separately,
     -- and then ours is the only one left. Bail before the tooltip read too --
     -- GetItemTrack allocates one per slot just to decide the letter.
@@ -2255,8 +2255,7 @@ function CP:CreateSocketButton(index)
     btn.qualityFrame, btn.quality = CreateQualityOverlay(btn)
 
     btn:SetScript("OnEnter", function(self)
-        -- Mirrors the enchant button's own OnEnter, and the reference's
-        -- (NorskenUI v6 CharacterPanel.lua). Without it, sliding from the
+        -- Mirrors the enchant button's own OnEnter. Without it, sliding from the
         -- enchant popup onto a socket leaves BOTH popups up: IsMouseOverGemUI
         -- now recognises the socket you just moved onto, so the enchant popup's
         -- 0.05s close timer sees the bar still hovered and bails.
@@ -2497,8 +2496,8 @@ function CP:RefreshSocketButtons()
     -- EllesmereUI ships the same socket row along the bottom of its themed
     -- sheet (SocketPanel.lua: one icon per equipped socket, click for a bag-gem
     -- flyout). Only the SOCKETS stand down -- the enchant button below has no
-    -- EUI equivalent, so the bar stays and carries it alone. Brandon's call,
-    -- 2026-08-03. The scan is skipped too: it walks every equipped item.
+    -- EUI equivalent, so the bar stays and carries it alone. The scan is skipped
+    -- too: it walks every equipped item.
     if not KE:EUIDrawsSlotElement("player", "socketPanel") then
         local allSockets = self:ScanAllEquippedSockets()
         for _, itemSocketInfo in ipairs(allSockets) do
@@ -2752,11 +2751,10 @@ end
 ---------------------------------------------------------------------------------
 -- One extra button on the right end of the socket bar. Hovering it lists every
 -- enchant in your bags; clicking a row starts Blizzard's normal "now click the
--- item" flow. Ported from NorskenUI v6 CharacterPanel.lua. Three
--- deliberate deviations from that source, each noted at its site below.
+-- item" flow.
 
--- Enchanting profession icon. The reference uses a bare fileID (4620672); a
--- named texture path says what it is and survives an asset renumber.
+-- Enchanting profession icon. A named texture path rather than a bare fileID:
+-- it says what it is and survives an asset renumber.
 local ENCHANT_BUTTON_ICON = "Interface\\Icons\\Trade_Engraving"
 
 -- Which slots an enchant targets, resolved from words in its tooltip. English
@@ -2843,9 +2841,7 @@ end
 
 -- Slots KE will not offer an enchant for, whatever the tooltip claims.
 --
---   [7] legs -- armour kits. The reference excludes them with no rationale in
---       its source; Brandon confirmed why 2026-08-03: they did not work
---       reliably there either.
+--   [7] legs -- armour kits, which do not apply reliably through this flow.
 --
 -- Head is NOT in here, and must not go back in: Midnight ships current helm
 -- enchants. See BLOCKED_ENCHANT_ITEMS below for what actually fails.
@@ -2858,7 +2854,7 @@ local UNOFFERABLE_ENCHANT_SLOTS = { [7] = true }
 --   [210494] Incandescent Essence
 --
 -- This is a blacklist rather than a rule because the in-game data gives no rule
--- to write. Probed 2026-08-03, every enchant in one bag at once:
+-- to write. Probed in game, every enchant in one bag at once:
 --
 --   itemID  name                                        subclass  expansion
 --   244007  Enchant Helm - Empowered Rune of Avoidance   0         11   works
@@ -3093,8 +3089,8 @@ function CP:CreateEnchantRow(index)
             CP:ShowSlotHighlight(button.targetSlotID)
         end
         if button.enchantData and button.enchantData.link then
-            -- 40px right of the row put it well clear of the popup; Brandon
-            -- read that as detached. 8px keeps the gap without the drift.
+            -- 40px right of the row cleared the popup but read as detached.
+            -- 8px keeps the gap without the drift.
             GameTooltip:SetOwner(button, "ANCHOR_RIGHT", 8, 0)
             GameTooltip:SetHyperlink(button.enchantData.link)
             GameTooltip:Show()
