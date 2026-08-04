@@ -533,7 +533,7 @@ local DIFF_FIELDS = {
 }
 
 -- Fields the upstream ENGINE consumes but KE deliberately does not port
--- (audit F3, 2026-07-18: targetBuffCountDeltaOnSuccess — an abandoned
+-- (targetBuffCountDeltaOnSuccess — an abandoned
 -- upstream experiment; its one historical row, Vicious Ambush in v26.5.12,
 -- was superseded by castStartAuraDelta in v26.6.29. Decision: no KE runtime
 -- until a real row exists). A row in the PRIMARY build would flow into
@@ -774,8 +774,7 @@ for _, field in ipairs(UNPORTED_RUNTIME_FIELDS) do
     if #hits > 0 then
         print("  *** WARNING: PRIMARY data now ships '" .. field .. "' ("
             .. table.concat(hits, ", ") .. ") — KE has NO runtime consumer "
-            .. "for it. Revisit the audit F3 port decision "
-            .. "(dev/docs/audits/2026-07-18-trash-module-exboss-audit.md) "
+            .. "for it. Revisit the port decision "
             .. "before shipping this data refresh. ***")
     end
 end

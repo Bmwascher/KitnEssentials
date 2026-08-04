@@ -1339,9 +1339,9 @@ function L.loadColorPicker(overrides)
 end
 
 -- Modules/QoL/MoveFrames.lua. GetFrame is called directly by MF.HandleFrame
--- (<REF>:521); both frame tables are referenced directly by MF.OnEnable
--- (<REF>:682 and <REF>:693); disabled is the file-local table MF:SetMovable
--- writes to (<REF>:633) -- all four seams are one debug.getupvalue hop.
+--; both frame tables are referenced directly by MF.OnEnable
+--; disabled is the file-local table MF:SetMovable
+-- writes to -- all four seams are one debug.getupvalue hop.
 -- strsplit is delimiter-first and not supplied by _wow_mock.lua; the module
 -- captures it as a file-scope local, so a real equivalent must be on _G
 -- before helpers.loadModule -- reusing wowStrsplit above (already
@@ -1372,7 +1372,7 @@ function L.loadMoveFrames(overrides)
 end
 
 -- Modules/QoL/RaidControl.lua captures WoW globals as file-scope upvalues AND
--- calls SetGrabCoords three times at file scope (<REF>:110-112), so
+-- calls SetGrabCoords three times at file scope, so
 -- GetTexCoordsByGrid, SOUNDKIT and RAID_CLASS_COLORS must exist on _G BEFORE
 -- helpers.loadModule runs or the file errors while loading.
 -- Seams, and the hop chain that reaches each:
@@ -1412,7 +1412,7 @@ function L.loadRaidControl(overrides)
     _G.InCombatLockdown = overrides.InCombatLockdown or function() return false end
     _G.IsInInstance = overrides.IsInInstance or function() return false, "none" end
     _G.IsInGroup = overrides.IsInGroup or function() return false end
-    -- UIParent is captured as a file-scope local at <REF>:74, so it must exist
+    -- UIParent is captured as a file-scope local, so it must exist
     -- on _G BEFORE loadModule. Setting it afterwards has no effect on the
     -- module's captured upvalue -- ScreenPosition would read a stale table.
     _G.UIParent = overrides.UIParent
@@ -1441,13 +1441,13 @@ end
 -- helpers.loadModule runs -- setting one afterwards leaves the module
 -- holding a stale upvalue. installMock(overrides, {}) is required even though
 -- no defaults are needed: the continuation driver calls CreateFrame at file
--- scope (<REF>:490).
+-- scope.
 -- Groups (engine state) is reached through GS.GetSortedGroup's upvalues;
 -- writing Processing/ProcessStart into it drives the in-progress refusal
 -- rule. Returns GS, KE, seams.
 function L.loadGroupSort(overrides)
     overrides = overrides or {}
-    -- The continuation driver calls CreateFrame at FILE SCOPE (<REF>:490), so
+    -- The continuation driver calls CreateFrame at FILE SCOPE, so
     -- installMock cannot be skipped.
     installMock(overrides, {})
     helpers.installAddonShim()

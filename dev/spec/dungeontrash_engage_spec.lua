@@ -1,8 +1,8 @@
 -- Tier 2: DungeonTrash engage-gated first-cast seeding (Batch B).
 -- A mob that is BOTH resolved and engaged gets speculative "enter" anchors +
 -- first-cast countdowns for every curated spell before it ever casts. The
--- 2026-07-07 revert taught the failure mode (seeding from plate-visibility lit
--- up the whole room), so the gates ARE the feature: these specs pin that a
+-- failure mode is known (seeding from plate-visibility lit up the whole room),
+-- so the gates ARE the feature: these specs pin that a
 -- seed happens only with combat evidence, only once, and never clobbers a
 -- real anchor. Live alert rendering stays in-game-only.
 
@@ -428,7 +428,7 @@ describe("DungeonTrash — engage-gated first-cast seeding", function()
     -- kick evidence (reference parity: MarkRuntimeChannelStop feeds it only
     -- into pendingInterrupted; the Layer1-visible sawInterrupted latches
     -- ONLY from the INTERRUPTED/FAILED events). Hardening alongside the
-    -- 2026-07-24 keep-locked fix: a Shadowmeld breaking a channel aimed at
+    -- Keep-locked fix: a Shadowmeld breaking a channel aimed at
     -- the melder (Riftbreath's channel phase) would stop it with
     -- interruptedBy present, and the old latch here rejected every
     -- cannotInterrupt Academy row exactly like the FAILED latch had.
