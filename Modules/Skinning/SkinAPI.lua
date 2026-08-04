@@ -2333,7 +2333,7 @@ function S.SetSkinFont(face, size, outline)
     -- An empty face means the addon's own font, which is what FONT_FACE already
     -- holds by default.
     if face ~= nil then
-        local resolved = (face == "" or face == nil) and "Expressway" or face
+        local resolved = (face == "") and "Expressway" or face
         if resolved ~= S.FONT_FACE then
             S.FONT_FACE = resolved
             changed = true

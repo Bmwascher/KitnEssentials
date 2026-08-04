@@ -262,8 +262,8 @@ end
 -- nothing to skin at all, so "(not installed)" is the more useful message and
 -- wins over a partial-coverage note. "partial" cannot also be not-installed
 -- today -- FRAME_SKINS rows carry no `addon` field, so AddonInstalled always
--- returns true for them (:158-162) -- but the branch order below is written
--- explicitly rather than relying on that.
+-- returns true for them -- but the branch order below is written explicitly
+-- rather than relying on that.
 -- Resolves one row's rendering: what it says, whether it tips, whether it is
 -- greyed. Shared by the grid and the solo rows so the two cannot drift.
 local function ResolveRow(entry)
