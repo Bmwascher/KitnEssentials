@@ -313,7 +313,7 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
     local card6 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
     manager:Register(card6, "all")
 
-    local row6note = GUIFrame:CreateRow(card6.content, 50)
+    local row6note = GUIFrame:CreateRow(card6.content, Theme.rowHeightNote)
     local note6 = GUIFrame:CreateText(row6note,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " Duration Text is the base color for the timer/count above each icon.\n" ..
@@ -321,7 +321,7 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
         50, "hide")
     row6note:AddWidget(note6, 1)
     manager:Register(note6, "all")
-    card6:AddRow(row6note, 50)
+    card6:AddRow(row6note, Theme.rowHeightNote)
 
     local row6 = GUIFrame:CreateRow(card6.content, Theme.rowHeightLast)
     local durationColorPicker = GUIFrame:CreateColorPicker(row6, "Duration Text", {

@@ -696,7 +696,7 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
     -- stack/reorder, or drag toward a column's edge (or off the map) to peel a window
     -- into its own new column. The live line preview shows the result before release
     -- (horizontal = stack, vertical = new column), so no separate buttons are needed.
-    local arrNoteRow = GUIFrame:CreateRow(card1.content, 50)
+    local arrNoteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightNote)
     local arrNote = GUIFrame:CreateText(arrNoteRow,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " Drag onto a window's center to stack it; drag to a side or off the edge for a new column.\n" ..
@@ -705,7 +705,7 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
         50, "hide")
     arrNoteRow:AddWidget(arrNote, 1)
     manager:Register(arrNote, "all")
-    card1:AddRow(arrNoteRow, 50, 0)
+    card1:AddRow(arrNoteRow, Theme.rowHeightNote, 0)
 
     yOffset = card1:GetNextOffset()
 
@@ -796,7 +796,7 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
                 end
             end
 
-            local szNoteRow = GUIFrame:CreateRow(sizeCard.content, 50)
+            local szNoteRow = GUIFrame:CreateRow(sizeCard.content, Theme.rowHeightNote)
             local szNote = GUIFrame:CreateText(szNoteRow,
                 KE:ColorTextByTheme("Note"),
                 KE:ColorTextByTheme("-") .. " Each slider splits just its two neighbours; the rest stay put.\n" ..
@@ -804,7 +804,7 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
                 50, "hide")
             szNoteRow:AddWidget(szNote, 1)
             manager:Register(szNote, "all")
-            sizeCard:AddRow(szNoteRow, 50, 0)
+            sizeCard:AddRow(szNoteRow, Theme.rowHeightNote, 0)
 
             yOffset = sizeCard:GetNextOffset()
         end
@@ -829,7 +829,7 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
     manager:Register(ctxDropdown, "all")
     card2:AddRow(rowCtx, Theme.rowHeight)
 
-    local ctxNoteRow = GUIFrame:CreateRow(card2.content, 50)
+    local ctxNoteRow = GUIFrame:CreateRow(card2.content, Theme.rowHeightNote)
     local ctxNote = GUIFrame:CreateText(ctxNoteRow,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " Defaults auto-apply when you enter that content. Unset contexts inherit Default.\n" ..
@@ -837,7 +837,7 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
         50, "hide")
     ctxNoteRow:AddWidget(ctxNote, 1)
     manager:Register(ctxNote, "all")
-    card2:AddRow(ctxNoteRow, 50, 0)
+    card2:AddRow(ctxNoteRow, Theme.rowHeightNote, 0)
 
     -- Column layout shared by the header + every window row (so they align):
     --   badge 0.08 | enable 0.16 | Type 0.38 | Segment 0.38.
@@ -1584,7 +1584,7 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
     manager:Register(instChk, "all")
     cardVis:AddRow(rowVis, Theme.rowHeight)
 
-    local visNoteRow = GUIFrame:CreateRow(cardVis.content, 50)
+    local visNoteRow = GUIFrame:CreateRow(cardVis.content, Theme.rowHeightNote)
     local visNote = GUIFrame:CreateText(visNoteRow,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " Both combine: the meter shows only when every enabled condition is met.\n" ..
@@ -1592,7 +1592,7 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
         50, "hide")
     visNoteRow:AddWidget(visNote, 1)
     manager:Register(visNote, "all")
-    cardVis:AddRow(visNoteRow, 50, 0)
+    cardVis:AddRow(visNoteRow, Theme.rowHeightNote, 0)
 
     yOffset = cardVis:GetNextOffset()
     return yOffset

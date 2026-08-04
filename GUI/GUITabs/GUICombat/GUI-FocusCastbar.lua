@@ -457,7 +457,7 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     manager:Register(opacitySlider, "all")
     cardRange:AddRow(rangeRow1, Theme.rowHeight)
 
-    local rangeNoteRow = GUIFrame:CreateRow(cardRange.content, 50)
+    local rangeNoteRow = GUIFrame:CreateRow(cardRange.content, Theme.rowHeightNote)
     local rangeNote = GUIFrame:CreateText(rangeNoteRow,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " Out-of-Range dims the bar when your interrupt can't reach the focus (1 = off).\n" ..
@@ -465,7 +465,7 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
         50, "hide")
     rangeNoteRow:AddWidget(rangeNote, 1)
     manager:Register(rangeNote, "all")
-    cardRange:AddRow(rangeNoteRow, 50, 0)
+    cardRange:AddRow(rangeNoteRow, Theme.rowHeightNote, 0)
 
     yOffset = cardRange:GetNextOffset()
 
@@ -573,7 +573,7 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     manager:Register(glowBorderCheck, "all")
     cardGlow:AddRow(glowRow5, Theme.rowHeight)
 
-    local glowNoteRow = GUIFrame:CreateRow(cardGlow.content, 50)
+    local glowNoteRow = GUIFrame:CreateRow(cardGlow.content, Theme.rowHeightNote)
     local glowNote = GUIFrame:CreateText(glowNoteRow,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " Fires only on casts Blizzard flags important; changes apply on the next cast.\n" ..
@@ -581,7 +581,7 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
         50, "hide")
     glowNoteRow:AddWidget(glowNote, 1)
     manager:Register(glowNote, "all")
-    cardGlow:AddRow(glowNoteRow, 50, 0)
+    cardGlow:AddRow(glowNoteRow, Theme.rowHeightNote, 0)
 
     yOffset = cardGlow:GetNextOffset()
 
@@ -647,7 +647,7 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     manager:Register(muteCB, "all")
     cardSound:AddRow(rowSndC, Theme.rowHeightLast)
 
-    local rowSndNote = GUIFrame:CreateRow(cardSound.content, 50)
+    local rowSndNote = GUIFrame:CreateRow(cardSound.content, Theme.rowHeightNote)
     local sndNote = GUIFrame:CreateText(rowSndNote,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " Plays when your focus target starts casting.\n" ..
@@ -655,7 +655,7 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
         50, "hide")
     rowSndNote:AddWidget(sndNote, 1)
     manager:Register(sndNote, "all")
-    cardSound:AddRow(rowSndNote, 50, 0)
+    cardSound:AddRow(rowSndNote, Theme.rowHeightNote, 0)
 
     yOffset = cardSound:GetNextOffset()
 

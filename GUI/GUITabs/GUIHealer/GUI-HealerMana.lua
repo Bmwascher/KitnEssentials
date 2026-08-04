@@ -128,14 +128,14 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
 
     -- Clarify the scope of these controls: they only affect Position Settings,
     -- not Appearance / Raid Mode / Font (those are shared across both modes).
-    local posModeNoteRow = GUIFrame:CreateRow(cardPosMode.content, 50)
+    local posModeNoteRow = GUIFrame:CreateRow(cardPosMode.content, Theme.rowHeightNote)
     local posModeNote = GUIFrame:CreateText(posModeNoteRow,
         KE:ColorTextByTheme("Note"),
         "These controls only affect the Position Settings below. Appearance, " ..
         "Raid Mode, and Font settings are shared between Dungeon and Raid.",
         50, "hide")
     posModeNoteRow:AddWidget(posModeNote, 1)
-    cardPosMode:AddRow(posModeNoteRow, 50, 0)
+    cardPosMode:AddRow(posModeNoteRow, Theme.rowHeightNote, 0)
     yOffset = cardPosMode:GetNextOffset()
 
     ----------------------------------------------------------------

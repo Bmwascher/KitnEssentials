@@ -61,13 +61,13 @@ GUIFrame:RegisterContent("CopyAnything", function(scrollChild, yOffset)
         KE:Print("Copy Anything: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, 40)
+    local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " Hover anything with a tooltip and press your copy key to open a small window with its ID ready to copy. Does nothing in combat or in a Mythic+ run.",
         40, "hide")
     noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, 40, 0)
+    card1:AddRow(noteRow, Theme.rowHeight, 0)
 
     yOffset = card1:GetNextOffset()
 

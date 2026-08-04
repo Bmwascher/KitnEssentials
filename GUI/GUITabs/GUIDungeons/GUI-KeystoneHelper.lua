@@ -50,14 +50,14 @@ GUIFrame:RegisterContent("KeystoneHelper", function(scrollChild, yOffset)
         KE:Print("Keystone Helper: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, 50)
+    local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightNote)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " Bundles three Mythic+ QoL reminders: instance reset " ..
         "announce, reroll-your-key, and \"is this your key?\".",
         50, "hide")
     noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, 50, 0)
+    card1:AddRow(noteRow, Theme.rowHeightNote, 0)
 
     yOffset = card1:GetNextOffset()
 
@@ -184,14 +184,14 @@ GUIFrame:RegisterContent("KeystoneHelper", function(scrollChild, yOffset)
     manager:Register(keyColorPicker, "all")
     cardLook:AddRow(rowL2, Theme.rowHeight)
 
-    local noteRowL = GUIFrame:CreateRow(cardLook.content, 50)
+    local noteRowL = GUIFrame:CreateRow(cardLook.content, Theme.rowHeightNote)
     local posNote = GUIFrame:CreateText(noteRowL,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " The preview shows both reminders side by side: the left copy " ..
         "follows the Position settings below; the right copy only previews the look.",
         50, "hide")
     noteRowL:AddWidget(posNote, 1)
-    cardLook:AddRow(noteRowL, 50, 0)
+    cardLook:AddRow(noteRowL, Theme.rowHeightNote, 0)
 
     yOffset = cardLook:GetNextOffset()
 
