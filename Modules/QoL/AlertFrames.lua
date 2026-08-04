@@ -93,8 +93,7 @@ local function GetPerksAnchor()
 end
 
 -- Pure grow-direction decision, extracted out of PostAlertMove so it is
--- directly unit-testable (task-4 sanctioned deviation -- the reference kept
--- this inline). centreY can be nil pre-layout (a frame not yet measured
+-- directly unit-testable. centreY can be nil pre-layout (a frame not yet measured
 -- reports 1x1/nil, feedback_prelayout_measurement.md); screenTop can be nil
 -- for the same reason. Either nil fails safe to "grow down". hasPerksAnchor
 -- always wins: Trading Post re-basing always grows up.

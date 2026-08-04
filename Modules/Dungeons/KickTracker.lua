@@ -123,7 +123,7 @@ INTERRUPT_SPELL_IDS[119914] = true  -- Command Demon: Axe Toss
 
 -- Class-default kicks for members whose spec is still unknown (teammates
 -- without a LibSpec-carrying addon never broadcast their spec). Values match
--- INTERRUPT_DATA; where specs differ the reference's lowest-CD rule applies.
+-- INTERRUPT_DATA; where specs differ the lowest CD wins.
 -- allRoles = every spec of the class has this kick; otherwise only a
 -- DAMAGER/TANK role assignment proves a kicking spec. Healer shamans keep
 -- Wind Shear at its 30s CD.
@@ -207,7 +207,7 @@ function KT:GetInterruptDataForSpec(specID)
     return nil
 end
 
--- Spec unknown (teammate without a LibSpec-carrying addon): reference
+-- Spec unknown (teammate without a LibSpec-carrying addon): the
 -- safe-optimistic rule — assign the class-default kick only when it can't
 -- be wrong (every spec of the class kicks, or a DPS/TANK role proves a
 -- kicking spec; ambiguous healer/NONE stays hidden rather than showing a
@@ -421,7 +421,7 @@ function KT:ProcessTeammateKick(interrupterGuid, interruptedSpellID)
     if not ok or name == nil then return end
 
     -- classToken may be SECRET: still usable for class COLOR (C-side
-    -- GetClassColor is AllowedWhenTainted — reference-proven); only a PLAIN
+    -- GetClassColor is AllowedWhenTainted); only a PLAIN
     -- token may be used for attribution comparisons below.
     local okClass, _, cf = pcall(UnitClassFromGUID, interrupterGuid)
     local classToken = (okClass and cf ~= nil) and cf or nil
@@ -430,7 +430,7 @@ function KT:ProcessTeammateKick(interrupterGuid, interruptedSpellID)
     -- Deterministic attribution — flip the real roster bar when identity
     -- data is readable: (1) plain name -> exact member; (2) plain class ->
     -- the ONLY kick-capable member of that class. No guessing beyond that
-    -- (the references discarded roster heuristics for false attributions).
+    -- (roster heuristics produce false attributions).
     -- In-game: name AND classFilename are BOTH secret in live
     -- dungeon combat (classFilename's missing secret flag in the generated
     -- docs is an annotation gap) — so this waterfall never fires in
@@ -509,7 +509,7 @@ function KT:ProcessTeammateKick(interrupterGuid, interruptedSpellID)
         self:ReleaseBar("record" .. old.id)
     end
 
-    -- Stash grace (reference pattern): the local nameplate event always
+    -- Stash grace: the local nameplate event always
     -- beats the network, so a comm user's kick would blink a record before
     -- the comm claims it. Hold the record invisible for the grace window —
     -- claimed records die unseen; unclaimed ones render 0.4s late.
@@ -555,7 +555,7 @@ local COMM_PREFIX = "KEKick"
 -- KICK from any class-auto-registered party member — no HELLO handshake
 -- required — and normalizes senders with Ambiguate like we do. Wire format:
 -- "B1;KICK;spellID;cd". Format drift on their side degrades to ignored
--- messages, never errors (watch on reference syncs).
+-- messages, never errors.
 local BLIZZI_PREFIX = "BliZziIT"
 local COMM_SUCCESS = Enum and Enum.SendAddonMessageResult
     and Enum.SendAddonMessageResult.Success or 0
@@ -577,7 +577,7 @@ local function transmitKick(prefix, msg)
     if KT._commBlocked then return end
 
     -- Non-lockdown failure: try PARTY (premade groups inside instances),
-    -- then whisper each member (reference fallback chain).
+    -- then whisper each member.
     if inInstanceGroup then
         ok, ret = pcall(C_ChatInfo.SendAddonMessage, prefix, msg, "PARTY")
         if ok and ret == COMM_SUCCESS then return end

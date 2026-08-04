@@ -3,10 +3,9 @@
 -- ║  Purpose: Skins the progress bars that appear inside     ║
 -- ║           tooltips (reputation, experience).             ║
 -- ║  Owner: SkinTooltips calls the installer from OnEnable.  ║
--- ║  The reference dispatches this through its always-on     ║
--- ║  skin engine; KE's equivalent dispatch is gated on the   ║
--- ║  separate Blizzard Frames toggle, so it would never fire ║
--- ║  for a user who only enabled tooltips.                   ║
+-- ║  Not dispatched by the skin engine: that dispatch is     ║
+-- ║  gated on the separate Blizzard Frames toggle and would  ║
+-- ║  never fire for a user who only enabled tooltips.        ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -16,10 +15,10 @@ local _G = _G
 local hooksecurefunc = hooksecurefunc
 
 local function SkinBar(bar)
-    -- Ported verbatim, including the ordering quirk: this sets `skinned`
+    -- Ordering quirk, deliberate: this sets `skinned`
     -- before S.StatusBar runs, and S.StatusBar early-returns on that flag,
-    -- so its backdrop call is dead. That is upstream's behaviour and the
-    -- look this port is matching. Do not "fix" it.
+    -- so its backdrop call is dead. That dead call is the look we want.
+    -- Do not "fix" it.
     if S.data(bar).skinned then return end
     S.data(bar).skinned = true
     S.StripTextures(bar)

@@ -368,7 +368,7 @@ end
 ---------------------------------------------------------------------------------
 -- Event handlers
 ---------------------------------------------------------------------------------
--- Resolve a usable TTS voice (ported from AdvancedFocusCastBar): honor the
+-- Resolve a usable TTS voice: honor the
 -- player's standard/alternate preference, fall back to the other, then to the
 -- default standard voice option.
 local function FindTTSVoiceID()

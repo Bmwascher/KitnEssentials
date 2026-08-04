@@ -91,9 +91,8 @@ function DTrash:SetSpellDisabled(mapID, npcID, spellID, disabled)
     -- consumed the spell's armed output at fire time (deferred reveals died
     -- at their gate re-check; the marker prune deleted stored predictions)
     -- and nothing else ever re-reads the still-correct anchors — the spell
-    -- stayed output-dead until its next COMPLETED cast. The reference
-    -- recovers within one refresh via its config-revision schedule rebuild;
-    -- re-arming the affected runtimes from their anchors reproduces that.
+    -- stayed output-dead until its next COMPLETED cast. Re-arm the
+    -- affected runtimes from their anchors so recovery is immediate.
     if not disabled and self.monitoring and mapID == self.currentMapID then
         for _, rt in pairs(self.tracked) do
             if rt.matchedNPCID == npcID then

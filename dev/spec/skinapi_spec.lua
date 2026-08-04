@@ -85,7 +85,7 @@ describe("SkinAPI palette", function()
         S = KE.Skins
     end)
 
-    it("keeps the reference greys verbatim", function()
+    it("keeps the structural greys unthemed", function()
         assert.same({ 0.031, 0.031, 0.031, 0.80 }, S.palette.window)
         assert.same({ 0.055, 0.055, 0.055, 0.90 }, S.palette.control)
         assert.same({ 0.06, 0.06, 0.06, 0.80 }, S.palette.panel)
@@ -93,7 +93,7 @@ describe("SkinAPI palette", function()
         assert.same({ 0, 0, 0, 1 }, S.palette.border)
     end)
 
-    it("keeps the reference brand alphas verbatim", function()
+    it("keeps the brand alphas unthemed", function()
         assert.equals(0.8, S.palette.brandFillA)
         assert.equals(0.35, S.palette.brandRestA)
     end)
@@ -104,7 +104,7 @@ describe("SkinAPI palette", function()
         assert.near(0.549, S.palette.brand[3], 1e-9)
     end)
 
-    it("keeps the reference hover wash verbatim, rgb included", function()
+    it("keeps the hover wash unthemed, rgb included", function()
         -- Was themed from accentHover. Because accent and accentHover share
         -- one rgb and differ only in alpha, that made hover identical to
         -- brand and every rest/hover pair invisible. armHover applies 0.15
@@ -273,9 +273,8 @@ describe("SkinAPI SetFont", function()
         assert.equals(1, #applied)
     end)
 
-    -- The lazy offset init is plan-introduced: the reference reads a
-    -- different db path (SkinningAPI.lua). Exercise the repointed
-    -- one so a wrong key surfaces here rather than in game.
+    -- Exercise the lazy offset init so a wrong db key surfaces here rather
+    -- than in game.
     it("picks the offset up from the database on first call", function()
         KE.db.profile.Skinning.BlizzardFrames.FontOffset = 2
         local fs = fontString()
@@ -479,9 +478,9 @@ describe("A6.1 helper surface", function()
 
     it("leaks no global named RecenterTabText", function()
         L.loadSkinAPI()
-        -- The reference forward-declares it as a local at SkinningAPI.lua
-        -- so the eight call sites below it can reach it. Dropping that line
-        -- turns the definition into a global write.
+        -- It is forward-declared as a local so the eight call sites below it
+        -- can reach it. Dropping that line turns the definition into a
+        -- global write.
         assert.is_nil(rawget(_G, "RecenterTabText"))
     end)
 

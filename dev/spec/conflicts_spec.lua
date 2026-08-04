@@ -263,10 +263,9 @@ describe("Core/Conflicts.lua prompt queue", function()
         assert.is_true(prompts[2].reload)
     end)
 
-    -- Regression guard for deviation 4. The reference fires a reload prompt
-    -- per choice and never sets pendingReload, so with KE's singleton dialog
-    -- the first reload prompt would be replaced by the second conflict prompt
-    -- before it could be clicked.
+    -- Regression guard. Firing a reload prompt per choice without setting
+    -- pendingReload lets the singleton dialog replace the first reload prompt
+    -- with the second conflict prompt before it can be clicked.
     it("shows both conflicts first, then exactly one reload prompt", function()
         login({ "TipTac", "TacoTip" })
         assert.equals(1, #prompts)

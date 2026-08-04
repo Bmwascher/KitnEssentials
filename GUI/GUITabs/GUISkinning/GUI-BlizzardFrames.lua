@@ -24,11 +24,10 @@ end
 -- applies and reverts live instead of on reload. An entry with `isOn` and
 -- `onToggle` bypasses the db.Skins read and write entirely.
 --
--- Ten keys ported alongside these get no row here, on purpose: AdventureMap,
+-- Ten keys get no row here, on purpose: AdventureMap,
 -- Battlenet, ChromieTime, CooldownManager, ExtraButtons, Help, PetBattle,
 -- Runeforge, TimeManager, TutorialFrame -- minor or loading-screen-rare
--- frames (reference rationale: GUI/Tabs/Skinning/GUI-BlizzardFrames.lua:
--- 118-124). A key with no row still dispatches and defaults on, because the
+-- frames. A key with no row still dispatches and defaults on, because the
 -- gate above reads Skins[key] ~= false -- don't "fix" this by adding rows.
 local FRAME_SKINS = {
     { key = "Achievement",              text = "Achievements" },

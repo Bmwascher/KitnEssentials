@@ -312,8 +312,7 @@ end
 -- to the DB but the cache never invalidates: nothing restyles until a reload
 -- or profile switch, and even newly created widgets get the stale font.
 -- BlizzardFonts.lua already calls UpdateDB in this same slot of its
--- own ApplySettings; this mirrors that shape. Intentional departure from the
--- reference, not a port gap.
+-- own ApplySettings; this mirrors that shape.
 function UIW:ApplySettings()
     if KE:ShouldNotLoadModule() then return end
     self:UpdateDB()

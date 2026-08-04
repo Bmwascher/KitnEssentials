@@ -1,7 +1,7 @@
--- Tier 2: DungeonTrash CAST_START pending start-advance (WS1).
+-- Tier 2: DungeonTrash CAST_START pending start-advance.
 -- CAST_START-mode spells anchor their cd at the observed cast START, whatever
--- the outcome — the reference's ONLY anchor path for them (its success-mode
--- inference returns nil for CAST_START), and the reason a KICKED Pulsing
+-- the outcome — their ONLY anchor path, since success-mode
+-- inference returns nil for CAST_START, and the reason a KICKED Pulsing
 -- Shriek still counts to its next cast. These specs pin the arm/consume
 -- lifecycle: armed per non-transition start, consumed once on resolution +
 -- sampled fingerprints, surviving interrupts, never double-advancing the
@@ -166,11 +166,11 @@ describe("DungeonTrash — CAST_START start-advance", function()
         assert.equals(1, hits)
     end)
 
-    -- Needs-based fingerprint wait (drift review B5): the sampler is the sole
+    -- Needs-based fingerprint wait: the sampler is the sole
     -- writer of startFingerprintsReady, so an unconditional wait let a plate
     -- blink inside the 0.10s window strand the pending forever. With no
     -- curated start fingerprint there is nothing to sample — consume without
-    -- the wait (the reference's waits exist only for spells that curate one).
+    -- the wait.
     it("consumption does not wait for the sampler when nothing curates a start fingerprint", function()
         local rt = trackResolved("nameplate1")
         DTrash:OnChannelStart(nil, "nameplate1", nil, nil, 7)
@@ -221,12 +221,12 @@ describe("DungeonTrash — CAST_START start-advance", function()
         assert.equals("channel", rt.pendingStartAdvanceKind)
     end)
 
-    -- Drift review D2: the reference pairs the incoming channel against the
-    -- STILL-ACTIVE cast (isCastIntoChannel needs no processed STOP) — a late,
+    -- The incoming channel pairs against the
+    -- STILL-ACTIVE cast, needing no processed STOP — a late,
     -- reordered or dropped STOP must not break the transition proof. Each
-    -- KE-only miss fired the phantom one-phase twin credit AND anchored the
+    -- miss fired the phantom one-phase twin credit AND anchored the
     -- channel late by castTime.
-    it("an implied-stop +1 channel pairs against the STILL-ACTIVE cast (D2)", function()
+    it("an implied-stop +1 channel pairs against the STILL-ACTIVE cast", function()
         DTrash:OnNameplateAdded(nil, "nameplate1")
         local rt = DTrash.tracked.nameplate1
         DTrash:OnCastStart(nil, "nameplate1", nil, nil, 5)

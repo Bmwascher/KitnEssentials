@@ -215,9 +215,9 @@ describe("DungeonTrash — engage-gated first-cast seeding", function()
         assert.equals(124, rt.anchors[50].nextStartAt)           -- successAt(104) + cd 20
     end)
 
-    -- Drift review B7: a deferred credit lands only under the identity that
-    -- earned it (reference: candidateChanged wipes pending success state
-    -- before consumption). A contradiction FLIP inside the 0.10s sample
+    -- A deferred credit lands only under the identity that
+    -- earned it: a candidate change wipes pending success state
+    -- before consumption. A contradiction FLIP inside the 0.10s sample
     -- window otherwise re-armed the discredited npcID's anchors and alerts
     -- right after resetResolvedOutput swept them.
     it("a deferred credit dies when the identity flips inside its window (B7)", function()
@@ -321,13 +321,12 @@ describe("DungeonTrash — engage-gated first-cast seeding", function()
         assert.is_true(#scheduled > 0)
     end)
 
-    -- Keep-locked contradiction handling (reference parity, its
-    -- ObservationTest keepLockedRuntime): a behavior contradiction commits
+    -- Keep-locked contradiction handling: a behavior contradiction commits
     -- only when re-derivation actually lands on a DIFFERENT mob. When every
     -- surviving row rejects — all five Algeth'ar Academy rows are
     -- cannotInterrupt, so a Shadowmeld-shaped interrupt latch rejects them
-    -- ALL — the identity, its lock and its output are KEPT: the reference
-    -- retains a locked in-combat runtime rather than blanking the plate
+    -- ALL — the identity, its lock and its output are KEPT: a locked
+    -- in-combat runtime is retained rather than blanking the plate
     -- forever (the disappearing-timer field report).
     it("a kick contradiction with no resolvable alternative keeps the lock and its output", function()
         KE.TrashData[1].dungeonKey = "D"
@@ -396,9 +395,9 @@ describe("DungeonTrash — engage-gated first-cast seeding", function()
         assert.is_true(rt.enterSeeded)                    -- output untouched
     end)
 
-    -- FAILED is NOT interrupt evidence (in-game Algeth'ar Academy;
-    -- documented deviation — the reference's FAILED handlers latch the same
-    -- sticky sawInterrupted a kick sets): a cast aborts on Shadowmeld / LoS /
+    -- FAILED is NOT interrupt evidence (in-game Algeth'ar Academy): latching
+    -- the same sticky sawInterrupted a kick sets is wrong because
+    -- a cast aborts on Shadowmeld / LoS /
     -- CC without proving anything about interruptibility. All five Academy
     -- trait rows are cannotInterrupt, so one abort permanently rejected every
     -- row on that plate — unresolved Ravagers never gained timers, resolved
@@ -425,10 +424,9 @@ describe("DungeonTrash — engage-gated first-cast seeding", function()
     end)
 
     -- interruptedBy on a correlated CHANNEL_STOP is a lifecycle signal, not
-    -- kick evidence (reference parity: MarkRuntimeChannelStop feeds it only
-    -- into pendingInterrupted; the Layer1-visible sawInterrupted latches
-    -- ONLY from the INTERRUPTED/FAILED events). Hardening alongside the
-    -- Keep-locked fix: a Shadowmeld breaking a channel aimed at
+    -- kick evidence: the channel stop feeds only the cast lifecycle, and
+    -- the Layer1-visible sawInterrupted latches
+    -- ONLY from the INTERRUPTED/FAILED events. A Shadowmeld breaking a channel aimed at
     -- the melder (Riftbreath's channel phase) would stop it with
     -- interruptedBy present, and the old latch here rejected every
     -- cannotInterrupt Academy row exactly like the FAILED latch had.
@@ -448,13 +446,12 @@ describe("DungeonTrash — engage-gated first-cast seeding", function()
         assert.equals("enter", rt.anchors[10].mode)   -- no success credit for the abort
     end)
 
-    -- castConfirmed gating (drift review A2): the lock's strength comes from
+    -- castConfirmed gating: the lock's strength comes from
     -- the pool shape BEFORE the cast. A multi-pool collapse can be driven by
     -- NEGATIVE evidence (an uncurated filler cast failing the true mob while
     -- coincidentally matching a sibling), so it resolves WITHOUT the lock —
-    -- Layer1 re-derivation can still heal it, approximating the reference's
-    -- stateless semantics. A verified lone survivor / levelAgreed winner
-    -- keeps earning the lock (the pinned D14 compensation).
+    -- Layer1 re-derivation can still heal it. A verified lone survivor /
+    -- levelAgreed winner keeps earning the lock.
     describe("Layer2 confirm strength", function()
         local function addTwin()
             KE.TrashData[1].mobs[222] = { npcID = 222, name = "Twin", spells = {
@@ -498,10 +495,9 @@ describe("DungeonTrash — engage-gated first-cast seeding", function()
             assert.is_true(rt.castConfirmed)
         end)
 
-        -- A5 resolve-without-lock (reference-true): a bare
+        -- Resolve-without-lock: a bare
         -- channel — transition unprovable, castIntoChannel nil — matches a
-        -- TWO-PHASE spell's channelTime as easily as a pure channel's. The
-        -- reference survives that lenient match because it never locks; KE's
+        -- TWO-PHASE spell's channelTime as easily as a pure channel's, so
         -- castConfirmed must not be earned by it. Resolve + output still arm.
         local function addTwoPhaseTwin()
             KE.TrashData[1].mobs[222] = { npcID = 222, name = "Twin", spells = {

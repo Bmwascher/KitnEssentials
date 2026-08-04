@@ -6,8 +6,8 @@
 -- ╚══════════════════════════════════════════════════════════╝
 --
 -- TAINT POSTURE -- read this before changing anything below.
--- This module deliberately taints Blizzard's secure LFGList system, at
--- parity with its reference and by explicit design grant. It rewrites
+-- This module deliberately taints Blizzard's secure LFGList system, by
+-- explicit design grant. It rewrites
 -- searchPanel.results in place, re-drives LFGListSearchPanel_UpdateResults,
 -- calls the restricted C_LFGList.Search directly, and synthesises a click
 -- on a Blizzard group button. It steps aside entirely when Premade Groups
@@ -17,8 +17,7 @@
 -- CategorySelection.selectedCategory or .selectedFilters.
 -- Do NOT describe the search as driven "purely" through
 -- LFGListSearchPanel_SetCategory/_DoSearch -- the happy path calls
--- C_LFGList.Search directly and only falls back to _DoSearch. The
--- reference's own header says "purely" and is wrong.
+-- C_LFGList.Search directly and only falls back to _DoSearch.
 --
 -- Do not harden any of the above. Do add the secret-value guards -- see
 -- SanitizeResult, which exists because GetSearchResultInfo and
@@ -75,7 +74,7 @@ end
 
 -- categoryID/filters pairs as Blizzard's category buttons carry them.
 -- 121 (Delves) is a hardcoded magic number with no fallback -- known
--- fragility, carried from the reference deliberately.
+-- fragility, accepted deliberately.
 local CATEGORY_DATA = {
     { key = "Mythic+", categoryID = _G.GROUP_FINDER_CATEGORY_ID_DUNGEONS or 2, filters = 0 },
     { key = "Raids",   categoryID = 3,   filters = 1 },
@@ -238,10 +237,10 @@ local resorting = false
 -- re-search -- which also sidesteps the "Search failed, please wait"
 -- throttle that per-click re-searches were tripping.
 local lastRawResults = {}
--- DELIBERATELY declared here rather than below OnUpdateResultList as the
--- reference does. Lua scopes a local from its declaration onward, so the
--- reference's read compiles as a never-assigned GLOBAL, permanently nil,
--- and the guard below is permanently true -- re-snapshotting from the
+-- DELIBERATELY declared here rather than below OnUpdateResultList. Lua
+-- scopes a local from its declaration onward, so a later declaration makes
+-- this read compile as a never-assigned GLOBAL, permanently nil,
+-- and the guard below permanently true -- re-snapshotting from the
 -- already-filtered list on every ReSort and defeating the whole
 -- resurrect-on-filter-relax design. luacheck reports both halves.
 local resortFromSnapshot = false
@@ -283,8 +282,7 @@ end
 --   gid / gidKnown  -- nil+false means "unreadable", skip the dungeon predicate
 --   roles           -- nil means "unreadable", skip the role predicates
 --   friends, overall, leaderScore -- 0 when unreadable
--- FAIL OPEN: an unreadable result is KEPT with neutral values, matching
--- the reference's own policy for the two sites it already guards.
+-- FAIL OPEN: an unreadable result is KEPT with neutral values.
 local function SanitizeResult(resultID, info, wantGroups, wantRoles)
     local rec = { gid = nil, gidKnown = false, roles = nil,
                   friends = 0, overall = 0, leaderScore = 0 }
@@ -293,7 +291,7 @@ local function SanitizeResult(resultID, info, wantGroups, wantRoles)
         if wantGroups then
             local ids = info.activityIDs
             -- `info.activityID` singular does not exist on LfgSearchResultData
-            -- in 12.0.7; the reference's `or` branch is dead. Kept verbatim.
+            -- in 12.0.7, so the `or` branch is dead. Kept as a guard anyway.
             local act = (ids and not SecretTable(ids)) and ids[1] or info.activityID
             if act ~= nil and not Secret(act) and C_LFGList.GetActivityInfoTable then
                 -- GetActivityInfoTable is AllowedWhenUntainted: the argument
@@ -433,7 +431,7 @@ local function OnUpdateResultList(searchPanel)
         -- GetSearchResultInfo returns nil, and the dead id sits in the
         -- list until someone hovers it.
         local info = C_LFGList.GetSearchResultInfo(resultID)
-        -- Deviation 15: positive tests, not the reference's empty leading
+        -- Positive tests, never an empty leading
         -- branch. A nil info means the listing died between Blizzard
         -- building the id list and us reading it back; it is dropped by
         -- falling through, which is safe because no button is built for it
@@ -916,8 +914,8 @@ function GFP:ApplyAndRefresh()
     -- C_LFGList.Search is HasRestrictions. It is reached SYNCHRONOUSLY
     -- from the click handler: deferring to a timer sheds the hardware
     -- context and produces ADDON_ACTION_BLOCKED. Whether an ordinary
-    -- OnClick counts as legal provenance is UNVERIFIED -- inherited from
-    -- the reference, which ships it working, and exercised by the smoke.
+    -- OnClick counts as legal provenance is UNVERIFIED -- it works in
+    -- practice and is exercised by the smoke.
     if C_LFGList and C_LFGList.Search and sp.categoryID then
         local filters = ResolveCategoryFilters(sp.categoryID, sp.filters)
         local languages = C_LFGList.GetLanguageSearchFilter and C_LFGList.GetLanguageSearchFilter()
@@ -1307,10 +1305,10 @@ local function CreateFilterPanel()
 end
 
 function GFP:UpdateMode()
-    -- UpdateMode has NO enabled check in the reference and reaches
-    -- SaveAdvancedFilter through ApplyAdvancedFilters, so a disabled
-    -- module keeps overwriting the user's Blizzard filter settings on
-    -- every category change.
+    -- The enabled check is load-bearing: UpdateMode reaches
+    -- SaveAdvancedFilter through ApplyAdvancedFilters, so without it a
+    -- disabled module keeps overwriting the user's Blizzard filter settings
+    -- on every category change.
     if not panel then return end
     if not IsActive() then return end
     local dungeonMode = IsDungeonSearchMode()
@@ -1471,13 +1469,10 @@ local function InstallEntryHook()
 end
 
 function GFP:OnEnable()
-    -- Deviation 6: the PGF bail comes FIRST. In the reference,
-    -- InstallEntryHook and the session-state reset run ABOVE the bail, so
-    -- a permanent unremovable hook plus six DB writes land even on the
-    -- "stepping aside" path. Installing a permanent hook is not stepping
-    -- aside. The hook is inert on that path -- friendResultSet is never
-    -- populated -- but that is a reason it costs little to move, not a
-    -- reason to leave it.
+    -- The PGF bail comes FIRST. With InstallEntryHook and the session-state
+    -- reset above it, a permanent unremovable hook plus six DB writes land
+    -- even on the "stepping aside" path, and installing a permanent hook is
+    -- not stepping aside.
     if PGFPresent() then
         KE:Print("Group Finder Panel disabled: Premade Groups Filter is installed and provides the same filtering.")
         return

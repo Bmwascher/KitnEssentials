@@ -6,9 +6,8 @@
 -- ║                                                          ║
 -- ║  TAINT NOTE: raising MERCHANT_ITEMS_PER_PAGE and         ║
 -- ║  creating Blizzard-named MerchantItem<N> frames means    ║
--- ║  merchant code runs tainted. The upstream project        ║
--- ║  shipped this disabled for that reason; it ships         ║
--- ║  enabled here on an explicit ruling, default OFF. If     ║
+-- ║  merchant code runs tainted. Shipped on an explicit      ║
+-- ║  ruling anyway, default OFF. If                          ║
 -- ║  a tooltip stops working after a vendor visit, or an     ║
 -- ║  "attempt to perform arithmetic on a secret number       ║
 -- ║  value" error appears, suspect this module first.        ║

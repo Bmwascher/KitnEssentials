@@ -97,8 +97,7 @@ end)
 -- C_Timer.After(0) away, the container renders one frame at Blizzard's spot
 -- before moving -- part of the "jumps to the bottom then back"
 -- report. The GroupLootContainer_Update hook always called ApplyPosition
--- synchronously; the OnShow hook did not, and nothing in this file or the
--- upstream reference explained the asymmetry.
+-- synchronously; the OnShow hook did not, and nothing explained the asymmetry.
 --
 -- The spec is falsifiable BECAUSE the loader installs an inert C_Timer: nothing
 -- deferred ever runs here, so a SetPoint landing during the handler can only
@@ -305,8 +304,8 @@ end)
 
 -- The preview must neutralize EVERY roll button, not most of them.
 --
--- Found in game: the reference lists four button keys in
--- previewButtons while CreateRollButton makes five, so Pass stayed
+-- Found in game: previewButtons listed four button keys while
+-- CreateRollButton makes five, so Pass stayed
 -- mouse-enabled during a preview and clicking it called
 -- RollOnLoot("PREVIEW", 0) -- the sentinel rollID reaching the real API.
 -- The two lists are file-locals, so this lifts each off the function that
@@ -354,7 +353,7 @@ describe("LootRoll preview button coverage", function()
 end)
 
 -- The item icon must go through the shared skinning helper, not a hardcoded
--- SetTexCoord. The reference hardcodes the crop; routing it through S.Icon is
+-- SetTexCoord. Routing it through S.Icon is
 -- what keeps this icon on the project's standard if that standard ever moves,
 -- and it is the only way the icon picks up the helper's pixel snap.
 describe("LootRoll item icon", function()

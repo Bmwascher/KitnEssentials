@@ -23,7 +23,7 @@
 -- PLAYER_REGEN_ENABLED it registers is unregistered before the event arrives.
 -- Disabling in combat therefore leaves the button up until a reload. Only a
 -- profile switch can reach that path -- the config window hides itself in
--- combat -- so it is left exactly as the reference wrote it.
+-- combat -- so it is left alone.
 --
 -- Performance: fully event-driven (GROUP_ROSTER_UPDATE, PLAYER_ENTERING_WORLD,
 -- PARTY_LEADER_CHANGED, PLAYER_DIFFICULTY_CHANGED and the combat events).

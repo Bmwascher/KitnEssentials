@@ -88,7 +88,7 @@ describe("MPT run lifecycle: mid-key exit / re-entry", function()
     it("keeps an active run when the map ID flaps while still inside", function()
         -- Re-entry PEW window: GetActiveChallengeMapID reads nil for a moment
         -- while the player is standing in the challenge instance. The run
-        -- must survive (upstream parity: reset requires being OUTSIDE).
+        -- must survive: a reset requires being OUTSIDE.
         seedActiveRun()
         activeMapID = nil
         setInstance("challenge")

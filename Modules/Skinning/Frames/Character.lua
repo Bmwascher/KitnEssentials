@@ -22,18 +22,13 @@ local TITLE_FONT = 13
 local BRAND = S.palette.brand
 
 -- Per-slot item level + gem icons used to be drawn here (EnsureSlotDisplay /
--- UpdateSlotDisplay / GetEmptySocketIcons, ported from the reference skin).
+-- UpdateSlotDisplay / GetEmptySocketIcons).
 -- Removed: KE already draws all three from Modules/QoL/CharacterPanel.lua, at
 -- anchors within 2px of these, so every character slot rendered them TWICE
--- whenever this skin was on. The reference has no such overlap -- there the
--- skin owns the paperdoll and its info module deliberately stands down (its
--- CharacterScreen.lua guards on the skin's own store before drawing, and
--- reads the skin's fontstring to anchor enchant text). KE's panel was ported
--- first, before this skin existed, so it grew its own copy instead.
+-- whenever this skin was on.
 -- CharacterPanel is the single owner now: it ships enabled by default, this
 -- skin ships disabled, and it also covers the inspect frame, which this never
--- did. KE.GetEmptySocketIcons went with them -- it was exported for the
--- reference's info module and nothing in KE ever called it.
+-- did. KE.GetEmptySocketIcons went with them -- nothing in KE called it.
 
 local function UpdateStatsPane()
     local pane = _G.CharacterStatsPane

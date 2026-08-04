@@ -737,8 +737,8 @@ end
 -- _needsFinalRefresh is set by OnRegenEnabled when the player left combat but
 -- the group is still fighting (e.g. died mid-pull): the ticker keeps polling
 -- GroupInCombat each tick and only stops once everyone is out of combat,
--- painting one final frame at that point. This is the continuous re-check the
--- reference guarantees, not a single deferred re-check.
+-- painting one final frame at that point. The re-check must be continuous; a
+-- single deferred one misses the tail of the fight.
 --
 -- DM:Tick is implemented in the render chunk and resolved at runtime; it is
 -- guarded so this lifecycle layer never throws "attempt to call a nil value"
@@ -1433,7 +1433,7 @@ local REPORT_CHANNELS = {
 -- Meter types with a meaningful per-second (amount-over-time). Interrupts / Dispels are
 -- counts and Deaths are events, so a rate is noise -- omitted from the report AND from
 -- the bar value (RenderWindow stashes the lookup per tick so RenderBar drops the
--- "count | rate" half for count types; the reference whitelists the same five).
+-- "count | rate" half for count types).
 local RATE_METER_TYPES = {
     [Enum.DamageMeterType.DamageDone] = true,
     [Enum.DamageMeterType.HealingDone] = true,
@@ -1955,10 +1955,8 @@ function DM:OnChallengeEvent(event)
     -- in the C_DamageMeter contract. Without this, "Overall" (and a window pinned to a
     -- prior session) carries the PREVIOUS key's data, incl. its deaths, into the new
     -- run. Reset on START only: resetting on COMPLETED/RESET would wipe a just-finished
-    -- run the user is still reviewing. Upstream verified: the reference
-    -- meter does this exact unconditional reset on CHALLENGE_MODE_START ("wipe data
-    -- so Overall = this dungeon run"), and Details-Midnight resets the server store
-    -- at key start too -- Details keeps cross-key history only because it snapshots
+    -- run the user is still reviewing. Details-Midnight resets the server store
+    -- at key start too -- it keeps cross-key history only because it snapshots
     -- each finalized fight into addon-local tables (the server store is just its
     -- live feed). KE renders the server store directly, and ResetAllCombatSessions
     -- is C_DamageMeter's ONLY mutator (12.0.7: no overall-only reset, no per-session

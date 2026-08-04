@@ -35,14 +35,12 @@ local ipairs = ipairs
 local pairs = pairs
 
 local MARKER_REFRESH = 1.0   -- count-text repaint cadence (swipe is native)
-local ICON_CROP = 0.08       -- upstream reference's 0.08–0.92 plate-icon crop
-                             -- (deliberate port fidelity; KE's central alerts
-                             -- use KE:ApplyIconZoom's 0.075 — visually equal)
+local ICON_CROP = 0.08       -- 0.08-0.92 plate-icon crop (central alerts use
+                             -- KE:ApplyIconZoom's 0.075 — visually equal)
 local PREDICTION_GRACE = 10.0 -- ready-linger: drop a prediction this many
                               -- seconds past its nextStart if no re-cast
-                              -- refreshed it (both references keep a ready
-                              -- bar for 10 seconds by default), so the
-                              -- green "due now" cue holds, then the ticker idles
+                              -- refreshed it, so the green "due now" cue
+                              -- holds, then the ticker idles
 
 DTrash._markers = {}         -- [unit] = marker frame
 DTrash._markerTicker = nil
@@ -57,9 +55,9 @@ end
 -- "plate" is a tall frame; anchoring to it floats icons at plate centre, so we
 -- probe for the actual bar across the supported nameplate addons and skip any
 -- frame that's hidden/detached/forbidden (each replacement addon disables the
--- others' bar rather than removing it). Ported from the upstream trash
--- reference's resolver — do NOT simplify: the ordering and the visibility guard
--- are exactly what make Plater / Platynator / Blizzard all resolve correctly.
+-- others' bar rather than removing it). Do NOT simplify: the ordering and the
+-- visibility guard are exactly what make Plater / Platynator / Blizzard all
+-- resolve correctly.
 --   • Platynator replaces UnitFrame with its own widget tree → child-walk probe.
 --   • Plater draws its own lowercase plate.unitFrame.healthBar and DETACHES the
 --     Blizzard HealthBarsContainer → the lowercase bar wins, and we only trust
@@ -116,7 +114,7 @@ local function resolvePlateAnchor(plate)
         return nil
     end
 
-    -- EUI (EllesmereUI Nameplates): best-effort — not in the upstream reference.
+    -- EUI (EllesmereUI Nameplates): best-effort.
     -- EUI parents its own plate as a child of the Blizzard nameplate and hides
     -- the default bar, exposing no public accessor; per its source that child
     -- carries a .health StatusBar and a .cast bar. Safe fallback: if this misses
@@ -311,8 +309,7 @@ function DTrash:UpdateNameplateMarker(unit)
     -- forever and the idle ticker can never go quiet. The per-spell gates are
     -- re-checked here too (mirrors SetNameplatePrediction's arm-time set): a
     -- mid-dungeon disable / role change / show-on-plate toggle must drop the
-    -- STORED prediction, not just block the next arm — the reference rebuilds
-    -- through its gates on every config revision.
+    -- STORED prediction, not just block the next arm.
     local order = {}
     local npcID = rt.matchedNPCID
     for spellID, pred in pairs(rt.predictions) do
@@ -336,7 +333,7 @@ function DTrash:UpdateNameplateMarker(unit)
     end
     table_sort(order, function(a, b)
         local an, bn = a.pred.nextStart or 0, b.pred.nextStart or 0
-        -- spellID tie-break (reference parity): two spells seeded from the
+        -- spellID tie-break: two spells seeded from the
         -- same engage with equal `first` must not swap slots between repaints.
         if an == bn then return a.spellID < b.spellID end
         return an < bn
@@ -401,10 +398,10 @@ function DTrash:SetNameplatePrediction(rt, npcID, spellID, startTime, nextStart)
     local iconID = (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(spellID)) or nil
     rt.predictions = rt.predictions or {}
     -- startTime is the REGISTRATION moment (callers pass their `now`), never
-    -- the schedule origin — the references stamp the swipe origin to now at
+    -- the schedule origin. The swipe origin is stamped to now at
     -- register/reset, so a late-resolved or rolled anchor draws a fresh full
     -- swipe instead of a pre-drained (or future-dated, invisible) one.
-    -- Continuity exception, also the reference's: a re-registration whose
+    -- Continuity exception: a re-registration whose
     -- nextStart moved ≤0.75s keeps the old origin so a mere refresh of an
     -- unchanged schedule doesn't visibly restart the arc.
     local prev = rt.predictions[spellID]

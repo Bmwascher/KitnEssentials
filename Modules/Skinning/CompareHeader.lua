@@ -8,8 +8,7 @@
 -- ║  Taint safety: this styles the header's own FRAME        ║
 -- ║  REGIONS once, at enable time. It never runs inside a    ║
 -- ║  tooltip build hook and never touches tooltip TEXT --    ║
--- ║  the reference's earlier text-mutating version tainted   ║
--- ║  the tooltip system and was replaced by exactly this.    ║
+-- ║  a text-mutating version taints the tooltip system.      ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE

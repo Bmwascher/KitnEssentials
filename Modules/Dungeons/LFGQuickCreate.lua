@@ -170,11 +170,10 @@ RefreshGlow = function()
     if not C_LFGList then return end
     local ok, ownLfgID, _, ownLevel = pcall(C_LFGList.GetOwnedKeystoneActivityAndGroupAndLevel)
     if not ok then ownLfgID, ownLevel = nil, nil end
-    -- Themed: this was the reference project's own accent literal, now KE's.
+    -- Themed, never a hardcoded accent.
     -- Read once per call, not once per button -- KE.Theme.accent[4] is the
     -- theme's alpha, not this glow's; the glow keeps its own measured 0.38.
-    -- Fallback is KE's own brand pink (VantusRune.lua precedent), not the
-    -- old literal -- that literal was the reference project's own accent.
+    -- Fallback is KE's own brand pink (VantusRune.lua precedent).
     -- A live theme switch repaints on the next 2s ticker, not instantly.
     local accent = KE.Theme and KE.Theme.accent or { 1, 0, 0.549 }
     for i = 1, #buttons do
@@ -221,8 +220,7 @@ end
 -- the only source.
 --
 -- UnitName is SecretWhenUnitIdentityRestricted
--- (.wow-api-reference Interface/AddOns/Blizzard_APIDocumentationGenerated/
--- UnitDocumentation.lua), so inside a dungeon the name comes back
+-- (UnitDocumentation.lua), so inside a dungeon the name comes back
 -- secret and comparing it would throw -- that unit is skipped and the line
 -- keeps the accent colour. UnitClass's SECOND return (classFilename) has no
 -- ConditionalSecret flag (same file :908-913); the first one does, so it is
@@ -294,9 +292,8 @@ MakeButton = function(parent, dungeon, index)
             -- (see the file header). The line still carries the useful half.
             GameTooltip:AddLine((playerShortName or "You") .. ": +" .. ownLevel, 1, 0.82, 0)
         end
-        -- Themed: this was the reference project's own accent literal, now
-        -- KE's. Fallback is KE's own brand pink (VantusRune.lua
-        -- precedent), not the old literal. A live theme switch repaints on
+        -- Themed, never a hardcoded accent. Fallback is KE's own brand pink
+        -- (VantusRune.lua precedent). A live theme switch repaints on
         -- the next hover, not instantly.
         local accent = KE.Theme and KE.Theme.accent or { 1, 0, 0.549 }
         for name, info in pairs(partyKeys) do
@@ -346,8 +343,7 @@ MakeButton = function(parent, dungeon, index)
         -- DO NOT call LFGListEntryCreation_Select here to pre-fill the form.
         -- BLOCKED, do not retry: Select reaches
         -- LFGListEntryCreation_SetTitleFromActivityInfo
-        -- (.wow-api-reference Interface/AddOns/Blizzard_GroupFinder/
-        -- Mainline/LFGList.lua), which calls the protected
+        -- (Blizzard_GroupFinder/LFGList.lua), which calls the protected
         -- SetEntryTitle. In-game trace: ADDON_ACTION_BLOCKED, 'SetEntryTitle()'.
         -- The form staying blank is cosmetic and stays that way.
     end)

@@ -30,9 +30,7 @@ local function SkinQueueTimer()
     end)
 end
 
--- The reference hardcodes this literal, but the value IS its own
--- palette.brand -- so copying the number verbatim shipped the upstream
--- periwinkle instead of KE's accent. Read the palette table (mutated in
+-- Never hardcode the accent here: read the palette table (mutated in
 -- place by S.RefreshPalette) so it tracks the live theme.
 local BRAND = S.palette.brand
 

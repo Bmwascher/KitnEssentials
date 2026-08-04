@@ -297,7 +297,7 @@ function VR:CreateGuildBankButton()
     local parent = _G.Baganator_SingleViewGuildViewFrameelvui or _G.GuildBankFrame
     if not parent then return end
 
-    -- Match reference: parent to guild bank, use textures instead of BackdropTemplate
+    -- Parent to the guild bank, use textures instead of BackdropTemplate
     local btn = CreateFrame("Button", "KE_VantusRuneButton", parent)
     btn:SetSize(BUTTON_WIDTH, BUTTON_HEIGHT)
     btn:SetPoint("TOPRIGHT", parent, "BOTTOMRIGHT", -1, -2)

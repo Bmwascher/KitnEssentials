@@ -5,16 +5,14 @@ local pairs = pairs
 local select = select
 local hooksecurefunc = hooksecurefunc
 
--- The reference hardcodes this literal, but the value IS its own
--- palette.brand -- so copying the number verbatim would ship the upstream
--- periwinkle instead of KE's accent. Read the palette table (mutated in
+-- Never hardcode the accent here: read the palette table (mutated in
 -- place by S.RefreshPalette) so it tracks the live theme.
 local BRAND = S.palette.brand
 
 -- Crop fraction per side, NOT the same scale as KE:ApplyIconZoom's `zoom`
 -- argument: that helper turns its 0.3 default into a 0.075 crop. The
--- reference's 0.20 therefore cropped ~2.7x harder than every other KE icon.
--- 0.075 matches the centralized helper exactly. We keep this file's own
+-- 0.075 here matches the centralized helper exactly (0.20 would crop ~2.7x
+-- harder than every other KE icon). We keep this file's own
 -- routine rather than calling the helper because TLX resets its texcoords on
 -- every scroll update, so the crop must be re-applied from stored base
 -- coords instead of compounding.

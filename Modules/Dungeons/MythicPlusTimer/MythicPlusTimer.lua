@@ -626,10 +626,9 @@ function MPT:UpdateObjectives()
                 -- Count/progress criteria (Quarry Camps 6/6) leave info.elapsed
                 -- pinned to the FIRST increment (1/6) — it never advances to the
                 -- 6/6 moment — so back-dating (elapsed - info.elapsed) yields the
-                -- time the first camp was tagged, not the completion. (Confirmed
-                -- against the MPlusTimer + EllesmereUIMythicTimer references, which
-                -- both stamp the live world clock at the completion transition for
-                -- this case rather than trusting the criterion's elapsed.) Boss
+                -- time the first camp was tagged, not the completion. Stamp the
+                -- live world clock at the completion transition instead of
+                -- trusting the criterion's elapsed. Boss
                 -- criteria report elapsed as time-since-completed, so they still
                 -- back-date correctly. totalQuantity > 1 marks the count case
                 -- (same gate the HUD uses for the "6/6" name prefix).
@@ -667,9 +666,9 @@ function MPT:UpdateObjectives()
                         -- event time — so the minuend must be the LIVE clock.
                         -- Subtracting from the once-per-second run.elapsed
                         -- mixes clocks and under-stamps by up to ~1s, the same
-                        -- improve-only optimism the count fix removed (the
-                        -- WarpDeplete and Reloe references both back-date from
-                        -- the live world clock). In CompleteRun's backfill
+                        -- improve-only optimism the count fix removed. Always
+                        -- back-date from the live world clock.
+                        -- In CompleteRun's backfill
                         -- pass liveElapsed IS the authoritative run.elapsed.
                         obj.clearTime = liveElapsed - (info.elapsed or 0)
                     end
@@ -1607,7 +1606,7 @@ function MPT:CheckForActiveRun()
             self:CompleteRun()
         elseif (self.run.active or self.run.completed) and not InChallengeInstance() then
             -- Reset ONLY once the player is genuinely OUTSIDE the keystone
-            -- instance (upstream parity — the walk-out/in bug):
+            -- instance (the walk-out/in bug):
             -- GetActiveChallengeMapID reads nil in the PLAYER_ENTERING_WORLD
             -- window even while standing inside a live key, and resetting an
             -- ACTIVE run on that flap wiped the freshly rebuilt run right

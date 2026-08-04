@@ -63,8 +63,7 @@ local INTERRUPT_LINGER = 1.0   -- seconds the desaturated icon stays up post-int
 local INTERRUPT_HOLD = 0.95    -- Release() suppression window; < LINGER avoids a same-tick race with the linger timer
 
 -- Breakpoint countdown formatter: db.Decimals digits for the whole sub-60
--- range (deliberate deviation from the reference's 3s cutoff — user
--- preference), m:ss above (only reachable if the >60s gate changes). The
+-- range, m:ss above (only reachable if the >60s gate changes). The
 -- format string is plain — the widget does the secret-side formatting.
 -- Lazy so headless spec loads (no C_StringUtil in busted) never touch it;
 -- cache is keyed on the decimals value so the GUI slider rebuilds it.
@@ -285,8 +284,7 @@ local function CreateIconFrame(entry, db)
     f.cooldown:SetDrawEdge(false)
     f.cooldown:SetDrawSwipe(false)
     -- Default minimumCountdownDuration is 2000ms (UI.xsd): sub-2s casts get
-    -- NO countdown numbers. Reference templates zero it; mirror them
-    -- (missing-timer bug — Throw Spear ~1.5s).
+    -- NO countdown numbers, so zero it (missing-timer bug — Throw Spear ~1.5s).
     f.cooldown:SetMinimumCountdownDuration(0)
     return f
 end
@@ -297,8 +295,8 @@ function TS:CreateEntry()
     entry:SetSize(EntryWidth(db), db.IconSize)
 
     -- Layout spine: textureless StatusBar whose fill extent mirrors entry
-    -- alpha, so invisible entries compact out of the stack (reference
-    -- spacer-chain mechanism). Length covers the entry + gap.
+    -- alpha, so invisible entries compact out of the stack. Length covers
+    -- the entry + gap.
     entry.Spacer = CreateFrame("StatusBar", nil, entry)
     entry.Spacer:SetStatusBarTexture("")
     entry.Spacer:SetOrientation("VERTICAL")
@@ -382,8 +380,8 @@ function TS:Release(entry, generation, reason)
     entry.spellId = nil
     entry.wasInterrupted, entry.doNotHideBefore = nil, nil
     -- Idempotent teardown: pooled frames must come back visually neutral.
-    -- Deliberately NO cooldown:Clear() here (reference Reset never touches
-    -- the Cooldown): replace-by-unit re-acquires this same entry, and Clear +
+    -- Deliberately NO cooldown:Clear() here — a reset must never touch
+    -- the Cooldown: replace-by-unit re-acquires this same entry, and Clear +
     -- SetCooldown on one widget in one frame eats the countdown text
     -- (missing-timer bug). Pooled entries are hidden and the next
     -- populate overwrites the cooldown anyway.
@@ -413,7 +411,7 @@ function TS:ReleaseAllEntries()
     end
 end
 
--- Reference pattern: glow runs whenever a spellId exists; the SECRET
+-- Glow runs whenever a spellId exists; the SECRET
 -- importance boolean only drives the glow child's alpha (never branched on).
 -- Uses the size-parameterized fork with plain db.IconSize — stock LCG reads
 -- frame:GetSize(), which returns SECRET numbers anywhere in this entry
@@ -552,8 +550,7 @@ function TS:RepositionEntries()
     for i, entry in ipairs(list) do
         local spacer = entry.Spacer
         -- Fill from the anchored edge so a zero-value spacer's texture edge
-        -- collapses to the chain point (verify direction in-game; reference
-        -- layout: Utils.lua).
+        -- collapses to the chain point.
         spacer:SetReverseFill(growDown)
         spacer:ClearAllPoints()
         spacer:SetPoint(point, (i == 1) and self.anchorFrame or prevTexture, relPoint, 0, 0)
@@ -582,8 +579,8 @@ function TS:BumpDispatchToken(unit)
     return token
 end
 
--- Delayed re-read: cast target/duration data settles ~0.2s after the event
--- (reference behavior). The dispatch token (not any cast id) aborts the
+-- Delayed re-read: cast target/duration data settles ~0.2s after the event.
+-- The dispatch token (not any cast id) aborts the
 -- handler once a later dispatch has superseded it for this unit.
 function TS:TryStart(unit, token)
     if not self.contentActive then return end
@@ -677,7 +674,7 @@ function TS:OnInterrupted(unit, castBarID)
     entry.doNotHideBefore = GetTime() + INTERRUPT_HOLD
     entry.leftIcon.tex:SetDesaturated(true)
     entry.rightIcon.tex:SetDesaturated(true)
-    -- Reference SetInterrupted: X on, countdown numbers off, glow off.
+    -- Interrupted look: X on, countdown numbers off, glow off.
     entry.interruptX:Show()
     entry.leftIcon.cooldown:SetHideCountdownNumbers(true)
     self:StopGlow(entry)
@@ -687,10 +684,10 @@ function TS:OnInterrupted(unit, castBarID)
     end)
 end
 
--- Scan/added/retarget paths run synchronously (reference Driver behavior):
+-- Scan/added/retarget paths run synchronously:
 -- the settle delay exists because a FRESH cast's target/duration data lags
 -- the START event — a cast discovered already in flight is settled, and
--- delaying it just shows the entry 0.2s later than the reference.
+-- delaying it just shows the entry 0.2s late for nothing.
 function TS:ScanExistingNameplates()
     for i = 1, MAX_NAMEPLATES do
         local unit = "nameplate" .. i
@@ -719,7 +716,7 @@ end
 
 function TS:OnUnitTarget(_, unit)
     -- Retarget mid-cast rebuilds the binding; ALSO the first-target case
-    -- (reference Driver.lua): a mob that starts casting untargeted and
+    -- is covered: a mob that starts casting untargeted and
     -- acquires you during the settle window shows NOW, not at +0.2s — so no
     -- existing-entry gate. Bumping the token supersedes the pending delayed
     -- dispatch; TryStart's early returns cover no-cast/irrelevant units.

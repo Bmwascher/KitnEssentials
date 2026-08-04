@@ -422,9 +422,8 @@ function GUIFrame:CreateCard(parent, title, yOffset, width)
         local totalHeight
         if self.currentY == 0 and self.headerHeight > 0 then
             -- Exactly the header, so the header plate covers the card entirely
-            -- and the bar is one solid colour. The reference adds borderSize*2, but
-            -- its header is inset by borderSize and draws no edge of its own;
-            -- KE's is flush at (0,0) with its own edge, so the same allowance
+            -- and the bar is one solid colour. No borderSize*2 allowance: the
+            -- header is flush at (0,0) with its own edge, so that allowance
             -- would expose two pixels of card backdrop under the header.
             totalHeight = self.headerHeight
             self.content:Hide()

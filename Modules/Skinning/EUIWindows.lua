@@ -91,8 +91,8 @@ S.WINDOW_MAP = {
     -- Its sibling `loot` row stays deleted: EllesmereUI's loot pack touches
     -- only _G.LootFrame while our `Loot` key covers four families.
     { euiKey = "loottoast",       skins = { "LootToast" },  since = "8.6.4" },
-    -- `micromenu` has no row: the reference ships no micro-menu skin and
-    -- A0 deleted ours. `Guild` (GuildInviteFrame) is likewise absent on
+    -- `micromenu` has no row: KE ships no micro-menu skin.
+    -- `Guild` (GuildInviteFrame) is likewise absent on
     -- purpose -- the invite popup is not the Communities window that
     -- EllesmereUI's `guild` key covers.
 }
@@ -229,13 +229,13 @@ function KE:ResolveSkinSuppression()
     -- IsAddOnLoaded returns TWO booleans: loadedOrLoading, then loaded. Gate
     -- on the second -- the first is true for a still-loading addon, whose
     -- tables aren't populated yet
-    -- (.wow-api-reference/Interface/AddOns/Blizzard_APIDocumentationGenerated/AddOnsDocumentation.lua).
+    -- (AddOnsDocumentation.lua).
     if C_AddOns and C_AddOns.IsAddOnLoaded
         and select(2, C_AddOns.IsAddOnLoaded("EllesmereUIBlizzardSkin")) then
         -- DisableAddOn leaves an addon loaded for the rest of the session,
         -- so "loaded" alone would keep suppressing after the user turned
         -- EllesmereUI's skin addon off. Blizzard's own > 0 comparison:
-        -- .wow-api-reference/.../Blizzard_AddOnList/AddonList.lua.
+        -- Blizzard_AddOnList/AddonList.lua.
         loaded = not (C_AddOns.GetAddOnEnableState
             and (C_AddOns.GetAddOnEnableState("EllesmereUIBlizzardSkin") or 0) <= 0)
         if loaded and C_AddOns.GetAddOnMetadata then

@@ -266,8 +266,8 @@ function DM:OpenDetail(bar, button)
     end
 
     -- Deaths row with no usable recap: no-op rather than opening an empty
-    -- "No death recap available" panel (a feign / no-recap death simply isn't clickable,
-    -- matching the reference). OOC only -- the in-combat branch above already returned, so
+    -- "No death recap available" panel (a feign / no-recap death simply isn't
+    -- clickable). OOC only -- the in-combat branch above already returned, so
     -- GetDeathRecap (which reads C_DeathRecap, OOC-safe) runs on a plain recapID here.
     -- W._isDeaths is stashed by RenderWindow; bar._deathRecapID by RenderBar.
     if W._isDeaths and not self:GetDeathRecap(bar._deathRecapID) then

@@ -4,16 +4,14 @@
 -- coverage to retire EllesmereUIBlizzardSkin ("BlizzUI Enhanced") from
 -- the pack, since tooltip skinning is all it is used for.
 --
--- Architecture notes (both references studied):
---   * EUI BlizzardSkin: visual-only changes -- alpha/backdrop/font, no
---     Hide/Show/SetParent on Blizzard frames, all post-hooks. Class
---     recolor works on GameTooltipTextLeft1 directly instead of
---     rebuilding the unit block. That discipline is kept 1:1.
---   * ElvUI TT: TooltipDataProcessor.AddTooltipPostCall for unit/spell/
---     item data, GameTooltip_SetDefaultAnchor hook for anchoring,
+-- Architecture:
+--   * Visual-only changes -- alpha/backdrop/font. No Hide/Show/SetParent on
+--     Blizzard frames, all post-hooks. Class recolor works on
+--     GameTooltipTextLeft1 directly instead of rebuilding the unit block.
+--   * TooltipDataProcessor.AddTooltipPostCall for unit/spell/item data,
+--     GameTooltip_SetDefaultAnchor hook for anchoring,
 --     NineSlice:SetAlpha(0) + own backdrop for the style, global font
---     objects for text, statusbar height/texture/text. Feature set and
---     secret-value guards transcribed from there.
+--     objects for text, statusbar height/texture/text.
 -- Zero idle cost: every code path is a tooltip event or hook; no
 -- OnUpdate, no timers.
 ---@class KE
@@ -313,9 +311,9 @@ end
 -- Locating the level row.
 --
 -- Blizzard publishes no line type for it: TooltipDataLineType has UnitName,
--- UnitThreat and UnitOwner but nothing for level (12.0.7 reference,
--- TooltipInfoSharedDocumentation.lua). So the row is found the way
--- ElvUI finds it -- by matching the localized level template against each
+-- UnitThreat and UnitOwner but nothing for level
+-- (TooltipInfoSharedDocumentation.lua, 12.0.7). So the row is found
+-- by matching the localized level template against each
 -- line's text. The templates are GlobalStrings and are reduced to plain
 -- substrings once, on first use rather than at file scope, so load order
 -- cannot matter.
@@ -369,7 +367,7 @@ end
 -- Reading a unit's name is only safe when its identity is not restricted.
 -- UnitName and UnitPVPName are both SecretWhenUnitIdentityRestricted, and
 -- C_Secrets.ShouldUnitIdentityBeSecret is the predicate that matches them
--- (12.0.7 reference, SecretPredicateAPIDocumentation.lua -- it returns a
+-- (SecretPredicateAPIDocumentation.lua, 12.0.7 -- it returns a
 -- plain bool, so testing it directly is safe).
 --
 -- This is a STRICTER test than KE:IsSecretValue(unit), which only asks
@@ -469,7 +467,7 @@ function TT:OnTooltipSetUnit(tt)
     -- SetTextColor, so the ClassColorNames block above stays the single
     -- owner of the colour instead of two paths fighting over it.
     --
-    -- CanReadIdentity is the only guard, matching the reference: it is the
+    -- CanReadIdentity is the only guard: it is the
     -- documented predicate for exactly these returns, so re-checking each
     -- value with KE:IsSecretValue would be the over-guarding that has
     -- silently killed features in this project before.
@@ -483,8 +481,8 @@ function TT:OnTooltipSetUnit(tt)
             -- Blizzard's own compact marker says "different realm" without
             -- the width.
             --
-            -- Deliberately a SETTING and not a Shift modifier, which is what
-            -- the reference uses. MODIFIER_STATE_CHANGED below refuses to
+            -- Deliberately a SETTING and not a Shift modifier.
+            -- MODIFIER_STATE_CHANGED below refuses to
             -- refresh unit tooltips on purpose (see the note there: the
             -- refresh re-runs Blizzard's line builders on our tainted
             -- execution and throws on a secret unit), so a modifier would be
@@ -494,9 +492,9 @@ function TT:OnTooltipSetUnit(tt)
             -- (Blizzard_UnitFrame/Mainline/UnitFrame.lua): a
             -- virtual realm is one you are effectively already on, so it
             -- gets no marker, and every other cross-realm case gets the
-            -- foreign-server suffix. ElvUI adds a second branch on
-            -- INTERACTIVE_SERVER_LABEL / LE_REALM_RELATION_COALESCED, but
-            -- neither name occurs anywhere in the 12.0.7 reference, and
+            -- foreign-server suffix. No second branch on
+            -- INTERACTIVE_SERVER_LABEL / LE_REALM_RELATION_COALESCED:
+            -- neither name exists in 12.0.7, and
             -- comparing against a nil constant would also make a nil
             -- relationship match by accident.
             if realm and realm ~= "" then
@@ -639,9 +637,8 @@ function TT:OnTooltipSetUnit(tt)
     end
 
     -- Faction row. "Alliance" / "Horde" duplicates what the name and level
-    -- rows already convey, and the reference look drops it. Ports the
-    -- faction half of ElvUI's RemoveTrashLines (Tooltip.lua); the
-    -- PvP tag it also strips is left alone.
+    -- rows already convey, so the clean look drops it. The PvP tag on the
+    -- same line is left alone.
     if db.HideFactionLine then
         local okData, info = pcall(tt.GetTooltipData, tt)
         if okData and info and info.lines then
@@ -814,8 +811,7 @@ function TT:EnsureAnchor()
     end
 end
 
--- KE-only. The reference anchors to UIParent and never repositions; KE's
--- position card offers a parent frame and a strata, and both need somewhere
+-- The position card offers a parent frame and a strata, and both need somewhere
 -- to land. Before EnsureAnchor has run there is no frame to move, so only
 -- the strata pass does anything.
 function TT:ApplyPosition()

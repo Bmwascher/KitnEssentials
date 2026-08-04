@@ -59,7 +59,7 @@ describe("UIWidgets", function()
             local container = {}
             -- tip.widgetContainer resolves to `container` through the
             -- metatable, but tip has no REAL widgetContainer field. The
-            -- reference deliberately uses rawget, so this must be false.
+            -- lookup deliberately uses rawget, so this must be false.
             local tip = setmetatable({}, { __index = function() return container end })
             plant("GameTooltip", tip)
             assert.is_false(InTooltip(nil, container))

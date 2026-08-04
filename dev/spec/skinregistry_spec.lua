@@ -23,10 +23,10 @@ local L = require("dev.spec._ke_loader")
 local GUI_FILE = "GUI/GUITabs/GUISkinning/GUI-BlizzardFrames.lua"
 local SKINNING_ROOT = "Modules/Skinning"
 
--- Keys the reference always dispatches with no grid row, cited at
+-- Keys that always dispatch with no grid row, cited at
 -- GUI-BlizzardFrames.lua (minor or loading-screen-rare frames). A row
 -- is not required for these -- it is also not FORBIDDEN, so ChatConfig and
--- Dialogs correctly appear both here and as grid rows (Deviation 3).
+-- Dialogs correctly appear both here and as grid rows.
 local ALWAYS_ON = {
     AdventureMap = true, Battlenet = true, ChatConfig = true,
     ChromieTime = true, CooldownManager = true, Dialogs = true,

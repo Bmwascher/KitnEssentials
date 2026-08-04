@@ -64,12 +64,12 @@ local issecrettable = issecrettable or function() return false end
 -- teleport spellID. Season-volatile data matched by name against
 -- GetActivityInfoTable's fullName.
 --
--- English keys only. The reference also carries ten Cyrillic keys, which
--- were dropped deliberately: they cannot ever match. The lookup lowercases
+-- English keys only. Cyrillic keys were dropped deliberately: they cannot
+-- ever match. The lookup lowercases
 -- with Lua's string.lower, which is byte-wise and ASCII-only, so a
 -- capitalised Cyrillic name ("Небесный путь") never folds to the lowercase
 -- key ("небесный путь") -- measured in this project's Lua 5.1.
--- They are dead entries upstream too, and KE ships no localisation, so
+-- KE ships no localisation, so
 -- carrying them would imply support that does not exist. Adding real
 -- Russian support means Cyrillic-aware case folding, not these keys.
 local TELEPORT_BY_NAME = {
@@ -425,8 +425,7 @@ ClearPending = function()
     -- pendingAttrSpellID and pendingShow; if the group breaks before combat
     -- ends, clearing only pendingShow would leave PLAYER_REGEN_ENABLED to
     -- build a popup nobody asked for and arm it with the cancelled
-    -- dungeon's teleport. The reference does not clear it because its
-    -- ShowPrompt built the popup up front.
+    -- dungeon's teleport.
     pendingAttrSpellID = nil
 end
 
@@ -569,7 +568,7 @@ end
 ---------------------------------------------------------------------------------
 
 -- Force-show the popup with sample contents so the user can drag it into
--- place from the config panel. The reference has no preview; KE adds one
+-- place from the config panel. It exists
 -- because dragging is the only way to position this frame and the only
 -- other route to seeing it is joining a real dungeon group.
 --

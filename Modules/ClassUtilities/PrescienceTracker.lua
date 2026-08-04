@@ -177,7 +177,7 @@ function PT:AddTrackedBuff(unit, aura, spellID)
     local role = UnitGroupRolesAssigned(unit) or "NONE"
     local _, classToken = UnitClass(unit)
 
-    -- Prescience crit detection (matching reference: aura.points[1] == 6)
+    -- Prescience crit detection: aura.points[1] == 6
     local isCrit = false
     if aura.points and not issecretvalue(aura.points) then
         isCrit = aura.points[1] == 6 and spellID == PRESCIENCE_ID
@@ -260,7 +260,7 @@ function PT:OnUnitAura(_, unit, info)
 
         if info.removedAuraInstanceIDs then
             for _, instanceID in ipairs(info.removedAuraInstanceIDs) do
-                -- Match reference: check BOTH instanceID AND unit before removing.
+                -- Check BOTH instanceID AND unit before removing.
                 -- Aura instance IDs are per-unit, not global — different units can share the same ID.
                 local data = self.trackedBuffs[instanceID]
                 if data and data.unit == unit then
@@ -574,7 +574,7 @@ function PT:UpdateTimers()
     end
 
     -- If no tracked buffs, try to re-detect via additive scan (doesn't wipe first).
-    -- Matching reference: FullRaidCheck runs regardless of combat state.
+    -- The full raid check runs regardless of combat state.
     local hasAny = next(self.trackedBuffs) ~= nil
     if not hasAny then
         self:RescanRoster()

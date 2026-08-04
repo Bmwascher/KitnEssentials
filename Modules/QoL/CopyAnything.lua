@@ -110,9 +110,8 @@ function CA:TryCopy(key)
     if not issecretvalue(GameTooltip:GetItem()) then
         if not copyId then
             -- GameTooltipDataMixin:GetItem() returns (name, hyperlink, id) --
-            -- three values, per .wow-api-reference Blizzard_GameTooltip/
-            -- Mainline/GameTooltip.lua delegating to
-            -- Blizzard_SharedXMLGame/Tooltip/TooltipUtil.lua. The bundled
+            -- three values, per Blizzard_GameTooltip/GameTooltip.lua
+            -- delegating to TooltipUtil.lua. The bundled
             -- type-checker DB models only two, a known DB gap.
             ---@diagnostic disable-next-line
             local itemName, _, itemId = GameTooltip:GetItem()
@@ -127,9 +126,8 @@ function CA:TryCopy(key)
     if not issecretvalue(GameTooltip:GetUnit()) then
         if not copyId then
             -- GameTooltipDataMixin:GetUnit() returns (name, unit, guid) --
-            -- three values, per .wow-api-reference Blizzard_GameTooltip/
-            -- Mainline/GameTooltip.lua delegating to
-            -- Blizzard_SharedXMLGame/Tooltip/TooltipUtil.lua. The
+            -- three values, per Blizzard_GameTooltip/GameTooltip.lua
+            -- delegating to TooltipUtil.lua. The
             -- bundled type-checker DB models only two, a known DB gap.
             ---@diagnostic disable-next-line
             local unitName, _, unitGUID = GameTooltip:GetUnit()

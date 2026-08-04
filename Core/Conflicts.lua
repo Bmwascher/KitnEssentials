@@ -382,8 +382,8 @@ local scanner = CreateFrame("Frame")
 scanner:RegisterEvent("PLAYER_ENTERING_WORLD")
 scanner:SetScript("OnEvent", function(self)
     self:UnregisterAllEvents()
-    -- Delayed so the login rush settles first. The reference tuned 5s down to
-    -- 2s: longer read as a hang.
+    -- Delayed so the login rush settles first. 2s, not 5s: longer reads as
+    -- a hang.
     C_Timer.After(2, function()
         -- RunAfterCombat defers to PLAYER_REGEN_ENABLED when in combat, so a
         -- mid-pull login never gets a prompt over the fight.

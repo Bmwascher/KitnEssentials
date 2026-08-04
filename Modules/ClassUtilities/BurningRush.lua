@@ -153,7 +153,7 @@ function BURN:SetActive(active)
     if active then self:ShowDisplay() else self:HideDisplay() end
 end
 
--- Detection is event-driven (mirrors the reference). Burning Rush (111400) is a
+-- Detection is event-driven. Burning Rush (111400) is a
 -- toggled self-buff whose action-button spell-activation overlay glow tracks its
 -- active state, so the reliable, low-overhead signals are:
 --   * UNIT_SPELLCAST_SUCCEEDED (player)    -> shown
@@ -246,7 +246,7 @@ function BURN:OnEnable()
 
     -- Raw event frame so the cast event can be unit-filtered to "player" via
     -- RegisterUnitEvent (AceEvent has no RegisterUnitEvent; an unfiltered
-    -- RegisterEvent would wake on every unit's cast). Mirrors the reference.
+    -- RegisterEvent would wake on every unit's cast).
     if not self.eventFrame then self.eventFrame = CreateFrame("Frame") end
     self.eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
     self.eventFrame:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE")

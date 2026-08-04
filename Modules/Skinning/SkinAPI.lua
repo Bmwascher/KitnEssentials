@@ -1,9 +1,8 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  SkinAPI.lua                                             ║
 -- ║  Purpose: Shared skinning helpers for Blizzard frames.   ║
--- ║           Ported from the upstream skinning API; the     ║
--- ║           inline comments are the upstream evidence      ║
--- ║           trail and are kept deliberately.               ║
+-- ║           The inline comments are the evidence trail     ║
+-- ║           and are kept deliberately.                     ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -65,7 +64,7 @@ function S.GetBackdrop(frame)
     return backdropCache[frame]
 end
 
--- Structural colours are the reference's, unchanged — they are tuned
+-- Structural colours are left alone — they are tuned
 -- against real Blizzard art. The brand/hover/progress entries follow KE's
 -- live theme so a skinned Blizzard window matches KE's own panels.
 S.palette = {
@@ -86,7 +85,7 @@ S.palette = {
 -- replacing a table here would leave those holding a dead one and freeze
 -- the accent at its placeholder for the whole session.
 --
--- palette.hover is deliberately NOT themed. It is the reference's neutral
+-- palette.hover is deliberately NOT themed. It is a neutral
 -- grey mouseover wash, not an accent: theme accent and accentHover share
 -- the same RGB and differ only in alpha, so driving hover from accentHover
 -- collapsed every rest/hover pair (rows, tabs, buttons, the close X) onto
@@ -298,9 +297,9 @@ function S.CropAtlasEdges(tex, xPct, yPct)
     d.cropping = nil
 end
 
--- The reference fills backdrops with its own statusbar art for a faint
--- sheen. KE uses a flat white so a skinned Blizzard window and a KE panel
--- sitting beside each other read as one surface (Chat.lua uses the same).
+-- Flat white, not statusbar art with a faint sheen, so a skinned Blizzard
+-- window and a KE panel sitting beside each other read as one surface
+-- (Chat.lua uses the same).
 local BG_TEX = "Interface\\Buttons\\WHITE8x8"
 
 function S.Backdrop(frame, inset, borderOnly)
@@ -467,10 +466,6 @@ end
 -- waiting for a frame to EXIST. Poll per FRAME instead: worst case is
 -- one frame (~4ms at the FPS) instead of up to a second, with the
 -- same total patience.
---
--- Ported ahead of its normal position late in the reference file: Tasks
--- 2-7 need it for their own frame-not-ready waits, and the spec (this
--- task) pins its polling/give-up behavior headlessly.
 function S.WaitFor(check, run, maxFrames)
     if check() then run() return end
     if not _G.C_Timer then return end
@@ -828,11 +823,10 @@ local CLOSE_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\KitnCu
 local ARROW_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.tga"
 local ARROW_ROT = { down = 0, up = 3.14159, right = 1.5708, left = -1.5708 }
 -- KitnCustomCrossv3 is a PLUS glyph -- KE's own GUI close button draws it as
--- an X by rotating 45 degrees (GUI/GUIMain/GUI-MainFrame.lua). The skin
--- swapped the reference's pre-rotated aesClose art for this one but kept the
--- reference's geometry, so every skinned window drew a small upright plus.
--- Rest colour is KE's GUI white (T.textPrimary), not the reference's 0.851
--- grey, for the same reason: these must read as the same button.
+-- an X by rotating 45 degrees (GUI/GUIMain/GUI-MainFrame.lua). Without the
+-- rotation every skinned window draws a small upright plus.
+-- Rest colour is KE's GUI white (T.textPrimary), for the same reason: these
+-- must read as the same button.
 local CLOSE_ROT = math.rad(45)
 local CLOSE_SIZE = 16
 local CLOSE_REST = { 1, 1, 1 }
@@ -2220,8 +2214,7 @@ function S.SetFontOutline(enabled)
     end
 end
 
--- 12.0.7 shadow doctrine (EllesmereUI's finding, adopted by the reference
--- skin engine): instance-level SetShadowColor/SetShadowOffset no longer
+-- 12.0.7 shadow doctrine: instance-level SetShadowColor/SetShadowOffset no longer
 -- affect RENDERING -- a FontString's shadow now comes solely from its
 -- FontObject. The per-string zeroing below and at several skin call sites
 -- has therefore been silently no-oping on every Blizzard FontString whose
@@ -2232,8 +2225,8 @@ end
 -- then restores face, size and flags at instance level, while the (absent)
 -- object shadow governs rendering.
 --
--- Deliberately scoped to the skin engine rather than KE:ApplyFont, which the
--- reference's equivalent does: KE:ApplyFont is shared with KE's own modules,
+-- Deliberately scoped to the skin engine rather than KE:ApplyFont, which is
+-- shared with KE's own modules,
 -- whose text has its own shadow and soft-outline pipeline
 -- (KE:ApplyFontToText). Skinned Blizzard frames all funnel through here.
 local noShadowFont
