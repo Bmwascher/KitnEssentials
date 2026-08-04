@@ -153,4 +153,28 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
     it("negative control: an invented id has no registered builder", function()
         assert.is_nil(GUIFrame.registeredContent["SkinBlizzardFramesBogus"])
     end)
+
+    -- The nested row keeps its own list, so its gate is a second decision that
+    -- the strip's tests cannot reach.
+    it("offers all four elements while no other suite is driving the frames", function()
+        elvui = false
+        local tabs = GUIFrame._VisibleElementTabs()
+        assert.equals(4, #tabs)
+        assert.equals("SkinBlizzardFramesLootRoll", tabs[1].id)
+        assert.equals("CharacterPanel", tabs[4].id)
+    end)
+
+    it("offers only the character screen in the conflict state", function()
+        elvui = true
+        local tabs = GUIFrame._VisibleElementTabs()
+        assert.equals(1, #tabs)
+        assert.equals("CharacterPanel", tabs[1].id)
+    end)
+
+    it("registers a builder for every element id in both states", function()
+        elvui = false
+        assertEveryIdResolves(GUIFrame._VisibleElementTabs())
+        elvui = true
+        assertEveryIdResolves(GUIFrame._VisibleElementTabs())
+    end)
 end)

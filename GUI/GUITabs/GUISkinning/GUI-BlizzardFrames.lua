@@ -621,6 +621,51 @@ GUIFrame:RegisterContent("SkinBlizzardFramesColors", function(scrollChild, yOffs
     return card:GetNextOffset()
 end)
 
+-- The four single-element pages behind one sub-row. Each was a top-level tab,
+-- which made the strip long enough to bury the settings people look for.
+--
+-- This row keeps its own active id. GUIFrame.tabbedPageState is keyed by PAGE,
+-- and this row is not a page.
+local elementTabs = {
+    { id = "SkinBlizzardFramesLootRoll",   label = "Loot Roll" },
+    { id = "SkinBlizzardFramesLootWindow", label = "Loot Window" },
+    { id = "SkinBlizzardFramesWidgets",    label = "UI Widgets" },
+    { id = "CharacterPanel",               label = "Character Screen" },
+}
+local activeElement = elementTabs[1].id
+
+-- Only Character Screen survives the conflict state; the other three configure
+-- skins this addon stands down from.
+local function VisibleElementTabs()
+    if KE.ShouldNotLoadModule and KE:ShouldNotLoadModule() then
+        return { elementTabs[4] }
+    end
+    return elementTabs
+end
+GUIFrame._VisibleElementTabs = VisibleElementTabs
+
+GUIFrame:RegisterContent("SkinBlizzardFramesElements", function(scrollChild, yOffset)
+    local tabs = VisibleElementTabs()
+
+    local found = false
+    for _, tab in ipairs(tabs) do
+        if tab.id == activeElement then found = true break end
+    end
+    if not found then activeElement = tabs[1].id end
+
+    local _, tabOffset = GUIFrame:CreateSubTabs(scrollChild, yOffset, {
+        tabs = tabs,
+        activeId = activeElement,
+        onSwitch = function(newId) activeElement = newId end,
+        fill = true,
+    })
+    yOffset = tabOffset
+
+    local builder = GUIFrame.registeredContent and GUIFrame.registeredContent[activeElement]
+    if builder then yOffset = builder(scrollChild, yOffset) end
+    return yOffset
+end)
+
 -- Three states, evaluated per build, so the master toggle's own RefreshContent
 -- switches between them with no reload.
 --
