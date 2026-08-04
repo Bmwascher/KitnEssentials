@@ -181,10 +181,13 @@ function Test-LinePreservesValue($removed, $added, $themeValues, $mask) {
     # Every theme reference must sit in code. One inside a string or comment is
     # rejected outright rather than rebuilt, so it cannot reconstruct its way to
     # a false pass.
-    $matches = [regex]::Matches($a, $pattern)
-    if ($matches.Count -eq 0) { return $false }   # nothing swapped is not a swap
+    # Named $refs, not $matches: $matches is PowerShell's automatic variable,
+    # written by every -match in scope. Shadowing it works today only because no
+    # -match follows, which is a trap for whoever edits this function next.
+    $refs = [regex]::Matches($a, $pattern)
+    if ($refs.Count -eq 0) { return $false }   # nothing swapped is not a swap
     if ($null -eq $mask) { return $false }
-    foreach ($m in $matches) {
+    foreach ($m in $refs) {
         if ($m.Index -ge $mask.Length -or -not $mask[$m.Index]) { return $false }
     }
 
