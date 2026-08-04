@@ -140,6 +140,16 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
         GUIFrame.registeredContent["SkinBlizzardFramesFrames"](nil, 0)
     end
 
+    -- The Addon Skins tab, which is a separate builder over a separate list.
+    -- Both share BuildSoloRows / BuildCheckGrid, so a change made for one can
+    -- break the other silently -- this is the only route that would see it.
+    -- AddonInstalled short-circuits to true when C_AddOns is absent
+    -- (GUI-BlizzardFrames.lua:219-221), and this spec installs no such global,
+    -- so every addon row reads installed here.
+    local function buildAddons()
+        GUIFrame.registeredContent["SkinBlizzardFramesAddons"](nil, 0)
+    end
+
     -- The grid's Achievements cell. FRAME_SKINS is sorted by display name,
     -- "Achievements" sorts first, and this list carries no soloRow entry, so it
     -- is the first widget built. Named rather than written as a bare 1, because
@@ -373,6 +383,63 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
             seedPartial("Achievement")
             buildFrames()
             assert.is_true(containsLabel(NOTE))
+        end)
+    end)
+    -- Ace3 is the Addon Skins solo row: it renders above the grid via
+    -- BuildSoloRows, exactly as Context Menus used to. Same failure to pin --
+    -- taking it out of ADDON_SKINS to stop the grid drawing it would also take
+    -- it out of the header any-on read and the bulk toggle, and the master
+    -- switch would silently skip one control.
+    describe("Ace3 stays an ADDON_SKINS member while rendering outside the grid", function()
+        local ACE_LABEL = "Addon Config Windows (AceGUI)"
+
+        local function addonCheckboxLabels()
+            local out = {}
+            for _, cb in ipairs(checkboxes) do out[#out + 1] = cb.label end
+            return out
+        end
+
+        it("renders exactly once, as the first widget, above the grid", function()
+            buildAddons()
+            assert.equal(ACE_LABEL, checkboxes[1].label)
+
+            local seen = 0
+            for _, label in ipairs(addonCheckboxLabels()) do
+                if label == ACE_LABEL then seen = seen + 1 end
+            end
+            assert.equal(1, seen)
+        end)
+
+        it("the any-on read reaches it: on alone, the header reads on", function()
+            -- Every other addon row off. Ace3 needs a REAL stored value, not an
+            -- absent key: the metatable default answers false for anything
+            -- missing, and EntryIsOn reads `skins[key] ~= false`, so leaving it
+            -- unset would read off like the rest. With it on it is the only
+            -- member that can make anyOn true.
+            KE.db.profile.Skinning.BlizzardFrames = freshDB(setmetatable(
+                { Ace3 = true },
+                { __index = function() return false end }))
+            buildAddons()
+            assert.is_true(headerToggle.anyOn)
+        end)
+
+        it("positive control: with Ace3 off too, the header reads off", function()
+            KE.db.profile.Skinning.BlizzardFrames = freshDB(setmetatable(
+                { Ace3 = false },
+                { __index = function() return false end }))
+            buildAddons()
+            assert.is_false(headerToggle.anyOn)
+        end)
+
+        it("the bulk toggle writes it", function()
+            KE.db.profile.Skinning.BlizzardFrames = freshDB({})
+            buildAddons()
+            headerToggle.callback(false)
+            -- SetEntry stores false for off, nil for on.
+            assert.is_false(KE.db.profile.Skinning.BlizzardFrames.Skins.Ace3)
+
+            headerToggle.callback(true)
+            assert.is_nil(KE.db.profile.Skinning.BlizzardFrames.Skins.Ace3)
         end)
     end)
 end)

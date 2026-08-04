@@ -250,8 +250,10 @@ end
 --               registrations EllesmereUI does not touch, so the row stays
 --               full opacity and clickable -- greying it would take away the
 --               off-switch for the working skins to describe one overlap.
---               It is relabelled with the map row's own description of what
---               is and is not covered, verbatim.
+--               It is marked with a trailing " *", and the map row's own
+--               description of what is and is not covered becomes its tooltip.
+--               The description is NOT used as the label: it runs to 37
+--               characters and cannot fit a three-column cell.
 --   "none"    -- unchanged: falls through to the not-installed check below.
 -- An uninstalled addon row is greyed the same way as "full", but "full" wins
 -- when a row is both suppressed and not-installed -- a row can only show one
@@ -272,9 +274,11 @@ local function ResolveRow(entry)
         state, _, _, partialTooltip = KE.Skins.GetSuppressionState(entry.key)
     end
     local label = entry.text
-    -- An entry may carry its own explanation. Only the suppression and
-    -- not-installed branches below override it, because those describe why the
-    -- row cannot be used at all, which outranks what it does.
+    -- An entry may carry its own explanation of what it skins. Every branch
+    -- below replaces it, because EllesmereUI coverage or a missing addon says
+    -- something about whether the row works at all, which outranks what it
+    -- does. Note "partial" replaces the tooltip WITHOUT disabling the row --
+    -- that one is a caveat, not a refusal.
     local tooltip = entry.tooltip
     local disabled = false
     if state == "full" then
