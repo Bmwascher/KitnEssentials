@@ -97,7 +97,7 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
     end
 
     ----------------------------------------------------------------
-    -- Card 1: Master Toggle
+    -- Master toggle, and everything about Blizzard's own text
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Blizzard Texts", yOffset)
     card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
@@ -115,11 +115,17 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
     -- Full Blizzard font-object replacement (BlizzardFonts module): re-fonts
     -- the shared Blizzard font objects (tooltips, quest text, objective
     -- tracker, number fonts, mail...) to the brand font at Blizzard's stock
-    -- sizes, scaled by the Blizzard Font Base Size on the Blizzard Frames
-    -- page. One-time application, no per-frame cost.
+    -- sizes, scaled by the base-size slider below. One-time application, no
+    -- per-frame cost.
+    --
+    -- Everything Blizzard's own text needs is gathered in this one card: the
+    -- switch, the size it scales from, the face, then the per-category sizes.
+    -- The base size writes to the frame-skin table because the skin engine
+    -- reads it from there.
     local fontsDb = KE.db and KE.db.profile.Skinning.BlizzardFonts
+    local framesDb = KE.db and KE.db.profile.Skinning.BlizzardFrames
     if fontsDb then
-        local rowBF = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+        local rowBF = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
         local fontsCheck = GUIFrame:CreateCheckbox(rowBF, "Replace All Blizzard Fonts", {
             value = fontsDb.Enabled == true,
             callback = function(checked)
@@ -138,6 +144,56 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
         card1:AddRow(rowBF, Theme.rowHeight)
     end
 
+    if framesDb then
+        local rowBase = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+        rowBase:AddWidget(GUIFrame:CreateSlider(rowBase, "Blizzard Font Base Size", {
+            min = 8, max = 18, step = 1, value = framesDb.FontBaseSize or 12,
+            tooltip = "Base size every Blizzard font object scales from unless it has a size of its own below. 12 is Blizzard's baseline.",
+            callback = function(val)
+                framesDb.FontBaseSize = val
+                if KE.Skins and KE.Skins.ApplyGlobalFonts then
+                    KE.Skins.ApplyGlobalFonts()
+                end
+                -- The font sweep scales every unoverridden font object off this
+                -- same base, so it has to re-run or the two systems drift apart.
+                local bf = KitnEssentials:GetModule("BlizzardFonts", true)
+                if bf and fontsDb and fontsDb.Enabled and bf.ApplyAll then bf:ApplyAll() end
+            end,
+        }), 1)
+        card1:AddRow(rowBase, Theme.rowHeight)
+    end
+
+    -- The face belongs to the message skinning, not the sweep, so it appears
+    -- only while the master switch is on -- but it reads as part of the same
+    -- subject and sits with it rather than in a card of its own.
+    if db.Enabled ~= false then
+        local rowFace = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+        local fontDropdown = GUIFrame:CreateDropdown(rowFace, "Font", {
+            options = fontList,
+            value = db.Font or "Friz Quadrata TT",
+            callback = function(key)
+                db.Font = key
+                ApplySettings()
+            end,
+            searchable = true,
+            isFontPreview = true,
+        })
+        rowFace:AddWidget(fontDropdown, 0.5)
+        manager:Register(fontDropdown, "all")
+
+        local outlineDropdown = GUIFrame:CreateDropdown(rowFace, "Outline", {
+            options = OUTLINE_OPTIONS,
+            value = db.FontOutline or "OUTLINE",
+            callback = function(key)
+                db.FontOutline = key
+                ApplySettings()
+            end,
+        })
+        rowFace:AddWidget(outlineDropdown, 0.5)
+        manager:Register(outlineDropdown, "all")
+        card1:AddRow(rowFace, Theme.rowHeight)
+    end
+
     if fontsDb then
         fontsDb.Sizes = fontsDb.Sizes or {}
         local sizes = fontsDb.Sizes
@@ -145,6 +201,11 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
             local bf = KitnEssentials:GetModule("BlizzardFonts", true)
             if bf and fontsDb.Enabled and bf.ApplyAll then bf:ApplyAll() end
         end
+
+        local rowSep = GUIFrame:CreateRow(card1.content, Theme.rowHeightSeparator)
+        rowSep:AddWidget(GUIFrame:CreateSeparator(rowSep), 1)
+        card1:AddRow(rowSep, Theme.rowHeightSeparator)
+
         card1:AddLabel("Sizes for the font categories the sweep controls. Requires 'Replace All Blizzard Fonts'; applies live.")
 
         local rowA = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
@@ -191,41 +252,7 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
     if db.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------
-    -- Card 2: Global Font Settings
-    ----------------------------------------------------------------
-    local card2 = GUIFrame:CreateCard(scrollChild, "Font Settings For Blizzard Texts", yOffset)
-    manager:Register(card2, "all")
-
-    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
-    local fontDropdown = GUIFrame:CreateDropdown(row2a, "Font", {
-        options = fontList,
-        value = db.Font or "Friz Quadrata TT",
-        callback = function(key)
-            db.Font = key
-            ApplySettings()
-        end,
-        searchable = true,
-        isFontPreview = true,
-    })
-    row2a:AddWidget(fontDropdown, 0.5)
-    manager:Register(fontDropdown, "all")
-
-    local outlineDropdown = GUIFrame:CreateDropdown(row2a, "Outline", {
-        options = OUTLINE_OPTIONS,
-        value = db.FontOutline or "OUTLINE",
-        callback = function(key)
-            db.FontOutline = key
-            ApplySettings()
-        end,
-    })
-    row2a:AddWidget(outlineDropdown, 0.5)
-    manager:Register(outlineDropdown, "all")
-    card2:AddRow(row2a, Theme.rowHeightLast, 0)
-
-    yOffset = card2:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Card 3: Error Messages (UIErrorsFrame)
+    -- Error Messages (UIErrorsFrame)
     ----------------------------------------------------------------
     local errDb = db.UIErrorsFrame
     local card3 = GUIFrame:CreateCard(scrollChild, "Error Messages (Red Text)", yOffset)
@@ -312,7 +339,7 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
     yOffset = card3:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 4: Action Status Text
+    -- Action Status Text
     ----------------------------------------------------------------
     local actDb = db.ActionStatusText
     local card4 = GUIFrame:CreateCard(scrollChild, "Action Status Text (Yellow Text)", yOffset)
@@ -399,7 +426,7 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
     yOffset = card4:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 5: Chat Bubbles
+    -- Chat Bubbles
     ----------------------------------------------------------------
     local bubbleDb = db.ChatBubbles
     local card5 = GUIFrame:CreateCard(scrollChild, "Chat Bubbles", yOffset)
@@ -470,7 +497,7 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
     yOffset = card5:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 6: Objective Tracker
+    -- Objective Tracker
     ----------------------------------------------------------------
     local objDb = db.ObjectiveTracker
     local card6 = GUIFrame:CreateCard(scrollChild, "Objective Tracker", yOffset)
@@ -518,7 +545,7 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
     yOffset = card6:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 7: Zone Texts
+    -- Zone Texts
     ----------------------------------------------------------------
     local zoneDB = db.ZoneText
     local card7 = GUIFrame:CreateCard(scrollChild, "Zone Texts", yOffset)

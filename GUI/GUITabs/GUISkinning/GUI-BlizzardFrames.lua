@@ -546,25 +546,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFonts", function(scrollChild, yOffse
             if S and S.SetSkinFont then S.SetSkinFont(nil, val, nil) end
         end,
     }), 1)
-    card:AddRow(rowSize, Theme.rowHeightLast)
-
-    local rowB = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
-    rowB:AddWidget(GUIFrame:CreateSlider(rowB, "Blizzard Font Base Size", {
-        min = 8, max = 18, step = 1, value = db.FontBaseSize or 12,
-        tooltip = "Base size the game-wide font override scales from. This is a different scope from the settings above: it reaches Blizzard's own text, not skinned windows. 12 is Blizzard's baseline.",
-        callback = function(val)
-            db.FontBaseSize = val
-            if KE.Skins and KE.Skins.ApplyGlobalFonts then
-                KE.Skins.ApplyGlobalFonts()
-            end
-            -- The font sweep scales every unoverridden font object off this
-            -- same base, so it has to re-run or the two systems drift apart.
-            local bf = KitnEssentials:GetModule("BlizzardFonts", true)
-            local fdb = KE.db and KE.db.profile.Skinning.BlizzardFonts
-            if bf and fdb and fdb.Enabled and bf.ApplyAll then bf:ApplyAll() end
-        end,
-    }), 1)
-    card:AddRow(rowB, Theme.rowHeightLast, 0)
+    card:AddRow(rowSize, Theme.rowHeightLast, 0)
 
     yOffset = card:GetNextOffset()
 
