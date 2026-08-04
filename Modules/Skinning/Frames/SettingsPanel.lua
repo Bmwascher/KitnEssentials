@@ -206,7 +206,7 @@ local function Skin()
         S.FontStrings(frame.CloseButton, 13, "")
     end
 
-    -- v3.5.873 ("these headers for the game/addons tab get blizzard
+    -- ("these headers for the game/addons tab get blizzard
     -- skins after hovering"): StripTextures alone could never hold here.
     -- These tabs re-atlas Left/Middle/Right in place on every state change
     -- (SelectableButton in a RadioButtonGroup -> Options_Tab_Active_*), so

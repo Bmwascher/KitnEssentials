@@ -253,7 +253,7 @@ local function UpdateFlyoutILvl(button) -- luacheck: ignore 211/UpdateFlyoutILvl
     local INVALID = 4294967295
     local itemLoc
     if type(loc) == "table" then
-        -- v3.5.769 ("compare table with number" from the
+        -- ("compare table with number" from the
         -- Item Upgrade UI): Midnight's upgrade flyout populates
         -- button.location with an ItemLocation-style TABLE instead of
         -- the legacy packed integer. Feeding that to
@@ -365,7 +365,7 @@ local function UpdateCharacterInset(a, b)
     local inset = _G.CharacterFrameInset
     if not inset then return end
 
-    -- v3.5.845 (art returns on Currency -> Reputation ->
+    -- (art returns on Currency -> Reputation ->
     -- Character): Blizzard re-dresses the inset on every tab switch,
     -- so a one-time strip at skin cannot hold -- and our strip is
     -- state-only now (correctly: no more NOOP surgery). We are already
@@ -385,7 +385,7 @@ local function UpdateCharacterInset(a, b)
 end
 
 
--- v3.5.851 THE FIX ("backdrop comes back after clicking tabs").
+-- THE FIX ("backdrop comes back after clicking tabs").
 -- /aedump named it: CharacterModelScene's four BACKGROUND textures
 -- (4709136-9). Blizzard's SetPaperDollBackground() re-SetTextures all
 -- four (+ a race-based BackgroundOverlay alpha) and it is called from

@@ -55,7 +55,7 @@ local function Skin()
         -- KillAllTextures had already removed. No treatment needed.
     end
 
-    -- v3.5.798 (animated gold arrow clipped by our borders):
+    -- (animated gold arrow clipped by our borders):
     -- the Arrow frame animates at base level, rendering UNDER the
     -- backdrop borders which slice it mid-flight. Raise it so it
     -- glides over everything; Blizzard's Show/Restart cycle only

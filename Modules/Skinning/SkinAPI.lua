@@ -604,7 +604,7 @@ function S.RowHover(row)
         tex:Hide()
         tex:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -1)
         tex:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 1)
-        -- v3.5.856 AUDIT: never enable input on a row Blizzard left
+        -- AUDIT: never enable input on a row Blizzard left
         -- mouse-disabled. This is our own hover standard, and it is the
         -- exact call that put AES in the currency-transfer FORBIDDEN
         -- (v841): changing input state on Blizzard's rows drags us into
@@ -659,7 +659,7 @@ function S.Protect(region)
 end
 
 function S.KillTexture(t)
-    -- v3.5.828 (flyout equip taint, THE root after seven rounds):
+    -- (flyout equip taint, THE root after seven rounds):
     -- replacing methods (SetTexture/Show/... = NOOP) on Blizzard's
     -- texture objects plants tainted FUNCTION values their secure
     -- code CALLS -- every SetItemButton*/state-texture touch in a
@@ -1493,7 +1493,7 @@ function S.Tab(tab)
         end
         if not d0.noGeometry and not d0.initFit and _G.PanelTemplates_TabResize then
             d0.initFit = true
-            -- v3.5.855 (tabs start somewhere then snap into
+            -- (tabs start somewhere then snap into
             -- place): this fit was deferred a frame, so the tab was
             -- drawn once at Blizzard's size/position and then jumped to
             -- ours. Nothing here needs to wait -- the tab and its text
@@ -2339,7 +2339,7 @@ local function thumbOnMouseDown(t) t.__aeActive = true; thumbColor(t, THUMB_HOT)
 local function thumbOnMouseUp(t) t.__aeActive = nil; thumbColor(t, THUMB_REST) end
 
 local function skinScrollArrows(frame)
-    -- v3.5.860 (currency-transfer FORBIDDEN, the actual root):
+    -- (currency-transfer FORBIDDEN, the actual root):
     -- this used S.ArrowButton on the trim bar's steppers, which runs
     -- zeroArrowStates -> S.KillTexture -> `t.Show = t.Hide` SLOT WRITES
     -- on stepper textures, plus OnEnter/OnLeave/OnShow re-kill hooks
@@ -2439,7 +2439,7 @@ function S.TrimScrollBar(frame, ignoreUpdates) -- luacheck: ignore 212/ignoreUpd
     -- never had. Currency passing `true` was accidentally the only skin
     -- immune to this.
     --
-    -- v3.5.873 CORRECTION: v868 claimed this hook was the root of the
+    -- CORRECTION: v868 claimed this hook was the root of the
     -- LootHistory taint and attached a doctrine to it -- "never
     -- hooksecurefunc a method Blizzard calls from the middle of another
     -- Blizzard function". Both were wrong. Removing this hook changed

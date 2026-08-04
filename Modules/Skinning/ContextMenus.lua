@@ -232,7 +232,7 @@ function CM:Setup()
     local manager = Menu.GetManager()
     if not manager then return false end
 
-    -- v3.5.834 REVERT of v3.5.833. The poller was built on a WRONG
+    -- REVERT of v3.5.833. The poller was built on a WRONG
     -- theory ("hooks inside a secure flow taint it"). They don't:
     -- hooksecurefunc is designed to be taint-safe -- the hook body
     -- runs with our taint, then execution returns to secure. ElvUI

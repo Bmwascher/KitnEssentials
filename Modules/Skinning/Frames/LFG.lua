@@ -652,7 +652,7 @@ local function Skin()
         local av = lfgList.ApplicationViewer
         if av then
             if av.Inset then S.StripTextures(av.Inset) end
-            -- v3.5.784 (keep the art, lose Blizzard's border):
+            -- (keep the art, lose Blizzard's border):
             -- the art and border are one atlas, so the border is
             -- cropped off in TEXCOORD space -- resolve the atlas's file
             -- rect via C_Texture.GetAtlasInfo and inset past the baked
@@ -699,7 +699,7 @@ local function Skin()
         end
     end
 
-    -- v3.5.777 (applicant accept/decline unskinned; role icons
+    -- (applicant accept/decline unskinned; role icons
     -- not matching our apply skin). ElvUI hooks
     -- LFGListApplicationViewer_UpdateApplicant for the buttons; role
     -- icons restyle in LFGListApplicationViewer_UpdateRoleIcons, where

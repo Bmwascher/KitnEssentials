@@ -19,7 +19,7 @@ local function HandleOptionSlot(slotFrame, skipHook)
     if not slotFrame or not slotFrame.OptionsList then return end
     local option = slotFrame.OptionsList
     S.StripTextures(option)
-    -- v3.5.802 (flyout transparent, rows overlapping the
+    -- (flyout transparent, rows overlapping the
     -- panel): the list's ScrollBox is frameStrata="HIGH" while the
     -- OptionsList (and a backdrop childed to it) sits in the config
     -- panel's MEDIUM strata -- rows floated in HIGH above everything

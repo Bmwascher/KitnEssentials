@@ -59,7 +59,7 @@ local FONT_LIST = {
 
     { "ObjectiveFont", 12, "S" },
     { "ObjectiveTrackerHeaderFont", 14, "O" },
-    -- v3.5.792 (dungeon/scenario tracker lines lacked outline):
+    -- (dungeon/scenario tracker lines lacked outline):
     -- these lines inherit ObjectiveTrackerLineFont; EUI's QuestTracker
     -- skin re-fonts only the blocks it covers, so the scenario module
     -- falls through to this font object. Promoted to outline
@@ -81,7 +81,7 @@ local FONT_LIST = {
     { "QuestFont_39", 39 },
 
     { "MailTextFontNormal", 15 },
-    -- v3.5.771 (cooldown numbers lost their outline):
+    -- (cooldown numbers lost their outline):
     -- this object IS the native cooldown-count font (ElvUI's font map
     -- confirms: cooldown = SystemFont_Shadow_Large_Outline). It was
     -- mapped "S", stripping OUTLINE from item cooldowns, private aura

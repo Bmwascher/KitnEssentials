@@ -710,7 +710,7 @@ local function WantIDs(db)
     return true
 end
 
--- v4.0.41 (field: no Spell ID on macro tooltips despite #showtooltip):
+-- (field: no Spell ID on macro tooltips despite #showtooltip):
 -- a macro's tooltip is TooltipDataType.MACRO, not SPELL, so the Spell
 -- post-call never fired -- the same disease as the buff frame
 -- and talent tooltips. ElvUI routes MACRO into this very
@@ -777,7 +777,7 @@ function TT:SetDefaultAnchor(tt, parent)
         tt:SetOwner(parent, "ANCHOR_CURSOR_RIGHT",
             db.CursorOffsetX or 10, db.CursorOffsetY or -10)
     elseif self.anchorFrame then
-        -- v3.5.897 (the ORIGINAL ask, ElvUI TooltipMover
+        -- (the ORIGINAL ask, ElvUI TooltipMover
         -- pattern): default-anchored tooltips dock to KE's own movable
         -- Tooltip anchor instead of Blizzard's corner.
         tt:SetOwner(parent, "ANCHOR_NONE")
@@ -925,7 +925,7 @@ function TT:OnEnable()
     self:SecureHook(_G.GameTooltip, "SetUnitBuff", "AuraIDByIndex")
     self:SecureHook(_G.GameTooltip, "SetUnitDebuff", "AuraIDByIndex")
 
-    -- v3.5.893 (holding a modifier after the tooltip was already
+    -- (holding a modifier after the tooltip was already
     -- up never added the ID lines): ElvUI's mechanism -- on modifier
     -- change, RefreshData() re-fires the tooltip data processors, so the
     -- Unit/Spell/Item post-calls re-run with the new modifier state.
@@ -958,10 +958,10 @@ function TT:MODIFIER_STATE_CHANGED()
     local owner = tt:GetOwner()
     if owner and owner.action then return end
     if itemLink or spellID then
-        -- v4.0.5 (talent NAME vanished with
+        -- (talent NAME vanished with
         -- shift held): raw RefreshData is lossy for ANY tooltip whose
         -- title is added by the owning frame rather than the spell data
-        -- -- v3.5.913 hit this on macro buttons, talents are the same
+        -- -- hit this on macro buttons, talents are the same
         -- disease (TalentDisplay mixins add the name line themselves).
         -- ElvUI's actual handler never force-refreshes these: it
         -- re-fires the owner's own tooltip builder. Generalized here:
@@ -969,7 +969,7 @@ function TT:MODIFIER_STATE_CHANGED()
         -- its tooltip through the CORRECT path, nothing is lost, and our
         -- data processor re-fires with the new modifier state. Raw
         -- RefreshData remains only as the ownerless fallback.
-        -- v3.5.911 still applies: 12.x hands SECRET color tables to
+        -- still applies: 12.x hands SECRET color tables to
         -- ordinary lines and the rebuild runs on our tainted execution,
         -- so both paths stay pcall'd -- on failure the tooltip re-renders
         -- securely on its own next natural update.

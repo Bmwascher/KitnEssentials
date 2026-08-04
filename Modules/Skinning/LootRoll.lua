@@ -278,7 +278,7 @@ function LR:GetMover()
     m:SetSize(340, 90)
     m:SetFrameStrata("FULLSCREEN_DIALOG")
     m:SetClampedToScreen(true)
-    -- v3.5.871 ("their own unlock anchors on top of the addon's
+    -- ("their own unlock anchors on top of the addon's
     -- toggle anchors ... causing position mismatches"): the mover's own
     -- drag scripts are gone and it never Shows itself any more. It had
     -- been a SECOND draggable anchor sitting on the same frame EditMode
@@ -377,7 +377,7 @@ function LR:Setup()
     LogState("Setup:pre-wire wired=" .. tostring(self._wired == true))
 
     if not self._wired then
-        -- v3.5.755 (taint report: ADDON_ACTION_BLOCKED on
+        -- (taint report: ADDON_ACTION_BLOCKED on
         -- UIParentRightManagedFrameContainer:ClearAllPoints during a
         -- stance-bar update): writing UIPARENT_MANAGED_FRAME_POSITIONS
         -- (even nil) taints the table, and setting ignoreInLayout on a
