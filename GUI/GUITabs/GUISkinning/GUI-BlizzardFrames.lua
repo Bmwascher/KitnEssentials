@@ -283,9 +283,9 @@ local function BuildCheckGrid(card, entries, skins)
     end
 end
 
--- This tab is offered in every state, including the two where the skin engine is
--- not running, because Color Picker and Raid Control ride on it and neither is a
--- skin. The font card IS a skin setting, so it alone is conditional.
+-- This tab is offered in every state, including the two where the skin engine
+-- is not running, because Color Picker and Raid Control ride on it and neither
+-- is a skin. The font card IS a skin setting, so it alone is conditional.
 --
 -- Note there is no early return on a missing db. The chained pages below read
 -- their own db and must still render when this page's is absent.
@@ -513,10 +513,10 @@ end, {
             -- AddHeaderToggle's own OnClick already calls RefreshContent.
         end)
         -- Say WHY the engine's own tabs are absent. Hiding them is right --
-        -- greyed controls read as "locked on" rather than "does not apply"
-        -- (the A6.3b Move Loot Rolls ruling) -- but hiding alone leaves a user
-        -- unable to tell those settings exist at all. AddLabel bumps the card
-        -- off its lone-header-bar height, which is the intended look here.
+        -- greyed controls read as "locked on" rather than "does not apply" (the
+        -- A6.3b Move Loot Rolls ruling) -- but hiding alone leaves a user unable
+        -- to tell those settings exist at all. AddLabel bumps the card off its
+        -- lone-header-bar height, which is the intended look here.
         --
         -- The toggle above stays live under ElvUI on purpose: the setting is
         -- kept and applies again if ElvUI is turned off, which is what the label
