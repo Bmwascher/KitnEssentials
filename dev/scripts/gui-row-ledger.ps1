@@ -19,7 +19,16 @@ param(
 # the excluded DamageMeter 80s, say - passes here because it genuinely does not
 # move a pixel. Plan conformance is a separate question, answered by reading the
 # diff against the plan. Do not read a green run as "the plan was obeyed".
-# (Both limits named by review, 2026-08-03.)
+#
+# ONE STANDING ASSUMPTION, stated rather than checked: that `Theme`, `T` and
+# `KE.Theme` all resolve to the theme table at the site where they appear. This
+# script matches the NAME, not the binding, so an undefined or shadowed alias
+# would read nil and the "no page can move" claim would not hold for that line.
+# The backing gate is luacheck, which is required to end 0/0 and reports an
+# undefined global read - that is exactly how the DungeonTimersDungeon.lua case
+# was caught, where no alias is in scope and `KE.Theme` is required. A green run
+# here plus a green luacheck covers it; this script alone does not.
+# (All three limits named by review, 2026-08-03.)
 
 $ErrorActionPreference = 'Stop'
 
@@ -44,54 +53,91 @@ function Get-ThemeValues($repo) {
     return $values
 }
 
-# Which characters of a Lua line are CODE, as opposed to string or comment.
+# Which characters of each line of a FILE are Lua code, as opposed to string or
+# comment. Returns a per-line array of bool arrays, indexed from 1.
 #
-# Needed because a substitution inside a string literal changes displayed text
-# while rebuilding to a line identical to the original: "foo 50 bar" becoming
+# Needed because a substitution inside a string changes displayed text while
+# rebuilding to a line identical to the original: "foo 50 bar" becoming
 # "foo Theme.rowHeightNote bar" rebuilds to "foo 50 bar" and would otherwise
-# pass while the user sees different words on screen. Named by review 2026-08-03.
+# pass while the user reads different words on screen.
 #
-# Deliberately a line-level scanner, not a Lua parser: it handles quoted strings
-# with escapes, [[ ]] long brackets and -- comments, all of which open and close
-# on one line in this codebase. A multi-line string is treated as code on its
-# continuation lines, which fails toward reporting an offender, never toward a
-# silent pass.
-function Get-CodeMask([string]$line) {
-    $mask = New-Object 'bool[]' $line.Length
-    $i = 0
-    while ($i -lt $line.Length) {
-        $c = $line[$i]
+# This scans the WHOLE FILE rather than one line, because lexical state carries
+# across lines and a diff hunk does not show you where you are. That is not
+# hypothetical here: GUI/GUITabs/GUICombat/GUI-Cursor.lua:456-475 is a multiline
+# --[[ ]]-- block containing real CreateRow/AddRow calls with theme constants in
+# them. A line-level scanner marks those as live code, and any grammar-based
+# check would match them too. Both limits named by review, 2026-08-03.
+#
+# Handles: quoted strings with backslash escapes, long brackets at any equals
+# level ([[ ]], [=[ ]=], [==[ ]==] ...), line comments, and long comments.
+function Get-FileCodeMask([string]$path) {
+    $masks = @{}
+    if (-not (Test-Path -LiteralPath $path)) { return $masks }
+    $lines = @(Get-Content -LiteralPath $path)
 
-        if ($c -eq '-' -and $i + 1 -lt $line.Length -and $line[$i + 1] -eq '-') {
-            break   # comment runs to end of line; everything from here is not code
-        }
+    $longLevel = -1        # -1 = not inside a long bracket; else its equals count
+    for ($ln = 0; $ln -lt $lines.Count; $ln++) {
+        $line = $lines[$ln]
+        $mask = New-Object 'bool[]' $line.Length
+        $i = 0
 
-        if ($c -eq '[' -and $i + 1 -lt $line.Length -and $line[$i + 1] -eq '[') {
-            $close = $line.IndexOf(']]', $i + 2)
-            if ($close -lt 0) { break }
-            $i = $close + 2
-            continue
-        }
-
-        if ($c -eq "'" -or $c -eq '"') {
-            $quote = $c
-            $i++
-            while ($i -lt $line.Length) {
-                if ($line[$i] -eq '\') { $i += 2; continue }
-                if ($line[$i] -eq $quote) { $i++; break }
-                $i++
+        while ($i -lt $line.Length) {
+            # Inside a multi-line long bracket: hunt only for its exact closer.
+            if ($longLevel -ge 0) {
+                $closer = ']' + ('=' * $longLevel) + ']'
+                $at = $line.IndexOf($closer, $i)
+                if ($at -lt 0) { $i = $line.Length; break }
+                $i = $at + $closer.Length
+                $longLevel = -1
+                continue
             }
-            continue
+
+            $c = $line[$i]
+
+            # A long bracket, possibly opening a comment (--[[) or a string.
+            if ($c -eq '[' -or ($c -eq '-' -and $i + 1 -lt $line.Length -and $line[$i + 1] -eq '-')) {
+                $probe = $i
+                if ($c -eq '-') { $probe = $i + 2 }
+                if ($probe -lt $line.Length -and $line[$probe] -eq '[') {
+                    $eq = 0
+                    $j = $probe + 1
+                    while ($j -lt $line.Length -and $line[$j] -eq '=') { $eq++; $j++ }
+                    if ($j -lt $line.Length -and $line[$j] -eq '[') {
+                        $longLevel = $eq
+                        $i = $j + 1
+                        continue
+                    }
+                }
+                # A '--' that did not open a long comment runs to end of line.
+                if ($c -eq '-') { break }
+            }
+
+            if ($c -eq "'" -or $c -eq '"') {
+                $quote = $c
+                $i++
+                while ($i -lt $line.Length) {
+                    if ($line[$i] -eq '\') { $i += 2; continue }
+                    if ($line[$i] -eq $quote) { $i++; break }
+                    $i++
+                }
+                continue
+            }
+
+            $mask[$i] = $true
+            $i++
         }
 
-        $mask[$i] = $true
-        $i++
+        $masks[$ln + 1] = $mask
     }
-    return $mask
+    return $masks
 }
 
 # One changed line pair, reduced to what actually differs.
-function Test-LinePreservesValue($removed, $added, $themeValues) {
+#
+# $mask is the code mask for this added line, from the file's own scan. A null
+# mask means the line could not be located in the working tree, which is treated
+# as NOT code - unlocatable is never assumed safe.
+function Test-LinePreservesValue($removed, $added, $themeValues, $mask) {
     # Normalise: strip the leading +/- and collapse nothing else. Whitespace
     # differences are NOT tolerated - a reflowed line is not a swap.
     $r = $removed.Substring(1)
@@ -113,9 +159,11 @@ function Test-LinePreservesValue($removed, $added, $themeValues) {
     # Every theme reference must sit in code. One inside a string or comment is
     # rejected outright rather than rebuilt, so it cannot reconstruct its way to
     # a false pass.
-    $mask = Get-CodeMask $a
-    foreach ($m in [regex]::Matches($a, $pattern)) {
-        if (-not $mask[$m.Index]) { return $false }
+    $matches = [regex]::Matches($a, $pattern)
+    if ($matches.Count -eq 0) { return $false }   # nothing swapped is not a swap
+    if ($null -eq $mask) { return $false }
+    foreach ($m in $matches) {
+        if ($m.Index -ge $mask.Length -or -not $mask[$m.Index]) { return $false }
     }
 
     $rebuilt = [regex]::Replace($a, $pattern, {
@@ -165,6 +213,8 @@ $removedQueue = New-Object System.Collections.ArrayList
 $offenders = New-Object System.Collections.ArrayList
 $entries = New-Object System.Collections.ArrayList
 $themeAdditions = 0
+$fileMasks = @{}    # repo-relative path -> line number -> per-char code mask
+$newLine = 0        # new-side line number of the next '+' line in this hunk
 
 # Header lines are recognized by POSITION IN THE DIFF, not by how they look.
 #
@@ -204,6 +254,9 @@ foreach ($line in $diff) {
     # cancelling out into a false pass.
     if ($line -like '@@*') {
         if ($file) { Flush-Leftovers $removedQueue $file $offenders }
+        # Capture the NEW-side start line so each '+' line can be located in the
+        # working-tree file and asked whether it is code. Format: @@ -a,b +c,d @@
+        if ($line -match '^@@ -\d+(?:,\d+)? \+(\d+)') { $newLine = [int]$Matches[1] } else { $newLine = 0 }
         continue
     }
 
@@ -218,6 +271,12 @@ foreach ($line in $diff) {
 
     if ($line.StartsWith('-')) { [void]$removedQueue.Add($line); continue }
     if (-not $line.StartsWith('+')) { continue }
+
+    # This '+' line's number on the new side. Advanced for EVERY added line,
+    # including the exempted theme one, or the count would drift out of step
+    # with the file and later masks would be read off the wrong lines.
+    $thisLine = $newLine
+    $newLine++
 
     # AddonTheme.lua is where the new constant is DEFINED, so it legitimately
     # adds ONE line with no removed twin. Exempt exactly that line and nothing
@@ -245,7 +304,12 @@ foreach ($line in $diff) {
     $removed = $removedQueue[0]
     $removedQueue.RemoveAt(0)
 
-    if (-not (Test-LinePreservesValue $removed $line $themeValues)) {
+    if (-not $fileMasks.ContainsKey($file)) {
+        $fileMasks[$file] = Get-FileCodeMask (Join-Path $RepoRoot $file)
+    }
+    $mask = $fileMasks[$file][$thisLine]
+
+    if (-not (Test-LinePreservesValue $removed $line $themeValues $mask)) {
         Add-Offender $offenders $file "not a value-preserving swap`n    was: $($removed.Substring(1).Trim())`n    now: $($line.Substring(1).Trim())"
         continue
     }
