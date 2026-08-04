@@ -42,8 +42,8 @@ local format = string.format
 -- These three are NOT in KE's .luacheckrc read_globals, so a bare reference
 -- is a W113 (undefined variable) -- which is never acceptable at any stage.
 -- Alias them at file scope through _G, the same way both sibling modules do
--- for C_LFGList (Modules/Dungeons/LFGQuickCreate.lua:53,
--- Modules/Dungeons/LFGReminder.lua:56). Do NOT widen .luacheckrc instead.
+-- for C_LFGList (Modules/Dungeons/LFGQuickCreate.lua,
+-- Modules/Dungeons/LFGReminder.lua). Do NOT widen .luacheckrc instead.
 -- C_SocialQueue may legitimately be nil here; every caller nil-checks it.
 local C_LFGList = _G.C_LFGList
 local C_SocialQueue = _G.C_SocialQueue

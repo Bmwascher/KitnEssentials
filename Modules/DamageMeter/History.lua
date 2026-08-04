@@ -346,7 +346,7 @@ function DM:HistoryCapture()
 
     if not (C_DamageMeter and C_DamageMeter.GetAvailableCombatSessions) then return nil end
     -- EXPLICIT huge cap: the helper defaults an omitted cap to 20 (its menu
-    -- contract, Core.lua:1669) — an implicit call would silently drop the
+    -- contract, Core.lua) — an implicit call would silently drop the
     -- OLDEST segments of a long key (Codex round 2, F2').
     local list = self:GetAvailableSessions(1e9)
     if not list or #list == 0 then return nil end

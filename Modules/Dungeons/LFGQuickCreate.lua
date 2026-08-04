@@ -48,7 +48,7 @@ local C_Timer = C_Timer
 -- Indexed off _G, unlike its neighbours: C_LFGList is the one API this file
 -- touches that is NOT in .luacheckrc's allowlist, so a bare capture is a
 -- W113 (accessing undefined global) and every task gates on zero warnings.
--- Modules/Skinning/Frames/LFG.lua:122 already reaches this same API this way.
+-- Modules/Skinning/Frames/LFG.lua already reaches this same API this way.
 -- Do NOT widen .luacheckrc instead.
 local C_LFGList = _G.C_LFGList
 local C_ChallengeMode = C_ChallengeMode
@@ -77,7 +77,7 @@ local issecretvalue = issecretvalue
 local playerShortName = UnitNameUnmodified and UnitNameUnmodified("player") or UnitName("player")
 -- Both name APIs are SecretWhenUnitIdentityRestricted (UnitDocumentation.lua
 -- :2367-2382 and :2401-2415). By that predicate's own documented text
--- (SecretPredicatesDocumentation.lua:108-111: secret only when the unit
+-- (SecretPredicatesDocumentation.lua: secret only when the unit
 -- isn't player-controlled or in the party/raid) the "player" token should
 -- never trigger it -- this guard is belt-and-braces against an undocumented
 -- restriction state, not a known one. Kept anyway: failing closed costs
@@ -173,7 +173,7 @@ RefreshGlow = function()
     -- Themed: this was the reference project's own accent literal, now KE's.
     -- Read once per call, not once per button -- KE.Theme.accent[4] is the
     -- theme's alpha, not this glow's; the glow keeps its own measured 0.38.
-    -- Fallback is KE's own brand pink (VantusRune.lua:184 precedent), not the
+    -- Fallback is KE's own brand pink (VantusRune.lua precedent), not the
     -- old literal -- that literal was the reference project's own accent.
     -- A live theme switch repaints on the next 2s ticker, not instantly.
     local accent = KE.Theme and KE.Theme.accent or { 1, 0, 0.549 }
@@ -222,7 +222,7 @@ end
 --
 -- UnitName is SecretWhenUnitIdentityRestricted
 -- (.wow-api-reference Interface/AddOns/Blizzard_APIDocumentationGenerated/
--- UnitDocumentation.lua:2368-2371), so inside a dungeon the name comes back
+-- UnitDocumentation.lua), so inside a dungeon the name comes back
 -- secret and comparing it would throw -- that unit is skipped and the line
 -- keeps the accent colour. UnitClass's SECOND return (classFilename) has no
 -- ConditionalSecret flag (same file :908-913); the first one does, so it is
@@ -295,7 +295,7 @@ MakeButton = function(parent, dungeon, index)
             GameTooltip:AddLine((playerShortName or "You") .. ": +" .. ownLevel, 1, 0.82, 0)
         end
         -- Themed: this was the reference project's own accent literal, now
-        -- KE's. Fallback is KE's own brand pink (VantusRune.lua:184
+        -- KE's. Fallback is KE's own brand pink (VantusRune.lua
         -- precedent), not the old literal. A live theme switch repaints on
         -- the next hover, not instantly.
         local accent = KE.Theme and KE.Theme.accent or { 1, 0, 0.549 }
@@ -347,7 +347,7 @@ MakeButton = function(parent, dungeon, index)
         -- Tried 2026-08-01 and it is BLOCKED: Select reaches
         -- LFGListEntryCreation_SetTitleFromActivityInfo
         -- (.wow-api-reference Interface/AddOns/Blizzard_GroupFinder/
-        -- Mainline/LFGList.lua:1104, :1311), which calls the protected
+        -- Mainline/LFGList.lua), which calls the protected
         -- SetEntryTitle. In-game trace: ADDON_ACTION_BLOCKED, 'SetEntryTitle()'.
         -- The form staying blank is cosmetic and stays that way.
     end)
@@ -457,10 +457,10 @@ Init = function()
 
     -- DEVIATION from the reference, and it fixes a live defect there. The
     -- reference hides the overlay only when out of combat and never retries
-    -- (<REF>:426, :444), so combat starting inside the 0.35s window leaves the
+    -- (<REF>:426), so combat starting inside the 0.35s window leaves the
     -- overlay SHOWN indefinitely, still covering that category tile and still
     -- armed to click Start a Group. Route every hide through KE:RunAfterCombat
-    -- (Core/Globals.lua:154-170), which owns its own frame and its own
+    -- (Core/Globals.lua), which owns its own frame and its own
     -- PLAYER_REGEN_ENABLED registration and therefore survives module disable.
     HideDoubleClickOverlay = function()
         if not dblOverlay then return end
@@ -597,7 +597,7 @@ function QC:UpdateDB()
     -- shipped this module, so no user can be holding a bad value from an
     -- older build. It is here because this key is user-editable through
     -- saved variables, because a plain string-array dropdown would return
-    -- the LABEL (GUI-KEDropdown.lua:198-202 -- the ordered form in the config
+    -- the LABEL (GUI-KEDropdown.lua -- the ordered form in the config
     -- page is what avoids that), and because the value feeds a protected API
     -- call where a string is a usage error.
     -- Enum.LFGEntryGeneralPlaystyle runs 0-4; 0 is None and never valid here.

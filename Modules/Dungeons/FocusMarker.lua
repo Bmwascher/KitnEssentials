@@ -162,7 +162,7 @@ end
 -- etc.) share the same handler namespace, the dispatch chain becomes tainted
 -- and SendChatMessage (HasRestrictions=true, RestrictedForMacroChatMessages=true)
 -- is blocked. The bare-frame OnEvent + C_Timer.After defer mirrors EllesmereUI's
--- pattern in EllesmereUIQoL.lua:874-904 (instance reset announcer).
+-- pattern in EllesmereUIQoL.lua (instance reset announcer).
 function FM:_AnnounceFocusMarkerOnReadyCheck()
     local db = self.db
     if not db.AnnounceReadyCheck then return end

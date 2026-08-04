@@ -217,7 +217,7 @@ function HM:GetEditModeLabel()
     return "Healer Mana"
 end
 
--- Ported from NUI v4 (HealerMana.lua:123-139). Rewrites the container's
+-- Ported from NUI v4 (HealerMana.lua). Rewrites the container's
 -- vertical anchor edge so the stack grows away from a stable edge: DOWN pins
 -- the TOP, UP pins the BOTTOM. Horizontal component preserved.
 function HM:GetGrowAnchor(anchor)

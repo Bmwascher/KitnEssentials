@@ -81,7 +81,7 @@ end
 
 -- Style ---------------------------------------------------------------
 
--- EUI's ACTUAL overlay technique (BlizzardSkin.lua:207-215) --
+-- EUI's ACTUAL overlay technique (BlizzardSkin.lua) --
 -- plain textures on the tooltip, no BackdropTemplate. The old
 -- BackdropTemplate child ran SetupTextureCoordinates (width/edgeSize
 -- arithmetic) on every tooltip resize, and Midnight world-quest
@@ -91,7 +91,7 @@ end
 -- go secret.
 --
 -- The styler handle lives in S.data, never on the tooltip itself. Doctrine
--- (SkinAPI.lua:1858): a field we write onto a Blizzard frame plants a tainted
+-- (SkinAPI.lua): a field we write onto a Blizzard frame plants a tainted
 -- key in a secure table, which contaminates the iteration and field-fallback
 -- reads Blizzard's own code performs -- the v3.5.827 combat
 -- ADDON_ACTION_BLOCKED. S.data is a weak-keyed side table, so nothing of ours
@@ -145,7 +145,7 @@ end
 -- with GameTooltip_AddWidgetSet. Any insecure work here taints that
 -- execution, and the widget layout then dies on a secret number:
 --
---   Blizzard_UIWidgetTemplateTextWithState.lua:35: attempt to perform
+--   Blizzard_UIWidgetTemplateTextWithState.lua: attempt to perform
 --   arithmetic on local 'textHeight' (a secret number value, while
 --   execution tainted by 'atrocityEssentials')
 --
@@ -236,10 +236,10 @@ end
 --
 -- 12.0 rebuilt it: GameTooltipUnitHealthBarMixin:OnLoad fixes the range at
 -- 0..1 and drives the value from UnitPercentHealthFromGUID
--- (Blizzard_GameTooltip/Mainline/GameTooltip.lua:1037-1078), so the bar
+-- (Blizzard_GameTooltip/Mainline/GameTooltip.lua), so the bar
 -- carries a FRACTION, not health. That function is declared
 -- SecretReturns = true with no condition attached
--- (UnitDocumentation.lua:2514-2516), and UnitHealth is unconditionally
+-- (UnitDocumentation.lua), and UnitHealth is unconditionally
 -- secret too, so the real numbers are unreachable from here.
 --
 -- A percentage is out as well: SetText and SetFormattedText do accept
@@ -315,7 +315,7 @@ end
 --
 -- Blizzard publishes no line type for it: TooltipDataLineType has UnitName,
 -- UnitThreat and UnitOwner but nothing for level (12.0.7 reference,
--- TooltipInfoSharedDocumentation.lua:27-80). So the row is found the way
+-- TooltipInfoSharedDocumentation.lua). So the row is found the way
 -- ElvUI finds it -- by matching the localized level template against each
 -- line's text. The templates are GlobalStrings and are reduced to plain
 -- substrings once, on first use rather than at file scope, so load order
@@ -370,7 +370,7 @@ end
 -- Reading a unit's name is only safe when its identity is not restricted.
 -- UnitName and UnitPVPName are both SecretWhenUnitIdentityRestricted, and
 -- C_Secrets.ShouldUnitIdentityBeSecret is the predicate that matches them
--- (12.0.7 reference, SecretPredicateAPIDocumentation.lua:305 -- it returns a
+-- (12.0.7 reference, SecretPredicateAPIDocumentation.lua -- it returns a
 -- plain bool, so testing it directly is safe).
 --
 -- This is a STRICTER test than KE:IsSecretValue(unit), which only asks
@@ -378,7 +378,7 @@ end
 -- only this one licenses concatenating a name.
 --
 -- Deliberately NOT copied from oUF, whose NotSecretUnit calls the BARE global
--- `ShouldUnitIdentityBeSecret` (ElvUI_Libraries/.../oUF/init.lua:59-65). That
+-- `ShouldUnitIdentityBeSecret` (ElvUI_Libraries/.../oUF/init.lua). That
 -- global does not exist: the system declares Namespace = "C_Secrets", so it
 -- only ever exports under C_Secrets. oUF's `ShouldUnitIdentityBeSecret and`
 -- short-circuit therefore always yields nil, making NotSecretUnit constantly
@@ -396,7 +396,7 @@ end
 -- The " [AFK]" / " [DND]" suffix.
 --
 -- These two strings are OURS, not Blizzard's. There is no AFK_LABEL or
--- DND_LABEL global -- ElvUI builds its own file-locals at Tooltip.lua:98-99
+-- DND_LABEL global -- ElvUI builds its own file-locals at Tooltip.lua
 -- and this reads as though they were globals until you look. Colours and
 -- bracket form are copied from there; the words are literals, per the port
 -- convention against locale tables.
@@ -407,7 +407,7 @@ local DND_LABEL = " |cffFFFFFF[|r|cffFF3333DND|r|cffFFFFFF]|r"
 -- condition from identity restriction, so CanReadIdentity does not cover
 -- them and they need their own check. The secret test has to come first: a
 -- truth test on a secret boolean throws. Same shape as ElvUI's E:UnitIsAFK
--- wrapper (ElvUI/Game/Shared/General/API.lua:1439-1449).
+-- wrapper (ElvUI/Game/Shared/General/API.lua).
 local function AwayLabel(unit)
     local afk = UnitIsAFK(unit)
     if not KE:IsSecretValue(afk) and afk then return AFK_LABEL end
@@ -420,7 +420,7 @@ end
 
 -- Embedded tooltips (UIWidgetBaseItemEmbeddedTooltip*, the reward previews
 -- inside UI widgets) must not be written to. Blizzard sizes the host widget
--- from them -- Blizzard_UIWidgetTemplateBase.lua:1638 does
+-- from them -- Blizzard_UIWidgetTemplateBase.lua does
 --
 --   widgetHeight = math.max(iconSize, self.Tooltip:GetHeight())
 --
@@ -463,7 +463,7 @@ function TT:OnTooltipSetUnit(tt)
 
     -- Name row rebuild: player title, realm suffix and the Away/Busy label,
     -- none of which Blizzard's own row carries. Ports ElvUI SetUnitText
-    -- (Tooltip.lua:231-261) minus its ElvUI-version lookup and its gender
+    -- (Tooltip.lua) minus its ElvUI-version lookup and its gender
     -- prefix.
     --
     -- Colour is deliberately NOT set here. SetText does not clear a
@@ -492,7 +492,7 @@ function TT:OnTooltipSetUnit(tt)
             -- read once on hover and never again -- a dead control.
             --
             -- Shaped after Blizzard's GetUnitName
-            -- (Blizzard_UnitFrame/Mainline/UnitFrame.lua:1085-1101): a
+            -- (Blizzard_UnitFrame/Mainline/UnitFrame.lua): a
             -- virtual realm is one you are effectively already on, so it
             -- gets no marker, and every other cross-realm case gets the
             -- foreign-server suffix. ElvUI adds a second branch on
@@ -576,7 +576,7 @@ function TT:OnTooltipSetUnit(tt)
 
                     -- Angle brackets around the guild name itself, before
                     -- the rank is appended: "<Instant Dollars> [Officer]".
-                    -- Same form ElvUI writes (Tooltip.lua:269). Guarded on
+                    -- Same form ElvUI writes (Tooltip.lua). Guarded on
                     -- the first character so refresh ticks cannot nest them.
                     if out:sub(1, 1) ~= "<" then
                         out = "<" .. out .. ">"
@@ -598,7 +598,7 @@ function TT:OnTooltipSetUnit(tt)
     -- Level row rebuild: "90 Dark Iron Dwarf" in place of Blizzard's
     -- "Level 90 Dark Iron Dwarf (Player)", with the number tinted by how
     -- dangerous the unit is. Ports ElvUI's SetUnitText/GetLevelLine pair
-    -- (Tooltip.lua:263-304).
+    -- (Tooltip.lua).
     --
     -- The name row above is rebuilt separately, behind CanReadIdentity.
     if UnitIsPlayer(unit) then
@@ -641,7 +641,7 @@ function TT:OnTooltipSetUnit(tt)
 
     -- Faction row. "Alliance" / "Horde" duplicates what the name and level
     -- rows already convey, and the reference look drops it. Ports the
-    -- faction half of ElvUI's RemoveTrashLines (Tooltip.lua:193-204); the
+    -- faction half of ElvUI's RemoveTrashLines (Tooltip.lua); the
     -- PvP tag it also strips is left alone.
     if db.HideFactionLine then
         local okData, info = pcall(tt.GetTooltipData, tt)

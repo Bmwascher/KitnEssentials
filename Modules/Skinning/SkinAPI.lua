@@ -104,7 +104,7 @@ S.RefreshPalette()
 S.bgColor = S.palette.window
 S.borderColor = S.palette.border
 
--- ElvUI's E.ClearTexture (their Core.lua:81). Their
+-- ElvUI's E.ClearTexture (their Core.lua). Their
 -- StripRegion clears art with SetTexture(ClearTexture) + SetAtlas("")
 -- -- we were passing nil to both, which does NOT clear an atlas the
 -- way "" does: the texture kept rendering (green missing-art box on
@@ -124,7 +124,7 @@ local BLIZZARD_REGIONS = {
     "BottomLeftTex", "BottomRightTex", "RightTex", "MiddleTex", "Center",
     "ArtOverlayFrame", "FilligreeOverlay", "PortraitOverlay",
     "ScrollFrameBorder", "ScrollUpBorder", "ScrollDownBorder",
-    -- NineSlice added (ElvUI Toolkit.lua:25). The region dump
+    -- NineSlice added (ElvUI Toolkit.lua). The region dump
     -- proved the surviving character-frame art IS the NineSlice pieces
     -- (UI-Frame-Metal-* on CharacterFrame, UI-Frame-Inner* on
     -- CharacterFrameInsetRight). We only alpha-faded the container --
@@ -134,7 +134,7 @@ local BLIZZARD_REGIONS = {
     "NineSlice",
 }
 
--- ElvUI's Kill(), ported exactly (their Toolkit.lua:430).
+-- ElvUI's Kill(), ported exactly (their Toolkit.lua).
 -- This is how ElvUI makes art stay dead through Blizzard re-dressing:
 -- frames get unregistered + reparented to a hidden frame; regions get
 -- ONE narrow redirect (Show -> the object's own Hide). Note what it is
@@ -300,7 +300,7 @@ end
 
 -- The reference fills backdrops with its own statusbar art for a faint
 -- sheen. KE uses a flat white so a skinned Blizzard window and a KE panel
--- sitting beside each other read as one surface (Chat.lua:145 uses the same).
+-- sitting beside each other read as one surface (Chat.lua uses the same).
 local BG_TEX = "Interface\\Buttons\\WHITE8x8"
 
 function S.Backdrop(frame, inset, borderOnly)
@@ -671,7 +671,7 @@ function S.KillTexture(t)
     -- re-assertion stay cheap.
     if not t then return end
     if protectedTextures[t] then return end
-    -- aligned with ElvUI's Kill (Toolkit.lua:430) -- their
+    -- aligned with ElvUI's Kill (Toolkit.lua) -- their
     -- one tool for "stay dead" regions: a single Show->Hide redirect,
     -- not our old four-method NOOP. State-only (v828-v837) was the
     -- other extreme and let Blizzard re-dress everything (BigWigs
@@ -745,8 +745,8 @@ local function reKillArrowStates(button)
 end
 
 -- ElvUI's texture-clearing idiom, ported exactly
--- (E.ClearTexture = 0 in their Core.lua:81; S:ClearNormalTexture and
--- friends in Skins.lua:178). Two ideas we never copied:
+-- (E.ClearTexture = 0 in their Core.lua; S:ClearNormalTexture and
+-- friends in Skins.lua). Two ideas we never copied:
 --   1. Clear state art by passing fileID 0 to the BUTTON's own setter.
 --      Never touch the texture object, never NOOP a method.
 --   2. Get permanence by HOOKING the setter and re-clearing through
@@ -828,7 +828,7 @@ local CLOSE_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\KitnCu
 local ARROW_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.tga"
 local ARROW_ROT = { down = 0, up = 3.14159, right = 1.5708, left = -1.5708 }
 -- KitnCustomCrossv3 is a PLUS glyph -- KE's own GUI close button draws it as
--- an X by rotating 45 degrees (GUI/GUIMain/GUI-MainFrame.lua:334). The skin
+-- an X by rotating 45 degrees (GUI/GUIMain/GUI-MainFrame.lua). The skin
 -- swapped the reference's pre-rotated aesClose art for this one but kept the
 -- reference's geometry, so every skinned window drew a small upright plus.
 -- Rest colour is KE's GUI white (T.textPrimary), not the reference's 0.851

@@ -580,7 +580,7 @@ function H.UpdateBarColor(self, interruptDuration)
         -- "Kick ready" color is the current cast type's color (Casting /
         -- Channeling / Empowering) so user-set EmpoweringColor etc. is visible
         -- during interruptible casts. Mirrors atrocityEssentials v4
-        -- CastbarBase.lua:401-415. Without this, every interruptible cast for
+        -- CastbarBase.lua. Without this, every interruptible cast for
         -- a player with a known interrupt (i.e. every player) renders as
         -- kick.ReadyColor regardless of the per-cast-type color setting.
         local cr, cg, cb, ca
@@ -811,7 +811,7 @@ function H.StartCast(self)
         self.isImportant = nil
     end
     -- Default nil → false at the read site (matches EllesmereUI
-    -- EllesmereUINameplates.lua:4723-4725 UpdateCast). UnitCastingInfo /
+    -- EllesmereUINameplates.lua UpdateCast). UnitCastingInfo /
     -- UnitChannelInfo can omit the notInterruptible field for some cast
     -- types, and a nil value crashes SetAlphaFromBoolean (line 665) and
     -- the downstream EvaluateColorValueFromBoolean / SetVertexColorFromBoolean

@@ -19,8 +19,8 @@ end
 local LR = KitnEssentials:NewModule("LootRoll", "AceEvent-3.0")
 
 -- The profile-switch path and the ElvUI startup skip both gate on
--- name:find("^Skin") or module.keDeferToReload (Core/ProfileManager.lua:458,
--- Core/Main.lua:174). "LootRoll" fails the ^Skin test, and re-running Setup
+-- name:find("^Skin") or module.keDeferToReload (Core/ProfileManager.lua,
+-- Core/Main.lua). "LootRoll" fails the ^Skin test, and re-running Setup
 -- live would reparent GroupLootContainer mid-session.
 LR.keDeferToReload = true
 
@@ -318,15 +318,15 @@ end
 -- We re-anchor the FRAME rather than moving the container, which is what the
 -- legacy branch does. That avoids the managed-frame system entirely:
 -- BonusRollFrame is parented to UIParent and is a plain <Frame>
--- (Blizzard_UIPanels_Game/Mainline/GroupLootFrame.xml:23), so ClearAllPoints
+-- (Blizzard_UIPanels_Game/Mainline/GroupLootFrame.xml), so ClearAllPoints
 -- and SetPoint on it are legal in combat and taint nothing. And it is
--- sufficient: GroupLootFrame.lua:87-88 is the ONLY place any roll frame is
+-- sufficient: GroupLootFrame.lua is the ONLY place any roll frame is
 -- ever anchored, and both entry paths -- AddFrame (:25-40) and ReplaceFrame
 -- (:68-75) -- end in GroupLootContainer_Update, the function we post-hook.
 --
 -- Only the PROMPT. BonusRollLootWonFrame / BonusRollMoneyWonFrame, which
 -- replace it once the roll resolves, are loot toasts: they set AlertFrame as
--- their alert container (GroupLootFrame.lua:626-632) and are handed to
+-- their alert container (GroupLootFrame.lua) and are handed to
 -- AlertFrame:AddAlertFrame, so the alert chain owns their placement and
 -- re-anchoring them would just fight it.
 local function AnchorBonusRoll()
@@ -337,7 +337,7 @@ local function AnchorBonusRoll()
     local f = _G.BonusRollFrame
     if not f or not f:IsShown() then return end
 
-    -- Bar 1's own anchor and defaults (LootRollBars.lua:343), so the prompt
+    -- Bar 1's own anchor and defaults (LootRollBars.lua), so the prompt
     -- lands where a roll bar would. NOT the legacy branch's BOTTOM/0 pair, and
     -- emphatically not its CENTER->BOTTOM conversion -- that exists because the
     -- legacy container grows upward as rolls stack, and this is one fixed-size
@@ -396,13 +396,13 @@ function LR:Setup()
         --
         --  1. LAYOUT CHILD ENUMERATION -- exited. BaseLayoutMixin's
         --     GetLayoutChildren walks GetChildren()
-        --     (Blizzard_SharedXML/LayoutFrame.lua:58-60), so once the
+        --     (Blizzard_SharedXML/LayoutFrame.lua), so once the
         --     container is reparented to UIParent instead,
         --     UIParentBottomManagedFrameContainer's Layout() genuinely
         --     cannot reach it.
         --  2. MANAGER MEMBERSHIP -- kept. The frame stays in the container's
         --     showingFrames table (written Blizzard_UIParent/Shared/
-        --     UIParent.lua:182, cleared only at :204). UpdateManagedFrames
+        --     UIParent.lua, cleared only at :204). UpdateManagedFrames
         --     (:186-193) iterates THAT table, not the child list, and its
         --     UpdateFrame reparents the frame straight back at :153. Every
         --     hide/show cycle also re-runs OnShow -> AddManagedFrame.
@@ -542,12 +542,12 @@ function LR:RegisterEditMode()
         -- item "LootRoll" -- Open Settings was silently falling through to
         -- "just open the GUI". These sections live in the consolidated
         -- Blizzard Frames tab, so route through it (KE's sidebar id:
-        -- GUI/GUIMain/GUI-MainFrame.lua:123). guiContext is dropped here:
+        -- GUI/GUIMain/GUI-MainFrame.lua). guiContext is dropped here:
         -- KE's GUIFrame:OpenPage stores it as pendingContext and nothing
-        -- reads it (GUI/GUIWidgets/GUI-Sidebar.lua:756). guiTab IS set --
+        -- reads it (GUI/GUIWidgets/GUI-Sidebar.lua). guiTab IS set --
         -- it is KE's live equivalent of the same intent, seeding
         -- GUIFrame.tabbedPageState so Open Settings lands on the right
-        -- subtab of the tabbed Blizzard Frames page (Core/EditMode.lua:56,
+        -- subtab of the tabbed Blizzard Frames page (Core/EditMode.lua,
         -- :1122-1126). The subtab id itself is created in Task 6.
         guiPath = "SkinBlizzardFrames",
         guiTab = "SkinBlizzardFramesLootRoll",

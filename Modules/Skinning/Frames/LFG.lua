@@ -193,7 +193,7 @@ local function HookLFGListIcons()
         -- then compares SECRET values (the listing name is |Kl21|k), so
         -- running our icon swap inside its execution taints it:
         --
-        --   LFGList.lua:1614: attempt to compare a secret number value
+        --   LFGList.lua: attempt to compare a secret number value
         --   (execution tainted by 'KitnEssentials')
         --
         -- Icon swaps are cosmetic; a frame later is fine.
@@ -669,7 +669,7 @@ local function Skin()
                 -- listing name is |Kl21|k) -- running our crop inside
                 -- that call taints it:
                 --
-                --   LFGList.lua:1614: attempt to compare a secret number
+                --   LFGList.lua: attempt to compare a secret number
                 --   value (execution tainted by 'KitnEssentials')
                 hooksecurefunc(av.InfoBackground, "SetAtlas", function(tex)
                     if S.data(tex).cropQueued then return end
@@ -732,7 +732,7 @@ local function Skin()
         -- Running our skin there taints that execution and their own
         -- comparisons blow up:
         --
-        --   LFGList.lua:4002: attempt to compare field 'isNew' (a secret
+        --   LFGList.lua: attempt to compare field 'isNew' (a secret
         --   boolean value, while execution tainted by
         --   'KitnEssentials')
         --

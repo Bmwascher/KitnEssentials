@@ -1129,7 +1129,7 @@ function CHAT:AddMessageEdits(_, msg, isHistory, historyTime)
     -- strmatch early-return and HandleShortChannels' gsub rewrite) but
     -- still fall through to the timestamp block, which only prepends via
     -- format and never parses the |K payload. Matches ElvUI's
-    -- AddMessageEdits (ElvUI/Game/Shared/Modules/Chat/Chat.lua:1100-1128),
+    -- AddMessageEdits (ElvUI/Game/Shared/Modules/Chat/Chat.lua),
     -- which uses the same isProtected flag only to skip its strmatch guards.
     local isProtected = self:MessageIsProtected(msg)
 

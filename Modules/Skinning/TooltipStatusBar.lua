@@ -43,7 +43,7 @@ function S.InstallTooltipStatusBarHook()
     hooksecurefunc("GameTooltip_ShowStatusBar", function(tooltip)
         -- The reference gates every one of its permanent hooks on
         -- TT:IsEnabled() and documents disabled-means-inert in OnDisable
-        -- ($REF/Skinning/Tooltips.lua:621, :631-653, :731-734). This hook is
+        -- ($REF/Skinning/Tooltips.lua). This hook is
         -- permanent for the same reason, so it carries the same gate.
         local TT = KitnEssentials:GetModule("SkinTooltips", true)
         if not (TT and TT:IsEnabled()) then return end

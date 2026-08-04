@@ -47,7 +47,7 @@ end
 --     standard (never manufacture hover on mouse-disabled rows).
 --   * our skinned flag as a field on the Blizzard row -> S.data.
 -- ElvUI flags this frame explicitly: "updates to this can taint
--- transferring currencies" (their Character.lua:343). They still skin
+-- transferring currencies" (their Character.lua). They still skin
 -- it, they just refuse to keep touching it. Same policy here.
 local function StyleEntry(child)
     if not child or S.data(child).skinned then return end
@@ -68,7 +68,7 @@ local function StyleEntry(child)
     S.data(child).skinned = true
 end
 
--- Transfer Log rows (ElvUI Character.lua:313-327).
+-- Transfer Log rows (ElvUI Character.lua).
 local function StyleLogLine(line)
     if not line or S.data(line).skinned then return end
     local icon = line.CurrencyIcon
@@ -106,7 +106,7 @@ local function ApplySkin()
 
     -- `true` (ignoreUpdates) stays -- ElvUI's own warning on
     -- this exact scrollbar: "updates to this can taint transferring
-    -- currencies" (Character.lua:343). The stepper contact inside
+    -- currencies" (Character.lua). The stepper contact inside
     -- TrimScrollBar is now state-only (see skinScrollArrows), which was
     -- the convicted root of the transfer FORBIDDEN.
     if frame.ScrollBar then S.ScrollBar(frame.ScrollBar, true) end
@@ -130,7 +130,7 @@ local function ApplySkin()
         if close then S.CloseButton(close) end
     end
 
-    -- Transfer Log window (ElvUI Character.lua:490-492).
+    -- Transfer Log window (ElvUI Character.lua).
     -- NOTE their warning at :484 -- they deliberately DON'T skin
     -- TokenFrame.CurrencyTransferLogToggleButton ("No no no, this
     -- taints"), they only swap its textures. We honour that: the
@@ -148,7 +148,7 @@ local function ApplySkin()
     end
 
     -- Currency Transfer menu, first port (ElvUI
-    -- Character.lua:504-524). Everything here is the state-only
+    -- Character.lua). Everything here is the state-only
     -- toolkit; the ONE piece of ElvUI's recipe we intentionally skip is
     -- nothing -- contact surface is theirs 1:1. The transfer input box
     -- backdrop re-anchors are their exact offsets.

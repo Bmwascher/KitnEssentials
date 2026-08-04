@@ -323,7 +323,7 @@ function TT:UpdateTotems()
     -- Blizzard's displays are each lossy in their own way: TotemFrame iterates
     -- only MAX_TOTEMS (4) slots so it cannot see slot 5, its pool enumerates via
     -- pairs() so icon order is nondeterministic, and the Cooldown Manager keys
-    -- totems by spellID (CooldownViewerItemData.lua:452-478) — which collapses
+    -- totems by spellID (CooldownViewerItemData.lua) — which collapses
     -- every Augmentation Evoker dupe into one entry, since they all share
     -- spellID 1259171. An independent read avoids all of it.
     --

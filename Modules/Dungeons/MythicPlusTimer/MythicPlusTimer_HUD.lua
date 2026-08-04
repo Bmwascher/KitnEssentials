@@ -410,7 +410,7 @@ function MPT:BuildHUD()
 
     -- Defensive: if BuildHUD was called lazily (e.g. from Render after OnEnable),
     -- register with EditMode now. Idempotent via self.editModeRegistered guard.
-    -- Mirrors KickTracker's pattern (KickTracker.lua:1282).
+    -- Mirrors KickTracker's pattern (KickTracker.lua).
     if self.RegWithEditMode then self:RegWithEditMode() end
 end
 
@@ -1476,7 +1476,7 @@ function MPT:ApplyLayout()
         f:SetScale(db.Scale or 1.0)
 
         -- KE:ApplyFramePosition sets frame strata internally from Config.Strata
-        -- (Core/Globals.lua:651) — no separate SetFrameStrata call needed here.
+        -- (Core/Globals.lua) — no separate SetFrameStrata call needed here.
         KE:ApplyFramePosition(f, {
             AnchorFrom = db.SelfPoint, AnchorTo = db.AnchorPoint,
             XOffset    = db.XOffset,   YOffset   = db.YOffset,
@@ -1732,7 +1732,7 @@ end
 
 ---------------------------------------------------------------------------------
 -- ApplySettings — single entry for GUI callbacks (Tasks 5.4+) and KE's
--- duck-typed refresh walk (Core/Main.lua:136-142, ProfileManager:419).
+-- duck-typed refresh walk (Core/Main.lua, ProfileManager:419).
 -- Busts the length gate, config-skip gate, and threshold geometry cache;
 -- re-applies bar textures + background textures; calls ApplyLayout
 -- (fonts/sizes/pos/scale/strata/backdrop); then requests a debounced

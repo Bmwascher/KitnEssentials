@@ -959,14 +959,14 @@ end
 -- overwrites it. Weak-keyed: never a field on a Blizzard frame.
 --
 -- Skipping the write is NOT enough to stand down here. EUI only re-anchors
--- these strings (CharacterSheet.lua:497-505) -- it never sets a font -- so
+-- these strings (CharacterSheet.lua) -- it never sets a font -- so
 -- whatever KE applied while EUI's sheet was off survives into EUI's header and
 -- no later refresh can release it. The stand-down has to hand back what it took.
 local headerTextOriginals = setmetatable({}, { __mode = "k" })
 
 -- withLayout: also capture width and word wrap, for the string whose layout KE
 -- actually changes. CharacterLevelText is configured 220x24 in Blizzard's own
--- XML (.wow-api-reference PaperDollFrame.xml:460), so GetWidth() here reads a
+-- XML (.wow-api-reference PaperDollFrame.xml), so GetWidth() here reads a
 -- real configured width, not a measurement of auto-sized text -- restoring it
 -- is right. CharacterFrameTitleText only ever gets a font from us.
 local function RememberHeaderText(fs, withLayout)
@@ -1773,7 +1773,7 @@ local STANDARD_BACKDROP = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = 
 -- alpha, which is right for a panel sitting on another panel but washes out
 -- over open world -- these two float over whatever is behind the character
 -- sheet. Matched instead to the Damage Meter's own popup menus
--- (DamageMeter/SegmentMenu.lua:126), the closest thing KE already has to a
+-- (DamageMeter/SegmentMenu.lua), the closest thing KE already has to a
 -- transient list over the world.
 local POPUP_BG = { 0.05, 0.05, 0.05, 0.97 }
 
@@ -2256,7 +2256,7 @@ function CP:CreateSocketButton(index)
 
     btn:SetScript("OnEnter", function(self)
         -- Mirrors the enchant button's own OnEnter, and the reference's
-        -- (NorskenUI v6 CharacterPanel.lua:730). Without it, sliding from the
+        -- (NorskenUI v6 CharacterPanel.lua). Without it, sliding from the
         -- enchant popup onto a socket leaves BOTH popups up: IsMouseOverGemUI
         -- now recognises the socket you just moved onto, so the enchant popup's
         -- 0.05s close timer sees the bar still hovered and bails.
@@ -2752,7 +2752,7 @@ end
 ---------------------------------------------------------------------------------
 -- One extra button on the right end of the socket bar. Hovering it lists every
 -- enchant in your bags; clicking a row starts Blizzard's normal "now click the
--- item" flow. Ported from NorskenUI v6 CharacterPanel.lua:1162-1562. Three
+-- item" flow. Ported from NorskenUI v6 CharacterPanel.lua. Three
 -- deliberate deviations from that source, each noted at its site below.
 
 -- Enchanting profession icon. The reference uses a bare fileID (4620672); a
@@ -3149,7 +3149,7 @@ function CP:ApplyEnchantFromBags(enchantData)
     end
     -- DEVIATION 3: the reference calls the bare UseContainerItem global.
     -- Blizzard's own code uses the namespaced form everywhere in 12.0.7
-    -- (ContainerFrame.lua:1342, SecureTemplates.lua:771), so the bare name is
+    -- (ContainerFrame.lua, SecureTemplates.lua), so the bare name is
     -- at best a deprecated shim.
     -- This picks the enchant up; the player then clicks the item to apply it.
     -- Deliberately NOT auto-applied -- same as the reference.

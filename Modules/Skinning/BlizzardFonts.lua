@@ -8,10 +8,10 @@ end
 local BF = KitnEssentials:NewModule("BlizzardFonts")
 
 -- The reference treats DISABLING as reload-requiring even though OnDisable
--- calls RestoreAll (<REF>/Skinning/BlizzardFonts.lua:275-277): its own GUI
+-- calls RestoreAll (<REF>/Skinning/BlizzardFonts.lua): its own GUI
 -- flags a reload on the disable branch
--- (<REF>/GUI/Tabs/Skinning/GUI-BlizzMessagesTab.lua:95-97). A PROFILE SWITCH
--- never runs that GUI callback -- Core/ProfileManager.lua:458 gates on
+-- (<REF>/GUI/Tabs/Skinning/GUI-BlizzMessagesTab.lua). A PROFILE SWITCH
+-- never runs that GUI callback -- Core/ProfileManager.lua gates on
 -- name:find("^Skin") or module.keDeferToReload, and "BlizzardFonts" fails the
 -- name test -- so without this flag a profile switch silently takes the path
 -- the reference deliberately guards. This preserves the reference's

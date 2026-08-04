@@ -40,8 +40,8 @@ end
 -- self.db points straight at the module's own saved-profile block
 -- (Core/Defaults.lua's CompareHeader block), the same block both of KE's
 -- lifecycle passes read via `module.db.Enabled`: the startup enable loop
--- (Core/Main.lua:169-178) and the profile-switch sync
--- (Core/ProfileManager.lua:449-475, where `wantEnabled ~= nil` gates the
+-- (Core/Main.lua) and the profile-switch sync
+-- (Core/ProfileManager.lua, where `wantEnabled ~= nil` gates the
 -- whole comparison). No private mirror is needed now that the module
 -- publishes its own key instead of borrowing the tooltip skin's.
 function CH:UpdateDB()

@@ -32,7 +32,7 @@ local issecretvalue = issecretvalue or function() return false end
 -- Current chat API. The bare global SendChatMessage is deprecated in 12.0, so capture
 -- the namespaced form once at load under a non-colliding local name (a local literally
 -- named SendChatMessage still trips the deprecation lint). C_ChatInfo is a core
--- namespace present before module files run. Mirror: Modules/DamageMeter/Core.lua:46.
+-- namespace present before module files run. Mirror: Modules/DamageMeter/Core.lua.
 local SendChat = C_ChatInfo and C_ChatInfo.SendChatMessage
 
 -- Returns the appropriate group chat channel for boss-split output, or nil when
@@ -785,7 +785,7 @@ end
 
 function MPT:OnInitialize()
     self:UpdateDB()
-    -- Default-disable: the addon-level OnEnable loop (Core/Main.lua:154-163)
+    -- Default-disable: the addon-level OnEnable loop (Core/Main.lua)
     -- owns the enable decision via db.Enabled (sibling pattern).
     self:SetEnabledState(false)
 end
@@ -1759,7 +1759,7 @@ end
 -- shows a draggable overlay over the HUD and persists position writes to
 -- SelfPoint/AnchorPoint/XOffset/YOffset (flat DB keys, Task 0.2 canonical).
 -- Idempotent: self.editModeRegistered guard prevents double-registration.
--- Mirrors KickTracker:RegWithEditMode() (KickTracker.lua:1236-1268).
+-- Mirrors KickTracker:RegWithEditMode() (KickTracker.lua).
 ---------------------------------------------------------------------------------
 
 function MPT:RegWithEditMode()

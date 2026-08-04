@@ -13,7 +13,7 @@ local LF = KitnEssentials:NewModule("LootFrame", "AceEvent-3.0")
 -- Destructive: Build() calls _G.LootFrame:UnregisterAllEvents(), which no
 -- OnDisable can undo. The profile-switch path and the ElvUI startup skip both
 -- gate on name:find("^Skin") or module.keDeferToReload
--- (Core/ProfileManager.lua:458, Core/Main.lua:174), and "LootFrame" fails the
+-- (Core/ProfileManager.lua, Core/Main.lua), and "LootFrame" fails the
 -- ^Skin test.
 LF.keDeferToReload = true
 
@@ -136,7 +136,7 @@ local function CreateSlot(id)
     count:SetJustifyH("RIGHT")
     count:SetPoint("BOTTOMRIGHT", iconFrame, -2, 2)
     S.SetFont(count, 12, "OUTLINE")
-    -- Reference passes the NUMBER 1 here (<REF>/Skinning/LootFrame.lua:131).
+    -- Reference passes the NUMBER 1 here (<REF>/Skinning/LootFrame.lua).
     -- Quoted instead: SetText is annotated string?, and the number form was
     -- this wave's only new wowlua-ls warning. Render is identical (SetText
     -- coerces), and the value never reaches the screen -- LOOT_OPENED

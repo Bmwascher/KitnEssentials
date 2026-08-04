@@ -167,7 +167,7 @@ local function buildIcon(marker)
     -- Plain-texture icon — deliberately NOT a BackdropTemplate. Over a 12.0
     -- nameplate the plate's geometry is restricted/secret; a BackdropTemplate's
     -- NineSlice SetupTextureCoordinates does arithmetic on the frame's (now
-    -- secret) width and throws inside SetCooldown (Backdrop.lua:226). Plain
+    -- secret) width and throws inside SetCooldown (Backdrop.lua). Plain
     -- textures never touch width in Lua and the native Cooldown swipe is
     -- secret-safe, so this frame can't taint. Border is a full-size texture
     -- under an inset bg → a 1px ring PaintIconCount tints on "ready".

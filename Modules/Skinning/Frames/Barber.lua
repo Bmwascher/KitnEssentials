@@ -19,7 +19,7 @@ local function OnCategorySelected(list)
                     -- display area for the current choice: ColorSwatch1/2
                     -- + glows get re-atlased ("charactercreate-customize-
                     -- palette"), vertex-colored and Show()n per selection
-                    -- (CustomizationOptionTemplates.lua:594+). S.Button's
+                    -- (CustomizationOptionTemplates.lua+). S.Button's
                     -- child sweep was Show->Hide-killing them, so every
                     -- Blizzard Show() executed Hide -- blank box next to
                     -- color options. Protect the whole display area.

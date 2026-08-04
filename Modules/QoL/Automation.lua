@@ -548,7 +548,7 @@ local function SetupAutoPassHousing()
             if not ok then return end
             if ConfirmLootRoll then pcall(ConfirmLootRoll, rollID, mode) end
             -- Dismiss the secondary CONFIRM_LOOT_ROLL popup defensively (matches
-            -- Caboodle Utilities.lua:425-428). RollOnLoot+ConfirmLootRoll already
+            -- Caboodle Utilities.lua). RollOnLoot+ConfirmLootRoll already
             -- went through programmatically; the popup is just stale UI to clear.
             -- This makes housing auto-roll work end-to-end without requiring the
             -- separate Auto-Confirm Loot Roll Popup toggle.

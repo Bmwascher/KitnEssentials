@@ -2922,7 +2922,7 @@ function DT:OnUnitChannelStart(_, unit)
 end
 
 -- Vordaza's channel becomes interruptible only after the shield is consumed
--- (see ExBoss/3213_Vordaza.lua:510). For any other shieldBar boss we'd want
+-- (see ExBoss/3213_Vordaza.lua). For any other shieldBar boss we'd want
 -- this same signal — non-interruptible while shield is up, interruptible
 -- after. Hide all active shields on the firing unit.
 function DT:OnUnitSpellcastInterruptible(_, unit)

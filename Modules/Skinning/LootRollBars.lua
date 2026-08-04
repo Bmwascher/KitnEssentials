@@ -226,7 +226,7 @@ function LR:RollBar_Create(index)
     button.icon:SetPoint("TOPLEFT", 1, -1)
     button.icon:SetPoint("BOTTOMRIGHT", -1, 1)
     -- DEVIATION: the reference hardcodes the crop
-    -- (<REF>/Skinning/LootRollBars.lua:224). Route it through the shared
+    -- (<REF>/Skinning/LootRollBars.lua). Route it through the shared
     -- skinning helper instead -- same 0.08/0.92 crop, plus the pixel snap and
     -- the re-entry guard a hardcoded SetTexCoord skips, and it tracks any
     -- future change to the standard. No second backdrop: the button already
@@ -287,7 +287,7 @@ function LR:RollBars_Layout()
 
         -- DEVIATION (2026-07-31, Brandon's call after the smoke). The
         -- reference sizes the item icon to the BAR FRAME height and centres
-        -- it there (<REF>/Skinning/LootRollBars.lua:279-281). But the visible
+        -- it there (<REF>/Skinning/LootRollBars.lua). But the visible
         -- row is taller than the frame: the roll buttons sit ABOVE the status
         -- bar (see the anchors below), so the content spans
         -- status height + button size, and a frame-height icon reads small
@@ -373,7 +373,7 @@ end
 -- clicks neutralized so nothing ever calls RollOnLoot on a fake id.
 local PREVIEW_SECONDS = 15
 -- DEVIATION (2026-07-31, found in smoke). The reference lists only four here
--- (<REF>/Skinning/LootRollBars.lua:356) while CreateRollButton makes FIVE --
+-- (<REF>/Skinning/LootRollBars.lua) while CreateRollButton makes FIVE --
 -- `pass` is missing, so its comment at <REF>:354 ("clicks neutralized so
 -- nothing ever calls RollOnLoot on a fake id") is false for Pass: clicking it
 -- during a preview called RollOnLoot("PREVIEW", 0) and errored with
@@ -419,7 +419,7 @@ function LR:ShowPreview()
     local db = self.db
     -- DEVIATION (2026-07-31, Brandon's call after the smoke). The reference
     -- lets QualityBorder drive the bar fill and spark as well as the icon
-    -- border (<REF>/Skinning/LootRollBars.lua:394-408), so a legendary drop
+    -- border (<REF>/Skinning/LootRollBars.lua), so a legendary drop
     -- turned the whole countdown bar orange and the setting's own label
     -- ("Item-Quality Border Colors") was untrue. Bar and spark now always
     -- take the theme accent; only the icon border follows item quality.

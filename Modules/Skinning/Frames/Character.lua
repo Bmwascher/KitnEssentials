@@ -27,7 +27,7 @@ local BRAND = S.palette.brand
 -- anchors within 2px of these, so every character slot rendered them TWICE
 -- whenever this skin was on. The reference has no such overlap -- there the
 -- skin owns the paperdoll and its info module deliberately stands down (its
--- CharacterScreen.lua:1710 guards on the skin's own store before drawing, and
+-- CharacterScreen.lua guards on the skin's own store before drawing, and
 -- reads the skin's fontstring to anchor enchant text). KE's panel was ported
 -- first, before this skin existed, so it grew its own copy instead.
 -- CharacterPanel is the single owner now: it ships enabled by default, this
@@ -94,7 +94,7 @@ local function SkinStatsPane()
     end
 
     -- CharacterFrameInset added -- ElvUI's charframe list
-    -- (their Character.lua:392-398) has it and ours didn't, so
+    -- (their Character.lua) has it and ours didn't, so
     -- Blizzard's inset art was never stripped. It only stayed hidden
     -- while our old KillTexture NOOP'd the setters addon-wide; once
     -- that went (v828/v838), the art came back on tab switches.
@@ -116,7 +116,7 @@ local function SkinSidebarTabs()
         if tab and not tab.aeTabSkinned then
             -- (art flashed on open): SetAlpha(0) is
             -- state -- Blizzard re-dresses it every show. ElvUI Kills
-            -- this exact region (Character.lua:239 tab.TabBg:Kill()).
+            -- this exact region (Character.lua tab.TabBg:Kill()).
             if tab.TabBg then S.Kill(tab.TabBg) end
             S.Backdrop(tab)
             if tab.Icon and tab.Icon.SetAllPoints then tab.Icon:SetAllPoints() end
@@ -302,7 +302,7 @@ local function EquipmentFlyoutSkin()
     local flyout = _G.EquipmentFlyoutFrame
     if not flyout then return end
     -- ElvUI's exact three lines for the flyout chrome
-    -- (their Character.lua:400-402): StripTextures the highlight,
+    -- (their Character.lua): StripTextures the highlight,
     -- alpha-0 bg1, DisableDrawLayer the rest. They never Kill these,
     -- so neither do we now that the kill primitive carries their
     -- Kill semantics.
@@ -392,7 +392,7 @@ end
 -- PaperDollFrame_OnShow -- i.e. EVERY time you come back to the
 -- Character tab. No amount of stripping at skin time can survive that;
 -- the re-dresser has to be hooked. SLE hides exactly these four by
--- name in their armory module (their character.lua:309-317) -- the
+-- name in their armory module (their character.lua) -- the
 -- feature  remembered -- so this is that, driven from Blizzard's
 -- own function so it can never be out of sync.
 local BG_PIECES = { "BackgroundTopLeft", "BackgroundTopRight",
@@ -422,7 +422,7 @@ local function Skin()
     if not frame then return end
     S.Frame(frame)
     -- ElvUI Kills the portrait here too
-    -- (their Character.lua:411 CharacterFramePortrait:Kill()).
+    -- (their Character.lua CharacterFramePortrait:Kill()).
     if _G.CharacterFramePortrait then S.Kill(_G.CharacterFramePortrait) end
 
     -- hook Blizzard's paperdoll background applier.
@@ -490,7 +490,7 @@ local function Skin()
     end
 end
 
--- ElvUI's exact registrations (their Character.lua:407-408).
+-- ElvUI's exact registrations (their Character.lua).
 -- Every piece of machinery that used to sit here -- the event-driven
 -- deferred driver (v824), the 0.1s panel ticker (v825), the post-hoc
 -- issecurevariable audit -- was built on the wrong theory that hooking

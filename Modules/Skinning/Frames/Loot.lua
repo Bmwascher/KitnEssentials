@@ -99,7 +99,7 @@ local function SkinLootRow(button)
     -- Midnight NameFrame/BorderFrame/etc. are TEXTURES (atlas item
     -- cards), not frames -- the old StripTextures/Backdrop/
     -- GetFrameLevel block was ElvUI's MasterLooter (frame-based)
-    -- recipe applied to the wrong context. ElvUI Mainline Loot.lua:28
+    -- recipe applied to the wrong context. ElvUI Mainline Loot.lua
     -- just alpha-zeros the card texture; the Item backdrop carries the
     -- look.
     S.Vanish(button, ROW_CARD_ART)

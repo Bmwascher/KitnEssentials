@@ -553,7 +553,7 @@ function TS:RepositionEntries()
         local spacer = entry.Spacer
         -- Fill from the anchored edge so a zero-value spacer's texture edge
         -- collapses to the chain point (verify direction in-game; reference
-        -- layout: Utils.lua:202-246).
+        -- layout: Utils.lua).
         spacer:SetReverseFill(growDown)
         spacer:ClearAllPoints()
         spacer:SetPoint(point, (i == 1) and self.anchorFrame or prevTexture, relPoint, 0, 0)
@@ -606,7 +606,7 @@ function TS:TryStart(unit, token)
     else
         -- Empowered casts report through UnitChannelInfo with isEmpowered set
         -- and use UnitEmpoweredChannelDuration — KE's own CastbarHelpers
-        -- H.StartCast is the shipped precedent (CastbarHelpers.lua:751-761).
+        -- H.StartCast is the shipped precedent (CastbarHelpers.lua).
         -- castBarID here is UnitChannelInfo's 11th return (plain, NeverSecret).
         local cname, _, ctexture, _, _, _, _, cspellID, isEmpowered, _, ccastBarID = UnitChannelInfo(unit)
         if not cname then return end
@@ -719,7 +719,7 @@ end
 
 function TS:OnUnitTarget(_, unit)
     -- Retarget mid-cast rebuilds the binding; ALSO the first-target case
-    -- (reference Driver.lua:360): a mob that starts casting untargeted and
+    -- (reference Driver.lua): a mob that starts casting untargeted and
     -- acquires you during the settle window shows NOW, not at +0.2s — so no
     -- existing-entry gate. Bumping the token supersedes the pending delayed
     -- dispatch; TryStart's early returns cover no-cast/irrelevant units.

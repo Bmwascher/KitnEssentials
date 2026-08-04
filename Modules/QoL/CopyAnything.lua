@@ -43,14 +43,14 @@ end
 
 -- Shows the copy dialog with the given spell/item/NPC ID and name.
 local function ShowCopyDialog(name, id)
-    -- KE:CreatePrompt is positional (Core/Widgets.lua:264):
+    -- KE:CreatePrompt is positional (Core/Widgets.lua):
     -- (title, text, showEditBox, ...). The reference passes a config table;
     -- that shape does not exist here.
     -- The hint always names Ctrl-C, never db.Modifier/db.Key: those two
     -- settings only gate the TOOLTIP-HOVER trigger that opens this window
     -- (TryCopy, below), not a binding inside it. The dialog's own copy
-    -- handler is hardcoded to Ctrl+C (Core/Widgets.lua:350), same as the
-    -- reference (References/atrocityEssentials .../Utils/AE-Dialog.lua:474)
+    -- handler is hardcoded to Ctrl+C (Core/Widgets.lua), same as the
+    -- reference (References/atrocityEssentials .../Utils/AE-Dialog.lua)
     -- and this addon's three other copy-mode prompts (GUI-ProfilesTab.lua,
     -- GUI-Nicknames.lua, GUI-BlizzardMessages.lua). Naming the configured
     -- key here would send a user on e.g. Shift+V into overwriting the
@@ -118,8 +118,8 @@ function CA:TryCopy(key)
         if not copyId then
             -- GameTooltipDataMixin:GetItem() returns (name, hyperlink, id) --
             -- three values, per .wow-api-reference Blizzard_GameTooltip/
-            -- Mainline/GameTooltip.lua:1023-1025 delegating to
-            -- Blizzard_SharedXMLGame/Tooltip/TooltipUtil.lua:9-23. The bundled
+            -- Mainline/GameTooltip.lua delegating to
+            -- Blizzard_SharedXMLGame/Tooltip/TooltipUtil.lua. The bundled
             -- type-checker DB models only two, a known DB gap.
             ---@diagnostic disable-next-line
             local itemName, _, itemId = GameTooltip:GetItem()
@@ -135,8 +135,8 @@ function CA:TryCopy(key)
         if not copyId then
             -- GameTooltipDataMixin:GetUnit() returns (name, unit, guid) --
             -- three values, per .wow-api-reference Blizzard_GameTooltip/
-            -- Mainline/GameTooltip.lua:1031-1033 delegating to
-            -- Blizzard_SharedXMLGame/Tooltip/TooltipUtil.lua:34-42. The
+            -- Mainline/GameTooltip.lua delegating to
+            -- Blizzard_SharedXMLGame/Tooltip/TooltipUtil.lua. The
             -- bundled type-checker DB models only two, a known DB gap.
             ---@diagnostic disable-next-line
             local unitName, _, unitGUID = GameTooltip:GetUnit()

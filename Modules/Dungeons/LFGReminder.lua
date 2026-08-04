@@ -51,7 +51,7 @@ local C_Spell = C_Spell
 -- Indexed off _G, unlike its neighbours: C_LFGList is the one API this file
 -- touches that is NOT in .luacheckrc's allowlist, so a bare capture is a
 -- W113 (accessing undefined global) and every task gates on zero warnings.
--- Modules/Skinning/Frames/LFG.lua:122 already reaches this same API this way.
+-- Modules/Skinning/Frames/LFG.lua already reaches this same API this way.
 -- Do NOT widen .luacheckrc instead.
 local C_LFGList = _G.C_LFGList
 local GameTooltip = GameTooltip
@@ -172,7 +172,7 @@ end
 BuildPopup = function()
     if popup then return popup end
     -- Resolved HERE, not at file scope: Dungeons.xml loads before
-    -- Skinning.xml (KitnEssentials.toc:21 vs :25), so a file-top capture
+    -- Skinning.xml (KitnEssentials.toc vs :25), so a file-top capture
     -- is nil and every skin call silently no-ops.
     local S = KE.Skins
 
@@ -335,8 +335,8 @@ UpdateButtonVisuals = function()
         -- NeverSecret flag, so under SecretWhenCooldownsRestricted the
         -- comparison throws and a live cooldown renders as ready.
         -- GetSpellCooldownDuration is AllowedWhenTainted and returns a handle we
-        -- only truth-test, never read (SpellDocumentation.lua:265-282). Same
-        -- shape as Modules/Combat/Cursor.lua:826-831.
+        -- only truth-test, never read (SpellDocumentation.lua). Same
+        -- shape as Modules/Combat/Cursor.lua.
         local duration = C_Spell and C_Spell.GetSpellCooldownDuration
             and C_Spell.GetSpellCooldownDuration(sid)
         if duration then
@@ -352,7 +352,7 @@ end
 -- Resolve the accepted dungeon via a CLEAN string chain. The pcall below is
 -- LOAD-BEARING, not belt-and-braces: GetSearchResultInfo and
 -- GetActivityInfoTable are both SecretArguments = "AllowedWhenUntainted"
--- (LFGListInfoDocumentation.lua:378, :167), so a secret resultID throws.
+-- (LFGListInfoDocumentation.lua), so a secret resultID throws.
 ResolveDungeon = function(resultID)
     if not (C_LFGList and C_LFGList.GetSearchResultInfo) then return end
     pcall(function()
@@ -360,9 +360,9 @@ ResolveDungeon = function(resultID)
         if type(info) ~= "table" then return end
         local activityID = info.activityID
         -- issecretTABLE, not issecretvalue: a table can be non-secret itself
-        -- while its reads produce secrets (FrameScriptDocumentation.lua:227-231
+        -- while its reads produce secrets (FrameScriptDocumentation.lua
         -- vs :244-248). This is the only live path -- LfgSearchResultData has no
-        -- activityID field in 12.0.7 (LFGListInfoDocumentation.lua:905-910).
+        -- activityID field in 12.0.7 (LFGListInfoDocumentation.lua).
         if activityID == nil and info.activityIDs and not issecrettable(info.activityIDs) then
             activityID = info.activityIDs[1]
         end
@@ -543,11 +543,11 @@ function LR:OnDisable()
     pendingHide = nil
     -- Do NOT use HidePrompt here. AceAddon disables our embeds immediately
     -- after this returns, and AceEvent's OnEmbedDisable calls
-    -- UnregisterAllEvents (Libs/AceEvent-3.0/AceEvent-3.0.lua:112-115) --
+    -- UnregisterAllEvents (Libs/AceEvent-3.0/AceEvent-3.0.lua) --
     -- so a hide that HidePrompt deferred via pendingHide could never be
     -- flushed: our PLAYER_REGEN_ENABLED is gone.
     --
-    -- KE:RunAfterCombat (Core/Globals.lua:154) owns its own frame and its
+    -- KE:RunAfterCombat (Core/Globals.lua) owns its own frame and its
     -- own PLAYER_REGEN_ENABLED registration, so it survives our disable.
     -- It runs the closure immediately when out of combat.
     if popup and popup:IsShown() then

@@ -670,14 +670,14 @@ end
 -- The difficulty control follows the group you are actually in: a raid sets the
 -- RAID difficulty, anything else sets the DUNGEON difficulty. Blizzard's own
 -- raid manager branches the same way and on the same helpers
--- (Blizzard_CompactRaidFrames/Mainline/Blizzard_CompactRaidFrameManager.lua:216-259).
+-- (Blizzard_CompactRaidFrames/Mainline/Blizzard_CompactRaidFrameManager.lua).
 -- The branch lives inside the menu generator, which re-runs every time the menu
 -- opens, so converting a party to a raid needs no extra wiring.
 --
 -- The raid side delegates to the global SetRaidDifficulties rather than calling
 -- SetRaidDifficultyID directly: that global also maps the matching legacy
 -- 10/25-player difficulty and handles dynamic instances
--- (Blizzard_UnitPopup/Mainline/UnitPopup.lua:29-61). Reimplementing it here
+-- (Blizzard_UnitPopup/Mainline/UnitPopup.lua). Reimplementing it here
 -- would be a slow-motion bug.
 local DIFFICULTY_RAID = { 14, 15, 16 }   -- DifficultyUtil.ID PrimaryRaid Normal/Heroic/Mythic
 local DIFFICULTY_PARTY = { 1, 2, 23 }    -- DifficultyUtil.ID Dungeon Normal/Heroic/Mythic
@@ -931,13 +931,13 @@ function RC:Setup()
     -- NSRT Shared Notes: opens NorthernSkyRaidTools' window on the
     -- SharedNotes tab. NSRT's internals are addon-private; the public
     -- contract is the slash command (/ns reminders -> NSUI:Show() +
-    -- SelectTabByName("SharedNotes"), SlashCommands.lua:25), reachable via
+    -- SelectTabByName("SharedNotes"), SlashCommands.lua), reachable via
     -- SlashCmdList["NSUI"] -- literally "as if typed".
     if hasSharedNotes then
         -- The button is a TOGGLE for NSRT's window; our panel stays open.
         -- NSRT's window is the global NSUI frame (DF:CreateSimplePanel 5th
-        -- arg, UI/Core.lua:177); when shown, we press its LITERAL X
-        -- (frame.Close, LibDFramework panel.lua:2359) via :Click() so DF's
+        -- arg, UI/Core.lua); when shown, we press its LITERAL X
+        -- (frame.Close, LibDFramework panel.lua) via :Click() so DF's
         -- own close handler and hooks run. Everything here is insecure --
         -- no combat gate in either direction.
         CreateUtilButton("KE_RaidControlNSRTNotes", panel, nil,

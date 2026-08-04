@@ -970,7 +970,7 @@ local function _tauntOnEvent(self, event, unit)
         return
     end
     -- PLAYER_SPECIALIZATION_CHANGED fires for ANY unit, not just the player
-    -- (UnitDocumentation.lua:3765-3773) -- filter out groupmates' spec swaps.
+    -- (UnitDocumentation.lua) -- filter out groupmates' spec swaps.
     if event == "PLAYER_SPECIALIZATION_CHANGED" then
         if unit and unit ~= "player" then return end
         C:_TauntEvaluateGate()
@@ -1098,7 +1098,7 @@ function C:ApplyTauntSatellite()
     -- nothing until the next SPELL_UPDATE_COOLDOWN happens to fire, so a taunt
     -- already on cooldown when the satellite starts draws blank. The reference
     -- pairs its find and update for the same reason
-    -- (<REF>/Combat/TauntCursor.lua:278-279); the Dispel sibling omits it and is
+    -- (<REF>/Combat/TauntCursor.lua); the Dispel sibling omits it and is
     -- masked by how often SPELL_UPDATE_COOLDOWN fires. Caught by the reviewer.
     if self.tauntFrame.cooldown then
         _tauntOnEvent(self.tauntFrame, "SPELL_UPDATE_COOLDOWN")
@@ -1109,7 +1109,7 @@ end
 -- is not suppressed by .luacheckrc:33-49 and Tasks 3 and 4 both gate on
 -- 0 warnings. Its only caller is the gate directly below.
 -- File-local, matching the reference's own shape (<REF>:42). The two-step spec
--- API resolution mirrors CombatTexts.lua:26 and Globals.lua:769; the
+-- API resolution mirrors CombatTexts.lua and Globals.lua; the
 -- reference's AE.GetSpecialization compat shim has no KE counterpart, which is
 -- why it is resolved inline.
 local function _isTankSpec()
@@ -1145,7 +1145,7 @@ function C:_TauntEvaluateGate()
 end
 
 -- PLAYER_SPECIALIZATION_CHANGED fires for ANY unit, not just the player
--- (UnitDocumentation.lua:3765-3773 -- it carries a unitTarget payload), so a
+-- (UnitDocumentation.lua -- it carries a unitTarget payload), so a
 -- groupmate's spec swap would otherwise run our gate. The filter lives here
 -- rather than inside _TauntEvaluateGate because OnEnable, Refresh and the
 -- preview timer all call the gate with no unit argument.

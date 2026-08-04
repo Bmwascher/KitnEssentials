@@ -56,7 +56,7 @@ end
 -- the menu system's acquired-frame callback. Those entries carry the
 -- dropdown's selection -- and taint.log convicted exactly that value:
 -- CurrencyTransferMenu.sourceCharacterData came back owned by
--- atrocityEssentials, read at CurrencyTransfer.lua:302, blocking
+-- atrocityEssentials, read at CurrencyTransfer.lua, blocking
 -- RequestCurrencyFromAccountCharacter at :403. ElvUI never touches
 -- menu entries. Parity beats our brand-colored radial marks.
 local function SkinFrame(frame)
@@ -68,7 +68,7 @@ local function SkinFrame(frame)
     -- carry SECRET dimensions. Anchoring TOPLEFT+BOTTOMRIGHT makes our
     -- backdrop derive its size from theirs, so
     -- BackdropTemplateMixin:SetupTextureCoordinates reads a secret
-    -- GetWidth() and dies at Backdrop.lua:226:
+    -- GetWidth() and dies at Backdrop.lua:
     --
     --   attempt to perform arithmetic on local 'width' (a secret number
     --   value, while execution tainted by 'atrocityEssentials')
@@ -209,7 +209,7 @@ local function OnMenuOpen(manager, _ownerRegion, menuDescription)
     -- by which point the layout has run.
     --
     -- This is EllesmereUI's shape and is why its menu skin does not have this
-    -- bug (EllesmereUIBlizzardSkin.lua:798, :805 defer both the root skin and
+    -- bug (EllesmereUIBlizzardSkin.lua defer both the root skin and
     -- every acquired frame). It is NOT the timing change reverted in v3.5.834:
     -- that reverted a POLLER that had replaced the hooks outright, on a theory
     -- about hooks tainting that the note itself calls wrong. The hooks stay
