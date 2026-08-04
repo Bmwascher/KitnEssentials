@@ -47,6 +47,10 @@ local FRAME_SKINS = {
     { key = "Collectables",             text = "Collections" },
     { key = "Communities",              text = "Communities & Guild" },
     { key = "ContextMenus",             text = "Context Menus (right-click and dropdown menus)",
+      -- Rendered alone on a full-width row above the grid (see the builder
+      -- below). A flag, not a key comparison: the reason lives on the row it
+      -- describes, and the grid's skip and the solo row cannot drift apart.
+      soloRow = true,
       isOn = function()
           local db = KE.db and KE.db.profile.Skinning.ContextMenus
           return db and db.Enabled == true or false
@@ -184,8 +188,24 @@ local function SetEntry(entry, skins, checked)
     return true
 end
 
-local PER_ROW = 2
-local CELL_H = 40
+-- Frame Skins takes three columns; Addon Skins takes two. Their labels are
+-- longer ("Mythic Dungeon Tools (not installed)" is 36 characters against the
+-- roughly 29 a third of the content width holds) and the list is only nine
+-- rows, so squeezing it costs readability and buys nothing.
+local FRAME_PER_ROW = 3
+local ADDON_PER_ROW = 2
+local CELL_H = 24
+local CELL_SPACING = 2
+
+-- Sorted by the name the USER reads, not by the internal key. Sorting by key put
+-- Key Bindings between Barbershop and Black Market, and Blizzard Fonts under G.
+-- Done once at file scope, not per build. Display names are unique across both
+-- tables, so table.sort's instability in 5.1 cannot reorder equal keys.
+local function SortByText(list)
+    table.sort(list, function(a, b) return a.text < b.text end)
+end
+SortByText(FRAME_SKINS)
+SortByText(ADDON_SKINS)
 
 -- An ADDON_SKINS row for an addon the user does not have is shown greyed
 -- rather than hidden, so the list reads the same on every machine and a
@@ -224,14 +244,17 @@ end
 -- today -- FRAME_SKINS rows carry no `addon` field, so AddonInstalled always
 -- returns true for them (:158-162) -- but the branch order below is written
 -- explicitly rather than relying on that.
-local function BuildCheckGrid(card, entries, skins)
+local function BuildCheckGrid(card, entries, skins, perRow)
     local i = 1
     while i <= #entries do
-        local isLastRow = (i + PER_ROW) > #entries
+        local isLastRow = (i + perRow) > #entries
         local row = GUIFrame:CreateRow(card.content, CELL_H)
-        for c = 0, PER_ROW - 1 do
+        for c = 0, perRow - 1 do
             local entry = entries[i + c]
-            if entry then
+            -- A soloRow entry renders on its own full-width row above this grid
+            -- (the Frame Skins builder), so the grid must not draw it twice. It
+            -- is still a FRAME_SKINS member for the bulk toggle's sake.
+            if entry and not entry.soloRow then
                 local state = "none"
                 local partialLabel, partialTooltip
                 if KE.Skins and KE.Skins.GetSuppressionState then
@@ -253,9 +276,10 @@ local function BuildCheckGrid(card, entries, skins)
                     label = partialLabel or (label .. " |cff888888(EllesmereUI)|r")
                     tooltip = partialTooltip or "EllesmereUI covers part of this window group. This toggle still controls the rest."
                 end
-                local check = GUIFrame:CreateCheckbox(row, label, {
+                local check = GUIFrame:CreateCompactCheckbox(row, label, {
                     value = EntryIsOn(entry, skins),
                     tooltip = tooltip,
+                    disabled = disabled,
                     callback = function(checked)
                         if SetEntry(entry, skins, checked) then
                             KE:SkinningReloadPrompt()
@@ -263,23 +287,15 @@ local function BuildCheckGrid(card, entries, skins)
                         GUIFrame:RefreshContent()
                     end,
                 })
-                if disabled then
-                    -- SetEnabled, not EnableMouse. CreateCheckbox returns the
-                    -- ROW; the clickable object is a child button, and
-                    -- row:SetEnabled is what reaches it
-                    -- (GUI/GUIWidgets/GUI-KEToggle.lua:301-311). EnableMouse on
-                    -- the row leaves the button live and the row still clicks.
-                    check:SetEnabled(false)
-                end
-                row:AddWidget(check, 1 / PER_ROW)
+                row:AddWidget(check, 1 / perRow)
             end
         end
         if isLastRow then
             card:AddRow(row, CELL_H, 0)
         else
-            card:AddRow(row, CELL_H)
+            card:AddRow(row, CELL_H, CELL_SPACING)
         end
-        i = i + PER_ROW
+        i = i + perRow
     end
 end
 
@@ -404,7 +420,29 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFrames", function(scrollChild, yOffs
         if needsReload then KE:SkinningReloadPrompt() end
     end)
 
-    BuildCheckGrid(card, FRAME_SKINS, db.Skins)
+    -- It stays a MEMBER of FRAME_SKINS. Removing it from the table would drop it
+    -- from the header's any-on read and from the bulk toggle, so the master
+    -- switch would silently skip one control -- a failure with no visible
+    -- symptom until a user noticed it.
+    for _, entry in ipairs(FRAME_SKINS) do
+        if entry.soloRow then
+            local cmRow = GUIFrame:CreateRow(card.content, CELL_H)
+            local cmCheck = GUIFrame:CreateCompactCheckbox(cmRow, entry.text, {
+                value = EntryIsOn(entry, db.Skins),
+                callback = function(checked)
+                    if SetEntry(entry, db.Skins, checked) then
+                        KE:SkinningReloadPrompt()
+                    end
+                    GUIFrame:RefreshContent()
+                end,
+            })
+            cmRow:AddWidget(cmCheck, 1)
+            card:AddRow(cmRow, CELL_H, CELL_SPACING)
+            break
+        end
+    end
+
+    BuildCheckGrid(card, FRAME_SKINS, db.Skins, FRAME_PER_ROW)
 
     return card:GetNextOffset()
 end)
@@ -442,7 +480,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesAddons", function(scrollChild, yOffs
     end)
 
     card:AddLabel("Skins for other addons, applied when that addon loads. Changes apply after a /reload.")
-    BuildCheckGrid(card, ADDON_SKINS, db.Skins)
+    BuildCheckGrid(card, ADDON_SKINS, db.Skins, ADDON_PER_ROW)
     return card:GetNextOffset()
 end)
 

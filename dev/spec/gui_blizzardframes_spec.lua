@@ -104,13 +104,13 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
                 function row:AddWidget(widget) self.widgets[#self.widgets + 1] = widget end
                 return row
             end,
-            CreateCheckbox = function(_, _, label, config)
+            CreateCompactCheckbox = function(_, _, label, config)
                 local checkbox = {
                     label = label,
                     tooltip = config.tooltip,
                     value = config.value,
                     callback = config.callback,
-                    enabled = true,
+                    enabled = not config.disabled,
                 }
                 function checkbox:SetEnabled(v) self.enabled = v end
                 checkboxes[#checkboxes + 1] = checkbox
@@ -125,34 +125,44 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
             db = { profile = { Skinning = { BlizzardFrames = freshDB({}) } } },
             SkinningReloadPrompt = function() end,
         }
+        -- ContextMenus' onToggle calls KitnEssentials:EnableModule /
+        -- :DisableModule, so the addon object has to exist before the file
+        -- loads and before any bulk toggle runs.
+        helpers.installAddonShim()
+        _G.KitnEssentials.EnableModule = function() end
+        _G.KitnEssentials.DisableModule = function() end
         helpers.loadModule("GUI/GUITabs/GUISkinning/GUI-BlizzardFrames.lua", KE)
     end)
 
     -- Invokes the REAL registered content builder for the Frames tab.
-    -- Achievement is FRAME_SKINS entry #1 (alphabetically first as of Task
-    -- 15's wiring), so checkboxes[1] is always its row -- the grid renders
-    -- every entry every time, regardless of which key's state a test is
-    -- exercising.
+    --
+    -- checkboxes[1] is now the Context Menus SOLO row, which renders above the
+    -- grid. checkboxes[2] is the grid's first cell, which is Achievements --
+    -- FRAME_SKINS is sorted by display name and "Achievements" sorts first.
     local function buildFrames()
         GUIFrame.registeredContent["SkinBlizzardFramesFrames"](nil, 0)
     end
 
+    -- The grid's Achievements cell. Named rather than written as a bare 2 at
+    -- every call site, so the reason the index moved stays attached to it.
+    local ACHIEVEMENT_CELL = 2
+
     describe("row rendering across all three states (same key: Achievement)", function()
         it("none: renders unchanged, no tooltip, not disabled", function()
             buildFrames()
-            assert.equal("Achievements", checkboxes[1].label)
-            assert.is_nil(checkboxes[1].tooltip)
-            assert.is_true(checkboxes[1].enabled)
+            assert.equal("Achievements", checkboxes[ACHIEVEMENT_CELL].label)
+            assert.is_nil(checkboxes[ACHIEVEMENT_CELL].tooltip)
+            assert.is_true(checkboxes[ACHIEVEMENT_CELL].enabled)
         end)
 
         it("full: greys the label, sets the suppression tooltip, disables", function()
             seedFull("Achievement")
             buildFrames()
-            assert.equal("Achievements |cff888888(EllesmereUI)|r", checkboxes[1].label)
+            assert.equal("Achievements |cff888888(EllesmereUI)|r", checkboxes[ACHIEVEMENT_CELL].label)
             assert.equal(
                 "EllesmereUI already skins this window, so KitnEssentials leaves it alone. Turn EllesmereUI's window skin off to use this one.",
-                checkboxes[1].tooltip)
-            assert.is_false(checkboxes[1].enabled)
+                checkboxes[ACHIEVEMENT_CELL].tooltip)
+            assert.is_false(checkboxes[ACHIEVEMENT_CELL].enabled)
         end)
 
         it("partial: renders the map row's own label/tooltip verbatim, stays enabled", function()
@@ -160,31 +170,31 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
             buildFrames()
             -- Positive control: the label is NOT entry.text -- proves the
             -- row actually switched off the "none" rendering above.
-            assert.equal("Achievements (EllesmereUI: dashboard only)", checkboxes[1].label)
-            assert.equal("Custom partial tooltip text", checkboxes[1].tooltip)
+            assert.equal("Achievements (EllesmereUI: dashboard only)", checkboxes[ACHIEVEMENT_CELL].label)
+            assert.equal("Custom partial tooltip text", checkboxes[ACHIEVEMENT_CELL].tooltip)
             -- The negative assertion the whole feature exists for: a
             -- partial row must NOT be disabled.
-            assert.is_true(checkboxes[1].enabled)
+            assert.is_true(checkboxes[ACHIEVEMENT_CELL].enabled)
         end)
 
         it("partial with no map strings: falls back to entry.text plus a generic suffix, never nil", function()
             seedPartial("Achievement")
             buildFrames()
-            assert.equal("Achievements |cff888888(EllesmereUI)|r", checkboxes[1].label)
+            assert.equal("Achievements |cff888888(EllesmereUI)|r", checkboxes[ACHIEVEMENT_CELL].label)
             -- The fallback wording is PARTIAL-specific, not the "full"
             -- suppression tooltip -- that one claims KitnEssentials leaves
             -- the window alone entirely, which is false next to a live,
             -- clickable partial row.
             assert.equal(
                 "EllesmereUI covers part of this window group. This toggle still controls the rest.",
-                checkboxes[1].tooltip)
-            assert.is_true(checkboxes[1].enabled)
+                checkboxes[ACHIEVEMENT_CELL].tooltip)
+            assert.is_true(checkboxes[ACHIEVEMENT_CELL].enabled)
         end)
     end)
 
     describe("header anyOn, in isolation", function()
         -- A metatable default of `false` models "every row off" without
-        -- hardcoding the full FRAME_SKINS key list (76 entries) -- only the
+        -- hardcoding the full FRAME_SKINS key list (77 entries) -- only the
         -- designated key is given a real, on-reading value.
         local function allOffExcept(key, value)
             return setmetatable({ [key] = value }, { __index = function() return false end })
@@ -270,6 +280,63 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
             assert.is_false(skins.Barber)
             assert.is_true(containsKey(calls, "Socket"), "bulk-on never asked the accessor about Socket")
             assert.is_true(containsKey(calls, "Barber"), "bulk-on never asked the accessor about Barber")
+        end)
+    end)
+    -- Context Menus renders on its own row, outside BuildCheckGrid. The failure
+    -- this pins: dropping it from FRAME_SKINS to stop the grid drawing it twice
+    -- would also drop it from the header any-on read and the bulk toggle, so the
+    -- master switch would silently skip one control.
+    describe("Context Menus stays a FRAME_SKINS member while rendering outside the grid", function()
+        it("renders exactly once, as the first widget, above the grid", function()
+            buildFrames()
+            assert.equal("Context Menus (right-click and dropdown menus)", checkboxes[1].label)
+
+            local seen = 0
+            for _, cb in ipairs(checkboxes) do
+                if cb.label == "Context Menus (right-click and dropdown menus)" then
+                    seen = seen + 1
+                end
+            end
+            assert.equal(1, seen)
+        end)
+
+        it("the bulk toggle reaches it", function()
+            -- ContextMenus carries onToggle, so SetEntry never writes db.Skins
+            -- for it -- the observable is the module flag its onToggle writes.
+            KE.db.profile.Skinning.ContextMenus = { Enabled = true }
+            buildFrames()
+            headerToggle.callback(false)
+            assert.is_false(KE.db.profile.Skinning.ContextMenus.Enabled)
+        end)
+
+        it("positive control: bulk-on turns it back on", function()
+            KE.db.profile.Skinning.ContextMenus = { Enabled = false }
+            buildFrames()
+            headerToggle.callback(true)
+            assert.is_true(KE.db.profile.Skinning.ContextMenus.Enabled)
+        end)
+
+        -- The other half of membership, and the half the two above cannot see:
+        -- the header's any-on READ. A Context Menus dropped from FRAME_SKINS
+        -- would still pass the bulk-toggle examples if it were toggled by some
+        -- other path, but the header would stop noticing it was on.
+        it("the any-on read reaches it: on alone, the header reads on", function()
+            KE.db.profile.Skinning.ContextMenus = { Enabled = true }
+            -- Every ordinary row off. ContextMenus ignores db.Skins entirely --
+            -- it answers through isOn -- so it is the only member left that can
+            -- make anyOn true.
+            KE.db.profile.Skinning.BlizzardFrames =
+                freshDB(setmetatable({}, { __index = function() return false end }))
+            buildFrames()
+            assert.is_true(headerToggle.anyOn)
+        end)
+
+        it("positive control: with it off too, the header reads off", function()
+            KE.db.profile.Skinning.ContextMenus = { Enabled = false }
+            KE.db.profile.Skinning.BlizzardFrames =
+                freshDB(setmetatable({}, { __index = function() return false end }))
+            buildFrames()
+            assert.is_false(headerToggle.anyOn)
         end)
     end)
 end)
