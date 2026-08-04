@@ -234,6 +234,14 @@ read_globals = {
 
     -- Collections (Mounts / Pets / Toys / Heirlooms)
     "PlayerHasToy", "C_MountJournal", "C_Heirloom", "C_TransmogCollection",
+    "C_PetJournal", "C_ToyBox", "C_ToyBoxInfo", "ToyBox",
+    "LE_MOUNT_JOURNAL_FILTER_COLLECTED", "LE_MOUNT_JOURNAL_FILTER_UNUSABLE",
+    "CollectionsMicroButton", "CollectionsMicroButton_SetAlertShown",
+    "MainMenuMicroButton_HideAlert",
+    "COLLECTION_UNOPENED_PLURAL", "COLLECTION_UNOPENED_SINGULAR",
+
+    -- Auras (cancel path)
+    "CancelUnitBuff",
 
     -- Gem Socketing
     "C_ItemSocketInfo", "SocketInventoryItem", "AcceptSockets", "CloseSocketInfo",
