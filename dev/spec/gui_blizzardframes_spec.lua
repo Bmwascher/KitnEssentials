@@ -125,6 +125,12 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
             Skins = { GetSuppressionState = stubGetSuppressionState, suppressed = {} },
             db = { profile = { Skinning = { BlizzardFrames = freshDB({}) } } },
             FlagReloadNeeded = function() end,
+            -- GUI-BlizzardFrames.lua reads `KE.LSM or LibStub(...)` at file
+            -- scope now that it builds a font dropdown. HashTable is enough
+            -- shape for the builder to iterate; the sibling
+            -- GUI-BlizzardMessages.lua gets away with `LSM = {}` because it
+            -- never calls HashTable.
+            LSM = { HashTable = function() return {} end },
         }
         -- ContextMenus' onToggle calls KitnEssentials:EnableModule /
         -- :DisableModule, so the addon object has to exist before the file

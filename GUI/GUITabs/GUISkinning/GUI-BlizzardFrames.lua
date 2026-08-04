@@ -7,6 +7,7 @@
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
+local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
 
 local ipairs = ipairs
 
@@ -367,68 +368,11 @@ end
 
 -- This tab is offered in every state, including the two where the skin engine
 -- is not running, because Color Picker and Raid Control ride on it and neither
--- is a skin. The font card IS a skin setting, so it alone is conditional.
+-- is a skin.
 --
 -- Note there is no early return on a missing db. The chained pages below read
 -- their own db and must still render when this page's is absent.
 GUIFrame:RegisterContent("SkinBlizzardFramesGeneral", function(scrollChild, yOffset)
-    local db = GetDB()
-    local engineOn = db and db.Enabled == true
-        and not (KE.ShouldNotLoadModule and KE:ShouldNotLoadModule())
-
-    if engineOn then
-        local card = GUIFrame:CreateCard(scrollChild, "Global Font Adjust", yOffset)
-
-        local row = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
-        local slider = GUIFrame:CreateSlider(row, "Font Size Adjust", {
-            min = -4, max = 6, step = 1, value = db.FontOffset or 0,
-            tooltip = "Grows or shrinks every font inside skinned windows together. 0 is the designed look.",
-            callback = function(val)
-                db.FontOffset = val
-                if KE.Skins and KE.Skins.SetFontOffset then KE.Skins.SetFontOffset(val) end
-            end,
-        })
-        row:AddWidget(slider, 1)
-        card:AddRow(row, Theme.rowHeightLast)
-
-        local rowB = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
-        local baseSlider = GUIFrame:CreateSlider(rowB, "Blizzard Font Base Size", {
-            min = 8, max = 18, step = 1, value = db.FontBaseSize or 12,
-            tooltip = "Base size the Blizzard font override scales from. Every font keeps its relative size; this moves them together. 12 is Blizzard's own baseline.",
-            callback = function(val)
-                db.FontBaseSize = val
-                if KE.Skins and KE.Skins.ApplyGlobalFonts then
-                    KE.Skins.ApplyGlobalFonts()
-                end
-                -- The BlizzardFonts sweep scales every UNOVERRIDDEN font object off
-                -- this same base, so it has to re-run or the two systems drift
-                -- apart. Objects with a per-category size in db.Sizes skip the
-                -- scaling entirely.
-                local bf = KitnEssentials:GetModule("BlizzardFonts", true)
-                local fdb = KE.db and KE.db.profile.Skinning.BlizzardFonts
-                if bf and fdb and fdb.Enabled and bf.ApplyAll then bf:ApplyAll() end
-            end,
-        })
-        rowB:AddWidget(baseSlider, 1)
-        card:AddRow(rowB, Theme.rowHeightLast)
-
-        local rowC = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
-        local outlineCheck = GUIFrame:CreateCheckbox(rowC, "Text Outline", {
-            value = db.FontOutline and true or false,
-            tooltip = "Draws a black outline around text inside skinned windows. Off is thinner and easier to read in dense lists such as the guild roster; on is the designed look.",
-            callback = function(checked)
-                db.FontOutline = checked and true or false
-                if KE.Skins and KE.Skins.SetFontOutline then
-                    KE.Skins.SetFontOutline(db.FontOutline)
-                end
-            end,
-        })
-        rowC:AddWidget(outlineCheck, 1)
-        card:AddRow(rowC, Theme.rowHeightLast, 0)
-
-        yOffset = card:GetNextOffset()
-    end
-
     -- Chained, not re-registered: each builder takes (scrollChild, yOffset) and
     -- returns the next offset, which is the same contract RegisterTabbedContent
     -- uses. Resolved live so GUI.xml load order does not matter.
@@ -533,6 +477,147 @@ GUIFrame:RegisterContent("SkinBlizzardFramesAddons", function(scrollChild, yOffs
     card:AddLabel("Skins for other addons, applied when that addon loads. Changes apply after a /reload.")
     BuildSoloRows(card, ADDON_SKINS, db.Skins)
     BuildCheckGrid(card, ADDON_SKINS, db.Skins, ADDON_PER_ROW)
+    return card:GetNextOffset()
+end)
+
+GUIFrame:RegisterContent("SkinBlizzardFramesFonts", function(scrollChild, yOffset)
+    local db = GetDB()
+    if not db then return yOffset end
+    local S = KE.Skins
+
+    local card = GUIFrame:CreateCard(scrollChild, "Skin Font", yOffset)
+    card:AddLabel("Controls text inside windows KitnEssentials skins. Elements with a deliberately larger size, such as window titles and big counters, keep the gap between them and move together.")
+
+    -- An empty key is the addon's own font. A map of options is sorted by key,
+    -- and an empty string sorts before every font name, so this entry lands
+    -- first without needing an ordered list.
+    local fontOptions = { [""] = "Use Global Font" }
+    if LSM then
+        for name in pairs(LSM:HashTable("font")) do fontOptions[name] = name end
+    end
+
+    local rowFace = GUIFrame:CreateRow(card.content, Theme.rowHeight)
+    rowFace:AddWidget(GUIFrame:CreateDropdown(rowFace, "Font", {
+        options = fontOptions,
+        value = db.FontFace or "",
+        searchable = true,
+        isFontPreview = true,
+        callback = function(key)
+            db.FontFace = key
+            if S and S.SetSkinFont then S.SetSkinFont(key, nil, nil) end
+        end,
+    }), 0.5)
+
+    -- Hand-rolled rather than taken from KE:GetFontOutlineOptions, because the
+    -- skin engine supports exactly these three modes. Note the token is THICK,
+    -- not the THICKOUTLINE spelling the rest of the addon uses for a raw font
+    -- flag: this key is a mode the engine resolves, not a flag it forwards.
+    --
+    -- SOFTOUTLINE is deliberately absent: it is a shadow system this addon
+    -- draws for HUD text, not a font flag, and it has no meaning inside a
+    -- skinned window.
+    rowFace:AddWidget(GUIFrame:CreateDropdown(rowFace, "Outline", {
+        options = { NONE = "None", OUTLINE = "Outline", THICK = "Thick" },
+        value = (S and S._ResolveOutlineMode and S._ResolveOutlineMode(db.FontOutline)) or "NONE",
+        callback = function(key)
+            db.FontOutline = key
+            if S and S.SetSkinFont then S.SetSkinFont(nil, nil, key) end
+        end,
+    }), 0.5)
+    card:AddRow(rowFace, Theme.rowHeight)
+
+    local rowSize = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
+    rowSize:AddWidget(GUIFrame:CreateSlider(rowSize, "Base Font Size", {
+        min = 8, max = 20, step = 1, value = db.FontSize or 12,
+        tooltip = "Base size for text in skinned windows. Larger elements keep their extra size and move with it. 12 is the designed look.",
+        callback = function(val)
+            db.FontSize = val
+            if S and S.SetSkinFont then S.SetSkinFont(nil, val, nil) end
+        end,
+    }), 1)
+    card:AddRow(rowSize, Theme.rowHeightLast)
+
+    local rowAdj = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
+    rowAdj:AddWidget(GUIFrame:CreateSlider(rowAdj, "Font Size Adjust", {
+        min = -4, max = 6, step = 1, value = db.FontOffset or 0,
+        tooltip = "A nudge on top of the base size above.",
+        callback = function(val)
+            db.FontOffset = val
+            if S and S.SetFontOffset then S.SetFontOffset(val) end
+        end,
+    }), 1)
+    card:AddRow(rowAdj, Theme.rowHeightLast)
+
+    local rowB = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
+    rowB:AddWidget(GUIFrame:CreateSlider(rowB, "Blizzard Font Base Size", {
+        min = 8, max = 18, step = 1, value = db.FontBaseSize or 12,
+        tooltip = "Base size the game-wide font override scales from. This is a different scope from the two sliders above: it reaches Blizzard's own text, not skinned windows. 12 is Blizzard's baseline.",
+        callback = function(val)
+            db.FontBaseSize = val
+            if KE.Skins and KE.Skins.ApplyGlobalFonts then
+                KE.Skins.ApplyGlobalFonts()
+            end
+            -- The font sweep scales every unoverridden font object off this
+            -- same base, so it has to re-run or the two systems drift apart.
+            local bf = KitnEssentials:GetModule("BlizzardFonts", true)
+            local fdb = KE.db and KE.db.profile.Skinning.BlizzardFonts
+            if bf and fdb and fdb.Enabled and bf.ApplyAll then bf:ApplyAll() end
+        end,
+    }), 1)
+    card:AddRow(rowB, Theme.rowHeightLast, 0)
+
+    yOffset = card:GetNextOffset()
+
+    -- Same subject, wider scope: the game-wide text settings, chained as-is so
+    -- this page stays the one place fonts are configured.
+    local messages = GUIFrame.registeredContent and GUIFrame.registeredContent["SkinMessages"]
+    if messages then yOffset = messages(scrollChild, yOffset) end
+
+    return yOffset
+end)
+
+GUIFrame:RegisterContent("SkinBlizzardFramesColors", function(scrollChild, yOffset)
+    local db = GetDB()
+    if not db then return yOffset end
+    local S = KE.Skins
+
+    db.BackdropColor = db.BackdropColor or { 0.031, 0.031, 0.031, 0.80 }
+    db.BorderColor = db.BorderColor or { 0, 0, 0, 1 }
+
+    local card = GUIFrame:CreateCard(scrollChild, "Window Colors", yOffset)
+    card:AddLabel("Both pickers repaint every skinned window that is already open. Frames that carry a colour of their own, such as controls and panels, keep it.")
+
+    local row = GUIFrame:CreateRow(card.content, Theme.rowHeight)
+    row:AddWidget(GUIFrame:CreateColorPicker(row, "Background Color", {
+        color = db.BackdropColor,
+        callback = function(r, g, b, a)
+            db.BackdropColor = { r, g, b, a }
+            if S and S.SetSkinColors then S.SetSkinColors(db.BackdropColor, nil) end
+        end,
+    }), 0.5)
+    row:AddWidget(GUIFrame:CreateColorPicker(row, "Border Color", {
+        color = db.BorderColor,
+        callback = function(r, g, b, a)
+            db.BorderColor = { r, g, b, a }
+            if S and S.SetSkinColors then S.SetSkinColors(nil, db.BorderColor) end
+        end,
+    }), 0.5)
+    card:AddRow(row, Theme.rowHeight)
+
+    local rowR = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
+    rowR:AddWidget(GUIFrame:CreateButton(rowR, "Reset to Default", {
+        width = 150,
+        tooltip = "Restore the designed window colours.",
+        callback = function()
+            if not (S and S.SetSkinColors) then return end
+            db.BackdropColor = { unpack(S.DEFAULT_BG) }
+            db.BorderColor = { unpack(S.DEFAULT_BORDER) }
+            S.SetSkinColors(db.BackdropColor, db.BorderColor)
+            GUIFrame:RefreshContent()
+        end,
+    }), 0.35)
+    card:AddRow(rowR, Theme.rowHeightLast, 0)
+
     return card:GetNextOffset()
 end)
 
