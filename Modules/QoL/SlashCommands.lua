@@ -29,6 +29,7 @@ local db
 -- /cd and /wa --
 
 local cdmRegistered = false
+local waRegistered = false
 
 local function ShowCooldownViewerSettings()
     if InCombatLockdown() then return end
@@ -62,16 +63,33 @@ function KE:HasAuraAddon()
     return false
 end
 
+-- /wa is offered only when nothing else owns it AND the user has not turned it
+-- off. Tracked apart from /cd so the two can be re-applied independently: a
+-- single registered flag made every apply after the first a no-op, which left
+-- the alias live after the setting was switched off.
+local function WantsWA()
+    return (db == nil or db.WAEnabled ~= false) and not KE:HasAuraAddon()
+end
+
 local function RegisterCDM()
-    if cdmRegistered then return end
+    local wantWA = WantsWA()
+
+    if cdmRegistered and waRegistered == wantWA then return end
+
     SLASH_KE_CDM1 = "/cd"
-    if not KE:HasAuraAddon() then
+    if wantWA then
         SLASH_KE_CDM2 = "/wa"
+    else
+        SLASH_KE_CDM2 = nil
     end
-    function SlashCmdList.KE_CDM(msg, editbox)
-        ShowCooldownViewerSettings()
+    waRegistered = wantWA
+
+    if not cdmRegistered then
+        function SlashCmdList.KE_CDM(msg, editbox)
+            ShowCooldownViewerSettings()
+        end
+        cdmRegistered = true
     end
-    cdmRegistered = true
 end
 
 local function UnregisterCDM()
@@ -80,6 +98,7 @@ local function UnregisterCDM()
     SLASH_KE_CDM2 = nil
     SlashCmdList.KE_CDM = nil
     cdmRegistered = false
+    waRegistered = false
 end
 
 -- /rl --
@@ -208,6 +227,20 @@ end
 ---------------------------------------------------------------------------------
 -- Settings
 ---------------------------------------------------------------------------------
+function KE:IsWAEnabled()
+    local settings = KE.db and KE.db.profile.SlashCommands
+    return not (settings and settings.WAEnabled == false)
+end
+
+-- Returns the new state so a caller can report it without re-reading the db.
+function KE:SetWAEnabled(enabled)
+    local settings = KE.db and KE.db.profile.SlashCommands
+    if not settings then return KE:IsWAEnabled() end
+    settings.WAEnabled = enabled and true or false
+    KE:ApplySlashCommands()
+    return settings.WAEnabled
+end
+
 function KE:ApplySlashCommands()
     db = KE.db and KE.db.profile.SlashCommands
     if not db then return end

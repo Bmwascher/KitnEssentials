@@ -998,6 +998,7 @@ local Defaults = {
         SlashCommands = {
             CDMEnabled = true,
             RLEnabled = true,
+            WAEnabled = true,
         },
 
         Recuperate = {
