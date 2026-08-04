@@ -488,16 +488,15 @@ function ProfileManager:RefreshAllModules()
         end
     end
 
-    -- Brandon's ruling 2026-08-02: a profile operation ALWAYS prompts for a
-    -- reload, as a precaution. Previously each class prompted only for itself
-    -- — skinning changes, and modules carrying keReloadOnDisable — which left
-    -- every other profile switch silent. The gap that exposed it: a module
-    -- whose OnEnable leaves state behind but which carries no
-    -- keReloadOnDisable flag (MoveFrames sets movable/mouse flags that survive
-    -- DisableModule) went off with no warning and no way for the user to know
-    -- a reload was owed. Rather than chase per-module flags, prompt always.
-    -- ONE prompt, never two: KE:CreatePrompt stores KE.activePrompt, so two
-    -- calls here would have the second replace the first.
+    -- A profile operation ALWAYS prompts for a reload, as a precaution.
+    -- Prompting per class instead — skinning changes, and modules carrying
+    -- keReloadOnDisable — left every other switch silent, and modules like
+    -- MoveFrames leave state behind (movable and mouse flags survive
+    -- DisableModule) without carrying the flag. Prompt always rather than chase
+    -- per-module flags.
+    --
+    -- ONE prompt, never two: KE:CreatePrompt stores KE.activePrompt, so a second
+    -- call here would replace the first.
     if skinningChanged and KE.SkinningReloadPrompt then
         KE:SkinningReloadPrompt()
     elseif KE.CreateReloadPrompt then

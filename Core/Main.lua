@@ -40,13 +40,12 @@ hooksecurefunc(KitnEssentials, "EnableModule", function(_, name)
     -- returns early while a prompt is already open, so a profile switch
     -- enabling several modules costs one queue, not one per module.
     -- Deferred a frame, NOT run inline, and coalesced. RunAfterCombat calls
-    -- straight through outside combat (Core/Globals.lua:155-158), and a profile
-    -- switch enables modules from inside RefreshAllModules and then raises its
-    -- own reload prompt in the SAME call stack (Core/ProfileManager.lua:464,
-    -- :501-507). KE:CreatePrompt is a singleton that replaces the live dialog
-    -- with a bare Hide() and never runs its callbacks (Core/Widgets.lua:283-285
-    -- vs ClosePrompt at :173-182) -- so an inline conflict prompt was destroyed
-    -- unanswered, leaving promptActive set and the user with both features live.
+    -- straight through outside combat, and a profile switch enables modules from
+    -- inside RefreshAllModules and then raises its own reload prompt in the SAME
+    -- call stack. KE:CreatePrompt is a singleton that replaces the live dialog
+    -- with a bare Hide() and never runs its callbacks, so an inline conflict
+    -- prompt was destroyed unanswered, leaving promptActive set and the user
+    -- with both features live.
     -- Next frame the refresh has finished, so the conflict prompt replaces the
     -- generic reload prompt instead; answering it raises a reload prompt of its
     -- own, and when nothing conflicts no prompt is built at all.

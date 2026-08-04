@@ -14,12 +14,9 @@ local KE = select(2, ...)
 -- enabled -- so it self-silences after a choice and returns only if the user
 -- deliberately re-enables both. Nothing is stored, so nothing goes stale.
 --
--- Ported from atrocityEssentials v28.1 Core/Conflicts.lua. The deviations are
--- listed in dev/docs/superpowers/specs/2026-07-27-aes-a2-conflict-registry-design.md;
--- two are easy to "fix" back by mistake:
+-- Two deliberate omissions, both easy to "fix" back by mistake:
 --   * ElvUI detection is deliberately absent. UseElvUI already hard-disables
---     every Skin* module (Core/Main.lua:170-177), so a branch for it would be
---     unreachable.
+--     every Skin* module, so a branch for it would be unreachable.
 --   * skinGated entries are skipped while KE:ShouldNotLoadModule() is true.
 --     The saved Enabled flag stays true when ElvUI holds the module inert, so
 --     testing the flag alone would prompt about a conflict that is not
@@ -30,15 +27,14 @@ local CONFLICTS = {
     {
         module = "SkinTooltips",
         label  = "Tooltip",
-        -- KE's skinning DB is nested, so the path is data rather than the
-        -- reference's flat profile[moduleName] lookup.
+        -- KE's skinning DB is nested, so the path is data rather than a flat
+        -- profile[moduleName] lookup.
         dbPath = { "Skinning", "Tooltips" },
         -- Skipped wholesale when ElvUI owns skinning.
         skinGated = true,
-        -- EllesmereUIBlizzardSkin restyles GameTooltip with EUI's dark style
-        -- (EllesmereUIBlizzardSkin.lua:96) -- the same frames SkinTooltips
-        -- restyles. The other three are tooltip replacements carried over
-        -- from the reference's list.
+        -- EllesmereUIBlizzardSkin restyles GameTooltip with its own dark style,
+        -- the same frames SkinTooltips restyles. The other three are outright
+        -- tooltip replacements.
         addons = { "TipTac", "TinyTooltip", "TacoTip", "EllesmereUIBlizzardSkin" },
         -- Rivals that expose a switch for JUST the conflicting feature. Turning
         -- the whole addon off would be disproportionate here: EUI's Blizz UI
@@ -51,10 +47,9 @@ local CONFLICTS = {
         resolvers = {
             EllesmereUIBlizzardSkin = {
                 label = "EllesmereUI's tooltip reskin",
-                -- EllesmereUIDB is the base EllesmereUI addon's saved variable
-                -- (EllesmereUI.toc:6); customTooltips is the "Reskin Tooltip"
-                -- toggle, and EUI's own source says it governs ONLY the game
-                -- tooltip (EllesmereUIBlizzardSkin.lua:113-114).
+                -- EllesmereUIDB is that addon's saved variable; customTooltips
+                -- is its "Reskin Tooltip" toggle, and its own source shows the
+                -- toggle governs only the game tooltip.
                 apply = function()
                     if type(_G.EllesmereUIDB) ~= "table" then return false end
                     _G.EllesmereUIDB.customTooltips = false
@@ -178,8 +173,7 @@ local function LiveEnv()
         -- the reload; without the enable-state half, /kes conflicts would
         -- re-raise the conflict they just resolved. Statelessness is the
         -- point: re-enabling the rival re-arms the prompt by itself.
-        -- The > 0 comparison is Blizzard's own
-        -- (.wow-api-reference/.../Blizzard_AddOnList/AddonList.lua:188).
+        -- The > 0 comparison is Blizzard's own, from its addon list.
         -- The optional second argument is the rival's resolver. A resolver
         -- flips the rival's OWN switch rather than disabling it, which leaves
         -- the addon loaded and enabled, so the two checks above cannot see that
@@ -282,11 +276,9 @@ local ADDON_LABELS = {
 local promptQueue = {}
 local promptActive = false
 -- ONE reload prompt after every conflict is answered, never one per choice.
--- KE:CreatePrompt is a singleton that hides the active dialog
--- (Core/Widgets.lua:271-273), so a per-choice reload prompt would be replaced
--- by the next conflict prompt before it could be clicked. The reference
--- declares this flag but never sets it (v28.1 Core/Conflicts.lua:56), so its
--- own single-reload comment describes behaviour its code does not have.
+-- KE:CreatePrompt is a singleton that hides the active dialog, so a per-choice
+-- reload prompt would be replaced by the next conflict prompt before it could
+-- be clicked.
 local pendingReload = false
 
 -- Recursive: the accept and cancel closures call it to advance the queue.
@@ -330,10 +322,9 @@ local function ShowNextPrompt()
             pendingReload = true
             ShowNextPrompt()
         end,
-        -- Escape and the close button reach THIS callback too
-        -- (Core/Widgets.lua:194-196, :238) -- an accepted risk, recorded in the
-        -- Global Constraints. The chat line is the mitigation: an accidental
-        -- dismissal announces what it did instead of changing state silently.
+        -- Escape and the close button reach THIS callback too, an accepted
+        -- risk. The chat line is the mitigation: an accidental dismissal
+        -- announces what it did instead of changing state silently.
         function()
             local moduleDB = ResolveDB(KE.db and KE.db.profile, item.dbPath)
             if moduleDB then moduleDB.Enabled = false end
@@ -359,8 +350,8 @@ end
 function KE:ScanAddonConflicts()
     -- Stall recovery: our callbacks are the only thing that clears
     -- promptActive, and an unrelated KE:CreatePrompt replaces the singleton
-    -- and drops them (Core/Widgets.lua:271-273). If no prompt is on screen at
-    -- all, ours died unanswered -- reclaim rather than stall forever.
+    -- and drops them. If no prompt is on screen at all, ours died unanswered --
+    -- reclaim rather than stall forever.
     if promptActive and not KE.activePrompt then
         promptActive = false
         -- Drop the stranded tail too. Whatever survived belongs to a session
