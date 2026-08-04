@@ -391,7 +391,10 @@ function GUIFrame:CreateCompactCheckbox(parent, labelText, config)
     -- A name too long for its column clips instead, which is why the three-column
     -- list carries no per-row suffixes.
     label:SetWordWrap(false)
-    KE:ApplyThemeFont(label, "small")
+    -- One point above "small". These grids pack three columns at 22px a row and
+    -- the small size reads thin there. Derived from the theme's own small size
+    -- rather than the "normal" step, which is not guaranteed to be one point up.
+    KE:ApplyThemeFont(label, (Theme.fontSizeSmall or 11) + 1)
     label:SetText(labelText or "")
     label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 0.9)
 
