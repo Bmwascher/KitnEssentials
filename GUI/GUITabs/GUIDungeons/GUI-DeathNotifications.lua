@@ -259,7 +259,7 @@ GUIFrame:RegisterContent("DeathNotifications", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 7: Display
     ----------------------------------------------------------------
-    local cardDisplay = GUIFrame:CreateCard(scrollChild, "Display", yOffset)
+    local cardDisplay = GUIFrame:CreateCard(scrollChild, "Display Settings", yOffset)
     manager:Register(cardDisplay, "all")
 
     local dRow1 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)

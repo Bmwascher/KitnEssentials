@@ -217,7 +217,6 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
     -- Card 4: Font Settings
     ----------------------------------------------------------------
     local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-        title = "Font",
         db = db,
         dbKeys = {
             fontFace = "FontFace",

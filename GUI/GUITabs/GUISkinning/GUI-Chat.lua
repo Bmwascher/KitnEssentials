@@ -309,7 +309,6 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     -- Card 5: Position
     ----------------------------------------------------------------
     local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        title = "Position",
         db = db,
         onChangeCallback = ApplySettings,
     })
@@ -320,7 +319,6 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     -- Card 6: Font
     ----------------------------------------------------------------
     local fontCard, fontOffset = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-        title = "Font",
         db = db,
         fontSizeRange = { 8, 24 },
         onChangeCallback = ApplySettings,

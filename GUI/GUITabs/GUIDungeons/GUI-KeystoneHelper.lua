@@ -130,7 +130,6 @@ GUIFrame:RegisterContent("KeystoneHelper", function(scrollChild, yOffset)
     -- Card 3: Font (shared — one size drives title and key line)
     ----------------------------------------------------------------
     local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-        title = "Font",
         db = db,
         dbKeys = {
             fontFace = "FontFace",

@@ -142,7 +142,7 @@ GUIFrame:RegisterContent("RangeChecker", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 5: Color Settings
     ----------------------------------------------------------------
-    local card5 = GUIFrame:CreateCard(scrollChild, "Color Settings", yOffset)
+    local card5 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
     manager:Register(card5, "all")
 
     local row5a = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
