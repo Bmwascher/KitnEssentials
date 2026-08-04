@@ -263,10 +263,9 @@ describe("Core/Conflicts.lua prompt queue", function()
         assert.is_true(prompts[2].reload)
     end)
 
-    -- Regression guard for deviation 4. The reference fires a reload prompt
-    -- per choice and never sets pendingReload, so with KE's singleton dialog
-    -- the first reload prompt would be replaced by the second conflict prompt
-    -- before it could be clicked.
+    -- Regression guard. Firing a reload prompt per choice without setting
+    -- pendingReload lets the singleton dialog replace the first reload prompt
+    -- with the second conflict prompt before it can be clicked.
     it("shows both conflicts first, then exactly one reload prompt", function()
         login({ "TipTac", "TacoTip" })
         assert.equals(1, #prompts)
@@ -418,7 +417,7 @@ describe("/kes conflicts", function()
         assert.has_no.errors(function() handler("conflicts") end)
     end)
 
-    -- Stub KE.Print, NOT _G.print: Core/Globals.lua:13 captures print into a
+    -- Stub KE.Print, NOT _G.print: Core/Globals.lua captures print into a
     -- file-local at load, so a _G.print stub installed after loadGlobals is
     -- invisible and the assertion could never pass. The handler resolves
     -- KE.Print at call time, so replacing it on the shared table works.

@@ -181,7 +181,7 @@ local function SkinComparisonRow(child)
     if S.data(child).skinned then return end
     S.data(child).skinned = true
     SkinCompareRow(child.Player)
-    -- v3.5.856 AUDIT: was SetTextColor = NOOP -- method surgery on a
+    -- AUDIT: was SetTextColor = NOOP -- method surgery on a
     -- Blizzard object, the exact class that tainted the flyout for 13
     -- versions (v828). Hook and re-assert instead, ElvUI's idiom.
     S.LockTextColor(child.Player.Description, 0.9, 0.9, 0.9)
@@ -216,7 +216,7 @@ local function SkinAchievementRow(child)
     end
     child.Icon.frame:Hide()
     S.LockTextColor(child.Description, 0.9, 0.9, 0.9)
-    -- v3.5.856 AUDIT: see above -- hook instead of owning the method.
+    -- AUDIT: see above -- hook instead of owning the method.
 
     local bd = S.Backdrop(child)
     if bd then

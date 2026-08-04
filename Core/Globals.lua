@@ -150,7 +150,7 @@ end
 -- geterrorhandler()) so one erroring closure cannot drop the rest of the
 -- queue. Secure-frame mutations (state drivers, secure attributes,
 -- Show/Hide on protected frames) route through this instead of executing
--- blocked mid-combat (CODE-04, 2026-07-13 audit).
+-- blocked mid-combat.
 function KE:RunAfterCombat(fn)
     if not InCombatLockdown() then
         fn()
@@ -240,8 +240,8 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
         if mt and mt.HandleSlash then
             mt:HandleSlash(mtRest)
         elseif KE.GUIFrame and KE.GUIFrame.OpenPage then
-            -- OpenPage(itemId, sectionId, context) — GUI/GUIWidgets/GUI-Sidebar.lua:755.
-            -- Self-shows the GUI, expands the section, selects the page.
+            -- OpenPage(itemId, sectionId, context) self-shows the GUI, expands
+            -- the section, and selects the page.
             KE.GUIFrame:OpenPage("MythicPlusTimer", "dungeons_section")
         end
         return
@@ -495,8 +495,7 @@ function KE:ApplyFont(fontString, fontName, fontSize, fontOutline)
 
     -- SimpleHTML frames (guild MOTD and Info bodies, anything rendering
     -- links) expose SetFont with a textType-FIRST signature:
-    -- SetFont(textType, fontFile, height, flags), per
-    -- .wow-api-reference SimpleHTMLAPIDocumentation.lua:203-215. Calling the
+    -- SetFont(textType, fontFile, height, flags). Calling the
     -- FontString form on one throws "bad argument #1". Callers cannot tell
     -- the two apart by testing for SetFont, because both have it, so the
     -- branch belongs here. Each text type is pcall'd: the set below is not
@@ -791,14 +790,12 @@ end
 -- Everything EUI does NOT draw (the socket helper, inspect gems, race text,
 -- the faction tag) keeps running.
 --
--- The test is EUI's OWN gate, copied from the places it guards each sheet with
--- (CharacterSheet.lua:4436, 4773, 4897; InspectSheet.lua:1207, 1235, 1248), so
--- turning a themed sheet off hands that display straight back to us. Absent
+-- The test is EUI's OWN gate, copied from the places it guards each sheet with,
+-- so turning a themed sheet off hands that display straight back to us. Absent
 -- means ON -- only a literal false is off, EUI's convention.
 --
--- The two sheets have SEPARATE enable keys and separate user-facing toggles
--- (EUI_BlizzardSkin_Options.lua:1174-1183 is the inspect one), so they really
--- do diverge by a click. Gating the inspect frame on the character sheet's key
+-- The two sheets have SEPARATE enable keys and separate user-facing toggles, so
+-- they really do diverge by a click. Gating the inspect frame on the character sheet's key
 -- breaks both ways: inspect text vanishes when only the inspect sheet is off,
 -- and double-draws when only the character sheet is off. Pass the unit and let
 -- this pick, rather than leaving the choice to each call site.
@@ -826,16 +823,15 @@ end
 -- Whether EUI is drawing ONE PARTICULAR per-slot element on a given frame.
 --
 -- The sheet being on is not enough to decide ownership: EUI ships six
--- independent per-element toggles on top of it, all live and all user-facing
--- (EUI_BlizzardSkin_Options.lua:893-951 for the character sheet, :1198-1230 for
--- inspect). Standing down on the sheet alone means turning EUI's "Show Gems"
+-- independent per-element toggles on top of it, all live and all user-facing.
+-- Standing down on the sheet alone means turning EUI's "Show Gems"
 -- off deletes the gems from BOTH addons -- strictly worse than the doubling
 -- this was meant to solve. Ask per element instead.
 --
 -- Two asymmetries in EUI worth knowing, both verified in its source:
 --   * gems: the inspect sheet draws none at all, at any setting.
 --   * missingEnchant: on the CHARACTER sheet the pulsing red border fires
---     outside the showEnchants branch (CharacterSheet.lua:4736-4740), so EUI
+--     outside the showEnchants branch, so EUI
 --     still flags a missing enchant with enchant display off. The INSPECT
 --     sheet has no border -- icon only, and that icon IS gated -- so with
 --     inspectShowEnchants off nothing marks it and ours should show.
@@ -872,10 +868,9 @@ function KE:EUIDrawsSlotElement(unit, element)
     -- the answer for these, so they never reach the key table below.
     if element == "headerText" then
         -- Character sheet only. EUI re-anchors Blizzard's own name and level
-        -- strings into its header (CharacterSheet.lua:497-505) rather than
-        -- drawing its own. KE restyling them and displacing the level string
-        -- to make room for race text lands on top of that -- the overlap
-        -- Brandon photographed 2026-08-03.
+        -- strings into its header rather than drawing its own. KE restyling
+        -- them and displacing the level string to make room for race text
+        -- lands on top of that, and the two overlap on screen.
         return isPlayer
     end
     if element == "avgIlvl" then

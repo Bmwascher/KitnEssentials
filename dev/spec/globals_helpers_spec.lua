@@ -51,7 +51,7 @@ describe("Core/Globals.lua helpers", function()
     end)
 
     describe("KE:FillProfileDefaults", function()
-        -- The crash class this prevents (Globals.lua:329): AceDB's __index
+        -- The crash class this prevents (Globals.lua): AceDB's __index
         -- backfill does NOT deep-fill nested sub-tables that already exist in
         -- saved data, so `db.DeathNotifications.FocusDeath.Enabled` crashes
         -- after FocusDeath is added to defaults post-release.
@@ -98,7 +98,7 @@ describe("Core/Globals.lua helpers", function()
         end)
 
         it("replaces a non-table saved value when the default is a table", function()
-            -- Globals.lua:340 — the default's SHAPE wins so nested reads can't crash.
+            -- Globals.lua — the default's SHAPE wins so nested reads can't crash.
             KE.db = {
                 profile = { Module = true },
                 defaults = { profile = { Module = { Enabled = true } } },
@@ -336,7 +336,7 @@ describe("Core/Globals.lua helpers", function()
     end)
 
     describe("KE:ValidateProfileFonts", function()
-        -- Repair rule (Globals.lua:308): a font KEY is "Font" exactly or
+        -- Repair rule (Globals.lua): a font KEY is "Font" exactly or
         -- anything ending in "FontFace"; an invalid value repairs to the
         -- per-key default, then to "Expressway" when that default is also
         -- invalid or missing.

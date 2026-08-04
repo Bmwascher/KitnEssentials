@@ -94,7 +94,7 @@ local function Skin()
     end
     if _G.GuildControlUIRankOrderFrameNewButton then
         _G.GuildControlUIRankOrderFrameNewButton:HookScript("OnClick", function()
-            -- v3.5.853: was After(1) -- a brand new rank row sat
+            -- was After(1) -- a brand new rank row sat
             -- unskinned for a full second after clicking New.
             if _G.C_Timer then _G.C_Timer.After(0, SkinRanks) end
         end)

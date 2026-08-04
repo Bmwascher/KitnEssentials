@@ -2,8 +2,7 @@
 -- ║  TrashAuraDelta.lua                                      ║
 -- ║  Party harmful-aura delta sampler for DungeonTrash.      ║
 -- ║                                                          ║
--- ║  Port of the reference engine's aura-delta module: it    ║
--- ║  caches each GROUP unit's (player + party1-4) HARMFUL    ║
+-- ║  Caches each GROUP unit's (player + party1-4) HARMFUL    ║
 -- ║  aura instance IDs and records every NEW application in  ║
 -- ║  a short ring. The castStartAuraDelta fingerprint asks   ║
 -- ║  "did a fresh debuff land on the party right at cast     ║
@@ -36,10 +35,9 @@ local wipe = wipe
 local TAD = {}
 KE.TrashAuraDelta = TAD
 
--- Constants verbatim from the reference module. Its scheduled-check
--- DELAY/PRE/POST windows all equal DungeonTrash's TARGET_SAMPLE_DELAY
--- (0.10s), so the existing +0.10s fingerprint sampler owns the scheduling —
--- no per-cast check scheduler is ported, only the cache/ring machinery.
+-- The check's DELAY/PRE/POST windows all equal DungeonTrash's
+-- TARGET_SAMPLE_DELAY (0.10s), so the existing +0.10s fingerprint sampler owns
+-- the scheduling — this file holds only the cache/ring machinery.
 local MAX_AURAS = 40             -- per-unit scan bound
 local RECENT_KEEP_SECONDS = 1.0  -- recent-application ring retention
 
@@ -48,8 +46,8 @@ TAD.seeded = false
 TAD.auraCache = {}   -- [unit] = { [auraInstanceID] = true }
 TAD.recentAdds = {}  -- array of { unit, id, at }, front-trimmed to the last second
 
--- The five units whose incoming debuffs the fingerprint watches (reference
--- scan set: player + party1-4; nameplate tokens never enter here).
+-- The five units whose incoming debuffs the fingerprint watches: player +
+-- party1-4. Nameplate tokens never enter here.
 local function isTrackedUnit(unit)
     if unit == "player" then return true end
     return type(unit) == "string" and unit:match("^party[1-4]$") ~= nil
@@ -59,7 +57,7 @@ TAD.IsTrackedUnit = isTrackedUnit
 local TRACKED_UNITS = { "player", "party1", "party2", "party3", "party4" }
 
 -- One unit's current HARMFUL aura instance-ID set. Reads are pcall-guarded
--- and the ID goes through tonumber (reference: SafeAuraInstanceID) — under
+-- and the ID goes through tonumber — under
 -- the ShouldAurasBeSecret()==false enable gate the field is plain, and if
 -- that gate is ever wrong tonumber on a secret degrades to nil (probe-
 -- pinned) and the aura is simply skipped.
@@ -153,9 +151,9 @@ end
 
 -- Event feeds, routed from DungeonTrash: UNIT_AURA is registered only while
 -- the monitor runs AND the sampler is live (see StartMonitor); the roster
--- edge rides the module's always-on handler, gated on enabled here
--- (reference: its roster handler wipes and reseeds — party unit tokens
--- re-key on every roster change, so the old baselines are meaningless).
+-- edge rides the module's always-on handler, gated on enabled here. The roster
+-- handler wipes and reseeds: party unit tokens re-key on every roster change,
+-- so the old baselines are meaningless.
 function TAD.OnUnitAura(unit)
     if TAD.enabled ~= true then return end
     if not isTrackedUnit(unit) then return end

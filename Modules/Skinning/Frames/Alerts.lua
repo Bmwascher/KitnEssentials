@@ -364,7 +364,7 @@ end
 -- EllesmereUI `loottoast` overlap can be suppressed on its own:
 -- EllesmereUI skins item-drop toasts (icon + item name) and explicitly
 -- leaves achievement and other alert styles alone
--- (EllesmereUIBlizzardSkin_WindowPacks.lua:11166-11177). Greying the
+-- (EllesmereUIBlizzardSkin_WindowPacks.lua). Greying the
 -- combined key against that overlap would un-skin nineteen popups
 -- EllesmereUI never touches.
 local SYSTEM_SKINS = {

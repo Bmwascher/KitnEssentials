@@ -74,7 +74,7 @@ local function IsPetOnPassive()
     return false
 end
 
--- Verified via /dump UnitGUID("pet") on 2026-05-07. Single NPC ID — no
+-- Verified via /dump UnitGUID("pet") on. Single NPC ID — no
 -- Wrathguard / talent variants in modern Demo.
 local FELGUARD_NPC_IDS = {
     [17252] = true,  -- Felguard

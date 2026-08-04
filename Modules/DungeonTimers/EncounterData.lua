@@ -324,16 +324,10 @@
 -- ║                -- shown to everyone (no role filter).    ║
 -- ║    }                                                     ║
 -- ║                                                          ║
--- ║  Cast durations + role classifications cross-referenced  ║
--- ║  against EXBossData (C:\...\AddOns\EXBossData\           ║
--- ║  EncounterData.lua). EXBoss eventType is Chinese:        ║
--- ║  坦克=tank, 治疗=heal, 机制=mechanic, 其他=other.         ║
--- ║                                                          ║
 -- ║  Lookup at BigWigs_Timer time: O(1) by encounterID +     ║
--- ║  spellID. The BigWigs spellId we receive matches         ║
--- ║  EXBoss's `evenSpellID`, NOT its `spellID` field (which  ║
--- ║  is the actual hostile-cast spellId — different in some  ║
--- ║  cases like Barrage 1260643 vs. 1260648 cast).           ║
+-- ║  spellID. The BigWigs spellId we receive is the EVENT    ║
+-- ║  spellId, NOT the hostile-cast spellId — they differ in  ║
+-- ║  some cases (Barrage 1260643 vs. 1260648 cast).          ║
 -- ║                                                          ║
 -- ║  Optional `bossOrder` field on an encounter overrides    ║
 -- ║  the default encounterID-ascending sort. Use when an     ║
@@ -387,12 +381,11 @@ KE.EncounterData[2564] = {
         -- LittleWigs's SPELL_AURA_APPLIED handler for aura 376781 doesn't fire in 12.0 (same root cause
         -- as L'ura's Backlash). Instead we spawn off LittleWigs's reliable widget-driven Message(376448),
         -- which fires from the UPDATE_UI_WIDGET handler when goal-tracker widget 4183 reaches barValue=3.
-        -- ExBoss uses the same widget signal and a 2s lead-in before the 12s active phase begins.
+        -- A 2s lead-in precedes the 12s active phase.
         [376448] = { name = "Vulnerability Phase", spawnOnMessage = true, duration = 12, leadDelay = 2,      role = "other",    display = "bar",  displayText = "VULNERABILITY", iconOverride = 135821, showAtSeconds = 0, sortAtEnd = true, sound = "Dmg Amp" },
     },
-    -- HP-threshold phase bars are visual-only (matches the reference module
-    -- ExBoss/Modules/Boss/Mechanics/HealthThreshold.lua, which deliberately
-    -- has no audio cue here). 12.0's secret-value system prevents an
+    -- HP-threshold phase bars are visual-only, no audio cue.
+    -- 12.0's secret-value system prevents an
     -- addon-observable HP crossing trigger, so the show sound on bar
     -- creation fired at engage (HP=100%) rather than at the threshold —
     -- text-only sidesteps that without per-encounter event proxies.

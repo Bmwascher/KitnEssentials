@@ -43,22 +43,15 @@ end
 
 -- Shows the copy dialog with the given spell/item/NPC ID and name.
 local function ShowCopyDialog(name, id)
-    -- KE:CreatePrompt is positional (Core/Widgets.lua:264):
-    -- (title, text, showEditBox, ...). The reference passes a config table;
-    -- that shape does not exist here.
-    -- The hint always names Ctrl-C, never db.Modifier/db.Key: those two
-    -- settings only gate the TOOLTIP-HOVER trigger that opens this window
-    -- (TryCopy, below), not a binding inside it. The dialog's own copy
-    -- handler is hardcoded to Ctrl+C (Core/Widgets.lua:350), same as the
-    -- reference (References/atrocityEssentials .../Utils/AE-Dialog.lua:474)
-    -- and this addon's three other copy-mode prompts (GUI-ProfilesTab.lua,
-    -- GUI-Nicknames.lua, GUI-BlizzardMessages.lua). Naming the configured
-    -- key here would send a user on e.g. Shift+V into overwriting the
-    -- highlighted id with the letter V instead of copying it.
+    -- The hint always names Ctrl-C, never db.Modifier/db.Key: those two settings
+    -- only gate the TOOLTIP-HOVER trigger that opens this window, not a binding
+    -- inside it, and the dialog's own copy handler is hardcoded to Ctrl+C.
+    -- Naming the configured key here would send a user on e.g. Shift+V into
+    -- overwriting the highlighted id with the letter V instead of copying it.
     local hint = "Press " .. KE:ColorTextByTheme("Ctrl-C") .. " to copy"
-    -- cancelText ("Close") is the opt-in Core/Widgets.lua reads to show a
-    -- single Close button AND swap this prompt's title/edit-box colours to
-    -- match the reference -- see CreatePrompt's isCopyPrompt flag.
+    -- cancelText ("Close") is the opt-in Core/Widgets.lua reads to show a single
+    -- Close button and swap this prompt's title and edit-box colours -- see
+    -- CreatePrompt's isCopyPrompt flag.
     KE:CreatePrompt(name or "Copy", tostring(id), true, hint, false, nil, nil, nil, nil, nil, nil, nil, "Close")
 end
 
@@ -117,9 +110,8 @@ function CA:TryCopy(key)
     if not issecretvalue(GameTooltip:GetItem()) then
         if not copyId then
             -- GameTooltipDataMixin:GetItem() returns (name, hyperlink, id) --
-            -- three values, per .wow-api-reference Blizzard_GameTooltip/
-            -- Mainline/GameTooltip.lua:1023-1025 delegating to
-            -- Blizzard_SharedXMLGame/Tooltip/TooltipUtil.lua:9-23. The bundled
+            -- three values, per Blizzard_GameTooltip/GameTooltip.lua
+            -- delegating to TooltipUtil.lua. The bundled
             -- type-checker DB models only two, a known DB gap.
             ---@diagnostic disable-next-line
             local itemName, _, itemId = GameTooltip:GetItem()
@@ -134,9 +126,8 @@ function CA:TryCopy(key)
     if not issecretvalue(GameTooltip:GetUnit()) then
         if not copyId then
             -- GameTooltipDataMixin:GetUnit() returns (name, unit, guid) --
-            -- three values, per .wow-api-reference Blizzard_GameTooltip/
-            -- Mainline/GameTooltip.lua:1031-1033 delegating to
-            -- Blizzard_SharedXMLGame/Tooltip/TooltipUtil.lua:34-42. The
+            -- three values, per Blizzard_GameTooltip/GameTooltip.lua
+            -- delegating to TooltipUtil.lua. The
             -- bundled type-checker DB models only two, a known DB gap.
             ---@diagnostic disable-next-line
             local unitName, _, unitGUID = GameTooltip:GetUnit()
@@ -279,10 +270,16 @@ function CA:SetListening(on)
         if not f.keListening then
             f.keListening = true
             f:EnableKeyboard(true)
+            f:Show()
         end
     elseif f.keListening then
         f.keListening = nil
-        f:EnableKeyboard(false)
+        -- Hide is what stops the listening, and it is the only thing that can:
+        -- the combat entry path reaches here in lockdown, where EnableKeyboard
+        -- is protected and throws. A hidden frame runs no OnKeyDown, so the
+        -- taint window closes either way.
+        f:Hide()
+        if not InCombatLockdown() then f:EnableKeyboard(false) end
     end
 end
 

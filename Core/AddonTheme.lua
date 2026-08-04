@@ -42,7 +42,7 @@ local ThemeDefaults = {
     contentWidth   = 679,
     borderSize     = 1,
 
-    -- Row heights (used by NUI v3.7-style cards: FontSettingsCard, GlowSettingsCard, etc.)
+    -- Row heights (used by the settings cards: FontSettingsCard, GlowSettingsCard, etc.)
     rowHeight          = 40,   -- Standard row height
     rowHeightLast      = 44,   -- Last row in a card (use 0 spacing in AddRow)
     rowHeightTall      = 80,   -- Anchor point selector rows

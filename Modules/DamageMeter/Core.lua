@@ -627,7 +627,7 @@ function DM:OnEnable()
         self.db.Dock = self.db.Dock or {}
         -- WidthRatio 1 = one full db.Width-wide column (LayoutDock reads it as an
         -- absolute baseW multiplier, NOT a normalized share like RowRatios — 0.5
-        -- here shipped a half-width, squished dock in v3.0.0). RowRatios ARE
+        -- here once shipped a half-width, squished dock). RowRatios ARE
         -- normalized, so 0.61/0.39 correctly splits the right column 61/39.
         self.db.Dock.Columns = {
             { WidthRatio = 1, Windows = { 1 },    RowRatios = { 1 } },
@@ -635,7 +635,7 @@ function DM:OnEnable()
         }
     end
 
-    -- Repair profiles seeded by the v3.0.0 build, where both columns shipped at
+    -- Repair profiles seeded by the old build, where both columns shipped at
     -- WidthRatio 0.5 (half-width / squished). Run-once and signature-gated so a
     -- customized dock is never touched. Resolved at runtime (Dock.lua loads after
     -- Core.lua); runs whether or not the seed block above fired (existing profiles
@@ -737,8 +737,8 @@ end
 -- _needsFinalRefresh is set by OnRegenEnabled when the player left combat but
 -- the group is still fighting (e.g. died mid-pull): the ticker keeps polling
 -- GroupInCombat each tick and only stops once everyone is out of combat,
--- painting one final frame at that point. This is the continuous re-check the
--- reference guarantees, not a single deferred re-check.
+-- painting one final frame at that point. The re-check must be continuous; a
+-- single deferred one misses the tail of the fight.
 --
 -- DM:Tick is implemented in the render chunk and resolved at runtime; it is
 -- guarded so this lifecycle layer never throws "attempt to call a nil value"
@@ -947,7 +947,7 @@ function DM:OnEncounterStart()
     -- Stored-id snapshot for the kill/wipe tint: OnEncounterEnd tags only sessions
     -- stored SINCE this pull. "Tag the newest" mis-tagged a key-completing final
     -- kill -- Blizzard stores the run-level "+NN" session on top of the boss's own
-    -- (live repro 2026-07-03), so the boss's outcome landed on the run row. Plain
+    -- (live repro), so the boss's outcome landed on the run row. Plain
     -- ids only (sessionID is never secret; guarded anyway). nil snapshot = the
     -- pcall'd list read failed -> OnEncounterEnd falls back to newest-only.
     local list = self:GetAvailableSessions()
@@ -1030,8 +1030,8 @@ function DM:OnEncounterEnd(_, _, _, _, _, success)
             -- Reached pre-pull history -> stop. EXCEPTION: the newest entry
             -- (i == #list) is the live session combat just finished, i.e. the
             -- boss. Blizzard sometimes creates that session a moment BEFORE
-            -- ENCOUNTER_START fires (races the event -- confirmed in a live kill
-            -- 2026-07-06: 10-id snapshot already held the boss's own session),
+            -- ENCOUNTER_START fires (races the event -- in a live kill the
+            -- 10-id snapshot already held the boss's own session),
             -- so it lands in the snapshot and the walk would otherwise break on
             -- it and tag nothing -> the boss row stays uncolored. Tag it anyway;
             -- older in-snapshot sessions are genuine history and still stop here.
@@ -1433,7 +1433,7 @@ local REPORT_CHANNELS = {
 -- Meter types with a meaningful per-second (amount-over-time). Interrupts / Dispels are
 -- counts and Deaths are events, so a rate is noise -- omitted from the report AND from
 -- the bar value (RenderWindow stashes the lookup per tick so RenderBar drops the
--- "count | rate" half for count types; the reference whitelists the same five).
+-- "count | rate" half for count types).
 local RATE_METER_TYPES = {
     [Enum.DamageMeterType.DamageDone] = true,
     [Enum.DamageMeterType.HealingDone] = true,
@@ -1955,10 +1955,8 @@ function DM:OnChallengeEvent(event)
     -- in the C_DamageMeter contract. Without this, "Overall" (and a window pinned to a
     -- prior session) carries the PREVIOUS key's data, incl. its deaths, into the new
     -- run. Reset on START only: resetting on COMPLETED/RESET would wipe a just-finished
-    -- run the user is still reviewing. Upstream verified 2026-07-18: the reference
-    -- meter does this exact unconditional reset on CHALLENGE_MODE_START ("wipe data
-    -- so Overall = this dungeon run"), and Details-Midnight resets the server store
-    -- at key start too -- Details keeps cross-key history only because it snapshots
+    -- run the user is still reviewing. Details-Midnight resets the server store
+    -- at key start too -- it keeps cross-key history only because it snapshots
     -- each finalized fight into addon-local tables (the server store is just its
     -- live feed). KE renders the server store directly, and ResetAllCombatSessions
     -- is C_DamageMeter's ONLY mutator (12.0.7: no overall-only reset, no per-session

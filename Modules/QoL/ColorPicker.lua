@@ -211,7 +211,7 @@ local function OnColorSelect(frame, r, g, b)
     picker.Content.ColorSwatchCurrent:SetColorTexture(r, g, b)
     -- REQUIRED DEVIATION: Blizzard's own OnColorSelect calls
     -- self.swatch:SetColorRGB(r, g, b) when a caller's setup table passed a
-    -- swatch (ColorPickerFrame.lua:11-13). This handler replaces that
+    -- swatch (ColorPickerFrame.lua). This handler replaces that
     -- script outright, so without this line any caller relying on `swatch`
     -- for live updates silently stops getting them.
     if picker.swatch then picker.swatch:SetColorRGB(r, g, b) end

@@ -14,8 +14,7 @@
 -- ║                                                          ║
 -- ║  This file is PURE (no WoW API, no per-nameplate state); ║
 -- ║  DungeonTrash.lua owns the event loop + runtime state    ║
--- ║  and calls these decision functions. Ported from an      ║
--- ║  upstream reference engine; see                          ║
+-- ║  and calls these decision functions. Engine spec:        ║
 -- ║  dev/docs/dungeon-trash-engine-port-spec.md.             ║
 -- ╚══════════════════════════════════════════════════════════╝
 
@@ -34,7 +33,7 @@ local abs = math.abs
 local TI = {}
 KE.TrashInference = TI
 
--- ── Constants (verbatim from the upstream engine) ──────────────────────────
+-- ── Constants ──────────────────────────────────────────────────────────────
 TI.CAST_TIME_TOLERANCE = 0.20   -- measured vs curated cast/channel duration
 TI.LEVEL_SQUISH_OFFSET = 60     -- Layer1 accepts obs.level == template-60
 TI.MIN_LEAD = 0.20              -- a predicted cast nearer than this is dropped
@@ -48,7 +47,7 @@ local ACADEMY_ROUTED_NPCS = {
     [197219] = true, [192680] = true, [192333] = true, [196671] = true,
 }
 
--- Skyreach (map 1209): an upstream-fork-only Layer1 rule — the Suntalon
+-- Skyreach (map 1209): a map-specific Layer1 rule — the Suntalon
 -- Tamer spawns only inside the 52-60% enemy-forces window, so a KNOWN
 -- percent outside it prunes the tamer from multi-candidate sets. Unknown
 -- forces stay ungated.
@@ -58,8 +57,8 @@ local SKYREACH_TAMER_NPC = 76154
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  Packed identity decoder (verification / fallback)       ║
 -- ╚══════════════════════════════════════════════════════════╝
--- The data already ships decoded `identity` tables; this mirrors the
--- upstream packed-row decoder so a spec can round-trip packedIdentity →
+-- The data already ships decoded `identity` tables; this decodes the packed
+-- row so a spec can round-trip packedIdentity →
 -- identity and catch a generator drift. b(shift,width) = the `width` bits
 -- of `p` at `shift`.
 function TI.DecodePackedIdentity(p)
@@ -89,10 +88,10 @@ end
 
 -- Placement gate. `placement` is a CSV: values ≤20 are dungeon boss-progress
 -- indices, values >20 are sub-zone map tokens (multi-floor dungeons). The two
--- kinds are independent AND-gates (reference: the map set is checked BEFORE
+-- kinds are independent AND-gates: the map set is checked BEFORE
 -- the stage set and BOTH must pass — a known-mismatched tier rejects
--- regardless of the other's match). Map tokens are TWO-TIER (reference
--- behavior): a token is either a uiMapID — equality with
+-- regardless of the other's match. Map tokens are TWO-TIER: a token is
+-- either a uiMapID — equality with
 -- opts.currentSubZoneMapID — or an areaID, whose C_Map.GetAreaInfo name (via
 -- the opts.resolveAreaName closure; this file stays pure) is compared to the
 -- live opts.currentZoneText. Nexus-Point Xenas ships areaID tokens
@@ -150,8 +149,8 @@ function TI.ScoreTraitRow(obs, trait, opts)
     -- discriminating soft field — not merely on the coarse sex/power/classID triple
     -- many mobs share. Without it, a mob whose own row is pruned/absent collapses
     -- onto a fingerprint-sibling and gets rubber-stamped (proven in-game:
-    -- Rokh'zal/Gnarldin false positives). The reference gets this by HARD-rejecting
-    -- level; KE keeps level soft for candidate SURVIVAL (Maisara scaling) but gates
+    -- Rokh'zal/Gnarldin false positives). Hard-rejecting on level would get the
+    -- same effect; level stays soft for candidate SURVIVAL (Maisara scaling) and gates
     -- the confident resolve on agreement. buffCount is deliberately NOT counted
     -- here — buffCount 0 is too common to be evidence. See BuildCandidates.
     local levelAgreed = false
@@ -164,9 +163,9 @@ function TI.ScoreTraitRow(obs, trait, opts)
     -- observed level scores softly and lets Layer2 cast/channel DURATION —
     -- stable across scaling — disambiguate. An observed level ABOVE the row is
     -- a different animal: downward drift never produces it, but boss plates sit
-    -- one level above trash (the reference's boss engine keys on nameplate
-    -- level 92 vs trash 91), and the reference's hard level reject is precisely
-    -- what keeps bosses out of its trash pool. Going soft in BOTH directions
+    -- one level above trash (nameplate level 92 vs trash 91), so rejecting
+    -- above the row is precisely
+    -- what keeps bosses out of the trash pool. Going soft in BOTH directions
     -- silently deleted that boss filter (proven in-game: Magisters' Terrace
     -- bosses resolved to Arcane Sentry / Shadowrift Voidcaller). Rejecting only
     -- the above case restores it and fails SAFE — a boss-tier plate produces no
@@ -206,12 +205,11 @@ function TI.ScoreTraitRow(obs, trait, opts)
     -- candidate pool — so an observed count ABOVE the row scores softly and
     -- Layer2 cast-duration disambiguation resolves collisions. A count BELOW
     -- the row is a different animal: nothing inflates downward, and a mob
-    -- MISSING the fingerprint's own buffs is a different mob. The reference
-    -- hard-rejects any buffCount mismatch, and going soft in both directions
-    -- let Maisara's uncurated Reanimated Warriors (b0, otherwise
+    -- MISSING the fingerprint's own buffs is a different mob. Going soft in
+    -- both directions let Maisara's uncurated Reanimated Warriors (b0, otherwise
     -- identity-identical) wear Bound Defender's (b1) timers as its lone
     -- surviving sibling (proven in-game). Rejecting only the below case
-    -- restores the reference's discriminator where our field evidence never
+    -- keeps the discriminator where field evidence never
     -- contradicted it, keeps the proto-drake alive, and fails safe. Same
     -- asymmetric shape as the level axis above; supersedes the all-soft
     -- rationale in dev/docs/dungeon-trash-engine-port-spec.md §3.
@@ -234,7 +232,7 @@ function TI.ScoreTraitRow(obs, trait, opts)
             if obs.unitClassification ~= "elite" then return false, score, strength, "classification" end
         end
     elseif id.nonElite ~= true then
-        -- elite row but classification unknown → reject (matches the reference).
+        -- elite row but classification unknown → reject.
         return false, score, strength, "classification-missing"
     end
 
@@ -267,10 +265,10 @@ function TI.MatchesAcademySignature(obs)
 end
 
 -- Route the Academy signature to a single npcID by M+ enemy-forces %.
--- Boundaries ported verbatim (note the deliberate gaps → fall to 196671).
--- UNKNOWN forces (nil) return nil: the newer upstream fork deliberately
--- SKIPS the Layer1 prune then, letting Layer2 cast behavior disambiguate —
--- the older upstream 196671 hard-route misidentified the eagle/tamer mobs
+-- Note the deliberate gaps → fall to 196671.
+-- UNKNOWN forces (nil) return nil: the Layer1 prune is SKIPPED then, letting
+-- Layer2 cast behavior disambiguate. A hard route to 196671 instead
+-- misidentifies the eagle/tamer mobs
 -- in every non-M+ Academy run and during forces-criteria blackouts.
 function TI.ResolveAcademyForcesNPC(forcesPercent)
     local f = tonumber(forcesPercent)
@@ -307,8 +305,8 @@ function TI.BuildCandidates(obs, opts)
     -- live forces percent backs the route, drop every routed npc except the
     -- resolved one. Unknown forces (nil percent — outside M+, or during a
     -- forces-criteria blackout) SKIP the prune entirely so Layer2 cast
-    -- behavior disambiguates (the upstream fork's forces-invalid branch; the
-    -- caller passes nil for unknown, NEVER 0 — 0 would route to the <20% npc).
+    -- behavior disambiguates. The caller passes nil for unknown, NEVER 0 —
+    -- 0 would route to the <20% npc.
     if opts.mapID == ACADEMY_MAP_ID and TI.MatchesAcademySignature(obs) then
         local keep = TI.ResolveAcademyForcesNPC(opts.forcesPercent)
         if keep then
@@ -322,7 +320,7 @@ function TI.BuildCandidates(obs, opts)
         end
     end
 
-    -- Skyreach tamer forces-window prune (an upstream-fork-only rule): outside
+    -- Skyreach tamer forces-window prune: outside
     -- [52, 60)% the tamer cannot spawn — drop it from MULTI-candidate sets only
     -- (a lone-survivor tamer stays for Layer2 verification), and never on an
     -- unknown percent.
@@ -355,7 +353,7 @@ function TI.BuildCandidates(obs, opts)
 end
 
 -- Reconcile each trait's capability fingerprint against its curated spells. The
--- upstream extractor drops hasChannelSpell for cast-into-channel spells (castTime
+-- data extractor drops hasChannelSpell for cast-into-channel spells (castTime
 -- AND channelTime both > 0) — a FALSE NEGATIVE that makes the Layer1 channel gate
 -- in ScoreTraitRow ("saw-channel-no-channel-spell") HARD-REJECT the correct mob
 -- the instant it channels, flipping the plate to an identical-except-that-bit
@@ -389,7 +387,7 @@ end
 
 -- Data fingerprint field → observed-sample field. Compared only when the
 -- data field is present AND both sides are the right type (never reject on an
--- unsampled/nil observation — matches the reference's type()=="boolean" gate).
+-- unsampled/nil observation — hence the type()=="boolean" gate).
 local BOOL_FINGERPRINTS = {
     { data = "targetExists",           obs = "targetExists" },
     { data = "targetAPIExists",        obs = "targetAPIExists" },
@@ -398,7 +396,7 @@ local BOOL_FINGERPRINTS = {
     -- castStartAuraDelta additionally carries a PRESENCE-SYMMETRIC clause in
     -- fingerprintsMatch below: a sampled delta with no curating spell rejects.
     { data = "castStartAuraDelta",     obs = "castStartAuraDelta" },
-    -- Declared upstream but backed by zero shipped data rows — mapped anyway
+    -- Declared by the data format but backed by zero shipped rows — mapped anyway
     -- so a future TrashData regeneration that adds rows cannot silently
     -- leave them undiscriminable. castStartTargetUnitExists is the same
     -- UnitExists(target) probe fpTargetExists already samples.
@@ -410,7 +408,7 @@ local function durationWithin(a, b, tol)
     return type(a) == "number" and type(b) == "number" and abs(a - b) <= tol
 end
 
--- Channel-evidence discriminator (ported from upstream): a channel with a
+-- Channel-evidence discriminator: a channel with a
 -- PROVEN cast→channel transition can only be a two-phase spell's channel
 -- phase — reject pure channels; one whose proof is affirmatively ABSENT
 -- cannot be a two-phase spell, whose channel is only reachable through its
@@ -439,10 +437,10 @@ local function fingerprintsMatch(spellData, observed)
                 return false
             end
         end
-        -- castStartAuraDelta is PRESENCE-SYMMETRIC, unlike the rows above
-        -- (reference: a RESOLVED aura delta rejects every non-curating spell
-        -- when matched AND every curating spell when not — that branch has no
-        -- nil-data wildcard). The sampler resolves the observation to a hard
+        -- castStartAuraDelta is PRESENCE-SYMMETRIC, unlike the rows above: a
+        -- RESOLVED aura delta rejects every non-curating spell
+        -- when matched AND every curating spell when not — no
+        -- nil-data wildcard. The sampler resolves the observation to a hard
         -- true/false on every sampled cast, so "a fresh party debuff landed
         -- but this spell doesn't curate one" is disconfirming evidence, not
         -- an unknown. An UNSAMPLED nil observation stays lenient (sampler
@@ -518,8 +516,7 @@ end
 
 -- Does any of the mob's spells of this kind curate a success self-buff-count
 -- delta? The caller must then SAMPLE the delta (before/after counts around
--- the stop) before crediting — the reference defers consumption on exactly
--- this need.
+-- the stop) before crediting — consumption defers on exactly this need.
 function TI.NeedsSelfBuffCountDelta(mobData, kind)
     if not (mobData and mobData.spells) then return false end
     for _, spell in pairs(mobData.spells) do
@@ -548,8 +545,8 @@ end
 
 -- Is a CAST_START spell OWNED by the start-advance path? Requires every
 -- curated start fingerprint to be one the engine can discriminate with:
--- castStartAuraDelta needs the party aura-delta sampler (TrashAuraDelta.lua,
--- the reference's own discriminator, now ported), which only runs while
+-- castStartAuraDelta needs the party aura-delta sampler
+-- (TrashAuraDelta.lua), which only runs while
 -- group auras are readable. auraDeltaUsable answers "can the delta
 -- discriminate THIS consult" and callers derive it per site:
 --   • the pre-sample WAIT decision (NeedsStartFingerprints) passes the
@@ -560,7 +557,7 @@ end
 --     "boolean") — candidate churn across the sample window can leave the
 --     delta unsampled with the ready bit set, and an owned spell matched on
 --     a lenient nil would anchor at a start the sample never discriminated
---     (churn guard, review find 2026-07-18).
+--     (churn guard).
 -- Usable → the fingerprint discriminates the start (a Riftbreath start
 -- carries no fresh party debuff, so Vicious Ambush 388942 — the one shipped
 -- row — cannot cross-anchor on it) and a meld-FAILED Ambush still advances
@@ -577,8 +574,8 @@ function TI.IsStartAdvanceOwned(spellData, auraDeltaUsable)
 end
 
 -- Does any start-advance-owned spell curate a boolean start fingerprint?
--- The pending start-advance's +0.10s fingerprint wait is NEEDS-BASED
--- (reference: fingerprint waits exist only for spells that curate one): with
+-- The pending start-advance's +0.10s fingerprint wait is NEEDS-BASED — a wait
+-- exists only for spells that curate a fingerprint: with
 -- nothing curated there is nothing to sample, and the wait must not gate
 -- consumption — the sampler is the only writer of the ready bit, and a plate
 -- blink inside the 0.10s window would otherwise strand the pending forever.
@@ -594,8 +591,8 @@ function TI.NeedsStartFingerprints(mobData, auraDeltaUsable)
     return false
 end
 
--- Does a CAST_START spell match an observed cast START? Kind rule verbatim
--- from the reference: "cast" needs a curated cast duration; "channel" needs
+-- Does a CAST_START spell match an observed cast START? Kind rule:
+-- "cast" needs a curated cast duration; "channel" needs
 -- channel-ONLY — a two-phase spell start-matches exclusively its cast phase
 -- (its channel start is the transition pairing's job, never a fresh advance).
 -- Fingerprints reuse the shared duration-agnostic tail; duration itself is
@@ -616,18 +613,17 @@ end
 
 -- Duration-agnostic cast-start fingerprint check for the observed cast-start
 -- cue — the +0.10s sampled start fingerprints act as HARD eligibility
--- filters ahead of the cue's nearest-predicted-start scoring, exactly like
--- the reference's voice-time re-resolution. Unsampled (nil) observations
--- stay lenient.
+-- filters ahead of the cue's nearest-predicted-start scoring. Unsampled (nil)
+-- observations stay lenient.
 function TI.StartFingerprintsMatch(spellData, fingerprints)
     if type(spellData) ~= "table" then return false end
     return fingerprintsMatch(spellData, { fingerprints = fingerprints })
 end
 
--- Trait-duration keep tier (reference behavior: the trait table's
+-- Trait-duration keep tier: the trait table's
 -- castTimeSet/channelTimeSet — every cast duration the mob is KNOWN to
--- perform, curated timer spells or not — is unioned into the Layer2 keep
--- rules, and Layer2 consults those rules BEFORE curated spells).
+-- perform, curated timer spells or not — unions into the Layer2 keep
+-- rules, and Layer2 consults those rules BEFORE curated spells.
 -- 16 shipped durations across 10 mobs have no curated timer spell, so without
 -- this tier a routine "filler" cast reads as DISCONFIRMING evidence against
 -- the true mob: it gets pruned from its own candidate pool (collapsing onto a
@@ -639,9 +635,9 @@ function TI.TraitDurationMatches(trait, observed)
     if not (trait and observed) then return false end
     -- Explicit per-kind select: the and/or form fell through to castTimeSet
     -- when a CHANNEL observation met a nil channelTimeSet, so a cast-only
-    -- mob survived real channel evidence (audit F2 — the same and/or-collapse
-    -- class as the 2026-07-10 alert-group field bug; the reference compiles
-    -- and consumes the two sets independently).
+    -- mob survived real channel evidence — the same and/or-collapse class as
+    -- the alert-group field bug. The two sets are compiled and consumed
+    -- independently.
     local set
     if observed.kind == "channel" then
         set = trait.channelTimeSet
@@ -657,14 +653,14 @@ function TI.TraitDurationMatches(trait, observed)
     return false
 end
 
--- Resolve-without-lock guard (reference semantics adapted for KE's lock).
--- A bare channel — castIntoChannel nil, the ONLY unproven state KE
+-- Resolve-without-lock guard.
+-- A bare channel — castIntoChannel nil, the ONLY unproven state the engine
 -- emits (it can never affirm a transition's absence; see the producer) —
 -- verifies a candidate through the lenient Pass-2 shape, and a TWO-PHASE
--- spell's channelTime passes that shape as easily as a pure channel's. The
--- reference survives the same lenient match because it never locks: every
+-- spell's channelTime passes that shape as easily as a pure channel's. A
+-- lock-free engine survives that lenient match because every
 -- pass re-derives, so a coincidental match self-corrects on the next cast.
--- KE's castConfirmed must therefore not be earned by that ambiguity: channel
+-- castConfirmed must therefore not be earned by that ambiguity: channel
 -- evidence locks only when the transition was PROVEN (castIntoChannel true)
 -- or the mob affirms a PURE channel (channelTime without castTime) whose
 -- fingerprints agree. A trait-only or two-phase-only match still RESOLVES —
@@ -689,21 +685,19 @@ end
 -- returns its KE.TrashTraits row for the trait-duration keep tier above.
 -- Keeps only candidates having at least one spell (or known trait duration)
 -- that matches; if that collapses to a strict subset it wins, else the
--- original list is returned (ambiguous → resolve stays nil upstream).
+-- original list is returned (ambiguous → resolve stays nil).
 -- A LONE candidate is VERIFIED, not rubber-stamped: it resolves only when the
 -- observed cast matches one of its curated spells or trait durations. This is
 -- the "defers to Layer2 cast disambiguation" that BuildCandidates promises
 -- for a lone level-disagreed survivor — without it that mob could never
 -- resolve at all (the old caller-side #>1 gate made the deferral dead code).
--- The reference engine runs Layer2 on every resolve pass regardless of count.
+-- Layer2 therefore runs on every resolve pass regardless of count.
 -- A CHANNEL verifies the lone survivor by the Pass-2 shape — channel
 -- capability + channel evidence + fingerprints, NO duration gate: a grab/beam
 -- channel's caster CHANNEL_STOP fires at castbar close, far short of curated
 -- channelTime (Plungegrip 0.85s vs 12s), so a duration-gated verify left
 -- every channel-only mob permanently unresolvable once its level disagreed
--- (a kick bypasses the verify entirely; a completion failed the gate). The
--- reference resolves a lone survivor with NO verification at all — this
--- capability-shaped verify is still strictly stronger.
+-- (a kick bypasses the verify entirely; a completion failed the gate).
 function TI.FilterCandidates(candidates, observed, dataByNpc, traitByNpc)
     if type(candidates) ~= "table" then return candidates, nil end
     local function traitMatches(npcID)
@@ -719,10 +713,9 @@ function TI.FilterCandidates(candidates, observed, dataByNpc, traitByNpc)
                 if spellShapeMatches(spell, observed) then shapeRejected = true end
             end
         end
-        -- Trait-duration revival is FILLER-ONLY (audit F1; reference:
-        -- fingerprint narrowing is a separate FIRST stage —
-        -- NarrowByCurrentFingerprint — and duration rules apply only to its
-        -- survivors): a curated spell whose kind+duration fit but whose
+        -- Trait-duration revival is FILLER-ONLY: fingerprint narrowing is a
+        -- separate FIRST stage and duration rules apply only to its
+        -- survivors. A curated spell whose kind+duration fit but whose
         -- EVIDENCE rejected is affirmative disconfirmation, and letting the
         -- fingerprint-blind trait set resurrect the candidate would
         -- neutralize every curated discriminator that shares a trait
@@ -788,9 +781,9 @@ function TI.InferSucceededSpell(mobData, observed, anchors, now, excludeTwoPhase
         -- excludeTwoPhase: skip cast→channel spells so a shared-castTime one-phase
         -- twin (e.g. Crowd Dispersal vs Arcane Beam) can be resolved on its own.
         local skip = excludeTwoPhase and (spell.channelTime or 0) > 0
-        -- Success-side delta is STRICT (reference: a spell curating
+        -- Success-side delta is STRICT: a spell curating
         -- selfBuffCountDeltaOnSuccess is only ever CREDITED with a sampled,
-        -- matching delta — an unknown delta rejects it here). Mob narrowing
+        -- matching delta — an unknown delta rejects it here. Mob narrowing
         -- stays lenient: fingerprintsMatch passes on an unsampled delta, so
         -- FilterCandidates — which runs before the delta is sampled — never
         -- prunes on it.
@@ -813,7 +806,7 @@ function TI.InferSucceededSpell(mobData, observed, anchors, now, excludeTwoPhase
             end
             if durationDelta ~= nil then
                 -- Schedule proximity: score against the spell's PREDICTED NEXT
-                -- start (anchor.nextStartAt — the reference's primary term),
+                -- start (anchor.nextStartAt — the primary term),
                 -- falling back to the previous start (anchorAt + first) for an
                 -- anchor without a prediction, then to the engage-anchored
                 -- first-cast expectation for a never-anchored spell. Scoring
@@ -862,7 +855,7 @@ function TI.InferSucceededSpell(mobData, observed, anchors, now, excludeTwoPhase
             and fingerprintsMatch(spell, observed) then
             count = count + 1
             -- Mirror Pass 1's scoring fix: prefer the PREDICTED NEXT start
-            -- (anchor.nextStartAt — the reference's only proximity term),
+            -- (anchor.nextStartAt — the only proximity term),
             -- falling back to the previous start for an anchor without a
             -- prediction. For a success anchor, anchorAt + first measures
             -- time since the PREVIOUS cast — the recency inversion that

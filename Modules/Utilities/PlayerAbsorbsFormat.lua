@@ -29,7 +29,7 @@ end
 -- Returns the display string ("" renders nothing).
 -- NOTE: secret zero-blanking only works WITHOUT abbreviation — TruncateWhenZero
 -- returns "" at zero without branching on the (secret) value. With abbreviation
--- on, a secret zero shows the abbreviated value (faithful to the reference).
+-- on, a secret zero shows the abbreviated value.
 local function FormatAbsorb(amount, abbreviate, hideWhenZero)
     if IsSecretValue(amount) then
         if hideWhenZero and not abbreviate and TruncateWhenZero then

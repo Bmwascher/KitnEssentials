@@ -36,7 +36,7 @@ local KE = select(2, ...)
 if not KitnEssentials then return end
 
 -- A per-spell entry may also carry `roles = { tank=, healer=, dps= }` to ship a
--- role restriction (e.g. healer-only); omit it to inherit the upstream/all-roles
+-- role restriction (e.g. healer-only); omit it for the all-roles
 -- default. A user's Visibility-tab role toggles still win over this.
 --
 -- `colorKey = "<PRESET>"` pins the alert colour to a preset independent of the
@@ -240,7 +240,7 @@ KE.TrashCurated = {
 
     -- ── Nexus-Point Xenas (2915) ────────────────────────────────────────────
     -- Circuit Seer's Energy Overflow (1262720) is intentionally uncurated: the
-    -- upstream data carries no first-cast/cd, so the tracker can never schedule
+    -- extracted data carries no first-cast/cd, so the tracker can never schedule
     -- a predicted countdown for it — no overlay entry needed to "skip" it.
     [2915] = {
         [241642] = {  -- Lingering Image
@@ -267,8 +267,7 @@ KE.TrashCurated = {
     },
 }
 
--- Forced cast SEQUENCES (ported from the upstream Windrunner Spire trash
--- overlay): a mob whose casts are fingerprint-identical on every sampled axis
+-- Forced cast SEQUENCES: a mob whose casts are fingerprint-identical on every sampled axis
 -- but follow a FIXED order is named by POSITION — consulted before any
 -- duration/schedule inference (DungeonTrash's creditFinishedCast). Keyed
 -- npcID → array of spellIDs, one entry per observed cast start; casts beyond

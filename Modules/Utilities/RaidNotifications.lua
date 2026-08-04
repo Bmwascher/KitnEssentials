@@ -58,7 +58,7 @@ local VOIDCORE_CURRENCY_ID = 3418
 -- via an active keystone.
 --
 -- Source: in-game player-location IDs (verified via WeakAuras' Player
--- Location trigger 2026-05-06).
+-- Location trigger).
 local VOIDCORE_UI_MAPS = {
     [2266] = true,  -- Keystone Dungeons (umbrella for all 8 active M+ rotation maps)
     [2501] = true,  -- Maisara Caverns
@@ -120,8 +120,7 @@ end
 ---------------------------------------------------------------------------------
 -- Subscription Orchestrator
 ---------------------------------------------------------------------------------
--- See docs/superpowers/specs/2026-05-28-raidnotifications-subsystem-refactor-design.md
--- for the design. Two-layer model: module-level always-on events drive
+-- Two-layer model: module-level always-on events drive
 -- _UpdateSubscriptions() which registers/unregisters per-alert events based on
 -- each alert's shouldSubscribe() gate. Sub-gated events are refcount-managed
 -- so multiple alerts can share an event (PLAYER_REGEN_* shared by ResetBoss +

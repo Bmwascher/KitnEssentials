@@ -52,7 +52,7 @@ local BlizzardFrames = {
     "ContainerFrame1",
     "ContainerFrameCombinedBags",
     "DestinyFrame",
-    -- v4.0.173: GameMenuFrame REMOVED. Making it movable means
+    -- GameMenuFrame REMOVED. Making it movable means
     -- SetMovable/EnableMouse on a protected frame, which taints it, and
     -- Blizzard's Exit Game handler then calls the protected Quit() from
     -- tainted execution:
@@ -447,8 +447,7 @@ local BlizzardFramesOnDemand = {
 local disabled = {}    -- [frame] = true while movement is suppressed via SetMovable API
 local moveTargets = {} -- [handle frame] = frame that actually moves
 
--- Combat deferral (the upstream mover used a shared task manager; KE has none,
--- so this is a minimal local queue drained on PLAYER_REGEN_ENABLED).
+-- Combat deferral: a minimal local queue drained on PLAYER_REGEN_ENABLED.
 local combatQueue = {}
 local function AfterCombat(fn)
     if not InCombatLockdown() then
@@ -468,7 +467,7 @@ function MF:DrainCombatQueue()
     end
 end
 
--- Resolve "A.B.C" dotted paths or direct frame refs (upstream resolver, verbatim)
+-- Resolve "A.B.C" dotted paths or direct frame refs
 local function GetFrame(frameOrName)
     local frame
     if frameOrName then
@@ -504,8 +503,7 @@ function MF:Frame_StopMoving(this, button)
     local moveTarget = moveTargets[this]
     if button == "LeftButton" and moveTarget then
         moveTarget:StopMovingOrSizing()
-        -- The upstream mover saved the position here -- skipped: positions
-        -- are deliberately temporary in this port.
+        -- No position save here: moved frames are deliberately temporary.
     end
 end
 
@@ -520,8 +518,7 @@ function MF:HandleFrame(this, bindTo)
     if InCombatLockdown() and thisFrame:IsProtected() then
         AfterCombat(function()
             self:HandleFrame(this, bindTo)
-            -- The upstream mover also repositioned from saved coords next
-            -- frame here -- skipped with the remember system.
+            -- No reposition-from-saved-coords pass: nothing is remembered.
         end)
         return
     end
@@ -533,8 +530,7 @@ function MF:HandleFrame(this, bindTo)
 
     self:SecureHookScript(thisFrame, "OnMouseDown", "Frame_StartMoving")
     self:SecureHookScript(thisFrame, "OnMouseUp", "Frame_StopMoving")
-    -- The upstream mover secure-hooked the move target's SetPoint to a
-    -- reposition pass here -- skipped (persistence machinery).
+    -- No SetPoint hook on the move target: that is persistence machinery.
 end
 
 function MF:HandleFramesWithTable(frameTable, parent)
@@ -556,7 +552,7 @@ function MF:HandleAddon(_, addon)
 
     self:HandleFramesWithTable(frameTable)
 
-    -- Frame-specific fixes inherited from the upstream mover
+    -- Frame-specific fixes
     AfterCombat(function()
         if addon == "Blizzard_EncounterJournal" then
             local replacement = function(rewardFrame)
@@ -576,8 +572,8 @@ function MF:HandleAddon(_, addon)
                 dialog:SetAllPoints()
             end
         elseif addon == "Blizzard_PlayerChoice" and _G.PlayerChoiceFrame then
-            -- Deviation from the reference: these three used a raw HookScript,
-            -- which cannot be undone. Routed through AceHook so module disable
+            -- These three go through AceHook, never a raw HookScript, which
+            -- cannot be undone. That way module disable
             -- removes them and a re-enable does not stack a second copy.
             self:SecureHookScript(_G.PlayerChoiceFrame, "OnHide", function()
                 if not InCombatLockdown() or not _G.PlayerChoiceFrame:IsProtected() then
@@ -609,7 +605,7 @@ function MF:HandleAddon(_, addon)
     end)
 end
 
--- Public API (upstream parity, minus persistence semantics) -------------------
+-- Public API ------------------------------------------------------------------
 
 ---Whether the module is active (BlizzMove/MoveAnything defer counts as off)
 function MF:IsRunning()
@@ -646,7 +642,7 @@ function MF:OnEnable()
     if not self.db or self.db.Enabled ~= true then return end
     if self.initialized then return end
 
-    -- Defer to dedicated movers, matching the upstream behaviour.
+    -- Defer to dedicated movers.
     if C_AddOns_IsAddOnLoaded("BlizzMove") then
         self.StopRunning = "BlizzMove"
         return
@@ -658,16 +654,15 @@ function MF:OnEnable()
 
     self.initialized = true
 
-    -- Trade Skill Master special handling. The upstream mover made this an
-    -- option; here it is always on -- TSM replaces the merchant frame
-    -- wholesale, so excluding it is strictly correct whenever TSM is present.
+    -- Trade Skill Master special handling, always on and not an option: TSM
+    -- replaces the merchant frame wholesale, so excluding it is strictly
+    -- correct whenever TSM is present.
     if C_AddOns_IsAddOnLoaded("TradeSkillMaster") then
         tDeleteItem(BlizzardFrames, "MerchantFrame")
     end
 
-    -- Mail inset reparent. Upstream called this an ElvUI fix; it is actually
-    -- generic -- the insets are parented oddly and drag the wrong frame
-    -- without it.
+    -- Mail inset reparent. Not an ElvUI-only fix -- the insets are parented
+    -- oddly and drag the wrong frame without it.
     if _G.MailFrameInset then
         _G.OpenMailFrameInset:SetParent(_G.OpenMailFrame)
         _G.MailFrameInset:SetParent(_G.MailFrame)
@@ -690,9 +685,6 @@ function MF:OnEnable()
             self:HandleAddon(nil, addon)
         end
     end
-
-    -- The upstream mover's ElvUI bag handling is skipped here: it is
-    -- specific to that addon, which KE treats as optional rather than required.
 
     -- Blizzard container anchoring fights the mover; clear on layout
     -- (ported verbatim; inert while Baganator replaces the bags).

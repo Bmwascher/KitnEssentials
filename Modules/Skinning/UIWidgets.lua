@@ -7,12 +7,10 @@ end
 
 local UIW = KitnEssentials:NewModule("UIWidgets", "AceEvent-3.0")
 
--- Styling applies destructively (widths, anchors, textures, fonts, backdrops
--- at <REF>/Skinning/UIWidgets.lua:76-151) and OnDisable is EMPTY (:308-309),
--- so nothing is ever undone. Core/ProfileManager.lua:458 only defers modules
--- whose name starts "Skin" or that carry this flag, and "UIWidgets" fails the
--- name test. Exact precedent: Modules/Skinning/ContextMenus.lua:17-20 sets it
--- for the same reason, in the same words.
+-- Styling applies destructively (widths, anchors, textures, fonts, backdrops)
+-- and OnDisable is EMPTY, so nothing is ever undone. Core/ProfileManager.lua
+-- only defers modules whose name starts "Skin" or that carry this flag, and
+-- "UIWidgets" fails the name test. ContextMenus.lua sets it for the same reason.
 UIW.keDeferToReload = true
 
 local hooksecurefunc = hooksecurefunc
@@ -51,7 +49,7 @@ function UIW:OnEnable()
 
     self:RegisterEvent("PLAYER_ENTERING_WORLD", function()
 
-        C_Timer.After(0, function() -- v3.5.853: was 0.1s
+        C_Timer.After(0, function() -- was 0.1s
             if self:IsEnabled() then self:StyleExistingWidgets() end
         end)
     end)
@@ -190,16 +188,16 @@ end
 -- hide DefaultWidgetLayout -> LayoutFrame compares a secret number in tainted
 -- execution:
 --
---   LayoutFrame.lua:491: attempt to compare a secret number value
---   (execution tainted by 'atrocityEssentials')
+--   LayoutFrame.lua: attempt to compare a secret number value
+--   (execution tainted by an addon)
 --
 -- Nothing is lost by skipping them: tooltip widget sets are transient and
 -- already inherit the tooltip's own styling.
--- v4.0.175: was a parent walk that called :GetName() on whatever it
+-- was a parent walk that called :GetName() on whatever it
 -- found. Something in that chain is not a real frame -- a proxy or a
 -- plain table with a GetName field -- and the call died with
 --
---   UIWidgets.lua:194: calling '?' on bad self
+--   UIWidgets.lua: calling '?' on bad self
 --   (Usage: local name = self:GetName())
 --
 -- reported from clicking the wind orb in Skyreach.
@@ -265,7 +263,7 @@ function UIW:SetupHooks()
     end
 
     if not (hooked.statusBar and hooked.textWithState) then
-        C_Timer.After(0, function() -- v3.5.853: was 1s; widget mixins
+        C_Timer.After(0, function() -- was 1s; widget mixins
             if self:IsEnabled() then self:SetupHooks() end -- appear within frames
         end)
     end
@@ -308,15 +306,13 @@ function UIW:StyleWidgetByType(widget)
     end
 end
 
--- <REF>/Skinning/UIWidgets.lua:302-306 has this same omission -- ApplySettings
--- never calls UpdateDB. GetFontSettings (:61-68) caches its resolved font
--- path and outline keyed on _styleGen, and _styleGen only bumps inside
--- UpdateDB (:37), so without this call the Font and Outline dropdowns write
+-- ApplySettings does not call UpdateDB. GetFontSettings caches its resolved
+-- font path and outline keyed on _styleGen, and _styleGen only bumps inside
+-- UpdateDB, so without this call the Font and Outline dropdowns write
 -- to the DB but the cache never invalidates: nothing restyles until a reload
 -- or profile switch, and even newly created widgets get the stale font.
--- BlizzardFonts.lua:278-280 already calls UpdateDB in this same slot of its
--- own ApplySettings; this mirrors that shape. Intentional departure from the
--- reference, not a port gap.
+-- BlizzardFonts.lua already calls UpdateDB in this same slot of its
+-- own ApplySettings; this mirrors that shape.
 function UIW:ApplySettings()
     if KE:ShouldNotLoadModule() then return end
     self:UpdateDB()

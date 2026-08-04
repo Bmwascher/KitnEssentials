@@ -304,8 +304,7 @@ local function CollectEncountersForDungeon(dungeonKey)
                 for spellID, spell in pairs(mob.spells or {}) do
                     -- hidden = fingerprint-only row (no first/cd — can never
                     -- schedule an alert): every knob would be a silent no-op,
-                    -- so keep it out of the config list entirely (the upstream
-                    -- GUI filters the same flag).
+                    -- so keep it out of the config list entirely.
                     if spell.hidden ~= true then
                         trashSpells[#trashSpells + 1] = {
                             id      = string_format("trash:%d:%d:%d", mapID, npcID, spellID),

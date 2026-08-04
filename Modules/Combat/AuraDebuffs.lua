@@ -789,8 +789,8 @@ end
 ---------------------------------------------------------------------------------
 
 local function SortAuras(a, b)
-    -- Sort by auraInstanceID (newer applications have higher IDs). Matches
-    -- the AE/NUI reference. We can't sort by dispelType for encounter
+    -- Sort by auraInstanceID (newer applications have higher IDs).
+    -- We can't sort by dispelType for encounter
     -- HARMFUL auras (dispelName is secret), and aura.expirationTime is
     -- secret for the same auras (comparison would taint).
     return (a.auraInstanceID or 0) < (b.auraInstanceID or 0)

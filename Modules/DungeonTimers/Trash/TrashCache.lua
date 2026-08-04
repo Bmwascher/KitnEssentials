@@ -12,18 +12,12 @@
 -- ║  central alerts re-key to the new unit — bars keep       ║
 -- ║  counting straight through the flicker.                  ║
 -- ║                                                          ║
--- ║  Port of the reference's trash cache (both reference     ║
--- ║  addons ship byte-identical cache logic); KE wires the   ║
--- ║  UNION of their event feeds: the UNIT_HEALTH death guard ║
--- ║  (one reference) AND the UNIT_FLAGS fresh-combat guard   ║
--- ║  (the other — inert upstream in the first). One          ║
--- ║  documented adaptation: the reference deep-copies its    ║
--- ║  snapshot into the new runtime table and then re-points  ║
--- ║  every live scheduler timer old→new; KE's deferred       ║
--- ║  alerts capture the runtime TABLE in their closures, so  ║
--- ║  adopting the cached table as the new unit's runtime IS  ║
--- ║  that rebind, with no timer walking. Extends the         ║
--- ║  DungeonTrash module.                                    ║
+-- ║  Two independent guards feed the cache: the UNIT_HEALTH  ║
+-- ║  death guard and the UNIT_FLAGS fresh-combat guard.      ║
+-- ║  Deferred alerts capture the runtime TABLE in their      ║
+-- ║  closures, so adopting the cached table as the new       ║
+-- ║  unit's runtime IS the timer rebind — no timer walking,  ║
+-- ║  no snapshot deep-copy. Extends the DungeonTrash module. ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 if not KitnEssentials then return end
@@ -42,7 +36,7 @@ local table_remove = table.remove
 local pairs = pairs
 local wipe = wipe
 
--- Constants verbatim from the reference cache module.
+-- Cache tuning constants.
 local RESTORE_WINDOW = 5.0          -- how long a removed runtime stays restorable
 local NEW_COMBAT_BLOCK_WINDOW = 1.0 -- plate that entered combat this soon after
                                     -- appearing = a genuinely NEW pull, no restore
@@ -78,10 +72,9 @@ end
 -- successor whose bars share that exact prefix — clean starts are reachable
 -- two mundane ways: the fresh-combat guard blocks the restore for a genuinely
 -- new add, and a Layer2-first confirm (FinishCast) resolves without ever
--- consulting the cache. The npcID scope isolates different-npcID mobs only;
--- the reference cannot cross-kill here at all (its expiry cancels via the
--- cached runtime OBJECT), so skip the sweep whenever a DIFFERENT live runtime
--- resolved to the same npcID owns the prefix now.
+-- consulting the cache. The npcID scope isolates different-npcID mobs only, so
+-- skip the sweep whenever a DIFFERENT live runtime resolved to the same npcID
+-- owns the prefix now.
 local function sweepOwnedByRow(self, row)
     local live = self.tracked[row.sourceUnit]
     if live and live ~= row.rt and tonumber(live.matchedNPCID) == row.npcID then
@@ -90,10 +83,9 @@ local function sweepOwnedByRow(self, row)
     return true
 end
 
--- Lazy expiry (the reference runs the same cleanup at add/remove/restore). KE
--- addition over the reference: sweeping an EXPIRED row here also sweeps its
--- still-counting alerts — upstream leaves that solely to the per-row timer,
--- which no-ops if this prune won the race and the teardown flag then leaks.
+-- Lazy expiry, run at add/remove/restore. Sweeping an EXPIRED row here also
+-- sweeps its still-counting alerts: leaving that solely to the per-row timer
+-- no-ops if this prune won the race, and the teardown flag then leaks.
 -- HideUnitAlerts is idempotent, so timer + prune can both fire safely.
 function DTrash:PruneTrashCache(now)
     local pending = self._trashPending
@@ -120,8 +112,7 @@ end
 -- ── Event feeds ─────────────────────────────────────────────────────────────
 
 -- Plate appeared: start its fresh-combat meta row and clear any stale
--- recent-dead mark for the recycled token (mirrors the reference's
--- plate-added handling).
+-- recent-dead mark for the recycled token.
 function DTrash:NoteNameplateAddedForCache(unit)
     self._plateMeta[unit] = { addedAt = GetTime() }
     self._recentDeadByUnit[unit] = nil
@@ -129,8 +120,7 @@ function DTrash:NoteNameplateAddedForCache(unit)
 end
 
 -- UNIT_FLAGS: record the first moment the unit is seen in combat after its
--- plate appeared (the fresh-combat guard's input). Wired in one reference
--- only; the cache logic consuming it is shipped in both. The same flip is
+-- plate appeared (the fresh-combat guard's input). The same flip is
 -- also the cleanest ENGAGE signal for a mob that hasn't acted yet — it feeds
 -- MarkEngaged so a resolved mob's first-cast timers seed the moment it is
 -- actually pulled.
@@ -146,8 +136,8 @@ function DTrash:OnUnitFlags(_, unit)
     if meta.firstCombatFlagAt == nil and inCombat == true then
         meta.firstCombatFlagAt = GetTime()
     end
-    -- Per-unit combat FLIP → reset the target-state sampler (the reference
-    -- resets its sampler on every transition): re-entering combat
+    -- Per-unit combat FLIP → reset the target-state sampler on every
+    -- transition: re-entering combat
     -- re-seeds the presence baseline; leaving (evade/wipe) clears it so a
     -- stale exists→gone can't log a false clear on the re-pull. MarkEngaged
     -- covers the FIRST entry; this covers every later flip.
@@ -161,8 +151,8 @@ function DTrash:OnUnitFlags(_, unit)
 end
 
 -- UNIT_HEALTH → death: mark the token recently-dead (blocks caching), purge
--- pending rows sourced from it, and untrack the plate immediately — the
--- reference unregisters a dead plate through its normal removal path, whose
+-- pending rows sourced from it, and untrack the plate immediately. A dead
+-- plate unregisters through the normal removal path, whose
 -- cache write is then skipped by the recent-dead mark, so the mob's alerts
 -- tear down NOW instead of counting on for a corpse.
 function DTrash:OnUnitHealth(_, unit)
@@ -198,8 +188,8 @@ end
 
 -- Hold a removed, resolved runtime for RESTORE_WINDOW. Returns true when the
 -- runtime was cached — the caller then SKIPS the immediate alert teardown
--- (the reference's deferred cancel: central bars keep counting through the
--- window; the per-row timer below does the real sweep if no restore lands).
+-- and defers the cancel: central bars keep counting through the
+-- window, and the per-row timer below does the real sweep if no restore lands.
 function DTrash:CacheRemovedRuntime(unit, rt)
     local now = GetTime()
     self:PruneTrashCache(now)
@@ -233,7 +223,7 @@ function DTrash:CacheRemovedRuntime(unit, rt)
             end
         end
     end
-    -- Pending-recovery mark (the reference carries an equivalent flag): while
+    -- Pending-recovery mark: while
     -- set, the deferred-alert cancel gate in ScheduleAlert lets a reveal
     -- maturing INSIDE the flicker gap fire on schedule — restore and expiry
     -- below own the real cancel.
@@ -286,8 +276,8 @@ function DTrash:TryRestoreCachedRuntime(rt, npcID)
         dprint("restore-skip " .. rt.unit .. " reason=fresh-combat")
         return nil
     end
-    -- Newest matching row wins; consumed immediately (reference semantics).
-    -- KE addition: a row sourced from THIS token outranks newer rows from
+    -- Newest matching row wins and is consumed immediately, except that
+    -- a row sourced from THIS token outranks newer rows from
     -- other tokens — restoring it makes the alert re-key a same-unit no-op,
     -- so it can never land on a destination key another same-npcID twin's
     -- live frames already occupy (the RekeyUnitAlerts clobber class).
@@ -311,7 +301,7 @@ function DTrash:TryRestoreCachedRuntime(rt, npcID)
     local oldUnit = row.sourceUnit
 
     -- Adopt the cached table as the unit's runtime (see header: this IS the
-    -- reference's timer rebind). The new plate contributes its unit token,
+    -- timer rebind). The new plate contributes its unit token,
     -- its fresh identity snapshot and its fresh Layer1 candidate list; an
     -- active cast measurement survives — a cast begun before the flicker can
     -- legitimately STOP after it, and the castBarID correlation still pairs.
@@ -346,8 +336,7 @@ function DTrash:TryRestoreCachedRuntime(rt, npcID)
     return cached
 end
 
--- Full wipe (monitor stop — the reference resets its cache at the same
--- lifecycle point: tracker stop / leaving the instance).
+-- Full wipe at monitor stop: tracker stop / leaving the instance.
 function DTrash:ResetTrashCache()
     -- Clear pending-recovery marks first: a leftover mark would let a dead
     -- runtime's deferred reveal fire after the monitor stopped.

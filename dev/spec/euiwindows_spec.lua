@@ -21,7 +21,7 @@ describe("EUIWindows", function()
                     return opts.styles[key]
                 end
                 -- Models EllesmereUI's own fail-open default
-                -- (EllesmereUIBlizzardSkin.lua:76-84): anything not
+                -- (EllesmereUIBlizzardSkin.lua): anything not
                 -- explicitly off answers "eui".
                 return "eui"
             end,
@@ -306,9 +306,9 @@ describe("EUIWindows", function()
         -- Housing has no registrations of its own until a much later task,
         -- so a test that only calls the two functions never reaches either
         -- concatenation: DebugVerify iterates S.skinRegistrations, which has
-        -- no entry for a key nothing ever registered (SkinAPI.lua:2798-2800),
+        -- no entry for a key nothing ever registered (SkinAPI.lua),
         -- and DebugRerun's own lookup reads that same table
-        -- (SkinAPI.lua:2855-2856), not skinIndex. Both require a real
+        -- (SkinAPI.lua), not skinIndex. Both require a real
         -- dispatch, so this registers a synthetic skin and runs it through
         -- the real path
         -- (S:Register + BF:RunForAddon, same as skinapi_spec.lua's

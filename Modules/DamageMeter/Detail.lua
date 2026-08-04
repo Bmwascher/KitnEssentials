@@ -266,8 +266,8 @@ function DM:OpenDetail(bar, button)
     end
 
     -- Deaths row with no usable recap: no-op rather than opening an empty
-    -- "No death recap available" panel (a feign / no-recap death simply isn't clickable,
-    -- matching the reference). OOC only -- the in-combat branch above already returned, so
+    -- "No death recap available" panel (a feign / no-recap death simply isn't
+    -- clickable). OOC only -- the in-combat branch above already returned, so
     -- GetDeathRecap (which reads C_DeathRecap, OOC-safe) runs on a plain recapID here.
     -- W._isDeaths is stashed by RenderWindow; bar._deathRecapID by RenderBar.
     if W._isDeaths and not self:GetDeathRecap(bar._deathRecapID) then
@@ -823,7 +823,7 @@ end
 -- ╚══════════════════════════════════════════════════════════╝
 
 local HOVER_TIP_ROWS = 15       -- top spells/events; the click-inline panel still shows the full list
-local TIP_WIDTH = 340           -- Phase 4c: holds the 3 numeric columns (Amount / DPS / %); the extra width over 300 is all name room (the columns anchor to the right edge, so the spell/enemy-name area grows) -- request 2026-06-05
+local TIP_WIDTH = 340           -- Phase 4c: holds the 3 numeric columns (Amount / DPS / %); the extra width over 300 is all name room (the columns anchor to the right edge, so the spell/enemy-name area grows) --
 local TIP_PAD = 4               -- inner inset for header / rows
 
 -- Phase 4c column geometry: each numeric column is right-aligned at a fixed x-offset
@@ -843,7 +843,7 @@ local _tipPoll                  -- detach-when-idle OnUpdate frame
 local _tipPollAccum = 0
 
 -- Tooltip text renders one point below the configured bar font so the quick-peek packs
--- densely (request 2026-06-05). Clamped to a readable floor. Every tip text element derives
+-- densely. Clamped to a readable floor. Every tip text element derives
 -- its size from this; the column/section headers sit one notch below it (TipFontSize - 1).
 local function TipFontSize(s) return math_max(8, (s or 12) - 1) end
 
@@ -911,7 +911,7 @@ local function MakeTipRow(parent, rowH)
 end
 
 -- One Targets-sub-section row: [icon] enemyName .... Amount  DPS  %. A dm_deaths glyph
--- leads each enemy name (a per-target icon, request 2026-06-05); the three
+-- leads each enemy name (a per-target icon); the three
 -- numeric columns line up under the SAME fixed offsets as the spell rows (TIP_AMT_X / DPS / PCT)
 -- so the breakdown and Targets share one column grid. Passive like the rest of the tip.
 -- Content-sized columns (no SetWidth) + SetWordWrap(false) so nothing truncates.
@@ -994,7 +994,7 @@ function DM:EnsureHoverTip()
     local size = TipFontSize(db and db.FontSize)
     local outline = db and db.FontOutline
 
-    -- Source-name title: CENTERED + class-colored (request 2026-06-05). The class tint
+    -- Source-name title: CENTERED + class-colored. The class tint
     -- is applied per-populate from bar._classFilename (PopulateHoverTip); centering makes
     -- the name read as a title so the column-category labels below can be the white headers.
     f.header = f:CreateFontString(nil, "OVERLAY")
@@ -1005,8 +1005,8 @@ function DM:EnsureHoverTip()
     KE:ApplyFontToText(f.header, face, size, outline)
 
     -- Phase 4c: one-time column-header row (Spell · Amount · DPS · %) under the source
-    -- name. The category labels are now WHITE and one notch larger than before (request
-    -- 2026-06-05: the centered class-colored title frees them to be the prominent headers),
+    -- name. The category labels are WHITE and one notch larger than the rows --
+    -- the centered class-colored title frees them to be the prominent headers --
     -- right-aligned over the same fixed columns as the data rows. Shown for the breakdown
     -- path, hidden for the Deaths recap (which keeps a single value column). Anchored just
     -- below the source header; PopulateHoverTip toggles it and offsets the data rows by
@@ -1089,8 +1089,8 @@ local function RenderTipTargets(self, bar, cfg, sessionID, topY, stride, barH)
     -- the raw name (realm stripped for display only, never for the targets key).
     -- _rawName is nil while the source's name is SECRET (a member who left the
     -- group before the snapshot capture): fall back to the identity memo, whose
-    -- realm-bearing form matches det.unitName — the attribution side stays plain
-    -- (probe 2026-07-19), so the memo name restores the whole section.
+    -- realm-bearing form matches det.unitName — the attribution side stays
+    -- plain, so the memo name restores the whole section.
     local playerName = bar._rawName
     if not playerName and self.PlainNameFor then
         playerName = self:PlainNameFor(bar._sourceGUID)
@@ -1104,7 +1104,7 @@ local function RenderTipTargets(self, bar, cfg, sessionID, topY, stride, barH)
     -- Lazy-create the divider + section-header ("Targets" + repeated Amount/DPS/% column
     -- headers) + up to TIP_TGT_ROWS bars once. The repeated numeric headers make the Targets
     -- section mirror the spell section; the dm_deaths glyph leads each enemy row (a
-    -- per-target icon, request 2026-06-05), built into MakeTargetRow.
+    -- per-target icon), built into MakeTargetRow.
     if not _tip.tgtDivider then
         _tip.tgtDivider = _tip:CreateTexture(nil, "ARTWORK")
         _tip.tgtDivider:SetHeight(1)
@@ -1263,7 +1263,7 @@ function DM:PopulateHoverTip(W, bar)
     local isEnemyTaken = (meterType == Enum.DamageMeterType.EnemyDamageTaken)
 
     -- Tip rows run ~2px shorter than the configured bar height so the quick-peek packs
-    -- the now-15 rows (+ Targets) densely (request 2026-06-05).
+    -- the now-15 rows (+ Targets) densely.
     -- Clamped to a sane floor; stride keeps the configured inter-row spacing.
     local barH = math_max(8, (W._snapHeight or 16) - 2)
     local stride = barH + (W._snapSpacing or 2)
@@ -1693,7 +1693,7 @@ function DM:ShowHoverTip(W, bar, isInitial)
                     side = (cx > (UIParent:GetWidth() or 0) / 2) and "left" or "right"
                 end
                 -- +1 y nudges the tip's top edge up 1px to line up flush with the
-                -- window's top border (request 2026-06-05).
+                -- window's top border.
                 if side == "left" then
                     _tip:SetPoint("TOPRIGHT", W.frame, "TOPLEFT", -4, 1)
                 else

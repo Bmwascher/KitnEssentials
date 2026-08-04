@@ -305,8 +305,8 @@ local function Skin()
     end
     if frame.GuildLogButton then S.Button(frame.GuildLogButton) end
 
-    -- v3.5.856: Guild Message of the Day editor (ElvUI's
-    -- Communities.lua:445-456 -- same shape as the Guild Log below,
+    -- Guild Message of the Day editor (ElvUI's
+    -- Communities.lua -- same shape as the Guild Log below,
     -- which we already had; this frame was simply never ported).
     local motd = _G.CommunitiesGuildTextEditFrame
     if motd and not S.data(motd).aeMotd then

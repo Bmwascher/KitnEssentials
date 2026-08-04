@@ -3,7 +3,6 @@
 -- ║  Module: Totem Tracker                                   ║
 -- ║  Purpose: Custom totem icon bar with cooldown swipes,    ║
 -- ║           timer text, and a destroy-all-totems macro.    ║
--- ║  Credit: Ported from NorskenUI v3.13 TotemTracker.       ║
 -- ║                                                          ║
 -- ║  Not Shaman-only: Augmentation Evoker dupes ("Future     ║
 -- ║  Self") are pseudo-totems and occupy real totem slots.   ║
@@ -271,9 +270,8 @@ function TT:UpdateButton(btn, slot)
     --     back as 0 — TRUTHY — on an empty slot. That was harmless while we only
     --     visited totems TotemFrame had already confirmed active; now that we walk
     --     every slot ourselves, it can no longer signal occupancy.
-    --   * icon (5) is the one return that is nil on an empty slot (probe
-    --     2026-07-13: empty slot -> false, "", 0, 0, nil, 0, 0), and it is what the
-    --     field-proven AddUI-Totem reference gates on.
+    --   * icon (5) is the one return that is nil on an empty slot -- a probe
+    --     returned false, "", 0, 0, nil, 0, 0 -- so it is what to gate on.
     -- That probe ran in OPEN-WORLD combat, where restrictions are not active — the
     -- nil-on-empty behavior still needs a smoke test inside an instance.
     local _, _, _, _, icon = GetTotemInfo(slot)
@@ -323,7 +321,7 @@ function TT:UpdateTotems()
     -- Blizzard's displays are each lossy in their own way: TotemFrame iterates
     -- only MAX_TOTEMS (4) slots so it cannot see slot 5, its pool enumerates via
     -- pairs() so icon order is nondeterministic, and the Cooldown Manager keys
-    -- totems by spellID (CooldownViewerItemData.lua:452-478) — which collapses
+    -- totems by spellID (CooldownViewerItemData.lua) — which collapses
     -- every Augmentation Evoker dupe into one entry, since they all share
     -- spellID 1259171. An independent read avoids all of it.
     --

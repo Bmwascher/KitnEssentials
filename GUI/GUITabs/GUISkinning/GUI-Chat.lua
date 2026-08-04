@@ -378,8 +378,7 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
 
     -- Edit Box Border Color has no control here: the edit box border is
     -- chat-type colored on every header update (say/whisper/channel), same
-    -- as the reference this was ported from -- a static color option would
-    -- be applied then instantly overridden.
+    -- so a static color option would be applied then instantly overridden.
     local row7c = GUIFrame:CreateRow(card7.content, Theme.rowHeight)
     local editBoxColorPicker = GUIFrame:CreateColorPicker(row7c, "Edit Box Color", {
         color = db.EditBox.BackdropColor or { 0.031, 0.031, 0.031, 1 },

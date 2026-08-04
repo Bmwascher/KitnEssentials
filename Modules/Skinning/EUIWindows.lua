@@ -17,7 +17,7 @@ local math_max = math.max
 -- `since` names the EllesmereUI version that introduced the window key.
 -- It exists because EllesmereUI.GetBlizzWindowStyle FAILS OPEN: an
 -- unrecognised key skips the enable-key test and falls through to "eui"
--- (EllesmereUIBlizzardSkin.lua:76-84). Asking an 8.5.9 client about a key
+-- (EllesmereUIBlizzardSkin.lua). Asking an 8.5.9 client about a key
 -- that only exists from 8.6.4 therefore answers "EllesmereUI owns it" for a
 -- window EllesmereUI does not touch, and our skin would go missing with no
 -- error and no clue. EllesmereUI's own key list is a file-local in its
@@ -49,11 +49,11 @@ S.WINDOW_MAP = {
     -- rows below). EllesmereUI's RegisterWindow declarations are NOT a
     -- complete record of what it skins -- `inspect`, `lfg` and `greatvault`
     -- have no declaration block at all, and their coverage lives in
-    -- pre-engine files (EllesmereUIBlizzardSkin.lua:61-69). Completing this
+    -- pre-engine files (EllesmereUIBlizzardSkin.lua). Completing this
     -- field for every row from declarations alone would therefore silently
     -- un-suppress our skin underneath one of those.
     { euiKey = "housing",         skins = { "Housing" },
-      -- EllesmereUIBlizzardSkin_WindowPacks.lua:5890-5892: the declared
+      -- EllesmereUIBlizzardSkin_WindowPacks.lua: the declared
       -- filter names exactly one addon; our key covers nine windows.
       addons = { "Blizzard_HousingDashboard" },
       partialLabel = "Housing (EllesmereUI: dashboard only)",
@@ -73,27 +73,26 @@ S.WINDOW_MAP = {
     { euiKey = "quest",           skins = { "Quest" } },
     { euiKey = "inspectrecipe",   skins = { "InspectRecipe" } },
     { euiKey = "delves",          skins = { "Delves" },
-      -- EllesmereUIBlizzardSkin_WindowPacks.lua:8464-8466: the declared
+      -- EllesmereUIBlizzardSkin_WindowPacks.lua: the declared
       -- filter names exactly one addon; our key covers three windows.
       addons = { "Blizzard_DelvesCompanionConfiguration" },
       partialLabel = "Delves (EllesmereUI: companion only)",
       partialTooltip = "EllesmereUI currently skins Companion Configuration. While that overlap is active, this toggle controls Difficulty Picker and Delves Dashboard. Your saved choice also applies to Companion Configuration if EllesmereUI stops covering it." },
     { euiKey = "itemupgrade",     skins = { "ItemUpgrade" },  since = "8.6.4" },
-    -- A6.3a deleted this row when it mapped to the whole `Alerts` key, because
-    -- an unfiltered row cost up to nineteen alert systems to avoid one
-    -- collision (2026-07-29-aes-a6-3a-colliding-window-skins.md:121-125). The
-    -- key split above is A6.3a's own named remedy for that shape: suppression
+    -- This row was deleted once, when it mapped to the whole `Alerts` key: an
+    -- unfiltered row cost up to nineteen alert systems to avoid one collision.
+    -- The key split above is the remedy for that shape: suppression
     -- now reaches only our six item-drop toasts instead of all twenty-five.
     -- It does NOT follow that EllesmereUI visits exactly those six. Its sweep
     -- walks every active alert subsystem and duck-types on a label field
-    -- (EllesmereUIBlizzardSkin_WindowPacks.lua:11295-11302), so over-suppression
+    -- (EllesmereUIBlizzardSkin_WindowPacks.lua), so over-suppression
     -- is bounded here, not eliminated -- which is the accepted trade, in the
     -- visible-failure direction A6.3a chose.
     -- Its sibling `loot` row stays deleted: EllesmereUI's loot pack touches
     -- only _G.LootFrame while our `Loot` key covers four families.
     { euiKey = "loottoast",       skins = { "LootToast" },  since = "8.6.4" },
-    -- `micromenu` has no row: the reference ships no micro-menu skin and
-    -- A0 deleted ours. `Guild` (GuildInviteFrame) is likewise absent on
+    -- `micromenu` has no row: KE ships no micro-menu skin.
+    -- `Guild` (GuildInviteFrame) is likewise absent on
     -- purpose -- the invite popup is not the Communities window that
     -- EllesmereUI's `guild` key covers.
 }
@@ -152,7 +151,7 @@ function KE:BuildSkinSuppressionSet(env)
                 -- gets a table value. A uniform record would give every
                 -- already-ported key with a row (Socket today) a table too,
                 -- and those keys DO get dispatched, so the concatenation at
-                -- SkinAPI.lua:2698 would hit a table the first time anyone
+                -- SkinAPI.lua would hit a table the first time anyone
                 -- ran /kes skins verify. Step 4 removes that crash
                 -- regardless; sparse means it was never reachable at all.
                 local value = entry.euiKey
@@ -230,13 +229,13 @@ function KE:ResolveSkinSuppression()
     -- IsAddOnLoaded returns TWO booleans: loadedOrLoading, then loaded. Gate
     -- on the second -- the first is true for a still-loading addon, whose
     -- tables aren't populated yet
-    -- (.wow-api-reference/Interface/AddOns/Blizzard_APIDocumentationGenerated/AddOnsDocumentation.lua:322-336).
+    -- (AddOnsDocumentation.lua).
     if C_AddOns and C_AddOns.IsAddOnLoaded
         and select(2, C_AddOns.IsAddOnLoaded("EllesmereUIBlizzardSkin")) then
         -- DisableAddOn leaves an addon loaded for the rest of the session,
         -- so "loaded" alone would keep suppressing after the user turned
         -- EllesmereUI's skin addon off. Blizzard's own > 0 comparison:
-        -- .wow-api-reference/.../Blizzard_AddOnList/AddonList.lua:188.
+        -- Blizzard_AddOnList/AddonList.lua.
         loaded = not (C_AddOns.GetAddOnEnableState
             and (C_AddOns.GetAddOnEnableState("EllesmereUIBlizzardSkin") or 0) <= 0)
         if loaded and C_AddOns.GetAddOnMetadata then

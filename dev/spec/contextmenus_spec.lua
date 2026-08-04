@@ -8,7 +8,7 @@
 -- replacement backdrop is built 1x1 and is therefore invisible, and the menu
 -- then lays out to full size with its text drawn over nothing.
 --
--- Diagnosed in game 2026-07-30 from a DEBUG_CM log that showed the root menu at
+-- Diagnosed in game from a DEBUG_CM log that showed the root menu at
 -- 164x342 and the submenu at 1x1 inside the same menu-open.
 
 local L = require("dev.spec._ke_loader")

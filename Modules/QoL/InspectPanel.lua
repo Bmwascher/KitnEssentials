@@ -339,8 +339,7 @@ end
 -- item, queue {slotID -> itemID}, and ask Blizzard to load its full data.
 -- ITEM_DATA_LOAD_RESULT then renders just that slot and drains the queue entry
 -- — no blanket re-scan, no self-sustaining loop. Keyed by slotID (not itemID)
--- so two slots sharing an itemID (duplicate rings) both resolve. Reference:
--- BetterCharacterPanel's itemLoadQueue model.
+-- so two slots sharing an itemID (duplicate rings) both resolve.
 --
 -- Always queue + request, never short-circuit on a cache check: C_Item's cache
 -- predicates report BASE item data (name, icon, base stats), NOT inspect-specific
@@ -467,7 +466,7 @@ function InspectPanel:UpdateInspectItemLevel()
 
     -- EllesmereUI's themed inspect sheet prints its own average near the top,
     -- and its layout puts the Talents button exactly where ours anchors, so
-    -- ours ends up half-hidden behind it (Brandon, 2026-08-03). EUI's is
+    -- ours ends up half-hidden behind it. EUI's is
     -- Blizzard's whole-number call formatted to two places, so it always ends
     -- .00 -- ours is the real decimal, which is why it stays on the unthemed
     -- sheet. It just cannot be READ on the themed one.

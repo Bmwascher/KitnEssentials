@@ -67,8 +67,7 @@ local nickByGUID = {}
 --
 -- BAR_POOL_SIZE is the fixed number of bar rows each window pre-allocates once.
 -- The render layer only ever shows up to this many (VisibleBars is clamped
--- against it), so the pool never grows after CreateWindow -- mirrors the
--- reference's static pre-allocated bar array. RANK_STRINGS caches the "N."
+-- against it), so the pool never grows after CreateWindow. RANK_STRINGS caches the "N."
 -- rank labels so the render path never builds them per tick.
 ---------------------------------------------------------------------------------
 
@@ -89,8 +88,8 @@ DM.BAR_POOL_SIZE = BAR_POOL_SIZE
 -- Fixed value-column gutter. The name's RIGHT edge stops at a FIXED reserve from
 -- the row edge instead of tracking the live value string's left edge -- so a big
 -- number no longer steals name space on every tick; an extreme value overflows
--- leftward over the name's ellipsis instead (rare, and the reference meters ship
--- the same trade-off). Multiples of the bar FontSize, pixel-snapped at anchor
+-- leftward over the name's ellipsis instead (rare, and the standard trade-off
+-- for meters). Multiples of the bar FontSize, pixel-snapped at anchor
 -- time: WIDE reserves room for the two-part "total | perSec" string ("Both" mode
 -- on a rate-type view), SINGLE covers everything else (one value / counts /
 -- death times). Tuning knobs -- adjust here after in-game eyeballing.
@@ -176,8 +175,8 @@ local function MakeBar(parent, db)
     -- Icon: square frame anchored left, holding the class/spec texture. The
     -- frame (not the texture) carries the pixel borders, per the KE icon
     -- standard (matches HealerMana / MaintenanceTracker). Parented to the row
-    -- (not the fill) so it tracks the row's frame level, matching the reference
-    -- and other KE bar modules.
+    -- (not the fill) so it tracks the row's frame level, like every other KE
+    -- bar module.
     row.iconFrame = CreateFrame("Frame", nil, row)
     row.iconFrame:SetPoint("LEFT", row, "LEFT", 0, 0)
     row.icon = row.iconFrame:CreateTexture(nil, "OVERLAY")
@@ -1493,7 +1492,7 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
     -- is taint-safe: a secret number is truthy (never nil), so the fallback only
     -- triggers for a genuinely absent field (a malformed source) -- SetValue(0) /
     -- SetMinMaxValues(0, 1) is a far better failure mode than passing nil to a
-    -- plain-Lua arithmetic widget call. Mirrors the reference's defensive nil-or.
+    -- plain-Lua arithmetic widget call.
     if W._isDeaths then
         -- Deaths: no damage-proportional fill, but the bar is FULL (SetValue 1)
         -- so the class color set below paints the whole row behind the name +
@@ -1768,7 +1767,7 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         -- keystone; source.name is ConditionalSecret in DamageMeterDocumentation). Ambiguate
         -- is SecretArguments=AllowedWhenTainted (PlayerScriptDocumentation) -- it accepts the
         -- secret name WITHOUT throwing and returns the realm-stripped form (itself secret;
-        -- SetText accepts that). Ambiguate(name, "short") is the reference strip on both the
+        -- SetText accepts that). Ambiguate(name, "short") is the strip used on both the
         -- secret and plain paths.
         -- (The old strip was UnitName(source.name): UnitName wants a UNIT token, not a name
         -- string, so it returned nil and the "-Realm" suffix leaked through in raids.)

@@ -5,16 +5,16 @@
 -- windows gets one prompt on the way out instead of eight interruptions.
 --
 -- The refusal rule pinned here is the COMBAT gate. Entering combat hides this
--- GUI (GUI/GUIMain/GUI-MainFrame.lua:682-698), so without the gate a pending
+-- GUI (GUI/GUIMain/GUI-MainFrame.lua), so without the gate a pending
 -- skin change puts a "Reload Now" button on screen at the pull, one misclick
 -- from reloading mid-fight. The flag must SURVIVE that close, because the same
 -- handler reopens the GUI when combat ends and the next ordinary close is what
 -- should raise the prompt.
 --
--- There are TWO gates and the reopenAfterCombat one is load-bearing. The first
--- attempt gated on InCombatLockdown alone and the prompt still appeared in game
--- (2026-08-04), so the examples below cover each gate on its own -- passing one
--- must never stand in for the other.
+-- There are TWO gates and the reopenAfterCombat one is load-bearing: gating on
+-- InCombatLockdown alone left the prompt still appearing in game. The examples
+-- below cover each gate on its own -- passing one must never stand in for the
+-- other.
 --
 -- Loaded against a hand-built KE rather than the real one: this file only needs
 -- the two functions and the CreateReloadPrompt they call, and Core/Widgets.lua

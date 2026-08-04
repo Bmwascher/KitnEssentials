@@ -31,7 +31,7 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
             -- GUI-UIWidgets.lua and GUI-BlizzardMessages.lua both call this
             -- eagerly at file scope, building their font-outline dropdown lists.
             GetFontOutlineOptions = function() return {} end,
-            -- GUI-BlizzardMessages.lua:12 reads `KE.LSM or LibStub(...)` at file
+            -- GUI-BlizzardMessages.lua reads `KE.LSM or LibStub(...)` at file
             -- scope. Seeding LSM short-circuits the LibStub call, which has no
             -- global here.
             LSM = {},

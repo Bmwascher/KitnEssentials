@@ -19,8 +19,8 @@ end
 local LR = KitnEssentials:NewModule("LootRoll", "AceEvent-3.0")
 
 -- The profile-switch path and the ElvUI startup skip both gate on
--- name:find("^Skin") or module.keDeferToReload (Core/ProfileManager.lua:458,
--- Core/Main.lua:174). "LootRoll" fails the ^Skin test, and re-running Setup
+-- name:find("^Skin") or module.keDeferToReload (Core/ProfileManager.lua,
+-- Core/Main.lua). "LootRoll" fails the ^Skin test, and re-running Setup
 -- live would reparent GroupLootContainer mid-session.
 LR.keDeferToReload = true
 
@@ -38,11 +38,9 @@ local string_format = string.format
 local tostring = tostring
 
 -- Flip to true to trace WHO moves GroupLootContainer and WHEN. Diagnoses the
--- 2026-07-31 "bonus roll jumps to the bottom then back" report: three triggers
--- are possible and only a live log separates them (fix plan §2 at
--- dev/docs/superpowers/plans/2026-07-31-lootroll-bonus-roll-position-jump.md).
--- Leave the instrumentation in place after diagnosis -- free tracing if this
--- regresses.
+-- "bonus roll jumps to the bottom then back" class of report: three triggers
+-- are possible and only a live log separates them. Leave the instrumentation in
+-- place after diagnosis -- free tracing if this regresses.
 local DEBUG_LR = false
 
 -- GetTime() is FRAME-STABLE -- every call inside one frame returns the same
@@ -143,7 +141,7 @@ end
 LR.SkinAllRollFrames = SkinAllRollFrames
 
 -- `why` is DEBUG_LR-only: it names the caller in the trace. Probe run 1
--- (2026-07-31) logged an ApplyPosition whose "before" state was already
+-- logged an ApplyPosition whose "before" state was already
 -- correct, and there was no way to tell which of the six call sites produced
 -- it -- Setup, the GLC_Update hook, the OnShow hook, either ReassertPosition
 -- tick, the regen watcher, or an external GUI/EditMode call. Untagged, the
@@ -158,7 +156,7 @@ function LR:ApplyPosition(why)
     end
     local c = _G.GroupLootContainer
     if not c then return end
-    -- v3.5.755: layout removal is by REPARENTING (see the Unmanage note
+    -- layout removal is by REPARENTING (see the Unmanage note
     -- below) -- the ignoreInLayout flag writes are gone; that boolean
     -- is read inside the SECURE managed-layout pass and writing it from
     -- here taints the whole UIParent_ManageFramePositions execution.
@@ -278,7 +276,7 @@ function LR:GetMover()
     m:SetSize(340, 90)
     m:SetFrameStrata("FULLSCREEN_DIALOG")
     m:SetClampedToScreen(true)
-    -- v3.5.871 ("their own unlock anchors on top of the addon's
+    -- ("their own unlock anchors on top of the addon's
     -- toggle anchors ... causing position mismatches"): the mover's own
     -- drag scripts are gone and it never Shows itself any more. It had
     -- been a SECOND draggable anchor sitting on the same frame EditMode
@@ -318,15 +316,15 @@ end
 -- We re-anchor the FRAME rather than moving the container, which is what the
 -- legacy branch does. That avoids the managed-frame system entirely:
 -- BonusRollFrame is parented to UIParent and is a plain <Frame>
--- (Blizzard_UIPanels_Game/Mainline/GroupLootFrame.xml:23), so ClearAllPoints
+-- (Blizzard_UIPanels_Game/Mainline/GroupLootFrame.xml), so ClearAllPoints
 -- and SetPoint on it are legal in combat and taint nothing. And it is
--- sufficient: GroupLootFrame.lua:87-88 is the ONLY place any roll frame is
--- ever anchored, and both entry paths -- AddFrame (:25-40) and ReplaceFrame
--- (:68-75) -- end in GroupLootContainer_Update, the function we post-hook.
+-- sufficient: GroupLootFrame.lua is the ONLY place any roll frame is
+-- ever anchored, and both entry paths -- AddFrame and ReplaceFrame -- end in
+-- GroupLootContainer_Update, the function we post-hook.
 --
 -- Only the PROMPT. BonusRollLootWonFrame / BonusRollMoneyWonFrame, which
 -- replace it once the roll resolves, are loot toasts: they set AlertFrame as
--- their alert container (GroupLootFrame.lua:626-632) and are handed to
+-- their alert container (GroupLootFrame.lua) and are handed to
 -- AlertFrame:AddAlertFrame, so the alert chain owns their placement and
 -- re-anchoring them would just fight it.
 local function AnchorBonusRoll()
@@ -337,7 +335,7 @@ local function AnchorBonusRoll()
     local f = _G.BonusRollFrame
     if not f or not f:IsShown() then return end
 
-    -- Bar 1's own anchor and defaults (LootRollBars.lua:343), so the prompt
+    -- Bar 1's own anchor and defaults (LootRollBars.lua), so the prompt
     -- lands where a roll bar would. NOT the legacy branch's BOTTOM/0 pair, and
     -- emphatically not its CENTER->BOTTOM conversion -- that exists because the
     -- legacy container grows upward as rolls stack, and this is one fixed-size
@@ -369,7 +367,7 @@ function LR:Setup()
     local c = _G.GroupLootContainer
     if not c then return end
 
-    -- Probe run 1 (2026-07-31) captured no Container:OnShow at all, and the two
+    -- Probe run 1 captured no Container:OnShow at all, and the two
     -- explanations need different fixes: the container was already shown when
     -- the hooks went in (so OnShow had already fired and we can never see it),
     -- or the hooks were not installed yet. This line dates the install and
@@ -377,7 +375,7 @@ function LR:Setup()
     LogState("Setup:pre-wire wired=" .. tostring(self._wired == true))
 
     if not self._wired then
-        -- v3.5.755 (taint report: ADDON_ACTION_BLOCKED on
+        -- (taint report: ADDON_ACTION_BLOCKED on
         -- UIParentRightManagedFrameContainer:ClearAllPoints during a
         -- stance-bar update): writing UIPARENT_MANAGED_FRAME_POSITIONS
         -- (even nil) taints the table, and setting ignoreInLayout on a
@@ -396,24 +394,21 @@ function LR:Setup()
         --
         --  1. LAYOUT CHILD ENUMERATION -- exited. BaseLayoutMixin's
         --     GetLayoutChildren walks GetChildren()
-        --     (Blizzard_SharedXML/LayoutFrame.lua:58-60), so once the
+        --     (Blizzard_SharedXML/LayoutFrame.lua), so once the
         --     container is reparented to UIParent instead,
         --     UIParentBottomManagedFrameContainer's Layout() genuinely
         --     cannot reach it.
         --  2. MANAGER MEMBERSHIP -- kept. The frame stays in the container's
-        --     showingFrames table (written Blizzard_UIParent/Shared/
-        --     UIParent.lua:182, cleared only at :204). UpdateManagedFrames
-        --     (:186-193) iterates THAT table, not the child list, and its
-        --     UpdateFrame reparents the frame straight back at :153. Every
+        --     showingFrames table (written in Blizzard_UIParent/Shared/
+        --     UIParent.lua). UpdateManagedFrames iterates THAT table, not the
+        --     child list, and its UpdateFrame reparents the frame back. Every
         --     hide/show cycle also re-runs OnShow -> AddManagedFrame.
         --
         -- So the reparent alone cannot hold the position: the layout pass
         -- puts the container back at the BOTTOM of the screen and our hook
         -- has to move it again. That is the visible "jumps to the bottom,
-        -- then back" the 2026-07-31 bug report describes. Re-asserting
-        -- after the layout settles is what makes it stick today; the real
-        -- exit from layer 2 is tracked in the fix plan at
-        -- dev/docs/superpowers/plans/2026-07-31-lootroll-bonus-roll-position-jump.md.
+        -- then back" the bug report describes. Re-asserting
+        -- after the layout settles is what makes it stick today.
         local function Unmanage()
             if c:GetParent() ~= _G.UIParent then
                 LR._origGLCParent = LR._origGLCParent or c:GetParent()
@@ -432,16 +427,14 @@ function LR:Setup()
         -- moved the container. Cheap -- they only do work while a roll is
         -- on screen.
         --
-        -- DEVIATION A (task-3, corrects <REF>:266-279): these three hooks
-        -- are PERMANENT -- hooksecurefunc cannot be undone, and none of
-        -- the reference's three callbacks tested whether the module was
-        -- still enabled, so KitnEssentials:DisableModule("LootRoll") left
-        -- the container getting repositioned and roll frames getting
-        -- skinned anyway -- the user's off-switch did not turn the
-        -- feature off. Each callback below now bails first when the
-        -- module is disabled.
+        -- These three hooks are PERMANENT -- hooksecurefunc cannot be undone.
+        -- Without an enabled test in each callback,
+        -- KitnEssentials:DisableModule("LootRoll") left the container getting
+        -- repositioned and roll frames getting skinned anyway, so the user's
+        -- off-switch did not turn the feature off. Each callback below bails
+        -- first when the module is disabled.
         --
-        -- FIX ROUND 2: the same guard is needed on two ASYNC re-entries
+        -- The same guard is needed on two ASYNC re-entries
         -- these hooks feed into, not just here -- five paths total.
         -- WaitForRegen's PLAYER_REGEN_ENABLED watcher and both of
         -- ReassertPosition's C_Timer.After callbacks call ApplyPosition
@@ -473,12 +466,9 @@ function LR:Setup()
         end
 
         -- ApplyPosition FIRST, then ReassertPosition -- the same order the
-        -- GroupLootContainer_Update hook above uses. The reference calls
-        -- only ReassertPosition here (<REF>:274), whose first correction is
-        -- a C_Timer.After(0) away, so the container renders for one frame
-        -- at Blizzard's managed spot before moving. Nothing in either file
-        -- explains the asymmetry; treating it as deliberate would mean
-        -- keeping a one-frame flicker on the show path for no reason.
+        -- GroupLootContainer_Update hook above uses. ReassertPosition alone
+        -- puts its first correction a C_Timer.After(0) away, so the container
+        -- renders for one frame at Blizzard's managed spot before moving.
         c:HookScript("OnShow", function()
             -- Logged BEFORE the enabled guard: Blizzard's AddManagedFrame has
             -- already run by the time this fires (it is the mixin's own OnShow),
@@ -538,16 +528,16 @@ function LR:RegisterEditMode()
                 pcall(function() KE.GUIFrame:RefreshContent("LootRoll") end)
             end
         end,
-        -- v3.5.871: guiPath is a SIDEBAR ITEM ID and there is no sidebar
+        -- guiPath is a SIDEBAR ITEM ID and there is no sidebar
         -- item "LootRoll" -- Open Settings was silently falling through to
         -- "just open the GUI". These sections live in the consolidated
         -- Blizzard Frames tab, so route through it (KE's sidebar id:
-        -- GUI/GUIMain/GUI-MainFrame.lua:123). guiContext is dropped here:
+        -- GUI/GUIMain/GUI-MainFrame.lua). guiContext is dropped here:
         -- KE's GUIFrame:OpenPage stores it as pendingContext and nothing
-        -- reads it (GUI/GUIWidgets/GUI-Sidebar.lua:756). guiTab IS set --
+        -- reads it (GUI/GUIWidgets/GUI-Sidebar.lua). guiTab IS set --
         -- it is KE's live equivalent of the same intent, seeding
         -- GUIFrame.tabbedPageState so Open Settings lands on the right
-        -- subtab of the tabbed Blizzard Frames page (Core/EditMode.lua:56,
+        -- subtab of the tabbed Blizzard Frames page (Core/EditMode.lua,
         -- :1122-1126). The subtab id itself is created in Task 6.
         guiPath = "SkinBlizzardFrames",
         guiTab = "SkinBlizzardFramesLootRoll",
@@ -563,20 +553,19 @@ end
 
 function LR:OnDisable()
     if self.mover then self.mover:Hide() end
-    -- v3.5.871: leave /kes edit when the module does.
+    -- leave /kes edit when the module does.
     if KE.EditMode then
         KE.EditMode:UnregisterElement("LootRoll")
         self.editModeRegistered = nil
     end
     if self.TeardownRollBars then self:TeardownRollBars() end
     local c = _G.GroupLootContainer
-    -- v3.5.755: restore by reparenting (flag writes taint the secure
+    -- restore by reparenting (flag writes taint the secure
     -- layout pass).
     --
-    -- DEVIATION (task-3, corrects <REF>:347-350): the reference's own
-    -- comment here claimed this was "combat-deferred implicitly -- next
-    -- ApplyPosition out of combat also restores", which is false on the
-    -- path that actually reaches OnDisable: ApplyPosition's restore
+    -- This is NOT combat-deferred implicitly by the next out-of-combat
+    -- ApplyPosition, which is the tempting reading. On the path that actually
+    -- reaches OnDisable, ApplyPosition's restore
     -- branch only runs when self.db.Reposition is FALSE, so a user who
     -- disables the MODULE while leaving Reposition on (the GUI's normal
     -- toggle) got no restore at all, in or out of combat. When combat

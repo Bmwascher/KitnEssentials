@@ -47,7 +47,7 @@ local SafePack = _G.SafePack
 
 -- Blizzard globals not on KE's read_globals allowlist -- read through _G.
 -- per family convention rather than growing .luacheckrc for this port
--- (Modules/Skinning/Chat.lua:69-72 is the sibling precedent).
+-- (Modules/Skinning/Chat.lua is the sibling precedent).
 local ChatEditSetLastTellTarget = (_G.ChatFrameUtil and _G.ChatFrameUtil.SetLastTellTarget) or _G.ChatEdit_SetLastTellTarget
 local ShouldColorChatByClass = (_G.ChatFrameUtil and _G.ChatFrameUtil.ShouldColorChatByClass) or _G.Chat_ShouldColorChatByClass or function(info) return info and info.colorNameByClass end
 local ResolvePrefixedChannelName = (_G.ChatFrameUtil and _G.ChatFrameUtil.ResolvePrefixedChannelName) or
@@ -57,7 +57,7 @@ local GetMobileEmbeddedTexture = (_G.ChatFrameUtil and _G.ChatFrameUtil.GetMobil
 
 local UNKNOWN = _G.UNKNOWN
 
--- v3.5.884 (WindTools ChatText port): role icons before names in group
+-- (WindTools ChatText port): role icons before names in group
 -- chat. CMH.lfgRoles is keyed by sender name (short AND name-realm keys,
 -- both written at cache-build time in Modules/Skinning/Chat.lua on
 -- GROUP_ROSTER_UPDATE); values are ready-made |T|t texture strings.

@@ -25,8 +25,8 @@ local math_floor = math.floor
 
 
 local SPELL_ID = 20484 -- Rebirth
--- MM:SS display only changes ~1Hz; 0.5s polling is ample and matches the
--- shared-brez reference (was 0.1 = 10Hz, 10x oversampled for a seconds clock).
+-- MM:SS display only changes ~1Hz; 0.5s polling is ample (0.1 = 10Hz was
+-- 10x oversampled for a seconds clock).
 local UPDATE_INTERVAL = 0.5
 
 CR.frame = nil

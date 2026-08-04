@@ -32,7 +32,7 @@
 GameMovieFinished = GameMovieFinished
 
 -- GetMouseFocus was REMOVED in 12.0. KE keeps a guarded call behind
--- `if GetMouseFocus then` in GUI/GUIHelpers/GUI-FrameChooser.lua:111
+-- `if GetMouseFocus then` in GUI/GUIHelpers/GUI-FrameChooser.lua
 -- (documented in the .luacheckrc drift allowlist). Typed nilable so the
 -- LS reflects that the global may not exist at runtime.
 ---@type function|nil

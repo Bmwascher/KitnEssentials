@@ -127,7 +127,7 @@ end
 -- boolean/nil, so direct comparison is safe.
 -- `base` is the long-cast suppression factor: a SECRET number (0 or 1) from the
 -- cast's DurationObject, or plain 1. Secret numbers tolerate truth tests and
--- alpha sinks but NEVER Lua arithmetic (in-game crash 2026-07-03), so the
+-- alpha sinks but NEVER Lua arithmetic (in-game crash), so the
 -- out-of-range dim is recomposed widget-side: the cached DurationObject is
 -- evaluated against an opacity-scaled curve (<=60s -> opacity, >60s -> 0)
 -- instead of multiplying opacity * base.
@@ -235,11 +235,11 @@ end
 -- 12.0 secret-value note: in restricted contexts (M+ / raids / outdoor cast
 -- restrictions), the interrupter GUID itself is SecretWhenUnitSpellCastRestricted,
 -- and so are UnitNameFromGUID's name return and UnitClassFromGUID's classFile.
--- Empirically (DEBUG_CB trace, open-world Felhunter/Felguard test 2026-05-03),
+-- Empirically (DEBUG_CB trace, open-world Felhunter/Felguard test),
 -- secret cstrings flow through WrapTextInColorCode -> string.format -> SetText
 -- without taint errors and render as their underlying values. So we deliberately
 -- do NOT bail on secret-name; only on truly nil. This contradicts the "Do NOT
--- concat with color codes" guidance documented for TargetedSpells v3.2.0 in
+-- concat with color codes" guidance documented for TargetedSpells in
 -- another module's surface — that warning is module-context-dependent, not
 -- universal. The castbar interrupt text path is safe.
 --
@@ -579,8 +579,7 @@ function H.UpdateBarColor(self, interruptDuration)
 
         -- "Kick ready" color is the current cast type's color (Casting /
         -- Channeling / Empowering) so user-set EmpoweringColor etc. is visible
-        -- during interruptible casts. Mirrors atrocityEssentials v4
-        -- CastbarBase.lua:401-415. Without this, every interruptible cast for
+        -- during interruptible casts. Without this, every interruptible cast for
         -- a player with a known interrupt (i.e. every player) renders as
         -- kick.ReadyColor regardless of the per-cast-type color setting.
         local cr, cg, cb, ca
@@ -717,7 +716,7 @@ function H.UpdateTargetNames(self)
     -- the target is a player. SetText accepts secret strings directly. We
     -- separate name (SetText) and color (SetTextColor with clean r/g/b)
     -- here for clarity, but empirical testing on UNIT_SPELLCAST_INTERRUPTED
-    -- (see H.GetColoredNameFromGUID above, 2026-05-03) shows that secret
+    -- (see H.GetColoredNameFromGUID above) shows that secret
     -- cstrings ALSO survive WrapTextInColorCode/string.format/SetText
     -- without taint errors — so concat with color codes is not a hazard,
     -- just less readable than the split SetText + SetTextColor pattern.
@@ -811,7 +810,7 @@ function H.StartCast(self)
         self.isImportant = nil
     end
     -- Default nil → false at the read site (matches EllesmereUI
-    -- EllesmereUINameplates.lua:4723-4725 UpdateCast). UnitCastingInfo /
+    -- EllesmereUINameplates.lua UpdateCast). UnitCastingInfo /
     -- UnitChannelInfo can omit the notInterruptible field for some cast
     -- types, and a nil value crashes SetAlphaFromBoolean (line 665) and
     -- the downstream EvaluateColorValueFromBoolean / SetVertexColorFromBoolean
@@ -821,7 +820,7 @@ function H.StartCast(self)
     self.notInterruptible = notInterruptible
 
     -- Long-cast suppression: hide absurd multi-day NPC channels. The evaluated
-    -- factor is a SECRET number (0 or 1) — in-game confirmed 2026-07-03 — legal
+    -- factor is a SECRET number (0 or 1) — in-game confirmed — legal
     -- in truth tests ("or 1") and alpha sinks, never arithmetic; GetRangeOpacity
     -- recomposes the out-of-range dim via an opacity-scaled curve instead of
     -- multiplying.

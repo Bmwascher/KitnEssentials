@@ -141,7 +141,7 @@ describe("MPT.CacheBelongsToRun", function()
     it("accepts the owning character and rejects a foreign one at the exact key", function()
         -- The cache is account-GLOBAL and survives a mid-key logout, so the
         -- same map+level on another character is a collision, not a recovery
-        -- — no API race required (review finding, 2026-07-16).
+        -- — no API race required (review finding).
         local cache = { key = "556:23", char = "Player-1234-000A" }
         assert.is_true(MPT.CacheBelongsToRun(cache, 556, 23, "Player-1234-000A"))
         assert.is_false(MPT.CacheBelongsToRun(cache, 556, 23, "Player-1234-000B"))
@@ -157,7 +157,7 @@ describe("MPT.CacheBelongsToRun", function()
     end)
 
     it("rejects a cache with no character stamp", function()
-        -- Ownerless caches are untrusted by definition (2026-07-17 review):
+        -- Ownerless caches are untrusted by definition (review):
         -- every released writer stamps char at create, so an unstamped cache
         -- is a pre-stamp artifact whose owner cannot be recovered. Adopting
         -- one would launder a possibly-foreign cache into this character's
@@ -169,8 +169,8 @@ end)
 
 -- Lifecycle cover, driving the real UpdateSplits/CommitSplits against the live
 -- store. The pure-core tests above pass even when the repair is never REACHED —
--- both defects Codex caught (a session-sticky run flag, and CommitSplits
--- creating an unstamped entry) lived in the wiring, not in the core.
+-- both known defects (a session-sticky run flag, and CommitSplits creating an
+-- unstamped entry) lived in the wiring, not in the core.
 describe("count-split repair lifecycle", function()
     local store
 

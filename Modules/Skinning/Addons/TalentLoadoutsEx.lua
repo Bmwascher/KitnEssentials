@@ -5,16 +5,14 @@ local pairs = pairs
 local select = select
 local hooksecurefunc = hooksecurefunc
 
--- The reference hardcodes this literal, but the value IS its own
--- palette.brand -- so copying the number verbatim would ship the upstream
--- periwinkle instead of KE's accent. Read the palette table (mutated in
+-- Never hardcode the accent here: read the palette table (mutated in
 -- place by S.RefreshPalette) so it tracks the live theme.
 local BRAND = S.palette.brand
 
 -- Crop fraction per side, NOT the same scale as KE:ApplyIconZoom's `zoom`
 -- argument: that helper turns its 0.3 default into a 0.075 crop. The
--- reference's 0.20 therefore cropped ~2.7x harder than every other KE icon.
--- 0.075 matches the centralized helper exactly. We keep this file's own
+-- 0.075 here matches the centralized helper exactly (0.20 would crop ~2.7x
+-- harder than every other KE icon). We keep this file's own
 -- routine rather than calling the helper because TLX resets its texcoords on
 -- every scroll update, so the crop must be re-applied from stored base
 -- coords instead of compounding.
@@ -250,7 +248,7 @@ local function SkinMainFrame()
         if textFrame then
             S.StripTextures(textFrame); S.Backdrop(textFrame)
             if textFrame.Main then S.StripTextures(textFrame.Main) end
-            -- v3.5.719: border children TLX keys outside
+            -- border children TLX keys outside
             -- .NineSlice stack a second ring on our backdrop.
             local tfB = textFrame.Border
             if tfB and tfB.GetNumChildren and tfB:GetNumChildren() == 0 then
@@ -261,7 +259,7 @@ local function SkinMainFrame()
                 S.EditBox(eb, true)
                 if eb.SetTextInsets then eb:SetTextInsets(6, 6, 2, 2) end
             end
-            -- v3.5.719: the paste bar opened overlapping the
+            -- the paste bar opened overlapping the
             -- icon-picker dialog. Pin it cleanly ABOVE the popup with a
             -- 4px gap (height preserved -- only bottom edge anchored).
             textFrame:ClearAllPoints()
@@ -272,7 +270,7 @@ local function SkinMainFrame()
         if listFrame then
             S.StripTextures(listFrame)
             S.Backdrop(listFrame)
-            -- v3.5.721 : v719 hid .Border
+            -- An earlier pass hid .Border
             -- unconditionally and re-anchored via a SINGLE point after
             -- ClearAllPoints -- if the frame was sized by two points
             -- (TOPLEFT+BOTTOMRIGHT), that deleted its size and it
@@ -350,9 +348,9 @@ local function SkinMainFrame()
     local textPopup = frame.TextPopupFrame and frame.TextPopupFrame.Main
     if textPopup then
         ReskinPopupFrame(frame.TextPopupFrame)
-        -- v3.5.719: this dialog originally straddled whatever
+        -- this dialog originally straddled whatever
         -- else was up, so it was pinned ABOVE the TLX panel.
-        -- v3.5.768 (Import/Export opens off-screen): pinning
+        -- (Import/Export opens off-screen): pinning
         -- above breaks when the panel sits at the screen's top edge --
         -- the 400px dialog leaves the screen entirely. It now opens to
         -- the LEFT of the panel, top-aligned, at its designed 500x400
@@ -395,7 +393,7 @@ local function SkinMainFrame()
     local presetPopup = frame.PresetPopupFrame and frame.PresetPopupFrame.Main
     if presetPopup then
         ReskinPopupFrame(frame.PresetPopupFrame)
-        -- v3.5.768: same off-screen guarantee as the Import/Export
+        -- same off-screen guarantee as the Import/Export
         -- dialog (its XML anchor is panel-relative too).
         frame.PresetPopupFrame:SetClampedToScreen(true)
         if presetPopup.AddonDropDownMenu then S.DropDown(presetPopup.AddonDropDownMenu) end
@@ -414,7 +412,7 @@ local function SkinMainFrame()
 end
 
 local function Skin()
-    -- v3.5.852 (TLX visibly skins in after opening): this polled
+    -- (TLX visibly skins in after opening): this polled
     -- for TalentLoadoutExMainFrame every 0.25s -- and never checked
     -- before the first wait -- so even when the frame already existed
     -- we sat unskinned for a quarter second. That IS the flash.

@@ -69,7 +69,7 @@ end
 -- other. Card 4 now writes EventToastAnchorFrameType/EventToastParentFrame/
 -- EventToastStrata; this builds the Config shape KE:ApplyFramePosition
 -- expects out of those, mirroring HealerMana's GetActiveAnchorConfig
--- (Modules/Healer/HealerMana.lua:198-208).
+-- (Modules/Healer/HealerMana.lua).
 function AF:ApplyEventToastPosition()
     if not (self.toastHolder and self.db and self.db.EventToastPosition) then return end
     KE:ApplyFramePosition(self.toastHolder, self.db.EventToastPosition, {
@@ -93,8 +93,7 @@ local function GetPerksAnchor()
 end
 
 -- Pure grow-direction decision, extracted out of PostAlertMove so it is
--- directly unit-testable (task-4 sanctioned deviation -- the reference kept
--- this inline). centreY can be nil pre-layout (a frame not yet measured
+-- directly unit-testable. centreY can be nil pre-layout (a frame not yet measured
 -- reports 1x1/nil, feedback_prelayout_measurement.md); screenTop can be nil
 -- for the same reason. Either nil fails safe to "grow down". hasPerksAnchor
 -- always wins: Trading Post re-basing always grows up.
@@ -131,8 +130,8 @@ end
 -- its anchor (PositionGroupLootContainer, below) and its removal from
 -- Blizzard's managed layout (InstallHooks' reparent) must stand down for it,
 -- or Alert Frames reparenting first leaves LootRoll's own origin-parent
--- capture (Modules/Skinning/LootRoll.lua:182-185) never set, permanently
--- breaking its disable-time restore (Modules/Skinning/LootRoll.lua:588).
+-- capture (Modules/Skinning/LootRoll.lua) never set, permanently
+-- breaking its disable-time restore (Modules/Skinning/LootRoll.lua).
 -- One helper, called from both places, so the three-key test is never
 -- written twice.
 local function LootRollOwnsGroupLootContainer()
@@ -229,9 +228,9 @@ function AF:InstallHooks()
     -- (LootRollOwnsGroupLootContainer, above). Reparenting here first would
     -- otherwise beat LootRoll to it: LootRoll captures the container's
     -- ORIGINAL parent lazily, only inside its own reparent branch
-    -- (Modules/Skinning/LootRoll.lua:182-185), so if Alert Frames reparents
+    -- (Modules/Skinning/LootRoll.lua), so if Alert Frames reparents
     -- first that capture never happens and LootRoll's disable-time restore
-    -- (Modules/Skinning/LootRoll.lua:588) becomes a permanent no-op.
+    -- (Modules/Skinning/LootRoll.lua) becomes a permanent no-op.
     local glc = _G.GroupLootContainer
     if glc then
         glc:EnableMouse(false)
@@ -293,10 +292,10 @@ function AF:RegisterEditMode()
         -- of its own -- its config cards live on the UI Widgets tab instead.
         -- Open Settings was silently falling through to "just open the GUI".
         -- Route through the tab that now hosts these cards (KE's sidebar
-        -- id: GUI/GUIMain/GUI-MainFrame.lua:124). guiTab seeds
+        -- id: GUI/GUIMain/GUI-MainFrame.lua). guiTab seeds
         -- GUIFrame.tabbedPageState so Open Settings lands on the right
-        -- subtab (Core/EditMode.lua:56, :1122-1126) -- same fix as
-        -- Modules/Skinning/LootRoll.lua:541-553.
+        -- subtab (Core/EditMode.lua) -- same fix as
+        -- Modules/Skinning/LootRoll.lua.
         guiPath = "SkinBlizzardFrames",
         guiTab = "SkinBlizzardFramesWidgets",
     })

@@ -28,7 +28,7 @@ local function Skin()
         _G.TabardFrameEmblemTopLeft, _G.TabardFrameEmblemBottomLeft } do
         if emblem and model then
             emblem:SetParent(model)
-            -- v3.5.834: "emblem.Show = nil" removed -- it only existed
+            -- "emblem.Show = nil" removed -- it only existed
             -- to undo KillTexture's old NOOP method surgery, gone as
             -- of v828. The re-Show alone is enough.
             emblem:Show()

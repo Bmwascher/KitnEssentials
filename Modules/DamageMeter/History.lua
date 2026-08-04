@@ -6,9 +6,7 @@
 -- ║          stored session × 11 meter types (+ per-source   ║
 -- ║          details) is RETAINED verbatim as one bundle;    ║
 -- ║          Core.lua's GetSession/GetSource serve entries   ║
--- ║          by NEGATIVE session id. Spec:                   ║
--- ║          dev/docs/superpowers/specs/                     ║
--- ║          2026-07-18-dm-snapshot-store-design.md          ║
+-- ║          by NEGATIVE session id.                         ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -101,7 +99,7 @@ end
 -- MARSHAL time: a member who leaves the group before the key-start capture is
 -- frozen into the snapshot with a permanently secret name, while their
 -- enemy-side attribution (combatSpellDetails.unitName — not conditional)
--- stays plain (in-game probe 2026-07-19: 7/7 attackers plain, 0 secret).
+-- stays plain (in-game probe: 7/7 attackers plain, 0 secret).
 -- Learned wherever a source name renders/marshals plain (RenderBar's plain
 -- ticks + the capture deep pass); Detail.lua falls back to it for the tip
 -- header and the Targets lookup when a bar's name is secret. Player GUIDs
@@ -148,18 +146,18 @@ end
 -- completion repairs flow to both). The persisted copy exists solely to
 -- survive /reload — the native session store is server-side and outlives
 -- a reload, so without it a between-keys reload sealed a fully-labeled
--- run as "Earlier runs" (smoke 2026-07-24). It lives in the AceDB GLOBAL
+-- run as "Earlier runs". It lives in the AceDB GLOBAL
 -- section, never the profile: pending describes the global native store,
 -- and a per-profile copy shards that state — an inactive profile could
 -- retain an anchored stale record across a no-wipe boundary drop and
--- resurrect it to mislabel a multi-key store (Codex round 2, MAJOR).
+-- resurrect it to mislabel a multi-key store.
 -- A RESTORED copy is only ever trusted against an anchor: a session id it
 -- stamped must still be in the store (HistoryCapture) or
 -- CHALLENGE_MODE_COMPLETED must fire for it (HistoryOnKeyComplete — the
 -- event itself proves the key is still live) — AND its charKey must match
 -- the current character: the global slot is ACCOUNT-wide while the native
 -- store is per-character, and an alt's small-integer session ids collide
--- with the main's trivially (Codex round 4). Every field is written
+-- with the main's trivially. Every field is written
 -- through a plain-value guard, so the table is SavedVariables-safe by
 -- construction.
 --
@@ -276,7 +274,7 @@ function DM:HistoryOnKeyComplete()
         -- id already stored at the event (usually the final boss). The
         -- summary pick below lands only after the 1s settle — a /reload
         -- inside that window would otherwise leave the persisted copy
-        -- anchor-less and cost the label (Codex tail review, F2).
+        -- anchor-less and cost the label.
         for i = #atEvent, 1, -1 do
             local id = atEvent[i] and atEvent[i].sessionID
             if id ~= nil and not issecretvalue(id) then
@@ -314,7 +312,7 @@ local METER_TYPE_MIN, METER_TYPE_MAX = 0, 10   -- Enum.DamageMeterType range
 
 -- Whole-bundle eviction, oldest first. HistoryRetain is clamped at READ so
 -- a legacy stored value (old slider max 10, older default 20) needs no
--- migration. Max 5: a deep bundle measured ~2.9MB live (2026-07-24 smoke),
+-- migration. Max 5: a deep bundle measured ~2.9MB live (smoke),
 -- so 5 keys ≈ 15MB runtime ceiling — 10 was ruled too heavy.
 local function evictOverCap(self, h)
     local cap = self.db and self.db.HistoryRetain
@@ -346,8 +344,8 @@ function DM:HistoryCapture()
 
     if not (C_DamageMeter and C_DamageMeter.GetAvailableCombatSessions) then return nil end
     -- EXPLICIT huge cap: the helper defaults an omitted cap to 20 (its menu
-    -- contract, Core.lua:1669) — an implicit call would silently drop the
-    -- OLDEST segments of a long key (Codex round 2, F2').
+    -- contract, Core.lua) — an implicit call would silently drop the
+    -- OLDEST segments of a long key.
     local list = self:GetAvailableSessions(1e9)
     if not list or #list == 0 then return nil end
 
@@ -398,7 +396,7 @@ function DM:HistoryCapture()
                 durationSeconds = avail.durationSeconds, -- may be secret: FormatDeathTime guards
                 -- Frozen tint [C1]. NO `or nil` tail — a false (wipe) tag is
                 -- a legitimate value and `and/or` would collapse it to nil
-                -- (the and/or-collapse bug class; see the 2026-07-18 trash
+                -- (the and/or-collapse bug class; see the trash
                 -- audit F2).
                 outcome = outcomes and outcomes[oldID],
                 isSummary = (pending and pending.summarySessionID == oldID) or nil,

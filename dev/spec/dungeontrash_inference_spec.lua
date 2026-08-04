@@ -177,7 +177,7 @@ describe("DungeonTrash inference — placement gate", function()
         assert.is_true(TI.IsPlacementAllowed("2493", {}))          -- map constraint, no sub-zone
     end)
 
-    -- The second tier of the map-token match (reference: IsCurrentPlacementID):
+    -- The second tier of the map-token match:
     -- a token that is an areaID, not a uiMapID, matches by its C_Map.GetAreaInfo
     -- NAME against the live zone text. Nexus-Point Xenas ships areaID tokens
     -- (16573-16576) — with only the uiMapID tier, a known sub-zone would
@@ -200,9 +200,9 @@ describe("DungeonTrash inference — placement gate", function()
             currentZoneText = "", resolveAreaName = resolve }))
     end)
 
-    -- Mixed rows AND the two kinds (reference: the map gate rejects BEFORE the
+    -- Mixed rows AND the two kinds: the map gate rejects BEFORE the
     -- stage check and vice versa — a known-mismatched tier vetoes the other's
-    -- match). No shipped row mixes kinds yet; this pins the semantics for the
+    -- match. No shipped row mixes kinds yet; this pins the semantics for the
     -- first extractor/curated row that does.
     it("ANDs the stage and map tiers on a mixed row", function()
         local resolve = function(id) return id == 16575 and "Xenas Deck" or nil end
@@ -381,7 +381,7 @@ describe("DungeonTrash inference — BuildCandidates", function()
         -- Rokh'zal (253683) is the ONLY sex=2/power=0 Maisara mob → a lone Layer1
         -- survivor. Curated level 91; live read 90. It matched only the coarse
         -- sex/power triple, so it must NOT be rubber-stamped — stays unresolved and
-        -- defers to a cast (this was the Rokh'zal false positive in-game 2026-07-07).
+        -- defers to a cast (this was the Rokh'zal false positive in-game).
         local obs = { level = 90, sex = 2, power = 0, unitClassification = "elite" }
         local cands, resolved = ti.BuildCandidates(
             obs, { dungeonKey = "MaisaraCaverns", traits = KE.TrashTraits })
@@ -498,8 +498,8 @@ describe("DungeonTrash inference — FilterCandidates", function()
 
     -- A LONE candidate is verified, not rubber-stamped: a level-disagreed lone
     -- survivor defers to Layer2 (BuildCandidates), and Layer2 resolves it only
-    -- via an observed cast matching one of its curated spells — the reference
-    -- runs Layer2 on every pass regardless of count. Rubber-stamping here would
+    -- via an observed cast matching one of its curated spells, so Layer2
+    -- runs on every pass regardless of count. Rubber-stamping here would
     -- resurrect the Rokh'zal false positive through the back door; never
     -- resolving (the old caller-side #>1 gate) deadlocked the mob forever.
     it("verifies a lone candidate: resolves on a cast matching its spells", function()
@@ -525,8 +525,8 @@ describe("DungeonTrash inference — FilterCandidates trait-duration keep tier",
     local TI
     setup(function() TI = loadInference() end)
 
-    -- The Phantasmal Mystic class (reference: trait castTimeSet/channelTimeSet
-    -- feed the Layer2 keep rules BEFORE curated spells): a mob's KNOWN filler
+    -- The Phantasmal Mystic class — trait castTimeSet/channelTimeSet
+    -- feed the Layer2 keep rules BEFORE curated spells: a mob's KNOWN filler
     -- cast — a duration in its trait set with no curated timer spell — must
     -- KEEP it in the pool / verify it, never read as disconfirming evidence
     -- that collapses the pool onto a same-duration fingerprint sibling (the
@@ -580,22 +580,22 @@ describe("DungeonTrash inference — FilterCandidates trait-duration keep tier",
         assert.is_false(TI.TraitDurationMatches({}, { kind = "cast", duration = 3 }))
     end)
 
-    -- Audit F2 (2026-07-18): the old and/or select fell through to castTimeSet
+    -- The old and/or select fell through to castTimeSet
     -- when a CHANNEL observation met a nil channelTimeSet — a real 2.5s channel
     -- kept a cast-only mob alive under fail-open routing (Riftbreath vs the
-    -- cast-only Academy sibling). The reference consumes the sets independently.
+    -- cast-only Academy sibling). The two sets are consumed independently.
     it("a channel observation never borrows castTimeSet when channelTimeSet is absent", function()
         local castOnly = { castTimeSet = { 2.5 } }
         assert.is_false(TI.TraitDurationMatches(castOnly, { kind = "channel", duration = 2.5 }))
         assert.is_true(TI.TraitDurationMatches(castOnly, { kind = "cast", duration = 2.5 }))
     end)
 
-    -- Audit F1 (2026-07-18): the trait keep tier is FILLER-ONLY. In production
+    -- The trait keep tier is FILLER-ONLY. In production
     -- both Skyreach twins' trait castTimeSet carry the shared 3s cast, so the
     -- old unconditional trait fallthrough revived the fingerprint-rejected twin
     -- and the pool never narrowed — the Batch E castStartChangeTarget splitter
     -- was dead with traitByNpc wired (the sampler spec above omits traitByNpc,
-    -- which is why it stayed green). Reference: fingerprint narrowing is a
+    -- which is why it stayed green). Fingerprint narrowing is a
     -- separate FIRST stage; duration rules see only its survivors.
     it("the trait tier cannot revive a fingerprint-rejected twin (production shape)", function()
         local DATA2 = {
@@ -696,8 +696,7 @@ describe("DungeonTrash inference — ChannelEvidenceLocks (A5 resolve-without-lo
 
     -- A bare channel (castIntoChannel nil — KE never emits false) passes the
     -- Pass-2 verify shape through a TWO-PHASE spell's channelTime as easily as
-    -- a pure channel's. The reference survives that lenient match because it
-    -- never locks; KE's castConfirmed must not be earned by it — channel
+    -- a pure channel's, so castConfirmed must not be earned by it — channel
     -- evidence locks only on a PROVEN transition or a fingerprint-agreeing
     -- PURE channel. Cast evidence is untouched (duration-gated).
     local twoPhaseOnly = { spells = { [1] = { castTime = 2, channelTime = 6 } } }
@@ -749,8 +748,8 @@ describe("DungeonTrash inference — InferSucceededSpell", function()
 
     -- The Arcane Sentry collision (Magisters' Terrace): Crowd Dispersal (3s cast,
     -- no channel) and Arcane Beam (3s cast + 5s channel) share a castTime, so a 3s
-    -- cast is ambiguous. excludeTwoPhase is the PRIMARY cast-kind rule (reference:
-    -- cast-kind success inference skips channel-capable spells): a completed bare
+    -- cast is ambiguous. excludeTwoPhase is the PRIMARY cast-kind rule —
+    -- cast-kind success inference skips channel-capable spells: a completed bare
     -- cast resolves among one-phase spells only — the two-phase spell is credited
     -- exclusively from its channel phase.
     it("excludeTwoPhase resolves a shared-castTime one-phase twin, skipping the channel spell", function()
@@ -805,7 +804,7 @@ describe("DungeonTrash inference — InferSucceededSpell", function()
     end)
 
     -- Schedule proximity scores against the PREDICTED NEXT start
-    -- (anchor.nextStartAt, the reference's primary term), not the previous
+    -- (anchor.nextStartAt, the primary term), not the previous
     -- one: among duration-tied spells the one that is DUE wins — the old
     -- previous-start term rewarded recency, so the least-due spell won ties.
     it("prefers the duration-tied spell that is DUE over the most recently cast", function()
@@ -892,7 +891,7 @@ describe("DungeonTrash inference — Layer2 samplers (Batch E)", function()
 
     it("a sampled selfBuffCountDelta splits Phalanx Breaker's twin 5s casts", function()
         -- A mismatched delta REJECTS the delta-curating spell outright
-        -- (reference semantics: the delta gates credit, it doesn't select).
+        -- (the delta gates credit, it doesn't select).
         assert.equals(471643, TI.InferSucceededSpell(PHALANX,
             { kind = "cast", duration = 5.0, selfBuffCountDelta = 0 }))
         -- With a matching delta both spells survive the fingerprint gate and
@@ -904,7 +903,7 @@ describe("DungeonTrash inference — Layer2 samplers (Batch E)", function()
               startAt = 105.5, engagedAt = 100 }, nil, 105.5))
     end)
 
-    -- Reference rule: the success-side delta is STRICT — a delta-curating
+    -- The success-side delta is STRICT — a delta-curating
     -- spell is only CREDITED with a sampled matching delta; unknown rejects it
     -- (unlike the lenient boolean fingerprints, which pass when unsampled).
     it("an UNSAMPLED delta strictly rejects the delta-curating spell in success inference", function()

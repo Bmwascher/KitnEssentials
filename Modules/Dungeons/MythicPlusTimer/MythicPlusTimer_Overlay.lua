@@ -56,7 +56,7 @@ local function SetupTooltip()
 
         -- Read progress off the mouseover token Blizzard's tooltip resolves
         -- against. Returns: (actualValue, percentValue, percentValueString).
-        -- percentValue (#2) is a RAW 0-1 fraction (live-confirmed 2026-07-02:
+        -- percentValue (#2) is a RAW 0-1 fraction (live-confirmed:
         -- 15/607 rendered "0.02%"), and scaling it up is off-limits — secret
         -- math throws — so display Blizzard's pre-formatted string (#3).
         -- Truthy check ONLY — no numeric comparison/arithmetic. format()

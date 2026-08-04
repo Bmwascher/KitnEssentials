@@ -88,7 +88,7 @@ local function StatusUpdate(status, elapsed)
         bar:Hide()
         return
     end
-    -- v3.5.694: previews drain locally -- GetLootRollTimeLeft errors on
+    -- previews drain locally -- GetLootRollTimeLeft errors on
     -- anything but a live numeric roll id.
     if bar.isPreview then
         local v = (status:GetValue() or 0) - elapsed
@@ -190,7 +190,7 @@ function LR:RollBar_Create(index)
     status:SetScript("OnUpdate", StatusUpdate)
     status:SetStatusBarTexture(KE:GetStatusbarPath(db.BarTexture or "KitnUI"))
     status.parent = bar
-    -- v3.5.818 (bar had no visible outline): the backdrop was
+    -- (bar had no visible outline): the backdrop was
     -- flush with the status bar's rect, so the FILL texture (higher
     -- frame level) painted over the border pixels on every side.
     -- Castbar convention is fill-inside-border; equivalent here:
@@ -225,10 +225,9 @@ function LR:RollBar_Create(index)
     -- INSIDE the border, the standard convention here.
     button.icon:SetPoint("TOPLEFT", 1, -1)
     button.icon:SetPoint("BOTTOMRIGHT", -1, 1)
-    -- DEVIATION (2026-07-31): the reference hardcodes the crop
-    -- (<REF>/Skinning/LootRollBars.lua:224). Route it through the shared
-    -- skinning helper instead -- same 0.08/0.92 crop, plus the pixel snap and
-    -- the re-entry guard a hardcoded SetTexCoord skips, and it tracks any
+    -- The crop goes through the shared skinning helper rather than a hardcoded
+    -- SetTexCoord -- same 0.08/0.92 crop, plus the pixel snap and
+    -- the re-entry guard a hardcoded call skips, and it tracks any
     -- future change to the standard. No second backdrop: the button already
     -- carries one, so withBackdrop stays false.
     S.Icon(button.icon)
@@ -285,9 +284,8 @@ function LR:RollBars_Layout()
 
         bar.status:SetStatusBarTexture(KE:GetStatusbarPath(db.BarTexture or "KitnUI"))
 
-        -- DEVIATION (2026-07-31, Brandon's call after the smoke). The
-        -- reference sizes the item icon to the BAR FRAME height and centres
-        -- it there (<REF>/Skinning/LootRollBars.lua:279-281). But the visible
+        -- The item icon is NOT sized to the bar frame height and centred
+        -- there, which is the obvious reading. The visible
         -- row is taller than the frame: the roll buttons sit ABOVE the status
         -- bar (see the anchors below), so the content spans
         -- status height + button size, and a frame-height icon reads small
@@ -368,15 +366,13 @@ function LR.CANCEL_ALL_LOOT_ROLLS(bar, event)
     LR:RollBar_Clear(bar, event)
 end
 
--- v3.5.692: sample roll for the GUI -- a fully dressed bar
+-- sample roll for the GUI -- a fully dressed bar
 -- (Thunderfury: legendary color, BoP, ilvl, all four buttons lit) with
 -- clicks neutralized so nothing ever calls RollOnLoot on a fake id.
 local PREVIEW_SECONDS = 15
--- DEVIATION (2026-07-31, found in smoke). The reference lists only four here
--- (<REF>/Skinning/LootRollBars.lua:356) while CreateRollButton makes FIVE --
--- `pass` is missing, so its comment at <REF>:354 ("clicks neutralized so
--- nothing ever calls RollOnLoot on a fake id") is false for Pass: clicking it
--- during a preview called RollOnLoot("PREVIEW", 0) and errored with
+-- All FIVE buttons CreateRollButton makes, `pass` included. Listing only four
+-- leaves Pass live during a preview: clicking it called
+-- RollOnLoot("PREVIEW", 0) and errored with
 -- `Usage: RollOnLoot(id, rollType)`. Both ShowPreview and HidePreview iterate
 -- this list, so adding the key neutralizes and restores the button together.
 local previewButtons = { "need", "greed", "disenchant", "transmog", "pass" }
@@ -417,14 +413,11 @@ function LR:ShowPreview()
     bar.bind:SetText("BoP")
 
     local db = self.db
-    -- DEVIATION (2026-07-31, Brandon's call after the smoke). The reference
-    -- lets QualityBorder drive the bar fill and spark as well as the icon
-    -- border (<REF>/Skinning/LootRollBars.lua:394-408), so a legendary drop
-    -- turned the whole countdown bar orange and the setting's own label
-    -- ("Item-Quality Border Colors") was untrue. Bar and spark now always
-    -- take the theme accent; only the icon border follows item quality.
-    -- The v3.5.694 fix this replaces -- never leave the statusbar at its
-    -- uncolored default -- still holds: the brand path is now unconditional.
+    -- QualityBorder drives the ICON BORDER only. Letting it drive the bar fill
+    -- and spark too turned the whole countdown bar orange on a legendary drop,
+    -- and made the setting's own label ("Item-Quality Border Colors") untrue.
+    -- Bar and spark always take the theme accent, and the statusbar is never
+    -- left at its uncolored default.
     local br2, bg2, bb2 = S.palette.brand[1], S.palette.brand[2], S.palette.brand[3]
     bar.status:SetStatusBarColor(br2, bg2, bb2, 0.7)
     bar.status.spark:SetColorTexture(br2, bg2, bb2, 0.9)
@@ -522,7 +515,7 @@ function LR:START_LOOT_ROLL(event, rollID, rollTime)
     -- Same deviation as ShowPreview above: bar and spark always take the
     -- theme accent, only the icon border follows item quality. Keep the two
     -- paths identical -- the preview exists to show what a real roll looks
-    -- like, and they drifted apart once already (the v3.5.694 report).
+    -- like, and they drifted apart once already once.
     local br2, bg2, bb2 = S.palette.brand[1], S.palette.brand[2], S.palette.brand[3]
     bar.status:SetStatusBarColor(br2, bg2, bb2, 0.7)
     bar.status.spark:SetColorTexture(br2, bg2, bb2, 0.9)

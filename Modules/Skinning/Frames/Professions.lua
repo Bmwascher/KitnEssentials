@@ -578,7 +578,7 @@ local function Skin()
             end
             S.ArrowButton(BrowseFrame.BackButton, "left")
 
-            -- v3.5.800 (crafter Crafting Orders page text had no
+            -- (crafter Crafting Orders page text had no
             -- outline): both lists' rows are pooled ScrollBox elements
             -- whose cell fonts we never touched. Outline once per
             -- pooled frame, size preserved (SetFont nil-size keeps the

@@ -639,7 +639,7 @@ function CP:UpdateSlotWarning(button, unit, slot)
     end
 
     -- Enchant warning only. A missing GEM is shown as a red empty-socket icon in
-    -- the gem row (see UpdateSlotDetail), reference-style, to avoid a third text
+    -- the gem row (see UpdateSlotDetail), to avoid a third text
     -- line the short slots can't fit.
     -- UnitLevel on inspect targets (hostile/encounter units) can be secret in 12.0;
     -- treat secret as "not max level" so we don't accuse an inspect target of
@@ -959,14 +959,14 @@ end
 -- overwrites it. Weak-keyed: never a field on a Blizzard frame.
 --
 -- Skipping the write is NOT enough to stand down here. EUI only re-anchors
--- these strings (CharacterSheet.lua:497-505) -- it never sets a font -- so
+-- these strings (CharacterSheet.lua) -- it never sets a font -- so
 -- whatever KE applied while EUI's sheet was off survives into EUI's header and
 -- no later refresh can release it. The stand-down has to hand back what it took.
 local headerTextOriginals = setmetatable({}, { __mode = "k" })
 
 -- withLayout: also capture width and word wrap, for the string whose layout KE
 -- actually changes. CharacterLevelText is configured 220x24 in Blizzard's own
--- XML (.wow-api-reference PaperDollFrame.xml:460), so GetWidth() here reads a
+-- XML (PaperDollFrame.xml), so GetWidth() here reads a
 -- real configured width, not a measurement of auto-sized text -- restoring it
 -- is right. CharacterFrameTitleText only ever gets a font from us.
 local function RememberHeaderText(fs, withLayout)
@@ -1251,8 +1251,8 @@ function CP:UpdateSlotTrackIndicator(slotFrame, slotID, unit, data)
 
     -- EllesmereUI prints the upgrade track beside its own item level ("(Myth)"),
     -- so our corner letter is the same fact twice. It does not overlap theirs,
-    -- but two readings of one thing on every slot is clutter -- Brandon's call,
-    -- 2026-08-03. Only while EUI is actually drawing it on THIS frame: its
+    -- but two readings of one thing on every slot is clutter. Suppressed only
+    -- while EUI is actually drawing it on THIS frame: its
     -- showUpgradeTrack / inspectShowUpgradeTrack toggles turn it off separately,
     -- and then ours is the only one left. Bail before the tooltip read too --
     -- GetItemTrack allocates one per slot just to decide the letter.
@@ -1395,7 +1395,7 @@ end
 
 local CENTER_SLOTS = { [16] = true, [17] = true }
 
--- Anchor the gem-icon row inline beside the ilvl text (reference model).
+-- Anchor the gem-icon row inline beside the ilvl text.
 local function AnchorGemsRightOf(detail, parent)
     for i = 1, SLOT_DETAIL_MAX_GEMS do
         local icon = detail.gemIcons[i]
@@ -1461,7 +1461,7 @@ function CP:CreateSlotDetail(slotFrame, slotID)
         detail.gemIcons[i] = iconFrame
     end
 
-    -- Static anchors per slot side (reference model): enchant at the slot's
+    -- Static anchors per slot side: enchant at the slot's
     -- inner-TOP, item level at the inner-BOTTOM, gem icons inline beside the ilvl.
     detail.enchantText:ClearAllPoints()
     detail.ilvlText:ClearAllPoints()
@@ -1623,8 +1623,8 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
 
     -- Gem icons inline beside the ilvl text (only scan socketable slots).
     -- Filled sockets show their gem (ShowSlotGems); empty sockets show a RED
-    -- empty-socket icon (ShowMissingGems) — the reference-style missing-gem cue
-    -- that replaces the old "No Gem" text (no room to stack a third text line).
+    -- empty-socket icon (ShowMissingGems) — a missing-gem cue that replaces the
+    -- old "No Gem" text (no room to stack a third text line).
     local gemCount = 0
     local gemsPending = false
     if not suppressGems then
@@ -1773,7 +1773,7 @@ local STANDARD_BACKDROP = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = 
 -- alpha, which is right for a panel sitting on another panel but washes out
 -- over open world -- these two float over whatever is behind the character
 -- sheet. Matched instead to the Damage Meter's own popup menus
--- (DamageMeter/SegmentMenu.lua:126), the closest thing KE already has to a
+-- (DamageMeter/SegmentMenu.lua), the closest thing KE already has to a
 -- transient list over the world.
 local POPUP_BG = { 0.05, 0.05, 0.05, 0.97 }
 
@@ -1851,7 +1851,7 @@ function CP:ScanItemSockets(unit, slotID, data)
     -- showing false "missing" reds), whereas C_TooltipInfo reflects what's actually
     -- rendered. Socket lines come back in physical order, so the running counter IS
     -- each socket's true index for both filled and empty — no position reconciliation
-    -- needed. (Reference: BetterCharacterPanel.)
+    -- needed.
     data = data or C_TooltipInfo.GetInventoryItem(unit, slotID)
     local lines = data and data.lines
     if not lines then
@@ -2132,14 +2132,14 @@ function CP:SocketGemFromPopup(gemData, targetSlotID, targetSocketIndex)
     return true
 end
 
--- The replace loop. Upstream-verified sequencing on 12.0.7 (DSH ships this
--- working): SocketInventoryItem opens the socketing UI for the equipped item;
+-- The replace loop. Sequencing verified on 12.0.7: SocketInventoryItem opens
+-- the socketing UI for the equipped item;
 -- verify it actually opened (GetExistingSocketLink(1)) and that the staged gem
 -- landed (GetNewSocketLink) before accepting — one 0.1s-delayed full retry
 -- pass if either check fails, since the socket UI can lag the call by a frame.
--- Upstream-documented gotcha: the API cannot stage gems into two sockets of
+-- API gotcha: gems cannot be staged into two sockets of
 -- the SAME item in one open — close between consecutive matches on one slotID.
--- Uses the canonical C_ItemSocketInfo namespace (the bare globals DSH calls
+-- Uses the canonical C_ItemSocketInfo namespace (the bare globals
 -- are Blizzard_DeprecatedItemSocketInfo shims in 12.0.7).
 function CP:ReplaceAllMatchingGems(oldGemID, newGemID, isRetry)
     if InCombatLockdown() then
@@ -2255,8 +2255,7 @@ function CP:CreateSocketButton(index)
     btn.qualityFrame, btn.quality = CreateQualityOverlay(btn)
 
     btn:SetScript("OnEnter", function(self)
-        -- Mirrors the enchant button's own OnEnter, and the reference's
-        -- (NorskenUI v6 CharacterPanel.lua:730). Without it, sliding from the
+        -- Mirrors the enchant button's own OnEnter. Without it, sliding from the
         -- enchant popup onto a socket leaves BOTH popups up: IsMouseOverGemUI
         -- now recognises the socket you just moved onto, so the enchant popup's
         -- 0.05s close timer sees the bar still hovered and bails.
@@ -2327,7 +2326,7 @@ function CP:CreateGemPopup()
     popup.noGems:SetTextColor(Theme.textMuted[1], Theme.textMuted[2], Theme.textMuted[3])
     popup.noGems:Hide()
 
-    -- Replace All footer hint (its own separated row, reference style). Text +
+    -- Replace All footer hint, on its own separated row. Text +
     -- visibility driven by UpdateReplaceAllPreview; the modifier keyword is
     -- colored bright red there so it stands out from the gem rows.
     popup.replaceHint = popup:CreateFontString(nil, "OVERLAY")
@@ -2497,8 +2496,8 @@ function CP:RefreshSocketButtons()
     -- EllesmereUI ships the same socket row along the bottom of its themed
     -- sheet (SocketPanel.lua: one icon per equipped socket, click for a bag-gem
     -- flyout). Only the SOCKETS stand down -- the enchant button below has no
-    -- EUI equivalent, so the bar stays and carries it alone. Brandon's call,
-    -- 2026-08-03. The scan is skipped too: it walks every equipped item.
+    -- EUI equivalent, so the bar stays and carries it alone. The scan is skipped
+    -- too: it walks every equipped item.
     if not KE:EUIDrawsSlotElement("player", "socketPanel") then
         local allSockets = self:ScanAllEquippedSockets()
         for _, itemSocketInfo in ipairs(allSockets) do
@@ -2659,7 +2658,7 @@ function CP:UpdateReplaceAllPreview()
     if not popup or not popup:IsShown() then return end
     local oldGemID = popup._replaceAllGemID
 
-    -- Bright red modifier keyword matching the DSH reference (|cffFC0316); a
+    -- Bright red modifier keyword (|cffFC0316); a
     -- white base keeps the rest legible against the popup background.
     local SHIFT_RED = "|cffFC0316"
     if oldGemID and IsShiftKeyDown() then
@@ -2752,11 +2751,10 @@ end
 ---------------------------------------------------------------------------------
 -- One extra button on the right end of the socket bar. Hovering it lists every
 -- enchant in your bags; clicking a row starts Blizzard's normal "now click the
--- item" flow. Ported from NorskenUI v6 CharacterPanel.lua:1162-1562. Three
--- deliberate deviations from that source, each noted at its site below.
+-- item" flow.
 
--- Enchanting profession icon. The reference uses a bare fileID (4620672); a
--- named texture path says what it is and survives an asset renumber.
+-- Enchanting profession icon. A named texture path rather than a bare fileID:
+-- it says what it is and survives an asset renumber.
 local ENCHANT_BUTTON_ICON = "Interface\\Icons\\Trade_Engraving"
 
 -- Which slots an enchant targets, resolved from words in its tooltip. English
@@ -2788,9 +2786,9 @@ local ENCHANT_SLOT_KEYWORDS = {
     ["trinket"] = { 13, 14 },
 }
 
--- DEVIATION 1 (bug fix). The reference walks this table with pairs() and
--- returns on the first hit, so a tooltip containing two keywords resolves
--- non-deterministically. "Enchant 2H Weapon - ..." contains BOTH "2h weapon"
+-- Walking this table with pairs() and returning on the first hit resolves
+-- non-deterministically when a tooltip contains two keywords.
+-- "Enchant 2H Weapon - ..." contains BOTH "2h weapon"
 -- ({16}) and "weapon" ({16, 17}), and which one wins can differ between
 -- sessions. Longest key first makes the most specific match win every time.
 -- Same fix, same reason as enchantNicknameOrder above.
@@ -2843,9 +2841,7 @@ end
 
 -- Slots KE will not offer an enchant for, whatever the tooltip claims.
 --
---   [7] legs -- armour kits. The reference excludes them with no rationale in
---       its source; Brandon confirmed why 2026-08-03: they did not work
---       reliably there either.
+--   [7] legs -- armour kits, which do not apply reliably through this flow.
 --
 -- Head is NOT in here, and must not go back in: Midnight ships current helm
 -- enchants. See BLOCKED_ENCHANT_ITEMS below for what actually fails.
@@ -2858,7 +2854,7 @@ local UNOFFERABLE_ENCHANT_SLOTS = { [7] = true }
 --   [210494] Incandescent Essence
 --
 -- This is a blacklist rather than a rule because the in-game data gives no rule
--- to write. Probed 2026-08-03, every enchant in one bag at once:
+-- to write. Probed in game, every enchant in one bag at once:
 --
 --   itemID  name                                        subclass  expansion
 --   244007  Enchant Helm - Empowered Rune of Avoidance   0         11   works
@@ -2895,8 +2891,8 @@ CP._IsOfferableEnchant = IsOfferableEnchant
 function CP:ScanBagsForEnchants()
     wipe(enchantCache)
     local NUM_BAG_SLOTS = NUM_BAG_SLOTS or 4
-    -- DEVIATION 2: the reference reads LE_ITEM_CLASS_ITEM_ENHANCEMENT, a legacy
-    -- global. Enum with a literal fallback matches ScanBagsForGems above.
+    -- Enum with a literal fallback (matches ScanBagsForGems above), never the
+    -- legacy LE_ITEM_CLASS_ITEM_ENHANCEMENT global.
     local ITEM_ENHANCEMENT = (Enum and Enum.ItemClass and Enum.ItemClass.ItemEnhancement) or 8
     for bag = 0, NUM_BAG_SLOTS do
         local numSlots = C_Container.GetContainerNumSlots(bag)
@@ -3093,8 +3089,8 @@ function CP:CreateEnchantRow(index)
             CP:ShowSlotHighlight(button.targetSlotID)
         end
         if button.enchantData and button.enchantData.link then
-            -- 40px right of the row put it well clear of the popup; Brandon
-            -- read that as detached. 8px keeps the gap without the drift.
+            -- 40px right of the row cleared the popup but read as detached.
+            -- 8px keeps the gap without the drift.
             GameTooltip:SetOwner(button, "ANCHOR_RIGHT", 8, 0)
             GameTooltip:SetHyperlink(button.enchantData.link)
             GameTooltip:Show()
@@ -3147,12 +3143,11 @@ function CP:ApplyEnchantFromBags(enchantData)
         self:HideSlotHighlight()
         return false
     end
-    -- DEVIATION 3: the reference calls the bare UseContainerItem global.
-    -- Blizzard's own code uses the namespaced form everywhere in 12.0.7
-    -- (ContainerFrame.lua:1342, SecureTemplates.lua:771), so the bare name is
-    -- at best a deprecated shim.
+    -- Namespaced form, never the bare UseContainerItem global: Blizzard's own
+    -- code uses C_Container everywhere in 12.0.7 (ContainerFrame.lua,
+    -- SecureTemplates.lua), so the bare name is at best a deprecated shim.
     -- This picks the enchant up; the player then clicks the item to apply it.
-    -- Deliberately NOT auto-applied -- same as the reference.
+    -- Deliberately NOT auto-applied.
     C_Container.UseContainerItem(enchantData.bagID, enchantData.slotID)
     self:HideEnchantPopup()
     self:HideSlotHighlight()

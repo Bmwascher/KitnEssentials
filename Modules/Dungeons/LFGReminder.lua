@@ -51,7 +51,7 @@ local C_Spell = C_Spell
 -- Indexed off _G, unlike its neighbours: C_LFGList is the one API this file
 -- touches that is NOT in .luacheckrc's allowlist, so a bare capture is a
 -- W113 (accessing undefined global) and every task gates on zero warnings.
--- Modules/Skinning/Frames/LFG.lua:122 already reaches this same API this way.
+-- Modules/Skinning/Frames/LFG.lua already reaches this same API this way.
 -- Do NOT widen .luacheckrc instead.
 local C_LFGList = _G.C_LFGList
 local GameTooltip = GameTooltip
@@ -64,12 +64,12 @@ local issecrettable = issecrettable or function() return false end
 -- teleport spellID. Season-volatile data matched by name against
 -- GetActivityInfoTable's fullName.
 --
--- English keys only. The reference also carries ten Cyrillic keys, which
--- were dropped deliberately: they cannot ever match. The lookup lowercases
+-- English keys only. Cyrillic keys were dropped deliberately: they cannot
+-- ever match. The lookup lowercases
 -- with Lua's string.lower, which is byte-wise and ASCII-only, so a
 -- capitalised Cyrillic name ("Небесный путь") never folds to the lowercase
--- key ("небесный путь") -- measured 2026-07-31 in this project's Lua 5.1.
--- They are dead entries upstream too, and KE ships no localisation, so
+-- key ("небесный путь") -- measured in this project's Lua 5.1.
+-- KE ships no localisation, so
 -- carrying them would imply support that does not exist. Adding real
 -- Russian support means Cyrillic-aware case folding, not these keys.
 local TELEPORT_BY_NAME = {
@@ -172,7 +172,7 @@ end
 BuildPopup = function()
     if popup then return popup end
     -- Resolved HERE, not at file scope: Dungeons.xml loads before
-    -- Skinning.xml (KitnEssentials.toc:21 vs :25), so a file-top capture
+    -- Skinning.xml in the toc, so a file-top capture
     -- is nil and every skin call silently no-ops.
     local S = KE.Skins
 
@@ -335,8 +335,8 @@ UpdateButtonVisuals = function()
         -- NeverSecret flag, so under SecretWhenCooldownsRestricted the
         -- comparison throws and a live cooldown renders as ready.
         -- GetSpellCooldownDuration is AllowedWhenTainted and returns a handle we
-        -- only truth-test, never read (SpellDocumentation.lua:265-282). Same
-        -- shape as Modules/Combat/Cursor.lua:826-831.
+        -- only truth-test, never read (SpellDocumentation.lua). Same
+        -- shape as Modules/Combat/Cursor.lua.
         local duration = C_Spell and C_Spell.GetSpellCooldownDuration
             and C_Spell.GetSpellCooldownDuration(sid)
         if duration then
@@ -352,7 +352,7 @@ end
 -- Resolve the accepted dungeon via a CLEAN string chain. The pcall below is
 -- LOAD-BEARING, not belt-and-braces: GetSearchResultInfo and
 -- GetActivityInfoTable are both SecretArguments = "AllowedWhenUntainted"
--- (LFGListInfoDocumentation.lua:378, :167), so a secret resultID throws.
+-- (LFGListInfoDocumentation.lua), so a secret resultID throws.
 ResolveDungeon = function(resultID)
     if not (C_LFGList and C_LFGList.GetSearchResultInfo) then return end
     pcall(function()
@@ -360,9 +360,9 @@ ResolveDungeon = function(resultID)
         if type(info) ~= "table" then return end
         local activityID = info.activityID
         -- issecretTABLE, not issecretvalue: a table can be non-secret itself
-        -- while its reads produce secrets (FrameScriptDocumentation.lua:227-231
-        -- vs :244-248). This is the only live path -- LfgSearchResultData has no
-        -- activityID field in 12.0.7 (LFGListInfoDocumentation.lua:905-910).
+        -- while its reads produce secrets (FrameScriptDocumentation.lua).
+        -- This is the only live path -- LfgSearchResultData has no
+        -- activityID field in 12.0.7 (LFGListInfoDocumentation.lua).
         if activityID == nil and info.activityIDs and not issecrettable(info.activityIDs) then
             activityID = info.activityIDs[1]
         end
@@ -383,9 +383,9 @@ end
 ShowPrompt = function()
     if not (LR.db and LR.db.Enabled ~= false) or not pendingSpellID then return end
     if InCombatLockdown() then
-        -- Deferral comes BEFORE BuildPopup, unlike the reference. BuildPopup
-        -- calls secureBtn:SetAttribute("type", "spell") on a protected frame
-        -- (<REF>:194), which combat blocks -- and OnEnable skips the build in
+        -- Deferral comes BEFORE BuildPopup, because BuildPopup calls
+        -- secureBtn:SetAttribute("type", "spell") on a protected frame,
+        -- which combat blocks -- and OnEnable skips the build in
         -- combat, so this path IS reachable with no popup at all: enable or
         -- /reload during combat, then join a group before it ends.
         -- PLAYER_REGEN_ENABLED builds it and finishes the show.
@@ -425,8 +425,7 @@ ClearPending = function()
     -- pendingAttrSpellID and pendingShow; if the group breaks before combat
     -- ends, clearing only pendingShow would leave PLAYER_REGEN_ENABLED to
     -- build a popup nobody asked for and arm it with the cancelled
-    -- dungeon's teleport. The reference does not clear it because its
-    -- ShowPrompt built the popup up front.
+    -- dungeon's teleport.
     pendingAttrSpellID = nil
 end
 
@@ -461,11 +460,10 @@ end
 
 function LR:PLAYER_REGEN_DISABLED()
     -- Remember that COMBAT is what took the prompt away, so REGEN_ENABLED can
-    -- put it back. HidePrompt clears pendingShow unconditionally, which is why
-    -- the reference never re-shows: by the time combat ends there is no flag
-    -- left saying a prompt was wanted. Deliberate deviation from the reference
-    -- (Brandon, 2026-08-01) -- the group and dungeon are unchanged, and the
-    -- end of the fight is exactly when the teleport becomes useful.
+    -- put it back. HidePrompt clears pendingShow unconditionally, so by the time
+    -- combat ends there is no flag left saying a prompt was wanted. Re-showing
+    -- is deliberate: the group and dungeon are unchanged, and the end of the
+    -- fight is exactly when the teleport becomes useful.
     combatHidden = (popup and popup:IsShown()) or nil
     HidePrompt()  -- teleports can't be cast in combat
 end
@@ -543,11 +541,11 @@ function LR:OnDisable()
     pendingHide = nil
     -- Do NOT use HidePrompt here. AceAddon disables our embeds immediately
     -- after this returns, and AceEvent's OnEmbedDisable calls
-    -- UnregisterAllEvents (Libs/AceEvent-3.0/AceEvent-3.0.lua:112-115) --
+    -- UnregisterAllEvents (Libs/AceEvent-3.0/AceEvent-3.0.lua) --
     -- so a hide that HidePrompt deferred via pendingHide could never be
     -- flushed: our PLAYER_REGEN_ENABLED is gone.
     --
-    -- KE:RunAfterCombat (Core/Globals.lua:154) owns its own frame and its
+    -- KE:RunAfterCombat (Core/Globals.lua) owns its own frame and its
     -- own PLAYER_REGEN_ENABLED registration, so it survives our disable.
     -- It runs the closure immediately when out of combat.
     if popup and popup:IsShown() then
@@ -570,7 +568,7 @@ end
 ---------------------------------------------------------------------------------
 
 -- Force-show the popup with sample contents so the user can drag it into
--- place from the config panel. The reference has no preview; KE adds one
+-- place from the config panel. It exists
 -- because dragging is the only way to position this frame and the only
 -- other route to seeing it is joining a real dungeon group.
 --

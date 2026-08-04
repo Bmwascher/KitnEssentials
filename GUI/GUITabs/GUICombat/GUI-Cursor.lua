@@ -744,7 +744,7 @@ end)
 
 -- The module's master enable renders ABOVE the tab strip: a disabled Cursor
 -- collapses to a lone header bar with no tabs and no content, matching every
--- other KE page. Precedent: GUI-BlizzardFrames.lua:435.
+-- other KE page.
 GUIFrame:RegisterTabbedContent("Cursor", {
     { id = "CursorGeneral", label = "Cursor" },
     { id = "CursorDispel",  label = "Dispel" },

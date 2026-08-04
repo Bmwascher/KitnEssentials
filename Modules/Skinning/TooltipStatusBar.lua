@@ -3,10 +3,9 @@
 -- ║  Purpose: Skins the progress bars that appear inside     ║
 -- ║           tooltips (reputation, experience).             ║
 -- ║  Owner: SkinTooltips calls the installer from OnEnable.  ║
--- ║  The reference dispatches this through its always-on     ║
--- ║  skin engine; KE's equivalent dispatch is gated on the   ║
--- ║  separate Blizzard Frames toggle, so it would never fire ║
--- ║  for a user who only enabled tooltips.                   ║
+-- ║  Not dispatched by the skin engine: that dispatch is     ║
+-- ║  gated on the separate Blizzard Frames toggle and would  ║
+-- ║  never fire for a user who only enabled tooltips.        ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -16,10 +15,10 @@ local _G = _G
 local hooksecurefunc = hooksecurefunc
 
 local function SkinBar(bar)
-    -- Ported verbatim, including the ordering quirk: this sets `skinned`
+    -- Ordering quirk, deliberate: this sets `skinned`
     -- before S.StatusBar runs, and S.StatusBar early-returns on that flag,
-    -- so its backdrop call is dead. That is upstream's behaviour and the
-    -- look this port is matching. Do not "fix" it.
+    -- so its backdrop call is dead. That dead call is the look we want.
+    -- Do not "fix" it.
     if S.data(bar).skinned then return end
     S.data(bar).skinned = true
     S.StripTextures(bar)
@@ -33,7 +32,7 @@ local installed = false
 
 function S.InstallTooltipStatusBarHook()
     if installed then return end
-    -- v3.5.840: ElvUI's approach restored -- they SecureHook
+    -- ElvUI's approach restored -- they SecureHook
     -- GameTooltip_ShowStatusBar to skin status bars. My v831 event
     -- driver came from the "hooks in a flow taint it" theory, which
     -- ElvUI disproves at scale. The real LootHistory seed was
@@ -41,10 +40,9 @@ function S.InstallTooltipStatusBarHook()
     if not _G.GameTooltip_ShowStatusBar then return end
     installed = true
     hooksecurefunc("GameTooltip_ShowStatusBar", function(tooltip)
-        -- The reference gates every one of its permanent hooks on
-        -- TT:IsEnabled() and documents disabled-means-inert in OnDisable
-        -- ($REF/Skinning/Tooltips.lua:621, :631-653, :731-734). This hook is
-        -- permanent for the same reason, so it carries the same gate.
+        -- Every permanent hook in the tooltip skin gates on TT:IsEnabled(),
+        -- because disabled must mean inert. This hook is permanent too, so it
+        -- carries the same gate.
         local TT = KitnEssentials:GetModule("SkinTooltips", true)
         if not (TT and TT:IsEnabled()) then return end
         local pool = tooltip and tooltip.statusBarPool

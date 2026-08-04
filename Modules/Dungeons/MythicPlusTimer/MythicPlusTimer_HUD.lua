@@ -76,19 +76,19 @@ MPT._objRowPool = MPT._objRowPool or KE.FramePool:New(
 local _sigBuf = {}
 
 -- Gap (px) on each side of the big timer's "/" separator — roughly half a
--- space glyph at the default 28px timer font. 2026-06-10 round-3 feedback:
--- pull both the elapsed and total sides inward toward the separator.
+-- space glyph at the default 28px timer font. Both the elapsed and total sides
+-- pull inward toward the separator.
 local TIMER_SEP_GAP = 3
 
 -- Gap (px) between the PB/delta text and the reserved timer-row width
--- (tightened 18 -> 8, 2026-07-02 in-game feedback: PB sat too far left).
+-- (tightened 18 -> 8, in-game feedback: PB sat too far left).
 local TIMER_PB_GAP = 8
 
 -- Gap (px) between the race-line label ("+2 Chest (26:24):") and the value's
 -- reserved box — the label pins LEFT of the box so the per-second countdown
 -- never re-flows it. The box follows the value's digit shape (re-measured
 -- once per crossing in ApplyLayout), so this gap is the WHOLE visible gap.
--- (4 -> 2, 2026-07-03 live feedback: hug the countdown.)
+-- (4 -> 2, live feedback: hug the countdown.)
 local RACE_VAL_GAP = 2
 
 ---------------------------------------------------------------------------------
@@ -226,7 +226,7 @@ function MPT:BuildHUD()
     -- timerPBText anchor is owned by ApplyLayout's stacking pass
     -- (reservation-tuck right-anchored). Anchoring it to timerText's left
     -- edge here made it ride the changing part's re-measured width every
-    -- tick (2026-07-02).
+    -- tick.
 
     local barTex = KE:GetStatusbarPath(self.db and self.db.BarTexture or "KitnUI")
 
@@ -410,7 +410,7 @@ function MPT:BuildHUD()
 
     -- Defensive: if BuildHUD was called lazily (e.g. from Render after OnEnable),
     -- register with EditMode now. Idempotent via self.editModeRegistered guard.
-    -- Mirrors KickTracker's pattern (KickTracker.lua:1282).
+    -- Mirrors KickTracker's pattern (KickTracker.lua).
     if self.RegWithEditMode then self:RegWithEditMode() end
 end
 
@@ -422,7 +422,7 @@ end
 -- clock, re-glued at every whole-second flip by OnTimerTick. Display is
 -- throttled to 10 Hz (WarpDeplete's cadence) and shows ONE decisecond
 -- digit — a 60 Hz three-digit readout churned unreadably and its
--- proportional-font width danced at frame rate (user feedback 2026-07-02);
+-- proportional-font width danced at frame rate (user feedback);
 -- the frozen completion time keeps the full .mmm via RenderTimer. The
 -- width reservation stays the .mmm template, so completion never moves
 -- the PB text. Detach-when-idle: the script exists only while
@@ -583,7 +583,7 @@ function MPT:RenderTimer()
         local col = diff <= 0 and (MPT.db.SplitAheadColor or {0.25, 0.88, 0.82})
                               or (MPT.db.SplitBehindColor or {1, 0.34, 0.34})
         local sign = diff < 0 and "-" or "+"
-        -- Unpadded ("+2:10", not "+02:10") — user direction 2026-07-18.
+        -- Unpadded ("+2:10", not "+02:10") — user direction.
         local dStr = (diff == 0) and "0:00" or _FmtShort(abs(diff))
         MPT.SetTextGated(f.timerPBText, format("%s%s%s|r", Hex(col), sign, dStr))
         f.timerPBText:SetAlpha(1)
@@ -717,7 +717,7 @@ local function _PlaceLabel(fs, timerBar, barW, cutoff, maxTime, place)
         -- Right-aligned to the tick, fully above the bar — the same stagger
         -- rule as EDGE. Centering collided near the bar end: the centered
         -- +1 label clipped the frame edge, and right-aligning only the end
-        -- label jammed it into the centered +2 (2026-07-02 live feedback,
+        -- label jammed it into the centered +2 (live feedback,
         -- rounds 1 + 2).
         fs:SetPoint("BOTTOMRIGHT", timerBar, "TOPLEFT", x - 3, 2)
     elseif place == "BELOW" then
@@ -828,7 +828,7 @@ function MPT:RenderThresholds()
                 end
                 local sign = (state == "OVER" or state == "LOCKED_MISSED") and "+" or ""
                 -- Tier 1 races bare completion, not an upgrade chest — the
-                -- community term is "Timed" (user direction 2026-07-02).
+                -- community term is "Timed" (user direction).
                 local label = tier == 1 and "Timed" or format("+%d Chest", tier)
                 -- Label and value are SEPARATE FontStrings: the label is
                 -- static per tier while the value re-measures every second,
@@ -850,7 +850,7 @@ function MPT:RenderThresholds()
                 -- outgrown; the ticking positions use the project's
                 -- widest-digit "8" stand-in. An all-8s template kept a dead
                 -- half-digit of slack whenever the leading digit was a
-                -- narrow "1" (2026-07-03 live feedback). The label re-anchors
+                -- narrow "1" (live feedback). The label re-anchors
                 -- only when the shape changes (leading-digit step,
                 -- digit-count crossing, sign flip — minute-scale events), so
                 -- it hugs the countdown at RACE_VAL_GAP without riding the
@@ -1104,7 +1104,7 @@ end
 -- BAR color: db.ForcesColor, or the quintile palette when ForcesBandedColors
 -- is on (Full band at 100%). The bar never recolors at completion — the
 -- percent/count TEXT flips to db.ForcesCompleteColor instead, over its usual
--- db.ForcesTextColor (2026-07-02 feedback; same ownership rule as the timer
+-- db.ForcesTextColor (feedback; same ownership rule as the timer
 -- bar: the number conveys state, the fill stays put).
 --
 -- ForcesBandPalette bands: [1]=0-20%, [2]=20-40%, [3]=40-60%,
@@ -1183,7 +1183,7 @@ function MPT:RenderForces()
 
     -- Forces PB: bare PB target after the %/count while filling; once capped,
     -- a completion PREFIX to the LEFT of the forces text — "<delta> [<time>]
-    -- <forces text>" (user direction 2026-07-18, screenshot parity; no extra
+    -- <forces text>" (user direction, screenshot parity; no extra
     -- separator — the " - " seen in COUNT_PERCENT belongs to that format).
     -- The delta keeps the boss-row style/gate (ShowPBDelta, ahead/behind
     -- colors, bare unpadded); the bracketed forces clear time shares the boss
@@ -1289,7 +1289,7 @@ function MPT:RenderObjectives()
             timeFS:SetAlpha(1)  -- clear a possible pending-row PBOpacity dim on this pooled slot
             -- "Show Clear Times" gates the clear-time text itself;
             -- the PB delta is self-contained and independently gated below.
-            -- Row style (user direction 2026-07-18): bracketed unpadded clear
+            -- Row style (user direction): bracketed unpadded clear
             -- time + bare unpadded delta — "[9:09] +0:27", not "09:09 (+00:30)".
             if db.ShowObjectiveTimes ~= false then
                 local doneHex = Hex(db.ObjectiveDoneColor or { 0, 1, 0.14 })
@@ -1386,7 +1386,7 @@ function MPT:ApplyLayout()
 
     -- Locals shared by both the config section and the stacking pass below.
     local PAD  = 12
-    local ROW  = db.RowSpacing or 2   -- user slider (default 2 = the 2026-06-10 dense look)
+    local ROW  = db.RowSpacing or 2   -- user slider (default 2 = the dense look)
     local barW = db.BarWidth  or 300
     local barH = db.BarHeight or 14
     local bars = self.frames.bars
@@ -1438,7 +1438,7 @@ function MPT:ApplyLayout()
 
         -- Race-line value reservation SEED: "24:58" is the widest REAL time
         -- a value can render — the +3 countdown never exceeds 25:00 (user
-        -- cap 2026-07-03), seconds never pass :59. This is only the
+        -- cap), seconds never pass :59. This is only the
         -- pre-first-render fallback: the stacking pass re-measures the box
         -- against the value's live digit shape (published by
         -- RenderThresholds) so the label hugs the countdown instead of
@@ -1476,7 +1476,7 @@ function MPT:ApplyLayout()
         f:SetScale(db.Scale or 1.0)
 
         -- KE:ApplyFramePosition sets frame strata internally from Config.Strata
-        -- (Core/Globals.lua:651) — no separate SetFrameStrata call needed here.
+        -- (Core/Globals.lua) — no separate SetFrameStrata call needed here.
         KE:ApplyFramePosition(f, {
             AnchorFrom = db.SelfPoint, AnchorTo = db.AnchorPoint,
             XOffset    = db.XOffset,   YOffset   = db.YOffset,
@@ -1518,7 +1518,7 @@ function MPT:ApplyLayout()
         else  -- EDGE (default): straddles the bar's BOTTOM edge at the right
               -- corner (the edge-straddling look) — half in / half out; the stacking
               -- pass reserves the protruding half-line. +2 y-bias rides the
-              -- text slightly higher into the bar (2026-06-10 feedback).
+              -- text slightly higher into the bar (feedback).
             f.forcesText:SetPoint("RIGHT", bars.forcesWrap, "BOTTOMRIGHT", -2, 2)
         end
     end
@@ -1605,7 +1605,7 @@ function MPT:ApplyLayout()
         -- PB/delta text: tucked just left of the RESERVED worst-case timer
         -- width (f._timerResW, config pass) — close to the timer, and still
         -- jitter-proof because it aligns to the reservation, never the live
-        -- string (2026-07-02 design: reservation-tuck).
+        -- string (design: reservation-tuck).
         f.timerPBText:ClearAllPoints()
         f.timerPBText:SetPoint("RIGHT", f, "TOPRIGHT",
             -(PAD + (f._timerResW or 0) + TIMER_PB_GAP), y - rowH / 2)
@@ -1732,7 +1732,7 @@ end
 
 ---------------------------------------------------------------------------------
 -- ApplySettings — single entry for GUI callbacks (Tasks 5.4+) and KE's
--- duck-typed refresh walk (Core/Main.lua:136-142, ProfileManager:419).
+-- duck-typed refresh walk (Core/Main.lua, ProfileManager:419).
 -- Busts the length gate, config-skip gate, and threshold geometry cache;
 -- re-applies bar textures + background textures; calls ApplyLayout
 -- (fonts/sizes/pos/scale/strata/backdrop); then requests a debounced

@@ -581,8 +581,8 @@ end
 -- rt = the nameplate runtime (for unit + token invalidation of stale timers).
 function DTrash:ScheduleAlert(rt, npcID, spellID, spellData, nextStart)
     if not rt or not spellData or self:IsTrashSpellDisabled(npcID, spellID) then return end
-    -- Arm-time blackout gate (the reference suppresses at schedule/registration
-    -- time, not just display): a cast resolved mid-blackout must not arm a
+    -- Arm-time blackout gate — suppression happens at schedule/registration
+    -- time, not just display: a cast resolved mid-blackout must not arm a
     -- deferred timer that matures — and passes the ShowAlert gate — after
     -- ENCOUNTER_END. Identity recorded during a blocklisted encounter is
     -- exactly the mislabeled kind the blackout exists to silence.
@@ -615,9 +615,7 @@ function DTrash:ScheduleAlert(rt, npcID, spellID, spellData, nextStart)
         -- Bump the key's token so any OLDER still-pending deferred arm no-ops
         -- at its token check below: without this, an early re-cast that lands
         -- in the immediate window leaves the previous deferred arm alive, and
-        -- it later revives a countdown to a schedule that no longer exists
-        -- (the references keep exactly ONE mutable timer per runtime+spell,
-        -- refreshed in place, so a stale second arm can't exist there).
+        -- it later revives a countdown to a schedule that no longer exists.
         rt._alertTokens = rt._alertTokens or {}
         rt._alertTokens[key] = (rt._alertTokens[key] or 0) + 1
         self:ShowAlert(key, lead, mode, label, color, iconID, sounds, decimalUnder)
@@ -632,9 +630,8 @@ function DTrash:ScheduleAlert(rt, npcID, spellID, spellData, nextStart)
     -- beyond the reveal window, so a visible countdown is counting to an
     -- OBSOLETE moment (the mob cast earlier than predicted) — left up, it
     -- runs to a stale zero, plays the "cast moment" cue seconds late, and
-    -- contradicts the instantly-corrected plate icon. The reference re-times
-    -- its one mutable timer in place and its lead-window clamp hides it the
-    -- same tick. HideAlert plays no sound; the stable-slot cache returns the
+    -- contradicts the instantly-corrected plate icon.
+    -- HideAlert plays no sound; the stable-slot cache returns the
     -- re-revealed alert to the same stack position.
     if self.alerts[key] then self:HideAlert(key) end
     C_Timer.After(lead - revealAt, function()
@@ -642,19 +639,18 @@ function DTrash:ScheduleAlert(rt, npcID, spellID, spellData, nextStart)
         -- token: a recycled plate token hosts a FRESH runtime whose counter
         -- restarts at 1, so a same-npcID mob re-scheduling the same spell
         -- would collide with this timer's token and revive a dead mob's
-        -- countdown. Comparing table identity (as the reference's captured-
-        -- runtime guards do) makes any plate re-add a guaranteed no-op.
-        -- Cache-window exception (reference: every cancel entry point no-ops
-        -- while the runtime is pending recovery): a reveal maturing while
+        -- countdown. Comparing table identity makes any plate re-add a
+        -- guaranteed no-op.
+        -- Cache-window exception — every cancel entry point no-ops
+        -- while the runtime is pending recovery: a reveal maturing while
         -- rt's plate is flickered off still fires on schedule — the cache
         -- owns the real cancel (a restore wipes _alertTokens and re-arms
         -- under the new key; an expiry sweeps the shown frame by npcID).
         local live = self.tracked[rt.unit] == rt or rt._cachePending == true
         if not live or not rt._alertTokens or rt._alertTokens[key] ~= token then return end
         -- Re-check the per-spell gates at FIRE time: a mid-dungeon GUI disable
-        -- or role change must kill this pending reveal — the reference rebuilds
-        -- every schedule through its gates on each config revision; re-checking
-        -- where armed output actually fires reproduces that outcome.
+        -- or role change must kill this pending reveal, and re-checking where
+        -- armed output actually fires is what makes that happen.
         if self:IsTrashSpellDisabled(npcID, spellID)
             or not self:PlayerSeesTrashSpell(self.currentMapID, npcID, spellID) then return end
         self:ShowAlert(key, revealAt, mode, label, color, iconID, sounds, decimalUnder)
@@ -663,29 +659,25 @@ end
 
 -- Observed-cast-start cue: a third per-spell sound slot fired the moment a
 -- tracked mob's REAL cast bar is observed.
--- The references dispatch their cast-start voice from the live START event
--- and force-DISABLE the countdown-zero cue for it ("CD zero means available,
--- not casting"); KE's onShow/onHide slots are both prediction-fired, so
+-- It exists because the onShow/onHide slots are both prediction-fired, so
 -- neither ever fires at the observed cast — early casts silently swallow the
 -- onHide cue via refresh-in-place, and a stunned mob's countdown plays it
--- with nothing casting. The spell is identified the way the reference
--- resolves its start-voice spell, DEFERRED one cue window so the +0.10s
--- cast-start fingerprint sampler lands first (the reference's
--- CAST_START_VOICE_TARGET_DELAY = 0.12 serves the same purpose): the sampled
+-- with nothing casting. A countdown-zero cue cannot stand in: CD zero means
+-- available, not casting. The spell is identified DEFERRED one cue window so
+-- the +0.10s cast-start fingerprint sampler lands first: the sampled
 -- start fingerprints are HARD eligibility filters ahead of the
--- nearest-predicted-start scoring (the reference gates every voice candidate
--- on its fingerprints the same way).
+-- nearest-predicted-start scoring.
 -- That filter — not the schedule — is what separates same-kind spells whose
 -- predictions have drifted together: Alpha Eagle's Gust and Raging Screech
 -- curate opposite targetClearOnCastStart, and a synchronous,
 -- fingerprint-blind pick played the wrong spell's sound in the field.
 -- Kind rule: cast → any curated cast, including a two-phase spell's cast
 -- phase; channel → channel-ONLY (a two-phase channel start is the
--- transition, its cue fired at the cast). Ambiguity within the reference's
+-- transition, its cue fired at the cast). Ambiguity within the
 -- 0.05s tie margin plays nothing — never a guess. Once per cast instance
 -- (activeCastSeq). Called from BeginCast on every start.
-local CAST_START_CUE_TIE = 0.05    -- reference's inline 0.05s tie margin
-local CAST_START_CUE_DELAY = 0.12  -- reference: CAST_START_VOICE_TARGET_DELAY
+local CAST_START_CUE_TIE = 0.05    -- two candidates this close = no cue
+local CAST_START_CUE_DELAY = 0.12  -- one cue window, clears the +0.10s sampler
 
 function DTrash:PlayObservedCastStartCue(rt, kind)
     if not (rt and rt.activeCastSeq) then return end
@@ -698,9 +690,8 @@ end
 function DTrash:FireObservedCastStartCue(rt, kind, seq)
     if self.tracked[rt.unit] ~= rt then return end
     -- Still THIS cast: a kick/failure inside the window clears the active
-    -- kind, a new start bumps the seq — either way the cue died with it
-    -- (reference: the delayed voice re-resolves and bails when the runtime
-    -- moved on).
+    -- kind, a new start bumps the seq — either way the cue died with it: the
+    -- delayed pick re-resolves and bails when the runtime moved on.
     if rt.activeCastSeq ~= seq or rt.activeCastKind ~= kind then return end
     if rt._castStartCuedSeq == seq then return end
     local npcID = rt.matchedNPCID
@@ -753,12 +744,11 @@ end
 -- Move a departed unit's still-visible alerts to its restored plate token
 -- (TrashCache flicker recovery): same frames, same stable stack slots, new
 -- unit-prefixed keys — the bars keep counting instead of being torn down and
--- re-emitted (the reference re-points its scheduler timers the same way).
+-- re-emitted.
 -- Deferred timers are NOT re-pointed here; the cache kills them via their
 -- token table and re-arms from the anchors. npcID (from the restored row)
 -- scopes the move to the restored mob's own keys — a recycled token may
--- already carry a DIFFERENT live mob's bars, which must stay put (the
--- reference rebinds only timers owned by the restored runtime object).
+-- already carry a DIFFERENT live mob's bars, which must stay put.
 function DTrash:RekeyUnitAlerts(oldUnit, newUnit, npcID)
     if not oldUnit or not newUnit or oldUnit == newUnit then return end
     local oldPrefix = npcID and (oldUnit .. ":" .. npcID .. ":") or (oldUnit .. ":")
@@ -808,9 +798,9 @@ end
 -- npcID (optional) scopes the sweep to that mob's keys alone: alert keys embed
 -- npcID, and a token recycled inside the cache restore window can host TWO
 -- runtimes' output at once (the cached mob's still-counting bars + the new
--- mob's). The reference never has this problem because its cancels are keyed
--- to the runtime object, not the reusable token — the npcID scope is KE's
--- equivalent isolation. nil npcID keeps the full-token sweep (teardowns).
+-- mob's). Keys are built from the reusable token, not the runtime object, so
+-- the npcID scope is what isolates them. nil npcID keeps the full-token sweep
+-- (teardowns).
 function DTrash:HideUnitAlerts(unit, npcID)
     if not unit then return end
     local prefix = npcID and (unit .. ":" .. npcID .. ":") or (unit .. ":")

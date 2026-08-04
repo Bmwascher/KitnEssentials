@@ -2,8 +2,7 @@
 -- ║  GUI-MythicPlusTimer.lua                                 ║
 -- ║  GUI: Mythic+ Timer                                      ║
 -- ║  Purpose: Configuration panel for the MythicPlusTimer    ║
--- ║           module. Four tabs (2026-06-11 restructure,     ║
--- ║           was six): General (the HUD frame itself),      ║
+-- ║           module. Four tabs: General (the HUD frame),    ║
 -- ║           Features (per-element toggles + behavior),     ║
 -- ║           Display (all colors, then all fonts),          ║
 -- ║           Enemy Overlay (nameplate/tooltip subsystem).   ║
@@ -272,8 +271,7 @@ BuildGeneralTab = function(scrollChild, yOffset, db, manager)
     layoutCard:AddRow(rowL3, Theme.rowHeightLast, 0)
     yOffset = layoutCard:GetNextOffset()
 
-    -- Card 4: Thresholds (+3 / +2 / +1 chest timers — split out of Layout,
-    -- 2026-06-11 restructure feedback)
+    -- Card 4: Thresholds (+3 / +2 / +1 chest timers — split out of Layout)
     local threshCard = GUIFrame:CreateCard(scrollChild, "Thresholds (+3 / +2 / +1 Timers)", yOffset)
     manager:Register(threshCard, "all")
     local rowT = GUIFrame:CreateRow(threshCard.content, Theme.rowHeight)

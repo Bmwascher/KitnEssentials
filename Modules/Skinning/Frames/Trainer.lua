@@ -58,7 +58,7 @@ local function Skin()
         S.Button(_G.ClassTrainerTrainButton)
     end
 
-    -- v3.5.729: also targets a Train All button, if one exists. Both
+    -- also targets a Train All button, if one exists. Both
     -- names below are third-party globals -- KitnEssentials has no
     -- Train All button of its own. The OnShow hook and the S.WaitFor
     -- poll below catch a button created after this skin already ran.
@@ -73,7 +73,7 @@ local function Skin()
         end
     end
     SkinEUIButton()
-    -- v3.5.853: was a flat 0.5s retry for EllesmereUI's button (half a
+    -- was a flat 0.5s retry for EllesmereUI's button (half a
     -- second unskinned). Poll per frame until it exists.
     S.WaitFor(function()
         return _G.EUI_TrainAllButton ~= nil or _G.AES_TrainAllButton ~= nil

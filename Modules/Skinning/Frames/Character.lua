@@ -22,18 +22,13 @@ local TITLE_FONT = 13
 local BRAND = S.palette.brand
 
 -- Per-slot item level + gem icons used to be drawn here (EnsureSlotDisplay /
--- UpdateSlotDisplay / GetEmptySocketIcons, ported from the reference skin).
+-- UpdateSlotDisplay / GetEmptySocketIcons).
 -- Removed: KE already draws all three from Modules/QoL/CharacterPanel.lua, at
 -- anchors within 2px of these, so every character slot rendered them TWICE
--- whenever this skin was on. The reference has no such overlap -- there the
--- skin owns the paperdoll and its info module deliberately stands down (its
--- CharacterScreen.lua:1710 guards on the skin's own store before drawing, and
--- reads the skin's fontstring to anchor enchant text). KE's panel was ported
--- first, before this skin existed, so it grew its own copy instead.
+-- whenever this skin was on.
 -- CharacterPanel is the single owner now: it ships enabled by default, this
 -- skin ships disabled, and it also covers the inspect frame, which this never
--- did. KE.GetEmptySocketIcons went with them -- it was exported for the
--- reference's info module and nothing in KE ever called it.
+-- did. KE.GetEmptySocketIcons went with them -- nothing in KE called it.
 
 local function UpdateStatsPane()
     local pane = _G.CharacterStatsPane
@@ -93,8 +88,8 @@ local function SkinStatsPane()
         end
     end
 
-    -- v3.5.843: CharacterFrameInset added -- ElvUI's charframe list
-    -- (their Character.lua:392-398) has it and ours didn't, so
+    -- CharacterFrameInset added -- ElvUI's charframe list
+    -- (their Character.lua) has it and ours didn't, so
     -- Blizzard's inset art was never stripped. It only stayed hidden
     -- while our old KillTexture NOOP'd the setters addon-wide; once
     -- that went (v828/v838), the art came back on tab switches.
@@ -114,9 +109,9 @@ local function SkinSidebarTabs()
     for i = 1, 3 do
         local tab = _G["PaperDollSidebarTab" .. i]
         if tab and not tab.aeTabSkinned then
-            -- v3.5.837 (art flashed on open): SetAlpha(0) is
+            -- (art flashed on open): SetAlpha(0) is
             -- state -- Blizzard re-dresses it every show. ElvUI Kills
-            -- this exact region (Character.lua:239 tab.TabBg:Kill()).
+            -- this exact region (Character.lua tab.TabBg:Kill()).
             if tab.TabBg then S.Kill(tab.TabBg) end
             S.Backdrop(tab)
             if tab.Icon and tab.Icon.SetAllPoints then tab.Icon:SetAllPoints() end
@@ -207,7 +202,7 @@ local function SkinEquipmentManagerPane()
     ShrinkSetButtons()
 end
 
--- v3.5.838: ElvUI's exact flyout treatment (their Character.lua
+-- ElvUI's exact flyout treatment (their Character.lua
 -- EquipmentDisplayButton): clear state art by passing E.ClearTexture
 -- (fileID 0) to the BUTTON's setters. No contact with the texture
 -- objects at all -- which is what tainted this display loop for
@@ -223,7 +218,7 @@ local function SkinFlyoutButton(button)
     S.ItemButton(button)
     KillFlyoutStates(button)
 
-    -- v3.5.825: the per-button method hooks (SetNormalTexture etc.,
+    -- the per-button method hooks (SetNormalTexture etc.,
     -- IconBorder Show-suppressor) fired INSIDE DisplayButton -- before
     -- the location write -- and were the remaining taint injectors
     -- (v824 post-hoc audit: even button1 tainted). No hooks at all
@@ -239,7 +234,7 @@ end
 local function UpdateFlyoutILvl(button) -- luacheck: ignore 211/UpdateFlyoutILvl
     if not button then return end
     if not S.data(button).flyoutILvl then
-        -- v3.5.827: fontstring ref moved off the button (tainted-key
+        -- fontstring ref moved off the button (tainted-key
         -- contamination, see S.ItemButton).
         local t = button:CreateFontString(nil, "OVERLAY")
 
@@ -253,7 +248,7 @@ local function UpdateFlyoutILvl(button) -- luacheck: ignore 211/UpdateFlyoutILvl
     local INVALID = 4294967295
     local itemLoc
     if type(loc) == "table" then
-        -- v3.5.769 ("compare table with number" from the
+        -- ("compare table with number" from the
         -- Item Upgrade UI): Midnight's upgrade flyout populates
         -- button.location with an ItemLocation-style TABLE instead of
         -- the legacy packed integer. Feeding that to
@@ -301,8 +296,8 @@ end
 local function EquipmentFlyoutSkin()
     local flyout = _G.EquipmentFlyoutFrame
     if not flyout then return end
-    -- v3.5.838: ElvUI's exact three lines for the flyout chrome
-    -- (their Character.lua:400-402): StripTextures the highlight,
+    -- ElvUI's exact three lines for the flyout chrome
+    -- (their Character.lua): StripTextures the highlight,
     -- alpha-0 bg1, DisableDrawLayer the rest. They never Kill these,
     -- so neither do we now that the kill primitive carries their
     -- Kill semantics.
@@ -327,9 +322,9 @@ local function EquipmentFlyoutSkin()
     if flyout.buttons then
         for _, button in ipairs(flyout.buttons) do
             SkinFlyoutButton(button)
-            KillFlyoutStates(button) -- v3.5.825: re-kill per pass (no hooks)
+            KillFlyoutStates(button) -- re-kill per pass (no hooks)
             if button.IconBorder then button.IconBorder:SetAlpha(0) end
-            -- v3.5.826: flyout ilvl RETIRED (ElvUI parity -- their skin
+            -- flyout ilvl RETIRED (ElvUI parity -- their skin
             -- is art-only on the flyout, zero item-data reads; the ilvl
             -- feature is WindTools', same mid-flow architecture as our
             -- old code, presumably same Midnight bug). All flyout item-data
@@ -348,7 +343,7 @@ local function EquipmentFlyoutNav()
     S.data(navi).skinned = true
 end
 
--- v3.5.843: ElvUI's per-tab inset backdrop (their showInsetBackdrop +
+-- ElvUI's per-tab inset backdrop (their showInsetBackdrop +
 -- UpdateCharacterInset, hooked on CharacterFrameMixin.ShowSubFrame).
 -- The list tabs want a dark inset behind their rows; the paperdoll
 -- does not -- that is the backdrop  saw sticking around after
@@ -365,13 +360,13 @@ local function UpdateCharacterInset(a, b)
     local inset = _G.CharacterFrameInset
     if not inset then return end
 
-    -- v3.5.845 (art returns on Currency -> Reputation ->
+    -- (art returns on Currency -> Reputation ->
     -- Character): Blizzard re-dresses the inset on every tab switch,
     -- so a one-time strip at skin cannot hold -- and our strip is
     -- state-only now (correctly: no more NOOP surgery). We are already
     -- hooked on ShowSubFrame for the backdrop, so re-strip here too.
     -- Cheap: a handful of regions, only on tab change.
-    -- v3.5.848: the dump showed CharacterFrame's OWN NineSlice art
+    -- the dump showed CharacterFrame's OWN NineSlice art
     -- (UI-Frame-Metal-*) returning too, not just the insets -- so
     -- re-strip the parent here as well. With NineSlice now in the
     -- region list, this clears the pieces themselves.
@@ -385,14 +380,14 @@ local function UpdateCharacterInset(a, b)
 end
 
 
--- v3.5.851 THE FIX ("backdrop comes back after clicking tabs").
+-- THE FIX ("backdrop comes back after clicking tabs").
 -- /aedump named it: CharacterModelScene's four BACKGROUND textures
 -- (4709136-9). Blizzard's SetPaperDollBackground() re-SetTextures all
 -- four (+ a race-based BackgroundOverlay alpha) and it is called from
 -- PaperDollFrame_OnShow -- i.e. EVERY time you come back to the
 -- Character tab. No amount of stripping at skin time can survive that;
 -- the re-dresser has to be hooked. SLE hides exactly these four by
--- name in their armory module (their character.lua:309-317) -- the
+-- name in their armory module (their character.lua) -- the
 -- feature  remembered -- so this is that, driven from Blizzard's
 -- own function so it can never be out of sync.
 local BG_PIECES = { "BackgroundTopLeft", "BackgroundTopRight",
@@ -421,18 +416,18 @@ local function Skin()
     local frame = _G.CharacterFrame
     if not frame then return end
     S.Frame(frame)
-    -- v3.5.837: ElvUI Kills the portrait here too
-    -- (their Character.lua:411 CharacterFramePortrait:Kill()).
+    -- ElvUI Kills the portrait here too
+    -- (their Character.lua CharacterFramePortrait:Kill()).
     if _G.CharacterFramePortrait then S.Kill(_G.CharacterFramePortrait) end
 
-    -- v3.5.851: hook Blizzard's paperdoll background applier.
+    -- hook Blizzard's paperdoll background applier.
     KillPaperDollBackground()
     if _G.SetPaperDollBackground and not S.data(frame).pdBgHook then
         S.data(frame).pdBgHook = true
         hooksecurefunc("SetPaperDollBackground", KillPaperDollBackground)
     end
 
-    -- v3.5.843: inset backdrop, driven per tab exactly as ElvUI does.
+    -- inset backdrop, driven per tab exactly as ElvUI does.
     local inset = _G.CharacterFrameInset
     if inset and not S.GetBackdrop(inset) then
         S.Backdrop(inset)
@@ -490,7 +485,7 @@ local function Skin()
     end
 end
 
--- v3.5.839: ElvUI's exact registrations (their Character.lua:407-408).
+-- ElvUI's exact registrations (their Character.lua).
 -- Every piece of machinery that used to sit here -- the event-driven
 -- deferred driver (v824), the 0.1s panel ticker (v825), the post-hoc
 -- issecurevariable audit -- was built on the wrong theory that hooking

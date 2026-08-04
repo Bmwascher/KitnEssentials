@@ -1535,8 +1535,8 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
     manager:Register(retainSlider, "all")
     cardSeg:AddRow(rowRetain, Theme.rowHeight)
 
-    -- 80px, not the usual 65: the third bullet wraps to a 4th body line (65 fits
-    -- title + 3 at the small font's ~16px line pitch; smoke 2026-07-24 clipped it).
+    -- 80px, not the usual 65: the third bullet wraps to a 4th body line, and 65
+    -- fits only a title plus 3 at the small font's ~16px line pitch.
     local segNoteRow = GUIFrame:CreateRow(cardSeg.content, 80)
     local segNote = GUIFrame:CreateText(segNoteRow,
         KE:ColorTextByTheme("Note"),

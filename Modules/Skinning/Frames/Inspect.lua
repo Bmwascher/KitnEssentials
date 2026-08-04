@@ -44,8 +44,8 @@ local function Skin()
     local model = _G.InspectModelFrame
     if model then
         S.StripTextures(model)
-        -- v3.5.767: no S.Backdrop here. With the background scene art
-        -- killed (v3.5.766) the backdrop rendered as an opaque black
+        -- no S.Backdrop here. With the background scene art
+        -- killed the backdrop rendered as an opaque black
         -- box; the Character pane's model scene is strip-only and
         -- transparent, so this now matches it.
         for _, name in next, { "TopLeft", "TopRight", "Top", "Left", "Right",
@@ -53,7 +53,7 @@ local function Skin()
             local border = _G["InspectModelFrameBorder" .. name]
             if border then S.KillTexture(border) end
         end
-        -- v3.5.766: background scene art killed to match the Character
+        -- background scene art killed to match the Character
         -- pane (its CharacterModelScene is StripTextures'd by the skin).
         -- The dark S.Backdrop above shows through instead. The old
         -- desaturation-preservation block is gone with the art.

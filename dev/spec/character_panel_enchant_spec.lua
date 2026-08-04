@@ -1,13 +1,12 @@
 -- Tier 2: the enchant helper's two testable pieces.
 --
 -- Scope is deliberate (AGENTS.md tiered test policy). The popup, its rows and
--- the bar anchoring are a port of NorskenUI v6 CharacterPanel.lua:1269-1562 and
--- are verified by diffing against that source plus an in-game smoke -- a spec
--- there would only encode the porter's reading. What IS covered:
+-- the bar anchoring are verified by an in-game smoke -- a spec
+-- there would only encode the author's reading. What IS covered:
 --
---   1. GetEnchantTargetSlots' keyword resolution. This is NOT a verbatim port:
---      the reference walks its keyword table with pairs() and returns on the
---      first hit, so a tooltip matching two keywords resolves differently
+--   1. GetEnchantTargetSlots' keyword resolution. Walking the keyword table
+--      with pairs() and returning on the
+--      first hit resolves a two-keyword tooltip differently
 --      between sessions. KE sorts longest-key-first instead. That is invented
 --      branching logic, so it gets a test.
 --   2. The combat refusal on applying an enchant. A guard rule that fails
@@ -77,8 +76,8 @@ describe("Enchant helper: target slot resolution", function()
     end)
 
     -- THE REGRESSION GUARD. "Enchant 2H Weapon - ..." contains both the
-    -- "2h weapon" keyword ({16}) and the "weapon" keyword ({16, 17}). Under the
-    -- reference's pairs() walk either could win. Longest-key-first must pick the
+    -- "2h weapon" keyword ({16}) and the "weapon" keyword ({16, 17}). Under a
+    -- pairs() walk either could win. Longest-key-first must pick the
     -- more specific one every time. Revert enchantKeywordOrder to a pairs()
     -- loop and this starts failing intermittently.
     it("prefers the most specific keyword when a tooltip matches two", function()

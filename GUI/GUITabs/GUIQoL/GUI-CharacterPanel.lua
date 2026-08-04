@@ -416,9 +416,7 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
                 local CH = GetCompareHeaderModule()
                 if CH then CH:ApplySettings() end
                 -- Turning it ON styles the header immediately; turning it OFF
-                -- cannot un-style it, so that direction needs a reload. Same
-                -- helper and same one-directional idiom as
-                -- GUI/GUITabs/GUISkinning/GUI-UIWidgets.lua:75.
+                -- cannot un-style it, so that direction needs a reload.
                 if not checked then KE:FlagReloadNeeded() end
             end,
             tooltip = "Styles the \"Equipped\" header on item comparison tooltips to match the rest of the tooltip skin. Turning it off needs a reload.",

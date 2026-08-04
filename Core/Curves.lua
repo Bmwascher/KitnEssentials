@@ -33,7 +33,7 @@ KE.curves.HealthMissingAlpha:AddPoint(1, 0)
 -- like Extract Essence): alpha 1 while remaining <= 60s, 0 above. Evaluated
 -- via LuaDurationObject:EvaluateRemainingDuration so the secret duration
 -- never enters Lua; the evaluated result is itself SECRET when the duration
--- is secret (in-game confirmed 2026-07-03) — feed it only to alpha /
+-- is secret (confirmed in game) — feed it only to alpha /
 -- statusbar-value sinks or truth tests, never Lua arithmetic. Consumers:
 -- TargetedSpells, DungeonCasts, CastbarHelpers.
 KE.curves.IsLongCast = C_CurveUtil.CreateCurve()

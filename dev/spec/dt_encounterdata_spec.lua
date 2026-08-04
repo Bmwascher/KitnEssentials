@@ -3,7 +3,7 @@
 -- SILENTLY in-game: a bad castType/role is never read back, a dangling
 -- phantomFollowupOf never spawns, an unknown displayText quietly falls back
 -- to the default bar color. The lint half walks every spell entry against
--- the schema documented at EncounterData.lua:6-344; the resolution half
+-- the schema documented at EncounterData.lua; the resolution half
 -- drives the REAL (file-local) ResolveDisplayPreset through DT:CreateBar
 -- and the exposed DT._ResolvePresetByText.
 -- Sound keys (spell/phase sound + soundOnHide) are deliberately NOT
@@ -11,7 +11,7 @@
 -- Core/Globals.lua).
 local L = require("dev.spec._ke_loader")
 
--- Schema enums, EncounterData.lua:13-25. castType is curation metadata
+-- Schema enums, EncounterData.lua. castType is curation metadata
 -- (never read by DungeonTimers.lua) but the schema requires it on every
 -- cast-driven entry; spawnOnMessage / phantomFollowupOf entries opt out of
 -- the BigWigs_Timer path and are exempt.
@@ -71,7 +71,7 @@ describe("DungeonTimers EncounterData — curated-data lint", function()
     -- displayText contract: resolve to a preset/alias color, or carry an
     -- explicit curated color, or be a known deliberate default-color label.
     -- Catches the silent fall-back-to-DEFAULT_BAR_COLOR typo class
-    -- (ResolveDisplayPreset, DungeonTimers.lua:246-255).
+    -- (ResolveDisplayPreset, DungeonTimers.lua).
     local function lintLabel(failures, ctx, site, text, hasExplicitColor)
         if text == nil then return end
         if type(text) ~= "string" or text == "" then
@@ -114,7 +114,7 @@ describe("DungeonTimers EncounterData — curated-data lint", function()
                 failures[#failures + 1] = ctx .. ": bossOrder must be a positive number"
             end
             -- BigWigs_Timer lookup runs through tonumber(spellId) and indexes
-            -- by number (DungeonTimers.lua:3265) — a string key never matches.
+            -- by number (DungeonTimers.lua) — a string key never matches.
             for spellId in pairs(type(enc.spells) == "table" and enc.spells or {}) do
                 if type(spellId) ~= "number" then
                     failures[#failures + 1] = ctx .. ": spell key " .. tostring(spellId) ..
@@ -137,7 +137,7 @@ describe("DungeonTimers EncounterData — curated-data lint", function()
             end
             -- Alternate-trigger entries skip the BigWigs_Timer path and spawn
             -- from `duration`; the spawn helpers drop duration <= 0, so a
-            -- missing duration is a dead entry (DungeonTimers.lua:2003/:2061).
+            -- missing duration is a dead entry (DungeonTimers.lua).
             if spell.spawnOnMessage or spell.phantomFollowupOf then
                 if not isPositiveNumber(spell.duration) then
                     failures[#failures + 1] = ctx .. ": alternate-trigger entry needs a positive duration"
@@ -191,7 +191,7 @@ describe("DungeonTimers EncounterData — curated-data lint", function()
                 end
             end
             -- showAtSeconds = 0 is meaningful ("force always visible",
-            -- EncounterData.lua:85-87), so 0 is allowed here.
+            -- EncounterData.lua), so 0 is allowed here.
             if spell.showAtSeconds ~= nil
                 and (type(spell.showAtSeconds) ~= "number" or spell.showAtSeconds < 0) then
                 failures[#failures + 1] = ctx .. ": showAtSeconds must be a number >= 0"
@@ -200,7 +200,7 @@ describe("DungeonTimers EncounterData — curated-data lint", function()
                 failures[#failures + 1] = ctx .. ": channel castType requires channelDuration"
             end
             -- extendByChannel without channelDuration is a silent no-op in
-            -- GetSpellExtension (DungeonTimers.lua:367) — curator error.
+            -- GetSpellExtension (DungeonTimers.lua) — curator error.
             if spell.extendByChannel and not isPositiveNumber(spell.channelDuration) then
                 failures[#failures + 1] = ctx .. ": extendByChannel requires channelDuration"
             end
@@ -215,7 +215,7 @@ describe("DungeonTimers EncounterData — curated-data lint", function()
                 if type(pcb) ~= "table" then
                     failures[#failures + 1] = ctx .. ": postCastBar must be a table"
                 else
-                    -- RenderBar drops baseDur <= 0 (DungeonTimers.lua:1919):
+                    -- RenderBar drops baseDur <= 0 (DungeonTimers.lua):
                     -- a postCastBar without a positive duration never renders.
                     if not isPositiveNumber(pcb.duration) then
                         failures[#failures + 1] = ctx .. ": postCastBar.duration must be a positive number"
@@ -261,7 +261,7 @@ describe("DungeonTimers EncounterData — curated-data lint", function()
     it("phantomFollowupOf resolves to a different spell in the same encounter", function()
         local failures = forEachSpell(function(failures, ctx, enc, spellId, spell)
             if spell.phantomFollowupOf == nil then return end
-            -- GetSpellPhantomFollowupOf goes through tonumber (DungeonTimers.lua:592).
+            -- GetSpellPhantomFollowupOf goes through tonumber (DungeonTimers.lua).
             local parent = tonumber(spell.phantomFollowupOf)
             if not parent then
                 failures[#failures + 1] = ctx .. ": phantomFollowupOf is not numeric"
@@ -282,9 +282,9 @@ describe("DungeonTimers EncounterData — curated-data lint", function()
             local hasColor = spell.color ~= nil
             lintLabel(failures, ctx, "displayText", spell.displayText, hasColor)
             -- castDisplayText exists to swap label AND color at cast start
-            -- (EncounterData.lua:35-46); there is no per-cast color field, so
+            -- (EncounterData.lua); there is no per-cast color field, so
             -- it must resolve — the StopBar swap reads castColor, which is
-            -- preset-derived only (DungeonTimers.lua:2119).
+            -- preset-derived only (DungeonTimers.lua).
             lintLabel(failures, ctx, "castDisplayText", spell.castDisplayText, false)
             if type(spell.secondary) == "table" then
                 lintLabel(failures, ctx, "secondary.displayText",
@@ -297,7 +297,7 @@ describe("DungeonTimers EncounterData — curated-data lint", function()
                     spell.postCastBar.displayText, hasColor)
             end
             -- shieldBar.displayText is exempt from color resolution — the
-            -- shield bar's fill color is hardcoded (DungeonTimers.lua:2679).
+            -- shield bar's fill color is hardcoded (DungeonTimers.lua).
         end)
         assert.same({}, failures)
     end)
@@ -321,7 +321,7 @@ describe("DungeonTimers EncounterData — curated-data lint", function()
                             failures[#failures + 1] = ctx .. ": threshold must be a number in (0, 100)"
                         end
                         -- BuildPhase*Curve all bail on lead <= 0
-                        -- (DungeonTimers.lua:2430) — a non-positive curated
+                        -- (DungeonTimers.lua) — a non-positive curated
                         -- lead is a dead rule.
                         if not isPositiveNumber(rule.lead) then
                             failures[#failures + 1] = ctx .. ": lead must be a positive number"
@@ -337,7 +337,7 @@ describe("DungeonTimers EncounterData — curated-data lint", function()
         local failures = {}
         for key, preset in pairs(DT.DISPLAY_PRESETS) do
             -- ResolvePresetByText indexes DISPLAY_PRESETS[str:upper()]
-            -- (DungeonTimers.lua:237): a non-uppercase key is unreachable by key.
+            -- (DungeonTimers.lua): a non-uppercase key is unreachable by key.
             if key ~= key:upper() then
                 failures[#failures + 1] = "preset '" .. key .. "': key must be uppercase"
             end
@@ -350,13 +350,13 @@ describe("DungeonTimers EncounterData — curated-data lint", function()
             lintColor(failures, "preset '" .. key .. "'", "color", preset.color)
         end
         for aliasKey, target in pairs(DT.DISPLAY_PRESET_ALIASES) do
-            -- Alias lookup upper-cases the INPUT only (DungeonTimers.lua:250);
+            -- Alias lookup upper-cases the INPUT only (DungeonTimers.lua);
             -- a non-uppercase alias key never matches.
             if aliasKey ~= aliasKey:upper() then
                 failures[#failures + 1] = "alias '" .. aliasKey .. "': key must be uppercase"
             end
             -- A dangling alias silently falls through to the default color
-            -- (guard at DungeonTimers.lua:251).
+            -- (guard at DungeonTimers.lua).
             if DT.DISPLAY_PRESETS[target] == nil then
                 failures[#failures + 1] = "alias '" .. tostring(aliasKey) .. "': target '" ..
                     tostring(target) .. "' is not a preset"
@@ -428,13 +428,13 @@ describe("DungeonTimers display-preset resolution", function()
     it("unknown text keeps the text and falls back to the default bar color", function()
         local bar = DT:CreateBar("k4", 5, 0, "bar", "TOTALLY CUSTOM")
         assert.equals("TOTALLY CUSTOM", bar.baseText)
-        assert.same({ 0.3, 0.5, 0.9 }, bar.barColor)  -- DEFAULT_BAR_COLOR (DungeonTimers.lua:187)
+        assert.same({ 0.3, 0.5, 0.9 }, bar.barColor)  -- DEFAULT_BAR_COLOR (DungeonTimers.lua)
     end)
 
     it("nil displayText falls back to the BigWigs text with the ' (N)' counter stripped", function()
         local bar = DT:CreateBar("Fireball (2)", 5, 0, "bar", nil)
         assert.equals("Fireball", bar.baseText)
-        -- Strip is end-anchored (StripBigWigsCounter, DungeonTimers.lua:302).
+        -- Strip is end-anchored (StripBigWigsCounter, DungeonTimers.lua).
         local bar2 = DT:CreateBar("(2) Fireball", 5, 0, "bar", nil)
         assert.equals("(2) Fireball", bar2.baseText)
     end)

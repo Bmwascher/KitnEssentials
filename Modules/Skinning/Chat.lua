@@ -1129,7 +1129,7 @@ function CHAT:AddMessageEdits(_, msg, isHistory, historyTime)
     -- strmatch early-return and HandleShortChannels' gsub rewrite) but
     -- still fall through to the timestamp block, which only prepends via
     -- format and never parses the |K payload. Matches ElvUI's
-    -- AddMessageEdits (ElvUI/Game/Shared/Modules/Chat/Chat.lua:1100-1128),
+    -- AddMessageEdits (ElvUI/Game/Shared/Modules/Chat/Chat.lua),
     -- which uses the same isProtected flag only to skip its strmatch guards.
     local isProtected = self:MessageIsProtected(msg)
 
@@ -1626,10 +1626,9 @@ function CHAT:StyleEditbox(editbox)
                 while #eb.historyLines > 50 do
                     tremove(eb.historyLines, 1)
                 end
-                -- DELIBERATE DEVIATION from the reference, which sets
-                -- historyIndex to 0 once at style time and never again. The
-                -- index therefore carried over between uses: after browsing
-                -- back three entries, the next Up resumed from there instead
+                -- Setting historyIndex to 0 once at style time is not enough:
+                -- the index then carries over between uses, so after browsing
+                -- back three entries the next Up resumes from there instead
                 -- of the newest line. Reset on every send as well as on
                 -- focus, so Up always starts at the most recent message.
                 eb.historyIndex = 0
@@ -1891,9 +1890,8 @@ function CHAT:BuildCopyChatFrame()
 
     local thumb = scrollbar:CreateTexture(nil, "OVERLAY")
     thumb:SetSize(SCROLLBAR_WIDTH - 2, 40)
-    -- The reference read its own theme here and only fell back to a literal;
-    -- the port kept the fallback and dropped the lookup, so this thumb
-    -- shipped the upstream periwinkle instead of KE's accent.
+    -- Theme lookup first, literal only as a fallback: dropping the lookup
+    -- ships a hardcoded colour instead of KE's accent.
     local brand = (KE.GetThemeColor and KE:GetThemeColor("accent")) or { 1.0, 0.0, 0.549 }
     thumb:SetColorTexture(brand[1], brand[2], brand[3], 0.8)
     scrollbar:SetThumbTexture(thumb)
@@ -2766,11 +2764,10 @@ end
 -- no polling. [Invite] link on guild logins dispatched from a secure
 -- post-hook on ItemRefTooltip:SetHyperlink. Role icons before names in
 -- group chat -- lfgRoles cache rebuilt on GROUP_ROSTER_UPDATE, consumed at
--- the pflag site in ChatMessageHandler (Task 7).
+-- the pflag site in ChatMessageHandler.
 --
--- Deviation from the reference: these installs are panel-DEPENDENT here
--- (wired from OnEnable/OnDisable) rather than the reference's
--- panel-independent OnInitialize install, so the three config keys
+-- These installs are panel-DEPENDENT (wired from OnEnable/OnDisable), not
+-- installed once at OnInitialize, so the three config keys
 -- (GuildMemberStatus, GuildMemberStatusInviteLink, RoleIcons) only take
 -- effect while the Chat module itself is enabled.
 local guildPlayerCache = {}
@@ -2890,10 +2887,9 @@ function CHAT:TeardownGuildMemberStatus()
     self:RemoveGuildMemberStatusFilter()
 end
 
--- Role icon textures: the reference ships custom PNGs (AE.ROLE_ICONS) that
--- have no KE equivalent, so this uses Blizzard's own group-finder role
--- atlases instead (same atlas names PrescienceTracker already uses for its
--- role badges) rather than a broken texture path.
+-- Role icon textures: Blizzard's own group-finder role atlases (the same
+-- atlas names PrescienceTracker uses for its role badges), so there is no
+-- custom art to ship and no broken texture path.
 local ROLE_ICON_ATLASES = {
     TANK    = "groupfinder-icon-role-large-tank",
     HEALER  = "groupfinder-icon-role-large-heal",

@@ -27,8 +27,7 @@ local C_Timer = C_Timer
 
 -- Flip to true, /reload, then right-click a UNIT and hover a submenu. The log
 -- answers the one thing source cannot: which branch of SkinFrame's
--- secret-dimension rescue a submenu frame actually takes. See
--- dev/docs/superpowers/plans/2026-07-30-context-menu-submenu-bug.md.
+-- secret-dimension rescue a submenu frame actually takes.
 local DEBUG_CM = false
 
 local backdrops = setmetatable({}, { __mode = "k" })
@@ -46,7 +45,7 @@ function CM:UpdateDB()
     self.db = KE.db.profile.Skinning.ContextMenus
 end
 
--- v3.5.836: ElvUI-EXACT port of their menu skin
+-- ElvUI-EXACT port of their menu skin
 -- (ElvUI/Game/Mainline/Skins/Menu.lua). Theirs is four operations on
 -- the menu frame ITSELF: StripTextures, CreateBackdrop + SetInside,
 -- HandleTrimScrollBar, OffsetFrameLevel. Nothing else.
@@ -55,9 +54,9 @@ end
 -- menu's CHILD ENTRIES to re-brand radio ticks, running from inside
 -- the menu system's acquired-frame callback. Those entries carry the
 -- dropdown's selection -- and taint.log convicted exactly that value:
--- CurrencyTransferMenu.sourceCharacterData came back owned by
--- atrocityEssentials, read at CurrencyTransfer.lua:302, blocking
--- RequestCurrencyFromAccountCharacter at :403. ElvUI never touches
+-- CurrencyTransferMenu.sourceCharacterData came back addon-owned, read at
+-- CurrencyTransfer.lua, blocking
+-- RequestCurrencyFromAccountCharacter. ElvUI never touches
 -- menu entries. Parity beats our brand-colored radial marks.
 local function SkinFrame(frame)
     if not frame then return end
@@ -68,10 +67,10 @@ local function SkinFrame(frame)
     -- carry SECRET dimensions. Anchoring TOPLEFT+BOTTOMRIGHT makes our
     -- backdrop derive its size from theirs, so
     -- BackdropTemplateMixin:SetupTextureCoordinates reads a secret
-    -- GetWidth() and dies at Backdrop.lua:226:
+    -- GetWidth() and dies at Backdrop.lua:
     --
     --   attempt to perform arithmetic on local 'width' (a secret number
-    --   value, while execution tainted by 'atrocityEssentials')
+    --   value, while execution tainted by an addon)
     --
     -- The size is therefore read BEFORE anything is created or anchored --
     -- S.Backdrop two-point anchors on creation, so checking afterwards would
@@ -88,7 +87,7 @@ local function SkinFrame(frame)
             .. " wasStripped=" .. tostring(stripped[frame] ~= nil))
     end
     if not w or not h or KE:IsSecretValue(w) or KE:IsSecretValue(h) then
-        -- v4.0.154: menu frames are POOLED. A frame stripped on an earlier
+        -- menu frames are POOLED. A frame stripped on an earlier
         -- (readable) menu comes back for a secret one, and hiding our
         -- backdrop then left it stripped AND unbacked -- text floating on
         -- the world with no panel, which is what the Target Marker Icon
@@ -129,7 +128,7 @@ local function SkinFrame(frame)
         return
     end
 
-    -- PRE-LAYOUT GUARD (2026-07-30). A menu frame reports 1x1 until Blizzard
+    -- PRE-LAYOUT GUARD. A menu frame reports 1x1 until Blizzard
     -- has laid it out, and the acquired-frame callback can fire before that
     -- happens. Those numbers are READABLE -- just wrong -- so the secret-value
     -- test above cannot catch them, and every branch below trusts them.
@@ -137,8 +136,8 @@ local function SkinFrame(frame)
     -- Stripping on a 1x1 measurement is unrecoverable in one pass: the Blizzard
     -- art goes, our backdrop is built 1x1 and is invisible, and the menu then
     -- lays out to full size with its text drawn over nothing. That is exactly
-    -- the submenu bug Brandon reported -- confirmed by an in-game DEBUG_CM log
-    -- showing the root at 164x342 and the submenu at 1x1 in the same open.
+    -- the submenu bug: an in-game log showed the root at 164x342 and the
+    -- submenu at 1x1 in the same open.
     --
     -- Bailing WITHOUT stripping leaves Blizzard's own art in place, which looks
     -- correct. The deferral in OnMenuOpen is what actually gets these frames
@@ -201,7 +200,7 @@ local function OnMenuOpen(manager, _ownerRegion, menuDescription)
     end
     if menu then SkinFrame(menu) end
 
-    -- DEFERRED BY ONE FRAME (2026-07-30). Acquired frames -- which is how
+    -- DEFERRED BY ONE FRAME. Acquired frames -- which is how
     -- SUBMENUS reach us -- arrive before Blizzard has laid them out, measuring
     -- 1x1. Skinning them synchronously stripped their art and built an
     -- invisible 1x1 backdrop; see the pre-layout guard in SkinFrame for the
@@ -209,8 +208,8 @@ local function OnMenuOpen(manager, _ownerRegion, menuDescription)
     -- by which point the layout has run.
     --
     -- This is EllesmereUI's shape and is why its menu skin does not have this
-    -- bug (EllesmereUIBlizzardSkin.lua:798, :805 defer both the root skin and
-    -- every acquired frame). It is NOT the timing change reverted in v3.5.834:
+    -- bug (EllesmereUIBlizzardSkin.lua defer both the root skin and
+    -- every acquired frame). It is NOT the reverted timing change:
     -- that reverted a POLLER that had replaced the hooks outright, on a theory
     -- about hooks tainting that the note itself calls wrong. The hooks stay
     -- exactly as they are here; only the visual work inside them moves.
@@ -232,7 +231,7 @@ function CM:Setup()
     local manager = Menu.GetManager()
     if not manager then return false end
 
-    -- v3.5.834 REVERT of v3.5.833. The poller was built on a WRONG
+    -- A REVERTED experiment. The poller was built on a WRONG
     -- theory ("hooks inside a secure flow taint it"). They don't:
     -- hooksecurefunc is designed to be taint-safe -- the hook body
     -- runs with our taint, then execution returns to secure. ElvUI

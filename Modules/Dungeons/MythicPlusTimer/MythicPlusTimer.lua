@@ -32,7 +32,7 @@ local issecretvalue = issecretvalue or function() return false end
 -- Current chat API. The bare global SendChatMessage is deprecated in 12.0, so capture
 -- the namespaced form once at load under a non-colliding local name (a local literally
 -- named SendChatMessage still trips the deprecation lint). C_ChatInfo is a core
--- namespace present before module files run. Mirror: Modules/DamageMeter/Core.lua:46.
+-- namespace present before module files run. Mirror: Modules/DamageMeter/Core.lua.
 local SendChat = C_ChatInfo and C_ChatInfo.SendChatMessage
 
 -- Returns the appropriate group chat channel for boss-split output, or nil when
@@ -176,7 +176,7 @@ end
 -- deadline live — the count-up big timer never shows time-remaining, so the
 -- line carries it. REMAINING formats pass false (their big timer IS the +1
 -- countdown) and keep the +2 overshoot. Completion in the missed-+2 window
--- ALWAYS locks the +2 delta (user direction 2026-07-02), so the lock is
+-- ALWAYS locks the +2 delta (user direction), so the lock is
 -- identical with the flag on or off.
 -- completed=true picks the locked state — CompleteRun freezes run.elapsed,
 -- so the "lock" is the caller re-rendering the frozen value.
@@ -234,7 +234,7 @@ end
 --     between driver frames)
 --   * never snap backward — when the authoritative feed stalls, the
 --     precise clock free-runs ahead; yanking it back to a stale tick
---     re-created the per-second sawtooth this replaced (2026-07-02)
+--     re-created the per-second sawtooth this replaced
 -- Returns (displaySeconds, newMsBase). Busted-testable
 -- (dev/spec/mpt_raceline_spec.lua).
 function MPT.LiveMsElapsed(now, msBase, elapsed)
@@ -387,7 +387,7 @@ local MPT_DEFAULTS = {
     OverlayTooltipEnabled = true,
     OverlayFormat = "%s%%", -- a string.format spec (NOT an enum) applied to the
                             -- pre-formatted percentValueString (API return #3 —
-                            -- "0.87", NO percent sign; live-confirmed 2026-07-02)
+                            -- "0.87", NO percent sign; live-confirmed)
     OverlayCombatOnly = true,
     OverlayFontFace = "Expressway",
     OverlayFontSize = 12,
@@ -626,10 +626,9 @@ function MPT:UpdateObjectives()
                 -- Count/progress criteria (Quarry Camps 6/6) leave info.elapsed
                 -- pinned to the FIRST increment (1/6) — it never advances to the
                 -- 6/6 moment — so back-dating (elapsed - info.elapsed) yields the
-                -- time the first camp was tagged, not the completion. (Confirmed
-                -- against the MPlusTimer + EllesmereUIMythicTimer references, which
-                -- both stamp the live world clock at the completion transition for
-                -- this case rather than trusting the criterion's elapsed.) Boss
+                -- time the first camp was tagged, not the completion. Stamp the
+                -- live world clock at the completion transition instead of
+                -- trusting the criterion's elapsed. Boss
                 -- criteria report elapsed as time-since-completed, so they still
                 -- back-date correctly. totalQuantity > 1 marks the count case
                 -- (same gate the HUD uses for the "6/6" name prefix).
@@ -667,9 +666,9 @@ function MPT:UpdateObjectives()
                         -- event time — so the minuend must be the LIVE clock.
                         -- Subtracting from the once-per-second run.elapsed
                         -- mixes clocks and under-stamps by up to ~1s, the same
-                        -- improve-only optimism the count fix removed (the
-                        -- WarpDeplete and Reloe references both back-date from
-                        -- the live world clock). In CompleteRun's backfill
+                        -- improve-only optimism the count fix removed. Always
+                        -- back-date from the live world clock.
+                        -- In CompleteRun's backfill
                         -- pass liveElapsed IS the authoritative run.elapsed.
                         obj.clearTime = liveElapsed - (info.elapsed or 0)
                     end
@@ -738,7 +737,7 @@ function MPT:UpdateDB()
     -- what is now Blizzard's pre-formatted percent STRING (the overlay binds
     -- GetUnitCriteriaProgressValues return #3 — %.2f on it would error), then
     -- briefly the bare "%s" passthrough, which dropped the % sign the string
-    -- doesn't carry (live-confirmed 2026-07-02). Normalize all three to "%s%%".
+    -- doesn't carry (live-confirmed). Normalize all three to "%s%%".
     -- OverlayFormat has no GUI control, so no user-customized value exists.
     if self.db.OverlayFormat == "PERCENT" or self.db.OverlayFormat == "%.2f%%"
         or self.db.OverlayFormat == "%s" then
@@ -785,7 +784,7 @@ end
 
 function MPT:OnInitialize()
     self:UpdateDB()
-    -- Default-disable: the addon-level OnEnable loop (Core/Main.lua:154-163)
+    -- Default-disable: the addon-level OnEnable loop (Core/Main.lua)
     -- owns the enable decision via db.Enabled (sibling pattern).
     self:SetEnabledState(false)
 end
@@ -1049,7 +1048,7 @@ function MPT:OnTimerTick()
     -- Re-glue the live-ms driver's clock at every whole-second flip: the
     -- flip is the only moment the true fraction is known (~0, within flip
     -- detection latency). A one-shot anchor bakes a stale fraction into
-    -- every later second — the 2026-07-02 "spazzing" sawtooth.
+    -- every later second — the "spazzing" sawtooth.
     if GetTimePreciseSec then
         run.msBase = GetTimePreciseSec() - elapsed
     end
@@ -1378,7 +1377,7 @@ function MPT:RepairRunInfo()
             -- level-0 window's relaxed map-only rule (MPT.CacheBelongsToRun).
             -- Character-gated like every adoption: only OUR stamped cache
             -- reaches the rekey — ownerless caches are rejected outright
-            -- (2026-07-17 review), so there is no legacy adoption arm here.
+            -- (review), so there is no legacy adoption arm here.
             local cache = GetRunSplitCache()
             local myChar = UnitGUID("player")
             if MPT.CacheBelongsToRun(cache, run.mapID, 0, myChar) then
@@ -1607,7 +1606,7 @@ function MPT:CheckForActiveRun()
             self:CompleteRun()
         elseif (self.run.active or self.run.completed) and not InChallengeInstance() then
             -- Reset ONLY once the player is genuinely OUTSIDE the keystone
-            -- instance (upstream parity — the 2026-07-03 walk-out/in bug):
+            -- instance (the walk-out/in bug):
             -- GetActiveChallengeMapID reads nil in the PLAYER_ENTERING_WORLD
             -- window even while standing inside a live key, and resetting an
             -- ACTIVE run on that flap wiped the freshly rebuilt run right
@@ -1759,7 +1758,7 @@ end
 -- shows a draggable overlay over the HUD and persists position writes to
 -- SelfPoint/AnchorPoint/XOffset/YOffset (flat DB keys, Task 0.2 canonical).
 -- Idempotent: self.editModeRegistered guard prevents double-registration.
--- Mirrors KickTracker:RegWithEditMode() (KickTracker.lua:1236-1268).
+-- Mirrors KickTracker:RegWithEditMode() (KickTracker.lua).
 ---------------------------------------------------------------------------------
 
 function MPT:RegWithEditMode()

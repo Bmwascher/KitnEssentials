@@ -680,7 +680,7 @@ end
 ---      fall back to it after the aura drops.
 ---   2. **Cache fallback** — if no live target, return RCC._lastSoulstoneTarget
 ---      provided the cached name is still in the group. This is the BR
----      stickiness behavior (Core/State.lua:1976 — "If not active, keep old
+---      stickiness behavior (Core/State.lua — "If not active, keep old
 ---      last target so macro still targets them after it falls off"): once
 ---      the warlock manually targets a specific healer with their first cast,
 ---      every subsequent click keeps nominating that same person, even after
@@ -688,7 +688,7 @@ end
 ---      if the cached target is currently dead.
 ---   3. **Cache prune** — if the cached name is no longer in the group, clear
 ---      it and return nil so the priority chain falls through to "first living
----      healer." Mirrors BR's prune step (State.lua:591-602).
+---      healer." Mirrors BR's prune step (State.lua).
 ---
 --- Player intentionally skipped from the live scan — matches BR's
 --- `not UnitIsUnit(data.unit, "player")` guard. Self-stones are covered by
@@ -793,7 +793,7 @@ end
 ---      (first cast of the session before any soulstone has been placed).
 ---   5. @player — final self-fallback.
 ---
---- Why not sticky-first (BR's order at Buffs.lua:488)? With sticky-first,
+--- Why not sticky-first (BR's order at Buffs.lua)? With sticky-first,
 --- a live sticky target shadows @target — the warlock can't override by
 --- targeting a different healer; the click always routes to the cached
 --- name. Putting @target before sticky makes "click target → click icon"
@@ -1242,7 +1242,7 @@ end
 --- Counts Standard + Demonic (warlock-only) HS in bags. Display-only for
 --- non-Warlocks. For Warlocks, clicking the slot casts Create Soulwell (29893)
 --- to drop a fresh well — the source healthstones come from. Mirrors
---- BuffReminders' Healthstone reminder click (Data/Buffs.lua:1170 castSpellID).
+--- BuffReminders' Healthstone reminder click (Data/Buffs.lua castSpellID).
 function RCC:UpdateHealthstone()
     local btn = self.buttons.hs
     if not btn then return end

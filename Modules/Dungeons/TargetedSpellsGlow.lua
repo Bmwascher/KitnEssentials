@@ -7,11 +7,11 @@
 -- ║           (GetSize) on the secret-alpha-bound entry      ║
 -- ║           subtree return SECRET numbers in live combat,  ║
 -- ║           so stock LCG's internal GetSize arithmetic     ║
--- ║           throws (BugSack-confirmed 2026-07-03).         ║
+-- ║           throws (BugSack-confirmed).         ║
 -- ╚══════════════════════════════════════════════════════════╝
 
--- Derived from LibCustomGlow (pixel glow only), via the upstream reference's
--- size-parameterized rework. MIT License:
+-- Derived from LibCustomGlow (pixel glow only), reworked to take an explicit
+-- size. MIT License:
 --
 -- Copyright (c) 2022 Benjamin Staneck
 --

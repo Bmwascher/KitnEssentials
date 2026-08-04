@@ -7,10 +7,8 @@
 -- ║           across those instances. Spec-aware, multi-     ║
 -- ║           class healer gated.                            ║
 -- ║                                                          ║
--- ║  Scanning logic adapted from PowerWordToolbox v1.1.3     ║
--- ║  with multi-spell tracking added. Original credit for    ║
--- ║  the secret-value-safe scanning pattern (issecretvalue   ║
--- ║  checks before comparisons). The player's auras use a     ║
+-- ║  The scan is secret-value safe: issecretvalue checks     ║
+-- ║  come before every comparison. The player's auras use a  ║
 -- ║  direct by-id lookup; group members take a single sweep. ║
 -- ╚══════════════════════════════════════════════════════════╝
 

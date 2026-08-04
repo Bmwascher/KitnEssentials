@@ -240,8 +240,7 @@ local Defaults = {
             -- Taunt cooldown countdown at the cursor. Tank specs only --
             -- C:_TauntEvaluateGate activates it on a tank spec and tears it
             -- down otherwise, so Enabled=true still shows nothing on a healer.
-            -- Ships OFF: the reference disables its module at init for the
-            -- same reason (<REF>/Combat/TauntCursor.lua:53).
+            -- Ships OFF for that reason.
             Taunt = {
                 Enabled            = false,
                 Attached           = true,
@@ -625,7 +624,7 @@ local Defaults = {
             PandemicHighlight = false,
             PandemicGlowType = "pixel",        -- pixel / autocast / button / proc (LibCustomGlow)
             PandemicColor = { 1, 1, 0, 1 },    -- yellow
-            -- 12.0.5 made UnitStat secret during encounters. EMTracker v1.2.0
+            -- 12.0.5 made UnitStat secret during encounters. EMTracker
             -- workaround: player saves their mainstat manually (out of combat)
             -- and the crit-detection math uses that cached value. Refreshed via
             -- the "Update from Current Stat" button in the GUI card. 0 = not set
@@ -966,8 +965,7 @@ local Defaults = {
 
         -- Quick Create: a row of season-dungeon buttons on the Group Finder
         -- Entry Creation form. One click lists a group for that dungeon.
-        -- Ships DISABLED: it modifies a Blizzard form's layout, so it is
-        -- opt-in, matching the reference.
+        -- Ships DISABLED: it modifies a Blizzard form's layout, so it is opt-in.
         LFGQuickCreate = {
             Enabled          = false,
             QuickCreate      = true,
@@ -1266,7 +1264,7 @@ local Defaults = {
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, 0),
             CVarDeclined = false,       -- internal: nameplateShowOffscreen prompt
-            EnableFixup = false,        -- internal: one-time v3.2.1 enable migration
+            EnableFixup = false,        -- internal: one-time enable migration
         },
 
         CopyAnything = {
@@ -1344,7 +1342,7 @@ local Defaults = {
                 anchorFrameType = "UIPARENT",
                 ParentFrame = "UIParent",
                 Position = DefaultPosition(-400, 200),
-                -- Raid/Dungeon mode (added 2026-05-30)
+                -- Raid/Dungeon mode
                 EnableInRaid = true,        -- master toggle: Raid Mode active at all
                 MaxHealers = 6,             -- cap on raid healers shown
                 ExcludeBenchGroups = true,  -- hide healers in raid subgroups 7-8 (bench convention)
@@ -1619,9 +1617,9 @@ local Defaults = {
                 HealthBarHidden = false,
                 HealthBarHeight = 7,
                 HealthBarTexture = "Blizzard",
-                -- Inert since 2026-08-03. Both controls and the handler were
-                -- removed -- 12.0's tooltip health bar carries a secret 0..1
-                -- fraction, so no readout is possible. Kept only so existing
+                -- Inert. Both controls and the handler were removed -- 12.0's
+                -- tooltip health bar carries a secret 0..1 fraction, so no
+                -- readout is possible. Kept only so existing
                 -- profiles need no migration; do not build a control on them.
                 HealthBarText = true,
                 HealthTextSize = 10,
@@ -1669,9 +1667,8 @@ local Defaults = {
                 TimestampColor = { r = 0.6, g = 0.6, b = 0.6 },
                 Backdrop = {
                     Enabled = true,
-                    -- #080808 @ 80% -- matches the Damage Meter backdrop
-                    -- (Modules/DamageMeter/Core.lua:194) so the two panels
-                    -- read as one family on screen.
+                    -- #080808 @ 80% -- matches the Damage Meter backdrop so the
+                    -- two panels read as one family on screen.
                     Color = { 0.031, 0.031, 0.031, 0.8 },
                     BorderColor = { 0, 0, 0, 1 },
                 },
@@ -1765,12 +1762,11 @@ local Defaults = {
             BlizzardFrames = {
                 Enabled    = false,
                 FontOffset = 0,
-                -- Global outline switch for skinned Blizzard text. The skin
-                -- asks for OUTLINE at 104 call sites (the reference's design);
-                -- at 12px that dilate closes the counters of tight glyphs and
-                -- dense lists like the guild roster read as blobby. Off by
-                -- default, matching EllesmereUI, which never outlines Blizzard
-                -- text. On restores every call site's designed outline.
+                -- Global outline switch for skinned Blizzard text. The skin asks
+                -- for OUTLINE at over a hundred call sites; at 12px that dilate
+                -- closes the counters of tight glyphs, and dense lists like the
+                -- guild roster read as blobby. Off by default. On restores every
+                -- call site's designed outline.
                 FontOutline = false,
                 -- Base point size the global Blizzard font override scales
                 -- from. Every font object keeps its own relative size; this

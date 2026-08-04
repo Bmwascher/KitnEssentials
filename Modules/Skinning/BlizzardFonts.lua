@@ -7,28 +7,24 @@ end
 
 local BF = KitnEssentials:NewModule("BlizzardFonts")
 
--- The reference treats DISABLING as reload-requiring even though OnDisable
--- calls RestoreAll (<REF>/Skinning/BlizzardFonts.lua:275-277): its own GUI
--- flags a reload on the disable branch
--- (<REF>/GUI/Tabs/Skinning/GUI-BlizzMessagesTab.lua:95-97). A PROFILE SWITCH
--- never runs that GUI callback -- Core/ProfileManager.lua:458 gates on
--- name:find("^Skin") or module.keDeferToReload, and "BlizzardFonts" fails the
--- name test -- so without this flag a profile switch silently takes the path
--- the reference deliberately guards. This preserves the reference's
--- reload-required disable contract across non-GUI transitions; it is NOT a
--- claim that teardown is missing, which is UIWidgets' separate problem.
+-- Disabling requires a reload even though OnDisable calls RestoreAll, and the
+-- GUI flags one on the disable branch. A PROFILE SWITCH never runs that GUI
+-- callback -- Core/ProfileManager.lua gates on name:find("^Skin") or
+-- module.keDeferToReload, and "BlizzardFonts" fails the name test -- so without
+-- this flag a profile switch silently skips the reload. Teardown itself is
+-- fine here; that is UIWidgets' separate problem.
 BF.keDeferToReload = true
 
 local _G = _G
 local C_Timer = C_Timer
 local unpack = unpack -- luacheck: ignore 211/unpack
 
--- v3.5.772: FONT_LIST audited against Blizzard's UI source
+-- FONT_LIST audited against Blizzard's UI source
 -- (Gethe/wow-ui-source, live branch, Blizzard_Fonts_Shared XML with
 -- full inheritance resolution). Result: NO entry strips a stock
 -- outline (the two that did -- SystemFont_Shadow_Large_Outline, the
--- native cooldown-count font, and Game15Font_o1 -- were fixed in
--- v3.5.771). Three entries deliberately downgrade stock THICK to
+-- native cooldown-count font, and Game15Font_o1 -- have been fixed).
+-- Three entries deliberately downgrade stock THICK to
 -- NORMAL outline and are annotated inline; QuestFont_Larger no longer
 -- appears in the source mirror but is runtime-guarded.
 local FONT_LIST = {
@@ -41,7 +37,7 @@ local FONT_LIST = {
     { "NumberFont_OutlineThick_Mono_Small", 12, "O" },
     { "NumberFont_Shadow_Small", 12, "S" },
     { "NumberFont_Small", 12 },
-    { "NumberFontNormalSmall", 12, "O" }, -- stock THICK; deliberate: thick at 12px muddies (audit v3.5.772)
+    { "NumberFontNormalSmall", 12, "O" }, -- stock THICK; deliberate: thick at 12px muddies
     { "Number13Font", 13 },
     { "Number13FontGray", 13, "S" },
     { "Number13FontWhite", 13, "S" },
@@ -59,7 +55,7 @@ local FONT_LIST = {
 
     { "ObjectiveFont", 12, "S" },
     { "ObjectiveTrackerHeaderFont", 14, "O" },
-    -- v3.5.792 (dungeon/scenario tracker lines lacked outline):
+    -- (dungeon/scenario tracker lines lacked outline):
     -- these lines inherit ObjectiveTrackerLineFont; EUI's QuestTracker
     -- skin re-fonts only the blocks it covers, so the scenario module
     -- falls through to this font object. Promoted to outline
@@ -74,14 +70,14 @@ local FONT_LIST = {
     { "QuestFont_Shadow_Super_Huge", 22, "SB" },
     { "QuestFont_Shadow_Enormous", 25, "SB" },
     { "QuestFont_Large", 15 },
-    { "QuestFont_Larger", 16 }, -- absent from live source mirror; runtime-guarded (audit v3.5.772)
+    { "QuestFont_Larger", 16 }, -- absent from live source mirror; runtime-guarded
     { "QuestFont_Huge", 18 },
     { "QuestFont_Super_Huge", 24 },
     { "QuestFont_Enormous", 30 },
     { "QuestFont_39", 39 },
 
     { "MailTextFontNormal", 15 },
-    -- v3.5.771 (cooldown numbers lost their outline):
+    -- (cooldown numbers lost their outline):
     -- this object IS the native cooldown-count font (ElvUI's font map
     -- confirms: cooldown = SystemFont_Shadow_Large_Outline). It was
     -- mapped "S", stripping OUTLINE from item cooldowns, private aura
@@ -129,14 +125,14 @@ local FONT_LIST = {
     { "SystemFont_Shadow_Med2", 14, "S" },
     { "SystemFont_Shadow_Med3", 14, "S" },
     { "Game15Font_Shadow", 15, "S" },
-    { "Game15Font_o1", 15, "O" }, -- v3.5.771: "_o1" = stock outline; was stripped
+    { "Game15Font_o1", 15, "O" }, -- "_o1" = stock outline; was stripped
     { "MailFont_Large", 15 },
     { "Game16Font", 16 },
     { "GameFontNormalLarge", 16, "S" },
 
     { "SystemFont_Large", 16 },
     { "SystemFont_Shadow_Large", 16, "S" },
-    { "SystemFont16_Shadow_ThickOutline", 16, "O" }, -- stock THICK; deliberate downgrade (audit v3.5.772)
+    { "SystemFont16_Shadow_ThickOutline", 16, "O" }, -- stock THICK; deliberate downgrade
     { "Game17Font_Shadow", 17, "S" },
     { "Game18Font", 18 },
     { "GameFontNormalLarge2", 18, "S" },
@@ -161,7 +157,7 @@ local FONT_LIST = {
     { "CoreAbilityFont", 32 },
     { "DestinyFontHuge", 32 },
     { "GameFont_Gigantic", 32, "S" },
-    { "SystemFont_OutlineThick_WTF", 32, "O" }, -- stock THICK; deliberate downgrade (audit v3.5.772)
+    { "SystemFont_OutlineThick_WTF", 32, "O" }, -- stock THICK; deliberate downgrade
 
     { "Game40Font", 40 },
     { "Game42Font", 42 },
@@ -174,7 +170,7 @@ local FONT_LIST = {
 }
 
 for i = 12, 22 do
-    FONT_LIST[#FONT_LIST + 1] = { "ObjectiveTrackerFont" .. i, i, "O" } -- v3.5.792: outlined with LineFont
+    FONT_LIST[#FONT_LIST + 1] = { "ObjectiveTrackerFont" .. i, i, "O" } -- outlined with LineFont
 end
 
 local CATEGORY = {

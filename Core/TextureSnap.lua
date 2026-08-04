@@ -10,23 +10,15 @@
 -- ║  re-assert it after any border recolor — SetColorTexture ║
 -- ║  re-enables Blizzard's snap on the texture.              ║
 -- ║                                                          ║
--- ║  HISTORY / DO-NOT-REGRESS:                                ║
--- ║  An earlier version (feat/pixel-perfect-overhaul, the    ║
--- ║  2026-05-27 merge) installed a GLOBAL metatable hook     ║
--- ║  ported verbatim from EllesmereUI: hooksecurefunc on     ║
--- ║  SetTexture / SetColorTexture / SetVertexColor /         ║
--- ║  SetTexCoord / SetStatusBarTexture / CreateTexture for   ║
--- ║  EVERY widget metatable in the game, plus an             ║
--- ║  EnumerateFrames walk. EUI is a full-UI replacement, so  ║
--- ║  it owns that cost. KE is a passenger module — the hook  ║
--- ║  made KE's closure run on every texture op by Blizzard   ║
--- ║  and every other addon, and recorded every game-wide     ║
--- ║  texture in a weak set. GetAddOnMemoryUsage bills the    ║
--- ║  on-stack addon, so KE was charged for the whole game's  ║
--- ║  texture churn: ~+8 MB at fresh /reload (5.9 → 13.8 MB)  ║
--- ║  and ~+2.3 s idle CPU. Confirmed by git-bisect reload    ║
--- ║  test (2026-05-28). Scoped back to KE's own textures.    ║
--- ║  DO NOT re-add the global metatable hook here.           ║
+-- ║  DO NOT hook the widget metatables globally. A global    ║
+-- ║  hooksecurefunc on SetTexture / SetColorTexture /        ║
+-- ║  SetVertexColor / SetTexCoord / SetStatusBarTexture /    ║
+-- ║  CreateTexture runs KE's closure on every texture op in  ║
+-- ║  the game. A full-UI replacement can own that cost; KE   ║
+-- ║  is a passenger. GetAddOnMemoryUsage bills the on-stack  ║
+-- ║  addon, so KE was charged for the whole game's texture   ║
+-- ║  churn: about +8 MB at a fresh /reload and +2.3 s idle   ║
+-- ║  CPU. This stays scoped to KE's own textures.            ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE

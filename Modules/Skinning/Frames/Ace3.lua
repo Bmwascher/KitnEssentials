@@ -13,9 +13,7 @@ local setmetatable = setmetatable
 
 local CreateFrame = CreateFrame
 local WHITE = "Interface\\Buttons\\WHITE8x8"
--- The reference hardcodes this literal, but the value IS its own
--- palette.brand -- so copying the number verbatim shipped the upstream
--- periwinkle instead of KE's accent. Read the palette table (mutated in
+-- Never hardcode the accent here: read the palette table (mutated in
 -- place by S.RefreshPalette) so it tracks the live theme.
 local BRAND = S.palette.brand
 local LevelLock
@@ -767,7 +765,7 @@ local function SkinPulloutFrame(pf)
 end
 S.SkinPulloutFrame = SkinPulloutFrame
 
--- v3.5.900: BigWigs 419 "stock yellow config" regression. BigWigs_Options
+-- BigWigs 419 "stock yellow config" regression. BigWigs_Options
 -- (LoD) embeds its own AceGUI-3.0. Post-ElvUI it is often the FIRST -- or a
 -- NEWER -- AceGUI-3.0 in the session: LibStub:NewLibrary succeeds and the
 -- incoming lib file body reassigns RegisterAsWidget/RegisterAsContainer/

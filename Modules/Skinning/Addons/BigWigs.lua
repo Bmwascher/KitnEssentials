@@ -30,9 +30,7 @@ local function SkinQueueTimer()
     end)
 end
 
--- The reference hardcodes this literal, but the value IS its own
--- palette.brand -- so copying the number verbatim shipped the upstream
--- periwinkle instead of KE's accent. Read the palette table (mutated in
+-- Never hardcode the accent here: read the palette table (mutated in
 -- place by S.RefreshPalette) so it tracks the live theme.
 local BRAND = S.palette.brand
 
@@ -97,7 +95,7 @@ local function BrandCastFilter(tex)
     end
 end
 
--- v3.5.840: the v832 re-assert ticker is gone. It only existed
+-- the v832 re-assert ticker is gone. It only existed
 -- because v828 left KillTexture state-only, so BigWigs' re-dressed
 -- tiles came back. S.KillTexture now carries ElvUI's Kill semantics
 -- (permanent), so one pass holds -- no ticker, no per-frame cost.
@@ -114,7 +112,7 @@ local function SkinKeystoneTeleports(frame)
                         local icon, cdbar = btn.icon, btn.cdbar
                         for _, r in next, { btn:GetRegions() } do
                             if r ~= icon and r ~= cdbar and r.IsObjectType and r:IsObjectType("Texture") then
-                                S.KillTexture(r) -- v3.5.840: permanent again (ElvUI Kill)
+                                S.KillTexture(r) -- permanent again (ElvUI Kill)
                             end
                         end
                         local bd = S.Backdrop(btn)
@@ -162,7 +160,7 @@ local function SkinKeystone()
                 end
             end
         end
-        -- v3.5.853: was 0.5s per try -- half a second of unskinned
+        -- was 0.5s per try -- half a second of unskinned
         -- keystone/queue frames every time. Per-frame, same patience.
         if tries < 1800 and _G.C_Timer then _G.C_Timer.After(0, scan) end
     end

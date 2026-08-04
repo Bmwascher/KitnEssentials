@@ -210,11 +210,10 @@ describe("DungeonTrash — TrashCache flicker recovery", function()
         assert.same({ { "nameplate1", 111 } }, hiddenUnits)
     end)
 
-    -- Ownership gate on the expiry sweep (drift review B2): the sweep key is
+    -- Ownership gate on the expiry sweep: the sweep key is
     -- a token+npcID prefix, so a recycled token hosting a LIVE same-npcID
     -- successor (clean start via the fresh-combat guard or a Layer2-first
-    -- confirm) shares the cached row's exact prefix — the reference cannot
-    -- cross-kill here (its expiry cancels via the runtime object).
+    -- confirm) shares the cached row's exact prefix.
     it("expiry never sweeps a LIVE same-npcID successor's bars on the recycled token", function()
         local rtA = trackResolved("nameplate1")
         DTrash:OnNameplateRemoved(nil, "nameplate1")
@@ -254,7 +253,7 @@ describe("DungeonTrash — TrashCache flicker recovery", function()
         assert.same({ { "nameplate1", 111 } }, hiddenUnits)
     end)
 
-    -- Same-token preference (drift review B1): a row sourced from the token
+    -- Same-token preference: a row sourced from the token
     -- being restored outranks newer rows from other tokens — the re-key then
     -- degenerates to a same-unit no-op and can never clobber a twin's live
     -- frames at the destination keys.
@@ -436,7 +435,7 @@ describe("DungeonTrash — deferred reveal pending-recovery gate (real ScheduleA
         return rt
     end
 
-    it("a reveal maturing INSIDE the flicker gap still fires (reference: pending recovery)", function()
+    it("a reveal maturing INSIDE the flicker gap still fires (pending recovery)", function()
         armDeferred("nameplate1")
         clock.now = clock.now + 1
         DTrash:OnNameplateRemoved(nil, "nameplate1")     -- cached; _cachePending set
@@ -506,10 +505,9 @@ describe("DungeonTrash — deferred reveal pending-recovery gate (real ScheduleA
         assert.same({ 10 }, predicted)
     end)
 
-    -- Observed cast-start cue (review call C3, 2026-07-10; reworked same day
-    -- after the Academy run): a third sound slot fired at the REAL cast bar.
-    -- Deferred one cue window (0.12s — reference's CAST_START_VOICE_TARGET_
-    -- DELAY) so the +0.10s sampler's start fingerprints can HARD-filter the
+    -- Observed cast-start cue: a third sound slot fired at the REAL cast bar.
+    -- Deferred one cue window (0.12s) so the +0.10s sampler's start
+    -- fingerprints can HARD-filter the
     -- candidates before the nearest-predicted-start scoring; once per cast
     -- instance; silent on a 0.05s tie.
     local function installCue()
@@ -566,9 +564,9 @@ describe("DungeonTrash — deferred reveal pending-recovery gate (real ScheduleA
         _G.PlaySoundFile = nil
     end)
 
-    -- The Academy eagle bug (in-game 2026-07-10): Gust and Raging Screech are
+    -- The Academy eagle bug (in game): Gust and Raging Screech are
     -- both cast-kind, and when the schedule drifts the nearest-prediction
-    -- guess picks the wrong one. The reference separates them by SAMPLED
+    -- guess picks the wrong one. They separate by SAMPLED
     -- cast-start fingerprint (opposite targetClearOnCastStart curations) —
     -- a hard eligibility filter, not a tie-break.
     it("the sampled start fingerprint outranks schedule proximity (eagle shape)", function()

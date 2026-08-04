@@ -163,7 +163,7 @@ local function InvitePlusPaint(tp)
     end
 end
 
--- v3.5.863 (BFL's original invite art comes back on top of ours
+-- (BFL's original invite art comes back on top of ours
 -- after clicking invite): this built once and then bailed on every
 -- later call -- but we are hooked to UpdateFriendButton/InitializeEntry,
 -- which is BFL RE-DRESSING the button. It re-set the button's art on
@@ -602,7 +602,7 @@ local function Skin()
 
     HookBFLTooltip()
     if not tooltipHooked and _G.C_Timer then
-        _G.C_Timer.After(0, HookBFLTooltip) -- v3.5.853: was 2s
+        _G.C_Timer.After(0, HookBFLTooltip) -- was 2s
     end
     FontFriendsTooltip()
     if not S.data(frame).fttShowHook and frame.HookScript then

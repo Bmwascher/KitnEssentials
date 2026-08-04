@@ -137,7 +137,7 @@ describe("Modules/Dungeons/LFGQuickCreate.lua", function()
 
         -- Same technique as dev/spec/lootroll_spec.lua's local `upvalue`
         -- helper: partyKeys is a file-local in the module with four readers
-        -- (LFGQuickCreate.lua:166, :257, :531, :577) and this callback as a
+        -- (LFGQuickCreate.lua) and this callback as a
         -- writer, and no other handle. Reading it off the captured
         -- callback's upvalues observes the real write, without adding a
         -- second production-code surface for it.
@@ -167,7 +167,7 @@ describe("Modules/Dungeons/LFGQuickCreate.lua", function()
                 issecretvalue = issecretvalueFn,
             })
             -- RegisterEvent is Ace-supplied at runtime; the loader's modules
-            -- are bare tables (dev/spec/_ke_loader.lua:971-974), so OnEnable's
+            -- are bare tables (dev/spec/_ke_loader.lua), so OnEnable's
             -- own RegisterEvent calls need a local stub here.
             QC.RegisterEvent = function() end
             QC:OnEnable()
@@ -190,7 +190,7 @@ describe("Modules/Dungeons/LFGQuickCreate.lua", function()
             assert.same({ level = 10, cmID = 500 }, partyKeys["Cleansender"])
         end)
 
-        -- Covers the load-time guard at LFGQuickCreate.lua:79, never exercised
+        -- Covers the load-time guard at LFGQuickCreate.lua, never exercised
         -- before. A distinct marker keeps issecretvalue scoped to the
         -- load-time player-name capture (:69), not an unrelated sender.
         it("captures playerShortName as nil when the load-time name is secret", function()

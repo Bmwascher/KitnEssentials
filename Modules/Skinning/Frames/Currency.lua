@@ -18,7 +18,7 @@ local function UpdateCollapse(texture, atlas)
     end
 end
 
--- v3.5.860: state-only button contact for everything living inside the
+-- state-only button contact for everything living inside the
 -- currency-transfer protected flow. ElvUI HandleButtons these same
 -- buttons with StripTextures + template and no Kill; our S.Button runs
 -- S.KillAllTextures (Show->Hide slot writes) which is banned surgery
@@ -39,7 +39,7 @@ local function StyleButtonClean(button)
     S.data(button).skinned = true
 end
 
--- v3.5.841: ElvUI-exact port of their UpdateTokenSkinsChild
+-- ElvUI-exact port of their UpdateTokenSkinsChild
 -- (Character.lua). Two deltas removed, both ours alone:
 --   * the row hover -- ours calls EnableMouse(true) on rows Blizzard
 --     deliberately left mouse-disabled. ElvUI never touches input
@@ -47,7 +47,7 @@ end
 --     standard (never manufacture hover on mouse-disabled rows).
 --   * our skinned flag as a field on the Blizzard row -> S.data.
 -- ElvUI flags this frame explicitly: "updates to this can taint
--- transferring currencies" (their Character.lua:343). They still skin
+-- transferring currencies" (their Character.lua). They still skin
 -- it, they just refuse to keep touching it. Same policy here.
 local function StyleEntry(child)
     if not child or S.data(child).skinned then return end
@@ -68,7 +68,7 @@ local function StyleEntry(child)
     S.data(child).skinned = true
 end
 
--- v3.5.856: Transfer Log rows (ElvUI Character.lua:313-327).
+-- Transfer Log rows (ElvUI Character.lua).
 local function StyleLogLine(line)
     if not line or S.data(line).skinned then return end
     local icon = line.CurrencyIcon
@@ -79,7 +79,7 @@ local function StyleLogLine(line)
     S.data(line).skinned = true
 end
 
--- v3.5.862: WHEN we skin turned out to be the whole story. The v861
+-- WHEN we skin turned out to be the whole story. The v861
 -- staged bisect applied every one of these contacts individually, live,
 -- AFTER the frame's first OnShow -- every stage stayed SECURE down the
 -- entire ladder and transfers succeeded with all of them applied. The
@@ -96,7 +96,7 @@ local function ApplySkin()
     local frame = _G.TokenFrame
     if not frame then return end
 
-    -- v3.5.860: S.StripTextures(TokenFrame) dropped. ElvUI never
+    -- S.StripTextures(TokenFrame) dropped. ElvUI never
     -- touches the TokenFrame frame itself (their Character skin strips
     -- the CharacterFrame insets that host it); every contact we make
     -- with this frame family beyond ElvUI's own is a taint suspect until
@@ -104,16 +104,16 @@ local function ApplySkin()
 
     if frame.filterDropdown then S.DropDown(frame.filterDropdown) end
 
-    -- v3.5.860: `true` (ignoreUpdates) stays -- ElvUI's own warning on
+    -- `true` (ignoreUpdates) stays -- ElvUI's own warning on
     -- this exact scrollbar: "updates to this can taint transferring
-    -- currencies" (Character.lua:343). The stepper contact inside
+    -- currencies" (Character.lua). The stepper contact inside
     -- TrimScrollBar is now state-only (see skinScrollArrows), which was
     -- the convicted root of the transfer FORBIDDEN.
     if frame.ScrollBar then S.ScrollBar(frame.ScrollBar, true) end
     if frame.ScrollBox then S.HookScrollBox(frame.ScrollBox, StyleEntry) end
 
-    -- v3.5.856: TokenFramePopup (the currency options flyout).
-    -- v3.5.860: toggle button moved off S.Button (KillAllTextures slot
+    -- TokenFramePopup (the currency options flyout).
+    -- toggle button moved off S.Button (KillAllTextures slot
     -- surgery on a button whose Refresh/UpdateEnabledState runs inside
     -- the protected transfer flow) onto the state-only recipe.
     local popup = _G.TokenFramePopup
@@ -130,12 +130,12 @@ local function ApplySkin()
         if close then S.CloseButton(close) end
     end
 
-    -- v3.5.856: Transfer Log window (ElvUI Character.lua:490-492).
-    -- NOTE their warning at :484 -- they deliberately DON'T skin
+    -- Transfer Log window (ElvUI Character.lua).
+    -- NOTE their warning -- they deliberately DON'T skin
     -- TokenFrame.CurrencyTransferLogToggleButton ("No no no, this
     -- taints"), they only swap its textures. We honour that: the
     -- toggle button on TokenFrame stays untouched entirely.
-    -- v3.5.860: the old guard set S.data(log).skinned = true and THEN
+    -- the old guard set S.data(log).skinned = true and THEN
     -- called S.Frame(log) -- which gates on the very same key and
     -- bailed immediately. That is why the Log shipped unskinned in
     -- v856-v859. Own key now; S.Frame's internal guard handles dedupe.
@@ -147,8 +147,8 @@ local function ApplySkin()
         if log.ScrollBox then S.HookScrollBox(log.ScrollBox, StyleLogLine) end
     end
 
-    -- v3.5.860: Currency Transfer menu, first port (ElvUI
-    -- Character.lua:504-524). Everything here is the state-only
+    -- Currency Transfer menu, first port (ElvUI
+    -- Character.lua). Everything here is the state-only
     -- toolkit; the ONE piece of ElvUI's recipe we intentionally skip is
     -- nothing -- contact surface is theirs 1:1. The transfer input box
     -- backdrop re-anchors are their exact offsets.
@@ -209,7 +209,7 @@ local function Skin()
 end
 
 S:Register("Blizzard_UIPanels_Game", Skin, "Currency")
--- v3.5.856: CurrencyTransferLog/Menu live in Blizzard_TokenUI, which is
+-- CurrencyTransferLog/Menu live in Blizzard_TokenUI, which is
 -- load-on-demand -- without this the Transfer Log stays unskinned until
 -- something else re-runs the pass.
 S:Register("Blizzard_TokenUI", Skin, "Currency")

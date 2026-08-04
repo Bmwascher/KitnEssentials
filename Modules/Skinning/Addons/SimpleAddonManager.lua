@@ -98,7 +98,7 @@ local function ReskinModules(frame)
     end
     if frame.Sizer then
         S.StripTextures(frame.Sizer)
-        -- v3.5.705: the strip killed the native grabber art and
+        -- the strip killed the native grabber art and
         -- left the resize handle invisible. Reuse KE's own GUI
         -- resize-handle element (MainFrame footer) for an identical
         -- look: custom 23px grip texture, muted grey @ 0.6.

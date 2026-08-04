@@ -39,7 +39,7 @@ describe("GUIFrame:CreateCompactCheckbox", function()
             GUIFrame = GUIFrame,
             -- Colour keys answer one triple each; the widget only indexes
             -- [1]..[3], so one table serves them all. fontSizeSmall is a real
-            -- NUMBER (Core/AddonTheme.lua:62) and must be seeded explicitly --
+            -- NUMBER (Core/AddonTheme.lua) and must be seeded explicitly --
             -- the label size is derived from it arithmetically, so the catch-all
             -- would hand back a table and throw.
             Theme = setmetatable({ fontSizeSmall = 12 }, { __index = function() return { 1, 1, 1 } end }),

@@ -80,7 +80,7 @@ describe("RaidControl", function()
         -- Returns (bottom, left): true when the frame's centre is in the
         -- lower / left half of a 1600x900 UIParent.
         -- UIParent must be installed by the loader, BEFORE the module chunk
-        -- runs: <REF>:74 captures it as a file-scope local, so assigning
+        -- runs: the module captures it as a file-scope local, so assigning
         -- _G.UIParent here would leave the module reading a different table.
         local function withCentre(x, y)
             RC, KE, seams = loader.loadRaidControl({

@@ -5,7 +5,6 @@
 --   lua dev/scripts/update-api-reference.lua --report-only  (no fetch, no writes)
 --   lua dev/scripts/update-api-reference.lua --seed         (no fetch; write baseline)
 --
--- Design: dev/docs/superpowers/specs/2026-07-01-api-drift-watch-design.md.
 -- Snapshot-diff (WowDoc changes_apidoc keying); exit 1 iff BREAKING-USED
 -- findings; snapshots only rewritten after a fully successful parse+diff.
 

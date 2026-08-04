@@ -3,7 +3,6 @@
 -- ║  Purpose: SOFTOUTLINE system — creates 8 shadow          ║
 -- ║           FontStrings around a main FontString for a     ║
 -- ║           custom soft outline effect.                    ║
--- ║  Credit: Adapted from atrocityEssentials/NorskenUI.      ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -49,14 +48,12 @@ local SHADOW_OFFSETS = {
 local SOFT_OUTLINE_FADEOUT_SPEED = 0.85
 
 ---------------------------------------------------------------------------------
--- Global fade hooks (installed ONCE at module load — see NorskenUI/Core/CustomOutline.lua
--- for the reference pattern).
+-- Global fade hooks, installed ONCE at module load.
 --
--- Critical fix vs. earlier: these were previously installed inside _HookMain,
--- which meant a fresh global hook on UIFrameFade / UIFrameFadeIn /
--- UIFrameFadeOut was registered for EVERY soft-outlined FontString. Over a
--- session — especially with DungeonTimers preview cycling — hundreds of
--- redundant entries piled up on each global's post-call list. Each chat
+-- Installing them inside _HookMain instead registers a fresh global hook on
+-- UIFrameFade / UIFrameFadeIn / UIFrameFadeOut for EVERY soft-outlined
+-- FontString. Over a session — especially with DungeonTimers preview cycling —
+-- hundreds of redundant entries pile up on each global's post-call list. Each chat
 -- scrollbar fade then ran all of them via secureexecuterange, blowing the C
 -- stack via ScrollingMessageFrame:RefreshDisplay / FCF_FadeInScrollbar paths.
 --

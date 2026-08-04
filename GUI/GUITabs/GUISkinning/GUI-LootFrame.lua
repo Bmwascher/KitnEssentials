@@ -30,7 +30,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootWindow", function(scrollChild, y
 
     card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
         db.Enabled = checked
-        if not checked then KE:FlagReloadNeeded() end -- v3.5.548: restoring Blizzard loot window needs /reload
+        if not checked then KE:FlagReloadNeeded() end -- restoring Blizzard's loot window needs /reload
         if checked then
             KitnEssentials:EnableModule("LootFrame")
         else
@@ -39,7 +39,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootWindow", function(scrollChild, y
         UpdateAllWidgetStates()
     end)
 
-    -- Disabled modules collapse to the header bar alone (v3.5.188).
+    -- Disabled modules collapse to the header bar alone.
     if db.Enabled == false then
         return yOffset + card1:GetContentHeight() + Theme.paddingSmall
     end
