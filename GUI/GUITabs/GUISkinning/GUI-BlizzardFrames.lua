@@ -533,10 +533,14 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFonts", function(scrollChild, yOffse
     }), 0.5)
     card:AddRow(rowFace, Theme.rowHeight)
 
+    -- One size control, not two. A separate nudge slider did the same
+    -- arithmetic in a different unit, so its range is folded into this one
+    -- instead. FontOffset is still read and still applied, which is what keeps
+    -- an existing saved look unchanged -- it just has no control any more.
     local rowSize = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
     rowSize:AddWidget(GUIFrame:CreateSlider(rowSize, "Base Font Size", {
-        min = 8, max = 20, step = 1, value = db.FontSize or 12,
-        tooltip = "Base size for text in skinned windows. Larger elements keep their extra size and move with it. 12 is the designed look.",
+        min = 8, max = 26, step = 1, value = db.FontSize or 12,
+        tooltip = "Size of text in skinned windows. Larger elements keep their extra size and move with it. 12 is the designed look.",
         callback = function(val)
             db.FontSize = val
             if S and S.SetSkinFont then S.SetSkinFont(nil, val, nil) end
@@ -544,21 +548,10 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFonts", function(scrollChild, yOffse
     }), 1)
     card:AddRow(rowSize, Theme.rowHeightLast)
 
-    local rowAdj = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
-    rowAdj:AddWidget(GUIFrame:CreateSlider(rowAdj, "Font Size Adjust", {
-        min = -4, max = 6, step = 1, value = db.FontOffset or 0,
-        tooltip = "A nudge on top of the base size above.",
-        callback = function(val)
-            db.FontOffset = val
-            if S and S.SetFontOffset then S.SetFontOffset(val) end
-        end,
-    }), 1)
-    card:AddRow(rowAdj, Theme.rowHeightLast)
-
     local rowB = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
     rowB:AddWidget(GUIFrame:CreateSlider(rowB, "Blizzard Font Base Size", {
         min = 8, max = 18, step = 1, value = db.FontBaseSize or 12,
-        tooltip = "Base size the game-wide font override scales from. This is a different scope from the two sliders above: it reaches Blizzard's own text, not skinned windows. 12 is Blizzard's baseline.",
+        tooltip = "Base size the game-wide font override scales from. This is a different scope from the settings above: it reaches Blizzard's own text, not skinned windows. 12 is Blizzard's baseline.",
         callback = function(val)
             db.FontBaseSize = val
             if KE.Skins and KE.Skins.ApplyGlobalFonts then
