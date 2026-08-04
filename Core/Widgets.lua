@@ -709,14 +709,29 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     if dialog.acceptBtn then dialog.acceptBtn:SetShown(showButtons and not isCopyPrompt) end
     if dialog.cancelBtn then dialog.cancelBtn:SetShown(showButtons) end
 
-    -- Always REST in propagate mode. The dialog takes keyboard focus, and
-    -- OnKeyDown re-propagates anything that is not ESCAPE -- but that call is
-    -- combat-protected (:201-212), so whatever state the frame carries INTO a
-    -- fight is the state it keeps. An ESCAPE-closed prompt leaves it false, and
-    -- the next prompt to open in combat then swallows every key until it is
-    -- dismissed: keybinds, abilities, movement. Resetting on each show out of
-    -- combat means the worst inherited state is "keys work".
-    if not InCombatLockdown() then dialog:SetPropagateKeyboardInput(true) end
+    -- Keyboard capture is decided per show, and the two cases are not
+    -- symmetric, because SetPropagateKeyboardInput is combat-protected
+    -- (:201-212) and so cannot be corrected once a fight has started.
+    --
+    -- Out of combat: capture, and RESET to propagate mode. The reset is the
+    -- load-bearing half -- an ESCAPE close leaves propagation false (:206-208),
+    -- and without this that state is what the next prompt inherits.
+    --
+    -- In combat: do not capture at all. Two reasons, and the second is the
+    -- serious one. A captured dialog whose propagation cannot be restored
+    -- swallows every key until it is dismissed, abilities included. And
+    -- listening for keys during combat puts KE on the call stack of the binding
+    -- system, which taints whatever that keybind fires next -- the same reason
+    -- CopyAnything refuses to listen in combat, with a quest item declining to
+    -- cast as the observed symptom (Modules/QoL/CopyAnything.lua:270-286).
+    -- ESCAPE will not close a prompt raised in combat; its Cancel button still
+    -- does, and the watcher below hands the keyboard back when the fight ends.
+    if InCombatLockdown() then
+        dialog:EnableKeyboard(false)
+    else
+        dialog:EnableKeyboard(true)
+        dialog:SetPropagateKeyboardInput(true)
+    end
 
     dialog:Show()
     KE.activePrompt = dialog
@@ -755,6 +770,18 @@ end
 -- Profile operations deliberately do NOT go through here: Brandon's ruling
 -- 2026-08-02 is that a profile switch always prompts immediately
 -- (Core/ProfileManager.lua:491-507).
+-- A prompt raised DURING combat opens with its keyboard capture off, so ESCAPE
+-- does nothing while the fight lasts. Hand it back the moment combat ends, so a
+-- dialog the user left open behaves normally again without being reopened.
+local promptCombatWatcher = CreateFrame("Frame")
+promptCombatWatcher:RegisterEvent("PLAYER_REGEN_ENABLED")
+promptCombatWatcher:SetScript("OnEvent", function()
+    local dialog = KE.activePrompt
+    if not dialog or not dialog.IsShown or not dialog:IsShown() then return end
+    dialog:EnableKeyboard(true)
+    dialog:SetPropagateKeyboardInput(true)
+end)
+
 function KE:FlagReloadNeeded()
     self.reloadPending = true
 end
