@@ -134,6 +134,17 @@ function KE:GetAccentColor(mode, color) end
 ---@return string
 function KE:ColorTextByTheme(text) end
 
+-- ─── Slash commands ───────────────────────────────────────
+---@return boolean
+function KE:IsWAEnabled() end
+
+---@param enabled boolean
+---@return boolean newState
+function KE:SetWAEnabled(enabled) end
+
+---@param arg string?  "on", "off", or anything else to report the state
+function KE:HandleWACommand(arg) end
+
 -- ─── Font helpers ─────────────────────────────────────────
 ---@param name string
 ---@return string
