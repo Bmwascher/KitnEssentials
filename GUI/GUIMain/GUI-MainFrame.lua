@@ -104,16 +104,12 @@ GUIFrame.sidebarConfig = {
         defaultExpanded = false,
         items = {
             { id = "Automation",        text = "Automation", keywords = { "automation", "auto", "role", "quest", "repair", "sell", "accept", "group", "duel", "delete", "ah", "auction house", "house", "housing", "vantus rune", "merchant", "vendor", "pages", "shop", "buy", "buyback", "extend", "wide" } },
-            { id = "CharacterPanel",    text = "Character Panel", keywords = { "character", "panel", "stats", "item level", "ilvl", "gear", "durability", "inspect" } },
-            { id = "ColorPicker",       text = "Color Picker", keywords = { "color", "colour", "picker", "rgb", "hex", "alpha", "opacity", "swatch", "class color" } },
             { id = "CombatLogger",      text = "Combat Logger", keywords = { "combat log", "logging", "advanced logging", "warcraftlogs", "raid" } },
             { id = "CopyAnything",      text = "Copy Anything", keywords = { "copy", "spell id", "item id", "npc id", "aura id", "macro", "clipboard", "tooltip" } },
             { id = "Nicknames",         text = "Custom Nicknames", keywords = { "nickname", "nicknames", "name", "custom", "rename" } },
             { id = "CVars",             text = "CVars", keywords = { "cvar", "cvars", "console", "variable", "setting", "world map", "map", "scale" } },
             { id = "GreatVaultAlert",   text = "Great Vault Alert", keywords = { "great vault", "vault", "weekly", "reward", "chest" } },
             { id = "MoveFrames",        text = "Move Frames", keywords = { "move", "mover", "drag", "draggable", "reposition", "position", "window", "windows", "frame", "frames", "blizzard", "panel", "unlock" } },
-            { id = "RaidControl",       text = "Raid Control", keywords = { "raid", "control", "raid control", "ready check", "readycheck", "countdown", "pull", "timer", "marker", "markers", "world marker", "raid marker", "difficulty", "assist", "everyone assist", "role", "roles", "tank", "healer", "raid manager", "raid tools", "shared notes", "group" } },
-            { id = "DragonRiding",      text = "Skyriding UI", keywords = { "skyriding", "dragonriding", "dragon riding", "vigor", "speed", "fly" } },
             { id = "SlashCommands",     text = "Slash Commands", keywords = { "slash", "command", "commands", "slash command" } },
         },
     },
@@ -124,10 +120,30 @@ GUIFrame.sidebarConfig = {
         defaultExpanded = false,
         elvUIDisabled = true,
         items = {
-            { id = "SkinBlizzardFrames", text = "Blizzard Frames", keywords = { "blizzard", "frames", "chat config", "chat settings", "gm", "skin", "window", "dark theme", "dialog", "context menu", "right click", "font", "socket", "taxi", "flight", "guild invite", "addon skins", "widget", "widgets", "status bar", "progress", "power bar", "top center", "bar text", "alert", "alerts", "toast", "toasts", "loot", "achievement", "banner", "recipe", "level up", "anchor", "move", "position" } },
-            { id = "SkinMessages",     text = "Blizzard Texts", keywords = { "blizzard", "text", "message", "error", "raid warning", "ui error", "font", "fonts", "replace fonts", "quest text", "objective tracker", "mail" } },
-            { id = "SkinTooltips",     text = "Blizzard Tooltips", keywords = { "tooltip", "tooltips", "blizzard", "mouseover", "skin", "anchor", "cursor", "spell id", "item id", "aura id", "guild rank", "mythic rating", "target", "health bar", "class color", "hide in combat" } },
-            { id = "Chat",             text = "Chat", keywords = { "chat", "channel", "whisper", "tab", "timestamp", "copy", "guild", "message", "panel" } },
+            -- Dark Theme leads rather than sorting alphabetically: it is the
+            -- section's master page and hosts eight of the section's eleven
+            -- pages behind its own tab strip.
+            --
+            -- alwaysEnabled keeps it and Skyriding UI clickable while the
+            -- section is greyed for ElvUI (GUI/GUIWidgets/GUI-Sidebar.lua:703).
+            -- Dark Theme's General tab carries Raid Control, which has no ElvUI
+            -- gate at all, and its Character Screen tab keeps Character Panel's
+            -- non-overlapping features; Skyriding UI is not a skin. Chat and
+            -- Tooltips carry no exemption because both modules genuinely do
+            -- stand down (Modules/Skinning/Chat.lua:423, and Tooltips via
+            -- SkinAPI.lua:2680).
+            --
+            -- The keyword list absorbs the four rows this page swallowed, so
+            -- searching "raid control", "ilvl", "hex" or "objective tracker"
+            -- still lands here.
+            { id = "SkinBlizzardFrames", text = "Dark Theme", alwaysEnabled = true, keywords = { "blizzard", "frames", "chat config", "chat settings", "gm", "skin", "window", "dark theme", "dialog", "context menu", "right click", "font", "socket", "taxi", "flight", "guild invite", "addon skins", "widget", "widgets", "status bar", "progress", "power bar", "top center", "bar text", "alert", "alerts", "toast", "toasts", "loot", "achievement", "banner", "recipe", "level up", "anchor", "move", "position",
+                "character", "panel", "stats", "item level", "ilvl", "gear", "durability", "inspect",
+                "color", "colour", "picker", "rgb", "hex", "alpha", "opacity", "swatch", "class color",
+                "raid", "control", "raid control", "ready check", "readycheck", "countdown", "pull", "timer", "marker", "markers", "world marker", "raid marker", "difficulty", "assist", "everyone assist", "role", "roles", "tank", "healer", "raid manager", "raid tools", "shared notes", "group",
+                "text", "message", "error", "raid warning", "ui error", "fonts", "replace fonts", "quest text", "objective tracker", "mail" } },
+            { id = "Chat",               text = "Chat", keywords = { "chat", "channel", "whisper", "tab", "timestamp", "copy", "guild", "message", "panel" } },
+            { id = "DragonRiding",       text = "Skyriding UI", alwaysEnabled = true, keywords = { "skyriding", "dragonriding", "dragon riding", "vigor", "speed", "fly" } },
+            { id = "SkinTooltips",       text = "Tooltips", keywords = { "tooltip", "tooltips", "blizzard", "mouseover", "skin", "anchor", "cursor", "spell id", "item id", "aura id", "guild rank", "mythic rating", "target", "health bar", "class color", "hide in combat" } },
         },
     },
     {

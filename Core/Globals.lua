@@ -574,7 +574,7 @@ local PREVIEW_MODULES = {
 }
 
 -- Section → preview module mapping for section-based previews
--- Sections not listed here (Settings, Optimize, Skinning) have no previews
+-- Sections not listed here (Settings, Optimize) have no previews
 local SECTION_PREVIEW_MODULES = {
     combat_section = {
         "CombatRes", "AuraExternals", "AuraDebuffs", "CombatTexts", "CombatTimer",
@@ -593,7 +593,13 @@ local SECTION_PREVIEW_MODULES = {
         "HuntersMark",
     },
     qol_section = {
-        "DragonRiding", "GreatVaultAlert",
+        "GreatVaultAlert",
+    },
+    -- Skyriding UI moved here from Quality of Life. Without this entry the
+    -- module stays in PREVIEW_MODULES but no section reaches it, so opening its
+    -- page would show no preview at all.
+    skinning_section = {
+        "DragonRiding",
     },
     dungeons_section = {
         "EnemyCounter", "KickTracker", "DungeonCasts", "DeathNotifications",

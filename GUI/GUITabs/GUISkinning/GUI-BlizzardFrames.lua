@@ -283,59 +283,81 @@ local function BuildCheckGrid(card, entries, skins)
     end
 end
 
+-- This tab is offered in every state, including the two where the skin engine
+-- is not running, because Color Picker and Raid Control ride on it and neither
+-- is a skin. The font card IS a skin setting, so it alone is conditional.
+--
+-- Note there is no early return on a missing db. The chained pages below read
+-- their own db and must still render when this page's is absent.
 GUIFrame:RegisterContent("SkinBlizzardFramesGeneral", function(scrollChild, yOffset)
     local db = GetDB()
-    if not db then return yOffset end
-    local card = GUIFrame:CreateCard(scrollChild, "Global Font Adjust", yOffset)
+    local engineOn = db and db.Enabled == true
+        and not (KE.ShouldNotLoadModule and KE:ShouldNotLoadModule())
 
-    local row = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
-    local slider = GUIFrame:CreateSlider(row, "Font Size Adjust", {
-        min = -4, max = 6, step = 1, value = db.FontOffset or 0,
-        tooltip = "Grows or shrinks every font inside skinned windows together. 0 is the designed look.",
-        callback = function(val)
-            db.FontOffset = val
-            if KE.Skins and KE.Skins.SetFontOffset then KE.Skins.SetFontOffset(val) end
-        end,
-    })
-    row:AddWidget(slider, 1)
-    card:AddRow(row, Theme.rowHeightLast)
+    if engineOn then
+        local card = GUIFrame:CreateCard(scrollChild, "Global Font Adjust", yOffset)
 
-    local rowB = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
-    local baseSlider = GUIFrame:CreateSlider(rowB, "Blizzard Font Base Size", {
-        min = 8, max = 18, step = 1, value = db.FontBaseSize or 12,
-        tooltip = "Base size the Blizzard font override scales from. Every font keeps its relative size; this moves them together. 12 is Blizzard's own baseline.",
-        callback = function(val)
-            db.FontBaseSize = val
-            if KE.Skins and KE.Skins.ApplyGlobalFonts then
-                KE.Skins.ApplyGlobalFonts()
-            end
-            -- The BlizzardFonts sweep scales every UNOVERRIDDEN font object off
-            -- this same base, so it has to re-run or the two systems drift
-            -- apart. Objects with a per-category size in db.Sizes skip the
-            -- scaling entirely (<REF>/Skinning/BlizzardFonts.lua:223-228).
-            local bf = KitnEssentials:GetModule("BlizzardFonts", true)
-            local fdb = KE.db and KE.db.profile.Skinning.BlizzardFonts
-            if bf and fdb and fdb.Enabled and bf.ApplyAll then bf:ApplyAll() end
-        end,
-    })
-    rowB:AddWidget(baseSlider, 1)
-    card:AddRow(rowB, Theme.rowHeightLast)
+        local row = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
+        local slider = GUIFrame:CreateSlider(row, "Font Size Adjust", {
+            min = -4, max = 6, step = 1, value = db.FontOffset or 0,
+            tooltip = "Grows or shrinks every font inside skinned windows together. 0 is the designed look.",
+            callback = function(val)
+                db.FontOffset = val
+                if KE.Skins and KE.Skins.SetFontOffset then KE.Skins.SetFontOffset(val) end
+            end,
+        })
+        row:AddWidget(slider, 1)
+        card:AddRow(row, Theme.rowHeightLast)
 
-    local rowC = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
-    local outlineCheck = GUIFrame:CreateCheckbox(rowC, "Text Outline", {
-        value = db.FontOutline and true or false,
-        tooltip = "Draws a black outline around text inside skinned windows. Off is thinner and easier to read in dense lists such as the guild roster; on is the designed look.",
-        callback = function(checked)
-            db.FontOutline = checked and true or false
-            if KE.Skins and KE.Skins.SetFontOutline then
-                KE.Skins.SetFontOutline(db.FontOutline)
-            end
-        end,
-    })
-    rowC:AddWidget(outlineCheck, 1)
-    card:AddRow(rowC, Theme.rowHeightLast, 0)
+        local rowB = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
+        local baseSlider = GUIFrame:CreateSlider(rowB, "Blizzard Font Base Size", {
+            min = 8, max = 18, step = 1, value = db.FontBaseSize or 12,
+            tooltip = "Base size the Blizzard font override scales from. Every font keeps its relative size; this moves them together. 12 is Blizzard's own baseline.",
+            callback = function(val)
+                db.FontBaseSize = val
+                if KE.Skins and KE.Skins.ApplyGlobalFonts then
+                    KE.Skins.ApplyGlobalFonts()
+                end
+                -- The BlizzardFonts sweep scales every UNOVERRIDDEN font object off
+                -- this same base, so it has to re-run or the two systems drift
+                -- apart. Objects with a per-category size in db.Sizes skip the
+                -- scaling entirely (<REF>/Skinning/BlizzardFonts.lua:223-228).
+                local bf = KitnEssentials:GetModule("BlizzardFonts", true)
+                local fdb = KE.db and KE.db.profile.Skinning.BlizzardFonts
+                if bf and fdb and fdb.Enabled and bf.ApplyAll then bf:ApplyAll() end
+            end,
+        })
+        rowB:AddWidget(baseSlider, 1)
+        card:AddRow(rowB, Theme.rowHeightLast)
 
-    return card:GetNextOffset()
+        local rowC = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
+        local outlineCheck = GUIFrame:CreateCheckbox(rowC, "Text Outline", {
+            value = db.FontOutline and true or false,
+            tooltip = "Draws a black outline around text inside skinned windows. Off is thinner and easier to read in dense lists such as the guild roster; on is the designed look.",
+            callback = function(checked)
+                db.FontOutline = checked and true or false
+                if KE.Skins and KE.Skins.SetFontOutline then
+                    KE.Skins.SetFontOutline(db.FontOutline)
+                end
+            end,
+        })
+        rowC:AddWidget(outlineCheck, 1)
+        card:AddRow(rowC, Theme.rowHeightLast, 0)
+
+        yOffset = card:GetNextOffset()
+    end
+
+    -- Chained, not re-registered: each builder takes (scrollChild, yOffset) and
+    -- returns the next offset, which is the same contract RegisterTabbedContent
+    -- uses. Same pattern as GUI/GUITabs/GUIClassUtilities/GUI-EbonMightHelper.lua:22-27.
+    -- Resolved live so GUI.xml load order does not matter.
+    local colorPicker = GUIFrame.registeredContent and GUIFrame.registeredContent["ColorPicker"]
+    if colorPicker then yOffset = colorPicker(scrollChild, yOffset) end
+
+    local raidControl = GUIFrame.registeredContent and GUIFrame.registeredContent["RaidControl"]
+    if raidControl then yOffset = raidControl(scrollChild, yOffset) end
+
+    return yOffset
 end)
 
 GUIFrame:RegisterContent("SkinBlizzardFramesFrames", function(scrollChild, yOffset)
@@ -424,47 +446,87 @@ GUIFrame:RegisterContent("SkinBlizzardFramesAddons", function(scrollChild, yOffs
     return card:GetNextOffset()
 end)
 
--- Three of these six tabs belong to modules that are INDEPENDENT of the skin
--- engine and ship enabled: Loot Roll, Loot Window, and UI Widgets, which also
--- hosts Alert Frames' controls. They must stay reachable while the engine is
--- off -- there is no other route to them, not the sidebar, not the keyword
--- search, not an Edit Mode Open Settings button, all of which land here.
+-- Three states, evaluated per build, so the master toggle's own RefreshContent
+-- switches between them with no reload.
 --
--- The other three configure the engine itself, so showing them while it is off
--- renders live-looking controls that do nothing. So the LIST varies with state
--- rather than the page collapsing wholesale. Evaluated per build, so the master
--- toggle's own RefreshContent switches between the two sets with no reload.
+-- Exactly TWO of these eight configure the skin engine itself -- Frame Skins and
+-- Addon Skins -- so they drop out while it is off, because showing them there
+-- renders live-looking controls that do nothing.
+--
+-- Five of the remaining six are INDEPENDENT of the engine and ship enabled: Loot
+-- Roll, Loot Window, UI Widgets (which also hosts Alert Frames' controls),
+-- Character Screen, and Blizzard Texts. They must stay reachable while the
+-- engine is off -- there is no other route to them, not the sidebar, not the
+-- keyword search, not an Edit Mode Open Settings button, all of which land here.
+--
+-- General is the sixth and is the hybrid, which is why it is not in either
+-- group. It is offered in EVERY state because Color Picker and Raid Control ride
+-- on it; the engine-specific part of it, the font card, is what turns off
+-- instead. That is a change from the old rule, which dropped General entirely.
+--
+-- ElvUI is a stricter cut than the engine flag, not a wider one. Loot Roll,
+-- Loot Window, UI Widgets and Blizzard Texts all stand down under ElvUI
+-- (Modules/Skinning/LootRoll.lua:558, LootFrame.lua:379, UIWidgets.lua:46,
+-- BlizzardMessages.lua:181), so they drop out too. General and Character Screen
+-- survive because Raid Control (no ElvUI gate at all) rides on General, and
+-- Character Panel keeps its non-overlapping features. Color Picker also rides on
+-- General but DOES stand down under ElvUI, by its own conflict list rather than
+-- the skin gate (Modules/QoL/ColorPicker.lua:58, :259-260); its card already says
+-- so, which is why it does not change what this list offers.
+--
+-- The Character Screen tab is deliberately not named Character Panel -- the
+-- Frame Skins grid already has a row by that name for the window skin (:45).
 GUIFrame:RegisterTabbedContent("SkinBlizzardFrames", function()
     local db = GetDB()
-    local independent = {
-        { id = "SkinBlizzardFramesLootRoll",   label = "Loot Roll" },
-        { id = "SkinBlizzardFramesLootWindow", label = "Loot Window" },
-        { id = "SkinBlizzardFramesWidgets",    label = "UI Widgets" },
-    }
-    if not db or db.Enabled ~= true then return independent end
 
-    return {
-        { id = "SkinBlizzardFramesGeneral",    label = "General" },
-        { id = "SkinBlizzardFramesFrames",     label = "Frames" },
-        { id = "SkinBlizzardFramesAddons",     label = "Addons" },
-        independent[1], independent[2], independent[3],
-    }
+    local GENERAL     = { id = "SkinBlizzardFramesGeneral",    label = "General" }
+    local FRAMES      = { id = "SkinBlizzardFramesFrames",     label = "Frame Skins" }
+    local ADDONS      = { id = "SkinBlizzardFramesAddons",     label = "Addon Skins" }
+    local LOOT_ROLL   = { id = "SkinBlizzardFramesLootRoll",   label = "Loot Roll" }
+    local LOOT_WINDOW = { id = "SkinBlizzardFramesLootWindow", label = "Loot Window" }
+    local WIDGETS     = { id = "SkinBlizzardFramesWidgets",    label = "UI Widgets" }
+    local CHAR_SCREEN = { id = "CharacterPanel",               label = "Character Screen" }
+    local TEXTS       = { id = "SkinMessages",                 label = "Blizzard Texts" }
+
+    if KE.ShouldNotLoadModule and KE:ShouldNotLoadModule() then
+        return { GENERAL, CHAR_SCREEN }
+    end
+
+    if not db or db.Enabled ~= true then
+        return { GENERAL, LOOT_ROLL, LOOT_WINDOW, WIDGETS, CHAR_SCREEN, TEXTS }
+    end
+
+    return { GENERAL, FRAMES, ADDONS, LOOT_ROLL, LOOT_WINDOW, WIDGETS, CHAR_SCREEN, TEXTS }
 end, {
     headerBuilder = function(scrollChild, yOffset)
         local db = GetDB()
-        if not db then return yOffset, true end
-        local card = GUIFrame:CreateCard(scrollChild, "Blizzard Frames", yOffset)
+        -- No header card without a db -- but do NOT collapse. Collapsing here
+        -- returns before the tab strip is built (GUI-TabbedContent.lua:44-48),
+        -- which would take Character Screen, Color Picker and Raid Control down
+        -- with a table this page alone owns. That is the same reachability rule
+        -- the tab list keeps; this is the one path that could still break it.
+        if not db then return yOffset, false end
+        local card = GUIFrame:CreateCard(scrollChild, "Dark Theme", yOffset)
         card:AddHeaderToggle(db.Enabled == true, function(checked)
             db.Enabled = checked
             KE:SkinningReloadPrompt()
             -- AddHeaderToggle's own OnClick already calls RefreshContent.
         end)
         -- Say WHY the engine's own tabs are absent. Hiding them is right --
-        -- greyed controls read as "locked on" rather than "does not apply"
-        -- (the A6.3b Move Loot Rolls ruling) -- but hiding alone leaves a user
-        -- unable to tell those settings exist at all. AddLabel bumps the card
-        -- off its lone-header-bar height, which is the intended look here.
-        if db.Enabled ~= true then
+        -- greyed controls read as "locked on" rather than "does not apply" (the
+        -- A6.3b Move Loot Rolls ruling) -- but hiding alone leaves a user unable
+        -- to tell those settings exist at all. AddLabel bumps the card off its
+        -- lone-header-bar height, which is the intended look here.
+        --
+        -- The toggle above stays live under ElvUI on purpose: the setting is
+        -- kept and applies again if ElvUI is turned off, which is what the label
+        -- says. The label claims nothing about the remaining tabs -- Color
+        -- Picker stands down under ElvUI too (Modules/QoL/ColorPicker.lua:58,
+        -- :259-260) and says so on its own card, so a blanket "ElvUI does not
+        -- touch these" here would be false.
+        if KE.ShouldNotLoadModule and KE:ShouldNotLoadModule() then
+            card:AddLabel("|cffffd100ElvUI is handling Blizzard frame skinning.|r KitnEssentials stands down so the two do not fight over the same windows, so the frame and addon skins are not applied right now. Your settings are kept and take effect again if you turn ElvUI off.")
+        elseif db.Enabled ~= true then
             card:AddLabel("Turn this on to configure frame and addon skins. The tabs below belong to modules that work with it off.")
         end
         local newOffset = yOffset + card:GetContentHeight() + Theme.paddingSmall
