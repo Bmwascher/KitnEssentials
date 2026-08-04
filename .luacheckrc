@@ -109,6 +109,16 @@ read_globals = {
     "GetPhysicalScreenSize", "GetCursorPosition",
     "RunNextFrame",
     "IsModifierKeyDown",
+    "EventUtil",
+
+    -- Tutorial / help-plate suppression
+    "MainHelpPlateButtonMixin", "HelpTip", "SetCVarBitfield", "EnumerateFrames",
+    "HelpPlate", "HelpPlateTooltip",
+
+    -- Trainer
+    "ClassTrainerFrame", "ClassTrainerTrainButton",
+    "GetTrainerServiceInfo", "GetTrainerServiceCost", "GetNumTrainerServices",
+    "BuyTrainerService",
 
     -- Enums and constants
     "Enum", "Constants", "CurveConstants",
@@ -116,7 +126,7 @@ read_globals = {
     "ENCHANTED_TOOLTIP_LINE",
     "FACTION_ALLIANCE", "FACTION_HORDE",
     "BASE_MOVEMENT_SPEED",
-    "NUM_BAG_FRAMES", "NUM_CHAT_WINDOWS", "NUM_LE_FRAME_TUTORIALS",
+    "NUM_BAG_FRAMES", "NUM_CHAT_WINDOWS",
     "RAID_CLASS_COLORS", "FACTION_BAR_COLORS", "GetClassColor", "CLASS_ICON_TCOORDS",
     "STANDARD_TEXT_FONT",
     "NORMAL_FONT_COLOR", "NORMAL_FONT_COLOR_CODE",

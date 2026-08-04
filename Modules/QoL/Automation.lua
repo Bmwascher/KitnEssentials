@@ -54,17 +54,6 @@ local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 local GetSpecializationRole = GetSpecializationRole
 
 ---------------------------------------------------------------------------------
--- Hide Helptips (runs at load time)
----------------------------------------------------------------------------------
-C_CVar.RegisterCVar("hideHelptips", 1)
-for index = 1, NUM_LE_FRAME_TUTORIALS do
-    C_CVar.SetCVarBitfield("closedInfoFrames", index, true)
-end
-for index = 1, #Enum.FrameTutorialAccount do
-    C_CVar.SetCVarBitfield("closedInfoFramesAccountWide", index, true)
-end
-
----------------------------------------------------------------------------------
 -- Constants
 ---------------------------------------------------------------------------------
 AU.CVAR_DEFS = {
@@ -1071,6 +1060,372 @@ local function ApplyHideErrorMessages()
     end
 end
 
+-- Hide Helptips --
+-- Suppresses Blizzard's tutorial / "Did you know" popups. Fully
+-- live-toggleable and reversible: HelpTip pool hides (acknowledging each
+-- tip's cvarBitfield so it stays dismissed), "i" help-plate buttons
+-- matched by mixin-method fingerprint and alpha-hidden (restored on
+-- disable), HelpPlate tooltip hooks, and the hideHelptips/showTutorials
+-- CVars. Hooks install once, only when the feature is first enabled.
+
+local tutorialsCoreHooked = false
+local tutorialsTooltipHooked = false
+local tutorialsWeSetCVar = false
+local tutorialsFingerprint
+local tutorialsHidden = setmetatable({}, { __mode = "k" })
+
+local function TutorialsEnabled()
+    return AU.db and AU.db.HideHelptips
+end
+
+local function GetTutorialFingerprint()
+    if not tutorialsFingerprint and MainHelpPlateButtonMixin then
+        tutorialsFingerprint = MainHelpPlateButtonMixin.ShowTooltip
+    end
+    return tutorialsFingerprint
+end
+
+local function TutorialHideButton(btn)
+    btn:SetAlpha(0)
+    btn:EnableMouse(false)
+    tutorialsHidden[btn] = true
+end
+
+-- Hoisted out of the pcall: one function, no per-call closure alloc
+local function DoHideOpenTips()
+    for tip in HelpTip.framePool:EnumerateActive() do
+        if tip:IsShown() then
+            local info = tip.info
+            if info and info.cvarBitfield and info.bitfieldFlag then
+                SetCVarBitfield(info.cvarBitfield, info.bitfieldFlag, true)
+            end
+            tip:Hide()
+        end
+    end
+end
+local function HideOpenTips()
+    if not (HelpTip and HelpTip.framePool and HelpTip.framePool.EnumerateActive) then return end
+    pcall(DoHideOpenTips)
+end
+
+local TutorialHideButtonsUnder
+-- Takes pcall's (ok, ...) directly, so a failed GetChildren costs us
+-- nothing and no table is allocated per node (this walks every frame of
+-- every panel opened via ShowUIPanel -- it must stay allocation free).
+local function TutorialScanChildren(ok, ...)
+    if not ok then return end
+    for i = 1, select("#", ...) do
+        TutorialHideButtonsUnder((select(i, ...)))
+    end
+end
+function TutorialHideButtonsUnder(root)
+    if not root then return end
+    -- The walk takes hostile input by definition -- it is handed the
+    -- entire child tree of whatever panel Blizzard just opened, and
+    -- Blizzard can restrict any node in it at any patch. So it refuses
+    -- forbidden nodes up front and treats GetChildren itself as fallible
+    -- rather than trusting that the method existing means it may be
+    -- called.
+    if root.IsForbidden and root:IsForbidden() then return end
+    local fp = GetTutorialFingerprint()
+    if not fp then return end
+    if root.ShowTooltip == fp then TutorialHideButton(root) end
+    if root.GetChildren then TutorialScanChildren(pcall(root.GetChildren, root)) end
+end
+
+-- One-time full walk to catch panels already open at enable time
+local function TutorialSweepAll()
+    local fp = GetTutorialFingerprint()
+    if not fp then return end
+    local frame = EnumerateFrames()
+    while frame do
+        if frame.ShowTooltip == fp then TutorialHideButton(frame) end
+        frame = EnumerateFrames(frame)
+    end
+end
+
+local function TutorialRestoreButtons()
+    for btn in pairs(tutorialsHidden) do
+        btn:SetAlpha(1)
+        btn:EnableMouse(true)
+        tutorialsHidden[btn] = nil
+    end
+end
+
+local function InstallTutorialCoreHooks()
+    if tutorialsCoreHooked then return end
+    tutorialsCoreHooked = true
+    if HelpTip and HelpTip.Show then
+        hooksecurefunc(HelpTip, "Show", function()
+            if TutorialsEnabled() then HideOpenTips() end
+        end)
+    end
+    if ShowUIPanel then
+        hooksecurefunc("ShowUIPanel", function(frame)
+            if TutorialsEnabled() and frame then
+                TutorialHideButtonsUnder(frame)
+                HideOpenTips()
+            end
+        end)
+    end
+end
+
+local function InstallTutorialTooltipHook()
+    if tutorialsTooltipHooked or not HelpPlateTooltip then return end
+    tutorialsTooltipHooked = true
+    if HelpPlate and HelpPlate.ShowTutorialTooltip then
+        hooksecurefunc(HelpPlate, "ShowTutorialTooltip", function()
+            if TutorialsEnabled() and HelpPlateTooltip then HelpPlateTooltip:Hide() end
+        end)
+    end
+    if HelpPlateTooltip.Init then
+        hooksecurefunc(HelpPlateTooltip, "Init", function(self)
+            if TutorialsEnabled() then self:Hide() end
+        end)
+    end
+end
+
+local function ApplyHideHelptips()
+    if TutorialsEnabled() then
+        InstallTutorialCoreHooks()
+        InstallTutorialTooltipHook()
+        pcall(SetCVar, "hideHelptips", "1")
+        pcall(SetCVar, "showTutorials", "0")
+        tutorialsWeSetCVar = true
+        TutorialSweepAll()
+        HideOpenTips()
+    else
+        if tutorialsWeSetCVar then
+            pcall(SetCVar, "hideHelptips", "0")
+            pcall(SetCVar, "showTutorials", "1")
+            tutorialsWeSetCVar = false
+        end
+        TutorialRestoreButtons()
+    end
+end
+
+-- Omnium Foil character-window button --
+-- Hides ExpansionLandingPageMinimapButton and proxies it as a
+-- house-styled icon button on PaperDollFrame instead.
+--   * Parent to CharacterStatsPane, NOT CharacterFrame -- CharacterFrame
+--     stays shown across Reputation/Currency tabs and would leak the
+--     button onto all of them; CharacterStatsPane follows the Character
+--     tab's Stats sidebar Show/Hide for free. The anchor still targets
+--     PaperDollFrame so the position is unchanged.
+--   * Below max level Blizzard's own minimap-button tooltip errors (no
+--     landing page data), so the whole feature is max-level gated.
+--   * Click() the real minimap button rather than reimplementing the
+--     toggle; reuse its OnEnter so the tooltip stays whatever Blizzard
+--     says it is.
+
+local OMNI_ICON_FILEID = 7554214
+local omniCharButton
+local omniMinimapHooked = false
+
+local function OmniumAllowed()
+    return _G.UnitLevel("player") >= _G.GetMaxPlayerLevel()
+end
+
+local function OmniumRefreshShown()
+    if omniCharButton then
+        omniCharButton:SetShown(AU.db.OmniumCharButton and OmniumAllowed())
+    end
+end
+
+local function OmniumCreateButton()
+    if omniCharButton then return omniCharButton end
+    if not _G.PaperDollFrame then return nil end
+
+    if InCombatLockdown() then
+        -- Anchoring onto a Blizzard window mid-fight is not established as safe
+        -- in this expansion, and getting it wrong taints. Neither button is
+        -- urgent; both wait for the fight to end.
+        AU:RegisterEvent("PLAYER_REGEN_ENABLED", "RetrySpawnDeferredButtons")
+        return
+    end
+
+    local S = KE.Skins
+    -- Parent = the stats pane (hides with it); anchor = the paperdoll
+    -- (position unchanged).
+    local host = _G.CharacterStatsPane or _G.PaperDollFrame
+    local b = CreateFrame("Button", "KE_OmniumFoilButton", host)
+    b:SetSize(26, 26)
+    b:SetPoint("BOTTOMRIGHT", _G.PaperDollFrame, "BOTTOMRIGHT", -8, 8)
+    b:SetFrameLevel(_G.PaperDollFrame:GetFrameLevel() + 10)
+
+    local icon = b:CreateTexture(nil, "ARTWORK")
+    icon:SetPoint("TOPLEFT", 1, -1)
+    icon:SetPoint("BOTTOMRIGHT", -1, 1)
+    icon:SetTexture(OMNI_ICON_FILEID)
+    b.icon = icon
+    if S then
+        S.Icon(icon)
+        S.Backdrop(b)
+        S.Hover(b)
+    end
+
+    b:SetScript("OnClick", function()
+        local mm = _G.ExpansionLandingPageMinimapButton
+        if mm then mm:Click() end
+    end)
+    b:SetScript("OnEnter", function(self)
+        local mm = _G.ExpansionLandingPageMinimapButton
+        local onEnter = mm and mm:GetScript("OnEnter")
+        if onEnter then
+            pcall(onEnter, mm)
+            _G.GameTooltip:ClearAllPoints()
+            _G.GameTooltip:SetPoint("BOTTOMRIGHT", self, "TOPLEFT", 0, 4)
+        end
+    end)
+    b:SetScript("OnLeave", function() _G.GameTooltip:Hide() end)
+
+    omniCharButton = b
+    return b
+end
+
+local function SetupOmniumButton()
+    local mm = _G.ExpansionLandingPageMinimapButton
+    local active = AU.db.OmniumCharButton and OmniumAllowed()
+
+    if mm and not omniMinimapHooked then
+        omniMinimapHooked = true
+        hooksecurefunc(mm, "Show", function(self)
+            if AU.db.OmniumCharButton and OmniumAllowed() then self:Hide() end
+        end)
+    end
+
+    if active then
+        if mm then mm:Hide() end
+        OmniumCreateButton()
+    elseif mm then
+        mm:Show()
+    end
+    OmniumRefreshShown()
+end
+
+function AU:RetrySpawnDeferredButtons()
+    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    SetupOmniumButton()
+    if AU._deferredTrainAllSpawn then AU._deferredTrainAllSpawn() end
+end
+
+-- Train All Button --
+-- One click buys every affordable trainer skill, respecting wallet and
+-- free primary profession slots.
+
+local trainAllInstalled = false
+local function SetupTrainAllButton()
+    if trainAllInstalled then return end
+    if not AU.db.TrainAllButton then return end
+    trainAllInstalled = true
+
+    local trainBtn = nil
+    local hooked = false
+
+    local function FreeProfessionSlots()
+        if not GetProfessions then return 2 end
+        local a, b = GetProfessions()
+        return 2 - (a and 1 or 0) - (b and 1 or 0)
+    end
+
+    local function SkillIsAffordable(i, wallet, freeSlots)
+        if not GetTrainerServiceInfo or not GetTrainerServiceCost then return false, 0, false end
+        local _, kind = GetTrainerServiceInfo(i)
+        if kind ~= "available" then return false, 0, false end
+        local cost, takesProfSlot = GetTrainerServiceCost(i)
+        cost = cost or 0
+        if cost > wallet then return false, 0, false end
+        if takesProfSlot and freeSlots <= 0 then return false, 0, false end
+        return true, cost, takesProfSlot
+    end
+
+    local function TrainableSummary()
+        if not GetNumTrainerServices then return 0, 0 end
+        local n, gold = 0, 0
+        local wallet = GetMoney and GetMoney() or 0
+        local slots  = FreeProfessionSlots()
+        for i = 1, GetNumTrainerServices() do
+            local ok, cost = SkillIsAffordable(i, wallet, slots)
+            if ok then n = n + 1; gold = gold + cost end
+        end
+        return n, gold
+    end
+
+    local function RefreshButton()
+        if not trainBtn then return end
+        if not AU.db.TrainAllButton then
+            trainBtn:Hide(); return
+        end
+        local n = TrainableSummary()
+        trainBtn:SetEnabled(n > 0)
+        trainBtn:Show()
+    end
+
+    local function SpawnButton()
+        if not AU.db.TrainAllButton then return end
+        if not ClassTrainerFrame or not ClassTrainerTrainButton then return end
+        if trainBtn then trainBtn:Show(); RefreshButton(); return end
+
+        if InCombatLockdown() then
+            -- Anchoring onto a Blizzard window mid-fight is not established as safe
+            -- in this expansion, and getting it wrong taints. Neither button is
+            -- urgent; both wait for the fight to end.
+            AU:RegisterEvent("PLAYER_REGEN_ENABLED", "RetrySpawnDeferredButtons")
+            return
+        end
+
+        trainBtn = CreateFrame("Button", "KE_TrainAllButton", ClassTrainerFrame, "MagicButtonTemplate")
+        trainBtn:SetText("Train All")
+        trainBtn:SetHeight(ClassTrainerTrainButton:GetHeight() or 22)
+        trainBtn:SetWidth(80)
+        trainBtn:SetPoint("RIGHT", ClassTrainerTrainButton, "LEFT", -2, 0)
+
+        -- Skin immediately when the Dark Theme owns Blizzard frames
+        local S = KE.Skins
+        if S and S.Button then
+            S.StripTextures(trainBtn)
+            S.Button(trainBtn)
+        end
+
+        trainBtn:SetScript("OnClick", function()
+            local wallet = GetMoney and GetMoney() or 0
+            local slots  = FreeProfessionSlots()
+            for i = 1, GetNumTrainerServices() do
+                local ok, cost, takesProfSlot = SkillIsAffordable(i, wallet, slots)
+                if ok then
+                    BuyTrainerService(i)
+                    wallet = wallet - cost
+                    if takesProfSlot then slots = slots - 1 end
+                end
+            end
+        end)
+
+        trainBtn:SetScript("OnEnter", function(self)
+            local n, gold = TrainableSummary()
+            if n <= 0 then return end
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(string.format("Learn %d skill%s for %s",
+                n, n == 1 and "" or "s",
+                C_CurrencyInfo.GetCoinTextureString(gold)), 1, 1, 1)
+            GameTooltip:Show()
+        end)
+        trainBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+        if not hooked then
+            hooksecurefunc("ClassTrainerFrame_Update", RefreshButton)
+            hooked = true
+        end
+        RefreshButton()
+    end
+
+    AU._deferredTrainAllSpawn = SpawnButton
+
+    if EventUtil and EventUtil.ContinueOnAddOnLoaded then
+        EventUtil.ContinueOnAddOnLoaded("Blizzard_TrainerUI", SpawnButton)
+    end
+    if C_AddOns.IsAddOnLoaded("Blizzard_TrainerUI") then SpawnButton() end
+end
+
 ---------------------------------------------------------------------------------
 -- Event Handlers
 ---------------------------------------------------------------------------------
@@ -1141,6 +1496,9 @@ function AU:ApplySettings()
     ApplyNoBossLoot()
     SetupHideScreenshotStatus()
     ApplyHideErrorMessages()
+    ApplyHideHelptips()
+    SetupOmniumButton()
+    SetupTrainAllButton()
     self:ApplyCVars()
 end
 
