@@ -124,7 +124,7 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
             GUIFrame = GUIFrame,
             Skins = { GetSuppressionState = stubGetSuppressionState, suppressed = {} },
             db = { profile = { Skinning = { BlizzardFrames = freshDB({}) } } },
-            SkinningReloadPrompt = function() end,
+            FlagReloadNeeded = function() end,
         }
         -- ContextMenus' onToggle calls KitnEssentials:EnableModule /
         -- :DisableModule, so the addon object has to exist before the file

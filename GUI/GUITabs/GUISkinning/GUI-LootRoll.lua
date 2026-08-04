@@ -91,7 +91,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
             Apply()
             UpdateAllWidgetStates()
             if not checked then
-                KE:SkinningReloadPrompt() -- v3.5.548: unified close-time prompt
+                KE:FlagReloadNeeded() -- v3.5.548: unified close-time prompt
             end
             -- The Position card's contents differ by mode -- "Move Loot Rolls"
             -- exists only in legacy mode -- so the page is rebuilt, not just

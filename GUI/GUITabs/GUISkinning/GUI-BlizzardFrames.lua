@@ -308,7 +308,7 @@ local function BuildCheckGrid(card, entries, skins, perRow)
                     disabled = disabled,
                     callback = function(checked)
                         if SetEntry(entry, skins, checked) then
-                            KE:SkinningReloadPrompt()
+                            KE:FlagReloadNeeded()
                         end
                         GUIFrame:RefreshContent()
                     end,
@@ -443,7 +443,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFrames", function(scrollChild, yOffs
             end
         end
         -- One prompt for the whole batch, not one per entry.
-        if needsReload then KE:SkinningReloadPrompt() end
+        if needsReload then KE:FlagReloadNeeded() end
     end)
 
     if AnySuppressed(FRAME_SKINS) then
@@ -461,7 +461,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFrames", function(scrollChild, yOffs
                 value = EntryIsOn(entry, db.Skins),
                 callback = function(checked)
                     if SetEntry(entry, db.Skins, checked) then
-                        KE:SkinningReloadPrompt()
+                        KE:FlagReloadNeeded()
                     end
                     GUIFrame:RefreshContent()
                 end,
@@ -506,7 +506,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesAddons", function(scrollChild, yOffs
                 needsReload = true
             end
         end
-        if needsReload then KE:SkinningReloadPrompt() end
+        if needsReload then KE:FlagReloadNeeded() end
     end)
 
     card:AddLabel("Skins for other addons, applied when that addon loads. Changes apply after a /reload.")
@@ -577,7 +577,7 @@ end, {
         local card = GUIFrame:CreateCard(scrollChild, "Dark Theme", yOffset)
         card:AddHeaderToggle(db.Enabled == true, function(checked)
             db.Enabled = checked
-            KE:SkinningReloadPrompt()
+            KE:FlagReloadNeeded()
             -- AddHeaderToggle's own OnClick already calls RefreshContent.
         end)
         -- Say WHY the engine's own tabs are absent. Hiding them is right --

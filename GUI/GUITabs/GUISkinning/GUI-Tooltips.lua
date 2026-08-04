@@ -136,7 +136,7 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
             KitnEssentials:EnableModule("SkinTooltips")
         else
             KitnEssentials:DisableModule("SkinTooltips")
-            KE:SkinningReloadPrompt()
+            KE:FlagReloadNeeded()
         end
         -- AddHeaderToggle's own OnClick already calls RefreshContent.
     end)

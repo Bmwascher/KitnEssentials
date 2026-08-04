@@ -738,6 +738,31 @@ function KE:SkinningReloadPrompt()
     return self:CreateReloadPrompt("Changing this setting may require a reload to take full effect.")
 end
 
+-- Skinning toggles FLAG instead of prompting. A user ticking eight windows
+-- should get one prompt when they close the GUI, not eight interruptions while
+-- they are still working. Ported from the reference's FlagReloadNeeded
+-- (Core/Globals.lua:267-269).
+--
+-- Profile operations deliberately do NOT go through here: Brandon's ruling
+-- 2026-08-02 is that a profile switch always prompts immediately
+-- (Core/ProfileManager.lua:490-502).
+function KE:FlagReloadNeeded()
+    self.reloadPending = true
+end
+
+-- Fired from the GUI frame's own OnHide, not from GUIFrame:Hide. The reference
+-- learned this the hard way (its v3.5.548 note at GUI/Main/MainFrame.lua:262-264):
+-- hooking the wrapper let some close paths skip the prompt entirely. The frame
+-- script cannot be skipped.
+--
+-- The creation-time Hide() is inert, because only a user action ever sets the
+-- flag.
+function KE:FlushPendingReloadPrompt()
+    if not self.reloadPending then return end
+    self.reloadPending = false
+    return self:CreateReloadPrompt("Some of the changes you made need a UI reload to take effect. Reload now?")
+end
+
 ---------------------------------------------------------------------------------
 -- Combat-Safe Fade
 ---------------------------------------------------------------------------------

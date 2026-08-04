@@ -568,6 +568,15 @@ function GUIFrame:CreateMainFrame()
         end
     end
 
+    -- One reload prompt per GUI session, raised on the way out. Hooked on the
+    -- FRAME rather than GUIFrame:Hide so no close path can skip it -- the
+    -- Escape key, the combat auto-close and the profile switcher all reach
+    -- here. Set BEFORE the Hide() below, which is inert because only a user
+    -- action ever sets the flag (Core/Widgets.lua:740-765).
+    frame:SetScript("OnHide", function()
+        if KE.FlushPendingReloadPrompt then KE:FlushPendingReloadPrompt() end
+    end)
+
     frame:Hide()
     self.mainFrame = frame
     self.header = header

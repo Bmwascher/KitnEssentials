@@ -30,7 +30,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootWindow", function(scrollChild, y
 
     card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
         db.Enabled = checked
-        if not checked then KE:SkinningReloadPrompt() end -- v3.5.548: restoring Blizzard loot window needs /reload
+        if not checked then KE:FlagReloadNeeded() end -- v3.5.548: restoring Blizzard loot window needs /reload
         if checked then
             KitnEssentials:EnableModule("LootFrame")
         else
