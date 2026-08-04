@@ -5,7 +5,7 @@
 -- windows gets one prompt on the way out instead of eight interruptions.
 --
 -- The refusal rule pinned here is the COMBAT gate. Entering combat hides this
--- GUI (GUI/GUIMain/GUI-MainFrame.lua:243-251), so without the gate a pending
+-- GUI (GUI/GUIMain/GUI-MainFrame.lua:682-698), so without the gate a pending
 -- skin change puts a "Reload Now" button on screen at the pull, one misclick
 -- from reloading mid-fight. The flag must SURVIVE that close, because the same
 -- handler reopens the GUI when combat ends and the next ordinary close is what

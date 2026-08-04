@@ -759,7 +759,7 @@ end
 -- flag.
 function KE:FlushPendingReloadPrompt()
     if not self.reloadPending then return end
-    -- Entering combat HIDES this GUI (GUI/GUIMain/GUI-MainFrame.lua:243-251),
+    -- Entering combat HIDES this GUI (GUI/GUIMain/GUI-MainFrame.lua:682-698),
     -- which would otherwise put a "Reload Now" button on screen at the pull --
     -- one misclick from reloading mid-fight. Keep the flag rather than clearing
     -- it: the same handler reopens the GUI when combat ends, so the next
