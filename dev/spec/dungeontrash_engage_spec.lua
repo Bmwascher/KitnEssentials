@@ -321,7 +321,7 @@ describe("DungeonTrash — engage-gated first-cast seeding", function()
         assert.is_true(#scheduled > 0)
     end)
 
-    -- Keep-locked contradiction handling (reference parity, ExBoss v26.6.29
+    -- Keep-locked contradiction handling (reference parity, its
     -- ObservationTest keepLockedRuntime): a behavior contradiction commits
     -- only when re-derivation actually lands on a DIFFERENT mob. When every
     -- surviving row rejects — all five Algeth'ar Academy rows are

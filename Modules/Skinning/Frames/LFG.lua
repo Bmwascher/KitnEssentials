@@ -879,7 +879,7 @@ local function SkinChallenges()
 
     local ks = _G.ChallengesKeystoneFrame
     if ks then
-        -- v3.5.786 : keep Blizzard's interior art wholesale --
+        -- Keep Blizzard's interior art wholesale --
         -- parchment, rune circle, golden slot ring, instruction bar,
         -- insert animation glows. The parchment atlas
         -- (ChallengeMode-KeystoneFrame) bakes the ornate gold border

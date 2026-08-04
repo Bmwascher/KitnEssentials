@@ -551,7 +551,7 @@ end
 -- (family rule); every send/parse is pcall'd so blocked contexts degrade
 -- silently to records.
 local COMM_PREFIX = "KEKick"
--- BliZzi Party Tools interop (reference v4.1.4): their dispatcher accepts
+-- BliZzi Party Tools interop: their dispatcher accepts
 -- KICK from any class-auto-registered party member — no HELLO handshake
 -- required — and normalizes senders with Ambiguate like we do. Wire format:
 -- "B1;KICK;spellID;cd". Format drift on their side degrades to ignored

@@ -239,7 +239,7 @@ end
 -- secret cstrings flow through WrapTextInColorCode -> string.format -> SetText
 -- without taint errors and render as their underlying values. So we deliberately
 -- do NOT bail on secret-name; only on truly nil. This contradicts the "Do NOT
--- concat with color codes" guidance documented for TargetedSpells v3.2.0 in
+-- concat with color codes" guidance documented for TargetedSpells in
 -- another module's surface — that warning is module-context-dependent, not
 -- universal. The castbar interrupt text path is safe.
 --

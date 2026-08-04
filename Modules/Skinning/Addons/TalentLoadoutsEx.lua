@@ -272,7 +272,7 @@ local function SkinMainFrame()
         if listFrame then
             S.StripTextures(listFrame)
             S.Backdrop(listFrame)
-            -- v3.5.721 : v719 hid .Border
+            -- An earlier pass hid .Border
             -- unconditionally and re-anchored via a SINGLE point after
             -- ClearAllPoints -- if the frame was sized by two points
             -- (TOPLEFT+BOTTOMRIGHT), that deleted its size and it

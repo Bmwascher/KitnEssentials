@@ -627,7 +627,7 @@ function DM:OnEnable()
         self.db.Dock = self.db.Dock or {}
         -- WidthRatio 1 = one full db.Width-wide column (LayoutDock reads it as an
         -- absolute baseW multiplier, NOT a normalized share like RowRatios — 0.5
-        -- here shipped a half-width, squished dock in v3.0.0). RowRatios ARE
+        -- here once shipped a half-width, squished dock). RowRatios ARE
         -- normalized, so 0.61/0.39 correctly splits the right column 61/39.
         self.db.Dock.Columns = {
             { WidthRatio = 1, Windows = { 1 },    RowRatios = { 1 } },
@@ -635,7 +635,7 @@ function DM:OnEnable()
         }
     end
 
-    -- Repair profiles seeded by the v3.0.0 build, where both columns shipped at
+    -- Repair profiles seeded by the old build, where both columns shipped at
     -- WidthRatio 0.5 (half-width / squished). Run-once and signature-gated so a
     -- customized dock is never touched. Resolved at runtime (Dock.lua loads after
     -- Core.lua); runs whether or not the seed block above fired (existing profiles

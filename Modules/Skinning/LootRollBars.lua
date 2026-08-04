@@ -515,7 +515,7 @@ function LR:START_LOOT_ROLL(event, rollID, rollTime)
     -- Same deviation as ShowPreview above: bar and spark always take the
     -- theme accent, only the icon border follows item quality. Keep the two
     -- paths identical -- the preview exists to show what a real roll looks
-    -- like, and they drifted apart once already (the v3.5.694 report).
+    -- like, and they drifted apart once already once.
     local br2, bg2, bb2 = S.palette.brand[1], S.palette.brand[2], S.palette.brand[3]
     bar.status:SetStatusBarColor(br2, bg2, bb2, 0.7)
     bar.status.spark:SetColorTexture(br2, bg2, bb2, 0.9)

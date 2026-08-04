@@ -206,7 +206,7 @@ local function SizeEncounterDropdown(dropdown, width)
     end
 end
 
--- v3.5.870 -- THE TIMING, not the contact.
+-- THE TIMING, not the contact.
 -- The v869 staged bisect applied all eight loot-history contacts live, one at
 -- a time (frame/bg/drop/timer/close/bar/box/resize), and ScrollBox,
 -- ScrollBox.view, ScrollBar and row1 stayed 100% secure through every single

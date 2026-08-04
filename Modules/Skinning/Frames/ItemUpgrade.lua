@@ -46,7 +46,7 @@ local function Skin()
             button.icon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
         end
         -- Quality color goes to the BUTTON backdrop (the visible box);
-        -- v3.5.797's icon-backdrop target is gone with SetInside.
+        -- The old icon-backdrop target is gone with SetInside.
         if button.IconBorder then S.IconBorder(button.IconBorder, S.GetBackdrop(button)) end
         -- (slot box mis-sized, round two): ButtonFrame
         -- is a TEXTURE (the ornate itemupgrade_slotborder atlas at

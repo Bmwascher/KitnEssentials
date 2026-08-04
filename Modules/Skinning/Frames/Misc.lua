@@ -15,7 +15,7 @@ local BTN_GAP = 1
 
 -- Protected buttons are left alone. Exit Game calls Quit(), which is
 -- protected -- a tainted click is refused and the button silently stops
--- working (field report, v4.0.173). Everything else is skinned:
+-- working (field report). Everything else is skinned:
 -- restyling textures does not taint a button's click handler, which is
 -- why every other UI pack skins this menu without issue.
 local function SkinOneGameMenuButton(button)
@@ -96,7 +96,7 @@ local function SkinMisc()
     SkinGameMenu()
 
     if _G.ReadyCheckFrame and not S.data(_G.ReadyCheckFrame).skinned then
-        -- v3.5.720 : on Midnight all the
+        -- On Midnight all the
         -- visible art lives on the ReadyCheckListenerFrame CHILD
         -- (setAllPoints over the bare ReadyCheckFrame container): .Bg
         -- dark tile, PortraitFrameTemplate .NineSlice border, the

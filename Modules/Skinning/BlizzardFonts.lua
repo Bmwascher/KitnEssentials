@@ -23,8 +23,8 @@ local unpack = unpack -- luacheck: ignore 211/unpack
 -- (Gethe/wow-ui-source, live branch, Blizzard_Fonts_Shared XML with
 -- full inheritance resolution). Result: NO entry strips a stock
 -- outline (the two that did -- SystemFont_Shadow_Large_Outline, the
--- native cooldown-count font, and Game15Font_o1 -- were fixed in
--- v3.5.771). Three entries deliberately downgrade stock THICK to
+-- native cooldown-count font, and Game15Font_o1 -- have been fixed).
+-- Three entries deliberately downgrade stock THICK to
 -- NORMAL outline and are annotated inline; QuestFont_Larger no longer
 -- appears in the source mirror but is runtime-guarded.
 local FONT_LIST = {

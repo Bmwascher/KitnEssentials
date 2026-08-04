@@ -150,7 +150,7 @@ EMT._seedNorm                = nil
 -- Tracked aura state
 EMT.selfAuraInstanceID  = 0
 EMT.selfExpirationTime  = 0
--- ebonMight: flat list of { auraId, value, target } — mirrors v1.2.0's structure
+-- ebonMight: flat list of { auraId, value, target }
 -- (preserved because CalcCrit iterates values linearly and dedupes on auraId).
 EMT.ebonMight           = {}
 

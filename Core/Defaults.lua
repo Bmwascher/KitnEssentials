@@ -624,7 +624,7 @@ local Defaults = {
             PandemicHighlight = false,
             PandemicGlowType = "pixel",        -- pixel / autocast / button / proc (LibCustomGlow)
             PandemicColor = { 1, 1, 0, 1 },    -- yellow
-            -- 12.0.5 made UnitStat secret during encounters. EMTracker v1.2.0
+            -- 12.0.5 made UnitStat secret during encounters. EMTracker
             -- workaround: player saves their mainstat manually (out of combat)
             -- and the crit-detection math uses that cached value. Refreshed via
             -- the "Update from Current Stat" button in the GUI card. 0 = not set
@@ -1264,7 +1264,7 @@ local Defaults = {
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, 0),
             CVarDeclined = false,       -- internal: nameplateShowOffscreen prompt
-            EnableFixup = false,        -- internal: one-time v3.2.1 enable migration
+            EnableFixup = false,        -- internal: one-time enable migration
         },
 
         CopyAnything = {

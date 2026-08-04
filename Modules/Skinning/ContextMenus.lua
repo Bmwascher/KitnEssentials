@@ -209,7 +209,7 @@ local function OnMenuOpen(manager, _ownerRegion, menuDescription)
     --
     -- This is EllesmereUI's shape and is why its menu skin does not have this
     -- bug (EllesmereUIBlizzardSkin.lua defer both the root skin and
-    -- every acquired frame). It is NOT the timing change reverted in v3.5.834:
+    -- every acquired frame). It is NOT the reverted timing change:
     -- that reverted a POLLER that had replaced the hooks outright, on a theory
     -- about hooks tainting that the note itself calls wrong. The hooks stay
     -- exactly as they are here; only the visual work inside them moves.
@@ -231,7 +231,7 @@ function CM:Setup()
     local manager = Menu.GetManager()
     if not manager then return false end
 
-    -- REVERT of v3.5.833. The poller was built on a WRONG
+    -- A REVERTED experiment. The poller was built on a WRONG
     -- theory ("hooks inside a secure flow taint it"). They don't:
     -- hooksecurefunc is designed to be taint-safe -- the hook body
     -- runs with our taint, then execution returns to secure. ElvUI

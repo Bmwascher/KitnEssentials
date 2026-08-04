@@ -93,7 +93,7 @@ end
 -- The styler handle lives in S.data, never on the tooltip itself. Doctrine
 -- (SkinAPI.lua): a field we write onto a Blizzard frame plants a tainted
 -- key in a secure table, which contaminates the iteration and field-fallback
--- reads Blizzard's own code performs -- the v3.5.827 combat
+-- reads Blizzard's own code performs -- the combat
 -- ADDON_ACTION_BLOCKED. S.data is a weak-keyed side table, so nothing of ours
 -- ever lands on the frame.
 local function EnsureStyler(tt)
@@ -485,7 +485,7 @@ function TT:OnTooltipSetUnit(tt)
             --
             -- Deliberately a SETTING and not a Shift modifier, which is what
             -- the reference uses. MODIFIER_STATE_CHANGED below refuses to
-            -- refresh unit tooltips on purpose (see v3.5.899 there: the
+            -- refresh unit tooltips on purpose (see the note there: the
             -- refresh re-runs Blizzard's line builders on our tainted
             -- execution and throws on a secret unit), so a modifier would be
             -- read once on hover and never again -- a dead control.

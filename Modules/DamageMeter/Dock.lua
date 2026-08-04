@@ -1019,13 +1019,13 @@ function DM:MaybeSeedDockTest()
 end
 
 ---------------------------------------------------------------------------------
--- One-time width repair for the v3.0.0 squished-dock seed
+-- One-time width repair for the squished-dock seed
 --
--- The v3.0.0 default seed wrote WidthRatio 0.5 on both columns. LayoutDock reads
+-- That default seed wrote WidthRatio 0.5 on both columns. LayoutDock reads
 -- WidthRatio as an ABSOLUTE multiplier of db.Width (colW = baseW * ratio), not a
 -- normalized share like RowRatios -- so 0.5 rendered each column at half width
 -- and the dock looked squished. The seed now ships WidthRatio 1; this repairs
--- profiles already created by the bad v3.0.0 build. Called from OnEnable after
+-- profiles already created by that build. Called from OnEnable after
 -- the seed block (so it also covers existing profiles, which skip that block).
 -- Stamped to run once, and gated on the EXACT untouched bad-seed signature
 -- (two columns, both 0.5, windows {1} and {2,3}) so a GUI-built or dragged dock
