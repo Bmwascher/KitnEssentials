@@ -3,7 +3,7 @@
 -- machine so a module toggled off/on while its GUI section is on screen
 -- re-previews immediately (the cache otherwise pins the stale pre-toggle
 -- decision until the next section change). Uses the REAL module/section
--- pairing "DragonRiding"/"qol_section" because PREVIEW_MODULES and
+-- pairing "DragonRiding"/"skinning_section" because PREVIEW_MODULES and
 -- SECTION_PREVIEW_MODULES are file locals. The addon shim's GetModule
 -- auto-vivifies, so the spec decorates the same table the manager sees.
 local L = require("dev.spec._ke_loader")
@@ -25,7 +25,7 @@ describe("Core/Globals.lua PreviewManager enable-toggle refresh", function()
         dr.ShowPreview = function() shown = shown + 1 end
         dr.HidePreview = function() hidden = hidden + 1 end
         PM.guiOpen = true
-        PM:SetActiveSection("qol_section")
+        PM:SetActiveSection("skinning_section")
         assert.equals(1, shown)   -- baseline: section activation previews it
     end)
 
