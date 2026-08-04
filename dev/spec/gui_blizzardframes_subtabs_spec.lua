@@ -6,7 +6,7 @@
 -- tabbed_content_spec.lua (a synthetic TABS fixture, not GUI-BlizzardFrames.lua's
 -- own list) nor gui_blizzardframes_spec.lua (stubs RegisterTabbedContent to a
 -- no-op, discarding the strip entirely) proves every declared id actually
--- resolves. This spec loads all six real GUI files against one shared stub and
+-- resolves. This spec loads all nine real GUI files against one shared stub and
 -- checks the strip against the registrations, so a subtab id typo (declared in
 -- the strip but never registered, or registered under a different id than the
 -- strip declares) fails here instead of silently rendering a blank page in-game.
@@ -49,6 +49,9 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
         helpers.loadModule("GUI/GUITabs/GUISkinning/GUI-LootFrame.lua", KE)
         helpers.loadModule("GUI/GUITabs/GUISkinning/GUI-BlizzardMessages.lua", KE)
         helpers.loadModule("GUI/GUITabs/GUIQoL/GUI-CharacterPanel.lua", KE)
+        helpers.loadModule("GUI/GUITabs/GUIDungeons/GUI-GroupFinderPanel.lua", KE)
+        helpers.loadModule("GUI/GUITabs/GUIDungeons/GUI-LFGQuickCreate.lua", KE)
+        helpers.loadModule("GUI/GUITabs/GUIDungeons/GUI-LFGReminder.lua", KE)
         helpers.loadModule("GUI/GUITabs/GUISkinning/GUI-BlizzardFrames.lua", KE)
     end)
 
@@ -78,7 +81,7 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
 
     it("registers a builder for every id declared while the engine is on", function()
         local tabs = strip(true, false)
-        assert.equals(8, #tabs)
+        assert.equals(6, #tabs)
         assertEveryIdResolves(tabs)
     end)
 
@@ -98,16 +101,14 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
         local tabs = strip(false, false)
         -- Count first. A set keyed by id cannot see a duplicate or an extra
         -- entry, so the membership assertions below would all still pass while
-        -- the strip rendered more than the six promised tabs.
-        assert.equals(6, #tabs)
+        -- the strip rendered more than the four promised tabs.
+        assert.equals(4, #tabs)
 
         local ids = idSet(tabs)
         assert.is_true(ids["SkinBlizzardFramesGeneral"])
-        assert.is_true(ids["SkinBlizzardFramesLootRoll"])
-        assert.is_true(ids["SkinBlizzardFramesLootWindow"])
-        assert.is_true(ids["SkinBlizzardFramesWidgets"])
-        assert.is_true(ids["CharacterPanel"])
-        assert.is_true(ids["SkinMessages"])
+        assert.is_true(ids["SkinBlizzardFramesFonts"])
+        assert.is_true(ids["SkinBlizzardFramesColors"])
+        assert.is_true(ids["SkinBlizzardFramesElements"])
 
         -- and neither tab that configures the engine itself, which would render
         -- live-looking controls that do nothing.
@@ -115,24 +116,28 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
         assert.is_nil(ids["SkinBlizzardFramesAddons"])
     end)
 
-    -- General survives ElvUI because Raid Control rides on it and has no ElvUI
-    -- gate at all; Character Screen survives because Character Panel keeps its
+    -- General survives ElvUI because Raid Control and the group-finder pages
+    -- ride on it and none has an ElvUI gate; Elements survives because it
+    -- nests the Character Screen, which keeps Character Panel's
     -- non-overlapping features. Everything else on this page DOES stand down
     -- under ElvUI, so offering those tabs would be the same
     -- live-looking-but-dead failure.
-    it("keeps exactly General and Character Screen while ElvUI is active", function()
+    it("keeps exactly General and Elements while ElvUI is active", function()
         local tabs = strip(true, true)
         assert.equals(2, #tabs)
 
         local ids = idSet(tabs)
         assert.is_true(ids["SkinBlizzardFramesGeneral"])
-        assert.is_true(ids["CharacterPanel"])
+        assert.is_true(ids["SkinBlizzardFramesElements"])
 
         assert.is_nil(ids["SkinBlizzardFramesFrames"])
         assert.is_nil(ids["SkinBlizzardFramesAddons"])
+        assert.is_nil(ids["SkinBlizzardFramesFonts"])
+        assert.is_nil(ids["SkinBlizzardFramesColors"])
         assert.is_nil(ids["SkinBlizzardFramesLootRoll"])
         assert.is_nil(ids["SkinBlizzardFramesLootWindow"])
         assert.is_nil(ids["SkinBlizzardFramesWidgets"])
+        assert.is_nil(ids["CharacterPanel"])
         assert.is_nil(ids["SkinMessages"])
     end)
 
@@ -148,6 +153,15 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
     it("positive control: the two absorbed page ids resolve", function()
         assert.is_function(GUIFrame.registeredContent["CharacterPanel"])
         assert.is_function(GUIFrame.registeredContent["SkinMessages"])
+    end)
+
+    -- The three group-finder pages are chained onto General, not registered as
+    -- tabs of their own -- this only proves they are reachable, not that any of
+    -- them appears in the strip.
+    it("resolves a builder for each of the three pages chained onto General", function()
+        assert.is_function(GUIFrame.registeredContent["GroupFinderPanel"])
+        assert.is_function(GUIFrame.registeredContent["LFGQuickCreate"])
+        assert.is_function(GUIFrame.registeredContent["LFGReminder"])
     end)
 
     it("negative control: an invented id has no registered builder", function()

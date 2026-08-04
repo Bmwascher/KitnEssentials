@@ -614,11 +614,11 @@ local SECTION_PREVIEW_MODULES = {
     -- module stays in PREVIEW_MODULES but no section reaches it, so opening its
     -- page would show no preview at all.
     skinning_section = {
-        "DragonRiding",
+        "DragonRiding", "LFGReminder",
     },
     dungeons_section = {
         "EnemyCounter", "KickTracker", "DungeonCasts", "DeathNotifications",
-        "MythicPlusTimer", "KeystoneHelper", "TargetedSpells", "LFGReminder",
+        "MythicPlusTimer", "KeystoneHelper", "TargetedSpells",
     },
 }
 

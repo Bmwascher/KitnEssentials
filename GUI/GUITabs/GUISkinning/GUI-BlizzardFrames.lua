@@ -382,6 +382,13 @@ GUIFrame:RegisterContent("SkinBlizzardFramesGeneral", function(scrollChild, yOff
     local raidControl = GUIFrame.registeredContent and GUIFrame.registeredContent["RaidControl"]
     if raidControl then yOffset = raidControl(scrollChild, yOffset) end
 
+    -- Three group-finder pages live here rather than in the sidebar. None is a
+    -- skin, so none is gated on the engine.
+    for _, id in ipairs({ "GroupFinderPanel", "LFGQuickCreate", "LFGReminder" }) do
+        local builder = GUIFrame.registeredContent and GUIFrame.registeredContent[id]
+        if builder then yOffset = builder(scrollChild, yOffset) end
+    end
+
     return yOffset
 end)
 
@@ -669,52 +676,50 @@ end)
 -- Three states, evaluated per build, so the master toggle's own RefreshContent
 -- switches between them with no reload.
 --
--- Exactly TWO of these eight configure the skin engine itself -- Frame Skins and
+-- Exactly TWO of these six configure the skin engine itself -- Frame Skins and
 -- Addon Skins -- so they drop out while it is off, because showing them there
 -- renders live-looking controls that do nothing.
 --
--- Five of the remaining six are INDEPENDENT of the engine and ship enabled: Loot
--- Roll, Loot Window, UI Widgets (which also hosts Alert Frames' controls),
--- Character Screen, and Blizzard Texts. They must stay reachable while the
--- engine is off -- there is no other route to them, not the sidebar, not the
--- keyword search, not an Edit Mode Open Settings button, all of which land here.
+-- Fonts and Colors are independent of the engine but still describe a skinned
+-- look, so they drop with the engine's own tabs.
 --
--- General is the sixth and is the hybrid, which is why it is not in either
--- group. It is offered in EVERY state because Color Picker and Raid Control ride
--- on it; the engine-specific part of it, the font card, is what turns off
--- instead. That is a change from the old rule, which dropped General entirely.
+-- General and Elements are the two that stay in every state. General carries
+-- Raid Control and the three group-finder pages, none of which is a skin;
+-- Elements carries the Character Screen, which keeps its non-overlapping
+-- features. That is why neither sits in the two groups above.
 --
--- ElvUI is a stricter cut than the engine flag, not a wider one. Loot Roll,
--- Loot Window, UI Widgets and Blizzard Texts all stand down under ElvUI, so they
--- drop out too. General and Character Screen survive because Raid Control (no
--- ElvUI gate at all) rides on General, and Character Panel keeps its
--- non-overlapping features. Color Picker also rides on General but DOES stand
--- down under ElvUI, by its own conflict list rather than the skin gate; its card
--- already says so, which is why it does not change what this list offers.
---
--- The Character Screen tab is deliberately not named Character Panel -- the
--- Frame Skins grid already has a row by that name for the window skin (:45).
+-- ElvUI is a stricter cut than the engine flag, not a wider one: it drops Fonts
+-- and Colors too, alongside Frame Skins and Addon Skins, leaving only General
+-- and Elements. General survives because Raid Control has no ElvUI gate at all;
+-- Elements survives because Character Panel keeps its non-overlapping features.
+-- Color Picker also rides on General but DOES stand down under ElvUI, by its
+-- own conflict list rather than the skin gate; its card already says so, which
+-- is why it does not change what this list offers.
 GUIFrame:RegisterTabbedContent("SkinBlizzardFrames", function()
     local db = GetDB()
 
-    local GENERAL     = { id = "SkinBlizzardFramesGeneral",    label = "General" }
-    local FRAMES      = { id = "SkinBlizzardFramesFrames",     label = "Frame Skins" }
-    local ADDONS      = { id = "SkinBlizzardFramesAddons",     label = "Addon Skins" }
-    local LOOT_ROLL   = { id = "SkinBlizzardFramesLootRoll",   label = "Loot Roll" }
-    local LOOT_WINDOW = { id = "SkinBlizzardFramesLootWindow", label = "Loot Window" }
-    local WIDGETS     = { id = "SkinBlizzardFramesWidgets",    label = "UI Widgets" }
-    local CHAR_SCREEN = { id = "CharacterPanel",               label = "Character Screen" }
-    local TEXTS       = { id = "SkinMessages",                 label = "Blizzard Texts" }
+    local GENERAL  = { id = "SkinBlizzardFramesGeneral",  label = "General" }
+    local FONTS    = { id = "SkinBlizzardFramesFonts",    label = "Fonts" }
+    local COLORS   = { id = "SkinBlizzardFramesColors",   label = "Colors" }
+    local FRAMES   = { id = "SkinBlizzardFramesFrames",   label = "Frame Skins" }
+    local ADDONS   = { id = "SkinBlizzardFramesAddons",   label = "Addon Skins" }
+    local ELEMENTS = { id = "SkinBlizzardFramesElements", label = "Elements" }
 
+    -- In the conflict state only the two tabs whose contents are not skins
+    -- survive: General carries Raid Control and the group-finder pages, and
+    -- Elements carries the Character Screen. Fonts and Colors drop with the
+    -- skins, because the text and windows they colour are not drawn here.
     if KE.ShouldNotLoadModule and KE:ShouldNotLoadModule() then
-        return { GENERAL, CHAR_SCREEN }
+        return { GENERAL, ELEMENTS }
     end
 
+    -- Frame Skins and Addon Skins are the only two tabs that configure the
+    -- engine itself, so they are the only two that drop while it is off.
     if not db or db.Enabled ~= true then
-        return { GENERAL, LOOT_ROLL, LOOT_WINDOW, WIDGETS, CHAR_SCREEN, TEXTS }
+        return { GENERAL, FONTS, COLORS, ELEMENTS }
     end
 
-    return { GENERAL, FRAMES, ADDONS, LOOT_ROLL, LOOT_WINDOW, WIDGETS, CHAR_SCREEN, TEXTS }
+    return { GENERAL, FONTS, COLORS, FRAMES, ADDONS, ELEMENTS }
 end, {
     headerBuilder = function(scrollChild, yOffset)
         local db = GetDB()
