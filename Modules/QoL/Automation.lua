@@ -973,6 +973,104 @@ local function SetupAutoAcceptRes()
     end
 end
 
+-- Hide Boss Banner Loot --
+-- Stops the boss-kill loot banner from replaying every drop after a kill.
+-- The kill banner itself still plays; only the loot scroll is silenced.
+-- Reversible with no reload.
+
+local function ApplyNoBossLoot()
+    local banner = _G.BossBanner
+    if not banner then return end
+    if AU.db.HideBossBannerLoot then
+        banner:UnregisterEvent("ENCOUNTER_LOOT_RECEIVED")
+    else
+        banner:RegisterEvent("ENCOUNTER_LOOT_RECEIVED")
+    end
+end
+
+-- Hide Screenshot Status --
+-- Blizzard creates ActionStatus lazily on the first screenshot, so this hides
+-- it right after Blizzard's own event handler shows it.
+
+local screenshotInstalled = false
+local function SetupHideScreenshotStatus()
+    if screenshotInstalled then return end
+    if not AU.db.HideScreenshotStatus then return end
+    screenshotInstalled = true
+
+    local function HideActionStatus()
+        local actionStatus = _G.ActionStatus
+        if actionStatus then actionStatus:Hide() end
+    end
+
+    local ssFrame = CreateFrame("Frame")
+    ssFrame:RegisterEvent("SCREENSHOT_SUCCEEDED")
+    ssFrame:RegisterEvent("SCREENSHOT_FAILED")
+    ssFrame:SetScript("OnEvent", function()
+        if AU.db.HideScreenshotStatus then
+            C_Timer.After(0, HideActionStatus)
+        end
+    end)
+end
+
+-- Hide Error Messages --
+-- Swallows red UIErrorsFrame spam while keeping a whitelist of genuinely
+-- useful errors. The OnEvent override is only installed while on, so this
+-- costs nothing when off and is fully reversible.
+
+local errOrigOnEvent
+local errInstalled = false
+local errKeep
+local function BuildErrKeepList()
+    if errKeep then return end
+    errKeep = {}
+    for _, msg in ipairs({
+        ERR_INV_FULL, ERR_QUEST_LOG_FULL, ERR_RAID_GROUP_ONLY,
+        ERR_PARTY_LFG_BOOT_LIMIT, ERR_PARTY_LFG_BOOT_DUNGEON_COMPLETE,
+        ERR_PARTY_LFG_BOOT_IN_COMBAT, ERR_PARTY_LFG_BOOT_IN_PROGRESS,
+        ERR_PARTY_LFG_BOOT_LOOT_ROLLS, ERR_PARTY_LFG_TELEPORT_IN_COMBAT,
+        ERR_PET_SPELL_DEAD, ERR_PLAYER_DEAD,
+        SPELL_FAILED_TARGET_NO_POCKETS, ERR_ALREADY_PICKPOCKETED,
+    }) do
+        if msg then errKeep[msg] = true end
+    end
+end
+
+-- The group-kick "not eligible" line is a format string: pattern match.
+local function IsBootNotEligible(err)
+    if type(err) ~= "string" or not ERR_PARTY_LFG_BOOT_NOT_ELIGIBLE_S then return false end
+    local ok, found = pcall(function()
+        return err:find(string.format(ERR_PARTY_LFG_BOOT_NOT_ELIGIBLE_S, ".+"))
+    end)
+    return (ok and found) and true or false
+end
+
+local function ErrFilteredOnEvent(self, event, id, err, ...)
+    if event == "UI_ERROR_MESSAGE" then
+        if errKeep[err] or IsBootNotEligible(err) then
+            return errOrigOnEvent(self, event, id, err, ...)
+        end
+        return
+    end
+    return errOrigOnEvent(self, event, id, err, ...)
+end
+
+local function ApplyHideErrorMessages()
+    local on = AU.db.HideErrorMessages
+    if on and not errInstalled then
+        BuildErrKeepList()
+        errOrigOnEvent = UIErrorsFrame:GetScript("OnEvent")
+        UIErrorsFrame:SetScript("OnEvent", ErrFilteredOnEvent)
+        UIParent:UnregisterEvent("PING_SYSTEM_ERROR")
+        errInstalled = true
+    elseif not on and errInstalled then
+        UIErrorsFrame:SetScript("OnEvent", errOrigOnEvent)
+        errOrigOnEvent = nil
+        UIParent:RegisterEvent("PING_SYSTEM_ERROR")
+        errInstalled = false
+    end
+end
+
 ---------------------------------------------------------------------------------
 -- Event Handlers
 ---------------------------------------------------------------------------------
@@ -1040,6 +1138,9 @@ function AU:ApplySettings()
     SetupAutoDeclineDuels()
     SetupAutoDeclinePetBattles()
     SetupAutoAcceptRes()
+    ApplyNoBossLoot()
+    SetupHideScreenshotStatus()
+    ApplyHideErrorMessages()
     self:ApplyCVars()
 end
 

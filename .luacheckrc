@@ -265,6 +265,15 @@ read_globals = {
     -- Static Popups
     "StaticPopup_Show", "StaticPopup_Hide", "StaticPopup_FindVisible",
 
+    -- Error message strings (GlobalStrings.lua)
+    "ERR_INV_FULL", "ERR_QUEST_LOG_FULL", "ERR_RAID_GROUP_ONLY",
+    "ERR_PARTY_LFG_BOOT_LIMIT", "ERR_PARTY_LFG_BOOT_DUNGEON_COMPLETE",
+    "ERR_PARTY_LFG_BOOT_IN_COMBAT", "ERR_PARTY_LFG_BOOT_IN_PROGRESS",
+    "ERR_PARTY_LFG_BOOT_LOOT_ROLLS", "ERR_PARTY_LFG_TELEPORT_IN_COMBAT",
+    "ERR_PET_SPELL_DEAD", "ERR_PLAYER_DEAD",
+    "SPELL_FAILED_TARGET_NO_POCKETS", "ERR_ALREADY_PICKPOCKETED",
+    "ERR_PARTY_LFG_BOOT_NOT_ELIGIBLE_S",
+
     -- Context menus (Blizzard_Menu, 11.0+ taint-safe menu API)
     "MenuUtil",
 
