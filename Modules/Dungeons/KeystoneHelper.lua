@@ -495,6 +495,10 @@ function KH:ApplySettings()
     self:ApplyRerollSettings()
     self:ApplyYourKeySettings()
 
+    -- The follow switch changes how many movers there are, so the element set
+    -- has to be rebuilt whenever settings move.
+    self:RefreshEditModeElements()
+
     -- Re-evaluate active reminders so disabling a sub-feature dismisses its
     -- display immediately instead of at the next natural stop point.
     if self.rerollActive then
@@ -517,28 +521,89 @@ end
 
 ---------------------------------------------------------------------------------
 -- Edit Mode
+-- Two elements, one per reminder. While Your Key follows the Reroll position the
+-- two frames share coordinates, so only ONE mover is registered: the one whose
+-- tab is in focus. RegisterElement builds the overlay immediately when edit mode
+-- is already running and UnregisterElement drops it, so the swap is live.
 ---------------------------------------------------------------------------------
-function KH:RegWithEditMode()
-    if not KE.EditMode or self.editModeRegistered then return end
+local EDIT_ELEMENTS = {
+    Reroll = {
+        key = "KeystoneHelperReroll",
+        displayName = "Keystone Helper: Reroll Key",
+        guiTab = "KeystoneHelperReroll",
+    },
+    YourKey = {
+        key = "KeystoneHelperYourKey",
+        displayName = "Keystone Helper: Your Key",
+        guiTab = "KeystoneHelperYourKey",
+    },
+}
 
-    -- One element moves both reminders — they share a single saved position.
+-- Which reminder holds the mover while the two share a position. The GUI tab
+-- builders push this in; the module never reads GUI state.
+KH.editModeFocus = "Reroll"
+
+function KH:RegisterEditModeElement(prefix)
+    local meta = EDIT_ELEMENTS[prefix]
+    if not meta or not KE.EditMode then return end
+
+    -- A following Your Key reads and writes the Reroll keys: the frames are on
+    -- the same coordinates, so writing anywhere else desyncs them on the first
+    -- drag. Resolved per call, not captured, so the switch takes effect live.
+    local function keyPrefix()
+        if prefix == "YourKey" and self.db.YourKeyUseRerollPosition ~= false then
+            return "Reroll"
+        end
+        return prefix
+    end
+
+    -- The mover must sit on the frame that actually occupies the stored
+    -- position. Edit Mode writes a dropped frame's own screen rect back as the
+    -- offset, and the preview parks a following Your Key copy to the RIGHT of
+    -- the Reroll copy, so binding the mover to that copy would fold the preview
+    -- gap into the saved position on every drag and walk the pair sideways.
+    local frame = (keyPrefix() == "Reroll") and self.rerollFrame or self.yourKeyFrame
+    if not frame then return end
+
     KE.EditMode:RegisterElement({
-        key = "KeystoneHelper",
-        displayName = "Keystone Helper: Reminders",
-        frame = self.rerollFrame,
-        getPosition = function() return self.db.Position end,
+        key = meta.key,
+        displayName = meta.displayName,
+        frame = frame,
+        getPosition = function() return self.db[keyPrefix() .. "Position"] end,
         setPosition = function(pos)
-            self.db.Position = pos
+            self.db[keyPrefix() .. "Position"] = pos
             self:ApplyRerollSettings()
             self:ApplyYourKeySettings()
         end,
         getParentFrame = function()
-            return KE:ResolveAnchorFrame(self.db.AnchorFrameType, self.db.ParentFrame)
+            local p = keyPrefix()
+            return KE:ResolveAnchorFrame(self.db[p .. "AnchorFrameType"], self.db[p .. "ParentFrame"])
         end,
         guiPath = "KeystoneHelper",
+        guiTab = meta.guiTab,
     })
+end
 
-    self.editModeRegistered = true
+function KH:RefreshEditModeElements()
+    if not KE.EditMode then return end
+    if not (self.rerollFrame and self.yourKeyFrame) then return end
+
+    if self.db.YourKeyUseRerollPosition ~= false then
+        local focus = (self.editModeFocus == "YourKey") and "YourKey" or "Reroll"
+        local other = (focus == "YourKey") and "Reroll" or "YourKey"
+        KE.EditMode:UnregisterElement(EDIT_ELEMENTS[other].key)
+        self:RegisterEditModeElement(focus)
+    else
+        self:RegisterEditModeElement("Reroll")
+        self:RegisterEditModeElement("YourKey")
+    end
+end
+
+function KH:SetEditModeFocus(prefix)
+    if not EDIT_ELEMENTS[prefix] then return end
+    if self.editModeFocus == prefix then return end
+    self.editModeFocus = prefix
+    self:RefreshEditModeElements()
 end
 
 ---------------------------------------------------------------------------------
@@ -571,7 +636,7 @@ end
 function KH:ShowPreview()
     self:CreateRerollFrame()
     self:CreateYourKeyFrame()
-    self:RegWithEditMode()
+    self:RefreshEditModeElements()
     self.isPreview = true
 
     -- Preview shows the player's real key when one is owned.
@@ -651,7 +716,7 @@ function KH:OnEnable()
     self:CreateYourKeyFrame()
     self:ApplyRerollSettings()
     self:ApplyYourKeySettings()
-    self:RegWithEditMode()
+    self:RefreshEditModeElements()
 
     self:RegisterEvent("CHALLENGE_MODE_COMPLETED", "OnChallengeModeCompleted")
     self:RegisterEvent("CHALLENGE_MODE_START", "OnChallengeModeStart")

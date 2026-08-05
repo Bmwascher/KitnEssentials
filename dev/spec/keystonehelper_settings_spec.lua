@@ -162,4 +162,104 @@ describe("KeystoneHelper: per-feature settings resolution", function()
             assert.equals(48, KH.yourKeyFrame.keFontSize)
         end)
     end)
+
+    describe("Edit Mode elements", function()
+        local REROLL_KEY = "KeystoneHelperReroll"
+        local YOURKEY_KEY = "KeystoneHelperYourKey"
+
+        local function registeredKeys()
+            local keys = {}
+            for key in pairs(rec.editMode.registered) do keys[#keys + 1] = key end
+            table.sort(keys)
+            return keys
+        end
+
+        it("registers one mover while Your Key follows the Reroll position", function()
+            KH:RefreshEditModeElements()
+            assert.are.same({ REROLL_KEY }, registeredKeys())
+        end)
+
+        it("swaps which mover is registered when the focus moves", function()
+            KH:RefreshEditModeElements()
+            KH:SetEditModeFocus("YourKey")
+            assert.are.same({ YOURKEY_KEY }, registeredKeys())
+
+            KH:SetEditModeFocus("Reroll")
+            assert.are.same({ REROLL_KEY }, registeredKeys())
+        end)
+
+        it("ignores a focus value that is not one of the two reminders", function()
+            KH:RefreshEditModeElements()
+            KH:SetEditModeFocus("InstanceReset")
+            assert.are.same({ REROLL_KEY }, registeredKeys())
+        end)
+
+        it("registers both movers once Your Key owns its position", function()
+            KH.db.YourKeyUseRerollPosition = false
+            KH:RefreshEditModeElements()
+            assert.are.same({ REROLL_KEY, YOURKEY_KEY }, registeredKeys())
+        end)
+
+        it("re-registers both when the follow switch is turned off live", function()
+            -- ApplySettings is what the GUI calls; if it does not refresh the
+            -- element set, flipping the switch leaves one mover on screen.
+            KH:RefreshEditModeElements()
+            KH.db.YourKeyUseRerollPosition = false
+            KH:ApplySettings()
+            assert.are.same({ REROLL_KEY, YOURKEY_KEY }, registeredKeys())
+        end)
+
+        it("writes the Reroll position when a following Your Key is dragged", function()
+            KH:SetEditModeFocus("YourKey")
+            KH:RefreshEditModeElements()
+            local element = rec.editMode.registered[YOURKEY_KEY]
+            assert.is_not_nil(element)
+            assert.equals(KH.db.RerollPosition, element.getPosition())
+
+            local dragged = { AnchorFrom = "LEFT", AnchorTo = "LEFT", XOffset = 7, YOffset = 8 }
+            element.setPosition(dragged)
+            assert.equals(dragged, KH.db.RerollPosition)
+            -- Untouched: following means there is one position, not two.
+            assert.equals(30, KH.db.YourKeyPosition.XOffset)
+        end)
+
+        it("writes Your Key's own position when it is not following", function()
+            KH.db.YourKeyUseRerollPosition = false
+            KH:RefreshEditModeElements()
+            local element = rec.editMode.registered[YOURKEY_KEY]
+            assert.is_not_nil(element)
+            assert.equals(KH.db.YourKeyPosition, element.getPosition())
+
+            local dragged = { AnchorFrom = "LEFT", AnchorTo = "LEFT", XOffset = 7, YOffset = 8 }
+            element.setPosition(dragged)
+            assert.equals(dragged, KH.db.YourKeyPosition)
+            assert.equals(10, KH.db.RerollPosition.XOffset)
+        end)
+
+        -- Edit Mode writes a dropped frame's own rect back as the position,
+        -- and the preview parks a following Your Key copy to the right of the
+        -- Reroll copy. A mover bound to that copy would bank the preview gap
+        -- into the saved position on every drag.
+        it("binds a following Your Key mover to the frame on the stored position", function()
+            KH:SetEditModeFocus("YourKey")
+            KH:RefreshEditModeElements()
+            assert.equals(KH.rerollFrame, rec.editMode.registered[YOURKEY_KEY].frame)
+        end)
+
+        it("binds an unfollowing Your Key mover to its own frame", function()
+            KH.db.YourKeyUseRerollPosition = false
+            KH:RefreshEditModeElements()
+            assert.equals(KH.yourKeyFrame, rec.editMode.registered[YOURKEY_KEY].frame)
+            assert.equals(KH.rerollFrame, rec.editMode.registered[REROLL_KEY].frame)
+        end)
+
+        it("points each mover's Configure link at its own tab", function()
+            KH.db.YourKeyUseRerollPosition = false
+            KH:RefreshEditModeElements()
+            assert.equals("KeystoneHelper", rec.editMode.registered[REROLL_KEY].guiPath)
+            assert.equals("KeystoneHelperReroll", rec.editMode.registered[REROLL_KEY].guiTab)
+            assert.equals("KeystoneHelper", rec.editMode.registered[YOURKEY_KEY].guiPath)
+            assert.equals("KeystoneHelperYourKey", rec.editMode.registered[YOURKEY_KEY].guiTab)
+        end)
+    end)
 end)
