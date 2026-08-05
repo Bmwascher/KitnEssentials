@@ -1570,4 +1570,40 @@ function L.loadKeystoneHelper(overrides)
     return modules["KeystoneHelper"], rec, KE
 end
 
+-- Modules/QoL/Optimize.lua. The module captures SetCVar/GetCVar as file-scope
+-- locals at load, so the fake cvar store has to exist on _G BEFORE loadModule --
+-- assigning it afterwards leaves the module holding a stale upvalue. rec.cvars
+-- IS that store: seed a key to set the live value, read a key to see what the
+-- module wrote. rec.difficultyID is the third GetInstanceInfo return, which is
+-- what the Mythic+ override branches on. The AceAddon shim hands back a bare
+-- table with no AceEvent, so the two event methods are stubbed onto the module
+-- and recorded in rec.events. Nothing calls OnInitialize for you.
+-- Returns OPT, rec, KE.
+function L.loadOptimize(overrides)
+    overrides = overrides or {}
+    installMock(overrides, { C_Timer = inertTimer() })
+    local modules = helpers.installAddonShim()
+
+    local rec = { cvars = {}, prints = {}, events = {}, difficultyID = 0 }
+
+    _G.SetCVar = function(cvar, value) rec.cvars[cvar] = tostring(value) end
+    _G.GetCVar = function(cvar) return rec.cvars[cvar] end
+    _G.C_CVar = { SetCVar = _G.SetCVar, GetCVar = _G.GetCVar }
+    _G.GetInstanceInfo = function() return "Mock", "party", rec.difficultyID end
+    _G.StaticPopupDialogs = {}
+    _G.ReloadUI = function() end
+    -- Wiped per load: this is the module's own SavedVariables and busted
+    -- insulates _G per FILE, not per test.
+    _G.KitnEssentialsOptimizeDB = nil
+
+    local KE = { Print = function(_, msg) rec.prints[#rec.prints + 1] = msg end }
+    helpers.loadModule("Modules/QoL/Optimize.lua", KE)
+
+    local OPT = modules["Optimize"]
+    function OPT:RegisterEvent(event) rec.events[event] = true end
+    function OPT:UnregisterEvent(event) rec.events[event] = nil end
+
+    return OPT, rec, KE
+end
+
 return L
