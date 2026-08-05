@@ -324,6 +324,8 @@ local Defaults = {
             Scale = 1,
             AttachToCombatTexts = false,
 
+            -- THEME paints all three parts with the addon accent instead.
+            ColorMode = "CUSTOM",
             TextColor = { 1, 1, 1, 1 },
             TimerColor = { 1, 0.82, 0, 1 },
             SeparatorColor = { 0.5, 0.5, 0.5, 1 },

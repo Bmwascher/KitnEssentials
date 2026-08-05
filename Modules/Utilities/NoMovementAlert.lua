@@ -305,11 +305,23 @@ function NMA:GetSlot(index)
     return slot
 end
 
-function NMA:StyleSlot(slot)
+-- One colour for every part in theme mode, the three saved ones otherwise.
+-- Every read of a colour goes through here so the mode cannot be honoured in
+-- one place and forgotten in another.
+function NMA:RoleColor(key)
     local db = self.db
+    if db.ColorMode == "THEME" then
+        local accent = KE.Theme and KE.Theme.accent
+        if accent then return accent end
+    end
+    return db[key] or db.TextColor
+end
+
+function NMA:StyleSlot(slot)
     local face, size, outline = self:EffectiveStyle()
+    local c = self:RoleColor("TextColor")
     KE:ApplyFontToText(slot.text, face, size, outline)
-    slot.text:SetTextColor(db.TextColor[1], db.TextColor[2], db.TextColor[3], db.TextColor[4] or 1)
+    slot.text:SetTextColor(c[1], c[2], c[3], c[4] or 1)
     slot:SetSize(220, size + 6)
 end
 
@@ -468,22 +480,22 @@ function NMA:ComposeFormat(name, numberFmt)
     -- Any literal % in a name or separator is escaped for the same
     -- reason -- it would otherwise be read as a specifier downstream.
     local function esc(s) return (tostring(s):gsub("%%", "%%%%")) end
-    return "|cff" .. Hex(db.TextColor) .. esc(name) .. "|r "
-        .. "|cff" .. Hex(db.SeparatorColor or db.TextColor) .. esc(sep) .. "|r "
-        .. "|cff" .. Hex(db.TimerColor or db.TextColor) .. numberFmt .. "|r"
+    return "|cff" .. Hex(self:RoleColor("TextColor")) .. esc(name) .. "|r "
+        .. "|cff" .. Hex(self:RoleColor("SeparatorColor")) .. esc(sep) .. "|r "
+        .. "|cff" .. Hex(self:RoleColor("TimerColor")) .. numberFmt .. "|r"
 end
 
 function NMA:ComposeLine(name, timeText)
     local db = self.db
-    local nameHex = Hex(db.TextColor)
+    local nameHex = Hex(self:RoleColor("TextColor"))
     if not timeText then
         return string.format("|cff%s%s|r", nameHex, name)
     end
-    local timeHex = Hex(db.TimerColor or db.TextColor)
+    local timeHex = Hex(self:RoleColor("TimerColor"))
     local sep = db.Separator
     if sep == nil or sep == "" then sep = "-" end
     return string.format("|cff%s%s|r |cff%s%s|r |cff%s%s|r",
-        nameHex, name, Hex(db.SeparatorColor or db.TextColor), sep, timeHex, timeText)
+        nameHex, name, Hex(self:RoleColor("SeparatorColor")), sep, timeHex, timeText)
 end
 
 -- Truth when the client will give it, memory when it will not.

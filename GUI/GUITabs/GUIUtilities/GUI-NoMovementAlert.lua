@@ -184,20 +184,37 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
     -- Card 5: Colors
     ------------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
-    local colorRow = GUIFrame:CreateRow(card5.content, 46)
-    colorRow:AddWidget(GUIFrame:CreateColorPicker(colorRow, "Text Color", {
-        color = db.TextColor,
-        callback = function(r, g, b, a) db.TextColor = { r, g, b, a }; ApplySettings() end,
-    }), 0.34)
-    colorRow:AddWidget(GUIFrame:CreateColorPicker(colorRow, "Timer Color", {
-        color = db.TimerColor,
-        callback = function(r, g, b, a) db.TimerColor = { r, g, b, a }; ApplySettings() end,
-    }), 0.33)
-    colorRow:AddWidget(GUIFrame:CreateColorPicker(colorRow, "Separator Color", {
-        color = db.SeparatorColor,
-        callback = function(r, g, b, a) db.SeparatorColor = { r, g, b, a }; ApplySettings() end,
-    }), 0.33)
-    card5:AddRow(colorRow, 46)
+
+    local modeRow = GUIFrame:CreateRow(card5.content, 40)
+    modeRow:AddWidget(GUIFrame:CreateDropdown(modeRow, "Color Mode", {
+        options = {
+            { key = "CUSTOM", text = "Custom" },
+            { key = "THEME",  text = "Match Theme" },
+        },
+        value = db.ColorMode or "CUSTOM",
+        tooltip = "Match Theme paints the name, timer and separator with the addon accent colour, and hides the three pickers.",
+        callback = function(v) db.ColorMode = v; ApplySettings(); GUIFrame:RefreshContent() end,
+    }), 1)
+    card5:AddRow(modeRow, 40)
+
+    -- The three pickers are hidden rather than greyed in theme mode: a
+    -- disabled swatch still shows a colour, which reads as the one in use.
+    if db.ColorMode ~= "THEME" then
+        local colorRow = GUIFrame:CreateRow(card5.content, 46)
+        colorRow:AddWidget(GUIFrame:CreateColorPicker(colorRow, "Text Color", {
+            color = db.TextColor,
+            callback = function(r, g, b, a) db.TextColor = { r, g, b, a }; ApplySettings() end,
+        }), 0.34)
+        colorRow:AddWidget(GUIFrame:CreateColorPicker(colorRow, "Timer Color", {
+            color = db.TimerColor,
+            callback = function(r, g, b, a) db.TimerColor = { r, g, b, a }; ApplySettings() end,
+        }), 0.33)
+        colorRow:AddWidget(GUIFrame:CreateColorPicker(colorRow, "Separator Color", {
+            color = db.SeparatorColor,
+            callback = function(r, g, b, a) db.SeparatorColor = { r, g, b, a }; ApplySettings() end,
+        }), 0.33)
+        card5:AddRow(colorRow, 46)
+    end
 
     local sepRow = GUIFrame:CreateRow(card5.content, 40)
     sepRow:AddWidget(GUIFrame:CreateEditBox(sepRow, "Separator", {
