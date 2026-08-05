@@ -1839,9 +1839,10 @@ local Defaults = {
                 },
             },
             -- Game-wide replacement of Blizzard's shared font OBJECTS (quest
-            -- text, objective tracker, number fonts, mail, tooltips...). Off by
+            -- text, objective tracker, number fonts, mail...). Off by
             -- default: it changes text everywhere, not just inside skinned
-            -- windows, so it is opt-in.
+            -- windows, so it is opt-in. Tooltip fonts are NOT in its reach --
+            -- the Tooltips module owns those alone.
             BlizzardFonts = {
                 Enabled = false,
                 -- Per-category size overrides (GUI sliders). Unlisted objects
