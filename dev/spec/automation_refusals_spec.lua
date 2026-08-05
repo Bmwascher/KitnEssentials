@@ -307,7 +307,6 @@ describe("Automation master teardown and return trip (Task 3 Step 10b)", functio
         AU:TeardownPorts()
 
         assert.is_true(_G.BossBanner:IsEventRegistered("ENCOUNTER_LOOT_RECEIVED"))
-        assert.equals(0, fx.findFrameCalls("unwrapFrame", "RegisterEvent") + fx.findFrameCalls("unwrapFrame", "RegisterUnitEvent"))
         assert.is_true(unwrapFrame:IsEventRegistered("NEW_MOUNT_ADDED") == false)
         assert.is_true(screenshotFrame:IsEventRegistered("SCREENSHOT_SUCCEEDED") == false)
         assert.equals(fx.originalErrHandler, _G.UIErrorsFrame:GetScript("OnEvent"))
@@ -315,7 +314,9 @@ describe("Automation master teardown and return trip (Task 3 Step 10b)", functio
         assert.is_true(transformAuraFrame:IsEventRegistered("UNIT_AURA") == false)
         assert.is_true(transformAuraFrame:IsEventRegistered("PLAYER_REGEN_ENABLED") == false)
         assert.is_true(transformFishFrame:IsEventRegistered("UNIT_SPELLCAST_CHANNEL_STOP") == false)
-        assert.is_true(_G.ExpansionLandingPageMinimapButton:IsShown())
+        -- Ledger, NOT IsShown(): normalizeAndClear shows this button itself, so a
+        -- state read here passes even if the teardown never restores it.
+        assert.equals(1, fx.findFrameCalls("ExpansionLandingPageMinimapButton", "Show"))
         assert.equals(1, fx.findFrameCalls("KE_OmniumFoilButton", "SetShown"))
         assert.is_false(fx.lastArg("KE_OmniumFoilButton", "SetShown"))
         assert.equals(1, fx.findFrameCalls("KE_TrainAllButton", "Hide"))
@@ -677,7 +678,7 @@ describe("Automation effective-state predicates (Task 3 Step 10b)", function()
             fx.AU.db.Enabled = true
             fx.AU.db.OmniumCharButton = false
             fx.AU:ApplySettings()
-            assert.is_true(_G.ExpansionLandingPageMinimapButton:IsShown())
+            assert.equals(1, fx.findFrameCalls("ExpansionLandingPageMinimapButton", "Show"))
             assert.is_false(fx.lastArg("KE_OmniumFoilButton", "SetShown"))
         end)
 

@@ -1575,8 +1575,10 @@ end
 -- Auto-cancels cosmetic transform auras (profession gear, holiday costumes,
 -- prank toys) with a per-item include/exclude picker. Zero cost when idle:
 -- events only registered while the master is on AND at least one transform
--- is included. Index scans bail in restricted content; UNIT_AURA payload
--- fields are checked with issecretvalue before boolean use.
+-- is included. The restricted-content bail-out is inert on this build, and
+-- six payload reads here are unguarded by design -- ported as the reference
+-- wrote them. Do not trust this path in restricted content without checking
+-- the recorded exposure list first.
 
 local TRANSFORM_CATEGORY_ORDER = { "professions", "holiday", "toys", "items" }
 local TRANSFORM_CATEGORY_LABEL = {
