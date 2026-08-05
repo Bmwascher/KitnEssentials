@@ -133,18 +133,7 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     card2:AddRow(row2a, Theme.rowHeight)
 
     local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local statusbarDropdown = GUIFrame:CreateDropdown(row2b, "Bar Texture", {
-        options = statusbarList,
-        value = db.StatusBarTexture or "KitnUI",
-        callback = function(key) db.StatusBarTexture = key; ApplySettings() end,
-        searchable = true,
-    })
-    row2b:AddWidget(statusbarDropdown, 1)
-    manager:Register(statusbarDropdown, "all")
-    card2:AddRow(row2b, Theme.rowHeight)
-
-    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
-    local hideNotInterruptCheck = GUIFrame:CreateCheckbox(row2c, "Hide Non-Interruptible Casts", {
+    local hideNotInterruptCheck = GUIFrame:CreateCheckbox(row2b, "Hide Non-Interruptible Casts", {
         value = db.HideNotInterruptible == true,
         callback = function(checked) db.HideNotInterruptible = checked end,
         msgPopup = true,
@@ -152,8 +141,19 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
         msgOn = "On",
         msgOff = "Off",
     })
-    row2c:AddWidget(hideNotInterruptCheck, 1)
+    row2b:AddWidget(hideNotInterruptCheck, 1)
     manager:Register(hideNotInterruptCheck, "all")
+    card2:AddRow(row2b, Theme.rowHeight)
+
+    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local statusbarDropdown = GUIFrame:CreateDropdown(row2c, "Bar Texture", {
+        options = statusbarList,
+        value = db.StatusBarTexture or "KitnUI",
+        callback = function(key) db.StatusBarTexture = key; ApplySettings() end,
+        searchable = true,
+    })
+    row2c:AddWidget(statusbarDropdown, 1)
+    manager:Register(statusbarDropdown, "all")
     card2:AddRow(row2c, Theme.rowHeightLast, 0)
 
     yOffset = card2:GetNextOffset()
@@ -340,7 +340,6 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
         manager    = manager,
         onChange   = ApplySettings,
         stateGroup = "all",
-        isLast     = true,
         colors     = {
             { label = "Casting", key = "CastingColor", default = { 1, 0.7, 0, 1 } },
             { label = "Channeling", key = "ChannelingColor", default = { 0, 0.7, 1, 1 } },
