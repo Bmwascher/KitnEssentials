@@ -1556,7 +1556,13 @@ function L.loadKeystoneHelper(overrides)
         registered = {},
         isActive = false,
         RegisterElement = function(self, config) self.registered[config.key] = config end,
-        UnregisterElement = function(self, key) self.registered[key] = nil end,
+        -- unregisterCalls is the only way to see a drop-then-recreate: the
+        -- registered table alone looks identical either way.
+        unregisterCalls = {},
+        UnregisterElement = function(self, key)
+            self.registered[key] = nil
+            self.unregisterCalls[#self.unregisterCalls + 1] = key
+        end,
     }
     KE.EditMode = rec.editMode
 

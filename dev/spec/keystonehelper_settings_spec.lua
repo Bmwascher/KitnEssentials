@@ -253,6 +253,41 @@ describe("KeystoneHelper: per-feature settings resolution", function()
             assert.equals(KH.rerollFrame, rec.editMode.registered[REROLL_KEY].frame)
         end)
 
+        -- EditMode reuses an existing overlay for a key and that overlay keeps
+        -- its own reference to the element it was built from, so re-registering
+        -- alone would leave the mover anchored to the frame it no longer names.
+        -- Only an explicit drop rebuilds it. The registered table looks correct
+        -- either way, so the drop is what has to be asserted.
+        it("drops the Your Key overlay when the follow switch changes its frame", function()
+            KH.db.YourKeyUseRerollPosition = false
+            KH:RefreshEditModeElements()
+            assert.equals(KH.yourKeyFrame, rec.editMode.registered[YOURKEY_KEY].frame)
+
+            local before = #rec.editMode.unregisterCalls
+            KH.db.YourKeyUseRerollPosition = true
+            KH:SetEditModeFocus("YourKey")
+            KH:RefreshEditModeElements()
+
+            local dropped = false
+            for i = before + 1, #rec.editMode.unregisterCalls do
+                if rec.editMode.unregisterCalls[i] == YOURKEY_KEY then dropped = true end
+            end
+            assert.is_true(dropped)
+            assert.equals(KH.rerollFrame, rec.editMode.registered[YOURKEY_KEY].frame)
+        end)
+
+        it("leaves the overlay alone when the frame does not change", function()
+            -- Every settings change re-registers. Dropping the overlay each time
+            -- would leak a frame per slider tick, so the drop must be conditional.
+            KH:RefreshEditModeElements()
+            local before = #rec.editMode.unregisterCalls
+            KH:RefreshEditModeElements()
+            KH:RefreshEditModeElements()
+            for i = before + 1, #rec.editMode.unregisterCalls do
+                assert.are_not.equals(REROLL_KEY, rec.editMode.unregisterCalls[i])
+            end
+        end)
+
         it("points each mover's Configure link at its own tab", function()
             KH.db.YourKeyUseRerollPosition = false
             KH:RefreshEditModeElements()

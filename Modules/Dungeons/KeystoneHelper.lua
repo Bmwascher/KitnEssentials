@@ -565,6 +565,17 @@ function KH:RegisterEditModeElement(prefix)
     local frame = (keyPrefix() == "Reroll") and self.rerollFrame or self.yourKeyFrame
     if not frame then return end
 
+    -- Re-registering a key is not enough when the frame under it changed:
+    -- EditMode reuses an existing overlay and that overlay keeps its own
+    -- reference to the element it was built from, so it would stay anchored to
+    -- the previous frame and drag from there. Flipping the follow switch while
+    -- Edit Mode is open is the path that does it. Drop the overlay first.
+    self.editModeFrames = self.editModeFrames or {}
+    if self.editModeFrames[meta.key] and self.editModeFrames[meta.key] ~= frame then
+        KE.EditMode:UnregisterElement(meta.key)
+    end
+    self.editModeFrames[meta.key] = frame
+
     KE.EditMode:RegisterElement({
         key = meta.key,
         displayName = meta.displayName,
