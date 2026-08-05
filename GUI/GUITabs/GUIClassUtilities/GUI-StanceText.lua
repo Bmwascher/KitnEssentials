@@ -105,8 +105,8 @@ GUIFrame:RegisterContent("StanceText", function(scrollChild, yOffset)
     table_insert(allWidgets, borderColor)
     card2:AddRow(row2b, 46)
 
-    -- No Preview button: PreviewManager shows this module whenever the page
-    -- is open or edit mode is on (Core/Globals.lua MODULES_FOR_CONTENT).
+    -- No Preview button: PreviewManager shows this module whenever the page is
+    -- open or edit mode is on.
     yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
     ------------------------------------------------------------------
