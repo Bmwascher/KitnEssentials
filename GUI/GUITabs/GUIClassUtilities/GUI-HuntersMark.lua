@@ -109,19 +109,15 @@ GUIFrame:RegisterContent("HuntersMark", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 4: Colors
     ----------------------------------------------------------------
-    local card4 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
-    manager:Register(card4, "all")
-
-    local row4 = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
-    local colorPicker = GUIFrame:CreateColorPicker(row4, "Alert Color", {
-        color = db.Color or { 1, 0.82, 0, 1 },
-        callback = function(r, g, b, a) db.Color = { r, g, b, a }; ApplySettings() end,
+    yOffset = GUIFrame:CreateColorsCard(scrollChild, yOffset, {
+        db = db,
+        manager = manager,
+        onChange = ApplySettings,
+        colors = {
+            { label = "Alert Color", key = "Color", default = { 1, 0.82, 0, 1 } },
+        },
+        isLast = true,
     })
-    row4:AddWidget(colorPicker, 1)
-    manager:Register(colorPicker, "all")
-    card4:AddRow(row4, Theme.rowHeightLast, 0)
-
-    yOffset = card4:GetNextOffset()
 
     RefreshStates()
     return yOffset

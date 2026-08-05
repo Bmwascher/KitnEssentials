@@ -246,42 +246,18 @@ GUIFrame:RegisterContent("EbonMightTracker", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 6: Colors
     ----------------------------------------------------------------
-    local card6 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
-    manager:Register(card6, "all")
-
-    local row6a = GUIFrame:CreateRow(card6.content, Theme.rowHeight)
-    local basePicker = GUIFrame:CreateColorPicker(row6a, "Base Color", {
-        color = db.BaseColor or { 1, 1, 1, 1 },
-        callback = function(r, g, b, a) db.BaseColor = { r, g, b, a }; ApplySettings() end,
+    yOffset = GUIFrame:CreateColorsCard(scrollChild, yOffset, {
+        db = db,
+        manager = manager,
+        onChange = ApplySettings,
+        colors = {
+            { label = "Base Color", key = "BaseColor", default = { 1, 1, 1, 1 } },
+            { label = "Crit Color", key = "CritColor", default = { 1, 0, 1, 1 } },
+            { label = "Dupe Color", key = "DupeColor", default = { 1, 0.5, 0, 1 } },
+            { label = "Pandemic Color", key = "PandemicColor", default = { 1, 1, 0, 1 } },
+        },
+        isLast = true,
     })
-    row6a:AddWidget(basePicker, 0.5)
-    manager:Register(basePicker, "all")
-
-    local critPicker = GUIFrame:CreateColorPicker(row6a, "Crit Color", {
-        color = db.CritColor or { 1, 0, 1, 1 },
-        callback = function(r, g, b, a) db.CritColor = { r, g, b, a }; ApplySettings() end,
-    })
-    row6a:AddWidget(critPicker, 0.5)
-    manager:Register(critPicker, "all")
-    card6:AddRow(row6a, Theme.rowHeight)
-
-    local row6b = GUIFrame:CreateRow(card6.content, Theme.rowHeightLast)
-    local dupePicker = GUIFrame:CreateColorPicker(row6b, "Dupe Color", {
-        color = db.DupeColor or { 1, 0.5, 0, 1 },
-        callback = function(r, g, b, a) db.DupeColor = { r, g, b, a }; ApplySettings() end,
-    })
-    row6b:AddWidget(dupePicker, 0.5)
-    manager:Register(dupePicker, "all")
-
-    local pandemicPicker = GUIFrame:CreateColorPicker(row6b, "Pandemic Color", {
-        color = db.PandemicColor or { 1, 1, 0, 1 },
-        callback = function(r, g, b, a) db.PandemicColor = { r, g, b, a }; ApplySettings() end,
-    })
-    row6b:AddWidget(pandemicPicker, 0.5)
-    manager:Register(pandemicPicker, "all")
-    card6:AddRow(row6b, Theme.rowHeightLast, 0)
-
-    yOffset = card6:GetNextOffset()
 
     RefreshStates()
     return yOffset

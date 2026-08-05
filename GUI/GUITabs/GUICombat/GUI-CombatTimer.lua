@@ -154,32 +154,15 @@ GUIFrame:RegisterContent("CombatTimer", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 5: Colors
     ----------------------------------------------------------------
-    local card4 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
-    manager:Register(card4, "all")
-
-    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
-    local inCombatColor = GUIFrame:CreateColorPicker(row4a, "In Combat Color", {
-        color = db.ColorInCombat or { 1, 1, 1, 1 },
-        callback = function(r, g, b, a)
-            db.ColorInCombat = { r, g, b, a }
-            ApplySettings()
-        end,
+    yOffset = GUIFrame:CreateColorsCard(scrollChild, yOffset, {
+        db = db,
+        manager = manager,
+        onChange = ApplySettings,
+        colors = {
+            { label = "In Combat Color", key = "ColorInCombat", default = { 1, 1, 1, 1 } },
+            { label = "Out of Combat Color", key = "ColorOutOfCombat", default = { 1, 1, 1, 0.7 } },
+        },
     })
-    row4a:AddWidget(inCombatColor, 0.5)
-    manager:Register(inCombatColor, "all")
-
-    local outCombatColor = GUIFrame:CreateColorPicker(row4a, "Out of Combat Color", {
-        color = db.ColorOutOfCombat or { 1, 1, 1, 0.7 },
-        callback = function(r, g, b, a)
-            db.ColorOutOfCombat = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row4a:AddWidget(outCombatColor, 0.5)
-    manager:Register(outCombatColor, "all")
-    card4:AddRow(row4a, Theme.rowHeightLast, 0)
-
-    yOffset = card4:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 6: Backdrop

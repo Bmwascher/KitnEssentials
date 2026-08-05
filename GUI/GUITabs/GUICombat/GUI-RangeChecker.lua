@@ -142,54 +142,18 @@ GUIFrame:RegisterContent("RangeChecker", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 5: Color Settings
     ----------------------------------------------------------------
-    local card5 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
-    manager:Register(card5, "all")
-
-    local row5a = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
-    local colorFourPicker = GUIFrame:CreateColorPicker(row5a, "0-10 Yards", {
-        color = db.ColorFour or { 0, 1, 0, 1 },
-        callback = function(r, g, b, a)
-            db.ColorFour = { r, g, b, a }
-            ApplySettings()
-        end,
+    yOffset = GUIFrame:CreateColorsCard(scrollChild, yOffset, {
+        db = db,
+        manager = manager,
+        onChange = ApplySettings,
+        colors = {
+            { label = "0-10 Yards", key = "ColorFour", default = { 0, 1, 0, 1 } },
+            { label = "20-40 Yards", key = "ColorTwo", default = { 1, 0.42, 0, 1 } },
+            { label = "10-20 Yards", key = "ColorThree", default = { 1, 0.82, 0, 1 } },
+            { label = "40+ Yards", key = "ColorOne", default = { 1, 0, 0, 1 } },
+        },
+        isLast = true,
     })
-    row5a:AddWidget(colorFourPicker, 0.5)
-    manager:Register(colorFourPicker, "all")
-
-    local colorTwoPicker = GUIFrame:CreateColorPicker(row5a, "20-40 Yards", {
-        color = db.ColorTwo or { 1, 0.42, 0, 1 },
-        callback = function(r, g, b, a)
-            db.ColorTwo = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row5a:AddWidget(colorTwoPicker, 0.5)
-    manager:Register(colorTwoPicker, "all")
-    card5:AddRow(row5a, Theme.rowHeight)
-
-    local row5b = GUIFrame:CreateRow(card5.content, Theme.rowHeightLast)
-    local colorThreePicker = GUIFrame:CreateColorPicker(row5b, "10-20 Yards", {
-        color = db.ColorThree or { 1, 0.82, 0, 1 },
-        callback = function(r, g, b, a)
-            db.ColorThree = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row5b:AddWidget(colorThreePicker, 0.5)
-    manager:Register(colorThreePicker, "all")
-
-    local colorOnePicker = GUIFrame:CreateColorPicker(row5b, "40+ Yards", {
-        color = db.ColorOne or { 1, 0, 0, 1 },
-        callback = function(r, g, b, a)
-            db.ColorOne = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row5b:AddWidget(colorOnePicker, 0.5)
-    manager:Register(colorOnePicker, "all")
-    card5:AddRow(row5b, Theme.rowHeightLast, 0)
-
-    yOffset = card5:GetNextOffset()
 
     RefreshStates()
     return yOffset
