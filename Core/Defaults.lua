@@ -914,6 +914,9 @@ local Defaults = {
         },
 
         KeystoneHelper = {
+            -- No GUI control. Core/Main.lua's module-enable loop and
+            -- PreviewManager both gate on this key, so the container-shaped
+            -- page leaves it permanently true rather than deleting it.
             Enabled = true,
 
             -- Feature toggles
@@ -922,18 +925,33 @@ local Defaults = {
             RerollEnabled = true,
             YourKeyEnabled = true,
 
-            -- Shared reminder appearance/position (one block for both frames —
-            -- Reroll and Your Key? are never on screen together live)
-            Size = 64,
-            FontFace = "Expressway",
-            FontOutline = "SOFTOUTLINE",
-            FontSize = 36,
-            FontColor = { 1, 1, 1, 1 },
-            FontColorKey = { 1, 1, 1, 1 },
-            Strata = "MEDIUM",
-            AnchorFrameType = "UIPARENT",
-            ParentFrame = "UIParent",
-            Position = DefaultPosition(0, 165),
+            -- Each reminder owns its own appearance. Position is the one
+            -- thing they can share: YourKeyUseRerollPosition parks Your Key
+            -- on the Reroll coordinates instead of its own.
+            RerollSize = 64,
+            RerollFontFace = "Expressway",
+            RerollFontOutline = "SOFTOUTLINE",
+            RerollFontSize = 36,
+            RerollFontColor = { 1, 1, 1, 1 },
+            RerollFontColorKey = { 1, 1, 1, 1 },
+            RerollStrata = "MEDIUM",
+            RerollAnchorFrameType = "UIPARENT",
+            RerollParentFrame = "UIParent",
+            RerollPosition = DefaultPosition(0, 165),
+
+            -- The X offset differs from Reroll's on purpose: switching the
+            -- follow off must not stack the two on identical coordinates.
+            YourKeyUseRerollPosition = true,
+            YourKeySize = 64,
+            YourKeyFontFace = "Expressway",
+            YourKeyFontOutline = "SOFTOUTLINE",
+            YourKeyFontSize = 36,
+            YourKeyFontColor = { 1, 1, 1, 1 },
+            YourKeyFontColorKey = { 1, 1, 1, 1 },
+            YourKeyStrata = "MEDIUM",
+            YourKeyAnchorFrameType = "UIPARENT",
+            YourKeyParentFrame = "UIParent",
+            YourKeyPosition = DefaultPosition(150, 165),
 
             -- Per-feature glow
             RerollGlowEnabled = true,
