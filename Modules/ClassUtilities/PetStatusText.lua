@@ -54,6 +54,8 @@ local PET_STATUS = {
     WRONG = 4,
 }
 
+local UPDATE_DEBOUNCE = 0.15
+
 PS.frame = nil
 PS.text = nil
 
@@ -212,7 +214,9 @@ function PS:CreateFrame()
 
     local text = frame:CreateFontString(nil, "OVERLAY")
     local fontPath = KE:GetFontPath(self.db.FontFace)
-    text:SetFont(fontPath, self.db.FontSize, self.db.FontOutline or "")
+    -- SOFTOUTLINE is a KE construct, not a SetFont flag — filter it here or the
+    -- default outline reaches SetFont as an unknown flag string.
+    text:SetFont(fontPath, self.db.FontSize, KE:GetFontOutline(self.db.FontOutline))
     text:SetTextColor(1, 0.82, 0, 1)
     text:ClearAllPoints()
     text:SetPoint("CENTER", frame, "CENTER", 0, 0)
@@ -228,7 +232,19 @@ function PS:CreateFrame()
 end
 
 function PS:UpdatePetText()
-    local _, message, color = CheckPetStatus()
+    if not self.frame then return end
+    -- The preview owns the frame while it is up; a live pet event must not
+    -- repaint or hide it out from under the config panel.
+    if self.isPreview then return end
+
+    -- If the status evaluation ever throws on an API change, hide the text
+    -- rather than leave the last painted state frozen on screen. A reminder
+    -- that cannot evaluate must not nag.
+    local ok, _, message, color = pcall(CheckPetStatus)
+    if not ok then
+        self.frame:Hide()
+        return
+    end
 
     if message and color then
         self.text:SetText(message)
@@ -236,8 +252,25 @@ function PS:UpdatePetText()
         self.text:SetTextColor(r, g, b, a)
         self.frame:Show()
     else
-        if self.frame then self.frame:Hide() end
+        self.frame:Hide()
     end
+end
+
+-- Pet events arrive in bursts (combat entry, mounting, a resummon), so repaints
+-- are debounced. The flush is hoisted so a burst does not allocate a closure per
+-- event.
+local function FlushPetUpdate()
+    PS._updatePending = false
+    -- A flush armed just before teardown would otherwise repaint and re-Show
+    -- over the hidden frame with nothing left registered to correct it.
+    if not PS._tracking then return end
+    PS:UpdatePetText()
+end
+
+function PS:QueueUpdate()
+    if self._updatePending then return end
+    self._updatePending = true
+    C_Timer.After(UPDATE_DEBOUNCE, FlushPetUpdate)
 end
 
 ---------------------------------------------------------------------------------
@@ -302,6 +335,12 @@ function PS:ShowPreview(state)
 
     self.text:SetText(previewText)
     self.text:SetTextColor(r, g, b, a)
+
+    -- CreateFrame sized the frame from an empty string, so refit to the real
+    -- preview text or long custom state text clips.
+    local width, height = math.max(self.text:GetWidth(), 170), math.max(self.text:GetHeight(), 18)
+    self.frame:SetSize(width + 5, height + 5)
+
     self.frame:Show()
 end
 
@@ -317,42 +356,48 @@ end
 ---------------------------------------------------------------------------------
 -- Lifecycle
 ---------------------------------------------------------------------------------
+-- Zone-in needs a longer settle than the debounce: pet data is not ready
+-- immediately after a load screen.
+function PS:OnPlayerEnteringWorld()
+    C_Timer.After(1, function()
+        if self._tracking then self:QueueUpdate() end
+    end)
+end
+
 function PS:OnEnable()
     if not self.db.Enabled then return end
     if not petInfo then return end
 
     self:CreateFrame()
+    self:ApplySettings()
     self:RegWithEditMode()
 
+    self._tracking = true
+    self._updatePending = false
+
     self:RegisterEvent("UNIT_PET", function(_, unit)
-        if unit == "player" then
-            C_Timer.After(0.2, function()
-                if UnitExists("pet") and not UnitIsDeadOrGhost("pet") then
-                    ResetPetDeathTracking()
-                end
-                self:UpdatePetText()
-            end)
+        if unit ~= "player" then return end
+        if UnitExists("pet") and not UnitIsDeadOrGhost("pet") then
+            ResetPetDeathTracking()
         end
+        self:QueueUpdate()
     end)
 
-    self:RegisterEvent("PLAYER_REGEN_ENABLED", "UpdatePetText")
-    self:RegisterEvent("PLAYER_ENTERING_WORLD", function() C_Timer.After(1, function() self:UpdatePetText() end) end)
-    self:RegisterEvent("SPELLS_CHANGED", "UpdatePetText")
-    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "UpdatePetText")
-    self:RegisterEvent("UNIT_DIED", "UpdatePetText")
-
-    self:RegisterEvent("PET_BAR_UPDATE", function()
-        C_Timer.After(0.1, function() self:UpdatePetText() end)
-    end)
+    self:RegisterEvent("PLAYER_REGEN_ENABLED", "QueueUpdate")
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnPlayerEnteringWorld")
+    self:RegisterEvent("SPELLS_CHANGED", "QueueUpdate")
+    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "QueueUpdate")
+    self:RegisterEvent("UNIT_DIED", "QueueUpdate")
+    -- Mounting hides the text, and without this nothing re-checks on dismount.
+    self:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED", "QueueUpdate")
+    self:RegisterEvent("PET_BAR_UPDATE", "QueueUpdate")
 
     self:UpdatePetText()
-
-    C_Timer.After(1, function()
-        self:ApplySettings()
-    end)
 end
 
 function PS:OnDisable()
-    if self.frame then self.frame:Hide() end
+    self._tracking = false
+    self._updatePending = false
     self:UnregisterAllEvents()
+    if self.frame then self.frame:Hide() end
 end
