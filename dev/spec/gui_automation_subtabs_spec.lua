@@ -55,21 +55,25 @@ describe("GUI-Automation: subtab id coverage", function()
         assertEveryIdResolves(tabs)
     end)
 
-    -- The reachability guarantee this page exists to keep: Auction House
-    -- Filter, Vantus Rune Withdrawer and Merchant Pages ride on this one
-    -- tab, and there is no other route to any of them.
-    it("keeps only Vendors & Bags reachable while the master is off", function()
+    -- The reachability guarantee this page exists to keep. Every tab holding a
+    -- module that runs independently of the master must survive master-off, or
+    -- that module's only switch disappears: Vantus Rune Withdrawer sits on
+    -- General, and Auction House Filter and Merchant Pages sit on Vendors.
+    -- There is no other route to any of the three.
+    it("keeps General and Vendors & Bags reachable while the master is off", function()
         local tabs = strip({ Enabled = false })
-        assert.equals(1, #tabs)
-        assert.equals("AutomationVendors", tabs[1].id)
+        assert.equals(2, #tabs)
+        assert.equals("AutomationGeneral", tabs[1].id)
+        assert.equals("AutomationVendors", tabs[2].id)
         assertEveryIdResolves(tabs)
     end)
 
     -- A missing db must not strand the three independent modules either.
-    it("keeps only Vendors & Bags reachable when the db is missing entirely", function()
+    it("keeps General and Vendors & Bags reachable when the db is missing entirely", function()
         local tabs = strip(nil)
-        assert.equals(1, #tabs)
-        assert.equals("AutomationVendors", tabs[1].id)
+        assert.equals(2, #tabs)
+        assert.equals("AutomationGeneral", tabs[1].id)
+        assert.equals("AutomationVendors", tabs[2].id)
         assertEveryIdResolves(tabs)
     end)
 

@@ -4,12 +4,12 @@
 -- ║  Purpose: Configuration panel for the Automation module, ║
 -- ║           split across four tabs (General, Interface,    ║
 -- ║           Quests & Social, Vendors & Bags) behind a      ║
--- ║           shared header toggle. Vendors & Bags also      ║
--- ║           hosts three independent modules (Auction House ║
--- ║           Filter, Vantus Rune Withdrawer, Merchant       ║
--- ║           Pages) with their own switches, so it is the   ║
--- ║           one tab offered even while the master is off — ║
--- ║           there is no other route to those three.        ║
+-- ║           shared header toggle. Three independent        ║
+-- ║           modules with their own switches live here and  ║
+-- ║           have no other route: Vantus Rune Withdrawer on ║
+-- ║           General, Auction House Filter and Merchant     ║
+-- ║           Pages on Vendors & Bags. Those two tabs are    ║
+-- ║           therefore offered even while the master is off.║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -66,8 +66,12 @@ local function BuildHeader(scrollChild, yOffset)
 end
 
 ----------------------------------------------------------------
--- General: Convenience
+-- General: Convenience, Housing Item Auto-Roll, Vantus Rune Withdrawer
 ----------------------------------------------------------------
+-- Survives master-off because Vantus Rune Withdrawer is an independent module
+-- and this is its only route. Convenience and Housing Item Auto-Roll gate on
+-- the master; Vantus Rune always renders, even when db (the Automation table
+-- itself) is missing entirely.
 GUIFrame:RegisterContent("AutomationGeneral", function(scrollChild, yOffset)
     local db = GetDB()
     if not db then return yOffset end
@@ -121,7 +125,93 @@ GUIFrame:RegisterContent("AutomationGeneral", function(scrollChild, yOffset)
 
     yOffset = card:GetNextOffset()
 
+    -- Master-gated, like the Convenience card above it.
+    if db.Enabled ~= false then
+        ----------------------------------------------------------------
+        -- Housing Item Auto-Roll
+        ----------------------------------------------------------------
+        local cardHousing = GUIFrame:CreateCard(scrollChild, "Housing Item Auto-Roll", yOffset)
+        manager:Register(cardHousing, "all")
+
+        local rowHousing = GUIFrame:CreateRow(cardHousing.content, Theme.rowHeightLast)
+        local autoPassHousingCheck = GUIFrame:CreateCheckbox(rowHousing, "Auto-Roll on Housing Items", {
+            value = db.AutoPassHousing == true,
+            callback = function(checked) db.AutoPassHousing = checked; ApplySettings() end,
+        })
+        rowHousing:AddWidget(autoPassHousingCheck, 0.5)
+        manager:Register(autoPassHousingCheck, "all")
+
+        local rollModeDropdown = GUIFrame:CreateDropdown(rowHousing, "Roll Type", {
+            options = {
+                { key = "PASS", text = "Pass" },
+                { key = "NEED", text = "Need" },
+            },
+            value = db.AutoPassHousingMode or "PASS",
+            callback = function(val) db.AutoPassHousingMode = val end,
+        })
+        rowHousing:AddWidget(rollModeDropdown, 0.5)
+        manager:Register(rollModeDropdown, "all")
+        cardHousing:AddRow(rowHousing, Theme.rowHeightLast, 0)
+
+        cardHousing:AddLabel("|cff888888Auto-rolls on Housing items based on your roll type selection. Useful in raids/dungeons where housing decor drops aren't gear upgrades.|r")
+
+        yOffset = cardHousing:GetNextOffset()
+    end
+
     manager:UpdateAll(true)
+
+    ----------------------------------------------------------------
+    -- Vantus Rune Withdrawer (independent module — own cascade)
+    ----------------------------------------------------------------
+    local vrDB = KE.db and KE.db.profile.VantusRune
+    if vrDB then
+        local vrManager = GUIFrame:CreateWidgetStateManager()
+
+        local function ApplyVRState(enabled)
+            vrDB.Enabled = enabled
+            if enabled then KitnEssentials:EnableModule("VantusRune")
+            else KitnEssentials:DisableModule("VantusRune") end
+        end
+
+        local function RefreshVRStates()
+            vrManager:UpdateAll(vrDB.Enabled ~= false)
+        end
+
+        local cardVR = GUIFrame:CreateCard(scrollChild, "Vantus Rune Withdrawer", yOffset)
+        cardVR:AddHeaderToggle(vrDB.Enabled ~= false, function(checked)
+            ApplyVRState(checked)
+            KE:Print("Vantus Rune Withdrawer: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+        end)
+        yOffset = cardVR:GetNextOffset()
+
+        if vrDB.Enabled ~= false then
+            local rowVR1 = GUIFrame:CreateRow(cardVR.content, Theme.rowHeight)
+            local vrChatCheck = GUIFrame:CreateCheckbox(rowVR1, "Show Chat Messages", {
+                value = vrDB.ShowChatMessages ~= false,
+                callback = function(checked) vrDB.ShowChatMessages = checked end,
+            })
+            rowVR1:AddWidget(vrChatCheck, 1)
+            vrManager:Register(vrChatCheck, "all")
+            cardVR:AddRow(rowVR1, Theme.rowHeight)
+
+            local rowVR2 = GUIFrame:CreateRow(cardVR.content, Theme.rowHeightLast)
+            local vrTimeoutSlider = GUIFrame:CreateSlider(rowVR2, "Confirm Timeout", {
+                min = 5, max = 30, step = 1,
+                value = vrDB.ConfirmationTimeout or 15,
+                callback = function(val) vrDB.ConfirmationTimeout = val end,
+            })
+            rowVR2:AddWidget(vrTimeoutSlider, 0.5)
+            vrManager:Register(vrTimeoutSlider, "all")
+            cardVR:AddRow(rowVR2, Theme.rowHeightLast, 0)
+
+            cardVR:AddLabel("|cff888888Adds a button to the Guild Bank to withdraw one Vantus Rune.\nPriority: Radiant Gold (245880) > Radiant Silver (245879).\nYou must be on the same realm as your guild to withdraw.|r")
+
+            yOffset = cardVR:GetNextOffset()
+        end
+
+        RefreshVRStates()
+    end
+
     return yOffset
 end)
 
@@ -464,15 +554,13 @@ GUIFrame:RegisterContent("AutomationQuests", function(scrollChild, yOffset)
 end)
 
 ----------------------------------------------------------------
--- Vendors & Bags: Merchant Automation, Merchant Pages, Pages,
--- Auction House Filter, Collections & Bags, Housing Item Auto-Roll,
--- Vantus Rune Withdrawer
+-- Vendors & Bags: Merchant Automation, Merchant Pages,
+-- Auction House Filter, Collections & Bags
 ----------------------------------------------------------------
--- The one tab still offered while the master is off. Merchant Automation,
--- Collections & Bags and Housing Item Auto-Roll gate on the master;
--- Auction House Filter, Merchant Pages (and Pages) and Vantus Rune
--- Withdrawer are independent modules and always render, even when db (the
--- Automation table itself) is missing entirely.
+-- Also survives master-off. Merchant Automation and Collections & Bags gate on
+-- the master; Auction House Filter and Merchant Pages are independent modules
+-- and always render, even when db (the Automation table itself) is missing
+-- entirely.
 GUIFrame:RegisterContent("AutomationVendors", function(scrollChild, yOffset)
     local db = GetDB()
     local gated = db and db.Enabled == true
@@ -684,96 +772,17 @@ GUIFrame:RegisterContent("AutomationVendors", function(scrollChild, yOffset)
 
         yOffset = card2:GetNextOffset()
 
-        ----------------------------------------------------------------
-        -- Housing Item Auto-Roll
-        ----------------------------------------------------------------
-        local card3 = GUIFrame:CreateCard(scrollChild, "Housing Item Auto-Roll", yOffset)
-        manager:Register(card3, "all")
-
-        local row3 = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
-        local autoPassHousingCheck = GUIFrame:CreateCheckbox(row3, "Auto-Roll on Housing Items", {
-            value = db.AutoPassHousing == true,
-            callback = function(checked) db.AutoPassHousing = checked; ApplySettings() end,
-        })
-        row3:AddWidget(autoPassHousingCheck, 0.5)
-        manager:Register(autoPassHousingCheck, "all")
-
-        local rollModeDropdown = GUIFrame:CreateDropdown(row3, "Roll Type", {
-            options = {
-                { key = "PASS", text = "Pass" },
-                { key = "NEED", text = "Need" },
-            },
-            value = db.AutoPassHousingMode or "PASS",
-            callback = function(val) db.AutoPassHousingMode = val end,
-        })
-        row3:AddWidget(rollModeDropdown, 0.5)
-        manager:Register(rollModeDropdown, "all")
-        card3:AddRow(row3, Theme.rowHeightLast, 0)
-
-        card3:AddLabel("|cff888888Auto-rolls on Housing items based on your roll type selection. Useful in raids/dungeons where housing decor drops aren't gear upgrades.|r")
-
-        yOffset = card3:GetNextOffset()
     end
 
-    ----------------------------------------------------------------
-    -- Vantus Rune Withdrawer (independent module — own cascade)
-    ----------------------------------------------------------------
-    local vrDB = KE.db and KE.db.profile.VantusRune
-    if vrDB then
-        local vrManager = GUIFrame:CreateWidgetStateManager()
-
-        local function ApplyVRState(enabled)
-            vrDB.Enabled = enabled
-            if enabled then KitnEssentials:EnableModule("VantusRune")
-            else KitnEssentials:DisableModule("VantusRune") end
-        end
-
-        local function RefreshVRStates()
-            vrManager:UpdateAll(vrDB.Enabled ~= false)
-        end
-
-        local cardVR = GUIFrame:CreateCard(scrollChild, "Vantus Rune Withdrawer", yOffset)
-        cardVR:AddHeaderToggle(vrDB.Enabled ~= false, function(checked)
-            ApplyVRState(checked)
-            KE:Print("Vantus Rune Withdrawer: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
-        end)
-        yOffset = cardVR:GetNextOffset()
-
-        if vrDB.Enabled ~= false then
-            local rowVR1 = GUIFrame:CreateRow(cardVR.content, Theme.rowHeight)
-            local vrChatCheck = GUIFrame:CreateCheckbox(rowVR1, "Show Chat Messages", {
-                value = vrDB.ShowChatMessages ~= false,
-                callback = function(checked) vrDB.ShowChatMessages = checked end,
-            })
-            rowVR1:AddWidget(vrChatCheck, 1)
-            vrManager:Register(vrChatCheck, "all")
-            cardVR:AddRow(rowVR1, Theme.rowHeight)
-
-            local rowVR2 = GUIFrame:CreateRow(cardVR.content, Theme.rowHeightLast)
-            local vrTimeoutSlider = GUIFrame:CreateSlider(rowVR2, "Confirm Timeout", {
-                min = 5, max = 30, step = 1,
-                value = vrDB.ConfirmationTimeout or 15,
-                callback = function(val) vrDB.ConfirmationTimeout = val end,
-            })
-            rowVR2:AddWidget(vrTimeoutSlider, 0.5)
-            vrManager:Register(vrTimeoutSlider, "all")
-            cardVR:AddRow(rowVR2, Theme.rowHeightLast, 0)
-
-            cardVR:AddLabel("|cff888888Adds a button to the Guild Bank to withdraw one Vantus Rune.\nPriority: Radiant Gold (245880) > Radiant Silver (245879).\nYou must be on the same realm as your guild to withdraw.|r")
-
-            yOffset = cardVR:GetNextOffset()
-        end
-
-        RefreshVRStates()
-    end
 
     manager:UpdateAll(true)
     return yOffset
 end)
 
--- Three cards on Vendors & Bags are separate modules with their own
--- switches, and this page is the only route to them. Turning Automation
--- off must not take them away, so that one tab survives.
+-- Three cards here are separate modules with their own switches, and this page
+-- is the only route to them: Vantus Rune Withdrawer on General, Auction House
+-- Filter and Merchant Pages on Vendors & Bags. Turning Automation off must not
+-- take them away, so both of those tabs survive it.
 GUIFrame:RegisterTabbedContent("Automation", function()
     local db = KE.db and KE.db.profile.Automation
 
@@ -783,7 +792,7 @@ GUIFrame:RegisterTabbedContent("Automation", function()
     local VENDORS   = { id = "AutomationVendors",   label = "Vendors & Bags" }
 
     if not db or db.Enabled == false then
-        return { VENDORS }
+        return { GENERAL, VENDORS }
     end
 
     return { GENERAL, INTERFACE, QUESTS, VENDORS }
