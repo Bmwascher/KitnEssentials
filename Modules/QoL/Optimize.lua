@@ -20,6 +20,7 @@ local OPT = KitnEssentials:NewModule("Optimize", "AceEvent-3.0")
 
 local _SetCVar = SetCVar or C_CVar.SetCVar
 local _GetCVar = GetCVar or C_CVar.GetCVar
+local GetInstanceInfo = GetInstanceInfo
 local pcall = pcall
 local tostring = tostring
 local tonumber = tonumber
@@ -371,7 +372,51 @@ function OPT:HasBackup(cvar)
     return backup.SavedSettings[cvar] ~= nil
 end
 
-function OPT:OptimizeAll()
+---------------------------------------------------------------------------------
+-- Presets
+--
+-- "balanced" = every category at its listed optimal, which is what the single
+--              Optimize All button used to do.
+-- "maxfps"   = the same, except the separate Raid & BG profile is switched off
+--              and the base graphics cvars drop to the Raid & BG values, so the
+--              low-end settings apply everywhere. The FPS cap also rises.
+--
+-- The chosen preset is stored in the optimization SavedVariables so the per-row
+-- Recommended column stays preset-aware across a reload.
+---------------------------------------------------------------------------------
+
+-- Lazily built map of cvar -> overridden value for the Max FPS preset. Derived
+-- from the raid category by stripping the raidGraphics prefix onto the matching
+-- base graphics cvar, so it tracks the Raid & BG values instead of needing a
+-- second hand-maintained list that could drift out of step with them.
+local maxFPSOverrides = nil
+function OPT:GetMaxFPSOverrides()
+    if maxFPSOverrides then return maxFPSOverrides end
+    local ov = {}
+    for _, cat in ipairs(self.Categories) do
+        if cat.id == "raid" then
+            for _, entry in ipairs(cat.cvars) do
+                local suffix = entry.cvar:match("^raidGraphics(.+)$")
+                if suffix then
+                    ov["graphics" .. suffix] = entry.optimal
+                end
+            end
+        end
+    end
+    -- Switch the separate raid/BG profile off so the lowered base graphics
+    -- apply in raids and battlegrounds too.
+    ov["RAIDsettingsEnabled"] = "0"
+    ov["maxFPS"] = "300"
+    maxFPSOverrides = ov
+    return maxFPSOverrides
+end
+
+--- Apply a preset across every category, optionally overriding individual
+--- values. Window mode is preserved, so applying never flips fullscreen to
+--- windowed, and the chosen preset is recorded.
+---@param presetName string "balanced" | "maxfps"
+---@param overrides table? cvar -> value overrides for this preset
+function OPT:ApplyPreset(presetName, overrides)
     local displayBackup = {}
     for _, cv in ipairs({ "gxWindow", "gxMaximize" }) do
         local ok, val = pcall(_GetCVar, cv)
@@ -381,7 +426,16 @@ function OPT:OptimizeAll()
     local applied, failed = 0, 0
     for _, cat in ipairs(self.Categories) do
         for _, entry in ipairs(cat.cvars) do
-            if self:ApplyCVar(entry.cvar, entry.optimal) then
+            local value = (overrides and overrides[entry.cvar]) or entry.optimal
+            if entry.cvar == "graphicsViewDistance" and self:IsMythicOverrideActive() then
+                -- The Mythic+ override is holding View Distance at its floor
+                -- right now. Writing here would fight it, and backing the
+                -- forced value up would make Revert All restore the floor.
+                -- Record what the preset wanted instead, so leaving the key
+                -- lands on that.
+                GetBackupDB().MythicVD.saved = value
+                applied = applied + 1
+            elseif self:ApplyCVar(entry.cvar, value) then
                 applied = applied + 1
             else
                 failed = failed + 1
@@ -393,13 +447,161 @@ function OPT:OptimizeAll()
         pcall(_SetCVar, cv, val)
     end
 
+    GetBackupDB().ActivePreset = presetName
+
     local KE_ACCENT = "|cffFF008C"
     local KE_GREEN  = "|cff00ff00"
     local KE_RESET  = "|r"
-    KE:Print(KE_GREEN .. applied .. " settings optimized." .. KE_RESET)
+    local label = presetName == "maxfps" and "Max FPS" or "Balanced"
+    KE:Print(KE_GREEN .. applied .. " settings optimized (" .. label .. ")." .. KE_RESET)
     if failed > 0 then
         KE:Print(KE_ACCENT .. "Warning:|r " .. failed .. " settings could not be applied.")
     end
+end
+
+--- Balanced preset.
+function OPT:OptimizeAll()
+    self:ApplyPreset("balanced", nil)
+end
+
+--- Max FPS preset: low-end graphics everywhere, no separate raid profile.
+function OPT:MaxFPS()
+    self:ApplyPreset("maxfps", self:GetMaxFPSOverrides())
+end
+
+--- The preset the page should show as selected, or nil.
+-- The stored name alone goes stale the moment the user changes graphics by
+-- hand after applying, and the page would then claim a preset the cvars no
+-- longer match. So it is VALIDATED: it counts only while every preset cvar
+-- still equals what that preset would write. Balanced gets one relaxed
+-- fallback -- hand-tweaked values with the raid/BG split still on are balanced
+-- in spirit. Max FPS gets no fallback, having no raid profile to fall back on.
+-- View Distance is left out of the comparison while the Mythic+ override is
+-- holding it down, which mirrors what ApplyPreset does with the same cvar.
+function OPT:GetActivePreset()
+    local stored = GetBackupDB().ActivePreset
+    if not stored then return nil end
+
+    local overrides = stored == "maxfps" and self:GetMaxFPSOverrides() or nil
+    local skipViewDistance = self:IsMythicOverrideActive()
+
+    local matches = true
+    for _, cat in ipairs(self.Categories) do
+        for _, entry in ipairs(cat.cvars) do
+            if not (skipViewDistance and entry.cvar == "graphicsViewDistance") then
+                local want = (overrides and overrides[entry.cvar]) or entry.optimal
+                local ok, live = pcall(_GetCVar, entry.cvar)
+                if not ok or tostring(live) ~= tostring(want) then
+                    matches = false
+                    break
+                end
+            end
+        end
+        if not matches then break end
+    end
+
+    if matches then return stored end
+
+    if stored == "balanced" then
+        local ok, raidMode = pcall(_GetCVar, "RAIDsettingsEnabled")
+        if ok and tostring(raidMode) == "1" then
+            return "balanced"
+        end
+    end
+
+    return nil
+end
+
+--- True while the Mythic+ override is currently holding View Distance down.
+-- The rest of that feature arrives with the override block below; this one
+-- predicate lives up here because both preset functions above consult it.
+function OPT:IsMythicOverrideActive()
+    local state = GetBackupDB().MythicVD
+    return state ~= nil and state.active == true
+end
+
+---------------------------------------------------------------------------------
+-- Mythic+ view distance override
+--
+-- Inside an active Mythic Keystone dungeon, force View Distance to its lowest
+-- setting for extra frames, then put it back on the way out. Opt-in. Purely
+-- event-driven, so the feature costs nothing per frame and nothing at all while
+-- it is off -- the events are registered only while the toggle is on. The saved
+-- value and the active flag live in the optimization SavedVariables, so the
+-- override survives a reload and recovers itself after a disconnect in a key.
+---------------------------------------------------------------------------------
+local MPLUS_DIFFICULTY_ID = 8     -- Mythic Keystone
+local MPLUS_VIEW_DISTANCE = "0"   -- reads as "1" on the in-game slider
+
+--- Whether the override is enabled. Account-wide, stored with the backups.
+function OPT:IsMythicViewDistanceEnabled()
+    return GetBackupDB().MythicViewDistanceEnabled == true
+end
+
+--- Events follow the setting, so the off state registers nothing.
+function OPT:UpdateMVDEventRegistration()
+    local events = { "PLAYER_ENTERING_WORLD", "ZONE_CHANGED_NEW_AREA",
+        "CHALLENGE_MODE_START", "CHALLENGE_MODE_COMPLETED" }
+    if self:IsMythicViewDistanceEnabled() then
+        for _, e in ipairs(events) do self:RegisterEvent(e, "UpdateMythicViewDistance") end
+        self:UpdateMythicViewDistance()
+    else
+        for _, e in ipairs(events) do self:UnregisterEvent(e) end
+    end
+end
+
+function OPT:SetMythicViewDistanceEnabled(enabled)
+    GetBackupDB().MythicViewDistanceEnabled = enabled and true or false
+    self:UpdateMVDEventRegistration()
+    self:UpdateMythicViewDistance()
+end
+
+--- True while inside a Mythic Keystone dungeon instance.
+function OPT:IsInMythicPlus()
+    local _, _, difficultyID = GetInstanceInfo()
+    return difficultyID == MPLUS_DIFFICULTY_ID
+end
+
+--- Put back the View Distance we lowered, if we are holding one down.
+function OPT:RestoreMythicViewDistance()
+    local state = GetBackupDB().MythicVD
+    if state and state.active then
+        if state.saved ~= nil then
+            pcall(_SetCVar, "graphicsViewDistance", tostring(state.saved))
+        end
+        state.active = false
+    end
+end
+
+--- Re-evaluate the override against the current zone and toggle. Safe to call
+--- from any of the four events; the original value is captured only on the
+--- first pass of an entry, or a later event would record the floor as the
+--- value to restore.
+function OPT:UpdateMythicViewDistance()
+    if not self:IsMythicViewDistanceEnabled() then
+        self:RestoreMythicViewDistance()
+        return
+    end
+
+    if self:IsInMythicPlus() then
+        local backup = GetBackupDB()
+        if not self:IsMythicOverrideActive() then
+            backup.MythicVD = { active = true, saved = self:GetCurrentValue("graphicsViewDistance") }
+        end
+        pcall(_SetCVar, "graphicsViewDistance", MPLUS_VIEW_DISTANCE)
+    else
+        self:RestoreMythicViewDistance()
+    end
+end
+
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
+function OPT:OnInitialize()
+    -- Presets act on demand and need nothing here. This one call wires the
+    -- Mythic+ override if it is on, and is also what recovers a held override
+    -- after a reload inside a key.
+    self:UpdateMVDEventRegistration()
 end
 
 function OPT:RevertAll()
@@ -415,6 +617,8 @@ function OPT:RevertAll()
         if ok then count = count + 1 end
     end
     backup.SavedSettings = {}
+    -- Everything is back at the user's own values, so no preset describes them.
+    backup.ActivePreset = nil
 
     KE:Print("|cff00ff00" .. count .. " settings reverted.|r")
 end
