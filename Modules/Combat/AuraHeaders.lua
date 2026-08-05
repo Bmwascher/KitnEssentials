@@ -31,9 +31,21 @@ local GetTime = GetTime
 local C_UnitAuras = C_UnitAuras
 local C_DurationUtil = C_DurationUtil
 local GameTooltip = GameTooltip
-local DebuffTypeColor = DebuffTypeColor
 
 local durationObj = C_DurationUtil and C_DurationUtil.CreateDuration and C_DurationUtil.CreateDuration()
+
+-- Dispel-school border colour, borrowed from Advanced Debuffs rather than
+-- duplicated: that module owns the palette the user configures, and it exposes
+-- its curve for exactly this. The curve resolves even while that module is
+-- disabled, because the palette lives in the profile either way. Returns a
+-- Color object, or nil when the curve API or the module is unavailable.
+local function DispelBorderColor(unit, auraInstanceID)
+    if not (auraInstanceID and C_UnitAuras.GetAuraDispelTypeColor) then return nil end
+    local ad = KitnEssentials:GetModule("AuraDebuffs", true)
+    local curve = ad and ad.GetDispelColorCurve and ad:GetDispelColorCurve()
+    if not curve then return nil end
+    return C_UnitAuras.GetAuraDispelTypeColor(unit, auraInstanceID, curve)
+end
 
 local DIRECTION_TO_POINT = {
     DOWN_RIGHT = "TOPLEFT",    DOWN_LEFT = "TOPRIGHT",
@@ -121,25 +133,24 @@ local function MakeHeaderModule(config)
             end
         end
 
-        -- Debuff borders take the school colour, the way Blizzard's do.
+        -- Debuff borders take the dispel-school colour.
         --
-        -- dispelName is aura data, which is SECRET in restricted content, and
-        -- a table lookup keyed by a secret is a comparison -- exactly what
-        -- secrets forbid. Guarded rather than pcall'd so the plain-value path
-        -- stays allocation-free; a secret school simply falls back to the
-        -- configured border colour.
+        -- The school cannot be read directly in 12.0: DebuffTypeColor no longer
+        -- exists, and dispelName is a secret string, so keying a table on it
+        -- would be a comparison secrets forbid. The colour comes from a
+        -- LuaCurveObject instead, which evaluates the aura's dispel integer
+        -- internally and returns a Color whose channels may themselves be
+        -- secret. They go straight to the texture and are never inspected.
+        -- The palette is Advanced Debuffs' own, so one setting drives both.
         if button.SetBorderColor then
-            local db = M.db
-            local school = info.dispelName
             local c
-            if config.colorByType and db.ColorByType ~= false
-                and school and not KE:IsSecretValue(school) and DebuffTypeColor then
-                c = DebuffTypeColor[school]
+            if config.colorByType and M.db.ColorByType ~= false then
+                c = DispelBorderColor(unit, info.auraInstanceID)
             end
             if c then
-                button:SetBorderColor(c.r, c.g, c.b, 1)
+                button:SetBorderColor(c:GetRGBA())
             else
-                button:SetBorderColor(unpack(db.BorderColor))
+                button:SetBorderColor(unpack(M.db.BorderColor))
             end
         end
     end
@@ -198,12 +209,12 @@ local function MakeHeaderModule(config)
         M.buttons[button] = true
         local db = M.db
 
+        -- AddBorders already disables per-texture pixel snap, which is what
+        -- keeps a 1px band crisp under this project's own grid maths. The
+        -- reference re-enables it here; doing that fights the pixel system and
+        -- makes a recoloured border render differently from a fresh one, since
+        -- SetBorderColor re-asserts the disable on every repaint.
         KE:AddBorders(button, db.BorderColor)
-        if button.borders then
-            for _, tex in pairs(button.borders) do
-                if tex.SetSnapToPixelGrid then tex:SetSnapToPixelGrid(true) end
-            end
-        end
 
         button.Icon = button:CreateTexture(nil, "ARTWORK")
         button.Icon:SetAllPoints()

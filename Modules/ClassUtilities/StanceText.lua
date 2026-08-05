@@ -14,7 +14,6 @@ local ST = KitnEssentials:NewModule("StanceText", "AceEvent-3.0")
 
 local CreateFrame = CreateFrame
 local unpack = unpack
-local pairs = pairs
 local ipairs = ipairs
 local tostring = tostring
 local InCombatLockdown = InCombatLockdown
@@ -175,14 +174,10 @@ function ST:CreateFrame()
     f:SetSize(db.IconSize, db.IconSize)
     f:SetFrameStrata(db.Strata or "MEDIUM")
 
-    -- Same 1px border treatment as the other aura icons, grid-snapped so it
-    -- stays crisp when anchored to a frame that is not pixel-aligned.
+    -- Same 1px border treatment as the other aura icons. AddBorders disables
+    -- per-texture pixel snap on purpose; re-enabling it fights this project's
+    -- own grid maths, and every repaint would disable it again anyway.
     KE:AddBorders(f, db.BorderColor)
-    if f.borders then
-        for _, tex in pairs(f.borders) do
-            if tex.SetSnapToPixelGrid then tex:SetSnapToPixelGrid(true) end
-        end
-    end
 
     local icon = f:CreateTexture(nil, "ARTWORK")
     icon:SetAllPoints()

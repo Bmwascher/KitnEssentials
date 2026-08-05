@@ -230,7 +230,7 @@ read_globals = {
     "GetInventoryItemQuality", "GetItemQualityColor", "ITEM_QUALITY_COLORS",
     "GetItemGem", -- deprecated compat shim (C_Item.GetItemGem), Blizzard_DeprecatedItemScript
     "GetWeaponEnchantInfo",
-    "RegisterAttributeDriver", "DebuffTypeColor",
+    "RegisterAttributeDriver",
     "ClearCursor", "ResetCursor", "SetCursor",
     "NUM_BAG_SLOTS",
 
