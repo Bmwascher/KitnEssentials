@@ -62,18 +62,6 @@ local function BuildHeader(scrollChild, yOffset)
         KE:Print("Automation: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
 
-    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
-    local hideHelptipsCheck = GUIFrame:CreateCheckbox(row1, "Hide Helptips", {
-        value = db.HideHelptips ~= false,
-        tooltip = "Suppresses Blizzard's tutorial and \"Did you know\" popups. Works whether or not Automation itself is on.",
-        callback = function(checked)
-            db.HideHelptips = checked
-            ApplySettings()
-        end,
-    })
-    row1:AddWidget(hideHelptipsCheck, 1)
-    card1:AddRow(row1, Theme.rowHeightLast, 0)
-
     return card1:GetNextOffset(), false
 end
 
@@ -202,7 +190,7 @@ GUIFrame:RegisterContent("AutomationInterface", function(scrollChild, yOffset)
     local card2 = GUIFrame:CreateCard(scrollChild, "Interface Cleanup", yOffset)
     manager:Register(card2, "all")
 
-    local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local hideScreenshotStatusCheck = GUIFrame:CreateCheckbox(row2, "Hide Screenshot Status", {
         value = db.HideScreenshotStatus == true,
         tooltip = "Hides the screenshot status text that appears after taking a screenshot.",
@@ -218,7 +206,22 @@ GUIFrame:RegisterContent("AutomationInterface", function(scrollChild, yOffset)
     })
     row2:AddWidget(hideErrorMessagesCheck, 0.5)
     manager:Register(hideErrorMessagesCheck, "all")
-    card2:AddRow(row2, Theme.rowHeightLast, 0)
+    card2:AddRow(row2, Theme.rowHeight)
+
+    -- Hide Helptips is NOT registered with the manager: it is master-independent
+    -- and keeps working while Automation is off, so it must never be greyed out
+    -- alongside the switches that do follow the master.
+    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local hideHelptipsCheck = GUIFrame:CreateCheckbox(row2b, "Hide Helptips", {
+        value = db.HideHelptips ~= false,
+        tooltip = "Suppresses Blizzard's tutorial and \"Did you know\" popups. Works whether or not Automation itself is on -- but this switch is only reachable while Automation is on.",
+        callback = function(checked)
+            db.HideHelptips = checked
+            ApplySettings()
+        end,
+    })
+    row2b:AddWidget(hideHelptipsCheck, 1)
+    card2:AddRow(row2b, Theme.rowHeightLast, 0)
 
     yOffset = card2:GetNextOffset()
 
@@ -553,6 +556,25 @@ GUIFrame:RegisterContent("AutomationVendors", function(scrollChild, yOffset)
             KE:Print("Merchant Pages: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
         end)
 
+        -- Pages lives in this card, not its own: one module, one card.
+        if mpDB.Enabled ~= false then
+            local rowPages = GUIFrame:CreateRow(cardMP.content, Theme.rowHeight)
+            local mpPagesSlider = GUIFrame:CreateSlider(rowPages, "Pages", {
+                min = 2, max = 4, step = 1,
+                value = mpDB.Pages or 2,
+                callback = function(val)
+                    mpDB.Pages = val
+                    -- The frame count is fixed at Setup and cannot change live --
+                    -- same reload idiom the skinning pages use for a setting
+                    -- that only takes effect on the next load.
+                    KE:CreateReloadPrompt("Changing the vendor page count requires a UI reload to take effect.")
+                end,
+            })
+            rowPages:AddWidget(mpPagesSlider, 1)
+            mpManager:Register(mpPagesSlider, "all")
+            cardMP:AddRow(rowPages, Theme.rowHeight)
+        end
+
         local mpNoteHeight = 90
         local mpNoteRow = GUIFrame:CreateRow(cardMP.content, mpNoteHeight)
         local mpNoteText = GUIFrame:CreateText(mpNoteRow,
@@ -568,32 +590,6 @@ GUIFrame:RegisterContent("AutomationVendors", function(scrollChild, yOffset)
         cardMP:AddRow(mpNoteRow, mpNoteHeight, 0)
 
         yOffset = cardMP:GetNextOffset()
-
-        -- Lone header bar: a disabled module shows its switch and nothing else.
-        if mpDB.Enabled ~= false then
-            ----------------------------------------------------------------
-            -- Pages
-            ----------------------------------------------------------------
-            local cardPages = GUIFrame:CreateCard(scrollChild, "Pages", yOffset)
-
-            local rowPages = GUIFrame:CreateRow(cardPages.content, Theme.rowHeightLast)
-            local mpPagesSlider = GUIFrame:CreateSlider(rowPages, "Pages", {
-                min = 2, max = 4, step = 1,
-                value = mpDB.Pages or 2,
-                callback = function(val)
-                    mpDB.Pages = val
-                    -- The frame count is fixed at Setup and cannot change live --
-                    -- same reload idiom the skinning pages use for a setting
-                    -- that only takes effect on the next load.
-                    KE:CreateReloadPrompt("Changing the vendor page count requires a UI reload to take effect.")
-                end,
-            })
-            rowPages:AddWidget(mpPagesSlider, 1)
-            mpManager:Register(mpPagesSlider, "all")
-            cardPages:AddRow(rowPages, Theme.rowHeightLast, 0)
-
-            yOffset = cardPages:GetNextOffset()
-        end
 
         RefreshMPStates()
     end

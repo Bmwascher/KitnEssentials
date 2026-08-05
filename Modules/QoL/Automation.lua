@@ -1625,7 +1625,7 @@ local TRANSFORMS = {
     { key = "pickaxe",      cat = "items", label = "Cursed Pickaxe",      ids = { 454405 } },
     -- The SKELETON costume is exempt from the cancel: slow fall and the
     -- remaining mini/reissue effects still cancel.
-    { key = "noggenfogger", cat = "items", label = "Noggenfogger Elixir (except skeleton)", ids = { 16593, 1223630, 16595, 1223629 } },
+    { key = "noggenfogger", cat = "items", label = "Noggenfogger Elixir", ids = { 16593, 1223630, 16595, 1223629 } },
     { key = "prism",        cat = "items", label = "Reflecting Prism",    ids = { 163267 } },
 }
 
