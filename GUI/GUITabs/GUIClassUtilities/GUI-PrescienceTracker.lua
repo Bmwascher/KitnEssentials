@@ -255,64 +255,22 @@ GUIFrame:RegisterContent("PrescienceTracker", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 6: Colors
     ----------------------------------------------------------------
-    local card6 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
-    manager:Register(card6, "all")
-
-    local row6a = GUIFrame:CreateRow(card6.content, Theme.rowHeight)
-    local classColorCheck = GUIFrame:CreateCheckbox(row6a, "Class Color Names", {
-        value = db.ClassColorNames == true,
-        callback = function(checked)
-            db.ClassColorNames = checked
-            ApplySettings()
-            RefreshStates()
-        end,
+    yOffset = GUIFrame:CreateColorsCard(scrollChild, yOffset, {
+        db         = db,
+        manager    = manager,
+        onChange   = ApplySettings,
+        stateGroup = "all",
+        isLast     = true,
+        sources = {
+            { label = "Class Color Names", key = "ClassColorNames", default = false, onChange = RefreshStates },
+        },
+        colors = {
+            { label = "Name Color", key = "NameColor", default = { 1, 1, 1, 1 }, group = "nameColor" },
+            { label = "Timer Color", key = "TimerColor", default = { 1, 1, 1, 1 } },
+            { label = "Crit Color", key = "CritColor", default = { 1, 0, 1, 1 } },
+        },
+        note = KE:ColorTextByTheme("-") .. " Crit color applies to Prescience when it has a critical strike bonus.",
     })
-    row6a:AddWidget(classColorCheck, 1)
-    manager:Register(classColorCheck, "all")
-    card6:AddRow(row6a, Theme.rowHeight)
-
-    local row6b = GUIFrame:CreateRow(card6.content, Theme.rowHeight)
-    local namePicker = GUIFrame:CreateColorPicker(row6b, "Name Color", {
-        color = db.NameColor or { 1, 1, 1, 1 },
-        callback = function(r, g, b, a)
-            db.NameColor = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row6b:AddWidget(namePicker, 0.33)
-    manager:Register(namePicker, "nameColor")
-
-    local timerPicker = GUIFrame:CreateColorPicker(row6b, "Timer Color", {
-        color = db.TimerColor or { 1, 1, 1, 1 },
-        callback = function(r, g, b, a)
-            db.TimerColor = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row6b:AddWidget(timerPicker, 0.33)
-    manager:Register(timerPicker, "all")
-
-    local critPicker = GUIFrame:CreateColorPicker(row6b, "Crit Color", {
-        color = db.CritColor or { 1, 0, 1, 1 },
-        callback = function(r, g, b, a)
-            db.CritColor = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row6b:AddWidget(critPicker, 0.34)
-    manager:Register(critPicker, "all")
-    card6:AddRow(row6b, Theme.rowHeight)
-
-    local row6note = GUIFrame:CreateRow(card6.content, Theme.rowHeight)
-    local note6 = GUIFrame:CreateText(row6note,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Crit color applies to Prescience when it has a critical strike bonus.",
-        Theme.rowHeight, "hide")
-    row6note:AddWidget(note6, 1)
-    manager:Register(note6, "all")
-    card6:AddRow(row6note, Theme.rowHeight, 0)
-
-    yOffset = card6:GetNextOffset()
 
     RefreshStates()
     return yOffset
