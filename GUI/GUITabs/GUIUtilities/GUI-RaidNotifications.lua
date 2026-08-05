@@ -173,34 +173,17 @@ GUIFrame:RegisterContent("RaidNotifications", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 5: Colors
     ----------------------------------------------------------------
-    local card5 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
-    manager:Register(card5, "all")
-
-    local row5 = GUIFrame:CreateRow(card5.content, Theme.rowHeightLast)
-    local colorModeDropdown = GUIFrame:CreateDropdown(row5, "Color Mode", {
-        options = KE.ColorModeOptions,
-        value = db.ColorMode or "custom",
-        callback = function(key)
-            db.ColorMode = key
-            ApplySettings()
-            RefreshStates()
-        end,
+    yOffset = GUIFrame:CreateColorsCard(scrollChild, yOffset, {
+        db         = db,
+        manager    = manager,
+        onChange   = ApplySettings,
+        stateGroup = "all",
+        isLast     = true,
+        colorMode  = { key = "ColorMode", onChange = RefreshStates },
+        colors     = {
+            { label = "Custom Color", key = "Color", default = { 0.969, 0.027, 0.945, 1 }, group = "customColor" },
+        },
     })
-    row5:AddWidget(colorModeDropdown, 0.5)
-    manager:Register(colorModeDropdown, "all")
-
-    local colorPicker = GUIFrame:CreateColorPicker(row5, "Custom Color", {
-        color = db.Color or { 0.969, 0.027, 0.945, 1 },
-        callback = function(r, g, b, a)
-            db.Color = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row5:AddWidget(colorPicker, 0.5)
-    manager:Register(colorPicker, "customColor")
-    card5:AddRow(row5, Theme.rowHeightLast, 0)
-
-    yOffset = card5:GetNextOffset()
 
     RefreshStates()
     return yOffset
