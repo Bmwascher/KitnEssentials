@@ -24,6 +24,12 @@ end
 local optimizeDirty = false
 local hookInstalled = false
 
+-- The preset the user is previewing: "maxfps", "balanced" or nil. File-local so
+-- it survives a content rebuild inside one session. Nil until a preset button is
+-- pressed, which is what keeps Apply All hidden and the Recommended column
+-- blank on a first visit.
+local selectedPreset
+
 local function InstallCloseHook()
     if hookInstalled then return end
     C_Timer.After(0, function()
@@ -49,12 +55,6 @@ GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
 
     InstallCloseHook()
 
-    local refreshCallbacks = {}
-
-    local function RefreshAllRows()
-        for _, fn in ipairs(refreshCallbacks) do fn() end
-    end
-
     local function MarkDirty()
         optimizeDirty = true
     end
@@ -62,34 +62,128 @@ GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 1: Presets
     ----------------------------------------------------------------
+    -- Reopen in the state the module remembers: a preset that was actually
+    -- APPLIED comes back selected after a reload. A preview-only selection
+    -- deliberately does not -- nothing was applied, so nothing is owed.
+    selectedPreset = selectedPreset or OPT:GetActivePreset()
+
     local card1 = GUIFrame:CreateCard(scrollChild, "Presets", yOffset)
 
     local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
 
-    local optimizeBtn = GUIFrame:CreateButton(row1, "Optimize All", {
-        width = 140,
+    local maxFpsBtn, balancedBtn, applyAllBtn
+
+    -- Selection reads as a fill inside the button, the same recipe the sidebar
+    -- uses for its selected row, so it follows a theme change on its own.
+    local function EnsureSelectedFill(btn)
+        if not btn.keSelectedFill then
+            local fill = btn:CreateTexture(nil, "ARTWORK", nil, 1)
+            fill:SetPoint("TOPLEFT", 1, -1)
+            fill:SetPoint("BOTTOMRIGHT", -1, 1)
+            fill:SetColorTexture(Theme.selectedBg[1], Theme.selectedBg[2],
+                Theme.selectedBg[3], Theme.selectedBg[4])
+            btn.keSelectedFill = fill
+        end
+        return btn.keSelectedFill
+    end
+
+    local function PaintSelection()
+        EnsureSelectedFill(maxFpsBtn):SetShown(selectedPreset == "maxfps")
+        EnsureSelectedFill(balancedBtn):SetShown(selectedPreset == "balanced")
+        applyAllBtn:SetShown(selectedPreset ~= nil)
+    end
+
+    -- The preset buttons SELECT, they do not apply. Choosing one loads that
+    -- preset's values into the Recommended column below as a preview; Apply All
+    -- is what sets them. The rebuild is not optional -- the Mythic+ card below
+    -- exists only under Balanced.
+    maxFpsBtn = GUIFrame:CreateButton(row1, "Max FPS", {
+        width = 120,
         height = 28,
+        tooltip = "Preview this preset's values below, then use Apply All.",
         callback = function()
-            OPT:OptimizeAll()
-            C_Timer.After(0.2, RefreshAllRows)
-            MarkDirty()
+            selectedPreset = "maxfps"
+            GUIFrame:RefreshContent()
         end,
     })
-    row1:AddWidget(optimizeBtn, 0.5)
+    row1:AddWidget(maxFpsBtn, 1 / 4)
+
+    balancedBtn = GUIFrame:CreateButton(row1, "Balanced", {
+        width = 120,
+        height = 28,
+        tooltip = "Preview this preset's values below, then use Apply All.",
+        callback = function()
+            selectedPreset = "balanced"
+            GUIFrame:RefreshContent()
+        end,
+    })
+    row1:AddWidget(balancedBtn, 1 / 4)
+
+    applyAllBtn = GUIFrame:CreateButton(row1, "Apply All", {
+        width = 120,
+        height = 28,
+        tooltip = "Apply every previewed value.",
+        callback = function()
+            if selectedPreset == "maxfps" then
+                OPT:MaxFPS()
+            else
+                OPT:OptimizeAll()
+                -- The Mythic+ drop is part of what Balanced means, so it comes
+                -- on with the preset.
+                OPT:SetMythicViewDistanceEnabled(true)
+            end
+            MarkDirty()
+            GUIFrame:RefreshContent()
+        end,
+    })
+    row1:AddWidget(applyAllBtn, 1 / 4)
 
     local revertBtn = GUIFrame:CreateButton(row1, "Revert All", {
-        width = 140,
+        width = 120,
         height = 28,
         callback = function()
-            OPT:RevertAll()
-            C_Timer.After(0.2, RefreshAllRows)
+            OPT:RevertAll()   -- also clears the recorded preset
+            selectedPreset = nil
             MarkDirty()
+            GUIFrame:RefreshContent()
         end,
     })
-    row1:AddWidget(revertBtn, 0.5)
-    card1:AddRow(row1, Theme.rowHeightLast, 0)
+    row1:AddWidget(revertBtn, 1 / 4)
+
+    card1:AddRow(row1, Theme.rowHeightLast)
+    PaintSelection()
+
+    card1:AddLabel("\226\128\162 " .. KE:ColorTextByTheme("Max FPS") ..
+        " gives the highest FPS without sacrificing visual clarity in raids, dungeons and outdoors.")
+    card1:AddLabel("\226\128\162 " .. KE:ColorTextByTheme("Balanced") ..
+        " uses the Raid & BG setting for a more immersive world and outdoor experience, while maximising in-raid performance. There is also a Lower View Distance option for Mythic+ to help FPS in some outdoor dungeons.")
+    if not selectedPreset then
+        card1:AddLabel("Select a preset above to load its recommended values.")
+    end
 
     yOffset = card1:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 2: Mythic+ (Balanced only)
+    ----------------------------------------------------------------
+    -- Balanced-gated on purpose: Max FPS already runs View Distance at its
+    -- floor, so the toggle would do nothing there.
+    if selectedPreset == "balanced" then
+        local mvdCard = GUIFrame:CreateCard(scrollChild, "Mythic+", yOffset)
+        -- Label ABOVE the toggle. A trailing label measures against the row and
+        -- clips into the checkbox.
+        mvdCard:AddLabel("Drops View Distance to its floor while inside a Mythic+ dungeon and restores it on exit. Helps FPS in some outdoor dungeons.")
+        local mvdRow = GUIFrame:CreateRow(mvdCard.content, Theme.rowHeightLast)
+        local mvdToggle = GUIFrame:CreateCheckbox(mvdRow, "Lower View Distance in Mythic+", {
+            value = OPT:IsMythicViewDistanceEnabled(),
+            callback = function(newState)
+                OPT:SetMythicViewDistanceEnabled(newState)
+            end,
+        })
+        mvdRow:AddWidget(mvdToggle, 1)
+        mvdCard:AddRow(mvdRow, Theme.rowHeightLast, 0)
+        yOffset = mvdCard:GetNextOffset()
+    end
 
     ----------------------------------------------------------------
     -- Helper: column headers row
@@ -230,49 +324,72 @@ GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
         SetupHover(applyBtn)
         SetupHover(revertBtnSmall)
 
+        -- What the selected preset wants for this cvar, or nil while no preset
+        -- is selected. Max FPS falls through to the listed optimal for every
+        -- cvar it does not override.
+        local function PreviewValue()
+            if not selectedPreset then return nil end
+            if selectedPreset == "maxfps" then
+                local v = OPT:GetMaxFPSOverrides()[entry.cvar]
+                if v ~= nil then return v end
+            end
+            return entry.optimal
+        end
+
         local function RefreshRow()
             local current = OPT:GetCurrentValue(entry.cvar) or "?"
-            local isOpt = OPT:IsOptimal(entry.cvar, entry.optimal)
-            local hasBackup = OPT:HasBackup(entry.cvar)
-            local currentDisplay = OPT:GetValueLabel(entry.cvar, current)
-            local optimalDisplay = OPT:GetValueLabel(entry.cvar, entry.optimal)
+            local rec = PreviewValue()
+            currentLabel:SetText(OPT:GetValueLabel(entry.cvar, current))
 
-            if isOpt then
-                currentLabel:SetTextColor(0.3, 1, 0.3, 1)
-            else
-                currentLabel:SetTextColor(1, 0.55, 0, 1)
-            end
-            currentLabel:SetText(currentDisplay)
-            optimalLabel:SetText(optimalDisplay)
-            optimalLabel:SetTextColor(0.3, 1, 0.3, 1)
-
-            if isOpt then
-                applyBtn:Hide()
-                optimalStatusLabel:Show()
-                if hasBackup then
-                    revertBtnSmall:Show()
-                    revertBtnSmall:SetAlpha(1)
-                    revertBtnSmall:EnableMouse(true)
-                else
-                    revertBtnSmall:Hide()
-                end
-            else
-                applyBtn:Show()
+            if rec == nil then
+                -- No preset selected: there is nothing to recommend and nothing
+                -- for Apply to apply, so the row reads neutral.
+                currentLabel:SetTextColor(Theme.textPrimary[1], Theme.textPrimary[2],
+                    Theme.textPrimary[3], 1)
+                optimalLabel:SetText("-")
+                optimalLabel:SetTextColor(0.5, 0.5, 0.5, 1)
                 optimalStatusLabel:Hide()
-                if hasBackup then
-                    revertBtnSmall:Show()
-                    revertBtnSmall:SetAlpha(1)
-                    revertBtnSmall:EnableMouse(true)
+                applyBtn:Show()
+                applyBtn:SetAlpha(0.35)
+                applyBtn:EnableMouse(false)
+            else
+                local isOpt = OPT:IsOptimal(entry.cvar, rec)
+                if isOpt then
+                    currentLabel:SetTextColor(0.3, 1, 0.3, 1)
                 else
-                    revertBtnSmall:Show()
-                    revertBtnSmall:SetAlpha(0.35)
-                    revertBtnSmall:EnableMouse(false)
+                    currentLabel:SetTextColor(1, 0.55, 0, 1)
                 end
+                optimalLabel:SetText(OPT:GetValueLabel(entry.cvar, rec))
+                optimalLabel:SetTextColor(0.3, 1, 0.3, 1)
+                if isOpt then
+                    applyBtn:Hide()
+                    optimalStatusLabel:Show()
+                else
+                    applyBtn:Show()
+                    applyBtn:SetAlpha(1)
+                    applyBtn:EnableMouse(true)
+                    optimalStatusLabel:Hide()
+                end
+            end
+
+            -- Revert now depends on the backup alone. It used to be hidden
+            -- outright on an optimal row with no backup, but "optimal" is a
+            -- per-preset answer since this change, so that rule would flick the
+            -- button in and out of existence as the user compares presets.
+            revertBtnSmall:Show()
+            if OPT:HasBackup(entry.cvar) then
+                revertBtnSmall:SetAlpha(1)
+                revertBtnSmall:EnableMouse(true)
+            else
+                revertBtnSmall:SetAlpha(0.35)
+                revertBtnSmall:EnableMouse(false)
             end
         end
 
         applyBtn:SetScript("OnClick", function()
-            OPT:ApplyCVar(entry.cvar, entry.optimal)
+            local rec = PreviewValue()
+            if rec == nil then return end
+            OPT:ApplyCVar(entry.cvar, rec)
             C_Timer.After(0.1, RefreshRow)
             MarkDirty()
         end)
@@ -290,7 +407,12 @@ GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
             GameTooltip:AddLine(" ")
             local cur = OPT:GetCurrentValue(entry.cvar) or "?"
             GameTooltip:AddLine("Current: " .. OPT:GetValueLabel(entry.cvar, cur), 0.7, 0.7, 0.7)
-            GameTooltip:AddLine("Recommended: " .. OPT:GetValueLabel(entry.cvar, entry.optimal), 0.3, 1, 0.3)
+            local recTip = PreviewValue()
+            if recTip ~= nil then
+                GameTooltip:AddLine("Recommended: " .. OPT:GetValueLabel(entry.cvar, recTip), 0.3, 1, 0.3)
+            else
+                GameTooltip:AddLine("Select a preset above to load its recommended values.", 0.5, 0.5, 0.5)
+            end
             GameTooltip:AddLine(" ")
             GameTooltip:AddLine("CVar: " .. entry.cvar, 0.5, 0.5, 0.5)
             if entry.desc then
@@ -302,7 +424,6 @@ GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
 
         row:AddWidget(container, 1)
         card:AddRow(row, 32)
-        table.insert(refreshCallbacks, RefreshRow)
 
         RefreshRow()
     end
