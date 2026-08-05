@@ -38,6 +38,7 @@ return {
         SPELL_FAILED_TARGET_NO_POCKETS = "GlobalStrings.lua constant, not in the UI-source export (same class as ROLL_DISENCHANT); nil-guarded by the `if msg then` filter at Modules/QoL/Automation.lua:1035",
         ERR_ALREADY_PICKPOCKETED = "GlobalStrings.lua constant, not in the UI-source export (same class as ROLL_DISENCHANT); nil-guarded by the `if msg then` filter at Modules/QoL/Automation.lua:1035",
         ERR_PARTY_LFG_BOOT_NOT_ELIGIBLE_S = "GlobalStrings.lua format-string constant, not in the UI-source export; nil-guarded at Modules/QoL/Automation.lua:1041 and its string.format is pcall-wrapped",
+        DebuffTypeColor = "FrameXML constant table, not in the UI-source export; guarded at its only read site (Modules/Combat/AuraHeaders.lua:136, the `and DebuffTypeColor then` clause in UpdateAura) so a nil table falls through to the configured border colour",
     },
     unused_ok = {
         canaccesstable = "declared for symmetry with the secret-intrinsics family",

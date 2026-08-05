@@ -1281,6 +1281,78 @@ local Defaults = {
             DispelPosition = { AnchorFrom = "TOPRIGHT",    AnchorTo = "TOPRIGHT",    XOffset = 0, YOffset = 0 },
         },
 
+        BuffTracking = {
+            Enabled = false,
+            ShowTooltips = true,
+
+            IconSize = 32,
+            IconSpacing = 4,
+            IconsPerRow = 12,
+            MaxRows = 3,
+            GrowthDirection = "LEFT_DOWN",
+
+            -- Sorting is deliberately NOT configurable: this is skinning, and
+            -- Blizzard's own order is what people expect.
+
+            Swipe = true,
+            Reverse = false,
+            ShowTimer = true,
+
+            BorderColor = { 0, 0, 0, 1 },
+            EnchantBorderColor = { 0.6, 0.2, 0.9, 1 },
+            CountColor = { 1, 1, 1, 1 },
+
+            FontFace = "Expressway",
+            FontOutline = "OUTLINE",
+            TimerFontSize = 12,
+            CountFontSize = 12,
+
+            Strata = "MEDIUM",
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            Position = {
+                AnchorFrom = "TOPRIGHT",
+                AnchorTo = "TOPRIGHT",
+                XOffset = -200,
+                YOffset = -20,
+            },
+        },
+
+        PlayerDebuffTracking = {
+            Enabled = false,
+            ShowTooltips = true,
+
+            IconSize = 32,
+            IconSpacing = 4,
+            IconsPerRow = 12,
+            MaxRows = 2,
+            GrowthDirection = "LEFT_DOWN",
+
+            Swipe = true,
+            Reverse = false,
+            ShowTimer = true,
+
+            ColorByType = true,
+            BorderColor = { 0, 0, 0, 1 },
+            EnchantBorderColor = { 0.6, 0.2, 0.9, 1 },
+            CountColor = { 1, 1, 1, 1 },
+
+            FontFace = "Expressway",
+            FontOutline = "OUTLINE",
+            TimerFontSize = 12,
+            CountFontSize = 12,
+
+            Strata = "MEDIUM",
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            Position = {
+                AnchorFrom = "TOPRIGHT",
+                AnchorTo = "TOPRIGHT",
+                XOffset = -200,
+                YOffset = -160,
+            },
+        },
+
         TargetedSpells = {
             Enabled = true,
             IconSize = 36,

@@ -1657,4 +1657,25 @@ function L.loadMovementAlert(overrides)
     return modules["NoMovementAlert"], KE, rec
 end
 
+-- Modules/Combat/AuraHeaders.lua. Both MakeHeaderModule calls run at file
+-- scope and only DEFINE methods -- nothing touches a frame or the db until
+-- OnEnable, which this loader never calls -- so the only stub the spec needs
+-- is KE.ShouldNotLoadModule, driven by overrides.shouldNotLoad.
+-- overrides.noHelper omits the stub entirely, modelling a build where
+-- Core/Globals.lua has not defined it. Returns the BuffTracking module plus
+-- KE (the shim's registry also captures PlayerDebuffTracking, reachable off
+-- KitnEssentials:GetModule if a spec ever needs it).
+function L.loadAuraHeaders(overrides)
+    overrides = overrides or {}
+    local modules = helpers.installAddonShim()
+    local KE = {
+        db = { profile = { BuffTracking = {}, PlayerDebuffTracking = {} } },
+    }
+    if not overrides.noHelper then
+        KE.ShouldNotLoadModule = function() return overrides.shouldNotLoad == true end
+    end
+    helpers.loadModule("Modules/Combat/AuraHeaders.lua", KE)
+    return modules["BuffTracking"], KE
+end
+
 return L
