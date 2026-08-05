@@ -158,12 +158,20 @@ GUIFrame:RegisterContent("StanceText", function(scrollChild, yOffset)
     card3:AddRow(rowT, 40)
 
     local rowT2 = GUIFrame:CreateRow(card3.content, 40)
-    local textInput = GUIFrame:CreateEditBox(rowT2, "Text", {
+    local textInput = GUIFrame:CreateEditBox(rowT2, "Missing Text", {
         value = db.Text or "MISSING",
+        tooltip = "Shown when the icon is the form you should be in.",
         callback = function(value) db.Text = value; ApplySettings() end,
     })
-    rowT2:AddWidget(textInput, 1)
+    rowT2:AddWidget(textInput, 0.5)
+    local wrongInput = GUIFrame:CreateEditBox(rowT2, "Wrong Form Text", {
+        value = db.TextWrong or "WRONG",
+        tooltip = "Shown instead when a spec uses Show Current Form, because the icon is then the form you are already in.",
+        callback = function(value) db.TextWrong = value; ApplySettings() end,
+    })
+    rowT2:AddWidget(wrongInput, 0.5)
     table_insert(allWidgets, textInput)
+    table_insert(allWidgets, wrongInput)
     card3:AddRow(rowT2, 40)
 
     local fontList = {}
@@ -256,9 +264,9 @@ GUIFrame:RegisterContent("StanceText", function(scrollChild, yOffset)
                 })
                 row:AddWidget(combat, 0.3)
 
-                local reverse = GUIFrame:CreateCheckbox(row, "Reverse Icon", {
+                local reverse = GUIFrame:CreateCheckbox(row, "Show Current Form", {
                     value = db[key .. "ReverseIcon"] == true,
-                    tooltip = "Show the form you are currently in instead of the one you are missing.",
+                    tooltip = "Draw the form you are actually in, instead of the one you should be in. It still only appears while your form is wrong, and the caption changes to your Wrong Form Text.",
                     callback = function(checked) db[key .. "ReverseIcon"] = checked; ApplySettings() end,
                 })
                 row:AddWidget(reverse, 0.3)

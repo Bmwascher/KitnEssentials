@@ -856,9 +856,11 @@ local Defaults = {
             Alpha = 1,
             BorderColor = { 0, 0, 0, 1 },
 
-            -- Caption above the icon
+            -- Caption above the icon. TextWrong replaces it for specs using
+            -- Show Current Form, where the icon is the form being held.
             ShowText = true,
             Text = "MISSING",
+            TextWrong = "WRONG",
             TextColor = { 1, 0.3, 0.3, 1 },
             FontFace = "Expressway",
             FontSize = 14,

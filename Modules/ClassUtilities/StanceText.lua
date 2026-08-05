@@ -25,6 +25,7 @@ local C_SpellBook = C_SpellBook
 local UIParent = UIParent
 
 local MISSING_TEXT_DEFAULT = "MISSING"
+local WRONG_TEXT_DEFAULT = "WRONG"
 
 -- Per-spec expected form, keyed by specialization ID.
 --
@@ -218,10 +219,16 @@ function ST:Update()
     local f = self.frame
     if not f then return end
 
+    -- The icon is the form being HELD only when Show Current Form is on for
+    -- this spec and there is a form to show. With no form at all the fallback
+    -- draws the wanted one, which is still a "missing", not a "wrong".
+    local current = evalContext.currentFormSpell
+    local wrongForm = db[tostring(specID) .. "ReverseIcon"] and current ~= nil and shown == current
+
     f:SetSize(db.IconSize, db.IconSize)
     f.icon:SetTexture(C_Spell.GetSpellTexture(shown))
     f:SetAlpha(db.Alpha or 1)
-    self:ApplyText(db)
+    self:ApplyText(db, wrongForm)
     f:Show()
 end
 
@@ -231,7 +238,10 @@ function ST:OnAura(_, unit)
 end
 
 -- The "MISSING" caption above the icon.
-function ST:ApplyText(db)
+-- wrongForm says the icon on screen is the form the player IS in, not the one
+-- they are missing, so the caption has to say the opposite thing. Showing
+-- "MISSING" over the stance you are currently holding reads as a bug.
+function ST:ApplyText(db, wrongForm)
     local f = self.frame
     if not f or not f.text then return end
     -- Hidden rather than blanked: nothing to write, nothing to go wrong.
@@ -239,9 +249,15 @@ function ST:ApplyText(db)
         f.text:Hide()
         return
     end
+    local text, fallback
+    if wrongForm then
+        text, fallback = db.TextWrong, WRONG_TEXT_DEFAULT
+    else
+        text, fallback = db.Text, MISSING_TEXT_DEFAULT
+    end
     KE:ApplyFontToText(f.text, db.FontFace, db.FontSize, db.FontOutline)
     f.text:SetTextColor(unpack(db.TextColor))
-    f.text:SetText(db.Text ~= "" and db.Text or MISSING_TEXT_DEFAULT)
+    f.text:SetText(text and text ~= "" and text or fallback)
     f.text:Show()
 end
 
