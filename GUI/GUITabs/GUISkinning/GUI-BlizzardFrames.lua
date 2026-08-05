@@ -370,8 +370,8 @@ end
 -- is not running, because Color Picker and Raid Control ride on it and neither
 -- is a skin.
 --
--- Note there is no early return on a missing db. The chained pages below read
--- their own db and must still render when this page's is absent.
+-- Note there is no early return on a missing db. Color Picker and Raid Control
+-- read their own db and must still render when this page's is absent.
 GUIFrame:RegisterContent("SkinBlizzardFramesGeneral", function(scrollChild, yOffset)
     -- Chained, not re-registered: each builder takes (scrollChild, yOffset) and
     -- returns the next offset, which is the same contract RegisterTabbedContent
@@ -381,13 +381,6 @@ GUIFrame:RegisterContent("SkinBlizzardFramesGeneral", function(scrollChild, yOff
 
     local raidControl = GUIFrame.registeredContent and GUIFrame.registeredContent["RaidControl"]
     if raidControl then yOffset = raidControl(scrollChild, yOffset) end
-
-    -- Three group-finder pages live here rather than in the sidebar. None is a
-    -- skin, so none is gated on the engine.
-    for _, id in ipairs({ "GroupFinderPanel", "LFGQuickCreate", "LFGReminder" }) do
-        local builder = GUIFrame.registeredContent and GUIFrame.registeredContent[id]
-        if builder then yOffset = builder(scrollChild, yOffset) end
-    end
 
     return yOffset
 end)

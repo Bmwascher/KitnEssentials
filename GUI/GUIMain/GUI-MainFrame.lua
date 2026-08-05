@@ -125,22 +125,21 @@ GUIFrame.sidebarConfig = {
             --
             -- alwaysEnabled keeps it and Skyriding UI clickable while the
             -- section is greyed for ElvUI.
-            -- Dark Theme's General tab carries Raid Control and the three
-            -- group-finder pages, none of which has an ElvUI gate of its own,
-            -- and its Elements tab nests the Character Screen, which keeps
-            -- Character Panel's non-overlapping features; Skyriding UI is not
-            -- a skin. Chat and Tooltips carry no exemption because both
-            -- modules genuinely do stand down.
+            -- Dark Theme's General tab carries Color Picker and Raid Control,
+            -- neither of which has an ElvUI gate of its own, and its Elements
+            -- tab nests the Character Screen, which keeps Character Panel's
+            -- non-overlapping features; Skyriding UI is not a skin. Chat and
+            -- Tooltips carry no exemption because both modules genuinely do
+            -- stand down.
             --
-            -- The keyword list absorbs the seven rows this page swallowed, so
-            -- searching "raid control", "ilvl", "hex", "objective tracker" or
-            -- "group finder" still lands here.
+            -- The keyword list absorbs the rows this page swallowed, so
+            -- searching "raid control", "ilvl", "hex" or "objective tracker"
+            -- still lands here.
             { id = "SkinBlizzardFrames", text = "Dark Theme", alwaysEnabled = true, keywords = { "blizzard", "frames", "chat config", "chat settings", "gm", "skin", "window", "dark theme", "dialog", "context menu", "right click", "font", "socket", "taxi", "flight", "guild invite", "addon skins", "widget", "widgets", "status bar", "progress", "power bar", "top center", "bar text", "alert", "alerts", "toast", "toasts", "loot", "achievement", "banner", "recipe", "level up", "anchor", "move", "position",
                 "character", "panel", "stats", "item level", "ilvl", "gear", "durability", "inspect",
                 "color", "colour", "picker", "rgb", "hex", "alpha", "opacity", "swatch", "class color",
                 "raid", "control", "raid control", "ready check", "readycheck", "countdown", "pull", "timer", "marker", "markers", "world marker", "raid marker", "difficulty", "assist", "everyone assist", "role", "roles", "tank", "healer", "raid manager", "raid tools", "shared notes", "group",
-                "text", "message", "error", "raid warning", "ui error", "fonts", "replace fonts", "quest text", "objective tracker", "mail",
-                "group finder", "lfg", "premade", "affix", "filter", "sort", "dungeon", "raider io", "m+", "quick create", "list group", "keystone", "playstyle", "teleport", "dungeon teleport", "reminder", "popup", "portal" } },
+                "text", "message", "error", "raid warning", "ui error", "fonts", "replace fonts", "quest text", "objective tracker", "mail", } },
             { id = "Chat",               text = "Chat", keywords = { "chat", "channel", "whisper", "tab", "timestamp", "copy", "guild", "message", "panel" } },
             { id = "DragonRiding",       text = "Skyriding UI", alwaysEnabled = true, keywords = { "skyriding", "dragonriding", "dragon riding", "vigor", "speed", "fly" } },
             { id = "SkinTooltips",       text = "Tooltips", keywords = { "tooltip", "tooltips", "blizzard", "mouseover", "skin", "anchor", "cursor", "spell id", "item id", "aura id", "guild rank", "mythic rating", "target", "health bar", "class color", "hide in combat" } },
@@ -157,7 +156,7 @@ GUIFrame.sidebarConfig = {
             { id = "EnemyCounter",                text = "Enemy Counter", keywords = { "enemy", "counter", "count", "mobs", "pull", "nameplate", "m+" } },
             { id = "FocusMarker",                 text = "Focus Marker", keywords = { "focus", "marker", "focus marker", "macro", "builder", "raid marker" } },
             { id = "KickTracker",                 text = "Interrupt Tracker", keywords = { "interrupt", "kick", "tracker", "cc", "stop", "party", "m+" } },
-            { id = "KeystoneHelper",              text = "Keystone Helper", keywords = { "keystone", "reset", "instance reset", "reroll", "key", "announcer", "mythic", "m+" } },
+            { id = "KeystoneHelper",              text = "Keystone Helper", keywords = { "keystone", "reset", "instance reset", "reroll", "key", "announcer", "mythic", "m+", "group finder", "lfg", "premade", "affix", "filter", "sort", "dungeon", "raider io", "quick create", "list group", "playstyle", "teleport", "dungeon teleport", "reminder", "popup", "portal" } },
             { id = "MythicPlusTimer",             text = "Mythic+ Timer", keywords = { "mythic plus", "m+", "keystone", "timer", "forces", "deaths", "splits", "objective", "personal best", "affix", "warpdeplete" } },
             { id = "TargetedSpells",              text = "Targeted Spells", keywords = { "targeted", "spells", "cast", "incoming", "self", "target", "warning", "m+" } },
         },
