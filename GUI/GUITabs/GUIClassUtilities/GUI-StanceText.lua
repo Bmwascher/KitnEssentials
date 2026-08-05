@@ -8,131 +8,54 @@
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
-local CreateFrame = CreateFrame
+local LSM = KE.LSM
 
-local STANCE_TEXT_DATA = {
-    WARRIOR = {
-        { key = "386164", text = "Battle Stance",    textureId = 132349 },
-        { key = "386196", text = "Berserker Stance", textureId = 132275 },
-        { key = "386208", text = "Defensive Stance", textureId = 132341 },
-    },
-    PALADIN = {
-        { key = "465",    text = "Devotion Aura",      textureId = 135893 },
-        { key = "317920", text = "Concentration Aura", textureId = 135933 },
-        { key = "32223",  text = "Crusader Aura",      textureId = 135890 },
-    },
-    EVOKER = {
-        { key = "403264", text = "Black Attunement",  textureId = 5199619 },
-        { key = "403265", text = "Bronze Attunement", textureId = 5199623 },
-    },
+local table_insert = table.insert
+local ipairs, pairs = ipairs, pairs
+local tostring = tostring
+
+local CLASS_TITLES = {
+    WARRIOR = "Warrior Stances",
+    PALADIN = "Paladin Auras",
+    DRUID   = "Druid Forms",
+    PRIEST  = "Priest Shadowform",
+    EVOKER  = "Evoker Attunement",
 }
 
-local function CreateIconWidget(parent, textureId, size)
-    size = size or 36
-    local container = CreateFrame("Frame", nil, parent)
-    container:SetSize(size + 8, size)
-    container.fixedWidth = size + 8
+-- Icon plus name, drawn above each spec's controls so a card of five near
+-- identical rows reads as a list of specs rather than a wall of checkboxes.
+local function SpecHeader(parent, iconPath, labelText)
+    local row = CreateFrame("Frame", nil, parent)
+    row:SetHeight(26)
 
-    local iconFrame = CreateFrame("Frame", nil, container)
-    iconFrame:SetSize(size, size)
-    iconFrame:SetPoint("LEFT", container, "LEFT", 4, 0)
+    local border = row:CreateTexture(nil, "BACKGROUND")
+    border:SetSize(20, 20)
+    border:SetPoint("LEFT", row, "LEFT", 0, 0)
+    border:SetColorTexture(0, 0, 0, 1)
 
-    local tex = iconFrame:CreateTexture(nil, "ARTWORK")
-    tex:SetPoint("TOPLEFT", iconFrame, "TOPLEFT", 1, -1)
-    tex:SetPoint("BOTTOMRIGHT", iconFrame, "BOTTOMRIGHT", -1, 1)
-    tex:SetTexture(textureId)
-    KE:ApplyIconZoom(tex)
-    KE:AddIconBorders(iconFrame)
+    local icon = row:CreateTexture(nil, "ARTWORK")
+    icon:SetSize(18, 18)
+    icon:SetPoint("CENTER", border, "CENTER")
+    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    if iconPath then icon:SetTexture(iconPath) else border:Hide() end
 
-    return container
+    local fs = row:CreateFontString(nil, "OVERLAY")
+    fs:SetPoint("LEFT", border, "RIGHT", 6, 0)
+    fs:SetJustifyH("LEFT")
+    KE:ApplyThemeFont(fs, "large")
+    fs:SetText(labelText)
+    fs:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
+
+    return row
 end
 
 local function GetModule()
-    if KitnEssentials then
-        return KitnEssentials:GetModule("StanceText", true)
-    end
-    return nil
+    return KitnEssentials and KitnEssentials:GetModule("StanceText", true)
 end
 
-local function CreateStanceCard(scrollChild, yOffset, classKey, title, db, manager)
-    db[classKey] = db[classKey] or {}
-
-    local card = GUIFrame:CreateCard(scrollChild, title, yOffset)
-    manager:Register(card, "all")
-
-    local stances = STANCE_TEXT_DATA[classKey]
-    if not stances then return card:GetNextOffset() end
-
-    local function ApplySettings()
-        local mod = GetModule()
-        if mod and mod.ApplySettings then mod:ApplySettings() end
-    end
-
-    local function Refresh()
-        local mod = GetModule()
-        if mod and mod.Refresh then mod:Refresh() end
-    end
-
-    for i, stance in ipairs(stances) do
-        local isLast = i == #stances
-
-        if i > 1 then
-            local sepRow = GUIFrame:CreateRow(card.content, Theme.rowHeightSeparator)
-            local sep = GUIFrame:CreateSeparator(sepRow)
-            sepRow:AddWidget(sep, 1)
-            manager:Register(sep, "all")
-            card:AddRow(sepRow, Theme.rowHeightSeparator)
-        end
-
-        db[classKey][stance.key] = db[classKey][stance.key] or {}
-        if not db[classKey][stance.key].Text then
-            db[classKey][stance.key].Text = stance.text
-        end
-
-        local rowHeight = isLast and Theme.rowHeightLast or Theme.rowHeight
-        local row = GUIFrame:CreateRow(card.content, rowHeight)
-
-        local iconWidget = CreateIconWidget(row, stance.textureId, 36)
-        row:AddWidget(iconWidget, 0.1)
-
-        local enableToggle = GUIFrame:CreateCheckbox(row, "Show", {
-            value = db[classKey][stance.key].Enabled == true,
-            callback = function(checked)
-                db[classKey][stance.key].Enabled = checked
-                Refresh()
-            end,
-        })
-        row:AddWidget(enableToggle, 0.15)
-        manager:Register(enableToggle, "all")
-
-        local colorPicker = GUIFrame:CreateColorPicker(row, "Color", {
-            color = db[classKey][stance.key].Color or { 1, 1, 1, 1 },
-            callback = function(r, g, b, a)
-                db[classKey][stance.key].Color = { r, g, b, a }
-                ApplySettings()
-            end,
-        })
-        row:AddWidget(colorPicker, 0.25)
-        manager:Register(colorPicker, "all")
-
-        local textInput = GUIFrame:CreateEditBox(row, "Text", {
-            value = db[classKey][stance.key].Text or stance.text,
-            callback = function(text)
-                db[classKey][stance.key].Text = text
-                ApplySettings()
-            end,
-        })
-        row:AddWidget(textInput, 0.5)
-        manager:Register(textInput, "all")
-
-        if isLast then
-            card:AddRow(row, rowHeight, 0)
-        else
-            card:AddRow(row, rowHeight)
-        end
-    end
-
-    return card:GetNextOffset()
+local function ApplySettings()
+    local mod = GetModule()
+    if mod and mod.ApplySettings then mod:ApplySettings() end
 end
 
 GUIFrame:RegisterContent("StanceText", function(scrollChild, yOffset)
@@ -140,50 +63,248 @@ GUIFrame:RegisterContent("StanceText", function(scrollChild, yOffset)
     if not db then
         local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
         errorCard:AddLabel("Database not available")
-        return errorCard:GetNextOffset()
+        return yOffset + errorCard:GetContentHeight() + Theme.paddingMedium
     end
 
     local mod = GetModule()
-    local manager = GUIFrame:CreateWidgetStateManager()
+    local allWidgets = {}
+    local subCards = {}
 
-    local function ApplySettings()
-        if mod and mod.ApplySettings then mod:ApplySettings() end
+    local function UpdateAllWidgetStates()
+        local enabled = db.Enabled == true
+        for _, c in ipairs(subCards) do
+            if c.SetAlpha then c:SetAlpha(enabled and 1 or 0.4) end
+        end
+        for _, w in ipairs(allWidgets) do
+            if w.SetEnabled then w:SetEnabled(enabled) end
+        end
     end
 
-    local function ApplyModuleState(enabled)
-        if not mod then return end
-        mod.db.Enabled = enabled
-        if enabled then
+    ------------------------------------------------------------------
+    -- Card 1: Master Enable
+    ------------------------------------------------------------------
+    local card1 = GUIFrame:CreateCard(scrollChild, "Stance Text", yOffset)
+    card1:AddHeaderToggle(db.Enabled == true, function(checked)
+        db.Enabled = checked
+        if checked then
             KitnEssentials:EnableModule("StanceText")
         else
             KitnEssentials:DisableModule("StanceText")
         end
-    end
-
-    local function RefreshStates()
-        manager:UpdateAll(db.Enabled == true)
-    end
-
-    ----------------------------------------------------------------
-    -- Card 1: Enable
-    ----------------------------------------------------------------
-    local card1 = GUIFrame:CreateCard(scrollChild, "Class Stance Texts", yOffset)
-    card1:AddHeaderToggle(db.Enabled == true, function(checked)
-        db.Enabled = checked
-        ApplyModuleState(checked)
-        KE:Print("Stance Text: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+        GUIFrame:RefreshContent()
     end)
+    card1:AddLabel("Shows an icon when your spec is not in the form, stance or aura it should be in.")
 
-    yOffset = card1:GetNextOffset()
+    if db.Enabled ~= true then
+        return yOffset + card1:GetContentHeight() + Theme.paddingSmall
+    end
+    yOffset = yOffset + card1:GetContentHeight() + Theme.paddingSmall
 
-    -- Lone header bar: a disabled module shows its switch and nothing else.
-    if db.Enabled ~= true then return yOffset end
+    ------------------------------------------------------------------
+    -- Card 2: Icon
+    ------------------------------------------------------------------
+    local card2 = GUIFrame:CreateCard(scrollChild, "Icon", yOffset)
+    table_insert(subCards, card2)
 
-    ----------------------------------------------------------------
-    -- Card 2: Position Settings
-    ----------------------------------------------------------------
+    local row2 = GUIFrame:CreateRow(card2.content, 40)
+    local sizeSlider = GUIFrame:CreateSlider(row2, "Icon Size", {
+        min = 20, max = 100, step = 1, value = db.IconSize or 44,
+        callback = function(v) db.IconSize = v; ApplySettings() end,
+    })
+    row2:AddWidget(sizeSlider, 0.5)
+    local alphaSlider = GUIFrame:CreateSlider(row2, "Opacity", {
+        min = 0.1, max = 1, step = 0.05, value = db.Alpha or 1,
+        callback = function(v) db.Alpha = v; ApplySettings() end,
+    })
+    row2:AddWidget(alphaSlider, 0.5)
+    table_insert(allWidgets, sizeSlider)
+    table_insert(allWidgets, alphaSlider)
+    card2:AddRow(row2, 40)
+
+    -- No background colour option: the icon texture fills the frame, so a
+    -- background behind it is never visible. Border only.
+    local row2b = GUIFrame:CreateRow(card2.content, 46)
+    local borderColor = GUIFrame:CreateColorPicker(row2b, "Border Color", {
+        color = db.BorderColor,
+        callback = function(r, g, b, a) db.BorderColor = { r, g, b, a }; ApplySettings() end,
+    })
+    row2b:AddWidget(borderColor, 0.5)
+    table_insert(allWidgets, borderColor)
+    card2:AddRow(row2b, 46)
+
+    -- No Preview button: PreviewManager shows this module whenever the page is
+    -- open or edit mode is on.
+    yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
+
+    ------------------------------------------------------------------
+    -- Card 3: Text
+    ------------------------------------------------------------------
+    local card3 = GUIFrame:CreateCard(scrollChild, "Text", yOffset)
+    table_insert(subCards, card3)
+
+    local rowT = GUIFrame:CreateRow(card3.content, 40)
+    local showText = GUIFrame:CreateCheckbox(rowT, "Show Text", {
+        value = db.ShowText ~= false,
+        callback = function(checked) db.ShowText = checked; ApplySettings() end,
+    })
+    rowT:AddWidget(showText, 0.5)
+    local textColor = GUIFrame:CreateColorPicker(rowT, "Text Color", {
+        color = db.TextColor,
+        callback = function(r, g, b, a) db.TextColor = { r, g, b, a }; ApplySettings() end,
+    })
+    rowT:AddWidget(textColor, 0.5)
+    table_insert(allWidgets, showText)
+    table_insert(allWidgets, textColor)
+    card3:AddRow(rowT, 40)
+
+    local rowT2 = GUIFrame:CreateRow(card3.content, 40)
+    local textInput = GUIFrame:CreateEditBox(rowT2, "Missing Text", {
+        value = db.Text or "MISSING",
+        tooltip = "Shown when the icon is the form you should be in.",
+        callback = function(value) db.Text = value; ApplySettings() end,
+    })
+    rowT2:AddWidget(textInput, 0.5)
+    local wrongInput = GUIFrame:CreateEditBox(rowT2, "Wrong Form Text", {
+        value = db.TextWrong or "WRONG",
+        tooltip = "Shown instead when a spec uses Show Current Form, because the icon is then the form you are already in.",
+        callback = function(value) db.TextWrong = value; ApplySettings() end,
+    })
+    rowT2:AddWidget(wrongInput, 0.5)
+    table_insert(allWidgets, textInput)
+    table_insert(allWidgets, wrongInput)
+    card3:AddRow(rowT2, 40)
+
+    local fontList = {}
+    if LSM then
+        for name in pairs(LSM:HashTable("font")) do
+            table_insert(fontList, { key = name, text = name })
+        end
+        table.sort(fontList, function(a, b) return a.text < b.text end)
+    else
+        table_insert(fontList, { key = "Friz Quadrata TT", text = "Friz Quadrata TT" })
+    end
+
+    local rowT3 = GUIFrame:CreateRow(card3.content, 40)
+    local fontDrop = GUIFrame:CreateDropdown(rowT3, "Font", {
+        options = fontList,
+        value = db.FontFace,
+        callback = function(value) db.FontFace = value; ApplySettings() end,
+    })
+    rowT3:AddWidget(fontDrop, 0.34)
+    local fontSize = GUIFrame:CreateSlider(rowT3, "Font Size", {
+        min = 8, max = 32, step = 1, value = db.FontSize or 14,
+        callback = function(v) db.FontSize = v; ApplySettings() end,
+    })
+    rowT3:AddWidget(fontSize, 0.33)
+    -- Soft Outline is added here for the caption's own renderer
+    -- (KE:ApplyFontToText), which the reference does not have.
+    local outlineDrop = GUIFrame:CreateDropdown(rowT3, "Outline", {
+        options = {
+            { key = "NONE",         text = "None" },
+            { key = "OUTLINE",      text = "Outline" },
+            { key = "THICKOUTLINE", text = "Thick" },
+            { key = "SOFTOUTLINE",  text = "Soft Outline" },
+        },
+        value = db.FontOutline,
+        callback = function(value) db.FontOutline = value; ApplySettings() end,
+    })
+    rowT3:AddWidget(outlineDrop, 0.33)
+    table_insert(allWidgets, fontDrop)
+    table_insert(allWidgets, fontSize)
+    table_insert(allWidgets, outlineDrop)
+    card3:AddRow(rowT3, 40)
+    yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
+
+    ------------------------------------------------------------------
+    -- One card per class, ALL classes -- settings can be prepared for an
+    -- alt without logging into it.
+    ------------------------------------------------------------------
+    local currentSpecId
+    if GetSpecialization and GetSpecializationInfo then
+        local idx = GetSpecialization()
+        if idx and idx > 0 then currentSpecId = GetSpecializationInfo(idx) end
+    end
+
+    if mod and mod.CLASS_ORDER then
+        for _, classKey in ipairs(mod.CLASS_ORDER) do
+            local card = GUIFrame:CreateCard(scrollChild, CLASS_TITLES[classKey] or classKey, yOffset)
+            table_insert(subCards, card)
+
+            for _, specID in ipairs(mod.CLASS_SPECS[classKey]) do
+                local entry = mod.SPECS[specID]
+                local key = tostring(specID)
+                local specName = mod.SPEC_NAMES[specID] or key
+                local wantedName = mod.SPELL_NAMES[entry.spellID] or ""
+
+                local specIcon
+                if GetSpecializationInfoByID then
+                    local _, n, _, icon = GetSpecializationInfoByID(specID)
+                    if n then specName = n end
+                    specIcon = icon
+                end
+                local headerText = specName
+                if specID == currentSpecId then
+                    headerText = headerText .. "  " .. KE:ColorTextByTheme("(current)")
+                end
+                local header = GUIFrame:CreateRow(card.content, 26)
+                header:AddWidget(SpecHeader(header, specIcon, headerText), 1)
+                card:AddRow(header, 26)
+
+                local row = GUIFrame:CreateRow(card.content, 40)
+                local check = GUIFrame:CreateCheckbox(row,
+                    wantedName ~= "" and wantedName or specName, {
+                        value = db[key .. "Enabled"] ~= false,
+                        callback = function(checked) db[key .. "Enabled"] = checked; ApplySettings() end,
+                    })
+                row:AddWidget(check, 0.4)
+
+                local combat = GUIFrame:CreateCheckbox(row, "Only In Combat", {
+                    value = db[key .. "CombatOnly"] == true,
+                    callback = function(checked) db[key .. "CombatOnly"] = checked; ApplySettings() end,
+                })
+                row:AddWidget(combat, 0.3)
+
+                local reverse = GUIFrame:CreateCheckbox(row, "Show Current Form", {
+                    value = db[key .. "ReverseIcon"] == true,
+                    tooltip = "Draw the form you are actually in, instead of the one you should be in. It still only appears while your form is wrong, and the caption changes to your Wrong Form Text.",
+                    callback = function(checked) db[key .. "ReverseIcon"] = checked; ApplySettings() end,
+                })
+                row:AddWidget(reverse, 0.3)
+
+                table_insert(allWidgets, check)
+                table_insert(allWidgets, combat)
+                table_insert(allWidgets, reverse)
+                card:AddRow(row, 40)
+
+                -- Only classes with more than one valid answer get a choice.
+                if entry.options then
+                    local list = {}
+                    for _, spellID in ipairs(entry.options) do
+                        list[#list + 1] = {
+                            key = tostring(spellID),
+                            text = mod.SPELL_NAMES[spellID] or tostring(spellID),
+                        }
+                    end
+                    local dropRow = GUIFrame:CreateRow(card.content, 34)
+                    local drop = GUIFrame:CreateDropdown(dropRow, "Required", {
+                        options = list,
+                        value = tostring(db[key .. "Spell"] or entry.spellID),
+                        callback = function(value) db[key .. "Spell"] = value; ApplySettings() end,
+                    })
+                    dropRow:AddWidget(drop, 1)
+                    table_insert(allWidgets, drop)
+                    card:AddRow(dropRow, 34)
+                end
+            end
+
+            yOffset = yOffset + card:GetContentHeight() + Theme.paddingSmall
+        end
+    end
+
+    ------------------------------------------------------------------
+    -- Position
+    ------------------------------------------------------------------
     local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        title = "Position Settings",
         db = db,
         dbKeys = {
             anchorFrameType = "anchorFrameType",
@@ -194,52 +315,13 @@ GUIFrame:RegisterContent("StanceText", function(scrollChild, yOffset)
             yOffset = "YOffset",
             strata = "Strata",
         },
-        defaults = {
-            anchorFrameType = "UIPARENT",
-            selfPoint = "CENTER",
-            anchorPoint = "CENTER",
-            xOffset = 0,
-            yOffset = 100,
-            strata = "HIGH",
-        },
         showAnchorFrameType = true,
         showStrata = true,
         onChangeCallback = ApplySettings,
     })
-
-    if posCard.positionWidgets then
-        manager:RegisterGroup(posCard.positionWidgets, "all")
-    end
-    manager:Register(posCard, "all")
+    table_insert(subCards, posCard)
     yOffset = posOffset
 
-    ----------------------------------------------------------------
-    -- Card 3: Font Settings
-    ----------------------------------------------------------------
-    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-        db = db,
-        dbKeys = {
-            fontFace = "FontFace",
-            fontSize = "FontSize",
-            fontOutline = "FontOutline",
-        },
-        fontSizeRange = { 8, 32 },
-        includeSoftOutline = true,
-        onChangeCallback = ApplySettings,
-    })
-    manager:Register(fontCard, "all")
-    if fontWidgets then
-        manager:RegisterGroup(fontWidgets, "all")
-    end
-    yOffset = fontOffset
-
-    ----------------------------------------------------------------
-    -- Cards 4–6: Per-class stance text editors
-    ----------------------------------------------------------------
-    yOffset = CreateStanceCard(scrollChild, yOffset, "WARRIOR", "Warrior Stance Texts", db, manager)
-    yOffset = CreateStanceCard(scrollChild, yOffset, "PALADIN", "Paladin Aura Texts", db, manager)
-    yOffset = CreateStanceCard(scrollChild, yOffset, "EVOKER", "Evoker Attunement Texts", db, manager)
-
-    RefreshStates()
+    UpdateAllWidgetStates()
     return yOffset
 end)

@@ -312,17 +312,30 @@ local Defaults = {
 
         NoMovementAlert = {
             Enabled = true,
-            Strata = "MEDIUM",
-            anchorFrameType = "UIPARENT",
-            ParentFrame = "UIParent",
             Position = DefaultPosition(0, -61),
             FontSize = 16,
             FontFace = "Expressway",
             FontOutline = "OUTLINE",
-            ColorMode = "theme",
-            Color = { 1, 0.2, 0.2, 1 },
-            DisplayFormat = "NO %n - %t",
-            MaxCooldown = 30,
+
+            GrowDirection = "DOWN",
+            ShowWhenReady = false,
+            HideOutOfCombat = false,
+            Spacing = 2,
+            Scale = 1,
+            AttachToCombatTexts = false,
+
+            TextColor = { 1, 1, 1, 1 },
+            TimerColor = { 1, 0.82, 0, 1 },
+            SeparatorColor = { 0.5, 0.5, 0.5, 1 },
+            Separator = "-",
+
+            SoundEnabled = false,
+            Sound = "None",
+
+            -- Per-spell overrides, keyed "specID:spellID". Absence means the
+            -- preset's own default, so an untouched profile stores nothing.
+            Spells = {},
+            PreviewCount = 2,
         },
 
         FocusCastbar = {
@@ -839,27 +852,36 @@ local Defaults = {
 
         StanceText = {
             Enabled = false,
+            IconSize = 44,
+            Alpha = 1,
+            BorderColor = { 0, 0, 0, 1 },
+
+            -- Caption above the icon. TextWrong replaces it for specs using
+            -- Show Current Form, where the icon is the form being held.
+            ShowText = true,
+            Text = "MISSING",
+            TextWrong = "WRONG",
+            TextColor = { 1, 0.3, 0.3, 1 },
             FontFace = "Expressway",
             FontSize = 14,
             FontOutline = "SOFTOUTLINE",
+
+            -- Warrior defaults to Reverse Icon (show the stance you ARE in)
+            -- because "wrong stance" is the useful signal there; the others
+            -- show what you are missing. Paladin auras are off by default --
+            -- plenty of people run whichever they like.
+            ["71Enabled"] = true,  ["71ReverseIcon"] = true,
+            ["72Enabled"] = true,  ["72ReverseIcon"] = true,
+            ["73Enabled"] = false, ["73ReverseIcon"] = false,
+            ["65Enabled"] = false, ["66Enabled"] = false, ["70Enabled"] = false,
+            ["102Enabled"] = true, ["103Enabled"] = true, ["104Enabled"] = true,
+            ["258Enabled"] = true,
+            ["1473Enabled"] = true,
+
             Strata = "HIGH",
             anchorFrameType = "PLAYERFRAME",
             ParentFrame = "UIParent",
             Position = { AnchorFrom = "LEFT", AnchorTo = "LEFT", XOffset = 3, YOffset = 0 },
-            WARRIOR = {
-                ["386164"] = { Enabled = true, Text = "Battle Stance", Color = { 1, 0, 0, 1 } },
-                ["386196"] = { Enabled = true, Text = "Berserker Stance", Color = { 1, 0, 0, 1 } },
-                ["386208"] = { Enabled = true, Text = "Defensive Stance", Color = { 0.3, 0.7, 1, 1 } },
-            },
-            PALADIN = {
-                ["465"] = { Enabled = true, Text = "Devotion Aura", Color = { 1, 1, 1, 1 } },
-                ["317920"] = { Enabled = true, Text = "Concentration Aura", Color = { 0.9, 0.5, 1, 1 } },
-                ["32223"] = { Enabled = true, Text = "Crusader Aura", Color = { 1, 0.8, 0.3, 1 } },
-            },
-            EVOKER = {
-                ["403264"] = { Enabled = true, Text = "Black Attunement", Color = { 0.5, 0.2, 0.8, 1 } },
-                ["403265"] = { Enabled = true, Text = "Bronze Attunement", Color = { 0.9, 0.7, 0.2, 1 } },
-            },
         },
 
         HuntersMark = {
@@ -1266,6 +1288,78 @@ local Defaults = {
             TimerPosition  = { AnchorFrom = "CENTER",      AnchorTo = "CENTER",      XOffset = 0, YOffset = 0 },
             StackPosition  = { AnchorFrom = "BOTTOMRIGHT", AnchorTo = "BOTTOMRIGHT", XOffset = 0, YOffset = 2 },
             DispelPosition = { AnchorFrom = "TOPRIGHT",    AnchorTo = "TOPRIGHT",    XOffset = 0, YOffset = 0 },
+        },
+
+        BuffTracking = {
+            Enabled = false,
+            ShowTooltips = true,
+
+            IconSize = 32,
+            IconSpacing = 4,
+            IconsPerRow = 12,
+            MaxRows = 3,
+            GrowthDirection = "LEFT_DOWN",
+
+            -- Sorting is deliberately NOT configurable: this is skinning, and
+            -- Blizzard's own order is what people expect.
+
+            Swipe = true,
+            Reverse = false,
+            ShowTimer = true,
+
+            BorderColor = { 0, 0, 0, 1 },
+            EnchantBorderColor = { 0.6, 0.2, 0.9, 1 },
+            CountColor = { 1, 1, 1, 1 },
+
+            FontFace = "Expressway",
+            FontOutline = "OUTLINE",
+            TimerFontSize = 12,
+            CountFontSize = 12,
+
+            Strata = "MEDIUM",
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            Position = {
+                AnchorFrom = "TOPRIGHT",
+                AnchorTo = "TOPRIGHT",
+                XOffset = -200,
+                YOffset = -20,
+            },
+        },
+
+        PlayerDebuffTracking = {
+            Enabled = false,
+            ShowTooltips = true,
+
+            IconSize = 32,
+            IconSpacing = 4,
+            IconsPerRow = 12,
+            MaxRows = 2,
+            GrowthDirection = "LEFT_DOWN",
+
+            Swipe = true,
+            Reverse = false,
+            ShowTimer = true,
+
+            ColorByType = true,
+            BorderColor = { 0, 0, 0, 1 },
+            EnchantBorderColor = { 0.6, 0.2, 0.9, 1 },
+            CountColor = { 1, 1, 1, 1 },
+
+            FontFace = "Expressway",
+            FontOutline = "OUTLINE",
+            TimerFontSize = 12,
+            CountFontSize = 12,
+
+            Strata = "MEDIUM",
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            Position = {
+                AnchorFrom = "TOPRIGHT",
+                AnchorTo = "TOPRIGHT",
+                XOffset = -200,
+                YOffset = -160,
+            },
         },
 
         TargetedSpells = {

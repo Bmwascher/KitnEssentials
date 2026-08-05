@@ -55,13 +55,14 @@ GUIFrame.sidebarConfig = {
             { id = "RangeChecker",  text = "Range Display", keywords = { "range", "distance", "yards", "melee", "ranged" } },
         },
     },
-    -- Player Buffs and Player Debuffs join this section when their modules land.
     {
         id = "aura_section",
         type = "header",
         text = "\226\128\162 Aura Tracking",
         defaultExpanded = false,
         items = {
+            { id = "AuraHeaders_Buffs",   text = "Player Buffs", keywords = { "buff", "buffs", "player buffs", "aura", "auras", "weapon enchant", "enchant", "blizzard", "replace" } },
+            { id = "AuraHeaders_Debuffs", text = "Player Debuffs", keywords = { "debuff", "debuffs", "player debuffs", "aura", "auras", "magic", "curse", "poison", "disease", "blizzard", "replace" } },
             { id = "AuraDebuffs",   text = "Advanced Debuffs", keywords = { "debuff", "debuffs", "aura", "boss", "dot", "magic", "curse", "poison", "disease" } },
             { id = "AuraExternals", text = "External Tracker", keywords = { "external", "externals", "defensive", "buff", "cooldown", "mitigation" } },
             { id = "StanceText",    text = "Stance Text", keywords = { "stance", "form", "shapeshift", "druid", "warrior", "evoker", "presence" } },

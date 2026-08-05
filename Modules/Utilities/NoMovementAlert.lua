@@ -1,8 +1,9 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  NoMovementAlert.lua                                     ║
 -- ║  Module: No Movement Alert                               ║
--- ║  Purpose: Shows remaining cooldown when movement ability ║
--- ║           is unavailable. Auto-detects movement spell.   ║
+-- ║  Purpose: Shows the current spec's mobility spells        ║
+-- ║           counting down, so the gap-closer or escape      ║
+-- ║           state is always on screen.                      ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -12,344 +13,1002 @@ if not KitnEssentials then return end
 ---@class NoMovementAlert: AceModule, AceEvent-3.0
 local NMA = KitnEssentials:NewModule("NoMovementAlert", "AceEvent-3.0")
 
+-- Zero idle cost: no cooldown or aura events are registered at all until
+-- the module is enabled, and the poll ticker only runs while at least one
+-- tracked spell is actually on cooldown.
+--
+-- MAINTENANCE: the spell tables below are hardcoded ids and WILL drift with
+-- talent and expansion changes. The user override list (db.Spells) is the
+-- escape hatch: it can disable a preset, retext it, or add an id that never
+-- shipped, so users self-correct without waiting on a build.
+
 local C_Spell = C_Spell
-local C_SpellBook = C_SpellBook
 local C_Timer = C_Timer
-local CreateFrame = CreateFrame
-local UnitClass = UnitClass
-local SpellBookBank_Player = Enum.SpellBookSpellBank.Player
 local GetTime = GetTime
-local string_format = string.format
-local string_gsub = string.gsub
+local UnitClass, UnitAffectingCombat = UnitClass, UnitAffectingCombat
 
----------------------------------------------------------------------------------
--- Constants
----------------------------------------------------------------------------------
-local REFRESH_INTERVAL = 0.1
-
-local CLASS_SPELLS = {
-    ["DEATHKNIGHT"] = {
-        { 48265, "DA" },          -- Death's Advance
-    },
-    ["DEMONHUNTER"] = {
-        { 195072, "RUSH" },       -- Fel Rush
-        { 189110, "LEAP" },       -- Infernal Strike
-    },
-    ["DRUID"] = {
-        { 252216, "DASH" },       -- Tiger Dash
-        { 102401, "CHARGE" },     -- Wild Charge
-    },
-    ["EVOKER"] = {
-        { 358267, "HOVER" },      -- Hover
-    },
-    ["HUNTER"] = {
-        { 781, "DISENGAGE" },     -- Disengage
-    },
-    ["MAGE"] = {
-        { 212653, "SHIMMER" },    -- Shimmer
-        { 1953, "BLINK" },        -- Blink
-    },
-    ["MONK"] = {
-        { 109132, "ROLL" },       -- Roll
-        { 115008, "TORPEDO" },    -- Chi Torpedo
-    },
-    ["PALADIN"] = {
-        { 190784, "STEED" },      -- Divine Steed
-    },
-    ["PRIEST"] = {
-        { 121536, "FEATHER" },    -- Angelic Feather
-    },
-    ["ROGUE"] = {
-        { 36554, "STEP" },        -- Shadowstep
-        { 195457, "GRAPPLE" },    -- Grappling Hook
-    },
-    ["SHAMAN"] = {
-        { 192063, "GUST" },       -- Gust of Wind
-    },
-    ["WARLOCK"] = {
-        { 48020, "PORT" },      -- Demonic Circle: Teleport
-    },
-    ["WARRIOR"] = {
-        { 6544, "LEAP" },         -- Heroic Leap
-    },
+------------------------------------------------------------------------
+-- Data tables
+------------------------------------------------------------------------
+local MOVEMENT_ABILITIES = {
+    DEATHKNIGHT = { [250] = { 48265, 212552 }, [251] = { 48265, 212552 }, [252] = { 48265, 444010, 444347, 212552 } },
+    DEMONHUNTER = { [577] = { 195072 }, [581] = { 189110 }, [1480] = { 1234796 } },
+    DRUID       = { [102] = { 102401, 252216, 1850, 102417 }, [103] = { 102401, 252216, 1850, 102417 }, [104] = { 102401, 252216, 106898, 1850, 102417 }, [105] = { 102401, 252216, 1850, 102417 } },
+    EVOKER      = { [1467] = { 358267 }, [1468] = { 358267 }, [1473] = { 358267 } },
+    HUNTER      = { [253] = { 186257, 781 }, [254] = { 186257, 781 }, [255] = { 186257, 781 } },
+    MAGE        = { [62] = { 212653, 1953 }, [63] = { 212653, 1953 }, [64] = { 212653, 1953 } },
+    MONK        = { [268] = { 115008, 109132, 119085, 361138 }, [269] = { 109132, 119085, 361138, 101545 }, [270] = { 109132, 119085, 361138 } },
+    PALADIN     = { [65] = { 190784 }, [66] = { 190784 }, [70] = { 190784 } },
+    PRIEST      = { [256] = { 121536, 73325 }, [257] = { 121536, 73325 }, [258] = { 121536, 73325 } },
+    ROGUE       = { [259] = { 36554, 2983 }, [260] = { 195457, 2983 }, [261] = { 36554, 2983 } },
+    SHAMAN      = { [262] = { 79206, 90328, 192063, 58875 }, [263] = { 90328, 192063, 58875 }, [264] = { 79206, 90328, 192063, 58875 } },
+    WARLOCK     = { [265] = { 48020, 111400 }, [266] = { 48020, 111400 }, [267] = { 48020, 111400 } },
+    WARRIOR     = { [71] = { 6544 }, [72] = { 6544 }, [73] = { 6544 } },
 }
 
----------------------------------------------------------------------------------
--- Module State
----------------------------------------------------------------------------------
-NMA.frame = nil
-NMA.text = nil
-NMA.isPreview = false
-NMA.editModeRegistered = false
-NMA.playerClass = nil
-NMA.activeSpellID = nil
-NMA.activeDisplayName = nil
-NMA.elapsed = 0
-NMA.fmtBefore = "NO MOVE ("
-NMA.fmtAfter = ")"
+-- Aura-tracked: no cooldown to count down, so the aura being up IS the
+-- state. Membership decides HOW a spell is tracked, never whether it is
+-- on (Burning Rush ships unchecked via DEFAULT_OFF).
+local BUFF_ACTIVE_SPELLS = {
+    [111400] = "Burning Rush Active!",
+}
 
----------------------------------------------------------------------------------
--- DB Helper
----------------------------------------------------------------------------------
-function NMA:UpdateDB()
-    self.db = KE.db.profile.NoMovementAlert
-end
+-- Same ability under different form/talent IDs: any of them satisfies
+-- the others' cooldown lookups.
+local SPELL_ALIAS_GROUPS = {
+    { 102401, 16979, 102417, 252216 },
+    { 106898, 77761, 77764 },
+}
 
----------------------------------------------------------------------------------
--- Spell Resolution
----------------------------------------------------------------------------------
-local function IsSpellKnownSafe(spellID)
-    if C_SpellBook and C_SpellBook.IsSpellKnown then
-        return C_SpellBook.IsSpellKnown(spellID, SpellBookBank_Player) or false
-    end
-    return false
-end
+-- Fallback durations for spells whose cooldown the API reports as 0
+-- until first cast (charge/category oddities).
+local SPELL_CATEGORY_DURATION = {
+    [102401] = 15, [16979] = 15, [102417] = 15, [252216] = 15,
+    [1850] = 18,
+    [106898] = 120, [77761] = 120,
+}
 
-function NMA:CacheMovementSpell()
-    self.activeSpellID = nil
-    self.activeDisplayName = nil
+-- Presets that ship UNCHECKED: absence of an override means enabled,
+-- except for these. Ticking the box writes an explicit enabled = true.
+local DEFAULT_OFF = {
+    [2983] = true,                    -- Sprint
+    [73325] = true,                   -- Leap of Faith
+    [106898] = true, [77761] = true, [77764] = true, -- Stampeding Roar
+    [1850] = true,                    -- Dash
+    [252216] = true,                  -- Tiger Dash
+    [212552] = true,                  -- Wraith Walk
+    [79206] = true,                   -- Spiritwalker's Grace
+    [58875] = true, [90328] = true,   -- Spirit Walk
+    [111400] = true,                  -- Burning Rush
+}
 
-    if not self.playerClass then return end
-    local spells = CLASS_SPELLS[self.playerClass]
-    if not spells then return end
+KE.MOVEMENT_ABILITIES = MOVEMENT_ABILITIES
+KE.MOVEMENT_BUFF_ACTIVE = BUFF_ACTIVE_SPELLS
+KE.MOVEMENT_DEFAULT_OFF = DEFAULT_OFF
 
-    for _, entry in ipairs(spells) do
-        if IsSpellKnownSafe(entry[1]) then
-            self.activeSpellID = entry[1]
-            self.activeDisplayName = entry[2]
-            self:ParseDisplayFormat()
-            return
+local ALIAS_MAP = {}
+do
+    for _, group in ipairs(SPELL_ALIAS_GROUPS) do
+        for _, id in ipairs(group) do ALIAS_MAP[id] = group end
+        for _, id in ipairs(group) do
+            if not SPELL_CATEGORY_DURATION[id] then
+                for _, other in ipairs(group) do
+                    if SPELL_CATEGORY_DURATION[other] then
+                        SPELL_CATEGORY_DURATION[id] = SPELL_CATEGORY_DURATION[other]
+                        break
+                    end
+                end
+            end
         end
     end
 end
 
-function NMA:ParseDisplayFormat()
-    local fmt = self.db.DisplayFormat or "NO %n (%t)"
-    local name = self.activeDisplayName or "MOVE"
-    local display = string_gsub(fmt, "%%n", name)
-    local before, after = display:match("^(.-)%%t(.*)$")
-    if before then
-        self.fmtBefore = before
-        self.fmtAfter = after or ""
-    else
-        self.fmtBefore = display
-        self.fmtAfter = nil
+local function CategoryDuration(spellId)
+    if SPELL_CATEGORY_DURATION[spellId] then return SPELL_CATEGORY_DURATION[spellId] end
+    local group = ALIAS_MAP[spellId]
+    if group then
+        for _, id in ipairs(group) do
+            if SPELL_CATEGORY_DURATION[id] then return SPELL_CATEGORY_DURATION[id] end
+        end
     end
-    self.lastTimeStr = nil
+    return 0
 end
 
----------------------------------------------------------------------------------
--- Display
----------------------------------------------------------------------------------
-function NMA:CreateFrame()
+------------------------------------------------------------------------
+-- Secret-safe API wrappers (12.x returns secret values in some states;
+-- KE:IsSecretValue is the house guard).
+------------------------------------------------------------------------
+-- Midnight makes cooldown numbers SECRET in combat. Discarding any secret
+-- value and returning 0 would make every tracked spell read as "ready",
+-- nothing would render, and the frame would hide itself for the rest of
+-- the fight.
+--
+-- Secret values can be DISPLAYED, just never inspected: keep the secret
+-- number, skip every comparison against it, and hand it to
+-- SetFormattedText, which renders it without the addon ever reading it.
+-- Same doctrine as Cursor.lua's SetCooldownFromDurationObject note --
+-- never boolean-test a secret.
+--
+-- The two fields below are what a plain cooldown and a charge cooldown
+-- both gate on:
+--   timeUntilEndOfStartRecovery -- remaining time, directly
+--   isOnGCD                     -- true when the only "cooldown" is the GCD
+-- That second field is the whole answer to the charge problem: a charge
+-- spell with a charge banked reports isOnGCD, so it filters out, while a
+-- fully spent one reports a real cooldown. No comparison against a
+-- secret, no local clock, no charge bookkeeping.
+--
+-- Returns: remaining, total, isSecret  (remaining may be secret when
+-- isSecret is true -- render it, never inspect it).
+local function ReadCooldown(spellId)
+    if not (C_Spell and C_Spell.GetSpellCooldown) then return nil end
+    local ok, info = pcall(C_Spell.GetSpellCooldown, spellId)
+    if not ok or type(info) ~= "table" then return nil end
+
+    local rem = info.timeUntilEndOfStartRecovery
+    if rem == nil then return nil end
+
+    -- isOnGCD is nil on clients that predate the field; treat that as
+    -- "cannot tell" and fall through to the duration object below.
+    local okGCD, onGCD = pcall(function() return info.isOnGCD end)
+    if okGCD and onGCD ~= nil then
+        if onGCD == true then return nil end          -- GCD only: not a cooldown
+        if KE:IsSecretValue(rem) then return rem, nil, true end
+        if rem > 0 then return rem, info.duration, false end
+        return nil
+    end
+
+    -- Fallback: the duration object (unrestricted per the API docs).
+    if C_Spell.GetSpellCooldownDuration then
+        local duration = C_Spell.GetSpellCooldownDuration(spellId)
+        if duration then
+            local okD, r, total = pcall(function()
+                return duration:GetRemainingDuration(), duration:GetTotalDuration()
+            end)
+            if okD then
+                if KE:IsSecretValue(r) or KE:IsSecretValue(total) then return r, total, true end
+                if total and total > 1.5 and r and r > 0 then return r, total, false end
+            end
+        end
+    end
+    return nil
+end
+
+local function SafeCharges(spellId)
+    if not (C_Spell and C_Spell.GetSpellCharges) then return nil end
+    local ok, info = pcall(C_Spell.GetSpellCharges, spellId)
+    if not ok or type(info) ~= "table" then return nil end
+    if KE:IsSecretValue(info.currentCharges) or KE:IsSecretValue(info.maxCharges) then return nil end
+    return info
+end
+
+local function SpellKnown(spellId)
+    if IsPlayerSpell and IsPlayerSpell(spellId) then return true end
+    if IsSpellKnownOrOverridesKnown and IsSpellKnownOrOverridesKnown(spellId) then return true end
+    return false
+end
+
+local function SpellInfo(spellId)
+    if not (C_Spell and C_Spell.GetSpellInfo) then return nil end
+    local ok, info = pcall(C_Spell.GetSpellInfo, spellId)
+    if ok and type(info) == "table" and info.name then return info end
+    return nil
+end
+
+------------------------------------------------------------------------
+-- Effective enable state: an explicit saved override wins, otherwise
+-- absence means enabled unless the preset is default-off.
+------------------------------------------------------------------------
+-- Overrides are PER SPEC. Keys are "specID:spellID"; the bare "spellID"
+-- key is the older account-wide form and is still read as a fallback so
+-- existing choices survive, but new writes are per spec. A spell that
+-- appears in several specs (Wild Charge, Dash) can now be tracked on
+-- Feral and ignored on Balance.
+local function SpellKey(specId, spellId)
+    return tostring(specId or 0) .. ":" .. tostring(spellId)
+end
+
+local function SpellEnabled(db, spellId, specId)
+    local spells = db.Spells
+    if spells then
+        local o = specId and spells[SpellKey(specId, spellId)]
+        if o and o.enabled ~= nil then return o.enabled ~= false end
+        local legacy = spells[tostring(spellId)]
+        if legacy and legacy.enabled ~= nil then return legacy.enabled ~= false end
+    end
+    return not DEFAULT_OFF[spellId]
+end
+
+local function SpellCustomText(db, spellId, specId)
+    local spells = db.Spells
+    if spells then
+        local o = specId and spells[SpellKey(specId, spellId)]
+        if not (o and o.customText and o.customText ~= "") then
+            o = spells[tostring(spellId)]
+        end
+        if o and o.customText and o.customText ~= "" then return o.customText end
+    end
+    return BUFF_ACTIVE_SPELLS[spellId]
+end
+KE.MOVEMENT_SPELL_KEY = SpellKey
+
+-- Thin accessors over the two file-local resolvers, so the rules can be tested
+-- without the frames and the cooldown APIs around them.
+function NMA:IsSpellEnabled(db, spellId, specId)
+    return SpellEnabled(db, spellId, specId)
+end
+
+function NMA:GetCategoryDuration(spellId)
+    return CategoryDuration(spellId)
+end
+
+------------------------------------------------------------------------
+-- Display frame + pooled slots
+------------------------------------------------------------------------
+function NMA:UpdateDB()
+    self.db = KE.db.profile.NoMovementAlert
+end
+
+function NMA:OnInitialize()
+    self:UpdateDB()
+    self.slots = {}
+    self.tracked = {}
+    self.auraActive = {}
+    self.glowing = {}
+    -- Charge counts are SECRET in combat, so a live read there returns
+    -- nothing and the spell falls through to the plain-cooldown path --
+    -- which for a charge spell sitting on charges is zero, hence
+    -- "Infernal Strike - 0". Remember what was learned while the values
+    -- were readable and maintain it through cast events instead.
+    --   chargeMeta[spellId] = { max, recharge }  -- learned when readable
+    --   chargeCount[spellId] = last known count  -- kept current in combat
+    self.chargeMeta = {}
+    self.chargeCount = {}
+    self.chargeTimers = {}
+    -- The client refuses cooldown NUMBERS in combat, and a secret value
+    -- cannot be compared -- so "ready" and "on cooldown" are
+    -- indistinguishable and everything would render, showing "Roll - 0"
+    -- with a charge in hand. Asking harder cannot fix that. Instead keep
+    -- a local clock: learn each spell's duration while the values ARE
+    -- readable, stamp an expiry when the cast goes out, and count down
+    -- locally with plain arithmetic no one can restrict. Any readable
+    -- poll overwrites the local state with truth.
+    self.cdDuration = {}   -- spellId -> learned cooldown length
+    self.cdUntil = {}      -- spellId -> GetTime() when it comes back
+    self.isPreview = false
+    self:SetEnabledState(false)
+end
+
+function NMA:CreateFrame_()
     if self.frame then return end
-
-    local frame = CreateFrame("Frame", "KE_NoMovementAlertFrame", UIParent)
-    frame:SetSize(200, 30)
-
-    local text = frame:CreateFontString(nil, "OVERLAY")
-    text:SetPoint("CENTER", frame, "CENTER", 0, 0)
-
-    -- Separate ticker frame that's always shown (OnUpdate doesn't fire on hidden frames)
-    local ticker = CreateFrame("Frame", nil, UIParent)
-    ticker:SetSize(1, 1)
-    ticker:Show()
-
-    self.frame = frame
-    self.text = text
-    self.tickerFrame = ticker
+    local frame = CreateFrame("Frame", "KE_MovementAlert", UIParent)
+    frame:SetSize(220, 40)
     frame:Hide()
+    self.frame = frame
 end
 
-function NMA:UpdateMovementAlert()
-    if not self.activeSpellID then
-        if self.frame then self.frame:Hide() end
-        return
+function NMA:GetSlot(index)
+    local slot = self.slots[index]
+    if slot then return slot end
+
+    slot = CreateFrame("Frame", nil, self.frame)
+    slot:SetSize(220, 30)
+
+    slot.text = slot:CreateFontString(nil, "OVERLAY")
+    slot.text:SetPoint("CENTER")
+
+    self.slots[index] = slot
+    -- Style BEFORE returning: callers (Update/ShowPreview) write text into
+    -- a fresh slot before LayoutSlots gets to style it, and a FontString
+    -- with no font set throws "Font not set" on SetText.
+    self:StyleSlot(slot)
+    return slot
+end
+
+function NMA:StyleSlot(slot)
+    local db = self.db
+    local face, size, outline = self:EffectiveStyle()
+    KE:ApplyFontToText(slot.text, face, size, outline)
+    slot.text:SetTextColor(db.TextColor[1], db.TextColor[2], db.TextColor[3], db.TextColor[4] or 1)
+    slot:SetSize(220, size + 6)
+end
+
+function NMA:LayoutSlots(count)
+    local db = self.db
+    local _, _, _, effSpacing = self:EffectiveStyle()
+    local spacing = effSpacing or db.Spacing or 2
+    local prev
+    local w, h = 0, 0
+    for i = 1, count do
+        local slot = self:GetSlot(i)
+        self:StyleSlot(slot)
+        slot:ClearAllPoints()
+        if db.GrowDirection == "RIGHT" or db.GrowDirection == "LEFT" then
+            local side = db.GrowDirection == "RIGHT" and "LEFT" or "RIGHT"
+            local opp = db.GrowDirection == "RIGHT" and "RIGHT" or "LEFT"
+            if prev then
+                slot:SetPoint(side, prev, opp, db.GrowDirection == "RIGHT" and spacing or -spacing, 0)
+            else
+                slot:SetPoint(side, self.frame, side, 0, 0)
+            end
+            w = w + slot:GetWidth() + spacing
+            h = math.max(h, slot:GetHeight())
+        else
+            local side = db.GrowDirection == "UP" and "BOTTOM" or "TOP"
+            local opp = db.GrowDirection == "UP" and "TOP" or "BOTTOM"
+            if prev then
+                slot:SetPoint(side, prev, opp, 0, db.GrowDirection == "UP" and spacing or -spacing)
+            else
+                slot:SetPoint(side, self.frame, side, 0, 0)
+            end
+            h = h + slot:GetHeight() + spacing
+            w = math.max(w, slot:GetWidth())
+        end
+        slot:Show()
+        prev = slot
+    end
+    for i = count + 1, #self.slots do
+        self.slots[i]:Hide()
+    end
+    if count > 0 then
+        self.frame:SetSize(math.max(w, 1), math.max(h, 1))
+    end
+end
+
+------------------------------------------------------------------------
+-- Tracked spell resolution
+------------------------------------------------------------------------
+function NMA:ResolveSpecId()
+    if not GetSpecialization then return nil end
+    local idx = GetSpecialization()
+    if not idx or idx == 0 then return nil end
+    local id = GetSpecializationInfo and GetSpecializationInfo(idx)
+    return id
+end
+
+function NMA:BuildTracked()
+    local db = self.db
+    local out = {}
+    local _, class = UnitClass("player")
+    local specId = self:ResolveSpecId()
+
+    local seen, seenName = {}, {}
+    local function add(spellId)
+        if seen[spellId] then return end
+        if not SpellEnabled(db, spellId, specId) then return end
+        if not SpellKnown(spellId) then return end
+        local info = SpellInfo(spellId)
+        if not info then return end
+        -- Every Druid spec lists Wild Charge twice -- the base ID and the
+        -- Travel form variant -- and in Travel Form both are known, so both
+        -- passed and rendered as two identical rows. Deduping on the resolved
+        -- name rather than the alias group is deliberate: 252216 (Tiger Dash)
+        -- shares Wild Charge's alias group for cooldown purposes, and
+        -- claiming the whole group would have hidden it whenever both were
+        -- talented. Same name means the player sees the same ability twice;
+        -- different names are different abilities.
+        if seenName[info.name] then return end
+
+        seen[spellId] = true
+        seenName[info.name] = true
+        -- Learn charge shape while the values are readable; the resolver
+        -- falls back to this in combat.
+        self:ResolveCharges(spellId)
+        out[#out + 1] = {
+            spellId = spellId,
+            name = info.name,
+            icon = info.iconID,
+            customText = SpellCustomText(db, spellId, specId),
+            isBuffActive = BUFF_ACTIVE_SPELLS[spellId] ~= nil,
+            baseDuration = CategoryDuration(spellId),
+        }
     end
 
-    local cdInfo = C_Spell.GetSpellCooldown(self.activeSpellID)
+    if class and specId and MOVEMENT_ABILITIES[class] and MOVEMENT_ABILITIES[class][specId] then
+        for _, spellId in ipairs(MOVEMENT_ABILITIES[class][specId]) do add(spellId) end
+    end
 
-    -- Skip if remaining cooldown exceeds threshold (hides long CDs until they're almost ready)
-    -- startTime and duration are secret in 12.0.5 — launder through string.format + tonumber
-    if cdInfo and cdInfo.startTime and cdInfo.duration then
-        local durationNum = tonumber(string_format("%.1f", cdInfo.duration))
-        if durationNum and durationNum > 0 then
-            local startNum = tonumber(string_format("%.1f", cdInfo.startTime))
-            if startNum then
-                local remaining = (startNum + durationNum) - GetTime()
-                local maxCD = self.db.MaxCooldown or 30
-                if remaining > maxCD then
-                    if self.frame:IsShown() then self.frame:Hide() end
-                    return
+    -- User-added IDs (the drift escape hatch). Anything with an explicit
+    -- enabled = true that is not already a preset for this spec.
+    -- User-added IDs (the drift escape hatch). Accept a bare legacy key
+    -- or one scoped to the spec we are actually in.
+    if db.Spells then
+        for key, o in pairs(db.Spells) do
+            if o and o.enabled == true then
+                local scoped, id = key:match("^(%d+):(%d+)$")
+                if id then
+                    if tonumber(scoped) == specId then add(tonumber(id)) end
+                else
+                    local bare = tonumber(key)
+                    if bare then add(bare) end
                 end
             end
         end
     end
 
-    if cdInfo and cdInfo.timeUntilEndOfStartRecovery and not cdInfo.isOnGCD and cdInfo.isOnGCD ~= nil then
-        -- timeUntilEndOfStartRecovery is a secret number — only string.format + concatenation work
-        local timeStr = string_format("%.1f", cdInfo.timeUntilEndOfStartRecovery)
+    self.tracked = out
+    return out
+end
 
-        -- timeStr is a secret string — cannot compare, just SetText every tick
-        if self.fmtAfter then
-            self.text:SetText(self.fmtBefore .. timeStr .. self.fmtAfter)
+------------------------------------------------------------------------
+-- Update loop -- ticker runs ONLY while something is counting down
+------------------------------------------------------------------------
+-- Decimals ONLY below one second -- a ticking tenths place at 8.4s is
+-- noise, at 0.4s it is information.
+local function FormatTime(remaining)
+    if remaining >= 60 then
+        return string.format("%d:%02d", remaining / 60, remaining % 60)
+    elseif remaining >= 1 then
+        return string.format("%d", remaining)
+    end
+    return string.format("%.1f", remaining)
+end
+
+-- "Roll - 12" rather than "Roll  12" -- a separator plus its own colour
+-- for the countdown, so the eye lands on the number. Colours are
+-- hex-wrapped rather than two FontStrings so the whole line stays a
+-- single centred string that the bar/icon modes can ignore.
+local function Hex(c)
+    return string.format("%02x%02x%02x",
+        math.floor((c[1] or 1) * 255 + 0.5),
+        math.floor((c[2] or 1) * 255 + 0.5),
+        math.floor((c[3] or 1) * 255 + 0.5))
+end
+
+-- Colour-wrapped line with a printf slot for the time, so a secret
+-- number can be rendered via SetFormattedText without being read.
+function NMA:ComposeFormat(name, numberFmt)
+    local db = self.db
+    local sep = db.Separator
+    if sep == nil or sep == "" then sep = "-" end
+    -- Built by concatenation, NOT string.format: the returned string is
+    -- itself a format string whose number slot must survive untouched
+    -- for SetFormattedText. Running it through format here consumed that
+    -- slot and threw "bad argument to 'format'".
+    -- Any literal % in a name or separator is escaped for the same
+    -- reason -- it would otherwise be read as a specifier downstream.
+    local function esc(s) return (tostring(s):gsub("%%", "%%%%")) end
+    return "|cff" .. Hex(db.TextColor) .. esc(name) .. "|r "
+        .. "|cff" .. Hex(db.SeparatorColor or db.TextColor) .. esc(sep) .. "|r "
+        .. "|cff" .. Hex(db.TimerColor or db.TextColor) .. numberFmt .. "|r"
+end
+
+function NMA:ComposeLine(name, timeText)
+    local db = self.db
+    local nameHex = Hex(db.TextColor)
+    if not timeText then
+        return string.format("|cff%s%s|r", nameHex, name)
+    end
+    local timeHex = Hex(db.TimerColor or db.TextColor)
+    local sep = db.Separator
+    if sep == nil or sep == "" then sep = "-" end
+    return string.format("|cff%s%s|r |cff%s%s|r |cff%s%s|r",
+        nameHex, name, Hex(db.SeparatorColor or db.TextColor), sep, timeHex, timeText)
+end
+
+-- Truth when the client will give it, memory when it will not.
+function NMA:ResolveCharges(spellId)
+    local info = SafeCharges(spellId)
+    if info and info.maxCharges and info.maxCharges > 1 then
+        self.chargeMeta[spellId] = {
+            max = info.maxCharges,
+            recharge = info.cooldownDuration or 0,
+        }
+        self.chargeCount[spellId] = info.currentCharges or 0
+        return self.chargeCount[spellId], true
+    end
+    local meta = self.chargeMeta[spellId]
+    if meta then
+        -- Known charge spell, count currently unreadable: use the value
+        -- we have been maintaining rather than guessing zero.
+        return self.chargeCount[spellId] or meta.max, true
+    end
+    return nil, false
+end
+
+-- Casting a tracked charge spell spends one; schedule the refund at its
+-- recharge duration. Any readable poll overwrites all of this with truth.
+function NMA:OnTrackedCast(_, unit, _, spellId)
+    if KE:IsSecretValue(unit) or unit ~= "player" then return end
+    if not spellId then return end
+
+
+    -- Local clock: stamp when this comes back, using the length we
+    -- learned while the numbers were readable.
+    local meta = self.chargeMeta[spellId]
+    local len = self.cdDuration[spellId]
+    if not meta and len and len > 1.5 then
+        self.cdUntil[spellId] = GetTime() + len
+        self:Update()
+        self:StartTicker()
+        return
+    end
+    if not meta then return end
+
+    local left = (self.chargeCount[spellId] or meta.max) - 1
+    if left < 0 then left = 0 end
+    self.chargeCount[spellId] = left
+    -- Only a fully spent charge spell is genuinely unavailable.
+    if left == 0 then
+        local d = self.cdDuration[spellId] or meta.recharge
+        if d and d > 1.5 then self.cdUntil[spellId] = GetTime() + d end
+    else
+        self.cdUntil[spellId] = nil
+    end
+
+    local delay = meta.recharge
+    if not delay or delay <= 0 then delay = nil end
+    if delay then
+        self.chargeTimers[spellId] = self.chargeTimers[spellId] or {}
+        local t = C_Timer.NewTimer(delay, function()
+            local c = (self.chargeCount[spellId] or 0) + 1
+            if c > meta.max then c = meta.max end
+            self.chargeCount[spellId] = c
+            if c > 0 then self.cdUntil[spellId] = nil end
+            if self:IsEnabled() then self:Update() end
+        end)
+        table.insert(self.chargeTimers[spellId], t)
+    end
+    self:Update()
+    self:StartTicker()
+end
+
+function NMA:CancelChargeTimers()
+    for _, list in pairs(self.chargeTimers or {}) do
+        for _, t in ipairs(list) do if t and t.Cancel then t:Cancel() end end
+    end
+    self.chargeTimers = {}
+end
+
+function NMA:StartTicker()
+    if self.ticker then return end
+    self.ticker = C_Timer.NewTicker(0.1, function() self:Update() end)
+end
+
+function NMA:StopTicker()
+    if self.ticker then
+        self.ticker:Cancel()
+        self.ticker = nil
+    end
+end
+
+function NMA:Update()
+    if self.isPreview then return end
+    local db = self.db
+    if not db or not db.Enabled or not self.frame then return end
+
+    if db.HideOutOfCombat and not UnitAffectingCombat("player") then
+        self.frame:Hide()
+        self:StopTicker()
+        return
+    end
+
+    local shown, anyRunning = 0, false
+
+    for _, entry in ipairs(self.tracked) do
+        -- Secret-safe render contract: `secretValue` means "show this,
+        -- never look at it". Text lines are therefore emitted either as
+        -- a plain SetText (safe values) or a SetFormattedText with the
+        -- secret number as an argument (never compared, never formatted
+        -- by us).
+        local plainLine, fmtLine, fmtValue
+
+        if entry.isBuffActive then
+            if self.auraActive[entry.spellId] then
+                plainLine = self:ComposeLine(entry.customText or entry.name, nil)
+            end
         else
-            self.text:SetText(self.fmtBefore)
+            local chargesLeft, _ = self:ResolveCharges(entry.spellId)
+
+            -- No usability gate: IsSpellUsable reports only learned status
+            -- and resources -- per its own docs -- and returns TRUE for a
+            -- spell sitting on cooldown, so gating on it would hide every
+            -- countdown. The charge rule is enforced by ReadCooldown
+            -- instead: the plain cooldown duration is already zero while a
+            -- charge remains.
+            local rem, _, isSecret = ReadCooldown(entry.spellId)
+
+            if isSecret then
+                anyRunning = true
+                self.readyFired = self.readyFired or {}
+                self.readyFired[entry.spellId] = true
+                if rem ~= nil then
+                    fmtLine = self:ComposeFormat(entry.customText or entry.name, "%.0f")
+                    fmtValue = rem
+                else
+                    plainLine = self:ComposeLine(entry.customText or entry.name, "...")
+                end
+            elseif rem then
+                anyRunning = true
+                self.readyFired = self.readyFired or {}
+                self.readyFired[entry.spellId] = true
+                plainLine = self:ComposeLine(entry.customText or entry.name, FormatTime(rem))
+            else
+                if self.readyFired and self.readyFired[entry.spellId] then
+                    self.readyFired[entry.spellId] = nil
+                    if db.SoundEnabled and db.Sound and db.Sound ~= "None" and KE.LSM then
+                        local path = KE.LSM:Fetch("sound", db.Sound, true)
+                        if path then pcall(PlaySoundFile, path, "Master") end
+                    end
+                end
+                if db.ShowWhenReady then
+                    local suffix = chargesLeft and chargesLeft > 0 and ("x" .. chargesLeft) or nil
+                    plainLine = self:ComposeLine(entry.customText or entry.name, suffix)
+                end
+            end
         end
 
-        if not self.frame:IsShown() then
-            self.frame:SetAlpha(1)
-            self.frame:Show()
+        if plainLine or fmtLine then
+            shown = shown + 1
+            local text = self:GetSlot(shown).text
+            if fmtLine then
+                text:SetFormattedText(fmtLine, fmtValue)
+            else
+                text:SetText(plainLine)
+            end
         end
+    end
+
+    if shown > 0 then
+        self:LayoutSlots(shown)
+        self:ApplyPosition()
+        self.frame:Show()
     else
-        if self.frame and self.frame:IsShown() then
-            self.frame:Hide()
+        self.frame:Hide()
+    end
+
+    -- While attached, this slot in the stack moves as Combat Texts
+    -- messages come and go. The ticker only runs while something is
+    -- counting down -- exactly when this is visible -- so re-seating here
+    -- costs nothing when idle and keeps formation when not.
+    if not anyRunning then self:StopTicker() end
+end
+
+function NMA:Refresh()
+    if self.isPreview then return end
+    self:BuildTracked()
+    -- Tracked list just changed, so the glow cache and buff states are
+    -- re-derived for the new set rather than carried over.
+    self:SeedGlowState()
+    self:RefreshBuffStates()
+    self:Update()
+    self:StartTicker()
+end
+
+-- Display-only refresh for the high-frequency cooldown/charge/usable events.
+--
+-- Those events change what a tracked spell is DOING, never which spells are
+-- tracked -- that set only moves on spec, talent, knowledge and settings
+-- changes, which have their own handlers. Running the full Refresh here meant
+-- BuildTracked allocating a fresh table per tracked spell, plus two dedupe
+-- tables and a closure, several times a second in combat; SPELL_UPDATE_USABLE
+-- alone fires on every resource change. That allocation churn is what the
+-- garbage collector pauses on, and the pause is what is felt as stutter.
+--
+-- Update() reads live cooldown state per entry itself, so refreshing the
+-- display and making sure the ticker is running is the entire job here.
+--
+-- Rate-capped with a trailing flush so a burst of events costs one pass rather
+-- than one per event. The cap matches the ticker's own 0.1s period, so nothing
+-- is displayed later than it already would have been. The flush closure is
+-- allocated once at load, not once per event (same reason as the UNIT_AURA
+-- debounce in AuraExternals.lua).
+local DISPLAY_REFRESH_CAP = 0.1
+
+local flushDisplayRefresh = function()
+    NMA._displayCapped = false
+    if NMA._displayPending then
+        NMA._displayPending = false
+        NMA:RefreshDisplay()
+    end
+end
+
+function NMA:RefreshDisplay()
+    if self.isPreview then return end
+    if self._displayCapped then
+        self._displayPending = true
+        return
+    end
+    self._displayCapped = true
+    self:Update()
+    self:StartTicker()
+    C_Timer.After(DISPLAY_REFRESH_CAP, flushDisplayRefresh)
+end
+
+------------------------------------------------------------------------
+-- Events
+------------------------------------------------------------------------
+-- Buff-active spells were previously detected ONLY by
+-- C_UnitAuras.GetPlayerAuraBySpellID. Midnight hides many buffs from the
+-- player's aura scan, so that returns nil while the effect is genuinely
+-- active -- InnervateTracker.lua documents the same thing. It is not M+
+-- specific: plain combat is restricted too.
+--
+-- Fallback is the spell-activation overlay glow. Burning Rush glows while
+-- it is toggled on, and the glow events are not aura reads, so they keep
+-- working where the aura scan does not:
+--
+--   SPELL_ACTIVATION_OVERLAY_GLOW_SHOW / _HIDE  -- live changes
+--   C_SpellActivationOverlay.IsSpellOverlayed   -- state on login/zone
+--
+-- The aura read stays primary; the glow is consulted only while the scan
+-- is returning nothing.
+function NMA:SeedGlowState()
+    local overlayed = C_SpellActivationOverlay and C_SpellActivationOverlay.IsSpellOverlayed
+    if not overlayed then return end
+
+    for _, entry in ipairs(self.tracked) do
+        if entry.isBuffActive then
+            local ok, on = pcall(overlayed, entry.spellId)
+            self.glowing[entry.spellId] = (ok and on) or nil
         end
     end
 end
 
-function NMA:HideAlert()
-    if self.frame then self.frame:Hide() end
+function NMA:OnGlowShow(_, spellId)
+    if not spellId or not BUFF_ACTIVE_SPELLS[spellId] then return end
+    self.glowing[spellId] = true
+    if self:RefreshBuffStates() then self:Update() end
 end
 
----------------------------------------------------------------------------------
--- OnUpdate
----------------------------------------------------------------------------------
-function NMA:StartOnUpdate()
-    if not self.tickerFrame then return end
-    self.tickerFrame:SetScript("OnUpdate", function(_, dt)
-        if self.isPreview then return end
-        self.elapsed = self.elapsed + dt
-        if self.elapsed < REFRESH_INTERVAL then return end
-        self.elapsed = 0
-        self:UpdateMovementAlert()
-    end)
+function NMA:OnGlowHide(_, spellId)
+    if not spellId or not BUFF_ACTIVE_SPELLS[spellId] then return end
+    self.glowing[spellId] = nil
+    if self:RefreshBuffStates() then self:Update() end
 end
 
-function NMA:StopOnUpdate()
-    if self.tickerFrame then
-        self.tickerFrame:SetScript("OnUpdate", nil)
+function NMA:ReadBuffActive(entry)
+    local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, entry.spellId)
+    if ok and aura then return true end
+    if ok and self.auraScanTrusted then return false end
+
+    return self.glowing[entry.spellId] and true or false
+end
+
+function NMA:RefreshBuffStates()
+    local changed = false
+    for _, entry in ipairs(self.tracked) do
+        if entry.isBuffActive then
+            local active = self:ReadBuffActive(entry)
+            if self.auraActive[entry.spellId] ~= active then
+                self.auraActive[entry.spellId] = active
+                changed = true
+            end
+        end
     end
-    self.elapsed = 0
+    return changed
 end
 
----------------------------------------------------------------------------------
--- Apply Settings
----------------------------------------------------------------------------------
+function NMA:OnAura(_, unit)
+    if KE:IsSecretValue(unit) or unit ~= "player" then return end
+
+    -- One confirmed aura read proves the scan works in this context;
+    -- from then on it is authoritative and the cast fallback is inert.
+    if not self.auraScanTrusted then
+        for _, entry in ipairs(self.tracked) do
+            if entry.isBuffActive then
+                local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, entry.spellId)
+                if ok and aura then self.auraScanTrusted = true break end
+            end
+        end
+    end
+
+    if self:RefreshBuffStates() then self:Update() end
+end
+
+-- Death ends these buffs and the glow with them; re-read rather than
+-- assume, since IsSpellOverlayed is authoritative.
+function NMA:ClearBuffFallback()
+    self.glowing = {}
+    self.auraScanTrusted = nil
+    self:SeedGlowState()
+    if self:RefreshBuffStates() then self:Update() end
+end
+
+-- Optional attach to the Combat Texts stack. Combat Texts owns
+-- KE_CombatTextsContainer, whose height ArrangeMessages() recomputes
+-- every time a message shows or hides -- so anchoring our TOP to its
+-- BOTTOM makes the alerts genuinely flow underneath its messages rather
+-- than just sitting near them, and one anchor moves both. Works for all
+-- three display modes; no coupling into Combat Texts' message pooling.
+-- Falls back to our own Position whenever Combat Texts is off or its
+-- container does not exist yet.
+function NMA:GetCombatTextsContainer()
+    local cm = KitnEssentials and KitnEssentials:GetModule("CombatTexts", true)
+    if not cm or not cm.container then return nil end
+    if not (cm.db and cm.db.Enabled) then return nil end
+    return cm.container
+end
+
+-- Height the visible Combat Texts messages actually occupy, using that
+-- module's own frames and spacing. Zero when nothing is shown.
+function NMA:CombatTextsUsedHeight()
+    local cm = KitnEssentials and KitnEssentials:GetModule("CombatTexts", true)
+    if not (cm and cm.messageFrames) then return 0 end
+    local spacing = (cm.db and cm.db.Spacing) or 4
+    local used = 0
+    for _, f in pairs(cm.messageFrames) do
+        if f and f.IsShown and f:IsShown() then
+            used = used + (f:GetHeight() or 0) + spacing
+        end
+    end
+    return used
+end
+
+function NMA:IsAttached()
+    return self.db and self.db.AttachToCombatTexts and self:GetCombatTextsContainer() ~= nil
+end
+
+-- Attached means "be a Combat Texts line" -- font face/size/outline and
+-- the stack spacing come from that module, so the alerts match the
+-- messages they sit under instead of drifting from them. The matching
+-- GUI rows are hidden while attached for the same reason.
+function NMA:EffectiveStyle()
+    local db = self.db
+    if self:IsAttached() then
+        local cm = KitnEssentials:GetModule("CombatTexts", true)
+        local c = cm and cm.db
+        if c then
+            return c.FontFace or db.FontFace, c.FontSize or db.FontSize,
+                   c.FontOutline or db.FontOutline, c.Spacing or db.Spacing, 1
+        end
+    end
+    return db.FontFace, db.FontSize, db.FontOutline, db.Spacing, db.Scale or 1
+end
+
+function NMA:ApplyPosition()
+    local db, frame = self.db, self.frame
+    if not frame or not db then return end
+    frame:ClearAllPoints()
+
+    local container = db.AttachToCombatTexts and self:GetCombatTextsContainer()
+    if container then
+        -- Take the NEXT SLOT in the Combat Texts stack, not a position
+        -- under the container. Its container keeps a 30px minimum height
+        -- even with nothing shown (ArrangeMessages: max(30, ...)), so
+        -- anchoring to BOTTOM would leave a phantom row of empty space.
+        -- Measuring the actually-visible message frames instead means: no
+        -- messages up -> sit exactly where the first one would; messages
+        -- up -> sit directly after them, at their own spacing.
+        frame:SetPoint("TOP", container, "TOP", 0, -self:CombatTextsUsedHeight())
+    else
+        KE:ApplyFramePosition(frame, db.Position, db)
+    end
+    local _, _, _, _, scale = self:EffectiveStyle()
+    frame:SetScale(scale)
+end
+
 function NMA:ApplySettings()
-    if not self.frame then return end
-
-    KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
-    KE:ApplyFontToText(self.text, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
-
-    local r, g, b, a = KE:GetAccentColor(self.db.ColorMode, self.db.Color)
-    self.text:SetTextColor(r, g, b, a)
-
-    -- Re-parse format in case DisplayFormat changed
-    self:ParseDisplayFormat()
-
-    -- Size frame from content (GetStringWidth can return secret after combat)
-    local textWidth = self.text and self.text:GetStringWidth()
-    if textWidth and not issecretvalue(textWidth) then
-        self.frame:SetSize(textWidth + 16, (self.db.FontSize or 20) + 10)
-    end
-end
-
----------------------------------------------------------------------------------
--- EditMode
----------------------------------------------------------------------------------
-function NMA:RegWithEditMode()
-    if KE.EditMode and not self.editModeRegistered then
-        KE.EditMode:RegisterElement({
-            key = "NoMovementAlert", displayName = "No Movement Alert", frame = self.frame,
-            getPosition = function() return self.db.Position end,
-            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePosition(self.frame, self.db.Position, self.db) end,
-            getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
-            guiPath = "NoMovementAlert",
-        })
-        self.editModeRegistered = true
-    end
-end
-
----------------------------------------------------------------------------------
--- Preview
----------------------------------------------------------------------------------
-function NMA:ShowPreview()
-    if not self.frame then
-        self:CreateFrame()
-    end
-    self:RegWithEditMode()
-    if not self.activeSpellID then
-        self:CacheMovementSpell()
-    end
-
-    self.isPreview = true
-    local name = self.activeDisplayName or "BLINK"
-    local fmt = self.db.DisplayFormat or "NO %n (%t)"
-    local display = string_gsub(fmt, "%%n", name)
-    display = string_gsub(display, "%%t", "12")
-    self.text:SetText(display)
-    self.frame:SetAlpha(1)
-    self.frame:Show()
-    self:ApplySettings()
-end
-
-function NMA:HidePreview()
-    self.isPreview = false
-    if self.db.Enabled then
-        self:UpdateMovementAlert()
-    else
-        self:HideAlert()
-    end
-end
-
----------------------------------------------------------------------------------
--- Lifecycle
----------------------------------------------------------------------------------
-function NMA:OnInitialize()
     self:UpdateDB()
-    local _, classToken = UnitClass("player")
-    self.playerClass = classToken
-    self:SetEnabledState(false)
+    if self.db and self.db.Enabled then
+        if not self:IsEnabled() then
+            KitnEssentials:EnableModule("NoMovementAlert")
+        elseif self.isPreview then
+            -- Refresh/Update both early-out while previewing, so
+            -- font/spacing/colour edits would silently do nothing on the
+            -- preview -- the one place the user is actually looking.
+            -- Repaint the preview instead.
+            self:ShowPreview()
+        else
+            self:ApplyPosition()
+            self:Refresh()
+        end
+    elseif self:IsEnabled() then
+        KitnEssentials:DisableModule("NoMovementAlert")
+    end
 end
 
-function NMA:OnTalentChange()
-    C_Timer.After(0.5, function()
-        if not self.db or not self.db.Enabled then return end
-        self:CacheMovementSpell()
-    end)
+local EDIT_MODE_ELEMENT = {
+    key = "NoMovementAlert",
+    displayName = "No Movement Alert",
+    guiPath = "NoMovementAlert",
+}
+
+function NMA:RegisterAnchor()
+    -- Attached to Combat Texts: that module owns the anchor, so a second
+    -- draggable overlay for the same spot would fight it.
+    if self:IsAttached() then
+        KE.EditMode:UnregisterElement("NoMovementAlert")
+        return
+    end
+    local cfg = {}
+    for k, v in pairs(EDIT_MODE_ELEMENT) do cfg[k] = v end
+    cfg.frame = self.frame
+    cfg.getPosition = function() return self.db.Position end
+    cfg.setPosition = function(pos)
+        local p = self.db.Position
+        p.AnchorFrom, p.AnchorTo = pos.AnchorFrom, pos.AnchorTo
+        p.XOffset, p.YOffset = pos.XOffset, pos.YOffset
+        self:ApplyPosition()
+    end
+    KE.EditMode:RegisterElement(cfg)
 end
 
 function NMA:OnEnable()
-    if not self.db.Enabled then return end
+    self:UpdateDB()
+    self:CreateFrame_()
+    self:ApplyPosition()
 
-    self:CreateFrame()
-    self:RegWithEditMode()
-    self:CacheMovementSpell()
+    -- Display-only + rate-capped: these fire many times a second in combat and
+    -- never change which spells are tracked. See RefreshDisplay.
+    self:RegisterEvent("SPELL_UPDATE_COOLDOWN", "RefreshDisplay")
+    self:RegisterEvent("SPELL_UPDATE_CHARGES", "RefreshDisplay")
+    self:RegisterEvent("SPELL_UPDATE_USABLE", "RefreshDisplay")
+    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnSpecChanged")
+    self:RegisterEvent("PLAYER_TALENT_UPDATE", "OnSpecChanged")
+    self:RegisterEvent("TRAIT_CONFIG_UPDATED", "OnSpecChanged")
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnSpecChanged")
+    self:RegisterEvent("PLAYER_REGEN_DISABLED", "Refresh")
+    self:RegisterEvent("PLAYER_REGEN_ENABLED", "Refresh")
+    -- While attached, Combat Texts' container height changes as its
+    -- messages come and go; combat transitions are when that happens, and
+    -- Refresh -> Update -> ApplyPosition re-seats this underneath.
+    self:RegisterEvent("UNIT_AURA", "OnAura")
+    self:RegisterEvent("PLAYER_DEAD", "ClearBuffFallback")
+    self:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW", "OnGlowShow")
+    self:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE", "OnGlowHide")
+    self:SeedGlowState()
+    self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", "OnTrackedCast")
 
-    C_Timer.After(0.5, function()
-        if not self.db or not self.db.Enabled then return end
-        self:ApplySettings()
-    end)
-
-    self:RegisterEvent("PLAYER_TALENT_UPDATE", "OnTalentChange")
-    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnTalentChange")
-    self:RegisterEvent("TRAIT_CONFIG_UPDATED", "OnTalentChange")
-
-    self:StartOnUpdate()
+    self:BuildTracked()
+    self:Update()
+    self:RegisterAnchor()
 end
 
-function NMA:OnThemeChanged()
-    if not self.db or not self.db.Enabled then return end
-    if (self.db.ColorMode or "custom") == "theme" and self.text then
-        local r, g, b, a = KE:GetAccentColor(self.db.ColorMode, self.db.Color)
-        self.text:SetTextColor(r, g, b, a)
-    end
+function NMA:OnSpecChanged()
+    -- Zoning ends these buffs, and whether the aura scan works differs
+    -- between the open world and instanced content -- so the fallback
+    -- state and the "scan is trustworthy" verdict both reset here.
+    self.glowing = {}
+    self.auraScanTrusted = nil
+
+    -- Talent/spec state is not reliable immediately on these events.
+    C_Timer.After(2, function()
+        if self:IsEnabled() then self:Refresh() end
+    end)
 end
 
 function NMA:OnDisable()
     self:UnregisterAllEvents()
-    self:StopOnUpdate()
-    self:HideAlert()
+    self:CancelChargeTimers()
+    self:StopTicker()
+    if self.frame then self.frame:Hide() end
+    self.tracked = {}
+    self.auraActive = {}
+    self.readyFired = nil
     self.isPreview = false
+    KE.EditMode:UnregisterElement("NoMovementAlert")
+end
+
+------------------------------------------------------------------------
+-- Preview (PreviewManager contract)
+------------------------------------------------------------------------
+function NMA:ShowPreview()
+    self:UpdateDB()
+    self:CreateFrame_()
+    self.isPreview = true
+    self:StopTicker()
+
+    local db = self.db
+    local samples = { { name = "Roll", remain = 12 }, { name = "Tiger's Lust", remain = 0.4 } }
+    local count = math.min(#samples, math.max(1, db.PreviewCount or 2))
+    for i = 1, count do
+        local s = samples[i]
+        self:GetSlot(i).text:SetText(self:ComposeLine(s.name, FormatTime(s.remain)))
+    end
+    self:LayoutSlots(count)
+    self:ApplyPosition()
+    self.frame:Show()
+    self:RegisterAnchor()
+end
+
+function NMA:HidePreview()
+    self.isPreview = false
+    if not self.frame then return end
+    if self.db and self.db.Enabled and self:IsEnabled() then
+        self:Refresh()
+    else
+        self.frame:Hide()
+        KE.EditMode:UnregisterElement("NoMovementAlert")
+    end
 end
