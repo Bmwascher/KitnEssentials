@@ -20,6 +20,7 @@ local OPT = KitnEssentials:NewModule("Optimize", "AceEvent-3.0")
 
 local _SetCVar = SetCVar or C_CVar.SetCVar
 local _GetCVar = GetCVar or C_CVar.GetCVar
+local GetInstanceInfo = GetInstanceInfo
 local pcall = pcall
 local tostring = tostring
 local tonumber = tonumber
@@ -517,6 +518,90 @@ end
 function OPT:IsMythicOverrideActive()
     local state = GetBackupDB().MythicVD
     return state ~= nil and state.active == true
+end
+
+---------------------------------------------------------------------------------
+-- Mythic+ view distance override
+--
+-- Inside an active Mythic Keystone dungeon, force View Distance to its lowest
+-- setting for extra frames, then put it back on the way out. Opt-in. Purely
+-- event-driven, so the feature costs nothing per frame and nothing at all while
+-- it is off -- the events are registered only while the toggle is on. The saved
+-- value and the active flag live in the optimization SavedVariables, so the
+-- override survives a reload and recovers itself after a disconnect in a key.
+---------------------------------------------------------------------------------
+local MPLUS_DIFFICULTY_ID = 8     -- Mythic Keystone
+local MPLUS_VIEW_DISTANCE = "0"   -- reads as "1" on the in-game slider
+
+--- Whether the override is enabled. Account-wide, stored with the backups.
+function OPT:IsMythicViewDistanceEnabled()
+    return GetBackupDB().MythicViewDistanceEnabled == true
+end
+
+--- Events follow the setting, so the off state registers nothing.
+function OPT:UpdateMVDEventRegistration()
+    local events = { "PLAYER_ENTERING_WORLD", "ZONE_CHANGED_NEW_AREA",
+        "CHALLENGE_MODE_START", "CHALLENGE_MODE_COMPLETED" }
+    if self:IsMythicViewDistanceEnabled() then
+        for _, e in ipairs(events) do self:RegisterEvent(e, "UpdateMythicViewDistance") end
+        self:UpdateMythicViewDistance()
+    else
+        for _, e in ipairs(events) do self:UnregisterEvent(e) end
+    end
+end
+
+function OPT:SetMythicViewDistanceEnabled(enabled)
+    GetBackupDB().MythicViewDistanceEnabled = enabled and true or false
+    self:UpdateMVDEventRegistration()
+    self:UpdateMythicViewDistance()
+end
+
+--- True while inside a Mythic Keystone dungeon instance.
+function OPT:IsInMythicPlus()
+    local _, _, difficultyID = GetInstanceInfo()
+    return difficultyID == MPLUS_DIFFICULTY_ID
+end
+
+--- Put back the View Distance we lowered, if we are holding one down.
+function OPT:RestoreMythicViewDistance()
+    local state = GetBackupDB().MythicVD
+    if state and state.active then
+        if state.saved ~= nil then
+            pcall(_SetCVar, "graphicsViewDistance", tostring(state.saved))
+        end
+        state.active = false
+    end
+end
+
+--- Re-evaluate the override against the current zone and toggle. Safe to call
+--- from any of the four events; the original value is captured only on the
+--- first pass of an entry, or a later event would record the floor as the
+--- value to restore.
+function OPT:UpdateMythicViewDistance()
+    if not self:IsMythicViewDistanceEnabled() then
+        self:RestoreMythicViewDistance()
+        return
+    end
+
+    if self:IsInMythicPlus() then
+        local backup = GetBackupDB()
+        if not self:IsMythicOverrideActive() then
+            backup.MythicVD = { active = true, saved = self:GetCurrentValue("graphicsViewDistance") }
+        end
+        pcall(_SetCVar, "graphicsViewDistance", MPLUS_VIEW_DISTANCE)
+    else
+        self:RestoreMythicViewDistance()
+    end
+end
+
+---------------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------------
+function OPT:OnInitialize()
+    -- Presets act on demand and need nothing here. This one call wires the
+    -- Mythic+ override if it is on, and is also what recovers a held override
+    -- after a reload inside a key.
+    self:UpdateMVDEventRegistration()
 end
 
 function OPT:RevertAll()

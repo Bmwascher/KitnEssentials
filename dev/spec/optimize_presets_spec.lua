@@ -202,4 +202,101 @@ describe("Optimize presets", function()
             assert.is_nil(_G.KitnEssentialsOptimizeDB.ActivePreset)
         end)
     end)
+
+    describe("the Mythic+ view distance override", function()
+        local MPLUS = 8   -- Mythic Keystone difficulty
+
+        it("registers no events while the toggle is off", function()
+            local OPT, rec = L.loadOptimize()
+            OPT:OnInitialize()
+            assert.is_nil(rec.events["ZONE_CHANGED_NEW_AREA"])
+            assert.is_nil(rec.events["CHALLENGE_MODE_START"])
+        end)
+
+        it("registers its four events when the toggle goes on, and drops them again", function()
+            local OPT, rec = L.loadOptimize()
+            OPT:SetMythicViewDistanceEnabled(true)
+            assert.is_true(rec.events["PLAYER_ENTERING_WORLD"])
+            assert.is_true(rec.events["ZONE_CHANGED_NEW_AREA"])
+            assert.is_true(rec.events["CHALLENGE_MODE_START"])
+            assert.is_true(rec.events["CHALLENGE_MODE_COMPLETED"])
+            OPT:SetMythicViewDistanceEnabled(false)
+            assert.is_nil(rec.events["PLAYER_ENTERING_WORLD"])
+            assert.is_nil(rec.events["CHALLENGE_MODE_COMPLETED"])
+        end)
+
+        it("drops view distance to the floor on entering a key, remembering the old value", function()
+            local OPT, rec = L.loadOptimize()
+            rec.cvars["graphicsViewDistance"] = "6"
+            OPT:SetMythicViewDistanceEnabled(true)
+            rec.difficultyID = MPLUS
+            OPT:UpdateMythicViewDistance()
+            assert.equals("0", rec.cvars["graphicsViewDistance"])
+            assert.equals("6", _G.KitnEssentialsOptimizeDB.MythicVD.saved)
+            assert.is_true(OPT:IsMythicOverrideActive())
+        end)
+
+        it("restores it on leaving", function()
+            local OPT, rec = L.loadOptimize()
+            rec.cvars["graphicsViewDistance"] = "6"
+            OPT:SetMythicViewDistanceEnabled(true)
+            rec.difficultyID = MPLUS
+            OPT:UpdateMythicViewDistance()
+            rec.difficultyID = 0
+            OPT:UpdateMythicViewDistance()
+            assert.equals("6", rec.cvars["graphicsViewDistance"])
+            assert.is_false(OPT:IsMythicOverrideActive())
+        end)
+
+        it("captures the original value once, not once per event", function()
+            -- Several of the four events fire on one zone-in. A second capture
+            -- would record the floor as the original and lose the real value.
+            local OPT, rec = L.loadOptimize()
+            rec.cvars["graphicsViewDistance"] = "6"
+            OPT:SetMythicViewDistanceEnabled(true)
+            rec.difficultyID = MPLUS
+            OPT:UpdateMythicViewDistance()
+            OPT:UpdateMythicViewDistance()
+            OPT:UpdateMythicViewDistance()
+            assert.equals("6", _G.KitnEssentialsOptimizeDB.MythicVD.saved)
+        end)
+
+        it("survives a reload inside the key and still restores on exit", function()
+            -- A reload builds a fresh module against the same SavedVariables.
+            local OPT, rec = L.loadOptimize()
+            rec.cvars["graphicsViewDistance"] = "6"
+            OPT:SetMythicViewDistanceEnabled(true)
+            rec.difficultyID = MPLUS
+            OPT:UpdateMythicViewDistance()
+
+            local saved = _G.KitnEssentialsOptimizeDB
+            local OPT2, rec2 = L.loadOptimize()
+            _G.KitnEssentialsOptimizeDB = saved
+            rec2.cvars["graphicsViewDistance"] = "0"
+            rec2.difficultyID = 0
+            OPT2:OnInitialize()
+            assert.equals("6", rec2.cvars["graphicsViewDistance"])
+            assert.is_false(OPT2:IsMythicOverrideActive())
+        end)
+
+        it("releases a held override the moment the toggle goes off", function()
+            local OPT, rec = L.loadOptimize()
+            rec.cvars["graphicsViewDistance"] = "6"
+            OPT:SetMythicViewDistanceEnabled(true)
+            rec.difficultyID = MPLUS
+            OPT:UpdateMythicViewDistance()
+            assert.equals("0", rec.cvars["graphicsViewDistance"])
+            OPT:SetMythicViewDistanceEnabled(false)
+            assert.equals("6", rec.cvars["graphicsViewDistance"])
+        end)
+
+        it("does nothing at all while the toggle is off", function()
+            local OPT, rec = L.loadOptimize()
+            rec.cvars["graphicsViewDistance"] = "6"
+            rec.difficultyID = MPLUS
+            OPT:UpdateMythicViewDistance()
+            assert.equals("6", rec.cvars["graphicsViewDistance"])
+            assert.is_false(OPT:IsMythicOverrideActive())
+        end)
+    end)
 end)
