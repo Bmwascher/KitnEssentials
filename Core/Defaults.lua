@@ -852,27 +852,34 @@ local Defaults = {
 
         StanceText = {
             Enabled = false,
+            IconSize = 44,
+            Alpha = 1,
+            BorderColor = { 0, 0, 0, 1 },
+
+            -- Caption above the icon
+            ShowText = true,
+            Text = "MISSING",
+            TextColor = { 1, 0.3, 0.3, 1 },
             FontFace = "Expressway",
             FontSize = 14,
             FontOutline = "SOFTOUTLINE",
+
+            -- Warrior defaults to Reverse Icon (show the stance you ARE in)
+            -- because "wrong stance" is the useful signal there; the others
+            -- show what you are missing. Paladin auras are off by default --
+            -- plenty of people run whichever they like.
+            ["71Enabled"] = true,  ["71ReverseIcon"] = true,
+            ["72Enabled"] = true,  ["72ReverseIcon"] = true,
+            ["73Enabled"] = false, ["73ReverseIcon"] = false,
+            ["65Enabled"] = false, ["66Enabled"] = false, ["70Enabled"] = false,
+            ["102Enabled"] = true, ["103Enabled"] = true, ["104Enabled"] = true,
+            ["258Enabled"] = true,
+            ["1473Enabled"] = true,
+
             Strata = "HIGH",
             anchorFrameType = "PLAYERFRAME",
             ParentFrame = "UIParent",
             Position = { AnchorFrom = "LEFT", AnchorTo = "LEFT", XOffset = 3, YOffset = 0 },
-            WARRIOR = {
-                ["386164"] = { Enabled = true, Text = "Battle Stance", Color = { 1, 0, 0, 1 } },
-                ["386196"] = { Enabled = true, Text = "Berserker Stance", Color = { 1, 0, 0, 1 } },
-                ["386208"] = { Enabled = true, Text = "Defensive Stance", Color = { 0.3, 0.7, 1, 1 } },
-            },
-            PALADIN = {
-                ["465"] = { Enabled = true, Text = "Devotion Aura", Color = { 1, 1, 1, 1 } },
-                ["317920"] = { Enabled = true, Text = "Concentration Aura", Color = { 0.9, 0.5, 1, 1 } },
-                ["32223"] = { Enabled = true, Text = "Crusader Aura", Color = { 1, 0.8, 0.3, 1 } },
-            },
-            EVOKER = {
-                ["403264"] = { Enabled = true, Text = "Black Attunement", Color = { 0.5, 0.2, 0.8, 1 } },
-                ["403265"] = { Enabled = true, Text = "Bronze Attunement", Color = { 0.9, 0.7, 0.2, 1 } },
-            },
         },
 
         HuntersMark = {

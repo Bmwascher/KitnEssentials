@@ -1,8 +1,8 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  StanceText.lua                                          ║
 -- ║  Module: Stance Text                                     ║
--- ║  Purpose: Displays current stance/shapeshift form name   ║
--- ║           as configurable text on screen.                ║
+-- ║  Purpose: Shows an icon when the current form, stance    ║
+-- ║           or aura does not match what the spec expects.  ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -13,289 +13,314 @@ if not KitnEssentials then return end
 local ST = KitnEssentials:NewModule("StanceText", "AceEvent-3.0")
 
 local CreateFrame = CreateFrame
-local GetShapeshiftForm, GetShapeshiftFormInfo = GetShapeshiftForm, GetShapeshiftFormInfo
+local unpack = unpack
+local pairs = pairs
+local ipairs = ipairs
 local tostring = tostring
+local InCombatLockdown = InCombatLockdown
+local GetShapeshiftForm = GetShapeshiftForm
+local GetShapeshiftFormInfo = GetShapeshiftFormInfo
 local C_UnitAuras = C_UnitAuras
-local UnitClass = UnitClass
-local issecretvalue = issecretvalue
+local C_Spell = C_Spell
+local C_SpellBook = C_SpellBook
 local UIParent = UIParent
 
----------------------------------------------------------------------------------
--- Module State
----------------------------------------------------------------------------------
-local playerClass = nil
----@type Frame
-local stanceTextFrame
+local MISSING_TEXT_DEFAULT = "MISSING"
 
----------------------------------------------------------------------------------
--- Helpers
----------------------------------------------------------------------------------
-local function PlayerHasBuff(spellId)
-    if not spellId then return false end
-    if issecretvalue(spellId) then return false end
-    local auraData = C_UnitAuras.GetPlayerAuraBySpellID(spellId)
-    return auraData ~= nil
+-- Per-spec expected form, keyed by specialization ID.
+--
+--   spellID  the form/aura/stance that spec is expected to hold
+--   check    "form"  read through GetShapeshiftForm (Warrior, Druid)
+--            "aura"  read through the player's auras (Priest, Evoker, Paladin)
+--   also     extra spell IDs that also satisfy the requirement
+--
+-- Paladin auras and Warrior stances have several valid choices, so their
+-- expected one is a setting; the value here is the default.
+local WARRIOR_STANCES = { 386164, 386196, 386208 }
+local PALADIN_AURAS   = { 465, 317920, 32223 }
+local EVOKER_ATTUNE   = { 403264, 403265 }
+
+local SPECS = {
+    -- Warrior
+    [71]   = { spellID = 386164, check = "form", options = WARRIOR_STANCES },
+    [72]   = { spellID = 386196, check = "form", options = WARRIOR_STANCES },
+    [73]   = { spellID = 386208, check = "form", options = WARRIOR_STANCES },
+    -- Paladin
+    [65]   = { spellID = 465,    check = "aura", options = PALADIN_AURAS },
+    [66]   = { spellID = 465,    check = "aura", options = PALADIN_AURAS },
+    [70]   = { spellID = 32223,  check = "aura", options = PALADIN_AURAS },
+    -- Druid
+    [102]  = { spellID = 24858,  check = "form" },
+    [103]  = { spellID = 768,    check = "form" },
+    [104]  = { spellID = 5487,   check = "form" },
+    -- Priest: Voidform also satisfies Shadowform.
+    [258]  = { spellID = 232698, check = "aura", also = { 194249 } },
+    -- Evoker
+    [1473] = { spellID = 403264, check = "aura", options = EVOKER_ATTUNE },
+}
+ST.SPECS = SPECS
+
+-- Options page order. Every class is listed regardless of what is being
+-- played, so settings can be prepared for an alt.
+ST.CLASS_ORDER = { "WARRIOR", "PALADIN", "DRUID", "PRIEST", "EVOKER" }
+ST.CLASS_SPECS = {
+    WARRIOR = { 71, 72, 73 },
+    PALADIN = { 65, 66, 70 },
+    DRUID   = { 102, 103, 104 },
+    PRIEST  = { 258 },
+    EVOKER  = { 1473 },
+}
+ST.SPEC_NAMES = {
+    [71] = "Arms", [72] = "Fury", [73] = "Protection",
+    [65] = "Holy", [66] = "Protection", [70] = "Retribution",
+    [102] = "Balance", [103] = "Feral", [104] = "Guardian",
+    [258] = "Shadow", [1473] = "Augmentation",
+}
+
+local SPELL_NAMES = {
+    [386164] = "Battle Stance", [386196] = "Berserker Stance", [386208] = "Defensive Stance",
+    [465] = "Devotion Aura", [317920] = "Concentration Aura", [32223] = "Crusader Aura",
+    [24858] = "Moonkin Form", [768] = "Cat Form", [5487] = "Bear Form",
+    [232698] = "Shadowform", [403264] = "Black Attunement", [403265] = "Bronze Attunement",
+}
+ST.SPELL_NAMES = SPELL_NAMES
+
+local function SpecEntry()
+    local specIndex = GetSpecialization and GetSpecialization()
+    local specID = specIndex and specIndex > 0 and GetSpecializationInfo(specIndex) or nil
+    return specID, specID and SPECS[specID] or nil
 end
+ST.SpecEntry = SpecEntry
 
----------------------------------------------------------------------------------
--- Frame creation
----------------------------------------------------------------------------------
-local function CreateStanceTextFrame()
-    if stanceTextFrame then return end
-    local db = ST.db
-
-    stanceTextFrame = CreateFrame("Frame", "KE_StanceTextDisplay", UIParent)
-    stanceTextFrame:SetSize(200, 30)
-    stanceTextFrame:SetFrameStrata("HIGH")
-    stanceTextFrame.text = stanceTextFrame:CreateFontString(nil, "OVERLAY")
-    stanceTextFrame.text:SetFont(KE.FONT, 12, "")
-    stanceTextFrame.text:SetPoint("CENTER", stanceTextFrame, "CENTER", 0, 0)
-
-    KE:ApplyFramePosition(stanceTextFrame, db.Position, db)
-    KE:ApplyFontToText(stanceTextFrame.text, db.FontFace, db.FontSize, db.FontOutline)
-
-    local textPoint = KE:GetTextPointFromAnchor(db.Position.AnchorFrom)
-    local textJustify = KE:GetTextJustifyFromAnchor(db.Position.AnchorFrom)
-    stanceTextFrame.text:ClearAllPoints()
-    stanceTextFrame.text:SetPoint(textPoint, stanceTextFrame, textPoint, 0, 0)
-    stanceTextFrame.text:SetJustifyH(textJustify)
-    stanceTextFrame.text:SetTextColor(1, 1, 1, 1)
-
-    stanceTextFrame:Hide()
-    ST.container = stanceTextFrame
-end
-
----------------------------------------------------------------------------------
--- Core update
----------------------------------------------------------------------------------
-local function UpdateStanceTextDisplay()
-    if not ST.db then return end
-    local db = ST.db
-
-    if not db.Enabled then
-        if stanceTextFrame then stanceTextFrame:Hide() end
-        return
-    end
-
-    if not playerClass then
-        if stanceTextFrame then stanceTextFrame:Hide() end
-        return
-    end
-
-    if playerClass ~= "WARRIOR" and playerClass ~= "PALADIN" and playerClass ~= "EVOKER" then
-        if stanceTextFrame then stanceTextFrame:Hide() end
-        return
-    end
-
-    if not stanceTextFrame then CreateStanceTextFrame() end
-
-    local currentSpellId = nil
-
-    -- Warrior / Evoker: detect via shapeshift form (persists in combat)
-    if playerClass == "WARRIOR" or playerClass == "EVOKER" then
-        local currentForm = GetShapeshiftForm()
-        if currentForm > 0 then
-            local _, _, _, formSpellId = GetShapeshiftFormInfo(currentForm)
-            currentSpellId = formSpellId
+local function HasAura(spellID, also)
+    if C_UnitAuras.GetPlayerAuraBySpellID(spellID) then return true end
+    if also then
+        for _, extra in ipairs(also) do
+            if C_UnitAuras.GetPlayerAuraBySpellID(extra) then return true end
         end
     end
-
-    -- Paladin: detect via aura buff
-    if playerClass == "PALADIN" then
-        local paladinAuras = { 465, 317920, 32223 }
-        for _, auraId in ipairs(paladinAuras) do
-            if PlayerHasBuff(auraId) then
-                currentSpellId = auraId
-                break
-            end
-        end
-    end
-
-    if not currentSpellId then
-        stanceTextFrame:Hide()
-        return
-    end
-
-    local classData = db[playerClass]
-    if not classData then
-        stanceTextFrame:Hide()
-        return
-    end
-
-    local stanceKey = tostring(currentSpellId)
-    local stanceSettings = classData[stanceKey]
-
-    if not stanceSettings or not stanceSettings.Enabled then
-        stanceTextFrame:Hide()
-        return
-    end
-
-    local text = stanceSettings.Text or "Stance"
-    local cr, cg, cb, ca = KE:ResolveColor(stanceSettings.Color, { 1, 1, 1, 1 })
-
-    stanceTextFrame.text:SetText(text)
-    stanceTextFrame.text:SetTextColor(cr, cg, cb, ca)
-
-    KE:ApplyFontToText(stanceTextFrame.text, db.FontFace, db.FontSize, db.FontOutline)
-    KE:ApplyFramePosition(stanceTextFrame, db.Position, db)
-
-    local textPoint = KE:GetTextPointFromAnchor(db.Position.AnchorFrom)
-    local textJustify = KE:GetTextJustifyFromAnchor(db.Position.AnchorFrom)
-    stanceTextFrame.text:ClearAllPoints()
-    stanceTextFrame.text:SetPoint(textPoint, stanceTextFrame, textPoint, 0, 0)
-    stanceTextFrame.text:SetJustifyH(textJustify)
-    stanceTextFrame:Show()
+    return false
 end
 
----------------------------------------------------------------------------------
--- DB Helper
----------------------------------------------------------------------------------
+-- The form the player is actually in, as a spell ID, or nil.
+local function CurrentFormSpell()
+    local index = GetShapeshiftForm()
+    if not index or index == 0 then return nil end
+    local _, _, _, spellID = GetShapeshiftFormInfo(index)
+    return spellID
+end
+
+local function SpellIsKnown(spellID)
+    if not (C_SpellBook and C_SpellBook.IsSpellKnown) then return true end
+    return C_SpellBook.IsSpellKnown(spellID) == true
+end
+
+-- Reused rather than rebuilt: UNIT_AURA for the player fires constantly in
+-- combat, and the reference's inline version allocates nothing on this path.
+local evalContext = { hasAura = HasAura, isKnown = SpellIsKnown }
+
+-- The whole rule, with every world reading passed in. Returns the spell id to
+-- draw, or nil to hide. Kept free of API calls so the rules can be tested
+-- without faking the shapeshift and aura subsystems.
+--
+-- ctx fields: inCombat, currentFormSpell, hasAura(spellID, also), isKnown(spellID)
+function ST:EvaluateSpec(db, specID, entry, ctx)
+    if not entry then return nil end
+
+    local key = tostring(specID)
+    if db[key .. "Enabled"] == false then return nil end
+
+    -- Out-of-combat suppression is per spec: a Guardian druid out of combat is
+    -- usually travelling, a Balance druid out of combat is usually not.
+    if db[key .. "CombatOnly"] and not ctx.inCombat then return nil end
+
+    local wanted = tonumber(db[key .. "Spell"]) or entry.spellID
+
+    -- Not learned yet (low level, or the talent is not taken) -- nothing to
+    -- remind about, and the icon would be a lie.
+    if not ctx.isKnown(wanted) then return nil end
+
+    local satisfied
+    if entry.check == "aura" then
+        satisfied = ctx.hasAura(wanted, entry.also)
+    else
+        satisfied = ctx.currentFormSpell == wanted
+    end
+    if satisfied then return nil end
+
+    -- Reverse Icon shows what you ARE in rather than what you should be in.
+    -- Useful for Warriors, where "you are in the wrong stance" reads better
+    -- than "you are missing the right one". Falls back to the wanted icon when
+    -- you are in no form at all, which would otherwise draw nothing.
+    if db[key .. "ReverseIcon"] then
+        return ctx.currentFormSpell or wanted
+    end
+    return wanted
+end
+
 function ST:UpdateDB()
     self.db = KE.db.profile.StanceText
 end
 
 function ST:OnInitialize()
     self:UpdateDB()
-    local _, class = UnitClass("player")
-    playerClass = class
     self:SetEnabledState(false)
 end
 
----------------------------------------------------------------------------------
--- Lifecycle
----------------------------------------------------------------------------------
-function ST:OnEnable()
-    if not self.db or not self.db.Enabled then return end
+function ST:CreateFrame()
+    if self.frame then return end
+    local db = self.db
 
-    -- Only Warriors, Paladins, and Evokers have stance texts
-    if playerClass ~= "WARRIOR" and playerClass ~= "PALADIN" and playerClass ~= "EVOKER" then return end
+    local f = CreateFrame("Frame", "KE_StanceTextDisplay", UIParent)
+    f:SetSize(db.IconSize, db.IconSize)
+    f:SetFrameStrata(db.Strata or "MEDIUM")
 
-    CreateStanceTextFrame()
-    self:RegWithEditMode()
-
-    C_Timer.After(0.5, function() self:ApplySettings() end)
-
-    self:RegisterEvent("UPDATE_SHAPESHIFT_FORM", function() UpdateStanceTextDisplay() end)
-    self:RegisterEvent("UPDATE_SHAPESHIFT_FORMS", function() UpdateStanceTextDisplay() end)
-    self:RegisterEvent("PLAYER_ENTERING_WORLD", function() C_Timer.After(1, UpdateStanceTextDisplay) end)
-
-    -- Paladin auras are buffs, so track aura changes
-    if playerClass == "PALADIN" then
-        self:RegisterEvent("UNIT_AURA", function(_, unit)
-            if unit == "player" then UpdateStanceTextDisplay() end
-        end)
-    end
-
-    C_Timer.After(2, UpdateStanceTextDisplay)
-end
-
-function ST:OnDisable()
-    self:UnregisterAllEvents()
-    if stanceTextFrame then stanceTextFrame:Hide() end
-end
-
----------------------------------------------------------------------------------
--- Settings
----------------------------------------------------------------------------------
-function ST:Refresh()
-    if self.db and self.db.Enabled then
-        self:OnEnable()
-    else
-        self:OnDisable()
-    end
-end
-
-function ST:ApplySettings()
-    if not self.db then return end
-    if not self.db.Enabled then return end
-
-    if stanceTextFrame then
-        KE:ApplyFontToText(stanceTextFrame.text, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
-        KE:ApplyFramePosition(stanceTextFrame, self.db.Position, self.db)
-
-        local textPoint = KE:GetTextPointFromAnchor(self.db.Position.AnchorFrom)
-        local textJustify = KE:GetTextJustifyFromAnchor(self.db.Position.AnchorFrom)
-        stanceTextFrame.text:ClearAllPoints()
-        stanceTextFrame.text:SetPoint(textPoint, stanceTextFrame, textPoint, 0, 0)
-        stanceTextFrame.text:SetJustifyH(textJustify)
-
-        if not self.db.Enabled then stanceTextFrame:Hide() end
-    end
-
-    UpdateStanceTextDisplay()
-end
-
----------------------------------------------------------------------------------
--- Preview
----------------------------------------------------------------------------------
-function ST:ShowPreview()
-    if not stanceTextFrame then CreateStanceTextFrame() end
-    self:RegWithEditMode()
-    self.isPreview = true
-
-    local db = self.db or {}
-
-    if not db.Enabled then
-        stanceTextFrame:Hide()
-        return
-    end
-
-    KE:ApplyFontToText(stanceTextFrame.text, db.FontFace, db.FontSize, db.FontOutline)
-
-    -- Show warrior Battle Stance as preview default
-    local previewText = "BATTLE"
-    local previewColor = { 1, 0, 0, 1 }
-
-    local classData = db["WARRIOR"]
-    if classData then
-        local stanceSettings = classData["386164"]
-        if stanceSettings then
-            if stanceSettings.Text and stanceSettings.Text ~= "" then
-                previewText = stanceSettings.Text
-            end
-            if stanceSettings.Color then
-                previewColor = stanceSettings.Color
-            end
+    -- Same 1px border treatment as the other aura icons, grid-snapped so it
+    -- stays crisp when anchored to a frame that is not pixel-aligned.
+    KE:AddBorders(f, db.BorderColor)
+    if f.borders then
+        for _, tex in pairs(f.borders) do
+            if tex.SetSnapToPixelGrid then tex:SetSnapToPixelGrid(true) end
         end
     end
 
-    stanceTextFrame.text:SetText(previewText)
-    local pr, pg, pb, pa = KE:ResolveColor(previewColor, { 1, 1, 1, 1 })
-    stanceTextFrame.text:SetTextColor(pr, pg, pb, pa)
+    local icon = f:CreateTexture(nil, "ARTWORK")
+    icon:SetAllPoints()
+    KE:ApplyIconZoom(icon)
+    f.icon = icon
 
-    KE:ApplyFramePosition(stanceTextFrame, db.Position, db)
+    f.text = f:CreateFontString(nil, "OVERLAY")
+    f.text:SetPoint("BOTTOM", f, "TOP", 0, 4)
+    f.text:SetWordWrap(false)
+    -- A FontString with no font THROWS on SetText, so the font is applied at
+    -- creation and never conditionally.
+    KE:ApplyFontToText(f.text, db.FontFace, db.FontSize, db.FontOutline)
 
-    local textPoint = KE:GetTextPointFromAnchor(db.Position.AnchorFrom)
-    local textJustify = KE:GetTextJustifyFromAnchor(db.Position.AnchorFrom)
-    stanceTextFrame.text:ClearAllPoints()
-    stanceTextFrame.text:SetPoint(textPoint, stanceTextFrame, textPoint, 0, 0)
-    stanceTextFrame.text:SetJustifyH(textJustify)
-    stanceTextFrame:Show()
+    f:Hide()
+    self.frame = f
+    KE:ApplyFramePosition(f, db.Position, db)
+end
+
+-- The whole feature: is the current spec in the form it should be in.
+function ST:Update()
+    local db = self.db
+    if not db or not db.Enabled then
+        if self.frame then self.frame:Hide() end
+        return
+    end
+    if self.previewing then return end
+
+    local specID, entry = SpecEntry()
+    evalContext.inCombat = InCombatLockdown()
+    evalContext.currentFormSpell = CurrentFormSpell()
+    local shown = self:EvaluateSpec(db, specID, entry, evalContext)
+
+    if not shown then
+        if self.frame then self.frame:Hide() end
+        return
+    end
+
+    self:CreateFrame()
+    local f = self.frame
+    if not f then return end
+
+    f:SetSize(db.IconSize, db.IconSize)
+    f.icon:SetTexture(C_Spell.GetSpellTexture(shown))
+    f:SetAlpha(db.Alpha or 1)
+    self:ApplyText(db)
+    f:Show()
+end
+
+function ST:OnAura(_, unit)
+    if KE:IsSecretValue(unit) or unit ~= "player" then return end
+    self:Update()
+end
+
+-- The "MISSING" caption above the icon.
+function ST:ApplyText(db)
+    local f = self.frame
+    if not f or not f.text then return end
+    -- Hidden rather than blanked: nothing to write, nothing to go wrong.
+    if not db.ShowText then
+        f.text:Hide()
+        return
+    end
+    KE:ApplyFontToText(f.text, db.FontFace, db.FontSize, db.FontOutline)
+    f.text:SetTextColor(unpack(db.TextColor))
+    f.text:SetText(db.Text ~= "" and db.Text or MISSING_TEXT_DEFAULT)
+    f.text:Show()
+end
+
+function ST:ApplySettings()
+    if not self:IsEnabled() then return end
+    self:UpdateDB()
+    if self.frame then
+        self.frame:SetFrameStrata(self.db.Strata or "MEDIUM")
+        KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
+    end
+    self:Update()
+end
+
+function ST:OnEnable()
+    self:UpdateDB()
+    if not self.db.Enabled then return end
+    self:CreateFrame()
+
+    -- Entirely event-driven -- nothing polls. Form and aura changes are the
+    -- only things that can change the answer, plus the combat transitions
+    -- that the per-spec CombatOnly option depends on.
+    self:RegisterEvent("UNIT_AURA", "OnAura")
+    self:RegisterEvent("UPDATE_SHAPESHIFT_FORM", "Update")
+    self:RegisterEvent("UPDATE_SHAPESHIFT_FORMS", "Update")
+    self:RegisterEvent("PLAYER_REGEN_DISABLED", "Update")
+    self:RegisterEvent("PLAYER_REGEN_ENABLED", "Update")
+    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "Update")
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "Update")
+    self:RegisterEvent("PLAYER_ALIVE", "Update")
+    self:Update()
+
+    if not self.frame or not KE.EditMode then return end
+    KE.EditMode:RegisterElement({
+        key = "StanceText",
+        displayName = "Stance Text",
+        frame = self.frame,
+        getPosition = function() return self.db.Position end,
+        setPosition = function(pos)
+            self.db.Position = pos
+            KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
+        end,
+        getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
+        guiPath = "StanceText",
+    })
+end
+
+function ST:OnDisable()
+    self:UnregisterEvent("UNIT_AURA")
+    self:UnregisterEvent("UPDATE_SHAPESHIFT_FORM")
+    self:UnregisterEvent("UPDATE_SHAPESHIFT_FORMS")
+    self:UnregisterEvent("PLAYER_REGEN_DISABLED")
+    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    self:UnregisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+    self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+    self:UnregisterEvent("PLAYER_ALIVE")
+    if self.frame then self.frame:Hide() end
+end
+
+-- Preview (options page) -----------------------------------------------
+
+function ST:ShowPreview()
+    self:CreateFrame()
+    if not self.frame then return end
+    self.previewing = true
+    local _, entry = SpecEntry()
+    local spellID = entry and entry.spellID or 24858
+    self.frame:SetSize(self.db.IconSize, self.db.IconSize)
+    self.frame.icon:SetTexture(C_Spell.GetSpellTexture(spellID))
+    self.frame:SetAlpha(self.db.Alpha or 1)
+    self.frame:Show()
 end
 
 function ST:HidePreview()
-    self.isPreview = false
-    if stanceTextFrame then stanceTextFrame:Hide() end
-    if self.db and self.db.Enabled then
-        C_Timer.After(0.1, UpdateStanceTextDisplay)
-    end
-end
-
----------------------------------------------------------------------------------
--- Edit Mode
----------------------------------------------------------------------------------
-function ST:RegWithEditMode()
-    if not KE.EditMode then return end
-    if self.container and not self.editModeRegistered then
-        KE.EditMode:RegisterElement({
-            key = "StanceText",
-            displayName = "Stance Text",
-            frame = self.container,
-            getPosition = function() return self.db.Position end,
-            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePosition(self.container, self.db.Position, self.db) end,
-            getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
-            guiPath = "StanceText",
-        })
-        self.editModeRegistered = true
-    end
+    self.previewing = nil
+    self:Update()
 end

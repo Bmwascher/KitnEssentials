@@ -1678,4 +1678,19 @@ function L.loadAuraHeaders(overrides)
     return modules["BuffTracking"], KE
 end
 
+-- Modules/ClassUtilities/StanceText.lua. EvaluateSpec is a pure decision
+-- function reading only its own arguments, so the loader needs no
+-- shapeshift/aura stubs -- it exists solely to make the file loadable.
+-- overrides.db seeds KE.db.profile.StanceText for specs that want it.
+-- Returns ST, KE.
+function L.loadStanceText(overrides)
+    overrides = overrides or {}
+    local modules = helpers.installAddonShim()
+    local KE = {
+        db = { profile = { StanceText = overrides.db or {} } },
+    }
+    helpers.loadModule("Modules/ClassUtilities/StanceText.lua", KE)
+    return modules["StanceText"], KE
+end
+
 return L
