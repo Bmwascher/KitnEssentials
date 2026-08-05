@@ -312,17 +312,30 @@ local Defaults = {
 
         NoMovementAlert = {
             Enabled = true,
-            Strata = "MEDIUM",
-            anchorFrameType = "UIPARENT",
-            ParentFrame = "UIParent",
             Position = DefaultPosition(0, -61),
             FontSize = 16,
             FontFace = "Expressway",
             FontOutline = "OUTLINE",
-            ColorMode = "theme",
-            Color = { 1, 0.2, 0.2, 1 },
-            DisplayFormat = "NO %n - %t",
-            MaxCooldown = 30,
+
+            GrowDirection = "DOWN",
+            ShowWhenReady = false,
+            HideOutOfCombat = false,
+            Spacing = 2,
+            Scale = 1,
+            AttachToCombatTexts = false,
+
+            TextColor = { 1, 1, 1, 1 },
+            TimerColor = { 1, 0.82, 0, 1 },
+            SeparatorColor = { 0.5, 0.5, 0.5, 1 },
+            Separator = "-",
+
+            SoundEnabled = false,
+            Sound = "None",
+
+            -- Per-spell overrides, keyed "specID:spellID". Absence means the
+            -- preset's own default, so an untouched profile stores nothing.
+            Spells = {},
+            PreviewCount = 2,
         },
 
         FocusCastbar = {

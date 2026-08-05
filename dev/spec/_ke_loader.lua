@@ -1606,4 +1606,55 @@ function L.loadOptimize(overrides)
     return OPT, rec, KE
 end
 
+-- Modules/Utilities/NoMovementAlert.lua. Only the PURE resolution layer is
+-- reachable headlessly: the data tables, the per-spec override rules and the
+-- alias/category duration lookup. Everything else in that module is frames,
+-- cooldown APIs and event timing, which this project verifies in game.
+-- The module captures C_Spell/C_Timer/GetTime/UnitClass at file scope, so they
+-- have to exist on _G BEFORE loadModule or the module holds stale upvalues.
+-- Returns NMA, KE, rec. KE comes SECOND, unlike some loaders here, because the
+-- resolution spec wants the module and the namespace and never the recorder:
+-- a discard in the middle would have to be `_`, which is a GLOBAL write in Lua
+-- and luacheck's allowlist hides it.
+function L.loadMovementAlert(overrides)
+    overrides = overrides or {}
+    installMock(overrides, { C_Timer = inertTimer() })
+    local modules = helpers.installAddonShim()
+
+    local rec = { fonts = {}, editMode = { registered = {}, unregisterCalls = {} } }
+
+    _G.UIParent = noopFrame()
+    _G.GetTime = overrides.GetTime or function() return 1000 end
+    _G.UnitClass = overrides.UnitClass or function() return "Druid", "DRUID", 11 end
+    _G.UnitAffectingCombat = overrides.UnitAffectingCombat or function() return false end
+    _G.IsPlayerSpell = overrides.IsPlayerSpell or function() return true end
+    _G.IsSpellKnownOrOverridesKnown = overrides.IsSpellKnownOrOverridesKnown or function() return false end
+    _G.C_Spell = overrides.C_Spell or {
+        GetSpellCooldown = function() return nil end,
+        GetSpellCharges = function() return nil end,
+        GetSpellInfo = function(id) return { name = "Spell " .. tostring(id) } end,
+    }
+
+    local KE = {
+        Print = function() end,
+        IsSecretValue = function() return false end,
+        ApplyFontToText = function(_, fontString, face, size, outline)
+            rec.fonts[#rec.fonts + 1] =
+                { fontString = fontString, face = face, size = size, outline = outline }
+        end,
+    }
+    KE.EditMode = {
+        RegisterElement = function(self, config) self.registered[config.key] = config end,
+        UnregisterElement = function(self, key)
+            self.registered[key] = nil
+            self.unregisterCalls[#self.unregisterCalls + 1] = key
+        end,
+        registered = rec.editMode.registered,
+        unregisterCalls = rec.editMode.unregisterCalls,
+    }
+
+    helpers.loadModule("Modules/Utilities/NoMovementAlert.lua", KE)
+    return modules["NoMovementAlert"], KE, rec
+end
+
 return L

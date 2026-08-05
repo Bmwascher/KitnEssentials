@@ -183,7 +183,8 @@ read_globals = {
 
     -- Spell
     "C_Spell", "C_SpellBook",
-    "IsPlayerSpell", "IsSpellKnown",
+    "IsPlayerSpell", "IsSpellKnown", "IsSpellKnownOrOverridesKnown",
+    "C_SpellActivationOverlay",
 
     -- Secret Values (12.0)
     "issecretvalue", "issecrettable", "canaccesstable", "canaccessvalue",
