@@ -177,22 +177,14 @@ GUIFrame:RegisterContent("TargetedSpells", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 5: Colors
     ----------------------------------------------------------------
-    local cardCol = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
-    manager:Register(cardCol, "all")
-
-    local rowCol = GUIFrame:CreateRow(cardCol.content, Theme.rowHeightLast)
-    local textColorPicker = GUIFrame:CreateColorPicker(rowCol, "Countdown Text", {
-        color = db.FontColor or { 1, 1, 1, 1 },
-        callback = function(r, g, b, a)
-            db.FontColor = { r, g, b, a }
-            Rebuild()
-        end,
+    yOffset = GUIFrame:CreateColorsCard(scrollChild, yOffset, {
+        db = db,
+        manager = manager,
+        onChange = Rebuild,
+        colors = {
+            { label = "Countdown Text", key = "FontColor", default = { 1, 1, 1, 1 } },
+        },
     })
-    rowCol:AddWidget(textColorPicker, 0.5)
-    manager:Register(textColorPicker, "all")
-    cardCol:AddRow(rowCol, Theme.rowHeightLast, 0)
-
-    yOffset = cardCol:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 6: Features

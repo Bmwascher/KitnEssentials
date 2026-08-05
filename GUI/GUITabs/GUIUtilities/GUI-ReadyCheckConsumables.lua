@@ -310,36 +310,18 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 6: Colors
     ----------------------------------------------------------------
-    local card6 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
-    manager:Register(card6, "all")
-
-    local row6note = GUIFrame:CreateRow(card6.content, Theme.rowHeightNote)
-    local note6 = GUIFrame:CreateText(row6note,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Duration Text is the base color for the timer/count above each icon.\n" ..
-        KE:ColorTextByTheme("-") .. " Hearty Food Text replaces it on the food slot when your active food persists through death.",
-        50, "hide")
-    row6note:AddWidget(note6, 1)
-    manager:Register(note6, "all")
-    card6:AddRow(row6note, Theme.rowHeightNote)
-
-    local row6 = GUIFrame:CreateRow(card6.content, Theme.rowHeightLast)
-    local durationColorPicker = GUIFrame:CreateColorPicker(row6, "Duration Text", {
-        color = db.DurationColor or { 1, 1, 1, 1 },
-        callback = function(r, g, b, a) db.DurationColor = { r, g, b, a }; ApplySettings() end,
+    yOffset = GUIFrame:CreateColorsCard(scrollChild, yOffset, {
+        db = db,
+        manager = manager,
+        onChange = ApplySettings,
+        isLast = true,
+        note = KE:ColorTextByTheme("-") .. " Duration Text is the base color for the timer/count above each icon.\n" ..
+            KE:ColorTextByTheme("-") .. " Hearty Food Text replaces it on the food slot when your active food persists through death.",
+        colors = {
+            { label = "Duration Text", key = "DurationColor", default = { 1, 1, 1, 1 } },
+            { label = "Hearty Food Text", key = "HeartyFoodColor", default = { 0.2, 1.0, 0.2, 1.0 } },
+        },
     })
-    row6:AddWidget(durationColorPicker, 0.5)
-    manager:Register(durationColorPicker, "all")
-
-    local heartyColorPicker = GUIFrame:CreateColorPicker(row6, "Hearty Food Text", {
-        color = db.HeartyFoodColor or { 0.2, 1.0, 0.2, 1.0 },
-        callback = function(r, g, b, a) db.HeartyFoodColor = { r, g, b, a }; ApplySettings() end,
-    })
-    row6:AddWidget(heartyColorPicker, 0.5)
-    manager:Register(heartyColorPicker, "all")
-    card6:AddRow(row6, Theme.rowHeightLast, 0)
-
-    yOffset = card6:GetNextOffset()
 
     RefreshStates()
     return yOffset
