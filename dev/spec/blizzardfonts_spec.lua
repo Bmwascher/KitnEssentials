@@ -101,6 +101,31 @@ describe("BlizzardFonts", function()
         end)
     end)
 
+    -- The Tooltips module owns every tooltip font object. This pass owning them
+    -- too was a live bug: whichever ran last won, so the base-size slider
+    -- silently overrode that module's own sizes. Re-adding any of the three to
+    -- FONT_LIST would restore the conflict without failing anything else, which
+    -- is exactly the kind of edit this case exists to stop.
+    describe("tooltip fonts are not this module's to scale", function()
+        it("leaves all three untouched at a base size that would rescale them", function()
+            load({ BlizzardFrames = { FontBaseSize = 18 } })
+            local objs = {
+                plant("Tooltip_Small", fontObject("Fonts\\FRIZQT__.TTF", 10, "")),
+                plant("Tooltip_Med", fontObject("Fonts\\FRIZQT__.TTF", 12, "")),
+                plant("GameTooltipHeader", fontObject("Fonts\\FRIZQT__.TTF", 14, "")),
+            }
+            BF:ApplyAll()
+            -- Stock sizes intact: an entry in FONT_LIST would have written
+            -- floor(stock * 18 / 12 + 0.5), which is 15, 18 and 21.
+            local _, small = objs[1]:GetFont()
+            local _, med = objs[2]:GetFont()
+            local _, header = objs[3]:GetFont()
+            assert.equals(10, small)
+            assert.equals(12, med)
+            assert.equals(14, header)
+        end)
+    end)
+
     describe("category override", function()
         -- ObjectiveFont { "ObjectiveFont", 12, "S" }: CATEGORY maps it to
         -- "Objective", so a Sizes.Objective override must win over scaling.

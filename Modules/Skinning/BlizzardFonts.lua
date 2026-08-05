@@ -27,6 +27,11 @@ local unpack = unpack -- luacheck: ignore 211/unpack
 -- Three entries deliberately downgrade stock THICK to
 -- NORMAL outline and are annotated inline; QuestFont_Larger no longer
 -- appears in the source mirror but is runtime-guarded.
+--
+-- Tooltip_Small, Tooltip_Med and GameTooltipHeader are deliberately ABSENT.
+-- The Tooltips module owns every tooltip font object; two passes scaling the
+-- same objects meant whichever ran last won, and the base-size slider silently
+-- overrode that module's own sizes. Do not add them back.
 local FONT_LIST = {
 
     { "Number11Font", 11 },
@@ -95,7 +100,6 @@ local FONT_LIST = {
     { "SubSpellFont", 10 },
     { "SystemFont_Outline_Small", 10, "O" },
     { "SystemFont_Shadow_Small", 10, "S" },
-    { "Tooltip_Small", 10 },
     { "SystemFont_Small", 10 },
     { "SystemFont_Small2", 11 },
     { "FriendsFont_11", 11, "S" },
@@ -108,7 +112,6 @@ local FONT_LIST = {
     { "InvoiceFont_Med", 12 },
     { "SystemFont_Med1", 12 },
     { "SystemFont_Shadow_Med1", 12, "S" },
-    { "Tooltip_Med", 12 },
     { "Game13FontShadow", 13, "S" },
     { "GameFontNormalMed1", 13, "S" },
     { "SystemFont_Med2", 13 },
@@ -119,7 +122,6 @@ local FONT_LIST = {
     { "GameFontHighlightMedium", 14, "S" },
     { "GameFontNormalMed2", 14, "S" },
     { "GameFontNormalMed3", 14, "S" },
-    { "GameTooltipHeader", 14 },
     { "PriceFont", 14 },
     { "SystemFont_Med3", 14 },
     { "SystemFont_Shadow_Med2", 14, "S" },
