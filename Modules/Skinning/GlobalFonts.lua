@@ -7,7 +7,9 @@ local OUTLINED = {
     "GameFontNormal", "GameFontNormalSmall", "GameFontNormalHuge",
     "GameFontHighlight", "GameFontHighlightSmall", "GameFontHighlightLarge", "GameFontDisable", "GameFontDisableSmall",
     "GameFontGreen", "GameFontRed", "GameFontWhite", "GameFontBlack",
-    "GameTooltipText", "GameTooltipTextSmall", "GameTooltipHeaderText",
+    -- The three tooltip font objects are deliberately absent: the Tooltips
+    -- module owns every tooltip font and this pass fighting it over them was a
+    -- live bug. Do not add them back.
     "NumberFontNormalLarge",
 
     "GameFontNormalLeft", "GameFontNormalSmallLeft", "GameFontNormalLeftBottom",

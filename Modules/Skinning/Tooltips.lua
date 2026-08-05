@@ -194,8 +194,14 @@ end
 
 -- Fonts ---------------------------------------------------------------
 
--- ElvUI's approach: the shared font objects cover every tooltip line at
--- zero per-line cost. 12.0.7 shadow doctrine: shadows untouched.
+-- The shared font objects cover every tooltip line at zero per-line cost.
+-- 12.0.7 shadow doctrine: shadows untouched.
+--
+-- This module is the SOLE owner of all six tooltip font objects. The Blizzard
+-- base-size pass and the global-font pass each used to scale three of them, so
+-- whichever ran last won and this module's own sizes were silently overwritten.
+-- Both lists dropped them; do not add them back. With this module disabled the
+-- six stay stock, which is the point of single ownership.
 function TT:ApplyFonts()
     local db = self.db
     if not db then return end
@@ -210,6 +216,17 @@ function TT:ApplyFonts()
     end
     if _G.GameTooltipTextSmall then
         _G.GameTooltipTextSmall:SetFont(path, db.SmallFontSize or 11, outline)
+    end
+    -- Paired with the three above by role, not by stock size: header, body,
+    -- small. Tooltip templates draw from these rather than the *Text objects.
+    if _G.GameTooltipHeader then
+        _G.GameTooltipHeader:SetFont(path, db.HeaderFontSize or 14, outline)
+    end
+    if _G.Tooltip_Med then
+        _G.Tooltip_Med:SetFont(path, db.FontSize or 12, outline)
+    end
+    if _G.Tooltip_Small then
+        _G.Tooltip_Small:SetFont(path, db.SmallFontSize or 11, outline)
     end
 end
 
