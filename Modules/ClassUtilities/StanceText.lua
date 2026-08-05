@@ -174,9 +174,8 @@ function ST:CreateFrame()
     f:SetSize(db.IconSize, db.IconSize)
     f:SetFrameStrata(db.Strata or "MEDIUM")
 
-    -- Same 1px border treatment as the other aura icons. AddBorders disables
-    -- per-texture pixel snap on purpose; re-enabling it fights this project's
-    -- own grid maths, and every repaint would disable it again anyway.
+    -- AddBorders disables per-texture pixel snap; leave it off. Re-enabling it
+    -- fights the grid maths and every repaint undoes it anyway.
     KE:AddBorders(f, db.BorderColor)
 
     local icon = f:CreateTexture(nil, "ARTWORK")

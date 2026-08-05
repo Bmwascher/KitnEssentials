@@ -34,11 +34,9 @@ local GameTooltip = GameTooltip
 
 local durationObj = C_DurationUtil and C_DurationUtil.CreateDuration and C_DurationUtil.CreateDuration()
 
--- Dispel-school border colour, borrowed from Advanced Debuffs rather than
--- duplicated: that module owns the palette the user configures, and it exposes
--- its curve for exactly this. The curve resolves even while that module is
--- disabled, because the palette lives in the profile either way. Returns a
--- Color object, or nil when the curve API or the module is unavailable.
+-- Dispel-school colour from Advanced Debuffs' palette, not a second copy of it.
+-- That module exposes its curve for this and resolves it even while disabled,
+-- since the palette lives in the profile.
 local function DispelBorderColor(unit, auraInstanceID)
     if not (auraInstanceID and C_UnitAuras.GetAuraDispelTypeColor) then return nil end
     local ad = KitnEssentials:GetModule("AuraDebuffs", true)
@@ -133,15 +131,11 @@ local function MakeHeaderModule(config)
             end
         end
 
-        -- Debuff borders take the dispel-school colour.
-        --
-        -- The school cannot be read directly in 12.0: DebuffTypeColor no longer
-        -- exists, and dispelName is a secret string, so keying a table on it
-        -- would be a comparison secrets forbid. The colour comes from a
-        -- LuaCurveObject instead, which evaluates the aura's dispel integer
-        -- internally and returns a Color whose channels may themselves be
-        -- secret. They go straight to the texture and are never inspected.
-        -- The palette is Advanced Debuffs' own, so one setting drives both.
+        -- The school cannot be read directly: DebuffTypeColor is gone in 12.0
+        -- and dispelName is secret, so keying a table on it would be a
+        -- forbidden comparison. The curve resolves it internally, and its
+        -- Color channels may be secret too -- pass them to the texture, never
+        -- inspect them.
         if button.SetBorderColor then
             local c
             if config.colorByType and M.db.ColorByType ~= false then
@@ -209,11 +203,9 @@ local function MakeHeaderModule(config)
         M.buttons[button] = true
         local db = M.db
 
-        -- AddBorders already disables per-texture pixel snap, which is what
-        -- keeps a 1px band crisp under this project's own grid maths. The
-        -- reference re-enables it here; doing that fights the pixel system and
-        -- makes a recoloured border render differently from a fresh one, since
-        -- SetBorderColor re-asserts the disable on every repaint.
+        -- AddBorders disables per-texture pixel snap; leave it off. Re-enabling
+        -- it fights the grid maths, and SetBorderColor disables it again on
+        -- every repaint, so a recoloured border would draw unlike a fresh one.
         KE:AddBorders(button, db.BorderColor)
 
         button.Icon = button:CreateTexture(nil, "ARTWORK")
