@@ -444,3 +444,20 @@ function AceModule:RawHook(object, method, handler, hookSecure) end
 
 ---@param msg string
 function AceModule:Hide(msg) end
+
+-- Automation's transform picker is a cross-module public surface (the GUI
+-- reads it from a different file in Task 4), unlike the module-private
+-- methods the AceModule note above says to skip. GetHideTransformItem is a
+-- PLAIN FUNCTION field (dot call); SetHideTransformItem is a METHOD (colon
+-- call) -- the GUI depends on that asymmetry.
+---@class Automation: AceModule
+---@field HideTransformsData { order: string[], labels: table<string, string>, items: table[] }
+local Automation
+
+---@param key string
+---@return boolean
+function Automation.GetHideTransformItem(key) end
+
+---@param key string
+---@param enabled boolean
+function Automation:SetHideTransformItem(key, enabled) end

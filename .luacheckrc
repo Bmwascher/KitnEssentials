@@ -109,6 +109,16 @@ read_globals = {
     "GetPhysicalScreenSize", "GetCursorPosition",
     "RunNextFrame",
     "IsModifierKeyDown",
+    "EventUtil",
+
+    -- Tutorial / help-plate suppression
+    "MainHelpPlateButtonMixin", "HelpTip", "SetCVarBitfield", "EnumerateFrames",
+    "HelpPlate", "HelpPlateTooltip",
+
+    -- Trainer
+    "ClassTrainerFrame", "ClassTrainerTrainButton",
+    "GetTrainerServiceInfo", "GetTrainerServiceCost", "GetNumTrainerServices",
+    "BuyTrainerService",
 
     -- Enums and constants
     "Enum", "Constants", "CurveConstants",
@@ -116,7 +126,7 @@ read_globals = {
     "ENCHANTED_TOOLTIP_LINE",
     "FACTION_ALLIANCE", "FACTION_HORDE",
     "BASE_MOVEMENT_SPEED",
-    "NUM_BAG_FRAMES", "NUM_CHAT_WINDOWS", "NUM_LE_FRAME_TUTORIALS",
+    "NUM_BAG_FRAMES", "NUM_CHAT_WINDOWS",
     "RAID_CLASS_COLORS", "FACTION_BAR_COLORS", "GetClassColor", "CLASS_ICON_TCOORDS",
     "STANDARD_TEXT_FONT",
     "NORMAL_FONT_COLOR", "NORMAL_FONT_COLOR_CODE",
@@ -224,6 +234,14 @@ read_globals = {
 
     -- Collections (Mounts / Pets / Toys / Heirlooms)
     "PlayerHasToy", "C_MountJournal", "C_Heirloom", "C_TransmogCollection",
+    "C_PetJournal", "C_ToyBox", "C_ToyBoxInfo", "ToyBox",
+    "LE_MOUNT_JOURNAL_FILTER_COLLECTED", "LE_MOUNT_JOURNAL_FILTER_UNUSABLE",
+    "CollectionsMicroButton", "CollectionsMicroButton_SetAlertShown",
+    "MainMenuMicroButton_HideAlert",
+    "COLLECTION_UNOPENED_PLURAL", "COLLECTION_UNOPENED_SINGULAR",
+
+    -- Auras (cancel path)
+    "CancelUnitBuff",
 
     -- Gem Socketing
     "C_ItemSocketInfo", "SocketInventoryItem", "AcceptSockets", "CloseSocketInfo",
@@ -264,6 +282,15 @@ read_globals = {
 
     -- Static Popups
     "StaticPopup_Show", "StaticPopup_Hide", "StaticPopup_FindVisible",
+
+    -- Error message strings (GlobalStrings.lua)
+    "ERR_INV_FULL", "ERR_QUEST_LOG_FULL", "ERR_RAID_GROUP_ONLY",
+    "ERR_PARTY_LFG_BOOT_LIMIT", "ERR_PARTY_LFG_BOOT_DUNGEON_COMPLETE",
+    "ERR_PARTY_LFG_BOOT_IN_COMBAT", "ERR_PARTY_LFG_BOOT_IN_PROGRESS",
+    "ERR_PARTY_LFG_BOOT_LOOT_ROLLS", "ERR_PARTY_LFG_TELEPORT_IN_COMBAT",
+    "ERR_PET_SPELL_DEAD", "ERR_PLAYER_DEAD",
+    "SPELL_FAILED_TARGET_NO_POCKETS", "ERR_ALREADY_PICKPOCKETED",
+    "ERR_PARTY_LFG_BOOT_NOT_ELIGIBLE_S",
 
     -- Context menus (Blizzard_Menu, 11.0+ taint-safe menu API)
     "MenuUtil",

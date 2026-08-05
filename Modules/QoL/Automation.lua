@@ -54,17 +54,6 @@ local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 local GetSpecializationRole = GetSpecializationRole
 
 ---------------------------------------------------------------------------------
--- Hide Helptips (runs at load time)
----------------------------------------------------------------------------------
-C_CVar.RegisterCVar("hideHelptips", 1)
-for index = 1, NUM_LE_FRAME_TUTORIALS do
-    C_CVar.SetCVarBitfield("closedInfoFrames", index, true)
-end
-for index = 1, #Enum.FrameTutorialAccount do
-    C_CVar.SetCVarBitfield("closedInfoFramesAccountWide", index, true)
-end
-
----------------------------------------------------------------------------------
 -- Constants
 ---------------------------------------------------------------------------------
 AU.CVAR_DEFS = {
@@ -240,8 +229,158 @@ function AU:UpdateDB()
     self.db = KE.db.profile.Automation
 end
 
+-- Hide Helptips --
+-- Suppresses Blizzard's tutorial / "Did you know" popups. Fully
+-- live-toggleable and reversible: HelpTip pool hides (acknowledging each
+-- tip's cvarBitfield so it stays dismissed), "i" help-plate buttons
+-- matched by mixin-method fingerprint and alpha-hidden (restored on
+-- disable), HelpPlate tooltip hooks, and the hideHelptips/showTutorials
+-- CVars. Hooks install once, only when the feature is first enabled.
+--
+-- Master-independent: this suppression must apply even while the
+-- Automation master switch is off, so it is defined above OnInitialize
+-- and called from OnInitialize directly, ahead of the module ever being
+-- enabled.
+
+local tutorialsCoreHooked = false
+local tutorialsTooltipHooked = false
+local tutorialsWeSetCVar = false
+local tutorialsFingerprint
+local tutorialsHidden = setmetatable({}, { __mode = "k" })
+
+local function TutorialsEnabled()
+    return AU.db and AU.db.HideHelptips
+end
+
+local function GetTutorialFingerprint()
+    if not tutorialsFingerprint and MainHelpPlateButtonMixin then
+        tutorialsFingerprint = MainHelpPlateButtonMixin.ShowTooltip
+    end
+    return tutorialsFingerprint
+end
+
+local function TutorialHideButton(btn)
+    btn:SetAlpha(0)
+    btn:EnableMouse(false)
+    tutorialsHidden[btn] = true
+end
+
+-- Hoisted out of the pcall: one function, no per-call closure alloc
+local function DoHideOpenTips()
+    for tip in HelpTip.framePool:EnumerateActive() do
+        if tip:IsShown() then
+            local info = tip.info
+            if info and info.cvarBitfield and info.bitfieldFlag then
+                SetCVarBitfield(info.cvarBitfield, info.bitfieldFlag, true)
+            end
+            tip:Hide()
+        end
+    end
+end
+local function HideOpenTips()
+    if not (HelpTip and HelpTip.framePool and HelpTip.framePool.EnumerateActive) then return end
+    pcall(DoHideOpenTips)
+end
+
+local TutorialHideButtonsUnder
+-- Takes pcall's (ok, ...) directly, so a failed GetChildren costs us
+-- nothing and no table is allocated per node (this walks every frame of
+-- every panel opened via ShowUIPanel -- it must stay allocation free).
+local function TutorialScanChildren(ok, ...)
+    if not ok then return end
+    for i = 1, select("#", ...) do
+        TutorialHideButtonsUnder((select(i, ...)))
+    end
+end
+function TutorialHideButtonsUnder(root)
+    if not root then return end
+    -- The walk takes hostile input by definition -- it is handed the
+    -- entire child tree of whatever panel Blizzard just opened, and
+    -- Blizzard can restrict any node in it at any patch. So it refuses
+    -- forbidden nodes up front and treats GetChildren itself as fallible
+    -- rather than trusting that the method existing means it may be
+    -- called.
+    if root.IsForbidden and root:IsForbidden() then return end
+    local fp = GetTutorialFingerprint()
+    if not fp then return end
+    if root.ShowTooltip == fp then TutorialHideButton(root) end
+    if root.GetChildren then TutorialScanChildren(pcall(root.GetChildren, root)) end
+end
+
+-- One-time full walk to catch panels already open at enable time
+local function TutorialSweepAll()
+    local fp = GetTutorialFingerprint()
+    if not fp then return end
+    local frame = EnumerateFrames()
+    while frame do
+        if frame.ShowTooltip == fp then TutorialHideButton(frame) end
+        frame = EnumerateFrames(frame)
+    end
+end
+
+local function TutorialRestoreButtons()
+    for btn in pairs(tutorialsHidden) do
+        btn:SetAlpha(1)
+        btn:EnableMouse(true)
+        tutorialsHidden[btn] = nil
+    end
+end
+
+local function InstallTutorialCoreHooks()
+    if tutorialsCoreHooked then return end
+    tutorialsCoreHooked = true
+    if HelpTip and HelpTip.Show then
+        hooksecurefunc(HelpTip, "Show", function()
+            if TutorialsEnabled() then HideOpenTips() end
+        end)
+    end
+    if ShowUIPanel then
+        hooksecurefunc("ShowUIPanel", function(frame)
+            if TutorialsEnabled() and frame then
+                TutorialHideButtonsUnder(frame)
+                HideOpenTips()
+            end
+        end)
+    end
+end
+
+local function InstallTutorialTooltipHook()
+    if tutorialsTooltipHooked or not HelpPlateTooltip then return end
+    tutorialsTooltipHooked = true
+    if HelpPlate and HelpPlate.ShowTutorialTooltip then
+        hooksecurefunc(HelpPlate, "ShowTutorialTooltip", function()
+            if TutorialsEnabled() and HelpPlateTooltip then HelpPlateTooltip:Hide() end
+        end)
+    end
+    if HelpPlateTooltip.Init then
+        hooksecurefunc(HelpPlateTooltip, "Init", function(self)
+            if TutorialsEnabled() then self:Hide() end
+        end)
+    end
+end
+
+local function ApplyHideHelptips()
+    if TutorialsEnabled() then
+        InstallTutorialCoreHooks()
+        InstallTutorialTooltipHook()
+        pcall(SetCVar, "hideHelptips", "1")
+        pcall(SetCVar, "showTutorials", "0")
+        tutorialsWeSetCVar = true
+        TutorialSweepAll()
+        HideOpenTips()
+    else
+        if tutorialsWeSetCVar then
+            pcall(SetCVar, "hideHelptips", "0")
+            pcall(SetCVar, "showTutorials", "1")
+            tutorialsWeSetCVar = false
+        end
+        TutorialRestoreButtons()
+    end
+end
+
 function AU:OnInitialize()
     self:UpdateDB()
+    ApplyHideHelptips()
     self:SyncFromCVars()
     self:SetEnabledState(false)
 end
@@ -973,6 +1112,656 @@ local function SetupAutoAcceptRes()
     end
 end
 
+-- Hide Boss Banner Loot --
+-- Stops the boss-kill loot banner from replaying every drop after a kill.
+-- The kill banner itself still plays; only the loot scroll is silenced.
+-- Reversible with no reload.
+
+local function ApplyNoBossLoot()
+    local banner = _G.BossBanner
+    if not banner then return end
+    local on = AU.db.Enabled and AU.db.HideBossBannerLoot
+    if on then
+        banner:UnregisterEvent("ENCOUNTER_LOOT_RECEIVED")
+    else
+        banner:RegisterEvent("ENCOUNTER_LOOT_RECEIVED")
+    end
+end
+
+-- Auto Unwrap Collections --
+-- Dismisses the "new mount/pet/toy" fanfare wrap and micro-button alert
+-- automatically.
+
+local unwrapFrame
+local unwrapInstalled = false
+local function SetupAutoUnwrapCollections()
+    local on = AU.db.Enabled and AU.db.AutoUnwrapCollections
+
+    if not unwrapInstalled then
+        if not on then return end
+        unwrapInstalled = true
+
+        local busy = false
+
+        local function AckMountAlerts()
+            if not C_MountJournal then return false end
+            local pending = C_MountJournal.GetNumMountsNeedingFanfare
+                and C_MountJournal.GetNumMountsNeedingFanfare()
+            if not pending or pending <= 0 then return false end
+            -- Snapshot active filters, force "collected only", sweep, restore
+            local snapshot = {}
+            for i = LE_MOUNT_JOURNAL_FILTER_COLLECTED, LE_MOUNT_JOURNAL_FILTER_UNUSABLE do
+                snapshot[i] = C_MountJournal.GetCollectedFilterSetting(i) and true or false
+                C_MountJournal.SetCollectedFilterSetting(i, i == LE_MOUNT_JOURNAL_FILTER_COLLECTED)
+            end
+            for i = 1, C_MountJournal.GetNumDisplayedMounts() do
+                local id = C_MountJournal.GetDisplayedMountID(i)
+                if id and C_MountJournal.NeedsFanfare(id) then
+                    C_MountJournal.ClearFanfare(id)
+                end
+            end
+            for i = LE_MOUNT_JOURNAL_FILTER_COLLECTED, LE_MOUNT_JOURNAL_FILTER_UNUSABLE do
+                C_MountJournal.SetCollectedFilterSetting(i, snapshot[i])
+            end
+            return true
+        end
+
+        local function AckPetAlerts()
+            if not C_PetJournal or not C_PetJournal.GetNumPetsNeedingFanfare then return false end
+            if (C_PetJournal.GetNumPetsNeedingFanfare() or 0) == 0 then return false end
+            local any = false
+            for _, id in ipairs(C_PetJournal.GetOwnedPetIDs and C_PetJournal.GetOwnedPetIDs() or {}) do
+                if id and C_PetJournal.PetNeedsFanfare and C_PetJournal.PetNeedsFanfare(id) then
+                    if C_PetJournal.ClearFanfare then C_PetJournal.ClearFanfare(id) end
+                    any = true
+                end
+            end
+            return any
+        end
+
+        local function AckToyAlerts()
+            if not C_ToyBoxInfo or not C_ToyBoxInfo.ClearFanfare then return false end
+            local any = false
+            -- Fast path via ToyBox.fanfareToys lookup table
+            if ToyBox and ToyBox.fanfareToys then
+                for id, needs in pairs(ToyBox.fanfareToys) do
+                    if needs and id and C_ToyBoxInfo.NeedsFanfare and C_ToyBoxInfo.NeedsFanfare(id) then
+                        C_ToyBoxInfo.ClearFanfare(id)
+                        any = true
+                    end
+                end
+                if any then return true end
+            end
+            -- Fallback: full scan
+            if C_ToyBox and C_ToyBox.GetNumToys and C_ToyBox.GetToyFromIndex then
+                for i = 1, C_ToyBox.GetNumToys() do
+                    local id = C_ToyBox.GetToyFromIndex(i)
+                    if id and C_ToyBoxInfo.NeedsFanfare and C_ToyBoxInfo.NeedsFanfare(id) then
+                        C_ToyBoxInfo.ClearFanfare(id)
+                        any = true
+                    end
+                end
+            end
+            return any
+        end
+
+        local function DismissCollectionAlerts()
+            if not (AU.db.Enabled and AU.db.AutoUnwrapCollections) then return end
+            if busy then return end
+            busy = true
+            C_Timer.After(0.2, function()
+                busy = false
+                if not (AU.db.Enabled and AU.db.AutoUnwrapCollections) then return end
+                local changed = AckMountAlerts() or AckPetAlerts() or AckToyAlerts()
+                if changed then
+                    if CollectionsMicroButton and MainMenuMicroButton_HideAlert then
+                        MainMenuMicroButton_HideAlert(CollectionsMicroButton)
+                    end
+                    if CollectionsMicroButton_SetAlertShown then
+                        CollectionsMicroButton_SetAlertShown(false)
+                    end
+                end
+            end)
+        end
+
+        hooksecurefunc("MainMenuMicroButton_ShowAlert", function(_, text)
+            if not (AU.db.Enabled and AU.db.AutoUnwrapCollections) then return end
+            if text == COLLECTION_UNOPENED_PLURAL or text == COLLECTION_UNOPENED_SINGULAR then
+                DismissCollectionAlerts()
+            end
+        end)
+
+        unwrapFrame = CreateFrame("Frame")
+        unwrapFrame:SetScript("OnEvent", function() DismissCollectionAlerts() end)
+        -- Defer the first sweep 3s so ToyBox.fanfareToys is available
+        -- (avoids a thousand-plus toy fallback scan on the login frame)
+        C_Timer.After(3, DismissCollectionAlerts)
+    end
+
+    if on then
+        unwrapFrame:RegisterEvent("NEW_MOUNT_ADDED")
+        unwrapFrame:RegisterEvent("NEW_PET_ADDED")
+        unwrapFrame:RegisterEvent("NEW_TOY_ADDED")
+    else
+        unwrapFrame:UnregisterAllEvents()
+    end
+end
+
+-- Hide Screenshot Status --
+-- Blizzard creates ActionStatus lazily on the first screenshot, so this hides
+-- it right after Blizzard's own event handler shows it.
+
+local screenshotFrame
+local screenshotInstalled = false
+local function SetupHideScreenshotStatus()
+    local on = AU.db.Enabled and AU.db.HideScreenshotStatus
+
+    if not screenshotInstalled then
+        if not on then return end
+        screenshotInstalled = true
+
+        local function HideActionStatus()
+            if not (AU.db.Enabled and AU.db.HideScreenshotStatus) then return end
+            local actionStatus = _G.ActionStatus
+            if actionStatus then actionStatus:Hide() end
+        end
+
+        screenshotFrame = CreateFrame("Frame")
+        screenshotFrame:SetScript("OnEvent", function()
+            if AU.db.HideScreenshotStatus then
+                C_Timer.After(0, HideActionStatus)
+            end
+        end)
+    end
+
+    if on then
+        screenshotFrame:RegisterEvent("SCREENSHOT_SUCCEEDED")
+        screenshotFrame:RegisterEvent("SCREENSHOT_FAILED")
+    else
+        screenshotFrame:UnregisterAllEvents()
+    end
+end
+
+-- Hide Error Messages --
+-- Swallows red UIErrorsFrame spam while keeping a whitelist of genuinely
+-- useful errors. The OnEvent override is only installed while on, so this
+-- costs nothing when off and is fully reversible.
+
+local errOrigOnEvent
+local errInstalled = false
+local errKeep
+local function BuildErrKeepList()
+    if errKeep then return end
+    errKeep = {}
+    for _, msg in ipairs({
+        ERR_INV_FULL, ERR_QUEST_LOG_FULL, ERR_RAID_GROUP_ONLY,
+        ERR_PARTY_LFG_BOOT_LIMIT, ERR_PARTY_LFG_BOOT_DUNGEON_COMPLETE,
+        ERR_PARTY_LFG_BOOT_IN_COMBAT, ERR_PARTY_LFG_BOOT_IN_PROGRESS,
+        ERR_PARTY_LFG_BOOT_LOOT_ROLLS, ERR_PARTY_LFG_TELEPORT_IN_COMBAT,
+        ERR_PET_SPELL_DEAD, ERR_PLAYER_DEAD,
+        SPELL_FAILED_TARGET_NO_POCKETS, ERR_ALREADY_PICKPOCKETED,
+    }) do
+        if msg then errKeep[msg] = true end
+    end
+end
+
+-- The group-kick "not eligible" line is a format string: pattern match.
+local function IsBootNotEligible(err)
+    if type(err) ~= "string" or not ERR_PARTY_LFG_BOOT_NOT_ELIGIBLE_S then return false end
+    local ok, found = pcall(function()
+        return err:find(string.format(ERR_PARTY_LFG_BOOT_NOT_ELIGIBLE_S, ".+"))
+    end)
+    return (ok and found) and true or false
+end
+
+local function ErrFilteredOnEvent(self, event, id, err, ...)
+    if event == "UI_ERROR_MESSAGE" then
+        if errKeep[err] or IsBootNotEligible(err) then
+            return errOrigOnEvent(self, event, id, err, ...)
+        end
+        return
+    end
+    return errOrigOnEvent(self, event, id, err, ...)
+end
+
+local function ApplyHideErrorMessages()
+    local on = AU.db.Enabled and AU.db.HideErrorMessages
+    if on and not errInstalled then
+        BuildErrKeepList()
+        errOrigOnEvent = UIErrorsFrame:GetScript("OnEvent")
+        UIErrorsFrame:SetScript("OnEvent", ErrFilteredOnEvent)
+        UIParent:UnregisterEvent("PING_SYSTEM_ERROR")
+        errInstalled = true
+    elseif not on and errInstalled then
+        UIErrorsFrame:SetScript("OnEvent", errOrigOnEvent)
+        errOrigOnEvent = nil
+        UIParent:RegisterEvent("PING_SYSTEM_ERROR")
+        errInstalled = false
+    end
+end
+
+-- Omnium Foil character-window button --
+-- Hides ExpansionLandingPageMinimapButton and proxies it as a
+-- house-styled icon button on PaperDollFrame instead.
+--   * Parent to CharacterStatsPane, NOT CharacterFrame -- CharacterFrame
+--     stays shown across Reputation/Currency tabs and would leak the
+--     button onto all of them; CharacterStatsPane follows the Character
+--     tab's Stats sidebar Show/Hide for free. The anchor still targets
+--     PaperDollFrame so the position is unchanged.
+--   * Below max level Blizzard's own minimap-button tooltip errors (no
+--     landing page data), so the whole feature is max-level gated.
+--   * Click() the real minimap button rather than reimplementing the
+--     toggle; reuse its OnEnter so the tooltip stays whatever Blizzard
+--     says it is.
+
+local OMNI_ICON_FILEID = 7554214
+local omniCharButton
+local omniMinimapHooked = false
+
+local function OmniumAllowed()
+    return _G.UnitLevel("player") >= _G.GetMaxPlayerLevel()
+end
+
+local function OmniumRefreshShown()
+    if omniCharButton then
+        omniCharButton:SetShown(AU.db.Enabled and AU.db.OmniumCharButton and OmniumAllowed())
+    end
+end
+
+local function OmniumCreateButton()
+    if omniCharButton then return omniCharButton end
+    if not _G.PaperDollFrame then return nil end
+
+    if InCombatLockdown() then
+        -- Anchoring onto a Blizzard window mid-fight is not established as safe
+        -- in this expansion, and getting it wrong taints. Neither button is
+        -- urgent; both wait for the fight to end.
+        AU:RegisterEvent("PLAYER_REGEN_ENABLED", "RetrySpawnDeferredButtons")
+        return
+    end
+
+    local S = KE.Skins
+    -- Parent = the stats pane (hides with it); anchor = the paperdoll
+    -- (position unchanged).
+    local host = _G.CharacterStatsPane or _G.PaperDollFrame
+    local b = CreateFrame("Button", "KE_OmniumFoilButton", host)
+    b:SetSize(26, 26)
+    b:SetPoint("BOTTOMRIGHT", _G.PaperDollFrame, "BOTTOMRIGHT", -8, 8)
+    b:SetFrameLevel(_G.PaperDollFrame:GetFrameLevel() + 10)
+
+    local icon = b:CreateTexture(nil, "ARTWORK")
+    icon:SetPoint("TOPLEFT", 1, -1)
+    icon:SetPoint("BOTTOMRIGHT", -1, 1)
+    icon:SetTexture(OMNI_ICON_FILEID)
+    b.icon = icon
+    if S then
+        S.Icon(icon)
+        S.Backdrop(b)
+        S.Hover(b)
+    end
+
+    b:SetScript("OnClick", function()
+        local mm = _G.ExpansionLandingPageMinimapButton
+        if mm then mm:Click() end
+    end)
+    b:SetScript("OnEnter", function(self)
+        local mm = _G.ExpansionLandingPageMinimapButton
+        local onEnter = mm and mm:GetScript("OnEnter")
+        if onEnter then
+            pcall(onEnter, mm)
+            _G.GameTooltip:ClearAllPoints()
+            _G.GameTooltip:SetPoint("BOTTOMRIGHT", self, "TOPLEFT", 0, 4)
+        end
+    end)
+    b:SetScript("OnLeave", function() _G.GameTooltip:Hide() end)
+
+    omniCharButton = b
+    return b
+end
+
+local function SetupOmniumButton()
+    local mm = _G.ExpansionLandingPageMinimapButton
+    local active = AU.db.Enabled and AU.db.OmniumCharButton and OmniumAllowed()
+
+    if mm and not omniMinimapHooked then
+        omniMinimapHooked = true
+        hooksecurefunc(mm, "Show", function(self)
+            if AU.db.Enabled and AU.db.OmniumCharButton and OmniumAllowed() then self:Hide() end
+        end)
+    end
+
+    if active then
+        if mm then mm:Hide() end
+        OmniumCreateButton()
+    elseif mm then
+        mm:Show()
+    end
+    OmniumRefreshShown()
+end
+
+function AU:RetrySpawnDeferredButtons()
+    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    SetupOmniumButton()
+    if AU._deferredTrainAllSpawn then AU._deferredTrainAllSpawn() end
+end
+
+-- Train All Button --
+-- One click buys every affordable trainer skill, respecting wallet and
+-- free primary profession slots.
+
+local trainBtn
+local trainAllInstalled = false
+local function SetupTrainAllButton()
+    local on = AU.db.Enabled and AU.db.TrainAllButton
+
+    if not trainAllInstalled then
+        if not on then return end
+        trainAllInstalled = true
+
+        local hooked = false
+
+        local function FreeProfessionSlots()
+            if not GetProfessions then return 2 end
+            local a, b = GetProfessions()
+            return 2 - (a and 1 or 0) - (b and 1 or 0)
+        end
+
+        local function SkillIsAffordable(i, wallet, freeSlots)
+            if not GetTrainerServiceInfo or not GetTrainerServiceCost then return false, 0, false end
+            local _, kind = GetTrainerServiceInfo(i)
+            if kind ~= "available" then return false, 0, false end
+            local cost, takesProfSlot = GetTrainerServiceCost(i)
+            cost = cost or 0
+            if cost > wallet then return false, 0, false end
+            if takesProfSlot and freeSlots <= 0 then return false, 0, false end
+            return true, cost, takesProfSlot
+        end
+
+        local function TrainableSummary()
+            if not GetNumTrainerServices then return 0, 0 end
+            local n, gold = 0, 0
+            local wallet = GetMoney and GetMoney() or 0
+            local slots  = FreeProfessionSlots()
+            for i = 1, GetNumTrainerServices() do
+                local ok, cost = SkillIsAffordable(i, wallet, slots)
+                if ok then n = n + 1; gold = gold + cost end
+            end
+            return n, gold
+        end
+
+        local function RefreshButton()
+            if not trainBtn then return end
+            if not (AU.db.Enabled and AU.db.TrainAllButton) then
+                trainBtn:Hide(); return
+            end
+            local n = TrainableSummary()
+            trainBtn:SetEnabled(n > 0)
+            trainBtn:Show()
+        end
+
+        local function SpawnButton()
+            if not (AU.db.Enabled and AU.db.TrainAllButton) then return end
+            if not ClassTrainerFrame or not ClassTrainerTrainButton then return end
+            if trainBtn then trainBtn:Show(); RefreshButton(); return end
+
+            if InCombatLockdown() then
+                -- Anchoring onto a Blizzard window mid-fight is not established as safe
+                -- in this expansion, and getting it wrong taints. Neither button is
+                -- urgent; both wait for the fight to end.
+                AU:RegisterEvent("PLAYER_REGEN_ENABLED", "RetrySpawnDeferredButtons")
+                return
+            end
+
+            trainBtn = CreateFrame("Button", "KE_TrainAllButton", ClassTrainerFrame, "MagicButtonTemplate")
+            trainBtn:SetText("Train All")
+            trainBtn:SetHeight(ClassTrainerTrainButton:GetHeight() or 22)
+            trainBtn:SetWidth(80)
+            trainBtn:SetPoint("RIGHT", ClassTrainerTrainButton, "LEFT", -2, 0)
+
+            -- Skin immediately when the Dark Theme owns Blizzard frames
+            local S = KE.Skins
+            if S and S.Button then
+                S.StripTextures(trainBtn)
+                S.Button(trainBtn)
+            end
+
+            trainBtn:SetScript("OnClick", function()
+                local wallet = GetMoney and GetMoney() or 0
+                local slots  = FreeProfessionSlots()
+                for i = 1, GetNumTrainerServices() do
+                    local ok, cost, takesProfSlot = SkillIsAffordable(i, wallet, slots)
+                    if ok then
+                        BuyTrainerService(i)
+                        wallet = wallet - cost
+                        if takesProfSlot then slots = slots - 1 end
+                    end
+                end
+            end)
+
+            trainBtn:SetScript("OnEnter", function(self)
+                local n, gold = TrainableSummary()
+                if n <= 0 then return end
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                GameTooltip:SetText(string.format("Learn %d skill%s for %s",
+                    n, n == 1 and "" or "s",
+                    C_CurrencyInfo.GetCoinTextureString(gold)), 1, 1, 1)
+                GameTooltip:Show()
+            end)
+            trainBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+            if not hooked then
+                hooksecurefunc("ClassTrainerFrame_Update", RefreshButton)
+                hooked = true
+            end
+            RefreshButton()
+        end
+
+        AU._deferredTrainAllSpawn = SpawnButton
+
+        if EventUtil and EventUtil.ContinueOnAddOnLoaded then
+            EventUtil.ContinueOnAddOnLoaded("Blizzard_TrainerUI", SpawnButton)
+        end
+        if C_AddOns.IsAddOnLoaded("Blizzard_TrainerUI") then SpawnButton() end
+    end
+
+    if on then
+        AU._deferredTrainAllSpawn()
+    else
+        if trainBtn then trainBtn:Hide() end
+    end
+end
+
+-- Hide Transform Items --
+-- Auto-cancels cosmetic transform auras (profession gear, holiday costumes,
+-- prank toys) with a per-item include/exclude picker. Zero cost when idle:
+-- events only registered while the master is on AND at least one transform
+-- is included. The restricted-content bail-out is inert on this build, and
+-- six payload reads here are unguarded by design -- ported as the reference
+-- wrote them. Do not trust this path in restricted content without checking
+-- the recorded exposure list first.
+
+local TRANSFORM_CATEGORY_ORDER = { "professions", "holiday", "toys", "items" }
+local TRANSFORM_CATEGORY_LABEL = {
+    professions = "Profession Gear",
+    holiday     = "Holiday Costumes",
+    toys        = "Toys",
+    items       = "Consumables & Items",
+}
+local TRANSFORMS = {
+    -- Profession gear
+    { key = "blacksmithing",  cat = "professions", label = "Blacksmithing",  ids = { 388658 } },
+    { key = "jewelcrafting",  cat = "professions", label = "Jewelcrafting",  ids = { 394015 } },
+    { key = "tailoring",      cat = "professions", label = "Tailoring",      ids = { 391312 } },
+    { key = "engineering",    cat = "professions", label = "Engineering",    ids = { 394007 } },
+    { key = "enchanting",     cat = "professions", label = "Enchanting",     ids = { 394008 } },
+    { key = "alchemy",        cat = "professions", label = "Alchemy",        ids = { 394003 } },
+    { key = "inscription",    cat = "professions", label = "Inscription",    ids = { 394016 } },
+    { key = "leatherworking", cat = "professions", label = "Leatherworking", ids = { 394001 } },
+    { key = "herbalism",      cat = "professions", label = "Herbalism",      ids = { 394005 } },
+    { key = "mining",         cat = "professions", label = "Mining",         ids = { 394006 } },
+    { key = "skinning",       cat = "professions", label = "Skinning",       ids = { 394011 } },
+    { key = "cooking",        cat = "professions", label = "Cooking (Chef's Hat)", ids = { 391775 } },
+    { key = "fishing",        cat = "professions", label = "Fishing",        ids = {} },
+
+    -- Holiday costumes
+    { key = "lantern",    cat = "holiday", label = "Weighted Jack-o'-Lantern", ids = { 44212 } },
+    { key = "hallowed",   cat = "holiday", label = "Hallowed Wand", ids = {
+        172010, 218132, 191703, 24732, 191210, 172015, 24735, 24736, 191698, 191700,
+        172008, 24712, 24713, 191701, 191211, 24710, 24711, 191686, 191688, 24708,
+        24709, 173958, 173959, 191682, 191683, 24723, 191702, 172003, 172020, 191208, 24740,
+    } },
+    { key = "noblebunny", cat = "holiday", label = "Noblegarden Bunny", ids = { 61734, 61716 } },
+    { key = "turkey",     cat = "holiday", label = "Pilgrim's Turkey", ids = { 61781 } },
+
+    -- Toys
+    { key = "aqir",       cat = "toys", label = "Aqir Egg Cluster",          ids = { 318452 } },
+    { key = "atomic",     cat = "toys", label = "Atomically Recalibrator",   ids = { 399502 } },
+    { key = "atomgoblin", cat = "toys", label = "Atomically Regoblinator",   ids = { 1215363 } },
+    { key = "blight",     cat = "toys", label = "Detoxified Blight Grenade", ids = { 290224 } },
+    { key = "witch",      cat = "toys", label = "Lucille's Sewing Needle",   ids = { 279509 } },
+    { key = "spraybots",  cat = "toys", label = "Spraybots",                 ids = { 301892, 301893, 301894 } },
+
+    -- Consumables & items
+    { key = "pickaxe",      cat = "items", label = "Cursed Pickaxe",      ids = { 454405 } },
+    -- The SKELETON costume is exempt from the cancel: slow fall and the
+    -- remaining mini/reissue effects still cancel.
+    { key = "noggenfogger", cat = "items", label = "Noggenfogger Elixir", ids = { 16593, 1223630, 16595, 1223629 } },
+    { key = "prism",        cat = "items", label = "Reflecting Prism",    ids = { 163267 } },
+}
+
+local transformCTable = {}   -- [spellID] = true for every included transform
+local transformAuraFrame     -- lazy
+local transformFishFrame     -- lazy
+local FISHING_OUTFIT_AURA = 394009
+local FISHING_CHANNEL_ID  = 131476
+
+local function TransformItemEnabled(key)
+    local t = AU.db.HideTransformItems
+    if t and t[key] == false then return false end
+    return true  -- included by default; picker stores only exclusions
+end
+
+local function RebuildTransformList()
+    wipe(transformCTable)
+    if not AU.db.HideTransforms then return end
+    for _, item in ipairs(TRANSFORMS) do
+        if TransformItemEnabled(item.key) then
+            for _, id in ipairs(item.ids) do transformCTable[id] = true end
+        end
+    end
+end
+
+-- Index scans hard-error while aura restrictions are active (M+/raids, even
+-- out of combat). Transforms are cosmetic; skipping the sweep there is fine
+-- -- it re-runs on the next event outside.
+local function TransformAurasRestricted()
+    if C_UnitAuras and C_UnitAuras.AreAurasRestricted then
+        local ok, res = pcall(C_UnitAuras.AreAurasRestricted)
+        if ok then return res == true end
+    end
+    return false
+end
+
+-- Sweep current buffs, canceling any included transform. Descending so
+-- a cancel (which shifts later buff indices down) cannot skip a match.
+local function CancelMatchingTransforms(force)
+    if not (C_UnitAuras and C_UnitAuras.GetBuffDataByIndex) then return end
+    if not force and UnitAffectingCombat("player") then return end
+    if TransformAurasRestricted() then return end
+    for i = 40, 1, -1 do
+        local data = C_UnitAuras.GetBuffDataByIndex("player", i)
+        if data then
+            local spellID = data.spellId
+            if spellID and not (issecretvalue and issecretvalue(spellID)) and transformCTable[spellID] then
+                CancelUnitBuff("player", i)
+            end
+        end
+    end
+end
+
+local function ApplyHideTransforms()
+    RebuildTransformList()
+    local on = AU.db.Enabled and AU.db.HideTransforms
+
+    if not transformAuraFrame then
+        if not (on and next(transformCTable) ~= nil) then return end
+        transformAuraFrame = CreateFrame("Frame")
+        transformAuraFrame:SetScript("OnEvent", function(_, event, _, updateInfo)
+            if event == "PLAYER_REGEN_ENABLED" then
+                CancelMatchingTransforms(true)  -- clear anything that landed in combat
+                return
+            end
+            -- UNIT_AURA (player only). The payload (and fields) can be secret
+            -- in restricted content -- boolean use of a secret errors, and the
+            -- sweep would error anyway; bail.
+            if not updateInfo then return end
+            if issecretvalue and issecretvalue(updateInfo) then return end
+            local isFull = updateInfo.isFullUpdate
+            if isFull ~= nil and issecretvalue and issecretvalue(isFull) then return end
+            if isFull then
+                CancelMatchingTransforms(false)
+            elseif updateInfo.addedAuras then
+                for _, aura in ipairs(updateInfo.addedAuras) do
+                    local spellID = aura.spellId
+                    if spellID and not (issecretvalue and issecretvalue(spellID)) and transformCTable[spellID] then
+                        CancelMatchingTransforms(false)
+                        break
+                    end
+                end
+            end
+        end)
+        -- Fishing outfit: aura 394009 sticks while the fishing channel
+        -- (131476) runs; clear it when the channel stops instead.
+        transformFishFrame = CreateFrame("Frame")
+        transformFishFrame:SetScript("OnEvent", function(_, _, _, _, spellID)
+            if spellID ~= FISHING_CHANNEL_ID then return end
+            if not (AU.db.HideTransforms and TransformItemEnabled("fishing")) then return end
+            C_Timer.After(0.3, function()
+                if not (AU.db.Enabled and AU.db.HideTransforms and TransformItemEnabled("fishing")) then return end
+                if UnitAffectingCombat("player") or TransformAurasRestricted() then return end
+                if not (C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID) then return end
+                local aura = C_UnitAuras.GetPlayerAuraBySpellID(FISHING_OUTFIT_AURA)
+                if aura and aura.auraInstanceID and C_UnitAuras.RemovePlayerAuraByAuraInstanceID then
+                    C_UnitAuras.RemovePlayerAuraByAuraInstanceID(aura.auraInstanceID)
+                end
+            end)
+        end)
+    end
+
+    if on and next(transformCTable) ~= nil then
+        transformAuraFrame:RegisterUnitEvent("UNIT_AURA", "player")
+        transformAuraFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+        CancelMatchingTransforms(false)  -- immediate sweep
+    else
+        transformAuraFrame:UnregisterEvent("UNIT_AURA")
+        transformAuraFrame:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    end
+
+    if on and TransformItemEnabled("fishing") then
+        transformFishFrame:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_STOP", "player")
+    else
+        transformFishFrame:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
+    end
+end
+
+-- Shared with the GUI picker
+AU.HideTransformsData = {
+    order  = TRANSFORM_CATEGORY_ORDER,
+    labels = TRANSFORM_CATEGORY_LABEL,
+    items  = TRANSFORMS,
+}
+AU.GetHideTransformItem = TransformItemEnabled
+function AU:SetHideTransformItem(key, enabled)
+    self.db.HideTransformItems = self.db.HideTransformItems or {}
+    -- Included is the default -- store only exclusions (sparse table)
+    if enabled then
+        self.db.HideTransformItems[key] = nil
+    else
+        self.db.HideTransformItems[key] = false
+    end
+    ApplyHideTransforms()
+end
+
 ---------------------------------------------------------------------------------
 -- Event Handlers
 ---------------------------------------------------------------------------------
@@ -1020,6 +1809,7 @@ end
 -- Settings
 ---------------------------------------------------------------------------------
 function AU:ApplySettings()
+    ApplyHideHelptips()                    -- master-independent, runs first
     if not self.db.Enabled then return end
     SetupSkipCinematics()
     self:SetupTalkingHeadHider()
@@ -1040,6 +1830,13 @@ function AU:ApplySettings()
     SetupAutoDeclineDuels()
     SetupAutoDeclinePetBattles()
     SetupAutoAcceptRes()
+    ApplyNoBossLoot()
+    SetupAutoUnwrapCollections()
+    SetupHideScreenshotStatus()
+    ApplyHideErrorMessages()
+    ApplyHideTransforms()
+    SetupOmniumButton()
+    SetupTrainAllButton()
     self:ApplyCVars()
 end
 
@@ -1054,10 +1851,26 @@ function AU:OnEnable()
     end)
 end
 
+-- Reverses every effective-state-gated feature with the master now off.
+-- Each apply re-reads AU.db.Enabled itself, so this never flips a db key --
+-- the player's settings survive the module being disabled and come back
+-- when it is re-enabled. Hide Helptips is deliberately excluded: it is
+-- master-independent and unaffected by this transition.
+function AU:TeardownPorts()
+    ApplyNoBossLoot()
+    SetupAutoUnwrapCollections()
+    SetupHideScreenshotStatus()
+    ApplyHideErrorMessages()
+    ApplyHideTransforms()
+    SetupOmniumButton()
+    SetupTrainAllButton()
+end
+
 function AU:OnDisable()
     self:UnregisterAllEvents()
     -- AceHook auto-unhooks everything on module disable; reset the SecureHook
     -- guard so re-enable actually rehooks TalkingHeadFrame. (_eventToastsHooked
     -- and friends use raw hooksecurefunc — permanent — their flags must stay.)
     self._talkingHeadHooked = nil
+    self:TeardownPorts()
 end
