@@ -1500,4 +1500,74 @@ function L.loadGroupSort(overrides)
     return GS, KE, seams
 end
 
+-- Modules/Dungeons/KeystoneHelper.lua. The KE seed records the three calls
+-- ApplyReminderSettings drives (position, both fonts) plus a fake EditMode,
+-- so a spec can read what the module resolved without inspecting a frame.
+-- LibStub returns nil, so LibCustomGlow is absent and the glow paths no-op.
+-- Specs assign KH.db themselves; UpdateDB is never called.
+-- Returns KH, rec, KE. rec comes before KE, unlike the other loaders here, so a
+-- spec wanting only the first two needs no discard local: luacheck rejects an
+-- unused local and `_` would write a global.
+function L.loadKeystoneHelper(overrides)
+    installMock(overrides, { C_Timer = inertTimer() })
+    local modules = helpers.installAddonShim()
+    _G.UIParent = noopFrame()
+    _G.LibStub = function() return nil end
+    _G.IsInGroup = function() return false end
+    _G.IsInRaid = function() return false end
+    _G.GetInstanceInfo = function()
+        return "Mock", "party", 23, "Mythic", 5, 0, false, 2286
+    end
+    _G.C_ChatInfo = { SendChatMessage = function() end }
+    _G.C_ChallengeMode = {
+        GetMapUIInfo = function() return "Mock Dungeon", nil, nil, 12345 end,
+        GetChallengeCompletionInfo = function() return nil end,
+    }
+    _G.C_MythicPlus = {
+        GetOwnedKeystoneLevel = function() return nil end,
+        GetOwnedKeystoneChallengeMapID = function() return nil end,
+        GetOwnedKeystoneMapID = function() return nil end,
+    }
+
+    local rec = { positions = {}, fonts = {} }
+
+    local KE = {
+        Print = function() end,
+        ApplyIconZoom = function() end,
+        AddIconBorders = function() end,
+        ApplyFramePosition = function(_, frame, position, opts)
+            rec.positions[#rec.positions + 1] =
+                { frame = frame, position = position, opts = opts }
+        end,
+        ApplyFontToText = function(_, fontString, face, size, outline)
+            rec.fonts[#rec.fonts + 1] =
+                { fontString = fontString, face = face, size = size, outline = outline }
+        end,
+        ResolveColor = function(_, color, fallback)
+            local c = color or fallback or { 1, 1, 1, 1 }
+            return c[1], c[2], c[3], c[4]
+        end,
+        ResolveAnchorFrame = function(_, frameType, parentFrame)
+            return { _frameType = frameType, _parentFrame = parentFrame }
+        end,
+    }
+
+    rec.editMode = {
+        registered = {},
+        isActive = false,
+        RegisterElement = function(self, config) self.registered[config.key] = config end,
+        -- unregisterCalls is the only way to see a drop-then-recreate: the
+        -- registered table alone looks identical either way.
+        unregisterCalls = {},
+        UnregisterElement = function(self, key)
+            self.registered[key] = nil
+            self.unregisterCalls[#self.unregisterCalls + 1] = key
+        end,
+    }
+    KE.EditMode = rec.editMode
+
+    helpers.loadModule("Modules/Dungeons/KeystoneHelper.lua", KE)
+    return modules["KeystoneHelper"], rec, KE
+end
+
 return L

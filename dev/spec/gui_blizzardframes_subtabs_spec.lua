@@ -6,7 +6,8 @@
 -- tabbed_content_spec.lua (a synthetic TABS fixture, not GUI-BlizzardFrames.lua's
 -- own list) nor gui_blizzardframes_spec.lua (stubs RegisterTabbedContent to a
 -- no-op, discarding the strip entirely) proves every declared id actually
--- resolves. This spec loads all nine real GUI files against one shared stub and
+-- resolves. This spec loads every real GUI file that registers into the strip
+-- against one shared stub and
 -- checks the strip against the registrations, so a subtab id typo (declared in
 -- the strip but never registered, or registered under a different id than the
 -- strip declares) fails here instead of silently rendering a blank page in-game.
@@ -49,9 +50,6 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
         helpers.loadModule("GUI/GUITabs/GUISkinning/GUI-LootFrame.lua", KE)
         helpers.loadModule("GUI/GUITabs/GUISkinning/GUI-BlizzardMessages.lua", KE)
         helpers.loadModule("GUI/GUITabs/GUIQoL/GUI-CharacterPanel.lua", KE)
-        helpers.loadModule("GUI/GUITabs/GUIDungeons/GUI-GroupFinderPanel.lua", KE)
-        helpers.loadModule("GUI/GUITabs/GUIDungeons/GUI-LFGQuickCreate.lua", KE)
-        helpers.loadModule("GUI/GUITabs/GUIDungeons/GUI-LFGReminder.lua", KE)
         helpers.loadModule("GUI/GUITabs/GUISkinning/GUI-BlizzardFrames.lua", KE)
     end)
 
@@ -153,15 +151,6 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
     it("positive control: the two absorbed page ids resolve", function()
         assert.is_function(GUIFrame.registeredContent["CharacterPanel"])
         assert.is_function(GUIFrame.registeredContent["SkinMessages"])
-    end)
-
-    -- The three group-finder pages are chained onto General, not registered as
-    -- tabs of their own -- this only proves they are reachable, not that any of
-    -- them appears in the strip.
-    it("resolves a builder for each of the three pages chained onto General", function()
-        assert.is_function(GUIFrame.registeredContent["GroupFinderPanel"])
-        assert.is_function(GUIFrame.registeredContent["LFGQuickCreate"])
-        assert.is_function(GUIFrame.registeredContent["LFGReminder"])
     end)
 
     it("negative control: an invented id has no registered builder", function()

@@ -55,6 +55,36 @@ function KH:OnInitialize()
 end
 
 ---------------------------------------------------------------------------------
+-- Per-feature settings resolution
+-- Each reminder owns a full appearance block keyed by prefix. Position is the
+-- one link between them: with YourKeyUseRerollPosition set, Your Key resolves
+-- the Reroll coordinates, anchor, parent and strata while keeping its own size,
+-- font and colours.
+---------------------------------------------------------------------------------
+function KH:ResolveReminderSettings(prefix)
+    local db = self.db
+    if not db then return nil end
+
+    local posPrefix = prefix
+    if prefix == "YourKey" and db.YourKeyUseRerollPosition ~= false then
+        posPrefix = "Reroll"
+    end
+
+    return {
+        size            = db[prefix .. "Size"] or 64,
+        fontFace        = db[prefix .. "FontFace"],
+        fontSize        = db[prefix .. "FontSize"] or 36,
+        fontOutline     = db[prefix .. "FontOutline"],
+        fontColor       = db[prefix .. "FontColor"],
+        fontColorKey    = db[prefix .. "FontColorKey"],
+        position        = db[posPrefix .. "Position"],
+        anchorFrameType = db[posPrefix .. "AnchorFrameType"],
+        parentFrame     = db[posPrefix .. "ParentFrame"],
+        strata          = db[posPrefix .. "Strata"],
+    }
+end
+
+---------------------------------------------------------------------------------
 -- Feature 1: Instance Reset Announcer
 -- SecureHook (not a bare frame + event) mirrors the NUI/old-KE pattern —
 -- ResetInstances() has no corresponding event, so a hook is the only way to
@@ -85,10 +115,9 @@ end
 ---------------------------------------------------------------------------------
 -- Shared reminder frame factory
 -- Both reminders are a single icon with a title line above and a
--- "<icon> <dungeon> - <level>" key line below. They share one saved
--- position and appearance block — they are never on screen together live
--- (Reroll exists only inside a completed keystone run at difficulty 8;
--- Your Key? only at Mythic 0, difficulty 23).
+-- "<icon> <dungeon> - <level>" key line below. Each carries its own
+-- appearance and position block; Your Key can be pinned to the Reroll
+-- position with YourKeyUseRerollPosition.
 ---------------------------------------------------------------------------------
 local function CreateReminderFrame(nameSuffix, iconID)
     local frame = CreateFrame("Frame", "KE_KeystoneHelper" .. nameSuffix, UIParent)
@@ -144,13 +173,16 @@ local function GetOwnedKeyDisplay()
     return string_format("%s - %d", name, level), texture
 end
 
-local function KeyIconSize()
-    return math.floor((KH.db.FontSize or 36) * KEY_ICON_SCALE + 0.5)
+-- Sized off the frame's own resolved font size, stashed by
+-- ApplyReminderSettings -- the two reminders can carry different sizes.
+local function KeyIconSize(frame)
+    local fontSize = (frame and frame.keFontSize) or 36
+    return math.floor(fontSize * KEY_ICON_SCALE + 0.5)
 end
 
 -- Icon renders square, sized off the text height (KEY_ICON_SCALE).
 local function LayoutKeyLine(frame)
-    local iconSize = KeyIconSize()
+    local iconSize = KeyIconSize(frame)
     frame.keyIcon:SetSize(iconSize, iconSize)
     frame.keyText:ClearAllPoints()
     -- Shift right by half the icon+gap so the icon+text pair stays centered
@@ -170,25 +202,27 @@ local function SetKeyLine(frame, text, icon)
     LayoutKeyLine(frame)
 end
 
--- Shared appearance/position — one Size/font/Position DB block drives both
--- reminder frames.
-local function ApplyReminderSettings(frame)
-    local db = KH.db
-    if not frame then return end
+-- Applies one resolved settings table to one reminder frame.
+local function ApplyReminderSettings(frame, settings)
+    if not frame or not settings then return end
 
-    frame:SetSize(db.Size or 64, db.Size or 64)
-    KE:ApplyFramePosition(frame, db.Position, {
-        anchorFrameType = db.AnchorFrameType,
-        ParentFrame     = db.ParentFrame,
-        Strata          = db.Strata,
+    frame:SetSize(settings.size, settings.size)
+    KE:ApplyFramePosition(frame, settings.position, {
+        anchorFrameType = settings.anchorFrameType,
+        ParentFrame     = settings.parentFrame,
+        Strata          = settings.strata,
     })
 
-    KE:ApplyFontToText(frame.title, db.FontFace, db.FontSize, db.FontOutline)
-    local r, g, b, a = KE:ResolveColor(db.FontColor, { 1, 1, 1, 1 })
+    -- LayoutKeyLine sizes the key-line icon from this; stashing it keeps the
+    -- prefix out of three layout signatures.
+    frame.keFontSize = settings.fontSize
+
+    KE:ApplyFontToText(frame.title, settings.fontFace, settings.fontSize, settings.fontOutline)
+    local r, g, b, a = KE:ResolveColor(settings.fontColor, { 1, 1, 1, 1 })
     frame.title:SetTextColor(r, g, b, a)
 
-    KE:ApplyFontToText(frame.keyText, db.FontFace, db.FontSize, db.FontOutline)
-    local kr, kg, kb, ka = KE:ResolveColor(db.FontColorKey, { 1, 1, 1, 1 })
+    KE:ApplyFontToText(frame.keyText, settings.fontFace, settings.fontSize, settings.fontOutline)
+    local kr, kg, kb, ka = KE:ResolveColor(settings.fontColorKey, { 1, 1, 1, 1 })
     frame.keyText:SetTextColor(kr, kg, kb, ka)
 
     LayoutKeyLine(frame)
@@ -230,7 +264,7 @@ end
 
 function KH:ApplyRerollSettings()
     if not self.rerollFrame then return end
-    ApplyReminderSettings(self.rerollFrame)
+    ApplyReminderSettings(self.rerollFrame, self:ResolveReminderSettings("Reroll"))
 
     -- Re-apply glow immediately so live enable/disable/color/speed edits show
     -- while the reminder (or preview) is already on screen.
@@ -338,7 +372,7 @@ end
 
 function KH:ApplyYourKeySettings()
     if not self.yourKeyFrame then return end
-    ApplyReminderSettings(self.yourKeyFrame)
+    ApplyReminderSettings(self.yourKeyFrame, self:ResolveReminderSettings("YourKey"))
 
     -- The GUI preview shows both frames at once — keep the visual-only
     -- side-by-side offset intact across settings changes while it is open.
@@ -461,6 +495,10 @@ function KH:ApplySettings()
     self:ApplyRerollSettings()
     self:ApplyYourKeySettings()
 
+    -- The follow switch changes how many movers there are, so the element set
+    -- has to be rebuilt whenever settings move.
+    self:RefreshEditModeElements()
+
     -- Re-evaluate active reminders so disabling a sub-feature dismisses its
     -- display immediately instead of at the next natural stop point.
     if self.rerollActive then
@@ -483,50 +521,125 @@ end
 
 ---------------------------------------------------------------------------------
 -- Edit Mode
+-- Two elements, one per reminder. While Your Key follows the Reroll position the
+-- two frames share coordinates, so only ONE mover is registered: the one whose
+-- tab is in focus. RegisterElement builds the overlay immediately when edit mode
+-- is already running and UnregisterElement drops it, so the swap is live.
 ---------------------------------------------------------------------------------
-function KH:RegWithEditMode()
-    if not KE.EditMode or self.editModeRegistered then return end
+local EDIT_ELEMENTS = {
+    Reroll = {
+        key = "KeystoneHelperReroll",
+        displayName = "Keystone Helper: Reroll Key",
+        guiTab = "KeystoneHelperReroll",
+    },
+    YourKey = {
+        key = "KeystoneHelperYourKey",
+        displayName = "Keystone Helper: Your Key",
+        guiTab = "KeystoneHelperYourKey",
+    },
+}
 
-    -- One element moves both reminders — they share a single saved position.
+-- Which reminder holds the mover while the two share a position. The GUI tab
+-- builders push this in; the module never reads GUI state.
+KH.editModeFocus = "Reroll"
+
+function KH:RegisterEditModeElement(prefix)
+    local meta = EDIT_ELEMENTS[prefix]
+    if not meta or not KE.EditMode then return end
+
+    -- A following Your Key reads and writes the Reroll keys: the frames are on
+    -- the same coordinates, so writing anywhere else desyncs them on the first
+    -- drag. Resolved per call, not captured, so the switch takes effect live.
+    local function keyPrefix()
+        if prefix == "YourKey" and self.db.YourKeyUseRerollPosition ~= false then
+            return "Reroll"
+        end
+        return prefix
+    end
+
+    -- The mover must sit on the frame that actually occupies the stored
+    -- position. Edit Mode writes a dropped frame's own screen rect back as the
+    -- offset, and the preview parks a following Your Key copy to the RIGHT of
+    -- the Reroll copy, so binding the mover to that copy would fold the preview
+    -- gap into the saved position on every drag and walk the pair sideways.
+    local frame = (keyPrefix() == "Reroll") and self.rerollFrame or self.yourKeyFrame
+    if not frame then return end
+
+    -- Re-registering a key is not enough when the frame under it changed:
+    -- EditMode reuses an existing overlay and that overlay keeps its own
+    -- reference to the element it was built from, so it would stay anchored to
+    -- the previous frame and drag from there. Flipping the follow switch while
+    -- Edit Mode is open is the path that does it. Drop the overlay first.
+    self.editModeFrames = self.editModeFrames or {}
+    if self.editModeFrames[meta.key] and self.editModeFrames[meta.key] ~= frame then
+        KE.EditMode:UnregisterElement(meta.key)
+    end
+    self.editModeFrames[meta.key] = frame
+
     KE.EditMode:RegisterElement({
-        key = "KeystoneHelper",
-        displayName = "Keystone Helper: Reminders",
-        frame = self.rerollFrame,
-        getPosition = function() return self.db.Position end,
+        key = meta.key,
+        displayName = meta.displayName,
+        frame = frame,
+        getPosition = function() return self.db[keyPrefix() .. "Position"] end,
         setPosition = function(pos)
-            self.db.Position = pos
+            self.db[keyPrefix() .. "Position"] = pos
             self:ApplyRerollSettings()
             self:ApplyYourKeySettings()
         end,
         getParentFrame = function()
-            return KE:ResolveAnchorFrame(self.db.AnchorFrameType, self.db.ParentFrame)
+            local p = keyPrefix()
+            return KE:ResolveAnchorFrame(self.db[p .. "AnchorFrameType"], self.db[p .. "ParentFrame"])
         end,
         guiPath = "KeystoneHelper",
+        guiTab = meta.guiTab,
     })
+end
 
-    self.editModeRegistered = true
+function KH:RefreshEditModeElements()
+    if not KE.EditMode then return end
+    if not (self.rerollFrame and self.yourKeyFrame) then return end
+
+    if self.db.YourKeyUseRerollPosition ~= false then
+        local focus = (self.editModeFocus == "YourKey") and "YourKey" or "Reroll"
+        local other = (focus == "YourKey") and "Reroll" or "YourKey"
+        KE.EditMode:UnregisterElement(EDIT_ELEMENTS[other].key)
+        self:RegisterEditModeElement(focus)
+    else
+        self:RegisterEditModeElement("Reroll")
+        self:RegisterEditModeElement("YourKey")
+    end
+end
+
+function KH:SetEditModeFocus(prefix)
+    if not EDIT_ELEMENTS[prefix] then return end
+    if self.editModeFocus == prefix then return end
+    self.editModeFocus = prefix
+    self:RefreshEditModeElements()
 end
 
 ---------------------------------------------------------------------------------
 -- Preview
 ---------------------------------------------------------------------------------
--- Preview shows both frames at once (live they never coexist) — place the
--- Your Key copy beside the Reroll copy. Visual-only, never saved. The gap
--- accounts for the key line extending past the frame edges (it's centered
--- under the icon), so the two lines can't overlap.
+-- Preview shows both frames at once (live they never coexist). While Your Key
+-- follows the Reroll position the two would land on top of each other, so nudge
+-- the copy aside. Visual-only, never saved. The gap accounts for the key line
+-- extending past the frame edges (it's centered under the icon), so the two
+-- lines can't overlap.
 function KH:ApplyPreviewOffset()
     if not (self.yourKeyFrame and self.rerollFrame) then return end
+    -- With its own position Your Key already sits somewhere else, and nudging
+    -- would fight the position the user actually set.
+    if self.db.YourKeyUseRerollPosition == false then return end
     -- Only pair them up when the Reroll copy is actually on screen. With its
     -- sub-toggle off there is nothing to sit beside, and offsetting anyway
-    -- would strand Your Key to the right of a hidden frame — so leave the
+    -- would strand Your Key to the right of a hidden frame -- so leave the
     -- normal position ApplyReminderSettings just set.
     if self.db.RerollEnabled == false then return end
-    local db = self.db
     local keyLine = self.rerollFrame.keyText
     local textWidth = (keyLine and keyLine:GetStringWidth()) or 0
     local iconWidth = self.rerollFrame.keyIcon:IsShown()
-        and (KeyIconSize() + KEY_ICON_GAP) or 0
-    local overhang = math.max(0, (iconWidth + textWidth - (db.Size or 64)) / 2)
+        and (KeyIconSize(self.rerollFrame) + KEY_ICON_GAP) or 0
+    local overhang = math.max(0, (iconWidth + textWidth - (self.db.RerollSize or 64)) / 2)
     self.yourKeyFrame:ClearAllPoints()
     self.yourKeyFrame:SetPoint("LEFT", self.rerollFrame, "RIGHT", 2 * overhang + 16, 0)
 end
@@ -534,7 +647,7 @@ end
 function KH:ShowPreview()
     self:CreateRerollFrame()
     self:CreateYourKeyFrame()
-    self:RegWithEditMode()
+    self:RefreshEditModeElements()
     self.isPreview = true
 
     -- Preview shows the player's real key when one is owned.
@@ -574,8 +687,11 @@ function KH:HidePreview()
     self:StopRerollGlow()
     self:StopYourKeyGlow()
 
-    -- Undo the preview-only side-by-side offset.
-    self:ApplyYourKeySettings()
+    -- Undo the preview-only side-by-side offset. Only the following case ever
+    -- applied one; with its own position the frame never moved.
+    if self.db.YourKeyUseRerollPosition ~= false then
+        self:ApplyYourKeySettings()
+    end
 
     -- A reminder that was live under the preview gets its real text and glow
     -- back; otherwise the frame was preview-only, so hide it.
@@ -611,7 +727,7 @@ function KH:OnEnable()
     self:CreateYourKeyFrame()
     self:ApplyRerollSettings()
     self:ApplyYourKeySettings()
-    self:RegWithEditMode()
+    self:RefreshEditModeElements()
 
     self:RegisterEvent("CHALLENGE_MODE_COMPLETED", "OnChallengeModeCompleted")
     self:RegisterEvent("CHALLENGE_MODE_START", "OnChallengeModeStart")
