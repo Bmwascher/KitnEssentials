@@ -101,3 +101,38 @@ describe("movement alert spell resolution", function()
         end)
     end)
 end)
+
+describe("NoMovementAlert RoleColor", function()
+    it("returns the saved colour for each role in custom mode", function()
+        local NMA = L.loadMovementAlert()
+        NMA.db = {
+            ColorMode = "CUSTOM",
+            TextColor = { 1, 1, 1, 1 },
+            TimerColor = { 1, 0, 0, 1 },
+            SeparatorColor = { 0, 1, 0, 1 },
+        }
+        assert.same({ 1, 0, 0, 1 }, NMA:RoleColor("TimerColor"))
+        assert.same({ 0, 1, 0, 1 }, NMA:RoleColor("SeparatorColor"))
+    end)
+
+    it("returns the theme accent for every role in theme mode", function()
+        local NMA, KE = L.loadMovementAlert()
+        KE.Theme = { accent = { 0.2, 0.4, 0.6, 1 } }
+        NMA.db = {
+            ColorMode = "THEME",
+            TextColor = { 1, 1, 1, 1 },
+            TimerColor = { 1, 0, 0, 1 },
+            SeparatorColor = { 0, 1, 0, 1 },
+        }
+        assert.same({ 0.2, 0.4, 0.6, 1 }, NMA:RoleColor("TextColor"))
+        assert.same({ 0.2, 0.4, 0.6, 1 }, NMA:RoleColor("TimerColor"))
+        assert.same({ 0.2, 0.4, 0.6, 1 }, NMA:RoleColor("SeparatorColor"))
+    end)
+
+    it("falls back to the saved colour when no theme accent exists", function()
+        local NMA, KE = L.loadMovementAlert()
+        KE.Theme = nil
+        NMA.db = { ColorMode = "THEME", TextColor = { 1, 1, 1, 1 }, TimerColor = { 1, 0, 0, 1 } }
+        assert.same({ 1, 0, 0, 1 }, NMA:RoleColor("TimerColor"))
+    end)
+end)
