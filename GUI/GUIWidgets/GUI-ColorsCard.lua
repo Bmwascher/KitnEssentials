@@ -1,3 +1,12 @@
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-ColorsCard.lua                                      ║
+-- ║  Purpose: Shared Colors card builder used across GUI     ║
+-- ║  pages: color-mode dropdown, source toggles, per-entry   ║
+-- ║  color pickers, and an optional note row, plus the       ║
+-- ║  KE:ReadCardColor / KE:WriteCardColor read-write pair    ║
+-- ║  that stores a colour as a flat {r,g,b,a} DB field.      ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
@@ -128,6 +137,7 @@ function GUIFrame:CreateColorsCard(scrollChild, yOffset, config)
             local text = GUIFrame:CreateText(row,
                 KE:ColorTextByTheme("Note"), config.note, Theme.rowHeightNote, "hide")
             row:AddWidget(text, 1)
+            manager:Register(text, group)
         end, config.isLast and 0 or nil)
     end
 
