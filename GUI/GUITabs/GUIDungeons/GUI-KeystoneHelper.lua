@@ -1,12 +1,12 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-KeystoneHelper.lua                                  ║
 -- ║  GUI: Keystone Helper                                    ║
--- ║  Purpose: Configuration panel for the KeystoneHelper     ║
--- ║           module, split across five tabs (General,       ║
--- ║           Appearance, Instance Reset, Reroll Key, Your   ║
--- ║           Key) behind a shared header toggle. The two    ║
--- ║           reminders share one appearance/font/position   ║
--- ║           block; only their glows are configured apart.  ║
+-- ║  Purpose: Container page over four tabs. General hosts    ║
+-- ║           the three group-finder pages, which are not     ║
+-- ║           keystone features but are dungeon tools with    ║
+-- ║           no sidebar row of their own. The other three    ║
+-- ║           are the module's features, each with its own    ║
+-- ║           switch and its own appearance.                  ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -27,6 +27,13 @@ local function ApplySettings()
     if KH and KH.ApplySettings then KH:ApplySettings() end
 end
 
+-- Tells the module which reminder holds the Edit Mode mover while the two
+-- share a position. GUI depends on the module, never the reverse.
+local function FocusReminder(prefix)
+    local KH = GetModule()
+    if KH and KH.SetEditModeFocus then KH:SetEditModeFocus(prefix) end
+end
+
 -- Every tab needs the same guard, and a tab that silently renders nothing is
 -- worse than one that says why.
 local function MissingDB(scrollChild, yOffset)
@@ -35,176 +42,19 @@ local function MissingDB(scrollChild, yOffset)
     return errorCard:GetNextOffset()
 end
 
--- Renders above the tab strip. A disabled module collapses to this bar alone,
--- which is what the second return value asks the host to do.
-local function BuildHeader(scrollChild, yOffset)
-    local db = GetDB()
-    if not db then return MissingDB(scrollChild, yOffset), true end
-
-    local card1 = GUIFrame:CreateCard(scrollChild, "Keystone Helper", yOffset)
-    card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
-        db.Enabled = checked
-        local KH = GetModule()
-        if KH then
-            if checked then KitnEssentials:EnableModule("KeystoneHelper")
-            else KitnEssentials:DisableModule("KeystoneHelper") end
-        end
-        KE:Print("Keystone Helper: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
-    end)
-
-    local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightNote)
-    local noteText = GUIFrame:CreateText(noteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Bundles three Mythic+ QoL reminders: instance reset " ..
-        "announce, reroll-your-key, and \"is this your key?\".",
-        50, "hide")
-    noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, Theme.rowHeightNote, 0)
-
-    return card1:GetNextOffset(), db.Enabled == false
-end
-
 ----------------------------------------------------------------
--- General: Reminders
+-- General: the three group-finder pages
+--
+-- Chained, not re-registered: each builder takes (scrollChild, yOffset) and
+-- returns the next offset, which is the same contract RegisterTabbedContent
+-- uses. Resolved live so GUI.xml load order does not matter. None of the three
+-- reads this page's db, so there is no guard here.
 ----------------------------------------------------------------
 GUIFrame:RegisterContent("KeystoneHelperGeneral", function(scrollChild, yOffset)
-    local db = GetDB()
-    if not db then return MissingDB(scrollChild, yOffset) end
-
-    -- Always true here, because a disabled module never reaches a tab. It is
-    -- not redundant: pooled widgets come back from the pool however the last
-    -- page left them, and this is what hands them back enabled.
-    local manager = GUIFrame:CreateWidgetStateManager()
-
-    local cardReminders = GUIFrame:CreateCard(scrollChild, "Reminders", yOffset)
-    manager:Register(cardReminders, "all")
-
-    local row2 = GUIFrame:CreateRow(cardReminders.content, Theme.rowHeightLast)
-    local rerollEnableCheck = GUIFrame:CreateCheckbox(row2, "Enable Reroll Reminder", {
-        value = db.RerollEnabled ~= false,
-        callback = function(checked) db.RerollEnabled = checked; ApplySettings() end,
-        msgPopup = true,
-        msgText = "Reroll Reminder",
-        msgOn = "On",
-        msgOff = "Off",
-    })
-    row2:AddWidget(rerollEnableCheck, 0.5)
-    manager:Register(rerollEnableCheck, "all")
-
-    local yourKeyEnableCheck = GUIFrame:CreateCheckbox(row2, "Enable Your Key Reminder", {
-        value = db.YourKeyEnabled ~= false,
-        callback = function(checked) db.YourKeyEnabled = checked; ApplySettings() end,
-        msgPopup = true,
-        msgText = "Your Key Reminder",
-        msgOn = "On",
-        msgOff = "Off",
-    })
-    row2:AddWidget(yourKeyEnableCheck, 0.5)
-    manager:Register(yourKeyEnableCheck, "all")
-    cardReminders:AddRow(row2, Theme.rowHeightLast, 0)
-
-    yOffset = cardReminders:GetNextOffset()
-
-    manager:UpdateAll(true)
-    return yOffset
-end)
-
-----------------------------------------------------------------
--- Appearance: Font (shared — one size drives title and key line),
--- Reminder Appearance, then Position — Position stays directly below
--- Appearance so its "below" note still reads in context.
-----------------------------------------------------------------
-GUIFrame:RegisterContent("KeystoneHelperAppearance", function(scrollChild, yOffset)
-    local db = GetDB()
-    if not db then return MissingDB(scrollChild, yOffset) end
-
-    local manager = GUIFrame:CreateWidgetStateManager()
-
-    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-        db = db,
-        dbKeys = {
-            fontFace = "FontFace",
-            fontSize = "FontSize",
-            fontOutline = "FontOutline",
-        },
-        fontSizeRange = { 16, 72 },
-        includeSoftOutline = true,
-        onChangeCallback = ApplySettings,
-    })
-    manager:Register(fontCard, "all")
-    if fontWidgets then manager:RegisterGroup(fontWidgets, "all") end
-    yOffset = fontOffset
-
-    local cardLook = GUIFrame:CreateCard(scrollChild, "Reminder Appearance", yOffset)
-    manager:Register(cardLook, "all")
-
-    local rowL1 = GUIFrame:CreateRow(cardLook.content, Theme.rowHeight)
-    local sizeSlider = GUIFrame:CreateSlider(rowL1, "Icon Size", {
-        min = 20, max = 120, step = 1,
-        value = db.Size or 64,
-        callback = function(val) db.Size = val; ApplySettings() end,
-    })
-    rowL1:AddWidget(sizeSlider, 1)
-    manager:Register(sizeSlider, "all")
-    cardLook:AddRow(rowL1, Theme.rowHeight)
-
-    local rowL2 = GUIFrame:CreateRow(cardLook.content, Theme.rowHeight)
-    local titleColorPicker = GUIFrame:CreateColorPicker(rowL2, "Title Color", {
-        color = db.FontColor or { 1, 1, 1, 1 },
-        callback = function(r, g, b, a)
-            db.FontColor = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    rowL2:AddWidget(titleColorPicker, 0.5)
-    manager:Register(titleColorPicker, "all")
-
-    local keyColorPicker = GUIFrame:CreateColorPicker(rowL2, "Key Text Color", {
-        color = db.FontColorKey or { 1, 1, 1, 1 },
-        callback = function(r, g, b, a)
-            db.FontColorKey = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    rowL2:AddWidget(keyColorPicker, 0.5)
-    manager:Register(keyColorPicker, "all")
-    cardLook:AddRow(rowL2, Theme.rowHeight)
-
-    local noteRowL = GUIFrame:CreateRow(cardLook.content, Theme.rowHeightNote)
-    local posNote = GUIFrame:CreateText(noteRowL,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " The preview shows both reminders side by side: the left copy " ..
-        "follows the Position settings below; the right copy only previews the look.",
-        50, "hide")
-    noteRowL:AddWidget(posNote, 1)
-    cardLook:AddRow(noteRowL, Theme.rowHeightNote, 0)
-
-    yOffset = cardLook:GetNextOffset()
-
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        title = "Reminder Position",
-        db = db,
-        positionKey = "Position",
-        dbKeys = {
-            anchorFrameType = "AnchorFrameType",
-            anchorFrameFrame = "ParentFrame",
-            selfPoint = "AnchorFrom",
-            anchorPoint = "AnchorTo",
-            xOffset = "XOffset",
-            yOffset = "YOffset",
-            strata = "Strata",
-        },
-        showAnchorFrameType = true,
-        showStrata = true,
-        onChangeCallback = ApplySettings,
-    })
-    manager:Register(posCard, "all")
-    if posCard.positionWidgets then
-        manager:RegisterGroup(posCard.positionWidgets, "all")
+    for _, id in ipairs({ "GroupFinderPanel", "LFGQuickCreate", "LFGReminder" }) do
+        local builder = GUIFrame.registeredContent and GUIFrame.registeredContent[id]
+        if builder then yOffset = builder(scrollChild, yOffset) end
     end
-    yOffset = posOffset
-
-    manager:UpdateAll(true)
     return yOffset
 end)
 
@@ -252,13 +102,103 @@ GUIFrame:RegisterContent("KeystoneHelperReset", function(scrollChild, yOffset)
 end)
 
 ----------------------------------------------------------------
--- Reroll Key: Reroll Glow
+-- Reroll Key: switch, font, appearance, position, glow
 ----------------------------------------------------------------
 GUIFrame:RegisterContent("KeystoneHelperReroll", function(scrollChild, yOffset)
     local db = GetDB()
     if not db then return MissingDB(scrollChild, yOffset) end
 
+    FocusReminder("Reroll")
+
+    local cardMain = GUIFrame:CreateCard(scrollChild, "Reroll Key Reminder", yOffset)
+    cardMain:AddHeaderToggle(db.RerollEnabled ~= false, function(checked)
+        db.RerollEnabled = checked
+        ApplySettings()
+        KE:Print("Reroll Reminder: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+    end)
+
+    -- Lone header bar: a disabled reminder shows its switch and nothing else.
+    if db.RerollEnabled == false then return cardMain:GetNextOffset() end
+
+    cardMain:AddLabel("Shown after you finish a keystone in time, while your own key can still be rerolled. Hides itself after five minutes.")
+    yOffset = cardMain:GetNextOffset()
+
     local manager = GUIFrame:CreateWidgetStateManager()
+
+    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        db = db,
+        dbKeys = {
+            fontFace = "RerollFontFace",
+            fontSize = "RerollFontSize",
+            fontOutline = "RerollFontOutline",
+        },
+        fontSizeRange = { 16, 72 },
+        includeSoftOutline = true,
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(fontCard, "all")
+    if fontWidgets then manager:RegisterGroup(fontWidgets, "all") end
+    yOffset = fontOffset
+
+    local cardLook = GUIFrame:CreateCard(scrollChild, "Reminder Appearance", yOffset)
+    manager:Register(cardLook, "all")
+
+    local rowL1 = GUIFrame:CreateRow(cardLook.content, Theme.rowHeight)
+    local sizeSlider = GUIFrame:CreateSlider(rowL1, "Icon Size", {
+        min = 20, max = 120, step = 1,
+        value = db.RerollSize or 64,
+        callback = function(val) db.RerollSize = val; ApplySettings() end,
+    })
+    rowL1:AddWidget(sizeSlider, 1)
+    manager:Register(sizeSlider, "all")
+    cardLook:AddRow(rowL1, Theme.rowHeight)
+
+    local rowL2 = GUIFrame:CreateRow(cardLook.content, Theme.rowHeightLast)
+    local titleColorPicker = GUIFrame:CreateColorPicker(rowL2, "Title Color", {
+        color = db.RerollFontColor or { 1, 1, 1, 1 },
+        callback = function(r, g, b, a)
+            db.RerollFontColor = { r, g, b, a }
+            ApplySettings()
+        end,
+    })
+    rowL2:AddWidget(titleColorPicker, 0.5)
+    manager:Register(titleColorPicker, "all")
+
+    local keyColorPicker = GUIFrame:CreateColorPicker(rowL2, "Key Text Color", {
+        color = db.RerollFontColorKey or { 1, 1, 1, 1 },
+        callback = function(r, g, b, a)
+            db.RerollFontColorKey = { r, g, b, a }
+            ApplySettings()
+        end,
+    })
+    rowL2:AddWidget(keyColorPicker, 0.5)
+    manager:Register(keyColorPicker, "all")
+    cardLook:AddRow(rowL2, Theme.rowHeightLast, 0)
+
+    yOffset = cardLook:GetNextOffset()
+
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        title = "Reminder Position",
+        db = db,
+        positionKey = "RerollPosition",
+        dbKeys = {
+            anchorFrameType = "RerollAnchorFrameType",
+            anchorFrameFrame = "RerollParentFrame",
+            selfPoint = "AnchorFrom",
+            anchorPoint = "AnchorTo",
+            xOffset = "XOffset",
+            yOffset = "YOffset",
+            strata = "RerollStrata",
+        },
+        showAnchorFrameType = true,
+        showStrata = true,
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(posCard, "all")
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
+    end
+    yOffset = posOffset
 
     local cardRerollGlow = GUIFrame:CreateCard(scrollChild, "Reroll Glow", yOffset)
     manager:Register(cardRerollGlow, "all")
@@ -325,13 +265,135 @@ GUIFrame:RegisterContent("KeystoneHelperReroll", function(scrollChild, yOffset)
 end)
 
 ----------------------------------------------------------------
--- Your Key: Your Key Glow
+-- Your Key: switch, font, appearance, position source, position, glow
 ----------------------------------------------------------------
 GUIFrame:RegisterContent("KeystoneHelperYourKey", function(scrollChild, yOffset)
     local db = GetDB()
     if not db then return MissingDB(scrollChild, yOffset) end
 
+    FocusReminder("YourKey")
+
+    local cardMain = GUIFrame:CreateCard(scrollChild, "Your Key Reminder", yOffset)
+    cardMain:AddHeaderToggle(db.YourKeyEnabled ~= false, function(checked)
+        db.YourKeyEnabled = checked
+        ApplySettings()
+        KE:Print("Your Key Reminder: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+    end)
+
+    if db.YourKeyEnabled == false then return cardMain:GetNextOffset() end
+
+    cardMain:AddLabel("Shown while you stand in a Mythic 0 of the dungeon your own keystone points at, so you remember to slot it. Hides itself after five minutes.")
+    yOffset = cardMain:GetNextOffset()
+
     local manager = GUIFrame:CreateWidgetStateManager()
+    -- The position card is the one group with a condition: following the Reroll
+    -- position means these controls do nothing, so they read as locked.
+    manager:SetCondition("ownposition", function()
+        return db.YourKeyUseRerollPosition == false
+    end)
+
+    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        db = db,
+        dbKeys = {
+            fontFace = "YourKeyFontFace",
+            fontSize = "YourKeyFontSize",
+            fontOutline = "YourKeyFontOutline",
+        },
+        fontSizeRange = { 16, 72 },
+        includeSoftOutline = true,
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(fontCard, "all")
+    if fontWidgets then manager:RegisterGroup(fontWidgets, "all") end
+    yOffset = fontOffset
+
+    local cardLook = GUIFrame:CreateCard(scrollChild, "Reminder Appearance", yOffset)
+    manager:Register(cardLook, "all")
+
+    local rowL1 = GUIFrame:CreateRow(cardLook.content, Theme.rowHeight)
+    local sizeSlider = GUIFrame:CreateSlider(rowL1, "Icon Size", {
+        min = 20, max = 120, step = 1,
+        value = db.YourKeySize or 64,
+        callback = function(val) db.YourKeySize = val; ApplySettings() end,
+    })
+    rowL1:AddWidget(sizeSlider, 1)
+    manager:Register(sizeSlider, "all")
+    cardLook:AddRow(rowL1, Theme.rowHeight)
+
+    local rowL2 = GUIFrame:CreateRow(cardLook.content, Theme.rowHeightLast)
+    local titleColorPicker = GUIFrame:CreateColorPicker(rowL2, "Title Color", {
+        color = db.YourKeyFontColor or { 1, 1, 1, 1 },
+        callback = function(r, g, b, a)
+            db.YourKeyFontColor = { r, g, b, a }
+            ApplySettings()
+        end,
+    })
+    rowL2:AddWidget(titleColorPicker, 0.5)
+    manager:Register(titleColorPicker, "all")
+
+    local keyColorPicker = GUIFrame:CreateColorPicker(rowL2, "Key Text Color", {
+        color = db.YourKeyFontColorKey or { 1, 1, 1, 1 },
+        callback = function(r, g, b, a)
+            db.YourKeyFontColorKey = { r, g, b, a }
+            ApplySettings()
+        end,
+    })
+    rowL2:AddWidget(keyColorPicker, 0.5)
+    manager:Register(keyColorPicker, "all")
+    cardLook:AddRow(rowL2, Theme.rowHeightLast, 0)
+
+    yOffset = cardLook:GetNextOffset()
+
+    local cardSource = GUIFrame:CreateCard(scrollChild, "Position Source", yOffset)
+    manager:Register(cardSource, "all")
+
+    local rowSrc = GUIFrame:CreateRow(cardSource.content, Theme.rowHeight)
+    local followCheck = GUIFrame:CreateCheckbox(rowSrc, "Use the Reroll Key position", {
+        value = db.YourKeyUseRerollPosition ~= false,
+        callback = function(checked)
+            db.YourKeyUseRerollPosition = checked
+            ApplySettings()
+            manager:UpdateAll(true)
+        end,
+    })
+    rowSrc:AddWidget(followCheck, 1)
+    manager:Register(followCheck, "all")
+    cardSource:AddRow(rowSrc, Theme.rowHeight)
+
+    local noteRowSrc = GUIFrame:CreateRow(cardSource.content, Theme.rowHeightNote)
+    local sourceNote = GUIFrame:CreateText(noteRowSrc,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " On: this reminder sits exactly where the Reroll " ..
+        "Key reminder sits, and the Position card below is locked. Off: it keeps " ..
+        "its own position and gets its own mover in Edit Mode.",
+        50, "hide")
+    noteRowSrc:AddWidget(sourceNote, 1)
+    cardSource:AddRow(noteRowSrc, Theme.rowHeightNote, 0)
+
+    yOffset = cardSource:GetNextOffset()
+
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        title = "Reminder Position",
+        db = db,
+        positionKey = "YourKeyPosition",
+        dbKeys = {
+            anchorFrameType = "YourKeyAnchorFrameType",
+            anchorFrameFrame = "YourKeyParentFrame",
+            selfPoint = "AnchorFrom",
+            anchorPoint = "AnchorTo",
+            xOffset = "XOffset",
+            yOffset = "YOffset",
+            strata = "YourKeyStrata",
+        },
+        showAnchorFrameType = true,
+        showStrata = true,
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(posCard, "ownposition")
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "ownposition")
+    end
+    yOffset = posOffset
 
     local cardYourKeyGlow = GUIFrame:CreateCard(scrollChild, "Your Key Glow", yOffset)
     manager:Register(cardYourKeyGlow, "all")
@@ -397,10 +459,11 @@ GUIFrame:RegisterContent("KeystoneHelperYourKey", function(scrollChild, yOffset)
     return yOffset
 end)
 
+-- No header card and no master toggle: each tab owns its own switch, so a
+-- shared one here would be a second switch for nothing.
 GUIFrame:RegisterTabbedContent("KeystoneHelper", {
-    { id = "KeystoneHelperGeneral",    label = "General" },
-    { id = "KeystoneHelperAppearance", label = "Appearance" },
-    { id = "KeystoneHelperReset",      label = "Instance Reset" },
-    { id = "KeystoneHelperReroll",     label = "Reroll Key" },
-    { id = "KeystoneHelperYourKey",    label = "Your Key" },
-}, { headerBuilder = BuildHeader })
+    { id = "KeystoneHelperGeneral",  label = "General" },
+    { id = "KeystoneHelperReset",    label = "Instance Reset" },
+    { id = "KeystoneHelperReroll",   label = "Reroll Key" },
+    { id = "KeystoneHelperYourKey",  label = "Your Key" },
+})
