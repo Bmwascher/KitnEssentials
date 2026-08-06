@@ -1095,7 +1095,7 @@ local Defaults = {
             ShowSlotGems         = true,
             SlotInfoFontSize     = 15,
 
-            -- Shared font face/outline (warnings + character panel text)
+            -- Shared font outline (warnings + character panel text)
             FontOutline              = "OUTLINE",
 
             -- Warning text size (independent)
