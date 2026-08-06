@@ -117,7 +117,7 @@ GUIFrame:RegisterContent("DTimers_Texts", function(scrollChild, yOffset)
     local row1 = GUIFrame:CreateRow(displayCard.content, Theme.rowHeight)
     local fontDropdown = GUIFrame:CreateDropdown(row1, "Font", {
         options = fontList,
-        value = db.TextDisplay.fontFace or "Expressway",
+        value = db.TextDisplay.fontFace or KE:GetGlobalFont(),
         callback = function(key) db.TextDisplay.fontFace = key; ApplyAndUpdate() end,
         searchable = true,
         isFontPreview = true,

@@ -113,7 +113,7 @@ function CR:CreateFrame()
     if self.frame then return end
 
     local db = self.db
-    local fontPath = KE:GetFontPath(db.FontFace or "Expressway") or KE.FONT
+    local fontPath = KE:GetFontPath(db.FontFace) or KE.FONT
     local fontSize = db.FontSize or 16
 
     local frame = CreateFrame("Frame", "KE_CombatResFrame", UIParent, BackdropTemplateMixin and "BackdropTemplate")
@@ -176,7 +176,7 @@ function CR:ApplyTextSettings()
     if not self.frame then return end
 
     local db = self.db
-    local fontName = db.FontFace or "Expressway"
+    local fontName = db.FontFace
     local fontSize = db.FontSize or 16
     local fontOutline = db.FontOutline or "SOFTOUTLINE"
 

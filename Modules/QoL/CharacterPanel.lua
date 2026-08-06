@@ -536,7 +536,7 @@ end
 ---------------------------------------------------------------------------------
 local function CreateSlotText(button, slot)
     local db = CP.db
-    local fontFace    = (db and db.FontFace)    or "Expressway"
+    local fontFace    = (db and db.FontFace)
     local fontSize    = (db and db.FontSize)    or 13
     local fontOutline = (db and db.FontOutline) or "OUTLINE"
     local text = button:CreateFontString(nil, "OVERLAY")
@@ -567,7 +567,7 @@ end
 
 local function ApplyFontToAll()
     local db = CP.db
-    local fontFace    = (db and db.FontFace)    or "Expressway"
+    local fontFace    = (db and db.FontFace)
     local fontSize    = (db and db.FontSize)    or 13
     local fontOutline = (db and db.FontOutline) or "OUTLINE"
     for _, buttonName in pairs(allCheckSlots) do
@@ -921,7 +921,7 @@ end
 
 function CP:ApplyFont(fontString, size)
     local db = self.db
-    local fontFace    = db.FontFace    or "Expressway"
+    local fontFace    = db.FontFace
     local fontOutline = db.FontOutline or "OUTLINE"
     -- These style Blizzard's own FontStrings (level/name/stat/category texts).
     -- SOFTOUTLINE is KE's custom 8-shadow system; on Blizzard's recycled
@@ -1237,7 +1237,7 @@ function CP:CreateTrackOverlay(slotFrame, slotID)
     end
 
     overlay.text = overlay:CreateFontString(nil, "OVERLAY")
-    KE:ApplyFontToText(overlay.text, self.db.FontFace or "Expressway", self.db.TrackLetterSize or 12, "OUTLINE")
+    KE:ApplyFontToText(overlay.text, self.db.FontFace, self.db.TrackLetterSize or 12, "OUTLINE")
     overlay.text:SetShadowColor(0, 0, 0, 0)
 
     if isRight then
@@ -1294,7 +1294,7 @@ function CP:UpdateSlotTrackIndicator(slotFrame, slotID, unit, data)
 
     if track then
         -- Re-apply font each update so a TrackLetterSize change is live.
-        KE:ApplyFontToText(overlay.text, self.db.FontFace or "Expressway", self.db.TrackLetterSize or 12, "OUTLINE")
+        KE:ApplyFontToText(overlay.text, self.db.FontFace, self.db.TrackLetterSize or 12, "OUTLINE")
         overlay.text:SetText(track.letter)
         overlay.text:SetTextColor(track.color[1], track.color[2], track.color[3])
         overlay:Show()
@@ -1436,7 +1436,7 @@ function CP:CreateSlotDetail(slotFrame, slotID)
 
     local isRight  = RIGHT_SLOTS[slotID]
     local isCenter = CENTER_SLOTS[slotID]
-    local fontFace    = self.db.FontFace or "Expressway"
+    local fontFace    = self.db.FontFace
     local fontSize    = self.db.SlotInfoFontSize or 11
     local fontOutline = SanitizeDetailOutline(self.db.FontOutline)
 
@@ -1590,7 +1590,7 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
     data = data or C_TooltipInfo.GetInventoryItem(unit, slotID)
 
     local detail = self:CreateSlotDetail(slotFrame, slotID)
-    local fontFace    = self.db.FontFace or "Expressway"
+    local fontFace    = self.db.FontFace
     local fontSize    = self.db.SlotInfoFontSize or 11
     local fontOutline = SanitizeDetailOutline(self.db.FontOutline)
 

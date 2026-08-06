@@ -221,7 +221,7 @@ local function ConfigureFontSettingsCardKit(kit, scrollChild, yOffset, config)
     -- which would otherwise write the clamp value to db before the SetValue
     -- below can restore it. (Surfaces as "font size resets to max" when
     -- navigating between modules with different fontSizeRanges.)
-    kit.fontDropdown:SetValue(GetDbValue(db, keys.fontFace, "Friz Quadrata TT"), true)
+    kit.fontDropdown:SetValue(GetDbValue(db, keys.fontFace, KE:GetGlobalFont()), true)
     kit.outlineDropdown:SetValue(KE:NormalizeFontOutline(GetDbValue(db, keys.fontOutline, "OUTLINE")), true)
     kit.fontSizeSlider:SetMinMaxValues(fontSizeRange[1], fontSizeRange[2], true)
     kit.fontSizeSlider:SetValue(GetDbValue(db, keys.fontSize, 18), true)
@@ -277,7 +277,7 @@ local function CreateFontSettingsCardLegacy(scrollChild, yOffset, config)
 
     local fontDropdown = GUIFrame:CreateDropdown(row1, "Font", {
         options = BuildFontList(),
-        value = getValue(keys.fontFace, "Friz Quadrata TT"),
+        value = getValue(keys.fontFace, KE:GetGlobalFont()),
         callback = function(key) setValue(keys.fontFace, key) end,
         searchable = searchable,
         isFontPreview = true,

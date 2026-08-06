@@ -1323,7 +1323,7 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     local row3a = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
     local fontDropdown = GUIFrame:CreateDropdown(row3a, "Font", {
         options = fontList,
-        value = db.FontFace or "Expressway",
+        value = db.FontFace or KE:GetGlobalFont(),
         callback = function(key) db.FontFace = key; ApplySettings() end,
         searchable = true,
         isFontPreview = true,

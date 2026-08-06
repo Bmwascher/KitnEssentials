@@ -187,7 +187,7 @@ GUIFrame:RegisterContent("StanceText", function(scrollChild, yOffset)
     local rowT3 = GUIFrame:CreateRow(card3.content, 40)
     local fontDrop = GUIFrame:CreateDropdown(rowT3, "Font", {
         options = fontList,
-        value = db.FontFace,
+        value = db.FontFace or KE:GetGlobalFont(),
         callback = function(value) db.FontFace = value; ApplySettings() end,
     })
     rowT3:AddWidget(fontDrop, 0.34)

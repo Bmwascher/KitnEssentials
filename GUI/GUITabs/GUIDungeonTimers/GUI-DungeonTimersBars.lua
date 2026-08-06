@@ -136,7 +136,7 @@ GUIFrame:RegisterContent("DTimers_Bars", function(scrollChild, yOffset)
     local row2 = GUIFrame:CreateRow(displayCard.content, Theme.rowHeight)
     local fontDropdown = GUIFrame:CreateDropdown(row2, "Font", {
         options = fontList,
-        value = db.BarDisplay.fontFace or "Expressway",
+        value = db.BarDisplay.fontFace or KE:GetGlobalFont(),
         callback = function(key) db.BarDisplay.fontFace = key; ApplyAndUpdate() end,
         searchable = true,
         isFontPreview = true,

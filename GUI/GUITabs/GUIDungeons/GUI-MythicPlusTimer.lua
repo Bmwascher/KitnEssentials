@@ -80,7 +80,7 @@ local function AddFontCard(scrollChild, yOffset, db, manager, prefix, opts)
     local row = GUIFrame:CreateRow(card.content, rowH)
     local fontDrop = GUIFrame:CreateDropdown(row, "Font", {
         options = MediaList("font", "Expressway"),
-        value = db[faceKey] or db.FontFace or "Expressway",
+        value = db[faceKey] or db.FontFace or KE:GetGlobalFont(),
         callback = function(key) db[faceKey] = key; applyFn() end,
         searchable = true, isFontPreview = true,
     })

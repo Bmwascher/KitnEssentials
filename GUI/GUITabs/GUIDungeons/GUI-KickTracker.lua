@@ -323,7 +323,7 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
     local fontDropdown = GUIFrame:CreateDropdown(row4b, "Font", {
         options = fontList,
-        value = db.FontFace or "Expressway",
+        value = db.FontFace or KE:GetGlobalFont(),
         callback = function(key) db.FontFace = key; ApplySettings() end,
         searchable = true,
         isFontPreview = true,

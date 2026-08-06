@@ -223,7 +223,7 @@ local function applyKitVisuals(frame, color)
     -- Fonts. Bar mode: white label left / white timer right inside the fill.
     -- Text mode: colored "label »" static + colored timer hanging off it.
     local face = (isBar and barD or textD)
-    local fontFace = (face and face.fontFace) or "Expressway"
+    local fontFace = (face and face.fontFace)
     local fontSize = (face and face.fontSize) or (isBar and 14 or 20)
     local fontOutline = (face and face.fontOutline) or "OUTLINE"
     KE:ApplyFontToText(frame.label, fontFace, fontSize, fontOutline)
